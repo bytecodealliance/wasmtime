@@ -272,7 +272,7 @@ block0(v0: i64):
 ;   add sp,+16
 ;   ret
 
-function %f13(i64, i128) -> i64 apple_aarch64 {
+function %f13(i64, i128) -> i64 {
 block0(v0: i64, v1: i128):
     v2, v3 = isplit v1
     return v2
@@ -282,8 +282,8 @@ block0(v0: i64, v1: i128):
 ;   mv a0,a1
 ;   ret
 
-function %f13_call(i64) -> i64 apple_aarch64 {
-    fn0 = %f13(i64, i128) -> i64 apple_aarch64
+function %f13_call(i64) -> i64 {
+    fn0 = %f13(i64, i128) -> i64
 
 block0(v0: i64):
     v1 = iconst.i64 42
@@ -357,7 +357,7 @@ block0(v0: i128, v1: i64):
 ;   add sp,+16
 ;   ret
 
-function %f15(i128, i128, i128, i64, i128) -> i128 apple_aarch64{
+function %f15(i128, i128, i128, i64, i128) -> i128{
 block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
     return v4
 }
@@ -374,8 +374,8 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   add sp,+16
 ;   ret
 
-function %f15_call(i128, i64) -> i128 apple_aarch64 {
-    fn0 = %f15(i128, i128, i128, i64, i128) -> i128 apple_aarch64
+function %f15_call(i128, i64) -> i128 {
+    fn0 = %f15(i128, i128, i128, i64, i128) -> i128
 
 block0(v0: i128, v1: i64):
     v2 = call fn0(v0, v0, v0, v1, v0)
@@ -407,7 +407,7 @@ block0(v0: i128, v1: i64):
 ;   add sp,+16
 ;   ret
 
-function %f16() -> i32, i32 wasmtime_system_v {
+function %f16() -> i32, i32 {
 block0:
     v0 = iconst.i32 0
     v1 = iconst.i32 1

@@ -1,7 +1,6 @@
 //! Riscv64 ISA definitions: registers.
 //!
 
-use crate::machinst::ArgsOrRets;
 use crate::settings;
 
 use crate::machinst::{Reg, Writable};
@@ -33,21 +32,6 @@ pub fn a2() -> Reg {
 #[inline(always)]
 pub fn a7() -> Reg {
     x_reg(17)
-}
-
-#[inline(always)]
-pub fn param_or_rets_xregs(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
-    let mut v = Vec::with_capacity(8);
-    let a0 = 10;
-    let a_last = if args_or_rets == ArgsOrRets::Args {
-        17
-    } else {
-        11
-    };
-    for enc in a0..=a_last {
-        v.push(Writable::from_reg(x_reg(enc as usize)));
-    }
-    v
 }
 
 #[inline(always)]
@@ -83,20 +67,6 @@ pub fn fa1() -> Reg {
 #[inline(always)]
 pub fn fa7() -> Reg {
     f_reg(17)
-}
-#[inline(always)]
-pub fn param_or_rets_fregs(args_or_rets: ArgsOrRets) -> Vec<Writable<Reg>> {
-    let mut v = Vec::with_capacity(8);
-    let fa0 = 10;
-    let fa_last = if args_or_rets == ArgsOrRets::Args {
-        17
-    } else {
-        11
-    };
-    for enc in fa0..=fa_last {
-        v.push(Writable::from_reg(f_reg(enc as usize)));
-    }
-    v
 }
 
 /// Get a reference to the zero-register.
@@ -237,7 +207,7 @@ pub fn f_reg(enc: usize) -> Reg {
     let v_reg = VReg::new(p_reg.index(), p_reg.class());
     Reg::from(v_reg)
 }
-pub fn pf_reg(enc: usize) -> PReg {
+pub const fn pf_reg(enc: usize) -> PReg {
     PReg::new(enc, RegClass::Float)
 }
 #[inline(always)]

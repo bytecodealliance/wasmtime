@@ -65,11 +65,15 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
     ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
-        // all registers can be alloc
-        let x_registers = param_or_rets_xregs(args_or_rets);
-        let mut x_registers = &x_registers[..];
-        let f_registers = param_or_rets_fregs(args_or_rets);
-        let mut f_registers = &f_registers[..];
+        // all registers can be used as parameter.
+        let (x_start, x_end, f_start, f_end) = if args_or_rets == ArgsOrRets::Args {
+            (10, 17, 10, 17)
+        } else {
+            (10, 11, 10, 11)
+        };
+
+        let mut next_x_reg = x_start;
+        let mut next_f_reg = f_start;
         // stack space
         let mut next_stack: u64 = 0;
         let mut abi_args = vec![];
@@ -91,10 +95,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
         for i in 0..params.len() {
             let mut param = params[i];
-
             let run_out_of_registers = {
-                (param.value_type.is_float() && f_registers.len() == 0)
-                    || (param.value_type.is_int() && x_registers.len() == 0)
+                (param.value_type.is_float() && next_f_reg > f_end)
+                    || (param.value_type.is_int() && next_x_reg > x_end)
             };
             param = if run_out_of_registers {
                 step_last_parameter()
@@ -136,16 +139,15 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             }
             match param.value_type {
                 F32 | F64 => {
-                    if f_registers.len() > 0 {
-                        let reg = f_registers[0].clone();
+                    if next_f_reg < f_end {
                         let arg = ABIArg::reg(
-                            reg.to_reg().to_real_reg().unwrap(),
+                            f_reg(next_f_reg).to_real_reg().unwrap(),
                             param.value_type,
                             param.extension,
                             param.purpose,
                         );
                         abi_args.push(arg);
-                        f_registers = &f_registers[1..];
+                        next_f_reg += 1;
                     } else {
                         let arg = ABIArg::stack(
                             next_stack as i64,
@@ -158,15 +160,14 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     }
                 }
                 B1 | B8 | B16 | B32 | B64 | I8 | I16 | I32 | I64 | R32 | R64 => {
-                    if x_registers.len() > 0 {
-                        let reg = x_registers[0].clone();
+                    if next_x_reg < x_end {
                         let arg = ABIArg::reg(
-                            reg.to_reg().to_real_reg().unwrap(),
+                            x_reg(next_x_reg).to_real_reg().unwrap(),
                             param.value_type,
                             param.extension,
                             param.purpose,
                         );
-                        x_registers = &x_registers[1..];
+                        next_x_reg += 1;
                         abi_args.push(arg);
                     } else {
                         let arg = ABIArg::stack(
@@ -182,25 +183,24 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 I128 | B128 => {
                     let elem_type = if param.value_type == I128 { I64 } else { B64 };
                     let mut slots = vec![];
-                    if x_registers.len() >= 2 {
+                    if next_x_reg + 1 <= x_end {
                         for i in 0..2 {
-                            let reg = x_registers[i].clone();
+                            let reg = x_reg(next_x_reg + i).clone();
                             slots.push(ABIArgSlot::Reg {
-                                reg: reg.to_reg().to_real_reg().unwrap(),
+                                reg: x_reg(next_x_reg + i).to_real_reg().unwrap(),
                                 ty: elem_type,
                                 extension: param.extension,
                             });
                         }
-                        x_registers = &x_registers[2..];
-                    } else if x_registers.len() == 1 {
+                        next_x_reg += 2;
+                    } else if next_x_reg < x_end {
                         // put in register
-                        let reg = x_registers[0].clone();
                         slots.push(ABIArgSlot::Reg {
-                            reg: reg.to_reg().to_real_reg().unwrap(),
+                            reg: x_reg(next_x_reg).to_real_reg().unwrap(),
                             ty: elem_type,
                             extension: param.extension,
                         });
-                        x_registers = &x_registers[1..];
+                        next_x_reg += 1;
                         slots.push(ABIArgSlot::Stack {
                             offset: next_stack as i64,
                             ty: elem_type,
@@ -230,16 +230,13 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         abi_args.extend(abi_args_for_stack.into_iter());
         let pos: Option<usize> = if add_ret_area_ptr {
             assert!(ArgsOrRets::Args == args_or_rets);
-            if x_registers.len() > 0 {
-                let reg = x_registers[0].clone();
+            if next_x_reg < x_end {
                 let arg = ABIArg::reg(
-                    reg.to_reg().to_real_reg().unwrap(),
+                    x_reg(next_x_reg).to_real_reg().unwrap(),
                     I64,
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
                 );
-                // we don't need use x_registers any more.
-                // x_registers = &x_registers[1..];
                 abi_args.push(arg);
                 Some(abi_args.len() - 1)
             } else {
@@ -313,7 +310,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn get_stacklimit_reg() -> Reg {
-        x_reg(5)
+        spilltmp_reg()
     }
 
     fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Inst> {

@@ -12,7 +12,7 @@ use cranelift_reader::parse_run_command;
 use cranelift_reader::TestCommand;
 use log::trace;
 use std::borrow::Cow;
-use target_lexicon::{Architecture, Riscv64Architecture};
+use target_lexicon::Architecture;
 
 struct TestRun;
 
@@ -43,6 +43,7 @@ impl SubTest for TestRun {
         // since we won't be able to natively execute machine code.
         let requested_arch = context.isa.unwrap().triple().architecture;
         #[cfg(target_arch = "riscv64")]
+        use target_lexicon::Riscv64Architecture;
         match (requested_arch, Architecture::host()) {
             // riscv64 can run on riscv64 and riscv64gc and ...
             // we cannot use an simple requested_arch != Architecture::host() to decide.

@@ -1501,34 +1501,16 @@ impl MachInstEmit for Inst {
                 let rs = allocs.next(rs);
                 let rd = allocs.next_writable(rd);
                 // get class information.
-                Inst::FpuRR {
-                    frm: None,
-                    alu_op: if in_type == F32 {
-                        FpuOPRR::FclassS
-                    } else {
-                        FpuOPRR::FclassD
-                    },
-                    rd,
-                    rs,
-                }
-                .emit(&[], sink, emit_info, state);
-                // rd = rd & is_nan()
-                Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Andi,
-                    rd: rd,
-                    rs: rd.to_reg(),
-                    imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
-                }
-                .emit(&[], sink, emit_info, state);
+                Inst::emit_not_nan(rd, rs, in_type).emit(&[], sink, emit_info, state);
                 // jump to nan
                 let label_jump_nan = sink.get_label();
                 Inst::CondBr {
                     taken: BranchTarget::Label(label_jump_nan),
                     not_taken: BranchTarget::zero(),
                     kind: IntegerCompare {
-                        kind: IntCC::NotEqual,
-                        rs1: zero_reg(),
-                        rs2: rd.to_reg(),
+                        kind: IntCC::Equal,
+                        rs2: zero_reg(),
+                        rs1: rd.to_reg(),
                     },
                 }
                 .emit(&[], sink, emit_info, state);
