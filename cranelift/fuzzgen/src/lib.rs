@@ -5,7 +5,9 @@ use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::types::*;
 use cranelift::codegen::ir::Function;
+use cranelift::codegen::Context;
 use cranelift::prelude::*;
+use cranelift_native::builder_with_options;
 
 mod config;
 mod function_generator;
@@ -85,9 +87,41 @@ where
         Ok(inputs)
     }
 
+    fn run_func_passes(&self, func: Function) -> Result<Function> {
+        // Do a NaN Canonicalization pass on the generated function.
+        //
+        // Both IEEE754 and the Wasm spec are somewhat loose about what is allowed
+        // to be returned from NaN producing operations. And in practice this changes
+        // from X86 to Aarch64 and others. Even in the same host machine, the
+        // interpreter may produce a code sequence different from cranelift that
+        // generates different NaN's but produces legal results according to the spec.
+        //
+        // These differences cause spurious failures in the fuzzer. To fix this
+        // we enable the NaN Canonicalization pass that replaces any NaN's produced
+        // with a single fixed canonical NaN value.
+        //
+        // This is something that we can enable via flags for the compiled version, however
+        // the interpreter won't get that version, so call that pass manually here.
+
+        let mut ctx = Context::for_function(func);
+        // Assume that we are generating this function for the current ISA
+        // this is only used for the verifier after `canonicalize_nans` so
+        // it's not too important.
+        let flags = settings::Flags::new(settings::builder());
+        let isa = builder_with_options(false)
+            .expect("Unable to build a TargetIsa for the current host")
+            .finish(flags)?;
+
+        ctx.canonicalize_nans(isa.as_ref())?;
+
+        Ok(ctx.func)
+    }
+
     pub fn generate_test(mut self) -> Result<TestCase> {
         let func = FunctionGenerator::new(&mut self.u, &self.config).generate()?;
         let inputs = self.generate_test_inputs(&func.signature)?;
+
+        let func = self.run_func_passes(func)?;
 
         Ok(TestCase { func, inputs })
     }
