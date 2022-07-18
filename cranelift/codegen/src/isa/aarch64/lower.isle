@@ -81,9 +81,6 @@
 (rule (lower (has_type ty @ (multi_lane _ _) (iadd x y)))
       (add_vec x y (vector_size ty)))
 
-(rule (lower (has_type ty @ (dynamic_lane _ _) (iadd x y)))
-      (value_reg (vec_rrr (VecALUOp.Add) (put_in_reg x) (put_in_reg y) (vector_size ty))))
-
 ;; `i128`
 (rule (lower (has_type $I128 (iadd x y)))
       (let
@@ -199,8 +196,6 @@
 ;; vectors
 (rule (lower (has_type ty @ (multi_lane _ _) (isub x y)))
       (sub_vec x y (vector_size ty)))
-(rule (lower (has_type ty @ (dynamic_lane _ _) (isub x y)))
-      (value_reg (sub_vec (put_in_reg x) (put_in_reg y) (vector_size ty))))
 
 ;; `i128`
 (rule (lower (has_type $I128 (isub x y)))
@@ -287,10 +282,6 @@
 ;; Case for i8x16, i16x8, and i32x4.
 (rule (lower (has_type (ty_vec128 ty @ (not_i64x2)) (imul x y)))
       (mul x y (vector_size ty)))
-
-;; Case for 'dynamic' i8x16, i16x8, and i32x4.
-(rule (lower (has_type ty @ (dynamic_lane _ _) (imul x y)))
-      (value_reg (vec_rrr (VecALUOp.Mul) (put_in_reg x) (put_in_reg y) (vector_size ty))))
 
 ;; Special lowering for i64x2.
 ;;

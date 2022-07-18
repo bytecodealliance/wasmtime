@@ -1,17 +1,17 @@
 
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty @ (dynamic_lane _ _) (iadd x y)))
-      (value_reg (vec_rrr (VecALUOp.Add) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+      (value_reg (add_vec (put_in_reg x) (put_in_reg y) (vector_size ty))))
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty @ (dynamic_lane _ _) (isub x y)))
-      (value_reg (vec_rrr (VecALUOp.Sub) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+      (value_reg (sub_vec (put_in_reg x) (put_in_reg y) (vector_size ty))))
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (lane_fits_in_32 ty @ (dynamic_lane _ _)) (imul x y)))
       (value_reg (vec_rrr (VecALUOp.Mul) (put_in_reg x) (put_in_reg y) (vector_size ty))))
 
-;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty @ (dynamic_lane _ _) (fadd x y)))
       (value_reg (vec_rrr (VecALUOp.Fadd) (put_in_reg x) (put_in_reg y) (vector_size ty))))
 
