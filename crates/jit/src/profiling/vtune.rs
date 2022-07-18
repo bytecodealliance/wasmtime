@@ -14,28 +14,30 @@
 
 use crate::{CompiledModule, ProfilingAgent};
 use anyhow::Result;
-use core::ptr;
-use ittapi_rs::*;
-use std::ffi::CString;
+use ittapi::jit::MethodLoadBuilder;
 use std::sync::{atomic, Mutex};
 use wasmtime_environ::EntityRef;
 
 /// Interface for driving the ittapi for VTune support
 pub struct VTuneAgent {
-    // Note that we use a mutex internally to serialize state updates
-    // since multiple threads may be sharing this agent.
+    // Note that we use a mutex internally to serialize state updates since multiple threads may be
+    // sharing this agent.
     state: Mutex<State>,
 }
 
 /// Interface for driving vtune
-#[derive(Clone, Debug, Default)]
-struct State;
+#[derive(Default)]
+struct State {
+    vtune: ittapi::jit::Jit,
+}
 
 impl VTuneAgent {
     /// Initialize a VTuneAgent.
     pub fn new() -> Result<Self> {
         Ok(VTuneAgent {
-            state: Mutex::new(State),
+            state: Mutex::new(State {
+                vtune: Default::default(),
+            }),
         })
     }
 }
@@ -47,56 +49,21 @@ impl Drop for VTuneAgent {
 }
 
 impl State {
-    /// Return a method ID for use with the ittapi.
-    fn get_method_id(&self) -> u32 {
-        unsafe { iJIT_GetNewMethodID() }
-    }
-
     /// Notify vtune about a newly tracked code region.
-    fn event_load(
-        &mut self,
-        method_id: u32,
-        module_name: &str,
-        method_name: &str,
-        addr: *const u8,
-        len: usize,
-    ) -> () {
-        let mut jmethod = _iJIT_Method_Load {
-            method_id,
-            method_name: CString::new(method_name)
-                .expect("CString::new failed")
-                .into_raw(),
-            method_load_address: addr as *mut ::std::os::raw::c_void,
-            method_size: len as u32,
-            line_number_size: 0,
-            line_number_table: ptr::null_mut(),
-            class_id: 0,
-            class_file_name: CString::new(module_name)
-                .expect("CString::new failed")
-                .into_raw(),
-            source_file_name: CString::new("<unknown wasm filename>")
-                .expect("CString::new failed")
-                .into_raw(),
-        };
-        let jmethod_ptr = &mut jmethod as *mut _ as *mut _;
-        unsafe {
-            log::trace!(
-                "NotifyEvent: method load (single method with id {})",
-                method_id
-            );
-            let _ret = iJIT_NotifyEvent(
-                iJIT_jvm_event_iJVM_EVENT_TYPE_METHOD_LOAD_FINISHED,
-                jmethod_ptr as *mut ::std::os::raw::c_void,
-            );
-        }
+    fn notify_code(&mut self, module_name: &str, method_name: &str, addr: *const u8, len: usize) {
+        self.vtune
+            .load_method(
+                MethodLoadBuilder::new(method_name.to_owned(), addr, len)
+                    .class_file_name(module_name.to_owned())
+                    .source_file_name("<unknown wasm filename>".to_owned()),
+            )
+            .unwrap();
     }
 
     /// Shutdown module
-    fn event_shutdown(&mut self) -> () {
-        unsafe {
-            log::trace!("NotifyEvent shutdown (whole module)");
-            let _ret = iJIT_NotifyEvent(iJIT_jvm_event_iJVM_EVENT_TYPE_SHUTDOWN, ptr::null_mut());
-        }
+    fn event_shutdown(&mut self) {
+        // Ignore if something went wrong.
+        let _ = self.vtune.shutdown();
     }
 }
 
@@ -113,7 +80,7 @@ impl ProfilingAgent for VTuneAgent {
 }
 
 impl State {
-    fn module_load(&mut self, module: &CompiledModule, _dbg_image: Option<&[u8]>) -> () {
+    fn module_load(&mut self, module: &CompiledModule, _dbg_image: Option<&[u8]>) {
         // Global counter for module ids.
         static MODULE_ID: atomic::AtomicUsize = atomic::AtomicUsize::new(0);
         let global_module_id = MODULE_ID.fetch_add(1, atomic::Ordering::SeqCst);
@@ -128,15 +95,13 @@ impl State {
         for (idx, func) in module.finished_functions() {
             let (addr, len) = unsafe { ((*func).as_ptr().cast::<u8>(), (*func).len()) };
             let method_name = super::debug_name(module, idx);
-            let method_id = self.get_method_id();
             log::trace!(
-                "new function ({}) {:?}::{:?} @ {:?}\n",
-                method_id,
+                "new function {:?}::{:?} @ {:?}\n",
                 module_name,
                 method_name,
                 addr
             );
-            self.event_load(method_id, &module_name, &method_name, addr, len);
+            self.notify_code(&module_name, &method_name, addr, len);
         }
 
         // Note: these are the trampolines into exported functions.
@@ -144,14 +109,12 @@ impl State {
             let idx = idx.index();
             let (addr, len) = (func as usize as *const u8, len);
             let method_name = format!("wasm::trampoline[{}]", idx,);
-            let method_id = self.get_method_id();
             log::trace!(
-                "new trampoline ({}) for exported signature {} @ {:?}\n",
-                method_id,
+                "new trampoline for exported signature {} @ {:?}\n",
                 idx,
                 addr
             );
-            self.event_load(method_id, &module_name, &method_name, addr, len);
+            self.notify_code(&module_name, &method_name, addr, len);
         }
     }
 
@@ -163,7 +126,6 @@ impl State {
         _pid: u32,
         _tid: u32,
     ) {
-        let method_id = self.get_method_id();
-        self.event_load(method_id, "wasm trampoline for Func::new", name, addr, size);
+        self.notify_code("wasm trampoline for Func::new", name, addr, size);
     }
 }
