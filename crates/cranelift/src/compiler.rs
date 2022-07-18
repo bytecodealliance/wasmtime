@@ -290,9 +290,10 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn compile_host_to_wasm_trampoline(
         &self,
+        tunables: &Tunables,
         ty: &WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
-        self.host_to_wasm_trampoline(ty)
+        self.host_to_wasm_trampoline(tunables, ty)
             .map(|x| Box::new(x) as Box<_>)
     }
 
@@ -372,9 +373,10 @@ impl wasmtime_environ::Compiler for Compiler {
         ty: &WasmFuncType,
         host_fn: usize,
         obj: &mut Object<'static>,
+        tunables: &Tunables,
     ) -> Result<(Trampoline, Trampoline)> {
-        let host_to_wasm = self.host_to_wasm_trampoline(ty)?;
-        let wasm_to_host = self.wasm_to_host_trampoline(ty, host_fn)?;
+        let host_to_wasm = self.host_to_wasm_trampoline(tunables, ty)?;
+        let wasm_to_host = self.wasm_to_host_trampoline(tunables, ty, host_fn)?;
         let module = Module::new();
         let mut builder = ModuleTextBuilder::new(obj, &module, &*self.isa);
         let a = builder.trampoline(SignatureIndex::new(0), &host_to_wasm);
@@ -423,7 +425,11 @@ fn to_flag_value(v: &settings::Value) -> FlagValue {
 }
 
 impl Compiler {
-    fn host_to_wasm_trampoline(&self, ty: &WasmFuncType) -> Result<CompiledFunction, CompileError> {
+    fn host_to_wasm_trampoline(
+        &self,
+        tunables: &Tunables,
+        ty: &WasmFuncType,
+    ) -> Result<CompiledFunction, CompileError> {
         let isa = &*self.isa;
         let value_size = mem::size_of::<u128>();
         let pointer_type = isa.pointer_type();
@@ -487,11 +493,33 @@ impl Compiler {
             })
             .collect::<Vec<_>>();
 
+        let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
+            ptr: isa.pointer_bytes(),
+            num_imported_functions: 0,
+            num_imported_tables: 0,
+            num_imported_memories: 0,
+            num_imported_globals: 0,
+            num_defined_tables: 0,
+            num_defined_memories: 0,
+            num_owned_memories: 0,
+            num_defined_globals: 0,
+            num_escaped_funcs: 0,
+        });
+
+        if tunables.outband_fuel {
+            self.reload_fuel(&offsets, &mut builder, vmctx_ptr_val);
+        }
+
         // Call the indirect function pointer we were given
         let new_sig = builder.import_signature(wasm_signature);
         let call = builder
             .ins()
             .call_indirect(new_sig, callee_value, &callee_args);
+
+        if tunables.outband_fuel {
+            self.spill_fuel(&offsets, &mut builder, vmctx_ptr_val);
+        }
+
         let results = builder.func.dfg.inst_results(call).to_vec();
 
         // Store the return values into `values_vec`.
@@ -535,6 +563,7 @@ impl Compiler {
     /// serialization.
     fn wasm_to_host_trampoline(
         &self,
+        tunables: &Tunables,
         ty: &WasmFuncType,
         host_fn: usize,
     ) -> Result<CompiledFunction, CompileError> {
@@ -562,7 +591,21 @@ impl Compiler {
         let (values_vec_ptr_val, values_vec_len) =
             self.wasm_to_host_spill_args(ty, &mut builder, block0);
 
+        let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
+            ptr: isa.pointer_bytes(),
+            num_imported_functions: 0,
+            num_imported_tables: 0,
+            num_imported_memories: 0,
+            num_imported_globals: 0,
+            num_defined_tables: 0,
+            num_defined_memories: 0,
+            num_owned_memories: 0,
+            num_defined_globals: 0,
+            num_escaped_funcs: 0,
+        });
+
         let block_params = builder.func.dfg.block_params(block0);
+        let callee_vmctx = block_params[1];
         let callee_args = [
             block_params[0],
             block_params[1],
@@ -572,11 +615,19 @@ impl Compiler {
                 .iconst(pointer_type, i64::from(values_vec_len)),
         ];
 
+        if tunables.outband_fuel {
+            self.spill_fuel(&offsets, &mut builder, callee_vmctx);
+        }
+
         let new_sig = builder.import_signature(host_signature);
         let callee_value = builder.ins().iconst(pointer_type, host_fn as i64);
         builder
             .ins()
             .call_indirect(new_sig, callee_value, &callee_args);
+
+        if tunables.outband_fuel {
+            self.reload_fuel(&offsets, &mut builder, callee_vmctx);
+        }
 
         self.wasm_to_host_load_results(ty, &mut builder, values_vec_ptr_val);
 
@@ -673,6 +724,61 @@ impl Compiler {
         }
         builder.ins().return_(&results);
         builder.finalize();
+    }
+
+    /// Loads the current fuel counter from `VMRuntimeLimits` into the fuel counter pinned reg.
+    fn reload_fuel(
+        &self,
+        offsets: &wasmtime_environ::VMOffsets<u8>,
+        builder: &mut FunctionBuilder,
+        vmctx: ir::Value,
+    ) {
+        let isa = &*self.isa;
+        let pointer_type = isa.pointer_type();
+        let vmctx_runtime_limits_offset = i32::try_from(offsets.vmctx_runtime_limits()).unwrap();
+        let vmruntime_limits_fuel_consumed_offset =
+            i32::try_from(offsets.vmruntime_limits_fuel_consumed()).unwrap();
+        let runtime_limits_ptr = builder.ins().load(
+            pointer_type,
+            ir::MemFlags::trusted(),
+            vmctx,
+            vmctx_runtime_limits_offset,
+        );
+        let new_fuel_consumed = builder.ins().load(
+            ir::types::I64,
+            ir::MemFlags::trusted(),
+            runtime_limits_ptr,
+            vmruntime_limits_fuel_consumed_offset,
+        );
+        builder.ins().set_pinned_reg(new_fuel_consumed);
+    }
+
+    /// Saves the current fuel counter saved in a pinned register into `VMRuntimeLimits` in memory.
+    fn spill_fuel(
+        &self,
+        offsets: &wasmtime_environ::VMOffsets<u8>,
+        builder: &mut FunctionBuilder,
+        vmctx: ir::Value,
+    ) {
+        let isa = &*self.isa;
+        let pointer_type = isa.pointer_type();
+        let fuel_consumed = builder.ins().get_pinned_reg(ir::types::I64);
+
+        let vmctx_runtime_limits_offset = i32::try_from(offsets.vmctx_runtime_limits()).unwrap();
+        let vmruntime_limits_fuel_consumed_offset =
+            i32::try_from(offsets.vmruntime_limits_fuel_consumed()).unwrap();
+        let runtime_limits_ptr = builder.ins().load(
+            pointer_type,
+            ir::MemFlags::trusted(),
+            vmctx,
+            vmctx_runtime_limits_offset,
+        );
+        builder.ins().store(
+            ir::MemFlags::trusted(),
+            fuel_consumed,
+            runtime_limits_ptr,
+            vmruntime_limits_fuel_consumed_offset,
+        );
     }
 
     fn finish_trampoline(

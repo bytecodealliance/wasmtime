@@ -26,6 +26,7 @@ impl<'a> Parse<'a> for FuelWast<'a> {
 
 #[test]
 fn run() -> Result<()> {
+    env_logger::init();
     let test = std::fs::read_to_string("tests/all/fuel.wast")?;
     let buf = ParseBuffer::new(&test)?;
     let mut wast = parser::parse::<FuelWast<'_>>(&buf)?;
@@ -115,7 +116,9 @@ fn iloop() {
         let module = Module::new(&engine, wat).unwrap();
         let mut store = Store::new(&engine, ());
         store.add_fuel(10_000).unwrap();
-        let error = Instance::new(&mut store, &module, &[]).err().unwrap();
+        let error = Instance::new(&mut store, &module, &[])
+            .err()
+            .expect("expected error");
         assert!(
             error.to_string().contains("all fuel consumed"),
             "bad error: {}",

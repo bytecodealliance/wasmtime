@@ -25,7 +25,7 @@ use wasmtime_runtime::{
 mod registry;
 mod serialization;
 
-pub use registry::{is_wasm_trap_pc, ModuleRegistry};
+pub use registry::{is_wasm_pc, is_wasm_trap_pc, ModuleRegistry};
 #[cfg(feature = "component-model")]
 pub use registry::{register_component, unregister_component};
 pub use serialization::SerializedModule;
@@ -404,7 +404,7 @@ impl Module {
             || -> Result<_> {
                 engine.run_maybe_parallel(translation.exported_signatures.clone(), |sig| {
                     let ty = &types[sig];
-                    Ok(compiler.compile_host_to_wasm_trampoline(ty)?)
+                    Ok(compiler.compile_host_to_wasm_trampoline(tunables, ty)?)
                 })
             },
         );

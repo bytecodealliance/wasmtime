@@ -72,6 +72,9 @@ impl Engine {
         // is the per-program initialization required for handling traps, such
         // as configuring signals, vectored exception handlers, etc.
         wasmtime_runtime::init_traps(crate::module::is_wasm_trap_pc);
+        if config.tunables.outband_fuel {
+            wasmtime_runtime::init_outband_fuel(crate::module::is_wasm_pc);
+        }
         debug_builtins::ensure_exported();
 
         let registry = SignatureRegistry::new();
@@ -353,7 +356,14 @@ impl Engine {
             "baldrdash_prologue_words" => *value == FlagValue::Num(0),
             "enable_llvm_abi_extensions" => *value == FlagValue::Bool(false),
             "emit_all_ones_funcaddrs" => *value == FlagValue::Bool(false),
-            "enable_pinned_reg" => *value == FlagValue::Bool(false),
+            "enable_pinned_reg" => {
+                // outband_fuel depends on the pinned reg to contain a consumed fuel count.
+                if self.config().tunables.outband_fuel {
+                    *value == FlagValue::Bool(true)
+                } else {
+                    return Ok(())
+                }
+            },
             "enable_probestack" => *value == FlagValue::Bool(false),
             "use_colocated_libcalls" => *value == FlagValue::Bool(false),
             "use_pinned_reg_as_heap_base" => *value == FlagValue::Bool(false),

@@ -414,6 +414,7 @@ impl<'a> SerializedModule<'a> {
             generate_native_debuginfo,
             parse_wasm_debuginfo,
             consume_fuel,
+            outband_fuel,
             epoch_interruption,
             static_memory_bound_is_maximum,
             guard_before_linear_memory,
@@ -454,6 +455,7 @@ impl<'a> SerializedModule<'a> {
             "WebAssembly backtrace support",
         )?;
         Self::check_bool(consume_fuel, other.consume_fuel, "fuel support")?;
+        Self::check_bool(outband_fuel, other.outband_fuel, "outband fuel")?;
         Self::check_bool(
             epoch_interruption,
             other.epoch_interruption,

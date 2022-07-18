@@ -95,8 +95,8 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_runtime::{
     InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
-    OnDemandInstanceAllocator, SignalHandler, StorePtr, VMCallerCheckedAnyfunc, VMContext,
-    VMExternRef, VMExternRefActivationsTable, VMRuntimeLimits, VMSharedSignatureIndex,
+    OnDemandInstanceAllocator, OutbandFuelSupport, SignalHandler, StorePtr, VMCallerCheckedAnyfunc,
+    VMContext, VMExternRef, VMExternRefActivationsTable, VMRuntimeLimits, VMSharedSignatureIndex,
     VMTrampoline,
 };
 
@@ -327,6 +327,10 @@ pub struct StoreOpaque {
     /// Note that this is `ManuallyDrop` as it must be dropped after
     /// `store_data` above, where the function pointers are stored.
     rooted_host_funcs: ManuallyDrop<Vec<Arc<[Definition]>>>,
+
+    /// TODO:
+    /// `None` is the support is not enabled.
+    outband_fuel_support: Option<OutbandFuelSupport>,
 }
 
 #[cfg(feature = "async")]
@@ -402,6 +406,16 @@ where
                 .externref_activations_table
                 .set_gc_okay(self.prev_okay);
         }
+    }
+}
+
+///
+pub struct OutbandFuelCheckHandle(wasmtime_runtime::OutbandFuelCheckHandle);
+
+impl OutbandFuelCheckHandle {
+    /// TODO:
+    pub fn check(&self) {
+        self.0.check();
     }
 }
 
@@ -497,6 +511,11 @@ impl<T> Store<T> {
                 hostcall_val_storage: Vec::new(),
                 wasm_val_raw_storage: Vec::new(),
                 rooted_host_funcs: ManuallyDrop::new(Vec::new()),
+                outband_fuel_support: if engine.config().tunables.outband_fuel {
+                    Some(OutbandFuelSupport::new())
+                } else {
+                    None
+                },
             },
             limiter: None,
             call_hook: None,
@@ -966,6 +985,15 @@ impl<T> Store<T> {
     pub fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
         self.inner.epoch_deadline_async_yield_and_update(delta);
     }
+
+    /// TODO:
+    ///
+    /// # Panics
+    ///
+    /// Panics if the async fuel checking is not enabled.
+    pub fn current_thread_outband_fuel_checker(&self) -> OutbandFuelCheckHandle {
+        self.inner.outband_fuel_checker()
+    }
 }
 
 impl<'a, T> StoreContext<'a, T> {
@@ -1094,7 +1122,31 @@ impl<T> StoreInner<T> {
         &mut self.data
     }
 
-    pub fn call_hook(&mut self, s: CallHook) -> Result<(), Trap> {
+    pub(crate) fn on_calling_wasm(&mut self) -> Result<(), Trap> {
+        self.call_hook(CallHook::CallingWasm)?;
+        self.enter_wasm();
+        Ok(())
+    }
+
+    pub(crate) fn on_returning_from_wasm(&mut self) -> Result<(), Trap> {
+        self.inner.leave_wasm();
+        self.call_hook(CallHook::ReturningFromWasm)?;
+        Ok(())
+    }
+
+    pub(crate) fn on_calling_host(&mut self) -> Result<(), Trap> {
+        self.inner.leave_wasm();
+        self.call_hook(CallHook::CallingHost)?;
+        Ok(())
+    }
+
+    pub(crate) fn on_returning_from_host(&mut self) -> Result<(), Trap> {
+        self.inner.enter_wasm();
+        self.call_hook(CallHook::ReturningFromHost)?;
+        Ok(())
+    }
+
+    fn call_hook(&mut self, s: CallHook) -> Result<(), Trap> {
         match &mut self.call_hook {
             Some(CallHookInner::Sync(hook)) => hook(&mut self.data, s),
 
@@ -1440,6 +1492,21 @@ impl StoreOpaque {
             }
             _ => bail!("not enough fuel remaining in store"),
         }
+    }
+
+    fn outband_fuel_checker(&self) -> OutbandFuelCheckHandle {
+        match self.outband_fuel_support {
+            Some(ref s) => OutbandFuelCheckHandle(s.new_checker()),
+            None => panic!("async fuel support not configured"),
+        }
+    }
+
+    fn enter_wasm(&self) {
+        self.outband_fuel_support.as_ref().map(|s| s.enter_wasm());
+    }
+
+    fn leave_wasm(&self) {
+        self.outband_fuel_support.as_ref().map(|s| s.leave_wasm());
     }
 
     #[inline]

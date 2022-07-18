@@ -417,7 +417,9 @@ pub use crate::module::Module;
 pub use crate::r#ref::ExternRef;
 #[cfg(feature = "async")]
 pub use crate::store::CallHookHandler;
-pub use crate::store::{AsContext, AsContextMut, CallHook, Store, StoreContext, StoreContextMut};
+pub use crate::store::{
+    AsContext, AsContextMut, CallHook, OutbandFuelCheckHandle, Store, StoreContext, StoreContextMut,
+};
 pub use crate::trap::*;
 pub use crate::types::*;
 pub use crate::values::*;
@@ -454,6 +456,7 @@ fn _assert_send_sync() {
     _assert::<ExternRef>();
     _assert::<InstancePre<()>>();
     _assert::<InstancePre<*mut u8>>();
+    _assert::<OutbandFuelCheckHandle>();
 
     #[cfg(feature = "async")]
     fn _call_async(s: &mut Store<()>, f: Func) {

@@ -152,6 +152,7 @@ pub trait Compiler: Send + Sync {
     /// function pointer argument which has the `ty` type provided.
     fn compile_host_to_wasm_trampoline(
         &self,
+        tunables: &Tunables,
         ty: &WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
 
@@ -196,6 +197,7 @@ pub trait Compiler: Send + Sync {
         ty: &WasmFuncType,
         host_fn: usize,
         obj: &mut Object<'static>,
+        tunables: &Tunables,
     ) -> Result<(Trampoline, Trampoline)>;
 
     /// Creates a new `Object` file which is used to build the results of a

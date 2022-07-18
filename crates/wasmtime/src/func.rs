@@ -1229,18 +1229,20 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
     unsafe {
         let exit = enter_wasm(store);
 
-        if let Err(trap) = store.0.call_hook(CallHook::CallingWasm) {
+        if let Err(trap) = store.0.on_calling_wasm() {
             exit_wasm(store, exit);
             return Err(trap);
         }
         let result = wasmtime_runtime::catch_traps(
             store.0.signal_handler(),
             store.0.engine().config().wasm_backtrace,
+            store.0.vmruntime_limits(),
+            store.0.engine().config().tunables.outband_fuel,
             store.0.default_callee(),
             closure,
         );
         exit_wasm(store, exit);
-        store.0.call_hook(CallHook::ReturningFromWasm)?;
+        store.0.on_returning_from_wasm()?;
         result.map_err(|t| Trap::from_runtime_box(store.0, t))
     }
 }
@@ -1885,7 +1887,7 @@ macro_rules! impl_into_func {
 
                         let ret = {
                             panic::catch_unwind(AssertUnwindSafe(|| {
-                                if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
+                                if let Err(trap) = caller.store.0.on_calling_host() {
                                     return R::fallible_from_trap(trap);
                                 }
                                 $(let $args = $args::from_abi($args, caller.store.0);)*
@@ -1893,7 +1895,7 @@ macro_rules! impl_into_func {
                                     caller.sub_caller(),
                                     $( $args, )*
                                 );
-                                if let Err(trap) = caller.store.0.call_hook(CallHook::ReturningFromHost) {
+                                if let Err(trap) = caller.store.0.on_returning_from_host() {
                                     return R::fallible_from_trap(trap);
                                 }
                                 r.into_fallible()
@@ -2050,9 +2052,9 @@ impl HostFunc {
     ) -> Self {
         let func = move |caller_vmctx, values: &mut [ValRaw]| {
             Caller::<T>::with(caller_vmctx, |mut caller| {
-                caller.store.0.call_hook(CallHook::CallingHost)?;
+                caller.store.0.on_calling_host()?;
                 let result = func(caller.sub_caller(), values)?;
-                caller.store.0.call_hook(CallHook::ReturningFromHost)?;
+                caller.store.0.on_returning_from_host()?;
                 Ok(result)
             })
         };

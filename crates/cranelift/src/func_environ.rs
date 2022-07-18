@@ -360,20 +360,24 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn fuel_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
-        // On function entry we load the amount of fuel into a function-local
-        // `self.fuel_var` to make fuel modifications fast locally. This cache
-        // is then periodically flushed to the Store-defined location in
-        // `VMRuntimeLimits` later.
-        builder.declare_var(self.fuel_var, ir::types::I64);
-        self.fuel_load_into_var(builder);
-        self.fuel_check(builder);
+        if !self.tunables.outband_fuel {
+            // On function entry we load the amount of fuel into a function-local
+            // `self.fuel_var` to make fuel modifications fast locally. This cache
+            // is then periodically flushed to the Store-defined location in
+            // `VMRuntimeLimits` later.
+            builder.declare_var(self.fuel_var, ir::types::I64);
+            self.fuel_load_into_var(builder);
+            self.fuel_check(builder);
+        }
     }
 
     fn fuel_function_exit(&mut self, builder: &mut FunctionBuilder<'_>) {
-        // On exiting the function we need to be sure to save the fuel we have
-        // cached locally in `self.fuel_var` back into the Store-defined
-        // location.
-        self.fuel_save_from_var(builder);
+        if !self.tunables.outband_fuel {
+            // On exiting the function we need to be sure to save the fuel we have
+            // cached locally in `self.fuel_var` back into the Store-defined
+            // location.
+            self.fuel_save_from_var(builder);
+        }
     }
 
     fn fuel_before_op(
@@ -425,7 +429,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             | Operator::ReturnCall { .. }
             | Operator::ReturnCallIndirect { .. } => {
                 self.fuel_increment_var(builder);
-                self.fuel_save_from_var(builder);
+                if !self.tunables.outband_fuel {
+                    self.fuel_save_from_var(builder);
+                }
             }
 
             // To ensure all code preceding a loop is only counted once we
@@ -478,6 +484,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn fuel_after_op(&mut self, op: &Operator<'_>, builder: &mut FunctionBuilder<'_>) {
+        if self.tunables.outband_fuel {
+            // Nothing to do here if the outband_fuel enabled.
+            return;
+        }
+
         // After a function call we need to reload our fuel value since the
         // function may have changed it.
         match op {
@@ -496,9 +507,15 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             return;
         }
 
-        let fuel = builder.use_var(self.fuel_var);
-        let fuel = builder.ins().iadd_imm(fuel, consumption);
-        builder.def_var(self.fuel_var, fuel);
+        if self.tunables.outband_fuel {
+            let fuel = builder.ins().get_pinned_reg(ir::types::I64);
+            let fuel = builder.ins().iadd_imm(fuel, consumption);
+            builder.ins().set_pinned_reg(fuel);
+        } else {
+            let fuel = builder.use_var(self.fuel_var);
+            let fuel = builder.ins().iadd_imm(fuel, consumption);
+            builder.def_var(self.fuel_var, fuel);
+        }
     }
 
     /// Loads the fuel consumption value from `VMRuntimeLimits` into `self.fuel_var`
@@ -507,14 +524,23 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let fuel = builder
             .ins()
             .load(ir::types::I64, ir::MemFlags::trusted(), addr, offset);
-        builder.def_var(self.fuel_var, fuel);
+
+        if self.tunables.outband_fuel {
+            builder.ins().set_pinned_reg(fuel);
+        } else {
+            builder.def_var(self.fuel_var, fuel);
+        }
     }
 
     /// Stores the fuel consumption value from `self.fuel_var` into
     /// `VMRuntimeLimits`.
     fn fuel_save_from_var(&mut self, builder: &mut FunctionBuilder<'_>) {
         let (addr, offset) = self.fuel_addr_offset(builder);
-        let fuel_consumed = builder.use_var(self.fuel_var);
+        let fuel_consumed = if self.tunables.outband_fuel {
+            builder.ins().get_pinned_reg(ir::types::I64)
+        } else {
+            builder.use_var(self.fuel_var)
+        };
         builder
             .ins()
             .store(ir::MemFlags::trusted(), fuel_consumed, addr, offset);
@@ -537,6 +563,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn fuel_check(&mut self, builder: &mut FunctionBuilder) {
         self.fuel_increment_var(builder);
         let out_of_gas_block = builder.create_block();
+        builder.set_cold_block(out_of_gas_block);
         let continuation_block = builder.create_block();
 
         // Note that our fuel is encoded as adding positive values to a
@@ -546,7 +573,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // Compare to see if our fuel is positive, and if so we ran out of gas.
         // Otherwise we can continue on like usual.
         let zero = builder.ins().iconst(ir::types::I64, 0);
-        let fuel = builder.use_var(self.fuel_var);
+        let fuel = if self.tunables.outband_fuel {
+            builder.ins().get_pinned_reg(ir::types::I64)
+        } else {
+            builder.use_var(self.fuel_var)
+        };
         let cmp = builder.ins().ifcmp(fuel, zero);
         builder
             .ins()
@@ -2023,7 +2054,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn translate_loop_header(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
         // Additionally if enabled check how much fuel we have remaining to see
         // if we've run out by this point.
-        if self.tunables.consume_fuel {
+        if self.tunables.consume_fuel && !self.tunables.outband_fuel {
             self.fuel_check(builder);
         }
 

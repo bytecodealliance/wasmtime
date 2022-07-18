@@ -28,6 +28,11 @@ pub struct Tunables {
     /// will be consumed every time a wasm instruction is executed.
     pub consume_fuel: bool,
 
+    /// If set to true, the behavior of `consume_fuel` is modified to not include
+    /// inline checks for the fuel. Instead, the fuel is checked out-of-band by
+    /// a signal handler or a separate thread.
+    pub outband_fuel: bool,
+
     /// Whether or not we use epoch-based interruption.
     pub epoch_interruption: bool,
 
@@ -82,6 +87,7 @@ impl Default for Tunables {
             generate_native_debuginfo: false,
             parse_wasm_debuginfo: true,
             consume_fuel: false,
+            outband_fuel: false,
             epoch_interruption: false,
             static_memory_bound_is_maximum: false,
             guard_before_linear_memory: true,

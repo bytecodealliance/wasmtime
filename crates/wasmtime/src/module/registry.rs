@@ -241,6 +241,31 @@ pub fn is_wasm_trap_pc(pc: usize) -> bool {
     }
 }
 
+/// Returns whether the `pc` corresponds to a wasm compiled code.
+pub fn is_wasm_pc(pc: usize) -> bool {
+    let (trap_info, text_offset) = {
+        let all_modules = GLOBAL_MODULES.read().unwrap();
+
+        let (end, (start, module)) = match all_modules.range(pc..).next() {
+            Some(info) => info,
+            None => return false,
+        };
+        if pc < *start || *end < pc {
+            return false;
+        }
+        (module.clone(), pc - *start)
+    };
+
+    match trap_info {
+        TrapInfo::Module(module) => module.func_by_text_offset(text_offset).is_some(),
+        #[cfg(feature = "component-model")]
+        TrapInfo::Component(traps) => {
+            // TODO: not sure how to handle that yet.
+            return false;
+        }
+    }
+}
+
 /// Registers a new region of code.
 ///
 /// Must not have been previously registered and must be `unregister`'d to

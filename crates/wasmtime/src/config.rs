@@ -392,6 +392,12 @@ impl Config {
         self
     }
 
+    /// TODO:
+    pub fn outband_fuel(&mut self, enable: bool) -> &mut Self {
+        self.tunables.outband_fuel = enable;
+        self
+    }
+
     /// Enables epoch-based interruption.
     ///
     /// When executing code in async mode, we sometimes want to
@@ -1369,6 +1375,12 @@ impl Config {
         {
             bail!("static memory guard size cannot be smaller than dynamic memory guard size");
         }
+        if self.tunables.outband_fuel && !self.tunables.consume_fuel {
+            bail!("out-of-band fuel metering requires `consume_fuel` to be enabled");
+        }
+        if self.tunables.outband_fuel && self.async_support {
+            bail!("out-of-band fuel metering does not support async currently");
+        }
 
         Ok(())
     }
@@ -1442,6 +1454,22 @@ impl Config {
                 .ensure_setting_unset_or_given("enable_simd", "true")
             {
                 bail!("compiler option 'enable_simd' must be enabled when 'simd' is enabled");
+            }
+        }
+        if self.tunables.outband_fuel {
+            if !self
+                .compiler_config
+                .ensure_setting_unset_or_given("enable_pinned_reg", "true")
+            {
+                bail!("compiler option 'enable_pinned_reg' must be enabled when 'outband_fuel' is enabled");
+            }
+
+            let arch = compiler.triple().architecture;
+            let os = compiler.triple().operating_system;
+            if !matches!(arch, target_lexicon::Architecture::X86_64)
+                || !matches!(os, target_lexicon::OperatingSystem::Linux)
+            {
+                bail!("`outband_fuel` only supports x86_64 Linux");
             }
         }
 

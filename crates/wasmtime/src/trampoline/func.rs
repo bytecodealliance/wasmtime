@@ -115,10 +115,12 @@ where
     F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<(), Trap> + Send + Sync + 'static,
 {
     let mut obj = engine.compiler().object()?;
+    let tunables = &engine.config().tunables;
     let (t1, t2) = engine.compiler().emit_trampoline_obj(
         ft.as_wasm_func_type(),
         stub_fn::<F> as usize,
         &mut obj,
+        tunables,
     )?;
     let obj = wasmtime_jit::mmap_vec_from_obj(obj)?;
 

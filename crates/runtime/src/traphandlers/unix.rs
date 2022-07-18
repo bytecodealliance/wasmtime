@@ -89,6 +89,12 @@ unsafe extern "C" fn trap_handler(
         let pc = get_pc(context, signum);
         let jmp_buf = info.jmp_buf_if_trap(pc, |handler| handler(signum, siginfo, context));
 
+        if info.outband_fuel && crate::traphandlers::IS_WASM_TRAP_PC(pc as usize) {
+            // flush it into the VMRuntimeLimits.
+            let fuel = get_fuel_reg(context);
+            *(*info.runtime_limits()).fuel_consumed.get() = fuel;
+        }
+
         // Figure out what to do based on the result of this handling of
         // the trap. Note that our sentinel value of 1 means that the
         // exception was handled by a custom exception handler, so we
@@ -161,6 +167,22 @@ unsafe extern "C" fn trap_handler(
         libc::sigaction(signum, previous, ptr::null_mut());
     } else {
         mem::transmute::<usize, extern "C" fn(libc::c_int)>(previous.sa_sigaction)(signum)
+    }
+}
+
+unsafe fn get_fuel_reg(cx: *mut libc::c_void) -> i64 {
+    cfg_if::cfg_if! {
+        if #[cfg(all(target_os = "linux", target_arch = "x86_64"))] {
+            let cx = &*(cx as *const libc::ucontext_t);
+            let r15 = cx.uc_mcontext.gregs[libc::REG_R15 as usize];
+            r15
+        } else if #[cfg(all(target_os = "macos", target_arch = "aarch64"))] {
+            let cx = &*(cx as *const libc::ucontext_t);
+            let x21 = (*cx.uc_mcontext).__ss.__x[21] as i64;
+            x21
+        } else {
+            panic!("unsupported platform")
+        }
     }
 }
 

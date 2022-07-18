@@ -338,19 +338,39 @@ impl Instance {
         let id = store.0.store_data()[self.0].id;
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
+        let outband_fuel = store.engine().config().tunables.outband_fuel;
         let instance = store.0.instance_mut(id);
         let f = instance.get_exported_func(start);
         let vmctx = instance.vmctx_ptr();
-        unsafe {
-            super::func::invoke_wasm_and_catch_traps(store, |_default_callee| {
-                mem::transmute::<
-                    *const VMFunctionBody,
-                    unsafe extern "C" fn(*mut VMOpaqueContext, *mut VMContext),
-                >(f.anyfunc.as_ref().func_ptr.as_ptr())(
-                    f.anyfunc.as_ref().vmctx, vmctx
-                )
-            })?;
+        if outband_fuel {
+            // HACK: calling `start` as below won't fly if `outband_fuel` is enabled. The reason is
+            // the fuel has to be loaded into the pinned reg. So we have to call `start` via a
+            // trampoline.
+            unsafe {
+                let trampoline = store.0.lookup_trampoline(f.anyfunc.as_ref());
+                super::func::invoke_wasm_and_catch_traps(store, |_default_callee| {
+                    let mut params_and_returns = vec![];
+                    trampoline(
+                        f.anyfunc.as_ref().vmctx,
+                        vmctx,
+                        (*f.anyfunc.as_ptr()).func_ptr.as_ptr(),
+                        params_and_returns.as_mut_ptr(),
+                    );
+                })?;
+            }
+        } else {
+            unsafe {
+                super::func::invoke_wasm_and_catch_traps(store, |_default_callee| {
+                    mem::transmute::<
+                        *const VMFunctionBody,
+                        unsafe extern "C" fn(*mut VMOpaqueContext, *mut VMContext),
+                    >(f.anyfunc.as_ref().func_ptr.as_ptr())(
+                        f.anyfunc.as_ref().vmctx, vmctx
+                    )
+                })?;
+            }
         }
+
         Ok(())
     }
 

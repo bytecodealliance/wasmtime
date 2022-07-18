@@ -312,6 +312,7 @@ impl Component {
             types: &ComponentTypes,
             provided_trampolines: &HashSet<SignatureIndex>,
         ) -> Result<Vec<(SignatureIndex, Box<dyn Any + Send>)>> {
+            let tunables = &engine.config().tunables;
             // All lowered functions will require a trampoline to be available in
             // case they're used when entering wasm. For example a lowered function
             // could be immediately lifted in which case we'll need a trampoline to
@@ -340,7 +341,12 @@ impl Component {
             trampolines_to_compile.sort();
             engine.run_maybe_parallel(trampolines_to_compile.clone(), |i| {
                 let ty = &types[*i];
-                Ok((*i, engine.compiler().compile_host_to_wasm_trampoline(ty)?))
+                Ok((
+                    *i,
+                    engine
+                        .compiler()
+                        .compile_host_to_wasm_trampoline(tunables, ty)?,
+                ))
             })
         }
     }

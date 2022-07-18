@@ -1,7 +1,7 @@
 //! WebAssembly trap handling, which is built on top of the lower-level
 //! signalhandling mechanisms.
 
-use crate::VMContext;
+use crate::{VMContext, VMRuntimeLimits};
 use anyhow::Error;
 use std::any::Any;
 use std::cell::{Cell, UnsafeCell};
@@ -45,7 +45,7 @@ pub use sys::SignalHandler;
 ///
 /// This is initialized during `init_traps` below. The definition lives within
 /// `wasmtime` currently.
-static mut IS_WASM_PC: fn(usize) -> bool = |_| false;
+pub static mut IS_WASM_TRAP_PC: fn(usize) -> bool = |_| false;
 
 /// This function is required to be called before any WebAssembly is entered.
 /// This will configure global state such as signal handlers to prepare the
@@ -56,14 +56,14 @@ static mut IS_WASM_PC: fn(usize) -> bool = |_| false;
 /// WebAssembly. Currently in wasmtime's integration this function is called on
 /// creation of a `Engine`.
 ///
-/// The `is_wasm_pc` argument is used when a trap happens to determine if a
+/// The `is_wasm_trap_pc` argument is used when a trap happens to determine if a
 /// program counter is the pc of an actual wasm trap or not. This is then used
 /// to disambiguate faults that happen due to wasm and faults that happen due to
 /// bugs in Rust or elsewhere.
-pub fn init_traps(is_wasm_pc: fn(usize) -> bool) {
+pub fn init_traps(is_wasm_trap_pc: fn(usize) -> bool) {
     static INIT: Once = Once::new();
     INIT.call_once(|| unsafe {
-        IS_WASM_PC = is_wasm_pc;
+        IS_WASM_TRAP_PC = is_wasm_trap_pc;
         sys::platform_init();
     });
 }
@@ -141,13 +141,21 @@ pub enum TrapReason {
 pub unsafe fn catch_traps<'a, F>(
     signal_handler: Option<*const SignalHandler<'static>>,
     capture_backtrace: bool,
+    runtime_limits: *mut VMRuntimeLimits,
+    outband_fuel: bool,
     callee: *mut VMContext,
     mut closure: F,
 ) -> Result<(), Box<Trap>>
 where
     F: FnMut(*mut VMContext),
 {
-    return CallThreadState::new(signal_handler, capture_backtrace).with(|cx| {
+    return CallThreadState::new(
+        signal_handler,
+        capture_backtrace,
+        runtime_limits,
+        outband_fuel,
+    )
+    .with(|cx| {
         wasmtime_setjmp(
             cx.jmp_buf.as_ptr(),
             call_closure::<F>,
@@ -173,6 +181,8 @@ pub struct CallThreadState {
     signal_handler: Option<*const SignalHandler<'static>>,
     prev: Cell<tls::Ptr>,
     capture_backtrace: bool,
+    runtime_limits: *mut VMRuntimeLimits,
+    outband_fuel: bool,
 }
 
 enum UnwindReason {
@@ -185,6 +195,8 @@ impl CallThreadState {
     fn new(
         signal_handler: Option<*const SignalHandler<'static>>,
         capture_backtrace: bool,
+        runtime_limits: *mut VMRuntimeLimits,
+        outband_fuel: bool,
     ) -> CallThreadState {
         CallThreadState {
             unwind: UnsafeCell::new(MaybeUninit::uninit()),
@@ -193,6 +205,8 @@ impl CallThreadState {
             signal_handler,
             prev: Cell::new(ptr::null()),
             capture_backtrace,
+            runtime_limits,
+            outband_fuel,
         }
     }
 
@@ -225,6 +239,10 @@ impl CallThreadState {
             (*self.unwind.get()).as_mut_ptr().write((reason, backtrace));
             wasmtime_longjmp(self.jmp_buf.get());
         }
+    }
+
+    pub(crate) fn runtime_limits(&self) -> *mut VMRuntimeLimits {
+        self.runtime_limits
     }
 
     /// Trap handler using our thread-local state.
@@ -273,7 +291,7 @@ impl CallThreadState {
         }
 
         // If this fault wasn't in wasm code, then it's not our problem
-        if unsafe { !IS_WASM_PC(pc as usize) } {
+        if unsafe { !IS_WASM_TRAP_PC(pc as usize) } {
             return ptr::null();
         }
 
@@ -311,7 +329,7 @@ impl<T: Copy> Drop for ResetCell<'_, T> {
 // happen which requires us to read some contextual state to figure out what to
 // do with the trap. This `tls` module is used to persist that information from
 // the caller to the trap site.
-mod tls {
+pub(crate) mod tls {
     use super::CallThreadState;
     use std::ptr;
 

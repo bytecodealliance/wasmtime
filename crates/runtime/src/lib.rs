@@ -38,6 +38,7 @@ mod instance;
 mod memory;
 mod mmap;
 mod mmap_vec;
+mod outband_fuel;
 mod table;
 mod traphandlers;
 mod vmcontext;
@@ -72,6 +73,7 @@ pub use crate::vmcontext::{
     VMRuntimeLimits, VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMTrampoline,
     ValRaw,
 };
+pub use outband_fuel::{init_outband_fuel, OutbandFuelCheckHandle, OutbandFuelSupport};
 
 mod module_id;
 pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};

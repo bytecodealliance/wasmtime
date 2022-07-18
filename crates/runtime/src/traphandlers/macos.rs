@@ -357,7 +357,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // pointer value and if `MAP` changes happen after we read our entry that's
     // ok since they won't invalidate our entry.
     let pc = get_pc(&thread_state);
-    if !super::IS_WASM_PC(pc as usize) {
+    if !super::IS_WASM_TRAP_PC(pc as usize) {
         return false;
     }
 
@@ -384,6 +384,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 /// of the wasm code.
 unsafe extern "C" fn unwind(wasm_pc: *const u8) -> ! {
     let jmp_buf = tls::with(|state| {
+        // TODO: flush the fuel reg into VMRuntimeLimits.
         let state = state.unwrap();
         state.capture_backtrace(wasm_pc);
         state.jmp_buf.get()
