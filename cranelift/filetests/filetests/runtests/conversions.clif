@@ -1,5 +1,7 @@
 test run
+
 target x86_64
+target aarch64
 
 function %fpromote_f32_f64(i64 vmctx, i64, f32) -> f64 {
     gv0 = vmctx
