@@ -156,6 +156,17 @@
 (rule (lower (has_type ty (iadd_pairwise x y)))
       (addp x y (vector_size ty)))
 
+;;;; Rules for `iabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (iabs x)))
+      (vec_abs x (vector_size ty)))
+
+(rule (lower (has_type $I64 (iabs x)))
+      (abs (OperandSize.Size64) x))
+
+(rule (lower (has_type (fits_in_32 ty) (iabs x)))
+      (abs (OperandSize.Size32) (put_in_reg_sext32 x)))
+
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller

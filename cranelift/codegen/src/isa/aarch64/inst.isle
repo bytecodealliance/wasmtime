@@ -187,6 +187,13 @@
         (rn Reg)
         (rm Reg))
 
+       ;; A conditional-select negation operation.
+       (CSNeg
+        (rd WritableReg)
+        (cond Cond)
+        (rn Reg)
+        (rm Reg))
+
        ;; A conditional-set operation.
        (CSet
         (rd WritableReg)
@@ -1534,11 +1541,15 @@
          (MInst.AluRRR (ALUOp.SubS) (operand_size ty) dst src1 src2)
          dst)))
 
+(decl cmp_imm (OperandSize Reg Imm12) ProducesFlags)
+(rule (cmp_imm size src1 src2)
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.AluRRImm12 (ALUOp.SubS) size (writable_zero_reg)
+        src1 src2)))
+
 (decl cmp64_imm (Reg Imm12) ProducesFlags)
 (rule (cmp64_imm src1 src2)
-      (ProducesFlags.ProducesFlagsSideEffect
-       (MInst.AluRRImm12 (ALUOp.SubS) (OperandSize.Size64) (writable_zero_reg)
-        src1 src2)))
+      (cmp_imm (OperandSize.Size64) src1 src2))
 
 ;; Helper for emitting `sbc` instructions.
 (decl sbc_paired (Type Reg Reg) ConsumesFlags)
@@ -1681,6 +1692,18 @@
          (MInst.CSel dst cond if_true if_false)
          dst)))
 
+;; Helper for generating a `CSNeg` instruction.
+;;
+;; Note that this doesn't actually emit anything, instead it produces a
+;; `ConsumesFlags` instruction which must be consumed with `with_flags*`
+;; helpers.
+(decl csneg (Cond Reg Reg) ConsumesFlags)
+(rule (csneg cond if_true if_false)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg
+         (MInst.CSNeg dst cond if_true if_false)
+         dst)))
+
 ;; Helpers for generating `add` instructions.
 
 (decl add (Type Reg Reg) Reg)
@@ -1768,6 +1791,17 @@
 ;; Helper for generating `addp` instructions.
 (decl addp (Reg Reg VectorSize) Reg)
 (rule (addp x y size) (vec_rrr (VecALUOp.Addp) x y size))
+
+;; Helper for generating vector `abs` instructions.
+(decl vec_abs (Reg VectorSize) Reg)
+(rule (vec_abs x size) (vec_misc (VecMisc2.Abs) x size))
+
+;; Helper for generating instruction sequences to calculate a scalar absolute
+;; value.
+(decl abs (OperandSize Reg) Reg)
+(rule (abs size x)
+      (value_regs_get (with_flags (cmp_imm size x (u8_into_imm12 0))
+                                  (csneg (Cond.Gt) x x)) 0))
 
 ;; Helper for generating `addv` instructions.
 (decl addv (Reg VectorSize) Reg)

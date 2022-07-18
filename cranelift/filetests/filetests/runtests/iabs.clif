@@ -1,5 +1,7 @@
 test interpret
-; aarch64 & x86_64 only support vector iabs
+test run
+target aarch64
+; x86_64 only supports vector iabs
 
 function %iabs_i8(i8) -> i8 {
 block0(v0: i8):

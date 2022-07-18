@@ -2130,6 +2130,16 @@ fn test_aarch64_binemit() {
         "csel x10, x12, x14, hs",
     ));
     insns.push((
+        Inst::CSNeg {
+            rd: writable_xreg(10),
+            rn: xreg(12),
+            rm: xreg(14),
+            cond: Cond::Hs,
+        },
+        "8A258EDA",
+        "csneg x10, x12, x14, hs",
+    ));
+    insns.push((
         Inst::CSet {
             rd: writable_xreg(15),
             cond: Cond::Ge,
