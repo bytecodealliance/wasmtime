@@ -121,6 +121,20 @@
 (rule (lower (has_type $I128 (iconcat lo hi)))
       (output (value_regs lo hi)))
 
+;;;; Rules for `scalar_to_vector` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32X4 (scalar_to_vector x)))
+      (fpu_extend x (ScalarSize.Size32)))
+
+(rule (lower (has_type $F64X2 (scalar_to_vector x)))
+      (fpu_extend x (ScalarSize.Size64)))
+
+(rule (lower (scalar_to_vector x @ (value_type (ty_int_bool_64 _))))
+      (mov_to_fpu x (ScalarSize.Size64)))
+
+(rule (lower (scalar_to_vector x @ (value_type (int_bool_fits_in_32 _))))
+      (mov_to_fpu (put_in_reg_zext32 x) (ScalarSize.Size32)))
+
 ;;;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I16X8 (iadd_pairwise (swiden_low x) (swiden_high y))))

@@ -1637,6 +1637,13 @@
             (_ Unit (emit (MInst.Extend dst rn signed from_bits to_bits))))
         dst))
 
+;; Helper for emitting `MInst.FpuExtend` instructions.
+(decl fpu_extend (Reg ScalarSize) Reg)
+(rule (fpu_extend src size)
+      (let ((dst WritableReg (temp_writable_reg $F32X4))
+            (_ Unit (emit (MInst.FpuExtend dst src size))))
+        dst))
+
 ;; Helper for emitting `MInst.LoadAcquire` instructions.
 (decl load_acquire (Type Reg) Reg)
 (rule (load_acquire ty addr)

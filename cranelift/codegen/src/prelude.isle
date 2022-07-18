@@ -313,6 +313,10 @@
 (decl ty_8_or_16 (Type) Type)
 (extern extractor ty_8_or_16 ty_8_or_16)
 
+;; An extractor that matches int and bool types that fit in 32 bits.
+(decl int_bool_fits_in_32 (Type) Type)
+(extern extractor int_bool_fits_in_32 int_bool_fits_in_32)
+
 ;; An extractor that matches I64 or B64.
 (decl ty_int_bool_64 (Type) Type)
 (extern extractor ty_int_bool_64 ty_int_bool_64)

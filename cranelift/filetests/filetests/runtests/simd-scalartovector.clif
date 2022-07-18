@@ -1,0 +1,42 @@
+test run
+target aarch64
+set enable_simd
+target x86_64 has_sse3 has_ssse3 has_sse41
+
+function %scalartovector_i32(i32) -> i32x4 {
+block0(v0: i32):
+    v1 = scalar_to_vector.i32x4 v0
+    return v1
+}
+; run: %scalartovector_i32(1) == [1 0 0 0]
+; run: %scalartovector_i32(4294967295) == [4294967295 0 0 0]
+
+function %scalartovector_i64(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = scalar_to_vector.i64x2 v0
+    return v1
+}
+; run: %scalartovector_i64(1) == [1 0]
+; run: %scalartovector_i64(18446744073709551615) == [18446744073709551615 0]
+
+function %scalartovector_f32(f32) -> f32x4 {
+block0(v0: f32):
+    v1 = scalar_to_vector.f32x4 v0
+    return v1
+}
+; run: %scalartovector_f32(0x1.0) == [0x1.0 0x0.0 0x0.0 0x0.0]
+; run: %scalartovector_f32(0x0.1) == [0x0.1 0x0.0 0x0.0 0x0.0]
+; run: %scalartovector_f32(NaN) == [NaN 0x0.0 0x0.0 0x0.0]
+; run: %scalartovector_f32(-0x0.0) == [-0x0.0 0x0.0 0x0.0 0x0.0]
+; run: %scalartovector_f32(0x0.0) == [0x0.0 0x0.0 0x0.0 0x0.0]
+
+function %scalartovector_f64(f64) -> f64x2 {
+block0(v0: f64):
+    v1 = scalar_to_vector.f64x2 v0
+    return v1
+}
+; run: %scalartovector_f64(0x1.0) == [0x1.0 0x0.0]
+; run: %scalartovector_f64(0x0.1) == [0x0.1 0x0.0]
+; run: %scalartovector_f64(NaN) == [NaN 0x0.0]
+; run: %scalartovector_f64(-0x0.0) == [-0x0.0 0x0.0]
+; run: %scalartovector_f64(0x0.0) == [0x0.0 0x0.0]

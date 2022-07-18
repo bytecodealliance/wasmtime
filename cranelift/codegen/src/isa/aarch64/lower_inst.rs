@@ -816,25 +816,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::ScalarToVector => {
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let input_ty = ctx.input_ty(insn, 0);
-            if (input_ty == I32 && ty.unwrap() == I32X4)
-                || (input_ty == I64 && ty.unwrap() == I64X2)
-            {
-                ctx.emit(Inst::MovToFpu {
-                    rd,
-                    rn,
-                    size: ScalarSize::from_ty(input_ty),
-                });
-            } else {
-                return Err(CodegenError::Unsupported(format!(
-                    "ScalarToVector: unsupported types {:?} -> {:?}",
-                    input_ty, ty
-                )));
-            }
-        }
+        Opcode::ScalarToVector => implemented_in_isle(ctx),
 
         Opcode::VallTrue if ctx.input_ty(insn, 0).lane_bits() == 64 => {
             let input_ty = ctx.input_ty(insn, 0);

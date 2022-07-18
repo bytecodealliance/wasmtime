@@ -5529,6 +5529,16 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::FpuExtend {
+            rd: writable_vreg(31),
+            rn: vreg(0),
+            size: ScalarSize::Size64,
+        },
+        "1F40601E",
+        "fmov d31, d0",
+    ));
+
+    insns.push((
         Inst::FpuRR {
             fpu_op: FPUOp1::Abs,
             size: ScalarSize::Size32,
