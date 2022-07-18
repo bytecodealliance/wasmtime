@@ -1,0 +1,85 @@
+test run
+
+target x86_64
+target aarch64
+
+function %fpromote_f32_f64(i64 vmctx, i64, f32) -> f64 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    heap0 = static gv1, min 0x10, bound 0x10, offset_guard 0x0, index_type i64
+
+block0(v0: i64, v1: i64, v2: f32):
+    v3 = heap_addr.i64 heap0, v1, 4
+    store.f32 v2, v3
+    v4 = load.f32 v3
+    v5 = fpromote.f64 v4
+    return v5
+}
+
+; heap: static, size=0x10, ptr=vmctx+0, bound=vmctx+8
+; run: %fpromote_f32_f64(0, 0x0.0) == 0x0.0
+; run: %fpromote_f32_f64(1, 0x0.1) == 0x0.1
+; run: %fpromote_f32_f64(2, 0x0.2) == 0x0.2
+; run: %fpromote_f32_f64(3, 0x3.2) == 0x3.2
+; run: %fpromote_f32_f64(0xc, 0x3.2) == 0x3.2
+
+function %fdemote_test(i64 vmctx, i64, f64) -> f32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    heap0 = static gv1, min 0x10, bound 0x10, offset_guard 0x0, index_type i64
+
+block0(v0: i64, v1: i64, v2: f64):
+    v3 = heap_addr.i64 heap0, v1, 8
+    store.f64 v2, v3
+    v4 = load.f64 v3
+    v5 = fdemote.f32 v4
+    return v5
+}
+
+; heap: static, size=0x10, ptr=vmctx+0, bound=vmctx+8
+; run: %fdemote_test(0, 0x0.0) == 0x0.0
+; run: %fdemote_test(1, 0x0.1) == 0x0.1
+; run: %fdemote_test(2, 0x0.2) == 0x0.2
+; run: %fdemote_test(3, 0x3.2) == 0x3.2
+; run: %fdemote_test(0x8, 0x3.2) == 0x3.2
+
+function %fvdemote_test(i64 vmctx, i64, f64x2) -> f32x4 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    heap0 = static gv1, min 0x20, bound 0x20, offset_guard 0, index_type i64
+
+block0(v0: i64, v1: i64, v2: f64x2):
+    v3 = heap_addr.i64 heap0, v1, 16
+    store.f64x2 v2, v3
+    v4 = load.f64x2 v3
+    v5 = fvdemote v4
+    return v5
+}
+
+; heap: static, size=0x20, ptr=vmctx+0, bound=vmctx+8
+; run: %fvdemote_test(0, [0x0.0 0x0.0]) == [0x0.0 0x0.0 0x0.0 0x0.0]
+; run: %fvdemote_test(1, [0x0.1 0x0.2]) == [0x0.1 0x0.2 0x0.0 0x0.0]
+; run: %fvdemote_test(2, [0x2.1 0x1.2]) == [0x2.1 0x1.2 0x0.0 0x0.0]
+; run: %fvdemote_test(8, [0x2.1 0x1.2]) == [0x2.1 0x1.2 0x0.0 0x0.0]
+; run: %fvdemote_test(16, [0x2.1 0x1.2]) == [0x2.1 0x1.2 0x0.0 0x0.0]
+
+
+function %fvpromote_low_test(i64 vmctx, i64, f32x4) -> f64x2 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    heap0 = static gv1, min 0x20, bound 0x20, offset_guard 0, index_type i64
+
+block0(v0: i64, v1: i64, v2: f32x4):
+    v3 = heap_addr.i64 heap0, v1, 16
+    store.f32x4 v2, v3
+    v4 = load.f32x4 v3
+    v5 = fvpromote_low v4
+    return v5
+}
+
+; heap: static, size=0x20, ptr=vmctx+0, bound=vmctx+8
+; run: %fvpromote_low_test(0, [0x0.0 0x0.0 0x0.0 0x0.0]) == [0x0.0 0x0.0]
+; run: %fvpromote_low_test(1, [0x0.1 0x0.2 0x0.0 0x0.0]) == [0x0.1 0x0.2]
+; run: %fvpromote_low_test(2, [0x2.1 0x1.2 0x0.0 0x0.0]) == [0x2.1 0x1.2]
+; run: %fvpromote_low_test(5, [0x0.0 0x0.0 0x2.1 0x1.2]) == [0x0.0 0x0.0]
+; run: %fvpromote_low_test(16, [0x0.0 0x0.0 0x2.1 0x1.2]) == [0x0.0 0x0.0]

@@ -2841,11 +2841,25 @@
             (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtss2sd) x dst))))
         dst))
 
+;; Helper for creating `cvtsd2ss` instructions.
+(decl x64_cvtsd2ss (Xmm) Xmm)
+(rule (x64_cvtsd2ss x)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtsd2ss) x dst))))
+        dst))
+
 ;; Helper for creating `cvtps2pd` instructions.
 (decl x64_cvtps2pd (Xmm) Xmm)
 (rule (x64_cvtps2pd x)
       (let ((dst WritableXmm (temp_writable_xmm))
            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtps2pd) x dst))))
+        dst))
+
+;; Helper for creating `cvtpd2ps` instructions.
+(decl x64_cvtpd2ps (Xmm) Xmm)
+(rule (x64_cvtpd2ps x)
+      (let ((dst WritableXmm (temp_writable_xmm))
+           (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtpd2ps) x dst))))
         dst))
 
 ;; Helpers for creating `pcmpeq*` instructions.
