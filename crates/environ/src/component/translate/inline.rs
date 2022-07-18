@@ -390,6 +390,7 @@ impl<'a> Inliner<'a> {
             // NB: at this time only lowered imported functions are supported.
             Lower(func, options) => {
                 let canonical_abi = frame.translation.funcs[frame.funcs.next_key()];
+                let lower_ty = frame.translation.component_funcs[*func];
 
                 let options_lower = self.canonical_options(frame, options);
                 let func = match &frame.component_funcs[*func] {
@@ -476,13 +477,14 @@ impl<'a> Inliner<'a> {
                     // the return values, copy them from `options_lift` to
                     // `options_lower`, and then return.
                     ComponentFuncDef::Lifted {
-                        ty,
+                        ty: lift_ty,
                         func,
                         options: options_lift,
                     } => {
                         // These are the various compilation options for lifting
                         // and lowering.
-                        drop(ty); // component-model function type
+                        drop(lift_ty); // type used when lifting the core function
+                        drop(lower_ty); // type used when lowering the core function
                         drop(func); // original core wasm function that was lifted
                         drop(options_lift); // options during `canon lift`
                         drop(options_lower); // options during `canon lower`
