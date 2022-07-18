@@ -509,7 +509,6 @@ name = "cranelift-codegen"
 version = "0.85.0"
 dependencies = [
  "bincode",
- "bumpalo",
  "cranelift-bforest",
  "cranelift-codegen-meta",
  "cranelift-codegen-shared",
@@ -544,6 +543,8 @@ name = "cranelift-egraph"
 version = "0.85.0"
 dependencies = [
  "cranelift-entity",
+ "fxhash",
+ "hashbrown 0.12.2",
  "indexmap",
  "log",
  "smallvec",
@@ -1316,9 +1317,12 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.12.1"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db0d4cf898abf0081f964436dc980e96670a0f36863e4b83aaacdb65c9d7ccc3"
+checksum = "607c8a29735385251a339424dd462993c0fed8fa09d378f259377df08c126022"
+dependencies = [
+ "ahash",
+]
 
 [[package]]
 name = "heck"
@@ -1392,7 +1396,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "10a35a97730320ffe8e2d410b5d3b69279b98d2c14bdb8b70ea89ecf7888d41e"
 dependencies = [
  "autocfg 1.1.0",
- "hashbrown 0.12.1",
+ "hashbrown 0.12.2",
  "serde",
 ]
 

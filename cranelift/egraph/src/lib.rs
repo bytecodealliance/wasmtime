@@ -13,9 +13,13 @@ use cranelift_entity::{entity_impl, packed_option::ReservedValue};
 use std::fmt::Debug;
 use std::hash::Hash;
 
+mod bumpvec;
+mod ctxhash;
 mod egraph;
 mod unionfind;
 
+pub use bumpvec::{BumpArena, BumpVec};
+pub use ctxhash::{CtxEq, CtxHash, CtxHashMap};
 pub use egraph::{EClass, EGraph};
 
 /// An eclass ID.
@@ -29,19 +33,9 @@ impl Id {
     }
 }
 
-/// An ID of a deduplicated node.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct NodeId(u32);
-entity_impl!(NodeId, "enode");
-
-impl NodeId {
-    pub fn invalid() -> NodeId {
-        Self::reserved_value()
-    }
-}
-
 /// A trait implemented by all "languages" (types that can be enodes).
-pub trait Language: Debug + PartialEq + Eq + Hash {
-    fn children(&self) -> &[Id];
-    fn children_mut(&mut self) -> &mut [Id];
+pub trait Language: CtxEq<Self::Node, Self::Node> + CtxHash<Self::Node> {
+    type Node: Debug;
+    fn children<'a>(&'a self, node: &'a Self::Node) -> &'a [Id];
+    fn children_mut<'a>(&'a mut self, ctx: &'a mut Self::Node) -> &'a mut [Id];
 }

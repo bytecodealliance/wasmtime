@@ -3,7 +3,7 @@
 
 use super::domtree::DomTreeWithChildren;
 use super::extract::Extractor;
-use super::node::Node;
+use super::node::{Node, NodeCtx};
 use crate::dominator_tree::DominatorTree;
 use crate::ir::{Block, Function, SourceLoc, Type, Value, ValueList};
 use crate::scoped_hash_map::ScopedHashMap;
@@ -13,7 +13,8 @@ use smallvec::SmallVec;
 pub(crate) struct Elaborator<'a> {
     func: &'a mut Function,
     domtree: &'a DominatorTree,
-    egraph: &'a EGraph<Node<'a>>,
+    node_ctx: &'a NodeCtx,
+    egraph: &'a EGraph<NodeCtx>,
     extractor: &'a Extractor,
     id_to_value: ScopedHashMap<Id, IdValue>,
     cur_block: Option<Block>,
@@ -31,13 +32,15 @@ impl<'a> Elaborator<'a> {
     pub(crate) fn new(
         func: &'a mut Function,
         domtree: &'a DominatorTree,
-        egraph: &'a EGraph<Node>,
+        egraph: &'a EGraph<NodeCtx>,
+        node_ctx: &'a NodeCtx,
         extractor: &'a Extractor,
     ) -> Self {
         Self {
             func,
             domtree,
             egraph,
+            node_ctx,
             extractor,
             id_to_value: ScopedHashMap::new(),
             cur_block: None,
@@ -69,7 +72,7 @@ impl<'a> Elaborator<'a> {
         };
         let inst = self.func.dfg.make_inst(instdata);
         self.func.srclocs[inst] = srcloc;
-        for &ty in result_tys.iter() {
+        for &ty in result_tys.as_slice(&self.node_ctx.types) {
             self.func.dfg.append_result(inst, ty);
         }
         self.func.layout.append_inst(inst, self.cur_block.unwrap());
@@ -111,8 +114,9 @@ impl<'a> Elaborator<'a> {
 
         // We're going to need to emit this operator. First, elaborate
         // all args, recursively.
-        let args: SmallVec<[Value; 8]> = node
-            .children()
+        let args: SmallVec<[Value; 8]> = self
+            .node_ctx
+            .children(node)
             .iter()
             .map(|&id| self.elaborate_eclass_use(id))
             .map(|idvalue| match idvalue {
