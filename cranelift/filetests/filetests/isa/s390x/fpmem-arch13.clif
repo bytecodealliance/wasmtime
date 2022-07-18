@@ -8,7 +8,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrg %f0, 0(%r2), 0
+;   vlebrg %v0, 0(%r2), 0
 ;   br %r14
 
 function %load_f32_little(i64) -> f32 {
@@ -18,7 +18,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrf %f0, 0(%r2), 0
+;   vlebrf %v0, 0(%r2), 0
 ;   br %r14
 
 function %store_f64_little(f64, i64) {
@@ -28,7 +28,7 @@ block0(v0: f64, v1: i64):
 }
 
 ; block0:
-;   vstebrg %f0, 0(%r2), 0
+;   vstebrg %v0, 0(%r2), 0
 ;   br %r14
 
 function %store_f32_little(f32, i64) {
@@ -38,6 +38,6 @@ block0(v0: f32, v1: i64):
 }
 
 ; block0:
-;   vstebrf %f0, 0(%r2), 0
+;   vstebrf %v0, 0(%r2), 0
 ;   br %r14
 

@@ -696,6 +696,11 @@ impl ABISig {
         let ret_arg = self.stack_ret_arg?;
         Some(self.args[ret_arg].clone())
     }
+
+    /// Get calling convention used.
+    pub fn call_conv(&self) -> isa::CallConv {
+        self.call_conv
+    }
 }
 
 /// ABI object for a function body.

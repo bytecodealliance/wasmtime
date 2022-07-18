@@ -1,6 +1,7 @@
 test interpret
 test run
 target aarch64
+target s390x
 target x86_64
 
 function %vall_true_b8x16(b8x16) -> b1 {

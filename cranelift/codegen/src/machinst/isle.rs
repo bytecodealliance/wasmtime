@@ -7,7 +7,8 @@ use std::cell::Cell;
 
 pub use super::MachLabel;
 pub use crate::ir::{
-    ArgumentExtension, DynamicStackSlot, ExternalName, FuncRef, GlobalValue, SigRef, StackSlot,
+    ArgumentExtension, Constant, DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate,
+    SigRef, StackSlot,
 };
 pub use crate::isa::unwind::UnwindInst;
 pub use crate::machinst::{ABIArg, ABIArgSlot, ABISig, RealReg, Reg, RelocDistance, Writable};
@@ -545,6 +546,18 @@ macro_rules! isle_prelude_methods {
             } else {
                 None
             }
+        }
+
+        #[inline]
+        fn u128_from_immediate(&mut self, imm: Immediate) -> Option<u128> {
+            let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
+            Some(u128::from_le_bytes(bytes.try_into().ok()?))
+        }
+
+        #[inline]
+        fn u128_from_constant(&mut self, constant: Constant) -> Option<u128> {
+            let bytes = self.lower_ctx.get_constant_data(constant).as_slice();
+            Some(u128::from_le_bytes(bytes.try_into().ok()?))
         }
 
         fn nonzero_u64_from_imm64(&mut self, val: Imm64) -> Option<u64> {

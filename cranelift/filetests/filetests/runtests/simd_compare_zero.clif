@@ -1,5 +1,6 @@
 test run
 target aarch64
+target s390x
 
 ; raw_bitcast is needed to get around issue with "bint" on aarch64
 

@@ -1,0 +1,43 @@
+test compile precise-output
+target s390x
+
+function %popcnt_i64x2(i64x2) -> i64x2 {
+block0(v0: i64x2):
+    v1 = popcnt.i64x2 v0
+    return v1
+}
+
+; block0:
+;   vpopctg %v24, %v24
+;   br %r14
+
+function %popcnt_i32x4(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = popcnt.i32x4 v0
+    return v1
+}
+
+; block0:
+;   vpopctf %v24, %v24
+;   br %r14
+
+function %popcnt_i16x8(i16x8) -> i16x8 {
+block0(v0: i16x8):
+    v1 = popcnt.i16x8 v0
+    return v1
+}
+
+; block0:
+;   vpopcth %v24, %v24
+;   br %r14
+
+function %popcnt_i8x16(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = popcnt.i8x16 v0
+    return v1
+}
+
+; block0:
+;   vpopctb %v24, %v24
+;   br %r14
+

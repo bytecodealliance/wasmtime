@@ -43,3 +43,18 @@ block0(v0: i32, v1: i8, v2: i8):
 ;   locre %r2, %r3
 ;   br %r14
 
+function %i(i32, i8x16, i8x16) -> i8x16 {
+block0(v0: i32, v1: i8x16, v2: i8x16):
+  v3 = iconst.i32 42
+  v4 = icmp.i32 eq v0, v3
+  v5 = select.i8x16 v4, v1, v2
+  return v5
+}
+
+; block0:
+;   vlr %v20, %v24
+;   clfi %r2, 42
+;   vlr %v24, %v25
+;   jne 10 ; vlr %v24, %v20
+;   br %r14
+

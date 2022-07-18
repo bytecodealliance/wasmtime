@@ -661,6 +661,17 @@
 (decl reloc_distance_near () RelocDistance)
 (extern extractor reloc_distance_near reloc_distance_near)
 
+;; Accessor for `Immediate` as u128.
+
+(decl u128_from_immediate (u128) Immediate)
+(extern extractor u128_from_immediate u128_from_immediate)
+
+;; Accessor for `Constant` as u128.
+
+(decl u128_from_constant (u128) Constant)
+(extern extractor u128_from_constant u128_from_constant)
+
+
 ;;;; Helpers for tail recursion loops ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; A range of integers to loop through.

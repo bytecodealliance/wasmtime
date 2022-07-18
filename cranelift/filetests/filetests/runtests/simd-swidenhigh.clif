@@ -1,6 +1,7 @@
 test interpret
 test run
 target aarch64
+target s390x
 set enable_simd
 target x86_64 has_sse3 has_ssse3 has_sse41
 

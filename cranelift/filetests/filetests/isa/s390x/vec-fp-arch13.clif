@@ -1,0 +1,90 @@
+test compile precise-output
+target s390x arch13
+
+function %fcvt_from_uint_i32x4_f32x4(i32x4) -> f32x4 {
+block0(v0: i32x4):
+  v1 = fcvt_from_uint.f32x4 v0
+  return v1
+}
+
+; block0:
+;   vcelfb %v24, %v24, 0, 4
+;   br %r14
+
+function %fcvt_from_sint_i32x4_f32x4(i32x4) -> f32x4 {
+block0(v0: i32x4):
+  v1 = fcvt_from_sint.f32x4 v0
+  return v1
+}
+
+; block0:
+;   vcefb %v24, %v24, 0, 4
+;   br %r14
+
+function %fcvt_from_uint_i64x2_f64x2(i64x2) -> f64x2 {
+block0(v0: i64x2):
+  v1 = fcvt_from_uint.f64x2 v0
+  return v1
+}
+
+; block0:
+;   vcdlgb %v24, %v24, 0, 4
+;   br %r14
+
+function %fcvt_from_sint_i64x2_f64x2(i64x2) -> f64x2 {
+block0(v0: i64x2):
+  v1 = fcvt_from_sint.f64x2 v0
+  return v1
+}
+
+; block0:
+;   vcdgb %v24, %v24, 0, 4
+;   br %r14
+
+
+function %fcvt_to_uint_sat_f32x4_i32x4(f32x4) -> i32x4 {
+block0(v0: f32x4):
+  v1 = fcvt_to_uint_sat.i32x4 v0
+  return v1
+}
+
+; block0:
+;   vclfeb %v24, %v24, 0, 5
+;   br %r14
+
+function %fcvt_to_sint_sat_f32x4_i32x4(f32x4) -> i32x4 {
+block0(v0: f32x4):
+  v1 = fcvt_to_sint_sat.i32x4 v0
+  return v1
+}
+
+; block0:
+;   vcfeb %v3, %v24, 0, 5
+;   vgbm %v5, 0
+;   vfcesb %v7, %v24, %v24
+;   vsel %v24, %v3, %v5, %v7
+;   br %r14
+
+function %fcvt_to_uint_sat_f64x2_i64x2(f64x2) -> i64x2 {
+block0(v0: f64x2):
+  v1 = fcvt_to_uint_sat.i64x2 v0
+  return v1
+}
+
+; block0:
+;   vclgdb %v24, %v24, 0, 5
+;   br %r14
+
+function %fcvt_to_sint_sat_f64x2_i64x2(f64x2) -> i64x2 {
+block0(v0: f64x2):
+  v1 = fcvt_to_sint_sat.i64x2 v0
+  return v1
+}
+
+; block0:
+;   vcgdb %v3, %v24, 0, 5
+;   vgbm %v5, 0
+;   vfcedb %v7, %v24, %v24
+;   vsel %v24, %v3, %v5, %v7
+;   br %r14
+
