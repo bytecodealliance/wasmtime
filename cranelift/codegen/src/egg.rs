@@ -43,9 +43,10 @@ impl<'a> FuncEGraph<'a> {
     /// domtree to be precomputed as well; the domtree is used for
     /// scheduling when lowering out of the egraph.
     pub fn new(func: &Function, domtree: &'a DominatorTree) -> FuncEGraph<'a> {
+        let node_count_estimate = func.dfg.num_values() * 2;
         let mut this = Self {
             domtree,
-            egraph: EGraph::new(),
+            egraph: EGraph::with_capacity(node_count_estimate),
             node_ctx: NodeCtx::default(),
             side_effects: SecondaryMap::with_default(0..0),
             side_effect_ids: vec![],

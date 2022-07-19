@@ -47,6 +47,13 @@ impl<T> BumpArena<T> {
         }
     }
 
+    pub fn arena_with_capacity(cap: usize) -> Self {
+        Self {
+            vec: Vec::with_capacity(cap),
+            freelist: Vec::with_capacity(cap / 16),
+        }
+    }
+
     pub fn with_capacity(&mut self, cap: usize) -> BumpVec<T> {
         let cap = u32::try_from(cap).unwrap();
         if let Some(range) = self.maybe_freelist_alloc(cap) {

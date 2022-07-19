@@ -1,5 +1,6 @@
 //! Egraph implementation.
 
+use crate::batched_workset::BatchedWorkset;
 use crate::bumpvec::{BumpArena, BumpVec};
 use crate::ctxhash::{CtxEq, CtxHash, CtxHashMap};
 use crate::unionfind::UnionFind;
@@ -23,14 +24,16 @@ where
     classes: PrimaryMap<Id, EClass<L>>,
     /// List pool used for parent lists.
     parent_pool: ListPool<Id>,
-    /// List of node IDs whose children have been updated. These need
+    /// Set of eclass IDs that have been merged into other eclasses,
+    /// for deferred merge processing.
+    pending_merges: BatchedWorkset<Id>,
+    /// Set of node IDs whose children have been updated. These need
     /// to be re-canonicalized in `.rebuild()`.
-    pending_child_updates: Vec<Id>,
+    pending_recanonicalizations: BatchedWorkset<Id>,
     /// List of eclass IDs that have been updated (have a new node)
     /// since last rebuild. These need to be processed by any rewrite
     /// rules.
-    #[allow(dead_code)]
-    pending_dirty_classes: Vec<Id>,
+    pending_dirty_classes: BatchedWorkset<Id>,
 }
 
 /// A reference to a node.
@@ -126,8 +129,22 @@ where
             union: UnionFind::new(),
             classes: PrimaryMap::new(),
             parent_pool: ListPool::new(),
-            pending_child_updates: vec![],
-            pending_dirty_classes: vec![],
+            pending_merges: BatchedWorkset::default(),
+            pending_recanonicalizations: BatchedWorkset::default(),
+            pending_dirty_classes: BatchedWorkset::default(),
+        }
+    }
+
+    pub fn with_capacity(nodes: usize) -> Self {
+        Self {
+            node_arena: BumpArena::arena_with_capacity(nodes),
+            node_map: CtxHashMap::with_capacity(nodes),
+            union: UnionFind::with_capacity(nodes),
+            classes: PrimaryMap::with_capacity(nodes),
+            parent_pool: ListPool::new(),
+            pending_merges: BatchedWorkset::default(),
+            pending_recanonicalizations: BatchedWorkset::default(),
+            pending_dirty_classes: BatchedWorkset::default(),
         }
     }
 
@@ -180,6 +197,8 @@ where
                 .push(eclass_id, &mut self.parent_pool);
         }
 
+        self.pending_dirty_classes.add(eclass_id);
+
         eclass_id
     }
 
@@ -187,13 +206,9 @@ where
         &self.classes[eclass].enodes.as_slice(&self.node_arena)[node_index]
     }
 
-    fn node_mut<'a>(&'a mut self, eclass: Id, node_index: usize) -> &'a mut L::Node {
-        &mut self.classes[eclass]
-            .enodes
-            .as_mut_slice(&mut self.node_arena)[node_index]
-    }
-
-    pub fn union(&mut self, a: Id, b: Id, ctx: &mut L) {
+    /// Do a merge with deferred fixups: merge the eclasses in the
+    /// union-find data structure, and enqueue the merge action itself.
+    pub fn union(&mut self, a: Id, b: Id, _ctx: &mut L) {
         let a = self.union.find_and_update(a);
         let b = self.union.find_and_update(b);
         if a == b {
@@ -213,52 +228,136 @@ where
         // Do the union-find "union" operation itself. This is what
         // makes the eclasses equivalent.
         self.union.union(union_into, union_from);
+        self.pending_merges.add(union_from);
+    }
 
+    /// Process a merge, actually combining the enode and parent lists.
+    fn do_merge(&mut self, union_into: Id, union_from: Id) {
         // Take ownership of the enode lists.
         let into_enodes = std::mem::take(&mut self.classes[union_into].enodes);
         let from_enodes = std::mem::take(&mut self.classes[union_from].enodes);
 
-        // Unregister all enodes in `from_enodes` from the dedup
-        // hashmap.
-        for enode in from_enodes.as_slice(&self.node_arena) {
-            let key = NodeKey::from_ref(enode);
-            let ctx = NodeKeyCtx {
+        // Append the enode list and place it into `union_into`.
+        let enodes = self.node_arena.append(into_enodes, from_enodes);
+        self.classes[union_into].enodes = enodes;
+
+        // Take the parent lists and append them.
+        let mut into_parents = std::mem::take(&mut self.classes[union_into].parents);
+        let from_parents = std::mem::take(&mut self.classes[union_from].parents);
+
+        into_parents.append_list(&from_parents, &mut self.parent_pool);
+        self.classes[union_into].parents = into_parents;
+
+        // Place all `from_parents` in the pending-child-update list.
+        for &parent in from_parents.as_slice(&self.parent_pool) {
+            self.pending_recanonicalizations.add(parent);
+        }
+
+        // Place this node in the pending-dirty-classes list.
+        self.pending_dirty_classes.add(union_into);
+    }
+
+    /// Rebuild the egraph.
+    pub fn rebuild(&mut self, ctx: &mut L) {
+        // While there are nodes with pending merges, perform them;
+        // while there are pending recanonicalizations, perform
+        // them. Merges may create recanonicalizations for parents,
+        // and recanonicalizations may result in additional merges, so
+        // we run both together in a fixpoint loop.
+        while !self.pending_merges.is_empty() || !self.pending_recanonicalizations.is_empty() {
+            let mut batch = self.pending_merges.take_batch();
+            for union_from in batch.batch() {
+                let union_into = self.union.find_and_update(union_from);
+                debug_assert_ne!(union_into, union_from);
+                self.do_merge(union_into, union_from);
+            }
+            self.pending_merges.reuse(batch);
+
+            let mut batch = self.pending_recanonicalizations.take_batch();
+            for node in batch.batch() {
+                self.do_recanonicalize(node, ctx);
+            }
+            self.pending_recanonicalizations.reuse(batch);
+        }
+    }
+
+    fn do_recanonicalize(&mut self, eclass: Id, ctx: &mut L) {
+        // For each node in the eclass: (i) remove from dedup, (ii)
+        // canonicalize all arg Ids according to the union-find, (iii)
+        // re-intern. If Re-interning hits another node already in
+        // dedup, then we've stumbled upon a recursive merging (merged
+        // children result in merged parents); enqueue that as a
+        // pending merge.
+        let n_nodes = self.classes[eclass].enodes.len();
+        let mut out_idx = 0;
+        for node_idx in 0..n_nodes {
+            // Remove from dedup hashmap.
+            let key = NodeKey::from_eclass_node(eclass, node_idx);
+            let keyctx = NodeKeyCtx {
                 classes: &self.classes,
                 arena: &self.node_arena,
                 node_ctx: ctx,
             };
-            self.node_map.remove(&key, &ctx);
+            self.node_map.remove(&key, &keyctx);
+
+            // Recanonicalize all arg eclass IDs.
+            let nodes = self.classes[eclass]
+                .enodes
+                .as_mut_slice(&mut self.node_arena);
+            let mut changed = false;
+            for arg in ctx.children_mut(&mut nodes[node_idx]) {
+                let orig_arg = *arg;
+                *arg = self.union.find_and_update(*arg);
+                if *arg != orig_arg {
+                    changed = true;
+                }
+            }
+
+            // Re-insert into dedup hashmap. If the newly-edited node
+            // is now a duplicate, we've found an eclass merge. Do the
+            // union-find, enqueue the actual node-list/parent-list
+            // merge, and skip bumping `out_idx` (i.e., remove this
+            // duplicate from our list). Otherwise, we "emit" it by
+            // bumping `out_idx` and, if this has fallen behind
+            // `node_idx`, shifting the node backward.
+            let key = NodeKey::from_eclass_node(eclass, node_idx);
+            let keyctx = NodeKeyCtx {
+                classes: &self.classes,
+                arena: &self.node_arena,
+                node_ctx: ctx,
+            };
+            if let Some(&dup_eclass) = self.node_map.get(&key, &keyctx) {
+                self.union.union(dup_eclass, eclass);
+                self.pending_merges.add(eclass);
+                self.pending_dirty_classes.add(dup_eclass);
+            } else {
+                let idx = out_idx;
+                if out_idx < node_idx {
+                    self.classes[eclass]
+                        .enodes
+                        .as_mut_slice(&mut self.node_arena)
+                        .swap(out_idx, node_idx);
+                }
+                out_idx += 1;
+                let key = NodeKey::from_eclass_node(eclass, idx);
+                let mut keyctx = NodeKeyCtx {
+                    classes: &self.classes,
+                    arena: &self.node_arena,
+                    node_ctx: ctx,
+                };
+                self.node_map.insert(key, eclass, &mut keyctx);
+
+                if changed {
+                    self.pending_dirty_classes.add(eclass);
+                }
+            }
         }
-
-        todo!();
-
-        // Likewise, append the parent-list and deduplicate.
-        //
-        // Note that this `.clone()` is a cheap clone of the reference
-        // into the pool.
-        let other_parent_list = self.classes[union_from].parents.clone();
-        self.classes[union_into]
-            .parents
-            .append_list(&other_parent_list, &mut self.parent_pool);
-        self.classes[union_into].parents.sort(&mut self.parent_pool);
-        self.classes[union_into]
-            .parents
-            .remove_dups(&mut self.parent_pool);
-
-        // Place all parents of `union_from` in the pending-update
-        // list.
-        self.pending_child_updates.extend(
-            other_parent_list
-                .as_slice(&self.parent_pool)
-                .iter()
-                .cloned(),
-        );
     }
 
-    /// Rebuild the egraph. Append to a list of eclasses that have
-    /// changed, requiring new rewrite rule applications.
-    pub fn rebuild(&mut self, _changed: &mut Vec<Id>) {
-        todo!()
+    /// Provide a list of all eclass IDs that are "dirty" (have
+    /// changed or were newly added).
+    pub fn dirty_classes_workset(&mut self) -> &mut BatchedWorkset<Id> {
+        &mut self.pending_dirty_classes
     }
 
     /// Get the enodes for a given eclass.

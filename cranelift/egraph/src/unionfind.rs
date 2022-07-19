@@ -15,6 +15,12 @@ impl UnionFind {
         UnionFind { parent: vec![] }
     }
 
+    pub fn with_capacity(cap: usize) -> Self {
+        UnionFind {
+            parent: Vec::with_capacity(cap),
+        }
+    }
+
     pub fn add(&mut self, id: Id) {
         if id.index() >= self.parent.len() {
             self.parent.resize(id.index() + 1, Id::invalid());

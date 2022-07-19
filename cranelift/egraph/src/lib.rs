@@ -13,6 +13,7 @@ use cranelift_entity::{entity_impl, packed_option::ReservedValue};
 use std::fmt::Debug;
 use std::hash::Hash;
 
+mod batched_workset;
 mod bumpvec;
 mod ctxhash;
 mod egraph;
