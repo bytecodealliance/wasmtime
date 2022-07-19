@@ -47,4 +47,6 @@ pub enum BackendError {
         "A mapped directory is required for this backend, but none was provided or it wasn't found"
     )]
     MissingMapDir(),
+    #[error("Invalid Tensor index {0}. This input was not found in the provided model")]
+    InvalidTensorIndex(usize),
 }

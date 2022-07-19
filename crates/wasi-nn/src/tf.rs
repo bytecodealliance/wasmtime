@@ -1,16 +1,16 @@
 //! Implements the wasi-nn API.
 use crate::api::{Backend, BackendError, BackendExecutionContext, BackendGraph};
 use crate::witx::types::{ExecutionTarget, GraphBuilderArray, Tensor};
+use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::Path;
 use std::str;
 use std::sync::Arc;
-// use tensorflow::library;
-use tensorflow::Tensor as TFTensor;
 use tensorflow::DEFAULT_SERVING_SIGNATURE_DEF_KEY;
 use tensorflow::{
     FetchToken, Graph, Operation, SavedModelBundle, SessionOptions, SessionRunArgs, Status,
 };
+use tensorflow::{SignatureDef, Tensor as TFTensor};
 
 #[derive(Default)]
 pub(crate) struct TensorflowBackend();
@@ -64,7 +64,7 @@ impl Backend for TensorflowBackend {
                             &mut graph,
                             full_path,
                         )?;
-                        return Ok(Box::new(TensorflowGraph(graph, Arc::new(bundle))));
+                        return Ok(Box::new(TensorflowGraph(Arc::new(graph), Arc::new(bundle))));
                     }
                 }
             }
@@ -74,7 +74,7 @@ impl Backend for TensorflowBackend {
     }
 }
 
-struct TensorflowGraph(Graph, Arc<SavedModelBundle>);
+struct TensorflowGraph(Arc<Graph>, Arc<SavedModelBundle>);
 
 impl<'a> BackendGraph for TensorflowGraph {
     fn init_execution_context(&mut self) -> Result<Box<dyn BackendExecutionContext>, BackendError> {
@@ -83,35 +83,38 @@ impl<'a> BackendGraph for TensorflowGraph {
             .meta_graph_def()
             .get_signature(DEFAULT_SERVING_SIGNATURE_DEF_KEY)?;
 
-        let x_info = signature.get_input("input_1")?;
-        let op_x: Operation = self.0.operation_by_name_required(&x_info.name().name)?;
-        let output_info = signature.get_output("Predictions")?;
-        let op_output = self
-            .0
-            .operation_by_name_required(&output_info.name().name)?;
+        let mut outputs: Vec<String> = vec![];
+
+        // Get the index of each output key
+        for (key, _value) in signature.outputs() {
+            outputs.push(key.clone());
+        }
+
+        // Currently we only support using one output, index == 0
+        let out_name = &signature.get_output(outputs[0].as_str())?.name().name;
 
         Ok(Box::new(TensorflowExecutionContext {
-            op_x: op_x,
-            op_output: op_output,
+            graph: self.0.clone(),
             bundle: self.1.clone(),
-            token_output: None,
-            tensor: None,
+            inputs: HashMap::new(),
+            sig: signature.clone(),
+            output_name: String::from(out_name),
             output: None,
         }))
     }
 }
 
 struct TensorflowExecutionContext {
-    op_x: Operation,
-    op_output: Operation,
+    graph: Arc<Graph>,
     bundle: Arc<SavedModelBundle>,
-    token_output: Option<FetchToken>,
-    tensor: Option<TFTensor<f32>>,
+    inputs: HashMap<String, TFTensor<f32>>,
+    sig: SignatureDef,
+    output_name: String,
     output: Option<TFTensor<f32>>,
 }
 
 impl BackendExecutionContext for TensorflowExecutionContext {
-    fn set_input(&mut self, _index: u32, tensor: &Tensor<'_>) -> Result<(), BackendError> {
+    fn set_input(&mut self, index: u32, tensor: &Tensor<'_>) -> Result<(), BackendError> {
         let dim = tensor
             .dimensions
             .as_slice()?
@@ -127,21 +130,48 @@ impl BackendExecutionContext for TensorflowExecutionContext {
             local_tensor[i] = tfdata_dref[i] as f32;
         }
 
-        self.tensor = Some(local_tensor);
+        // Save the input to the context
+        self.inputs.insert(index.to_string(), local_tensor.clone());
+
         Ok(())
     }
 
     fn compute(&mut self) -> Result<(), BackendError> {
-        let mut args: SessionRunArgs = SessionRunArgs::new();
-        args.add_feed(&self.op_x, 0, &self.tensor.as_ref().unwrap());
-        self.token_output = Some(args.request_fetch(&self.op_output, 0));
+        let mut inputs: Vec<String> = vec![];
+
+        // Get the available inputs for this model
+        for key in self.sig.inputs().keys() {
+            inputs.push(key.clone());
+        }
+
+        // Initialize SessionRunArgs for inputs/outputs
+        let mut args = SessionRunArgs::new();
+
+        // Check that the saved inputs exist in the signature, and add them to the feed.
+        for key in self.inputs.keys() {
+            let key_usize = key.parse::<usize>().unwrap();
+
+            if key_usize > self.sig.inputs().len() - 1 {
+                return Err(BackendError::InvalidTensorIndex(key_usize));
+            }
+
+            let x_info = self.sig.get_input(inputs[key_usize].as_str())?;
+            let op_x: Operation = self.graph.operation_by_name_required(&x_info.name().name)?;
+            args.add_feed(&op_x, key_usize as i32, &self.inputs[key]);
+        }
+
+        // Setup the output
+        let op_output = &self.graph.operation_by_name_required(&self.output_name)?;
+        let token_output: FetchToken = args.request_fetch(&op_output, 0);
+        // Run the inference
         self.bundle.session.run(&mut args)?;
-        self.output = Some(args.fetch(self.token_output.unwrap())?);
+        // Save the output for later
+        self.output = Some(args.fetch(token_output)?);
+
         Ok(())
     }
 
     fn get_output(&mut self, _index: u32, destination: &mut [u8]) -> Result<u32, BackendError> {
-        // Calculate argmax of the output
         let output = self.output.as_ref().unwrap();
         if output.len() > destination.len() {
             return Err(BackendError::NotEnoughMemory(output.len()));
