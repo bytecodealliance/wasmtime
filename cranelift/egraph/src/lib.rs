@@ -19,7 +19,7 @@ mod ctxhash;
 mod egraph;
 mod unionfind;
 
-pub use bumpvec::{BumpArena, BumpVec};
+pub use bumpvec::{BumpArena, BumpSlice, BumpVec};
 pub use ctxhash::{CtxEq, CtxHash, CtxHashMap};
 pub use egraph::{EClass, EGraph};
 

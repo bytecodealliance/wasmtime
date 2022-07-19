@@ -1,7 +1,7 @@
 //! Node definition for EGraph representation.
 
 use crate::ir::{Block, Inst, InstructionImms, Opcode, SourceLoc, Type};
-use cranelift_egraph::{BumpArena, BumpVec, CtxEq, CtxHash, Id, Language};
+use cranelift_egraph::{BumpArena, BumpSlice, CtxEq, CtxHash, Id, Language};
 use cranelift_entity::{EntityList, ListPool};
 use std::hash::{Hash, Hasher};
 
@@ -27,7 +27,7 @@ pub enum Node {
         /// eclass arguments to the operator.
         args: EntityList<Id>,
         /// Types of results.
-        types: BumpVec<Type>,
+        types: BumpSlice<Type>,
     },
     /// A CLIF instruction that has side-effects or is otherwise not
     /// representable by `Pure`.
@@ -37,7 +37,7 @@ pub enum Node {
         /// eclass arguments to the operator.
         args: EntityList<Id>,
         /// Types of results.
-        types: BumpVec<Type>,
+        types: BumpSlice<Type>,
         /// The original instruction. We include this so that the
         /// `Inst`s are not deduplicated: every instance is a
         /// logically separate and unique side-effect. However,

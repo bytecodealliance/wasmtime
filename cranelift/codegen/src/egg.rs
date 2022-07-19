@@ -105,6 +105,7 @@ impl<'a> FuncEGraph<'a> {
                     .node_ctx
                     .types
                     .from_iter(results.iter().map(|&val| func.dfg.value_type(val)));
+                let types = types.freeze_cap(&mut self.node_ctx.types);
 
                 // Create the egraph node.
                 let op = InstructionImms::from(&func.dfg[inst]);
