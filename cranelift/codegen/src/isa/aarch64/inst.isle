@@ -895,6 +895,16 @@
             Size64
             Size128))
 
+;; Helper for calculating the `ScalarSize` corresponding to a type
+(decl scalar_size (Type) ScalarSize)
+(rule (scalar_size $I8) (ScalarSize.Size8))
+(rule (scalar_size $I16) (ScalarSize.Size16))
+(rule (scalar_size $I32) (ScalarSize.Size32))
+(rule (scalar_size $I64) (ScalarSize.Size64))
+(rule (scalar_size $I128) (ScalarSize.Size128))
+(rule (scalar_size $F32) (ScalarSize.Size32))
+(rule (scalar_size $F64) (ScalarSize.Size64))
+
 (type Cond extern
   (enum
     (Eq)
@@ -1460,6 +1470,19 @@
             (_ Unit (emit (MInst.VecRRR op dst src1 src2 size))))
         dst))
 
+;; Helper for emitting `MInst.FpuRRR` instructions.
+(decl fpu_rrr (FPUOp2 Reg Reg ScalarSize) Reg)
+(rule (fpu_rrr op src1 src2 size)
+      (let ((dst WritableReg (temp_writable_reg $F64))
+            (_ Unit (emit (MInst.FpuRRR op size dst src1 src2))))
+        dst))
+
+;; Helper for emitting `MInst.FpuCmp` instructions.
+(decl fpu_cmp (ScalarSize Reg Reg) ProducesFlags)
+(rule (fpu_cmp size rn rm)
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.FpuCmp size rn rm)))
+
 ;; Helper for emitting `MInst.VecLanes` instructions.
 (decl vec_lanes (VecLanesOp Reg VectorSize) Reg)
 (rule (vec_lanes op src size)
@@ -1611,6 +1634,22 @@
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecRRLong op dst src high_half))))
         dst))
+
+;; Helper for emitting `MInst.FpuCSel32` / `MInst.FpuCSel64`
+;; instructions.
+(decl fpu_csel (Type Cond Reg Reg) ConsumesFlags)
+(rule (fpu_csel $F32 cond if_true if_false)
+      (let ((dst WritableReg (temp_writable_reg $F32)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg
+         (MInst.FpuCSel32 dst if_true if_false cond)
+         dst)))
+
+(rule (fpu_csel $F64 cond if_true if_false)
+      (let ((dst WritableReg (temp_writable_reg $F64)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg
+         (MInst.FpuCSel64 dst if_true if_false cond)
+         dst)))
+
 
 ;; Helper for emitting `MInst.MovToFpu` instructions.
 (decl mov_to_fpu (Reg ScalarSize) Reg)

@@ -164,6 +164,72 @@
 (rule (lower (has_type (fits_in_32 ty) (iabs x)))
       (abs (OperandSize.Size32) (put_in_reg_sext32 x)))
 
+;;;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fadd rn rm)))
+      (vec_rrr (VecALUOp.Fadd) rn rm (vector_size ty)))
+
+(rule (lower (has_type (ty_scalar_float ty) (fadd rn rm)))
+      (fpu_rrr (FPUOp2.Add) rn rm (scalar_size ty)))
+
+;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fsub rn rm)))
+      (vec_rrr (VecALUOp.Fsub) rn rm (vector_size ty)))
+
+(rule (lower (has_type (ty_scalar_float ty) (fsub rn rm)))
+      (fpu_rrr (FPUOp2.Sub) rn rm (scalar_size ty)))
+
+;;;; Rules for `fmul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fmul rn rm)))
+      (vec_rrr (VecALUOp.Fmul) rn rm (vector_size ty)))
+
+(rule (lower (has_type (ty_scalar_float ty) (fmul rn rm)))
+      (fpu_rrr (FPUOp2.Mul) rn rm (scalar_size ty)))
+
+;;;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fdiv rn rm)))
+      (vec_rrr (VecALUOp.Fdiv) rn rm (vector_size ty)))
+
+(rule (lower (has_type (ty_scalar_float ty) (fdiv rn rm)))
+      (fpu_rrr (FPUOp2.Div) rn rm (scalar_size ty)))
+
+;;;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fmin rn rm)))
+      (vec_rrr (VecALUOp.Fmin) rn rm (vector_size ty)))
+
+(rule (lower (has_type (ty_scalar_float ty) (fmin rn rm)))
+      (fpu_rrr (FPUOp2.Min) rn rm (scalar_size ty)))
+
+;;;; Rules for `fmax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fmax rn rm)))
+      (vec_rrr (VecALUOp.Fmax) rn rm (vector_size ty)))
+
+(rule (lower (has_type (ty_scalar_float ty) (fmax rn rm)))
+      (fpu_rrr (FPUOp2.Max) rn rm (scalar_size ty)))
+
+;;;; Rules for `fmin_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fmin_pseudo rm rn)))
+      (bsl ty (vec_rrr (VecALUOp.Fcmgt) rm rn (vector_size ty)) rn rm))
+
+(rule (lower (has_type (ty_scalar_float ty) (fmin_pseudo rm rn)))
+      (with_flags (fpu_cmp (scalar_size ty) rm rn)
+                  (fpu_csel ty (Cond.Gt) rn rm)))
+
+;;;; Rules for `fmax_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fmax_pseudo rm rn)))
+      (bsl ty (vec_rrr (VecALUOp.Fcmgt) rn rm (vector_size ty)) rn rm))
+
+(rule (lower (has_type (ty_scalar_float ty) (fmax_pseudo rm rn)))
+      (with_flags (fpu_cmp (scalar_size ty) rn rm)
+                  (fpu_csel ty (Cond.Gt) rn rm)))
+
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller
