@@ -3,7 +3,11 @@
 //! The implementation here is built around signal handlers. We register a custom signal handler
 //! for SIGUSR1. When a check handle is created it captures the current thread and process id.
 //!
-//! For performing the out-of-band check, a SIGUSR1 signal is sent using the `tgkill` system call.
+//! For performing the out-of-band check, a SIGUSR1 signal is sent using the `rt_tgsigqueueinfo`
+//! system call. This modules uses the raw syscall because glibc/nptl attempts to fill the
+//! `siginfo_t` with the current pid/uid by issuing the corresponding syscalls. Our signal handler
+//! could not care less about those and we are not keen on doing any unnecessary syscalls inside
+//! of the check routine since it guarded by a mutex.
 
 use crate::outband_fuel::IS_WASM_PC;
 use crate::traphandlers::{raise_lib_trap, tls};
@@ -12,9 +16,35 @@ use std::mem::{self, MaybeUninit};
 use std::ptr;
 use wasmtime_environ::TrapCode;
 
+const SI_QUEUE: libc::c_int = -1;
+
+// We have to redefine `siginfo_t` since libc's `siginfo_t` only allows reading the fields, here
+// we have to write them.
+#[repr(C, align(8))] // assumes x86_64!
+struct siginfo_t {
+    si_signo: libc::c_int,
+    si_errno: libc::c_int,
+    si_code: libc::c_int,
+    si_pid: libc::c_int,
+    si_uid: libc::c_int,
+    si_value: sigval,
+}
+
+#[repr(C)]
+union sigval {
+    sival_int: libc::c_int,
+    sival_ptr: *const libc::c_void,
+}
+
+/// A wrapper to perform the `rt_tgsigqueueinfo` syscall.
 #[inline]
-unsafe fn tgkill(tgid: libc::pid_t, tid: libc::pid_t, sig: libc::c_int) -> libc::c_int {
-    libc::syscall(libc::SYS_tgkill, tgid, tid, sig) as libc::c_int
+unsafe fn rt_tgsigqueueinfo(
+    tgid: libc::pid_t,
+    tid: libc::pid_t,
+    sig: libc::c_int,
+    uinfo: *const siginfo_t,
+) -> libc::c_int {
+    libc::syscall(libc::SYS_rt_tgsigqueueinfo, tgid, tid, sig, uinfo) as libc::c_int
 }
 
 pub struct CheckHandle {
@@ -36,17 +66,54 @@ impl CheckHandle {
 
     pub fn check(&self) {
         unsafe {
+            // Assemble siginfo_t structure.
+            //
+            // Note, that the kernel does not care about the exact values in si_pid, si_uid, it
+            // just passes them through. The signal handler doesn't need them too, so we just supply
+            // 0.
+            let uinfo = siginfo_t {
+                si_signo: libc::SIGUSR1,
+                si_errno: 0,
+                si_code: SI_QUEUE,
+                si_pid: 0,
+                si_uid: 0,
+                si_value: sigval {
+                    sival_ptr: COOKIE as *const libc::c_void,
+                },
+            };
+
             // Send SIGUSR1 signal to the thread of interest.  Ignore the return value of the
             // syscall deliberately.
-            let _ = tgkill(self.my_pid, self.target_tid, libc::SIGUSR1);
+            //
+            // NOTE: that we are using `my_pid` instead of asking the current pid from the kernel.
+            // Theoretically it can change, but only in situations like forking.
+            // TODO: Do we care about that?
+            let _ = rt_tgsigqueueinfo(
+                self.my_pid,
+                self.target_tid,
+                libc::SIGUSR1,
+                &uinfo as *const siginfo_t,
+            );
         }
     }
 }
 
+/// This cookie is used to differentiate those SIGUSR1 coming from this file from those
+/// than come from elsewhere.
+static mut COOKIE: usize = 0;
 static mut PREV_SIGUSR1: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 
 pub fn platform_init() {
     unsafe {
+        // Generate the COOKIE first. Collision is unlikely and is not the end of the world, so
+        // use the trick found in aHash.
+        //
+        // Writing to COOKIE is safe since no data race is possible because `platform_init` is
+        // executed only once.
+        COOKIE = psm::stack_pointer() as usize;
+        // TODO: I am pretty sure there is no need for synchronization, but still?
+
+        // Install the signal handler for the check fuel requests.
         let mut handler: libc::sigaction = mem::zeroed();
         handler.sa_flags = libc::SA_SIGINFO;
         handler.sa_sigaction = trap_handler as usize;
@@ -62,10 +129,14 @@ pub fn platform_init() {
 
 unsafe extern "C" fn trap_handler(
     signum: libc::c_int,
-    siginfo: *mut libc::siginfo_t,
+    siginfo: *mut siginfo_t,
     context: *mut libc::c_void,
 ) {
     let handled = tls::with(|info| {
+        if (*siginfo).si_value.sival_ptr as usize != COOKIE {
+            return false;
+        }
+
         // we don't check if the tls info is set, because it's may not be immediatelly after
         // the pthread_t is initialized.
         let info = match info {
@@ -104,7 +175,7 @@ unsafe extern "C" fn trap_handler(
     // returning the signal to it's original disposition and returning.
     let previous = &*PREV_SIGUSR1.as_ptr();
     if previous.sa_flags & libc::SA_SIGINFO != 0 {
-        mem::transmute::<usize, extern "C" fn(libc::c_int, *mut libc::siginfo_t, *mut libc::c_void)>(
+        mem::transmute::<usize, extern "C" fn(libc::c_int, *mut siginfo_t, *mut libc::c_void)>(
             previous.sa_sigaction,
         )(signum, siginfo, context)
     } else if previous.sa_sigaction == libc::SIG_DFL || previous.sa_sigaction == libc::SIG_IGN {

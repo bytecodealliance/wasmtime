@@ -3609,6 +3609,7 @@ dependencies = [
  "memfd",
  "memoffset",
  "more-asserts",
+ "psm",
  "rand 0.8.5",
  "rustix",
  "thiserror",
