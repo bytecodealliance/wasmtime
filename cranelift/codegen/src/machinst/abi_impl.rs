@@ -1410,12 +1410,13 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
 
         if !self.call_conv.extends_baldrdash() {
             self.fixed_frame_storage_size += total_stacksize;
-            self.setup_frame = M::is_frame_setup_needed(
-                self.is_leaf,
-                self.stack_args_size(),
-                clobbered_callee_saves.len(),
-                self.fixed_frame_storage_size,
-            );
+            self.setup_frame = self.flags.preserve_frame_pointers()
+                || M::is_frame_setup_needed(
+                    self.is_leaf,
+                    self.stack_args_size(),
+                    clobbered_callee_saves.len(),
+                    self.fixed_frame_storage_size,
+                );
 
             insts.extend(
                 M::gen_debug_frame_info(self.call_conv, &self.flags, &self.isa_flags).into_iter(),
