@@ -484,6 +484,7 @@ impl Engine {
                 "has_popcnt" => Some(std::is_x86_feature_detected!("popcnt")),
                 "has_avx" => Some(std::is_x86_feature_detected!("avx")),
                 "has_avx2" => Some(std::is_x86_feature_detected!("avx2")),
+                "has_fma" => Some(std::is_x86_feature_detected!("fma")),
                 "has_bmi1" => Some(std::is_x86_feature_detected!("bmi1")),
                 "has_bmi2" => Some(std::is_x86_feature_detected!("bmi2")),
                 "has_avx512bitalg" => Some(std::is_x86_feature_detected!("avx512bitalg")),
