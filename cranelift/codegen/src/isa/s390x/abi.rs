@@ -71,7 +71,7 @@ use crate::machinst::{RealReg, Reg, RegClass, Writable};
 use crate::settings;
 use crate::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
-use regalloc2::{PReg, PRegSet, VReg};
+use regalloc2::{PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
 
@@ -509,30 +509,11 @@ impl ABIMachineSpec for S390xMachineDeps {
         outgoing_args_size: u32,
     ) -> (u64, SmallVec<[Inst; 16]>) {
         let mut insts = SmallVec::new();
-        let mut clobbered_fpr = vec![];
-        let mut clobbered_gpr = vec![];
 
-        for &reg in clobbered_callee_saves.iter() {
-            match reg.to_reg().class() {
-                RegClass::Int => clobbered_gpr.push(reg),
-                RegClass::Float => clobbered_fpr.push(reg),
-            }
-        }
-        // We need to save the link register in non-leaf functions.
-        // FIXME: This should be included in the clobber list to begin with,
-        // but isn't because we have have excluded call instructions via the
-        // is_included_in_clobbers callback.
-        if outgoing_args_size > 0 {
-            clobbered_gpr.push(Writable::from_reg(RealReg::from(gpr_preg(14))));
-        }
-
-        let mut first_clobbered_gpr = 16;
-        for reg in clobbered_gpr {
-            let enc = reg.to_reg().hw_enc();
-            if enc < first_clobbered_gpr {
-                first_clobbered_gpr = enc;
-            }
-        }
+        // Collect clobbered registers.
+        let is_leaf = outgoing_args_size == 0;
+        let (first_clobbered_gpr, clobbered_fpr) =
+            get_clobbered_gpr_fpr(clobbered_callee_saves, is_leaf);
         let clobber_size = clobbered_fpr.len() * 8;
         if flags.unwind_info() {
             insts.push(Inst::Unwind {
@@ -607,30 +588,20 @@ impl ABIMachineSpec for S390xMachineDeps {
 
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
-        _: &Signature,
-        _: &settings::Flags,
+        sig: &Signature,
+        flags: &settings::Flags,
         clobbers: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
+        let clobbered_callee_saves =
+            Self::get_clobbered_callee_saves(call_conv, flags, sig, clobbers);
 
         // Collect clobbered registers.
-        let (mut clobbered_gpr, clobbered_fpr) = get_regs_saved_in_prologue(call_conv, clobbers);
-        // We need to restore the link register in non-leaf functions.
-        // FIXME: This should be included in the clobber list to begin with,
-        // but isn't because we have have excluded call instructions via the
-        // is_included_in_clobbers callback.
-        if outgoing_args_size > 0 {
-            clobbered_gpr.push(Writable::from_reg(RealReg::from(gpr_preg(14))));
-        }
-        let mut first_clobbered_gpr = 16;
-        for reg in clobbered_gpr {
-            let enc = reg.to_reg().hw_enc();
-            if enc < first_clobbered_gpr {
-                first_clobbered_gpr = enc;
-            }
-        }
+        let is_leaf = outgoing_args_size == 0;
+        let (first_clobbered_gpr, clobbered_fpr) =
+            get_clobbered_gpr_fpr(&clobbered_callee_saves, is_leaf);
         let clobber_size = clobbered_fpr.len() * 8;
 
         // Restore FPRs.
@@ -770,24 +741,38 @@ fn is_reg_saved_in_prologue(_call_conv: isa::CallConv, r: RealReg) -> bool {
     }
 }
 
-fn get_regs_saved_in_prologue(
-    call_conv: isa::CallConv,
-    regs: &[Writable<RealReg>],
-) -> (Vec<Writable<RealReg>>, Vec<Writable<RealReg>>) {
-    let mut int_saves = vec![];
-    let mut fpr_saves = vec![];
-    for &reg in regs {
-        if is_reg_saved_in_prologue(call_conv, reg.to_reg()) {
-            match reg.to_reg().class() {
-                RegClass::Int => int_saves.push(reg),
-                RegClass::Float => fpr_saves.push(reg),
+fn get_clobbered_gpr_fpr(
+    clobbered_callee_saves: &[Writable<RealReg>],
+    is_leaf: bool,
+) -> (u8, SmallVec<[Writable<RealReg>; 8]>) {
+    // Collect clobbered registers.  Note we save/restore GPR always as
+    // a block of registers using LOAD MULTIPLE / STORE MULTIPLE, starting
+    // with the clobbered GPR with the lowest number up to %r15.  We
+    // return the number of that first GPR (or 16 if none is to be saved).
+    let mut clobbered_fpr = SmallVec::new();
+    let mut first_clobbered_gpr = 16;
+
+    // We need to save/restore the link register in non-leaf functions.
+    // FIXME: This should be included in the clobber list to begin with,
+    // but isn't because we have have excluded call instructions via the
+    // is_included_in_clobbers callback.
+    if !is_leaf {
+        first_clobbered_gpr = 14;
+    }
+
+    for &reg in clobbered_callee_saves.iter() {
+        match reg.to_reg().class() {
+            RegClass::Int => {
+                let enc = reg.to_reg().hw_enc();
+                if enc < first_clobbered_gpr {
+                    first_clobbered_gpr = enc;
+                }
             }
+            RegClass::Float => clobbered_fpr.push(reg),
         }
     }
-    // Sort registers for deterministic code output.
-    int_saves.sort_by_key(|r| VReg::from(r.to_reg()).vreg());
-    fpr_saves.sort_by_key(|r| VReg::from(r.to_reg()).vreg());
-    (int_saves, fpr_saves)
+
+    (first_clobbered_gpr, clobbered_fpr)
 }
 
 const fn clobbers() -> PRegSet {
