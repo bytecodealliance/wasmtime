@@ -230,6 +230,85 @@
       (with_flags (fpu_cmp (scalar_size ty) rn rm)
                   (fpu_csel ty (Cond.Gt) rn rm)))
 
+;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (sqrt x)))
+      (vec_misc (VecMisc2.Fsqrt) x (vector_size ty)))
+
+(rule (lower (has_type (ty_scalar_float ty) (sqrt x)))
+      (fpu_rr (FPUOp1.Sqrt) x (scalar_size ty)))
+
+;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fneg x)))
+      (vec_misc (VecMisc2.Fneg) x (vector_size ty)))
+
+(rule (lower (has_type (ty_scalar_float ty) (fneg x)))
+      (fpu_rr (FPUOp1.Neg) x (scalar_size ty)))
+
+;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fabs x)))
+      (vec_misc (VecMisc2.Fabs) x (vector_size ty)))
+
+(rule (lower (has_type (ty_scalar_float ty) (fabs x)))
+      (fpu_rr (FPUOp1.Abs) x (scalar_size ty)))
+
+;;;; Rules for `fpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F64 (fpromote x)))
+      (fpu_rr (FPUOp1.Cvt32To64) x (ScalarSize.Size32)))
+
+;;;; Rules for `fdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fdemote x)))
+      (fpu_rr (FPUOp1.Cvt64To32) x (ScalarSize.Size64)))
+
+;;;; Rules for `ceil` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (ceil x)))
+      (vec_misc (VecMisc2.Frintp) x (vector_size ty)))
+
+(rule (lower (has_type $F32 (ceil x)))
+      (fpu_round (FpuRoundMode.Plus32) x))
+
+(rule (lower (has_type $F64 (ceil x)))
+      (fpu_round (FpuRoundMode.Plus64) x))
+
+;;;; Rules for `floor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (floor x)))
+      (vec_misc (VecMisc2.Frintm) x (vector_size ty)))
+
+(rule (lower (has_type $F32 (floor x)))
+      (fpu_round (FpuRoundMode.Minus32) x))
+
+(rule (lower (has_type $F64 (floor x)))
+      (fpu_round (FpuRoundMode.Minus64) x))
+
+;;;; Rules for `trunc` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (trunc x)))
+      (vec_misc (VecMisc2.Frintz) x (vector_size ty)))
+
+(rule (lower (has_type $F32 (trunc x)))
+      (fpu_round (FpuRoundMode.Zero32) x))
+
+(rule (lower (has_type $F64 (trunc x)))
+      (fpu_round (FpuRoundMode.Zero64) x))
+
+;;;; Rules for `nearest` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (nearest x)))
+      (vec_misc (VecMisc2.Frintn) x (vector_size ty)))
+
+(rule (lower (has_type $F32 (nearest x)))
+      (fpu_round (FpuRoundMode.Nearest32) x))
+
+(rule (lower (has_type $F64 (nearest x)))
+      (fpu_round (FpuRoundMode.Nearest64) x))
+
+
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller

@@ -701,3 +701,212 @@ block0(v0: f64):
 ;   fcvtzs x0, d7
 ;   ret
 
+function %f57(f32x2) -> f32x2 {
+block0(v0: f32x2):
+  v1 = sqrt v0
+  return v1
+}
+
+; block0:
+;   fsqrt v0.2s, v0.2s
+;   ret
+
+function %f58(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = sqrt v0
+  return v1
+}
+
+; block0:
+;   fsqrt v0.4s, v0.4s
+;   ret
+
+function %f59(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = sqrt v0
+  return v1
+}
+
+; block0:
+;   fsqrt v0.2d, v0.2d
+;   ret
+
+function %f60(f32x2) -> f32x2 {
+block0(v0: f32x2):
+  v1 = fneg v0
+  return v1
+}
+
+; block0:
+;   fneg v0.2s, v0.2s
+;   ret
+
+function %f61(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = fneg v0
+  return v1
+}
+
+; block0:
+;   fneg v0.4s, v0.4s
+;   ret
+
+function %f62(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = fneg v0
+  return v1
+}
+
+; block0:
+;   fneg v0.2d, v0.2d
+;   ret
+
+function %f63(f32x2) -> f32x2 {
+block0(v0: f32x2):
+  v1 = fabs v0
+  return v1
+}
+
+; block0:
+;   fabs v0.2s, v0.2s
+;   ret
+
+function %f64(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = fabs v0
+  return v1
+}
+
+; block0:
+;   fabs v0.4s, v0.4s
+;   ret
+
+function %f65(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = fabs v0
+  return v1
+}
+
+; block0:
+;   fabs v0.2d, v0.2d
+;   ret
+
+function %f66(f32x2) -> f32x2 {
+block0(v0: f32x2):
+  v1 = ceil v0
+  return v1
+}
+
+; block0:
+;   frintp v0.2s, v0.2s
+;   ret
+
+function %f67(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = ceil v0
+  return v1
+}
+
+; block0:
+;   frintp v0.4s, v0.4s
+;   ret
+
+function %f68(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = ceil v0
+  return v1
+}
+
+; block0:
+;   frintp v0.2d, v0.2d
+;   ret
+
+function %f69(f32x2) -> f32x2 {
+block0(v0: f32x2):
+  v1 = floor v0
+  return v1
+}
+
+; block0:
+;   frintm v0.2s, v0.2s
+;   ret
+
+function %f70(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = floor v0
+  return v1
+}
+
+; block0:
+;   frintm v0.4s, v0.4s
+;   ret
+
+function %f71(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = floor v0
+  return v1
+}
+
+; block0:
+;   frintm v0.2d, v0.2d
+;   ret
+
+function %f72(f32x2) -> f32x2 {
+block0(v0: f32x2):
+  v1 = trunc v0
+  return v1
+}
+
+; block0:
+;   frintz v0.2s, v0.2s
+;   ret
+
+function %f73(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = trunc v0
+  return v1
+}
+
+; block0:
+;   frintz v0.4s, v0.4s
+;   ret
+
+function %f74(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = trunc v0
+  return v1
+}
+
+; block0:
+;   frintz v0.2d, v0.2d
+;   ret
+
+function %f75(f32x2) -> f32x2 {
+block0(v0: f32x2):
+  v1 = nearest v0
+  return v1
+}
+
+; block0:
+;   frintn v0.2s, v0.2s
+;   ret
+
+function %f76(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = nearest v0
+  return v1
+}
+
+; block0:
+;   frintn v0.4s, v0.4s
+;   ret
+
+function %f77(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = nearest v0
+  return v1
+}
+
+; block0:
+;   frintn v0.2d, v0.2d
+;   ret
