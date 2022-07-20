@@ -716,6 +716,12 @@ fn table_ops_eventually_gcs() {
     use arbitrary::Unstructured;
     use rand::prelude::*;
 
+    // Skip if we're under emulation because some fuzz configurations will do
+    // large address space reservations that QEMU doesn't handle well.
+    if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
+        return;
+    }
+
     let mut rng = SmallRng::seed_from_u64(0);
     let mut buf = vec![0; 2048];
     let n = 100;
