@@ -18,6 +18,18 @@ pub(crate) fn define() -> SettingGroup {
         false,
     );
 
+    settings.add_bool(
+        "regalloc_verbose_logs",
+        "Enable verbose debug logs for regalloc2.",
+        r#"
+            This adds extra logging for regalloc2 output, that is quite valuable to understand
+            decisions taken by the register allocator as well as debugging it. It is disabled by
+            default, as it can cause many log calls which can slow down compilation by a large
+            amount.
+        "#,
+        false,
+    );
+
     settings.add_enum(
         "opt_level",
         "Optimization level for generated code.",
