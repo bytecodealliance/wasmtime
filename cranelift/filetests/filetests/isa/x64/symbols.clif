@@ -1,0 +1,35 @@
+test compile precise-output
+target x86_64
+
+function %func_addr() -> i64 {
+    fn0 = %func0(i64) -> i64
+
+block0:
+    v0 = func_addr.i64 fn0
+    return v0
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_ext_name %func0+0, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %symbol_value() -> i64 {
+    gv0 = symbol %global0
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_ext_name %global0+0, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
