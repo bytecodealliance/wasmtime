@@ -1286,12 +1286,6 @@
 
 ;; Extractor helpers for various immmediate constants ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl move_wide_const_from_u64 (MoveWideConst) u64)
-(extern extractor move_wide_const_from_u64 move_wide_const_from_u64)
-
-(decl move_wide_const_from_negated_u64 (MoveWideConst) u64)
-(extern extractor move_wide_const_from_negated_u64 move_wide_const_from_negated_u64)
-
 (decl pure imm_logic_from_u64 (Type u64) ImmLogic)
 (extern constructor imm_logic_from_u64 imm_logic_from_u64)
 
@@ -1884,27 +1878,36 @@
 
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl imm (Type u64) Reg)
+;; Type of extension performed by an immediate helper
+(type ImmExtend
+  (enum
+    (Sign)
+    (Zero)))
 
-;; 16-bit immediate (shifted by 0, 16, 32 or 48 bits) in MOVZ
-(rule (imm (integral_ty _ty) (move_wide_const_from_u64 n))
-      (movz n (OperandSize.Size64)))
+;; Arguments:
+;; * Immediate type
+;; * Way to extend the immediate value to the full width of the destination
+;;   register
+;; * Immediate value - only the bits that fit within the type are used and
+;;   extended, while the rest are ignored
+;;
+;; Note that, unlike the convention in the AArch64 backend, this helper leaves
+;; all bits in the destination register in a defined state, i.e. smaller types
+;; such as `I8` are either sign- or zero-extended.
+(decl imm (Type ImmExtend u64) Reg)
 
-;; 16-bit immediate (shifted by 0, 16, 32 or 48 bits) in MOVN
-(rule (imm (integral_ty _ty) (move_wide_const_from_negated_u64 n))
-      (movn n (OperandSize.Size64)))
+;; Weird logical-instruction immediate in ORI using zero register; to simplify,
+;; we only match when we are zero-extending the value.
+(rule (imm (integral_ty ty) (ImmExtend.Zero) k)
+      (if-let n (imm_logic_from_u64 ty k))
+      (orr_imm ty (zero_reg) n))
 
-;; Weird logical-instruction immediate in ORI using zero register
-(rule (imm (integral_ty _ty) k)
-      (if-let n (imm_logic_from_u64 $I64 k))
-      (orr_imm $I64 (zero_reg) n))
-
-(decl load_constant64_full (u64) Reg)
+(decl load_constant64_full (Type ImmExtend u64) Reg)
 (extern constructor load_constant64_full load_constant64_full)
 
-;; Fallback for integral 64-bit constants that uses lots of `movk`
-(rule (imm (integral_ty _ty) n)
-      (load_constant64_full n))
+;; Fallback for integral 64-bit constants
+(rule (imm (integral_ty ty) extend n)
+      (load_constant64_full ty extend n))
 
 ;; Sign extension helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

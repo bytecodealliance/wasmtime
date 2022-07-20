@@ -75,20 +75,12 @@ where
         }
     }
 
-    fn move_wide_const_from_u64(&mut self, n: u64) -> Option<MoveWideConst> {
-        MoveWideConst::maybe_from_u64(n)
-    }
-
-    fn move_wide_const_from_negated_u64(&mut self, n: u64) -> Option<MoveWideConst> {
-        MoveWideConst::maybe_from_u64(!n)
-    }
-
     fn imm_logic_from_u64(&mut self, ty: Type, n: u64) -> Option<ImmLogic> {
-        let ty = if ty.bits() < 32 { I32 } else { ty };
         ImmLogic::maybe_from_u64(n, ty)
     }
 
     fn imm_logic_from_imm64(&mut self, ty: Type, n: Imm64) -> Option<ImmLogic> {
+        let ty = if ty.bits() < 32 { I32 } else { ty };
         self.imm_logic_from_u64(ty, n.bits() as u64)
     }
 
@@ -136,7 +128,45 @@ where
     ///
     /// The logic here is nontrivial enough that it's not really worth porting
     /// this over to ISLE.
-    fn load_constant64_full(&mut self, value: u64) -> Reg {
+    fn load_constant64_full(
+        &mut self,
+        ty: Type,
+        extend: &generated_code::ImmExtend,
+        value: u64,
+    ) -> Reg {
+        let bits = ty.bits();
+        let value = if bits < 64 {
+            if *extend == generated_code::ImmExtend::Sign {
+                let shift = 64 - bits;
+                let value = value as i64;
+
+                ((value << shift) >> shift) as u64
+            } else {
+                value & !(u64::MAX << bits)
+            }
+        } else {
+            value
+        };
+        let rd = self.temp_writable_reg(I64);
+
+        if value == 0 {
+            self.emit(&MInst::MovWide {
+                op: MoveWideOp::MovZ,
+                rd,
+                imm: MoveWideConst::zero(),
+                size: OperandSize::Size64,
+            });
+            return rd.to_reg();
+        } else if value == u64::MAX {
+            self.emit(&MInst::MovWide {
+                op: MoveWideOp::MovN,
+                rd,
+                imm: MoveWideConst::zero(),
+                size: OperandSize::Size64,
+            });
+            return rd.to_reg();
+        };
+
         // If the top 32 bits are zero, use 32-bit `mov` operations.
         let (num_half_words, size, negated) = if value >> 32 == 0 {
             (2, OperandSize::Size32, (!value << 32) >> 32)
@@ -151,8 +181,6 @@ where
         // instruction used.
         let ignored_halfword = if first_is_inverted { 0xffff } else { 0 };
         let mut first_mov_emitted = false;
-
-        let rd = self.temp_writable_reg(I64);
 
         for i in 0..num_half_words {
             let imm16 = (value >> (16 * i)) & 0xffff;
