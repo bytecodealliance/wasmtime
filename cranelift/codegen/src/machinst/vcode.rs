@@ -598,9 +598,14 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         // will be returned directly to `regalloc2` eventually and all
         // operands/results of instructions will use the alias-resolved vregs
         // from `regalloc2`'s perspective.
+        //
+        // Also note that `reftyped_vregs` can't have duplicates, so after the
+        // aliases are applied duplicates are removed.
         for reg in self.vcode.reftyped_vregs.iter_mut() {
             *reg = Self::resolve_vreg_alias_impl(&self.vcode.vreg_aliases, *reg);
         }
+        self.vcode.reftyped_vregs.sort();
+        self.vcode.reftyped_vregs.dedup();
 
         self.compute_preds_from_succs();
         self.vcode.debug_value_labels.sort_unstable();
