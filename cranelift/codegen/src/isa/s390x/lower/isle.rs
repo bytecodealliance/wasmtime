@@ -262,7 +262,8 @@ where
     fn u64_from_value(&mut self, val: Value) -> Option<u64> {
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant = self.lower_ctx.get_constant(inst)?;
-        Some(constant)
+        let ty = self.lower_ctx.output_ty(inst, 0);
+        Some(zero_extend_to_u64(constant, self.ty_bits(ty).unwrap()))
     }
 
     #[inline]
@@ -594,6 +595,17 @@ where
     #[inline]
     fn emit(&mut self, inst: &MInst) -> Unit {
         self.lower_ctx.emit(inst.clone());
+    }
+}
+
+/// Zero-extend the low `from_bits` bits of `value` to a full u64.
+#[inline]
+fn zero_extend_to_u64(value: u64, from_bits: u8) -> u64 {
+    assert!(from_bits <= 64);
+    if from_bits >= 64 {
+        value
+    } else {
+        value & ((1u64 << from_bits) - 1)
     }
 }
 
