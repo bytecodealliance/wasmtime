@@ -147,12 +147,7 @@ impl<'a> Arbitrary<'a> for TableOps {
         let mut stack = 0;
         let mut ops = vec![];
         let mut choices = vec![];
-        loop {
-            let keep_going = ops.len() < MAX_OPS && u.arbitrary().unwrap_or(false);
-            if !keep_going {
-                break;
-            }
-
+        while ops.len() < MAX_OPS && !u.is_empty() {
             ops.push(TableOp::arbitrary(u, &mut stack, &mut choices)?);
         }
 
@@ -216,8 +211,8 @@ define_table_ops! {
     MakeRefs : 0 => 3,
     TakeRefs : 3 => 0,
 
-    TableGet(i32) : 0 => 1,
-    TableSet(i32) : 1 => 0,
+    TableGet(u32) : 0 => 1,
+    TableSet(u32) : 1 => 0,
 
     GlobalGet(u32) : 0 => 1,
     GlobalSet(u32) : 1 => 0,
@@ -237,7 +232,7 @@ impl TableOp {
 
         // Add one to make sure that out of bounds table accesses are possible,
         // but still rare.
-        let table_mod = table_size as i32 + 1;
+        let table_mod = table_size + 1;
 
         let gc_func_idx = 0;
         let take_refs_func_idx = 1;
@@ -256,12 +251,12 @@ impl TableOp {
                 func.instruction(&Instruction::Call(take_refs_func_idx));
             }
             Self::TableGet(x) => {
-                func.instruction(&Instruction::I32Const(x % table_mod));
+                func.instruction(&Instruction::I32Const((x % table_mod) as i32));
                 func.instruction(&Instruction::TableGet { table: 0 });
             }
             Self::TableSet(x) => {
                 func.instruction(&Instruction::LocalSet(scratch_local));
-                func.instruction(&Instruction::I32Const(x % table_mod));
+                func.instruction(&Instruction::I32Const((x % table_mod) as i32));
                 func.instruction(&Instruction::LocalGet(scratch_local));
                 func.instruction(&Instruction::TableSet { table: 0 });
             }
