@@ -10,6 +10,18 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 0.39.1
+
+Released 2022-07-20.
+
+### Fixed
+
+* An s390x-specific codegen bug in addition to a mistake introduced in the fix
+  of CVE-2022-31146 were fixed.
+  [#4490](https://github.com/bytecodealliance/wasmtime/pull/4490)
+
+--------------------------------------------------------------------------------
+
 ## 0.39.0
 
 Released 2022-07-20
@@ -65,6 +77,32 @@ Released 2022-07-20
 * Generation of platform-specific unwinding information is disabled if
   `wasm_backtrace` and `wasm_reference_types` are both disabled.
   [#4351](https://github.com/bytecodealliance/wasmtime/pull/4351)
+
+--------------------------------------------------------------------------------
+
+## 0.38.3
+
+Released 2022-07-20.
+
+### Fixed.
+
+* An s390x-specific codegen bug in addition to a mistake introduced in the fix
+  of CVE-2022-31146 were fixed.
+  [#4491](https://github.com/bytecodealliance/wasmtime/pull/4491)
+
+--------------------------------------------------------------------------------
+
+## 0.38.2
+
+Released 2022-07-20.
+
+### Fixed.
+
+* A miscompilation when handling constant divisors on AArch64 has been fixed.
+  [CVE-2022-31169](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-7f6x-jwh5-m9r4)
+
+* A use-after-free possible with accidentally missing stack maps has been fixed.
+  [CVE-2022-31146](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-5fhj-g3p3-pq9g)
 
 --------------------------------------------------------------------------------
 
