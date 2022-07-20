@@ -73,7 +73,7 @@ use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::visit_block_succs;
 use crate::ir::{Block, Function, Inst, Opcode};
-use crate::machinst::*;
+use crate::{machinst::*, trace};
 
 use smallvec::SmallVec;
 
@@ -214,7 +214,7 @@ impl LoweredBlock {
 impl BlockLoweringOrder {
     /// Compute and return a lowered block order for `f`.
     pub fn new(f: &Function) -> BlockLoweringOrder {
-        log::trace!("BlockLoweringOrder: function body {:?}", f);
+        trace!("BlockLoweringOrder: function body {:?}", f);
 
         // Step 1: compute the in-edge and out-edge count of every block.
         let mut block_in_count = SecondaryMap::with_default(0);
@@ -477,7 +477,7 @@ impl BlockLoweringOrder {
             orig_map,
             cold_blocks,
         };
-        log::trace!("BlockLoweringOrder: {:?}", result);
+        trace!("BlockLoweringOrder: {:?}", result);
         result
     }
 

@@ -2789,7 +2789,7 @@ pub(crate) fn emit(
         }
 
         Inst::VirtualSPOffsetAdj { offset } => {
-            log::trace!(
+            trace!(
                 "virtual sp offset adjusted by {} -> {}",
                 offset,
                 state.virtual_sp_offset + offset

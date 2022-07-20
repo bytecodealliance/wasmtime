@@ -147,8 +147,8 @@ use crate::machinst::{
     BlockIndex, MachInstLabelUse, TextSectionBuilder, VCodeConstant, VCodeConstants, VCodeInst,
 };
 use crate::timing;
+use crate::trace;
 use cranelift_entity::{entity_impl, SecondaryMap};
-use log::trace;
 use smallvec::SmallVec;
 use std::convert::TryFrom;
 use std::mem;
