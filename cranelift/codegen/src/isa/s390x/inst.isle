@@ -1530,11 +1530,6 @@
 (decl i64_from_offset (i64) Offset32)
 (extern extractor infallible i64_from_offset i64_from_offset)
 
-;; Accessors for `ExternalName`.
-
-(decl box_external_name (ExternalName) BoxExternalName)
-(extern constructor box_external_name box_external_name)
-
 ;; Accessors for `MemFlags`.
 
 (decl littleendian () MemFlags)

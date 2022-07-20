@@ -656,6 +656,9 @@
 (decl symbol_value_data (ExternalName RelocDistance i64) GlobalValue)
 (extern extractor symbol_value_data symbol_value_data)
 
+(decl box_external_name (ExternalName) BoxExternalName)
+(extern constructor box_external_name box_external_name)
+
 ;; Accessor for `RelocDistance`.
 
 (decl reloc_distance_near () RelocDistance)

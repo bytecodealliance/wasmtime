@@ -531,6 +531,11 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn box_external_name(&mut self, extname: ExternalName) -> BoxExternalName {
+            Box::new(extname)
+        }
+
+        #[inline]
         fn symbol_value_data(
             &mut self,
             global_value: GlobalValue,

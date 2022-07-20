@@ -579,11 +579,6 @@ where
     }
 
     #[inline]
-    fn box_external_name(&mut self, name: ExternalName) -> BoxExternalName {
-        Box::new(name)
-    }
-
-    #[inline]
     fn memflags_trusted(&mut self) -> MemFlags {
         MemFlags::trusted()
     }
