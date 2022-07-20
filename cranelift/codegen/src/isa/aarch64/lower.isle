@@ -7,20 +7,20 @@
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (iconst (u64_from_imm64 n))))
-      (imm ty n))
+      (imm ty (ImmExtend.Zero) n))
 
 ;;;; Rules for `bconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (bconst $false)))
-      (imm ty 0))
+      (imm ty (ImmExtend.Zero) 0))
 
 (rule (lower (has_type ty (bconst $true)))
-      (imm ty 1))
+      (imm ty (ImmExtend.Zero) 1))
 
 ;;;; Rules for `null` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (null)))
-      (imm ty 0))
+      (imm ty (ImmExtend.Zero) 0))
 
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -423,7 +423,7 @@
 ;; move it into a register.
 (rule (put_nonzero_in_reg_zext64 (and (value_type ty)
                                       (iconst (nonzero_u64_from_imm64 n))))
-      (imm ty n))
+      (imm ty (ImmExtend.Zero) n))
 
 ;;;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -458,7 +458,7 @@
 ;; Special case for `sdiv` where no checks are needed due to division by a
 ;; constant meaning the checks are always passed.
 (rule (lower (has_type (fits_in_64 ty) (sdiv x (iconst (safe_divisor_from_imm64 y)))))
-      (a64_sdiv $I64 (put_in_reg_sext64 x) (imm ty y)))
+      (a64_sdiv $I64 (put_in_reg_sext64 x) (imm ty (ImmExtend.Sign) y)))
 
 ;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
 (decl put_nonzero_in_reg_sext64 (Value) Reg)
@@ -469,7 +469,7 @@
 ;; not zero we can skip the zero check.
 (rule (put_nonzero_in_reg_sext64 (and (value_type ty)
                                       (iconst (nonzero_u64_from_imm64 n))))
-      (imm ty n))
+      (imm ty (ImmExtend.Sign) n))
 
 ;;;; Rules for `urem` and `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -522,14 +522,14 @@
 ;; Conversion to 128-bit needs a zero-extension of the lower bits and the upper
 ;; bits are all zero.
 (rule (lower (has_type $I128 (uextend x)))
-      (value_regs (put_in_reg_zext64 x) (imm $I64 0)))
+      (value_regs (put_in_reg_zext64 x) (imm $I64 (ImmExtend.Zero) 0)))
 
 ;; Like above where vector extraction automatically zero-extends extending to
 ;; i128 only requires generating a 0 constant for the upper bits.
 (rule (lower (has_type $I128
                        (uextend (extractlane vec @ (value_type in)
                                              (u8_from_uimm8 lane)))))
-      (value_regs (mov_from_vec (put_in_reg vec) lane (vector_size in)) (imm $I64 0)))
+      (value_regs (mov_from_vec (put_in_reg vec) lane (vector_size in)) (imm $I64 (ImmExtend.Zero) 0)))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -913,7 +913,7 @@
 (rule (lower (has_type $I128 (rotl x y)))
       (let ((val ValueRegs x)
             (amt Reg (value_regs_get y 0))
-            (neg_amt Reg (sub $I64 (imm $I64 128) amt))
+            (neg_amt Reg (sub $I64 (imm $I64 (ImmExtend.Zero) 128) amt))
             (lshift ValueRegs (lower_shl128 val amt))
             (rshift ValueRegs (lower_ushr128 val neg_amt)))
         (value_regs
@@ -997,7 +997,7 @@
 (rule (lower (has_type $I128 (rotr x y)))
       (let ((val ValueRegs x)
             (amt Reg (value_regs_get y 0))
-            (neg_amt Reg (sub $I64 (imm $I64 128) amt))
+            (neg_amt Reg (sub $I64 (imm $I64 (ImmExtend.Zero) 128) amt))
             (rshift ValueRegs (lower_ushr128 val amt))
             (lshift ValueRegs (lower_shl128 val neg_amt))
             (hi Reg (orr $I64 (value_regs_get rshift 1) (value_regs_get lshift 1)))
@@ -1052,7 +1052,7 @@
       (let ((hi_clz Reg (a64_clz $I64 (value_regs_get val 1)))
             (lo_clz Reg (a64_clz $I64 (value_regs_get val 0)))
             (tmp Reg (lsr_imm $I64 hi_clz (imm_shift_from_u8 6))))
-        (value_regs (madd $I64 lo_clz tmp hi_clz) (imm $I64 0))))
+        (value_regs (madd $I64 lo_clz tmp hi_clz) (imm $I64 (ImmExtend.Zero) 0))))
 
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1104,7 +1104,7 @@
             (maybe_lo Reg (with_flags_reg
                            (cmp64_imm hi_cls (u8_into_imm12 63))
                            (csel (Cond.Eq) lo_sign_bits (zero_reg)))))
-        (value_regs (add $I64 maybe_lo hi_cls) (imm $I64 0))))
+        (value_regs (add $I64 maybe_lo hi_cls) (imm $I64 (ImmExtend.Zero) 0))))
 
 (rule (lower (has_type ty (cls x)))
       (a64_cls ty x))
@@ -1118,7 +1118,7 @@
       (let ((val ValueRegs x)
             (in_lo Reg (value_regs_get val 0))
             (dst_lo Reg (and_imm $I32 in_lo (u64_into_imm_logic $I32 1)))
-            (dst_hi Reg (imm $I64 0)))
+            (dst_hi Reg (imm $I64 (ImmExtend.Zero) 0)))
         (value_regs dst_lo dst_hi)))
 
 (rule (lower (bint x))
@@ -1213,7 +1213,7 @@
             (tmp Reg (mov_to_vec tmp_half (value_regs_get val 1) 1 (VectorSize.Size64x2)))
             (nbits Reg (vec_cnt tmp (VectorSize.Size8x16)))
             (added Reg (addv nbits (VectorSize.Size8x16))))
-        (value_regs (mov_from_vec added 0 (VectorSize.Size8x16)) (imm $I64 0))))
+        (value_regs (mov_from_vec added 0 (VectorSize.Size8x16)) (imm $I64 (ImmExtend.Zero) 0))))
 
 (rule (lower (has_type $I8X16 (popcnt x)))
       (vec_cnt x (VectorSize.Size8x16)))
