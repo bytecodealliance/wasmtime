@@ -1,20 +1,26 @@
 use anyhow::Context;
-use std::collections::BTreeSet;
+use serde_json::Value;
 use std::process::Command;
+use std::str::from_utf8;
 
 fn main() -> anyhow::Result<()> {
-    let example_to_run = std::env::args().nth(1);
-    let mut examples = BTreeSet::new();
-    for e in std::fs::read_dir("examples")? {
-        let e = e?;
-        let path = e.path();
-        let dir = e.metadata()?.is_dir();
-        if let Some("wat") = path.extension().and_then(|s| s.to_str()) {
-            continue;
-        }
-
-        examples.insert((path.file_stem().unwrap().to_str().unwrap().to_owned(), dir));
-    }
+    let mut rust_targets: Vec<String> = Vec::new();
+    match Command::new("cargo").arg("read-manifest").output() {
+        Ok(cargo_manifest_output) => match from_utf8(cargo_manifest_output.stdout.as_slice()) {
+            Ok(stdout) => {
+                let cargo_manifest: Value = serde_json::from_str(stdout)?;
+                for target in cargo_manifest["targets"].as_array().unwrap() {
+                    let is_example = target["kind"].is_array()
+                        && target["kind"].as_array().unwrap()[0].as_str().unwrap() == "example";
+                    if is_example {
+                        rust_targets.push(target["name"].as_str().unwrap().to_string());
+                    }
+                }
+            }
+            Err(error) => panic!("Problem getting cargo manifest stdout: {:?}", error),
+        },
+        Err(error) => panic!("Problem getting cargo manifest: {:?}", error),
+    };
 
     println!("======== Prepare C/C++ CMake project ===========");
     run(Command::new("cmake")
@@ -22,16 +28,35 @@ fn main() -> anyhow::Result<()> {
         .arg("-Bexamples/build")
         .arg("-DBUILD_SHARED_LIBS=OFF"))?;
 
-    for (example, is_dir) in examples {
-        if example == "README" || example == "CMakeLists" || example == "build" {
-            continue;
-        }
-        if let Some(example_to_run) = &example_to_run {
-            if !example.contains(&example_to_run[..]) {
-                continue;
+    let mut c_targets: Vec<String> = Vec::new();
+    match Command::new("cmake")
+        .arg("--build")
+        .arg("examples/build")
+        .arg("--target")
+        .arg("help")
+        .output()
+    {
+        Ok(cmake_help_output) => match from_utf8(cmake_help_output.stdout.as_slice()) {
+            Ok(stdout) => {
+                for possible_target_line in stdout.lines() {
+                    let possible_location = possible_target_line.find("wasmtime-");
+                    if let Some(location) = possible_location {
+                        let line = &possible_target_line
+                            [(location + "wasmtime-".len())..possible_target_line.len()];
+                        // "crate" is the wasmtime-c-api itself
+                        if line != "crate" {
+                            c_targets.push(line.to_string());
+                        }
+                    }
+                }
             }
-        }
-        if is_dir {
+            Err(error) => panic!("Problem getting cmake help stdout: {:?}", error),
+        },
+        Err(error) => panic!("Problem getting cmake help: {:?}", error),
+    };
+
+    for example in rust_targets {
+        if example == "fib-debug" || example == "tokio" || example == "wasi" {
             println!("======== Rust wasm file `{}` ============", example);
             let target = if example == "fib-debug" {
                 "wasm32-unknown-unknown"
@@ -53,30 +78,29 @@ fn main() -> anyhow::Result<()> {
             cargo_cmd.arg("--features").arg("wasmtime-wasi/tokio");
         }
         run(&mut cargo_cmd)?;
+    }
 
+    for example in c_targets {
         println!("======== C/C++ example `{}` ============", example);
-        let c_file = format!("examples/{}.c", example);
-        if std::path::Path::new(&c_file).exists() {
-            run(Command::new("cmake")
-                .arg("--build")
-                .arg("examples/build")
-                .arg("--target")
-                .arg(format!("wasmtime-{}", example))
-                .arg("--config")
-                .arg("Debug"))?;
+        run(Command::new("cmake")
+            .arg("--build")
+            .arg("examples/build")
+            .arg("--target")
+            .arg(format!("wasmtime-{}", example))
+            .arg("--config")
+            .arg("Debug"))?;
 
-            if cfg!(windows) {
-                run(&mut Command::new(format!(
-                    "examples/build/wasmtime-{}.exe",
-                    example
-                )))?;
-            } else {
-                run(&mut Command::new(format!(
-                    "examples/build/wasmtime-{}",
-                    example
-                )))?;
-            };
-        }
+        if cfg!(windows) {
+            run(&mut Command::new(format!(
+                "examples/build/wasmtime-{}.exe",
+                example
+            )))?;
+        } else {
+            run(&mut Command::new(format!(
+                "examples/build/wasmtime-{}",
+                example
+            )))?;
+        };
     }
 
     println!("======== Remove examples binaries ===========");

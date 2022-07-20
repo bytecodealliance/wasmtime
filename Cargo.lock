@@ -2432,7 +2432,7 @@ name = "run-examples"
 version = "0.19.0"
 dependencies = [
  "anyhow",
- "cc",
+ "serde_json",
 ]
 
 [[package]]
