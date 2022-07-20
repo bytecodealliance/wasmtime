@@ -12,7 +12,7 @@ Unreleased.
 
 ## 0.39.0
 
-Unreleased.
+Released 2022-07-20
 
 ### Added
 
