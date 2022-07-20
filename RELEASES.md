@@ -1,5 +1,17 @@
 --------------------------------------------------------------------------------
 
+## 0.38.3
+
+Released 2022-07-20.
+
+### Fixed.
+
+* An s390x-specific codegen bug in addition to a mistake introduced in the fix
+  of CVE-2022-31146 were fixed.
+  [#4491](https://github.com/bytecodealliance/wasmtime/pull/4491)
+
+--------------------------------------------------------------------------------
+
 ## 0.38.2
 
 Released 2022-07-20.
