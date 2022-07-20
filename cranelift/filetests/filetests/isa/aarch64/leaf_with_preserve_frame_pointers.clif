@@ -1,0 +1,18 @@
+;; Test compilation of leaf functions while preserving frame pointers.
+
+test compile precise-output
+set unwind_info=false
+set preserve_frame_pointers=true
+target aarch64
+
+function %leaf(i64) -> i64 {
+block0(v0: i64):
+    return v0
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   ldp fp, lr, [sp], #16
+;   ret
+
