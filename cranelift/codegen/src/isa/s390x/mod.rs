@@ -72,7 +72,6 @@ impl TargetIsa for S390xBackend {
         let flags = self.flags();
         let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
 
-        let want_disasm = want_disasm || log::log_enabled!(log::Level::Debug);
         let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
