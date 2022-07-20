@@ -236,6 +236,8 @@ pub enum TermKind {
     Decl {
         /// Whether the term is marked as `pure`.
         pure: bool,
+        /// Whether the term is marked as `multi`.
+        multi: bool,
         /// The kind of this term's constructor, if any.
         constructor_kind: Option<ConstructorKind>,
         /// The kind of this term's extractor, if any.
@@ -290,6 +292,11 @@ pub struct ExternalSig {
     pub ret_tys: Vec<TypeId>,
     /// Whether this signature is infallible or not.
     pub infallible: bool,
+    /// Whether this signature has an extra `&mut usize` param to
+    /// allow for multiple-return iteration. Mutually exclusive with
+    /// respect to `infallible` (otherwise, the iteration could never
+    /// end).
+    pub multi: bool,
 }
 
 impl Term {
@@ -353,6 +360,7 @@ impl Term {
     pub fn extractor_sig(&self, tyenv: &TypeEnv) -> Option<ExternalSig> {
         match &self.kind {
             TermKind::Decl {
+                multi,
                 extractor_kind:
                     Some(ExtractorKind::ExternalExtractor {
                         name, infallible, ..
@@ -364,6 +372,7 @@ impl Term {
                 param_tys: vec![self.ret_ty],
                 ret_tys: self.arg_tys.clone(),
                 infallible: *infallible,
+                multi: *multi,
             }),
             _ => None,
         }
@@ -382,6 +391,7 @@ impl Term {
                 param_tys: self.arg_tys.clone(),
                 ret_tys: vec![self.ret_ty],
                 infallible: !pure,
+                multi: false,
             }),
             TermKind::Decl {
                 constructor_kind: Some(ConstructorKind::InternalConstructor { .. }),
@@ -398,6 +408,7 @@ impl Term {
                     // matching at the toplevel (an entry point can
                     // fail to rewrite).
                     infallible: false,
+                    multi: false,
                 })
             }
             _ => None,
@@ -854,6 +865,7 @@ impl TermEnv {
                             constructor_kind: None,
                             extractor_kind: None,
                             pure: decl.pure,
+                            multi: decl.multi,
                         },
                     });
                 }

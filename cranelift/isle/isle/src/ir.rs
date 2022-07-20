@@ -104,6 +104,8 @@ pub enum PatternInst {
         term: TermId,
         /// Whether this extraction is infallible or not.
         infallible: bool,
+        /// Whether this is a multi-extractor or not.
+        multi: bool,
     },
 
     // NB: This has to go last, since it is infallible, so that when we sort
@@ -304,6 +306,7 @@ impl PatternSequence {
         output_tys: Vec<TypeId>,
         term: TermId,
         infallible: bool,
+        multi: bool,
     ) -> Vec<Value> {
         let inst = InstId(self.insts.len());
         let mut outs = vec![];
@@ -318,6 +321,7 @@ impl PatternSequence {
             output_tys,
             term,
             infallible,
+            multi,
         });
         outs
     }
@@ -428,6 +432,7 @@ impl PatternSequence {
                                 panic!("Should have been expanded away")
                             }
                             TermKind::Decl {
+                                multi,
                                 extractor_kind:
                                     Some(ExtractorKind::ExternalExtractor { infallible, .. }),
                                 ..
@@ -451,6 +456,7 @@ impl PatternSequence {
                                     output_tys,
                                     term,
                                     *infallible,
+                                    *multi,
                                 );
 
                                 for (pat, &val) in output_pats.iter().zip(arg_values.iter()) {

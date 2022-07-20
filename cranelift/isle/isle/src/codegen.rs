@@ -87,7 +87,11 @@ impl<'a> Codegen<'a> {
                 "#![allow(unused_imports, unused_variables, non_snake_case, unused_mut)]"
             )
             .unwrap();
-            writeln!(code, "#![allow(irrefutable_let_patterns)]").unwrap();
+            writeln!(
+                code,
+                "#![allow(irrefutable_let_patterns, unused_assignments)]"
+            )
+            .unwrap();
         }
 
         writeln!(code, "\nuse super::*;  // Pulls in all external types.").unwrap();
@@ -96,7 +100,7 @@ impl<'a> Codegen<'a> {
     fn generate_trait_sig(&self, code: &mut String, indent: &str, sig: &ExternalSig) {
         writeln!(
             code,
-            "{indent}fn {name}(&mut self, {params}) -> {opt_start}{open_paren}{rets}{close_paren}{opt_end};",
+            "{indent}fn {name}(&mut self, {params}{multi_iter_param}) -> {opt_start}{open_paren}{rets}{close_paren}{opt_end};",
             indent = indent,
             name = sig.func_name,
             params = sig.param_tys
@@ -105,7 +109,8 @@ impl<'a> Codegen<'a> {
                 .map(|(i, &ty)| format!("arg{}: {}", i, self.type_name(ty, /* by_ref = */ true)))
                 .collect::<Vec<_>>()
                 .join(", "),
-            opt_start = if sig.infallible { "" } else { "Option<" },
+            multi_iter_param = if sig.multi { ", multi_index: usize" } else { "" },
+            opt_start = if sig.infallible && !sig.multi { "" } else { "Option<" },
             open_paren = if sig.ret_tys.len() != 1 { "(" } else { "" },
             rets = sig.ret_tys
                 .iter()
@@ -113,7 +118,7 @@ impl<'a> Codegen<'a> {
                 .collect::<Vec<_>>()
                 .join(", "),
             close_paren = if sig.ret_tys.len() != 1 { ")" } else { "" },
-            opt_end = if sig.infallible { "" } else { ">" },
+            opt_end = if sig.infallible && !sig.multi { "" } else { ">" },
         )
         .unwrap();
     }
@@ -568,12 +573,13 @@ impl<'a> Codegen<'a> {
                 ref output_tys,
                 term,
                 infallible,
+                multi,
                 ..
             } => {
                 let termdata = &self.termenv.terms[term.index()];
                 let sig = termdata.extractor_sig(self.typeenv).unwrap();
 
-                let input_values = inputs
+                let mut input_values = inputs
                     .iter()
                     .map(|input| self.value_by_ref(input, ctx))
                     .collect::<Vec<_>>();
@@ -590,7 +596,12 @@ impl<'a> Codegen<'a> {
                     })
                     .collect::<Vec<_>>();
 
-                if infallible {
+                if multi {
+                    writeln!(code, "{indent}let mut multi_index = 0;", indent = indent).unwrap();
+                    input_values.push("multi_index".to_string());
+                }
+
+                if infallible && !multi {
                     writeln!(
                         code,
                         "{indent}let {open_paren}{vars}{close_paren} = {name}(ctx, {args});",
@@ -606,15 +617,19 @@ impl<'a> Codegen<'a> {
                 } else {
                     writeln!(
                         code,
-                        "{indent}if let Some({open_paren}{vars}{close_paren}) = {name}(ctx, {args}) {{",
+                        "{indent}{if_while} let Some({open_paren}{vars}{close_paren}) = {name}(ctx, {args}) {{",
                         indent = indent,
+                        if_while = if multi { "while" } else { "if" },
                         open_paren = if output_binders.len() == 1 { "" } else { "(" },
                         vars = output_binders.join(", "),
                         close_paren = if output_binders.len() == 1 { "" } else { ")" },
                         name = sig.full_name,
                         args = input_values.join(", "),
                     )
-                    .unwrap();
+                        .unwrap();
+                    if multi {
+                        writeln!(code, "{indent}    multi_index += 1;", indent = indent).unwrap();
+                    }
                     false
                 }
             }

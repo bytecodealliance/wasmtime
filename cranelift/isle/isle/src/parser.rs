@@ -290,6 +290,12 @@ impl<'a> Parser<'a> {
         } else {
             false
         };
+        let multi = if self.is_sym_str("multi") {
+            self.symbol()?;
+            true
+        } else {
+            false
+        };
 
         let term = self.parse_ident()?;
 
@@ -307,6 +313,7 @@ impl<'a> Parser<'a> {
             arg_tys,
             ret_ty,
             pure,
+            multi,
             pos,
         })
     }
