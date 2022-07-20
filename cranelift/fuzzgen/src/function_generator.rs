@@ -1,3 +1,4 @@
+use crate::codegen::ir::ValueList;
 use crate::config::Config;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
@@ -14,84 +15,26 @@ use std::ops::RangeInclusive;
 
 type BlockSignature = Vec<Type>;
 
-fn insert_opcode_arity_0(
-    _fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    opcode: Opcode,
-    _args: &'static [Type],
-    _rets: &'static [Type],
-) -> Result<()> {
-    builder.ins().NullAry(opcode, INVALID);
-    Ok(())
-}
-
-fn insert_opcode_arity_1(
+fn insert_opcode(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
     opcode: Opcode,
     args: &'static [Type],
     rets: &'static [Type],
 ) -> Result<()> {
-    let arg0 = fgen.get_variable_of_type(args[0])?;
-    let arg0 = builder.use_var(arg0);
-
-    let typevar = rets[0];
-    let (inst, dfg) = builder.ins().Unary(opcode, typevar, arg0);
-    let results = dfg.inst_results(inst).to_vec();
-
-    for (val, ty) in results.into_iter().zip(rets) {
-        let var = fgen.get_variable_of_type(*ty)?;
-        builder.def_var(var, val);
+    let mut arg_vals = ValueList::new();
+    for &arg in args.into_iter() {
+        let var = fgen.get_variable_of_type(arg)?;
+        let val = builder.use_var(var);
+        arg_vals.push(val, &mut builder.func.dfg.value_lists);
     }
-    Ok(())
-}
 
-fn insert_opcode_arity_2(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    opcode: Opcode,
-    args: &'static [Type],
-    rets: &'static [Type],
-) -> Result<()> {
-    let arg0 = fgen.get_variable_of_type(args[0])?;
-    let arg0 = builder.use_var(arg0);
-
-    let arg1 = fgen.get_variable_of_type(args[1])?;
-    let arg1 = builder.use_var(arg1);
-
-    let typevar = rets[0];
-    let (inst, dfg) = builder.ins().Binary(opcode, typevar, arg0, arg1);
+    let typevar = rets.first().copied().unwrap_or(INVALID);
+    let (inst, dfg) = builder.ins().MultiAry(opcode, typevar, arg_vals);
     let results = dfg.inst_results(inst).to_vec();
 
-    for (val, ty) in results.into_iter().zip(rets) {
-        let var = fgen.get_variable_of_type(*ty)?;
-        builder.def_var(var, val);
-    }
-    Ok(())
-}
-
-fn insert_opcode_arity_3(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    opcode: Opcode,
-    args: &'static [Type],
-    rets: &'static [Type],
-) -> Result<()> {
-    let arg0 = fgen.get_variable_of_type(args[0])?;
-    let arg0 = builder.use_var(arg0);
-
-    let arg1 = fgen.get_variable_of_type(args[1])?;
-    let arg1 = builder.use_var(arg1);
-
-    let arg2 = fgen.get_variable_of_type(args[1])?;
-    let arg2 = builder.use_var(arg2);
-
-    let typevar = rets[0];
-    let (inst, dfg) = builder.ins().Ternary(opcode, typevar, arg0, arg1, arg2);
-    let results = dfg.inst_results(inst).to_vec();
-
-    for (val, ty) in results.into_iter().zip(rets) {
-        let var = fgen.get_variable_of_type(*ty)?;
+    for (val, &ty) in results.into_iter().zip(rets) {
+        let var = fgen.get_variable_of_type(ty)?;
         builder.def_var(var, val);
     }
     Ok(())
@@ -152,113 +95,84 @@ const OPCODE_SIGNATURES: &'static [(
     &'static [Type], // Rets
     OpcodeInserter,
 )] = &[
-    (Opcode::Nop, &[], &[], insert_opcode_arity_0),
+    (Opcode::Nop, &[], &[], insert_opcode),
     // Iadd
-    (Opcode::Iadd, &[I8, I8], &[I8], insert_opcode_arity_2),
-    (Opcode::Iadd, &[I16, I16], &[I16], insert_opcode_arity_2),
-    (Opcode::Iadd, &[I32, I32], &[I32], insert_opcode_arity_2),
-    (Opcode::Iadd, &[I64, I64], &[I64], insert_opcode_arity_2),
+    (Opcode::Iadd, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Iadd, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Iadd, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Iadd, &[I64, I64], &[I64], insert_opcode),
     // Isub
-    (Opcode::Isub, &[I8, I8], &[I8], insert_opcode_arity_2),
-    (Opcode::Isub, &[I16, I16], &[I16], insert_opcode_arity_2),
-    (Opcode::Isub, &[I32, I32], &[I32], insert_opcode_arity_2),
-    (Opcode::Isub, &[I64, I64], &[I64], insert_opcode_arity_2),
+    (Opcode::Isub, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Isub, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Isub, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Isub, &[I64, I64], &[I64], insert_opcode),
     // Imul
-    (Opcode::Imul, &[I8, I8], &[I8], insert_opcode_arity_2),
-    (Opcode::Imul, &[I16, I16], &[I16], insert_opcode_arity_2),
-    (Opcode::Imul, &[I32, I32], &[I32], insert_opcode_arity_2),
-    (Opcode::Imul, &[I64, I64], &[I64], insert_opcode_arity_2),
+    (Opcode::Imul, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Imul, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Imul, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Imul, &[I64, I64], &[I64], insert_opcode),
     // Udiv
-    (Opcode::Udiv, &[I8, I8], &[I8], insert_opcode_arity_2),
-    (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode_arity_2),
-    (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode_arity_2),
-    (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode_arity_2),
+    (Opcode::Udiv, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode),
     // Sdiv
-    (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode_arity_2),
-    (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode_arity_2),
-    (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode_arity_2),
-    (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode_arity_2),
+    (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode),
     // Fadd
-    (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode_arity_2),
-    (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode_arity_2),
+    (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode),
     // Fmul
-    (Opcode::Fmul, &[F32, F32], &[F32], insert_opcode_arity_2),
-    (Opcode::Fmul, &[F64, F64], &[F64], insert_opcode_arity_2),
+    (Opcode::Fmul, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fmul, &[F64, F64], &[F64], insert_opcode),
     // Fsub
-    (Opcode::Fsub, &[F32, F32], &[F32], insert_opcode_arity_2),
-    (Opcode::Fsub, &[F64, F64], &[F64], insert_opcode_arity_2),
+    (Opcode::Fsub, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fsub, &[F64, F64], &[F64], insert_opcode),
     // Fdiv
-    (Opcode::Fdiv, &[F32, F32], &[F32], insert_opcode_arity_2),
-    (Opcode::Fdiv, &[F64, F64], &[F64], insert_opcode_arity_2),
+    (Opcode::Fdiv, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fdiv, &[F64, F64], &[F64], insert_opcode),
     // Fmin
-    (Opcode::Fmin, &[F32, F32], &[F32], insert_opcode_arity_2),
-    (Opcode::Fmin, &[F64, F64], &[F64], insert_opcode_arity_2),
+    (Opcode::Fmin, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fmin, &[F64, F64], &[F64], insert_opcode),
     // Fmax
-    (Opcode::Fmax, &[F32, F32], &[F32], insert_opcode_arity_2),
-    (Opcode::Fmax, &[F64, F64], &[F64], insert_opcode_arity_2),
+    (Opcode::Fmax, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fmax, &[F64, F64], &[F64], insert_opcode),
     // FminPseudo
-    (
-        Opcode::FminPseudo,
-        &[F32, F32],
-        &[F32],
-        insert_opcode_arity_2,
-    ),
-    (
-        Opcode::FminPseudo,
-        &[F64, F64],
-        &[F64],
-        insert_opcode_arity_2,
-    ),
+    (Opcode::FminPseudo, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::FminPseudo, &[F64, F64], &[F64], insert_opcode),
     // FmaxPseudo
-    (
-        Opcode::FmaxPseudo,
-        &[F32, F32],
-        &[F32],
-        insert_opcode_arity_2,
-    ),
-    (
-        Opcode::FmaxPseudo,
-        &[F64, F64],
-        &[F64],
-        insert_opcode_arity_2,
-    ),
+    (Opcode::FmaxPseudo, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::FmaxPseudo, &[F64, F64], &[F64], insert_opcode),
     // Fcopysign
-    (
-        Opcode::Fcopysign,
-        &[F32, F32],
-        &[F32],
-        insert_opcode_arity_2,
-    ),
-    (
-        Opcode::Fcopysign,
-        &[F64, F64],
-        &[F64],
-        insert_opcode_arity_2,
-    ),
+    (Opcode::Fcopysign, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fcopysign, &[F64, F64], &[F64], insert_opcode),
     // Fma
-    (Opcode::Fma, &[F32, F32, F32], &[F32], insert_opcode_arity_3),
-    (Opcode::Fma, &[F64, F64, F64], &[F64], insert_opcode_arity_3),
+    // TODO: Missing on X86, see https://github.com/bytecodealliance/wasmtime/pull/4460
+    // (Opcode::Fma, &[F32, F32, F32], &[F32], insert_opcode),
+    // (Opcode::Fma, &[F64, F64, F64], &[F64], insert_opcode),
     // Fabs
-    (Opcode::Fabs, &[F32], &[F32], insert_opcode_arity_1),
-    (Opcode::Fabs, &[F64], &[F64], insert_opcode_arity_1),
+    (Opcode::Fabs, &[F32], &[F32], insert_opcode),
+    (Opcode::Fabs, &[F64], &[F64], insert_opcode),
     // Fneg
-    (Opcode::Fneg, &[F32], &[F32], insert_opcode_arity_1),
-    (Opcode::Fneg, &[F64], &[F64], insert_opcode_arity_1),
+    (Opcode::Fneg, &[F32], &[F32], insert_opcode),
+    (Opcode::Fneg, &[F64], &[F64], insert_opcode),
     // Sqrt
-    (Opcode::Sqrt, &[F32], &[F32], insert_opcode_arity_1),
-    (Opcode::Sqrt, &[F64], &[F64], insert_opcode_arity_1),
+    (Opcode::Sqrt, &[F32], &[F32], insert_opcode),
+    (Opcode::Sqrt, &[F64], &[F64], insert_opcode),
     // Ceil
-    (Opcode::Ceil, &[F32], &[F32], insert_opcode_arity_1),
-    (Opcode::Ceil, &[F64], &[F64], insert_opcode_arity_1),
+    (Opcode::Ceil, &[F32], &[F32], insert_opcode),
+    (Opcode::Ceil, &[F64], &[F64], insert_opcode),
     // Floor
-    (Opcode::Floor, &[F32], &[F32], insert_opcode_arity_1),
-    (Opcode::Floor, &[F64], &[F64], insert_opcode_arity_1),
+    (Opcode::Floor, &[F32], &[F32], insert_opcode),
+    (Opcode::Floor, &[F64], &[F64], insert_opcode),
     // Trunc
-    (Opcode::Trunc, &[F32], &[F32], insert_opcode_arity_1),
-    (Opcode::Trunc, &[F64], &[F64], insert_opcode_arity_1),
+    (Opcode::Trunc, &[F32], &[F32], insert_opcode),
+    (Opcode::Trunc, &[F64], &[F64], insert_opcode),
     // Nearest
-    (Opcode::Nearest, &[F32], &[F32], insert_opcode_arity_1),
-    (Opcode::Nearest, &[F64], &[F64], insert_opcode_arity_1),
+    (Opcode::Nearest, &[F32], &[F32], insert_opcode),
+    (Opcode::Nearest, &[F64], &[F64], insert_opcode),
     // Stack Access
     (Opcode::StackStore, &[I8], &[], insert_stack_store),
     (Opcode::StackStore, &[I16], &[], insert_stack_store),
