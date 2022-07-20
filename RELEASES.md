@@ -1,5 +1,19 @@
 --------------------------------------------------------------------------------
 
+## 0.38.2
+
+Released 2022-07-20.
+
+### Fixed.
+
+* A miscompilation when handling constant divisors on AArch64 has been fixed.
+  [CVE-2022-31169](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-7f6x-jwh5-m9r4)
+
+* A use-after-free possible with accidentally missing stack maps has been fixed.
+  [CVE-2022-31146](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-5fhj-g3p3-pq9g)
+
+--------------------------------------------------------------------------------
+
 ## 0.38.1
 
 Released 2022-06-27.
