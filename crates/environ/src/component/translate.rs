@@ -604,7 +604,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 for export in s {
                     let export = export?;
 
-                    // TODO: remove this check once type exports are supported
+                    // TODO: https://github.com/bytecodealliance/wasmtime/issues/4494
                     // Currently, wit-component-based tooling creates components that
                     // export types to represent the interface of a component so that
                     // bindings can (potentially) be generated directly from the component

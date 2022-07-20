@@ -55,20 +55,3 @@ fn instance_exports() -> Result<()> {
 
     Ok(())
 }
-
-#[test]
-fn instantiate_with_type_exports() -> Result<()> {
-    // For now, this just tests that we can instantiate a component with type exports
-    let engine = super::engine();
-    let component = r#"
-        (component
-            (type string)
-            (export "" (type 0))
-        )
-    "#;
-    let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    linker.instantiate(&mut store, &component)?;
-    Ok(())
-}
