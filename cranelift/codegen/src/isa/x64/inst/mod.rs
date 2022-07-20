@@ -43,6 +43,13 @@ pub struct CallInfo {
     pub opcode: Opcode,
 }
 
+#[test]
+fn inst_size_test() {
+    // This test will help with unintentionally growing the size
+    // of the Inst enum.
+    assert_eq!(72, std::mem::size_of::<Inst>());
+}
+
 pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
     let xs = x as i64;
     xs == ((xs << 32) >> 32)
