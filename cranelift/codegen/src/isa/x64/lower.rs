@@ -3308,8 +3308,8 @@ impl LowerBackend for X64Backend {
                         tmp1,
                         tmp2,
                         default_target,
-                        targets: jt_targets,
-                        targets_for_term,
+                        targets: Box::new(jt_targets),
+                        targets_for_term: Box::new(targets_for_term),
                     });
                 }
 
