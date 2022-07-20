@@ -202,7 +202,7 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
             let cx = &*(cx as *const libc::ucontext_t);
             (
                 (cx.uc_mcontext.psw.addr - trap_offset) as *const u8,
-                todo!("fp")
+                *(cx.uc_mcontext.gregs[15] as *const usize),
             )
         } else if #[cfg(all(target_os = "macos", target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);

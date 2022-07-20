@@ -69,11 +69,6 @@ impl Backtrace {
             ),
         };
 
-        assert!(
-            (last_wasm_exit_fp != 0 && last_wasm_exit_pc != 0)
-                || (last_wasm_exit_fp == 0 && last_wasm_exit_pc == 0)
-        );
-
         if last_wasm_exit_pc == 0 {
             return;
         }
@@ -86,11 +81,6 @@ impl Backtrace {
         );
 
         for state in state.iter() {
-            assert!(
-                (state.old_last_wasm_exit_fp != 0 && state.old_last_wasm_exit_pc != 0)
-                    || (state.old_last_wasm_exit_fp == 0 && state.old_last_wasm_exit_pc == 0)
-            );
-
             if state.old_last_wasm_exit_pc == 0 {
                 return;
             }
@@ -170,10 +160,16 @@ impl Backtrace {
             assert_eq!(first_wasm_sp % 16, 8);
         } else if cfg!(target_arch = "aarch64") {
             assert_eq!(first_wasm_sp % 16, 0);
+        } else if cfg!(target_arch = "s390x") {
+            assert_eq!(first_wasm_sp % 8, 0);
         }
 
         loop {
-            assert_eq!(fp % 16, 0, "stack should always be aligned to 16");
+            if cfg!(target_arch = "x86_64") || cfg!(target_arch = "aarch64") {
+                assert_eq!(fp % 16, 0, "stack should always be aligned to 16");
+            } else {
+                assert_eq!(fp % 8, 0, "stack should always be aligned to 8");
+            }
 
             log::trace!("--- Tracing through one Wasm frame ---");
             log::trace!("pc = 0x{:016x}", pc);
@@ -214,6 +210,8 @@ impl Backtrace {
                 *(fp as *mut usize).offset(1)
             } else if #[cfg(target_arch = "aarch64")] {
                 *(fp as *mut usize).offset(1)
+            } else if #[cfg(target_arch = "s390x")] {
+                *(fp as *mut usize).offset(14)
             } else {
                 compile_error!("platform not supported")
             }
@@ -225,6 +223,8 @@ impl Backtrace {
             if #[cfg(target_arch = "x86_64")] {
                 *(fp as *mut usize)
             } else if #[cfg(target_arch = "aarch64")] {
+                *(fp as *mut usize)
+            } else if #[cfg(target_arch = "s390x")] {
                 *(fp as *mut usize)
             } else {
                 compile_error!("platform not supported")
@@ -238,6 +238,8 @@ impl Backtrace {
                 fp == first_wasm_sp - 8
             } else if #[cfg(target_arch = "aarch64")] {
                 fp == first_wasm_sp - 16
+            } else if #[cfg(target_arch = "s390x")] {
+                fp == first_wasm_sp
             } else {
                 compile_error!("platform not supported")
             }
