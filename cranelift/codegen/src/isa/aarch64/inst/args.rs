@@ -643,6 +643,16 @@ impl ScalarSize {
             _ => panic!("Unexpected scalar FP operand size: {:?}", self),
         }
     }
+
+    pub fn widen(&self) -> ScalarSize {
+        match self {
+            ScalarSize::Size8 => ScalarSize::Size16,
+            ScalarSize::Size16 => ScalarSize::Size32,
+            ScalarSize::Size32 => ScalarSize::Size64,
+            ScalarSize::Size64 => ScalarSize::Size128,
+            ScalarSize::Size128 => panic!("can't widen 128-bits"),
+        }
+    }
 }
 
 /// Type used to communicate the size of a vector operand.

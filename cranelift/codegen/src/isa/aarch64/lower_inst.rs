@@ -1767,57 +1767,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
 
-        Opcode::Snarrow | Opcode::Unarrow | Opcode::Uunarrow => {
-            let nonzero_high_half = maybe_input_insn(ctx, inputs[1], Opcode::Vconst)
-                .map_or(true, |insn| {
-                    const_param_to_u128(ctx, insn).expect("Invalid immediate bytes") != 0
-                });
-            let ty = ty.unwrap();
-            let ty = if ty.is_dynamic_vector() {
-                ty.dynamic_to_vector()
-                    .unwrap_or_else(|| panic!("Unsupported dynamic type: {}?", ty))
-            } else {
-                ty
-            };
-
-            let op = match (op, ty) {
-                (Opcode::Snarrow, I8X16) => VecRRNarrowOp::Sqxtn16,
-                (Opcode::Snarrow, I16X8) => VecRRNarrowOp::Sqxtn32,
-                (Opcode::Snarrow, I32X4) => VecRRNarrowOp::Sqxtn64,
-                (Opcode::Unarrow, I8X16) => VecRRNarrowOp::Sqxtun16,
-                (Opcode::Unarrow, I16X8) => VecRRNarrowOp::Sqxtun32,
-                (Opcode::Unarrow, I32X4) => VecRRNarrowOp::Sqxtun64,
-                (Opcode::Uunarrow, I8X16) => VecRRNarrowOp::Uqxtn16,
-                (Opcode::Uunarrow, I16X8) => VecRRNarrowOp::Uqxtn32,
-                (Opcode::Uunarrow, I32X4) => VecRRNarrowOp::Uqxtn64,
-                (_, ty) => {
-                    return Err(CodegenError::Unsupported(format!(
-                        "{}: Unsupported type: {:?}",
-                        op, ty
-                    )))
-                }
-            };
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-
-            ctx.emit(Inst::VecRRNarrow {
-                op,
-                rd,
-                rn,
-                high_half: false,
-            });
-
-            if nonzero_high_half {
-                let rn = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-
-                ctx.emit(Inst::VecRRNarrow {
-                    op,
-                    rd,
-                    rn,
-                    high_half: true,
-                });
-            }
-        }
+        Opcode::Snarrow | Opcode::Unarrow | Opcode::Uunarrow => implemented_in_isle(ctx),
 
         Opcode::SwidenLow | Opcode::SwidenHigh | Opcode::UwidenLow | Opcode::UwidenHigh => {
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
@@ -1940,19 +1890,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
 
-        Opcode::Fvdemote => {
-            debug_assert_eq!(ty.unwrap(), F32X4);
-
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-
-            ctx.emit(Inst::VecRRNarrow {
-                op: VecRRNarrowOp::Fcvtn64,
-                rd,
-                rn,
-                high_half: false,
-            });
-        }
+        Opcode::Fvdemote => implemented_in_isle(ctx),
 
         Opcode::ExtractVector => implemented_in_isle(ctx),
 

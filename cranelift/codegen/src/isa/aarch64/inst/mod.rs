@@ -2124,94 +2124,24 @@ impl Inst {
                 rd,
                 rn,
                 high_half,
+                lane_size,
             } => {
-                let (op, rd_size, size) = match (op, high_half) {
-                    (VecRRNarrowOp::Xtn16, false) => {
-                        ("xtn", VectorSize::Size8x8, VectorSize::Size16x8)
-                    }
-                    (VecRRNarrowOp::Xtn16, true) => {
-                        ("xtn2", VectorSize::Size8x16, VectorSize::Size16x8)
-                    }
-                    (VecRRNarrowOp::Xtn32, false) => {
-                        ("xtn", VectorSize::Size16x4, VectorSize::Size32x4)
-                    }
-                    (VecRRNarrowOp::Xtn32, true) => {
-                        ("xtn2", VectorSize::Size16x8, VectorSize::Size32x4)
-                    }
-                    (VecRRNarrowOp::Xtn64, false) => {
-                        ("xtn", VectorSize::Size32x2, VectorSize::Size64x2)
-                    }
-                    (VecRRNarrowOp::Xtn64, true) => {
-                        ("xtn2", VectorSize::Size32x4, VectorSize::Size64x2)
-                    }
-                    (VecRRNarrowOp::Sqxtn16, false) => {
-                        ("sqxtn", VectorSize::Size8x8, VectorSize::Size16x8)
-                    }
-                    (VecRRNarrowOp::Sqxtn16, true) => {
-                        ("sqxtn2", VectorSize::Size8x16, VectorSize::Size16x8)
-                    }
-                    (VecRRNarrowOp::Sqxtn32, false) => {
-                        ("sqxtn", VectorSize::Size16x4, VectorSize::Size32x4)
-                    }
-                    (VecRRNarrowOp::Sqxtn32, true) => {
-                        ("sqxtn2", VectorSize::Size16x8, VectorSize::Size32x4)
-                    }
-                    (VecRRNarrowOp::Sqxtn64, false) => {
-                        ("sqxtn", VectorSize::Size32x2, VectorSize::Size64x2)
-                    }
-                    (VecRRNarrowOp::Sqxtn64, true) => {
-                        ("sqxtn2", VectorSize::Size32x4, VectorSize::Size64x2)
-                    }
-                    (VecRRNarrowOp::Sqxtun16, false) => {
-                        ("sqxtun", VectorSize::Size8x8, VectorSize::Size16x8)
-                    }
-                    (VecRRNarrowOp::Sqxtun16, true) => {
-                        ("sqxtun2", VectorSize::Size8x16, VectorSize::Size16x8)
-                    }
-                    (VecRRNarrowOp::Sqxtun32, false) => {
-                        ("sqxtun", VectorSize::Size16x4, VectorSize::Size32x4)
-                    }
-                    (VecRRNarrowOp::Sqxtun32, true) => {
-                        ("sqxtun2", VectorSize::Size16x8, VectorSize::Size32x4)
-                    }
-                    (VecRRNarrowOp::Sqxtun64, false) => {
-                        ("sqxtun", VectorSize::Size32x2, VectorSize::Size64x2)
-                    }
-                    (VecRRNarrowOp::Sqxtun64, true) => {
-                        ("sqxtun2", VectorSize::Size32x4, VectorSize::Size64x2)
-                    }
-                    (VecRRNarrowOp::Uqxtn16, false) => {
-                        ("uqxtn", VectorSize::Size8x8, VectorSize::Size16x8)
-                    }
-                    (VecRRNarrowOp::Uqxtn16, true) => {
-                        ("uqxtn2", VectorSize::Size8x16, VectorSize::Size16x8)
-                    }
-                    (VecRRNarrowOp::Uqxtn32, false) => {
-                        ("uqxtn", VectorSize::Size16x4, VectorSize::Size32x4)
-                    }
-                    (VecRRNarrowOp::Uqxtn32, true) => {
-                        ("uqxtn2", VectorSize::Size16x8, VectorSize::Size32x4)
-                    }
-                    (VecRRNarrowOp::Uqxtn64, false) => {
-                        ("uqxtn", VectorSize::Size32x2, VectorSize::Size64x2)
-                    }
-                    (VecRRNarrowOp::Uqxtn64, true) => {
-                        ("uqxtn2", VectorSize::Size32x4, VectorSize::Size64x2)
-                    }
-                    (VecRRNarrowOp::Fcvtn32, false) => {
-                        ("fcvtn", VectorSize::Size16x4, VectorSize::Size32x4)
-                    }
-                    (VecRRNarrowOp::Fcvtn32, true) => {
-                        ("fcvtn2", VectorSize::Size16x8, VectorSize::Size32x4)
-                    }
-                    (VecRRNarrowOp::Fcvtn64, false) => {
-                        ("fcvtn", VectorSize::Size32x2, VectorSize::Size64x2)
-                    }
-                    (VecRRNarrowOp::Fcvtn64, true) => {
-                        ("fcvtn2", VectorSize::Size32x4, VectorSize::Size64x2)
-                    }
+                let vec64 = VectorSize::from_lane_size(lane_size, false);
+                let vec128 = VectorSize::from_lane_size(lane_size, true);
+                let rn_size = VectorSize::from_lane_size(lane_size.widen(), true);
+                let (op, rd_size) = match (op, high_half) {
+                    (VecRRNarrowOp::Xtn, false) => ("xtn", vec64),
+                    (VecRRNarrowOp::Xtn, true) => ("xtn2", vec128),
+                    (VecRRNarrowOp::Sqxtn, false) => ("sqxtn", vec64),
+                    (VecRRNarrowOp::Sqxtn, true) => ("sqxtn2", vec128),
+                    (VecRRNarrowOp::Sqxtun, false) => ("sqxtun", vec64),
+                    (VecRRNarrowOp::Sqxtun, true) => ("sqxtun2", vec128),
+                    (VecRRNarrowOp::Uqxtn, false) => ("uqxtn", vec64),
+                    (VecRRNarrowOp::Uqxtn, true) => ("uqxtn2", vec128),
+                    (VecRRNarrowOp::Fcvtn, false) => ("fcvtn", vec64),
+                    (VecRRNarrowOp::Fcvtn, true) => ("fcvtn2", vec128),
                 };
-                let rn = pretty_print_vreg_vector(rn, size, allocs);
+                let rn = pretty_print_vreg_vector(rn, rn_size, allocs);
                 let rd = pretty_print_vreg_vector(rd.to_reg(), rd_size, allocs);
 
                 format!("{} {}, {}", op, rd, rn)

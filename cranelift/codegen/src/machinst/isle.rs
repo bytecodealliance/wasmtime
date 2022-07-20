@@ -355,6 +355,15 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_vec64_int(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() && ty.bits() == 64 && ty.lane_type().is_int() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn ty_vec128_int(&mut self, ty: Type) -> Option<Type> {
             if ty.is_vector() && ty.bits() == 128 && ty.lane_type().is_int() {
                 Some(ty)
@@ -471,6 +480,24 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_dyn64_int(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_dynamic_vector() && ty.min_bits() == 64 && ty.lane_type().is_int() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_dyn128_int(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_dynamic_vector() && ty.min_bits() == 128 && ty.lane_type().is_int() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn def_inst(&mut self, val: Value) -> Option<Inst> {
             self.lower_ctx.dfg().value_def(val).inst()
         }
@@ -485,6 +512,59 @@ macro_rules! isle_prelude_methods {
 
         fn u8_from_uimm8(&mut self, val: Uimm8) -> u8 {
             val
+        }
+
+        fn zero_value(&mut self, value: Value) -> Option<Value> {
+            let insn = self.def_inst(value);
+            if insn.is_some() {
+                let insn = insn.unwrap();
+                let inst_data = self.lower_ctx.data(insn);
+                match inst_data {
+                    InstructionData::Unary {
+                        opcode: Opcode::Splat,
+                        arg,
+                    } => {
+                        let arg = arg.clone();
+                        return self.zero_value(arg);
+                    }
+                    InstructionData::UnaryConst {
+                        opcode: Opcode::Vconst,
+                        constant_handle,
+                    } => {
+                        let constant_data =
+                            self.lower_ctx.get_constant_data(*constant_handle).clone();
+                        if constant_data.into_vec().iter().any(|&x| x != 0) {
+                            return None;
+                        } else {
+                            return Some(value);
+                        }
+                    }
+                    InstructionData::UnaryImm { imm, .. } => {
+                        if imm.bits() == 0 {
+                            return Some(value);
+                        } else {
+                            return None;
+                        }
+                    }
+                    InstructionData::UnaryIeee32 { imm, .. } => {
+                        if imm.bits() == 0 {
+                            return Some(value);
+                        } else {
+                            return None;
+                        }
+                    }
+                    InstructionData::UnaryIeee64 { imm, .. } => {
+                        if imm.bits() == 0 {
+                            return Some(value);
+                        } else {
+                            return None;
+                        }
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            }
         }
 
         fn not_i64x2(&mut self, ty: Type) -> Option<()> {

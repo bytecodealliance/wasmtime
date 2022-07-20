@@ -2252,15 +2252,17 @@ impl MachInstEmit for Inst {
             &Inst::VecDup { rd, rn, size } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
-                let imm5 = match size {
-                    VectorSize::Size8x16 => 0b00001,
-                    VectorSize::Size16x8 => 0b00010,
-                    VectorSize::Size32x4 => 0b00100,
-                    VectorSize::Size64x2 => 0b01000,
+                let q = size.is_128bits() as u32;
+                let imm5 = match size.lane_size() {
+                    ScalarSize::Size8 => 0b00001,
+                    ScalarSize::Size16 => 0b00010,
+                    ScalarSize::Size32 => 0b00100,
+                    ScalarSize::Size64 => 0b01000,
                     _ => unimplemented!("Unexpected VectorSize: {:?}", size),
                 };
                 sink.put4(
-                    0b010_01110000_00000_000011_00000_00000
+                    0b000_01110000_00000_000011_00000_00000
+                        | (q << 30)
                         | (imm5 << 16)
                         | (machreg_to_gpr(rn) << 5)
                         | machreg_to_vec(rd.to_reg()),
@@ -2395,24 +2397,30 @@ impl MachInstEmit for Inst {
                 rd,
                 rn,
                 high_half,
+                lane_size,
             } => {
                 let rn = allocs.next(rn);
                 let rd = allocs.next_writable(rd);
-                let (u, size, bits_12_16) = match op {
-                    VecRRNarrowOp::Xtn16 => (0b0, 0b00, 0b10010),
-                    VecRRNarrowOp::Xtn32 => (0b0, 0b01, 0b10010),
-                    VecRRNarrowOp::Xtn64 => (0b0, 0b10, 0b10010),
-                    VecRRNarrowOp::Sqxtn16 => (0b0, 0b00, 0b10100),
-                    VecRRNarrowOp::Sqxtn32 => (0b0, 0b01, 0b10100),
-                    VecRRNarrowOp::Sqxtn64 => (0b0, 0b10, 0b10100),
-                    VecRRNarrowOp::Sqxtun16 => (0b1, 0b00, 0b10010),
-                    VecRRNarrowOp::Sqxtun32 => (0b1, 0b01, 0b10010),
-                    VecRRNarrowOp::Sqxtun64 => (0b1, 0b10, 0b10010),
-                    VecRRNarrowOp::Uqxtn16 => (0b1, 0b00, 0b10100),
-                    VecRRNarrowOp::Uqxtn32 => (0b1, 0b01, 0b10100),
-                    VecRRNarrowOp::Uqxtn64 => (0b1, 0b10, 0b10100),
-                    VecRRNarrowOp::Fcvtn32 => (0b0, 0b00, 0b10110),
-                    VecRRNarrowOp::Fcvtn64 => (0b0, 0b01, 0b10110),
+
+                let size = match lane_size {
+                    ScalarSize::Size8 => 0b00,
+                    ScalarSize::Size16 => 0b01,
+                    ScalarSize::Size32 => 0b10,
+                    _ => panic!("unsupported size: {:?}", lane_size),
+                };
+
+                // Floats use a single bit, to encode either half or single.
+                let size = match op {
+                    VecRRNarrowOp::Fcvtn => size >> 1,
+                    _ => size,
+                };
+
+                let (u, bits_12_16) = match op {
+                    VecRRNarrowOp::Xtn => (0b0, 0b10010),
+                    VecRRNarrowOp::Sqxtn => (0b0, 0b10100),
+                    VecRRNarrowOp::Sqxtun => (0b1, 0b10010),
+                    VecRRNarrowOp::Uqxtn => (0b1, 0b10100),
+                    VecRRNarrowOp::Fcvtn => (0b0, 0b10110),
                 };
 
                 sink.put4(enc_vec_rr_misc(
