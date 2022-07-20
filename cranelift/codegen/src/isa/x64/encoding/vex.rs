@@ -1,8 +1,6 @@
 //! Encodes VEX instructions. These instructions are those added by the Advanced Vector Extensions
 //! (AVX).
 
-// section 3.1.1.2
-
 use super::evex::Register;
 use super::rex::{LegacyPrefixes, OpcodeMap};
 use super::ByteSink;
@@ -17,7 +15,6 @@ pub struct VexInstruction {
     map: OpcodeMap,
     opcode: u8,
     w: bool,
-    wig: bool,
     reg: u8,
     rm: Register,
     vvvv: Option<Register>,
@@ -32,7 +29,6 @@ impl Default for VexInstruction {
             map: OpcodeMap::None,
             opcode: 0x00,
             w: false,
-            wig: false,
             reg: 0x00,
             rm: Register::default(),
             vvvv: None,
@@ -87,13 +83,6 @@ impl VexInstruction {
         self
     }
 
-    /// Set the WIG bit, denoted by `.WIG` in the instruction string.
-    #[inline(always)]
-    pub fn wig(mut self, wig: bool) -> Self {
-        self.wig = wig;
-        self
-    }
-
     /// Set the instruction opcode byte.
     #[inline(always)]
     pub fn opcode(mut self, opcode: u8) -> Self {
@@ -118,7 +107,7 @@ impl VexInstruction {
 
     /// Set the register to use for the `rm` bits; many instructions use this as the "read from
     /// register/memory" operand. Currently this does not support memory addressing (TODO).Setting
-    /// this affects both the ModRM byte (`rm` section) and the EVEX prefix (the extension bits for
+    /// this affects both the ModRM byte (`rm` section) and the VEX prefix (the extension bits for
     /// register encodings > 8).
     #[inline(always)]
     pub fn rm(mut self, reg: impl Into<Register>) -> Self {
@@ -152,14 +141,34 @@ impl VexInstruction {
         self
     }
 
+    /// The R bit in encoded format (inverted).
+    #[inline(always)]
+    fn r_bit(&self) -> u8 {
+        (!(self.reg >> 3)) & 1
+    }
+
+    /// The X bit in encoded format (inverted).
+    #[inline(always)]
+    fn x_bit(&self) -> u8 {
+        // TODO
+        (!0) & 1
+    }
+
+    /// The B bit in encoded format (inverted).
+    #[inline(always)]
+    fn b_bit(&self) -> u8 {
+        let rm: u8 = self.rm.into();
+        (!(rm >> 3)) & 1
+    }
+
     /// Is the 2 byte prefix available for this instruction?
     /// We essentially just check if we need any of the bits that are only available
     /// in the 3 byte instruction
     #[inline(always)]
     fn use_2byte_prefix(&self) -> bool {
-        // TODO: b_bit == 1
-        // TODO: x_bit == 1
-
+        // These bits are only represented on the 3 byte prefix, so their presence
+        // implies the use of the 3 byte prefix
+        self.b_bit() == 1 && self.x_bit() == 1 &&
         // The presence of W1 in the opcode column implies the opcode must be encoded using the
         // 3-byte form of the VEX prefix.
         self.w == false &&
@@ -167,7 +176,6 @@ impl VexInstruction {
         // encoded by the three-byte form of VEX
         !(self.map == OpcodeMap::_0F3A || self.map == OpcodeMap::_0F38)
     }
-
     /// The last byte of the 2byte and 3byte prefixes is mostly the same, share the common
     /// encoding logic here.
     #[inline(always)]
@@ -189,8 +197,7 @@ impl VexInstruction {
         //    | C5h | | R | vvvv | L | pp |
         //    +-----+ +-------------------+
 
-        let r_bit = 1; // TODO
-        let last_byte = self.prefix_last_byte() | (r_bit << 7);
+        let last_byte = self.prefix_last_byte() | (self.r_bit() << 7);
 
         sink.put1(0xC5);
         sink.put1(last_byte);
@@ -204,14 +211,11 @@ impl VexInstruction {
         //    | C4h | | RXB | m-mmmm | | W | vvvv | L | pp |
         //    +-----+ +--------------+ +-------------------+
 
-        let r_bit = 1; // TODO
-        let x_bit = 1; // TODO
-        let b_bit = 1; // TODO
         let mut second_byte = 0x00;
         second_byte |= self.map.bits(); // m-mmmm field
-        second_byte |= b_bit << 5;
-        second_byte |= x_bit << 6;
-        second_byte |= r_bit << 7;
+        second_byte |= self.b_bit() << 5;
+        second_byte |= self.x_bit() << 6;
+        second_byte |= self.r_bit() << 7;
 
         let w_bit = self.w as u8;
         let last_byte = self.prefix_last_byte() | (w_bit << 7);
@@ -282,19 +286,18 @@ mod tests {
         // VEX.128.66.0F 73 /7 ib
         // VPSLLDQ xmm1, xmm2, imm8
 
-        let dst = regs::xmm1();
-        let src = regs::xmm2();
+        let dst = regs::xmm1().to_real_reg().unwrap().hw_enc();
+        let src = regs::xmm2().to_real_reg().unwrap().hw_enc();
         let mut sink0 = Vec::new();
 
         VexInstruction::new()
             .length(VexVectorLength::V128)
             .prefix(LegacyPrefixes::_66)
             .map(OpcodeMap::_0F)
-            .wig(true)
             .opcode(0x73)
             .opcode_ext(7)
-            .vvvv(dst.to_real_reg().unwrap().hw_enc())
-            .rm(src.to_real_reg().unwrap().hw_enc())
+            .vvvv(dst)
+            .rm(src)
             .imm(0x17)
             .encode(&mut sink0);
 
@@ -328,25 +331,27 @@ mod tests {
         assert_eq!(sink0, vec![0xc4, 0xe3, 0x69, 0x4b, 0xcb, 0x40]);
     }
 
-    // #[test]
-    // fn vmovaps_mem_access() {
-    //     // VEX.256.0F.WIG 29 /r
-    //     // vmovaps [2 * edx + 4],ymm2
-    //
-    //     let dst = regs::rdx().to_real_reg().unwrap().hw_enc();
-    //     let src = regs::xmm2().to_real_reg().unwrap().hw_enc();
-    //     let mut sink0 = Vec::new();
-    //
-    //     VexInstruction::new()
-    //         .length(VexVectorLength::V256)
-    //         .map(OpcodeMap::_0F)
-    //         .wig(true)
-    //         .opcode(0x4B)
-    //         .reg(src)
-    //         .rm(dst)
-    //         .imm(4)
-    //         .encode(&mut sink0);
-    //
-    //     assert_eq!(sink0, vec![0xc5, 0xfc, 0x29, 0x54, 0x12, 0x04]);
-    // }
+    #[test]
+    fn vcmpps() {
+        // VEX.128.0F.WIG C2 /r ib
+        // VCMPPS ymm10, ymm11, ymm12, 4 // neq
+
+        let dst = regs::xmm10().to_real_reg().unwrap().hw_enc();
+        let a = regs::xmm11().to_real_reg().unwrap().hw_enc();
+        let b = regs::xmm12().to_real_reg().unwrap().hw_enc();
+        let mut sink0 = Vec::new();
+
+        VexInstruction::new()
+            .length(VexVectorLength::V256)
+            .prefix(LegacyPrefixes::None)
+            .map(OpcodeMap::_0F)
+            .opcode(0xC2)
+            .reg(dst)
+            .vvvv(a)
+            .rm(b)
+            .imm(4)
+            .encode(&mut sink0);
+
+        assert_eq!(sink0, vec![0xc4, 0x41, 0x24, 0xc2, 0xd4, 0x04]);
+    }
 }

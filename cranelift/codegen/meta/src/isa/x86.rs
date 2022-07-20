@@ -122,6 +122,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     settings.add_predicate("use_ssse3", predicate!(has_ssse3));
     settings.add_predicate("use_sse41", predicate!(has_sse41));
     settings.add_predicate("use_sse42", predicate!(has_sse41 && has_sse42));
+    settings.add_predicate("use_fma", predicate!(has_avx && has_fma));
 
     settings.add_predicate(
         "use_ssse3_simd",
@@ -138,7 +139,6 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
 
     settings.add_predicate("use_avx_simd", predicate!(shared_enable_simd && has_avx));
     settings.add_predicate("use_avx2_simd", predicate!(shared_enable_simd && has_avx2));
-    settings.add_predicate("use_fma_simd", predicate!(shared_enable_simd && has_fma));
     settings.add_predicate(
         "use_avx512bitalg_simd",
         predicate!(shared_enable_simd && has_avx512bitalg),
