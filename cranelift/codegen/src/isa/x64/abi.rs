@@ -487,7 +487,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             Writable::from_reg(regs::rax()),
         ));
         insts.push(Inst::CallKnown {
-            dest: ExternalName::LibCall(LibCall::Probestack),
+            dest: Box::new(ExternalName::LibCall(LibCall::Probestack)),
             info: Box::new(CallInfo {
                 uses: smallvec![regs::rax()],
                 defs: smallvec![],

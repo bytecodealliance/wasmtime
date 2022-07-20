@@ -256,8 +256,8 @@ fn input_to_reg_mem_imm<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> 
     match non_reg_input_to_sext_imm(input, input_ty) {
         Some(x) => RegMemImm::imm(x),
         None => match input_to_reg_mem(ctx, spec) {
-            RegMem::Reg { reg } => RegMemImm::reg(reg),
-            RegMem::Mem { addr } => RegMemImm::mem(addr),
+            RegMem::Reg { reg } => RegMemImm::Reg { reg },
+            RegMem::Mem { addr } => RegMemImm::Mem { addr },
         },
     }
 }
@@ -2746,14 +2746,18 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                 let (name, _, _) = ctx.symbol_value(insn).unwrap();
                 let symbol = name.clone();
-                ctx.emit(Inst::ElfTlsGetAddr { symbol });
+                ctx.emit(Inst::ElfTlsGetAddr {
+                    symbol: Box::new(symbol),
+                });
                 ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
             }
             TlsModel::Macho => {
                 let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                 let (name, _, _) = ctx.symbol_value(insn).unwrap();
                 let symbol = name.clone();
-                ctx.emit(Inst::MachOTlsGetAddr { symbol });
+                ctx.emit(Inst::MachOTlsGetAddr {
+                    symbol: Box::new(symbol),
+                });
                 ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
             }
             _ => {

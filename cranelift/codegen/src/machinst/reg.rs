@@ -84,6 +84,10 @@ impl Reg {
     pub fn is_virtual(self) -> bool {
         self.to_virtual_reg().is_some()
     }
+
+    pub(crate) fn vreg(self) -> usize {
+        self.0.vreg()
+    }
 }
 
 impl std::fmt::Debug for Reg {

@@ -23,7 +23,7 @@
        ;; Integer arithmetic read-modify-write on memory.
        (AluRM (size OperandSize) ;; 4 or 8
               (op AluRmiROpcode)
-              (src1_dst SyntheticAmode)
+              (src1_dst PackedAmode)
               (src2 Gpr))
 
        ;; Instructions on general-purpose registers that only read src and
@@ -115,11 +115,11 @@
                  (dst WritableGpr))
 
        ;; A plain 64-bit integer load, since MovZX_RM_R can't represent that.
-       (Mov64MR (src SyntheticAmode)
+       (Mov64MR (src PackedAmode)
                 (dst WritableGpr))
 
        ;; Loads the memory address of addr into dst.
-       (LoadEffectiveAddress (addr SyntheticAmode)
+       (LoadEffectiveAddress (addr PackedAmode)
                              (dst WritableGpr))
 
        ;; Sign-extended loads and moves: movs (bl bq wl wq lq) addr reg.
@@ -130,7 +130,7 @@
        ;; Integer stores: mov (b w l q) reg addr.
        (MovRM (size OperandSize) ;; 1, 2, 4, or 8
               (src Gpr)
-              (dst SyntheticAmode))
+              (dst PackedAmode))
 
        ;; Arithmetic shifts: (shl shr sar) (b w l q) imm reg.
        (ShiftR (size OperandSize) ;; 1, 2, 4, or 8
@@ -219,7 +219,7 @@
        ;; movq
        (XmmMovRM (op SseOpcode)
                  (src Reg)
-                 (dst SyntheticAmode))
+                 (dst PackedAmode))
 
        ;; XMM (vector) unary op (to move a constant value into an xmm register):
        ;; movups
@@ -314,7 +314,7 @@
        ;; Control flow instructions.
 
        ;; Direct call: call simm32.
-       (CallKnown (dest ExternalName)
+       (CallKnown (dest BoxExternalName)
                   (info BoxCallInfo))
 
        ;; Indirect call: callq (reg mem)
@@ -405,7 +405,7 @@
        (LockCmpxchg (ty Type) ;; I8, I16, I32, or I64
                     (replacement Reg)
                     (expected Reg)
-                    (mem SyntheticAmode)
+                    (mem PackedAmode)
                     (dst_old WritableReg))
 
        ;; A synthetic instruction, based on a loop around a native `lock
@@ -435,7 +435,7 @@
        ;;   instruction.
        (AtomicRmwSeq (ty Type) ;; I8, I16, I32, or I64
                      (op MachAtomicRmwOp)
-                     (mem SyntheticAmode)
+                     (mem PackedAmode)
                      (operand Reg)
                      (temp WritableReg)
                      (dst_old WritableReg))
@@ -471,11 +471,11 @@
 
        ;; A call to the `ElfTlsGetAddr` libcall. Returns address of TLS symbol
        ;; in `rax`.
-       (ElfTlsGetAddr (symbol ExternalName))
+       (ElfTlsGetAddr (symbol BoxExternalName))
 
        ;; A Mach-O TLS symbol access. Returns address of the TLS symbol in
        ;; `rax`.
-       (MachOTlsGetAddr (symbol ExternalName))
+       (MachOTlsGetAddr (symbol BoxExternalName))
 
        ;; An unwind pseudoinstruction describing the state of the machine at
        ;; this program point.
@@ -722,7 +722,7 @@
 (type RegMemImm extern
       (enum
        (Reg (reg Reg))
-       (Mem (addr SyntheticAmode))
+       (Mem (addr PackedAmode))
        (Imm (simm32 u32))))
 
 ;; Put the given clif value into a `RegMemImm` operand.
@@ -737,7 +737,7 @@
 (type RegMem extern
       (enum
        (Reg (reg Reg))
-       (Mem (addr SyntheticAmode))))
+       (Mem (addr PackedAmode))))
 
 ;; Put the given clif value into a `RegMem` operand.
 ;;
@@ -749,6 +749,14 @@
 (extern constructor put_in_reg_mem put_in_reg_mem)
 
 ;; Addressing modes.
+
+(type PackedAmode extern (enum))
+
+(decl pack_synthetic_amode (SyntheticAmode) PackedAmode)
+(extern constructor pack_synthetic_amode pack_synthetic_amode)
+
+(decl unpack_packed_amode (PackedAmode) SyntheticAmode)
+(extern constructor unpack_packed_amode unpack_packed_amode)
 
 (type SyntheticAmode extern (enum))
 
@@ -1489,11 +1497,11 @@
 ;;;; Helpers for Emitting Loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Load a value into a register.
-(decl x64_load (Type SyntheticAmode ExtKind) Reg)
+(decl x64_load (Type PackedAmode ExtKind) Reg)
 
 (rule (x64_load (fits_in_32 ty) addr (ExtKind.SignExtend))
       (x64_movsx (ext_mode (ty_bytes ty) 8)
-             addr))
+             (unpack_packed_amode addr)))
 
 (rule (x64_load $I64 addr _ext_kind)
       (let ((dst WritableGpr (temp_writable_gpr))
@@ -1502,28 +1510,28 @@
 
 (rule (x64_load $F32 addr _ext_kind)
       (xmm_unary_rm_r (SseOpcode.Movss)
-                      addr))
+                      (unpack_packed_amode addr)))
 
 (rule (x64_load $F64 addr _ext_kind)
       (xmm_unary_rm_r (SseOpcode.Movsd)
-                      addr))
+                      (unpack_packed_amode addr)))
 
 (rule (x64_load $F32X4 addr _ext_kind)
       (xmm_unary_rm_r (SseOpcode.Movups)
-                      addr))
+                      (unpack_packed_amode addr)))
 
 (rule (x64_load $F64X2 addr _ext_kind)
       (xmm_unary_rm_r (SseOpcode.Movupd)
-                      addr))
+                      (unpack_packed_amode addr)))
 
 (rule (x64_load (multi_lane _bits _lanes) addr _ext_kind)
       (xmm_unary_rm_r (SseOpcode.Movdqu)
-                      addr))
+                      (unpack_packed_amode addr)))
 
 (decl x64_mov (Amode) Reg)
 (rule (x64_mov addr)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.Mov64MR addr dst))))
+            (_ Unit (emit (MInst.Mov64MR (pack_synthetic_amode addr) dst))))
         dst))
 
 (decl x64_movzx (ExtMode GprMem) Gpr)
@@ -1585,11 +1593,11 @@
 (decl x64_movrm (Type SyntheticAmode Gpr) SideEffectNoResult)
 (rule (x64_movrm ty addr data)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (SideEffectNoResult.Inst (MInst.MovRM size data addr))))
+        (SideEffectNoResult.Inst (MInst.MovRM size data (pack_synthetic_amode addr)))))
 
 (decl x64_xmm_movrm (SseOpcode SyntheticAmode Xmm) SideEffectNoResult)
 (rule (x64_xmm_movrm op addr data)
-      (SideEffectNoResult.Inst (MInst.XmmMovRM op data addr)))
+      (SideEffectNoResult.Inst (MInst.XmmMovRM op data (pack_synthetic_amode addr))))
 
 ;; Load a constant into an XMM register.
 (decl x64_xmm_load_const (Type VCodeConstant) Xmm)
@@ -2663,7 +2671,8 @@
 (decl x64_lea (SyntheticAmode) Gpr)
 (rule (x64_lea addr)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.LoadEffectiveAddress addr dst))))
+            (amode PackedAmode (pack_synthetic_amode addr))
+            (_ Unit (emit (MInst.LoadEffectiveAddress amode dst))))
         dst))
 
 ;; Helper for creating `ud2` instructions.
@@ -2898,7 +2907,8 @@
 (decl alu_rm (Type AluRmiROpcode Amode Gpr) SideEffectNoResult)
 (rule (alu_rm ty opcode src1_dst src2)
       (let ((size OperandSize (operand_size_of_type_32_64 ty)))
-        (SideEffectNoResult.Inst (MInst.AluRM size opcode src1_dst src2))))
+        (SideEffectNoResult.Inst
+          (MInst.AluRM size opcode (pack_synthetic_amode src1_dst) src2))))
 
 (decl x64_add_mem (Type Amode Gpr) SideEffectNoResult)
 (rule (x64_add_mem ty addr val)
@@ -2929,14 +2939,16 @@
 (decl x64_cmpxchg (Type Gpr Gpr SyntheticAmode) Gpr)
 (rule (x64_cmpxchg ty expected replacement addr)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.LockCmpxchg ty replacement expected addr dst))))
+            (amode PackedAmode (pack_synthetic_amode addr))
+            (_ Unit (emit (MInst.LockCmpxchg ty replacement expected amode dst))))
         dst))
 
 (decl x64_atomic_rmw_seq (Type MachAtomicRmwOp SyntheticAmode Gpr) Gpr)
 (rule (x64_atomic_rmw_seq ty op mem input)
       (let ((dst WritableGpr (temp_writable_gpr))
             (tmp WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.AtomicRmwSeq ty op mem input tmp dst))))
+            (amode PackedAmode (pack_synthetic_amode mem))
+            (_ Unit (emit (MInst.AtomicRmwSeq ty op amode input tmp dst))))
         dst))
 
 ;; CLIF IR has one enumeration for atomic operations (`AtomicRmwOp`) while the
@@ -2995,6 +3007,7 @@
 (convert SyntheticAmode GprMem synthetic_amode_to_gpr_mem)
 (convert Amode XmmMem amode_to_xmm_mem)
 (convert SyntheticAmode XmmMem synthetic_amode_to_xmm_mem)
+(convert SyntheticAmode PackedAmode pack_synthetic_amode)
 
 (convert IntCC CC intcc_to_cc)
 (convert AtomicRmwOp MachAtomicRmwOp atomic_rmw_op_to_mach_atomic_rmw_op)

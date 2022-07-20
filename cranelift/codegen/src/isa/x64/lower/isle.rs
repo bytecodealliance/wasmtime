@@ -256,9 +256,7 @@ where
     fn sink_load(&mut self, load: &SinkableLoad) -> RegMemImm {
         self.lower_ctx.sink_inst(load.inst);
         let addr = lower_to_amode(self.lower_ctx, load.addr_input, load.offset);
-        RegMemImm::Mem {
-            addr: SyntheticAmode::Real(addr),
-        }
+        RegMemImm::mem(SyntheticAmode::Real(addr))
     }
 
     #[inline]
@@ -572,6 +570,16 @@ where
     #[inline]
     fn atomic_rmw_op_to_mach_atomic_rmw_op(&mut self, op: &AtomicRmwOp) -> MachAtomicRmwOp {
         MachAtomicRmwOp::from(*op)
+    }
+
+    #[inline]
+    fn pack_synthetic_amode(&mut self, amode: &SyntheticAmode) -> PackedAmode {
+        PackedAmode::from(amode.clone())
+    }
+
+    #[inline]
+    fn unpack_packed_amode(&mut self, packed: &PackedAmode) -> SyntheticAmode {
+        SyntheticAmode::from(packed.clone())
     }
 }
 

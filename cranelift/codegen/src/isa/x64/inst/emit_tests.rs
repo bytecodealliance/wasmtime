@@ -4600,25 +4600,28 @@ fn test_x64_emit() {
 
     // ========================================================
     // Pertaining to atomics.
-    let am1: SyntheticAmode =
-        Amode::imm_reg_reg_shift(321, Gpr::new(r10).unwrap(), Gpr::new(rdx).unwrap(), 2).into();
+    let am1: PackedAmode = PackedAmode::from(Amode::imm_reg_reg_shift(
+        321,
+        Gpr::new(r10).unwrap(),
+        Gpr::new(rdx).unwrap(),
+        2,
+    ));
     // `am2` doesn't contribute any 1 bits to the rex prefix, so we must use it when testing
     // for retention of the apparently-redundant rex prefix in the 8-bit case.
-    let am2: SyntheticAmode = Amode::imm_reg_reg_shift(
+    let am2: PackedAmode = PackedAmode::from(Amode::imm_reg_reg_shift(
         -12345i32 as u32,
         Gpr::new(rcx).unwrap(),
         Gpr::new(rsi).unwrap(),
         3,
-    )
-    .into();
+    ));
     // Use `r9` with a 0 offset.
-    let am3: SyntheticAmode = Amode::imm_reg(0, r9).into();
+    let am3: PackedAmode = PackedAmode::from(Amode::imm_reg(0, r9));
 
     // A general 8-bit case.
     insns.push((
         Inst::LockCmpxchg {
             ty: types::I8,
-            mem: am1,
+            mem: am1.into(),
             replacement: rbx,
             expected: rax,
             dst_old: w_rax,
@@ -4836,10 +4839,10 @@ fn test_x64_emit() {
 
     insns.push((
         Inst::ElfTlsGetAddr {
-            symbol: ExternalName::User {
+            symbol: Box::new(ExternalName::User {
                 namespace: 0,
                 index: 0,
-            },
+            }),
         },
         "66488D3D00000000666648E800000000",
         "%rax = elf_tls_get_addr User { namespace: 0, index: 0 }",
@@ -4847,10 +4850,10 @@ fn test_x64_emit() {
 
     insns.push((
         Inst::MachOTlsGetAddr {
-            symbol: ExternalName::User {
+            symbol: Box::new(ExternalName::User {
                 namespace: 0,
                 index: 0,
-            },
+            }),
         },
         "488B3D00000000FF17",
         "%rax = macho_tls_get_addr User { namespace: 0, index: 0 }",

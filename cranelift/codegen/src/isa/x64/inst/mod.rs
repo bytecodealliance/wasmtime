@@ -48,7 +48,7 @@ pub struct CallInfo {
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
-    assert_eq!(72, std::mem::size_of::<Inst>());
+    assert_eq!(48, std::mem::size_of::<Inst>());
 }
 
 pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
@@ -353,7 +353,7 @@ impl Inst {
         Inst::XmmMovRM {
             op,
             src,
-            dst: dst.into(),
+            dst: PackedAmode::from(dst.into()),
         }
     }
 
@@ -541,7 +541,7 @@ impl Inst {
     pub(crate) fn mov64_m_r(src: impl Into<SyntheticAmode>, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Int);
         Inst::Mov64MR {
-            src: src.into(),
+            src: PackedAmode::from(src.into()),
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
     }
@@ -551,14 +551,14 @@ impl Inst {
         Inst::MovRM {
             size,
             src: Gpr::new(src).unwrap(),
-            dst: dst.into(),
+            dst: PackedAmode::from(dst.into()),
         }
     }
 
     pub(crate) fn lea(addr: impl Into<SyntheticAmode>, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Int);
         Inst::LoadEffectiveAddress {
-            addr: addr.into(),
+            addr: PackedAmode::from(addr.into()),
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
     }
@@ -674,7 +674,7 @@ impl Inst {
         opcode: Opcode,
     ) -> Inst {
         Inst::CallKnown {
-            dest,
+            dest: Box::new(dest),
             info: Box::new(CallInfo {
                 uses,
                 defs,
@@ -945,7 +945,8 @@ impl PrettyPrint for Inst {
             } => {
                 let size_bytes = size_lqb(*size, op.is_8bit());
                 let src2 = pretty_print_reg(src2.to_reg(), size_bytes, allocs);
-                let src1_dst = src1_dst.pretty_print(size_bytes, allocs);
+                let src1_dst =
+                    SyntheticAmode::from(src1_dst.clone()).pretty_print(size_bytes, allocs);
                 format!(
                     "{} {}, {}",
                     ljustify2(op.to_string(), suffix_lqb(*size, op.is_8bit())),
@@ -1114,7 +1115,7 @@ impl PrettyPrint for Inst {
 
             Inst::XmmMovRM { op, src, dst, .. } => {
                 let src = pretty_print_reg(*src, 8, allocs);
-                let dst = dst.pretty_print(8, allocs);
+                let dst = SyntheticAmode::from(dst.clone()).pretty_print(8, allocs);
                 format!("{} {}, {}", ljustify(op.to_string()), src, dst)
             }
 
@@ -1411,13 +1412,13 @@ impl PrettyPrint for Inst {
 
             Inst::Mov64MR { src, dst, .. } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                let src = src.pretty_print(8, allocs);
+                let src = SyntheticAmode::from(src.clone()).pretty_print(8, allocs);
                 format!("{} {}, {}", ljustify("movq".to_string()), src, dst)
             }
 
             Inst::LoadEffectiveAddress { addr, dst } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                let addr = addr.pretty_print(8, allocs);
+                let addr = SyntheticAmode::from(addr.clone()).pretty_print(8, allocs);
                 format!("{} {}, {}", ljustify("lea".to_string()), addr, dst)
             }
 
@@ -1436,7 +1437,7 @@ impl PrettyPrint for Inst {
 
             Inst::MovRM { size, src, dst, .. } => {
                 let src = pretty_print_reg(src.to_reg(), size.to_bytes(), allocs);
-                let dst = dst.pretty_print(size.to_bytes(), allocs);
+                let dst = SyntheticAmode::from(dst.clone()).pretty_print(size.to_bytes(), allocs);
                 format!(
                     "{} {}, {}",
                     ljustify2("mov".to_string(), suffix_bwlq(*size)),
@@ -1650,7 +1651,7 @@ impl PrettyPrint for Inst {
                 let replacement = pretty_print_reg(*replacement, size, allocs);
                 let expected = pretty_print_reg(*expected, size, allocs);
                 let dst_old = pretty_print_reg(dst_old.to_reg(), size, allocs);
-                let mem = mem.pretty_print(size, allocs);
+                let mem = SyntheticAmode::from(mem.clone()).pretty_print(size, allocs);
                 format!(
                     "lock cmpxchg{} {}, {}, expected={}, dst_old={}",
                     suffix_bwlq(OperandSize::from_bytes(size as u32)),
@@ -1736,7 +1737,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
         Inst::AluRM { src1_dst, src2, .. } => {
             collector.reg_use(src2.to_reg());
-            src1_dst.get_operands(collector);
+            SyntheticAmode::from(src1_dst.clone()).get_operands(collector);
         }
         Inst::Not { src, dst, .. } => {
             collector.reg_use(src.to_reg());
@@ -1891,7 +1892,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
         Inst::XmmMovRM { src, dst, .. } => {
             collector.reg_use(*src);
-            dst.get_operands(collector);
+            SyntheticAmode::from(dst.clone()).get_operands(collector);
         }
         Inst::XmmCmpRmR { src, dst, .. } => {
             collector.reg_use(dst.to_reg());
@@ -1949,11 +1950,11 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
         Inst::Mov64MR { src, dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
-            src.get_operands(collector);
+            SyntheticAmode::from(src.clone()).get_operands(collector);
         }
         Inst::LoadEffectiveAddress { addr: src, dst } => {
             collector.reg_def(dst.to_writable_reg());
-            src.get_operands(collector);
+            SyntheticAmode::from(src.clone()).get_operands(collector);
         }
         Inst::MovsxRmR { src, dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
@@ -1961,7 +1962,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
         Inst::MovRM { src, dst, .. } => {
             collector.reg_use(src.to_reg());
-            dst.get_operands(collector);
+            SyntheticAmode::from(dst.clone()).get_operands(collector);
         }
         Inst::ShiftR {
             num_bits, src, dst, ..
@@ -2057,7 +2058,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_use(*replacement);
             collector.reg_fixed_use(*expected, regs::rax());
             collector.reg_fixed_def(*dst_old, regs::rax());
-            mem.get_operands(collector);
+            SyntheticAmode::from(mem.clone()).get_operands(collector);
         }
 
         Inst::AtomicRmwSeq {
@@ -2072,7 +2073,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             // This `fixed_def` is needed because `CMPXCHG` always uses this
             // register implicitly.
             collector.reg_fixed_def(*dst_old, regs::rax());
-            mem.get_operands_late(collector)
+            SyntheticAmode::from(mem.clone()).get_operands_late(collector)
         }
 
         Inst::Ret { rets } => {
