@@ -618,6 +618,10 @@ impl MoveWideConst {
             })
         }
     }
+
+    pub fn zero() -> MoveWideConst {
+        MoveWideConst { bits: 0, shift: 0 }
+    }
 }
 
 /// Advanced SIMD modified immediate as used by MOVI/MVNI.
