@@ -30,6 +30,11 @@ proptest = "1.0.0"
 tokio = { version = "1", features = ["rt-multi-thread","time", "macros"] }
 
 [[test]]
+name = "atoms_async"
+path = "tests/atoms_async.rs"
+required-features = ["wasmtime_async"]
+
+[[test]]
 name = "wasmtime_async"
 path = "tests/wasmtime_async.rs"
 required-features = ["wasmtime_async", "wasmtime/wat"]
