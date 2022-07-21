@@ -41,6 +41,6 @@ cfg_if::cfg_if! {
         #[macro_use]
         mod s390x;
     } else {
-        compile_error!("nope");
+        compile_error!("unsupported architecture");
     }
 }
