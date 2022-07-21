@@ -341,9 +341,6 @@ impl CallThreadState {
     }
 
     fn set_jit_trap(&self, pc: *const u8, fp: usize) {
-        unsafe {
-            *(*self.limits).last_wasm_exit_fp.get() = fp;
-        }
         let backtrace = self.capture_backtrace(Some((pc as usize, fp)));
         unsafe {
             (*self.unwind.get())
