@@ -8,6 +8,8 @@
 // Also at this time this file is heavily based off the x86_64 file, so you'll
 // probably want to read that one as well.
 
+use wasmtime_asm_macros::{asm_func, asm_sym};
+
 // fn(top_of_stack(%r0): *mut u8)
 asm_func!(
     "wasmtime_fiber_switch",

@@ -60,6 +60,8 @@ pub struct wasmtime_store_t {
     pub(crate) store: Store<StoreData>,
 }
 
+wasmtime_c_api_macros::declare_own!(wasmtime_store_t);
+
 pub type CStoreContext<'a> = StoreContext<'a, StoreData>;
 pub type CStoreContextMut<'a> = StoreContextMut<'a, StoreData>;
 
@@ -76,9 +78,6 @@ pub struct StoreData {
     /// for a different direction.
     pub wasm_val_storage: Vec<Val>,
 }
-
-#[no_mangle]
-pub extern "C" fn wasmtime_store_delete(_: Box<wasmtime_store_t>) {}
 
 #[no_mangle]
 pub extern "C" fn wasmtime_store_new(

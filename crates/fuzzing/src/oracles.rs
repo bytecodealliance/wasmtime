@@ -124,13 +124,8 @@ pub fn instantiate(wasm: &[u8], known_valid: bool, config: &generators::Config, 
 
     let mut timeout_state = SignalOnDrop::default();
     match timeout {
-        Timeout::Fuel(fuel) => {
-            // consume the default fuel in the store ...
-            let remaining = store.consume_fuel(0).unwrap();
-            store.consume_fuel(remaining - 1).unwrap();
-            // ... then add back in how much fuel we're allowing here
-            store.add_fuel(fuel).unwrap();
-        }
+        Timeout::Fuel(fuel) => set_fuel(&mut store, fuel),
+
         // If a timeout is requested then we spawn a helper thread to wait for
         // the requested time and then send us a signal to get interrupted. We
         // also arrange for the thread's sleep to get interrupted if we return
@@ -553,12 +548,7 @@ pub fn table_ops(mut fuzz_config: generators::Config, ops: generators::table_ops
     {
         fuzz_config.wasmtime.consume_fuel = true;
         let mut store = fuzz_config.to_store();
-
-        // consume the default fuel in the store ...
-        let remaining = store.consume_fuel(0).unwrap();
-        store.consume_fuel(remaining - 1).unwrap();
-        // ... then add back in how much fuel we're allowing here
-        store.add_fuel(1_000).unwrap();
+        set_fuel(&mut store, 1_000);
 
         let wasm = ops.to_wasm_binary();
         log_wasm(&wasm);
@@ -991,4 +981,17 @@ impl Drop for SignalOnDrop {
             thread.join().unwrap();
         }
     }
+}
+
+fn set_fuel<T>(store: &mut Store<T>, fuel: u64) {
+    // Determine the amount of fuel already within the store, if any, and
+    // add/consume as appropriate to set the remaining amount to` fuel`.
+    let remaining = store.consume_fuel(0).unwrap();
+    if fuel > remaining {
+        store.add_fuel(fuel - remaining).unwrap();
+    } else {
+        store.consume_fuel(remaining - fuel).unwrap();
+    }
+    // double-check that the store has the expected amount of fuel remaining
+    assert_eq!(store.consume_fuel(0).unwrap(), fuel);
 }

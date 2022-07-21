@@ -2,7 +2,9 @@ use proc_macro2::{Literal, TokenStream, TokenTree};
 use quote::{format_ident, quote};
 use std::collections::HashSet;
 use std::fmt;
-use syn::{parse_macro_input, parse_quote, Data, DeriveInput, Error, Result};
+use syn::parse::{Parse, ParseStream};
+use syn::punctuated::Punctuated;
+use syn::{braced, parse_macro_input, parse_quote, Data, DeriveInput, Error, Result, Token};
 
 #[derive(Debug, Copy, Clone)]
 enum VariantStyle {
@@ -181,6 +183,16 @@ impl From<DiscriminantSize> for u32 {
     }
 }
 
+impl From<DiscriminantSize> for usize {
+    fn from(size: DiscriminantSize) -> usize {
+        match size {
+            DiscriminantSize::Size1 => 1,
+            DiscriminantSize::Size2 => 2,
+            DiscriminantSize::Size4 => 4,
+        }
+    }
+}
+
 fn discriminant_size(case_count: usize) -> Option<DiscriminantSize> {
     if case_count <= 0xFF {
         Some(DiscriminantSize::Size1)
@@ -200,11 +212,17 @@ struct VariantCase<'a> {
 }
 
 trait Expander {
-    fn expand_record(&self, input: &DeriveInput, fields: &syn::FieldsNamed) -> Result<TokenStream>;
+    fn expand_record(
+        &self,
+        name: &syn::Ident,
+        generics: &syn::Generics,
+        fields: &[&syn::Field],
+    ) -> Result<TokenStream>;
 
     fn expand_variant(
         &self,
-        input: &DeriveInput,
+        name: &syn::Ident,
+        generics: &syn::Generics,
         discriminant_size: DiscriminantSize,
         cases: &[VariantCase],
         style: VariantStyle,
@@ -231,7 +249,11 @@ fn expand_record(expander: &dyn Expander, input: &DeriveInput) -> Result<TokenSt
     };
 
     match &body.fields {
-        syn::Fields::Named(fields) => expander.expand_record(input, fields),
+        syn::Fields::Named(fields) => expander.expand_record(
+            &input.ident,
+            &input.generics,
+            &fields.named.iter().collect::<Vec<_>>(),
+        ),
 
         syn::Fields::Unnamed(_) | syn::Fields::Unit => Err(Error::new(
             name.span(),
@@ -312,7 +334,109 @@ fn expand_variant(
         )
         .collect::<Result<Vec<_>>>()?;
 
-    expander.expand_variant(input, discriminant_size, &cases, style)
+    expander.expand_variant(
+        &input.ident,
+        &input.generics,
+        discriminant_size,
+        &cases,
+        style,
+    )
+}
+
+fn expand_record_for_component_type(
+    name: &syn::Ident,
+    generics: &syn::Generics,
+    fields: &[&syn::Field],
+    typecheck: TokenStream,
+    typecheck_argument: TokenStream,
+) -> Result<TokenStream> {
+    let internal = quote!(wasmtime::component::__internal);
+
+    let mut lower_generic_params = TokenStream::new();
+    let mut lower_generic_args = TokenStream::new();
+    let mut lower_field_declarations = TokenStream::new();
+    let mut sizes = TokenStream::new();
+    let mut unique_types = HashSet::new();
+
+    for (index, syn::Field { ident, ty, .. }) in fields.iter().enumerate() {
+        let generic = format_ident!("T{}", index);
+
+        lower_generic_params.extend(quote!(#generic: Copy,));
+        lower_generic_args.extend(quote!(<#ty as wasmtime::component::ComponentType>::Lower,));
+
+        lower_field_declarations.extend(quote!(#ident: #generic,));
+
+        sizes.extend(quote!(
+            size = #internal::align_to(size, <#ty as wasmtime::component::ComponentType>::ALIGN32);
+            size += <#ty as wasmtime::component::ComponentType>::SIZE32;
+        ));
+
+        unique_types.insert(ty);
+    }
+
+    let alignments = unique_types
+        .into_iter()
+        .map(|ty| {
+            let align = quote!(<#ty as wasmtime::component::ComponentType>::ALIGN32);
+            quote!(if #align > align {
+                align = #align;
+            })
+        })
+        .collect::<TokenStream>();
+
+    let generics = add_trait_bounds(generics, parse_quote!(wasmtime::component::ComponentType));
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    let lower = format_ident!("Lower{}", name);
+
+    // You may wonder why we make the types of all the fields of the #lower struct generic.  This is to work
+    // around the lack of [perfect derive support in
+    // rustc](https://smallcultfollowing.com/babysteps//blog/2022/04/12/implied-bounds-and-perfect-derive/#what-is-perfect-derive)
+    // as of this writing.
+    //
+    // If the struct we're deriving a `ComponentType` impl for has any generic parameters, then #lower needs
+    // generic parameters too.  And if we just copy the parameters and bounds from the impl to #lower, then the
+    // `#[derive(Clone, Copy)]` will fail unless the original generics were declared with those bounds, which
+    // we don't want to require.
+    //
+    // Alternatively, we could just pass the `Lower` associated type of each generic type as arguments to
+    // #lower, but that would require distinguishing between generic and concrete types when generating
+    // #lower_field_declarations, which would require some form of symbol resolution.  That doesn't seem worth
+    // the trouble.
+
+    let expanded = quote! {
+        #[doc(hidden)]
+        #[derive(Clone, Copy)]
+        #[repr(C)]
+        pub struct #lower <#lower_generic_params> {
+            #lower_field_declarations
+        }
+
+        unsafe impl #impl_generics wasmtime::component::ComponentType for #name #ty_generics #where_clause {
+            type Lower = #lower <#lower_generic_args>;
+
+            const SIZE32: usize = {
+                let mut size = 0;
+                #sizes
+                size
+            };
+
+            const ALIGN32: u32 = {
+                let mut align = 1;
+                #alignments
+                align
+            };
+
+            #[inline]
+            fn typecheck(
+                ty: &#internal::InterfaceType,
+                types: &#internal::ComponentTypes,
+            ) -> #internal::anyhow::Result<()> {
+                #internal::#typecheck(ty, types, &[#typecheck_argument])
+            }
+        }
+    };
+
+    Ok(quote!(const _: () = { #expanded };))
 }
 
 #[proc_macro_derive(Lift, attributes(component))]
@@ -325,13 +449,18 @@ pub fn lift(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 struct LiftExpander;
 
 impl Expander for LiftExpander {
-    fn expand_record(&self, input: &DeriveInput, fields: &syn::FieldsNamed) -> Result<TokenStream> {
+    fn expand_record(
+        &self,
+        name: &syn::Ident,
+        generics: &syn::Generics,
+        fields: &[&syn::Field],
+    ) -> Result<TokenStream> {
         let internal = quote!(wasmtime::component::__internal);
 
         let mut lifts = TokenStream::new();
         let mut loads = TokenStream::new();
 
-        for syn::Field { ident, ty, .. } in &fields.named {
+        for syn::Field { ident, ty, .. } in fields {
             lifts.extend(quote!(#ident: <#ty as wasmtime::component::Lift>::lift(
                 store, options, &src.#ident
             )?,));
@@ -344,8 +473,7 @@ impl Expander for LiftExpander {
             )?,));
         }
 
-        let name = &input.ident;
-        let generics = add_trait_bounds(&input.generics, parse_quote!(wasmtime::component::Lift));
+        let generics = add_trait_bounds(generics, parse_quote!(wasmtime::component::Lift));
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
         let expanded = quote! {
@@ -381,7 +509,8 @@ impl Expander for LiftExpander {
 
     fn expand_variant(
         &self,
-        input: &DeriveInput,
+        name: &syn::Ident,
+        generics: &syn::Generics,
         discriminant_size: DiscriminantSize,
         cases: &[VariantCase],
         _style: VariantStyle,
@@ -415,8 +544,7 @@ impl Expander for LiftExpander {
             }
         }
 
-        let name = &input.ident;
-        let generics = add_trait_bounds(&input.generics, parse_quote!(wasmtime::component::Lift));
+        let generics = add_trait_bounds(generics, parse_quote!(wasmtime::component::Lift));
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
         let from_bytes = match discriminant_size {
@@ -425,7 +553,7 @@ impl Expander for LiftExpander {
             DiscriminantSize::Size4 => quote!(u32::from_le_bytes(bytes[0..4].try_into()?)),
         };
 
-        let payload_offset = u32::from(discriminant_size) as usize;
+        let payload_offset = usize::from(discriminant_size);
 
         let expanded = quote! {
             unsafe impl #impl_generics wasmtime::component::Lift for #name #ty_generics #where_clause {
@@ -469,13 +597,18 @@ pub fn lower(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 struct LowerExpander;
 
 impl Expander for LowerExpander {
-    fn expand_record(&self, input: &DeriveInput, fields: &syn::FieldsNamed) -> Result<TokenStream> {
+    fn expand_record(
+        &self,
+        name: &syn::Ident,
+        generics: &syn::Generics,
+        fields: &[&syn::Field],
+    ) -> Result<TokenStream> {
         let internal = quote!(wasmtime::component::__internal);
 
         let mut lowers = TokenStream::new();
         let mut stores = TokenStream::new();
 
-        for syn::Field { ident, ty, .. } in &fields.named {
+        for syn::Field { ident, ty, .. } in fields {
             lowers.extend(quote!(wasmtime::component::Lower::lower(
                 &self.#ident, store, options, #internal::map_maybe_uninit!(dst.#ident)
             )?;));
@@ -485,8 +618,7 @@ impl Expander for LowerExpander {
             )?;));
         }
 
-        let name = &input.ident;
-        let generics = add_trait_bounds(&input.generics, parse_quote!(wasmtime::component::Lower));
+        let generics = add_trait_bounds(generics, parse_quote!(wasmtime::component::Lower));
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
         let expanded = quote! {
@@ -520,7 +652,8 @@ impl Expander for LowerExpander {
 
     fn expand_variant(
         &self,
-        input: &DeriveInput,
+        name: &syn::Ident,
+        generics: &syn::Generics,
         discriminant_size: DiscriminantSize,
         cases: &[VariantCase],
         _style: VariantStyle,
@@ -535,6 +668,8 @@ impl Expander for LowerExpander {
 
             let index_quoted = discriminant_size.quote(index);
 
+            let discriminant_size = usize::from(discriminant_size);
+
             let pattern;
             let lower;
             let store;
@@ -544,7 +679,10 @@ impl Expander for LowerExpander {
                 lower = quote!(value.lower(store, options, #internal::map_maybe_uninit!(dst.payload.#ident)));
                 store = quote!(value.store(
                     memory,
-                    offset + #internal::align_to(1, <Self as wasmtime::component::ComponentType>::ALIGN32)
+                    offset + #internal::align_to(
+                        #discriminant_size,
+                        <Self as wasmtime::component::ComponentType>::ALIGN32
+                    )
                 ));
             } else {
                 pattern = quote!(Self::#ident);
@@ -557,16 +695,13 @@ impl Expander for LowerExpander {
                 #lower
             }));
 
-            let discriminant_size = u32::from(discriminant_size) as usize;
-
             stores.extend(quote!(#pattern => {
                 *memory.get::<#discriminant_size>(offset) = #index_quoted.to_le_bytes();
                 #store
             }));
         }
 
-        let name = &input.ident;
-        let generics = add_trait_bounds(&input.generics, parse_quote!(wasmtime::component::Lower));
+        let generics = add_trait_bounds(generics, parse_quote!(wasmtime::component::Lower));
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
         let expanded = quote! {
@@ -621,116 +756,38 @@ pub fn component_type(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 struct ComponentTypeExpander;
 
 impl Expander for ComponentTypeExpander {
-    fn expand_record(&self, input: &DeriveInput, fields: &syn::FieldsNamed) -> Result<TokenStream> {
-        let internal = quote!(wasmtime::component::__internal);
+    fn expand_record(
+        &self,
+        name: &syn::Ident,
+        generics: &syn::Generics,
+        fields: &[&syn::Field],
+    ) -> Result<TokenStream> {
+        expand_record_for_component_type(
+            name,
+            generics,
+            fields,
+            quote!(typecheck_record),
+            fields
+                .iter()
+                .map(
+                    |syn::Field {
+                         attrs, ident, ty, ..
+                     }| {
+                        let name = find_rename(attrs)?.unwrap_or_else(|| {
+                            Literal::string(&ident.as_ref().unwrap().to_string())
+                        });
 
-        let mut field_names_and_checks = TokenStream::new();
-        let mut lower_generic_params = TokenStream::new();
-        let mut lower_generic_args = TokenStream::new();
-        let mut lower_field_declarations = TokenStream::new();
-        let mut sizes = TokenStream::new();
-        let mut unique_types = HashSet::new();
-
-        for (
-            index,
-            syn::Field {
-                attrs, ident, ty, ..
-            },
-        ) in fields.named.iter().enumerate()
-        {
-            let name = find_rename(attrs)?
-                .unwrap_or_else(|| Literal::string(&ident.as_ref().unwrap().to_string()));
-
-            let generic = format_ident!("T{}", index);
-
-            lower_generic_params.extend(quote!(#generic: Copy,));
-            lower_generic_args.extend(quote!(<#ty as wasmtime::component::ComponentType>::Lower,));
-
-            lower_field_declarations.extend(quote!(#ident: #generic,));
-
-            field_names_and_checks
-                .extend(quote!((#name, <#ty as wasmtime::component::ComponentType>::typecheck),));
-
-            sizes.extend(quote!(
-                size = #internal::align_to(size, <#ty as wasmtime::component::ComponentType>::ALIGN32);
-                size += <#ty as wasmtime::component::ComponentType>::SIZE32;
-            ));
-
-            unique_types.insert(ty);
-        }
-
-        let alignments = unique_types
-            .into_iter()
-            .map(|ty| {
-                let align = quote!(<#ty as wasmtime::component::ComponentType>::ALIGN32);
-                quote!(if #align > align {
-                    align = #align;
-                })
-            })
-            .collect::<TokenStream>();
-
-        let name = &input.ident;
-        let generics = add_trait_bounds(
-            &input.generics,
-            parse_quote!(wasmtime::component::ComponentType),
-        );
-        let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-        let lower = format_ident!("Lower{}", name);
-
-        // You may wonder why we make the types of all the fields of the #lower struct generic.  This is to work
-        // around the lack of [perfect derive support in
-        // rustc](https://smallcultfollowing.com/babysteps//blog/2022/04/12/implied-bounds-and-perfect-derive/#what-is-perfect-derive)
-        // as of this writing.
-        //
-        // If the struct we're deriving a `ComponentType` impl for has any generic parameters, then #lower needs
-        // generic parameters too.  And if we just copy the parameters and bounds from the impl to #lower, then the
-        // `#[derive(Clone, Copy)]` will fail unless the original generics were declared with those bounds, which
-        // we don't want to require.
-        //
-        // Alternatively, we could just pass the `Lower` associated type of each generic type as arguments to
-        // #lower, but that would require distinguishing between generic and concrete types when generating
-        // #lower_field_declarations, which would require some form of symbol resolution.  That doesn't seem worth
-        // the trouble.
-
-        let expanded = quote! {
-            #[doc(hidden)]
-            #[derive(Clone, Copy)]
-            #[repr(C)]
-            pub struct #lower <#lower_generic_params> {
-                #lower_field_declarations
-            }
-
-            unsafe impl #impl_generics wasmtime::component::ComponentType for #name #ty_generics #where_clause {
-                type Lower = #lower <#lower_generic_args>;
-
-                const SIZE32: usize = {
-                    let mut size = 0;
-                    #sizes
-                    size
-                };
-
-                const ALIGN32: u32 = {
-                    let mut align = 1;
-                    #alignments
-                    align
-                };
-
-                #[inline]
-                fn typecheck(
-                    ty: &#internal::InterfaceType,
-                    types: &#internal::ComponentTypes,
-                ) -> #internal::anyhow::Result<()> {
-                    #internal::typecheck_record(ty, types, &[#field_names_and_checks])
-                }
-            }
-        };
-
-        Ok(quote!(const _: () = { #expanded };))
+                        Ok(quote!((#name, <#ty as wasmtime::component::ComponentType>::typecheck),))
+                    },
+                )
+                .collect::<Result<_>>()?,
+        )
     }
 
     fn expand_variant(
         &self,
-        input: &DeriveInput,
+        name: &syn::Ident,
+        generics: &syn::Generics,
         discriminant_size: DiscriminantSize,
         cases: &[VariantCase],
         style: VariantStyle,
@@ -822,11 +879,7 @@ impl Expander for ComponentTypeExpander {
             VariantStyle::Enum => quote!(typecheck_enum),
         };
 
-        let name = &input.ident;
-        let generics = add_trait_bounds(
-            &input.generics,
-            parse_quote!(wasmtime::component::ComponentType),
-        );
+        let generics = add_trait_bounds(generics, parse_quote!(wasmtime::component::ComponentType));
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
         let lower = format_ident!("Lower{}", name);
         let lower_payload = format_ident!("LowerPayload{}", name);
@@ -884,4 +937,365 @@ impl Expander for ComponentTypeExpander {
 
         Ok(quote!(const _: () = { #expanded };))
     }
+}
+
+#[derive(Debug)]
+struct Flag {
+    rename: Option<String>,
+    name: String,
+}
+
+impl Parse for Flag {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let attributes = syn::Attribute::parse_outer(input)?;
+
+        let rename = find_rename(&attributes)?
+            .map(|literal| {
+                let s = literal.to_string();
+
+                s.strip_prefix('"')
+                    .and_then(|s| s.strip_suffix('"'))
+                    .map(|s| s.to_owned())
+                    .ok_or_else(|| Error::new(literal.span(), "expected string literal"))
+            })
+            .transpose()?;
+
+        input.parse::<Token![const]>()?;
+        let name = input.parse::<syn::Ident>()?.to_string();
+
+        Ok(Self { rename, name })
+    }
+}
+
+#[derive(Debug)]
+struct Flags {
+    name: String,
+    flags: Vec<Flag>,
+}
+
+impl Parse for Flags {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let name = input.parse::<syn::Ident>()?.to_string();
+
+        let content;
+        braced!(content in input);
+
+        let flags = content
+            .parse_terminated::<_, Token![;]>(Flag::parse)?
+            .into_iter()
+            .collect();
+
+        Ok(Self { name, flags })
+    }
+}
+
+enum FlagsSize {
+    /// Flags can fit in a u8
+    Size1,
+    /// Flags can fit in a u16
+    Size2,
+    /// Flags can fit in a specified number of u32 fields
+    Size4Plus(usize),
+}
+
+fn ceiling_divide(n: usize, d: usize) -> usize {
+    (n + d - 1) / d
+}
+
+#[proc_macro]
+pub fn flags(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    expand_flags(&parse_macro_input!(input as Flags))
+        .unwrap_or_else(Error::into_compile_error)
+        .into()
+}
+
+fn expand_flags(flags: &Flags) -> Result<TokenStream> {
+    let size = if flags.flags.len() <= 8 {
+        FlagsSize::Size1
+    } else if flags.flags.len() <= 16 {
+        FlagsSize::Size2
+    } else {
+        FlagsSize::Size4Plus(ceiling_divide(flags.flags.len(), 32))
+    };
+
+    let ty;
+    let eq;
+
+    let count = flags.flags.len();
+
+    match size {
+        FlagsSize::Size1 => {
+            ty = quote!(u8);
+
+            eq = if count == 8 {
+                quote!(self.__inner0.eq(&rhs.__inner0))
+            } else {
+                let mask = !(0xFF_u8 << count);
+
+                quote!((self.__inner0 & #mask).eq(&(rhs.__inner0 & #mask)))
+            };
+        }
+        FlagsSize::Size2 => {
+            ty = quote!(u16);
+
+            eq = if count == 16 {
+                quote!(self.__inner0.eq(&rhs.__inner0))
+            } else {
+                let mask = !(0xFFFF_u16 << count);
+
+                quote!((self.__inner0 & #mask).eq(&(rhs.__inner0 & #mask)))
+            };
+        }
+        FlagsSize::Size4Plus(n) => {
+            ty = quote!(u32);
+
+            let comparisons = (0..(n - 1))
+                .map(|index| {
+                    let field = format_ident!("__inner{}", index);
+
+                    quote!(self.#field.eq(&rhs.#field) &&)
+                })
+                .collect::<TokenStream>();
+
+            let field = format_ident!("__inner{}", n - 1);
+
+            eq = if count % 32 == 0 {
+                quote!(#comparisons self.#field.eq(&rhs.#field))
+            } else {
+                let mask = !(0xFFFF_FFFF_u32 << (count % 32));
+
+                quote!(#comparisons (self.#field & #mask).eq(&(rhs.#field & #mask)))
+            }
+        }
+    }
+
+    let count;
+    let mut as_array;
+    let mut bitor;
+    let mut bitor_assign;
+    let mut bitand;
+    let mut bitand_assign;
+    let mut bitxor;
+    let mut bitxor_assign;
+    let mut not;
+
+    match size {
+        FlagsSize::Size1 | FlagsSize::Size2 => {
+            count = 1;
+            as_array = quote!([self.__inner0 as u32]);
+            bitor = quote!(Self {
+                __inner0: self.__inner0.bitor(rhs.__inner0)
+            });
+            bitor_assign = quote!(self.__inner0.bitor_assign(rhs.__inner0));
+            bitand = quote!(Self {
+                __inner0: self.__inner0.bitand(rhs.__inner0)
+            });
+            bitand_assign = quote!(self.__inner0.bitand_assign(rhs.__inner0));
+            bitxor = quote!(Self {
+                __inner0: self.__inner0.bitxor(rhs.__inner0)
+            });
+            bitxor_assign = quote!(self.__inner0.bitxor_assign(rhs.__inner0));
+            not = quote!(Self {
+                __inner0: self.__inner0.not()
+            });
+        }
+        FlagsSize::Size4Plus(n) => {
+            count = n;
+            as_array = TokenStream::new();
+            bitor = TokenStream::new();
+            bitor_assign = TokenStream::new();
+            bitand = TokenStream::new();
+            bitand_assign = TokenStream::new();
+            bitxor = TokenStream::new();
+            bitxor_assign = TokenStream::new();
+            not = TokenStream::new();
+
+            for index in 0..n {
+                let field = format_ident!("__inner{}", index);
+
+                as_array.extend(quote!(self.#field,));
+                bitor.extend(quote!(#field: self.#field.bitor(rhs.#field),));
+                bitor_assign.extend(quote!(self.#field.bitor_assign(rhs.#field);));
+                bitand.extend(quote!(#field: self.#field.bitand(rhs.#field),));
+                bitand_assign.extend(quote!(self.#field.bitand_assign(rhs.#field);));
+                bitxor.extend(quote!(#field: self.#field.bitxor(rhs.#field),));
+                bitxor_assign.extend(quote!(self.#field.bitxor_assign(rhs.#field);));
+                not.extend(quote!(#field: self.#field.not(),));
+            }
+
+            as_array = quote!([#as_array]);
+            bitor = quote!(Self { #bitor });
+            bitand = quote!(Self { #bitand });
+            bitxor = quote!(Self { #bitxor });
+            not = quote!(Self { #not });
+        }
+    };
+
+    let name = format_ident!("{}", flags.name);
+
+    let mut constants = TokenStream::new();
+    let mut rust_names = TokenStream::new();
+    let mut component_names = TokenStream::new();
+
+    for (index, Flag { name, rename }) in flags.flags.iter().enumerate() {
+        rust_names.extend(quote!(#name,));
+
+        let component_name = rename.as_ref().unwrap_or(name);
+        component_names.extend(quote!(#component_name,));
+
+        let fields = match size {
+            FlagsSize::Size1 => {
+                let init = 1_u8 << index;
+                quote!(__inner0: #init)
+            }
+            FlagsSize::Size2 => {
+                let init = 1_u16 << index;
+                quote!(__inner0: #init)
+            }
+            FlagsSize::Size4Plus(n) => (0..n)
+                .map(|i| {
+                    let field = format_ident!("__inner{}", i);
+
+                    let init = if index / 32 == i {
+                        1_u32 << (index % 32)
+                    } else {
+                        0
+                    };
+
+                    quote!(#field: #init,)
+                })
+                .collect::<TokenStream>(),
+        };
+
+        let name = format_ident!("{}", name);
+
+        constants.extend(quote!(const #name: Self = Self { #fields };));
+    }
+
+    let generics = syn::Generics {
+        lt_token: None,
+        params: Punctuated::new(),
+        gt_token: None,
+        where_clause: None,
+    };
+
+    let fields = {
+        let ty = syn::parse2::<syn::Type>(ty.clone())?;
+
+        (0..count)
+            .map(|index| syn::Field {
+                attrs: Vec::new(),
+                vis: syn::Visibility::Inherited,
+                ident: Some(format_ident!("__inner{}", index)),
+                colon_token: None,
+                ty: ty.clone(),
+            })
+            .collect::<Vec<_>>()
+    };
+
+    let fields = fields.iter().collect::<Vec<_>>();
+
+    let component_type_impl = expand_record_for_component_type(
+        &name,
+        &generics,
+        &fields,
+        quote!(typecheck_flags),
+        component_names,
+    )?;
+
+    let lower_impl = LowerExpander.expand_record(&name, &generics, &fields)?;
+
+    let lift_impl = LiftExpander.expand_record(&name, &generics, &fields)?;
+
+    let internal = quote!(wasmtime::component::__internal);
+
+    let fields = fields
+        .iter()
+        .map(|syn::Field { ident, .. }| quote!(#[doc(hidden)] #ident: #ty,))
+        .collect::<TokenStream>();
+
+    let expanded = quote! {
+        #[derive(Copy, Clone, Default)]
+        struct #name { #fields }
+
+        impl #name {
+            #constants
+
+            fn as_array(&self) -> [u32; #count] {
+                #as_array
+            }
+        }
+
+        impl std::cmp::PartialEq for #name {
+            fn eq(&self, rhs: &#name) -> bool {
+                #eq
+            }
+        }
+
+        impl std::cmp::Eq for #name { }
+
+        impl std::fmt::Debug for #name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                #internal::format_flags(&self.as_array(), &[#rust_names], f)
+            }
+        }
+
+        impl std::ops::BitOr for #name {
+            type Output = #name;
+
+            fn bitor(self, rhs: #name) -> #name {
+                #bitor
+            }
+        }
+
+        impl std::ops::BitOrAssign for #name {
+            fn bitor_assign(&mut self, rhs: #name) {
+                #bitor_assign
+            }
+        }
+
+        impl std::ops::BitAnd for #name {
+            type Output = #name;
+
+            fn bitand(self, rhs: #name) -> #name {
+                #bitand
+            }
+        }
+
+        impl std::ops::BitAndAssign for #name {
+            fn bitand_assign(&mut self, rhs: #name) {
+                #bitand_assign
+            }
+        }
+
+        impl std::ops::BitXor for #name {
+            type Output = #name;
+
+            fn bitxor(self, rhs: #name) -> #name {
+                #bitxor
+            }
+        }
+
+        impl std::ops::BitXorAssign for #name {
+            fn bitxor_assign(&mut self, rhs: #name) {
+                #bitxor_assign
+            }
+        }
+
+        impl std::ops::Not for #name {
+            type Output = #name;
+
+            fn not(self) -> #name {
+                #not
+            }
+        }
+
+        #component_type_impl
+
+        #lower_impl
+
+        #lift_impl
+    };
+
+    Ok(expanded)
 }

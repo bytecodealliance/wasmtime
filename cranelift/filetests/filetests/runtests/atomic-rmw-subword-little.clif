@@ -1,5 +1,6 @@
 test run
 target s390x
+target s390x has_mie2
 target aarch64
 target aarch64 has_lse
 target x86_64
@@ -456,4 +457,3 @@ block0(v0: i32, v1: i64, v2: i8):
 ; run: %atomic_rmw_xchg_little_i8(0x12345678, 1, 0xff) == 0x1234ff78
 ; run: %atomic_rmw_xchg_little_i8(0x12345678, 0, 0x11) == 0x12345611
 ; run: %atomic_rmw_xchg_little_i8(0x12345678, 0, 0xff) == 0x123456ff
-

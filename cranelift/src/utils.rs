@@ -64,6 +64,9 @@ pub fn parse_sets_and_triple(
         Err(ParseOptionError::UnknownFlag { name, .. }) => {
             unknown_settings.push(name);
         }
+        Err(ParseOptionError::UnknownValue { name, value, .. }) => {
+            unknown_settings.push(format!("{}={}", name, value));
+        }
         Err(ParseOptionError::Generic(err)) => return Err(err.into()),
         Ok(()) => {}
     }

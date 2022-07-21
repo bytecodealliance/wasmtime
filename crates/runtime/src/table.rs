@@ -280,7 +280,9 @@ impl Table {
         };
 
         for (item, slot) in items.zip(elements) {
-            *slot = item as usize;
+            unsafe {
+                *slot = TableElement::FuncRef(item).into_table_value();
+            }
         }
         Ok(())
     }

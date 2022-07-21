@@ -5,6 +5,8 @@
 // all the other bits. Documentation tries to reference various bits here and
 // there but try to make sure to read over everything before tweaking things!
 
+use wasmtime_asm_macros::{asm_func, asm_sym};
+
 // fn(top_of_stack(rdi): *mut u8)
 asm_func!(
     "wasmtime_fiber_switch",

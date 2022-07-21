@@ -18,6 +18,8 @@
 //   `DW_CFA_AARCH64_negate_ra_state` DWARF operation (aliased with the
 //   `.cfi_window_save` assembler directive) informs an unwinder about this
 
+use wasmtime_asm_macros::asm_func;
+
 cfg_if::cfg_if! {
     if #[cfg(target_os = "macos")] {
         macro_rules! cfi_window_save { () => (""); }

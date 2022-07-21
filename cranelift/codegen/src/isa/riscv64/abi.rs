@@ -66,12 +66,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         add_ret_area_ptr: bool,
     ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
         // all registers can be used as parameter.
+        // both start and all included.
         let (x_start, x_end, f_start, f_end) = if args_or_rets == ArgsOrRets::Args {
             (10, 17, 10, 17)
         } else {
             (10, 11, 10, 11)
         };
-
         let mut next_x_reg = x_start;
         let mut next_f_reg = f_start;
         // stack space
@@ -139,7 +139,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             }
             match param.value_type {
                 F32 | F64 => {
-                    if next_f_reg < f_end {
+                    if next_f_reg <= f_end {
                         let arg = ABIArg::reg(
                             f_reg(next_f_reg).to_real_reg().unwrap(),
                             param.value_type,
@@ -160,7 +160,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     }
                 }
                 B1 | B8 | B16 | B32 | B64 | I8 | I16 | I32 | I64 | R32 | R64 => {
-                    if next_x_reg < x_end {
+                    if next_x_reg <= x_end {
                         let arg = ABIArg::reg(
                             x_reg(next_x_reg).to_real_reg().unwrap(),
                             param.value_type,
@@ -185,7 +185,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     let mut slots = vec![];
                     if next_x_reg + 1 <= x_end {
                         for i in 0..2 {
-                            let reg = x_reg(next_x_reg + i).clone();
                             slots.push(ABIArgSlot::Reg {
                                 reg: x_reg(next_x_reg + i).to_real_reg().unwrap(),
                                 ty: elem_type,
@@ -193,7 +192,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                             });
                         }
                         next_x_reg += 2;
-                    } else if next_x_reg < x_end {
+                    } else if next_x_reg <= x_end {
                         // put in register
                         slots.push(ABIArgSlot::Reg {
                             reg: x_reg(next_x_reg).to_real_reg().unwrap(),
@@ -230,7 +229,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         abi_args.extend(abi_args_for_stack.into_iter());
         let pos: Option<usize> = if add_ret_area_ptr {
             assert!(ArgsOrRets::Args == args_or_rets);
-            if next_x_reg < x_end {
+            if next_x_reg <= x_end {
                 let arg = ABIArg::reg(
                     x_reg(next_x_reg).to_real_reg().unwrap(),
                     I64,
@@ -265,7 +264,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
-        // just previous fp saved on stack.
+        // lr fp.
         16
     }
 

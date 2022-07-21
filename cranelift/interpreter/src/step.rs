@@ -410,7 +410,28 @@ where
         }
         Opcode::GetPinnedReg => unimplemented!("GetPinnedReg"),
         Opcode::SetPinnedReg => unimplemented!("SetPinnedReg"),
-        Opcode::TableAddr => unimplemented!("TableAddr"),
+        Opcode::TableAddr => {
+            if let InstructionData::TableAddr { table, offset, .. } = inst {
+                let table = &state.get_current_function().tables[table];
+                let base = state.resolve_global_value(table.base_gv)?;
+                let bound = state.resolve_global_value(table.bound_gv)?;
+                let index_ty = table.index_type;
+                let element_size = V::int(u64::from(table.element_size) as i128, index_ty)?;
+                let inst_offset = V::int(i32::from(offset) as i128, index_ty)?;
+
+                let byte_offset = arg(0)?.mul(element_size.clone())?.add(inst_offset)?;
+                let bound_bytes = bound.mul(element_size)?;
+                if byte_offset.gt(&bound_bytes)? {
+                    return Ok(ControlFlow::Trap(CraneliftTrap::User(
+                        TrapCode::HeapOutOfBounds,
+                    )));
+                }
+
+                assign(base.add(byte_offset)?)
+            } else {
+                unreachable!()
+            }
+        }
         Opcode::Iconst => assign(Value::int(imm().into_int()?, ctrl_ty)?),
         Opcode::F32const => assign(imm()),
         Opcode::F64const => assign(imm()),

@@ -80,19 +80,21 @@ block3(v7: r64, v8: r64):
 ; block1:
 ;   j label2
 ; block2:
+;   mv t2,a1
 ;   ld a0,16(nominal_sp)
 ;   j label5
 ; block3:
 ;   j label4
 ; block4:
 ;   mv a0,a1
-;   ld a1,16(nominal_sp)
+;   ld t2,16(nominal_sp)
 ;   j label5
 ; block5:
 ;   load_addr t3,0(nominal_sp)
 ;   ld t3,0(t3)
 ;   mv a2,s8
-;   sd t3,0(a2)
+;   sd t2,0(a2)
+;   sd t3,8(a2)
 ;   ld s8,0(sp)
 ;   add sp,+48
 ;   ld ra,8(sp)

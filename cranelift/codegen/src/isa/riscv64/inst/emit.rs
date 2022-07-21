@@ -656,23 +656,19 @@ impl MachInstEmit for Inst {
                 let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
                 let rd = allocs.next_writable(rd);
-                if alu_op.reverse_rs() {
-                    let x: u32 = alu_op.op_code()
-                        | reg_to_gpr_num(rd.to_reg()) << 7
-                        | (alu_op.funct3()) << 12
-                        | reg_to_gpr_num(rs2) << 15
-                        | reg_to_gpr_num(rs1) << 20
-                        | alu_op.funct7() << 25;
-                    sink.put4(x);
+
+                let (rs1, rs2) = if alu_op.reverse_rs() {
+                    (rs2, rs1)
                 } else {
-                    let x: u32 = alu_op.op_code()
-                        | reg_to_gpr_num(rd.to_reg()) << 7
-                        | (alu_op.funct3()) << 12
-                        | reg_to_gpr_num(rs1) << 15
-                        | reg_to_gpr_num(rs2) << 20
-                        | alu_op.funct7() << 25;
-                    sink.put4(x);
-                }
+                    (rs1, rs2)
+                };
+                let x: u32 = alu_op.op_code()
+                    | reg_to_gpr_num(rd.to_reg()) << 7
+                    | (alu_op.funct3()) << 12
+                    | reg_to_gpr_num(rs1) << 15
+                    | reg_to_gpr_num(rs2) << 20
+                    | alu_op.funct7() << 25;
+                sink.put4(x);
             }
             &Inst::AluRRImm12 {
                 alu_op,
