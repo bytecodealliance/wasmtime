@@ -16,8 +16,16 @@ pub struct Config {
     /// This value does not apply to block0 which takes the function params
     /// and is thus governed by `signature_params`
     pub block_signature_params: RangeInclusive<usize>,
+    /// Max number of jump tables generated per function
+    /// Note, the actual number of jump tables may be larger if the Switch interface
+    /// decides to insert more.
     pub jump_tables_per_function: RangeInclusive<usize>,
     pub jump_table_entries: RangeInclusive<usize>,
+    /// The Switch API specializes either individual blocks or contiguous ranges.
+    /// In `switch_cases` we decide to produce either a single block or a range.
+    /// The size of the range is controlled by `switch_max_range_size`.
+    pub switch_cases: RangeInclusive<usize>,
+    pub switch_max_range_size: RangeInclusive<usize>,
 
     /// Stack slots.
     /// The combination of these two determines stack usage per function
@@ -38,6 +46,8 @@ impl Default for Config {
             block_signature_params: 0..=16,
             jump_tables_per_function: 0..=4,
             jump_table_entries: 0..=16,
+            switch_cases: 0..=64,
+            switch_max_range_size: 0..=32,
             static_stack_slots_per_function: 0..=8,
             static_stack_slot_size: 0..=128,
         }
