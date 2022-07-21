@@ -20,7 +20,7 @@ asm_func!(
         // this was core Wasm, otherwise store an invalid sentinal value.
         mov  x12, #-1
         mov  x13, sp
-        csel x12, x13, x12, eq // TODO: is `eq` right?
+        csel x12, x13, x12, eq
         stur x12, [x9, #40]
 
         // Tail call to the callee function pointer in the vmctx.
