@@ -64,6 +64,18 @@ impl Handle<RecordIndex> {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct TupleIndex(TypeTupleIndex);
+
+impl Handle<TupleIndex> {
+    pub fn types(&self) -> impl ExactSizeIterator<Item = Type> + '_ {
+        self.types[self.index.0]
+            .types
+            .iter()
+            .map(|ty| Type::from(ty, &self.types))
+    }
+}
+
 pub struct Case<'a> {
     pub name: &'a str,
     pub ty: Type,
@@ -78,30 +90,6 @@ impl Handle<VariantIndex> {
             name: &case.name,
             ty: Type::from(&case.ty, &self.types),
         })
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct FlagsIndex(TypeFlagsIndex);
-
-impl Handle<FlagsIndex> {
-    pub fn names(&self) -> impl ExactSizeIterator<Item = &str> {
-        self.types[self.index.0]
-            .names
-            .iter()
-            .map(|name| name.deref())
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct TupleIndex(TypeTupleIndex);
-
-impl Handle<TupleIndex> {
-    pub fn types(&self) -> impl ExactSizeIterator<Item = Type> + '_ {
-        self.types[self.index.0]
-            .types
-            .iter()
-            .map(|ty| Type::from(ty, &self.types))
     }
 }
 
@@ -139,6 +127,18 @@ impl Handle<ExpectedIndex> {
 
     pub fn err(&self) -> Type {
         Type::from(&self.types[self.index.0].err, &self.types)
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct FlagsIndex(TypeFlagsIndex);
+
+impl Handle<FlagsIndex> {
+    pub fn names(&self) -> impl ExactSizeIterator<Item = &str> {
+        self.types[self.index.0]
+            .names
+            .iter()
+            .map(|name| name.deref())
     }
 }
 
@@ -183,12 +183,10 @@ pub enum Type {
     List(Handle<TypeIndex>),
     /// Record
     Record(Handle<RecordIndex>),
-    /// Variant
-    Variant(Handle<VariantIndex>),
-    /// Bit flags
-    Flags(Handle<FlagsIndex>),
     /// Tuple
     Tuple(Handle<TupleIndex>),
+    /// Variant
+    Variant(Handle<VariantIndex>),
     /// Enum
     Enum(Handle<EnumIndex>),
     /// Union
@@ -197,6 +195,8 @@ pub enum Type {
     Option(Handle<TypeIndex>),
     /// Expected
     Expected(Handle<ExpectedIndex>),
+    /// Bit flags
+    Flags(Handle<FlagsIndex>),
 }
 
 impl Type {
@@ -514,16 +514,12 @@ impl Type {
                 index: RecordIndex(*index),
                 types: types.clone(),
             }),
-            InterfaceType::Variant(index) => Type::Variant(Handle {
-                index: VariantIndex(*index),
-                types: types.clone(),
-            }),
-            InterfaceType::Flags(index) => Type::Flags(Handle {
-                index: FlagsIndex(*index),
-                types: types.clone(),
-            }),
             InterfaceType::Tuple(index) => Type::Tuple(Handle {
                 index: TupleIndex(*index),
+                types: types.clone(),
+            }),
+            InterfaceType::Variant(index) => Type::Variant(Handle {
+                index: VariantIndex(*index),
                 types: types.clone(),
             }),
             InterfaceType::Enum(index) => Type::Enum(Handle {
@@ -540,6 +536,10 @@ impl Type {
             }),
             InterfaceType::Expected(index) => Type::Expected(Handle {
                 index: ExpectedIndex(*index),
+                types: types.clone(),
+            }),
+            InterfaceType::Flags(index) => Type::Flags(Handle {
+                index: FlagsIndex(*index),
                 types: types.clone(),
             }),
         }
@@ -617,13 +617,13 @@ impl Type {
             Type::String => "string",
             Type::List(_) => "list",
             Type::Record(_) => "record",
-            Type::Variant(_) => "variant",
-            Type::Flags(_) => "flags",
             Type::Tuple(_) => "tuple",
+            Type::Variant(_) => "variant",
             Type::Enum(_) => "enum",
             Type::Union(_) => "union",
             Type::Option(_) => "option",
             Type::Expected(_) => "expected",
+            Type::Flags(_) => "flags",
         }
     }
 

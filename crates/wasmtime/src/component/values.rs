@@ -22,23 +22,16 @@ pub struct Record {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Tuple {
+    pub(crate) ty: Handle<TupleIndex>,
+    pub(crate) values: Box<[Val]>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Variant {
     pub(crate) ty: Handle<VariantIndex>,
     pub(crate) discriminant: u32,
     pub(crate) value: Box<Val>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Flags {
-    pub(crate) ty: Handle<FlagsIndex>,
-    pub(crate) count: u32,
-    pub(crate) value: Box<[u32]>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Tuple {
-    pub(crate) ty: Handle<TupleIndex>,
-    pub(crate) values: Box<[Val]>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -66,6 +59,13 @@ pub struct Expected {
     pub(crate) ty: Handle<ExpectedIndex>,
     pub(crate) discriminant: u32,
     pub(crate) value: Box<Val>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Flags {
+    pub(crate) ty: Handle<FlagsIndex>,
+    pub(crate) count: u32,
+    pub(crate) value: Box<[u32]>,
 }
 
 /// Represents possible runtime values which a component function can either consume or produce
@@ -103,12 +103,10 @@ pub enum Val {
     List(List),
     /// Record
     Record(Record),
-    /// Variant
-    Variant(Variant),
-    /// Bit flags
-    Flags(Flags),
     /// Tuple
     Tuple(Tuple),
+    /// Variant
+    Variant(Variant),
     /// Enum
     Enum(Enum),
     /// Union
@@ -117,6 +115,8 @@ pub enum Val {
     Option(Option),
     /// Expected
     Expected(Expected),
+    /// Bit flags
+    Flags(Flags),
 }
 
 impl Val {
@@ -139,13 +139,13 @@ impl Val {
             Val::String(_) => Type::String,
             Val::List(List { ty, .. }) => Type::List(ty.clone()),
             Val::Record(Record { ty, .. }) => Type::Record(ty.clone()),
-            Val::Variant(Variant { ty, .. }) => Type::Variant(ty.clone()),
-            Val::Flags(Flags { ty, .. }) => Type::Flags(ty.clone()),
             Val::Tuple(Tuple { ty, .. }) => Type::Tuple(ty.clone()),
+            Val::Variant(Variant { ty, .. }) => Type::Variant(ty.clone()),
             Val::Enum(Enum { ty, .. }) => Type::Enum(ty.clone()),
             Val::Union(Union { ty, .. }) => Type::Union(ty.clone()),
             Val::Option(Option { ty, .. }) => Type::Option(ty.clone()),
             Val::Expected(Expected { ty, .. }) => Type::Expected(ty.clone()),
+            Val::Flags(Flags { ty, .. }) => Type::Flags(ty.clone()),
         }
     }
 
