@@ -80,6 +80,20 @@ fn insert_stack_store(
     Ok(())
 }
 
+fn insert_const(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    _opcode: Opcode,
+    _args: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let typevar = rets[0];
+    let var = fgen.get_variable_of_type(typevar)?;
+    let val = fgen.generate_const(builder, typevar)?;
+    builder.def_var(var, val);
+    Ok(())
+}
+
 type OpcodeInserter = fn(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
@@ -182,6 +196,16 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::StackLoad, &[], &[I16], insert_stack_load),
     (Opcode::StackLoad, &[], &[I32], insert_stack_load),
     (Opcode::StackLoad, &[], &[I64], insert_stack_load),
+    // Integer Consts
+    (Opcode::Iconst, &[], &[I8], insert_const),
+    (Opcode::Iconst, &[], &[I16], insert_const),
+    (Opcode::Iconst, &[], &[I32], insert_const),
+    (Opcode::Iconst, &[], &[I64], insert_const),
+    // Float Consts
+    (Opcode::F32const, &[], &[F32], insert_const),
+    (Opcode::F64const, &[], &[F64], insert_const),
+    // Bool Consts
+    (Opcode::Bconst, &[], &[B1], insert_const),
 ];
 
 pub struct FunctionGenerator<'r, 'data>
