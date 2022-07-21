@@ -111,10 +111,7 @@ impl TableOps {
 
         func.instruction(&Instruction::Loop(wasm_encoder::BlockType::Empty));
         for op in &self.ops {
-            op.insert(
-                &mut func,
-                self.num_params as u32,
-            );
+            op.insert(&mut func, self.num_params as u32);
         }
         func.instruction(&Instruction::Br(0));
         func.instruction(&Instruction::End);
