@@ -221,7 +221,7 @@ pub struct CallThreadState {
     jmp_buf: Cell<*const u8>,
     handling_trap: Cell<bool>,
     signal_handler: Option<*const SignalHandler<'static>>,
-    prev: Cell<tls::Ptr>,
+    pub(crate) prev: Cell<tls::Ptr>,
     capture_backtrace: bool,
     pub(crate) old_last_wasm_exit_fp: usize,
     pub(crate) old_last_wasm_exit_pc: usize,

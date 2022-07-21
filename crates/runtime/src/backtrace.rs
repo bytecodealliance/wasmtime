@@ -92,35 +92,54 @@ impl Backtrace {
         mut f: impl FnMut(Frame) -> ControlFlow<()>,
     ) {
         let (last_wasm_exit_pc, last_wasm_exit_fp) = match trap_pc_and_fp {
+            // If we exited Wasm by catching a trap, then the Wasm-to-host
+            // trampoline did not get a chance to save the last Wasm PC and FP,
+            // and we need to use the plumbed-through values instead.
             Some((pc, fp)) => (pc, fp),
-            None => (
-                *(*state.limits).last_wasm_exit_pc.get(),
-                *(*state.limits).last_wasm_exit_fp.get(),
-            ),
+            // Either there is no Wasm currently on the stack, or we exited Wasm
+            // through the Wasm-to-host trampoline.
+            None => {
+                let pc = *(*state.limits).last_wasm_exit_pc.get();
+                // If the PC is set to its default zero value, then there is no
+                // Wasm on the stack, because otherwise the Wasm-to-host
+                // trampoline would have set the PC.
+                if pc == 0 {
+                    return;
+                }
+                let fp = *(*state.limits).last_wasm_exit_fp.get();
+                (pc, fp)
+            }
         };
 
-        if last_wasm_exit_pc == 0 {
-            return;
-        }
-
-        Self::trace_through_wasm(
+        // Trace through the first contiguous sequence of Wasm frames on the
+        // stack.
+        if let ControlFlow::Break(()) = Self::trace_through_wasm(
             last_wasm_exit_pc,
             last_wasm_exit_fp,
             *(*state.limits).last_wasm_entry_sp.get(),
             &mut f,
-        );
+        ) {
+            return;
+        }
 
+        // And then trace through each of the older contiguous sequences of Wasm
+        // frames on the stack.
         for state in state.iter() {
+            // If the old state's PC is zero, then we have finished iterating
+            // over all sequences of contiguous Wasm frames.
             if state.old_last_wasm_exit_pc == 0 {
+                debug_assert!(state.prev.get().is_null());
                 return;
             }
 
-            Self::trace_through_wasm(
+            if let ControlFlow::Break(()) = Self::trace_through_wasm(
                 state.old_last_wasm_exit_pc,
                 state.old_last_wasm_exit_fp,
                 state.old_last_wasm_entry_sp,
                 &mut f,
-            );
+            ) {
+                return;
+            }
         }
     }
 
