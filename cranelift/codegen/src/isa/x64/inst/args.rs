@@ -437,6 +437,7 @@ pub enum PackedAmodeTag {
 }
 
 impl PackedAmodeTag {
+    #[inline(always)]
     fn value(self) -> u8 {
         match self {
             Self::ImmReg => 0,
@@ -449,6 +450,7 @@ impl PackedAmodeTag {
 }
 
 impl From<&PackedAmode> for PackedAmodeTag {
+    #[inline(always)]
     fn from(val: &PackedAmode) -> Self {
         match val.0 as u8 {
             0 => PackedAmodeTag::ImmReg,
@@ -481,30 +483,36 @@ impl From<&PackedAmode> for PackedAmodeTag {
 pub struct PackedAmode(u64, u64);
 
 impl PackedAmode {
+    #[inline(always)]
     fn mem_flags(&self) -> MemFlags {
         MemFlags::from_u8((self.0 >> 16) as u8)
     }
 
+    #[inline(always)]
     fn shift(&self) -> u8 {
         (self.0 >> 8) as u8
     }
 
+    #[inline(always)]
     fn base_vreg(&self) -> VReg {
         let val = (self.1 & 0xfffffff) as usize;
         assert!(val < VReg::MAX);
         VReg::new(val, RegClass::Int)
     }
 
+    #[inline(always)]
     fn index_vreg(&self) -> VReg {
         let val = ((self.1 >> 32) & 0xfffffff) as usize;
         assert!(val < VReg::MAX);
         VReg::new(val, RegClass::Int)
     }
 
+    #[inline(always)]
     fn simm32(&self) -> u32 {
         (self.0 >> 32) as u32
     }
 
+    #[inline(always)]
     fn imm_reg(simm32: u32, base: Reg, flags: MemFlags) -> Self {
         let tag = PackedAmodeTag::ImmReg.value() as u64;
         let flags = (flags.as_u8() as u64) << 16;
@@ -513,6 +521,7 @@ impl PackedAmode {
         Self(tag | flags | simm32, base)
     }
 
+    #[inline(always)]
     fn as_imm_reg(&self) -> Amode {
         Amode::ImmReg {
             simm32: self.simm32(),
@@ -521,6 +530,7 @@ impl PackedAmode {
         }
     }
 
+    #[inline(always)]
     fn imm_reg_reg_shift(simm32: u32, base: Gpr, index: Gpr, shift: u8, flags: MemFlags) -> Self {
         let tag = PackedAmodeTag::ImmRegRegShift.value() as u64;
         let shift = (shift as u64) << 8;
@@ -531,6 +541,7 @@ impl PackedAmode {
         Self(tag | shift | flags | simm32, base | index)
     }
 
+    #[inline(always)]
     fn as_imm_reg_reg_shift(&self) -> Amode {
         Amode::ImmRegRegShift {
             simm32: self.simm32(),
@@ -541,42 +552,49 @@ impl PackedAmode {
         }
     }
 
+    #[inline(always)]
     fn rip_relative(target: MachLabel) -> Self {
         let tag = PackedAmodeTag::RipRelative.value() as u64;
         let target = (target.as_u32() as u64) << 32;
         Self(tag | target, 0)
     }
 
+    #[inline(always)]
     fn as_rip_relative(&self) -> Amode {
         Amode::RipRelative {
             target: MachLabel::from_u32((self.0 >> 32) as u32),
         }
     }
 
+    #[inline(always)]
     fn nominal_sp_offset(simm32: u32) -> Self {
         let tag = PackedAmodeTag::NominalSPOffset.value() as u64;
         let simm32 = (simm32 as u64) << 32;
         Self(tag | simm32, 0)
     }
 
+    #[inline(always)]
     fn as_nominal_sp_offset(&self) -> SyntheticAmode {
         SyntheticAmode::NominalSPOffset {
             simm32: (self.0 >> 32) as u32,
         }
     }
 
+    #[inline(always)]
     fn constant_offset(offset: VCodeConstant) -> Self {
         let tag = PackedAmodeTag::ConstantOffset.value() as u64;
         let offset = (offset.as_u32() as u64) << 32;
         Self(tag | offset, 0)
     }
 
+    #[inline(always)]
     fn as_constant_offset(&self) -> SyntheticAmode {
         SyntheticAmode::ConstantOffset(VCodeConstant::from_u32((self.0 >> 32) as u32))
     }
 }
 
 impl From<Amode> for PackedAmode {
+    #[inline(always)]
     fn from(amode: Amode) -> Self {
         match amode {
             Amode::ImmReg {
@@ -599,6 +617,7 @@ impl From<Amode> for PackedAmode {
 }
 
 impl From<SyntheticAmode> for PackedAmode {
+    #[inline(always)]
     fn from(amode: SyntheticAmode) -> Self {
         match amode {
             SyntheticAmode::Real(amode) => amode.into(),
@@ -611,6 +630,7 @@ impl From<SyntheticAmode> for PackedAmode {
 impl TryFrom<PackedAmode> for Amode {
     type Error = ();
 
+    #[inline(always)]
     fn try_from(val: PackedAmode) -> Result<Self, ()> {
         match PackedAmodeTag::from(&val) {
             PackedAmodeTag::ImmReg => Ok(val.as_imm_reg()),
@@ -623,6 +643,7 @@ impl TryFrom<PackedAmode> for Amode {
 }
 
 impl From<PackedAmode> for SyntheticAmode {
+    #[inline(always)]
     fn from(val: PackedAmode) -> Self {
         match PackedAmodeTag::from(&val) {
             PackedAmodeTag::ImmReg => SyntheticAmode::Real(val.as_imm_reg()),
