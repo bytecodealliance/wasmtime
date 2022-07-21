@@ -1,4 +1,24 @@
-//! Backtrace, stack walking, and unwinding functionality for Wasm.
+//! Backtrace and stack walking functionality for Wasm.
+//!
+//! Walking the Wasm stack is comprised of
+//!
+//! 1. identifying sequences of contiguous Wasm frames on the stack
+//!    (i.e. skipping over native host frames), and
+//!
+//! 2. walking the Wasm frames within such a sequence.
+//!
+//! To perform (1) we maintain the entry stack pointer (SP) and exit frame
+//! pointer (FP) and program counter (PC) each time we call into Wasm and Wasm
+//! calls into the host via trampolines (see
+//! `crates/runtime/src/trampolines`). The most recent entry is stored in
+//! `VMRuntimeLimits` and older entries are saved in `CallThreadState`. This
+//! lets us identify ranges of contiguous Wasm frames on the stack.
+//!
+//! To solve (2) and walk the Wasm frames within a region of contiguous Wasm
+//! frames on the stack, we configure Cranelift's `preserve_frame_pointers =
+//! true` setting. Then we can do simple frame pointer traversal starting at the
+//! exit FP and stopping once we reach the entry SP (meaning that the next older
+//! frame is a host frame).
 
 use crate::traphandlers::{tls, CallThreadState};
 use cfg_if::cfg_if;
