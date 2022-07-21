@@ -389,6 +389,7 @@ impl Engine {
             | "enable_simd"
             | "enable_verifier"
             | "regalloc_checker"
+            | "regalloc_verbose_logs"
             | "is_pic"
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now

@@ -527,6 +527,7 @@ libcall_call_conv = "isa_default"
 baldrdash_prologue_words = 0
 probestack_size_log2 = 12
 regalloc_checker = false
+regalloc_verbose_logs = false
 enable_alias_analysis = true
 enable_verifier = true
 is_pic = false
