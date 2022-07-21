@@ -24,6 +24,29 @@ use crate::traphandlers::{tls, CallThreadState};
 use cfg_if::cfg_if;
 use std::ops::ControlFlow;
 
+// Architecture-specific bits for stack walking. Each of these modules should
+// define and export the following functions:
+//
+// * `unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize`
+// * `unsafe fn get_next_older_fp_from_fp(fp: usize) -> usize`
+// * `fn reached_entry_sp(fp: usize, first_wasm_sp: usize) -> bool`
+// * `fn assert_entry_sp_is_aligned(sp: usize)`
+// * `fn assert_fp_is_aligned(fp: usize)`
+cfg_if! {
+    if #[cfg(target_arch = "x86_64")] {
+        mod x86_64;
+        use x86_64 as arch;
+    } else if #[cfg(target_arch = "aarch64")] {
+        mod aarch64;
+        use aarch46 as arch;
+    } else if #[cfg(target_arch = "s390x")] {
+        mod s390x;
+        use s390x as arch;
+    } else {
+        compile_error!("unsupported architecture");
+    }
+}
+
 /// A WebAssembly stack trace.
 #[derive(Debug)]
 pub struct Backtrace(Vec<Frame>);
@@ -196,29 +219,10 @@ impl Backtrace {
         // to Wasm.
         assert!(first_wasm_sp >= fp, "{first_wasm_sp:#x} >= {fp:#x}");
 
-        // The stack pointer should always be aligned to 16 bytes
-        // *except* inside function prologues where the return PC is
-        // pushed to the stack but before the old frame pointer has been
-        // saved to the stack via `push rbp`. And this happens to be
-        // exactly where we are inside of our host-to-Wasm trampoline
-        // that records the value of SP when we first enter
-        // Wasm. Therefore, the SP should *always* be 8-byte aligned but
-        // *never* 16-byte aligned.
-        if cfg!(target_arch = "x86_64") {
-            assert_eq!(first_wasm_sp % 8, 0);
-            assert_eq!(first_wasm_sp % 16, 8);
-        } else if cfg!(target_arch = "aarch64") {
-            assert_eq!(first_wasm_sp % 16, 0);
-        } else if cfg!(target_arch = "s390x") {
-            assert_eq!(first_wasm_sp % 8, 0);
-        }
+        arch::assert_entry_sp_is_aligned(first_wasm_sp);
 
         loop {
-            if cfg!(target_arch = "x86_64") || cfg!(target_arch = "aarch64") {
-                assert_eq!(fp % 16, 0, "stack should always be aligned to 16");
-            } else {
-                assert_eq!(fp % 8, 0, "stack should always be aligned to 8");
-            }
+            arch::assert_fp_is_aligned(fp);
 
             log::trace!("--- Tracing through one Wasm frame ---");
             log::trace!("pc = 0x{:016x}", pc);
@@ -230,7 +234,7 @@ impl Backtrace {
             // host, then we've successfully walked all the Wasm frames,
             // and have now reached a host frame. We're done iterating
             // through this contiguous sequence of Wasm frames.
-            if Self::reached_entry_sp(fp, first_wasm_sp) {
+            if arch::reached_entry_sp(fp, first_wasm_sp) {
                 return ControlFlow::Continue(());
             }
 
@@ -239,59 +243,13 @@ impl Backtrace {
             // we know that the FP isn't an arbitrary value and it is
             // safe to dereference it to read the next PC/FP.
 
-            // The calling convention always pushes the return pointer
-            // (aka the PC of the next older frame) just before this
-            // frame.
-            pc = Self::get_next_older_pc_from_fp(fp);
+            pc = arch::get_next_older_pc_from_fp(fp);
 
-            // And the current frame pointer points to the next older
-            // frame pointer. Because the stack grows down, the older FP
-            // must be greater than the current FP.
-            let next_older_fp = Self::get_next_older_fp_from_fp(fp);
+            let next_older_fp = arch::get_next_older_fp_from_fp(fp);
+            // Because the stack always grows down, the older FP must be greater
+            // than the current FP.
             assert!(next_older_fp > fp, "{next_older_fp:#x} > {fp:#x}");
             fp = next_older_fp;
-        }
-    }
-
-    unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize {
-        cfg_if! {
-            if #[cfg(target_arch = "x86_64")] {
-                *(fp as *mut usize).offset(1)
-            } else if #[cfg(target_arch = "aarch64")] {
-                *(fp as *mut usize).offset(1)
-            } else if #[cfg(target_arch = "s390x")] {
-                *(fp as *mut usize).offset(14)
-            } else {
-                compile_error!("platform not supported")
-            }
-        }
-    }
-
-    unsafe fn get_next_older_fp_from_fp(fp: usize) -> usize {
-        cfg_if! {
-            if #[cfg(target_arch = "x86_64")] {
-                *(fp as *mut usize)
-            } else if #[cfg(target_arch = "aarch64")] {
-                *(fp as *mut usize)
-            } else if #[cfg(target_arch = "s390x")] {
-                *(fp as *mut usize)
-            } else {
-                compile_error!("platform not supported")
-            }
-        }
-    }
-
-    unsafe fn reached_entry_sp(fp: usize, first_wasm_sp: usize) -> bool {
-        cfg_if! {
-            if #[cfg(target_arch = "x86_64")] {
-                fp == first_wasm_sp - 8
-            } else if #[cfg(target_arch = "aarch64")] {
-                fp == first_wasm_sp - 16
-            } else if #[cfg(target_arch = "s390x")] {
-                fp == first_wasm_sp
-            } else {
-                compile_error!("platform not supported")
-            }
         }
     }
 
