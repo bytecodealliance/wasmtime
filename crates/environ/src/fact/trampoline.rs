@@ -326,6 +326,13 @@ impl Compiler<'_> {
             InterfaceType::Record(t) => self.translate_record(*t, src, dst_ty, dst),
             InterfaceType::Tuple(t) => self.translate_tuple(*t, src, dst_ty, dst),
 
+            InterfaceType::String => {
+                // consider this field used for now until this is fully
+                // implemented.
+                drop(&self.adapter.lift.string_encoding);
+                unimplemented!("don't know how to translate strings")
+            }
+
             // TODO: this needs to be filled out for all the other interface
             // types.
             ty => unimplemented!("don't know how to translate {ty:?}"),
