@@ -81,7 +81,6 @@ members = [
   "crates/bench-api",
   "crates/c-api",
   "crates/cli-flags",
-  "crates/misc/run-examples",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
   "examples/tokio/wasm",
