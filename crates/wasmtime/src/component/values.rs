@@ -1,9 +1,6 @@
-use crate::component::func::{self, Lower, MemoryMut, Options, MAX_STACK_PARAMS};
-use crate::component::types::{
-    EnumIndex, ExpectedIndex, FlagsIndex, Handle, RecordIndex, SizeAndAlignment, TupleIndex, Type,
-    TypeIndex, UnionIndex, VariantIndex,
-};
-use crate::{map_maybe_uninit, AsContextMut, StoreContextMut, ValRaw};
+use crate::component::func::{self, Lower, MemoryMut, Options};
+use crate::component::types::{self, SizeAndAlignment, Type};
+use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::Result;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
@@ -11,59 +8,59 @@ use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct List {
-    pub(crate) ty: Handle<TypeIndex>,
+    pub(crate) ty: types::List,
     pub(crate) values: Box<[Val]>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Record {
-    pub(crate) ty: Handle<RecordIndex>,
+    pub(crate) ty: types::Record,
     pub(crate) values: Box<[Val]>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Tuple {
-    pub(crate) ty: Handle<TupleIndex>,
+    pub(crate) ty: types::Tuple,
     pub(crate) values: Box<[Val]>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Variant {
-    pub(crate) ty: Handle<VariantIndex>,
+    pub(crate) ty: types::Variant,
     pub(crate) discriminant: u32,
     pub(crate) value: Box<Val>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Enum {
-    pub(crate) ty: Handle<EnumIndex>,
+    pub(crate) ty: types::Enum,
     pub(crate) discriminant: u32,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Union {
-    pub(crate) ty: Handle<UnionIndex>,
+    pub(crate) ty: types::Union,
     pub(crate) discriminant: u32,
     pub(crate) value: Box<Val>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Option {
-    pub(crate) ty: Handle<TypeIndex>,
+    pub(crate) ty: types::Option,
     pub(crate) discriminant: u32,
     pub(crate) value: Box<Val>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Expected {
-    pub(crate) ty: Handle<ExpectedIndex>,
+    pub(crate) ty: types::Expected,
     pub(crate) discriminant: u32,
     pub(crate) value: Box<Val>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Flags {
-    pub(crate) ty: Handle<FlagsIndex>,
+    pub(crate) ty: types::Flags,
     pub(crate) count: u32,
     pub(crate) value: Box<[u32]>,
 }
@@ -154,64 +151,41 @@ impl Val {
         &self,
         store: &mut StoreContextMut<T>,
         options: &Options,
-        dst: &mut MaybeUninit<[ValRaw; MAX_STACK_PARAMS]>,
-        offset: usize,
+        dst: &mut std::slice::IterMut<'_, MaybeUninit<ValRaw>>,
     ) -> Result<()> {
         match self {
             Val::Unit => (),
-            Val::Bool(value) => {
-                map_maybe_uninit!(dst[offset]).write(ValRaw::u32(if *value { 1 } else { 0 }));
-            }
-            Val::S8(value) => {
-                map_maybe_uninit!(dst[offset]).write(ValRaw::i32(*value as i32));
-            }
-            Val::U8(value) => {
-                map_maybe_uninit!(dst[offset]).write(ValRaw::u32(*value as u32));
-            }
-            Val::S16(value) => {
-                map_maybe_uninit!(dst[offset]).write(ValRaw::i32(*value as i32));
-            }
-            Val::U16(value) => {
-                map_maybe_uninit!(dst[offset]).write(ValRaw::u32(*value as u32));
-            }
-            Val::S32(value) => {
-                map_maybe_uninit!(dst[offset]).write(ValRaw::i32(*value));
-            }
-            Val::U32(value) => {
-                map_maybe_uninit!(dst[offset]).write(ValRaw::u32(*value));
-            }
-            Val::S64(value) => {
-                map_maybe_uninit!(dst[offset]).write(ValRaw::i64(*value));
-            }
-            Val::U64(value) => {
-                map_maybe_uninit!(dst[offset]).write(ValRaw::u64(*value));
-            }
-            Val::Float32(value) => {
-                map_maybe_uninit!(dst[offset]).write(ValRaw::f32(*value));
-            }
-            Val::Float64(value) => {
-                map_maybe_uninit!(dst[offset]).write(ValRaw::f64(*value));
-            }
-            Val::Char(value) => {
-                map_maybe_uninit!(dst[offset]).write(ValRaw::u32(u32::from(*value)));
-            }
+            Val::Bool(value) => value.lower(store, options, next(dst))?,
+            Val::S8(value) => value.lower(store, options, next(dst))?,
+            Val::U8(value) => value.lower(store, options, next(dst))?,
+            Val::S16(value) => value.lower(store, options, next(dst))?,
+            Val::U16(value) => value.lower(store, options, next(dst))?,
+            Val::S32(value) => value.lower(store, options, next(dst))?,
+            Val::U32(value) => value.lower(store, options, next(dst))?,
+            Val::S64(value) => value.lower(store, options, next(dst))?,
+            Val::U64(value) => value.lower(store, options, next(dst))?,
+            Val::Float32(value) => value.lower(store, options, next(dst))?,
+            Val::Float64(value) => value.lower(store, options, next(dst))?,
+            Val::Char(value) => value.lower(store, options, next(dst))?,
             Val::String(value) => {
-                let (ptr, len) = super::lower_string(
-                    &mut MemoryMut::new(store.as_context_mut(), options),
-                    value,
-                )?;
-                map_maybe_uninit!(dst[offset]).write(ValRaw::i64(ptr as i64));
-                map_maybe_uninit!(dst[offset + 1]).write(ValRaw::i64(len as i64));
+                let my_dst = &mut MaybeUninit::<[ValRaw; 2]>::uninit();
+                value.lower(store, options, my_dst)?;
+                let my_dst = unsafe { my_dst.assume_init() };
+                next(dst).write(my_dst[0]);
+                next(dst).write(my_dst[1]);
             }
-            Val::List(List { values, .. }) => {
-                let (ptr, len) =
-                    lower_list(&mut MemoryMut::new(store.as_context_mut(), options), values)?;
-                map_maybe_uninit!(dst[offset]).write(ValRaw::i64(ptr as i64));
-                map_maybe_uninit!(dst[offset + 1]).write(ValRaw::i64(len as i64));
+            Val::List(List { values, ty }) => {
+                let (ptr, len) = lower_list(
+                    &ty.ty(),
+                    &mut MemoryMut::new(store.as_context_mut(), options),
+                    values,
+                )?;
+                next(dst).write(ValRaw::i64(ptr as i64));
+                next(dst).write(ValRaw::i64(len as i64));
             }
             Val::Record(Record { values, .. }) | Val::Tuple(Tuple { values, .. }) => {
-                for (index, value) in values.iter().enumerate() {
-                    value.lower(store, options, dst, offset + index)?;
+                for value in values.deref() {
+                    value.lower(store, options, dst)?;
                 }
             }
             Val::Variant(Variant {
@@ -234,15 +208,18 @@ impl Val {
                 value,
                 ..
             }) => {
-                map_maybe_uninit!(dst[offset]).write(ValRaw::u32(*discriminant));
-                value.lower(store, options, dst, offset + 1)?;
+                next(dst).write(ValRaw::u32(*discriminant));
+                value.lower(store, options, dst)?;
+                for _ in (1 + value.ty().flatten_count())..self.ty().flatten_count() {
+                    next(dst).write(ValRaw::u32(0));
+                }
             }
             Val::Enum(Enum { discriminant, .. }) => {
-                map_maybe_uninit!(dst[offset]).write(ValRaw::u32(*discriminant));
+                next(dst).write(ValRaw::u32(*discriminant));
             }
             Val::Flags(Flags { value, .. }) => {
-                for (index, value) in value.iter().enumerate() {
-                    map_maybe_uninit!(dst[offset + index]).write(ValRaw::u32(*value));
+                for value in value.deref() {
+                    next(dst).write(ValRaw::u32(*value));
                 }
             }
         }
@@ -252,6 +229,8 @@ impl Val {
 
     /// Serialize this value to the heap at the specified memory location.
     pub(crate) fn store<T>(&self, mem: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
+        debug_assert!(offset % usize::try_from(self.ty().size_and_alignment().alignment)? == 0);
+
         match self {
             Val::Unit => (),
             Val::Bool(value) => value.store(mem, offset)?,
@@ -266,14 +245,9 @@ impl Val {
             Val::Float32(value) => value.store(mem, offset)?,
             Val::Float64(value) => value.store(mem, offset)?,
             Val::Char(value) => value.store(mem, offset)?,
-            Val::String(value) => {
-                let (ptr, len) = super::lower_string(mem, value)?;
-                // FIXME: needs memory64 handling
-                *mem.get(offset + 0) = (ptr as i32).to_le_bytes();
-                *mem.get(offset + 4) = (len as i32).to_le_bytes();
-            }
-            Val::List(List { values, .. }) => {
-                let (ptr, len) = lower_list(mem, values)?;
+            Val::String(value) => value.store(mem, offset)?,
+            Val::List(List { values, ty }) => {
+                let (ptr, len) = lower_list(&ty.ty(), mem, values)?;
                 // FIXME: needs memory64 handling
                 *mem.get(offset + 0) = (ptr as i32).to_le_bytes();
                 *mem.get(offset + 4) = (len as i32).to_le_bytes();
@@ -356,11 +330,11 @@ impl Val {
 }
 
 /// Lower a list with the specified element type and values.
-fn lower_list<T>(mem: &mut MemoryMut<'_, T>, items: &[Val]) -> Result<(usize, usize)> {
-    let element_type = match items {
-        [item, ..] => item.ty(),
-        [] => Type::Unit,
-    };
+fn lower_list<T>(
+    element_type: &Type,
+    mem: &mut MemoryMut<'_, T>,
+    items: &[Val],
+) -> Result<(usize, usize)> {
     let SizeAndAlignment {
         size: element_size,
         alignment: element_alignment,
@@ -386,4 +360,8 @@ pub(crate) fn u32_count_for_flag_count(count: usize) -> usize {
         FlagsSize::Size1 | FlagsSize::Size2 => 1,
         FlagsSize::Size4Plus(n) => n,
     }
+}
+
+fn next<'a>(dst: &mut std::slice::IterMut<'a, MaybeUninit<ValRaw>>) -> &'a mut MaybeUninit<ValRaw> {
+    dst.next().unwrap()
 }

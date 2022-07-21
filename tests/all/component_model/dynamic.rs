@@ -1,4 +1,4 @@
-use super::{make_echo_component, make_echo_component_with_params, Type};
+use super::{make_echo_component, make_echo_component_with_params, Param, Type};
 use anyhow::Result;
 use wasmtime::component::{Component, Func, Linker, Val};
 use wasmtime::{AsContextMut, Store};
@@ -21,18 +21,26 @@ fn primitives() -> Result<()> {
     let mut store = Store::new(&engine, ());
 
     for (input, ty, param) in [
-        (Val::Bool(true), "bool", Type::U8),
-        (Val::S8(-42), "s8", Type::S8),
-        (Val::U8(42), "u8", Type::U8),
-        (Val::S16(-4242), "s16", Type::S16),
-        (Val::U16(4242), "u16", Type::U16),
-        (Val::S32(-314159265), "s32", Type::I32),
-        (Val::U32(314159265), "u32", Type::I32),
-        (Val::S64(-31415926535897), "s64", Type::I64),
-        (Val::U64(31415926535897), "u64", Type::I64),
-        (Val::Float32(3.14159265_f32.to_bits()), "float32", Type::F32),
-        (Val::Float64(3.14159265_f64.to_bits()), "float64", Type::F64),
-        (Val::Char('🦀'), "char", Type::I32),
+        (Val::Bool(true), "bool", Param(Type::U8, Some(0))),
+        (Val::S8(-42), "s8", Param(Type::S8, Some(0))),
+        (Val::U8(42), "u8", Param(Type::U8, Some(0))),
+        (Val::S16(-4242), "s16", Param(Type::S16, Some(0))),
+        (Val::U16(4242), "u16", Param(Type::U16, Some(0))),
+        (Val::S32(-314159265), "s32", Param(Type::I32, Some(0))),
+        (Val::U32(314159265), "u32", Param(Type::I32, Some(0))),
+        (Val::S64(-31415926535897), "s64", Param(Type::I64, Some(0))),
+        (Val::U64(31415926535897), "u64", Param(Type::I64, Some(0))),
+        (
+            Val::Float32(3.14159265_f32.to_bits()),
+            "float32",
+            Param(Type::F32, Some(0)),
+        ),
+        (
+            Val::Float64(3.14159265_f64.to_bits()),
+            "float64",
+            Param(Type::F64, Some(0)),
+        ),
+        (Val::Char('🦀'), "char", Param(Type::I32, Some(0))),
     ] {
         let component = Component::new(&engine, make_echo_component_with_params(ty, &[param]))?;
         let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
@@ -46,7 +54,7 @@ fn primitives() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component_with_params("float64", &[Type::F64]),
+        make_echo_component_with_params("float64", &[Param(Type::F64, Some(0))]),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
@@ -143,7 +151,12 @@ fn records() -> Result<()> {
         &engine,
         make_echo_component_with_params(
             r#"(record (field "A" u32) (field "B" float64) (field "C" (record (field "D" bool) (field "E" u32))))"#,
-            &[Type::I32, Type::F64, Type::U8, Type::I32],
+            &[
+                Param(Type::I32, Some(0)),
+                Param(Type::F64, Some(8)),
+                Param(Type::U8, Some(16)),
+                Param(Type::I32, Some(20)),
+            ],
         ),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
@@ -222,13 +235,42 @@ fn variants() -> Result<()> {
         &engine,
         make_echo_component_with_params(
             r#"(variant (case "A" u32) (case "B" float64) (case "C" (record (field "D" bool) (field "E" u32))))"#,
-            &[Type::U8, Type::I64, Type::I32],
+            &[
+                Param(Type::U8, Some(0)),
+                Param(Type::I64, Some(8)),
+                Param(Type::I32, None),
+            ],
         ),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
     let ty = &func.params(&store)[0];
     let input = ty.new_variant("B", Val::Float64(3.14159265_f64.to_bits()))?;
+    let output = func.call_and_post_return(&mut store, &[input.clone()])?;
+
+    assert_eq!(input, output);
+
+    // Do it again, this time using case "C"
+
+    let component = Component::new(
+        &engine,
+        dbg!(make_echo_component_with_params(
+            r#"(variant (case "A" u32) (case "B" float64) (case "C" (record (field "D" bool) (field "E" u32))))"#,
+            &[
+                Param(Type::U8, Some(0)),
+                Param(Type::I64, Some(8)),
+                Param(Type::I32, Some(12)),
+            ],
+        )),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+    let ty = &func.params(&store)[0];
+    let c_type = &ty.nested()[2];
+    let input = ty.new_variant(
+        "C",
+        c_type.new_record([("D", Val::Bool(true)), ("E", Val::U32(314159265))])?,
+    )?;
     let output = func.call_and_post_return(&mut store, &[input.clone()])?;
 
     assert_eq!(input, output);
@@ -245,6 +287,38 @@ fn variants() -> Result<()> {
 
     assert!(err.to_string().contains("unknown variant case"), "{err}");
 
+    // Make sure we lift variants which have cases of different sizes with the correct alignment
+
+    let component = Component::new(
+        &engine,
+        make_echo_component_with_params(
+            r#"
+            (record
+                (field "A" (variant
+                               (case "A" u32)
+                               (case "B" float64)
+                               (case "C" (record (field "D" bool) (field "E" u32)))))
+                (field "B" u32))"#,
+            &[
+                Param(Type::U8, Some(0)),
+                Param(Type::I64, Some(8)),
+                Param(Type::I32, None),
+                Param(Type::I32, Some(16)),
+            ],
+        ),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+    let ty = &func.params(&store)[0];
+    let a_type = &ty.nested()[0];
+    let input = ty.new_record([
+        ("A", a_type.new_variant("A", Val::U32(314159265))?),
+        ("B", Val::U32(628318530)),
+    ])?;
+    let output = func.call_and_post_return(&mut store, &[input.clone()])?;
+
+    assert_eq!(input, output);
+
     Ok(())
 }
 
@@ -255,7 +329,10 @@ fn flags() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component_with_params(r#"(flags "A" "B" "C" "D" "E")"#, &[Type::U8]),
+        make_echo_component_with_params(
+            r#"(flags "A" "B" "C" "D" "E")"#,
+            &[Param(Type::U8, Some(0))],
+        ),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
@@ -309,32 +386,32 @@ fn everything() -> Result<()> {
                 (field "BB" (expected string string))
             )"#,
             &[
-                Type::I32,
-                Type::U8,
-                Type::U8,
-                Type::I32,
-                Type::I32,
-                Type::I32,
-                Type::U8,
-                Type::I64,
-                Type::I32,
-                Type::S8,
-                Type::S16,
-                Type::I32,
-                Type::I64,
-                Type::F32,
-                Type::F64,
-                Type::I32,
-                Type::I32,
-                Type::I32,
-                Type::I32,
-                Type::I32,
-                Type::I64,
-                Type::U8,
-                Type::I32,
-                Type::U8,
-                Type::I32,
-                Type::I32,
+                Param(Type::I32, Some(0)),
+                Param(Type::U8, Some(4)),
+                Param(Type::U8, Some(5)),
+                Param(Type::I32, Some(8)),
+                Param(Type::I32, Some(12)),
+                Param(Type::I32, Some(16)),
+                Param(Type::U8, Some(20)),
+                Param(Type::I64, Some(28)),
+                Param(Type::I32, Some(32)),
+                Param(Type::S8, Some(36)),
+                Param(Type::S16, Some(38)),
+                Param(Type::I32, Some(40)),
+                Param(Type::I64, Some(48)),
+                Param(Type::F32, Some(56)),
+                Param(Type::F64, Some(64)),
+                Param(Type::I32, Some(72)),
+                Param(Type::I32, Some(76)),
+                Param(Type::I32, Some(80)),
+                Param(Type::I32, Some(84)),
+                Param(Type::I32, Some(88)),
+                Param(Type::I64, Some(96)),
+                Param(Type::U8, Some(104)),
+                Param(Type::I32, Some(108)),
+                Param(Type::U8, Some(112)),
+                Param(Type::I32, Some(116)),
+                Param(Type::I32, Some(120)),
             ],
         ),
     )?;

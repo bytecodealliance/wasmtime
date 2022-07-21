@@ -1,7 +1,7 @@
+//! This module defines the `Type` type, representing the dynamic form of a component interface type.
+
 use crate::component::func::{self, Lift, Memory, Options};
-use crate::component::values::{
-    self, Enum, Expected, Flags, List, Option, Record, Tuple, Union, Val, Variant,
-};
+use crate::component::values::{self, Val};
 use crate::store::StoreOpaque;
 use crate::ValRaw;
 use anyhow::{anyhow, bail, Context, Error, Result};
@@ -17,7 +17,7 @@ use wasmtime_environ::component::{
 };
 
 #[derive(Clone)]
-pub struct Handle<T> {
+struct Handle<T> {
     index: T,
     types: Arc<ComponentTypes>,
 }
@@ -38,104 +38,138 @@ impl<T: PartialEq> PartialEq for Handle<T> {
 
 impl<T: Eq> Eq for Handle<T> {}
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct TypeIndex(TypeInterfaceIndex);
+/// A `list` interface type
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct List(Handle<TypeInterfaceIndex>);
 
-impl Handle<TypeIndex> {
+impl List {
+    /// Retreive the element type of this `list`.
     pub fn ty(&self) -> Type {
-        Type::from(&self.types[self.index.0], &self.types)
+        Type::from(&self.0.types[self.0.index], &self.0.types)
     }
 }
 
+/// A field declaration belonging to a `record`
 pub struct Field<'a> {
+    /// The name of the field
     pub name: &'a str,
+    /// The type of the field
     pub ty: Type,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct RecordIndex(TypeRecordIndex);
+/// A `record` interface type
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Record(Handle<TypeRecordIndex>);
 
-impl Handle<RecordIndex> {
+impl Record {
+    /// Retrieve the fields of this `record` in declaration order.
     pub fn fields(&self) -> impl ExactSizeIterator<Item = Field> {
-        self.types[self.index.0].fields.iter().map(|field| Field {
+        self.0.types[self.0.index].fields.iter().map(|field| Field {
             name: &field.name,
-            ty: Type::from(&field.ty, &self.types),
+            ty: Type::from(&field.ty, &self.0.types),
         })
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct TupleIndex(TypeTupleIndex);
+/// A `tuple` interface type
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Tuple(Handle<TypeTupleIndex>);
 
-impl Handle<TupleIndex> {
+impl Tuple {
+    /// Retrieve the types of the fields of this `tuple` in declaration order.
     pub fn types(&self) -> impl ExactSizeIterator<Item = Type> + '_ {
-        self.types[self.index.0]
+        self.0.types[self.0.index]
             .types
             .iter()
-            .map(|ty| Type::from(ty, &self.types))
+            .map(|ty| Type::from(ty, &self.0.types))
     }
 }
 
+/// A case declaration belonging to a `variant`
 pub struct Case<'a> {
+    /// The name of the case
     pub name: &'a str,
+    /// The type of the case
     pub ty: Type,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct VariantIndex(TypeVariantIndex);
+/// A `variant` interface type
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Variant(Handle<TypeVariantIndex>);
 
-impl Handle<VariantIndex> {
+impl Variant {
+    /// Retrieve the cases of this `variant` in declaration order.
     pub fn cases(&self) -> impl ExactSizeIterator<Item = Case> {
-        self.types[self.index.0].cases.iter().map(|case| Case {
+        self.0.types[self.0.index].cases.iter().map(|case| Case {
             name: &case.name,
-            ty: Type::from(&case.ty, &self.types),
+            ty: Type::from(&case.ty, &self.0.types),
         })
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct EnumIndex(TypeEnumIndex);
+/// An `enum` interface type
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Enum(Handle<TypeEnumIndex>);
 
-impl Handle<EnumIndex> {
+impl Enum {
+    /// Retrieve the names of the cases of this `enum` in declaration order.
     pub fn names(&self) -> impl ExactSizeIterator<Item = &str> {
-        self.types[self.index.0]
+        self.0.types[self.0.index]
             .names
             .iter()
             .map(|name| name.deref())
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct UnionIndex(TypeUnionIndex);
+/// A `union` interface type
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Union(Handle<TypeUnionIndex>);
 
-impl Handle<UnionIndex> {
+impl Union {
+    /// Retrieve the types of the cases of this `union` in declaration order.
     pub fn types(&self) -> impl ExactSizeIterator<Item = Type> + '_ {
-        self.types[self.index.0]
+        self.0.types[self.0.index]
             .types
             .iter()
-            .map(|ty| Type::from(ty, &self.types))
+            .map(|ty| Type::from(ty, &self.0.types))
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct ExpectedIndex(TypeExpectedIndex);
+/// An `option` interface type
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Option(Handle<TypeInterfaceIndex>);
 
-impl Handle<ExpectedIndex> {
+impl Option {
+    /// Retrieve the type parameter for this `option`.
+    pub fn ty(&self) -> Type {
+        Type::from(&self.0.types[self.0.index], &self.0.types)
+    }
+}
+
+/// An `expected` interface type
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Expected(Handle<TypeExpectedIndex>);
+
+impl Expected {
+    /// Retrieve the `ok` type parameter for this `option`.
     pub fn ok(&self) -> Type {
-        Type::from(&self.types[self.index.0].ok, &self.types)
+        Type::from(&self.0.types[self.0.index].ok, &self.0.types)
     }
 
+    /// Retrieve the `err` type parameter for this `option`.
     pub fn err(&self) -> Type {
-        Type::from(&self.types[self.index.0].err, &self.types)
+        Type::from(&self.0.types[self.0.index].err, &self.0.types)
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct FlagsIndex(TypeFlagsIndex);
+/// A `flags` interface type
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Flags(Handle<TypeFlagsIndex>);
 
-impl Handle<FlagsIndex> {
+impl Flags {
+    /// Retrieve the names of the flags of this `flags` type in declaration order.
     pub fn names(&self) -> impl ExactSizeIterator<Item = &str> {
-        self.types[self.index.0]
+        self.0.types[self.0.index]
             .names
             .iter()
             .map(|name| name.deref())
@@ -180,23 +214,23 @@ pub enum Type {
     /// Character string
     String,
     /// List of values
-    List(Handle<TypeIndex>),
+    List(List),
     /// Record
-    Record(Handle<RecordIndex>),
+    Record(Record),
     /// Tuple
-    Tuple(Handle<TupleIndex>),
+    Tuple(Tuple),
     /// Variant
-    Variant(Handle<VariantIndex>),
+    Variant(Variant),
     /// Enum
-    Enum(Handle<EnumIndex>),
+    Enum(Enum),
     /// Union
-    Union(Handle<UnionIndex>),
+    Union(Union),
     /// Option
-    Option(Handle<TypeIndex>),
+    Option(Option),
     /// Expected
-    Expected(Handle<ExpectedIndex>),
+    Expected(Expected),
     /// Bit flags
-    Flags(Handle<FlagsIndex>),
+    Flags(Flags),
 }
 
 impl Type {
@@ -209,7 +243,7 @@ impl Type {
                     .with_context(|| format!("type mismatch for element {index} of list"))?;
             }
 
-            Ok(Val::List(List {
+            Ok(Val::List(values::List {
                 ty: handle.clone(),
                 values,
             }))
@@ -238,7 +272,7 @@ impl Type {
                 );
             }
 
-            Ok(Val::Record(Record {
+            Ok(Val::Record(values::Record {
                 ty: handle.clone(),
                 values: values
                     .zip(handle.fields())
@@ -279,7 +313,7 @@ impl Type {
                     .with_context(|| format!("type mismatch for field {index} of tuple"))?;
             }
 
-            Ok(Val::Tuple(Tuple {
+            Ok(Val::Tuple(values::Tuple {
                 ty: handle.clone(),
                 values,
             }))
@@ -306,7 +340,7 @@ impl Type {
             ty.check(&value)
                 .with_context(|| format!("type mismatch for case {name} of variant"))?;
 
-            Ok(Val::Variant(Variant {
+            Ok(Val::Variant(values::Variant {
                 ty: handle.clone(),
                 discriminant: u32::try_from(discriminant)?,
                 value: Box::new(value),
@@ -326,7 +360,7 @@ impl Type {
                     .ok_or_else(|| anyhow!("unknown enum case: {name}"))?,
             )?;
 
-            Ok(Val::Enum(Enum {
+            Ok(Val::Enum(values::Enum {
                 ty: handle.clone(),
                 discriminant,
             }))
@@ -342,7 +376,7 @@ impl Type {
                 ty.check(&value)
                     .with_context(|| format!("type mismatch for case {discriminant} of union"))?;
 
-                Ok(Val::Union(Union {
+                Ok(Val::Union(values::Union {
                     ty: handle.clone(),
                     discriminant,
                     value: Box::new(value),
@@ -372,7 +406,7 @@ impl Type {
                 })
                 .transpose()?;
 
-            Ok(Val::Option(Option {
+            Ok(Val::Option(values::Option {
                 ty: handle.clone(),
                 discriminant: if value.is_none() { 0 } else { 1 },
                 value: Box::new(value.unwrap_or(Val::Unit)),
@@ -385,7 +419,7 @@ impl Type {
     /// Instantiate this type (which must be a `Type::Expected`) with the specified `value`.
     pub fn new_expected(&self, value: Result<Val, Val>) -> Result<Val> {
         if let Type::Expected(handle) = self {
-            Ok(Val::Expected(Expected {
+            Ok(Val::Expected(values::Expected {
                 ty: handle.clone(),
                 discriminant: if value.is_ok() { 0 } else { 1 },
                 value: Box::new(match value {
@@ -428,7 +462,7 @@ impl Type {
                 values[index / 32] |= 1 << (index % 32);
             }
 
-            Ok(Val::Flags(Flags {
+            Ok(Val::Flags(values::Flags {
                 ty: handle.clone(),
                 count: u32::try_from(map.len())?,
                 value: values.into(),
@@ -506,42 +540,42 @@ impl Type {
             InterfaceType::Float64 => Type::Float64,
             InterfaceType::Char => Type::Char,
             InterfaceType::String => Type::String,
-            InterfaceType::List(index) => Type::List(Handle {
-                index: TypeIndex(*index),
+            InterfaceType::List(index) => Type::List(List(Handle {
+                index: *index,
                 types: types.clone(),
-            }),
-            InterfaceType::Record(index) => Type::Record(Handle {
-                index: RecordIndex(*index),
+            })),
+            InterfaceType::Record(index) => Type::Record(Record(Handle {
+                index: *index,
                 types: types.clone(),
-            }),
-            InterfaceType::Tuple(index) => Type::Tuple(Handle {
-                index: TupleIndex(*index),
+            })),
+            InterfaceType::Tuple(index) => Type::Tuple(Tuple(Handle {
+                index: *index,
                 types: types.clone(),
-            }),
-            InterfaceType::Variant(index) => Type::Variant(Handle {
-                index: VariantIndex(*index),
+            })),
+            InterfaceType::Variant(index) => Type::Variant(Variant(Handle {
+                index: *index,
                 types: types.clone(),
-            }),
-            InterfaceType::Enum(index) => Type::Enum(Handle {
-                index: EnumIndex(*index),
+            })),
+            InterfaceType::Enum(index) => Type::Enum(Enum(Handle {
+                index: *index,
                 types: types.clone(),
-            }),
-            InterfaceType::Union(index) => Type::Union(Handle {
-                index: UnionIndex(*index),
+            })),
+            InterfaceType::Union(index) => Type::Union(Union(Handle {
+                index: *index,
                 types: types.clone(),
-            }),
-            InterfaceType::Option(index) => Type::Option(Handle {
-                index: TypeIndex(*index),
+            })),
+            InterfaceType::Option(index) => Type::Option(Option(Handle {
+                index: *index,
                 types: types.clone(),
-            }),
-            InterfaceType::Expected(index) => Type::Expected(Handle {
-                index: ExpectedIndex(*index),
+            })),
+            InterfaceType::Expected(index) => Type::Expected(Expected(Handle {
+                index: *index,
                 types: types.clone(),
-            }),
-            InterfaceType::Flags(index) => Type::Flags(Handle {
-                index: FlagsIndex(*index),
+            })),
+            InterfaceType::Flags(index) => Type::Flags(Flags(Handle {
+                index: *index,
                 types: types.clone(),
-            }),
+            })),
         }
     }
 
@@ -632,7 +666,7 @@ impl Type {
         &self,
         store: &StoreOpaque,
         options: &Options,
-        src: &mut impl Iterator<Item = &'a ValRaw>,
+        src: &mut std::slice::Iter<'_, ValRaw>,
     ) -> Result<Val> {
         Ok(match self {
             Type::Unit => Val::Unit,
@@ -648,19 +682,23 @@ impl Type {
             Type::Float32 => Val::Float32(u32::lift(store, options, next(src))?),
             Type::Float64 => Val::Float64(u64::lift(store, options, next(src))?),
             Type::Char => Val::Char(char::lift(store, options, next(src))?),
-            Type::String | Type::List(_) => {
-                // These won't fit in func::MAX_STACK_RESULTS as of this writing, so presumably we should never
-                // reach here
-                unreachable!()
+            Type::String => {
+                Val::String(Box::<str>::lift(store, options, &[*next(src), *next(src)])?)
             }
-            Type::Record(handle) => Val::Record(Record {
+            Type::List(handle) => {
+                // FIXME: needs memory64 treatment
+                let ptr = u32::lift(store, options, next(src))? as usize;
+                let len = u32::lift(store, options, next(src))? as usize;
+                load_list(handle, &Memory::new(store, options), ptr, len)?
+            }
+            Type::Record(handle) => Val::Record(values::Record {
                 ty: handle.clone(),
                 values: handle
                     .fields()
                     .map(|field| field.ty.lift(store, options, src))
                     .collect::<Result<_>>()?,
             }),
-            Type::Tuple(handle) => Val::Tuple(Tuple {
+            Type::Tuple(handle) => Val::Tuple(values::Tuple {
                 ty: handle.clone(),
                 values: handle
                     .types()
@@ -668,48 +706,69 @@ impl Type {
                     .collect::<Result<_>>()?,
             }),
             Type::Variant(handle) => {
-                let (discriminant, value) =
-                    lift_variant(handle.cases().map(|case| case.ty), store, options, src)?;
+                let (discriminant, value) = lift_variant(
+                    self.flatten_count(),
+                    handle.cases().map(|case| case.ty),
+                    store,
+                    options,
+                    src,
+                )?;
 
-                Val::Variant(Variant {
+                Val::Variant(values::Variant {
                     ty: handle.clone(),
                     discriminant,
                     value: Box::new(value),
                 })
             }
             Type::Enum(handle) => {
-                let (discriminant, _) =
-                    lift_variant(handle.names().map(|_| Type::Unit), store, options, src)?;
+                let (discriminant, _) = lift_variant(
+                    self.flatten_count(),
+                    handle.names().map(|_| Type::Unit),
+                    store,
+                    options,
+                    src,
+                )?;
 
-                Val::Enum(Enum {
+                Val::Enum(values::Enum {
                     ty: handle.clone(),
                     discriminant,
                 })
             }
             Type::Union(handle) => {
-                let (discriminant, value) = lift_variant(handle.types(), store, options, src)?;
+                let (discriminant, value) =
+                    lift_variant(self.flatten_count(), handle.types(), store, options, src)?;
 
-                Val::Union(Union {
+                Val::Union(values::Union {
                     ty: handle.clone(),
                     discriminant,
                     value: Box::new(value),
                 })
             }
             Type::Option(handle) => {
-                let (discriminant, value) =
-                    lift_variant([Type::Unit, handle.ty()].into_iter(), store, options, src)?;
+                let (discriminant, value) = lift_variant(
+                    self.flatten_count(),
+                    [Type::Unit, handle.ty()].into_iter(),
+                    store,
+                    options,
+                    src,
+                )?;
 
-                Val::Option(Option {
+                Val::Option(values::Option {
                     ty: handle.clone(),
                     discriminant,
                     value: Box::new(value),
                 })
             }
             Type::Expected(handle) => {
-                let (discriminant, value) =
-                    lift_variant([handle.ok(), handle.err()].into_iter(), store, options, src)?;
+                let (discriminant, value) = lift_variant(
+                    self.flatten_count(),
+                    [handle.ok(), handle.err()].into_iter(),
+                    store,
+                    options,
+                    src,
+                )?;
 
-                Val::Expected(Expected {
+                Val::Expected(values::Expected {
                     ty: handle.clone(),
                     discriminant,
                     value: Box::new(value),
@@ -720,7 +779,7 @@ impl Type {
                 assert!(count <= 32);
                 let value = iter::once(u32::lift(store, options, next(src))?).collect();
 
-                Val::Flags(Flags {
+                Val::Flags(values::Flags {
                     ty: handle.clone(),
                     count,
                     value,
@@ -750,40 +809,13 @@ impl Type {
                 // FIXME: needs memory64 treatment
                 let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap()) as usize;
                 let len = u32::from_le_bytes(bytes[4..].try_into().unwrap()) as usize;
-                let element_type = handle.ty();
-                let SizeAndAlignment {
-                    size: element_size,
-                    alignment: element_alignment,
-                } = element_type.size_and_alignment();
-
-                match len
-                    .checked_mul(element_size)
-                    .and_then(|len| ptr.checked_add(len))
-                {
-                    Some(n) if n <= mem.as_slice().len() => {}
-                    _ => bail!("list pointer/length out of bounds of memory"),
-                }
-                if ptr % usize::try_from(element_alignment)? != 0 {
-                    bail!("list pointer is not aligned")
-                }
-
-                Val::List(List {
-                    ty: handle.clone(),
-                    values: (0..len)
-                        .map(|index| {
-                            element_type.load(
-                                mem,
-                                &mem.as_slice()[ptr + (index * element_size)..][..element_size],
-                            )
-                        })
-                        .collect::<Result<_>>()?,
-                })
+                load_list(handle, mem, ptr, len)?
             }
-            Type::Record(handle) => Val::Record(Record {
+            Type::Record(handle) => Val::Record(values::Record {
                 ty: handle.clone(),
                 values: load_record(handle.fields().map(|field| field.ty), mem, bytes)?,
             }),
-            Type::Tuple(handle) => Val::Tuple(Tuple {
+            Type::Tuple(handle) => Val::Tuple(values::Tuple {
                 ty: handle.clone(),
                 values: load_record(handle.types(), mem, bytes)?,
             }),
@@ -791,7 +823,7 @@ impl Type {
                 let (discriminant, value) =
                     self.load_variant(handle.cases().map(|case| case.ty), mem, bytes)?;
 
-                Val::Variant(Variant {
+                Val::Variant(values::Variant {
                     ty: handle.clone(),
                     discriminant,
                     value: Box::new(value),
@@ -801,7 +833,7 @@ impl Type {
                 let (discriminant, _) =
                     self.load_variant(handle.names().map(|_| Type::Unit), mem, bytes)?;
 
-                Val::Enum(Enum {
+                Val::Enum(values::Enum {
                     ty: handle.clone(),
                     discriminant,
                 })
@@ -809,7 +841,7 @@ impl Type {
             Type::Union(handle) => {
                 let (discriminant, value) = self.load_variant(handle.types(), mem, bytes)?;
 
-                Val::Union(Union {
+                Val::Union(values::Union {
                     ty: handle.clone(),
                     discriminant,
                     value: Box::new(value),
@@ -819,7 +851,7 @@ impl Type {
                 let (discriminant, value) =
                     self.load_variant([Type::Unit, handle.ty()].into_iter(), mem, bytes)?;
 
-                Val::Option(Option {
+                Val::Option(values::Option {
                     ty: handle.clone(),
                     discriminant,
                     value: Box::new(value),
@@ -829,13 +861,13 @@ impl Type {
                 let (discriminant, value) =
                     self.load_variant([handle.ok(), handle.err()].into_iter(), mem, bytes)?;
 
-                Val::Expected(Expected {
+                Val::Expected(values::Expected {
                     ty: handle.clone(),
                     discriminant,
                     value: Box::new(value),
                 })
             }
-            Type::Flags(handle) => Val::Flags(Flags {
+            Type::Flags(handle) => Val::Flags(values::Flags {
                 ty: handle.clone(),
                 count: u32::try_from(handle.names().len())?,
                 value: match FlagsSize::from_count(handle.names().len()) {
@@ -958,6 +990,37 @@ impl Type {
     }
 }
 
+fn load_list(handle: &List, mem: &Memory, ptr: usize, len: usize) -> Result<Val> {
+    let element_type = handle.ty();
+    let SizeAndAlignment {
+        size: element_size,
+        alignment: element_alignment,
+    } = element_type.size_and_alignment();
+
+    match len
+        .checked_mul(element_size)
+        .and_then(|len| ptr.checked_add(len))
+    {
+        Some(n) if n <= mem.as_slice().len() => {}
+        _ => bail!("list pointer/length out of bounds of memory"),
+    }
+    if ptr % usize::try_from(element_alignment)? != 0 {
+        bail!("list pointer is not aligned")
+    }
+
+    Ok(Val::List(values::List {
+        ty: handle.clone(),
+        values: (0..len)
+            .map(|index| {
+                element_type.load(
+                    mem,
+                    &mem.as_slice()[ptr + (index * element_size)..][..element_size],
+                )
+            })
+            .collect::<Result<_>>()?,
+    }))
+}
+
 fn load_record(
     types: impl Iterator<Item = Type>,
     mem: &Memory,
@@ -975,10 +1038,11 @@ fn load_record(
 }
 
 fn lift_variant<'a>(
+    flatten_count: usize,
     mut types: impl ExactSizeIterator<Item = Type>,
     store: &StoreOpaque,
     options: &Options,
-    src: &mut impl Iterator<Item = &'a ValRaw>,
+    src: &mut std::slice::Iter<'_, ValRaw>,
 ) -> Result<(u32, Val)> {
     let len = types.len();
     let discriminant = next(src).get_u32();
@@ -986,6 +1050,9 @@ fn lift_variant<'a>(
         .nth(discriminant as usize)
         .ok_or_else(|| anyhow!("discriminant {} out of range [0..{})", discriminant, len))?;
     let value = ty.lift(store, options, src)?;
+    for _ in (1 + ty.flatten_count())..flatten_count {
+        next(src);
+    }
     Ok((discriminant, value))
 }
 
@@ -1006,7 +1073,7 @@ fn record_size_and_alignment(types: impl Iterator<Item = Type>) -> SizeAndAlignm
 
 fn variant_size_and_alignment(types: impl ExactSizeIterator<Item = Type>) -> SizeAndAlignment {
     let discriminant_size = DiscriminantSize::from_count(types.len()).unwrap();
-    let mut alignment = 1;
+    let mut alignment = u32::from(discriminant_size);
     let mut size = 0;
     for ty in types {
         let size_and_alignment = ty.size_and_alignment();
@@ -1020,6 +1087,6 @@ fn variant_size_and_alignment(types: impl ExactSizeIterator<Item = Type>) -> Siz
     }
 }
 
-fn next<'a>(src: &mut impl Iterator<Item = &'a ValRaw>) -> &'a ValRaw {
+fn next<'a>(src: &mut std::slice::Iter<'a, ValRaw>) -> &'a ValRaw {
     src.next().unwrap()
 }

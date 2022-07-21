@@ -510,7 +510,7 @@ forward_impls! {
     (T: Lower) Vec<T> => [T],
 }
 
-macro_rules! forward_lifts {
+macro_rules! forward_string_lifts {
     ($($a:ty,)*) => ($(
         unsafe impl Lift for $a {
             fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
@@ -524,11 +524,34 @@ macro_rules! forward_lifts {
     )*)
 }
 
-forward_lifts! {
+forward_string_lifts! {
     Box<str>,
     std::rc::Rc<str>,
     std::sync::Arc<str>,
     String,
+}
+
+macro_rules! forward_list_lifts {
+    ($($a:ty,)*) => ($(
+        unsafe impl <T: Lift + Lower> Lift for $a {
+            fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
+                let list = <WasmList::<T> as Lift>::lift(store, options, src)?;
+                (0..list.len).map(|index| list.get_from_store(store, index).unwrap()).collect()
+            }
+
+            fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+                let list = <WasmList::<T> as Lift>::load(memory, bytes)?;
+                (0..list.len).map(|index| list.get_from_memory(memory, index).unwrap()).collect()
+            }
+        }
+    )*)
+}
+
+forward_list_lifts! {
+    Box<[T]>,
+    std::rc::Rc<[T]>,
+    std::sync::Arc<[T]>,
+    Vec<T>,
 }
 
 // Macro to help generate `ComponentType` implementations for primitive types
@@ -806,7 +829,7 @@ unsafe impl Lower for str {
     }
 }
 
-pub(crate) fn lower_string<T>(mem: &mut MemoryMut<'_, T>, string: &str) -> Result<(usize, usize)> {
+fn lower_string<T>(mem: &mut MemoryMut<'_, T>, string: &str) -> Result<(usize, usize)> {
     match mem.string_encoding() {
         StringEncoding::Utf8 => {
             let ptr = mem.realloc(0, 0, 1, string.len())?;
@@ -1092,14 +1115,17 @@ impl<T: Lift> WasmList<T> {
     // should we even expose a random access iteration API? In theory all
     // consumers should be validating through the iterator.
     pub fn get(&self, store: impl AsContext, index: usize) -> Option<Result<T>> {
-        self._get(store.as_context().0, index)
+        self.get_from_store(store.as_context().0, index)
     }
 
-    fn _get(&self, store: &StoreOpaque, index: usize) -> Option<Result<T>> {
+    fn get_from_store(&self, store: &StoreOpaque, index: usize) -> Option<Result<T>> {
+        self.get_from_memory(&Memory::new(store, &self.options), index)
+    }
+
+    fn get_from_memory(&self, memory: &Memory, index: usize) -> Option<Result<T>> {
         if index >= self.len {
             return None;
         }
-        let memory = Memory::new(store, &self.options);
         // Note that this is using panicking indexing and this is expected to
         // never fail. The bounds-checking here happened during the construction
         // of the `WasmList` itself which means these should always be in-bounds
@@ -1119,7 +1145,7 @@ impl<T: Lift> WasmList<T> {
         store: impl Into<StoreContext<'a, U>>,
     ) -> impl ExactSizeIterator<Item = Result<T>> + 'a {
         let store = store.into().0;
-        (0..self.len).map(move |i| self._get(store, i).unwrap())
+        (0..self.len).map(move |i| self.get_from_store(store, i).unwrap())
     }
 }
 

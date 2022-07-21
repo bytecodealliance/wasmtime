@@ -12,8 +12,8 @@ use wasmtime_environ::component::{
 };
 use wasmtime_runtime::{Export, ExportFunction, VMTrampoline};
 
-pub(crate) const MAX_STACK_PARAMS: usize = 16;
-pub(crate) const MAX_STACK_RESULTS: usize = 1;
+const MAX_STACK_PARAMS: usize = 16;
+const MAX_STACK_RESULTS: usize = 1;
 
 /// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
 /// is a field projection within `T`.
@@ -309,8 +309,12 @@ impl Func {
                 if param_count > MAX_STACK_PARAMS {
                     self.store_args(store, &options, &params, args, dst)
                 } else {
+                    dst.write([ValRaw::u64(0); MAX_STACK_PARAMS]);
+                    let dst = unsafe {
+                        mem::transmute::<_, &mut [MaybeUninit<ValRaw>; MAX_STACK_PARAMS]>(dst)
+                    };
                     args.iter()
-                        .try_for_each(|arg| arg.lower(store, &options, dst, 0))
+                        .try_for_each(|arg| arg.lower(store, &options, &mut dst.iter_mut()))
                 }
             },
             |store, options, src: &[ValRaw; MAX_STACK_RESULTS]| {
@@ -570,7 +574,7 @@ impl Func {
     fn load_result<'a>(
         mem: &Memory,
         ty: &Type,
-        src: &mut impl Iterator<Item = &'a ValRaw>,
+        src: &mut std::slice::Iter<'_, ValRaw>,
     ) -> Result<Val> {
         let SizeAndAlignment { size, alignment } = ty.size_and_alignment();
         // FIXME: needs to read an i64 for memory64

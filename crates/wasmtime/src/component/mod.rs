@@ -9,7 +9,7 @@ mod instance;
 mod linker;
 mod matching;
 mod store;
-mod types;
+pub mod types;
 mod values;
 pub use self::component::Component;
 pub use self::func::{
@@ -38,5 +38,4 @@ pub mod __internal {
     pub use wasmtime_environ::component::{ComponentTypes, InterfaceType};
 }
 
-pub(crate) use self::func::lower_string;
 pub(crate) use self::store::ComponentStoreData;
