@@ -4,6 +4,8 @@ use std::process::Command;
 use std::str::from_utf8;
 
 fn main() -> anyhow::Result<()> {
+    let example_to_run = std::env::args().nth(1);
+
     let mut rust_targets: Vec<String> = Vec::new();
     match Command::new("cargo").arg("read-manifest").output() {
         Ok(cargo_manifest_output) => match from_utf8(cargo_manifest_output.stdout.as_slice()) {
@@ -21,6 +23,11 @@ fn main() -> anyhow::Result<()> {
         },
         Err(error) => panic!("Problem getting cargo manifest: {:?}", error),
     };
+
+    if let Some(example) = &example_to_run {
+        // If explicit example is provided, use that instead
+        rust_targets.retain(|e| *e == *example);
+    }
 
     println!("======== Prepare C/C++ CMake project ===========");
     run(Command::new("cmake")
@@ -54,6 +61,11 @@ fn main() -> anyhow::Result<()> {
         },
         Err(error) => panic!("Problem getting cmake help: {:?}", error),
     };
+
+    if let Some(example) = &example_to_run {
+        // If explicit example is provided, use that instead
+        c_targets.retain(|e| *e == *example);
+    }
 
     for example in rust_targets {
         if example == "fib-debug" || example == "tokio" || example == "wasi" {
