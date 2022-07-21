@@ -510,6 +510,27 @@ forward_impls! {
     (T: Lower) Vec<T> => [T],
 }
 
+macro_rules! forward_lifts {
+    ($($a:ty,)*) => ($(
+        unsafe impl Lift for $a {
+            fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
+                Ok(<WasmStr as Lift>::lift(store, options, src)?.to_str_from_store(store)?.into())
+            }
+
+            fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+                Ok(<WasmStr as Lift>::load(memory, bytes)?.to_str_from_memory(memory.as_slice())?.into())
+            }
+        }
+    )*)
+}
+
+forward_lifts! {
+    Box<str>,
+    std::rc::Rc<str>,
+    std::sync::Arc<str>,
+    String,
+}
+
 // Macro to help generate `ComponentType` implementations for primitive types
 // such as integers, char, bool, etc.
 macro_rules! integers {
@@ -872,29 +893,29 @@ impl WasmStr {
     // method that returns `[u16]` after validating to avoid the utf16-to-utf8
     // transcode.
     pub fn to_str<'a, T: 'a>(&self, store: impl Into<StoreContext<'a, T>>) -> Result<Cow<'a, str>> {
-        self._to_str(store.into().0)
+        self.to_str_from_store(store.into().0)
     }
 
-    // TODO: this is only exposed as pub(crate) temporarily for use in `component::values` until we can implement
-    // `Lift` for `String`, `Box<str>`, etc.
-    pub(crate) fn _to_str<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
+    fn to_str_from_store<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
+        self.to_str_from_memory(self.options.memory(store))
+    }
+
+    fn to_str_from_memory<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
         match self.options.string_encoding() {
-            StringEncoding::Utf8 => self.decode_utf8(store),
-            StringEncoding::Utf16 => self.decode_utf16(store),
+            StringEncoding::Utf8 => self.decode_utf8(memory),
+            StringEncoding::Utf16 => self.decode_utf16(memory),
             StringEncoding::CompactUtf16 => unimplemented!(),
         }
     }
 
-    fn decode_utf8<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
-        let memory = self.options.memory(store);
+    fn decode_utf8<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
         // Note that bounds-checking already happen in construction of `WasmStr`
         // so this is never expected to panic. This could theoretically be
         // unchecked indexing if we're feeling wild enough.
         Ok(str::from_utf8(&memory[self.ptr..][..self.len])?.into())
     }
 
-    fn decode_utf16<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
-        let memory = self.options.memory(store);
+    fn decode_utf16<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
         // See notes in `decode_utf8` for why this is panicking indexing.
         let memory = &memory[self.ptr..][..self.len * 2];
         Ok(std::char::decode_utf16(

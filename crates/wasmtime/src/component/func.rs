@@ -315,12 +315,7 @@ impl Func {
             },
             |store, options, src: &[ValRaw; MAX_STACK_RESULTS]| {
                 if result_count > MAX_STACK_RESULTS {
-                    Self::load_result(
-                        store,
-                        &Memory::new(store, &options),
-                        &result,
-                        &mut src.iter(),
-                    )
+                    Self::load_result(&Memory::new(store, &options), &result, &mut src.iter())
                 } else {
                     result.lift(store, &options, &mut src.iter())
                 }
@@ -573,7 +568,6 @@ impl Func {
     }
 
     fn load_result<'a>(
-        store: &StoreOpaque,
         mem: &Memory,
         ty: &Type,
         src: &mut impl Iterator<Item = &'a ValRaw>,
@@ -591,6 +585,6 @@ impl Func {
             .and_then(|b| b.get(..size))
             .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
 
-        ty.load(store, mem, bytes)
+        ty.load(mem, bytes)
     }
 }

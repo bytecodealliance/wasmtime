@@ -1,4 +1,4 @@
-use crate::component::func::{self, Lift, Memory, Options, WasmStr};
+use crate::component::func::{self, Lift, Memory, Options};
 use crate::component::values::{
     self, Enum, Expected, Flags, List, Option, Record, Tuple, Union, Val, Variant,
 };
@@ -730,7 +730,7 @@ impl Type {
     }
 
     /// Deserialize a value of this type from the heap.
-    pub(crate) fn load(&self, store: &StoreOpaque, mem: &Memory, bytes: &[u8]) -> Result<Val> {
+    pub(crate) fn load(&self, mem: &Memory, bytes: &[u8]) -> Result<Val> {
         Ok(match self {
             Type::Unit => Val::Unit,
             Type::Bool => Val::Bool(bool::load(mem, bytes)?),
@@ -745,9 +745,7 @@ impl Type {
             Type::Float32 => Val::Float32(u32::load(mem, bytes)?),
             Type::Float64 => Val::Float64(u64::load(mem, bytes)?),
             Type::Char => Val::Char(char::load(mem, bytes)?),
-            Type::String => Val::String(Box::from(
-                WasmStr::load(mem, bytes)?._to_str(store)?.deref(),
-            )),
+            Type::String => Val::String(Box::<str>::load(mem, bytes)?),
             Type::List(handle) => {
                 // FIXME: needs memory64 treatment
                 let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap()) as usize;
@@ -774,7 +772,6 @@ impl Type {
                     values: (0..len)
                         .map(|index| {
                             element_type.load(
-                                store,
                                 mem,
                                 &mem.as_slice()[ptr + (index * element_size)..][..element_size],
                             )
@@ -784,15 +781,15 @@ impl Type {
             }
             Type::Record(handle) => Val::Record(Record {
                 ty: handle.clone(),
-                values: load_record(handle.fields().map(|field| field.ty), store, mem, bytes)?,
+                values: load_record(handle.fields().map(|field| field.ty), mem, bytes)?,
             }),
             Type::Tuple(handle) => Val::Tuple(Tuple {
                 ty: handle.clone(),
-                values: load_record(handle.types(), store, mem, bytes)?,
+                values: load_record(handle.types(), mem, bytes)?,
             }),
             Type::Variant(handle) => {
                 let (discriminant, value) =
-                    self.load_variant(handle.cases().map(|case| case.ty), store, mem, bytes)?;
+                    self.load_variant(handle.cases().map(|case| case.ty), mem, bytes)?;
 
                 Val::Variant(Variant {
                     ty: handle.clone(),
@@ -802,7 +799,7 @@ impl Type {
             }
             Type::Enum(handle) => {
                 let (discriminant, _) =
-                    self.load_variant(handle.names().map(|_| Type::Unit), store, mem, bytes)?;
+                    self.load_variant(handle.names().map(|_| Type::Unit), mem, bytes)?;
 
                 Val::Enum(Enum {
                     ty: handle.clone(),
@@ -810,7 +807,7 @@ impl Type {
                 })
             }
             Type::Union(handle) => {
-                let (discriminant, value) = self.load_variant(handle.types(), store, mem, bytes)?;
+                let (discriminant, value) = self.load_variant(handle.types(), mem, bytes)?;
 
                 Val::Union(Union {
                     ty: handle.clone(),
@@ -820,7 +817,7 @@ impl Type {
             }
             Type::Option(handle) => {
                 let (discriminant, value) =
-                    self.load_variant([Type::Unit, handle.ty()].into_iter(), store, mem, bytes)?;
+                    self.load_variant([Type::Unit, handle.ty()].into_iter(), mem, bytes)?;
 
                 Val::Option(Option {
                     ty: handle.clone(),
@@ -830,7 +827,7 @@ impl Type {
             }
             Type::Expected(handle) => {
                 let (discriminant, value) =
-                    self.load_variant([handle.ok(), handle.err()].into_iter(), store, mem, bytes)?;
+                    self.load_variant([handle.ok(), handle.err()].into_iter(), mem, bytes)?;
 
                 Val::Expected(Expected {
                     ty: handle.clone(),
@@ -855,7 +852,6 @@ impl Type {
     fn load_variant(
         &self,
         mut types: impl ExactSizeIterator<Item = Type>,
-        store: &StoreOpaque,
         mem: &Memory,
         bytes: &[u8],
     ) -> Result<(u32, Val)> {
@@ -873,7 +869,6 @@ impl Type {
             )
         })?;
         let value = ty.load(
-            store,
             mem,
             &bytes[func::align_to(
                 usize::from(discriminant_size),
@@ -965,7 +960,6 @@ impl Type {
 
 fn load_record(
     types: impl Iterator<Item = Type>,
-    store: &StoreOpaque,
     mem: &Memory,
     bytes: &[u8],
 ) -> Result<Box<[Val]>> {
@@ -973,7 +967,6 @@ fn load_record(
     types
         .map(|ty| {
             ty.load(
-                store,
                 mem,
                 &bytes[ty.next_field(&mut offset)..][..ty.size_and_alignment().size],
             )
