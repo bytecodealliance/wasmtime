@@ -5,7 +5,7 @@ asm_func!(
     "host_to_wasm_trampoline",
     r#"
         .cfi_startproc
-        hint #34 // bti c
+        bti c
 
         // Load the pointer to `VMRuntimeLimits` in `x9`.
         ldur x9, [x1, #8]
@@ -51,7 +51,7 @@ asm_func!(
     "wasm_to_host_trampoline",
     "
         .cfi_startproc
-        hint #34 // bti c
+        bti c
 
         // Load the pointer to `VMRuntimeLimits` in `x9`.
         ldur x9, [x1, #8]
@@ -98,7 +98,7 @@ macro_rules! wasm_to_libcall_trampoline {
             stringify!($libcall),
             "
                 .cfi_startproc
-                hint #34 // bti c
+                bti c
 
                 // Load the pointer to `VMRuntimeLimits` in `x9`.
                 ldur x9, [x0, #8]
