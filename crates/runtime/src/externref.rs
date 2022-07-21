@@ -165,6 +165,12 @@ use wasmtime_environ::StackMap;
 #[repr(transparent)]
 pub struct VMExternRef(NonNull<VMExternData>);
 
+impl std::fmt::Pointer for VMExternRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Pointer::fmt(&self.0, f)
+    }
+}
+
 // Data contained is always Send+Sync so these should be safe.
 unsafe impl Send for VMExternRef {}
 unsafe impl Sync for VMExternRef {}

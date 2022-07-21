@@ -100,3 +100,9 @@ impl ExternRef {
         externref_ptr as usize
     }
 }
+
+impl std::fmt::Pointer for ExternRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Pointer::fmt(&self.inner, f)
+    }
+}
