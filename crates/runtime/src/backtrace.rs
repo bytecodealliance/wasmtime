@@ -51,17 +51,22 @@ impl Backtrace {
     /// Capture the current Wasm stack in a backtrace.
     pub fn new() -> Backtrace {
         tls::with(|state| match state {
-            Some(state) => unsafe { Self::new_with_state(state, None) },
+            Some(state) => unsafe { Self::new_with_trap_state(state, None) },
             None => Backtrace(vec![]),
         })
     }
 
-    pub(crate) unsafe fn new_with_state(
+    /// Capture the current Wasm stack trace.
+    ///
+    /// If Wasm hit a trap, and we calling this from the trap handler, then the
+    /// Wasm exit trampoline didn't run, and we use the provided PC and FP
+    /// instead of looking them up in `VMRuntimeLimits`.
+    pub(crate) unsafe fn new_with_trap_state(
         state: &CallThreadState,
-        initial_pc_and_fp: Option<(usize, usize)>,
+        trap_pc_and_fp: Option<(usize, usize)>,
     ) -> Backtrace {
         let mut frames = vec![];
-        Self::trace_with_state(state, initial_pc_and_fp, |frame| {
+        Self::trace_with_trap_state(state, trap_pc_and_fp, |frame| {
             frames.push(frame);
             ControlFlow::Continue(())
         });
@@ -71,17 +76,22 @@ impl Backtrace {
     /// Walk the current Wasm stack, calling `f` for each frame we walk.
     pub fn trace(f: impl FnMut(Frame) -> ControlFlow<()>) {
         tls::with(|state| match state {
-            Some(state) => unsafe { Self::trace_with_state(state, None, f) },
+            Some(state) => unsafe { Self::trace_with_trap_state(state, None, f) },
             None => {}
         });
     }
 
-    pub(crate) unsafe fn trace_with_state(
+    /// Walk the current Wasm stack, calling `f` for each frame we walk.
+    ///
+    /// If Wasm hit a trap, and we calling this from the trap handler, then the
+    /// Wasm exit trampoline didn't run, and we use the provided PC and FP
+    /// instead of looking them up in `VMRuntimeLimits`.
+    pub(crate) unsafe fn trace_with_trap_state(
         state: &CallThreadState,
-        initial_pc_and_fp: Option<(usize, usize)>,
+        trap_pc_and_fp: Option<(usize, usize)>,
         mut f: impl FnMut(Frame) -> ControlFlow<()>,
     ) {
-        let (last_wasm_exit_pc, last_wasm_exit_fp) = match initial_pc_and_fp {
+        let (last_wasm_exit_pc, last_wasm_exit_fp) = match trap_pc_and_fp {
             Some((pc, fp)) => (pc, fp),
             None => (
                 *(*state.limits).last_wasm_exit_pc.get(),

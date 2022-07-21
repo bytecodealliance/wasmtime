@@ -357,7 +357,7 @@ impl CallThreadState {
             return None;
         }
 
-        Some(unsafe { Backtrace::new_with_state(self, pc_and_fp) })
+        Some(unsafe { Backtrace::new_with_trap_state(self, pc_and_fp) })
     }
 
     pub(crate) fn iter<'a>(&'a self) -> impl Iterator<Item = &Self> + 'a {
