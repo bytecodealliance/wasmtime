@@ -22,6 +22,13 @@
 //!   value of the stack pointer register never changes after the
 //!   initial allocation in the function prologue.
 //!
+//! - If we are asked to "preserve frame pointers" to enable stack
+//!   unwinding, we use the stack backchain feature instead, which
+//!   is documented by the s390x ELF ABI, but marked as optional.
+//!   This ensures that at all times during execution of a function,
+//!   the lowest word on the stack (part of the register save area)
+//!   holds a copy of the stack pointer at function entry.
+//!
 //! Overall, the stack frame layout on s390x is as follows:
 //!
 //! ```plain
@@ -33,7 +40,8 @@
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | 160 bytes reg save area   |
-//! SP at function entry ----->  | (used to save GPRs)       |
+//!                              | (used to save GPRs)       |
+//! SP at function entry ----->  | (incl. caller's backchain)|
 //!                              +---------------------------+
 //!                              |          ...              |
 //!                              | clobbered callee-saves    |
@@ -51,7 +59,8 @@
 //!                              |          ...              |
 //!                              | args for call             |
 //!                              | outgoing reg save area    |
-//! SP during function  ------>  | (alloc'd by prologue)     |
+//!                              | (alloc'd by prologue)     |
+//! SP during function  ------>  | (incl. callee's backchain)|
 //!                              +---------------------------+
 //!
 //!   (low address)
@@ -178,6 +187,9 @@ fn get_vecreg_for_ret(idx: usize) -> Option<Reg> {
 /// with 32-bit arithmetic: for now, 128 MB.
 static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
 
+/// The size of the register save area
+static REG_SAVE_AREA_SIZE: u32 = 160;
+
 impl Into<MemArg> for StackAMode {
     fn into(self) -> MemArg {
         match self {
@@ -220,7 +232,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         let mut ret = vec![];
 
         if args_or_rets == ArgsOrRets::Args {
-            next_stack = 160;
+            next_stack = REG_SAVE_AREA_SIZE as u64;
         }
 
         for i in 0..params.len() {
@@ -506,19 +518,18 @@ impl ABIMachineSpec for S390xMachineDeps {
         flags: &settings::Flags,
         clobbered_callee_saves: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
-        outgoing_args_size: u32,
+        mut outgoing_args_size: u32,
     ) -> (u64, SmallVec<[Inst; 16]>) {
         let mut insts = SmallVec::new();
 
         // Collect clobbered registers.
-        let is_leaf = outgoing_args_size == 0;
         let (first_clobbered_gpr, clobbered_fpr) =
-            get_clobbered_gpr_fpr(clobbered_callee_saves, is_leaf);
+            get_clobbered_gpr_fpr(flags, clobbered_callee_saves, &mut outgoing_args_size);
         let clobber_size = clobbered_fpr.len() * 8;
         if flags.unwind_info() {
             insts.push(Inst::Unwind {
                 inst: UnwindInst::DefineNewFrame {
-                    offset_upward_to_caller_sp: 160,
+                    offset_upward_to_caller_sp: REG_SAVE_AREA_SIZE,
                     offset_downward_to_clobbers: clobber_size as u32,
                 },
             });
@@ -544,6 +555,11 @@ impl ABIMachineSpec for S390xMachineDeps {
             }
         }
 
+        // Save current stack pointer value if we need to write the backchain.
+        if flags.preserve_frame_pointers() {
+            insts.push(Inst::mov64(writable_gpr(1), stack_reg()));
+        }
+
         // Decrement stack pointer.
         let stack_size =
             outgoing_args_size as i32 + clobber_size as i32 + fixed_frame_storage_size as i32;
@@ -559,6 +575,14 @@ impl ABIMachineSpec for S390xMachineDeps {
         let sp_adj = outgoing_args_size as i32;
         if sp_adj > 0 {
             insts.push(Self::gen_nominal_sp_adj(sp_adj));
+        }
+
+        // Write the stack backchain if requested, using the value saved above.
+        if flags.preserve_frame_pointers() {
+            insts.push(Inst::Store64 {
+                rd: gpr(1),
+                mem: MemArg::reg_plus_off(stack_reg(), 0, MemFlags::trusted()),
+            });
         }
 
         // Save FPRs.
@@ -592,16 +616,15 @@ impl ABIMachineSpec for S390xMachineDeps {
         flags: &settings::Flags,
         clobbers: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
-        outgoing_args_size: u32,
+        mut outgoing_args_size: u32,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
         let clobbered_callee_saves =
             Self::get_clobbered_callee_saves(call_conv, flags, sig, clobbers);
 
         // Collect clobbered registers.
-        let is_leaf = outgoing_args_size == 0;
         let (first_clobbered_gpr, clobbered_fpr) =
-            get_clobbered_gpr_fpr(&clobbered_callee_saves, is_leaf);
+            get_clobbered_gpr_fpr(flags, &clobbered_callee_saves, &mut outgoing_args_size);
         let clobber_size = clobbered_fpr.len() * 8;
 
         // Restore FPRs.
@@ -742,8 +765,9 @@ fn is_reg_saved_in_prologue(_call_conv: isa::CallConv, r: RealReg) -> bool {
 }
 
 fn get_clobbered_gpr_fpr(
+    flags: &settings::Flags,
     clobbered_callee_saves: &[Writable<RealReg>],
-    is_leaf: bool,
+    outgoing_args_size: &mut u32,
 ) -> (u8, SmallVec<[Writable<RealReg>; 8]>) {
     // Collect clobbered registers.  Note we save/restore GPR always as
     // a block of registers using LOAD MULTIPLE / STORE MULTIPLE, starting
@@ -752,11 +776,23 @@ fn get_clobbered_gpr_fpr(
     let mut clobbered_fpr = SmallVec::new();
     let mut first_clobbered_gpr = 16;
 
+    // If the front end asks to preserve frame pointers (which we do not
+    // really have in the s390x ABI), we use the stack backchain instead.
+    // For this to work in all cases, we must allocate a stack frame with
+    // at least the outgoing register save area even in leaf functions.
+    // Update out caller's outgoing_args_size to reflect this.
+    if flags.preserve_frame_pointers() {
+        if *outgoing_args_size < REG_SAVE_AREA_SIZE {
+            *outgoing_args_size = REG_SAVE_AREA_SIZE;
+        }
+    }
+
     // We need to save/restore the link register in non-leaf functions.
-    // FIXME: This should be included in the clobber list to begin with,
-    // but isn't because we have have excluded call instructions via the
-    // is_included_in_clobbers callback.
-    if !is_leaf {
+    // This is not included in the clobber list because we have excluded
+    // call instructions via the is_included_in_clobbers callback.
+    // We also want to enforce saving the link register in leaf functions
+    // for stack unwinding, if we're asked to preserve frame pointers.
+    if *outgoing_args_size > 0 {
         first_clobbered_gpr = 14;
     }
 
