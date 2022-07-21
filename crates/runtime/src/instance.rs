@@ -891,8 +891,7 @@ impl Instance {
         assert!(std::ptr::eq(module, self.module().as_ref()));
 
         *self.vmctx_plus_offset(self.offsets.vmctx_magic()) = VMCONTEXT_MAGIC;
-        *self.vmctx_plus_offset(self.offsets.vmctx_callee()) = ptr::null_mut::<()>();
-
+        self.set_callee(None);
         self.set_store(store.as_raw());
 
         // Initialize shared signatures
