@@ -23,15 +23,12 @@
 //      anyfuncs: [VMCallerCheckedAnyfunc; module.num_escaped_funcs],
 // }
 
-mod vm_host_func_offsets;
-
 use crate::{
     AnyfuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
     GlobalIndex, MemoryIndex, Module, TableIndex,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use std::convert::TryFrom;
-pub use vm_host_func_offsets::{VMHostFuncOffsets, VM_HOST_FUNC_MAGIC};
 use wasmtime_types::OwnedMemoryIndex;
 
 /// Sentinel value indicating that wasm has been interrupted.
@@ -852,6 +849,12 @@ impl<P: PtrSize> VMOffsets<P> {
         self.pointer_size().into()
     }
 }
+
+/// Equivalent of `VMCONTEXT_MAGIC` except for host functions.
+///
+/// This is stored at the start of all `VMHostFuncContext` structures and
+/// double-checked on `VMHostFuncContext::from_opaque`.
+pub const VM_HOST_FUNC_MAGIC: u32 = u32::from_le_bytes(*b"host");
 
 #[cfg(test)]
 mod tests {
