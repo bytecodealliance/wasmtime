@@ -1257,30 +1257,21 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
 /// This function may fail if the the stack limit can't be set because an
 /// interrupt already happened.
 fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
-    // TODO FITZGEN: Do we need a non-stack canary way to detect re-entrancy and
-    // early exit here?
+    // If this is a recursive call, e.g. our stack limit is already set, then
+    // we may be able to skip this function.
     //
-    // // If this is a recursive call, e.g. our stack canary is already set, then
-    // // we may be able to skip this function.
-    // //
-    // // For synchronous stores there's nothing else to do because all wasm calls
-    // // happen synchronously and on the same stack. This means that the previous
-    // // stack limit will suffice for the next recursive call.
-    // //
-    // // For asynchronous stores then each call happens on a separate native
-    // // stack. This means that the previous stack limit is no longer relevant
-    // // because we're on a separate stack. In this situation we need to
-    // // update the stack limit, but we don't need to update the gc stack canary
-    // // in this situation.
-    // if store
-    //     .0
-    //     .externref_activations_table()
-    //     .stack_canary()
-    //     .is_some()
-    //     && !store.0.async_support()
-    // {
-    //     return None;
-    // }
+    // For synchronous stores there's nothing else to do because all wasm calls
+    // happen synchronously and on the same stack. This means that the previous
+    // stack limit will suffice for the next recursive call.
+    //
+    // For asynchronous stores then each call happens on a separate native
+    // stack. This means that the previous stack limit is no longer relevant
+    // because we're on a separate stack.
+    if unsafe { *store.0.runtime_limits().stack_limit.get() } != usize::MAX
+        && !store.0.async_support()
+    {
+        return None;
+    }
 
     let stack_pointer = psm::stack_pointer() as usize;
 
