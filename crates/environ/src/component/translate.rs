@@ -603,6 +603,16 @@ impl<'a, 'data> Translator<'a, 'data> {
                 self.validator.component_export_section(&s)?;
                 for export in s {
                     let export = export?;
+
+                    // TODO: https://github.com/bytecodealliance/wasmtime/issues/4494
+                    // Currently, wit-component-based tooling creates components that
+                    // export types to represent the interface of a component so that
+                    // bindings can (potentially) be generated directly from the component
+                    // itself without a wit file. For now, we ignore these exports in Wasmtime.
+                    if wasmparser::ComponentExternalKind::Type == export.kind {
+                        continue;
+                    }
+
                     let item = self.kind_to_item(export.kind, export.index);
                     let prev = self.result.exports.insert(export.name, item);
                     assert!(prev.is_none());

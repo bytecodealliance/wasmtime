@@ -67,6 +67,12 @@
   ))
 )
 
+;; Test to see if a component with a type export can be instantiated.
+(component
+    (type string)
+    (export "" (type 0))
+)
+
 ;; double-check the start function runs by ensuring that a trap shows up and it
 ;; sees the wrong value for the global import
 (assert_trap
