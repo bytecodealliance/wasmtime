@@ -1,12 +1,20 @@
 pub unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize {
+    // The next older PC can be found in register %r14 at function entry, which
+    // was saved into slot 14 of the register save area pointed to by "FP" (the
+    // backchain pointer).
     *(fp as *mut usize).offset(14)
 }
 
 pub unsafe fn get_next_older_fp_from_fp(fp: usize) -> usize {
+    // The next older "FP" (backchain pointer) was saved in the slot pointed to
+    // by the current "FP".
     *(fp as *mut usize)
 }
 
 pub fn reached_entry_sp(fp: usize, first_wasm_sp: usize) -> bool {
+    // The "FP" (backchain pointer) holds the value of the stack pointer at
+    // function entry. If this equals the value the stack pointer had when we
+    // first entered a Wasm function, we are done.
     fp == first_wasm_sp
 }
 
