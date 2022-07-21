@@ -10,6 +10,17 @@ use std::mem;
 /// Callers must never call Wasm function pointers directly. Callers must
 /// instead call this function and then enter Wasm through the returned
 /// host-to-Wasm trampoline.
+///
+/// # Unsafety
+///
+/// The `vmctx` argument must be valid.
+///
+/// The generic type `T` must be a function pointer type and `func` must be a
+/// pointer to a Wasm function of that signature.
+///
+/// After calling this function, you may not mess with the vmctx or any other
+/// Wasm state until after you've called the trampoline returned by this
+/// function.
 #[inline]
 pub unsafe fn prepare_host_to_wasm_trampoline<T>(vmctx: *mut VMContext, func: T) -> T {
     assert_eq!(mem::size_of::<T>(), mem::size_of::<usize>());
