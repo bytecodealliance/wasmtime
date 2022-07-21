@@ -270,11 +270,24 @@ impl Instance {
         ptr
     }
 
-    pub unsafe fn set_store(&mut self, store: *mut dyn Store) {
-        *self.vmctx_plus_offset(self.offsets.vmctx_store()) = store;
-        *self.runtime_limits() = (*store).vmruntime_limits();
-        *self.epoch_ptr() = (*store).epoch_ptr();
-        *self.externref_activations_table() = (*store).externref_activations_table().0;
+    pub unsafe fn set_store(&mut self, store: Option<*mut dyn Store>) {
+        if let Some(store) = store {
+            *self.vmctx_plus_offset(self.offsets.vmctx_store()) = store;
+            *self.runtime_limits() = (*store).vmruntime_limits();
+            *self.epoch_ptr() = (*store).epoch_ptr();
+            *self.externref_activations_table() = (*store).externref_activations_table().0;
+        } else {
+            assert_eq!(
+                mem::size_of::<*mut dyn Store>(),
+                mem::size_of::<[*mut (); 2]>()
+            );
+            *self.vmctx_plus_offset::<[*mut (); 2]>(self.offsets.vmctx_store()) =
+                [ptr::null_mut(), ptr::null_mut()];
+
+            *self.runtime_limits() = ptr::null_mut();
+            *self.epoch_ptr() = ptr::null_mut();
+            *self.externref_activations_table() = ptr::null_mut();
+        }
     }
 
     pub(crate) unsafe fn set_callee(&mut self, callee: Option<NonNull<VMFunctionBody>>) {
@@ -880,11 +893,7 @@ impl Instance {
         *self.vmctx_plus_offset(self.offsets.vmctx_magic()) = VMCONTEXT_MAGIC;
         *self.vmctx_plus_offset(self.offsets.vmctx_callee()) = ptr::null_mut::<()>();
 
-        if let Some(store) = store.as_raw() {
-            self.set_store(store);
-        } else {
-            // TODO: set_store variant for poison pattern or nulls
-        }
+        self.set_store(store.as_raw());
 
         // Initialize shared signatures
         let signatures = self.runtime_info.signature_ids();
@@ -1166,7 +1175,7 @@ impl InstanceHandle {
     /// This is provided for the original `Store` itself to configure the first
     /// self-pointer after the original `Box` has been initialized.
     pub unsafe fn set_store(&mut self, store: *mut dyn Store) {
-        self.instance_mut().set_store(store);
+        self.instance_mut().set_store(Some(store));
     }
 
     /// Returns a clone of this instance.
