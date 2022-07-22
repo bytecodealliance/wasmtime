@@ -10,8 +10,13 @@
 //! When an oracle finds a bug, it should report it to the fuzzing engine by
 //! panicking.
 
+#[cfg(feature = "fuzz-spec-interpreter")]
+pub mod diff_spec;
+pub mod diff_wasmi;
+pub mod diff_wasmtime;
 pub mod dummy;
 mod stacks;
+pub mod engine;
 
 use crate::generators;
 use arbitrary::Arbitrary;
