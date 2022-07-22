@@ -29,10 +29,12 @@ use crate::{
         isle::*, InsnInput, InsnOutput, LowerCtx, MachAtomicRmwOp, VCodeConstant, VCodeConstantData,
     },
 };
+use smallvec::SmallVec;
 use std::boxed::Box;
 use std::convert::TryFrom;
 
 type BoxCallInfo = Box<CallInfo>;
+type BoxVecMachLabel = Box<SmallVec<[MachLabel; 4]>>;
 
 pub struct SinkableLoad {
     inst: Inst,

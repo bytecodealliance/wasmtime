@@ -852,6 +852,7 @@
 (type BranchTarget (primitive BranchTarget))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
 (type CodeOffset (primitive CodeOffset))
+(type VecMachLabel extern (enum))
 
 (type ExtendOp extern
   (enum

@@ -880,6 +880,7 @@
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
+(type VecMachLabel extern (enum))
 
 ;; An ALU operation.
 (type ALUOp

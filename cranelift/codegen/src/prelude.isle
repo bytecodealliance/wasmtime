@@ -187,7 +187,6 @@
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type MachLabel (primitive MachLabel))
-(type VecMachLabel extern (enum))
 (type ValueLabel (primitive ValueLabel))
 (type UnwindInst (primitive UnwindInst))
 (type ExternalName (primitive ExternalName))
