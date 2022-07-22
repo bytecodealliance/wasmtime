@@ -364,8 +364,8 @@
                     (tmp1 WritableReg)
                     (tmp2 WritableReg)
                     (default_target MachLabel)
-                    (targets VecMachLabel)
-                    (targets_for_term VecMachLabel))
+                    (targets BoxVecMachLabel)
+                    (targets_for_term BoxVecMachLabel))
 
        ;; Indirect jump: jmpq (reg mem).
        (JmpUnknown (target RegMem))
@@ -496,6 +496,8 @@
             SFence))
 
 (type BoxCallInfo extern (enum))
+
+(type BoxVecMachLabel extern (enum))
 
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
 (decl operand_size_of_type_32_64 (Type) OperandSize)

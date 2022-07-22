@@ -24,6 +24,7 @@ pub type WritableValueRegs = crate::machinst::ValueRegs<WritableReg>;
 pub type InstOutput = SmallVec<[ValueRegs; 2]>;
 pub type InstOutputBuilder = Cell<InstOutput>;
 pub type VecMachLabel = Vec<MachLabel>;
+pub type BoxVecMachLabel = Box<SmallVec<[MachLabel; 16]>>;
 pub type BoxExternalName = Box<ExternalName>;
 pub type Range = (usize, usize);
 
