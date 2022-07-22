@@ -1492,9 +1492,7 @@
 (decl load_ext_name (ExternalName i64) Reg)
 (rule (load_ext_name extname offset)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.LoadExtName dst
-                                             (box_external_name extname)
-                                             offset))))
+            (_ Unit (emit (MInst.LoadExtName dst extname offset))))
         dst))
 
 ;; Load a value into a register.
