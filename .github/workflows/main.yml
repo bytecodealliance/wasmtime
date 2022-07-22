@@ -280,7 +280,7 @@ jobs:
     - run: cmake --build examples/build --config Debug
       if: matrix.target == ''
     # Run tests
-    - run: cmake --build examples/build --target test -- ARGS='--output-on-failure'
+    - run: cmake --build examples/build --target test -- ARGS='-j4 --output-on-failure'
       env:
         RUST_BACKTRACE: 1
       if: matrix.target == ''
