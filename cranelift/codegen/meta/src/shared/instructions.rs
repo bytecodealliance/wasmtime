@@ -157,7 +157,12 @@ fn define_control_flow(
     }
 
     {
-        let x = &Operand::new("x", iB).with_doc("index into jump table");
+        let _i32 = &TypeVar::new(
+            "i32",
+            "A 32 bit scalar integer type",
+            TypeSetBuilder::new().ints(32..32).build(),
+        );
+        let x = &Operand::new("x", _i32).with_doc("i32 index into jump table");
         let JT = &Operand::new("JT", &entities.jump_table);
 
         ig.push(

@@ -419,8 +419,7 @@ where
 
     /// Generates a br_table into a random block
     fn generate_br_table(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let _type = *self.u.choose(&[I8, I16, I32, I64][..])?;
-        let var = self.get_variable_of_type(_type)?;
+        let var = self.get_variable_of_type(I32)?; // br_table only supports I32
         let val = builder.use_var(var);
 
         let valid_blocks = self.generate_valid_jumptable_target_blocks();

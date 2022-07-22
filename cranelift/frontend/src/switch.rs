@@ -264,21 +264,28 @@ impl Switch {
                 }
             };
 
-            let discr = if bx.func.dfg.value_type(discr).bits() > 64 {
-                // Check for overflow of cast to u32. This is the max supported jump table entries.
-                let new_block = bx.create_block();
-                let bigger_than_u32 =
-                    bx.ins()
-                        .icmp_imm(IntCC::UnsignedGreaterThan, discr, u32::MAX as i64);
-                bx.ins().brnz(bigger_than_u32, otherwise, &[]);
-                bx.ins().jump(new_block, &[]);
-                bx.seal_block(new_block);
-                bx.switch_to_block(new_block);
+            let discr = match bx.func.dfg.value_type(discr).bits() {
+                bits if bits > 32 => {
+                    // Check for overflow of cast to u32. This is the max supported jump table entries.
+                    let new_block = bx.create_block();
+                    let bigger_than_u32 =
+                        bx.ins()
+                            .icmp_imm(IntCC::UnsignedGreaterThan, discr, u32::MAX as i64);
+                    bx.ins().brnz(bigger_than_u32, otherwise, &[]);
+                    bx.ins().jump(new_block, &[]);
+                    bx.seal_block(new_block);
+                    bx.switch_to_block(new_block);
 
-                // Cast to u64, as br_table is not implemented for i128
-                bx.ins().isplit(discr).0
-            } else {
-                discr
+                    // Cast to i32, as br_table is not implemented for i64/i128
+                    let discr = if bits > 64 {
+                        bx.ins().isplit(discr).0
+                    } else {
+                        discr
+                    };
+                    bx.ins().ireduce(types::I32, discr)
+                }
+                bits if bits < 32 => bx.ins().uextend(types::I32, discr),
+                _ => discr,
             };
 
             bx.ins().br_table(discr, otherwise, jump_table);
@@ -419,7 +426,8 @@ block0:
     jump block3
 
 block3:
-    br_table.i8 v0, block0, jt0"
+    v1 = uextend.i32 v0
+    br_table v1, block0, jt0"
         );
     }
 
@@ -470,11 +478,13 @@ block8:
     jump block12
 
 block12:
-    br_table.i8 v0, block0, jt0
+    v5 = uextend.i32 v0
+    br_table v5, block0, jt0
 
 block10:
-    v5 = iadd_imm.i8 v0, -10
-    br_table v5, block0, jt1"
+    v6 = iadd_imm.i8 v0, -10
+    v7 = uextend.i32 v6
+    br_table v7, block0, jt1"
         );
     }
 
@@ -528,7 +538,8 @@ block0:
     jump block4
 
 block4:
-    br_table.i8 v0, block0, jt0"
+    v2 = uextend.i32 v0
+    br_table v2, block0, jt0"
         );
     }
 
@@ -620,7 +631,13 @@ block0:
     jump block4
 
 block4:
-    br_table.i64 v0, block3, jt0"
+    v1 = icmp_imm.i64 ugt v0, 0xffff_ffff
+    brnz v1, block3
+    jump block5
+
+block5:
+    v2 = ireduce.i32 v0
+    br_table v2, block3, jt0"
         );
     }
 
@@ -661,7 +678,8 @@ block4:
 
 block5:
     v2, v3 = isplit.i128 v0
-    br_table v2, block3, jt0"
+    v4 = ireduce.i32 v2
+    br_table v4, block3, jt0"
         );
     }
 }
