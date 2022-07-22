@@ -8,6 +8,7 @@ use anyhow::{anyhow, bail, Context, Error, Result};
 use std::collections::HashMap;
 use std::fmt;
 use std::iter;
+use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
@@ -626,13 +627,19 @@ impl Type {
     }
 
     pub(crate) fn check(&self, value: &Val) -> Result<()> {
-        if self == &value.ty() {
+        let other = &value.ty();
+        if self == other {
             Ok(())
-        } else {
+        } else if mem::discriminant(self) != mem::discriminant(other) {
             Err(anyhow!(
                 "type mismatch: expected {}, got {}",
                 self.desc(),
-                value.ty().desc()
+                other.desc()
+            ))
+        } else {
+            Err(anyhow!(
+                "type mismatch for {}, possibly due to mixing distinct composite types",
+                self.desc()
             ))
         }
     }
