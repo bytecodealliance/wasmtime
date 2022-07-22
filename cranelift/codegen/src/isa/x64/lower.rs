@@ -13,7 +13,6 @@ use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::isa::{x64::settings as x64_settings, x64::X64Backend, CallConv};
-use crate::machinst::isle::BoxVecMachLabel;
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
@@ -3254,11 +3253,9 @@ impl LowerBackend for X64Backend {
                     };
                     ctx.emit(Inst::cmp_rmi_r(cmp_size, RegMemImm::imm(jt_size), idx));
 
-                    let targets_for_term: BoxVecMachLabel =
-                        Box::new(targets.iter().cloned().collect());
                     let default_target = targets[0];
 
-                    let jt_targets: BoxVecMachLabel =
+                    let jt_targets: Box<SmallVec<[MachLabel; 4]>> =
                         Box::new(targets.iter().skip(1).cloned().collect());
 
                     ctx.emit(Inst::JmpTableSeq {
@@ -3267,7 +3264,6 @@ impl LowerBackend for X64Backend {
                         tmp2,
                         default_target,
                         targets: jt_targets,
-                        targets_for_term,
                     });
                 }
 

@@ -364,8 +364,7 @@
                     (tmp1 WritableReg)
                     (tmp2 WritableReg)
                     (default_target MachLabel)
-                    (targets BoxVecMachLabel)
-                    (targets_for_term BoxVecMachLabel))
+                    (targets BoxVecMachLabel))
 
        ;; Indirect jump: jmpq (reg mem).
        (JmpUnknown (target RegMem))
