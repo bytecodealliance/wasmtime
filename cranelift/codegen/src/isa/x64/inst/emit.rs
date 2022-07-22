@@ -424,7 +424,9 @@ pub(crate) fn emit(
                     )
                 }
                 RegMem::Mem { addr: src } => {
-                    let amode = SyntheticAmode::from(src.clone()).finalize(state, sink).with_allocs(allocs);
+                    let amode = SyntheticAmode::from(src.clone())
+                        .finalize(state, sink)
+                        .with_allocs(allocs);
                     emit_std_enc_mem(
                         sink,
                         info,
@@ -737,7 +739,9 @@ pub(crate) fn emit(
                 }
 
                 RegMem::Mem { addr: src } => {
-                    let src = &SyntheticAmode::from(src.clone()).finalize(state, sink).with_allocs(allocs);
+                    let src = &SyntheticAmode::from(src.clone())
+                        .finalize(state, sink)
+                        .with_allocs(allocs);
 
                     emit_std_reg_mem(
                         sink,
@@ -839,7 +843,9 @@ pub(crate) fn emit(
                 }
 
                 RegMem::Mem { addr: src } => {
-                    let src = &SyntheticAmode::from(src.clone()).finalize(state, sink).with_allocs(allocs);
+                    let src = &SyntheticAmode::from(src.clone())
+                        .finalize(state, sink)
+                        .with_allocs(allocs);
 
                     emit_std_reg_mem(
                         sink,
@@ -990,7 +996,9 @@ pub(crate) fn emit(
                         emit_std_reg_reg(sink, prefix, opcode_bytes, 2, dst, reg, rex);
                     }
                     RegMemImm::Mem { addr } => {
-                        let addr = &SyntheticAmode::from(addr.clone()).finalize(state, sink).with_allocs(allocs);
+                        let addr = &SyntheticAmode::from(addr.clone())
+                            .finalize(state, sink)
+                            .with_allocs(allocs);
                         emit_std_reg_mem(sink, info, prefix, opcode_bytes, 2, dst, addr, rex, 0);
                     }
                     RegMemImm::Imm { .. } => unreachable!(),
@@ -1038,7 +1046,9 @@ pub(crate) fn emit(
                 }
 
                 RegMemImm::Mem { addr } => {
-                    let addr = &SyntheticAmode::from(addr.clone()).finalize(state, sink).with_allocs(allocs);
+                    let addr = &SyntheticAmode::from(addr.clone())
+                        .finalize(state, sink)
+                        .with_allocs(allocs);
                     // Whereas here we revert to the "normal" G-E ordering for CMP.
                     let opcode = match (*size, is_cmp) {
                         (OperandSize::Size8, true) => 0x3A,
@@ -1119,7 +1129,9 @@ pub(crate) fn emit(
                     emit_std_reg_reg(sink, prefix, opcode, 2, dst, reg, rex_flags);
                 }
                 RegMem::Mem { addr } => {
-                    let addr = &SyntheticAmode::from(addr.clone()).finalize(state, sink).with_allocs(allocs);
+                    let addr = &SyntheticAmode::from(addr.clone())
+                        .finalize(state, sink)
+                        .with_allocs(allocs);
                     emit_std_reg_mem(sink, info, prefix, opcode, 2, dst, addr, rex_flags, 0);
                 }
             }
