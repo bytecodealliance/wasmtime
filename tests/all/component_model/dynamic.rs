@@ -118,7 +118,7 @@ fn lists() -> Result<()> {
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
     let ty = &func.params(&store)[0];
-    let input = ty.new_list(Box::new([
+    let input = ty.unwrap_list().new_val(Box::new([
         Val::U32(32343),
         Val::U32(79023439),
         Val::U32(2084037802),
@@ -130,7 +130,8 @@ fn lists() -> Result<()> {
     // Sad path: type mismatch
 
     let err = ty
-        .new_list(Box::new([
+        .unwrap_list()
+        .new_val(Box::new([
             Val::U32(32343),
             Val::U32(79023439),
             Val::Float32(3.14159265_f32.to_bits()),
@@ -163,12 +164,14 @@ fn records() -> Result<()> {
     let func = instance.get_func(&mut store, "echo").unwrap();
     let ty = &func.params(&store)[0];
     let inner_type = &ty.nested()[2];
-    let input = ty.new_record([
+    let input = ty.unwrap_record().new_val([
         ("A", Val::U32(32343)),
         ("B", Val::Float64(3.14159265_f64.to_bits())),
         (
             "C",
-            inner_type.new_record([("D", Val::Bool(false)), ("E", Val::U32(2084037802))])?,
+            inner_type
+                .unwrap_record()
+                .new_val([("D", Val::Bool(false)), ("E", Val::U32(2084037802))])?,
         ),
     ])?;
     let output = func.call_and_post_return(&mut store, &[input.clone()])?;
@@ -178,12 +181,15 @@ fn records() -> Result<()> {
     // Sad path: type mismatch
 
     let err = ty
-        .new_record([
+        .unwrap_record()
+        .new_val([
             ("A", Val::S32(32343)),
             ("B", Val::Float64(3.14159265_f64.to_bits())),
             (
                 "C",
-                inner_type.new_record([("D", Val::Bool(false)), ("E", Val::U32(2084037802))])?,
+                inner_type
+                    .unwrap_record()
+                    .new_val([("D", Val::Bool(false)), ("E", Val::U32(2084037802))])?,
             ),
         ])
         .unwrap_err();
@@ -193,12 +199,15 @@ fn records() -> Result<()> {
     // Sad path: too many fields
 
     let err = ty
-        .new_record([
+        .unwrap_record()
+        .new_val([
             ("A", Val::U32(32343)),
             ("B", Val::Float64(3.14159265_f64.to_bits())),
             (
                 "C",
-                inner_type.new_record([("D", Val::Bool(false)), ("E", Val::U32(2084037802))])?,
+                inner_type
+                    .unwrap_record()
+                    .new_val([("D", Val::Bool(false)), ("E", Val::U32(2084037802))])?,
             ),
             ("F", Val::Unit),
         ])
@@ -212,7 +221,8 @@ fn records() -> Result<()> {
     // Sad path: too few fields
 
     let err = ty
-        .new_record([
+        .unwrap_record()
+        .new_val([
             ("A", Val::U32(32343)),
             ("B", Val::Float64(3.14159265_f64.to_bits())),
         ])
@@ -245,7 +255,9 @@ fn variants() -> Result<()> {
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
     let ty = &func.params(&store)[0];
-    let input = ty.new_variant("B", Val::Float64(3.14159265_f64.to_bits()))?;
+    let input = ty
+        .unwrap_variant()
+        .new_val("B", Val::Float64(3.14159265_f64.to_bits()))?;
     let output = func.call_and_post_return(&mut store, &[input.clone()])?;
 
     assert_eq!(input, output);
@@ -267,9 +279,11 @@ fn variants() -> Result<()> {
     let func = instance.get_func(&mut store, "echo").unwrap();
     let ty = &func.params(&store)[0];
     let c_type = &ty.nested()[2];
-    let input = ty.new_variant(
+    let input = ty.unwrap_variant().new_val(
         "C",
-        c_type.new_record([("D", Val::Bool(true)), ("E", Val::U32(314159265))])?,
+        c_type
+            .unwrap_record()
+            .new_val([("D", Val::Bool(true)), ("E", Val::U32(314159265))])?,
     )?;
     let output = func.call_and_post_return(&mut store, &[input.clone()])?;
 
@@ -277,13 +291,19 @@ fn variants() -> Result<()> {
 
     // Sad path: type mismatch
 
-    let err = ty.new_variant("B", Val::U64(314159265)).unwrap_err();
+    let err = ty
+        .unwrap_variant()
+        .new_val("B", Val::U64(314159265))
+        .unwrap_err();
 
     assert!(err.to_string().contains("type mismatch"), "{err}");
 
     // Sad path: unknown case
 
-    let err = ty.new_variant("D", Val::U64(314159265)).unwrap_err();
+    let err = ty
+        .unwrap_variant()
+        .new_val("D", Val::U64(314159265))
+        .unwrap_err();
 
     assert!(err.to_string().contains("unknown variant case"), "{err}");
 
@@ -311,8 +331,11 @@ fn variants() -> Result<()> {
     let func = instance.get_func(&mut store, "echo").unwrap();
     let ty = &func.params(&store)[0];
     let a_type = &ty.nested()[0];
-    let input = ty.new_record([
-        ("A", a_type.new_variant("A", Val::U32(314159265))?),
+    let input = ty.unwrap_record().new_val([
+        (
+            "A",
+            a_type.unwrap_variant().new_val("A", Val::U32(314159265))?,
+        ),
         ("B", Val::U32(628318530)),
     ])?;
     let output = func.call_and_post_return(&mut store, &[input.clone()])?;
@@ -337,14 +360,14 @@ fn flags() -> Result<()> {
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
     let ty = &func.params(&store)[0];
-    let input = ty.new_flags(&["B", "D"])?;
+    let input = ty.unwrap_flags().new_val(&["B", "D"])?;
     let output = func.call_and_post_return(&mut store, &[input.clone()])?;
 
     assert_eq!(input, output);
 
     // Sad path: unknown flags
 
-    let err = ty.new_flags(&["B", "D", "F"]).unwrap_err();
+    let err = ty.unwrap_flags().new_val(&["B", "D", "F"]).unwrap_err();
 
     assert!(err.to_string().contains("unknown flag"), "{err}");
 
@@ -423,20 +446,26 @@ fn everything() -> Result<()> {
         &types[1], &types[2], &types[3], &types[4], &types[14], &types[15], &types[16], &types[17],
     );
     let f_element_type = &f_type.nested()[0];
-    let input = ty.new_record([
+    let input = ty.unwrap_record().new_val([
         ("A", Val::U32(32343)),
-        ("B", b_type.new_enum("2")?),
+        ("B", b_type.unwrap_enum().new_val("2")?),
         (
             "C",
-            c_type.new_record([("D", Val::Bool(false)), ("E", Val::U32(2084037802))])?,
+            c_type
+                .unwrap_record()
+                .new_val([("D", Val::Bool(false)), ("E", Val::U32(2084037802))])?,
         ),
         (
             "F",
-            f_type.new_list(Box::new([f_element_type.new_flags(&["G", "I"])?]))?,
+            f_type.unwrap_list().new_val(Box::new([f_element_type
+                .unwrap_flags()
+                .new_val(&["G", "I"])?]))?,
         ),
         (
             "J",
-            j_type.new_variant("L", Val::Float64(3.14159265_f64.to_bits()))?,
+            j_type
+                .unwrap_variant()
+                .new_val("L", Val::Float64(3.14159265_f64.to_bits()))?,
         ),
         ("P", Val::S8(42)),
         ("Q", Val::S16(4242)),
@@ -449,16 +478,25 @@ fn everything() -> Result<()> {
         ("X", Val::Unit),
         (
             "Y",
-            y_type.new_tuple(Box::new([Val::U32(42), Val::U32(24)]))?,
+            y_type
+                .unwrap_tuple()
+                .new_val(Box::new([Val::U32(42), Val::U32(24)]))?,
         ),
         (
             "Z",
-            z_type.new_union(1, Val::Float64(3.14159265_f64.to_bits()))?,
+            z_type
+                .unwrap_union()
+                .new_val(1, Val::Float64(3.14159265_f64.to_bits()))?,
         ),
-        ("AA", aa_type.new_option(Some(Val::U32(314159265)))?),
+        (
+            "AA",
+            aa_type.unwrap_option().new_val(Some(Val::U32(314159265)))?,
+        ),
         (
             "BB",
-            bb_type.new_expected(Ok(Val::String(Box::from("no problem"))))?,
+            bb_type
+                .unwrap_expected()
+                .new_val(Ok(Val::String(Box::from("no problem"))))?,
         ),
     ])?;
     let output = func.call_and_post_return(&mut store, &[input.clone()])?;

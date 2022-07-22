@@ -43,6 +43,20 @@ impl<T: Eq> Eq for Handle<T> {}
 pub struct List(Handle<TypeInterfaceIndex>);
 
 impl List {
+    /// Instantiate this type with the specified `values`.
+    pub fn new_val(&self, values: Box<[Val]>) -> Result<Val> {
+        let ty = self.ty();
+        for (index, value) in values.iter().enumerate() {
+            ty.check(value)
+                .with_context(|| format!("type mismatch for element {index} of list"))?;
+        }
+
+        Ok(Val::List(values::List {
+            ty: self.clone(),
+            values,
+        }))
+    }
+
     /// Retreive the element type of this `list`.
     pub fn ty(&self) -> Type {
         Type::from(&self.0.types[self.0.index], &self.0.types)
@@ -62,6 +76,48 @@ pub struct Field<'a> {
 pub struct Record(Handle<TypeRecordIndex>);
 
 impl Record {
+    /// Instantiate this type with the specified `values`.
+    pub fn new_val<
+        'a,
+        I: ExactSizeIterator<Item = (&'a str, Val)>,
+        II: IntoIterator<Item = (&'a str, Val), IntoIter = I>,
+    >(
+        &self,
+        values: II,
+    ) -> Result<Val> {
+        let values = values.into_iter();
+
+        if values.len() != self.fields().len() {
+            bail!(
+                "expected {} value(s); got {}",
+                self.fields().len(),
+                values.len()
+            );
+        }
+
+        Ok(Val::Record(values::Record {
+            ty: self.clone(),
+            values: values
+                .zip(self.fields())
+                .map(|((name, value), field)| {
+                    if name == field.name {
+                        field
+                            .ty
+                            .check(&value)
+                            .with_context(|| format!("type mismatch for field {name} of record"))?;
+
+                        Ok(value)
+                    } else {
+                        Err(anyhow!(
+                            "field name mismatch: expected {}; got {name}",
+                            field.name
+                        ))
+                    }
+                })
+                .collect::<Result<_>>()?,
+        }))
+    }
+
     /// Retrieve the fields of this `record` in declaration order.
     pub fn fields(&self) -> impl ExactSizeIterator<Item = Field> {
         self.0.types[self.0.index].fields.iter().map(|field| Field {
@@ -76,6 +132,27 @@ impl Record {
 pub struct Tuple(Handle<TypeTupleIndex>);
 
 impl Tuple {
+    /// Instantiate this type ith the specified `values`.
+    pub fn new_val(&self, values: Box<[Val]>) -> Result<Val> {
+        if values.len() != self.types().len() {
+            bail!(
+                "expected {} value(s); got {}",
+                self.types().len(),
+                values.len()
+            );
+        }
+
+        for (index, (value, ty)) in values.iter().zip(self.types()).enumerate() {
+            ty.check(value)
+                .with_context(|| format!("type mismatch for field {index} of tuple"))?;
+        }
+
+        Ok(Val::Tuple(values::Tuple {
+            ty: self.clone(),
+            values,
+        }))
+    }
+
     /// Retrieve the types of the fields of this `tuple` in declaration order.
     pub fn types(&self) -> impl ExactSizeIterator<Item = Type> + '_ {
         self.0.types[self.0.index]
@@ -98,6 +175,30 @@ pub struct Case<'a> {
 pub struct Variant(Handle<TypeVariantIndex>);
 
 impl Variant {
+    /// Instantiate this type with the specified case `name` and `value`.
+    pub fn new_val(&self, name: &str, value: Val) -> Result<Val> {
+        let (discriminant, ty) = self
+            .cases()
+            .enumerate()
+            .find_map(|(index, case)| {
+                if case.name == name {
+                    Some((index, case.ty))
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| anyhow!("unknown variant case: {name}"))?;
+
+        ty.check(&value)
+            .with_context(|| format!("type mismatch for case {name} of variant"))?;
+
+        Ok(Val::Variant(values::Variant {
+            ty: self.clone(),
+            discriminant: u32::try_from(discriminant)?,
+            value: Box::new(value),
+        }))
+    }
+
     /// Retrieve the cases of this `variant` in declaration order.
     pub fn cases(&self) -> impl ExactSizeIterator<Item = Case> {
         self.0.types[self.0.index].cases.iter().map(|case| Case {
@@ -112,6 +213,20 @@ impl Variant {
 pub struct Enum(Handle<TypeEnumIndex>);
 
 impl Enum {
+    /// Instantiate this type with the specified case `name`.
+    pub fn new_val(&self, name: &str) -> Result<Val> {
+        let discriminant = u32::try_from(
+            self.names()
+                .position(|n| n == name)
+                .ok_or_else(|| anyhow!("unknown enum case: {name}"))?,
+        )?;
+
+        Ok(Val::Enum(values::Enum {
+            ty: self.clone(),
+            discriminant,
+        }))
+    }
+
     /// Retrieve the names of the cases of this `enum` in declaration order.
     pub fn names(&self) -> impl ExactSizeIterator<Item = &str> {
         self.0.types[self.0.index]
@@ -126,6 +241,25 @@ impl Enum {
 pub struct Union(Handle<TypeUnionIndex>);
 
 impl Union {
+    /// Instantiate this type with the specified `discriminant` and `value`.
+    pub fn new_val(&self, discriminant: u32, value: Val) -> Result<Val> {
+        if let Some(ty) = self.types().nth(usize::try_from(discriminant)?) {
+            ty.check(&value)
+                .with_context(|| format!("type mismatch for case {discriminant} of union"))?;
+
+            Ok(Val::Union(values::Union {
+                ty: self.clone(),
+                discriminant,
+                value: Box::new(value),
+            }))
+        } else {
+            Err(anyhow!(
+                "discriminant {discriminant} out of range: [0,{})",
+                self.types().len()
+            ))
+        }
+    }
+
     /// Retrieve the types of the cases of this `union` in declaration order.
     pub fn types(&self) -> impl ExactSizeIterator<Item = Type> + '_ {
         self.0.types[self.0.index]
@@ -140,6 +274,25 @@ impl Union {
 pub struct Option(Handle<TypeInterfaceIndex>);
 
 impl Option {
+    /// Instantiate this type with the specified `value`.
+    pub fn new_val(&self, value: std::option::Option<Val>) -> Result<Val> {
+        let value = value
+            .map(|value| {
+                self.ty()
+                    .check(&value)
+                    .context("type mismatch for option")?;
+
+                Ok::<_, Error>(value)
+            })
+            .transpose()?;
+
+        Ok(Val::Option(values::Option {
+            ty: self.clone(),
+            discriminant: if value.is_none() { 0 } else { 1 },
+            value: Box::new(value.unwrap_or(Val::Unit)),
+        }))
+    }
+
     /// Retrieve the type parameter for this `option`.
     pub fn ty(&self) -> Type {
         Type::from(&self.0.types[self.0.index], &self.0.types)
@@ -151,6 +304,28 @@ impl Option {
 pub struct Expected(Handle<TypeExpectedIndex>);
 
 impl Expected {
+    /// Instantiate this type with the specified `value`.
+    pub fn new_val(&self, value: Result<Val, Val>) -> Result<Val> {
+        Ok(Val::Expected(values::Expected {
+            ty: self.clone(),
+            discriminant: if value.is_ok() { 0 } else { 1 },
+            value: Box::new(match value {
+                Ok(value) => {
+                    self.ok()
+                        .check(&value)
+                        .context("type mismatch for ok case of expected")?;
+                    value
+                }
+                Err(value) => {
+                    self.err()
+                        .check(&value)
+                        .context("type mismatch for err case of expected")?;
+                    value
+                }
+            }),
+        }))
+    }
+
     /// Retrieve the `ok` type parameter for this `option`.
     pub fn ok(&self) -> Type {
         Type::from(&self.0.types[self.0.index].ok, &self.0.types)
@@ -167,6 +342,30 @@ impl Expected {
 pub struct Flags(Handle<TypeFlagsIndex>);
 
 impl Flags {
+    /// Instantiate this type with the specified flag `names`.
+    pub fn new_val(&self, names: &[&str]) -> Result<Val> {
+        let map = self
+            .names()
+            .enumerate()
+            .map(|(index, name)| (name, index))
+            .collect::<HashMap<_, _>>();
+
+        let mut values = vec![0_u32; values::u32_count_for_flag_count(self.names().len())];
+
+        for name in names {
+            let index = map
+                .get(name)
+                .ok_or_else(|| anyhow!("unknown flag: {name}"))?;
+            values[index / 32] |= 1 << (index % 32);
+        }
+
+        Ok(Val::Flags(values::Flags {
+            ty: self.clone(),
+            count: u32::try_from(map.len())?,
+            value: values.into(),
+        }))
+    }
+
     /// Retrieve the names of the flags of this `flags` type in declaration order.
     pub fn names(&self) -> impl ExactSizeIterator<Item = &str> {
         self.0.types[self.0.index]
@@ -234,241 +433,120 @@ pub enum Type {
 }
 
 impl Type {
-    /// Instantiate this type (which must be a `Type::List`) with the specified `values`.
-    pub fn new_list(&self, values: Box<[Val]>) -> Result<Val> {
+    /// Retrieve the inner [`List`] of a [`Type::List`].
+    ///
+    /// # Panics
+    ///
+    /// This will panic if `self` is not a [`Type::List`].
+    pub fn unwrap_list(&self) -> &List {
         if let Type::List(handle) = self {
-            let ty = handle.ty();
-            for (index, value) in values.iter().enumerate() {
-                ty.check(value)
-                    .with_context(|| format!("type mismatch for element {index} of list"))?;
-            }
-
-            Ok(Val::List(values::List {
-                ty: handle.clone(),
-                values,
-            }))
+            &handle
         } else {
-            Err(anyhow!("cannot make list from {} type", self.desc()))
+            panic!("attempted to unwrap a {} as a list", self.desc())
         }
     }
 
-    /// Instantiate this type (which must be a `Type::Record`) with the specified `values`.
-    pub fn new_record<
-        'a,
-        I: ExactSizeIterator<Item = (&'a str, Val)>,
-        II: IntoIterator<Item = (&'a str, Val), IntoIter = I>,
-    >(
-        &self,
-        values: II,
-    ) -> Result<Val> {
+    /// Retrieve the inner [`Record`] of a [`Type::Record`].
+    ///
+    /// # Panics
+    ///
+    /// This will panic if `self` is not a [`Type::Record`].
+    pub fn unwrap_record(&self) -> &Record {
         if let Type::Record(handle) = self {
-            let values = values.into_iter();
-
-            if values.len() != handle.fields().len() {
-                bail!(
-                    "expected {} value(s); got {}",
-                    handle.fields().len(),
-                    values.len()
-                );
-            }
-
-            Ok(Val::Record(values::Record {
-                ty: handle.clone(),
-                values: values
-                    .zip(handle.fields())
-                    .map(|((name, value), field)| {
-                        if name == field.name {
-                            field.ty.check(&value).with_context(|| {
-                                format!("type mismatch for field {name} of record")
-                            })?;
-
-                            Ok(value)
-                        } else {
-                            Err(anyhow!(
-                                "field name mismatch: expected {}; got {name}",
-                                field.name
-                            ))
-                        }
-                    })
-                    .collect::<Result<_>>()?,
-            }))
+            &handle
         } else {
-            Err(anyhow!("cannot make record from {} type", self.desc()))
+            panic!("attempted to unwrap a {} as a record", self.desc())
         }
     }
 
-    /// Instantiate this type (which must be a `Type::Tuple`) with the specified `values`.
-    pub fn new_tuple(&self, values: Box<[Val]>) -> Result<Val> {
+    /// Retrieve the inner [`Tuple`] of a [`Type::Tuple`].
+    ///
+    /// # Panics
+    ///
+    /// This will panic if `self` is not a [`Type::Tuple`].
+    pub fn unwrap_tuple(&self) -> &Tuple {
         if let Type::Tuple(handle) = self {
-            if values.len() != handle.types().len() {
-                bail!(
-                    "expected {} value(s); got {}",
-                    handle.types().len(),
-                    values.len()
-                );
-            }
-
-            for (index, (value, ty)) in values.iter().zip(handle.types()).enumerate() {
-                ty.check(value)
-                    .with_context(|| format!("type mismatch for field {index} of tuple"))?;
-            }
-
-            Ok(Val::Tuple(values::Tuple {
-                ty: handle.clone(),
-                values,
-            }))
+            &handle
         } else {
-            Err(anyhow!("cannot make tuple from {} type", self.desc()))
+            panic!("attempted to unwrap a {} as a tuple", self.desc())
         }
     }
 
-    /// Instantiate this type (which must be a `Type::Variant`) with the specified case `name` and `value`.
-    pub fn new_variant(&self, name: &str, value: Val) -> Result<Val> {
+    /// Retrieve the inner [`Variant`] of a [`Type::Variant`].
+    ///
+    /// # Panics
+    ///
+    /// This will panic if `self` is not a [`Type::Variant`].
+    pub fn unwrap_variant(&self) -> &Variant {
         if let Type::Variant(handle) = self {
-            let (discriminant, ty) = handle
-                .cases()
-                .enumerate()
-                .find_map(|(index, case)| {
-                    if case.name == name {
-                        Some((index, case.ty))
-                    } else {
-                        None
-                    }
-                })
-                .ok_or_else(|| anyhow!("unknown variant case: {name}"))?;
-
-            ty.check(&value)
-                .with_context(|| format!("type mismatch for case {name} of variant"))?;
-
-            Ok(Val::Variant(values::Variant {
-                ty: handle.clone(),
-                discriminant: u32::try_from(discriminant)?,
-                value: Box::new(value),
-            }))
+            &handle
         } else {
-            Err(anyhow!("cannot make variant from {} type", self.desc()))
+            panic!("attempted to unwrap a {} as a variant", self.desc())
         }
     }
 
-    /// Instantiate this type (which must be a `Type::Enum`) with the specified case `name`.
-    pub fn new_enum(&self, name: &str) -> Result<Val> {
+    /// Retrieve the inner [`Enum`] of a [`Type::Enum`].
+    ///
+    /// # Panics
+    ///
+    /// This will panic if `self` is not a [`Type::Enum`].
+    pub fn unwrap_enum(&self) -> &Enum {
         if let Type::Enum(handle) = self {
-            let discriminant = u32::try_from(
-                handle
-                    .names()
-                    .position(|n| n == name)
-                    .ok_or_else(|| anyhow!("unknown enum case: {name}"))?,
-            )?;
-
-            Ok(Val::Enum(values::Enum {
-                ty: handle.clone(),
-                discriminant,
-            }))
+            &handle
         } else {
-            Err(anyhow!("cannot make enum from {} type", self.desc()))
+            panic!("attempted to unwrap a {} as a enum", self.desc())
         }
     }
 
-    /// Instantiate this type (which must be a `Type::Union`) with the specified `discriminant` and `value`.
-    pub fn new_union(&self, discriminant: u32, value: Val) -> Result<Val> {
+    /// Retrieve the inner [`Union`] of a [`Type::Union`].
+    ///
+    /// # Panics
+    ///
+    /// This will panic if `self` is not a [`Type::Union`].
+    pub fn unwrap_union(&self) -> &Union {
         if let Type::Union(handle) = self {
-            if let Some(ty) = handle.types().nth(usize::try_from(discriminant)?) {
-                ty.check(&value)
-                    .with_context(|| format!("type mismatch for case {discriminant} of union"))?;
-
-                Ok(Val::Union(values::Union {
-                    ty: handle.clone(),
-                    discriminant,
-                    value: Box::new(value),
-                }))
-            } else {
-                Err(anyhow!(
-                    "discriminant {discriminant} out of range: [0,{})",
-                    handle.types().len()
-                ))
-            }
+            &handle
         } else {
-            Err(anyhow!("cannot make union from {} type", self.desc()))
+            panic!("attempted to unwrap a {} as a union", self.desc())
         }
     }
 
-    /// Instantiate this type (which must be a `Type::Option`) with the specified `value`.
-    pub fn new_option(&self, value: std::option::Option<Val>) -> Result<Val> {
+    /// Retrieve the inner [`Option`] of a [`Type::Option`].
+    ///
+    /// # Panics
+    ///
+    /// This will panic if `self` is not a [`Type::Option`].
+    pub fn unwrap_option(&self) -> &Option {
         if let Type::Option(handle) = self {
-            let value = value
-                .map(|value| {
-                    handle
-                        .ty()
-                        .check(&value)
-                        .context("type mismatch for option")?;
-
-                    Ok::<_, Error>(value)
-                })
-                .transpose()?;
-
-            Ok(Val::Option(values::Option {
-                ty: handle.clone(),
-                discriminant: if value.is_none() { 0 } else { 1 },
-                value: Box::new(value.unwrap_or(Val::Unit)),
-            }))
+            &handle
         } else {
-            Err(anyhow!("cannot make option from {} type", self.desc()))
+            panic!("attempted to unwrap a {} as a option", self.desc())
         }
     }
 
-    /// Instantiate this type (which must be a `Type::Expected`) with the specified `value`.
-    pub fn new_expected(&self, value: Result<Val, Val>) -> Result<Val> {
+    /// Retrieve the inner [`Expected`] of a [`Type::Expected`].
+    ///
+    /// # Panics
+    ///
+    /// This will panic if `self` is not a [`Type::Expected`].
+    pub fn unwrap_expected(&self) -> &Expected {
         if let Type::Expected(handle) = self {
-            Ok(Val::Expected(values::Expected {
-                ty: handle.clone(),
-                discriminant: if value.is_ok() { 0 } else { 1 },
-                value: Box::new(match value {
-                    Ok(value) => {
-                        handle
-                            .ok()
-                            .check(&value)
-                            .context("type mismatch for ok case of expected")?;
-                        value
-                    }
-                    Err(value) => {
-                        handle
-                            .err()
-                            .check(&value)
-                            .context("type mismatch for err case of expected")?;
-                        value
-                    }
-                }),
-            }))
+            &handle
         } else {
-            Err(anyhow!("cannot make expected from {} type", self.desc()))
+            panic!("attempted to unwrap a {} as a expected", self.desc())
         }
     }
 
-    /// Instantiate this type (which must be a `Type::Flags`) with the specified flag `names`.
-    pub fn new_flags(&self, names: &[&str]) -> Result<Val> {
+    /// Retrieve the inner [`Flags`] of a [`Type::Flags`].
+    ///
+    /// # Panics
+    ///
+    /// This will panic if `self` is not a [`Type::Flags`].
+    pub fn unwrap_flags(&self) -> &Flags {
         if let Type::Flags(handle) = self {
-            let map = handle
-                .names()
-                .enumerate()
-                .map(|(index, name)| (name, index))
-                .collect::<HashMap<_, _>>();
-
-            let mut values = vec![0_u32; values::u32_count_for_flag_count(handle.names().len())];
-
-            for name in names {
-                let index = map
-                    .get(name)
-                    .ok_or_else(|| anyhow!("unknown flag: {name}"))?;
-                values[index / 32] |= 1 << (index % 32);
-            }
-
-            Ok(Val::Flags(values::Flags {
-                ty: handle.clone(),
-                count: u32::try_from(map.len())?,
-                value: values.into(),
-            }))
+            &handle
         } else {
-            Err(anyhow!("cannot make flags from {} type", self.desc()))
+            panic!("attempted to unwrap a {} as a flags", self.desc())
         }
     }
 
