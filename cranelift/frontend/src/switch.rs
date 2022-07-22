@@ -277,11 +277,6 @@ impl Switch {
                     bx.switch_to_block(new_block);
 
                     // Cast to i32, as br_table is not implemented for i64/i128
-                    let discr = if bits > 64 {
-                        bx.ins().isplit(discr).0
-                    } else {
-                        discr
-                    };
                     bx.ins().ireduce(types::I32, discr)
                 }
                 bits if bits < 32 => bx.ins().uextend(types::I32, discr),
@@ -677,9 +672,8 @@ block4:
     jump block5
 
 block5:
-    v2, v3 = isplit.i128 v0
-    v4 = ireduce.i32 v2
-    br_table v4, block3, jt0"
+    v2 = ireduce.i32 v0
+    br_table v2, block3, jt0"
         );
     }
 }
