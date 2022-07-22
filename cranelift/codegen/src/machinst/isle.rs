@@ -164,6 +164,11 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn value_regs_len(&mut self, regs: ValueRegs) -> usize {
+            regs.regs().len()
+        }
+
+        #[inline]
         fn u8_as_u32(&mut self, x: u8) -> Option<u32> {
             Some(x.into())
         }
@@ -656,6 +661,14 @@ macro_rules! isle_prelude_methods {
             }
         }
 
+        fn range_singleton(&mut self, r: Range) -> Option<usize> {
+            if r.0 + 1 == r.1 {
+                Some(r.0)
+            } else {
+                None
+            }
+        }
+
         fn range_unwrap(&mut self, r: Range) -> Option<(usize, Range)> {
             if r.0 < r.1 {
                 Some((r.0, (r.0 + 1, r.1)))
@@ -670,6 +683,10 @@ macro_rules! isle_prelude_methods {
 
         fn only_writable_reg(&mut self, regs: WritableValueRegs) -> Option<WritableReg> {
             regs.only_reg()
+        }
+
+        fn writable_regs_get(&mut self, regs: WritableValueRegs, idx: usize) -> WritableReg {
+            regs.regs()[idx]
         }
 
         fn abi_copy_to_arg_order(&mut self, abi: &ABISig, idx: usize) -> usize {
