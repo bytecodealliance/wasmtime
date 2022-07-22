@@ -1,3 +1,4 @@
+test interpret
 test run
 target aarch64
 target s390x
@@ -210,4 +211,3 @@ block0(v0: i32, v1: i32):
 }
 ; run: %add_sextend32_64(0xffff_ee00, 0x1000_0001) == 0x0000_0000_0fff_ee01
 ; run: %add_sextend32_64(0xffff_ee00, 0x9000_0001) == 0xffff_ffff_8fff_ee01
-
