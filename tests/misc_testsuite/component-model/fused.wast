@@ -416,3 +416,267 @@
     (with "assert-post" (func $assert_post))
   ))
 )
+
+;; post-return passes the results
+(component
+  (core module $m
+    (func (export "foo") (result i32) i32.const 100)
+    (func (export "foo-post") (param i32)
+      (if (i32.ne (local.get 0) (i32.const 100)) (unreachable)))
+  )
+  (core instance $m (instantiate $m))
+  (func $foo (result u32)
+    (canon lift (core func $m "foo") (post-return (func $m "foo-post"))))
+
+  (component $c
+    (import "foo" (func $foo (result u32)))
+    (core func $foo (canon lower (func $foo)))
+
+    (core module $something
+      (import "" "foo" (func $foo (result i32)))
+      (func $start
+        (if (i32.ne (call $foo) (i32.const 100)) (unreachable)))
+      (start $start)
+    )
+    (core instance (instantiate $something
+      (with "" (instance
+        (export "foo" (func $foo))
+      ))
+    ))
+  )
+  (instance (instantiate $c
+    (with "foo" (func $foo))
+  ))
+)
+
+;; struct field reordering
+(component
+  (component $c1
+    (type $in (record
+      (field "a" u32)
+      (field "b" bool)
+      (field "c" u8)
+    ))
+    (type $out (record
+      (field "x" u8)
+      (field "y" u32)
+      (field "z" bool)
+    ))
+
+    (core module $m
+      (memory (export "memory") 1)
+      (func (export "r") (param i32 i32 i32) (result i32)
+        (if (i32.ne (local.get 0) (i32.const 3)) (unreachable)) ;; a == 3
+        (if (i32.ne (local.get 1) (i32.const 1)) (unreachable)) ;; b == true
+        (if (i32.ne (local.get 2) (i32.const 2)) (unreachable)) ;; c == 2
+
+
+        (i32.store8 offset=0 (i32.const 200) (i32.const 0xab)) ;; x == 0xab
+        (i32.store  offset=4 (i32.const 200) (i32.const 200))  ;; y == 200
+        (i32.store8 offset=8 (i32.const 200) (i32.const 0))    ;; z == false
+        i32.const 200
+      )
+    )
+    (core instance $m (instantiate $m))
+    (func (export "r") (param $in) (result $out)
+      (canon lift (core func $m "r") (memory $m "memory"))
+    )
+  )
+  (component $c2
+    ;; note the different field orderings than the records specified above
+    (type $in (record
+      (field "b" bool)
+      (field "c" u8)
+      (field "a" u32)
+    ))
+    (type $out (record
+      (field "z" bool)
+      (field "x" u8)
+      (field "y" u32)
+    ))
+    (import "r" (func $r (param $in) (result $out)))
+    (core module $libc (memory (export "memory") 1))
+    (core instance $libc (instantiate $libc))
+    (core func $r (canon lower (func $r) (memory $libc "memory")))
+
+    (core module $m
+      (import "" "r" (func $r (param i32 i32 i32 i32)))
+      (import "libc" "memory" (memory 0))
+      (func $start
+        i32.const 100 ;; b: bool
+        i32.const 2   ;; c: u8
+        i32.const 3   ;; a: u32
+        i32.const 100 ;; retptr
+        call $r
+
+        ;; z == false
+        (if (i32.ne (i32.load8_u offset=0 (i32.const 100)) (i32.const 0)) (unreachable))
+        ;; x == 0xab
+        (if (i32.ne (i32.load8_u offset=1 (i32.const 100)) (i32.const 0xab)) (unreachable))
+        ;; y == 200
+        (if (i32.ne (i32.load offset=4 (i32.const 100)) (i32.const 200)) (unreachable))
+      )
+      (start $start)
+    )
+    (core instance (instantiate $m
+      (with "libc" (instance $libc))
+      (with "" (instance
+        (export "r" (func $r))
+      ))
+    ))
+  )
+  (instance $c1 (instantiate $c1))
+  (instance $c2 (instantiate $c2 (with "r" (func $c1 "r"))))
+)
+
+;; callee retptr misaligned
+(assert_trap
+  (component
+    (component $c1
+      (core module $m
+        (memory (export "memory") 1)
+        (func (export "r") (result i32) i32.const 1)
+      )
+      (core instance $m (instantiate $m))
+      (func (export "r") (result (tuple u32 u32))
+        (canon lift (core func $m "r") (memory $m "memory"))
+      )
+    )
+    (component $c2
+      (import "r" (func $r (result (tuple u32 u32))))
+      (core module $libc (memory (export "memory") 1))
+      (core instance $libc (instantiate $libc))
+      (core func $r (canon lower (func $r) (memory $libc "memory")))
+
+      (core module $m
+        (import "" "r" (func $r (param i32)))
+        (func $start
+          i32.const 4
+          call $r
+        )
+        (start $start)
+      )
+      (core instance (instantiate $m
+        (with "" (instance (export "r" (func $r))))
+      ))
+    )
+    (instance $c1 (instantiate $c1))
+    (instance $c2 (instantiate $c2 (with "r" (func $c1 "r"))))
+  )
+  "unreachable")
+
+;; caller retptr misaligned
+(assert_trap
+  (component
+    (component $c1
+      (core module $m
+        (memory (export "memory") 1)
+        (func (export "r") (result i32) i32.const 0)
+      )
+      (core instance $m (instantiate $m))
+      (func (export "r") (result (tuple u32 u32))
+        (canon lift (core func $m "r") (memory $m "memory"))
+      )
+    )
+    (component $c2
+      (import "r" (func $r (result (tuple u32 u32))))
+      (core module $libc (memory (export "memory") 1))
+      (core instance $libc (instantiate $libc))
+      (core func $r (canon lower (func $r) (memory $libc "memory")))
+
+      (core module $m
+        (import "" "r" (func $r (param i32)))
+        (func $start
+          i32.const 1
+          call $r
+        )
+        (start $start)
+      )
+      (core instance (instantiate $m
+        (with "" (instance (export "r" (func $r))))
+      ))
+    )
+    (instance $c1 (instantiate $c1))
+    (instance $c2 (instantiate $c2 (with "r" (func $c1 "r"))))
+  )
+  "unreachable")
+
+;; callee argptr misaligned
+(assert_trap
+  (component
+    (type $big (tuple u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32))
+
+    (component $c1
+      (core module $m
+        (memory (export "memory") 1)
+        (func (export "r") (param i32))
+        (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+          i32.const 1)
+      )
+      (core instance $m (instantiate $m))
+      (func (export "r") (param $big)
+        (canon lift (core func $m "r") (memory $m "memory") (realloc (func $m "realloc")))
+      )
+    )
+    (component $c2
+      (import "r" (func $r (param $big)))
+      (core module $libc (memory (export "memory") 1))
+      (core instance $libc (instantiate $libc))
+      (core func $r (canon lower (func $r) (memory $libc "memory")))
+
+      (core module $m
+        (import "" "r" (func $r (param i32)))
+        (func $start
+          i32.const 4
+          call $r
+        )
+        (start $start)
+      )
+      (core instance (instantiate $m
+        (with "" (instance (export "r" (func $r))))
+      ))
+    )
+    (instance $c1 (instantiate $c1))
+    (instance $c2 (instantiate $c2 (with "r" (func $c1 "r"))))
+  )
+  "unreachable")
+
+;; caller argptr misaligned
+(assert_trap
+  (component
+    (type $big (tuple u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32 u32))
+
+    (component $c1
+      (core module $m
+        (memory (export "memory") 1)
+        (func (export "r") (param i32))
+        (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+          i32.const 4)
+      )
+      (core instance $m (instantiate $m))
+      (func (export "r") (param $big)
+        (canon lift (core func $m "r") (memory $m "memory") (realloc (func $m "realloc")))
+      )
+    )
+    (component $c2
+      (import "r" (func $r (param $big)))
+      (core module $libc (memory (export "memory") 1))
+      (core instance $libc (instantiate $libc))
+      (core func $r (canon lower (func $r) (memory $libc "memory")))
+
+      (core module $m
+        (import "" "r" (func $r (param i32)))
+        (func $start
+          i32.const 1
+          call $r
+        )
+        (start $start)
+      )
+      (core instance (instantiate $m
+        (with "" (instance (export "r" (func $r))))
+      ))
+    )
+    (instance $c1 (instantiate $c1))
+    (instance $c2 (instantiate $c2 (with "r" (func $c1 "r"))))
+  )
+  "unreachable")
