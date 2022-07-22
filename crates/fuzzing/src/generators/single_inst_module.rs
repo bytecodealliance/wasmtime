@@ -47,8 +47,7 @@ impl<'a> SingleInstModule<'a> {
 
         // Encode the code section.
         let mut codes = CodeSection::new();
-        let locals = vec![];
-        let mut f = Function::new(locals);
+        let mut f = Function::new([]);
         for (index, _) in self.parameters.iter().enumerate() {
             f.instruction(&Instruction::LocalGet(index as u32));
         }
