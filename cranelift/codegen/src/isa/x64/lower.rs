@@ -3244,19 +3244,13 @@ impl LowerBackend for X64Backend {
                     let jt_size = jt_size as u32;
 
                     let ty = ctx.input_ty(branches[0], 0);
-                    let ext_spec = match ty {
-                        types::I128 => panic!("BrTable unimplemented for I128"),
-                        types::I64 => ExtSpec::ZeroExtendTo64,
-                        _ => ExtSpec::ZeroExtendTo32,
-                    };
-
                     let idx = extend_input_to_reg(
                         ctx,
                         InsnInput {
                             insn: branches[0],
                             input: 0,
                         },
-                        ext_spec,
+                        ExtSpec::ZeroExtendTo32,
                     );
 
                     // Emit the compound instruction that does:
