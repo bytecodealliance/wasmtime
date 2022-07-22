@@ -80,7 +80,8 @@ Tier 3 features include:
   * A change which makes building Wasmtime more difficult for unrelated
     developers.
 
-  In general Tier 3 features are off-by-default at compile time.
+  In general Tier 3 features are off-by-default at compile time but still
+  tested-by-default on CI.
 
 * New features of Wasmtime cannot have major known bugs at the time of
   inclusion. Landing a feature in Wasmtime requires the feature to be correct
@@ -107,11 +108,11 @@ This baseline level of support notably does not require any degree of testing,
 fuzzing, or verification. As a result components classified as Tier 3 are
 generally not production-ready as they have not been battle-tested much.
 
-Features classified as Tier 3 may be turned off or removed from Wasmtime as
-well. If a Tier 3 feature is preventing development of other features then the
-owner will be notified. If no response is heard from within a week then the
-feature will be turned off. If no further response happens for a month then
-the feature may be removed from Wasmtime.
+Features classified as Tier 3 may be disabled in CI or removed from the
+repository as well. If a Tier 3 feature is preventing development of other
+features then the owner will be notified. If no response is heard from within a
+week then the feature will be disabled in CI. If no further response happens
+for a month then the feature may be removed from the repository.
 
 #### Tier 2 - Almost Production Ready
 
@@ -126,8 +127,9 @@ Tier 2 features include:
   passes. For example a Tier 2 platform runs in CI directly or via emulation.
   Features are otherwise fully tested on CI.
 
-* Complete implementations for any feature that's part of Tier 1. For example
-  all Tier 2 targets must implement all of the Tier 1 WebAssembly proposals.
+* Complete implementations for anything that's part of Tier 1. For example
+  all Tier 2 targets must implement all of the Tier 1 WebAssembly proposals,
+  and all Tier 2 features must be implemented on all Tier 1 targets.
 
 * All existing developers are expected to handle minor changes which affect Tier
   2 components. For example if Cranelift's interfaces change then the developer
@@ -173,13 +175,11 @@ Tier 1 features include:
   but only `x86_64-unknown-linux-gnu` is fuzzed.
 
 * CVEs and security releases will be performed as necessary for any bugs found
-  in features.
+  in features and targets.
 
-* Most developers of Wasmtime are expected to be able to handle up-to-major
-  changes affecting this component. Specialized maintainers may still be
-  necessary for major refactorings or major new features, but otherwise it
-  should be reasonable to expect most Wasmtime developers to be able to maintain
-  Tier 1 features.
+* Major changes affecting this component may require help from maintainers with
+  specialized expertise, but otherwise it should be reasonable to expect most
+  Wasmtime developers to be able to maintain Tier 1 features.
 
 * Major changes affecting Tier 1 features require an RFC and prior agreement on
   the change before an implementation is committed.
