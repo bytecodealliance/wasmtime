@@ -265,14 +265,6 @@ impl MemFlags {
         self.set_vmctx();
         self
     }
-
-    pub(crate) fn as_u8(self) -> u8 {
-        self.bits
-    }
-
-    pub(crate) fn from_u8(bits: u8) -> Self {
-        Self { bits }
-    }
 }
 
 impl fmt::Display for MemFlags {
