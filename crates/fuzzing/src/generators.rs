@@ -20,6 +20,7 @@ mod single_inst_module;
 mod spec_test;
 mod stacks;
 pub mod table_ops;
+mod value;
 
 pub use codegen_settings::CodegenSettings;
 pub use config::{Config, WasmtimeConfig};
@@ -30,3 +31,4 @@ pub use module::{Module, ModuleConfig};
 pub use single_inst_module::SingleInstModule;
 pub use spec_test::SpecTest;
 pub use stacks::Stacks;
+pub use value::{DiffValue, DiffValueType};
