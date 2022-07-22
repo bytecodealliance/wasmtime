@@ -470,7 +470,7 @@ pub unsafe trait Lift: Sized + ComponentType {
 // another type, used for wrappers in Rust like `&T`, `Box<T>`, etc. Note that
 // these wrappers only implement lowering because lifting native Rust types
 // cannot be done.
-macro_rules! forward_impls {
+macro_rules! forward_type_impls {
     ($(($($generics:tt)*) $a:ty => $b:ty,)*) => ($(
         unsafe impl <$($generics)*> ComponentType for $a {
             type Lower = <$b as ComponentType>::Lower;
@@ -483,7 +483,20 @@ macro_rules! forward_impls {
                 <$b as ComponentType>::typecheck(ty, types)
             }
         }
+    )*)
+}
 
+forward_type_impls! {
+    (T: ComponentType + ?Sized) &'_ T => T,
+    (T: ComponentType + ?Sized) Box<T> => T,
+    (T: ComponentType + ?Sized) std::rc::Rc<T> => T,
+    (T: ComponentType + ?Sized) std::sync::Arc<T> => T,
+    () String => str,
+    (T: ComponentType) Vec<T> => [T],
+}
+
+macro_rules! forward_lowers {
+    ($(($($generics:tt)*) $a:ty => $b:ty,)*) => ($(
         unsafe impl <$($generics)*> Lower for $a {
             fn lower<U>(
                 &self,
@@ -501,7 +514,7 @@ macro_rules! forward_impls {
     )*)
 }
 
-forward_impls! {
+forward_lowers! {
     (T: Lower + ?Sized) &'_ T => T,
     (T: Lower + ?Sized) Box<T> => T,
     (T: Lower + ?Sized) std::rc::Rc<T> => T,
@@ -518,7 +531,7 @@ macro_rules! forward_string_lifts {
             }
 
             fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
-                Ok(<WasmStr as Lift>::load(memory, bytes)?.to_str_from_memory(memory.as_slice())?.into())
+                Ok(<WasmStr as Lift>::load(memory, bytes)?.to_str_from_store(&memory.store)?.into())
             }
         }
     )*)
@@ -533,7 +546,7 @@ forward_string_lifts! {
 
 macro_rules! forward_list_lifts {
     ($($a:ty,)*) => ($(
-        unsafe impl <T: Lift + Lower> Lift for $a {
+        unsafe impl <T: Lift> Lift for $a {
             fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
                 let list = <WasmList::<T> as Lift>::lift(store, options, src)?;
                 (0..list.len).map(|index| list.get_from_store(store, index).unwrap()).collect()
@@ -541,7 +554,7 @@ macro_rules! forward_list_lifts {
 
             fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
                 let list = <WasmList::<T> as Lift>::load(memory, bytes)?;
-                (0..list.len).map(|index| list.get_from_memory(memory, index).unwrap()).collect()
+                (0..list.len).map(|index| list.get_from_store(&memory.store, index).unwrap()).collect()
             }
         }
     )*)
@@ -920,25 +933,23 @@ impl WasmStr {
     }
 
     fn to_str_from_store<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
-        self.to_str_from_memory(self.options.memory(store))
-    }
-
-    fn to_str_from_memory<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
         match self.options.string_encoding() {
-            StringEncoding::Utf8 => self.decode_utf8(memory),
-            StringEncoding::Utf16 => self.decode_utf16(memory),
+            StringEncoding::Utf8 => self.decode_utf8(store),
+            StringEncoding::Utf16 => self.decode_utf16(store),
             StringEncoding::CompactUtf16 => unimplemented!(),
         }
     }
 
-    fn decode_utf8<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
+    fn decode_utf8<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
+        let memory = self.options.memory(store);
         // Note that bounds-checking already happen in construction of `WasmStr`
         // so this is never expected to panic. This could theoretically be
         // unchecked indexing if we're feeling wild enough.
         Ok(str::from_utf8(&memory[self.ptr..][..self.len])?.into())
     }
 
-    fn decode_utf16<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
+    fn decode_utf16<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
+        let memory = self.options.memory(store);
         // See notes in `decode_utf8` for why this is panicking indexing.
         let memory = &memory[self.ptr..][..self.len * 2];
         Ok(std::char::decode_utf16(
@@ -1119,13 +1130,10 @@ impl<T: Lift> WasmList<T> {
     }
 
     fn get_from_store(&self, store: &StoreOpaque, index: usize) -> Option<Result<T>> {
-        self.get_from_memory(&Memory::new(store, &self.options), index)
-    }
-
-    fn get_from_memory(&self, memory: &Memory, index: usize) -> Option<Result<T>> {
         if index >= self.len {
             return None;
         }
+        let memory = Memory::new(store, &self.options);
         // Note that this is using panicking indexing and this is expected to
         // never fail. The bounds-checking here happened during the construction
         // of the `WasmList` itself which means these should always be in-bounds

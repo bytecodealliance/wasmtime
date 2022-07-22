@@ -1,6 +1,6 @@
 use super::{make_echo_component, make_echo_component_with_params, Param, Type};
 use anyhow::Result;
-use wasmtime::component::{Component, Func, Linker, Val};
+use wasmtime::component::{self, Component, Func, Linker, Val};
 use wasmtime::{AsContextMut, Store};
 
 trait FuncExt {
@@ -163,7 +163,7 @@ fn records() -> Result<()> {
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
     let ty = &func.params(&store)[0];
-    let inner_type = &ty.nested()[2];
+    let inner_type = &ty.unwrap_record().fields().nth(2).unwrap().ty;
     let input = ty.unwrap_record().new_val([
         ("A", Val::U32(32343)),
         ("B", Val::Float64(3.14159265_f64.to_bits())),
@@ -278,7 +278,7 @@ fn variants() -> Result<()> {
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
     let ty = &func.params(&store)[0];
-    let c_type = &ty.nested()[2];
+    let c_type = &ty.unwrap_variant().cases().nth(2).unwrap().ty;
     let input = ty.unwrap_variant().new_val(
         "C",
         c_type
@@ -330,7 +330,7 @@ fn variants() -> Result<()> {
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
     let ty = &func.params(&store)[0];
-    let a_type = &ty.nested()[0];
+    let a_type = &ty.unwrap_record().fields().nth(0).unwrap().ty;
     let input = ty.unwrap_record().new_val([
         (
             "A",
@@ -441,11 +441,15 @@ fn everything() -> Result<()> {
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
     let ty = &func.params(&store)[0];
-    let types = ty.nested();
+    let types = ty
+        .unwrap_record()
+        .fields()
+        .map(|field| field.ty)
+        .collect::<Box<[component::Type]>>();
     let (b_type, c_type, f_type, j_type, y_type, z_type, aa_type, bb_type) = (
         &types[1], &types[2], &types[3], &types[4], &types[14], &types[15], &types[16], &types[17],
     );
-    let f_element_type = &f_type.nested()[0];
+    let f_element_type = &f_type.unwrap_list().ty();
     let input = ty.unwrap_record().new_val([
         ("A", Val::U32(32343)),
         ("B", b_type.unwrap_enum().new_val("2")?),

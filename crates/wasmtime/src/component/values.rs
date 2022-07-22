@@ -1,7 +1,8 @@
 use crate::component::func::{self, Lower, MemoryMut, Options};
 use crate::component::types::{self, SizeAndAlignment, Type};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
-use anyhow::Result;
+use anyhow::{anyhow, bail, Context, Error, Result};
+use std::collections::HashMap;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
@@ -12,16 +13,96 @@ pub struct List {
     pub(crate) values: Box<[Val]>,
 }
 
+impl List {
+    /// Instantiate the specified type with the specified `values`.
+    pub fn try_new(ty: &types::List, values: Box<[Val]>) -> Result<Self> {
+        let element_type = ty.ty();
+        for (index, value) in values.iter().enumerate() {
+            element_type
+                .check(value)
+                .with_context(|| format!("type mismatch for element {index} of list"))?;
+        }
+
+        Ok(Self {
+            ty: ty.clone(),
+            values,
+        })
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Record {
     pub(crate) ty: types::Record,
     pub(crate) values: Box<[Val]>,
 }
 
+impl Record {
+    /// Instantiate the specified type with the specified `values`.
+    pub fn try_new<'a>(
+        ty: &types::Record,
+        values: impl IntoIterator<Item = (&'a str, Val)>,
+    ) -> Result<Self> {
+        let mut fields = ty.fields();
+        let expected_len = fields.len();
+        let mut iter = values.into_iter();
+        let mut values = Vec::with_capacity(expected_len);
+        loop {
+            match (fields.next(), iter.next()) {
+                (Some(field), Some((name, value))) => {
+                    if name == field.name {
+                        field
+                            .ty
+                            .check(&value)
+                            .with_context(|| format!("type mismatch for field {name} of record"))?;
+
+                        values.push(value);
+                    } else {
+                        bail!("field name mismatch: expected {}; got {name}", field.name)
+                    }
+                }
+                (None, Some((_, value))) => values.push(value),
+                _ => break,
+            }
+        }
+
+        if values.len() != expected_len {
+            bail!("expected {} value(s); got {}", expected_len, values.len());
+        }
+
+        Ok(Self {
+            ty: ty.clone(),
+            values: values.into(),
+        })
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Tuple {
     pub(crate) ty: types::Tuple,
     pub(crate) values: Box<[Val]>,
+}
+
+impl Tuple {
+    /// Instantiate the specified type ith the specified `values`.
+    pub fn try_new(ty: &types::Tuple, values: Box<[Val]>) -> Result<Self> {
+        if values.len() != ty.types().len() {
+            bail!(
+                "expected {} value(s); got {}",
+                ty.types().len(),
+                values.len()
+            );
+        }
+
+        for (index, (value, ty)) in values.iter().zip(ty.types()).enumerate() {
+            ty.check(value)
+                .with_context(|| format!("type mismatch for field {index} of tuple"))?;
+        }
+
+        Ok(Self {
+            ty: ty.clone(),
+            values,
+        })
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -31,10 +112,53 @@ pub struct Variant {
     pub(crate) value: Box<Val>,
 }
 
+impl Variant {
+    /// Instantiate the specified type with the specified case `name` and `value`.
+    pub fn try_new(ty: &types::Variant, name: &str, value: Val) -> Result<Self> {
+        let (discriminant, case_type) = ty
+            .cases()
+            .enumerate()
+            .find_map(|(index, case)| {
+                if case.name == name {
+                    Some((index, case.ty))
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| anyhow!("unknown variant case: {name}"))?;
+
+        case_type
+            .check(&value)
+            .with_context(|| format!("type mismatch for case {name} of variant"))?;
+
+        Ok(Self {
+            ty: ty.clone(),
+            discriminant: u32::try_from(discriminant)?,
+            value: Box::new(value),
+        })
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Enum {
     pub(crate) ty: types::Enum,
     pub(crate) discriminant: u32,
+}
+
+impl Enum {
+    /// Instantiate the specified type with the specified case `name`.
+    pub fn try_new(ty: &types::Enum, name: &str) -> Result<Self> {
+        let discriminant = u32::try_from(
+            ty.names()
+                .position(|n| n == name)
+                .ok_or_else(|| anyhow!("unknown enum case: {name}"))?,
+        )?;
+
+        Ok(Self {
+            ty: ty.clone(),
+            discriminant,
+        })
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -44,11 +168,52 @@ pub struct Union {
     pub(crate) value: Box<Val>,
 }
 
+impl Union {
+    /// Instantiate the specified type with the specified `discriminant` and `value`.
+    pub fn try_new(ty: &types::Union, discriminant: u32, value: Val) -> Result<Self> {
+        if let Some(case_ty) = ty.types().nth(usize::try_from(discriminant)?) {
+            case_ty
+                .check(&value)
+                .with_context(|| format!("type mismatch for case {discriminant} of union"))?;
+
+            Ok(Self {
+                ty: ty.clone(),
+                discriminant,
+                value: Box::new(value),
+            })
+        } else {
+            Err(anyhow!(
+                "discriminant {discriminant} out of range: [0,{})",
+                ty.types().len()
+            ))
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Option {
     pub(crate) ty: types::Option,
     pub(crate) discriminant: u32,
     pub(crate) value: Box<Val>,
+}
+
+impl Option {
+    /// Instantiate the specified type with the specified `value`.
+    pub fn try_new(ty: &types::Option, value: std::option::Option<Val>) -> Result<Self> {
+        let value = value
+            .map(|value| {
+                ty.ty().check(&value).context("type mismatch for option")?;
+
+                Ok::<_, Error>(value)
+            })
+            .transpose()?;
+
+        Ok(Self {
+            ty: ty.clone(),
+            discriminant: if value.is_none() { 0 } else { 1 },
+            value: Box::new(value.unwrap_or(Val::Unit)),
+        })
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -58,11 +223,61 @@ pub struct Expected {
     pub(crate) value: Box<Val>,
 }
 
+impl Expected {
+    /// Instantiate the specified type with the specified `value`.
+    pub fn try_new(ty: &types::Expected, value: Result<Val, Val>) -> Result<Self> {
+        Ok(Self {
+            ty: ty.clone(),
+            discriminant: if value.is_ok() { 0 } else { 1 },
+            value: Box::new(match value {
+                Ok(value) => {
+                    ty.ok()
+                        .check(&value)
+                        .context("type mismatch for ok case of expected")?;
+                    value
+                }
+                Err(value) => {
+                    ty.err()
+                        .check(&value)
+                        .context("type mismatch for err case of expected")?;
+                    value
+                }
+            }),
+        })
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Flags {
     pub(crate) ty: types::Flags,
     pub(crate) count: u32,
     pub(crate) value: Box<[u32]>,
+}
+
+impl Flags {
+    /// Instantiate the specified type with the specified flag `names`.
+    pub fn try_new(ty: &types::Flags, names: &[&str]) -> Result<Self> {
+        let map = ty
+            .names()
+            .enumerate()
+            .map(|(index, name)| (name, index))
+            .collect::<HashMap<_, _>>();
+
+        let mut values = vec![0_u32; u32_count_for_flag_count(ty.names().len())];
+
+        for name in names {
+            let index = map
+                .get(name)
+                .ok_or_else(|| anyhow!("unknown flag: {name}"))?;
+            values[index / 32] |= 1 << (index % 32);
+        }
+
+        Ok(Self {
+            ty: ty.clone(),
+            count: u32::try_from(map.len())?,
+            value: values.into(),
+        })
+    }
 }
 
 /// Represents possible runtime values which a component function can either consume or produce
