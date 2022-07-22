@@ -280,7 +280,7 @@ jobs:
     - run: cmake --build examples/build --config Debug
       if: matrix.target == ''
     # Run tests
-    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --target test
+    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
       env:
         RUST_BACKTRACE: 1
       if: matrix.target == ''
