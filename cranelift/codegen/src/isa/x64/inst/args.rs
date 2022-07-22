@@ -424,173 +424,68 @@ impl PrettyPrint for Amode {
     }
 }
 
-#[repr(u8)]
-pub enum PackedAmodeTag {
-    // Amode cases
-    ImmReg,
-    ImmRegRegShift,
-    RipRelative,
+#[derive(Clone, Debug)]
+pub struct BaseIndexShift([u16; 3]);
 
-    // Additional SyntheticAmode cases
-    NominalSPOffset,
-    ConstantOffset,
-}
-
-impl PackedAmodeTag {
-    #[inline(always)]
-    fn value(self) -> u8 {
-        match self {
-            Self::ImmReg => 0,
-            Self::ImmRegRegShift => 1,
-            Self::RipRelative => 2,
-            Self::NominalSPOffset => 3,
-            Self::ConstantOffset => 4,
-        }
-    }
-}
-
-impl From<&PackedAmode> for PackedAmodeTag {
-    #[inline(always)]
-    fn from(val: &PackedAmode) -> Self {
-        match val.0 as u8 {
-            0 => PackedAmodeTag::ImmReg,
-            1 => PackedAmodeTag::ImmRegRegShift,
-            2 => PackedAmodeTag::RipRelative,
-            3 => PackedAmodeTag::NominalSPOffset,
-            4 => PackedAmodeTag::ConstantOffset,
-            _ => unreachable!(),
-        }
-    }
-}
-
-/// A packed version of the [`SyntheticAmode`] type.
-///
-/// The layout looks like the following:
+/// The representation of registers only requires 21 bits, so packing two registers into 6 bytes
+/// leaves us with 6 left over bits to use to store the shift component of
 ///
 /// ```text
-/// 0                                  32
-/// +--------+--------+--------+--------+
-/// | tag    | shift  | flags  | unused |
-/// +--------+--------+--------+--------+
-/// | simm32/rip rel target/...         |
-/// +--------+--------+--------+--------+
-/// | base (Gpr)                        |
-/// +--------+--------+--------+--------+
-/// | index (Gpr)                       |
-/// +--------+--------+--------+--------+
+/// 0                16
+/// +------------------+
+/// | base low 16 bits |
+/// +------------------+
+/// | index low 16 bits|
+/// +------+-----+-----+
+/// | shift| base| idx |
+/// +------+-----+-----+
 /// ```
-#[derive(Clone, Debug)]
-pub struct PackedAmode(u64, u64);
+impl BaseIndexShift {
+    const REG_UPPER_BIT_MASK: u32 = 0b11111_00000000_00000000;
 
-impl PackedAmode {
-    #[inline(always)]
-    fn mem_flags(&self) -> MemFlags {
-        MemFlags::from_u8((self.0 >> 16) as u8)
+    fn new(base: u32, index: u32, shift: u8) -> Self {
+        let low = base as u16;
+        let mid = index as u16;
+        let high = ((base & Self::REG_UPPER_BIT_MASK) >> (16 - 11)) as u16
+            | ((index & Self::REG_UPPER_BIT_MASK) >> (16 - 6)) as u16
+            | (shift & 0b111111) as u16;
+        BaseIndexShift([low, mid, high])
     }
 
-    #[inline(always)]
+    fn base(&self) -> VReg {
+        let val = (self.0[0] as u32) | ((self.0[2] & 0b11111_00000_000000) as u32) << (16 - 11);
+        VReg::new(val as usize, RegClass::Int)
+    }
+
+    fn index(&self) -> VReg {
+        let val = (self.0[1] as u32) | ((self.0[2] & 0b00000_11111_000000) as u32) << (16 - 6);
+        VReg::new(val as usize, RegClass::Int)
+    }
+
     fn shift(&self) -> u8 {
-        (self.0 >> 8) as u8
+        (self.0[2] & 0b00000_00000_111111) as u8
     }
+}
 
-    #[inline(always)]
-    fn base_vreg(&self) -> VReg {
-        let val = (self.1 & 0xfffffff) as usize;
-        assert!(val < VReg::MAX);
-        VReg::new(val, RegClass::Int)
-    }
-
-    #[inline(always)]
-    fn index_vreg(&self) -> VReg {
-        let val = ((self.1 >> 32) & 0xfffffff) as usize;
-        assert!(val < VReg::MAX);
-        VReg::new(val, RegClass::Int)
-    }
-
-    #[inline(always)]
-    fn simm32(&self) -> u32 {
-        (self.0 >> 32) as u32
-    }
-
-    #[inline(always)]
-    fn imm_reg(simm32: u32, base: Reg, flags: MemFlags) -> Self {
-        let tag = PackedAmodeTag::ImmReg.value() as u64;
-        let flags = (flags.as_u8() as u64) << 16;
-        let simm32 = (simm32 as u64) << 32;
-        let base = base.vreg() as u64;
-        Self(tag | flags | simm32, base)
-    }
-
-    #[inline(always)]
-    fn as_imm_reg(&self) -> Amode {
-        Amode::ImmReg {
-            simm32: self.simm32(),
-            base: self.base_vreg().into(),
-            flags: self.mem_flags(),
-        }
-    }
-
-    #[inline(always)]
-    fn imm_reg_reg_shift(simm32: u32, base: Gpr, index: Gpr, shift: u8, flags: MemFlags) -> Self {
-        let tag = PackedAmodeTag::ImmRegRegShift.value() as u64;
-        let shift = (shift as u64) << 8;
-        let flags = (flags.as_u8() as u64) << 16;
-        let simm32 = (simm32 as u64) << 32;
-        let base = base.0.vreg() as u64;
-        let index = (index.0.vreg() as u64) << 32;
-        Self(tag | shift | flags | simm32, base | index)
-    }
-
-    #[inline(always)]
-    fn as_imm_reg_reg_shift(&self) -> Amode {
-        Amode::ImmRegRegShift {
-            simm32: self.simm32(),
-            base: Gpr(self.base_vreg().into()),
-            index: Gpr(self.index_vreg().into()),
-            shift: self.shift(),
-            flags: self.mem_flags(),
-        }
-    }
-
-    #[inline(always)]
-    fn rip_relative(target: MachLabel) -> Self {
-        let tag = PackedAmodeTag::RipRelative.value() as u64;
-        let target = (target.as_u32() as u64) << 32;
-        Self(tag | target, 0)
-    }
-
-    #[inline(always)]
-    fn as_rip_relative(&self) -> Amode {
-        Amode::RipRelative {
-            target: MachLabel::from_u32((self.0 >> 32) as u32),
-        }
-    }
-
-    #[inline(always)]
-    fn nominal_sp_offset(simm32: u32) -> Self {
-        let tag = PackedAmodeTag::NominalSPOffset.value() as u64;
-        let simm32 = (simm32 as u64) << 32;
-        Self(tag | simm32, 0)
-    }
-
-    #[inline(always)]
-    fn as_nominal_sp_offset(&self) -> SyntheticAmode {
-        SyntheticAmode::NominalSPOffset {
-            simm32: (self.0 >> 32) as u32,
-        }
-    }
-
-    #[inline(always)]
-    fn constant_offset(offset: VCodeConstant) -> Self {
-        let tag = PackedAmodeTag::ConstantOffset.value() as u64;
-        let offset = (offset.as_u32() as u64) << 32;
-        Self(tag | offset, 0)
-    }
-
-    #[inline(always)]
-    fn as_constant_offset(&self) -> SyntheticAmode {
-        SyntheticAmode::ConstantOffset(VCodeConstant::from_u32((self.0 >> 32) as u32))
-    }
+#[derive(Clone, Debug)]
+pub enum PackedAmode {
+    ImmReg {
+        simm32: u32,
+        base: Reg,
+        flags: MemFlags,
+    },
+    ImmRegRegShift {
+        simm32: u32,
+        packed: BaseIndexShift,
+        flags: MemFlags,
+    },
+    RipRelative {
+        target: MachLabel,
+    },
+    NominalSPOffset {
+        simm32: u32,
+    },
+    ConstantOffset(VCodeConstant),
 }
 
 impl From<Amode> for PackedAmode {
@@ -601,7 +496,11 @@ impl From<Amode> for PackedAmode {
                 simm32,
                 base,
                 flags,
-            } => Self::imm_reg(simm32, base, flags),
+            } => Self::ImmReg {
+                simm32,
+                base,
+                flags,
+            },
 
             Amode::ImmRegRegShift {
                 simm32,
@@ -609,9 +508,13 @@ impl From<Amode> for PackedAmode {
                 index,
                 shift,
                 flags,
-            } => Self::imm_reg_reg_shift(simm32, base, index, shift, flags),
+            } => Self::ImmRegRegShift {
+                simm32,
+                packed: BaseIndexShift::new(base.vreg() as u32, index.vreg() as u32, shift),
+                flags,
+            },
 
-            Amode::RipRelative { target } => Self::rip_relative(target),
+            Amode::RipRelative { target } => Self::RipRelative { target },
         }
     }
 }
@@ -621,8 +524,8 @@ impl From<SyntheticAmode> for PackedAmode {
     fn from(amode: SyntheticAmode) -> Self {
         match amode {
             SyntheticAmode::Real(amode) => amode.into(),
-            SyntheticAmode::NominalSPOffset { simm32 } => PackedAmode::nominal_sp_offset(simm32),
-            SyntheticAmode::ConstantOffset(offset) => PackedAmode::constant_offset(offset),
+            SyntheticAmode::NominalSPOffset { simm32 } => Self::NominalSPOffset { simm32 },
+            SyntheticAmode::ConstantOffset(offset) => Self::ConstantOffset(offset),
         }
     }
 }
@@ -630,27 +533,63 @@ impl From<SyntheticAmode> for PackedAmode {
 impl TryFrom<PackedAmode> for Amode {
     type Error = ();
 
-    #[inline(always)]
     fn try_from(val: PackedAmode) -> Result<Self, ()> {
-        match PackedAmodeTag::from(&val) {
-            PackedAmodeTag::ImmReg => Ok(val.as_imm_reg()),
-            PackedAmodeTag::ImmRegRegShift => Ok(val.as_imm_reg_reg_shift()),
-            PackedAmodeTag::RipRelative => Ok(val.as_rip_relative()),
-            PackedAmodeTag::NominalSPOffset => Err(()),
-            PackedAmodeTag::ConstantOffset => Err(()),
+        match val {
+            PackedAmode::ImmReg {
+                simm32,
+                base,
+                flags,
+            } => Ok(Amode::ImmReg {
+                simm32,
+                base,
+                flags,
+            }),
+            PackedAmode::ImmRegRegShift {
+                simm32,
+                packed,
+                flags,
+            } => Ok(Amode::ImmRegRegShift {
+                simm32,
+                base: Gpr(packed.base().into()),
+                index: Gpr(packed.index().into()),
+                shift: packed.shift(),
+                flags,
+            }),
+            PackedAmode::RipRelative { target } => Ok(Amode::RipRelative { target }),
+            PackedAmode::NominalSPOffset { .. } => Err(()),
+            PackedAmode::ConstantOffset { .. } => Err(()),
         }
     }
 }
 
 impl From<PackedAmode> for SyntheticAmode {
-    #[inline(always)]
     fn from(val: PackedAmode) -> Self {
-        match PackedAmodeTag::from(&val) {
-            PackedAmodeTag::ImmReg => SyntheticAmode::Real(val.as_imm_reg()),
-            PackedAmodeTag::ImmRegRegShift => SyntheticAmode::Real(val.as_imm_reg_reg_shift()),
-            PackedAmodeTag::RipRelative => SyntheticAmode::Real(val.as_rip_relative()),
-            PackedAmodeTag::NominalSPOffset => val.as_nominal_sp_offset(),
-            PackedAmodeTag::ConstantOffset => val.as_constant_offset(),
+        match val {
+            PackedAmode::ImmReg {
+                simm32,
+                base,
+                flags,
+            } => SyntheticAmode::Real(Amode::ImmReg {
+                simm32,
+                base,
+                flags,
+            }),
+            PackedAmode::ImmRegRegShift {
+                simm32,
+                packed,
+                flags,
+            } => SyntheticAmode::Real(Amode::ImmRegRegShift {
+                simm32,
+                base: Gpr(packed.base().into()),
+                index: Gpr(packed.index().into()),
+                shift: packed.shift(),
+                flags,
+            }),
+            PackedAmode::RipRelative { target } => {
+                SyntheticAmode::Real(Amode::RipRelative { target })
+            }
+            PackedAmode::NominalSPOffset { simm32 } => SyntheticAmode::NominalSPOffset { simm32 },
+            PackedAmode::ConstantOffset(offset) => SyntheticAmode::ConstantOffset(offset),
         }
     }
 }
@@ -888,7 +827,9 @@ impl RegMem {
             RegMem::Reg { reg } => RegMem::Reg {
                 reg: allocs.next(*reg),
             },
-            RegMem::Mem { addr } => RegMem::mem(SyntheticAmode::from(addr.clone()).with_allocs(allocs)),
+            RegMem::Mem { addr } => {
+                RegMem::mem(SyntheticAmode::from(addr.clone()).with_allocs(allocs))
+            }
         }
     }
 }
@@ -903,7 +844,9 @@ impl PrettyPrint for RegMem {
     fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
             RegMem::Reg { reg } => pretty_print_reg(*reg, size, allocs),
-            RegMem::Mem { addr, .. } => SyntheticAmode::from(addr.clone()).pretty_print(size, allocs),
+            RegMem::Mem { addr, .. } => {
+                SyntheticAmode::from(addr.clone()).pretty_print(size, allocs)
+            }
         }
     }
 }
