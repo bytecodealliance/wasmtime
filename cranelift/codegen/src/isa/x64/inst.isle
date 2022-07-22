@@ -482,7 +482,9 @@
        (Unwind (inst UnwindInst))
 
        ;; A pseudoinstruction that just keeps a value alive.
-       (DummyUse (reg Reg))))
+       (DummyUse (reg Reg) (pad Padding))))
+
+(type Padding extern (enum))
 
 (type OperandSize extern
       (enum Size8

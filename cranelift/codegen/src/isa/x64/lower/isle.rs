@@ -34,6 +34,8 @@ use std::convert::TryFrom;
 
 type BoxCallInfo = Box<CallInfo>;
 
+type Padding = [u8; 64];
+
 pub struct SinkableLoad {
     inst: Inst,
     addr_input: InsnInput,

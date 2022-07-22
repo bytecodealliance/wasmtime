@@ -1692,7 +1692,7 @@ impl PrettyPrint for Inst {
                 format!("unwind {:?}", inst)
             }
 
-            Inst::DummyUse { reg } => {
+            Inst::DummyUse { reg, .. } => {
                 let reg = pretty_print_reg(*reg, 8, allocs);
                 format!("dummy_use {}", reg)
             }
@@ -2112,7 +2112,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
 
         Inst::Unwind { .. } => {}
 
-        Inst::DummyUse { reg } => {
+        Inst::DummyUse { reg, .. } => {
             collector.reg_use(*reg);
         }
     }
@@ -2362,7 +2362,7 @@ impl MachInst for Inst {
     }
 
     fn gen_dummy_use(reg: Reg) -> Self {
-        Inst::DummyUse { reg }
+        Inst::DummyUse { reg, pad: [0; 64] }
     }
 
     fn worst_case_size() -> CodeOffset {
