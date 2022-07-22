@@ -1464,6 +1464,13 @@
             (_ Unit (emit (MInst.VecRRR op dst src1 src2 size))))
         dst))
 
+;; Helper for emitting `MInst.FpuRR` instructions.
+(decl fpu_rr (FPUOp1 Reg ScalarSize) Reg)
+(rule (fpu_rr op src size)
+      (let ((dst WritableReg (temp_writable_reg $F64))
+            (_ Unit (emit (MInst.FpuRR op size dst src))))
+        dst))
+
 ;; Helper for emitting `MInst.FpuRRR` instructions.
 (decl fpu_rrr (FPUOp2 Reg Reg ScalarSize) Reg)
 (rule (fpu_rrr op src1 src2 size)
@@ -1644,6 +1651,12 @@
          (MInst.FpuCSel64 dst if_true if_false cond)
          dst)))
 
+;; Helper for emitting `MInst.FpuRound` instructions.
+(decl fpu_round (FpuRoundMode Reg) Reg)
+(rule (fpu_round op rn)
+      (let ((dst WritableReg (temp_writable_reg $F64))
+            (_ Unit (emit (MInst.FpuRound op dst rn))))
+        dst))
 
 ;; Helper for emitting `MInst.MovToFpu` instructions.
 (decl mov_to_fpu (Reg ScalarSize) Reg)
