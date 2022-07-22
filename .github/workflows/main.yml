@@ -273,11 +273,21 @@ jobs:
         touch ${{ runner.tool_cache }}/qemu/built
       if: matrix.gcc != ''
 
-    # Ensure all our examples build and execute
-    - run: cargo run -p run-examples
+    # Prepare tests in CMake
+    - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF
+      if: matrix.target == ''
+    # Build tests
+    - run: cmake --build examples/build --config Debug
+      if: matrix.target == ''
+    # Run tests
+    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target RUN_TESTS
       env:
         RUST_BACKTRACE: 1
-      if: matrix.target == ''
+      if: matrix.target == '' && matrix.os == 'windows-2019'
+    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
+      env:
+        RUST_BACKTRACE: 1
+      if: matrix.target == '' && matrix.os != 'windows-2019'
 
     # Build and test all features
     - run: ./ci/run-tests.sh --locked
