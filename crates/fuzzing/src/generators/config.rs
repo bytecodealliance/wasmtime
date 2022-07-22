@@ -112,13 +112,7 @@ impl Config {
         input: &mut Unstructured<'_>,
         default_fuel: Option<u32>,
     ) -> arbitrary::Result<wasm_smith::Module> {
-        let mut module = wasm_smith::Module::new(self.module_config.config.clone(), input)?;
-
-        if let Some(default_fuel) = default_fuel {
-            module.ensure_termination(default_fuel);
-        }
-
-        Ok(module)
+        self.module_config.generate(input, default_fuel)
     }
 
     /// Indicates that this configuration should be spec-test-compliant,
