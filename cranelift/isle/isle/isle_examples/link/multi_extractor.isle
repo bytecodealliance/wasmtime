@@ -1,11 +1,11 @@
 (type u32 (primitive u32))
 (type A extern (enum (B) (C)))
 
-(decl multi E1 (A u32) u32)
-(decl multi E2 (A u32) u32)
+(decl E1 (A u32) u32)
+(decl E2 (A u32) u32)
 
-(extern extractor E1 e1_etor)
-(extern extractor infallible E2 e2_etor)
+(extern extractor multi E1 e1_etor)
+(extern extractor infallible multi E2 e2_etor)
 
 (decl Rule (u32) u32)
 (decl Rule2 (u32) u32)

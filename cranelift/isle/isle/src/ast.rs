@@ -72,8 +72,6 @@ pub struct Decl {
     pub ret_ty: Ident,
     /// Whether this term's constructor is pure.
     pub pure: bool,
-    /// Whether this term's extractor can return multiple matches.
-    pub multi: bool,
     pub pos: Pos,
 }
 
@@ -376,6 +374,8 @@ pub enum Extern {
         /// never fail, it is declared as such and allows for slightly
         /// better code to be generated.
         infallible: bool,
+        /// Whether this term's extractor can return multiple matches.
+        multi: bool,
     },
     /// An external constructor: `(constructor Term rustfunc)` form.
     Constructor {

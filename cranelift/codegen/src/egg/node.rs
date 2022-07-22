@@ -7,8 +7,9 @@ use std::hash::{Hash, Hasher};
 
 #[derive(Debug)]
 pub enum Node {
-    /// A blockparam. Effectively an input/root; refers to the
-    /// CLIF-level Value.
+    /// A blockparam. Effectively an input/root; does not refer to
+    /// predecessors' branch arguments, because this would create
+    /// cycles.
     Param {
         /// CLIF block this param comes from.
         block: Block,

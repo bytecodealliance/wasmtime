@@ -432,9 +432,10 @@ impl PatternSequence {
                                 panic!("Should have been expanded away")
                             }
                             TermKind::Decl {
-                                multi,
                                 extractor_kind:
-                                    Some(ExtractorKind::ExternalExtractor { infallible, .. }),
+                                    Some(ExtractorKind::ExternalExtractor {
+                                        infallible, multi, ..
+                                    }),
                                 ..
                             } => {
                                 // Evaluate all `input` args.

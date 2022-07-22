@@ -236,8 +236,6 @@ pub enum TermKind {
     Decl {
         /// Whether the term is marked as `pure`.
         pure: bool,
-        /// Whether the term is marked as `multi`.
-        multi: bool,
         /// The kind of this term's constructor, if any.
         constructor_kind: Option<ConstructorKind>,
         /// The kind of this term's extractor, if any.
@@ -274,6 +272,8 @@ pub enum ExtractorKind {
         name: Sym,
         /// Is the external extractor infallible?
         infallible: bool,
+        /// Whether the term is marked as `multi`.
+        multi: bool,
         /// The position where this external extractor was declared.
         pos: Pos,
     },
@@ -360,10 +360,12 @@ impl Term {
     pub fn extractor_sig(&self, tyenv: &TypeEnv) -> Option<ExternalSig> {
         match &self.kind {
             TermKind::Decl {
-                multi,
                 extractor_kind:
                     Some(ExtractorKind::ExternalExtractor {
-                        name, infallible, ..
+                        name,
+                        infallible,
+                        multi,
+                        ..
                     }),
                 ..
             } => Some(ExternalSig {
@@ -865,7 +867,6 @@ impl TermEnv {
                             constructor_kind: None,
                             extractor_kind: None,
                             pure: decl.pure,
-                            multi: decl.multi,
                         },
                     });
                 }
@@ -1232,6 +1233,7 @@ impl TermEnv {
                     ref func,
                     pos,
                     infallible,
+                    multi,
                 }) => {
                     let term_sym = tyenv.intern_mut(term);
                     let func_sym = tyenv.intern_mut(func);
@@ -1255,6 +1257,7 @@ impl TermEnv {
                                     name: func_sym,
                                     infallible,
                                     pos,
+                                    multi,
                                 });
                             }
                             Some(ExtractorKind::ExternalExtractor { pos: pos2, .. }) => {

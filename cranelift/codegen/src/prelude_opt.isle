@@ -1,0 +1,50 @@
+;; Prelude definitions specific to the mid-end.
+
+;;;;; eclass and enode access ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; An eclass ID.
+(type Id (primitive Id))
+
+;; What is the type of an eclass (if a single type)?
+(decl eclass_type (Type) Id)
+(extern extractor eclass_type eclass_type)
+
+;; Helper to wrap an Id-matching pattern and extract type.
+(decl has_type (Type Id) Id)
+(extractor (has_type ty id)
+           (and (eclass_type ty)
+                id))
+
+;; 1. Extract any pure node(s) for the given eclass ID.
+;; 2. Construct a pure node, returning a new (or deduplicated
+;;    already-existing) eclass ID.
+(decl pure_enode (Type InstructionImms IdArray) Id)
+(extern extractor multi pure_enode pure_enode_etor)
+(extern constructor pure_enode pure_enode_ctor)
+
+;; Type of an Id slice (for args).
+(type IdArray (primitive IdArray))
+
+(decl id_array_0 () IdArray)
+(extern constructor id_array_0 id_array_0)
+(extern extractor id_array_0 id_array_0)
+(decl id_array_1 (Id) IdArray)
+(extern constructor id_array_1 id_array_1)
+(extern extractor id_array_1 id_array_1)
+(decl id_array_2 (Id Id) IdArray)
+(extern constructor id_array_2 id_array_2)
+(extern extractor id_array_2 id_array_2)
+(decl id_array_3 (Id Id Id) IdArray)
+(extern constructor id_array_3 id_array_3)
+(extern extractor id_array_3 id_array_3)
+
+;;;;; optimization toplevel ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; The entry-point constructor invoked by the driver loop. Should
+;; return an eclass ID that is possibly a rewritten/simplified version
+;; of the expression. It is always legal to return the same ID
+;; (meaning, "no simplification possible").
+(decl simplify (Id) Id)
+
+;; Fallback.
+(rule -100 (simplify x) x)
