@@ -128,7 +128,7 @@ impl Record {
 }
 
 /// A `tuple` interface type
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Debug)]
 pub struct Tuple(Handle<TypeTupleIndex>);
 
 impl Tuple {
@@ -161,6 +161,26 @@ impl Tuple {
             .map(|ty| Type::from(ty, &self.0.types))
     }
 }
+
+impl PartialEq for Tuple {
+    fn eq(&self, other: &Self) -> bool {
+        if self.0 == other.0 {
+            return true;
+        }
+
+        let self_types = self.types();
+        let other_types = other.types();
+        if self_types.len() == other_types.len() {
+            self_types
+                .zip(other_types)
+                .all(|(self_type, other_type)| self_type == other_type)
+        } else {
+            false
+        }
+    }
+}
+
+impl Eq for Tuple {}
 
 /// A case declaration belonging to a `variant`
 pub struct Case<'a> {
@@ -270,7 +290,7 @@ impl Union {
 }
 
 /// An `option` interface type
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Debug)]
 pub struct Option(Handle<TypeInterfaceIndex>);
 
 impl Option {
@@ -299,8 +319,16 @@ impl Option {
     }
 }
 
+impl PartialEq for Option {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0 || self.ty() == other.ty()
+    }
+}
+
+impl Eq for Option {}
+
 /// An `expected` interface type
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Debug)]
 pub struct Expected(Handle<TypeExpectedIndex>);
 
 impl Expected {
@@ -336,6 +364,14 @@ impl Expected {
         Type::from(&self.0.types[self.0.index].err, &self.0.types)
     }
 }
+
+impl PartialEq for Expected {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0 || (self.ok() == other.ok() && self.err() == other.err())
+    }
+}
+
+impl Eq for Expected {}
 
 /// A `flags` interface type
 #[derive(Clone, PartialEq, Eq, Debug)]
