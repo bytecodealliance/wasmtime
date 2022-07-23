@@ -76,7 +76,7 @@ impl TargetIsa for X64Backend {
         let dynamic_stackslot_offsets = emit_result.dynamic_stackslot_offsets;
 
         if let Some(disasm) = emit_result.disasm.as_ref() {
-            log::debug!("disassembly:\n{}", disasm);
+            log::trace!("disassembly:\n{}", disasm);
         }
 
         Ok(MachCompileResult {

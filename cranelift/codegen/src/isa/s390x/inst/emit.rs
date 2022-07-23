@@ -852,6 +852,74 @@ fn enc_siy(opcode: u16, b1: Reg, d1: u32, i2: u8) -> [u8; 6] {
     enc
 }
 
+/// VRIa-type instructions.
+///
+///   47      39 35 31 15 11  7
+///   opcode1 v1 -  i2 m3 rxb opcode2
+///        40 36 32 16 12   8       0
+///
+fn enc_vri_a(opcode: u16, v1: Reg, i2: u16, m3: u8) -> [u8; 6] {
+    let opcode1 = ((opcode >> 8) & 0xff) as u8;
+    let opcode2 = (opcode & 0xff) as u8;
+    let rxb = rxb(Some(v1), None, None, None);
+    let v1 = machreg_to_vr(v1) & 0x0f;
+    let m3 = m3 & 0x0f;
+
+    let mut enc: [u8; 6] = [0; 6];
+    enc[0] = opcode1;
+    enc[1] = v1 << 4;
+    enc[2..4].copy_from_slice(&i2.to_be_bytes());
+    enc[4] = m3 << 4 | rxb;
+    enc[5] = opcode2;
+    enc
+}
+
+/// VRIb-type instructions.
+///
+///   47      39 35 31 23 15 11  7
+///   opcode1 v1 -  i2 i3 m4 rxb opcode2
+///        40 36 32 24 16 12   8       0
+///
+fn enc_vri_b(opcode: u16, v1: Reg, i2: u8, i3: u8, m4: u8) -> [u8; 6] {
+    let opcode1 = ((opcode >> 8) & 0xff) as u8;
+    let opcode2 = (opcode & 0xff) as u8;
+    let rxb = rxb(Some(v1), None, None, None);
+    let v1 = machreg_to_vr(v1) & 0x0f;
+    let m4 = m4 & 0x0f;
+
+    let mut enc: [u8; 6] = [0; 6];
+    enc[0] = opcode1;
+    enc[1] = v1 << 4;
+    enc[2] = i2;
+    enc[3] = i3;
+    enc[4] = m4 << 4 | rxb;
+    enc[5] = opcode2;
+    enc
+}
+
+/// VRIc-type instructions.
+///
+///   47      39 35 31 15 11  7
+///   opcode1 v1 v3 i2 m4 rxb opcode2
+///        40 36 32 16 12   8       0
+///
+fn enc_vri_c(opcode: u16, v1: Reg, i2: u16, v3: Reg, m4: u8) -> [u8; 6] {
+    let opcode1 = ((opcode >> 8) & 0xff) as u8;
+    let opcode2 = (opcode & 0xff) as u8;
+    let rxb = rxb(Some(v1), Some(v3), None, None);
+    let v1 = machreg_to_vr(v1) & 0x0f;
+    let v3 = machreg_to_vr(v3) & 0x0f;
+    let m4 = m4 & 0x0f;
+
+    let mut enc: [u8; 6] = [0; 6];
+    enc[0] = opcode1;
+    enc[1] = v1 << 4 | v3;
+    enc[2..4].copy_from_slice(&i2.to_be_bytes());
+    enc[4] = m4 << 4 | rxb;
+    enc[5] = opcode2;
+    enc
+}
+
 /// VRRa-type instructions.
 ///
 ///   47      39 35 31 23 19 15 11  7
@@ -874,6 +942,32 @@ fn enc_vrr_a(opcode: u16, v1: Reg, v2: Reg, m3: u8, m4: u8, m5: u8) -> [u8; 6] {
     enc[2] = 0;
     enc[3] = m5 << 4 | m4;
     enc[4] = m3 << 4 | rxb;
+    enc[5] = opcode2;
+    enc
+}
+
+/// VRRb-type instructions.
+///
+///   47      39 35 31 27 23 19 15 11  7
+///   opcode1 v1 v2 v3 -  m5 -  m4 rxb opcode2
+///        40 36 32 28 24 20 16 12   8       0
+///
+fn enc_vrr_b(opcode: u16, v1: Reg, v2: Reg, v3: Reg, m4: u8, m5: u8) -> [u8; 6] {
+    let opcode1 = ((opcode >> 8) & 0xff) as u8;
+    let opcode2 = (opcode & 0xff) as u8;
+    let rxb = rxb(Some(v1), Some(v2), Some(v3), None);
+    let v1 = machreg_to_vr(v1) & 0x0f;
+    let v2 = machreg_to_vr(v2) & 0x0f;
+    let v3 = machreg_to_vr(v3) & 0x0f;
+    let m4 = m4 & 0x0f;
+    let m5 = m5 & 0x0f;
+
+    let mut enc: [u8; 6] = [0; 6];
+    enc[0] = opcode1;
+    enc[1] = v1 << 4 | v2;
+    enc[2] = v3 << 4;
+    enc[3] = m5 << 4;
+    enc[4] = m4 << 4 | rxb;
     enc[5] = opcode2;
     enc
 }
@@ -928,6 +1022,56 @@ fn enc_vrr_e(opcode: u16, v1: Reg, v2: Reg, v3: Reg, v4: Reg, m5: u8, m6: u8) ->
     enc[2] = v3 << 4 | m6;
     enc[3] = m5;
     enc[4] = v4 << 4 | rxb;
+    enc[5] = opcode2;
+    enc
+}
+
+/// VRRf-type instructions.
+///
+///   47      39 35 31 27 11  7
+///   opcode1 v1 r2 r3 -  rxb opcode2
+///        40 36 32 28 12   8       0
+///
+fn enc_vrr_f(opcode: u16, v1: Reg, r2: Reg, r3: Reg) -> [u8; 6] {
+    let opcode1 = ((opcode >> 8) & 0xff) as u8;
+    let opcode2 = (opcode & 0xff) as u8;
+    let rxb = rxb(Some(v1), None, None, None);
+    let v1 = machreg_to_vr(v1) & 0x0f;
+    let r2 = machreg_to_gpr(r2) & 0x0f;
+    let r3 = machreg_to_gpr(r3) & 0x0f;
+
+    let mut enc: [u8; 6] = [0; 6];
+    enc[0] = opcode1;
+    enc[1] = v1 << 4 | r2;
+    enc[2] = r3 << 4;
+    enc[4] = rxb;
+    enc[5] = opcode2;
+    enc
+}
+
+/// VRSa-type instructions.
+///
+///   47      39 35 31 27 15 11  7
+///   opcode1 v1 v3 b2 d2 m4 rxb opcode2
+///        40 36 32 28 16 12   8       0
+///
+fn enc_vrs_a(opcode: u16, v1: Reg, b2: Reg, d2: u32, v3: Reg, m4: u8) -> [u8; 6] {
+    let opcode1 = ((opcode >> 8) & 0xff) as u8;
+    let opcode2 = (opcode & 0xff) as u8;
+    let rxb = rxb(Some(v1), Some(v3), None, None);
+    let v1 = machreg_to_vr(v1) & 0x0f;
+    let b2 = machreg_to_gpr(b2) & 0x0f;
+    let v3 = machreg_to_vr(v3) & 0x0f;
+    let d2_lo = (d2 & 0xff) as u8;
+    let d2_hi = ((d2 >> 8) & 0x0f) as u8;
+    let m4 = m4 & 0x0f;
+
+    let mut enc: [u8; 6] = [0; 6];
+    enc[0] = opcode1;
+    enc[1] = v1 << 4 | v3;
+    enc[2] = b2 << 4 | d2_hi;
+    enc[3] = d2_lo;
+    enc[4] = m4 << 4 | rxb;
     enc[5] = opcode2;
     enc
 }
@@ -1834,29 +1978,6 @@ impl MachInstEmit for Inst {
                     rd, &mem, opcode_rx, opcode_rxy, opcode_ril, true, sink, emit_info, state,
                 );
             }
-            &Inst::FpuLoad32 { rd, ref mem }
-            | &Inst::FpuLoad64 { rd, ref mem }
-            | &Inst::FpuLoadRev32 { rd, ref mem }
-            | &Inst::FpuLoadRev64 { rd, ref mem } => {
-                let rd = allocs.next_writable(rd);
-                let mem = mem.with_allocs(&mut allocs);
-
-                let (opcode_rx, opcode_rxy, opcode_vrx) = match self {
-                    &Inst::FpuLoad32 { .. } => (Some(0x78), Some(0xed64), 0xe703), // LE(Y), VLEF
-                    &Inst::FpuLoad64 { .. } => (Some(0x68), Some(0xed65), 0xe702), // LD(Y), VLEG
-                    &Inst::FpuLoadRev32 { .. } => (None, None, 0xe603),            // VLEBRF
-                    &Inst::FpuLoadRev64 { .. } => (None, None, 0xe602),            // VLEBRG
-                    _ => unreachable!(),
-                };
-                let rd = rd.to_reg();
-                if is_fpr(rd) && opcode_rx.is_some() {
-                    mem_emit(
-                        rd, &mem, opcode_rx, opcode_rxy, None, true, sink, emit_info, state,
-                    );
-                } else {
-                    mem_vrx_emit(rd, &mem, opcode_vrx, 0, true, sink, emit_info, state);
-                }
-            }
 
             &Inst::Store8 { rd, ref mem }
             | &Inst::Store16 { rd, ref mem }
@@ -1903,28 +2024,6 @@ impl MachInstEmit for Inst {
                     _ => unreachable!(),
                 };
                 mem_imm16_emit(imm, &mem, opcode, true, sink, emit_info, state);
-            }
-            &Inst::FpuStore32 { rd, ref mem }
-            | &Inst::FpuStore64 { rd, ref mem }
-            | &Inst::FpuStoreRev32 { rd, ref mem }
-            | &Inst::FpuStoreRev64 { rd, ref mem } => {
-                let rd = allocs.next(rd);
-                let mem = mem.with_allocs(&mut allocs);
-
-                let (opcode_rx, opcode_rxy, opcode_vrx) = match self {
-                    &Inst::FpuStore32 { .. } => (Some(0x70), Some(0xed66), 0xe70b), // STE(Y), VSTEF
-                    &Inst::FpuStore64 { .. } => (Some(0x60), Some(0xed67), 0xe70a), // STD(Y), VSTEG
-                    &Inst::FpuStoreRev32 { .. } => (None, None, 0xe60b),            // VSTEBRF
-                    &Inst::FpuStoreRev64 { .. } => (None, None, 0xe60a),            // VSTEBRG
-                    _ => unreachable!(),
-                };
-                if is_fpr(rd) && opcode_rx.is_some() {
-                    mem_emit(
-                        rd, &mem, opcode_rx, opcode_rxy, None, true, sink, emit_info, state,
-                    );
-                } else {
-                    mem_vrx_emit(rd, &mem, opcode_vrx, 0, true, sink, emit_info, state);
-                }
             }
 
             &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
@@ -2168,44 +2267,6 @@ impl MachInstEmit for Inst {
                     put(sink, &enc_vrr_a(opcode, rd.to_reg(), rm, 0, 0, 0));
                 }
             }
-            &Inst::MovToFpr32 { rd, rn } => {
-                let rd = allocs.next_writable(rd);
-                let rn = allocs.next(rn);
-
-                let (opcode, m4) = (0xe722, 2); // VLVG
-                put(sink, &enc_vrs_b(opcode, rd.to_reg(), zero_reg(), 0, rn, m4));
-            }
-            &Inst::MovToFpr64 { rd, rn } => {
-                let rd = allocs.next_writable(rd);
-                let rn = allocs.next(rn);
-
-                if is_fpr(rd.to_reg()) {
-                    let opcode = 0xb3c1; // LDGR
-                    put(sink, &enc_rre(opcode, rd.to_reg(), rn));
-                } else {
-                    let (opcode, m4) = (0xe722, 3); // VLVG
-                    put(sink, &enc_vrs_b(opcode, rd.to_reg(), zero_reg(), 0, rn, m4));
-                }
-            }
-            &Inst::MovFromFpr32 { rd, rn } => {
-                let rd = allocs.next_writable(rd);
-                let rn = allocs.next(rn);
-
-                let (opcode, m4) = (0xe721, 2); // VLGV
-                put(sink, &enc_vrs_c(opcode, rd.to_reg(), zero_reg(), 0, rn, m4));
-            }
-            &Inst::MovFromFpr64 { rd, rn } => {
-                let rd = allocs.next_writable(rd);
-                let rn = allocs.next(rn);
-
-                if is_fpr(rn) {
-                    let opcode = 0xb3cd; // LGDR
-                    put(sink, &enc_rre(opcode, rd.to_reg(), rn));
-                } else {
-                    let (opcode, m4) = (0xe721, 3); // VLVG
-                    put(sink, &enc_vrs_c(opcode, rd.to_reg(), zero_reg(), 0, rn, m4));
-                }
-            }
             &Inst::LoadFpuConst32 { rd, const_data } => {
                 let rd = allocs.next_writable(rd);
 
@@ -2213,9 +2274,11 @@ impl MachInstEmit for Inst {
                 let reg = writable_spilltmp_reg().to_reg();
                 put(sink, &enc_ri_b(opcode, reg, 8));
                 sink.put4(const_data.swap_bytes());
-                let inst = Inst::FpuLoad32 {
+                let inst = Inst::VecLoadLaneUndef {
+                    size: 32,
                     rd,
                     mem: MemArg::reg(reg, MemFlags::trusted()),
+                    lane_imm: 0,
                 };
                 inst.emit(&[], sink, emit_info, state);
             }
@@ -2226,9 +2289,11 @@ impl MachInstEmit for Inst {
                 let reg = writable_spilltmp_reg().to_reg();
                 put(sink, &enc_ri_b(opcode, reg, 12));
                 sink.put8(const_data.swap_bytes());
-                let inst = Inst::FpuLoad64 {
+                let inst = Inst::VecLoadLaneUndef {
+                    size: 64,
                     rd,
                     mem: MemArg::reg(reg, MemFlags::trusted()),
+                    lane_imm: 0,
                 };
                 inst.emit(&[], sink, emit_info, state);
             }
@@ -2236,21 +2301,30 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
 
-                let (opcode, m3, m5, opcode_fpr) = match fpu_op {
-                    FPUOp1::Abs32 => (0xe7cc, 2, 2, 0xb300),     // VFPSO, LPEBR
-                    FPUOp1::Abs64 => (0xe7cc, 3, 2, 0xb310),     // VFPSO, LPDBR
-                    FPUOp1::Neg32 => (0xe7cc, 2, 0, 0xb303),     // VFPSO, LCEBR
-                    FPUOp1::Neg64 => (0xe7cc, 3, 0, 0xb313),     // VFPSO, LCDBR
-                    FPUOp1::NegAbs32 => (0xe7cc, 2, 1, 0xb301),  // VFPSO, LNEBR
-                    FPUOp1::NegAbs64 => (0xe7cc, 3, 1, 0xb311),  // VFPSO, LNDBR
-                    FPUOp1::Sqrt32 => (0xe7ce, 2, 0, 0xb314),    // VFSQ, SQEBR
-                    FPUOp1::Sqrt64 => (0xe7ce, 3, 0, 0xb315),    // VFSQ, SQDBR
-                    FPUOp1::Cvt32To64 => (0xe7c4, 2, 0, 0xb304), // VFLL, LDEBR
+                let (opcode, m3, m4, m5, opcode_fpr) = match fpu_op {
+                    FPUOp1::Abs32 => (0xe7cc, 2, 8, 2, Some(0xb300)), // WFPSO, LPEBR
+                    FPUOp1::Abs64 => (0xe7cc, 3, 8, 2, Some(0xb310)), // WFPSO, LPDBR
+                    FPUOp1::Abs32x4 => (0xe7cc, 2, 0, 2, None),       // VFPSO
+                    FPUOp1::Abs64x2 => (0xe7cc, 3, 0, 2, None),       // VFPSO
+                    FPUOp1::Neg32 => (0xe7cc, 2, 8, 0, Some(0xb303)), // WFPSO, LCEBR
+                    FPUOp1::Neg64 => (0xe7cc, 3, 8, 0, Some(0xb313)), // WFPSO, LCDBR
+                    FPUOp1::Neg32x4 => (0xe7cc, 2, 0, 0, None),       // VFPSO
+                    FPUOp1::Neg64x2 => (0xe7cc, 3, 0, 0, None),       // VFPSO
+                    FPUOp1::NegAbs32 => (0xe7cc, 2, 8, 1, Some(0xb301)), // WFPSO, LNEBR
+                    FPUOp1::NegAbs64 => (0xe7cc, 3, 8, 1, Some(0xb311)), // WFPSO, LNDBR
+                    FPUOp1::NegAbs32x4 => (0xe7cc, 2, 0, 1, None),    // VFPSO
+                    FPUOp1::NegAbs64x2 => (0xe7cc, 3, 0, 1, None),    // VFPSO
+                    FPUOp1::Sqrt32 => (0xe7ce, 2, 8, 0, Some(0xb314)), // WFSQ, SQEBR
+                    FPUOp1::Sqrt64 => (0xe7ce, 3, 8, 0, Some(0xb315)), // WFSQ, SQDBR
+                    FPUOp1::Sqrt32x4 => (0xe7ce, 2, 0, 0, None),      // VFSQ
+                    FPUOp1::Sqrt64x2 => (0xe7ce, 3, 0, 0, None),      // VFSQ
+                    FPUOp1::Cvt32To64 => (0xe7c4, 2, 8, 0, Some(0xb304)), // WFLL, LDEBR
+                    FPUOp1::Cvt32x4To64x2 => (0xe7c4, 2, 0, 0, None), // VFLL
                 };
-                if is_fpr(rd.to_reg()) && is_fpr(rn) {
-                    put(sink, &enc_rre(opcode_fpr, rd.to_reg(), rn));
+                if m4 == 8 && is_fpr(rd.to_reg()) && is_fpr(rn) {
+                    put(sink, &enc_rre(opcode_fpr.unwrap(), rd.to_reg(), rn));
                 } else {
-                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, m3, 8, m5));
+                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, m3, m4, m5));
                 }
             }
             &Inst::FpuRRR { fpu_op, rd, rn, rm } => {
@@ -2258,24 +2332,45 @@ impl MachInstEmit for Inst {
                 let rn = allocs.next(rn);
                 let rm = allocs.next(rm);
 
-                let (opcode, m4, m6, opcode_fpr) = match fpu_op {
-                    FPUOp2::Add32 => (0xe7e3, 2, 0, Some(0xb30a)), // VFA, AEBR
-                    FPUOp2::Add64 => (0xe7e3, 3, 0, Some(0xb31a)), // VFA, ADBR
-                    FPUOp2::Sub32 => (0xe7e2, 2, 0, Some(0xb30b)), // VFS, SEBR
-                    FPUOp2::Sub64 => (0xe7e2, 3, 0, Some(0xb31b)), // VFS, SDBR
-                    FPUOp2::Mul32 => (0xe7e7, 2, 0, Some(0xb317)), // VFM, MEEBR
-                    FPUOp2::Mul64 => (0xe7e7, 3, 0, Some(0xb31c)), // VFM, MDBR
-                    FPUOp2::Div32 => (0xe7e5, 2, 0, Some(0xb30d)), // VFD, DEBR
-                    FPUOp2::Div64 => (0xe7e5, 3, 0, Some(0xb31d)), // VFD, DDBR
-                    FPUOp2::Max32 => (0xe7ef, 2, 1, None),         // VFMAX
-                    FPUOp2::Max64 => (0xe7ef, 3, 1, None),         // VFMAX
-                    FPUOp2::Min32 => (0xe7ee, 2, 1, None),         // VFMIN
-                    FPUOp2::Min64 => (0xe7ee, 3, 1, None),         // VFMIN
+                let (opcode, m4, m5, m6, opcode_fpr) = match fpu_op {
+                    FPUOp2::Add32 => (0xe7e3, 2, 8, 0, Some(0xb30a)), // WFA, AEBR
+                    FPUOp2::Add64 => (0xe7e3, 3, 8, 0, Some(0xb31a)), // WFA, ADBR
+                    FPUOp2::Add32x4 => (0xe7e3, 2, 0, 0, None),       // VFA
+                    FPUOp2::Add64x2 => (0xe7e3, 3, 0, 0, None),       // VFA
+                    FPUOp2::Sub32 => (0xe7e2, 2, 8, 0, Some(0xb30b)), // WFS, SEBR
+                    FPUOp2::Sub64 => (0xe7e2, 3, 8, 0, Some(0xb31b)), // WFS, SDBR
+                    FPUOp2::Sub32x4 => (0xe7e2, 2, 0, 0, None),       // VFS
+                    FPUOp2::Sub64x2 => (0xe7e2, 3, 0, 0, None),       // VFS
+                    FPUOp2::Mul32 => (0xe7e7, 2, 8, 0, Some(0xb317)), // WFM, MEEBR
+                    FPUOp2::Mul64 => (0xe7e7, 3, 8, 0, Some(0xb31c)), // WFM, MDBR
+                    FPUOp2::Mul32x4 => (0xe7e7, 2, 0, 0, None),       // VFM
+                    FPUOp2::Mul64x2 => (0xe7e7, 3, 0, 0, None),       // VFM
+                    FPUOp2::Div32 => (0xe7e5, 2, 8, 0, Some(0xb30d)), // WFD, DEBR
+                    FPUOp2::Div64 => (0xe7e5, 3, 8, 0, Some(0xb31d)), // WFD, DDBR
+                    FPUOp2::Div32x4 => (0xe7e5, 2, 0, 0, None),       // VFD
+                    FPUOp2::Div64x2 => (0xe7e5, 3, 0, 0, None),       // VFD
+                    FPUOp2::Max32 => (0xe7ef, 2, 8, 1, None),         // WFMAX
+                    FPUOp2::Max64 => (0xe7ef, 3, 8, 1, None),         // WFMAX
+                    FPUOp2::Max32x4 => (0xe7ef, 2, 0, 1, None),       // VFMAX
+                    FPUOp2::Max64x2 => (0xe7ef, 3, 0, 1, None),       // VFMAX
+                    FPUOp2::Min32 => (0xe7ee, 2, 8, 1, None),         // WFMIN
+                    FPUOp2::Min64 => (0xe7ee, 3, 8, 1, None),         // WFMIN
+                    FPUOp2::Min32x4 => (0xe7ee, 2, 0, 1, None),       // VFMIN
+                    FPUOp2::Min64x2 => (0xe7ee, 3, 0, 1, None),       // VFMIN
+                    FPUOp2::MaxPseudo32 => (0xe7ef, 2, 8, 3, None),   // WFMAX
+                    FPUOp2::MaxPseudo64 => (0xe7ef, 3, 8, 3, None),   // WFMAX
+                    FPUOp2::MaxPseudo32x4 => (0xe7ef, 2, 0, 3, None), // VFMAX
+                    FPUOp2::MaxPseudo64x2 => (0xe7ef, 3, 0, 3, None), // VFMAX
+                    FPUOp2::MinPseudo32 => (0xe7ee, 2, 8, 3, None),   // WFMIN
+                    FPUOp2::MinPseudo64 => (0xe7ee, 3, 8, 3, None),   // WFMIN
+                    FPUOp2::MinPseudo32x4 => (0xe7ee, 2, 0, 3, None), // VFMIN
+                    FPUOp2::MinPseudo64x2 => (0xe7ee, 3, 0, 3, None), // VFMIN
                 };
-                if opcode_fpr.is_some() && rd.to_reg() == rn && is_fpr(rn) && is_fpr(rm) {
+                if m5 == 8 && opcode_fpr.is_some() && rd.to_reg() == rn && is_fpr(rn) && is_fpr(rm)
+                {
                     put(sink, &enc_rre(opcode_fpr.unwrap(), rd.to_reg(), rm));
                 } else {
-                    put(sink, &enc_vrr_c(opcode, rd.to_reg(), rn, rm, m4, 8, m6));
+                    put(sink, &enc_vrr_c(opcode, rd.to_reg(), rn, rm, m4, m5, m6));
                 }
             }
             &Inst::FpuRRRR {
@@ -2290,16 +2385,20 @@ impl MachInstEmit for Inst {
                 let rm = allocs.next(rm);
                 let ra = allocs.next(ra);
 
-                let (opcode, m6, opcode_fpr) = match fpu_op {
-                    FPUOp3::MAdd32 => (0xe78f, 2, 0xb30e), // VFMA, MAEBR
-                    FPUOp3::MAdd64 => (0xe78f, 3, 0xb31e), // VFMA, MADBR
-                    FPUOp3::MSub32 => (0xe78e, 2, 0xb30f), // VFMS, MSEBR
-                    FPUOp3::MSub64 => (0xe78e, 3, 0xb31f), // VFMS, MSDBR
+                let (opcode, m5, m6, opcode_fpr) = match fpu_op {
+                    FPUOp3::MAdd32 => (0xe78f, 8, 2, Some(0xb30e)), // WFMA, MAEBR
+                    FPUOp3::MAdd64 => (0xe78f, 8, 3, Some(0xb31e)), // WFMA, MADBR
+                    FPUOp3::MAdd32x4 => (0xe78f, 0, 2, None),       // VFMA
+                    FPUOp3::MAdd64x2 => (0xe78f, 0, 3, None),       // VFMA
+                    FPUOp3::MSub32 => (0xe78e, 8, 2, Some(0xb30f)), // WFMS, MSEBR
+                    FPUOp3::MSub64 => (0xe78e, 8, 3, Some(0xb31f)), // WFMS, MSDBR
+                    FPUOp3::MSub32x4 => (0xe78e, 0, 2, None),       // VFMS
+                    FPUOp3::MSub64x2 => (0xe78e, 0, 3, None),       // VFMS
                 };
-                if rd.to_reg() == ra && is_fpr(rn) && is_fpr(rm) && is_fpr(ra) {
-                    put(sink, &enc_rrd(opcode_fpr, rd.to_reg(), rm, rn));
+                if m5 == 8 && rd.to_reg() == ra && is_fpr(rn) && is_fpr(rm) && is_fpr(ra) {
+                    put(sink, &enc_rrd(opcode_fpr.unwrap(), rd.to_reg(), rm, rn));
                 } else {
-                    put(sink, &enc_vrr_e(opcode, rd.to_reg(), rn, rm, ra, 8, m6));
+                    put(sink, &enc_vrr_e(opcode, rd.to_reg(), rn, rm, ra, m5, m6));
                 }
             }
             &Inst::FpuRound { op, mode, rd, rn } => {
@@ -2315,26 +2414,37 @@ impl MachInstEmit for Inst {
                     FpuRoundMode::ToPosInfinity => 6,
                     FpuRoundMode::ToNegInfinity => 7,
                 };
-                let (opcode, m3, opcode_fpr) = match op {
-                    FpuRoundOp::Cvt64To32 => (0xe7c5, 3, Some(0xb344)), // VFLR, LEDBR(A)
-                    FpuRoundOp::Round32 => (0xe7c7, 2, Some(0xb357)),   // VFI, FIEBR
-                    FpuRoundOp::Round64 => (0xe7c7, 3, Some(0xb35f)),   // VFI, FIDBR
-                    FpuRoundOp::ToSInt32 => (0xe7c2, 2, None),          // VCSFP
-                    FpuRoundOp::ToSInt64 => (0xe7c2, 3, None),          // VCSFP
-                    FpuRoundOp::ToUInt32 => (0xe7c0, 2, None),          // VCLFP
-                    FpuRoundOp::ToUInt64 => (0xe7c0, 3, None),          // VCLFP
-                    FpuRoundOp::FromSInt32 => (0xe7c3, 2, None),        // VCFPS
-                    FpuRoundOp::FromSInt64 => (0xe7c3, 3, None),        // VCFPS
-                    FpuRoundOp::FromUInt32 => (0xe7c1, 2, None),        // VCFPL
-                    FpuRoundOp::FromUInt64 => (0xe7c1, 3, None),        // VCFPL
+                let (opcode, m3, m4, opcode_fpr) = match op {
+                    FpuRoundOp::Cvt64To32 => (0xe7c5, 3, 8, Some(0xb344)), // WFLR, LEDBR(A)
+                    FpuRoundOp::Cvt64x2To32x4 => (0xe7c5, 3, 0, None),     // VFLR
+                    FpuRoundOp::Round32 => (0xe7c7, 2, 8, Some(0xb357)),   // WFI, FIEBR
+                    FpuRoundOp::Round64 => (0xe7c7, 3, 8, Some(0xb35f)),   // WFI, FIDBR
+                    FpuRoundOp::Round32x4 => (0xe7c7, 2, 0, None),         // VFI
+                    FpuRoundOp::Round64x2 => (0xe7c7, 3, 0, None),         // VFI
+                    FpuRoundOp::ToSInt32 => (0xe7c2, 2, 8, None),          // WCSFP
+                    FpuRoundOp::ToSInt64 => (0xe7c2, 3, 8, None),          // WCSFP
+                    FpuRoundOp::ToUInt32 => (0xe7c0, 2, 8, None),          // WCLFP
+                    FpuRoundOp::ToUInt64 => (0xe7c0, 3, 8, None),          // WCLFP
+                    FpuRoundOp::ToSInt32x4 => (0xe7c2, 2, 0, None),        // VCSFP
+                    FpuRoundOp::ToSInt64x2 => (0xe7c2, 3, 0, None),        // VCSFP
+                    FpuRoundOp::ToUInt32x4 => (0xe7c0, 2, 0, None),        // VCLFP
+                    FpuRoundOp::ToUInt64x2 => (0xe7c0, 3, 0, None),        // VCLFP
+                    FpuRoundOp::FromSInt32 => (0xe7c3, 2, 8, None),        // WCFPS
+                    FpuRoundOp::FromSInt64 => (0xe7c3, 3, 8, None),        // WCFPS
+                    FpuRoundOp::FromUInt32 => (0xe7c1, 2, 8, None),        // WCFPL
+                    FpuRoundOp::FromUInt64 => (0xe7c1, 3, 8, None),        // WCFPL
+                    FpuRoundOp::FromSInt32x4 => (0xe7c3, 2, 0, None),      // VCFPS
+                    FpuRoundOp::FromSInt64x2 => (0xe7c3, 3, 0, None),      // VCFPS
+                    FpuRoundOp::FromUInt32x4 => (0xe7c1, 2, 0, None),      // VCFPL
+                    FpuRoundOp::FromUInt64x2 => (0xe7c1, 3, 0, None),      // VCFPL
                 };
-                if opcode_fpr.is_some() && is_fpr(rd.to_reg()) && is_fpr(rn) {
+                if m4 == 8 && opcode_fpr.is_some() && is_fpr(rd.to_reg()) && is_fpr(rn) {
                     put(
                         sink,
                         &enc_rrf_cde(opcode_fpr.unwrap(), rd.to_reg(), rn, mode, 0),
                     );
                 } else {
-                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, m3, 8, mode));
+                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, m3, m4, mode));
                 }
             }
             &Inst::FpuCmp32 { rn, rm } => {
@@ -2361,6 +2471,169 @@ impl MachInstEmit for Inst {
                     put(sink, &enc_vrr_a(opcode, rn, rm, 3, 0, 0));
                 }
             }
+
+            &Inst::VecRRR { op, rd, rn, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
+                let (opcode, m4) = match op {
+                    VecBinaryOp::Add8x16 => (0xe7f3, 0),       // VAB
+                    VecBinaryOp::Add16x8 => (0xe7f3, 1),       // VAH
+                    VecBinaryOp::Add32x4 => (0xe7f3, 2),       // VAF
+                    VecBinaryOp::Add64x2 => (0xe7f3, 3),       // VAG
+                    VecBinaryOp::Sub8x16 => (0xe7f7, 0),       // VSB
+                    VecBinaryOp::Sub16x8 => (0xe7f7, 1),       // VSH
+                    VecBinaryOp::Sub32x4 => (0xe7f7, 2),       // VSF
+                    VecBinaryOp::Sub64x2 => (0xe7f7, 3),       // VSG
+                    VecBinaryOp::Mul8x16 => (0xe7a2, 0),       // VMLB
+                    VecBinaryOp::Mul16x8 => (0xe7a2, 1),       // VMLHW
+                    VecBinaryOp::Mul32x4 => (0xe7a2, 2),       // VMLF
+                    VecBinaryOp::UMulHi8x16 => (0xe7a1, 0),    // VMLHB
+                    VecBinaryOp::UMulHi16x8 => (0xe7a1, 1),    // VMLHH
+                    VecBinaryOp::UMulHi32x4 => (0xe7a1, 2),    // VMLHF
+                    VecBinaryOp::SMulHi8x16 => (0xe7a3, 0),    // VMHB
+                    VecBinaryOp::SMulHi16x8 => (0xe7a3, 1),    // VMHH
+                    VecBinaryOp::SMulHi32x4 => (0xe7a3, 2),    // VMHF
+                    VecBinaryOp::UMulEven8x16 => (0xe7a4, 0),  // VMLEB
+                    VecBinaryOp::UMulEven16x8 => (0xe7a4, 1),  // VMLEH
+                    VecBinaryOp::UMulEven32x4 => (0xe7a4, 2),  // VMLEF
+                    VecBinaryOp::SMulEven8x16 => (0xe7a6, 0),  // VMEB
+                    VecBinaryOp::SMulEven16x8 => (0xe7a6, 1),  // VMEH
+                    VecBinaryOp::SMulEven32x4 => (0xe7a6, 2),  // VMEF
+                    VecBinaryOp::UMulOdd8x16 => (0xe7a5, 0),   // VMLOB
+                    VecBinaryOp::UMulOdd16x8 => (0xe7a5, 1),   // VMLOH
+                    VecBinaryOp::UMulOdd32x4 => (0xe7a5, 2),   // VMLOF
+                    VecBinaryOp::SMulOdd8x16 => (0xe7a7, 0),   // VMOB
+                    VecBinaryOp::SMulOdd16x8 => (0xe7a7, 1),   // VMOH
+                    VecBinaryOp::SMulOdd32x4 => (0xe7a7, 2),   // VMOF
+                    VecBinaryOp::UMax8x16 => (0xe7fd, 0),      // VMXLB
+                    VecBinaryOp::UMax16x8 => (0xe7fd, 1),      // VMXLH
+                    VecBinaryOp::UMax32x4 => (0xe7fd, 2),      // VMXLF
+                    VecBinaryOp::UMax64x2 => (0xe7fd, 3),      // VMXLG
+                    VecBinaryOp::SMax8x16 => (0xe7ff, 0),      // VMXB
+                    VecBinaryOp::SMax16x8 => (0xe7ff, 1),      // VMXH
+                    VecBinaryOp::SMax32x4 => (0xe7ff, 2),      // VMXF
+                    VecBinaryOp::SMax64x2 => (0xe7ff, 3),      // VMXG
+                    VecBinaryOp::UMin8x16 => (0xe7fc, 0),      // VMNLB
+                    VecBinaryOp::UMin16x8 => (0xe7fc, 1),      // VMNLH
+                    VecBinaryOp::UMin32x4 => (0xe7fc, 2),      // VMNLF
+                    VecBinaryOp::UMin64x2 => (0xe7fc, 3),      // VMNLG
+                    VecBinaryOp::SMin8x16 => (0xe7fe, 0),      // VMNB
+                    VecBinaryOp::SMin16x8 => (0xe7fe, 1),      // VMNH
+                    VecBinaryOp::SMin32x4 => (0xe7fe, 2),      // VMNF
+                    VecBinaryOp::SMin64x2 => (0xe7fe, 3),      // VMNG
+                    VecBinaryOp::UAvg8x16 => (0xe7f0, 0),      // VAVGLB
+                    VecBinaryOp::UAvg16x8 => (0xe7f0, 1),      // VAVGLH
+                    VecBinaryOp::UAvg32x4 => (0xe7f0, 2),      // VAVGLF
+                    VecBinaryOp::UAvg64x2 => (0xe7f0, 3),      // VAVGLG
+                    VecBinaryOp::SAvg8x16 => (0xe7f2, 0),      // VAVGB
+                    VecBinaryOp::SAvg16x8 => (0xe7f2, 1),      // VAVGH
+                    VecBinaryOp::SAvg32x4 => (0xe7f2, 2),      // VAVGF
+                    VecBinaryOp::SAvg64x2 => (0xe7f2, 3),      // VAVGG
+                    VecBinaryOp::And128 => (0xe768, 0),        // VN
+                    VecBinaryOp::Orr128 => (0xe76a, 0),        // VO
+                    VecBinaryOp::Xor128 => (0xe76d, 0),        // VX
+                    VecBinaryOp::NotAnd128 => (0xe76e, 0),     // VNN
+                    VecBinaryOp::NotOrr128 => (0xe76b, 0),     // VNO
+                    VecBinaryOp::NotXor128 => (0xe76c, 0),     // VNX
+                    VecBinaryOp::AndNot128 => (0xe769, 0),     // VNC
+                    VecBinaryOp::OrrNot128 => (0xe76f, 0),     // VOC
+                    VecBinaryOp::BitPermute128 => (0xe785, 0), // VBPERM
+                    VecBinaryOp::LShLByByte128 => (0xe775, 0), // VSLB
+                    VecBinaryOp::LShRByByte128 => (0xe77d, 0), // VSRLB
+                    VecBinaryOp::AShRByByte128 => (0xe77f, 0), // VSRAB
+                    VecBinaryOp::LShLByBit128 => (0xe774, 0),  // VSL
+                    VecBinaryOp::LShRByBit128 => (0xe77c, 0),  // VSRL
+                    VecBinaryOp::AShRByBit128 => (0xe77e, 0),  // VSRA
+                    VecBinaryOp::Pack16x8 => (0xe794, 1),      // VPKH
+                    VecBinaryOp::Pack32x4 => (0xe794, 2),      // VPKF
+                    VecBinaryOp::Pack64x2 => (0xe794, 3),      // VPKG
+                    VecBinaryOp::PackUSat16x8 => (0xe795, 1),  // VPKLSH
+                    VecBinaryOp::PackUSat32x4 => (0xe795, 2),  // VPKLSF
+                    VecBinaryOp::PackUSat64x2 => (0xe795, 3),  // VPKLSG
+                    VecBinaryOp::PackSSat16x8 => (0xe797, 1),  // VPKSH
+                    VecBinaryOp::PackSSat32x4 => (0xe797, 2),  // VPKSF
+                    VecBinaryOp::PackSSat64x2 => (0xe797, 3),  // VPKSG
+                    VecBinaryOp::MergeLow8x16 => (0xe760, 0),  // VMRLB
+                    VecBinaryOp::MergeLow16x8 => (0xe760, 1),  // VMRLH
+                    VecBinaryOp::MergeLow32x4 => (0xe760, 2),  // VMRLF
+                    VecBinaryOp::MergeLow64x2 => (0xe760, 3),  // VMRLG
+                    VecBinaryOp::MergeHigh8x16 => (0xe761, 0), // VMRHB
+                    VecBinaryOp::MergeHigh16x8 => (0xe761, 1), // VMRHH
+                    VecBinaryOp::MergeHigh32x4 => (0xe761, 2), // VMRHF
+                    VecBinaryOp::MergeHigh64x2 => (0xe761, 3), // VMRHG
+                };
+
+                put(sink, &enc_vrr_c(opcode, rd.to_reg(), rn, rm, m4, 0, 0));
+            }
+            &Inst::VecRR { op, rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
+                let (opcode, m3) = match op {
+                    VecUnaryOp::Abs8x16 => (0xe7df, 0),         // VLPB
+                    VecUnaryOp::Abs16x8 => (0xe7df, 1),         // VLPH
+                    VecUnaryOp::Abs32x4 => (0xe7df, 2),         // VLPF
+                    VecUnaryOp::Abs64x2 => (0xe7df, 3),         // VLPG
+                    VecUnaryOp::Neg8x16 => (0xe7de, 0),         // VLCB
+                    VecUnaryOp::Neg16x8 => (0xe7de, 1),         // VLCH
+                    VecUnaryOp::Neg32x4 => (0xe7de, 2),         // VLCF
+                    VecUnaryOp::Neg64x2 => (0xe7de, 3),         // VLCG
+                    VecUnaryOp::Popcnt8x16 => (0xe750, 0),      // VPOPCTB
+                    VecUnaryOp::Popcnt16x8 => (0xe750, 1),      // VPOPCTH
+                    VecUnaryOp::Popcnt32x4 => (0xe750, 2),      // VPOPCTF
+                    VecUnaryOp::Popcnt64x2 => (0xe750, 3),      // VPOPCTG
+                    VecUnaryOp::UnpackULow8x16 => (0xe7d4, 0),  // VUPLLB
+                    VecUnaryOp::UnpackULow16x8 => (0xe7d4, 1),  // VUPLLH
+                    VecUnaryOp::UnpackULow32x4 => (0xe7d4, 2),  // VUPLLF
+                    VecUnaryOp::UnpackUHigh8x16 => (0xe7d5, 0), // VUPLHB
+                    VecUnaryOp::UnpackUHigh16x8 => (0xe7d5, 1), // VUPLHH
+                    VecUnaryOp::UnpackUHigh32x4 => (0xe7d5, 2), // VUPLHF
+                    VecUnaryOp::UnpackSLow8x16 => (0xe7d6, 0),  // VUPLB
+                    VecUnaryOp::UnpackSLow16x8 => (0xe7d6, 1),  // VUPLH
+                    VecUnaryOp::UnpackSLow32x4 => (0xe7d6, 2),  // VUPLF
+                    VecUnaryOp::UnpackSHigh8x16 => (0xe7d7, 0), // VUPHB
+                    VecUnaryOp::UnpackSHigh16x8 => (0xe7d7, 1), // VUPHH
+                    VecUnaryOp::UnpackSHigh32x4 => (0xe7d7, 2), // VUPHF
+                };
+
+                put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, m3, 0, 0));
+            }
+            &Inst::VecShiftRR {
+                shift_op,
+                rd,
+                rn,
+                shift_imm,
+                shift_reg,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let shift_reg = allocs.next(shift_reg);
+
+                let (opcode, m4) = match shift_op {
+                    VecShiftOp::RotL8x16 => (0xe733, 0), // VERLLB
+                    VecShiftOp::RotL16x8 => (0xe733, 1), // VERLLH
+                    VecShiftOp::RotL32x4 => (0xe733, 2), // VERLLF
+                    VecShiftOp::RotL64x2 => (0xe733, 3), // VERLLG
+                    VecShiftOp::LShL8x16 => (0xe730, 0), // VESLB
+                    VecShiftOp::LShL16x8 => (0xe730, 1), // VESLH
+                    VecShiftOp::LShL32x4 => (0xe730, 2), // VESLF
+                    VecShiftOp::LShL64x2 => (0xe730, 3), // VESLG
+                    VecShiftOp::LShR8x16 => (0xe738, 0), // VESRLB
+                    VecShiftOp::LShR16x8 => (0xe738, 1), // VESRLH
+                    VecShiftOp::LShR32x4 => (0xe738, 2), // VESRLF
+                    VecShiftOp::LShR64x2 => (0xe738, 3), // VESRLG
+                    VecShiftOp::AShR8x16 => (0xe73a, 0), // VESRAB
+                    VecShiftOp::AShR16x8 => (0xe73a, 1), // VESRAH
+                    VecShiftOp::AShR32x4 => (0xe73a, 2), // VESRAF
+                    VecShiftOp::AShR64x2 => (0xe73a, 3), // VESRAG
+                };
+                put(
+                    sink,
+                    &enc_vrs_a(opcode, rd.to_reg(), shift_reg, shift_imm.into(), rn, m4),
+                );
+            }
             &Inst::VecSelect { rd, rn, rm, ra } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
@@ -2369,6 +2642,442 @@ impl MachInstEmit for Inst {
 
                 let opcode = 0xe78d; // VSEL
                 put(sink, &enc_vrr_e(opcode, rd.to_reg(), rn, rm, ra, 0, 0));
+            }
+            &Inst::VecPermute { rd, rn, rm, ra } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                let ra = allocs.next(ra);
+
+                let opcode = 0xe78c; // VPERM
+                put(sink, &enc_vrr_e(opcode, rd.to_reg(), rn, rm, ra, 0, 0));
+            }
+            &Inst::VecPermuteDWImm {
+                rd,
+                rn,
+                rm,
+                idx1,
+                idx2,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                let m4 = (idx1 & 1) * 4 + (idx2 & 1);
+
+                let opcode = 0xe784; // VPDI
+                put(sink, &enc_vrr_c(opcode, rd.to_reg(), rn, rm, m4, 0, 0));
+            }
+            &Inst::VecIntCmp { op, rd, rn, rm } | &Inst::VecIntCmpS { op, rd, rn, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
+                let (opcode, m4) = match op {
+                    VecIntCmpOp::CmpEq8x16 => (0xe7f8, 0),  // VCEQB
+                    VecIntCmpOp::CmpEq16x8 => (0xe7f8, 1),  // VCEQH
+                    VecIntCmpOp::CmpEq32x4 => (0xe7f8, 2),  // VCEQF
+                    VecIntCmpOp::CmpEq64x2 => (0xe7f8, 3),  // VCEQG
+                    VecIntCmpOp::SCmpHi8x16 => (0xe7fb, 0), // VCHB
+                    VecIntCmpOp::SCmpHi16x8 => (0xe7fb, 1), // VCHH
+                    VecIntCmpOp::SCmpHi32x4 => (0xe7fb, 2), // VCHG
+                    VecIntCmpOp::SCmpHi64x2 => (0xe7fb, 3), // VCHG
+                    VecIntCmpOp::UCmpHi8x16 => (0xe7f9, 0), // VCHLB
+                    VecIntCmpOp::UCmpHi16x8 => (0xe7f9, 1), // VCHLH
+                    VecIntCmpOp::UCmpHi32x4 => (0xe7f9, 2), // VCHLG
+                    VecIntCmpOp::UCmpHi64x2 => (0xe7f9, 3), // VCHLG
+                };
+                let m5 = match self {
+                    &Inst::VecIntCmp { .. } => 0,
+                    &Inst::VecIntCmpS { .. } => 1,
+                    _ => unreachable!(),
+                };
+
+                put(sink, &enc_vrr_b(opcode, rd.to_reg(), rn, rm, m4, m5));
+            }
+            &Inst::VecFloatCmp { op, rd, rn, rm } | &Inst::VecFloatCmpS { op, rd, rn, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
+                let (opcode, m4) = match op {
+                    VecFloatCmpOp::CmpEq32x4 => (0xe7e8, 2),   // VFCESB
+                    VecFloatCmpOp::CmpEq64x2 => (0xe7e8, 3),   // VFCEDB
+                    VecFloatCmpOp::CmpHi32x4 => (0xe7eb, 2),   // VFCHSB
+                    VecFloatCmpOp::CmpHi64x2 => (0xe7eb, 3),   // VFCHDB
+                    VecFloatCmpOp::CmpHiEq32x4 => (0xe7ea, 2), // VFCHESB
+                    VecFloatCmpOp::CmpHiEq64x2 => (0xe7ea, 3), // VFCHEDB
+                };
+                let m6 = match self {
+                    &Inst::VecFloatCmp { .. } => 0,
+                    &Inst::VecFloatCmpS { .. } => 1,
+                    _ => unreachable!(),
+                };
+
+                put(sink, &enc_vrr_c(opcode, rd.to_reg(), rn, rm, m4, 0, m6));
+            }
+
+            &Inst::VecLoad { rd, ref mem } | &Inst::VecLoadRev { rd, ref mem } => {
+                let rd = allocs.next_writable(rd);
+                let mem = mem.with_allocs(&mut allocs);
+
+                let (opcode, m3) = match self {
+                    &Inst::VecLoad { .. } => (0xe706, 0),    // VL
+                    &Inst::VecLoadRev { .. } => (0xe606, 4), // VLBRQ
+                    _ => unreachable!(),
+                };
+                mem_vrx_emit(rd.to_reg(), &mem, opcode, m3, true, sink, emit_info, state);
+            }
+            &Inst::VecStore { rd, ref mem } | &Inst::VecStoreRev { rd, ref mem } => {
+                let rd = allocs.next(rd);
+                let mem = mem.with_allocs(&mut allocs);
+
+                let (opcode, m3) = match self {
+                    &Inst::VecStore { .. } => (0xe70e, 0),    // VST
+                    &Inst::VecStoreRev { .. } => (0xe60e, 4), // VSTBRQ
+                    _ => unreachable!(),
+                };
+                mem_vrx_emit(rd, &mem, opcode, m3, true, sink, emit_info, state);
+            }
+            &Inst::VecLoadReplicate { size, rd, ref mem }
+            | &Inst::VecLoadReplicateRev { size, rd, ref mem } => {
+                let rd = allocs.next_writable(rd);
+                let mem = mem.with_allocs(&mut allocs);
+
+                let (opcode, m3) = match (self, size) {
+                    (&Inst::VecLoadReplicate { .. }, 8) => (0xe705, 0), // VLREPB
+                    (&Inst::VecLoadReplicate { .. }, 16) => (0xe705, 1), // VLREPH
+                    (&Inst::VecLoadReplicate { .. }, 32) => (0xe705, 2), // VLREPF
+                    (&Inst::VecLoadReplicate { .. }, 64) => (0xe705, 3), // VLREPG
+                    (&Inst::VecLoadReplicateRev { .. }, 16) => (0xe605, 1), // VLREPBRH
+                    (&Inst::VecLoadReplicateRev { .. }, 32) => (0xe605, 2), // VLREPBRF
+                    (&Inst::VecLoadReplicateRev { .. }, 64) => (0xe605, 3), // VLREPBRG
+                    _ => unreachable!(),
+                };
+                mem_vrx_emit(rd.to_reg(), &mem, opcode, m3, true, sink, emit_info, state);
+            }
+
+            &Inst::VecMov { rd, rn } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
+                let opcode = 0xe756; // VLR
+                put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, 0, 0, 0));
+            }
+            &Inst::VecCMov { rd, cond, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rm = allocs.next(rm);
+
+                let opcode = 0xa74; // BCR
+                put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 6));
+                let opcode = 0xe756; // VLR
+                put(sink, &enc_vrr_a(opcode, rd.to_reg(), rm, 0, 0, 0));
+            }
+            &Inst::MovToVec128 { rd, rn, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
+                let opcode = 0xe762; // VLVGP
+                put(sink, &enc_vrr_f(opcode, rd.to_reg(), rn, rm));
+            }
+            &Inst::VecLoadConst { rd, const_data } => {
+                let rd = allocs.next_writable(rd);
+
+                let opcode = 0xa75; // BRAS
+                let reg = writable_spilltmp_reg().to_reg();
+                put(sink, &enc_ri_b(opcode, reg, 20));
+                for i in const_data.to_be_bytes().iter() {
+                    sink.put1(*i);
+                }
+                let inst = Inst::VecLoad {
+                    rd,
+                    mem: MemArg::reg(reg, MemFlags::trusted()),
+                };
+                inst.emit(&[], sink, emit_info, state);
+            }
+            &Inst::VecLoadConstReplicate {
+                size,
+                rd,
+                const_data,
+            } => {
+                let rd = allocs.next_writable(rd);
+
+                let opcode = 0xa75; // BRAS
+                let reg = writable_spilltmp_reg().to_reg();
+                put(sink, &enc_ri_b(opcode, reg, (4 + size / 8) as i32));
+                for i in 0..size / 8 {
+                    sink.put1((const_data >> (size - 8 - 8 * i)) as u8);
+                }
+                let inst = Inst::VecLoadReplicate {
+                    size,
+                    rd,
+                    mem: MemArg::reg(reg, MemFlags::trusted()),
+                };
+                inst.emit(&[], sink, emit_info, state);
+            }
+            &Inst::VecImmByteMask { rd, mask } => {
+                let rd = allocs.next_writable(rd);
+                let opcode = 0xe744; // VGBM
+                put(sink, &enc_vri_a(opcode, rd.to_reg(), mask, 0));
+            }
+            &Inst::VecImmBitMask {
+                size,
+                rd,
+                start_bit,
+                end_bit,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let (opcode, m4) = match size {
+                    8 => (0xe746, 0),  // VGMB
+                    16 => (0xe746, 1), // VGMH
+                    32 => (0xe746, 2), // VGMF
+                    64 => (0xe746, 3), // VGMG
+                    _ => unreachable!(),
+                };
+                put(
+                    sink,
+                    &enc_vri_b(opcode, rd.to_reg(), start_bit, end_bit, m4),
+                );
+            }
+            &Inst::VecImmReplicate { size, rd, imm } => {
+                let rd = allocs.next_writable(rd);
+                let (opcode, m3) = match size {
+                    8 => (0xe745, 0),  // VREPIB
+                    16 => (0xe745, 1), // VREPIH
+                    32 => (0xe745, 2), // VREPIF
+                    64 => (0xe745, 3), // VREPIG
+                    _ => unreachable!(),
+                };
+                put(sink, &enc_vri_a(opcode, rd.to_reg(), imm as u16, m3));
+            }
+
+            &Inst::VecLoadLane {
+                size,
+                rd,
+                ref mem,
+                lane_imm,
+            }
+            | &Inst::VecLoadLaneUndef {
+                size,
+                rd,
+                ref mem,
+                lane_imm,
+            }
+            | &Inst::VecLoadLaneRev {
+                size,
+                rd,
+                ref mem,
+                lane_imm,
+            }
+            | &Inst::VecLoadLaneRevUndef {
+                size,
+                rd,
+                ref mem,
+                lane_imm,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let mem = mem.with_allocs(&mut allocs);
+
+                let (opcode_vrx, opcode_rx, opcode_rxy) = match (self, size) {
+                    (&Inst::VecLoadLane { .. }, 8) => (0xe700, None, None), // VLEB
+                    (&Inst::VecLoadLane { .. }, 16) => (0xe701, None, None), // VLEH
+                    (&Inst::VecLoadLane { .. }, 32) => (0xe703, None, None), // VLEF
+                    (&Inst::VecLoadLane { .. }, 64) => (0xe702, None, None), // VLEG
+                    (&Inst::VecLoadLaneUndef { .. }, 8) => (0xe700, None, None), // VLEB
+                    (&Inst::VecLoadLaneUndef { .. }, 16) => (0xe701, None, None), // VLEH
+                    (&Inst::VecLoadLaneUndef { .. }, 32) => (0xe703, Some(0x78), Some(0xed64)), // VLEF, LE(Y)
+                    (&Inst::VecLoadLaneUndef { .. }, 64) => (0xe702, Some(0x68), Some(0xed65)), // VLEG, LD(Y)
+                    (&Inst::VecLoadLaneRev { .. }, 16) => (0xe601, None, None), // VLEBRH
+                    (&Inst::VecLoadLaneRev { .. }, 32) => (0xe603, None, None), // VLEBRF
+                    (&Inst::VecLoadLaneRev { .. }, 64) => (0xe602, None, None), // VLEBRG
+                    (&Inst::VecLoadLaneRevUndef { .. }, 16) => (0xe601, None, None), // VLEBRH
+                    (&Inst::VecLoadLaneRevUndef { .. }, 32) => (0xe603, None, None), // VLEBRF
+                    (&Inst::VecLoadLaneRevUndef { .. }, 64) => (0xe602, None, None), // VLEBRG
+                    _ => unreachable!(),
+                };
+
+                let rd = rd.to_reg();
+                if lane_imm == 0 && is_fpr(rd) && opcode_rx.is_some() {
+                    mem_emit(
+                        rd, &mem, opcode_rx, opcode_rxy, None, true, sink, emit_info, state,
+                    );
+                } else {
+                    mem_vrx_emit(
+                        rd,
+                        &mem,
+                        opcode_vrx,
+                        lane_imm.into(),
+                        true,
+                        sink,
+                        emit_info,
+                        state,
+                    );
+                }
+            }
+            &Inst::VecStoreLane {
+                size,
+                rd,
+                ref mem,
+                lane_imm,
+            }
+            | &Inst::VecStoreLaneRev {
+                size,
+                rd,
+                ref mem,
+                lane_imm,
+            } => {
+                let rd = allocs.next(rd);
+                let mem = mem.with_allocs(&mut allocs);
+
+                let (opcode_vrx, opcode_rx, opcode_rxy) = match (self, size) {
+                    (&Inst::VecStoreLane { .. }, 8) => (0xe708, None, None), // VSTEB
+                    (&Inst::VecStoreLane { .. }, 16) => (0xe709, None, None), // VSTEH
+                    (&Inst::VecStoreLane { .. }, 32) => (0xe70b, Some(0x70), Some(0xed66)), // VSTEF, STE(Y)
+                    (&Inst::VecStoreLane { .. }, 64) => (0xe70a, Some(0x60), Some(0xed67)), // VSTEG, STD(Y)
+                    (&Inst::VecStoreLaneRev { .. }, 16) => (0xe609, None, None), // VSTEBRH
+                    (&Inst::VecStoreLaneRev { .. }, 32) => (0xe60b, None, None), // VSTEBRF
+                    (&Inst::VecStoreLaneRev { .. }, 64) => (0xe60a, None, None), // VSTEBRG
+                    _ => unreachable!(),
+                };
+
+                if lane_imm == 0 && is_fpr(rd) && opcode_rx.is_some() {
+                    mem_emit(
+                        rd, &mem, opcode_rx, opcode_rxy, None, true, sink, emit_info, state,
+                    );
+                } else {
+                    mem_vrx_emit(
+                        rd,
+                        &mem,
+                        opcode_vrx,
+                        lane_imm.into(),
+                        true,
+                        sink,
+                        emit_info,
+                        state,
+                    );
+                }
+            }
+            &Inst::VecInsertLane {
+                size,
+                rd,
+                rn,
+                lane_imm,
+                lane_reg,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let lane_reg = allocs.next(lane_reg);
+
+                let (opcode_vrs, m4) = match size {
+                    8 => (0xe722, 0),  // VLVGB
+                    16 => (0xe722, 1), // VLVGH
+                    32 => (0xe722, 2), // VLVGF
+                    64 => (0xe722, 3), // VLVGG
+                    _ => unreachable!(),
+                };
+                put(
+                    sink,
+                    &enc_vrs_b(opcode_vrs, rd.to_reg(), lane_reg, lane_imm.into(), rn, m4),
+                );
+            }
+            &Inst::VecInsertLaneUndef {
+                size,
+                rd,
+                rn,
+                lane_imm,
+                lane_reg,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let lane_reg = allocs.next(lane_reg);
+
+                let (opcode_vrs, m4, opcode_rre) = match size {
+                    8 => (0xe722, 0, None),          // VLVGB
+                    16 => (0xe722, 1, None),         // VLVGH
+                    32 => (0xe722, 2, None),         // VLVGF
+                    64 => (0xe722, 3, Some(0xb3c1)), // VLVGG, LDGR
+                    _ => unreachable!(),
+                };
+                if opcode_rre.is_some()
+                    && lane_imm == 0
+                    && lane_reg == zero_reg()
+                    && is_fpr(rd.to_reg())
+                {
+                    put(sink, &enc_rre(opcode_rre.unwrap(), rd.to_reg(), rn));
+                } else {
+                    put(
+                        sink,
+                        &enc_vrs_b(opcode_vrs, rd.to_reg(), lane_reg, lane_imm.into(), rn, m4),
+                    );
+                }
+            }
+            &Inst::VecExtractLane {
+                size,
+                rd,
+                rn,
+                lane_imm,
+                lane_reg,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let lane_reg = allocs.next(lane_reg);
+
+                let (opcode_vrs, m4, opcode_rre) = match size {
+                    8 => (0xe721, 0, None),          // VLGVB
+                    16 => (0xe721, 1, None),         // VLGVH
+                    32 => (0xe721, 2, None),         // VLGVF
+                    64 => (0xe721, 3, Some(0xb3cd)), // VLGVG, LGDR
+                    _ => unreachable!(),
+                };
+                if opcode_rre.is_some() && lane_imm == 0 && lane_reg == zero_reg() && is_fpr(rn) {
+                    put(sink, &enc_rre(opcode_rre.unwrap(), rd.to_reg(), rn));
+                } else {
+                    put(
+                        sink,
+                        &enc_vrs_c(opcode_vrs, rd.to_reg(), lane_reg, lane_imm.into(), rn, m4),
+                    );
+                }
+            }
+            &Inst::VecInsertLaneImm {
+                size,
+                rd,
+                imm,
+                lane_imm,
+            } => {
+                let rd = allocs.next_writable(rd);
+
+                let opcode = match size {
+                    8 => 0xe740,  // VLEIB
+                    16 => 0xe741, // LEIVH
+                    32 => 0xe743, // VLEIF
+                    64 => 0xe742, // VLEIG
+                    _ => unreachable!(),
+                };
+                put(
+                    sink,
+                    &enc_vri_a(opcode, rd.to_reg(), imm as u16, lane_imm.into()),
+                );
+            }
+            &Inst::VecReplicateLane {
+                size,
+                rd,
+                rn,
+                lane_imm,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+
+                let (opcode, m4) = match size {
+                    8 => (0xe74d, 0),  // VREPB
+                    16 => (0xe74d, 1), // VREPH
+                    32 => (0xe74d, 2), // VREPF
+                    64 => (0xe74d, 3), // VREPG
+                    _ => unreachable!(),
+                };
+                put(
+                    sink,
+                    &enc_vri_c(opcode, rd.to_reg(), lane_imm.into(), rn, m4),
+                );
             }
 
             &Inst::Call { link, ref info } => {

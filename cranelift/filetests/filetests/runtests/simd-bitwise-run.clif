@@ -1,6 +1,7 @@
 test run
 set enable_simd
 target aarch64
+; target s390x FIXME: s390x implements modulo semantics for shift counts
 target x86_64 skylake
 
 ; TODO: once available, replace all lane extraction with `icmp + all_ones`

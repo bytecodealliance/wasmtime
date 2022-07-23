@@ -1,3 +1,4 @@
+test interpret
 test run
 set enable_llvm_abi_extensions=true
 target aarch64

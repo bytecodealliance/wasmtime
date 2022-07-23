@@ -1,0 +1,807 @@
+test compile precise-output
+target s390x arch13
+
+function %insertlane_i64x2_mem_0(i64x2, i64) -> i64x2 {
+block0(v0: i64x2, v1: i64):
+    v2 = load.i64 v1
+    v3 = insertlane.i64x2 v0, v2, 0
+    return v3
+}
+
+; block0:
+;   vleg %v24, 0(%r2), 1
+;   br %r14
+
+function %insertlane_i64x2_mem_1(i64x2, i64) -> i64x2 {
+block0(v0: i64x2, v1: i64):
+    v2 = load.i64 v1
+    v3 = insertlane.i64x2 v0, v2, 1
+    return v3
+}
+
+; block0:
+;   vleg %v24, 0(%r2), 0
+;   br %r14
+
+function %insertlane_i64x2_mem_little_0(i64x2, i64) -> i64x2 {
+block0(v0: i64x2, v1: i64):
+    v2 = load.i64 little v1
+    v3 = insertlane.i64x2 v0, v2, 0
+    return v3
+}
+
+; block0:
+;   vlebrg %v24, 0(%r2), 1
+;   br %r14
+
+function %insertlane_i64x2_mem_little_1(i64x2, i64) -> i64x2 {
+block0(v0: i64x2, v1: i64):
+    v2 = load.i64 little v1
+    v3 = insertlane.i64x2 v0, v2, 1
+    return v3
+}
+
+; block0:
+;   vlebrg %v24, 0(%r2), 0
+;   br %r14
+
+function %insertlane_i32x4_mem_0(i32x4, i64) -> i32x4 {
+block0(v0: i32x4, v1: i64):
+    v2 = load.i32 v1
+    v3 = insertlane.i32x4 v0, v2, 0
+    return v3
+}
+
+; block0:
+;   vlef %v24, 0(%r2), 3
+;   br %r14
+
+function %insertlane_i32x4_mem_3(i32x4, i64) -> i32x4 {
+block0(v0: i32x4, v1: i64):
+    v2 = load.i32 v1
+    v3 = insertlane.i32x4 v0, v2, 3
+    return v3
+}
+
+; block0:
+;   vlef %v24, 0(%r2), 0
+;   br %r14
+
+function %insertlane_i32x4_mem_little_0(i32x4, i64) -> i32x4 {
+block0(v0: i32x4, v1: i64):
+    v2 = load.i32 little v1
+    v3 = insertlane.i32x4 v0, v2, 0
+    return v3
+}
+
+; block0:
+;   vlebrf %v24, 0(%r2), 3
+;   br %r14
+
+function %insertlane_i32x4_mem_little_3(i32x4, i64) -> i32x4 {
+block0(v0: i32x4, v1: i64):
+    v2 = load.i32 little v1
+    v3 = insertlane.i32x4 v0, v2, 3
+    return v3
+}
+
+; block0:
+;   vlebrf %v24, 0(%r2), 0
+;   br %r14
+
+function %insertlane_i16x8_mem_0(i16x8, i64) -> i16x8 {
+block0(v0: i16x8, v1: i64):
+    v2 = load.i16 v1
+    v3 = insertlane.i16x8 v0, v2, 0
+    return v3
+}
+
+; block0:
+;   vleh %v24, 0(%r2), 7
+;   br %r14
+
+function %insertlane_i16x8_mem_7(i16x8, i64) -> i16x8 {
+block0(v0: i16x8, v1: i64):
+    v2 = load.i16 v1
+    v3 = insertlane.i16x8 v0, v2, 7
+    return v3
+}
+
+; block0:
+;   vleh %v24, 0(%r2), 0
+;   br %r14
+
+function %insertlane_i16x8_mem_little_0(i16x8, i64) -> i16x8 {
+block0(v0: i16x8, v1: i64):
+    v2 = load.i16 little v1
+    v3 = insertlane.i16x8 v0, v2, 0
+    return v3
+}
+
+; block0:
+;   vlebrh %v24, 0(%r2), 7
+;   br %r14
+
+function %insertlane_i16x8_mem_little_7(i16x8, i64) -> i16x8 {
+block0(v0: i16x8, v1: i64):
+    v2 = load.i16 little v1
+    v3 = insertlane.i16x8 v0, v2, 7
+    return v3
+}
+
+; block0:
+;   vlebrh %v24, 0(%r2), 0
+;   br %r14
+
+function %insertlane_i8x16_mem_0(i8x16, i64) -> i8x16 {
+block0(v0: i8x16, v1: i64):
+    v2 = load.i8 v1
+    v3 = insertlane.i8x16 v0, v2, 0
+    return v3
+}
+
+; block0:
+;   vleb %v24, 0(%r2), 15
+;   br %r14
+
+function %insertlane_i8x16_mem_15(i8x16, i64) -> i8x16 {
+block0(v0: i8x16, v1: i64):
+    v2 = load.i8 v1
+    v3 = insertlane.i8x16 v0, v2, 15
+    return v3
+}
+
+; block0:
+;   vleb %v24, 0(%r2), 0
+;   br %r14
+
+function %insertlane_i8x16_mem_little_0(i8x16, i64) -> i8x16 {
+block0(v0: i8x16, v1: i64):
+    v2 = load.i8 little v1
+    v3 = insertlane.i8x16 v0, v2, 0
+    return v3
+}
+
+; block0:
+;   vleb %v24, 0(%r2), 15
+;   br %r14
+
+function %insertlane_i8x16_mem_little_15(i8x16, i64) -> i8x16 {
+block0(v0: i8x16, v1: i64):
+    v2 = load.i8 little v1
+    v3 = insertlane.i8x16 v0, v2, 15
+    return v3
+}
+
+; block0:
+;   vleb %v24, 0(%r2), 0
+;   br %r14
+
+function %insertlane_f64x2_mem_0(f64x2, i64) -> f64x2 {
+block0(v0: f64x2, v1: i64):
+    v2 = load.f64 v1
+    v3 = insertlane.f64x2 v0, v2, 0
+    return v3
+}
+
+; block0:
+;   vleg %v24, 0(%r2), 1
+;   br %r14
+
+function %insertlane_f64x2_mem_1(f64x2, i64) -> f64x2 {
+block0(v0: f64x2, v1: i64):
+    v2 = load.f64 v1
+    v3 = insertlane.f64x2 v0, v2, 1
+    return v3
+}
+
+; block0:
+;   vleg %v24, 0(%r2), 0
+;   br %r14
+
+function %insertlane_f64x2_mem_little_0(f64x2, i64) -> f64x2 {
+block0(v0: f64x2, v1: i64):
+    v2 = load.f64 little v1
+    v3 = insertlane.f64x2 v0, v2, 0
+    return v3
+}
+
+; block0:
+;   vlebrg %v24, 0(%r2), 1
+;   br %r14
+
+function %insertlane_f64x2_mem_little_1(f64x2, i64) -> f64x2 {
+block0(v0: f64x2, v1: i64):
+    v2 = load.f64 little v1
+    v3 = insertlane.f64x2 v0, v2, 1
+    return v3
+}
+
+; block0:
+;   vlebrg %v24, 0(%r2), 0
+;   br %r14
+
+function %insertlane_f32x4_mem_0(f32x4, i64) -> f32x4 {
+block0(v0: f32x4, v1: i64):
+    v2 = load.f32 v1
+    v3 = insertlane.f32x4 v0, v2, 0
+    return v3
+}
+
+; block0:
+;   vlef %v24, 0(%r2), 3
+;   br %r14
+
+function %insertlane_i32x4_mem_3(i32x4, i64) -> i32x4 {
+block0(v0: i32x4, v1: i64):
+    v2 = load.i32 v1
+    v3 = insertlane.i32x4 v0, v2, 3
+    return v3
+}
+
+; block0:
+;   vlef %v24, 0(%r2), 0
+;   br %r14
+
+function %insertlane_f32x4_mem_little_0(f32x4, i64) -> f32x4 {
+block0(v0: f32x4, v1: i64):
+    v2 = load.f32 little v1
+    v3 = insertlane.f32x4 v0, v2, 0
+    return v3
+}
+
+; block0:
+;   vlebrf %v24, 0(%r2), 3
+;   br %r14
+
+function %insertlane_i32x4_mem_little_3(i32x4, i64) -> i32x4 {
+block0(v0: i32x4, v1: i64):
+    v2 = load.i32 little v1
+    v3 = insertlane.i32x4 v0, v2, 3
+    return v3
+}
+
+; block0:
+;   vlebrf %v24, 0(%r2), 0
+;   br %r14
+
+function %extractlane_i64x2_mem_0(i64x2, i64) {
+block0(v0: i64x2, v1: i64):
+    v2 = extractlane.i64x2 v0, 0
+    store v2, v1
+    return
+}
+
+; block0:
+;   vsteg %v24, 0(%r2), 1
+;   br %r14
+
+function %extractlane_i64x2_mem_1(i64x2, i64) {
+block0(v0: i64x2, v1: i64):
+    v2 = extractlane.i64x2 v0, 1
+    store v2, v1
+    return
+}
+
+; block0:
+;   vsteg %v24, 0(%r2), 0
+;   br %r14
+
+function %extractlane_i64x2_mem_little_0(i64x2, i64) {
+block0(v0: i64x2, v1: i64):
+    v2 = extractlane.i64x2 v0, 0
+    store little v2, v1
+    return
+}
+
+; block0:
+;   vstebrg %v24, 0(%r2), 1
+;   br %r14
+
+function %extractlane_i64x2_mem_little_1(i64x2, i64) {
+block0(v0: i64x2, v1: i64):
+    v2 = extractlane.i64x2 v0, 1
+    store little v2, v1
+    return
+}
+
+; block0:
+;   vstebrg %v24, 0(%r2), 0
+;   br %r14
+
+function %extractlane_i32x4_mem_0(i32x4, i64) {
+block0(v0: i32x4, v1: i64):
+    v2 = extractlane.i32x4 v0, 0
+    store v2, v1
+    return
+}
+
+; block0:
+;   vstef %v24, 0(%r2), 3
+;   br %r14
+
+function %extractlane_i32x4_mem_3(i32x4, i64) {
+block0(v0: i32x4, v1: i64):
+    v2 = extractlane.i32x4 v0, 3
+    store v2, v1
+    return
+}
+
+; block0:
+;   vstef %v24, 0(%r2), 0
+;   br %r14
+
+function %extractlane_i32x4_mem_little_0(i32x4, i64) {
+block0(v0: i32x4, v1: i64):
+    v2 = extractlane.i32x4 v0, 0
+    store little v2, v1
+    return
+}
+
+; block0:
+;   vstebrf %v24, 0(%r2), 3
+;   br %r14
+
+function %extractlane_i32x4_mem_little_3(i32x4, i64) {
+block0(v0: i32x4, v1: i64):
+    v2 = extractlane.i32x4 v0, 3
+    store little v2, v1
+    return
+}
+
+; block0:
+;   vstebrf %v24, 0(%r2), 0
+;   br %r14
+
+function %extractlane_i16x8_mem_0(i16x8, i64) {
+block0(v0: i16x8, v1: i64):
+    v2 = extractlane.i16x8 v0, 0
+    store v2, v1
+    return
+}
+
+; block0:
+;   vsteh %v24, 0(%r2), 7
+;   br %r14
+
+function %extractlane_i16x8_mem_7(i16x8, i64) {
+block0(v0: i16x8, v1: i64):
+    v2 = extractlane.i16x8 v0, 7
+    store v2, v1
+    return
+}
+
+; block0:
+;   vsteh %v24, 0(%r2), 0
+;   br %r14
+
+function %extractlane_i16x8_mem_little_0(i16x8, i64) {
+block0(v0: i16x8, v1: i64):
+    v2 = extractlane.i16x8 v0, 0
+    store little v2, v1
+    return
+}
+
+; block0:
+;   vstebrh %v24, 0(%r2), 7
+;   br %r14
+
+function %extractlane_i16x8_mem_little_7(i16x8, i64) {
+block0(v0: i16x8, v1: i64):
+    v2 = extractlane.i16x8 v0, 7
+    store little v2, v1
+    return
+}
+
+; block0:
+;   vstebrh %v24, 0(%r2), 0
+;   br %r14
+
+function %extractlane_i8x16_mem_0(i8x16, i64) {
+block0(v0: i8x16, v1: i64):
+    v2 = extractlane.i8x16 v0, 0
+    store v2, v1
+    return
+}
+
+; block0:
+;   vsteb %v24, 0(%r2), 15
+;   br %r14
+
+function %extractlane_i8x16_mem_15(i8x16, i64) {
+block0(v0: i8x16, v1: i64):
+    v2 = extractlane.i8x16 v0, 15
+    store v2, v1
+    return
+}
+
+; block0:
+;   vsteb %v24, 0(%r2), 0
+;   br %r14
+
+function %extractlane_i8x16_mem_little_0(i8x16, i64) {
+block0(v0: i8x16, v1: i64):
+    v2 = extractlane.i8x16 v0, 0
+    store little v2, v1
+    return
+}
+
+; block0:
+;   vsteb %v24, 0(%r2), 15
+;   br %r14
+
+function %extractlane_i8x16_mem_little_15(i8x16, i64) {
+block0(v0: i8x16, v1: i64):
+    v2 = extractlane.i8x16 v0, 15
+    store little v2, v1
+    return
+}
+
+; block0:
+;   vsteb %v24, 0(%r2), 0
+;   br %r14
+
+function %extractlane_f64x2_mem_0(f64x2, i64) {
+block0(v0: f64x2, v1: i64):
+    v2 = extractlane.f64x2 v0, 0
+    store v2, v1
+    return
+}
+
+; block0:
+;   vsteg %v24, 0(%r2), 1
+;   br %r14
+
+function %extractlane_f64x2_mem_1(f64x2, i64) {
+block0(v0: f64x2, v1: i64):
+    v2 = extractlane.f64x2 v0, 1
+    store v2, v1
+    return
+}
+
+; block0:
+;   vsteg %v24, 0(%r2), 0
+;   br %r14
+
+function %extractlane_f64x2_mem_little_0(f64x2, i64) {
+block0(v0: f64x2, v1: i64):
+    v2 = extractlane.f64x2 v0, 0
+    store little v2, v1
+    return
+}
+
+; block0:
+;   vstebrg %v24, 0(%r2), 1
+;   br %r14
+
+function %extractlane_f64x2_mem_little_1(f64x2, i64) {
+block0(v0: f64x2, v1: i64):
+    v2 = extractlane.f64x2 v0, 1
+    store little v2, v1
+    return
+}
+
+; block0:
+;   vstebrg %v24, 0(%r2), 0
+;   br %r14
+
+function %extractlane_f32x4_mem_0(f32x4, i64) {
+block0(v0: f32x4, v1: i64):
+    v2 = extractlane.f32x4 v0, 0
+    store v2, v1
+    return
+}
+
+; block0:
+;   vstef %v24, 0(%r2), 3
+;   br %r14
+
+function %extractlane_f32x4_mem_3(f32x4, i64) {
+block0(v0: f32x4, v1: i64):
+    v2 = extractlane.f32x4 v0, 3
+    store v2, v1
+    return
+}
+
+; block0:
+;   vstef %v24, 0(%r2), 0
+;   br %r14
+
+function %extractlane_f32x4_mem_little_0(f32x4, i64) {
+block0(v0: f32x4, v1: i64):
+    v2 = extractlane.f32x4 v0, 0
+    store little v2, v1
+    return
+}
+
+; block0:
+;   vstebrf %v24, 0(%r2), 3
+;   br %r14
+
+function %extractlane_f32x4_mem_little_3(f32x4, i64) {
+block0(v0: f32x4, v1: i64):
+    v2 = extractlane.f32x4 v0, 3
+    store little v2, v1
+    return
+}
+
+; block0:
+;   vstebrf %v24, 0(%r2), 0
+;   br %r14
+
+function %splat_i64x2_mem(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = load.i64 v0
+    v2 = splat.i64x2 v1
+    return v2
+}
+
+; block0:
+;   vlrepg %v24, 0(%r2)
+;   br %r14
+
+function %splat_i64x2_mem_little(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = load.i64 little v0
+    v2 = splat.i64x2 v1
+    return v2
+}
+
+; block0:
+;   vlbrrepg %v24, 0(%r2)
+;   br %r14
+
+function %splat_i32x4_mem(i64) -> i32x4 {
+block0(v0: i64):
+    v1 = load.i32 v0
+    v2 = splat.i32x4 v1
+    return v2
+}
+
+; block0:
+;   vlrepf %v24, 0(%r2)
+;   br %r14
+
+function %splat_i32x4_mem_little(i64) -> i32x4 {
+block0(v0: i64):
+    v1 = load.i32 little v0
+    v2 = splat.i32x4 v1
+    return v2
+}
+
+; block0:
+;   vlbrrepf %v24, 0(%r2)
+;   br %r14
+
+function %splat_i16x8_mem(i64) -> i16x8 {
+block0(v0: i64):
+    v1 = load.i16 v0
+    v2 = splat.i16x8 v1
+    return v2
+}
+
+; block0:
+;   vlreph %v24, 0(%r2)
+;   br %r14
+
+function %splat_i16x8_mem_little(i64) -> i16x8 {
+block0(v0: i64):
+    v1 = load.i16 little v0
+    v2 = splat.i16x8 v1
+    return v2
+}
+
+; block0:
+;   vlbrreph %v24, 0(%r2)
+;   br %r14
+
+function %splat_i8x16_mem(i64) -> i8x16 {
+block0(v0: i64):
+    v1 = load.i8 v0
+    v2 = splat.i8x16 v1
+    return v2
+}
+
+; block0:
+;   vlrepb %v24, 0(%r2)
+;   br %r14
+
+function %splat_i8x16_mem_little(i64) -> i8x16 {
+block0(v0: i64):
+    v1 = load.i8 little v0
+    v2 = splat.i8x16 v1
+    return v2
+}
+
+; block0:
+;   vlrepb %v24, 0(%r2)
+;   br %r14
+
+function %splat_f64x2_mem(i64) -> f64x2 {
+block0(v0: i64):
+    v1 = load.f64 v0
+    v2 = splat.f64x2 v1
+    return v2
+}
+
+; block0:
+;   vlrepg %v24, 0(%r2)
+;   br %r14
+
+function %splat_f64x2_mem_little(i64) -> f64x2 {
+block0(v0: i64):
+    v1 = load.f64 little v0
+    v2 = splat.f64x2 v1
+    return v2
+}
+
+; block0:
+;   vlbrrepg %v24, 0(%r2)
+;   br %r14
+
+function %splat_f32x4_mem(i64) -> f32x4 {
+block0(v0: i64):
+    v1 = load.f32 v0
+    v2 = splat.f32x4 v1
+    return v2
+}
+
+; block0:
+;   vlrepf %v24, 0(%r2)
+;   br %r14
+
+function %splat_f32x4_mem_little(i64) -> f32x4 {
+block0(v0: i64):
+    v1 = load.f32 little v0
+    v2 = splat.f32x4 v1
+    return v2
+}
+
+; block0:
+;   vlbrrepf %v24, 0(%r2)
+;   br %r14
+
+function %scalar_to_vector_i64x2_mem(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = load.i64 v0
+    v2 = scalar_to_vector.i64x2 v1
+    return v2
+}
+
+; block0:
+;   vgbm %v24, 0
+;   vleg %v24, 0(%r2), 1
+;   br %r14
+
+function %scalar_to_vector_i64x2_mem_little(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = load.i64 little v0
+    v2 = scalar_to_vector.i64x2 v1
+    return v2
+}
+
+; block0:
+;   vgbm %v24, 0
+;   vlebrg %v24, 0(%r2), 1
+;   br %r14
+
+function %scalar_to_vector_i32x4_mem(i64) -> i32x4 {
+block0(v0: i64):
+    v1 = load.i32 v0
+    v2 = scalar_to_vector.i32x4 v1
+    return v2
+}
+
+; block0:
+;   vgbm %v24, 0
+;   vlef %v24, 0(%r2), 3
+;   br %r14
+
+function %scalar_to_vector_i32x4_mem_little(i64) -> i32x4 {
+block0(v0: i64):
+    v1 = load.i32 little v0
+    v2 = scalar_to_vector.i32x4 v1
+    return v2
+}
+
+; block0:
+;   vgbm %v24, 0
+;   vlebrf %v24, 0(%r2), 3
+;   br %r14
+
+function %scalar_to_vector_i16x8_mem(i64) -> i16x8 {
+block0(v0: i64):
+    v1 = load.i16 v0
+    v2 = scalar_to_vector.i16x8 v1
+    return v2
+}
+
+; block0:
+;   vgbm %v24, 0
+;   vleh %v24, 0(%r2), 7
+;   br %r14
+
+function %scalar_to_vector_i16x8_mem_little(i64) -> i16x8 {
+block0(v0: i64):
+    v1 = load.i16 little v0
+    v2 = scalar_to_vector.i16x8 v1
+    return v2
+}
+
+; block0:
+;   vgbm %v24, 0
+;   vlebrh %v24, 0(%r2), 7
+;   br %r14
+
+function %scalar_to_vector_i8x16_mem(i64) -> i8x16 {
+block0(v0: i64):
+    v1 = load.i8 v0
+    v2 = scalar_to_vector.i8x16 v1
+    return v2
+}
+
+; block0:
+;   vgbm %v24, 0
+;   vleb %v24, 0(%r2), 15
+;   br %r14
+
+function %scalar_to_vector_i8x16_mem_little(i64) -> i8x16 {
+block0(v0: i64):
+    v1 = load.i8 little v0
+    v2 = scalar_to_vector.i8x16 v1
+    return v2
+}
+
+; block0:
+;   vgbm %v24, 0
+;   vleb %v24, 0(%r2), 15
+;   br %r14
+
+function %scalar_to_vector_f64x2_mem(i64) -> f64x2 {
+block0(v0: i64):
+    v1 = load.f64 v0
+    v2 = scalar_to_vector.f64x2 v1
+    return v2
+}
+
+; block0:
+;   vgbm %v24, 0
+;   vleg %v24, 0(%r2), 1
+;   br %r14
+
+function %scalar_to_vector_f64x2_mem_little(i64) -> f64x2 {
+block0(v0: i64):
+    v1 = load.f64 little v0
+    v2 = scalar_to_vector.f64x2 v1
+    return v2
+}
+
+; block0:
+;   vgbm %v24, 0
+;   vlebrg %v24, 0(%r2), 1
+;   br %r14
+
+function %scalar_to_vector_f32x4_mem(i64) -> f32x4 {
+block0(v0: i64):
+    v1 = load.f32 v0
+    v2 = scalar_to_vector.f32x4 v1
+    return v2
+}
+
+; block0:
+;   vgbm %v24, 0
+;   vlef %v24, 0(%r2), 3
+;   br %r14
+
+function %scalar_to_vector_f32x4_mem_little(i64) -> f32x4 {
+block0(v0: i64):
+    v1 = load.f32 little v0
+    v2 = scalar_to_vector.f32x4 v1
+    return v2
+}
+
+; block0:
+;   vgbm %v24, 0
+;   vlebrf %v24, 0(%r2), 3
+;   br %r14
+

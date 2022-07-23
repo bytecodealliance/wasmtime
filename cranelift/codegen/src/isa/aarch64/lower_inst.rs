@@ -816,25 +816,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::ScalarToVector => {
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let input_ty = ctx.input_ty(insn, 0);
-            if (input_ty == I32 && ty.unwrap() == I32X4)
-                || (input_ty == I64 && ty.unwrap() == I64X2)
-            {
-                ctx.emit(Inst::MovToFpu {
-                    rd,
-                    rn,
-                    size: ScalarSize::from_ty(input_ty),
-                });
-            } else {
-                return Err(CodegenError::Unsupported(format!(
-                    "ScalarToVector: unsupported types {:?} -> {:?}",
-                    input_ty, ty
-                )));
-            }
-        }
+        Opcode::ScalarToVector => implemented_in_isle(ctx),
 
         Opcode::VallTrue if ctx.input_ty(insn, 0).lane_bits() == 64 => {
             let input_ty = ctx.input_ty(insn, 0);
@@ -1262,213 +1244,16 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv | Opcode::Fmin | Opcode::Fmax => {
-            let ty = ty.unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            if !ty.is_vector() && !ty.is_dynamic_vector() {
-                let fpu_op = match op {
-                    Opcode::Fadd => FPUOp2::Add,
-                    Opcode::Fsub => FPUOp2::Sub,
-                    Opcode::Fmul => FPUOp2::Mul,
-                    Opcode::Fdiv => FPUOp2::Div,
-                    Opcode::Fmin => FPUOp2::Min,
-                    Opcode::Fmax => FPUOp2::Max,
-                    _ => unreachable!(),
-                };
-                ctx.emit(Inst::FpuRRR {
-                    fpu_op,
-                    size: ScalarSize::from_ty(ty),
-                    rd,
-                    rn,
-                    rm,
-                });
-            } else {
-                let alu_op = match op {
-                    Opcode::Fadd => VecALUOp::Fadd,
-                    Opcode::Fsub => VecALUOp::Fsub,
-                    Opcode::Fdiv => VecALUOp::Fdiv,
-                    Opcode::Fmax => VecALUOp::Fmax,
-                    Opcode::Fmin => VecALUOp::Fmin,
-                    Opcode::Fmul => VecALUOp::Fmul,
-                    _ => unreachable!(),
-                };
-
-                ctx.emit(Inst::VecRRR {
-                    rd,
-                    rn,
-                    rm,
-                    alu_op,
-                    size: VectorSize::from_ty(ty),
-                });
-            }
+            implemented_in_isle(ctx)
         }
 
-        Opcode::FminPseudo | Opcode::FmaxPseudo => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rn = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let (ra, rb) = if op == Opcode::FminPseudo {
-                (rm, rn)
-            } else {
-                (rn, rm)
-            };
-            let ty = ty.unwrap();
-            let lane_type = ty.lane_type();
-
-            debug_assert!(lane_type == F32 || lane_type == F64);
-
-            if ty.is_vector() || ty.is_dynamic_vector() {
-                let size = VectorSize::from_ty(ty);
-
-                // pmin(a,b) => bitsel(b, a, cmpgt(a, b))
-                // pmax(a,b) => bitsel(b, a, cmpgt(b, a))
-                // Since we're going to write the output register `rd` anyway, we might as well
-                // first use it to hold the comparison result.  This has the slightly unusual
-                // effect that we modify the output register in the first instruction (`fcmgt`)
-                // but read both the inputs again in the second instruction (`bsl`), which means
-                // that the output register can't be either of the input registers.  Regalloc
-                // should handle this correctly, nevertheless.
-                ctx.emit(Inst::VecRRR {
-                    alu_op: VecALUOp::Fcmgt,
-                    rd,
-                    rn: ra,
-                    rm: rb,
-                    size,
-                });
-                ctx.emit(Inst::VecRRR {
-                    alu_op: VecALUOp::Bsl,
-                    rd,
-                    rn,
-                    rm,
-                    size,
-                });
-            } else {
-                ctx.emit(Inst::FpuCmp {
-                    size: ScalarSize::from_ty(lane_type),
-                    rn: ra,
-                    rm: rb,
-                });
-                if lane_type == F32 {
-                    ctx.emit(Inst::FpuCSel32 {
-                        rd,
-                        rn,
-                        rm,
-                        cond: Cond::Gt,
-                    });
-                } else {
-                    ctx.emit(Inst::FpuCSel64 {
-                        rd,
-                        rn,
-                        rm,
-                        cond: Cond::Gt,
-                    });
-                }
-            }
-        }
+        Opcode::FminPseudo | Opcode::FmaxPseudo => implemented_in_isle(ctx),
 
         Opcode::Sqrt | Opcode::Fneg | Opcode::Fabs | Opcode::Fpromote | Opcode::Fdemote => {
-            let ty = ty.unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            if !ty.is_vector() {
-                let fpu_op = match op {
-                    Opcode::Sqrt => FPUOp1::Sqrt,
-                    Opcode::Fneg => FPUOp1::Neg,
-                    Opcode::Fabs => FPUOp1::Abs,
-                    Opcode::Fpromote => {
-                        if ty != F64 {
-                            return Err(CodegenError::Unsupported(format!(
-                                "Fpromote: Unsupported type: {:?}",
-                                ty
-                            )));
-                        }
-                        FPUOp1::Cvt32To64
-                    }
-                    Opcode::Fdemote => {
-                        if ty != F32 {
-                            return Err(CodegenError::Unsupported(format!(
-                                "Fdemote: Unsupported type: {:?}",
-                                ty
-                            )));
-                        }
-                        FPUOp1::Cvt64To32
-                    }
-                    _ => unreachable!(),
-                };
-                ctx.emit(Inst::FpuRR {
-                    fpu_op,
-                    size: ScalarSize::from_ty(ctx.input_ty(insn, 0)),
-                    rd,
-                    rn,
-                });
-            } else {
-                let op = match op {
-                    Opcode::Fabs => VecMisc2::Fabs,
-                    Opcode::Fneg => VecMisc2::Fneg,
-                    Opcode::Sqrt => VecMisc2::Fsqrt,
-                    _ => {
-                        return Err(CodegenError::Unsupported(format!(
-                            "{}: Unsupported type: {:?}",
-                            op, ty
-                        )))
-                    }
-                };
-
-                ctx.emit(Inst::VecMisc {
-                    op,
-                    rd,
-                    rn,
-                    size: VectorSize::from_ty(ty),
-                });
-            }
+            implemented_in_isle(ctx)
         }
 
-        Opcode::Ceil | Opcode::Floor | Opcode::Trunc | Opcode::Nearest => {
-            let ty = ctx.output_ty(insn, 0);
-            if !ty.is_vector() {
-                let bits = ty_bits(ty);
-                let op = match (op, bits) {
-                    (Opcode::Ceil, 32) => FpuRoundMode::Plus32,
-                    (Opcode::Ceil, 64) => FpuRoundMode::Plus64,
-                    (Opcode::Floor, 32) => FpuRoundMode::Minus32,
-                    (Opcode::Floor, 64) => FpuRoundMode::Minus64,
-                    (Opcode::Trunc, 32) => FpuRoundMode::Zero32,
-                    (Opcode::Trunc, 64) => FpuRoundMode::Zero64,
-                    (Opcode::Nearest, 32) => FpuRoundMode::Nearest32,
-                    (Opcode::Nearest, 64) => FpuRoundMode::Nearest64,
-                    _ => {
-                        return Err(CodegenError::Unsupported(format!(
-                            "{}: Unsupported type: {:?}",
-                            op, ty
-                        )))
-                    }
-                };
-                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::FpuRound { op, rd, rn });
-            } else {
-                let (op, size) = match (op, ty) {
-                    (Opcode::Ceil, F32X4) => (VecMisc2::Frintp, VectorSize::Size32x4),
-                    (Opcode::Ceil, F64X2) => (VecMisc2::Frintp, VectorSize::Size64x2),
-                    (Opcode::Floor, F32X4) => (VecMisc2::Frintm, VectorSize::Size32x4),
-                    (Opcode::Floor, F64X2) => (VecMisc2::Frintm, VectorSize::Size64x2),
-                    (Opcode::Trunc, F32X4) => (VecMisc2::Frintz, VectorSize::Size32x4),
-                    (Opcode::Trunc, F64X2) => (VecMisc2::Frintz, VectorSize::Size64x2),
-                    (Opcode::Nearest, F32X4) => (VecMisc2::Frintn, VectorSize::Size32x4),
-                    (Opcode::Nearest, F64X2) => (VecMisc2::Frintn, VectorSize::Size64x2),
-                    _ => {
-                        return Err(CodegenError::Unsupported(format!(
-                            "{}: Unsupported type: {:?}",
-                            op, ty
-                        )))
-                    }
-                };
-                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::VecMisc { op, rd, rn, size });
-            }
-        }
+        Opcode::Ceil | Opcode::Floor | Opcode::Trunc | Opcode::Nearest => implemented_in_isle(ctx),
 
         Opcode::Fma => {
             let ty = ty.unwrap();
@@ -1959,17 +1744,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("ALU+imm and ALU+carry ops should not appear here!");
         }
 
-        Opcode::Iabs => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let ty = ty.unwrap();
-            ctx.emit(Inst::VecMisc {
-                op: VecMisc2::Abs,
-                rd,
-                rn,
-                size: VectorSize::from_ty(ty),
-            });
-        }
+        Opcode::Iabs => implemented_in_isle(ctx),
         Opcode::AvgRound => {
             let ty = ty.unwrap();
 

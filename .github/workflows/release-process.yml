@@ -119,8 +119,6 @@ jobs:
 
           git commit -a -F-<<EOF
           Update release date of Wasmtime $cur
-
-          [skip ci]
           EOF
           git push origin HEAD:ci/release-date-for-$cur
 

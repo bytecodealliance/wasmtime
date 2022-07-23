@@ -195,3 +195,159 @@ block0(v0: f64, v1: f64):
   return v5
 }
 ; run: %f64x2_splat_sub(0x1.0, 0x3.0) == [-0x2.0 -0x2.0]
+
+function %f32x4_splat_mul(f32, f32) -> f32x4 {
+  gv0 = dyn_scale_target_const.f32x4
+  dt0 = f32x4*gv0
+
+block0(v0: f32, v1: f32):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = fmul v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+; run: %f32x4_splat_mul(0x2.0, 0x3.0) == [0x6.0 0x6.0 0x6.0 0x6.0]
+
+function %f64x2_splat_mul(f64, f64) -> f64x2 {
+  gv0 = dyn_scale_target_const.f64x2
+  dt0 = f64x2*gv0
+
+block0(v0: f64, v1: f64):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = fmul v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+; run: %f64x2_splat_sub(-0x2.0, 0x3.0) == [-0x6.0 -0x6.0]
+
+function %f32x4_splat_div(f32, f32) -> f32x4 {
+  gv0 = dyn_scale_target_const.f32x4
+  dt0 = f32x4*gv0
+
+block0(v0: f32, v1: f32):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = fdiv v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+; run: %f32x4_splat_div(0x6.6, 0x2.2) == [0x3.0 0x3.0 0x3.0 0x3.0]
+
+function %f64x2_splat_div(f64, f64) -> f64x2 {
+  gv0 = dyn_scale_target_const.f64x2
+  dt0 = f64x2*gv0
+
+block0(v0: f64, v1: f64):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = fdiv v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+; run: %f64x2_splat_div(-0x6.6, 0x2.2) == [-0x3.0 -0x3.0]
+
+function %f32x4_splat_min(f32, f32) -> f32x4 {
+  gv0 = dyn_scale_target_const.f32x4
+  dt0 = f32x4*gv0
+
+block0(v0: f32, v1: f32):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = fmin v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+; run: %f32x4_splat_min(0x6.6, 0x2.2) == [0x2.2 0x2.2 0x2.2 0x2.2]
+
+function %f64x2_splat_min(f64, f64) -> f64x2 {
+  gv0 = dyn_scale_target_const.f64x2
+  dt0 = f64x2*gv0
+
+block0(v0: f64, v1: f64):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = fmin v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+; run: %f64x2_splat_min(-0x6.6, 0x2.2) == [-0x6.6 -0x6.6]
+
+function %f32x4_splat_max(f32, f32) -> f32x4 {
+  gv0 = dyn_scale_target_const.f32x4
+  dt0 = f32x4*gv0
+
+block0(v0: f32, v1: f32):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = fmax v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+; run: %f32x4_splat_max(0x6.6, 0x2.2) == [0x6.6 0x6.6 0x6.6 0x6.6]
+
+function %f64x2_splat_max(f64, f64) -> f64x2 {
+  gv0 = dyn_scale_target_const.f64x2
+  dt0 = f64x2*gv0
+
+block0(v0: f64, v1: f64):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = fmax v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+; run: %f64x2_splat_max(-0x6.6, 0x2.2) == [0x2.2 0x2.2]
+
+function %f32x4_splat_min_pseudo(f32, f32) -> f32x4 {
+  gv0 = dyn_scale_target_const.f32x4
+  dt0 = f32x4*gv0
+
+block0(v0: f32, v1: f32):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = fmin_pseudo v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+; run: %f32x4_splat_min_pseudo(0x6.6, 0x2.2) == [0x2.2 0x2.2 0x2.2 0x2.2]
+
+function %f64x2_splat_min_pseudo(f64, f64) -> f64x2 {
+  gv0 = dyn_scale_target_const.f64x2
+  dt0 = f64x2*gv0
+
+block0(v0: f64, v1: f64):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = fmin_pseudo v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+; run: %f64x2_splat_min_pseudo(-0x6.6, 0x2.2) == [-0x6.6 -0x6.6]
+
+function %f32x4_splat_max_pseudo(f32, f32) -> f32x4 {
+  gv0 = dyn_scale_target_const.f32x4
+  dt0 = f32x4*gv0
+
+block0(v0: f32, v1: f32):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = fmax_pseudo v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+; run: %f32x4_splat_max_pseudo(0x6.6, 0x2.2) == [0x6.6 0x6.6 0x6.6 0x6.6]
+
+function %f64x2_splat_max_pseudo(f64, f64) -> f64x2 {
+  gv0 = dyn_scale_target_const.f64x2
+  dt0 = f64x2*gv0
+
+block0(v0: f64, v1: f64):
+  v2 = splat.dt0 v0
+  v3 = splat.dt0 v1
+  v4 = fmax_pseudo v2, v3
+  v5 = extract_vector v4, 0
+  return v5
+}
+; run: %f64x2_splat_max_pseudo(-0x6.6, 0x2.2) == [0x2.2 0x2.2]

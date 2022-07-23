@@ -389,10 +389,12 @@ impl Engine {
             | "enable_simd"
             | "enable_verifier"
             | "regalloc_checker"
+            | "regalloc_verbose_logs"
             | "is_pic"
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
             | "opt_level" // opt level doesn't change semantics
+            | "preserve_frame_pointers" // we don't currently rely on frame pointers
             | "enable_alias_analysis" // alias analysis-based opts don't change semantics
             | "probestack_func_adjusts_sp" // probestack above asserted disabled
             | "probestack_size_log2" // probestack above asserted disabled

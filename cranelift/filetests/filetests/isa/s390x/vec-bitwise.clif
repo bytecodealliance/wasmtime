@@ -1,0 +1,364 @@
+
+test compile precise-output
+target s390x
+
+function %band_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = band.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vn %v24, %v24, %v25
+;   br %r14
+
+function %band_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = band.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vn %v24, %v24, %v25
+;   br %r14
+
+function %band_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = band.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vn %v24, %v24, %v25
+;   br %r14
+
+function %band_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = band.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vn %v24, %v24, %v25
+;   br %r14
+
+function %bor_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = bor.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vo %v24, %v24, %v25
+;   br %r14
+
+function %bor_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = bor.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vo %v24, %v24, %v25
+;   br %r14
+
+function %bor_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = bor.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vo %v24, %v24, %v25
+;   br %r14
+
+function %bor_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = bor.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vo %v24, %v24, %v25
+;   br %r14
+
+function %bxor_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = bxor.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vx %v24, %v24, %v25
+;   br %r14
+
+function %bxor_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = bxor.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vx %v24, %v24, %v25
+;   br %r14
+
+function %bxor_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = bxor.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vx %v24, %v24, %v25
+;   br %r14
+
+function %bxor_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = bxor.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vx %v24, %v24, %v25
+;   br %r14
+
+function %band_not_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = band_not.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vnc %v24, %v24, %v25
+;   br %r14
+
+function %band_not_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = band_not.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vnc %v24, %v24, %v25
+;   br %r14
+
+function %band_not_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = band_not.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vnc %v24, %v24, %v25
+;   br %r14
+
+function %band_not_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = band_not.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vnc %v24, %v24, %v25
+;   br %r14
+
+function %bor_not_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = bor_not.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   voc %v24, %v24, %v25
+;   br %r14
+
+function %bor_not_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = bor_not.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   voc %v24, %v24, %v25
+;   br %r14
+
+function %bor_not_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = bor_not.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   voc %v24, %v24, %v25
+;   br %r14
+
+function %bor_not_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = bor_not.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   voc %v24, %v24, %v25
+;   br %r14
+
+function %bxor_not_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = bxor_not.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vnx %v24, %v24, %v25
+;   br %r14
+
+function %bxor_not_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = bxor_not.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vnx %v24, %v24, %v25
+;   br %r14
+
+function %bxor_not_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = bxor_not.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vnx %v24, %v24, %v25
+;   br %r14
+
+function %bxor_not_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = bxor_not.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vnx %v24, %v24, %v25
+;   br %r14
+
+function %bnot_i64x2(i64x2) -> i64x2 {
+block0(v0: i64x2):
+  v1 = bnot.i64x2 v0
+  return v1
+}
+
+; block0:
+;   vno %v24, %v24, %v24
+;   br %r14
+
+function %bnot_i32x4(i32x4) -> i32x4 {
+block0(v0: i32x4):
+  v1 = bnot.i32x4 v0
+  return v1
+}
+
+; block0:
+;   vno %v24, %v24, %v24
+;   br %r14
+
+function %bnot_i16x8(i16x8) -> i16x8 {
+block0(v0: i16x8):
+  v1 = bnot.i16x8 v0
+  return v1
+}
+
+; block0:
+;   vno %v24, %v24, %v24
+;   br %r14
+
+function %bnot_i8x16(i8x16) -> i8x16 {
+block0(v0: i8x16):
+  v1 = bnot.i8x16 v0
+  return v1
+}
+
+; block0:
+;   vno %v24, %v24, %v24
+;   br %r14
+
+function %bitselect_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bitselect.i64x2 v0, v1, v2
+  return v3
+}
+
+; block0:
+;   vsel %v24, %v25, %v26, %v24
+;   br %r14
+
+function %bitselect_i32x4(i32x4, i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4, v2: i32x4):
+  v3 = bitselect.i32x4 v0, v1, v2
+  return v3
+}
+
+; block0:
+;   vsel %v24, %v25, %v26, %v24
+;   br %r14
+
+function %bitselect_i16x8(i16x8, i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8, v2: i16x8):
+  v3 = bitselect.i16x8 v0, v1, v2
+  return v3
+}
+
+; block0:
+;   vsel %v24, %v25, %v26, %v24
+;   br %r14
+
+function %bitselect_i8x16(i8x16, i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16, v2: i8x16):
+  v3 = bitselect.i8x16 v0, v1, v2
+  return v3
+}
+
+; block0:
+;   vsel %v24, %v25, %v26, %v24
+;   br %r14
+
+function %vselect_i64x2(b64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: b64x2, v1: i64x2, v2: i64x2):
+  v3 = vselect.i64x2 v0, v1, v2
+  return v3
+}
+
+; block0:
+;   vsel %v24, %v25, %v26, %v24
+;   br %r14
+
+function %vselect_i32x4(b32x4, i32x4, i32x4) -> i32x4 {
+block0(v0: b32x4, v1: i32x4, v2: i32x4):
+  v3 = vselect.i32x4 v0, v1, v2
+  return v3
+}
+
+; block0:
+;   vsel %v24, %v25, %v26, %v24
+;   br %r14
+
+function %vselect_i16x8(b16x8, i16x8, i16x8) -> i16x8 {
+block0(v0: b16x8, v1: i16x8, v2: i16x8):
+  v3 = vselect.i16x8 v0, v1, v2
+  return v3
+}
+
+; block0:
+;   vsel %v24, %v25, %v26, %v24
+;   br %r14
+
+function %vselect_i8x16(b8x16, i8x16, i8x16) -> i8x16 {
+block0(v0: b8x16, v1: i8x16, v2: i8x16):
+  v3 = vselect.i8x16 v0, v1, v2
+  return v3
+}
+
+; block0:
+;   vsel %v24, %v25, %v26, %v24
+;   br %r14
+

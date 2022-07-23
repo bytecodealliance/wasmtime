@@ -893,13 +893,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Fmin
         | Opcode::Fmax
         | Opcode::FminPseudo
-        | Opcode::FmaxPseudo => implemented_in_isle(ctx),
-
-        Opcode::Icmp => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::Fcmp => {
+        | Opcode::FmaxPseudo
+        | Opcode::Sqrt
+        | Opcode::Fpromote
+        | Opcode::FvpromoteLow
+        | Opcode::Fdemote
+        | Opcode::Fvdemote
+        | Opcode::Icmp
+        | Opcode::Fcmp => {
             implemented_in_isle(ctx);
         }
 
@@ -1018,36 +1019,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
                 };
             };
-        }
-
-        Opcode::Sqrt => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::Fpromote => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::FvpromoteLow => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::Fdemote => {
-            // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
-            // must avoid merging a load here.
-            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            ctx.emit(Inst::xmm_unary_rm_r(SseOpcode::Cvtsd2ss, src, dst));
-        }
-
-        Opcode::Fvdemote => {
-            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            ctx.emit(Inst::xmm_unary_rm_r(
-                SseOpcode::Cvtpd2ps,
-                RegMem::from(src),
-                dst,
-            ));
         }
 
         Opcode::FcvtFromSint => {
@@ -3273,19 +3244,13 @@ impl LowerBackend for X64Backend {
                     let jt_size = jt_size as u32;
 
                     let ty = ctx.input_ty(branches[0], 0);
-                    let ext_spec = match ty {
-                        types::I128 => panic!("BrTable unimplemented for I128"),
-                        types::I64 => ExtSpec::ZeroExtendTo64,
-                        _ => ExtSpec::ZeroExtendTo32,
-                    };
-
                     let idx = extend_input_to_reg(
                         ctx,
                         InsnInput {
                             insn: branches[0],
                             input: 0,
                         },
-                        ext_spec,
+                        ExtSpec::ZeroExtendTo32,
                     );
 
                     // Emit the compound instruction that does:

@@ -1279,7 +1279,6 @@ impl FClassResult {
 /// EQ - equal numerical value.
 /// LT - x is less than y.
 /// GT - x is greater than y.
-
 #[derive(Clone, Copy)]
 pub struct FloatCCArgs(pub(crate) u8);
 

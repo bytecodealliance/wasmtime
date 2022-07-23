@@ -11,29 +11,29 @@ use wasm_encoder::{
 /// operations.
 #[derive(Debug)]
 pub struct TableOps {
-    pub(crate) num_params: u8,
-    pub(crate) num_globals: u8,
-    pub(crate) table_size: u32,
+    pub(crate) num_params: u32,
+    pub(crate) num_globals: u32,
+    pub(crate) table_size: i32,
     ops: Vec<TableOp>,
 }
 
-const NUM_PARAMS_RANGE: RangeInclusive<u8> = 1..=10;
-const NUM_GLOBALS_RANGE: RangeInclusive<u8> = 1..=10;
-const TABLE_SIZE_RANGE: RangeInclusive<u32> = 1..=100;
+const NUM_PARAMS_RANGE: RangeInclusive<u32> = 0..=10;
+const NUM_GLOBALS_RANGE: RangeInclusive<u32> = 0..=10;
+const TABLE_SIZE_RANGE: RangeInclusive<i32> = 0..=100;
 const MAX_OPS: usize = 100;
 
 impl TableOps {
     /// Serialize this module into a Wasm binary.
     ///
-    /// The module requires a single import: `(import "" "gc" (func))`. This
-    /// should be a function to trigger GC.
+    /// The module requires several function imports. See this function's
+    /// implementation for their exact types.
     ///
     /// The single export of the module is a function "run" that takes
-    /// `self.num_params()` parameters of type `externref`.
+    /// `self.num_params` parameters of type `externref`.
     ///
-    /// The "run" function is guaranteed to terminate (no loops or recursive
-    /// calls), but is not guaranteed to avoid traps (might access out-of-bounds
-    /// of the table).
+    /// The "run" function does not terminate; you should run it with limited
+    /// fuel. It also is not guaranteed to avoid traps: it may access
+    /// out-of-bounds of the table.
     pub fn to_wasm_binary(&self) -> Vec<u8> {
         let mut module = Module::new();
 
@@ -82,7 +82,7 @@ impl TableOps {
         let mut tables = TableSection::new();
         tables.table(TableType {
             element_type: ValType::ExternRef,
-            minimum: self.table_size,
+            minimum: self.table_size as u32,
             maximum: None,
         });
 
@@ -111,12 +111,7 @@ impl TableOps {
 
         func.instruction(&Instruction::Loop(wasm_encoder::BlockType::Empty));
         for op in &self.ops {
-            op.insert(
-                &mut func,
-                self.num_params as u32,
-                self.table_size,
-                self.num_globals as u32,
-            );
+            op.insert(&mut func, self.num_params as u32);
         }
         func.instruction(&Instruction::Br(0));
         func.instruction(&Instruction::End);
@@ -140,72 +135,64 @@ impl TableOps {
 
 impl<'a> Arbitrary<'a> for TableOps {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
-        let num_params = u.int_in_range(NUM_PARAMS_RANGE)?;
-        let num_globals = u.int_in_range(NUM_GLOBALS_RANGE)?;
-        let table_size = u.int_in_range(TABLE_SIZE_RANGE)?;
+        let mut result = TableOps {
+            num_params: u.int_in_range(NUM_PARAMS_RANGE)?,
+            num_globals: u.int_in_range(NUM_GLOBALS_RANGE)?,
+            table_size: u.int_in_range(TABLE_SIZE_RANGE)?,
+            ops: Vec::new(),
+        };
 
         let mut stack = 0;
-        let mut ops = vec![];
         let mut choices = vec![];
-        loop {
-            let keep_going = ops.len() < MAX_OPS && u.arbitrary().unwrap_or(false);
-            if !keep_going {
-                break;
-            }
-
-            ops.push(TableOp::arbitrary(u, &mut stack, &mut choices)?);
+        while result.ops.len() < MAX_OPS && !u.is_empty() {
+            add_table_op(&mut result, u, &mut stack, &mut choices)?;
         }
 
         // Drop any extant refs on the stack.
         for _ in 0..stack {
-            ops.push(TableOp::Drop);
+            result.ops.push(TableOp::Drop);
         }
 
-        Ok(TableOps {
-            num_params,
-            num_globals,
-            table_size,
-            ops,
-        })
+        Ok(result)
     }
 }
 
 macro_rules! define_table_ops {
 	(
         $(
-            $op:ident $( ( $($imm:ty),* $(,)* ) )? : $params:expr => $results:expr ,
+            $op:ident $( ( $($limit:expr => $ty:ty),* ) )? : $params:expr => $results:expr ,
         )*
     ) => {
         #[derive(Copy, Clone, Debug)]
         pub(crate) enum TableOp {
             $(
-                $op $( ( $($imm),* ) )? ,
+                $op $( ( $($ty),* ) )? ,
             )*
         }
 
-        impl TableOp {
-            fn arbitrary(
-                u: &mut Unstructured,
-                stack: &mut u32,
-                choices: &mut Vec<fn(&mut Unstructured, &mut u32) -> Result<TableOp>>,
-            ) -> Result<TableOp> {
-                choices.clear();
+        fn add_table_op(
+            ops: &mut TableOps,
+            u: &mut Unstructured,
+            stack: &mut u32,
+            choices: &mut Vec<fn(&TableOps, &mut Unstructured, &mut u32) -> Result<TableOp>>,
+        ) -> Result<()> {
+            choices.clear();
 
-                // Add all the choices of valid `TableOp`s we could generate.
-                $(
-                    #[allow(unused_comparisons)]
-                    if *stack >= $params {
-                        choices.push(|_u, stack| {
-                            *stack = *stack - $params + $results;
-                            Ok(TableOp::$op $( ( $( <$imm>::arbitrary(_u)? ),* ) )? )
-                        });
-                    }
-                )*
+            // Add all the choices of valid `TableOp`s we could generate.
+            $(
+                #[allow(unused_comparisons)]
+                if $( $(($limit as fn(&TableOps) -> $ty)(&*ops) > 0 &&)* )? *stack >= $params {
+                    choices.push(|_ops, _u, stack| {
+                        *stack = *stack - $params + $results;
+                        Ok(TableOp::$op $( ( $(_u.int_in_range(0..=($limit as fn(&TableOps) -> $ty)(_ops) - 1)?),* ) )? )
+                    });
+                }
+            )*
 
-                // Choose a table op to insert.
-                let f = u.choose(&choices)?;
-                f(u, stack)
-            }
+            // Choose a table op to insert.
+            let f = u.choose(&choices)?;
+            let v = f(ops, u, stack)?;
+            Ok(ops.ops.push(v))
         }
 	};
 }
@@ -216,14 +203,15 @@ define_table_ops! {
     MakeRefs : 0 => 3,
     TakeRefs : 3 => 0,
 
-    TableGet(i32) : 0 => 1,
-    TableSet(i32) : 1 => 0,
+    // Add one to make sure that out of bounds table accesses are possible, but still rare.
+    TableGet(|ops| ops.table_size + 1 => i32) : 0 => 1,
+    TableSet(|ops| ops.table_size + 1 => i32) : 1 => 0,
 
-    GlobalGet(u32) : 0 => 1,
-    GlobalSet(u32) : 1 => 0,
+    GlobalGet(|ops| ops.num_globals => u32) : 0 => 1,
+    GlobalSet(|ops| ops.num_globals => u32) : 1 => 0,
 
-    LocalGet(u32) : 0 => 1,
-    LocalSet(u32) : 1 => 0,
+    LocalGet(|ops| ops.num_params => u32) : 0 => 1,
+    LocalSet(|ops| ops.num_params => u32) : 1 => 0,
 
     Drop : 1 => 0,
 
@@ -231,19 +219,10 @@ define_table_ops! {
 }
 
 impl TableOp {
-    fn insert(self, func: &mut Function, num_params: u32, table_size: u32, num_globals: u32) {
-        assert!(num_params > 0);
-        assert!(table_size > 0);
-
-        // Add one to make sure that out of bounds table accesses are possible,
-        // but still rare.
-        let table_mod = table_size as i32 + 1;
-
+    fn insert(self, func: &mut Function, scratch_local: u32) {
         let gc_func_idx = 0;
         let take_refs_func_idx = 1;
         let make_refs_func_idx = 2;
-
-        let scratch_local = num_params;
 
         match self {
             Self::Gc => {
@@ -256,26 +235,26 @@ impl TableOp {
                 func.instruction(&Instruction::Call(take_refs_func_idx));
             }
             Self::TableGet(x) => {
-                func.instruction(&Instruction::I32Const(x % table_mod));
+                func.instruction(&Instruction::I32Const(x));
                 func.instruction(&Instruction::TableGet { table: 0 });
             }
             Self::TableSet(x) => {
                 func.instruction(&Instruction::LocalSet(scratch_local));
-                func.instruction(&Instruction::I32Const(x % table_mod));
+                func.instruction(&Instruction::I32Const(x));
                 func.instruction(&Instruction::LocalGet(scratch_local));
                 func.instruction(&Instruction::TableSet { table: 0 });
             }
             Self::GlobalGet(x) => {
-                func.instruction(&Instruction::GlobalGet(x % num_globals));
+                func.instruction(&Instruction::GlobalGet(x));
             }
             Self::GlobalSet(x) => {
-                func.instruction(&Instruction::GlobalSet(x % num_globals));
+                func.instruction(&Instruction::GlobalSet(x));
             }
             Self::LocalGet(x) => {
-                func.instruction(&Instruction::LocalGet(x % num_params));
+                func.instruction(&Instruction::LocalGet(x));
             }
             Self::LocalSet(x) => {
-                func.instruction(&Instruction::LocalSet(x % num_params));
+                func.instruction(&Instruction::LocalSet(x));
             }
             Self::Drop => {
                 func.instruction(&Instruction::Drop);

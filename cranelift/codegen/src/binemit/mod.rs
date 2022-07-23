@@ -85,7 +85,7 @@ impl fmt::Display for Reloc {
             Self::MachOX86_64Tlv => write!(f, "MachOX86_64Tlv"),
             Self::Aarch64TlsGdAdrPage21 => write!(f, "Aarch64TlsGdAdrPage21"),
             Self::Aarch64TlsGdAddLo12Nc => write!(f, "Aarch64TlsGdAddLo12Nc"),
-            Self::RiscvCall => write!(f, "riscvCall"),
+            Self::RiscvCall => write!(f, "RiscvCall"),
         }
     }
 }

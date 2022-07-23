@@ -2130,6 +2130,16 @@ fn test_aarch64_binemit() {
         "csel x10, x12, x14, hs",
     ));
     insns.push((
+        Inst::CSNeg {
+            rd: writable_xreg(10),
+            rn: xreg(12),
+            rm: xreg(14),
+            cond: Cond::Hs,
+        },
+        "8A258EDA",
+        "csneg x10, x12, x14, hs",
+    ));
+    insns.push((
         Inst::CSet {
             rd: writable_xreg(15),
             cond: Cond::Ge,
@@ -4421,6 +4431,17 @@ fn test_aarch64_binemit() {
             op: VecMisc2::Fabs,
             rd: writable_vreg(15),
             rn: vreg(16),
+            size: VectorSize::Size32x2,
+        },
+        "0FFAA00E",
+        "fabs v15.2s, v16.2s",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Fabs,
+            rd: writable_vreg(15),
+            rn: vreg(16),
             size: VectorSize::Size32x4,
         },
         "0FFAA04E",
@@ -4436,6 +4457,17 @@ fn test_aarch64_binemit() {
         },
         "C3FAE04E",
         "fabs v3.2d, v22.2d",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Fneg,
+            rd: writable_vreg(31),
+            rn: vreg(0),
+            size: VectorSize::Size32x2,
+        },
+        "1FF8A02E",
+        "fneg v31.2s, v0.2s",
     ));
 
     insns.push((
@@ -4469,6 +4501,17 @@ fn test_aarch64_binemit() {
         },
         "32FBA12E",
         "fsqrt v18.2s, v25.2s",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Fsqrt,
+            rd: writable_vreg(18),
+            rn: vreg(25),
+            size: VectorSize::Size32x4,
+        },
+        "32FBA16E",
+        "fsqrt v18.4s, v25.4s",
     ));
 
     insns.push((
@@ -5526,6 +5569,16 @@ fn test_aarch64_binemit() {
         },
         "1F40201E",
         "fmov s31, s0",
+    ));
+
+    insns.push((
+        Inst::FpuExtend {
+            rd: writable_vreg(31),
+            rn: vreg(0),
+            size: ScalarSize::Size64,
+        },
+        "1F40601E",
+        "fmov d31, d0",
     ));
 
     insns.push((

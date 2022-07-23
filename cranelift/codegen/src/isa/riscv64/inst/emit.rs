@@ -1974,8 +1974,6 @@ impl MachInstEmit for Inst {
                             rs: rs1,
                         }
                         .emit(&[], sink, emit_info, state);
-                        // here is rs1 and rs2 all equal to zero.
-                        // sign bit not known.
                         Inst::AluRRImm12 {
                             alu_op: AluOPRRI::Slli,
                             rd: tmp,

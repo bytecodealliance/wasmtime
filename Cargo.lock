@@ -584,6 +584,7 @@ dependencies = [
  "anyhow",
  "arbitrary",
  "cranelift",
+ "cranelift-native",
 ]
 
 [[package]]
@@ -1485,10 +1486,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aab8fc367588b89dcee83ab0fd66b72b50b72fa1904d7095045ace2b0c81c35"
 
 [[package]]
-name = "ittapi-rs"
-version = "0.2.0"
+name = "ittapi"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f712648a1ad72fbfb7adc2772c331e8d90f022f8cf30cbabefba2878dd3172b0"
+checksum = "663fe0550070071ff59e981864a9cd3ee1c869ed0a088140d9ac4dc05ea6b1a1"
+dependencies = [
+ "anyhow",
+ "ittapi-sys",
+ "log",
+]
+
+[[package]]
+name = "ittapi-sys"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e21911b7183f38c71d75ab478a527f314e28db51027037ece2e5511ed9410703"
 dependencies = [
  "cc",
 ]
@@ -2351,9 +2363,9 @@ dependencies = [
 
 [[package]]
 name = "regalloc2"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd4159f16b35683a517cc0318997f8fbe89523ed03526c90e267bed6d66ced36"
+checksum = "76ff2e57a7d050308b3fde0f707aa240b491b190e3855f212860f11bb3af4205"
 dependencies = [
  "fxhash",
  "log",
@@ -2425,14 +2437,6 @@ dependencies = [
  "serde",
  "subtle",
  "zeroize",
-]
-
-[[package]]
-name = "run-examples"
-version = "0.19.0"
-dependencies = [
- "anyhow",
- "cc",
 ]
 
 [[package]]
@@ -3571,7 +3575,7 @@ dependencies = [
  "cfg-if",
  "cpp_demangle",
  "gimli",
- "ittapi-rs",
+ "ittapi",
  "log",
  "object",
  "rustc-demangle",

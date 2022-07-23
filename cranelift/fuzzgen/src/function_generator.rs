@@ -1,3 +1,4 @@
+use crate::codegen::ir::ValueList;
 use crate::config::Config;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
@@ -14,36 +15,26 @@ use std::ops::RangeInclusive;
 
 type BlockSignature = Vec<Type>;
 
-fn insert_opcode_arity_0(
-    _fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    opcode: Opcode,
-    _args: &'static [Type],
-    _rets: &'static [Type],
-) -> Result<()> {
-    builder.ins().NullAry(opcode, INVALID);
-    Ok(())
-}
-
-fn insert_opcode_arity_2(
+fn insert_opcode(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
     opcode: Opcode,
     args: &'static [Type],
     rets: &'static [Type],
 ) -> Result<()> {
-    let arg0 = fgen.get_variable_of_type(args[0])?;
-    let arg0 = builder.use_var(arg0);
+    let mut arg_vals = ValueList::new();
+    for &arg in args.into_iter() {
+        let var = fgen.get_variable_of_type(arg)?;
+        let val = builder.use_var(var);
+        arg_vals.push(val, &mut builder.func.dfg.value_lists);
+    }
 
-    let arg1 = fgen.get_variable_of_type(args[1])?;
-    let arg1 = builder.use_var(arg1);
-
-    let typevar = rets[0];
-    let (inst, dfg) = builder.ins().Binary(opcode, typevar, arg0, arg1);
+    let typevar = rets.first().copied().unwrap_or(INVALID);
+    let (inst, dfg) = builder.ins().MultiAry(opcode, typevar, arg_vals);
     let results = dfg.inst_results(inst).to_vec();
 
-    for (val, ty) in results.into_iter().zip(rets) {
-        let var = fgen.get_variable_of_type(*ty)?;
+    for (val, &ty) in results.into_iter().zip(rets) {
+        let var = fgen.get_variable_of_type(ty)?;
         builder.def_var(var, val);
     }
     Ok(())
@@ -89,6 +80,20 @@ fn insert_stack_store(
     Ok(())
 }
 
+fn insert_const(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    _opcode: Opcode,
+    _args: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let typevar = rets[0];
+    let var = fgen.get_variable_of_type(typevar)?;
+    let val = fgen.generate_const(builder, typevar)?;
+    builder.def_var(var, val);
+    Ok(())
+}
+
 type OpcodeInserter = fn(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
@@ -104,32 +109,84 @@ const OPCODE_SIGNATURES: &'static [(
     &'static [Type], // Rets
     OpcodeInserter,
 )] = &[
-    (Opcode::Nop, &[], &[], insert_opcode_arity_0),
+    (Opcode::Nop, &[], &[], insert_opcode),
     // Iadd
-    (Opcode::Iadd, &[I8, I8], &[I8], insert_opcode_arity_2),
-    (Opcode::Iadd, &[I16, I16], &[I16], insert_opcode_arity_2),
-    (Opcode::Iadd, &[I32, I32], &[I32], insert_opcode_arity_2),
-    (Opcode::Iadd, &[I64, I64], &[I64], insert_opcode_arity_2),
+    (Opcode::Iadd, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Iadd, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Iadd, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Iadd, &[I64, I64], &[I64], insert_opcode),
     // Isub
-    (Opcode::Isub, &[I8, I8], &[I8], insert_opcode_arity_2),
-    (Opcode::Isub, &[I16, I16], &[I16], insert_opcode_arity_2),
-    (Opcode::Isub, &[I32, I32], &[I32], insert_opcode_arity_2),
-    (Opcode::Isub, &[I64, I64], &[I64], insert_opcode_arity_2),
+    (Opcode::Isub, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Isub, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Isub, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Isub, &[I64, I64], &[I64], insert_opcode),
     // Imul
-    (Opcode::Imul, &[I8, I8], &[I8], insert_opcode_arity_2),
-    (Opcode::Imul, &[I16, I16], &[I16], insert_opcode_arity_2),
-    (Opcode::Imul, &[I32, I32], &[I32], insert_opcode_arity_2),
-    (Opcode::Imul, &[I64, I64], &[I64], insert_opcode_arity_2),
+    (Opcode::Imul, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Imul, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Imul, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Imul, &[I64, I64], &[I64], insert_opcode),
     // Udiv
-    (Opcode::Udiv, &[I8, I8], &[I8], insert_opcode_arity_2),
-    (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode_arity_2),
-    (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode_arity_2),
-    (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode_arity_2),
+    (Opcode::Udiv, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode),
     // Sdiv
-    (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode_arity_2),
-    (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode_arity_2),
-    (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode_arity_2),
-    (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode_arity_2),
+    (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode),
+    // Fadd
+    (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode),
+    // Fmul
+    (Opcode::Fmul, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fmul, &[F64, F64], &[F64], insert_opcode),
+    // Fsub
+    (Opcode::Fsub, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fsub, &[F64, F64], &[F64], insert_opcode),
+    // Fdiv
+    (Opcode::Fdiv, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fdiv, &[F64, F64], &[F64], insert_opcode),
+    // Fmin
+    (Opcode::Fmin, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fmin, &[F64, F64], &[F64], insert_opcode),
+    // Fmax
+    (Opcode::Fmax, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fmax, &[F64, F64], &[F64], insert_opcode),
+    // FminPseudo
+    (Opcode::FminPseudo, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::FminPseudo, &[F64, F64], &[F64], insert_opcode),
+    // FmaxPseudo
+    (Opcode::FmaxPseudo, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::FmaxPseudo, &[F64, F64], &[F64], insert_opcode),
+    // Fcopysign
+    (Opcode::Fcopysign, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fcopysign, &[F64, F64], &[F64], insert_opcode),
+    // Fma
+    // TODO: Missing on X86, see https://github.com/bytecodealliance/wasmtime/pull/4460
+    // (Opcode::Fma, &[F32, F32, F32], &[F32], insert_opcode),
+    // (Opcode::Fma, &[F64, F64, F64], &[F64], insert_opcode),
+    // Fabs
+    (Opcode::Fabs, &[F32], &[F32], insert_opcode),
+    (Opcode::Fabs, &[F64], &[F64], insert_opcode),
+    // Fneg
+    (Opcode::Fneg, &[F32], &[F32], insert_opcode),
+    (Opcode::Fneg, &[F64], &[F64], insert_opcode),
+    // Sqrt
+    (Opcode::Sqrt, &[F32], &[F32], insert_opcode),
+    (Opcode::Sqrt, &[F64], &[F64], insert_opcode),
+    // Ceil
+    (Opcode::Ceil, &[F32], &[F32], insert_opcode),
+    (Opcode::Ceil, &[F64], &[F64], insert_opcode),
+    // Floor
+    (Opcode::Floor, &[F32], &[F32], insert_opcode),
+    (Opcode::Floor, &[F64], &[F64], insert_opcode),
+    // Trunc
+    (Opcode::Trunc, &[F32], &[F32], insert_opcode),
+    (Opcode::Trunc, &[F64], &[F64], insert_opcode),
+    // Nearest
+    (Opcode::Nearest, &[F32], &[F32], insert_opcode),
+    (Opcode::Nearest, &[F64], &[F64], insert_opcode),
     // Stack Access
     (Opcode::StackStore, &[I8], &[], insert_stack_store),
     (Opcode::StackStore, &[I16], &[], insert_stack_store),
@@ -139,6 +196,16 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::StackLoad, &[], &[I16], insert_stack_load),
     (Opcode::StackLoad, &[], &[I32], insert_stack_load),
     (Opcode::StackLoad, &[], &[I64], insert_stack_load),
+    // Integer Consts
+    (Opcode::Iconst, &[], &[I8], insert_const),
+    (Opcode::Iconst, &[], &[I16], insert_const),
+    (Opcode::Iconst, &[], &[I32], insert_const),
+    (Opcode::Iconst, &[], &[I64], insert_const),
+    // Float Consts
+    (Opcode::F32const, &[], &[F32], insert_const),
+    (Opcode::F64const, &[], &[F64], insert_const),
+    // Bool Consts
+    (Opcode::Bconst, &[], &[B1], insert_const),
 ];
 
 pub struct FunctionGenerator<'r, 'data>
@@ -202,9 +269,8 @@ where
         let scalars = [
             // IFLAGS, FFLAGS,
             B1, // B8, B16, B32, B64, B128,
-            I8, I16, I32, I64,
-            // I128,
-            // F32, F64,
+            I8, I16, I32, I64, // I128,
+            F32, F64,
             // R32, R64,
         ];
         // TODO: vector types
@@ -284,6 +350,14 @@ where
                 builder.ins().iconst(ty, imm64)
             }
             ty if ty.is_bool() => builder.ins().bconst(ty, bool::arbitrary(self.u)?),
+            // f{32,64}::arbitrary does not generate a bunch of important values
+            // such as Signaling NaN's / NaN's with payload, so generate floats from integers.
+            F32 => builder
+                .ins()
+                .f32const(f32::from_bits(u32::arbitrary(self.u)?)),
+            F64 => builder
+                .ins()
+                .f64const(f64::from_bits(u64::arbitrary(self.u)?)),
             _ => unimplemented!(),
         })
     }
@@ -345,8 +419,7 @@ where
 
     /// Generates a br_table into a random block
     fn generate_br_table(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let _type = *self.u.choose(&[I8, I16, I32, I64][..])?;
-        let var = self.get_variable_of_type(_type)?;
+        let var = self.get_variable_of_type(I32)?; // br_table only supports I32
         let val = builder.use_var(var);
 
         let valid_blocks = self.generate_valid_jumptable_target_blocks();

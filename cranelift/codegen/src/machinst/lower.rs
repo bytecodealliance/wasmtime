@@ -12,8 +12,8 @@ use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::{
     types::{FFLAGS, IFLAGS},
     ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
-    GlobalValue, GlobalValueData, Inst, InstructionData, MemFlags, Opcode, Signature, SourceLoc,
-    Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
+    GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, Opcode, Signature,
+    SourceLoc, Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::{
     non_writable_value_regs, writable_value_regs, ABICallee, BlockIndex, BlockLoweringOrder,
@@ -167,6 +167,8 @@ pub trait LowerCtx {
     /// for the input produced by the sunk instruction), otherwise the
     /// side-effect will occur twice.
     fn sink_inst(&mut self, ir_inst: Inst);
+    /// Retrieve immediate data given a handle.
+    fn get_immediate_data(&self, imm: Immediate) -> &ConstantData;
     /// Retrieve constant data given a handle.
     fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData;
     /// Indicate that a constant should be emitted.
@@ -1446,6 +1448,10 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         assert!(sunk_inst_exit_color == self.cur_scan_entry_color.unwrap());
         self.cur_scan_entry_color = Some(sunk_inst_entry_color);
         self.inst_sunk.insert(ir_inst);
+    }
+
+    fn get_immediate_data(&self, imm: Immediate) -> &ConstantData {
+        self.f.dfg.immediates.get(imm).unwrap()
     }
 
     fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData {

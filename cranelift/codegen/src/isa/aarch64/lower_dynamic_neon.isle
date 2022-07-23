@@ -1,23 +1,51 @@
 
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty @ (dynamic_lane _ _) (iadd x y)))
-      (value_reg (vec_rrr (VecALUOp.Add) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+      (value_reg (add_vec (put_in_reg x) (put_in_reg y) (vector_size ty))))
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty @ (dynamic_lane _ _) (isub x y)))
-      (value_reg (vec_rrr (VecALUOp.Sub) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+      (value_reg (sub_vec (put_in_reg x) (put_in_reg y) (vector_size ty))))
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (lane_fits_in_32 ty @ (dynamic_lane _ _)) (imul x y)))
       (value_reg (vec_rrr (VecALUOp.Mul) (put_in_reg x) (put_in_reg y) (vector_size ty))))
 
-;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty @ (dynamic_lane _ _) (fadd x y)))
       (value_reg (vec_rrr (VecALUOp.Fadd) (put_in_reg x) (put_in_reg y) (vector_size ty))))
 
 ;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty @ (dynamic_lane _ _) (fsub x y)))
       (value_reg (vec_rrr (VecALUOp.Fsub) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `fmul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type ty @ (dynamic_lane _ _) (fmul x y)))
+      (value_reg (vec_rrr (VecALUOp.Fmul) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type ty @ (dynamic_lane _ _) (fdiv x y)))
+      (value_reg (vec_rrr (VecALUOp.Fdiv) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type ty @ (dynamic_lane _ _) (fmin x y)))
+      (value_reg (vec_rrr (VecALUOp.Fmin) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `fmax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type ty @ (dynamic_lane _ _) (fmax x y)))
+      (value_reg (vec_rrr (VecALUOp.Fmax) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `fmin_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type ty @ (dynamic_lane _ _) (fmin_pseudo x y)))
+      (value_reg (bsl ty
+                  (vec_rrr (VecALUOp.Fcmgt) (put_in_reg x) (put_in_reg y)
+                   (vector_size ty)) (put_in_reg y) (put_in_reg x))))
+
+;;;; Rules for `fmax_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type ty @ (dynamic_lane _ _) (fmax_pseudo x y)))
+      (value_reg (bsl ty
+                  (vec_rrr (VecALUOp.Fcmgt) (put_in_reg y) (put_in_reg x)
+                   (vector_size ty)) (put_in_reg y) (put_in_reg x))))
 
 ;;; Rules for `dynamic_stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (dynamic_stack_addr stack_slot))

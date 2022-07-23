@@ -12,6 +12,7 @@ publish = false
 
 [dependencies]
 cranelift = { path = "../umbrella", version = "0.87.0" }
+cranelift-native = { path = "../native", version = "0.87.0" }
 
 anyhow = "1.0.19"
 arbitrary = "1.0.0"

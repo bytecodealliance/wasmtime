@@ -1,6 +1,7 @@
 test interpret
 test run
 target aarch64
+target s390x
 ;; x86_64 hasn't implemented this for `i32x4`
 
 function %sqmulrs_i32x4(i32x4, i32x4) -> i32x4 {

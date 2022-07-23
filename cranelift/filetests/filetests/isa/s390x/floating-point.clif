@@ -168,6 +168,46 @@ block0(v0: f64, v1: f64):
 ;   wfmaxdb %f0, %f0, %f2, 1
 ;   br %r14
 
+function %fmin_pseudo_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fmin_pseudo v0, v1
+  return v2
+}
+
+; block0:
+;   wfminsb %f0, %f0, %f2, 3
+;   br %r14
+
+function %fmin_pseudo_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fmin_pseudo v0, v1
+  return v2
+}
+
+; block0:
+;   wfmindb %f0, %f0, %f2, 3
+;   br %r14
+
+function %fmax_pseudo_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fmax_pseudo v0, v1
+  return v2
+}
+
+; block0:
+;   wfmaxsb %f0, %f0, %f2, 3
+;   br %r14
+
+function %fmax_pseudo_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fmax_pseudo v0, v1
+  return v2
+}
+
+; block0:
+;   wfmaxdb %f0, %f0, %f2, 3
+;   br %r14
+
 function %sqrt_f32(f32) -> f32 {
 block0(v0: f32):
   v1 = sqrt v0

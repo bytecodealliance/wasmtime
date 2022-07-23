@@ -1,59 +1,60 @@
 test compile precise-output
 target s390x
 
-function %f(i64) -> i64 {
+function %f(i32) -> i32 {
   jt0 = jump_table [block1, block2, block3]
 
-block0(v0: i64):
+block0(v0: i32):
   br_table v0, block4, jt0
 
 block1:
-  v1 = iconst.i64 1
+  v1 = iconst.i32 1
   jump block5(v1)
 
 block2:
-  v2 = iconst.i64 2
+  v2 = iconst.i32 2
   jump block5(v2)
 
 block3:
-  v3 = iconst.i64 3
+  v3 = iconst.i32 3
   jump block5(v3)
 
 block4:
-  v4 = iconst.i64 4
+  v4 = iconst.i32 4
   jump block5(v4)
 
-block5(v5: i64):
-  v6 = iadd.i64 v0, v5
+block5(v5: i32):
+  v6 = iadd.i32 v0, v5
   return v6
 }
 
 ; block0:
-;   clgfi %r2, 3
+;   llgfr %r3, %r2
+;   clgfi %r3, 3
 ;   jghe label1
-;   sllg %r5, %r2, 2
-;   larl %r1, 14 ; agf %r1, 0(%r1, %r5) ; br %r1 ; jt_entries label3 label5 label7
+;   sllg %r3, %r3, 2
+;   larl %r1, 14 ; agf %r1, 0(%r1, %r3) ; br %r1 ; jt_entries label3 label5 label7
 ; block1:
-;   lghi %r4, 4
+;   lhi %r5, 4
 ;   jg label2
 ; block2:
 ;   jg label9
 ; block3:
-;   lghi %r4, 1
+;   lhi %r5, 1
 ;   jg label4
 ; block4:
 ;   jg label9
 ; block5:
-;   lghi %r4, 2
+;   lhi %r5, 2
 ;   jg label6
 ; block6:
 ;   jg label9
 ; block7:
-;   lghi %r4, 3
+;   lhi %r5, 3
 ;   jg label8
 ; block8:
 ;   jg label9
 ; block9:
-;   agr %r2, %r4
+;   ar %r2, %r5
 ;   br %r14
 

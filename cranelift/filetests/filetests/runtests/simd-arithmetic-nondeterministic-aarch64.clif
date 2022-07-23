@@ -3,6 +3,7 @@
 ; simd-arithmetic-nondeterministic*.clif as well.
 test run
 target aarch64
+target s390x
 
 function %fmax_f64x2(f64x2, f64x2) -> f64x2 {
 block0(v0: f64x2, v1: f64x2):
