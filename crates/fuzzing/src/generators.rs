@@ -27,7 +27,7 @@ pub use config::{Config, WasmtimeConfig};
 pub use instance_allocation_strategy::InstanceAllocationStrategy;
 pub use instance_limits::InstanceLimits;
 pub use memory::{MemoryConfig, NormalMemoryConfig, UnalignedMemory, UnalignedMemoryCreator};
-pub use module::{Module, ModuleConfig};
+pub use module::{Module, ModuleConfig, ModuleFeatures};
 pub use single_inst_module::SingleInstModule;
 pub use spec_test::SpecTest;
 pub use stacks::Stacks;

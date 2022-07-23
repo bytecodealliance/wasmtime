@@ -1,5 +1,6 @@
 //! Generate Wasm modules that contain a single instruction.
 
+use super::module::ModuleFeatures;
 use arbitrary::{Arbitrary, Unstructured};
 use wasm_encoder::{
     CodeSection, ExportKind, ExportSection, Function, FunctionSection, Instruction, Module,
@@ -21,9 +22,9 @@ pub struct SingleInstModule<'a> {
 }
 
 impl<'a> SingleInstModule<'a> {
-    /// Generate a binary Wasm module with a single exported function, `test`,
+    /// Encode a binary Wasm module with a single exported function, `test`,
     /// that executes the single instruction.
-    pub fn encode(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Vec<u8> {
         let mut module = Module::new();
 
         // Encode the type section.
@@ -58,6 +59,11 @@ impl<'a> SingleInstModule<'a> {
 
         // Extract the encoded Wasm bytes for this module.
         module.finish()
+    }
+
+    /// Mark which Wasm features are used in the Wasm module.
+    pub fn to_features(&self) -> ModuleFeatures {
+        ModuleFeatures::default()
     }
 }
 
@@ -288,7 +294,7 @@ mod test {
             parameters: &[ValType::I32, ValType::I32],
             results: &[ValType::I32],
         };
-        let wasm = sut.encode();
+        let wasm = sut.to_bytes();
         let wat = wasmprinter::print_bytes(wasm).unwrap();
         assert_eq!(
             wat,
@@ -307,7 +313,7 @@ mod test {
     #[test]
     fn instructions_encode_to_valid_modules() {
         for inst in INSTRUCTIONS {
-            assert!(wat::parse_bytes(&inst.encode()).is_ok());
+            assert!(wat::parse_bytes(&inst.to_bytes()).is_ok());
         }
     }
 }

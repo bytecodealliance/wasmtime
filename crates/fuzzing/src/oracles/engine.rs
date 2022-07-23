@@ -1,33 +1,35 @@
 //! Define the interface for differential evaluation of Wasm functions.
 
-use crate::generators::DiffValue;
-use crate::oracles::{diff_wasmi::WasmiEngine, diff_wasmtime::WasmtimeEngine, generators};
+use crate::generators::{DiffValue, ModuleFeatures};
+use crate::oracles::{diff_wasmi::WasmiEngine, diff_wasmtime::WasmtimeEngine};
 use anyhow::{bail, Ok};
 use arbitrary::Unstructured;
 use std::collections::hash_map::DefaultHasher;
 
-/// Pick one of the engines implemented in this module that is compatible
-/// with the fuzz configuration passed in `config`.
+/// Pick one of the engines implemented in this module that is compatible with
+/// the Wasm features passed in `features` and, when fuzzing Wasmtime against
+/// itself, an existing `wasmtime_engine`.
 pub fn choose(
-    input: &mut Unstructured<'_>,
-    config: &generators::Config,
+    u: &mut Unstructured<'_>,
+    features: &ModuleFeatures,
+    wasmtime_engine: &WasmtimeEngine,
 ) -> anyhow::Result<Box<dyn DiffEngine>> {
     // Filter out any engines that cannot match the given configuration.
     let mut engines: Vec<Box<dyn DiffEngine>> = vec![];
-    if let Result::Ok(e) = WasmtimeEngine::new_with_compatible_config(input, config) {
+    if let Result::Ok(e) = WasmtimeEngine::arbitrary_with_compatible_config(u, wasmtime_engine) {
         engines.push(e)
     }
-    if let Result::Ok(e) = WasmiEngine::new(config) {
+    if let Result::Ok(e) = WasmiEngine::new(features) {
         engines.push(e)
     }
     #[cfg(feature = "fuzz-spec-interpreter")]
-    if let Result::Ok(e) = crate::oracles::diff_spec::SpecInterpreter::new(config) {
+    if let Result::Ok(e) = crate::oracles::diff_spec::SpecInterpreter::new(features) {
         engines.push(e)
     }
 
     // Choose one of the remaining engines.
     if !engines.is_empty() {
-        let index: usize = input.int_in_range(0..=engines.len() - 1)?;
+        let index: usize = u.int_in_range(0..=engines.len() - 1)?;
         Ok(engines.swap_remove(index))
     } else {
         bail!("no engines to pick from")

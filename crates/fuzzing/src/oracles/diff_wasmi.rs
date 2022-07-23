@@ -1,10 +1,9 @@
 //! Evaluate an exported Wasm function using the wasmi interpreter.
 
-use crate::generators::{self, DiffValue};
+use crate::generators::{DiffValue, ModuleFeatures};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
 use anyhow::{bail, Context, Result};
 use std::hash::Hash;
-use wasm_smith::Config;
 
 /// A wrapper for `wasmi` as a [`DiffEngine`].
 pub struct WasmiEngine;
@@ -12,16 +11,15 @@ pub struct WasmiEngine;
 impl WasmiEngine {
     /// Build a new [`WasmiEngine`] but only if the configuration does not rely
     /// on features that `wasmi` does not support.
-    pub fn new(config: &generators::Config) -> Result<Box<Self>> {
-        let config = &config.module_config.config;
-        if config.simd_enabled() {
+    pub fn new(features: &ModuleFeatures) -> Result<Box<Self>> {
+        if features.reference_types {
+            bail!("wasmi does not support reference types")
+        }
+        if features.simd {
             bail!("wasmi does not support SIMD")
         }
-        if config.multi_value_enabled() {
+        if features.multi_value {
             bail!("wasmi does not support multi-value")
-        }
-        if config.reference_types_enabled() {
-            bail!("wasmi does not support reference types")
         }
         Ok(Box::new(Self))
     }

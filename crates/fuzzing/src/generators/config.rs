@@ -1,8 +1,8 @@
 //! Generate a configuration for both Wasmtime and the Wasm module to execute.
 
 use super::{
-    CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig, NormalMemoryConfig,
-    UnalignedMemoryCreator,
+    CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig, ModuleFeatures,
+    NormalMemoryConfig, UnalignedMemoryCreator,
 };
 use crate::oracles::{StoreLimits, Timeout};
 use anyhow::Result;
@@ -99,6 +99,13 @@ impl Config {
                 MemoryConfig::CustomUnaligned => unreachable!(), // Arbitrary impl for `Config` should have prevented this
             }
         }
+    }
+
+    /// Modify this configuration to use the given [`ModuleFeatures`].
+    pub fn set_features(&mut self, features: &ModuleFeatures) {
+        self.module_config.config.simd_enabled = features.simd;
+        self.module_config.config.multi_value_enabled = features.multi_value;
+        self.module_config.config.reference_types_enabled = features.reference_types;
     }
 
     /// Uses this configuration and the supplied source of data to generate

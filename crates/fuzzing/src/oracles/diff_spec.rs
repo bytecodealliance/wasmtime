@@ -1,10 +1,9 @@
 //! Evaluate an exported Wasm function using the WebAssembly specification
 //! reference interpreter.
 
-use crate::generators::DiffValue;
+use crate::generators::{DiffValue, ModuleFeatures};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
 use anyhow::{anyhow, bail, Result};
-use wasm_smith::Config;
 use wasm_spec_interpreter::Value;
 
 /// A wrapper for `wasm-spec-interpreter` as a [`DiffEngine`].
@@ -14,10 +13,9 @@ impl SpecInterpreter {
     /// Build a new [`SpecInterpreter`] but only if the configuration does not
     /// rely on features that the current bindings (i.e.,
     /// `wasm-spec-interpreter`) do not support.
-    pub fn new(config: &crate::generators::Config) -> Result<Box<Self>> {
-        let config = &config.module_config.config;
-        if config.reference_types_enabled() {
-            bail!("wasmi does not support reference types")
+    pub fn new(features: &ModuleFeatures) -> Result<Box<Self>> {
+        if features.reference_types {
+            bail!("the spec interpreter bindings do not support reference types")
         }
         Ok(Box::new(Self))
     }

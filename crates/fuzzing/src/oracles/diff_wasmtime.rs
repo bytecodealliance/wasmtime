@@ -1,6 +1,6 @@
 //! Evaluate an exported Wasm function using Wasmtime.
 
-use crate::generators::{self, DiffValue, InstanceAllocationStrategy};
+use crate::generators::{self, DiffValue, InstanceAllocationStrategy, ModuleFeatures};
 use crate::oracles::engine::DiffInstance;
 use crate::oracles::{compile_module, engine::DiffEngine, instantiate_with_dummy, StoreLimits};
 use anyhow::{Context, Result};
@@ -29,17 +29,31 @@ impl WasmtimeEngine {
         }))
     }
 
-    /// Construct a new Wasmtime engine with a randomly-generated configuration
-    /// that is compatible with `original_config`.
-    pub fn new_with_compatible_config(
-        input: &mut Unstructured<'_>,
-        original_config: &generators::Config,
+    /// Create a new Wasmtime engine from a randomly-generated configuration
+    /// that matches the given Wasm `features`.
+    pub fn arbitrary_with_features(
+        u: &mut Unstructured<'_>,
+        features: &ModuleFeatures,
     ) -> Result<Box<Self>> {
+        let mut config: generators::Config = u.arbitrary()?;
+        config.set_differential_config();
+        config.set_features(features);
+        WasmtimeEngine::new(&config)
+    }
+
+    /// Construct a new Wasmtime engine with a randomly-generated configuration
+    /// that is compatible with `original_engine`.
+    pub fn arbitrary_with_compatible_config(
+        u: &mut Unstructured<'_>,
+        original_engine: &WasmtimeEngine,
+    ) -> Result<Box<Self>> {
+        let original_config = &original_engine.config;
+
         // Generate a completely new Wasmtime configuration leaving the module
         // configuration the same.
         let mut new_config = generators::Config {
             module_config: original_config.module_config.clone(),
-            wasmtime: input.arbitrary()?,
+            wasmtime: u.arbitrary()?,
         };
 
         // Use the same allocation strategy between the two configs.

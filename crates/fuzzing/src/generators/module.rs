@@ -28,7 +28,7 @@ impl Module<'_> {
                 let module = config.generate(input, default_fuel)?;
                 Ok(module.to_bytes())
             }
-            Module::SingleInstModule(config) => Ok(config.encode()),
+            Module::SingleInstModule(config) => Ok(config.to_bytes()),
         }
     }
 }
@@ -88,4 +88,13 @@ impl ModuleConfig {
 
         Ok(module)
     }
+}
+
+/// Document the Wasm features necessary for a module to be evaluated.
+#[derive(Debug, Default)]
+#[allow(missing_docs)]
+pub struct ModuleFeatures {
+    pub simd: bool,
+    pub multi_value: bool,
+    pub reference_types: bool,
 }
