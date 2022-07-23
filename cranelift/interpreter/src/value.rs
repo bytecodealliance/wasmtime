@@ -191,12 +191,19 @@ macro_rules! binary_match {
             _ => unimplemented!()
         }
     };
-    ( $op:tt($arg1:expr, $arg2:expr); unsigned integers ) => {
+    ( $op:tt($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ]; rhs: $rhs:tt ) => {
         match ($arg1, $arg2) {
-            (DataValue::I8(a), DataValue::I8(b)) => { Ok(DataValue::I8((u8::try_from(*a)? $op u8::try_from(*b)?) as i8)) }
-            (DataValue::I16(a), DataValue::I16(b)) => { Ok(DataValue::I16((u16::try_from(*a)? $op u16::try_from(*b)?) as i16)) }
-            (DataValue::I32(a), DataValue::I32(b)) => { Ok(DataValue::I32((u32::try_from(*a)? $op u32::try_from(*b)?) as i32)) }
-            (DataValue::I64(a), DataValue::I64(b)) => { Ok(DataValue::I64((u64::try_from(*a)? $op u64::try_from(*b)?) as i64)) }
+            $( (DataValue::$data_value_ty(a), DataValue::$rhs(b)) => { Ok(DataValue::$data_value_ty(a.$op(*b))) } )*
+            _ => unimplemented!()
+        }
+    };
+    ( $op:ident($arg1:expr, $arg2:expr); unsigned integers ) => {
+        match ($arg1, $arg2) {
+            (DataValue::I8(a), DataValue::I8(b)) => { Ok(DataValue::I8((u8::try_from(*a)?.$op(u8::try_from(*b)?) as i8))) }
+            (DataValue::I16(a), DataValue::I16(b)) => { Ok(DataValue::I16((u16::try_from(*a)?.$op(u16::try_from(*b)?) as i16))) }
+            (DataValue::I32(a), DataValue::I32(b)) => { Ok(DataValue::I32((u32::try_from(*a)?.$op(u32::try_from(*b)?) as i32))) }
+            (DataValue::I64(a), DataValue::I64(b)) => { Ok(DataValue::I64((u64::try_from(*a)?.$op(u64::try_from(*b)?) as i64))) }
+            (DataValue::I128(a), DataValue::I128(b)) => { Ok(DataValue::I128((u128::try_from(*a)?.$op(u128::try_from(*b)?) as i64))) }
             _ => { Err(ValueError::InvalidType(ValueTypeClass::Integer, if !($arg1).ty().is_int() { ($arg1).ty() } else { ($arg2).ty() })) }
         }
     };
@@ -306,7 +313,9 @@ impl Value for DataValue {
         Ok(match kind {
             ValueConversionKind::Exact(ty) => match (self, ty) {
                 // TODO a lot to do here: from bmask to ireduce to raw_bitcast...
-                (DataValue::I64(n), ty) if ty.is_int() => DataValue::from_integer(n as i128, ty)?,
+                (val, ty) if val.ty().is_int() && ty.is_int() => {
+                    DataValue::from_integer(val.into_int()?, ty)?
+                }
                 (DataValue::F32(n), types::I32) => DataValue::I32(n.bits() as i32),
                 (DataValue::F64(n), types::I64) => DataValue::I64(n.bits() as i64),
                 (DataValue::B(b), t) if t.is_bool() => DataValue::B(b),
@@ -623,23 +632,38 @@ impl Value for DataValue {
     }
 
     fn shl(self, other: Self) -> ValueResult<Self> {
-        binary_match!(<<(&self, &other); [I8, I16, I32, I64])
+        let amt = other
+            .convert(ValueConversionKind::Exact(types::I32))?
+            .convert(ValueConversionKind::ToUnsigned)?;
+        binary_match!(wrapping_shl(&self, &amt); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; rhs: U32)
     }
 
     fn ushr(self, other: Self) -> ValueResult<Self> {
-        binary_match!(>>(&self, &other); unsigned integers)
+        let amt = other
+            .convert(ValueConversionKind::Exact(types::I32))?
+            .convert(ValueConversionKind::ToUnsigned)?;
+        binary_match!(wrapping_shr(&self, &amt); [U8, U16, U32, U64, U128]; rhs: U32)
     }
 
     fn ishr(self, other: Self) -> ValueResult<Self> {
-        binary_match!(>>(&self, &other); [I8, I16, I32, I64])
+        let amt = other
+            .convert(ValueConversionKind::Exact(types::I32))?
+            .convert(ValueConversionKind::ToUnsigned)?;
+        binary_match!(wrapping_shr(&self, &amt); [I8, I16, I32, I64, I128]; rhs: U32)
     }
 
-    fn rotl(self, _other: Self) -> ValueResult<Self> {
-        unimplemented!()
+    fn rotl(self, other: Self) -> ValueResult<Self> {
+        let amt = other
+            .convert(ValueConversionKind::Exact(types::I32))?
+            .convert(ValueConversionKind::ToUnsigned)?;
+        binary_match!(rotate_left(&self, &amt); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; rhs: U32)
     }
 
-    fn rotr(self, _other: Self) -> ValueResult<Self> {
-        unimplemented!()
+    fn rotr(self, other: Self) -> ValueResult<Self> {
+        let amt = other
+            .convert(ValueConversionKind::Exact(types::I32))?
+            .convert(ValueConversionKind::ToUnsigned)?;
+        binary_match!(rotate_right(&self, &amt); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; rhs: U32)
     }
 
     fn and(self, other: Self) -> ValueResult<Self> {
