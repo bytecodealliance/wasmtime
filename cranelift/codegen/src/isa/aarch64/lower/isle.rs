@@ -25,6 +25,7 @@ use crate::{
     isa::unwind::UnwindInst,
     machinst::{ty_bits, InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
 };
+use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use std::boxed::Box;
 use std::convert::TryFrom;
 use std::vec::Vec;
@@ -65,7 +66,7 @@ impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
 where
     C: LowerCtx<I = MInst>,
 {
-    isle_prelude_methods!();
+    isle_lower_prelude_methods!();
 
     fn use_lse(&mut self, _: Inst) -> Option<()> {
         if self.isa_flags.use_lse() {

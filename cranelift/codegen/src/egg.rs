@@ -19,13 +19,14 @@ mod node;
 
 use elaborate::Elaborator;
 use extract::Extractor;
-use node::{Node, NodeCtx};
+pub use node::{Node, NodeCtx};
 
 pub struct FuncEGraph<'a> {
     domtree: &'a DominatorTree,
-    egraph: EGraph<NodeCtx>,
+    /// The egraph itself.
+    pub egraph: EGraph<NodeCtx>,
     /// "node context", containing arenas for node data.
-    node_ctx: NodeCtx,
+    pub node_ctx: NodeCtx,
     /// Ranges in `side_effect_ids` for sequences of side-effecting
     /// eclasses per block.
     side_effects: SecondaryMap<Block, Range<u32>>,
@@ -105,7 +106,7 @@ impl<'a> FuncEGraph<'a> {
                     .node_ctx
                     .types
                     .from_iter(results.iter().map(|&val| func.dfg.value_type(val)));
-                let types = types.freeze_cap(&mut self.node_ctx.types);
+                let types = types.freeze(&mut self.node_ctx.types);
 
                 // Create the egraph node.
                 let op = InstructionImms::from(&func.dfg[inst]);
@@ -155,11 +156,6 @@ impl<'a> FuncEGraph<'a> {
             let side_effect_range = side_effect_start..side_effect_end;
             self.side_effects[block] = side_effect_range;
         }
-    }
-
-    /// Run rewrite rules to optimize.
-    pub fn optimize(&mut self) {
-        todo!()
     }
 
     /// Extraction: choose one enode per eclass, finding an acyclic

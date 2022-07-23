@@ -109,7 +109,7 @@ impl<'a> Codegen<'a> {
                 .map(|(i, &ty)| format!("arg{}: {}", i, self.type_name(ty, /* by_ref = */ true)))
                 .collect::<Vec<_>>()
                 .join(", "),
-            multi_iter_param = if sig.multi { ", multi_index: usize" } else { "" },
+            multi_iter_param = if sig.multi { ", multi_index: &mut usize" } else { "" },
             opt_start = if sig.infallible && !sig.multi { "" } else { "Option<" },
             open_paren = if sig.ret_tys.len() != 1 { "(" } else { "" },
             rets = sig.ret_tys
@@ -598,7 +598,7 @@ impl<'a> Codegen<'a> {
 
                 if multi {
                     writeln!(code, "{indent}let mut multi_index = 0;", indent = indent).unwrap();
-                    input_values.push("multi_index".to_string());
+                    input_values.push("&mut multi_index".to_string());
                 }
 
                 if infallible && !multi {
@@ -627,9 +627,6 @@ impl<'a> Codegen<'a> {
                         args = input_values.join(", "),
                     )
                         .unwrap();
-                    if multi {
-                        writeln!(code, "{indent}    multi_index += 1;", indent = indent).unwrap();
-                    }
                     false
                 }
             }

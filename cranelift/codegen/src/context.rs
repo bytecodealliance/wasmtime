@@ -161,7 +161,7 @@ impl Context {
         );
 
         self.compute_cfg();
-        if opt_level != OptLevel::None {
+        if !isa.flags().use_egraphs() && opt_level != OptLevel::None {
             self.preopt(isa)?;
         }
         if isa.flags().enable_nan_canonicalization() {
@@ -169,7 +169,7 @@ impl Context {
         }
 
         self.legalize(isa)?;
-        if opt_level != OptLevel::None {
+        if !isa.flags().use_egraphs() && opt_level != OptLevel::None {
             self.compute_domtree();
             self.compute_loop_analysis();
             self.licm(isa)?;
@@ -178,13 +178,13 @@ impl Context {
 
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
-        if opt_level != OptLevel::None {
+        if !isa.flags().use_egraphs() && opt_level != OptLevel::None {
             self.dce(isa)?;
         }
 
         self.remove_constant_phis(isa)?;
 
-        if opt_level != OptLevel::None {
+        if !isa.flags().use_egraphs() && opt_level != OptLevel::None {
             self.replace_redundant_loads()?;
             self.simple_gvn(isa)?;
         }
@@ -195,6 +195,7 @@ impl Context {
                 self.func.display()
             );
             let mut eg = FuncEGraph::new(&self.func, &self.domtree);
+            crate::opts::optimize(&mut eg);
             eg.extract(&self.func);
             eg.elaborate(&mut self.func);
             log::debug!("After egraph optimization:\n{}", self.func.display());

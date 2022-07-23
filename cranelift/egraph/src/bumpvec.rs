@@ -35,8 +35,9 @@ pub struct BumpVec<T> {
 
 /// A slice in an arena: like a `BumpVec`, but has a fixed size that
 /// cannot grow. The size of this struct is one 32-bit word smaller
-/// than `BumpVec`.
-#[derive(Debug)]
+/// than `BumpVec`. It is copyable/cloneable because it will never be
+/// freed.
+#[derive(Debug, Clone, Copy)]
 pub struct BumpSlice<T> {
     base: u32,
     len: u32,
@@ -348,8 +349,9 @@ impl<T> BumpVec<T> {
     }
 
     /// Freeze the capacity of this BumpVec, turning it into a slice,
-    /// for a smaller struct (8 bytes rather than 12).
-    pub fn freeze_cap(self, arena: &mut BumpArena<T>) -> BumpSlice<T> {
+    /// for a smaller struct (8 bytes rather than 12). Once this
+    /// exists, it is copyable, because the slice will never be freed.
+    pub fn freeze(self, arena: &mut BumpArena<T>) -> BumpSlice<T> {
         if self.cap > self.len {
             arena
                 .freelist
@@ -381,12 +383,6 @@ impl<T> BumpSlice<T> {
     pub fn len(&self) -> usize {
         self.len as usize
     }
-
-    /// Consume the BumpSlice and return its indices to a free pool in
-    /// the arena.
-    pub fn free(self, arena: &mut BumpArena<T>) {
-        arena.freelist.push(self.base..(self.base + self.len));
-    }
 }
 
 impl<T> std::default::Default for BumpVec<T> {
@@ -395,6 +391,16 @@ impl<T> std::default::Default for BumpVec<T> {
             base: 0,
             len: 0,
             cap: 0,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T> std::default::Default for BumpSlice<T> {
+    fn default() -> Self {
+        BumpSlice {
+            base: 0,
+            len: 0,
             _phantom: PhantomData,
         }
     }

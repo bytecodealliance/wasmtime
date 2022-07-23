@@ -2,6 +2,7 @@
 
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
+use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use crate::machinst::{InputSourceInst, Reg, Writable};
 use generated_code::MInst;
 
@@ -54,7 +55,7 @@ impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
 where
     C: LowerCtx<I = MInst>,
 {
-    isle_prelude_methods!();
+    isle_lower_prelude_methods!();
 
     #[inline]
     fn operand_size_of_type_32_64(&mut self, ty: Type) -> OperandSize {

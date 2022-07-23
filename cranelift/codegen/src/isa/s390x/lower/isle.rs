@@ -19,6 +19,7 @@ use crate::{
     isa::unwind::UnwindInst,
     machinst::{InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
 };
+use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use std::boxed::Box;
 use std::cell::Cell;
 use std::convert::TryFrom;
@@ -67,7 +68,7 @@ impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
 where
     C: LowerCtx<I = MInst>,
 {
-    isle_prelude_methods!();
+    isle_lower_prelude_methods!();
 
     #[inline]
     fn allow_div_traps(&mut self, _: Type) -> Option<()> {

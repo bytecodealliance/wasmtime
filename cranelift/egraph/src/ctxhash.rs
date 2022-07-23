@@ -145,6 +145,29 @@ impl<K, V> CtxHashMap<K, V> {
                 &mut data.v
             })
     }
+
+    /// Refile a key-value entry under a new key, finding it initially
+    /// by computing the hash on *another* key, then using `Eq`
+    /// (rather than external-context equality) to find the
+    /// entry. This is used in very special circumstances when doing
+    /// egraph merges in a way that requires keys to change in a
+    /// deterministic way.
+    pub(crate) fn rewrite_raw_key<Q, Ctx: CtxHash<Q> + CtxHash<K>>(
+        &mut self,
+        hash_key: &Q,
+        old_key: &K,
+        new_key: K,
+        ctx: &Ctx,
+    ) where
+        K: PartialEq + Eq,
+    {
+        let h = hash(hash_key, ctx);
+        if let Some(bucket) = self.raw.find(h, |bucket| &bucket.k == old_key) {
+            let mut data = unsafe { self.raw.remove(bucket) };
+            data.k = new_key;
+            self.raw.insert(h, data, |bucket| hash(&bucket.k, ctx));
+        }
+    }
 }
 
 #[cfg(test)]

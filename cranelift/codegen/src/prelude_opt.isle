@@ -26,25 +26,24 @@
 (type IdArray (primitive IdArray))
 
 (decl id_array_0 () IdArray)
-(extern constructor id_array_0 id_array_0)
-(extern extractor id_array_0 id_array_0)
+(extern constructor id_array_0 id_array_0_ctor)
+(extern extractor id_array_0 id_array_0_etor)
 (decl id_array_1 (Id) IdArray)
-(extern constructor id_array_1 id_array_1)
-(extern extractor id_array_1 id_array_1)
+(extern constructor id_array_1 id_array_1_ctor)
+(extern extractor id_array_1 id_array_1_etor)
 (decl id_array_2 (Id Id) IdArray)
-(extern constructor id_array_2 id_array_2)
-(extern extractor id_array_2 id_array_2)
+(extern constructor id_array_2 id_array_2_ctor)
+(extern extractor id_array_2 id_array_2_etor)
 (decl id_array_3 (Id Id Id) IdArray)
-(extern constructor id_array_3 id_array_3)
-(extern extractor id_array_3 id_array_3)
+(extern constructor id_array_3 id_array_3_ctor)
+(extern extractor id_array_3 id_array_3_etor)
+
+;; Union an eclass with another.
+(decl eclass_union (Id Id) Unit)
+(extern constructor eclass_union eclass_union)
 
 ;;;;; optimization toplevel ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; The entry-point constructor invoked by the driver loop. Should
-;; return an eclass ID that is possibly a rewritten/simplified version
-;; of the expression. It is always legal to return the same ID
-;; (meaning, "no simplification possible").
+;; The main matcher rule invoked by the toplevel driver.
 (decl simplify (Id) Id)
 
-;; Fallback.
-(rule -100 (simplify x) x)

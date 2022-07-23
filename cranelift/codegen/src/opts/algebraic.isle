@@ -1,1 +1,19 @@
 ;; Algebraic optimizations.
+
+;; x+0 == x.
+(rule (simplify (iadd _
+                      x
+                      (iconst _ (simm32 0))))
+      x)
+
+;; 0+x == x.
+(rule (simplify (iadd _
+                      (iconst _ (simm32 0))
+                      x))
+      x)
+
+;; x*2 == 2*x == x+x.
+(rule (simplify (imul ty x (iconst _ (simm32 2))))
+      (iadd ty x x))
+(rule (simplify (imul ty (iconst _ (simm32 2)) x))
+      (iadd ty x x))

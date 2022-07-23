@@ -8,16 +8,22 @@ pub enum A {
 
 struct Context;
 impl multi_extractor::Context for Context {
-    fn e1_etor(&mut self, arg0: u32, i: usize) -> Option<(A, u32)> {
-        if i >= 32 {
+    fn e1_etor(&mut self, arg0: u32, i: &mut usize) -> Option<(A, u32)> {
+        if *i >= 32 {
             None
         } else {
-            let a = if arg0 & (1u32 << i) != 0 { A::B } else { A::C };
-            Some((a, i as u32))
+            let idx = *i;
+            *i += 1;
+            let a = if arg0 & (1u32 << idx) != 0 {
+                A::B
+            } else {
+                A::C
+            };
+            Some((a, idx as u32))
         }
     }
 
-    fn e2_etor(&mut self, arg0: u32, i: usize) -> Option<(A, u32)> {
+    fn e2_etor(&mut self, arg0: u32, i: &mut usize) -> Option<(A, u32)> {
         self.e1_etor(arg0, i)
     }
 }

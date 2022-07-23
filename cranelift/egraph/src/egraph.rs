@@ -42,6 +42,13 @@ struct NodeKey<'a, L: Language> {
     _phantom: PhantomData<&'a L::Node>,
 }
 
+impl<'a, L: Language> PartialEq for NodeKey<'a, L> {
+    fn eq(&self, other: &Self) -> bool {
+        self.bits == other.bits
+    }
+}
+impl<'a, L: Language> Eq for NodeKey<'a, L> {}
+
 impl<'a, L: Language> NodeKey<'a, L>
 where
     L::Node: 'static,
@@ -232,10 +239,26 @@ where
     }
 
     /// Process a merge, actually combining the enode and parent lists.
-    fn do_merge(&mut self, union_into: Id, union_from: Id) {
+    fn do_merge(&mut self, union_into: Id, union_from: Id, ctx: &mut L) {
         // Take ownership of the enode lists.
         let into_enodes = std::mem::take(&mut self.classes[union_into].enodes);
         let from_enodes = std::mem::take(&mut self.classes[union_from].enodes);
+
+        // For each node in `from_enodes`, rewrite the NodeKey to the
+        // into-class and new enode index.
+        let from_enodes_slice = from_enodes.as_slice(&self.node_arena);
+        for i in 0..from_enodes.len() {
+            let node_key = NodeKey::from_eclass_node(union_from, i);
+            let new_node_key = NodeKey::from_eclass_node(union_into, into_enodes.len() + i);
+            let hash_key = NodeKey::from_ref(&from_enodes_slice[i]);
+            let ctx = NodeKeyCtx {
+                classes: &self.classes,
+                arena: &self.node_arena,
+                node_ctx: ctx,
+            };
+            self.node_map
+                .rewrite_raw_key(&hash_key, &node_key, new_node_key, &ctx);
+        }
 
         // Append the enode list and place it into `union_into`.
         let enodes = self.node_arena.append(into_enodes, from_enodes);
@@ -269,7 +292,7 @@ where
             for union_from in batch.batch() {
                 let union_into = self.union.find_and_update(union_from);
                 debug_assert_ne!(union_into, union_from);
-                self.do_merge(union_into, union_from);
+                self.do_merge(union_into, union_from, ctx);
             }
             self.pending_merges.reuse(batch);
 
