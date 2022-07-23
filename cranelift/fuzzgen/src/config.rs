@@ -47,7 +47,8 @@ impl Default for Config {
             jump_tables_per_function: 0..=4,
             jump_table_entries: 0..=16,
             switch_cases: 0..=64,
-            switch_max_range_size: 0..=32,
+            // Ranges smaller than 2 don't make sense.
+            switch_max_range_size: 2..=32,
             static_stack_slots_per_function: 0..=8,
             static_stack_slot_size: 0..=128,
         }

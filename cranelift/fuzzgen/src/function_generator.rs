@@ -493,20 +493,24 @@ where
         // Build this into a HashMap since we cannot have duplicate entries.
         let mut entries = HashMap::new();
         for _ in 0..self.param(&self.config.switch_cases)? {
+            // The Switch API only allows for entries that are addressable by the index type
+            // so we need to limit the range of values that we generate.
+            let (ty_min, ty_max) = _type.bounds(false);
+            let range_start = self.u.int_in_range(ty_min..=ty_max)?;
+
             // We can either insert a contiguous range of blocks or a individual block
             // This is done because the Switch API specializes contiguous ranges.
-            if bool::arbitrary(self.u)? {
-                let index = self.u.arbitrary()?;
+            let range_size = if bool::arbitrary(self.u)? {
+                1
+            } else {
+                self.param(&self.config.switch_max_range_size)?
+            } as u128;
+
+            // Build the switch entries
+            for i in 0..range_size {
+                let index = range_start.wrapping_add(i) % ty_max;
                 let block = *self.u.choose(&valid_blocks[..])?;
                 entries.insert(index, block);
-            } else {
-                let range_start: u128 = self.u.arbitrary()?;
-                let range_size = self.param(&self.config.switch_max_range_size)? as u128;
-                for i in 0..=range_size {
-                    let index = range_start.wrapping_add(i);
-                    let block = *self.u.choose(&valid_blocks[..])?;
-                    entries.insert(index, block);
-                }
             }
         }
 
