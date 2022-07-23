@@ -15,14 +15,17 @@ pub mod diff_spec;
 pub mod diff_wasmi;
 pub mod diff_wasmtime;
 pub mod dummy;
-mod stacks;
 pub mod engine;
+mod stacks;
 
-use crate::generators;
+use self::engine::DiffInstance;
+use crate::generators::{self, DiffValue};
 use arbitrary::Arbitrary;
 use log::debug;
 pub use stacks::check_stacks;
 use std::cell::Cell;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
@@ -245,9 +248,10 @@ fn compile_module(
             if let generators::InstanceAllocationStrategy::Pooling { .. } =
                 &config.wasmtime.strategy
             {
-                // When using the pooling allocator, accept failures to compile when arbitrary
-                // table element limits have been exceeded as there is currently no way
-                // to constrain the generated module table types.
+                // When using the pooling allocator, accept failures to compile
+                // when arbitrary table element limits have been exceeded as
+                // there is currently no way to constrain the generated module
+                // table types.
                 let string = e.to_string();
                 if string.contains("minimum element size") {
                     return None;
@@ -255,7 +259,7 @@ fn compile_module(
 
                 // Allow modules-failing-to-compile which exceed the requested
                 // size for each instance. This is something that is difficult
-                // to control and ensure it always suceeds, so we simply have a
+                // to control and ensure it always succeeds, so we simply have a
                 // "random" instance size limit and if a module doesn't fit we
                 // move on to the next fuzz input.
                 if string.contains("instance allocation for this module requires") {
@@ -268,6 +272,10 @@ fn compile_module(
     }
 }
 
+// TODO: we should implement tracing versions of these dummy imports that record
+// a trace of the order that imported functions were called in and with what
+// values. Like the results of exported functions, calls to imports should also
+// yield the same values for each configuration, and we should assert that.
 fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Option<Instance> {
     // Creation of imports can fail due to resource limit constraints, and then
     // instantiation can naturally fail for a number of reasons as well. Bundle
@@ -311,6 +319,55 @@ fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Op
 
     // Everything else should be a bug in the fuzzer or a bug in wasmtime
     panic!("failed to instantiate: {:?}", e);
+}
+
+/// Evaluate the function identified by `name` in two different engine
+/// instances--`lhs` and `rhs`.
+///
+/// # Panics
+///
+/// This will panic if the evaluation is different between engines (e.g.,
+/// results are different, hashed instance is different, one side traps, etc.).
+pub fn differential(
+    lhs: &mut dyn DiffInstance,
+    rhs: &mut dyn DiffInstance,
+    name: &str,
+    args: &[DiffValue],
+) -> anyhow::Result<()> {
+    log::debug!("Evaluating: {}({:?})", name, args);
+    let lhs_results = lhs.evaluate(name, args);
+    log::debug!(" -> results on {}: {:?}", lhs.name(), &lhs_results);
+    let rhs_results = rhs.evaluate(name, args);
+    log::debug!(" -> results on {}: {:?}", rhs.name(), &rhs_results);
+    match (lhs_results, rhs_results) {
+        // If the evaluation succeeds, we compare the results.
+        (Ok(lhs_results), Ok(rhs_results)) => assert_eq!(lhs_results, rhs_results),
+        // Both sides failed--this is an acceptable result (e.g., both sides
+        // trap at a divide by zero). We could compare the error strings perhaps
+        // (since the `lhs` and `rhs` could be failing for different reasons)
+        // but this seems good enough for now.
+        (Err(_), Err(_)) => {}
+        // A real bug is found if only one side fails.
+        (Ok(_), Err(_)) => panic!("only the `rhs` ({}) failed for this input", rhs.name()),
+        (Err(_), Ok(_)) => panic!("only the `lhs` ({}) failed for this input", lhs.name()),
+    };
+
+    let hash = |i: &mut dyn DiffInstance| -> anyhow::Result<u64> {
+        let mut hasher = DefaultHasher::new();
+        i.hash(&mut hasher)?;
+        Ok(hasher.finish())
+    };
+
+    if lhs.is_hashable() && rhs.is_hashable() {
+        log::debug!("Hashing instances:");
+        let lhs_hash = hash(lhs)?;
+        log::debug!(" -> hash of {}: {:?}", lhs.name(), lhs_hash);
+        let rhs_hash = hash(rhs)?;
+        log::debug!(" -> hash of {}: {:?}", rhs.name(), rhs_hash);
+        assert_eq!(lhs_hash, rhs_hash);
+    }
+
+    Ok(())
 }
 
 /// Instantiate the given Wasm module with each `Config` and call all of its

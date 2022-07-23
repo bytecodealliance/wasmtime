@@ -2,8 +2,10 @@
 
 use crate::generators::{DiffValue, ModuleFeatures};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::hash::Hash;
+
+use super::engine::DiffIgnoreError;
 
 /// A wrapper for `wasmi` as a [`DiffEngine`].
 pub struct WasmiEngine;
@@ -27,8 +29,12 @@ impl WasmiEngine {
 
 impl DiffEngine for WasmiEngine {
     fn instantiate(&self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
-        let module =
-            wasmi::Module::from_buffer(wasm).context("unable to validate module in wasmi")?;
+        let module = wasmi::Module::from_buffer(wasm).map_err(|e| match e {
+            // Ignore `wasmi` validation errors; some opcodes not supported
+            // (TODO).
+            wasmi::Error::Validation(e) => anyhow!(DiffIgnoreError(e)),
+            e => anyhow!(e),
+        })?;
         let instance = wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default())
             .context("unable to instantiate module in wasmi")?;
         let instance = instance.assert_no_start();

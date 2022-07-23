@@ -34,11 +34,11 @@ impl WasmtimeEngine {
     pub fn arbitrary_with_features(
         u: &mut Unstructured<'_>,
         features: &ModuleFeatures,
-    ) -> Result<Box<Self>> {
+    ) -> arbitrary::Result<Box<Self>> {
         let mut config: generators::Config = u.arbitrary()?;
         config.set_differential_config();
         config.set_features(features);
-        WasmtimeEngine::new(&config)
+        Ok(WasmtimeEngine::new(&config).unwrap())
     }
 
     /// Construct a new Wasmtime engine with a randomly-generated configuration

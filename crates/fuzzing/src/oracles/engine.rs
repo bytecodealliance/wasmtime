@@ -2,7 +2,6 @@
 
 use crate::generators::{DiffValue, ModuleFeatures};
 use crate::oracles::{diff_wasmi::WasmiEngine, diff_wasmtime::WasmtimeEngine};
-use anyhow::{bail, Ok};
 use arbitrary::Unstructured;
 use std::collections::hash_map::DefaultHasher;
 
@@ -13,7 +12,7 @@ pub fn choose(
     u: &mut Unstructured<'_>,
     features: &ModuleFeatures,
     wasmtime_engine: &WasmtimeEngine,
-) -> anyhow::Result<Box<dyn DiffEngine>> {
+) -> arbitrary::Result<Box<dyn DiffEngine>> {
     // Filter out any engines that cannot match the given configuration.
     let mut engines: Vec<Box<dyn DiffEngine>> = vec![];
     if let Result::Ok(e) = WasmtimeEngine::arbitrary_with_compatible_config(u, wasmtime_engine) {
@@ -32,7 +31,8 @@ pub fn choose(
         let index: usize = u.int_in_range(0..=engines.len() - 1)?;
         Ok(engines.swap_remove(index))
     } else {
-        bail!("no engines to pick from")
+        panic!("no engines to pick from");
+        // Err(arbitrary::Error::EmptyChoose)
     }
 }
 
@@ -64,6 +64,43 @@ pub trait DiffInstance {
     ///
     /// TODO allow more types of hashers.
     fn hash(&self, state: &mut DefaultHasher) -> anyhow::Result<()>;
+}
+
+/// For errors that we want to ignore (not fuzz bugs), we can wrap them in this
+/// structure.
+#[derive(Debug)]
+pub struct DiffIgnoreError(pub String);
+impl std::fmt::Display for DiffIgnoreError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "this error should be ignored by fuzzing: {}", self.0)
+    }
+}
+impl std::error::Error for DiffIgnoreError {}
+
+/// This trait adds a handy way to ignore [`DiffIgnoreError`] during fuzzing.
+pub trait DiffIgnorable<T> {
+    /// Like `Result::expect`, but ignores all [`DiffIgnoreError`]s by logging
+    /// the error and converting it to an `arbitrary` error.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value is an `Err` but not a [`DiffIgnoreError`].
+    fn expect_or_ignore(self, message: &str) -> arbitrary::Result<T>;
+}
+impl<T> DiffIgnorable<T> for anyhow::Result<T> {
+    fn expect_or_ignore(self, message: &str) -> arbitrary::Result<T> {
+        match self {
+            Ok(t) => Ok(t),
+            Err(e) => {
+                if let Some(ignorable) = e.downcast_ref::<DiffIgnoreError>() {
+                    println!("ignoring error: {}", ignorable);
+                    Err(arbitrary::Error::IncorrectFormat)
+                } else {
+                    panic!("{}: {:?}", message, e);
+                }
+            }
+        }
+    }
 }
 
 /// Extract the signatures of any exported functions in a Wasm module.
