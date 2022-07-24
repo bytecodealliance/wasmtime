@@ -529,15 +529,23 @@ impl Value for DataValue {
             return Err(ValueError::IntegerDivisionByZero);
         }
 
-        binary_match!(/(&self, &other); [I8, I16, I32, I64, U8, U16, U32, U64])
+        binary_match!(/(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
     }
 
     fn rem(self, other: Self) -> ValueResult<Self> {
-        if other.clone().into_int()? == 0 {
+        let denominator = other.clone().into_int()?;
+
+        // Check if we are dividing INT_MIN / -1. This causes an integer overflow trap.
+        let min = Value::int(1i128 << (self.ty().bits() - 1), self.ty())?;
+        if self == min && denominator == -1 {
+            return Err(ValueError::IntegerOverflow);
+        }
+
+        if denominator == 0 {
             return Err(ValueError::IntegerDivisionByZero);
         }
 
-        binary_match!(%(&self, &other); [I8, I16, I32, I64])
+        binary_match!(%(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
     }
 
     fn sqrt(self) -> ValueResult<Self> {
