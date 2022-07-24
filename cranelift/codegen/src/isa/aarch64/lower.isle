@@ -927,7 +927,8 @@
 ;; Shift for vector types.
 (rule (lower (has_type (ty_vec128 ty) (ishl x y)))
       (let ((size VectorSize (vector_size ty))
-            (shift Reg (vec_dup y size)))
+            (masked_shift_amt Reg (and_imm $I32 y (shift_mask ty)))
+            (shift Reg (vec_dup masked_shift_amt size)))
         (sshl x shift size)))
 
 ;; Helper function to emit a shift operation with the opcode specified and
@@ -986,7 +987,8 @@
 ;; Vector shifts.
 (rule (lower (has_type (ty_vec128 ty) (ushr x y)))
       (let ((size VectorSize (vector_size ty))
-            (shift Reg (vec_dup (sub $I32 (zero_reg) y) size)))
+            (masked_shift_amt Reg (and_imm $I32 y (shift_mask ty)))
+            (shift Reg (vec_dup (sub $I64 (zero_reg) masked_shift_amt) size)))
         (ushl x shift size)))
 
 ;;     lsr       lo_rshift, src_lo, amt
@@ -1035,7 +1037,8 @@
 ;; Note that right shifts are implemented with a negative left shift.
 (rule (lower (has_type (ty_vec128 ty) (sshr x y)))
       (let ((size VectorSize (vector_size ty))
-            (shift Reg (vec_dup (sub $I32 (zero_reg) y) size)))
+            (masked_shift_amt Reg (and_imm $I32 y (shift_mask ty)))
+            (shift Reg (vec_dup (sub $I64 (zero_reg) masked_shift_amt) size)))
         (sshl x shift size)))
 
 ;;     lsr       lo_rshift, src_lo, amt
