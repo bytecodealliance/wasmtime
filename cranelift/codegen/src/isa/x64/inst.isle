@@ -1146,6 +1146,10 @@
 (decl reg_mem_to_xmm_mem (RegMem) XmmMem)
 (extern constructor reg_mem_to_xmm_mem reg_mem_to_xmm_mem)
 
+;; Construct a new `RegMemImm` from the given `Reg`.
+(decl reg_to_reg_mem_imm (Reg) RegMemImm)
+(extern constructor reg_to_reg_mem_imm reg_to_reg_mem_imm)
+
 ;; Construct a new `GprMemImm` from the given `RegMemImm`.
 ;;
 ;; Asserts that the `RegMemImm`'s register, if any, is an GPR register.
@@ -1352,6 +1356,10 @@
 ;; semantics.
 (decl const_to_type_masked_imm8 (u64 Type) Imm8Gpr)
 (extern constructor const_to_type_masked_imm8 const_to_type_masked_imm8)
+
+;; Generate a mask for the bit-width of the given type
+(decl shift_mask (Type) u32)
+(extern constructor shift_mask shift_mask)
 
 ;; Extract a constant `GprMemImm.Imm` from a value operand.
 (decl simm32_from_value (GprMemImm) Value)
@@ -3042,6 +3050,7 @@
 (convert Xmm RegMem xmm_to_reg_mem)
 (convert Reg Xmm xmm_new)
 (convert Reg XmmMem reg_to_xmm_mem)
+(convert Reg RegMemImm reg_to_reg_mem_imm)
 (convert RegMem XmmMem reg_mem_to_xmm_mem)
 (convert RegMemImm XmmMemImm mov_rmi_to_xmm)
 (convert Xmm XmmMem xmm_to_xmm_mem)
