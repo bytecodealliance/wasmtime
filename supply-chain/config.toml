@@ -1211,14 +1211,6 @@ criteria = "safe-to-deploy"
 version = "35.0.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.wast]]
-version = "43.0.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.wat]]
-version = "1.0.45"
-criteria = "safe-to-deploy"
-
 [[exemptions.web-sys]]
 version = "0.3.57"
 criteria = "safe-to-run"
