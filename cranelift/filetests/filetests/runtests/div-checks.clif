@@ -9,26 +9,164 @@ block0(v0: i8, v1: i8):
   v2 = srem.i8 v0, v1
   return v2
 }
+; run: %i8(0, 1) == 0
+; run: %i8(1, -1) == 0
 ; run: %i8(0x80, 0xff) == 0
 ; run: %i8(0x2, 0x7) == 0x2
+
+function %i8_const(i8) -> i8 {
+block0(v0: i8):
+  v1 = iconst.i8 -1
+  v2 = srem.i8 v0, v1
+  return v2
+}
+; run: %i8_const(0) == 0
+; run: %i8_const(1) == 0
+; run: %i8_const(0x80) == 0
+; run: %i8_const(0x2) == 0
 
 function %i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
   v2 = srem.i16 v0, v1
   return v2
 }
+; run: %i16(0, 42) == 0
+; run: %i16(4, -2) == 0
+; run: %i16(13, 5) == 3
 ; run: %i16(0x8000, 0xffff) == 0
+
+function %i16_const(i16) -> i16 {
+block0(v0: i16):
+  v1 = iconst.i16 0xffff
+  v2 = srem.i16 v0, v1
+  return v2
+}
+; run: %i16_const(0) == 0
+; run: %i16_const(4) == 0
+; run: %i16_const(13) == 0
+; run: %i16_const(0x8000) == 0
 
 function %i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
   v2 = srem.i32 v0, v1
   return v2
 }
+; run: %i32(0, 13) == 0
+; run: %i32(1048576, 8192) == 0
+; run: %i32(-1024, 255) == -4
 ; run: %i32(0x80000000, 0xffffffff) == 0
+
+function %i32_const(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 -1
+  v2 = srem.i32 v0, v1
+  return v2
+}
+; run: %i32_const(0) == 0
+; run: %i32_const(1057) == 0
+; run: %i32_const(-42) == 0
+; run: %i32_const(0x80000000) == 0
 
 function %i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = srem.i64 v0, v1
   return v2
 }
-; run: %i32(0x800000000000000, 0xffffffffffffffff) == 0
+; run: %i64(0, 104857600000) == 0
+; run: %i64(104857600000, 511) == 398
+; run: %i64(-57, -5) == -2
+; run: %i64(0x800000000000000, 0xffffffffffffffff) == 0
+
+function %i64_const(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 -1
+  v2 = srem.i64 v0, v1
+  return v2
+}
+; run: %i64_const(0) == 0
+; run: %i64_const(104857600000) == 0
+; run: %i64_const(-57) == 0
+; run: %i64_const(0x800000000000000) == 0
+
+function %i8_u(i8, i8) -> i8 {
+block0(v0: i8,v1: i8):
+  v2 = urem v0, v1
+  return v2
+}
+; run: %i8_u(0, 1) == 0
+; run: %i8_u(2, 2) == 0
+; run: %i8_u(1, -1) == 1
+; run: %i8_u(3, 2) == 1
+; run: %i8_u(0x80, 0xff) == 0x80
+
+function %i8_u_const(i8) -> i8 {
+block0(v0: i8):
+  v1 = iconst.i8 -1
+  v2 = urem v0, v1
+  return v2
+}
+; run: %i8_u_const(0) == 0
+; run: %i8_u_const(3) == 3
+; run: %i8_u_const(0x80) == 0x80
+
+function %i16_u(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = urem.i16 v0, v1
+  return v2
+}
+; run: %i16_u(0, 42) == 0
+; run: %i16_u(4, -2) == 4
+; run: %i16_u(13, 5) == 3
+; run: %i16_u(0x8000, 0xffff) == 0x8000
+
+function %i16_u_const(i16) -> i16 {
+block0(v0: i16):
+  v1 = iconst.i16 0xffff
+  v2 = urem.i16 v0, v1
+  return v2
+}
+; run: %i16_u_const(0) == 0
+; run: %i16_u_const(4) == 4
+; run: %i16_u_const(0x8000) == 0x8000
+
+function %i32_u(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = urem.i32 v0, v1
+  return v2
+}
+; run: %i32_u(0, 13) == 0
+; run: %i32_u(1048576, 8192) == 0
+; run: %i32_u(-1024, 255) == 252
+; run: %i32_u(0x80000000, 0xffffffff) == 0x80000000
+
+function %i32_u_const(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 -1
+  v2 = urem.i32 v0, v1
+  return v2
+}
+; run: %i32_u_const(0) == 0
+; run: %i32_u_const(1057) == 1057
+; run: %i32_u_const(-42) == -42
+; run: %i32_u_const(0x80000000) == 0x80000000
+
+function %i64_u(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = urem.i64 v0, v1
+  return v2
+}
+; run: %i64_u(0, 104857600000) == 0
+; run: %i64_u(104857600000, 511) == 398
+; run: %i64_u(-57, -5) == -57
+; run: %i64_u(0x800000000000000, 0xffffffffffffffff) == 0x800000000000000
+
+function %i64_u_const(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 -1
+  v2 = urem.i64 v0, v1
+  return v2
+}
+; run: %i64_u_const(0) == 0
+; run: %i64_u_const(104857600000) == 104857600000
+; run: %i64_u_const(-57) == -57
+; run: %i64_u_const(0x800000000000000) == 0x800000000000000
