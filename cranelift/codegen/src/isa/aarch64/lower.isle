@@ -1453,25 +1453,25 @@
 ;;;; Rules for `fcmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond_not_eq cond) x y)))
-      (if-let _ (zero_value y))
+      (if (zero_value y))
       (let ((rn Reg x)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (not (fcmeq0 rn vec_size) vec_size))))
 
 (rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond cond) x y)))
-      (if-let _ (zero_value y))
+      (if (zero_value y))
       (let ((rn Reg x)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (float_cmp_zero cond rn vec_size))))
 
 (rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond_not_eq cond) x y)))
-      (if-let _ (zero_value x))
+      (if (zero_value x))
       (let ((rn Reg y)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (not (fcmeq0 rn vec_size) vec_size))))
 
 (rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond cond) x y)))
-      (if-let _ (zero_value x))
+      (if (zero_value x))
       (let ((rn Reg y)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (float_cmp_zero_swap cond rn vec_size))))
@@ -1480,25 +1480,25 @@
 ;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond_not_eq cond) x y)))
-      (if-let _ (zero_value y))
+      (if (zero_value y))
       (let ((rn Reg x)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (not (cmeq0 rn vec_size) vec_size))))
 
 (rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond cond) x y)))
-      (if-let _ (zero_value y))
+      (if (zero_value y))
       (let ((rn Reg x)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (int_cmp_zero cond rn vec_size))))
 
 (rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond_not_eq cond) x y)))
-      (if-let _ (zero_value x))
+      (if (zero_value x))
       (let ((rn Reg y)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (not (cmeq0 rn vec_size) vec_size))))
 
 (rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond cond) x y)))
-      (if-let _ (zero_value x))
+      (if (zero_value x))
       (let ((rn Reg y)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (int_cmp_zero_swap cond rn vec_size))))
@@ -1620,7 +1620,7 @@
 
 ;;;; Rules for `snarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (ty_vec128_int ty) (snarrow x y)))
-      (if-let _ (zero_value y))
+      (if (zero_value y))
       (sqxtn x (lane_size ty)))
 
 (rule (lower (has_type (ty_vec64_int ty) (snarrow x y)))
@@ -1635,7 +1635,7 @@
 
 ;;;; Rules for `unarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (ty_vec128_int ty) (unarrow x y)))
-      (if-let _ (zero_value y))
+      (if (zero_value y))
       (sqxtun x (lane_size ty)))
 
 (rule (lower (has_type (ty_vec64_int ty) (unarrow x y)))
@@ -1650,7 +1650,7 @@
 
 ;;;; Rules for `uunarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (ty_vec128_int ty) (uunarrow x y)))
-      (if-let _ (zero_value y))
+      (if (zero_value y))
       (uqxtn x (lane_size ty)))
 
 (rule (lower (has_type (ty_vec64_int ty) (uunarrow x y)))
