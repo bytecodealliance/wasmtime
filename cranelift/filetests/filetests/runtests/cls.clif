@@ -1,6 +1,7 @@
 test interpret
 test run
 target aarch64
+target s390x
 ; not implemented on `x86_64`
 
 function %cls_i8(i8) -> i8 {

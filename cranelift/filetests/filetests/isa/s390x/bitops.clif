@@ -93,7 +93,7 @@ block0(v0: i64):
 ;   srag %r5, %r2, 63
 ;   xgrk %r3, %r2, %r5
 ;   flogr %r0, %r3
-;   lgr %r2, %r0
+;   aghik %r2, %r0, -1
 ;   br %r14
 
 function %cls_i32(i32) -> i32 {
@@ -107,7 +107,7 @@ block0(v0: i32):
 ;   srag %r3, %r5, 63
 ;   xgr %r5, %r3
 ;   flogr %r0, %r5
-;   ahik %r2, %r0, -32
+;   ahik %r2, %r0, -33
 ;   br %r14
 
 function %cls_i16(i16) -> i16 {
@@ -121,7 +121,7 @@ block0(v0: i16):
 ;   srag %r3, %r5, 63
 ;   xgr %r5, %r3
 ;   flogr %r0, %r5
-;   ahik %r2, %r0, -48
+;   ahik %r2, %r0, -49
 ;   br %r14
 
 function %cls_i8(i8) -> i8 {
@@ -135,7 +135,7 @@ block0(v0: i8):
 ;   srag %r3, %r5, 63
 ;   xgr %r5, %r3
 ;   flogr %r0, %r5
-;   ahik %r2, %r0, -56
+;   ahik %r2, %r0, -57
 ;   br %r14
 
 function %ctz_i64(i64) -> i64 {
@@ -238,9 +238,9 @@ block0(v0: i16):
 
 ; block0:
 ;   popcnt %r5, %r2
-;   sllk %r3, %r5, 8
-;   ar %r5, %r3
-;   srlk %r2, %r5, 8
+;   srlk %r3, %r5, 8
+;   ark %r2, %r5, %r3
+;   nill %r2, 255
 ;   br %r14
 
 function %popcnt_i8(i8) -> i8 {
