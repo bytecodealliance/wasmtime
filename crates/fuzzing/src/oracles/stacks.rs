@@ -33,6 +33,16 @@ pub fn check_stacks(stacks: Stacks) -> usize {
                 Ok(())
             },
         )
+        .unwrap()
+        .func_wrap(
+            "host",
+            "call_func",
+            |mut caller: Caller<'_, ()>, f: Option<Func>| {
+                let f = f.unwrap();
+                f.call(&mut caller, &[], &mut [])?;
+                Ok(())
+            },
+        )
         .unwrap();
 
     let mut store = Store::new(&engine, ());
