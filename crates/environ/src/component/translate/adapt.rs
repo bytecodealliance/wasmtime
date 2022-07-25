@@ -184,7 +184,7 @@ impl<'data> Translator<'_, 'data> {
             items: DefinedItems::default(),
             instance_map: PrimaryMap::with_capacity(component.num_runtime_instances as usize),
         };
-        state.run(&mut component.initializers, adapters);
+        state.run(component, adapters);
 
         // Next, in reverse, insert all of the adapter modules into the actual
         // initializer list. Note that the iteration order is important here to
@@ -310,6 +310,8 @@ enum ToProcess {
     AddAdapterToModule(AdapterIndex),
     /// A global initializer needs to be remapped.
     GlobalInitializer(usize),
+    /// An export needs to be remapped.
+    Export(usize),
     /// A global initializer which creates an instance has had all of its
     /// arguments processed and now the instance number needs to be recorded.
     PushInstance,
@@ -353,7 +355,7 @@ impl PartitionAdapterModules {
     /// Process the list of global `initializers` and partitions adapters into
     /// adapter modules which will get inserted into the provided list in a
     /// later pass.
-    fn run(&mut self, initializers: &mut [GlobalInitializer], adapters: &mut Adapters) {
+    fn run(&mut self, component: &mut Component, adapters: &mut Adapters) {
         // This function is designed to be an iterative loop which models
         // recursion in the `self.to_process` array instead of on the host call
         // stack. The reason for this is that adapters need recursive processing
@@ -378,9 +380,12 @@ impl PartitionAdapterModules {
         }
 
         // Seed the worklist of what to process with the list of global
-        // initializers, but in reverse order since this is a LIFO queue.
-        // Afterwards all of the items to process are handled in a loop.
-        for i in (0..initializers.len()).rev() {
+        // initializers and exports, but in reverse order since this is a LIFO
+        // queue.  Afterwards all of the items to process are handled in a loop.
+        for i in (0..component.exports.len()).rev() {
+            self.to_process.push(ToProcess::Export(i));
+        }
+        for i in (0..component.initializers.len()).rev() {
             self.to_process.push(ToProcess::GlobalInitializer(i));
         }
 
@@ -389,7 +394,12 @@ impl PartitionAdapterModules {
                 ToProcess::GlobalInitializer(i) => {
                     assert!(i <= self.cur_idx + 1);
                     self.cur_idx = i;
-                    self.global_initializer(&mut initializers[i]);
+                    self.global_initializer(&mut component.initializers[i]);
+                }
+
+                ToProcess::Export(i) => {
+                    self.cur_idx = component.initializers.len();
+                    self.export(&mut component.exports[i]);
                 }
 
                 ToProcess::PushInstance => {
@@ -486,6 +496,20 @@ impl PartitionAdapterModules {
             GlobalInitializer::ExtractMemory(_) => {}
             GlobalInitializer::SaveStaticModule(_) => {}
             GlobalInitializer::SaveModuleImport(_) => {}
+        }
+    }
+
+    fn export(&mut self, export: &mut Export) {
+        match export {
+            Export::LiftedFunction { func, .. } => {
+                self.process_core_def(func);
+            }
+            Export::Instance(exports) => {
+                for (_, export) in exports {
+                    self.export(export);
+                }
+            }
+            Export::Module(_) => {}
         }
     }
 
