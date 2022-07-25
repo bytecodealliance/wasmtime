@@ -319,14 +319,15 @@ impl Inst {
     }
 
     #[cfg(test)]
-    pub(crate) fn xmm_rm_r_vex(op: AvxOpcode, src1: RegMem, src2: Reg, dst: Writable<Reg>) -> Self {
-        src1.assert_regclass_is(RegClass::Float);
+    pub(crate) fn xmm_rm_r_vex(op: AvxOpcode, src3: RegMem, src2: Reg, dst: Writable<Reg>) -> Self {
+        src3.assert_regclass_is(RegClass::Float);
         debug_assert!(src2.class() == RegClass::Float);
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         Inst::XmmRmRVex {
             op,
-            src1: XmmMem::new(src1).unwrap(),
+            src3: XmmMem::new(src3).unwrap(),
             src2: Xmm::new(src2).unwrap(),
+            src1: Xmm::new(dst.to_reg()).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -1147,13 +1148,23 @@ impl PrettyPrint for Inst {
                 op,
                 src1,
                 src2,
+                src3,
                 dst,
                 ..
             } => {
+                let src3 = src3.pretty_print(8, allocs);
                 let src2 = pretty_print_reg(src2.to_reg(), 8, allocs);
+                let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                let src1 = src1.pretty_print(8, allocs);
-                format!("{} {}, {}, {}", ljustify(op.to_string()), src1, src2, dst)
+
+                format!(
+                    "{} {}, {}, {}, {}",
+                    ljustify(op.to_string()),
+                    src1,
+                    src2,
+                    src3,
+                    dst
+                )
             }
 
             Inst::XmmRmREvex {
@@ -1864,6 +1875,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             op,
             src1,
             src2,
+            src3,
             dst,
             ..
         } => {
@@ -1872,10 +1884,10 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             // register uses.
             assert!(*op == AvxOpcode::Vfmadd213ps || *op == AvxOpcode::Vfmadd213pd);
 
-            // We both use and def dst
-            collector.reg_mod(dst.to_writable_reg());
+            collector.reg_use(src1.to_reg());
+            collector.reg_reuse_def(dst.to_writable_reg(), 0);
             collector.reg_use(src2.to_reg());
-            src1.get_operands(collector);
+            src3.get_operands(collector);
         }
         Inst::XmmRmREvex {
             op,

@@ -3707,13 +3707,13 @@ fn test_x64_emit() {
     insns.push((
         Inst::xmm_rm_r_vex(AvxOpcode::Vfmadd213ps, RegMem::reg(xmm2), xmm1, w_xmm0),
         "C4E271A8C2",
-        "vfmadd213ps %xmm2, %xmm1, %xmm0",
+        "vfmadd213ps %xmm0, %xmm1, %xmm2, %xmm0",
     ));
 
     insns.push((
         Inst::xmm_rm_r_vex(AvxOpcode::Vfmadd213pd, RegMem::reg(xmm5), xmm4, w_xmm3),
         "C4E2D9A8DD",
-        "vfmadd213pd %xmm5, %xmm4, %xmm3",
+        "vfmadd213pd %xmm3, %xmm4, %xmm5, %xmm3",
     ));
 
     // ========================================================

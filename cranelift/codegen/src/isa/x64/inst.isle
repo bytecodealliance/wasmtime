@@ -195,8 +195,9 @@
 
        ;; XMM (scalar or vector) binary op that relies on the VEX prefix.
        (XmmRmRVex (op AvxOpcode)
-                   (src1 XmmMem)
+                   (src1 Xmm)
                    (src2 Xmm)
+                   (src3 XmmMem)
                    (dst WritableXmm))
 
        ;; XMM (scalar or vector) binary op that relies on the EVEX prefix.
@@ -2815,21 +2816,27 @@
             (_ Unit (emit (MInst.XmmRmR (SseOpcode.Maxpd) x y dst))))
         dst))
 
+
+;; Helper for creating `MInst.XmmRmRVex` instructions.
+(decl xmm_rmr_vex (AvxOpcode Xmm Xmm XmmMem) Xmm)
+(rule (xmm_rmr_vex op src1 src2 src3)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmRVex op
+                                           src1
+                                           src2
+                                           src3
+                                           dst))))
+        dst))
+
 ;; Helper for creating `vfmadd213ps` instructions.
 (decl x64_vfmadd213ps (Xmm Xmm XmmMem) Xmm)
 (rule (x64_vfmadd213ps x y z)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_1 Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Movups) x dst)))
-            (_2 Unit (emit (MInst.XmmRmRVex (AvxOpcode.Vfmadd213ps) z y dst))))
-        dst))
+      (xmm_rmr_vex (AvxOpcode.Vfmadd213ps) x y z))
 
 ;; Helper for creating `vfmadd213pd` instructions.
 (decl x64_vfmadd213pd (Xmm Xmm XmmMem) Xmm)
 (rule (x64_vfmadd213pd x y z)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_1 Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Movups) x dst)))
-            (_2 Unit (emit (MInst.XmmRmRVex (AvxOpcode.Vfmadd213pd) z y dst))))
-        dst))
+      (xmm_rmr_vex (AvxOpcode.Vfmadd213pd) x y z))
 
 
 ;; Helper for creating `sqrtss` instructions.

@@ -1695,18 +1695,21 @@ pub(crate) fn emit(
             op,
             src1,
             src2,
+            src3,
             dst,
         } => {
+            let src1 = allocs.next(src1.to_reg());
             let dst = allocs.next(dst.to_reg().to_reg());
+            debug_assert_eq!(src1, dst);
             let src2 = allocs.next(src2.to_reg());
-            let src1 = src1.clone().to_reg_mem().with_allocs(allocs);
+            let src3 = src3.clone().to_reg_mem().with_allocs(allocs);
 
             let (w, opcode) = match op {
                 AvxOpcode::Vfmadd213ps => (false, 0xA8),
                 AvxOpcode::Vfmadd213pd => (true, 0xA8),
             };
 
-            match src1 {
+            match src3 {
                 RegMem::Reg { reg: src } => VexInstruction::new()
                     .length(VexVectorLength::V128)
                     .prefix(LegacyPrefixes::_66)
