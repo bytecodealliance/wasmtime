@@ -341,6 +341,11 @@
 (decl ty_vec128 (Type) Type)
 (extern extractor ty_vec128 ty_vec128)
 
+;; An extractor that only matches 64-bit vector types with integer
+;; lanes (I8X8, I16X4, I32X2)
+(decl ty_vec64_int (Type) Type)
+(extern extractor ty_vec64_int ty_vec64_int)
+
 ;; An extractor that only matches 128-bit vector types with integer
 ;; lanes (I8X16, I16X8, I32X4, I64X2).
 (decl ty_vec128_int (Type) Type)
@@ -458,6 +463,16 @@
 (decl dynamic_fp_lane (u32) Type)
 (extern extractor dynamic_fp_lane dynamic_fp_lane)
 
+;; An extractor that only matches 64-bit dynamic vector types with integer
+;; lanes (I8X8XN, I16X4XN, I32X2XN)
+(decl ty_dyn64_int (Type) Type)
+(extern extractor ty_dyn64_int ty_dyn64_int)
+
+;; An extractor that only matches 128-bit dynamic vector types with integer
+;; lanes (I8X16XN, I16X8XN, I32X4XN, I64X2XN).
+(decl ty_dyn128_int (Type) Type)
+(extern extractor ty_dyn128_int ty_dyn128_int)
+
 ;; Match the instruction that defines the given value, if any.
 (decl def_inst (Inst) Value)
 (extern extractor def_inst def_inst)
@@ -470,6 +485,10 @@
 ;; Convert an `Offset32` to a primitive number.
 (decl offset32_to_u32 (Offset32) u32)
 (extern constructor offset32_to_u32 offset32_to_u32)
+
+;; Match any zero value for iconst, fconst32, fconst64, vconst and splat.
+(decl pure zero_value (Value) Value)
+(extern constructor zero_value zero_value)
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

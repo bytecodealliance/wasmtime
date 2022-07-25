@@ -531,7 +531,8 @@
         (op VecRRNarrowOp)
         (rd WritableReg)
         (rn Reg)
-        (high_half bool))
+        (high_half bool)
+        (lane_size ScalarSize))
 
        ;; 1-operand vector instruction that operates on a pair of elements.
        (VecRRPair
@@ -905,6 +906,17 @@
 (rule (scalar_size $F32) (ScalarSize.Size32))
 (rule (scalar_size $F64) (ScalarSize.Size64))
 
+;; Helper for calculating the `ScalarSize` lane type from vector type
+(decl lane_size (Type) ScalarSize)
+(rule (lane_size (multi_lane 8 _)) (ScalarSize.Size8))
+(rule (lane_size (multi_lane 16 _)) (ScalarSize.Size16))
+(rule (lane_size (multi_lane 32 _)) (ScalarSize.Size32))
+(rule (lane_size (multi_lane 64 _)) (ScalarSize.Size64))
+(rule (lane_size (dynamic_lane 8 _)) (ScalarSize.Size8))
+(rule (lane_size (dynamic_lane 16 _)) (ScalarSize.Size16))
+(rule (lane_size (dynamic_lane 32 _)) (ScalarSize.Size32))
+(rule (lane_size (dynamic_lane 64 _)) (ScalarSize.Size64))
+
 (type Cond extern
   (enum
     (Eq)
@@ -934,17 +946,6 @@
     (Size32x2)
     (Size32x4)
     (Size64x2)
-))
-
-(type DynamicVectorSize extern
-  (enum
-    (Size8x8xN)
-    (Size8x16xN)
-    (Size16x4xN)
-    (Size16x8xN)
-    (Size32x2xN)
-    (Size32x4xN)
-    (Size64x2xN)
 ))
 
 ;; Helper for calculating the `VectorSize` corresponding to a type
@@ -1203,34 +1204,16 @@
 ;; A vector narrowing operation with one argument.
 (type VecRRNarrowOp
   (enum
-    ;; Extract narrow, 16-bit elements
-    (Xtn16)
-    ;; Extract narrow, 32-bit elements
-    (Xtn32)
-    ;; Extract narrow, 64-bit elements
-    (Xtn64)
-    ;; Signed saturating extract narrow, 16-bit elements
-    (Sqxtn16)
-    ;; Signed saturating extract narrow, 32-bit elements
-    (Sqxtn32)
-    ;; Signed saturating extract narrow, 64-bit elements
-    (Sqxtn64)
-    ;; Signed saturating extract unsigned narrow, 16-bit elements
-    (Sqxtun16)
-    ;; Signed saturating extract unsigned narrow, 32-bit elements
-    (Sqxtun32)
-    ;; Signed saturating extract unsigned narrow, 64-bit elements
-    (Sqxtun64)
-    ;; Unsigned saturating extract narrow, 16-bit elements
-    (Uqxtn16)
-    ;; Unsigned saturating extract narrow, 32-bit elements
-    (Uqxtn32)
-    ;; Unsigned saturating extract narrow, 64-bit elements
-    (Uqxtn64)
-    ;; Floating-point convert to lower precision narrow, 32-bit elements
-    (Fcvtn32)
-    ;; Floating-point convert to lower precision narrow, 64-bit elements
-    (Fcvtn64)
+    ;; Extract narrow.
+    (Xtn)
+    ;; Signed saturating extract narrow.
+    (Sqxtn)
+    ;; Signed saturating extract unsigned narrow.
+    (Sqxtun)
+    ;; Unsigned saturating extract narrow.
+    (Uqxtn)
+    ;; Floating-point convert to lower precision narrow.
+    (Fcvtn)
 ))
 
 (type VecRRRLongOp
@@ -1623,10 +1606,19 @@
         dst))
 
 ;; Helper for emitting `MInst.VecRRNarrow` instructions.
-(decl vec_rr_narrow (VecRRNarrowOp Reg bool) Reg)
-(rule (vec_rr_narrow op src high_half)
+(decl vec_rr_narrow (VecRRNarrowOp Reg ScalarSize) Reg)
+(rule (vec_rr_narrow op src size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_ Unit (emit (MInst.VecRRNarrow op dst src high_half))))
+            (_ Unit (emit (MInst.VecRRNarrow op dst src $false size))))
+        dst))
+
+;; Helper for emitting `MInst.VecRRNarrow` instructions which update the
+;; high half of the destination register.
+(decl vec_rr_narrow_high (VecRRNarrowOp Reg Reg ScalarSize) Reg)
+(rule (vec_rr_narrow_high op mod src size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_1 Unit (emit (MInst.FpuMove128 dst mod)))
+            (_2 Unit (emit (MInst.VecRRNarrow op dst src $true size))))
         dst))
 
 ;; Helper for emitting `MInst.VecRRLong` instructions.
@@ -1671,6 +1663,14 @@
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_1 Unit (emit (MInst.FpuMove128 dst src1)))
             (_2 Unit (emit (MInst.MovToVec dst src2 lane size))))
+        dst))
+
+;; Helper for emitting `MInst.VecMovElement` instructions.
+(decl mov_vec_elem (Reg Reg u8 u8 VectorSize) Reg)
+(rule (mov_vec_elem src1 src2 dst_idx src_idx size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_1 Unit (emit (MInst.FpuMove128 dst src1)))
+            (_2 Unit (emit (MInst.VecMovElement dst src2 dst_idx src_idx size))))
         dst))
 
 ;; Helper for emitting `MInst.MovFromVec` instructions.
@@ -1830,9 +1830,37 @@
 (decl rev64 (Reg VectorSize) Reg)
 (rule (rev64 x size) (vec_misc (VecMisc2.Rev64) x size))
 
-;; Helper for generating `xtn64` instructions.
-(decl xtn64 (Reg bool) Reg)
-(rule (xtn64 x high_half) (vec_rr_narrow (VecRRNarrowOp.Xtn64) x high_half))
+;; Helper for generating `xtn` instructions.
+(decl xtn (Reg ScalarSize) Reg)
+(rule (xtn x size) (vec_rr_narrow (VecRRNarrowOp.Xtn) x size))
+
+;; Helper for generating `fcvtn` instructions.
+(decl fcvtn (Reg ScalarSize) Reg)
+(rule (fcvtn x size) (vec_rr_narrow (VecRRNarrowOp.Fcvtn) x size))
+
+;; Helper for generating `sqxtn` instructions.
+(decl sqxtn (Reg ScalarSize) Reg)
+(rule (sqxtn x size) (vec_rr_narrow (VecRRNarrowOp.Sqxtn) x size))
+
+;; Helper for generating `sqxtn2` instructions.
+(decl sqxtn2 (Reg Reg ScalarSize) Reg)
+(rule (sqxtn2 x y size) (vec_rr_narrow_high (VecRRNarrowOp.Sqxtn) x y size))
+
+;; Helper for generating `sqxtun` instructions.
+(decl sqxtun (Reg ScalarSize) Reg)
+(rule (sqxtun x size) (vec_rr_narrow (VecRRNarrowOp.Sqxtun) x size))
+
+;; Helper for generating `sqxtun2` instructions.
+(decl sqxtun2 (Reg Reg ScalarSize) Reg)
+(rule (sqxtun2 x y size) (vec_rr_narrow_high (VecRRNarrowOp.Sqxtun) x y size))
+
+;; Helper for generating `uqxtn` instructions.
+(decl uqxtn (Reg ScalarSize) Reg)
+(rule (uqxtn x size) (vec_rr_narrow (VecRRNarrowOp.Uqxtn) x size))
+
+;; Helper for generating `uqxtn2` instructions.
+(decl uqxtn2 (Reg Reg ScalarSize) Reg)
+(rule (uqxtn2 x y size) (vec_rr_narrow_high (VecRRNarrowOp.Uqxtn) x y size))
 
 ;; Helper for generating `addp` instructions.
 (decl addp (Reg Reg VectorSize) Reg)
@@ -2202,16 +2230,6 @@
           (alu_rrr op ty x_lo y_lo)
           (alu_rrr op ty x_hi y_hi))))
 
-;; Float vector compare helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Match 32 bit float 0 value
-(decl zero_value_f32 (Ieee32) Ieee32)
-(extern extractor zero_value_f32 zero_value_f32)
-
-;; Match 64 bit float 0 value
-(decl zero_value_f64 (Ieee64) Ieee64)
-(extern extractor zero_value_f64 zero_value_f64)
-
 ;; Generate comparison to zero operator from input condition code
 (decl float_cc_cmp_zero_to_vec_misc_op (FloatCC) VecMisc2)
 (extern constructor float_cc_cmp_zero_to_vec_misc_op float_cc_cmp_zero_to_vec_misc_op)
@@ -2241,12 +2259,6 @@
 (decl fcmeq0 (Reg VectorSize) Reg)
 (rule (fcmeq0 rn size)
       (vec_misc (VecMisc2.Fcmeq0) rn size))
-
-;; Int vector compare helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Match integer 0 value
-(decl zero_value (Imm64) Imm64)
-(extern extractor zero_value zero_value)
 
 ;; Generate comparison to zero operator from input condition code
 (decl int_cc_cmp_zero_to_vec_misc_op (IntCC) VecMisc2)

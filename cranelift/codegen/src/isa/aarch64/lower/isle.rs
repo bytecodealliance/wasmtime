@@ -424,25 +424,4 @@ where
             _ => panic!(),
         }
     }
-
-    fn zero_value(&mut self, value: Imm64) -> Option<Imm64> {
-        if value.bits() == 0 {
-            return Some(value);
-        }
-        None
-    }
-
-    fn zero_value_f32(&mut self, value: Ieee32) -> Option<Ieee32> {
-        if value.bits() == 0 {
-            return Some(value);
-        }
-        None
-    }
-
-    fn zero_value_f64(&mut self, value: Ieee64) -> Option<Ieee64> {
-        if value.bits() == 0 {
-            return Some(value);
-        }
-        None
-    }
 }
