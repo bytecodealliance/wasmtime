@@ -105,7 +105,7 @@ macro_rules! wasm_to_libcall_trampoline {
                 mov 32[r10], r11
 
                 // Tail call to the actual implementation of this libcall.
-                jmp ", stringify!($libcall_impl), "
+                jmp ", wasmtime_asm_macros::asm_sym!(stringify!($libcall_impl)), "
 
                 .cfi_endproc
             ",

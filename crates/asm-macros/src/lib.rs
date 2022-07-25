@@ -23,7 +23,7 @@ cfg_if::cfg_if! {
 
         #[macro_export]
         macro_rules! asm_sym {
-            ($name:tt) => (concat!("_", $name))
+            ( $( $name:tt )* ) => ( concat!("_", $( $name )* ) )
         }
     } else {
         // Note that for now this "else" clause just assumes that everything
@@ -60,7 +60,7 @@ cfg_if::cfg_if! {
 
         #[macro_export]
         macro_rules! asm_sym {
-            ($name:tt) => ($name)
+            ( $( $name:tt )* ) => ( $( $name )* )
         }
     }
 }

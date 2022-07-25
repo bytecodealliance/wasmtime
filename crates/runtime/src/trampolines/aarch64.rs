@@ -110,7 +110,7 @@ macro_rules! wasm_to_libcall_trampoline {
                 stur lr, [x9, #32]
 
                 // Tail call to the actual implementation of this libcall.
-                b ", stringify!($libcall_impl), "
+                b ", wasmtime_asm_macros::asm_sym!(stringify!($libcall_impl)), "
 
                 .cfi_endproc
             "
