@@ -171,6 +171,14 @@
 (decl value_regs_get (ValueRegs usize) Reg)
 (extern constructor value_regs_get value_regs_get)
 
+;; Get the number of registers in a `ValueRegs`.
+(decl value_regs_len (ValueRegs) usize)
+(extern constructor value_regs_len value_regs_len)
+
+;; Get a range for the number of regs in a `ValueRegs`.
+(decl value_regs_range (ValueRegs) Range)
+(rule (value_regs_range regs) (range 0 (value_regs_len regs)))
+
 ;; Put the value into one or more registers and return the first register.
 ;;
 ;; Unlike `put_in_reg`, this does not assert that the value fits in a single
@@ -707,6 +715,10 @@
 (decl range_empty () Range)
 (extern extractor range_empty range_empty)
 
+;; Extractor to test whether a range has a single element in it
+(decl range_singleton (usize) Range)
+(extern extractor range_singleton range_singleton)
+
 ;; Extractor to return the first value in the range, and a sub-range
 ;; containing the remaining values.
 (decl range_unwrap (usize Range) Range)
@@ -722,6 +734,10 @@
 ;; contains only a single register.
 (decl only_writable_reg (WritableReg) WritableValueRegs)
 (extern extractor only_writable_reg only_writable_reg)
+
+;; Get the `n`th register inside a `WritableValueRegs`.
+(decl writable_regs_get (WritableValueRegs usize) WritableReg)
+(extern constructor writable_regs_get writable_regs_get)
 
 ;;;; Helpers for generating calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
