@@ -21,6 +21,9 @@
     )
 )]
 
+#[cfg(feature = "component-model")]
+mod component;
+mod core;
 mod spectest;
 mod wast;
 
