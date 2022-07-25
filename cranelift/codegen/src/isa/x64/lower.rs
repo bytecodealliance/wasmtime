@@ -17,7 +17,6 @@ use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::{Flags, TlsModel};
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 use log::trace;
 use smallvec::SmallVec;
@@ -900,7 +899,31 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Fdemote
         | Opcode::Fvdemote
         | Opcode::Icmp
-        | Opcode::Fcmp => {
+        | Opcode::Fcmp
+        | Opcode::Load
+        | Opcode::Uload8
+        | Opcode::Sload8
+        | Opcode::Uload16
+        | Opcode::Sload16
+        | Opcode::Uload32
+        | Opcode::Sload32
+        | Opcode::Sload8x8
+        | Opcode::Uload8x8
+        | Opcode::Sload16x4
+        | Opcode::Uload16x4
+        | Opcode::Sload32x2
+        | Opcode::Uload32x2
+        | Opcode::Store
+        | Opcode::Istore8
+        | Opcode::Istore16
+        | Opcode::Istore32
+        | Opcode::AtomicRmw
+        | Opcode::AtomicCas
+        | Opcode::AtomicLoad
+        | Opcode::AtomicStore
+        | Opcode::Fence
+        | Opcode::FuncAddr
+        | Opcode::SymbolValue => {
             implemented_in_isle(ctx);
         }
 
@@ -2076,68 +2099,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 };
                 emit_vm_call(ctx, flags, triple, libcall, insn, inputs, outputs)?;
             }
-        }
-
-        Opcode::Load
-        | Opcode::Uload8
-        | Opcode::Sload8
-        | Opcode::Uload16
-        | Opcode::Sload16
-        | Opcode::Uload32
-        | Opcode::Sload32
-        | Opcode::Sload8x8
-        | Opcode::Uload8x8
-        | Opcode::Sload16x4
-        | Opcode::Uload16x4
-        | Opcode::Sload32x2
-        | Opcode::Uload32x2 => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::AtomicRmw => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::AtomicCas => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::AtomicLoad => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::AtomicStore => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::Fence => {
-            implemented_in_isle(ctx);
-        }
-
-        Opcode::FuncAddr => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let (extname, _) = ctx.call_target(insn).unwrap();
-            let extname = extname.clone();
-            ctx.emit(Inst::LoadExtName {
-                dst,
-                name: Box::new(extname),
-                offset: 0,
-            });
-        }
-
-        Opcode::SymbolValue => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let (extname, _, offset) = ctx.symbol_value(insn).unwrap();
-            let extname = extname.clone();
-            ctx.emit(Inst::LoadExtName {
-                dst,
-                name: Box::new(extname),
-                offset,
-            });
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),

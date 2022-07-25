@@ -2828,6 +2828,16 @@
 (rule (lower (fence))
       (side_effect (x64_mfence)))
 
+;; Rules for `func_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (func_addr (func_ref_data _ extname _)))
+      (load_ext_name extname 0))
+
+;; Rules for `symbol_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (symbol_value (symbol_value_data extname _ offset)))
+      (load_ext_name extname offset))
+
 ;; Rules for `atomic_load` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; This is a normal load. The x86-TSO memory model provides sufficient

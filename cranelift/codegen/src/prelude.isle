@@ -656,6 +656,9 @@
 (decl symbol_value_data (ExternalName RelocDistance i64) GlobalValue)
 (extern extractor symbol_value_data symbol_value_data)
 
+(decl box_external_name (ExternalName) BoxExternalName)
+(extern constructor box_external_name box_external_name)
+
 ;; Accessor for `RelocDistance`.
 
 (decl reloc_distance_near () RelocDistance)
@@ -802,3 +805,4 @@
 (convert Reg InstOutput output_reg)
 (convert Value InstOutput output_value)
 (convert Offset32 u32 offset32_to_u32)
+(convert ExternalName BoxExternalName box_external_name)
