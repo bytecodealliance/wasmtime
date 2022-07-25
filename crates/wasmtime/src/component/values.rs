@@ -1,21 +1,23 @@
-use crate::component::func::{self, Lower, MemoryMut, Options};
+use crate::component::func::{self, Lift, Lower, Memory, MemoryMut, Options};
 use crate::component::types::{self, SizeAndAlignment, Type};
+use crate::store::StoreOpaque;
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{anyhow, bail, Context, Error, Result};
 use std::collections::HashMap;
+use std::iter;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct List {
-    pub(crate) ty: types::List,
-    pub(crate) values: Box<[Val]>,
+    ty: types::List,
+    values: Box<[Val]>,
 }
 
 impl List {
     /// Instantiate the specified type with the specified `values`.
-    pub fn try_new(ty: &types::List, values: Box<[Val]>) -> Result<Self> {
+    pub fn new(ty: &types::List, values: Box<[Val]>) -> Result<Self> {
         let element_type = ty.ty();
         for (index, value) in values.iter().enumerate() {
             element_type
@@ -32,13 +34,13 @@ impl List {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Record {
-    pub(crate) ty: types::Record,
-    pub(crate) values: Box<[Val]>,
+    ty: types::Record,
+    values: Box<[Val]>,
 }
 
 impl Record {
     /// Instantiate the specified type with the specified `values`.
-    pub fn try_new<'a>(
+    pub fn new<'a>(
         ty: &types::Record,
         values: impl IntoIterator<Item = (&'a str, Val)>,
     ) -> Result<Self> {
@@ -78,13 +80,13 @@ impl Record {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Tuple {
-    pub(crate) ty: types::Tuple,
-    pub(crate) values: Box<[Val]>,
+    ty: types::Tuple,
+    values: Box<[Val]>,
 }
 
 impl Tuple {
     /// Instantiate the specified type ith the specified `values`.
-    pub fn try_new(ty: &types::Tuple, values: Box<[Val]>) -> Result<Self> {
+    pub fn new(ty: &types::Tuple, values: Box<[Val]>) -> Result<Self> {
         if values.len() != ty.types().len() {
             bail!(
                 "expected {} value(s); got {}",
@@ -107,14 +109,14 @@ impl Tuple {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Variant {
-    pub(crate) ty: types::Variant,
-    pub(crate) discriminant: u32,
-    pub(crate) value: Box<Val>,
+    ty: types::Variant,
+    discriminant: u32,
+    value: Box<Val>,
 }
 
 impl Variant {
     /// Instantiate the specified type with the specified case `name` and `value`.
-    pub fn try_new(ty: &types::Variant, name: &str, value: Val) -> Result<Self> {
+    pub fn new(ty: &types::Variant, name: &str, value: Val) -> Result<Self> {
         let (discriminant, case_type) = ty
             .cases()
             .enumerate()
@@ -141,13 +143,13 @@ impl Variant {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Enum {
-    pub(crate) ty: types::Enum,
-    pub(crate) discriminant: u32,
+    ty: types::Enum,
+    discriminant: u32,
 }
 
 impl Enum {
     /// Instantiate the specified type with the specified case `name`.
-    pub fn try_new(ty: &types::Enum, name: &str) -> Result<Self> {
+    pub fn new(ty: &types::Enum, name: &str) -> Result<Self> {
         let discriminant = u32::try_from(
             ty.names()
                 .position(|n| n == name)
@@ -163,14 +165,14 @@ impl Enum {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Union {
-    pub(crate) ty: types::Union,
-    pub(crate) discriminant: u32,
-    pub(crate) value: Box<Val>,
+    ty: types::Union,
+    discriminant: u32,
+    value: Box<Val>,
 }
 
 impl Union {
     /// Instantiate the specified type with the specified `discriminant` and `value`.
-    pub fn try_new(ty: &types::Union, discriminant: u32, value: Val) -> Result<Self> {
+    pub fn new(ty: &types::Union, discriminant: u32, value: Val) -> Result<Self> {
         if let Some(case_ty) = ty.types().nth(usize::try_from(discriminant)?) {
             case_ty
                 .check(&value)
@@ -192,14 +194,14 @@ impl Union {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Option {
-    pub(crate) ty: types::Option,
-    pub(crate) discriminant: u32,
-    pub(crate) value: Box<Val>,
+    ty: types::Option,
+    discriminant: u32,
+    value: Box<Val>,
 }
 
 impl Option {
     /// Instantiate the specified type with the specified `value`.
-    pub fn try_new(ty: &types::Option, value: std::option::Option<Val>) -> Result<Self> {
+    pub fn new(ty: &types::Option, value: std::option::Option<Val>) -> Result<Self> {
         let value = value
             .map(|value| {
                 ty.ty().check(&value).context("type mismatch for option")?;
@@ -218,14 +220,14 @@ impl Option {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Expected {
-    pub(crate) ty: types::Expected,
-    pub(crate) discriminant: u32,
-    pub(crate) value: Box<Val>,
+    ty: types::Expected,
+    discriminant: u32,
+    value: Box<Val>,
 }
 
 impl Expected {
     /// Instantiate the specified type with the specified `value`.
-    pub fn try_new(ty: &types::Expected, value: Result<Val, Val>) -> Result<Self> {
+    pub fn new(ty: &types::Expected, value: Result<Val, Val>) -> Result<Self> {
         Ok(Self {
             ty: ty.clone(),
             discriminant: if value.is_ok() { 0 } else { 1 },
@@ -249,14 +251,14 @@ impl Expected {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Flags {
-    pub(crate) ty: types::Flags,
-    pub(crate) count: u32,
-    pub(crate) value: Box<[u32]>,
+    ty: types::Flags,
+    count: u32,
+    value: Box<[u32]>,
 }
 
 impl Flags {
     /// Instantiate the specified type with the specified flag `names`.
-    pub fn try_new(ty: &types::Flags, names: &[&str]) -> Result<Self> {
+    pub fn new(ty: &types::Flags, names: &[&str]) -> Result<Self> {
         let map = ty
             .names()
             .enumerate()
@@ -361,6 +363,226 @@ impl Val {
         }
     }
 
+    /// Deserialize a value of this type from core Wasm stack values.
+    pub(crate) fn lift<'a>(
+        ty: &Type,
+        store: &StoreOpaque,
+        options: &Options,
+        src: &mut std::slice::Iter<'_, ValRaw>,
+    ) -> Result<Val> {
+        Ok(match ty {
+            Type::Unit => Val::Unit,
+            Type::Bool => Val::Bool(bool::lift(store, options, next(src))?),
+            Type::S8 => Val::S8(i8::lift(store, options, next(src))?),
+            Type::U8 => Val::U8(u8::lift(store, options, next(src))?),
+            Type::S16 => Val::S16(i16::lift(store, options, next(src))?),
+            Type::U16 => Val::U16(u16::lift(store, options, next(src))?),
+            Type::S32 => Val::S32(i32::lift(store, options, next(src))?),
+            Type::U32 => Val::U32(u32::lift(store, options, next(src))?),
+            Type::S64 => Val::S64(i64::lift(store, options, next(src))?),
+            Type::U64 => Val::U64(u64::lift(store, options, next(src))?),
+            Type::Float32 => Val::Float32(u32::lift(store, options, next(src))?),
+            Type::Float64 => Val::Float64(u64::lift(store, options, next(src))?),
+            Type::Char => Val::Char(char::lift(store, options, next(src))?),
+            Type::String => {
+                Val::String(Box::<str>::lift(store, options, &[*next(src), *next(src)])?)
+            }
+            Type::List(handle) => {
+                // FIXME: needs memory64 treatment
+                let ptr = u32::lift(store, options, next(src))? as usize;
+                let len = u32::lift(store, options, next(src))? as usize;
+                load_list(handle, &Memory::new(store, options), ptr, len)?
+            }
+            Type::Record(handle) => Val::Record(Record {
+                ty: handle.clone(),
+                values: handle
+                    .fields()
+                    .map(|field| Self::lift(&field.ty, store, options, src))
+                    .collect::<Result<_>>()?,
+            }),
+            Type::Tuple(handle) => Val::Tuple(Tuple {
+                ty: handle.clone(),
+                values: handle
+                    .types()
+                    .map(|ty| Self::lift(&ty, store, options, src))
+                    .collect::<Result<_>>()?,
+            }),
+            Type::Variant(handle) => {
+                let (discriminant, value) = lift_variant(
+                    ty.flatten_count(),
+                    handle.cases().map(|case| case.ty),
+                    store,
+                    options,
+                    src,
+                )?;
+
+                Val::Variant(Variant {
+                    ty: handle.clone(),
+                    discriminant,
+                    value: Box::new(value),
+                })
+            }
+            Type::Enum(handle) => {
+                let (discriminant, _) = lift_variant(
+                    ty.flatten_count(),
+                    handle.names().map(|_| Type::Unit),
+                    store,
+                    options,
+                    src,
+                )?;
+
+                Val::Enum(Enum {
+                    ty: handle.clone(),
+                    discriminant,
+                })
+            }
+            Type::Union(handle) => {
+                let (discriminant, value) =
+                    lift_variant(ty.flatten_count(), handle.types(), store, options, src)?;
+
+                Val::Union(Union {
+                    ty: handle.clone(),
+                    discriminant,
+                    value: Box::new(value),
+                })
+            }
+            Type::Option(handle) => {
+                let (discriminant, value) = lift_variant(
+                    ty.flatten_count(),
+                    [Type::Unit, handle.ty()].into_iter(),
+                    store,
+                    options,
+                    src,
+                )?;
+
+                Val::Option(Option {
+                    ty: handle.clone(),
+                    discriminant,
+                    value: Box::new(value),
+                })
+            }
+            Type::Expected(handle) => {
+                let (discriminant, value) = lift_variant(
+                    ty.flatten_count(),
+                    [handle.ok(), handle.err()].into_iter(),
+                    store,
+                    options,
+                    src,
+                )?;
+
+                Val::Expected(Expected {
+                    ty: handle.clone(),
+                    discriminant,
+                    value: Box::new(value),
+                })
+            }
+            Type::Flags(handle) => {
+                let count = u32::try_from(handle.names().len()).unwrap();
+                assert!(count <= 32);
+                let value = iter::once(u32::lift(store, options, next(src))?).collect();
+
+                Val::Flags(Flags {
+                    ty: handle.clone(),
+                    count,
+                    value,
+                })
+            }
+        })
+    }
+
+    /// Deserialize a value of this type from the heap.
+    pub(crate) fn load(ty: &Type, mem: &Memory, bytes: &[u8]) -> Result<Val> {
+        Ok(match ty {
+            Type::Unit => Val::Unit,
+            Type::Bool => Val::Bool(bool::load(mem, bytes)?),
+            Type::S8 => Val::S8(i8::load(mem, bytes)?),
+            Type::U8 => Val::U8(u8::load(mem, bytes)?),
+            Type::S16 => Val::S16(i16::load(mem, bytes)?),
+            Type::U16 => Val::U16(u16::load(mem, bytes)?),
+            Type::S32 => Val::S32(i32::load(mem, bytes)?),
+            Type::U32 => Val::U32(u32::load(mem, bytes)?),
+            Type::S64 => Val::S64(i64::load(mem, bytes)?),
+            Type::U64 => Val::U64(u64::load(mem, bytes)?),
+            Type::Float32 => Val::Float32(u32::load(mem, bytes)?),
+            Type::Float64 => Val::Float64(u64::load(mem, bytes)?),
+            Type::Char => Val::Char(char::load(mem, bytes)?),
+            Type::String => Val::String(Box::<str>::load(mem, bytes)?),
+            Type::List(handle) => {
+                // FIXME: needs memory64 treatment
+                let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap()) as usize;
+                let len = u32::from_le_bytes(bytes[4..].try_into().unwrap()) as usize;
+                load_list(handle, mem, ptr, len)?
+            }
+            Type::Record(handle) => Val::Record(Record {
+                ty: handle.clone(),
+                values: load_record(handle.fields().map(|field| field.ty), mem, bytes)?,
+            }),
+            Type::Tuple(handle) => Val::Tuple(Tuple {
+                ty: handle.clone(),
+                values: load_record(handle.types(), mem, bytes)?,
+            }),
+            Type::Variant(handle) => {
+                let (discriminant, value) =
+                    load_variant(ty, handle.cases().map(|case| case.ty), mem, bytes)?;
+
+                Val::Variant(Variant {
+                    ty: handle.clone(),
+                    discriminant,
+                    value: Box::new(value),
+                })
+            }
+            Type::Enum(handle) => {
+                let (discriminant, _) =
+                    load_variant(ty, handle.names().map(|_| Type::Unit), mem, bytes)?;
+
+                Val::Enum(Enum {
+                    ty: handle.clone(),
+                    discriminant,
+                })
+            }
+            Type::Union(handle) => {
+                let (discriminant, value) = load_variant(ty, handle.types(), mem, bytes)?;
+
+                Val::Union(Union {
+                    ty: handle.clone(),
+                    discriminant,
+                    value: Box::new(value),
+                })
+            }
+            Type::Option(handle) => {
+                let (discriminant, value) =
+                    load_variant(ty, [Type::Unit, handle.ty()].into_iter(), mem, bytes)?;
+
+                Val::Option(Option {
+                    ty: handle.clone(),
+                    discriminant,
+                    value: Box::new(value),
+                })
+            }
+            Type::Expected(handle) => {
+                let (discriminant, value) =
+                    load_variant(ty, [handle.ok(), handle.err()].into_iter(), mem, bytes)?;
+
+                Val::Expected(Expected {
+                    ty: handle.clone(),
+                    discriminant,
+                    value: Box::new(value),
+                })
+            }
+            Type::Flags(handle) => Val::Flags(Flags {
+                ty: handle.clone(),
+                count: u32::try_from(handle.names().len())?,
+                value: match FlagsSize::from_count(handle.names().len()) {
+                    FlagsSize::Size1 => iter::once(u8::load(mem, bytes)? as u32).collect(),
+                    FlagsSize::Size2 => iter::once(u16::load(mem, bytes)? as u32).collect(),
+                    FlagsSize::Size4Plus(n) => (0..n)
+                        .map(|index| u32::load(mem, &bytes[index * 4..][..4]))
+                        .collect::<Result<_>>()?,
+                },
+            }),
+        })
+    }
+
     /// Serialize this value as core Wasm stack values.
     pub(crate) fn lower<T>(
         &self,
@@ -370,24 +592,24 @@ impl Val {
     ) -> Result<()> {
         match self {
             Val::Unit => (),
-            Val::Bool(value) => value.lower(store, options, next(dst))?,
-            Val::S8(value) => value.lower(store, options, next(dst))?,
-            Val::U8(value) => value.lower(store, options, next(dst))?,
-            Val::S16(value) => value.lower(store, options, next(dst))?,
-            Val::U16(value) => value.lower(store, options, next(dst))?,
-            Val::S32(value) => value.lower(store, options, next(dst))?,
-            Val::U32(value) => value.lower(store, options, next(dst))?,
-            Val::S64(value) => value.lower(store, options, next(dst))?,
-            Val::U64(value) => value.lower(store, options, next(dst))?,
-            Val::Float32(value) => value.lower(store, options, next(dst))?,
-            Val::Float64(value) => value.lower(store, options, next(dst))?,
-            Val::Char(value) => value.lower(store, options, next(dst))?,
+            Val::Bool(value) => value.lower(store, options, next_mut(dst))?,
+            Val::S8(value) => value.lower(store, options, next_mut(dst))?,
+            Val::U8(value) => value.lower(store, options, next_mut(dst))?,
+            Val::S16(value) => value.lower(store, options, next_mut(dst))?,
+            Val::U16(value) => value.lower(store, options, next_mut(dst))?,
+            Val::S32(value) => value.lower(store, options, next_mut(dst))?,
+            Val::U32(value) => value.lower(store, options, next_mut(dst))?,
+            Val::S64(value) => value.lower(store, options, next_mut(dst))?,
+            Val::U64(value) => value.lower(store, options, next_mut(dst))?,
+            Val::Float32(value) => value.lower(store, options, next_mut(dst))?,
+            Val::Float64(value) => value.lower(store, options, next_mut(dst))?,
+            Val::Char(value) => value.lower(store, options, next_mut(dst))?,
             Val::String(value) => {
                 let my_dst = &mut MaybeUninit::<[ValRaw; 2]>::uninit();
                 value.lower(store, options, my_dst)?;
                 let my_dst = unsafe { my_dst.assume_init() };
-                next(dst).write(my_dst[0]);
-                next(dst).write(my_dst[1]);
+                next_mut(dst).write(my_dst[0]);
+                next_mut(dst).write(my_dst[1]);
             }
             Val::List(List { values, ty }) => {
                 let (ptr, len) = lower_list(
@@ -395,8 +617,8 @@ impl Val {
                     &mut MemoryMut::new(store.as_context_mut(), options),
                     values,
                 )?;
-                next(dst).write(ValRaw::i64(ptr as i64));
-                next(dst).write(ValRaw::i64(len as i64));
+                next_mut(dst).write(ValRaw::i64(ptr as i64));
+                next_mut(dst).write(ValRaw::i64(len as i64));
             }
             Val::Record(Record { values, .. }) | Val::Tuple(Tuple { values, .. }) => {
                 for value in values.deref() {
@@ -423,18 +645,18 @@ impl Val {
                 value,
                 ..
             }) => {
-                next(dst).write(ValRaw::u32(*discriminant));
+                next_mut(dst).write(ValRaw::u32(*discriminant));
                 value.lower(store, options, dst)?;
                 for _ in (1 + value.ty().flatten_count())..self.ty().flatten_count() {
-                    next(dst).write(ValRaw::u32(0));
+                    next_mut(dst).write(ValRaw::u32(0));
                 }
             }
             Val::Enum(Enum { discriminant, .. }) => {
-                next(dst).write(ValRaw::u32(*discriminant));
+                next_mut(dst).write(ValRaw::u32(*discriminant));
             }
             Val::Flags(Flags { value, .. }) => {
                 for value in value.deref() {
-                    next(dst).write(ValRaw::u32(*value));
+                    next_mut(dst).write(ValRaw::u32(*value));
                 }
             }
         }
@@ -544,6 +766,104 @@ impl Val {
     }
 }
 
+fn load_list(handle: &types::List, mem: &Memory, ptr: usize, len: usize) -> Result<Val> {
+    let element_type = handle.ty();
+    let SizeAndAlignment {
+        size: element_size,
+        alignment: element_alignment,
+    } = element_type.size_and_alignment();
+
+    match len
+        .checked_mul(element_size)
+        .and_then(|len| ptr.checked_add(len))
+    {
+        Some(n) if n <= mem.as_slice().len() => {}
+        _ => bail!("list pointer/length out of bounds of memory"),
+    }
+    if ptr % usize::try_from(element_alignment)? != 0 {
+        bail!("list pointer is not aligned")
+    }
+
+    Ok(Val::List(List {
+        ty: handle.clone(),
+        values: (0..len)
+            .map(|index| {
+                Val::load(
+                    &element_type,
+                    mem,
+                    &mem.as_slice()[ptr + (index * element_size)..][..element_size],
+                )
+            })
+            .collect::<Result<_>>()?,
+    }))
+}
+
+fn load_record(
+    types: impl Iterator<Item = Type>,
+    mem: &Memory,
+    bytes: &[u8],
+) -> Result<Box<[Val]>> {
+    let mut offset = 0;
+    types
+        .map(|ty| {
+            Val::load(
+                &ty,
+                mem,
+                &bytes[ty.next_field(&mut offset)..][..ty.size_and_alignment().size],
+            )
+        })
+        .collect()
+}
+
+fn load_variant(
+    ty: &Type,
+    mut types: impl ExactSizeIterator<Item = Type>,
+    mem: &Memory,
+    bytes: &[u8],
+) -> Result<(u32, Val)> {
+    let discriminant_size = DiscriminantSize::from_count(types.len()).unwrap();
+    let discriminant = match discriminant_size {
+        DiscriminantSize::Size1 => u8::load(mem, &bytes[..1])? as u32,
+        DiscriminantSize::Size2 => u16::load(mem, &bytes[..2])? as u32,
+        DiscriminantSize::Size4 => u32::load(mem, &bytes[..4])?,
+    };
+    let case_ty = types.nth(discriminant as usize).ok_or_else(|| {
+        anyhow!(
+            "discriminant {} out of range [0..{})",
+            discriminant,
+            types.len()
+        )
+    })?;
+    let value = Val::load(
+        &case_ty,
+        mem,
+        &bytes[func::align_to(
+            usize::from(discriminant_size),
+            ty.size_and_alignment().alignment,
+        )..][..case_ty.size_and_alignment().size],
+    )?;
+    Ok((discriminant, value))
+}
+
+fn lift_variant<'a>(
+    flatten_count: usize,
+    mut types: impl ExactSizeIterator<Item = Type>,
+    store: &StoreOpaque,
+    options: &Options,
+    src: &mut std::slice::Iter<'_, ValRaw>,
+) -> Result<(u32, Val)> {
+    let len = types.len();
+    let discriminant = next(src).get_u32();
+    let ty = types
+        .nth(discriminant as usize)
+        .ok_or_else(|| anyhow!("discriminant {} out of range [0..{})", discriminant, len))?;
+    let value = Val::lift(&ty, store, options, src)?;
+    for _ in (1 + ty.flatten_count())..flatten_count {
+        next(src);
+    }
+    Ok((discriminant, value))
+}
+
 /// Lower a list with the specified element type and values.
 fn lower_list<T>(
     element_type: &Type,
@@ -577,6 +897,12 @@ pub(crate) fn u32_count_for_flag_count(count: usize) -> usize {
     }
 }
 
-fn next<'a>(dst: &mut std::slice::IterMut<'a, MaybeUninit<ValRaw>>) -> &'a mut MaybeUninit<ValRaw> {
+fn next<'a>(src: &mut std::slice::Iter<'a, ValRaw>) -> &'a ValRaw {
+    src.next().unwrap()
+}
+
+fn next_mut<'a>(
+    dst: &mut std::slice::IterMut<'a, MaybeUninit<ValRaw>>,
+) -> &'a mut MaybeUninit<ValRaw> {
     dst.next().unwrap()
 }

@@ -321,7 +321,7 @@ impl Func {
                 if result_count > MAX_STACK_RESULTS {
                     Self::load_result(&Memory::new(store, &options), &result, &mut src.iter())
                 } else {
-                    result.lift(store, &options, &mut src.iter())
+                    Val::lift(&result, store, &options, &mut src.iter())
                 }
             },
         )
@@ -589,6 +589,6 @@ impl Func {
             .and_then(|b| b.get(..size))
             .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
 
-        ty.load(mem, bytes)
+        Val::load(ty, mem, bytes)
     }
 }
