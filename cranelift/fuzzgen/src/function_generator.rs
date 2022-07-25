@@ -7,10 +7,11 @@ use cranelift::codegen::ir::{
     AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, StackSlot, Type, Value,
 };
 use cranelift::codegen::isa::CallConv;
-use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
+use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
 use cranelift::prelude::{
     EntityRef, InstBuilder, IntCC, JumpTableData, StackSlotData, StackSlotKind,
 };
+use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
 type BlockSignature = Vec<Type>;
@@ -477,6 +478,51 @@ where
         Ok(())
     }
 
+    fn generate_switch(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
+        let _type = *self.u.choose(
+            &[
+                I8, I16, I32, I64, // TODO: I128
+            ][..],
+        )?;
+        let switch_var = self.get_variable_of_type(_type)?;
+        let switch_val = builder.use_var(switch_var);
+
+        let valid_blocks = self.generate_valid_jumptable_target_blocks();
+        let default_block = *self.u.choose(&valid_blocks[..])?;
+
+        // Build this into a HashMap since we cannot have duplicate entries.
+        let mut entries = HashMap::new();
+        for _ in 0..self.param(&self.config.switch_cases)? {
+            // The Switch API only allows for entries that are addressable by the index type
+            // so we need to limit the range of values that we generate.
+            let (ty_min, ty_max) = _type.bounds(false);
+            let range_start = self.u.int_in_range(ty_min..=ty_max)?;
+
+            // We can either insert a contiguous range of blocks or a individual block
+            // This is done because the Switch API specializes contiguous ranges.
+            let range_size = if bool::arbitrary(self.u)? {
+                1
+            } else {
+                self.param(&self.config.switch_max_range_size)?
+            } as u128;
+
+            // Build the switch entries
+            for i in 0..range_size {
+                let index = range_start.wrapping_add(i) % ty_max;
+                let block = *self.u.choose(&valid_blocks[..])?;
+                entries.insert(index, block);
+            }
+        }
+
+        let mut switch = Switch::new();
+        for (entry, block) in entries.into_iter() {
+            switch.set_entry(entry, block);
+        }
+        switch.emit(builder, switch_val, default_block);
+
+        Ok(())
+    }
+
     /// We always need to exit safely out of a block.
     /// This either means a jump into another block or a return.
     fn finalize_block(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
@@ -487,6 +533,7 @@ where
                 Self::generate_br_table,
                 Self::generate_jump,
                 Self::generate_return,
+                Self::generate_switch,
             ][..],
         )?;
 
