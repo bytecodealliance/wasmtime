@@ -47,7 +47,7 @@ pub struct Module<'a> {
     /// Final list of imports that this module ended up using, in the same order
     /// as the imports in the import section.
     imports: Vec<CoreDef>,
-    /// Intern'd improts and what index they were assigned.
+    /// Intern'd imports and what index they were assigned.
     imported: HashMap<CoreDef, u32>,
 
     // Current status of index spaces from the imports generated so far.
