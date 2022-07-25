@@ -1152,10 +1152,10 @@ impl PrettyPrint for Inst {
                 dst,
                 ..
             } => {
-                let src3 = src3.pretty_print(8, allocs);
-                let src2 = pretty_print_reg(src2.to_reg(), 8, allocs);
                 let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                let src2 = pretty_print_reg(src2.to_reg(), 8, allocs);
+                let src3 = src3.pretty_print(8, allocs);
 
                 format!(
                     "{} {}, {}, {}, {}",
