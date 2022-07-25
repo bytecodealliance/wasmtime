@@ -3333,6 +3333,7 @@ dependencies = [
  "wasmparser",
  "wasmtime-cache",
  "wasmtime-component-macro",
+ "wasmtime-component-util",
  "wasmtime-cranelift",
  "wasmtime-environ",
  "wasmtime-fiber",
@@ -3472,7 +3473,12 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+ "wasmtime-component-util",
 ]
+
+[[package]]
+name = "wasmtime-component-util"
+version = "0.40.0"
 
 [[package]]
 name = "wasmtime-cranelift"
