@@ -595,6 +595,7 @@ dependencies = [
  "cranelift-entity",
  "cranelift-frontend",
  "cranelift-reader",
+ "libm",
  "log",
  "smallvec",
  "thiserror",

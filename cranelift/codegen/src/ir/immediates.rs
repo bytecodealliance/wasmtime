@@ -770,12 +770,6 @@ impl Ieee32 {
         f32::from_bits(self.0)
     }
 
-    /// Fused multiply-add. Computes (self * a) + b with only one rounding error, yielding a
-    /// more accurate result than an unfused multiply-add.
-    pub fn mul_add(&self, a: Self, b: Self) -> Self {
-        Self::with_float(self.as_f32().mul_add(a.as_f32(), b.as_f32()))
-    }
-
     /// Returns the square root of self.
     pub fn sqrt(self) -> Self {
         Self::with_float(self.as_f32().sqrt())
@@ -960,12 +954,6 @@ impl Ieee64 {
     /// Converts Self to a rust f64
     pub fn as_f64(self) -> f64 {
         f64::from_bits(self.0)
-    }
-
-    /// Fused multiply-add. Computes (self * a) + b with only one rounding error, yielding a
-    /// more accurate result than an unfused multiply-add.
-    pub fn mul_add(&self, a: Self, b: Self) -> Self {
-        Self::with_float(self.as_f64().mul_add(a.as_f64(), b.as_f64()))
     }
 
     /// Returns the square root of self.
