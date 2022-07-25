@@ -92,6 +92,9 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
         if std::is_x86_feature_detected!("avx2") {
             isa_builder.enable("has_avx2").unwrap();
         }
+        if std::is_x86_feature_detected!("fma") {
+            isa_builder.enable("has_fma").unwrap();
+        }
         if std::is_x86_feature_detected!("bmi1") {
             isa_builder.enable("has_bmi1").unwrap();
         }

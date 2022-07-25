@@ -2832,7 +2832,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Cls => unimplemented!("Cls not supported"),
 
-        Opcode::Fma => unimplemented!("Fma not supported"),
+        Opcode::Fma => implemented_in_isle(ctx),
 
         Opcode::BorNot | Opcode::BxorNot => {
             unimplemented!("or-not / xor-not opcodes not implemented");

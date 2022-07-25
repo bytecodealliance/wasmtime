@@ -52,6 +52,12 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
         "AVX2: CPUID.07H:EBX.AVX2[bit 5]",
         false,
     );
+    let has_fma = settings.add_bool(
+        "has_fma",
+        "Has support for FMA.",
+        "FMA: CPUID.01H:ECX.FMA[bit 12]",
+        false,
+    );
     let has_avx512bitalg = settings.add_bool(
         "has_avx512bitalg",
         "Has support for AVX512BITALG.",
@@ -116,6 +122,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     settings.add_predicate("use_ssse3", predicate!(has_ssse3));
     settings.add_predicate("use_sse41", predicate!(has_sse41));
     settings.add_predicate("use_sse42", predicate!(has_sse41 && has_sse42));
+    settings.add_predicate("use_fma", predicate!(has_avx && has_fma));
 
     settings.add_predicate(
         "use_ssse3_simd",
@@ -195,7 +202,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     let broadwell = settings.add_preset(
         "broadwell",
         "Broadwell microarchitecture.",
-        preset!(haswell),
+        preset!(haswell && has_fma),
     );
     let skylake = settings.add_preset("skylake", "Skylake microarchitecture.", preset!(broadwell));
     let cannonlake = settings.add_preset(

@@ -8,6 +8,7 @@ use crate::isa::x64::encoding::rex::{
     low8_will_sign_extend_to_32, low8_will_sign_extend_to_64, reg_enc, LegacyPrefixes, OpcodeMap,
     RexFlags,
 };
+use crate::isa::x64::encoding::vex::{VexInstruction, VexVectorLength};
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::machinst::{inst_common, MachBuffer, MachInstEmit, MachLabel, Reg, Writable};
@@ -119,6 +120,7 @@ pub(crate) fn emit(
             InstructionSet::Lzcnt => info.isa_flags.use_lzcnt(),
             InstructionSet::BMI1 => info.isa_flags.use_bmi1(),
             InstructionSet::BMI2 => info.isa_flags.has_bmi2(),
+            InstructionSet::FMA => info.isa_flags.has_fma(),
             InstructionSet::AVX512BITALG => info.isa_flags.has_avx512bitalg(),
             InstructionSet::AVX512DQ => info.isa_flags.has_avx512dq(),
             InstructionSet::AVX512F => info.isa_flags.has_avx512f(),
@@ -1687,6 +1689,39 @@ pub(crate) fn emit(
                     emit_std_reg_mem(sink, info, prefix, opcode, length, reg_g, addr, rex, 0);
                 }
             }
+        }
+
+        Inst::XmmRmRVex {
+            op,
+            src1,
+            src2,
+            src3,
+            dst,
+        } => {
+            let src1 = allocs.next(src1.to_reg());
+            let dst = allocs.next(dst.to_reg().to_reg());
+            debug_assert_eq!(src1, dst);
+            let src2 = allocs.next(src2.to_reg());
+            let src3 = src3.clone().to_reg_mem().with_allocs(allocs);
+
+            let (w, opcode) = match op {
+                AvxOpcode::Vfmadd213ps => (false, 0xA8),
+                AvxOpcode::Vfmadd213pd => (true, 0xA8),
+            };
+
+            match src3 {
+                RegMem::Reg { reg: src } => VexInstruction::new()
+                    .length(VexVectorLength::V128)
+                    .prefix(LegacyPrefixes::_66)
+                    .map(OpcodeMap::_0F38)
+                    .w(w)
+                    .opcode(opcode)
+                    .reg(dst.to_real_reg().unwrap().hw_enc())
+                    .rm(src.to_real_reg().unwrap().hw_enc())
+                    .vvvv(src2.to_real_reg().unwrap().hw_enc())
+                    .encode(sink),
+                _ => todo!(),
+            };
         }
 
         Inst::XmmRmREvex {
