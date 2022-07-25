@@ -14,6 +14,7 @@ use crate::isa::riscv64::{inst::EmitState, inst::*};
 use crate::isa::CallConv;
 use crate::machinst::*;
 
+use crate::ir::LibCall;
 use crate::ir::Signature;
 use crate::isa::unwind::UnwindInst;
 use crate::settings;
@@ -617,32 +618,30 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_memcpy(
-        _call_conv: isa::CallConv,
-        _dst: Reg,
-        _src: Reg,
-        _size: usize,
+        call_conv: isa::CallConv,
+        dst: Reg,
+        src: Reg,
+        size: usize,
     ) -> SmallVec<[Self::I; 8]> {
-        panic!(
-            "libcall call should use indirect call,need a temp register to store memcpy address."
-        );
-        // let mut insts = SmallVec::new();
-        // let arg0 = writable_a0();
-        // let arg1 = writable_a1();
-        // let arg2 = writable_a2();
-        // insts.push(Inst::gen_move(arg0, dst, I64));
-        // insts.push(Inst::gen_move(arg1, src, I64));
-        // insts.extend(Inst::load_constant_u64(arg2, size as u64));
-        // insts.push(Inst::Call {
-        //     info: Box::new(CallInfo {
-        //         dest: ExternalName::LibCall(LibCall::Memcpy),
-        //         uses: vec![arg0.to_reg(), arg1.to_reg(), arg2.to_reg()],
-        //         defs: Self::get_regs_clobbered_by_call(call_conv),
-        //         opcode: Opcode::Call,
-        //         caller_callconv: call_conv,
-        //         callee_callconv: call_conv,
-        //     }),
-        // });
-        // insts
+        let mut insts = SmallVec::new();
+        let arg0 = writable_a0();
+        let arg1 = writable_a1();
+        let arg2 = writable_a2();
+        insts.push(Inst::gen_move(arg0, dst, I64));
+        insts.push(Inst::gen_move(arg1, src, I64));
+        insts.extend(Inst::load_constant_u64(arg2, size as u64));
+        insts.push(Inst::Call {
+            info: Box::new(CallInfo {
+                dest: ExternalName::LibCall(LibCall::Memcpy),
+                uses: smallvec![arg0.to_reg(), arg1.to_reg(), arg2.to_reg()],
+                defs: smallvec![],
+                clobbers: Self::get_regs_clobbered_by_call(call_conv),
+                opcode: Opcode::Call,
+                caller_callconv: call_conv,
+                callee_callconv: call_conv,
+            }),
+        });
+        insts
     }
 
     fn get_number_of_spillslots_for_value(rc: RegClass, _target_vector_bytes: u32) -> u32 {

@@ -136,6 +136,7 @@ impl MachInstEmitState<Inst> for EmitState {
 }
 
 impl Inst {
+    /// construct a "imm - rs".
     pub(crate) fn construct_imm_sub_rs(rd: Writable<Reg>, imm: u64, rs: Reg) -> SmallInstVec<Inst> {
         let mut insts = Inst::load_constant_u64(rd, imm);
         insts.push(Inst::AluRRR {
@@ -886,8 +887,30 @@ impl MachInstEmit for Inst {
                             .into_iter()
                             .for_each(|i| i.emit(&[], sink, emit_info, state));
                     }
-                    ExternalName::TestCase { .. } => todo!(),
-                    ExternalName::LibCall(..) => todo!(),
+                    ExternalName::LibCall(..) | ExternalName::TestCase { .. } => {
+                        // use indirect call. it is more simple.
+                        // load ext name.
+                        Inst::LoadExtName {
+                            rd: writable_spilltmp_reg2(),
+                            name: Box::new(info.dest.clone()),
+                            offset: 0,
+                        }
+                        .emit(&[], sink, emit_info, state);
+
+                        if let Some(s) = state.take_stack_map() {
+                            sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
+                        }
+                        if info.opcode.is_call() {
+                            sink.add_call_site(info.opcode);
+                        }
+                        // call
+                        Inst::Jalr {
+                            rd: writable_link_reg(),
+                            base: spilltmp_reg2(),
+                            offset: Imm12::zero(),
+                        }
+                        .emit(&[], sink, emit_info, state);
+                    }
                 }
             }
             &Inst::CallInd { ref info } => {
@@ -1789,13 +1812,12 @@ impl MachInstEmit for Inst {
                 // load max value need to round.
                 if ty == F32 {
                     Inst::load_fp_constant32(f_tmp, max_value_need_round(ty) as u32)
-                        .into_iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
                 } else {
                     Inst::load_fp_constant64(f_tmp, max_value_need_round(ty))
-                        .into_iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
                 }
+                .into_iter()
+                .for_each(|i| i.emit(&[], sink, emit_info, state));
+
                 // get abs value.
                 Inst::emit_fabs(rd, rs, ty).emit(&[], sink, emit_info, state);
                 Inst::lower_br_fcmp(

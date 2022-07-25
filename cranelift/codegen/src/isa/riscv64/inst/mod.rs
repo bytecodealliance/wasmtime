@@ -241,16 +241,15 @@ impl Inst {
         insts.unwrap_or(LoadConstant::U64(value).load_constant(rd))
     }
 
-    /// this will discard return address.
-    pub(crate) fn construct_auipc_and_jalr(tmp: Writable<Reg>, offset: i64) -> [Inst; 2] {
+    pub(crate) fn construct_auipc_and_jalr(link: Writable<Reg>, offset: i64) -> [Inst; 2] {
         Inst::generate_imm(offset as u64, |imm20, imm12| {
             let a = Inst::Auipc {
-                rd: tmp,
+                rd: link,
                 imm: imm20.unwrap_or_default(),
             };
             let b = Inst::Jalr {
-                rd: writable_zero_reg(),
-                base: tmp.to_reg(),
+                rd: link,
+                base: link.to_reg(),
                 offset: imm12.unwrap_or_default(),
             };
             [a, b]
@@ -1000,8 +999,8 @@ impl Inst {
                 let t0 = format_reg(t0.to_reg(), allocs);
                 let dst = format_reg(dst.to_reg(), allocs);
                 format!(
-                    "{} {},{},{},({})##t0={} ty={}",
-                    "atomic_cas", dst, e, v, addr, t0, ty
+                    "atomic_cas.{} {},{},{},({})##t0={}",
+                    ty, dst, e, v, addr, t0,
                 )
             }
             &Inst::Icmp { cc, rd, a, b, ty } => {

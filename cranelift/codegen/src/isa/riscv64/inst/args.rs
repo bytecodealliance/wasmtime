@@ -1380,7 +1380,7 @@ impl AtomicOP {
 
     #[inline(always)]
     pub(crate) fn funct7(self, amo: AMO) -> u32 {
-        self.funct5() << 2 | amo.as_u32()
+        self.funct5() << 2 | amo.as_u32() & 0b11
     }
 
     pub(crate) fn funct3(self) -> u32 {
