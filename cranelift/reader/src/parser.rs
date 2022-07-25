@@ -2622,7 +2622,11 @@ impl<'a> Parser<'a> {
                 let as_vec = self.match_uimm128(ty)?.into_vec();
                 if as_vec.len() == 16 {
                     let mut as_array = [0; 16];
-                    as_array.copy_from_slice(&as_vec[..16]);
+                    as_array.copy_from_slice(&as_vec[..]);
+                    DataValue::from(as_array)
+                } else if as_vec.len() == 8 {
+                    let mut as_array = [0; 8];
+                    as_array.copy_from_slice(&as_vec[..]);
                     DataValue::from(as_array)
                 } else {
                     return Err(self.error("only 128-bit vectors are currently supported"));

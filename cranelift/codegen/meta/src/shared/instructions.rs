@@ -3533,8 +3533,8 @@ pub(crate) fn define(
         "A SIMD vector type containing integer lanes 8, 16, or 32 bits wide.",
         TypeSetBuilder::new()
             .ints(8..32)
-            .simd_lanes(4..16)
-            .dynamic_simd_lanes(4..16)
+            .simd_lanes(2..16)
+            .dynamic_simd_lanes(2..16)
             .includes_scalars(false)
             .build(),
     );

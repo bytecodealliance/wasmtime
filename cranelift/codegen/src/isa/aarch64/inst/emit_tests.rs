@@ -4041,6 +4041,18 @@ fn test_aarch64_binemit() {
             rd: writable_vreg(16),
             rn: vreg(12),
             rm: vreg(1),
+            size: VectorSize::Size8x8,
+        },
+        "90BD210E",
+        "addp v16.8b, v12.8b, v1.8b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Addp,
+            rd: writable_vreg(16),
+            rn: vreg(12),
+            rm: vreg(1),
             size: VectorSize::Size8x16,
         },
         "90BD214E",
@@ -4057,6 +4069,18 @@ fn test_aarch64_binemit() {
         },
         "88BDAE4E",
         "addp v8.4s, v12.4s, v14.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Addp,
+            rd: writable_vreg(8),
+            rn: vreg(12),
+            rm: vreg(14),
+            size: VectorSize::Size32x2,
+        },
+        "88BDAE0E",
+        "addp v8.2s, v12.2s, v14.2s",
     ));
 
     insns.push((
