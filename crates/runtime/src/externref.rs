@@ -249,7 +249,12 @@ impl VMExternData {
         let alloc_align = std::cmp::max(value_align, extern_data_align);
         let alloc_size = value_and_padding_size + extern_data_size;
 
-        debug_assert!(Layout::from_size_align(alloc_size, alloc_align).is_ok());
+        debug_assert!(
+            Layout::from_size_align(alloc_size, alloc_align).is_ok(),
+            "should create a `Layout` for size={} and align={} okay",
+            alloc_size,
+            alloc_align,
+        );
         (
             Layout::from_size_align_unchecked(alloc_size, alloc_align),
             value_and_padding_size,
