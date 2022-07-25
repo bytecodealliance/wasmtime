@@ -20,30 +20,51 @@ For explanations of what each tier means see below.
 
 #### Tier 1
 
-* Target - `x86_64-apple-darwin`
-* Target - `x86_64-pc-windows-msvc`
-* Target - `x86_64-unknown-linux-gnu`
-* WASI Proposal - `wasi_snapshot_preview1`
-* WASI Proposal - `wasi_unstable`
-* WebAssembly Proposal - `bulk-memory`
-* WebAssembly Proposal - `reference-types`
-* WebAssembly Proposal - `simd`
+| Category             | Description                                |
+|----------------------|--------------------------------------------|
+| Target               | `x86_64-apple-darwin`                      |
+| Target               | `x86_64-pc-windows-msvc`                   |
+| Target               | `x86_64-unknown-linux-gnu`                 |
+| WASI Proposal        | `wasi_snapshot_preview1`                   |
+| WASI Proposal        | `wasi_unstable`                            |
+| WebAssembly Proposal | `bulk-memory`                              |
+| WebAssembly Proposal | `reference-types`                          |
+| WebAssembly Proposal | `simd`                                     |
 
 #### Tier 2
 
-* Target - `aarch64-unknown-linux-gnu`
-* Target - `s390x-unknown-linux-gnu`
-* Target - `x86_64-pc-windows-gnu`
-* WebAssembly Proposal - `memory64`
-* WebAssembly Proposal - `multi-memory`
+| Category             | Description                | Missing Tier 1 Requirements |
+|----------------------|----------------------------|-----------------------------|
+| Target               | `aarch64-unknown-linux-gnu`| Continuous fuzzing          |
+| Target               | `s390x-unknown-linux-gnu`  | Continuous fuzzing          |
+| Target               | `x86_64-pc-windows-gnu`    | Clear owner of the target   |
+| WebAssembly Proposal | `memory64`                 | Unstable wasm proposal      |
+| WebAssembly Proposal | `multi-memory`             | Unstable wasm proposal      |
 
 #### Tier 3
 
-* Target - `aarch64-apple-darwin`
-* WASI Proposal - `wasi-nn`
-* WASI Proposal - `wasi-crypto`
-* WebAssembly Proposal - `threads`
-* WebAssembly Proposal - `component-model`
+| Category             | Description                       | Missing Tier 2 Requirements |
+|----------------------|-----------------------------------|-----------------------------|
+| Target               | `aarch64-apple-darwin`            | CI testing                  |
+| WASI Proposal        | `wasi-nn`                         | More expansive CI testing   |
+| WASI Proposal        | `wasi-crypto`                     | CI testing, clear owner     |
+| WebAssembly Proposal | `threads`                         | Complete implementation     |
+| WebAssembly Proposal | `component-model`                 | Complete implementation     |
+| *misc*               | Non-Wasmtime Cranelift usage [^1] | CI testing, full-time maintainer |
+| *misc*               | DWARF debugging [^2]              | CI testing, full-time maintainer, improved quality |
+
+[^1]: This is intended to encompass features that Cranelift supports as a
+general-purpose code generator such as integer value types other than `i32` and
+`i64`, non-Wasmtime calling conventions, code model settings, relocation
+restrictions, etc. These features aren't covered by Wasmtime's usage of
+Cranelift because the WebAssembly instruction set doesn't leverage them. This
+means that they receive far less testing and fuzzing than the parts of Cranelift
+exercised by Wasmtime.
+
+[^2]: Currently there is no active maintainer of DWARF debugging support and
+support is currently best-effort. Additionally there are known shortcomings
+and bugs. At this time there's no developer time to improve the situation here
+as well.
 
 ## Tier Details
 
