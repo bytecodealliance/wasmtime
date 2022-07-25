@@ -9,11 +9,9 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
     CanonicalOptions, ComponentTypes, CoreDef, RuntimeComponentInstanceIndex, TypeFuncIndex,
+    MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
 use wasmtime_runtime::{Export, ExportFunction, VMTrampoline};
-
-const MAX_STACK_PARAMS: usize = 16;
-const MAX_STACK_RESULTS: usize = 1;
 
 /// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
 /// is a field projection within `T`.
@@ -305,20 +303,20 @@ impl Func {
         self.call_raw(
             store,
             args,
-            |store, options, args, dst: &mut MaybeUninit<[ValRaw; MAX_STACK_PARAMS]>| {
-                if param_count > MAX_STACK_PARAMS {
+            |store, options, args, dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>| {
+                if param_count > MAX_FLAT_PARAMS {
                     self.store_args(store, &options, &params, args, dst)
                 } else {
-                    dst.write([ValRaw::u64(0); MAX_STACK_PARAMS]);
+                    dst.write([ValRaw::u64(0); MAX_FLAT_PARAMS]);
                     let dst = unsafe {
-                        mem::transmute::<_, &mut [MaybeUninit<ValRaw>; MAX_STACK_PARAMS]>(dst)
+                        mem::transmute::<_, &mut [MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>(dst)
                     };
                     args.iter()
                         .try_for_each(|arg| arg.lower(store, &options, &mut dst.iter_mut()))
                 }
             },
-            |store, options, src: &[ValRaw; MAX_STACK_RESULTS]| {
-                if result_count > MAX_STACK_RESULTS {
+            |store, options, src: &[ValRaw; MAX_FLAT_RESULTS]| {
+                if result_count > MAX_FLAT_RESULTS {
                     Self::load_result(&Memory::new(store, &options), &result, &mut src.iter())
                 } else {
                     Val::lift(&result, store, &options, &mut src.iter())
@@ -378,7 +376,7 @@ impl Func {
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
 
         let instance = store.0[instance.0].as_ref().unwrap().instance();
-        let flags = instance.flags(component_instance);
+        let mut flags = instance.instance_flags(component_instance);
 
         unsafe {
             // Test the "may enter" flag which is a "lock" on this instance.
@@ -388,15 +386,15 @@ impl Func {
             // from this point on the instance is considered "poisoned" and can
             // never be entered again. The only time this flag is set to `true`
             // again is after post-return logic has completed successfully.
-            if !(*flags).may_enter() {
+            if !flags.may_enter() {
                 bail!("cannot reenter component instance");
             }
-            (*flags).set_may_enter(false);
+            flags.set_may_enter(false);
 
-            debug_assert!((*flags).may_leave());
-            (*flags).set_may_leave(false);
+            debug_assert!(flags.may_leave());
+            flags.set_may_leave(false);
             let result = lower(store, &options, params, map_maybe_uninit!(space.params));
-            (*flags).set_may_leave(true);
+            flags.set_may_leave(true);
             result?;
 
             // This is unsafe as we are providing the guarantee that all the
@@ -430,7 +428,7 @@ impl Func {
             // is currently required to be 0 or 1 values according to the
             // canonical ABI, is saved within the `Store`'s `FuncData`. This'll
             // later get used in post-return.
-            (*flags).set_needs_post_return(true);
+            flags.set_needs_post_return(true);
             let val = lift(store.0, &options, ret)?;
             let ret_slice = cast_storage(ret);
             let data = &mut store.0[self.0];
@@ -488,7 +486,7 @@ impl Func {
         let component_instance = data.component_instance;
         let post_return_arg = data.post_return_arg.take();
         let instance = store.0[instance.0].as_ref().unwrap().instance();
-        let flags = instance.flags(component_instance);
+        let mut flags = instance.instance_flags(component_instance);
 
         unsafe {
             // First assert that the instance is in a "needs post return" state.
@@ -508,18 +506,18 @@ impl Func {
             // `post_return` on the right function despite the call being a
             // separate step in the API.
             assert!(
-                (*flags).needs_post_return(),
+                flags.needs_post_return(),
                 "post_return can only be called after a function has previously been called",
             );
             let post_return_arg = post_return_arg.expect("calling post_return on wrong function");
 
             // This is a sanity-check assert which shouldn't ever trip.
-            assert!(!(*flags).may_enter());
+            assert!(!flags.may_enter());
 
             // Unset the "needs post return" flag now that post-return is being
             // processed. This will cause future invocations of this method to
             // panic, even if the function call below traps.
-            (*flags).set_needs_post_return(false);
+            flags.set_needs_post_return(false);
 
             // If the function actually had a `post-return` configured in its
             // canonical options that's executed here.
@@ -539,7 +537,7 @@ impl Func {
             // And finally if everything completed successfully then the "may
             // enter" flag is set to `true` again here which enables further use
             // of the component.
-            (*flags).set_may_enter(true);
+            flags.set_may_enter(true);
         }
         Ok(())
     }
@@ -550,7 +548,7 @@ impl Func {
         options: &Options,
         params: &[Type],
         args: &[Val],
-        dst: &mut MaybeUninit<[ValRaw; MAX_STACK_PARAMS]>,
+        dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>,
     ) -> Result<()> {
         let mut size = 0;
         let mut alignment = 1;

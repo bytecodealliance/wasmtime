@@ -72,12 +72,12 @@ impl ComponentCompiler for Compiler {
             i32::try_from(offsets.lowering_data(lowering.index)).unwrap(),
         ));
 
-        // flags: *mut VMComponentFlags
+        // flags: *mut VMGlobalDefinition
         host_sig.params.push(ir::AbiParam::new(pointer_type));
         callee_args.push(
             builder
                 .ins()
-                .iadd_imm(vmctx, i64::from(offsets.flags(instance))),
+                .iadd_imm(vmctx, i64::from(offsets.instance_flags(instance))),
         );
 
         // memory: *mut VMMemoryDefinition

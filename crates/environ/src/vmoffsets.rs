@@ -126,6 +126,13 @@ pub trait PtrSize {
     fn size_of_vmcaller_checked_anyfunc(&self) -> u8 {
         3 * self.size()
     }
+
+    /// Return the size of `VMGlobalDefinition`; this is the size of the largest value type (i.e. a
+    /// V128).
+    #[inline]
+    fn size_of_vmglobal_definition(&self) -> u8 {
+        16
+    }
 }
 
 /// Type representing the size of a pointer for the current compilation host
@@ -355,7 +362,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
                 = cmul(ret.num_owned_memories, ret.size_of_vmmemory_definition()),
             align(16),
             size(defined_globals)
-                = cmul(ret.num_defined_globals, ret.size_of_vmglobal_definition()),
+                = cmul(ret.num_defined_globals, ret.ptr.size_of_vmglobal_definition()),
             size(defined_anyfuncs) = cmul(
                 ret.num_escaped_funcs,
                 ret.ptr.size_of_vmcaller_checked_anyfunc(),
@@ -521,16 +528,6 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn size_of_vmglobal_import(&self) -> u8 {
         1 * self.pointer_size()
-    }
-}
-
-/// Offsets for `VMGlobalDefinition`.
-impl<P: PtrSize> VMOffsets<P> {
-    /// Return the size of `VMGlobalDefinition`; this is the size of the largest value type (i.e. a
-    /// V128).
-    #[inline]
-    pub fn size_of_vmglobal_definition(&self) -> u8 {
-        16
     }
 }
 
@@ -729,7 +726,8 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_vmglobal_definition(&self, index: DefinedGlobalIndex) -> u32 {
         assert_lt!(index.as_u32(), self.num_defined_globals);
-        self.vmctx_globals_begin() + index.as_u32() * u32::from(self.size_of_vmglobal_definition())
+        self.vmctx_globals_begin()
+            + index.as_u32() * u32::from(self.ptr.size_of_vmglobal_definition())
     }
 
     /// Return the offset to the `VMCallerCheckedAnyfunc` for the given function

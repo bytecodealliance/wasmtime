@@ -26,6 +26,17 @@
 //! any time. Some comments may reflect historical rather than current state as
 //! well (sorry).
 
+/// Canonical ABI-defined constant for the maximum number of "flat" parameters
+/// to a wasm function, or the maximum number of parameters a core wasm function
+/// will take for just the parameters used. Over this number the heap is used
+/// for transferring parameters.
+pub const MAX_FLAT_PARAMS: usize = 16;
+
+/// Canonical ABI-defined constant for the maximum number of "flat" results.
+/// This number of results are returned directly from wasm and otherwise results
+/// are transferred through memory.
+pub const MAX_FLAT_RESULTS: usize = 1;
+
 mod compiler;
 mod info;
 mod translate;

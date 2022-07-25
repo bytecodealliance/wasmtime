@@ -7,8 +7,8 @@
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
 use crate::{
-    Store, VMCallerCheckedAnyfunc, VMFunctionBody, VMMemoryDefinition, VMOpaqueContext,
-    VMSharedSignatureIndex, ValRaw,
+    Store, VMCallerCheckedAnyfunc, VMFunctionBody, VMGlobalDefinition, VMMemoryDefinition,
+    VMOpaqueContext, VMSharedSignatureIndex, ValRaw,
 };
 use memoffset::offset_of;
 use std::alloc::{self, Layout};
@@ -19,8 +19,7 @@ use std::ptr::{self, NonNull};
 use wasmtime_environ::component::{
     Component, LoweredIndex, RuntimeAlwaysTrapIndex, RuntimeComponentInstanceIndex,
     RuntimeMemoryIndex, RuntimePostReturnIndex, RuntimeReallocIndex, StringEncoding,
-    VMComponentOffsets, VMCOMPONENT_FLAG_MAY_ENTER, VMCOMPONENT_FLAG_MAY_LEAVE,
-    VMCOMPONENT_FLAG_NEEDS_POST_RETURN, VMCOMPONENT_MAGIC,
+    VMComponentOffsets, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FLAG_NEEDS_POST_RETURN, VMCOMPONENT_MAGIC,
 };
 use wasmtime_environ::HostPtr;
 
@@ -75,7 +74,7 @@ pub struct ComponentInstance {
 pub type VMLoweringCallee = extern "C" fn(
     vmctx: *mut VMOpaqueContext,
     data: *mut u8,
-    flags: *mut VMComponentFlags,
+    flags: InstanceFlags,
     opt_memory: *mut VMMemoryDefinition,
     opt_realloc: *mut VMCallerCheckedAnyfunc,
     string_encoding: StringEncoding,
@@ -113,11 +112,6 @@ pub struct VMComponentContext {
     /// For more information about this see the equivalent field in `VMContext`
     _marker: marker::PhantomPinned,
 }
-
-/// Flags stored in a `VMComponentContext` with values defined by
-/// `VMCOMPONENT_FLAG_*`
-#[repr(transparent)]
-pub struct VMComponentFlags(u8);
 
 impl ComponentInstance {
     /// Returns the layout corresponding to what would be an allocation of a
@@ -174,8 +168,8 @@ impl ComponentInstance {
 
     /// Returns a pointer to the "may leave" flag for this instance specified
     /// for canonical lowering and lifting operations.
-    pub fn flags(&self, instance: RuntimeComponentInstanceIndex) -> *mut VMComponentFlags {
-        unsafe { self.vmctx_plus_offset(self.offsets.flags(instance)) }
+    pub fn instance_flags(&self, instance: RuntimeComponentInstanceIndex) -> InstanceFlags {
+        unsafe { InstanceFlags(self.vmctx_plus_offset(self.offsets.instance_flags(instance))) }
     }
 
     /// Returns the store that this component was created with.
@@ -381,7 +375,9 @@ impl ComponentInstance {
         *self.vmctx_plus_offset(self.offsets.store()) = store;
         for i in 0..self.offsets.num_runtime_component_instances {
             let i = RuntimeComponentInstanceIndex::from_u32(i);
-            *self.flags(i) = VMComponentFlags::new();
+            let mut def = VMGlobalDefinition::new();
+            *def.as_i32_mut() = FLAG_MAY_ENTER | FLAG_MAY_LEAVE;
+            *self.instance_flags(i).0 = def;
         }
 
         // In debug mode set non-null bad values to all "pointer looking" bits
@@ -569,51 +565,56 @@ impl VMOpaqueContext {
 }
 
 #[allow(missing_docs)]
-impl VMComponentFlags {
-    fn new() -> VMComponentFlags {
-        VMComponentFlags(VMCOMPONENT_FLAG_MAY_LEAVE | VMCOMPONENT_FLAG_MAY_ENTER)
+#[repr(transparent)]
+pub struct InstanceFlags(*mut VMGlobalDefinition);
+
+#[allow(missing_docs)]
+impl InstanceFlags {
+    #[inline]
+    pub unsafe fn may_leave(&self) -> bool {
+        *(*self.0).as_i32() & FLAG_MAY_LEAVE != 0
     }
 
     #[inline]
-    pub fn may_leave(&self) -> bool {
-        self.0 & VMCOMPONENT_FLAG_MAY_LEAVE != 0
-    }
-
-    #[inline]
-    pub fn set_may_leave(&mut self, val: bool) {
+    pub unsafe fn set_may_leave(&mut self, val: bool) {
         if val {
-            self.0 |= VMCOMPONENT_FLAG_MAY_LEAVE;
+            *(*self.0).as_i32_mut() |= FLAG_MAY_LEAVE;
         } else {
-            self.0 &= !VMCOMPONENT_FLAG_MAY_LEAVE;
+            *(*self.0).as_i32_mut() &= !FLAG_MAY_LEAVE;
         }
     }
 
     #[inline]
-    pub fn may_enter(&self) -> bool {
-        self.0 & VMCOMPONENT_FLAG_MAY_ENTER != 0
+    pub unsafe fn may_enter(&self) -> bool {
+        *(*self.0).as_i32() & FLAG_MAY_ENTER != 0
     }
 
     #[inline]
-    pub fn set_may_enter(&mut self, val: bool) {
+    pub unsafe fn set_may_enter(&mut self, val: bool) {
         if val {
-            self.0 |= VMCOMPONENT_FLAG_MAY_ENTER;
+            *(*self.0).as_i32_mut() |= FLAG_MAY_ENTER;
         } else {
-            self.0 &= !VMCOMPONENT_FLAG_MAY_ENTER;
+            *(*self.0).as_i32_mut() &= !FLAG_MAY_ENTER;
         }
     }
 
     #[inline]
-    pub fn needs_post_return(&self) -> bool {
-        self.0 & VMCOMPONENT_FLAG_NEEDS_POST_RETURN != 0
+    pub unsafe fn needs_post_return(&self) -> bool {
+        *(*self.0).as_i32() & FLAG_NEEDS_POST_RETURN != 0
     }
 
     #[inline]
-    pub fn set_needs_post_return(&mut self, val: bool) {
+    pub unsafe fn set_needs_post_return(&mut self, val: bool) {
         if val {
-            self.0 |= VMCOMPONENT_FLAG_NEEDS_POST_RETURN;
+            *(*self.0).as_i32_mut() |= FLAG_NEEDS_POST_RETURN;
         } else {
-            self.0 &= !VMCOMPONENT_FLAG_NEEDS_POST_RETURN;
+            *(*self.0).as_i32_mut() &= !FLAG_NEEDS_POST_RETURN;
         }
+    }
+
+    #[inline]
+    pub fn as_raw(&self) -> *mut VMGlobalDefinition {
+        self.0
     }
 }
 

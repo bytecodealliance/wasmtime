@@ -1,4 +1,5 @@
 use crate::component::*;
+use crate::ScopeVec;
 use crate::{
     EntityIndex, ModuleEnvironment, ModuleTranslation, PrimaryMap, SignatureIndex, Tunables,
 };
@@ -8,6 +9,8 @@ use std::collections::HashMap;
 use std::mem;
 use wasmparser::{Chunk, Encoding, Parser, Payload, Validator};
 
+mod adapt;
+pub use self::adapt::*;
 mod inline;
 
 /// Structure used to translate a component and parse it.
@@ -43,6 +46,9 @@ pub struct Translator<'a, 'data> {
 
     /// The compiler configuration provided by the embedder.
     tunables: &'a Tunables,
+
+    /// Auxiliary location to push generated adapter modules onto.
+    scope_vec: &'data ScopeVec<u8>,
 
     /// Completely translated core wasm modules that have been found so far.
     ///
@@ -275,6 +281,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         tunables: &'a Tunables,
         validator: &'a mut Validator,
         types: &'a mut ComponentTypesBuilder,
+        scope_vec: &'data ScopeVec<u8>,
     ) -> Self {
         Self {
             result: Translation::default(),
@@ -286,6 +293,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             static_components: Default::default(),
             static_modules: Default::default(),
             synthetic_instance_types: Default::default(),
+            scope_vec,
         }
     }
 
@@ -353,12 +361,13 @@ impl<'a, 'data> Translator<'a, 'data> {
         // much simpler than the original component and more efficient for
         // Wasmtime to process at runtime as well (e.g. no string lookups as
         // most everything is done through indices instead).
-        let component = inline::run(
+        let (mut component, mut adapters) = inline::run(
             &self.types,
             &self.result,
             &self.static_modules,
             &self.static_components,
         )?;
+        self.insert_adapter_module_initializers(&mut component, &mut adapters);
         Ok((component, self.static_modules))
     }
 
