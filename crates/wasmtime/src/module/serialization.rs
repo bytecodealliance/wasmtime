@@ -607,14 +607,13 @@ mod test {
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(
-                format!("{:?}", e),
+            Err(e) => assert!(format!("{:?}", e).starts_with(
                 "\
 compilation settings of module incompatible with native host
 
 Caused by:
     setting \"avoid_div_traps\" is configured to Bool(false) which is not supported"
-            ),
+            )),
         }
 
         Ok(())
@@ -634,14 +633,13 @@ Caused by:
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(
-                format!("{:?}", e),
+            Err(e) => assert!(format!("{:?}", e).starts_with(
                 "\
 compilation settings of module incompatible with native host
 
 Caused by:
     cannot test if target-specific flag \"not_a_flag\" is available at runtime",
-            ),
+            )),
         }
 
         Ok(())
