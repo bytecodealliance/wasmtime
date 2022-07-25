@@ -33,7 +33,7 @@ macro_rules! foreach_builtin_function {
             /// Returns an index for Wasm's `table.fill` instruction for `funcref`s.
             table_fill_funcref(vmctx, i32, i32, pointer, i32) -> ();
             /// Returns an index to drop a `VMExternRef`.
-            drop_externref(pointer) -> ();
+            drop_externref(vmctx, pointer) -> ();
             /// Returns an index to do a GC and then insert a `VMExternRef` into the
             /// `VMExternRefActivationsTable`.
             activations_table_insert_with_gc(vmctx, reference) -> ();

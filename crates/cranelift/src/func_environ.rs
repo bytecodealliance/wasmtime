@@ -1197,11 +1197,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let builtin_sig = self
                     .builtin_function_signatures
                     .drop_externref(builder.func);
-                let (_vmctx, builtin_addr) = self
+                let (vmctx, builtin_addr) = self
                     .translate_load_builtin_function_address(&mut builder.cursor(), builtin_idx);
                 builder
                     .ins()
-                    .call_indirect(builtin_sig, builtin_addr, &[current_elem]);
+                    .call_indirect(builtin_sig, builtin_addr, &[vmctx, current_elem]);
                 builder.ins().jump(continue_block, &[]);
 
                 builder.switch_to_block(continue_block);

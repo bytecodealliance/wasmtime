@@ -7,44 +7,52 @@
 //! These functions are called by compiled Wasm code, and therefore must take
 //! certain care about some things:
 //!
-//! * They must always be `pub extern "C"` and should only contain basic, raw
-//!   i32/i64/f32/f64/pointer parameters that are safe to pass across the system
-//!   ABI!
+//! * They must only contain basic, raw i32/i64/f32/f64/pointer parameters that
+//!   are safe to pass across the system ABI.
 //!
 //! * If any nested function propagates an `Err(trap)` out to the library
 //!   function frame, we need to raise it. This involves some nasty and quite
-//!   unsafe code under the covers! Notable, after raising the trap, drops
+//!   unsafe code under the covers! Notably, after raising the trap, drops
 //!   **will not** be run for local variables! This can lead to things like
 //!   leaking `InstanceHandle`s which leads to never deallocating JIT code,
-//!   instances, and modules! Therefore, always use the `fallible_lib_call`
-//!   macro to define such functions.
+//!   instances, and modules if we are not careful!
 //!
-//! * Any libcall function that can trap must also be defined with the
-//!   `fallible_lib_call` macro!
+//! * The libcall must be entered via a Wasm-to-libcall trampoline that saves
+//!   the last Wasm FP and PC for stack walking purposes. (For more details, see
+//!   `crates/runtime/src/backtrace.rs`.)
 //!
-//! * When receiving a raw `*mut u8` that is actually a `VMExternRef` reference,
-//!   convert it into a proper `VMExternRef` with `VMExternRef::clone_from_raw`
-//!   as soon as apossible. Any GC before raw pointer is converted into a
-//!   reference can potentially collect the referenced object, which could lead
-//!   to use after free. Avoid this by eagerly converting into a proper
-//!   `VMExternRef`!
+//! To make it easier to correctly handle all these things, **all** libcalls
+//! must be defined via the `libcall!` helper macro! See its doc comments below
+//! for an example, or just look at the rest of the file.
 //!
-//!   ```ignore
-//!   pub unsafe extern "C" my_lib_takes_ref(raw_extern_ref: *mut u8) {
-//!       // Before `clone_from_raw`, `raw_extern_ref` is potentially unrooted,
-//!       // and doing GC here could lead to use after free!
+//! ## Dealing with `externref`s
 //!
-//!       let my_extern_ref = if raw_extern_ref.is_null() {
-//!           None
-//!       } else {
-//!           Some(VMExternRef::clone_from_raw(raw_extern_ref))
-//!       };
+//! When receiving a raw `*mut u8` that is actually a `VMExternRef` reference,
+//! convert it into a proper `VMExternRef` with `VMExternRef::clone_from_raw` as
+//! soon as apossible. Any GC before raw pointer is converted into a reference
+//! can potentially collect the referenced object, which could lead to use after
+//! free.
 //!
-//!       // Now that we did `clone_from_raw`, it is safe to do a GC (or do
-//!       // anything else that might transitively GC, like call back into
-//!       // Wasm!)
-//!   }
-//!   ```
+//! Avoid this by eagerly converting into a proper `VMExternRef`! (Unfortunately
+//! there is no macro to help us automatically get this correct, so stay
+//! vigilant!)
+//!
+//! ```ignore
+//! pub unsafe extern "C" my_libcall_takes_ref(raw_extern_ref: *mut u8) {
+//!     // Before `clone_from_raw`, `raw_extern_ref` is potentially unrooted,
+//!     // and doing GC here could lead to use after free!
+//!
+//!     let my_extern_ref = if raw_extern_ref.is_null() {
+//!         None
+//!     } else {
+//!         Some(VMExternRef::clone_from_raw(raw_extern_ref))
+//!     };
+//!
+//!     // Now that we did `clone_from_raw`, it is safe to do a GC (or do
+//!     // anything else that might transitively GC, like call back into
+//!     // Wasm!)
+//! }
+//! ```
 
 use crate::externref::VMExternRef;
 use crate::instance::Instance;
@@ -57,7 +65,7 @@ use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TrapCode,
 };
 
-/// Define a fallible (trap raising and/or can panic) libcall function.
+/// Define a libcall function.
 ///
 /// This macro takes care of handling panics and raising traps for you, without
 /// you having to worry about leaking resources due to `longjmp`ing and skipping
@@ -65,36 +73,43 @@ use wasmtime_environ::{
 /// for maintaining Wasm frame and stack pointers, used when capturing
 /// backtraces.
 ///
-/// If your libcall can raise a user trap, use `-> Result<T>` for returns
-/// (i.e. the error variant is the default `anyhow::Error), but if it can only
-/// raise a lib trap, then use `-> Result<T, TrapCode>` for your return type
-/// (use the `wasmtime_environ::TrapCode` type for the error variant). If your
-/// libcall can both raise user and lib traps, then use `-> Result<T,
-/// TrapReason>`.
+/// What kind of return should my libcall have if it raises traps?
 ///
-/// # Example
+/// * If your libcall can raise a user trap, use `-> Result<T>` for returns
+///   (i.e. the error variant is the default `anyhow::Error).
+///
+/// * However, if it can only raise a lib trap, then use `-> Result<T,
+///   TrapCode>` for your return type (i.e. use the `wasmtime_environ::TrapCode`
+///   type for the error variant).
+///
+/// * If your libcall can both raise user and lib traps, then use `-> Result<T,
+///   TrapReason>`.
+///
+/// * If your libcall is infallible, just use `-> T` directly, as usual.
+///
+/// ### Example
 ///
 /// ```ignore
-/// fallible_lib_call! {
-///     my_libcall => unsafe fn __wasmtime_my_libcall(vmctx: *mut VMContext) -> Result<u64> {
+/// libcall! {
+///     my_libcall => unsafe fn impl_my_libcall(vmctx: *mut VMContext) -> Result<u64> {
 ///         // do stuff here
 ///     }
 /// }
 /// ```
-macro_rules! fallible_lib_call {
+macro_rules! libcall {
     // Variant for `TrapReason` error types.
     (
         $libcall:ident => unsafe fn $impl_name:ident (
-            $vmctx:ident: *mut VMContext $( $arg:tt )*
+            $vmctx:ident : *mut VMContext $( , $arg:ident : $arg_ty:ty )* $(,)?
         ) -> Result<$ret:ty, TrapReason> {
             $( $body:tt )*
         }
     ) => {
-        fallible_lib_call!(@extern_decl $libcall ; ( $vmctx: *mut VMContext $( $arg )* ) ; $ret);
-        fallible_lib_call!(@global_asm $libcall ; $impl_name);
+        libcall!(@extern_decl $libcall ; ( $vmctx : *mut VMContext $( , $arg : $arg_ty )* ) ; $ret);
+        libcall!(@global_asm $libcall ; $impl_name);
 
         #[no_mangle]
-        unsafe extern "C" fn $impl_name( $vmctx: *mut VMContext $( $arg )* ) -> $ret {
+        unsafe extern "C" fn $impl_name( $vmctx : *mut VMContext $( , $arg : $arg_ty )* ) -> $ret {
             let result = std::panic::catch_unwind(|| { $( $body )* });
             match result {
                 Ok(Ok(x)) => x,
@@ -111,16 +126,16 @@ macro_rules! fallible_lib_call {
     // Variant for `TrapCode` error types.
     (
         $libcall:ident => unsafe fn $impl_name:ident (
-            $vmctx:ident: *mut VMContext $( $arg:tt )*
+            $vmctx:ident : *mut VMContext $( , $arg:ident : $arg_ty:ty )* $(,)?
         ) -> Result<$ret:ty, TrapCode> {
             $( $body:tt )*
         }
     ) => {
-        fallible_lib_call!(@extern_decl $libcall ; ( $vmctx: *mut VMContext $( $arg )* ) ; $ret);
-        fallible_lib_call!(@global_asm $libcall ; $impl_name);
+        libcall!(@extern_decl $libcall ; ( $vmctx : *mut VMContext $( , $arg : $arg_ty )* ) ; $ret);
+        libcall!(@global_asm $libcall ; $impl_name);
 
         #[no_mangle]
-        unsafe extern "C" fn $impl_name( $vmctx: *mut VMContext $( $arg )* ) -> $ret {
+        unsafe extern "C" fn $impl_name( $vmctx : *mut VMContext $( , $arg : $arg_ty )* ) -> $ret {
             let result = std::panic::catch_unwind(|| { $( $body )* });
             match result {
                 Ok(Ok(x)) => x,
@@ -133,20 +148,62 @@ macro_rules! fallible_lib_call {
     // Variant for (implicit) `anyhow::Error` error types.
     (
         $libcall:ident => unsafe fn $impl_name:ident (
-            $vmctx:ident: *mut VMContext $( $arg:tt )*
+            $vmctx:ident : *mut VMContext $( , $arg:ident : $arg_ty:ty )* $(,)?
         ) -> Result<$ret:ty> {
             $( $body:tt )*
         }
     ) => {
-        fallible_lib_call!(@extern_decl $libcall ; ( $vmctx: *mut VMContext $( $arg )* ) ; $ret);
-        fallible_lib_call!(@global_asm $libcall ; $impl_name);
+        libcall!(@extern_decl $libcall ; ( $vmctx : *mut VMContext $( , $arg : $arg_ty )* ) ; $ret);
+        libcall!(@global_asm $libcall ; $impl_name);
 
         #[no_mangle]
-        unsafe extern "C" fn $impl_name( $vmctx: *mut VMContext $( $arg )* ) -> $ret {
+        unsafe extern "C" fn $impl_name( $vmctx : *mut VMContext $( , $arg : $arg_ty )* ) -> $ret {
             let result = std::panic::catch_unwind(|| { $( $body )* });
             match result {
                 Ok(Ok(x)) => x,
                 Ok(Err(trap)) => crate::traphandlers::raise_user_trap(trap),
+                Err(panic) => resume_panic(panic),
+            }
+        }
+    };
+
+    // Variant for infallible return types.
+    (
+        $libcall:ident => unsafe fn $impl_name:ident (
+            $vmctx:ident : *mut VMContext $( , $arg:ident : $arg_ty:ty )* $(,)?
+        ) -> $ret:ty {
+            $( $body:tt )*
+        }
+    ) => {
+        libcall!(@extern_decl $libcall ; ( $vmctx : *mut VMContext $( , $arg : $arg_ty )* ) ; $ret);
+        libcall!(@global_asm $libcall ; $impl_name);
+
+        #[no_mangle]
+        unsafe extern "C" fn $impl_name( $vmctx : *mut VMContext $( , $arg : $arg_ty )* ) -> $ret {
+            let result = std::panic::catch_unwind(|| { $( $body )* });
+            match result {
+                Ok(x) => x,
+                Err(panic) => resume_panic(panic),
+            }
+        }
+    };
+
+    // Variant for infallible unit return types.
+    (
+        $libcall:ident => unsafe fn $impl_name:ident (
+            $vmctx:ident : *mut VMContext $( , $arg:ident : $arg_ty:ty )* $(,)?
+        ) {
+            $( $body:tt )*
+        }
+    ) => {
+        libcall!(@extern_decl $libcall ; ( $vmctx : *mut VMContext $( , $arg : $arg_ty )* ) ; ());
+        libcall!(@global_asm $libcall ; $impl_name);
+
+        #[no_mangle]
+        unsafe extern "C" fn $impl_name( $vmctx : *mut VMContext $( , $arg : $arg_ty )* ) {
+            let result = std::panic::catch_unwind(|| { $( $body )* });
+            match result {
+                Ok(()) => {}
                 Err(panic) => resume_panic(panic),
             }
         }
@@ -168,8 +225,8 @@ macro_rules! fallible_lib_call {
     }
 }
 
-fallible_lib_call! {
-    memory32_grow => unsafe fn __wasmtime_memory32_grow_impl(
+libcall! {
+    memory32_grow => unsafe fn impl_memory32_grow_impl(
         vmctx: *mut VMContext,
         delta: u64,
         memory_index: u32,
@@ -188,8 +245,8 @@ fallible_lib_call! {
 //
 // Table grow can invoke user code provided in a ResourceLimiter{,Async}, so we
 // need to catch a possible panic.
-fallible_lib_call! {
-    table_grow => unsafe fn __wasmtime_table_grow(
+libcall! {
+    table_grow => unsafe fn impl_table_grow(
         vmctx: *mut VMContext,
         table_index: u32,
         delta: u32,
@@ -221,8 +278,8 @@ pub use table_grow as table_grow_funcref;
 pub use table_grow as table_grow_externref;
 
 // Implementation of `table.fill`.
-fallible_lib_call! {
-    table_fill => unsafe fn __wasmtime_table_fill(
+libcall! {
+    table_fill => unsafe fn impl_table_fill(
         vmctx: *mut VMContext,
         table_index: u32,
         dst: u32,
@@ -255,8 +312,8 @@ pub use table_fill as table_fill_funcref;
 pub use table_fill as table_fill_externref;
 
 // Implementation of `table.copy`.
-fallible_lib_call! {
-    table_copy => unsafe fn __wasmtime_table_copy(
+libcall! {
+    table_copy => unsafe fn impl_table_copy(
         vmctx: *mut VMContext,
         dst_table_index: u32,
         src_table_index: u32,
@@ -276,8 +333,8 @@ fallible_lib_call! {
 }
 
 // Implementation of `table.init`.
-fallible_lib_call! {
-    table_init => unsafe fn __wasmtime_table_init(
+libcall! {
+    table_init => unsafe fn impl_table_init(
         vmctx: *mut VMContext,
         table_index: u32,
         elem_index: u32,
@@ -292,16 +349,18 @@ fallible_lib_call! {
     }
 }
 
-/// Implementation of `elem.drop`.
-pub unsafe extern "C" fn elem_drop(vmctx: *mut VMContext, elem_index: u32) {
-    let elem_index = ElemIndex::from_u32(elem_index);
-    let instance = (*vmctx).instance_mut();
-    instance.elem_drop(elem_index);
+// Implementation of `elem.drop`.
+libcall! {
+    elem_drop => unsafe fn impl_elem_drop(vmctx: *mut VMContext, elem_index: u32) {
+        let elem_index = ElemIndex::from_u32(elem_index);
+        let instance = (*vmctx).instance_mut();
+        instance.elem_drop(elem_index);
+    }
 }
 
 // Implementation of `memory.copy` for locally defined memories.
-fallible_lib_call! {
-    memory_copy => unsafe fn __wasmtime_memory_copy(
+libcall! {
+    memory_copy => unsafe fn impl_memory_copy(
         vmctx: *mut VMContext,
         dst_index: u32,
         dst: u64,
@@ -317,8 +376,8 @@ fallible_lib_call! {
 }
 
 // Implementation of `memory.fill` for locally defined memories.
-fallible_lib_call! {
-    memory_fill => unsafe fn __wasmtime_memory_fill(
+libcall! {
+    memory_fill => unsafe fn impl_memory_fill(
         vmctx: *mut VMContext,
         memory_index: u32,
         dst: u64,
@@ -332,8 +391,8 @@ fallible_lib_call! {
 }
 
 // Implementation of `memory.init`.
-fallible_lib_call! {
-    memory_init => unsafe fn __wasmtime_memory_init(
+libcall! {
+    memory_init => unsafe fn impl_memory_init(
         vmctx: *mut VMContext,
         memory_index: u32,
         data_index: u32,
@@ -348,111 +407,131 @@ fallible_lib_call! {
     }
 }
 
-/// Implementation of `ref.func`.
-pub unsafe extern "C" fn ref_func(vmctx: *mut VMContext, func_index: u32) -> *mut u8 {
-    let instance = (*vmctx).instance_mut();
-    let anyfunc = instance
-        .get_caller_checked_anyfunc(FuncIndex::from_u32(func_index))
-        .expect("ref_func: caller_checked_anyfunc should always be available for given func index");
-    anyfunc as *mut _
+// Implementation of `ref.func`.
+libcall! {
+    ref_func => unsafe fn impl_ref_func(vmctx: *mut VMContext, func_index: u32) -> *mut u8 {
+        let instance = (*vmctx).instance_mut();
+        let anyfunc = instance
+            .get_caller_checked_anyfunc(FuncIndex::from_u32(func_index))
+            .expect("ref_func: caller_checked_anyfunc should always be available for given func index");
+        anyfunc as *mut _
+    }
 }
 
-/// Implementation of `data.drop`.
-pub unsafe extern "C" fn data_drop(vmctx: *mut VMContext, data_index: u32) {
-    let data_index = DataIndex::from_u32(data_index);
-    let instance = (*vmctx).instance_mut();
-    instance.data_drop(data_index)
+// Implementation of `data.drop`.
+libcall! {
+    data_drop => unsafe fn impl_data_drop(vmctx: *mut VMContext, data_index: u32) {
+        let data_index = DataIndex::from_u32(data_index);
+        let instance = (*vmctx).instance_mut();
+        instance.data_drop(data_index)
+    }
 }
 
-/// Returns a table entry after lazily initializing it.
-pub unsafe extern "C" fn table_get_lazy_init_funcref(
-    vmctx: *mut VMContext,
-    table_index: u32,
-    index: u32,
-) -> *mut u8 {
-    let instance = (*vmctx).instance_mut();
-    let table_index = TableIndex::from_u32(table_index);
-    let table = instance.get_table_with_lazy_init(table_index, std::iter::once(index));
-    let elem = (*table)
-        .get(index)
-        .expect("table access already bounds-checked");
+// Returns a table entry after lazily initializing it.
+libcall! {
+    table_get_lazy_init_funcref => unsafe fn impl_table_get_lazy_init_funcref(
+        vmctx: *mut VMContext,
+        table_index: u32,
+        index: u32,
+    ) -> *mut u8 {
+        let instance = (*vmctx).instance_mut();
+        let table_index = TableIndex::from_u32(table_index);
+        let table = instance.get_table_with_lazy_init(table_index, std::iter::once(index));
+        let elem = (*table)
+            .get(index)
+            .expect("table access already bounds-checked");
 
-    elem.into_ref_asserting_initialized() as *mut _
+        elem.into_ref_asserting_initialized() as *mut _
+    }
 }
 
-/// Drop a `VMExternRef`.
-pub unsafe extern "C" fn drop_externref(externref: *mut u8) {
-    let externref = externref as *mut crate::externref::VMExternData;
-    let externref = NonNull::new(externref).unwrap();
-    crate::externref::VMExternData::drop_and_dealloc(externref);
+// Drop a `VMExternRef`.
+libcall! {
+    drop_externref => unsafe fn impl_drop_externref(
+        _vmctx: *mut VMContext,
+        externref: *mut u8,
+    ) {
+        let externref = externref as *mut crate::externref::VMExternData;
+        let externref = NonNull::new(externref).unwrap();
+        crate::externref::VMExternData::drop_and_dealloc(externref);
+    }
 }
 
-/// Do a GC and insert the given `externref` into the
-/// `VMExternRefActivationsTable`.
-pub unsafe extern "C" fn activations_table_insert_with_gc(
-    vmctx: *mut VMContext,
-    externref: *mut u8,
-) {
-    let externref = VMExternRef::clone_from_raw(externref);
-    let instance = (*vmctx).instance();
-    let (activations_table, module_info_lookup) = (*instance.store()).externref_activations_table();
+// Do a GC and insert the given `externref` into the
+// `VMExternRefActivationsTable`.
+libcall! {
+    activations_table_insert_with_gc => unsafe fn impl_activations_table_insert_with_gc(
+        vmctx: *mut VMContext,
+        externref: *mut u8,
+    ) {
+        let externref = VMExternRef::clone_from_raw(externref);
+        let instance = (*vmctx).instance();
+        let (activations_table, module_info_lookup) = (*instance.store()).externref_activations_table();
 
-    // Invariant: all `externref`s on the stack have an entry in the activations
-    // table. So we need to ensure that this `externref` is in the table
-    // *before* we GC, even though `insert_with_gc` will ensure that it is in
-    // the table *after* the GC. This technically results in one more hash table
-    // look up than is strictly necessary -- which we could avoid by having an
-    // additional GC method that is aware of these GC-triggering references --
-    // but it isn't really a concern because this is already a slow path.
-    activations_table.insert_without_gc(externref.clone());
+        // Invariant: all `externref`s on the stack have an entry in the activations
+        // table. So we need to ensure that this `externref` is in the table
+        // *before* we GC, even though `insert_with_gc` will ensure that it is in
+        // the table *after* the GC. This technically results in one more hash table
+        // look up than is strictly necessary -- which we could avoid by having an
+        // additional GC method that is aware of these GC-triggering references --
+        // but it isn't really a concern because this is already a slow path.
+        activations_table.insert_without_gc(externref.clone());
 
-    activations_table.insert_with_gc(externref, module_info_lookup);
+        activations_table.insert_with_gc(externref, module_info_lookup);
+    }
 }
 
-/// Perform a Wasm `global.get` for `externref` globals.
-pub unsafe extern "C" fn externref_global_get(vmctx: *mut VMContext, index: u32) -> *mut u8 {
-    let index = GlobalIndex::from_u32(index);
-    let instance = (*vmctx).instance();
-    let global = instance.defined_or_imported_global_ptr(index);
-    match (*global).as_externref().clone() {
-        None => ptr::null_mut(),
-        Some(externref) => {
-            let raw = externref.as_raw();
-            let (activations_table, module_info_lookup) =
-                (*instance.store()).externref_activations_table();
-            activations_table.insert_with_gc(externref, module_info_lookup);
-            raw
+// Perform a Wasm `global.get` for `externref` globals.
+libcall! {
+    externref_global_get => unsafe fn impl_externref_global_get(
+        vmctx: *mut VMContext,
+        index: u32,
+    ) -> *mut u8 {
+        let index = GlobalIndex::from_u32(index);
+        let instance = (*vmctx).instance();
+        let global = instance.defined_or_imported_global_ptr(index);
+        match (*global).as_externref().clone() {
+            None => ptr::null_mut(),
+            Some(externref) => {
+                let raw = externref.as_raw();
+                let (activations_table, module_info_lookup) =
+                    (*instance.store()).externref_activations_table();
+                activations_table.insert_with_gc(externref, module_info_lookup);
+                raw
+            }
         }
     }
 }
 
-/// Perform a Wasm `global.set` for `externref` globals.
-pub unsafe extern "C" fn externref_global_set(
-    vmctx: *mut VMContext,
-    index: u32,
-    externref: *mut u8,
-) {
-    let externref = if externref.is_null() {
-        None
-    } else {
-        Some(VMExternRef::clone_from_raw(externref))
-    };
+// Perform a Wasm `global.set` for `externref` globals.
+libcall! {
+    externref_global_set => unsafe fn impl_externref_global_set(
+        vmctx: *mut VMContext,
+        index: u32,
+        externref: *mut u8,
+    ) {
+        let externref = if externref.is_null() {
+            None
+        } else {
+            Some(VMExternRef::clone_from_raw(externref))
+        };
 
-    let index = GlobalIndex::from_u32(index);
-    let instance = (*vmctx).instance();
-    let global = instance.defined_or_imported_global_ptr(index);
+        let index = GlobalIndex::from_u32(index);
+        let instance = (*vmctx).instance();
+        let global = instance.defined_or_imported_global_ptr(index);
 
-    // Swap the new `externref` value into the global before we drop the old
-    // value. This protects against an `externref` with a `Drop` implementation
-    // that calls back into Wasm and touches this global again (we want to avoid
-    // it observing a halfway-deinitialized value).
-    let old = mem::replace((*global).as_externref_mut(), externref);
-    drop(old);
+        // Swap the new `externref` value into the global before we drop the old
+        // value. This protects against an `externref` with a `Drop` implementation
+        // that calls back into Wasm and touches this global again (we want to avoid
+        // it observing a halfway-deinitialized value).
+        let old = mem::replace((*global).as_externref_mut(), externref);
+        drop(old);
+    }
 }
 
 // Implementation of `memory.atomic.notify` for locally defined memories.
-fallible_lib_call! {
-    memory_atomic_notify => unsafe fn __wasmtime_memory_atomic_notify(
+libcall! {
+    memory_atomic_notify => unsafe fn impl_memory_atomic_notify(
         vmctx: *mut VMContext,
         memory_index: u32,
         addr: *mut u8,
@@ -473,8 +552,8 @@ fallible_lib_call! {
 }
 
 // Implementation of `memory.atomic.wait32` for locally defined memories.
-fallible_lib_call! {
-    memory_atomic_wait32 => unsafe fn __wasmtime_memory_atomic_wait32(
+libcall! {
+    memory_atomic_wait32 => unsafe fn impl_memory_atomic_wait32(
         vmctx: *mut VMContext,
         memory_index: u32,
         addr: *mut u8,
@@ -495,8 +574,8 @@ fallible_lib_call! {
 }
 
 // Implementation of `memory.atomic.wait64` for locally defined memories.
-fallible_lib_call! {
-    memory_atomic_wait64 => unsafe fn __wasmtime_memory_atomic_wait64(
+libcall! {
+    memory_atomic_wait64 => unsafe fn impl_memory_atomic_wait64(
         vmctx: *mut VMContext,
         memory_index: u32,
         addr: *mut u8,
@@ -537,15 +616,15 @@ unsafe fn validate_atomic_addr(
 }
 
 // Hook for when an instance runs out of fuel.
-fallible_lib_call! {
-    out_of_gas => unsafe fn __wasmtime_out_of_gas(vmctx: *mut VMContext) -> Result<()> {
+libcall! {
+    out_of_gas => unsafe fn impl_out_of_gas(vmctx: *mut VMContext) -> Result<()> {
          (*(*vmctx).instance().store()).out_of_gas()
     }
 }
 
 // Hook for when an instance observes that the epoch has changed.
-fallible_lib_call! {
-    new_epoch => unsafe fn __wasmtime_new_epoch(vmctx: *mut VMContext) -> Result<u64> {
+libcall! {
+    new_epoch => unsafe fn impl_new_epoch(vmctx: *mut VMContext) -> Result<u64> {
         (*(*vmctx).instance().store()).new_epoch()
     }
 }
