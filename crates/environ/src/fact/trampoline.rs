@@ -72,8 +72,8 @@ pub(super) fn compile(
     types: &mut CoreTypes,
     adapter: &AdapterData,
 ) -> (Vec<u8>, Vec<(usize, Trap)>) {
-    let lower_sig = &module.signature(adapter.lower.ty, Context::Lower);
-    let lift_sig = &module.signature(adapter.lift.ty, Context::Lift);
+    let lower_sig = &module.signature(&adapter.lower, Context::Lower);
+    let lift_sig = &module.signature(&adapter.lift, Context::Lift);
     Compiler {
         module,
         types,
@@ -127,6 +127,8 @@ struct Stack<'a> {
 
 /// Representation of where a value is going to be stored in linear memory.
 struct Memory {
+    /// Whether or not the `addr_local` is a 64-bit type.
+    memory64: bool,
     /// The index of the local that contains the base address of where the
     /// storage is happening.
     addr_local: u32,
@@ -775,17 +777,25 @@ impl Compiler<'_, '_> {
         self.instruction(GlobalSet(flags_global.as_u32()));
     }
 
-    fn verify_aligned(&mut self, local: u32, align: usize) {
+    fn verify_aligned(&mut self, memory: &Memory, align: usize) {
         // If the alignment is 1 then everything is trivially aligned and the
         // check can be omitted.
         if align == 1 {
             return;
         }
-        self.instruction(LocalGet(local));
+        self.instruction(LocalGet(memory.addr_local));
         assert!(align.is_power_of_two());
-        let mask = i32::try_from(align - 1).unwrap();
-        self.instruction(I32Const(mask));
-        self.instruction(I32And);
+        if memory.memory64 {
+            let mask = i64::try_from(align - 1).unwrap();
+            self.instruction(I64Const(mask));
+            self.instruction(I64And);
+            self.instruction(I64Const(0));
+            self.instruction(I64Ne);
+        } else {
+            let mask = i32::try_from(align - 1).unwrap();
+            self.instruction(I32Const(mask));
+            self.instruction(I32And);
+        }
         self.instruction(If(BlockType::Empty));
         self.trap(Trap::UnalignedPointer);
         self.instruction(End);
@@ -801,11 +811,21 @@ impl Compiler<'_, '_> {
         }
         assert!(align.is_power_of_two());
         self.instruction(LocalGet(mem.addr_local));
-        self.instruction(I32Const(mem.i32_offset()));
-        self.instruction(I32Add);
-        let mask = i32::try_from(align - 1).unwrap();
-        self.instruction(I32Const(mask));
-        self.instruction(I32And);
+        if mem.memory64 {
+            self.instruction(I64Const(i64::from(mem.offset)));
+            self.instruction(I64Add);
+            let mask = i64::try_from(align - 1).unwrap();
+            self.instruction(I64Const(mask));
+            self.instruction(I64And);
+            self.instruction(I64Const(0));
+            self.instruction(I64Ne);
+        } else {
+            self.instruction(I32Const(mem.i32_offset()));
+            self.instruction(I32Add);
+            let mask = i32::try_from(align - 1).unwrap();
+            self.instruction(I32Const(mask));
+            self.instruction(I32And);
+        }
         self.instruction(If(BlockType::Empty));
         self.trap(Trap::AssertFailed("pointer not aligned"));
         self.instruction(End);
@@ -832,12 +852,14 @@ impl Compiler<'_, '_> {
 
     fn memory_operand(&mut self, opts: &Options, addr_local: u32, align: usize) -> Memory {
         let memory = opts.memory.unwrap();
-        self.verify_aligned(addr_local, align);
-        Memory {
+        let ret = Memory {
+            memory64: opts.memory64,
             addr_local,
             offset: 0,
             memory_idx: memory.as_u32(),
-        }
+        };
+        self.verify_aligned(&ret, align);
+        ret
     }
 
     fn gen_local(&mut self, ty: ValType) -> u32 {
@@ -1174,6 +1196,7 @@ impl Memory {
 
     fn bump(&self, offset: usize) -> Memory {
         Memory {
+            memory64: self.memory64,
             addr_local: self.addr_local,
             memory_idx: self.memory_idx,
             offset: self.offset + u32::try_from(offset).unwrap(),
@@ -1185,16 +1208,6 @@ impl<'a> Stack<'a> {
     fn slice(&self, range: Range<usize>) -> Stack<'a> {
         Stack {
             locals: &self.locals[range],
-        }
-    }
-}
-
-impl Options {
-    fn ptr(&self) -> ValType {
-        if self.memory64 {
-            ValType::I64
-        } else {
-            ValType::I32
         }
     }
 }

@@ -26,6 +26,10 @@ struct GenAdapterModule {
 struct GenAdapter {
     ty: FuncType,
     post_return: bool,
+    lift_memory64: bool,
+    lower_memory64: bool,
+    lift_encoding: GenStringEncoding,
+    lower_encoding: GenStringEncoding,
 }
 
 #[derive(Arbitrary, Debug)]
@@ -52,6 +56,13 @@ enum ValType {
     Variant(NonZeroLenVec<ValType>),
 }
 
+#[derive(Copy, Clone, Arbitrary, Debug)]
+enum GenStringEncoding {
+    Utf8,
+    Utf16,
+    CompactUtf16,
+}
+
 pub struct NonZeroLenVec<T>(Vec<T>);
 
 impl<'a, T: Arbitrary<'a>> Arbitrary<'a> for NonZeroLenVec<T> {
@@ -75,20 +86,36 @@ fuzz_target!(|module: GenAdapterModule| {
 
     let mut types = ComponentTypesBuilder::default();
 
+    // Manufactures a unique `CoreDef` so all function imports get unique
+    // function imports.
     let mut next_def = 0;
     let mut dummy_def = || {
         next_def += 1;
         CoreDef::Adapter(AdapterIndex::from_u32(next_def))
     };
+
+    // Manufactures a `CoreExport` for a memory with the shape specified. Note
+    // that we can't import as many memories as functions so these are
+    // intentionally limited. Once a handful of memories are generated of each
+    // type then they start getting reused.
     let mut next_memory = 0;
-    let mut dummy_memory = || {
-        // Limit the number of memory imports generated since `wasmparser` has a
-        // hardcoded limit of ~100 for now anyway.
-        if next_memory < 20 {
+    let mut memories32 = Vec::new();
+    let mut memories64 = Vec::new();
+    let mut dummy_memory = |memory64: bool| {
+        let dst = if memory64 {
+            &mut memories64
+        } else {
+            &mut memories32
+        };
+        let idx = if dst.len() < 5 {
             next_memory += 1;
-        }
+            dst.push(next_memory - 1);
+            next_memory - 1
+        } else {
+            dst[0]
+        };
         CoreExport {
-            instance: RuntimeInstanceIndex::from_u32(next_memory),
+            instance: RuntimeInstanceIndex::from_u32(idx),
             item: ExportItem::Name(String::new()),
         }
     };
@@ -109,21 +136,23 @@ fuzz_target!(|module: GenAdapterModule| {
             lower_ty: signature,
             lower_options: AdapterOptions {
                 instance: RuntimeComponentInstanceIndex::from_u32(0),
-                string_encoding: StringEncoding::Utf8,
+                string_encoding: adapter.lower_encoding.into(),
+                memory64: adapter.lower_memory64,
                 // Pessimistically assume that memory/realloc are going to be
                 // required for this trampoline and provide it. Avoids doing
                 // calculations to figure out whether they're necessary and
                 // simplifies the fuzzer here without reducing coverage within FACT
                 // itself.
-                memory: Some(dummy_memory()),
+                memory: Some(dummy_memory(adapter.lower_memory64)),
                 realloc: Some(dummy_def()),
                 // Lowering never allows `post-return`
                 post_return: None,
             },
             lift_options: AdapterOptions {
                 instance: RuntimeComponentInstanceIndex::from_u32(1),
-                string_encoding: StringEncoding::Utf8,
-                memory: Some(dummy_memory()),
+                string_encoding: adapter.lift_encoding.into(),
+                memory64: adapter.lift_memory64,
+                memory: Some(dummy_memory(adapter.lift_memory64)),
                 realloc: Some(dummy_def()),
                 post_return: if adapter.post_return {
                     Some(dummy_def())
@@ -135,13 +164,14 @@ fuzz_target!(|module: GenAdapterModule| {
         });
     }
     let types = types.finish();
-    let mut module = Module::new(&types, module.debug);
+    let mut fact_module = Module::new(&types, module.debug);
     for (i, adapter) in adapters.iter().enumerate() {
-        module.adapt(&format!("adapter{i}"), adapter);
+        fact_module.adapt(&format!("adapter{i}"), adapter);
     }
-    let wasm = module.encode();
+    let wasm = fact_module.encode();
     let result = Validator::new_with_features(WasmFeatures {
         multi_memory: true,
+        memory64: true,
         ..WasmFeatures::default()
     })
     .validate_all(&wasm);
@@ -151,8 +181,8 @@ fuzz_target!(|module: GenAdapterModule| {
         Err(e) => e,
     };
     eprintln!("invalid wasm module: {err:?}");
-    for adapter in adapters.iter() {
-        eprintln!("adapter type: {:?}", types[adapter.lift_ty]);
+    for adapter in module.adapters.iter() {
+        eprintln!("adapter: {adapter:?}");
     }
     std::fs::write("invalid.wasm", &wasm).unwrap();
     match wasmprinter::print_bytes(&wasm) {
@@ -207,6 +237,16 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> InterfaceType {
                     .collect(),
             };
             InterfaceType::Variant(types.add_variant_type(ty))
+        }
+    }
+}
+
+impl From<GenStringEncoding> for StringEncoding {
+    fn from(gen: GenStringEncoding) -> StringEncoding {
+        match gen {
+            GenStringEncoding::Utf8 => StringEncoding::Utf8,
+            GenStringEncoding::Utf16 => StringEncoding::Utf16,
+            GenStringEncoding::CompactUtf16 => StringEncoding::CompactUtf16,
         }
     }
 }
