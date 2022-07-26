@@ -67,10 +67,6 @@ criteria = "safe-to-deploy"
 version = "1.1.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.backtrace]]
-version = "0.3.66"
-criteria = "safe-to-deploy"
-
 [[exemptions.base64]]
 version = "0.13.0"
 criteria = "safe-to-deploy"
@@ -150,14 +146,6 @@ criteria = "safe-to-deploy"
 [[exemptions.cast]]
 version = "0.2.7"
 criteria = "safe-to-run"
-
-[[exemptions.cc]]
-version = "1.0.73"
-criteria = "safe-to-deploy"
-
-[[exemptions.cfg-if]]
-version = "1.0.0"
-criteria = "safe-to-deploy"
 
 [[exemptions.chacha20]]
 version = "0.8.1"
@@ -887,10 +875,6 @@ criteria = "safe-to-deploy"
 version = "0.5.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.rustc-demangle]]
-version = "0.1.21"
-criteria = "safe-to-deploy"
-
 [[exemptions.rustc_version]]
 version = "0.4.0"
 criteria = "safe-to-run"
@@ -1179,36 +1163,12 @@ criteria = "safe-to-run"
 version = "0.2.80"
 criteria = "safe-to-run"
 
-[[exemptions.wasm-encoder]]
-version = "0.14.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.wasm-mutate]]
-version = "0.2.5"
-criteria = "safe-to-deploy"
-
-[[exemptions.wasm-smith]]
-version = "0.11.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.wasmi]]
 version = "0.11.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasmi-validation]]
 version = "0.4.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.wasmparser]]
-version = "0.87.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.wasmprinter]]
-version = "0.2.37"
-criteria = "safe-to-deploy"
-
-[[exemptions.wast]]
-version = "35.0.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.web-sys]]
