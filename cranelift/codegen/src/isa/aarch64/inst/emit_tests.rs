@@ -40,6 +40,7 @@ fn test_aarch64_binemit() {
     insns.push((Inst::Ret { rets: vec![] }, "C0035FD6", "ret"));
     insns.push((Inst::Nop0, "", "nop-zero-len"));
     insns.push((Inst::Nop4, "1F2003D5", "nop"));
+    insns.push((Inst::Csdb, "9F2203D5", "csdb"));
     insns.push((
         Inst::Udf {
             use_allocated_encoding: false,
