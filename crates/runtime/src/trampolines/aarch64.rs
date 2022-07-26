@@ -10,7 +10,9 @@ asm_func!(
         // Load the pointer to `VMRuntimeLimits` in `x9`.
         ldur x9, [x1, #8]
 
-        // Check to see if callee is a core `VMContext` (MAGIC == "core").
+        // Check to see if callee is a core `VMContext` (MAGIC == "core"). NB:
+        // we do not support big-endian aarch64 so the magic value is always
+        // little-endian encoded.
         ldur w10, [x0]
         mov  w11, #0x6f63
         movk w11, #0x6572, lsl #16
