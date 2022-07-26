@@ -38,7 +38,7 @@ cfg_if! {
         use x86_64 as arch;
     } else if #[cfg(target_arch = "aarch64")] {
         mod aarch64;
-        use aarch46 as arch;
+        use aarch64 as arch;
     } else if #[cfg(target_arch = "s390x")] {
         mod s390x;
         use s390x as arch;

@@ -52,7 +52,7 @@ cfg_if::cfg_if! {
                     ".global ", $name, "\n",
                     $crate::elf_func_type_header!($name),
                     $name, ":\n",
-                    $($body)*
+                    concat!($($body)*),
                     ".size ", $name, ",.-", $name,
                 ));
             };
