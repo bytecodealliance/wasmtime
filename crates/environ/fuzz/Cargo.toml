@@ -14,10 +14,14 @@ env_logger = "0.9.0"
 libfuzzer-sys = "0.4"
 wasmparser = "0.87.0"
 wasmprinter = "0.2.37"
-wasmtime-environ = { path = "..", features = ["component-model"] }
+wasmtime-environ = { path = ".." }
 
 [[bin]]
 name = "fact-valid-module"
 path = "fuzz_targets/fact-valid-module.rs"
 test = false
 doc = false
+required-features = ["component-model"]
+
+[features]
+component-model = ["wasmtime-environ/component-model"]
