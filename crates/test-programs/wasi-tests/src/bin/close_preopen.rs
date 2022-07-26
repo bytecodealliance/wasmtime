@@ -1,11 +1,10 @@
-use more_asserts::assert_gt;
 use std::{env, process};
 use wasi_tests::{assert_errno, open_scratch_directory};
 
 unsafe fn test_close_preopen(dir_fd: wasi::Fd) {
     let pre_fd: wasi::Fd = (libc::STDERR_FILENO + 1) as wasi::Fd;
 
-    assert_gt!(dir_fd, pre_fd, "dir_fd number");
+    assert!(dir_fd > pre_fd, "dir_fd number");
 
     // Try to close a preopened directory handle.
     assert_errno!(

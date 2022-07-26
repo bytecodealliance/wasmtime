@@ -6,7 +6,6 @@ use gimli::{
     write, DebugLine, DebugLineOffset, DebugLineStr, DebugStr, DebugStrOffsets,
     DebuggingInformationEntry, LineEncoding, Unit,
 };
-use more_asserts::assert_le;
 use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
 #[derive(Debug)]
@@ -93,7 +92,7 @@ where
     if let Ok(program) = program {
         let header = program.header();
         let file_index_base = if header.version() < 5 { 1 } else { 0 };
-        assert_le!(header.version(), 5, "not supported 6");
+        assert!(header.version() <= 5, "not supported 6");
         let line_encoding = LineEncoding {
             minimum_instruction_length: header.minimum_instruction_length(),
             maximum_operations_per_instruction: header.maximum_operations_per_instruction(),

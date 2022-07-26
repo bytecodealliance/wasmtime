@@ -26,7 +26,6 @@ use crate::{
     GlobalIndex, MemoryIndex, Module, TableIndex,
 };
 use cranelift_entity::packed_option::ReservedValue;
-use more_asserts::assert_lt;
 use std::convert::TryFrom;
 use wasmtime_types::OwnedMemoryIndex;
 
@@ -671,7 +670,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to `VMFunctionImport` index `index`.
     #[inline]
     pub fn vmctx_vmfunction_import(&self, index: FuncIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_imported_functions);
+        assert!(index.as_u32() < self.num_imported_functions);
         self.vmctx_imported_functions_begin()
             + index.as_u32() * u32::from(self.size_of_vmfunction_import())
     }
@@ -679,7 +678,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to `VMTableImport` index `index`.
     #[inline]
     pub fn vmctx_vmtable_import(&self, index: TableIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_imported_tables);
+        assert!(index.as_u32() < self.num_imported_tables);
         self.vmctx_imported_tables_begin()
             + index.as_u32() * u32::from(self.size_of_vmtable_import())
     }
@@ -687,7 +686,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to `VMMemoryImport` index `index`.
     #[inline]
     pub fn vmctx_vmmemory_import(&self, index: MemoryIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_imported_memories);
+        assert!(index.as_u32() < self.num_imported_memories);
         self.vmctx_imported_memories_begin()
             + index.as_u32() * u32::from(self.size_of_vmmemory_import())
     }
@@ -695,7 +694,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to `VMGlobalImport` index `index`.
     #[inline]
     pub fn vmctx_vmglobal_import(&self, index: GlobalIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_imported_globals);
+        assert!(index.as_u32() < self.num_imported_globals);
         self.vmctx_imported_globals_begin()
             + index.as_u32() * u32::from(self.size_of_vmglobal_import())
     }
@@ -703,21 +702,21 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to `VMTableDefinition` index `index`.
     #[inline]
     pub fn vmctx_vmtable_definition(&self, index: DefinedTableIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_defined_tables);
+        assert!(index.as_u32() < self.num_defined_tables);
         self.vmctx_tables_begin() + index.as_u32() * u32::from(self.size_of_vmtable_definition())
     }
 
     /// Return the offset to the `*mut VMMemoryDefinition` at index `index`.
     #[inline]
     pub fn vmctx_vmmemory_pointer(&self, index: DefinedMemoryIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_defined_memories);
+        assert!(index.as_u32() < self.num_defined_memories);
         self.vmctx_memories_begin() + index.as_u32() * u32::from(self.size_of_vmmemory_pointer())
     }
 
     /// Return the offset to the owned `VMMemoryDefinition` at index `index`.
     #[inline]
     pub fn vmctx_vmmemory_definition(&self, index: OwnedMemoryIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_owned_memories);
+        assert!(index.as_u32() < self.num_owned_memories);
         self.vmctx_owned_memories_begin()
             + index.as_u32() * u32::from(self.size_of_vmmemory_definition())
     }
@@ -725,7 +724,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to the `VMGlobalDefinition` index `index`.
     #[inline]
     pub fn vmctx_vmglobal_definition(&self, index: DefinedGlobalIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_defined_globals);
+        assert!(index.as_u32() < self.num_defined_globals);
         self.vmctx_globals_begin()
             + index.as_u32() * u32::from(self.ptr.size_of_vmglobal_definition())
     }
@@ -735,7 +734,7 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_anyfunc(&self, index: AnyfuncIndex) -> u32 {
         assert!(!index.is_reserved_value());
-        assert_lt!(index.as_u32(), self.num_escaped_funcs);
+        assert!(index.as_u32() < self.num_escaped_funcs);
         self.vmctx_anyfuncs_begin()
             + index.as_u32() * u32::from(self.ptr.size_of_vmcaller_checked_anyfunc())
     }

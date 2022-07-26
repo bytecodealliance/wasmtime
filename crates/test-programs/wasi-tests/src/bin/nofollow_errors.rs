@@ -1,4 +1,3 @@
-use more_asserts::assert_gt;
 use std::{env, process};
 use wasi_tests::{assert_errno, open_scratch_directory};
 
@@ -38,9 +37,8 @@ unsafe fn test_nofollow_errors(dir_fd: wasi::Fd) {
         0,
     )
     .expect("opening a symlink as a directory");
-    assert_gt!(
-        file_fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        file_fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
     wasi::fd_close(file_fd).expect("closing a file");
