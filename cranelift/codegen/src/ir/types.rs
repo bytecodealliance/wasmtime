@@ -171,8 +171,8 @@ impl Type {
         self.replace_lanes(match self.lane_type() {
             I8 | B1 | B8 => I8,
             I16 | B16 => I16,
-            I32 | B32 => I32,
-            I64 | B64 => I64,
+            I32 | B32 | F32 => I32,
+            I64 | B64 | F64 => I64,
             I128 | B128 => I128,
             _ => unimplemented!(),
         })

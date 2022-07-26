@@ -308,10 +308,10 @@
 (decl fits_in_64 (Type) Type)
 (extern extractor fits_in_64 fits_in_64)
 
-;; An extractor that only matches scalar booleans, integers, and references that
-;; can fit in 64 bits.
-(decl ty_int_bool_ref_scalar_64 (Type) Type)
-(extern extractor ty_int_bool_ref_scalar_64 ty_int_bool_ref_scalar_64)
+;; A pure constructor that only matches scalar booleans, integers, and
+;; references that can fit in 64 bits.
+(decl pure ty_int_bool_ref_scalar_64 (Type) Type)
+(extern constructor ty_int_bool_ref_scalar_64 ty_int_bool_ref_scalar_64)
 
 ;; An extractor that matches 32- and 64-bit types only.
 (decl ty_32_or_64 (Type) Type)
@@ -407,6 +407,10 @@
 (decl u8_from_uimm8 (u8) Uimm8)
 (extern extractor infallible u8_from_uimm8 u8_from_uimm8)
 
+;; Extract a `u64` from a `bool`.
+(decl u64_from_bool (u64) bool)
+(extern extractor infallible u64_from_bool u64_from_bool)
+
 ;; Extract a `u64` from an `Imm64`.
 (decl u64_from_imm64 (u64) Imm64)
 (extern extractor infallible u64_from_imm64 u64_from_imm64)
@@ -498,6 +502,10 @@
 (decl pure zero_value (Value) Value)
 (extern constructor zero_value zero_value)
 
+;; Match a sinkable instruction from a value operand.
+(decl pure is_sinkable_inst (Value) Inst)
+(extern constructor is_sinkable_inst is_sinkable_inst)
+
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Emit an instruction.
@@ -507,6 +515,14 @@
 
 (decl emit (MInst) Unit)
 (extern constructor emit emit)
+
+;; Sink an instruction.
+;;
+;; This is a side-effectful operation that notifies the context that the
+;; instruction has been sunk into another instruction, and no longer needs to
+;; be lowered.
+(decl sink_inst (Inst) Unit)
+(extern constructor sink_inst sink_inst)
 
 ;; Constant pool emission.
 

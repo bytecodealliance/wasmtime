@@ -165,6 +165,8 @@ pub fn create_reg_env(flags: &settings::Flags) -> MachineEnv {
                 preg(xreg(14)),
                 preg(xreg(15)),
                 // x16 and x17 are spilltmp and tmp2 (see above).
+                // x18 could be used by the platform to carry inter-procedural state;
+                // conservatively assume so and make it not allocatable.
                 // x19-28 are callee-saved and so not preferred.
                 // x21 is the pinned register (if enabled) and not allocatable if so.
                 // x29 is FP, x30 is LR, x31 is SP/ZR.
@@ -178,30 +180,7 @@ pub fn create_reg_env(flags: &settings::Flags) -> MachineEnv {
                 preg(vreg(5)),
                 preg(vreg(6)),
                 preg(vreg(7)),
-                preg(vreg(8)),
-                preg(vreg(9)),
-                preg(vreg(10)),
-                preg(vreg(11)),
-                preg(vreg(12)),
-                preg(vreg(13)),
-                preg(vreg(14)),
-                preg(vreg(15)),
-            ],
-        ],
-        non_preferred_regs_by_class: [
-            vec![
-                preg(xreg(19)),
-                preg(xreg(20)),
-                // x21 is pinned reg if enabled; we add to this list below if not.
-                preg(xreg(22)),
-                preg(xreg(23)),
-                preg(xreg(24)),
-                preg(xreg(25)),
-                preg(xreg(26)),
-                preg(xreg(27)),
-                preg(xreg(28)),
-            ],
-            vec![
+                // v8-15 are callee-saved and so not preferred.
                 preg(vreg(16)),
                 preg(vreg(17)),
                 preg(vreg(18)),
@@ -218,6 +197,30 @@ pub fn create_reg_env(flags: &settings::Flags) -> MachineEnv {
                 preg(vreg(29)),
                 preg(vreg(30)),
                 preg(vreg(31)),
+            ],
+        ],
+        non_preferred_regs_by_class: [
+            vec![
+                preg(xreg(19)),
+                preg(xreg(20)),
+                // x21 is pinned reg if enabled; we add to this list below if not.
+                preg(xreg(22)),
+                preg(xreg(23)),
+                preg(xreg(24)),
+                preg(xreg(25)),
+                preg(xreg(26)),
+                preg(xreg(27)),
+                preg(xreg(28)),
+            ],
+            vec![
+                preg(vreg(8)),
+                preg(vreg(9)),
+                preg(vreg(10)),
+                preg(vreg(11)),
+                preg(vreg(12)),
+                preg(vreg(13)),
+                preg(vreg(14)),
+                preg(vreg(15)),
             ],
         ],
         fixed_stack_slots: vec![],

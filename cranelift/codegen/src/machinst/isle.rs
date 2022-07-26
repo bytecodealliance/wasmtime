@@ -11,7 +11,9 @@ pub use crate::ir::{
     SigRef, StackSlot,
 };
 pub use crate::isa::unwind::UnwindInst;
-pub use crate::machinst::{ABIArg, ABIArgSlot, ABISig, RealReg, Reg, RelocDistance, Writable};
+pub use crate::machinst::{
+    ABIArg, ABIArgSlot, ABISig, InputSourceInst, RealReg, Reg, RelocDistance, Writable,
+};
 
 pub type Unit = ();
 pub type ValueSlice = (ValueList, usize);
@@ -423,6 +425,15 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn u64_from_imm64(&mut self, imm: Imm64) -> u64 {
             imm.bits() as u64
+        }
+
+        #[inline]
+        fn u64_from_bool(&mut self, b: bool) -> u64 {
+            if b {
+                u64::MAX
+            } else {
+                0
+            }
         }
 
         #[inline]
@@ -853,6 +864,21 @@ macro_rules! isle_prelude_methods {
 
         fn real_reg_to_writable_reg(&mut self, reg: RealReg) -> WritableReg {
             Writable::from_reg(Reg::from(reg))
+        }
+
+        fn is_sinkable_inst(&mut self, val: Value) -> Option<Inst> {
+            let input = self.lower_ctx.get_value_as_source_or_const(val);
+
+            if let InputSourceInst::UniqueUse(inst, _) = input.inst {
+                Some(inst)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn sink_inst(&mut self, inst: Inst) {
+            self.lower_ctx.sink_inst(inst);
         }
     };
 }

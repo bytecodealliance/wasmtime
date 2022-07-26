@@ -2258,10 +2258,10 @@ impl MachInstEmit for Inst {
                     ScalarSize::Size16 => 0b00010,
                     ScalarSize::Size32 => 0b00100,
                     ScalarSize::Size64 => 0b01000,
-                    _ => unimplemented!("Unexpected VectorSize: {:?}", size),
+                    _ => unreachable!(),
                 };
                 sink.put4(
-                    0b000_01110000_00000_000011_00000_00000
+                    0b0_0_0_01110000_00000_000011_00000_00000
                         | (q << 30)
                         | (imm5 << 16)
                         | (machreg_to_gpr(rn) << 5)
@@ -2625,13 +2625,18 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_vec_rrr(top11 | q << 9, rm, bit15_10, rn, rd));
             }
-            &Inst::VecLoadReplicate { rd, rn, size } => {
+            &Inst::VecLoadReplicate {
+                rd,
+                rn,
+                size,
+                flags,
+            } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 let (q, size) = size.enc_size();
 
                 let srcloc = state.cur_srcloc();
-                if srcloc != SourceLoc::default() {
+                if srcloc != SourceLoc::default() && !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }

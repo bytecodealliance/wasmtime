@@ -1423,7 +1423,8 @@
 
 ;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (ty_int_bool_ref_scalar_64 ty) (bitselect c x y)))
+(rule (lower (has_type ty (bitselect c x y)))
+      (if (ty_int_bool_ref_scalar_64 ty))
       (let ((tmp1 Reg (and_reg ty x c))
             (tmp2 Reg (bic ty y c)))
         (orr ty tmp1 tmp2)))
@@ -1441,12 +1442,14 @@
 ;; T -> I{64,32,16,8}: We can simply pass through the value: values
 ;; are always stored with high bits undefined, so we can just leave
 ;; them be.
-(rule (lower (has_type (ty_int_bool_ref_scalar_64 ty) (ireduce src)))
+(rule (lower (has_type ty (ireduce src)))
+    (if (ty_int_bool_ref_scalar_64 ty))
     (value_regs_get src 0))
 
 ;; Likewise for breduce.
 
-(rule (lower (has_type (ty_int_bool_ref_scalar_64 ty) (breduce src)))
+(rule (lower (has_type ty (breduce src)))
+      (if (ty_int_bool_ref_scalar_64 ty))
       (value_regs_get src 0))
 
 
@@ -1515,6 +1518,39 @@
       (let ((use_allocated_encoding bool (is_not_baldrdash_call_conv)))
          (side_effect (udf use_allocated_encoding trap_code))))
 
+;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (splat x @ (value_type in_ty))))
+      (if (ty_int_bool_ref_scalar_64 in_ty))
+      (vec_dup x (vector_size ty)))
+
+(rule (lower (has_type ty (splat x @ (value_type (ty_scalar_float _)))))
+      (vec_dup_from_fpu x (vector_size ty)))
+
+(rule (lower (has_type ty (splat (bconst (u64_from_bool n)))))
+      (splat_const n (vector_size ty)))
+
+(rule (lower (has_type ty (splat (breduce (bconst (u64_from_bool n))))))
+      (splat_const n (vector_size ty)))
+
+(rule (lower (has_type ty (splat (f32const (u64_from_ieee32 n)))))
+      (splat_const n (vector_size ty)))
+
+(rule (lower (has_type ty (splat (f64const (u64_from_ieee64 n)))))
+      (splat_const n (vector_size ty)))
+
+(rule (lower (has_type ty (splat (iconst (u64_from_imm64 n)))))
+      (splat_const n (vector_size ty)))
+
+(rule (lower (has_type ty (splat (ireduce (iconst (u64_from_imm64 n))))))
+      (splat_const n (vector_size ty)))
+
+(rule (lower (has_type ty (splat x @ (load flags _addr offset))))
+      (if-let mem_op (is_sinkable_inst x))
+      (let ((_ Unit (sink_inst mem_op))
+            (addr AMode (amode (lane_type ty) mem_op offset))
+            (address Reg (load_addr addr)))
+           (ld1r address (vector_size ty) flags)))
 
 ;;;; Rules for `AtomicLoad` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (valid_atomic_transaction ty) (atomic_load flags addr)))
@@ -1526,7 +1562,6 @@
                 src @ (value_type (valid_atomic_transaction ty))
                 addr))
       (side_effect (store_release ty src addr)))
-
 
 ;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

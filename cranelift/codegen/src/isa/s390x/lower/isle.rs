@@ -667,11 +667,6 @@ where
     }
 
     #[inline]
-    fn sink_inst(&mut self, inst: Inst) -> Unit {
-        self.lower_ctx.sink_inst(inst);
-    }
-
-    #[inline]
     fn emit(&mut self, inst: &MInst) -> Unit {
         self.lower_ctx.emit(inst.clone());
     }
