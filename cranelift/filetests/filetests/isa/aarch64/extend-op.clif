@@ -33,7 +33,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   movz x1, #0
+;   movz w1, #0
 ;   ret
 
 function %i128_sextend_i64(i64) -> i128 {
@@ -54,7 +54,7 @@ block0(v0: i32):
 
 ; block0:
 ;   mov w0, w0
-;   movz x1, #0
+;   movz w1, #0
 ;   ret
 
 function %i128_sextend_i32(i32) -> i128 {
@@ -76,7 +76,7 @@ block0(v0: i16):
 
 ; block0:
 ;   uxth w0, w0
-;   movz x1, #0
+;   movz w1, #0
 ;   ret
 
 function %i128_sextend_i16(i16) -> i128 {
@@ -98,7 +98,7 @@ block0(v0: i8):
 
 ; block0:
 ;   uxtb w0, w0
-;   movz x1, #0
+;   movz w1, #0
 ;   ret
 
 function %i128_sextend_i8(i8) -> i128 {
@@ -154,7 +154,7 @@ block0(v0: i8x16):
 
 ; block0:
 ;   umov w0, v0.b[1]
-;   movz x1, #0
+;   movz w1, #0
 ;   ret
 
 function %i8x16_sextend_i16(i8x16) -> i16 {
@@ -233,7 +233,7 @@ block0(v0: i16x8):
 
 ; block0:
 ;   umov w0, v0.h[1]
-;   movz x1, #0
+;   movz w1, #0
 ;   ret
 
 function %i16x8_sextend_i32(i16x8) -> i32 {
@@ -290,7 +290,7 @@ block0(v0: i32x4):
 
 ; block0:
 ;   mov w0, v0.s[1]
-;   movz x1, #0
+;   movz w1, #0
 ;   ret
 
 function %i32x4_sextend_i64(i32x4) -> i64 {
@@ -325,7 +325,7 @@ block0(v0: i64x2):
 
 ; block0:
 ;   mov x0, v0.d[1]
-;   movz x1, #0
+;   movz w1, #0
 ;   ret
 
 function %i64x2_sextend_i128(i64x2) -> i128 {

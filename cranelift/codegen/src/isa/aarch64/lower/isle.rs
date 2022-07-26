@@ -148,41 +148,59 @@ where
             value
         };
         let rd = self.temp_writable_reg(I64);
+        let size = OperandSize::Size64;
 
-        if value == 0 {
-            self.emit(&MInst::MovWide {
-                op: MoveWideOp::MovZ,
-                rd,
-                imm: MoveWideConst::zero(),
-                size: OperandSize::Size64,
-            });
+        // If the top 32 bits are zero, use 32-bit `mov` operations.
+        if value >> 32 == 0 {
+            let size = OperandSize::Size32;
+            let lower_halfword = value as u16;
+            let upper_halfword = (value >> 16) as u16;
+
+            if upper_halfword == u16::MAX {
+                self.emit(&MInst::MovWide {
+                    op: MoveWideOp::MovN,
+                    rd,
+                    imm: MoveWideConst::maybe_with_shift(!lower_halfword, 0).unwrap(),
+                    size,
+                });
+            } else {
+                self.emit(&MInst::MovWide {
+                    op: MoveWideOp::MovZ,
+                    rd,
+                    imm: MoveWideConst::maybe_with_shift(lower_halfword, 0).unwrap(),
+                    size,
+                });
+
+                if upper_halfword != 0 {
+                    self.emit(&MInst::MovWide {
+                        op: MoveWideOp::MovK,
+                        rd,
+                        imm: MoveWideConst::maybe_with_shift(upper_halfword, 16).unwrap(),
+                        size,
+                    });
+                }
+            }
+
             return rd.to_reg();
         } else if value == u64::MAX {
             self.emit(&MInst::MovWide {
                 op: MoveWideOp::MovN,
                 rd,
                 imm: MoveWideConst::zero(),
-                size: OperandSize::Size64,
+                size,
             });
             return rd.to_reg();
         };
 
-        // If the top 32 bits are zero, use 32-bit `mov` operations.
-        let (num_half_words, size, negated) = if value >> 32 == 0 {
-            (2, OperandSize::Size32, (!value << 32) >> 32)
-        } else {
-            (4, OperandSize::Size64, !value)
-        };
         // If the number of 0xffff half words is greater than the number of 0x0000 half words
         // it is more efficient to use `movn` for the first instruction.
-        let first_is_inverted = count_zero_half_words(negated, num_half_words)
-            > count_zero_half_words(value, num_half_words);
+        let first_is_inverted = count_zero_half_words(!value) > count_zero_half_words(value);
         // Either 0xffff or 0x0000 half words can be skipped, depending on the first
         // instruction used.
         let ignored_halfword = if first_is_inverted { 0xffff } else { 0 };
         let mut first_mov_emitted = false;
 
-        for i in 0..num_half_words {
+        for i in 0..4 {
             let imm16 = (value >> (16 * i)) & 0xffff;
             if imm16 != ignored_halfword {
                 if !first_mov_emitted {
@@ -222,9 +240,9 @@ where
 
         return self.writable_reg_to_reg(rd);
 
-        fn count_zero_half_words(mut value: u64, num_half_words: u8) -> usize {
+        fn count_zero_half_words(mut value: u64) -> usize {
             let mut count = 0;
-            for _ in 0..num_half_words {
+            for _ in 0..4 {
                 if value & 0xffff == 0 {
                     count += 1;
                 }
