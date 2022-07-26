@@ -57,6 +57,7 @@ where
                     I16 => self.u.arbitrary::<i16>()? as i128,
                     I32 => self.u.arbitrary::<i32>()? as i128,
                     I64 => self.u.arbitrary::<i64>()? as i128,
+                    I128 => self.u.arbitrary::<i128>()?,
                     _ => unreachable!(),
                 };
                 DataValue::from_integer(imm, ty)?

@@ -3,6 +3,8 @@
 use libfuzzer_sys::fuzz_target;
 
 use cranelift_codegen::data_value::DataValue;
+use cranelift_codegen::settings;
+use cranelift_codegen::settings::Configurable;
 use cranelift_filetests::function_runner::{CompiledFunction, SingleFunctionCompiler};
 use cranelift_fuzzgen::*;
 use cranelift_interpreter::environment::FuncIndex;
@@ -60,7 +62,13 @@ fuzz_target!(|testcase: TestCase| {
     };
 
     // Native fn
-    let mut host_compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
+    let flags = {
+        let mut builder = settings::builder();
+        // We need llvm ABI extensions for i128 values on x86
+        builder.set("enable_llvm_abi_extensions", "true").unwrap();
+        settings::Flags::new(builder)
+    };
+    let mut host_compiler = SingleFunctionCompiler::with_host_isa(flags).unwrap();
     let compiled_fn = host_compiler.compile(testcase.func.clone()).unwrap();
 
     for args in &testcase.inputs {
