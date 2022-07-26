@@ -5,6 +5,10 @@
 //! attributes correct (e.g. ELF symbols get a size and are flagged as a
 //! function) and additionally handles visibility across platforms. All symbols
 //! should be visible to Rust but not visible externally outside of a `*.so`.
+//!
+//! It also exports a an `asm_sym!` macro which can be used to reference symbols
+//! from within `global_asm!`-defined functions, and handles adding the leading
+//! underscore that macOS prepends to symbols for you.
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "macos")] {
