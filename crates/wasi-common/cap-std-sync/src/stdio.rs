@@ -16,7 +16,7 @@ use io_lifetimes::{AsFd, BorrowedFd};
 #[cfg(windows)]
 use io_lifetimes::{AsHandle, BorrowedHandle};
 use wasi_common::{
-    file::{FdFlags, FileType, Filestat, WasiFile},
+    file::{FdFlags, FileType, WasiFile},
     Error, ErrorExt,
 };
 
