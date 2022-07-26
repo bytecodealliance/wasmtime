@@ -574,7 +574,7 @@ impl ComponentTypesBuilder {
                 .collect(),
             result: self.valtype(&ty.result),
         };
-        intern(&mut self.functions, &mut self.component_types.functions, ty)
+        self.add_func_type(ty)
     }
 
     fn defined_type(&mut self, ty: &wasmparser::ComponentDefinedType<'_>) -> InterfaceType {
@@ -636,7 +636,7 @@ impl ComponentTypesBuilder {
                 })
                 .collect(),
         };
-        intern(&mut self.records, &mut self.component_types.records, record)
+        self.add_record_type(record)
     }
 
     fn variant_type(&mut self, cases: &[wasmparser::VariantCase<'_>]) -> TypeVariantIndex {
@@ -654,18 +654,14 @@ impl ComponentTypesBuilder {
                 })
                 .collect(),
         };
-        intern(
-            &mut self.variants,
-            &mut self.component_types.variants,
-            variant,
-        )
+        self.add_variant_type(variant)
     }
 
     fn tuple_type(&mut self, types: &[wasmparser::ComponentValType]) -> TypeTupleIndex {
         let tuple = TypeTuple {
             types: types.iter().map(|ty| self.valtype(ty)).collect(),
         };
-        intern(&mut self.tuples, &mut self.component_types.tuples, tuple)
+        self.add_tuple_type(tuple)
     }
 
     fn flags_type(&mut self, flags: &[&str]) -> TypeFlagsIndex {
@@ -703,6 +699,26 @@ impl ComponentTypesBuilder {
             &mut self.component_types.expecteds,
             expected,
         )
+    }
+
+    /// Interns a new function type within this type information.
+    pub fn add_func_type(&mut self, ty: TypeFunc) -> TypeFuncIndex {
+        intern(&mut self.functions, &mut self.component_types.functions, ty)
+    }
+
+    /// Interns a new record type within this type information.
+    pub fn add_record_type(&mut self, ty: TypeRecord) -> TypeRecordIndex {
+        intern(&mut self.records, &mut self.component_types.records, ty)
+    }
+
+    /// Interns a new tuple type within this type information.
+    pub fn add_tuple_type(&mut self, ty: TypeTuple) -> TypeTupleIndex {
+        intern(&mut self.tuples, &mut self.component_types.tuples, ty)
+    }
+
+    /// Interns a new variant type within this type information.
+    pub fn add_variant_type(&mut self, ty: TypeVariant) -> TypeVariantIndex {
+        intern(&mut self.variants, &mut self.component_types.variants, ty)
     }
 }
 

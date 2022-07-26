@@ -16,9 +16,10 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    InterfaceType, TypeRecordIndex, TypeTupleIndex, FLAG_MAY_ENTER, FLAG_MAY_LEAVE,
-    MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    InterfaceType, TypeRecordIndex, TypeTupleIndex, TypeVariantIndex, FLAG_MAY_ENTER,
+    FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
+use crate::fact::core_types::CoreTypes;
 use crate::fact::signature::{align_to, Signature};
 use crate::fact::traps::Trap;
 use crate::fact::{AdapterData, Context, Module, Options};
@@ -27,10 +28,14 @@ use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
 use wasm_encoder::{BlockType, Encode, Instruction, Instruction::*, MemArg, ValType};
+use wasmtime_component_util::DiscriminantSize;
 
-struct Compiler<'a> {
+struct Compiler<'a, 'b> {
     /// The module that the adapter will eventually be inserted into.
     module: &'a Module<'a>,
+
+    /// The type section of `module`
+    types: &'b mut CoreTypes,
 
     /// Metadata about the adapter that is being compiled.
     adapter: &'a AdapterData,
@@ -62,11 +67,16 @@ struct Compiler<'a> {
     lift_sig: &'a Signature,
 }
 
-pub(super) fn compile(module: &Module<'_>, adapter: &AdapterData) -> (Vec<u8>, Vec<(usize, Trap)>) {
+pub(super) fn compile(
+    module: &Module<'_>,
+    types: &mut CoreTypes,
+    adapter: &AdapterData,
+) -> (Vec<u8>, Vec<(usize, Trap)>) {
     let lower_sig = &module.signature(adapter.lower.ty, Context::Lower);
     let lift_sig = &module.signature(adapter.lift.ty, Context::Lift);
     Compiler {
         module,
+        types,
         adapter,
         code: Vec::new(),
         locals: Vec::new(),
@@ -94,10 +104,13 @@ enum Source<'a> {
 }
 
 /// Same as `Source` but for where values are translated into.
-enum Destination {
+enum Destination<'a> {
     /// This value is destined for the WebAssembly stack which means that
     /// results are simply pushed as we go along.
-    Stack,
+    ///
+    /// The types listed are the types that are expected to be on the stack at
+    /// the end of translation.
+    Stack(&'a [ValType]),
 
     /// This value is to be placed in linear memory described by `Memory`.
     Memory(Memory),
@@ -125,7 +138,7 @@ struct Memory {
     memory_idx: u32,
 }
 
-impl Compiler<'_> {
+impl Compiler<'_, '_> {
     fn compile(&mut self) -> (Vec<u8>, Vec<(usize, Trap)>) {
         // Check the instance flags required for this trampoline.
         //
@@ -237,7 +250,7 @@ impl Compiler<'_> {
         };
 
         let dst = if dst_flat.len() <= MAX_FLAT_PARAMS {
-            Destination::Stack
+            Destination::Stack(&dst_flat)
         } else {
             // If there are too many parameters then space is allocated in the
             // destination module for the parameters via its `realloc` function.
@@ -246,10 +259,10 @@ impl Compiler<'_> {
         };
 
         let srcs = src
-            .record_field_sources(self.module, src_tys.iter().copied())
+            .record_field_srcs(self.module, src_tys.iter().copied())
             .zip(src_tys.iter());
         let dsts = dst
-            .record_field_sources(self.module, dst_tys.iter().copied())
+            .record_field_dsts(self.module, dst_tys.iter().copied())
             .zip(dst_tys.iter());
         for ((src, src_ty), (dst, dst_ty)) in srcs.zip(dsts) {
             self.translate(&src_ty, &src, &dst_ty, &dst);
@@ -291,7 +304,7 @@ impl Compiler<'_> {
         };
 
         let dst = if dst_flat.len() <= MAX_FLAT_RESULTS {
-            Destination::Stack
+            Destination::Stack(&dst_flat)
         } else {
             // This is slightly different than `translate_params` where the
             // return pointer was provided by the caller of this function
@@ -322,9 +335,18 @@ impl Compiler<'_> {
             InterfaceType::Unit => self.translate_unit(src, dst_ty, dst),
             InterfaceType::Bool => self.translate_bool(src, dst_ty, dst),
             InterfaceType::U8 => self.translate_u8(src, dst_ty, dst),
+            InterfaceType::S8 => self.translate_s8(src, dst_ty, dst),
+            InterfaceType::U16 => self.translate_u16(src, dst_ty, dst),
+            InterfaceType::S16 => self.translate_s16(src, dst_ty, dst),
             InterfaceType::U32 => self.translate_u32(src, dst_ty, dst),
+            InterfaceType::S32 => self.translate_s32(src, dst_ty, dst),
+            InterfaceType::U64 => self.translate_u64(src, dst_ty, dst),
+            InterfaceType::S64 => self.translate_s64(src, dst_ty, dst),
+            InterfaceType::Float32 => self.translate_f32(src, dst_ty, dst),
+            InterfaceType::Float64 => self.translate_f64(src, dst_ty, dst),
             InterfaceType::Record(t) => self.translate_record(*t, src, dst_ty, dst),
             InterfaceType::Tuple(t) => self.translate_tuple(*t, src, dst_ty, dst),
+            InterfaceType::Variant(v) => self.translate_variant(*v, src, dst_ty, dst),
 
             InterfaceType::String => {
                 // consider this field used for now until this is fully
@@ -362,7 +384,7 @@ impl Compiler<'_> {
 
         match dst {
             Destination::Memory(mem) => self.i32_store8(mem),
-            Destination::Stack => {}
+            Destination::Stack(stack) => self.stack_set(stack, ValType::I32),
         }
     }
 
@@ -372,11 +394,67 @@ impl Compiler<'_> {
         self.push_dst_addr(dst);
         match src {
             Source::Memory(mem) => self.i32_load8u(mem),
-            Source::Stack(stack) => self.stack_get(stack, ValType::I32),
+            Source::Stack(stack) => {
+                self.stack_get(stack, ValType::I32);
+                self.instruction(I32Const(0xff));
+                self.instruction(I32And);
+            }
         }
         match dst {
             Destination::Memory(mem) => self.i32_store8(mem),
-            Destination::Stack => {}
+            Destination::Stack(stack) => self.stack_set(stack, ValType::I32),
+        }
+    }
+
+    fn translate_s8(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::S8));
+        self.push_dst_addr(dst);
+        match src {
+            Source::Memory(mem) => self.i32_load8s(mem),
+            Source::Stack(stack) => {
+                self.stack_get(stack, ValType::I32);
+                self.instruction(I32Extend8S);
+            }
+        }
+        match dst {
+            Destination::Memory(mem) => self.i32_store8(mem),
+            Destination::Stack(stack) => self.stack_set(stack, ValType::I32),
+        }
+    }
+
+    fn translate_u16(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::U16));
+        self.push_dst_addr(dst);
+        match src {
+            Source::Memory(mem) => self.i32_load16u(mem),
+            Source::Stack(stack) => {
+                self.stack_get(stack, ValType::I32);
+                self.instruction(I32Const(0xffff));
+                self.instruction(I32And);
+            }
+        }
+        match dst {
+            Destination::Memory(mem) => self.i32_store16(mem),
+            Destination::Stack(stack) => self.stack_set(stack, ValType::I32),
+        }
+    }
+
+    fn translate_s16(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::S16));
+        self.push_dst_addr(dst);
+        match src {
+            Source::Memory(mem) => self.i32_load16s(mem),
+            Source::Stack(stack) => {
+                self.stack_get(stack, ValType::I32);
+                self.instruction(I32Extend16S);
+            }
+        }
+        match dst {
+            Destination::Memory(mem) => self.i32_store16(mem),
+            Destination::Stack(stack) => self.stack_set(stack, ValType::I32),
         }
     }
 
@@ -390,7 +468,77 @@ impl Compiler<'_> {
         }
         match dst {
             Destination::Memory(mem) => self.i32_store(mem),
-            Destination::Stack => {}
+            Destination::Stack(stack) => self.stack_set(stack, ValType::I32),
+        }
+    }
+
+    fn translate_s32(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::S32));
+        self.push_dst_addr(dst);
+        match src {
+            Source::Memory(mem) => self.i32_load(mem),
+            Source::Stack(stack) => self.stack_get(stack, ValType::I32),
+        }
+        match dst {
+            Destination::Memory(mem) => self.i32_store(mem),
+            Destination::Stack(stack) => self.stack_set(stack, ValType::I32),
+        }
+    }
+
+    fn translate_u64(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::U64));
+        self.push_dst_addr(dst);
+        match src {
+            Source::Memory(mem) => self.i64_load(mem),
+            Source::Stack(stack) => self.stack_get(stack, ValType::I64),
+        }
+        match dst {
+            Destination::Memory(mem) => self.i64_store(mem),
+            Destination::Stack(stack) => self.stack_set(stack, ValType::I64),
+        }
+    }
+
+    fn translate_s64(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::S64));
+        self.push_dst_addr(dst);
+        match src {
+            Source::Memory(mem) => self.i64_load(mem),
+            Source::Stack(stack) => self.stack_get(stack, ValType::I64),
+        }
+        match dst {
+            Destination::Memory(mem) => self.i64_store(mem),
+            Destination::Stack(stack) => self.stack_set(stack, ValType::I64),
+        }
+    }
+
+    fn translate_f32(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::Float32));
+        self.push_dst_addr(dst);
+        match src {
+            Source::Memory(mem) => self.f32_load(mem),
+            Source::Stack(stack) => self.stack_get(stack, ValType::F32),
+        }
+        match dst {
+            Destination::Memory(mem) => self.f32_store(mem),
+            Destination::Stack(stack) => self.stack_set(stack, ValType::F32),
+        }
+    }
+
+    fn translate_f64(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::Float64));
+        self.push_dst_addr(dst);
+        match src {
+            Source::Memory(mem) => self.f64_load(mem),
+            Source::Stack(stack) => self.stack_get(stack, ValType::F64),
+        }
+        match dst {
+            Destination::Memory(mem) => self.f64_store(mem),
+            Destination::Stack(stack) => self.stack_set(stack, ValType::F64),
         }
     }
 
@@ -415,7 +563,7 @@ impl Compiler<'_> {
         // fields' names
         let mut src_fields = HashMap::new();
         for (i, src) in src
-            .record_field_sources(self.module, src_ty.fields.iter().map(|f| f.ty))
+            .record_field_srcs(self.module, src_ty.fields.iter().map(|f| f.ty))
             .enumerate()
         {
             let field = &src_ty.fields[i];
@@ -431,7 +579,7 @@ impl Compiler<'_> {
         //
         // TODO: should that lookup be fallible with subtyping?
         for (i, dst) in dst
-            .record_field_sources(self.module, dst_ty.fields.iter().map(|f| f.ty))
+            .record_field_dsts(self.module, dst_ty.fields.iter().map(|f| f.ty))
             .enumerate()
         {
             let field = &dst_ty.fields[i];
@@ -457,13 +605,142 @@ impl Compiler<'_> {
         assert_eq!(src_ty.types.len(), dst_ty.types.len());
 
         let srcs = src
-            .record_field_sources(self.module, src_ty.types.iter().copied())
+            .record_field_srcs(self.module, src_ty.types.iter().copied())
             .zip(src_ty.types.iter());
         let dsts = dst
-            .record_field_sources(self.module, dst_ty.types.iter().copied())
+            .record_field_dsts(self.module, dst_ty.types.iter().copied())
             .zip(dst_ty.types.iter());
         for ((src, src_ty), (dst, dst_ty)) in srcs.zip(dsts) {
             self.translate(src_ty, &src, dst_ty, &dst);
+        }
+    }
+
+    fn translate_variant(
+        &mut self,
+        src_ty: TypeVariantIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let src_ty = &self.module.types[src_ty];
+        let dst_ty = match dst_ty {
+            InterfaceType::Variant(t) => &self.module.types[*t],
+            _ => panic!("expected a variant"),
+        };
+
+        let src_disc_size = DiscriminantSize::from_count(src_ty.cases.len()).unwrap();
+        let dst_disc_size = DiscriminantSize::from_count(dst_ty.cases.len()).unwrap();
+
+        // The outermost block is special since it has the result type of the
+        // translation here. That will depend on the `dst`.
+        let outer_block_ty = match dst {
+            Destination::Stack(dst_flat) => match dst_flat.len() {
+                0 => BlockType::Empty,
+                1 => BlockType::Result(dst_flat[0]),
+                _ => {
+                    let ty = self.types.function(&[], &dst_flat);
+                    BlockType::FunctionType(ty)
+                }
+            },
+            Destination::Memory(_) => BlockType::Empty,
+        };
+        self.instruction(Block(outer_block_ty));
+
+        // After the outermost block generate a new block for each of the
+        // remaining cases.
+        for _ in 0..src_ty.cases.len() - 1 {
+            self.instruction(Block(BlockType::Empty));
+        }
+
+        // Generate a block for an invalid variant discriminant
+        self.instruction(Block(BlockType::Empty));
+
+        // And generate one final block that we'll be jumping out of with the
+        // `br_table`
+        self.instruction(Block(BlockType::Empty));
+
+        // Load the discriminant
+        match src {
+            Source::Stack(s) => self.stack_get(&s.slice(0..1), ValType::I32),
+            Source::Memory(mem) => match src_disc_size {
+                DiscriminantSize::Size1 => self.i32_load8u(mem),
+                DiscriminantSize::Size2 => self.i32_load16u(mem),
+                DiscriminantSize::Size4 => self.i32_load(mem),
+            },
+        }
+
+        // Generate the `br_table` for the discriminant. Each case has an
+        // offset of 1 to skip the trapping block.
+        let mut targets = Vec::new();
+        for i in 0..src_ty.cases.len() {
+            targets.push((i + 1) as u32);
+        }
+        self.instruction(BrTable(targets[..].into(), 0));
+        self.instruction(End); // end the `br_table` block
+
+        self.trap(Trap::InvalidDiscriminant);
+        self.instruction(End); // end the "invalid discriminant" block
+
+        // Translate each case individually within its own block. Note that the
+        // iteration order here places the first case in the innermost block
+        // and the last case in the outermost block. This matches the order
+        // of the jump targets in the `br_table` instruction.
+        for (src_i, src_case) in src_ty.cases.iter().enumerate() {
+            let dst_i = dst_ty
+                .cases
+                .iter()
+                .position(|c| c.name == src_case.name)
+                .unwrap();
+            let dst_case = &dst_ty.cases[dst_i];
+            let dst_i = u32::try_from(dst_i).unwrap() as i32;
+
+            // Translate the discriminant here, noting that `dst_i` may be
+            // different than `src_i`.
+            self.push_dst_addr(dst);
+            self.instruction(I32Const(dst_i));
+            match dst {
+                Destination::Stack(stack) => self.stack_set(&stack[..1], ValType::I32),
+                Destination::Memory(mem) => match dst_disc_size {
+                    DiscriminantSize::Size1 => self.i32_store8(mem),
+                    DiscriminantSize::Size2 => self.i32_store16(mem),
+                    DiscriminantSize::Size4 => self.i32_store(mem),
+                },
+            }
+
+            // Translate the payload of this case using the various types from
+            // the dst/src.
+            let src_payload = src.payload_src(self.module, src_disc_size, &src_case.ty);
+            let dst_payload = dst.payload_dst(self.module, dst_disc_size, &dst_case.ty);
+            self.translate(&src_case.ty, &src_payload, &dst_case.ty, &dst_payload);
+
+            // If the results of this translation were placed on the stack then
+            // the stack values may need to be padded with more zeros due to
+            // this particular case being possibly smaller than the entire
+            // variant. That's handled here by pushing remaining zeros after
+            // accounting for the discriminant pushed as well as the results of
+            // this individual payload.
+            if let Destination::Stack(payload_results) = dst_payload {
+                if let Destination::Stack(dst_results) = dst {
+                    let remaining = &dst_results[1..][payload_results.len()..];
+                    for ty in remaining {
+                        match ty {
+                            ValType::I32 => self.instruction(I32Const(0)),
+                            ValType::I64 => self.instruction(I64Const(0)),
+                            ValType::F32 => self.instruction(F32Const(0.0)),
+                            ValType::F64 => self.instruction(F64Const(0.0)),
+                            _ => unreachable!(),
+                        }
+                    }
+                }
+            }
+
+            // Branch to the outermost block. Note that this isn't needed for
+            // the outermost case since it simply falls through.
+            let src_len = src_ty.cases.len();
+            if src_i != src_len - 1 {
+                self.instruction(Br((src_len - src_i - 1) as u32));
+            }
+            self.instruction(End); // end this case's block
         }
     }
 
@@ -606,6 +883,13 @@ impl Compiler<'_> {
         (bytes, mem::take(&mut self.traps))
     }
 
+    /// Fetches the value contained with the local specified by `stack` and
+    /// converts it to `dst_ty`.
+    ///
+    /// This is only intended for use in primitive operations where `stack` is
+    /// guaranteed to have only one local. The type of the local on the stack is
+    /// then converted to `dst_ty` appropriately. Note that the types may be
+    /// different due to the "flattening" of variant types.
     fn stack_get(&mut self, stack: &Stack<'_>, dst_ty: ValType) {
         assert_eq!(stack.locals.len(), 1);
         let (idx, src_ty) = stack.locals[0];
@@ -646,14 +930,88 @@ impl Compiler<'_> {
         }
     }
 
+    /// Converts the top value on the WebAssembly stack which has type
+    /// `src_ty` to `dst_tys[0]`.
+    ///
+    /// This is only intended for conversion of primitives where the `dst_tys`
+    /// list is known to be of length 1.
+    fn stack_set(&mut self, dst_tys: &[ValType], src_ty: ValType) {
+        assert_eq!(dst_tys.len(), 1);
+        let dst_ty = dst_tys[0];
+        match (src_ty, dst_ty) {
+            (ValType::I32, ValType::I32)
+            | (ValType::I64, ValType::I64)
+            | (ValType::F32, ValType::F32)
+            | (ValType::F64, ValType::F64) => {}
+
+            (ValType::F32, ValType::I32) => self.instruction(I32ReinterpretF32),
+            (ValType::I32, ValType::I64) => self.instruction(I64ExtendI32U),
+            (ValType::F64, ValType::I64) => self.instruction(I64ReinterpretF64),
+            (ValType::F32, ValType::F64) => self.instruction(F64PromoteF32),
+            (ValType::F32, ValType::I64) => {
+                self.instruction(F64PromoteF32);
+                self.instruction(I64ReinterpretF64);
+            }
+
+            // should not be possible given the `join` function for variants
+            (ValType::I64, ValType::I32)
+            | (ValType::F64, ValType::I32)
+            | (ValType::I32, ValType::F32)
+            | (ValType::I64, ValType::F32)
+            | (ValType::F64, ValType::F32)
+            | (ValType::I32, ValType::F64)
+            | (ValType::I64, ValType::F64)
+
+            // not used in the component model
+            | (ValType::ExternRef, _)
+            | (_, ValType::ExternRef)
+            | (ValType::FuncRef, _)
+            | (_, ValType::FuncRef)
+            | (ValType::V128, _)
+            | (_, ValType::V128) => {
+                panic!("cannot get {dst_ty:?} from {src_ty:?} local");
+            }
+        }
+    }
+
     fn i32_load8u(&mut self, mem: &Memory) {
         self.instruction(LocalGet(mem.addr_local));
         self.instruction(I32Load8_U(mem.memarg(0)));
     }
 
+    fn i32_load8s(&mut self, mem: &Memory) {
+        self.instruction(LocalGet(mem.addr_local));
+        self.instruction(I32Load8_S(mem.memarg(0)));
+    }
+
+    fn i32_load16u(&mut self, mem: &Memory) {
+        self.instruction(LocalGet(mem.addr_local));
+        self.instruction(I32Load16_U(mem.memarg(1)));
+    }
+
+    fn i32_load16s(&mut self, mem: &Memory) {
+        self.instruction(LocalGet(mem.addr_local));
+        self.instruction(I32Load16_S(mem.memarg(1)));
+    }
+
     fn i32_load(&mut self, mem: &Memory) {
         self.instruction(LocalGet(mem.addr_local));
         self.instruction(I32Load(mem.memarg(2)));
+    }
+
+    fn i64_load(&mut self, mem: &Memory) {
+        self.instruction(LocalGet(mem.addr_local));
+        self.instruction(I64Load(mem.memarg(3)));
+    }
+
+    fn f32_load(&mut self, mem: &Memory) {
+        self.instruction(LocalGet(mem.addr_local));
+        self.instruction(F32Load(mem.memarg(2)));
+    }
+
+    fn f64_load(&mut self, mem: &Memory) {
+        self.instruction(LocalGet(mem.addr_local));
+        self.instruction(F64Load(mem.memarg(3)));
     }
 
     fn push_dst_addr(&mut self, dst: &Destination) {
@@ -666,8 +1024,24 @@ impl Compiler<'_> {
         self.instruction(I32Store8(mem.memarg(0)));
     }
 
+    fn i32_store16(&mut self, mem: &Memory) {
+        self.instruction(I32Store16(mem.memarg(1)));
+    }
+
     fn i32_store(&mut self, mem: &Memory) {
         self.instruction(I32Store(mem.memarg(2)));
+    }
+
+    fn i64_store(&mut self, mem: &Memory) {
+        self.instruction(I64Store(mem.memarg(3)));
+    }
+
+    fn f32_store(&mut self, mem: &Memory) {
+        self.instruction(F32Store(mem.memarg(2)));
+    }
+
+    fn f64_store(&mut self, mem: &Memory) {
+        self.instruction(F64Store(mem.memarg(3)));
     }
 }
 
@@ -678,7 +1052,7 @@ impl<'a> Source<'a> {
     /// This will automatically slice stack-based locals to the appropriate
     /// width for each component type and additionally calculate the appropriate
     /// offset for each memory-based type.
-    fn record_field_sources<'b>(
+    fn record_field_srcs<'b>(
         &'b self,
         module: &'b Module,
         fields: impl IntoIterator<Item = InterfaceType> + 'b,
@@ -689,9 +1063,8 @@ impl<'a> Source<'a> {
         let mut offset = 0;
         fields.into_iter().map(move |ty| match self {
             Source::Memory(mem) => {
-                let (size, align) = module.size_align(&ty);
-                offset = align_to(offset, align) + size;
-                Source::Memory(mem.bump(offset - size))
+                let mem = next_field_offset(&mut offset, module, &ty, mem);
+                Source::Memory(mem)
             }
             Source::Stack(stack) => {
                 let cnt = module.flatten_types([ty]).len();
@@ -700,26 +1073,90 @@ impl<'a> Source<'a> {
             }
         })
     }
+
+    /// Returns the corresponding discriminant source and payload source f
+    fn payload_src(
+        &self,
+        module: &Module,
+        size: DiscriminantSize,
+        case: &InterfaceType,
+    ) -> Source<'a> {
+        match self {
+            Source::Stack(s) => {
+                let flat_len = module.flatten_types([*case]).len();
+                Source::Stack(s.slice(1..s.locals.len()).slice(0..flat_len))
+            }
+            Source::Memory(mem) => {
+                let mem = payload_offset(size, module, case, mem);
+                Source::Memory(mem)
+            }
+        }
+    }
 }
 
-impl Destination {
-    /// Same as `Source::record_field_sources` but for destinations.
-    fn record_field_sources<'a>(
-        &'a self,
-        module: &'a Module,
-        fields: impl IntoIterator<Item = InterfaceType> + 'a,
-    ) -> impl Iterator<Item = Destination> + 'a {
+impl<'a> Destination<'a> {
+    /// Same as `Source::record_field_srcs` but for destinations.
+    fn record_field_dsts<'b>(
+        &'b self,
+        module: &'b Module,
+        fields: impl IntoIterator<Item = InterfaceType> + 'b,
+    ) -> impl Iterator<Item = Destination> + 'b
+    where
+        'a: 'b,
+    {
         let mut offset = 0;
         fields.into_iter().map(move |ty| match self {
-            // TODO: dedupe with above?
             Destination::Memory(mem) => {
-                let (size, align) = module.size_align(&ty);
-                offset = align_to(offset, align) + size;
-                Destination::Memory(mem.bump(offset - size))
+                let mem = next_field_offset(&mut offset, module, &ty, mem);
+                Destination::Memory(mem)
             }
-            Destination::Stack => Destination::Stack,
+            Destination::Stack(s) => {
+                let cnt = module.flatten_types([ty]).len();
+                offset += cnt;
+                Destination::Stack(&s[offset - cnt..offset])
+            }
         })
     }
+
+    /// Returns the corresponding discriminant source and payload source f
+    fn payload_dst(
+        &self,
+        module: &Module,
+        size: DiscriminantSize,
+        case: &InterfaceType,
+    ) -> Destination {
+        match self {
+            Destination::Stack(s) => {
+                let flat_len = module.flatten_types([*case]).len();
+                Destination::Stack(&s[1..][..flat_len])
+            }
+            Destination::Memory(mem) => {
+                let mem = payload_offset(size, module, case, mem);
+                Destination::Memory(mem)
+            }
+        }
+    }
+}
+
+fn next_field_offset(
+    offset: &mut usize,
+    module: &Module,
+    field: &InterfaceType,
+    mem: &Memory,
+) -> Memory {
+    let (size, align) = module.size_align(field);
+    *offset = align_to(*offset, align) + size;
+    mem.bump(*offset - size)
+}
+
+fn payload_offset(
+    disc_size: DiscriminantSize,
+    module: &Module,
+    case: &InterfaceType,
+    mem: &Memory,
+) -> Memory {
+    let align = module.align(case);
+    mem.bump(align_to(disc_size.into(), align))
 }
 
 impl Memory {

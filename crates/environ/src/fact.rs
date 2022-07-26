@@ -23,6 +23,7 @@ use crate::component::{
 };
 use crate::{FuncIndex, GlobalIndex, MemoryIndex};
 use std::collections::HashMap;
+use std::mem;
 use wasm_encoder::*;
 
 mod core_types;
@@ -90,6 +91,7 @@ enum Context {
 }
 
 impl<'a> Module<'a> {
+    /// Creates an empty module.
     pub fn new(types: &'a ComponentTypes, debug: bool) -> Module<'a> {
         Module {
             debug,
@@ -245,26 +247,27 @@ impl<'a> Module<'a> {
         ret
     }
 
+    /// Encodes this module into a WebAssembly binary.
     pub fn encode(&mut self) -> Vec<u8> {
         let mut funcs = FunctionSection::new();
         let mut code = CodeSection::new();
         let mut exports = ExportSection::new();
         let mut traps = traps::TrapSection::default();
 
+        let mut types = mem::take(&mut self.core_types);
         for adapter in self.adapters.iter() {
             let idx = self.core_funcs + funcs.len();
             exports.export(&adapter.name, ExportKind::Func, idx);
 
             let signature = self.signature(adapter.lower.ty, Context::Lower);
-            let ty = self
-                .core_types
-                .function(&signature.params, &signature.results);
+            let ty = types.function(&signature.params, &signature.results);
             funcs.function(ty);
 
-            let (function, func_traps) = trampoline::compile(self, adapter);
+            let (function, func_traps) = trampoline::compile(self, &mut types, adapter);
             code.raw(&function);
             traps.append(idx, func_traps);
         }
+        self.core_types = types;
         let traps = traps.finish();
 
         let mut result = wasm_encoder::Module::new();

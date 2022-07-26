@@ -3507,7 +3507,20 @@ dependencies = [
  "wasm-encoder",
  "wasmparser",
  "wasmprinter",
+ "wasmtime-component-util",
  "wasmtime-types",
+]
+
+[[package]]
+name = "wasmtime-environ-fuzz"
+version = "0.0.0"
+dependencies = [
+ "arbitrary",
+ "env_logger 0.9.0",
+ "libfuzzer-sys",
+ "wasmparser",
+ "wasmprinter",
+ "wasmtime-environ",
 ]
 
 [[package]]
