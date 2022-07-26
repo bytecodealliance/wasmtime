@@ -8,7 +8,6 @@
 //! <https://link.springer.com/content/pdf/10.1007/978-3-642-37051-9_6.pdf>
 
 use crate::Variable;
-use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 use core::convert::TryInto;
 use core::mem;
@@ -22,6 +21,7 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::packed_option::PackedOption;
 use smallvec::SmallVec;
+use std::collections::HashSet;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///
@@ -53,6 +53,10 @@ pub struct SSABuilder {
 
     /// Side effects accumulated in the `use_var`/`predecessors_lookup` state machine.
     side_effects: SideEffects,
+
+    /// Reused allocation for blocks we've already visited in the
+    /// `can_optimize_var_lookup` method.
+    visited: HashSet<Block>,
 }
 
 /// Side effects of a `use_var` or a `seal_block` method call.
@@ -129,6 +133,7 @@ impl SSABuilder {
             calls: Vec::new(),
             results: Vec::new(),
             side_effects: SideEffects::new(),
+            visited: Default::default(),
         }
     }
 
@@ -282,14 +287,14 @@ impl SSABuilder {
     /// marking visited blocks and aborting if we find a previously seen block.
     /// We stop the search if we find a block with multiple predecessors since the
     /// original algorithm can handle these cases.
-    fn can_optimize_var_lookup(&self, block: Block) -> bool {
+    fn can_optimize_var_lookup(&mut self, block: Block) -> bool {
         // Check that the initial block only has one predecessor. This is only a requirement
         // for the first block.
         if self.predecessors(block).len() != 1 {
             return false;
         }
 
-        let mut visited = BTreeSet::new();
+        self.visited.clear();
         let mut current = block;
         loop {
             let predecessors = self.predecessors(current);
@@ -307,11 +312,11 @@ impl SSABuilder {
                 return true;
             }
 
-            if visited.contains(&current) {
+            let next_current = predecessors[0].block;
+            if !self.visited.insert(current) {
                 return false;
             }
-            visited.insert(current);
-            current = predecessors[0].block;
+            current = next_current;
         }
     }
 
