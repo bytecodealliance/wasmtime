@@ -29,6 +29,27 @@ cfg_if::cfg_if! {
         macro_rules! asm_sym {
             ( $( $name:tt )* ) => ( concat!("_", $( $name )* ) )
         }
+    } else if #[cfg(target_os = "windows")] {
+        #[macro_export]
+        macro_rules! asm_func {
+            ($name:expr, $($body:tt)*) => {
+                std::arch::global_asm!(concat!(
+                    ".def ", $name, "\n",
+                    ".scl 2\n",
+                    ".type 32\n",
+                    ".endef\n",
+                    ".global ", $name, "\n",
+                    ".p2align 4\n",
+                    $name, ":\n",
+                    $($body)*
+                ));
+            };
+        }
+
+        #[macro_export]
+        macro_rules! asm_sym {
+            ( $( $name:tt )* ) => ( $( $name )* )
+        }
     } else {
         // Note that for now this "else" clause just assumes that everything
         // other than macOS is ELF and has the various directives here for
