@@ -1,4 +1,3 @@
-
 // The host_to_wasm_trampoline implementation is in the s390x.S
 // file, but we still want to have this unit test here.
 
@@ -45,7 +44,5 @@ mod wasm_to_host_trampoline_offsets_tests {
 // have to duplicate the list of libcalls used in the assembler file.
 
 macro_rules! wasm_to_libcall_trampoline {
-    ($libcall:ident ; $libcall_impl:ident) => {
-    }
+    ($libcall:ident ; $libcall_impl:ident) => {};
 }
-
