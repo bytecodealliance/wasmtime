@@ -1,14 +1,14 @@
-
 // Currently `global_asm!` isn't stable on s390x, so this is an external
 // assembler file built with the `build.rs`.
 
-        .machine z14
+        .machine z13
         .text
 
         .hidden host_to_wasm_trampoline
         .globl host_to_wasm_trampoline
         .type host_to_wasm_trampoline,@function
         .p2align 2
+
 host_to_wasm_trampoline:
         .cfi_startproc
 
@@ -36,6 +36,7 @@ host_to_wasm_trampoline:
         .globl wasm_to_host_trampoline
         .type wasm_to_host_trampoline,@function
         .p2align 2
+
 wasm_to_host_trampoline:
         .cfi_startproc
 
@@ -58,7 +59,6 @@ wasm_to_host_trampoline:
 
         .cfi_endproc
         .size wasm_to_host_trampoline,.-wasm_to_host_trampoline
-
 
 #define LIBCALL_TRAMPOLINE(libcall, libcall_impl)                                 \
         .hidden libcall ;                                                         \
