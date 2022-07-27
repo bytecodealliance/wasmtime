@@ -160,9 +160,17 @@
   (component $c
     (import "roundtrip" (func $roundtrip (type $roundtrip)))
 
-    (core module $libc (memory (export "memory") 1))
+    (core module $libc
+      (memory (export "memory") 1)
+      (func (export "realloc") (param i32 i32 i32 i32) (result i32) unreachable)
+    )
     (core instance $libc (instantiate $libc))
-    (core func $roundtrip (canon lower (func $roundtrip) (memory $libc "memory")))
+    (core func $roundtrip
+      (canon lower (func $roundtrip)
+        (memory $libc "memory")
+        (realloc (func $libc "realloc")) ;; FIXME(wasm-tools#693) should not be necessary
+      )
+    )
 
     (core module $m2
       (import "libc" "memory" (memory 1))
@@ -312,9 +320,18 @@
   (component $c
     (import "foo" (func $foo (param $tuple20)))
 
-    (core module $libc (memory (export "memory") 1))
+    (core module $libc
+      (memory (export "memory") 1)
+      (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+        unreachable)
+    )
     (core instance $libc (instantiate $libc))
-    (core func $foo (canon lower (func $foo) (memory $libc "memory")))
+    (core func $foo
+      (canon lower (func $foo)
+        (memory $libc "memory")
+        (realloc (func $libc "realloc")) ;; FIXME(wasm-tools#693) should not be necessary
+      )
+    )
     (core module $something
       (import "" "foo" (func (param i32)))
     )
@@ -620,9 +637,17 @@
     )
     (component $c2
       (import "r" (func $r (param $big)))
-      (core module $libc (memory (export "memory") 1))
+      (core module $libc
+        (memory (export "memory") 1)
+        (func (export "realloc") (param i32 i32 i32 i32) (result i32) unreachable)
+      )
       (core instance $libc (instantiate $libc))
-      (core func $r (canon lower (func $r) (memory $libc "memory")))
+      (core func $r
+        (canon lower (func $r)
+          (memory $libc "memory")
+          (realloc (func $libc "realloc")) ;; FIXME(wasm-tools#693) should not be necessary
+        )
+      )
 
       (core module $m
         (import "" "r" (func $r (param i32)))
@@ -660,9 +685,18 @@
     )
     (component $c2
       (import "r" (func $r (param $big)))
-      (core module $libc (memory (export "memory") 1))
+      (core module $libc
+        (memory (export "memory") 1)
+        (func (export "realloc") (param i32 i32 i32 i32) (result i32) unreachable)
+      )
       (core instance $libc (instantiate $libc))
-      (core func $r (canon lower (func $r) (memory $libc "memory")))
+      (core func $r
+        (canon lower (func $r)
+          (memory $libc "memory")
+          (realloc (func $libc "realloc")) ;; FIXME(wasm-tools#693) should not be necessary
+        )
+      )
+
 
       (core module $m
         (import "" "r" (func $r (param i32)))
