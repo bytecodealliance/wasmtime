@@ -2908,3 +2908,11 @@
 (rule (lower (has_type (and (fits_in_64 ty) (ty_int _))
                   (atomic_rmw flags op address input)))
       (x64_atomic_rmw_seq ty op (to_amode flags address (zero_offset)) input))
+
+;; Rules for `call` and `call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (call (func_ref_data sig_ref extname dist) inputs))
+      (gen_call sig_ref extname dist inputs))
+
+(rule (lower (call_indirect sig_ref val inputs))
+      (gen_call_indirect sig_ref val inputs))

@@ -925,51 +925,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::FuncAddr
         | Opcode::SymbolValue
         | Opcode::FallthroughReturn
-        | Opcode::Return => {
+        | Opcode::Return
+        | Opcode::Call
+        | Opcode::CallIndirect => {
             implemented_in_isle(ctx);
-        }
-
-        Opcode::Call | Opcode::CallIndirect => {
-            let caller_conv = ctx.abi().call_conv();
-            let (mut abi, inputs) = match op {
-                Opcode::Call => {
-                    let (extname, dist) = ctx.call_target(insn).unwrap();
-                    let sig = ctx.call_sig(insn).unwrap();
-                    assert_eq!(inputs.len(), sig.params.len());
-                    assert_eq!(outputs.len(), sig.returns.len());
-                    (
-                        X64ABICaller::from_func(sig, &extname, dist, caller_conv, flags)?,
-                        &inputs[..],
-                    )
-                }
-
-                Opcode::CallIndirect => {
-                    let ptr = put_input_in_reg(ctx, inputs[0]);
-                    let sig = ctx.call_sig(insn).unwrap();
-                    assert_eq!(inputs.len() - 1, sig.params.len());
-                    assert_eq!(outputs.len(), sig.returns.len());
-                    (
-                        X64ABICaller::from_ptr(sig, ptr, op, caller_conv, flags)?,
-                        &inputs[1..],
-                    )
-                }
-
-                _ => unreachable!(),
-            };
-
-            abi.emit_stack_pre_adjust(ctx);
-            assert_eq!(inputs.len(), abi.num_args());
-            for i in abi.get_copy_to_arg_order() {
-                let input = inputs[i];
-                let arg_regs = put_input_in_regs(ctx, input);
-                abi.emit_copy_regs_to_arg(ctx, i, arg_regs);
-            }
-            abi.emit_call(ctx);
-            for (i, output) in outputs.iter().enumerate() {
-                let retval_regs = get_output_reg(ctx, *output);
-                abi.emit_copy_retval_to_regs(ctx, i, retval_regs);
-            }
-            abi.emit_stack_post_adjust(ctx);
         }
 
         Opcode::Trapif | Opcode::Trapff => {
