@@ -1,6 +1,6 @@
 //! Implements the wasi-nn API.
 use crate::api::{Backend, BackendError, BackendExecutionContext, BackendGraph};
-use crate::witx::types::{ExecutionTarget, GraphBuilderArray, Tensor};
+use crate::witx::types::{ExecutionTarget, GraphBuilderArray, Tensor, TensorType};
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::Path;
@@ -92,11 +92,15 @@ impl<'a> BackendGraph for TensorflowGraph {
 
         // Currently we only support using one output, index == 0
         let out_name = &signature.get_output(outputs[0].as_str())?.name().name;
-
         Ok(Box::new(TensorflowExecutionContext {
             graph: self.0.clone(),
             bundle: self.1.clone(),
-            inputs: HashMap::new(),
+            tensormap: InputTensorsMap {
+                u8: HashMap::new(),
+                f16: HashMap::new(),
+                f32: HashMap::new(),
+                i32: HashMap::new(),
+            },
             sig: signature.clone(),
             output_name: String::from(out_name),
             output: None,
@@ -107,14 +111,25 @@ impl<'a> BackendGraph for TensorflowGraph {
 struct TensorflowExecutionContext {
     graph: Arc<Graph>,
     bundle: Arc<SavedModelBundle>,
-    inputs: HashMap<String, TFTensor<f32>>,
+    tensormap: InputTensorsMap,
     sig: SignatureDef,
     output_name: String,
     output: Option<TFTensor<f32>>,
 }
 
+struct InputTensorsMap {
+    u8: HashMap<String, TFTensor<u8>>,
+    f16: HashMap<String, TFTensor<f32>>, // f16 isn't currently defined in Rust
+    f32: HashMap<String, TFTensor<f32>>,
+    i32: HashMap<String, TFTensor<i32>>,
+}
 impl BackendExecutionContext for TensorflowExecutionContext {
     fn set_input(&mut self, index: u32, tensor: &Tensor<'_>) -> Result<(), BackendError> {
+        // Return an error if the index doesn't exist in the signature.
+        if index as usize > self.sig.inputs().len() - 1 {
+            return Err(BackendError::InvalidTensorIndex(index as usize));
+        }
+
         let dim = tensor
             .dimensions
             .as_slice()?
@@ -122,16 +137,57 @@ impl BackendExecutionContext for TensorflowExecutionContext {
             .map(|d| *d as u64)
             .collect::<Vec<_>>();
 
+        let prec = tensor.type_;
         let tfdata = tensor.data.as_slice()?;
         let tfdata_dref = tfdata.deref();
-        let mut local_tensor = TFTensor::<f32>::new(&dim);
+        let data_vec = tfdata_dref.to_vec();
 
-        for i in 0..tfdata_dref.len() {
-            local_tensor[i] = tfdata_dref[i] as f32;
+        match tensor.type_ {
+            TensorType::F16 => {
+                let mut input_tensor = TFTensor::<f32>::new(&dim);
+
+                for i in 0..data_vec.len() {
+                    input_tensor[i] = data_vec[i] as f32;
+                }
+
+                self.tensormap
+                    .f16
+                    .insert(index.to_string(), TFTensor::<f32>::from(input_tensor));
+            }
+            TensorType::F32 => {
+                let mut input_tensor = TFTensor::<f32>::new(&dim);
+
+                for i in 0..data_vec.len() {
+                    input_tensor[i] = data_vec[i] as f32;
+                }
+
+                self.tensormap
+                    .f32
+                    .insert(index.to_string(), TFTensor::<f32>::from(input_tensor));
+            }
+            TensorType::U8 => {
+                let mut input_tensor = TFTensor::<u8>::new(&dim);
+
+                for i in 0..data_vec.len() {
+                    input_tensor[i] = data_vec[i];
+                }
+
+                self.tensormap
+                    .u8
+                    .insert(index.to_string(), TFTensor::<u8>::from(input_tensor));
+            }
+            TensorType::I32 => {
+                let mut input_tensor = TFTensor::<i32>::new(&dim);
+
+                for i in 0..data_vec.len() {
+                    input_tensor[i] = data_vec[i] as i32;
+                }
+
+                self.tensormap
+                    .i32
+                    .insert(index.to_string(), TFTensor::<i32>::from(input_tensor));
+            }
         }
-
-        // Save the input to the context
-        self.inputs.insert(index.to_string(), local_tensor.clone());
 
         Ok(())
     }
@@ -148,16 +204,32 @@ impl BackendExecutionContext for TensorflowExecutionContext {
         let mut args = SessionRunArgs::new();
 
         // Check that the saved inputs exist in the signature, and add them to the feed.
-        for key in self.inputs.keys() {
+        for key in self.tensormap.f16.keys() {
             let key_usize = key.parse::<usize>().unwrap();
-
-            if key_usize > self.sig.inputs().len() - 1 {
-                return Err(BackendError::InvalidTensorIndex(key_usize));
-            }
-
             let x_info = self.sig.get_input(inputs[key_usize].as_str())?;
             let op_x: Operation = self.graph.operation_by_name_required(&x_info.name().name)?;
-            args.add_feed(&op_x, key_usize as i32, &self.inputs[key]);
+            args.add_feed(&op_x, key_usize as i32, &self.tensormap.f16[key]);
+        }
+
+        for key in self.tensormap.f32.keys() {
+            let key_usize = key.parse::<usize>().unwrap();
+            let x_info = self.sig.get_input(inputs[key_usize].as_str())?;
+            let op_x: Operation = self.graph.operation_by_name_required(&x_info.name().name)?;
+            args.add_feed(&op_x, key_usize as i32, &self.tensormap.f32[key]);
+        }
+
+        for key in self.tensormap.u8.keys() {
+            let key_usize = key.parse::<usize>().unwrap();
+            let x_info = self.sig.get_input(inputs[key_usize].as_str())?;
+            let op_x: Operation = self.graph.operation_by_name_required(&x_info.name().name)?;
+            args.add_feed(&op_x, key_usize as i32, &self.tensormap.u8[key]);
+        }
+
+        for key in self.tensormap.i32.keys() {
+            let key_usize = key.parse::<usize>().unwrap();
+            let x_info = self.sig.get_input(inputs[key_usize].as_str())?;
+            let op_x: Operation = self.graph.operation_by_name_required(&x_info.name().name)?;
+            args.add_feed(&op_x, key_usize as i32, &self.tensormap.i32[key]);
         }
 
         // Setup the output
