@@ -51,6 +51,7 @@ enum ValType {
     S64,
     Float32,
     Float64,
+    Char,
     Record(Vec<ValType>),
     Tuple(Vec<ValType>),
     Variant(NonZeroLenVec<ValType>),
@@ -206,6 +207,7 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> InterfaceType {
         ValType::S64 => InterfaceType::S64,
         ValType::Float32 => InterfaceType::Float32,
         ValType::Float64 => InterfaceType::Float64,
+        ValType::Char => InterfaceType::Char,
         ValType::Record(tys) => {
             let ty = TypeRecord {
                 fields: tys

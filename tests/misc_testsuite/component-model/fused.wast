@@ -1107,3 +1107,121 @@
   (instance $c1 (instantiate $c1))
   (instance $c2 (instantiate $c2 (with "" (instance $c1))))
 )
+
+;; roundtrip some valid chars
+(component
+  (component $c1
+    (core module $m
+      (func (export "a") (param i32) (result i32) local.get 0)
+    )
+    (core instance $m (instantiate $m))
+    (func (export "a") (param char) (result char) (canon lift (core func $m "a")))
+  )
+  (component $c2
+    (import "" (instance $i
+      (export "a" (func (param char) (result char)))
+    ))
+
+    (core func $a (canon lower (func $i "a")))
+
+    (core module $m
+      (import "" "a" (func $a (param i32) (result i32)))
+
+      (func $start
+        (call $roundtrip (i32.const 0))
+        (call $roundtrip (i32.const 0xab))
+        (call $roundtrip (i32.const 0xd7ff))
+        (call $roundtrip (i32.const 0xe000))
+        (call $roundtrip (i32.const 0x10ffff))
+      )
+      (func $roundtrip (export "roundtrip") (param i32)
+        local.get 0
+        call $a
+        local.get 0
+        i32.ne
+        if unreachable end
+      )
+      (start $start)
+    )
+    (core instance $m (instantiate $m
+      (with "" (instance
+        (export "a" (func $a))
+      ))
+    ))
+
+    (func (export "roundtrip") (param char) (canon lift (core func $m "roundtrip")))
+  )
+  (instance $c1 (instantiate $c1))
+  (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+
+  (export "roundtrip" (func $c2 "roundtrip"))
+)
+
+(assert_return (invoke "roundtrip" (char.const "x")) (unit.const))
+(assert_return (invoke "roundtrip" (char.const "⛳")) (unit.const))
+(assert_return (invoke "roundtrip" (char.const "🍰")) (unit.const))
+
+;; invalid chars
+(assert_trap
+  (component
+    (component $c1
+      (core module $m (func (export "a") (param i32)))
+      (core instance $m (instantiate $m))
+      (func (export "a") (param char) (canon lift (core func $m "a")))
+    )
+    (component $c2
+      (import "" (instance $i (export "a" (func (param char)))))
+      (core func $a (canon lower (func $i "a")))
+      (core module $m
+        (import "" "a" (func $a (param i32)))
+        (func $start (call $a (i32.const 0xd800)))
+        (start $start)
+      )
+      (core instance (instantiate $m (with "" (instance (export "a" (func $a))))))
+    )
+    (instance $c1 (instantiate $c1))
+    (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+  )
+  "unreachable")
+(assert_trap
+  (component
+    (component $c1
+      (core module $m (func (export "a") (param i32)))
+      (core instance $m (instantiate $m))
+      (func (export "a") (param char) (canon lift (core func $m "a")))
+    )
+    (component $c2
+      (import "" (instance $i (export "a" (func (param char)))))
+      (core func $a (canon lower (func $i "a")))
+      (core module $m
+        (import "" "a" (func $a (param i32)))
+        (func $start (call $a (i32.const 0xdfff)))
+        (start $start)
+      )
+      (core instance (instantiate $m (with "" (instance (export "a" (func $a))))))
+    )
+    (instance $c1 (instantiate $c1))
+    (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+  )
+  "unreachable")
+(assert_trap
+  (component
+    (component $c1
+      (core module $m (func (export "a") (param i32)))
+      (core instance $m (instantiate $m))
+      (func (export "a") (param char) (canon lift (core func $m "a")))
+    )
+    (component $c2
+      (import "" (instance $i (export "a" (func (param char)))))
+      (core func $a (canon lower (func $i "a")))
+      (core module $m
+        (import "" "a" (func $a (param i32)))
+        (func $start (call $a (i32.const 0x110000)))
+        (start $start)
+      )
+      (core instance (instantiate $m (with "" (instance (export "a" (func $a))))))
+    )
+    (instance $c1 (instantiate $c1))
+    (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+  )
+  "unreachable")
