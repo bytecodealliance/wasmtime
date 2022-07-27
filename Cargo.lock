@@ -3621,6 +3621,7 @@ dependencies = [
  "mach",
  "memfd",
  "memoffset",
+ "paste",
  "rand 0.8.5",
  "rustix",
  "thiserror",

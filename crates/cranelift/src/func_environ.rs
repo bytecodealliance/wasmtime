@@ -30,7 +30,7 @@ macro_rules! declare_function_signatures {
     (
         $(
             $( #[$attr:meta] )*
-            $name:ident( $( $param:ident ),* ) -> ( $( $result:ident ),* );
+            $name:ident( $( $pname:ident: $param:ident ),* ) $( -> $result:ident )?;
         )*
     ) => {
         /// A struct with an `Option<ir::SigRef>` member for every builtin
@@ -94,7 +94,7 @@ macro_rules! declare_function_signatures {
                     let sig = self.$name.unwrap_or_else(|| {
                         func.import_signature(Signature {
                             params: vec![ $( self.$param() ),* ],
-                            returns: vec![ $( self.$result() ),* ],
+                            returns: vec![ $( self.$result() )? ],
                             call_conv: self.call_conv,
                         })
                     });

@@ -634,26 +634,23 @@ macro_rules! define_builtin_array {
     (
         $(
             $( #[$attr:meta] )*
-            $name:ident( $( $param:ident ),* ) -> ( $( $result:ident ),* );
+            $name:ident( $( $pname:ident: $param:ident ),* ) $( -> $result:ident )?;
         )*
     ) => {
         /// An array that stores addresses of builtin functions. We translate code
         /// to use indirect calls. This way, we don't have to patch the code.
         #[repr(C)]
-        #[allow(unused_parens)]
         pub struct VMBuiltinFunctionsArray {
             $(
                 $name: unsafe extern "C" fn(
                     $(define_builtin_array!(@ty $param)),*
-                ) -> (
-                    $(define_builtin_array!(@ty $result)),*
-                ),
+                ) $( -> define_builtin_array!(@ty $result))?,
             )*
         }
 
         impl VMBuiltinFunctionsArray {
             pub const INIT: VMBuiltinFunctionsArray = VMBuiltinFunctionsArray {
-                $($name: crate::libcalls::$name,)*
+                $($name: crate::libcalls::trampolines::$name,)*
             };
         }
     };
