@@ -680,3 +680,396 @@
     (instance $c2 (instantiate $c2 (with "r" (func $c1 "r"))))
   )
   "unreachable")
+
+;; simple variant translation
+(component
+  (type $a (variant (case "x" unit)))
+  (type $b (variant (case "y" unit)))
+
+  (component $c1
+    (core module $m
+      (func (export "r") (param i32) (result i32)
+        (if (i32.ne (local.get 0) (i32.const 0)) (unreachable))
+        i32.const 0
+      )
+    )
+    (core instance $m (instantiate $m))
+    (func (export "r") (param $a) (result $b) (canon lift (core func $m "r")))
+  )
+  (component $c2
+    (import "r" (func $r (param $a) (result $b)))
+    (core func $r (canon lower (func $r)))
+
+    (core module $m
+      (import "" "r" (func $r (param i32) (result i32)))
+      (func $start
+        i32.const 0
+        call $r
+        i32.const 0
+        i32.ne
+        if unreachable end
+      )
+      (start $start)
+    )
+    (core instance (instantiate $m
+      (with "" (instance (export "r" (func $r))))
+    ))
+  )
+  (instance $c1 (instantiate $c1))
+  (instance $c2 (instantiate $c2 (with "r" (func $c1 "r"))))
+)
+
+;; invalid variant discriminant in a parameter
+(assert_trap
+  (component
+    (type $a (variant (case "x" unit)))
+
+    (component $c1
+      (core module $m
+        (func (export "r") (param i32))
+      )
+      (core instance $m (instantiate $m))
+      (func (export "r") (param $a) (canon lift (core func $m "r")))
+    )
+    (component $c2
+      (import "r" (func $r (param $a)))
+      (core func $r (canon lower (func $r)))
+
+      (core module $m
+        (import "" "r" (func $r (param i32)))
+        (func $start
+          i32.const 1
+          call $r
+        )
+        (start $start)
+      )
+      (core instance (instantiate $m
+        (with "" (instance (export "r" (func $r))))
+      ))
+    )
+    (instance $c1 (instantiate $c1))
+    (instance $c2 (instantiate $c2 (with "r" (func $c1 "r"))))
+  )
+  "unreachable")
+
+;; invalid variant discriminant in a result
+(assert_trap
+  (component
+    (type $a (variant (case "x" unit)))
+
+    (component $c1
+      (core module $m
+        (func (export "r") (result i32) i32.const 1)
+      )
+      (core instance $m (instantiate $m))
+      (func (export "r") (result $a) (canon lift (core func $m "r")))
+    )
+    (component $c2
+      (import "r" (func $r (result $a)))
+      (core func $r (canon lower (func $r)))
+
+      (core module $m
+        (import "" "r" (func $r (result i32)))
+        (func $start call $r drop)
+        (start $start)
+      )
+      (core instance (instantiate $m
+        (with "" (instance (export "r" (func $r))))
+      ))
+    )
+    (instance $c1 (instantiate $c1))
+    (instance $c2 (instantiate $c2 (with "r" (func $c1 "r"))))
+  )
+  "unreachable")
+
+
+;; extra bits are chopped off
+(component
+  (component $c1
+    (core module $m
+      (func (export "u") (param i32)
+        (if (i32.ne (local.get 0) (i32.const 0)) (unreachable))
+      )
+      (func (export "s") (param i32)
+        (if (i32.ne (local.get 0) (i32.const -1)) (unreachable))
+      )
+    )
+    (core instance $m (instantiate $m))
+    (func (export "u8") (param u8) (canon lift (core func $m "u")))
+    (func (export "u16") (param u16) (canon lift (core func $m "u")))
+    (func (export "s8") (param s8) (canon lift (core func $m "s")))
+    (func (export "s16") (param s16) (canon lift (core func $m "s")))
+  )
+  (component $c2
+    (import "" (instance $i
+      (export "u8" (func (param u8)))
+      (export "s8" (func (param s8)))
+      (export "u16" (func (param u16)))
+      (export "s16" (func (param s16)))
+    ))
+
+    (core func $u8 (canon lower (func $i "u8")))
+    (core func $s8 (canon lower (func $i "s8")))
+    (core func $u16 (canon lower (func $i "u16")))
+    (core func $s16 (canon lower (func $i "s16")))
+
+    (core module $m
+      (import "" "u8" (func $u8 (param i32)))
+      (import "" "s8" (func $s8 (param i32)))
+      (import "" "u16" (func $u16 (param i32)))
+      (import "" "s16" (func $s16 (param i32)))
+
+      (func $start
+        (call $u8 (i32.const 0))
+        (call $u8 (i32.const 0xff00))
+        (call $s8 (i32.const -1))
+        (call $s8 (i32.const 0xff))
+        (call $s8 (i32.const 0xffff))
+
+        (call $u16 (i32.const 0))
+        (call $u16 (i32.const 0xff0000))
+        (call $s16 (i32.const -1))
+        (call $s16 (i32.const 0xffff))
+        (call $s16 (i32.const 0xffffff))
+      )
+      (start $start)
+    )
+    (core instance (instantiate $m
+      (with "" (instance
+        (export "u8" (func $u8))
+        (export "s8" (func $s8))
+        (export "u16" (func $u16))
+        (export "s16" (func $s16))
+      ))
+    ))
+  )
+  (instance $c1 (instantiate $c1))
+  (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+)
+
+;; translation of locals between different types
+(component
+  (type $a (variant (case "a" u8) (case "b" float32)))
+  (type $b (variant (case "a" u16) (case "b" s64)))
+  (type $c (variant (case "a" u64) (case "b" float64)))
+  (type $d (variant (case "a" float32) (case "b" float64)))
+  (type $e (variant (case "a" float32) (case "b" s64)))
+
+  (component $c1
+    (core module $m
+      (func (export "a") (param i32 i32 i32)
+        (i32.eqz (local.get 0))
+        if
+          (if (i32.ne (local.get 1) (i32.const 0)) (unreachable))
+          (if (i32.ne (local.get 2) (i32.const 2)) (unreachable))
+        else
+          (if (i32.ne (local.get 1) (i32.const 1)) (unreachable))
+          (if (f32.ne (f32.reinterpret_i32 (local.get 2)) (f32.const 3)) (unreachable))
+        end
+      )
+      (func (export "b") (param i32 i32 i64)
+        (i32.eqz (local.get 0))
+        if
+          (if (i32.ne (local.get 1) (i32.const 0)) (unreachable))
+          (if (i64.ne (local.get 2) (i64.const 4)) (unreachable))
+        else
+          (if (i32.ne (local.get 1) (i32.const 1)) (unreachable))
+          (if (i64.ne (local.get 2) (i64.const 5)) (unreachable))
+        end
+      )
+      (func (export "c") (param i32 i32 i64)
+        (i32.eqz (local.get 0))
+        if
+          (if (i32.ne (local.get 1) (i32.const 0)) (unreachable))
+          (if (i64.ne (local.get 2) (i64.const 6)) (unreachable))
+        else
+          (if (i32.ne (local.get 1) (i32.const 1)) (unreachable))
+          (if (f64.ne (f64.reinterpret_i64 (local.get 2)) (f64.const 7)) (unreachable))
+        end
+      )
+      (func (export "d") (param i32 i32 i64)
+        (i32.eqz (local.get 0))
+        if
+          (if (i32.ne (local.get 1) (i32.const 0)) (unreachable))
+          (if (f64.ne (f64.reinterpret_i64 (local.get 2)) (f64.const 8)) (unreachable))
+        else
+          (if (i32.ne (local.get 1) (i32.const 1)) (unreachable))
+          (if (f64.ne (f64.reinterpret_i64 (local.get 2)) (f64.const 9)) (unreachable))
+        end
+      )
+      (func (export "e") (param i32 i32 i64)
+        (i32.eqz (local.get 0))
+        if
+          (if (i32.ne (local.get 1) (i32.const 0)) (unreachable))
+          (if (f64.ne (f64.reinterpret_i64 (local.get 2)) (f64.const 10)) (unreachable))
+        else
+          (if (i32.ne (local.get 1) (i32.const 1)) (unreachable))
+          (if (i64.ne (local.get 2) (i64.const 11)) (unreachable))
+        end
+      )
+    )
+    (core instance $m (instantiate $m))
+    (func (export "a") (param bool) (param $a) (canon lift (core func $m "a")))
+    (func (export "b") (param bool) (param $b) (canon lift (core func $m "b")))
+    (func (export "c") (param bool) (param $c) (canon lift (core func $m "c")))
+    (func (export "d") (param bool) (param $d) (canon lift (core func $m "d")))
+    (func (export "e") (param bool) (param $e) (canon lift (core func $m "e")))
+  )
+  (component $c2
+    (import "" (instance $i
+      (export "a" (func (param bool) (param $a)))
+      (export "b" (func (param bool) (param $b)))
+      (export "c" (func (param bool) (param $c)))
+      (export "d" (func (param bool) (param $d)))
+      (export "e" (func (param bool) (param $e)))
+    ))
+
+    (core func $a (canon lower (func $i "a")))
+    (core func $b (canon lower (func $i "b")))
+    (core func $c (canon lower (func $i "c")))
+    (core func $d (canon lower (func $i "d")))
+    (core func $e (canon lower (func $i "e")))
+
+    (core module $m
+      (import "" "a" (func $a (param i32 i32 i32)))
+      (import "" "b" (func $b (param i32 i32 i64)))
+      (import "" "c" (func $c (param i32 i32 i64)))
+      (import "" "d" (func $d (param i32 i32 i64)))
+      (import "" "e" (func $e (param i32 i32 i64)))
+
+      (func $start
+                                                ;; upper bits should get masked
+        (call $a (i32.const 0) (i32.const 0) (i32.const 0xff_02))
+        (call $a (i32.const 1) (i32.const 1) (i32.reinterpret_f32 (f32.const 3)))
+
+                                                ;; upper bits should get masked
+        (call $b (i32.const 0) (i32.const 0) (i64.const 0xff_00_04))
+        (call $b (i32.const 1) (i32.const 1) (i64.const 5))
+
+        (call $c (i32.const 0) (i32.const 0) (i64.const 6))
+        (call $c (i32.const 1) (i32.const 1) (i64.reinterpret_f64 (f64.const 7)))
+
+        (call $d (i32.const 0) (i32.const 0) (i64.reinterpret_f64 (f64.const 8)))
+        (call $d (i32.const 1) (i32.const 1) (i64.reinterpret_f64 (f64.const 9)))
+
+        (call $e (i32.const 0) (i32.const 0) (i64.reinterpret_f64 (f64.const 10)))
+        (call $e (i32.const 1) (i32.const 1) (i64.const 11))
+      )
+      (start $start)
+    )
+    (core instance (instantiate $m
+      (with "" (instance
+        (export "a" (func $a))
+        (export "b" (func $b))
+        (export "c" (func $c))
+        (export "d" (func $d))
+        (export "e" (func $e))
+      ))
+    ))
+  )
+  (instance $c1 (instantiate $c1))
+  (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+)
+
+;; different size variants
+(component
+  (type $a (variant
+    (case "a" unit)
+    (case "b" float32)
+    (case "c" (tuple float32 u32))
+    (case "d" (tuple float32 unit u64 u8))
+  ))
+
+  (component $c1
+    (core module $m
+      (func (export "a") (param i32 i32 f32 i64 i32)
+        (if (i32.eq (local.get 0) (i32.const 0))
+          (block
+            (if (i32.ne (local.get 1) (i32.const 0)) (unreachable))
+            (if (f32.ne (local.get 2) (f32.const 0)) (unreachable))
+            (if (i64.ne (local.get 3) (i64.const 0)) (unreachable))
+            (if (i32.ne (local.get 4) (i32.const 0)) (unreachable))
+          )
+        )
+        (if (i32.eq (local.get 0) (i32.const 1))
+          (block
+            (if (i32.ne (local.get 1) (i32.const 1)) (unreachable))
+            (if (f32.ne (local.get 2) (f32.const 1)) (unreachable))
+            (if (i64.ne (local.get 3) (i64.const 0)) (unreachable))
+            (if (i32.ne (local.get 4) (i32.const 0)) (unreachable))
+          )
+        )
+        (if (i32.eq (local.get 0) (i32.const 2))
+          (block
+            (if (i32.ne (local.get 1) (i32.const 2)) (unreachable))
+            (if (f32.ne (local.get 2) (f32.const 2)) (unreachable))
+            (if (i64.ne (local.get 3) (i64.const 2)) (unreachable))
+            (if (i32.ne (local.get 4) (i32.const 0)) (unreachable))
+          )
+        )
+        (if (i32.eq (local.get 0) (i32.const 3))
+          (block
+            (if (i32.ne (local.get 1) (i32.const 3)) (unreachable))
+            (if (f32.ne (local.get 2) (f32.const 3)) (unreachable))
+            (if (i64.ne (local.get 3) (i64.const 3)) (unreachable))
+            (if (i32.ne (local.get 4) (i32.const 3)) (unreachable))
+          )
+        )
+        (if (i32.gt_u (local.get 0) (i32.const 3))
+          (unreachable))
+      )
+    )
+    (core instance $m (instantiate $m))
+    (func (export "a") (param u8) (param $a) (canon lift (core func $m "a")))
+  )
+  (component $c2
+    (import "" (instance $i
+      (export "a" (func (param u8) (param $a)))
+    ))
+
+    (core func $a (canon lower (func $i "a")))
+
+    (core module $m
+      (import "" "a" (func $a (param i32 i32 f32 i64 i32)))
+
+      (func $start
+        ;; variant a
+        (call $a
+          (i32.const 0)
+          (i32.const 0)
+          (f32.const 0)
+          (i64.const 0)
+          (i32.const 0))
+        ;; variant b
+        (call $a
+          (i32.const 1)
+          (i32.const 1)
+          (f32.const 1)
+          (i64.const 0)
+          (i32.const 0))
+        ;; variant c
+        (call $a
+          (i32.const 2)
+          (i32.const 2)
+          (f32.const 2)
+          (i64.const 2)
+          (i32.const 0))
+        ;; variant d
+        (call $a
+          (i32.const 3)
+          (i32.const 3)
+          (f32.const 3)
+          (i64.const 3)
+          (i32.const 3))
+      )
+      (start $start)
+    )
+    (core instance (instantiate $m
+      (with "" (instance
+        (export "a" (func $a))
+      ))
+    ))
+  )
+  (instance $c1 (instantiate $c1))
+  (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+)

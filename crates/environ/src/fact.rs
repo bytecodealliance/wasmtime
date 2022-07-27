@@ -23,6 +23,7 @@ use crate::component::{
 };
 use crate::{FuncIndex, GlobalIndex, MemoryIndex};
 use std::collections::HashMap;
+use std::mem;
 use wasm_encoder::*;
 
 mod core_types;
@@ -90,6 +91,7 @@ enum Context {
 }
 
 impl<'a> Module<'a> {
+    /// Creates an empty module.
     pub fn new(types: &'a ComponentTypes, debug: bool) -> Module<'a> {
         Module {
             debug,
@@ -110,19 +112,23 @@ impl<'a> Module<'a> {
     /// The `name` provided is the export name of the adapter from the final
     /// module, and `adapter` contains all metadata necessary for compilation.
     pub fn adapt(&mut self, name: &str, adapter: &Adapter) {
-        // Import core wasm function which was lifted using its appropriate
+        // Import any items required by the various canonical options
+        // (memories, reallocs, etc)
+        let mut lift = self.import_options(adapter.lift_ty, &adapter.lift_options);
+        let lower = self.import_options(adapter.lower_ty, &adapter.lower_options);
+
+        // Lowering options are not allowed to specify post-return as per the
+        // current canonical abi specification.
+        assert!(adapter.lower_options.post_return.is_none());
+
+        // Import the core wasm function which was lifted using its appropriate
         // signature since the exported function this adapter generates will
         // call the lifted function.
-        let signature = self.signature(adapter.lift_ty, Context::Lift);
+        let signature = self.signature(&lift, Context::Lift);
         let ty = self
             .core_types
             .function(&signature.params, &signature.results);
         let callee = self.import_func("callee", name, ty, adapter.func.clone());
-
-        // Next import any items required by the various canonical options
-        // (memories, reallocs, etc)
-        let mut lift = self.import_options(adapter.lift_ty, &adapter.lift_options);
-        let lower = self.import_options(adapter.lower_ty, &adapter.lower_options);
 
         // Handle post-return specifically here where we have `core_ty` and the
         // results of `core_ty` are the parameters to the post-return function.
@@ -130,10 +136,6 @@ impl<'a> Module<'a> {
             let ty = self.core_types.function(&signature.results, &[]);
             self.import_func("post_return", name, ty, func.clone())
         });
-
-        // Lowering options are not allowed to specify post-return as per the
-        // current canonical abi specification.
-        assert!(adapter.lower_options.post_return.is_none());
 
         self.adapters.push(AdapterData {
             name: name.to_string(),
@@ -151,10 +153,10 @@ impl<'a> Module<'a> {
             instance,
             string_encoding,
             memory,
+            memory64,
             realloc,
             post_return: _, // handled above
         } = options;
-        let memory64 = false; // FIXME(#4311) should be plumbed from somewhere
         let flags = self.import_global(
             "flags",
             &format!("instance{}", instance.as_u32()),
@@ -172,13 +174,17 @@ impl<'a> Module<'a> {
                     minimum: 0,
                     maximum: None,
                     shared: false,
-                    memory64,
+                    memory64: *memory64,
                 },
                 memory.clone().into(),
             )
         });
         let realloc = realloc.as_ref().map(|func| {
-            let ptr = if memory64 { ValType::I64 } else { ValType::I32 };
+            let ptr = if *memory64 {
+                ValType::I64
+            } else {
+                ValType::I32
+            };
             let ty = self.core_types.function(&[ptr, ptr, ptr, ptr], &[ptr]);
             self.import_func("realloc", "", ty, func.clone())
         });
@@ -186,7 +192,7 @@ impl<'a> Module<'a> {
             ty,
             string_encoding: *string_encoding,
             flags,
-            memory64,
+            memory64: *memory64,
             memory,
             realloc,
             post_return: None,
@@ -245,26 +251,27 @@ impl<'a> Module<'a> {
         ret
     }
 
+    /// Encodes this module into a WebAssembly binary.
     pub fn encode(&mut self) -> Vec<u8> {
         let mut funcs = FunctionSection::new();
         let mut code = CodeSection::new();
         let mut exports = ExportSection::new();
         let mut traps = traps::TrapSection::default();
 
+        let mut types = mem::take(&mut self.core_types);
         for adapter in self.adapters.iter() {
             let idx = self.core_funcs + funcs.len();
             exports.export(&adapter.name, ExportKind::Func, idx);
 
-            let signature = self.signature(adapter.lower.ty, Context::Lower);
-            let ty = self
-                .core_types
-                .function(&signature.params, &signature.results);
+            let signature = self.signature(&adapter.lower, Context::Lower);
+            let ty = types.function(&signature.params, &signature.results);
             funcs.function(ty);
 
-            let (function, func_traps) = trampoline::compile(self, adapter);
+            let (function, func_traps) = trampoline::compile(self, &mut types, adapter);
             code.raw(&function);
             traps.append(idx, func_traps);
         }
+        self.core_types = types;
         let traps = traps.finish();
 
         let mut result = wasm_encoder::Module::new();
@@ -286,5 +293,15 @@ impl<'a> Module<'a> {
     /// module.
     pub fn imports(&self) -> &[CoreDef] {
         &self.imports
+    }
+}
+
+impl Options {
+    fn ptr(&self) -> ValType {
+        if self.memory64 {
+            ValType::I64
+        } else {
+            ValType::I32
+        }
     }
 }

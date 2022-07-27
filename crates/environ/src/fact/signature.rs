@@ -1,11 +1,12 @@
 //! Size, align, and flattening information about component model types.
 
-use crate::component::{InterfaceType, TypeFuncIndex, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
-use crate::fact::{Context, Module};
+use crate::component::{InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
+use crate::fact::{Context, Module, Options};
 use wasm_encoder::ValType;
 
 /// Metadata about a core wasm signature which is created for a component model
 /// signature.
+#[derive(Debug)]
 pub struct Signature {
     /// Core wasm parameters.
     pub params: Vec<ValType>,
@@ -33,13 +34,14 @@ impl Module<'_> {
     /// This is used to generate the core wasm signatures for functions that are
     /// imported (matching whatever was `canon lift`'d) and functions that are
     /// exported (matching the generated function from `canon lower`).
-    pub(super) fn signature(&self, ty: TypeFuncIndex, context: Context) -> Signature {
-        let ty = &self.types[ty];
+    pub(super) fn signature(&self, options: &Options, context: Context) -> Signature {
+        let ty = &self.types[options.ty];
+        let ptr_ty = options.ptr();
 
         let mut params = self.flatten_types(ty.params.iter().map(|(_, ty)| *ty));
         let mut params_indirect = false;
         if params.len() > MAX_FLAT_PARAMS {
-            params = vec![ValType::I32];
+            params = vec![ptr_ty];
             params_indirect = true;
         }
 
@@ -51,13 +53,13 @@ impl Module<'_> {
                 // For a lifted function too-many-results gets translated to a
                 // returned pointer where results are read from. The callee
                 // allocates space here.
-                Context::Lift => results = vec![ValType::I32],
+                Context::Lift => results = vec![ptr_ty],
                 // For a lowered function too-many-results becomes a return
                 // pointer which is passed as the last argument. The caller
                 // allocates space here.
                 Context::Lower => {
                     results.truncate(0);
-                    params.push(ValType::I32);
+                    params.push(ptr_ty);
                 }
             }
         }
