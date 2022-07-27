@@ -1475,12 +1475,11 @@
 
 ;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; For GPR-held values we only need to emit `CMP + SETCC`. We rely here on
-;; Cranelift's verification that `a` and `b` are of the same type.
-;; Unfortunately for clarity, the registers are flipped here (TODO).
 (rule (lower (icmp cc a @ (value_type (fits_in_64 ty)) b))
-      (let ((size OperandSize (raw_operand_size_of_type ty)))
-           (with_flags (x64_cmp size b a) (x64_setcc cc))))
+      (lower_bool (emit_cmp cc a b)))
+
+(rule (lower (icmp cc a @ (value_type $I128) b))
+      (lower_bool (emit_cmp cc a b)))
 
 ;; For XMM-held values, we lower to `PCMP*` instructions, sometimes more than
 ;; one. To note: what is different here about the output values is that each
@@ -1551,61 +1550,6 @@
 ;; (rule (lower (icmp (IntCC.UnsignedGreaterThanOrEqual) a @ (value_type $I64X2) b))
 ;; TODO: not used by WebAssembly translation
 ;; (rule (lower (icmp (IntCC.UnsignedLessThanOrEqual) a @ (value_type $I64X2) b))
-
-;; For I128 values (held in two GPRs), the instruction sequences depend on what
-;; kind of condition is tested.
-(rule (lower (icmp (IntCC.Equal) a @ (value_type $I128) b))
-      (let ((a_lo Gpr (value_regs_get_gpr a 0))
-            (a_hi Gpr (value_regs_get_gpr a 1))
-            (b_lo Gpr (value_regs_get_gpr b 0))
-            (b_hi Gpr (value_regs_get_gpr b 1))
-            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo) (x64_setcc (CC.Z))))
-            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_hi a_hi) (x64_setcc (CC.Z))))
-            ;; At this point, `cmp_lo` and `cmp_hi` contain either 0 or 1 in the
-            ;; lowest 8 bits--`SETcc` guarantees this. The upper bits may be
-            ;; unchanged so we must compare against 1 below; this instruction
-            ;; combines `cmp_lo` and `cmp_hi` for that final comparison.
-            (cmp Reg (x64_and $I64 cmp_lo cmp_hi)))
-           ;; We must compare one more time against the immediate value 1 to
-           ;; check if both `cmp_lo` and `cmp_hi` are true. If `cmp AND 1 == 0`
-           ;; then the `ZF` will be set (see `TEST` definition); if either of
-           ;; the halves `AND`s to 0, they were not equal, therefore we `SETcc`
-           ;; with `NZ`.
-           (with_flags (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp) (x64_setcc (CC.NZ)))))
-
-(rule (lower (icmp (IntCC.NotEqual) a @ (value_type $I128) b))
-      (let ((a_lo Gpr (value_regs_get_gpr a 0))
-            (a_hi Gpr (value_regs_get_gpr a 1))
-            (b_lo Gpr (value_regs_get_gpr b 0))
-            (b_hi Gpr (value_regs_get_gpr b 1))
-            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo) (x64_setcc (CC.NZ))))
-            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_hi a_hi) (x64_setcc (CC.NZ))))
-            ;; See comments for `IntCC.Equal`.
-            (cmp Reg (x64_or $I64 cmp_lo cmp_hi)))
-           (with_flags (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp) (x64_setcc (CC.NZ)))))
-
-;; Result = (a_hi <> b_hi) ||
-;;          (a_hi == b_hi && a_lo <> b_lo)
-(rule (lower (icmp cc a @ (value_type $I128) b))
-      (if (intcc_neq cc (IntCC.Equal)))
-      (if (intcc_neq cc (IntCC.NotEqual)))
-      (let ((a_lo Gpr (value_regs_get_gpr a 0))
-            (a_hi Gpr (value_regs_get_gpr a 1))
-            (b_lo Gpr (value_regs_get_gpr b 0))
-            (b_hi Gpr (value_regs_get_gpr b 1))
-            (cmp_hi ValueRegs (with_flags (x64_cmp (OperandSize.Size64) b_hi a_hi)
-                                       (consumes_flags_concat
-                                                 (x64_setcc (intcc_without_eq cc))
-                                                 (x64_setcc (CC.Z)))))
-            (cc_hi Reg (value_regs_get cmp_hi 0))
-            (eq_hi Reg (value_regs_get cmp_hi 1))
-
-            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo)
-                                        (x64_setcc (intcc_unsigned cc))))
-
-            (res_lo Reg (x64_and $I64 eq_hi cmp_lo))
-            (res Reg (x64_or $I64 cc_hi res_lo)))
-           (x64_and $I64 res (RegMemImm.Imm 1))))
 
 
 ;;;; Rules for `fcmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
