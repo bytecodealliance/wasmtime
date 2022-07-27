@@ -1,4 +1,4 @@
-// The aarch64 calling conventions save the return PC one word above the FP and
+// The aarch64 calling conventions save the return PC one i64 above the FP and
 // the previous FP is pointed to by the current FP:
 //
 // > Each frame shall link to the frame of its caller by means of a frame record
@@ -17,8 +17,8 @@ pub unsafe fn get_next_older_fp_from_fp(fp: usize) -> usize {
 }
 
 pub fn reached_entry_sp(fp: usize, first_wasm_sp: usize) -> bool {
-    // Calls in aarch64 push two words (old FP and return PC) so our entry SP is
-    // two words above the first Wasm FP.
+    // Calls in aarch64 push two i64s (old FP and return PC) so our entry SP is
+    // two i64s above the first Wasm FP.
     fp == first_wasm_sp - 16
 }
 
