@@ -335,7 +335,9 @@ where
     }
 
     fn shift_mask(&mut self, ty: Type) -> ImmLogic {
-        let mask = (ty.bits() - 1) as u64;
+        debug_assert!(ty.lane_bits().is_power_of_two());
+
+        let mask = (ty.lane_bits() - 1) as u64;
         ImmLogic::maybe_from_u64(mask, I32).unwrap()
     }
 

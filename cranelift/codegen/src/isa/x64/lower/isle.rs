@@ -230,6 +230,11 @@ where
     }
 
     #[inline]
+    fn shift_mask(&mut self, ty: Type) -> u32 {
+        ty.lane_bits() - 1
+    }
+
+    #[inline]
     fn simm32_from_value(&mut self, val: Value) -> Option<GprMemImm> {
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant: u64 = self.lower_ctx.get_constant(inst)?;
@@ -413,6 +418,11 @@ where
     #[inline]
     fn temp_writable_xmm(&mut self) -> WritableXmm {
         Writable::from_reg(Xmm::new(self.temp_writable_reg(I8X16).to_reg()).unwrap())
+    }
+
+    #[inline]
+    fn reg_to_reg_mem_imm(&mut self, reg: Reg) -> RegMemImm {
+        RegMemImm::Reg { reg }
     }
 
     #[inline]
