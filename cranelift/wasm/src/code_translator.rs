@@ -3022,26 +3022,37 @@ fn bitcast_arguments<'a>(
     builder: &FunctionBuilder,
     arguments: &'a mut [Value],
     params: &[ir::AbiParam],
-    is_wasm: impl Fn(usize) -> bool,
+    param_predicate: impl Fn(usize) -> bool,
 ) -> Vec<(Type, &'a mut Value)> {
-    // zip_eq is from the itertools::Itertools trait
-    params
+    let filtered_param_types = params
         .iter()
         .enumerate()
-        .filter(|(i, _)| is_wasm(*i))
-        .map(|(_, param)| param.value_type)
-        .zip_eq(arguments.iter_mut())
-        .filter(|(t, _)| t.is_vector())
-        .filter(|(t, arg)| {
+        .filter(|(i, _)| param_predicate(*i))
+        .map(|(_, param)| param.value_type);
+
+    // zip_eq, from the itertools::Itertools trait, is like Iterator::zip but panics if one
+    // iterator ends before the other. The `param_predicate` is required to select exactly as many
+    // elements of `params` as there are elements in `arguments`.
+    let pairs = filtered_param_types.zip_eq(arguments.iter_mut());
+
+    // The arguments which need to be bitcasted are those which have some vector type but the type
+    // expected by the parameter is not the same vector type as that of the provided argument.
+    pairs
+        .filter(|(param_type, _)| param_type.is_vector())
+        .filter(|(param_type, arg)| {
             let arg_type = builder.func.dfg.value_type(**arg);
             assert!(
                 arg_type.is_vector(),
                 "unexpected type mismatch: expected {}, argument {} was actually of type {}",
-                t,
+                param_type,
                 *arg,
                 arg_type
             );
-            arg_type != *t
+
+            // This is the same check that would be done by `optionally_bitcast_vector`, except we
+            // can't take a mutable borrow of the FunctionBuilder here, so we defer inserting the
+            // bitcast instruction to the caller.
+            arg_type != *param_type
         })
         .collect()
 }
