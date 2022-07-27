@@ -16,6 +16,8 @@ use cranelift_entity::{EntityList, EntityRef};
 pub type IdArray = EntityList<Id>;
 pub type Unit = ();
 
+pub type ConstructorVec<T> = smallvec::SmallVec<[T; 8]>;
+
 mod generated_code;
 
 struct IsleContext<'a, 'b> {
@@ -45,12 +47,14 @@ impl<'a, 'b> IsleContext<'a, 'b> {
 
     fn do_rewrites_on_eclass(&mut self, id: Id) {
         log::trace!("running rules on eclass {}", id.index());
-        let optimized = generated_code::constructor_simplify(self, id);
-        if optimized.is_some() && optimized.unwrap() != id {
-            log::trace!(" -> merging in new eclass {}", optimized.unwrap().index());
-            self.egraph
-                .egraph
-                .union(id, optimized.unwrap(), &mut self.egraph.node_ctx);
+        let optimized_ids = generated_code::constructor_simplify(self, id);
+        if let Some(ids) = optimized_ids {
+            for new_id in ids {
+                log::trace!(" -> merging in new eclass {}", new_id);
+                self.egraph
+                    .egraph
+                    .union(id, new_id, &mut self.egraph.node_ctx);
+            }
         }
     }
 }
@@ -70,7 +74,7 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
         None
     }
 
-    fn pure_enode_etor(
+    fn pure_enodes_etor(
         &mut self,
         eclass: Id,
         multi_index: &mut usize,

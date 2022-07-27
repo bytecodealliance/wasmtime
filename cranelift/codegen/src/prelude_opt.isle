@@ -15,11 +15,13 @@
            (and (eclass_type ty)
                 id))
 
-;; 1. Extract any pure node(s) for the given eclass ID.
-;; 2. Construct a pure node, returning a new (or deduplicated
-;;    already-existing) eclass ID.
+;; Extract any pure node(s) for the given eclass ID.
+(decl multi pure_enodes (Type InstructionImms IdArray) Id)
+(extern extractor pure_enodes pure_enodes_etor)
+
+;; Construct a pure node, returning a new (or deduplicated
+;; already-existing) eclass ID.
 (decl pure_enode (Type InstructionImms IdArray) Id)
-(extern extractor multi pure_enode pure_enode_etor)
 (extern constructor pure_enode pure_enode_ctor)
 
 ;; Type of an Id slice (for args).
@@ -45,5 +47,4 @@
 ;;;;; optimization toplevel ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The main matcher rule invoked by the toplevel driver.
-(decl simplify (Id) Id)
-
+(decl multi simplify (Id) Id)

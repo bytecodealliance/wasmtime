@@ -1508,10 +1508,9 @@ fn gen_common_isle(
                 s.push_str("))");
                 fmt.line(&s);
             } else {
-                // Mid-end case: we need to separately fetch the
-                // InstructionImms and the Ids.
+                // Mid-end case.
                 let mut s = format!(
-                    "(pure_enode ty (InstructionImms.{} (Opcode.{})",
+                    "(pure_enodes ty (InstructionImms.{} (Opcode.{})",
                     inst.format.name, inst.camel_name
                 );
 
