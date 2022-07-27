@@ -220,7 +220,7 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
             let cx = &*(cx as *const libc::ucontext_t);
             (
                 (*cx.uc_mcontext).__ss.__pc as *const u8,
-                (*cx.uc_mcontext).__ss.__opaque_fp as usize,
+                (*cx.uc_mcontext).__ss.__fp as usize,
             )
         } else if #[cfg(all(target_os = "freebsd", target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
