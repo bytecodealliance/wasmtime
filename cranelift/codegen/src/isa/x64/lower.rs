@@ -17,7 +17,7 @@ use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::{Flags, TlsModel};
-use alloc::vec::Vec;
+use alloc::boxed::Box;
 use log::trace;
 use smallvec::SmallVec;
 use std::convert::TryFrom;
@@ -3236,10 +3236,10 @@ impl LowerBackend for X64Backend {
                     };
                     ctx.emit(Inst::cmp_rmi_r(cmp_size, RegMemImm::imm(jt_size), idx));
 
-                    let targets_for_term: Vec<MachLabel> = targets.to_vec();
                     let default_target = targets[0];
 
-                    let jt_targets: Vec<MachLabel> = targets.iter().skip(1).cloned().collect();
+                    let jt_targets: Box<SmallVec<[MachLabel; 4]>> =
+                        Box::new(targets.iter().skip(1).cloned().collect());
 
                     ctx.emit(Inst::JmpTableSeq {
                         idx,
@@ -3247,7 +3247,6 @@ impl LowerBackend for X64Backend {
                         tmp2,
                         default_target,
                         targets: jt_targets,
-                        targets_for_term,
                     });
                 }
 
