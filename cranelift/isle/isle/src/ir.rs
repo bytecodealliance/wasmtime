@@ -104,8 +104,8 @@ pub enum PatternInst {
         term: TermId,
         /// Whether this extraction is infallible or not.
         infallible: bool,
-        /// Whether this is a multi-extractor or not.
-        multi: bool,
+        /// Whether this is a call to a pull-based multi-extractor.
+        pull_multi: bool,
     },
 
     // NB: This has to go last, since it is infallible, so that when we sort
@@ -163,6 +163,8 @@ pub enum ExprInst {
         term: TermId,
         /// Whether this constructor is infallible or not.
         infallible: bool,
+        /// Whether this is a call to a push-based multi-extractor.
+        push_multi: bool,
     },
 
     /// Set the Nth return value. Produces no values.
@@ -306,7 +308,7 @@ impl PatternSequence {
         output_tys: Vec<TypeId>,
         term: TermId,
         infallible: bool,
-        multi: bool,
+        pull_multi: bool,
     ) -> Vec<Value> {
         let inst = InstId(self.insts.len());
         let mut outs = vec![];
@@ -321,7 +323,7 @@ impl PatternSequence {
             output_tys,
             term,
             infallible,
-            multi,
+            pull_multi,
         });
         outs
     }
@@ -432,12 +434,11 @@ impl PatternSequence {
                                 panic!("Should have been expanded away")
                             }
                             TermKind::Decl {
-                                extractor_kind:
-                                    Some(ExtractorKind::ExternalExtractor {
-                                        infallible, multi, ..
-                                    }),
+                                extractor_kind: Some(ExtractorKind::ExternalExtractor { .. }),
                                 ..
                             } => {
+                                let ext_sig = termdata.extractor_sig(typeenv).unwrap();
+
                                 // Evaluate all `input` args.
                                 let mut inputs = vec![];
                                 let mut input_tys = vec![];
@@ -456,8 +457,8 @@ impl PatternSequence {
                                     input_tys,
                                     output_tys,
                                     term,
-                                    *infallible,
-                                    *multi,
+                                    ext_sig.infallible,
+                                    ext_sig.pull_multi,
                                 );
 
                                 for (pat, &val) in output_pats.iter().zip(arg_values.iter()) {
@@ -527,6 +528,7 @@ impl ExprSequence {
         ty: TypeId,
         term: TermId,
         infallible: bool,
+        push_multi: bool,
     ) -> Value {
         let inst = InstId(self.insts.len());
         let inputs = inputs.iter().cloned().collect();
@@ -535,6 +537,7 @@ impl ExprSequence {
             ty,
             term,
             infallible,
+            push_multi,
         });
         Value::Expr { inst, output: 0 }
     }
@@ -587,6 +590,7 @@ impl ExprSequence {
                     }
                     TermKind::Decl {
                         constructor_kind: Some(ConstructorKind::InternalConstructor),
+                        multi,
                         ..
                     } => {
                         self.add_construct(
@@ -594,11 +598,13 @@ impl ExprSequence {
                             ty,
                             term,
                             /* infallible = */ false,
+                            *multi,
                         )
                     }
                     TermKind::Decl {
                         constructor_kind: Some(ConstructorKind::ExternalConstructor { .. }),
                         pure,
+                        multi,
                         ..
                     } => {
                         self.add_construct(
@@ -606,6 +612,7 @@ impl ExprSequence {
                             ty,
                             term,
                             /* infallible = */ !pure,
+                            *multi,
                         )
                     }
                     TermKind::Decl {

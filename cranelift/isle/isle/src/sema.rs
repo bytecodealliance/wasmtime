@@ -236,6 +236,8 @@ pub enum TermKind {
     Decl {
         /// Whether the term is marked as `pure`.
         pure: bool,
+        /// Whether the term is marked as `multi`.
+        multi: bool,
         /// The kind of this term's constructor, if any.
         constructor_kind: Option<ConstructorKind>,
         /// The kind of this term's extractor, if any.
@@ -272,8 +274,6 @@ pub enum ExtractorKind {
         name: Sym,
         /// Is the external extractor infallible?
         infallible: bool,
-        /// Whether the term is marked as `multi`.
-        multi: bool,
         /// The position where this external extractor was declared.
         pos: Pos,
     },
@@ -296,7 +296,10 @@ pub struct ExternalSig {
     /// allow for multiple-return iteration. Mutually exclusive with
     /// respect to `infallible` (otherwise, the iteration could never
     /// end).
-    pub multi: bool,
+    pub pull_multi: bool,
+    /// Whether this signature returns a `ConstructorVec<[(T1, T2,
+    /// ...); 8]>` rather than `(T1, T2, ...)`.
+    pub push_multi: bool,
 }
 
 impl Term {
@@ -360,12 +363,10 @@ impl Term {
     pub fn extractor_sig(&self, tyenv: &TypeEnv) -> Option<ExternalSig> {
         match &self.kind {
             TermKind::Decl {
+                multi,
                 extractor_kind:
                     Some(ExtractorKind::ExternalExtractor {
-                        name,
-                        infallible,
-                        multi,
-                        ..
+                        name, infallible, ..
                     }),
                 ..
             } => Some(ExternalSig {
@@ -373,8 +374,9 @@ impl Term {
                 full_name: format!("C::{}", tyenv.syms[name.index()]),
                 param_tys: vec![self.ret_ty],
                 ret_tys: self.arg_tys.clone(),
-                infallible: *infallible,
-                multi: *multi,
+                infallible: *infallible && !*multi,
+                pull_multi: *multi,
+                push_multi: false,
             }),
             _ => None,
         }
@@ -385,6 +387,7 @@ impl Term {
         match &self.kind {
             TermKind::Decl {
                 constructor_kind: Some(ConstructorKind::ExternalConstructor { name }),
+                multi,
                 pure,
                 ..
             } => Some(ExternalSig {
@@ -393,10 +396,12 @@ impl Term {
                 param_tys: self.arg_tys.clone(),
                 ret_tys: vec![self.ret_ty],
                 infallible: !pure,
-                multi: false,
+                pull_multi: false,
+                push_multi: *multi,
             }),
             TermKind::Decl {
                 constructor_kind: Some(ConstructorKind::InternalConstructor { .. }),
+                multi,
                 ..
             } => {
                 let name = format!("constructor_{}", tyenv.syms[self.name.index()]);
@@ -410,7 +415,8 @@ impl Term {
                     // matching at the toplevel (an entry point can
                     // fail to rewrite).
                     infallible: false,
-                    multi: false,
+                    pull_multi: false,
+                    push_multi: *multi,
                 })
             }
             _ => None,
@@ -867,6 +873,7 @@ impl TermEnv {
                             constructor_kind: None,
                             extractor_kind: None,
                             pure: decl.pure,
+                            multi: decl.multi,
                         },
                     });
                 }
@@ -1027,8 +1034,18 @@ impl TermEnv {
                         );
                         continue;
                     }
-                    TermKind::Decl { extractor_kind, .. } => match extractor_kind {
+                    TermKind::Decl {
+                        multi,
+                        extractor_kind,
+                        ..
+                    } => match extractor_kind {
                         None => {
+                            if *multi {
+                                tyenv.report_error(
+                                    ext.pos,
+                                    "A term declared with `multi` cannot have an internal extractor.".to_string());
+                                continue;
+                            }
                             *extractor_kind = Some(ExtractorKind::InternalExtractor { template });
                         }
                         Some(ext_kind) => {
@@ -1233,7 +1250,6 @@ impl TermEnv {
                     ref func,
                     pos,
                     infallible,
-                    multi,
                 }) => {
                     let term_sym = tyenv.intern_mut(term);
                     let func_sym = tyenv.intern_mut(func);
@@ -1257,7 +1273,6 @@ impl TermEnv {
                                     name: func_sym,
                                     infallible,
                                     pos,
-                                    multi,
                                 });
                             }
                             Some(ExtractorKind::ExternalExtractor { pos: pos2, .. }) => {

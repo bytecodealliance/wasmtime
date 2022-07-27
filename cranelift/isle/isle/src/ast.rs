@@ -72,6 +72,13 @@ pub struct Decl {
     pub ret_ty: Ident,
     /// Whether this term's constructor is pure.
     pub pure: bool,
+    /// Whether this term can exist with some multiplicity. For an
+    /// extractor, this implies an ABI with an extra `&mut usize`
+    /// parameter (a lazy or "pull") approach to get all the
+    /// terms. For a constructor, this implies an ABI where the return
+    /// value is a `SmallVec` (an eager or "push") approach to return
+    /// all the terms.
+    pub multi: bool,
     pub pos: Pos,
 }
 
@@ -374,8 +381,6 @@ pub enum Extern {
         /// never fail, it is declared as such and allows for slightly
         /// better code to be generated.
         infallible: bool,
-        /// Whether this term's extractor can return multiple matches.
-        multi: bool,
     },
     /// An external constructor: `(constructor Term rustfunc)` form.
     Constructor {
