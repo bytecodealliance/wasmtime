@@ -207,7 +207,11 @@ where
     *(**limits).last_wasm_exit_pc.get() = old_last_wasm_exit_pc;
     *(**limits).last_wasm_entry_sp.get() = old_last_wasm_entry_sp;
 
-    return result;
+    return match result {
+        Ok(x) => Ok(x),
+        Err((UnwindReason::Trap(reason), backtrace)) => Err(Box::new(Trap { reason, backtrace })),
+        Err((UnwindReason::Panic(panic), _)) => std::panic::resume_unwind(panic),
+    };
 
     extern "C" fn call_closure<F>(payload: *mut u8, caller: *mut VMContext)
     where
@@ -261,23 +265,21 @@ impl CallThreadState {
         }
     }
 
-    fn with(self, closure: impl FnOnce(&CallThreadState) -> i32) -> Result<(), Box<Trap>> {
+    fn with(
+        self,
+        closure: impl FnOnce(&CallThreadState) -> i32,
+    ) -> Result<(), (UnwindReason, Option<Backtrace>)> {
         let ret = tls::set(&self, || closure(&self));
         if ret != 0 {
             Ok(())
         } else {
-            Err(unsafe { self.read_trap() })
+            Err(unsafe { self.read_unwind() })
         }
     }
 
     #[cold]
-    unsafe fn read_trap(&self) -> Box<Trap> {
-        let (unwind_reason, backtrace) = (*self.unwind.get()).as_ptr().read();
-        let reason = match unwind_reason {
-            UnwindReason::Trap(trap) => trap,
-            UnwindReason::Panic(panic) => std::panic::resume_unwind(panic),
-        };
-        Box::new(Trap { reason, backtrace })
+    unsafe fn read_unwind(&self) -> (UnwindReason, Option<Backtrace>) {
+        (*self.unwind.get()).as_ptr().read()
     }
 
     fn unwind_with(&self, reason: UnwindReason) -> ! {

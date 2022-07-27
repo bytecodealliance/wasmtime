@@ -307,6 +307,61 @@ fn rust_panic_import() -> Result<()> {
     Ok(())
 }
 
+// Test that we properly save/restore our trampolines' saved Wasm registers
+// (used when capturing backtraces) before we resume panics.
+#[test]
+fn rust_catch_panic_import() -> Result<()> {
+    let mut store = Store::<()>::default();
+
+    let binary = wat::parse_str(
+        r#"
+            (module $a
+                (import "" "panic" (func $panic))
+                (import "" "catch panic" (func $catch_panic))
+                (func (export "panic") call $panic)
+                (func (export "run")
+                  call $catch_panic
+                  call $catch_panic
+                  unreachable
+                )
+            )
+        "#,
+    )?;
+
+    let module = Module::new(store.engine(), &binary)?;
+    let num_panics = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let sig = FuncType::new(None, None);
+    let panic = Func::new(&mut store, sig, {
+        let num_panics = num_panics.clone();
+        move |_, _, _| {
+            num_panics.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            panic!("this is a panic");
+        }
+    });
+    let catch_panic = Func::wrap(&mut store, |mut caller: Caller<'_, _>| {
+        panic::catch_unwind(AssertUnwindSafe(|| {
+            drop(
+                caller
+                    .get_export("panic")
+                    .unwrap()
+                    .into_func()
+                    .unwrap()
+                    .call(&mut caller, &[], &mut []),
+            );
+        }))
+        .unwrap_err();
+    });
+
+    let instance = Instance::new(&mut store, &module, &[panic.into(), catch_panic.into()])?;
+    let run = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    let trap = run.call(&mut store, ()).unwrap_err();
+    let trace = trap.trace().unwrap();
+    assert_eq!(trace.len(), 1);
+    assert_eq!(trace[0].func_index(), 3);
+    assert_eq!(num_panics.load(std::sync::atomic::Ordering::SeqCst), 2);
+    Ok(())
+}
+
 #[test]
 fn rust_panic_start_function() -> Result<()> {
     let mut store = Store::<()>::default();
