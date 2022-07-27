@@ -113,6 +113,17 @@ impl Value {
             _ => None,
         }
     }
+
+    /// Builds a string from the current value
+    pub fn value_string(&self) -> String {
+        match self.kind() {
+            SettingKind::Enum => self.as_enum().map(|b| b.to_string()),
+            SettingKind::Num => self.as_num().map(|b| b.to_string()),
+            SettingKind::Bool => self.as_bool().map(|b| b.to_string()),
+            SettingKind::Preset => unreachable!(),
+        }
+        .unwrap()
+    }
 }
 
 impl fmt::Display for Value {
@@ -516,6 +527,8 @@ libcall_call_conv = "isa_default"
 baldrdash_prologue_words = 0
 probestack_size_log2 = 12
 regalloc_checker = false
+regalloc_verbose_logs = false
+enable_alias_analysis = true
 enable_verifier = true
 is_pic = false
 use_colocated_libcalls = false
@@ -529,6 +542,7 @@ enable_atomics = true
 enable_safepoints = false
 enable_llvm_abi_extensions = false
 unwind_info = true
+preserve_frame_pointers = false
 machine_code_cfg_info = false
 emit_all_ones_funcaddrs = false
 enable_probestack = true

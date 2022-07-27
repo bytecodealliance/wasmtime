@@ -26,20 +26,39 @@ pub fn print_relocs(relocs: &[MachReloc]) -> String {
 pub fn print_traps(traps: &[MachTrap]) -> String {
     let mut text = String::new();
     for &MachTrap { offset, code } in traps {
-        writeln!(text, "trap: {} at {}", code, offset).unwrap();
+        writeln!(text, "trap: {code} at {offset:#x}").unwrap();
     }
     text
 }
 
 pub fn print_stack_maps(traps: &[MachStackMap]) -> String {
     let mut text = String::new();
-    for &MachStackMap {
+    for MachStackMap {
         offset,
-        offset_end: _,
-        stack_map: _,
+        offset_end,
+        stack_map,
     } in traps
     {
-        writeln!(text, "add_stack_map at {}", offset).unwrap();
+        writeln!(
+            text,
+            "add_stack_map at {offset:#x}-{offset_end:#x} mapped_words={}",
+            stack_map.mapped_words()
+        )
+        .unwrap();
+
+        write!(text, "    entries: ").unwrap();
+        let mut first = true;
+        for i in 0..stack_map.mapped_words() {
+            if !stack_map.get_bit(i as usize) {
+                continue;
+            }
+            if !first {
+                write!(text, ", ").unwrap();
+            } else {
+                first = false;
+            }
+            write!(text, "{i}").unwrap();
+        }
     }
     text
 }

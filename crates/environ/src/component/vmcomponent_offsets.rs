@@ -2,9 +2,10 @@
 //
 // struct VMComponentContext {
 //      magic: u32,
-//      flags: u8,
 //      store: *mut dyn Store,
+//      flags: [VMGlobalDefinition; component.num_runtime_component_instances],
 //      lowering_anyfuncs: [VMCallerCheckedAnyfunc; component.num_lowerings],
+//      always_trap_anyfuncs: [VMCallerCheckedAnyfunc; component.num_always_trap],
 //      lowerings: [VMLowering; component.num_lowerings],
 //      memories: [*mut VMMemoryDefinition; component.num_memories],
 //      reallocs: [*mut VMCallerCheckedAnyfunc; component.num_reallocs],
@@ -12,27 +13,28 @@
 // }
 
 use crate::component::{
-    Component, LoweredIndex, RuntimeMemoryIndex, RuntimePostReturnIndex, RuntimeReallocIndex,
+    Component, LoweredIndex, RuntimeAlwaysTrapIndex, RuntimeComponentInstanceIndex,
+    RuntimeMemoryIndex, RuntimePostReturnIndex, RuntimeReallocIndex,
 };
 use crate::PtrSize;
 
 /// Equivalent of `VMCONTEXT_MAGIC` except for components.
 ///
-/// This is stored at the start of all `VMComponentContext` structures adn
+/// This is stored at the start of all `VMComponentContext` structures and
 /// double-checked on `VMComponentContext::from_opaque`.
 pub const VMCOMPONENT_MAGIC: u32 = u32::from_le_bytes(*b"comp");
 
 /// Flag for the `VMComponentContext::flags` field which corresponds to the
 /// canonical ABI flag `may_leave`
-pub const VMCOMPONENT_FLAG_MAY_LEAVE: u8 = 1 << 0;
+pub const FLAG_MAY_LEAVE: i32 = 1 << 0;
 
 /// Flag for the `VMComponentContext::flags` field which corresponds to the
 /// canonical ABI flag `may_enter`
-pub const VMCOMPONENT_FLAG_MAY_ENTER: u8 = 1 << 1;
+pub const FLAG_MAY_ENTER: i32 = 1 << 1;
 
 /// Flag for the `VMComponentContext::flags` field which is set whenever a
 /// function is called to indicate that `post_return` must be called next.
-pub const VMCOMPONENT_FLAG_NEEDS_POST_RETURN: u8 = 1 << 2;
+pub const FLAG_NEEDS_POST_RETURN: i32 = 1 << 2;
 
 /// Runtime offsets within a `VMComponentContext` for a specific component.
 #[derive(Debug, Clone, Copy)]
@@ -48,12 +50,19 @@ pub struct VMComponentOffsets<P> {
     pub num_runtime_reallocs: u32,
     /// The number of post-returns which are recorded in this component for options.
     pub num_runtime_post_returns: u32,
+    /// Number of component instances internally in the component (always at
+    /// least 1).
+    pub num_runtime_component_instances: u32,
+    /// Number of "always trap" functions which have their
+    /// `VMCallerCheckedAnyfunc` stored inline in the `VMComponentContext`.
+    pub num_always_trap: u32,
 
     // precalculated offsets of various member fields
     magic: u32,
-    flags: u32,
     store: u32,
+    flags: u32,
     lowering_anyfuncs: u32,
+    always_trap_anyfuncs: u32,
     lowerings: u32,
     memories: u32,
     reallocs: u32,
@@ -77,10 +86,16 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             num_runtime_memories: component.num_runtime_memories.try_into().unwrap(),
             num_runtime_reallocs: component.num_runtime_reallocs.try_into().unwrap(),
             num_runtime_post_returns: component.num_runtime_post_returns.try_into().unwrap(),
+            num_runtime_component_instances: component
+                .num_runtime_component_instances
+                .try_into()
+                .unwrap(),
+            num_always_trap: component.num_always_trap,
             magic: 0,
-            flags: 0,
             store: 0,
+            flags: 0,
             lowering_anyfuncs: 0,
+            always_trap_anyfuncs: 0,
             lowerings: 0,
             memories: 0,
             reallocs: 0,
@@ -114,10 +129,13 @@ impl<P: PtrSize> VMComponentOffsets<P> {
 
         fields! {
             size(magic) = 4u32,
-            size(flags) = 1u32,
             align(u32::from(ret.ptr.size())),
             size(store) = cmul(2, ret.ptr.size()),
+            align(16),
+            size(flags) = cmul(ret.num_runtime_component_instances, ret.ptr.size_of_vmglobal_definition()),
+            align(u32::from(ret.ptr.size())),
             size(lowering_anyfuncs) = cmul(ret.num_lowerings, ret.ptr.size_of_vmcaller_checked_anyfunc()),
+            size(always_trap_anyfuncs) = cmul(ret.num_always_trap, ret.ptr.size_of_vmcaller_checked_anyfunc()),
             size(lowerings) = cmul(ret.num_lowerings, ret.ptr.size() * 2),
             size(memories) = cmul(ret.num_runtime_memories, ret.ptr.size()),
             size(reallocs) = cmul(ret.num_runtime_reallocs, ret.ptr.size()),
@@ -148,8 +166,9 @@ impl<P: PtrSize> VMComponentOffsets<P> {
 
     /// The offset of the `flags` field.
     #[inline]
-    pub fn flags(&self) -> u32 {
-        self.flags
+    pub fn instance_flags(&self, index: RuntimeComponentInstanceIndex) -> u32 {
+        assert!(index.as_u32() < self.num_runtime_component_instances);
+        self.flags + index.as_u32() * u32::from(self.ptr.size_of_vmglobal_definition())
     }
 
     /// The offset of the `store` field.
@@ -169,6 +188,20 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     pub fn lowering_anyfunc(&self, index: LoweredIndex) -> u32 {
         assert!(index.as_u32() < self.num_lowerings);
         self.lowering_anyfuncs()
+            + index.as_u32() * u32::from(self.ptr.size_of_vmcaller_checked_anyfunc())
+    }
+
+    /// The offset of the `always_trap_anyfuncs` field.
+    #[inline]
+    pub fn always_trap_anyfuncs(&self) -> u32 {
+        self.always_trap_anyfuncs
+    }
+
+    /// The offset of `VMCallerCheckedAnyfunc` for the `index` specified.
+    #[inline]
+    pub fn always_trap_anyfunc(&self, index: RuntimeAlwaysTrapIndex) -> u32 {
+        assert!(index.as_u32() < self.num_always_trap);
+        self.always_trap_anyfuncs()
             + index.as_u32() * u32::from(self.ptr.size_of_vmcaller_checked_anyfunc())
     }
 

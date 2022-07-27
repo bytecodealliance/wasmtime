@@ -1,0 +1,132 @@
+test interpret
+test run
+target x86_64
+target aarch64
+target s390x
+
+function %fmul_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = fmul v0, v1
+    return v2
+}
+; run: %fmul_f32(0x0.5, 0x1.0) == 0x1.4p-2
+; run: %fmul_f32(0x1.5, 0x2.9) == 0x1.ae8p1
+; run: %fmul_f32(0x1.1p10, 0x1.4p1) == 0x1.54p11
+; run: %fmul_f32(0x1.4cccccp0, 0x1.8p0) == 0x1.f33332p0
+; run: %fmul_f32(0x1.b33334p0, 0x1.99999ap-2) == 0x1.5c28f6p-1
+; run: %fmul_f32(0x1.333334p-1, 0x1.666666p1) == 0x1.ae147cp0
+; run: %fmul_f32(-0x0.5, -0x1.0) == 0x1.4p-2
+; run: %fmul_f32(-0x1.5, -0x2.9) == 0x1.ae8p1
+; run: %fmul_f32(-0x1.1p10, -0x1.333334p-1) == 0x1.466668p9
+; run: %fmul_f32(-0x1.99999ap-2, -0x1.4cccccp0) == 0x1.0a3d70p-1
+; run: %fmul_f32(-0x1.8p0, -0x1.b33334p0) == 0x1.466668p1
+; run: %fmul_f32(-0x1.4p1, -0x1.666666p1) == 0x1.c00000p2
+; run: %fmul_f32(0x0.5, -0x1.0) == -0x1.4p-2
+; run: %fmul_f32(0x1.b33334p0, -0x1.b33334p0) == -0x1.71eb86p1
+
+; Specials
+; run: %fmul_f32(0x0.0, -0x0.0) == -0x0.0
+; run: %fmul_f32(-0x0.0, 0x0.0) == -0x0.0
+; run: %fmul_f32(+Inf, -Inf) == -Inf
+; run: %fmul_f32(-Inf, +Inf) == -Inf
+
+; F32 Epsilon / Max / Min Positive
+; run: %fmul_f32(0x1.0p-23, 0x1.fffffep127) == 0x1.fffffep104
+; run: %fmul_f32(0x1.0p-23, 0x1.0p-126) == 0x0.000002p-126
+; run: %fmul_f32(0x1.fffffep127, 0x1.fffffep127) == +Inf
+; run: %fmul_f32(0x1.0p-126, 0x1.fffffep127) == 0x1.fffffep1
+; run: %fmul_f32(0x1.0p-126, 0x1.0p-126) == 0x0.0
+
+; F32 Subnormals
+; run: %fmul_f32(0x0.8p-126, -0x0.800002p-126) == -0x0.0
+; run: %fmul_f32(0x0.8p-126, 0x1.0) == 0x0.8p-126
+; run: %fmul_f32(-0x0.800002p-126, 0x1.0) == -0x0.800002p-126
+
+; F32 NaN's
+; For NaN's this operation is specified as producing a value that is a NaN
+function %fmul_is_nan_f32(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+    v2 = fmul v0, v1
+    v3 = fcmp ne v2, v2
+    v4 = bint.i32 v3
+    return v4
+}
+; run: %fmul_is_nan_f32(-0x0.0, +Inf) == 1
+; run: %fmul_is_nan_f32(0x0.0, -Inf) == 1
+; run: %fmul_is_nan_f32(0x0.0, +NaN) == 1
+; run: %fmul_is_nan_f32(0x0.0, -NaN) == 1
+; run: %fmul_is_nan_f32(0x0.0, +NaN:0x0) == 1
+; run: %fmul_is_nan_f32(0x0.0, +NaN:0x1) == 1
+; run: %fmul_is_nan_f32(0x0.0, +NaN:0x300001) == 1
+; run: %fmul_is_nan_f32(0x0.0, -NaN:0x0) == 1
+; run: %fmul_is_nan_f32(0x0.0, -NaN:0x1) == 1
+; run: %fmul_is_nan_f32(0x0.0, -NaN:0x300001) == 1
+; run: %fmul_is_nan_f32(0x0.0, +sNaN:0x1) == 1
+; run: %fmul_is_nan_f32(0x0.0, -sNaN:0x1) == 1
+; run: %fmul_is_nan_f32(0x0.0, +sNaN:0x200001) == 1
+; run: %fmul_is_nan_f32(0x0.0, -sNaN:0x200001) == 1
+
+
+
+function %fmul_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+    v2 = fmul v0, v1
+    return v2
+}
+; run: %fmul_f64(0x0.5, 0x1.0) == 0x1.4p-2
+; run: %fmul_f64(0x1.5, 0x2.9) == 0x1.ae8p1
+; run: %fmul_f64(0x1.1p10, 0x1.4p1) == 0x1.54p11
+; run: %fmul_f64(0x1.4cccccccccccdp0, 0x1.8p0) == 0x1.f333333333334p0
+; run: %fmul_f64(0x1.b333333333333p0, 0x1.999999999999ap-2) == 0x1.5c28f5c28f5c3p-1
+; run: %fmul_f64(0x1.3333333333333p-1, 0x1.6666666666666p1) == 0x1.ae147ae147ae1p0
+; run: %fmul_f64(-0x0.5, -0x1.0) == 0x1.4p-2
+; run: %fmul_f64(-0x1.5, -0x2.9) == 0x1.ae8p1
+; run: %fmul_f64(-0x1.1p10, -0x1.3333333333333p-1) == 0x1.4666666666666p9
+; run: %fmul_f64(-0x1.999999999999ap-2, -0x1.4cccccccccccdp0) == 0x1.0a3d70a3d70a4p-1
+; run: %fmul_f64(-0x1.8p0, -0x1.b333333333333p0) == 0x1.4666666666666p1
+; run: %fmul_f64(-0x1.4p1, -0x1.6666666666666p1) == 0x1.cp2
+; run: %fmul_f64(0x0.5, -0x1.0) == -0x1.4p-2
+; run: %fmul_f64(0x1.b333333333333p0, -0x1.b333333333333p0) == -0x1.71eb851eb851ep1
+
+; Specials
+; run: %fmul_f64(0x0.0, -0x0.0) == -0x0.0
+; run: %fmul_f64(-0x0.0, 0x0.0) == -0x0.0
+; run: %fmul_f64(+Inf, -Inf) == -Inf
+; run: %fmul_f64(-Inf, +Inf) == -Inf
+
+; F64 Epsilon / Max / Min Positive
+; run: %fmul_f64(0x1.0p-52, 0x1.fffffffffffffp1023) == 0x1.fffffffffffffp971
+; run: %fmul_f64(0x1.0p-52, 0x1.0p-1022) == 0x0.0000000000001p-1022
+; run: %fmul_f64(0x1.fffffffffffffp1023, 0x1.fffffffffffffp1023) == +Inf
+; run: %fmul_f64(0x1.0p-1022, 0x1.fffffffffffffp1023) == 0x1.fffffffffffffp1
+; run: %fmul_f64(0x1.0p-1022, 0x1.0p-1022) == 0x0.0
+
+; F64 Subnormals
+; run: %fmul_f64(0x0.8p-1022, -0x0.8p-1022) == -0x0.0
+; run: %fmul_f64(0x0.8p-1022, 0x1.0) == 0x0.8p-1022
+; run: %fmul_f64(-0x0.8p-1022, 0x1.0) == -0x0.8p-1022
+
+
+; F64 NaN's
+; For NaN's this operation is specified as producing a value that is a NaN
+function %fmul_is_nan_f64(f64, f64) -> i32 {
+block0(v0: f64, v1: f64):
+    v2 = fmul v0, v1
+    v3 = fcmp ne v2, v2
+    v4 = bint.i32 v3
+    return v4
+}
+; run: %fmul_is_nan_f64(-0x0.0, +Inf) == 1
+; run: %fmul_is_nan_f64(0x0.0, -Inf) == 1
+; run: %fmul_is_nan_f64(0x0.0, +NaN) == 1
+; run: %fmul_is_nan_f64(0x0.0, -NaN) == 1
+; run: %fmul_is_nan_f64(0x0.0, +NaN:0x0) == 1
+; run: %fmul_is_nan_f64(0x0.0, +NaN:0x1) == 1
+; run: %fmul_is_nan_f64(0x0.0, +NaN:0x4000000000001) == 1
+; run: %fmul_is_nan_f64(0x0.0, -NaN:0x0) == 1
+; run: %fmul_is_nan_f64(0x0.0, -NaN:0x1) == 1
+; run: %fmul_is_nan_f64(0x0.0, -NaN:0x4000000000001) == 1
+; run: %fmul_is_nan_f64(0x0.0, +sNaN:0x1) == 1
+; run: %fmul_is_nan_f64(0x0.0, -sNaN:0x1) == 1
+; run: %fmul_is_nan_f64(0x0.0, +sNaN:0x4000000000001) == 1
+; run: %fmul_is_nan_f64(0x0.0, -sNaN:0x4000000000001) == 1

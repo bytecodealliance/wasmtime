@@ -535,7 +535,9 @@ fn souper_type_of(dfg: &ir::DataFlowGraph, val: ir::Value) -> Option<ast::Type> 
     let ty = dfg.value_type(val);
     assert!(ty.is_int() || ty.is_bool());
     assert_eq!(ty.lane_count(), 1);
-    Some(ast::Type { width: ty.bits() })
+    Some(ast::Type {
+        width: ty.bits().try_into().unwrap(),
+    })
 }
 
 #[derive(Debug)]

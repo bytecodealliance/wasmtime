@@ -1,49 +1,97 @@
+use crate::codegen::ir::ValueList;
 use crate::config::Config;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::ir::types::*;
 use cranelift::codegen::ir::{
-    AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, Type, Value,
+    AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, StackSlot, Type, Value,
 };
 use cranelift::codegen::isa::CallConv;
-use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use cranelift::prelude::{EntityRef, InstBuilder, IntCC, JumpTableData};
+use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
+use cranelift::prelude::{
+    EntityRef, InstBuilder, IntCC, JumpTableData, StackSlotData, StackSlotKind,
+};
+use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
 type BlockSignature = Vec<Type>;
 
-fn insert_opcode_arity_0(
-    _fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    opcode: Opcode,
-    _args: &'static [Type],
-    _rets: &'static [Type],
-) -> Result<()> {
-    builder.ins().NullAry(opcode, INVALID);
-    Ok(())
-}
-
-fn insert_opcode_arity_2(
+fn insert_opcode(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
     opcode: Opcode,
     args: &'static [Type],
     rets: &'static [Type],
 ) -> Result<()> {
-    let arg0 = fgen.get_variable_of_type(args[0])?;
-    let arg0 = builder.use_var(arg0);
+    let mut arg_vals = ValueList::new();
+    for &arg in args.into_iter() {
+        let var = fgen.get_variable_of_type(arg)?;
+        let val = builder.use_var(var);
+        arg_vals.push(val, &mut builder.func.dfg.value_lists);
+    }
 
-    let arg1 = fgen.get_variable_of_type(args[1])?;
-    let arg1 = builder.use_var(arg1);
-
-    let typevar = rets[0];
-    let (inst, dfg) = builder.ins().Binary(opcode, typevar, arg0, arg1);
+    let typevar = rets.first().copied().unwrap_or(INVALID);
+    let (inst, dfg) = builder.ins().MultiAry(opcode, typevar, arg_vals);
     let results = dfg.inst_results(inst).to_vec();
 
-    for (val, ty) in results.into_iter().zip(rets) {
-        let var = fgen.get_variable_of_type(*ty)?;
+    for (val, &ty) in results.into_iter().zip(rets) {
+        let var = fgen.get_variable_of_type(ty)?;
         builder.def_var(var, val);
     }
+    Ok(())
+}
+
+fn insert_stack_load(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    _opcode: Opcode,
+    _args: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let typevar = rets[0];
+    let slot = fgen.stack_slot_with_size(builder, typevar.bytes())?;
+    let slot_size = builder.func.sized_stack_slots[slot].size;
+    let type_size = typevar.bytes();
+    let offset = fgen.u.int_in_range(0..=(slot_size - type_size))? as i32;
+
+    let val = builder.ins().stack_load(typevar, slot, offset);
+    let var = fgen.get_variable_of_type(typevar)?;
+    builder.def_var(var, val);
+
+    Ok(())
+}
+
+fn insert_stack_store(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    _opcode: Opcode,
+    args: &'static [Type],
+    _rets: &'static [Type],
+) -> Result<()> {
+    let typevar = args[0];
+    let slot = fgen.stack_slot_with_size(builder, typevar.bytes())?;
+    let slot_size = builder.func.sized_stack_slots[slot].size;
+    let type_size = typevar.bytes();
+    let offset = fgen.u.int_in_range(0..=(slot_size - type_size))? as i32;
+
+    let arg0 = fgen.get_variable_of_type(typevar)?;
+    let arg0 = builder.use_var(arg0);
+
+    builder.ins().stack_store(arg0, slot, offset);
+    Ok(())
+}
+
+fn insert_const(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    _opcode: Opcode,
+    _args: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let typevar = rets[0];
+    let var = fgen.get_variable_of_type(typevar)?;
+    let val = fgen.generate_const(builder, typevar)?;
+    builder.def_var(var, val);
     Ok(())
 }
 
@@ -62,32 +110,111 @@ const OPCODE_SIGNATURES: &'static [(
     &'static [Type], // Rets
     OpcodeInserter,
 )] = &[
-    (Opcode::Nop, &[], &[], insert_opcode_arity_0),
+    (Opcode::Nop, &[], &[], insert_opcode),
     // Iadd
-    (Opcode::Iadd, &[I8, I8], &[I8], insert_opcode_arity_2),
-    (Opcode::Iadd, &[I16, I16], &[I16], insert_opcode_arity_2),
-    (Opcode::Iadd, &[I32, I32], &[I32], insert_opcode_arity_2),
-    (Opcode::Iadd, &[I64, I64], &[I64], insert_opcode_arity_2),
+    (Opcode::Iadd, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Iadd, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Iadd, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Iadd, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Iadd, &[I128, I128], &[I128], insert_opcode),
     // Isub
-    (Opcode::Isub, &[I8, I8], &[I8], insert_opcode_arity_2),
-    (Opcode::Isub, &[I16, I16], &[I16], insert_opcode_arity_2),
-    (Opcode::Isub, &[I32, I32], &[I32], insert_opcode_arity_2),
-    (Opcode::Isub, &[I64, I64], &[I64], insert_opcode_arity_2),
+    (Opcode::Isub, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Isub, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Isub, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Isub, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Isub, &[I128, I128], &[I128], insert_opcode),
     // Imul
-    (Opcode::Imul, &[I8, I8], &[I8], insert_opcode_arity_2),
-    (Opcode::Imul, &[I16, I16], &[I16], insert_opcode_arity_2),
-    (Opcode::Imul, &[I32, I32], &[I32], insert_opcode_arity_2),
-    (Opcode::Imul, &[I64, I64], &[I64], insert_opcode_arity_2),
+    (Opcode::Imul, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Imul, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Imul, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Imul, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Imul, &[I128, I128], &[I128], insert_opcode),
     // Udiv
-    (Opcode::Udiv, &[I8, I8], &[I8], insert_opcode_arity_2),
-    (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode_arity_2),
-    (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode_arity_2),
-    (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode_arity_2),
+    (Opcode::Udiv, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Udiv, &[I128, I128], &[I128], insert_opcode),
     // Sdiv
-    (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode_arity_2),
-    (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode_arity_2),
-    (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode_arity_2),
-    (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode_arity_2),
+    (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
+    // Fadd
+    (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode),
+    // Fmul
+    (Opcode::Fmul, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fmul, &[F64, F64], &[F64], insert_opcode),
+    // Fsub
+    (Opcode::Fsub, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fsub, &[F64, F64], &[F64], insert_opcode),
+    // Fdiv
+    (Opcode::Fdiv, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fdiv, &[F64, F64], &[F64], insert_opcode),
+    // Fmin
+    (Opcode::Fmin, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fmin, &[F64, F64], &[F64], insert_opcode),
+    // Fmax
+    (Opcode::Fmax, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fmax, &[F64, F64], &[F64], insert_opcode),
+    // FminPseudo
+    (Opcode::FminPseudo, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::FminPseudo, &[F64, F64], &[F64], insert_opcode),
+    // FmaxPseudo
+    (Opcode::FmaxPseudo, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::FmaxPseudo, &[F64, F64], &[F64], insert_opcode),
+    // Fcopysign
+    (Opcode::Fcopysign, &[F32, F32], &[F32], insert_opcode),
+    (Opcode::Fcopysign, &[F64, F64], &[F64], insert_opcode),
+    // Fma
+    // TODO: Missing on X86, see https://github.com/bytecodealliance/wasmtime/pull/4460
+    // (Opcode::Fma, &[F32, F32, F32], &[F32], insert_opcode),
+    // (Opcode::Fma, &[F64, F64, F64], &[F64], insert_opcode),
+    // Fabs
+    (Opcode::Fabs, &[F32], &[F32], insert_opcode),
+    (Opcode::Fabs, &[F64], &[F64], insert_opcode),
+    // Fneg
+    (Opcode::Fneg, &[F32], &[F32], insert_opcode),
+    (Opcode::Fneg, &[F64], &[F64], insert_opcode),
+    // Sqrt
+    (Opcode::Sqrt, &[F32], &[F32], insert_opcode),
+    (Opcode::Sqrt, &[F64], &[F64], insert_opcode),
+    // Ceil
+    (Opcode::Ceil, &[F32], &[F32], insert_opcode),
+    (Opcode::Ceil, &[F64], &[F64], insert_opcode),
+    // Floor
+    (Opcode::Floor, &[F32], &[F32], insert_opcode),
+    (Opcode::Floor, &[F64], &[F64], insert_opcode),
+    // Trunc
+    (Opcode::Trunc, &[F32], &[F32], insert_opcode),
+    (Opcode::Trunc, &[F64], &[F64], insert_opcode),
+    // Nearest
+    (Opcode::Nearest, &[F32], &[F32], insert_opcode),
+    (Opcode::Nearest, &[F64], &[F64], insert_opcode),
+    // Stack Access
+    (Opcode::StackStore, &[I8], &[], insert_stack_store),
+    (Opcode::StackStore, &[I16], &[], insert_stack_store),
+    (Opcode::StackStore, &[I32], &[], insert_stack_store),
+    (Opcode::StackStore, &[I64], &[], insert_stack_store),
+    (Opcode::StackStore, &[I128], &[], insert_stack_store),
+    (Opcode::StackLoad, &[], &[I8], insert_stack_load),
+    (Opcode::StackLoad, &[], &[I16], insert_stack_load),
+    (Opcode::StackLoad, &[], &[I32], insert_stack_load),
+    (Opcode::StackLoad, &[], &[I64], insert_stack_load),
+    (Opcode::StackLoad, &[], &[I128], insert_stack_load),
+    // Integer Consts
+    (Opcode::Iconst, &[], &[I8], insert_const),
+    (Opcode::Iconst, &[], &[I16], insert_const),
+    (Opcode::Iconst, &[], &[I32], insert_const),
+    (Opcode::Iconst, &[], &[I64], insert_const),
+    (Opcode::Iconst, &[], &[I128], insert_const),
+    // Float Consts
+    (Opcode::F32const, &[], &[F32], insert_const),
+    (Opcode::F64const, &[], &[F64], insert_const),
+    // Bool Consts
+    (Opcode::Bconst, &[], &[B1], insert_const),
 ];
 
 pub struct FunctionGenerator<'r, 'data>
@@ -99,6 +226,7 @@ where
     vars: Vec<(Type, Variable)>,
     blocks: Vec<(Block, BlockSignature)>,
     jump_tables: Vec<JumpTable>,
+    static_stack_slots: Vec<StackSlot>,
 }
 
 impl<'r, 'data> FunctionGenerator<'r, 'data>
@@ -112,6 +240,7 @@ where
             vars: vec![],
             blocks: vec![],
             jump_tables: vec![],
+            static_stack_slots: vec![],
         }
     }
 
@@ -149,9 +278,7 @@ where
         let scalars = [
             // IFLAGS, FFLAGS,
             B1, // B8, B16, B32, B64, B128,
-            I8, I16, I32, I64,
-            // I128,
-            // F32, F64,
+            I8, I16, I32, I64, I128, F32, F64,
             // R32, R64,
         ];
         // TODO: vector types
@@ -181,6 +308,18 @@ where
         Ok(sig)
     }
 
+    /// Finds a stack slot with size of at least n bytes
+    fn stack_slot_with_size(&mut self, builder: &mut FunctionBuilder, n: u32) -> Result<StackSlot> {
+        let opts: Vec<_> = self
+            .static_stack_slots
+            .iter()
+            .filter(|ss| builder.func.sized_stack_slots[**ss].size >= n)
+            .map(|ss| *ss)
+            .collect();
+
+        Ok(*self.u.choose(&opts[..])?)
+    }
+
     /// Creates a new var
     fn create_var(&mut self, builder: &mut FunctionBuilder, ty: Type) -> Result<Variable> {
         let id = self.vars.len();
@@ -208,6 +347,12 @@ where
     /// Generates an instruction(`iconst`/`fconst`/etc...) to introduce a constant value
     fn generate_const(&mut self, builder: &mut FunctionBuilder, ty: Type) -> Result<Value> {
         Ok(match ty {
+            I128 => {
+                // See: https://github.com/bytecodealliance/wasmtime/issues/2906
+                let hi = builder.ins().iconst(I64, self.u.arbitrary::<i64>()?);
+                let lo = builder.ins().iconst(I64, self.u.arbitrary::<i64>()?);
+                builder.ins().iconcat(lo, hi)
+            }
             ty if ty.is_int() => {
                 let imm64 = match ty {
                     I8 => self.u.arbitrary::<i8>()? as i64,
@@ -218,7 +363,15 @@ where
                 };
                 builder.ins().iconst(ty, imm64)
             }
-            ty if ty.is_bool() => builder.ins().bconst(B1, bool::arbitrary(self.u)?),
+            ty if ty.is_bool() => builder.ins().bconst(ty, bool::arbitrary(self.u)?),
+            // f{32,64}::arbitrary does not generate a bunch of important values
+            // such as Signaling NaN's / NaN's with payload, so generate floats from integers.
+            F32 => builder
+                .ins()
+                .f32const(f32::from_bits(u32::arbitrary(self.u)?)),
+            F64 => builder
+                .ins()
+                .f64const(f64::from_bits(u64::arbitrary(self.u)?)),
             _ => unimplemented!(),
         })
     }
@@ -280,8 +433,7 @@ where
 
     /// Generates a br_table into a random block
     fn generate_br_table(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let _type = *self.u.choose(&[I8, I16, I32, I64][..])?;
-        let var = self.get_variable_of_type(_type)?;
+        let var = self.get_variable_of_type(I32)?; // br_table only supports I32
         let val = builder.use_var(var);
 
         let valid_blocks = self.generate_valid_jumptable_target_blocks();
@@ -296,10 +448,7 @@ where
     fn generate_br(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         let (block, args) = self.generate_target_block(builder)?;
 
-        let condbr_types = [
-            I8, I16, I32, I64, // TODO: I128
-            B1,
-        ];
+        let condbr_types = [I8, I16, I32, I64, I128, B1];
         let _type = *self.u.choose(&condbr_types[..])?;
         let var = self.get_variable_of_type(_type)?;
         let val = builder.use_var(var);
@@ -320,7 +469,9 @@ where
         let cond = self.generate_intcc()?;
 
         let bricmp_types = [
-            I8, I16, I32, I64, // TODO: I128
+            I8, I16, I32,
+            I64,
+            // I128 - TODO: https://github.com/bytecodealliance/wasmtime/issues/4406
         ];
         let _type = *self.u.choose(&bricmp_types[..])?;
 
@@ -339,6 +490,47 @@ where
         Ok(())
     }
 
+    fn generate_switch(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
+        let _type = *self.u.choose(&[I8, I16, I32, I64, I128][..])?;
+        let switch_var = self.get_variable_of_type(_type)?;
+        let switch_val = builder.use_var(switch_var);
+
+        let valid_blocks = self.generate_valid_jumptable_target_blocks();
+        let default_block = *self.u.choose(&valid_blocks[..])?;
+
+        // Build this into a HashMap since we cannot have duplicate entries.
+        let mut entries = HashMap::new();
+        for _ in 0..self.param(&self.config.switch_cases)? {
+            // The Switch API only allows for entries that are addressable by the index type
+            // so we need to limit the range of values that we generate.
+            let (ty_min, ty_max) = _type.bounds(false);
+            let range_start = self.u.int_in_range(ty_min..=ty_max)?;
+
+            // We can either insert a contiguous range of blocks or a individual block
+            // This is done because the Switch API specializes contiguous ranges.
+            let range_size = if bool::arbitrary(self.u)? {
+                1
+            } else {
+                self.param(&self.config.switch_max_range_size)?
+            } as u128;
+
+            // Build the switch entries
+            for i in 0..range_size {
+                let index = range_start.wrapping_add(i) % ty_max;
+                let block = *self.u.choose(&valid_blocks[..])?;
+                entries.insert(index, block);
+            }
+        }
+
+        let mut switch = Switch::new();
+        for (entry, block) in entries.into_iter() {
+            switch.set_entry(entry, block);
+        }
+        switch.emit(builder, switch_val, default_block);
+
+        Ok(())
+    }
+
     /// We always need to exit safely out of a block.
     /// This either means a jump into another block or a return.
     fn finalize_block(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
@@ -349,6 +541,7 @@ where
                 Self::generate_br_table,
                 Self::generate_jump,
                 Self::generate_return,
+                Self::generate_switch,
             ][..],
         )?;
 
@@ -377,6 +570,46 @@ where
             }
 
             self.jump_tables.push(builder.create_jump_table(jt_data));
+        }
+        Ok(())
+    }
+
+    fn generate_stack_slots(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
+        for _ in 0..self.param(&self.config.static_stack_slots_per_function)? {
+            let bytes = self.param(&self.config.static_stack_slot_size)? as u32;
+            let ss_data = StackSlotData::new(StackSlotKind::ExplicitSlot, bytes);
+            let slot = builder.create_sized_stack_slot(ss_data);
+
+            self.static_stack_slots.push(slot);
+        }
+        Ok(())
+    }
+
+    /// Zero initializes the stack slot by inserting `stack_store`'s.
+    fn initialize_stack_slots(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
+        let i128_zero = builder.ins().iconst(I128, 0);
+        let i64_zero = builder.ins().iconst(I64, 0);
+        let i32_zero = builder.ins().iconst(I32, 0);
+        let i16_zero = builder.ins().iconst(I16, 0);
+        let i8_zero = builder.ins().iconst(I8, 0);
+
+        for &slot in self.static_stack_slots.iter() {
+            let init_size = builder.func.sized_stack_slots[slot].size;
+            let mut size = init_size;
+
+            // Insert the largest available store for the remaining size.
+            while size != 0 {
+                let offset = (init_size - size) as i32;
+                let (val, filled) = match size {
+                    sz if sz / 16 > 0 => (i128_zero, 16),
+                    sz if sz / 8 > 0 => (i64_zero, 8),
+                    sz if sz / 4 > 0 => (i32_zero, 4),
+                    sz if sz / 2 > 0 => (i16_zero, 2),
+                    _ => (i8_zero, 1),
+                };
+                builder.ins().stack_store(val, slot, offset);
+                size -= filled;
+            }
         }
         Ok(())
     }
@@ -467,6 +700,7 @@ where
 
         // Function preamble
         self.generate_jumptables(&mut builder)?;
+        self.generate_stack_slots(&mut builder)?;
 
         // Main instruction generation loop
         for (i, (block, block_sig)) in self.blocks.clone().iter().enumerate() {
@@ -478,6 +712,10 @@ where
                 // block signature and for the variable pool. Additionally, we must also define
                 // initial values for all variables that are not the function signature.
                 self.build_variable_pool(&mut builder)?;
+
+                // Stack slots have random bytes at the beginning of the function
+                // initialize them to a constant value so that execution stays predictable.
+                self.initialize_stack_slots(&mut builder)?;
             } else {
                 // Define variables for the block params
                 for (i, ty) in block_sig.iter().enumerate() {

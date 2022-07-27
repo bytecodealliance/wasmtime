@@ -133,7 +133,7 @@ impl Context {
         self.verify_if(isa)?;
 
         let opt_level = isa.flags().opt_level();
-        log::debug!(
+        log::trace!(
             "Compiling (opt level {:?}):\n{}",
             opt_level,
             self.func.display()
@@ -163,7 +163,7 @@ impl Context {
 
         self.remove_constant_phis(isa)?;
 
-        if opt_level != OptLevel::None {
+        if opt_level != OptLevel::None && isa.flags().enable_alias_analysis() {
             self.replace_redundant_loads()?;
             self.simple_gvn(isa)?;
         }

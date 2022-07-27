@@ -19,3 +19,4 @@ foo
 .cargo
 publish
 vendor
+examples/build

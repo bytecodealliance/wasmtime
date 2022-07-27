@@ -1,0 +1,824 @@
+test compile precise-output
+target s390x
+
+function %iadd_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = iadd.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vag %v24, %v24, %v25
+;   br %r14
+
+function %iadd_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = iadd.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vaf %v24, %v24, %v25
+;   br %r14
+
+function %iadd_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = iadd.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vah %v24, %v24, %v25
+;   br %r14
+
+function %iadd_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = iadd.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vab %v24, %v24, %v25
+;   br %r14
+
+function %isub_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = isub.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vsg %v24, %v24, %v25
+;   br %r14
+
+function %isub_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = isub.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vsf %v24, %v24, %v25
+;   br %r14
+
+function %isub_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = isub.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vsh %v24, %v24, %v25
+;   br %r14
+
+function %isub_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = isub.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vsb %v24, %v24, %v25
+;   br %r14
+
+function %iabs_i64x2(i64x2) -> i64x2 {
+block0(v0: i64x2):
+  v1 = iabs.i64x2 v0
+  return v1
+}
+
+; block0:
+;   vlpg %v24, %v24
+;   br %r14
+
+function %iabs_i32x4(i32x4) -> i32x4 {
+block0(v0: i32x4):
+  v1 = iabs.i32x4 v0
+  return v1
+}
+
+; block0:
+;   vlpf %v24, %v24
+;   br %r14
+
+function %iabs_i16x8(i16x8) -> i16x8 {
+block0(v0: i16x8):
+  v1 = iabs.i16x8 v0
+  return v1
+}
+
+; block0:
+;   vlph %v24, %v24
+;   br %r14
+
+function %iabs_i8x16(i8x16) -> i8x16 {
+block0(v0: i8x16):
+  v1 = iabs.i8x16 v0
+  return v1
+}
+
+; block0:
+;   vlpb %v24, %v24
+;   br %r14
+
+function %ineg_i64x2(i64x2) -> i64x2 {
+block0(v0: i64x2):
+  v1 = ineg.i64x2 v0
+  return v1
+}
+
+; block0:
+;   vlcg %v24, %v24
+;   br %r14
+
+function %ineg_i32x4(i32x4) -> i32x4 {
+block0(v0: i32x4):
+  v1 = ineg.i32x4 v0
+  return v1
+}
+
+; block0:
+;   vlcf %v24, %v24
+;   br %r14
+
+function %ineg_i16x8(i16x8) -> i16x8 {
+block0(v0: i16x8):
+  v1 = ineg.i16x8 v0
+  return v1
+}
+
+; block0:
+;   vlch %v24, %v24
+;   br %r14
+
+function %ineg_i8x16(i8x16) -> i8x16 {
+block0(v0: i8x16):
+  v1 = ineg.i8x16 v0
+  return v1
+}
+
+; block0:
+;   vlcb %v24, %v24
+;   br %r14
+
+function %umax_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = umax.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vmxlg %v24, %v24, %v25
+;   br %r14
+
+function %umax_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = umax.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vmxlf %v24, %v24, %v25
+;   br %r14
+
+function %umax_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = umax.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vmxlh %v24, %v24, %v25
+;   br %r14
+
+function %umax_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = umax.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vmxlb %v24, %v24, %v25
+;   br %r14
+
+function %umin_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = umin.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vmnlg %v24, %v24, %v25
+;   br %r14
+
+function %umin_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = umin.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vmnlf %v24, %v24, %v25
+;   br %r14
+
+function %umin_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = umin.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vmnlh %v24, %v24, %v25
+;   br %r14
+
+function %umin_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = umin.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vmnlb %v24, %v24, %v25
+;   br %r14
+
+function %imax_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = imax.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vmxg %v24, %v24, %v25
+;   br %r14
+
+function %imax_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = imax.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vmxf %v24, %v24, %v25
+;   br %r14
+
+function %imax_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = imax.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vmxh %v24, %v24, %v25
+;   br %r14
+
+function %imax_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = imax.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vmxb %v24, %v24, %v25
+;   br %r14
+
+function %imin_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = imin.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vmng %v24, %v24, %v25
+;   br %r14
+
+function %imin_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = imin.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vmnf %v24, %v24, %v25
+;   br %r14
+
+function %imin_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = imin.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vmnh %v24, %v24, %v25
+;   br %r14
+
+function %imin_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = imin.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vmnb %v24, %v24, %v25
+;   br %r14
+
+function %avg_round_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = avg_round.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vavglg %v24, %v24, %v25
+;   br %r14
+
+function %avg_round_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = avg_round.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vavglf %v24, %v24, %v25
+;   br %r14
+
+function %avg_round_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = avg_round.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vavglh %v24, %v24, %v25
+;   br %r14
+
+function %avg_round_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = avg_round.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vavglb %v24, %v24, %v25
+;   br %r14
+
+function %uadd_sat64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = uadd_sat.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vag %v5, %v24, %v25
+;   vchlg %v7, %v24, %v5
+;   vo %v24, %v5, %v7
+;   br %r14
+
+function %uadd_sat32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = uadd_sat.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vaf %v5, %v24, %v25
+;   vchlf %v7, %v24, %v5
+;   vo %v24, %v5, %v7
+;   br %r14
+
+function %uadd_sat16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = uadd_sat.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vah %v5, %v24, %v25
+;   vchlh %v7, %v24, %v5
+;   vo %v24, %v5, %v7
+;   br %r14
+
+function %uadd_sat8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = uadd_sat.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vab %v5, %v24, %v25
+;   vchlb %v7, %v24, %v5
+;   vo %v24, %v5, %v7
+;   br %r14
+
+function %sadd_sat32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = sadd_sat.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vuphf %v5, %v24
+;   vuphf %v7, %v25
+;   vag %v17, %v5, %v7
+;   vuplf %v19, %v24
+;   vuplf %v21, %v25
+;   vag %v23, %v19, %v21
+;   vpksg %v24, %v17, %v23
+;   br %r14
+
+function %sadd_sat16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = sadd_sat.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vuphh %v5, %v24
+;   vuphh %v7, %v25
+;   vaf %v17, %v5, %v7
+;   vuplh %v19, %v24
+;   vuplh %v21, %v25
+;   vaf %v23, %v19, %v21
+;   vpksf %v24, %v17, %v23
+;   br %r14
+
+function %sadd_sat8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = sadd_sat.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vuphb %v5, %v24
+;   vuphb %v7, %v25
+;   vah %v17, %v5, %v7
+;   vuplb %v19, %v24
+;   vuplb %v21, %v25
+;   vah %v23, %v19, %v21
+;   vpksh %v24, %v17, %v23
+;   br %r14
+
+function %iadd_pairwise_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = iadd_pairwise.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vrepib %v5, 32
+;   vsrlb %v7, %v25, %v5
+;   vaf %v17, %v25, %v7
+;   vsrlb %v19, %v24, %v5
+;   vaf %v21, %v24, %v19
+;   vpkg %v24, %v17, %v21
+;   br %r14
+
+function %usub_sat64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = usub_sat.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vsg %v5, %v24, %v25
+;   vchlg %v7, %v24, %v25
+;   vn %v24, %v5, %v7
+;   br %r14
+
+function %usub_sat32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = usub_sat.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vsf %v5, %v24, %v25
+;   vchlf %v7, %v24, %v25
+;   vn %v24, %v5, %v7
+;   br %r14
+
+function %usub_sat16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = usub_sat.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vsh %v5, %v24, %v25
+;   vchlh %v7, %v24, %v25
+;   vn %v24, %v5, %v7
+;   br %r14
+
+function %usub_sat8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = usub_sat.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vsb %v5, %v24, %v25
+;   vchlb %v7, %v24, %v25
+;   vn %v24, %v5, %v7
+;   br %r14
+
+function %ssub_sat32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = ssub_sat.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vuphf %v5, %v24
+;   vuphf %v7, %v25
+;   vsg %v17, %v5, %v7
+;   vuplf %v19, %v24
+;   vuplf %v21, %v25
+;   vsg %v23, %v19, %v21
+;   vpksg %v24, %v17, %v23
+;   br %r14
+
+function %ssub_sat16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = ssub_sat.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vuphh %v5, %v24
+;   vuphh %v7, %v25
+;   vsf %v17, %v5, %v7
+;   vuplh %v19, %v24
+;   vuplh %v21, %v25
+;   vsf %v23, %v19, %v21
+;   vpksf %v24, %v17, %v23
+;   br %r14
+
+function %ssub_sat8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = ssub_sat.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vuphb %v5, %v24
+;   vuphb %v7, %v25
+;   vsh %v17, %v5, %v7
+;   vuplb %v19, %v24
+;   vuplb %v21, %v25
+;   vsh %v23, %v19, %v21
+;   vpksh %v24, %v17, %v23
+;   br %r14
+
+function %iadd_pairwise_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = iadd_pairwise.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vrepib %v5, 32
+;   vsrlb %v7, %v25, %v5
+;   vaf %v17, %v25, %v7
+;   vsrlb %v19, %v24, %v5
+;   vaf %v21, %v24, %v19
+;   vpkg %v24, %v17, %v21
+;   br %r14
+
+function %iadd_pairwise_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = iadd_pairwise.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vrepib %v5, 16
+;   vsrlb %v7, %v25, %v5
+;   vah %v17, %v25, %v7
+;   vsrlb %v19, %v24, %v5
+;   vah %v21, %v24, %v19
+;   vpkf %v24, %v17, %v21
+;   br %r14
+
+function %iadd_pairwise_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = iadd_pairwise.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vrepib %v5, 8
+;   vsrlb %v7, %v25, %v5
+;   vab %v17, %v25, %v7
+;   vsrlb %v19, %v24, %v5
+;   vab %v21, %v24, %v19
+;   vpkh %v24, %v17, %v21
+;   br %r14
+
+function %imul_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = imul.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vlgvg %r3, %v24, 0
+;   vlgvg %r5, %v25, 0
+;   msgr %r3, %r5
+;   vlgvg %r5, %v24, 1
+;   vlgvg %r4, %v25, 1
+;   msgr %r5, %r4
+;   vlvgp %v24, %r3, %r5
+;   br %r14
+
+function %imul_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = imul.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vmlf %v24, %v24, %v25
+;   br %r14
+
+function %imul_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = imul.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vmlhw %v24, %v24, %v25
+;   br %r14
+
+function %imul_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = imul.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vmlb %v24, %v24, %v25
+;   br %r14
+
+function %umulhi_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = umulhi.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vlgvg %r3, %v24, 0
+;   vlgvg %r1, %v25, 0
+;   mlgr %r0, %r3
+;   lgr %r2, %r0
+;   vlgvg %r3, %v24, 1
+;   vlgvg %r1, %v25, 1
+;   mlgr %r0, %r3
+;   vlvgp %v24, %r2, %r0
+;   br %r14
+
+function %umulhi_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = umulhi.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vmlhf %v24, %v24, %v25
+;   br %r14
+
+function %umulhi_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = umulhi.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vmlhh %v24, %v24, %v25
+;   br %r14
+
+function %umulhi_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = umulhi.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vmlhb %v24, %v24, %v25
+;   br %r14
+
+function %smulhi_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+  v2 = smulhi.i64x2 v0, v1
+  return v2
+}
+
+; block0:
+;   vlgvg %r3, %v24, 0
+;   vlgvg %r5, %v25, 0
+;   mgrk %r0, %r3, %r5
+;   lgr %r3, %r0
+;   vlgvg %r2, %v24, 1
+;   vlgvg %r4, %v25, 1
+;   mgrk %r0, %r2, %r4
+;   lgr %r4, %r3
+;   vlvgp %v24, %r4, %r0
+;   br %r14
+
+function %smulhi_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = smulhi.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vmhf %v24, %v24, %v25
+;   br %r14
+
+function %smulhi_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = smulhi.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vmhh %v24, %v24, %v25
+;   br %r14
+
+function %smulhi_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = smulhi.i8x16 v0, v1
+  return v2
+}
+
+; block0:
+;   vmhb %v24, %v24, %v25
+;   br %r14
+
+function %widening_pairwise_dot_product_s_i16x8(i16x8, i16x8) -> i32x4 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = widening_pairwise_dot_product_s v0, v1
+  return v2
+}
+
+; block0:
+;   vmeh %v5, %v24, %v25
+;   vmoh %v7, %v24, %v25
+;   vaf %v24, %v5, %v7
+;   br %r14
+
+function %sqmul_round_sat(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = sqmul_round_sat.i16x8 v0, v1
+  return v2
+}
+
+; block0:
+;   vuphh %v5, %v24
+;   vuphh %v7, %v25
+;   vmlf %v17, %v5, %v7
+;   vgmf %v19, 17, 17
+;   vaf %v21, %v17, %v19
+;   vesraf %v23, %v21, 15
+;   vuplh %v26, %v24
+;   vuplh %v27, %v25
+;   vmlf %v29, %v26, %v27
+;   vgmf %v31, 17, 17
+;   vaf %v1, %v29, %v31
+;   vesraf %v3, %v1, 15
+;   vpksf %v24, %v23, %v3
+;   br %r14
+
+function %sqmul_round_sat(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = sqmul_round_sat.i32x4 v0, v1
+  return v2
+}
+
+; block0:
+;   vuphf %v5, %v24
+;   vuphf %v7, %v25
+;   lgdr %r3, %f5
+;   lgdr %r5, %f7
+;   msgr %r3, %r5
+;   vlgvg %r5, %v5, 1
+;   vlgvg %r4, %v7, 1
+;   msgr %r5, %r4
+;   vlvgp %v29, %r3, %r5
+;   vgmg %v31, 33, 33
+;   vag %v1, %v29, %v31
+;   vesrag %v3, %v1, 31
+;   vuplf %v5, %v24
+;   vuplf %v7, %v25
+;   lgdr %r3, %f5
+;   lgdr %r5, %f7
+;   msgr %r3, %r5
+;   vlgvg %r5, %v5, 1
+;   vlgvg %r4, %v7, 1
+;   msgr %r5, %r4
+;   vlvgp %v29, %r3, %r5
+;   vgmg %v31, 33, 33
+;   vag %v1, %v29, %v31
+;   vesrag %v4, %v1, 31
+;   vpksg %v24, %v3, %v4
+;   br %r14
+

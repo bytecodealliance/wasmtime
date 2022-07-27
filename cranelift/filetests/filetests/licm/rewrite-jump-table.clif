@@ -5,7 +5,7 @@ function %rewrite_jump_table() {
     jt0 = jump_table [block1, block2]
 
     block0:
-        v0 = iconst.i64 1
+        v0 = iconst.i32 1
         br_table v0, block1, jt0
 
     block1:

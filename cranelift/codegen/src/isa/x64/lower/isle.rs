@@ -2,7 +2,10 @@
 
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
-use crate::machinst::{InputSourceInst, Reg, Writable};
+use crate::{
+    ir::AtomicRmwOp,
+    machinst::{InputSourceInst, Reg, Writable},
+};
 use generated_code::MInst;
 
 // Types that the generated ISLE code uses via `use super::*`.
@@ -18,15 +21,21 @@ use crate::{
         settings::Flags,
         unwind::UnwindInst,
         x64::{
-            inst::{args::*, regs},
+            inst::{args::*, regs, CallInfo},
             settings::Flags as IsaFlags,
         },
     },
     machinst::{
-        isle::*, AtomicRmwOp, InsnInput, InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData,
+        isle::*, InsnInput, InsnOutput, LowerCtx, MachAtomicRmwOp, MachInst, VCodeConstant,
+        VCodeConstantData,
     },
 };
+use smallvec::SmallVec;
+use std::boxed::Box;
 use std::convert::TryFrom;
+
+type BoxCallInfo = Box<CallInfo>;
+type BoxVecMachLabel = Box<SmallVec<[MachLabel; 4]>>;
 
 pub struct SinkableLoad {
     inst: Inst,
@@ -122,9 +131,7 @@ where
         let inputs = self.lower_ctx.get_value_as_source_or_const(val);
 
         if let Some(c) = inputs.constant {
-            let mask = 1_u64
-                .checked_shl(ty.bits() as u32)
-                .map_or(u64::MAX, |x| x - 1);
+            let mask = 1_u64.checked_shl(ty.bits()).map_or(u64::MAX, |x| x - 1);
             return Imm8Gpr::new(Imm8Reg::Imm8 {
                 imm: (c & mask) as u8,
             })
@@ -215,13 +222,16 @@ where
 
     #[inline]
     fn const_to_type_masked_imm8(&mut self, c: u64, ty: Type) -> Imm8Gpr {
-        let mask = 1_u64
-            .checked_shl(ty.bits() as u32)
-            .map_or(u64::MAX, |x| x - 1);
+        let mask = 1_u64.checked_shl(ty.bits()).map_or(u64::MAX, |x| x - 1);
         Imm8Gpr::new(Imm8Reg::Imm8 {
             imm: (c & mask) as u8,
         })
         .unwrap()
+    }
+
+    #[inline]
+    fn shift_mask(&mut self, ty: Type) -> u32 {
+        ty.lane_bits() - 1
     }
 
     #[inline]
@@ -411,6 +421,11 @@ where
     }
 
     #[inline]
+    fn reg_to_reg_mem_imm(&mut self, reg: Reg) -> RegMemImm {
+        RegMemImm::Reg { reg }
+    }
+
+    #[inline]
     fn reg_mem_to_xmm_mem(&mut self, rm: &RegMem) -> XmmMem {
         XmmMem::new(rm.clone()).unwrap()
     }
@@ -565,6 +580,16 @@ where
     #[inline]
     fn zero_offset(&mut self) -> Offset32 {
         Offset32::new(0)
+    }
+
+    #[inline]
+    fn atomic_rmw_op_to_mach_atomic_rmw_op(&mut self, op: &AtomicRmwOp) -> MachAtomicRmwOp {
+        MachAtomicRmwOp::from(*op)
+    }
+
+    #[inline]
+    fn gen_move(&mut self, ty: Type, dst: WritableReg, src: Reg) -> MInst {
+        MInst::gen_move(dst, src, ty)
     }
 }
 

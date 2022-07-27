@@ -264,7 +264,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let length = u32::try_from(code_buf.len()).unwrap();
 
-        let stack_slots = std::mem::take(&mut context.func.stack_slots);
+        let sized_stack_slots = std::mem::take(&mut context.func.sized_stack_slots);
 
         self.save_context(CompilerContext {
             func_translator,
@@ -275,7 +275,7 @@ impl wasmtime_environ::Compiler for Compiler {
             body: code_buf,
             relocations: func_relocs,
             value_labels_ranges: ranges.unwrap_or(Default::default()),
-            stack_slots,
+            sized_stack_slots,
             unwind_info,
             traps,
             info: FunctionInfo {
@@ -288,17 +288,29 @@ impl wasmtime_environ::Compiler for Compiler {
         }))
     }
 
+    fn compile_host_to_wasm_trampoline(
+        &self,
+        ty: &WasmFuncType,
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
+        self.host_to_wasm_trampoline(ty)
+            .map(|x| Box::new(x) as Box<_>)
+    }
+
     fn emit_obj(
         &self,
         translation: &ModuleTranslation,
-        types: &ModuleTypes,
         funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
+        compiled_trampolines: Vec<Box<dyn Any + Send>>,
         tunables: &Tunables,
         obj: &mut Object<'static>,
     ) -> Result<(PrimaryMap<DefinedFuncIndex, FunctionInfo>, Vec<Trampoline>)> {
         let funcs: CompiledFunctions = funcs
             .into_iter()
             .map(|(_i, f)| *f.downcast().unwrap())
+            .collect();
+        let compiled_trampolines: Vec<CompiledFunction> = compiled_trampolines
+            .into_iter()
+            .map(|f| *f.downcast().unwrap())
             .collect();
 
         let mut builder = ModuleTextBuilder::new(obj, &translation.module, &*self.isa);
@@ -307,11 +319,6 @@ impl wasmtime_environ::Compiler for Compiler {
         }
         let mut addrs = AddressMapSection::default();
         let mut traps = TrapEncodingBuilder::default();
-        let compiled_trampolines = translation
-            .exported_signatures
-            .iter()
-            .map(|i| self.host_to_wasm_trampoline(&types[*i]))
-            .collect::<Result<Vec<_>, _>>()?;
 
         let mut func_starts = Vec::with_capacity(funcs.len());
         for (i, func) in funcs.iter() {
@@ -325,12 +332,17 @@ impl wasmtime_environ::Compiler for Compiler {
         }
 
         // Build trampolines for every signature that can be used by this module.
+        assert_eq!(
+            translation.exported_signatures.len(),
+            compiled_trampolines.len()
+        );
         let mut trampolines = Vec::with_capacity(translation.exported_signatures.len());
         for (i, func) in translation
             .exported_signatures
             .iter()
             .zip(&compiled_trampolines)
         {
+            assert!(func.traps.is_empty());
             trampolines.push(builder.trampoline(*i, &func));
         }
 
@@ -601,7 +613,7 @@ impl Compiler {
         let values_vec_byte_size = u32::try_from(value_size * values_vec_len).unwrap();
         let values_vec_len = u32::try_from(values_vec_len).unwrap();
 
-        let ss = builder.func.create_stack_slot(ir::StackSlotData::new(
+        let ss = builder.func.create_sized_stack_slot(ir::StackSlotData::new(
             ir::StackSlotKind::ExplicitSlot,
             values_vec_byte_size,
         ));
@@ -672,19 +684,21 @@ impl Compiler {
         context
             .compile_and_emit(isa, &mut code_buf)
             .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+        let result = context.mach_compile_result.as_ref().unwrap();
 
         // Processing relocations isn't the hardest thing in the world here but
         // no trampoline should currently generate a relocation, so assert that
         // they're all empty and if this ever trips in the future then handling
         // will need to be added here to ensure they make their way into the
         // `CompiledFunction` below.
-        assert!(context
-            .mach_compile_result
-            .as_ref()
-            .unwrap()
+        assert!(result.buffer.relocs().is_empty());
+
+        let traps = result
             .buffer
-            .relocs()
-            .is_empty());
+            .traps()
+            .into_iter()
+            .map(mach_trap_to_trap)
+            .collect::<Vec<_>>();
 
         let unwind_info = if isa.flags().unwind_info() {
             context
@@ -698,11 +712,11 @@ impl Compiler {
             body: code_buf,
             unwind_info,
             relocations: Vec::new(),
-            stack_slots: Default::default(),
+            sized_stack_slots: Default::default(),
             value_labels_ranges: Default::default(),
             info: Default::default(),
             address_map: Default::default(),
-            traps: Vec::new(),
+            traps,
         })
     }
 
@@ -878,6 +892,8 @@ fn mach_reloc_to_reloc(reloc: &MachReloc) -> Relocation {
     }
 }
 
+const ALWAYS_TRAP_CODE: u16 = 100;
+
 fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
     let &MachTrap { offset, code } = trap;
     TrapInformation {
@@ -894,6 +910,7 @@ fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
             ir::TrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
             ir::TrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
             ir::TrapCode::Interrupt => TrapCode::Interrupt,
+            ir::TrapCode::User(ALWAYS_TRAP_CODE) => TrapCode::AlwaysTrapAdapter,
 
             // these should never be emitted by wasmtime-cranelift
             ir::TrapCode::User(_) => unreachable!(),

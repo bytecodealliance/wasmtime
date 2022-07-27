@@ -9,7 +9,6 @@ use crate::MemoryImageSlot;
 use crate::Store;
 use anyhow::Error;
 use anyhow::{bail, format_err, Result};
-use more_asserts::{assert_ge, assert_le};
 use std::convert::TryFrom;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
@@ -214,7 +213,7 @@ impl MmapMemory {
             // of the two is, the `maximum` given or the `bound` specified for
             // this memory.
             MemoryStyle::Static { bound } => {
-                assert_ge!(bound, plan.memory.minimum);
+                assert!(bound >= plan.memory.minimum);
                 let bound_bytes =
                     usize::try_from(bound.checked_mul(WASM_PAGE_SIZE_U64).unwrap()).unwrap();
                 maximum = Some(bound_bytes.min(maximum.unwrap_or(usize::MAX)));
@@ -662,7 +661,7 @@ impl Memory {
         } else {
             WASM32_MAX_PAGES
         };
-        assert_le!(plan.memory.minimum, absolute_max);
+        assert!(plan.memory.minimum <= absolute_max);
         assert!(plan.memory.maximum.is_none() || plan.memory.maximum.unwrap() <= absolute_max);
 
         // This is the absolute possible maximum that the module can try to

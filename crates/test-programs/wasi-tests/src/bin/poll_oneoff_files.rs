@@ -1,4 +1,3 @@
-use more_asserts::assert_gt;
 use std::{env, mem::MaybeUninit, process};
 use wasi_tests::{assert_errno, open_scratch_directory};
 
@@ -16,7 +15,9 @@ unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Even
 
 /// Repeatedly call `poll_oneoff` until all the subcriptions in `in` have
 /// seen their events occur.
-unsafe fn poll_oneoff_with_retry(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Event>, wasi::Error> {
+unsafe fn poll_oneoff_with_retry(
+    r#in: &[wasi::Subscription],
+) -> Result<Vec<wasi::Event>, wasi::Error> {
     let mut subscriptions = r#in.to_vec();
     let mut events = Vec::new();
     while !subscriptions.is_empty() {
@@ -24,7 +25,11 @@ unsafe fn poll_oneoff_with_retry(r#in: &[wasi::Subscription]) -> Result<Vec<wasi
         out.resize_with(subscriptions.len(), || {
             MaybeUninit::<wasi::Event>::zeroed().assume_init()
         });
-        let size = wasi::poll_oneoff(subscriptions.as_ptr(), out.as_mut_ptr(), subscriptions.len())?;
+        let size = wasi::poll_oneoff(
+            subscriptions.as_ptr(),
+            out.as_mut_ptr(),
+            subscriptions.len(),
+        )?;
         out.truncate(size);
 
         // Append the events from this `poll` to the result.
@@ -204,9 +209,8 @@ unsafe fn test_fd_readwrite_valid_fd(dir_fd: wasi::Fd) {
     )
     .expect("opening a readable file");
 
-    assert_gt!(
-        readable_fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        readable_fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
     // Create a file in the scratch directory.
@@ -220,9 +224,8 @@ unsafe fn test_fd_readwrite_valid_fd(dir_fd: wasi::Fd) {
         0,
     )
     .expect("opening a writable file");
-    assert_gt!(
-        writable_fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        writable_fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 

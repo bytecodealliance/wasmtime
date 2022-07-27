@@ -157,7 +157,12 @@ fn define_control_flow(
     }
 
     {
-        let x = &Operand::new("x", iB).with_doc("index into jump table");
+        let _i32 = &TypeVar::new(
+            "i32",
+            "A 32 bit scalar integer type",
+            TypeSetBuilder::new().ints(32..32).build(),
+        );
+        let x = &Operand::new("x", _i32).with_doc("i32 index into jump table");
         let JT = &Operand::new("JT", &entities.jump_table);
 
         ig.push(
@@ -427,6 +432,7 @@ fn define_simd_lane_access(
             .floats(Interval::All)
             .bools(Interval::All)
             .simd_lanes(Interval::All)
+            .dynamic_simd_lanes(Interval::All)
             .includes_scalars(false)
             .build(),
     );
@@ -706,6 +712,7 @@ pub(crate) fn define(
         TypeSetBuilder::new()
             .ints(Interval::All)
             .simd_lanes(Interval::All)
+            .dynamic_simd_lanes(Interval::All)
             .build(),
     );
 
@@ -785,6 +792,7 @@ pub(crate) fn define(
             .floats(Interval::All)
             .simd_lanes(Interval::All)
             .refs(Interval::All)
+            .dynamic_simd_lanes(Interval::All)
             .build(),
     );
 
@@ -793,6 +801,7 @@ pub(crate) fn define(
     let addr = &Operand::new("addr", iAddr);
 
     let SS = &Operand::new("SS", &entities.stack_slot);
+    let DSS = &Operand::new("DSS", &entities.dynamic_stack_slot);
     let Offset = &Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address");
     let x = &Operand::new("x", Mem).with_doc("Value to be stored");
     let a = &Operand::new("a", Mem).with_doc("Value loaded");
@@ -1163,7 +1172,51 @@ pub(crate) fn define(
         .operands_out(vec![addr]),
     );
 
+    ig.push(
+        Inst::new(
+            "dynamic_stack_load",
+            r#"
+        Load a value from a dynamic stack slot.
+
+        This is a polymorphic instruction that can load any value type which
+        has a memory representation.
+        "#,
+            &formats.dynamic_stack_load,
+        )
+        .operands_in(vec![DSS])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "dynamic_stack_store",
+            r#"
+        Store a value to a dynamic stack slot.
+
+        This is a polymorphic instruction that can store any dynamic value type with a
+        memory representation.
+        "#,
+            &formats.dynamic_stack_store,
+        )
+        .operands_in(vec![x, DSS])
+        .can_store(true),
+    );
+
     let GV = &Operand::new("GV", &entities.global_value);
+    ig.push(
+        Inst::new(
+            "dynamic_stack_addr",
+            r#"
+        Get the address of a dynamic stack slot.
+
+        Compute the absolute address of the first byte of a dynamic stack slot.
+        "#,
+            &formats.dynamic_stack_load,
+        )
+        .operands_in(vec![DSS])
+        .operands_out(vec![addr]),
+    );
 
     ig.push(
         Inst::new(
@@ -2786,6 +2839,7 @@ pub(crate) fn define(
         TypeSetBuilder::new()
             .floats(Interval::All)
             .simd_lanes(Interval::All)
+            .dynamic_simd_lanes(Interval::All)
             .build(),
     );
     let Cond = &Operand::new("Cond", &imm.floatcc);
@@ -3273,20 +3327,14 @@ pub(crate) fn define(
 
     let Bool = &TypeVar::new(
         "Bool",
-        "A scalar or vector boolean type",
-        TypeSetBuilder::new()
-            .bools(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
+        "A scalar boolean type",
+        TypeSetBuilder::new().bools(Interval::All).build(),
     );
 
     let BoolTo = &TypeVar::new(
         "BoolTo",
-        "A smaller boolean type with the same number of lanes",
-        TypeSetBuilder::new()
-            .bools(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
+        "A smaller boolean type",
+        TypeSetBuilder::new().bools(Interval::All).build(),
     );
 
     let x = &Operand::new("x", Bool);
@@ -3296,11 +3344,7 @@ pub(crate) fn define(
         Inst::new(
             "breduce",
             r#"
-        Convert `x` to a smaller boolean type in the platform-defined way.
-
-        The result type must have the same number of vector lanes as the input,
-        and each lane must not have more bits that the input lanes. If the
-        input and output types are the same, this is a no-op.
+        Convert `x` to a smaller boolean type by discarding the most significant bits.
         "#,
             &formats.unary,
         )
@@ -3310,11 +3354,8 @@ pub(crate) fn define(
 
     let BoolTo = &TypeVar::new(
         "BoolTo",
-        "A larger boolean type with the same number of lanes",
-        TypeSetBuilder::new()
-            .bools(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
+        "A larger boolean type",
+        TypeSetBuilder::new().bools(Interval::All).build(),
     );
     let x = &Operand::new("x", Bool);
     let a = &Operand::new("a", BoolTo);
@@ -3323,11 +3364,7 @@ pub(crate) fn define(
         Inst::new(
             "bextend",
             r#"
-        Convert `x` to a larger boolean type in the platform-defined way.
-
-        The result type must have the same number of vector lanes as the input,
-        and each lane must not have fewer bits that the input lanes. If the
-        input and output types are the same, this is a no-op.
+        Convert `x` to a larger boolean type
         "#,
             &formats.unary,
         )
@@ -3357,6 +3394,14 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let Bool = &TypeVar::new(
+        "Bool",
+        "A scalar or vector boolean type",
+        TypeSetBuilder::new()
+            .bools(Interval::All)
+            .simd_lanes(Interval::All)
+            .build(),
+    );
     let IntTo = &TypeVar::new(
         "IntTo",
         "An integer type with the same number of lanes",
@@ -3385,20 +3430,14 @@ pub(crate) fn define(
 
     let Int = &TypeVar::new(
         "Int",
-        "A scalar or vector integer type",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
+        "A scalar integer type",
+        TypeSetBuilder::new().ints(Interval::All).build(),
     );
 
     let IntTo = &TypeVar::new(
         "IntTo",
-        "A smaller integer type with the same number of lanes",
-        TypeSetBuilder::new()
-            .ints(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
+        "A smaller integer type",
+        TypeSetBuilder::new().ints(Interval::All).build(),
     );
     let x = &Operand::new("x", Int);
     let a = &Operand::new("a", IntTo);
@@ -3407,15 +3446,10 @@ pub(crate) fn define(
         Inst::new(
             "ireduce",
             r#"
-        Convert `x` to a smaller integer type by dropping high bits.
+        Convert `x` to a smaller integer type by discarding
+        the most significant bits.
 
-        Each lane in `x` is converted to a smaller integer type by discarding
-        the most significant bits. This is the same as reducing modulo
-        `2^n`.
-
-        The result type must have the same number of vector lanes as the input,
-        and each lane must not have more bits that the input lanes. If the
-        input and output types are the same, this is a no-op.
+        This is the same as reducing modulo `2^n`.
         "#,
             &formats.unary,
         )
@@ -3429,6 +3463,7 @@ pub(crate) fn define(
         TypeSetBuilder::new()
             .ints(16..64)
             .simd_lanes(2..8)
+            .dynamic_simd_lanes(2..8)
             .includes_scalars(false)
             .build(),
     );
@@ -3498,7 +3533,8 @@ pub(crate) fn define(
         "A SIMD vector type containing integer lanes 8, 16, or 32 bits wide.",
         TypeSetBuilder::new()
             .ints(8..32)
-            .simd_lanes(4..16)
+            .simd_lanes(2..16)
+            .dynamic_simd_lanes(2..16)
             .includes_scalars(false)
             .build(),
     );
@@ -3855,6 +3891,14 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let Int = &TypeVar::new(
+        "Int",
+        "A scalar or vector integer type",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .simd_lanes(Interval::All)
+            .build(),
+    );
     let x = &Operand::new("x", Int);
     let a = &Operand::new("a", FloatTo);
 
@@ -4074,5 +4118,31 @@ pub(crate) fn define(
             &formats.nullary,
         )
         .other_side_effects(true),
+    );
+
+    let TxN = &TypeVar::new(
+        "TxN",
+        "A dynamic vector type",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .floats(Interval::All)
+            .bools(Interval::All)
+            .dynamic_simd_lanes(Interval::All)
+            .build(),
+    );
+    let x = &Operand::new("x", TxN).with_doc("The dynamic vector to extract from");
+    let y = &Operand::new("y", &imm.uimm8).with_doc("128-bit vector index");
+    let a = &Operand::new("a", &TxN.dynamic_to_vector()).with_doc("New fixed vector");
+
+    ig.push(
+        Inst::new(
+            "extract_vector",
+            r#"
+        Return a fixed length sub vector, extracted from a dynamic vector.
+        "#,
+            &formats.binary_imm8,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
     );
 }

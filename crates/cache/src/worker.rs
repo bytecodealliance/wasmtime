@@ -230,8 +230,7 @@ impl WorkerThread {
 
     #[cfg(target_os = "windows")]
     fn lower_thread_priority() {
-        use winapi::um::processthreadsapi::{GetCurrentThread, SetThreadPriority};
-        use winapi::um::winbase::THREAD_MODE_BACKGROUND_BEGIN;
+        use windows_sys::Win32::System::Threading::*;
 
         // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadpriority
         // https://docs.microsoft.com/en-us/windows/win32/procthread/scheduling-priorities

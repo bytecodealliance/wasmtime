@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-wasi-nn"
-version = "0.39.0"
+version = "0.40.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Wasmtime implementation of the wasi-nn API"
 documentation = "https://docs.rs/wasmtime-wasi-nn"
@@ -14,11 +14,12 @@ edition = "2021"
 [dependencies]
 # These dependencies are necessary for the witx-generation macros to work:
 anyhow = "1.0"
-wiggle = { path = "../wiggle", version = "=0.39.0" }
+wiggle = { path = "../wiggle", version = "=0.40.0" }
 
 # These dependencies are necessary for the wasi-nn implementation:
-openvino = { version = "0.4.0", features = ["runtime-linking"] }
 tensorflow = { git = "https://github.com/tensorflow/rust.git", rev = "110b139696794f18bcd8b66429ab587693e8b1dc", features = ["tensorflow_runtime_linking"]}
+openvino = { version = "0.4.1", features = ["runtime-linking"] }
+
 thiserror = "1.0"
 
 [build-dependencies]

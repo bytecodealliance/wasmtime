@@ -40,6 +40,8 @@ pub struct wasi_config_t {
     inherit_stderr: bool,
 }
 
+wasmtime_c_api_macros::declare_own!(wasi_config_t);
+
 impl wasi_config_t {
     pub fn into_wasi_ctx(self) -> Result<WasiCtx> {
         let mut builder = WasiCtxBuilder::new();
@@ -99,9 +101,6 @@ impl wasi_config_t {
 pub extern "C" fn wasi_config_new() -> Box<wasi_config_t> {
     Box::new(wasi_config_t::default())
 }
-
-#[no_mangle]
-pub extern "C" fn wasi_config_delete(_config: Box<wasi_config_t>) {}
 
 #[no_mangle]
 pub unsafe extern "C" fn wasi_config_set_argv(

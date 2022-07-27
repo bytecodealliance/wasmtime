@@ -1,6 +1,6 @@
 test run
 target aarch64
-; target s390x TODO: Not yet implemented on s390x
+target s390x
 set enable_simd
 target x86_64 skylake
 

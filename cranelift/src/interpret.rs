@@ -17,10 +17,6 @@ pub struct Options {
     #[clap(required = true)]
     files: Vec<PathBuf>,
 
-    /// Enable debug output on stderr/stdout
-    #[clap(short)]
-    debug: bool,
-
     /// Be more verbose
     #[clap(short, long)]
     verbose: bool,
@@ -28,8 +24,6 @@ pub struct Options {
 
 /// Run files through the Cranelift interpreter, interpreting any functions with annotations.
 pub fn run(options: &Options) -> anyhow::Result<()> {
-    crate::handle_debug_flag(options.debug);
-
     let mut total = 0;
     let mut errors = 0;
     for file in iterate_files(&options.files) {
@@ -179,7 +173,6 @@ mod test {
     fn filetests() {
         run(&Options {
             files: vec![PathBuf::from("../filetests/filetests/interpreter")],
-            debug: true,
             verbose: true,
         })
         .unwrap()

@@ -171,9 +171,9 @@ fn write_testsuite_tests(
 fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     match strategy {
         "Cranelift" => match (testsuite, testname) {
-            // No simd support yet for s390x.
-            ("simd", _) if platform_is_s390x() => return true,
-            _ if platform_is_s390x() && testname.starts_with("simd") => return true,
+            // FIXME: These tests fail under qemu due to a qemu bug.
+            (_, "simd_f32x4_pmin_pmax") if platform_is_s390x() => return true,
+            (_, "simd_f64x2_pmin_pmax") if platform_is_s390x() => return true,
             _ => {}
         },
         _ => panic!("unrecognized strategy"),

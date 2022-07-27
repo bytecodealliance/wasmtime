@@ -59,131 +59,13 @@
 use crate::externref::VMExternRef;
 use crate::instance::Instance;
 use crate::table::{Table, TableElementType};
-use crate::traphandlers::{raise_lib_trap, resume_panic, Trap};
+use crate::traphandlers::{raise_lib_trap, raise_user_trap, resume_panic};
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
 use std::mem;
 use std::ptr::{self, NonNull};
 use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TrapCode,
 };
-
-const TOINT_32: f32 = 1.0 / f32::EPSILON;
-const TOINT_64: f64 = 1.0 / f64::EPSILON;
-
-/// Implementation of f32.ceil
-pub extern "C" fn wasmtime_f32_ceil(x: f32) -> f32 {
-    x.ceil()
-}
-
-/// Implementation of f32.floor
-pub extern "C" fn wasmtime_f32_floor(x: f32) -> f32 {
-    x.floor()
-}
-
-/// Implementation of f32.trunc
-pub extern "C" fn wasmtime_f32_trunc(x: f32) -> f32 {
-    x.trunc()
-}
-
-/// Implementation of f32.nearest
-#[allow(clippy::float_arithmetic, clippy::float_cmp)]
-pub extern "C" fn wasmtime_f32_nearest(x: f32) -> f32 {
-    // Rust doesn't have a nearest function; there's nearbyint, but it's not
-    // stabilized, so do it manually.
-    // Nearest is either ceil or floor depending on which is nearest or even.
-    // This approach exploited round half to even default mode.
-    let i = x.to_bits();
-    let e = i >> 23 & 0xff;
-    if e >= 0x7f_u32 + 23 {
-        // Check for NaNs.
-        if e == 0xff {
-            // Read the 23-bits significand.
-            if i & 0x7fffff != 0 {
-                // Ensure it's arithmetic by setting the significand's most
-                // significant bit to 1; it also works for canonical NaNs.
-                return f32::from_bits(i | (1 << 22));
-            }
-        }
-        x
-    } else {
-        (x.abs() + TOINT_32 - TOINT_32).copysign(x)
-    }
-}
-
-/// Implementation of i64.udiv
-pub extern "C" fn wasmtime_i64_udiv(x: u64, y: u64) -> u64 {
-    x / y
-}
-
-/// Implementation of i64.sdiv
-pub extern "C" fn wasmtime_i64_sdiv(x: i64, y: i64) -> i64 {
-    x / y
-}
-
-/// Implementation of i64.urem
-pub extern "C" fn wasmtime_i64_urem(x: u64, y: u64) -> u64 {
-    x % y
-}
-
-/// Implementation of i64.srem
-pub extern "C" fn wasmtime_i64_srem(x: i64, y: i64) -> i64 {
-    x % y
-}
-
-/// Implementation of i64.ishl
-pub extern "C" fn wasmtime_i64_ishl(x: i64, y: i64) -> i64 {
-    x << y
-}
-
-/// Implementation of i64.ushr
-pub extern "C" fn wasmtime_i64_ushr(x: u64, y: i64) -> u64 {
-    x >> y
-}
-
-/// Implementation of i64.sshr
-pub extern "C" fn wasmtime_i64_sshr(x: i64, y: i64) -> i64 {
-    x >> y
-}
-
-/// Implementation of f64.ceil
-pub extern "C" fn wasmtime_f64_ceil(x: f64) -> f64 {
-    x.ceil()
-}
-
-/// Implementation of f64.floor
-pub extern "C" fn wasmtime_f64_floor(x: f64) -> f64 {
-    x.floor()
-}
-
-/// Implementation of f64.trunc
-pub extern "C" fn wasmtime_f64_trunc(x: f64) -> f64 {
-    x.trunc()
-}
-
-/// Implementation of f64.nearest
-#[allow(clippy::float_arithmetic, clippy::float_cmp)]
-pub extern "C" fn wasmtime_f64_nearest(x: f64) -> f64 {
-    // Rust doesn't have a nearest function; there's nearbyint, but it's not
-    // stabilized, so do it manually.
-    // Nearest is either ceil or floor depending on which is nearest or even.
-    // This approach exploited round half to even default mode.
-    let i = x.to_bits();
-    let e = i >> 52 & 0x7ff;
-    if e >= 0x3ff_u64 + 52 {
-        // Check for NaNs.
-        if e == 0x7ff {
-            // Read the 52-bits significand.
-            if i & 0xfffffffffffff != 0 {
-                // Ensure it's arithmetic by setting the significand's most
-                // significant bit to 1; it also works for canonical NaNs.
-                return f64::from_bits(i | (1 << 51));
-            }
-        }
-        x
-    } else {
-        (x.abs() + TOINT_64 - TOINT_64).copysign(x)
-    }
-}
 
 /// Implementation of memory.grow for locally-defined 32-bit memories.
 pub unsafe extern "C" fn memory32_grow(
@@ -506,14 +388,12 @@ pub unsafe extern "C" fn memory_atomic_notify(
         // or it's been validated to be in-bounds already. Double-check for now
         // just to be sure.
         let addr_to_check = addr.checked_add(4).unwrap();
-        validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
-            Err(Trap::user(anyhow::anyhow!(
-                "unimplemented: wasm atomics (fn memory_atomic_notify) unsupported",
-            )))
-        })
+        validate_atomic_addr(instance, memory, addr_to_check)
     };
     match result {
-        Ok(n) => n,
+        Ok(()) => raise_user_trap(anyhow::anyhow!(
+            "unimplemented: wasm atomics (fn memory_atomic_notify) unsupported",
+        )),
         Err(e) => raise_lib_trap(e),
     }
 }
@@ -533,14 +413,12 @@ pub unsafe extern "C" fn memory_atomic_wait32(
         // see wasmtime_memory_atomic_notify for why this shouldn't overflow
         // but we still double-check
         let addr_to_check = addr.checked_add(4).unwrap();
-        validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
-            Err(Trap::user(anyhow::anyhow!(
-                "unimplemented: wasm atomics (fn memory_atomic_wait32) unsupported",
-            )))
-        })
+        validate_atomic_addr(instance, memory, addr_to_check)
     };
     match result {
-        Ok(n) => n,
+        Ok(()) => raise_user_trap(anyhow::anyhow!(
+            "unimplemented: wasm atomics (fn memory_atomic_wait32) unsupported",
+        )),
         Err(e) => raise_lib_trap(e),
     }
 }
@@ -560,14 +438,12 @@ pub unsafe extern "C" fn memory_atomic_wait64(
         // see wasmtime_memory_atomic_notify for why this shouldn't overflow
         // but we still double-check
         let addr_to_check = addr.checked_add(8).unwrap();
-        validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
-            Err(Trap::user(anyhow::anyhow!(
-                "unimplemented: wasm atomics (fn memory_atomic_wait64) unsupported",
-            )))
-        })
+        validate_atomic_addr(instance, memory, addr_to_check)
     };
     match result {
-        Ok(n) => n,
+        Ok(()) => raise_user_trap(anyhow::anyhow!(
+            "unimplemented: wasm atomics (fn memory_atomic_wait64) unsupported",
+        )),
         Err(e) => raise_lib_trap(e),
     }
 }
@@ -585,9 +461,9 @@ unsafe fn validate_atomic_addr(
     instance: &Instance,
     memory: MemoryIndex,
     addr: usize,
-) -> Result<(), Trap> {
+) -> Result<(), TrapCode> {
     if addr > instance.get_memory(memory).current_length() {
-        return Err(Trap::wasm(TrapCode::HeapOutOfBounds));
+        return Err(TrapCode::HeapOutOfBounds);
     }
     Ok(())
 }

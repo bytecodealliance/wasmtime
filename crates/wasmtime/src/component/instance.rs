@@ -2,16 +2,17 @@ use crate::component::func::HostFunc;
 use crate::component::{Component, ComponentParams, Func, Lift, Lower, TypedFunc};
 use crate::instance::OwnedImports;
 use crate::store::{StoreOpaque, Stored};
-use crate::{AsContextMut, Module, StoreContext, StoreContextMut};
+use crate::{AsContextMut, Module, StoreContextMut};
 use anyhow::{anyhow, Context, Result};
+use indexmap::IndexMap;
 use std::marker;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    ComponentTypes, CoreDef, CoreExport, Export, ExportItem, ExtractMemory, ExtractPostReturn,
-    ExtractRealloc, GlobalInitializer, InstantiateModule, LowerImport, RuntimeImportIndex,
-    RuntimeInstanceIndex, RuntimeModuleIndex,
+    AlwaysTrap, ComponentTypes, CoreDef, CoreExport, Export, ExportItem, ExtractMemory,
+    ExtractPostReturn, ExtractRealloc, GlobalInitializer, InstantiateModule, LowerImport,
+    RuntimeImportIndex, RuntimeInstanceIndex, RuntimeModuleIndex,
 };
-use wasmtime_environ::{EntityIndex, PrimaryMap};
+use wasmtime_environ::{EntityIndex, Global, GlobalInit, PrimaryMap, WasmType};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
 
 /// An instantiated component.
@@ -43,30 +44,33 @@ pub(crate) struct InstanceData {
 }
 
 impl Instance {
+    /// Returns information about the exports of this instance.
+    ///
+    /// This method can be used to extract exported values from this component
+    /// instance. The argument to this method be a handle to the store that
+    /// this instance was instantiated into.
+    ///
+    /// The returned [`Exports`] value can be used to lookup exported items by
+    /// name.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
+    pub fn exports<'a, T: 'a>(&self, store: impl Into<StoreContextMut<'a, T>>) -> Exports<'a> {
+        let store = store.into();
+        Exports::new(store.0, self)
+    }
+
     /// Looks up a function by name within this [`Instance`].
     ///
-    /// The `store` specified must be the store that this instance lives within
-    /// and `name` is the name of the function to lookup. If the function is
-    /// found `Some` is returned otherwise `None` is returned.
+    /// This is a convenience method for calling [`Instance::exports`] followed
+    /// by [`ExportInstance::get_func`].
     ///
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
     pub fn get_func(&self, mut store: impl AsContextMut, name: &str) -> Option<Func> {
-        self._get_func(store.as_context_mut().0, name)
-    }
-
-    fn _get_func(&self, store: &mut StoreOpaque, name: &str) -> Option<Func> {
-        // FIXME: this movement in ownership is unfortunate and feels like there
-        // should be a better solution. The reason for this is that we need to
-        // simultaneously look at lots of pieces of `InstanceData` while also
-        // inserting into `store`, but `InstanceData` is stored within `store`.
-        // By moving it out we appease the borrow-checker but take a runtime
-        // hit.
-        let data = store[self.0].take().unwrap();
-        let result = data.get_func(store, self, name);
-        store[self.0] = Some(data);
-        return result;
+        self.exports(store.as_context_mut()).root().func(name)
     }
 
     /// Looks up an exported [`Func`] value by name and with its type.
@@ -97,60 +101,49 @@ impl Instance {
             .with_context(|| format!("failed to convert function `{}` to given type", name))?)
     }
 
-    /// Returns an iterator of all of the exported modules that this instance
-    /// contains.
-    //
-    // FIXME: this should probably be generalized in some form to something else
-    // that either looks like:
-    //
-    // * an iterator over all exports
-    // * an iterator for a `Component` with type information followed by a
-    //   `get_module` function here
-    //
-    // For now this is just quick-and-dirty to get wast support for iterating
-    // over exported modules to work.
-    pub fn modules<'a, T: 'a>(
-        &'a self,
-        store: impl Into<StoreContext<'a, T>>,
-    ) -> impl Iterator<Item = (&'a str, &'a Module)> + 'a {
-        let store = store.into();
-        self._modules(store.0)
-    }
-
-    fn _modules<'a>(
-        &'a self,
-        store: &'a StoreOpaque,
-    ) -> impl Iterator<Item = (&'a str, &'a Module)> + '_ {
-        let data = store.store_data()[self.0].as_ref().unwrap();
-        data.component
-            .env_component()
-            .exports
-            .iter()
-            .filter_map(|(name, export)| match *export {
-                Export::Module(idx) => Some((name.as_str(), &data.exported_modules[idx])),
-                _ => None,
-            })
+    /// Looks up a module by name within this [`Instance`].
+    ///
+    /// The `store` specified must be the store that this instance lives within
+    /// and `name` is the name of the function to lookup. If the function is
+    /// found `Some` is returned otherwise `None` is returned.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
+    pub fn get_module(&self, mut store: impl AsContextMut, name: &str) -> Option<Module> {
+        self.exports(store.as_context_mut())
+            .root()
+            .module(name)
+            .cloned()
     }
 }
 
 impl InstanceData {
-    fn get_func(&self, store: &mut StoreOpaque, instance: &Instance, name: &str) -> Option<Func> {
-        match self.component.env_component().exports.get(name)? {
-            Export::LiftedFunction { ty, func, options } => Some(Func::from_lifted_func(
-                store, instance, self, *ty, func, options,
-            )),
-            Export::Module(_) => None,
-        }
-    }
-
-    fn lookup_def(&self, store: &mut StoreOpaque, def: &CoreDef) -> wasmtime_runtime::Export {
+    pub fn lookup_def(&self, store: &mut StoreOpaque, def: &CoreDef) -> wasmtime_runtime::Export {
         match def {
+            CoreDef::Export(e) => self.lookup_export(store, e),
             CoreDef::Lowered(idx) => {
                 wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
                     anyfunc: self.state.lowering_anyfunc(*idx),
                 })
             }
-            CoreDef::Export(e) => self.lookup_export(store, e),
+            CoreDef::AlwaysTrap(idx) => {
+                wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
+                    anyfunc: self.state.always_trap_anyfunc(*idx),
+                })
+            }
+            CoreDef::InstanceFlags(idx) => {
+                wasmtime_runtime::Export::Global(wasmtime_runtime::ExportGlobal {
+                    definition: self.state.instance_flags(*idx).as_raw(),
+                    global: Global {
+                        wasm_ty: WasmType::I32,
+                        mutability: true,
+                        initializer: GlobalInit::I32Const(0),
+                    },
+                })
+            }
+            // This should have been processed away during compilation.
+            CoreDef::Adapter(_) => unreachable!(),
         }
     }
 
@@ -272,6 +265,8 @@ impl<'a> Instantiator<'a> {
 
                 GlobalInitializer::LowerImport(import) => self.lower_import(import),
 
+                GlobalInitializer::AlwaysTrap(trap) => self.always_trap(trap),
+
                 GlobalInitializer::ExtractMemory(mem) => self.extract_memory(store.0, mem),
 
                 GlobalInitializer::ExtractRealloc(realloc) => {
@@ -307,7 +302,7 @@ impl<'a> Instantiator<'a> {
         self.data.state.set_lowering(
             import.index,
             func.lowering(),
-            self.component.trampoline_ptr(import.index),
+            self.component.lowering_ptr(import.index),
             self.component
                 .signatures()
                 .shared_signature(import.canonical_abi)
@@ -322,6 +317,17 @@ impl<'a> Instantiator<'a> {
         // of host functions used we can ensure that the function lives long
         // enough for the whole duration of this instance.
         self.data.funcs.push(func.clone());
+    }
+
+    fn always_trap(&mut self, trap: &AlwaysTrap) {
+        self.data.state.set_always_trap(
+            trap.index,
+            self.component.always_trap_ptr(trap.index),
+            self.component
+                .signatures()
+                .shared_signature(trap.canonical_abi)
+                .expect("found unregistered signature"),
+        );
     }
 
     fn extract_memory(&mut self, store: &mut StoreOpaque, memory: &ExtractMemory) {
@@ -360,10 +366,28 @@ impl<'a> Instantiator<'a> {
     ) -> &OwnedImports {
         self.core_imports.clear();
         self.core_imports.reserve(module);
+        let mut imports = module.compiled_module().module().imports();
 
         for arg in args {
-            let export = self.data.lookup_def(store, arg);
+            // The general idea of Wasmtime is that at runtime type-checks for
+            // core wasm instantiations internally within a component are
+            // unnecessary and superfluous. Naturally though mistakes may be
+            // made, so double-check this property of wasmtime in debug mode.
+            if cfg!(debug_assertions) {
+                let export = self.data.lookup_def(store, arg);
+                let (_, _, expected) = imports.next().unwrap();
+                let val = unsafe { crate::Extern::from_wasmtime_export(export, store) };
+                crate::types::matching::MatchCx {
+                    store,
+                    engine: store.engine(),
+                    signatures: module.signatures(),
+                    types: module.types(),
+                }
+                .extern_(&expected, &val)
+                .expect("unexpected typecheck failure");
+            }
 
+            let export = self.data.lookup_def(store, arg);
             // The unsafety here should be ok since the `export` is loaded
             // directly from an instance which should only give us valid export
             // items.
@@ -371,6 +395,7 @@ impl<'a> Instantiator<'a> {
                 self.core_imports.push_export(&export);
             }
         }
+        debug_assert!(imports.next().is_none());
 
         &self.core_imports
     }
@@ -382,7 +407,8 @@ impl<'a> Instantiator<'a> {
 /// This structure represents an efficient form of instantiation where import
 /// type-checking and import lookup has all been resolved by the time that this
 /// type is created. This type is primarily created through the
-/// [`Linker::instance_pre`](crate::component::Linker::instance_pre) method.
+/// [`Linker::instantiate_pre`](crate::component::Linker::instantiate_pre)
+/// method.
 pub struct InstancePre<T> {
     component: Component,
     imports: PrimaryMap<RuntimeImportIndex, RuntimeImport>,
@@ -421,5 +447,167 @@ impl<T> InstancePre<T> {
         i.run(&mut store)?;
         let data = Box::new(i.data);
         Ok(Instance(store.0.store_data_mut().insert(Some(data))))
+    }
+}
+
+/// Description of the exports of an [`Instance`].
+///
+/// This structure is created through the [`Instance::exports`] method and is
+/// used lookup exports by name from within an instance.
+pub struct Exports<'store> {
+    store: &'store mut StoreOpaque,
+    data: Option<Box<InstanceData>>,
+    instance: Instance,
+}
+
+impl<'store> Exports<'store> {
+    fn new(store: &'store mut StoreOpaque, instance: &Instance) -> Exports<'store> {
+        // Note that the `InstanceData` is `take`n from the store here. That's
+        // to ease with the various liftimes in play here where we often need
+        // simultaneous borrows into the `store` and the `data`.
+        //
+        // To put the data back into the store the `Drop for Exports<'_>` will
+        // restore the state of the world.
+        Exports {
+            data: store[instance.0].take(),
+            store,
+            instance: *instance,
+        }
+    }
+
+    /// Returns the "root" instance of this set of exports, or the items that
+    /// are directly exported from the instance that this was created from.
+    pub fn root(&mut self) -> ExportInstance<'_, '_> {
+        let data = self.data.as_ref().unwrap();
+        ExportInstance {
+            exports: &data.component.env_component().exports,
+            instance: &self.instance,
+            data,
+            store: self.store,
+        }
+    }
+
+    /// Returns the items that the named instance exports.
+    ///
+    /// This method will lookup the exported instance with the name `name` from
+    /// this list of exports and return a descriptin of that instance's
+    /// exports.
+    pub fn instance(&mut self, name: &str) -> Option<ExportInstance<'_, '_>> {
+        self.root().into_instance(name)
+    }
+
+    // FIXME: should all the func/module/typed_func methods below be mirrored
+    // here as well? They're already mirrored on `Instance` and otherwise
+    // this is attempting to look like the `Linker` API "but in reverse"
+    // somewhat.
+}
+
+impl Drop for Exports<'_> {
+    fn drop(&mut self) {
+        // See `Exports::new` for where this data was originally extracted, and
+        // this is just restoring the state of the world.
+        self.store[self.instance.0] = self.data.take();
+    }
+}
+
+/// Description of the exports of a single instance.
+///
+/// This structure is created from [`Exports`] via the [`Exports::root`] or
+/// [`Exports::instance`] methods. This type provides access to the first layer
+/// of exports within an instance. The [`ExportInstance::instance`] method
+/// can be used to provide nested access to sub-instances.
+pub struct ExportInstance<'a, 'store> {
+    exports: &'a IndexMap<String, Export>,
+    instance: &'a Instance,
+    data: &'a InstanceData,
+    store: &'store mut StoreOpaque,
+}
+
+impl<'a, 'store> ExportInstance<'a, 'store> {
+    /// Same as [`Instance::get_func`]
+    pub fn func(&mut self, name: &str) -> Option<Func> {
+        match self.exports.get(name)? {
+            Export::LiftedFunction { ty, func, options } => Some(Func::from_lifted_func(
+                self.store,
+                self.instance,
+                self.data,
+                *ty,
+                func,
+                options,
+            )),
+            Export::Module(_) | Export::Instance(_) => None,
+        }
+    }
+
+    /// Same as [`Instance::get_typed_func`]
+    pub fn typed_func<Params, Results>(&mut self, name: &str) -> Result<TypedFunc<Params, Results>>
+    where
+        Params: ComponentParams + Lower,
+        Results: Lift,
+    {
+        let func = self
+            .func(name)
+            .ok_or_else(|| anyhow!("failed to find function export `{}`", name))?;
+        Ok(func
+            ._typed::<Params, Results>(self.store)
+            .with_context(|| format!("failed to convert function `{}` to given type", name))?)
+    }
+
+    /// Same as [`Instance::get_module`]
+    pub fn module(&mut self, name: &str) -> Option<&'a Module> {
+        match self.exports.get(name)? {
+            Export::Module(idx) => Some(&self.data.exported_modules[*idx]),
+            _ => None,
+        }
+    }
+
+    /// Returns an iterator of all of the exported modules that this instance
+    /// contains.
+    //
+    // FIXME: this should probably be generalized in some form to something else
+    // that either looks like:
+    //
+    // * an iterator over all exports
+    // * an iterator for a `Component` with type information followed by a
+    //   `get_module` function here
+    //
+    // For now this is just quick-and-dirty to get wast support for iterating
+    // over exported modules to work.
+    pub fn modules(&self) -> impl Iterator<Item = (&'a str, &'a Module)> + '_ {
+        self.exports
+            .iter()
+            .filter_map(|(name, export)| match *export {
+                Export::Module(idx) => Some((name.as_str(), &self.data.exported_modules[idx])),
+                _ => None,
+            })
+    }
+
+    fn as_mut(&mut self) -> ExportInstance<'a, '_> {
+        ExportInstance {
+            exports: self.exports,
+            instance: self.instance,
+            data: self.data,
+            store: self.store,
+        }
+    }
+
+    /// Looks up the exported instance with the `name` specified and returns
+    /// a description of its exports.
+    pub fn instance(&mut self, name: &str) -> Option<ExportInstance<'a, '_>> {
+        self.as_mut().into_instance(name)
+    }
+
+    /// Same as [`ExportInstance::instance`] but consumes self to yield a
+    /// return value with the same lifetimes.
+    pub fn into_instance(self, name: &str) -> Option<ExportInstance<'a, 'store>> {
+        match self.exports.get(name)? {
+            Export::Instance(exports) => Some(ExportInstance {
+                exports,
+                instance: self.instance,
+                data: self.data,
+                store: self.store,
+            }),
+            _ => None,
+        }
     }
 }

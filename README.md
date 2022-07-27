@@ -111,7 +111,7 @@ You can use Wasmtime from a variety of different languages through embeddings of
 the implementation:
 
 * **[Rust]** - the [`wasmtime` crate]
-* **[C]** - the [`wasm.h`, `wasi.h`, and `wasmtime.h` headers][c-headers] or use [`wasmtime` Conan package]
+* **[C]** - the [`wasm.h`, `wasi.h`, and `wasmtime.h` headers][c-headers], [CMake](crates/c-api/CMakeLists.txt) or [`wasmtime` Conan package]
 * **C++** - the [`wasmtime-cpp` repository][wasmtime-cpp] or use [`wasmtime-cpp` Conan package]
 * **[Python]** - the [`wasmtime` PyPI package]
 * **[.NET]** - the [`Wasmtime` NuGet package]

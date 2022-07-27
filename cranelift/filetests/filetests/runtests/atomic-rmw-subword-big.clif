@@ -1,5 +1,6 @@
 test run
 target s390x
+target s390x has_mie2
 
 ; We can't test that these instructions are right regarding atomicity, but we can
 ; test if they perform their operation correctly
@@ -457,4 +458,3 @@ block0(v0: i32, v1: i64, v2: i8):
 ; run: %atomic_rmw_xchg_big_i8(0x12345678, 2, 0xff) == 0x1234ff78
 ; run: %atomic_rmw_xchg_big_i8(0x12345678, 3, 0x11) == 0x12345611
 ; run: %atomic_rmw_xchg_big_i8(0x12345678, 3, 0xff) == 0x123456ff
-

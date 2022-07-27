@@ -1,5 +1,5 @@
 use crate::signatures::SignatureRegistry;
-use crate::{Config, Trap};
+use crate::Config;
 use anyhow::Result;
 use once_cell::sync::OnceCell;
 #[cfg(feature = "parallel-compilation")]
@@ -71,7 +71,7 @@ impl Engine {
         // Ensure that wasmtime_runtime's signal handlers are configured. This
         // is the per-program initialization required for handling traps, such
         // as configuring signals, vectored exception handlers, etc.
-        wasmtime_runtime::init_traps(crate::module::GlobalModuleRegistry::is_wasm_trap_pc);
+        wasmtime_runtime::init_traps(crate::module::is_wasm_trap_pc);
         debug_builtins::ensure_exported();
 
         let registry = SignatureRegistry::new();
@@ -117,8 +117,8 @@ impl Engine {
     /// on calls into WebAssembly. This is provided for use cases where the
     /// latency of WebAssembly calls are extra-important, which is not
     /// necessarily true of all embeddings.
-    pub fn tls_eager_initialize() -> Result<(), Trap> {
-        wasmtime_runtime::tls_eager_initialize().map_err(Trap::from_runtime_box)
+    pub fn tls_eager_initialize() {
+        wasmtime_runtime::tls_eager_initialize();
     }
 
     /// Returns the configuration settings that this engine is using.
@@ -345,7 +345,6 @@ impl Engine {
             // can affect the way the generated code performs or behaves at
             // runtime.
             "avoid_div_traps" => *value == FlagValue::Bool(true),
-            "unwind_info" => *value == FlagValue::Bool(true),
             "libcall_call_conv" => *value == FlagValue::Enum("isa_default".into()),
 
             // Features wasmtime doesn't use should all be disabled, since
@@ -369,6 +368,16 @@ impl Engine {
                 }
             }
 
+            // If reference types or backtraces are enabled, we need unwind info. Otherwise, we
+            // don't care.
+            "unwind_info" => {
+                if self.config().wasm_backtrace || self.config().features.reference_types {
+                    *value == FlagValue::Bool(true)
+                } else {
+                    return Ok(())
+                }
+            }
+
             // These settings don't affect the interface or functionality of
             // the module itself, so their configuration values shouldn't
             // matter.
@@ -380,10 +389,13 @@ impl Engine {
             | "enable_simd"
             | "enable_verifier"
             | "regalloc_checker"
+            | "regalloc_verbose_logs"
             | "is_pic"
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
             | "opt_level" // opt level doesn't change semantics
+            | "preserve_frame_pointers" // we don't currently rely on frame pointers
+            | "enable_alias_analysis" // alias analysis-based opts don't change semantics
             | "probestack_func_adjusts_sp" // probestack above asserted disabled
             | "probestack_size_log2" // probestack above asserted disabled
             | "regalloc" // shouldn't change semantics
@@ -474,6 +486,7 @@ impl Engine {
                 "has_popcnt" => Some(std::is_x86_feature_detected!("popcnt")),
                 "has_avx" => Some(std::is_x86_feature_detected!("avx")),
                 "has_avx2" => Some(std::is_x86_feature_detected!("avx2")),
+                "has_fma" => Some(std::is_x86_feature_detected!("fma")),
                 "has_bmi1" => Some(std::is_x86_feature_detected!("bmi1")),
                 "has_bmi2" => Some(std::is_x86_feature_detected!("bmi2")),
                 "has_avx512bitalg" => Some(std::is_x86_feature_detected!("avx512bitalg")),
@@ -518,8 +531,10 @@ impl Default for Engine {
 #[cfg(test)]
 mod tests {
     use crate::{Config, Engine, Module, OptLevel};
+
     use anyhow::Result;
     use tempfile::TempDir;
+    use wasmtime_environ::FlagValue;
 
     #[test]
     fn cache_accounts_for_opt_level() -> Result<()> {
@@ -583,5 +598,21 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    #[cfg(compiler)]
+    fn test_disable_backtraces() {
+        let engine = Engine::new(
+            Config::new()
+                .wasm_backtrace(false)
+                .wasm_reference_types(false),
+        )
+        .expect("failed to construct engine");
+        assert_eq!(
+            engine.compiler().flags().get("unwind_info"),
+            Some(&FlagValue::Bool(false)),
+            "unwind info should be disabled unless needed"
+        );
     }
 }

@@ -1,0 +1,244 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+function %fn0(i8x8, i8x8) -> i8x8 {
+block0(v0: i8x8, v1: i8x8):
+  v2 = imin v0, v1
+  return v2
+}
+
+; block0:
+;   smin v0.8b, v0.8b, v1.8b
+;   ret
+
+function %fn1(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = imin v0, v1
+  return v2
+}
+
+; block0:
+;   smin v0.16b, v0.16b, v1.16b
+;   ret
+
+function %fn2(i16x4, i16x4) -> i16x4 {
+block0(v0: i16x4, v1: i16x4):
+  v2 = imin v0, v1
+  return v2
+}
+
+; block0:
+;   smin v0.4h, v0.4h, v1.4h
+;   ret
+
+function %fn3(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = imin v0, v1
+  return v2
+}
+
+; block0:
+;   smin v0.8h, v0.8h, v1.8h
+;   ret
+
+function %fn4(i32x2, i32x2) -> i32x2 {
+block0(v0: i32x2, v1: i32x2):
+  v2 = imin v0, v1
+  return v2
+}
+
+; block0:
+;   smin v0.2s, v0.2s, v1.2s
+;   ret
+
+function %fn5(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = imin v0, v1
+  return v2
+}
+
+; block0:
+;   smin v0.4s, v0.4s, v1.4s
+;   ret
+
+function %fn6(i8x8, i8x8) -> i8x8 {
+block0(v0: i8x8, v1: i8x8):
+  v2 = umin v0, v1
+  return v2
+}
+
+; block0:
+;   umin v0.8b, v0.8b, v1.8b
+;   ret
+
+function %fn7(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = umin v0, v1
+  return v2
+}
+
+; block0:
+;   umin v0.16b, v0.16b, v1.16b
+;   ret
+
+function %fn8(i16x4, i16x4) -> i16x4 {
+block0(v0: i16x4, v1: i16x4):
+  v2 = umin v0, v1
+  return v2
+}
+
+; block0:
+;   umin v0.4h, v0.4h, v1.4h
+;   ret
+
+function %fn9(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = umin v0, v1
+  return v2
+}
+
+; block0:
+;   umin v0.8h, v0.8h, v1.8h
+;   ret
+
+function %fn10(i32x2, i32x2) -> i32x2 {
+block0(v0: i32x2, v1: i32x2):
+  v2 = umin v0, v1
+  return v2
+}
+
+; block0:
+;   umin v0.2s, v0.2s, v1.2s
+;   ret
+
+function %fn11(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = umin v0, v1
+  return v2
+}
+
+; block0:
+;   umin v0.4s, v0.4s, v1.4s
+;   ret
+
+function %fn12(i8x8, i8x8) -> i8x8 {
+block0(v0: i8x8, v1: i8x8):
+  v2 = imax v0, v1
+  return v2
+}
+
+; block0:
+;   smax v0.8b, v0.8b, v1.8b
+;   ret
+
+function %fn13(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = imax v0, v1
+  return v2
+}
+
+; block0:
+;   smax v0.16b, v0.16b, v1.16b
+;   ret
+
+function %fn14(i16x4, i16x4) -> i16x4 {
+block0(v0: i16x4, v1: i16x4):
+  v2 = imax v0, v1
+  return v2
+}
+
+; block0:
+;   smax v0.4h, v0.4h, v1.4h
+;   ret
+
+function %fn15(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = imax v0, v1
+  return v2
+}
+
+; block0:
+;   smax v0.8h, v0.8h, v1.8h
+;   ret
+
+function %fn16(i32x2, i32x2) -> i32x2 {
+block0(v0: i32x2, v1: i32x2):
+  v2 = imax v0, v1
+  return v2
+}
+
+; block0:
+;   smax v0.2s, v0.2s, v1.2s
+;   ret
+
+function %fn17(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = imax v0, v1
+  return v2
+}
+
+; block0:
+;   smax v0.4s, v0.4s, v1.4s
+;   ret
+
+function %fn18(i8x8, i8x8) -> i8x8 {
+block0(v0: i8x8, v1: i8x8):
+  v2 = umax v0, v1
+  return v2
+}
+
+; block0:
+;   umax v0.8b, v0.8b, v1.8b
+;   ret
+
+function %fn19(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+  v2 = umax v0, v1
+  return v2
+}
+
+; block0:
+;   umax v0.16b, v0.16b, v1.16b
+;   ret
+
+function %fn20(i16x4, i16x4) -> i16x4 {
+block0(v0: i16x4, v1: i16x4):
+  v2 = umax v0, v1
+  return v2
+}
+
+; block0:
+;   umax v0.4h, v0.4h, v1.4h
+;   ret
+
+function %fn21(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = umax v0, v1
+  return v2
+}
+
+; block0:
+;   umax v0.8h, v0.8h, v1.8h
+;   ret
+
+function %fn22(i32x2, i32x2) -> i32x2 {
+block0(v0: i32x2, v1: i32x2):
+  v2 = umax v0, v1
+  return v2
+}
+
+; block0:
+;   umax v0.2s, v0.2s, v1.2s
+;   ret
+
+function %fn23(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = umax v0, v1
+  return v2
+}
+
+; block0:
+;   umax v0.4s, v0.4s, v1.4s
+;   ret
+

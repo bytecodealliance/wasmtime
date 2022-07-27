@@ -2,7 +2,6 @@ use crate::imports::Imports;
 use crate::instance::{Instance, InstanceHandle, RuntimeMemoryCreator};
 use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::table::Table;
-use crate::traphandlers::Trap;
 use crate::ModuleRuntimeInfo;
 use crate::Store;
 use anyhow::Result;
@@ -103,7 +102,7 @@ pub enum InstantiationError {
 
     /// A trap ocurred during instantiation, after linking.
     #[error("Trap occurred during instantiation")]
-    Trap(Trap),
+    Trap(TrapCode),
 
     /// A limit on how many instances are supported has been reached.
     #[error("Limit of {0} concurrent instances has been reached")]
@@ -384,9 +383,7 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), I
         },
     );
     if !ok {
-        return Err(InstantiationError::Trap(Trap::wasm(
-            TrapCode::HeapOutOfBounds,
-        )));
+        return Err(InstantiationError::Trap(TrapCode::HeapOutOfBounds));
     }
 
     Ok(())

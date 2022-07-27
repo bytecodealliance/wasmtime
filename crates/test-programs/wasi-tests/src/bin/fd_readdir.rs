@@ -1,4 +1,3 @@
-use more_asserts::assert_gt;
 use std::{env, mem, process, slice, str};
 use wasi_tests::open_scratch_directory;
 
@@ -107,9 +106,8 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
         0,
     )
     .expect("failed to create file");
-    assert_gt!(
-        file_fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        file_fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 
@@ -165,9 +163,8 @@ unsafe fn test_fd_readdir_lots(dir_fd: wasi::Fd) {
             0,
         )
         .expect("failed to create file");
-        assert_gt!(
-            file_fd,
-            libc::STDERR_FILENO as wasi::Fd,
+        assert!(
+            file_fd > libc::STDERR_FILENO as wasi::Fd,
             "file descriptor range check",
         );
         wasi::fd_close(file_fd).expect("closing a file");

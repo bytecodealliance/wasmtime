@@ -8,8 +8,9 @@ use crate::isa::x64::settings as x64_settings;
 use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
+use alloc::boxed::Box;
 use alloc::vec::Vec;
-use regalloc2::{Allocation, VReg};
+use regalloc2::{Allocation, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::fmt;
 use std::string::{String, ToString};
@@ -28,6 +29,27 @@ use args::*;
 
 // `Inst` is defined inside ISLE as `MInst`. We publicly re-export it here.
 pub use super::lower::isle::generated_code::MInst as Inst;
+
+// Out-of-line data for calls, to keep the size of `Inst` downn.
+#[derive(Clone, Debug)]
+pub struct CallInfo {
+    /// Register uses of this call.
+    pub uses: SmallVec<[Reg; 8]>,
+    /// Register defs of this call.
+    pub defs: SmallVec<[Writable<Reg>; 8]>,
+    /// Registers clobbered by this call, as per its calling convention.
+    pub clobbers: PRegSet,
+    /// The opcode of this call.
+    pub opcode: Opcode,
+}
+
+#[test]
+#[cfg(target_pointer_width = "64")]
+fn inst_size_test() {
+    // This test will help with unintentionally growing the size
+    // of the Inst enum.
+    assert_eq!(48, std::mem::size_of::<Inst>());
+}
 
 pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
     let xs = x as i64;
@@ -107,6 +129,8 @@ impl Inst {
             | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
 
             Inst::XmmUnaryRmREvex { op, .. } | Inst::XmmRmREvex { op, .. } => op.available_from(),
+
+            Inst::XmmRmRVex { op, .. } => op.available_from(),
         }
     }
 }
@@ -298,6 +322,20 @@ impl Inst {
             op,
             src1: Xmm::new(dst.to_reg()).unwrap(),
             src2: XmmMem::new(src).unwrap(),
+            dst: WritableXmm::from_writable_reg(dst).unwrap(),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn xmm_rm_r_vex(op: AvxOpcode, src3: RegMem, src2: Reg, dst: Writable<Reg>) -> Self {
+        src3.assert_regclass_is(RegClass::Float);
+        debug_assert!(src2.class() == RegClass::Float);
+        debug_assert!(dst.to_reg().class() == RegClass::Float);
+        Inst::XmmRmRVex {
+            op,
+            src3: XmmMem::new(src3).unwrap(),
+            src2: Xmm::new(src2).unwrap(),
+            src1: Xmm::new(dst.to_reg()).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -617,14 +655,14 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_cmove(size: OperandSize, cc: CC, src: RegMem, dst: Writable<Reg>) -> Inst {
-        debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
+    pub(crate) fn xmm_cmove(ty: Type, cc: CC, src: RegMem, dst: Writable<Reg>) -> Inst {
+        debug_assert!(ty == types::F32 || ty == types::F64 || ty.is_vector());
         src.assert_regclass_is(RegClass::Float);
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         let src = XmmMem::new(src).unwrap();
         let dst = WritableXmm::from_writable_reg(dst).unwrap();
         Inst::XmmCmove {
-            size,
+            ty,
             cc,
             consequent: src,
             alternative: dst.to_reg(),
@@ -646,30 +684,38 @@ impl Inst {
 
     pub(crate) fn call_known(
         dest: ExternalName,
-        uses: Vec<Reg>,
-        defs: Vec<Writable<Reg>>,
+        uses: SmallVec<[Reg; 8]>,
+        defs: SmallVec<[Writable<Reg>; 8]>,
+        clobbers: PRegSet,
         opcode: Opcode,
     ) -> Inst {
         Inst::CallKnown {
             dest,
-            uses,
-            defs,
-            opcode,
+            info: Box::new(CallInfo {
+                uses,
+                defs,
+                clobbers,
+                opcode,
+            }),
         }
     }
 
     pub(crate) fn call_unknown(
         dest: RegMem,
-        uses: Vec<Reg>,
-        defs: Vec<Writable<Reg>>,
+        uses: SmallVec<[Reg; 8]>,
+        defs: SmallVec<[Writable<Reg>; 8]>,
+        clobbers: PRegSet,
         opcode: Opcode,
     ) -> Inst {
         dest.assert_regclass_is(RegClass::Int);
         Inst::CallUnknown {
             dest,
-            uses,
-            defs,
-            opcode,
+            info: Box::new(CallInfo {
+                uses,
+                defs,
+                clobbers,
+                opcode,
+            }),
         }
     }
 
@@ -966,11 +1012,15 @@ impl PrettyPrint for Inst {
                 dst_remainder,
             } => {
                 let dividend_lo = pretty_print_reg(dividend_lo.to_reg(), size.to_bytes(), allocs);
-                let dividend_hi = pretty_print_reg(dividend_hi.to_reg(), size.to_bytes(), allocs);
                 let dst_quotient =
                     pretty_print_reg(dst_quotient.to_reg().to_reg(), size.to_bytes(), allocs);
                 let dst_remainder =
                     pretty_print_reg(dst_remainder.to_reg().to_reg(), size.to_bytes(), allocs);
+                let dividend_hi = if size.to_bits() > 8 {
+                    pretty_print_reg(dividend_hi.to_reg(), size.to_bytes(), allocs)
+                } else {
+                    "(none)".to_string()
+                };
                 let divisor = divisor.pretty_print(size.to_bytes(), allocs);
                 format!(
                     "{} {}, {}, {}, {}, {}",
@@ -1100,6 +1150,29 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
                 format!("{} {}, {}, {}", ljustify(op.to_string()), src1, src2, dst)
+            }
+
+            Inst::XmmRmRVex {
+                op,
+                src1,
+                src2,
+                src3,
+                dst,
+                ..
+            } => {
+                let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                let src2 = pretty_print_reg(src2.to_reg(), 8, allocs);
+                let src3 = src3.pretty_print(8, allocs);
+
+                format!(
+                    "{} {}, {}, {}, {}",
+                    ljustify(op.to_string()),
+                    src1,
+                    src2,
+                    src3,
+                    dst
+                )
             }
 
             Inst::XmmRmREvex {
@@ -1507,23 +1580,26 @@ impl PrettyPrint for Inst {
             }
 
             Inst::XmmCmove {
-                size,
+                ty,
                 cc,
                 consequent,
                 alternative,
                 dst,
                 ..
             } => {
-                let alternative = pretty_print_reg(alternative.to_reg(), size.to_bytes(), allocs);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
-                let consequent = consequent.pretty_print(size.to_bytes(), allocs);
+                let size = u8::try_from(ty.bytes()).unwrap();
+                let alternative = pretty_print_reg(alternative.to_reg(), size, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), size, allocs);
+                let consequent = consequent.pretty_print(size, allocs);
                 format!(
                     "mov {}, {}; j{} $next; mov{} {}, {}; $next: ",
                     cc.invert().to_string(),
-                    if *size == OperandSize::Size64 {
-                        "sd"
-                    } else {
-                        "ss"
+                    match *ty {
+                        types::F64 => "sd",
+                        types::F32 => "ss",
+                        types::F32X4 => "aps",
+                        types::F64X2 => "apd",
+                        _ => "dqa",
                     },
                     consequent,
                     dst,
@@ -1643,11 +1719,11 @@ impl PrettyPrint for Inst {
             Inst::Ud2 { trap_code } => format!("ud2 {}", trap_code),
 
             Inst::ElfTlsGetAddr { ref symbol } => {
-                format!("elf_tls_get_addr {:?}", symbol)
+                format!("%rax = elf_tls_get_addr {:?}", symbol)
             }
 
             Inst::MachOTlsGetAddr { ref symbol } => {
-                format!("macho_tls_get_addr {:?}", symbol)
+                format!("%rax = macho_tls_get_addr {:?}", symbol)
             }
 
             Inst::Unwind { inst } => {
@@ -1715,12 +1791,15 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             dividend_hi,
             dst_quotient,
             dst_remainder,
+            size,
             ..
         } => {
             collector.reg_fixed_use(dividend_lo.to_reg(), regs::rax());
-            collector.reg_fixed_use(dividend_hi.to_reg(), regs::rdx());
             collector.reg_fixed_def(dst_quotient.to_writable_reg(), regs::rax());
             collector.reg_fixed_def(dst_remainder.to_writable_reg(), regs::rdx());
+            if size.to_bits() > 8 {
+                collector.reg_fixed_use(dividend_hi.to_reg(), regs::rdx());
+            }
             divisor.get_operands(collector);
         }
         Inst::MulHi {
@@ -1799,6 +1878,24 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
                     collector.reg_use(regs::xmm0());
                 }
             }
+        }
+        Inst::XmmRmRVex {
+            op,
+            src1,
+            src2,
+            src3,
+            dst,
+            ..
+        } => {
+            // Vfmadd uses and defs the dst reg, that is not the case with all
+            // AVX's ops, if you're adding a new op, make sure to correctly define
+            // register uses.
+            assert!(*op == AvxOpcode::Vfmadd213ps || *op == AvxOpcode::Vfmadd213pd);
+
+            collector.reg_use(src1.to_reg());
+            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            collector.reg_use(src2.to_reg());
+            src3.get_operands(collector);
         }
         Inst::XmmRmREvex {
             op,
@@ -1967,34 +2064,25 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_def(dst.to_writable_reg());
         }
 
-        Inst::CallKnown {
-            ref uses, ref defs, ..
-        } => {
-            for &u in uses {
+        Inst::CallKnown { ref info, .. } => {
+            for &u in &info.uses {
                 collector.reg_use(u);
             }
-            for &d in defs {
+            for &d in &info.defs {
                 collector.reg_def(d);
             }
-            // FIXME: keep clobbers separate in the Inst and use
-            // `reg_clobber()`.
+            collector.reg_clobbers(info.clobbers);
         }
 
-        Inst::CallUnknown {
-            ref uses,
-            ref defs,
-            dest,
-            ..
-        } => {
+        Inst::CallUnknown { ref info, dest, .. } => {
             dest.get_operands(collector);
-            for &u in uses {
+            for &u in &info.uses {
                 collector.reg_use(u);
             }
-            for &d in defs {
+            for &d in &info.defs {
                 collector.reg_def(d);
             }
-            // FIXME: keep clobbers separate in the Inst and use
-            // `reg_clobber()`.
+            collector.reg_clobbers(info.clobbers);
         }
 
         Inst::JmpTableSeq {
@@ -2029,13 +2117,19 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             mem.get_operands(collector);
         }
 
-        Inst::AtomicRmwSeq { .. } => {
-            // FIXME: take vreg args, not fixed regs, and just use
-            // reg_fixed_use here.
-            collector.reg_use(regs::r9());
-            collector.reg_use(regs::r10());
-            collector.reg_def(Writable::from_reg(regs::r11()));
-            collector.reg_def(Writable::from_reg(regs::rax()));
+        Inst::AtomicRmwSeq {
+            operand,
+            temp,
+            dst_old,
+            mem,
+            ..
+        } => {
+            collector.reg_late_use(*operand);
+            collector.reg_early_def(*temp);
+            // This `fixed_def` is needed because `CMPXCHG` always uses this
+            // register implicitly.
+            collector.reg_fixed_def(*dst_old, regs::rax());
+            mem.get_operands_late(collector)
         }
 
         Inst::Ret { rets } => {
@@ -2060,16 +2154,16 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
 
         Inst::ElfTlsGetAddr { .. } | Inst::MachOTlsGetAddr { .. } => {
+            collector.reg_def(Writable::from_reg(regs::rax()));
             // All caller-saves are clobbered.
             //
             // We use the SysV calling convention here because the
             // pseudoinstruction (and relocation that it emits) is specific to
             // ELF systems; other x86-64 targets with other conventions (i.e.,
             // Windows) use different TLS strategies.
-            for reg in X64ABIMachineSpec::get_regs_clobbered_by_call(CallConv::SystemV) {
-                // FIXME: use actual clobber functionality.
-                collector.reg_def(reg);
-            }
+            let mut clobbers = X64ABIMachineSpec::get_regs_clobbered_by_call(CallConv::SystemV);
+            clobbers.remove(regs::gpr_preg(regs::ENC_RAX));
+            collector.reg_clobbers(clobbers);
         }
 
         Inst::Unwind { .. } => {}

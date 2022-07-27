@@ -19,12 +19,14 @@
 
 use crate::fx::FxHashMap;
 use crate::fx::FxHashSet;
-use crate::ir::{self, types, Constant, ConstantData, LabelValueLoc, SourceLoc, ValueLabel};
+use crate::ir::{
+    self, types, Constant, ConstantData, DynamicStackSlot, LabelValueLoc, SourceLoc, ValueLabel,
+};
 use crate::machinst::*;
 use crate::timing;
 use crate::ValueLocRange;
 use regalloc2::{
-    Edit, Function as RegallocFunction, InstOrEdit, InstRange, Operand, OperandKind, PReg,
+    Edit, Function as RegallocFunction, InstOrEdit, InstRange, Operand, OperandKind, PReg, PRegSet,
     RegClass, VReg,
 };
 
@@ -79,12 +81,8 @@ pub struct VCode<I: VCodeInst> {
     /// instruction's operands.
     operand_ranges: Vec<(u32, u32)>,
 
-    /// Clobbers: a sparse map from instruction indices to clobber lists.
-    clobber_ranges: FxHashMap<InsnIndex, (u32, u32)>,
-
-    /// A flat list of clobbered registers, with index ranges held by
-    /// `clobber_ranges`.
-    clobbers: Vec<PReg>,
+    /// Clobbers: a sparse map from instruction indices to clobber masks.
+    clobbers: FxHashMap<InsnIndex, PRegSet>,
 
     /// Move information: for a given InsnIndex, (src, dst) operand pair.
     is_move: FxHashMap<InsnIndex, (Operand, Operand)>,
@@ -211,8 +209,11 @@ pub struct EmitResult<I: VCodeInst> {
     /// epilogue(s), and makes use of the regalloc results.
     pub disasm: Option<String>,
 
-    /// Offsets of stackslots.
-    pub stackslot_offsets: PrimaryMap<StackSlot, u32>,
+    /// Offsets of sized stackslots.
+    pub sized_stackslot_offsets: PrimaryMap<StackSlot, u32>,
+
+    /// Offsets of dynamic stackslots.
+    pub dynamic_stackslot_offsets: PrimaryMap<DynamicStackSlot, u32>,
 
     /// Value-labels information (debug metadata).
     pub value_labels_ranges: ValueLabelsRanges,
@@ -568,13 +569,8 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             let (ops, clobbers) = op_collector.finish();
             self.vcode.operand_ranges.push(ops);
 
-            if !clobbers.is_empty() {
-                let start = self.vcode.clobbers.len();
-                self.vcode.clobbers.extend(clobbers.into_iter());
-                let end = self.vcode.clobbers.len();
-                self.vcode
-                    .clobber_ranges
-                    .insert(InsnIndex::new(i), (start as u32, end as u32));
+            if clobbers != PRegSet::default() {
+                self.vcode.clobbers.insert(InsnIndex::new(i), clobbers);
             }
 
             if let Some((dst, src)) = insn.is_move() {
@@ -602,6 +598,20 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             self.reverse_and_finalize();
         }
         self.collect_operands();
+
+        // Apply register aliases to the `reftyped_vregs` list since this list
+        // will be returned directly to `regalloc2` eventually and all
+        // operands/results of instructions will use the alias-resolved vregs
+        // from `regalloc2`'s perspective.
+        //
+        // Also note that `reftyped_vregs` can't have duplicates, so after the
+        // aliases are applied duplicates are removed.
+        for reg in self.vcode.reftyped_vregs.iter_mut() {
+            *reg = Self::resolve_vreg_alias_impl(&self.vcode.vreg_aliases, *reg);
+        }
+        self.vcode.reftyped_vregs.sort();
+        self.vcode.reftyped_vregs.dedup();
+
         self.compute_preds_from_succs();
         self.vcode.debug_value_labels.sort_unstable();
         self.vcode
@@ -628,8 +638,7 @@ impl<I: VCodeInst> VCode<I> {
             insts: Vec::with_capacity(10 * n_blocks),
             operands: Vec::with_capacity(30 * n_blocks),
             operand_ranges: Vec::with_capacity(10 * n_blocks),
-            clobber_ranges: FxHashMap::default(),
-            clobbers: vec![],
+            clobbers: FxHashMap::default(),
             is_move: FxHashMap::default(),
             srclocs: Vec::with_capacity(10 * n_blocks),
             entry: BlockIndex::new(0),
@@ -710,13 +719,15 @@ impl<I: VCodeInst> VCode<I> {
             }
 
             // Also add explicitly-clobbered registers.
-            if let Some(&(start, end)) = self.clobber_ranges.get(&InsnIndex::new(i)) {
-                let inst_clobbers = &self.clobbers[(start as usize)..(end as usize)];
-                for &preg in inst_clobbers {
-                    let reg = RealReg::from(preg);
-                    if clobbered_set.insert(reg) {
-                        clobbered.push(Writable::from_reg(reg));
-                    }
+            for preg in self
+                .clobbers
+                .get(&InsnIndex::new(i))
+                .cloned()
+                .unwrap_or_default()
+            {
+                let reg = RealReg::from(preg);
+                if clobbered_set.insert(reg) {
+                    clobbered.push(Writable::from_reg(reg));
                 }
             }
         }
@@ -1046,7 +1057,8 @@ impl<I: VCodeInst> VCode<I> {
             inst_offsets,
             func_body_len,
             disasm: if want_disasm { Some(disasm) } else { None },
-            stackslot_offsets: self.abi.stackslot_offsets().clone(),
+            sized_stackslot_offsets: self.abi.sized_stackslot_offsets().clone(),
+            dynamic_stackslot_offsets: self.abi.dynamic_stackslot_offsets().clone(),
             value_labels_ranges,
             frame_size,
         }
@@ -1122,6 +1134,29 @@ impl<I: VCodeInst> VCode<I> {
     pub fn bindex_to_bb(&self, block: BlockIndex) -> Option<ir::Block> {
         self.block_order.lowered_order()[block.index()].orig_block()
     }
+
+    #[inline]
+    fn assert_no_vreg_aliases<'a>(&self, list: &'a [VReg]) -> &'a [VReg] {
+        for vreg in list {
+            self.assert_not_vreg_alias(*vreg);
+        }
+        list
+    }
+
+    #[inline]
+    fn assert_not_vreg_alias(&self, vreg: VReg) -> VReg {
+        debug_assert!(VCodeBuilder::<I>::resolve_vreg_alias_impl(&self.vreg_aliases, vreg) == vreg);
+        vreg
+    }
+
+    #[inline]
+    fn assert_operand_not_vreg_alias(&self, op: Operand) -> Operand {
+        // It should be true by construction that `Operand`s do not contain any
+        // aliased vregs since they're all collected and mapped when the VCode
+        // is itself constructed.
+        self.assert_not_vreg_alias(op.vreg());
+        op
+    }
 }
 
 impl<I: VCodeInst> RegallocFunction for VCode<I> {
@@ -1154,7 +1189,10 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
 
     fn block_params(&self, block: BlockIndex) -> &[VReg] {
         let (start, end) = self.block_params_range[block.index()];
-        &self.block_params[start as usize..end as usize]
+        let ret = &self.block_params[start as usize..end as usize];
+        // Currently block params are never aliased to another vreg, but
+        // double-check just to be sure.
+        self.assert_no_vreg_aliases(ret)
     }
 
     fn branch_blockparams(&self, block: BlockIndex, _insn: InsnIndex, succ_idx: usize) -> &[VReg] {
@@ -1162,7 +1200,9 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         let succ_ranges =
             &self.branch_block_arg_range[succ_range_start as usize..succ_range_end as usize];
         let (branch_block_args_start, branch_block_args_end) = succ_ranges[succ_idx];
-        &self.branch_block_args[branch_block_args_start as usize..branch_block_args_end as usize]
+        let ret = &self.branch_block_args
+            [branch_block_args_start as usize..branch_block_args_end as usize];
+        self.assert_no_vreg_aliases(ret)
     }
 
     fn is_ret(&self, insn: InsnIndex) -> bool {
@@ -1184,20 +1224,24 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 
     fn is_move(&self, insn: InsnIndex) -> Option<(Operand, Operand)> {
-        self.is_move.get(&insn).cloned()
+        let (a, b) = self.is_move.get(&insn)?;
+        Some((
+            self.assert_operand_not_vreg_alias(*a),
+            self.assert_operand_not_vreg_alias(*b),
+        ))
     }
 
     fn inst_operands(&self, insn: InsnIndex) -> &[Operand] {
         let (start, end) = self.operand_ranges[insn.index()];
-        &self.operands[start as usize..end as usize]
+        let ret = &self.operands[start as usize..end as usize];
+        for op in ret {
+            self.assert_operand_not_vreg_alias(*op);
+        }
+        ret
     }
 
-    fn inst_clobbers(&self, insn: InsnIndex) -> &[PReg] {
-        if let Some(&(start, end)) = self.clobber_ranges.get(&insn) {
-            &self.clobbers[start as usize..end as usize]
-        } else {
-            &[]
-        }
+    fn inst_clobbers(&self, insn: InsnIndex) -> PRegSet {
+        self.clobbers.get(&insn).cloned().unwrap_or_default()
     }
 
     fn num_vregs(&self) -> usize {
@@ -1205,10 +1249,16 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 
     fn reftype_vregs(&self) -> &[VReg] {
-        &self.reftyped_vregs[..]
+        self.assert_no_vreg_aliases(&self.reftyped_vregs[..])
     }
 
     fn debug_value_labels(&self) -> &[(VReg, InsnIndex, InsnIndex, u32)] {
+        // VRegs here are inserted into `debug_value_labels` after code is
+        // generated and aliases are fully defined, so no double-check that
+        // aliases are not lingering.
+        for (vreg, ..) in self.debug_value_labels.iter() {
+            self.assert_not_vreg_alias(*vreg);
+        }
         &self.debug_value_labels[..]
     }
 

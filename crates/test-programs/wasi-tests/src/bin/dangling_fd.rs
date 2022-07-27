@@ -1,4 +1,3 @@
-use more_asserts::assert_gt;
 use std::{env, process};
 use wasi_tests::{open_scratch_directory, TESTCONFIG};
 
@@ -9,9 +8,8 @@ unsafe fn test_dangling_fd(dir_fd: wasi::Fd) {
         let fd = wasi::path_open(dir_fd, 0, "file", wasi::OFLAGS_CREAT, 0, 0, 0).unwrap();
         wasi::fd_close(fd).unwrap();
         let file_fd = wasi::path_open(dir_fd, 0, "file", 0, 0, 0, 0).expect("failed to open");
-        assert_gt!(
-            file_fd,
-            libc::STDERR_FILENO as wasi::Fd,
+        assert!(
+            file_fd > libc::STDERR_FILENO as wasi::Fd,
             "file descriptor range check",
         );
         wasi::path_unlink_file(dir_fd, "file").expect("failed to unlink");
@@ -22,9 +20,8 @@ unsafe fn test_dangling_fd(dir_fd: wasi::Fd) {
         wasi::path_create_directory(dir_fd, "subdir").expect("failed to create dir");
         let subdir_fd = wasi::path_open(dir_fd, 0, "subdir", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
             .expect("failed to open dir");
-        assert_gt!(
-            subdir_fd,
-            libc::STDERR_FILENO as wasi::Fd,
+        assert!(
+            subdir_fd > libc::STDERR_FILENO as wasi::Fd,
             "file descriptor range check",
         );
         wasi::path_remove_directory(dir_fd, "subdir").expect("failed to remove dir 2");

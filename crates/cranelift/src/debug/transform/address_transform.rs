@@ -1,6 +1,5 @@
 use crate::{CompiledFunctions, FunctionAddressMap};
 use gimli::write;
-use more_asserts::assert_le;
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use wasmtime_environ::{DefinedFuncIndex, EntityRef, FilePos, PrimaryMap, WasmFileInfo};
@@ -87,13 +86,10 @@ fn build_function_lookup(
     ft: &FunctionAddressMap,
     code_section_offset: u64,
 ) -> (WasmAddress, WasmAddress, FuncLookup) {
-    assert_le!(
-        code_section_offset,
-        ft.start_srcloc.file_offset().unwrap().into()
-    );
+    assert!(code_section_offset <= ft.start_srcloc.file_offset().unwrap().into());
     let fn_start = get_wasm_code_offset(ft.start_srcloc, code_section_offset);
     let fn_end = get_wasm_code_offset(ft.end_srcloc, code_section_offset);
-    assert_le!(fn_start, fn_end);
+    assert!(fn_start <= fn_end);
 
     // Build ranges of continuous source locations. The new ranges starts when
     // non-descending order is interrupted. Assuming the same origin location can
@@ -111,8 +107,8 @@ fn build_function_lookup(
         }
 
         let offset = get_wasm_code_offset(t.srcloc, code_section_offset);
-        assert_le!(fn_start, offset);
-        assert_le!(offset, fn_end);
+        assert!(fn_start <= offset);
+        assert!(offset <= fn_end);
 
         let inst_gen_start = t.code_offset as usize;
         let inst_gen_end = match ft.instructions.get(i + 1) {
@@ -213,7 +209,7 @@ fn build_function_addr_map(
         if cfg!(debug_assertions) {
             // fn_map is sorted by the generated field -- see FunctionAddressMap::instructions.
             for i in 1..fn_map.len() {
-                assert_le!(fn_map[i - 1].generated, fn_map[i].generated);
+                assert!(fn_map[i - 1].generated <= fn_map[i].generated);
             }
         }
 

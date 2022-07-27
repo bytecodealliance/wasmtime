@@ -2,6 +2,7 @@
 
 use anyhow::{anyhow, bail, Context as _, Result};
 use clap::Parser;
+use once_cell::sync::Lazy;
 use std::fs::File;
 use std::io::Read;
 use std::thread;
@@ -65,11 +66,7 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
     Ok((parts[0].into(), parts[1].into()))
 }
 
-lazy_static::lazy_static! {
-    static ref AFTER_HELP: String = {
-        crate::FLAG_EXPLANATIONS.to_string()
-    };
-}
+static AFTER_HELP: Lazy<String> = Lazy::new(|| crate::FLAG_EXPLANATIONS.to_string());
 
 /// Runs a WebAssembly module
 #[derive(Parser)]
@@ -81,6 +78,11 @@ pub struct RunCommand {
     /// Allow unknown exports when running commands.
     #[clap(long = "allow-unknown-exports")]
     allow_unknown_exports: bool,
+
+    /// Allow the main module to import unknown functions, using an
+    /// implementation that immediately traps, when running commands.
+    #[clap(long = "trap-unknown-imports")]
+    trap_unknown_imports: bool,
 
     /// Allow executing precompiled WebAssembly modules as `*.cwasm` files.
     ///
@@ -319,8 +321,13 @@ impl RunCommand {
         }
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
-        // Use "" as a default module name.
         let module = self.load_module(linker.engine(), &self.module)?;
+        // The main module might be allowed to have unknown imports, which
+        // should be defined as traps:
+        if self.trap_unknown_imports {
+            linker.define_unknown_imports_as_traps(&module)?;
+        }
+        // Use "" as a default module name.
         linker
             .module(&mut *store, "", &module)
             .context(format!("failed to instantiate {:?}", self.module))?;

@@ -1,5 +1,5 @@
-use crate::component::func::{MAX_STACK_PARAMS, MAX_STACK_RESULTS};
-use crate::component::{ComponentParams, ComponentType, Lift, Lower, Memory, MemoryMut, Options};
+use crate::component::func::{Memory, MemoryMut, Options};
+use crate::component::{ComponentParams, ComponentType, Lift, Lower};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{bail, Context, Result};
 use std::any::Any;
@@ -7,9 +7,11 @@ use std::mem::MaybeUninit;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
 use std::sync::Arc;
-use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeFuncIndex};
+use wasmtime_environ::component::{
+    ComponentTypes, StringEncoding, TypeFuncIndex, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+};
 use wasmtime_runtime::component::{
-    VMComponentContext, VMComponentFlags, VMLowering, VMLoweringCallee,
+    InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
 };
 use wasmtime_runtime::{VMCallerCheckedAnyfunc, VMMemoryDefinition, VMOpaqueContext};
 
@@ -17,7 +19,7 @@ use wasmtime_runtime::{VMCallerCheckedAnyfunc, VMMemoryDefinition, VMOpaqueConte
 /// component.
 ///
 /// For more information see the
-/// [`Linker::func_wrap`](crate::component::Linker::func_wrap) documentation.
+/// [`func_wrap`](crate::component::LinkerInstance::func_wrap) documentation.
 pub trait IntoComponentFunc<T, Params, Return> {
     /// Host entrypoint from a cranelift-generated trampoline.
     ///
@@ -27,6 +29,7 @@ pub trait IntoComponentFunc<T, Params, Return> {
     extern "C" fn entrypoint(
         cx: *mut VMOpaqueContext,
         data: *mut u8,
+        flags: InstanceFlags,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMCallerCheckedAnyfunc,
         string_encoding: StringEncoding,
@@ -105,6 +108,7 @@ where
 /// the select few places it's intended to be called from.
 unsafe fn call_host<T, Params, Return, F>(
     cx: *mut VMOpaqueContext,
+    mut flags: InstanceFlags,
     memory: *mut VMMemoryDefinition,
     realloc: *mut VMCallerCheckedAnyfunc,
     string_encoding: StringEncoding,
@@ -136,7 +140,6 @@ where
 
     let cx = VMComponentContext::from_opaque(cx);
     let instance = (*cx).instance();
-    let flags = (*instance).flags();
     let mut cx = StoreContextMut::from_raw((*instance).store());
 
     let options = Options::new(
@@ -149,13 +152,9 @@ where
     // Perform a dynamic check that this instance can indeed be left. Exiting
     // the component is disallowed, for example, when the `realloc` function
     // calls a canonical import.
-    if !(*flags).may_leave() {
+    if !flags.may_leave() {
         bail!("cannot leave component instance");
     }
-
-    // While we're lifting and lowering this instance cannot be reentered, so
-    // unset the flag here. This is also reset back to `true` on exit.
-    let _reset_may_enter = unset_and_reset_on_drop(flags, VMComponentFlags::set_may_enter);
 
     // There's a 2x2 matrix of whether parameters and results are stored on the
     // stack or on the heap. Each of the 4 branches here have a different
@@ -167,13 +166,12 @@ where
     // trivially DCE'd by LLVM. Perhaps one day with enough const programming in
     // Rust we can make monomorphizations of this function codegen only one
     // branch, but today is not that day.
-    let reset_may_leave;
-    if Params::flatten_count() <= MAX_STACK_PARAMS {
-        if Return::flatten_count() <= MAX_STACK_RESULTS {
+    if Params::flatten_count() <= MAX_FLAT_PARAMS {
+        if Return::flatten_count() <= MAX_FLAT_RESULTS {
             let storage = cast_storage::<ReturnStack<Params::Lower, Return::Lower>>(storage);
             let params = Params::lift(cx.0, &options, &storage.assume_init_ref().args)?;
             let ret = closure(cx.as_context_mut(), params)?;
-            reset_may_leave = unset_and_reset_on_drop(flags, VMComponentFlags::set_may_leave);
+            flags.set_may_leave(false);
             ret.lower(&mut cx, &options, map_maybe_uninit!(storage.ret))?;
         } else {
             let storage = cast_storage::<ReturnPointer<Params::Lower>>(storage).assume_init_ref();
@@ -181,61 +179,43 @@ where
             let ret = closure(cx.as_context_mut(), params)?;
             let mut memory = MemoryMut::new(cx.as_context_mut(), &options);
             let ptr = validate_inbounds::<Return>(memory.as_slice_mut(), &storage.retptr)?;
-            reset_may_leave = unset_and_reset_on_drop(flags, VMComponentFlags::set_may_leave);
+            flags.set_may_leave(false);
             ret.store(&mut memory, ptr)?;
         }
     } else {
         let memory = Memory::new(cx.0, &options);
-        if Return::flatten_count() <= MAX_STACK_RESULTS {
+        if Return::flatten_count() <= MAX_FLAT_RESULTS {
             let storage = cast_storage::<ReturnStack<ValRaw, Return::Lower>>(storage);
             let ptr =
                 validate_inbounds::<Params>(memory.as_slice(), &storage.assume_init_ref().args)?;
-            let params = Params::load(&memory, &memory.as_slice()[ptr..][..Params::size()])?;
+            let params = Params::load(&memory, &memory.as_slice()[ptr..][..Params::SIZE32])?;
             let ret = closure(cx.as_context_mut(), params)?;
-            reset_may_leave = unset_and_reset_on_drop(flags, VMComponentFlags::set_may_leave);
+            flags.set_may_leave(false);
             ret.lower(&mut cx, &options, map_maybe_uninit!(storage.ret))?;
         } else {
             let storage = cast_storage::<ReturnPointer<ValRaw>>(storage).assume_init_ref();
             let ptr = validate_inbounds::<Params>(memory.as_slice(), &storage.args)?;
-            let params = Params::load(&memory, &memory.as_slice()[ptr..][..Params::size()])?;
+            let params = Params::load(&memory, &memory.as_slice()[ptr..][..Params::SIZE32])?;
             let ret = closure(cx.as_context_mut(), params)?;
             let mut memory = MemoryMut::new(cx.as_context_mut(), &options);
             let ptr = validate_inbounds::<Return>(memory.as_slice_mut(), &storage.retptr)?;
-            reset_may_leave = unset_and_reset_on_drop(flags, VMComponentFlags::set_may_leave);
+            flags.set_may_leave(false);
             ret.store(&mut memory, ptr)?;
         }
     }
 
-    drop(reset_may_leave);
+    flags.set_may_leave(true);
 
     return Ok(());
-
-    unsafe fn unset_and_reset_on_drop(
-        slot: *mut VMComponentFlags,
-        set: fn(&mut VMComponentFlags, bool),
-    ) -> impl Drop {
-        set(&mut *slot, false);
-        return Reset(slot, set);
-
-        struct Reset(*mut VMComponentFlags, fn(&mut VMComponentFlags, bool));
-
-        impl Drop for Reset {
-            fn drop(&mut self) {
-                unsafe {
-                    (self.1)(&mut *self.0, true);
-                }
-            }
-        }
-    }
 }
 
 fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<usize> {
     // FIXME: needs memory64 support
     let ptr = usize::try_from(ptr.get_u32())?;
-    if ptr % usize::try_from(T::align())? != 0 {
+    if ptr % usize::try_from(T::ALIGN32)? != 0 {
         bail!("pointer not aligned");
     }
-    let end = match ptr.checked_add(T::size()) {
+    let end = match ptr.checked_add(T::SIZE32) {
         Some(n) => n,
         None => bail!("pointer size overflow"),
     };
@@ -282,6 +262,7 @@ macro_rules! impl_into_component_func {
             extern "C" fn entrypoint(
                 cx: *mut VMOpaqueContext,
                 data: *mut u8,
+                flags: InstanceFlags,
                 memory: *mut VMMemoryDefinition,
                 realloc: *mut VMCallerCheckedAnyfunc,
                 string_encoding: StringEncoding,
@@ -292,6 +273,7 @@ macro_rules! impl_into_component_func {
                 unsafe {
                     handle_result(|| call_host::<T, _, _, _>(
                         cx,
+                        flags,
                         memory,
                         realloc,
                         string_encoding,
@@ -318,6 +300,7 @@ macro_rules! impl_into_component_func {
             extern "C" fn entrypoint(
                 cx: *mut VMOpaqueContext,
                 data: *mut u8,
+                flags: InstanceFlags,
                 memory: *mut VMMemoryDefinition,
                 realloc: *mut VMCallerCheckedAnyfunc,
                 string_encoding: StringEncoding,
@@ -328,6 +311,7 @@ macro_rules! impl_into_component_func {
                 unsafe {
                     handle_result(|| call_host::<T, _, _, _>(
                         cx,
+                        flags,
                         memory,
                         realloc,
                         string_encoding,

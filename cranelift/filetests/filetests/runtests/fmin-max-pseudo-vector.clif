@@ -1,7 +1,7 @@
 test run
-; target s390x TODO: Not yet implemented on s390x
 set enable_simd
 target aarch64
+; target s390x FIXME: This currently fails under qemu due to a qemu bug
 target x86_64 skylake
 
 function %fmin_pseudo_f32x4(f32x4, f32x4) -> f32x4 {

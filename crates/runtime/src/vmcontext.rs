@@ -332,17 +332,16 @@ pub struct VMGlobalDefinition {
 mod test_vmglobal_definition {
     use super::VMGlobalDefinition;
     use crate::externref::VMExternRef;
-    use more_asserts::assert_ge;
     use std::mem::{align_of, size_of};
-    use wasmtime_environ::{Module, VMOffsets};
+    use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
     #[test]
     fn check_vmglobal_definition_alignment() {
-        assert_ge!(align_of::<VMGlobalDefinition>(), align_of::<i32>());
-        assert_ge!(align_of::<VMGlobalDefinition>(), align_of::<i64>());
-        assert_ge!(align_of::<VMGlobalDefinition>(), align_of::<f32>());
-        assert_ge!(align_of::<VMGlobalDefinition>(), align_of::<f64>());
-        assert_ge!(align_of::<VMGlobalDefinition>(), align_of::<[u8; 16]>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<i32>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<i64>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<f32>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<f64>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<[u8; 16]>());
     }
 
     #[test]
@@ -351,7 +350,7 @@ mod test_vmglobal_definition {
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
             size_of::<VMGlobalDefinition>(),
-            usize::from(offsets.size_of_vmglobal_definition())
+            usize::from(offsets.ptr.size_of_vmglobal_definition())
         );
     }
 
@@ -676,7 +675,7 @@ pub struct VMInvokeArgument([u8; 16]);
 mod test_vm_invoke_argument {
     use super::VMInvokeArgument;
     use std::mem::{align_of, size_of};
-    use wasmtime_environ::{Module, VMOffsets};
+    use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
     #[test]
     fn check_vm_invoke_argument_alignment() {
@@ -689,7 +688,7 @@ mod test_vm_invoke_argument {
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
             size_of::<VMInvokeArgument>(),
-            usize::from(offsets.size_of_vmglobal_definition())
+            usize::from(offsets.ptr.size_of_vmglobal_definition())
         );
     }
 }

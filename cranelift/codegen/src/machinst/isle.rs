@@ -1,14 +1,19 @@
 use crate::ir::{types, Inst, Value, ValueList};
-use crate::machinst::{get_output_reg, InsnOutput, LowerCtx, Reg, Writable};
+use crate::machinst::{get_output_reg, InsnOutput, LowerCtx};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use smallvec::SmallVec;
 use std::cell::Cell;
 
 pub use super::MachLabel;
-pub use crate::ir::{ExternalName, FuncRef, GlobalValue, SigRef};
+pub use crate::ir::{
+    ArgumentExtension, Constant, DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate,
+    SigRef, StackSlot,
+};
 pub use crate::isa::unwind::UnwindInst;
-pub use crate::machinst::RelocDistance;
+pub use crate::machinst::{
+    ABIArg, ABIArgSlot, ABISig, InputSourceInst, RealReg, Reg, RelocDistance, Writable,
+};
 
 pub type Unit = ();
 pub type ValueSlice = (ValueList, usize);
@@ -16,12 +21,12 @@ pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 pub type WritableReg = Writable<Reg>;
 pub type VecReg = Vec<Reg>;
-pub type VecWritableReg = Vec<WritableReg>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
+pub type WritableValueRegs = crate::machinst::ValueRegs<WritableReg>;
 pub type InstOutput = SmallVec<[ValueRegs; 2]>;
 pub type InstOutputBuilder = Cell<InstOutput>;
-pub type VecMachLabel = Vec<MachLabel>;
 pub type BoxExternalName = Box<ExternalName>;
+pub type Range = (usize, usize);
 
 /// Helper macro to define methods in `prelude.isle` within `impl Context for
 /// ...` for each backend. These methods are shared amongst all backends.
@@ -160,6 +165,11 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn value_regs_len(&mut self, regs: ValueRegs) -> usize {
+            regs.regs().len()
+        }
+
+        #[inline]
         fn u8_as_u32(&mut self, x: u8) -> Option<u32> {
             Some(x.into())
         }
@@ -207,7 +217,7 @@ macro_rules! isle_prelude_methods {
 
         #[inline]
         fn ty_bits_u16(&mut self, ty: Type) -> u16 {
-            ty.bits()
+            ty.bits().try_into().unwrap()
         }
 
         #[inline]
@@ -242,7 +252,18 @@ macro_rules! isle_prelude_methods {
 
         #[inline]
         fn fits_in_32(&mut self, ty: Type) -> Option<Type> {
-            if ty.bits() <= 32 {
+            if ty.bits() <= 32 && !ty.is_dynamic_vector() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn lane_fits_in_32(&mut self, ty: Type) -> Option<Type> {
+            if !ty.is_vector() && !ty.is_dynamic_vector() {
+                None
+            } else if ty.lane_type().bits() <= 32 {
                 Some(ty)
             } else {
                 None
@@ -251,7 +272,7 @@ macro_rules! isle_prelude_methods {
 
         #[inline]
         fn fits_in_64(&mut self, ty: Type) -> Option<Type> {
-            if ty.bits() <= 64 {
+            if ty.bits() <= 64 && !ty.is_dynamic_vector() {
                 Some(ty)
             } else {
                 None
@@ -282,6 +303,14 @@ macro_rules! isle_prelude_methods {
                 Some(ty)
             } else {
                 None
+            }
+        }
+
+        #[inline]
+        fn int_bool_fits_in_32(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                I8 | I16 | I32 | B8 | B16 | B32 => Some(ty),
+                _ => None,
             }
         }
 
@@ -325,6 +354,15 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn ty_vec128(&mut self, ty: Type) -> Option<Type> {
             if ty.is_vector() && ty.bits() == 128 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_vec64_int(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() && ty.bits() == 64 && ty.lane_type().is_int() {
                 Some(ty)
             } else {
                 None
@@ -389,6 +427,15 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn u64_from_bool(&mut self, b: bool) -> u64 {
+            if b {
+                u64::MAX
+            } else {
+                0
+            }
+        }
+
+        #[inline]
         fn inst_results(&mut self, inst: Inst) -> ValueSlice {
             (self.lower_ctx.dfg().inst_results_list(inst), 0)
         }
@@ -409,9 +456,57 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
-        fn multi_lane(&mut self, ty: Type) -> Option<(u8, u16)> {
+        fn multi_lane(&mut self, ty: Type) -> Option<(u32, u32)> {
             if ty.lane_count() > 1 {
                 Some((ty.lane_bits(), ty.lane_count()))
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn dynamic_lane(&mut self, ty: Type) -> Option<(u32, u32)> {
+            if ty.is_dynamic_vector() {
+                Some((ty.lane_bits(), ty.min_lane_count()))
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn dynamic_int_lane(&mut self, ty: Type) -> Option<u32> {
+            if ty.is_dynamic_vector() && crate::machinst::ty_has_int_representation(ty.lane_type())
+            {
+                Some(ty.lane_bits())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn dynamic_fp_lane(&mut self, ty: Type) -> Option<u32> {
+            if ty.is_dynamic_vector()
+                && crate::machinst::ty_has_float_or_vec_representation(ty.lane_type())
+            {
+                Some(ty.lane_bits())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_dyn64_int(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_dynamic_vector() && ty.min_bits() == 64 && ty.lane_type().is_int() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_dyn128_int(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_dynamic_vector() && ty.min_bits() == 128 && ty.lane_type().is_int() {
+                Some(ty)
             } else {
                 None
             }
@@ -432,6 +527,59 @@ macro_rules! isle_prelude_methods {
 
         fn u8_from_uimm8(&mut self, val: Uimm8) -> u8 {
             val
+        }
+
+        fn zero_value(&mut self, value: Value) -> Option<Value> {
+            let insn = self.def_inst(value);
+            if insn.is_some() {
+                let insn = insn.unwrap();
+                let inst_data = self.lower_ctx.data(insn);
+                match inst_data {
+                    InstructionData::Unary {
+                        opcode: Opcode::Splat,
+                        arg,
+                    } => {
+                        let arg = arg.clone();
+                        return self.zero_value(arg);
+                    }
+                    InstructionData::UnaryConst {
+                        opcode: Opcode::Vconst,
+                        constant_handle,
+                    } => {
+                        let constant_data =
+                            self.lower_ctx.get_constant_data(*constant_handle).clone();
+                        if constant_data.into_vec().iter().any(|&x| x != 0) {
+                            return None;
+                        } else {
+                            return Some(value);
+                        }
+                    }
+                    InstructionData::UnaryImm { imm, .. } => {
+                        if imm.bits() == 0 {
+                            return Some(value);
+                        } else {
+                            return None;
+                        }
+                    }
+                    InstructionData::UnaryIeee32 { imm, .. } => {
+                        if imm.bits() == 0 {
+                            return Some(value);
+                        } else {
+                            return None;
+                        }
+                    }
+                    InstructionData::UnaryIeee64 { imm, .. } => {
+                        if imm.bits() == 0 {
+                            return Some(value);
+                        } else {
+                            return None;
+                        }
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            }
         }
 
         fn not_i64x2(&mut self, ty: Type) -> Option<()> {
@@ -478,6 +626,11 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn box_external_name(&mut self, extname: ExternalName) -> BoxExternalName {
+            Box::new(extname)
+        }
+
+        #[inline]
         fn symbol_value_data(
             &mut self,
             global_value: GlobalValue,
@@ -493,6 +646,18 @@ macro_rules! isle_prelude_methods {
             } else {
                 None
             }
+        }
+
+        #[inline]
+        fn u128_from_immediate(&mut self, imm: Immediate) -> Option<u128> {
+            let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
+            Some(u128::from_le_bytes(bytes.try_into().ok()?))
+        }
+
+        #[inline]
+        fn u128_from_constant(&mut self, constant: Constant) -> Option<u128> {
+            let bytes = self.lower_ctx.get_constant_data(constant).as_slice();
+            Some(u128::from_le_bytes(bytes.try_into().ok()?))
         }
 
         fn nonzero_u64_from_imm64(&mut self, val: Imm64) -> Option<u64> {
@@ -572,6 +737,147 @@ macro_rules! isle_prelude_methods {
         fn emit_u64_le_const(&mut self, value: u64) -> VCodeConstant {
             let data = VCodeConstantData::U64(value.to_le_bytes());
             self.lower_ctx.use_constant(data)
+        }
+
+        fn range(&mut self, start: usize, end: usize) -> Range {
+            (start, end)
+        }
+
+        fn range_empty(&mut self, r: Range) -> Option<()> {
+            if r.0 >= r.1 {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        fn range_singleton(&mut self, r: Range) -> Option<usize> {
+            if r.0 + 1 == r.1 {
+                Some(r.0)
+            } else {
+                None
+            }
+        }
+
+        fn range_unwrap(&mut self, r: Range) -> Option<(usize, Range)> {
+            if r.0 < r.1 {
+                Some((r.0, (r.0 + 1, r.1)))
+            } else {
+                None
+            }
+        }
+
+        fn retval(&mut self, i: usize) -> WritableValueRegs {
+            self.lower_ctx.retval(i)
+        }
+
+        fn only_writable_reg(&mut self, regs: WritableValueRegs) -> Option<WritableReg> {
+            regs.only_reg()
+        }
+
+        fn writable_regs_get(&mut self, regs: WritableValueRegs, idx: usize) -> WritableReg {
+            regs.regs()[idx]
+        }
+
+        fn abi_copy_to_arg_order(&mut self, abi: &ABISig, idx: usize) -> usize {
+            abi.copy_to_arg_order(idx)
+        }
+
+        fn abi_num_args(&mut self, abi: &ABISig) -> usize {
+            abi.num_args()
+        }
+
+        fn abi_get_arg(&mut self, abi: &ABISig, idx: usize) -> ABIArg {
+            abi.get_arg(idx)
+        }
+
+        fn abi_num_rets(&mut self, abi: &ABISig) -> usize {
+            abi.num_rets()
+        }
+
+        fn abi_get_ret(&mut self, abi: &ABISig, idx: usize) -> ABIArg {
+            abi.get_ret(idx)
+        }
+
+        fn abi_ret_arg(&mut self, abi: &ABISig) -> Option<ABIArg> {
+            abi.get_ret_arg()
+        }
+
+        fn abi_no_ret_arg(&mut self, abi: &ABISig) -> Option<()> {
+            if let Some(_) = abi.get_ret_arg() {
+                None
+            } else {
+                Some(())
+            }
+        }
+
+        fn abi_sized_stack_arg_space(&mut self, abi: &ABISig) -> i64 {
+            abi.sized_stack_arg_space()
+        }
+
+        fn abi_sized_stack_ret_space(&mut self, abi: &ABISig) -> i64 {
+            abi.sized_stack_ret_space()
+        }
+
+        fn abi_arg_only_slot(&mut self, arg: &ABIArg) -> Option<ABIArgSlot> {
+            match arg {
+                &ABIArg::Slots { ref slots, .. } => {
+                    if slots.len() == 1 {
+                        Some(slots[0])
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            }
+        }
+
+        fn abi_stackslot_addr(
+            &mut self,
+            dst: WritableReg,
+            stack_slot: StackSlot,
+            offset: Offset32,
+        ) -> MInst {
+            let offset = u32::try_from(i32::from(offset)).unwrap();
+            self.lower_ctx
+                .abi()
+                .sized_stackslot_addr(stack_slot, offset, dst)
+        }
+
+        fn abi_dynamic_stackslot_addr(
+            &mut self,
+            dst: WritableReg,
+            stack_slot: DynamicStackSlot,
+        ) -> MInst {
+            assert!(self
+                .lower_ctx
+                .abi()
+                .dynamic_stackslot_offsets()
+                .is_valid(stack_slot));
+            self.lower_ctx.abi().dynamic_stackslot_addr(stack_slot, dst)
+        }
+
+        fn real_reg_to_reg(&mut self, reg: RealReg) -> Reg {
+            Reg::from(reg)
+        }
+
+        fn real_reg_to_writable_reg(&mut self, reg: RealReg) -> WritableReg {
+            Writable::from_reg(Reg::from(reg))
+        }
+
+        fn is_sinkable_inst(&mut self, val: Value) -> Option<Inst> {
+            let input = self.lower_ctx.get_value_as_source_or_const(val);
+
+            if let InputSourceInst::UniqueUse(inst, _) = input.inst {
+                Some(inst)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn sink_inst(&mut self, inst: Inst) {
+            self.lower_ctx.sink_inst(inst);
         }
     };
 }

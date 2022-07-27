@@ -10,9 +10,9 @@ block0:
 }
 
 ; block0:
-;   movz x2, #1
-;   movk x2, #1, LSL #48
-;   fmov d0, x2
+;   movz x1, #1
+;   movk x1, #1, LSL #48
+;   fmov d0, x1
 ;   ret
 
 function %f2() -> i32x4 {
@@ -23,7 +23,31 @@ block0:
 }
 
 ; block0:
-;   movz x2, #42679
-;   fmov s0, w2
+;   movz x1, #42679
+;   fmov s0, w1
+;   ret
+
+function %f3() -> f32x4 {
+block0:
+  v0 = f32const 0x1.0
+  v1 = scalar_to_vector.f32x4 v0
+  return v1
+}
+
+; block0:
+;   fmov s1, #1
+;   fmov s0, s1
+;   ret
+
+function %f4() -> f64x2 {
+block0:
+  v0 = f64const 0x1.0
+  v1 = scalar_to_vector.f64x2 v0
+  return v1
+}
+
+; block0:
+;   fmov d1, #1
+;   fmov d0, d1
 ;   ret
 

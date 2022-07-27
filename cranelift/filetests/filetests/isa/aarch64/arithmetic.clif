@@ -74,7 +74,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   orr x3, xzr, #2
+;   movz w3, #2
 ;   sdiv x0, x0, x3
 ;   ret
 
@@ -150,7 +150,7 @@ block0(v0: i32):
 
 ; block0:
 ;   sxtw x3, w0
-;   orr x5, xzr, #2
+;   movz w5, #2
 ;   sdiv x0, x3, x5
 ;   ret
 
@@ -176,7 +176,7 @@ block0(v0: i32):
 
 ; block0:
 ;   mov w3, w0
-;   orr x5, xzr, #2
+;   orr w5, wzr, #2
 ;   udiv x0, x3, x5
 ;   ret
 
@@ -344,9 +344,10 @@ block0(v0: i8x16):
 
 ; block0:
 ;   movz x3, #1
-;   sub w5, wzr, w3
-;   dup v7.16b, w5
-;   ushl v0.16b, v0.16b, v7.16b
+;   and w5, w3, #7
+;   sub x7, xzr, x5
+;   dup v17.16b, w7
+;   ushl v0.16b, v0.16b, v17.16b
 ;   ret
 
 function %add_i128(i128, i128) -> i128 {
@@ -460,7 +461,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   orr x3, xzr, #2
+;   movz w3, #2
 ;   sdiv x5, x0, x3
 ;   msub x0, x5, x3, x0
 ;   ret
@@ -492,4 +493,3 @@ block0(v0: i64):
 ;   b.vc 8 ; udf
 ;   sdiv x0, x0, x3
 ;   ret
-

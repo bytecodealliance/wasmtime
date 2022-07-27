@@ -67,6 +67,12 @@
   ))
 )
 
+;; Test to see if a component with a type export can be instantiated.
+(component
+    (type string)
+    (export "" (type 0))
+)
+
 ;; double-check the start function runs by ensuring that a trap shows up and it
 ;; sees the wrong value for the global import
 (assert_trap
@@ -235,3 +241,20 @@
 
   (core instance (instantiate $verify (with "host" (instance $i))))
 )
+
+;; export an instance
+(component
+  (core module $m)
+  (instance $i (export "m" (core module $m)))
+  (export "i" (instance $i))
+)
+(component
+  (component $c)
+  (instance $i (instantiate $c))
+  (export "i" (instance $i))
+)
+(component
+  (import "host" (instance $i))
+  (export "i" (instance $i))
+)
+

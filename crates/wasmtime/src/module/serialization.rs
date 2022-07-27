@@ -426,6 +426,9 @@ impl<'a> SerializedModule<'a> {
             // setting just fine (it's just a section in the compiled file and
             // whether it's present or not)
             generate_address_map: _,
+
+            // Just a debugging aid, doesn't affect functionality at all.
+            debug_adapter_modules: _,
         } = self.metadata.tunables;
 
         Self::check_int(
@@ -607,14 +610,13 @@ mod test {
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(
-                format!("{:?}", e),
+            Err(e) => assert!(format!("{:?}", e).starts_with(
                 "\
 compilation settings of module incompatible with native host
 
 Caused by:
     setting \"avoid_div_traps\" is configured to Bool(false) which is not supported"
-            ),
+            )),
         }
 
         Ok(())
@@ -634,14 +636,13 @@ Caused by:
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(
-                format!("{:?}", e),
+            Err(e) => assert!(format!("{:?}", e).starts_with(
                 "\
 compilation settings of module incompatible with native host
 
 Caused by:
     cannot test if target-specific flag \"not_a_flag\" is available at runtime",
-            ),
+            )),
         }
 
         Ok(())

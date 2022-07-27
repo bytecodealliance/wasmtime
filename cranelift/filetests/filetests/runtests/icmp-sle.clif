@@ -2,6 +2,7 @@ test interpret
 test run
 target aarch64
 target x86_64
+target s390x
 
 
 function %icmp_sle_i8(i8, i8) -> b1 {

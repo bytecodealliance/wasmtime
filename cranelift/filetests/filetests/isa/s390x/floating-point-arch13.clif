@@ -1,0 +1,736 @@
+test compile precise-output
+target s390x arch13
+
+function %fcvt_to_uint_f32_i8(f32) -> i8 {
+block0(v0: f32):
+  v1 = fcvt_to_uint.i8 v0
+  return v1
+}
+
+; block0:
+;   cebr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 8 ; data.f32 256 ; le %f5, 0(%r1)
+;   cebr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 8 ; data.f32 -1 ; vlef %v17, 0(%r1), 0
+;   wfcsb %f0, %v17
+;   jnle 6 ; trap
+;   wclfeb %v21, %f0, 0, 5
+;   vlgvf %r2, %v21, 0
+;   br %r14
+
+function %fcvt_to_sint_f32_i8(f32) -> i8 {
+block0(v0: f32):
+  v1 = fcvt_to_sint.i8 v0
+  return v1
+}
+
+; block0:
+;   cebr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 8 ; data.f32 128 ; le %f5, 0(%r1)
+;   cebr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 8 ; data.f32 -129 ; vlef %v17, 0(%r1), 0
+;   wfcsb %f0, %v17
+;   jnle 6 ; trap
+;   wcfeb %v21, %f0, 0, 5
+;   vlgvf %r2, %v21, 0
+;   br %r14
+
+function %fcvt_to_uint_f32_i16(f32) -> i16 {
+block0(v0: f32):
+  v1 = fcvt_to_uint.i16 v0
+  return v1
+}
+
+; block0:
+;   cebr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 8 ; data.f32 65536 ; le %f5, 0(%r1)
+;   cebr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 8 ; data.f32 -1 ; vlef %v17, 0(%r1), 0
+;   wfcsb %f0, %v17
+;   jnle 6 ; trap
+;   wclfeb %v21, %f0, 0, 5
+;   vlgvf %r2, %v21, 0
+;   br %r14
+
+function %fcvt_to_sint_f32_i16(f32) -> i16 {
+block0(v0: f32):
+  v1 = fcvt_to_sint.i16 v0
+  return v1
+}
+
+; block0:
+;   cebr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 8 ; data.f32 32768 ; le %f5, 0(%r1)
+;   cebr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 8 ; data.f32 -32769 ; vlef %v17, 0(%r1), 0
+;   wfcsb %f0, %v17
+;   jnle 6 ; trap
+;   wcfeb %v21, %f0, 0, 5
+;   vlgvf %r2, %v21, 0
+;   br %r14
+
+function %fcvt_to_uint_f32_i32(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_uint.i32 v0
+  return v1
+}
+
+; block0:
+;   cebr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 8 ; data.f32 4294967300 ; le %f5, 0(%r1)
+;   cebr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 8 ; data.f32 -1 ; vlef %v17, 0(%r1), 0
+;   wfcsb %f0, %v17
+;   jnle 6 ; trap
+;   wclfeb %v21, %f0, 0, 5
+;   vlgvf %r2, %v21, 0
+;   br %r14
+
+function %fcvt_to_sint_f32_i32(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_sint.i32 v0
+  return v1
+}
+
+; block0:
+;   cebr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 8 ; data.f32 2147483600 ; le %f5, 0(%r1)
+;   cebr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 8 ; data.f32 -2147484000 ; vlef %v17, 0(%r1), 0
+;   wfcsb %f0, %v17
+;   jnle 6 ; trap
+;   wcfeb %v21, %f0, 0, 5
+;   vlgvf %r2, %v21, 0
+;   br %r14
+
+function %fcvt_to_uint_f32_i64(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_uint.i64 v0
+  return v1
+}
+
+; block0:
+;   cebr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 8 ; data.f32 18446744000000000000 ; le %f5, 0(%r1)
+;   cebr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 8 ; data.f32 -1 ; vlef %v17, 0(%r1), 0
+;   wfcsb %f0, %v17
+;   jnle 6 ; trap
+;   wldeb %v21, %f0
+;   wclgdb %v23, %v21, 0, 5
+;   vlgvg %r2, %v23, 0
+;   br %r14
+
+function %fcvt_to_sint_f32_i64(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_sint.i64 v0
+  return v1
+}
+
+; block0:
+;   cebr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 8 ; data.f32 9223372000000000000 ; le %f5, 0(%r1)
+;   cebr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 8 ; data.f32 -9223373000000000000 ; vlef %v17, 0(%r1), 0
+;   wfcsb %f0, %v17
+;   jnle 6 ; trap
+;   wldeb %v21, %f0
+;   wcgdb %v23, %v21, 0, 5
+;   vlgvg %r2, %v23, 0
+;   br %r14
+
+function %fcvt_to_uint_f64_i8(f64) -> i8 {
+block0(v0: f64):
+  v1 = fcvt_to_uint.i8 v0
+  return v1
+}
+
+; block0:
+;   cdbr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 12 ; data.f64 256 ; ld %f5, 0(%r1)
+;   cdbr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 12 ; data.f64 -1 ; vleg %v17, 0(%r1), 0
+;   wfcdb %f0, %v17
+;   jnle 6 ; trap
+;   wclgdb %v21, %f0, 0, 5
+;   vlgvg %r2, %v21, 0
+;   br %r14
+
+function %fcvt_to_sint_f64_i8(f64) -> i8 {
+block0(v0: f64):
+  v1 = fcvt_to_sint.i8 v0
+  return v1
+}
+
+; block0:
+;   cdbr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 12 ; data.f64 128 ; ld %f5, 0(%r1)
+;   cdbr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 12 ; data.f64 -129 ; vleg %v17, 0(%r1), 0
+;   wfcdb %f0, %v17
+;   jnle 6 ; trap
+;   wcgdb %v21, %f0, 0, 5
+;   vlgvg %r2, %v21, 0
+;   br %r14
+
+function %fcvt_to_uint_f64_i16(f64) -> i16 {
+block0(v0: f64):
+  v1 = fcvt_to_uint.i16 v0
+  return v1
+}
+
+; block0:
+;   cdbr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 12 ; data.f64 65536 ; ld %f5, 0(%r1)
+;   cdbr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 12 ; data.f64 -1 ; vleg %v17, 0(%r1), 0
+;   wfcdb %f0, %v17
+;   jnle 6 ; trap
+;   wclgdb %v21, %f0, 0, 5
+;   vlgvg %r2, %v21, 0
+;   br %r14
+
+function %fcvt_to_sint_f64_i16(f64) -> i16 {
+block0(v0: f64):
+  v1 = fcvt_to_sint.i16 v0
+  return v1
+}
+
+; block0:
+;   cdbr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 12 ; data.f64 32768 ; ld %f5, 0(%r1)
+;   cdbr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 12 ; data.f64 -32769 ; vleg %v17, 0(%r1), 0
+;   wfcdb %f0, %v17
+;   jnle 6 ; trap
+;   wcgdb %v21, %f0, 0, 5
+;   vlgvg %r2, %v21, 0
+;   br %r14
+
+function %fcvt_to_uint_f64_i32(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_uint.i32 v0
+  return v1
+}
+
+; block0:
+;   cdbr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 12 ; data.f64 4294967296 ; ld %f5, 0(%r1)
+;   cdbr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 12 ; data.f64 -1 ; vleg %v17, 0(%r1), 0
+;   wfcdb %f0, %v17
+;   jnle 6 ; trap
+;   wclgdb %v21, %f0, 0, 5
+;   vlgvg %r2, %v21, 0
+;   br %r14
+
+function %fcvt_to_sint_f64_i32(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_sint.i32 v0
+  return v1
+}
+
+; block0:
+;   cdbr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 12 ; data.f64 2147483648 ; ld %f5, 0(%r1)
+;   cdbr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 12 ; data.f64 -2147483649 ; vleg %v17, 0(%r1), 0
+;   wfcdb %f0, %v17
+;   jnle 6 ; trap
+;   wcgdb %v21, %f0, 0, 5
+;   vlgvg %r2, %v21, 0
+;   br %r14
+
+function %fcvt_to_uint_f64_i64(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_uint.i64 v0
+  return v1
+}
+
+; block0:
+;   cdbr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 12 ; data.f64 18446744073709552000 ; ld %f5, 0(%r1)
+;   cdbr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 12 ; data.f64 -1 ; vleg %v17, 0(%r1), 0
+;   wfcdb %f0, %v17
+;   jnle 6 ; trap
+;   wclgdb %v21, %f0, 0, 5
+;   vlgvg %r2, %v21, 0
+;   br %r14
+
+function %fcvt_to_sint_f64_i64(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_sint.i64 v0
+  return v1
+}
+
+; block0:
+;   cdbr %f0, %f0
+;   jno 6 ; trap
+;   bras %r1, 12 ; data.f64 9223372036854776000 ; ld %f5, 0(%r1)
+;   cdbr %f0, %f5
+;   jnhe 6 ; trap
+;   bras %r1, 12 ; data.f64 -9223372036854778000 ; vleg %v17, 0(%r1), 0
+;   wfcdb %f0, %v17
+;   jnle 6 ; trap
+;   wcgdb %v21, %f0, 0, 5
+;   vlgvg %r2, %v21, 0
+;   br %r14
+
+function %fcvt_from_uint_i8_f32(i8) -> f32 {
+block0(v0: i8):
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+}
+
+; block0:
+;   llcr %r5, %r2
+;   vlvgf %v5, %r5, 0
+;   wcelfb %f0, %f5, 0, 4
+;   br %r14
+
+function %fcvt_from_sint_i8_f32(i8) -> f32 {
+block0(v0: i8):
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+}
+
+; block0:
+;   lbr %r5, %r2
+;   vlvgf %v5, %r5, 0
+;   wcefb %f0, %f5, 0, 4
+;   br %r14
+
+function %fcvt_from_uint_i16_f32(i16) -> f32 {
+block0(v0: i16):
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+}
+
+; block0:
+;   llhr %r5, %r2
+;   vlvgf %v5, %r5, 0
+;   wcelfb %f0, %f5, 0, 4
+;   br %r14
+
+function %fcvt_from_sint_i16_f32(i16) -> f32 {
+block0(v0: i16):
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+}
+
+; block0:
+;   lhr %r5, %r2
+;   vlvgf %v5, %r5, 0
+;   wcefb %f0, %f5, 0, 4
+;   br %r14
+
+function %fcvt_from_uint_i32_f32(i32) -> f32 {
+block0(v0: i32):
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+}
+
+; block0:
+;   vlvgf %v3, %r2, 0
+;   wcelfb %f0, %f3, 0, 4
+;   br %r14
+
+function %fcvt_from_sint_i32_f32(i32) -> f32 {
+block0(v0: i32):
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+}
+
+; block0:
+;   vlvgf %v3, %r2, 0
+;   wcefb %f0, %f3, 0, 4
+;   br %r14
+
+function %fcvt_from_uint_i64_f32(i64) -> f32 {
+block0(v0: i64):
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+}
+
+; block0:
+;   ldgr %f3, %r2
+;   wcdlgb %f5, %f3, 0, 3
+;   ledbra %f0, %f5, 4
+;   br %r14
+
+function %fcvt_from_sint_i64_f32(i64) -> f32 {
+block0(v0: i64):
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+}
+
+; block0:
+;   ldgr %f3, %r2
+;   wcdgb %f5, %f3, 0, 3
+;   ledbra %f0, %f5, 4
+;   br %r14
+
+function %fcvt_from_uint_i8_f64(i8) -> f64 {
+block0(v0: i8):
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+}
+
+; block0:
+;   llgcr %r5, %r2
+;   ldgr %f5, %r5
+;   wcdlgb %f0, %f5, 0, 4
+;   br %r14
+
+function %fcvt_from_sint_i8_f64(i8) -> f64 {
+block0(v0: i8):
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+}
+
+; block0:
+;   lgbr %r5, %r2
+;   ldgr %f5, %r5
+;   wcdgb %f0, %f5, 0, 4
+;   br %r14
+
+function %fcvt_from_uint_i16_f64(i16) -> f64 {
+block0(v0: i16):
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+}
+
+; block0:
+;   llghr %r5, %r2
+;   ldgr %f5, %r5
+;   wcdlgb %f0, %f5, 0, 4
+;   br %r14
+
+function %fcvt_from_sint_i16_f64(i16) -> f64 {
+block0(v0: i16):
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+}
+
+; block0:
+;   lghr %r5, %r2
+;   ldgr %f5, %r5
+;   wcdgb %f0, %f5, 0, 4
+;   br %r14
+
+function %fcvt_from_uint_i32_f64(i32) -> f64 {
+block0(v0: i32):
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+}
+
+; block0:
+;   llgfr %r5, %r2
+;   ldgr %f5, %r5
+;   wcdlgb %f0, %f5, 0, 4
+;   br %r14
+
+function %fcvt_from_sint_i32_f64(i32) -> f64 {
+block0(v0: i32):
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+}
+
+; block0:
+;   lgfr %r5, %r2
+;   ldgr %f5, %r5
+;   wcdgb %f0, %f5, 0, 4
+;   br %r14
+
+function %fcvt_from_uint_i64_f64(i64) -> f64 {
+block0(v0: i64):
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+}
+
+; block0:
+;   ldgr %f3, %r2
+;   wcdlgb %f0, %f3, 0, 4
+;   br %r14
+
+function %fcvt_from_sint_i64_f64(i64) -> f64 {
+block0(v0: i64):
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+}
+
+; block0:
+;   ldgr %f3, %r2
+;   wcdgb %f0, %f3, 0, 4
+;   br %r14
+
+function %fcvt_to_uint_sat_f32_i8(f32) -> i8 {
+block0(v0: f32):
+  v1 = fcvt_to_uint_sat.i8 v0
+  return v1
+}
+
+; block0:
+;   wclfeb %f3, %f0, 0, 5
+;   vlgvf %r3, %v3, 0
+;   lgr %r2, %r3
+;   clfi %r3, 256
+;   lochih %r2, 255
+;   br %r14
+
+function %fcvt_to_sint_sat_f32_i8(f32) -> i8 {
+block0(v0: f32):
+  v1 = fcvt_to_sint_sat.i8 v0
+  return v1
+}
+
+; block0:
+;   wcfeb %f3, %f0, 0, 5
+;   vlgvf %r3, %v3, 0
+;   cebr %f0, %f0
+;   lochio %r3, 0
+;   lgr %r4, %r3
+;   chi %r3, 127
+;   lochih %r4, 127
+;   lgr %r2, %r4
+;   chi %r4, -128
+;   lochil %r2, -128
+;   br %r14
+
+function %fcvt_to_uint_sat_f32_i16(f32) -> i16 {
+block0(v0: f32):
+  v1 = fcvt_to_uint_sat.i16 v0
+  return v1
+}
+
+; block0:
+;   wclfeb %f3, %f0, 0, 5
+;   vlgvf %r3, %v3, 0
+;   lgr %r2, %r3
+;   clfi %r3, 65535
+;   lochih %r2, -1
+;   br %r14
+
+function %fcvt_to_sint_sat_f32_i16(f32) -> i16 {
+block0(v0: f32):
+  v1 = fcvt_to_sint_sat.i16 v0
+  return v1
+}
+
+; block0:
+;   wcfeb %f3, %f0, 0, 5
+;   vlgvf %r3, %v3, 0
+;   cebr %f0, %f0
+;   lochio %r3, 0
+;   lgr %r4, %r3
+;   chi %r3, 32767
+;   lochih %r4, 32767
+;   lgr %r2, %r4
+;   chi %r4, -32768
+;   lochil %r2, -32768
+;   br %r14
+
+function %fcvt_to_uint_sat_f32_i32(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_uint_sat.i32 v0
+  return v1
+}
+
+; block0:
+;   wclfeb %f3, %f0, 0, 5
+;   vlgvf %r2, %v3, 0
+;   br %r14
+
+function %fcvt_to_sint_sat_f32_i32(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_sint_sat.i32 v0
+  return v1
+}
+
+; block0:
+;   wcfeb %f3, %f0, 0, 5
+;   vlgvf %r2, %v3, 0
+;   cebr %f0, %f0
+;   lochio %r2, 0
+;   br %r14
+
+function %fcvt_to_uint_sat_f32_i64(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_uint_sat.i64 v0
+  return v1
+}
+
+; block0:
+;   ldebr %f3, %f0
+;   wclgdb %f5, %f3, 0, 5
+;   lgdr %r2, %f5
+;   br %r14
+
+function %fcvt_to_sint_sat_f32_i64(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_sint_sat.i64 v0
+  return v1
+}
+
+; block0:
+;   ldebr %f3, %f0
+;   wcgdb %f5, %f3, 0, 5
+;   lgdr %r2, %f5
+;   cebr %f0, %f0
+;   locghio %r2, 0
+;   br %r14
+
+function %fcvt_to_uint_sat_f64_i8(f64) -> i8 {
+block0(v0: f64):
+  v1 = fcvt_to_uint_sat.i8 v0
+  return v1
+}
+
+; block0:
+;   wclgdb %f3, %f0, 0, 5
+;   lgdr %r3, %f3
+;   lgr %r2, %r3
+;   clgfi %r3, 256
+;   locghih %r2, 255
+;   br %r14
+
+function %fcvt_to_sint_sat_f64_i8(f64) -> i8 {
+block0(v0: f64):
+  v1 = fcvt_to_sint_sat.i8 v0
+  return v1
+}
+
+; block0:
+;   wcgdb %f3, %f0, 0, 5
+;   lgdr %r3, %f3
+;   cdbr %f0, %f0
+;   locghio %r3, 0
+;   lgr %r4, %r3
+;   cghi %r3, 127
+;   locghih %r4, 127
+;   lgr %r2, %r4
+;   cghi %r4, -128
+;   locghil %r2, -128
+;   br %r14
+
+function %fcvt_to_uint_sat_f64_i16(f64) -> i16 {
+block0(v0: f64):
+  v1 = fcvt_to_uint_sat.i16 v0
+  return v1
+}
+
+; block0:
+;   wclgdb %f3, %f0, 0, 5
+;   lgdr %r3, %f3
+;   lgr %r2, %r3
+;   clgfi %r3, 65535
+;   locghih %r2, -1
+;   br %r14
+
+function %fcvt_to_sint_sat_f64_i16(f64) -> i16 {
+block0(v0: f64):
+  v1 = fcvt_to_sint_sat.i16 v0
+  return v1
+}
+
+; block0:
+;   wcgdb %f3, %f0, 0, 5
+;   lgdr %r3, %f3
+;   cdbr %f0, %f0
+;   locghio %r3, 0
+;   lgr %r4, %r3
+;   cghi %r3, 32767
+;   locghih %r4, 32767
+;   lgr %r2, %r4
+;   cghi %r4, -32768
+;   locghil %r2, -32768
+;   br %r14
+
+function %fcvt_to_uint_sat_f64_i32(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_uint_sat.i32 v0
+  return v1
+}
+
+; block0:
+;   wclgdb %f3, %f0, 0, 5
+;   lgdr %r2, %f3
+;   llilf %r5, 4294967295
+;   clgr %r2, %r5
+;   locgrh %r2, %r5
+;   br %r14
+
+function %fcvt_to_sint_sat_f64_i32(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_sint_sat.i32 v0
+  return v1
+}
+
+; block0:
+;   wcgdb %f3, %f0, 0, 5
+;   lgdr %r2, %f3
+;   cdbr %f0, %f0
+;   locghio %r2, 0
+;   lgfi %r5, 2147483647
+;   cgr %r2, %r5
+;   locgrh %r2, %r5
+;   lgfi %r3, -2147483648
+;   cgr %r2, %r3
+;   locgrl %r2, %r3
+;   br %r14
+
+function %fcvt_to_uint_sat_f64_i64(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_uint_sat.i64 v0
+  return v1
+}
+
+; block0:
+;   wclgdb %f3, %f0, 0, 5
+;   lgdr %r2, %f3
+;   br %r14
+
+function %fcvt_to_sint_sat_f64_i64(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_sint_sat.i64 v0
+  return v1
+}
+
+; block0:
+;   wcgdb %f3, %f0, 0, 5
+;   lgdr %r2, %f3
+;   cdbr %f0, %f0
+;   locghio %r2, 0
+;   br %r14
+

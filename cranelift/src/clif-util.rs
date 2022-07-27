@@ -13,7 +13,6 @@
 )]
 
 use clap::Parser;
-use cranelift_codegen::dbg::LOG_FILENAME_PREFIX;
 use std::path::PathBuf;
 
 mod bugpoint;
@@ -30,14 +29,6 @@ mod souper_harvest;
 
 #[cfg(feature = "wasm")]
 mod wasm;
-
-fn handle_debug_flag(debug: bool) {
-    if debug {
-        pretty_env_logger::init();
-    } else {
-        file_per_thread_logger::initialize(LOG_FILENAME_PREFIX);
-    }
-}
 
 /// Cranelift code generator utility.
 #[derive(Parser)]
@@ -73,10 +64,6 @@ struct TestOptions {
     #[clap(short = 'T')]
     time_passes: bool,
 
-    /// Enable debug output on stderr/stdout
-    #[clap(short = 'd')]
-    debug: bool,
-
     /// Specify an input file to be used. Use '-' for stdin.
     #[clap(required = true)]
     files: Vec<PathBuf>,
@@ -92,10 +79,6 @@ struct PassOptions {
     /// Print pass timing report for test
     #[clap(short = 'T')]
     time_passes: bool,
-
-    /// Enable debug output on stderr/stdout
-    #[clap(short)]
-    debug: bool,
 
     /// Specify an input file to be used. Use '-' for stdin.
     file: PathBuf,
@@ -113,6 +96,8 @@ struct PassOptions {
 struct CompiledWithoutSupportOptions {}
 
 fn main() -> anyhow::Result<()> {
+    pretty_env_logger::init();
+
     match Commands::parse() {
         Commands::Cat(c) => cat::run(&c)?,
         Commands::Run(r) => run::run(&r)?,
@@ -135,7 +120,6 @@ fn main() -> anyhow::Result<()> {
         ),
 
         Commands::Test(t) => {
-            handle_debug_flag(t.debug);
             cranelift_filetests::run(
                 t.verbose,
                 t.time_passes,
@@ -146,7 +130,6 @@ fn main() -> anyhow::Result<()> {
             )?;
         }
         Commands::Pass(p) => {
-            handle_debug_flag(p.debug);
             cranelift_filetests::run_passes(
                 p.verbose,
                 p.time_passes,

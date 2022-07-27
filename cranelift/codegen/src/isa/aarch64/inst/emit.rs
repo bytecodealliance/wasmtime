@@ -6,7 +6,6 @@ use crate::binemit::{CodeOffset, Reloc, StackMap};
 use crate::ir::types::*;
 use crate::ir::{LibCall, MemFlags, TrapCode};
 use crate::isa::aarch64::inst::*;
-use crate::isa::aarch64::lower::is_valid_atomic_transaction_ty;
 use crate::machinst::{ty_bits, Reg, RegClass, Writable};
 use core::convert::TryFrom;
 
@@ -90,12 +89,12 @@ pub fn mem_finalize(
 //=============================================================================
 // Instructions and subcomponents: emission
 
-fn machreg_to_gpr(m: Reg) -> u32 {
+pub(crate) fn machreg_to_gpr(m: Reg) -> u32 {
     assert_eq!(m.class(), RegClass::Int);
     u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
 }
 
-fn machreg_to_vec(m: Reg) -> u32 {
+pub(crate) fn machreg_to_vec(m: Reg) -> u32 {
     assert_eq!(m.class(), RegClass::Float);
     u32::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap()
 }
@@ -332,12 +331,16 @@ pub(crate) fn enc_adr(off: i32, rd: Writable<Reg>) -> u32 {
     (0b00010000 << 24) | (immlo << 29) | (immhi << 5) | machreg_to_gpr(rd.to_reg())
 }
 
-fn enc_csel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond) -> u32 {
+fn enc_csel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond, op: u32, o2: u32) -> u32 {
+    debug_assert_eq!(op & 0b1, op);
+    debug_assert_eq!(o2 & 0b1, o2);
     0b100_11010100_00000_0000_00_00000_00000
+        | (op << 30)
         | (machreg_to_gpr(rm) << 16)
+        | (cond.bits() << 12)
+        | (o2 << 10)
         | (machreg_to_gpr(rn) << 5)
         | machreg_to_gpr(rd.to_reg())
-        | (cond.bits() << 12)
 }
 
 fn enc_fcsel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond, size: ScalarSize) -> u32 {
@@ -347,18 +350,6 @@ fn enc_fcsel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond, size: ScalarSize) 
         | (machreg_to_vec(rn) << 5)
         | machreg_to_vec(rd.to_reg())
         | (cond.bits() << 12)
-}
-
-fn enc_cset(rd: Writable<Reg>, cond: Cond) -> u32 {
-    0b100_11010100_11111_0000_01_11111_00000
-        | machreg_to_gpr(rd.to_reg())
-        | (cond.invert().bits() << 12)
-}
-
-fn enc_csetm(rd: Writable<Reg>, cond: Cond) -> u32 {
-    0b110_11010100_11111_0000_00_11111_00000
-        | machreg_to_gpr(rd.to_reg())
-        | (cond.invert().bits() << 12)
 }
 
 fn enc_ccmp_imm(size: OperandSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) -> u32 {
@@ -1353,15 +1344,21 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 let rm = allocs.next(rm);
-                sink.put4(enc_csel(rd, rn, rm, cond));
+                sink.put4(enc_csel(rd, rn, rm, cond, 0, 0));
+            }
+            &Inst::CSNeg { rd, rn, rm, cond } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                sink.put4(enc_csel(rd, rn, rm, cond, 1, 1));
             }
             &Inst::CSet { rd, cond } => {
                 let rd = allocs.next_writable(rd);
-                sink.put4(enc_cset(rd, cond));
+                sink.put4(enc_csel(rd, zero_reg(), zero_reg(), cond.invert(), 0, 1));
             }
             &Inst::CSetm { rd, cond } => {
                 let rd = allocs.next_writable(rd);
-                sink.put4(enc_csetm(rd, cond));
+                sink.put4(enc_csel(rd, zero_reg(), zero_reg(), cond.invert(), 1, 0));
             }
             &Inst::CCmpImm {
                 size,
@@ -1374,14 +1371,12 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_ccmp_imm(size, rn, imm, nzcv, cond));
             }
             &Inst::AtomicRMW { ty, op, rs, rt, rn } => {
-                assert!(is_valid_atomic_transaction_ty(ty));
                 let rs = allocs.next(rs);
                 let rt = allocs.next_writable(rt);
                 let rn = allocs.next(rn);
                 sink.put4(enc_acq_rel(ty, op, rs, rt, rn));
             }
             &Inst::AtomicRMWLoop { ty, op } => {
-                assert!(is_valid_atomic_transaction_ty(ty));
                 /* Emit this:
                      again:
                       ldaxr{,b,h}  x/w27, [x25]
@@ -1691,7 +1686,7 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 sink.put4(enc_fpurr(
-                    0b000_11110_00_1_000000_10000 | (size.ftype() << 13),
+                    0b000_11110_00_1_000000_10000 | (size.ftype() << 12),
                     rd,
                     rn,
                 ));
@@ -2257,15 +2252,17 @@ impl MachInstEmit for Inst {
             &Inst::VecDup { rd, rn, size } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
-                let imm5 = match size {
-                    VectorSize::Size8x16 => 0b00001,
-                    VectorSize::Size16x8 => 0b00010,
-                    VectorSize::Size32x4 => 0b00100,
-                    VectorSize::Size64x2 => 0b01000,
-                    _ => unimplemented!(),
+                let q = size.is_128bits() as u32;
+                let imm5 = match size.lane_size() {
+                    ScalarSize::Size8 => 0b00001,
+                    ScalarSize::Size16 => 0b00010,
+                    ScalarSize::Size32 => 0b00100,
+                    ScalarSize::Size64 => 0b01000,
+                    _ => unreachable!(),
                 };
                 sink.put4(
-                    0b010_01110000_00000_000011_00000_00000
+                    0b0_0_0_01110000_00000_000011_00000_00000
+                        | (q << 30)
                         | (imm5 << 16)
                         | (machreg_to_gpr(rn) << 5)
                         | machreg_to_vec(rd.to_reg()),
@@ -2400,24 +2397,30 @@ impl MachInstEmit for Inst {
                 rd,
                 rn,
                 high_half,
+                lane_size,
             } => {
                 let rn = allocs.next(rn);
                 let rd = allocs.next_writable(rd);
-                let (u, size, bits_12_16) = match op {
-                    VecRRNarrowOp::Xtn16 => (0b0, 0b00, 0b10010),
-                    VecRRNarrowOp::Xtn32 => (0b0, 0b01, 0b10010),
-                    VecRRNarrowOp::Xtn64 => (0b0, 0b10, 0b10010),
-                    VecRRNarrowOp::Sqxtn16 => (0b0, 0b00, 0b10100),
-                    VecRRNarrowOp::Sqxtn32 => (0b0, 0b01, 0b10100),
-                    VecRRNarrowOp::Sqxtn64 => (0b0, 0b10, 0b10100),
-                    VecRRNarrowOp::Sqxtun16 => (0b1, 0b00, 0b10010),
-                    VecRRNarrowOp::Sqxtun32 => (0b1, 0b01, 0b10010),
-                    VecRRNarrowOp::Sqxtun64 => (0b1, 0b10, 0b10010),
-                    VecRRNarrowOp::Uqxtn16 => (0b1, 0b00, 0b10100),
-                    VecRRNarrowOp::Uqxtn32 => (0b1, 0b01, 0b10100),
-                    VecRRNarrowOp::Uqxtn64 => (0b1, 0b10, 0b10100),
-                    VecRRNarrowOp::Fcvtn32 => (0b0, 0b00, 0b10110),
-                    VecRRNarrowOp::Fcvtn64 => (0b0, 0b01, 0b10110),
+
+                let size = match lane_size {
+                    ScalarSize::Size8 => 0b00,
+                    ScalarSize::Size16 => 0b01,
+                    ScalarSize::Size32 => 0b10,
+                    _ => panic!("unsupported size: {:?}", lane_size),
+                };
+
+                // Floats use a single bit, to encode either half or single.
+                let size = match op {
+                    VecRRNarrowOp::Fcvtn => size >> 1,
+                    _ => size,
+                };
+
+                let (u, bits_12_16) = match op {
+                    VecRRNarrowOp::Xtn => (0b0, 0b10010),
+                    VecRRNarrowOp::Sqxtn => (0b0, 0b10100),
+                    VecRRNarrowOp::Sqxtun => (0b1, 0b10010),
+                    VecRRNarrowOp::Uqxtn => (0b1, 0b10100),
+                    VecRRNarrowOp::Fcvtn => (0b0, 0b10110),
                 };
 
                 sink.put4(enc_vec_rr_misc(
@@ -2622,13 +2625,18 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_vec_rrr(top11 | q << 9, rm, bit15_10, rn, rd));
             }
-            &Inst::VecLoadReplicate { rd, rn, size } => {
+            &Inst::VecLoadReplicate {
+                rd,
+                rn,
+                size,
+                flags,
+            } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 let (q, size) = size.enc_size();
 
                 let srcloc = state.cur_srcloc();
-                if srcloc != SourceLoc::default() {
+                if srcloc != SourceLoc::default() && !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }

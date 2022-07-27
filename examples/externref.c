@@ -15,6 +15,10 @@ You can compile and run this example on Linux with:
 Note that on Windows and macOS the command will be similar, but you'll need
 to tweak the `-lpthread` and such annotations as well as the name of the
 `libwasmtime.a` file on Windows.
+
+You can also build using cmake:
+
+mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-externref
 */
 
 #include <assert.h>

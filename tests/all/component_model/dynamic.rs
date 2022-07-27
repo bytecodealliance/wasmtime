@@ -1,0 +1,511 @@
+use super::{make_echo_component, make_echo_component_with_params, Param, Type};
+use anyhow::Result;
+use wasmtime::component::{self, Component, Func, Linker, Val};
+use wasmtime::{AsContextMut, Store};
+
+trait FuncExt {
+    fn call_and_post_return(&self, store: impl AsContextMut, args: &[Val]) -> Result<Val>;
+}
+
+impl FuncExt for Func {
+    fn call_and_post_return(&self, mut store: impl AsContextMut, args: &[Val]) -> Result<Val> {
+        let result = self.call(&mut store, args)?;
+        self.post_return(&mut store)?;
+        Ok(result)
+    }
+}
+
+#[test]
+fn primitives() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    for (input, ty, param) in [
+        (Val::Bool(true), "bool", Param(Type::U8, Some(0))),
+        (Val::S8(-42), "s8", Param(Type::S8, Some(0))),
+        (Val::U8(42), "u8", Param(Type::U8, Some(0))),
+        (Val::S16(-4242), "s16", Param(Type::S16, Some(0))),
+        (Val::U16(4242), "u16", Param(Type::U16, Some(0))),
+        (Val::S32(-314159265), "s32", Param(Type::I32, Some(0))),
+        (Val::U32(314159265), "u32", Param(Type::I32, Some(0))),
+        (Val::S64(-31415926535897), "s64", Param(Type::I64, Some(0))),
+        (Val::U64(31415926535897), "u64", Param(Type::I64, Some(0))),
+        (
+            Val::Float32(3.14159265_f32.to_bits()),
+            "float32",
+            Param(Type::F32, Some(0)),
+        ),
+        (
+            Val::Float64(3.14159265_f64.to_bits()),
+            "float64",
+            Param(Type::F64, Some(0)),
+        ),
+        (Val::Char('🦀'), "char", Param(Type::I32, Some(0))),
+    ] {
+        let component = Component::new(&engine, make_echo_component_with_params(ty, &[param]))?;
+        let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+        let func = instance.get_func(&mut store, "echo").unwrap();
+        let output = func.call_and_post_return(&mut store, &[input.clone()])?;
+
+        assert_eq!(input, output);
+    }
+
+    // Sad path: type mismatch
+
+    let component = Component::new(
+        &engine,
+        make_echo_component_with_params("float64", &[Param(Type::F64, Some(0))]),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+    let err = func
+        .call_and_post_return(&mut store, &[Val::U64(42)])
+        .unwrap_err();
+
+    assert!(err.to_string().contains("type mismatch"), "{err}");
+
+    // Sad path: arity mismatch (too many)
+
+    let err = func
+        .call_and_post_return(
+            &mut store,
+            &[
+                Val::Float64(3.14159265_f64.to_bits()),
+                Val::Float64(3.14159265_f64.to_bits()),
+            ],
+        )
+        .unwrap_err();
+
+    assert!(
+        err.to_string().contains("expected 1 argument(s), got 2"),
+        "{err}"
+    );
+
+    // Sad path: arity mismatch (too few)
+
+    let err = func.call_and_post_return(&mut store, &[]).unwrap_err();
+
+    assert!(
+        err.to_string().contains("expected 1 argument(s), got 0"),
+        "{err}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn strings() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    let component = Component::new(&engine, make_echo_component("string", 8))?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+    let input = Val::String(Box::from("hello, component!"));
+    let output = func.call_and_post_return(&mut store, &[input.clone()])?;
+
+    assert_eq!(input, output);
+
+    Ok(())
+}
+
+#[test]
+fn lists() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    let component = Component::new(&engine, make_echo_component("(list u32)", 8))?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+    let ty = &func.params(&store)[0];
+    let input = ty.unwrap_list().new_val(Box::new([
+        Val::U32(32343),
+        Val::U32(79023439),
+        Val::U32(2084037802),
+    ]))?;
+    let output = func.call_and_post_return(&mut store, &[input.clone()])?;
+
+    assert_eq!(input, output);
+
+    // Sad path: type mismatch
+
+    let err = ty
+        .unwrap_list()
+        .new_val(Box::new([
+            Val::U32(32343),
+            Val::U32(79023439),
+            Val::Float32(3.14159265_f32.to_bits()),
+        ]))
+        .unwrap_err();
+
+    assert!(err.to_string().contains("type mismatch"), "{err}");
+
+    Ok(())
+}
+
+#[test]
+fn records() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    let component = Component::new(
+        &engine,
+        make_echo_component_with_params(
+            r#"(record (field "A" u32) (field "B" float64) (field "C" (record (field "D" bool) (field "E" u32))))"#,
+            &[
+                Param(Type::I32, Some(0)),
+                Param(Type::F64, Some(8)),
+                Param(Type::U8, Some(16)),
+                Param(Type::I32, Some(20)),
+            ],
+        ),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+    let ty = &func.params(&store)[0];
+    let inner_type = &ty.unwrap_record().fields().nth(2).unwrap().ty;
+    let input = ty.unwrap_record().new_val([
+        ("A", Val::U32(32343)),
+        ("B", Val::Float64(3.14159265_f64.to_bits())),
+        (
+            "C",
+            inner_type
+                .unwrap_record()
+                .new_val([("D", Val::Bool(false)), ("E", Val::U32(2084037802))])?,
+        ),
+    ])?;
+    let output = func.call_and_post_return(&mut store, &[input.clone()])?;
+
+    assert_eq!(input, output);
+
+    // Sad path: type mismatch
+
+    let err = ty
+        .unwrap_record()
+        .new_val([
+            ("A", Val::S32(32343)),
+            ("B", Val::Float64(3.14159265_f64.to_bits())),
+            (
+                "C",
+                inner_type
+                    .unwrap_record()
+                    .new_val([("D", Val::Bool(false)), ("E", Val::U32(2084037802))])?,
+            ),
+        ])
+        .unwrap_err();
+
+    assert!(err.to_string().contains("type mismatch"), "{err}");
+
+    // Sad path: too many fields
+
+    let err = ty
+        .unwrap_record()
+        .new_val([
+            ("A", Val::U32(32343)),
+            ("B", Val::Float64(3.14159265_f64.to_bits())),
+            (
+                "C",
+                inner_type
+                    .unwrap_record()
+                    .new_val([("D", Val::Bool(false)), ("E", Val::U32(2084037802))])?,
+            ),
+            ("F", Val::Unit),
+        ])
+        .unwrap_err();
+
+    assert!(
+        err.to_string().contains("expected 3 value(s); got 4"),
+        "{err}"
+    );
+
+    // Sad path: too few fields
+
+    let err = ty
+        .unwrap_record()
+        .new_val([
+            ("A", Val::U32(32343)),
+            ("B", Val::Float64(3.14159265_f64.to_bits())),
+        ])
+        .unwrap_err();
+
+    assert!(
+        err.to_string().contains("expected 3 value(s); got 2"),
+        "{err}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn variants() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    let component = Component::new(
+        &engine,
+        make_echo_component_with_params(
+            r#"(variant (case "A" u32) (case "B" float64) (case "C" (record (field "D" bool) (field "E" u32))))"#,
+            &[
+                Param(Type::U8, Some(0)),
+                Param(Type::I64, Some(8)),
+                Param(Type::I32, None),
+            ],
+        ),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+    let ty = &func.params(&store)[0];
+    let input = ty
+        .unwrap_variant()
+        .new_val("B", Val::Float64(3.14159265_f64.to_bits()))?;
+    let output = func.call_and_post_return(&mut store, &[input.clone()])?;
+
+    assert_eq!(input, output);
+
+    // Do it again, this time using case "C"
+
+    let component = Component::new(
+        &engine,
+        dbg!(make_echo_component_with_params(
+            r#"(variant (case "A" u32) (case "B" float64) (case "C" (record (field "D" bool) (field "E" u32))))"#,
+            &[
+                Param(Type::U8, Some(0)),
+                Param(Type::I64, Some(8)),
+                Param(Type::I32, Some(12)),
+            ],
+        )),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+    let ty = &func.params(&store)[0];
+    let c_type = &ty.unwrap_variant().cases().nth(2).unwrap().ty;
+    let input = ty.unwrap_variant().new_val(
+        "C",
+        c_type
+            .unwrap_record()
+            .new_val([("D", Val::Bool(true)), ("E", Val::U32(314159265))])?,
+    )?;
+    let output = func.call_and_post_return(&mut store, &[input.clone()])?;
+
+    assert_eq!(input, output);
+
+    // Sad path: type mismatch
+
+    let err = ty
+        .unwrap_variant()
+        .new_val("B", Val::U64(314159265))
+        .unwrap_err();
+
+    assert!(err.to_string().contains("type mismatch"), "{err}");
+
+    // Sad path: unknown case
+
+    let err = ty
+        .unwrap_variant()
+        .new_val("D", Val::U64(314159265))
+        .unwrap_err();
+
+    assert!(err.to_string().contains("unknown variant case"), "{err}");
+
+    // Make sure we lift variants which have cases of different sizes with the correct alignment
+
+    let component = Component::new(
+        &engine,
+        make_echo_component_with_params(
+            r#"
+            (record
+                (field "A" (variant
+                               (case "A" u32)
+                               (case "B" float64)
+                               (case "C" (record (field "D" bool) (field "E" u32)))))
+                (field "B" u32))"#,
+            &[
+                Param(Type::U8, Some(0)),
+                Param(Type::I64, Some(8)),
+                Param(Type::I32, None),
+                Param(Type::I32, Some(16)),
+            ],
+        ),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+    let ty = &func.params(&store)[0];
+    let a_type = &ty.unwrap_record().fields().nth(0).unwrap().ty;
+    let input = ty.unwrap_record().new_val([
+        (
+            "A",
+            a_type.unwrap_variant().new_val("A", Val::U32(314159265))?,
+        ),
+        ("B", Val::U32(628318530)),
+    ])?;
+    let output = func.call_and_post_return(&mut store, &[input.clone()])?;
+
+    assert_eq!(input, output);
+
+    Ok(())
+}
+
+#[test]
+fn flags() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    let component = Component::new(
+        &engine,
+        make_echo_component_with_params(
+            r#"(flags "A" "B" "C" "D" "E")"#,
+            &[Param(Type::U8, Some(0))],
+        ),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+    let ty = &func.params(&store)[0];
+    let input = ty.unwrap_flags().new_val(&["B", "D"])?;
+    let output = func.call_and_post_return(&mut store, &[input.clone()])?;
+
+    assert_eq!(input, output);
+
+    // Sad path: unknown flags
+
+    let err = ty.unwrap_flags().new_val(&["B", "D", "F"]).unwrap_err();
+
+    assert!(err.to_string().contains("unknown flag"), "{err}");
+
+    Ok(())
+}
+
+#[test]
+fn everything() -> Result<()> {
+    // This serves to test both nested types and storing parameters on the heap (i.e. exceeding `MAX_STACK_PARAMS`)
+
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    let component = Component::new(
+        &engine,
+        make_echo_component_with_params(
+            r#"
+            (record
+                (field "A" u32)
+                (field "B" (enum "1" "2"))
+                (field "C" (record (field "D" bool) (field "E" u32)))
+                (field "F" (list (flags "G" "H" "I")))
+                (field "J" (variant
+                               (case "K" u32)
+                               (case "L" float64)
+                               (case "M" (record (field "N" bool) (field "O" u32)))))
+                (field "P" s8)
+                (field "Q" s16)
+                (field "R" s32)
+                (field "S" s64)
+                (field "T" float32)
+                (field "U" float64)
+                (field "V" string)
+                (field "W" char)
+                (field "X" unit)
+                (field "Y" (tuple u32 u32))
+                (field "Z" (union u32 float64))
+                (field "AA" (option u32))
+                (field "BB" (expected string string))
+            )"#,
+            &[
+                Param(Type::I32, Some(0)),
+                Param(Type::U8, Some(4)),
+                Param(Type::U8, Some(5)),
+                Param(Type::I32, Some(8)),
+                Param(Type::I32, Some(12)),
+                Param(Type::I32, Some(16)),
+                Param(Type::U8, Some(20)),
+                Param(Type::I64, Some(28)),
+                Param(Type::I32, Some(32)),
+                Param(Type::S8, Some(36)),
+                Param(Type::S16, Some(38)),
+                Param(Type::I32, Some(40)),
+                Param(Type::I64, Some(48)),
+                Param(Type::F32, Some(56)),
+                Param(Type::F64, Some(64)),
+                Param(Type::I32, Some(72)),
+                Param(Type::I32, Some(76)),
+                Param(Type::I32, Some(80)),
+                Param(Type::I32, Some(84)),
+                Param(Type::I32, Some(88)),
+                Param(Type::I64, Some(96)),
+                Param(Type::U8, Some(104)),
+                Param(Type::I32, Some(108)),
+                Param(Type::U8, Some(112)),
+                Param(Type::I32, Some(116)),
+                Param(Type::I32, Some(120)),
+            ],
+        ),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+    let ty = &func.params(&store)[0];
+    let types = ty
+        .unwrap_record()
+        .fields()
+        .map(|field| field.ty)
+        .collect::<Box<[component::Type]>>();
+    let (b_type, c_type, f_type, j_type, y_type, z_type, aa_type, bb_type) = (
+        &types[1], &types[2], &types[3], &types[4], &types[14], &types[15], &types[16], &types[17],
+    );
+    let f_element_type = &f_type.unwrap_list().ty();
+    let input = ty.unwrap_record().new_val([
+        ("A", Val::U32(32343)),
+        ("B", b_type.unwrap_enum().new_val("2")?),
+        (
+            "C",
+            c_type
+                .unwrap_record()
+                .new_val([("D", Val::Bool(false)), ("E", Val::U32(2084037802))])?,
+        ),
+        (
+            "F",
+            f_type.unwrap_list().new_val(Box::new([f_element_type
+                .unwrap_flags()
+                .new_val(&["G", "I"])?]))?,
+        ),
+        (
+            "J",
+            j_type
+                .unwrap_variant()
+                .new_val("L", Val::Float64(3.14159265_f64.to_bits()))?,
+        ),
+        ("P", Val::S8(42)),
+        ("Q", Val::S16(4242)),
+        ("R", Val::S32(42424242)),
+        ("S", Val::S64(424242424242424242)),
+        ("T", Val::Float32(3.14159265_f32.to_bits())),
+        ("U", Val::Float64(3.14159265_f64.to_bits())),
+        ("V", Val::String(Box::from("wow, nice types"))),
+        ("W", Val::Char('🦀')),
+        ("X", Val::Unit),
+        (
+            "Y",
+            y_type
+                .unwrap_tuple()
+                .new_val(Box::new([Val::U32(42), Val::U32(24)]))?,
+        ),
+        (
+            "Z",
+            z_type
+                .unwrap_union()
+                .new_val(1, Val::Float64(3.14159265_f64.to_bits()))?,
+        ),
+        (
+            "AA",
+            aa_type.unwrap_option().new_val(Some(Val::U32(314159265)))?,
+        ),
+        (
+            "BB",
+            bb_type
+                .unwrap_expected()
+                .new_val(Ok(Val::String(Box::from("no problem"))))?,
+        ),
+    ])?;
+    let output = func.call_and_post_return(&mut store, &[input.clone()])?;
+
+    assert_eq!(input, output);
+
+    Ok(())
+}

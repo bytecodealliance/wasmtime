@@ -31,6 +31,7 @@ mod module_environ;
 mod module_types;
 pub mod obj;
 mod ref_bits;
+mod scopevec;
 mod stack_map;
 mod trap_encoding;
 mod tunables;
@@ -43,6 +44,7 @@ pub use crate::module::*;
 pub use crate::module_environ::*;
 pub use crate::module_types::*;
 pub use crate::ref_bits::*;
+pub use crate::scopevec::ScopeVec;
 pub use crate::stack_map::StackMap;
 pub use crate::trap_encoding::*;
 pub use crate::tunables::Tunables;
@@ -51,6 +53,8 @@ pub use object;
 
 #[cfg(feature = "component-model")]
 pub mod component;
+#[cfg(feature = "component-model")]
+pub mod fact;
 
 // Reexport all of these type-level since they're quite commonly used and it's
 // much easier to refer to everything through one crate rather than importing

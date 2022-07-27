@@ -1,0 +1,146 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+; Test these inputs without div traps, it shouldn't affect normal inputs
+set avoid_div_traps
+target aarch64
+target s390x
+target x86_64
+
+function %srem_i64(i64, i64) -> i64 {
+block0(v0: i64,v1: i64):
+    v2 = srem v0, v1
+    return v2
+}
+; run: %srem_i64(0, 1) == 0
+; run: %srem_i64(2, 2) == 0
+; run: %srem_i64(1, -1) == 0
+; run: %srem_i64(3, 2) == 1
+; run: %srem_i64(19, 7) == 5
+; run: %srem_i64(3, -2) == 1
+; run: %srem_i64(-19, 7) == -5
+; run: %srem_i64(-57, -5) == -2
+; run: %srem_i64(0, 104857600000) == 0
+; run: %srem_i64(104857600000, 511) == 398
+; run: %srem_i64(0xC0FFEEEE_DECAFFFF, 8) == -1
+; run: %srem_i64(0xC0FFEEEE_DECAFFFF, -8) == -1
+; run: %srem_i64(0x80000000_00000000, -2) == 0
+
+function %srem_i32(i32, i32) -> i32 {
+block0(v0: i32,v1: i32):
+    v2 = srem v0, v1
+    return v2
+}
+; run: %srem_i32(0, 1) == 0
+; run: %srem_i32(2, 2) == 0
+; run: %srem_i32(1, -1) == 0
+; run: %srem_i32(3, 2) == 1
+; run: %srem_i32(19, 7) == 5
+; run: %srem_i32(3, -2) == 1
+; run: %srem_i32(-19, 7) == -5
+; run: %srem_i32(0, 13) == 0
+; run: %srem_i32(1048576, 8192) == 0
+; run: %srem_i32(-1024, 255) == -4
+; run: %srem_i32(0xC0FFEEEE, 8) == -2
+; run: %srem_i32(0xC0FFEEEE, -8) == -2
+; run: %srem_i32(0x80000000, -2) == 0
+
+function %srem_i16(i16, i16) -> i16 {
+block0(v0: i16,v1: i16):
+    v2 = srem v0, v1
+    return v2
+}
+; run: %srem_i16(0, 1) == 0
+; run: %srem_i16(2, 2) == 0
+; run: %srem_i16(1, -1) == 0
+; run: %srem_i16(3, 2) == 1
+; run: %srem_i16(19, 7) == 5
+; run: %srem_i16(3, -2) == 1
+; run: %srem_i16(13, 5) == 3
+; run: %srem_i16(0, 42) == 0
+; run: %srem_i16(4, -2) == 0
+; run: %srem_i16(-19, 7) == -5
+; run: %srem_i16(0xC0FF, 8) == -1
+; run: %srem_i16(0xC0FF, -8) == -1
+; run: %srem_i16(0x8000, -2) == 0
+
+function %srem_i8(i8, i8) -> i8 {
+block0(v0: i8,v1: i8):
+    v2 = srem v0, v1
+    return v2
+}
+; run: %srem_i8(0, 1) == 0
+; run: %srem_i8(2, 2) == 0
+; run: %srem_i8(1, -1) == 0
+; run: %srem_i8(2, 7) == 2
+; run: %srem_i8(3, 2) == 1
+; run: %srem_i8(19, 7) == 5
+; run: %srem_i8(3, -2) == 1
+; run: %srem_i8(-19, 7) == -5
+; run: %srem_i8(0xC0, 8) == 0
+; run: %srem_i8(0xC0, -8) == 0
+; run: %srem_i8(0x80, -2) == 0
+
+
+function %srem_imm_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = srem_imm v0, 3
+    return v1
+}
+; run: %srem_imm_i64(0) == 0
+; run: %srem_imm_i64(1) == 1
+; run: %srem_imm_i64(2) == 2
+; run: %srem_imm_i64(3) == 0
+; run: %srem_imm_i64(19) == 1
+; run: %srem_imm_i64(-19) == -1
+; run: %srem_imm_i64(-57) == 0
+; run: %srem_imm_i64(104857600000) == 1
+; run: %srem_imm_i64(0xC0FFEEEE_DECAFFFF) == -1
+; run: %srem_imm_i64(0x80000000_00000000) == -2
+
+function %srem_imm_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = srem_imm v0, 3
+    return v1
+}
+; run: %srem_imm_i32(0) == 0
+; run: %srem_imm_i32(1) == 1
+; run: %srem_imm_i32(2) == 2
+; run: %srem_imm_i32(3) == 0
+; run: %srem_imm_i32(4) == 1
+; run: %srem_imm_i32(19) == 1
+; run: %srem_imm_i32(-19) == -1
+; run: %srem_imm_i32(-42) == 0
+; run: %srem_imm_i32(1057) == 1
+; run: %srem_imm_i32(0xC0FFEEEE) == -2
+
+function %srem_imm_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = srem_imm v0, 3
+    return v1
+}
+; run: %srem_imm_i16(0) == 0
+; run: %srem_imm_i16(1) == 1
+; run: %srem_imm_i16(2) == 2
+; run: %srem_imm_i16(3) == 0
+; run: %srem_imm_i16(4) == 1
+; run: %srem_imm_i16(19) == 1
+; run: %srem_imm_i16(-19) == -1
+; run: %srem_imm_i16(0xC0FF) == -1
+; run: %srem_imm_i16(0x8000) == -2
+
+function %srem_imm_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = srem_imm v0, 3
+    return v1
+}
+; run: %srem_imm_i8(0) == 0
+; run: %srem_imm_i8(1) == 1
+; run: %srem_imm_i8(2) == 2
+; run: %srem_imm_i8(3) == 0
+; run: %srem_imm_i8(19) == 1
+; run: %srem_imm_i8(-19) == -1
+; run: %srem_imm_i8(0xC0) == -1
+; run: %srem_imm_i8(0x80) == -2

@@ -46,6 +46,16 @@ pub enum ParseOptionError {
         /// Name of the unknown flag.
         name: String,
     },
+
+    /// An unknown value was used, with the given name at the given location.
+    UnknownValue {
+        /// Location where the flag was given.
+        loc: Location,
+        /// Name of the unknown value.
+        name: String,
+        /// Value of the unknown value.
+        value: String,
+    },
 }
 
 impl From<ParseOptionError> for ParseError {
@@ -55,6 +65,11 @@ impl From<ParseOptionError> for ParseError {
             ParseOptionError::UnknownFlag { loc, name } => Self {
                 location: loc,
                 message: format!("unknown setting '{}'", name),
+                is_warning: false,
+            },
+            ParseOptionError::UnknownValue { loc, name, value } => Self {
+                location: loc,
+                message: format!("unknown setting '{}={}'", name, value),
                 is_warning: false,
             },
         }
@@ -92,7 +107,11 @@ where
             TestOption::Value(name, value) => match config.set(name, value) {
                 Ok(_) => {}
                 Err(SetError::BadName(name)) => {
-                    return Err(ParseOptionError::UnknownFlag { loc, name })
+                    return Err(ParseOptionError::UnknownValue {
+                        loc,
+                        name,
+                        value: value.to_string(),
+                    })
                 }
                 Err(SetError::BadType) => {
                     return option_err!(loc, "invalid setting type: '{}'", opt)

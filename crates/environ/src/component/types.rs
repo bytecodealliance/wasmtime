@@ -122,6 +122,9 @@ indices! {
     /// refer back to previously created instances for exports and such.
     pub struct RuntimeInstanceIndex(u32);
 
+    /// Same as `RuntimeInstanceIndex` but tracks component instances instead.
+    pub struct RuntimeComponentInstanceIndex(u32);
+
     /// Used to index imports into a `Component`
     ///
     /// This does not correspond to anything in the binary format for the
@@ -142,6 +145,9 @@ indices! {
     /// component model.
     pub struct LoweredIndex(u32);
 
+    /// Same as `LoweredIndex` but for the `CoreDef::AlwaysTrap` variant.
+    pub struct RuntimeAlwaysTrapIndex(u32);
+
     /// Index representing a linear memory extracted from a wasm instance
     /// which is stored in a `VMComponentContext`. This is used to deduplicate
     /// references to the same linear memory where it's only stored once in a
@@ -160,6 +166,10 @@ indices! {
     /// Index that represents an exported module from a component since that's
     /// currently the only use for saving the entire module state at runtime.
     pub struct RuntimeModuleIndex(u32);
+
+    /// Index into the list of fused adapters identified during compilation.
+    /// Used in conjuction with the `Adapters` type.
+    pub struct AdapterIndex(u32);
 }
 
 // Reexport for convenience some core-wasm indices which are also used in the
@@ -278,6 +288,11 @@ impl ComponentTypesBuilder {
     pub fn finish(mut self) -> ComponentTypes {
         self.component_types.module_types = self.module_types.finish();
         self.component_types
+    }
+
+    /// Returns the `ComponentTypes`-in-progress.
+    pub fn component_types(&self) -> &ComponentTypes {
+        &self.component_types
     }
 
     /// Returns the underlying builder used to build up core wasm module types.
@@ -402,47 +417,65 @@ impl ComponentTypesBuilder {
         ty: &[wasmparser::ModuleTypeDeclaration<'_>],
     ) -> Result<TypeModuleIndex> {
         let mut result = TypeModule::default();
-        let mut functypes: PrimaryMap<TypeIndex, SignatureIndex> = PrimaryMap::default();
+        self.push_type_scope();
 
         for item in ty {
             match item {
                 wasmparser::ModuleTypeDeclaration::Type(wasmparser::Type::Func(f)) => {
-                    functypes.push(self.module_types.wasm_func_type(f.clone().try_into()?));
+                    let ty =
+                        TypeDef::CoreFunc(self.module_types.wasm_func_type(f.clone().try_into()?));
+                    self.push_core_typedef(ty);
                 }
                 wasmparser::ModuleTypeDeclaration::Export { name, ty } => {
                     let prev = result
                         .exports
-                        .insert(name.to_string(), type_ref(ty, &functypes)?);
+                        .insert(name.to_string(), self.entity_type(ty)?);
                     assert!(prev.is_none());
                 }
                 wasmparser::ModuleTypeDeclaration::Import(import) => {
                     let prev = result.imports.insert(
                         (import.module.to_string(), import.name.to_string()),
-                        type_ref(&import.ty, &functypes)?,
+                        self.entity_type(&import.ty)?,
                     );
                     assert!(prev.is_none());
                 }
+                wasmparser::ModuleTypeDeclaration::Alias(alias) => match alias {
+                    wasmparser::Alias::Outer {
+                        kind: wasmparser::OuterAliasKind::Type,
+                        count,
+                        index,
+                    } => {
+                        let ty = self.core_outer_type(*count, TypeIndex::from_u32(*index));
+                        self.push_core_typedef(ty);
+                    }
+                    wasmparser::Alias::InstanceExport { .. } => {
+                        unreachable!("invalid alias {alias:?}")
+                    }
+                },
             }
         }
 
-        return Ok(self.component_types.modules.push(result));
+        self.pop_type_scope();
 
-        fn type_ref(
-            ty: &wasmparser::TypeRef,
-            functypes: &PrimaryMap<TypeIndex, SignatureIndex>,
-        ) -> Result<EntityType> {
-            Ok(match ty {
-                wasmparser::TypeRef::Func(idx) => {
-                    EntityType::Function(functypes[TypeIndex::from_u32(*idx)])
+        Ok(self.component_types.modules.push(result))
+    }
+
+    fn entity_type(&self, ty: &wasmparser::TypeRef) -> Result<EntityType> {
+        Ok(match ty {
+            wasmparser::TypeRef::Func(idx) => {
+                let idx = TypeIndex::from_u32(*idx);
+                match self.core_outer_type(0, idx) {
+                    TypeDef::CoreFunc(idx) => EntityType::Function(idx),
+                    _ => unreachable!(), // not possible with valid components
                 }
-                wasmparser::TypeRef::Table(ty) => EntityType::Table(ty.clone().try_into()?),
-                wasmparser::TypeRef::Memory(ty) => EntityType::Memory(ty.clone().into()),
-                wasmparser::TypeRef::Global(ty) => {
-                    EntityType::Global(Global::new(ty.clone(), GlobalInit::Import)?)
-                }
-                wasmparser::TypeRef::Tag(_) => bail!("exceptions proposal not implemented"),
-            })
-        }
+            }
+            wasmparser::TypeRef::Table(ty) => EntityType::Table(ty.clone().try_into()?),
+            wasmparser::TypeRef::Memory(ty) => EntityType::Memory(ty.clone().into()),
+            wasmparser::TypeRef::Global(ty) => {
+                EntityType::Global(Global::new(ty.clone(), GlobalInit::Import)?)
+            }
+            wasmparser::TypeRef::Tag(_) => bail!("exceptions proposal not implemented"),
+        })
     }
 
     fn component_type(
@@ -541,7 +574,7 @@ impl ComponentTypesBuilder {
                 .collect(),
             result: self.valtype(&ty.result),
         };
-        intern(&mut self.functions, &mut self.component_types.functions, ty)
+        self.add_func_type(ty)
     }
 
     fn defined_type(&mut self, ty: &wasmparser::ComponentDefinedType<'_>) -> InterfaceType {
@@ -603,7 +636,7 @@ impl ComponentTypesBuilder {
                 })
                 .collect(),
         };
-        intern(&mut self.records, &mut self.component_types.records, record)
+        self.add_record_type(record)
     }
 
     fn variant_type(&mut self, cases: &[wasmparser::VariantCase<'_>]) -> TypeVariantIndex {
@@ -621,18 +654,14 @@ impl ComponentTypesBuilder {
                 })
                 .collect(),
         };
-        intern(
-            &mut self.variants,
-            &mut self.component_types.variants,
-            variant,
-        )
+        self.add_variant_type(variant)
     }
 
     fn tuple_type(&mut self, types: &[wasmparser::ComponentValType]) -> TypeTupleIndex {
         let tuple = TypeTuple {
             types: types.iter().map(|ty| self.valtype(ty)).collect(),
         };
-        intern(&mut self.tuples, &mut self.component_types.tuples, tuple)
+        self.add_tuple_type(tuple)
     }
 
     fn flags_type(&mut self, flags: &[&str]) -> TypeFlagsIndex {
@@ -670,6 +699,26 @@ impl ComponentTypesBuilder {
             &mut self.component_types.expecteds,
             expected,
         )
+    }
+
+    /// Interns a new function type within this type information.
+    pub fn add_func_type(&mut self, ty: TypeFunc) -> TypeFuncIndex {
+        intern(&mut self.functions, &mut self.component_types.functions, ty)
+    }
+
+    /// Interns a new record type within this type information.
+    pub fn add_record_type(&mut self, ty: TypeRecord) -> TypeRecordIndex {
+        intern(&mut self.records, &mut self.component_types.records, ty)
+    }
+
+    /// Interns a new tuple type within this type information.
+    pub fn add_tuple_type(&mut self, ty: TypeTuple) -> TypeTupleIndex {
+        intern(&mut self.tuples, &mut self.component_types.tuples, ty)
+    }
+
+    /// Interns a new variant type within this type information.
+    pub fn add_variant_type(&mut self, ty: TypeVariant) -> TypeVariantIndex {
+        intern(&mut self.variants, &mut self.component_types.variants, ty)
     }
 }
 

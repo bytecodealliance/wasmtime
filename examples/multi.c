@@ -16,6 +16,10 @@ You can compile and run this example on Linux with:
 Note that on Windows and macOS the command will be similar, but you'll need
 to tweak the `-lpthread` and such annotations.
 
+You can also build using cmake:
+
+mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-multi
+
 Also note that this example was taken from
 https://github.com/WebAssembly/wasm-c-api/blob/master/example/multi.c
 originally

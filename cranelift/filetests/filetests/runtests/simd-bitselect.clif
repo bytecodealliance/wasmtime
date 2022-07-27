@@ -1,6 +1,7 @@
 test run
 set enable_simd
 target aarch64
+target s390x
 target x86_64 has_sse3 has_ssse3 has_sse41
 
 function %bitselect_i32x4(i32x4, i32x4, i32x4) -> i32x4 {
@@ -12,3 +13,33 @@ block0(v0: i32x4, v1: i32x4, v2: i32x4):
 ; run: %bitselect_i32x4(0x11111111111111111111111111111111, 0x11111111111111111111111111111111, 0x00000000000000000000000000000000) == 0x11111111111111111111111111111111
 ; run: %bitselect_i32x4(0x01010011000011110000000011111111, 0x11111111111111111111111111111111, 0x00000000000000000000000000000000) == 0x01010011000011110000000011111111
 ; run: %bitselect_i32x4(0x00000000000000001111111111111111, 0x00000000000000000000000000000000, 0x11111111111111111111111111111111) == 0x11111111111111110000000000000000
+
+function %bitselect_i8x16(i8x16, i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16, v2: i8x16):
+    v3 = bitselect v0, v1, v2
+    return v3
+}
+; Remember that bitselect accepts: 1) the selector vector, 2) the "if true" vector, and 3) the "if false" vector.
+; run: %bitselect_i8x16([0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255], [127 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42], [42 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127]) == [42 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42]
+
+function %bitselect_i8x16() -> b1 {
+block0:
+    v0 = vconst.i8x16 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255]  ; the selector vector
+    v1 = vconst.i8x16 [127 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42] ; for each 1-bit in v0 the bit of v1 is selected
+    v2 = vconst.i8x16 [42 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127] ; for each 0-bit in v0 the bit of v2 is selected
+    v3 = bitselect v0, v1, v2
+
+    v4 = extractlane v3, 0
+    v5 = icmp_imm eq v4, 42
+
+    v6 = extractlane v3, 1
+    v7 = icmp_imm eq v6, 0
+
+    v8 = extractlane v3, 15
+    v9 = icmp_imm eq v8, 42
+
+    v10 = band v5, v7
+    v11 = band v10, v9
+    return v11
+}
+; run

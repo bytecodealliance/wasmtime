@@ -62,8 +62,9 @@ impl PtrLen {
 
     #[cfg(target_os = "windows")]
     fn with_size(size: usize) -> io::Result<Self> {
-        use winapi::um::memoryapi::VirtualAlloc;
-        use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE};
+        use windows_sys::Win32::System::Memory::{
+            VirtualAlloc, MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE,
+        };
 
         // VirtualAlloc always rounds up to the next multiple of the page size
         let ptr = unsafe {

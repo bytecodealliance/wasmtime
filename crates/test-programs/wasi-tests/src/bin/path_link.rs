@@ -1,4 +1,3 @@
-use more_asserts::assert_gt;
 use std::{env, process};
 use wasi_tests::{assert_errno, create_file, open_scratch_directory, TESTCONFIG};
 
@@ -12,9 +11,8 @@ const TEST_RIGHTS: wasi::Rights = wasi::RIGHTS_FD_READ
 unsafe fn create_or_open(dir_fd: wasi::Fd, name: &str, flags: wasi::Oflags) -> wasi::Fd {
     let file_fd = wasi::path_open(dir_fd, 0, name, flags, TEST_RIGHTS, TEST_RIGHTS, 0)
         .unwrap_or_else(|_| panic!("opening '{}'", name));
-    assert_gt!(
-        file_fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        file_fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
     file_fd
@@ -23,9 +21,8 @@ unsafe fn create_or_open(dir_fd: wasi::Fd, name: &str, flags: wasi::Oflags) -> w
 unsafe fn open_link(dir_fd: wasi::Fd, name: &str) -> wasi::Fd {
     let file_fd = wasi::path_open(dir_fd, 0, name, 0, TEST_RIGHTS, TEST_RIGHTS, 0)
         .unwrap_or_else(|_| panic!("opening a link '{}'", name));
-    assert_gt!(
-        file_fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        file_fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
     file_fd

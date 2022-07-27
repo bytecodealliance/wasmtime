@@ -306,7 +306,7 @@ impl Amode {
         }
     }
 
-    /// Add the regs mentioned by `self` to `collector`.
+    /// Add the registers mentioned by `self` to `collector`.
     pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
         &self,
         collector: &mut OperandCollector<'_, F>,
@@ -318,6 +318,25 @@ impl Amode {
             Amode::ImmRegRegShift { base, index, .. } => {
                 collector.reg_use(base.to_reg());
                 collector.reg_use(index.to_reg());
+            }
+            Amode::RipRelative { .. } => {
+                // RIP isn't involved in regalloc.
+            }
+        }
+    }
+
+    /// Same as `get_operands`, but add the registers in the "late" phase.
+    pub(crate) fn get_operands_late<F: Fn(VReg) -> VReg>(
+        &self,
+        collector: &mut OperandCollector<'_, F>,
+    ) {
+        match self {
+            Amode::ImmReg { base, .. } => {
+                collector.reg_late_use(*base);
+            }
+            Amode::ImmRegRegShift { base, index, .. } => {
+                collector.reg_late_use(base.to_reg());
+                collector.reg_late_use(index.to_reg());
             }
             Amode::RipRelative { .. } => {
                 // RIP isn't involved in regalloc.
@@ -426,13 +445,27 @@ impl SyntheticAmode {
         SyntheticAmode::NominalSPOffset { simm32 }
     }
 
-    /// Add the regs mentioned by `self` to `collector`.
+    /// Add the registers mentioned by `self` to `collector`.
     pub(crate) fn get_operands<F: Fn(VReg) -> VReg>(
         &self,
         collector: &mut OperandCollector<'_, F>,
     ) {
         match self {
             SyntheticAmode::Real(addr) => addr.get_operands(collector),
+            SyntheticAmode::NominalSPOffset { .. } => {
+                // Nothing to do; the base is SP and isn't involved in regalloc.
+            }
+            SyntheticAmode::ConstantOffset(_) => {}
+        }
+    }
+
+    /// Same as `get_operands`, but add the register in the "late" phase.
+    pub(crate) fn get_operands_late<F: Fn(VReg) -> VReg>(
+        &self,
+        collector: &mut OperandCollector<'_, F>,
+    ) {
+        match self {
+            SyntheticAmode::Real(addr) => addr.get_operands_late(collector),
             SyntheticAmode::NominalSPOffset { .. } => {
                 // Nothing to do; the base is SP and isn't involved in regalloc.
             }
@@ -761,6 +794,7 @@ pub(crate) enum InstructionSet {
     BMI1,
     #[allow(dead_code)] // never constructed (yet).
     BMI2,
+    FMA,
     AVX512BITALG,
     AVX512DQ,
     AVX512F,
@@ -1348,6 +1382,38 @@ impl fmt::Debug for SseOpcode {
 }
 
 impl fmt::Display for SseOpcode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub enum AvxOpcode {
+    Vfmadd213ps,
+    Vfmadd213pd,
+}
+
+impl AvxOpcode {
+    /// Which `InstructionSet`s support the opcode?
+    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
+        match self {
+            AvxOpcode::Vfmadd213ps => smallvec![InstructionSet::FMA],
+            AvxOpcode::Vfmadd213pd => smallvec![InstructionSet::FMA],
+        }
+    }
+}
+
+impl fmt::Debug for AvxOpcode {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let name = match self {
+            AvxOpcode::Vfmadd213ps => "vfmadd213ps",
+            AvxOpcode::Vfmadd213pd => "vfmadd213pd",
+        };
+        write!(fmt, "{}", name)
+    }
+}
+
+impl fmt::Display for AvxOpcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
     }

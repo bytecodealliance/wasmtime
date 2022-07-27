@@ -643,6 +643,16 @@ impl ScalarSize {
             _ => panic!("Unexpected scalar FP operand size: {:?}", self),
         }
     }
+
+    pub fn widen(&self) -> ScalarSize {
+        match self {
+            ScalarSize::Size8 => ScalarSize::Size16,
+            ScalarSize::Size16 => ScalarSize::Size32,
+            ScalarSize::Size32 => ScalarSize::Size64,
+            ScalarSize::Size64 => ScalarSize::Size128,
+            ScalarSize::Size128 => panic!("can't widen 128-bits"),
+        }
+    }
 }
 
 /// Type used to communicate the size of a vector operand.
@@ -706,12 +716,9 @@ impl VectorSize {
     /// Get the scalar operand size that corresponds to a lane of a vector with a certain size.
     pub fn lane_size(&self) -> ScalarSize {
         match self {
-            VectorSize::Size8x8 => ScalarSize::Size8,
-            VectorSize::Size8x16 => ScalarSize::Size8,
-            VectorSize::Size16x4 => ScalarSize::Size16,
-            VectorSize::Size16x8 => ScalarSize::Size16,
-            VectorSize::Size32x2 => ScalarSize::Size32,
-            VectorSize::Size32x4 => ScalarSize::Size32,
+            VectorSize::Size8x8 | VectorSize::Size8x16 => ScalarSize::Size8,
+            VectorSize::Size16x4 | VectorSize::Size16x8 => ScalarSize::Size16,
+            VectorSize::Size32x2 | VectorSize::Size32x4 => ScalarSize::Size32,
             VectorSize::Size64x2 => ScalarSize::Size64,
         }
     }
@@ -741,5 +748,20 @@ impl VectorSize {
         };
 
         (q, size)
+    }
+}
+
+pub(crate) fn dynamic_to_fixed(ty: Type) -> Type {
+    match ty {
+        I8X8XN => I8X8,
+        I8X16XN => I8X16,
+        I16X4XN => I16X4,
+        I16X8XN => I16X8,
+        I32X2XN => I32X2,
+        I32X4XN => I32X4,
+        I64X2XN => I64X2,
+        F32X4XN => F32X4,
+        F64X2XN => F64X2,
+        _ => unreachable!("unhandled type: {}", ty),
     }
 }

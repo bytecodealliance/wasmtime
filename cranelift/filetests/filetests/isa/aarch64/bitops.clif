@@ -111,7 +111,7 @@ block0(v0: i128):
 ;   clz x8, x0
 ;   lsr x10, x6, #6
 ;   madd x0, x8, x10, x6
-;   movz x1, #0
+;   movz w1, #0
 ;   ret
 
 function %c(i8) -> i8 {
@@ -121,7 +121,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   uxtb w3, w0
+;   sxtb w3, w0
 ;   cls w5, w3
 ;   sub w0, w5, #24
 ;   ret
@@ -133,7 +133,7 @@ block0(v0: i16):
 }
 
 ; block0:
-;   uxth w3, w0
+;   sxth w3, w0
 ;   cls w5, w3
 ;   sub w0, w5, #16
 ;   ret
@@ -173,7 +173,7 @@ block0(v0: i128):
 ;   subs xzr, x8, #63
 ;   csel x1, x14, xzr, eq
 ;   add x0, x1, x8
-;   movz x1, #0
+;   movz w1, #0
 ;   ret
 
 function %d(i8) -> i8 {
@@ -235,7 +235,7 @@ block0(v0: i128):
 ;   clz x12, x8
 ;   lsr x14, x10, #6
 ;   madd x0, x12, x14, x10
-;   movz x1, #0
+;   movz w1, #0
 ;   ret
 
 function %d(i128) -> i128 {
@@ -244,18 +244,13 @@ block0(v0: i128):
     return v1
 }
 
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
-;   stp d11, d13, [sp, #-16]!
 ; block0:
 ;   fmov d6, x0
 ;   mov v6.d[1], x1
-;   cnt v11.16b, v6.16b
-;   addv b13, v11.16b
-;   umov w0, v13.b[0]
-;   movz x1, #0
-;   ldp d11, d13, [sp], #16
-;   ldp fp, lr, [sp], #16
+;   cnt v19.16b, v6.16b
+;   addv b21, v19.16b
+;   umov w0, v21.b[0]
+;   movz w1, #0
 ;   ret
 
 function %d(i64) -> i64 {
@@ -317,8 +312,8 @@ block0:
 }
 
 ; block0:
-;   movz x2, #255
-;   sxtb w0, w2
+;   movz x1, #255
+;   sxtb w0, w1
 ;   ret
 
 function %bextend_b1() -> b32 {
@@ -329,8 +324,8 @@ block0:
 }
 
 ; block0:
-;   movz x2, #1
-;   sbfx w0, w2, #0, #1
+;   movz x1, #1
+;   sbfx w0, w1, #0, #1
 ;   ret
 
 function %bnot_i32(i32) -> i32 {
@@ -928,4 +923,3 @@ block0(v0: i128, v1: i128):
 ;   csel x0, x12, x6, ne
 ;   csel x1, x4, x12, ne
 ;   ret
-

@@ -2,16 +2,13 @@
 
 use anyhow::{Context as _, Result};
 use clap::Parser;
+use once_cell::sync::Lazy;
 use std::path::PathBuf;
 use wasmtime::{Engine, Store};
 use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wast::WastContext;
 
-lazy_static::lazy_static! {
-    static ref AFTER_HELP: String = {
-        crate::FLAG_EXPLANATIONS.to_string()
-    };
-}
+static AFTER_HELP: Lazy<String> = Lazy::new(|| crate::FLAG_EXPLANATIONS.to_string());
 
 /// Runs a WebAssembly test script file
 #[derive(Parser)]

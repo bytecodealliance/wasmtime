@@ -22,9 +22,12 @@ use target_lexicon::{PointerWidth, Triple};
 ///
 /// SIMD vector types have power-of-two lanes, up to 256. Lanes can be any int/float/bool type.
 ///
+/// Note that this is encoded in a `u16` currently for extensibility,
+/// but allows only 14 bits to be used due to some bitpacking tricks
+/// in the CLIF data structures.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct Type(u8);
+pub struct Type(u16);
 
 /// Not a valid type. Can't be loaded or stored. Can't be part of a SIMD vector.
 pub const INVALID: Type = Type(0);
@@ -54,7 +57,7 @@ impl Type {
     }
 
     /// Get log_2 of the number of bits in a lane.
-    pub fn log2_lane_bits(self) -> u8 {
+    pub fn log2_lane_bits(self) -> u32 {
         match self.lane_type() {
             B1 => 0,
             B8 | I8 => 3,
@@ -67,7 +70,7 @@ impl Type {
     }
 
     /// Get the number of bits in a lane.
-    pub fn lane_bits(self) -> u8 {
+    pub fn lane_bits(self) -> u32 {
         match self.lane_type() {
             B1 => 1,
             B8 | I8 => 8,
@@ -168,8 +171,8 @@ impl Type {
         self.replace_lanes(match self.lane_type() {
             I8 | B1 | B8 => I8,
             I16 | B16 => I16,
-            I32 | B32 => I32,
-            I64 | B64 => I64,
+            I32 | B32 | F32 => I32,
+            I64 | B64 | F64 => I64,
             I128 | B128 => I128,
             _ => unimplemented!(),
         })
@@ -230,7 +233,12 @@ impl Type {
     ///
     /// A vector type has 2 or more lanes.
     pub fn is_vector(self) -> bool {
-        self.0 >= constants::VECTOR_BASE
+        self.0 >= constants::VECTOR_BASE && !self.is_dynamic_vector()
+    }
+
+    /// Is this a SIMD vector type with a runtime number of lanes?
+    pub fn is_dynamic_vector(self) -> bool {
+        self.0 >= constants::DYNAMIC_VECTOR_BASE
     }
 
     /// Is this a scalar boolean type?
@@ -284,25 +292,68 @@ impl Type {
     /// will be a number in the range 0-8.
     ///
     /// A scalar type is the same as a SIMD vector type with one lane, so it returns 0.
-    pub fn log2_lane_count(self) -> u8 {
-        self.0.saturating_sub(constants::LANE_BASE) >> 4
+    pub fn log2_lane_count(self) -> u32 {
+        if self.is_dynamic_vector() {
+            0
+        } else {
+            (self.0.saturating_sub(constants::LANE_BASE) >> 4) as u32
+        }
+    }
+
+    /// Get log_2 of the number of lanes in this vector/dynamic type.
+    pub fn log2_min_lane_count(self) -> u32 {
+        if self.is_dynamic_vector() {
+            (self
+                .0
+                .saturating_sub(constants::VECTOR_BASE + constants::LANE_BASE)
+                >> 4) as u32
+        } else {
+            self.log2_lane_count()
+        }
     }
 
     /// Get the number of lanes in this SIMD vector type.
     ///
     /// A scalar type is the same as a SIMD vector type with one lane, so it returns 1.
-    pub fn lane_count(self) -> u16 {
-        1 << self.log2_lane_count()
+    pub fn lane_count(self) -> u32 {
+        if self.is_dynamic_vector() {
+            0
+        } else {
+            1 << self.log2_lane_count()
+        }
     }
 
     /// Get the total number of bits used to represent this type.
-    pub fn bits(self) -> u16 {
-        u16::from(self.lane_bits()) * self.lane_count()
+    pub fn bits(self) -> u32 {
+        if self.is_dynamic_vector() {
+            0
+        } else {
+            self.lane_bits() * self.lane_count()
+        }
+    }
+
+    /// Get the minimum of lanes in this SIMD vector type, this supports both fixed and
+    /// dynamic types.
+    pub fn min_lane_count(self) -> u32 {
+        if self.is_dynamic_vector() {
+            1 << self.log2_min_lane_count()
+        } else {
+            1 << self.log2_lane_count()
+        }
+    }
+
+    /// Get the minimum number of bits used to represent this type.
+    pub fn min_bits(self) -> u32 {
+        if self.is_dynamic_vector() {
+            self.lane_bits() * self.min_lane_count()
+        } else {
+            self.bits()
+        }
     }
 
     /// Get the number of bytes used to store this type in memory.
     pub fn bytes(self) -> u32 {
-        (u32::from(self.bits()) + 7) / 8
+        (self.bits() + 7) / 8
     }
 
     /// Get a SIMD vector type with `n` times more lanes than this one.
@@ -311,24 +362,47 @@ impl Type {
     ///
     /// If this is already a SIMD vector type, this produces a SIMD vector type with `n *
     /// self.lane_count()` lanes.
-    pub fn by(self, n: u16) -> Option<Self> {
+    pub fn by(self, n: u32) -> Option<Self> {
+        if self.is_dynamic_vector() {
+            return None;
+        }
         if self.lane_bits() == 0 || !n.is_power_of_two() {
             return None;
         }
         let log2_lanes: u32 = n.trailing_zeros();
         let new_type = u32::from(self.0) + (log2_lanes << 4);
-        if new_type < 0x100 {
-            Some(Self(new_type as u8))
+        if new_type < constants::DYNAMIC_VECTOR_BASE as u32
+            && (new_type as u16) < constants::DYNAMIC_VECTOR_BASE
+        {
+            Some(Self(new_type as u16))
         } else {
             None
         }
+    }
+
+    /// Convert a fixed vector type to a dynamic one.
+    pub fn vector_to_dynamic(self) -> Option<Self> {
+        assert!(self.is_vector());
+        if self.bits() > 256 {
+            return None;
+        }
+        let new_ty = self.0 + constants::VECTOR_BASE;
+        let ty = Some(Self(new_ty));
+        assert!(ty.unwrap().is_dynamic_vector());
+        return ty;
+    }
+
+    /// Convert a dynamic vector type to a fixed one.
+    pub fn dynamic_to_vector(self) -> Option<Self> {
+        assert!(self.is_dynamic_vector());
+        Some(Self(self.0 - constants::VECTOR_BASE))
     }
 
     /// Get a SIMD vector with half the number of lanes.
     ///
     /// There is no `double_vector()` method. Use `t.by(2)` instead.
     pub fn half_vector(self) -> Option<Self> {
-        if self.is_vector() {
+        if self.is_vector() && !self.is_dynamic_vector() {
             Some(Self(self.0 - 0x10))
         } else {
             None
@@ -391,6 +465,18 @@ impl Type {
             self
         }
     }
+
+    /// Gets a bit-level representation of the type. Used only
+    /// internally for efficiently storing types.
+    pub(crate) fn repr(self) -> u16 {
+        self.0
+    }
+
+    /// Converts from a bit-level representation of the type back to a
+    /// `Type`.
+    pub(crate) fn from_repr(bits: u16) -> Type {
+        Type(bits)
+    }
 }
 
 impl Display for Type {
@@ -403,6 +489,8 @@ impl Display for Type {
             write!(f, "f{}", self.lane_bits())
         } else if self.is_vector() {
             write!(f, "{}x{}", self.lane_type(), self.lane_count())
+        } else if self.is_dynamic_vector() {
+            write!(f, "{:?}x{}xN", self.lane_type(), self.min_lane_count())
         } else if self.is_ref() {
             write!(f, "r{}", self.lane_bits())
         } else {
@@ -426,6 +514,8 @@ impl Debug for Type {
             write!(f, "types::F{}", self.lane_bits())
         } else if self.is_vector() {
             write!(f, "{:?}X{}", self.lane_type(), self.lane_count())
+        } else if self.is_dynamic_vector() {
+            write!(f, "{:?}X{}XN", self.lane_type(), self.min_lane_count())
         } else if self.is_ref() {
             write!(f, "types::R{}", self.lane_bits())
         } else {
@@ -551,6 +641,55 @@ mod tests {
         // Check that the generated constants match the computed vector types.
         assert_eq!(I32.by(4), Some(I32X4));
         assert_eq!(F64.by(8), Some(F64X8));
+    }
+
+    #[test]
+    fn dynamic_vectors() {
+        // Identification.
+        assert_eq!(I8X16XN.is_dynamic_vector(), true);
+        assert_eq!(B16X4XN.is_dynamic_vector(), true);
+        assert_eq!(F32X8XN.is_dynamic_vector(), true);
+        assert_eq!(F64X4XN.is_dynamic_vector(), true);
+        assert_eq!(I128X2XN.is_dynamic_vector(), true);
+
+        // Lane counts.
+        assert_eq!(I16X8XN.lane_count(), 0);
+        assert_eq!(I16X8XN.min_lane_count(), 8);
+
+        // Size
+        assert_eq!(B32X2XN.bits(), 0);
+        assert_eq!(B32X2XN.min_bits(), 64);
+
+        // Change lane counts
+        assert_eq!(F64X4XN.half_vector(), None);
+        assert_eq!(I8X8XN.by(2), None);
+
+        // Conversions to and from vectors.
+        assert_eq!(B8.by(8).unwrap().vector_to_dynamic(), Some(B8X8XN));
+        assert_eq!(I8.by(16).unwrap().vector_to_dynamic(), Some(I8X16XN));
+        assert_eq!(I16.by(8).unwrap().vector_to_dynamic(), Some(I16X8XN));
+        assert_eq!(B16.by(16).unwrap().vector_to_dynamic(), Some(B16X16XN));
+        assert_eq!(B32.by(2).unwrap().vector_to_dynamic(), Some(B32X2XN));
+        assert_eq!(B32.by(8).unwrap().vector_to_dynamic(), Some(B32X8XN));
+        assert_eq!(I32.by(4).unwrap().vector_to_dynamic(), Some(I32X4XN));
+        assert_eq!(F32.by(4).unwrap().vector_to_dynamic(), Some(F32X4XN));
+        assert_eq!(F64.by(2).unwrap().vector_to_dynamic(), Some(F64X2XN));
+        assert_eq!(I128.by(2).unwrap().vector_to_dynamic(), Some(I128X2XN));
+
+        assert_eq!(I128X2XN.dynamic_to_vector(), Some(I128X2));
+        assert_eq!(B64X2XN.dynamic_to_vector(), Some(B64X2));
+        assert_eq!(F32X4XN.dynamic_to_vector(), Some(F32X4));
+        assert_eq!(F64X4XN.dynamic_to_vector(), Some(F64X4));
+        assert_eq!(I32X2XN.dynamic_to_vector(), Some(I32X2));
+        assert_eq!(I32X8XN.dynamic_to_vector(), Some(I32X8));
+        assert_eq!(I16X16XN.dynamic_to_vector(), Some(I16X16));
+        assert_eq!(I8X32XN.dynamic_to_vector(), Some(I8X32));
+
+        assert_eq!(I8X64.vector_to_dynamic(), None);
+        assert_eq!(B16X32.vector_to_dynamic(), None);
+        assert_eq!(F32X16.vector_to_dynamic(), None);
+        assert_eq!(I64X8.vector_to_dynamic(), None);
+        assert_eq!(I128X4.vector_to_dynamic(), None);
     }
 
     #[test]

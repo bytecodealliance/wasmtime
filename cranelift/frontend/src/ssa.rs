@@ -8,7 +8,6 @@
 //! <https://link.springer.com/content/pdf/10.1007/978-3-642-37051-9_6.pdf>
 
 use crate::Variable;
-use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 use core::convert::TryInto;
 use core::mem;
@@ -17,9 +16,12 @@ use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::instructions::BranchInfo;
 use cranelift_codegen::ir::types::{F32, F64};
-use cranelift_codegen::ir::{Block, Function, Inst, InstBuilder, InstructionData, Type, Value};
+use cranelift_codegen::ir::{
+    Block, Function, Inst, InstBuilder, InstructionData, JumpTableData, Type, Value,
+};
 use cranelift_codegen::packed_option::PackedOption;
 use smallvec::SmallVec;
+use std::collections::HashSet;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///
@@ -51,6 +53,10 @@ pub struct SSABuilder {
 
     /// Side effects accumulated in the `use_var`/`predecessors_lookup` state machine.
     side_effects: SideEffects,
+
+    /// Reused allocation for blocks we've already visited in the
+    /// `can_optimize_var_lookup` method.
+    visited: HashSet<Block>,
 }
 
 /// Side effects of a `use_var` or a `seal_block` method call.
@@ -127,6 +133,7 @@ impl SSABuilder {
             calls: Vec::new(),
             results: Vec::new(),
             side_effects: SideEffects::new(),
+            visited: Default::default(),
         }
     }
 
@@ -280,14 +287,14 @@ impl SSABuilder {
     /// marking visited blocks and aborting if we find a previously seen block.
     /// We stop the search if we find a block with multiple predecessors since the
     /// original algorithm can handle these cases.
-    fn can_optimize_var_lookup(&self, block: Block) -> bool {
+    fn can_optimize_var_lookup(&mut self, block: Block) -> bool {
         // Check that the initial block only has one predecessor. This is only a requirement
         // for the first block.
         if self.predecessors(block).len() != 1 {
             return false;
         }
 
-        let mut visited = BTreeSet::new();
+        self.visited.clear();
         let mut current = block;
         loop {
             let predecessors = self.predecessors(current);
@@ -305,11 +312,11 @@ impl SSABuilder {
                 return true;
             }
 
-            if visited.contains(&current) {
+            let next_current = predecessors[0].block;
+            if !self.visited.insert(current) {
                 return false;
             }
-            visited.insert(current);
-            current = predecessors[0].block;
+            current = next_current;
         }
     }
 
@@ -652,7 +659,7 @@ impl SSABuilder {
                 func.dfg.append_inst_arg(jump_inst, val);
                 None
             }
-            BranchInfo::Table(jt, default_block) => {
+            BranchInfo::Table(mut jt, _default_block) => {
                 // In the case of a jump table, the situation is tricky because br_table doesn't
                 // support arguments.
                 // We have to split the critical edge
@@ -662,25 +669,35 @@ impl SSABuilder {
                 self.ssa_blocks[middle_block].add_predecessor(jump_inst_block, jump_inst);
                 self.mark_block_sealed(middle_block);
 
-                if let Some(default_block) = default_block {
-                    if dest_block == default_block {
-                        match func.dfg[jump_inst] {
-                            InstructionData::BranchTable {
-                                destination: ref mut dest,
-                                ..
-                            } => {
-                                *dest = middle_block;
-                            }
-                            _ => panic!("should not happen"),
-                        }
+                let table = &func.jump_tables[jt];
+                let mut copied = JumpTableData::with_capacity(table.len());
+                let mut changed = false;
+                for &destination in table.iter() {
+                    if destination == dest_block {
+                        copied.push_entry(middle_block);
+                        changed = true;
+                    } else {
+                        copied.push_entry(destination);
                     }
                 }
 
-                for old_dest in func.jump_tables[jt].as_mut_slice() {
-                    if *old_dest == dest_block {
-                        *old_dest = middle_block;
-                    }
+                if changed {
+                    jt = func.create_jump_table(copied);
                 }
+
+                // Redo the match from `analyze_branch` but this time capture mutable references
+                match &mut func.dfg[jump_inst] {
+                    InstructionData::BranchTable {
+                        destination, table, ..
+                    } => {
+                        if *destination == dest_block {
+                            *destination = middle_block;
+                        }
+                        *table = jt;
+                    }
+                    _ => unreachable!(),
+                }
+
                 let mut cur = FuncCursor::new(func).at_bottom(middle_block);
                 let middle_jump_inst = cur.ins().jump(dest_block, &[val]);
                 self.def_var(var, val, middle_block);

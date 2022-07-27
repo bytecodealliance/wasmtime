@@ -29,6 +29,8 @@
 //! `suspend`, which has 0xB000 so it can find this, will read that and write
 //! its own resumption information into this slot as well.
 
+#![allow(unused_macros)]
+
 use crate::RunResult;
 use std::cell::Cell;
 use std::io;
@@ -172,5 +174,22 @@ impl Suspend {
         let ret = self.0.cast::<*const u8>().offset(-1).read();
         assert!(!ret.is_null());
         ret.cast()
+    }
+}
+
+cfg_if::cfg_if! {
+    if #[cfg(target_arch = "aarch64")] {
+        mod aarch64;
+    } else if #[cfg(target_arch = "x86_64")] {
+        mod x86_64;
+    } else if #[cfg(target_arch = "x86")] {
+        mod x86;
+    } else if #[cfg(target_arch = "arm")] {
+        mod arm;
+    } else if #[cfg(target_arch = "s390x")] {
+        // currently `global_asm!` isn't stable on s390x so this is an external
+        // assembler file built with the `build.rs`.
+    } else {
+        compile_error!("fibers are not supported on this CPU architecture");
     }
 }

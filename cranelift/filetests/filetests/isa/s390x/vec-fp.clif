@@ -1,0 +1,533 @@
+test compile precise-output
+target s390x
+
+function %vconst_f32x4_zero() -> f32x4 {
+block0:
+  v1 = vconst.f32x4 [0x0.0 0x0.0 0x0.0 0x0.0]
+  return v1
+}
+
+; block0:
+;   vgbm %v24, 0
+;   br %r14
+
+function %vconst_f64x2_zero() -> f64x2 {
+block0:
+  v1 = vconst.f64x2 [0x0.0 0x0.0]
+  return v1
+}
+
+; block0:
+;   vgbm %v24, 0
+;   br %r14
+
+function %vconst_f32x4_mixed() -> f32x4 {
+block0:
+  v1 = vconst.f32x4 [0x1.0 0x2.0 0x3.0 0x4.0]
+  return v1
+}
+
+; block0:
+;   bras %r1, 20 ; data.u128 0x4080000040400000400000003f800000 ; vl %v24, 0(%r1)
+;   br %r14
+
+function %vconst_f64x2_mixed() -> f64x2 {
+block0:
+  v1 = vconst.f64x2 [0x1.0 0x2.0]
+  return v1
+}
+
+; block0:
+;   bras %r1, 20 ; data.u128 0x40000000000000003ff0000000000000 ; vl %v24, 0(%r1)
+;   br %r14
+
+function %fadd_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+  v2 = fadd v0, v1
+  return v2
+}
+
+; block0:
+;   vfasb %v24, %v24, %v25
+;   br %r14
+
+function %fadd_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+  v2 = fadd v0, v1
+  return v2
+}
+
+; block0:
+;   vfadb %v24, %v24, %v25
+;   br %r14
+
+function %fsub_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+  v2 = fsub v0, v1
+  return v2
+}
+
+; block0:
+;   vfssb %v24, %v24, %v25
+;   br %r14
+
+function %fsub_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+  v2 = fsub v0, v1
+  return v2
+}
+
+; block0:
+;   vfsdb %v24, %v24, %v25
+;   br %r14
+
+function %fmul_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+  v2 = fmul v0, v1
+  return v2
+}
+
+; block0:
+;   vfmsb %v24, %v24, %v25
+;   br %r14
+
+function %fmul_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+  v2 = fmul v0, v1
+  return v2
+}
+
+; block0:
+;   vfmdb %v24, %v24, %v25
+;   br %r14
+
+function %fdiv_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+  v2 = fdiv v0, v1
+  return v2
+}
+
+; block0:
+;   vfdsb %v24, %v24, %v25
+;   br %r14
+
+function %fdiv_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+  v2 = fdiv v0, v1
+  return v2
+}
+
+; block0:
+;   vfddb %v24, %v24, %v25
+;   br %r14
+
+function %fmin_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+  v2 = fmin v0, v1
+  return v2
+}
+
+; block0:
+;   vfminsb %v24, %v24, %v25, 1
+;   br %r14
+
+function %fmin_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+  v2 = fmin v0, v1
+  return v2
+}
+
+; block0:
+;   vfmindb %v24, %v24, %v25, 1
+;   br %r14
+
+function %fmax_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+  v2 = fmax v0, v1
+  return v2
+}
+
+; block0:
+;   vfmaxsb %v24, %v24, %v25, 1
+;   br %r14
+
+function %fmax_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+  v2 = fmax v0, v1
+  return v2
+}
+
+; block0:
+;   vfmaxdb %v24, %v24, %v25, 1
+;   br %r14
+
+function %fmin_pseudo_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+  v2 = fmin_pseudo v0, v1
+  return v2
+}
+
+; block0:
+;   vfminsb %v24, %v24, %v25, 3
+;   br %r14
+
+function %fmin_pseudo_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+  v2 = fmin_pseudo v0, v1
+  return v2
+}
+
+; block0:
+;   vfmindb %v24, %v24, %v25, 3
+;   br %r14
+
+function %fmax_pseudo_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+  v2 = fmax_pseudo v0, v1
+  return v2
+}
+
+; block0:
+;   vfmaxsb %v24, %v24, %v25, 3
+;   br %r14
+
+function %fmax_pseudo_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+  v2 = fmax_pseudo v0, v1
+  return v2
+}
+
+; block0:
+;   vfmaxdb %v24, %v24, %v25, 3
+;   br %r14
+
+function %sqrt_f32x4(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = sqrt v0
+  return v1
+}
+
+; block0:
+;   vfsqsb %v24, %v24
+;   br %r14
+
+function %sqrt_f64x2(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = sqrt v0
+  return v1
+}
+
+; block0:
+;   vfsqdb %v24, %v24
+;   br %r14
+
+function %fabs_f32x4(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = fabs v0
+  return v1
+}
+
+; block0:
+;   vflpsb %v24, %v24
+;   br %r14
+
+function %fabs_f64x2(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = fabs v0
+  return v1
+}
+
+; block0:
+;   vflpdb %v24, %v24
+;   br %r14
+
+function %fneg_f32x4(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = fneg v0
+  return v1
+}
+
+; block0:
+;   vflcsb %v24, %v24
+;   br %r14
+
+function %fneg_f64x2(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = fneg v0
+  return v1
+}
+
+; block0:
+;   vflcdb %v24, %v24
+;   br %r14
+
+function %fvpromote_low_f32x4(f32x4) -> f64x2 {
+block0(v0: f32x4):
+  v1 = fvpromote_low v0
+  return v1
+}
+
+; block0:
+;   vmrlf %v3, %v24, %v24
+;   vldeb %v24, %v3
+;   br %r14
+
+function %fvdemote_f64x2(f64x2) -> f32x4 {
+block0(v0: f64x2):
+  v1 = fvdemote v0
+  return v1
+}
+
+; block0:
+;   vledb %v3, %v24, 0, 0
+;   vgbm %v5, 0
+;   bras %r1, 20 ; data.u128 0x10101010101010100001020308090a0b ; vl %v7, 0(%r1)
+;   vperm %v24, %v3, %v5, %v7
+;   br %r14
+
+function %ceil_f32x4(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = ceil v0
+  return v1
+}
+
+; block0:
+;   vfisb %v24, %v24, 0, 6
+;   br %r14
+
+function %ceil_f64x2(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = ceil v0
+  return v1
+}
+
+; block0:
+;   vfidb %v24, %v24, 0, 6
+;   br %r14
+
+function %floor_f32x4(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = floor v0
+  return v1
+}
+
+; block0:
+;   vfisb %v24, %v24, 0, 7
+;   br %r14
+
+function %floor_f64x2(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = floor v0
+  return v1
+}
+
+; block0:
+;   vfidb %v24, %v24, 0, 7
+;   br %r14
+
+function %trunc_f32x4(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = trunc v0
+  return v1
+}
+
+; block0:
+;   vfisb %v24, %v24, 0, 5
+;   br %r14
+
+function %trunc_f64x2(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = trunc v0
+  return v1
+}
+
+; block0:
+;   vfidb %v24, %v24, 0, 5
+;   br %r14
+
+function %nearest_f32x4(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = nearest v0
+  return v1
+}
+
+; block0:
+;   vfisb %v24, %v24, 0, 4
+;   br %r14
+
+function %nearest_f64x2(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = nearest v0
+  return v1
+}
+
+; block0:
+;   vfidb %v24, %v24, 0, 4
+;   br %r14
+
+function %fma_f32x4(f32x4, f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4, v2: f32x4):
+  v3 = fma v0, v1, v2
+  return v3
+}
+
+; block0:
+;   vfmasb %v24, %v24, %v25, %v26
+;   br %r14
+
+function %fma_f64x2(f64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2, v2: f64x2):
+  v3 = fma v0, v1, v2
+  return v3
+}
+
+; block0:
+;   vfmadb %v24, %v24, %v25, %v26
+;   br %r14
+
+function %fcopysign_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+  v2 = fcopysign v0, v1
+  return v2
+}
+
+; block0:
+;   vgmf %v5, 1, 31
+;   vsel %v24, %v24, %v25, %v5
+;   br %r14
+
+function %fcopysign_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+  v2 = fcopysign v0, v1
+  return v2
+}
+
+; block0:
+;   vgmg %v5, 1, 63
+;   vsel %v24, %v24, %v25, %v5
+;   br %r14
+
+function %fcvt_from_uint_i32x4_f32x4(i32x4) -> f32x4 {
+block0(v0: i32x4):
+  v1 = fcvt_from_uint.f32x4 v0
+  return v1
+}
+
+; block0:
+;   vuplhf %v3, %v24
+;   vcdlgb %v5, %v3, 0, 3
+;   vledb %v7, %v5, 0, 4
+;   vupllf %v17, %v24
+;   vcdlgb %v19, %v17, 0, 3
+;   vledb %v21, %v19, 0, 4
+;   bras %r1, 20 ; data.u128 0x0001020308090a0b1011121318191a1b ; vl %v23, 0(%r1)
+;   vperm %v24, %v7, %v21, %v23
+;   br %r14
+
+function %fcvt_from_sint_i32x4_f32x4(i32x4) -> f32x4 {
+block0(v0: i32x4):
+  v1 = fcvt_from_sint.f32x4 v0
+  return v1
+}
+
+; block0:
+;   vuphf %v3, %v24
+;   vcdgb %v5, %v3, 0, 3
+;   vledb %v7, %v5, 0, 4
+;   vuplf %v17, %v24
+;   vcdgb %v19, %v17, 0, 3
+;   vledb %v21, %v19, 0, 4
+;   bras %r1, 20 ; data.u128 0x0001020308090a0b1011121318191a1b ; vl %v23, 0(%r1)
+;   vperm %v24, %v7, %v21, %v23
+;   br %r14
+
+function %fcvt_from_uint_i64x2_f64x2(i64x2) -> f64x2 {
+block0(v0: i64x2):
+  v1 = fcvt_from_uint.f64x2 v0
+  return v1
+}
+
+; block0:
+;   vcdlgb %v24, %v24, 0, 4
+;   br %r14
+
+function %fcvt_from_sint_i64x2_f64x2(i64x2) -> f64x2 {
+block0(v0: i64x2):
+  v1 = fcvt_from_sint.f64x2 v0
+  return v1
+}
+
+; block0:
+;   vcdgb %v24, %v24, 0, 4
+;   br %r14
+
+
+function %fcvt_low_from_sint_i32x4_f64x2(i32x4) -> f64x2 {
+block0(v0: i32x4):
+  v1 = fcvt_low_from_sint.f64x2 v0
+  return v1
+}
+
+; block0:
+;   vuplf %v3, %v24
+;   vcdgb %v24, %v3, 0, 4
+;   br %r14
+
+function %fcvt_to_uint_sat_f32x4_i32x4(f32x4) -> i32x4 {
+block0(v0: f32x4):
+  v1 = fcvt_to_uint_sat.i32x4 v0
+  return v1
+}
+
+; block0:
+;   vmrhf %v3, %v24, %v24
+;   vldeb %v5, %v3
+;   vclgdb %v7, %v5, 0, 5
+;   vmrlf %v17, %v24, %v24
+;   vldeb %v19, %v17
+;   vclgdb %v21, %v19, 0, 5
+;   vpklsg %v24, %v7, %v21
+;   br %r14
+
+function %fcvt_to_sint_sat_f32x4_i32x4(f32x4) -> i32x4 {
+block0(v0: f32x4):
+  v1 = fcvt_to_sint_sat.i32x4 v0
+  return v1
+}
+
+; block0:
+;   vmrhf %v3, %v24, %v24
+;   vldeb %v5, %v3
+;   vcgdb %v7, %v5, 0, 5
+;   vmrlf %v17, %v24, %v24
+;   vldeb %v19, %v17
+;   vcgdb %v21, %v19, 0, 5
+;   vpksg %v23, %v7, %v21
+;   vgbm %v25, 0
+;   vfcesb %v27, %v24, %v24
+;   vsel %v24, %v23, %v25, %v27
+;   br %r14
+
+function %fcvt_to_uint_sat_f64x2_i64x2(f64x2) -> i64x2 {
+block0(v0: f64x2):
+  v1 = fcvt_to_uint_sat.i64x2 v0
+  return v1
+}
+
+; block0:
+;   vclgdb %v24, %v24, 0, 5
+;   br %r14
+
+function %fcvt_to_sint_sat_f64x2_i64x2(f64x2) -> i64x2 {
+block0(v0: f64x2):
+  v1 = fcvt_to_sint_sat.i64x2 v0
+  return v1
+}
+
+; block0:
+;   vcgdb %v3, %v24, 0, 5
+;   vgbm %v5, 0
+;   vfcedb %v7, %v24, %v24
+;   vsel %v24, %v3, %v5, %v7
+;   br %r14
+

@@ -14,6 +14,10 @@ You can compile and run this example on Linux with:
 
 Note that on Windows and macOS the command will be similar, but you'll need
 to tweak the `-lpthread` and such annotations.
+
+You can also build using cmake:
+
+mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-multimemory
 */
 
 #include <inttypes.h>
@@ -264,7 +268,7 @@ int main(int argc, const char* argv[]) {
 
   // Grow memory.
   printf("Growing memory...\n");
-  uint32_t old_size;
+  uint64_t old_size;
   error = wasmtime_memory_grow(context, &memory0, 1, &old_size);
   if (error != NULL)
     exit_with_error("failed to grow memory", error, trap);

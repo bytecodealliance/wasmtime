@@ -1,9 +1,7 @@
-use more_asserts::assert_gt;
 pub mod config;
+use once_cell::sync::Lazy;
 
-lazy_static::lazy_static! {
-    pub static ref TESTCONFIG: config::TestConfig = config::TestConfig::from_env();
-}
+pub static TESTCONFIG: Lazy<config::TestConfig> = Lazy::new(config::TestConfig::from_env);
 
 // The `wasi` crate version 0.9.0 and beyond, doesn't
 // seem to define these constants, so we do it ourselves.
@@ -44,9 +42,8 @@ pub fn open_scratch_directory(path: &str) -> Result<wasi::Fd, String> {
 pub unsafe fn create_file(dir_fd: wasi::Fd, filename: &str) {
     let file_fd =
         wasi::path_open(dir_fd, 0, filename, wasi::OFLAGS_CREAT, 0, 0, 0).expect("creating a file");
-    assert_gt!(
-        file_fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        file_fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
     wasi::fd_close(file_fd).expect("closing a file");

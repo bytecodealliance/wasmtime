@@ -45,11 +45,10 @@ pub(crate) fn insn_outputs<I: VCodeInst, C: LowerCtx<I = I>>(
 //============================================================================
 // Atomic instructions.
 
-/// Atomic memory update operations.  As of 21 Aug 2020 these are used for the aarch64 and x64
-/// targets.
+/// Atomic memory update operations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
-pub enum AtomicRmwOp {
+pub enum MachAtomicRmwOp {
     /// Add
     Add,
     /// Sub
@@ -74,21 +73,22 @@ pub enum AtomicRmwOp {
     Smax,
 }
 
-impl AtomicRmwOp {
-    /// Converts an `ir::AtomicRmwOp` to the corresponding `inst_common::AtomicRmwOp`.
+impl MachAtomicRmwOp {
+    /// Converts an `ir::AtomicRmwOp` to the corresponding
+    /// `inst_common::AtomicRmwOp`.
     pub fn from(ir_op: ir::AtomicRmwOp) -> Self {
         match ir_op {
-            ir::AtomicRmwOp::Add => AtomicRmwOp::Add,
-            ir::AtomicRmwOp::Sub => AtomicRmwOp::Sub,
-            ir::AtomicRmwOp::And => AtomicRmwOp::And,
-            ir::AtomicRmwOp::Nand => AtomicRmwOp::Nand,
-            ir::AtomicRmwOp::Or => AtomicRmwOp::Or,
-            ir::AtomicRmwOp::Xor => AtomicRmwOp::Xor,
-            ir::AtomicRmwOp::Xchg => AtomicRmwOp::Xchg,
-            ir::AtomicRmwOp::Umin => AtomicRmwOp::Umin,
-            ir::AtomicRmwOp::Umax => AtomicRmwOp::Umax,
-            ir::AtomicRmwOp::Smin => AtomicRmwOp::Smin,
-            ir::AtomicRmwOp::Smax => AtomicRmwOp::Smax,
+            ir::AtomicRmwOp::Add => MachAtomicRmwOp::Add,
+            ir::AtomicRmwOp::Sub => MachAtomicRmwOp::Sub,
+            ir::AtomicRmwOp::And => MachAtomicRmwOp::And,
+            ir::AtomicRmwOp::Nand => MachAtomicRmwOp::Nand,
+            ir::AtomicRmwOp::Or => MachAtomicRmwOp::Or,
+            ir::AtomicRmwOp::Xor => MachAtomicRmwOp::Xor,
+            ir::AtomicRmwOp::Xchg => MachAtomicRmwOp::Xchg,
+            ir::AtomicRmwOp::Umin => MachAtomicRmwOp::Umin,
+            ir::AtomicRmwOp::Umax => MachAtomicRmwOp::Umax,
+            ir::AtomicRmwOp::Smin => MachAtomicRmwOp::Smin,
+            ir::AtomicRmwOp::Smax => MachAtomicRmwOp::Smax,
         }
     }
 }

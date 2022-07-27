@@ -196,7 +196,7 @@ pub struct TargetFrontendConfig {
 impl TargetFrontendConfig {
     /// Get the pointer type of this target.
     pub fn pointer_type(self) -> ir::Type {
-        ir::Type::int(u16::from(self.pointer_bits())).unwrap()
+        ir::Type::int(self.pointer_bits() as u16).unwrap()
     }
 
     /// Get the width of pointers on this target, in units of bits.
@@ -225,6 +225,9 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// Get the ISA-dependent flag values that were used to make this trait object.
     fn isa_flags(&self) -> Vec<settings::Value>;
+
+    /// Get the ISA-dependent maximum vector register size, in bytes.
+    fn dynamic_vector_bytes(&self, dynamic_ty: ir::Type) -> u32;
 
     /// Compile the given function.
     fn compile_function(
@@ -311,7 +314,7 @@ impl<'a> dyn TargetIsa + 'a {
 
     /// Get the pointer type of this ISA.
     pub fn pointer_type(&self) -> ir::Type {
-        ir::Type::int(u16::from(self.pointer_bits())).unwrap()
+        ir::Type::int(self.pointer_bits() as u16).unwrap()
     }
 
     /// Get the width of pointers on this ISA.

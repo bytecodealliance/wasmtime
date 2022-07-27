@@ -1,10 +1,45 @@
 --------------------------------------------------------------------------------
 
-## 0.39.0
+## 0.40.0
 
 Unreleased.
 
 ### Added
+
+### Changed
+
+--------------------------------------------------------------------------------
+
+## 0.39.1
+
+Released 2022-07-20.
+
+### Fixed
+
+* An s390x-specific codegen bug in addition to a mistake introduced in the fix
+  of CVE-2022-31146 were fixed.
+  [#4490](https://github.com/bytecodealliance/wasmtime/pull/4490)
+
+--------------------------------------------------------------------------------
+
+## 0.39.0
+
+Released 2022-07-20
+
+### Added
+
+* Initial support for shared memories and the `threads` WebAssembly proposal
+  has been added. Note that this feature is still experimental and not ready
+  for production use yet.
+  [#4187](https://github.com/bytecodealliance/wasmtime/pull/4187)
+
+* A new `Linker::define_unknown_imports_as_traps` method and
+  `--trap-unknown-imports` CLI flag have been added to conveniently support
+  running modules with imports that aren't dynamically called at runtime.
+  [#4312](https://github.com/bytecodealliance/wasmtime/pull/4312)
+
+* The VTune profiling strategy can now be selected through the C API.
+  [#4316](https://github.com/bytecodealliance/wasmtime/pull/4316)
 
 ### Changed
 
@@ -15,12 +50,88 @@ Unreleased.
   [#4252](https://github.com/bytecodealliance/wasmtime/pull/4252)
   [#4262](https://github.com/bytecodealliance/wasmtime/pull/4262)
 
+* Parallel compilation of WebAssembly modules is now enabled in the C API by
+  default.
+  [#4270](https://github.com/bytecodealliance/wasmtime/pull/4270)
+
+* Implicit Cargo features of the `wasmtime` introduced through `optional`
+  dependencies may have been removed since namespaced features are now used.
+  It's recommended to only used the set of named `[features]` for Wasmtime.
+  [#4293](https://github.com/bytecodealliance/wasmtime/pull/4293)
+
+* Register allocation has fixed a few issues related to excessive memory usage
+  at compile time.
+  [#4324](https://github.com/bytecodealliance/wasmtime/pull/4324)
+
 ### Fixed
 
 * A refactor of `Config` was made to fix an issue that the order of calls to `Config`
   matters now, which may lead to unexpected behavior.
   [#4252](https://github.com/bytecodealliance/wasmtime/pull/4252)
   [#4262](https://github.com/bytecodealliance/wasmtime/pull/4262)
+
+* Wasmtime has been fixed to work on SSE2-only x86\_64 platforms when the
+  `simd` feature is disabled in `Config`.
+  [#4231](https://github.com/bytecodealliance/wasmtime/pull/4231)
+
+* Generation of platform-specific unwinding information is disabled if
+  `wasm_backtrace` and `wasm_reference_types` are both disabled.
+  [#4351](https://github.com/bytecodealliance/wasmtime/pull/4351)
+
+--------------------------------------------------------------------------------
+
+## 0.38.3
+
+Released 2022-07-20.
+
+### Fixed.
+
+* An s390x-specific codegen bug in addition to a mistake introduced in the fix
+  of CVE-2022-31146 were fixed.
+  [#4491](https://github.com/bytecodealliance/wasmtime/pull/4491)
+
+--------------------------------------------------------------------------------
+
+## 0.38.2
+
+Released 2022-07-20.
+
+### Fixed.
+
+* A miscompilation when handling constant divisors on AArch64 has been fixed.
+  [CVE-2022-31169](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-7f6x-jwh5-m9r4)
+
+* A use-after-free possible with accidentally missing stack maps has been fixed.
+  [CVE-2022-31146](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-5fhj-g3p3-pq9g)
+
+--------------------------------------------------------------------------------
+
+## 0.38.1
+
+Released 2022-06-27.
+
+### Fixed.
+
+* A register allocator bug was fixed that could affect direct users of
+  Cranelift who use struct-return (`sret`) arguments. The bug had to do with
+  the handling of physical register constraints in the function prologue. No
+  impact should be possible for users of Cranelift via the Wasm frontend,
+  including Wasmtime.
+  [regalloc2#60](https://github.com/bytecodealliance/regalloc2/pull/60)
+  [#4333](https://github.com/bytecodealliance/wasmtime/pull/4333)
+
+* Lowering bugs for the `i8x16.swizzle` and `select`-with-`v128`-inputs
+  instructions were fixed for the x86\_64 code generator. Note that aarch64 and
+  s390x are unaffected.
+  [#4334](https://github.com/bytecodealliance/wasmtime/pull/4334)
+
+* A bug in the 8-bit lowering of integer division on x86-64 was fixed in
+  Cranelift that could cause a register allocator panic due to an undefined
+  value in a register. (The divide instruction does not take a register `rdx`
+  as a source when 8 bits but the metadata incorrectly claimed it did.) No
+  impact on Wasm/Wasmtime users, and impact on direct Cranelift embedders
+  limited to compilation panics.
+  [#4332](https://github.com/bytecodealliance/wasmtime/pull/4332)
 
 --------------------------------------------------------------------------------
 

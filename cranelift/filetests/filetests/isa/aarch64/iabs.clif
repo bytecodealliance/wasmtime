@@ -1,0 +1,119 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+function %f1(i8x16) -> i8x16 {
+block0(v0: i8x16):
+  v1 = iabs v0
+  return v1
+}
+
+; block0:
+;   abs v0.16b, v0.16b
+;   ret
+
+function %f2(i8x8) -> i8x8 {
+block0(v0: i8x8):
+  v1 = iabs v0
+  return v1
+}
+
+; block0:
+;   abs v0.8b, v0.8b
+;   ret
+
+function %f3(i16x8) -> i16x8 {
+block0(v0: i16x8):
+  v1 = iabs v0
+  return v1
+}
+
+; block0:
+;   abs v0.8h, v0.8h
+;   ret
+
+function %f4(i16x4) -> i16x4 {
+block0(v0: i16x4):
+  v1 = iabs v0
+  return v1
+}
+
+; block0:
+;   abs v0.4h, v0.4h
+;   ret
+
+function %f5(i32x4) -> i32x4 {
+block0(v0: i32x4):
+  v1 = iabs v0
+  return v1
+}
+
+; block0:
+;   abs v0.4s, v0.4s
+;   ret
+
+function %f6(i32x2) -> i32x2 {
+block0(v0: i32x2):
+  v1 = iabs v0
+  return v1
+}
+
+; block0:
+;   abs v0.2s, v0.2s
+;   ret
+
+function %f7(i64x2) -> i64x2 {
+block0(v0: i64x2):
+  v1 = iabs v0
+  return v1
+}
+
+; block0:
+;   abs v0.2d, v0.2d
+;   ret
+
+function %f8(i8) -> i8 {
+block0(v0: i8):
+  v1 = iabs v0
+  return v1
+}
+
+; block0:
+;   sxtb w3, w0
+;   subs wzr, w3, #0
+;   csneg x0, x3, x3, gt
+;   ret
+
+function %f9(i16) -> i16 {
+block0(v0: i16):
+  v1 = iabs v0
+  return v1
+}
+
+; block0:
+;   sxth w3, w0
+;   subs wzr, w3, #0
+;   csneg x0, x3, x3, gt
+;   ret
+
+function %f10(i32) -> i32 {
+block0(v0: i32):
+  v1 = iabs v0
+  return v1
+}
+
+; block0:
+;   subs wzr, w0, #0
+;   csneg x0, x0, x0, gt
+;   ret
+
+function %f11(i64) -> i64 {
+block0(v0: i64):
+  v1 = iabs v0
+  return v1
+}
+
+; block0:
+;   subs xzr, x0, #0
+;   csneg x0, x0, x0, gt
+;   ret

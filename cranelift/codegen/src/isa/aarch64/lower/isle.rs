@@ -5,12 +5,13 @@ pub mod generated_code;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
-    writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo,
-    CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift,
+    insn_inputs, writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget,
+    CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift,
     Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MoveWideConst, MoveWideOp, NarrowValueMode,
     Opcode, OperandSize, PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize,
     NZCV,
 };
+use crate::isa::aarch64::lower::{lower_address, lower_splat_const};
 use crate::isa::aarch64::settings::Flags as IsaFlags;
 use crate::machinst::{isle::*, InputSourceInst};
 use crate::settings::Flags;
@@ -21,7 +22,7 @@ use crate::{
         TrapCode, Value, ValueList,
     },
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
-    isa::aarch64::lower::{is_valid_atomic_transaction_ty, writable_xreg, xreg},
+    isa::aarch64::lower::{writable_xreg, xreg},
     isa::unwind::UnwindInst,
     machinst::{ty_bits, InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
 };
@@ -75,20 +76,12 @@ where
         }
     }
 
-    fn move_wide_const_from_u64(&mut self, n: u64) -> Option<MoveWideConst> {
-        MoveWideConst::maybe_from_u64(n)
-    }
-
-    fn move_wide_const_from_negated_u64(&mut self, n: u64) -> Option<MoveWideConst> {
-        MoveWideConst::maybe_from_u64(!n)
-    }
-
     fn imm_logic_from_u64(&mut self, ty: Type, n: u64) -> Option<ImmLogic> {
-        let ty = if ty.bits() < 32 { I32 } else { ty };
         ImmLogic::maybe_from_u64(n, ty)
     }
 
     fn imm_logic_from_imm64(&mut self, ty: Type, n: Imm64) -> Option<ImmLogic> {
+        let ty = if ty.bits() < 32 { I32 } else { ty };
         self.imm_logic_from_u64(ty, n.bits() as u64)
     }
 
@@ -123,11 +116,11 @@ where
         }
     }
 
+    /// This is target-word-size dependent.  And it excludes booleans and reftypes.
     fn valid_atomic_transaction(&mut self, ty: Type) -> Option<Type> {
-        if is_valid_atomic_transaction_ty(ty) {
-            Some(ty)
-        } else {
-            None
+        match ty {
+            I8 | I16 | I32 | I64 => Some(ty),
+            _ => None,
         }
     }
 
@@ -136,25 +129,79 @@ where
     ///
     /// The logic here is nontrivial enough that it's not really worth porting
     /// this over to ISLE.
-    fn load_constant64_full(&mut self, value: u64) -> Reg {
-        // If the top 32 bits are zero, use 32-bit `mov` operations.
-        let (num_half_words, size, negated) = if value >> 32 == 0 {
-            (2, OperandSize::Size32, (!value << 32) >> 32)
+    fn load_constant64_full(
+        &mut self,
+        ty: Type,
+        extend: &generated_code::ImmExtend,
+        value: u64,
+    ) -> Reg {
+        let bits = ty.bits();
+        let value = if bits < 64 {
+            if *extend == generated_code::ImmExtend::Sign {
+                let shift = 64 - bits;
+                let value = value as i64;
+
+                ((value << shift) >> shift) as u64
+            } else {
+                value & !(u64::MAX << bits)
+            }
         } else {
-            (4, OperandSize::Size64, !value)
+            value
         };
+        let rd = self.temp_writable_reg(I64);
+        let size = OperandSize::Size64;
+
+        // If the top 32 bits are zero, use 32-bit `mov` operations.
+        if value >> 32 == 0 {
+            let size = OperandSize::Size32;
+            let lower_halfword = value as u16;
+            let upper_halfword = (value >> 16) as u16;
+
+            if upper_halfword == u16::MAX {
+                self.emit(&MInst::MovWide {
+                    op: MoveWideOp::MovN,
+                    rd,
+                    imm: MoveWideConst::maybe_with_shift(!lower_halfword, 0).unwrap(),
+                    size,
+                });
+            } else {
+                self.emit(&MInst::MovWide {
+                    op: MoveWideOp::MovZ,
+                    rd,
+                    imm: MoveWideConst::maybe_with_shift(lower_halfword, 0).unwrap(),
+                    size,
+                });
+
+                if upper_halfword != 0 {
+                    self.emit(&MInst::MovWide {
+                        op: MoveWideOp::MovK,
+                        rd,
+                        imm: MoveWideConst::maybe_with_shift(upper_halfword, 16).unwrap(),
+                        size,
+                    });
+                }
+            }
+
+            return rd.to_reg();
+        } else if value == u64::MAX {
+            self.emit(&MInst::MovWide {
+                op: MoveWideOp::MovN,
+                rd,
+                imm: MoveWideConst::zero(),
+                size,
+            });
+            return rd.to_reg();
+        };
+
         // If the number of 0xffff half words is greater than the number of 0x0000 half words
         // it is more efficient to use `movn` for the first instruction.
-        let first_is_inverted = count_zero_half_words(negated, num_half_words)
-            > count_zero_half_words(value, num_half_words);
+        let first_is_inverted = count_zero_half_words(!value) > count_zero_half_words(value);
         // Either 0xffff or 0x0000 half words can be skipped, depending on the first
         // instruction used.
         let ignored_halfword = if first_is_inverted { 0xffff } else { 0 };
         let mut first_mov_emitted = false;
 
-        let rd = self.temp_writable_reg(I64);
-
-        for i in 0..num_half_words {
+        for i in 0..4 {
             let imm16 = (value >> (16 * i)) & 0xffff;
             if imm16 != ignored_halfword {
                 if !first_mov_emitted {
@@ -194,9 +241,9 @@ where
 
         return self.writable_reg_to_reg(rd);
 
-        fn count_zero_half_words(mut value: u64, num_half_words: u8) -> usize {
+        fn count_zero_half_words(mut value: u64) -> usize {
             let mut count = 0;
-            for _ in 0..num_half_words {
+            for _ in 0..4 {
                 if value & 0xffff == 0 {
                     count += 1;
                 }
@@ -288,7 +335,9 @@ where
     }
 
     fn shift_mask(&mut self, ty: Type) -> ImmLogic {
-        let mask = (ty.bits() - 1) as u64;
+        debug_assert!(ty.lane_bits().is_power_of_two());
+
+        let mask = (ty.lane_bits() - 1) as u64;
         ImmLogic::maybe_from_u64(mask, I32).unwrap()
     }
 
@@ -397,24 +446,24 @@ where
         }
     }
 
-    fn zero_value(&mut self, value: Imm64) -> Option<Imm64> {
-        if value.bits() == 0 {
-            return Some(value);
-        }
-        None
+    fn amode(&mut self, ty: Type, mem_op: Inst, offset: u32) -> AMode {
+        lower_address(
+            self.lower_ctx,
+            ty,
+            &insn_inputs(self.lower_ctx, mem_op)[..],
+            offset as i32,
+        )
     }
 
-    fn zero_value_f32(&mut self, value: Ieee32) -> Option<Ieee32> {
-        if value.bits() == 0 {
-            return Some(value);
-        }
-        None
+    fn amode_is_reg(&mut self, address: &AMode) -> Option<Reg> {
+        address.is_reg()
     }
 
-    fn zero_value_f64(&mut self, value: Ieee64) -> Option<Ieee64> {
-        if value.bits() == 0 {
-            return Some(value);
-        }
-        None
+    fn splat_const(&mut self, value: u64, size: &VectorSize) -> Reg {
+        let rd = self.temp_writable_reg(I8X16);
+
+        lower_splat_const(self.lower_ctx, rd, value, *size);
+
+        rd.to_reg()
     }
 }

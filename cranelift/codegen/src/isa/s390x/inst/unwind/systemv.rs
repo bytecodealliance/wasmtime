@@ -45,7 +45,7 @@ pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
         Register(14),
         Register(15),
     ];
-    const FPR_MAP: [gimli::Register; 16] = [
+    const VR_MAP: [gimli::Register; 32] = [
         Register(16),
         Register(20),
         Register(17),
@@ -62,11 +62,27 @@ pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
         Register(30),
         Register(27),
         Register(31),
+        Register(68),
+        Register(72),
+        Register(69),
+        Register(73),
+        Register(70),
+        Register(74),
+        Register(71),
+        Register(75),
+        Register(76),
+        Register(80),
+        Register(77),
+        Register(81),
+        Register(78),
+        Register(82),
+        Register(79),
+        Register(83),
     ];
 
     match reg.class() {
         RegClass::Int => Ok(GPR_MAP[reg.to_real_reg().unwrap().hw_enc() as usize]),
-        RegClass::Float => Ok(FPR_MAP[reg.to_real_reg().unwrap().hw_enc() as usize]),
+        RegClass::Float => Ok(VR_MAP[reg.to_real_reg().unwrap().hw_enc() as usize]),
     }
 }
 
@@ -132,7 +148,7 @@ mod tests {
         pos.ins().return_(&[]);
 
         if let Some(stack_slot) = stack_slot {
-            func.stack_slots.push(stack_slot);
+            func.sized_stack_slots.push(stack_slot);
         }
 
         func
@@ -190,7 +206,7 @@ mod tests {
         pos.ins().return_(&[]);
 
         if let Some(stack_slot) = stack_slot {
-            func.stack_slots.push(stack_slot);
+            func.sized_stack_slots.push(stack_slot);
         }
 
         func

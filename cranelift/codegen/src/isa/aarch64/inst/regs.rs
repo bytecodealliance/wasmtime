@@ -24,9 +24,13 @@ pub const PINNED_REG: u8 = 21;
 /// Get a reference to an X-register (integer register). Do not use
 /// this for xsp / xzr; we have two special registers for those.
 pub fn xreg(num: u8) -> Reg {
+    Reg::from(xreg_preg(num))
+}
+
+/// Get the given X-register as a PReg.
+pub(crate) const fn xreg_preg(num: u8) -> PReg {
     assert!(num < 31);
-    let preg = PReg::new(num as usize, RegClass::Int);
-    Reg::from(VReg::new(preg.index(), RegClass::Int))
+    PReg::new(num as usize, RegClass::Int)
 }
 
 /// Get a writable reference to an X-register.
@@ -36,9 +40,13 @@ pub fn writable_xreg(num: u8) -> Writable<Reg> {
 
 /// Get a reference to a V-register (vector/FP register).
 pub fn vreg(num: u8) -> Reg {
+    Reg::from(vreg_preg(num))
+}
+
+/// Get the given V-register as a PReg.
+pub(crate) const fn vreg_preg(num: u8) -> PReg {
     assert!(num < 32);
-    let preg = PReg::new(num as usize, RegClass::Float);
-    Reg::from(VReg::new(preg.index(), RegClass::Float))
+    PReg::new(num as usize, RegClass::Float)
 }
 
 /// Get a writable reference to a V-register.
@@ -157,6 +165,8 @@ pub fn create_reg_env(flags: &settings::Flags) -> MachineEnv {
                 preg(xreg(14)),
                 preg(xreg(15)),
                 // x16 and x17 are spilltmp and tmp2 (see above).
+                // x18 could be used by the platform to carry inter-procedural state;
+                // conservatively assume so and make it not allocatable.
                 // x19-28 are callee-saved and so not preferred.
                 // x21 is the pinned register (if enabled) and not allocatable if so.
                 // x29 is FP, x30 is LR, x31 is SP/ZR.
@@ -170,30 +180,7 @@ pub fn create_reg_env(flags: &settings::Flags) -> MachineEnv {
                 preg(vreg(5)),
                 preg(vreg(6)),
                 preg(vreg(7)),
-                preg(vreg(8)),
-                preg(vreg(9)),
-                preg(vreg(10)),
-                preg(vreg(11)),
-                preg(vreg(12)),
-                preg(vreg(13)),
-                preg(vreg(14)),
-                preg(vreg(15)),
-            ],
-        ],
-        non_preferred_regs_by_class: [
-            vec![
-                preg(xreg(19)),
-                preg(xreg(20)),
-                // x21 is pinned reg if enabled; we add to this list below if not.
-                preg(xreg(22)),
-                preg(xreg(23)),
-                preg(xreg(24)),
-                preg(xreg(25)),
-                preg(xreg(26)),
-                preg(xreg(27)),
-                preg(xreg(28)),
-            ],
-            vec![
+                // v8-15 are callee-saved and so not preferred.
                 preg(vreg(16)),
                 preg(vreg(17)),
                 preg(vreg(18)),
@@ -210,6 +197,30 @@ pub fn create_reg_env(flags: &settings::Flags) -> MachineEnv {
                 preg(vreg(29)),
                 preg(vreg(30)),
                 preg(vreg(31)),
+            ],
+        ],
+        non_preferred_regs_by_class: [
+            vec![
+                preg(xreg(19)),
+                preg(xreg(20)),
+                // x21 is pinned reg if enabled; we add to this list below if not.
+                preg(xreg(22)),
+                preg(xreg(23)),
+                preg(xreg(24)),
+                preg(xreg(25)),
+                preg(xreg(26)),
+                preg(xreg(27)),
+                preg(xreg(28)),
+            ],
+            vec![
+                preg(vreg(8)),
+                preg(vreg(9)),
+                preg(vreg(10)),
+                preg(vreg(11)),
+                preg(vreg(12)),
+                preg(vreg(13)),
+                preg(vreg(14)),
+                preg(vreg(15)),
             ],
         ],
         fixed_stack_slots: vec![],
@@ -324,12 +335,9 @@ pub fn show_vreg_element(reg: Reg, idx: u8, size: VectorSize) -> String {
     assert_eq!(RegClass::Float, reg.class());
     let s = show_reg(reg);
     let suffix = match size {
-        VectorSize::Size8x8 => ".b",
-        VectorSize::Size8x16 => ".b",
-        VectorSize::Size16x4 => ".h",
-        VectorSize::Size16x8 => ".h",
-        VectorSize::Size32x2 => ".s",
-        VectorSize::Size32x4 => ".s",
+        VectorSize::Size8x8 | VectorSize::Size8x16 => ".b",
+        VectorSize::Size16x4 | VectorSize::Size16x8 => ".h",
+        VectorSize::Size32x2 | VectorSize::Size32x4 => ".s",
         VectorSize::Size64x2 => ".d",
     };
     format!("{}{}[{}]", s, suffix, idx)

@@ -575,7 +575,7 @@ impl Mutator for RemoveUnusedEntities {
 
                 let mut stack_slots = StackSlots::new();
 
-                for (stack_slot, stack_slot_data) in func.stack_slots.clone().iter() {
+                for (stack_slot, stack_slot_data) in func.sized_stack_slots.clone().iter() {
                     if let Some(stack_slot_usage) = stack_slot_usage_map.get(&stack_slot) {
                         let new_stack_slot = stack_slots.push(stack_slot_data.clone());
                         for &inst in stack_slot_usage {
@@ -591,7 +591,7 @@ impl Mutator for RemoveUnusedEntities {
                     }
                 }
 
-                func.stack_slots = stack_slots;
+                func.sized_stack_slots = stack_slots;
 
                 "Remove unused stack slots"
             }
@@ -617,9 +617,9 @@ impl Mutator for RemoveUnusedEntities {
                         // These can create cyclic references, which cause complications. Just skip
                         // the global value removal for now.
                         // FIXME Handle them in a better way.
-                        GlobalValueData::Load { .. } | GlobalValueData::IAddImm { .. } => {
-                            return None
-                        }
+                        GlobalValueData::Load { .. }
+                        | GlobalValueData::IAddImm { .. }
+                        | GlobalValueData::DynScaleTargetConst { .. } => return None,
                     }
                 }
 

@@ -16,14 +16,9 @@ pub struct Options {
     /// Specify an input file to be used. Use '-' for stdin.
     #[clap(required = true)]
     files: Vec<PathBuf>,
-
-    /// Enable debug output on stderr/stdout
-    #[clap(short)]
-    debug: bool,
 }
 
 pub fn run(options: &Options) -> Result<()> {
-    crate::handle_debug_flag(options.debug);
     for (i, f) in options.files.iter().enumerate() {
         if i != 0 {
             println!();

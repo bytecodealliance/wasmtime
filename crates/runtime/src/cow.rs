@@ -162,10 +162,12 @@ impl MemoryImage {
                 // extra-super-sure that it never changes, and because
                 // this costs very little, we use the kernel's "seal" API
                 // to make the memfd image permanently read-only.
-                memfd.add_seal(memfd::FileSeal::SealGrow)?;
-                memfd.add_seal(memfd::FileSeal::SealShrink)?;
-                memfd.add_seal(memfd::FileSeal::SealWrite)?;
-                memfd.add_seal(memfd::FileSeal::SealSeal)?;
+                memfd.add_seals(&[
+                    memfd::FileSeal::SealGrow,
+                    memfd::FileSeal::SealShrink,
+                    memfd::FileSeal::SealWrite,
+                    memfd::FileSeal::SealSeal,
+                ])?;
 
                 Ok(Some(MemoryImage {
                     fd: FdSource::Memfd(memfd),
@@ -210,7 +212,7 @@ impl ModuleMemoryImages {
             _ => return Ok(None),
         };
         let mut memories = PrimaryMap::with_capacity(map.len());
-        let page_size = region::page::size() as u32;
+        let page_size = crate::page_size() as u32;
         for (memory_index, init) in map {
             // mmap-based-initialization only works for defined memories with a
             // known starting point of all zeros, so bail out if the mmeory is
@@ -594,7 +596,7 @@ mod test {
 
     fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryImage> {
         // Offset must be page-aligned.
-        let page_size = region::page::size();
+        let page_size = crate::page_size();
         assert_eq!(offset & (page_size - 1), 0);
         let memfd = create_memfd()?;
         memfd.as_file().write_all(data)?;

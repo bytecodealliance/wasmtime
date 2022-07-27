@@ -1750,12 +1750,12 @@ fn test_x64_emit() {
     insns.push((
         Inst::div(OperandSize::Size8, false, RegMem::reg(regs::rax())),
         "F6F0",
-        "div     %al, %dl, %al, %al, %dl",
+        "div     %al, (none), %al, %al, %dl",
     ));
     insns.push((
         Inst::div(OperandSize::Size8, false, RegMem::reg(regs::rsi())),
         "40F6F6",
-        "div     %al, %dl, %sil, %al, %dl",
+        "div     %al, (none), %sil, %al, %dl",
     ));
 
     // ========================================================
@@ -3572,8 +3572,9 @@ fn test_x64_emit() {
                 namespace: 0,
                 index: 0,
             },
-            Vec::new(),
-            Vec::new(),
+            smallvec![],
+            smallvec![],
+            PRegSet::default(),
             Opcode::Call,
         ),
         "E800000000",
@@ -3583,7 +3584,13 @@ fn test_x64_emit() {
     // ========================================================
     // CallUnknown
     fn call_unknown(rm: RegMem) -> Inst {
-        Inst::call_unknown(rm, Vec::new(), Vec::new(), Opcode::CallIndirect)
+        Inst::call_unknown(
+            rm,
+            smallvec![],
+            smallvec![],
+            PRegSet::default(),
+            Opcode::CallIndirect,
+        )
     }
 
     insns.push((call_unknown(RegMem::reg(rbp)), "FFD5", "call    *%rbp"));
@@ -3692,6 +3699,21 @@ fn test_x64_emit() {
         ))),
         "41FFA49241010000",
         "jmp     *321(%r10,%rdx,4)",
+    ));
+
+    // ========================================================
+    // XMM FMA
+
+    insns.push((
+        Inst::xmm_rm_r_vex(AvxOpcode::Vfmadd213ps, RegMem::reg(xmm2), xmm1, w_xmm0),
+        "C4E271A8C2",
+        "vfmadd213ps %xmm0, %xmm1, %xmm2, %xmm0",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r_vex(AvxOpcode::Vfmadd213pd, RegMem::reg(xmm5), xmm4, w_xmm3),
+        "C4E2D9A8DD",
+        "vfmadd213pd %xmm3, %xmm4, %xmm5, %xmm3",
     ));
 
     // ========================================================
@@ -4604,6 +4626,8 @@ fn test_x64_emit() {
         3,
     )
     .into();
+    // Use `r9` with a 0 offset.
+    let am3: SyntheticAmode = Amode::imm_reg(0, r9).into();
 
     // A general 8-bit case.
     insns.push((
@@ -4736,8 +4760,8 @@ fn test_x64_emit() {
     insns.push((
         Inst::AtomicRmwSeq {
             ty: types::I8,
-            op: inst_common::AtomicRmwOp::Or,
-            address: r9,
+            op: inst_common::MachAtomicRmwOp::Or,
+            mem: am3.clone(),
             operand: r10,
             temp: w_r11,
             dst_old: w_rax
@@ -4748,8 +4772,8 @@ fn test_x64_emit() {
     insns.push((
         Inst::AtomicRmwSeq {
             ty: types::I16,
-            op: inst_common::AtomicRmwOp::And,
-            address: r9,
+            op: inst_common::MachAtomicRmwOp::And,
+            mem: am3.clone(),
             operand: r10,
             temp: w_r11,
             dst_old: w_rax
@@ -4760,8 +4784,8 @@ fn test_x64_emit() {
     insns.push((
         Inst::AtomicRmwSeq {
             ty: types::I32,
-            op: inst_common::AtomicRmwOp::Xchg,
-            address: r9,
+            op: inst_common::MachAtomicRmwOp::Xchg,
+            mem: am3.clone(),
             operand: r10,
             temp: w_r11,
             dst_old: w_rax
@@ -4772,8 +4796,8 @@ fn test_x64_emit() {
     insns.push((
         Inst::AtomicRmwSeq {
             ty: types::I32,
-            op: inst_common::AtomicRmwOp::Umin,
-            address: r9,
+            op: inst_common::MachAtomicRmwOp::Umin,
+            mem: am3.clone(),
             operand: r10,
             temp: w_r11,
             dst_old: w_rax
@@ -4784,8 +4808,8 @@ fn test_x64_emit() {
     insns.push((
         Inst::AtomicRmwSeq {
             ty: types::I64,
-            op: inst_common::AtomicRmwOp::Add,
-            address: r9,
+            op: inst_common::MachAtomicRmwOp::Add,
+            mem: am3.clone(),
             operand: r10,
             temp: w_r11,
             dst_old: w_rax
@@ -4833,7 +4857,7 @@ fn test_x64_emit() {
             },
         },
         "66488D3D00000000666648E800000000",
-        "elf_tls_get_addr User { namespace: 0, index: 0 }",
+        "%rax = elf_tls_get_addr User { namespace: 0, index: 0 }",
     ));
 
     insns.push((
@@ -4844,7 +4868,7 @@ fn test_x64_emit() {
             },
         },
         "488B3D00000000FF17",
-        "macho_tls_get_addr User { namespace: 0, index: 0 }",
+        "%rax = macho_tls_get_addr User { namespace: 0, index: 0 }",
     ));
 
     // ========================================================
@@ -4857,6 +4881,7 @@ fn test_x64_emit() {
     let mut isa_flag_builder = x64::settings::builder();
     isa_flag_builder.enable("has_ssse3").unwrap();
     isa_flag_builder.enable("has_sse41").unwrap();
+    isa_flag_builder.enable("has_fma").unwrap();
     isa_flag_builder.enable("has_avx512bitalg").unwrap();
     isa_flag_builder.enable("has_avx512dq").unwrap();
     isa_flag_builder.enable("has_avx512f").unwrap();
