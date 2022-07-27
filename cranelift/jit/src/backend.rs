@@ -696,7 +696,13 @@ impl Module for JITModule {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        unsafe { ctx.emit_to_memory(ptr) };
+        unsafe {
+            ctx.mach_compile_result
+                .as_ref()
+                .expect("we should have a result after a successful compilation")
+                .emit_to_memory(ptr)
+        };
+
         let relocs = ctx
             .mach_compile_result
             .as_ref()

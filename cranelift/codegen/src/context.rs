@@ -116,7 +116,11 @@ impl Context {
         let info = self.compile(isa)?;
         let old_len = mem.len();
         mem.resize(old_len + info.total_size as usize, 0);
-        let new_info = unsafe { self.emit_to_memory(mem.as_mut_ptr().add(old_len)) };
+        let result = self
+            .mach_compile_result
+            .as_ref()
+            .expect("result must be computed after compilation");
+        let new_info = unsafe { result.emit_to_memory(mem.as_mut_ptr().add(old_len)) };
         debug_assert!(new_info == info);
         Ok(())
     }
@@ -172,35 +176,6 @@ impl Context {
         let info = result.code_info();
         self.mach_compile_result = Some(result);
         Ok(info)
-    }
-
-    /// Emit machine code directly into raw memory.
-    ///
-    /// Write all of the function's machine code to the memory at `mem`. The size of the machine
-    /// code is returned by `compile` above.
-    ///
-    /// The machine code is not relocated.
-    /// Instead, any relocations can be obtained from `mach_compile_result`.
-    ///
-    /// # Safety
-    ///
-    /// This function is unsafe since it does not perform bounds checking on the memory buffer,
-    /// and it can't guarantee that the `mem` pointer is valid.
-    ///
-    /// Returns information about the emitted code and data.
-    #[deny(unsafe_op_in_unsafe_fn)]
-    pub unsafe fn emit_to_memory(&self, mem: *mut u8) -> CodeInfo {
-        let _tt = timing::binemit();
-        let result = self
-            .mach_compile_result
-            .as_ref()
-            .expect("only using mach backend now");
-        let info = result.code_info();
-
-        let mem = unsafe { std::slice::from_raw_parts_mut(mem, info.total_size as usize) };
-        mem.copy_from_slice(result.buffer.data());
-
-        info
     }
 
     /// If available, return information about the code layout in the
