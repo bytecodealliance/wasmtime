@@ -1,0 +1,32 @@
+test interpret
+
+function %urem_i128(i128, i128) -> i128 {
+block0(v0: i128,v1: i128):
+    v2 = urem v0, v1
+    return v2
+}
+; run: %urem_i128(0, 1) == 0
+; run: %urem_i128(2, 2) == 0
+; run: %urem_i128(1, -1) == 1
+; run: %urem_i128(3, 2) == 1
+; run: %urem_i128(19, 7) == 5
+; run: %urem_i128(3, -2) == 3
+; run: %urem_i128(-19, 7) == 6
+; run: %urem_i128(0xC0FFEEEE_DECAFFFF_C0FFEEEE_DECAFFFF, 8) == 7
+; run: %urem_i128(0xC0FFEEEE_DECAFFFF_C0FFEEEE_DECAFFFF, -8) == 0xC0FFEEEE_DECAFFFF_C0FFEEEE_DECAFFFF
+; run: %urem_i128(0x80000000_00000000_00000000_00000000, -2) == 0x80000000_00000000_00000000_00000000
+
+
+function %urem_imm_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = urem_imm v0, 3
+    return v1
+}
+; run: %urem_imm_i128(0) == 0
+; run: %urem_imm_i128(1) == 1
+; run: %urem_imm_i128(2) == 2
+; run: %urem_imm_i128(3) == 0
+; run: %urem_imm_i128(19) == 1
+; run: %urem_imm_i128(-19) == 0
+; run: %urem_imm_i128(0xC0FFEEEE_DECAFFFF_C0FFEEEE_DECAFFFF) == 0
+; run: %urem_imm_i128(0x80000000_00000000_00000000_00000000) == 2

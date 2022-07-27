@@ -1013,4 +1013,26 @@ mod tests {
 
         assert_eq!(result, vec![DataValue::B(true)])
     }
+
+    #[test]
+    fn srem_trap() {
+        let code = "function %test() -> i64 {
+        block0:
+            v0 = iconst.i64 0x8000_0000_0000_0000
+            v1 = iconst.i64 -1
+            v2 = srem.i64 v0, v1
+            return v2
+        }";
+
+        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
+        let mut env = FunctionStore::default();
+        env.add(func.name.to_string(), &func);
+        let state = InterpreterState::default().with_function_store(env);
+        let trap = Interpreter::new(state)
+            .call_by_name("%test", &[])
+            .unwrap()
+            .unwrap_trap();
+
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::IntegerOverflow));
+    }
 }
