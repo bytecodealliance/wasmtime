@@ -785,15 +785,15 @@ block0(v0: i128, v1: i128):
 ;   subq    %rsp, $16, %rsp
 ;   virtual_sp_offset_adjust 16
 ;   lea     0(%rsp), %r8
-;   load_ext_name %g+0, %rax
-;   call    *%rax
-;   movq    0(%rsp), %r8
-;   movq    8(%rsp), %r10
+;   load_ext_name %g+0, %r9
+;   call    *%r9
+;   movq    0(%rsp), %rcx
+;   movq    8(%rsp), %r8
 ;   addq    %rsp, $16, %rsp
 ;   virtual_sp_offset_adjust -16
 ;   movq    %r12, %r9
-;   movq    %r8, 0(%r9)
-;   movq    %r10, 8(%r9)
+;   movq    %rcx, 0(%r9)
+;   movq    %r8, 8(%r9)
 ;   movq    0(%rsp), %r12
 ;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
