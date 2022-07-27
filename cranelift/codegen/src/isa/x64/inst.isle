@@ -1095,7 +1095,9 @@
 (extern extractor cc_nz_or_z cc_nz_or_z)
 
 (type AvxOpcode extern
-      (enum Vfmadd213ps
+      (enum Vfmadd213ss
+            Vfmadd213sd
+            Vfmadd213ps
             Vfmadd213pd))
 
 (type Avx512Opcode extern
@@ -1388,6 +1390,9 @@
 
 (decl use_popcnt () Type)
 (extern extractor use_popcnt use_popcnt)
+
+(decl use_fma () Type)
+(extern extractor use_fma use_fma)
 
 ;;;; Helpers for Merging and Sinking Immediates/Loads  ;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2934,6 +2939,16 @@
                                            src3
                                            dst))))
         dst))
+
+;; Helper for creating `vfmadd213ss` instructions.
+(decl x64_vfmadd213ss (Xmm Xmm XmmMem) Xmm)
+(rule (x64_vfmadd213ss x y z)
+      (xmm_rmr_vex (AvxOpcode.Vfmadd213ss) x y z))
+
+;; Helper for creating `vfmadd213sd` instructions.
+(decl x64_vfmadd213sd (Xmm Xmm XmmMem) Xmm)
+(rule (x64_vfmadd213sd x y z)
+      (xmm_rmr_vex (AvxOpcode.Vfmadd213sd) x y z))
 
 ;; Helper for creating `vfmadd213ps` instructions.
 (decl x64_vfmadd213ps (Xmm Xmm XmmMem) Xmm)

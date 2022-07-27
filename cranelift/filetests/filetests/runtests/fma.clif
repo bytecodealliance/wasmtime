@@ -2,6 +2,7 @@ test interpret
 test run
 target aarch64
 target s390x
+target x86_64 has_avx has_fma
 target x86_64 has_avx=false has_fma=false
 
 function %fma_f32(f32, f32, f32) -> f32 {
