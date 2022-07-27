@@ -52,7 +52,8 @@ impl VMHostFuncContext {
             wasm_to_host_trampoline,
             host_state,
         });
-        ctx.wasm_to_host_trampoline.vmctx = &*ctx as *const _ as *mut _;
+        ctx.wasm_to_host_trampoline.vmctx =
+            VMOpaqueContext::from_vm_host_func_context(&*ctx as *const _ as *mut _);
         ctx
     }
 
