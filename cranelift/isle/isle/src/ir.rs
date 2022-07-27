@@ -94,6 +94,9 @@ pub enum PatternInst {
     /// value to extract, the other are the `Input`-polarity extractor args) and
     /// producing an output value for each `Output`-polarity extractor arg.
     Extract {
+        /// Whether this extraction is infallible or not. `false`
+        /// comes before `true`, so fallible nodes come first.
+        infallible: bool,
         /// The value to extract, followed by polarity extractor args.
         inputs: Vec<Value>,
         /// The types of the inputs.
@@ -102,8 +105,6 @@ pub enum PatternInst {
         output_tys: Vec<TypeId>,
         /// This extractor's term.
         term: TermId,
-        /// Whether this extraction is infallible or not.
-        infallible: bool,
         /// Whether this is a call to a pull-based multi-extractor.
         pull_multi: bool,
     },

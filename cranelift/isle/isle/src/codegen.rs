@@ -663,7 +663,7 @@ impl<'a> Codegen<'a> {
                         name = sig.full_name,
                         args = input_values.join(", "),
                     )
-                        .unwrap();
+                    .unwrap();
                     false
                 }
             }
