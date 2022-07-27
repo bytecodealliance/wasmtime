@@ -32,7 +32,6 @@ use wasmtime_environ::SignatureIndex;
 #[macro_use]
 mod trampolines;
 
-mod backtrace;
 #[cfg(feature = "component-model")]
 pub mod component;
 mod export;
@@ -51,7 +50,6 @@ pub mod libcalls;
 
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
-pub use crate::backtrace::Backtrace;
 pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
@@ -70,7 +68,7 @@ pub use crate::table::{Table, TableElement};
 pub use crate::trampolines::prepare_host_to_wasm_trampoline;
 pub use crate::traphandlers::{
     catch_traps, init_traps, raise_lib_trap, raise_user_trap, resume_panic, tls_eager_initialize,
-    SignalHandler, TlsRestore, Trap, TrapReason,
+    Backtrace, SignalHandler, TlsRestore, Trap, TrapReason,
 };
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,

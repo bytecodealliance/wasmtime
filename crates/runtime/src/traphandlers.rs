@@ -1,7 +1,9 @@
 //! WebAssembly trap handling, which is built on top of the lower-level
 //! signalhandling mechanisms.
 
-use crate::{Backtrace, VMContext, VMRuntimeLimits};
+mod backtrace;
+
+use crate::{VMContext, VMRuntimeLimits};
 use anyhow::Error;
 use std::any::Any;
 use std::cell::{Cell, UnsafeCell};
@@ -10,6 +12,7 @@ use std::ptr;
 use std::sync::Once;
 use wasmtime_environ::TrapCode;
 
+pub use self::backtrace::Backtrace;
 pub use self::tls::{tls_eager_initialize, TlsRestore};
 
 #[link(name = "wasmtime-helpers")]
@@ -221,7 +224,7 @@ pub struct CallThreadState {
     jmp_buf: Cell<*const u8>,
     handling_trap: Cell<bool>,
     signal_handler: Option<*const SignalHandler<'static>>,
-    pub(crate) prev: Cell<tls::Ptr>,
+    prev: Cell<tls::Ptr>,
     capture_backtrace: bool,
     pub(crate) old_last_wasm_exit_fp: usize,
     pub(crate) old_last_wasm_exit_pc: usize,
@@ -381,7 +384,7 @@ impl<T: Copy> Drop for ResetCell<'_, T> {
 // happen which requires us to read some contextual state to figure out what to
 // do with the trap. This `tls` module is used to persist that information from
 // the caller to the trap site.
-pub(crate) mod tls {
+mod tls {
     use super::CallThreadState;
     use std::ptr;
 
