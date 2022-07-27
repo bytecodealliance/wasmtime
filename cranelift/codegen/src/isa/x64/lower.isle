@@ -1452,6 +1452,20 @@
 (rule (lower (trap code))
       (side_effect (x64_ud2 code)))
 
+;;;; Rules for `trapif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; The flags must not have been clobbered by any other instruction between the
+;; iadd_ifcout and this instruction, as verified by the CLIF validator; so we
+;; can simply use the flags here.
+(rule (lower (trapif cc (iadd_ifcout _ _) tc))
+      (let ((_ Unit (emit_consumer (trap_if cc tc))))
+        (output_none)))
+
+;; Verification ensures that the input is always a single-def ifcmp.
+(rule (lower (trapif cc (ifcmp a b) tc))
+      (let ((_ Unit (trap_if_bool (emit_cmp cc a b) tc)))
+        (output_none)))
+
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (resumable_trap code))

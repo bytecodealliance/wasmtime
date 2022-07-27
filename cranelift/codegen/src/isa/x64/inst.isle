@@ -3002,6 +3002,20 @@
 (rule (x64_xor_mem ty addr val)
       (alu_rm ty (AluRmiROpcode.Xor) addr val))
 
+;; Helper for emitting a consumer when it's known by other means that the flags
+;; register has not been clobbered.
+(decl emit_consumer (ConsumesFlags) Unit)
+(rule (emit_consumer (ConsumesFlags.ConsumesFlagsSideEffect c))
+      (emit c))
+
+(decl trap_if (CC TrapCode) ConsumesFlags)
+(rule (trap_if cc tc)
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.TrapIf cc tc)))
+
+(decl trap_if_bool (ProducesBool TrapCode) Unit)
+(rule (trap_if_bool (ProducesBool.ProducesBool producer cc) tc)
+      (with_flags_side_effect producer (trap_if cc tc)))
+
 ;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type ProducesBool (enum (ProducesBool (producer ProducesFlags) (cc CC))))

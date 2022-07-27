@@ -574,6 +574,7 @@
 ;; Variant determines how result is given when combined with a
 ;; ProducesFlags. See `with_flags` below for more.
 (type ConsumesFlags (enum
+                     (ConsumesFlagsSideEffect (inst MInst))
                      (ConsumesFlagsReturnsResultWithProducer (inst MInst) (result Reg))
                      (ConsumesFlagsReturnsReg (inst MInst) (result Reg))
                      (ConsumesFlagsTwiceReturnsValueRegs (inst1 MInst)
@@ -666,6 +667,18 @@
 (rule (with_flags_reg p c)
       (let ((v ValueRegs (with_flags p c)))
         (value_regs_get v 0)))
+
+;; Combine a flags-producing instruction and a flags-consuming instruction that
+;; produces no results.
+;;
+;; This function handles the following case only:
+;; - ProducesFlagsSideEffect + ConsumesFlagsSideEffect
+(decl with_flags_side_effect (ProducesFlags ConsumesFlags) Unit)
+(rule (with_flags_side_effect
+        (ProducesFlags.ProducesFlagsSideEffect p)
+        (ConsumesFlags.ConsumesFlagsSideEffect c))
+      (let ((_1 Unit (emit p)))
+        (emit c)))
 
 ;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
