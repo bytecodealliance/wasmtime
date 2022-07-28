@@ -16,9 +16,6 @@ use wasmparser::{Validator, WasmFeatures};
 use wasmtime_environ::component::*;
 use wasmtime_environ::fact::Module;
 
-// Allow inflating to 16 bits but don't go further.
-const MAX_ENUM_SIZE: usize = 257;
-
 #[derive(Arbitrary, Debug)]
 struct GenAdapterModule {
     debug: bool,
@@ -56,10 +53,16 @@ enum ValType {
     Float64,
     Char,
     Record(Vec<ValType>),
+    // FIXME(WebAssembly/component-model#75) are zero-sized flags allowed?
+    //
+    // ... otherwise go up to 65 flags to exercise up to 3 u32 values
+    Flags(UsizeInRange<1, 65>),
     Tuple(Vec<ValType>),
     Variant(NonZeroLenVec<ValType>),
     Union(NonZeroLenVec<ValType>),
-    Enum(usize),
+    // at least one enum variant but no more than what's necessary to inflate to
+    // 16 bits to keep this reasonably sized
+    Enum(UsizeInRange<1, 257>),
     Option(Box<ValType>),
     Expected(Box<ValType>, Box<ValType>),
 }
@@ -84,6 +87,20 @@ impl<'a, T: Arbitrary<'a>> Arbitrary<'a> for NonZeroLenVec<T> {
 }
 
 impl<T: fmt::Debug> fmt::Debug for NonZeroLenVec<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+pub struct UsizeInRange<const L: usize, const H: usize>(usize);
+
+impl<'a, const L: usize, const H: usize> Arbitrary<'a> for UsizeInRange<L, H> {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(UsizeInRange(u.int_in_range(L..=H)?))
+    }
+}
+
+impl<const L: usize, const H: usize> fmt::Debug for UsizeInRange<L, H> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
@@ -228,6 +245,12 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> InterfaceType {
             };
             InterfaceType::Record(types.add_record_type(ty))
         }
+        ValType::Flags(size) => {
+            let ty = TypeFlags {
+                names: (0..size.0).map(|i| format!("f{i}")).collect(),
+            };
+            InterfaceType::Flags(types.add_flags_type(ty))
+        }
         ValType::Tuple(tys) => {
             let ty = TypeTuple {
                 types: tys.iter().map(|ty| intern(types, ty)).collect(),
@@ -254,10 +277,8 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> InterfaceType {
             InterfaceType::Union(types.add_union_type(ty))
         }
         ValType::Enum(size) => {
-            let size = size % MAX_ENUM_SIZE;
-            let size = if size == 0 { 1 } else { size };
             let ty = TypeEnum {
-                names: (0..size).map(|i| format!("c{i}")).collect(),
+                names: (0..size.0).map(|i| format!("c{i}")).collect(),
             };
             InterfaceType::Enum(types.add_enum_type(ty))
         }

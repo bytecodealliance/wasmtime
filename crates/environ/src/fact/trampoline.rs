@@ -16,9 +16,9 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    InterfaceType, TypeEnumIndex, TypeExpectedIndex, TypeInterfaceIndex, TypeRecordIndex,
-    TypeTupleIndex, TypeUnionIndex, TypeVariantIndex, FLAG_MAY_ENTER, FLAG_MAY_LEAVE,
-    MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    InterfaceType, TypeEnumIndex, TypeExpectedIndex, TypeFlagsIndex, TypeInterfaceIndex,
+    TypeRecordIndex, TypeTupleIndex, TypeUnionIndex, TypeVariantIndex, FLAG_MAY_ENTER,
+    FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
 use crate::fact::core_types::CoreTypes;
 use crate::fact::signature::{align_to, Signature};
@@ -29,7 +29,7 @@ use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
 use wasm_encoder::{BlockType, Encode, Instruction, Instruction::*, MemArg, ValType};
-use wasmtime_component_util::DiscriminantSize;
+use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 struct Compiler<'a, 'b> {
     /// The module that the adapter will eventually be inserted into.
@@ -349,6 +349,7 @@ impl Compiler<'_, '_> {
             InterfaceType::Float64 => self.translate_f64(src, dst_ty, dst),
             InterfaceType::Char => self.translate_char(src, dst_ty, dst),
             InterfaceType::Record(t) => self.translate_record(*t, src, dst_ty, dst),
+            InterfaceType::Flags(f) => self.translate_flags(*f, src, dst_ty, dst),
             InterfaceType::Tuple(t) => self.translate_tuple(*t, src, dst_ty, dst),
             InterfaceType::Variant(v) => self.translate_variant(*v, src, dst_ty, dst),
             InterfaceType::Union(u) => self.translate_union(*u, src, dst_ty, dst),
@@ -399,14 +400,24 @@ impl Compiler<'_, '_> {
     fn translate_u8(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
         // TODO: subtyping
         assert!(matches!(dst_ty, InterfaceType::U8));
+        self.convert_u8_mask(src, dst, 0xff);
+    }
+
+    fn convert_u8_mask(&mut self, src: &Source<'_>, dst: &Destination<'_>, mask: u8) {
         self.push_dst_addr(dst);
+        let mut needs_mask = true;
         match src {
-            Source::Memory(mem) => self.i32_load8u(mem),
+            Source::Memory(mem) => {
+                self.i32_load8u(mem);
+                needs_mask = mask != 0xff;
+            }
             Source::Stack(stack) => {
                 self.stack_get(stack, ValType::I32);
-                self.instruction(I32Const(0xff));
-                self.instruction(I32And);
             }
+        }
+        if needs_mask {
+            self.instruction(I32Const(i32::from(mask)));
+            self.instruction(I32And);
         }
         match dst {
             Destination::Memory(mem) => self.i32_store8(mem),
@@ -434,14 +445,24 @@ impl Compiler<'_, '_> {
     fn translate_u16(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
         // TODO: subtyping
         assert!(matches!(dst_ty, InterfaceType::U16));
+        self.convert_u16_mask(src, dst, 0xffff);
+    }
+
+    fn convert_u16_mask(&mut self, src: &Source<'_>, dst: &Destination<'_>, mask: u16) {
         self.push_dst_addr(dst);
+        let mut needs_mask = true;
         match src {
-            Source::Memory(mem) => self.i32_load16u(mem),
+            Source::Memory(mem) => {
+                self.i32_load16u(mem);
+                needs_mask = mask != 0xffff;
+            }
             Source::Stack(stack) => {
                 self.stack_get(stack, ValType::I32);
-                self.instruction(I32Const(0xffff));
-                self.instruction(I32And);
             }
+        }
+        if needs_mask {
+            self.instruction(I32Const(i32::from(mask)));
+            self.instruction(I32And);
         }
         match dst {
             Destination::Memory(mem) => self.i32_store16(mem),
@@ -469,10 +490,18 @@ impl Compiler<'_, '_> {
     fn translate_u32(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
         // TODO: subtyping
         assert!(matches!(dst_ty, InterfaceType::U32));
+        self.convert_u32_mask(src, dst, 0xffffffff)
+    }
+
+    fn convert_u32_mask(&mut self, src: &Source<'_>, dst: &Destination<'_>, mask: u32) {
         self.push_dst_addr(dst);
         match src {
-            Source::Memory(mem) => self.i32_load(mem),
+            Source::Memory(mem) => self.i32_load16u(mem),
             Source::Stack(stack) => self.stack_get(stack, ValType::I32),
+        }
+        if mask != 0xffffffff {
+            self.instruction(I32Const(mask as i32));
+            self.instruction(I32And);
         }
         match dst {
             Destination::Memory(mem) => self.i32_store(mem),
@@ -645,6 +674,52 @@ impl Compiler<'_, '_> {
             let field = &dst_ty.fields[i];
             let (src, src_ty) = &src_fields[&field.name];
             self.translate(src_ty, src, &field.ty, &dst);
+        }
+    }
+
+    fn translate_flags(
+        &mut self,
+        src_ty: TypeFlagsIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let src_ty = &self.module.types[src_ty];
+        let dst_ty = match dst_ty {
+            InterfaceType::Flags(r) => &self.module.types[*r],
+            _ => panic!("expected a record"),
+        };
+
+        // TODO: subtyping
+        //
+        // Notably this implementation does not support reordering flags from
+        // the source to the destination nor having more flags in the
+        // destination. Currently this is a copy from source to destination
+        // in-bulk. Otherwise reordering indices would have to have some sort of
+        // fancy bit twiddling tricks or something like that.
+        assert_eq!(src_ty.names, dst_ty.names);
+        let cnt = src_ty.names.len();
+        match FlagsSize::from_count(cnt) {
+            FlagsSize::Size1 => {
+                let mask = if cnt == 8 { 0xff } else { (1 << cnt) - 1 };
+                self.convert_u8_mask(src, dst, mask);
+            }
+            FlagsSize::Size2 => {
+                let mask = if cnt == 16 { 0xffff } else { (1 << cnt) - 1 };
+                self.convert_u16_mask(src, dst, mask);
+            }
+            FlagsSize::Size4Plus(n) => {
+                let srcs = src.record_field_srcs(self.module, (0..n).map(|_| InterfaceType::U32));
+                let dsts = dst.record_field_dsts(self.module, (0..n).map(|_| InterfaceType::U32));
+                for (i, (src, dst)) in srcs.zip(dsts).enumerate() {
+                    let mask = if i == n - 1 && (cnt % 32 != 0) {
+                        (1 << (cnt % 32)) - 1
+                    } else {
+                        0xffffffff
+                    };
+                    self.convert_u32_mask(&src, &dst, mask);
+                }
+            }
         }
     }
 
