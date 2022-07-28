@@ -6,7 +6,7 @@ use crate::{
     ir::AtomicRmwOp,
     machinst::{InputSourceInst, Reg, Writable},
 };
-use generated_code::MInst;
+use generated_code::{Context, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode};
@@ -21,13 +21,14 @@ use crate::{
         settings::Flags,
         unwind::UnwindInst,
         x64::{
+            abi::{X64ABICaller, X64ABIMachineSpec},
             inst::{args::*, regs, CallInfo},
             settings::Flags as IsaFlags,
         },
     },
     machinst::{
-        isle::*, InsnInput, InsnOutput, LowerCtx, MachAtomicRmwOp, MachInst, VCodeConstant,
-        VCodeConstantData,
+        isle::*, valueregs, ABICaller, InsnInput, InsnOutput, LowerCtx, MachAtomicRmwOp, MachInst,
+        VCodeConstant, VCodeConstantData,
     },
 };
 use smallvec::SmallVec;
@@ -59,7 +60,7 @@ where
     })
 }
 
-impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
+impl<C> Context for IsleContext<'_, C, Flags, IsaFlags, 6>
 where
     C: LowerCtx<I = MInst>,
 {
@@ -590,6 +591,107 @@ where
     #[inline]
     fn gen_move(&mut self, ty: Type, dst: WritableReg, src: Reg) -> MInst {
         MInst::gen_move(dst, src, ty)
+    }
+
+    fn gen_call(
+        &mut self,
+        sig_ref: SigRef,
+        extname: ExternalName,
+        dist: RelocDistance,
+        args @ (inputs, off): ValueSlice,
+    ) -> InstOutput {
+        let caller_conv = self.lower_ctx.abi().call_conv();
+        let sig = &self.lower_ctx.dfg().signatures[sig_ref];
+        let num_rets = sig.returns.len();
+        let abi = ABISig::from_func_sig::<X64ABIMachineSpec>(sig, self.flags).unwrap();
+        let caller = X64ABICaller::from_func(sig, &extname, dist, caller_conv, self.flags).unwrap();
+
+        assert_eq!(
+            inputs.len(&self.lower_ctx.dfg().value_lists) - off,
+            sig.params.len()
+        );
+
+        self.gen_call_common(abi, num_rets, caller, args)
+    }
+
+    fn gen_call_indirect(
+        &mut self,
+        sig_ref: SigRef,
+        val: Value,
+        args @ (inputs, off): ValueSlice,
+    ) -> InstOutput {
+        let caller_conv = self.lower_ctx.abi().call_conv();
+        let ptr = self.put_in_reg(val);
+        let sig = &self.lower_ctx.dfg().signatures[sig_ref];
+        let num_rets = sig.returns.len();
+        let abi = ABISig::from_func_sig::<X64ABIMachineSpec>(sig, self.flags).unwrap();
+        let caller =
+            X64ABICaller::from_ptr(sig, ptr, Opcode::CallIndirect, caller_conv, self.flags)
+                .unwrap();
+
+        assert_eq!(
+            inputs.len(&self.lower_ctx.dfg().value_lists) - off,
+            sig.params.len()
+        );
+
+        self.gen_call_common(abi, num_rets, caller, args)
+    }
+}
+
+impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>
+where
+    C: LowerCtx<I = MInst>,
+{
+    fn abi_arg_slot_regs(&mut self, arg: &ABIArg) -> Option<WritableValueRegs> {
+        match arg {
+            &ABIArg::Slots { ref slots, .. } => match slots.len() {
+                1 => {
+                    let a = self.temp_writable_reg(slots[0].get_type());
+                    Some(WritableValueRegs::one(a))
+                }
+                2 => {
+                    let a = self.temp_writable_reg(slots[0].get_type());
+                    let b = self.temp_writable_reg(slots[1].get_type());
+                    Some(WritableValueRegs::two(a, b))
+                }
+                _ => panic!("Expected to see one or two slots only from {:?}", arg),
+            },
+            _ => None,
+        }
+    }
+
+    fn gen_call_common(
+        &mut self,
+        abi: ABISig,
+        num_rets: usize,
+        mut caller: X64ABICaller,
+        (inputs, off): ValueSlice,
+    ) -> InstOutput {
+        caller.emit_stack_pre_adjust(self.lower_ctx);
+
+        assert_eq!(
+            inputs.len(&self.lower_ctx.dfg().value_lists) - off,
+            abi.num_args()
+        );
+        for i in caller.get_copy_to_arg_order() {
+            let input = inputs
+                .get(off + i, &self.lower_ctx.dfg().value_lists)
+                .unwrap();
+            let arg_regs = self.lower_ctx.put_value_in_regs(input);
+            caller.emit_copy_regs_to_arg(self.lower_ctx, i, arg_regs);
+        }
+        caller.emit_call(self.lower_ctx);
+
+        let mut outputs = InstOutput::new();
+        for i in 0..num_rets {
+            let ret = abi.get_ret(i);
+            let retval_regs = self.abi_arg_slot_regs(&ret).unwrap();
+            caller.emit_copy_retval_to_regs(self.lower_ctx, i, retval_regs.clone());
+            outputs.push(valueregs::non_writable_value_regs(retval_regs));
+        }
+        caller.emit_stack_post_adjust(self.lower_ctx);
+
+        outputs
     }
 }
 
