@@ -589,6 +589,11 @@ impl ObjectModule {
                 RelocationEncoding::X86Branch,
                 32,
             ),
+            Reloc::X86SecRel => (
+                RelocationKind::SectionOffset,
+                RelocationEncoding::Generic,
+                32,
+            ),
             Reloc::X86GOTPCRel4 => (RelocationKind::GotRelative, RelocationEncoding::Generic, 32),
             Reloc::Arm64Call => (
                 RelocationKind::Relative,
