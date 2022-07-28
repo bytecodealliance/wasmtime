@@ -129,9 +129,6 @@
 (decl output_builder_finish (InstOutputBuilder) InstOutput)
 (extern constructor output_builder_finish output_builder_finish)
 
-(decl abi_arg_slot_regs (WritableValueRegs) ABIArg)
-(extern extractor abi_arg_slot_regs abi_arg_slot_regs)
-
 ;; Get a temporary register for writing.
 (decl temp_writable_reg (Type) WritableReg)
 (extern constructor temp_writable_reg temp_writable_reg)
