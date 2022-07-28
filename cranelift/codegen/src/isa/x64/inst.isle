@@ -3092,6 +3092,100 @@
             (res Reg (x64_or $I64 cc_hi res_lo)))
         (bool (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) res) (CC.NZ))))
 
+(type FcmpCondResult
+      (enum
+        ;; The given condition code must be set.
+        (Condition (producer ProducesFlags) (cc CC))
+
+        ;; Both condition codes must be set.
+        (AndCondition (producer ProducesFlags) (cc1 CC) (cc2 CC))
+
+        ;; Either of the conditions codes must be set.
+        (OrCondition (producer ProducesFlags) (cc1 CC) (cc2 CC))))
+
+;; Lower a FcmpCondResult to a boolean value in a register.
+(decl lower_fcmp_bool (FcmpCondResult) ValueRegs)
+
+(rule (lower_fcmp_bool (FcmpCondResult.Condition producer cc))
+      (with_flags producer (x64_setcc cc)))
+
+(rule (lower_fcmp_bool (FcmpCondResult.AndCondition producer cc1 cc2))
+      (let ((maybe ValueRegs (with_flags producer
+                                         (consumes_flags_concat
+                                           (x64_setcc cc1)
+                                           (x64_setcc cc2))))
+            (maybe0 Gpr (value_regs_get_gpr maybe 0))
+            (maybe1 Gpr (value_regs_get_gpr maybe 1)))
+        (value_reg (x64_and $I8 maybe0 maybe1))))
+
+(rule (lower_fcmp_bool (FcmpCondResult.OrCondition producer cc1 cc2))
+      (let ((maybe ValueRegs (with_flags producer
+                                         (consumes_flags_concat
+                                           (x64_setcc cc1)
+                                           (x64_setcc cc2))))
+            (maybe0 Gpr (value_regs_get_gpr maybe 0))
+            (maybe1 Gpr (value_regs_get_gpr maybe 1)))
+        (value_reg (x64_or $I8 maybe0 maybe1))))
+
+;; CLIF's `fcmp` instruction always operates on XMM registers--both scalar and
+;; vector. For the scalar versions, we use the flag-setting behavior of the
+;; `UCOMIS*` instruction to `SETcc` a 0 or 1 in a GPR register. Note that CLIF's
+;; `select` uses the same kind of flag-setting behavior but chooses values other
+;; than 0 or 1.
+;;
+;; Checking the result of `UCOMIS*` is unfortunately difficult in some cases
+;; because we do not have `SETcc` instructions that explicitly check
+;; simultaneously for the condition (i.e., `eq`, `le`, `gt`, etc.) *and*
+;; orderedness. Instead, we must check the flags multiple times. The UCOMIS*
+;; documentation (see Intel's Software Developer's Manual, volume 2, chapter 4)
+;; is helpful:
+;;  - unordered assigns    Z = 1, P = 1, C = 1
+;;  - greater than assigns Z = 0, P = 0, C = 0
+;;  - less than assigns    Z = 0, P = 0, C = 1
+;;  - equal assigns        Z = 1, P = 0, C = 0
+(decl emit_fcmp (FloatCC Value Value) FcmpCondResult)
+
+(rule (emit_fcmp (FloatCC.Equal) a @ (value_type (ty_scalar_float _)) b)
+      (FcmpCondResult.AndCondition (x64_ucomis b a) (CC.NP) (CC.Z)))
+
+(rule (emit_fcmp (FloatCC.NotEqual) a @ (value_type (ty_scalar_float _)) b)
+      (FcmpCondResult.OrCondition (x64_ucomis b a) (CC.P) (CC.NZ)))
+
+;; Some scalar lowerings correspond to one condition code.
+
+(rule (emit_fcmp (FloatCC.Ordered) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NP)))
+(rule (emit_fcmp (FloatCC.Unordered) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.P)))
+(rule (emit_fcmp (FloatCC.OrderedNotEqual) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NZ)))
+(rule (emit_fcmp (FloatCC.UnorderedOrEqual) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.Z)))
+(rule (emit_fcmp (FloatCC.GreaterThan) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NBE)))
+(rule (emit_fcmp (FloatCC.GreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NB)))
+(rule (emit_fcmp (FloatCC.UnorderedOrLessThan) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.B)))
+(rule (emit_fcmp (FloatCC.UnorderedOrLessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.BE)))
+
+;; Other scalar lowerings are made possible by flipping the operands and
+;; reversing the condition code.
+
+(rule (emit_fcmp (FloatCC.LessThan) a @ (value_type (ty_scalar_float ty)) b)
+      ;; Same flags as `GreaterThan`.
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NBE)))
+(rule (emit_fcmp (FloatCC.LessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
+      ;; Same flags as `GreaterThanOrEqual`.
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NB)))
+(rule (emit_fcmp (FloatCC.UnorderedOrGreaterThan) a @ (value_type (ty_scalar_float ty)) b)
+      ;; Same flags as `UnorderedOrLessThan`.
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.B)))
+(rule (emit_fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
+      ;; Same flags as `UnorderedOrLessThanOrEqual`.
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.BE)))
+
 ;;;; Atomics ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl x64_mfence () SideEffectNoResult)
