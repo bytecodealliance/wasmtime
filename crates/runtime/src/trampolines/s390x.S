@@ -85,8 +85,10 @@ libcall: ;                                                                      
         .size libcall,.-libcall
 
 LIBCALL_TRAMPOLINE(memory32_grow, impl_memory32_grow)
-LIBCALL_TRAMPOLINE(table_grow, impl_table_grow)
-LIBCALL_TRAMPOLINE(table_fill, impl_table_fill)
+LIBCALL_TRAMPOLINE(table_grow_funcref, impl_table_grow_funcref)
+LIBCALL_TRAMPOLINE(table_grow_externref, impl_table_grow_externref)
+LIBCALL_TRAMPOLINE(table_fill_funcref, impl_table_fill_funcref)
+LIBCALL_TRAMPOLINE(table_fill_externref, impl_table_fill_externref)
 LIBCALL_TRAMPOLINE(table_copy, impl_table_copy)
 LIBCALL_TRAMPOLINE(table_init, impl_table_init)
 LIBCALL_TRAMPOLINE(elem_drop, impl_elem_drop)
