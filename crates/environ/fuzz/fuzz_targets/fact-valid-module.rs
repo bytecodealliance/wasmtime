@@ -16,6 +16,9 @@ use wasmparser::{Validator, WasmFeatures};
 use wasmtime_environ::component::*;
 use wasmtime_environ::fact::Module;
 
+// Allow inflating to 16 bits but don't go further.
+const MAX_ENUM_SIZE: usize = 257;
+
 #[derive(Arbitrary, Debug)]
 struct GenAdapterModule {
     debug: bool,
@@ -55,6 +58,10 @@ enum ValType {
     Record(Vec<ValType>),
     Tuple(Vec<ValType>),
     Variant(NonZeroLenVec<ValType>),
+    Union(NonZeroLenVec<ValType>),
+    Enum(usize),
+    Option(Box<ValType>),
+    Expected(Box<ValType>, Box<ValType>),
 }
 
 #[derive(Copy, Clone, Arbitrary, Debug)]
@@ -239,6 +246,29 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> InterfaceType {
                     .collect(),
             };
             InterfaceType::Variant(types.add_variant_type(ty))
+        }
+        ValType::Union(tys) => {
+            let ty = TypeUnion {
+                types: tys.0.iter().map(|ty| intern(types, ty)).collect(),
+            };
+            InterfaceType::Union(types.add_union_type(ty))
+        }
+        ValType::Enum(size) => {
+            let size = size % MAX_ENUM_SIZE;
+            let size = if size == 0 { 1 } else { size };
+            let ty = TypeEnum {
+                names: (0..size).map(|i| format!("c{i}")).collect(),
+            };
+            InterfaceType::Enum(types.add_enum_type(ty))
+        }
+        ValType::Option(ty) => {
+            let ty = intern(types, ty);
+            InterfaceType::Option(types.add_interface_type(ty))
+        }
+        ValType::Expected(ok, err) => {
+            let ok = intern(types, ok);
+            let err = intern(types, err);
+            InterfaceType::Expected(types.add_expected_type(TypeExpected { ok, err }))
         }
     }
 }
