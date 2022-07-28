@@ -660,7 +660,7 @@ impl ComponentTypesBuilder {
         let flags = TypeFlags {
             names: flags.iter().map(|s| s.to_string()).collect(),
         };
-        intern(&mut self.flags, &mut self.component_types.flags, flags)
+        self.add_flags_type(flags)
     }
 
     fn enum_type(&mut self, variants: &[&str]) -> TypeEnumIndex {
@@ -697,6 +697,11 @@ impl ComponentTypesBuilder {
     /// Interns a new record type within this type information.
     pub fn add_record_type(&mut self, ty: TypeRecord) -> TypeRecordIndex {
         intern(&mut self.records, &mut self.component_types.records, ty)
+    }
+
+    /// Interns a new flags type within this type information.
+    pub fn add_flags_type(&mut self, ty: TypeFlags) -> TypeFlagsIndex {
+        intern(&mut self.flags, &mut self.component_types.flags, ty)
     }
 
     /// Interns a new tuple type within this type information.
