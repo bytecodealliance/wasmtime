@@ -26,7 +26,7 @@ impl FromStr for KnownSymbol {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "ElfGlobalOffsetTable" => Ok(Self::ElfGlobalOffsetTable),
-            "CoffTlsIndex" => Ok(Self::TlsIndex),
+            "CoffTlsIndex" => Ok(Self::CoffTlsIndex),
             _ => Err(()),
         }
     }
@@ -42,6 +42,6 @@ mod tests {
             "ElfGlobalOffsetTable".parse(),
             Ok(KnownSymbol::ElfGlobalOffsetTable)
         );
-        assert_eq!("CoffTlsIndex".parse(), Ok(KnownSymbol::TlsIndex));
+        assert_eq!("CoffTlsIndex".parse(), Ok(KnownSymbol::CoffTlsIndex));
     }
 }

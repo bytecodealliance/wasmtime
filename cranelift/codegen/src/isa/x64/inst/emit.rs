@@ -2969,7 +2969,7 @@ pub(crate) fn emit(
             emit_reloc(
                 sink,
                 Reloc::X86PCRel4,
-                &ExternalName::KnownSymbol(KnownSymbol::TlsIndex),
+                &ExternalName::KnownSymbol(KnownSymbol::CoffTlsIndex),
                 -4,
             );
             sink.put4(0); // offset
