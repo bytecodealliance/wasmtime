@@ -1502,27 +1502,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Iabs => implemented_in_isle(ctx),
-        Opcode::AvgRound => {
-            let ty = ty.unwrap();
-
-            if ty.lane_bits() == 64 {
-                return Err(CodegenError::Unsupported(format!(
-                    "AvgRound: Unsupported type: {:?}",
-                    ty
-                )));
-            }
-
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            ctx.emit(Inst::VecRRR {
-                alu_op: VecALUOp::Urhadd,
-                rd,
-                rn,
-                rm,
-                size: VectorSize::from_ty(ty),
-            });
-        }
+        Opcode::AvgRound => implemented_in_isle(ctx),
 
         Opcode::Snarrow | Opcode::Unarrow | Opcode::Uunarrow => implemented_in_isle(ctx),
 
@@ -1583,28 +1563,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         },
 
-        Opcode::SqmulRoundSat => {
-            let ty = ty.unwrap();
-
-            if !ty.is_vector() || (ty.lane_type() != I16 && ty.lane_type() != I32) {
-                return Err(CodegenError::Unsupported(format!(
-                    "SqmulRoundSat: Unsupported type: {:?}",
-                    ty
-                )));
-            }
-
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-
-            ctx.emit(Inst::VecRRR {
-                alu_op: VecALUOp::Sqrdmulh,
-                rd,
-                rn,
-                rm,
-                size: VectorSize::from_ty(ty),
-            });
-        }
+        Opcode::SqmulRoundSat => implemented_in_isle(ctx),
 
         Opcode::FcvtLowFromSint => {
             let ty = ty.unwrap();

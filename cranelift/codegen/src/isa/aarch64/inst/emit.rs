@@ -1976,31 +1976,34 @@ impl MachInstEmit for Inst {
             } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
-                let (is_shr, template) = match op {
-                    VecShiftImmOp::Ushr => (true, 0b_011_011110_0000_000_000001_00000_00000_u32),
-                    VecShiftImmOp::Sshr => (true, 0b_010_011110_0000_000_000001_00000_00000_u32),
-                    VecShiftImmOp::Shl => (false, 0b_010_011110_0000_000_010101_00000_00000_u32),
+                let (is_shr, mut template) = match op {
+                    VecShiftImmOp::Ushr => (true, 0b_001_011110_0000_000_000001_00000_00000_u32),
+                    VecShiftImmOp::Sshr => (true, 0b_000_011110_0000_000_000001_00000_00000_u32),
+                    VecShiftImmOp::Shl => (false, 0b_000_011110_0000_000_010101_00000_00000_u32),
                 };
+                if size.is_128bits() {
+                    template |= 0b1 << 30;
+                }
                 let imm = imm as u32;
                 // Deal with the somewhat strange encoding scheme for, and limits on,
                 // the shift amount.
-                let immh_immb = match (size, is_shr) {
-                    (VectorSize::Size64x2, true) if imm >= 1 && imm <= 64 => {
+                let immh_immb = match (size.lane_size(), is_shr) {
+                    (ScalarSize::Size64, true) if imm >= 1 && imm <= 64 => {
                         0b_1000_000_u32 | (64 - imm)
                     }
-                    (VectorSize::Size32x4, true) if imm >= 1 && imm <= 32 => {
+                    (ScalarSize::Size32, true) if imm >= 1 && imm <= 32 => {
                         0b_0100_000_u32 | (32 - imm)
                     }
-                    (VectorSize::Size16x8, true) if imm >= 1 && imm <= 16 => {
+                    (ScalarSize::Size16, true) if imm >= 1 && imm <= 16 => {
                         0b_0010_000_u32 | (16 - imm)
                     }
-                    (VectorSize::Size8x16, true) if imm >= 1 && imm <= 8 => {
+                    (ScalarSize::Size8, true) if imm >= 1 && imm <= 8 => {
                         0b_0001_000_u32 | (8 - imm)
                     }
-                    (VectorSize::Size64x2, false) if imm <= 63 => 0b_1000_000_u32 | imm,
-                    (VectorSize::Size32x4, false) if imm <= 31 => 0b_0100_000_u32 | imm,
-                    (VectorSize::Size16x8, false) if imm <= 15 => 0b_0010_000_u32 | imm,
-                    (VectorSize::Size8x16, false) if imm <= 7 => 0b_0001_000_u32 | imm,
+                    (ScalarSize::Size64, false) if imm <= 63 => 0b_1000_000_u32 | imm,
+                    (ScalarSize::Size32, false) if imm <= 31 => 0b_0100_000_u32 | imm,
+                    (ScalarSize::Size16, false) if imm <= 15 => 0b_0010_000_u32 | imm,
+                    (ScalarSize::Size8, false) if imm <= 7 => 0b_0001_000_u32 | imm,
                     _ => panic!(
                         "aarch64: Inst::VecShiftImm: emit: invalid op/size/imm {:?}, {:?}, {:?}",
                         op, size, imm
