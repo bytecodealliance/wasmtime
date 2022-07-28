@@ -642,7 +642,7 @@ where
                     let b = self.temp_writable_reg(slots[1].get_type());
                     Some(WritableValueRegs::two(a, b))
                 }
-                _ => None,
+                _ => panic!("Expected to see one or two slots only from {:?}", arg),
             },
             _ => None,
         }
