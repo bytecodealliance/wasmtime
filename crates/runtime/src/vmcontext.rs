@@ -1,6 +1,8 @@
 //! This file declares `VMContext` and several related structs which contain
 //! fields that compiled wasm code accesses directly.
 
+mod vm_host_func_context;
+
 use crate::externref::VMExternRef;
 use crate::instance::Instance;
 use std::any::Any;
@@ -9,6 +11,7 @@ use std::marker;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::u32;
+pub use vm_host_func_context::VMHostFuncContext;
 use wasmtime_environ::DefinedMemoryIndex;
 
 pub const VMCONTEXT_MAGIC: u32 = u32::from_le_bytes(*b"core");
@@ -631,26 +634,23 @@ macro_rules! define_builtin_array {
     (
         $(
             $( #[$attr:meta] )*
-            $name:ident( $( $param:ident ),* ) -> ( $( $result:ident ),* );
+            $name:ident( $( $pname:ident: $param:ident ),* ) $( -> $result:ident )?;
         )*
     ) => {
         /// An array that stores addresses of builtin functions. We translate code
         /// to use indirect calls. This way, we don't have to patch the code.
         #[repr(C)]
-        #[allow(unused_parens)]
         pub struct VMBuiltinFunctionsArray {
             $(
                 $name: unsafe extern "C" fn(
                     $(define_builtin_array!(@ty $param)),*
-                ) -> (
-                    $(define_builtin_array!(@ty $result)),*
-                ),
+                ) $( -> define_builtin_array!(@ty $result))?,
             )*
         }
 
         impl VMBuiltinFunctionsArray {
             pub const INIT: VMBuiltinFunctionsArray = VMBuiltinFunctionsArray {
-                $($name: crate::libcalls::$name,)*
+                $($name: crate::libcalls::trampolines::$name,)*
             };
         }
     };
@@ -722,6 +722,48 @@ pub struct VMRuntimeLimits {
     /// observed to reach or exceed this value, the guest code will
     /// yield if running asynchronously.
     pub epoch_deadline: UnsafeCell<u64>,
+
+    /// The value of the frame pointer register when we last called from Wasm to
+    /// the host.
+    ///
+    /// Maintained by our Wasm-to-host trampoline, and cleared just before
+    /// calling into Wasm in `catch_traps`.
+    ///
+    /// This member is `0` when Wasm is actively running and has not called out
+    /// to the host.
+    ///
+    /// Used to find the start of a a contiguous sequence of Wasm frames when
+    /// walking the stack.
+    pub last_wasm_exit_fp: UnsafeCell<usize>,
+
+    /// The last Wasm program counter before we called from Wasm to the host.
+    ///
+    /// Maintained by our Wasm-to-host trampoline, and cleared just before
+    /// calling into Wasm in `catch_traps`.
+    ///
+    /// This member is `0` when Wasm is actively running and has not called out
+    /// to the host.
+    ///
+    /// Used when walking a contiguous sequence of Wasm frames.
+    pub last_wasm_exit_pc: UnsafeCell<usize>,
+
+    /// The last host stack pointer before we called into Wasm from the host.
+    ///
+    /// Maintained by our host-to-Wasm trampoline, and cleared just before
+    /// calling into Wasm in `catch_traps`.
+    ///
+    /// This member is `0` when Wasm is actively running and has not called out
+    /// to the host.
+    ///
+    /// When a host function is wrapped into a `wasmtime::Func`, and is then
+    /// called from the host, then this member has the sentinal value of `-1 as
+    /// usize`, meaning that this contiguous sequence of Wasm frames is the
+    /// empty sequence, and it is not safe to dereference the
+    /// `last_wasm_exit_fp`.
+    ///
+    /// Used to find the end of a contiguous sequence of Wasm frames when
+    /// walking the stack.
+    pub last_wasm_entry_sp: UnsafeCell<usize>,
 }
 
 // The `VMRuntimeLimits` type is a pod-type with no destructor, and we don't
@@ -737,6 +779,9 @@ impl Default for VMRuntimeLimits {
             stack_limit: UnsafeCell::new(usize::max_value()),
             fuel_consumed: UnsafeCell::new(0),
             epoch_deadline: UnsafeCell::new(0),
+            last_wasm_exit_fp: UnsafeCell::new(0),
+            last_wasm_exit_pc: UnsafeCell::new(0),
+            last_wasm_entry_sp: UnsafeCell::new(0),
         }
     }
 }
@@ -763,6 +808,18 @@ mod test_vmruntime_limits {
         assert_eq!(
             offset_of!(VMRuntimeLimits, epoch_deadline),
             usize::from(offsets.vmruntime_limits_epoch_deadline())
+        );
+        assert_eq!(
+            offset_of!(VMRuntimeLimits, last_wasm_exit_fp),
+            usize::from(offsets.vmruntime_limits_last_wasm_exit_fp())
+        );
+        assert_eq!(
+            offset_of!(VMRuntimeLimits, last_wasm_exit_pc),
+            usize::from(offsets.vmruntime_limits_last_wasm_exit_pc())
+        );
+        assert_eq!(
+            offset_of!(VMRuntimeLimits, last_wasm_entry_sp),
+            usize::from(offsets.vmruntime_limits_last_wasm_entry_sp())
         );
     }
 }
@@ -1094,9 +1151,15 @@ pub struct VMOpaqueContext {
 }
 
 impl VMOpaqueContext {
-    /// Helper function to clearly indicate that cast desired
+    /// Helper function to clearly indicate that casts are desired.
     #[inline]
     pub fn from_vmcontext(ptr: *mut VMContext) -> *mut VMOpaqueContext {
+        ptr.cast()
+    }
+
+    /// Helper function to clearly indicate that casts are desired.
+    #[inline]
+    pub fn from_vm_host_func_context(ptr: *mut VMHostFuncContext) -> *mut VMOpaqueContext {
         ptr.cast()
     }
 }

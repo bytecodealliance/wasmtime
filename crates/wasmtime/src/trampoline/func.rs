@@ -1,19 +1,12 @@
 //! Support for a calling of an imported function.
 
-use crate::module::BareModuleInfo;
 use crate::{Engine, FuncType, Trap, ValRaw};
 use anyhow::Result;
-use std::any::Any;
 use std::panic::{self, AssertUnwindSafe};
-use std::sync::Arc;
-use wasmtime_environ::{
-    AnyfuncIndex, EntityIndex, FunctionInfo, Module, ModuleType, SignatureIndex,
-};
+use std::ptr::NonNull;
 use wasmtime_jit::{CodeMemory, ProfilingAgent};
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    OnDemandInstanceAllocator, StorePtr, VMContext, VMFunctionBody, VMOpaqueContext,
-    VMSharedSignatureIndex, VMTrampoline,
+    VMContext, VMHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex, VMTrampoline,
 };
 
 struct TrampolineState<F> {
@@ -44,7 +37,7 @@ unsafe extern "C" fn stub_fn<F>(
     // have any. To prevent leaks we avoid having any local destructors by
     // avoiding local variables.
     let result = panic::catch_unwind(AssertUnwindSafe(|| {
-        let vmctx = VMContext::from_opaque(vmctx);
+        let vmctx = VMHostFuncContext::from_opaque(vmctx);
         // Double-check ourselves in debug mode, but we control
         // the `Any` here so an unsafe downcast should also
         // work.
@@ -110,7 +103,7 @@ pub fn create_function<F>(
     ft: &FuncType,
     func: F,
     engine: &Engine,
-) -> Result<(InstanceHandle, VMTrampoline)>
+) -> Result<(Box<VMHostFuncContext>, VMSharedSignatureIndex, VMTrampoline)>
 where
     F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<(), Trap> + Send + Sync + 'static,
 {
@@ -131,54 +124,20 @@ where
 
     // Extract the host/wasm trampolines from the results of compilation since
     // we know their start/length.
+
     let host_trampoline = code.text[t1.start as usize..][..t1.length as usize].as_ptr();
-    let wasm_trampoline = &code.text[t2.start as usize..][..t2.length as usize];
-    let wasm_trampoline = wasm_trampoline as *const [u8] as *mut [VMFunctionBody];
+    let wasm_trampoline = code.text[t2.start as usize..].as_ptr() as *mut _;
+    let wasm_trampoline = NonNull::new(wasm_trampoline).unwrap();
 
     let sig = engine.signatures().register(ft.as_wasm_func_type());
 
     unsafe {
-        let instance = create_raw_function(
+        let ctx = VMHostFuncContext::new(
             wasm_trampoline,
             sig,
             Box::new(TrampolineState { func, code_memory }),
-        )?;
+        );
         let host_trampoline = std::mem::transmute::<*const u8, VMTrampoline>(host_trampoline);
-        Ok((instance, host_trampoline))
+        Ok((ctx, sig, host_trampoline))
     }
-}
-
-pub unsafe fn create_raw_function(
-    func: *mut [VMFunctionBody],
-    sig: VMSharedSignatureIndex,
-    host_state: Box<dyn Any + Send + Sync>,
-) -> Result<InstanceHandle> {
-    let mut module = Module::new();
-
-    let sig_id = SignatureIndex::from_u32(u32::max_value() - 1);
-    module.types.push(ModuleType::Function(sig_id));
-    let func_id = module.push_escaped_function(sig_id, AnyfuncIndex::from_u32(0));
-    module.num_escaped_funcs = 1;
-    module
-        .exports
-        .insert(String::new(), EntityIndex::Function(func_id));
-    let module = Arc::new(module);
-
-    let runtime_info = &BareModuleInfo::one_func(
-        module.clone(),
-        (*func).as_ptr() as usize,
-        FunctionInfo::default(),
-        sig_id,
-        sig,
-    )
-    .into_traitobj();
-
-    Ok(
-        OnDemandInstanceAllocator::default().allocate(InstanceAllocationRequest {
-            imports: Imports::default(),
-            host_state,
-            store: StorePtr::empty(),
-            runtime_info,
-        })?,
-    )
 }

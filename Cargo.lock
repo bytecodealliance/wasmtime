@@ -3309,7 +3309,6 @@ version = "0.40.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "backtrace",
  "bincode",
  "cfg-if",
  "indexmap",
@@ -3614,7 +3613,6 @@ name = "wasmtime-runtime"
 version = "0.40.0"
 dependencies = [
  "anyhow",
- "backtrace",
  "cc",
  "cfg-if",
  "indexmap",
@@ -3623,9 +3621,11 @@ dependencies = [
  "mach",
  "memfd",
  "memoffset",
+ "paste",
  "rand 0.8.5",
  "rustix",
  "thiserror",
+ "wasmtime-asm-macros",
  "wasmtime-environ",
  "wasmtime-fiber",
  "wasmtime-jit-debug",

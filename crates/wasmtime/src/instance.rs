@@ -342,13 +342,14 @@ impl Instance {
         let f = instance.get_exported_func(start);
         let vmctx = instance.vmctx_ptr();
         unsafe {
-            super::func::invoke_wasm_and_catch_traps(store, |_default_callee| {
-                mem::transmute::<
+            super::func::invoke_wasm_and_catch_traps(store, |_default_caller| {
+                let trampoline = mem::transmute::<
                     *const VMFunctionBody,
                     unsafe extern "C" fn(*mut VMOpaqueContext, *mut VMContext),
-                >(f.anyfunc.as_ref().func_ptr.as_ptr())(
-                    f.anyfunc.as_ref().vmctx, vmctx
-                )
+                >(f.anyfunc.as_ref().func_ptr.as_ptr());
+                let trampoline =
+                    wasmtime_runtime::prepare_host_to_wasm_trampoline(vmctx, trampoline);
+                trampoline(f.anyfunc.as_ref().vmctx, vmctx)
             })?;
         }
         Ok(())

@@ -304,7 +304,7 @@ pub struct StoreOpaque {
     /// `rooted_host_funcs` below. This structure contains pointers which are
     /// otherwise kept alive by the `Arc` references in `rooted_host_funcs`.
     store_data: ManuallyDrop<StoreData>,
-    default_callee: InstanceHandle,
+    default_caller: InstanceHandle,
 
     /// Used to optimzed wasm->host calls when the host function is defined with
     /// `Func::new` to avoid allocating a new vector each time a function is
@@ -493,7 +493,7 @@ impl<T> Store<T> {
                 },
                 out_of_gas_behavior: OutOfGas::Trap,
                 store_data: ManuallyDrop::new(StoreData::new()),
-                default_callee,
+                default_caller: default_callee,
                 hostcall_val_storage: Vec::new(),
                 wasm_val_raw_storage: Vec::new(),
                 rooted_host_funcs: ManuallyDrop::new(Vec::new()),
@@ -514,7 +514,7 @@ impl<T> Store<T> {
                 *mut (dyn wasmtime_runtime::Store + '_),
                 *mut (dyn wasmtime_runtime::Store + 'static),
             >(&mut *inner);
-            inner.default_callee.set_store(traitobj);
+            inner.default_caller.set_store(traitobj);
         }
 
         Self {
@@ -1458,12 +1458,12 @@ impl StoreOpaque {
     }
 
     #[inline]
-    pub fn default_callee(&self) -> *mut VMContext {
-        self.default_callee.vmctx_ptr()
+    pub fn default_caller(&self) -> *mut VMContext {
+        self.default_caller.vmctx_ptr()
     }
 
     pub fn traitobj(&self) -> *mut dyn wasmtime_runtime::Store {
-        self.default_callee.store()
+        self.default_caller.store()
     }
 
     /// Takes the cached `Vec<Val>` stored internally across hostcalls to get
@@ -2047,7 +2047,7 @@ impl Drop for StoreOpaque {
                     allocator.deallocate(&instance.handle);
                 }
             }
-            ondemand.deallocate(&self.default_callee);
+            ondemand.deallocate(&self.default_caller);
 
             // See documentation for these fields on `StoreOpaque` for why they
             // must be dropped in this order.
