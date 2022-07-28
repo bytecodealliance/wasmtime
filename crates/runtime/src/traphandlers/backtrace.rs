@@ -125,7 +125,6 @@ impl Backtrace {
                 let pc = *(*state.limits).last_wasm_exit_pc.get();
                 let fp = *(*state.limits).last_wasm_exit_fp.get();
                 assert_ne!(pc, 0);
-                assert_ne!(fp, 0);
                 (pc, fp)
             }
         };
