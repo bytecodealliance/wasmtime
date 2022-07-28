@@ -97,7 +97,7 @@ pub mod trampolines {
                     ) $(-> libcall!(@ty $result))?;
                 }
 
-                wasm_to_libcall_trampoline!($name ; [<$name _impl>]);
+                wasm_to_libcall_trampoline!($name ; [<impl_ $name>]);
 
                 // This is the direct entrypoint from the inline assembly which
                 // still has the same raw signature as the trampoline itself.
@@ -105,7 +105,7 @@ pub mod trampolines {
                 // implementation and automatically perform `catch_unwind` along
                 // with conversion of the return value in the face of traps.
                 #[no_mangle]
-                unsafe extern "C" fn [<$name _impl>](
+                unsafe extern "C" fn [<impl_ $name>](
                     vmctx : *mut VMContext,
                     $( $pname : libcall!(@ty $param), )*
                 ) $( -> libcall!(@ty $result))? {

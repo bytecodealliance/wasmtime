@@ -84,7 +84,7 @@ libcall: ;                                                                      
         .cfi_endproc ;                                                            \
         .size libcall,.-libcall
 
-LIBCALL_TRAMPOLINE(memory32_grow, impl_memory32_grow_impl)
+LIBCALL_TRAMPOLINE(memory32_grow, impl_memory32_grow)
 LIBCALL_TRAMPOLINE(table_grow, impl_table_grow)
 LIBCALL_TRAMPOLINE(table_fill, impl_table_fill)
 LIBCALL_TRAMPOLINE(table_copy, impl_table_copy)
