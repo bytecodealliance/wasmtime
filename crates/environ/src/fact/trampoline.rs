@@ -346,6 +346,7 @@ impl Compiler<'_, '_> {
             InterfaceType::S64 => self.translate_s64(src, dst_ty, dst),
             InterfaceType::Float32 => self.translate_f32(src, dst_ty, dst),
             InterfaceType::Float64 => self.translate_f64(src, dst_ty, dst),
+            InterfaceType::Char => self.translate_char(src, dst_ty, dst),
             InterfaceType::Record(t) => self.translate_record(*t, src, dst_ty, dst),
             InterfaceType::Tuple(t) => self.translate_tuple(*t, src, dst_ty, dst),
             InterfaceType::Variant(v) => self.translate_variant(*v, src, dst_ty, dst),
@@ -541,6 +542,58 @@ impl Compiler<'_, '_> {
         match dst {
             Destination::Memory(mem) => self.f64_store(mem),
             Destination::Stack(stack) => self.stack_set(stack, ValType::F64),
+        }
+    }
+
+    fn translate_char(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        assert!(matches!(dst_ty, InterfaceType::Char));
+        let local = self.gen_local(ValType::I32);
+        match src {
+            Source::Memory(mem) => self.i32_load(mem),
+            Source::Stack(stack) => self.stack_get(stack, ValType::I32),
+        }
+        self.instruction(LocalSet(local));
+
+        // This sequence is copied from the output of LLVM for:
+        //
+        //      pub extern "C" fn foo(x: u32) -> char {
+        //          char::try_from(x)
+        //              .unwrap_or_else(|_| std::arch::wasm32::unreachable())
+        //      }
+        //
+        // Apparently this does what's required by the canonical ABI:
+        //
+        //    def i32_to_char(opts, i):
+        //      trap_if(i >= 0x110000)
+        //      trap_if(0xD800 <= i <= 0xDFFF)
+        //      return chr(i)
+        //
+        // ... but I don't know how it works other than "well I trust LLVM"
+        self.instruction(Block(BlockType::Empty));
+        self.instruction(Block(BlockType::Empty));
+        self.instruction(LocalGet(local));
+        self.instruction(I32Const(0xd800));
+        self.instruction(I32Xor);
+        self.instruction(I32Const(-0x110000));
+        self.instruction(I32Add);
+        self.instruction(I32Const(-0x10f800));
+        self.instruction(I32LtU);
+        self.instruction(BrIf(0));
+        self.instruction(LocalGet(local));
+        self.instruction(I32Const(0x110000));
+        self.instruction(I32Ne);
+        self.instruction(BrIf(1));
+        self.instruction(End);
+        self.trap(Trap::InvalidChar);
+        self.instruction(End);
+
+        self.push_dst_addr(dst);
+        self.instruction(LocalGet(local));
+        match dst {
+            Destination::Memory(mem) => {
+                self.i32_store(mem);
+            }
+            Destination::Stack(stack) => self.stack_set(stack, ValType::I32),
         }
     }
 

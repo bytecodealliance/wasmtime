@@ -28,6 +28,7 @@ pub enum Trap {
     CannotEnter,
     UnalignedPointer,
     InvalidDiscriminant,
+    InvalidChar,
     AssertFailed(&'static str),
 }
 
@@ -101,6 +102,7 @@ impl fmt::Display for Trap {
             Trap::CannotEnter => "cannot enter instance".fmt(f),
             Trap::UnalignedPointer => "pointer not aligned correctly".fmt(f),
             Trap::InvalidDiscriminant => "invalid variant discriminant".fmt(f),
+            Trap::InvalidChar => "invalid char value specified".fmt(f),
             Trap::AssertFailed(s) => write!(f, "assertion failure: {}", s),
         }
     }
