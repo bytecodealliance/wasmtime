@@ -165,7 +165,7 @@ impl Stacks {
                 val_type: wasm_encoder::ValType::I32,
                 mutable: true,
             },
-            &Instruction::I32Const(0),
+            &wasm_encoder::ConstExpr::i32_const(0),
         );
         let stack_len_global = globals.len();
         globals.global(
@@ -173,7 +173,7 @@ impl Stacks {
                 val_type: wasm_encoder::ValType::I32,
                 mutable: true,
             },
-            &Instruction::I32Const(0),
+            &wasm_encoder::ConstExpr::i32_const(0),
         );
         section(&mut module, globals);
 
