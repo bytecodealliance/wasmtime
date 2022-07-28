@@ -3496,7 +3496,10 @@ name = "wasmtime-environ"
 version = "0.40.0"
 dependencies = [
  "anyhow",
+ "atty",
+ "clap 3.2.8",
  "cranelift-entity",
+ "env_logger 0.9.0",
  "gimli",
  "indexmap",
  "log",
@@ -3509,6 +3512,7 @@ dependencies = [
  "wasmprinter",
  "wasmtime-component-util",
  "wasmtime-types",
+ "wat",
 ]
 
 [[package]]
