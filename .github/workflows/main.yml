@@ -321,10 +321,6 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
-    # Test the component-model related functionality which is gated behind a
-    # compile-time feature
-    - run: cargo test --test all --features component-model component_model
-
   # Build and test the wasi-nn module.
   test_wasi_nn:
     name: Test wasi-nn module
