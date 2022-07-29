@@ -682,19 +682,18 @@
 ;;
 ;; This function handles the following case only:
 ;; - ProducesFlagsSideEffect + ConsumesFlagsSideEffect
-(decl with_flags_side_effect (ProducesFlags ConsumesFlags) Unit)
+(decl with_flags_side_effect (ProducesFlags ConsumesFlags) SideEffectNoResult)
 
 (rule (with_flags_side_effect
         (ProducesFlags.AlreadyExistingFlags val)
         (ConsumesFlags.ConsumesFlagsSideEffect c))
       (let ((_ Unit (mark_value_used val)))
-        (emit c)))
+        (SideEffectNoResult.Inst c)))
 
 (rule (with_flags_side_effect
         (ProducesFlags.ProducesFlagsSideEffect p)
         (ConsumesFlags.ConsumesFlagsSideEffect c))
-      (let ((_ Unit (emit p)))
-        (emit c)))
+      (SideEffectNoResult.Inst2 p c))
 
 ;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

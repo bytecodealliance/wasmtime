@@ -3033,11 +3033,11 @@
 (rule (trap_if_or cc1 cc2 tc)
       (ConsumesFlags.ConsumesFlagsSideEffect (MInst.TrapIfOr cc1 cc2 tc)))
 
-(decl trap_if_bool (ProducesBool TrapCode) Unit)
+(decl trap_if_bool (ProducesBool TrapCode) SideEffectNoResult)
 (rule (trap_if_bool (ProducesBool.ProducesBool producer cc) tc)
       (with_flags_side_effect producer (trap_if cc tc)))
 
-(decl trap_ff_cond (FcmpCondResult TrapCode) Unit)
+(decl trap_ff_cond (FcmpCondResult TrapCode) SideEffectNoResult)
 
 (rule (trap_ff_cond (FcmpCondResult.Condition producer cc) tc)
       (with_flags_side_effect producer (trap_if cc tc)))

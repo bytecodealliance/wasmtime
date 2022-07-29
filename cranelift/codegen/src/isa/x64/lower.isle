@@ -1458,20 +1458,17 @@
 ;; iadd_ifcout and this instruction, as verified by the CLIF validator; so we
 ;; can simply use the flags here.
 (rule (lower (trapif cc flags @ (iadd_ifcout _ _) tc))
-      (let ((producer ProducesFlags (ProducesFlags.AlreadyExistingFlags flags))
-            (_ Unit (trap_if_bool (bool producer cc) tc)))
-        (output_none)))
+      (let ((producer ProducesFlags (ProducesFlags.AlreadyExistingFlags flags)))
+        (side_effect (trap_if_bool (bool producer cc) tc))))
 
 ;; Verification ensures that the input is always a single-def ifcmp.
 (rule (lower (trapif cc (ifcmp a b) tc))
-      (let ((_ Unit (trap_if_bool (emit_cmp cc a b) tc)))
-        (output_none)))
+      (side_effect (trap_if_bool (emit_cmp cc a b) tc)))
 
 ;;;; Rules for `trapff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trapff cc (ffcmp a b) tc))
-      (let ((_ Unit (trap_ff_cond (emit_fcmp cc a b) tc)))
-        (output_none)))
+      (side_effect (trap_ff_cond (emit_fcmp cc a b) tc)))
 
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
