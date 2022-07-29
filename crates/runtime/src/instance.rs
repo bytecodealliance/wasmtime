@@ -994,7 +994,7 @@ impl Instance {
                     // count as values move between globals, everything else is just
                     // copy-able bits.
                     match global.wasm_ty {
-                        WASM_EXTERN_REF => {
+                        WasmType::Ref(WASM_EXTERN_REF) => {
                             *(*to).as_externref_mut() = from.as_externref().clone()
                         }
                         _ => ptr::copy_nonoverlapping(from, to, 1),
@@ -1006,7 +1006,7 @@ impl Instance {
                 }
                 GlobalInit::RefNullConst => match global.wasm_ty {
                     // `VMGlobalDefinition::new()` already zeroed out the bits
-                    WASM_EXTERN_REF | WASM_FUNC_REFWasmType::FuncRef => {}
+                    WasmType::Ref(WASM_EXTERN_REF) | WasmType::Ref(WASM_FUNC_REF) => {}
                     ty => panic!("unsupported reference type for global: {:?}", ty),
                 },
                 GlobalInit::Import => panic!("locally-defined global initialized as import"),
@@ -1025,7 +1025,7 @@ impl Drop for Instance {
             };
             match global.wasm_ty {
                 // For now only externref globals need to get destroyed
-                WasmType::ExternRef => {}
+                WasmType::Ref(WASM_EXTERN_REF) => {}
                 _ => continue,
             }
             unsafe {

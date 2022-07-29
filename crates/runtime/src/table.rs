@@ -8,7 +8,7 @@ use anyhow::{bail, format_err, Error, Result};
 use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
 use std::ptr;
-use wasmtime_environ::{TablePlan, TrapCode, WasmType, FUNCREF_INIT_BIT, FUNCREF_MASK};
+use wasmtime_environ::{TablePlan, TrapCode, WasmRefType, WasmHeapType, FUNCREF_INIT_BIT, FUNCREF_MASK};
 
 /// An element going into or coming out of a table.
 ///
@@ -163,11 +163,11 @@ pub enum Table {
     },
 }
 
-fn wasm_to_table_type(ty: WasmType) -> Result<TableElementType> {
-    match ty {
-        WasmType::FuncRef => Ok(TableElementType::Func),
-        WasmType::ExternRef => Ok(TableElementType::Extern),
-        ty => bail!("invalid table element type {:?}", ty),
+fn wasm_to_table_type(rt: WasmRefType) -> Result<TableElementType> {
+    match rt.heap_type {
+        WasmHeapType::Func => Ok(TableElementType::Func),
+        WasmHeapType::Extern => Ok(TableElementType::Extern),
+        ht => bail!("invalid table element type {:?}", ht),
     }
 }
 
