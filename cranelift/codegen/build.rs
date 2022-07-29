@@ -298,6 +298,10 @@ fn run_compilation(
         // https://github.com/rust-lang/rust/issues/47995.)
         options.exclude_global_allow_pragmas = true;
 
+        // We'd like to get more detailed information in traces when pattern match failures occur,
+        // to help with debugging.
+        options.match_failure_tracing = true;
+
         isle::compile::compile(&defs, &options)
     })()
     .map_err(|e| {

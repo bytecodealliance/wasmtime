@@ -15,6 +15,9 @@ pub struct CodegenOptions {
     /// Do not include the `#![allow(...)]` pragmas in the generated
     /// source. Useful if it must be include!()'d elsewhere.
     pub exclude_global_allow_pragmas: bool,
+
+    /// Include `log::trace!` calls at match failure sites.
+    pub match_failure_tracing: bool,
 }
 
 /// Emit Rust source code for the given type and term environments.
@@ -59,7 +62,7 @@ impl<'a> Codegen<'a> {
         self.generate_header(&mut code, options);
         self.generate_ctx_trait(&mut code);
         self.generate_internal_types(&mut code);
-        self.generate_internal_term_constructors(&mut code);
+        self.generate_internal_term_constructors(&mut code, options);
 
         code
     }
@@ -278,7 +281,7 @@ impl<'a> Codegen<'a> {
         }
     }
 
-    fn generate_internal_term_constructors(&self, code: &mut String) {
+    fn generate_internal_term_constructors(&self, code: &mut String, options: &CodegenOptions) {
         for (&termid, trie) in self.functions_by_term {
             let termdata = &self.termenv.terms[termid.index()];
 
@@ -314,9 +317,23 @@ impl<'a> Codegen<'a> {
             .unwrap();
 
             let mut body_ctx: BodyContext = Default::default();
-            let returned =
-                self.generate_body(code, /* depth = */ 0, trie, "    ", &mut body_ctx);
+            let returned = self.generate_body(
+                code,
+                options,
+                /* depth = */ 0,
+                trie,
+                "    ",
+                &mut body_ctx,
+            );
             if !returned {
+                if options.match_failure_tracing {
+                    writeln!(
+                        code,
+                        "    log::trace!(\"Failed to match any rule for `{}`\");",
+                        sig.func_name
+                    )
+                    .unwrap();
+                }
                 writeln!(code, "    return None;").unwrap();
             }
 
@@ -686,6 +703,7 @@ impl<'a> Codegen<'a> {
     fn generate_body(
         &self,
         code: &mut String,
+        options: &CodegenOptions,
         depth: usize,
         trie: &TrieNode,
         indent: &str,
@@ -764,7 +782,14 @@ impl<'a> Codegen<'a> {
                     // (possibly an empty one). Only use a `match` form if there
                     // are at least two adjacent options.
                     if last - i > 1 {
-                        self.generate_body_matches(code, depth, &edges[i..last], indent, ctx);
+                        self.generate_body_matches(
+                            code,
+                            options,
+                            depth,
+                            &edges[i..last],
+                            indent,
+                            ctx,
+                        );
                         i = last;
                         continue;
                     } else {
@@ -777,7 +802,8 @@ impl<'a> Codegen<'a> {
 
                         match symbol {
                             &TrieSymbol::EndOfMatch => {
-                                returned = self.generate_body(code, depth + 1, node, indent, ctx);
+                                returned =
+                                    self.generate_body(code, options, depth + 1, node, indent, ctx);
                             }
                             &TrieSymbol::Match { ref op } => {
                                 let id = InstId(depth);
@@ -785,7 +811,7 @@ impl<'a> Codegen<'a> {
                                     self.generate_pattern_inst(code, id, op, indent, ctx);
                                 let i = if infallible { indent } else { &subindent[..] };
                                 let sub_returned =
-                                    self.generate_body(code, depth + 1, node, i, ctx);
+                                    self.generate_body(code, options, depth + 1, node, i, ctx);
                                 if !infallible {
                                     writeln!(code, "{}}}", indent).unwrap();
                                 }
@@ -806,6 +832,7 @@ impl<'a> Codegen<'a> {
     fn generate_body_matches(
         &self,
         code: &mut String,
+        options: &CodegenOptions,
         depth: usize,
         edges: &[TrieEdge],
         indent: &str,
@@ -874,7 +901,7 @@ impl<'a> Codegen<'a> {
             )
             .unwrap();
             let subindent = format!("{}        ", indent);
-            self.generate_body(code, depth + 1, node, &subindent, ctx);
+            self.generate_body(code, options, depth + 1, node, &subindent, ctx);
             writeln!(code, "{}    }}", indent).unwrap();
         }
 
