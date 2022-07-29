@@ -1458,8 +1458,7 @@
 ;; iadd_ifcout and this instruction, as verified by the CLIF validator; so we
 ;; can simply use the flags here.
 (rule (lower (trapif cc flags @ (iadd_ifcout _ _) tc))
-      (let ((producer ProducesFlags (ProducesFlags.AlreadyExistingFlags flags)))
-        (side_effect (trap_if_bool (bool producer cc) tc))))
+      (side_effect (trap_if_bool (bool (flags_to_producesflags flags) cc) tc)))
 
 ;; Verification ensures that the input is always a single-def ifcmp.
 (rule (lower (trapif cc (ifcmp a b) tc))

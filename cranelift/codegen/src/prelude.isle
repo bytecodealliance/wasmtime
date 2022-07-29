@@ -571,7 +571,7 @@
                      ;; instruction, and we have out-of-band reasons to know
                      ;; that they won't be clobbered by the time we depend on
                      ;; them.
-                     (AlreadyExistingFlags (value Value))
+                     (AlreadyExistingFlags)
                      (ProducesFlagsSideEffect (inst MInst))
                      ;; Not directly combinable with a ConsumesFlags;
                      ;; used in s390x and unwrapped directly by `trapif`.
@@ -677,6 +677,13 @@
       (let ((v ValueRegs (with_flags p c)))
         (value_regs_get v 0)))
 
+;; Indicate that the current state of the flags register from the instruction
+;; that produces this Value is relied on.
+(decl flags_to_producesflags (Value) ProducesFlags)
+(rule (flags_to_producesflags val)
+      (let ((_ Unit (mark_value_used val)))
+        (ProducesFlags.AlreadyExistingFlags)))
+
 ;; Combine a flags-producing instruction and a flags-consuming instruction that
 ;; produces no results.
 ;;
@@ -685,10 +692,9 @@
 (decl with_flags_side_effect (ProducesFlags ConsumesFlags) SideEffectNoResult)
 
 (rule (with_flags_side_effect
-        (ProducesFlags.AlreadyExistingFlags val)
+        (ProducesFlags.AlreadyExistingFlags)
         (ConsumesFlags.ConsumesFlagsSideEffect c))
-      (let ((_ Unit (mark_value_used val)))
-        (SideEffectNoResult.Inst c)))
+      (SideEffectNoResult.Inst c))
 
 (rule (with_flags_side_effect
         (ProducesFlags.ProducesFlagsSideEffect p)
