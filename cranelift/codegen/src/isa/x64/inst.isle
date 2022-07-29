@@ -3012,12 +3012,6 @@
 (rule (x64_xor_mem ty addr val)
       (alu_rm ty (AluRmiROpcode.Xor) addr val))
 
-;; Helper for emitting a consumer when it's known by other means that the flags
-;; register has not been clobbered.
-(decl emit_consumer (ConsumesFlags) Unit)
-(rule (emit_consumer (ConsumesFlags.ConsumesFlagsSideEffect c))
-      (emit c))
-
 ;; Trap if the condition code supplied is set.
 (decl trap_if (CC TrapCode) ConsumesFlags)
 (rule (trap_if cc tc)
