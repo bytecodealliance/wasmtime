@@ -128,7 +128,7 @@ pub enum Pattern {
         pos: Pos,
     },
     /// An operator that matches a constant integer value.
-    ConstInt { val: i64, pos: Pos },
+    ConstInt { val: i128, pos: Pos },
     /// An operator that matches an external constant value.
     ConstPrim { val: Ident, pos: Pos },
     /// An application of a type variant or term.
@@ -313,7 +313,7 @@ pub enum Expr {
     /// A variable use.
     Var { name: Ident, pos: Pos },
     /// A constant integer.
-    ConstInt { val: i64, pos: Pos },
+    ConstInt { val: i128, pos: Pos },
     /// A constant of some other primitive type.
     ConstPrim { val: Ident, pos: Pos },
     /// The `(let ((var ty val)*) body)` form.

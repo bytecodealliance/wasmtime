@@ -486,7 +486,7 @@ pub enum Pattern {
 
     /// Match the current value against a constant integer of the given integer
     /// type.
-    ConstInt(TypeId, i64),
+    ConstInt(TypeId, i128),
 
     /// Match the current value against a constant primitive value of the given
     /// primitive type.
@@ -511,7 +511,7 @@ pub enum Expr {
     /// Get the value of a variable that was bound in the left-hand side.
     Var(TypeId, VarId),
     /// Get a constant integer.
-    ConstInt(TypeId, i64),
+    ConstInt(TypeId, i128),
     /// Get a constant primitive.
     ConstPrim(TypeId, Sym),
     /// Evaluate the nested expressions and bind their results to the given
