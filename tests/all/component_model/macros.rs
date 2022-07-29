@@ -426,6 +426,22 @@ fn enum_derive() -> Result<()> {
 
 #[test]
 fn flags() -> Result<()> {
+    let engine = super::engine();
+    let mut store = Store::new(&engine, ());
+
+    // Edge case of 0 flags
+    wasmtime::component::flags! {
+        Flags0 {}
+    }
+    assert_eq!(Flags0::default(), Flags0::default());
+
+    let component = Component::new(&engine, make_echo_component(r#"(flags)"#, 0))?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_typed_func::<(Flags0,), Flags0, _>(&mut store, "echo")?;
+    let output = func.call_and_post_return(&mut store, (Flags0::default(),))?;
+    assert_eq!(output, Flags0::default());
+
+    // Simple 8-bit flags
     wasmtime::component::flags! {
         Foo {
             #[component(name = "foo-bar-baz")]
@@ -441,9 +457,6 @@ fn flags() -> Result<()> {
     assert_eq!(Foo::A | Foo::B, Foo::A ^ Foo::B);
     assert_eq!(Foo::default(), Foo::A ^ Foo::A);
     assert_eq!(Foo::B | Foo::C, !Foo::A);
-
-    let engine = super::engine();
-    let mut store = Store::new(&engine, ());
 
     // Happy path: component type matches flag count and names
 

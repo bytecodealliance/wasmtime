@@ -700,6 +700,7 @@ impl Compiler<'_, '_> {
         assert_eq!(src_ty.names, dst_ty.names);
         let cnt = src_ty.names.len();
         match FlagsSize::from_count(cnt) {
+            FlagsSize::Size0 => {}
             FlagsSize::Size1 => {
                 let mask = if cnt == 8 { 0xff } else { (1 << cnt) - 1 };
                 self.convert_u8_mask(src, dst, mask);
