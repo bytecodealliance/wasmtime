@@ -754,7 +754,7 @@ dependencies = [
  "serde",
  "smallvec",
  "target-lexicon",
- "wasmparser",
+ "wasmparser 0.88.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmtime-types",
  "wat",
 ]
@@ -3256,7 +3256,7 @@ dependencies = [
  "rand 0.8.5",
  "thiserror",
  "wasm-encoder",
- "wasmparser",
+ "wasmparser 0.88.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3270,7 +3270,7 @@ dependencies = [
  "indexmap",
  "leb128",
  "wasm-encoder",
- "wasmparser",
+ "wasmparser 0.88.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3316,13 +3316,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmparser"
+version = "0.88.0"
+source = "git+https://github.com/effect-handlers/wasm-tools?branch=func-ref-2#b9989767b52f2d629be9bfa40a726a09a17f8119"
+dependencies = [
+ "indexmap",
+]
+
+[[package]]
 name = "wasmprinter"
 version = "0.2.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04f2786f19a25211ddfa331e28b7579a6d6880f5f4b18d21253cd90274aa4c21"
 dependencies = [
  "anyhow",
- "wasmparser",
+ "wasmparser 0.88.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3345,7 +3353,7 @@ dependencies = [
  "target-lexicon",
  "tempfile",
  "wasi-cap-std-sync",
- "wasmparser",
+ "wasmparser 0.88.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmtime-cache",
  "wasmtime-component-macro",
  "wasmtime-component-util",
@@ -3510,7 +3518,7 @@ dependencies = [
  "object",
  "target-lexicon",
  "thiserror",
- "wasmparser",
+ "wasmparser 0.88.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmtime-environ",
 ]
 
@@ -3531,7 +3539,7 @@ dependencies = [
  "target-lexicon",
  "thiserror",
  "wasm-encoder",
- "wasmparser",
+ "wasmparser 0.88.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmprinter",
  "wasmtime-component-util",
  "wasmtime-types",
@@ -3546,7 +3554,7 @@ dependencies = [
  "component-fuzz-util",
  "env_logger 0.9.0",
  "libfuzzer-sys",
- "wasmparser",
+ "wasmparser 0.88.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmprinter",
  "wasmtime-environ",
 ]
@@ -3606,7 +3614,7 @@ dependencies = [
  "wasm-smith",
  "wasm-spec-interpreter",
  "wasmi",
- "wasmparser",
+ "wasmparser 0.88.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmprinter",
  "wasmtime",
  "wasmtime-wast",
@@ -3677,7 +3685,7 @@ dependencies = [
  "cranelift-entity",
  "serde",
  "thiserror",
- "wasmparser",
+ "wasmparser 0.88.0 (git+https://github.com/effect-handlers/wasm-tools?branch=func-ref-2)",
 ]
 
 [[package]]

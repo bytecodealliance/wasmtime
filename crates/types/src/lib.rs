@@ -25,10 +25,10 @@ pub enum WasmType {
     F64,
     /// V128 type
     V128,
-    /// FuncRef type
-    FuncRef,
-    /// ExternRef type
-    ExternRef,
+    /// Reference type
+    Ref(WasmRefType),
+    /// Bottom type
+    Bot,
 }
 
 impl TryFrom<wasmparser::ValType> for WasmType {
@@ -41,8 +41,8 @@ impl TryFrom<wasmparser::ValType> for WasmType {
             F32 => Ok(WasmType::F32),
             F64 => Ok(WasmType::F64),
             V128 => Ok(WasmType::V128),
-            FuncRef => Ok(WasmType::FuncRef),
-            ExternRef => Ok(WasmType::ExternRef),
+            Ref(rt) => Ok(WasmType::Ref(WasmRefType::try_from(rt)?)),
+            Bot => Ok(WasmType::Bot),
         }
     }
 }
@@ -55,8 +55,8 @@ impl From<WasmType> for wasmparser::ValType {
             WasmType::F32 => wasmparser::ValType::F32,
             WasmType::F64 => wasmparser::ValType::F64,
             WasmType::V128 => wasmparser::ValType::V128,
-            WasmType::FuncRef => wasmparser::ValType::FuncRef,
-            WasmType::ExternRef => wasmparser::ValType::ExternRef,
+            WasmType::Ref(rt) => wasmparser::ValType::Ref(wasmparser::RefType::from(rt)),
+            WasmType::Bot => wasmparser::ValType::Bot,
         }
     }
 }
@@ -69,8 +69,117 @@ impl fmt::Display for WasmType {
             WasmType::F32 => write!(f, "f32"),
             WasmType::F64 => write!(f, "f64"),
             WasmType::V128 => write!(f, "v128"),
-            WasmType::ExternRef => write!(f, "externref"),
-            WasmType::FuncRef => write!(f, "funcref"),
+            WasmType::Ref(rt) => write!(f, "ref {}", rt),
+            WasmType::Bot => write!(f, "bot"),
+        }
+    }
+}
+
+/// WebAssembly reference type -- equivalent of `wasmparser`'s RefType
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct WasmRefType {
+    nullable: bool,
+    heap_type: WasmHeapType,
+}
+
+pub const WASM_EXTERN_REF: WasmRefType = WasmRefType {
+    nullable: true,
+    heap_type: WasmHeapType::Extern,
+};
+
+pub const WASM_FUNC_REF: WasmRefType = WasmRefType {
+    nullable: true,
+    heap_type: WasmHeapType::Func,
+};
+
+impl TryFrom<wasmparser::RefType> for WasmRefType {
+    type Error = WasmError;
+    fn try_from(
+        wasmparser::RefType {
+            nullable,
+            heap_type,
+        }: wasmparser::RefType,
+    ) -> Result<Self, Self::Error> {
+        Ok(WasmRefType {
+            nullable,
+            heap_type: WasmHeapType::try_from(heap_type)?,
+        })
+    }
+}
+
+impl From<WasmRefType> for wasmparser::RefType {
+    fn from(
+        WasmRefType {
+            nullable,
+            heap_type,
+        }: WasmRefType,
+    ) -> wasmparser::RefType {
+        wasmparser::RefType {
+            nullable,
+            heap_type: wasmparser::HeapType::from(heap_type),
+        }
+    }
+}
+
+impl fmt::Display for WasmRefType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &WASM_EXTERN_REF => write!(f, "externref"),
+            &WASM_FUNC_REF => write!(f, "funcref"),
+            WasmRefType {
+                heap_type,
+                nullable,
+            } => {
+                if *nullable {
+                    write!(f, "(ref null {})", heap_type)
+                } else {
+                    write!(f, "(ref {})", heap_type)
+                }
+            }
+        }
+    }
+}
+
+/// WebAssembly heap type -- equivalent of `wasmparser`'s HeapType
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum WasmHeapType {
+    Bot,
+    Func,
+    Extern,
+    Index(u32),
+}
+
+impl TryFrom<wasmparser::HeapType> for WasmHeapType {
+    type Error = WasmError;
+    fn try_from(ht: wasmparser::HeapType) -> Result<Self, Self::Error> {
+        use wasmparser::HeapType::*;
+        match ht {
+            Bot => Ok(WasmHeapType::Bot),
+            Func => Ok(WasmHeapType::Func),
+            Extern => Ok(WasmHeapType::Extern),
+            Index(i) => Ok(WasmHeapType::Index(i)),
+        }
+    }
+}
+
+impl From<WasmHeapType> for wasmparser::HeapType {
+    fn from(ht: WasmHeapType) -> wasmparser::HeapType {
+        match ht {
+            WasmHeapType::Bot => wasmparser::HeapType::Bot,
+            WasmHeapType::Func => wasmparser::HeapType::Func,
+            WasmHeapType::Extern => wasmparser::HeapType::Extern,
+            WasmHeapType::Index(i) => wasmparser::HeapType::Index(i),
+        }
+    }
+}
+
+impl fmt::Display for WasmHeapType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            WasmHeapType::Bot => write!(f, "bot"),
+            WasmHeapType::Func => write!(f, "func"),
+            WasmHeapType::Extern => write!(f, "extern"),
+            WasmHeapType::Index(i) => write!(f, "{}", i),
         }
     }
 }
@@ -87,10 +196,19 @@ pub struct WasmFuncType {
 impl WasmFuncType {
     #[inline]
     pub fn new(params: Box<[WasmType]>, returns: Box<[WasmType]>) -> Self {
-        let externref_params_count = params.iter().filter(|p| **p == WasmType::ExternRef).count();
+        let externref_params_count = params
+            .iter()
+            .filter(|p| match **p {
+                WasmType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
+                _ => false,
+            })
+            .count();
         let externref_returns_count = returns
             .iter()
-            .filter(|r| **r == WasmType::ExternRef)
+            .filter(|r| match **r {
+                WasmType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
+                _ => false,
+            })
             .count();
         WasmFuncType {
             params,
@@ -324,7 +442,7 @@ impl Global {
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Table {
     /// The table elements' Wasm type.
-    pub wasm_ty: WasmType,
+    pub wasm_ty: WasmRefType,
     /// The minimum number of elements in the table.
     pub minimum: u32,
     /// The maximum number of elements in the table.
