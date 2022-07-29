@@ -3033,41 +3033,38 @@
 (rule (trap_if_or cc1 cc2 tc)
       (ConsumesFlags.ConsumesFlagsSideEffect (MInst.TrapIfOr cc1 cc2 tc)))
 
-(decl trap_if_bool (ProducesBool TrapCode) SideEffectNoResult)
-(rule (trap_if_bool (ProducesBool.ProducesBool producer cc) tc)
+(decl trap_if_icmp (IcmpCondResult TrapCode) SideEffectNoResult)
+(rule (trap_if_icmp (IcmpCondResult.Condition producer cc) tc)
       (with_flags_side_effect producer (trap_if cc tc)))
 
-(decl trap_ff_cond (FcmpCondResult TrapCode) SideEffectNoResult)
-
-(rule (trap_ff_cond (FcmpCondResult.Condition producer cc) tc)
+(decl trap_if_fcmp (FcmpCondResult TrapCode) SideEffectNoResult)
+(rule (trap_if_fcmp (FcmpCondResult.Condition producer cc) tc)
       (with_flags_side_effect producer (trap_if cc tc)))
-
-(rule (trap_ff_cond (FcmpCondResult.AndCondition producer cc1 cc2) tc)
+(rule (trap_if_fcmp (FcmpCondResult.AndCondition producer cc1 cc2) tc)
       (with_flags_side_effect producer (trap_if_and cc1 cc2 tc)))
-
-(rule (trap_ff_cond (FcmpCondResult.OrCondition producer cc1 cc2) tc)
+(rule (trap_if_fcmp (FcmpCondResult.OrCondition producer cc1 cc2) tc)
       (with_flags_side_effect producer (trap_if_or cc1 cc2 tc)))
 
 ;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(type ProducesBool (enum (ProducesBool (producer ProducesFlags) (cc CC))))
+(type IcmpCondResult (enum (Condition (producer ProducesFlags) (cc CC))))
 
-(decl bool (ProducesFlags CC) ProducesBool)
-(rule (bool producer cc) (ProducesBool.ProducesBool producer cc))
+(decl icmp_cond_result (ProducesFlags CC) IcmpCondResult)
+(rule (icmp_cond_result producer cc) (IcmpCondResult.Condition producer cc))
 
-;; Lower a bool into a register.
-(decl lower_bool (ProducesBool) ValueRegs)
-(rule (lower_bool (ProducesBool.ProducesBool producer cc))
+;; Lower an Icmp result into a boolean value in a register.
+(decl lower_icmp_bool (IcmpCondResult) ValueRegs)
+(rule (lower_icmp_bool (IcmpCondResult.Condition producer cc))
       (with_flags producer (x64_setcc cc)))
 
-(decl emit_cmp (IntCC Value Value) ProducesBool)
+(decl emit_cmp (IntCC Value Value) IcmpCondResult)
 
 ;; For GPR-held values we only need to emit `CMP + SETCC`. We rely here on
 ;; Cranelift's verification that `a` and `b` are of the same type.
 ;; Unfortunately for clarity, the registers are flipped here (TODO).
 (rule (emit_cmp cc a @ (value_type ty) b)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (bool (x64_cmp size b a) cc)))
+        (icmp_cond_result (x64_cmp size b a) cc)))
 
 ;; For I128 values (held in two GPRs), the instruction sequences depend on what
 ;; kind of condition is tested.
@@ -3088,7 +3085,9 @@
         ;; then the `ZF` will be set (see `TEST` definition); if either of
         ;; the halves `AND`s to 0, they were not equal, therefore we `SETcc`
         ;; with `NZ`.
-        (bool (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp) (CC.NZ))))
+        (icmp_cond_result
+          (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp)
+          (CC.NZ))))
 
 (rule (emit_cmp (IntCC.NotEqual) a @ (value_type $I128) b)
       (let ((a_lo Gpr (value_regs_get_gpr a 0))
@@ -3099,7 +3098,9 @@
             (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_hi a_hi) (x64_setcc (CC.NZ))))
             ;; See comments for `IntCC.Equal`.
             (cmp Reg (x64_or $I64 cmp_lo cmp_hi)))
-           (bool (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp) (CC.NZ))))
+           (icmp_cond_result
+             (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp)
+             (CC.NZ))))
 
 ;; Result = (a_hi <> b_hi) ||
 ;;          (a_hi == b_hi && a_lo <> b_lo)
@@ -3122,7 +3123,9 @@
 
             (res_lo Reg (x64_and $I64 eq_hi cmp_lo))
             (res Reg (x64_or $I64 cc_hi res_lo)))
-        (bool (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) res) (CC.NZ))))
+        (icmp_cond_result
+          (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) res)
+          (CC.NZ))))
 
 (type FcmpCondResult
       (enum

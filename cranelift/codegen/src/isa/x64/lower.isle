@@ -1458,16 +1458,17 @@
 ;; iadd_ifcout and this instruction, as verified by the CLIF validator; so we
 ;; can simply use the flags here.
 (rule (lower (trapif cc flags @ (iadd_ifcout _ _) tc))
-      (side_effect (trap_if_bool (bool (flags_to_producesflags flags) cc) tc)))
+      (side_effect
+        (trap_if_icmp (icmp_cond_result (flags_to_producesflags flags) cc) tc)))
 
 ;; Verification ensures that the input is always a single-def ifcmp.
 (rule (lower (trapif cc (ifcmp a b) tc))
-      (side_effect (trap_if_bool (emit_cmp cc a b) tc)))
+      (side_effect (trap_if_icmp (emit_cmp cc a b) tc)))
 
 ;;;; Rules for `trapff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trapff cc (ffcmp a b) tc))
-      (side_effect (trap_ff_cond (emit_fcmp cc a b) tc)))
+      (side_effect (trap_if_fcmp (emit_fcmp cc a b) tc)))
 
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1493,10 +1494,10 @@
 ;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (icmp cc a @ (value_type (fits_in_64 ty)) b))
-      (lower_bool (emit_cmp cc a b)))
+      (lower_icmp_bool (emit_cmp cc a b)))
 
 (rule (lower (icmp cc a @ (value_type $I128) b))
-      (lower_bool (emit_cmp cc a b)))
+      (lower_icmp_bool (emit_cmp cc a b)))
 
 ;; For XMM-held values, we lower to `PCMP*` instructions, sometimes more than
 ;; one. To note: what is different here about the output values is that each
