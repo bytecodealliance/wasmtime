@@ -71,6 +71,19 @@ impl LoopAnalysis {
         self.loops[lp].parent.expand()
     }
 
+    /// Return the innermost loop for a given block.
+    pub fn innermost_loop(&self, block: Block) -> Option<Loop> {
+        self.block_loop_map[block].expand()
+    }
+
+    /// Determine if a Block is a loop header. If so, return the loop.
+    pub fn is_loop_header(&self, block: Block) -> Option<Loop> {
+        self.innermost_loop(block)
+            .map(|lp| (self.loop_header(lp), lp))
+            .filter(|&(header, _)| header == block)
+            .map(|(_, lp)| lp)
+    }
+
     /// Determine if a Block belongs to a loop by running a finger along the loop tree.
     ///
     /// Returns `true` if `block` is in loop `lp`.

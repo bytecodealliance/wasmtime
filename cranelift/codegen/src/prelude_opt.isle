@@ -44,6 +44,15 @@
 (decl eclass_union (Id Id) Unit)
 (extern constructor eclass_union eclass_union)
 
+;;;;; helpers for (virtual) associativity and commutativity ;;;;;;;;;;;;;;;;;;;;
+
+(type Pair (enum
+            (Id (a Id)
+                (b Id))))
+
+(decl pure multi commutative (Id Id) Pair)
+(extern constructor commutative commutative_ctor)
+
 ;;;;; optimization toplevel ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The main matcher rule invoked by the toplevel driver.

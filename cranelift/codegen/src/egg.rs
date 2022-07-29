@@ -1,6 +1,7 @@
 //! Egraph-based mid-end optimization framework.
 
 use crate::dominator_tree::DominatorTree;
+use crate::loop_analysis::LoopAnalysis;
 use crate::{
     fx::FxHashMap,
     inst_predicates::has_side_effect,
@@ -22,7 +23,10 @@ use extract::Extractor;
 pub use node::{Node, NodeCtx};
 
 pub struct FuncEGraph<'a> {
+    /// Dominator tree, used for elaboration pass.
     domtree: &'a DominatorTree,
+    /// Loop analysis results, used for built-in LICM during elaboration.
+    loop_analysis: &'a LoopAnalysis,
     /// The egraph itself.
     pub egraph: EGraph<NodeCtx>,
     /// "node context", containing arenas for node data.
@@ -43,10 +47,15 @@ impl<'a> FuncEGraph<'a> {
     /// Create a new EGraph for the given function. Requires the
     /// domtree to be precomputed as well; the domtree is used for
     /// scheduling when lowering out of the egraph.
-    pub fn new(func: &Function, domtree: &'a DominatorTree) -> FuncEGraph<'a> {
+    pub fn new(
+        func: &Function,
+        domtree: &'a DominatorTree,
+        loop_analysis: &'a LoopAnalysis,
+    ) -> FuncEGraph<'a> {
         let node_count_estimate = func.dfg.num_values() * 2;
         let mut this = Self {
             domtree,
+            loop_analysis,
             egraph: EGraph::with_capacity(node_count_estimate),
             node_ctx: NodeCtx::default(),
             side_effects: SecondaryMap::with_default(0..0),
@@ -249,6 +258,7 @@ impl<'a> FuncEGraph<'a> {
         let mut elab = Elaborator::new(
             func,
             self.domtree,
+            self.loop_analysis,
             &self.egraph,
             &self.node_ctx,
             &self.extractor,

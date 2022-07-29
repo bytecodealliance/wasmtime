@@ -7,6 +7,7 @@
 use crate::fx::FxHashMap;
 use core::hash::Hash;
 use core::mem;
+use smallvec::{smallvec, SmallVec};
 
 #[cfg(not(feature = "std"))]
 use crate::fx::FxHasher;
@@ -16,7 +17,6 @@ type Hasher = core::hash::BuildHasherDefault<FxHasher>;
 struct Val<K, V> {
     value: V,
     next_key: Option<K>,
-    depth: usize,
 }
 
 /// A view into an occupied entry in a `ScopedHashMap`. It is part of the `Entry` enum.
@@ -41,7 +41,6 @@ pub struct VacantEntry<'a, K: 'a, V: 'a> {
     #[cfg(not(feature = "std"))]
     entry: super::hash_map::VacantEntry<'a, K, Val<K, V>, Hasher>,
     next_key: Option<K>,
-    depth: usize,
 }
 
 impl<'a, K: Hash, V> VacantEntry<'a, K, V> {
@@ -50,7 +49,6 @@ impl<'a, K: Hash, V> VacantEntry<'a, K, V> {
         self.entry.insert(Val {
             value,
             next_key: self.next_key,
-            depth: self.depth,
         });
     }
 }
@@ -70,8 +68,7 @@ pub enum Entry<'a, K: 'a, V: 'a> {
 /// is not supported in this implementation.
 pub struct ScopedHashMap<K, V> {
     map: FxHashMap<K, Val<K, V>>,
-    last_insert: Option<K>,
-    current_depth: usize,
+    last_insert_by_depth: SmallVec<[Option<K>; 8]>,
 }
 
 impl<K, V> ScopedHashMap<K, V>
@@ -82,24 +79,29 @@ where
     pub fn new() -> Self {
         Self {
             map: FxHashMap(),
-            last_insert: None,
-            current_depth: 0,
+            last_insert_by_depth: smallvec![None],
         }
     }
 
     /// Similar to `FxHashMap::entry`, gets the given key's corresponding entry in the map for
     /// in-place manipulation.
     pub fn entry<'a>(&'a mut self, key: K) -> Entry<'a, K, V> {
+        self.entry_with_depth(key, self.depth())
+    }
+
+    /// Get the entry, setting the scope depth at which to insert.
+    pub fn entry_with_depth<'a>(&'a mut self, key: K, depth: usize) -> Entry<'a, K, V> {
+        debug_assert!(depth <= self.last_insert_by_depth.len());
         use super::hash_map::Entry::*;
         match self.map.entry(key) {
             Occupied(entry) => Entry::Occupied(OccupiedEntry { entry }),
             Vacant(entry) => {
-                let clone_key = entry.key().clone();
-                Entry::Vacant(VacantEntry {
-                    entry,
-                    next_key: mem::replace(&mut self.last_insert, Some(clone_key)),
-                    depth: self.current_depth,
-                })
+                let head_link = self
+                    .last_insert_by_depth
+                    .get_mut(depth)
+                    .expect("Insert depth must be within current depth");
+                let next_key = mem::replace(head_link, Some(entry.key().clone()));
+                Entry::Vacant(VacantEntry { entry, next_key })
             }
         }
     }
@@ -111,7 +113,12 @@ where
 
     /// Insert a key-value pair if absent, panicking otherwise.
     pub fn insert_if_absent(&mut self, key: K, value: V) {
-        match self.entry(key) {
+        self.insert_if_absent_with_depth(key, value, self.depth());
+    }
+
+    /// Insert a key-value pair if absent at the given depth, panicking otherwise.
+    pub fn insert_if_absent_with_depth(&mut self, key: K, value: V, depth: usize) {
+        match self.entry_with_depth(key, depth) {
             Entry::Vacant(v) => {
                 v.insert(value);
             }
@@ -123,28 +130,33 @@ where
 
     /// Enter a new scope.
     pub fn increment_depth(&mut self) {
-        // Increment the depth.
-        self.current_depth = self.current_depth.checked_add(1).unwrap();
+        self.last_insert_by_depth.push(None);
     }
 
     /// Exit the current scope.
     pub fn decrement_depth(&mut self) {
         // Remove all elements inserted at the current depth.
-        while let Some(key) = self.last_insert.clone() {
+        let mut head = self
+            .last_insert_by_depth
+            .pop()
+            .expect("Cannot pop beyond root scope");
+        while let Some(key) = head {
             use crate::hash_map::Entry::*;
             match self.map.entry(key) {
                 Occupied(entry) => {
-                    if entry.get().depth != self.current_depth {
-                        break;
-                    }
-                    self.last_insert = entry.remove_entry().1.next_key;
+                    head = entry.remove_entry().1.next_key;
                 }
                 Vacant(_) => panic!(),
             }
         }
+    }
 
-        // Decrement the depth.
-        self.current_depth = self.current_depth.checked_sub(1).unwrap();
+    /// Return the current scope depth.
+    pub fn depth(&self) -> usize {
+        self.last_insert_by_depth
+            .len()
+            .checked_sub(1)
+            .expect("last_insert_by_depth cannot be empty")
     }
 }
 
@@ -246,5 +258,23 @@ mod tests {
             Entry::Occupied(_entry) => panic!(),
             Entry::Vacant(entry) => entry.insert(3),
         }
+    }
+
+    #[test]
+    fn insert_arbitrary_depth() {
+        let mut map: ScopedHashMap<i32, i32> = ScopedHashMap::new();
+        map.insert_if_absent(1, 2);
+        assert_eq!(map.get(&1), Some(&2));
+        map.increment_depth();
+        assert_eq!(map.get(&1), Some(&2));
+        map.insert_if_absent(3, 4);
+        assert_eq!(map.get(&3), Some(&4));
+        map.decrement_depth();
+        assert_eq!(map.get(&3), None);
+        map.increment_depth();
+        map.insert_if_absent_with_depth(3, 4, 0);
+        assert_eq!(map.get(&3), Some(&4));
+        map.decrement_depth();
+        assert_eq!(map.get(&3), Some(&4));
     }
 }

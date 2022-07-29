@@ -12,11 +12,12 @@ pub use crate::ir::{
 use crate::isle_common_prelude_methods;
 pub use cranelift_egraph::Id;
 use cranelift_entity::{EntityList, EntityRef};
+use smallvec::{smallvec, SmallVec};
 
 pub type IdArray = EntityList<Id>;
 pub type Unit = ();
 
-pub type ConstructorVec<T> = smallvec::SmallVec<[T; 8]>;
+pub type ConstructorVec<T> = SmallVec<[T; 8]>;
 
 mod generated_code;
 
@@ -164,5 +165,12 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
             .union(arg0, arg1, &mut self.egraph.node_ctx);
 
         ()
+    }
+
+    fn commutative_ctor(&mut self, a: Id, b: Id) -> Option<ConstructorVec<generated_code::Pair>> {
+        Some(smallvec![
+            generated_code::Pair::Id { a, b },
+            generated_code::Pair::Id { b, a }
+        ])
     }
 }

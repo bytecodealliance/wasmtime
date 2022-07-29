@@ -194,7 +194,8 @@ impl Context {
                 "About to optimize with egraph phase:\n{}",
                 self.func.display()
             );
-            let mut eg = FuncEGraph::new(&self.func, &self.domtree);
+            self.compute_loop_analysis();
+            let mut eg = FuncEGraph::new(&self.func, &self.domtree, &self.loop_analysis);
             crate::opts::optimize(&mut eg);
             eg.extract(&self.func);
             eg.elaborate(&mut self.func);
