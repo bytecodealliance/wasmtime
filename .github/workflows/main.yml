@@ -217,8 +217,8 @@ jobs:
           - os: ubuntu-latest
           # defaults to x86_64-apple-darwin
           - os: macos-latest
-          - os: windows-2019
-          - os: windows-2019
+          - os: windows-latest
+          - os: windows-latest
             target: x86_64-pc-windows-gnu
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
@@ -302,11 +302,11 @@ jobs:
     - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target RUN_TESTS
       env:
         RUST_BACKTRACE: 1
-      if: matrix.target == '' && matrix.os == 'windows-2019'
+      if: matrix.target == '' && matrix.os == 'windows-latest'
     - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
       env:
         RUST_BACKTRACE: 1
-      if: matrix.target == '' && matrix.os != 'windows-2019'
+      if: matrix.target == '' && matrix.os != 'windows-latest'
 
     # Build and test all features
     - run: ./ci/run-tests.sh --locked
