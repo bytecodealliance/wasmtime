@@ -739,10 +739,7 @@ impl Compiler<'_, '_> {
         // call `memory.size` and put that in a local. If that is not the
         // maximum for a 32-bit memory then this entire bounds-check here can be
         // skipped.
-        //
-        // TODO: zero-size values don't work with this scheme because it doesn't
-        // actually touch memory.
-        if !src_opts.memory64 {
+        if !src_opts.memory64 && src_size > 0 {
             self.instruction(LocalGet(src_mem.addr_local));
             self.instruction(I64ExtendI32U);
             if src_size < dst_size {
@@ -820,72 +817,81 @@ impl Compiler<'_, '_> {
             self.instruction(End);
         }
 
-        let cur_dst_ptr = self.gen_local(dst_opts.ptr());
-        let cur_src_ptr = self.gen_local(src_opts.ptr());
-        let remaining = self.gen_local(src_opts.ptr());
+        // This is the main body of the loop to actually translate list types.
+        // Note that if both element sizes are 0 then this won't actually do
+        // anything so the loop is removed entirely.
+        if src_size > 0 || dst_size > 0 {
+            let cur_dst_ptr = self.gen_local(dst_opts.ptr());
+            let cur_src_ptr = self.gen_local(src_opts.ptr());
+            let remaining = self.gen_local(src_opts.ptr());
 
-        let iconst = |i: i32, ty: ValType| match ty {
-            ValType::I32 => I32Const(i32::try_from(i).unwrap()),
-            ValType::I64 => I64Const(i64::try_from(i).unwrap()),
-            _ => unreachable!(),
-        };
-        let src_add = if src_opts.memory64 { I64Add } else { I32Add };
-        let dst_add = if dst_opts.memory64 { I64Add } else { I32Add };
-        let src_eqz = if src_opts.memory64 { I64Eqz } else { I32Eqz };
+            let iconst = |i: i32, ty: ValType| match ty {
+                ValType::I32 => I32Const(i32::try_from(i).unwrap()),
+                ValType::I64 => I64Const(i64::try_from(i).unwrap()),
+                _ => unreachable!(),
+            };
+            let src_add = if src_opts.memory64 { I64Add } else { I32Add };
+            let dst_add = if dst_opts.memory64 { I64Add } else { I32Add };
+            let src_eqz = if src_opts.memory64 { I64Eqz } else { I32Eqz };
 
-        // This block encompasses the entire loop and is use to exit before even
-        // entering the loop if the list size is zero.
-        self.instruction(Block(BlockType::Empty));
+            // This block encompasses the entire loop and is use to exit before even
+            // entering the loop if the list size is zero.
+            self.instruction(Block(BlockType::Empty));
 
-        // Set the `remaining` local and only continue if it's > 0
-        self.instruction(LocalGet(src_len));
-        self.instruction(LocalTee(remaining));
-        self.instruction(src_eqz.clone());
-        self.instruction(BrIf(0));
+            // Set the `remaining` local and only continue if it's > 0
+            self.instruction(LocalGet(src_len));
+            self.instruction(LocalTee(remaining));
+            self.instruction(src_eqz.clone());
+            self.instruction(BrIf(0));
 
-        // Initialize the two destination pointers to their initial values
-        self.instruction(LocalGet(src_mem.addr_local));
-        self.instruction(LocalSet(cur_src_ptr));
-        self.instruction(LocalGet(dst_mem.addr_local));
-        self.instruction(LocalSet(cur_dst_ptr));
+            // Initialize the two destination pointers to their initial values
+            self.instruction(LocalGet(src_mem.addr_local));
+            self.instruction(LocalSet(cur_src_ptr));
+            self.instruction(LocalGet(dst_mem.addr_local));
+            self.instruction(LocalSet(cur_dst_ptr));
 
-        self.instruction(Loop(BlockType::Empty));
+            self.instruction(Loop(BlockType::Empty));
 
-        // Translate the next element in the list
-        let element_src = Source::Memory(Memory {
-            opts: src_opts,
-            offset: 0,
-            addr_local: cur_src_ptr,
-        });
-        let element_dst = Destination::Memory(Memory {
-            opts: dst_opts,
-            offset: 0,
-            addr_local: cur_dst_ptr,
-        });
-        self.translate(src_element_ty, &element_src, dst_element_ty, &element_dst);
+            // Translate the next element in the list
+            let element_src = Source::Memory(Memory {
+                opts: src_opts,
+                offset: 0,
+                addr_local: cur_src_ptr,
+            });
+            let element_dst = Destination::Memory(Memory {
+                opts: dst_opts,
+                offset: 0,
+                addr_local: cur_dst_ptr,
+            });
+            self.translate(src_element_ty, &element_src, dst_element_ty, &element_dst);
 
-        // Update the two loop pointers
-        let src_size = i32::try_from(src_size).unwrap();
-        self.instruction(LocalGet(cur_src_ptr));
-        self.instruction(iconst(src_size, src_opts.ptr()));
-        self.instruction(src_add.clone());
-        self.instruction(LocalSet(cur_src_ptr));
-        let dst_size = i32::try_from(dst_size).unwrap();
-        self.instruction(LocalGet(cur_dst_ptr));
-        self.instruction(iconst(dst_size, dst_opts.ptr()));
-        self.instruction(dst_add.clone());
-        self.instruction(LocalSet(cur_dst_ptr));
+            // Update the two loop pointers
+            if src_size > 0 {
+                let src_size = i32::try_from(src_size).unwrap();
+                self.instruction(LocalGet(cur_src_ptr));
+                self.instruction(iconst(src_size, src_opts.ptr()));
+                self.instruction(src_add.clone());
+                self.instruction(LocalSet(cur_src_ptr));
+            }
+            if dst_size > 0 {
+                let dst_size = i32::try_from(dst_size).unwrap();
+                self.instruction(LocalGet(cur_dst_ptr));
+                self.instruction(iconst(dst_size, dst_opts.ptr()));
+                self.instruction(dst_add.clone());
+                self.instruction(LocalSet(cur_dst_ptr));
+            }
 
-        // Update the remaining count, falling through to break out if it's zero
-        // now.
-        self.instruction(LocalGet(remaining));
-        self.instruction(iconst(-1, src_opts.ptr()));
-        self.instruction(src_add.clone());
-        self.instruction(LocalTee(remaining));
-        self.instruction(src_eqz.clone());
-        self.instruction(BrIf(0));
-        self.instruction(End); // end of loop
-        self.instruction(End); // end of block
+            // Update the remaining count, falling through to break out if it's zero
+            // now.
+            self.instruction(LocalGet(remaining));
+            self.instruction(iconst(-1, src_opts.ptr()));
+            self.instruction(src_add.clone());
+            self.instruction(LocalTee(remaining));
+            self.instruction(src_eqz.clone());
+            self.instruction(BrIf(0));
+            self.instruction(End); // end of loop
+            self.instruction(End); // end of block
+        }
 
         // Store the ptr/length in the desired destination
         match dst {
