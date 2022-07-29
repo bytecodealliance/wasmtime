@@ -147,6 +147,10 @@
 (decl valid_reg () Reg)
 (extern extractor valid_reg valid_reg)
 
+;; Mark this value as used, to ensure that it gets lowered.
+(decl mark_value_used (Value) Unit)
+(extern constructor mark_value_used mark_value_used)
+
 ;; Put the given value into a register.
 ;;
 ;; Asserts that the value fits into a single register, and doesn't require
@@ -563,6 +567,11 @@
 ;; Variant determines how result is given when combined with a
 ;; ConsumesFlags. See `with_flags` below for more.
 (type ProducesFlags (enum
+                     ;; For cases where the flags have been produced by another
+                     ;; instruction, and we have out-of-band reasons to know
+                     ;; that they won't be clobbered by the time we depend on
+                     ;; them.
+                     (AlreadyExistingFlags (value Value))
                      (ProducesFlagsSideEffect (inst MInst))
                      ;; Not directly combinable with a ConsumesFlags;
                      ;; used in s390x and unwrapped directly by `trapif`.
@@ -674,10 +683,17 @@
 ;; This function handles the following case only:
 ;; - ProducesFlagsSideEffect + ConsumesFlagsSideEffect
 (decl with_flags_side_effect (ProducesFlags ConsumesFlags) Unit)
+
+(rule (with_flags_side_effect
+        (ProducesFlags.AlreadyExistingFlags val)
+        (ConsumesFlags.ConsumesFlagsSideEffect c))
+      (let ((_ Unit (mark_value_used val)))
+        (emit c)))
+
 (rule (with_flags_side_effect
         (ProducesFlags.ProducesFlagsSideEffect p)
         (ConsumesFlags.ConsumesFlagsSideEffect c))
-      (let ((_1 Unit (emit p)))
+      (let ((_ Unit (emit p)))
         (emit c)))
 
 ;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

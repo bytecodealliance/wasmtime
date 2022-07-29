@@ -141,6 +141,8 @@ pub trait LowerCtx {
     /// Resolves a particular input of an instruction to the `Value` that it is
     /// represented with.
     fn input_as_value(&self, ir_inst: Inst, idx: usize) -> Value;
+    /// Increment the reference count for the Value, ensuring that it gets lowered.
+    fn increment_lowered_uses(&mut self, val: Value);
     /// Put the `idx`th input into register(s) and return the assigned register.
     fn put_input_in_regs(&mut self, ir_inst: Inst, idx: usize) -> ValueRegs<Reg>;
     /// Put the given value into register(s) and return the assigned register.
@@ -1360,6 +1362,10 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         let constant = inst.as_inst().and_then(|(inst, _)| self.get_constant(inst));
 
         NonRegInput { inst, constant }
+    }
+
+    fn increment_lowered_uses(&mut self, val: Value) {
+        self.value_lowered_uses[val] += 1
     }
 
     fn put_input_in_regs(&mut self, ir_inst: Inst, idx: usize) -> ValueRegs<Reg> {

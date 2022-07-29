@@ -145,6 +145,11 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn mark_value_used(&mut self, val: Value) {
+            self.lower_ctx.increment_lowered_uses(val);
+        }
+
+        #[inline]
         fn put_in_reg(&mut self, val: Value) -> Reg {
             self.lower_ctx.put_value_in_regs(val).only_reg().unwrap()
         }
