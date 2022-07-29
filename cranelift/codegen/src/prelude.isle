@@ -551,8 +551,8 @@
       (let ((_ Unit (emit inst)))
         (output_none)))
 (rule (side_effect (SideEffectNoResult.Inst2 inst1 inst2))
-      (let ((_1 Unit (emit inst1))
-            (_2 Unit (emit inst2)))
+      (let ((_ Unit (emit inst1))
+            (_ Unit (emit inst2)))
         (output_none)))
 
 (decl side_effect_concat (SideEffectNoResult SideEffectNoResult) SideEffectNoResult)
