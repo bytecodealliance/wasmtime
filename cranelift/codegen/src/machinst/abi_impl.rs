@@ -165,6 +165,16 @@ pub enum ABIArgSlot {
     },
 }
 
+impl ABIArgSlot {
+    /// The type of the value that will be stored in this slot.
+    pub fn get_type(&self) -> ir::Type {
+        match self {
+            ABIArgSlot::Reg { ty, .. } => *ty,
+            ABIArgSlot::Stack { ty, .. } => *ty,
+        }
+    }
+}
+
 /// An ABIArg is composed of one or more parts. This allows for a CLIF-level
 /// Value to be passed with its parts in more than one location at the ABI
 /// level. For example, a 128-bit integer may be passed in two 64-bit registers,

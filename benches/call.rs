@@ -368,7 +368,7 @@ fn wasm_to_host(c: &mut Criterion) {
         desc: &str,
         is_async: IsAsync,
     ) {
-        group.bench_function(&format!("wasm-to-host - nop - {}", desc), |b| {
+        group.bench_function(&format!("wasm-to-host - {} - nop", desc), |b| {
             let run = instance
                 .get_typed_func::<u64, (), _>(&mut *store, "run-nop")
                 .unwrap();
@@ -383,7 +383,7 @@ fn wasm_to_host(c: &mut Criterion) {
             })
         });
         group.bench_function(
-            &format!("wasm-to-host - nop-params-and-results - {}", desc),
+            &format!("wasm-to-host - {} - nop-params-and-results", desc),
             |b| {
                 let run = instance
                     .get_typed_func::<u64, (), _>(&mut *store, "run-nop-params-and-results")

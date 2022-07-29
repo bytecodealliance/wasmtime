@@ -346,6 +346,7 @@ impl Engine {
             // runtime.
             "avoid_div_traps" => *value == FlagValue::Bool(true),
             "libcall_call_conv" => *value == FlagValue::Enum("isa_default".into()),
+            "preserve_frame_pointers" => *value == FlagValue::Bool(true),
 
             // Features wasmtime doesn't use should all be disabled, since
             // otherwise if they are enabled it could change the behavior of
@@ -394,7 +395,6 @@ impl Engine {
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
             | "opt_level" // opt level doesn't change semantics
-            | "preserve_frame_pointers" // we don't currently rely on frame pointers
             | "enable_alias_analysis" // alias analysis-based opts don't change semantics
             | "probestack_func_adjusts_sp" // probestack above asserted disabled
             | "probestack_size_log2" // probestack above asserted disabled

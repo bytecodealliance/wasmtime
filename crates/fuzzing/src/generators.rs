@@ -17,6 +17,7 @@ mod memory;
 mod module_config;
 mod single_inst_module;
 mod spec_test;
+mod stacks;
 pub mod table_ops;
 
 pub use codegen_settings::CodegenSettings;
@@ -27,3 +28,4 @@ pub use memory::{MemoryConfig, NormalMemoryConfig, UnalignedMemory, UnalignedMem
 pub use module_config::ModuleConfig;
 pub use single_inst_module::SingleInstModule;
 pub use spec_test::SpecTest;
+pub use stacks::Stacks;

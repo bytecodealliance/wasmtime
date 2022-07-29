@@ -164,13 +164,13 @@ where
         // the memory go away, so the size matters here for performance.
         let mut captures = (func, MaybeUninit::uninit(), params, false);
 
-        let result = invoke_wasm_and_catch_traps(store, |callee| {
+        let result = invoke_wasm_and_catch_traps(store, |caller| {
             let (anyfunc, ret, params, returned) = &mut captures;
             let anyfunc = anyfunc.as_ref();
             let result = Params::invoke::<Results>(
                 anyfunc.func_ptr.as_ptr(),
                 anyfunc.vmctx,
-                callee,
+                caller,
                 *params,
             );
             ptr::write(ret.as_mut_ptr(), result);
@@ -568,7 +568,7 @@ macro_rules! impl_wasm_params {
                         $($t::Abi,)*
                         <R::ResultAbi as HostAbi>::Retptr,
                     ) -> <R::ResultAbi as HostAbi>::Abi,
-                >(func);
+                    >(func);
                 let ($($t,)*) = abi;
                 // Use the `call` function to acquire a `retptr` which we'll
                 // forward to the native function. Once we have it we also
@@ -578,6 +578,7 @@ macro_rules! impl_wasm_params {
                 // Upon returning `R::call` will convert all the returns back
                 // into `R`.
                 <R::ResultAbi as HostAbi>::call(|retptr| {
+                    let fnptr = wasmtime_runtime::prepare_host_to_wasm_trampoline(vmctx2, fnptr);
                     fnptr(vmctx1, vmctx2, $($t,)* retptr)
                 })
             }

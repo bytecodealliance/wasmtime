@@ -1567,6 +1567,27 @@
          (MInst.AluRRR (ALUOp.SubS) (operand_size ty) dst src1 src2)
          dst)))
 
+;; Helper for materializing a boolean value into a register from
+;; flags.
+(decl materialize_bool_result (u8 Cond) ConsumesFlags)
+(rule (materialize_bool_result 1 cond)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg
+         (MInst.CSet dst cond)
+         dst)))
+
+(rule -1 (materialize_bool_result _ty_bits cond)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg
+         (MInst.CSetm dst cond)
+         dst)))
+
+(decl cmn_imm (OperandSize Reg Imm12) ProducesFlags)
+(rule (cmn_imm size src1 src2)
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.AluRRImm12 (ALUOp.AddS) size (writable_zero_reg)
+        src1 src2)))
+
 (decl cmp_imm (OperandSize Reg Imm12) ProducesFlags)
 (rule (cmp_imm size src1 src2)
       (ProducesFlags.ProducesFlagsSideEffect

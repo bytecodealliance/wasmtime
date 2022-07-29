@@ -4,53 +4,53 @@ macro_rules! foreach_builtin_function {
     ($mac:ident) => {
         $mac! {
             /// Returns an index for wasm's `memory.grow` builtin function.
-            memory32_grow(vmctx, i64, i32) -> (pointer);
+            memory32_grow(vmctx: vmctx, delta: i64, index: i32) -> pointer;
             /// Returns an index for wasm's `table.copy` when both tables are locally
             /// defined.
-            table_copy(vmctx, i32, i32, i32, i32, i32) -> ();
+            table_copy(vmctx: vmctx, dst_index: i32, src_index: i32, dst: i32, src: i32, len: i32);
             /// Returns an index for wasm's `table.init`.
-            table_init(vmctx, i32, i32, i32, i32, i32) -> ();
+            table_init(vmctx: vmctx, table: i32, elem: i32, dst: i32, src: i32, len: i32);
             /// Returns an index for wasm's `elem.drop`.
-            elem_drop(vmctx, i32) -> ();
+            elem_drop(vmctx: vmctx, elem: i32);
             /// Returns an index for wasm's `memory.copy`
-            memory_copy(vmctx, i32, i64, i32, i64, i64) -> ();
+            memory_copy(vmctx: vmctx, dst_index: i32, dst: i64, src_index: i32, src: i64, len: i64);
             /// Returns an index for wasm's `memory.fill` instruction.
-            memory_fill(vmctx, i32, i64, i32, i64) -> ();
+            memory_fill(vmctx: vmctx, memory: i32, dst: i64, val: i32, len: i64);
             /// Returns an index for wasm's `memory.init` instruction.
-            memory_init(vmctx, i32, i32, i64, i32, i32) -> ();
+            memory_init(vmctx: vmctx, memory: i32, data: i32, dst: i64, src: i32, len: i32);
             /// Returns a value for wasm's `ref.func` instruction.
-            ref_func(vmctx, i32) -> (pointer);
+            ref_func(vmctx: vmctx, func: i32) -> pointer;
             /// Returns an index for wasm's `data.drop` instruction.
-            data_drop(vmctx, i32) -> ();
+            data_drop(vmctx: vmctx, data: i32);
             /// Returns a table entry after lazily initializing it.
-            table_get_lazy_init_funcref(vmctx, i32, i32) -> (pointer);
+            table_get_lazy_init_funcref(vmctx: vmctx, table: i32, index: i32) -> pointer;
             /// Returns an index for Wasm's `table.grow` instruction for `funcref`s.
-            table_grow_funcref(vmctx, i32, i32, pointer) -> (i32);
+            table_grow_funcref(vmctx: vmctx, table: i32, delta: i32, init: pointer) -> i32;
             /// Returns an index for Wasm's `table.grow` instruction for `externref`s.
-            table_grow_externref(vmctx, i32, i32, reference) -> (i32);
+            table_grow_externref(vmctx: vmctx, table: i32, delta: i32, init: reference) -> i32;
             /// Returns an index for Wasm's `table.fill` instruction for `externref`s.
-            table_fill_externref(vmctx, i32, i32, reference, i32) -> ();
+            table_fill_externref(vmctx: vmctx, table: i32, dst: i32, val: reference, len: i32);
             /// Returns an index for Wasm's `table.fill` instruction for `funcref`s.
-            table_fill_funcref(vmctx, i32, i32, pointer, i32) -> ();
+            table_fill_funcref(vmctx: vmctx, table: i32, dst: i32, val: pointer, len: i32);
             /// Returns an index to drop a `VMExternRef`.
-            drop_externref(pointer) -> ();
+            drop_externref(vmctx: vmctx, val: pointer);
             /// Returns an index to do a GC and then insert a `VMExternRef` into the
             /// `VMExternRefActivationsTable`.
-            activations_table_insert_with_gc(vmctx, reference) -> ();
+            activations_table_insert_with_gc(vmctx: vmctx, val: reference);
             /// Returns an index for Wasm's `global.get` instruction for `externref`s.
-            externref_global_get(vmctx, i32) -> (reference);
+            externref_global_get(vmctx: vmctx, global: i32) -> reference;
             /// Returns an index for Wasm's `global.get` instruction for `externref`s.
-            externref_global_set(vmctx, i32, reference) -> ();
+            externref_global_set(vmctx: vmctx, global: i32, val: reference);
             /// Returns an index for wasm's `memory.atomic.notify` instruction.
-            memory_atomic_notify(vmctx, i32, pointer, i32) -> (i32);
+            memory_atomic_notify(vmctx: vmctx, memory: i32, addr: pointer, count: i32) -> i32;
             /// Returns an index for wasm's `memory.atomic.wait32` instruction.
-            memory_atomic_wait32(vmctx, i32, pointer, i32, i64) -> (i32);
+            memory_atomic_wait32(vmctx: vmctx, memory: i32, addr: pointer, expected: i32, timeout: i64) -> i32;
             /// Returns an index for wasm's `memory.atomic.wait64` instruction.
-            memory_atomic_wait64(vmctx, i32, pointer, i64, i64) -> (i32);
+            memory_atomic_wait64(vmctx: vmctx, memory: i32, addr: pointer, expected: i64, timeout: i64) -> i32;
             /// Invoked when fuel has run out while executing a function.
-            out_of_gas(vmctx) -> ();
+            out_of_gas(vmctx: vmctx);
             /// Invoked when we reach a new epoch.
-            new_epoch(vmctx) -> (i64);
+            new_epoch(vmctx: vmctx) -> i64;
         }
     };
 }
@@ -75,7 +75,7 @@ macro_rules! declare_indexes {
     (
         $(
             $( #[$attr:meta] )*
-            $name:ident( $( $param:ident ),* ) -> ( $( $result:ident ),* );
+            $name:ident( $( $pname:ident: $param:ident ),* ) $( -> $result:ident )?;
         )*
     ) => {
         impl BuiltinFunctionIndex {

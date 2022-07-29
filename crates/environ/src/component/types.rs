@@ -588,7 +588,7 @@ impl ComponentTypesBuilder {
             }
             wasmparser::ComponentDefinedType::List(e) => {
                 let ty = self.valtype(e);
-                InterfaceType::List(self.intern_interface_type(ty))
+                InterfaceType::List(self.add_interface_type(ty))
             }
             wasmparser::ComponentDefinedType::Tuple(e) => InterfaceType::Tuple(self.tuple_type(e)),
             wasmparser::ComponentDefinedType::Flags(e) => InterfaceType::Flags(self.flags_type(e)),
@@ -596,7 +596,7 @@ impl ComponentTypesBuilder {
             wasmparser::ComponentDefinedType::Union(e) => InterfaceType::Union(self.union_type(e)),
             wasmparser::ComponentDefinedType::Option(e) => {
                 let ty = self.valtype(e);
-                InterfaceType::Option(self.intern_interface_type(ty))
+                InterfaceType::Option(self.add_interface_type(ty))
             }
             wasmparser::ComponentDefinedType::Expected { ok, error } => {
                 InterfaceType::Expected(self.expected_type(ok, error))
@@ -616,14 +616,6 @@ impl ComponentTypesBuilder {
                 }
             }
         }
-    }
-
-    fn intern_interface_type(&mut self, ty: InterfaceType) -> TypeInterfaceIndex {
-        intern(
-            &mut self.interface_types,
-            &mut self.component_types.interface_types,
-            ty,
-        )
     }
 
     fn record_type(&mut self, record: &[(&str, wasmparser::ComponentValType)]) -> TypeRecordIndex {
@@ -668,21 +660,21 @@ impl ComponentTypesBuilder {
         let flags = TypeFlags {
             names: flags.iter().map(|s| s.to_string()).collect(),
         };
-        intern(&mut self.flags, &mut self.component_types.flags, flags)
+        self.add_flags_type(flags)
     }
 
     fn enum_type(&mut self, variants: &[&str]) -> TypeEnumIndex {
         let e = TypeEnum {
             names: variants.iter().map(|s| s.to_string()).collect(),
         };
-        intern(&mut self.enums, &mut self.component_types.enums, e)
+        self.add_enum_type(e)
     }
 
     fn union_type(&mut self, types: &[wasmparser::ComponentValType]) -> TypeUnionIndex {
         let union = TypeUnion {
             types: types.iter().map(|ty| self.valtype(ty)).collect(),
         };
-        intern(&mut self.unions, &mut self.component_types.unions, union)
+        self.add_union_type(union)
     }
 
     fn expected_type(
@@ -694,11 +686,7 @@ impl ComponentTypesBuilder {
             ok: self.valtype(ok),
             err: self.valtype(err),
         };
-        intern(
-            &mut self.expecteds,
-            &mut self.component_types.expecteds,
-            expected,
-        )
+        self.add_expected_type(expected)
     }
 
     /// Interns a new function type within this type information.
@@ -711,6 +699,11 @@ impl ComponentTypesBuilder {
         intern(&mut self.records, &mut self.component_types.records, ty)
     }
 
+    /// Interns a new flags type within this type information.
+    pub fn add_flags_type(&mut self, ty: TypeFlags) -> TypeFlagsIndex {
+        intern(&mut self.flags, &mut self.component_types.flags, ty)
+    }
+
     /// Interns a new tuple type within this type information.
     pub fn add_tuple_type(&mut self, ty: TypeTuple) -> TypeTupleIndex {
         intern(&mut self.tuples, &mut self.component_types.tuples, ty)
@@ -719,6 +712,30 @@ impl ComponentTypesBuilder {
     /// Interns a new variant type within this type information.
     pub fn add_variant_type(&mut self, ty: TypeVariant) -> TypeVariantIndex {
         intern(&mut self.variants, &mut self.component_types.variants, ty)
+    }
+
+    /// Interns a new union type within this type information.
+    pub fn add_union_type(&mut self, ty: TypeUnion) -> TypeUnionIndex {
+        intern(&mut self.unions, &mut self.component_types.unions, ty)
+    }
+
+    /// Interns a new enum type within this type information.
+    pub fn add_enum_type(&mut self, ty: TypeEnum) -> TypeEnumIndex {
+        intern(&mut self.enums, &mut self.component_types.enums, ty)
+    }
+
+    /// Interns a new expected type within this type information.
+    pub fn add_expected_type(&mut self, ty: TypeExpected) -> TypeExpectedIndex {
+        intern(&mut self.expecteds, &mut self.component_types.expecteds, ty)
+    }
+
+    /// Interns a new expected type within this type information.
+    pub fn add_interface_type(&mut self, ty: InterfaceType) -> TypeInterfaceIndex {
+        intern(
+            &mut self.interface_types,
+            &mut self.component_types.interface_types,
+            ty,
+        )
     }
 }
 

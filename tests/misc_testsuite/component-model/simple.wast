@@ -32,3 +32,11 @@
     (component (export ""))
   )
   "exporting a component from the root component is not supported")
+
+(component
+  (core module $m (func (export "")))
+  (core instance $m (instantiate $m))
+  (func (export "") (canon lift (core func $m "")))
+)
+
+(assert_return (invoke "") (unit.const))

@@ -73,7 +73,7 @@ impl Record {
     }
 
     /// Retrieve the fields of this `record` in declaration order.
-    pub fn fields(&self) -> impl ExactSizeIterator<Item = Field> {
+    pub fn fields(&self) -> impl ExactSizeIterator<Item = Field<'_>> {
         self.0.types[self.0.index].fields.iter().map(|field| Field {
             name: &field.name,
             ty: Type::from(&field.ty, &self.0.types),

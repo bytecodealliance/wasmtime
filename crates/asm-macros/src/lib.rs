@@ -5,12 +5,16 @@
 //! attributes correct (e.g. ELF symbols get a size and are flagged as a
 //! function) and additionally handles visibility across platforms. All symbols
 //! should be visible to Rust but not visible externally outside of a `*.so`.
+//!
+//! It also exports a an `asm_sym!` macro which can be used to reference symbols
+//! from within `global_asm!`-defined functions, and handles adding the leading
+//! underscore that macOS prepends to symbols for you.
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "macos")] {
         #[macro_export]
         macro_rules! asm_func {
-            ($name:tt, $($body:tt)*) => {
+            ($name:expr, $($body:tt)*) => {
                 std::arch::global_asm!(concat!(
                     ".p2align 4\n",
                     ".private_extern _", $name, "\n",
@@ -23,7 +27,28 @@ cfg_if::cfg_if! {
 
         #[macro_export]
         macro_rules! asm_sym {
-            ($name:tt) => (concat!("_", $name))
+            ( $( $name:tt )* ) => ( concat!("_", $( $name )* ) )
+        }
+    } else if #[cfg(target_os = "windows")] {
+        #[macro_export]
+        macro_rules! asm_func {
+            ($name:expr, $($body:tt)*) => {
+                std::arch::global_asm!(concat!(
+                    ".def ", $name, "\n",
+                    ".scl 2\n",
+                    ".type 32\n",
+                    ".endef\n",
+                    ".global ", $name, "\n",
+                    ".p2align 4\n",
+                    $name, ":\n",
+                    $($body)*
+                ));
+            };
+        }
+
+        #[macro_export]
+        macro_rules! asm_sym {
+            ( $( $name:tt )* ) => ( $( $name )* )
         }
     } else {
         // Note that for now this "else" clause just assumes that everything
@@ -45,14 +70,14 @@ cfg_if::cfg_if! {
 
         #[macro_export]
         macro_rules! asm_func {
-            ($name:tt, $($body:tt)*) => {
+            ($name:expr, $($body:tt)*) => {
                 std::arch::global_asm!(concat!(
                     ".p2align 4\n",
                     ".hidden ", $name, "\n",
                     ".global ", $name, "\n",
                     $crate::elf_func_type_header!($name),
                     $name, ":\n",
-                    $($body)*
+                    concat!($($body)*),
                     ".size ", $name, ",.-", $name,
                 ));
             };
@@ -60,7 +85,7 @@ cfg_if::cfg_if! {
 
         #[macro_export]
         macro_rules! asm_sym {
-            ($name:tt) => ($name)
+            ( $( $name:tt )* ) => ( $( $name )* )
         }
     }
 }

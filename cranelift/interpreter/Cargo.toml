@@ -17,6 +17,9 @@ log = { version = "0.4.8", default-features = false }
 smallvec = "1.6.1"
 thiserror = "1.0.15"
 
+[target.x86_64-pc-windows-gnu.dependencies]
+libm = "0.2"
+
 [dev-dependencies]
 cranelift-frontend = { path = "../frontend", version = "0.87.0" }
 cranelift-reader = { path = "../reader", version = "0.87.0" }

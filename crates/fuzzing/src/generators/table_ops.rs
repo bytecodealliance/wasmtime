@@ -3,8 +3,9 @@
 use arbitrary::{Arbitrary, Result, Unstructured};
 use std::ops::RangeInclusive;
 use wasm_encoder::{
-    CodeSection, EntityType, ExportKind, ExportSection, Function, FunctionSection, GlobalSection,
-    ImportSection, Instruction, Module, TableSection, TableType, TypeSection, ValType,
+    CodeSection, ConstExpr, EntityType, ExportKind, ExportSection, Function, FunctionSection,
+    GlobalSection, ImportSection, Instruction, Module, TableSection, TableType, TypeSection,
+    ValType,
 };
 
 /// A description of a Wasm module that makes a series of `externref` table
@@ -94,7 +95,7 @@ impl TableOps {
                     val_type: wasm_encoder::ValType::ExternRef,
                     mutable: true,
                 },
-                &Instruction::RefNull(wasm_encoder::ValType::ExternRef),
+                &ConstExpr::ref_null(wasm_encoder::ValType::ExternRef),
             );
         }
 

@@ -292,11 +292,11 @@ block0:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $1, %edx
+;   movl    $1, %eax
 ;   subq    %rsp, $16, %rsp
 ;   virtual_sp_offset_adjust 16
 ;   lea     0(%rsp), %rdi
-;   call    *%rdx
+;   call    *%rax
 ;   movq    0(%rsp), %rdx
 ;   addq    %rsp, $16, %rsp
 ;   virtual_sp_offset_adjust -16
@@ -318,8 +318,8 @@ block0:
 ;   movq    %r13, 0(%rsp)
 ; block0:
 ;   movq    %rdi, %r13
-;   movl    $1, %r9d
-;   call    *%r9
+;   movl    $1, %edx
+;   call    *%rdx
 ;   movq    %r13, %rdi
 ;   movl    %edx, 0(%rdi)
 ;   movq    0(%rsp), %r13
@@ -342,17 +342,17 @@ block0:
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rdi, %rbx
-;   movl    $1, %r11d
+;   movl    $1, %r8d
 ;   subq    %rsp, $16, %rsp
 ;   virtual_sp_offset_adjust 16
 ;   lea     0(%rsp), %rdi
-;   call    *%r11
-;   movq    0(%rsp), %rcx
+;   call    *%r8
+;   movq    0(%rsp), %r11
 ;   addq    %rsp, $16, %rsp
 ;   virtual_sp_offset_adjust -16
 ;   movq    %rbx, %rdi
 ;   movq    %rdx, 0(%rdi)
-;   movl    %ecx, 8(%rdi)
+;   movl    %r11d, 8(%rdi)
 ;   movq    0(%rsp), %rbx
 ;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
@@ -373,8 +373,8 @@ block0:
 ;   movq    %r12, 0(%rsp)
 ; block0:
 ;   movq    %rdi, %r12
-;   movl    $1, %edi
-;   call    *%rdi
+;   movl    $1, %r9d
+;   call    *%r9
 ;   movq    %r12, %rdi
 ;   movq    %rax, 0(%rdi)
 ;   movl    %edx, 8(%rdi)
@@ -399,8 +399,8 @@ block0(v0: f32, v1: i64, v2: i32, v3: f32):
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rdx, %rbx
-;   movl    $1, %eax
-;   call    *%rax
+;   movl    $1, %r8d
+;   call    *%r8
 ;   movq    %rbx, %r10
 ;   movq    %rax, 0(%r10)
 ;   movl    %edx, 8(%r10)

@@ -51,9 +51,20 @@ enum ValType {
     S64,
     Float32,
     Float64,
+    Char,
     Record(Vec<ValType>),
+    // FIXME(WebAssembly/component-model#75) are zero-sized flags allowed?
+    //
+    // ... otherwise go up to 65 flags to exercise up to 3 u32 values
+    Flags(UsizeInRange<1, 65>),
     Tuple(Vec<ValType>),
     Variant(NonZeroLenVec<ValType>),
+    Union(NonZeroLenVec<ValType>),
+    // at least one enum variant but no more than what's necessary to inflate to
+    // 16 bits to keep this reasonably sized
+    Enum(UsizeInRange<1, 257>),
+    Option(Box<ValType>),
+    Expected(Box<ValType>, Box<ValType>),
 }
 
 #[derive(Copy, Clone, Arbitrary, Debug)]
@@ -76,6 +87,20 @@ impl<'a, T: Arbitrary<'a>> Arbitrary<'a> for NonZeroLenVec<T> {
 }
 
 impl<T: fmt::Debug> fmt::Debug for NonZeroLenVec<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+pub struct UsizeInRange<const L: usize, const H: usize>(usize);
+
+impl<'a, const L: usize, const H: usize> Arbitrary<'a> for UsizeInRange<L, H> {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(UsizeInRange(u.int_in_range(L..=H)?))
+    }
+}
+
+impl<const L: usize, const H: usize> fmt::Debug for UsizeInRange<L, H> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
@@ -206,6 +231,7 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> InterfaceType {
         ValType::S64 => InterfaceType::S64,
         ValType::Float32 => InterfaceType::Float32,
         ValType::Float64 => InterfaceType::Float64,
+        ValType::Char => InterfaceType::Char,
         ValType::Record(tys) => {
             let ty = TypeRecord {
                 fields: tys
@@ -218,6 +244,12 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> InterfaceType {
                     .collect(),
             };
             InterfaceType::Record(types.add_record_type(ty))
+        }
+        ValType::Flags(size) => {
+            let ty = TypeFlags {
+                names: (0..size.0).map(|i| format!("f{i}")).collect(),
+            };
+            InterfaceType::Flags(types.add_flags_type(ty))
         }
         ValType::Tuple(tys) => {
             let ty = TypeTuple {
@@ -237,6 +269,27 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> InterfaceType {
                     .collect(),
             };
             InterfaceType::Variant(types.add_variant_type(ty))
+        }
+        ValType::Union(tys) => {
+            let ty = TypeUnion {
+                types: tys.0.iter().map(|ty| intern(types, ty)).collect(),
+            };
+            InterfaceType::Union(types.add_union_type(ty))
+        }
+        ValType::Enum(size) => {
+            let ty = TypeEnum {
+                names: (0..size.0).map(|i| format!("c{i}")).collect(),
+            };
+            InterfaceType::Enum(types.add_enum_type(ty))
+        }
+        ValType::Option(ty) => {
+            let ty = intern(types, ty);
+            InterfaceType::Option(types.add_interface_type(ty))
+        }
+        ValType::Expected(ok, err) => {
+            let ok = intern(types, ok);
+            let err = intern(types, err);
+            InterfaceType::Expected(types.add_expected_type(TypeExpected { ok, err }))
         }
     }
 }

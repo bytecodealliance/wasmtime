@@ -160,9 +160,17 @@
   (component $c
     (import "roundtrip" (func $roundtrip (type $roundtrip)))
 
-    (core module $libc (memory (export "memory") 1))
+    (core module $libc
+      (memory (export "memory") 1)
+      (func (export "realloc") (param i32 i32 i32 i32) (result i32) unreachable)
+    )
     (core instance $libc (instantiate $libc))
-    (core func $roundtrip (canon lower (func $roundtrip) (memory $libc "memory")))
+    (core func $roundtrip
+      (canon lower (func $roundtrip)
+        (memory $libc "memory")
+        (realloc (func $libc "realloc")) ;; FIXME(wasm-tools#693) should not be necessary
+      )
+    )
 
     (core module $m2
       (import "libc" "memory" (memory 1))
@@ -312,9 +320,18 @@
   (component $c
     (import "foo" (func $foo (param $tuple20)))
 
-    (core module $libc (memory (export "memory") 1))
+    (core module $libc
+      (memory (export "memory") 1)
+      (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+        unreachable)
+    )
     (core instance $libc (instantiate $libc))
-    (core func $foo (canon lower (func $foo) (memory $libc "memory")))
+    (core func $foo
+      (canon lower (func $foo)
+        (memory $libc "memory")
+        (realloc (func $libc "realloc")) ;; FIXME(wasm-tools#693) should not be necessary
+      )
+    )
     (core module $something
       (import "" "foo" (func (param i32)))
     )
@@ -620,9 +637,17 @@
     )
     (component $c2
       (import "r" (func $r (param $big)))
-      (core module $libc (memory (export "memory") 1))
+      (core module $libc
+        (memory (export "memory") 1)
+        (func (export "realloc") (param i32 i32 i32 i32) (result i32) unreachable)
+      )
       (core instance $libc (instantiate $libc))
-      (core func $r (canon lower (func $r) (memory $libc "memory")))
+      (core func $r
+        (canon lower (func $r)
+          (memory $libc "memory")
+          (realloc (func $libc "realloc")) ;; FIXME(wasm-tools#693) should not be necessary
+        )
+      )
 
       (core module $m
         (import "" "r" (func $r (param i32)))
@@ -660,9 +685,18 @@
     )
     (component $c2
       (import "r" (func $r (param $big)))
-      (core module $libc (memory (export "memory") 1))
+      (core module $libc
+        (memory (export "memory") 1)
+        (func (export "realloc") (param i32 i32 i32 i32) (result i32) unreachable)
+      )
       (core instance $libc (instantiate $libc))
-      (core func $r (canon lower (func $r) (memory $libc "memory")))
+      (core func $r
+        (canon lower (func $r)
+          (memory $libc "memory")
+          (realloc (func $libc "realloc")) ;; FIXME(wasm-tools#693) should not be necessary
+        )
+      )
+
 
       (core module $m
         (import "" "r" (func $r (param i32)))
@@ -1072,4 +1106,282 @@
   )
   (instance $c1 (instantiate $c1))
   (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+)
+
+;; roundtrip some valid chars
+(component
+  (component $c1
+    (core module $m
+      (func (export "a") (param i32) (result i32) local.get 0)
+    )
+    (core instance $m (instantiate $m))
+    (func (export "a") (param char) (result char) (canon lift (core func $m "a")))
+  )
+  (component $c2
+    (import "" (instance $i
+      (export "a" (func (param char) (result char)))
+    ))
+
+    (core func $a (canon lower (func $i "a")))
+
+    (core module $m
+      (import "" "a" (func $a (param i32) (result i32)))
+
+      (func $start
+        (call $roundtrip (i32.const 0))
+        (call $roundtrip (i32.const 0xab))
+        (call $roundtrip (i32.const 0xd7ff))
+        (call $roundtrip (i32.const 0xe000))
+        (call $roundtrip (i32.const 0x10ffff))
+      )
+      (func $roundtrip (export "roundtrip") (param i32)
+        local.get 0
+        call $a
+        local.get 0
+        i32.ne
+        if unreachable end
+      )
+      (start $start)
+    )
+    (core instance $m (instantiate $m
+      (with "" (instance
+        (export "a" (func $a))
+      ))
+    ))
+
+    (func (export "roundtrip") (param char) (canon lift (core func $m "roundtrip")))
+  )
+  (instance $c1 (instantiate $c1))
+  (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+
+  (export "roundtrip" (func $c2 "roundtrip"))
+)
+
+(assert_return (invoke "roundtrip" (char.const "x")) (unit.const))
+(assert_return (invoke "roundtrip" (char.const "⛳")) (unit.const))
+(assert_return (invoke "roundtrip" (char.const "🍰")) (unit.const))
+
+;; invalid chars
+(assert_trap
+  (component
+    (component $c1
+      (core module $m (func (export "a") (param i32)))
+      (core instance $m (instantiate $m))
+      (func (export "a") (param char) (canon lift (core func $m "a")))
+    )
+    (component $c2
+      (import "" (instance $i (export "a" (func (param char)))))
+      (core func $a (canon lower (func $i "a")))
+      (core module $m
+        (import "" "a" (func $a (param i32)))
+        (func $start (call $a (i32.const 0xd800)))
+        (start $start)
+      )
+      (core instance (instantiate $m (with "" (instance (export "a" (func $a))))))
+    )
+    (instance $c1 (instantiate $c1))
+    (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+  )
+  "unreachable")
+(assert_trap
+  (component
+    (component $c1
+      (core module $m (func (export "a") (param i32)))
+      (core instance $m (instantiate $m))
+      (func (export "a") (param char) (canon lift (core func $m "a")))
+    )
+    (component $c2
+      (import "" (instance $i (export "a" (func (param char)))))
+      (core func $a (canon lower (func $i "a")))
+      (core module $m
+        (import "" "a" (func $a (param i32)))
+        (func $start (call $a (i32.const 0xdfff)))
+        (start $start)
+      )
+      (core instance (instantiate $m (with "" (instance (export "a" (func $a))))))
+    )
+    (instance $c1 (instantiate $c1))
+    (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+  )
+  "unreachable")
+(assert_trap
+  (component
+    (component $c1
+      (core module $m (func (export "a") (param i32)))
+      (core instance $m (instantiate $m))
+      (func (export "a") (param char) (canon lift (core func $m "a")))
+    )
+    (component $c2
+      (import "" (instance $i (export "a" (func (param char)))))
+      (core func $a (canon lower (func $i "a")))
+      (core module $m
+        (import "" "a" (func $a (param i32)))
+        (func $start (call $a (i32.const 0x110000)))
+        (start $start)
+      )
+      (core instance (instantiate $m (with "" (instance (export "a" (func $a))))))
+    )
+    (instance $c1 (instantiate $c1))
+    (instance $c2 (instantiate $c2 (with "" (instance $c1))))
+  )
+  "unreachable")
+
+;; test that flags get their upper bits all masked off
+(component
+  (type $f1 (flags "f1"))
+  (type $f8 (flags "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8"))
+  (type $f9 (flags "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8" "f9"))
+  (type $f16 (flags
+    "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8"
+    "g1" "g2" "g3" "g4" "g5" "g6" "g7" "g8"
+  ))
+  (type $f17 (flags
+    "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8"
+    "g1" "g2" "g3" "g4" "g5" "g6" "g7" "g8"
+    "g9"
+  ))
+  (type $f32 (flags
+    "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8"
+    "g1" "g2" "g3" "g4" "g5" "g6" "g7" "g8"
+    "h1" "h2" "h3" "h4" "h5" "h6" "h7" "h8"
+    "i1" "i2" "i3" "i4" "i5" "i6" "i7" "i8"
+  ))
+  (type $f33 (flags
+    "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8"
+    "g1" "g2" "g3" "g4" "g5" "g6" "g7" "g8"
+    "h1" "h2" "h3" "h4" "h5" "h6" "h7" "h8"
+    "i1" "i2" "i3" "i4" "i5" "i6" "i7" "i8"
+    "i9"
+  ))
+  (type $f64 (flags
+    "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8"
+    "g1" "g2" "g3" "g4" "g5" "g6" "g7" "g8"
+    "h1" "h2" "h3" "h4" "h5" "h6" "h7" "h8"
+    "i1" "i2" "i3" "i4" "i5" "i6" "i7" "i8"
+    "j1" "j2" "j3" "j4" "j5" "j6" "j7" "j8"
+    "k1" "k2" "k3" "k4" "k5" "k6" "k7" "k8"
+    "l1" "l2" "l3" "l4" "l5" "l6" "l7" "l8"
+    "m1" "m2" "m3" "m4" "m5" "m6" "m7" "m8"
+  ))
+  (type $f65 (flags
+    "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8"
+    "g1" "g2" "g3" "g4" "g5" "g6" "g7" "g8"
+    "h1" "h2" "h3" "h4" "h5" "h6" "h7" "h8"
+    "i1" "i2" "i3" "i4" "i5" "i6" "i7" "i8"
+    "j1" "j2" "j3" "j4" "j5" "j6" "j7" "j8"
+    "k1" "k2" "k3" "k4" "k5" "k6" "k7" "k8"
+    "l1" "l2" "l3" "l4" "l5" "l6" "l7" "l8"
+    "m1" "m2" "m3" "m4" "m5" "m6" "m7" "m8"
+    "m9"
+  ))
+
+  (component $c1
+    (core module $m
+      (func (export "f1") (param i32)
+        (if (i32.ne (local.get 0) (i32.const 0x1)) (unreachable))
+      )
+      (func (export "f8") (param i32)
+        (if (i32.ne (local.get 0) (i32.const 0x11)) (unreachable))
+      )
+      (func (export "f9") (param i32)
+        (if (i32.ne (local.get 0) (i32.const 0x111)) (unreachable))
+      )
+      (func (export "f16") (param i32)
+        (if (i32.ne (local.get 0) (i32.const 0x1111)) (unreachable))
+      )
+      (func (export "f17") (param i32)
+        (if (i32.ne (local.get 0) (i32.const 0x11111)) (unreachable))
+      )
+      (func (export "f32") (param i32)
+        (if (i32.ne (local.get 0) (i32.const 0x11111111)) (unreachable))
+      )
+      (func (export "f33") (param i32 i32)
+        (if (i32.ne (local.get 0) (i32.const 0x11111111)) (unreachable))
+        (if (i32.ne (local.get 1) (i32.const 0x1)) (unreachable))
+      )
+      (func (export "f64") (param i32 i32)
+        (if (i32.ne (local.get 0) (i32.const 0x11111111)) (unreachable))
+        (if (i32.ne (local.get 1) (i32.const 0x11111111)) (unreachable))
+      )
+      (func (export "f65") (param i32 i32 i32)
+        (if (i32.ne (local.get 0) (i32.const 0x11111111)) (unreachable))
+        (if (i32.ne (local.get 1) (i32.const 0x11111111)) (unreachable))
+        (if (i32.ne (local.get 2) (i32.const 0x1)) (unreachable))
+      )
+    )
+    (core instance $m (instantiate $m))
+    (func (export "f1") (param $f1) (canon lift (core func $m "f1")))
+    (func (export "f8") (param $f8) (canon lift (core func $m "f8")))
+    (func (export "f9") (param $f9) (canon lift (core func $m "f9")))
+    (func (export "f16") (param $f16) (canon lift (core func $m "f16")))
+    (func (export "f17") (param $f17) (canon lift (core func $m "f17")))
+    (func (export "f32") (param $f32) (canon lift (core func $m "f32")))
+    (func (export "f33") (param $f33) (canon lift (core func $m "f33")))
+    (func (export "f64") (param $f64) (canon lift (core func $m "f64")))
+    (func (export "f65") (param $f65) (canon lift (core func $m "f65")))
+  )
+  (instance $c1 (instantiate $c1))
+
+  (component $c2
+    (import "" (instance $i
+      (export "f1" (func (param $f1)))
+      (export "f8" (func (param $f8)))
+      (export "f9" (func (param $f9)))
+      (export "f16" (func (param $f16)))
+      (export "f17" (func (param $f17)))
+      (export "f32" (func (param $f32)))
+      (export "f33" (func (param $f33)))
+      (export "f64" (func (param $f64)))
+      (export "f65" (func (param $f65)))
+    ))
+    (core func $f1 (canon lower (func $i "f1")))
+    (core func $f8 (canon lower (func $i "f8")))
+    (core func $f9 (canon lower (func $i "f9")))
+    (core func $f16 (canon lower (func $i "f16")))
+    (core func $f17 (canon lower (func $i "f17")))
+    (core func $f32 (canon lower (func $i "f32")))
+    (core func $f33 (canon lower (func $i "f33")))
+    (core func $f64 (canon lower (func $i "f64")))
+    (core func $f65 (canon lower (func $i "f65")))
+
+    (core module $m
+      (import "" "f1" (func $f1 (param i32)))
+      (import "" "f8" (func $f8 (param i32)))
+      (import "" "f9" (func $f9 (param i32)))
+      (import "" "f16" (func $f16 (param i32)))
+      (import "" "f17" (func $f17 (param i32)))
+      (import "" "f32" (func $f32 (param i32)))
+      (import "" "f33" (func $f33 (param i32 i32)))
+      (import "" "f64" (func $f64 (param i32 i32)))
+      (import "" "f65" (func $f65 (param i32 i32 i32)))
+
+      (func $start
+        (call $f1 (i32.const 0xffffff01))
+        (call $f8 (i32.const 0xffffff11))
+        (call $f9 (i32.const 0xffffff11))
+        (call $f16 (i32.const 0xffff1111))
+        (call $f17 (i32.const 0xffff1111))
+        (call $f32 (i32.const 0x11111111))
+        (call $f33 (i32.const 0x11111111) (i32.const 0xffffffff))
+        (call $f64 (i32.const 0x11111111) (i32.const 0x11111111))
+        (call $f65 (i32.const 0x11111111) (i32.const 0x11111111) (i32.const 0xffffffff))
+      )
+
+      (start $start)
+    )
+    (core instance $m (instantiate $m
+      (with "" (instance
+        (export "f1" (func $f1))
+        (export "f8" (func $f8))
+        (export "f9" (func $f9))
+        (export "f16" (func $f16))
+        (export "f17" (func $f17))
+        (export "f32" (func $f32))
+        (export "f33" (func $f33))
+        (export "f64" (func $f64))
+        (export "f65" (func $f65))
+      ))
+    ))
+  )
+  (instance (instantiate $c2 (with "" (instance $c1))))
 )
