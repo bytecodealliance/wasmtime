@@ -1673,7 +1673,7 @@ impl PrettyPrint for Inst {
                 ..
             } => {
                 format!(
-                    "j{} ; j{} ; ud2 {} ;",
+                    "trap_if_and {}, {}, {}",
                     cc1.invert().to_string(),
                     cc2.invert().to_string(),
                     trap_code
@@ -1687,7 +1687,7 @@ impl PrettyPrint for Inst {
                 ..
             } => {
                 format!(
-                    "j{} ; j{} ; ud2 {} ;",
+                    "trap_if_or {}, {}, {}",
                     cc1.to_string(),
                     cc2.invert().to_string(),
                     trap_code
