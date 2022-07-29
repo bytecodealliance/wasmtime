@@ -49,4 +49,6 @@ pub enum BackendError {
     MissingMapDir(),
     #[error("Invalid Tensor index {0}. This input was not found in the provided model")]
     InvalidTensorIndex(usize),
+    #[error("Unsupported output precision")]
+    UnsupportedOutputPrecision(),
 }

@@ -6,11 +6,11 @@ use std::ops::Deref;
 use std::path::Path;
 use std::str;
 use std::sync::Arc;
-use tensorflow::DEFAULT_SERVING_SIGNATURE_DEF_KEY;
 use tensorflow::{
     FetchToken, Graph, Operation, SavedModelBundle, SessionOptions, SessionRunArgs, Status,
 };
 use tensorflow::{SignatureDef, Tensor as TFTensor};
+use tensorflow::{TensorInfo, DEFAULT_SERVING_SIGNATURE_DEF_KEY};
 
 #[derive(Default)]
 pub(crate) struct TensorflowBackend();
@@ -90,20 +90,22 @@ impl<'a> BackendGraph for TensorflowGraph {
             outputs.push(key.clone());
         }
 
+        // Get the indexes of the inputs in the signature
+        let mut inputs: Vec<String> = vec![];
+        for key in signature.inputs().keys() {
+            inputs.push(key.clone());
+        }
+
         // Currently we only support using one output, index == 0
-        let out_name = &signature.get_output(outputs[0].as_str())?.name().name;
+        let info = signature.get_output(outputs[0].as_str())?.to_owned();
         Ok(Box::new(TensorflowExecutionContext {
             graph: self.0.clone(),
             bundle: self.1.clone(),
-            tensormap: InputTensorsMap {
-                u8: HashMap::new(),
-                f16: HashMap::new(),
-                f32: HashMap::new(),
-                i32: HashMap::new(),
-            },
+            tensormap: HashMap::new(),
             sig: signature.clone(),
-            output_name: String::from(out_name),
-            output: None,
+            inputs: inputs,
+            output_info: info,
+            output: vec![],
         }))
     }
 }
@@ -111,24 +113,28 @@ impl<'a> BackendGraph for TensorflowGraph {
 struct TensorflowExecutionContext {
     graph: Arc<Graph>,
     bundle: Arc<SavedModelBundle>,
-    tensormap: InputTensorsMap,
+    tensormap: HashMap<String, TensorTypes>,
     sig: SignatureDef,
-    output_name: String,
-    output: Option<TFTensor<f32>>,
+    inputs: Vec<String>,
+    output_info: TensorInfo,
+    output: Vec<u8>,
 }
 
-struct InputTensorsMap {
-    u8: HashMap<String, TFTensor<u8>>,
-    f16: HashMap<String, TFTensor<f32>>, // f16 isn't currently defined in Rust
-    f32: HashMap<String, TFTensor<f32>>,
-    i32: HashMap<String, TFTensor<i32>>,
+enum TensorTypes {
+    TTU8(TFTensor<u8>),
+    TTF16(TFTensor<f32>),
+    TTF32(TFTensor<f32>),
+    TTI32(TFTensor<i32>),
 }
+
 impl BackendExecutionContext for TensorflowExecutionContext {
     fn set_input(&mut self, index: u32, tensor: &Tensor<'_>) -> Result<(), BackendError> {
         // Return an error if the index doesn't exist in the signature.
         if index as usize > self.sig.inputs().len() - 1 {
             return Err(BackendError::InvalidTensorIndex(index as usize));
         }
+
+        let info = self.sig.get_input(&self.inputs[index as usize])?;
 
         let dim = tensor
             .dimensions
@@ -137,132 +143,111 @@ impl BackendExecutionContext for TensorflowExecutionContext {
             .map(|d| *d as u64)
             .collect::<Vec<_>>();
 
-        let prec = tensor.type_;
         let tfdata = tensor.data.as_slice()?;
         let tfdata_dref = tfdata.deref();
         let data_vec = tfdata_dref.to_vec();
 
-        match tensor.type_ {
-            TensorType::F16 => {
-                let mut input_tensor = TFTensor::<f32>::new(&dim);
+        // Check that the type of the tensor matches the input type
+        let matched = match tensor.type_ {
+            TensorType::F16 => info.dtype() == tensorflow::DataType::Half,
+            TensorType::F32 => info.dtype() == tensorflow::DataType::Float,
+            TensorType::U8 => info.dtype() == tensorflow::DataType::UInt8,
+            TensorType::I32 => info.dtype() == tensorflow::DataType::Int32,
+        };
 
-                for i in 0..data_vec.len() {
-                    input_tensor[i] = data_vec[i] as f32;
-                }
-
-                self.tensormap
-                    .f16
-                    .insert(index.to_string(), TFTensor::<f32>::from(input_tensor));
-            }
-            TensorType::F32 => {
-                let mut input_tensor = TFTensor::<f32>::new(&dim);
-
-                for i in 0..data_vec.len() {
-                    input_tensor[i] = data_vec[i] as f32;
-                }
-
-                self.tensormap
-                    .f32
-                    .insert(index.to_string(), TFTensor::<f32>::from(input_tensor));
-            }
-            TensorType::U8 => {
-                let mut input_tensor = TFTensor::<u8>::new(&dim);
-
-                for i in 0..data_vec.len() {
-                    input_tensor[i] = data_vec[i];
-                }
-
-                self.tensormap
-                    .u8
-                    .insert(index.to_string(), TFTensor::<u8>::from(input_tensor));
-            }
-            TensorType::I32 => {
-                let mut input_tensor = TFTensor::<i32>::new(&dim);
-
-                for i in 0..data_vec.len() {
-                    input_tensor[i] = data_vec[i] as i32;
-                }
-
-                self.tensormap
-                    .i32
-                    .insert(index.to_string(), TFTensor::<i32>::from(input_tensor));
-            }
+        if !matched {
+            return Err(BackendError::InvalidTensorIndex(index as usize));
         }
+
+        self.save_input_tensor(tensor.type_, index.to_string(), &dim, data_vec.clone());
 
         Ok(())
     }
 
     fn compute(&mut self) -> Result<(), BackendError> {
-        let mut inputs: Vec<String> = vec![];
-
-        // Get the available inputs for this model
-        for key in self.sig.inputs().keys() {
-            inputs.push(key.clone());
-        }
-
         // Initialize SessionRunArgs for inputs/outputs
         let mut args = SessionRunArgs::new();
 
-        // Check that the saved inputs exist in the signature, and add them to the feed.
-        for key in self.tensormap.f16.keys() {
+        for key in self.tensormap.keys() {
             let key_usize = key.parse::<usize>().unwrap();
-            let x_info = self.sig.get_input(inputs[key_usize].as_str())?;
+            let x_info = self.sig.get_input(self.inputs[key_usize].as_str())?;
             let op_x: Operation = self.graph.operation_by_name_required(&x_info.name().name)?;
-            args.add_feed(&op_x, key_usize as i32, &self.tensormap.f16[key]);
-        }
 
-        for key in self.tensormap.f32.keys() {
-            let key_usize = key.parse::<usize>().unwrap();
-            let x_info = self.sig.get_input(inputs[key_usize].as_str())?;
-            let op_x: Operation = self.graph.operation_by_name_required(&x_info.name().name)?;
-            args.add_feed(&op_x, key_usize as i32, &self.tensormap.f32[key]);
-        }
-
-        for key in self.tensormap.u8.keys() {
-            let key_usize = key.parse::<usize>().unwrap();
-            let x_info = self.sig.get_input(inputs[key_usize].as_str())?;
-            let op_x: Operation = self.graph.operation_by_name_required(&x_info.name().name)?;
-            args.add_feed(&op_x, key_usize as i32, &self.tensormap.u8[key]);
-        }
-
-        for key in self.tensormap.i32.keys() {
-            let key_usize = key.parse::<usize>().unwrap();
-            let x_info = self.sig.get_input(inputs[key_usize].as_str())?;
-            let op_x: Operation = self.graph.operation_by_name_required(&x_info.name().name)?;
-            args.add_feed(&op_x, key_usize as i32, &self.tensormap.i32[key]);
+            use TensorTypes::*;
+            match &self.tensormap[key] {
+                TTU8(t) => args.add_feed(&op_x, key_usize as i32, &t),
+                TTF16(t) => args.add_feed(&op_x, key_usize as i32, &t),
+                TTF32(t) => args.add_feed(&op_x, key_usize as i32, &t),
+                TTI32(t) => args.add_feed(&op_x, key_usize as i32, &t),
+            }
         }
 
         // Setup the output
-        let op_output = &self.graph.operation_by_name_required(&self.output_name)?;
+        let op_output = &self
+            .graph
+            .operation_by_name_required(&self.output_info.name().name)?;
         let token_output: FetchToken = args.request_fetch(&op_output, 0);
         // Run the inference
         self.bundle.session.run(&mut args)?;
-        // Save the output for later
-        self.output = Some(args.fetch(token_output)?);
+
+        // Save the output for later before the SessionRunArgs go out of scope
+        match self.output_info.dtype() {
+            tensorflow::DataType::Float | tensorflow::DataType::Half => {
+                self.output = sort_results(args.fetch::<f32>(token_output)?);
+            }
+            tensorflow::DataType::Int32 => {
+                self.output = sort_results(args.fetch::<i32>(token_output)?);
+            }
+            tensorflow::DataType::UInt8 => {
+                self.output = sort_results(args.fetch::<u8>(token_output)?);
+            }
+            _ => {
+                return Err(BackendError::UnsupportedOutputPrecision());
+            }
+        }
 
         Ok(())
     }
 
     fn get_output(&mut self, _index: u32, destination: &mut [u8]) -> Result<u32, BackendError> {
-        let output = self.output.as_ref().unwrap();
+        let output = &self.output;
         if output.len() > destination.len() {
             return Err(BackendError::NotEnoughMemory(output.len()));
         }
 
-        destination.copy_from_slice(f32_to_u8(&output[..]));
-
-        output
-            .iter()
-            .enumerate()
-            .fold((0, output[0]), |(idx_max, val_max), (idx, val)| {
-                if &val_max > val {
-                    (idx_max, val_max)
-                } else {
-                    (idx, *val)
-                }
-            });
+        destination.copy_from_slice(output);
 
         Ok(output.len() as u32)
+    }
+}
+
+impl TensorflowExecutionContext {
+    // Save an input tensor to the context
+    fn save_input_tensor(
+        &mut self,
+        tensor_type: TensorType,
+        index: String,
+        dim: &[u64],
+        data: Vec<u8>,
+    ) {
+        let input_tensor: TensorTypes;
+
+        match tensor_type {
+            TensorType::F32 => {
+                input_tensor = TensorTypes::TTF32(u8_to_t(TFTensor::<f32>::new(&dim), data))
+            }
+            TensorType::F16 => {
+                input_tensor = TensorTypes::TTF16(u8_to_t(TFTensor::<f32>::new(&dim), data))
+            }
+            TensorType::U8 => {
+                input_tensor = TensorTypes::TTU8(u8_to_t(TFTensor::<u8>::new(&dim), data))
+            }
+            TensorType::I32 => {
+                input_tensor = TensorTypes::TTI32(u8_to_t(TFTensor::<i32>::new(&dim), data))
+            }
+        }
+
+        self.tensormap.insert(index, input_tensor);
     }
 }
 
@@ -272,6 +257,39 @@ impl From<Status> for BackendError {
     }
 }
 
-fn f32_to_u8(data: &[f32]) -> &[u8] {
-    unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 4) }
+fn sort_results<T: tensorflow::TensorType + std::cmp::PartialOrd + Copy>(
+    data: tensorflow::Tensor<T>,
+) -> Vec<u8> {
+    data.iter()
+        .enumerate()
+        .fold((0, data[0]), |(idx_max, val_max), (idx, val)| {
+            if &val_max > val {
+                (idx_max, val_max)
+            } else {
+                (idx, *val)
+            }
+        });
+    let newdata = &data[..];
+    return t_to_u8(newdata).to_owned();
+}
+
+// Convert u8 to type T
+fn u8_to_t<T: tensorflow::TensorType + std::convert::From<u8>>(
+    mut input: TFTensor<T>,
+    data: Vec<u8>,
+) -> TFTensor<T> {
+    for i in 0..data.len() {
+        input[i] = data[i].try_into().unwrap();
+    }
+    return input;
+}
+
+// Convert type T to u8
+fn t_to_u8<T>(data: &[T]) -> &[u8] {
+    unsafe {
+        std::slice::from_raw_parts(
+            data.as_ptr() as *const u8,
+            data.len() * std::mem::size_of::<T>(),
+        )
+    }
 }
