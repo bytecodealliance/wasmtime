@@ -928,44 +928,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Return
         | Opcode::Call
         | Opcode::CallIndirect
-        | Opcode::Trapif => {
+        | Opcode::Trapif
+        | Opcode::Trapff => {
             implemented_in_isle(ctx);
-        }
-
-        Opcode::Trapff => {
-            let trap_code = ctx.data(insn).trap_code().unwrap();
-
-            let cond_code = ctx.data(insn).fp_cond_code().unwrap();
-
-            // Verification ensures that the input is always a single-def ffcmp.
-            let ffcmp = matches_input(ctx, inputs[0], Opcode::Ffcmp).unwrap();
-
-            match emit_fcmp(ctx, ffcmp, cond_code, FcmpSpec::Normal) {
-                FcmpCondResult::Condition(cc) => ctx.emit(Inst::TrapIf { trap_code, cc }),
-                FcmpCondResult::AndConditions(cc1, cc2) => {
-                    // A bit unfortunate, but materialize the flags in their own register, and
-                    // check against this.
-                    let tmp = ctx.alloc_tmp(types::I32).only_reg().unwrap();
-                    let tmp2 = ctx.alloc_tmp(types::I32).only_reg().unwrap();
-                    ctx.emit(Inst::setcc(cc1, tmp));
-                    ctx.emit(Inst::setcc(cc2, tmp2));
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size32,
-                        AluRmiROpcode::And,
-                        RegMemImm::reg(tmp.to_reg()),
-                        tmp2,
-                    ));
-                    ctx.emit(Inst::TrapIf {
-                        trap_code,
-                        cc: CC::NZ,
-                    });
-                }
-                FcmpCondResult::OrConditions(cc1, cc2) => {
-                    ctx.emit(Inst::TrapIf { trap_code, cc: cc1 });
-                    ctx.emit(Inst::TrapIf { trap_code, cc: cc2 });
-                }
-                FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
-            };
         }
 
         Opcode::FcvtFromSint => {

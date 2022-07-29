@@ -1466,6 +1466,12 @@
       (let ((_ Unit (trap_if_bool (emit_cmp cc a b) tc)))
         (output_none)))
 
+;;;; Rules for `trapff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (trapff cc (ffcmp a b) tc))
+      (let ((_ Unit (trap_ff_cond (emit_fcmp cc a b) tc)))
+        (output_none)))
+
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (resumable_trap code))

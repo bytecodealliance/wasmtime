@@ -105,6 +105,8 @@ impl Inst {
             | Inst::ShiftR { .. }
             | Inst::SignExtendData { .. }
             | Inst::TrapIf { .. }
+            | Inst::TrapIfAnd { .. }
+            | Inst::TrapIfOr { .. }
             | Inst::Ud2 { .. }
             | Inst::VirtualSPOffsetAdj { .. }
             | Inst::XmmCmove { .. }
@@ -1664,6 +1666,34 @@ impl PrettyPrint for Inst {
                 format!("j{} ; ud2 {} ;", cc.invert().to_string(), trap_code)
             }
 
+            Inst::TrapIfAnd {
+                cc1,
+                cc2,
+                trap_code,
+                ..
+            } => {
+                format!(
+                    "j{} ; j{} ; ud2 {} ;",
+                    cc1.invert().to_string(),
+                    cc2.invert().to_string(),
+                    trap_code
+                )
+            }
+
+            Inst::TrapIfOr {
+                cc1,
+                cc2,
+                trap_code,
+                ..
+            } => {
+                format!(
+                    "j{} ; j{} ; ud2 {} ;",
+                    cc1.to_string(),
+                    cc2.invert().to_string(),
+                    trap_code
+                )
+            }
+
             Inst::LoadExtName {
                 dst, name, offset, ..
             } => {
@@ -2146,6 +2176,8 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         | Inst::JmpCond { .. }
         | Inst::Nop { .. }
         | Inst::TrapIf { .. }
+        | Inst::TrapIfAnd { .. }
+        | Inst::TrapIfOr { .. }
         | Inst::VirtualSPOffsetAdj { .. }
         | Inst::Hlt
         | Inst::Ud2 { .. }

@@ -380,6 +380,16 @@
        (TrapIf (cc CC)
                (trap_code TrapCode))
 
+       ;; Traps if both of the condition codes are set.
+       (TrapIfAnd (cc1 CC)
+                  (cc2 CC)
+                  (trap_code TrapCode))
+
+       ;; Traps if either of the condition codes are set.
+       (TrapIfOr (cc1 CC)
+                 (cc2 CC)
+                 (trap_code TrapCode))
+
        ;; A debug trap.
        (Hlt)
 
@@ -3008,13 +3018,35 @@
 (rule (emit_consumer (ConsumesFlags.ConsumesFlagsSideEffect c))
       (emit c))
 
+;; Trap if the condition code supplied is set.
 (decl trap_if (CC TrapCode) ConsumesFlags)
 (rule (trap_if cc tc)
       (ConsumesFlags.ConsumesFlagsSideEffect (MInst.TrapIf cc tc)))
 
+;; Trap if both of the condition codes supplied are set.
+(decl trap_if_and (CC CC TrapCode) ConsumesFlags)
+(rule (trap_if_and cc1 cc2 tc)
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.TrapIfAnd cc1 cc2 tc)))
+
+;; Trap if either of the condition codes supplied are set.
+(decl trap_if_or (CC CC TrapCode) ConsumesFlags)
+(rule (trap_if_or cc1 cc2 tc)
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.TrapIfOr cc1 cc2 tc)))
+
 (decl trap_if_bool (ProducesBool TrapCode) Unit)
 (rule (trap_if_bool (ProducesBool.ProducesBool producer cc) tc)
       (with_flags_side_effect producer (trap_if cc tc)))
+
+(decl trap_ff_cond (FcmpCondResult TrapCode) Unit)
+
+(rule (trap_ff_cond (FcmpCondResult.Condition producer cc) tc)
+      (with_flags_side_effect producer (trap_if cc tc)))
+
+(rule (trap_ff_cond (FcmpCondResult.AndCondition producer cc1 cc2) tc)
+      (with_flags_side_effect producer (trap_if_and cc1 cc2 tc)))
+
+(rule (trap_ff_cond (FcmpCondResult.OrCondition producer cc1 cc2) tc)
+      (with_flags_side_effect producer (trap_if_or cc1 cc2 tc)))
 
 ;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
