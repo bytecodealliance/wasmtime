@@ -617,19 +617,3 @@ impl InstanceFlags {
         self.0
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::mem::size_of;
-
-    #[test]
-    fn size_of_vmcomponent_flags() {
-        let component = Component::default();
-        let offsets = VMComponentOffsets::new(size_of::<*mut u8>() as u8, &component);
-        assert_eq!(
-            size_of::<VMComponentFlags>(),
-            usize::from(offsets.size_of_vmcomponent_flags())
-        );
-    }
-}
