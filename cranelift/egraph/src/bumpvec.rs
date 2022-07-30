@@ -147,7 +147,7 @@ impl<T> BumpArena<T> {
             // no longer exists), and we update `a`'s length to cover
             // the initialized contents in their new location.
             unsafe {
-                self.move_item(b.base + i, a.base + a.cap + i);
+                self.move_item(b.base + i, a.base + a.len + i);
             }
         }
         a.len += b.len;

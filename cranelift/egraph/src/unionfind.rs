@@ -46,8 +46,10 @@ impl UnionFind {
     }
 
     pub fn union(&mut self, a: Id, b: Id) {
-        debug_assert_eq!(a, self.find(a));
-        debug_assert_eq!(b, self.find(b));
-        self.parent[b.index()] = a;
+        let a = self.find_and_update(a);
+        let b = self.find_and_update(b);
+        if a != b {
+            self.parent[b.index()] = a;
+        }
     }
 }

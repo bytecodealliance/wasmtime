@@ -188,8 +188,7 @@ fn get_isle_compilations(
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("prelude_lower.isle"));
 
     // Directory for mid-end optimizations.
-    let src_opts =
-        make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("opts"));
+    let src_opts = make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("opts"));
     // Directories for lowering backends.
     let src_isa_x64 =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("x64"));
@@ -220,6 +219,7 @@ fn get_isle_compilations(
                     prelude_isle.clone(),
                     prelude_opt_isle.clone(),
                     src_opts.join("algebraic.isle"),
+                    src_opts.join("cprop.isle"),
                 ],
                 untracked_inputs: vec![clif_opt_isle.clone()],
             },

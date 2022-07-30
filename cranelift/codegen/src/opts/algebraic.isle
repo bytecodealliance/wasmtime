@@ -1,19 +1,115 @@
 ;; Algebraic optimizations.
 
-;; x+0 == x.
-(rule (simplify (iadd _
+;; x+0 == 0+x == x.
+(rule (simplify (iadd ty
                       x
-                      (iconst _ (simm32 0))))
+                      (iconst ty (u64_from_imm64 0))))
       x)
-
-;; 0+x == x.
-(rule (simplify (iadd _
-                      (iconst _ (simm32 0))
+(rule (simplify (iadd ty
+                      (iconst ty (u64_from_imm64 0))
                       x))
       x)
+;; x-0 == x.
+(rule (simplify (isub ty
+                      x
+                      (iconst ty (u64_from_imm64 0))))
+      x)
+;; 0-x == (ineg x).
+(rule (simplify (isub ty
+                      (iconst ty (u64_from_imm64 0))
+                      x))
+      (ineg ty x))
+
+;; x*1 == 1*x == x.
+(rule (simplify (imul ty
+                      x
+                      (iconst ty (u64_from_imm64 1))))
+      x)
+(rule (simplify (imul ty
+                      (iconst ty (u64_from_imm64 1))
+                      x))
+      x)
+
+;; x/1 == x.
+(rule (simplify (sdiv ty
+                      x
+                      (iconst ty (u64_from_imm64 1))))
+      x)
+(rule (simplify (udiv ty
+                      x
+                      (iconst ty (u64_from_imm64 1))))
+      x)
+
+;; x>>0 == x<<0 == x rotr 0 == x rotl 0 == x.
+(rule (simplify (ishl ty
+                      x
+                      (iconst ty (u64_from_imm64 0))))
+      x)
+(rule (simplify (ushr ty
+                      x
+                      (iconst ty (u64_from_imm64 0))))
+      x)
+(rule (simplify (sshr ty
+                      x
+                      (iconst ty (u64_from_imm64 0))))
+      x)
+(rule (simplify (rotr ty
+                      x
+                      (iconst ty (u64_from_imm64 0))))
+      x)
+(rule (simplify (rotl ty
+                      x
+                      (iconst ty (u64_from_imm64 0))))
+      x)
+
+;; x | 0 == 0 | x == x | x == x.
+(rule (simplify (bor ty
+                     x
+                     (iconst ty (u64_from_imm64 0))))
+      x)
+(rule (simplify (bor ty
+                     (iconst ty (u64_from_imm64 0))
+                     x))
+      x)
+(rule (simplify (bor ty x x))
+      x)
+
+;; x ^ 0 == 0 ^ x == x.
+(rule (simplify (bor ty
+                     x
+                     (iconst ty (u64_from_imm64 0))))
+      x)
+(rule (simplify (bor ty
+                     (iconst ty (u64_from_imm64 0))
+                     x))
+      x)
+(rule (simplify (bor ty x x))
+      x)
+
+;; x ^ x == 0.
+(rule (simplify (bxor ty x x))
+      (iconst ty (imm64 0)))
+
+;; x ^ not(x) == not(x) ^ x == -1.
+
+;; x & -1 == -1 & x == x & x == x.
+
+;; not(not(x)) == x.
+
+;; bnot(bor(x, y)) == band(bnot(x), bnot(y))
+;; bnot(band(x, y)) == bor(bnot(x), bnot(y))
+
 
 ;; x*2 == 2*x == x+x.
 (rule (simplify (imul ty x (iconst _ (simm32 2))))
       (iadd ty x x))
 (rule (simplify (imul ty (iconst _ (simm32 2)) x))
       (iadd ty x x))
+
+;; TODO: strength reduction: mul/div to shifts
+;; TODO: shift patterns to sign/zero-extend
+;; TODO: div/rem by constants -> magic multiplications
+;; TODO: algebraic: add/sub 0, mul/div 1, shift by 0, rot by 0, and by all-1s, or/xor by 0, not(not(x))
+;; TODO: demorgan
+
+;; TODO: mask iconst values down to type?

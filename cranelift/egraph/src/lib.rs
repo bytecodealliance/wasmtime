@@ -17,7 +17,7 @@ mod batched_workset;
 mod bumpvec;
 mod ctxhash;
 mod egraph;
-mod unionfind;
+pub mod unionfind;
 
 pub use bumpvec::{BumpArena, BumpSlice, BumpVec};
 pub use ctxhash::{CtxEq, CtxHash, CtxHashMap};

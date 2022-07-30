@@ -95,7 +95,8 @@ impl<'a> FuncEGraph<'a> {
             let side_effect_start = self.side_effect_ids.len() as u32;
             for inst in func.layout.block_insts(block) {
                 let side_effect = has_side_effect(func, inst)
-                    || func.dfg[inst].opcode().can_load()
+                    || (func.dfg[inst].opcode().can_load()
+                        && !func.dfg[inst].memflags().unwrap().readonly())
                     || func.dfg[inst].opcode().can_store();
 
                 // Build args from SSA values.
@@ -230,7 +231,12 @@ impl<'a> FuncEGraph<'a> {
                     .extractor
                     .visit_eclass(&self.egraph, side_effect, &self.node_ctx)
                     .is_some();
-                debug_assert!(present);
+                if !present {
+                    panic!(
+                        "Extraction: root eclass {:?} has no present enodes",
+                        side_effect
+                    );
+                }
             }
         }
     }

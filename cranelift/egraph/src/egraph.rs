@@ -291,8 +291,9 @@ where
             let mut batch = self.pending_merges.take_batch();
             for union_from in batch.batch() {
                 let union_into = self.union.find_and_update(union_from);
-                debug_assert_ne!(union_into, union_from);
-                self.do_merge(union_into, union_from, ctx);
+                if union_into != union_from {
+                    self.do_merge(union_into, union_from, ctx);
+                }
             }
             self.pending_merges.reuse(batch);
 

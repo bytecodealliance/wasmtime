@@ -43,8 +43,40 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u64_mul(&mut self, x: u64, y: u64) -> Option<u64> {
+            Some(x.wrapping_mul(y))
+        }
+
+        #[inline]
+        fn u64_sdiv(&mut self, x: u64, y: u64) -> Option<u64> {
+            let x = x as i64;
+            let y = y as i64;
+            x.checked_div(y).map(|d| d as u64)
+        }
+
+        #[inline]
+        fn u64_udiv(&mut self, x: u64, y: u64) -> Option<u64> {
+            x.checked_div(y)
+        }
+
+        #[inline]
         fn u64_and(&mut self, x: u64, y: u64) -> Option<u64> {
             Some(x & y)
+        }
+
+        #[inline]
+        fn u64_or(&mut self, x: u64, y: u64) -> Option<u64> {
+            Some(x | y)
+        }
+
+        #[inline]
+        fn u64_xor(&mut self, x: u64, y: u64) -> Option<u64> {
+            Some(x ^ y)
+        }
+
+        #[inline]
+        fn u64_not(&mut self, x: u64) -> Option<u64> {
+            Some(!x)
         }
 
         #[inline]
@@ -264,6 +296,11 @@ macro_rules! isle_common_prelude_methods {
             } else {
                 None
             }
+        }
+
+        #[inline]
+        fn imm64(&mut self, x: u64) -> Option<Imm64> {
+            Some(Imm64::new(x as i64))
         }
 
         #[inline]

@@ -8,7 +8,6 @@ use cranelift_egraph::{EGraph, Id, Language};
 enum EclassState {
     Visiting,
     Visited { cost: u32, node_idx: u32 },
-    Deleted,
 }
 
 #[derive(Clone, Debug)]
@@ -31,17 +30,17 @@ impl Extractor {
         id: Id,
         ctx: &NodeCtx,
     ) -> Option<u32> {
+        log::trace!("visiting eclass {:?}", id);
         if let Some(state) = self.eclass_state.get(&id) {
             match state {
                 EclassState::Visiting => {
+                    log::trace!(" -> found a cycle");
                     // Found a cycle!
                     return None;
                 }
                 EclassState::Visited { cost, .. } => {
+                    log::trace!(" -> already visited, cost {}", *cost);
                     return Some(*cost);
-                }
-                EclassState::Deleted => {
-                    return None;
                 }
             }
         }
@@ -49,7 +48,9 @@ impl Extractor {
 
         let mut best_cost_and_node = None;
         for (node_idx, node) in egraph.enodes(id).iter().enumerate() {
+            log::trace!("eclass {:?} has node {:?}", id, node,);
             let this_cost = self.visit_enode(egraph, node, ctx);
+            log::trace!("eclass {:?} node {:?} has cost {:?}", id, node, this_cost);
             best_cost_and_node = match (best_cost_and_node, this_cost) {
                 (None, None) => None,
                 (None, Some(c)) => Some((c, node_idx as u32)),
@@ -60,12 +61,14 @@ impl Extractor {
 
         match best_cost_and_node {
             Some((cost, node_idx)) => {
+                log::trace!("eclass {:?} now visited, with final cost {}", id, cost);
                 self.eclass_state
                     .insert(id, EclassState::Visited { cost, node_idx });
                 Some(cost)
             }
             None => {
-                self.eclass_state.insert(id, EclassState::Deleted);
+                log::trace!("eclass {:?} has no remaining enodes without cycles", id);
+                self.eclass_state.remove(&id);
                 None
             }
         }
@@ -74,6 +77,7 @@ impl Extractor {
     fn visit_enode(&mut self, egraph: &EGraph<NodeCtx>, node: &Node, ctx: &NodeCtx) -> Option<u32> {
         let mut cost = node.cost() as u32;
         for &arg in ctx.children(node) {
+            log::trace!("node {:?} has child {:?}", node, arg);
             let arg_cost = self.visit_eclass(egraph, arg, ctx)?;
             cost += arg_cost;
         }
@@ -84,7 +88,6 @@ impl Extractor {
         match self.eclass_state.get(&id)? {
             &EclassState::Visiting => unreachable!(),
             &EclassState::Visited { node_idx, .. } => Some(&egraph.enodes(id)[node_idx as usize]),
-            &EclassState::Deleted => None,
         }
     }
 }
