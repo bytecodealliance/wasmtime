@@ -32,7 +32,9 @@ pub fn optimize<'a>(egraph: &mut FuncEGraph<'a>) {
 
 impl<'a, 'b> IsleContext<'a, 'b> {
     pub fn do_rewrites(&mut self) {
-        while !self.egraph.egraph.dirty_classes_workset().is_empty() {
+        const MAX_ITERS: usize = 10;
+        let mut iters = 0;
+        while !self.egraph.egraph.dirty_classes_workset().is_empty() && iters < MAX_ITERS {
             let mut dirty_batch = self.egraph.egraph.dirty_classes_workset().take_batch();
             for dirty_eclass_id in dirty_batch.batch() {
                 self.do_rewrites_on_eclass(dirty_eclass_id);
@@ -43,6 +45,7 @@ impl<'a, 'b> IsleContext<'a, 'b> {
                 .reuse(dirty_batch);
 
             self.egraph.egraph.rebuild(&mut self.egraph.node_ctx);
+            iters += 1;
         }
     }
 
