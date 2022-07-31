@@ -332,24 +332,6 @@ fn define_control_flow(
         .is_terminator(true),
     );
 
-    let rvals = &Operand::new("rvals", &entities.varargs).with_doc("return values");
-    ig.push(
-        Inst::new(
-            "fallthrough_return",
-            r#"
-        Return from the function by fallthrough.
-
-        This is a specialized instruction for use where one wants to append
-        a custom epilogue, which will then perform the real return. This
-        instruction has no encoding.
-        "#,
-            &formats.multiary,
-        )
-        .operands_in(vec![rvals])
-        .is_return(true)
-        .is_terminator(true),
-    );
-
     let FN = &Operand::new("FN", &entities.func_ref)
         .with_doc("function to call, declared by `function`");
     let args = &Operand::new("args", &entities.varargs).with_doc("call arguments");

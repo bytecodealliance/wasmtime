@@ -77,7 +77,6 @@ impl Inst {
             | Inst::CvtFloatToUintSeq { .. }
             | Inst::CvtUint64ToFloatSeq { .. }
             | Inst::Div { .. }
-            | Inst::EpiloguePlaceholder
             | Inst::Fence { .. }
             | Inst::Hlt
             | Inst::Imm { .. }
@@ -723,10 +722,6 @@ impl Inst {
 
     pub(crate) fn ret(rets: Vec<Reg>) -> Inst {
         Inst::Ret { rets }
-    }
-
-    pub(crate) fn epilogue_placeholder() -> Inst {
-        Inst::EpiloguePlaceholder
     }
 
     pub(crate) fn jmp_known(dst: MachLabel) -> Inst {
@@ -1629,8 +1624,6 @@ impl PrettyPrint for Inst {
 
             Inst::Ret { .. } => "ret".to_string(),
 
-            Inst::EpiloguePlaceholder => "epilogue placeholder".to_string(),
-
             Inst::JmpKnown { dst } => {
                 format!("{} {}", ljustify("jmp".to_string()), dst.to_string())
             }
@@ -2170,8 +2163,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             }
         }
 
-        Inst::EpiloguePlaceholder
-        | Inst::JmpKnown { .. }
+        Inst::JmpKnown { .. }
         | Inst::JmpIf { .. }
         | Inst::JmpCond { .. }
         | Inst::Nop { .. }
@@ -2247,18 +2239,10 @@ impl MachInst for Inst {
         }
     }
 
-    fn is_epilogue_placeholder(&self) -> bool {
-        if let Self::EpiloguePlaceholder = self {
-            true
-        } else {
-            false
-        }
-    }
-
     fn is_term(&self) -> MachTerminator {
         match self {
             // Interesting cases.
-            &Self::Ret { .. } | &Self::EpiloguePlaceholder => MachTerminator::Ret,
+            &Self::Ret { .. } => MachTerminator::Ret,
             &Self::JmpKnown { .. } => MachTerminator::Uncond,
             &Self::JmpCond { .. } => MachTerminator::Cond,
             &Self::JmpTableSeq { .. } => MachTerminator::Indirect,

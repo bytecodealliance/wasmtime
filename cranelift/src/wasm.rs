@@ -17,7 +17,7 @@ use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
 use cranelift_codegen::Context;
 use cranelift_entity::EntityRef;
-use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
+use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex};
 use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
@@ -186,8 +186,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
     };
 
     let debug_info = options.value_ranges;
-    let mut dummy_environ =
-        DummyEnvironment::new(isa.frontend_config(), ReturnMode::NormalReturns, debug_info);
+    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), debug_info);
     translate_module(&module_binary, &mut dummy_environ)?;
 
     vcprintln!(options.verbose, use_color, terminal, Color::Green, "ok");

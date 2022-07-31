@@ -97,10 +97,6 @@ Cranelift is designed to be a code generator for WebAssembly, but it is
 general enough to be useful elsewhere too. The initial planned uses that
 affected its design are:
 
- - [WebAssembly compiler for the SpiderMonkey engine in
-    Firefox](spidermonkey.md#phase-1-webassembly).
- - [Backend for the IonMonkey JavaScript JIT compiler in
-    Firefox](spidermonkey.md#phase-2-ionmonkey).
  - [Debug build backend for the Rust compiler](rustc.md).
  - [Wasmtime non-Web wasm engine](https://github.com/bytecodealliance/wasmtime).
 

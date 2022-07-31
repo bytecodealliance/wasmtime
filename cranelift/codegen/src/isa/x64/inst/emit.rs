@@ -2646,11 +2646,7 @@ pub(crate) fn emit(
                 sink.put1(0x48 | ((enc_dst >> 3) & 1));
                 sink.put1(0xB8 | (enc_dst & 7));
                 emit_reloc(sink, Reloc::Abs8, name, *offset);
-                if info.flags.emit_all_ones_funcaddrs() {
-                    sink.put8(u64::max_value());
-                } else {
-                    sink.put8(0);
-                }
+                sink.put8(0);
             }
         }
 
@@ -2916,10 +2912,6 @@ pub(crate) fn emit(
                 }
                 len -= emitted;
             }
-        }
-
-        Inst::EpiloguePlaceholder => {
-            // Generate no code.
         }
 
         Inst::ElfTlsGetAddr { ref symbol } => {

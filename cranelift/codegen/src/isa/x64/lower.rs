@@ -6,8 +6,8 @@ pub(super) mod isle;
 use crate::data_value::DataValue;
 use crate::ir::{
     condcodes::{CondCode, FloatCC, IntCC},
-    types, AbiParam, ArgumentPurpose, ExternalName, Inst as IRInst, InstructionData, LibCall,
-    Opcode, Signature, Type,
+    types, AbiParam, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Signature,
+    Type,
 };
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
@@ -577,7 +577,7 @@ fn make_libcall_sig<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     insn: IRInst,
     call_conv: CallConv,
-    ptr_ty: Type,
+    _ptr_ty: Type,
 ) -> Signature {
     let mut sig = Signature::new(call_conv);
     for i in 0..ctx.num_inputs(insn) {
@@ -585,11 +585,6 @@ fn make_libcall_sig<C: LowerCtx<I = Inst>>(
     }
     for i in 0..ctx.num_outputs(insn) {
         sig.returns.push(AbiParam::new(ctx.output_ty(insn, i)));
-    }
-    if call_conv.extends_baldrdash() {
-        // Adds the special VMContext parameter to the signature.
-        sig.params
-            .push(AbiParam::special(ptr_ty, ArgumentPurpose::VMContext));
     }
     sig
 }
@@ -620,18 +615,11 @@ fn emit_vm_call<C: LowerCtx<I = Inst>>(
 
     abi.emit_stack_pre_adjust(ctx);
 
-    let vm_context = if call_conv.extends_baldrdash() { 1 } else { 0 };
-    assert_eq!(inputs.len() + vm_context, abi.num_args());
+    assert_eq!(inputs.len(), abi.num_args());
 
     for (i, input) in inputs.iter().enumerate() {
         let arg_reg = put_input_in_reg(ctx, *input);
         abi.emit_copy_regs_to_arg(ctx, i, ValueRegs::one(arg_reg));
-    }
-    if call_conv.extends_baldrdash() {
-        let vm_context_vreg = ctx
-            .get_vm_context()
-            .expect("should have a VMContext to pass to libcall funcs");
-        abi.emit_copy_regs_to_arg(ctx, inputs.len(), ValueRegs::one(vm_context_vreg));
     }
 
     abi.emit_call(ctx);
@@ -923,7 +911,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Fence
         | Opcode::FuncAddr
         | Opcode::SymbolValue
-        | Opcode::FallthroughReturn
         | Opcode::Return
         | Opcode::Call
         | Opcode::CallIndirect

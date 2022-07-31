@@ -3551,12 +3551,9 @@
       (side_effect (trap_if_impl (mask_as_cond 3) trap_code)))
 
 
-;;;; Rules for `return` and `fallthrough_return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (return args))
-      (lower_return (range 0 (value_slice_len args)) args))
-
-(rule (lower (fallthrough_return args))
       (lower_return (range 0 (value_slice_len args)) args))
 
 (decl lower_return (Range ValueSlice) InstOutput)

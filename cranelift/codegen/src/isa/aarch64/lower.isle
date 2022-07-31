@@ -1512,14 +1512,12 @@
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trap trap_code))
-      (let ((use_allocated_encoding bool (is_not_baldrdash_call_conv)))
-         (side_effect (udf use_allocated_encoding trap_code))))
+      (side_effect (udf $true trap_code)))
 
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (resumable_trap trap_code))
-      (let ((use_allocated_encoding bool (is_not_baldrdash_call_conv)))
-         (side_effect (udf use_allocated_encoding trap_code))))
+      (side_effect (udf $true trap_code)))
 
 ;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

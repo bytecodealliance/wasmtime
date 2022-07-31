@@ -89,11 +89,6 @@ pub trait ABICallee {
     /// Generate a return instruction.
     fn gen_ret(&self) -> Self::I;
 
-    /// Generate an epilogue placeholder. The returned instruction should return `true` from
-    /// `is_epilogue_placeholder()`; this is used to indicate to the lowering driver when
-    /// the epilogue should be inserted.
-    fn gen_epilogue_placeholder(&self) -> Self::I;
-
     // -----------------------------------------------------------------
     // Every function above this line may only be called pre-regalloc.
     // Every function below this line may only be called post-regalloc.
@@ -159,9 +154,7 @@ pub trait ABICallee {
     /// Returns the full frame size for the given function, after prologue
     /// emission has run. This comprises the spill slots and stack-storage slots
     /// (but not storage for clobbered callee-save registers, arguments pushed
-    /// at callsites within this function, or other ephemeral pushes).  This is
-    /// used for ABI variants where the client generates prologue/epilogue code,
-    /// as in Baldrdash (SpiderMonkey integration).
+    /// at callsites within this function, or other ephemeral pushes).
     fn frame_size(&self) -> u32;
 
     /// Returns the size of arguments expected on the stack.

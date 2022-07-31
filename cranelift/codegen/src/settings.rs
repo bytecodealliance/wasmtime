@@ -524,7 +524,6 @@ mod tests {
 opt_level = "none"
 tls_model = "none"
 libcall_call_conv = "isa_default"
-baldrdash_prologue_words = 0
 probestack_size_log2 = 12
 regalloc_checker = false
 regalloc_verbose_logs = false
@@ -544,7 +543,6 @@ enable_llvm_abi_extensions = false
 unwind_info = true
 preserve_frame_pointers = false
 machine_code_cfg_info = false
-emit_all_ones_funcaddrs = false
 enable_probestack = true
 probestack_func_adjusts_sp = false
 enable_jump_tables = true
@@ -554,7 +552,6 @@ enable_table_access_spectre_mitigation = true
         );
         assert_eq!(f.opt_level(), super::OptLevel::None);
         assert_eq!(f.enable_simd(), false);
-        assert_eq!(f.baldrdash_prologue_words(), 0);
     }
 
     #[test]

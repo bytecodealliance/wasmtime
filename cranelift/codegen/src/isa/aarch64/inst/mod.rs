@@ -975,7 +975,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
                 collector.reg_use(ret);
             }
         }
-        &Inst::Jump { .. } | &Inst::EpiloguePlaceholder => {}
+        &Inst::Jump { .. } => {}
         &Inst::Call { ref info, .. } => {
             collector.reg_uses(&info.uses[..]);
             collector.reg_defs(&info.defs[..]);
@@ -1062,14 +1062,6 @@ impl MachInst for Inst {
         }
     }
 
-    fn is_epilogue_placeholder(&self) -> bool {
-        if let Inst::EpiloguePlaceholder = self {
-            true
-        } else {
-            false
-        }
-    }
-
     fn is_included_in_clobbers(&self) -> bool {
         // We exclude call instructions from the clobber-set when they are calls
         // from caller to callee with the same ABI. Such calls cannot possibly
@@ -1090,7 +1082,7 @@ impl MachInst for Inst {
 
     fn is_term(&self) -> MachTerminator {
         match self {
-            &Inst::Ret { .. } | &Inst::EpiloguePlaceholder => MachTerminator::Ret,
+            &Inst::Ret { .. } => MachTerminator::Ret,
             &Inst::Jump { .. } => MachTerminator::Uncond,
             &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::IndirectBr { .. } => MachTerminator::Indirect,
@@ -2472,7 +2464,6 @@ impl Inst {
                 format!("blr {}", rn)
             }
             &Inst::Ret { .. } => "ret".to_string(),
-            &Inst::EpiloguePlaceholder => "epilogue placeholder".to_string(),
             &Inst::Jump { ref dest } => {
                 let dest = dest.pretty_print(0, allocs);
                 format!("b {}", dest)

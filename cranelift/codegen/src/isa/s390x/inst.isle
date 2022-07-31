@@ -772,10 +772,6 @@
       (link Reg)
       (rets VecReg))
 
-    ;; A placeholder instruction, generating no code, meaning that a function epilogue must be
-    ;; inserted there.
-    (EpiloguePlaceholder)
-
     ;; An unconditional branch.
     (Jump
       (dest MachLabel))

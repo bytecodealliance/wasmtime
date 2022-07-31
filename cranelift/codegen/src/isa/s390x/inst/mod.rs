@@ -200,7 +200,6 @@ impl Inst {
             | Inst::Call { .. }
             | Inst::CallInd { .. }
             | Inst::Ret { .. }
-            | Inst::EpiloguePlaceholder
             | Inst::Jump { .. }
             | Inst::CondBr { .. }
             | Inst::TrapIf { .. }
@@ -847,7 +846,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_use(link);
             collector.reg_uses(&rets[..]);
         }
-        &Inst::Jump { .. } | &Inst::EpiloguePlaceholder => {}
+        &Inst::Jump { .. } => {}
         &Inst::IndirectBr { rn, .. } => {
             collector.reg_use(rn);
         }
@@ -903,14 +902,6 @@ impl MachInst for Inst {
         }
     }
 
-    fn is_epilogue_placeholder(&self) -> bool {
-        if let Inst::EpiloguePlaceholder = self {
-            true
-        } else {
-            false
-        }
-    }
-
     fn is_included_in_clobbers(&self) -> bool {
         // We exclude call instructions from the clobber-set when they are calls
         // from caller to callee with the same ABI. Such calls cannot possibly
@@ -928,7 +919,7 @@ impl MachInst for Inst {
 
     fn is_term(&self) -> MachTerminator {
         match self {
-            &Inst::Ret { .. } | &Inst::EpiloguePlaceholder => MachTerminator::Ret,
+            &Inst::Ret { .. } => MachTerminator::Ret,
             &Inst::Jump { .. } => MachTerminator::Uncond,
             &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::OneWayCondBr { .. } => {
@@ -2778,7 +2769,6 @@ impl Inst {
                 let link = pretty_print_reg(link, allocs);
                 format!("br {}", link)
             }
-            &Inst::EpiloguePlaceholder => "epilogue placeholder".to_string(),
             &Inst::Jump { dest } => {
                 let dest = dest.to_string();
                 format!("jg {}", dest)

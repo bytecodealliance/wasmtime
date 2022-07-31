@@ -5,7 +5,7 @@
 //! WebAssembly module and the runtime environment.
 
 use crate::code_translator::{bitcast_wasm_returns, translate_operator};
-use crate::environ::{FuncEnvironment, ReturnMode};
+use crate::environ::FuncEnvironment;
 use crate::state::FuncTranslationState;
 use crate::translation_utils::get_vmctx_value_label;
 use crate::WasmResult;
@@ -253,13 +253,8 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     // generate a return instruction that doesn't match the signature.
     if state.reachable {
         if !builder.is_unreachable() {
-            match environ.return_mode() {
-                ReturnMode::NormalReturns => {
-                    bitcast_wasm_returns(environ, &mut state.stack, builder);
-                    builder.ins().return_(&state.stack)
-                }
-                ReturnMode::FallthroughReturn => builder.ins().fallthrough_return(&state.stack),
-            };
+            bitcast_wasm_returns(environ, &mut state.stack, builder);
+            builder.ins().return_(&state.stack);
         }
     }
 
@@ -279,7 +274,7 @@ fn cur_srcloc(reader: &BinaryReader) -> ir::SourceLoc {
 
 #[cfg(test)]
 mod tests {
-    use super::{FuncTranslator, ReturnMode};
+    use super::FuncTranslator;
     use crate::environ::DummyEnvironment;
     use cranelift_codegen::ir::types::I32;
     use cranelift_codegen::{ir, isa, settings, Context};
@@ -310,7 +305,6 @@ mod tests {
                 default_call_conv: isa::CallConv::Fast,
                 pointer_width: PointerWidth::U64,
             },
-            ReturnMode::NormalReturns,
             false,
         );
 
@@ -349,7 +343,6 @@ mod tests {
                 default_call_conv: isa::CallConv::Fast,
                 pointer_width: PointerWidth::U64,
             },
-            ReturnMode::NormalReturns,
             false,
         );
 
@@ -393,7 +386,6 @@ mod tests {
                 default_call_conv: isa::CallConv::Fast,
                 pointer_width: PointerWidth::U64,
             },
-            ReturnMode::NormalReturns,
             false,
         );
 

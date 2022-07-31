@@ -445,10 +445,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         insts
     }
 
-    fn gen_epilogue_placeholder() -> Inst {
-        Inst::EpiloguePlaceholder
-    }
-
     fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>, _ty: Type) -> Inst {
         let mem = mem.into();
         Inst::LoadAddr { rd: into_reg, mem }

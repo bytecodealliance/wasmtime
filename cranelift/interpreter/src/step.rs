@@ -272,7 +272,6 @@ where
             CraneliftTrap::User(trap_code()),
         ),
         Opcode::Return => ControlFlow::Return(args()?),
-        Opcode::FallthroughReturn => ControlFlow::Return(args()?),
         Opcode::Call => {
             if let InstructionData::Call { func_ref, .. } = inst {
                 let function = state
