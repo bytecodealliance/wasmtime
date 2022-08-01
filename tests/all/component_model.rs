@@ -210,7 +210,9 @@ fn make_echo_component(type_definition: &str, type_size: u32) -> String {
 }
 
 fn make_echo_component_with_params(type_definition: &str, params: &[Param]) -> String {
-    let func = if params.len() == 1 || params.len() > 16 {
+    let func = if params.len() == 0 {
+        format!("(func (export \"echo\"))")
+    } else if params.len() == 1 || params.len() > 16 {
         let primitive = if params.len() == 1 {
             params[0].0.primitive()
         } else {

@@ -53,10 +53,8 @@ enum ValType {
     Float64,
     Char,
     Record(Vec<ValType>),
-    // FIXME(WebAssembly/component-model#75) are zero-sized flags allowed?
-    //
-    // ... otherwise go up to 65 flags to exercise up to 3 u32 values
-    Flags(UsizeInRange<1, 65>),
+    // Up to 65 flags to exercise up to 3 u32 values
+    Flags(UsizeInRange<0, 65>),
     Tuple(Vec<ValType>),
     Variant(NonZeroLenVec<ValType>),
     Union(NonZeroLenVec<ValType>),

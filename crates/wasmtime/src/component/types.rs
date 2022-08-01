@@ -606,6 +606,10 @@ impl Type {
             }
 
             Type::Flags(handle) => match FlagsSize::from_count(handle.names().len()) {
+                FlagsSize::Size0 => SizeAndAlignment {
+                    size: 0,
+                    alignment: 1,
+                },
                 FlagsSize::Size1 => SizeAndAlignment {
                     size: 1,
                     alignment: 1,
