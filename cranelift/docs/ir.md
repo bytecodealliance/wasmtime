@@ -405,7 +405,10 @@ retlist      : paramlist
 param        : type [paramext] [paramspecial]
 paramext     : "uext" | "sext"
 paramspecial : "sret" | "link" | "fp" | "csr" | "vmctx" | "sigid" | "stack_limit"
-callconv     : "fast" | "cold" | "system_v" | "fastcall"
+callconv     : "fast" | "cold" | "system_v" | "windows_fastcall"
+             | "wasmtime_system_v" | "wasmtime_fastcall"
+             | "apple_aarch64" | "wasmtime_apple_aarch64"
+             | "probestack"
 ```
 
 A function's calling convention determines exactly how arguments and return

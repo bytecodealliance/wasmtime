@@ -94,6 +94,12 @@
 //!
 //!   (low address)
 //! ```
+//!
+//! # Multi-value Returns
+//!
+//! We support multi-value returns by using multiple return-value
+//! registers. In some cases this is an extension of the base system
+//! ABI. See each platform's `abi.rs` implementation for details.
 
 use super::abi::*;
 use crate::binemit::StackMap;

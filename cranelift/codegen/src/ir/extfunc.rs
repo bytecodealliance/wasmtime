@@ -384,7 +384,7 @@ impl ExtFuncData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::types::I32;
+    use crate::ir::types::{B8, F32, I32};
     use alloc::string::ToString;
 
     #[test]
@@ -429,5 +429,19 @@ mod tests {
         ] {
             assert_eq!(Ok(cc), cc.to_string().parse())
         }
+    }
+
+    #[test]
+    fn signatures() {
+        let mut sig = Signature::new(CallConv::WindowsFastcall);
+        assert_eq!(sig.to_string(), "() windows_fastcall");
+        sig.params.push(AbiParam::new(I32));
+        assert_eq!(sig.to_string(), "(i32) windows_fastcall");
+        sig.returns.push(AbiParam::new(F32));
+        assert_eq!(sig.to_string(), "(i32) -> f32 windows_fastcall");
+        sig.params.push(AbiParam::new(I32.by(4).unwrap()));
+        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32 windows_fastcall");
+        sig.returns.push(AbiParam::new(B8));
+        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, b8 windows_fastcall");
     }
 }
