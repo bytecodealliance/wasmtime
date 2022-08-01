@@ -1656,6 +1656,9 @@ impl MachInstEmit for Inst {
             &Inst::Fence {} => {
                 sink.put4(enc_dmb_ish()); // dmb ish
             }
+            &Inst::Csdb {} => {
+                sink.put4(0xd503229f);
+            }
             &Inst::FpuMove64 { rd, rn } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
@@ -2910,6 +2913,8 @@ impl MachInstEmit for Inst {
                     rm: ridx,
                 };
                 inst.emit(&[], sink, emit_info, state);
+                // Prevent any data value speculation.
+                Inst::Csdb.emit(&[], sink, emit_info, state);
 
                 // Load address of jump table
                 let inst = Inst::Adr { rd: rtmp1, off: 16 };

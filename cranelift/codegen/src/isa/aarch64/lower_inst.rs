@@ -375,6 +375,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     op, ty
                 )));
             }
+
+            if op == Opcode::SelectifSpectreGuard {
+                ctx.emit(Inst::Csdb);
+            }
         }
 
         Opcode::Bitselect | Opcode::Vselect => implemented_in_isle(ctx),

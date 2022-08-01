@@ -703,7 +703,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rn);
             collector.reg_use(rt);
         }
-        &Inst::Fence {} => {}
+        &Inst::Fence {} | &Inst::Csdb {} => {}
         &Inst::FpuMove64 { rd, rn } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
@@ -1679,6 +1679,9 @@ impl Inst {
             &Inst::Fence {} => {
                 format!("dmb ish")
             }
+            &Inst::Csdb {} => {
+                format!("csdb")
+            }
             &Inst::FpuMove64 { rd, rn } => {
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64, allocs);
                 let rn = pretty_print_vreg_scalar(rn, ScalarSize::Size64, allocs);
@@ -2545,6 +2548,8 @@ impl Inst {
                 format!(
                     concat!(
                         "b.hs {} ; ",
+                        "csel {}, xzr, {}, hs ; ",
+                        "csdb ; ",
                         "adr {}, pc+16 ; ",
                         "ldrsw {}, [{}, {}, LSL 2] ; ",
                         "add {}, {}, {} ; ",
@@ -2552,10 +2557,12 @@ impl Inst {
                         "jt_entries {:?}"
                     ),
                     default_target,
+                    rtmp2,
+                    ridx,
                     rtmp1,
                     rtmp2,
                     rtmp1,
-                    ridx,
+                    rtmp2,
                     rtmp1,
                     rtmp1,
                     rtmp2,
