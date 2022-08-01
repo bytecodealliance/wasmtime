@@ -52,6 +52,7 @@ enum ValType {
     Float32,
     Float64,
     Char,
+    List(Box<ValType>),
     Record(Vec<ValType>),
     // Up to 65 flags to exercise up to 3 u32 values
     Flags(UsizeInRange<0, 65>),
@@ -230,6 +231,10 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> InterfaceType {
         ValType::Float32 => InterfaceType::Float32,
         ValType::Float64 => InterfaceType::Float64,
         ValType::Char => InterfaceType::Char,
+        ValType::List(ty) => {
+            let ty = intern(types, ty);
+            InterfaceType::List(types.add_interface_type(ty))
+        }
         ValType::Record(tys) => {
             let ty = TypeRecord {
                 fields: tys

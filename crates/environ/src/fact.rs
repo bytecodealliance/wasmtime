@@ -304,4 +304,12 @@ impl Options {
             ValType::I32
         }
     }
+
+    fn ptr_size(&self) -> u8 {
+        if self.memory64 {
+            8
+        } else {
+            4
+        }
+    }
 }
