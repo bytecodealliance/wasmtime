@@ -257,10 +257,10 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             }
             (vec![], vec![], vec![])
         } else {
-            let result = context
+            let compiled_code = context
                 .compile_and_emit(isa, &mut mem)
                 .map_err(|err| anyhow::anyhow!("{}", pretty_error(&err.func, err.inner)))?;
-            let code_info = result.code_info();
+            let code_info = compiled_code.code_info();
 
             if options.print_size {
                 println!(
@@ -279,9 +279,9 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                 saved_size = Some(code_info.total_size);
             }
             (
-                result.buffer.relocs().to_vec(),
-                result.buffer.traps().to_vec(),
-                result.buffer.stack_maps().to_vec(),
+                compiled_code.buffer.relocs().to_vec(),
+                compiled_code.buffer.traps().to_vec(),
+                compiled_code.buffer.stack_maps().to_vec(),
             )
         };
 
@@ -298,13 +298,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                 println!("; Exported as \"{}\"", export_name);
             }
             let value_ranges = if options.value_ranges {
-                Some(
-                    context
-                        .mach_compile_result()
-                        .unwrap()
-                        .value_labels_ranges
-                        .clone(),
-                )
+                Some(context.compiled_code().unwrap().value_labels_ranges.clone())
             } else {
                 None
             };

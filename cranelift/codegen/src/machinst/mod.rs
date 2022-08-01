@@ -273,7 +273,7 @@ pub trait MachInstEmitState<I: MachInst>: Default + Clone + Debug {
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine
 /// code (as bytes) and a disassembly, if requested.
-pub struct MachCompileResult {
+pub struct CompiledCode {
     /// Machine code.
     pub buffer: MachBufferFinalized,
     /// Size of stack frame, in bytes.
@@ -300,7 +300,7 @@ pub struct MachCompileResult {
     pub bb_edges: Vec<(CodeOffset, CodeOffset)>,
 }
 
-impl MachCompileResult {
+impl CompiledCode {
     /// Get a `CodeInfo` describing section sizes from this compilation result.
     pub fn code_info(&self) -> CodeInfo {
         CodeInfo {

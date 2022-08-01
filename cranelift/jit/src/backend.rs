@@ -681,8 +681,8 @@ impl Module for JITModule {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
-        let compile_result = ctx.compile(self.isa())?;
-        let code_size = compile_result.code_info().total_size;
+        let compiled_code = ctx.compile(self.isa())?;
+        let code_size = compiled_code.code_info().total_size;
 
         let size = code_size as usize;
         let ptr = self
@@ -691,9 +691,9 @@ impl Module for JITModule {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        unsafe { compile_result.emit_to_memory(ptr) };
+        unsafe { compiled_code.emit_to_memory(ptr) };
 
-        let relocs = compile_result.buffer.relocs().to_vec();
+        let relocs = compiled_code.buffer.relocs().to_vec();
 
         self.record_function_for_perf(ptr, size, &decl.name);
         self.compiled_functions[id] = Some(CompiledBlob { ptr, size, relocs });

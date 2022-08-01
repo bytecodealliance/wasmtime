@@ -53,12 +53,12 @@ impl SubTest for TestCompile {
         // With `MachBackend`s, we need to explicitly request dissassembly results.
         comp_ctx.set_disasm(true);
 
-        let compile_result = comp_ctx
+        let compiled_code = comp_ctx
             .compile(isa)
             .map_err(|e| crate::pretty_anyhow_error(&e.func, e.inner))?;
-        let total_size = compile_result.code_info().total_size;
+        let total_size = compiled_code.code_info().total_size;
 
-        let disasm = compile_result.disasm.as_ref().unwrap();
+        let disasm = compiled_code.disasm.as_ref().unwrap();
 
         info!("Generated {} bytes of code:\n{}", total_size, disasm);
 

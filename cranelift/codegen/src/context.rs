@@ -18,7 +18,7 @@ use crate::isa::TargetIsa;
 use crate::legalizer::simple_legalize;
 use crate::licm::do_licm;
 use crate::loop_analysis::LoopAnalysis;
-use crate::machinst::MachCompileResult;
+use crate::machinst::CompiledCode;
 use crate::nan_canonicalization::do_nan_canonicalization;
 use crate::remove_constant_phis::do_remove_constant_phis;
 use crate::result::{CodegenResult, CompileResult};
@@ -50,9 +50,9 @@ pub struct Context {
     pub loop_analysis: LoopAnalysis,
 
     /// Result of MachBackend compilation, if computed.
-    mach_compile_result: Option<MachCompileResult>,
+    compiled_code: Option<CompiledCode>,
 
-    /// Flag: do we want a disassembly with the MachCompileResult?
+    /// Flag: do we want a disassembly with the CompiledCode?
     pub want_disasm: bool,
 }
 
@@ -75,7 +75,7 @@ impl Context {
             cfg: ControlFlowGraph::new(),
             domtree: DominatorTree::new(),
             loop_analysis: LoopAnalysis::new(),
-            mach_compile_result: None,
+            compiled_code: None,
             want_disasm: false,
         }
     }
@@ -86,14 +86,14 @@ impl Context {
         self.cfg.clear();
         self.domtree.clear();
         self.loop_analysis.clear();
-        self.mach_compile_result = None;
+        self.compiled_code = None;
         self.want_disasm = false;
     }
 
     /// Returns the compilation result for this function, available after any `compile` function
     /// has been called.
-    pub fn mach_compile_result(&self) -> Option<&MachCompileResult> {
-        self.mach_compile_result.as_ref()
+    pub fn compiled_code(&self) -> Option<&CompiledCode> {
+        self.compiled_code.as_ref()
     }
 
     /// Set the flag to request a disassembly when compiling with a
@@ -107,7 +107,7 @@ impl Context {
     /// Run the function through all the passes necessary to generate code for the target ISA
     /// represented by `isa`, as well as the final step of emitting machine code into a
     /// `Vec<u8>`. The machine code is not relocated. Instead, any relocations can be obtained
-    /// from `mach_compile_result`.
+    /// from `compiled_code()`.
     ///
     /// This function calls `compile` and `emit_to_memory`, taking care to resize `mem` as
     /// needed, so it provides a safe interface.
@@ -117,14 +117,14 @@ impl Context {
         &mut self,
         isa: &dyn TargetIsa,
         mem: &mut Vec<u8>,
-    ) -> CompileResult<&MachCompileResult> {
-        let result = self.compile(isa)?;
-        let code_info = result.code_info();
+    ) -> CompileResult<&CompiledCode> {
+        let compiled_code = self.compile(isa)?;
+        let code_info = compiled_code.code_info();
         let old_len = mem.len();
         mem.resize(old_len + code_info.total_size as usize, 0);
-        let new_info = unsafe { result.emit_to_memory(mem.as_mut_ptr().add(old_len)) };
+        let new_info = unsafe { compiled_code.emit_to_memory(mem.as_mut_ptr().add(old_len)) };
         debug_assert!(new_info == code_info);
-        Ok(result)
+        Ok(compiled_code)
     }
 
     /// Compile the function.
@@ -134,7 +134,7 @@ impl Context {
     /// code sink.
     ///
     /// Returns information about the function's code and read-only data.
-    pub fn compile(&mut self, isa: &dyn TargetIsa) -> CompileResult<&MachCompileResult> {
+    pub fn compile(&mut self, isa: &dyn TargetIsa) -> CompileResult<&CompiledCode> {
         let _tt = timing::compile();
 
         let mut inner = || {
@@ -177,12 +177,12 @@ impl Context {
             }
 
             let result = isa.compile_function(&self.func, self.want_disasm)?;
-            self.mach_compile_result = Some(result);
+            self.compiled_code = Some(result);
             Ok(())
         };
 
         inner()
-            .map(|_| self.mach_compile_result.as_ref().unwrap())
+            .map(|_| self.compiled_code.as_ref().unwrap())
             .map_err(|error| CompileError {
                 inner: error,
                 func: &self.func,
@@ -193,7 +193,7 @@ impl Context {
     /// final machine code: the offsets (in bytes) of each basic-block
     /// start, and all basic-block edges.
     pub fn get_code_bb_layout(&self) -> Option<(Vec<usize>, Vec<(usize, usize)>)> {
-        if let Some(result) = self.mach_compile_result.as_ref() {
+        if let Some(result) = self.compiled_code.as_ref() {
             Some((
                 result.bb_starts.iter().map(|&off| off as usize).collect(),
                 result
@@ -216,7 +216,7 @@ impl Context {
         isa: &dyn TargetIsa,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
         let unwind_info_kind = isa.unwind_info_kind();
-        let result = self.mach_compile_result.as_ref().unwrap();
+        let result = self.compiled_code.as_ref().unwrap();
         isa.emit_unwind_info(result, unwind_info_kind)
     }
 
