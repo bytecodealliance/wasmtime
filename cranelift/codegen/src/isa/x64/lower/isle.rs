@@ -31,6 +31,7 @@ use crate::{
         VCodeConstant, VCodeConstantData,
     },
 };
+use regalloc2::PReg;
 use smallvec::SmallVec;
 use std::boxed::Box;
 use std::convert::TryFrom;
@@ -635,6 +636,16 @@ where
         );
 
         self.gen_call_common(abi, num_rets, caller, args)
+    }
+
+    #[inline]
+    fn preg_rbp(&mut self) -> PReg {
+        regs::rbp().to_real_reg().unwrap().into()
+    }
+
+    #[inline]
+    fn preg_rsp(&mut self) -> PReg {
+        regs::rsp().to_real_reg().unwrap().into()
     }
 }
 

@@ -373,6 +373,11 @@
       (rd WritableReg)
       (rm Reg))
 
+    ;; Like `Mov64` but with a particular physical register source.
+    (MovPReg
+      (rd WritableReg)
+      (rm PReg))
+
     ;; A 32-bit move instruction with a full 32-bit immediate.
     (Mov32Imm
       (rd WritableReg)
@@ -2473,6 +2478,26 @@
 (rule (emit_load $I64 dst addr)
       (emit (MInst.Load64 dst addr)))
 
+;; Helper for creating `MInst.MovPReg` instructions.
+(decl mov_preg (PReg) Reg)
+(rule (mov_preg src)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.MovPReg dst src))))
+        dst))
+
+(decl preg_r14 () PReg)
+(extern constructor preg_r14 preg_r14)
+
+(decl preg_r15 () PReg)
+(extern constructor preg_r15 preg_r15)
+
+(decl r14 () Reg)
+(rule (r14)
+      (mov_preg (preg_r14)))
+
+(decl r15 () Reg)
+(rule (r15)
+      (mov_preg (preg_r15)))
 
 ;; Helpers for accessing argument / return value slots ;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -53,6 +53,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             point, as constants are rematerialized at use-sites"
         ),
 
+        Opcode::GetFramePointer | Opcode::GetStackPointer | Opcode::GetReturnAddress => {
+            implemented_in_isle(ctx)
+        }
+
         Opcode::Iadd => implemented_in_isle(ctx),
         Opcode::Isub => implemented_in_isle(ctx),
         Opcode::UaddSat | Opcode::SaddSat | Opcode::UsubSat | Opcode::SsubSat => {

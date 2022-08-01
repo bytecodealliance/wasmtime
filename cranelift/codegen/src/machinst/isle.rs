@@ -884,6 +884,16 @@ macro_rules! isle_prelude_methods {
         fn sink_inst(&mut self, inst: Inst) {
             self.lower_ctx.sink_inst(inst);
         }
+
+        #[inline]
+        fn mem_flags_trusted(&mut self) -> MemFlags {
+            MemFlags::trusted()
+        }
+
+        #[inline]
+        fn preg_to_reg(&mut self, preg: PReg) -> Reg {
+            preg.into()
+        }
     };
 }
 

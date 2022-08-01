@@ -649,6 +649,13 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(rm);
         }
+        &Inst::MovPReg { rd, rm } => {
+            debug_assert!(
+                [regs::fp_reg(), regs::stack_reg(), regs::link_reg()].contains(&rm.into())
+            );
+            debug_assert!(rd.to_reg().is_virtual());
+            collector.reg_def(rd);
+        }
         &Inst::MovWide { op, rd, .. } => match op {
             MoveWideOp::MovK => collector.reg_mod(rd),
             _ => collector.reg_def(rd),
@@ -1480,6 +1487,11 @@ impl Inst {
             &Inst::Mov { size, rd, rm } => {
                 let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
                 let rm = pretty_print_ireg(rm, size, allocs);
+                format!("mov {}, {}", rd, rm)
+            }
+            &Inst::MovPReg { rd, rm } => {
+                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
+                let rm = show_ireg_sized(rm.into(), OperandSize::Size64);
                 format!("mov {}, {}", rd, rm)
             }
             &Inst::MovWide {

@@ -319,8 +319,8 @@ impl Amode {
                 collector.reg_use(base.to_reg());
                 collector.reg_use(index.to_reg());
             }
-            Amode::RipRelative { .. } => {
-                // RIP isn't involved in regalloc.
+            Amode::RipRelative { .. } | Amode::RbpOffset { .. } => {
+                // RIP and RBP aren't involved in regalloc.
             }
         }
     }
@@ -338,16 +338,17 @@ impl Amode {
                 collector.reg_late_use(base.to_reg());
                 collector.reg_late_use(index.to_reg());
             }
-            Amode::RipRelative { .. } => {
-                // RIP isn't involved in regalloc.
+            Amode::RipRelative { .. } | Amode::RbpOffset { .. } => {
+                // RIP and RBP aren't involved in regalloc.
             }
         }
     }
 
     pub(crate) fn get_flags(&self) -> MemFlags {
         match self {
-            Amode::ImmReg { flags, .. } => *flags,
-            Amode::ImmRegRegShift { flags, .. } => *flags,
+            Amode::RbpOffset { flags, .. }
+            | Amode::ImmReg { flags, .. }
+            | Amode::ImmRegRegShift { flags, .. } => *flags,
             Amode::RipRelative { .. } => MemFlags::trusted(),
         }
     }
@@ -383,6 +384,7 @@ impl Amode {
                 index: Gpr::new(allocs.next(*index)).unwrap(),
             },
             &Amode::RipRelative { target } => Amode::RipRelative { target },
+            &Amode::RbpOffset { simm32, flags } => Amode::RbpOffset { simm32, flags },
         }
     }
 
@@ -401,6 +403,12 @@ impl Amode {
 impl PrettyPrint for Amode {
     fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
+            Amode::RbpOffset { simm32, flags } => Amode::ImmReg {
+                simm32: *simm32,
+                base: regs::rbp(),
+                flags: *flags,
+            }
+            .pretty_print(8, allocs),
             Amode::ImmReg { simm32, base, .. } => {
                 // Note: size is always 8; the address is 64 bits,
                 // even if the addressed operand is smaller.

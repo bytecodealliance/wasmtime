@@ -3619,3 +3619,13 @@
             (_ Unit (output_builder_push builder ret)))
         (lower_call_rets abi tail builder)))
 
+;;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;
+
+(rule (lower (get_stack_pointer))
+      (r15))
+
+(rule (lower (get_frame_pointer))
+      (load64 (memarg_stack_off 0 0)))
+
+(rule (lower (get_return_address))
+      (r14))

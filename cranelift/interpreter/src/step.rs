@@ -1019,6 +1019,9 @@ where
         Opcode::ExtractVector => {
             unimplemented!("ExtractVector not supported");
         }
+        Opcode::GetFramePointer => unimplemented!("GetFramePointer"),
+        Opcode::GetStackPointer => unimplemented!("GetStackPointer"),
+        Opcode::GetReturnAddress => unimplemented!("GetReturnAddress"),
     })
 }
 

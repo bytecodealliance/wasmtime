@@ -144,6 +144,7 @@ impl Inst {
             | Inst::StoreMultiple64 { .. }
             | Inst::Mov32 { .. }
             | Inst::Mov64 { .. }
+            | Inst::MovPReg { .. }
             | Inst::Mov32Imm { .. }
             | Inst::Mov32SImm16 { .. }
             | Inst::Mov64SImm16 { .. }
@@ -623,6 +624,11 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         &Inst::Mov64 { rd, rm } => {
             collector.reg_def(rd);
             collector.reg_use(rm);
+        }
+        &Inst::MovPReg { rd, rm } => {
+            debug_assert!([regs::gpr(14), regs::gpr(15)].contains(&rm.into()));
+            debug_assert!(rd.to_reg().is_virtual());
+            collector.reg_def(rd);
         }
         &Inst::Mov32 { rd, rm } => {
             collector.reg_def(rd);
@@ -1785,6 +1791,11 @@ impl Inst {
             &Inst::Mov64 { rd, rm } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let rm = pretty_print_reg(rm, allocs);
+                format!("lgr {}, {}", rd, rm)
+            }
+            &Inst::MovPReg { rd, rm } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rm = show_reg(rm.into());
                 format!("lgr {}, {}", rd, rm)
             }
             &Inst::Mov32 { rd, rm } => {

@@ -181,7 +181,10 @@ impl LowerBackend for S390xBackend {
             | Opcode::Return
             | Opcode::StackAddr
             | Opcode::FuncAddr
-            | Opcode::SymbolValue => {
+            | Opcode::SymbolValue
+            | Opcode::GetFramePointer
+            | Opcode::GetStackPointer
+            | Opcode::GetReturnAddress => {
                 unreachable!(
                     "implemented in ISLE: inst = `{}`, type = `{:?}`",
                     ctx.dfg().display_inst(ir_inst),

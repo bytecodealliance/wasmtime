@@ -1337,6 +1337,15 @@ impl MachInstEmit for Inst {
                     }
                 }
             }
+            &Inst::MovPReg { rd, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rm: Reg = rm.into();
+                debug_assert!([regs::fp_reg(), regs::stack_reg(), regs::link_reg()].contains(&rm));
+                assert!(rm.class() == RegClass::Int);
+                assert!(rd.to_reg().class() == rm.class());
+                let size = OperandSize::Size64;
+                Inst::Mov { size, rd, rm }.emit(&[], sink, emit_info, state);
+            }
             &Inst::MovWide { op, rd, imm, size } => {
                 let rd = allocs.next_writable(rd);
                 sink.put4(enc_move_wide(op, rd, imm, size));

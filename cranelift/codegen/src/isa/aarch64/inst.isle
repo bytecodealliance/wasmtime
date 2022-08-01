@@ -165,6 +165,12 @@
         (rd WritableReg)
         (rm Reg))
 
+       ;; Like `Move` but with a particular `PReg` source (for implementing CLIF
+       ;; instructions like `get_stack_pointer`).
+       (MovPReg
+        (rd WritableReg)
+        (rm PReg))
+
        ;; A MOV[Z,N,K] with a 16-bit immediate.
        (MovWide
         (op MoveWideOp)
@@ -2426,3 +2432,31 @@
         ;; And finally, copy the preordained AtomicCASLoop output reg to its destination.
         ;; Also, x24 and x28 are trashed.
         (mov64_from_real 27)))
+
+;; Helper for emitting `MInst.MovPReg` instructions.
+(decl mov_preg (PReg) Reg)
+(rule (mov_preg src)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.MovPReg dst src))))
+        dst))
+
+(decl preg_sp () PReg)
+(extern constructor preg_sp preg_sp)
+
+(decl preg_fp () PReg)
+(extern constructor preg_fp preg_fp)
+
+(decl preg_link () PReg)
+(extern constructor preg_link preg_link)
+
+(decl aarch64_sp () Reg)
+(rule (aarch64_sp)
+      (mov_preg (preg_sp)))
+
+(decl aarch64_fp () Reg)
+(rule (aarch64_fp)
+      (mov_preg (preg_fp)))
+
+(decl aarch64_link () Reg)
+(rule (aarch64_link)
+      (mov_preg (preg_link)))

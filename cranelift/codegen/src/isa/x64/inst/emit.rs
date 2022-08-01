@@ -678,6 +678,16 @@ pub(crate) fn emit(
             );
         }
 
+        Inst::MovPReg { src, dst } => {
+            let src: Reg = (*src).into();
+            debug_assert!([regs::rsp(), regs::rbp()].contains(&src));
+            let src = Gpr::new(src).unwrap();
+            let size = OperandSize::Size64;
+            let dst = allocs.next(dst.to_reg().to_reg());
+            let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
+            Inst::MovRR { size, src, dst }.emit(&[], sink, info, state);
+        }
+
         Inst::MovzxRmR { ext_mode, src, dst } => {
             let dst = allocs.next(dst.to_reg().to_reg());
             let (opcodes, num_opcodes, mut rex_flags) = match ext_mode {

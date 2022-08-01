@@ -2842,3 +2842,16 @@
 
 (rule (lower (call_indirect sig_ref val inputs))
       (gen_call_indirect sig_ref val inputs))
+
+;;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;
+
+(rule (lower (get_frame_pointer))
+      (x64_rbp))
+
+(rule (lower (get_stack_pointer))
+      (x64_rsp))
+
+(rule (lower (get_return_address))
+      (x64_load $I64
+                (Amode.RbpOffset 8 (mem_flags_trusted))
+                (ExtKind.None)))

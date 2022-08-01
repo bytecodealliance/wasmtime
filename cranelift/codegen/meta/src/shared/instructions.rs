@@ -1314,6 +1314,41 @@ pub(crate) fn define(
         .other_side_effects(true),
     );
 
+    ig.push(
+        Inst::new(
+            "get_frame_pointer",
+            r#"
+        Get the address in the frame pointer register.
+
+        Usage of this instruction requires setting `preserve_frame_pointers` to `true`.
+        "#,
+            &formats.nullary,
+        )
+        .operands_out(vec![addr]),
+    );
+
+    ig.push(
+        Inst::new(
+            "get_stack_pointer",
+            r#"
+        Get the address in the stack pointer register.
+        "#,
+            &formats.nullary,
+        )
+        .operands_out(vec![addr]),
+    );
+
+    ig.push(
+        Inst::new(
+            "get_return_address",
+            r#"
+        Get the PC where this function will transfer control to when it returns.
+        "#,
+            &formats.nullary,
+        )
+        .operands_out(vec![addr]),
+    );
+
     let TableOffset = &TypeVar::new(
         "TableOffset",
         "An unsigned table offset",

@@ -721,6 +721,25 @@ impl<'a> Verifier<'a> {
                     ));
                 }
             }
+            NullAry {
+                opcode: Opcode::GetFramePointer,
+            } => {
+                if let Some(isa) = &self.isa {
+                    if !isa.flags().preserve_frame_pointers() {
+                        return errors.fatal((
+                            inst,
+                            self.context(inst),
+                            "`get_frame_pointer` cannot be used with enabling `preserve_frame_pointers`"
+                        ));
+                    }
+                } else {
+                    return errors.fatal((
+                        inst,
+                        self.context(inst),
+                        "`get_frame_pointer` requires an ISA!",
+                    ));
+                }
+            }
             Unary {
                 opcode: Opcode::Bitcast,
                 arg,

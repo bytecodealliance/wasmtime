@@ -92,6 +92,7 @@ impl Inst {
             | Inst::Mov64MR { .. }
             | Inst::MovRM { .. }
             | Inst::MovRR { .. }
+            | Inst::MovPReg { .. }
             | Inst::MovsxRmR { .. }
             | Inst::MovzxRmR { .. }
             | Inst::MulHi { .. }
@@ -1428,6 +1429,13 @@ impl PrettyPrint for Inst {
                 )
             }
 
+            Inst::MovPReg { src, dst } => {
+                let src: Reg = (*src).into();
+                let src = regs::show_ireg_sized(src, 8);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                format!("{} {}, {}", ljustify("movq".to_string()), src, dst)
+            }
+
             Inst::MovzxRmR {
                 ext_mode, src, dst, ..
             } => {
@@ -1989,6 +1997,11 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
         Inst::MovRR { src, dst, .. } => {
             collector.reg_use(src.to_reg());
+            collector.reg_def(dst.to_writable_reg());
+        }
+        Inst::MovPReg { dst, src } => {
+            debug_assert!([regs::rsp(), regs::rbp()].contains(&(*src).into()));
+            debug_assert!(dst.to_reg().to_reg().is_virtual());
             collector.reg_def(dst.to_writable_reg());
         }
         Inst::XmmToGpr { src, dst, .. } => {

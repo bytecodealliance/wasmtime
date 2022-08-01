@@ -26,6 +26,7 @@ use crate::{
     isa::unwind::UnwindInst,
     machinst::{ty_bits, InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
 };
+use regalloc2::PReg;
 use std::boxed::Box;
 use std::convert::TryFrom;
 use std::vec::Vec;
@@ -465,5 +466,17 @@ where
         lower_splat_const(self.lower_ctx, rd, value, *size);
 
         rd.to_reg()
+    }
+
+    fn preg_sp(&mut self) -> PReg {
+        super::regs::stack_reg().to_real_reg().unwrap().into()
+    }
+
+    fn preg_fp(&mut self) -> PReg {
+        super::regs::fp_reg().to_real_reg().unwrap().into()
+    }
+
+    fn preg_link(&mut self) -> PReg {
+        super::regs::link_reg().to_real_reg().unwrap().into()
     }
 }
