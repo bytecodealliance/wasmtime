@@ -352,6 +352,7 @@ fn expand_record_for_component_type(
         #[repr(C)]
         pub struct #lower <#lower_generic_params> {
             #lower_field_declarations
+            _align: [wasmtime::ValRaw; 0],
         }
 
         unsafe impl #impl_generics wasmtime::component::ComponentType for #name #ty_generics #where_clause {
