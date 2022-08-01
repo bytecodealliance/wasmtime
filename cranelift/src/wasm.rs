@@ -257,10 +257,9 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             }
             (vec![], vec![], vec![])
         } else {
-            context
+            let result = context
                 .compile_and_emit(isa, &mut mem)
-                .map_err(|err| anyhow::anyhow!("{}", pretty_error(&context.func, err)))?;
-            let result = context.mach_compile_result().unwrap();
+                .map_err(|err| anyhow::anyhow!("{}", pretty_error(&err.func, err.inner)))?;
             let code_info = result.code_info();
 
             if options.print_size {

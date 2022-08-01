@@ -211,10 +211,9 @@ impl wasmtime_environ::Compiler for Compiler {
         )?;
 
         let mut code_buf: Vec<u8> = Vec::new();
-        context
+        let compile_result = context
             .compile_and_emit(isa, &mut code_buf)
-            .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
-        let compile_result = context.mach_compile_result().unwrap();
+            .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
 
         let func_relocs = compile_result
             .buffer
@@ -244,7 +243,13 @@ impl wasmtime_environ::Compiler for Compiler {
             self.get_function_address_map(&context, &input, code_buf.len() as u32, tunables);
 
         let ranges = if tunables.generate_native_debuginfo {
-            Some(compile_result.value_labels_ranges.clone())
+            Some(
+                context
+                    .mach_compile_result()
+                    .unwrap()
+                    .value_labels_ranges
+                    .clone(),
+            )
         } else {
             None
         };
@@ -672,10 +677,9 @@ impl Compiler {
         isa: &dyn TargetIsa,
     ) -> Result<CompiledFunction, CompileError> {
         let mut code_buf = Vec::new();
-        context
+        let compile_result = context
             .compile_and_emit(isa, &mut code_buf)
-            .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
-        let compile_result = context.mach_compile_result().unwrap();
+            .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
 
         // Processing relocations isn't the hardest thing in the world here but
         // no trampoline should currently generate a relocation, so assert that

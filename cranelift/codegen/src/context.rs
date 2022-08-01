@@ -10,7 +10,6 @@
 //! single ISA instance.
 
 use crate::alias_analysis::AliasAnalysis;
-use crate::binemit::CodeInfo;
 use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
@@ -22,13 +21,13 @@ use crate::loop_analysis::LoopAnalysis;
 use crate::machinst::MachCompileResult;
 use crate::nan_canonicalization::do_nan_canonicalization;
 use crate::remove_constant_phis::do_remove_constant_phis;
-use crate::result::CodegenResult;
+use crate::result::{CodegenResult, CompileResult};
 use crate::settings::{FlagsOrIsa, OptLevel};
 use crate::simple_gvn::do_simple_gvn;
 use crate::simple_preopt::do_preopt;
-use crate::timing;
 use crate::unreachable_code::eliminate_unreachable_code;
 use crate::verifier::{verify_context, VerifierErrors, VerifierResult};
+use crate::{timing, CompileError};
 #[cfg(feature = "souper-harvest")]
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -118,15 +117,14 @@ impl Context {
         &mut self,
         isa: &dyn TargetIsa,
         mem: &mut Vec<u8>,
-    ) -> CodegenResult<()> {
-        self.compile(isa)?;
-        let result = self.mach_compile_result.as_ref().unwrap();
+    ) -> CompileResult<&MachCompileResult> {
+        let result = self.compile(isa)?;
         let code_info = result.code_info();
         let old_len = mem.len();
         mem.resize(old_len + code_info.total_size as usize, 0);
         let new_info = unsafe { result.emit_to_memory(mem.as_mut_ptr().add(old_len)) };
         debug_assert!(new_info == code_info);
-        Ok(())
+        Ok(result)
     }
 
     /// Compile the function.
@@ -136,50 +134,59 @@ impl Context {
     /// code sink.
     ///
     /// Returns information about the function's code and read-only data.
-    pub fn compile(&mut self, isa: &dyn TargetIsa) -> CodegenResult<CodeInfo> {
+    pub fn compile(&mut self, isa: &dyn TargetIsa) -> CompileResult<&MachCompileResult> {
         let _tt = timing::compile();
-        self.verify_if(isa)?;
 
-        let opt_level = isa.flags().opt_level();
-        log::trace!(
-            "Compiling (opt level {:?}):\n{}",
-            opt_level,
-            self.func.display()
-        );
+        let mut inner = || {
+            self.verify_if(isa)?;
 
-        self.compute_cfg();
-        if opt_level != OptLevel::None {
-            self.preopt(isa)?;
-        }
-        if isa.flags().enable_nan_canonicalization() {
-            self.canonicalize_nans(isa)?;
-        }
+            let opt_level = isa.flags().opt_level();
+            log::trace!(
+                "Compiling (opt level {:?}):\n{}",
+                opt_level,
+                self.func.display()
+            );
 
-        self.legalize(isa)?;
-        if opt_level != OptLevel::None {
+            self.compute_cfg();
+            if opt_level != OptLevel::None {
+                self.preopt(isa)?;
+            }
+            if isa.flags().enable_nan_canonicalization() {
+                self.canonicalize_nans(isa)?;
+            }
+
+            self.legalize(isa)?;
+            if opt_level != OptLevel::None {
+                self.compute_domtree();
+                self.compute_loop_analysis();
+                self.licm(isa)?;
+                self.simple_gvn(isa)?;
+            }
+
             self.compute_domtree();
-            self.compute_loop_analysis();
-            self.licm(isa)?;
-            self.simple_gvn(isa)?;
-        }
+            self.eliminate_unreachable_code(isa)?;
+            if opt_level != OptLevel::None {
+                self.dce(isa)?;
+            }
 
-        self.compute_domtree();
-        self.eliminate_unreachable_code(isa)?;
-        if opt_level != OptLevel::None {
-            self.dce(isa)?;
-        }
+            self.remove_constant_phis(isa)?;
 
-        self.remove_constant_phis(isa)?;
+            if opt_level != OptLevel::None && isa.flags().enable_alias_analysis() {
+                self.replace_redundant_loads()?;
+                self.simple_gvn(isa)?;
+            }
 
-        if opt_level != OptLevel::None && isa.flags().enable_alias_analysis() {
-            self.replace_redundant_loads()?;
-            self.simple_gvn(isa)?;
-        }
+            let result = isa.compile_function(&self.func, self.want_disasm)?;
+            self.mach_compile_result = Some(result);
+            Ok(())
+        };
 
-        let result = isa.compile_function(&self.func, self.want_disasm)?;
-        let code_info = result.code_info();
-        self.mach_compile_result = Some(result);
-        Ok(code_info)
+        inner()
+            .map(|_| self.mach_compile_result.as_ref().unwrap())
+            .map_err(|error| CompileError {
+                inner: error,
+                func: &self.func,
+            })
     }
 
     /// If available, return information about the code layout in the

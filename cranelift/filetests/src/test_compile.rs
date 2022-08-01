@@ -4,7 +4,6 @@
 
 use crate::subtest::{run_filecheck, Context, SubTest};
 use anyhow::{bail, Result};
-use cranelift_codegen::binemit::CodeInfo;
 use cranelift_codegen::ir;
 use cranelift_reader::{TestCommand, TestOption};
 use log::info;
@@ -54,16 +53,12 @@ impl SubTest for TestCompile {
         // With `MachBackend`s, we need to explicitly request dissassembly results.
         comp_ctx.set_disasm(true);
 
-        let CodeInfo { total_size, .. } = comp_ctx
+        let compile_result = comp_ctx
             .compile(isa)
-            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))?;
+            .map_err(|e| crate::pretty_anyhow_error(&e.func, e.inner))?;
+        let total_size = compile_result.code_info().total_size;
 
-        let disasm = comp_ctx
-            .mach_compile_result()
-            .unwrap()
-            .disasm
-            .as_ref()
-            .unwrap();
+        let disasm = compile_result.disasm.as_ref().unwrap();
 
         info!("Generated {} bytes of code:\n{}", total_size, disasm);
 

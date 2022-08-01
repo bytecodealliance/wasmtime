@@ -4,10 +4,7 @@ use crate::{compiled_blob::CompiledBlob, memory::Memory};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings, MachReloc};
-use cranelift_codegen::{
-    binemit::{CodeInfo, Reloc},
-    CodegenError,
-};
+use cranelift_codegen::{binemit::Reloc, CodegenError};
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
@@ -684,11 +681,8 @@ impl Module for JITModule {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
-        let CodeInfo {
-            total_size: code_size,
-            ..
-        } = ctx.compile(self.isa())?;
-        let compile_result = ctx.mach_compile_result().unwrap();
+        let compile_result = ctx.compile(self.isa())?;
+        let code_size = compile_result.code_info().total_size;
 
         let size = code_size as usize;
         let ptr = self
