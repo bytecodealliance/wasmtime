@@ -128,10 +128,10 @@ use crate::binemit::StackMap;
 use crate::ir::types::*;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, DynamicStackSlot, Signature, StackSlot};
 use crate::isa::TargetIsa;
-use crate::machinst::*;
 use crate::settings;
 use crate::CodegenResult;
 use crate::{ir, isa};
+use crate::{machinst::*, trace};
 use alloc::vec::Vec;
 use regalloc2::{PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
@@ -596,7 +596,7 @@ impl ABISig {
             }
         }
 
-        log::trace!(
+        trace!(
             "ABISig: sig {:?} => args = {:?} rets = {:?} arg stack = {} ret stack = {} stack_ret_arg = {:?} copy_to_arg_order = {:?}",
             sig,
             args,
@@ -791,7 +791,7 @@ fn get_special_purpose_param_register(
 impl<M: ABIMachineSpec> ABICalleeImpl<M> {
     /// Create a new body ABI instance.
     pub fn new(f: &ir::Function, isa: &dyn TargetIsa) -> CodegenResult<Self> {
-        log::trace!("ABI: func signature {:?}", f.signature);
+        trace!("ABI: func signature {:?}", f.signature);
 
         let flags = isa.flags().clone();
         let ir_sig = ensure_struct_return_ptr_is_returned(&f.signature);
@@ -1265,14 +1265,14 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         if let Some(i) = self.sig.stack_ret_arg {
             let insts = self.gen_copy_arg_to_regs(i, ValueRegs::one(self.ret_area_ptr.unwrap()));
             let inst = insts.into_iter().next().unwrap();
-            log::trace!(
+            trace!(
                 "gen_retval_area_setup: inst {:?}; ptr reg is {:?}",
                 inst,
                 self.ret_area_ptr.unwrap().to_reg()
             );
             Some(inst)
         } else {
-            log::trace!("gen_retval_area_setup: not needed");
+            trace!("gen_retval_area_setup: not needed");
             None
         }
     }
@@ -1347,7 +1347,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let islot = slot.index() as i64;
         let spill_off = islot * M::word_bytes() as i64;
         let sp_off = self.stackslots_size as i64 + spill_off;
-        log::trace!("load_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
+        trace!("load_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
 
         gen_load_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), into_regs, ty)
     }
@@ -1363,7 +1363,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let islot = slot.index() as i64;
         let spill_off = islot * M::word_bytes() as i64;
         let sp_off = self.stackslots_size as i64 + spill_off;
-        log::trace!("store_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
+        trace!("store_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
 
         gen_store_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), from_regs, ty)
     }
@@ -1376,7 +1376,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let virtual_sp_offset = M::get_virtual_sp_offset_from_state(state);
         let nominal_sp_to_fp = M::get_nominal_sp_to_fp(state);
         assert!(virtual_sp_offset >= 0);
-        log::trace!(
+        trace!(
             "spillslots_to_stackmap: slots = {:?}, state = {:?}",
             slots,
             state
@@ -1508,7 +1508,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
             insts.push(M::gen_ret(vec![]));
         }
 
-        log::trace!("Epilogue: {:?}", insts);
+        trace!("Epilogue: {:?}", insts);
         insts
     }
 

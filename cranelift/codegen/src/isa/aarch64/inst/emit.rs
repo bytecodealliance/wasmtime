@@ -7,6 +7,7 @@ use crate::ir::types::*;
 use crate::ir::{LibCall, MemFlags, TrapCode};
 use crate::isa::aarch64::inst::*;
 use crate::machinst::{ty_bits, Reg, RegClass, Writable};
+use crate::trace;
 use core::convert::TryFrom;
 
 /// Memory label/reference finalization: convert a MemLabel to a PC-relative
@@ -39,7 +40,7 @@ pub fn mem_finalize(
             };
             let adj = match mem {
                 &AMode::NominalSPOffset(..) => {
-                    log::trace!(
+                    trace!(
                         "mem_finalize: nominal SP offset {} + adj {} -> {}",
                         off,
                         state.virtual_sp_offset,
@@ -3068,7 +3069,7 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::VirtualSPOffsetAdj { offset } => {
-                log::trace!(
+                trace!(
                     "virtual sp offset adjusted by {} -> {}",
                     offset,
                     state.virtual_sp_offset + offset,
