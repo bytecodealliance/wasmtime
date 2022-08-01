@@ -1700,26 +1700,26 @@
             (result Reg (uqxtn2 low_half y (lane_size ty))))
         result))
 
-;;;; Rules for `Fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `Fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (fence))
       (side_effect (aarch64_fence)))
 
-;;;; Rules for `IsNull` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `IsNull` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type out_ty (is_null x @ (value_type ty))))
       (with_flags (cmp_imm (operand_size ty) x (u8_into_imm12 0))
                   (materialize_bool_result
                    (ty_bits out_ty) (Cond.Eq))))
 
-;;;; Rules for `IsInvalid` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `IsInvalid` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type out_ty (is_invalid x @ (value_type ty))))
       (with_flags (cmn_imm (operand_size ty) x (u8_into_imm12 1))
                   (materialize_bool_result
                    (ty_bits out_ty) (Cond.Eq))))
 
-;;;; Rules for `Debugtrap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `Debugtrap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (debugtrap))
       (side_effect (brk)))
