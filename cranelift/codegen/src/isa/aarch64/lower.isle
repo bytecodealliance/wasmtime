@@ -1703,8 +1703,7 @@
 ;;;; Rules for `Fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (fence))
-      (let ((_ Unit (emit (MInst.Fence))))
-            (output_none)))
+      (side_effect (aarch64_fence)))
 
 ;;;; Rules for `IsNull` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1723,5 +1722,4 @@
 ;;;; Rules for `Debugtrap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (debugtrap))
-      (let ((_ Unit (emit (MInst.Brk))))
-            (output_none)))
+      (side_effect (brk)))

@@ -1905,6 +1905,16 @@
 (decl uqxtn2 (Reg Reg ScalarSize) Reg)
 (rule (uqxtn2 x y size) (vec_rr_narrow_high (VecRRNarrowOp.Uqxtn) x y size))
 
+;; Helper for generating `fence` instructions.
+(decl aarch64_fence () SideEffectNoResult)
+(rule (aarch64_fence)
+      (SideEffectNoResult.Inst (MInst.Fence)))
+
+;; Helper for generating `brk` instructions.
+(decl brk () SideEffectNoResult)
+(rule (brk)
+      (SideEffectNoResult.Inst (MInst.Brk)))
+
 ;; Helper for generating `addp` instructions.
 (decl addp (Reg Reg VectorSize) Reg)
 (rule (addp x y size) (vec_rrr (VecALUOp.Addp) x y size))
