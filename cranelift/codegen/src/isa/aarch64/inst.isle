@@ -1644,8 +1644,8 @@
 (decl vec_rrrr_long (VecRRRLongOp Reg Reg Reg bool) Reg)
 (rule (vec_rrrr_long op src1 src2 src3 high_half)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_1 Unit (emit (MInst.FpuMove128 dst src1)))
-            (_2 Unit (emit (MInst.VecRRRLong op dst src2 src3 high_half))))
+            (_ Unit (emit (MInst.FpuMove128 dst src1)))
+            (_ Unit (emit (MInst.VecRRRLong op dst src2 src3 high_half))))
         dst))
 
 ;; Helper for emitting `MInst.VecRRNarrow` instructions.
@@ -1660,8 +1660,8 @@
 (decl vec_rr_narrow_high (VecRRNarrowOp Reg Reg ScalarSize) Reg)
 (rule (vec_rr_narrow_high op mod src size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_1 Unit (emit (MInst.FpuMove128 dst mod)))
-            (_2 Unit (emit (MInst.VecRRNarrow op dst src $true size))))
+            (_ Unit (emit (MInst.FpuMove128 dst mod)))
+            (_ Unit (emit (MInst.VecRRNarrow op dst src $true size))))
         dst))
 
 ;; Helper for emitting `MInst.VecRRLong` instructions.
@@ -1704,16 +1704,16 @@
 (decl mov_to_vec (Reg Reg u8 VectorSize) Reg)
 (rule (mov_to_vec src1 src2 lane size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_1 Unit (emit (MInst.FpuMove128 dst src1)))
-            (_2 Unit (emit (MInst.MovToVec dst src2 lane size))))
+            (_ Unit (emit (MInst.FpuMove128 dst src1)))
+            (_ Unit (emit (MInst.MovToVec dst src2 lane size))))
         dst))
 
 ;; Helper for emitting `MInst.VecMovElement` instructions.
 (decl mov_vec_elem (Reg Reg u8 u8 VectorSize) Reg)
 (rule (mov_vec_elem src1 src2 dst_idx src_idx size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_1 Unit (emit (MInst.FpuMove128 dst src1)))
-            (_2 Unit (emit (MInst.VecMovElement dst src2 dst_idx src_idx size))))
+            (_ Unit (emit (MInst.FpuMove128 dst src1)))
+            (_ Unit (emit (MInst.VecMovElement dst src2 dst_idx src_idx size))))
         dst))
 
 ;; Helper for emitting `MInst.MovFromVec` instructions.
@@ -2091,8 +2091,8 @@
 (decl bsl (Type Reg Reg Reg) Reg)
 (rule (bsl ty c x y)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_1 Unit (emit (MInst.FpuMove128 dst c)))
-            (_2 Unit (emit (MInst.VecRRR (VecALUOp.Bsl) dst x y (vector_size ty)))))
+            (_ Unit (emit (MInst.FpuMove128 dst c)))
+            (_ Unit (emit (MInst.VecRRR (VecALUOp.Bsl) dst x y (vector_size ty)))))
         dst))
 
 ;; Helper for generating a `udf` instruction.
@@ -2188,16 +2188,16 @@
 (rule (trap_if_div_overflow ty x y)
       (let (
           ;; Check RHS is -1.
-          (_1 Unit (emit (MInst.AluRRImm12 (ALUOp.AddS) (operand_size ty) (writable_zero_reg) y (u8_into_imm12 1))))
+          (_ Unit (emit (MInst.AluRRImm12 (ALUOp.AddS) (operand_size ty) (writable_zero_reg) y (u8_into_imm12 1))))
 
           ;; Check LHS is min_value, by subtracting 1 and branching if
           ;; there is overflow.
-          (_2 Unit (emit (MInst.CCmpImm (size_from_ty ty)
-                                        x
-                                        (u8_into_uimm5 1)
-                                        (nzcv $false $false $false $false)
-                                        (Cond.Eq))))
-          (_3 Unit (emit (MInst.TrapIf (cond_br_cond (Cond.Vs))
+          (_ Unit (emit (MInst.CCmpImm (size_from_ty ty)
+                                       x
+                                       (u8_into_uimm5 1)
+                                       (nzcv $false $false $false $false)
+                                       (Cond.Eq))))
+          (_ Unit (emit (MInst.TrapIf (cond_br_cond (Cond.Vs))
                                       (trap_code_integer_overflow))))
         )
         x))
@@ -2371,8 +2371,8 @@
 (rule (lse_atomic_cas addr expect replace ty)
       (let (
             (dst WritableReg (temp_writable_reg ty))
-            (_1 Unit (emit (MInst.Mov (operand_size ty) dst expect)))
-            (_2 Unit (emit (MInst.AtomicCAS dst replace addr ty)))
+            (_ Unit (emit (MInst.Mov (operand_size ty) dst expect)))
+            (_ Unit (emit (MInst.AtomicCAS dst replace addr ty)))
           )
           dst))
 

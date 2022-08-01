@@ -1840,8 +1840,8 @@
 (decl umul_wide (Reg Reg) RegPair)
 (rule (umul_wide src1 src2)
       (let ((dst WritableRegPair (temp_writable_regpair))
-            (_1 Unit (emit (MInst.Mov64 (writable_regpair_lo dst) src2)))
-            (_2 Unit (emit (MInst.UMulWide src1))))
+            (_ Unit (emit (MInst.Mov64 (writable_regpair_lo dst) src2)))
+            (_ Unit (emit (MInst.UMulWide src1))))
         dst))
 
 ;; Helper for emitting `MInst.SDivMod32` instructions.
@@ -2425,8 +2425,8 @@
 ;; Push instructions to break out of the loop if condition is met.
 (decl push_break_if (VecMInstBuilder ProducesFlags Cond) Reg)
 (rule (push_break_if ib (ProducesFlags.ProducesFlagsSideEffect inst) cond)
-      (let ((_1 Unit (inst_builder_push ib inst))
-            (_2 Unit (inst_builder_push ib (MInst.CondBreak cond))))
+      (let ((_ Unit (inst_builder_push ib inst))
+            (_ Unit (inst_builder_push ib (MInst.CondBreak cond))))
         (invalid_reg)))
 
 ;; Emit a `MInst.Loop` instruction holding a loop body instruction sequence.
@@ -2985,12 +2985,12 @@
 
 (decl trap_if (ProducesFlags Cond TrapCode) Reg)
 (rule (trap_if (ProducesFlags.ProducesFlagsReturnsReg inst result) cond trap_code)
-      (let ((_1 Unit (emit inst))
-            (_2 Unit (emit (MInst.TrapIf cond trap_code))))
+      (let ((_ Unit (emit inst))
+            (_ Unit (emit (MInst.TrapIf cond trap_code))))
         result))
 (rule (trap_if (ProducesFlags.ProducesFlagsSideEffect inst) cond trap_code)
-      (let ((_1 Unit (emit inst))
-            (_2 Unit (emit (MInst.TrapIf cond trap_code))))
+      (let ((_ Unit (emit inst))
+            (_ Unit (emit (MInst.TrapIf cond trap_code))))
         (invalid_reg)))
 
 (decl icmps_reg_and_trap (Type Reg Reg Cond TrapCode) Reg)
@@ -3058,18 +3058,18 @@
 (decl select_bool_reg (Type ProducesBool Reg Reg) Reg)
 (rule (select_bool_reg ty (ProducesBool.ProducesBool producer cond) reg_true reg_false)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_1 Unit (emit_producer producer))
-            (_2 Unit (emit_mov ty dst reg_false))
-            (_3 Unit (emit_consumer (emit_cmov_reg ty dst cond reg_true))))
+            (_ Unit (emit_producer producer))
+            (_ Unit (emit_mov ty dst reg_false))
+            (_ Unit (emit_consumer (emit_cmov_reg ty dst cond reg_true))))
         dst))
 
 ;; Use a boolean condition to select between two immediate values.
 (decl select_bool_imm (Type ProducesBool i16 u64) Reg)
 (rule (select_bool_imm ty (ProducesBool.ProducesBool producer cond) imm_true imm_false)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_1 Unit (emit_producer producer))
-            (_2 Unit (emit_imm ty dst imm_false))
-            (_3 Unit (emit_consumer (emit_cmov_imm ty dst cond imm_true))))
+            (_ Unit (emit_producer producer))
+            (_ Unit (emit_imm ty dst imm_false))
+            (_ Unit (emit_consumer (emit_cmov_imm ty dst cond imm_true))))
         dst))
 
 ;; Lower a boolean condition to a boolean type.  The value used to represent
@@ -3129,8 +3129,8 @@
             (result Reg (push_atomic_cas ib (ty_ext32 ty)
                           (casloop_val_reg) val aligned_mem))
             ;; Emit initial load followed by compare-and-swap loop.
-            (_1 Unit (emit_load (ty_ext32 ty) (casloop_val_reg) aligned_mem))
-            (_2 Unit (emit_loop ib (intcc_as_cond (IntCC.NotEqual)))))
+            (_ Unit (emit_load (ty_ext32 ty) (casloop_val_reg) aligned_mem))
+            (_ Unit (emit_loop ib (intcc_as_cond (IntCC.NotEqual)))))
         result))
 
 ;; Compute the previous memory value after a (fullword) compare-and-swap loop.
@@ -3345,8 +3345,8 @@
 ;; conditional move, and because flogr returns a register pair.
 (rule (clz_reg zeroval x)
       (let ((dst WritableRegPair (temp_writable_regpair))
-            (_1 Unit (emit (MInst.Flogr x)))
-            (_2 Unit (emit (MInst.CMov64SImm16 (writable_regpair_hi dst)
+            (_ Unit (emit (MInst.Flogr x)))
+            (_ Unit (emit (MInst.CMov64SImm16 (writable_regpair_hi dst)
                               (intcc_as_cond (IntCC.Equal)) zeroval))))
         dst))
 
