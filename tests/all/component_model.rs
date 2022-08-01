@@ -90,6 +90,14 @@ const REALLOC_AND_FREE: &str = r#"
 fn engine() -> Engine {
     let mut config = Config::new();
     config.wasm_component_model(true);
+
+    // When pooling allocator tests are skipped it means we're in qemu. The
+    // component model tests create a disproportionate number of instances so
+    // try to cut down on virtual memory usage by avoiding 4G reservations.
+    if crate::skip_pooling_allocator_tests() {
+        config.static_memory_maximum_size(0);
+        config.dynamic_memory_guard_size(0);
+    }
     Engine::new(&config).unwrap()
 }
 
