@@ -51,7 +51,7 @@ pub struct Context {
     pub loop_analysis: LoopAnalysis,
 
     /// Result of MachBackend compilation, if computed.
-    pub mach_compile_result: Option<MachCompileResult>,
+    mach_compile_result: Option<MachCompileResult>,
 
     /// Flag: do we want a disassembly with the MachCompileResult?
     pub want_disasm: bool,
@@ -91,6 +91,12 @@ impl Context {
         self.want_disasm = false;
     }
 
+    /// Returns the compilation result for this function, available after any `compile` function
+    /// has been called.
+    pub fn mach_compile_result(&self) -> Option<&MachCompileResult> {
+        self.mach_compile_result.as_ref()
+    }
+
     /// Set the flag to request a disassembly when compiling with a
     /// `MachBackend` backend.
     pub fn set_disasm(&mut self, val: bool) {
@@ -113,15 +119,13 @@ impl Context {
         isa: &dyn TargetIsa,
         mem: &mut Vec<u8>,
     ) -> CodegenResult<()> {
-        let info = self.compile(isa)?;
+        self.compile(isa)?;
+        let result = self.mach_compile_result.as_ref().unwrap();
+        let code_info = result.code_info();
         let old_len = mem.len();
-        mem.resize(old_len + info.total_size as usize, 0);
-        let result = self
-            .mach_compile_result
-            .as_ref()
-            .expect("result must be computed after compilation");
+        mem.resize(old_len + code_info.total_size as usize, 0);
         let new_info = unsafe { result.emit_to_memory(mem.as_mut_ptr().add(old_len)) };
-        debug_assert!(new_info == info);
+        debug_assert!(new_info == code_info);
         Ok(())
     }
 
@@ -173,9 +177,9 @@ impl Context {
         }
 
         let result = isa.compile_function(&self.func, self.want_disasm)?;
-        let info = result.code_info();
+        let code_info = result.code_info();
         self.mach_compile_result = Some(result);
-        Ok(info)
+        Ok(code_info)
     }
 
     /// If available, return information about the code layout in the

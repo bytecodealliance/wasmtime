@@ -260,7 +260,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             context
                 .compile_and_emit(isa, &mut mem)
                 .map_err(|err| anyhow::anyhow!("{}", pretty_error(&context.func, err)))?;
-            let result = context.mach_compile_result.as_ref().unwrap();
+            let result = context.mach_compile_result().unwrap();
             let code_info = result.code_info();
 
             if options.print_size {
@@ -301,8 +301,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             let value_ranges = if options.value_ranges {
                 Some(
                     context
-                        .mach_compile_result
-                        .as_ref()
+                        .mach_compile_result()
                         .unwrap()
                         .value_labels_ranges
                         .clone(),

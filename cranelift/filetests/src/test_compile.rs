@@ -59,8 +59,7 @@ impl SubTest for TestCompile {
             .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))?;
 
         let disasm = comp_ctx
-            .mach_compile_result
-            .as_ref()
+            .mach_compile_result()
             .unwrap()
             .disasm
             .as_ref()

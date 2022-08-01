@@ -246,8 +246,7 @@ fn compile(function: Function, isa: &dyn TargetIsa) -> Result<Mmap, CompilationE
 
     unsafe {
         context
-            .mach_compile_result
-            .as_ref()
+            .mach_compile_result()
             .expect("we should have a result after a successful compilation")
             .emit_to_memory(code_page.as_mut_ptr());
     };

@@ -688,6 +688,7 @@ impl Module for JITModule {
             total_size: code_size,
             ..
         } = ctx.compile(self.isa())?;
+        let compile_result = ctx.mach_compile_result().unwrap();
 
         let size = code_size as usize;
         let ptr = self
@@ -696,20 +697,9 @@ impl Module for JITModule {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        unsafe {
-            ctx.mach_compile_result
-                .as_ref()
-                .expect("we should have a result after a successful compilation")
-                .emit_to_memory(ptr)
-        };
+        unsafe { compile_result.emit_to_memory(ptr) };
 
-        let relocs = ctx
-            .mach_compile_result
-            .as_ref()
-            .unwrap()
-            .buffer
-            .relocs()
-            .to_vec();
+        let relocs = compile_result.buffer.relocs().to_vec();
 
         self.record_function_for_perf(ptr, size, &decl.name);
         self.compiled_functions[id] = Some(CompiledBlob { ptr, size, relocs });

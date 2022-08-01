@@ -316,7 +316,7 @@ impl Module for ObjectModule {
         self.define_function_bytes(
             func_id,
             &code,
-            ctx.mach_compile_result.as_ref().unwrap().buffer.relocs(),
+            ctx.mach_compile_result().unwrap().buffer.relocs(),
         )
     }
 
