@@ -3685,6 +3685,7 @@ name = "wasmtime-wast"
 version = "0.40.0"
 dependencies = [
  "anyhow",
+ "log",
  "wasmtime",
  "wast 45.0.0",
 ]

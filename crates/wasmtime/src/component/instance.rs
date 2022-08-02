@@ -142,8 +142,6 @@ impl InstanceData {
                     },
                 })
             }
-            // This should have been processed away during compilation.
-            CoreDef::Adapter(_) => unreachable!(),
         }
     }
 

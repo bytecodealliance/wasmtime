@@ -18,9 +18,8 @@
 //! their imports and then generating a core wasm module to implement all of
 //! that.
 
-use crate::component::{
-    Adapter, AdapterOptions, ComponentTypes, CoreDef, StringEncoding, TypeFuncIndex,
-};
+use crate::component::dfg::CoreDef;
+use crate::component::{Adapter, AdapterOptions, ComponentTypes, StringEncoding, TypeFuncIndex};
 use crate::{FuncIndex, GlobalIndex, MemoryIndex};
 use std::collections::HashMap;
 use std::mem;

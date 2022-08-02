@@ -361,14 +361,14 @@ impl<'a, 'data> Translator<'a, 'data> {
         // much simpler than the original component and more efficient for
         // Wasmtime to process at runtime as well (e.g. no string lookups as
         // most everything is done through indices instead).
-        let (mut component, mut adapters) = inline::run(
+        let mut component = inline::run(
             &self.types,
             &self.result,
             &self.static_modules,
             &self.static_components,
         )?;
-        self.insert_adapter_module_initializers(&mut component, &mut adapters);
-        Ok((component, self.static_modules))
+        self.partition_adapter_modules(&mut component);
+        Ok((component.finish(), self.static_modules))
     }
 
     fn translate_payload(
