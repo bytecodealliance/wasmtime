@@ -1095,12 +1095,28 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                 assert_eq!(into_regs.len(), slots.len());
                 for (slot, into_reg) in slots.iter().zip(into_regs.regs().iter()) {
                     match slot {
-                        // Extension mode doesn't matter (we're copying out, not in; we
-                        // ignore high bits by convention).
                         &ABIArgSlot::Reg { reg, ty, .. } => {
+                            // Extension mode doesn't matter (we're copying out, not in; we
+                            // ignore high bits by convention).
                             insts.push(M::gen_move(*into_reg, reg.into(), ty));
                         }
-                        &ABIArgSlot::Stack { offset, ty, .. } => {
+                        &ABIArgSlot::Stack {
+                            offset,
+                            ty,
+                            extension,
+                            ..
+                        } => {
+                            // However, we have to respect the extention mode for stack
+                            // slots, or else we grab the wrong bytes on big-endian.
+                            let ext = M::get_ext_mode(self.sig.call_conv, extension);
+                            let ty = match (ext, ty_bits(ty) as u32) {
+                                (ArgumentExtension::Uext, n) | (ArgumentExtension::Sext, n)
+                                    if n < M::word_bits() =>
+                                {
+                                    M::word_type()
+                                }
+                                _ => ty,
+                            };
                             insts.push(M::gen_load_stack(
                                 StackAMode::FPOffset(
                                     M::fp_to_arg_offset(self.call_conv, &self.flags) + offset,
