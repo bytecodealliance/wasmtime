@@ -3175,14 +3175,14 @@ mod tests {
         assert_eq!(sig.returns.len(), 0);
         assert_eq!(sig.call_conv, CallConv::SystemV);
 
-        let sig2 = Parser::new("(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 baldrdash_system_v")
+        let sig2 = Parser::new("(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 system_v")
             .parse_signature()
             .unwrap();
         assert_eq!(
             sig2.to_string(),
-            "(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 baldrdash_system_v"
+            "(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 system_v"
         );
-        assert_eq!(sig2.call_conv, CallConv::BaldrdashSystemV);
+        assert_eq!(sig2.call_conv, CallConv::SystemV);
 
         // Old-style signature without a calling convention.
         assert_eq!(

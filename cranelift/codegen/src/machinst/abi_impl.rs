@@ -97,31 +97,9 @@
 //!
 //! # Multi-value Returns
 //!
-//! Note that we support multi-value returns in two ways. First, we allow for
-//! multiple return-value registers. Second, if teh appropriate flag is set, we
-//! support the SpiderMonkey Wasm ABI.  For details of the multi-value return
-//! ABI, see:
-//!
-//! <https://searchfox.org/mozilla-central/rev/bc3600def806859c31b2c7ac06e3d69271052a89/js/src/wasm/WasmStubs.h#134>
-//!
-//! In brief:
-//! - Return values are processed in *reverse* order.
-//! - The first return value in this order (so the last return) goes into the
-//!   ordinary return register.
-//! - Any further returns go in a struct-return area, allocated upwards (in
-//!   address order) during the reverse traversal.
-//! - This struct-return area is provided by the caller, and a pointer to its
-//!   start is passed as an invisible last (extra) argument. Normally the caller
-//!   will allocate this area on the stack. When we generate calls, we place it
-//!   just above the on-stack argument area.
-//! - So, for example, a function returning 4 i64's (v0, v1, v2, v3), with no
-//!   formal arguments, would:
-//!   - Accept a pointer `P` to the struct return area as a hidden argument in the
-//!     first argument register on entry.
-//!   - Return v3 in the one and only return-value register.
-//!   - Return v2 in memory at `[P]`.
-//!   - Return v1 in memory at `[P+8]`.
-//!   - Return v0 in memory at `[P+16]`.
+//! We support multi-value returns by using multiple return-value
+//! registers. In some cases this is an extension of the base system
+//! ABI. See each platform's `abi.rs` implementation for details.
 
 use super::abi::*;
 use crate::binemit::StackMap;
@@ -212,14 +190,6 @@ pub enum ABIArg {
 }
 
 impl ABIArg {
-    /// Get the purpose of this arg.
-    fn get_purpose(&self) -> ir::ArgumentPurpose {
-        match self {
-            &ABIArg::Slots { purpose, .. } => purpose,
-            &ABIArg::StructArg { purpose, .. } => purpose,
-        }
-    }
-
     /// Is this a StructArg?
     fn is_struct_arg(&self) -> bool {
         match self {
@@ -366,10 +336,6 @@ pub trait ABIMachineSpec {
 
     /// Generate a return instruction.
     fn gen_ret(rets: Vec<Reg>) -> Self::I;
-
-    /// Generate an "epilogue placeholder" instruction, recognized by lowering
-    /// when using the Baldrdash ABI.
-    fn gen_epilogue_placeholder() -> Self::I;
 
     /// Generate an add-with-immediate. Note that even if this uses a scratch
     /// register, it must satisfy two requirements:
@@ -734,8 +700,7 @@ pub struct ABICalleeImpl<M: ABIMachineSpec> {
     /// Total number of spillslots, including for 'dynamic' types, from regalloc.
     spillslots: Option<usize>,
     /// Storage allocated for the fixed part of the stack frame.  This is
-    /// usually the same as the total frame size below, except in the case
-    /// of the baldrdash calling convention.
+    /// usually the same as the total frame size below.
     fixed_frame_storage_size: u32,
     /// "Total frame size", as defined by "distance between FP and nominal SP".
     /// Some items are pushed below nominal SP, so the function may actually use
@@ -803,7 +768,6 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
             call_conv == isa::CallConv::SystemV
                 || call_conv == isa::CallConv::Fast
                 || call_conv == isa::CallConv::Cold
-                || call_conv.extends_baldrdash()
                 || call_conv.extends_windows_fastcall()
                 || call_conv == isa::CallConv::AppleAarch64
                 || call_conv == isa::CallConv::WasmtimeSystemV
@@ -1164,14 +1128,8 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         insts
     }
 
-    fn arg_is_needed_in_body(&self, idx: usize) -> bool {
-        match self.sig.args[idx].get_purpose() {
-            // Special Baldrdash-specific pseudo-args that are present only to
-            // fill stack slots.  Won't ever be used as ordinary values in the
-            // body.
-            ir::ArgumentPurpose::CalleeTLS | ir::ArgumentPurpose::CallerTLS => false,
-            _ => true,
-        }
+    fn arg_is_needed_in_body(&self, _idx: usize) -> bool {
+        true
     }
 
     fn gen_copy_regs_to_retval(
@@ -1296,10 +1254,6 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         M::gen_ret(rets)
     }
 
-    fn gen_epilogue_placeholder(&self) -> Self::I {
-        M::gen_epilogue_placeholder()
-    }
-
     fn set_num_spillslots(&mut self, slots: usize) {
         self.spillslots = Some(slots);
     }
@@ -1400,14 +1354,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
 
     fn gen_prologue(&mut self) -> SmallInstVec<Self::I> {
         let bytes = M::word_bytes();
-        let mut total_stacksize = self.stackslots_size + bytes * self.spillslots.unwrap() as u32;
-        if self.call_conv.extends_baldrdash() {
-            debug_assert!(
-                !self.flags.enable_probestack(),
-                "baldrdash does not expect cranelift to emit stack probes"
-            );
-            total_stacksize += self.flags.baldrdash_prologue_words() as u32 * bytes;
-        }
+        let total_stacksize = self.stackslots_size + bytes * self.spillslots.unwrap() as u32;
         let mask = M::stack_align(self.call_conv) - 1;
         let total_stacksize = (total_stacksize + mask) & !mask; // 16-align the stack.
         let clobbered_callee_saves = M::get_clobbered_callee_saves(
@@ -1418,36 +1365,34 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         );
         let mut insts = smallvec![];
 
-        if !self.call_conv.extends_baldrdash() {
-            self.fixed_frame_storage_size += total_stacksize;
-            self.setup_frame = self.flags.preserve_frame_pointers()
-                || M::is_frame_setup_needed(
-                    self.is_leaf,
-                    self.stack_args_size(),
-                    clobbered_callee_saves.len(),
-                    self.fixed_frame_storage_size,
-                );
-
-            insts.extend(
-                M::gen_debug_frame_info(self.call_conv, &self.flags, &self.isa_flags).into_iter(),
+        self.fixed_frame_storage_size += total_stacksize;
+        self.setup_frame = self.flags.preserve_frame_pointers()
+            || M::is_frame_setup_needed(
+                self.is_leaf,
+                self.stack_args_size(),
+                clobbered_callee_saves.len(),
+                self.fixed_frame_storage_size,
             );
 
-            if self.setup_frame {
-                // set up frame
-                insts.extend(M::gen_prologue_frame_setup(&self.flags).into_iter());
-            }
+        insts.extend(
+            M::gen_debug_frame_info(self.call_conv, &self.flags, &self.isa_flags).into_iter(),
+        );
 
-            // Leaf functions with zero stack don't need a stack check if one's
-            // specified, otherwise always insert the stack check.
-            if total_stacksize > 0 || !self.is_leaf {
-                if let Some((reg, stack_limit_load)) = &self.stack_limit {
-                    insts.extend(stack_limit_load.clone());
-                    self.insert_stack_check(*reg, total_stacksize, &mut insts);
-                }
-                if let Some(min_frame) = &self.probestack_min_frame {
-                    if total_stacksize >= *min_frame {
-                        insts.extend(M::gen_probestack(total_stacksize));
-                    }
+        if self.setup_frame {
+            // set up frame
+            insts.extend(M::gen_prologue_frame_setup(&self.flags).into_iter());
+        }
+
+        // Leaf functions with zero stack don't need a stack check if one's
+        // specified, otherwise always insert the stack check.
+        if total_stacksize > 0 || !self.is_leaf {
+            if let Some((reg, stack_limit_load)) = &self.stack_limit {
+                insts.extend(stack_limit_load.clone());
+                self.insert_stack_check(*reg, total_stacksize, &mut insts);
+            }
+            if let Some(min_frame) = &self.probestack_min_frame {
+                if total_stacksize >= *min_frame {
+                    insts.extend(M::gen_probestack(total_stacksize));
                 }
             }
         }
@@ -1497,16 +1442,14 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         // the CFG, so early returns in the middle of function bodies would cause an incorrect
         // offset for the rest of the body.
 
-        if !self.call_conv.extends_baldrdash() {
-            if self.setup_frame {
-                insts.extend(M::gen_epilogue_frame_restore(&self.flags));
-            }
-
-            // This `ret` doesn't need any return registers attached
-            // because we are post-regalloc and don't need to
-            // represent the implicit uses anymore.
-            insts.push(M::gen_ret(vec![]));
+        if self.setup_frame {
+            insts.extend(M::gen_epilogue_frame_restore(&self.flags));
         }
+
+        // This `ret` doesn't need any return registers attached
+        // because we are post-regalloc and don't need to
+        // represent the implicit uses anymore.
+        insts.push(M::gen_ret(vec![]));
 
         trace!("Epilogue: {:?}", insts);
         insts

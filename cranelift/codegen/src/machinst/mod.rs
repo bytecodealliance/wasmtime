@@ -96,9 +96,6 @@ pub trait MachInst: Clone + Debug {
     /// (ret/uncond/cond) and target if applicable.
     fn is_term(&self) -> MachTerminator;
 
-    /// Returns true if the instruction is an epilogue placeholder.
-    fn is_epilogue_placeholder(&self) -> bool;
-
     /// Should this instruction be included in the clobber-set?
     fn is_included_in_clobbers(&self) -> bool {
         true

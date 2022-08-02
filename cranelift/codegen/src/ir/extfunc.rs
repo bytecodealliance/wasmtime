@@ -215,11 +215,6 @@ impl fmt::Display for AbiParam {
 /// particulars of the target's ABI, and the CLIF should be platform-independent, these attributes
 /// specify *how* to extend (according to the signedness of the original program) rather than
 /// *whether* to extend.
-///
-/// For example, on x86-64, the SystemV ABI does not require extensions of narrow values, so these
-/// `ArgumentExtension` attributes are ignored; but in the Baldrdash (SpiderMonkey) ABI on the same
-/// platform, all narrow values *are* extended, so these attributes may lead to extra
-/// zero/sign-extend instructions in the generated machine code.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum ArgumentExtension {
@@ -297,20 +292,6 @@ pub enum ArgumentPurpose {
     /// This is a pointer to a stack limit. It is used to check the current stack pointer
     /// against. Can only appear once in a signature.
     StackLimit,
-
-    /// A callee TLS value.
-    ///
-    /// In the Baldrdash-2020 calling convention, the stack upon entry to the callee contains the
-    /// TLS-register values for the caller and the callee. This argument is used to provide the
-    /// value for the callee.
-    CalleeTLS,
-
-    /// A caller TLS value.
-    ///
-    /// In the Baldrdash-2020 calling convention, the stack upon entry to the callee contains the
-    /// TLS-register values for the caller and the callee. This argument is used to provide the
-    /// value for the caller.
-    CallerTLS,
 }
 
 impl fmt::Display for ArgumentPurpose {
@@ -325,8 +306,6 @@ impl fmt::Display for ArgumentPurpose {
             Self::VMContext => "vmctx",
             Self::SignatureId => "sigid",
             Self::StackLimit => "stack_limit",
-            Self::CalleeTLS => "callee_tls",
-            Self::CallerTLS => "caller_tls",
         })
     }
 }
@@ -447,9 +426,6 @@ mod tests {
             CallConv::Cold,
             CallConv::SystemV,
             CallConv::WindowsFastcall,
-            CallConv::BaldrdashSystemV,
-            CallConv::BaldrdashWindows,
-            CallConv::Baldrdash2020,
         ] {
             assert_eq!(Ok(cc), cc.to_string().parse())
         }
@@ -457,18 +433,15 @@ mod tests {
 
     #[test]
     fn signatures() {
-        let mut sig = Signature::new(CallConv::BaldrdashSystemV);
-        assert_eq!(sig.to_string(), "() baldrdash_system_v");
+        let mut sig = Signature::new(CallConv::WindowsFastcall);
+        assert_eq!(sig.to_string(), "() windows_fastcall");
         sig.params.push(AbiParam::new(I32));
-        assert_eq!(sig.to_string(), "(i32) baldrdash_system_v");
+        assert_eq!(sig.to_string(), "(i32) windows_fastcall");
         sig.returns.push(AbiParam::new(F32));
-        assert_eq!(sig.to_string(), "(i32) -> f32 baldrdash_system_v");
+        assert_eq!(sig.to_string(), "(i32) -> f32 windows_fastcall");
         sig.params.push(AbiParam::new(I32.by(4).unwrap()));
-        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32 baldrdash_system_v");
+        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32 windows_fastcall");
         sig.returns.push(AbiParam::new(B8));
-        assert_eq!(
-            sig.to_string(),
-            "(i32, i32x4) -> f32, b8 baldrdash_system_v"
-        );
+        assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, b8 windows_fastcall");
     }
 }

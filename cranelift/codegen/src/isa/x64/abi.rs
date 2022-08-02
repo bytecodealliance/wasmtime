@@ -20,60 +20,6 @@ use std::convert::TryFrom;
 /// with 32-bit arithmetic: for now, 128 MB.
 static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
 
-/// Offset in stack-arg area to callee-TLS slot in Baldrdash-2020 calling convention.
-static BALDRDASH_CALLEE_TLS_OFFSET: i64 = 0;
-/// Offset in stack-arg area to caller-TLS slot in Baldrdash-2020 calling convention.
-static BALDRDASH_CALLER_TLS_OFFSET: i64 = 8;
-
-/// Try to fill a Baldrdash register, returning it if it was found.
-fn try_fill_baldrdash_reg(call_conv: CallConv, param: &ir::AbiParam) -> Option<ABIArg> {
-    if call_conv.extends_baldrdash() {
-        match &param.purpose {
-            &ir::ArgumentPurpose::VMContext => {
-                // This is SpiderMonkey's `WasmTlsReg`.
-                Some(ABIArg::reg(
-                    regs::r14().to_real_reg().unwrap(),
-                    types::I64,
-                    param.extension,
-                    param.purpose,
-                ))
-            }
-            &ir::ArgumentPurpose::SignatureId => {
-                // This is SpiderMonkey's `WasmTableCallSigReg`.
-                Some(ABIArg::reg(
-                    regs::r10().to_real_reg().unwrap(),
-                    types::I64,
-                    param.extension,
-                    param.purpose,
-                ))
-            }
-            &ir::ArgumentPurpose::CalleeTLS => {
-                // This is SpiderMonkey's callee TLS slot in the extended frame of Wasm's ABI-2020.
-                assert!(call_conv == isa::CallConv::Baldrdash2020);
-                Some(ABIArg::stack(
-                    BALDRDASH_CALLEE_TLS_OFFSET,
-                    ir::types::I64,
-                    ir::ArgumentExtension::None,
-                    param.purpose,
-                ))
-            }
-            &ir::ArgumentPurpose::CallerTLS => {
-                // This is SpiderMonkey's caller TLS slot in the extended frame of Wasm's ABI-2020.
-                assert!(call_conv == isa::CallConv::Baldrdash2020);
-                Some(ABIArg::stack(
-                    BALDRDASH_CALLER_TLS_OFFSET,
-                    ir::types::I64,
-                    ir::ArgumentExtension::None,
-                    param.purpose,
-                ))
-            }
-            _ => None,
-        }
-    } else {
-        None
-    }
-}
-
 /// Support for the x64 ABI from the callee side (within a function body).
 pub(crate) type X64ABICallee = ABICalleeImpl<X64ABIMachineSpec>;
 
@@ -102,9 +48,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
     ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
-        let is_baldrdash = call_conv.extends_baldrdash();
         let is_fastcall = call_conv.extends_windows_fastcall();
-        let has_baldrdash_tls = call_conv == isa::CallConv::Baldrdash2020;
 
         let mut next_gpr = 0;
         let mut next_vreg = 0;
@@ -121,40 +65,19 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             next_stack = 32;
         }
 
-        if args_or_rets == ArgsOrRets::Args && has_baldrdash_tls {
-            // Baldrdash ABI-2020 always has two stack-arg slots reserved, for the callee and
-            // caller TLS-register values, respectively.
-            next_stack = 16;
-        }
-
-        for i in 0..params.len() {
-            // Process returns backward, according to the SpiderMonkey ABI (which we
-            // adopt internally if `is_baldrdash` is set).
-            let param = match (args_or_rets, is_baldrdash) {
-                (ArgsOrRets::Args, _) => &params[i],
-                (ArgsOrRets::Rets, false) => &params[i],
-                (ArgsOrRets::Rets, true) => &params[params.len() - 1 - i],
-            };
-
+        for param in params {
             // Validate "purpose".
             match &param.purpose {
                 &ir::ArgumentPurpose::VMContext
                 | &ir::ArgumentPurpose::Normal
                 | &ir::ArgumentPurpose::StackLimit
                 | &ir::ArgumentPurpose::SignatureId
-                | &ir::ArgumentPurpose::CalleeTLS
-                | &ir::ArgumentPurpose::CallerTLS
                 | &ir::ArgumentPurpose::StructReturn
                 | &ir::ArgumentPurpose::StructArgument(_) => {}
                 _ => panic!(
                     "Unsupported argument purpose {:?} in signature: {:?}",
                     param.purpose, params
                 ),
-            }
-
-            if let Some(param) = try_fill_baldrdash_reg(call_conv, param) {
-                ret.push(param);
-                continue;
             }
 
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
@@ -269,10 +192,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             });
         }
 
-        if args_or_rets == ArgsOrRets::Rets && is_baldrdash {
-            ret.reverse();
-        }
-
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
             if let Some(reg) = get_intreg_for_arg(&call_conv, next_gpr, next_param_idx) {
@@ -306,14 +225,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         Ok((ret, next_stack as i64, extra_arg))
     }
 
-    fn fp_to_arg_offset(call_conv: isa::CallConv, flags: &settings::Flags) -> i64 {
-        if call_conv.extends_baldrdash() {
-            let num_words = flags.baldrdash_prologue_words() as i64;
-            debug_assert!(num_words > 0, "baldrdash must set baldrdash_prologue_words");
-            num_words * 8
-        } else {
-            16 // frame pointer + return address.
-        }
+    fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
+        16 // frame pointer + return address.
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I {
@@ -361,10 +274,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         Inst::ret(rets)
     }
 
-    fn gen_epilogue_placeholder() -> Self::I {
-        Inst::epilogue_placeholder()
-    }
-
     fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Self::I> {
         let mut ret = SmallVec::new();
         if from_reg != into_reg.to_reg() {
@@ -396,10 +305,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn get_stacklimit_reg() -> Reg {
-        debug_assert!(
-            !is_callee_save_systemv(regs::r10().to_real_reg().unwrap(), false)
-                && !is_callee_save_baldrdash(regs::r10().to_real_reg().unwrap())
-        );
+        debug_assert!(!is_callee_save_systemv(
+            regs::r10().to_real_reg().unwrap(),
+            false
+        ));
 
         // As per comment on trait definition, we must return a caller-save
         // register here.
@@ -621,17 +530,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             ));
         }
 
-        // If this is Baldrdash-2020, restore the callee (i.e., our) TLS
-        // register. We may have allocated it for something else and clobbered
-        // it, but the ABI expects us to leave the TLS register unchanged.
-        if call_conv == isa::CallConv::Baldrdash2020 {
-            let off = BALDRDASH_CALLEE_TLS_OFFSET + Self::fp_to_arg_offset(call_conv, flags);
-            insts.push(Inst::mov64_m_r(
-                Amode::imm_reg(off as u32, regs::rbp()),
-                Writable::from_reg(regs::r14()),
-            ));
-        }
-
         insts
     }
 
@@ -684,8 +582,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         src: Reg,
         size: usize,
     ) -> SmallVec<[Self::I; 8]> {
-        // Baldrdash should not use struct args.
-        assert!(!call_conv.extends_baldrdash());
         let mut insts = SmallVec::new();
         let arg0 = get_intreg_for_arg(&call_conv, 0, 0).unwrap();
         let arg1 = get_intreg_for_arg(&call_conv, 1, 1).unwrap();
@@ -741,33 +637,18 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
-        let mut clobbers = if call_conv_of_callee.extends_windows_fastcall() {
+        if call_conv_of_callee.extends_windows_fastcall() {
             WINDOWS_CLOBBERS
         } else {
             SYSV_CLOBBERS
-        };
-
-        if call_conv_of_callee.extends_baldrdash() {
-            clobbers.add(regs::gpr_preg(regs::ENC_R12));
-            clobbers.add(regs::gpr_preg(regs::ENC_R13));
-            clobbers.add(regs::gpr_preg(regs::ENC_R15));
-            clobbers.add(regs::gpr_preg(regs::ENC_RBX));
         }
-
-        clobbers
     }
 
     fn get_ext_mode(
-        call_conv: isa::CallConv,
-        specified: ir::ArgumentExtension,
+        _call_conv: isa::CallConv,
+        _specified: ir::ArgumentExtension,
     ) -> ir::ArgumentExtension {
-        if call_conv.extends_baldrdash() {
-            // Baldrdash (SpiderMonkey) always extends args and return values to the full register.
-            specified
-        } else {
-            // No other supported ABI on x64 does so.
-            ir::ArgumentExtension::None
-        }
+        ir::ArgumentExtension::None
     }
 
     fn get_clobbered_callee_saves(
@@ -777,14 +658,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = match call_conv {
-            CallConv::BaldrdashSystemV | CallConv::Baldrdash2020 => regs
-                .iter()
-                .cloned()
-                .filter(|r| is_callee_save_baldrdash(r.to_reg()))
-                .collect(),
-            CallConv::BaldrdashWindows => {
-                todo!("baldrdash windows");
-            }
             CallConv::Fast | CallConv::Cold | CallConv::SystemV | CallConv::WasmtimeSystemV => regs
                 .iter()
                 .cloned()
@@ -905,10 +778,7 @@ fn get_intreg_for_retval(
             1 => Some(regs::rdx()),
             _ => None,
         },
-        CallConv::BaldrdashSystemV
-        | CallConv::Baldrdash2020
-        | CallConv::WasmtimeSystemV
-        | CallConv::WasmtimeFastcall => {
+        CallConv::WasmtimeSystemV | CallConv::WasmtimeFastcall => {
             if intreg_idx == 0 && retval_idx == 0 {
                 Some(regs::rax())
             } else {
@@ -920,7 +790,7 @@ fn get_intreg_for_retval(
             1 => Some(regs::rdx()), // The Rust ABI for i128s needs this.
             _ => None,
         },
-        CallConv::BaldrdashWindows | CallConv::Probestack => todo!(),
+        CallConv::Probestack => todo!(),
         CallConv::AppleAarch64 | CallConv::WasmtimeAppleAarch64 => unreachable!(),
     }
 }
@@ -936,10 +806,7 @@ fn get_fltreg_for_retval(
             1 => Some(regs::xmm1()),
             _ => None,
         },
-        CallConv::BaldrdashSystemV
-        | CallConv::Baldrdash2020
-        | CallConv::WasmtimeFastcall
-        | CallConv::WasmtimeSystemV => {
+        CallConv::WasmtimeFastcall | CallConv::WasmtimeSystemV => {
             if fltreg_idx == 0 && retval_idx == 0 {
                 Some(regs::xmm0())
             } else {
@@ -950,7 +817,7 @@ fn get_fltreg_for_retval(
             0 => Some(regs::xmm0()),
             _ => None,
         },
-        CallConv::BaldrdashWindows | CallConv::Probestack => todo!(),
+        CallConv::Probestack => todo!(),
         CallConv::AppleAarch64 | CallConv::WasmtimeAppleAarch64 => unreachable!(),
     }
 }
@@ -966,22 +833,6 @@ fn is_callee_save_systemv(r: RealReg, enable_pinned_reg: bool) -> bool {
             ENC_R15 => !enable_pinned_reg,
             _ => false,
         },
-        RegClass::Float => false,
-    }
-}
-
-fn is_callee_save_baldrdash(r: RealReg) -> bool {
-    use regs::*;
-    match r.class() {
-        RegClass::Int => {
-            if r.hw_enc() == ENC_R14 {
-                // r14 is the WasmTlsReg and is preserved implicitly.
-                false
-            } else {
-                // Defer to native for the other ones.
-                is_callee_save_systemv(r, /* enable_pinned_reg = */ true)
-            }
-        }
         RegClass::Float => false,
     }
 }

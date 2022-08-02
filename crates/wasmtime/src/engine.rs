@@ -351,9 +351,7 @@ impl Engine {
             // Features wasmtime doesn't use should all be disabled, since
             // otherwise if they are enabled it could change the behavior of
             // generated code.
-            "baldrdash_prologue_words" => *value == FlagValue::Num(0),
             "enable_llvm_abi_extensions" => *value == FlagValue::Bool(false),
-            "emit_all_ones_funcaddrs" => *value == FlagValue::Bool(false),
             "enable_pinned_reg" => *value == FlagValue::Bool(false),
             "enable_probestack" => *value == FlagValue::Bool(false),
             "use_colocated_libcalls" => *value == FlagValue::Bool(false),

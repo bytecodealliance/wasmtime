@@ -1240,13 +1240,12 @@ impl EmitState {
 
 /// Constant state used during function compilation.
 pub struct EmitInfo {
-    flags: settings::Flags,
     isa_flags: s390x_settings::Flags,
 }
 
 impl EmitInfo {
-    pub(crate) fn new(flags: settings::Flags, isa_flags: s390x_settings::Flags) -> Self {
-        Self { flags, isa_flags }
+    pub(crate) fn new(isa_flags: s390x_settings::Flags) -> Self {
+        Self { isa_flags }
     }
 }
 
@@ -2200,11 +2199,7 @@ impl MachInstEmit for Inst {
                 let reg = writable_spilltmp_reg().to_reg();
                 put(sink, &enc_ri_b(opcode, reg, 12));
                 sink.add_reloc(Reloc::Abs8, name, offset);
-                if emit_info.flags.emit_all_ones_funcaddrs() {
-                    sink.put8(u64::max_value());
-                } else {
-                    sink.put8(0);
-                }
+                sink.put8(0);
                 let inst = Inst::Load64 {
                     rd,
                     mem: MemArg::reg(reg, MemFlags::trusted()),
@@ -3119,9 +3114,6 @@ impl MachInstEmit for Inst {
 
                 let opcode = 0x07; // BCR
                 put(sink, &enc_rr(opcode, gpr(15), link));
-            }
-            &Inst::EpiloguePlaceholder => {
-                // Noop; this is just a placeholder for epilogues.
             }
             &Inst::Jump { dest } => {
                 let off = sink.cur_offset();

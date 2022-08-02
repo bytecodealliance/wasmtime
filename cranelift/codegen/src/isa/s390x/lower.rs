@@ -177,7 +177,6 @@ impl LowerBackend for S390xBackend {
             | Opcode::Debugtrap
             | Opcode::Call
             | Opcode::CallIndirect
-            | Opcode::FallthroughReturn
             | Opcode::Return
             | Opcode::StackAddr
             | Opcode::FuncAddr

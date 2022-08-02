@@ -43,11 +43,10 @@ fn test_aarch64_binemit() {
     insns.push((Inst::Csdb, "9F2203D5", "csdb"));
     insns.push((
         Inst::Udf {
-            use_allocated_encoding: false,
             trap_code: TrapCode::Interrupt,
         },
-        "0000A0D4",
-        "udf",
+        "1FC10000",
+        "udf #0xc11f",
     ));
     insns.push((
         Inst::AluRRR {

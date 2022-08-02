@@ -463,7 +463,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::FallthroughReturn | Opcode::Return => {
+        Opcode::Return => {
             for (i, input) in inputs.iter().enumerate() {
                 // N.B.: according to the AArch64 ABI, the top bits of a register
                 // (above the bits for the value's type) are undefined, so we

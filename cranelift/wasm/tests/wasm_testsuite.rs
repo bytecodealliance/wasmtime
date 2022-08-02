@@ -2,7 +2,7 @@ use cranelift_codegen::isa::{CallConv, TargetFrontendConfig};
 use cranelift_codegen::print_errors::pretty_verifier_error;
 use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::verifier;
-use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
+use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex};
 use std::fs;
 use std::path::Path;
 use target_lexicon::PointerWidth;
@@ -28,16 +28,8 @@ fn testsuite() {
         let path = path.path();
         println!("=== {} ===", path.display());
         let data = read_module(&path);
-        handle_module(data, &flags, ReturnMode::NormalReturns);
+        handle_module(data, &flags);
     }
-}
-
-#[test]
-fn use_fallthrough_return() {
-    let flags = Flags::new(settings::builder());
-    let path = Path::new("./wasmtests/use_fallthrough_return.wat");
-    let data = read_module(&path);
-    handle_module(data, &flags, ReturnMode::FallthroughReturn);
 }
 
 #[test]
@@ -51,13 +43,11 @@ fn use_name_section() {
     )
     .unwrap();
 
-    let return_mode = ReturnMode::NormalReturns;
     let mut dummy_environ = DummyEnvironment::new(
         TargetFrontendConfig {
             default_call_conv: CallConv::SystemV,
             pointer_width: PointerWidth::U32,
         },
-        return_mode,
         false,
     );
 
@@ -84,13 +74,12 @@ fn read_module(path: &Path) -> Vec<u8> {
     }
 }
 
-fn handle_module(data: Vec<u8>, flags: &Flags, return_mode: ReturnMode) {
+fn handle_module(data: Vec<u8>, flags: &Flags) {
     let mut dummy_environ = DummyEnvironment::new(
         TargetFrontendConfig {
             default_call_conv: CallConv::SystemV,
             pointer_width: PointerWidth::U64,
         },
-        return_mode,
         false,
     );
 
@@ -107,7 +96,6 @@ fn handle_module(data: Vec<u8>, flags: &Flags, return_mode: ReturnMode) {
 fn reachability_is_correct() {
     let tests = vec![
         (
-            ReturnMode::NormalReturns,
             r#"
         (module (func (param i32)
          (loop
@@ -127,7 +115,6 @@ fn reachability_is_correct() {
             ],
         ),
         (
-            ReturnMode::NormalReturns,
             r#"
         (module (func (param i32)
          (loop
@@ -145,7 +132,6 @@ fn reachability_is_correct() {
             ],
         ),
         (
-            ReturnMode::NormalReturns,
             r#"
         (module (func (param i32) (result i32)
           i32.const 1
@@ -158,30 +144,15 @@ fn reachability_is_correct() {
                 (false, false), // End
             ],
         ),
-        (
-            ReturnMode::FallthroughReturn,
-            r#"
-        (module (func (param i32) (result i32)
-         i32.const 1
-         return
-         i32.const 42))"#,
-            vec![
-                (true, true),   // I32Const
-                (true, false),  // Return
-                (false, false), // I32Const
-                (false, true),  // End
-            ],
-        ),
     ];
 
-    for (return_mode, wat, expected_reachability) in tests {
+    for (wat, expected_reachability) in tests {
         println!("testing wat:\n{}", wat);
         let mut env = DummyEnvironment::new(
             TargetFrontendConfig {
                 default_call_conv: CallConv::SystemV,
                 pointer_width: PointerWidth::U64,
             },
-            return_mode,
             false,
         );
         env.test_expected_reachability(expected_reachability);

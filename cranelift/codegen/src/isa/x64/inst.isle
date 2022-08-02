@@ -331,13 +331,8 @@
        ;; Return.
        (Ret (rets VecReg))
 
-       ;; A placeholder instruction, generating no code, meaning that a function
-       ;; epilogue must be inserted there.
-       (EpiloguePlaceholder)
-
        ;; Jump to a known target: jmp simm32.
        (JmpKnown (dst MachLabel))
-
 
        ;; One-way conditional branch: jcond cond target.
        ;;
