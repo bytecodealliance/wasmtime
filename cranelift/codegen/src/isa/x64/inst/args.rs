@@ -318,7 +318,11 @@ impl Amode {
                 }
             }
             Amode::ImmRegRegShift { base, index, .. } => {
+                debug_assert_ne!(base.to_reg(), regs::rbp());
+                debug_assert_ne!(base.to_reg(), regs::rsp());
                 collector.reg_use(base.to_reg());
+                debug_assert_ne!(index.to_reg(), regs::rbp());
+                debug_assert_ne!(index.to_reg(), regs::rsp());
                 collector.reg_use(index.to_reg());
             }
             Amode::RipRelative { .. } => {
