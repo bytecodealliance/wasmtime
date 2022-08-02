@@ -244,13 +244,7 @@ impl ComponentInstance {
     /// This can only be called after `idx` has been initialized at runtime
     /// during the instantiation process of a component.
     pub fn lowering_anyfunc(&self, idx: LoweredIndex) -> NonNull<VMCallerCheckedAnyfunc> {
-        unsafe {
-            let ret = self
-                .vmctx_plus_offset::<VMCallerCheckedAnyfunc>(self.offsets.lowering_anyfunc(idx));
-            debug_assert!((*ret).func_ptr.as_ptr() as usize != INVALID_PTR);
-            debug_assert!((*ret).vmctx as usize != INVALID_PTR);
-            NonNull::new(ret).unwrap()
-        }
+        unsafe { self.anyfunc(self.offsets.lowering_anyfunc(idx)) }
     }
 
     /// Same as `lowering_anyfunc` except for the functions that always trap.
@@ -258,13 +252,14 @@ impl ComponentInstance {
         &self,
         idx: RuntimeAlwaysTrapIndex,
     ) -> NonNull<VMCallerCheckedAnyfunc> {
-        unsafe {
-            let ret = self
-                .vmctx_plus_offset::<VMCallerCheckedAnyfunc>(self.offsets.always_trap_anyfunc(idx));
-            debug_assert!((*ret).func_ptr.as_ptr() as usize != INVALID_PTR);
-            debug_assert!((*ret).vmctx as usize != INVALID_PTR);
-            NonNull::new(ret).unwrap()
-        }
+        unsafe { self.anyfunc(self.offsets.always_trap_anyfunc(idx)) }
+    }
+
+    unsafe fn anyfunc(&self, offset: u32) -> NonNull<VMCallerCheckedAnyfunc> {
+        let ret = self.vmctx_plus_offset::<VMCallerCheckedAnyfunc>(offset);
+        debug_assert!((*ret).func_ptr.as_ptr() as usize != INVALID_PTR);
+        debug_assert!((*ret).vmctx as usize != INVALID_PTR);
+        NonNull::new(ret).unwrap()
     }
 
     /// Stores the runtime memory pointer at the index specified.
@@ -335,16 +330,12 @@ impl ComponentInstance {
             debug_assert!(
                 *self.vmctx_plus_offset::<usize>(self.offsets.lowering_data(idx)) == INVALID_PTR
             );
-            debug_assert!(
-                *self.vmctx_plus_offset::<usize>(self.offsets.lowering_anyfunc(idx)) == INVALID_PTR
-            );
             *self.vmctx_plus_offset(self.offsets.lowering(idx)) = lowering;
-            let vmctx = self.vmctx();
-            *self.vmctx_plus_offset(self.offsets.lowering_anyfunc(idx)) = VMCallerCheckedAnyfunc {
-                func_ptr: anyfunc_func_ptr,
-                type_index: anyfunc_type_index,
-                vmctx: VMOpaqueContext::from_vmcomponent(vmctx),
-            };
+            self.set_anyfunc(
+                self.offsets.lowering_anyfunc(idx),
+                anyfunc_func_ptr,
+                anyfunc_type_index,
+            );
         }
     }
 
@@ -355,19 +346,22 @@ impl ComponentInstance {
         func_ptr: NonNull<VMFunctionBody>,
         type_index: VMSharedSignatureIndex,
     ) {
-        unsafe {
-            debug_assert!(
-                *self.vmctx_plus_offset::<usize>(self.offsets.always_trap_anyfunc(idx))
-                    == INVALID_PTR
-            );
-            let vmctx = self.vmctx();
-            *self.vmctx_plus_offset(self.offsets.always_trap_anyfunc(idx)) =
-                VMCallerCheckedAnyfunc {
-                    func_ptr,
-                    type_index,
-                    vmctx: VMOpaqueContext::from_vmcomponent(vmctx),
-                };
-        }
+        unsafe { self.set_anyfunc(self.offsets.always_trap_anyfunc(idx), func_ptr, type_index) }
+    }
+
+    unsafe fn set_anyfunc(
+        &mut self,
+        offset: u32,
+        func_ptr: NonNull<VMFunctionBody>,
+        type_index: VMSharedSignatureIndex,
+    ) {
+        debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
+        let vmctx = self.vmctx();
+        *self.vmctx_plus_offset(offset) = VMCallerCheckedAnyfunc {
+            func_ptr,
+            type_index,
+            vmctx: VMOpaqueContext::from_vmcomponent(vmctx),
+        };
     }
 
     unsafe fn initialize_vmctx(&mut self, store: *mut dyn Store) {
