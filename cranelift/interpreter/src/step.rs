@@ -488,24 +488,52 @@ where
             }
             ControlFlow::Continue
         }
-        Opcode::Imin => choose(Value::gt(&arg(1)?, &arg(0)?)?, arg(0)?, arg(1)?),
-        Opcode::Umin => choose(
-            Value::gt(
-                &arg(1)?.convert(ValueConversionKind::ToUnsigned)?,
-                &arg(0)?.convert(ValueConversionKind::ToUnsigned)?,
-            )?,
-            arg(0)?,
-            arg(1)?,
-        ),
-        Opcode::Imax => choose(Value::gt(&arg(0)?, &arg(1)?)?, arg(0)?, arg(1)?),
-        Opcode::Umax => choose(
-            Value::gt(
-                &arg(0)?.convert(ValueConversionKind::ToUnsigned)?,
-                &arg(1)?.convert(ValueConversionKind::ToUnsigned)?,
-            )?,
-            arg(0)?,
-            arg(1)?,
-        ),
+        Opcode::Imin => {
+            if ctrl_ty.is_vector() {
+                let icmp = icmp(ctrl_ty, IntCC::SignedGreaterThan, &arg(1)?, &arg(0)?)?;
+                assign(vselect(&icmp, &arg(0)?, &arg(1)?, ctrl_ty)?)
+            } else {
+                choose(Value::gt(&arg(1)?, &arg(0)?)?, arg(0)?, arg(1)?)
+            }
+        }
+        Opcode::Umin => {
+            if ctrl_ty.is_vector() {
+                let icmp = icmp(ctrl_ty, IntCC::UnsignedGreaterThan, &arg(1)?, &arg(0)?)?;
+                assign(vselect(&icmp, &arg(0)?, &arg(1)?, ctrl_ty)?)
+            } else {
+                choose(
+                    Value::gt(
+                        &arg(1)?.convert(ValueConversionKind::ToUnsigned)?,
+                        &arg(0)?.convert(ValueConversionKind::ToUnsigned)?,
+                    )?,
+                    arg(0)?,
+                    arg(1)?,
+                )
+            }
+        }
+        Opcode::Imax => {
+            if ctrl_ty.is_vector() {
+                let icmp = icmp(ctrl_ty, IntCC::SignedGreaterThan, &arg(0)?, &arg(1)?)?;
+                assign(vselect(&icmp, &arg(0)?, &arg(1)?, ctrl_ty)?)
+            } else {
+                choose(Value::gt(&arg(0)?, &arg(1)?)?, arg(0)?, arg(1)?)
+            }
+        }
+        Opcode::Umax => {
+            if ctrl_ty.is_vector() {
+                let icmp = icmp(ctrl_ty, IntCC::UnsignedGreaterThan, &arg(0)?, &arg(1)?)?;
+                assign(vselect(&icmp, &arg(0)?, &arg(1)?, ctrl_ty)?)
+            } else {
+                choose(
+                    Value::gt(
+                        &arg(0)?.convert(ValueConversionKind::ToUnsigned)?,
+                        &arg(1)?.convert(ValueConversionKind::ToUnsigned)?,
+                    )?,
+                    arg(0)?,
+                    arg(1)?,
+                )
+            }
+        }
         Opcode::AvgRound => {
             let sum = Value::add(arg(0)?, arg(1)?)?;
             let one = Value::int(1, arg(0)?.ty())?;
@@ -897,20 +925,7 @@ where
         }
         Opcode::Vsplit => unimplemented!("Vsplit"),
         Opcode::Vconcat => unimplemented!("Vconcat"),
-        Opcode::Vselect => {
-            let c = extractlanes(&arg(0)?, ctrl_ty)?;
-            let x = extractlanes(&arg(1)?, ctrl_ty)?;
-            let y = extractlanes(&arg(2)?, ctrl_ty)?;
-            let mut new_vec = SimdVec::new();
-            for (c, (x, y)) in c.into_iter().zip(x.into_iter().zip(y.into_iter())) {
-                if Value::eq(&c, &Value::int(0, ctrl_ty.lane_type())?)? {
-                    new_vec.push(y);
-                } else {
-                    new_vec.push(x);
-                }
-            }
-            assign(vectorizelanes(&new_vec, ctrl_ty)?)
-        }
+        Opcode::Vselect => assign(vselect(&arg(0)?, &arg(1)?, &arg(2)?, ctrl_ty)?),
         Opcode::VanyTrue => assign(fold_vector(
             arg(0)?,
             ctrl_ty,
@@ -1295,4 +1310,22 @@ where
         .collect::<ValueResult<SimdVec<V>>>()?;
 
     vectorizelanes(&result, vector_type)
+}
+
+fn vselect<V>(c: &V, x: &V, y: &V, vector_type: types::Type) -> ValueResult<V>
+where
+    V: Value,
+{
+    let c = extractlanes(c, vector_type)?;
+    let x = extractlanes(x, vector_type)?;
+    let y = extractlanes(y, vector_type)?;
+    let mut new_vec = SimdVec::new();
+    for (c, (x, y)) in c.into_iter().zip(x.into_iter().zip(y.into_iter())) {
+        if Value::eq(&c, &Value::int(0, vector_type.lane_type())?)? {
+            new_vec.push(y);
+        } else {
+            new_vec.push(x);
+        }
+    }
+    vectorizelanes(&new_vec, vector_type)
 }
