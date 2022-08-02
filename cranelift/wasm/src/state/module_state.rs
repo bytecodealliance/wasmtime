@@ -23,13 +23,19 @@ pub struct ModuleTranslationState {
     pub(crate) wasm_types: WasmTypes,
 }
 
+/// TODO(dhil): Temporary workaround, should be available from wasmparser/readers/core/types.rs
+const EXTERN_REF: wasmparser::RefType = wasmparser::RefType {
+    nullable: true,
+    heap_type: wasmparser::HeapType::Extern,
+};
+
 fn cranelift_to_wasmparser_type(ty: Type) -> WasmResult<wasmparser::ValType> {
     Ok(match ty {
         types::I32 => wasmparser::ValType::I32,
         types::I64 => wasmparser::ValType::I64,
         types::F32 => wasmparser::ValType::F32,
         types::F64 => wasmparser::ValType::F64,
-        types::R32 | types::R64 => wasmparser::ValType::ExternRef,
+        types::R32 | types::R64 => wasmparser::ValType::Ref(EXTERN_REF),
         _ => {
             return Err(WasmError::Unsupported(format!(
                 "Cannot convert Cranelift type to Wasm signature: {:?}",

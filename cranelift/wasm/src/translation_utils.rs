@@ -30,9 +30,8 @@ pub fn type_to_type<PE: TargetEnvironment + ?Sized>(
         wasmparser::ValType::F32 => Ok(ir::types::F32),
         wasmparser::ValType::F64 => Ok(ir::types::F64),
         wasmparser::ValType::V128 => Ok(ir::types::I8X16),
-        wasmparser::ValType::ExternRef | wasmparser::ValType::FuncRef => {
-            Ok(environ.reference_type(ty.try_into()?))
-        }
+        wasmparser::ValType::Ref(rt) => Ok(environ.reference_type(rt.heap_type.try_into()?)),
+        wasmparser::ValType::Bot => todo!("ValType::Bot will not exist in final wasm-tools"),
     }
 }
 
@@ -48,10 +47,27 @@ pub fn tabletype_to_type<PE: TargetEnvironment + ?Sized>(
         wasmparser::ValType::F32 => Ok(Some(ir::types::F32)),
         wasmparser::ValType::F64 => Ok(Some(ir::types::F64)),
         wasmparser::ValType::V128 => Ok(Some(ir::types::I8X16)),
-        wasmparser::ValType::ExternRef => Ok(Some(environ.reference_type(ty.try_into()?))),
-        wasmparser::ValType::FuncRef => Ok(None),
+        wasmparser::ValType::Ref(rt) => {
+            match rt.heap_type {
+                wasmparser::HeapType::Extern => {
+                    Ok(Some(environ.reference_type(rt.heap_type.try_into()?)))
+                }
+                _ => Ok(None), // TODO(dhil) fixme: verify this is indeed the right thing to do.
+            }
+        }
+        wasmparser::ValType::Bot => todo!("ValType::Bot will not exist in final wasm-tools"),
     }
 }
+
+/// TODO(dhil): Temporary workaround, should be available from wasmparser/readers/core/types.rs
+const FUNC_REF: wasmparser::RefType = wasmparser::RefType {
+    nullable: true,
+    heap_type: wasmparser::HeapType::Func,
+};
+const EXTERN_REF: wasmparser::RefType = wasmparser::RefType {
+    nullable: true,
+    heap_type: wasmparser::HeapType::Extern,
+};
 
 /// Get the parameter and result types for the given Wasm blocktype.
 pub fn blocktype_params_results<'a, T>(
@@ -81,8 +97,14 @@ where
                 wasmparser::ValType::F32 => &[wasmparser::ValType::F32],
                 wasmparser::ValType::F64 => &[wasmparser::ValType::F64],
                 wasmparser::ValType::V128 => &[wasmparser::ValType::V128],
-                wasmparser::ValType::ExternRef => &[wasmparser::ValType::ExternRef],
-                wasmparser::ValType::FuncRef => &[wasmparser::ValType::FuncRef],
+                wasmparser::ValType::Ref(rt) => {
+                    match rt.heap_type {
+                        wasmparser::HeapType::Extern => &[wasmparser::ValType::Ref(EXTERN_REF)],
+                        wasmparser::HeapType::Func => &[wasmparser::ValType::Ref(FUNC_REF)],
+                        _ => todo!("Implement blocktype_params_results for HeapType::Bot/Index"), // TODO(dhil) fixme: I have a feeling this one is going to be somewhat painful.
+                    }
+                }
+                wasmparser::ValType::Bot => &[wasmparser::ValType::Bot],
             };
             (
                 itertools::Either::Left(params.iter().copied()),
@@ -123,12 +145,21 @@ pub fn block_with_params<PE: TargetEnvironment + ?Sized>(
             wasmparser::ValType::F64 => {
                 builder.append_block_param(block, ir::types::F64);
             }
-            wasmparser::ValType::ExternRef | wasmparser::ValType::FuncRef => {
-                builder.append_block_param(block, environ.reference_type(ty.try_into()?));
+            wasmparser::ValType::Ref(rt) => {
+                match rt.heap_type {
+                    wasmparser::HeapType::Func | wasmparser::HeapType::Extern => {
+                        builder.append_block_param(
+                            block,
+                            environ.reference_type(rt.heap_type.try_into()?),
+                        );
+                    } // TODO(dhil) fixme: verify that this is indeed the correct thing to do.
+                    _ => todo!("Implement block_with_params for HeapType::Bot/Index"), // TODO(dhil) fixme
+                }
             }
             wasmparser::ValType::V128 => {
                 builder.append_block_param(block, ir::types::I8X16);
             }
+            wasmparser::ValType::Bot => todo!("ValType::Bot will not exist in actual wasmparser"),
         }
     }
     Ok(block)

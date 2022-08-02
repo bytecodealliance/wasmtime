@@ -9,7 +9,7 @@
 use crate::state::FuncTranslationState;
 use crate::{
     DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
-    Table, TableIndex, Tag, TagIndex, TypeIndex, WasmError, WasmFuncType, WasmResult, WasmType,
+    Table, TableIndex, Tag, TagIndex, TypeIndex, WasmError, WasmFuncType, WasmResult, WasmHeapType,
 };
 use core::convert::From;
 use cranelift_codegen::cursor::FuncCursor;
@@ -65,7 +65,7 @@ pub trait TargetEnvironment {
     /// 32-bit architectures. If you override this, then you should also
     /// override `FuncEnvironment::{translate_ref_null, translate_ref_is_null}`
     /// as well.
-    fn reference_type(&self, ty: WasmType) -> ir::Type {
+    fn reference_type(&self, ty: WasmHeapType) -> ir::Type {
         let _ = ty;
         match self.pointer_type() {
             ir::types::I32 => ir::types::R32,
@@ -359,7 +359,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// null sentinel is not a null reference type pointer for your type. If you
     /// override this method, then you should also override
     /// `translate_ref_is_null` as well.
-    fn translate_ref_null(&mut self, mut pos: FuncCursor, ty: WasmType) -> WasmResult<ir::Value> {
+    fn translate_ref_null(&mut self, mut pos: FuncCursor, ty: WasmHeapType) -> WasmResult<ir::Value> {
         let _ = ty;
         Ok(pos.ins().null(self.reference_type(ty)))
     }

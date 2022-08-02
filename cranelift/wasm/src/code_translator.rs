@@ -2019,6 +2019,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::F64x2RelaxedMax => {
             return Err(wasm_unsupported!("proposed relaxed-simd operator {:?}", op));
         }
+
+        // TODO(dhil) fixme: merge into the above list.
+        // Function references instructions
+        Operator::BrOnNull { .. }
+        | Operator::BrOnNonNull { .. }
+        | Operator::CallRef
+        | Operator::ReturnCallRef
+        | Operator::RefAsNonNull => todo!("Implement Operator::[BrOnNull,BrOnNonNull,CallRef] for translate_operator"), // TODO(dhil) fixme
     };
     Ok(())
 }

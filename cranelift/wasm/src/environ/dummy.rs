@@ -271,7 +271,8 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
                 WasmType::F32 => ir::types::F32,
                 WasmType::F64 => ir::types::F64,
                 WasmType::V128 => ir::types::I8X16,
-                WasmType::FuncRef | WasmType::ExternRef => ir::types::R64,
+                WasmType::Ref(_) => ir::types::R64,
+                WasmType::Bot => panic!("WasmType::Bot won't exist soon"),
             },
         })
     }
@@ -667,7 +668,8 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
                 WasmType::F32 => ir::types::F32,
                 WasmType::F64 => ir::types::F64,
                 WasmType::V128 => ir::types::I8X16,
-                WasmType::FuncRef | WasmType::ExternRef => reference_type,
+                WasmType::Ref(_) => reference_type, // TODO(dhil) fixme: verify this is indeed the correct thing to do.
+                WasmType::Bot => todo!("Implement WasmType::Bot for declare_func_type"), // TODO(dhil) fixme
             })
         };
         sig.params.extend(wasm.params().iter().map(&mut cvt));
