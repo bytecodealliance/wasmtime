@@ -281,8 +281,8 @@ block0(v0: i64):
 ; block0:
 ;   mov x7, x0
 ;   movz x0, #42
-;   mov x1, x7
 ;   movz x2, #42
+;   mov x1, x7
 ;   ldr x10, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
 ;   blr x10
 ;   ldp fp, lr, [sp], #16

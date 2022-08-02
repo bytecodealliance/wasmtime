@@ -4,10 +4,10 @@
 pub mod generated_code;
 
 // Types that the generated ISLE code uses via `use super::*`.
-use crate::isa::s390x::abi::S390xMachineDeps;
+use crate::isa::s390x::abi::{S390xMachineDeps, REG_SAVE_AREA_SIZE};
 use crate::isa::s390x::inst::{
-    stack_reg, writable_gpr, zero_reg, CallIndInfo, CallInfo, Cond, Inst as MInst, MemArg, UImm12,
-    UImm16Shifted, UImm32Shifted,
+    gpr, stack_reg, writable_gpr, zero_reg, CallIndInfo, CallInfo, Cond, Inst as MInst, MemArg,
+    MemArgPair, UImm12, UImm16Shifted, UImm32Shifted,
 };
 use crate::isa::s390x::settings::Flags as IsaFlags;
 use crate::machinst::isle::*;
@@ -16,17 +16,25 @@ use crate::settings::Flags;
 use crate::{
     ir::{
         condcodes::*, immediates::*, types::*, AtomicRmwOp, Endianness, Inst, InstructionData,
-        MemFlags, Opcode, TrapCode, Value, ValueList,
+        LibCall, MemFlags, Opcode, TrapCode, Value, ValueList,
     },
     isa::unwind::UnwindInst,
+    isa::CallConv,
+    machinst::abi_impl::ABIMachineSpec,
     machinst::{InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
 };
 use regalloc2::PReg;
+use smallvec::{smallvec, SmallVec};
 use std::boxed::Box;
 use std::cell::Cell;
 use std::convert::TryFrom;
 use std::vec::Vec;
 use target_lexicon::Triple;
+
+/// Information describing a library call to be emitted.
+pub struct LibCallInfo {
+    libcall: LibCall,
+}
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
@@ -122,6 +130,49 @@ where
             opcode: *opcode,
             caller_callconv: self.lower_ctx.abi().call_conv(),
             callee_callconv: abi.call_conv(),
+        })
+    }
+
+    fn lib_call_info_memcpy(&mut self) -> LibCallInfo {
+        LibCallInfo {
+            libcall: LibCall::Memcpy,
+        }
+    }
+
+    fn lib_accumulate_outgoing_args_size(&mut self, _: &LibCallInfo) -> Unit {
+        // Libcalls only require the register save area.
+        self.lower_ctx
+            .abi()
+            .accumulate_outgoing_args_size(REG_SAVE_AREA_SIZE);
+    }
+
+    fn lib_call_info(&mut self, info: &LibCallInfo) -> BoxCallInfo {
+        let caller_callconv = self.lower_ctx.abi().call_conv();
+        let callee_callconv = CallConv::for_libcall(&self.flags, caller_callconv);
+
+        // Uses and defs are defined by the particular libcall.
+        let (uses, defs): (SmallVec<[Reg; 8]>, SmallVec<[WritableReg; 8]>) = match info.libcall {
+            LibCall::Memcpy => (
+                smallvec![gpr(2), gpr(3), gpr(4)],
+                smallvec![writable_gpr(2)],
+            ),
+            _ => unreachable!(),
+        };
+
+        // Clobbers are defined by the calling convention.  Remove deps from clobbers.
+        let mut clobbers = S390xMachineDeps::get_regs_clobbered_by_call(callee_callconv);
+        for reg in &defs {
+            clobbers.remove(PReg::from(reg.to_reg().to_real_reg().unwrap()));
+        }
+
+        Box::new(CallInfo {
+            dest: ExternalName::LibCall(info.libcall),
+            uses,
+            defs,
+            clobbers,
+            opcode: Opcode::Call,
+            caller_callconv,
+            callee_callconv,
         })
     }
 
@@ -469,6 +520,15 @@ where
     }
 
     #[inline]
+    fn len_minus_one(&mut self, len: u64) -> Option<u8> {
+        if len > 0 && len <= 256 {
+            Some((len - 1) as u8)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
     fn mask_amt_imm(&mut self, ty: Type, amt: i64) -> u8 {
         let mask = ty.lane_bits() - 1;
         (amt as u8) & (mask as u8)
@@ -600,6 +660,11 @@ where
     }
 
     #[inline]
+    fn memarg_flags(&mut self, mem: &MemArg) -> MemFlags {
+        mem.get_flags()
+    }
+
+    #[inline]
     fn memarg_reg_plus_reg(&mut self, x: Reg, y: Reg, bias: u8, flags: MemFlags) -> MemArg {
         MemArg::BXD12 {
             base: x,
@@ -640,6 +705,20 @@ where
             Some(off)
         } else {
             None
+        }
+    }
+
+    #[inline]
+    fn memarg_pair_from_memarg(&mut self, mem: &MemArg) -> Option<MemArgPair> {
+        MemArgPair::maybe_from_memarg(mem)
+    }
+
+    #[inline]
+    fn memarg_pair_from_reg(&mut self, reg: Reg, flags: MemFlags) -> MemArgPair {
+        MemArgPair {
+            base: reg,
+            disp: UImm12::zero(),
+            flags,
         }
     }
 

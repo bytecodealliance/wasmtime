@@ -195,6 +195,8 @@ pub trait ABICaller {
     fn signature(&self) -> &Signature;
 
     /// Emit a copy of an argument value from a source register, prior to the call.
+    /// For large arguments with associated stack buffer, this may load the address
+    /// of the buffer into the argument register, if required by the ABI.
     fn emit_copy_regs_to_arg<C: LowerCtx<I = Self::I>>(
         &self,
         ctx: &mut C,
@@ -202,10 +204,17 @@ pub trait ABICaller {
         from_reg: ValueRegs<Reg>,
     );
 
-    /// Specific order for copying into arguments at callsites. We must be
-    /// careful to copy into StructArgs first, because we need to be able
-    /// to invoke memcpy() before we've loaded other arg regs (see above).
-    fn get_copy_to_arg_order(&self) -> SmallVec<[usize; 8]>;
+    /// Emit a copy of a large argument into its associated stack buffer, if any.
+    /// We must be careful to perform all these copies (as necessary) before setting
+    /// up the argument registers, since we may have to invoke memcpy(), which could
+    /// clobber any registers already set up.  The back-end should call this routine
+    /// for all arguments before calling emit_copy_regs_to_arg for all arguments.
+    fn emit_copy_regs_to_buffer<C: LowerCtx<I = Self::I>>(
+        &self,
+        ctx: &mut C,
+        idx: usize,
+        from_reg: ValueRegs<Reg>,
+    );
 
     /// Emit a copy a return value into a destination register, after the call returns.
     fn emit_copy_retval_to_regs<C: LowerCtx<I = Self::I>>(

@@ -712,12 +712,18 @@ where
             inputs.len(&self.lower_ctx.dfg().value_lists) - off,
             abi.num_args()
         );
-        for i in caller.get_copy_to_arg_order() {
+        let mut arg_regs = vec![];
+        for i in 0..abi.num_args() {
             let input = inputs
                 .get(off + i, &self.lower_ctx.dfg().value_lists)
                 .unwrap();
-            let arg_regs = self.lower_ctx.put_value_in_regs(input);
-            caller.emit_copy_regs_to_arg(self.lower_ctx, i, arg_regs);
+            arg_regs.push(self.lower_ctx.put_value_in_regs(input));
+        }
+        for (i, arg_regs) in arg_regs.iter().enumerate() {
+            caller.emit_copy_regs_to_buffer(self.lower_ctx, i, *arg_regs);
+        }
+        for (i, arg_regs) in arg_regs.iter().enumerate() {
+            caller.emit_copy_regs_to_arg(self.lower_ctx, i, *arg_regs);
         }
         caller.emit_call(self.lower_ctx);
 
