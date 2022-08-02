@@ -833,6 +833,7 @@ impl Compiler<'_, '_> {
             let src_add = if src_opts.memory64 { I64Add } else { I32Add };
             let dst_add = if dst_opts.memory64 { I64Add } else { I32Add };
             let src_eqz = if src_opts.memory64 { I64Eqz } else { I32Eqz };
+            let src_ne = if src_opts.memory64 { I64Ne } else { I32Ne };
 
             // This block encompasses the entire loop and is use to exit before even
             // entering the loop if the list size is zero.
@@ -887,7 +888,8 @@ impl Compiler<'_, '_> {
             self.instruction(iconst(-1, src_opts.ptr()));
             self.instruction(src_add.clone());
             self.instruction(LocalTee(remaining));
-            self.instruction(src_eqz.clone());
+            self.instruction(iconst(0, src_opts.ptr()));
+            self.instruction(src_ne.clone());
             self.instruction(BrIf(0));
             self.instruction(End); // end of loop
             self.instruction(End); // end of block
