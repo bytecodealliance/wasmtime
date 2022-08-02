@@ -800,11 +800,7 @@
              ;; pointer). The appropriate relocation is emitted so
              ;; that the resulting immediate makes this Amode refer to
              ;; the given MachLabel.
-             (RipRelative (target MachLabel))
-
-             ;; Load `rbp + sign_extend(simm32)`.
-             (RbpOffset (simm32 u32)
-                        (flags MemFlags))))
+             (RipRelative (target MachLabel))))
 
 ;; Some Amode constructor helpers.
 

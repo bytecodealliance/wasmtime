@@ -298,20 +298,7 @@ pub(crate) fn emit_std_enc_mem(
 
     prefixes.emit(sink);
 
-    let mem_e = match mem_e.clone() {
-        Amode::RbpOffset { simm32, flags } => {
-            let base = regs::rbp();
-            Amode::ImmReg {
-                simm32,
-                base,
-                flags,
-            }
-        }
-        other => other,
-    };
-
-    match mem_e {
-        Amode::RbpOffset { .. } => unreachable!(),
+    match *mem_e {
         Amode::ImmReg { simm32, base, .. } => {
             // If this is an access based off of RSP, it may trap with a stack overflow if it's the
             // first touch of a new stack page.
