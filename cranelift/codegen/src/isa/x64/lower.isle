@@ -2882,3 +2882,9 @@
 
 (rule (lower_branch (brnz (icmp cc a b) _ _) (two_targets taken not_taken))
       (side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
+
+
+;; Rules for `bricmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower_branch (br_icmp cc a b _ _) (two_targets taken not_taken))
+      (side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))

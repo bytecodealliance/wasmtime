@@ -2968,34 +2968,8 @@ impl LowerBackend for X64Backend {
                     }
                 }
 
-                Opcode::BrIcmp => {
-                    let src_ty = ctx.input_ty(branches[0], 0);
-                    if is_int_or_ref_ty(src_ty) || is_bool_ty(src_ty) {
-                        let lhs = put_input_in_reg(
-                            ctx,
-                            InsnInput {
-                                insn: branches[0],
-                                input: 0,
-                            },
-                        );
-                        let rhs = input_to_reg_mem_imm(
-                            ctx,
-                            InsnInput {
-                                insn: branches[0],
-                                input: 1,
-                            },
-                        );
-                        let cc = CC::from_intcc(ctx.data(branches[0]).cond_code().unwrap());
-                        // Cranelift's icmp semantics want to compare lhs - rhs, while Intel gives
-                        // us dst - src at the machine instruction level, so invert operands.
-                        ctx.emit(Inst::cmp_rmi_r(OperandSize::from_ty(src_ty), rhs, lhs));
-                        ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
-                    } else {
-                        unimplemented!("bricmp with non-int type {:?}", src_ty);
-                    }
-                }
-
-                Opcode::Brif => {
+                Opcode::BrIcmp
+                | Opcode::Brif => {
                     implemented_in_isle(ctx)
                 }
                 Opcode::Brff => {
