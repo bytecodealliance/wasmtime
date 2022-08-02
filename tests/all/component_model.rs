@@ -88,6 +88,8 @@ const REALLOC_AND_FREE: &str = r#"
 "#;
 
 fn engine() -> Engine {
+    drop(env_logger::try_init());
+
     let mut config = Config::new();
     config.wasm_component_model(true);
 

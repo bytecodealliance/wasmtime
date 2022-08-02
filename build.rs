@@ -28,9 +28,7 @@ fn main() -> anyhow::Result<()> {
             test_directory_module(out, "tests/misc_testsuite/simd", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/threads", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/memory64", strategy)?;
-            if cfg!(feature = "component-model") {
-                test_directory_module(out, "tests/misc_testsuite/component-model", strategy)?;
-            }
+            test_directory_module(out, "tests/misc_testsuite/component-model", strategy)?;
             Ok(())
         })?;
 
