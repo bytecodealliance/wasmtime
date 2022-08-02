@@ -47,14 +47,14 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-    ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
+    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)> {
         let is_fastcall = call_conv.extends_windows_fastcall();
 
         let mut next_gpr = 0;
         let mut next_vreg = 0;
         let mut next_stack: u64 = 0;
         let mut next_param_idx = 0; // Fastcall cares about overall param index
-        let mut ret = vec![];
+        let mut ret = ABIArgVec::new();
 
         if args_or_rets == ArgsOrRets::Args && is_fastcall {
             // Fastcall always reserves 32 bytes of shadow space corresponding to
