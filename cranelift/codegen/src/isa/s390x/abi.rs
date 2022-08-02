@@ -224,12 +224,12 @@ impl ABIMachineSpec for S390xMachineDeps {
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-    ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
+    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)> {
         let mut next_gpr = 0;
         let mut next_fpr = 0;
         let mut next_vr = 0;
         let mut next_stack: u64 = 0;
-        let mut ret = vec![];
+        let mut ret = ABIArgVec::new();
 
         if args_or_rets == ArgsOrRets::Args {
             next_stack = REG_SAVE_AREA_SIZE as u64;

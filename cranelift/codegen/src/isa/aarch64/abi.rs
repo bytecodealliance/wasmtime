@@ -85,7 +85,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-    ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
+    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)> {
         let is_apple_cc = call_conv.extends_apple_aarch64();
 
         // See AArch64 ABI (https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#64parameter-passing), sections 6.4.
@@ -105,7 +105,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let mut next_xreg = 0;
         let mut next_vreg = 0;
         let mut next_stack: u64 = 0;
-        let mut ret = vec![];
+        let mut ret = ABIArgVec::new();
 
         let (max_per_class_reg_vals, mut remaining_reg_vals) = match args_or_rets {
             ArgsOrRets::Args => (8, 16), // x0-x7 and v0-v7

@@ -310,7 +310,7 @@ pub trait ABIMachineSpec {
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-    ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)>;
+    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)>;
 
     /// Returns the offset from FP to the argument area, i.e., jumping over the saved FP, return
     /// address, and maybe other standard elements depending on ABI (e.g. Wasm TLS reg).
@@ -499,15 +499,18 @@ pub trait ABIMachineSpec {
     ) -> ir::ArgumentExtension;
 }
 
+// A vector of `ABIArg`s with inline capacity, since they are typically small.
+pub type ABIArgVec = SmallVec<[ABIArg; 6]>;
+
 /// ABI information shared between body (callee) and caller.
 #[derive(Clone)]
 pub struct ABISig {
     /// Argument locations (regs or stack slots). Stack offsets are relative to
     /// SP on entry to function.
-    args: Vec<ABIArg>,
+    args: ABIArgVec,
     /// Return-value locations. Stack offsets are relative to the return-area
     /// pointer.
-    rets: Vec<ABIArg>,
+    rets: ABIArgVec,
     /// Space on stack used to store arguments.
     sized_stack_arg_space: i64,
     /// Space on stack used to store return values.
