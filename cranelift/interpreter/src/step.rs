@@ -448,7 +448,6 @@ where
             assign(Value::or(mask_a, mask_b)?)
         }
         Opcode::Copy => assign(arg(0)?),
-        Opcode::IfcmpSp => unimplemented!("IfcmpSp"),
         Opcode::Icmp => assign(icmp(
             ctrl_ty,
             inst.cond_code().unwrap(),

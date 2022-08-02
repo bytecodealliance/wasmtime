@@ -1794,7 +1794,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::ExtractVector => implemented_in_isle(ctx),
 
-        Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit | Opcode::IfcmpSp => {
+        Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit => {
             return Err(CodegenError::Unsupported(format!(
                 "Unimplemented lowering: {}",
                 op

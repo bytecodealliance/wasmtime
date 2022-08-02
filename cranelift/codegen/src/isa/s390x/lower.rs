@@ -221,7 +221,6 @@ impl LowerBackend for S390xBackend {
                 panic!("global_value should have been removed by legalization!");
             }
             Opcode::Ifcmp
-            | Opcode::IfcmpSp
             | Opcode::Ffcmp
             | Opcode::Trapff
             | Opcode::Trueif
