@@ -595,13 +595,16 @@ pub fn table_ops(
                                 caller.gc();
                             }
 
+                            let a = ExternRef::new(CountDrops(num_dropped.clone()));
+                            let b = ExternRef::new(CountDrops(num_dropped.clone()));
+                            let c = ExternRef::new(CountDrops(num_dropped.clone()));
+
+                            log::info!("table_ops: make_refs() -> ({:p}, {:p}, {:p})", a, b, c);
+
                             expected_drops.fetch_add(3, SeqCst);
-                            results[0] =
-                                Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
-                            results[1] =
-                                Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
-                            results[2] =
-                                Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
+                            results[0] = Some(a).into();
+                            results[1] = Some(b).into();
+                            results[2] = Some(c).into();
                             Ok(())
                         }
                     },
@@ -613,7 +616,22 @@ pub fn table_ops(
             .func_wrap("", "take_refs", {
                 let expected_drops = expected_drops.clone();
                 move |a: Option<ExternRef>, b: Option<ExternRef>, c: Option<ExternRef>| {
-                    log::info!("table_ops: take_refs");
+                    log::info!(
+                        "table_ops: take_refs({}, {}, {})",
+                        a.as_ref().map_or_else(
+                            || format!("{:p}", std::ptr::null::<()>()),
+                            |r| format!("{:p}", *r)
+                        ),
+                        b.as_ref().map_or_else(
+                            || format!("{:p}", std::ptr::null::<()>()),
+                            |r| format!("{:p}", *r)
+                        ),
+                        c.as_ref().map_or_else(
+                            || format!("{:p}", std::ptr::null::<()>()),
+                            |r| format!("{:p}", *r)
+                        ),
+                    );
+
                     // Do the assertion on each ref's inner data, even though it
                     // all points to the same atomic, so that if we happen to
                     // run into a use-after-free bug with one of these refs we
