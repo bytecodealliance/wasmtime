@@ -68,7 +68,6 @@ define_passes! {
 
     regalloc: "Register allocation",
     regalloc_checker: "Register allocation symbolic verification",
-    binemit: "Binary machine code emission",
     layout_renumber: "Layout full renumbering",
 
     canonicalize_nans: "Canonicalization of NaNs",

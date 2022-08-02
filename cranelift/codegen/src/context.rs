@@ -122,8 +122,7 @@ impl Context {
         let code_info = compiled_code.code_info();
         let old_len = mem.len();
         mem.resize(old_len + code_info.total_size as usize, 0);
-        let new_info = unsafe { compiled_code.emit_to_memory(mem.as_mut_ptr().add(old_len)) };
-        debug_assert!(new_info == code_info);
+        mem[old_len..].copy_from_slice(compiled_code.code_buffer());
         Ok(compiled_code)
     }
 

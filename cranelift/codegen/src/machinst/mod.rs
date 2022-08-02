@@ -48,7 +48,6 @@ use crate::binemit::{Addend, CodeInfo, CodeOffset, Reloc, StackMap};
 use crate::ir::{DynamicStackSlot, SourceLoc, StackSlot, Type};
 use crate::result::CodegenResult;
 use crate::settings::Flags;
-use crate::timing;
 use crate::value_label::ValueLabelsRanges;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -308,26 +307,9 @@ impl CompiledCode {
         }
     }
 
-    /// Emit machine code directly into raw memory.
-    ///
-    /// Write all of the function's machine code to the memory at `mem`.
-    ///
-    /// The machine code is not relocated.
-    /// Instead, any relocations can be obtained from this struct's field `buffer`.
-    ///
-    /// # Safety
-    ///
-    /// This function is unsafe since it does not perform bounds checking on the memory buffer,
-    /// and it can't guarantee that the `mem` pointer is valid.
-    ///
-    /// Returns information about the emitted code and data.
-    #[deny(unsafe_op_in_unsafe_fn)]
-    pub unsafe fn emit_to_memory(&self, mem: *mut u8) -> CodeInfo {
-        let _tt = timing::binemit();
-        let info = self.code_info();
-        let mem = unsafe { std::slice::from_raw_parts_mut(mem, info.total_size as usize) };
-        mem.copy_from_slice(self.buffer.data());
-        info
+    /// Returns a reference to the machine code generated for this function compilation.
+    pub fn code_buffer(&self) -> &[u8] {
+        self.buffer.data()
     }
 }
 

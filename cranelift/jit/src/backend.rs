@@ -691,7 +691,10 @@ impl Module for JITModule {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        unsafe { compiled_code.emit_to_memory(ptr) };
+        {
+            let mem = unsafe { std::slice::from_raw_parts_mut(ptr, size) };
+            mem.copy_from_slice(compiled_code.code_buffer());
+        }
 
         let relocs = compiled_code.buffer.relocs().to_vec();
 
