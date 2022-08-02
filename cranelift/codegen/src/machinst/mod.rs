@@ -45,7 +45,8 @@
 //! ```
 
 use crate::binemit::{Addend, CodeInfo, CodeOffset, Reloc, StackMap};
-use crate::ir::{DynamicStackSlot, SourceLoc, StackSlot, Type};
+use crate::ir::function::FunctionParameters;
+use crate::ir::{DynamicStackSlot, RelSourceLoc, StackSlot, Type};
 use crate::result::CodegenResult;
 use crate::settings::Flags;
 use crate::value_label::ValueLabelsRanges;
@@ -56,6 +57,9 @@ use cranelift_entity::PrimaryMap;
 use regalloc2::{Allocation, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::string::String;
+
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
 
 #[macro_use]
 pub mod isle;
@@ -264,15 +268,16 @@ pub trait MachInstEmitState<I: MachInst>: Default + Clone + Debug {
     fn pre_safepoint(&mut self, _stack_map: StackMap) {}
     /// Update the emission state to indicate instructions are associated with a
     /// particular SourceLoc.
-    fn pre_sourceloc(&mut self, _srcloc: SourceLoc) {}
+    fn pre_sourceloc(&mut self, _srcloc: RelSourceLoc) {}
 }
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine
 /// code (as bytes) and a disassembly, if requested.
-#[derive(PartialEq, Debug)]
-pub struct CompiledCode {
+#[derive(PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct CompiledCodeBase<T: CompilePhase> {
     /// Machine code.
-    pub buffer: MachBufferFinalized,
+    pub buffer: MachBufferFinalized<T>,
     /// Size of stack frame, in bytes.
     pub frame_size: u32,
     /// Disassembly, if requested.
@@ -297,7 +302,23 @@ pub struct CompiledCode {
     pub bb_edges: Vec<(CodeOffset, CodeOffset)>,
 }
 
-impl CompiledCode {
+impl CompiledCodeBase<Stencil> {
+    /// Apply function parameters to finalize a stencil into its final form.
+    pub fn apply_params(self, params: &FunctionParameters) -> CompiledCode {
+        CompiledCode {
+            buffer: self.buffer.apply_params(params),
+            frame_size: self.frame_size,
+            disasm: self.disasm,
+            value_labels_ranges: self.value_labels_ranges,
+            sized_stackslot_offsets: self.sized_stackslot_offsets,
+            dynamic_stackslot_offsets: self.dynamic_stackslot_offsets,
+            bb_starts: self.bb_starts,
+            bb_edges: self.bb_edges,
+        }
+    }
+}
+
+impl<T: CompilePhase> CompiledCodeBase<T> {
     /// Get a `CodeInfo` describing section sizes from this compilation result.
     pub fn code_info(&self) -> CodeInfo {
         CodeInfo {
@@ -310,6 +331,10 @@ impl CompiledCode {
         self.buffer.data()
     }
 }
+
+/// `CompiledCode` in its final form (i.e. after `FunctionParameters` have been applied), ready for
+/// consumption.
+pub type CompiledCode = CompiledCodeBase<Final>;
 
 /// An object that can be used to create the text section of an executable.
 ///

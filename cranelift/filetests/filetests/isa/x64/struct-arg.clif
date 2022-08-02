@@ -54,7 +54,7 @@ block0(v0: i64):
 ;   movl    $64, %edx
 ;   load_ext_name %Memcpy+0, %rcx
 ;   call    *%rcx
-;   call    User { namespace: 0, index: 0 }
+;   call    User(u1)
 ;   addq    %rsp, $64, %rsp
 ;   virtual_sp_offset_adjust -64
 ;   movq    %rbp, %rsp
@@ -82,7 +82,7 @@ block0(v0: i64, v1: i64):
 ;   load_ext_name %Memcpy+0, %rcx
 ;   call    *%rcx
 ;   movq    %r12, %rdi
-;   call    User { namespace: 0, index: 0 }
+;   call    User(u1)
 ;   addq    %rsp, $64, %rsp
 ;   virtual_sp_offset_adjust -64
 ;   movq    0(%rsp), %r12
@@ -139,7 +139,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   load_ext_name %Memcpy+0, %rcx
 ;   call    *%rcx
 ;   movq    %r14, %rdi
-;   call    User { namespace: 0, index: 0 }
+;   call    User(u1)
 ;   addq    %rsp, $192, %rsp
 ;   virtual_sp_offset_adjust -192
 ;   movq    0(%rsp), %rbx

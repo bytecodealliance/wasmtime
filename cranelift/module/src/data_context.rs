@@ -182,7 +182,7 @@ impl DataContext {
 #[cfg(test)]
 mod tests {
     use super::{DataContext, Init};
-    use cranelift_codegen::ir;
+    use cranelift_codegen::{entity::EntityRef as _, ir};
 
     #[test]
     fn basic_data_context() {
@@ -198,11 +198,16 @@ mod tests {
 
         data_ctx.define_zeroinit(256);
 
-        let _func_a = data_ctx.import_function(ir::ExternalName::user(0, 0));
-        let func_b = data_ctx.import_function(ir::ExternalName::user(0, 1));
-        let func_c = data_ctx.import_function(ir::ExternalName::user(1, 0));
-        let _data_a = data_ctx.import_global_value(ir::ExternalName::user(2, 2));
-        let data_b = data_ctx.import_global_value(ir::ExternalName::user(2, 3));
+        let _func_a =
+            data_ctx.import_function(ir::ExternalName::user(ir::UserExternalNameRef::new(0)));
+        let func_b =
+            data_ctx.import_function(ir::ExternalName::user(ir::UserExternalNameRef::new(1)));
+        let func_c =
+            data_ctx.import_function(ir::ExternalName::user(ir::UserExternalNameRef::new(2)));
+        let _data_a =
+            data_ctx.import_global_value(ir::ExternalName::user(ir::UserExternalNameRef::new(3)));
+        let data_b =
+            data_ctx.import_global_value(ir::ExternalName::user(ir::UserExternalNameRef::new(4)));
 
         data_ctx.write_function_addr(8, func_b);
         data_ctx.write_function_addr(16, func_c);

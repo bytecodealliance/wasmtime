@@ -5,7 +5,7 @@ use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature};
 use cranelift_codegen::isa::{self, TargetFrontendConfig, TargetIsa};
-use cranelift_entity::EntityRef;
+use cranelift_entity::{EntityRef, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
@@ -20,11 +20,6 @@ use wasmtime_environ::{
     TableStyle, Tunables, VMOffsets, WASM_PAGE_SIZE,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
-
-/// Compute an `ir::ExternalName` for a given wasm function index.
-pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
-    ir::ExternalName::user(0, func_index.as_u32())
-}
 
 macro_rules! declare_function_signatures {
     (
@@ -152,6 +147,8 @@ pub struct FuncEnvironment<'module_environment> {
     epoch_ptr_var: cranelift_frontend::Variable,
 
     fuel_consumed: i64,
+
+    pub(crate) ext_names: SecondaryMap<FuncIndex, Option<ir::ExternalName>>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -183,10 +180,29 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             epoch_deadline_var: Variable::new(0),
             epoch_ptr_var: Variable::new(0),
             vmruntime_limits_ptr: Variable::new(0),
+            ext_names: Default::default(),
 
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
             fuel_consumed: 1,
+        }
+    }
+
+    pub(crate) fn ensure_func_name(
+        &mut self,
+        func: &mut Function,
+        index: FuncIndex,
+    ) -> ir::ExternalName {
+        if let Some(ref name) = self.ext_names[index] {
+            name.clone()
+        } else {
+            let reff = func.declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: index.as_u32(),
+            });
+            let name = ir::ExternalName::User(reff);
+            self.ext_names[index] = Some(name.clone());
+            name
         }
     }
 
@@ -1509,7 +1525,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::FuncRef> {
         let sig = crate::func_signature(self.isa, self.translation, self.types, index);
         let signature = func.import_signature(sig);
-        let name = get_func_name(index);
+        let name = self.ensure_func_name(func, index);
         Ok(func.import_function(ir::ExtFuncData {
             name,
             signature,

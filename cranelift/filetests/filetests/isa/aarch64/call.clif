@@ -14,7 +14,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x5, 8 ; b 12 ; data TestCase { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x5, 8 ; b 12 ; data TestCase(TestcaseName { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x5
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -30,7 +30,7 @@ block0(v0: i32):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x5, 8 ; b 12 ; data TestCase { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x5, 8 ; b 12 ; data TestCase(TestcaseName { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x5
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -54,7 +54,7 @@ block0(v0: i32):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x5, 8 ; b 12 ; data TestCase { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x5, 8 ; b 12 ; data TestCase(TestcaseName { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x5
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -91,7 +91,7 @@ block0(v0: i8):
 ;   movz x6, #42
 ;   movz x7, #42
 ;   strb w15, [sp]
-;   ldr x15, 8 ; b 12 ; data TestCase { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x15, 8 ; b 12 ; data TestCase(TestcaseName { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x15
 ;   add sp, sp, #16
 ;   virtual_sp_offset_adjust -16
@@ -140,25 +140,25 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #48
 ; block0:
-;   ldr x9, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x9, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x9
 ;   str q0, [sp]
-;   ldr x11, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x11, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x11
 ;   str q0, [sp, #16]
-;   ldr x13, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x13, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x13
 ;   str q0, [sp, #32]
-;   ldr x15, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x15, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x15
 ;   ldr q0, [sp]
-;   ldr x1, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x1, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x1
 ;   ldr q0, [sp, #16]
-;   ldr x3, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x3, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x3
 ;   ldr q0, [sp, #32]
-;   ldr x5, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x5, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x5
 ;   add sp, sp, #48
 ;   ldp fp, lr, [sp], #16
@@ -184,25 +184,25 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #48
 ; block0:
-;   ldr x9, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x9, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x9
 ;   str q0, [sp]
-;   ldr x11, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x11, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x11
 ;   str q0, [sp, #16]
-;   ldr x13, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x13, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x13
 ;   str q0, [sp, #32]
-;   ldr x15, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x15, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x15
 ;   ldr q0, [sp]
-;   ldr x1, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x1, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x1
 ;   ldr q0, [sp, #16]
-;   ldr x3, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x3, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x3
 ;   ldr q0, [sp, #32]
-;   ldr x5, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x5, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x5
 ;   add sp, sp, #48
 ;   ldp fp, lr, [sp], #16
@@ -232,25 +232,25 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #48
 ; block0:
-;   ldr x9, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x9, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x9
 ;   str q0, [sp]
-;   ldr x11, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x11, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x11
 ;   str q0, [sp, #16]
-;   ldr x13, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x13, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x13
 ;   str q0, [sp, #32]
-;   ldr x15, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x15, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x15
 ;   ldr q0, [sp]
-;   ldr x1, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x1, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x1
 ;   ldr q0, [sp, #16]
-;   ldr x3, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 53, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x3, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 53, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x3
 ;   ldr q0, [sp, #32]
-;   ldr x5, 8 ; b 12 ; data TestCase { length: 2, ascii: [103, 54, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x5, 8 ; b 12 ; data TestCase(TestcaseName { length: 2, ascii: [103, 54, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x5
 ;   add sp, sp, #48
 ;   ldp fp, lr, [sp], #16
@@ -283,7 +283,7 @@ block0(v0: i64):
 ;   movz x0, #42
 ;   movz x2, #42
 ;   mov x1, x7
-;   ldr x10, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x10, 8 ; b 12 ; data TestCase(TestcaseName { length: 3, ascii: [102, 49, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x10
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -315,7 +315,7 @@ block0(v0: i64):
 ;   movz x3, #42
 ;   movz x0, #42
 ;   mov x2, x7
-;   ldr x10, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x10, 8 ; b 12 ; data TestCase(TestcaseName { length: 3, ascii: [102, 49, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x10
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -347,7 +347,7 @@ block0(v0: i64):
 ;   movz x2, #42
 ;   movz x0, #42
 ;   mov x1, x7
-;   ldr x10, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x10, 8 ; b 12 ; data TestCase(TestcaseName { length: 3, ascii: [102, 49, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x10
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -388,7 +388,7 @@ block0(v0: i128, v1: i64):
 ;   mov x6, x14
 ;   str x13, [sp]
 ;   str x15, [sp, #8]
-;   ldr x7, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x7, 8 ; b 12 ; data TestCase(TestcaseName { length: 3, ascii: [102, 49, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x7
 ;   add sp, sp, #16
 ;   virtual_sp_offset_adjust -16
@@ -431,7 +431,7 @@ block0(v0: i128, v1: i64):
 ;   mov x6, x14
 ;   str x13, [sp]
 ;   str x15, [sp, #8]
-;   ldr x7, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 49, 53, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x7, 8 ; b 12 ; data TestCase(TestcaseName { length: 3, ascii: [102, 49, 53, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x7
 ;   add sp, sp, #16
 ;   virtual_sp_offset_adjust -16

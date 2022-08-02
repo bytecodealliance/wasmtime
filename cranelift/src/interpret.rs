@@ -113,8 +113,11 @@ impl FileInterpreter {
                     commands.push(command);
                 }
             }
-            // Note: func.name may truncate the function name
-            env.add(func.name.to_string(), func);
+            // Note: func.params.name may truncate the function name
+            env.add(
+                func.params.name().display(Some(&func.params)).to_string(),
+                func,
+            );
         }
 
         // Run assertion commands

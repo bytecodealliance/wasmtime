@@ -9,10 +9,49 @@ use core::cmp;
 use core::fmt::{self, Write};
 use core::str::FromStr;
 
+use cranelift_entity::EntityRef as _;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
+use super::entities::UserExternalNameRef;
+use super::function::FunctionParameters;
+
 pub(crate) const TESTCASE_NAME_LENGTH: usize = 16;
+
+/// A name in a user-defined symbol table. Cranelift does not interpret
+/// these numbers in any way.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct UserExternalName {
+    /// Arbitrary.
+    pub namespace: u32,
+    /// Arbitrary.
+    pub index: u32,
+}
+
+/// A name for a test case.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct TestcaseName {
+    /// How many of the bytes in `ascii` are valid?
+    length: u8,
+    /// Ascii bytes of the name.
+    ascii: [u8; TESTCASE_NAME_LENGTH],
+}
+
+impl TestcaseName {
+    pub(crate) fn new<T: AsRef<[u8]>>(v: T) -> Self {
+        let vec = v.as_ref();
+        let len = cmp::min(vec.len(), TESTCASE_NAME_LENGTH);
+        let mut bytes = [0u8; TESTCASE_NAME_LENGTH];
+        bytes[0..len].copy_from_slice(&vec[0..len]);
+
+        Self {
+            length: len as u8,
+            ascii: bytes,
+        }
+    }
+}
 
 /// The name of an external is either a reference to a user-defined symbol
 /// table, or a short sequence of ascii bytes so that test cases do not have
@@ -28,24 +67,19 @@ pub(crate) const TESTCASE_NAME_LENGTH: usize = 16;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum ExternalName {
-    /// A name in a user-defined symbol table. Cranelift does not interpret
-    /// these numbers in any way.
-    User {
-        /// Arbitrary.
-        namespace: u32,
-        /// Arbitrary.
-        index: u32,
-    },
+    /// A reference to a name in a user-defined symbol table.
+    User(UserExternalNameRef),
     /// A test case function name of up to a hardcoded amount of ascii
     /// characters. This is not intended to be used outside test cases.
-    TestCase {
-        /// How many of the bytes in `ascii` are valid?
-        length: u8,
-        /// Ascii bytes of the name.
-        ascii: [u8; TESTCASE_NAME_LENGTH],
-    },
+    TestCase(TestcaseName),
     /// A well-known runtime library function.
     LibCall(LibCall),
+}
+
+impl Default for ExternalName {
+    fn default() -> Self {
+        Self::User(UserExternalNameRef::new(0))
+    }
 }
 
 impl ExternalName {
@@ -58,52 +92,61 @@ impl ExternalName {
     /// # use cranelift_codegen::ir::ExternalName;
     /// // Create `ExternalName` from a string.
     /// let name = ExternalName::testcase("hello");
-    /// assert_eq!(name.to_string(), "%hello");
+    /// assert_eq!(name.display(None).to_string(), "%hello");
     /// ```
     pub fn testcase<T: AsRef<[u8]>>(v: T) -> Self {
-        let vec = v.as_ref();
-        let len = cmp::min(vec.len(), TESTCASE_NAME_LENGTH);
-        let mut bytes = [0u8; TESTCASE_NAME_LENGTH];
-        bytes[0..len].copy_from_slice(&vec[0..len]);
-
-        Self::TestCase {
-            length: len as u8,
-            ascii: bytes,
-        }
+        Self::TestCase(TestcaseName::new(v))
     }
 
-    /// Create a new external name from user-provided integer indices.
+    /// Create a new external name from a user-defined external function reference.
     ///
     /// # Examples
     /// ```rust
-    /// # use cranelift_codegen::ir::ExternalName;
-    /// // Create `ExternalName` from integer indices
-    /// let name = ExternalName::user(123, 456);
-    /// assert_eq!(name.to_string(), "u123:456");
+    /// # use cranelift_codegen::ir::{ExternalName, UserExternalNameRef};
+    /// let user_func_ref: UserExternalNameRef = Default::default(); // usually obtained with `Function::declare_imported_user_function()`
+    /// let name = ExternalName::user(user_func_ref);
+    /// assert_eq!(name.display(None).to_string(), "u0");
     /// ```
-    pub fn user(namespace: u32, index: u32) -> Self {
-        Self::User { namespace, index }
+    pub fn user(func_ref: UserExternalNameRef) -> Self {
+        Self::User(func_ref)
+    }
+
+    /// Returns a display for the current `ExternalName`, with extra context to prettify the
+    /// output.
+    pub fn display<'a>(
+        &'a self,
+        params: Option<&'a FunctionParameters>,
+    ) -> DisplayableExternalName<'a> {
+        DisplayableExternalName { name: self, params }
     }
 }
 
-impl Default for ExternalName {
-    fn default() -> Self {
-        Self::user(0, 0)
-    }
+/// An `ExternalName` that has enough context to be displayed.
+pub struct DisplayableExternalName<'a> {
+    name: &'a ExternalName,
+    params: Option<&'a FunctionParameters>,
 }
 
-impl fmt::Display for ExternalName {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Self::User { namespace, index } => write!(f, "u{}:{}", namespace, index),
-            Self::TestCase { length, ascii } => {
+impl<'a> fmt::Display for DisplayableExternalName<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self.name {
+            ExternalName::User(func_ref) => {
+                if let Some(params) = self.params {
+                    let name = &params.user_named_funcs[func_ref];
+                    write!(f, "u{}:{}", name.namespace, name.index)
+                } else {
+                    // Best effort.
+                    write!(f, "{}", func_ref)
+                }
+            }
+            ExternalName::TestCase(TestcaseName { length, ascii }) => {
                 f.write_char('%')?;
                 for byte in ascii.iter().take(length as usize) {
                     f.write_char(*byte as char)?;
                 }
                 Ok(())
             }
-            Self::LibCall(lc) => write!(f, "%{}", lc),
+            ExternalName::LibCall(lc) => write!(f, "%{}", lc),
         }
     }
 }
@@ -123,33 +166,81 @@ impl FromStr for ExternalName {
 #[cfg(test)]
 mod tests {
     use super::ExternalName;
-    use crate::ir::LibCall;
+    use crate::ir::{
+        entities::UserExternalNameRef,
+        function::{FunctionName, FunctionParameters},
+        LibCall, UserExternalName,
+    };
     use alloc::string::ToString;
     use core::u32;
+    use cranelift_entity::EntityRef as _;
 
     #[test]
     fn display_testcase() {
-        assert_eq!(ExternalName::testcase("").to_string(), "%");
-        assert_eq!(ExternalName::testcase("x").to_string(), "%x");
-        assert_eq!(ExternalName::testcase("x_1").to_string(), "%x_1");
+        assert_eq!(ExternalName::testcase("").display(None).to_string(), "%");
+        assert_eq!(ExternalName::testcase("x").display(None).to_string(), "%x");
         assert_eq!(
-            ExternalName::testcase("longname12345678").to_string(),
+            ExternalName::testcase("x_1").display(None).to_string(),
+            "%x_1"
+        );
+        assert_eq!(
+            ExternalName::testcase("longname12345678")
+                .display(None)
+                .to_string(),
             "%longname12345678"
         );
         // Constructor will silently drop bytes beyond the 16th
         assert_eq!(
-            ExternalName::testcase("longname123456789").to_string(),
+            ExternalName::testcase("longname123456789")
+                .display(None)
+                .to_string(),
             "%longname12345678"
         );
     }
 
     #[test]
     fn display_user() {
-        assert_eq!(ExternalName::user(0, 0).to_string(), "u0:0");
-        assert_eq!(ExternalName::user(1, 1).to_string(), "u1:1");
         assert_eq!(
-            ExternalName::user(u32::MAX, u32::MAX).to_string(),
-            "u4294967295:4294967295"
+            ExternalName::user(UserExternalNameRef::new(0))
+                .display(None)
+                .to_string(),
+            "u0"
+        );
+        assert_eq!(
+            ExternalName::user(UserExternalNameRef::new(1))
+                .display(None)
+                .to_string(),
+            "u1"
+        );
+
+        // ref 0
+        let mut func_params = FunctionParameters::new(FunctionName::user(13, 37));
+
+        // ref 1
+        func_params.user_named_funcs.push(UserExternalName {
+            namespace: 1,
+            index: 42,
+        });
+
+        assert_eq!(
+            ExternalName::user(UserExternalNameRef::new(0))
+                .display(Some(&func_params))
+                .to_string(),
+            "u13:37"
+        );
+
+        assert_eq!(
+            ExternalName::user(UserExternalNameRef::new(1))
+                .display(Some(&func_params))
+                .to_string(),
+            "u1:42"
+        );
+
+        assert_eq!(
+            ExternalName::user(UserExternalNameRef::new((u32::MAX - 1) as _))
+                .display(None)
+                .to_string(),
+            "u4294967294"
         );
     }
 
@@ -160,7 +251,9 @@ mod tests {
             Ok(ExternalName::LibCall(LibCall::FloorF32))
         );
         assert_eq!(
-            ExternalName::LibCall(LibCall::FloorF32).to_string(),
+            ExternalName::LibCall(LibCall::FloorF32)
+                .display(None)
+                .to_string(),
             "%FloorF32"
         );
     }

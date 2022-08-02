@@ -54,7 +54,15 @@ fn run_in_host(compiled_fn: &CompiledFunction, args: &[DataValue]) -> RunResult 
 fuzz_target!(|testcase: TestCase| {
     let build_interpreter = || {
         let mut env = FunctionStore::default();
-        env.add(testcase.func.name.to_string(), &testcase.func);
+        env.add(
+            testcase
+                .func
+                .params
+                .name()
+                .display(Some(&testcase.func.params))
+                .to_string(),
+            &testcase.func,
+        );
 
         let state = InterpreterState::default().with_function_store(env);
         let interpreter = Interpreter::new(state).with_fuel(Some(INTERPRETER_FUEL));

@@ -28,9 +28,6 @@ pub mod types;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "incremental-cache")]
-pub(crate) use crate::ir::extname::TESTCASE_NAME_LENGTH;
-
 pub use crate::ir::atomic_rmw_op::AtomicRmwOp;
 pub use crate::ir::builder::{
     InsertBuilder, InstBuilder, InstBuilderBase, InstInserterBase, ReplaceBuilder,
@@ -40,13 +37,13 @@ pub use crate::ir::dfg::{DataFlowGraph, ValueDef};
 pub use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 pub use crate::ir::entities::{
     Block, Constant, DynamicStackSlot, DynamicType, FuncRef, GlobalValue, Heap, Immediate, Inst,
-    JumpTable, SigRef, StackSlot, Table, Value,
+    JumpTable, SigRef, StackSlot, Table, UserExternalNameRef, Value,
 };
 pub use crate::ir::extfunc::{
     AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature,
 };
-pub use crate::ir::extname::ExternalName;
-pub use crate::ir::function::{DisplayFunctionAnnotations, Function};
+pub use crate::ir::extname::{ExternalName, UserExternalName};
+pub use crate::ir::function::{DisplayFunctionAnnotations, Function, FunctionName};
 pub use crate::ir::globalvalue::GlobalValueData;
 pub use crate::ir::heap::{HeapData, HeapStyle};
 pub use crate::ir::instructions::{
@@ -57,7 +54,7 @@ pub use crate::ir::layout::Layout;
 pub use crate::ir::libcall::{get_probestack_funcref, LibCall};
 pub use crate::ir::memflags::{Endianness, MemFlags};
 pub use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder, ProgramPoint};
-pub use crate::ir::sourceloc::SourceLoc;
+pub use crate::ir::sourceloc::{RelSourceLoc, SourceLoc};
 pub use crate::ir::stackslot::{
     DynamicStackSlotData, DynamicStackSlots, StackSlotData, StackSlotKind, StackSlots,
 };
@@ -72,7 +69,7 @@ use crate::entity::{entity_impl, PrimaryMap, SecondaryMap};
 pub type JumpTables = PrimaryMap<JumpTable, JumpTableData>;
 
 /// Source locations for instructions.
-pub type SourceLocs = SecondaryMap<Inst, SourceLoc>;
+pub type SourceLocs = SecondaryMap<Inst, RelSourceLoc>;
 
 /// Marked with a label value.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -81,18 +78,18 @@ pub struct ValueLabel(u32);
 entity_impl!(ValueLabel, "val");
 
 /// A label of a Value.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ValueLabelStart {
     /// Source location when it is in effect
-    pub from: SourceLoc,
+    pub from: RelSourceLoc,
 
     /// The label index.
     pub label: ValueLabel,
 }
 
 /// Value label assignements: label starts or value aliases.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum ValueLabelAssignments {
     /// Original value labels assigned at transform.
@@ -101,7 +98,7 @@ pub enum ValueLabelAssignments {
     /// A value alias to original value.
     Alias {
         /// Source location when it is in effect
-        from: SourceLoc,
+        from: RelSourceLoc,
 
         /// The label index.
         value: Value,

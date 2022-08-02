@@ -147,7 +147,11 @@ fn run_one_test<'a>(
     context: &mut Context<'a>,
 ) -> anyhow::Result<()> {
     let (test, flags, isa) = tuple;
-    let name = format!("{}({})", test.name(), func.name);
+    let name = format!(
+        "{}({})",
+        test.name(),
+        func.params.name().display(Some(&func.params))
+    );
     info!("Test: {} {}", name, isa.map_or("-", TargetIsa::name));
 
     context.flags = flags;

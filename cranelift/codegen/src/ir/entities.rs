@@ -328,6 +328,12 @@ impl FuncRef {
     }
 }
 
+/// A reference to an `UserExternalName`, declared with `Function::declare_imported_user_function`.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct UserExternalNameRef(u32);
+entity_impl!(UserExternalNameRef, "u");
+
 /// An opaque reference to a function [`Signature`](super::Signature).
 ///
 /// `SigRef`s are used to declare a function with

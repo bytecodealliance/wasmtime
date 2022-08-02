@@ -2,7 +2,7 @@ use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose, ValueList};
 use crate::config::Config;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
-use cranelift::codegen::ir::{types::*, FuncRef, LibCall};
+use cranelift::codegen::ir::{types::*, FuncRef, FunctionName, LibCall, UserExternalName};
 use cranelift::codegen::ir::{
     AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, StackSlot, Type, Value,
 };
@@ -615,10 +615,14 @@ where
             let (ext_name, sig) = if self.u.arbitrary::<bool>()? {
                 let func_index = self.next_func_index;
                 self.next_func_index = self.next_func_index.wrapping_add(1);
-                let name = ExternalName::User {
-                    namespace: 0,
-                    index: func_index,
-                };
+                // TODO coalesce user func ref?
+                let user_func_ref = builder
+                    .func
+                    .declare_imported_user_function(UserExternalName {
+                        namespace: 0,
+                        index: func_index,
+                    });
+                let name = ExternalName::User(user_func_ref);
                 let signature = self.generate_signature()?;
                 (name, signature)
             } else {
@@ -761,7 +765,7 @@ where
         let sig = self.generate_signature()?;
 
         let mut fn_builder_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig.clone());
+        let mut func = Function::with_name_signature(FunctionName::default(), sig.clone());
 
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
 

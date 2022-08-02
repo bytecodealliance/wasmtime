@@ -14,6 +14,8 @@ use core::str::FromStr;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
+use super::function::FunctionParameters;
+
 /// Function signature.
 ///
 /// The function signature describes the types of formal parameters and return values along with
@@ -338,7 +340,7 @@ impl FromStr for ArgumentPurpose {
 /// An external function.
 ///
 /// Information about a function that can be called directly with a direct `call` instruction.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ExtFuncData {
     /// Name of the external function.
@@ -361,15 +363,6 @@ pub struct ExtFuncData {
     pub colocated: bool,
 }
 
-impl fmt::Display for ExtFuncData {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.colocated {
-            write!(f, "colocated ")?;
-        }
-        write!(f, "{} {}", self.name, self.signature)
-    }
-}
-
 impl ExtFuncData {
     /// Return an estimate of the distance to the referred-to function symbol.
     pub fn reloc_distance(&self) -> RelocDistance {
@@ -378,6 +371,38 @@ impl ExtFuncData {
         } else {
             RelocDistance::Far
         }
+    }
+
+    /// Returns a displayable version of the `ExtFuncData`, with or without extra context to
+    /// prettify the output.
+    pub fn display<'a>(
+        &'a self,
+        params: Option<&'a FunctionParameters>,
+    ) -> DisplayableExtFuncData<'a> {
+        DisplayableExtFuncData {
+            ext_func: self,
+            params,
+        }
+    }
+}
+
+/// A displayable `ExtFuncData`, with extra context to prettify the output.
+pub struct DisplayableExtFuncData<'a> {
+    ext_func: &'a ExtFuncData,
+    params: Option<&'a FunctionParameters>,
+}
+
+impl<'a> fmt::Display for DisplayableExtFuncData<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.ext_func.colocated {
+            write!(f, "colocated ")?;
+        }
+        write!(
+            f,
+            "{} {}",
+            self.ext_func.name.display(self.params),
+            self.ext_func.signature
+        )
     }
 }
 

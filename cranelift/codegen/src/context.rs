@@ -18,7 +18,7 @@ use crate::isa::TargetIsa;
 use crate::legalizer::simple_legalize;
 use crate::licm::do_licm;
 use crate::loop_analysis::LoopAnalysis;
-use crate::machinst::CompiledCode;
+use crate::machinst::{CompiledCode, CompiledCodeBase, Stencil};
 use crate::nan_canonicalization::do_nan_canonicalization;
 use crate::remove_constant_phis::do_remove_constant_phis;
 use crate::result::{CodegenResult, CompileResult};
@@ -126,7 +126,15 @@ impl Context {
         Ok(compiled_code)
     }
 
-    pub(crate) fn compile_inner(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
+    /// Internally compiles the function into a stencil.
+    ///
+    /// Public only for testing and fuzzing purposes.
+    pub fn compile_stencil(
+        &mut self,
+        isa: &dyn TargetIsa,
+    ) -> CodegenResult<CompiledCodeBase<Stencil>> {
+        let _tt = timing::compile();
+
         self.verify_if(isa)?;
 
         let opt_level = isa.flags().opt_level();
@@ -165,9 +173,7 @@ impl Context {
             self.simple_gvn(isa)?;
         }
 
-        let result = isa.compile_function(&self.func, self.want_disasm)?;
-        self.compiled_code = Some(result);
-        Ok(())
+        isa.compile_function(&self.func, self.want_disasm)
     }
 
     /// Compile the function.
@@ -179,12 +185,13 @@ impl Context {
     /// Returns information about the function's code and read-only data.
     pub fn compile(&mut self, isa: &dyn TargetIsa) -> CompileResult<&CompiledCode> {
         let _tt = timing::compile();
-        self.compile_inner(isa)
-            .map(|_| self.compiled_code.as_ref().unwrap())
-            .map_err(|error| CompileError {
-                inner: error,
-                func: &self.func,
-            })
+        let stencil = self.compile_stencil(isa).map_err(|error| CompileError {
+            inner: error,
+            func: &self.func,
+        })?;
+        Ok(self
+            .compiled_code
+            .insert(stencil.apply_params(&self.func.params)))
     }
 
     /// If available, return information about the code layout in the

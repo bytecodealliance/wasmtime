@@ -9,13 +9,14 @@ use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
 use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::entity::EntityRef;
-use cranelift_codegen::ir;
+use cranelift_codegen::entity::{EntityRef, PrimaryMap};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
+use cranelift_codegen::ir::function::FunctionName;
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
+use cranelift_codegen::ir::{self, UserExternalNameRef};
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentPurpose, Block, Constant, ConstantData, DynamicStackSlot,
     DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef, Function,
@@ -224,6 +225,12 @@ pub struct Parser<'a> {
 
     /// Comments collected so far.
     comments: Vec<Comment<'a>>,
+
+    /// Maps inlined external names to a ref value, so they can be declared before parsing the rest
+    /// of the function later.
+    ///
+    /// This maintains backward compatibility with previous ways for declaring external names.
+    predeclared_external_names: PrimaryMap<UserExternalNameRef, ir::UserExternalName>,
 
     /// Default calling conventions; used when none is specified.
     default_calling_convention: CallConv,
@@ -508,6 +515,7 @@ impl<'a> Parser<'a> {
             gathered_comments: Vec::new(),
             comments: Vec::new(),
             default_calling_convention: CallConv::Fast,
+            predeclared_external_names: Default::default(),
         }
     }
 
@@ -1287,6 +1295,19 @@ impl<'a> Parser<'a> {
         // function ::= "function" name * signature "{" preamble function-body "}"
         let sig = self.parse_signature()?;
 
+        let name = match name {
+            ExternalName::User(user_func_ref) => {
+                if let Some(name) = self.predeclared_external_names.get(user_func_ref) {
+                    FunctionName::User(name.clone())
+                } else {
+                    Default::default()
+                }
+            }
+            ExternalName::TestCase(testcase) => FunctionName::Testcase(testcase),
+            ExternalName::LibCall(_) => {
+                return err!(self.loc, "shouldn't name functions after libcall")
+            }
+        };
         let mut ctx = Context::new(Function::with_name_signature(name, sig));
 
         // function ::= "function" name signature * "{" preamble function-body "}"
@@ -1306,6 +1327,25 @@ impl<'a> Parser<'a> {
         self.start_gathering_comments();
         self.token();
         self.claim_gathered_comments(AnyEntity::Function);
+
+        // Claim all the declared user-defined function names.
+        let num_skip = if matches!(ctx.function.params.name(), ir::ExternalName::User(_)) {
+            // The first entry is the function itself, so skip it as we've declared it at the top of
+            // this function.
+            1
+        } else {
+            0
+        };
+        for (user_func_ref, user_external_name) in
+            std::mem::take(&mut self.predeclared_external_names)
+                .into_iter()
+                .skip(num_skip)
+        {
+            let actual_ref = ctx
+                .function
+                .declare_imported_user_function(user_external_name);
+            assert_eq!(user_func_ref, actual_ref);
+        }
 
         let details = Details {
             location,
@@ -1329,8 +1369,10 @@ impl<'a> Parser<'a> {
                 s.parse()
                     .map_err(|_| self.error("invalid test case or libcall name"))
             }
-            Some(Token::UserRef(namespace)) => {
+
+            Some(Token::UserRef(func_ref)) => {
                 self.consume();
+
                 match self.token() {
                     Some(Token::Colon) => {
                         self.consume();
@@ -1341,14 +1383,25 @@ impl<'a> Parser<'a> {
                                         self.error("the integer given overflows the u32 type")
                                     })?;
                                 self.consume();
-                                Ok(ExternalName::user(namespace, index))
+                                let name_ref =
+                                    self.predeclared_external_names.push(ir::UserExternalName {
+                                        namespace: func_ref,
+                                        index,
+                                    });
+                                Ok(ExternalName::user(name_ref))
                             }
                             _ => err!(self.loc, "expected integer"),
                         }
                     }
-                    _ => err!(self.loc, "expected colon"),
+                    _ => {
+                        // Assume it's only a func ref that was predeclared:.
+                        Ok(ExternalName::user(UserExternalNameRef::new(
+                            func_ref as usize,
+                        )))
+                    }
                 }
             }
+
             _ => err!(self.loc, "expected external name"),
         }
     }
@@ -2249,7 +2302,7 @@ impl<'a> Parser<'a> {
             .expect("duplicate inst references created");
 
         if !srcloc.is_default() {
-            ctx.function.srclocs[inst] = srcloc;
+            ctx.function.set_srcloc(inst, srcloc);
         }
 
         if results.len() != num_results {
@@ -3154,7 +3207,7 @@ mod tests {
         )
         .parse_function()
         .unwrap();
-        assert_eq!(func.name.to_string(), "%qux");
+        assert_eq!(func.params.name().display(None).to_string(), "%qux");
         let v4 = details.map.lookup_str("v4").unwrap();
         assert_eq!(v4.to_string(), "v4");
         let v3 = details.map.lookup_str("v3").unwrap();
@@ -3231,7 +3284,7 @@ mod tests {
         )
         .parse_function()
         .unwrap();
-        assert_eq!(func.name.to_string(), "%foo");
+        assert_eq!(func.params.name().display(None).to_string(), "%foo");
         let mut iter = func.sized_stack_slots.keys();
         let _ss0 = iter.next().unwrap();
         let ss1 = iter.next().unwrap();
@@ -3276,7 +3329,7 @@ mod tests {
         )
         .parse_function()
         .unwrap();
-        assert_eq!(func.name.to_string(), "%blocks");
+        assert_eq!(func.params.name().display(None).to_string(), "%blocks");
 
         let mut blocks = func.layout.blocks();
 
@@ -3458,7 +3511,7 @@ mod tests {
         )
         .parse_function()
         .unwrap();
-        assert_eq!(func.name.to_string(), "%comment");
+        assert_eq!(func.params.name().display(None).to_string(), "%comment");
         assert_eq!(comments.len(), 8); // no 'before' comment.
         assert_eq!(
             comments[0],
@@ -3512,7 +3565,10 @@ mod tests {
         assert_eq!(tf.preamble_comments[0].text, "; before");
         assert_eq!(tf.preamble_comments[1].text, "; still preamble");
         assert_eq!(tf.functions.len(), 1);
-        assert_eq!(tf.functions[0].0.name.to_string(), "%comment");
+        assert_eq!(
+            tf.functions[0].0.params.name().display(None).to_string(),
+            "%comment"
+        );
     }
 
     #[test]
@@ -3561,7 +3617,12 @@ mod tests {
         .parse_function()
         .unwrap()
         .0;
-        assert_eq!(func.name.to_string(), "u1:2");
+        // This has become a UserExternalNameRef, so it's expected to be different.
+        assert_eq!(func.params.name().display(None).to_string(), "u0");
+        assert_eq!(
+            func.params.name().display(Some(&func.params)).to_string(),
+            "u1:2"
+        );
 
         // Invalid characters in the name:
         let mut parser = Parser::new(
@@ -3581,13 +3642,21 @@ mod tests {
         );
         assert!(parser.parse_function().is_err());
 
-        let mut parser = Parser::new(
+        let func = Parser::new(
             "function u0() system_v {
                                            block0:
                                              trap int_ovf
                                            }",
+        )
+        .parse_function()
+        .unwrap()
+        .0;
+        // TODO support parser declarations for user-declared funcs?
+        //assert_eq!(func.params.name.display(None).to_string(), "u0:0");
+        assert_eq!(
+            func.params.name().display(Some(&func.params)).to_string(),
+            "u0:0"
         );
-        assert!(parser.parse_function().is_err());
 
         let mut parser = Parser::new(
             "function u0:() system_v {

@@ -88,7 +88,7 @@ impl FuncTranslator {
         log::trace!(
             "translate({} bytes, {}{})",
             reader.bytes_remaining(),
-            func.name,
+            func.params.name().display(Some(&func.params)),
             func.signature
         );
         debug_assert_eq!(func.dfg.num_blocks(), 0, "Function must be empty");
@@ -310,7 +310,9 @@ mod tests {
 
         let mut ctx = Context::new();
 
-        ctx.func.name = ir::ExternalName::testcase("small1");
+        ctx.func
+            .params
+            .set_name(ir::FunctionName::testcase("small1"));
         ctx.func.signature.params.push(ir::AbiParam::new(I32));
         ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
@@ -348,7 +350,9 @@ mod tests {
 
         let mut ctx = Context::new();
 
-        ctx.func.name = ir::ExternalName::testcase("small2");
+        ctx.func
+            .params
+            .set_name(ir::FunctionName::testcase("small2"));
         ctx.func.signature.params.push(ir::AbiParam::new(I32));
         ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
@@ -391,7 +395,9 @@ mod tests {
 
         let mut ctx = Context::new();
 
-        ctx.func.name = ir::ExternalName::testcase("infloop");
+        ctx.func
+            .params
+            .set_name(ir::FunctionName::testcase("infloop"));
         ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
         let (body, mut validator) = extract_func(&wasm);

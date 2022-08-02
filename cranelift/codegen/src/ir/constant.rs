@@ -10,7 +10,6 @@
 
 use crate::ir::immediates::{IntoBytes, V128Imm};
 use crate::ir::Constant;
-use crate::HashMap;
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::fmt;
@@ -169,16 +168,22 @@ impl FromStr for ConstantData {
 
 /// Maintains the mapping between a constant handle (i.e.  [`Constant`](crate::ir::Constant)) and
 /// its constant data (i.e.  [`ConstantData`](crate::ir::ConstantData)).
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ConstantPool {
     /// This mapping maintains the insertion order as long as Constants are created with
     /// sequentially increasing integers.
-    pub(crate) handles_to_values: BTreeMap<Constant, ConstantData>,
+    ///
+    /// It is important that, by construction, no entry in that list gets removed. If that ever
+    /// need to happen, don't forget to update the `Constant` generation scheme.
+    handles_to_values: BTreeMap<Constant, ConstantData>,
 
-    /// This mapping is unordered (no need for lexicographic ordering) but allows us to map
-    /// constant data back to handles.
-    pub(crate) values_to_handles: HashMap<ConstantData, Constant>,
+    /// Mapping of hashed `ConstantData` to the index into the other hashmap.
+    ///
+    /// For `ConstantPool` to be `Hash`able, we really want to use a `BTreeMap` and not a simple
+    /// `HashMap` here, so we manually rehash the `ConstantData` (to avoid using the whole
+    /// `ConstantData` as the key in this map), and do a value comparison on matches.
+    values_to_handles: BTreeMap<u64, Vec<Constant>>,
 }
 
 impl ConstantPool {
@@ -186,7 +191,7 @@ impl ConstantPool {
     pub fn new() -> Self {
         Self {
             handles_to_values: BTreeMap::new(),
-            values_to_handles: HashMap::new(),
+            values_to_handles: BTreeMap::new(),
         }
     }
 
@@ -196,17 +201,30 @@ impl ConstantPool {
         self.values_to_handles.clear();
     }
 
+    fn compute_hash(constant_value: &ConstantData) -> u64 {
+        use std::hash::Hasher;
+        let mut hasher = crate::hash_map::DefaultHasher::new();
+        hasher.write(constant_value.as_slice());
+        hasher.finish()
+    }
+
     /// Insert constant data into the pool, returning a handle for later referencing; when constant
     /// data is inserted that is a duplicate of previous constant data, the existing handle will be
     /// returned.
     pub fn insert(&mut self, constant_value: ConstantData) -> Constant {
-        if self.values_to_handles.contains_key(&constant_value) {
-            *self.values_to_handles.get(&constant_value).unwrap()
-        } else {
-            let constant_handle = Constant::new(self.len());
-            self.set(constant_handle, constant_value);
-            constant_handle
+        let constant_value_hash = Self::compute_hash(&constant_value);
+
+        if let Some(constants) = self.values_to_handles.get(&constant_value_hash) {
+            for cst in constants {
+                if self.handles_to_values[cst] == constant_value {
+                    return *cst;
+                }
+            }
         }
+
+        let constant_handle = Constant::new(self.len());
+        self.set(constant_handle, constant_value);
+        constant_handle
     }
 
     /// Retrieve the constant data given a handle.
@@ -229,8 +247,11 @@ impl ConstantPool {
             &constant_value,
             replaced.unwrap()
         );
+        let constant_value_hash = Self::compute_hash(&constant_value);
         self.values_to_handles
-            .insert(constant_value, constant_handle);
+            .entry(constant_value_hash)
+            .or_default()
+            .push(constant_handle);
     }
 
     /// Iterate over the constants in insertion order.
@@ -250,7 +271,7 @@ impl ConstantPool {
 
     /// Return the combined size of all of the constant values in the pool.
     pub fn byte_size(&self) -> usize {
-        self.values_to_handles.keys().map(|c| c.len()).sum()
+        self.handles_to_values.values().map(|c| c.len()).sum()
     }
 }
 

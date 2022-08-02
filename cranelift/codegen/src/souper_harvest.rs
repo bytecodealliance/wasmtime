@@ -525,7 +525,9 @@ fn harvest_candidate_lhs(
         let lhs = lhs.finish(allocs.ir_to_souper_val[&val], None);
         out.send(format!(
             ";; Harvested from `{}` in `{}`\n{}\n",
-            val, func.name, lhs
+            val,
+            func.params.name().display(Some(&func.params)),
+            lhs
         ))
         .unwrap();
     }

@@ -26,7 +26,6 @@ object = { version = "0.29.0", default-features = false, features = ['write'] }
 thiserror = "1.0.4"
 
 [features]
-default = ["incremental-cache"] # TODO(bnjbvr) remove before landing
 all-arch = ["cranelift-codegen/all-arch"]
 component-model = ["wasmtime-environ/component-model"]
 incremental-cache = ["cranelift-codegen/incremental-cache"]

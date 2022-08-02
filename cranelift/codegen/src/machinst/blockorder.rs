@@ -494,14 +494,15 @@ impl BlockLoweringOrder {
 mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
+    use crate::ir::function::FunctionName;
     use crate::ir::types::*;
-    use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
+    use crate::ir::{AbiParam, Function, InstBuilder, Signature};
     use crate::isa::CallConv;
 
     fn build_test_func(n_blocks: usize, edges: &[(usize, usize)]) -> Function {
         assert!(n_blocks > 0);
 
-        let name = ExternalName::testcase("test0");
+        let name = FunctionName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         let mut func = Function::with_name_signature(name, sig);

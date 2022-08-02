@@ -249,7 +249,11 @@ fn compile(function: Function, isa: &dyn TargetIsa) -> Result<Mmap, CompilationE
     let code_page = code_page.make_exec()?;
     trace!(
         "Compiled function {} with signature {} at: {:p}",
-        context.func.name,
+        context
+            .func
+            .params
+            .name()
+            .display(Some(&context.func.params)),
         context.func.signature,
         code_page.as_ptr()
     );
@@ -269,7 +273,7 @@ fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
     wrapper_sig.params.push(ir::AbiParam::new(pointer_type)); // Add the `callee_address` parameter.
     wrapper_sig.params.push(ir::AbiParam::new(pointer_type)); // Add the `values_vec` parameter.
 
-    let mut func = ir::Function::with_name_signature(ir::ExternalName::user(0, 0), wrapper_sig);
+    let mut func = ir::Function::with_name_signature(ir::FunctionName::default(), wrapper_sig);
 
     // The trampoline has a single block filled with loads, one call to callee_address, and some loads.
     let mut builder_context = FunctionBuilderContext::new();

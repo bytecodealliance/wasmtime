@@ -10,7 +10,7 @@ use cranelift_codegen::{
 };
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
-    ModuleDeclarations, ModuleError, ModuleResult,
+    ModuleDeclarations, ModuleError, ModuleExtName, ModuleResult,
 };
 use log::info;
 use object::write::{
@@ -313,12 +313,18 @@ impl Module for ObjectModule {
 
         ctx.compile_and_emit(self.isa(), &mut code)?;
 
-        self.define_function_bytes(func_id, &code, ctx.compiled_code().unwrap().buffer.relocs())
+        self.define_function_bytes(
+            func_id,
+            &ctx.func,
+            &code,
+            ctx.compiled_code().unwrap().buffer.relocs(),
+        )
     }
 
     fn define_function_bytes(
         &mut self,
         func_id: FuncId,
+        func: &ir::Function,
         bytes: &[u8],
         relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction> {
@@ -361,7 +367,7 @@ impl Module for ObjectModule {
         if !relocs.is_empty() {
             let relocs = relocs
                 .iter()
-                .map(|record| self.process_reloc(record))
+                .map(|record| self.process_reloc(&func, record))
                 .collect();
             self.relocs.push(SymbolRelocs {
                 section,
@@ -373,7 +379,12 @@ impl Module for ObjectModule {
         Ok(ModuleCompiledFunction { size: total_size })
     }
 
-    fn define_data(&mut self, data_id: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
+    fn define_data(
+        &mut self,
+        data_id: DataId,
+        func: &ir::Function,
+        data_ctx: &DataContext,
+    ) -> ModuleResult<()> {
         let decl = self.declarations.get_data_decl(data_id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
@@ -403,7 +414,7 @@ impl Module for ObjectModule {
         let relocs = data_ctx
             .description()
             .all_relocs(pointer_reloc)
-            .map(|record| self.process_reloc(&record))
+            .map(|record| self.process_reloc(&func, &record))
             .collect::<Vec<_>>();
 
         let section = if custom_segment_section.is_none() {
@@ -515,9 +526,9 @@ impl ObjectModule {
 
     /// This should only be called during finish because it creates
     /// symbols for missing libcalls.
-    fn get_symbol(&mut self, name: &ir::ExternalName) -> SymbolId {
+    fn get_symbol(&mut self, name: &ModuleExtName) -> SymbolId {
         match *name {
-            ir::ExternalName::User { .. } => {
+            ModuleExtName::User { .. } => {
                 if ModuleDeclarations::is_function(name) {
                     let id = FuncId::from_name(name);
                     self.functions[id].unwrap().0
@@ -526,7 +537,7 @@ impl ObjectModule {
                     self.data_objects[id].unwrap().0
                 }
             }
-            ir::ExternalName::LibCall(ref libcall) => {
+            ModuleExtName::LibCall(ref libcall) => {
                 let name = (self.libcall_names)(*libcall);
                 if let Some(symbol) = self.object.symbol_id(name.as_bytes()) {
                     symbol
@@ -547,11 +558,10 @@ impl ObjectModule {
                     symbol
                 }
             }
-            _ => panic!("invalid ExternalName {}", name),
         }
     }
 
-    fn process_reloc(&self, record: &MachReloc) -> ObjectRelocRecord {
+    fn process_reloc(&self, func: &ir::Function, record: &MachReloc) -> ObjectRelocRecord {
         let mut addend = record.addend;
         let (kind, encoding, size) = match record.kind {
             Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
@@ -626,9 +636,22 @@ impl ObjectModule {
             // FIXME
             reloc => unimplemented!("{:?}", reloc),
         };
+
+        let name = match record.name {
+            ir::ExternalName::User(reff) => {
+                let name = &func.params.user_named_funcs[reff];
+                ModuleExtName::User {
+                    namespace: name.namespace,
+                    index: name.index,
+                }
+            }
+            ir::ExternalName::TestCase { .. } => unimplemented!(),
+            ir::ExternalName::LibCall(libcall) => ModuleExtName::LibCall(libcall),
+        };
+
         ObjectRelocRecord {
             offset: record.offset,
-            name: record.name.clone(),
+            name,
             kind,
             encoding,
             size,
@@ -692,7 +715,7 @@ struct SymbolRelocs {
 #[derive(Clone)]
 struct ObjectRelocRecord {
     offset: CodeOffset,
-    name: ir::ExternalName,
+    name: ModuleExtName,
     kind: RelocationKind,
     encoding: RelocationEncoding,
     size: u8,

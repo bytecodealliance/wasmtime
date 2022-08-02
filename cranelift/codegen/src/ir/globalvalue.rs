@@ -151,7 +151,7 @@ impl fmt::Display for GlobalValueData {
                     "symbol {}{}{}",
                     if colocated { "colocated " } else { "" },
                     if tls { "tls " } else { "" },
-                    name
+                    name.display(None)
                 )?;
                 let offset_val: i64 = offset.into();
                 if offset_val > 0 {

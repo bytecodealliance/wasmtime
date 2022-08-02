@@ -7,7 +7,8 @@ use crate::isa::s390x::settings as s390x_settings;
 use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, MachTextSectionBuilder, Reg, TextSectionBuilder, VCode,
+    compile, CompiledCode, CompiledCodeBase, MachTextSectionBuilder, Reg, Stencil,
+    TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
@@ -63,7 +64,11 @@ impl S390xBackend {
 }
 
 impl TargetIsa for S390xBackend {
-    fn compile_function(&self, func: &Function, want_disasm: bool) -> CodegenResult<CompiledCode> {
+    fn compile_function(
+        &self,
+        func: &Function,
+        want_disasm: bool,
+    ) -> CodegenResult<CompiledCodeBase<Stencil>> {
         let flags = self.flags();
         let (vcode, regalloc_result) = self.compile_vcode(func)?;
 
@@ -78,7 +83,7 @@ impl TargetIsa for S390xBackend {
             log::debug!("disassembly:\n{}", disasm);
         }
 
-        Ok(CompiledCode {
+        Ok(CompiledCodeBase {
             buffer,
             frame_size,
             disasm: emit_result.disasm,
@@ -185,8 +190,9 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
 mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
+    use crate::ir::function::FunctionName;
     use crate::ir::types::*;
-    use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
+    use crate::ir::{AbiParam, Function, InstBuilder, Signature};
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
@@ -195,7 +201,7 @@ mod test {
 
     #[test]
     fn test_compile_function() {
-        let name = ExternalName::testcase("test0");
+        let name = FunctionName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -233,7 +239,7 @@ mod test {
 
     #[test]
     fn test_branch_lowering() {
-        let name = ExternalName::testcase("test0");
+        let name = FunctionName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));

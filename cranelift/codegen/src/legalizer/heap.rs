@@ -7,7 +7,7 @@ use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::condcodes::IntCC;
 use crate::ir::immediates::Uimm32;
-use crate::ir::{self, InstBuilder};
+use crate::ir::{self, InstBuilder, RelSourceLoc};
 use crate::isa::TargetIsa;
 
 /// Expand a `heap_addr` instruction according to the definition of the heap.
@@ -212,7 +212,9 @@ fn cast_offset_to_pointer_ty(
     // Add debug value-label alias so that debuginfo can name the extended
     // value as the address
     let loc = pos.srcloc();
+    let loc = RelSourceLoc::from_base_offset(pos.func.params.base_srcloc(), loc);
     pos.func
+        .stencil
         .dfg
         .add_value_label_alias(extended_offset, loc, offset);
 

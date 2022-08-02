@@ -27,6 +27,10 @@ use serde::ser::Serializer;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
+use super::entities::UserExternalNameRef;
+use super::extname::{TestcaseName, UserExternalName};
+use super::{RelSourceLoc, SourceLoc};
+
 /// A version marker used to ensure that serialized clif ir is never deserialized with a
 /// different version of Cranelift.
 #[derive(Copy, Clone, Debug, PartialEq, Hash)]
@@ -60,19 +64,150 @@ impl<'de> Deserialize<'de> for VersionMarker {
     }
 }
 
-/// Functions can be cloned, but it is not a very fast operation.
-/// The clone will have all the same entity numbers as the original.
+/// An explicit name for a function.
+pub enum FunctionName {
+    /// A user-defined name, with semantics left to the user.
+    User(UserExternalName),
+    /// A name for a test case, mostly intended for Cranelift testing.
+    Testcase(TestcaseName),
+}
+
+impl FunctionName {
+    /// Creates a new external name from a sequence of bytes. Caller is expected
+    /// to guarantee bytes are only ascii alphanumeric or `_`.
+    pub fn testcase<T: AsRef<[u8]>>(v: T) -> Self {
+        Self::Testcase(TestcaseName::new(v))
+    }
+
+    /// Create a new external name from a user-defined external function reference.
+    pub fn user(namespace: u32, index: u32) -> Self {
+        Self::User(UserExternalName { namespace, index })
+    }
+}
+
+impl Default for FunctionName {
+    fn default() -> Self {
+        FunctionName::User(UserExternalName::default())
+    }
+}
+
+/// Function parameters used when creating this function, and that will become applied after
+/// compilation to materialize the final `CompiledCode`.
 #[derive(Clone)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct Function {
+pub struct FunctionParameters {
+    /// Name of this function. Mostly used by `.clif` files.
+    ///
+    /// Invariant: this name is always inserted in the `user_named_funcs` field. If this value is
+    /// changed and it was a `UserExternalName`, the corresponding (first) entry in
+    /// `user_named_funcs` must be updated too; the `set_name` function takes care of this.
+    name: ExternalName,
+
+    /// The first `SourceLoc` appearing in the function, serving as a base for every relative
+    /// source loc in the function.
+    base_srcloc: Option<SourceLoc>,
+
+    /// External user-defined function references.
+    pub user_named_funcs: PrimaryMap<UserExternalNameRef, UserExternalName>,
+}
+
+impl FunctionParameters {
+    /// Creates a new `FunctionParameters` with the given name.
+    pub fn new(name: FunctionName) -> Self {
+        let mut user_named_funcs = PrimaryMap::default();
+        let name = match name {
+            FunctionName::User(user_ext_name) => {
+                let name_ref = user_named_funcs.push(user_ext_name);
+                ExternalName::User(name_ref)
+            }
+            FunctionName::Testcase(name) => ExternalName::TestCase(name),
+        };
+        Self {
+            name,
+            base_srcloc: None,
+            user_named_funcs,
+        }
+    }
+
+    /// Returns the name of the current function.
+    pub fn name(&self) -> &ExternalName {
+        &self.name
+    }
+
+    /// Resets the function's name to the new given one.
+    pub fn set_name(&mut self, name: FunctionName) {
+        // if the function was named with a user function name, then we need to replace it,
+        // otherwise we need to make sure to add it, if needed.
+        let replace_by = if let ExternalName::User(user_func_ref) = self.name {
+            Some(user_func_ref)
+        } else {
+            None
+        };
+
+        let name = match name {
+            FunctionName::User(name) => {
+                if let Some(user_func_ref) = replace_by {
+                    self.user_named_funcs[user_func_ref] = name.clone();
+                    ExternalName::user(user_func_ref)
+                } else {
+                    let user_func_ref = self.user_named_funcs.push(name.clone());
+                    ExternalName::user(user_func_ref)
+                }
+            }
+            FunctionName::Testcase(testcase) => {
+                if replace_by.is_some() {
+                    // Should really remove the first entry, but who would do this in pratice.
+                    assert_eq!(self.user_named_funcs.len(), 1, "resetting a name is only possible before any other references to user functions");
+                    self.user_named_funcs.clear();
+                }
+                ExternalName::TestCase(testcase)
+            }
+        };
+
+        self.name = name;
+    }
+
+    /// Returns the base `SourceLoc`.
+    ///
+    /// If it was never explicitly set with `ensure_base_srcloc`, will return an invalid
+    /// `SourceLoc`.
+    pub fn base_srcloc(&self) -> SourceLoc {
+        self.base_srcloc.unwrap_or_default()
+    }
+
+    /// Sets the base `SourceLoc`, if not set yet, and returns the base value.
+    pub fn ensure_base_srcloc(&mut self, srcloc: SourceLoc) -> SourceLoc {
+        match self.base_srcloc {
+            Some(val) => val,
+            None => {
+                self.base_srcloc = Some(srcloc);
+                srcloc
+            }
+        }
+    }
+
+    fn clear(&mut self) {
+        self.base_srcloc = None;
+        // Maintain the invariant that the function's name is always declared in user_named_funcs.
+        self.user_named_funcs.clear();
+        let new_name = Default::default();
+        let new_name_ref = self.user_named_funcs.push(new_name);
+        self.name = ExternalName::user(new_name_ref);
+    }
+}
+
+/// Function fields needed when compiling a function.
+///
+/// Additionally, these fields can be the same for two functions that would be compiled the same
+/// way, and finalized by applying `FunctionParameters` onto their `CompiledCodeStencil`.
+#[derive(Clone, PartialEq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct FunctionStencil {
     /// A version marker used to ensure that serialized clif ir is never deserialized with a
     /// different version of Cranelift.
     // Note: This must be the first field to ensure that Serde will deserialize it before
     // attempting to deserialize other fields that are potentially changed between versions.
     pub version_marker: VersionMarker,
-
-    /// Name of this function. Mostly used by `.clif` files.
-    pub name: ExternalName,
 
     /// Signature of this function.
     pub signature: Signature,
@@ -105,7 +240,7 @@ pub struct Function {
     ///
     /// Track the original source location for each instruction. The source locations are not
     /// interpreted by Cranelift, only preserved.
-    pub srclocs: SourceLocs,
+    srclocs: SourceLocs,
 
     /// An optional global value which represents an expression evaluating to
     /// the stack limit for this function. This `GlobalValue` will be
@@ -115,28 +250,8 @@ pub struct Function {
     pub stack_limit: Option<ir::GlobalValue>,
 }
 
-impl Function {
-    /// Create a function with the given name and signature.
-    pub fn with_name_signature(name: ExternalName, sig: Signature) -> Self {
-        Self {
-            version_marker: VersionMarker,
-            name,
-            signature: sig,
-            sized_stack_slots: StackSlots::new(),
-            dynamic_stack_slots: DynamicStackSlots::new(),
-            global_values: PrimaryMap::new(),
-            heaps: PrimaryMap::new(),
-            tables: PrimaryMap::new(),
-            jump_tables: PrimaryMap::new(),
-            dfg: DataFlowGraph::new(),
-            layout: Layout::new(),
-            srclocs: SecondaryMap::new(),
-            stack_limit: None,
-        }
-    }
-
-    /// Clear all data structures in this function.
-    pub fn clear(&mut self) {
+impl FunctionStencil {
+    fn clear(&mut self) {
         self.signature.clear(CallConv::Fast);
         self.sized_stack_slots.clear();
         self.dynamic_stack_slots.clear();
@@ -148,11 +263,6 @@ impl Function {
         self.layout.clear();
         self.srclocs.clear();
         self.stack_limit = None;
-    }
-
-    /// Create a new empty, anonymous function with a Fast calling convention.
-    pub fn new() -> Self {
-        Self::with_name_signature(ExternalName::default(), Signature::new(CallConv::Fast))
     }
 
     /// Creates a jump table in the function, to be used by `br_table` instructions.
@@ -175,11 +285,6 @@ impl Function {
     /// Adds a signature which can later be used to declare an external function import.
     pub fn import_signature(&mut self, signature: Signature) -> SigRef {
         self.dfg.signatures.push(signature)
-    }
-
-    /// Declare an external function import.
-    pub fn import_function(&mut self, data: ExtFuncData) -> FuncRef {
-        self.dfg.ext_funcs.push(data)
     }
 
     /// Declares a global value accessible to the function.
@@ -215,19 +320,6 @@ impl Function {
     /// Declares a table accessible to the function.
     pub fn create_table(&mut self, data: TableData) -> Table {
         self.tables.push(data)
-    }
-
-    /// Return an object that can display this function with correct ISA-specific annotations.
-    pub fn display(&self) -> DisplayFunction<'_> {
-        DisplayFunction(self, Default::default())
-    }
-
-    /// Return an object that can display this function with correct ISA-specific annotations.
-    pub fn display_with<'a>(
-        &'a self,
-        annotations: DisplayFunctionAnnotations<'a>,
-    ) -> DisplayFunction<'a> {
-        DisplayFunction(self, annotations)
     }
 
     /// Find a presumed unique special-purpose function parameter value.
@@ -354,6 +446,116 @@ impl Function {
     /// Does not include any padding necessary due to offsets
     pub fn fixed_stack_size(&self) -> u32 {
         self.sized_stack_slots.values().map(|ss| ss.size).sum()
+    }
+
+    /// Returns the list of relative source locations for this function.
+    pub(crate) fn rel_srclocs(&self) -> &SecondaryMap<Inst, RelSourceLoc> {
+        &self.srclocs
+    }
+}
+
+/// Functions can be cloned, but it is not a very fast operation.
+/// The clone will have all the same entity numbers as the original.
+#[derive(Clone)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct Function {
+    /// All the fields required for compiling a function, independently of details irrelevant to
+    /// compilation and that are stored in the `FunctionParameters` `params` field instead.
+    pub stencil: FunctionStencil,
+
+    /// All the parameters that can be applied onto the function stencil, that is, that don't
+    /// matter when caching compilation artifacts.
+    pub params: FunctionParameters,
+}
+
+impl core::ops::Deref for Function {
+    type Target = FunctionStencil;
+
+    fn deref(&self) -> &Self::Target {
+        &self.stencil
+    }
+}
+
+impl core::ops::DerefMut for Function {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.stencil
+    }
+}
+
+impl Function {
+    /// Create a function with the given name and signature.
+    /// TODO: `name` should probably be a `UserExternalName`, with the resulting `ExternalName`
+    /// being automatically declared with `declare_imported_user_function` to allow recursive calls
+    /// without extra effort.
+    pub fn with_name_signature(name: FunctionName, sig: Signature) -> Self {
+        Self {
+            stencil: FunctionStencil {
+                version_marker: VersionMarker,
+                signature: sig,
+                sized_stack_slots: StackSlots::new(),
+                dynamic_stack_slots: DynamicStackSlots::new(),
+                global_values: PrimaryMap::new(),
+                heaps: PrimaryMap::new(),
+                tables: PrimaryMap::new(),
+                jump_tables: PrimaryMap::new(),
+                dfg: DataFlowGraph::new(),
+                layout: Layout::new(),
+                srclocs: SecondaryMap::new(),
+                stack_limit: None,
+            },
+            params: FunctionParameters::new(name),
+        }
+    }
+
+    /// Clear all data structures in this function.
+    pub fn clear(&mut self) {
+        self.stencil.clear();
+        self.params.clear();
+    }
+
+    /// Create a new empty, anonymous function with a Fast calling convention.
+    pub fn new() -> Self {
+        Self::with_name_signature(Default::default(), Signature::new(CallConv::Fast))
+    }
+
+    /// Return an object that can display this function with correct ISA-specific annotations.
+    pub fn display(&self) -> DisplayFunction<'_> {
+        DisplayFunction(self, Default::default())
+    }
+
+    /// Return an object that can display this function with correct ISA-specific annotations.
+    pub fn display_with<'a>(
+        &'a self,
+        annotations: DisplayFunctionAnnotations<'a>,
+    ) -> DisplayFunction<'a> {
+        DisplayFunction(self, annotations)
+    }
+
+    /// Sets an absolute source location for the given instruction.
+    ///
+    /// If no base source location has been set yet, records it at the same time.
+    pub fn set_srcloc(&mut self, inst: Inst, srcloc: SourceLoc) {
+        let base = self.params.ensure_base_srcloc(srcloc);
+        self.stencil.srclocs[inst] = RelSourceLoc::from_base_offset(base, srcloc);
+    }
+
+    /// Returns an absolute source location for the given instruction.
+    pub fn srcloc(&self, inst: Inst) -> SourceLoc {
+        let base = self.params.base_srcloc();
+        self.stencil.srclocs[inst].expand(base)
+    }
+
+    /// Declare a user-defined external function import, to be referenced in `ExtFuncData::User` later.
+    pub fn declare_imported_user_function(
+        &mut self,
+        name: UserExternalName,
+    ) -> UserExternalNameRef {
+        self.params.user_named_funcs.push(name)
+    }
+
+    /// Declare an external function import.
+    pub fn import_function(&mut self, data: ExtFuncData) -> FuncRef {
+        self.stencil.dfg.ext_funcs.push(data)
     }
 }
 

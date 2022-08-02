@@ -19,7 +19,14 @@ entity_impl!(FuncIndex, "fn");
 impl<'a> From<&'a Function> for FunctionStore<'a> {
     fn from(function: &'a Function) -> Self {
         let mut store = FunctionStore::default();
-        store.add(function.name.to_string(), function);
+        store.add(
+            function
+                .params
+                .name()
+                .display(Some(&function.params))
+                .to_string(),
+            function,
+        );
         store
     }
 }
@@ -63,18 +70,20 @@ impl<'a> FunctionStore<'a> {
 /// currently it retrieves the function name as a string and performs string matching.
 fn get_function_name(func_ref: FuncRef, function: &Function) -> String {
     function
+        .stencil
         .dfg
         .ext_funcs
         .get(func_ref)
         .expect("function to exist")
         .name
+        .display(Some(&function.params))
         .to_string()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cranelift_codegen::ir::{ExternalName, Signature};
+    use cranelift_codegen::ir::{FunctionName, Signature};
     use cranelift_codegen::isa::CallConv;
 
     #[test]
@@ -95,7 +104,7 @@ mod tests {
 
     #[test]
     fn from() {
-        let name = ExternalName::testcase("test");
+        let name = FunctionName::testcase("test");
         let signature = Signature::new(CallConv::Fast);
         let func = &Function::with_name_signature(name, signature);
         let env: FunctionStore = func.into();

@@ -90,6 +90,20 @@ pub struct ListPool<T: EntityRef + ReservedValue> {
     free: Vec<usize>,
 }
 
+impl<T: EntityRef + ReservedValue> PartialEq for ListPool<T> {
+    fn eq(&self, other: &Self) -> bool {
+        // ignore the free list
+        self.data == other.data
+    }
+}
+
+impl<T: core::hash::Hash + EntityRef + ReservedValue> core::hash::Hash for ListPool<T> {
+    fn hash<H: __core::hash::Hasher>(&self, state: &mut H) {
+        // ignore the free list
+        self.data.hash(state);
+    }
+}
+
 /// Lists are allocated in sizes that are powers of two, starting from 4.
 /// Each power of two is assigned a size class number, so the size is `4 << SizeClass`.
 type SizeClass = u8;
@@ -132,13 +146,6 @@ impl<T: EntityRef + ReservedValue> ListPool<T> {
     pub fn clear(&mut self) {
         self.data.clear();
         self.free.clear();
-    }
-
-    /// Returns a list of the allocated data in that list.
-    ///
-    /// To be used for serialization purposes.
-    pub fn internal_data(&self) -> &[T] {
-        self.data.as_slice()
     }
 
     /// Read the length of a list field, if it exists.

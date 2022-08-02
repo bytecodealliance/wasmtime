@@ -14,13 +14,13 @@ type EntryIndex = u128;
 ///
 /// ```rust
 /// # use cranelift_codegen::ir::types::*;
-/// # use cranelift_codegen::ir::{ExternalName, Function, Signature, InstBuilder};
+/// # use cranelift_codegen::ir::{FunctionName, Function, Signature, InstBuilder};
 /// # use cranelift_codegen::isa::CallConv;
 /// # use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Switch};
 /// #
 /// # let mut sig = Signature::new(CallConv::SystemV);
 /// # let mut fn_builder_ctx = FunctionBuilderContext::new();
-/// # let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig);
+/// # let mut func = Function::with_name_signature(FunctionName::user(0, 0), sig);
 /// # let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
 /// #
 /// # let entry = builder.create_block();

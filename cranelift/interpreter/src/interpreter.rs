@@ -75,7 +75,11 @@ impl<'a> Interpreter<'a> {
         function: &'a Function,
         arguments: &[DataValue],
     ) -> Result<ControlFlow<'a, DataValue>, InterpreterError> {
-        trace!("Call: {}({:?})", function.name, arguments);
+        trace!(
+            "Call: {}({:?})",
+            function.params.name().display(Some(&function.params)),
+            arguments
+        );
         let first_block = function
             .layout
             .blocks()
@@ -622,7 +626,10 @@ mod tests {
 
         let func = parse_functions(code).unwrap().into_iter().next().unwrap();
         let mut env = FunctionStore::default();
-        env.add(func.name.to_string(), &func);
+        env.add(
+            func.params.name().display(Some(&func.params)).to_string(),
+            &func,
+        );
         let state = InterpreterState::default().with_function_store(env);
         let result = Interpreter::new(state)
             .call_by_name("%test", &[])
@@ -644,7 +651,10 @@ mod tests {
 
         let func = parse_functions(code).unwrap().into_iter().next().unwrap();
         let mut env = FunctionStore::default();
-        env.add(func.name.to_string(), &func);
+        env.add(
+            func.params.name().display(Some(&func.params)).to_string(),
+            &func,
+        );
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%test", &[])
@@ -665,7 +675,10 @@ mod tests {
 
         let func = parse_functions(code).unwrap().into_iter().next().unwrap();
         let mut env = FunctionStore::default();
-        env.add(func.name.to_string(), &func);
+        env.add(
+            func.params.name().display(Some(&func.params)).to_string(),
+            &func,
+        );
         let state = InterpreterState::default().with_function_store(env);
         let result = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
@@ -698,7 +711,9 @@ mod tests {
 
         let mut env = FunctionStore::default();
         let funcs = parse_functions(code).unwrap().to_vec();
-        funcs.iter().for_each(|f| env.add(f.name.to_string(), f));
+        funcs
+            .iter()
+            .for_each(|f| env.add(f.params.name().display(Some(&f.params)).to_string(), f));
 
         let state = InterpreterState::default().with_function_store(env);
         let result = Interpreter::new(state)
@@ -731,7 +746,10 @@ mod tests {
 
         let func = parse_functions(code).unwrap().into_iter().next().unwrap();
         let mut env = FunctionStore::default();
-        env.add(func.name.to_string(), &func);
+        env.add(
+            func.params.name().display(Some(&func.params)).to_string(),
+            &func,
+        );
 
         // The default interpreter should not enable the fuel mechanism
         let state = InterpreterState::default().with_function_store(env.clone());
@@ -802,7 +820,9 @@ mod tests {
 
         let mut env = FunctionStore::default();
         let funcs = parse_functions(code).unwrap().to_vec();
-        funcs.iter().for_each(|f| env.add(f.name.to_string(), f));
+        funcs
+            .iter()
+            .for_each(|f| env.add(f.params.name().display(Some(&f.params)).to_string(), f));
 
         let state = InterpreterState::default().with_function_store(env);
         let result = Interpreter::new(state)
@@ -835,7 +855,10 @@ mod tests {
 
         let func = parse_functions(code).unwrap().into_iter().next().unwrap();
         let mut env = FunctionStore::default();
-        env.add(func.name.to_string(), &func);
+        env.add(
+            func.params.name().display(Some(&func.params)).to_string(),
+            &func,
+        );
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_write", &[])
@@ -859,7 +882,10 @@ mod tests {
 
         let func = parse_functions(code).unwrap().into_iter().next().unwrap();
         let mut env = FunctionStore::default();
-        env.add(func.name.to_string(), &func);
+        env.add(
+            func.params.name().display(Some(&func.params)).to_string(),
+            &func,
+        );
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_write", &[])
@@ -882,7 +908,10 @@ mod tests {
 
         let func = parse_functions(code).unwrap().into_iter().next().unwrap();
         let mut env = FunctionStore::default();
-        env.add(func.name.to_string(), &func);
+        env.add(
+            func.params.name().display(Some(&func.params)).to_string(),
+            &func,
+        );
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_load", &[])
@@ -905,7 +934,10 @@ mod tests {
 
         let func = parse_functions(code).unwrap().into_iter().next().unwrap();
         let mut env = FunctionStore::default();
-        env.add(func.name.to_string(), &func);
+        env.add(
+            func.params.name().display(Some(&func.params)).to_string(),
+            &func,
+        );
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_load", &[])
@@ -931,7 +963,10 @@ mod tests {
 
         let func = parse_functions(code).unwrap().into_iter().next().unwrap();
         let mut env = FunctionStore::default();
-        env.add(func.name.to_string(), &func);
+        env.add(
+            func.params.name().display(Some(&func.params)).to_string(),
+            &func,
+        );
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_load", &[])
@@ -957,7 +992,10 @@ mod tests {
 
         let func = parse_functions(code).unwrap().into_iter().next().unwrap();
         let mut env = FunctionStore::default();
-        env.add(func.name.to_string(), &func);
+        env.add(
+            func.params.name().display(Some(&func.params)).to_string(),
+            &func,
+        );
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_store", &[])
@@ -992,7 +1030,10 @@ mod tests {
 
         let func = parse_functions(code).unwrap().into_iter().next().unwrap();
         let mut env = FunctionStore::default();
-        env.add(func.name.to_string(), &func);
+        env.add(
+            func.params.name().display(Some(&func.params)).to_string(),
+            &func,
+        );
         let mut state = InterpreterState::default().with_function_store(env);
 
         let heap0 = state.register_heap(HeapInit::Zeroed(0x1000));
@@ -1026,7 +1067,10 @@ mod tests {
 
         let func = parse_functions(code).unwrap().into_iter().next().unwrap();
         let mut env = FunctionStore::default();
-        env.add(func.name.to_string(), &func);
+        env.add(
+            func.params.name().display(Some(&func.params)).to_string(),
+            &func,
+        );
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%test", &[])

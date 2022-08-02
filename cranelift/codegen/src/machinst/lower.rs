@@ -11,10 +11,11 @@ use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::{
     types::{FFLAGS, IFLAGS},
-    ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
-    GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, Opcode, Signature,
-    SourceLoc, Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
+    ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, Function, GlobalValue,
+    GlobalValueData, Immediate, Inst, InstructionData, MemFlags, Opcode, Signature, Type, Value,
+    ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
+use crate::ir::{ExternalName, RelSourceLoc};
 use crate::machinst::{
     non_writable_value_regs, writable_value_regs, ABICallee, BlockIndex, BlockLoweringOrder,
     LoweredBlock, MachLabel, Reg, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
@@ -102,7 +103,7 @@ pub trait LowerCtx {
     /// Returns the memory flags of a given memory access.
     fn memflags(&self, ir_inst: Inst) -> Option<MemFlags>;
     /// Get the source location for a given instruction.
-    fn srcloc(&self, ir_inst: Inst) -> SourceLoc;
+    fn srcloc(&self, ir_inst: Inst) -> RelSourceLoc;
 
     // Instruction input/output queries:
 
@@ -960,10 +961,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         for &arg in self.f.dfg.block_params(block) {
             self.emit_value_label_marks_for_value(arg);
         }
-        self.finish_ir_inst(SourceLoc::default());
+        self.finish_ir_inst(Default::default());
     }
 
-    fn finish_ir_inst(&mut self, loc: SourceLoc) {
+    fn finish_ir_inst(&mut self, loc: RelSourceLoc) {
         self.vcode.set_srcloc(loc);
         // The VCodeBuilder builds in reverse order (and reverses at
         // the end), but `ir_insts` is in forward order, so reverse
@@ -1021,7 +1022,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
             self.vcode.add_succ(succ, &branch_arg_vregs[..]);
         }
-        self.finish_ir_inst(SourceLoc::default());
+        self.finish_ir_inst(Default::default());
     }
 
     fn collect_branches_and_targets(
@@ -1121,7 +1122,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 self.vcode.add_succ(succ, &branch_arg_vregs[..]);
 
                 self.emit(I::gen_jump(MachLabel::from_block(succ)));
-                self.finish_ir_inst(SourceLoc::default());
+                self.finish_ir_inst(Default::default());
             }
 
             // Original block body.
@@ -1133,7 +1134,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             if bindex.index() == 0 {
                 // Set up the function with arg vreg inits.
                 self.gen_arg_setup();
-                self.finish_ir_inst(SourceLoc::default());
+                self.finish_ir_inst(Default::default());
             }
 
             self.finish_bb();
@@ -1175,7 +1176,7 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         self.f.dfg.ctrl_typevar(ir_inst)
     }
 
-    fn call_target<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance)> {
+    fn call_target(&self, ir_inst: Inst) -> Option<(&ExternalName, RelocDistance)> {
         match &self.f.dfg[ir_inst] {
             &InstructionData::Call { func_ref, .. }
             | &InstructionData::FuncAddr { func_ref, .. } => {
@@ -1238,8 +1239,8 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         }
     }
 
-    fn srcloc(&self, ir_inst: Inst) -> SourceLoc {
-        self.f.srclocs[ir_inst]
+    fn srcloc(&self, ir_inst: Inst) -> RelSourceLoc {
+        self.f.rel_srclocs()[ir_inst]
     }
 
     fn num_inputs(&self, ir_inst: Inst) -> usize {

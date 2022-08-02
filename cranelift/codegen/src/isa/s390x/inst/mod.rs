@@ -2830,7 +2830,7 @@ impl Inst {
             }
             &Inst::Call { link, ref info, .. } => {
                 let link = pretty_print_reg(link.to_reg(), allocs);
-                format!("brasl {}, {}", link, info.dest)
+                format!("brasl {}, {}", link, info.dest.display(None))
             }
             &Inst::CallInd { link, ref info, .. } => {
                 let link = pretty_print_reg(link.to_reg(), allocs);
@@ -2900,7 +2900,11 @@ impl Inst {
                 let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg(), &mut empty_allocs);
                 format!(
                     "bras {}, 12 ; data {} + {} ; lg {}, 0({})",
-                    tmp, name, offset, rd, tmp
+                    tmp,
+                    name.display(None),
+                    offset,
+                    rd,
+                    tmp
                 )
             }
             &Inst::LoadAddr { rd, ref mem } => {
