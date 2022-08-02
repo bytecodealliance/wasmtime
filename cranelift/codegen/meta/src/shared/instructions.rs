@@ -1343,6 +1343,8 @@ pub(crate) fn define(
             "get_return_address",
             r#"
         Get the PC where this function will transfer control to when it returns.
+
+        Usage of this instruction requires setting `preserve_frame_pointers` to `true`.
         "#,
             &formats.nullary,
         )

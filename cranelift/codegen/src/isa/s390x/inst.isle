@@ -1565,6 +1565,10 @@
 (decl memarg_stack_off (i64 i64) MemArg)
 (extern constructor memarg_stack_off memarg_stack_off)
 
+;; Create a `MemArg` referring to an offset from the initial SP.
+(decl memarg_initial_sp_offset (i64) MemArg)
+(extern constructor memarg_initial_sp_offset memarg_initial_sp_offset)
+
 ;; Form the sum of two offset values, and check that the result is
 ;; a valid `MemArg::Symbol` offset (i.e. is even and fits into i32).
 (decl pure memarg_symbol_offset_sum (i64 i64) i32)
@@ -2485,16 +2489,10 @@
             (_ Unit (emit (MInst.MovPReg dst src))))
         dst))
 
-(decl preg_r14 () PReg)
-(extern constructor preg_r14 preg_r14)
-
 (decl preg_r15 () PReg)
 (extern constructor preg_r15 preg_r15)
 
-(decl r14 () Reg)
-(rule (r14)
-      (mov_preg (preg_r14)))
-
+;; Copy `r15`, the physical stack register, into a virtual register.
 (decl r15 () Reg)
 (rule (r15)
       (mov_preg (preg_r15)))

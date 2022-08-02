@@ -6,8 +6,8 @@ pub mod generated_code;
 // Types that the generated ISLE code uses via `use super::*`.
 use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::s390x::inst::{
-    regs, stack_reg, writable_gpr, zero_reg, CallIndInfo, CallInfo, Cond, Inst as MInst, MemArg,
-    UImm12, UImm16Shifted, UImm32Shifted,
+    stack_reg, writable_gpr, zero_reg, CallIndInfo, CallInfo, Cond, Inst as MInst, MemArg, UImm12,
+    UImm16Shifted, UImm32Shifted,
 };
 use crate::isa::s390x::settings::Flags as IsaFlags;
 use crate::machinst::isle::*;
@@ -605,6 +605,11 @@ where
     }
 
     #[inline]
+    fn memarg_initial_sp_offset(&mut self, off: i64) -> MemArg {
+        MemArg::InitialSPOffset { off }
+    }
+
+    #[inline]
     fn memarg_symbol(&mut self, name: ExternalName, offset: i32, flags: MemFlags) -> MemArg {
         MemArg::Symbol {
             name: Box::new(name),
@@ -670,11 +675,6 @@ where
     #[inline]
     fn emit(&mut self, inst: &MInst) -> Unit {
         self.lower_ctx.emit(inst.clone());
-    }
-
-    #[inline]
-    fn preg_r14(&mut self) -> PReg {
-        regs::gpr(14).to_real_reg().unwrap().into()
     }
 
     #[inline]

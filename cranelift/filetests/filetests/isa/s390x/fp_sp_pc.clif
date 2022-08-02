@@ -46,7 +46,7 @@ block0:
 ;   virtual_sp_offset_adjust 160
 ;   stg %r1, 0(%r15)
 ; block0:
-;   lgr %r2, %r14
+;   lg %r2, 272(%r15)
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 

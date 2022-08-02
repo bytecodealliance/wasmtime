@@ -722,21 +722,22 @@ impl<'a> Verifier<'a> {
                 }
             }
             NullAry {
-                opcode: Opcode::GetFramePointer,
+                opcode: Opcode::GetFramePointer | Opcode::GetReturnAddress,
             } => {
                 if let Some(isa) = &self.isa {
                     if !isa.flags().preserve_frame_pointers() {
                         return errors.fatal((
                             inst,
                             self.context(inst),
-                            "`get_frame_pointer` cannot be used with enabling `preserve_frame_pointers`"
+                            "`get_frame_pointer`/`get_return_address` cannot be used without \
+                             enabling `preserve_frame_pointers`",
                         ));
                     }
                 } else {
                     return errors.fatal((
                         inst,
                         self.context(inst),
-                        "`get_frame_pointer` requires an ISA!",
+                        "`get_frame_pointer`/`get_return_address` require an ISA!",
                     ));
                 }
             }
