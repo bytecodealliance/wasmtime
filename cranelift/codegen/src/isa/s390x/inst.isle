@@ -2489,13 +2489,13 @@
             (_ Unit (emit (MInst.MovPReg dst src))))
         dst))
 
-(decl preg_r15 () PReg)
-(extern constructor preg_r15 preg_r15)
+(decl preg_stack () PReg)
+(extern constructor preg_stack preg_stack)
 
-;; Copy `r15`, the physical stack register, into a virtual register.
-(decl r15 () Reg)
-(rule (r15)
-      (mov_preg (preg_r15)))
+;; Copy the physical stack register into a virtual register.
+(decl sp () Reg)
+(rule (sp)
+      (mov_preg (preg_stack)))
 
 ;; Helpers for accessing argument / return value slots ;;;;;;;;;;;;;;;;;;;;;;;;;
 

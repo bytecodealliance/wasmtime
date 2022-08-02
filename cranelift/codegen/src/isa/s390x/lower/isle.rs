@@ -678,7 +678,7 @@ where
     }
 
     #[inline]
-    fn preg_r15(&mut self) -> PReg {
+    fn preg_stack(&mut self) -> PReg {
         stack_reg().to_real_reg().unwrap().into()
     }
 }

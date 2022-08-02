@@ -3622,12 +3622,12 @@
 ;;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;
 
 (rule (lower (get_stack_pointer))
-      (r15))
+      (sp))
 
 (rule (lower (get_frame_pointer))
       (load64 (memarg_stack_off 0 0)))
 
 (rule (lower (get_return_address))
-      ;; The return address is 14 pointer-sized slots above the SP. So our
-      ;; offset is `14 * 8 = 112`.
+      ;; The return address is 14 pointer-sized slots above the initial SP. So
+      ;; our offset is `14 * 8 = 112`.
       (load64 (memarg_initial_sp_offset 112)))
