@@ -475,7 +475,7 @@
 
             ;; Extract the low half components of rn.
             ;;   tmp1 = |c|a|
-            (tmp1 Reg (xtn64 rn $false))
+            (tmp1 Reg (xtn rn (ScalarSize.Size32)))
 
             ;; Sum the respective high half components.
             ;;   rd = |dg+ch|be+af||dg+ch|be+af|
@@ -483,7 +483,7 @@
 
             ;; Extract the low half components of rm.
             ;;   tmp2 = |g|e|
-            (tmp2 Reg (xtn64 rm $false))
+            (tmp2 Reg (xtn rm (ScalarSize.Size32)))
 
             ;; Shift the high half components, into the high half.
             ;;   rd = |dg+ch << 32|be+af << 32|
@@ -1450,68 +1450,55 @@
       (value_regs_get src 0))
 
 
-;;;; Rules for `fcmp` 32 bit ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `fcmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond_not_eq cond) x (splat (f32const (zero_value_f32 y))))))
+(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond_not_eq cond) x y)))
+      (if (zero_value y))
       (let ((rn Reg x)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (not (fcmeq0 rn vec_size) vec_size))))
 
-(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond cond) x (splat (f32const (zero_value_f32 y))))))
-      (let ((rn Reg x)
-            (vec_size VectorSize (vector_size ty)))
-          (value_reg (float_cmp_zero cond rn vec_size))))
-
-(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond_not_eq cond) (splat (f32const (zero_value_f32 x))) y)))
-      (let ((rn Reg y)
-            (vec_size VectorSize (vector_size ty)))
-          (value_reg (not (fcmeq0 rn vec_size) vec_size))))
-
-(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond cond) (splat (f32const (zero_value_f32 x))) y)))
-      (let ((rn Reg y)
-            (vec_size VectorSize (vector_size ty)))
-          (value_reg (float_cmp_zero_swap cond rn vec_size))))
-
-;;;; Rules for `fcmp` 64 bit ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond_not_eq cond) x (splat (f64const (zero_value_f64 y))))))
-      (let ((rn Reg x)
-            (vec_size VectorSize (vector_size ty)))
-          (value_reg (not (fcmeq0 rn vec_size) vec_size))))
-
-(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond cond) x (splat (f64const (zero_value_f64 y))))))
+(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond cond) x y)))
+      (if (zero_value y))
       (let ((rn Reg x)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (float_cmp_zero cond rn vec_size))))
 
-(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond_not_eq cond) (splat (f64const (zero_value_f64 x))) y)))
+(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond_not_eq cond) x y)))
+      (if (zero_value x))
       (let ((rn Reg y)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (not (fcmeq0 rn vec_size) vec_size))))
 
-(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond cond) (splat (f64const (zero_value_f64 x))) y)))
+(rule (lower (has_type ty @ (multi_lane _ _) (fcmp (fcmp_zero_cond cond) x y)))
+      (if (zero_value x))
       (let ((rn Reg y)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (float_cmp_zero_swap cond rn vec_size))))
+
 
 ;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond_not_eq cond) x (splat (iconst (zero_value y))))))
+(rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond_not_eq cond) x y)))
+      (if (zero_value y))
       (let ((rn Reg x)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (not (cmeq0 rn vec_size) vec_size))))
 
-(rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond cond) x (splat (iconst (zero_value y))))))
+(rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond cond) x y)))
+      (if (zero_value y))
       (let ((rn Reg x)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (int_cmp_zero cond rn vec_size))))
 
-(rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond_not_eq cond) (splat (iconst (zero_value x))) y)))
+(rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond_not_eq cond) x y)))
+      (if (zero_value x))
       (let ((rn Reg y)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (not (cmeq0 rn vec_size) vec_size))))
 
-(rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond cond) (splat (iconst (zero_value x))) y)))
+(rule (lower (has_type ty @ (multi_lane _ _) (icmp (icmp_zero_cond cond) x y)))
+      (if (zero_value x))
       (let ((rn Reg y)
             (vec_size VectorSize (vector_size ty)))
           (value_reg (int_cmp_zero_swap cond rn vec_size))))
@@ -1624,3 +1611,53 @@
 (rule (lower (and (has_type (valid_atomic_transaction ty)
                   (atomic_cas flags addr src1 src2))))
       (atomic_cas_loop addr src1 src2 ty))
+
+
+;;;; Rules for 'fvdemote' ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (fvdemote x))
+      (fcvtn x (ScalarSize.Size32)))
+
+
+;;;; Rules for `snarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type (ty_vec128_int ty) (snarrow x y)))
+      (if (zero_value y))
+      (sqxtn x (lane_size ty)))
+
+(rule (lower (has_type (ty_vec64_int ty) (snarrow x y)))
+      (let ((dst Reg (mov_vec_elem x y 1 0 (VectorSize.Size64x2))))
+            (sqxtn dst (lane_size ty))))
+
+(rule (lower (has_type (ty_vec128_int ty) (snarrow x y)))
+      (let ((low_half Reg (sqxtn x (lane_size ty)))
+            (result Reg (sqxtn2 low_half y (lane_size ty))))
+        result))
+
+
+;;;; Rules for `unarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type (ty_vec128_int ty) (unarrow x y)))
+      (if (zero_value y))
+      (sqxtun x (lane_size ty)))
+
+(rule (lower (has_type (ty_vec64_int ty) (unarrow x y)))
+      (let ((dst Reg (mov_vec_elem x y 1 0 (VectorSize.Size64x2))))
+            (sqxtun dst (lane_size ty))))
+
+(rule (lower (has_type (ty_vec128_int ty) (unarrow x y)))
+      (let ((low_half Reg (sqxtun x (lane_size ty)))
+            (result Reg (sqxtun2 low_half y (lane_size ty))))
+        result))
+
+
+;;;; Rules for `uunarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type (ty_vec128_int ty) (uunarrow x y)))
+      (if (zero_value y))
+      (uqxtn x (lane_size ty)))
+
+(rule (lower (has_type (ty_vec64_int ty) (uunarrow x y)))
+      (let ((dst Reg (mov_vec_elem x y 1 0 (VectorSize.Size64x2))))
+            (uqxtn dst (lane_size ty))))
+
+(rule (lower (has_type (ty_vec128_int ty) (uunarrow x y)))
+      (let ((low_half Reg (uqxtn x (lane_size ty)))
+            (result Reg (uqxtn2 low_half y (lane_size ty))))
+        result))

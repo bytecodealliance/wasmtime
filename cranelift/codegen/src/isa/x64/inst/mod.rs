@@ -129,6 +129,8 @@ impl Inst {
             | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
 
             Inst::XmmUnaryRmREvex { op, .. } | Inst::XmmRmREvex { op, .. } => op.available_from(),
+
+            Inst::XmmRmRVex { op, .. } => op.available_from(),
         }
     }
 }
@@ -320,6 +322,20 @@ impl Inst {
             op,
             src1: Xmm::new(dst.to_reg()).unwrap(),
             src2: XmmMem::new(src).unwrap(),
+            dst: WritableXmm::from_writable_reg(dst).unwrap(),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn xmm_rm_r_vex(op: AvxOpcode, src3: RegMem, src2: Reg, dst: Writable<Reg>) -> Self {
+        src3.assert_regclass_is(RegClass::Float);
+        debug_assert!(src2.class() == RegClass::Float);
+        debug_assert!(dst.to_reg().class() == RegClass::Float);
+        Inst::XmmRmRVex {
+            op,
+            src3: XmmMem::new(src3).unwrap(),
+            src2: Xmm::new(src2).unwrap(),
+            src1: Xmm::new(dst.to_reg()).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -1136,6 +1152,29 @@ impl PrettyPrint for Inst {
                 format!("{} {}, {}, {}", ljustify(op.to_string()), src1, src2, dst)
             }
 
+            Inst::XmmRmRVex {
+                op,
+                src1,
+                src2,
+                src3,
+                dst,
+                ..
+            } => {
+                let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                let src2 = pretty_print_reg(src2.to_reg(), 8, allocs);
+                let src3 = src3.pretty_print(8, allocs);
+
+                format!(
+                    "{} {}, {}, {}, {}",
+                    ljustify(op.to_string()),
+                    src1,
+                    src2,
+                    src3,
+                    dst
+                )
+            }
+
             Inst::XmmRmREvex {
                 op,
                 src1,
@@ -1839,6 +1878,24 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
                     collector.reg_use(regs::xmm0());
                 }
             }
+        }
+        Inst::XmmRmRVex {
+            op,
+            src1,
+            src2,
+            src3,
+            dst,
+            ..
+        } => {
+            // Vfmadd uses and defs the dst reg, that is not the case with all
+            // AVX's ops, if you're adding a new op, make sure to correctly define
+            // register uses.
+            assert!(*op == AvxOpcode::Vfmadd213ps || *op == AvxOpcode::Vfmadd213pd);
+
+            collector.reg_use(src1.to_reg());
+            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            collector.reg_use(src2.to_reg());
+            src3.get_operands(collector);
         }
         Inst::XmmRmREvex {
             op,

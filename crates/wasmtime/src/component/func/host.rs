@@ -1,4 +1,4 @@
-use crate::component::func::{Memory, MemoryMut, Options, MAX_STACK_PARAMS, MAX_STACK_RESULTS};
+use crate::component::func::{Memory, MemoryMut, Options};
 use crate::component::{ComponentParams, ComponentType, Lift, Lower};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{bail, Context, Result};
@@ -7,9 +7,11 @@ use std::mem::MaybeUninit;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
 use std::sync::Arc;
-use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeFuncIndex};
+use wasmtime_environ::component::{
+    ComponentTypes, StringEncoding, TypeFuncIndex, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+};
 use wasmtime_runtime::component::{
-    VMComponentContext, VMComponentFlags, VMLowering, VMLoweringCallee,
+    InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
 };
 use wasmtime_runtime::{VMCallerCheckedAnyfunc, VMMemoryDefinition, VMOpaqueContext};
 
@@ -27,7 +29,7 @@ pub trait IntoComponentFunc<T, Params, Return> {
     extern "C" fn entrypoint(
         cx: *mut VMOpaqueContext,
         data: *mut u8,
-        flags: *mut VMComponentFlags,
+        flags: InstanceFlags,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMCallerCheckedAnyfunc,
         string_encoding: StringEncoding,
@@ -106,7 +108,7 @@ where
 /// the select few places it's intended to be called from.
 unsafe fn call_host<T, Params, Return, F>(
     cx: *mut VMOpaqueContext,
-    flags: *mut VMComponentFlags,
+    mut flags: InstanceFlags,
     memory: *mut VMMemoryDefinition,
     realloc: *mut VMCallerCheckedAnyfunc,
     string_encoding: StringEncoding,
@@ -150,7 +152,7 @@ where
     // Perform a dynamic check that this instance can indeed be left. Exiting
     // the component is disallowed, for example, when the `realloc` function
     // calls a canonical import.
-    if !(*flags).may_leave() {
+    if !flags.may_leave() {
         bail!("cannot leave component instance");
     }
 
@@ -164,12 +166,12 @@ where
     // trivially DCE'd by LLVM. Perhaps one day with enough const programming in
     // Rust we can make monomorphizations of this function codegen only one
     // branch, but today is not that day.
-    if Params::flatten_count() <= MAX_STACK_PARAMS {
-        if Return::flatten_count() <= MAX_STACK_RESULTS {
+    if Params::flatten_count() <= MAX_FLAT_PARAMS {
+        if Return::flatten_count() <= MAX_FLAT_RESULTS {
             let storage = cast_storage::<ReturnStack<Params::Lower, Return::Lower>>(storage);
             let params = Params::lift(cx.0, &options, &storage.assume_init_ref().args)?;
             let ret = closure(cx.as_context_mut(), params)?;
-            (*flags).set_may_leave(false);
+            flags.set_may_leave(false);
             ret.lower(&mut cx, &options, map_maybe_uninit!(storage.ret))?;
         } else {
             let storage = cast_storage::<ReturnPointer<Params::Lower>>(storage).assume_init_ref();
@@ -177,18 +179,18 @@ where
             let ret = closure(cx.as_context_mut(), params)?;
             let mut memory = MemoryMut::new(cx.as_context_mut(), &options);
             let ptr = validate_inbounds::<Return>(memory.as_slice_mut(), &storage.retptr)?;
-            (*flags).set_may_leave(false);
+            flags.set_may_leave(false);
             ret.store(&mut memory, ptr)?;
         }
     } else {
         let memory = Memory::new(cx.0, &options);
-        if Return::flatten_count() <= MAX_STACK_RESULTS {
+        if Return::flatten_count() <= MAX_FLAT_RESULTS {
             let storage = cast_storage::<ReturnStack<ValRaw, Return::Lower>>(storage);
             let ptr =
                 validate_inbounds::<Params>(memory.as_slice(), &storage.assume_init_ref().args)?;
             let params = Params::load(&memory, &memory.as_slice()[ptr..][..Params::SIZE32])?;
             let ret = closure(cx.as_context_mut(), params)?;
-            (*flags).set_may_leave(false);
+            flags.set_may_leave(false);
             ret.lower(&mut cx, &options, map_maybe_uninit!(storage.ret))?;
         } else {
             let storage = cast_storage::<ReturnPointer<ValRaw>>(storage).assume_init_ref();
@@ -197,12 +199,12 @@ where
             let ret = closure(cx.as_context_mut(), params)?;
             let mut memory = MemoryMut::new(cx.as_context_mut(), &options);
             let ptr = validate_inbounds::<Return>(memory.as_slice_mut(), &storage.retptr)?;
-            (*flags).set_may_leave(false);
+            flags.set_may_leave(false);
             ret.store(&mut memory, ptr)?;
         }
     }
 
-    (*flags).set_may_leave(true);
+    flags.set_may_leave(true);
 
     return Ok(());
 }
@@ -260,7 +262,7 @@ macro_rules! impl_into_component_func {
             extern "C" fn entrypoint(
                 cx: *mut VMOpaqueContext,
                 data: *mut u8,
-                flags: *mut VMComponentFlags,
+                flags: InstanceFlags,
                 memory: *mut VMMemoryDefinition,
                 realloc: *mut VMCallerCheckedAnyfunc,
                 string_encoding: StringEncoding,
@@ -298,7 +300,7 @@ macro_rules! impl_into_component_func {
             extern "C" fn entrypoint(
                 cx: *mut VMOpaqueContext,
                 data: *mut u8,
-                flags: *mut VMComponentFlags,
+                flags: InstanceFlags,
                 memory: *mut VMMemoryDefinition,
                 realloc: *mut VMCallerCheckedAnyfunc,
                 string_encoding: StringEncoding,

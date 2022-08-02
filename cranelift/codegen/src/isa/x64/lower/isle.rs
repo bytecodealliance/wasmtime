@@ -26,7 +26,8 @@ use crate::{
         },
     },
     machinst::{
-        isle::*, InsnInput, InsnOutput, LowerCtx, MachAtomicRmwOp, VCodeConstant, VCodeConstantData,
+        isle::*, InsnInput, InsnOutput, LowerCtx, MachAtomicRmwOp, MachInst, VCodeConstant,
+        VCodeConstantData,
     },
 };
 use std::boxed::Box;
@@ -572,6 +573,11 @@ where
     #[inline]
     fn atomic_rmw_op_to_mach_atomic_rmw_op(&mut self, op: &AtomicRmwOp) -> MachAtomicRmwOp {
         MachAtomicRmwOp::from(*op)
+    }
+
+    #[inline]
+    fn gen_move(&mut self, ty: Type, dst: WritableReg, src: Reg) -> MInst {
+        MInst::gen_move(dst, src, ty)
     }
 }
 

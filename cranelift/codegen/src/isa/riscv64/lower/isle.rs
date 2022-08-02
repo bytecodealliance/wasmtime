@@ -21,6 +21,7 @@ use crate::{
     isa::riscv64::inst::*,
     machinst::{InsnOutput, LowerCtx},
 };
+use regalloc2::Block;
 
 use std::boxed::Box;
 use std::convert::TryFrom;
@@ -66,6 +67,87 @@ where
         } else {
             None
         }
+    }
+    fn lower_br_fcmp(
+        &mut self,
+        cc: &FloatCC,
+        a: Reg,
+        b: Reg,
+        targets: &VecMachLabel,
+        ty: Type,
+    ) -> InstOutput {
+        let tmp = self.temp_writable_reg(I64);
+        MInst::lower_br_fcmp(
+            *cc,
+            a,
+            b,
+            BranchTarget::Label(targets[0]),
+            BranchTarget::Label(targets[1]),
+            ty,
+            tmp,
+        )
+        .iter()
+        .for_each(|i| self.emit(i));
+        InstOutput::default()
+    }
+
+    fn lower_brz_or_nz(
+        &mut self,
+        cc: &IntCC,
+        a: Value,
+        targets: &VecMachLabel,
+        ty: Type,
+    ) -> InstOutput {
+        let a = self.put_in_regs(a);
+        let a = generated_code::constructor_uext_int_if_need(self, a, ty).unwrap();
+        MInst::lower_br_icmp(
+            *cc,
+            a,
+            self.int_zero_reg(ty),
+            BranchTarget::Label(targets[0]),
+            BranchTarget::Label(targets[1]),
+            ty,
+        )
+        .iter()
+        .for_each(|i| self.emit(i));
+
+        InstOutput::default()
+    }
+    fn lower_br_icmp(
+        &mut self,
+        cc: &IntCC,
+        a: Value,
+        b: Value,
+        targets: &VecMachLabel,
+        ty: Type,
+    ) -> InstOutput {
+        let test = generated_code::constructor_lower_icmp(self, cc, a, b, ty).unwrap();
+        self.emit(&MInst::CondBr {
+            taken: BranchTarget::Label(targets[0]),
+            not_taken: BranchTarget::Label(targets[1]),
+            kind: IntegerCompare {
+                kind: IntCC::NotEqual,
+                rs1: test,
+                rs2: zero_reg(),
+            },
+        });
+        InstOutput::default()
+    }
+
+    fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
+        assert!(ty.is_int());
+        if ty.bits() == 128 {
+            ValueRegs::two(self.zero_reg(), self.zero_reg())
+        } else {
+            ValueRegs::one(self.zero_reg())
+        }
+    }
+    fn vec_label_get(&mut self, val: &VecMachLabel, x: u8) -> MachLabel {
+        val[x as usize]
+    }
+
+    fn label_to_br_target(&mut self, label: MachLabel) -> BranchTarget {
+        BranchTarget::Label(label)
     }
     fn gen_return(&mut self, val: ValueSlice) -> InstOutput {
         // due to owernship error I have to clone ssa_values.
@@ -288,7 +370,7 @@ where
     fn inst_output_get(&mut self, x: InstOutput, index: u8) -> ValueRegs {
         x[index as usize]
     }
-    fn iadd_ifcount_parameter(&mut self, val: Value) -> Option<(Value, Value, Type)> {
+    fn iadd_ifcout_parameter(&mut self, val: Value) -> Option<(Value, Value, Type)> {
         let inst = self.value_inst(val)?;
         let opcode = self.lower_ctx.data(inst).opcode();
         if opcode == crate::ir::Opcode::IaddIfcout {
@@ -438,7 +520,7 @@ where
         }
     }
 
-    fn intcc_is_signed(&mut self, cc: &IntCC) -> Option<(IntCC, bool)> {
+    fn intcc_is_ueq_compare(&mut self, cc: &IntCC) -> Option<(IntCC, bool)> {
         let cc = *cc;
         match cc {
             IntCC::SignedLessThan => Some((cc, true)),
@@ -461,7 +543,22 @@ where
             None
         }
     }
-
+    fn lower_br_table(&mut self, index: Reg, targets: &VecMachLabel) -> InstOutput {
+        let tmp = self.temp_writable_reg(I64);
+        let default_ = BranchTarget::Label(targets[0]);
+        let targets: Vec<BranchTarget> = targets
+            .iter()
+            .skip(1)
+            .map(|bix| BranchTarget::Label(*bix))
+            .collect();
+        self.emit(&MInst::BrTable {
+            index,
+            tmp1: tmp,
+            default_,
+            targets,
+        });
+        InstOutput::default()
+    }
     fn intcc_is_overflow_or_nof(&mut self, cc: &IntCC) -> Option<IntCC> {
         let cc = *cc;
         if cc == IntCC::Overflow || cc == IntCC::NotOverflow {
@@ -482,4 +579,20 @@ where
             self.lower_ctx.emit(i.clone());
         }
     }
+}
+
+/// The main entry point for branch lowering with ISLE.
+pub(crate) fn lower_branch<C>(
+    lower_ctx: &mut C,
+    flags: &Flags,
+    isa_flags: &IsaFlags,
+    branch: Inst,
+    targets: &[MachLabel],
+) -> Result<(), ()>
+where
+    C: LowerCtx<I = MInst>,
+{
+    lower_common(lower_ctx, flags, isa_flags, &[], branch, |cx, insn| {
+        generated_code::constructor_lower_branch(cx, insn, &targets.to_vec())
+    })
 }

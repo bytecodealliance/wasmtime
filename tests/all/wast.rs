@@ -13,6 +13,8 @@ include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
 // function which actually executes the `wast` test suite given the `strategy`
 // to compile it.
 fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()> {
+    drop(env_logger::try_init());
+
     match strategy {
         Strategy::Cranelift => {}
         _ => unimplemented!(),

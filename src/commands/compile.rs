@@ -155,6 +155,8 @@ mod test {
             "--cranelift-enable",
             "has_avx2",
             "--cranelift-enable",
+            "has_fma",
+            "--cranelift-enable",
             "has_avx512dq",
             "--cranelift-enable",
             "has_avx512vl",

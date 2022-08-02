@@ -2363,3 +2363,50 @@ fn errors_that_poison_instance() -> Result<()> {
         );
     }
 }
+
+#[test]
+fn run_export_with_internal_adapter() -> Result<()> {
+    let component = r#"
+(component
+  (type $t (func (param u32) (result u32)))
+  (component $a
+    (core module $m
+      (func (export "add-five") (param i32) (result i32)
+        local.get 0
+        i32.const 5
+        i32.add)
+    )
+    (core instance $m (instantiate $m))
+    (func (export "add-five") (type $t) (canon lift (core func $m "add-five")))
+  )
+  (component $b
+    (import "interface-0.1.0" (instance $i
+      (export "add-five" (func (type $t)))))
+    (core module $m
+      (func $add-five (import "interface-0.1.0" "add-five") (param i32) (result i32))
+      (func) ;; causes index out of bounds
+      (func (export "run") (result i32) i32.const 0 call $add-five)
+    )
+    (core func $add-five (canon lower (func $i "add-five")))
+    (core instance $i (instantiate 0
+      (with "interface-0.1.0" (instance
+        (export "add-five" (func $add-five))
+      ))
+    ))
+    (func (result u32) (canon lift (core func $i "run")))
+    (export "run" (func 1))
+  )
+  (instance $a (instantiate $a))
+  (instance $b (instantiate $b (with "interface-0.1.0" (instance $a))))
+  (export "run" (func $b "run"))
+)
+"#;
+    let engine = super::engine();
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), u32, _>(&mut store, "run")?;
+    assert_eq!(run.call(&mut store, ())?, 5);
+    Ok(())
+}

@@ -213,7 +213,7 @@ impl<'a, T> MemoryMut<'a, T> {
 
 /// Like `MemoryMut` but for a read-only version that's used during lifting.
 pub struct Memory<'a> {
-    store: &'a StoreOpaque,
+    pub(crate) store: &'a StoreOpaque,
     options: &'a Options,
 }
 

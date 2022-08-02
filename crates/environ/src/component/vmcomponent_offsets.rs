@@ -3,7 +3,7 @@
 // struct VMComponentContext {
 //      magic: u32,
 //      store: *mut dyn Store,
-//      flags: [VMComponentFlags; component.num_runtime_component_instances],
+//      flags: [VMGlobalDefinition; component.num_runtime_component_instances],
 //      lowering_anyfuncs: [VMCallerCheckedAnyfunc; component.num_lowerings],
 //      always_trap_anyfuncs: [VMCallerCheckedAnyfunc; component.num_always_trap],
 //      lowerings: [VMLowering; component.num_lowerings],
@@ -26,15 +26,15 @@ pub const VMCOMPONENT_MAGIC: u32 = u32::from_le_bytes(*b"comp");
 
 /// Flag for the `VMComponentContext::flags` field which corresponds to the
 /// canonical ABI flag `may_leave`
-pub const VMCOMPONENT_FLAG_MAY_LEAVE: u8 = 1 << 0;
+pub const FLAG_MAY_LEAVE: i32 = 1 << 0;
 
 /// Flag for the `VMComponentContext::flags` field which corresponds to the
 /// canonical ABI flag `may_enter`
-pub const VMCOMPONENT_FLAG_MAY_ENTER: u8 = 1 << 1;
+pub const FLAG_MAY_ENTER: i32 = 1 << 1;
 
 /// Flag for the `VMComponentContext::flags` field which is set whenever a
 /// function is called to indicate that `post_return` must be called next.
-pub const VMCOMPONENT_FLAG_NEEDS_POST_RETURN: u8 = 1 << 2;
+pub const FLAG_NEEDS_POST_RETURN: i32 = 1 << 2;
 
 /// Runtime offsets within a `VMComponentContext` for a specific component.
 #[derive(Debug, Clone, Copy)]
@@ -131,7 +131,8 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             size(magic) = 4u32,
             align(u32::from(ret.ptr.size())),
             size(store) = cmul(2, ret.ptr.size()),
-            size(flags) = cmul(ret.num_runtime_component_instances, ret.size_of_vmcomponent_flags()),
+            align(16),
+            size(flags) = cmul(ret.num_runtime_component_instances, ret.ptr.size_of_vmglobal_definition()),
             align(u32::from(ret.ptr.size())),
             size(lowering_anyfuncs) = cmul(ret.num_lowerings, ret.ptr.size_of_vmcaller_checked_anyfunc()),
             size(always_trap_anyfuncs) = cmul(ret.num_always_trap, ret.ptr.size_of_vmcaller_checked_anyfunc()),
@@ -163,17 +164,11 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.magic
     }
 
-    /// The size of the `VMComponentFlags` type.
-    #[inline]
-    pub fn size_of_vmcomponent_flags(&self) -> u8 {
-        1
-    }
-
     /// The offset of the `flags` field.
     #[inline]
-    pub fn flags(&self, index: RuntimeComponentInstanceIndex) -> u32 {
+    pub fn instance_flags(&self, index: RuntimeComponentInstanceIndex) -> u32 {
         assert!(index.as_u32() < self.num_runtime_component_instances);
-        self.flags + index.as_u32()
+        self.flags + index.as_u32() * u32::from(self.ptr.size_of_vmglobal_definition())
     }
 
     /// The offset of the `store` field.

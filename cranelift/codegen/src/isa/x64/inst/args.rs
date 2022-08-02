@@ -794,6 +794,7 @@ pub(crate) enum InstructionSet {
     BMI1,
     #[allow(dead_code)] // never constructed (yet).
     BMI2,
+    FMA,
     AVX512BITALG,
     AVX512DQ,
     AVX512F,
@@ -1381,6 +1382,38 @@ impl fmt::Debug for SseOpcode {
 }
 
 impl fmt::Display for SseOpcode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub enum AvxOpcode {
+    Vfmadd213ps,
+    Vfmadd213pd,
+}
+
+impl AvxOpcode {
+    /// Which `InstructionSet`s support the opcode?
+    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
+        match self {
+            AvxOpcode::Vfmadd213ps => smallvec![InstructionSet::FMA],
+            AvxOpcode::Vfmadd213pd => smallvec![InstructionSet::FMA],
+        }
+    }
+}
+
+impl fmt::Debug for AvxOpcode {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let name = match self {
+            AvxOpcode::Vfmadd213ps => "vfmadd213ps",
+            AvxOpcode::Vfmadd213pd => "vfmadd213pd",
+        };
+        write!(fmt, "{}", name)
+    }
+}
+
+impl fmt::Display for AvxOpcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
     }

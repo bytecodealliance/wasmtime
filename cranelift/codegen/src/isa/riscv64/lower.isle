@@ -962,7 +962,7 @@
 )
 
 (rule
-  (lower (trapif _ (iadd_ifcount_parameter a b ty) trap_code ))
+  (lower (trapif _ (iadd_ifcout_parameter a b ty) trap_code ))
   (let
     (
       (tmp InstOutput (lower_iadd_overflow  a b ty  ) )

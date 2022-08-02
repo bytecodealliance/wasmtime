@@ -23,49 +23,6 @@ pub(crate) fn put_input_in_reg<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInp
         .expect("Multi-register value not expected")
 }
 
-/// Checks for an instance of `op` feeding the given input.
-pub(crate) fn maybe_input_insn<C: LowerCtx<I = Inst>>(
-    c: &C,
-    input: InsnInput,
-    op: Opcode,
-) -> Option<IRInst> {
-    let inputs = c.get_input_as_source_or_const(input.insn, input.input);
-    log::trace!(
-        "maybe_input_insn: input {:?} has options {:?}; looking for op {:?}",
-        input,
-        inputs,
-        op
-    );
-    if let Some((src_inst, _)) = inputs.inst.as_inst() {
-        let data = c.data(src_inst);
-        log::trace!(" -> input inst {:?}", data);
-        if data.opcode() == op {
-            return Some(src_inst);
-        }
-    }
-    None
-}
-
-pub(crate) fn get_ifcmp_parameters<C: LowerCtx<I = Inst>>(
-    c: &mut C,
-    input: IRInst,
-) -> (ValueRegs<Reg>, ValueRegs<Reg>, Type) {
-    let x = c.put_input_in_regs(input, 0);
-    let y = c.put_input_in_regs(input, 1);
-    let ty = c.input_ty(input, 0);
-    (x, y, ty)
-}
-
-pub(crate) fn get_ffcmp_parameters<C: LowerCtx<I = Inst>>(
-    c: &mut C,
-    input: IRInst,
-) -> (Reg, Reg, Type) {
-    let x = c.put_input_in_regs(input, 0).only_reg().unwrap();
-    let y = c.put_input_in_regs(input, 1).only_reg().unwrap();
-    let ty = c.input_ty(input, 0);
-    (x, y, ty)
-}
-
 //=============================================================================
 // Lowering-backend trait implementation.
 
@@ -82,7 +39,33 @@ impl LowerBackend for Riscv64Backend {
         branches: &[IRInst],
         targets: &[MachLabel],
     ) -> CodegenResult<()> {
-        lower_inst::lower_branch(ctx, branches, targets)
+        // A block should end with at most two branches. The first may be a
+        // conditional branch; a conditional branch can be followed only by an
+        // unconditional branch or fallthrough. Otherwise, if only one branch,
+        // it may be an unconditional branch, a fallthrough, a return, or a
+        // trap. These conditions are verified by `is_ebb_basic()` during the
+        // verifier pass.
+        assert!(branches.len() <= 2);
+        if branches.len() == 2 {
+            let op1 = ctx.data(branches[1]).opcode();
+            assert!(op1 == Opcode::Jump);
+        }
+
+        // Lower the first branch in ISLE.  This will automatically handle
+        // the second branch (if any) by emitting a two-way conditional branch.
+        if let Ok(()) = super::lower::isle::lower_branch(
+            ctx,
+            &self.flags,
+            &self.isa_flags,
+            branches[0],
+            targets,
+        ) {
+            return Ok(());
+        }
+        unreachable!(
+            "implemented in ISLE: branch = `{}`",
+            ctx.dfg().display_inst(branches[0]),
+        );
     }
 
     fn maybe_pinned_reg(&self) -> Option<Reg> {

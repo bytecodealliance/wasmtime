@@ -1149,17 +1149,26 @@
 
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; The result of cls is not supposed to count the sign bit itself, just
+;; additional copies of it.  Therefore, when computing cls in terms of clz,
+;; we need to subtract one.  Fold this into the offset computation.
+(decl cls_offset (Type Reg) Reg)
+(rule (cls_offset $I8 x) (add_simm16 $I8 x -57))
+(rule (cls_offset $I16 x) (add_simm16 $I16 x -49))
+(rule (cls_offset $I32 x) (add_simm16 $I32 x -33))
+(rule (cls_offset $I64 x) (add_simm16 $I64 x -1))
+
 ;; Count leading sign-bit copies.  We don't have any instruction for that,
 ;; so we instead count the leading zeros after inverting the input if negative,
 ;; i.e. computing
-;;        cls(x) == clz(x ^ (x >> 63))
+;;        cls(x) == clz(x ^ (x >> 63)) - 1
 ;; where x is the sign-extended input.
 (rule (lower (has_type (fits_in_64 ty) (cls x)))
       (let ((ext_reg Reg (put_in_reg_sext64 x))
             (signbit_copies Reg (ashr_imm $I64 ext_reg 63))
             (inv_reg Reg (xor_reg $I64 ext_reg signbit_copies))
             (clz RegPair (clz_reg 64 inv_reg)))
-        (clz_offset ty (regpair_hi clz))))
+        (cls_offset ty (regpair_hi clz))))
 
 
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1214,12 +1223,14 @@
 ;; of each input byte separately, so we need to accumulate those partial
 ;; results via a series of log2(type size in bytes) - 1 additions.  We
 ;; accumulate in the high byte, so that a final right shift will zero out
-;; any unrelated bits to give a clean result.
+;; any unrelated bits to give a clean result.  (This does not work with
+;; $I16, where we instead accumulate in the low byte and clear high bits
+;; via an explicit and operation.)
 
 (rule (lower (has_type (and (mie2_disabled) $I16) (popcnt x)))
       (let ((cnt2 Reg (popcnt_byte x))
-            (cnt1 Reg (add_reg $I32 cnt2 (lshl_imm $I32 cnt2 8))))
-        (lshr_imm $I32 cnt1 8)))
+            (cnt1 Reg (add_reg $I32 cnt2 (lshr_imm $I32 cnt2 8))))
+        (and_uimm16shifted $I32 cnt1 (uimm16shifted 255 0))))
 
 (rule (lower (has_type (and (mie2_disabled) $I32) (popcnt x)))
       (let ((cnt4 Reg (popcnt_byte x))

@@ -1893,8 +1893,9 @@
 )
 (convert ValueRegs Reg convert_valueregs_reg)
 
-(decl intcc_is_signed (IntCC bool)IntCC)
-(extern extractor intcc_is_signed intcc_is_signed)
+;;; intcc is a not equal compare like greaterthan and ...
+(decl intcc_is_ueq_compare (IntCC bool)IntCC)
+(extern extractor intcc_is_ueq_compare intcc_is_ueq_compare)
 
 (decl intcc_is_eq_or_ne (IntCC)IntCC)
 (extern extractor intcc_is_eq_or_ne intcc_is_eq_or_ne)
@@ -1911,12 +1912,12 @@
 )
 ;;;; singed >= ... 
 (rule
-  (lower_icmp (intcc_is_signed cc $true) (sext_int_if_need x _) (sext_int_if_need y _) ty)
+  (lower_icmp (intcc_is_ueq_compare cc $true) (sext_int_if_need x _) (sext_int_if_need y _) ty)
   (gen_icmp cc x y ty)
 )
 ;;;; unsigned >= ... 
 (rule
-  (lower_icmp (intcc_is_signed cc $false) x y ty)
+  (lower_icmp (intcc_is_ueq_compare cc $false) x y ty)
   (gen_icmp cc (uext_int_if_need x ty ) (uext_int_if_need y ty ) ty)
 )
 ;;; overflow 
@@ -2038,8 +2039,89 @@
   )
 )
 
-(decl iadd_ifcount_parameter (Value Value Type)Value)
-(extern extractor iadd_ifcount_parameter iadd_ifcount_parameter)
+(decl iadd_ifcout_parameter (Value Value Type)Value)
+(extern extractor iadd_ifcout_parameter iadd_ifcout_parameter)
 
 (decl inst_output_get (InstOutput u8) ValueRegs)
 (extern constructor inst_output_get inst_output_get)
+
+(decl label_to_br_target (MachLabel)BranchTarget)
+(extern constructor label_to_br_target label_to_br_target)
+
+(decl gen_jump (MachLabel)MInst)
+(rule
+  (gen_jump v)
+  (MInst.Jal (label_to_br_target v))  
+)
+
+(decl vec_label_get (VecMachLabel u8) MachLabel )
+(extern constructor vec_label_get vec_label_get)
+
+(decl lower_branch (Inst VecMachLabel) InstOutput)
+(rule (lower_branch (jump _ _) targets )
+      (side_effect (SideEffectNoResult.Inst (gen_jump (vec_label_get targets 0 )) ))
+)
+
+;;; cc a b targets Type
+(decl lower_br_icmp (IntCC Value Value VecMachLabel Type) InstOutput )
+(extern constructor lower_br_icmp lower_br_icmp)
+
+(decl lower_br_fcmp (FloatCC Reg Reg VecMachLabel Type) InstOutput )
+(extern constructor lower_br_fcmp lower_br_fcmp)
+
+;; int scalar zero regs.
+(decl int_zero_reg (Type) ValueRegs)
+(extern constructor int_zero_reg int_zero_reg)
+
+(decl lower_brz_or_nz (IntCC Value VecMachLabel Type) InstOutput )
+(extern constructor lower_brz_or_nz lower_brz_or_nz)
+
+;;;;; 
+(rule 
+  (lower_branch  (brz (type_and_value ty v ) _ _ ) targets )
+  ( lower_brz_or_nz (IntCC.Equal) v  
+    targets
+    ty 
+  )
+)
+;;;; 
+(rule 
+  (lower_branch  (brnz (type_and_value ty v ) _ _ ) targets )
+  ( lower_brz_or_nz (IntCC.NotEqual) v  
+    targets
+    ty 
+  )
+)
+
+;;; 
+(rule 
+  (lower_branch  (br_icmp cc (type_and_value ty a ) b  _ _ ) targets )
+  ( lower_br_icmp cc  a b
+    targets
+    ty 
+  )
+)
+
+(rule 
+  (lower_branch  (brif cc (ifcmp_parameters a b ty ) _ _ ) targets )
+  ( lower_br_icmp cc a b  
+    targets
+    ty 
+  )
+)
+
+(rule 
+  (lower_branch  (brff cc (ffcmp_parameters a b ty ) _ _ ) targets )
+  ( lower_br_fcmp cc  a b  
+    targets
+    ty 
+  )
+)
+
+(decl lower_br_table (Reg VecMachLabel) InstOutput)
+(extern constructor lower_br_table lower_br_table)
+
+(rule 
+  (lower_branch  (br_table index _ _ ) targets)
+  (lower_br_table index targets)
+)

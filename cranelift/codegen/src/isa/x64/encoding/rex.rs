@@ -159,6 +159,7 @@ impl From<(OperandSize, Reg)> for RexFlags {
 /// Allows using the same opcode byte in different "opcode maps" to allow for more instruction
 /// encodings. See appendix A in the Intel Software Developer's Manual, volume 2A, for more details.
 #[allow(missing_docs)]
+#[derive(PartialEq)]
 pub enum OpcodeMap {
     None,
     _0F,
@@ -168,7 +169,7 @@ pub enum OpcodeMap {
 
 impl OpcodeMap {
     /// Normally the opcode map is specified as bytes in the instruction, but some x64 encoding
-    /// formats pack this information as bits in a prefix (e.g. EVEX).
+    /// formats pack this information as bits in a prefix (e.g. VEX / EVEX).
     pub(crate) fn bits(&self) -> u8 {
         match self {
             OpcodeMap::None => 0b00,
@@ -187,6 +188,7 @@ impl Default for OpcodeMap {
 
 /// We may need to include one or more legacy prefix bytes before the REX prefix.  This enum
 /// covers only the small set of possibilities that we actually need.
+#[derive(PartialEq)]
 pub enum LegacyPrefixes {
     /// No prefix bytes.
     None,

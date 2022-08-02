@@ -171,6 +171,14 @@
 (decl value_regs_get (ValueRegs usize) Reg)
 (extern constructor value_regs_get value_regs_get)
 
+;; Get the number of registers in a `ValueRegs`.
+(decl value_regs_len (ValueRegs) usize)
+(extern constructor value_regs_len value_regs_len)
+
+;; Get a range for the number of regs in a `ValueRegs`.
+(decl value_regs_range (ValueRegs) Range)
+(rule (value_regs_range regs) (range 0 (value_regs_len regs)))
+
 ;; Put the value into one or more registers and return the first register.
 ;;
 ;; Unlike `put_in_reg`, this does not assert that the value fits in a single
@@ -341,6 +349,11 @@
 (decl ty_vec128 (Type) Type)
 (extern extractor ty_vec128 ty_vec128)
 
+;; An extractor that only matches 64-bit vector types with integer
+;; lanes (I8X8, I16X4, I32X2)
+(decl ty_vec64_int (Type) Type)
+(extern extractor ty_vec64_int ty_vec64_int)
+
 ;; An extractor that only matches 128-bit vector types with integer
 ;; lanes (I8X16, I16X8, I32X4, I64X2).
 (decl ty_vec128_int (Type) Type)
@@ -458,6 +471,16 @@
 (decl dynamic_fp_lane (u32) Type)
 (extern extractor dynamic_fp_lane dynamic_fp_lane)
 
+;; An extractor that only matches 64-bit dynamic vector types with integer
+;; lanes (I8X8XN, I16X4XN, I32X2XN)
+(decl ty_dyn64_int (Type) Type)
+(extern extractor ty_dyn64_int ty_dyn64_int)
+
+;; An extractor that only matches 128-bit dynamic vector types with integer
+;; lanes (I8X16XN, I16X8XN, I32X4XN, I64X2XN).
+(decl ty_dyn128_int (Type) Type)
+(extern extractor ty_dyn128_int ty_dyn128_int)
+
 ;; Match the instruction that defines the given value, if any.
 (decl def_inst (Inst) Value)
 (extern extractor def_inst def_inst)
@@ -470,6 +493,10 @@
 ;; Convert an `Offset32` to a primitive number.
 (decl offset32_to_u32 (Offset32) u32)
 (extern constructor offset32_to_u32 offset32_to_u32)
+
+;; Match any zero value for iconst, fconst32, fconst64, vconst and splat.
+(decl pure zero_value (Value) Value)
+(extern constructor zero_value zero_value)
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -656,6 +683,9 @@
 (decl symbol_value_data (ExternalName RelocDistance i64) GlobalValue)
 (extern extractor symbol_value_data symbol_value_data)
 
+(decl box_external_name (ExternalName) BoxExternalName)
+(extern constructor box_external_name box_external_name)
+
 ;; Accessor for `RelocDistance`.
 
 (decl reloc_distance_near () RelocDistance)
@@ -685,6 +715,10 @@
 (decl range_empty () Range)
 (extern extractor range_empty range_empty)
 
+;; Extractor to test whether a range has a single element in it
+(decl range_singleton (usize) Range)
+(extern extractor range_singleton range_singleton)
+
 ;; Extractor to return the first value in the range, and a sub-range
 ;; containing the remaining values.
 (decl range_unwrap (usize Range) Range)
@@ -700,6 +734,10 @@
 ;; contains only a single register.
 (decl only_writable_reg (WritableReg) WritableValueRegs)
 (extern extractor only_writable_reg only_writable_reg)
+
+;; Get the `n`th register inside a `WritableValueRegs`.
+(decl writable_regs_get (WritableValueRegs usize) WritableReg)
+(extern constructor writable_regs_get writable_regs_get)
 
 ;;;; Helpers for generating calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -802,3 +840,4 @@
 (convert Reg InstOutput output_reg)
 (convert Value InstOutput output_value)
 (convert Offset32 u32 offset32_to_u32)
+(convert ExternalName BoxExternalName box_external_name)

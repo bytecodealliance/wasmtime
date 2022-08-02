@@ -1,6 +1,4 @@
-use crate::component::func::{
-    Func, Memory, MemoryMut, Options, MAX_STACK_PARAMS, MAX_STACK_RESULTS,
-};
+use crate::component::func::{Func, Memory, MemoryMut, Options};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use anyhow::{bail, Context, Result};
@@ -9,7 +7,9 @@ use std::fmt;
 use std::marker;
 use std::mem::{self, MaybeUninit};
 use std::str;
-use wasmtime_environ::component::{ComponentTypes, InterfaceType, StringEncoding};
+use wasmtime_environ::component::{
+    ComponentTypes, InterfaceType, StringEncoding, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+};
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -156,16 +156,16 @@ where
         // space reserved for the params/results is always of the appropriate
         // size (as the params/results needed differ depending on the "flatten"
         // count)
-        if Params::flatten_count() <= MAX_STACK_PARAMS {
-            if Return::flatten_count() <= MAX_STACK_RESULTS {
-                self.call_raw(
+        if Params::flatten_count() <= MAX_FLAT_PARAMS {
+            if Return::flatten_count() <= MAX_FLAT_RESULTS {
+                self.func.call_raw(
                     store,
                     &params,
                     Self::lower_stack_args,
                     Self::lift_stack_result,
                 )
             } else {
-                self.call_raw(
+                self.func.call_raw(
                     store,
                     &params,
                     Self::lower_stack_args,
@@ -173,15 +173,15 @@ where
                 )
             }
         } else {
-            if Return::flatten_count() <= MAX_STACK_RESULTS {
-                self.call_raw(
+            if Return::flatten_count() <= MAX_FLAT_RESULTS {
+                self.func.call_raw(
                     store,
                     &params,
                     Self::lower_heap_args,
                     Self::lift_stack_result,
                 )
             } else {
-                self.call_raw(
+                self.func.call_raw(
                     store,
                     &params,
                     Self::lower_heap_args,
@@ -203,7 +203,7 @@ where
         params: &Params,
         dst: &mut MaybeUninit<Params::Lower>,
     ) -> Result<()> {
-        assert!(Params::flatten_count() <= MAX_STACK_PARAMS);
+        assert!(Params::flatten_count() <= MAX_FLAT_PARAMS);
         params.lower(store, options, dst)?;
         Ok(())
     }
@@ -211,7 +211,7 @@ where
     /// Lower parameters onto a heap-allocated location.
     ///
     /// This is used when the stack space to be used for the arguments is above
-    /// the `MAX_STACK_PARAMS` threshold. Here the wasm's `realloc` function is
+    /// the `MAX_FLAT_PARAMS` threshold. Here the wasm's `realloc` function is
     /// invoked to allocate space and then parameters are stored at that heap
     /// pointer location.
     fn lower_heap_args<T>(
@@ -220,7 +220,7 @@ where
         params: &Params,
         dst: &mut MaybeUninit<ValRaw>,
     ) -> Result<()> {
-        assert!(Params::flatten_count() > MAX_STACK_PARAMS);
+        assert!(Params::flatten_count() > MAX_FLAT_PARAMS);
 
         // Memory must exist via validation if the arguments are stored on the
         // heap, so we can create a `MemoryMut` at this point. Afterwards
@@ -257,14 +257,14 @@ where
         options: &Options,
         dst: &Return::Lower,
     ) -> Result<Return> {
-        assert!(Return::flatten_count() <= MAX_STACK_RESULTS);
+        assert!(Return::flatten_count() <= MAX_FLAT_RESULTS);
         Return::lift(store, options, dst)
     }
 
     /// Lift the result of a function where the result is stored indirectly on
     /// the heap.
     fn lift_heap_result(store: &StoreOpaque, options: &Options, dst: &ValRaw) -> Result<Return> {
-        assert!(Return::flatten_count() > MAX_STACK_RESULTS);
+        assert!(Return::flatten_count() > MAX_FLAT_RESULTS);
         // FIXME: needs to read an i64 for memory64
         let ptr = usize::try_from(dst.get_u32())?;
         if ptr % usize::try_from(Return::ALIGN32)? != 0 {
@@ -280,228 +280,10 @@ where
         Return::load(&memory, bytes)
     }
 
-    /// Invokes the underlying wasm function, lowering arguments and lifting the
-    /// result.
-    ///
-    /// The `lower` function and `lift` function provided here are what actually
-    /// do the lowering and lifting. The `LowerParams` and `LowerReturn` types
-    /// are what will be allocated on the stack for this function call. They
-    /// should be appropriately sized for the lowering/lifting operation
-    /// happening.
-    fn call_raw<T, LowerParams, LowerReturn>(
-        &self,
-        store: &mut StoreContextMut<'_, T>,
-        params: &Params,
-        lower: impl FnOnce(
-            &mut StoreContextMut<'_, T>,
-            &Options,
-            &Params,
-            &mut MaybeUninit<LowerParams>,
-        ) -> Result<()>,
-        lift: impl FnOnce(&StoreOpaque, &Options, &LowerReturn) -> Result<Return>,
-    ) -> Result<Return>
-    where
-        LowerParams: Copy,
-        LowerReturn: Copy,
-    {
-        let super::FuncData {
-            trampoline,
-            export,
-            options,
-            instance,
-            component_instance,
-            ..
-        } = store.0[self.func.0];
-
-        let space = &mut MaybeUninit::<ParamsAndResults<LowerParams, LowerReturn>>::uninit();
-
-        // Double-check the size/alignemnt of `space`, just in case.
-        //
-        // Note that this alone is not enough to guarantee the validity of the
-        // `unsafe` block below, but it's definitely required. In any case LLVM
-        // should be able to trivially see through these assertions and remove
-        // them in release mode.
-        let val_size = mem::size_of::<ValRaw>();
-        let val_align = mem::align_of::<ValRaw>();
-        assert!(mem::size_of_val(space) % val_size == 0);
-        assert!(mem::size_of_val(map_maybe_uninit!(space.params)) % val_size == 0);
-        assert!(mem::size_of_val(map_maybe_uninit!(space.ret)) % val_size == 0);
-        assert!(mem::align_of_val(space) == val_align);
-        assert!(mem::align_of_val(map_maybe_uninit!(space.params)) == val_align);
-        assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
-
-        let instance = store.0[instance.0].as_ref().unwrap().instance();
-        let flags = instance.flags(component_instance);
-
-        unsafe {
-            // Test the "may enter" flag which is a "lock" on this instance.
-            // This is immediately set to `false` afterwards and note that
-            // there's no on-cleanup setting this flag back to true. That's an
-            // intentional design aspect where if anything goes wrong internally
-            // from this point on the instance is considered "poisoned" and can
-            // never be entered again. The only time this flag is set to `true`
-            // again is after post-return logic has completed successfully.
-            if !(*flags).may_enter() {
-                bail!("cannot reenter component instance");
-            }
-            (*flags).set_may_enter(false);
-
-            debug_assert!((*flags).may_leave());
-            (*flags).set_may_leave(false);
-            let result = lower(store, &options, params, map_maybe_uninit!(space.params));
-            (*flags).set_may_leave(true);
-            result?;
-
-            // This is unsafe as we are providing the guarantee that all the
-            // inputs are valid. The various pointers passed in for the function
-            // are all valid since they're coming from our store, and the
-            // `params_and_results` should have the correct layout for the core
-            // wasm function we're calling. Note that this latter point relies
-            // on the correctness of this module and `ComponentType`
-            // implementations, hence `ComponentType` being an `unsafe` trait.
-            crate::Func::call_unchecked_raw(
-                store,
-                export.anyfunc,
-                trampoline,
-                space.as_mut_ptr().cast(),
-            )?;
-
-            // Note that `.assume_init_ref()` here is unsafe but we're relying
-            // on the correctness of the structure of `LowerReturn` and the
-            // type-checking performed to acquire the `TypedFunc` to make this
-            // safe. It should be the case that `LowerReturn` is the exact
-            // representation of the return value when interpreted as
-            // `[ValRaw]`, and additionally they should have the correct types
-            // for the function we just called (which filled in the return
-            // values).
-            let ret = map_maybe_uninit!(space.ret).assume_init_ref();
-
-            // Lift the result into the host while managing post-return state
-            // here as well.
-            //
-            // After a successful lift the return value of the function, which
-            // is currently required to be 0 or 1 values according to the
-            // canonical ABI, is saved within the `Store`'s `FuncData`. This'll
-            // later get used in post-return.
-            (*flags).set_needs_post_return(true);
-            let val = lift(store.0, &options, ret)?;
-            let ret_slice = cast_storage(ret);
-            let data = &mut store.0[self.func.0];
-            assert!(data.post_return_arg.is_none());
-            match ret_slice.len() {
-                0 => data.post_return_arg = Some(ValRaw::i32(0)),
-                1 => data.post_return_arg = Some(ret_slice[0]),
-                _ => unreachable!(),
-            }
-            return Ok(val);
-        }
-
-        unsafe fn cast_storage<T>(storage: &T) -> &[ValRaw] {
-            assert!(std::mem::size_of_val(storage) % std::mem::size_of::<ValRaw>() == 0);
-            assert!(std::mem::align_of_val(storage) == std::mem::align_of::<ValRaw>());
-
-            std::slice::from_raw_parts(
-                (storage as *const T).cast(),
-                mem::size_of_val(storage) / mem::size_of::<ValRaw>(),
-            )
-        }
+    /// See [`Func::post_return`]
+    pub fn post_return(&self, store: impl AsContextMut) -> Result<()> {
+        self.func.post_return(store)
     }
-
-    /// Invokes the `post-return` canonical ABI option, if specified, after a
-    /// [`TypedFunc::call`] has finished.
-    ///
-    /// For some more information on when to use this function see the
-    /// documentation for post-return in the [`TypedFunc::call`] method.
-    /// Otherwise though this function is a required method call after a
-    /// [`TypedFunc::call`] completes successfully. After the embedder has
-    /// finished processing the return value then this function must be invoked.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error in the case of a WebAssembly trap
-    /// happening during the execution of the `post-return` function, if
-    /// specified.
-    ///
-    /// # Panics
-    ///
-    /// This function will panic if it's not called under the correct
-    /// conditions. This can only be called after a previous invocation of
-    /// [`TypedFunc::call`] completes successfully, and this function can only
-    /// be called for the same [`TypedFunc`] that was `call`'d.
-    ///
-    /// If this function is called when [`TypedFunc::call`] was not previously
-    /// called, then it will panic. If a different [`TypedFunc`] for the same
-    /// component instance was invoked then this function will also panic
-    /// because the `post-return` needs to happen for the other function.
-    pub fn post_return(&self, mut store: impl AsContextMut) -> Result<()> {
-        let mut store = store.as_context_mut();
-        let data = &mut store.0[self.func.0];
-        let instance = data.instance;
-        let post_return = data.post_return;
-        let component_instance = data.component_instance;
-        let post_return_arg = data.post_return_arg.take();
-        let instance = store.0[instance.0].as_ref().unwrap().instance();
-        let flags = instance.flags(component_instance);
-
-        unsafe {
-            // First assert that the instance is in a "needs post return" state.
-            // This will ensure that the previous action on the instance was a
-            // function call above. This flag is only set after a component
-            // function returns so this also can't be called (as expected)
-            // during a host import for example.
-            //
-            // Note, though, that this assert is not sufficient because it just
-            // means some function on this instance needs its post-return
-            // called. We need a precise post-return for a particular function
-            // which is the second assert here (the `.expect`). That will assert
-            // that this function itself needs to have its post-return called.
-            //
-            // The theory at least is that these two asserts ensure component
-            // model semantics are upheld where the host properly calls
-            // `post_return` on the right function despite the call being a
-            // separate step in the API.
-            assert!(
-                (*flags).needs_post_return(),
-                "post_return can only be called after a function has previously been called",
-            );
-            let post_return_arg = post_return_arg.expect("calling post_return on wrong function");
-
-            // This is a sanity-check assert which shouldn't ever trip.
-            assert!(!(*flags).may_enter());
-
-            // Unset the "needs post return" flag now that post-return is being
-            // processed. This will cause future invocations of this method to
-            // panic, even if the function call below traps.
-            (*flags).set_needs_post_return(false);
-
-            // If the function actually had a `post-return` configured in its
-            // canonical options that's executed here.
-            //
-            // Note that if this traps (returns an error) this function
-            // intentionally leaves the instance in a "poisoned" state where it
-            // can no longer be entered because `may_enter` is `false`.
-            if let Some((func, trampoline)) = post_return {
-                crate::Func::call_unchecked_raw(
-                    &mut store,
-                    func.anyfunc,
-                    trampoline,
-                    &post_return_arg as *const ValRaw as *mut ValRaw,
-                )?;
-            }
-
-            // And finally if everything completed successfully then the "may
-            // enter" flag is set to `true` again here which enables further use
-            // of the component.
-            (*flags).set_may_enter(true);
-        }
-        Ok(())
-    }
-}
-
-#[repr(C)]
-union ParamsAndResults<Params: Copy, Return: Copy> {
-    params: Params,
-    ret: Return,
 }
 
 /// A trait representing a static list of parameters that can be passed to a
@@ -567,11 +349,9 @@ pub unsafe trait ComponentParams: ComponentType {
 // though, that correctness bugs in this trait implementation are highly likely
 // to lead to security bugs, which again leads to the `unsafe` in the trait.
 //
-// Also note that this trait specifically is not sealed because we'll
-// eventually have a proc macro that generates implementations of this trait
-// for external types in a `#[derive]`-like fashion.
-//
-// FIXME: need to write a #[derive(ComponentType)]
+// Also note that this trait specifically is not sealed because we have a proc
+// macro that generates implementations of this trait for external types in a
+// `#[derive]`-like fashion.
 pub unsafe trait ComponentType {
     /// Representation of the "lowered" form of this component value.
     ///
@@ -690,7 +470,7 @@ pub unsafe trait Lift: Sized + ComponentType {
 // another type, used for wrappers in Rust like `&T`, `Box<T>`, etc. Note that
 // these wrappers only implement lowering because lifting native Rust types
 // cannot be done.
-macro_rules! forward_impls {
+macro_rules! forward_type_impls {
     ($(($($generics:tt)*) $a:ty => $b:ty,)*) => ($(
         unsafe impl <$($generics)*> ComponentType for $a {
             type Lower = <$b as ComponentType>::Lower;
@@ -703,7 +483,20 @@ macro_rules! forward_impls {
                 <$b as ComponentType>::typecheck(ty, types)
             }
         }
+    )*)
+}
 
+forward_type_impls! {
+    (T: ComponentType + ?Sized) &'_ T => T,
+    (T: ComponentType + ?Sized) Box<T> => T,
+    (T: ComponentType + ?Sized) std::rc::Rc<T> => T,
+    (T: ComponentType + ?Sized) std::sync::Arc<T> => T,
+    () String => str,
+    (T: ComponentType) Vec<T> => [T],
+}
+
+macro_rules! forward_lowers {
+    ($(($($generics:tt)*) $a:ty => $b:ty,)*) => ($(
         unsafe impl <$($generics)*> Lower for $a {
             fn lower<U>(
                 &self,
@@ -721,13 +514,57 @@ macro_rules! forward_impls {
     )*)
 }
 
-forward_impls! {
+forward_lowers! {
     (T: Lower + ?Sized) &'_ T => T,
     (T: Lower + ?Sized) Box<T> => T,
     (T: Lower + ?Sized) std::rc::Rc<T> => T,
     (T: Lower + ?Sized) std::sync::Arc<T> => T,
     () String => str,
     (T: Lower) Vec<T> => [T],
+}
+
+macro_rules! forward_string_lifts {
+    ($($a:ty,)*) => ($(
+        unsafe impl Lift for $a {
+            fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
+                Ok(<WasmStr as Lift>::lift(store, options, src)?.to_str_from_store(store)?.into())
+            }
+
+            fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+                Ok(<WasmStr as Lift>::load(memory, bytes)?.to_str_from_store(&memory.store)?.into())
+            }
+        }
+    )*)
+}
+
+forward_string_lifts! {
+    Box<str>,
+    std::rc::Rc<str>,
+    std::sync::Arc<str>,
+    String,
+}
+
+macro_rules! forward_list_lifts {
+    ($($a:ty,)*) => ($(
+        unsafe impl <T: Lift> Lift for $a {
+            fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
+                let list = <WasmList::<T> as Lift>::lift(store, options, src)?;
+                (0..list.len).map(|index| list.get_from_store(store, index).unwrap()).collect()
+            }
+
+            fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
+                let list = <WasmList::<T> as Lift>::load(memory, bytes)?;
+                (0..list.len).map(|index| list.get_from_store(&memory.store, index).unwrap()).collect()
+            }
+        }
+    )*)
+}
+
+forward_list_lifts! {
+    Box<[T]>,
+    std::rc::Rc<[T]>,
+    std::sync::Arc<[T]>,
+    Vec<T>,
 }
 
 // Macro to help generate `ComponentType` implementations for primitive types
@@ -1092,10 +929,10 @@ impl WasmStr {
     // method that returns `[u16]` after validating to avoid the utf16-to-utf8
     // transcode.
     pub fn to_str<'a, T: 'a>(&self, store: impl Into<StoreContext<'a, T>>) -> Result<Cow<'a, str>> {
-        self._to_str(store.into().0)
+        self.to_str_from_store(store.into().0)
     }
 
-    fn _to_str<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
+    fn to_str_from_store<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
         match self.options.string_encoding() {
             StringEncoding::Utf8 => self.decode_utf8(store),
             StringEncoding::Utf16 => self.decode_utf16(store),
@@ -1289,10 +1126,10 @@ impl<T: Lift> WasmList<T> {
     // should we even expose a random access iteration API? In theory all
     // consumers should be validating through the iterator.
     pub fn get(&self, store: impl AsContext, index: usize) -> Option<Result<T>> {
-        self._get(store.as_context().0, index)
+        self.get_from_store(store.as_context().0, index)
     }
 
-    fn _get(&self, store: &StoreOpaque, index: usize) -> Option<Result<T>> {
+    fn get_from_store(&self, store: &StoreOpaque, index: usize) -> Option<Result<T>> {
         if index >= self.len {
             return None;
         }
@@ -1316,7 +1153,7 @@ impl<T: Lift> WasmList<T> {
         store: impl Into<StoreContext<'a, U>>,
     ) -> impl ExactSizeIterator<Item = Result<T>> + 'a {
         let store = store.into().0;
-        (0..self.len).map(move |i| self._get(store, i).unwrap())
+        (0..self.len).map(move |i| self.get_from_store(store, i).unwrap())
     }
 }
 

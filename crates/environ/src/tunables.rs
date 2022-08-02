@@ -41,6 +41,10 @@ pub struct Tunables {
     /// Indicates whether an address map from compiled native code back to wasm
     /// offsets in the original file is generated.
     pub generate_address_map: bool,
+
+    /// Flag for the component module whether adapter modules have debug
+    /// assertions baked into them.
+    pub debug_adapter_modules: bool,
 }
 
 impl Default for Tunables {
@@ -86,6 +90,7 @@ impl Default for Tunables {
             static_memory_bound_is_maximum: false,
             guard_before_linear_memory: true,
             generate_address_map: true,
+            debug_adapter_modules: false,
         }
     }
 }

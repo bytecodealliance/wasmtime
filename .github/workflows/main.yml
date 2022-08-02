@@ -45,6 +45,25 @@ jobs:
           echo `pwd` >> $GITHUB_PATH
       - run: cargo deny check bans licenses
 
+  # Ensure dependencies are vetted. See https://mozilla.github.io/cargo-vet/
+  cargo_vet:
+    name: Cargo vet
+    runs-on: ubuntu-latest
+    env:
+      CARGO_VET_VERSION: 0.2.0
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - uses: actions/cache@v2
+      with:
+        path: ${{ runner.tool_cache }}/cargo-vet
+        key: cargo-vet-bin-${{ env.CARGO_VET_VERSION }}
+    - run: echo "${{ runner.tool_cache }}/cargo-vet/bin" >> $GITHUB_PATH
+    - run: cargo install --root ${{ runner.tool_cache }}/cargo-vet --version ${{ env.CARGO_VET_VERSION }} cargo-vet
+    - run: cargo vet --locked
+
   doc:
     name: Doc build
     runs-on: ubuntu-latest

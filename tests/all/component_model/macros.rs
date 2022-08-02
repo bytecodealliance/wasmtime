@@ -1,74 +1,8 @@
-use super::TypedFuncExt;
+use super::{make_echo_component, TypedFuncExt};
 use anyhow::Result;
 use component_macro_test::{add_variants, flags_test};
-use std::fmt::Write;
 use wasmtime::component::{Component, ComponentType, Lift, Linker, Lower};
 use wasmtime::Store;
-
-fn make_echo_component(type_definition: &str, type_size: u32) -> String {
-    if type_size <= 4 {
-        format!(
-            r#"
-            (component
-                (core module $m
-                    (func (export "echo") (param i32) (result i32)
-                        local.get 0
-                    )
-
-                    (memory (export "memory") 1)
-                )
-
-                (core instance $i (instantiate $m))
-
-                {}
-
-                (func (export "echo") (param $Foo) (result $Foo)
-                    (canon lift (core func $i "echo") (memory $i "memory"))
-                )
-            )"#,
-            type_definition
-        )
-    } else {
-        let mut params = String::new();
-        let mut store = String::new();
-
-        for index in 0..(type_size / 4) {
-            params.push_str(" i32");
-            write!(
-                &mut store,
-                "(i32.store offset={} (local.get $base) (local.get {}))",
-                index * 4,
-                index,
-            )
-            .unwrap();
-        }
-
-        format!(
-            r#"
-            (component
-                (core module $m
-                    (func (export "echo") (param{}) (result i32)
-                        (local $base i32)
-                        (local.set $base (i32.const 0))
-                        {}
-                        local.get $base
-                    )
-
-                    (memory (export "memory") 1)
-                )
-
-                (core instance $i (instantiate $m))
-
-                {}
-
-                (func (export "echo") (param $Foo) (result $Foo)
-                    (canon lift (core func $i "echo") (memory $i "memory"))
-                )
-            )"#,
-            params, store, type_definition
-        )
-    }
-}
 
 #[test]
 fn record_derive() -> Result<()> {
@@ -87,10 +21,7 @@ fn record_derive() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component(
-            r#"(type $Foo (record (field "foo-bar-baz" s32) (field "b" u32)))"#,
-            8,
-        ),
+        make_echo_component(r#"(record (field "foo-bar-baz" s32) (field "b" u32))"#, 8),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
@@ -105,7 +36,7 @@ fn record_derive() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component(r#"(type $Foo (record (field "foo-bar-baz" s32)))"#, 4),
+        make_echo_component(r#"(record (field "foo-bar-baz" s32))"#, 4),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
@@ -118,7 +49,7 @@ fn record_derive() -> Result<()> {
     let component = Component::new(
         &engine,
         make_echo_component(
-            r#"(type $Foo (record (field "foo-bar-baz" s32) (field "b" u32) (field "c" u32)))"#,
+            r#"(record (field "foo-bar-baz" s32) (field "b" u32) (field "c" u32))"#,
             12,
         ),
     )?;
@@ -132,7 +63,7 @@ fn record_derive() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component(r#"(type $Foo (record (field "a" s32) (field "b" u32)))"#, 8),
+        make_echo_component(r#"(record (field "a" s32) (field "b" u32))"#, 8),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
@@ -144,10 +75,7 @@ fn record_derive() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component(
-            r#"(type $Foo (record (field "foo-bar-baz" s32) (field "b" s32)))"#,
-            8,
-        ),
+        make_echo_component(r#"(record (field "foo-bar-baz" s32) (field "b" s32))"#, 8),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
@@ -172,10 +100,7 @@ fn record_derive() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component(
-            r#"(type $Foo (record (field "foo-bar-baz" s32) (field "b" u32)))"#,
-            8,
-        ),
+        make_echo_component(r#"(record (field "foo-bar-baz" s32) (field "b" u32))"#, 8),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
@@ -203,10 +128,7 @@ fn union_derive() -> Result<()> {
 
     // Happy path: component type matches case count and types
 
-    let component = Component::new(
-        &engine,
-        make_echo_component(r#"(type $Foo (union s32 u32 s32))"#, 8),
-    )?;
+    let component = Component::new(&engine, make_echo_component("(union s32 u32 s32)", 8))?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_typed_func::<(Foo,), Foo, _>(&mut store, "echo")?;
 
@@ -218,10 +140,7 @@ fn union_derive() -> Result<()> {
 
     // Sad path: case count mismatch (too few)
 
-    let component = Component::new(
-        &engine,
-        make_echo_component(r#"(type $Foo (union s32 u32))"#, 8),
-    )?;
+    let component = Component::new(&engine, make_echo_component("(union s32 u32)", 8))?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
     assert!(instance
@@ -232,7 +151,7 @@ fn union_derive() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component(r#"(type $Foo (union s32 u32 s32 s32))"#, 8),
+        make_echo_component(r#"(union s32 u32 s32 s32)"#, 8),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
@@ -246,10 +165,7 @@ fn union_derive() -> Result<()> {
 
     // Sad path: case type mismatch
 
-    let component = Component::new(
-        &engine,
-        make_echo_component(r#"(type $Foo (union s32 s32 s32))"#, 8),
-    )?;
+    let component = Component::new(&engine, make_echo_component("(union s32 s32 s32)", 8))?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
     assert!(instance
@@ -266,10 +182,7 @@ fn union_derive() -> Result<()> {
         C(C),
     }
 
-    let component = Component::new(
-        &engine,
-        make_echo_component(r#"(type $Foo (union s32 u32 s32))"#, 8),
-    )?;
+    let component = Component::new(&engine, make_echo_component("(union s32 u32 s32)", 8))?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_typed_func::<(Generic<i32, u32, i32>,), Generic<i32, u32, i32>, _>(
         &mut store, "echo",
@@ -307,7 +220,7 @@ fn variant_derive() -> Result<()> {
     let component = Component::new(
         &engine,
         make_echo_component(
-            r#"(type $Foo (variant (case "foo-bar-baz" s32) (case "B" u32) (case "C" unit)))"#,
+            r#"(variant (case "foo-bar-baz" s32) (case "B" u32) (case "C" unit))"#,
             8,
         ),
     )?;
@@ -324,10 +237,7 @@ fn variant_derive() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component(
-            r#"(type $Foo (variant (case "foo-bar-baz" s32) (case "B" u32)))"#,
-            8,
-        ),
+        make_echo_component(r#"(variant (case "foo-bar-baz" s32) (case "B" u32))"#, 8),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
@@ -340,7 +250,7 @@ fn variant_derive() -> Result<()> {
     let component = Component::new(
         &engine,
         make_echo_component(
-            r#"(type $Foo (variant (case "foo-bar-baz" s32) (case "B" u32) (case "C" unit) (case "D" u32)))"#,
+            r#"(variant (case "foo-bar-baz" s32) (case "B" u32) (case "C" unit) (case "D" u32))"#,
             8,
         ),
     )?;
@@ -355,7 +265,7 @@ fn variant_derive() -> Result<()> {
     let component = Component::new(
         &engine,
         make_echo_component(
-            r#"(type $Foo (variant (case "A" s32) (case "B" u32) (case "C" unit)))"#,
+            r#"(variant (case "A" s32) (case "B" u32) (case "C" unit))"#,
             8,
         ),
     )?;
@@ -370,7 +280,7 @@ fn variant_derive() -> Result<()> {
     let component = Component::new(
         &engine,
         make_echo_component(
-            r#"(type $Foo (variant (case "foo-bar-baz" s32) (case "B" s32) (case "C" unit)))"#,
+            r#"(variant (case "foo-bar-baz" s32) (case "B" s32) (case "C" unit))"#,
             8,
         ),
     )?;
@@ -394,7 +304,7 @@ fn variant_derive() -> Result<()> {
     let component = Component::new(
         &engine,
         make_echo_component(
-            r#"(type $Foo (variant (case "foo-bar-baz" s32) (case "B" u32) (case "C" unit)))"#,
+            r#"(variant (case "foo-bar-baz" s32) (case "B" u32) (case "C" unit))"#,
             8,
         ),
     )?;
@@ -429,7 +339,7 @@ fn enum_derive() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component(r#"(type $Foo (enum "foo-bar-baz" "B" "C"))"#, 4),
+        make_echo_component(r#"(enum "foo-bar-baz" "B" "C")"#, 4),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_typed_func::<(Foo,), Foo, _>(&mut store, "echo")?;
@@ -444,7 +354,7 @@ fn enum_derive() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component(r#"(type $Foo (enum "foo-bar-baz" "B"))"#, 4),
+        make_echo_component(r#"(enum "foo-bar-baz" "B")"#, 4),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
@@ -456,7 +366,7 @@ fn enum_derive() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component(r#"(type $Foo (enum "foo-bar-baz" "B" "C" "D"))"#, 4),
+        make_echo_component(r#"(enum "foo-bar-baz" "B" "C" "D")"#, 4),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
@@ -466,10 +376,7 @@ fn enum_derive() -> Result<()> {
 
     // Sad path: case name mismatch
 
-    let component = Component::new(
-        &engine,
-        make_echo_component(r#"(type $Foo (enum "A" "B" "C"))"#, 4),
-    )?;
+    let component = Component::new(&engine, make_echo_component(r#"(enum "A" "B" "C")"#, 4))?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
     assert!(instance
@@ -487,7 +394,7 @@ fn enum_derive() -> Result<()> {
         &engine,
         make_echo_component(
             &format!(
-                r#"(type $Foo (enum {}))"#,
+                "(enum {})",
                 (0..257)
                     .map(|index| format!(r#""V{}""#, index))
                     .collect::<Vec<_>>()
@@ -542,7 +449,7 @@ fn flags() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component(r#"(type $Foo (flags "foo-bar-baz" "B" "C"))"#, 4),
+        make_echo_component(r#"(flags "foo-bar-baz" "B" "C")"#, 4),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_typed_func::<(Foo,), Foo, _>(&mut store, "echo")?;
@@ -568,7 +475,7 @@ fn flags() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component(r#"(type $Foo (flags "foo-bar-baz" "B"))"#, 4),
+        make_echo_component(r#"(flags "foo-bar-baz" "B")"#, 4),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
@@ -580,7 +487,7 @@ fn flags() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component(r#"(type $Foo (flags "foo-bar-baz" "B" "C" "D"))"#, 4),
+        make_echo_component(r#"(flags "foo-bar-baz" "B" "C" "D")"#, 4),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
@@ -590,10 +497,7 @@ fn flags() -> Result<()> {
 
     // Sad path: flag name mismatch
 
-    let component = Component::new(
-        &engine,
-        make_echo_component(r#"(type $Foo (flags "A" "B" "C"))"#, 4),
-    )?;
+    let component = Component::new(&engine, make_echo_component(r#"(flags "A" "B" "C")"#, 4))?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
     assert!(instance
@@ -633,7 +537,7 @@ fn flags() -> Result<()> {
         &engine,
         make_echo_component(
             &format!(
-                r#"(type $Foo (flags {}))"#,
+                r#"(flags {})"#,
                 (0..8)
                     .map(|index| format!(r#""F{}""#, index))
                     .collect::<Vec<_>>()
@@ -682,7 +586,7 @@ fn flags() -> Result<()> {
         &engine,
         make_echo_component(
             &format!(
-                r#"(type $Foo (flags {}))"#,
+                "(flags {})",
                 (0..9)
                     .map(|index| format!(r#""F{}""#, index))
                     .collect::<Vec<_>>()
@@ -730,7 +634,7 @@ fn flags() -> Result<()> {
         &engine,
         make_echo_component(
             &format!(
-                r#"(type $Foo (flags {}))"#,
+                r#"(flags {})"#,
                 (0..16)
                     .map(|index| format!(r#""F{}""#, index))
                     .collect::<Vec<_>>()
@@ -769,7 +673,7 @@ fn flags() -> Result<()> {
         &engine,
         make_echo_component(
             &format!(
-                r#"(type $Foo (flags {}))"#,
+                "(flags {})",
                 (0..17)
                     .map(|index| format!(r#""F{}""#, index))
                     .collect::<Vec<_>>()
@@ -817,7 +721,7 @@ fn flags() -> Result<()> {
         &engine,
         make_echo_component(
             &format!(
-                r#"(type $Foo (flags {}))"#,
+                r#"(flags {})"#,
                 (0..32)
                     .map(|index| format!(r#""F{}""#, index))
                     .collect::<Vec<_>>()
@@ -856,7 +760,7 @@ fn flags() -> Result<()> {
         &engine,
         make_echo_component(
             &format!(
-                r#"(type $Foo (flags {}))"#,
+                "(flags {})",
                 (0..33)
                     .map(|index| format!(r#""F{}""#, index))
                     .collect::<Vec<_>>()
@@ -889,7 +793,7 @@ fn flags() -> Result<()> {
         &engine,
         make_echo_component(
             &format!(
-                r#"(type $Foo (flags {}))"#,
+                "(flags {})",
                 (0..65)
                     .map(|index| format!(r#""F{}""#, index))
                     .collect::<Vec<_>>()
