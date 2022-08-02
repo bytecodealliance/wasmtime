@@ -580,6 +580,11 @@ where
     }
 
     #[inline]
+    fn cc_invert(&mut self, cc: &CC) -> CC {
+        cc.invert()
+    }
+
+    #[inline]
     fn sum_extend_fits_in_32_bits(
         &mut self,
         extend_from_ty: Type,
@@ -697,6 +702,15 @@ where
     fn single_target(&mut self, targets: &MachLabelSlice) -> Option<MachLabel> {
         if targets.len() == 1 {
             Some(targets[0])
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn two_targets(&mut self, targets: &MachLabelSlice) -> Option<(MachLabel, MachLabel)> {
+        if targets.len() == 2 {
+            Some((targets[0], targets[1]))
         } else {
             None
         }

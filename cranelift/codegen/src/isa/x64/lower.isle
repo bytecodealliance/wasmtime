@@ -2866,3 +2866,19 @@
 
 (rule (lower_branch (jump _ _) (single_target target))
       (side_effect (jmp_known target)))
+
+;; Rules for `brif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower_branch (brif cc (ifcmp a b) _ _) (two_targets taken not_taken))
+      (side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
+
+;; Rules for `brz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower_branch (brz (icmp cc a b) _ _) (two_targets taken not_taken))
+      (let ((cmp IcmpCondResult (invert_icmp_cond_result (emit_cmp cc a b))))
+        (side_effect (jmp_cond_icmp cmp taken not_taken))))
+
+;; Rules for `brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower_branch (brnz (icmp cc a b) _ _) (two_targets taken not_taken))
+      (side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))

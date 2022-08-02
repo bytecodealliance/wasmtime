@@ -2876,18 +2876,8 @@ impl LowerBackend for X64Backend {
 
                     let src_ty = ctx.input_ty(branches[0], 0);
 
-                    if let Some(icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
-                        let cond_code = ctx.data(icmp).cond_code().unwrap();
-                        let cond_code = emit_cmp(ctx, icmp, cond_code);
-
-                        let cond_code = if op0 == Opcode::Brz {
-                            cond_code.inverse()
-                        } else {
-                            cond_code
-                        };
-
-                        let cc = CC::from_intcc(cond_code);
-                        ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
+                    if let Some(_icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
+                        implemented_in_isle(ctx)
                     } else if let Some(fcmp) = matches_input(ctx, flag_input, Opcode::Fcmp) {
                         let cond_code = ctx.data(fcmp).fp_cond_code().unwrap();
                         let cond_code = if op0 == Opcode::Brz {
@@ -3006,20 +2996,7 @@ impl LowerBackend for X64Backend {
                 }
 
                 Opcode::Brif => {
-                    let flag_input = InsnInput {
-                        insn: branches[0],
-                        input: 0,
-                    };
-
-                    if let Some(ifcmp) = matches_input(ctx, flag_input, Opcode::Ifcmp) {
-                        let cond_code = ctx.data(branches[0]).cond_code().unwrap();
-                        let cond_code = emit_cmp(ctx, ifcmp, cond_code);
-                        let cc = CC::from_intcc(cond_code);
-                        ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
-                    } else {
-                        // Should be disallowed by flags checks in verifier.
-                        unimplemented!("Brif with non-ifcmp input");
-                    }
+                    implemented_in_isle(ctx)
                 }
                 Opcode::Brff => {
                     let flag_input = InsnInput {
