@@ -34,7 +34,7 @@ pub fn link_spectest<T>(linker: &mut Linker<T>, store: &mut Store<T>) -> Result<
     let g = Global::new(&mut *store, ty, Val::F64(0x4084_d000_0000_0000))?;
     linker.define("spectest", "global_f64", g)?;
 
-    let ty = TableType::new(ValType::FuncRef, 10, Some(20));
+    let ty = TableType::new(RefType { nullable: true, heap_type: HeapType::Func }, 10, Some(20));
     let table = Table::new(&mut *store, ty, Val::FuncRef(None))?;
     linker.define("spectest", "table", table)?;
 
