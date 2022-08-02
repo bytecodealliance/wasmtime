@@ -1,7 +1,19 @@
 use std::fmt;
-use wasmtime_environ::{EntityType, Global, Memory, ModuleTypes, Table, WasmFuncType, WasmType};
+use wasmtime_environ::{
+    EntityType, Global, Memory, ModuleTypes, Table, WasmFuncType, WasmHeapType, WasmRefType,
+    WasmType,
+};
 
 pub(crate) mod matching;
+
+const FUNC_REF: RefType = RefType {
+    nullable: true,
+    heap_type: HeapType::Func,
+};
+const EXTERN_REF: RefType = RefType {
+    nullable: true,
+    heap_type: HeapType::Extern,
+};
 
 // Type Representations
 
@@ -33,10 +45,10 @@ pub enum ValType {
     F64,
     /// A 128 bit number.
     V128,
-    /// A reference to a Wasm function.
-    FuncRef,
-    /// A reference to opaque data in the Wasm instance.
-    ExternRef,
+    /// A typeful reference type.
+    Ref(RefType),
+    /// Special bottom type.
+    Bot,
 }
 
 impl fmt::Display for ValType {
@@ -47,8 +59,10 @@ impl fmt::Display for ValType {
             ValType::F32 => write!(f, "f32"),
             ValType::F64 => write!(f, "f64"),
             ValType::V128 => write!(f, "v128"),
-            ValType::ExternRef => write!(f, "externref"),
-            ValType::FuncRef => write!(f, "funcref"),
+            ValType::Ref(rt) => write!(f, "{}", rt),
+            ValType::Bot => write!(f, "bot"),
+            // ValType::ExternRef => write!(f, "externref"),
+            // ValType::FuncRef => write!(f, "funcref"),
         }
     }
 }
@@ -66,7 +80,7 @@ impl ValType {
     /// Returns true if `ValType` matches either of the reference types.
     pub fn is_ref(&self) -> bool {
         match self {
-            ValType::ExternRef | ValType::FuncRef => true,
+            ValType::Ref(_) => true,
             _ => false,
         }
     }
@@ -78,8 +92,8 @@ impl ValType {
             Self::F32 => WasmType::F32,
             Self::F64 => WasmType::F64,
             Self::V128 => WasmType::V128,
-            Self::FuncRef => WasmType::FuncRef,
-            Self::ExternRef => WasmType::ExternRef,
+            Self::Ref(rt) => WasmType::Ref(RefType::to_wasm_ref_type(rt)),
+            Self::Bot => WasmType::Bot,
         }
     }
 
@@ -90,14 +104,101 @@ impl ValType {
             WasmType::F32 => Self::F32,
             WasmType::F64 => Self::F64,
             WasmType::V128 => Self::V128,
-            WasmType::FuncRef => Self::FuncRef,
-            WasmType::ExternRef => Self::ExternRef,
+            WasmType::Ref(rt) => Self::Ref(RefType::from_wasm_ref_type(&rt)),
+            WasmType::Bot => Self::Bot,
+        }
+    }
+}
+
+/// A reference type holds what it refers to and whether it is nullable
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct RefType {
+    /// Indicates whether the reference is nullable.
+    pub nullable: bool,
+    /// The reference's heap type.
+    pub heap_type: HeapType,
+}
+
+impl fmt::Display for RefType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &FUNC_REF => write!(f, "funcref"),
+            &EXTERN_REF => write!(f, "externref"),
+            RefType {
+                nullable,
+                heap_type,
+            } => {
+                if *nullable {
+                    write!(f, "(ref null {})", heap_type)
+                } else {
+                    write!(f, "(ref {})", heap_type)
+                }
+            }
+        }
+    }
+}
+
+impl RefType {
+    pub(crate) fn to_wasm_ref_type(&self) -> WasmRefType {
+        WasmRefType {
+            nullable: self.nullable,
+            heap_type: HeapType::to_wasm_heap_type(&self.heap_type),
+        }
+    }
+
+    pub(crate) fn from_wasm_ref_type(rt: &WasmRefType) -> Self {
+        RefType {
+            nullable: rt.nullable,
+            heap_type: HeapType::from_wasm_heap_type(&rt.heap_type),
+        }
+    }
+}
+
+/// A list of all possible heap types in WebAssembly
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub enum HeapType {
+    /// A reference to a Wasm function.
+    Func,
+    /// A reference to opaque data in the Wasm instance.
+    Extern,
+    /// A typed reference to a Wasm function.
+    Index(u32),
+    /// A special bottom heap type.
+    Bot,
+}
+
+impl fmt::Display for HeapType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Func => write!(f, "func"),
+            Self::Extern => write!(f, "extern"),
+            Self::Index(i) => write!(f, "index({})", i), // TODO(dhil) fixme
+            Self::Bot => write!(f, "bot"),
+        }
+    }
+}
+
+impl HeapType {
+    pub(crate) fn to_wasm_heap_type(&self) -> WasmHeapType {
+        match self {
+            Self::Func => WasmHeapType::Func,
+            Self::Extern => WasmHeapType::Extern,
+            Self::Index(i) => WasmHeapType::Index(*i),
+            Self::Bot => WasmHeapType::Bot,
+        }
+    }
+
+    pub(crate) fn from_wasm_heap_type(ht: &WasmHeapType) -> Self {
+        match ht {
+            WasmHeapType::Func => Self::Func,
+            WasmHeapType::Extern => Self::Extern,
+            WasmHeapType::Index(i) => Self::Index(*i),
+            WasmHeapType::Bot => Self::Bot,
         }
     }
 }
 
 // External Types
-
 /// A list of all possible types which can be externally referenced from a
 /// WebAssembly module.
 ///
@@ -289,10 +390,10 @@ pub struct TableType {
 impl TableType {
     /// Creates a new table descriptor which will contain the specified
     /// `element` and have the `limits` applied to its length.
-    pub fn new(element: ValType, min: u32, max: Option<u32>) -> TableType {
+    pub fn new(element: RefType, min: u32, max: Option<u32>) -> TableType {
         TableType {
             ty: Table {
-                wasm_ty: element.to_wasm_type(),
+                wasm_ty: element.to_wasm_ref_type(),
                 minimum: min,
                 maximum: max,
             },
@@ -300,8 +401,8 @@ impl TableType {
     }
 
     /// Returns the element value type of this table.
-    pub fn element(&self) -> ValType {
-        ValType::from_wasm_type(&self.ty.wasm_ty)
+    pub fn element(&self) -> RefType {
+        RefType::from_wasm_ref_type(&self.ty.wasm_ty)
     }
 
     /// Returns minimum number of elements this table must have

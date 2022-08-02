@@ -1,6 +1,6 @@
 use super::{invoke_wasm_and_catch_traps, HostAbi};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
-use crate::{AsContextMut, ExternRef, Func, FuncType, StoreContextMut, Trap, ValRaw, ValType};
+use crate::{AsContextMut, ExternRef, Func, FuncType, StoreContextMut, Trap, ValRaw, ValType, RefType, HeapType};
 use anyhow::{bail, Result};
 use std::marker;
 use std::mem::{self, MaybeUninit};
@@ -321,7 +321,7 @@ unsafe impl WasmTy for Option<ExternRef> {
 
     #[inline]
     fn valtype() -> ValType {
-        ValType::ExternRef
+        ValType::Ref(RefType { nullable: true, heap_type: HeapType::Extern })
     }
 
     #[inline]
@@ -403,7 +403,7 @@ unsafe impl WasmTy for Option<Func> {
 
     #[inline]
     fn valtype() -> ValType {
-        ValType::FuncRef
+        ValType::Ref(RefType { nullable: true, heap_type: HeapType::Func })
     }
 
     #[inline]

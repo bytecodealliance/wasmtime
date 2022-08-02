@@ -3353,7 +3353,7 @@ dependencies = [
  "target-lexicon",
  "tempfile",
  "wasi-cap-std-sync",
- "wasmparser 0.88.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmparser 0.88.0 (git+https://github.com/effect-handlers/wasm-tools?branch=func-ref-2)",
  "wasmtime-cache",
  "wasmtime-component-macro",
  "wasmtime-component-util",
