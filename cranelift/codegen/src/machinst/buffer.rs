@@ -1338,6 +1338,7 @@ impl<I: VCodeInst> MachBuffer<I> {
                 (start_offset, end_offset)
             }
         };
+        trace!("Adding stack map for offsets {start:#x}..{end:#x}");
         self.stack_maps.push(MachStackMap {
             offset: start,
             offset_end: end,
