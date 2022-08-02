@@ -2084,7 +2084,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::MovPReg { rd, rm } => {
                 let rm: Reg = rm.into();
-                debug_assert!([regs::gpr(14), regs::gpr(15)].contains(&rm));
+                debug_assert!([regs::gpr(15)].contains(&rm));
                 let rd = allocs.next_writable(rd);
                 Inst::Mov64 { rd, rm }.emit(&[], sink, emit_info, state);
             }
