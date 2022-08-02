@@ -373,6 +373,11 @@
       (rd WritableReg)
       (rm Reg))
 
+    ;; Like `Mov64` but with a particular physical register source.
+    (MovPReg
+      (rd WritableReg)
+      (rm PReg))
+
     ;; A 32-bit move instruction with a full 32-bit immediate.
     (Mov32Imm
       (rd WritableReg)
@@ -1556,6 +1561,10 @@
 (decl memarg_stack_off (i64 i64) MemArg)
 (extern constructor memarg_stack_off memarg_stack_off)
 
+;; Create a `MemArg` referring to an offset from the initial SP.
+(decl memarg_initial_sp_offset (i64) MemArg)
+(extern constructor memarg_initial_sp_offset memarg_initial_sp_offset)
+
 ;; Form the sum of two offset values, and check that the result is
 ;; a valid `MemArg::Symbol` offset (i.e. is even and fits into i32).
 (decl pure memarg_symbol_offset_sum (i64 i64) i32)
@@ -2469,6 +2478,20 @@
 (rule (emit_load $I64 dst addr)
       (emit (MInst.Load64 dst addr)))
 
+;; Helper for creating `MInst.MovPReg` instructions.
+(decl mov_preg (PReg) Reg)
+(rule (mov_preg src)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.MovPReg dst src))))
+        dst))
+
+(decl preg_stack () PReg)
+(extern constructor preg_stack preg_stack)
+
+;; Copy the physical stack register into a virtual register.
+(decl sp () Reg)
+(rule (sp)
+      (mov_preg (preg_stack)))
 
 ;; Helpers for accessing argument / return value slots ;;;;;;;;;;;;;;;;;;;;;;;;;
 

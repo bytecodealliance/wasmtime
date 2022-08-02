@@ -2081,6 +2081,12 @@ impl MachInstEmit for Inst {
                 let opcode = 0xb904; // LGR
                 put(sink, &enc_rre(opcode, rd.to_reg(), rm));
             }
+            &Inst::MovPReg { rd, rm } => {
+                let rm: Reg = rm.into();
+                debug_assert!([regs::gpr(15)].contains(&rm));
+                let rd = allocs.next_writable(rd);
+                Inst::Mov64 { rd, rm }.emit(&[], sink, emit_info, state);
+            }
             &Inst::Mov32 { rd, rm } => {
                 let rd = allocs.next_writable(rd);
                 let rm = allocs.next(rm);

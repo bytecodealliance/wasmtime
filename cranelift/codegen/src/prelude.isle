@@ -84,6 +84,7 @@
 (type OptionWritableReg (primitive OptionWritableReg))
 (type VecReg extern (enum))
 (type VecWritableReg extern (enum))
+(type PReg (primitive PReg))
 
 ;; Construct a `ValueRegs` of one register.
 (decl value_reg (Reg) ValueRegs)
@@ -196,6 +197,10 @@
       (let ((regs ValueRegs (put_in_regs val)))
         (value_regs_get regs 0)))
 
+;; Convert a `PReg` into a `Reg`
+(decl preg_to_reg (PReg) Reg)
+(extern constructor preg_to_reg preg_to_reg)
+
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type MachLabel (primitive MachLabel))
@@ -292,6 +297,12 @@
 ;; Get the type of each lane in the given type.
 (decl lane_type (Type) Type)
 (extern constructor lane_type lane_type)
+
+;;;; `cranelift_codegen::ir::MemFlags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `MemFlags::trusted`
+(decl mem_flags_trusted () MemFlags)
+(extern constructor mem_flags_trusted mem_flags_trusted)
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -887,3 +898,4 @@
 (convert Value InstOutput output_value)
 (convert Offset32 u32 offset32_to_u32)
 (convert ExternalName BoxExternalName box_external_name)
+(convert PReg Reg preg_to_reg)

@@ -21,6 +21,7 @@ use crate::{
     isa::unwind::UnwindInst,
     machinst::{InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
 };
+use regalloc2::PReg;
 use std::boxed::Box;
 use std::cell::Cell;
 use std::convert::TryFrom;
@@ -604,6 +605,11 @@ where
     }
 
     #[inline]
+    fn memarg_initial_sp_offset(&mut self, off: i64) -> MemArg {
+        MemArg::InitialSPOffset { off }
+    }
+
+    #[inline]
     fn memarg_symbol(&mut self, name: ExternalName, offset: i32, flags: MemFlags) -> MemArg {
         MemArg::Symbol {
             name: Box::new(name),
@@ -669,6 +675,11 @@ where
     #[inline]
     fn emit(&mut self, inst: &MInst) -> Unit {
         self.lower_ctx.emit(inst.clone());
+    }
+
+    #[inline]
+    fn preg_stack(&mut self) -> PReg {
+        stack_reg().to_real_reg().unwrap().into()
     }
 }
 

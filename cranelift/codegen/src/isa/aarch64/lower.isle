@@ -1697,6 +1697,7 @@
 
 
 ;;;; Rules for `uunarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (rule (lower (has_type (ty_vec128_int ty) (uunarrow x y)))
       (if (zero_value y))
       (uqxtn x (lane_size ty)))
@@ -1733,3 +1734,14 @@
 
 (rule (lower (debugtrap))
       (side_effect (brk)))
+
+;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;;
+
+(rule (lower (get_frame_pointer))
+      (aarch64_fp))
+
+(rule (lower (get_stack_pointer))
+      (aarch64_sp))
+
+(rule (lower (get_return_address))
+      (aarch64_link))

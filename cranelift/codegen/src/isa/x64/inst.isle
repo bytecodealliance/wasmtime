@@ -104,6 +104,11 @@
               (src Gpr)
               (dst WritableGpr))
 
+       ;; Like `MovRR` but with a physical register source (for implementing
+       ;; CLIF instructions like `get_stack_pointer`).
+       (MovPReg (src PReg)
+                (dst WritableGpr))
+
        ;; Zero-extended loads, except for 64 bits: movz (bl bq wl wq lq) addr
        ;; reg.
        ;;
@@ -3328,3 +3333,24 @@
 (decl synthetic_amode_to_xmm_mem (SyntheticAmode) XmmMem)
 (rule (synthetic_amode_to_xmm_mem amode)
       (synthetic_amode_to_reg_mem amode))
+
+;; Helper for creating `MovPReg` instructions.
+(decl mov_preg (PReg) Reg)
+(rule (mov_preg preg)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.MovPReg preg dst))))
+        dst))
+
+(decl preg_rbp () PReg)
+(extern constructor preg_rbp preg_rbp)
+
+(decl preg_rsp () PReg)
+(extern constructor preg_rsp preg_rsp)
+
+(decl x64_rbp () Reg)
+(rule (x64_rbp)
+      (mov_preg (preg_rbp)))
+
+(decl x64_rsp () Reg)
+(rule (x64_rsp)
+      (mov_preg (preg_rsp)))

@@ -914,7 +914,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Call
         | Opcode::CallIndirect
         | Opcode::Trapif
-        | Opcode::Trapff => {
+        | Opcode::Trapff
+        | Opcode::GetFramePointer
+        | Opcode::GetStackPointer
+        | Opcode::GetReturnAddress => {
             implemented_in_isle(ctx);
         }
 
