@@ -1512,12 +1512,12 @@
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trap trap_code))
-      (side_effect (udf $true trap_code)))
+      (side_effect (udf trap_code)))
 
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (resumable_trap trap_code))
-      (side_effect (udf $true trap_code)))
+      (side_effect (udf trap_code)))
 
 ;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

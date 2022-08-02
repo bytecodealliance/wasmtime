@@ -55,9 +55,8 @@ impl S390xBackend {
     fn compile_vcode(
         &self,
         func: &Function,
-        flags: shared_settings::Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
-        let emit_info = EmitInfo::new(flags.clone(), self.isa_flags.clone());
+        let emit_info = EmitInfo::new(self.isa_flags.clone());
         let abi = Box::new(abi::S390xABICallee::new(func, self)?);
         compile::compile::<S390xBackend>(func, self, abi, &self.machine_env, emit_info)
     }
@@ -70,7 +69,7 @@ impl TargetIsa for S390xBackend {
         want_disasm: bool,
     ) -> CodegenResult<MachCompileResult> {
         let flags = self.flags();
-        let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
+        let (vcode, regalloc_result) = self.compile_vcode(func)?;
 
         let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
         let frame_size = emit_result.frame_size;

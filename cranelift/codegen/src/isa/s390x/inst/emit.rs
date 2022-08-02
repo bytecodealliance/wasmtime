@@ -1244,7 +1244,7 @@ pub struct EmitInfo {
 }
 
 impl EmitInfo {
-    pub(crate) fn new(_flags: settings::Flags, isa_flags: s390x_settings::Flags) -> Self {
+    pub(crate) fn new(isa_flags: s390x_settings::Flags) -> Self {
         Self { isa_flags }
     }
 }

@@ -577,7 +577,6 @@ fn make_libcall_sig<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     insn: IRInst,
     call_conv: CallConv,
-    _ptr_ty: Type,
 ) -> Signature {
     let mut sig = Signature::new(call_conv);
     for i in 0..ctx.num_inputs(insn) {
@@ -608,7 +607,7 @@ fn emit_vm_call<C: LowerCtx<I = Inst>>(
 
     // TODO avoid recreating signatures for every single Libcall function.
     let call_conv = CallConv::for_libcall(flags, CallConv::triple_default(triple));
-    let sig = make_libcall_sig(ctx, insn, call_conv, types::I64);
+    let sig = make_libcall_sig(ctx, insn, call_conv);
     let caller_conv = ctx.abi().call_conv();
 
     let mut abi = X64ABICaller::from_func(&sig, &extname, dist, caller_conv, flags)?;

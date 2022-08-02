@@ -2820,10 +2820,7 @@ impl MachInstEmit for Inst {
                 ));
                 sink.use_label_at_offset(off, label, LabelUse::Branch19);
                 // udf
-                let trap = Inst::Udf {
-                    use_allocated_encoding: true,
-                    trap_code,
-                };
+                let trap = Inst::Udf { trap_code };
                 trap.emit(&[], sink, emit_info, state);
                 // LABEL:
                 sink.bind_label(label);
@@ -2839,15 +2836,10 @@ impl MachInstEmit for Inst {
             &Inst::Brk => {
                 sink.put4(0xd4200000);
             }
-            &Inst::Udf {
-                use_allocated_encoding,
-                trap_code,
-            } => {
-                let encoding = if use_allocated_encoding {
-                    0xc11f
-                } else {
-                    0xd4a00000
-                };
+            &Inst::Udf { trap_code } => {
+                // "CLIF" in hex, to make the trap recognizable during
+                // debugging.
+                let encoding = 0xc11f;
 
                 sink.add_trap(trap_code);
                 if let Some(s) = state.take_stack_map() {

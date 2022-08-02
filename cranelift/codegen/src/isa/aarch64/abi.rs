@@ -44,7 +44,6 @@ impl Into<AMode> for StackAMode {
 // Returns the size of stack space needed to store the
 // `int_reg` and `vec_reg`.
 fn saved_reg_stack_size(
-    _call_conv: isa::CallConv,
     int_reg: &[Writable<RealReg>],
     vec_reg: &[Writable<RealReg>],
 ) -> (usize, usize) {
@@ -576,7 +575,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     // Returns stack bytes used as well as instructions. Does not adjust
     // nominal SP offset; abi_impl generic code will do that.
     fn gen_clobber_save(
-        call_conv: isa::CallConv,
+        _call_conv: isa::CallConv,
         setup_frame: bool,
         flags: &settings::Flags,
         clobbered_callee_saves: &[Writable<RealReg>],
@@ -593,8 +592,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             }
         }
 
-        let (int_save_bytes, vec_save_bytes) =
-            saved_reg_stack_size(call_conv, &clobbered_int, &clobbered_vec);
+        let (int_save_bytes, vec_save_bytes) = saved_reg_stack_size(&clobbered_int, &clobbered_vec);
         let total_save_bytes = int_save_bytes + vec_save_bytes;
         let clobber_size = total_save_bytes as i32;
         let mut insts = SmallVec::new();
@@ -772,7 +770,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn gen_clobber_restore(
-        call_conv: isa::CallConv,
+        _call_conv: isa::CallConv,
         sig: &Signature,
         flags: &settings::Flags,
         clobbers: &[Writable<RealReg>],
@@ -780,8 +778,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         _outgoing_args_size: u32,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
-        let (clobbered_int, clobbered_vec) =
-            get_regs_restored_in_epilogue(call_conv, flags, sig, clobbers);
+        let (clobbered_int, clobbered_vec) = get_regs_restored_in_epilogue(flags, sig, clobbers);
 
         // Free the fixed frame if necessary.
         if fixed_frame_storage_size > 0 {
@@ -975,7 +972,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn get_clobbered_callee_saves(
-        call_conv: isa::CallConv,
+        _call_conv: isa::CallConv,
         flags: &settings::Flags,
         sig: &Signature,
         regs: &[Writable<RealReg>],
@@ -983,9 +980,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let mut regs: Vec<Writable<RealReg>> = regs
             .iter()
             .cloned()
-            .filter(|r| {
-                is_reg_saved_in_prologue(call_conv, flags.enable_pinned_reg(), sig, r.to_reg())
-            })
+            .filter(|r| is_reg_saved_in_prologue(flags.enable_pinned_reg(), sig, r.to_reg()))
             .collect();
 
         // Sort registers for deterministic code output. We can do an unstable
@@ -1020,12 +1015,7 @@ fn legal_type_for_machine(ty: Type) -> bool {
 
 /// Is the given register saved in the prologue if clobbered, i.e., is it a
 /// callee-save?
-fn is_reg_saved_in_prologue(
-    _call_conv: isa::CallConv,
-    enable_pinned_reg: bool,
-    sig: &Signature,
-    r: RealReg,
-) -> bool {
+fn is_reg_saved_in_prologue(enable_pinned_reg: bool, sig: &Signature, r: RealReg) -> bool {
     // FIXME: We need to inspect whether a function is returning Z or P regs too.
     let save_z_regs = sig
         .params
@@ -1066,7 +1056,6 @@ fn is_reg_saved_in_prologue(
 /// prologue and restored in the epilogue, given the set of all registers
 /// written by the function's body.
 fn get_regs_restored_in_epilogue(
-    call_conv: isa::CallConv,
     flags: &settings::Flags,
     sig: &Signature,
     regs: &[Writable<RealReg>],
@@ -1074,7 +1063,7 @@ fn get_regs_restored_in_epilogue(
     let mut int_saves = vec![];
     let mut vec_saves = vec![];
     for &reg in regs {
-        if is_reg_saved_in_prologue(call_conv, flags.enable_pinned_reg(), sig, reg.to_reg()) {
+        if is_reg_saved_in_prologue(flags.enable_pinned_reg(), sig, reg.to_reg()) {
             match reg.to_reg().class() {
                 RegClass::Int => int_saves.push(reg),
                 RegClass::Float => vec_saves.push(reg),
