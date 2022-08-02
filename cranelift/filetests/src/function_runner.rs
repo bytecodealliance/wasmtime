@@ -241,12 +241,10 @@ fn compile(function: Function, isa: &dyn TargetIsa) -> Result<Mmap, CompilationE
     context.func = function;
 
     // Compile and encode the result to machine code.
-    let code_info = context.compile(isa)?;
-    let mut code_page = MmapMut::map_anon(code_info.total_size as usize)?;
+    let compiled_code = context.compile(isa).map_err(|err| err.inner)?;
+    let mut code_page = MmapMut::map_anon(compiled_code.code_info().total_size as usize)?;
 
-    unsafe {
-        context.emit_to_memory(code_page.as_mut_ptr());
-    };
+    code_page.copy_from_slice(compiled_code.code_buffer());
 
     let code_page = code_page.make_exec()?;
     trace!(
