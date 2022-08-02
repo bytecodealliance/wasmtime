@@ -369,11 +369,18 @@ impl Amode {
                 simm32,
                 base,
                 flags,
-            } => Amode::ImmReg {
-                simm32,
-                flags,
-                base: allocs.next(base),
-            },
+            } => {
+                let base = if base == regs::rsp() || base == regs::rbp() {
+                    base
+                } else {
+                    allocs.next(base)
+                };
+                Amode::ImmReg {
+                    simm32,
+                    flags,
+                    base,
+                }
+            }
             &Amode::ImmRegRegShift {
                 simm32,
                 base,
