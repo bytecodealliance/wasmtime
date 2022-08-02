@@ -212,7 +212,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     let upper_reg = xreg(next_xreg + 1);
 
                     ret.push(ABIArg::Slots {
-                        slots: vec![
+                        slots: smallvec![
                             ABIArgSlot::Reg {
                                 reg: lower_reg.to_real_reg().unwrap(),
                                 ty: param.value_type,

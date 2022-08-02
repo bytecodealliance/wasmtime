@@ -153,6 +153,11 @@ impl ABIArgSlot {
     }
 }
 
+/// A vector of `ABIArgSlot`s. Inline capacity for one element because basically
+/// 100% of values use one slot. Only `i128`s need multiple slots, and they are
+/// super rare (and never happen with Wasm).
+pub type ABIArgSlotVec = SmallVec<[ABIArgSlot; 1]>;
+
 /// An ABIArg is composed of one or more parts. This allows for a CLIF-level
 /// Value to be passed with its parts in more than one location at the ABI
 /// level. For example, a 128-bit integer may be passed in two 64-bit registers,
@@ -169,7 +174,7 @@ pub enum ABIArg {
     /// parts used to store a value of this type.
     Slots {
         /// Slots, one per register part.
-        slots: Vec<ABIArgSlot>,
+        slots: ABIArgSlotVec,
         /// Purpose of this arg.
         purpose: ir::ArgumentPurpose,
     },
@@ -206,7 +211,7 @@ impl ABIArg {
         purpose: ir::ArgumentPurpose,
     ) -> ABIArg {
         ABIArg::Slots {
-            slots: vec![ABIArgSlot::Reg { reg, ty, extension }],
+            slots: smallvec![ABIArgSlot::Reg { reg, ty, extension }],
             purpose,
         }
     }
@@ -219,7 +224,7 @@ impl ABIArg {
         purpose: ir::ArgumentPurpose,
     ) -> ABIArg {
         ABIArg::Slots {
-            slots: vec![ABIArgSlot::Stack {
+            slots: smallvec![ABIArgSlot::Stack {
                 offset,
                 ty,
                 extension,
