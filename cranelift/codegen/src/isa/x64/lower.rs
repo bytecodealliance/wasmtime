@@ -2833,6 +2833,24 @@ impl LowerBackend for X64Backend {
         // verifier pass.
         assert!(branches.len() <= 2);
 
+        if let Ok(()) = isle::lower_branch(
+            ctx,
+            &self.triple,
+            &self.flags,
+            &self.x64_flags,
+            branches[0],
+            targets,
+        ) {
+            return Ok(());
+        }
+
+        let implemented_in_isle = |ctx: &mut C| {
+            unreachable!(
+                "branch implemented in ISLE: inst = `{}`",
+                ctx.dfg().display_inst(branches[0])
+            )
+        };
+
         if branches.len() == 2 {
             // Must be a conditional branch followed by an unconditional branch.
             let op0 = ctx.data(branches[0]).opcode();
@@ -3040,7 +3058,7 @@ impl LowerBackend for X64Backend {
             let op = ctx.data(branches[0]).opcode();
             match op {
                 Opcode::Jump => {
-                    ctx.emit(Inst::jmp_known(targets[0]));
+                    implemented_in_isle(ctx)
                 }
 
                 Opcode::BrTable => {

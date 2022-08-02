@@ -515,6 +515,11 @@
 
 (type BoxVecMachLabel extern (enum))
 
+(type MachLabelSlice extern (enum))
+
+(decl single_target (MachLabel) MachLabelSlice)
+(extern extractor single_target single_target)
+
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
 (decl operand_size_of_type_32_64 (Type) OperandSize)
 (extern constructor operand_size_of_type_32_64 operand_size_of_type_32_64)
@@ -3038,6 +3043,12 @@
       (with_flags_side_effect producer (trap_if_and cc1 cc2 tc)))
 (rule (trap_if_fcmp (FcmpCondResult.OrCondition producer cc1 cc2) tc)
       (with_flags_side_effect producer (trap_if_or cc1 cc2 tc)))
+
+;;;; Jumps ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl jmp_known (MachLabel) SideEffectNoResult)
+(rule (jmp_known target)
+      (SideEffectNoResult.Inst (MInst.JmpKnown target)))
 
 ;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

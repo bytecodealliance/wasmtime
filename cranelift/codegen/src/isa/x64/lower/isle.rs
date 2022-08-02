@@ -41,6 +41,7 @@ use target_lexicon::Triple;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxVecMachLabel = Box<SmallVec<[MachLabel; 4]>>;
+type MachLabelSlice = [MachLabel];
 
 pub struct SinkableLoad {
     inst: Inst,
@@ -69,6 +70,22 @@ where
         inst,
         |cx, insn| generated_code::constructor_lower(cx, insn),
     )
+}
+
+pub(crate) fn lower_branch<C>(
+    lower_ctx: &mut C,
+    triple: &Triple,
+    flags: &Flags,
+    isa_flags: &IsaFlags,
+    branch: Inst,
+    targets: &[MachLabel],
+) -> Result<(), ()>
+where
+    C: LowerCtx<I = MInst>,
+{
+    lower_common(lower_ctx, triple, flags, isa_flags, &[], branch, |cx, insn| {
+        generated_code::constructor_lower_branch(cx, insn, targets)
+    })
 }
 
 impl<C> Context for IsleContext<'_, C, Flags, IsaFlags, 6>
@@ -674,6 +691,15 @@ where
         .expect("Failed to emit LibCall");
 
         output_reg.to_reg()
+    }
+
+    #[inline]
+    fn single_target(&mut self, targets: &MachLabelSlice) -> Option<MachLabel> {
+        if targets.len() == 1 {
+            Some(targets[0])
+        } else {
+            None
+        }
     }
 }
 
