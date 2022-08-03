@@ -30,8 +30,8 @@ use std::mem;
 use std::sync::Mutex;
 use wasmtime_environ::{
     AddressMapSection, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionInfo,
-    InstructionAddressMap, Module, ModuleTranslation, ModuleTypes, StackMapInformation, Trampoline,
-    TrapCode, TrapEncodingBuilder, TrapInformation, Tunables, VMOffsets,
+    InstructionAddressMap, Module, ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation,
+    Trampoline, TrapCode, TrapEncodingBuilder, TrapInformation, Tunables, VMOffsets,
 };
 
 #[cfg(feature = "component-model")]
@@ -196,7 +196,7 @@ impl wasmtime_environ::Compiler for Compiler {
         });
         let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
             base: interrupts_ptr,
-            offset: i32::try_from(func_env.offsets.vmruntime_limits_stack_limit())
+            offset: i32::try_from(func_env.offsets.ptr.vmruntime_limits_stack_limit())
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
