@@ -2968,10 +2968,7 @@ impl LowerBackend for X64Backend {
                     }
                 }
 
-                Opcode::BrIcmp
-                | Opcode::Brif => {
-                    implemented_in_isle(ctx)
-                }
+                Opcode::BrIcmp | Opcode::Brif => implemented_in_isle(ctx),
                 Opcode::Brff => {
                     let flag_input = InsnInput {
                         insn: branches[0],
@@ -3008,9 +3005,7 @@ impl LowerBackend for X64Backend {
             // Must be an unconditional branch or trap.
             let op = ctx.data(branches[0]).opcode();
             match op {
-                Opcode::Jump => {
-                    implemented_in_isle(ctx)
-                }
+                Opcode::Jump => implemented_in_isle(ctx),
 
                 Opcode::BrTable => {
                     let jt_size = targets.len() - 1;
