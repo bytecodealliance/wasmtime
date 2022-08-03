@@ -672,6 +672,16 @@
        (Ret
         (rets VecReg))
 
+       ;; A machine return instruction with pointer authentication using SP as the
+       ;; modifier. This instruction requires pointer authentication support
+       ;; (FEAT_PAuth) unless `is_hint` is true, in which case it is equivalent to
+       ;; the combination of a no-op and a return instruction on platforms without
+       ;; the relevant support.
+       (AuthenticatedRet
+        (key APIKey)
+        (is_hint bool)
+        (rets VecReg))
+
        ;; An unconditional branch.
        (Jump
         (dest BranchTarget))
@@ -745,6 +755,12 @@
        (LoadAddr
         (rd WritableReg)
         (mem AMode))
+
+       ;; Pointer authentication code for instruction address with modifier in SP;
+       ;; equivalent to a no-op if Pointer authentication (FEAT_PAuth) is not
+       ;; supported.
+       (Pacisp
+        (key APIKey))
 
        ;; Marker, no-op in generated code: SP "virtual offset" is adjusted. This
        ;; controls how AMode::NominalSPOffset args are lowered.
@@ -1306,6 +1322,13 @@
     (Umax)
     (Umin)
     (Xchg)
+))
+
+;; Keys for instruction address PACs
+(type APIKey
+  (enum
+    (A)
+    (B)
 ))
 
 ;; Extractors for target features ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

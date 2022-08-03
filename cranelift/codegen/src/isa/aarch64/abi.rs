@@ -7,7 +7,7 @@ use crate::ir::MemFlags;
 use crate::ir::Opcode;
 use crate::ir::{ExternalName, LibCall, Signature};
 use crate::isa;
-use crate::isa::aarch64::{inst::EmitState, inst::*};
+use crate::isa::aarch64::{inst::EmitState, inst::*, settings as aarch64_settings};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::*;
 use crate::settings;
@@ -67,8 +67,12 @@ fn saved_reg_stack_size(
 /// point for the trait; it is never actually instantiated.
 pub(crate) struct AArch64MachineDeps;
 
+impl IsaFlags for aarch64_settings::Flags {}
+
 impl ABIMachineSpec for AArch64MachineDeps {
     type I = Inst;
+
+    type F = aarch64_settings::Flags;
 
     fn word_bits() -> u32 {
         64
@@ -377,8 +381,22 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
     }
 
-    fn gen_ret(rets: Vec<Reg>) -> Inst {
-        Inst::Ret { rets }
+    fn gen_ret(setup_frame: bool, isa_flags: &aarch64_settings::Flags, rets: Vec<Reg>) -> Inst {
+        if isa_flags.sign_return_address() && (setup_frame || isa_flags.sign_return_address_all()) {
+            let key = if isa_flags.sign_return_address_with_bkey() {
+                APIKey::B
+            } else {
+                APIKey::A
+            };
+
+            Inst::AuthenticatedRet {
+                key,
+                is_hint: !isa_flags.has_pauth(),
+                rets,
+            }
+        } else {
+            Inst::Ret { rets }
+        }
     }
 
     fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Inst> {
@@ -493,19 +511,39 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
     }
 
-    fn gen_debug_frame_info(
+    fn gen_prologue_start(
+        setup_frame: bool,
         call_conv: isa::CallConv,
         flags: &settings::Flags,
-        _isa_flags: &Vec<settings::Value>,
+        isa_flags: &aarch64_settings::Flags,
     ) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
-        if flags.unwind_info() && call_conv.extends_apple_aarch64() {
+
+        if isa_flags.sign_return_address() && (setup_frame || isa_flags.sign_return_address_all()) {
+            let key = if isa_flags.sign_return_address_with_bkey() {
+                APIKey::B
+            } else {
+                APIKey::A
+            };
+
+            insts.push(Inst::Pacisp { key });
+
+            if flags.unwind_info() {
+                insts.push(Inst::Unwind {
+                    inst: UnwindInst::Aarch64SetPointerAuth {
+                        return_addresses: true,
+                    },
+                });
+            }
+        } else if flags.unwind_info() && call_conv.extends_apple_aarch64() {
+            // The macOS unwinder seems to require this.
             insts.push(Inst::Unwind {
                 inst: UnwindInst::Aarch64SetPointerAuth {
                     return_addresses: false,
                 },
             });
         }
+
         insts
     }
 

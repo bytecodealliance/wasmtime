@@ -14,7 +14,7 @@ use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use regalloc2::MachineEnv;
-use target_lexicon::{Aarch64Architecture, Architecture, Triple};
+use target_lexicon::{Aarch64Architecture, Architecture, OperatingSystem, Triple};
 
 // New backend:
 mod abi;
@@ -59,7 +59,7 @@ impl AArch64Backend {
         flags: shared_settings::Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(flags.clone());
-        let abi = Box::new(abi::AArch64ABICallee::new(func, self)?);
+        let abi = Box::new(abi::AArch64ABICallee::new(func, self, &self.isa_flags)?);
         compile::compile::<AArch64Backend>(func, self, abi, &self.machine_env, emit_info)
     }
 }
@@ -147,6 +147,21 @@ impl TargetIsa for AArch64Backend {
 
     #[cfg(feature = "unwind")]
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        let is_apple_os = match self.triple.operating_system {
+            OperatingSystem::Darwin
+            | OperatingSystem::Ios
+            | OperatingSystem::MacOSX { .. }
+            | OperatingSystem::Tvos => true,
+            _ => false,
+        };
+
+        if self.isa_flags.sign_return_address()
+            && self.isa_flags.sign_return_address_with_bkey()
+            && !is_apple_os
+        {
+            unimplemented!("Specifying that the B key is used with pointer authentication instructions in the CIE is not implemented.");
+        }
+
         Some(inst::unwind::systemv::create_cie())
     }
 

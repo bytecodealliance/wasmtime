@@ -38,6 +38,25 @@ fn test_aarch64_binemit() {
     //
     //      $ echo "mov x1, x2" | aarch64inst.sh
     insns.push((Inst::Ret { rets: vec![] }, "C0035FD6", "ret"));
+    insns.push((
+        Inst::AuthenticatedRet {
+            key: APIKey::A,
+            is_hint: true,
+            rets: vec![],
+        },
+        "BF2303D5C0035FD6",
+        "autiasp ; ret",
+    ));
+    insns.push((
+        Inst::AuthenticatedRet {
+            key: APIKey::B,
+            is_hint: false,
+            rets: vec![],
+        },
+        "FF0F5FD6",
+        "retab",
+    ));
+    insns.push((Inst::Pacisp { key: APIKey::B }, "7F2303D5", "pacibsp"));
     insns.push((Inst::Nop0, "", "nop-zero-len"));
     insns.push((Inst::Nop4, "1F2003D5", "nop"));
     insns.push((Inst::Csdb, "9F2203D5", "csdb"));
