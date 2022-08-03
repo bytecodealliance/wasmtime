@@ -1,4 +1,4 @@
-use crate::codegen::ir::ValueList;
+use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose, ValueList};
 use crate::config::Config;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
@@ -288,9 +288,21 @@ where
     }
 
     fn generate_abi_param(&mut self) -> Result<AbiParam> {
-        // TODO: Generate more advanced abi params (structs/purposes/extensions/etc...)
-        let ty = self.generate_type()?;
-        Ok(AbiParam::new(ty))
+        let value_type = self.generate_type()?;
+        // TODO: There are more argument purposes to be explored...
+        let purpose = ArgumentPurpose::Normal;
+        let extension = match self.u.int_in_range(0..=2)? {
+            2 => ArgumentExtension::Sext,
+            1 => ArgumentExtension::Uext,
+            _ => ArgumentExtension::None,
+        };
+
+        Ok(AbiParam {
+            value_type,
+            purpose,
+            extension,
+            legalized_to_pointer: false,
+        })
     }
 
     fn generate_signature(&mut self) -> Result<Signature> {
