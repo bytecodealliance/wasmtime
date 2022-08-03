@@ -496,9 +496,12 @@ impl<'a> FunctionBuilder<'a> {
         {
             // Iterate manually to provide more helpful error messages.
             for block in self.func_ctx.blocks.keys() {
-                if let Err((inst, _msg)) = self.func.is_block_basic(block) {
+                if let Err((inst, msg)) = self.func.is_block_basic(block) {
                     let inst_str = self.func.dfg.display_inst(inst);
-                    panic!("{} failed basic block invariants on {}", block, inst_str);
+                    panic!(
+                        "{} failed basic block invariants on {}: {}",
+                        block, inst_str, msg
+                    );
                 }
             }
         }
