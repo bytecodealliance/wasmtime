@@ -83,9 +83,15 @@ pub(crate) fn lower_branch<C>(
 where
     C: LowerCtx<I = MInst>,
 {
-    lower_common(lower_ctx, triple, flags, isa_flags, &[], branch, |cx, insn| {
-        generated_code::constructor_lower_branch(cx, insn, targets)
-    })
+    lower_common(
+        lower_ctx,
+        triple,
+        flags,
+        isa_flags,
+        &[],
+        branch,
+        |cx, insn| generated_code::constructor_lower_branch(cx, insn, targets),
+    )
 }
 
 impl<C> Context for IsleContext<'_, C, Flags, IsaFlags, 6>
