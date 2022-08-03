@@ -9,17 +9,15 @@ use crate::{
 };
 use alloc::vec::Vec;
 use core::ops::Range;
-use cranelift_egraph::{EGraph, Id};
+use cranelift_egraph::{EGraph, Id, NewOrExisting};
 use cranelift_entity::EntityList;
 use cranelift_entity::SecondaryMap;
 
 mod domtree;
 mod elaborate;
-mod extract;
 mod node;
 
 use elaborate::Elaborator;
-use extract::Extractor;
 pub use node::{Node, NodeCtx};
 
 pub struct FuncEGraph<'a> {
@@ -28,19 +26,17 @@ pub struct FuncEGraph<'a> {
     /// Loop analysis results, used for built-in LICM during elaboration.
     loop_analysis: &'a LoopAnalysis,
     /// The egraph itself.
-    pub egraph: EGraph<NodeCtx>,
+    pub(crate) egraph: EGraph<NodeCtx>,
     /// "node context", containing arenas for node data.
-    pub node_ctx: NodeCtx,
+    pub(crate) node_ctx: NodeCtx,
     /// Ranges in `side_effect_ids` for sequences of side-effecting
     /// eclasses per block.
     side_effects: SecondaryMap<Block, Range<u32>>,
     side_effect_ids: Vec<Id>,
-    /// Ranges in `blockparam_tys` for sequences of blockparam eclass
-    /// IDs and types per block.
+    /// Ranges in `blockparam_ids_tys` for sequences of blockparam
+    /// eclass IDs and types per block.
     blockparams: SecondaryMap<Block, Range<u32>>,
     blockparam_ids_tys: Vec<(Id, Type)>,
-    /// Extractor records which node we want to use for each eclass.
-    extractor: Extractor,
 }
 
 impl<'a> FuncEGraph<'a> {
@@ -62,7 +58,6 @@ impl<'a> FuncEGraph<'a> {
             side_effect_ids: vec![],
             blockparams: SecondaryMap::with_default(0..0),
             blockparam_ids_tys: vec![],
-            extractor: Extractor::new(),
         };
         this.build(func);
         this
@@ -78,14 +73,17 @@ impl<'a> FuncEGraph<'a> {
             let blockparam_start = self.blockparam_ids_tys.len() as u32;
             for (i, &value) in func.dfg.block_params(block).iter().enumerate() {
                 let ty = func.dfg.value_type(value);
-                let param = self.egraph.add(
-                    Node::Param {
-                        block,
-                        index: i as u32,
-                        ty,
-                    },
-                    &mut self.node_ctx,
-                );
+                let param = self
+                    .egraph
+                    .add(
+                        Node::Param {
+                            block,
+                            index: i as u32,
+                            ty,
+                        },
+                        &mut self.node_ctx,
+                    )
+                    .get();
                 value_to_id.insert(value, param);
                 self.blockparam_ids_tys.push((param, ty));
             }
@@ -134,9 +132,21 @@ impl<'a> FuncEGraph<'a> {
                 };
                 let id = self.egraph.add(node, &mut self.node_ctx);
 
-                if side_effect {
-                    self.side_effect_ids.push(id);
-                }
+                let id = match (side_effect, id) {
+                    (true, id) => {
+                        let id = id.get();
+                        self.side_effect_ids.push(id);
+                        id
+                    }
+                    (false, NewOrExisting::New(id)) => {
+                        // Apply all optimization rules immediately; the
+                        // aegraph (acyclic egraph) works best when we do
+                        // this so all uses pick up the eclass with all
+                        // possible enodes.
+                        crate::opts::optimize_eclass(id, self)
+                    }
+                    (false, NewOrExisting::Existing(id)) => id,
+                };
 
                 // Create results and save in Value->Id map.
                 match results {
@@ -148,14 +158,17 @@ impl<'a> FuncEGraph<'a> {
                         debug_assert!(many_results.len() > 1);
                         for (i, &result) in many_results.iter().enumerate() {
                             let ty = func.dfg.value_type(result);
-                            let projection = self.egraph.add(
-                                Node::Result {
-                                    value: id,
-                                    result: i,
-                                    ty,
-                                },
-                                &mut self.node_ctx,
-                            );
+                            let projection = self
+                                .egraph
+                                .add(
+                                    Node::Result {
+                                        value: id,
+                                        result: i,
+                                        ty,
+                                    },
+                                    &mut self.node_ctx,
+                                )
+                                .get();
                             value_to_id.insert(result, projection);
                         }
                     }
@@ -165,79 +178,6 @@ impl<'a> FuncEGraph<'a> {
             let side_effect_end = self.side_effect_ids.len() as u32;
             let side_effect_range = side_effect_start..side_effect_end;
             self.side_effects[block] = side_effect_range;
-        }
-    }
-
-    /// Extraction: choose one enode per eclass, finding an acyclic
-    /// subgraph of the egraph that we use for codegen.
-    ///
-    /// To avoid cycles, we do a cycle-finding DFS as part of
-    ///  extraction that disqualifies enodes (removes them from
-    /// eclasses).
-    ///
-    /// There will always be some acyclic path to generate any value,
-    /// because (i) the initial egraph is acyclic and (ii) egraph
-    /// growth and merging is additive. Intuitively, there is thus
-    /// always an acyclic path through *enodes* to terminals/roots. If
-    /// merging creates an equivalence between two of those enodes in
-    /// the path and creates a cycle, then we can "skip forward"
-    /// directly to the node closer to the terminals. In other words,
-    /// if we start with the enodes (each in their own eclass):
-    ///
-    /// ```plain
-    ///           A
-    ///          /  \
-    ///         B     C
-    ///       / \      \
-    ///       D  E      F
-    ///     /
-    ///    G
-    /// ```
-    ///
-    /// then if B and G were merged we might get:
-    ///
-    /// ```plain
-    ///          A
-    ///         /  \
-    ///  .---B,G   C
-    ///  ^  / |      \
-    ///  | D  E       F
-    ///  \_|
-    /// ```
-    ///
-    /// but when we reach the merged `B,G` eclass during extraction,
-    /// we do a DFS on the `B` enode and eventually reach `B` again
-    /// while it is in the DFS path; we disqualify `D` as a result
-    /// (remove it from the eclass). We propagate this removal upward:
-    /// if an eclass has all nodes removed, it is deleted; and if an
-    /// eclass is deleted, all nodes that use as an arg it are
-    /// deleted. This results in the final egraph:
-    ///
-    /// ```plain
-    ///           A
-    ///         /  \
-    ///       G     C
-    ///              \
-    ///   E           F
-    /// ```
-    ///
-    /// Then, once we know which nodes are deleted, we pick the
-    /// cheapest.
-    pub fn extract(&mut self, func: &Function) {
-        for block in func.layout.blocks() {
-            for side_effect in self.side_effects[block].clone() {
-                let side_effect = self.side_effect_ids[side_effect as usize];
-                let present = self
-                    .extractor
-                    .visit_eclass(&self.egraph, side_effect, &self.node_ctx)
-                    .is_some();
-                if !present {
-                    panic!(
-                        "Extraction: root eclass {:?} has no present enodes",
-                        side_effect
-                    );
-                }
-            }
         }
     }
 
@@ -267,7 +207,6 @@ impl<'a> FuncEGraph<'a> {
             self.loop_analysis,
             &self.egraph,
             &self.node_ctx,
-            &self.extractor,
         );
         elab.elaborate(
             |block| {

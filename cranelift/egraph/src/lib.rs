@@ -13,7 +13,6 @@ use cranelift_entity::{entity_impl, packed_option::ReservedValue};
 use std::fmt::Debug;
 use std::hash::Hash;
 
-mod batched_workset;
 mod bumpvec;
 mod ctxhash;
 mod egraph;
@@ -21,7 +20,7 @@ pub mod unionfind;
 
 pub use bumpvec::{BumpArena, BumpSlice, BumpVec};
 pub use ctxhash::{CtxEq, CtxHash, CtxHashMap};
-pub use egraph::{EClass, EGraph};
+pub use egraph::{EClass, EGraph, NewOrExisting, NodeIter};
 
 /// An eclass ID.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

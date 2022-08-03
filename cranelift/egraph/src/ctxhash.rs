@@ -130,44 +130,6 @@ impl<K, V> CtxHashMap<K, V> {
                 &data.v
             })
     }
-
-    /// Look up a key, returning a mutable borrow of the value if present.
-    pub fn get_mut<'a, Q, Ctx: CtxEq<K, Q> + CtxHash<Q> + CtxHash<K>>(
-        &'a mut self,
-        k: &Q,
-        ctx: &Ctx,
-    ) -> Option<&'a mut V> {
-        let h = hash(k, ctx);
-        self.raw
-            .find(h, |bucket| ctx.ctx_eq(&bucket.k, k))
-            .map(|bucket| {
-                let data = unsafe { bucket.as_mut() };
-                &mut data.v
-            })
-    }
-
-    /// Refile a key-value entry under a new key, finding it initially
-    /// by computing the hash on *another* key, then using `Eq`
-    /// (rather than external-context equality) to find the
-    /// entry. This is used in very special circumstances when doing
-    /// egraph merges in a way that requires keys to change in a
-    /// deterministic way.
-    pub(crate) fn rewrite_raw_key<Q, Ctx: CtxHash<Q> + CtxHash<K>>(
-        &mut self,
-        hash_key: &Q,
-        old_key: &K,
-        new_key: K,
-        ctx: &Ctx,
-    ) where
-        K: PartialEq + Eq,
-    {
-        let h = hash(hash_key, ctx);
-        if let Some(bucket) = self.raw.find(h, |bucket| &bucket.k == old_key) {
-            let mut data = unsafe { self.raw.remove(bucket) };
-            data.k = new_key;
-            self.raw.insert(h, data, |bucket| hash(&bucket.k, ctx));
-        }
-    }
 }
 
 #[cfg(test)]
@@ -206,16 +168,14 @@ mod test {
         let k1 = Key { index: 1 };
         let k2 = Key { index: 2 };
 
-        assert!(k0.ctx_eq(&k2, ctx));
-        assert!(!k0.ctx_eq(&k1, ctx));
-        assert!(!k2.ctx_eq(&k1, ctx));
+        assert!(ctx.ctx_eq(&k0, &k2));
+        assert!(!ctx.ctx_eq(&k0, &k1));
+        assert!(!ctx.ctx_eq(&k2, &k1));
 
         let mut map: CtxHashMap<Key, u64> = CtxHashMap::new();
         assert_eq!(map.insert(k0, 42, &ctx), None);
         assert_eq!(map.insert(k2, 84, &ctx), Some(42));
         assert_eq!(map.get(&k1, &ctx), None);
         assert_eq!(*map.get(&k0, &ctx).unwrap(), 84);
-        *map.get_mut(&k2, &ctx).unwrap() += 1;
-        assert_eq!(*map.get(&k0, &ctx).unwrap(), 85);
     }
 }

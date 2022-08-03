@@ -156,7 +156,7 @@ impl CtxHash<Node> for NodeCtx {
     }
 }
 
-fn op_cost(op: &InstructionImms) -> usize {
+pub(crate) fn op_cost(op: &InstructionImms) -> usize {
     match op.opcode() {
         // Constants.
         Opcode::Iconst | Opcode::F32const | Opcode::F64const | Opcode::Bconst => 0,
@@ -180,21 +180,6 @@ fn op_cost(op: &InstructionImms) -> usize {
         | Opcode::Bnot => 2,
         // Everything else.
         _ => 3,
-    }
-}
-
-impl Node {
-    pub(crate) fn cost(&self) -> usize {
-        match self {
-            // Projections and parameters have no cost: they just
-            // alias values.
-            Node::Result { .. } | Node::Param { .. } => 0,
-            Node::Pure { op, .. } => op_cost(op),
-            // Side-effecting ops have the highest cost, but they're
-            // special-cased below while scheduling because we must
-            // perform them.
-            Node::Inst { .. } => 10,
-        }
     }
 }
 

@@ -1,9 +1,31 @@
 //! Elaboration phase: lowers EGraph back to sequences of operations
 //! in CFG nodes.
 
+/* TODO: extraction:
+
+   /// Because the aegraph builds sets in a persistent-data-structure
+   /// way, where a larger set is composed of a union of two smaller
+   /// sets or else a single new node, we can do this in a single
+   /// pass over the eclasses.
+   ///
+   /// The acyclic property of ENodes -- that is, the ENode in a
+   /// given EClass can refer only to EClasses with a lower ID --
+   /// means that this single pass can compute the cost of a new
+   /// ENode just by looking up the lower-id EClasses and adding the
+   /// cost of the op.
+
+
+ - actually, we want to do this *during elaboration*, because the
+   best extraction at a given point depends on what we already
+   have. Walk the enode tree for an eclass; if we already have the
+   value of one, that's it. Otherwise, find the min. Then memoize the
+   result by elaborating. Don't memoize the selection because it
+   depends on what's available in the scoped hashmap, which can
+   "retract" as we pop scopes.
+*/
+
 use super::domtree::DomTreeWithChildren;
-use super::extract::Extractor;
-use super::node::{Node, NodeCtx};
+use super::node::{op_cost, Node, NodeCtx};
 use crate::dominator_tree::DominatorTree;
 use crate::ir::{Block, Function, Inst, SourceLoc, Type, Value, ValueList};
 use crate::loop_analysis::LoopAnalysis;
@@ -20,8 +42,8 @@ pub(crate) struct Elaborator<'a> {
     loop_analysis: &'a LoopAnalysis,
     node_ctx: &'a NodeCtx,
     egraph: &'a EGraph<NodeCtx>,
-    extractor: &'a Extractor,
     id_to_value: ScopedHashMap<Id, IdValue>,
+    id_to_best_cost_and_node: ScopedHashMap<Id, (usize, Id)>,
     /// Stack of blocks and loops in current elaboration path.
     loop_stack: SmallVec<[LoopStackEntry; 8]>,
     cur_block: Option<Block>,
@@ -55,7 +77,6 @@ impl<'a> Elaborator<'a> {
         loop_analysis: &'a LoopAnalysis,
         egraph: &'a EGraph<NodeCtx>,
         node_ctx: &'a NodeCtx,
-        extractor: &'a Extractor,
     ) -> Self {
         let num_blocks = func.dfg.num_blocks();
         Self {
@@ -64,8 +85,8 @@ impl<'a> Elaborator<'a> {
             loop_analysis,
             egraph,
             node_ctx,
-            extractor,
             id_to_value: ScopedHashMap::new(),
+            id_to_best_cost_and_node: ScopedHashMap::new(),
             loop_stack: smallvec![],
             cur_block: None,
             first_branch: SecondaryMap::with_capacity(num_blocks),
@@ -142,15 +163,116 @@ impl<'a> Elaborator<'a> {
         self.func.dfg.inst_results_list(inst)
     }
 
+    fn find_best_node(&mut self, id: Id) -> (usize, Id) {
+        log::trace!("find_best_node: {}", id);
+
+        if self.id_to_value.get(&id).is_some() {
+            log::trace!(" -> value already available; cost 0");
+            return (0, id);
+        }
+
+        if let Some(&(cost, node)) = self.id_to_best_cost_and_node.get(&id) {
+            log::trace!(" -> memoized to cost {} node {}", cost, node);
+            return (cost, node);
+        }
+
+        let eclass = self.egraph.classes[id];
+        let node = eclass.get_node();
+        let parent1 = eclass
+            .as_node_and_parent()
+            .map(|(_, parent)| parent)
+            .or(eclass.as_union().map(|(p1, _)| p1));
+        let parent2 = eclass.as_union().map(|(_, p2)| p2);
+
+        log::trace!(
+            " -> id {} node expands to: node {:?} parent1 {:?} parent2 {:?}",
+            id,
+            node,
+            parent1,
+            parent2
+        );
+
+        let (mut best_cost, mut best_id) = if let Some(node) = node {
+            let cost = match node.node::<NodeCtx>(&self.egraph.nodes) {
+                Node::Param { .. } | Node::Inst { .. } => {
+                    return (0, id);
+                }
+                Node::Result { value, .. } => {
+                    return self.find_best_node(*value);
+                }
+                Node::Pure { op, .. } => op_cost(op),
+            };
+            log::trace!("  -> id {} has operand cost {}", id, cost);
+
+            let mut children_cost = 0;
+            let child_count = self
+                .node_ctx
+                .children(node.node::<NodeCtx>(&self.egraph.nodes))
+                .len();
+            for child_idx in 0..child_count {
+                let child = self
+                    .node_ctx
+                    .children(node.node::<NodeCtx>(&self.egraph.nodes))[child_idx];
+                assert!(child < id);
+                log::trace!("  -> id {} child {}", id, child);
+                let (child_cost, _) = self.find_best_node(child);
+                children_cost += child_cost;
+                log::trace!("  -> id {} child {} child cost {}", id, child, child_cost);
+            }
+            let node_cost = cost + children_cost;
+
+            log::trace!(
+                "  -> id {} total cost of operand plus args: {}",
+                id,
+                node_cost
+            );
+            (Some(node_cost), Some(id))
+        } else {
+            (None, None)
+        };
+
+        for parent in parent1.into_iter().chain(parent2.into_iter()) {
+            log::trace!(" -> id {} parent {}", id, parent);
+            assert!(parent < id);
+            let (parent_best_cost, parent_best_id) = self.find_best_node(parent);
+            log::trace!(
+                " -> id {} parent {} has cost {} with best id {}",
+                id,
+                parent,
+                parent_best_cost,
+                parent_best_id
+            );
+            if best_cost.is_none() || parent_best_cost < best_cost.unwrap() {
+                best_cost = Some(parent_best_cost);
+                best_id = Some(parent_best_id);
+            }
+        }
+
+        let best_id = best_id.expect("Must have at least one node");
+        let best_cost = best_cost.expect("Must have at least one node");
+
+        log::trace!(
+            "-> for eclass {}, best node is in id {} with cost {}",
+            id,
+            best_id,
+            best_cost
+        );
+
+        self.id_to_best_cost_and_node
+            .insert_if_absent(id, (best_cost, best_id));
+
+        (best_cost, best_id)
+    }
+
     fn elaborate_eclass_use(&mut self, id: Id) -> IdValue {
-        if let Some(val) = self.id_to_value.get(&id) {
+        let (_, best_node_eclass) = self.find_best_node(id);
+
+        if let Some(val) = self.id_to_value.get(&best_node_eclass) {
             return val.clone();
         }
 
-        let node = self
-            .extractor
-            .get_node(self.egraph, id)
-            .expect("Should have extracted node for eclass that is used");
+        let node_key = self.egraph.classes[best_node_eclass].get_node().unwrap();
+        let node = node_key.node::<NodeCtx>(&self.egraph.nodes);
 
         // Is the node a block param? We should never get here if so
         // (they are inserted when first visiting the block).
@@ -180,7 +302,7 @@ impl<'a> Elaborator<'a> {
         let mut max_loop_depth = 0;
         let args: SmallVec<[Value; 8]> = self
             .node_ctx
-            .children(node)
+            .children(&node)
             .iter()
             .map(|&id| self.elaborate_eclass_use(id))
             .map(|idvalue| match idvalue {
@@ -240,6 +362,7 @@ impl<'a> Elaborator<'a> {
         domtree: &DomTreeWithChildren,
     ) {
         self.id_to_value.increment_depth();
+        self.id_to_best_cost_and_node.increment_depth();
 
         let blockparam_ids_tys = (block_params_fn)(block);
         self.start_block(idom, block, blockparam_ids_tys);
@@ -251,6 +374,7 @@ impl<'a> Elaborator<'a> {
             self.elaborate_block(Some(block), child, block_params_fn, block_roots_fn, domtree);
         }
 
+        self.id_to_best_cost_and_node.decrement_depth();
         self.id_to_value.decrement_depth();
         if let Some(innermost_loop) = self.loop_stack.last() {
             if innermost_loop.scope_depth as usize == self.id_to_value.depth() {

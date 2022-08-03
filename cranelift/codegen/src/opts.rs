@@ -1,7 +1,7 @@
 //! Optimization driver using ISLE rewrite rules on an egraph.
 
 use crate::egg::FuncEGraph;
-pub use crate::egg::Node;
+pub use crate::egg::{Node, NodeCtx};
 pub use crate::ir::condcodes::{FloatCC, IntCC};
 pub use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64, Uimm8};
 pub use crate::ir::types::*;
@@ -10,9 +10,10 @@ pub use crate::ir::{
     JumpTable, MemFlags, Opcode, StackSlot, Table, TrapCode, Type, Value,
 };
 use crate::isle_common_prelude_methods;
-pub use cranelift_egraph::Id;
+pub use cranelift_egraph::{Id, NewOrExisting, NodeIter};
 use cranelift_entity::{EntityList, EntityRef};
 use smallvec::{smallvec, SmallVec};
+use std::marker::PhantomData;
 
 pub type IdArray = EntityList<Id>;
 pub type Unit = ();
@@ -25,41 +26,48 @@ struct IsleContext<'a, 'b> {
     egraph: &'a mut FuncEGraph<'b>,
 }
 
-pub fn optimize<'a>(egraph: &mut FuncEGraph<'a>) {
+pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     let mut ctx = IsleContext { egraph };
-    ctx.do_rewrites();
-}
-
-impl<'a, 'b> IsleContext<'a, 'b> {
-    pub fn do_rewrites(&mut self) {
-        const MAX_ITERS: usize = 10;
-        let mut iters = 0;
-        while !self.egraph.egraph.dirty_classes_workset().is_empty() && iters < MAX_ITERS {
-            let mut dirty_batch = self.egraph.egraph.dirty_classes_workset().take_batch();
-            for dirty_eclass_id in dirty_batch.batch() {
-                self.do_rewrites_on_eclass(dirty_eclass_id);
-            }
-            self.egraph
-                .egraph
-                .dirty_classes_workset()
-                .reuse(dirty_batch);
-
-            self.egraph.egraph.rebuild(&mut self.egraph.node_ctx);
-            iters += 1;
+    log::trace!("running rules on eclass {}", id.index());
+    let optimized_ids = generated_code::constructor_simplify(&mut ctx, id);
+    let mut union_id = id;
+    if let Some(ids) = optimized_ids {
+        for new_id in ids {
+            union_id = egraph.egraph.union(union_id, new_id);
         }
     }
+    union_id
+}
 
-    fn do_rewrites_on_eclass(&mut self, id: Id) {
-        log::trace!("running rules on eclass {}", id.index());
-        let optimized_ids = generated_code::constructor_simplify(self, id);
-        if let Some(ids) = optimized_ids {
-            for new_id in ids {
-                log::trace!(" -> merging in new eclass {}", new_id);
-                self.egraph
-                    .egraph
-                    .union(id, new_id, &mut self.egraph.node_ctx);
+struct PureNodesEtorIter<'a, 'b>
+where
+    'b: 'a,
+{
+    root: Id,
+    iter: NodeIter<NodeCtx>,
+    _phantom1: PhantomData<&'a ()>,
+    _phantom2: PhantomData<&'b ()>,
+}
+
+impl<'a, 'b> generated_code::ContextIter for PureNodesEtorIter<'a, 'b>
+where
+    'b: 'a,
+{
+    type Context = IsleContext<'a, 'b>;
+    type Output = (Type, InstructionImms, IdArray);
+
+    fn next(&mut self, ctx: &mut IsleContext<'a, 'b>) -> Option<Self::Output> {
+        while let Some(node) = self.iter.next(&ctx.egraph.egraph) {
+            log::trace!("iter from root {}: node {:?}", self.root, node);
+            match node {
+                Node::Pure { op, args, types } if types.len() == 1 => {
+                    let ty = types.as_slice(&ctx.egraph.node_ctx.types)[0];
+                    return Some((ty, op.clone(), args.clone()));
+                }
+                _ => {}
             }
         }
+        None
     }
 }
 
@@ -67,7 +75,8 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
     isle_common_prelude_methods!();
 
     fn eclass_type(&mut self, eclass: Id) -> Option<Type> {
-        for node in self.egraph.egraph.enodes(eclass) {
+        let mut iter = self.egraph.egraph.enodes(eclass);
+        while let Some(node) = iter.next(&self.egraph.egraph) {
             match node {
                 &Node::Pure { types, .. } if types.len() == 1 => {
                     return Some(types.as_slice(&self.egraph.node_ctx.types)[0]);
@@ -78,33 +87,29 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
         None
     }
 
-    fn pure_enodes_etor(
-        &mut self,
-        eclass: Id,
-        multi_index: &mut usize,
-    ) -> Option<(Type, InstructionImms, IdArray)> {
-        let nodes = self.egraph.egraph.enodes(eclass);
-        while *multi_index < nodes.len() {
-            let i = *multi_index;
-            *multi_index += 1;
-            match nodes[i] {
-                Node::Pure { op, args, types } if types.len() == 1 => {
-                    let ty = types.as_slice(&self.egraph.node_ctx.types)[0];
-                    return Some((ty, op.clone(), args.clone()));
-                }
-                _ => {}
-            }
-        }
-        None
+    type pure_enodes_etor_iter = PureNodesEtorIter<'a, 'b>;
+
+    fn pure_enodes_etor(&mut self, eclass: Id) -> Option<PureNodesEtorIter<'a, 'b>> {
+        Some(PureNodesEtorIter {
+            root: eclass,
+            iter: self.egraph.egraph.enodes(eclass),
+            _phantom1: PhantomData,
+            _phantom2: PhantomData,
+        })
     }
 
     fn pure_enode_ctor(&mut self, ty: Type, op: &InstructionImms, args: IdArray) -> Id {
         let types = self.egraph.node_ctx.types.single(ty);
         let types = types.freeze(&mut self.egraph.node_ctx.types);
         let op = op.clone();
-        self.egraph
+        match self
+            .egraph
             .egraph
             .add(Node::Pure { op, args, types }, &mut self.egraph.node_ctx)
+        {
+            NewOrExisting::New(id) => optimize_eclass(id, self.egraph),
+            NewOrExisting::Existing(id) => id,
+        }
     }
 
     fn id_array_0_etor(&mut self, arg0: IdArray) -> Option<()> {
@@ -160,14 +165,6 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
             [arg0, arg1, arg2].into_iter(),
             &mut self.egraph.node_ctx.args,
         )
-    }
-
-    fn eclass_union(&mut self, arg0: Id, arg1: Id) -> Unit {
-        self.egraph
-            .egraph
-            .union(arg0, arg1, &mut self.egraph.node_ctx);
-
-        ()
     }
 
     fn commutative_ctor(&mut self, a: Id, b: Id) -> Option<ConstructorVec<generated_code::Pair>> {

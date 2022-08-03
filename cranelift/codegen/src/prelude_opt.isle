@@ -40,10 +40,6 @@
 (extern constructor id_array_3 id_array_3_ctor)
 (extern extractor id_array_3 id_array_3_etor)
 
-;; Union an eclass with another.
-(decl eclass_union (Id Id) Unit)
-(extern constructor eclass_union eclass_union)
-
 ;;;;; helpers for (virtual) associativity and commutativity ;;;;;;;;;;;;;;;;;;;;
 
 (type Pair (enum

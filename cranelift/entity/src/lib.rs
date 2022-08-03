@@ -103,10 +103,24 @@ macro_rules! entity_impl {
                 $entity(x)
             }
 
+            /// Create a new instance from raw bits.
+            #[allow(dead_code)]
+            #[inline]
+            pub fn from_bits(bits: u32) -> Self {
+                $entity(bits)
+            }
+
             /// Return the underlying index value as a `u32`.
             #[allow(dead_code)]
             #[inline]
             pub fn as_u32(self) -> u32 {
+                self.0
+            }
+
+            /// Return the raw b its, suitable for later use with `from_bits`.
+            #[allow(dead_code)]
+            #[inline]
+            pub fn as_bits(self) -> u32 {
                 self.0
             }
         }
