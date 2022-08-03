@@ -1072,6 +1072,9 @@
 (decl cc_invert (CC) CC)
 (extern constructor cc_invert cc_invert)
 
+(decl floatcc_inverse (FloatCC) FloatCC)
+(extern constructor floatcc_inverse floatcc_inverse)
+
 ;; Fails if the argument is not either CC.NZ or CC.Z.
 (decl cc_nz_or_z (CC) CC)
 (extern extractor cc_nz_or_z cc_nz_or_z)
@@ -3062,6 +3065,10 @@
 (rule (jmp_known target)
       (SideEffectNoResult.Inst (MInst.JmpKnown target)))
 
+(decl jmp_if (CC MachLabel) ConsumesFlags)
+(rule (jmp_if cc taken)
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.JmpIf cc taken)))
+
 ;; Conditional jump based on the condition code.
 (decl jmp_cond (CC MachLabel MachLabel) ConsumesFlags)
 (rule (jmp_cond cc taken not_taken)
@@ -3071,6 +3078,21 @@
 (decl jmp_cond_icmp (IcmpCondResult MachLabel MachLabel) SideEffectNoResult)
 (rule (jmp_cond_icmp (IcmpCondResult.Condition producer cc) taken not_taken)
       (with_flags_side_effect producer (jmp_cond cc taken not_taken)))
+
+;; Conditional jump based on the result of an fcmp.
+(decl jmp_cond_fcmp (FcmpCondResult MachLabel MachLabel) SideEffectNoResult)
+(rule (jmp_cond_fcmp (FcmpCondResult.Condition producer cc) taken not_taken)
+      (with_flags_side_effect producer (jmp_cond cc taken not_taken)))
+(rule (jmp_cond_fcmp (FcmpCondResult.AndCondition producer cc1 cc2) taken not_taken)
+      (with_flags_side_effect producer
+                              (consumes_flags_concat
+                                (jmp_if (cc_invert cc1) not_taken)
+                                (jmp_cond (cc_invert cc2) not_taken taken))))
+(rule (jmp_cond_fcmp (FcmpCondResult.OrCondition producer cc1 cc2) taken not_taken)
+      (with_flags_side_effect producer
+                              (consumes_flags_concat
+                                (jmp_if cc1 taken)
+                                (jmp_cond cc2 taken not_taken))))
 
 ;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

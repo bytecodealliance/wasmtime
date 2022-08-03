@@ -729,10 +729,6 @@ impl Inst {
         Inst::JmpKnown { dst }
     }
 
-    pub(crate) fn jmp_if(cc: CC, taken: MachLabel) -> Inst {
-        Inst::JmpIf { cc, taken }
-    }
-
     pub(crate) fn jmp_cond(cc: CC, taken: MachLabel, not_taken: MachLabel) -> Inst {
         Inst::JmpCond {
             cc,

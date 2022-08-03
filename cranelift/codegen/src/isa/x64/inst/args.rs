@@ -1693,32 +1693,6 @@ impl CC {
         }
     }
 
-    pub(crate) fn from_floatcc(floatcc: FloatCC) -> Self {
-        match floatcc {
-            FloatCC::Ordered => CC::NP,
-            FloatCC::Unordered => CC::P,
-            // Alias for NE
-            FloatCC::OrderedNotEqual => CC::NZ,
-            // Alias for E
-            FloatCC::UnorderedOrEqual => CC::Z,
-            // Alias for A
-            FloatCC::GreaterThan => CC::NBE,
-            // Alias for AE
-            FloatCC::GreaterThanOrEqual => CC::NB,
-            FloatCC::UnorderedOrLessThan => CC::B,
-            FloatCC::UnorderedOrLessThanOrEqual => CC::BE,
-            FloatCC::Equal
-            | FloatCC::NotEqual
-            | FloatCC::LessThan
-            | FloatCC::LessThanOrEqual
-            | FloatCC::UnorderedOrGreaterThan
-            | FloatCC::UnorderedOrGreaterThanOrEqual => panic!(
-                "{:?} can't be lowered to a CC code; treat as special case.",
-                floatcc
-            ),
-        }
-    }
-
     pub(crate) fn get_enc(self) -> u8 {
         self as u8
     }

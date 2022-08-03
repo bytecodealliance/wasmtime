@@ -2872,17 +2872,30 @@
 (rule (lower_branch (brif cc (ifcmp a b) _ _) (two_targets taken not_taken))
       (side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
 
+;; Rules for `brff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower_branch (brff cc (ffcmp a b) _ _) (two_targets taken not_taken))
+      (side_effect (jmp_cond_fcmp (emit_fcmp cc a b) taken not_taken)))
+
 ;; Rules for `brz` and `brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower_branch (brz (icmp cc a b) _ _) (two_targets taken not_taken))
       (let ((cmp IcmpCondResult (invert_icmp_cond_result (emit_cmp cc a b))))
         (side_effect (jmp_cond_icmp cmp taken not_taken))))
 
+(rule (lower_branch (brz (fcmp cc a b) _ _) (two_targets taken not_taken))
+      (let ((cmp FcmpCondResult (emit_fcmp (floatcc_inverse cc) a b)))
+        (side_effect (jmp_cond_fcmp cmp taken not_taken))))
+
 (rule (lower_branch (brz val @ (value_type $I128) _ _) (two_targets taken not_taken))
       (side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.NZ) val) taken not_taken)))
 
 (rule (lower_branch (brnz (icmp cc a b) _ _) (two_targets taken not_taken))
       (side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
+
+(rule (lower_branch (brnz (fcmp cc a b) _ _) (two_targets taken not_taken))
+      (let ((cmp FcmpCondResult (emit_fcmp cc a b)))
+        (side_effect (jmp_cond_fcmp cmp taken not_taken))))
 
 (rule (lower_branch (brnz val @ (value_type $I128) _ _) (two_targets taken not_taken))
       (side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.Z) val) taken not_taken)))

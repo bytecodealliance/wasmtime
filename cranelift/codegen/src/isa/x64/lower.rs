@@ -5,7 +5,7 @@ pub(super) mod isle;
 
 use crate::data_value::DataValue;
 use crate::ir::{
-    condcodes::{CondCode, FloatCC, IntCC},
+    condcodes::{FloatCC, IntCC},
     types, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type,
 };
 use crate::isa::x64::abi::*;
@@ -476,100 +476,6 @@ fn emit_cmp<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst, cc: IntCC) -> IntC
         ctx.emit(Inst::cmp_rmi_r(OperandSize::from_ty(ty), rhs, lhs));
         cc
     }
-}
-
-/// A specification for a fcmp emission.
-enum FcmpSpec {
-    /// Normal flow.
-    Normal,
-
-    /// Avoid emitting Equal at all costs by inverting it to NotEqual, and indicate when that
-    /// happens with `InvertedEqualOrConditions`.
-    ///
-    /// This is useful in contexts where it is hard/inefficient to produce a single instruction (or
-    /// sequence of instructions) that check for an "AND" combination of condition codes; see for
-    /// instance lowering of Select.
-    #[allow(dead_code)]
-    InvertEqual,
-}
-
-/// This explains how to interpret the results of an fcmp instruction.
-enum FcmpCondResult {
-    /// The given condition code must be set.
-    Condition(CC),
-
-    /// Both condition codes must be set.
-    AndConditions(CC, CC),
-
-    /// Either of the conditions codes must be set.
-    OrConditions(CC, CC),
-
-    /// The associated spec was set to `FcmpSpec::InvertEqual` and Equal has been inverted. Either
-    /// of the condition codes must be set, and the user must invert meaning of analyzing the
-    /// condition code results. When the spec is set to `FcmpSpec::Normal`, then this case can't be
-    /// reached.
-    InvertedEqualOrConditions(CC, CC),
-}
-
-/// Emits a float comparison instruction.
-///
-/// Note: make sure that there are no instructions modifying the flags between a call to this
-/// function and the use of the flags!
-fn emit_fcmp<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    insn: IRInst,
-    mut cond_code: FloatCC,
-    spec: FcmpSpec,
-) -> FcmpCondResult {
-    let (flip_operands, inverted_equal) = match cond_code {
-        FloatCC::LessThan
-        | FloatCC::LessThanOrEqual
-        | FloatCC::UnorderedOrGreaterThan
-        | FloatCC::UnorderedOrGreaterThanOrEqual => {
-            cond_code = cond_code.reverse();
-            (true, false)
-        }
-        FloatCC::Equal => {
-            let inverted_equal = match spec {
-                FcmpSpec::Normal => false,
-                FcmpSpec::InvertEqual => {
-                    cond_code = FloatCC::NotEqual; // same as .inverse()
-                    true
-                }
-            };
-            (false, inverted_equal)
-        }
-        _ => (false, false),
-    };
-
-    // The only valid CC constructed with `from_floatcc` can be put in the flag
-    // register with a direct float comparison; do this here.
-    let op = match ctx.input_ty(insn, 0) {
-        types::F32 => SseOpcode::Ucomiss,
-        types::F64 => SseOpcode::Ucomisd,
-        _ => panic!("Bad input type to Fcmp"),
-    };
-
-    let inputs = &[InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
-    let (lhs_input, rhs_input) = if flip_operands {
-        (inputs[1], inputs[0])
-    } else {
-        (inputs[0], inputs[1])
-    };
-    let lhs = put_input_in_reg(ctx, lhs_input);
-    let rhs = input_to_reg_mem(ctx, rhs_input);
-    ctx.emit(Inst::xmm_cmp_rm_r(op, rhs, lhs));
-
-    let cond_result = match cond_code {
-        FloatCC::Equal => FcmpCondResult::AndConditions(CC::NP, CC::Z),
-        FloatCC::NotEqual if inverted_equal => {
-            FcmpCondResult::InvertedEqualOrConditions(CC::P, CC::NZ)
-        }
-        FloatCC::NotEqual if !inverted_equal => FcmpCondResult::OrConditions(CC::P, CC::NZ),
-        _ => FcmpCondResult::Condition(CC::from_floatcc(cond_code)),
-    };
-
-    cond_result
 }
 
 fn emit_vm_call<C: LowerCtx<I = Inst>>(
@@ -2878,27 +2784,8 @@ impl LowerBackend for X64Backend {
 
                     if let Some(_icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
                         implemented_in_isle(ctx)
-                    } else if let Some(fcmp) = matches_input(ctx, flag_input, Opcode::Fcmp) {
-                        let cond_code = ctx.data(fcmp).fp_cond_code().unwrap();
-                        let cond_code = if op0 == Opcode::Brz {
-                            cond_code.inverse()
-                        } else {
-                            cond_code
-                        };
-                        match emit_fcmp(ctx, fcmp, cond_code, FcmpSpec::Normal) {
-                            FcmpCondResult::Condition(cc) => {
-                                ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
-                            }
-                            FcmpCondResult::AndConditions(cc1, cc2) => {
-                                ctx.emit(Inst::jmp_if(cc1.invert(), not_taken));
-                                ctx.emit(Inst::jmp_cond(cc2.invert(), not_taken, taken));
-                            }
-                            FcmpCondResult::OrConditions(cc1, cc2) => {
-                                ctx.emit(Inst::jmp_if(cc1, taken));
-                                ctx.emit(Inst::jmp_cond(cc2, taken, not_taken));
-                            }
-                            FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
-                        }
+                    } else if let Some(_fcmp) = matches_input(ctx, flag_input, Opcode::Fcmp) {
+                        implemented_in_isle(ctx)
                     } else if src_ty == types::I128 {
                         implemented_in_isle(ctx);
                     } else if is_int_or_ref_ty(src_ty) || is_bool_ty(src_ty) {
@@ -2936,34 +2823,7 @@ impl LowerBackend for X64Backend {
                     }
                 }
 
-                Opcode::BrIcmp | Opcode::Brif => implemented_in_isle(ctx),
-                Opcode::Brff => {
-                    let flag_input = InsnInput {
-                        insn: branches[0],
-                        input: 0,
-                    };
-
-                    if let Some(ffcmp) = matches_input(ctx, flag_input, Opcode::Ffcmp) {
-                        let cond_code = ctx.data(branches[0]).fp_cond_code().unwrap();
-                        match emit_fcmp(ctx, ffcmp, cond_code, FcmpSpec::Normal) {
-                            FcmpCondResult::Condition(cc) => {
-                                ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
-                            }
-                            FcmpCondResult::AndConditions(cc1, cc2) => {
-                                ctx.emit(Inst::jmp_if(cc1.invert(), not_taken));
-                                ctx.emit(Inst::jmp_cond(cc2.invert(), not_taken, taken));
-                            }
-                            FcmpCondResult::OrConditions(cc1, cc2) => {
-                                ctx.emit(Inst::jmp_if(cc1, taken));
-                                ctx.emit(Inst::jmp_cond(cc2, taken, not_taken));
-                            }
-                            FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
-                        }
-                    } else {
-                        // Should be disallowed by flags checks in verifier.
-                        unimplemented!("Brff with input not from ffcmp");
-                    }
-                }
+                Opcode::BrIcmp | Opcode::Brif | Opcode::Brff => implemented_in_isle(ctx),
 
                 _ => panic!("unexpected branch opcode: {:?}", op0),
             }

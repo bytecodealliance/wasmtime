@@ -14,7 +14,7 @@ use crate::ir::LibCall;
 use crate::isa::x64::lower::emit_vm_call;
 use crate::{
     ir::{
-        condcodes::{FloatCC, IntCC},
+        condcodes::{CondCode, FloatCC, IntCC},
         immediates::*,
         types::*,
         Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueList,
@@ -597,6 +597,11 @@ where
             CC::NZ => Some(*cc),
             _ => None,
         }
+    }
+
+    #[inline]
+    fn floatcc_inverse(&mut self, cc: &FloatCC) -> FloatCC {
+        cc.inverse()
     }
 
     #[inline]
