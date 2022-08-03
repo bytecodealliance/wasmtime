@@ -140,6 +140,7 @@ impl Inst {
             | Inst::StoreRev16 { .. }
             | Inst::StoreRev32 { .. }
             | Inst::StoreRev64 { .. }
+            | Inst::Mvc { .. }
             | Inst::LoadMultiple64 { .. }
             | Inst::StoreMultiple64 { .. }
             | Inst::Mov32 { .. }
@@ -599,6 +600,12 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         | &Inst::StoreImm32SExt16 { ref mem, .. }
         | &Inst::StoreImm64SExt16 { ref mem, .. } => {
             memarg_operands(mem, collector);
+        }
+        &Inst::Mvc {
+            ref dst, ref src, ..
+        } => {
+            collector.reg_use(dst.base);
+            collector.reg_use(src.base);
         }
         &Inst::LoadMultiple64 {
             rt, rt2, ref mem, ..
@@ -1762,6 +1769,22 @@ impl Inst {
                 let mem = mem.pretty_print_default();
 
                 format!("{}{} {}, {}", mem_str, op, mem, imm)
+            }
+            &Inst::Mvc {
+                ref dst,
+                ref src,
+                len_minus_one,
+            } => {
+                let dst = dst.with_allocs(allocs);
+                let src = src.with_allocs(allocs);
+                format!(
+                    "mvc {}({},{}), {}({})",
+                    dst.disp.pretty_print_default(),
+                    len_minus_one,
+                    show_reg(dst.base),
+                    src.disp.pretty_print_default(),
+                    show_reg(src.base)
+                )
             }
             &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
                 let mem = mem.with_allocs(allocs);

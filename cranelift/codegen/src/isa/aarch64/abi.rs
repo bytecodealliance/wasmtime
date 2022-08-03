@@ -162,6 +162,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
                 next_stack += size;
                 ret.push(ABIArg::StructArg {
+                    pointer: None,
                     offset,
                     size,
                     purpose: param.purpose,

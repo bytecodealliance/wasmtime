@@ -185,6 +185,10 @@ pub enum ABIArg {
     /// area; on the callee side, we compute a pointer to this stack area and
     /// provide that as the argument's value.
     StructArg {
+        /// Register or stack slot holding a pointer to the buffer as passed
+        /// by the caller to the callee.  If None, the ABI defines the buffer
+        /// to reside at a well-known location (i.e. at `offset` below).
+        pointer: Option<ABIArgSlot>,
         /// Offset of this arg relative to base of stack args.
         offset: i64,
         /// Size of this arg on the stack.
@@ -195,14 +199,6 @@ pub enum ABIArg {
 }
 
 impl ABIArg {
-    /// Is this a StructArg?
-    fn is_struct_arg(&self) -> bool {
-        match self {
-            &ABIArg::StructArg { .. } => true,
-            _ => false,
-        }
-    }
-
     /// Create an ABIArg from one register.
     pub fn reg(
         reg: RealReg,
@@ -530,10 +526,6 @@ pub struct ABISig {
     sized_stack_ret_space: i64,
     /// Index in `args` of the stack-return-value-area argument.
     stack_ret_arg: Option<usize>,
-    /// Specific order for copying into arguments at callsites. We must be
-    /// careful to copy into StructArgs first, because we need to be able
-    /// to invoke memcpy() before we've loaded other arg regs (see above).
-    copy_to_arg_order: SmallVec<[usize; 8]>,
     /// Calling convention used.
     call_conv: isa::CallConv,
 }
@@ -563,30 +555,14 @@ impl ABISig {
             need_stack_return_area,
         )?;
 
-        let mut copy_to_arg_order = SmallVec::new();
-        for (i, arg) in args.iter().enumerate() {
-            // Struct args.
-            if arg.is_struct_arg() {
-                copy_to_arg_order.push(i);
-            }
-        }
-        for (i, arg) in args.iter().enumerate() {
-            // Non-struct args. Skip an appended return-area arg for multivalue
-            // returns, if any.
-            if !arg.is_struct_arg() && i < sig.params.len() {
-                copy_to_arg_order.push(i);
-            }
-        }
-
         trace!(
-            "ABISig: sig {:?} => args = {:?} rets = {:?} arg stack = {} ret stack = {} stack_ret_arg = {:?} copy_to_arg_order = {:?}",
+            "ABISig: sig {:?} => args = {:?} rets = {:?} arg stack = {} ret stack = {} stack_ret_arg = {:?}",
             sig,
             args,
             rets,
             sized_stack_arg_space,
             sized_stack_ret_space,
             stack_ret_arg,
-            copy_to_arg_order,
         );
 
         Ok(ABISig {
@@ -595,7 +571,6 @@ impl ABISig {
             sized_stack_arg_space,
             sized_stack_ret_space,
             stack_ret_arg,
-            copy_to_arg_order,
             call_conv: sig.call_conv,
         })
     }
@@ -608,13 +583,25 @@ impl ABISig {
         // Compute uses: all arg regs.
         let mut uses = smallvec![];
         for arg in &self.args {
-            if let &ABIArg::Slots { ref slots, .. } = arg {
-                for slot in slots {
-                    match slot {
-                        &ABIArgSlot::Reg { reg, .. } => {
-                            uses.push(Reg::from(reg));
+            match arg {
+                &ABIArg::Slots { ref slots, .. } => {
+                    for slot in slots {
+                        match slot {
+                            &ABIArgSlot::Reg { reg, .. } => {
+                                uses.push(Reg::from(reg));
+                            }
+                            _ => {}
                         }
-                        _ => {}
+                    }
+                }
+                &ABIArg::StructArg { ref pointer, .. } => {
+                    if let Some(slot) = pointer {
+                        match slot {
+                            &ABIArgSlot::Reg { reg, .. } => {
+                                uses.push(Reg::from(reg));
+                            }
+                            _ => {}
+                        }
                     }
                 }
             }
@@ -641,11 +628,6 @@ impl ABISig {
         }
 
         (uses, defs, clobbers)
-    }
-
-    /// Specific order for copying into arguments at callsites.
-    pub fn copy_to_arg_order(&self, idx: usize) -> usize {
-        self.copy_to_arg_order[idx]
     }
 
     /// Get the number of arguments expected.
@@ -1106,55 +1088,67 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         into_regs: ValueRegs<Writable<Reg>>,
     ) -> SmallInstVec<Self::I> {
         let mut insts = smallvec![];
+        let mut copy_arg_slot_to_reg = |slot: &ABIArgSlot, into_reg: &Writable<Reg>| {
+            match slot {
+                &ABIArgSlot::Reg { reg, ty, .. } => {
+                    // Extension mode doesn't matter (we're copying out, not in; we
+                    // ignore high bits by convention).
+                    insts.push(M::gen_move(*into_reg, reg.into(), ty));
+                }
+                &ABIArgSlot::Stack {
+                    offset,
+                    ty,
+                    extension,
+                    ..
+                } => {
+                    // However, we have to respect the extention mode for stack
+                    // slots, or else we grab the wrong bytes on big-endian.
+                    let ext = M::get_ext_mode(self.sig.call_conv, extension);
+                    let ty = match (ext, ty_bits(ty) as u32) {
+                        (ArgumentExtension::Uext, n) | (ArgumentExtension::Sext, n)
+                            if n < M::word_bits() =>
+                        {
+                            M::word_type()
+                        }
+                        _ => ty,
+                    };
+                    insts.push(M::gen_load_stack(
+                        StackAMode::FPOffset(
+                            M::fp_to_arg_offset(self.call_conv, &self.flags) + offset,
+                            ty,
+                        ),
+                        *into_reg,
+                        ty,
+                    ));
+                }
+            }
+        };
+
         match &self.sig.args[idx] {
             &ABIArg::Slots { ref slots, .. } => {
                 assert_eq!(into_regs.len(), slots.len());
                 for (slot, into_reg) in slots.iter().zip(into_regs.regs().iter()) {
-                    match slot {
-                        &ABIArgSlot::Reg { reg, ty, .. } => {
-                            // Extension mode doesn't matter (we're copying out, not in; we
-                            // ignore high bits by convention).
-                            insts.push(M::gen_move(*into_reg, reg.into(), ty));
-                        }
-                        &ABIArgSlot::Stack {
-                            offset,
-                            ty,
-                            extension,
-                            ..
-                        } => {
-                            // However, we have to respect the extention mode for stack
-                            // slots, or else we grab the wrong bytes on big-endian.
-                            let ext = M::get_ext_mode(self.sig.call_conv, extension);
-                            let ty = match (ext, ty_bits(ty) as u32) {
-                                (ArgumentExtension::Uext, n) | (ArgumentExtension::Sext, n)
-                                    if n < M::word_bits() =>
-                                {
-                                    M::word_type()
-                                }
-                                _ => ty,
-                            };
-                            insts.push(M::gen_load_stack(
-                                StackAMode::FPOffset(
-                                    M::fp_to_arg_offset(self.call_conv, &self.flags) + offset,
-                                    ty,
-                                ),
-                                *into_reg,
-                                ty,
-                            ));
-                        }
-                    }
+                    copy_arg_slot_to_reg(&slot, &into_reg);
                 }
             }
-            &ABIArg::StructArg { offset, .. } => {
+            &ABIArg::StructArg {
+                pointer, offset, ..
+            } => {
                 let into_reg = into_regs.only_reg().unwrap();
-                insts.push(M::gen_get_stack_addr(
-                    StackAMode::FPOffset(
-                        M::fp_to_arg_offset(self.call_conv, &self.flags) + offset,
+                if let Some(slot) = pointer {
+                    // Buffer address is passed in a register or stack slot.
+                    copy_arg_slot_to_reg(&slot, &into_reg);
+                } else {
+                    // Buffer address is implicitly defined by the ABI.
+                    insts.push(M::gen_get_stack_addr(
+                        StackAMode::FPOffset(
+                            M::fp_to_arg_offset(self.call_conv, &self.flags) + offset,
+                            I8,
+                        ),
+                        into_reg,
                         I8,
-                    ),
-                    into_reg,
-                    I8,
-                ));
+                    ));
+                }
             }
         }
         insts
@@ -1668,6 +1662,37 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         adjust_stack_and_nominal_sp::<M, C>(ctx, off as i32, /* is_sub = */ false)
     }
 
+    fn emit_copy_regs_to_buffer<C: LowerCtx<I = Self::I>>(
+        &self,
+        ctx: &mut C,
+        idx: usize,
+        from_regs: ValueRegs<Reg>,
+    ) {
+        match &self.sig.args[idx] {
+            &ABIArg::Slots { .. } => {}
+            &ABIArg::StructArg { offset, size, .. } => {
+                let src_ptr = from_regs.only_reg().unwrap();
+                let dst_ptr = ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
+                ctx.emit(M::gen_get_stack_addr(
+                    StackAMode::SPOffset(offset, I8),
+                    dst_ptr,
+                    I8,
+                ));
+                // Emit a memcpy from `src_ptr` to `dst_ptr` of `size` bytes.
+                // N.B.: because we process StructArg params *first*, this is
+                // safe w.r.t. clobbers: we have not yet filled in any other
+                // arg regs.
+                let memcpy_call_conv = isa::CallConv::for_libcall(&self.flags, self.sig.call_conv);
+                for insn in
+                    M::gen_memcpy(memcpy_call_conv, dst_ptr.to_reg(), src_ptr, size as usize)
+                        .into_iter()
+                {
+                    ctx.emit(insn);
+                }
+            }
+        }
+    }
+
     fn emit_copy_regs_to_arg<C: LowerCtx<I = Self::I>>(
         &self,
         ctx: &mut C,
@@ -1744,31 +1769,10 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
                     }
                 }
             }
-            &ABIArg::StructArg { offset, size, .. } => {
-                let src_ptr = from_regs.only_reg().unwrap();
-                let dst_ptr = ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
-                ctx.emit(M::gen_get_stack_addr(
-                    StackAMode::SPOffset(offset, I8),
-                    dst_ptr,
-                    I8,
-                ));
-                // Emit a memcpy from `src_ptr` to `dst_ptr` of `size` bytes.
-                // N.B.: because we process StructArg params *first*, this is
-                // safe w.r.t. clobbers: we have not yet filled in any other
-                // arg regs.
-                let memcpy_call_conv = isa::CallConv::for_libcall(&self.flags, self.sig.call_conv);
-                for insn in
-                    M::gen_memcpy(memcpy_call_conv, dst_ptr.to_reg(), src_ptr, size as usize)
-                        .into_iter()
-                {
-                    ctx.emit(insn);
-                }
+            &ABIArg::StructArg { pointer, .. } => {
+                assert!(pointer.is_none()); // Only supported via ISLE.
             }
         }
-    }
-
-    fn get_copy_to_arg_order(&self) -> SmallVec<[usize; 8]> {
-        self.sig.copy_to_arg_order.clone()
     }
 
     fn emit_copy_retval_to_regs<C: LowerCtx<I = Self::I>>(

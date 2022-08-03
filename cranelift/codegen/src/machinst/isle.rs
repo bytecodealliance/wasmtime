@@ -780,10 +780,6 @@ macro_rules! isle_prelude_methods {
             regs.regs()[idx]
         }
 
-        fn abi_copy_to_arg_order(&mut self, abi: &ABISig, idx: usize) -> usize {
-            abi.copy_to_arg_order(idx)
-        }
-
         fn abi_num_args(&mut self, abi: &ABISig) -> usize {
             abi.num_args()
         }
@@ -825,6 +821,24 @@ macro_rules! isle_prelude_methods {
                 &ABIArg::Slots { ref slots, .. } => {
                     if slots.len() == 1 {
                         Some(slots[0])
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            }
+        }
+
+        fn abi_arg_struct_pointer(&mut self, arg: &ABIArg) -> Option<(ABIArgSlot, i64, u64)> {
+            match arg {
+                &ABIArg::StructArg {
+                    pointer,
+                    offset,
+                    size,
+                    ..
+                } => {
+                    if let Some(pointer) = pointer {
+                        Some((pointer, offset, size))
                     } else {
                         None
                     }

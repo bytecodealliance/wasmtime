@@ -828,10 +828,6 @@
     (Sext)
 ))
 
-;; Specific order for copying into arguments at callsites.
-(decl abi_copy_to_arg_order (ABISig usize) usize)
-(extern constructor abi_copy_to_arg_order abi_copy_to_arg_order)
-
 ;; Get the number of arguments expected.
 (decl abi_num_args (ABISig) usize)
 (extern constructor abi_num_args abi_num_args)
@@ -877,6 +873,11 @@
 ;; return value only requires a single slot to be passed.
 (decl abi_arg_only_slot (ABIArgSlot) ABIArg)
 (extern extractor abi_arg_only_slot abi_arg_only_slot)
+
+;; Extractor to detect the special case where a struct argument
+;; is explicitly passed by reference using a hidden pointer.
+(decl abi_arg_struct_pointer (ABIArgSlot i64 u64) ABIArg)
+(extern extractor abi_arg_struct_pointer abi_arg_struct_pointer)
 
 ;; Convert a real register number into a virtual register.
 (decl real_reg_to_reg (RealReg) Reg)
