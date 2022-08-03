@@ -162,6 +162,12 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+/// This is the error variant returned from [`FunctionBuilder::try_use_var`].
+pub enum UseVariableError {
+    UsedBeforeDeclared(Variable),
+}
+
 /// This module allows you to create a function in Cranelift IR in a straightforward way, hiding
 /// all the complexity of its internal representation.
 ///
@@ -301,16 +307,15 @@ impl<'a> FunctionBuilder<'a> {
         self.func_ctx.types[var] = ty;
     }
 
-    /// Returns the Cranelift IR value corresponding to the utilization at the current program
-    /// position of a previously defined user variable.
-    pub fn use_var(&mut self, var: Variable) -> Value {
+    /// Returns the Cranelift IR necessary to use a previously defined user
+    /// variable, returning an error if this is not possible.
+    pub fn try_use_var(&mut self, var: Variable) -> Result<Value, UseVariableError> {
         let (val, side_effects) = {
-            let ty = *self.func_ctx.types.get(var).unwrap_or_else(|| {
-                panic!(
-                    "variable {:?} is used but its type has not been declared",
-                    var
-                )
-            });
+            let ty = *self
+                .func_ctx
+                .types
+                .get(var)
+                .ok_or(UseVariableError::UsedBeforeDeclared(var))?;
             debug_assert_ne!(
                 ty,
                 types::INVALID,
@@ -322,7 +327,18 @@ impl<'a> FunctionBuilder<'a> {
                 .use_var(self.func, var, ty, self.position.unwrap())
         };
         self.handle_ssa_side_effects(side_effects);
-        val
+        Ok(val)
+    }
+
+    /// Returns the Cranelift IR value corresponding to the utilization at the current program
+    /// position of a previously defined user variable.
+    pub fn use_var(&mut self, var: Variable) -> Value {
+        self.try_use_var(var).unwrap_or_else(|_| {
+            panic!(
+                "variable {:?} is used but its type has not been declared",
+                var
+            )
+        })
     }
 
     /// Register a new definition of a user variable. The type of the value must be
@@ -971,7 +987,7 @@ impl<'a> FunctionBuilder<'a> {
 #[cfg(test)]
 mod tests {
     use super::greatest_divisible_power_of_two;
-    use crate::frontend::{FunctionBuilder, FunctionBuilderContext};
+    use crate::frontend::{FunctionBuilder, FunctionBuilderContext, UseVariableError};
     use crate::Variable;
     use alloc::string::ToString;
     use cranelift_codegen::entity::EntityRef;
@@ -1668,5 +1684,25 @@ block0:
         assert_eq!(16, greatest_divisible_power_of_two(48));
         assert_eq!(8, greatest_divisible_power_of_two(24));
         assert_eq!(1, greatest_divisible_power_of_two(25));
+    }
+
+    #[test]
+    fn try_use_var() {
+        let sig = Signature::new(CallConv::SystemV);
+
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(ExternalName::testcase("sample"), sig);
+        {
+            let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+
+            let block0 = builder.create_block();
+            builder.append_block_params_for_function_params(block0);
+            builder.switch_to_block(block0);
+
+            assert_eq!(
+                builder.try_use_var(Variable::with_u32(0)),
+                Err(UseVariableError::UsedBeforeDeclared(Variable::with_u32(0)))
+            );
+        }
     }
 }
