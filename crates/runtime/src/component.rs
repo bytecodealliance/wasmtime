@@ -367,6 +367,8 @@ impl ComponentInstance {
     unsafe fn initialize_vmctx(&mut self, store: *mut dyn Store) {
         *self.vmctx_plus_offset(self.offsets.magic()) = VMCOMPONENT_MAGIC;
         *self.vmctx_plus_offset(self.offsets.store()) = store;
+        *self.vmctx_plus_offset(self.offsets.limits()) = (*store).vmruntime_limits();
+
         for i in 0..self.offsets.num_runtime_component_instances {
             let i = RuntimeComponentInstanceIndex::from_u32(i);
             let mut def = VMGlobalDefinition::new();
