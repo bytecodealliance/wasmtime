@@ -50,6 +50,8 @@ impl LowerBackend for S390xBackend {
             | Opcode::F64const
             | Opcode::Vconst
             | Opcode::Null
+            | Opcode::Isplit
+            | Opcode::Iconcat
             | Opcode::Iadd
             | Opcode::IaddIfcout
             | Opcode::Isub
@@ -201,8 +203,6 @@ impl LowerBackend for S390xBackend {
             | Opcode::TlsValue
             | Opcode::GetPinnedReg
             | Opcode::SetPinnedReg
-            | Opcode::Isplit
-            | Opcode::Iconcat
             | Opcode::Vsplit
             | Opcode::Vconcat
             | Opcode::DynamicStackLoad

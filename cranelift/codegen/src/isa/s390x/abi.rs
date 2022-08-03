@@ -239,8 +239,15 @@ impl ABIMachineSpec for S390xMachineDeps {
             next_stack = REG_SAVE_AREA_SIZE as u64;
         }
 
+        // In the SystemV ABI, the return area pointer is the first argument,
+        // so we need to leave room for it if required.  (In the Wasmtime ABI,
+        // the return area pointer is the last argument and is handled below.)
+        if add_ret_area_ptr && !call_conv.extends_wasmtime() {
+            next_gpr += 1;
+        }
+
         for i in 0..params.len() {
-            let param = &params[i];
+            let mut param = params[i];
 
             // Validate "purpose".
             match &param.purpose {
@@ -259,26 +266,41 @@ impl ABIMachineSpec for S390xMachineDeps {
             let intreg = in_int_reg(param.value_type);
             let fltreg = in_flt_reg(param.value_type);
             let vecreg = in_vec_reg(param.value_type);
-            debug_assert!(intreg as i32 + fltreg as i32 + vecreg as i32 == 1);
+            debug_assert!(intreg as i32 + fltreg as i32 + vecreg as i32 <= 1);
 
-            let (next_reg, candidate) = if intreg {
+            let (next_reg, candidate, implicit_ref) = if intreg {
                 let candidate = match args_or_rets {
                     ArgsOrRets::Args => get_intreg_for_arg(next_gpr),
                     ArgsOrRets::Rets => get_intreg_for_ret(next_gpr),
                 };
-                (&mut next_gpr, candidate)
+                (&mut next_gpr, candidate, None)
             } else if fltreg {
                 let candidate = match args_or_rets {
                     ArgsOrRets::Args => get_fltreg_for_arg(next_fpr),
                     ArgsOrRets::Rets => get_fltreg_for_ret(next_fpr),
                 };
-                (&mut next_fpr, candidate)
-            } else {
+                (&mut next_fpr, candidate, None)
+            } else if vecreg {
                 let candidate = match args_or_rets {
                     ArgsOrRets::Args => get_vecreg_for_arg(next_vr),
                     ArgsOrRets::Rets => get_vecreg_for_ret(next_vr),
                 };
-                (&mut next_vr, candidate)
+                (&mut next_vr, candidate, None)
+            } else if call_conv.extends_wasmtime() {
+                panic!("i128 args/return values not supported in the Wasmtime ABI");
+            } else {
+                assert!(param.extension == ir::ArgumentExtension::None);
+                // We must pass this by implicit reference.
+                if args_or_rets == ArgsOrRets::Rets {
+                    // For return values, just force them to memory.
+                    (&mut next_gpr, None, None)
+                } else {
+                    // For arguments, implicitly convert to pointer type.
+                    let implicit_ref = Some(param.value_type);
+                    param = ir::AbiParam::new(types::I64);
+                    let candidate = get_intreg_for_arg(next_gpr);
+                    (&mut next_gpr, candidate, implicit_ref)
+                }
             };
 
             // In the Wasmtime ABI only the first return value can be in a register.
@@ -336,6 +358,17 @@ impl ABIMachineSpec for S390xMachineDeps {
                     size: size as u64,
                     purpose: param.purpose,
                 });
+            } else if let Some(ty) = implicit_ref {
+                assert!(
+                    (ty_bits(ty) / 8) % 8 == 0,
+                    "implicit argument size is not properly aligned"
+                );
+                ret.push(ABIArg::ImplicitPtrArg {
+                    pointer: slot,
+                    offset: 0,
+                    ty,
+                    purpose: param.purpose,
+                });
             } else {
                 ret.push(ABIArg::Slots {
                     slots: smallvec![slot],
@@ -348,6 +381,13 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
+            // The return pointer is passed either as first argument
+            // (in the SystemV ABI) or as last argument (Wasmtime ABI).
+            let next_gpr = if call_conv.extends_wasmtime() {
+                next_gpr
+            } else {
+                0
+            };
             if let Some(reg) = get_intreg_for_arg(next_gpr) {
                 ret.push(ABIArg::reg(
                     reg.to_real_reg().unwrap(),
@@ -370,7 +410,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         };
 
         // After all arguments are in their well-defined location,
-        // allocate buffers for all StructArg arguments.
+        // allocate buffers for all StructArg or ImplicitPtrArg arguments.
         for i in 0..ret.len() {
             match &mut ret[i] {
                 &mut ABIArg::StructArg {
@@ -380,6 +420,12 @@ impl ABIMachineSpec for S390xMachineDeps {
                 } => {
                     *offset = next_stack as i64;
                     next_stack += size;
+                }
+                &mut ABIArg::ImplicitPtrArg {
+                    ref mut offset, ty, ..
+                } => {
+                    *offset = next_stack as i64;
+                    next_stack += (ty_bits(ty) / 8) as u64;
                 }
                 _ => {}
             }

@@ -4,9 +4,18 @@ target s390x
 
 ; FIXME: add immediate operand versions
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; BAND
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+function %band_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = band.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   vn %v7, %v0, %v1
+;   vst %v7, 0(%r2)
+;   br %r14
 
 function %band_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -103,6 +112,19 @@ block0(v0: i8, v1: i64):
 ; block0:
 ;   llc %r4, 0(%r3)
 ;   nr %r2, %r4
+;   br %r14
+
+function %bor_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = bor.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   vo %v7, %v0, %v1
+;   vst %v7, 0(%r2)
 ;   br %r14
 
 function %bor_i64(i64, i64) -> i64 {
@@ -202,6 +224,19 @@ block0(v0: i8, v1: i64):
 ;   or %r2, %r4
 ;   br %r14
 
+function %bxor_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = bxor.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   vx %v7, %v0, %v1
+;   vst %v7, 0(%r2)
+;   br %r14
+
 function %bxor_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = bxor.i64 v0, v1
@@ -299,6 +334,19 @@ block0(v0: i8, v1: i64):
 ;   xr %r2, %r4
 ;   br %r14
 
+function %band_not_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = band_not.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   vnc %v7, %v0, %v1
+;   vst %v7, 0(%r2)
+;   br %r14
+
 function %band_not_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = band_not.i64 v0, v1
@@ -342,6 +390,19 @@ block0(v0: i8, v1: i8):
 ; block0:
 ;   xilf %r3, 4294967295
 ;   nr %r2, %r3
+;   br %r14
+
+function %bor_not_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = bor_not.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   voc %v7, %v0, %v1
+;   vst %v7, 0(%r2)
 ;   br %r14
 
 function %bor_not_i64(i64, i64) -> i64 {
@@ -389,6 +450,19 @@ block0(v0: i8, v1: i8):
 ;   or %r2, %r3
 ;   br %r14
 
+function %bxor_not_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = bxor_not.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   vnx %v7, %v0, %v1
+;   vst %v7, 0(%r2)
+;   br %r14
+
 function %bxor_not_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = bxor_not.i64 v0, v1
@@ -434,6 +508,18 @@ block0(v0: i8, v1: i8):
 ;   xilf %r2, 4294967295
 ;   br %r14
 
+function %bnot_i128(i128) -> i128 {
+block0(v0: i128):
+  v1 = bnot.i128 v0
+  return v1
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vno %v5, %v0, %v0
+;   vst %v5, 0(%r2)
+;   br %r14
+
 function %bnot_i64(i64) -> i64 {
 block0(v0: i64):
   v1 = bnot.i64 v0
@@ -473,6 +559,20 @@ block0(v0: i8):
 
 ; block0:
 ;   xilf %r2, 4294967295
+;   br %r14
+
+function %bitselect_i128(i128, i128, i128) -> i128 {
+block0(v0: i128, v1: i128, v2: i128):
+  v3 = bitselect.i128 v0, v1, v2
+  return v3
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   vl %v2, 0(%r5)
+;   vsel %v17, %v1, %v2, %v0
+;   vst %v17, 0(%r2)
 ;   br %r14
 
 function %bitselect_i64(i64, i64, i64) -> i64 {

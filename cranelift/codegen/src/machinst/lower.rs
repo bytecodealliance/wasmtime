@@ -1051,13 +1051,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     pub fn lower<B: LowerBackend<MInst = I>>(mut self, backend: &B) -> CodegenResult<VCode<I>> {
         trace!("about to lower function: {:?}", self.f);
 
-        // Initialize the ABI object, giving it a temp if requested.
-        let maybe_tmp = if let Some(temp_ty) = self.vcode.abi().temp_needed() {
-            Some(self.alloc_tmp(temp_ty).only_reg().unwrap())
-        } else {
-            None
-        };
-        self.vcode.abi().init(maybe_tmp);
+        // Initialize the ABI object, giving it temps if requested.
+        let temps = self
+            .vcode
+            .abi()
+            .temps_needed()
+            .into_iter()
+            .map(|temp_ty| self.alloc_tmp(temp_ty).only_reg().unwrap())
+            .collect::<Vec<_>>();
+        self.vcode.abi().init(temps);
 
         // Get the pinned reg here (we only parameterize this function on `B`,
         // not the whole `Lower` impl).

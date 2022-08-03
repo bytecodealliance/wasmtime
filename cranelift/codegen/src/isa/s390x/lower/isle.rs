@@ -248,6 +248,15 @@ where
     }
 
     #[inline]
+    fn vr128_ty(&mut self, ty: Type) -> Option<Type> {
+        match ty {
+            I128 | B128 => Some(ty),
+            _ if ty.is_vector() && ty.bits() == 128 => Some(ty),
+            _ => None,
+        }
+    }
+
+    #[inline]
     fn uimm32shifted(&mut self, n: u32, shift: u8) -> UImm32Shifted {
         UImm32Shifted::maybe_with_shift(n, shift).unwrap()
     }
