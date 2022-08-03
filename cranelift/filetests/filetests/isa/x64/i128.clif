@@ -320,7 +320,7 @@ block2:
 ;   setz    %r11b
 ;   cmpq    $0, %rsi
 ;   setz    %al
-;   andb    %al, %r11b, %al
+;   testb   %r11b, %al
 ;   jnz     label1; j label2
 ; block1:
 ;   movl    $1, %eax
@@ -351,11 +351,11 @@ block2:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   cmpq    $0, %rdi
-;   setnz   %r11b
+;   setz    %r11b
 ;   cmpq    $0, %rsi
-;   setnz   %al
-;   orb     %al, %r11b, %al
-;   jnz     label1; j label2
+;   setz    %al
+;   testb   %r11b, %al
+;   jz      label1; j label2
 ; block1:
 ;   movl    $1, %eax
 ;   movq    %rbp, %rsp

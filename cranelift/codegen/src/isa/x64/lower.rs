@@ -2900,39 +2900,7 @@ impl LowerBackend for X64Backend {
                             FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
                         }
                     } else if src_ty == types::I128 {
-                        let src = put_input_in_regs(
-                            ctx,
-                            InsnInput {
-                                insn: branches[0],
-                                input: 0,
-                            },
-                        );
-                        let (half_cc, comb_op) = match op0 {
-                            Opcode::Brz => (CC::Z, AluRmiROpcode::And8),
-                            Opcode::Brnz => (CC::NZ, AluRmiROpcode::Or8),
-                            _ => unreachable!(),
-                        };
-                        let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                        let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                        ctx.emit(Inst::cmp_rmi_r(
-                            OperandSize::Size64,
-                            RegMemImm::imm(0),
-                            src.regs()[0],
-                        ));
-                        ctx.emit(Inst::setcc(half_cc, tmp1));
-                        ctx.emit(Inst::cmp_rmi_r(
-                            OperandSize::Size64,
-                            RegMemImm::imm(0),
-                            src.regs()[1],
-                        ));
-                        ctx.emit(Inst::setcc(half_cc, tmp2));
-                        ctx.emit(Inst::alu_rmi_r(
-                            OperandSize::Size32,
-                            comb_op,
-                            RegMemImm::reg(tmp1.to_reg()),
-                            tmp2,
-                        ));
-                        ctx.emit(Inst::jmp_cond(CC::NZ, taken, not_taken));
+                        implemented_in_isle(ctx);
                     } else if is_int_or_ref_ty(src_ty) || is_bool_ty(src_ty) {
                         let src = put_input_in_reg(
                             ctx,

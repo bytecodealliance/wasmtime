@@ -591,6 +591,15 @@ where
     }
 
     #[inline]
+    fn cc_nz_or_z(&mut self, cc: &CC) -> Option<CC> {
+        match cc {
+            CC::Z => Some(*cc),
+            CC::NZ => Some(*cc),
+            _ => None,
+        }
+    }
+
+    #[inline]
     fn sum_extend_fits_in_32_bits(
         &mut self,
         extend_from_ty: Type,

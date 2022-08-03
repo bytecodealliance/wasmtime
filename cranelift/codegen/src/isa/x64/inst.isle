@@ -1074,6 +1074,10 @@
 (decl cc_invert (CC) CC)
 (extern constructor cc_invert cc_invert)
 
+;; Fails if the argument is not either CC.NZ or CC.Z.
+(decl cc_nz_or_z (CC) CC)
+(extern extractor cc_nz_or_z cc_nz_or_z)
+
 (type AvxOpcode extern
       (enum Vfmadd213ps
             Vfmadd213pd))
