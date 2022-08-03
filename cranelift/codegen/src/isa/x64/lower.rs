@@ -2833,6 +2833,24 @@ impl LowerBackend for X64Backend {
         // verifier pass.
         assert!(branches.len() <= 2);
 
+        if let Ok(()) = isle::lower_branch(
+            ctx,
+            &self.triple,
+            &self.flags,
+            &self.x64_flags,
+            branches[0],
+            targets,
+        ) {
+            return Ok(());
+        }
+
+        let implemented_in_isle = |ctx: &mut C| {
+            unreachable!(
+                "branch implemented in ISLE: inst = `{}`",
+                ctx.dfg().display_inst(branches[0])
+            )
+        };
+
         if branches.len() == 2 {
             // Must be a conditional branch followed by an unconditional branch.
             let op0 = ctx.data(branches[0]).opcode();
@@ -2858,18 +2876,8 @@ impl LowerBackend for X64Backend {
 
                     let src_ty = ctx.input_ty(branches[0], 0);
 
-                    if let Some(icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
-                        let cond_code = ctx.data(icmp).cond_code().unwrap();
-                        let cond_code = emit_cmp(ctx, icmp, cond_code);
-
-                        let cond_code = if op0 == Opcode::Brz {
-                            cond_code.inverse()
-                        } else {
-                            cond_code
-                        };
-
-                        let cc = CC::from_intcc(cond_code);
-                        ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
+                    if let Some(_icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
+                        implemented_in_isle(ctx)
                     } else if let Some(fcmp) = matches_input(ctx, flag_input, Opcode::Fcmp) {
                         let cond_code = ctx.data(fcmp).fp_cond_code().unwrap();
                         let cond_code = if op0 == Opcode::Brz {
@@ -2960,49 +2968,7 @@ impl LowerBackend for X64Backend {
                     }
                 }
 
-                Opcode::BrIcmp => {
-                    let src_ty = ctx.input_ty(branches[0], 0);
-                    if is_int_or_ref_ty(src_ty) || is_bool_ty(src_ty) {
-                        let lhs = put_input_in_reg(
-                            ctx,
-                            InsnInput {
-                                insn: branches[0],
-                                input: 0,
-                            },
-                        );
-                        let rhs = input_to_reg_mem_imm(
-                            ctx,
-                            InsnInput {
-                                insn: branches[0],
-                                input: 1,
-                            },
-                        );
-                        let cc = CC::from_intcc(ctx.data(branches[0]).cond_code().unwrap());
-                        // Cranelift's icmp semantics want to compare lhs - rhs, while Intel gives
-                        // us dst - src at the machine instruction level, so invert operands.
-                        ctx.emit(Inst::cmp_rmi_r(OperandSize::from_ty(src_ty), rhs, lhs));
-                        ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
-                    } else {
-                        unimplemented!("bricmp with non-int type {:?}", src_ty);
-                    }
-                }
-
-                Opcode::Brif => {
-                    let flag_input = InsnInput {
-                        insn: branches[0],
-                        input: 0,
-                    };
-
-                    if let Some(ifcmp) = matches_input(ctx, flag_input, Opcode::Ifcmp) {
-                        let cond_code = ctx.data(branches[0]).cond_code().unwrap();
-                        let cond_code = emit_cmp(ctx, ifcmp, cond_code);
-                        let cc = CC::from_intcc(cond_code);
-                        ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
-                    } else {
-                        // Should be disallowed by flags checks in verifier.
-                        unimplemented!("Brif with non-ifcmp input");
-                    }
-                }
+                Opcode::BrIcmp | Opcode::Brif => implemented_in_isle(ctx),
                 Opcode::Brff => {
                     let flag_input = InsnInput {
                         insn: branches[0],
@@ -3039,9 +3005,7 @@ impl LowerBackend for X64Backend {
             // Must be an unconditional branch or trap.
             let op = ctx.data(branches[0]).opcode();
             match op {
-                Opcode::Jump => {
-                    ctx.emit(Inst::jmp_known(targets[0]));
-                }
+                Opcode::Jump => implemented_in_isle(ctx),
 
                 Opcode::BrTable => {
                     let jt_size = targets.len() - 1;

@@ -515,6 +515,16 @@
 
 (type BoxVecMachLabel extern (enum))
 
+(type MachLabelSlice extern (enum))
+
+;; Extract a the target from a MachLabelSlice with exactly one target.
+(decl single_target (MachLabel) MachLabelSlice)
+(extern extractor single_target single_target)
+
+;; Extract a the targets from a MachLabelSlice with exactly two targets.
+(decl two_targets (MachLabel MachLabel) MachLabelSlice)
+(extern extractor two_targets two_targets)
+
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
 (decl operand_size_of_type_32_64 (Type) OperandSize)
 (extern constructor operand_size_of_type_32_64 operand_size_of_type_32_64)
@@ -1057,8 +1067,12 @@
             NLE
             P
             NP))
+
 (decl intcc_to_cc (IntCC) CC)
 (extern constructor intcc_to_cc intcc_to_cc)
+
+(decl cc_invert (CC) CC)
+(extern constructor cc_invert cc_invert)
 
 (type AvxOpcode extern
       (enum Vfmadd213ps
@@ -3039,12 +3053,33 @@
 (rule (trap_if_fcmp (FcmpCondResult.OrCondition producer cc1 cc2) tc)
       (with_flags_side_effect producer (trap_if_or cc1 cc2 tc)))
 
+;;;; Jumps ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Unconditional jump.
+(decl jmp_known (MachLabel) SideEffectNoResult)
+(rule (jmp_known target)
+      (SideEffectNoResult.Inst (MInst.JmpKnown target)))
+
+;; Conditional jump based on the condition code.
+(decl jmp_cond (CC MachLabel MachLabel) ConsumesFlags)
+(rule (jmp_cond cc taken not_taken)
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.JmpCond cc taken not_taken)))
+
+;; Conditional jump based on the result of an icmp.
+(decl jmp_cond_icmp (IcmpCondResult MachLabel MachLabel) SideEffectNoResult)
+(rule (jmp_cond_icmp (IcmpCondResult.Condition producer cc) taken not_taken)
+      (with_flags_side_effect producer (jmp_cond cc taken not_taken)))
+
 ;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type IcmpCondResult (enum (Condition (producer ProducesFlags) (cc CC))))
 
 (decl icmp_cond_result (ProducesFlags CC) IcmpCondResult)
 (rule (icmp_cond_result producer cc) (IcmpCondResult.Condition producer cc))
+
+(decl invert_icmp_cond_result (IcmpCondResult) IcmpCondResult)
+(rule (invert_icmp_cond_result (IcmpCondResult.Condition producer cc))
+      (icmp_cond_result producer (cc_invert cc)))
 
 ;; Lower an Icmp result into a boolean value in a register.
 (decl lower_icmp_bool (IcmpCondResult) ValueRegs)

@@ -41,6 +41,7 @@ use target_lexicon::Triple;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxVecMachLabel = Box<SmallVec<[MachLabel; 4]>>;
+type MachLabelSlice = [MachLabel];
 
 pub struct SinkableLoad {
     inst: Inst,
@@ -68,6 +69,28 @@ where
         outputs,
         inst,
         |cx, insn| generated_code::constructor_lower(cx, insn),
+    )
+}
+
+pub(crate) fn lower_branch<C>(
+    lower_ctx: &mut C,
+    triple: &Triple,
+    flags: &Flags,
+    isa_flags: &IsaFlags,
+    branch: Inst,
+    targets: &[MachLabel],
+) -> Result<(), ()>
+where
+    C: LowerCtx<I = MInst>,
+{
+    lower_common(
+        lower_ctx,
+        triple,
+        flags,
+        isa_flags,
+        &[],
+        branch,
+        |cx, insn| generated_code::constructor_lower_branch(cx, insn, targets),
     )
 }
 
@@ -563,6 +586,11 @@ where
     }
 
     #[inline]
+    fn cc_invert(&mut self, cc: &CC) -> CC {
+        cc.invert()
+    }
+
+    #[inline]
     fn sum_extend_fits_in_32_bits(
         &mut self,
         extend_from_ty: Type,
@@ -674,6 +702,24 @@ where
         .expect("Failed to emit LibCall");
 
         output_reg.to_reg()
+    }
+
+    #[inline]
+    fn single_target(&mut self, targets: &MachLabelSlice) -> Option<MachLabel> {
+        if targets.len() == 1 {
+            Some(targets[0])
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn two_targets(&mut self, targets: &MachLabelSlice) -> Option<(MachLabel, MachLabel)> {
+        if targets.len() == 2 {
+            Some((targets[0], targets[1]))
+        } else {
+            None
+        }
     }
 }
 
