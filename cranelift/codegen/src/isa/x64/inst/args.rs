@@ -701,12 +701,6 @@ pub enum AluRmiROpcode {
     Xor,
     /// The signless, non-extending (N x N -> N, for N in {32,64}) variant.
     Mul,
-    /// 8-bit form of And. Handled separately as we don't have full 8-bit op
-    /// support (we just use wider instructions). Used only with some sequences
-    /// with SETcc.
-    And8,
-    /// 8-bit form of Or.
-    Or8,
 }
 
 impl fmt::Debug for AluRmiROpcode {
@@ -720,8 +714,6 @@ impl fmt::Debug for AluRmiROpcode {
             AluRmiROpcode::Or => "or",
             AluRmiROpcode::Xor => "xor",
             AluRmiROpcode::Mul => "imul",
-            AluRmiROpcode::And8 => "and",
-            AluRmiROpcode::Or8 => "or",
         };
         write!(fmt, "{}", name)
     }
@@ -736,10 +728,7 @@ impl fmt::Display for AluRmiROpcode {
 impl AluRmiROpcode {
     /// Is this a special-cased 8-bit ALU op?
     pub fn is_8bit(self) -> bool {
-        match self {
-            AluRmiROpcode::And8 | AluRmiROpcode::Or8 => true,
-            _ => false,
-        }
+        false
     }
 }
 

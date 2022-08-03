@@ -548,9 +548,7 @@
             And
             Or
             Xor
-            Mul
-            And8
-            Or8))
+            Mul))
 
 (type UnaryRmROpcode extern
       (enum Bsr

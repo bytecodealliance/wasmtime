@@ -199,8 +199,6 @@ pub(crate) fn emit(
                     AluRmiROpcode::And => (0x21, 0x23, 4, false),
                     AluRmiROpcode::Or => (0x09, 0x0B, 1, false),
                     AluRmiROpcode::Xor => (0x31, 0x33, 6, false),
-                    AluRmiROpcode::And8 => (0x20, 0x22, 4, true),
-                    AluRmiROpcode::Or8 => (0x08, 0x0A, 1, true),
                     AluRmiROpcode::Mul => panic!("unreachable"),
                 };
                 assert!(!(is_8bit && *size == OperandSize::Size64));
