@@ -55,7 +55,10 @@ impl ComponentCompiler for Compiler {
             vmctx,
             i32::try_from(offsets.limits()).unwrap(),
         );
-        // Then save the exit Wasm FP to the limits.
+        // Then save the exit Wasm FP to the limits. We dereference the current
+        // FP to get the previous FP because the current FP is the trampoline's
+        // FP, and we want the Wasm function's FP, which is the caller of this
+        // trampoline.
         let trampoline_fp = builder.ins().get_frame_pointer(pointer_type);
         let wasm_fp = builder.ins().load(
             pointer_type,
