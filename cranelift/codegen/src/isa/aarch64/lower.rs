@@ -658,16 +658,24 @@ pub(crate) fn lower_address(
         if addends32.len() > 0 {
             let (reg32, extendop) = addends32.pop().unwrap();
             let reg64 = addends64.pop().unwrap();
-            AMode::RegExtended(reg64, reg32, extendop)
+            AMode::RegExtended {
+                rn: reg64,
+                rm: reg32,
+                extendop,
+            }
         } else if offset > 0 && offset < 0x1000 {
             let reg64 = addends64.pop().unwrap();
             let off = offset;
             offset = 0;
-            AMode::RegOffset(reg64, off, elem_ty)
+            AMode::RegOffset {
+                rn: reg64,
+                off,
+                ty: elem_ty,
+            }
         } else if addends64.len() >= 2 {
             let reg1 = addends64.pop().unwrap();
             let reg2 = addends64.pop().unwrap();
-            AMode::RegReg(reg1, reg2)
+            AMode::RegReg { rn: reg1, rm: reg2 }
         } else {
             let reg1 = addends64.pop().unwrap();
             AMode::reg(reg1)
@@ -691,7 +699,11 @@ pub(crate) fn lower_address(
                 to_bits: 64,
             });
             if let Some((reg2, extendop)) = addends32.pop() {
-                AMode::RegExtended(tmp.to_reg(), reg2, extendop)
+                AMode::RegExtended {
+                    rn: tmp.to_reg(),
+                    rm: reg2,
+                    extendop,
+                }
             } else {
                 AMode::reg(tmp.to_reg())
             }
@@ -716,12 +728,36 @@ pub(crate) fn lower_address(
     // Allocate the temp and shoehorn it into the AMode.
     let addr = ctx.alloc_tmp(I64).only_reg().unwrap();
     let (reg, memarg) = match memarg {
-        AMode::RegExtended(r1, r2, extendop) => {
-            (r1, AMode::RegExtended(addr.to_reg(), r2, extendop))
-        }
-        AMode::RegOffset(r, off, ty) => (r, AMode::RegOffset(addr.to_reg(), off, ty)),
-        AMode::RegReg(r1, r2) => (r2, AMode::RegReg(addr.to_reg(), r1)),
-        AMode::UnsignedOffset(r, imm) => (r, AMode::UnsignedOffset(addr.to_reg(), imm)),
+        AMode::RegExtended { rn, rm, extendop } => (
+            rn,
+            AMode::RegExtended {
+                rn: addr.to_reg(),
+                rm,
+                extendop,
+            },
+        ),
+        AMode::RegOffset { rn, off, ty } => (
+            rn,
+            AMode::RegOffset {
+                rn: addr.to_reg(),
+                off,
+                ty,
+            },
+        ),
+        AMode::RegReg { rn, rm } => (
+            rm,
+            AMode::RegReg {
+                rn: addr.to_reg(),
+                rm: rn,
+            },
+        ),
+        AMode::UnsignedOffset { rn, uimm12 } => (
+            rn,
+            AMode::UnsignedOffset {
+                rn: addr.to_reg(),
+                uimm12,
+            },
+        ),
         _ => unreachable!(),
     };
 

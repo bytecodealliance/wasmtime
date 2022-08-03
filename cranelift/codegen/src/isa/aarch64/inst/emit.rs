@@ -28,18 +28,18 @@ pub fn mem_finalize(
     state: &EmitState,
 ) -> (SmallVec<[Inst; 4]>, AMode) {
     match mem {
-        &AMode::RegOffset(_, off, ty)
-        | &AMode::SPOffset(off, ty)
-        | &AMode::FPOffset(off, ty)
-        | &AMode::NominalSPOffset(off, ty) => {
+        &AMode::RegOffset { off, ty, .. }
+        | &AMode::SPOffset { off, ty }
+        | &AMode::FPOffset { off, ty }
+        | &AMode::NominalSPOffset { off, ty } => {
             let basereg = match mem {
-                &AMode::RegOffset(reg, _, _) => reg,
-                &AMode::SPOffset(..) | &AMode::NominalSPOffset(..) => stack_reg(),
-                &AMode::FPOffset(..) => fp_reg(),
+                &AMode::RegOffset { rn, .. } => rn,
+                &AMode::SPOffset { .. } | &AMode::NominalSPOffset { .. } => stack_reg(),
+                &AMode::FPOffset { .. } => fp_reg(),
                 _ => unreachable!(),
             };
             let adj = match mem {
-                &AMode::NominalSPOffset(..) => {
+                &AMode::NominalSPOffset { .. } => {
                     trace!(
                         "mem_finalize: nominal SP offset {} + adj {} -> {}",
                         off,
@@ -53,10 +53,13 @@ pub fn mem_finalize(
             let off = off + adj;
 
             if let Some(simm9) = SImm9::maybe_from_i64(off) {
-                let mem = AMode::Unscaled(basereg, simm9);
+                let mem = AMode::Unscaled { rn: basereg, simm9 };
                 (smallvec![], mem)
-            } else if let Some(uimm12s) = UImm12Scaled::maybe_from_i64(off, ty) {
-                let mem = AMode::UnsignedOffset(basereg, uimm12s);
+            } else if let Some(uimm12) = UImm12Scaled::maybe_from_i64(off, ty) {
+                let mem = AMode::UnsignedOffset {
+                    rn: basereg,
+                    uimm12,
+                };
                 (smallvec![], mem)
             } else {
                 let tmp = writable_spilltmp_reg();
@@ -78,9 +81,14 @@ pub fn mem_finalize(
             }
         }
 
-        &AMode::Label(ref label) => {
+        &AMode::Label { ref label } => {
             let off = memlabel_finalize(insn_off, label);
-            (smallvec![], AMode::Label(MemLabel::PCRel(off)))
+            (
+                smallvec![],
+                AMode::Label {
+                    label: MemLabel::PCRel(off),
+                },
+            )
         }
 
         _ => (smallvec![], mem.clone()),
@@ -969,40 +977,41 @@ impl MachInstEmit for Inst {
                 }
 
                 match &mem {
-                    &AMode::Unscaled(reg, simm9) => {
-                        let reg = allocs.next(reg);
+                    &AMode::Unscaled { rn, simm9 } => {
+                        let reg = allocs.next(rn);
                         sink.put4(enc_ldst_simm9(op, simm9, 0b00, reg, rd));
                     }
-                    &AMode::UnsignedOffset(reg, uimm12scaled) => {
-                        let reg = allocs.next(reg);
-                        if uimm12scaled.value() != 0 {
-                            assert_eq!(bits, ty_bits(uimm12scaled.scale_ty()));
+                    &AMode::UnsignedOffset { rn, uimm12 } => {
+                        let reg = allocs.next(rn);
+                        if uimm12.value() != 0 {
+                            assert_eq!(bits, ty_bits(uimm12.scale_ty()));
                         }
-                        sink.put4(enc_ldst_uimm12(op, uimm12scaled, reg, rd));
+                        sink.put4(enc_ldst_uimm12(op, uimm12, reg, rd));
                     }
-                    &AMode::RegReg(r1, r2) => {
-                        let r1 = allocs.next(r1);
-                        let r2 = allocs.next(r2);
+                    &AMode::RegReg { rn, rm } => {
+                        let r1 = allocs.next(rn);
+                        let r2 = allocs.next(rm);
                         sink.put4(enc_ldst_reg(
                             op, r1, r2, /* scaled = */ false, /* extendop = */ None, rd,
                         ));
                     }
-                    &AMode::RegScaled(r1, r2, ty) | &AMode::RegScaledExtended(r1, r2, ty, _) => {
-                        let r1 = allocs.next(r1);
-                        let r2 = allocs.next(r2);
+                    &AMode::RegScaled { rn, rm, ty }
+                    | &AMode::RegScaledExtended { rn, rm, ty, .. } => {
+                        let r1 = allocs.next(rn);
+                        let r2 = allocs.next(rm);
                         assert_eq!(bits, ty_bits(ty));
                         let extendop = match &mem {
-                            &AMode::RegScaled(..) => None,
-                            &AMode::RegScaledExtended(_, _, _, op) => Some(op),
+                            &AMode::RegScaled { .. } => None,
+                            &AMode::RegScaledExtended { extendop, .. } => Some(extendop),
                             _ => unreachable!(),
                         };
                         sink.put4(enc_ldst_reg(
                             op, r1, r2, /* scaled = */ true, extendop, rd,
                         ));
                     }
-                    &AMode::RegExtended(r1, r2, extendop) => {
-                        let r1 = allocs.next(r1);
-                        let r2 = allocs.next(r2);
+                    &AMode::RegExtended { rn, rm, extendop } => {
+                        let r1 = allocs.next(rn);
+                        let r2 = allocs.next(rm);
                         sink.put4(enc_ldst_reg(
                             op,
                             r1,
@@ -1012,7 +1021,7 @@ impl MachInstEmit for Inst {
                             rd,
                         ));
                     }
-                    &AMode::Label(ref label) => {
+                    &AMode::Label { ref label } => {
                         let offset = match label {
                             // cast i32 to u32 (two's-complement)
                             &MemLabel::PCRel(off) => off as u32,
@@ -1040,19 +1049,21 @@ impl MachInstEmit for Inst {
                             _ => panic!("Unspported size for LDR from constant pool!"),
                         }
                     }
-                    &AMode::PreIndexed(reg, simm9) => {
-                        let reg = allocs.next(reg.to_reg());
+                    &AMode::PreIndexed { rn, simm9 } => {
+                        let reg = allocs.next(rn.to_reg());
                         sink.put4(enc_ldst_simm9(op, simm9, 0b11, reg, rd));
                     }
-                    &AMode::PostIndexed(reg, simm9) => {
-                        let reg = allocs.next(reg.to_reg());
+                    &AMode::PostIndexed { rn, simm9 } => {
+                        let reg = allocs.next(rn.to_reg());
                         sink.put4(enc_ldst_simm9(op, simm9, 0b01, reg, rd));
                     }
                     // Eliminated by `mem_finalize()` above.
-                    &AMode::SPOffset(..) | &AMode::FPOffset(..) | &AMode::NominalSPOffset(..) => {
-                        panic!("Should not see stack-offset here!")
+                    &AMode::SPOffset { .. }
+                    | &AMode::FPOffset { .. }
+                    | &AMode::NominalSPOffset { .. }
+                    | &AMode::RegOffset { .. } => {
+                        panic!("Should not see {:?} here!", mem)
                     }
-                    &AMode::RegOffset(..) => panic!("SHould not see generic reg-offset here!"),
                 }
             }
 
@@ -1089,39 +1100,39 @@ impl MachInstEmit for Inst {
                 }
 
                 match &mem {
-                    &AMode::Unscaled(reg, simm9) => {
-                        let reg = allocs.next(reg);
+                    &AMode::Unscaled { rn, simm9 } => {
+                        let reg = allocs.next(rn);
                         sink.put4(enc_ldst_simm9(op, simm9, 0b00, reg, rd));
                     }
-                    &AMode::UnsignedOffset(reg, uimm12scaled) => {
-                        let reg = allocs.next(reg);
-                        if uimm12scaled.value() != 0 {
-                            assert_eq!(bits, ty_bits(uimm12scaled.scale_ty()));
+                    &AMode::UnsignedOffset { rn, uimm12 } => {
+                        let reg = allocs.next(rn);
+                        if uimm12.value() != 0 {
+                            assert_eq!(bits, ty_bits(uimm12.scale_ty()));
                         }
-                        sink.put4(enc_ldst_uimm12(op, uimm12scaled, reg, rd));
+                        sink.put4(enc_ldst_uimm12(op, uimm12, reg, rd));
                     }
-                    &AMode::RegReg(r1, r2) => {
-                        let r1 = allocs.next(r1);
-                        let r2 = allocs.next(r2);
+                    &AMode::RegReg { rn, rm } => {
+                        let r1 = allocs.next(rn);
+                        let r2 = allocs.next(rm);
                         sink.put4(enc_ldst_reg(
                             op, r1, r2, /* scaled = */ false, /* extendop = */ None, rd,
                         ));
                     }
-                    &AMode::RegScaled(r1, r2, _ty) | &AMode::RegScaledExtended(r1, r2, _ty, _) => {
-                        let r1 = allocs.next(r1);
-                        let r2 = allocs.next(r2);
+                    &AMode::RegScaled { rn, rm, .. } | &AMode::RegScaledExtended { rn, rm, .. } => {
+                        let r1 = allocs.next(rn);
+                        let r2 = allocs.next(rm);
                         let extendop = match &mem {
-                            &AMode::RegScaled(..) => None,
-                            &AMode::RegScaledExtended(_, _, _, op) => Some(op),
+                            &AMode::RegScaled { .. } => None,
+                            &AMode::RegScaledExtended { extendop, .. } => Some(extendop),
                             _ => unreachable!(),
                         };
                         sink.put4(enc_ldst_reg(
                             op, r1, r2, /* scaled = */ true, extendop, rd,
                         ));
                     }
-                    &AMode::RegExtended(r1, r2, extendop) => {
-                        let r1 = allocs.next(r1);
-                        let r2 = allocs.next(r2);
+                    &AMode::RegExtended { rn, rm, extendop } => {
+                        let r1 = allocs.next(rn);
+                        let r2 = allocs.next(rm);
                         sink.put4(enc_ldst_reg(
                             op,
                             r1,
@@ -1131,22 +1142,24 @@ impl MachInstEmit for Inst {
                             rd,
                         ));
                     }
-                    &AMode::Label(..) => {
+                    &AMode::Label { .. } => {
                         panic!("Store to a MemLabel not implemented!");
                     }
-                    &AMode::PreIndexed(reg, simm9) => {
-                        let reg = allocs.next(reg.to_reg());
+                    &AMode::PreIndexed { rn, simm9 } => {
+                        let reg = allocs.next(rn.to_reg());
                         sink.put4(enc_ldst_simm9(op, simm9, 0b11, reg, rd));
                     }
-                    &AMode::PostIndexed(reg, simm9) => {
-                        let reg = allocs.next(reg.to_reg());
+                    &AMode::PostIndexed { rn, simm9 } => {
+                        let reg = allocs.next(rn.to_reg());
                         sink.put4(enc_ldst_simm9(op, simm9, 0b01, reg, rd));
                     }
                     // Eliminated by `mem_finalize()` above.
-                    &AMode::SPOffset(..) | &AMode::FPOffset(..) | &AMode::NominalSPOffset(..) => {
-                        panic!("Should not see stack-offset here!")
+                    &AMode::SPOffset { .. }
+                    | &AMode::FPOffset { .. }
+                    | &AMode::NominalSPOffset { .. }
+                    | &AMode::RegOffset { .. } => {
+                        panic!("Should not see {:?} here!", mem)
                     }
-                    &AMode::RegOffset(..) => panic!("SHould not see generic reg-offset here!"),
                 }
             }
 
@@ -2176,7 +2189,9 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let inst = Inst::FpuLoad64 {
                     rd,
-                    mem: AMode::Label(MemLabel::PCRel(8)),
+                    mem: AMode::Label {
+                        label: MemLabel::PCRel(8),
+                    },
                     flags: MemFlags::trusted(),
                 };
                 inst.emit(&[], sink, emit_info, state);
@@ -2190,7 +2205,9 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let inst = Inst::FpuLoad128 {
                     rd,
-                    mem: AMode::Label(MemLabel::PCRel(8)),
+                    mem: AMode::Label {
+                        label: MemLabel::PCRel(8),
+                    },
                     flags: MemFlags::trusted(),
                 };
                 inst.emit(&[], sink, emit_info, state);
@@ -3069,7 +3086,9 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let inst = Inst::ULoad64 {
                     rd,
-                    mem: AMode::Label(MemLabel::PCRel(8)),
+                    mem: AMode::Label {
+                        label: MemLabel::PCRel(8),
+                    },
                     flags: MemFlags::trusted(),
                 };
                 inst.emit(&[], sink, emit_info, state);
@@ -3089,17 +3108,17 @@ impl MachInstEmit for Inst {
                 }
 
                 let (reg, index_reg, offset) = match mem {
-                    AMode::RegExtended(r, idx, extendop) => {
-                        let r = allocs.next(r);
-                        (r, Some((idx, extendop)), 0)
+                    AMode::RegExtended { rn, rm, extendop } => {
+                        let r = allocs.next(rn);
+                        (r, Some((rm, extendop)), 0)
                     }
-                    AMode::Unscaled(r, simm9) => {
-                        let r = allocs.next(r);
+                    AMode::Unscaled { rn, simm9 } => {
+                        let r = allocs.next(rn);
                         (r, None, simm9.value())
                     }
-                    AMode::UnsignedOffset(r, uimm12scaled) => {
-                        let r = allocs.next(r);
-                        (r, None, uimm12scaled.value() as i32)
+                    AMode::UnsignedOffset { rn, uimm12 } => {
+                        let r = allocs.next(rn);
+                        (r, None, uimm12.value() as i32)
                     }
                     _ => panic!("Unsupported case for LoadAddr: {:?}", mem),
                 };

@@ -36,7 +36,7 @@ mod emit_tests;
 // Instructions (top level): definition
 
 pub use crate::isa::aarch64::lower::isle::generated_code::{
-    ALUOp, ALUOp3, APIKey, AtomicRMWLoopOp, AtomicRMWOp, BitOp, FPUOp1, FPUOp2, FPUOp3,
+    ALUOp, ALUOp3, AMode, APIKey, AtomicRMWLoopOp, AtomicRMWOp, BitOp, FPUOp1, FPUOp2, FPUOp3,
     FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp, VecALUModOp, VecALUOp,
     VecExtendOp, VecLanesOp, VecMisc2, VecPairOp, VecRRLongOp, VecRRNarrowOp, VecRRPairLongOp,
     VecRRRLongOp, VecShiftImmModOp, VecShiftImmOp,
@@ -539,24 +539,24 @@ impl Inst {
 fn memarg_operands<F: Fn(VReg) -> VReg>(memarg: &AMode, collector: &mut OperandCollector<'_, F>) {
     // This should match `AMode::with_allocs()`.
     match memarg {
-        &AMode::Unscaled(reg, ..) | &AMode::UnsignedOffset(reg, ..) => {
-            collector.reg_use(reg);
+        &AMode::Unscaled { rn, .. } | &AMode::UnsignedOffset { rn, .. } => {
+            collector.reg_use(rn);
         }
-        &AMode::RegReg(r1, r2, ..)
-        | &AMode::RegScaled(r1, r2, ..)
-        | &AMode::RegScaledExtended(r1, r2, ..)
-        | &AMode::RegExtended(r1, r2, ..) => {
-            collector.reg_use(r1);
-            collector.reg_use(r2);
+        &AMode::RegReg { rn, rm, .. }
+        | &AMode::RegScaled { rn, rm, .. }
+        | &AMode::RegScaledExtended { rn, rm, .. }
+        | &AMode::RegExtended { rn, rm, .. } => {
+            collector.reg_use(rn);
+            collector.reg_use(rm);
         }
-        &AMode::Label(..) => {}
-        &AMode::PreIndexed(reg, ..) | &AMode::PostIndexed(reg, ..) => {
-            collector.reg_mod(reg);
+        &AMode::Label { .. } => {}
+        &AMode::PreIndexed { rn, .. } | &AMode::PostIndexed { rn, .. } => {
+            collector.reg_mod(rn);
         }
-        &AMode::FPOffset(..) => {}
-        &AMode::SPOffset(..) | &AMode::NominalSPOffset(..) => {}
-        &AMode::RegOffset(r, ..) => {
-            collector.reg_use(r);
+        &AMode::FPOffset { .. } => {}
+        &AMode::SPOffset { .. } | &AMode::NominalSPOffset { .. } => {}
+        &AMode::RegOffset { rn, .. } => {
+            collector.reg_use(rn);
         }
     }
 }
@@ -1416,7 +1416,7 @@ impl Inst {
             | &Inst::SLoad32 { rd, ref mem, .. }
             | &Inst::ULoad64 { rd, ref mem, .. } => {
                 let is_unscaled = match &mem {
-                    &AMode::Unscaled(..) => true,
+                    &AMode::Unscaled { .. } => true,
                     _ => false,
                 };
                 let (op, size) = match (self, is_unscaled) {
@@ -1449,7 +1449,7 @@ impl Inst {
             | &Inst::Store32 { rd, ref mem, .. }
             | &Inst::Store64 { rd, ref mem, .. } => {
                 let is_unscaled = match &mem {
-                    &AMode::Unscaled(..) => true,
+                    &AMode::Unscaled { .. } => true,
                     _ => false,
                 };
                 let (op, size) = match (self, is_unscaled) {
@@ -2632,11 +2632,9 @@ impl Inst {
                     );
                 }
                 let (reg, index_reg, offset) = match mem {
-                    AMode::RegExtended(r, idx, extendop) => (r, Some((idx, extendop)), 0),
-                    AMode::Unscaled(r, simm9) => (r, None, simm9.value()),
-                    AMode::UnsignedOffset(r, uimm12scaled) => {
-                        (r, None, uimm12scaled.value() as i32)
-                    }
+                    AMode::RegExtended { rn, rm, extendop } => (rn, Some((rm, extendop)), 0),
+                    AMode::Unscaled { rn, simm9 } => (rn, None, simm9.value()),
+                    AMode::UnsignedOffset { rn, uimm12 } => (rn, None, uimm12.value() as i32),
                     _ => panic!("Unsupported case for LoadAddr: {:?}", mem),
                 };
                 let abs_offset = if offset < 0 {

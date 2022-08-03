@@ -931,7 +931,108 @@
     (Cls)
 ))
 
-(type AMode extern (enum))
+(type MemLabel extern (enum))
+(type SImm9 extern (enum))
+(type UImm12Scaled extern (enum))
+
+;; An addressing mode specified for a load/store operation.
+(type AMode
+      (enum
+        ;;
+        ;; Real ARM64 addressing modes:
+        ;;
+        ;; "post-indexed" mode as per AArch64 docs: postincrement reg after
+        ;; address computation.
+        (PostIndexed
+         (rn WritableReg)
+         (simm9 SImm9))
+
+        ;; "pre-indexed" mode as per AArch64 docs: preincrement reg before
+        ;; address computation.
+        (PreIndexed
+         (rn WritableReg)
+         (simm9 SImm9))
+
+        ;; N.B.: RegReg, RegScaled, and RegScaledExtended all correspond to
+        ;; what the ISA calls the "register offset" addressing mode. We split
+        ;; out several options here for more ergonomic codegen.
+        ;;
+        ;; Register plus register offset.
+        (RegReg
+         (rn Reg)
+         (rm Reg))
+
+        ;; Register plus register offset, scaled by type's size.
+        (RegScaled
+         (rn Reg)
+         (rm Reg)
+         (ty Type))
+
+        ;; Register plus register offset, scaled by type's size, with index
+        ;; sign- or zero-extended first.
+        (RegScaledExtended
+         (rn Reg)
+         (rm Reg)
+         (ty Type)
+         (extendop ExtendOp))
+
+        ;; Register plus register offset, with index sign- or zero-extended
+        ;; first.
+        (RegExtended
+         (rn Reg)
+         (rm Reg)
+         (extendop ExtendOp))
+
+        ;; Unscaled signed 9-bit immediate offset from reg.
+        (Unscaled
+         (rn Reg)
+         (simm9 SImm9))
+
+        ;; Scaled (by size of a type) unsigned 12-bit immediate offset from reg.
+        (UnsignedOffset
+         (rn Reg)
+         (uimm12 UImm12Scaled))
+
+        ;; virtual addressing modes that are lowered at emission time:
+        ;;
+        ;; Reference to a "label": e.g., a symbol.
+        (Label
+         (label MemLabel))
+
+        ;; Arbitrary offset from a register. Converted to generation of large
+        ;; offsets with multiple instructions as necessary during code emission.
+        (RegOffset
+         (rn Reg)
+         (off i64)
+         (ty Type))
+
+        ;; Offset from the stack pointer.
+        (SPOffset
+         (off i64)
+         (ty Type))
+
+        ;; Offset from the frame pointer.
+        (FPOffset
+         (off i64)
+         (ty Type))
+
+        ;; Offset from the "nominal stack pointer", which is where the real SP is
+        ;; just after stack and spill slots are allocated in the function prologue.
+        ;; At emission time, this is converted to `SPOffset` with a fixup added to
+        ;; the offset constant. The fixup is a running value that is tracked as
+        ;; emission iterates through instructions in linear order, and can be
+        ;; adjusted up and down with [Inst::VirtualSPOffsetAdj].
+        ;;
+        ;; The standard ABI is in charge of handling this (by emitting the
+        ;; adjustment meta-instructions). It maintains the invariant that "nominal
+        ;; SP" is where the actual SP is after the function prologue and before
+        ;; clobber pushes. See the diagram in the documentation for
+        ;; [crate::isa::aarch64::abi](the ABI module) for more details.
+        (NominalSPOffset
+         (off i64)
+         (ty Type))
+))
+
 (type PairAMode extern (enum))
 (type FPUOpRI extern (enum))
 
@@ -1470,6 +1571,12 @@
 (decl valid_atomic_transaction (Type) Type)
 (extern extractor valid_atomic_transaction valid_atomic_transaction)
 
+(decl pure is_zero_simm9 (SImm9) Unit)
+(extern constructor is_zero_simm9 is_zero_simm9)
+
+(decl pure is_zero_uimm12 (UImm12Scaled) Unit)
+(extern constructor is_zero_uimm12 is_zero_uimm12)
+
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
 (decl imm12_from_value (Imm12) Value)
 (extractor
@@ -1502,24 +1609,20 @@
 (decl cond_br_cond (Cond) CondBrKind)
 (extern constructor cond_br_cond cond_br_cond)
 
-;; Lower the address of a load or a store.
-(decl amode (Type Value u32) AMode)
-;; TODO: Port lower_address() to ISLE.
-(extern constructor amode amode)
-
 (decl pair_amode (Value u32) PairAMode)
 (extern constructor pair_amode pair_amode)
-
-;; Matches an `AMode` that is just a register.
-(decl pure amode_is_reg (AMode) Reg)
-;; TODO: Implement in ISLE.
-(extern constructor amode_is_reg amode_is_reg)
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Helper for creating the zero register.
 (decl zero_reg () Reg)
 (extern constructor zero_reg zero_reg)
+
+(decl fp_reg () Reg)
+(extern constructor fp_reg fp_reg)
+
+(decl stack_reg () Reg)
+(extern constructor stack_reg stack_reg)
 
 (decl writable_zero_reg () WritableReg)
 (extern constructor writable_zero_reg writable_zero_reg)
@@ -2615,14 +2718,33 @@
 
 ;; Helper for emitting `MInst.LoadAddr` instructions.
 (decl load_addr (AMode) Reg)
+
+(rule (load_addr (AMode.UnsignedOffset r imm))
+      (if (is_zero_uimm12 imm))
+      r)
+
+(rule (load_addr (AMode.Unscaled r imm))
+      (if (is_zero_simm9 imm))
+      r)
+
+(rule (load_addr (AMode.RegOffset r 0 _)) r)
+(rule (load_addr (AMode.FPOffset 0 _)) (fp_reg))
+(rule (load_addr (AMode.SPOffset 0 _)) (stack_reg))
+
 (rule (load_addr addr)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.LoadAddr dst addr))))
         dst))
 
-(rule (load_addr addr)
-      (if-let addr_reg (amode_is_reg addr))
-      addr_reg)
+;; Lower the address of a load or a store.
+(decl amode (Type Value u32) AMode)
+;; TODO: Port lower_address() to ISLE.
+(extern constructor amode amode)
+
+(decl sink_load_into_amode (Type Inst) AMode)
+(rule (sink_load_into_amode ty x @ (load _ addr offset))
+      (let ((_ Unit (sink_inst x)))
+           (amode ty addr offset)))
 
 ;; Lower a constant f64.
 (decl constant_f64 (u64) Reg)
