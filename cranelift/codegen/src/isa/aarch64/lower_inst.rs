@@ -16,11 +16,13 @@ use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
+use target_lexicon::Triple;
 
 /// Actually codegen an instruction's results into registers.
 pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     insn: IRInst,
+    triple: &Triple,
     flags: &Flags,
     isa_flags: &aarch64_settings::Flags,
 ) -> CodegenResult<()> {
@@ -33,7 +35,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         None
     };
 
-    if let Ok(()) = super::lower::isle::lower(ctx, flags, isa_flags, &outputs, insn) {
+    if let Ok(()) = super::lower::isle::lower(ctx, triple, flags, isa_flags, &outputs, insn) {
         return Ok(());
     }
 

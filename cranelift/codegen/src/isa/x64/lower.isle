@@ -2491,6 +2491,10 @@
 
 ;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(rule (lower (has_type $F32 (fma x y z)))
+      (libcall_3 (LibCall.FmaF32) x y z))
+(rule (lower (has_type $F64 (fma x y z)))
+      (libcall_3 (LibCall.FmaF64) x y z))
 (rule (lower (has_type $F32X4 (fma x y z)))
       (x64_vfmadd213ps x y z))
 (rule (lower (has_type $F64X2 (fma x y z)))

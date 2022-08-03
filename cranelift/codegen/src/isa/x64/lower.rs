@@ -6,8 +6,7 @@ pub(super) mod isle;
 use crate::data_value::DataValue;
 use crate::ir::{
     condcodes::{CondCode, FloatCC, IntCC},
-    types, AbiParam, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Signature,
-    Type,
+    types, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type,
 };
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
@@ -573,29 +572,13 @@ fn emit_fcmp<C: LowerCtx<I = Inst>>(
     cond_result
 }
 
-fn make_libcall_sig<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    insn: IRInst,
-    call_conv: CallConv,
-) -> Signature {
-    let mut sig = Signature::new(call_conv);
-    for i in 0..ctx.num_inputs(insn) {
-        sig.params.push(AbiParam::new(ctx.input_ty(insn, i)));
-    }
-    for i in 0..ctx.num_outputs(insn) {
-        sig.returns.push(AbiParam::new(ctx.output_ty(insn, i)));
-    }
-    sig
-}
-
 fn emit_vm_call<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     flags: &Flags,
     triple: &Triple,
     libcall: LibCall,
-    insn: IRInst,
-    inputs: SmallVec<[InsnInput; 4]>,
-    outputs: SmallVec<[InsnOutput; 2]>,
+    inputs: &[Reg],
+    outputs: &[Writable<Reg>],
 ) -> CodegenResult<()> {
     let extname = ExternalName::LibCall(libcall);
 
@@ -607,7 +590,7 @@ fn emit_vm_call<C: LowerCtx<I = Inst>>(
 
     // TODO avoid recreating signatures for every single Libcall function.
     let call_conv = CallConv::for_libcall(flags, CallConv::triple_default(triple));
-    let sig = make_libcall_sig(ctx, insn, call_conv);
+    let sig = libcall.signature(call_conv);
     let caller_conv = ctx.abi().call_conv();
 
     let mut abi = X64ABICaller::from_func(&sig, &extname, dist, caller_conv, flags)?;
@@ -617,14 +600,12 @@ fn emit_vm_call<C: LowerCtx<I = Inst>>(
     assert_eq!(inputs.len(), abi.num_args());
 
     for (i, input) in inputs.iter().enumerate() {
-        let arg_reg = put_input_in_reg(ctx, *input);
-        abi.emit_copy_regs_to_arg(ctx, i, ValueRegs::one(arg_reg));
+        abi.emit_copy_regs_to_arg(ctx, i, ValueRegs::one(*input));
     }
 
     abi.emit_call(ctx);
     for (i, output) in outputs.iter().enumerate() {
-        let retval_reg = get_output_reg(ctx, *output).only_reg().unwrap();
-        abi.emit_copy_retval_to_regs(ctx, i, ValueRegs::one(retval_reg));
+        abi.emit_copy_retval_to_regs(ctx, i, ValueRegs::one(*output));
     }
     abi.emit_stack_post_adjust(ctx);
 
@@ -810,7 +791,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         None
     };
 
-    if let Ok(()) = isle::lower(ctx, flags, isa_flags, &outputs, insn) {
+    if let Ok(()) = isle::lower(ctx, triple, flags, isa_flags, &outputs, insn) {
         return Ok(());
     }
 
@@ -884,6 +865,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::FvpromoteLow
         | Opcode::Fdemote
         | Opcode::Fvdemote
+        | Opcode::Fma
         | Opcode::Icmp
         | Opcode::Fcmp
         | Opcode::Load
@@ -1974,7 +1956,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         ty, op
                     ),
                 };
-                emit_vm_call(ctx, flags, triple, libcall, insn, inputs, outputs)?;
+
+                let input = put_input_in_reg(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+
+                emit_vm_call(ctx, flags, triple, libcall, &[input], &[dst])?;
             }
         }
 
@@ -2725,8 +2711,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Cls => unimplemented!("Cls not supported"),
-
-        Opcode::Fma => implemented_in_isle(ctx),
 
         Opcode::BorNot | Opcode::BxorNot => {
             unimplemented!("or-not / xor-not opcodes not implemented");

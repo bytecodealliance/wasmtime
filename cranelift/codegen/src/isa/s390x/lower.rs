@@ -30,9 +30,14 @@ impl LowerBackend for S390xBackend {
             None
         };
 
-        if let Ok(()) =
-            super::lower::isle::lower(ctx, &self.flags, &self.isa_flags, &outputs, ir_inst)
-        {
+        if let Ok(()) = super::lower::isle::lower(
+            ctx,
+            &self.triple,
+            &self.flags,
+            &self.isa_flags,
+            &outputs,
+            ir_inst,
+        ) {
             return Ok(());
         }
 
@@ -295,6 +300,7 @@ impl LowerBackend for S390xBackend {
         // the second branch (if any) by emitting a two-way conditional branch.
         if let Ok(()) = super::lower::isle::lower_branch(
             ctx,
+            &self.triple,
             &self.flags,
             &self.isa_flags,
             branches[0],

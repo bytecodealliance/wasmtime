@@ -26,6 +26,7 @@ use std::boxed::Box;
 use std::cell::Cell;
 use std::convert::TryFrom;
 use std::vec::Vec;
+use target_lexicon::Triple;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
@@ -37,6 +38,7 @@ type VecMInstBuilder = Cell<Vec<MInst>>;
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower<C>(
     lower_ctx: &mut C,
+    triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
     outputs: &[InsnOutput],
@@ -45,14 +47,21 @@ pub(crate) fn lower<C>(
 where
     C: LowerCtx<I = MInst>,
 {
-    lower_common(lower_ctx, flags, isa_flags, outputs, inst, |cx, insn| {
-        generated_code::constructor_lower(cx, insn)
-    })
+    lower_common(
+        lower_ctx,
+        triple,
+        flags,
+        isa_flags,
+        outputs,
+        inst,
+        |cx, insn| generated_code::constructor_lower(cx, insn),
+    )
 }
 
 /// The main entry point for branch lowering with ISLE.
 pub(crate) fn lower_branch<C>(
     lower_ctx: &mut C,
+    triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
     branch: Inst,
@@ -61,9 +70,15 @@ pub(crate) fn lower_branch<C>(
 where
     C: LowerCtx<I = MInst>,
 {
-    lower_common(lower_ctx, flags, isa_flags, &[], branch, |cx, insn| {
-        generated_code::constructor_lower_branch(cx, insn, &targets.to_vec())
-    })
+    lower_common(
+        lower_ctx,
+        triple,
+        flags,
+        isa_flags,
+        &[],
+        branch,
+        |cx, insn| generated_code::constructor_lower_branch(cx, insn, &targets.to_vec()),
+    )
 }
 
 impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
