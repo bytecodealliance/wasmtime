@@ -123,6 +123,24 @@ impl<T: EntityRef + ReservedValue> ListPool<T> {
         }
     }
 
+    /// Create a new list pool with the given capacity for data pre-allocated.
+    pub fn with_capacity(len: usize) -> Self {
+        Self {
+            data: Vec::with_capacity(len),
+            free: Vec::new(),
+        }
+    }
+
+    /// Get the capacity of this pool. This will be somewhat higher
+    /// than the total length of lists that can be stored without
+    /// reallocating, because of internal metadata overheads. It is
+    /// mostly useful to allow another pool to be allocated that is
+    /// likely to hold data transferred from this one without the need
+    /// to grow.
+    pub fn capacity(&self) -> usize {
+        self.data.capacity()
+    }
+
     /// Clear the pool, forgetting about all lists that use it.
     ///
     /// This invalidates any existing entity lists that used this pool to allocate memory.

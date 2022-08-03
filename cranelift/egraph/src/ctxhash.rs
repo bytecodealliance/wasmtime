@@ -4,7 +4,7 @@
 //! node-internal data references some other storage (e.g., offsets into
 //! an array or pool of shared data).
 
-use hashbrown::raw::RawTable;
+use hashbrown::raw::{Bucket, RawTable};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 
@@ -99,23 +99,6 @@ impl<K, V> CtxHashMap<K, V> {
         }
     }
 
-    /// Remove a key-value pair, returning the old value associated
-    /// with this key (if any).
-    pub fn remove<Q, Ctx: CtxEq<K, Q> + CtxHash<Q> + CtxHash<K>>(
-        &mut self,
-        k: &Q,
-        ctx: &Ctx,
-    ) -> Option<V> {
-        let h = hash(k, ctx);
-        match self.raw.find(h, |bucket| ctx.ctx_eq(&bucket.k, k)) {
-            Some(bucket) => {
-                let data = unsafe { self.raw.remove(bucket) };
-                Some(data.v)
-            }
-            None => None,
-        }
-    }
-
     /// Look up a key, returning a borrow of the value if present.
     pub fn get<'a, Q, Ctx: CtxEq<K, Q> + CtxHash<Q> + CtxHash<K>>(
         &'a self,
@@ -129,6 +112,78 @@ impl<K, V> CtxHashMap<K, V> {
                 let data = unsafe { bucket.as_ref() };
                 &data.v
             })
+    }
+
+    /// Return an Entry cursor on a given bucket for a key, allowing
+    /// for fetching the current value or inserting a new one.
+    pub fn entry<'a, Ctx: CtxEq<K, K> + CtxHash<K>>(
+        &'a mut self,
+        k: K,
+        ctx: &'a Ctx,
+    ) -> Entry<'a, Ctx, K, V> {
+        let h = hash(&k, ctx);
+        match self.raw.find(h, |bucket| ctx.ctx_eq(&bucket.k, &k)) {
+            Some(bucket) => Entry::Occupied(OccupiedEntry {
+                bucket,
+                _phantom: PhantomData,
+            }),
+            None => Entry::Vacant(VacantEntry {
+                raw: &mut self.raw,
+                ctx,
+                hash: h,
+                key: k,
+            }),
+        }
+    }
+}
+
+/// An entry in the hashmap.
+pub enum Entry<'a, Ctx, K: 'a, V>
+where
+    Ctx: CtxHash<K>,
+{
+    Occupied(OccupiedEntry<'a, K, V>),
+    Vacant(VacantEntry<'a, Ctx, K, V>),
+}
+
+/// An occupied entry.
+pub struct OccupiedEntry<'a, K, V> {
+    bucket: Bucket<BucketData<K, V>>,
+    _phantom: PhantomData<&'a ()>,
+}
+
+impl<'a, K: 'a, V> OccupiedEntry<'a, K, V> {
+    /// Get the value.
+    pub fn get(&self) -> &'a V {
+        let bucket = unsafe { self.bucket.as_ref() };
+        &bucket.v
+    }
+}
+
+/// A vacant entry.
+pub struct VacantEntry<'a, Ctx, K, V>
+where
+    Ctx: CtxHash<K>,
+{
+    raw: &'a mut RawTable<BucketData<K, V>>,
+    ctx: &'a Ctx,
+    hash: u64,
+    key: K,
+}
+
+impl<'a, Ctx, K, V> VacantEntry<'a, Ctx, K, V>
+where
+    Ctx: CtxHash<K>,
+{
+    /// Insert a value.
+    pub fn insert(self, v: V) -> &'a V {
+        let bucket = self
+            .raw
+            .insert(self.hash, BucketData { k: self.key, v }, |bucket| {
+                hash(&bucket.k, self.ctx)
+            });
+        let data = unsafe { bucket.as_ref() };
+        &data.v
     }
 }
 
@@ -177,5 +232,19 @@ mod test {
         assert_eq!(map.insert(k2, 84, &ctx), Some(42));
         assert_eq!(map.get(&k1, &ctx), None);
         assert_eq!(*map.get(&k0, &ctx).unwrap(), 84);
+    }
+
+    #[test]
+    fn test_entry() {
+        let ctx = Ctx {
+            vals: &["a", "b", "a"],
+        };
+
+        let k0 = Key { index: 0 };
+        let k1 = Key { index: 1 };
+        let k2 = Key { index: 2 };
+
+        let mut map: CtxHashMap<Key, u64> = CtxHashMap::new();
+        assert!(matches!(map.entry(k0), Entry::VacantEntry(_)));
     }
 }

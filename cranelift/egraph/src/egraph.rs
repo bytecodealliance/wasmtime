@@ -1,6 +1,6 @@
 //! Egraph implementation.
 
-use crate::ctxhash::{CtxEq, CtxHash, CtxHashMap};
+use crate::ctxhash::{CtxEq, CtxHash, CtxHashMap, Entry};
 use crate::{Id, Language};
 use cranelift_entity::PrimaryMap;
 use smallvec::{smallvec, SmallVec};
@@ -201,25 +201,29 @@ where
         self.nodes.push(node);
 
         let key = NodeKey::from_node_idx(node_idx);
-        let mut ctx = NodeKeyCtx {
+        let ctx = NodeKeyCtx {
             nodes: &self.nodes[..],
             node_ctx,
         };
 
-        if let Some(eclass_id) = self.node_map.get(&key, &ctx) {
-            self.nodes.pop();
-            log::trace!(" -> existing id {}", eclass_id);
-            return NewOrExisting::Existing(*eclass_id);
+        match self.node_map.entry(key, &ctx) {
+            Entry::Occupied(o) => {
+                let eclass_id = *o.get();
+                self.nodes.pop();
+                log::trace!(" -> existing id {}", eclass_id);
+                NewOrExisting::Existing(eclass_id)
+            }
+            Entry::Vacant(v) => {
+                // We're creating a new eclass now.
+                let eclass_id = self.classes.push(EClass::node(key));
+                log::trace!(" -> new node and eclass: {}", eclass_id);
+
+                // Add to interning map with a NodeKey referring to the eclass.
+                v.insert(eclass_id);
+
+                NewOrExisting::New(eclass_id)
+            }
         }
-
-        // We're creating a new eclass now.
-        let eclass_id = self.classes.push(EClass::node(key));
-        log::trace!(" -> new node and eclass: {}", eclass_id);
-
-        // Add to interning map with a NodeKey referring to the eclass.
-        self.node_map.insert(key, eclass_id, &mut ctx);
-
-        NewOrExisting::New(eclass_id)
     }
 
     /// Merge one eclass into another, maintaining the acyclic

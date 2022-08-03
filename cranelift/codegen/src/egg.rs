@@ -53,7 +53,10 @@ impl<'a> FuncEGraph<'a> {
             domtree,
             loop_analysis,
             egraph: EGraph::with_capacity(node_count_estimate),
-            node_ctx: NodeCtx::default(),
+            node_ctx: NodeCtx::with_capacity(
+                func.dfg.num_values(),
+                func.dfg.value_lists.capacity(),
+            ),
             side_effects: SecondaryMap::with_default(0..0),
             side_effect_ids: vec![],
             blockparams: SecondaryMap::with_default(0..0),

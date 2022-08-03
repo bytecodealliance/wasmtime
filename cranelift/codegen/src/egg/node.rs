@@ -77,6 +77,15 @@ impl std::default::Default for NodeCtx {
     }
 }
 
+impl NodeCtx {
+    pub(crate) fn with_capacity(types: usize, args: usize) -> Self {
+        Self {
+            types: BumpArena::arena_with_capacity(types),
+            args: ListPool::with_capacity(args),
+        }
+    }
+}
+
 impl CtxEq<Node, Node> for NodeCtx {
     fn ctx_eq(&self, a: &Node, b: &Node) -> bool {
         match (a, b) {
