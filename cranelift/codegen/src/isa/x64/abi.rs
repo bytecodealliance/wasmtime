@@ -125,7 +125,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 );
             }
 
-            let mut slots = vec![];
+            let mut slots = ABIArgSlotVec::new();
             for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
                 let intreg = *rc == RegClass::Int;
                 let nextreg = if intreg {
