@@ -1,8 +1,9 @@
 //! A frontend for building Cranelift IR from other languages.
 use crate::ssa::{SSABuilder, SideEffects};
 use crate::variable::Variable;
+use core::fmt::{self, Debug};
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
-use cranelift_codegen::entity::{EntitySet, SecondaryMap};
+use cranelift_codegen::entity::{EntityRef, EntitySet, SecondaryMap};
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{
@@ -163,9 +164,83 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-/// This is the error variant returned from [`FunctionBuilder::try_use_var`].
+/// An error encountered when calling [`FunctionBuilder::try_use_var`].
 pub enum UseVariableError {
     UsedBeforeDeclared(Variable),
+}
+
+impl fmt::Display for UseVariableError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UseVariableError::UsedBeforeDeclared(variable) => {
+                f.write_str("variable ")?;
+                <usize as fmt::Display>::fmt(&variable.index(), f)?;
+                f.write_str(" was used before it was defined!")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for UseVariableError {}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+/// An error encountered when calling [`FunctionBuilder::try_declare_var`]
+pub enum DeclareVariableError {
+    DeclaredMultipleTimes(Variable),
+}
+
+impl std::error::Error for DeclareVariableError {}
+
+impl fmt::Display for DeclareVariableError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DeclareVariableError::DeclaredMultipleTimes(variable) => {
+                f.write_str("variable ")?;
+                <usize as fmt::Display>::fmt(&variable.index(), f)?;
+                f.write_str(" was declared multiple times!")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+/// An error encountered when defining the initial value of a variable.
+pub enum DefVariableError {
+    /// The variable was instantiated with a value of the wrong type.
+    ///
+    /// note: to obtain the type of the value, you can call
+    /// [`cranelift_codegen::ir::dfg::DataFlowGraph::value_type`] (using the
+    /// [`FunctionBuilder.func.dfg`] field)
+    TypeMismatch(Variable, Value),
+    /// The value was defined (in a call to [`FunctionBuilder::def_var`]) before
+    /// it was declared (in a call to [`FunctionBuilder::declare_var`]).
+    DefinedBeforeDeclared(Variable),
+}
+
+impl fmt::Display for DefVariableError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DefVariableError::TypeMismatch(variable, value) => {
+                f.write_str("the types of variable ")?;
+                <usize as fmt::Display>::fmt(&variable.index(), f)?;
+                f.write_str(" and value ")?;
+                <u32 as fmt::Display>::fmt(&value.as_u32(), f)?;
+                f.write_str(
+                    " are not the same - the `Value` supplied to
+                `def_var` must be of the same type as the variable was declared
+                to be of in `declare_var`.",
+                )?;
+            }
+            DefVariableError::DefinedBeforeDeclared(variable) => {
+                f.write_str("the value of variable ")?;
+                <usize as fmt::Display>::fmt(&variable.index(), f)?;
+                f.write_str(" was declared before it was defined!")?;
+            }
+        }
+        Ok(())
+    }
 }
 
 /// This module allows you to create a function in Cranelift IR in a straightforward way, hiding
@@ -296,15 +371,22 @@ impl<'a> FunctionBuilder<'a> {
         self.handle_ssa_side_effects(side_effects);
     }
 
-    /// In order to use a variable in a `use_var`, you need to declare its type with this method.
-    pub fn declare_var(&mut self, var: Variable, ty: Type) {
-        debug_assert_eq!(
-            self.func_ctx.types[var],
-            types::INVALID,
-            "variable {:?} is declared twice",
-            var
-        );
+    /// Declares the type of a variable, so that it can be used later (by calling
+    /// [`FunctionBuilder::use_var`]). This function will return an error if it
+    /// was not possible to use the variable.
+    pub fn try_declare_var(&mut self, var: Variable, ty: Type) -> Result<(), DeclareVariableError> {
+        if self.func_ctx.types[var] != types::INVALID {
+            return Err(DeclareVariableError::DeclaredMultipleTimes(var));
+        }
         self.func_ctx.types[var] = ty;
+        Ok(())
+    }
+
+    /// In order to use a variable (by calling [`FunctionBuilder::use_var`]), you need
+    /// to first declare its type with this method.
+    pub fn declare_var(&mut self, var: Variable, ty: Type) {
+        self.try_declare_var(var, ty)
+            .unwrap_or_else(|_| panic!("the variable {:?} has been declared multiple times", var))
     }
 
     /// Returns the Cranelift IR necessary to use a previously defined user
@@ -341,21 +423,41 @@ impl<'a> FunctionBuilder<'a> {
         })
     }
 
+    /// Registers a new definition of a user variable. This function will return
+    /// an error if the value supplied does not match the type the variable was
+    /// declared to have.
+    pub fn try_def_var(&mut self, var: Variable, val: Value) -> Result<(), DefVariableError> {
+        let var_ty = *self
+            .func_ctx
+            .types
+            .get(var)
+            .ok_or(DefVariableError::DefinedBeforeDeclared(var))?;
+        if var_ty != self.func.dfg.value_type(val) {
+            return Err(DefVariableError::TypeMismatch(var, val));
+        }
+
+        self.func_ctx.ssa.def_var(var, val, self.position.unwrap());
+        Ok(())
+    }
+
     /// Register a new definition of a user variable. The type of the value must be
     /// the same as the type registered for the variable.
     pub fn def_var(&mut self, var: Variable, val: Value) {
-        debug_assert_eq!(
-            *self.func_ctx.types.get(var).unwrap_or_else(|| panic!(
-                "variable {:?} is used but its type has not been declared",
-                var
-            )),
-            self.func.dfg.value_type(val),
-            "declared type of variable {:?} doesn't match type of value {}",
-            var,
-            val
-        );
-
-        self.func_ctx.ssa.def_var(var, val, self.position.unwrap());
+        self.try_def_var(var, val)
+            .unwrap_or_else(|error| match error {
+                DefVariableError::TypeMismatch(var, val) => {
+                    panic!(
+                        "declared type of variable {:?} doesn't match type of value {}",
+                        var, val
+                    );
+                }
+                DefVariableError::DefinedBeforeDeclared(var) => {
+                    panic!(
+                        "variable {:?} is used but its type has not been declared",
+                        var
+                    );
+                }
+            })
     }
 
     /// Set label for Value
@@ -987,7 +1089,10 @@ impl<'a> FunctionBuilder<'a> {
 #[cfg(test)]
 mod tests {
     use super::greatest_divisible_power_of_two;
-    use crate::frontend::{FunctionBuilder, FunctionBuilderContext, UseVariableError};
+    use crate::frontend::{
+        DeclareVariableError, DefVariableError, FunctionBuilder, FunctionBuilderContext,
+        UseVariableError,
+    };
     use crate::Variable;
     use alloc::string::ToString;
     use cranelift_codegen::entity::EntityRef;
@@ -1702,6 +1807,23 @@ block0:
             assert_eq!(
                 builder.try_use_var(Variable::with_u32(0)),
                 Err(UseVariableError::UsedBeforeDeclared(Variable::with_u32(0)))
+            );
+
+            let value = builder.ins().iconst(cranelift_codegen::ir::types::I32, 0);
+
+            assert_eq!(
+                builder.try_def_var(Variable::with_u32(0), value),
+                Err(DefVariableError::DefinedBeforeDeclared(Variable::with_u32(
+                    0
+                )))
+            );
+
+            builder.declare_var(Variable::with_u32(0), cranelift_codegen::ir::types::I32);
+            assert_eq!(
+                builder.try_declare_var(Variable::with_u32(0), cranelift_codegen::ir::types::I32),
+                Err(DeclareVariableError::DeclaredMultipleTimes(
+                    Variable::with_u32(0)
+                ))
             );
         }
     }
