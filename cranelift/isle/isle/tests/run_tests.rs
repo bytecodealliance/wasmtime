@@ -46,6 +46,7 @@ pub fn run_link(isle_filename: &str) {
         .arg(&rust_driver)
         .arg("-o")
         .arg(output)
+        .stderr(std::process::Stdio::inherit())
         .spawn()
         .unwrap();
     assert!(rustc.wait().unwrap().success());

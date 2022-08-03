@@ -105,8 +105,8 @@ pub enum PatternInst {
         output_tys: Vec<TypeId>,
         /// This extractor's term.
         term: TermId,
-        /// Whether this is a call to a pull-based multi-extractor.
-        pull_multi: bool,
+        /// The mode in which we handle multiplicity.
+        multi: MultiMode,
     },
 
     // NB: This has to go last, since it is infallible, so that when we sort
@@ -164,8 +164,8 @@ pub enum ExprInst {
         term: TermId,
         /// Whether this constructor is infallible or not.
         infallible: bool,
-        /// Whether this is a call to a push-based multi-extractor.
-        push_multi: bool,
+        /// The mode in which we handle multiplicity.
+        multi: MultiMode,
     },
 
     /// Set the Nth return value. Produces no values.
@@ -309,7 +309,7 @@ impl PatternSequence {
         output_tys: Vec<TypeId>,
         term: TermId,
         infallible: bool,
-        pull_multi: bool,
+        multi: MultiMode,
     ) -> Vec<Value> {
         let inst = InstId(self.insts.len());
         let mut outs = vec![];
@@ -324,7 +324,7 @@ impl PatternSequence {
             output_tys,
             term,
             infallible,
-            pull_multi,
+            multi,
         });
         outs
     }
@@ -459,7 +459,7 @@ impl PatternSequence {
                                     output_tys,
                                     term,
                                     ext_sig.infallible,
-                                    ext_sig.pull_multi,
+                                    ext_sig.multi,
                                 );
 
                                 for (pat, &val) in output_pats.iter().zip(arg_values.iter()) {
@@ -529,7 +529,7 @@ impl ExprSequence {
         ty: TypeId,
         term: TermId,
         infallible: bool,
-        push_multi: bool,
+        multi: MultiMode,
     ) -> Value {
         let inst = InstId(self.insts.len());
         let inputs = inputs.iter().cloned().collect();
@@ -538,7 +538,7 @@ impl ExprSequence {
             ty,
             term,
             infallible,
-            push_multi,
+            multi,
         });
         Value::Expr { inst, output: 0 }
     }
@@ -599,7 +599,11 @@ impl ExprSequence {
                             ty,
                             term,
                             /* infallible = */ false,
-                            *multi,
+                            if *multi {
+                                MultiMode::Vec
+                            } else {
+                                MultiMode::None
+                            },
                         )
                     }
                     TermKind::Decl {
@@ -613,7 +617,11 @@ impl ExprSequence {
                             ty,
                             term,
                             /* infallible = */ !pure,
-                            *multi,
+                            if *multi {
+                                MultiMode::Vec
+                            } else {
+                                MultiMode::None
+                            },
                         )
                     }
                     TermKind::Decl {

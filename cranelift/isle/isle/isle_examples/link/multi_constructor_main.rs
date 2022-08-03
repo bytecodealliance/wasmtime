@@ -4,15 +4,29 @@ pub(crate) type ConstructorVec<T> = Vec<T>;
 
 struct Context;
 
-impl multi_constructor::Context for Context {
-    fn etor_C(&mut self, value: u32, index: &mut usize) -> Option<u32> {
-        let i = *index as u32;
-        if i > value {
+struct It {
+    i: u32,
+    limit: u32,
+}
+
+impl multi_constructor::ContextIter for It {
+    type Context = Context;
+    type Output = u32;
+    fn next(&mut self, _ctx: &mut Self::Context) -> Option<u32> {
+        if self.i >= self.limit {
             None
         } else {
-            *index += 1;
+            let i = self.i;
+            self.i += 1;
             Some(i)
         }
+    }
+}
+
+impl multi_constructor::Context for Context {
+    type etor_C_iter = It;
+    fn etor_C(&mut self, value: u32) -> Option<It> {
+        Some(It { i: 0, limit: value })
     }
 
     fn ctor_B(&mut self, value: u32) -> Option<Vec<u32>> {

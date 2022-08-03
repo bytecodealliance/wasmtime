@@ -292,14 +292,23 @@ pub struct ExternalSig {
     pub ret_tys: Vec<TypeId>,
     /// Whether this signature is infallible or not.
     pub infallible: bool,
-    /// Whether this signature has an extra `&mut usize` param to
-    /// allow for multiple-return iteration. Mutually exclusive with
-    /// respect to `infallible` (otherwise, the iteration could never
-    /// end).
-    pub pull_multi: bool,
-    /// Whether this signature returns a `ConstructorVec<[(T1, T2,
-    /// ...); 8]>` rather than `(T1, T2, ...)`.
-    pub push_multi: bool,
+    /// "Multiplicity" mode: iterator, vec-return, or none.
+    pub multi: MultiMode,
+}
+
+/// The mode by which a term (extractor or constructor) returns
+/// multiple values.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum MultiMode {
+    /// Function (constructor or extractor) logically returns only one
+    /// result (or none).
+    None,
+    /// Function logically returns multiple results, and returns these
+    /// as an iterator that implements a custom iterator trait.
+    Iter,
+    /// Function logically returns multiple results, and returns these
+    /// as a vector.
+    Vec,
 }
 
 impl Term {
@@ -375,8 +384,11 @@ impl Term {
                 param_tys: vec![self.ret_ty],
                 ret_tys: self.arg_tys.clone(),
                 infallible: *infallible && !*multi,
-                pull_multi: *multi,
-                push_multi: false,
+                multi: if *multi {
+                    MultiMode::Iter
+                } else {
+                    MultiMode::None
+                },
             }),
             _ => None,
         }
@@ -395,9 +407,12 @@ impl Term {
                 full_name: format!("C::{}", tyenv.syms[name.index()]),
                 param_tys: self.arg_tys.clone(),
                 ret_tys: vec![self.ret_ty],
-                infallible: !pure,
-                pull_multi: false,
-                push_multi: *multi,
+                infallible: !pure && !*multi,
+                multi: if *multi {
+                    MultiMode::Vec
+                } else {
+                    MultiMode::None
+                },
             }),
             TermKind::Decl {
                 constructor_kind: Some(ConstructorKind::InternalConstructor { .. }),
@@ -415,8 +430,11 @@ impl Term {
                     // matching at the toplevel (an entry point can
                     // fail to rewrite).
                     infallible: false,
-                    pull_multi: false,
-                    push_multi: *multi,
+                    multi: if *multi {
+                        MultiMode::Vec
+                    } else {
+                        MultiMode::None
+                    },
                 })
             }
             _ => None,
