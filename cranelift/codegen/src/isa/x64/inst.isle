@@ -3274,6 +3274,13 @@
       ;; Same flags as `UnorderedOrLessThanOrEqual`.
       (FcmpCondResult.Condition (x64_ucomis a b) (CC.BE)))
 
+;;;; Type Guards ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; A type guard for matching 64-bit sized ints, bools, or references but
+;; explicitly ruling out 32-bit references.
+(decl ty_int_bool_or_ref () Type)
+(extern extractor ty_int_bool_or_ref ty_int_bool_or_ref)
+
 ;;;; Atomics ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl x64_mfence () SideEffectNoResult)

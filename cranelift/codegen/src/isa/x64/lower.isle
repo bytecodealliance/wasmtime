@@ -2890,6 +2890,12 @@
 (rule (lower_branch (brz val @ (value_type $I128) _ _) (two_targets taken not_taken))
       (side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.NZ) val) taken not_taken)))
 
+(rule (lower_branch (brz val @ (value_type (ty_int_bool_or_ref)) _ _) (two_targets taken not_taken))
+      (side_effect
+        (with_flags_side_effect (cmp_zero_int_bool_ref val)
+                                (jmp_cond (CC.Z) taken not_taken))))
+
+
 (rule (lower_branch (brnz (icmp cc a b) _ _) (two_targets taken not_taken))
       (side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
 
@@ -2899,6 +2905,12 @@
 
 (rule (lower_branch (brnz val @ (value_type $I128) _ _) (two_targets taken not_taken))
       (side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.Z) val) taken not_taken)))
+
+(rule (lower_branch (brnz val @ (value_type (ty_int_bool_or_ref)) _ _) (two_targets taken not_taken))
+      (side_effect
+        (with_flags_side_effect (cmp_zero_int_bool_ref val)
+                                (jmp_cond (CC.NZ) taken not_taken))))
+
 
 ;; Compare an I128 value to zero, returning a flags result suitable for making a
 ;; jump decision. The comparison is implemented as `(hi == 0) && (low == 0)`,
@@ -2915,6 +2927,14 @@
             (hi_z Gpr (with_flags_reg (x64_cmp (OperandSize.Size64) (RegMemImm.Imm 0) hi)
                                       (x64_setcc (CC.Z)))))
           (icmp_cond_result (x64_test (OperandSize.Size8) lo_z hi_z) cc)))
+
+
+(decl cmp_zero_int_bool_ref (Value) ProducesFlags)
+(rule (cmp_zero_int_bool_ref val @ (value_type $B1))
+      (x64_test (OperandSize.Size8) (RegMemImm.Imm 1) val))
+(rule (cmp_zero_int_bool_ref val @ (value_type ty))
+      (let ((size OperandSize (raw_operand_size_of_type ty)))
+        (x64_test size val val)))
 
 ;; Rules for `bricmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
