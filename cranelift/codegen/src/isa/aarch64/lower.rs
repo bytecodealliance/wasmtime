@@ -1065,17 +1065,6 @@ pub(crate) fn condcode_is_signed(cc: IntCC) -> bool {
 //=============================================================================
 // Helpers for instruction lowering.
 
-pub(crate) fn choose_32_64<T: Copy>(ty: Type, op32: T, op64: T) -> T {
-    let bits = ty_bits(ty);
-    if bits <= 32 {
-        op32
-    } else if bits == 64 {
-        op64
-    } else {
-        panic!("choose_32_64 on > 64 bits!")
-    }
-}
-
 /// Checks for an instance of `op` feeding the given input.
 pub(crate) fn maybe_input_insn(
     c: &mut Lower<Inst>,
