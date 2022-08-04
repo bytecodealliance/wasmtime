@@ -102,6 +102,17 @@
   )
 )
 
+;; type exports work
+(component $C
+  (component $C2
+    (type string)
+    (export "x" (type 0))
+  )
+  (instance (instantiate 0))
+  (alias export 0 "x" (type))
+  (export "x" (type 0))
+)
+
 (component
   (core module $m (func (export "") (param i32) (result i32) local.get 0))
   (core instance $m (instantiate $m))
