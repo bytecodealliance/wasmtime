@@ -748,9 +748,12 @@ where
     }
 
     #[inline]
-    fn jump_table_targets(&mut self, targets: &MachLabelSlice) -> Option<(MachLabel, BoxVecMachLabel)> {
+    fn jump_table_targets(
+        &mut self,
+        targets: &MachLabelSlice,
+    ) -> Option<(MachLabel, BoxVecMachLabel)> {
         if targets.is_empty() {
-            return None
+            return None;
         }
 
         let default_label = targets[0];
