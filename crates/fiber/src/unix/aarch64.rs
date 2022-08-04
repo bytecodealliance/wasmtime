@@ -22,17 +22,15 @@ use wasmtime_asm_macros::asm_func;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "macos")] {
-        macro_rules! cfi_window_save { () => (""); }
-        macro_rules! pacia1716 { () => (""); }
-        macro_rules! paciasp { () => (""); }
-        macro_rules! autiasp { () => (""); }
+        macro_rules! paci1716 { () => ("pacib1716\n"); }
+        macro_rules! pacisp { () => ("pacibsp\n"); }
+        macro_rules! autisp { () => ("autibsp\n"); }
         macro_rules! sym_adrp { ($s:tt) => (concat!("_", $s, "@PAGE")); }
         macro_rules! sym_add { ($s:tt) => (concat!("_", $s, "@PAGEOFF")); }
     } else {
-        macro_rules! cfi_window_save { () => (".cfi_window_save\n"); }
-        macro_rules! pacia1716 { () => ("pacia1716\n"); }
-        macro_rules! paciasp { () => ("paciasp\n"); }
-        macro_rules! autiasp { () => ("autiasp\n"); }
+        macro_rules! paci1716 { () => ("pacia1716\n"); }
+        macro_rules! pacisp { () => ("paciasp\n"); }
+        macro_rules! autisp { () => ("autiasp\n"); }
         macro_rules! sym_adrp { ($s:tt) => (concat!($s, "")); }
         macro_rules! sym_add { ($s:tt) => (concat!(":lo12:", $s)); }
     }
@@ -44,9 +42,9 @@ asm_func!(
     "
         .cfi_startproc
     ",
-    paciasp!(),
-    cfi_window_save!(),
+    pacisp!(),
     "
+        .cfi_window_save
         // Save all callee-saved registers on the stack since we're
         // assuming they're clobbered as a result of the stack switch.
         stp x29, x30, [sp, -16]!
@@ -81,9 +79,9 @@ asm_func!(
         ldp x20, x19, [sp], 16
         ldp x29, x30, [sp], 16
     ",
-    autiasp!(),
-    cfi_window_save!(),
+    autisp!(),
     "
+        .cfi_window_save
         ret
         .cfi_endproc
     ",
@@ -121,7 +119,7 @@ asm_func!(
         adrp x17, ", sym_adrp!("wasmtime_fiber_start"), "
         add x17, x17, ", sym_add!("wasmtime_fiber_start"), "
     ",
-    pacia1716!(),
+    paci1716!(),
     "
         str x17, [x16, -0x8] // x17 => lr
         str x0, [x16, -0x18] // x0 => x19
@@ -151,9 +149,7 @@ asm_func!(
             0x23, 0xa0, 0x1  /* DW_OP_plus_uconst 0xa0 */
         .cfi_rel_offset x29, -0x10
         .cfi_rel_offset x30, -0x08
-    ",
-    cfi_window_save!(),
-    "
+        .cfi_window_save
         .cfi_rel_offset x19, -0x18
         .cfi_rel_offset x20, -0x20
         .cfi_rel_offset x21, -0x28

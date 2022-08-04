@@ -138,6 +138,9 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
         }
 
         if cfg!(target_os = "macos") {
+            // Pointer authentication is always available on Apple Silicon.
+            isa_builder.enable("sign_return_address").unwrap();
+            // macOS enforces the use of the B key for return addresses.
             isa_builder.enable("sign_return_address_with_bkey").unwrap();
         }
     }
