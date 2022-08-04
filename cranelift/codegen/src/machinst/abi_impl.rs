@@ -1601,8 +1601,6 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
 
 /// ABI object for a callsite.
 pub struct ABICallerImpl<M: ABIMachineSpec> {
-    /// CLIF-level signature, possibly normalized.
-    ir_sig: ir::Signature,
     /// The called function's signature.
     sig: ABISig,
     /// All uses for the callsite, i.e., function args.
@@ -1645,7 +1643,6 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
         let sig = ABISig::from_func_sig::<M>(&ir_sig, flags)?;
         let (uses, defs, clobbers) = sig.call_uses_defs_clobbers::<M>();
         Ok(ABICallerImpl {
-            ir_sig,
             sig,
             uses,
             defs,
@@ -1671,7 +1668,6 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
         let sig = ABISig::from_func_sig::<M>(&ir_sig, flags)?;
         let (uses, defs, clobbers) = sig.call_uses_defs_clobbers::<M>();
         Ok(ABICallerImpl {
-            ir_sig,
             sig,
             uses,
             defs,
@@ -1702,10 +1698,6 @@ fn adjust_stack_and_nominal_sp<M: ABIMachineSpec, C: LowerCtx<I = M::I>>(
 
 impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
     type I = M::I;
-
-    fn signature(&self) -> &ir::Signature {
-        &self.ir_sig
-    }
 
     fn num_args(&self) -> usize {
         if self.sig.stack_ret_arg.is_some() {
