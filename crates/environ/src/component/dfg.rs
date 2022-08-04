@@ -35,6 +35,7 @@ use std::hash::Hash;
 use std::ops::Index;
 
 #[derive(Default)]
+#[allow(missing_docs)]
 pub struct ComponentDfg {
     /// Same as `Component::import_types`
     pub import_types: PrimaryMap<ImportIndex, (String, TypeDef)>,
@@ -109,6 +110,7 @@ pub struct ComponentDfg {
 macro_rules! id {
     ($(pub struct $name:ident(u32);)*) => ($(
         #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+        #[allow(missing_docs)]
         pub struct $name(u32);
         cranelift_entity::entity_impl!($name);
     )*)
@@ -126,6 +128,7 @@ id! {
 }
 
 /// Same as `info::InstantiateModule`
+#[allow(missing_docs)]
 pub enum Instance {
     Static(StaticModuleIndex, Box<[CoreDef]>),
     Import(
@@ -135,6 +138,7 @@ pub enum Instance {
 }
 
 /// Same as `info::Export`
+#[allow(missing_docs)]
 pub enum Export {
     LiftedFunction {
         ty: TypeFuncIndex,
@@ -148,6 +152,7 @@ pub enum Export {
 
 /// Same as `info::CoreDef`, except has an extra `Adapter` variant.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[allow(missing_docs)]
 pub enum CoreDef {
     Export(CoreExport<EntityIndex>),
     Lowered(LowerImportId),
@@ -176,12 +181,14 @@ where
 
 /// Same as `info::CoreExport`
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[allow(missing_docs)]
 pub struct CoreExport<T> {
     pub instance: InstanceId,
     pub item: ExportItem<T>,
 }
 
 impl<T> CoreExport<T> {
+    #[allow(missing_docs)]
     pub fn map_index<U>(self, f: impl FnOnce(T) -> U) -> CoreExport<U> {
         CoreExport {
             instance: self.instance,
@@ -195,6 +202,7 @@ impl<T> CoreExport<T> {
 
 /// Same as `info::LowerImport`
 #[derive(Hash, Eq, PartialEq, Clone)]
+#[allow(missing_docs)]
 pub struct LowerImport {
     pub import: RuntimeImportIndex,
     pub canonical_abi: SignatureIndex,
@@ -203,6 +211,7 @@ pub struct LowerImport {
 
 /// Same as `info::CanonicalOptions`
 #[derive(Clone, Hash, Eq, PartialEq)]
+#[allow(missing_docs)]
 pub struct CanonicalOptions {
     pub instance: RuntimeComponentInstanceIndex,
     pub string_encoding: StringEncoding,

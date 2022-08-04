@@ -38,7 +38,7 @@ pub const MAX_FLAT_PARAMS: usize = 16;
 pub const MAX_FLAT_RESULTS: usize = 1;
 
 mod compiler;
-pub(crate) mod dfg;
+pub mod dfg;
 mod info;
 mod translate;
 mod types;

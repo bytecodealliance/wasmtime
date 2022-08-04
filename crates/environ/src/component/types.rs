@@ -166,10 +166,6 @@ indices! {
     /// Index that represents an exported module from a component since that's
     /// currently the only use for saving the entire module state at runtime.
     pub struct RuntimeModuleIndex(u32);
-
-    /// Index into the list of fused adapters identified during compilation.
-    /// Used in conjuction with the `Adapters` type.
-    pub struct AdapterIndex(u32);
 }
 
 // Reexport for convenience some core-wasm indices which are also used in the
