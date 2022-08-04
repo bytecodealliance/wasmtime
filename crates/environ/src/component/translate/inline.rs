@@ -979,7 +979,7 @@ impl<'a> InlinerFrame<'a> {
                 ComponentItemDef::Instance(self.component_instances[i].clone())
             }
             ComponentItem::Module(i) => ComponentItemDef::Module(self.modules[i].clone()),
-            ComponentItem::Type => ComponentItemDef::Type,
+            ComponentItem::Type(_) => ComponentItemDef::Type,
         }
     }
 

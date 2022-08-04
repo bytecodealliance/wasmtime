@@ -787,7 +787,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 ComponentItem::ComponentInstance(i) => Some(ComponentItemType::Instance(
                     self.result.component_instances[i],
                 )),
-                ComponentItem::Module(_) | ComponentItem::Type => None,
+                ComponentItem::Module(_) | ComponentItem::Type(_) => None,
             };
             map.insert(export.name, idx);
             if let Some(ty) = ty {
@@ -825,9 +825,9 @@ impl<'a, 'data> Translator<'a, 'data> {
                 unimplemented!("component values");
             }
             wasmparser::ComponentExternalKind::Type => {
-                // TODO: https://github.com/bytecodealliance/wasmtime/issues/4494
-                // For now, just return a value indicating the item was a type
-                ComponentItem::Type
+                let index = ComponentTypeIndex::from_u32(index);
+                let ty = self.types.component_outer_type(0, index);
+                ComponentItem::Type(ty)
             }
         }
     }
@@ -888,9 +888,12 @@ impl<'a, 'data> Translator<'a, 'data> {
                             .component_instances
                             .push(translation.component_instances[idx]);
                     }
+                    ComponentItem::Type(ty) => {
+                        self.types.push_component_typedef(ty);
+                    }
 
                     // ignored during this type pass
-                    ComponentItem::Module(_) | ComponentItem::Type => {}
+                    ComponentItem::Module(_) => {}
                 }
             }
 

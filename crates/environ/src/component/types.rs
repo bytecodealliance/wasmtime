@@ -181,10 +181,7 @@ pub enum ComponentItem {
     Module(ModuleIndex),
     Component(ComponentIndex),
     ComponentInstance(ComponentInstanceIndex),
-    // TODO: https://github.com/bytecodealliance/wasmtime/issues/4494
-    // The entity is a type; currently unsupported but represented here
-    // so that type exports can be ignored for now.
-    Type,
+    Type(TypeDef),
 }
 
 /// Runtime information about the type information contained within a component.
