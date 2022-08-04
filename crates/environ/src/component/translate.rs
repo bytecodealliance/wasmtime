@@ -612,16 +612,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                 self.validator.component_export_section(&s)?;
                 for export in s {
                     let export = export?;
-
-                    // TODO: https://github.com/bytecodealliance/wasmtime/issues/4494
-                    // Currently, wit-component-based tooling creates components that
-                    // export types to represent the interface of a component so that
-                    // bindings can (potentially) be generated directly from the component
-                    // itself without a wit file. For now, we ignore these exports in Wasmtime.
-                    if wasmparser::ComponentExternalKind::Type == export.kind {
-                        continue;
-                    }
-
                     let item = self.kind_to_item(export.kind, export.index);
                     let prev = self.result.exports.insert(export.name, item);
                     assert!(prev.is_none());
@@ -797,7 +787,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 ComponentItem::ComponentInstance(i) => Some(ComponentItemType::Instance(
                     self.result.component_instances[i],
                 )),
-                ComponentItem::Module(_) => None,
+                ComponentItem::Module(_) | ComponentItem::Type => None,
             };
             map.insert(export.name, idx);
             if let Some(ty) = ty {
@@ -835,7 +825,9 @@ impl<'a, 'data> Translator<'a, 'data> {
                 unimplemented!("component values");
             }
             wasmparser::ComponentExternalKind::Type => {
-                unimplemented!("component type export");
+                // TODO: https://github.com/bytecodealliance/wasmtime/issues/4494
+                // For now, just return a value indicating the item was a type
+                ComponentItem::Type
             }
         }
     }
@@ -898,7 +890,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                     }
 
                     // ignored during this type pass
-                    ComponentItem::Module(_) => {}
+                    ComponentItem::Module(_) | ComponentItem::Type => {}
                 }
             }
 

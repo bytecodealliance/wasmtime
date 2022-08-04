@@ -224,6 +224,10 @@ enum ComponentItemDef<'a> {
     Instance(ComponentInstanceDef<'a>),
     Func(ComponentFuncDef<'a>),
     Module(ModuleDef<'a>),
+    // TODO: https://github.com/bytecodealliance/wasmtime/issues/4494
+    // The entity is a type; currently unsupported but represented here
+    // so that type exports can be ignored for now.
+    Type,
 }
 
 #[derive(Clone)]
@@ -377,6 +381,7 @@ impl<'a> Inliner<'a> {
                 ComponentItemDef::Func(i) => {
                     frame.component_funcs.push(i.clone());
                 }
+                ComponentItemDef::Type => {}
             },
 
             // Lowering a component function to a core wasm function is
@@ -703,6 +708,9 @@ impl<'a> Inliner<'a> {
                             let instance = i.clone();
                             frame.component_instances.push(instance);
                         }
+                        ComponentItemDef::Type => {
+                            // Ignore type aliases for now
+                        }
                     },
                 }
             }
@@ -920,6 +928,11 @@ impl<'a> Inliner<'a> {
             ComponentItemDef::Component(_) => {
                 bail!("exporting a component from the root component is not supported")
             }
+
+            ComponentItemDef::Type => {
+                // Ignore type exports for now
+                return Ok(());
+            }
         };
 
         map.insert(name.to_string(), export);
@@ -966,6 +979,7 @@ impl<'a> InlinerFrame<'a> {
                 ComponentItemDef::Instance(self.component_instances[i].clone())
             }
             ComponentItem::Module(i) => ComponentItemDef::Module(self.modules[i].clone()),
+            ComponentItem::Type => ComponentItemDef::Type,
         }
     }
 

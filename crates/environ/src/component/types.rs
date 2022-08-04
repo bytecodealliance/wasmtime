@@ -94,7 +94,7 @@ indices! {
     pub struct TypeExpectedIndex(u32);
 
     // ========================================================================
-    // Index types used to identify modules and components during compliation.
+    // Index types used to identify modules and components during compilation.
 
     /// Index into a "closed over variables" list for components used to
     /// implement outer aliases. For more information on this see the
@@ -181,6 +181,10 @@ pub enum ComponentItem {
     Module(ModuleIndex),
     Component(ComponentIndex),
     ComponentInstance(ComponentInstanceIndex),
+    // TODO: https://github.com/bytecodealliance/wasmtime/issues/4494
+    // The entity is a type; currently unsupported but represented here
+    // so that type exports can be ignored for now.
+    Type,
 }
 
 /// Runtime information about the type information contained within a component.
