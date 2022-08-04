@@ -12,6 +12,7 @@ mod instance;
 mod macros;
 mod nested;
 mod post_return;
+mod strings;
 
 #[test]
 fn components_importing_modules() -> Result<()> {

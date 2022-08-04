@@ -2,11 +2,13 @@
 //
 // struct VMComponentContext {
 //      magic: u32,
+//      transcode_libcalls: &'static VMBuiltinTranscodeArray,
 //      store: *mut dyn Store,
 //      limits: *const VMRuntimeLimits,
 //      flags: [VMGlobalDefinition; component.num_runtime_component_instances],
 //      lowering_anyfuncs: [VMCallerCheckedAnyfunc; component.num_lowerings],
 //      always_trap_anyfuncs: [VMCallerCheckedAnyfunc; component.num_always_trap],
+//      transcoder_anyfuncs: [VMCallerCheckedAnyfunc; component.num_transcoders],
 //      lowerings: [VMLowering; component.num_lowerings],
 //      memories: [*mut VMMemoryDefinition; component.num_memories],
 //      reallocs: [*mut VMCallerCheckedAnyfunc; component.num_reallocs],
@@ -15,7 +17,7 @@
 
 use crate::component::{
     Component, LoweredIndex, RuntimeAlwaysTrapIndex, RuntimeComponentInstanceIndex,
-    RuntimeMemoryIndex, RuntimePostReturnIndex, RuntimeReallocIndex,
+    RuntimeMemoryIndex, RuntimePostReturnIndex, RuntimeReallocIndex, RuntimeTranscoderIndex,
 };
 use crate::PtrSize;
 
@@ -57,14 +59,18 @@ pub struct VMComponentOffsets<P> {
     /// Number of "always trap" functions which have their
     /// `VMCallerCheckedAnyfunc` stored inline in the `VMComponentContext`.
     pub num_always_trap: u32,
+    /// Number of transcoders needed for string conversion.
+    pub num_transcoders: u32,
 
     // precalculated offsets of various member fields
     magic: u32,
+    transcode_libcalls: u32,
     store: u32,
     limits: u32,
     flags: u32,
     lowering_anyfuncs: u32,
     always_trap_anyfuncs: u32,
+    transcoder_anyfuncs: u32,
     lowerings: u32,
     memories: u32,
     reallocs: u32,
@@ -93,12 +99,15 @@ impl<P: PtrSize> VMComponentOffsets<P> {
                 .try_into()
                 .unwrap(),
             num_always_trap: component.num_always_trap,
+            num_transcoders: component.num_transcoders,
             magic: 0,
+            transcode_libcalls: 0,
             store: 0,
             limits: 0,
             flags: 0,
             lowering_anyfuncs: 0,
             always_trap_anyfuncs: 0,
+            transcoder_anyfuncs: 0,
             lowerings: 0,
             memories: 0,
             reallocs: 0,
@@ -133,6 +142,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         fields! {
             size(magic) = 4u32,
             align(u32::from(ret.ptr.size())),
+            size(transcode_libcalls) = ret.ptr.size(),
             size(store) = cmul(2, ret.ptr.size()),
             size(limits) = ret.ptr.size(),
             align(16),
@@ -140,6 +150,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             align(u32::from(ret.ptr.size())),
             size(lowering_anyfuncs) = cmul(ret.num_lowerings, ret.ptr.size_of_vmcaller_checked_anyfunc()),
             size(always_trap_anyfuncs) = cmul(ret.num_always_trap, ret.ptr.size_of_vmcaller_checked_anyfunc()),
+            size(transcoder_anyfuncs) = cmul(ret.num_transcoders, ret.ptr.size_of_vmcaller_checked_anyfunc()),
             size(lowerings) = cmul(ret.num_lowerings, ret.ptr.size() * 2),
             size(memories) = cmul(ret.num_runtime_memories, ret.ptr.size()),
             size(reallocs) = cmul(ret.num_runtime_reallocs, ret.ptr.size()),
@@ -166,6 +177,12 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     #[inline]
     pub fn magic(&self) -> u32 {
         self.magic
+    }
+
+    /// The offset of the `transcode_libcalls` field.
+    #[inline]
+    pub fn transcode_libcalls(&self) -> u32 {
+        self.transcode_libcalls
     }
 
     /// The offset of the `flags` field.
@@ -212,6 +229,20 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     pub fn always_trap_anyfunc(&self, index: RuntimeAlwaysTrapIndex) -> u32 {
         assert!(index.as_u32() < self.num_always_trap);
         self.always_trap_anyfuncs()
+            + index.as_u32() * u32::from(self.ptr.size_of_vmcaller_checked_anyfunc())
+    }
+
+    /// The offset of the `transcoder_anyfuncs` field.
+    #[inline]
+    pub fn transcoder_anyfuncs(&self) -> u32 {
+        self.transcoder_anyfuncs
+    }
+
+    /// The offset of `VMCallerCheckedAnyfunc` for the `index` specified.
+    #[inline]
+    pub fn transcoder_anyfunc(&self, index: RuntimeTranscoderIndex) -> u32 {
+        assert!(index.as_u32() < self.num_transcoders);
+        self.transcoder_anyfuncs()
             + index.as_u32() * u32::from(self.ptr.size_of_vmcaller_checked_anyfunc())
     }
 

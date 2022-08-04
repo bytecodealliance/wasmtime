@@ -10,9 +10,9 @@ use std::sync::Arc;
 use wasmtime_environ::component::{
     AlwaysTrap, ComponentTypes, CoreDef, CoreExport, Export, ExportItem, ExtractMemory,
     ExtractPostReturn, ExtractRealloc, GlobalInitializer, InstantiateModule, LowerImport,
-    RuntimeImportIndex, RuntimeInstanceIndex, RuntimeModuleIndex,
+    RuntimeImportIndex, RuntimeInstanceIndex, RuntimeModuleIndex, Transcoder,
 };
-use wasmtime_environ::{EntityIndex, Global, GlobalInit, PrimaryMap, WasmType};
+use wasmtime_environ::{EntityIndex, EntityType, Global, GlobalInit, PrimaryMap, WasmType};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
 
 /// An instantiated component.
@@ -140,6 +140,11 @@ impl InstanceData {
                         mutability: true,
                         initializer: GlobalInit::I32Const(0),
                     },
+                })
+            }
+            CoreDef::Transcoder(idx) => {
+                wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
+                    anyfunc: self.state.transcoder_anyfunc(*idx),
                 })
             }
         }
@@ -287,6 +292,8 @@ impl<'a> Instantiator<'a> {
                         _ => unreachable!(),
                     });
                 }
+
+                GlobalInitializer::Transcoder(e) => self.transcoder(e),
             }
         }
         Ok(())
@@ -324,6 +331,17 @@ impl<'a> Instantiator<'a> {
             self.component
                 .signatures()
                 .shared_signature(trap.canonical_abi)
+                .expect("found unregistered signature"),
+        );
+    }
+
+    fn transcoder(&mut self, transcoder: &Transcoder) {
+        self.data.state.set_transcoder(
+            transcoder.index,
+            self.component.transcoder_ptr(transcoder.index),
+            self.component
+                .signatures()
+                .shared_signature(transcoder.signature)
                 .expect("found unregistered signature"),
         );
     }
@@ -371,24 +389,16 @@ impl<'a> Instantiator<'a> {
             // core wasm instantiations internally within a component are
             // unnecessary and superfluous. Naturally though mistakes may be
             // made, so double-check this property of wasmtime in debug mode.
+
             if cfg!(debug_assertions) {
-                let export = self.data.lookup_def(store, arg);
                 let (_, _, expected) = imports.next().unwrap();
-                let val = unsafe { crate::Extern::from_wasmtime_export(export, store) };
-                crate::types::matching::MatchCx {
-                    store,
-                    engine: store.engine(),
-                    signatures: module.signatures(),
-                    types: module.types(),
-                }
-                .extern_(&expected, &val)
-                .expect("unexpected typecheck failure");
+                self.assert_type_matches(store, module, arg, expected);
             }
 
-            let export = self.data.lookup_def(store, arg);
             // The unsafety here should be ok since the `export` is loaded
             // directly from an instance which should only give us valid export
             // items.
+            let export = self.data.lookup_def(store, arg);
             unsafe {
                 self.core_imports.push_export(&export);
             }
@@ -396,6 +406,41 @@ impl<'a> Instantiator<'a> {
         debug_assert!(imports.next().is_none());
 
         &self.core_imports
+    }
+
+    fn assert_type_matches(
+        &mut self,
+        store: &mut StoreOpaque,
+        module: &Module,
+        arg: &CoreDef,
+        expected: EntityType,
+    ) {
+        let export = self.data.lookup_def(store, arg);
+
+        // If this value is a core wasm function then the type check is inlined
+        // here. This can otherwise fail `Extern::from_wasmtime_export` because
+        // there's no guarantee that there exists a trampoline for `f` so this
+        // can't fall through to the case below
+        if let wasmtime_runtime::Export::Function(f) = &export {
+            match expected {
+                EntityType::Function(expected) => {
+                    let actual = unsafe { f.anyfunc.as_ref().type_index };
+                    assert_eq!(module.signatures().shared_signature(expected), Some(actual));
+                    return;
+                }
+                _ => panic!("function not expected"),
+            }
+        }
+
+        let val = unsafe { crate::Extern::from_wasmtime_export(export, store) };
+        crate::types::matching::MatchCx {
+            store,
+            engine: store.engine(),
+            signatures: module.signatures(),
+            types: module.types(),
+        }
+        .extern_(&expected, &val)
+        .expect("unexpected typecheck failure");
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::component::func::{Func, Memory, MemoryMut, Options};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContext, StoreContextMut, ValRaw};
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::borrow::Cow;
 use std::fmt;
 use std::marker;
@@ -801,6 +801,10 @@ unsafe impl Lift for char {
     }
 }
 
+// TODO: these probably need different constants for memory64
+const UTF16_TAG: usize = 1 << 31;
+const MAX_STRING_BYTE_LENGTH: usize = (1 << 31) - 1;
+
 // Note that this is similar to `ComponentType for WasmStr` except it can only
 // be used for lowering, not lifting.
 unsafe impl ComponentType for str {
@@ -843,16 +847,51 @@ unsafe impl Lower for str {
 }
 
 fn lower_string<T>(mem: &mut MemoryMut<'_, T>, string: &str) -> Result<(usize, usize)> {
+    // Note that in general the wasm module can't assume anything about what the
+    // host strings are encoded as. Additionally hosts are allowed to have
+    // differently-encoded strings at runtime. Finally when copying a string
+    // into wasm it's somewhat strict in the sense that the various patterns of
+    // allocation and such are already dictated for us.
+    //
+    // In general what this means is that when copying a string from the host
+    // into the destination we need to follow one of the cases of copying into
+    // WebAssembly. It doesn't particularly matter which case as long as it ends
+    // up in the right encoding. For example a destination encoding of
+    // latin1+utf16 has a number of ways to get copied into and we do something
+    // here that isn't the default "utf8 to latin1+utf16" since we have access
+    // to simd-accelerated helpers in the `encoding_rs` crate. This is ok though
+    // because we can fake that the host string was already stored in latin1
+    // format and follow that copy pattern instead.
     match mem.string_encoding() {
+        // This corresponds to `store_string_copy` in the canonical ABI where
+        // the host's representation is utf-8 and the wasm module wants utf-8 so
+        // a copy is all that's needed (and the `realloc` can be precise for the
+        // initial memory allocation).
         StringEncoding::Utf8 => {
+            if string.len() > MAX_STRING_BYTE_LENGTH {
+                bail!(
+                    "string length of {} too large to copy into wasm",
+                    string.len()
+                );
+            }
             let ptr = mem.realloc(0, 0, 1, string.len())?;
             if string.len() > 0 {
                 mem.as_slice_mut()[ptr..][..string.len()].copy_from_slice(string.as_bytes());
             }
             Ok((ptr, string.len()))
         }
+
+        // This corresponds to `store_utf8_to_utf16` in the canonical ABI. Here
+        // an over-large allocation is performed and then shrunk afterwards if
+        // necessary.
         StringEncoding::Utf16 => {
             let size = string.len() * 2;
+            if size > MAX_STRING_BYTE_LENGTH {
+                bail!(
+                    "string length of {} too large to copy into wasm",
+                    string.len()
+                );
+            }
             let mut ptr = mem.realloc(0, 0, 2, size)?;
             let mut copied = 0;
             if size > 0 {
@@ -869,8 +908,60 @@ fn lower_string<T>(mem: &mut MemoryMut<'_, T>, string: &str) -> Result<(usize, u
             }
             Ok((ptr, copied))
         }
+
         StringEncoding::CompactUtf16 => {
-            unimplemented!("compact-utf-16");
+            // This corresponds to `store_string_to_latin1_or_utf16`
+            let bytes = string.as_bytes();
+            let mut iter = string.char_indices();
+            let mut ptr = mem.realloc(0, 0, 2, bytes.len())?;
+            let mut dst = &mut mem.as_slice_mut()[ptr..][..bytes.len()];
+            let mut result = 0;
+            while let Some((i, ch)) = iter.next() {
+                // Test if this `char` fits into the latin1 encoding.
+                if let Ok(byte) = u8::try_from(u32::from(ch)) {
+                    dst[result] = byte;
+                    result += 1;
+                    continue;
+                }
+
+                // .. if utf16 is forced to be used then the allocation is
+                // bumped up to the maximum size.
+                let worst_case = bytes
+                    .len()
+                    .checked_mul(2)
+                    .ok_or_else(|| anyhow!("byte length overflow"))?;
+                if worst_case > MAX_STRING_BYTE_LENGTH {
+                    bail!("byte length too large");
+                }
+                ptr = mem.realloc(ptr, bytes.len(), 2, worst_case)?;
+                dst = &mut mem.as_slice_mut()[ptr..][..worst_case];
+
+                // Previously encoded latin1 bytes are inflated to their 16-bit
+                // size for utf16
+                for i in (0..result).rev() {
+                    dst[2 * i] = dst[i];
+                    dst[2 * i + 1] = 0;
+                }
+
+                // and then the remainder of the string is encoded.
+                for (u, bytes) in string[i..]
+                    .encode_utf16()
+                    .zip(dst[2 * result..].chunks_mut(2))
+                {
+                    let u_bytes = u.to_le_bytes();
+                    bytes[0] = u_bytes[0];
+                    bytes[1] = u_bytes[1];
+                    result += 1;
+                }
+                if worst_case > 2 * result {
+                    ptr = mem.realloc(ptr, worst_case, 2, 2 * result)?;
+                }
+                return Ok((ptr, result | UTF16_TAG));
+            }
+            if result < bytes.len() {
+                ptr = mem.realloc(ptr, bytes.len(), 2, result)?;
+            }
+            Ok((ptr, result))
         }
     }
 }
@@ -898,7 +989,13 @@ impl WasmStr {
         let byte_len = match memory.string_encoding() {
             StringEncoding::Utf8 => Some(len),
             StringEncoding::Utf16 => len.checked_mul(2),
-            StringEncoding::CompactUtf16 => unimplemented!(),
+            StringEncoding::CompactUtf16 => {
+                if len & UTF16_TAG == 0 {
+                    Some(len)
+                } else {
+                    (len ^ UTF16_TAG).checked_mul(2)
+                }
+            }
         };
         match byte_len.and_then(|len| ptr.checked_add(len)) {
             Some(n) if n <= memory.as_slice().len() => {}
@@ -939,8 +1036,14 @@ impl WasmStr {
     fn to_str_from_store<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
         match self.options.string_encoding() {
             StringEncoding::Utf8 => self.decode_utf8(store),
-            StringEncoding::Utf16 => self.decode_utf16(store),
-            StringEncoding::CompactUtf16 => unimplemented!(),
+            StringEncoding::Utf16 => self.decode_utf16(store, self.len),
+            StringEncoding::CompactUtf16 => {
+                if self.len & UTF16_TAG == 0 {
+                    self.decode_latin1(store)
+                } else {
+                    self.decode_utf16(store, self.len ^ UTF16_TAG)
+                }
+            }
         }
     }
 
@@ -952,10 +1055,10 @@ impl WasmStr {
         Ok(str::from_utf8(&memory[self.ptr..][..self.len])?.into())
     }
 
-    fn decode_utf16<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
+    fn decode_utf16<'a>(&self, store: &'a StoreOpaque, len: usize) -> Result<Cow<'a, str>> {
         let memory = self.options.memory(store);
         // See notes in `decode_utf8` for why this is panicking indexing.
-        let memory = &memory[self.ptr..][..self.len * 2];
+        let memory = &memory[self.ptr..][..len * 2];
         Ok(std::char::decode_utf16(
             memory
                 .chunks(2)
@@ -963,6 +1066,14 @@ impl WasmStr {
         )
         .collect::<Result<String, _>>()?
         .into())
+    }
+
+    fn decode_latin1<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
+        // See notes in `decode_utf8` for why this is panicking indexing.
+        let memory = self.options.memory(store);
+        Ok(encoding_rs::mem::decode_latin1(
+            &memory[self.ptr..][..self.len],
+        ))
     }
 }
 
@@ -1068,7 +1179,7 @@ where
     let size = list
         .len()
         .checked_mul(elem_size)
-        .ok_or_else(|| anyhow::anyhow!("size overflow copying a list"))?;
+        .ok_or_else(|| anyhow!("size overflow copying a list"))?;
     let ptr = mem.realloc(0, 0, T::ALIGN32, size)?;
     let mut cur = ptr;
     for item in list {

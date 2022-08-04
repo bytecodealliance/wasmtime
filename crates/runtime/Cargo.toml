@@ -25,6 +25,7 @@ rand = "0.8.3"
 anyhow = "1.0.38"
 memfd = { version = "0.6.1", optional = true }
 paste = "1.0.3"
+encoding_rs = { version = "0.8.31", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 mach = "0.3.2"
@@ -62,4 +63,7 @@ pooling-allocator = []
 # need portable signal handling.
 posix-signals-on-macos = []
 
-component-model = ["wasmtime-environ/component-model"]
+component-model = [
+  "wasmtime-environ/component-model",
+  "dep:encoding_rs",
+]
