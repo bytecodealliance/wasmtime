@@ -2872,17 +2872,49 @@
 (rule (lower_branch (brif cc (ifcmp a b) _ _) (two_targets taken not_taken))
       (side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
 
-;; Rules for `brz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Rules for `brff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower_branch (brff cc (ffcmp a b) _ _) (two_targets taken not_taken))
+      (side_effect (jmp_cond_fcmp (emit_fcmp cc a b) taken not_taken)))
+
+;; Rules for `brz` and `brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower_branch (brz (icmp cc a b) _ _) (two_targets taken not_taken))
       (let ((cmp IcmpCondResult (invert_icmp_cond_result (emit_cmp cc a b))))
         (side_effect (jmp_cond_icmp cmp taken not_taken))))
 
-;; Rules for `brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower_branch (brz (fcmp cc a b) _ _) (two_targets taken not_taken))
+      (let ((cmp FcmpCondResult (emit_fcmp (floatcc_inverse cc) a b)))
+        (side_effect (jmp_cond_fcmp cmp taken not_taken))))
+
+(rule (lower_branch (brz val @ (value_type $I128) _ _) (two_targets taken not_taken))
+      (side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.NZ) val) taken not_taken)))
 
 (rule (lower_branch (brnz (icmp cc a b) _ _) (two_targets taken not_taken))
       (side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
 
+(rule (lower_branch (brnz (fcmp cc a b) _ _) (two_targets taken not_taken))
+      (let ((cmp FcmpCondResult (emit_fcmp cc a b)))
+        (side_effect (jmp_cond_fcmp cmp taken not_taken))))
+
+(rule (lower_branch (brnz val @ (value_type $I128) _ _) (two_targets taken not_taken))
+      (side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.Z) val) taken not_taken)))
+
+;; Compare an I128 value to zero, returning a flags result suitable for making a
+;; jump decision. The comparison is implemented as `(hi == 0) && (low == 0)`,
+;; and the result can be interpreted as follows
+;; * CC.Z indicates that the value was non-zero, as one or both of the halves of
+;;   the value were non-zero
+;; * CC.NZ indicates that both halves of the value were 0
+(decl cmp_zero_i128 (CC ValueRegs) IcmpCondResult)
+(rule (cmp_zero_i128 (cc_nz_or_z cc) val)
+      (let ((lo Gpr (value_regs_get_gpr val 0))
+            (hi Gpr (value_regs_get_gpr val 1))
+            (lo_z Gpr (with_flags_reg (x64_cmp (OperandSize.Size64) (RegMemImm.Imm 0) lo)
+                                      (x64_setcc (CC.Z))))
+            (hi_z Gpr (with_flags_reg (x64_cmp (OperandSize.Size64) (RegMemImm.Imm 0) hi)
+                                      (x64_setcc (CC.Z)))))
+          (icmp_cond_result (x64_test (OperandSize.Size8) lo_z hi_z) cc)))
 
 ;; Rules for `bricmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

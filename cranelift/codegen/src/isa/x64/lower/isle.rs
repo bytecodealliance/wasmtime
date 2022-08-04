@@ -14,7 +14,7 @@ use crate::ir::LibCall;
 use crate::isa::x64::lower::emit_vm_call;
 use crate::{
     ir::{
-        condcodes::{FloatCC, IntCC},
+        condcodes::{CondCode, FloatCC, IntCC},
         immediates::*,
         types::*,
         Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueList,
@@ -588,6 +588,20 @@ where
     #[inline]
     fn cc_invert(&mut self, cc: &CC) -> CC {
         cc.invert()
+    }
+
+    #[inline]
+    fn cc_nz_or_z(&mut self, cc: &CC) -> Option<CC> {
+        match cc {
+            CC::Z => Some(*cc),
+            CC::NZ => Some(*cc),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    fn floatcc_inverse(&mut self, cc: &FloatCC) -> FloatCC {
+        cc.inverse()
     }
 
     #[inline]

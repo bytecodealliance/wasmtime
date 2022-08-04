@@ -729,10 +729,6 @@ impl Inst {
         Inst::JmpKnown { dst }
     }
 
-    pub(crate) fn jmp_if(cc: CC, taken: MachLabel) -> Inst {
-        Inst::JmpIf { cc, taken }
-    }
-
     pub(crate) fn jmp_cond(cc: CC, taken: MachLabel, not_taken: MachLabel) -> Inst {
         Inst::JmpCond {
             cc,
@@ -892,21 +888,13 @@ impl PrettyPrint for Inst {
             .to_string()
         }
 
-        fn suffix_lqb(size: OperandSize, is_8: bool) -> String {
-            match (size, is_8) {
-                (_, true) => "b",
-                (OperandSize::Size32, false) => "l",
-                (OperandSize::Size64, false) => "q",
+        fn suffix_lqb(size: OperandSize) -> String {
+            match size {
+                OperandSize::Size32 => "l",
+                OperandSize::Size64 => "q",
                 _ => unreachable!(),
             }
             .to_string()
-        }
-
-        fn size_lqb(size: OperandSize, is_8: bool) -> u8 {
-            if is_8 {
-                return 1;
-            }
-            size.to_bytes()
         }
 
         fn suffix_bwlq(size: OperandSize) -> String {
@@ -922,11 +910,10 @@ impl PrettyPrint for Inst {
             Inst::Nop { len } => format!("{} len={}", ljustify("nop".to_string()), len),
 
             Inst::AluRmiR { size, op, dst, .. } if self.produces_const() => {
-                let dst =
-                    pretty_print_reg(dst.to_reg().to_reg(), size_lqb(*size, op.is_8bit()), allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
                 format!(
                     "{} {}, {}, {}",
-                    ljustify2(op.to_string(), suffix_lqb(*size, op.is_8bit())),
+                    ljustify2(op.to_string(), suffix_lqb(*size)),
                     dst,
                     dst,
                     dst
@@ -939,13 +926,13 @@ impl PrettyPrint for Inst {
                 src2,
                 dst,
             } => {
-                let size_bytes = size_lqb(*size, op.is_8bit());
+                let size_bytes = size.to_bytes();
                 let src1 = pretty_print_reg(src1.to_reg(), size_bytes, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size_bytes, allocs);
                 let src2 = src2.pretty_print(size_bytes, allocs);
                 format!(
                     "{} {}, {}, {}",
-                    ljustify2(op.to_string(), suffix_lqb(*size, op.is_8bit())),
+                    ljustify2(op.to_string(), suffix_lqb(*size)),
                     src1,
                     src2,
                     dst
@@ -957,12 +944,12 @@ impl PrettyPrint for Inst {
                 src1_dst,
                 src2,
             } => {
-                let size_bytes = size_lqb(*size, op.is_8bit());
+                let size_bytes = size.to_bytes();
                 let src2 = pretty_print_reg(src2.to_reg(), size_bytes, allocs);
                 let src1_dst = src1_dst.pretty_print(size_bytes, allocs);
                 format!(
                     "{} {}, {}",
-                    ljustify2(op.to_string(), suffix_lqb(*size, op.is_8bit())),
+                    ljustify2(op.to_string(), suffix_lqb(*size)),
                     src2,
                     src1_dst,
                 )

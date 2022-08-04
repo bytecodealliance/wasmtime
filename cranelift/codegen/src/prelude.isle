@@ -553,7 +553,10 @@
 (type SideEffectNoResult (enum
                           (Inst (inst MInst))
                           (Inst2 (inst1 MInst)
-                                 (inst2 MInst))))
+                                 (inst2 MInst))
+                          (Inst3 (inst1 MInst)
+                                 (inst2 MInst)
+                                 (inst3 MInst))))
 
 ;; Create an empty `InstOutput`, but do emit the given side-effectful
 ;; instruction.
@@ -565,10 +568,19 @@
       (let ((_ Unit (emit inst1))
             (_ Unit (emit inst2)))
         (output_none)))
+(rule (side_effect (SideEffectNoResult.Inst3 inst1 inst2 inst3))
+      (let ((_ Unit (emit inst1))
+            (_ Unit (emit inst2))
+            (_ Unit (emit inst3)))
+        (output_none)))
 
 (decl side_effect_concat (SideEffectNoResult SideEffectNoResult) SideEffectNoResult)
 (rule (side_effect_concat (SideEffectNoResult.Inst inst1) (SideEffectNoResult.Inst inst2))
       (SideEffectNoResult.Inst2 inst1 inst2))
+(rule (side_effect_concat (SideEffectNoResult.Inst inst1) (SideEffectNoResult.Inst2 inst2 inst3))
+      (SideEffectNoResult.Inst3 inst1 inst2 inst3))
+(rule (side_effect_concat (SideEffectNoResult.Inst2 inst1 inst2) (SideEffectNoResult.Inst inst3))
+      (SideEffectNoResult.Inst3 inst1 inst2 inst3))
 
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -595,6 +607,7 @@
 ;; ProducesFlags. See `with_flags` below for more.
 (type ConsumesFlags (enum
                      (ConsumesFlagsSideEffect (inst MInst))
+                     (ConsumesFlagsSideEffect2 (inst1 MInst) (inst2 MInst))
                      (ConsumesFlagsReturnsResultWithProducer (inst MInst) (result Reg))
                      (ConsumesFlagsReturnsReg (inst MInst) (result Reg))
                      (ConsumesFlagsTwiceReturnsValueRegs (inst1 MInst)
@@ -630,6 +643,10 @@
        inst1
        inst2
        (value_regs reg1 reg2)))
+(rule (consumes_flags_concat
+        (ConsumesFlags.ConsumesFlagsSideEffect inst1)
+        (ConsumesFlags.ConsumesFlagsSideEffect inst2))
+      (ConsumesFlags.ConsumesFlagsSideEffect2 inst1 inst2))
 
 ;; Combine flags-producing and -consuming instructions together, ensuring that
 ;; they are emitted back-to-back and no other instructions can be emitted
@@ -708,9 +725,19 @@
       (SideEffectNoResult.Inst c))
 
 (rule (with_flags_side_effect
+        (ProducesFlags.AlreadyExistingFlags)
+        (ConsumesFlags.ConsumesFlagsSideEffect2 c1 c2))
+      (SideEffectNoResult.Inst2 c1 c2))
+
+(rule (with_flags_side_effect
         (ProducesFlags.ProducesFlagsSideEffect p)
         (ConsumesFlags.ConsumesFlagsSideEffect c))
       (SideEffectNoResult.Inst2 p c))
+
+(rule (with_flags_side_effect
+        (ProducesFlags.ProducesFlagsSideEffect p)
+        (ConsumesFlags.ConsumesFlagsSideEffect2 c1 c2))
+      (SideEffectNoResult.Inst3 p c1 c2))
 
 ;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -126,3 +126,62 @@ block2:
 ;   popq    %rbp
 ;   ret
 
+function %f4(f32, f32) -> b1 {
+block0(v0: f32, v1: f32):
+  v2 = fcmp eq v0, v1
+  brz v2, block1
+  jump block2
+block1:
+  v3 = bconst.b1 true
+  return v3
+block2:
+  v4 = bconst.b1 false
+  return v4
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ucomiss %xmm1, %xmm0
+;   jp      label1
+;   jnz     label1; j label2
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   xorl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f4(f32, f32) -> b1 {
+block0(v0: f32, v1: f32):
+  v2 = fcmp ne v0, v1
+  brz v2, block1
+  jump block2
+block1:
+  v3 = bconst.b1 true
+  return v3
+block2:
+  v4 = bconst.b1 false
+  return v4
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ucomiss %xmm1, %xmm0
+;   jp      label2
+;   jnz     label2; j label1
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   xorl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
