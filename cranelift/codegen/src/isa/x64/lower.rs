@@ -2730,6 +2730,10 @@ impl LowerBackend for X64Backend {
         // trap. These conditions are verified by `is_ebb_basic()` during the
         // verifier pass.
         assert!(branches.len() <= 2);
+        if branches.len() == 2 {
+            let op1 = ctx.data(branches[1]).opcode();
+            assert!(op1 == Opcode::Jump);
+        }
 
         if let Ok(()) = isle::lower_branch(
             ctx,
