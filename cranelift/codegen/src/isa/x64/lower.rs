@@ -1881,43 +1881,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(inst);
         }
 
-        Opcode::Select => {
+        Opcode::Select
+        | Opcode::Selectif | Opcode::SelectifSpectreGuard => {
             implemented_in_isle(ctx);
-        }
-
-        Opcode::Selectif | Opcode::SelectifSpectreGuard => {
-            let lhs = put_input_in_regs(ctx, inputs[1]);
-            let rhs = put_input_in_regs(ctx, inputs[2]);
-            let dst = get_output_reg(ctx, outputs[0]);
-            let ty = ctx.output_ty(insn, 0);
-
-            // Verification ensures that the input is always a single-def ifcmp.
-            let cmp_insn = ctx
-                .get_input_as_source_or_const(inputs[0].insn, inputs[0].input)
-                .inst
-                .as_inst()
-                .unwrap()
-                .0;
-            debug_assert_eq!(ctx.data(cmp_insn).opcode(), Opcode::Ifcmp);
-            let cond_code = ctx.data(insn).cond_code().unwrap();
-            let cond_code = emit_cmp(ctx, cmp_insn, cond_code);
-
-            let cc = CC::from_intcc(cond_code);
-
-            if is_int_or_ref_ty(ty) || ty == types::I128 {
-                let size = ty.bytes() as u8;
-                emit_moves(ctx, dst, rhs, ty);
-                emit_cmoves(ctx, size, cc, lhs, dst);
-            } else {
-                debug_assert!(ty == types::F32 || ty == types::F64);
-                emit_moves(ctx, dst, rhs, ty);
-                ctx.emit(Inst::xmm_cmove(
-                    ty,
-                    cc,
-                    RegMem::reg(lhs.only_reg().unwrap()),
-                    dst.only_reg().unwrap(),
-                ));
-            }
         }
 
         Opcode::Udiv | Opcode::Urem | Opcode::Sdiv | Opcode::Srem => {

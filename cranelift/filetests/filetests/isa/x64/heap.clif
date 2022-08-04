@@ -25,9 +25,8 @@ block0(v0: i32, v1: i64):
 ;   jbe     label1; j label2
 ; block1:
 ;   addq    %rax, 0(%rsi), %rax
-;   xorq    %rdx, %rdx, %rdx
 ;   cmpq    %rdi, %rcx
-;   cmovnbeq %rdx, %rax, %rax
+;   cmovnbeq const(VCodeConstant(0)), %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

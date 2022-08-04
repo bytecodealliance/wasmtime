@@ -3140,7 +3140,6 @@
           (ConsumesFlags.ConsumesFlagsSideEffect
             (MInst.JmpTableSeq idx tmp1 tmp2 default_target jt_targets)))))
 
-
 ;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type IcmpCondResult (enum (Condition (producer ProducesFlags) (cc CC))))
@@ -3156,6 +3155,11 @@
 (decl lower_icmp_bool (IcmpCondResult) ValueRegs)
 (rule (lower_icmp_bool (IcmpCondResult.Condition producer cc))
       (with_flags producer (x64_setcc cc)))
+
+;; Emit a conditional move based on the result of an icmp.
+(decl select_icmp (IcmpCondResult Value Value) ValueRegs)
+(rule (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type ty) y)
+      (with_flags producer (cmove_from_values ty cc x y)))
 
 (decl emit_cmp (IntCC Value Value) IcmpCondResult)
 

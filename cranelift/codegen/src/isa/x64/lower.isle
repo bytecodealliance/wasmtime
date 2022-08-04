@@ -2945,3 +2945,11 @@
 
 (rule (lower_branch (br_table idx @ (value_type ty) _ _) (jump_table_targets default_target jt_targets))
       (side_effect (jmp_table_seq ty idx default_target jt_targets)))
+
+;; Rules for `selectif` and `selectif_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (selectif cc (ifcmp a b) x y)))
+      (select_icmp (emit_cmp cc a b) x y))
+
+(rule (lower (has_type ty (selectif_spectre_guard cc (ifcmp a b) x y)))
+      (select_icmp (emit_cmp cc a b) x y))
