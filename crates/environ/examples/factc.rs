@@ -89,7 +89,7 @@ impl Factc {
         let mut next_def = 0;
         let mut dummy_def = || {
             next_def += 1;
-            CoreDef::Adapter(AdapterIndex::from_u32(next_def))
+            dfg::CoreDef::Adapter(dfg::AdapterId::from_u32(next_def))
         };
 
         // Manufactures a `CoreExport` for a memory with the shape specified. Note
@@ -112,8 +112,8 @@ impl Factc {
             } else {
                 dst[0]
             };
-            CoreExport {
-                instance: RuntimeInstanceIndex::from_u32(idx),
+            dfg::CoreExport {
+                instance: dfg::InstanceId::from_u32(idx),
                 item: ExportItem::Name(String::new()),
             }
         };
