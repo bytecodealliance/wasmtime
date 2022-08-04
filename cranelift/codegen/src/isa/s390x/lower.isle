@@ -1246,6 +1246,41 @@
       (vec_and ty x (vec_imm ty 1)))
 
 
+;;;; Rules for `bitrev` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (bitrev x)))
+      (bitrev_bytes ty
+        (bitrev_bits 4 0xf0f0_f0f0_f0f0_f0f0 ty
+          (bitrev_bits 2 0xcccc_cccc_cccc_cccc ty
+            (bitrev_bits 1 0xaaaa_aaaa_aaaa_aaaa ty x)))))
+
+(decl bitrev_bits (u8 u64 Type Reg) Reg)
+(rule (bitrev_bits size bitmask (fits_in_64 ty) x)
+      (let ((mask Reg (imm ty bitmask))
+            (xh Reg (lshl_imm (ty_ext32 ty) x size))
+            (xl Reg (lshr_imm (ty_ext32 ty) x size))
+            (xh_masked Reg (and_reg ty xh mask))
+            (xl_masked Reg (and_reg ty xl (not_reg ty mask))))
+        (or_reg ty xh_masked xl_masked)))
+
+(rule (bitrev_bits size bitmask (vr128_ty ty) x)
+      (let ((mask Reg (vec_imm_splat $I64X2 bitmask))
+            (size_reg Reg (vec_imm_splat $I8X16 (u8_as_u64 size)))
+            (xh Reg (vec_lshl_by_bit x size_reg))
+            (xl Reg (vec_lshr_by_bit x size_reg)))
+        (vec_select ty xh xl mask)))
+
+(decl bitrev_bytes (Type Reg) Reg)
+(rule (bitrev_bytes $I8 x) x)
+(rule (bitrev_bytes $I16 x) (lshr_imm $I32 (bswap_reg $I32 x) 16))
+(rule (bitrev_bytes $I32 x) (bswap_reg $I32 x))
+(rule (bitrev_bytes $I64 x) (bswap_reg $I64 x))
+(rule (bitrev_bytes $I128 x)
+      (vec_permute $I128 x x
+                   (vec_imm $I8X16 (imm8x16 15 14 13 12 11 10 9 8
+                                            7 6 5 4 3 2 1 0))))
+
+
 ;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The FLOGR hardware instruction always operates on the full 64-bit register.
