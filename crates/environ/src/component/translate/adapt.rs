@@ -493,9 +493,12 @@ impl PartitionAdapterModules {
             GlobalInitializer::LowerImport(_) => self.items.lowerings += 1,
             GlobalInitializer::AlwaysTrap(_) => self.items.always_trap += 1,
 
+            GlobalInitializer::ExtractMemory(memory) => {
+                self.process_core_export(&mut memory.export);
+            }
+
             // Nothing is defined or referenced by these initializers that we
             // need to worry about here.
-            GlobalInitializer::ExtractMemory(_) => {}
             GlobalInitializer::SaveStaticModule(_) => {}
             GlobalInitializer::SaveModuleImport(_) => {}
         }
