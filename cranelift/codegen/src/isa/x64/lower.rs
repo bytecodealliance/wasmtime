@@ -5,8 +5,7 @@ pub(super) mod isle;
 
 use crate::data_value::DataValue;
 use crate::ir::{
-    condcodes::{FloatCC, IntCC},
-    types, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type,
+    condcodes::FloatCC, types, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type,
 };
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
@@ -217,38 +216,9 @@ fn extend_input_to_reg<C: LowerCtx<I = Inst>>(
     dst.to_reg()
 }
 
-/// Returns whether the given input is an immediate that can be properly sign-extended, without any
-/// possible side-effect.
-fn non_reg_input_to_sext_imm(input: NonRegInput, input_ty: Type) -> Option<u32> {
-    input.constant.and_then(|x| {
-        // For i64 instructions (prefixed with REX.W), require that the immediate will sign-extend
-        // to 64 bits. For other sizes, it doesn't matter and we can just use the plain
-        // constant.
-        if input_ty.bytes() != 8 || low32_will_sign_extend_to_64(x) {
-            Some(x as u32)
-        } else {
-            None
-        }
-    })
-}
-
 fn input_to_imm<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Option<u64> {
     ctx.get_input_as_source_or_const(spec.insn, spec.input)
         .constant
-}
-
-/// Put the given input into an immediate, a register or a memory operand.
-/// Effectful: may mark the given input as used, when returning the register form.
-fn input_to_reg_mem_imm<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> RegMemImm {
-    let input = ctx.get_input_as_source_or_const(spec.insn, spec.input);
-    let input_ty = ctx.input_ty(spec.insn, spec.input);
-    match non_reg_input_to_sext_imm(input, input_ty) {
-        Some(x) => RegMemImm::imm(x),
-        None => match input_to_reg_mem(ctx, spec) {
-            RegMem::Reg { reg } => RegMemImm::reg(reg),
-            RegMem::Mem { addr } => RegMemImm::mem(addr),
-        },
-    }
 }
 
 /// Emit an instruction to insert a value `src` into a lane of `dst`.
@@ -354,119 +324,6 @@ fn emit_extract_lane<C: LowerCtx<I = Inst>>(
         }
     } else {
         panic!("unable to emit extractlane for type: {}", ty)
-    }
-}
-
-/// Emits an int comparison instruction.
-///
-/// Note: make sure that there are no instructions modifying the flags between a call to this
-/// function and the use of the flags!
-///
-/// Takes the condition code that will be tested, and returns
-/// the condition code that should be used. This allows us to
-/// synthesize comparisons out of multiple instructions for
-/// special cases (e.g., 128-bit integers).
-fn emit_cmp<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst, cc: IntCC) -> IntCC {
-    let ty = ctx.input_ty(insn, 0);
-
-    let inputs = [InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
-
-    if ty == types::I128 {
-        // We need to compare both halves and combine the results appropriately.
-        let cmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-        let cmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-        let lhs = put_input_in_regs(ctx, inputs[0]);
-        let lhs_lo = lhs.regs()[0];
-        let lhs_hi = lhs.regs()[1];
-        let rhs = put_input_in_regs(ctx, inputs[1]);
-        let rhs_lo = RegMemImm::reg(rhs.regs()[0]);
-        let rhs_hi = RegMemImm::reg(rhs.regs()[1]);
-        match cc {
-            IntCC::Equal => {
-                ctx.emit(Inst::cmp_rmi_r(OperandSize::Size64, rhs_hi, lhs_hi));
-                ctx.emit(Inst::setcc(CC::Z, cmp1));
-                ctx.emit(Inst::cmp_rmi_r(OperandSize::Size64, rhs_lo, lhs_lo));
-                ctx.emit(Inst::setcc(CC::Z, cmp2));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::And,
-                    RegMemImm::reg(cmp1.to_reg()),
-                    cmp2,
-                ));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::And,
-                    RegMemImm::imm(1),
-                    cmp2,
-                ));
-                IntCC::NotEqual
-            }
-            IntCC::NotEqual => {
-                ctx.emit(Inst::cmp_rmi_r(OperandSize::Size64, rhs_hi, lhs_hi));
-                ctx.emit(Inst::setcc(CC::NZ, cmp1));
-                ctx.emit(Inst::cmp_rmi_r(OperandSize::Size64, rhs_lo, lhs_lo));
-                ctx.emit(Inst::setcc(CC::NZ, cmp2));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::Or,
-                    RegMemImm::reg(cmp1.to_reg()),
-                    cmp2,
-                ));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::And,
-                    RegMemImm::imm(1),
-                    cmp2,
-                ));
-                IntCC::NotEqual
-            }
-            IntCC::SignedLessThan
-            | IntCC::SignedLessThanOrEqual
-            | IntCC::SignedGreaterThan
-            | IntCC::SignedGreaterThanOrEqual
-            | IntCC::UnsignedLessThan
-            | IntCC::UnsignedLessThanOrEqual
-            | IntCC::UnsignedGreaterThan
-            | IntCC::UnsignedGreaterThanOrEqual => {
-                // Result = (lhs_hi <> rhs_hi) ||
-                //          (lhs_hi == rhs_hi && lhs_lo <> rhs_lo)
-                let cmp3 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                ctx.emit(Inst::cmp_rmi_r(OperandSize::Size64, rhs_hi, lhs_hi));
-                ctx.emit(Inst::setcc(CC::from_intcc(cc.without_equal()), cmp1));
-                ctx.emit(Inst::setcc(CC::Z, cmp2));
-                ctx.emit(Inst::cmp_rmi_r(OperandSize::Size64, rhs_lo, lhs_lo));
-                ctx.emit(Inst::setcc(CC::from_intcc(cc.unsigned()), cmp3));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::And,
-                    RegMemImm::reg(cmp2.to_reg()),
-                    cmp3,
-                ));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::Or,
-                    RegMemImm::reg(cmp1.to_reg()),
-                    cmp3,
-                ));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::And,
-                    RegMemImm::imm(1),
-                    cmp3,
-                ));
-                IntCC::NotEqual
-            }
-            _ => panic!("Unhandled IntCC in I128 comparison: {:?}", cc),
-        }
-    } else {
-        // TODO Try to commute the operands (and invert the condition) if one is an immediate.
-        let lhs = put_input_in_reg(ctx, inputs[0]);
-        let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
-
-        // Cranelift's icmp semantics want to compare lhs - rhs, while Intel gives
-        // us dst - src at the machine instruction level, so invert operands.
-        ctx.emit(Inst::cmp_rmi_r(OperandSize::from_ty(ty), rhs, lhs));
-        cc
     }
 }
 
@@ -632,37 +489,6 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i
     Amode::imm_reg(offset as u32, input).with_flags(flags)
 }
 
-fn emit_moves<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    dst: ValueRegs<Writable<Reg>>,
-    src: ValueRegs<Reg>,
-    ty: Type,
-) {
-    let (_, tys) = Inst::rc_for_type(ty).unwrap();
-    for ((dst, src), ty) in dst.regs().iter().zip(src.regs().iter()).zip(tys.iter()) {
-        ctx.emit(Inst::gen_move(*dst, *src, *ty));
-    }
-}
-
-fn emit_cmoves<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    size: u8,
-    cc: CC,
-    src: ValueRegs<Reg>,
-    dst: ValueRegs<Writable<Reg>>,
-) {
-    let size = size / src.len() as u8;
-    let size = u8::max(size, 4); // at least 32 bits
-    for (dst, src) in dst.regs().iter().zip(src.regs().iter()) {
-        ctx.emit(Inst::cmove(
-            OperandSize::from_bytes(size.into()),
-            cc,
-            RegMem::reg(*src),
-            *dst,
-        ));
-    }
-}
-
 //=============================================================================
 // Top-level instruction lowering entry point, for one instruction.
 
@@ -797,7 +623,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Trapff
         | Opcode::GetFramePointer
         | Opcode::GetStackPointer
-        | Opcode::GetReturnAddress => {
+        | Opcode::GetReturnAddress
+        | Opcode::Select
+        | Opcode::Selectif
+        | Opcode::SelectifSpectreGuard => {
             implemented_in_isle(ctx);
         }
 
@@ -1879,11 +1708,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.abi()
                     .sized_stackslot_addr(stack_slot, u32::try_from(offset).unwrap(), dst);
             ctx.emit(inst);
-        }
-
-        Opcode::Select
-        | Opcode::Selectif | Opcode::SelectifSpectreGuard => {
-            implemented_in_isle(ctx);
         }
 
         Opcode::Udiv | Opcode::Urem | Opcode::Sdiv | Opcode::Srem => {

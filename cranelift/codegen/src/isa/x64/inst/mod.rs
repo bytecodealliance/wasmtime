@@ -645,21 +645,6 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_cmove(ty: Type, cc: CC, src: RegMem, dst: Writable<Reg>) -> Inst {
-        debug_assert!(ty == types::F32 || ty == types::F64 || ty.is_vector());
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        let src = XmmMem::new(src).unwrap();
-        let dst = WritableXmm::from_writable_reg(dst).unwrap();
-        Inst::XmmCmove {
-            ty,
-            cc,
-            consequent: src,
-            alternative: dst.to_reg(),
-            dst,
-        }
-    }
-
     pub(crate) fn push64(src: RegMemImm) -> Inst {
         src.assert_regclass_is(RegClass::Int);
         let src = GprMemImm::new(src).unwrap();
