@@ -185,3 +185,41 @@ block2:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+
+
+function %f5(i32) -> b1 {
+  jt0 = jump_table [block1, block2]
+
+block0(v0: i32):
+  br_table v0, block1, jt0
+
+block1:
+  v1 = bconst.b1 true
+  return v1
+
+block2:
+  v2 = bconst.b1 false
+  return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $0, %r8d
+;   cmpl    $2, %edi
+;   br_table %rdi
+; block1:
+;   jmp     label3
+; block2:
+;   jmp     label3
+; block3:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block4:
+;   xorl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

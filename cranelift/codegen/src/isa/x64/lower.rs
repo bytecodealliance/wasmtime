@@ -16,7 +16,6 @@ use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::{Flags, TlsModel};
-use alloc::boxed::Box;
 use smallvec::SmallVec;
 use std::convert::TryFrom;
 use target_lexicon::Triple;
@@ -171,6 +170,7 @@ fn input_to_reg_mem<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> RegM
 /// An extension specification for `extend_input_to_reg`.
 #[derive(Clone, Copy)]
 enum ExtSpec {
+    #[allow(dead_code)]
     ZeroExtendTo32,
     ZeroExtendTo64,
     SignExtendTo32,
@@ -2730,6 +2730,10 @@ impl LowerBackend for X64Backend {
         // trap. These conditions are verified by `is_ebb_basic()` during the
         // verifier pass.
         assert!(branches.len() <= 2);
+        if branches.len() == 2 {
+            let op1 = ctx.data(branches[1]).opcode();
+            assert!(op1 == Opcode::Jump);
+        }
 
         if let Ok(()) = isle::lower_branch(
             ctx,
@@ -2742,96 +2746,10 @@ impl LowerBackend for X64Backend {
             return Ok(());
         }
 
-        let implemented_in_isle = |ctx: &mut C| {
-            unreachable!(
-                "branch implemented in ISLE: inst = `{}`",
-                ctx.dfg().display_inst(branches[0])
-            )
-        };
-
-        if branches.len() == 2 {
-            implemented_in_isle(ctx)
-        } else {
-            assert_eq!(branches.len(), 1);
-
-            // Must be an unconditional branch or trap.
-            let op = ctx.data(branches[0]).opcode();
-            match op {
-                Opcode::Jump => implemented_in_isle(ctx),
-
-                Opcode::BrTable => {
-                    let jt_size = targets.len() - 1;
-                    assert!(jt_size <= u32::MAX as usize);
-                    let jt_size = jt_size as u32;
-
-                    let ty = ctx.input_ty(branches[0], 0);
-                    let idx = extend_input_to_reg(
-                        ctx,
-                        InsnInput {
-                            insn: branches[0],
-                            input: 0,
-                        },
-                        ExtSpec::ZeroExtendTo32,
-                    );
-
-                    // Emit the compound instruction that does:
-                    //
-                    // lea $jt, %rA
-                    // movsbl [%rA, %rIndex, 2], %rB
-                    // add %rB, %rA
-                    // j *%rA
-                    // [jt entries]
-                    //
-                    // This must be *one* instruction in the vcode because we cannot allow regalloc
-                    // to insert any spills/fills in the middle of the sequence; otherwise, the
-                    // lea PC-rel offset to the jumptable would be incorrect.  (The alternative
-                    // is to introduce a relocation pass for inlined jumptables, which is much
-                    // worse.)
-
-                    // This temporary is used as a signed integer of 64-bits (to hold addresses).
-                    let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                    // This temporary is used as a signed integer of 32-bits (for the wasm-table
-                    // index) and then 64-bits (address addend). The small lie about the I64 type
-                    // is benign, since the temporary is dead after this instruction (and its
-                    // Cranelift type is thus unused).
-                    let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-
-                    // Put a zero in tmp1. This is needed for Spectre
-                    // mitigations (a CMOV that zeroes the index on
-                    // misspeculation).
-                    let inst = Inst::imm(OperandSize::Size64, 0, tmp1);
-                    ctx.emit(inst);
-
-                    // Bounds-check (compute flags from idx - jt_size)
-                    // and branch to default.  We only support
-                    // u32::MAX entries, but we compare the full 64
-                    // bit register when doing the bounds check.
-                    let cmp_size = if ty == types::I64 {
-                        OperandSize::Size64
-                    } else {
-                        OperandSize::Size32
-                    };
-                    ctx.emit(Inst::cmp_rmi_r(cmp_size, RegMemImm::imm(jt_size), idx));
-
-                    let default_target = targets[0];
-
-                    let jt_targets: Box<SmallVec<[MachLabel; 4]>> =
-                        Box::new(targets.iter().skip(1).cloned().collect());
-
-                    ctx.emit(Inst::JmpTableSeq {
-                        idx,
-                        tmp1,
-                        tmp2,
-                        default_target,
-                        targets: jt_targets,
-                    });
-                }
-
-                _ => panic!("Unknown branch type {:?}", op),
-            }
-        }
-
-        Ok(())
+        unreachable!(
+            "implemented in ISLE: branch = `{}`",
+            ctx.dfg().display_inst(branches[0]),
+        );
     }
 
     fn maybe_pinned_reg(&self) -> Option<Reg> {
