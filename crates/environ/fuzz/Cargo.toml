@@ -15,6 +15,7 @@ libfuzzer-sys = "0.4"
 wasmparser = "0.88.0"
 wasmprinter = "0.2.37"
 wasmtime-environ = { path = ".." }
+component-fuzz-util = { path = "../../misc/component-fuzz-util", optional = true }
 
 [[bin]]
 name = "fact-valid-module"
@@ -24,4 +25,4 @@ doc = false
 required-features = ["component-model"]
 
 [features]
-component-model = ["wasmtime-environ/component-model"]
+component-model = ["wasmtime-environ/component-model", "dep:component-fuzz-util"]

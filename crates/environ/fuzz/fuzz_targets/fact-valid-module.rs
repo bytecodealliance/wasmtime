@@ -9,9 +9,9 @@
 
 #![no_main]
 
-use arbitrary::{Arbitrary, Unstructured};
+use arbitrary::Arbitrary;
+use component_fuzz_util::Type as ValType;
 use libfuzzer_sys::fuzz_target;
-use std::fmt;
 use wasmparser::{Validator, WasmFeatures};
 use wasmtime_environ::component::*;
 use wasmtime_environ::fact::Module;
@@ -38,34 +38,6 @@ struct FuncType {
     result: ValType,
 }
 
-#[derive(Arbitrary, Debug)]
-enum ValType {
-    Unit,
-    U8,
-    S8,
-    U16,
-    S16,
-    U32,
-    S32,
-    U64,
-    S64,
-    Float32,
-    Float64,
-    Char,
-    List(Box<ValType>),
-    Record(Vec<ValType>),
-    // Up to 65 flags to exercise up to 3 u32 values
-    Flags(UsizeInRange<0, 65>),
-    Tuple(Vec<ValType>),
-    Variant(NonZeroLenVec<ValType>),
-    Union(NonZeroLenVec<ValType>),
-    // at least one enum variant but no more than what's necessary to inflate to
-    // 16 bits to keep this reasonably sized
-    Enum(UsizeInRange<1, 257>),
-    Option(Box<ValType>),
-    Expected(Box<ValType>, Box<ValType>),
-}
-
 #[derive(Copy, Clone, Arbitrary, Debug)]
 enum GenStringEncoding {
     Utf8,
@@ -73,39 +45,9 @@ enum GenStringEncoding {
     CompactUtf16,
 }
 
-pub struct NonZeroLenVec<T>(Vec<T>);
+fuzz_target!(|module: GenAdapterModule| { drop(target(module)) });
 
-impl<'a, T: Arbitrary<'a>> Arbitrary<'a> for NonZeroLenVec<T> {
-    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        let mut items = Vec::arbitrary(u)?;
-        if items.is_empty() {
-            items.push(u.arbitrary()?);
-        }
-        Ok(NonZeroLenVec(items))
-    }
-}
-
-impl<T: fmt::Debug> fmt::Debug for NonZeroLenVec<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-pub struct UsizeInRange<const L: usize, const H: usize>(usize);
-
-impl<'a, const L: usize, const H: usize> Arbitrary<'a> for UsizeInRange<L, H> {
-    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(UsizeInRange(u.int_in_range(L..=H)?))
-    }
-}
-
-impl<const L: usize, const H: usize> fmt::Debug for UsizeInRange<L, H> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-fuzz_target!(|module: GenAdapterModule| {
+fn target(module: GenAdapterModule) -> Result<(), ()> {
     drop(env_logger::try_init());
 
     let mut types = ComponentTypesBuilder::default();
@@ -148,9 +90,9 @@ fuzz_target!(|module: GenAdapterModule| {
     for adapter in module.adapters.iter() {
         let mut params = Vec::new();
         for param in adapter.ty.params.iter() {
-            params.push((None, intern(&mut types, param)));
+            params.push((None, intern(&mut types, param)?));
         }
-        let result = intern(&mut types, &adapter.ty.result);
+        let result = intern(&mut types, &adapter.ty.result)?;
         let signature = types.add_func_type(TypeFunc {
             params: params.into(),
             result,
@@ -201,7 +143,7 @@ fuzz_target!(|module: GenAdapterModule| {
     .validate_all(&wasm);
 
     let err = match result {
-        Ok(_) => return,
+        Ok(_) => return Ok(()),
         Err(e) => e,
     };
     eprintln!("invalid wasm module: {err:?}");
@@ -215,11 +157,12 @@ fuzz_target!(|module: GenAdapterModule| {
     }
 
     panic!()
-});
+}
 
-fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> InterfaceType {
-    match ty {
+fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> Result<InterfaceType, ()> {
+    Ok(match ty {
         ValType::Unit => InterfaceType::Unit,
+        ValType::Bool => InterfaceType::Bool,
         ValType::U8 => InterfaceType::U8,
         ValType::S8 => InterfaceType::S8,
         ValType::U16 => InterfaceType::U16,
@@ -232,7 +175,7 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> InterfaceType {
         ValType::Float64 => InterfaceType::Float64,
         ValType::Char => InterfaceType::Char,
         ValType::List(ty) => {
-            let ty = intern(types, ty);
+            let ty = intern(types, ty)?;
             InterfaceType::List(types.add_interface_type(ty))
         }
         ValType::Record(tys) => {
@@ -240,61 +183,72 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> InterfaceType {
                 fields: tys
                     .iter()
                     .enumerate()
-                    .map(|(i, ty)| RecordField {
-                        name: format!("f{i}"),
-                        ty: intern(types, ty),
+                    .map(|(i, ty)| {
+                        Ok(RecordField {
+                            name: format!("f{i}"),
+                            ty: intern(types, ty)?,
+                        })
                     })
-                    .collect(),
+                    .collect::<Result<_, _>>()?,
             };
             InterfaceType::Record(types.add_record_type(ty))
         }
         ValType::Flags(size) => {
             let ty = TypeFlags {
-                names: (0..size.0).map(|i| format!("f{i}")).collect(),
+                names: (0..size.as_usize()).map(|i| format!("f{i}")).collect(),
             };
             InterfaceType::Flags(types.add_flags_type(ty))
         }
         ValType::Tuple(tys) => {
             let ty = TypeTuple {
-                types: tys.iter().map(|ty| intern(types, ty)).collect(),
+                types: tys
+                    .iter()
+                    .map(|ty| intern(types, ty))
+                    .collect::<Result<_, _>>()?,
             };
             InterfaceType::Tuple(types.add_tuple_type(ty))
         }
-        ValType::Variant(NonZeroLenVec(cases)) => {
+        ValType::Variant(cases) => {
             let ty = TypeVariant {
                 cases: cases
                     .iter()
                     .enumerate()
-                    .map(|(i, ty)| VariantCase {
-                        name: format!("c{i}"),
-                        ty: intern(types, ty),
+                    .map(|(i, ty)| {
+                        Ok(VariantCase {
+                            name: format!("c{i}"),
+                            ty: intern(types, ty)?,
+                        })
                     })
-                    .collect(),
+                    .collect::<Result<_, _>>()?,
             };
             InterfaceType::Variant(types.add_variant_type(ty))
         }
         ValType::Union(tys) => {
             let ty = TypeUnion {
-                types: tys.0.iter().map(|ty| intern(types, ty)).collect(),
+                types: tys
+                    .iter()
+                    .map(|ty| intern(types, ty))
+                    .collect::<Result<_, _>>()?,
             };
             InterfaceType::Union(types.add_union_type(ty))
         }
         ValType::Enum(size) => {
             let ty = TypeEnum {
-                names: (0..size.0).map(|i| format!("c{i}")).collect(),
+                names: (0..size.as_usize()).map(|i| format!("c{i}")).collect(),
             };
             InterfaceType::Enum(types.add_enum_type(ty))
         }
         ValType::Option(ty) => {
-            let ty = intern(types, ty);
+            let ty = intern(types, ty)?;
             InterfaceType::Option(types.add_interface_type(ty))
         }
-        ValType::Expected(ok, err) => {
-            let ok = intern(types, ok);
-            let err = intern(types, err);
+        ValType::Expected { ok, err } => {
+            let ok = intern(types, ok)?;
+            let err = intern(types, err)?;
             InterfaceType::Expected(types.add_expected_type(TypeExpected { ok, err }))
         }
-    }
+        ValType::String => return Err(()),
+    })
 }
 
 impl From<GenStringEncoding> for StringEncoding {

@@ -3,12 +3,13 @@ use crate::component::linker::{Definition, NameMap, Strings};
 use crate::types::matching;
 use crate::Module;
 use anyhow::{anyhow, bail, Context, Result};
+use std::sync::Arc;
 use wasmtime_environ::component::{
     ComponentTypes, TypeComponentInstance, TypeDef, TypeFuncIndex, TypeModule,
 };
 
 pub struct TypeChecker<'a> {
-    pub types: &'a ComponentTypes,
+    pub types: &'a Arc<ComponentTypes>,
     pub strings: &'a Strings,
 }
 

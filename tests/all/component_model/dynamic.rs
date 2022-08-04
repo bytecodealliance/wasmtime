@@ -1,19 +1,8 @@
 use super::{make_echo_component, make_echo_component_with_params, Param, Type};
 use anyhow::Result;
-use wasmtime::component::{self, Component, Func, Linker, Val};
-use wasmtime::{AsContextMut, Store};
-
-trait FuncExt {
-    fn call_and_post_return(&self, store: impl AsContextMut, args: &[Val]) -> Result<Val>;
-}
-
-impl FuncExt for Func {
-    fn call_and_post_return(&self, mut store: impl AsContextMut, args: &[Val]) -> Result<Val> {
-        let result = self.call(&mut store, args)?;
-        self.post_return(&mut store)?;
-        Ok(result)
-    }
-}
+use component_test_util::FuncExt;
+use wasmtime::component::{self, Component, Linker, Val};
+use wasmtime::Store;
 
 #[test]
 fn primitives() -> Result<()> {

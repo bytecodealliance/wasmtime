@@ -1,5 +1,6 @@
 use super::REALLOC_AND_FREE;
 use anyhow::Result;
+use std::ops::Deref;
 use wasmtime::component::*;
 use wasmtime::{Store, StoreContextMut, Trap};
 
@@ -117,6 +118,12 @@ fn simple() -> Result<()> {
     "#;
 
     let engine = super::engine();
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, None);
+    assert!(store.data().is_none());
+
+    // First, test the static API
+
     let mut linker = Linker::new(&engine);
     linker.root().func_wrap(
         "",
@@ -127,13 +134,34 @@ fn simple() -> Result<()> {
             Ok(())
         },
     )?;
-    let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, None);
     let instance = linker.instantiate(&mut store, &component)?;
-    assert!(store.data().is_none());
     instance
         .get_typed_func::<(), (), _>(&mut store, "call")?
         .call(&mut store, ())?;
+    assert_eq!(store.data().as_ref().unwrap(), "hello world");
+
+    // Next, test the dynamic API
+
+    *store.data_mut() = None;
+    let mut linker = Linker::new(&engine);
+    linker.root().func_new(
+        &component,
+        "",
+        |mut store: StoreContextMut<'_, Option<String>>, args| {
+            if let Val::String(s) = &args[0] {
+                assert!(store.data().is_none());
+                *store.data_mut() = Some(s.to_string());
+                Ok(Val::Unit)
+            } else {
+                panic!()
+            }
+        },
+    )?;
+    let instance = linker.instantiate(&mut store, &component)?;
+    instance
+        .get_func(&mut store, "call")
+        .unwrap()
+        .call(&mut store, &[])?;
     assert_eq!(store.data().as_ref().unwrap(), "hello world");
 
     Ok(())
@@ -299,15 +327,20 @@ fn attempt_to_reenter_during_host() -> Result<()> {
 )
     "#;
 
-    struct State {
+    let engine = super::engine();
+    let component = Component::new(&engine, component)?;
+
+    // First, test the static API
+
+    struct StaticState {
         func: Option<TypedFunc<(), ()>>,
     }
 
-    let engine = super::engine();
+    let mut store = Store::new(&engine, StaticState { func: None });
     let mut linker = Linker::new(&engine);
     linker.root().func_wrap(
         "thunk",
-        |mut store: StoreContextMut<'_, State>| -> Result<()> {
+        |mut store: StoreContextMut<'_, StaticState>| -> Result<()> {
             let func = store.data_mut().func.take().unwrap();
             let trap = func.call(&mut store, ()).unwrap_err();
             assert!(
@@ -319,12 +352,39 @@ fn attempt_to_reenter_during_host() -> Result<()> {
             Ok(())
         },
     )?;
-    let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, State { func: None });
     let instance = linker.instantiate(&mut store, &component)?;
     let func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
     store.data_mut().func = Some(func);
     func.call(&mut store, ())?;
+
+    // Next, test the dynamic API
+
+    struct DynamicState {
+        func: Option<Func>,
+    }
+
+    let mut store = Store::new(&engine, DynamicState { func: None });
+    let mut linker = Linker::new(&engine);
+    linker.root().func_new(
+        &component,
+        "thunk",
+        |mut store: StoreContextMut<'_, DynamicState>, _| {
+            let func = store.data_mut().func.take().unwrap();
+            let trap = func.call(&mut store, &[]).unwrap_err();
+            assert!(
+                trap.to_string()
+                    .contains("cannot reenter component instance"),
+                "bad trap: {}",
+                trap,
+            );
+            Ok(Val::Unit)
+        },
+    )?;
+    let instance = linker.instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "run").unwrap();
+    store.data_mut().func = Some(func);
+    func.call(&mut store, &[])?;
+
     Ok(())
 }
 
@@ -466,6 +526,11 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
     );
 
     let engine = super::engine();
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+
+    // First, test the static API
+
     let mut linker = Linker::new(&engine);
     linker.root().func_wrap("f1", |x: u32| -> Result<u32> {
         assert_eq!(x, 1);
@@ -515,12 +580,60 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
             Ok("xyz".to_string())
         },
     )?;
-    let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
     let instance = linker.instantiate(&mut store, &component)?;
     instance
         .get_typed_func::<(), (), _>(&mut store, "run")?
         .call(&mut store, ())?;
+
+    // Next, test the dynamic API
+
+    let mut linker = Linker::new(&engine);
+    linker.root().func_new(&component, "f1", |_, args| {
+        if let Val::U32(x) = &args[0] {
+            assert_eq!(*x, 1);
+            Ok(Val::U32(2))
+        } else {
+            panic!()
+        }
+    })?;
+    linker.root().func_new(&component, "f2", |_, args| {
+        if let Val::Tuple(tuple) = &args[0] {
+            if let Val::String(s) = &tuple.values()[0] {
+                assert_eq!(s.deref(), "abc");
+                Ok(Val::U32(3))
+            } else {
+                panic!()
+            }
+        } else {
+            panic!()
+        }
+    })?;
+    linker.root().func_new(&component, "f3", |_, args| {
+        if let Val::U32(x) = &args[0] {
+            assert_eq!(*x, 8);
+            Ok(Val::String("xyz".into()))
+        } else {
+            panic!();
+        }
+    })?;
+    linker.root().func_new(&component, "f4", |_, args| {
+        if let Val::Tuple(tuple) = &args[0] {
+            if let Val::String(s) = &tuple.values()[0] {
+                assert_eq!(s.deref(), "abc");
+                Ok(Val::String("xyz".into()))
+            } else {
+                panic!()
+            }
+        } else {
+            panic!()
+        }
+    })?;
+    let instance = linker.instantiate(&mut store, &component)?;
+    instance
+        .get_func(&mut store, "run")
+        .unwrap()
+        .call(&mut store, &[])?;
+
     Ok(())
 }
 
@@ -648,6 +761,9 @@ fn no_actual_wasm_code() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, 0);
+
+    // First, test the static API
+
     let mut linker = Linker::new(&engine);
     linker
         .root()
@@ -661,6 +777,24 @@ fn no_actual_wasm_code() -> Result<()> {
 
     assert_eq!(*store.data(), 0);
     thunk.call(&mut store, ())?;
+    assert_eq!(*store.data(), 1);
+
+    // Next, test the dynamic API
+
+    *store.data_mut() = 0;
+    let mut linker = Linker::new(&engine);
+    linker
+        .root()
+        .func_new(&component, "f", |mut store: StoreContextMut<'_, u32>, _| {
+            *store.data_mut() += 1;
+            Ok(Val::Unit)
+        })?;
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let thunk = instance.get_func(&mut store, "thunk").unwrap();
+
+    assert_eq!(*store.data(), 0);
+    thunk.call(&mut store, &[])?;
     assert_eq!(*store.data(), 1);
 
     Ok(())

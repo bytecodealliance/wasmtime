@@ -442,12 +442,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "component-fuzz-util"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arbitrary",
+ "proc-macro2",
+ "quote",
+ "wasmtime-component-util",
+]
+
+[[package]]
 name = "component-macro-test"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "component-test-util"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arbitrary",
+ "env_logger 0.9.0",
+ "wasmtime",
 ]
 
 [[package]]
@@ -3415,6 +3436,7 @@ dependencies = [
  "async-trait",
  "clap 3.2.8",
  "component-macro-test",
+ "component-test-util",
  "criterion",
  "env_logger 0.9.0",
  "filecheck",
@@ -3434,6 +3456,7 @@ dependencies = [
  "wasmtime",
  "wasmtime-cache",
  "wasmtime-cli-flags",
+ "wasmtime-component-util",
  "wasmtime-cranelift",
  "wasmtime-environ",
  "wasmtime-runtime",
@@ -3520,6 +3543,7 @@ name = "wasmtime-environ-fuzz"
 version = "0.0.0"
 dependencies = [
  "arbitrary",
+ "component-fuzz-util",
  "env_logger 0.9.0",
  "libfuzzer-sys",
  "wasmparser",
@@ -3543,6 +3567,10 @@ dependencies = [
 name = "wasmtime-fuzz"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
+ "arbitrary",
+ "component-fuzz-util",
+ "component-test-util",
  "cranelift-codegen",
  "cranelift-filetests",
  "cranelift-fuzzgen",
@@ -3550,6 +3578,9 @@ dependencies = [
  "cranelift-reader",
  "cranelift-wasm",
  "libfuzzer-sys",
+ "proc-macro2",
+ "quote",
+ "rand 0.8.5",
  "target-lexicon",
  "wasmtime",
  "wasmtime-fuzzing",
@@ -3561,6 +3592,8 @@ version = "0.19.0"
 dependencies = [
  "anyhow",
  "arbitrary",
+ "component-fuzz-util",
+ "component-test-util",
  "env_logger 0.9.0",
  "log",
  "rand 0.8.5",
