@@ -5,11 +5,11 @@ pub mod generated_code;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
-    insn_inputs, writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget,
-    CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift,
-    Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MoveWideConst, MoveWideOp, NarrowValueMode,
-    Opcode, OperandSize, PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize,
-    NZCV,
+    insn_inputs, lower_constant_f128, writable_zero_reg, zero_reg, AMode, ASIMDFPModImm,
+    ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI,
+    FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, JTSequenceInfo, MachLabel,
+    MoveWideConst, MoveWideOp, NarrowValueMode, Opcode, OperandSize, PairAMode, Reg, ScalarSize,
+    ShiftOpAndAmt, UImm5, VecMisc2, VectorSize, NZCV,
 };
 use crate::isa::aarch64::lower::{lower_address, lower_splat_const};
 use crate::isa::aarch64::settings::Flags as IsaFlags;
@@ -22,7 +22,7 @@ use crate::{
         TrapCode, Value, ValueList,
     },
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
-    isa::aarch64::lower::{writable_xreg, xreg},
+    isa::aarch64::lower::{writable_vreg, writable_xreg, xreg},
     isa::unwind::UnwindInst,
     machinst::{ty_bits, InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
 };
@@ -275,6 +275,10 @@ where
         writable_xreg(index)
     }
 
+    fn writable_vreg(&mut self, index: u8) -> WritableReg {
+        writable_vreg(index)
+    }
+
     fn extended_value_from_value(&mut self, val: Value) -> Option<ExtendedValue> {
         let (val, extend) =
             super::get_as_extended_value(self.lower_ctx, val, NarrowValueMode::None)?;
@@ -466,6 +470,14 @@ where
 
     fn amode_is_reg(&mut self, address: &AMode) -> Option<Reg> {
         address.is_reg()
+    }
+
+    fn constant_f128(&mut self, value: u128) -> Reg {
+        let rd = self.temp_writable_reg(I8X16);
+
+        lower_constant_f128(self.lower_ctx, rd, value);
+
+        rd.to_reg()
     }
 
     fn splat_const(&mut self, value: u64, size: &VectorSize) -> Reg {

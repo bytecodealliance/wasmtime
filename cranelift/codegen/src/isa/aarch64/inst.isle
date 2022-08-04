@@ -1428,6 +1428,9 @@
 (decl xreg (u8) Reg)
 (extern constructor xreg xreg)
 
+(decl writable_vreg (u8) WritableReg)
+(extern constructor writable_vreg writable_vreg)
+
 (decl writable_xreg (u8) WritableReg)
 (extern constructor writable_xreg writable_xreg)
 
@@ -1645,6 +1648,26 @@
 (rule (vec_tbl rn rm is_extension)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecTbl dst rn rm is_extension))))
+        dst))
+
+;; Helper for emitting `MInst.VecTbl2` instructions.
+;; - 2 register table vector lookups require consecutive table registers;
+;;   we satisfy this constraint by hardcoding the usage of v30 and v31.
+;; - Make sure that both args are in virtual regs, since it is not guaranteed
+;;   that we can get them safely to the temporaries if either is in a real
+;;   register.
+(decl vec_tbl2 (Reg Reg Reg bool Type) Reg)
+(rule (vec_tbl2 rn rn2 rm is_extension ty)
+      (let (
+            (temp WritableReg (writable_vreg 30))
+            (temp2 WritableReg (writable_vreg 31))
+            (dst WritableReg (temp_writable_reg $I8X16))
+            (rn Reg (ensure_in_vreg rn ty))
+            (rn2 Reg (ensure_in_vreg rn2 ty))
+            (_ Unit (emit (MInst.FpuMove128 temp rn)))
+            (_ Unit (emit (MInst.FpuMove128 temp2 rn2)))
+            (_ Unit (emit (MInst.VecTbl2 dst temp temp2 rm is_extension)))
+        )
         dst))
 
 ;; Helper for emitting `MInst.VecRRRLong` instructions.
@@ -2324,6 +2347,11 @@
 (rule (load_addr addr)
       (if-let addr_reg (amode_is_reg addr))
       addr_reg)
+
+;; Lower a constant f128.
+(decl constant_f128 (u128) Reg)
+;; TODO: Port lower_constant_f128() to ISLE.
+(extern constructor constant_f128 constant_f128)
 
 ;; Lower a vector splat with a constant parameter.
 (decl splat_const (u64 VectorSize) Reg)

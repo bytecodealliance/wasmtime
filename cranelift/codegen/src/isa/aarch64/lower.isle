@@ -99,6 +99,12 @@
           (add_with_flags_paired $I64 x_lo y_lo)
           (adc_paired $I64 x_hi y_hi))))
 
+;;;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (shuffle rn rn2 (u128_from_immediate mask))))
+      (let ((mask_reg Reg (constant_f128 mask)))
+       (vec_tbl2 rn rn2 mask_reg $false ty)))
+
 ;;;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type vec_i128_ty (swizzle rn rm)))
