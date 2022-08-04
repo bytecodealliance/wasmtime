@@ -237,9 +237,11 @@ impl fmt::Display for DefVariableError {
                 )?;
             }
             DefVariableError::DefinedBeforeDeclared(variable) => {
-                f.write_str("the value of variable ")?;
-                <usize as fmt::Display>::fmt(&variable.index(), f)?;
-                f.write_str(" was declared before it was defined!")?;
+                write!(
+                    f,
+                    "the value of variabe {} was declared before it was defined",
+                    variable.index()
+                )?;
             }
         }
         Ok(())
