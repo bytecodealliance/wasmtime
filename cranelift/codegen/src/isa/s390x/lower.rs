@@ -189,6 +189,7 @@ impl LowerBackend for S390xBackend {
             | Opcode::StackAddr
             | Opcode::FuncAddr
             | Opcode::SymbolValue
+            | Opcode::TlsValue
             | Opcode::GetFramePointer
             | Opcode::GetStackPointer
             | Opcode::GetReturnAddress => {
@@ -200,7 +201,6 @@ impl LowerBackend for S390xBackend {
             }
 
             Opcode::ConstAddr
-            | Opcode::TlsValue
             | Opcode::GetPinnedReg
             | Opcode::SetPinnedReg
             | Opcode::Vsplit

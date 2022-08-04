@@ -29,7 +29,7 @@ mod emit_tests;
 
 pub use crate::isa::s390x::lower::isle::generated_code::{
     ALUOp, CmpOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuRoundOp, MInst as Inst, RxSBGOp,
-    ShiftOp, UnaryOp, VecBinaryOp, VecFloatCmpOp, VecIntCmpOp, VecShiftOp, VecUnaryOp,
+    ShiftOp, SymbolReloc, UnaryOp, VecBinaryOp, VecFloatCmpOp, VecIntCmpOp, VecShiftOp, VecUnaryOp,
 };
 
 /// Additional information for (direct) Call instructions, left out of line to lower the size of
@@ -43,6 +43,7 @@ pub struct CallInfo {
     pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
+    pub tls_symbol: Option<SymbolReloc>,
 }
 
 /// Additional information for CallInd instructions, left out of line to lower the size of the Inst
@@ -154,6 +155,8 @@ impl Inst {
             | Inst::Mov64UImm32Shifted { .. }
             | Inst::Insert64UImm16Shifted { .. }
             | Inst::Insert64UImm32Shifted { .. }
+            | Inst::LoadAR { .. }
+            | Inst::InsertAR { .. }
             | Inst::Extend { .. }
             | Inst::CMov32 { .. }
             | Inst::CMov64 { .. }
@@ -212,7 +215,7 @@ impl Inst {
             | Inst::Debugtrap
             | Inst::Trap { .. }
             | Inst::JTSequence { .. }
-            | Inst::LoadExtNameFar { .. }
+            | Inst::LoadSymbolReloc { .. }
             | Inst::LoadAddr { .. }
             | Inst::Loop { .. }
             | Inst::CondBreak { .. }
@@ -662,6 +665,12 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         &Inst::Insert64UImm16Shifted { rd, .. } | &Inst::Insert64UImm32Shifted { rd, .. } => {
             collector.reg_mod(rd);
         }
+        &Inst::LoadAR { rd, .. } => {
+            collector.reg_def(rd);
+        }
+        &Inst::InsertAR { rd, .. } => {
+            collector.reg_mod(rd);
+        }
         &Inst::FpuMove32 { rd, rn } | &Inst::FpuMove64 { rd, rn } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
@@ -881,7 +890,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_use(ridx);
             collector.reg_early_def(writable_gpr(1));
         }
-        &Inst::LoadExtNameFar { rd, .. } => {
+        &Inst::LoadSymbolReloc { rd, .. } => {
             collector.reg_def(rd);
             collector.reg_def(writable_gpr(1));
         }
@@ -1887,6 +1896,10 @@ impl Inst {
                 };
                 format!("{} {}, {}", op, rd, imm.bits)
             }
+            &Inst::LoadAR { rd, ar } | &Inst::InsertAR { rd, ar } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                format!("ear {}, %a{}", rd, ar)
+            }
             &Inst::CMov32 { rd, cond, rm } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let rm = pretty_print_reg(rm, allocs);
@@ -2830,7 +2843,12 @@ impl Inst {
             }
             &Inst::Call { link, ref info, .. } => {
                 let link = pretty_print_reg(link.to_reg(), allocs);
-                format!("brasl {}, {}", link, info.dest)
+                let tls_symbol = match &info.tls_symbol {
+                    None => "".to_string(),
+                    Some(SymbolReloc::TlsGd { name }) => format!(":tls_gdcall:{}", name),
+                    _ => unreachable!(),
+                };
+                format!("brasl {}, {}{}", link, info.dest, tls_symbol)
             }
             &Inst::CallInd { link, ref info, .. } => {
                 let link = pretty_print_reg(link.to_reg(), allocs);
@@ -2891,17 +2909,17 @@ impl Inst {
                     rtmp, rtmp, rtmp, ridx, rtmp, jt_entries,
                 )
             }
-            &Inst::LoadExtNameFar {
+            &Inst::LoadSymbolReloc {
                 rd,
-                ref name,
-                offset,
+                ref symbol_reloc,
             } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg(), &mut empty_allocs);
-                format!(
-                    "bras {}, 12 ; data {} + {} ; lg {}, 0({})",
-                    tmp, name, offset, rd, tmp
-                )
+                let symbol = match &**symbol_reloc {
+                    SymbolReloc::Absolute { name, offset } => format!("{} + {}", name, offset),
+                    SymbolReloc::TlsGd { name } => format!("{}@tlsgd", name),
+                };
+                format!("bras {}, 12 ; data {} ; lg {}, 0({})", tmp, symbol, rd, tmp)
             }
             &Inst::LoadAddr { rd, ref mem } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);

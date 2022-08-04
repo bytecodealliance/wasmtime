@@ -59,6 +59,11 @@ pub enum Reloc {
     /// Set the add immediate field to the low 12 bits of the final address. Does not check for overflow.
     /// This is equivalent to `R_AARCH64_TLSGD_ADD_LO12_NC` in the [aaelf64](https://github.com/ARM-software/abi-aa/blob/2bcab1e3b22d55170c563c3c7940134089176746/aaelf64/aaelf64.rst#relocations-for-thread-local-storage)
     Aarch64TlsGdAddLo12Nc,
+
+    /// s390x TLS GD64 - 64-bit offset of tls_index for GD symbol in GOT
+    S390xTlsGd64,
+    /// s390x TLS GDCall - marker to enable optimization of TLS calls
+    S390xTlsGdCall,
 }
 
 impl fmt::Display for Reloc {
@@ -79,6 +84,8 @@ impl fmt::Display for Reloc {
             Self::MachOX86_64Tlv => write!(f, "MachOX86_64Tlv"),
             Self::Aarch64TlsGdAdrPage21 => write!(f, "Aarch64TlsGdAdrPage21"),
             Self::Aarch64TlsGdAddLo12Nc => write!(f, "Aarch64TlsGdAddLo12Nc"),
+            Self::S390xTlsGd64 => write!(f, "TlsGd64"),
+            Self::S390xTlsGdCall => write!(f, "TlsGdCall"),
         }
     }
 }

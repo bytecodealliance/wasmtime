@@ -2258,17 +2258,25 @@ impl MachInstEmit for Inst {
                 };
                 put(sink, &enc_ril_a(opcode, rd.to_reg(), imm.bits));
             }
-            &Inst::LoadExtNameFar {
+            &Inst::LoadAR { rd, ar } | &Inst::InsertAR { rd, ar } => {
+                let rd = allocs.next_writable(rd);
+                let opcode = 0xb24f; // EAR
+                put(sink, &enc_rre(opcode, rd.to_reg(), gpr(ar)));
+            }
+            &Inst::LoadSymbolReloc {
                 rd,
-                ref name,
-                offset,
+                ref symbol_reloc,
             } => {
                 let rd = allocs.next_writable(rd);
 
                 let opcode = 0xa75; // BRAS
                 let reg = writable_spilltmp_reg().to_reg();
                 put(sink, &enc_ri_b(opcode, reg, 12));
-                sink.add_reloc(Reloc::Abs8, name, offset);
+                let (reloc, name, offset) = match &**symbol_reloc {
+                    SymbolReloc::Absolute { name, offset } => (Reloc::Abs8, name, *offset),
+                    SymbolReloc::TlsGd { name } => (Reloc::S390xTlsGd64, name, 0),
+                };
+                sink.add_reloc(reloc, name, offset);
                 sink.put8(0);
                 let inst = Inst::Load64 {
                     rd,
@@ -3197,6 +3205,15 @@ impl MachInstEmit for Inst {
 
             &Inst::Call { link, ref info } => {
                 let link = allocs.next_writable(link);
+
+                // Add relocation for TLS libcalls to enable linker optimizations.
+                match &info.tls_symbol {
+                    None => {}
+                    Some(SymbolReloc::TlsGd { name }) => {
+                        sink.add_reloc(Reloc::S390xTlsGdCall, name, 0)
+                    }
+                    _ => unreachable!(),
+                }
 
                 let opcode = 0xc05; // BRASL
                 let reloc = Reloc::S390xPCRel32Dbl;
