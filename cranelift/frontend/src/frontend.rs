@@ -173,9 +173,11 @@ impl fmt::Display for UseVariableError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             UseVariableError::UsedBeforeDeclared(variable) => {
-                f.write_str("variable ")?;
-                <usize as fmt::Display>::fmt(&variable.index(), f)?;
-                f.write_str(" was used before it was defined!")?;
+                write!(
+                    f,
+                    "variable {} was used before it was defined",
+                    variable.index()
+                )?;
             }
         }
         Ok(())
@@ -185,7 +187,7 @@ impl fmt::Display for UseVariableError {
 impl std::error::Error for UseVariableError {}
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-/// An error encountered when calling [`FunctionBuilder::try_declare_var`]
+/// An error encountered when calling [`FunctionBuilder::try_declare_var`].
 pub enum DeclareVariableError {
     DeclaredMultipleTimes(Variable),
 }
@@ -196,9 +198,11 @@ impl fmt::Display for DeclareVariableError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DeclareVariableError::DeclaredMultipleTimes(variable) => {
-                f.write_str("variable ")?;
-                <usize as fmt::Display>::fmt(&variable.index(), f)?;
-                f.write_str(" was declared multiple times!")?;
+                write!(
+                    f,
+                    "variable {} was declared multiple times",
+                    variable.index()
+                )?;
             }
         }
         Ok(())
@@ -223,14 +227,13 @@ impl fmt::Display for DefVariableError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DefVariableError::TypeMismatch(variable, value) => {
-                f.write_str("the types of variable ")?;
-                <usize as fmt::Display>::fmt(&variable.index(), f)?;
-                f.write_str(" and value ")?;
-                <u32 as fmt::Display>::fmt(&value.as_u32(), f)?;
-                f.write_str(
-                    " are not the same - the `Value` supplied to
-                `def_var` must be of the same type as the variable was declared
-                to be of in `declare_var`.",
+                write!(
+                    f,
+                    "the types of variable {} and value {} are not the same.
+                    The `Value` supplied to `def_var` must be of the same type as
+                    the variable was declared to be of in `declare_var`.",
+                    variable.index(),
+                    value.as_u32()
                 )?;
             }
             DefVariableError::DefinedBeforeDeclared(variable) => {
