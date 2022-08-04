@@ -1,9 +1,75 @@
 test compile precise-output
 target s390x
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; ROTR
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+function %rotr_i128_vr(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = rotr.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   vrepb %v7, %v1, 15
+;   vlcb %v17, %v7
+;   vslb %v19, %v0, %v17
+;   vsl %v21, %v19, %v17
+;   vsrlb %v23, %v0, %v7
+;   vsrl %v25, %v23, %v7
+;   vo %v27, %v21, %v25
+;   vst %v27, 0(%r2)
+;   br %r14
+
+function %rotr_i128_reg(i128, i64) -> i128 {
+block0(v0: i128, v1: i64):
+  v2 = rotr.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vlvgb %v7, %r4, 0
+;   vrepb %v17, %v7, 0
+;   vlcb %v19, %v17
+;   vslb %v21, %v0, %v19
+;   vsl %v23, %v21, %v19
+;   vsrlb %v25, %v0, %v17
+;   vsrl %v27, %v25, %v17
+;   vo %v29, %v23, %v27
+;   vst %v29, 0(%r2)
+;   br %r14
+
+function %rotr_i128_imm(i128) -> i128 {
+block0(v0: i128):
+  v1 = iconst.i32 17
+  v2 = rotr.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vrepib %v5, 17
+;   vlcb %v7, %v5
+;   vslb %v17, %v0, %v7
+;   vsl %v19, %v17, %v7
+;   vsrlb %v21, %v0, %v5
+;   vsrl %v23, %v21, %v5
+;   vo %v25, %v19, %v23
+;   vst %v25, 0(%r2)
+;   br %r14
+
+function %rotr_i64_vr(i64, i128) -> i64 {
+block0(v0: i64, v1: i128):
+  v2 = rotr.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   vlgvg %r3, %v1, 1
+;   lcr %r5, %r3
+;   rllg %r2, %r2, 0(%r5)
+;   br %r14
 
 function %rotr_i64_reg(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -12,7 +78,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   lcgr %r3, %r3
+;   lcr %r3, %r3
 ;   rllg %r2, %r2, 0(%r3)
 ;   br %r14
 
@@ -25,6 +91,19 @@ block0(v0: i64):
 
 ; block0:
 ;   rllg %r2, %r2, 47
+;   br %r14
+
+function %rotr_i32_vr(i32, i128) -> i32 {
+block0(v0: i32, v1: i128):
+  v2 = rotr.i32 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   vlgvg %r3, %v1, 1
+;   lcr %r5, %r3
+;   rll %r2, %r2, 0(%r5)
 ;   br %r14
 
 function %rotr_i32_reg(i32, i32) -> i32 {
@@ -47,6 +126,24 @@ block0(v0: i32):
 
 ; block0:
 ;   rll %r2, %r2, 15
+;   br %r14
+
+function %rotr_i16_vr(i16, i128) -> i16 {
+block0(v0: i16, v1: i128):
+  v2 = rotr.i16 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   llhr %r3, %r2
+;   vlgvg %r5, %v1, 1
+;   lcr %r4, %r5
+;   nill %r5, 15
+;   nill %r4, 15
+;   sllk %r4, %r3, 0(%r4)
+;   srlk %r5, %r3, 0(%r5)
+;   ork %r2, %r4, %r5
 ;   br %r14
 
 function %rotr_i16_reg(i16, i16) -> i16 {
@@ -79,6 +176,24 @@ block0(v0: i16):
 ;   ork %r2, %r3, %r5
 ;   br %r14
 
+function %rotr_i8_vr(i8, i128) -> i8 {
+block0(v0: i8, v1: i128):
+  v2 = rotr.i8 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   llcr %r3, %r2
+;   vlgvg %r5, %v1, 1
+;   lcr %r4, %r5
+;   nill %r5, 7
+;   nill %r4, 7
+;   sllk %r4, %r3, 0(%r4)
+;   srlk %r5, %r3, 0(%r5)
+;   ork %r2, %r4, %r5
+;   br %r14
+
 function %rotr_i8_reg(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
   v2 = rotr.i8 v0, v1
@@ -109,6 +224,75 @@ block0(v0: i8):
 ;   ork %r2, %r3, %r5
 ;   br %r14
 
+function %rotl_i128_vr(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = rotl.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   vrepb %v7, %v1, 15
+;   vlcb %v17, %v7
+;   vslb %v19, %v0, %v7
+;   vsl %v21, %v19, %v7
+;   vsrlb %v23, %v0, %v17
+;   vsrl %v25, %v23, %v17
+;   vo %v27, %v21, %v25
+;   vst %v27, 0(%r2)
+;   br %r14
+
+function %rotl_i128_reg(i128, i64) -> i128 {
+block0(v0: i128, v1: i64):
+  v2 = rotl.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vlvgb %v7, %r4, 0
+;   vrepb %v17, %v7, 0
+;   vlcb %v19, %v17
+;   vslb %v21, %v0, %v17
+;   vsl %v23, %v21, %v17
+;   vsrlb %v25, %v0, %v19
+;   vsrl %v27, %v25, %v19
+;   vo %v29, %v23, %v27
+;   vst %v29, 0(%r2)
+;   br %r14
+
+function %rotl_i128_imm(i128) -> i128 {
+block0(v0: i128):
+  v1 = iconst.i32 17
+  v2 = rotl.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vrepib %v5, 17
+;   vlcb %v7, %v5
+;   vslb %v17, %v0, %v5
+;   vsl %v19, %v17, %v5
+;   vsrlb %v21, %v0, %v7
+;   vsrl %v23, %v21, %v7
+;   vo %v25, %v19, %v23
+;   vst %v25, 0(%r2)
+;   br %r14
+
+function %rotl_i64_vr(i64, i128) -> i64 {
+block0(v0: i64, v1: i128):
+  v2 = rotl.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   vlgvg %r3, %v1, 1
+;   rllg %r2, %r2, 0(%r3)
+;   br %r14
+
 function %rotl_i64_reg(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = rotl.i64 v0, v1
@@ -130,6 +314,18 @@ block0(v0: i64):
 ;   rllg %r2, %r2, 17
 ;   br %r14
 
+function %rotl_i32_vr(i32, i128) -> i32 {
+block0(v0: i32, v1: i128):
+  v2 = rotl.i32 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   vlgvg %r3, %v1, 1
+;   rll %r2, %r2, 0(%r3)
+;   br %r14
+
 function %rotl_i32_reg(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
   v2 = rotl.i32 v0, v1
@@ -149,6 +345,24 @@ block0(v0: i32):
 
 ; block0:
 ;   rll %r2, %r2, 17
+;   br %r14
+
+function %rotl_i16_vr(i16, i128) -> i16 {
+block0(v0: i16, v1: i128):
+  v2 = rotl.i16 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   llhr %r3, %r2
+;   vlgvg %r5, %v1, 1
+;   lcr %r4, %r5
+;   nill %r5, 15
+;   nill %r4, 15
+;   sllk %r5, %r3, 0(%r5)
+;   srlk %r2, %r3, 0(%r4)
+;   ork %r2, %r5, %r2
 ;   br %r14
 
 function %rotl_i16_reg(i16, i16) -> i16 {
@@ -181,6 +395,24 @@ block0(v0: i16):
 ;   ork %r2, %r3, %r5
 ;   br %r14
 
+function %rotl_i8_vr(i8, i128) -> i8 {
+block0(v0: i8, v1: i128):
+  v2 = rotl.i8 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   llcr %r3, %r2
+;   vlgvg %r5, %v1, 1
+;   lcr %r4, %r5
+;   nill %r5, 7
+;   nill %r4, 7
+;   sllk %r5, %r3, 0(%r5)
+;   srlk %r2, %r3, 0(%r4)
+;   ork %r2, %r5, %r2
+;   br %r14
+
 function %rotl_i8_reg(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
   v2 = rotl.i8 v0, v1
@@ -211,6 +443,63 @@ block0(v0: i8):
 ;   ork %r2, %r3, %r5
 ;   br %r14
 
+function %ushr_i128_vr(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = ushr.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   vrepb %v7, %v1, 15
+;   vsrlb %v17, %v0, %v7
+;   vsrl %v19, %v17, %v7
+;   vst %v19, 0(%r2)
+;   br %r14
+
+function %ushr_i128_reg(i128, i64) -> i128 {
+block0(v0: i128, v1: i64):
+  v2 = ushr.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vlvgb %v7, %r4, 0
+;   vrepb %v17, %v7, 0
+;   vsrlb %v19, %v0, %v17
+;   vsrl %v21, %v19, %v17
+;   vst %v21, 0(%r2)
+;   br %r14
+
+function %ushr_i128_imm(i128) -> i128 {
+block0(v0: i128):
+  v1 = iconst.i32 17
+  v2 = ushr.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vrepib %v5, 17
+;   vsrlb %v7, %v0, %v5
+;   vsrl %v17, %v7, %v5
+;   vst %v17, 0(%r2)
+;   br %r14
+
+function %ushr_i64_vr(i64, i128) -> i64 {
+block0(v0: i64, v1: i128):
+  v2 = ushr.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   vlgvg %r3, %v1, 1
+;   srlg %r2, %r2, 0(%r3)
+;   br %r14
+
 function %ushr_i64_reg(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = ushr.i64 v0, v1
@@ -230,6 +519,19 @@ block0(v0: i64):
 
 ; block0:
 ;   srlg %r2, %r2, 17
+;   br %r14
+
+function %ushr_i32_vr(i32, i128) -> i32 {
+block0(v0: i32, v1: i128):
+  v2 = ushr.i32 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   vlgvg %r3, %v1, 1
+;   nill %r3, 31
+;   srlk %r2, %r2, 0(%r3)
 ;   br %r14
 
 function %ushr_i32_reg(i32, i32) -> i32 {
@@ -252,6 +554,20 @@ block0(v0: i32):
 
 ; block0:
 ;   srlk %r2, %r2, 17
+;   br %r14
+
+function %ushr_i16_vr(i16, i128) -> i16 {
+block0(v0: i16, v1: i128):
+  v2 = ushr.i16 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   llhr %r3, %r2
+;   vlgvg %r5, %v1, 1
+;   nill %r5, 15
+;   srlk %r2, %r3, 0(%r5)
 ;   br %r14
 
 function %ushr_i16_reg(i16, i16) -> i16 {
@@ -278,6 +594,20 @@ block0(v0: i16):
 ;   srlk %r2, %r5, 10
 ;   br %r14
 
+function %ushr_i8_vr(i8, i128) -> i8 {
+block0(v0: i8, v1: i128):
+  v2 = ushr.i8 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   llcr %r3, %r2
+;   vlgvg %r5, %v1, 1
+;   nill %r5, 7
+;   srlk %r2, %r3, 0(%r5)
+;   br %r14
+
 function %ushr_i8_reg(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
   v2 = ushr.i8 v0, v1
@@ -302,6 +632,63 @@ block0(v0: i8):
 ;   srlk %r2, %r5, 3
 ;   br %r14
 
+function %ishl_i128_vr(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = ishl.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   vrepb %v7, %v1, 15
+;   vslb %v17, %v0, %v7
+;   vsl %v19, %v17, %v7
+;   vst %v19, 0(%r2)
+;   br %r14
+
+function %ishl_i128_reg(i128, i64) -> i128 {
+block0(v0: i128, v1: i64):
+  v2 = ishl.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vlvgb %v7, %r4, 0
+;   vrepb %v17, %v7, 0
+;   vslb %v19, %v0, %v17
+;   vsl %v21, %v19, %v17
+;   vst %v21, 0(%r2)
+;   br %r14
+
+function %ishl_i128_imm(i128) -> i128 {
+block0(v0: i128):
+  v1 = iconst.i32 17
+  v2 = ishl.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vrepib %v5, 17
+;   vslb %v7, %v0, %v5
+;   vsl %v17, %v7, %v5
+;   vst %v17, 0(%r2)
+;   br %r14
+
+function %ishl_i64_vr(i64, i128) -> i64 {
+block0(v0: i64, v1: i128):
+  v2 = ishl.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   vlgvg %r3, %v1, 1
+;   sllg %r2, %r2, 0(%r3)
+;   br %r14
+
 function %ishl_i64_reg(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = ishl.i64 v0, v1
@@ -321,6 +708,19 @@ block0(v0: i64):
 
 ; block0:
 ;   sllg %r2, %r2, 17
+;   br %r14
+
+function %ishl_i32_vr(i32, i128) -> i32 {
+block0(v0: i32, v1: i128):
+  v2 = ishl.i32 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   vlgvg %r3, %v1, 1
+;   nill %r3, 31
+;   sllk %r2, %r2, 0(%r3)
 ;   br %r14
 
 function %ishl_i32_reg(i32, i32) -> i32 {
@@ -345,6 +745,19 @@ block0(v0: i32):
 ;   sllk %r2, %r2, 17
 ;   br %r14
 
+function %ishl_i16_vr(i16, i128) -> i16 {
+block0(v0: i16, v1: i128):
+  v2 = ishl.i16 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   vlgvg %r3, %v1, 1
+;   nill %r3, 15
+;   sllk %r2, %r2, 0(%r3)
+;   br %r14
+
 function %ishl_i16_reg(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
   v2 = ishl.i16 v0, v1
@@ -365,6 +778,19 @@ block0(v0: i16):
 
 ; block0:
 ;   sllk %r2, %r2, 10
+;   br %r14
+
+function %ishl_i8_vr(i8, i128) -> i8 {
+block0(v0: i8, v1: i128):
+  v2 = ishl.i8 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   vlgvg %r3, %v1, 1
+;   nill %r3, 7
+;   sllk %r2, %r2, 0(%r3)
 ;   br %r14
 
 function %ishl_i8_reg(i8, i8) -> i8 {
@@ -389,6 +815,63 @@ block0(v0: i8):
 ;   sllk %r2, %r2, 3
 ;   br %r14
 
+function %sshr_i128_vr(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = sshr.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   vrepb %v7, %v1, 15
+;   vsrab %v17, %v0, %v7
+;   vsra %v19, %v17, %v7
+;   vst %v19, 0(%r2)
+;   br %r14
+
+function %sshr_i128_reg(i128, i64) -> i128 {
+block0(v0: i128, v1: i64):
+  v2 = sshr.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vlvgb %v7, %r4, 0
+;   vrepb %v17, %v7, 0
+;   vsrab %v19, %v0, %v17
+;   vsra %v21, %v19, %v17
+;   vst %v21, 0(%r2)
+;   br %r14
+
+function %sshr_i128_imm(i128) -> i128 {
+block0(v0: i128):
+  v1 = iconst.i32 17
+  v2 = sshr.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vrepib %v5, 17
+;   vsrab %v7, %v0, %v5
+;   vsra %v17, %v7, %v5
+;   vst %v17, 0(%r2)
+;   br %r14
+
+function %sshr_i64_vr(i64, i128) -> i64 {
+block0(v0: i64, v1: i128):
+  v2 = sshr.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   vlgvg %r3, %v1, 1
+;   srag %r2, %r2, 0(%r3)
+;   br %r14
+
 function %sshr_i64_reg(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = sshr.i64 v0, v1
@@ -408,6 +891,19 @@ block0(v0: i64):
 
 ; block0:
 ;   srag %r2, %r2, 17
+;   br %r14
+
+function %sshr_i32_vr(i32, i128) -> i32 {
+block0(v0: i32, v1: i128):
+  v2 = sshr.i32 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   vlgvg %r3, %v1, 1
+;   nill %r3, 31
+;   srak %r2, %r2, 0(%r3)
 ;   br %r14
 
 function %sshr_i32_reg(i32, i32) -> i32 {
@@ -432,6 +928,20 @@ block0(v0: i32):
 ;   srak %r2, %r2, 17
 ;   br %r14
 
+function %sshr_i16_vr(i16, i128) -> i16 {
+block0(v0: i16, v1: i128):
+  v2 = sshr.i16 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   lhr %r3, %r2
+;   vlgvg %r5, %v1, 1
+;   nill %r5, 15
+;   srak %r2, %r3, 0(%r5)
+;   br %r14
+
 function %sshr_i16_reg(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
   v2 = sshr.i16 v0, v1
@@ -454,6 +964,20 @@ block0(v0: i16):
 ; block0:
 ;   lhr %r5, %r2
 ;   srak %r2, %r5, 10
+;   br %r14
+
+function %sshr_i8_vr(i8, i128) -> i8 {
+block0(v0: i8, v1: i128):
+  v2 = sshr.i8 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v1, 0(%r3)
+;   lbr %r3, %r2
+;   vlgvg %r5, %v1, 1
+;   nill %r5, 7
+;   srak %r2, %r3, 0(%r5)
 ;   br %r14
 
 function %sshr_i8_reg(i8, i8) -> i8 {

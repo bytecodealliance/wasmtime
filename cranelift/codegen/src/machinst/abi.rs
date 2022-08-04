@@ -17,14 +17,14 @@ pub trait ABICallee {
     /// The instruction type for the ISA associated with this ABI.
     type I: VCodeInst;
 
-    /// Does the ABI-body code need a temp reg (and if so, of what type)? One
-    /// will be provided to `init()` as the `maybe_tmp` arg if so.
-    fn temp_needed(&self) -> Option<Type>;
+    /// Does the ABI-body code need temp registers (and if so, of what type)?
+    /// They will be provided to `init()` as the `temps` arg if so.
+    fn temps_needed(&self) -> Vec<Type>;
 
     /// Initialize. This is called after the ABICallee is constructed because it
-    /// may be provided with a temp vreg, which can only be allocated once the
-    /// lowering context exists.
-    fn init(&mut self, maybe_tmp: Option<Writable<Reg>>);
+    /// may be provided with a vector of temp vregs, which can only be allocated
+    /// once the lowering context exists.
+    fn init(&mut self, temps: Vec<Writable<Reg>>);
 
     /// Access the (possibly legalized) signature.
     fn signature(&self) -> &Signature;

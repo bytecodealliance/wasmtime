@@ -847,6 +847,18 @@ macro_rules! isle_prelude_methods {
             }
         }
 
+        fn abi_arg_implicit_pointer(&mut self, arg: &ABIArg) -> Option<(ABIArgSlot, i64, Type)> {
+            match arg {
+                &ABIArg::ImplicitPtrArg {
+                    pointer,
+                    offset,
+                    ty,
+                    ..
+                } => Some((pointer, offset, ty)),
+                _ => None,
+            }
+        }
+
         fn abi_stackslot_addr(
             &mut self,
             dst: WritableReg,

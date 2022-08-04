@@ -183,3 +183,38 @@ block0(v0: i64, v1: i32, v2: i32, v3: i32, v4: i16, v5: i16, v6: i16, v7: i8, v8
 ;   lmg %r7, %r15, 72(%r15)
 ;   br %r14
 
+function %incoming_args_i128(i128, i128, i128, i128, i128, i128, i128, i128) -> i128 {
+block0(v0: i128, v1: i128, v2: i128, v3: i128, v4: i128, v5: i128, v6: i128, v7: i128):
+    v8 = iadd v0, v1
+    v9 = iadd v2, v3
+    v10 = iadd v4, v5
+    v11 = iadd v6, v7
+    v12 = iadd v8, v9
+    v13 = iadd v10, v11
+    v14 = iadd v12, v13
+    return v14
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   vl %v2, 0(%r5)
+;   vl %v3, 0(%r6)
+;   lg %r3, 160(%r15)
+;   vl %v4, 0(%r3)
+;   lg %r3, 168(%r15)
+;   vl %v5, 0(%r3)
+;   lg %r5, 176(%r15)
+;   vl %v6, 0(%r5)
+;   lg %r4, 184(%r15)
+;   vl %v7, 0(%r4)
+;   vaq %v17, %v0, %v1
+;   vaq %v18, %v2, %v3
+;   vaq %v19, %v4, %v5
+;   vaq %v20, %v6, %v7
+;   vaq %v17, %v17, %v18
+;   vaq %v18, %v19, %v20
+;   vaq %v17, %v17, %v18
+;   vst %v17, 0(%r2)
+;   br %r14
+

@@ -8172,6 +8172,16 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::VecRRR {
+            op: VecBinaryOp::Add128,
+            rd: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E748C00048F3",
+        "vaq %v20, %v8, %v12",
+    ));
+    insns.push((
+        Inst::VecRRR {
             op: VecBinaryOp::Sub8x16,
             rd: writable_vr(20),
             rn: vr(8),
@@ -8209,6 +8219,16 @@ fn test_s390x_binemit() {
         },
         "E748C00038F7",
         "vsg %v20, %v8, %v12",
+    ));
+    insns.push((
+        Inst::VecRRR {
+            op: VecBinaryOp::Sub128,
+            rd: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E748C00048F7",
+        "vsq %v20, %v8, %v12",
     ));
     insns.push((
         Inst::VecRRR {
@@ -9091,6 +9111,78 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::VecRR {
+            op: VecUnaryOp::Clz8x16,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800000853",
+        "vclzb %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
+            op: VecUnaryOp::Clz16x8,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800001853",
+        "vclzh %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
+            op: VecUnaryOp::Clz32x4,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800002853",
+        "vclzf %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
+            op: VecUnaryOp::Clz64x2,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800003853",
+        "vclzg %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
+            op: VecUnaryOp::Ctz8x16,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800000852",
+        "vctzb %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
+            op: VecUnaryOp::Ctz16x8,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800001852",
+        "vctzh %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
+            op: VecUnaryOp::Ctz32x4,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800002852",
+        "vctzf %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
+            op: VecUnaryOp::Ctz64x2,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800003852",
+        "vctzg %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
             op: VecUnaryOp::UnpackULow8x16,
             rd: writable_vr(20),
             rn: vr(8),
@@ -9779,6 +9871,24 @@ fn test_s390x_binemit() {
         },
         "E748C01038F9",
         "vchlgs %v20, %v8, %v12",
+    ));
+    insns.push((
+        Inst::VecInt128SCmpHi {
+            tmp: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E7C8000030DBA7740005E748C01038F9",
+        "vecg %v12, %v8 ; jne 10 ; vchlgs %v20, %v8, %v12",
+    ));
+    insns.push((
+        Inst::VecInt128UCmpHi {
+            tmp: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E7C8000030D9A7740005E748C01038F9",
+        "veclg %v12, %v8 ; jne 10 ; vchlgs %v20, %v8, %v12",
     ));
 
     insns.push((

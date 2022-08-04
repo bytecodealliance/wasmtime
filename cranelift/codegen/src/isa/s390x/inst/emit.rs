@@ -2548,10 +2548,12 @@ impl MachInstEmit for Inst {
                     VecBinaryOp::Add16x8 => (0xe7f3, 1),       // VAH
                     VecBinaryOp::Add32x4 => (0xe7f3, 2),       // VAF
                     VecBinaryOp::Add64x2 => (0xe7f3, 3),       // VAG
+                    VecBinaryOp::Add128 => (0xe7f3, 4),        // VAQ
                     VecBinaryOp::Sub8x16 => (0xe7f7, 0),       // VSB
                     VecBinaryOp::Sub16x8 => (0xe7f7, 1),       // VSH
                     VecBinaryOp::Sub32x4 => (0xe7f7, 2),       // VSF
                     VecBinaryOp::Sub64x2 => (0xe7f7, 3),       // VSG
+                    VecBinaryOp::Sub128 => (0xe7f7, 4),        // VSQ
                     VecBinaryOp::Mul8x16 => (0xe7a2, 0),       // VMLB
                     VecBinaryOp::Mul16x8 => (0xe7a2, 1),       // VMLHW
                     VecBinaryOp::Mul32x4 => (0xe7a2, 2),       // VMLF
@@ -2650,6 +2652,14 @@ impl MachInstEmit for Inst {
                     VecUnaryOp::Popcnt16x8 => (0xe750, 1),      // VPOPCTH
                     VecUnaryOp::Popcnt32x4 => (0xe750, 2),      // VPOPCTF
                     VecUnaryOp::Popcnt64x2 => (0xe750, 3),      // VPOPCTG
+                    VecUnaryOp::Clz8x16 => (0xe753, 0),         // VCLZB
+                    VecUnaryOp::Clz16x8 => (0xe753, 1),         // VCLZH
+                    VecUnaryOp::Clz32x4 => (0xe753, 2),         // VCLZF
+                    VecUnaryOp::Clz64x2 => (0xe753, 3),         // VCLZG
+                    VecUnaryOp::Ctz8x16 => (0xe752, 0),         // VCTZB
+                    VecUnaryOp::Ctz16x8 => (0xe752, 1),         // VCTZH
+                    VecUnaryOp::Ctz32x4 => (0xe752, 2),         // VCTZF
+                    VecUnaryOp::Ctz64x2 => (0xe752, 3),         // VCTZG
                     VecUnaryOp::UnpackULow8x16 => (0xe7d4, 0),  // VUPLLB
                     VecUnaryOp::UnpackULow16x8 => (0xe7d4, 1),  // VUPLLH
                     VecUnaryOp::UnpackULow32x4 => (0xe7d4, 2),  // VUPLLF
@@ -2780,6 +2790,45 @@ impl MachInstEmit for Inst {
                 };
 
                 put(sink, &enc_vrr_c(opcode, rd.to_reg(), rn, rm, m4, 0, m6));
+            }
+            &Inst::VecInt128SCmpHi { tmp, rn, rm } | &Inst::VecInt128UCmpHi { tmp, rn, rm } => {
+                // Synthetic instruction to compare 128-bit values.
+                // Sets CC 1 if rn > rm, sets a different CC otherwise.
+                let tmp = allocs.next_writable(tmp);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
+                // Use VECTOR ELEMENT COMPARE to compare the high parts.
+                // Swap the inputs to get:
+                //    CC 1 if high(rn) > high(rm)
+                //    CC 2 if high(rn) < high(rm)
+                //    CC 0 if high(rn) == high(rm)
+                let (opcode, m3) = match self {
+                    &Inst::VecInt128SCmpHi { .. } => (0xe7db, 3), // VECG
+                    &Inst::VecInt128UCmpHi { .. } => (0xe7d9, 3), // VECLG
+                    _ => unreachable!(),
+                };
+                put(sink, &enc_vrr_a(opcode, rm, rn, m3, 0, 0));
+
+                // If CC != 0, we'd done, so jump over the next instruction.
+                let opcode = 0xa74; // BCR
+                put(sink, &enc_ri_c(opcode, 7, 4 + 6));
+
+                // Otherwise, use VECTOR COMPARE HIGH LOGICAL.
+                // Since we already know the high parts are equal, the CC
+                // result will only depend on the low parts:
+                //     CC 1 if low(rn) > low(rm)
+                //     CC 3 if low(rn) <= low(rm)
+                let inst = Inst::VecIntCmpS {
+                    op: VecIntCmpOp::UCmpHi64x2,
+                    // N.B.: This is the first write to tmp, and it happens
+                    // after all uses of rn and rm.  If this were to ever
+                    // change, tmp would have to become an early-def.
+                    rd: tmp,
+                    rn,
+                    rm,
+                };
+                inst.emit(&[], sink, emit_info, state);
             }
 
             &Inst::VecLoad { rd, ref mem } | &Inst::VecLoadRev { rd, ref mem } => {

@@ -196,6 +196,19 @@ pub enum ABIArg {
         /// Purpose of this arg.
         purpose: ir::ArgumentPurpose,
     },
+    /// Implicit argument. Similar to a StructArg, except that we have the
+    /// target type, not a pointer type, at the CLIF-level. This argument is
+    /// still being passed via reference implicitly.
+    ImplicitPtrArg {
+        /// Register or stack slot holding a pointer to the buffer.
+        pointer: ABIArgSlot,
+        /// Offset of the argument buffer.
+        offset: i64,
+        /// Type of the implicit argument.
+        ty: Type,
+        /// Purpose of this arg.
+        purpose: ir::ArgumentPurpose,
+    },
 }
 
 impl ABIArg {
@@ -604,6 +617,12 @@ impl ABISig {
                         }
                     }
                 }
+                &ABIArg::ImplicitPtrArg { ref pointer, .. } => match pointer {
+                    &ABIArgSlot::Reg { reg, .. } => {
+                        uses.push(Reg::from(reg));
+                    }
+                    _ => {}
+                },
             }
         }
 
@@ -707,6 +726,8 @@ pub struct ABICalleeImpl<M: ABIMachineSpec> {
     total_frame_size: Option<u32>,
     /// The register holding the return-area pointer, if needed.
     ret_area_ptr: Option<Writable<Reg>>,
+    /// Temp registers required for argument setup, if needed.
+    arg_temp_reg: Vec<Option<Writable<Reg>>>,
     /// Calling convention this function expects.
     call_conv: isa::CallConv,
     /// The settings controlling this function's compilation.
@@ -845,6 +866,7 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
             fixed_frame_storage_size: 0,
             total_frame_size: None,
             ret_area_ptr: None,
+            arg_temp_reg: vec![],
             call_conv,
             flags,
             isa_flags: isa_flags.clone(),
@@ -1033,18 +1055,39 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         &self.ir_sig
     }
 
-    fn temp_needed(&self) -> Option<Type> {
-        if self.sig.stack_ret_arg.is_some() {
-            Some(M::word_type())
-        } else {
-            None
+    fn temps_needed(&self) -> Vec<Type> {
+        let mut temp_tys = vec![];
+        for arg in &self.sig.args {
+            match arg {
+                &ABIArg::ImplicitPtrArg { pointer, .. } => match &pointer {
+                    &ABIArgSlot::Reg { .. } => {}
+                    &ABIArgSlot::Stack { ty, .. } => {
+                        temp_tys.push(ty);
+                    }
+                },
+                _ => {}
+            }
         }
+        if self.sig.stack_ret_arg.is_some() {
+            temp_tys.push(M::word_type());
+        }
+        temp_tys
     }
 
-    fn init(&mut self, maybe_tmp: Option<Writable<Reg>>) {
+    fn init(&mut self, temps: Vec<Writable<Reg>>) {
+        let mut temps_iter = temps.into_iter();
+        for arg in &self.sig.args {
+            let temp = match arg {
+                &ABIArg::ImplicitPtrArg { pointer, .. } => match &pointer {
+                    &ABIArgSlot::Reg { .. } => None,
+                    &ABIArgSlot::Stack { .. } => Some(temps_iter.next().unwrap()),
+                },
+                _ => None,
+            };
+            self.arg_temp_reg.push(temp);
+        }
         if self.sig.stack_ret_arg.is_some() {
-            assert!(maybe_tmp.is_some());
-            self.ret_area_ptr = maybe_tmp;
+            self.ret_area_ptr = Some(temps_iter.next().unwrap());
         }
     }
 
@@ -1150,6 +1193,28 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                     ));
                 }
             }
+            &ABIArg::ImplicitPtrArg { pointer, ty, .. } => {
+                let into_reg = into_regs.only_reg().unwrap();
+                // We need to dereference the pointer.
+                let base = match &pointer {
+                    &ABIArgSlot::Reg { reg, .. } => Reg::from(reg),
+                    &ABIArgSlot::Stack { offset, ty, .. } => {
+                        // In this case we need a temp register to hold the address.
+                        // This was allocated in the `init` routine.
+                        let addr_reg = self.arg_temp_reg[idx].unwrap();
+                        insts.push(M::gen_load_stack(
+                            StackAMode::FPOffset(
+                                M::fp_to_arg_offset(self.call_conv, &self.flags) + offset,
+                                ty,
+                            ),
+                            addr_reg,
+                            ty,
+                        ));
+                        addr_reg.to_reg()
+                    }
+                };
+                insts.push(M::gen_load_base_offset(into_reg, base, 0, ty));
+            }
         }
         insts
     }
@@ -1240,6 +1305,9 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
             }
             &ABIArg::StructArg { .. } => {
                 panic!("StructArg in return position is unsupported");
+            }
+            &ABIArg::ImplicitPtrArg { .. } => {
+                panic!("ImplicitPtrArg in return position is unsupported");
             }
         }
         ret
@@ -1690,6 +1758,7 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
                     ctx.emit(insn);
                 }
             }
+            &ABIArg::ImplicitPtrArg { .. } => unimplemented!(), // Only supported via ISLE.
         }
     }
 
@@ -1772,6 +1841,7 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
             &ABIArg::StructArg { pointer, .. } => {
                 assert!(pointer.is_none()); // Only supported via ISLE.
             }
+            &ABIArg::ImplicitPtrArg { .. } => unimplemented!(), // Only supported via ISLE.
         }
     }
 
@@ -1804,6 +1874,9 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
             }
             &ABIArg::StructArg { .. } => {
                 panic!("StructArg not supported in return position");
+            }
+            &ABIArg::ImplicitPtrArg { .. } => {
+                panic!("ImplicitPtrArg not supported in return position");
             }
         }
     }
