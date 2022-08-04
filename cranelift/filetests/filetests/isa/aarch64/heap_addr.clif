@@ -24,6 +24,7 @@ block0(v0: i64, v1: i32):
 ;   subs xzr, x10, x11
 ;   movz x14, #0
 ;   csel x0, x14, x13, hi
+;   csdb
 ;   ret
 ; block2:
 ;   udf #0xc11f
@@ -46,7 +47,7 @@ block0(v0: i64, v1: i32):
 ;   subs xzr, x8, #65536
 ;   movz x11, #0
 ;   csel x0, x11, x10, hi
+;   csdb
 ;   ret
 ; block2:
 ;   udf #0xc11f
-

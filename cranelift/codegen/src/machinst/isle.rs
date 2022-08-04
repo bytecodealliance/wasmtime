@@ -4,6 +4,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use smallvec::SmallVec;
 use std::cell::Cell;
+use target_lexicon::Triple;
 
 pub use super::MachLabel;
 pub use crate::ir::{
@@ -142,6 +143,11 @@ macro_rules! isle_prelude_methods {
             } else {
                 None
             }
+        }
+
+        #[inline]
+        fn mark_value_used(&mut self, val: Value) {
+            self.lower_ctx.increment_lowered_uses(val);
         }
 
         #[inline]
@@ -611,11 +617,6 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
-        fn is_not_baldrdash_call_conv(&mut self) -> Option<bool> {
-            Some(!self.lower_ctx.abi().call_conv().extends_baldrdash())
-        }
-
-        #[inline]
         fn func_ref_data(&mut self, func_ref: FuncRef) -> (SigRef, ExternalName, RelocDistance) {
             let funcdata = &self.lower_ctx.dfg().ext_funcs[func_ref];
             (
@@ -779,10 +780,6 @@ macro_rules! isle_prelude_methods {
             regs.regs()[idx]
         }
 
-        fn abi_copy_to_arg_order(&mut self, abi: &ABISig, idx: usize) -> usize {
-            abi.copy_to_arg_order(idx)
-        }
-
         fn abi_num_args(&mut self, abi: &ABISig) -> usize {
             abi.num_args()
         }
@@ -824,6 +821,24 @@ macro_rules! isle_prelude_methods {
                 &ABIArg::Slots { ref slots, .. } => {
                     if slots.len() == 1 {
                         Some(slots[0])
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            }
+        }
+
+        fn abi_arg_struct_pointer(&mut self, arg: &ABIArg) -> Option<(ABIArgSlot, i64, u64)> {
+            match arg {
+                &ABIArg::StructArg {
+                    pointer,
+                    offset,
+                    size,
+                    ..
+                } => {
+                    if let Some(pointer) = pointer {
+                        Some((pointer, offset, size))
                     } else {
                         None
                     }
@@ -879,6 +894,16 @@ macro_rules! isle_prelude_methods {
         fn sink_inst(&mut self, inst: Inst) {
             self.lower_ctx.sink_inst(inst);
         }
+
+        #[inline]
+        fn mem_flags_trusted(&mut self) -> MemFlags {
+            MemFlags::trusted()
+        }
+
+        #[inline]
+        fn preg_to_reg(&mut self, preg: PReg) -> Reg {
+            preg.into()
+        }
     };
 }
 
@@ -889,6 +914,7 @@ where
     [(C::I, bool); N]: smallvec::Array,
 {
     pub lower_ctx: &'a mut C,
+    pub triple: &'a Triple,
     pub flags: &'a F,
     pub isa_flags: &'a I,
 }
@@ -900,6 +926,7 @@ where
 /// lowering.
 pub(crate) fn lower_common<C, F, I, IF, const N: usize>(
     lower_ctx: &mut C,
+    triple: &Triple,
     flags: &F,
     isa_flags: &I,
     outputs: &[InsnOutput],
@@ -915,6 +942,7 @@ where
     // internal heap allocations.
     let mut isle_ctx = IsleContext {
         lower_ctx,
+        triple,
         flags,
         isa_flags,
     };

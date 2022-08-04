@@ -7,6 +7,7 @@ use crate::ir::types::*;
 use crate::ir::{LibCall, MemFlags, TrapCode};
 use crate::isa::aarch64::inst::*;
 use crate::machinst::{ty_bits, Reg, RegClass, Writable};
+use crate::trace;
 use core::convert::TryFrom;
 
 /// Memory label/reference finalization: convert a MemLabel to a PC-relative
@@ -39,7 +40,7 @@ pub fn mem_finalize(
             };
             let adj = match mem {
                 &AMode::NominalSPOffset(..) => {
-                    log::trace!(
+                    trace!(
                         "mem_finalize: nominal SP offset {} + adj {} -> {}",
                         off,
                         state.virtual_sp_offset,
@@ -617,8 +618,6 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source-code location corresponding to instruction to be emitted.
     cur_srcloc: SourceLoc,
-    /// Is code generated for the SpiderMonkey WebAssembly convention.
-    is_baldrdash_target: bool,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -628,7 +627,6 @@ impl MachInstEmitState<Inst> for EmitState {
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: SourceLoc::default(),
-            is_baldrdash_target: abi.call_conv().extends_baldrdash(),
         }
     }
 
@@ -1336,6 +1334,15 @@ impl MachInstEmit for Inst {
                     }
                 }
             }
+            &Inst::MovPReg { rd, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rm: Reg = rm.into();
+                debug_assert!([regs::fp_reg(), regs::stack_reg(), regs::link_reg()].contains(&rm));
+                assert!(rm.class() == RegClass::Int);
+                assert!(rd.to_reg().class() == rm.class());
+                let size = OperandSize::Size64;
+                Inst::Mov { size, rd, rm }.emit(&[], sink, emit_info, state);
+            }
             &Inst::MovWide { op, rd, imm, size } => {
                 let rd = allocs.next_writable(rd);
                 sink.put4(enc_move_wide(op, rd, imm, size));
@@ -1654,6 +1661,9 @@ impl MachInstEmit for Inst {
             }
             &Inst::Fence {} => {
                 sink.put4(enc_dmb_ish()); // dmb ish
+            }
+            &Inst::Csdb {} => {
+                sink.put4(0xd503229f);
             }
             &Inst::FpuMove64 { rd, rn } => {
                 let rd = allocs.next_writable(rd);
@@ -2764,8 +2774,18 @@ impl MachInstEmit for Inst {
             &Inst::Ret { .. } => {
                 sink.put4(0xd65f03c0);
             }
-            &Inst::EpiloguePlaceholder => {
-                // Noop; this is just a placeholder for epilogues.
+            &Inst::AuthenticatedRet { key, is_hint, .. } => {
+                let key = match key {
+                    APIKey::A => 0b0,
+                    APIKey::B => 0b1,
+                };
+
+                if is_hint {
+                    sink.put4(0xd50323bf | key << 6); // autiasp / autibsp
+                    Inst::Ret { rets: vec![] }.emit(&[], sink, emit_info, state);
+                } else {
+                    sink.put4(0xd65f0bff | key << 10); // retaa / retab
+                }
             }
             &Inst::Call { ref info } => {
                 if let Some(s) = state.take_stack_map() {
@@ -2822,10 +2842,7 @@ impl MachInstEmit for Inst {
                 ));
                 sink.use_label_at_offset(off, label, LabelUse::Branch19);
                 // udf
-                let trap = Inst::Udf {
-                    use_allocated_encoding: !state.is_baldrdash_target,
-                    trap_code,
-                };
+                let trap = Inst::Udf { trap_code };
                 trap.emit(&[], sink, emit_info, state);
                 // LABEL:
                 sink.bind_label(label);
@@ -2841,15 +2858,10 @@ impl MachInstEmit for Inst {
             &Inst::Brk => {
                 sink.put4(0xd4200000);
             }
-            &Inst::Udf {
-                use_allocated_encoding,
-                trap_code,
-            } => {
-                let encoding = if use_allocated_encoding {
-                    0xc11f
-                } else {
-                    0xd4a00000
-                };
+            &Inst::Udf { trap_code } => {
+                // "CLIF" in hex, to make the trap recognizable during
+                // debugging.
+                let encoding = 0xc11f;
 
                 sink.add_trap(trap_code);
                 if let Some(s) = state.take_stack_map() {
@@ -2909,6 +2921,8 @@ impl MachInstEmit for Inst {
                     rm: ridx,
                 };
                 inst.emit(&[], sink, emit_info, state);
+                // Prevent any data value speculation.
+                Inst::Csdb.emit(&[], sink, emit_info, state);
 
                 // Load address of jump table
                 let inst = Inst::Adr { rd: rtmp1, off: 16 };
@@ -2979,11 +2993,7 @@ impl MachInstEmit for Inst {
                 };
                 inst.emit(&[], sink, emit_info, state);
                 sink.add_reloc(Reloc::Abs8, name, offset);
-                if emit_info.0.emit_all_ones_funcaddrs() {
-                    sink.put8(u64::max_value());
-                } else {
-                    sink.put8(0);
-                }
+                sink.put8(0);
             }
             &Inst::LoadAddr { rd, ref mem } => {
                 let rd = allocs.next_writable(rd);
@@ -3067,8 +3077,16 @@ impl MachInstEmit for Inst {
                     add.emit(&[], sink, emit_info, state);
                 }
             }
+            &Inst::Pacisp { key } => {
+                let key = match key {
+                    APIKey::A => 0b0,
+                    APIKey::B => 0b1,
+                };
+
+                sink.put4(0xd503233f | key << 6);
+            }
             &Inst::VirtualSPOffsetAdj { offset } => {
-                log::trace!(
+                trace!(
                     "virtual sp offset adjusted by {} -> {}",
                     offset,
                     state.virtual_sp_offset + offset,

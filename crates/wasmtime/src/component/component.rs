@@ -10,7 +10,7 @@ use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    AlwaysTrapInfo, ComponentTypes, GlobalInitializer, LoweredIndex, LoweringInfo,
+    AlwaysTrapInfo, ComponentTypes, FunctionInfo, GlobalInitializer, LoweredIndex,
     RuntimeAlwaysTrapIndex, StaticModuleIndex, Translator,
 };
 use wasmtime_environ::{PrimaryMap, ScopeVec, SignatureIndex, Trampoline, TrapCode};
@@ -56,7 +56,7 @@ struct ComponentInner {
     /// These trampolines are the function pointer within the
     /// `VMCallerCheckedAnyfunc` and will delegate indirectly to a host function
     /// pointer when called.
-    lowerings: PrimaryMap<LoweredIndex, LoweringInfo>,
+    lowerings: PrimaryMap<LoweredIndex, FunctionInfo>,
 
     /// Where the "always trap" functions are located within the `text` section
     /// of `trampoline_obj`.
@@ -205,7 +205,7 @@ impl Component {
             .values()
             .as_slice()
             .windows(2)
-            .all(|window| { window[0].start < window[1].start }));
+            .all(|window| { window[0].info.start < window[1].info.start }));
 
         crate::module::register_component(code.text, &always_trap);
         Ok(Component {
@@ -229,7 +229,7 @@ impl Component {
         types: &ComponentTypes,
         provided_trampolines: &HashSet<SignatureIndex>,
     ) -> Result<(
-        PrimaryMap<LoweredIndex, LoweringInfo>,
+        PrimaryMap<LoweredIndex, FunctionInfo>,
         PrimaryMap<RuntimeAlwaysTrapIndex, AlwaysTrapInfo>,
         Vec<Trampoline>,
         wasmtime_runtime::MmapVec,
@@ -368,17 +368,17 @@ impl Component {
 
     pub(crate) fn lowering_ptr(&self, index: LoweredIndex) -> NonNull<VMFunctionBody> {
         let info = &self.inner.lowerings[index];
-        self.func(info.start, info.length)
+        self.func(info)
     }
 
     pub(crate) fn always_trap_ptr(&self, index: RuntimeAlwaysTrapIndex) -> NonNull<VMFunctionBody> {
         let info = &self.inner.always_trap[index];
-        self.func(info.start, info.length)
+        self.func(&info.info)
     }
 
-    fn func(&self, start: u32, len: u32) -> NonNull<VMFunctionBody> {
+    fn func(&self, info: &FunctionInfo) -> NonNull<VMFunctionBody> {
         let text = self.text();
-        let trampoline = &text[start as usize..][..len as usize];
+        let trampoline = &text[info.start as usize..][..info.length as usize];
         NonNull::new(trampoline.as_ptr() as *mut VMFunctionBody).unwrap()
     }
 
@@ -393,7 +393,7 @@ impl Component {
             .always_trap
             .values()
             .as_slice()
-            .binary_search_by_key(&offset, |info| info.start + info.trap_offset)
+            .binary_search_by_key(&offset, |info| info.info.start + info.trap_offset)
         {
             Ok(_) => Some(TrapCode::AlwaysTrapAdapter),
             Err(_) => None,

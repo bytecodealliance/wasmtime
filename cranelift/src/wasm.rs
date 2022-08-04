@@ -17,7 +17,7 @@ use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
 use cranelift_codegen::Context;
 use cranelift_entity::EntityRef;
-use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
+use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex};
 use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
@@ -186,8 +186,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
     };
 
     let debug_info = options.value_ranges;
-    let mut dummy_environ =
-        DummyEnvironment::new(isa.frontend_config(), ReturnMode::NormalReturns, debug_info);
+    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), debug_info);
     translate_module(&module_binary, &mut dummy_environ)?;
 
     vcprintln!(options.verbose, use_color, terminal, Color::Green, "ok");
@@ -257,11 +256,10 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             }
             (vec![], vec![], vec![])
         } else {
-            context
+            let compiled_code = context
                 .compile_and_emit(isa, &mut mem)
-                .map_err(|err| anyhow::anyhow!("{}", pretty_error(&context.func, err)))?;
-            let result = context.mach_compile_result.as_ref().unwrap();
-            let code_info = result.code_info();
+                .map_err(|err| anyhow::anyhow!("{}", pretty_error(&err.func, err.inner)))?;
+            let code_info = compiled_code.code_info();
 
             if options.print_size {
                 println!(
@@ -280,9 +278,9 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                 saved_size = Some(code_info.total_size);
             }
             (
-                result.buffer.relocs().to_vec(),
-                result.buffer.traps().to_vec(),
-                result.buffer.stack_maps().to_vec(),
+                compiled_code.buffer.relocs().to_vec(),
+                compiled_code.buffer.traps().to_vec(),
+                compiled_code.buffer.stack_maps().to_vec(),
             )
         };
 
@@ -299,14 +297,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                 println!("; Exported as \"{}\"", export_name);
             }
             let value_ranges = if options.value_ranges {
-                Some(
-                    context
-                        .mach_compile_result
-                        .as_ref()
-                        .unwrap()
-                        .value_labels_ranges
-                        .clone(),
-                )
+                Some(context.compiled_code().unwrap().value_labels_ranges.clone())
             } else {
                 None
             };

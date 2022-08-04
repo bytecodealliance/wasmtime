@@ -10,7 +10,7 @@ use std::any::Any;
 /// Description of where a trampoline is located in the text section of a
 /// compiled image.
 #[derive(Serialize, Deserialize)]
-pub struct LoweringInfo {
+pub struct FunctionInfo {
     /// The byte offset from the start of the text section where this trampoline
     /// starts.
     pub start: u32,
@@ -22,11 +22,8 @@ pub struct LoweringInfo {
 /// `ComponentCompiler::compile_always_trap`.
 #[derive(Serialize, Deserialize)]
 pub struct AlwaysTrapInfo {
-    /// The byte offset from the start of the text section where this trampoline
-    /// starts.
-    pub start: u32,
-    /// The byte length of this trampoline's function body.
-    pub length: u32,
+    /// Information about the extent of this generated function.
+    pub info: FunctionInfo,
     /// The offset from `start` of where the trapping instruction is located.
     pub trap_offset: u32,
 }
@@ -79,7 +76,7 @@ pub trait ComponentCompiler: Send + Sync {
         tramplines: Vec<(SignatureIndex, Box<dyn Any + Send>)>,
         obj: &mut Object<'static>,
     ) -> Result<(
-        PrimaryMap<LoweredIndex, LoweringInfo>,
+        PrimaryMap<LoweredIndex, FunctionInfo>,
         PrimaryMap<RuntimeAlwaysTrapIndex, AlwaysTrapInfo>,
         Vec<Trampoline>,
     )>;

@@ -35,7 +35,7 @@ enum Op {
 impl<'a> Arbitrary<'a> for Stacks {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
         let funcs = Self::arbitrary_funcs(u)?;
-        let n = u.len();
+        let n = u.len().min(200);
         let inputs = u.bytes(n)?.to_vec();
         Ok(Stacks { funcs, inputs })
     }

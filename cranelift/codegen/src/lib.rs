@@ -114,6 +114,17 @@ mod value_label;
 #[cfg(feature = "souper-harvest")]
 mod souper_harvest;
 
-pub use crate::result::{CodegenError, CodegenResult};
+pub use crate::result::{CodegenError, CodegenResult, CompileError};
+
+/// Even when trace logging is disabled, the trace macro has a significant performance cost so we
+/// disable it by default.
+#[macro_export]
+macro_rules! trace {
+    ($($tt:tt)*) => {
+        if cfg!(feature = "trace-log") {
+            ::log::trace!($($tt)*);
+        }
+    };
+}
 
 include!(concat!(env!("OUT_DIR"), "/version.rs"));

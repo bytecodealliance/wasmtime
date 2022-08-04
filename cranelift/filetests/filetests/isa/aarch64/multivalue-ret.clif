@@ -2,7 +2,6 @@ test compile precise-output
 set unwind_info=false
 target aarch64
 
-;; Test default (non-SpiderMonkey) ABI.
 function %f() -> i64, i64 {
 block1:
   v0 = iconst.i64 1

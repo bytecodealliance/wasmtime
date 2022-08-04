@@ -6,19 +6,17 @@ pub(super) mod isle;
 use crate::data_value::DataValue;
 use crate::ir::{
     condcodes::{CondCode, FloatCC, IntCC},
-    types, AbiParam, ArgumentPurpose, ExternalName, Inst as IRInst, InstructionData, LibCall,
-    Opcode, Signature, Type,
+    types, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type,
 };
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::isa::{x64::settings as x64_settings, x64::X64Backend, CallConv};
 use crate::machinst::lower::*;
-use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::{Flags, TlsModel};
+use crate::{machinst::*, trace};
 use alloc::boxed::Box;
-use log::trace;
 use smallvec::SmallVec;
 use std::convert::TryFrom;
 use target_lexicon::Triple;
@@ -574,35 +572,13 @@ fn emit_fcmp<C: LowerCtx<I = Inst>>(
     cond_result
 }
 
-fn make_libcall_sig<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    insn: IRInst,
-    call_conv: CallConv,
-    ptr_ty: Type,
-) -> Signature {
-    let mut sig = Signature::new(call_conv);
-    for i in 0..ctx.num_inputs(insn) {
-        sig.params.push(AbiParam::new(ctx.input_ty(insn, i)));
-    }
-    for i in 0..ctx.num_outputs(insn) {
-        sig.returns.push(AbiParam::new(ctx.output_ty(insn, i)));
-    }
-    if call_conv.extends_baldrdash() {
-        // Adds the special VMContext parameter to the signature.
-        sig.params
-            .push(AbiParam::special(ptr_ty, ArgumentPurpose::VMContext));
-    }
-    sig
-}
-
 fn emit_vm_call<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     flags: &Flags,
     triple: &Triple,
     libcall: LibCall,
-    insn: IRInst,
-    inputs: SmallVec<[InsnInput; 4]>,
-    outputs: SmallVec<[InsnOutput; 2]>,
+    inputs: &[Reg],
+    outputs: &[Writable<Reg>],
 ) -> CodegenResult<()> {
     let extname = ExternalName::LibCall(libcall);
 
@@ -614,31 +590,22 @@ fn emit_vm_call<C: LowerCtx<I = Inst>>(
 
     // TODO avoid recreating signatures for every single Libcall function.
     let call_conv = CallConv::for_libcall(flags, CallConv::triple_default(triple));
-    let sig = make_libcall_sig(ctx, insn, call_conv, types::I64);
+    let sig = libcall.signature(call_conv);
     let caller_conv = ctx.abi().call_conv();
 
     let mut abi = X64ABICaller::from_func(&sig, &extname, dist, caller_conv, flags)?;
 
     abi.emit_stack_pre_adjust(ctx);
 
-    let vm_context = if call_conv.extends_baldrdash() { 1 } else { 0 };
-    assert_eq!(inputs.len() + vm_context, abi.num_args());
+    assert_eq!(inputs.len(), abi.num_args());
 
     for (i, input) in inputs.iter().enumerate() {
-        let arg_reg = put_input_in_reg(ctx, *input);
-        abi.emit_copy_regs_to_arg(ctx, i, ValueRegs::one(arg_reg));
-    }
-    if call_conv.extends_baldrdash() {
-        let vm_context_vreg = ctx
-            .get_vm_context()
-            .expect("should have a VMContext to pass to libcall funcs");
-        abi.emit_copy_regs_to_arg(ctx, inputs.len(), ValueRegs::one(vm_context_vreg));
+        abi.emit_copy_regs_to_arg(ctx, i, ValueRegs::one(*input));
     }
 
     abi.emit_call(ctx);
     for (i, output) in outputs.iter().enumerate() {
-        let retval_reg = get_output_reg(ctx, *output).only_reg().unwrap();
-        abi.emit_copy_retval_to_regs(ctx, i, ValueRegs::one(retval_reg));
+        abi.emit_copy_retval_to_regs(ctx, i, ValueRegs::one(*output));
     }
     abi.emit_stack_post_adjust(ctx);
 
@@ -824,7 +791,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         None
     };
 
-    if let Ok(()) = isle::lower(ctx, flags, isa_flags, &outputs, insn) {
+    if let Ok(()) = isle::lower(ctx, triple, flags, isa_flags, &outputs, insn) {
         return Ok(());
     }
 
@@ -898,6 +865,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::FvpromoteLow
         | Opcode::Fdemote
         | Opcode::Fvdemote
+        | Opcode::Fma
         | Opcode::Icmp
         | Opcode::Fcmp
         | Opcode::Load
@@ -924,66 +892,15 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Fence
         | Opcode::FuncAddr
         | Opcode::SymbolValue
-        | Opcode::FallthroughReturn
         | Opcode::Return
         | Opcode::Call
-        | Opcode::CallIndirect => {
+        | Opcode::CallIndirect
+        | Opcode::Trapif
+        | Opcode::Trapff
+        | Opcode::GetFramePointer
+        | Opcode::GetStackPointer
+        | Opcode::GetReturnAddress => {
             implemented_in_isle(ctx);
-        }
-
-        Opcode::Trapif | Opcode::Trapff => {
-            let trap_code = ctx.data(insn).trap_code().unwrap();
-
-            if matches_input(ctx, inputs[0], Opcode::IaddIfcout).is_some() {
-                let cond_code = ctx.data(insn).cond_code().unwrap();
-                // The flags must not have been clobbered by any other instruction between the
-                // iadd_ifcout and this instruction, as verified by the CLIF validator; so we can
-                // simply use the flags here.
-                let cc = CC::from_intcc(cond_code);
-
-                ctx.emit(Inst::TrapIf { trap_code, cc });
-            } else if op == Opcode::Trapif {
-                let cond_code = ctx.data(insn).cond_code().unwrap();
-
-                // Verification ensures that the input is always a single-def ifcmp.
-                let ifcmp = matches_input(ctx, inputs[0], Opcode::Ifcmp).unwrap();
-                let cond_code = emit_cmp(ctx, ifcmp, cond_code);
-                let cc = CC::from_intcc(cond_code);
-
-                ctx.emit(Inst::TrapIf { trap_code, cc });
-            } else {
-                let cond_code = ctx.data(insn).fp_cond_code().unwrap();
-
-                // Verification ensures that the input is always a single-def ffcmp.
-                let ffcmp = matches_input(ctx, inputs[0], Opcode::Ffcmp).unwrap();
-
-                match emit_fcmp(ctx, ffcmp, cond_code, FcmpSpec::Normal) {
-                    FcmpCondResult::Condition(cc) => ctx.emit(Inst::TrapIf { trap_code, cc }),
-                    FcmpCondResult::AndConditions(cc1, cc2) => {
-                        // A bit unfortunate, but materialize the flags in their own register, and
-                        // check against this.
-                        let tmp = ctx.alloc_tmp(types::I32).only_reg().unwrap();
-                        let tmp2 = ctx.alloc_tmp(types::I32).only_reg().unwrap();
-                        ctx.emit(Inst::setcc(cc1, tmp));
-                        ctx.emit(Inst::setcc(cc2, tmp2));
-                        ctx.emit(Inst::alu_rmi_r(
-                            OperandSize::Size32,
-                            AluRmiROpcode::And,
-                            RegMemImm::reg(tmp.to_reg()),
-                            tmp2,
-                        ));
-                        ctx.emit(Inst::TrapIf {
-                            trap_code,
-                            cc: CC::NZ,
-                        });
-                    }
-                    FcmpCondResult::OrConditions(cc1, cc2) => {
-                        ctx.emit(Inst::TrapIf { trap_code, cc: cc1 });
-                        ctx.emit(Inst::TrapIf { trap_code, cc: cc2 });
-                    }
-                    FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
-                };
-            };
         }
 
         Opcode::FcvtFromSint => {
@@ -2039,7 +1956,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         ty, op
                     ),
                 };
-                emit_vm_call(ctx, flags, triple, libcall, insn, inputs, outputs)?;
+
+                let input = put_input_in_reg(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+
+                emit_vm_call(ctx, flags, triple, libcall, &[input], &[dst])?;
             }
         }
 
@@ -2791,8 +2712,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Cls => unimplemented!("Cls not supported"),
 
-        Opcode::Fma => implemented_in_isle(ctx),
-
         Opcode::BorNot | Opcode::BxorNot => {
             unimplemented!("or-not / xor-not opcodes not implemented");
         }
@@ -2864,7 +2783,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("table_addr should have been removed by legalization!");
         }
 
-        Opcode::IfcmpSp | Opcode::Copy => {
+        Opcode::Copy => {
             panic!("Unused opcode should not be encountered.");
         }
 
@@ -2914,6 +2833,24 @@ impl LowerBackend for X64Backend {
         // verifier pass.
         assert!(branches.len() <= 2);
 
+        if let Ok(()) = isle::lower_branch(
+            ctx,
+            &self.triple,
+            &self.flags,
+            &self.x64_flags,
+            branches[0],
+            targets,
+        ) {
+            return Ok(());
+        }
+
+        let implemented_in_isle = |ctx: &mut C| {
+            unreachable!(
+                "branch implemented in ISLE: inst = `{}`",
+                ctx.dfg().display_inst(branches[0])
+            )
+        };
+
         if branches.len() == 2 {
             // Must be a conditional branch followed by an unconditional branch.
             let op0 = ctx.data(branches[0]).opcode();
@@ -2939,18 +2876,8 @@ impl LowerBackend for X64Backend {
 
                     let src_ty = ctx.input_ty(branches[0], 0);
 
-                    if let Some(icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
-                        let cond_code = ctx.data(icmp).cond_code().unwrap();
-                        let cond_code = emit_cmp(ctx, icmp, cond_code);
-
-                        let cond_code = if op0 == Opcode::Brz {
-                            cond_code.inverse()
-                        } else {
-                            cond_code
-                        };
-
-                        let cc = CC::from_intcc(cond_code);
-                        ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
+                    if let Some(_icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
+                        implemented_in_isle(ctx)
                     } else if let Some(fcmp) = matches_input(ctx, flag_input, Opcode::Fcmp) {
                         let cond_code = ctx.data(fcmp).fp_cond_code().unwrap();
                         let cond_code = if op0 == Opcode::Brz {
@@ -3041,66 +2968,7 @@ impl LowerBackend for X64Backend {
                     }
                 }
 
-                Opcode::BrIcmp => {
-                    let src_ty = ctx.input_ty(branches[0], 0);
-                    if is_int_or_ref_ty(src_ty) || is_bool_ty(src_ty) {
-                        let lhs = put_input_in_reg(
-                            ctx,
-                            InsnInput {
-                                insn: branches[0],
-                                input: 0,
-                            },
-                        );
-                        let rhs = input_to_reg_mem_imm(
-                            ctx,
-                            InsnInput {
-                                insn: branches[0],
-                                input: 1,
-                            },
-                        );
-                        let cc = CC::from_intcc(ctx.data(branches[0]).cond_code().unwrap());
-                        // Cranelift's icmp semantics want to compare lhs - rhs, while Intel gives
-                        // us dst - src at the machine instruction level, so invert operands.
-                        ctx.emit(Inst::cmp_rmi_r(OperandSize::from_ty(src_ty), rhs, lhs));
-                        ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
-                    } else {
-                        unimplemented!("bricmp with non-int type {:?}", src_ty);
-                    }
-                }
-
-                Opcode::Brif => {
-                    let flag_input = InsnInput {
-                        insn: branches[0],
-                        input: 0,
-                    };
-
-                    if let Some(ifcmp) = matches_input(ctx, flag_input, Opcode::Ifcmp) {
-                        let cond_code = ctx.data(branches[0]).cond_code().unwrap();
-                        let cond_code = emit_cmp(ctx, ifcmp, cond_code);
-                        let cc = CC::from_intcc(cond_code);
-                        ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
-                    } else if let Some(ifcmp_sp) = matches_input(ctx, flag_input, Opcode::IfcmpSp) {
-                        let operand = put_input_in_reg(
-                            ctx,
-                            InsnInput {
-                                insn: ifcmp_sp,
-                                input: 0,
-                            },
-                        );
-                        let ty = ctx.input_ty(ifcmp_sp, 0);
-                        ctx.emit(Inst::cmp_rmi_r(
-                            OperandSize::from_ty(ty),
-                            RegMemImm::reg(regs::rsp()),
-                            operand,
-                        ));
-                        let cond_code = ctx.data(branches[0]).cond_code().unwrap();
-                        let cc = CC::from_intcc(cond_code);
-                        ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
-                    } else {
-                        // Should be disallowed by flags checks in verifier.
-                        unimplemented!("Brif with non-ifcmp input");
-                    }
-                }
+                Opcode::BrIcmp | Opcode::Brif => implemented_in_isle(ctx),
                 Opcode::Brff => {
                     let flag_input = InsnInput {
                         insn: branches[0],
@@ -3137,9 +3005,7 @@ impl LowerBackend for X64Backend {
             // Must be an unconditional branch or trap.
             let op = ctx.data(branches[0]).opcode();
             match op {
-                Opcode::Jump => {
-                    ctx.emit(Inst::jmp_known(targets[0]));
-                }
+                Opcode::Jump => implemented_in_isle(ctx),
 
                 Opcode::BrTable => {
                     let jt_size = targets.len() - 1;

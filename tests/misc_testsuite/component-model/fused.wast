@@ -1228,6 +1228,7 @@
 
 ;; test that flags get their upper bits all masked off
 (component
+  (type $f0 (flags))
   (type $f1 (flags "f1"))
   (type $f8 (flags "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8"))
   (type $f9 (flags "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8" "f9"))
@@ -1277,6 +1278,7 @@
 
   (component $c1
     (core module $m
+      (func (export "f0"))
       (func (export "f1") (param i32)
         (if (i32.ne (local.get 0) (i32.const 0x1)) (unreachable))
       )
@@ -1310,6 +1312,7 @@
       )
     )
     (core instance $m (instantiate $m))
+    (func (export "f0") (param $f0) (canon lift (core func $m "f0")))
     (func (export "f1") (param $f1) (canon lift (core func $m "f1")))
     (func (export "f8") (param $f8) (canon lift (core func $m "f8")))
     (func (export "f9") (param $f9) (canon lift (core func $m "f9")))
@@ -1324,6 +1327,7 @@
 
   (component $c2
     (import "" (instance $i
+      (export "f0" (func (param $f0)))
       (export "f1" (func (param $f1)))
       (export "f8" (func (param $f8)))
       (export "f9" (func (param $f9)))
@@ -1334,6 +1338,7 @@
       (export "f64" (func (param $f64)))
       (export "f65" (func (param $f65)))
     ))
+    (core func $f0 (canon lower (func $i "f0")))
     (core func $f1 (canon lower (func $i "f1")))
     (core func $f8 (canon lower (func $i "f8")))
     (core func $f9 (canon lower (func $i "f9")))
@@ -1345,6 +1350,7 @@
     (core func $f65 (canon lower (func $i "f65")))
 
     (core module $m
+      (import "" "f0" (func $f0))
       (import "" "f1" (func $f1 (param i32)))
       (import "" "f8" (func $f8 (param i32)))
       (import "" "f9" (func $f9 (param i32)))
@@ -1356,6 +1362,7 @@
       (import "" "f65" (func $f65 (param i32 i32 i32)))
 
       (func $start
+        (call $f0)
         (call $f1 (i32.const 0xffffff01))
         (call $f8 (i32.const 0xffffff11))
         (call $f9 (i32.const 0xffffff11))
@@ -1371,6 +1378,7 @@
     )
     (core instance $m (instantiate $m
       (with "" (instance
+        (export "f0" (func $f0))
         (export "f1" (func $f1))
         (export "f8" (func $f8))
         (export "f9" (func $f9))

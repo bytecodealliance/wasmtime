@@ -261,7 +261,7 @@ impl<'a> Codegen<'a> {
         ctx.values.insert(value.clone(), (is_ref, ty));
     }
 
-    fn const_int(&self, val: i64, ty: TypeId) -> String {
+    fn const_int(&self, val: i128, ty: TypeId) -> String {
         let is_bool = match &self.typeenv.types[ty.index()] {
             &Type::Primitive(_, name, _) => &self.typeenv.syms[name.index()] == "bool",
             _ => unreachable!(),
@@ -269,7 +269,12 @@ impl<'a> Codegen<'a> {
         if is_bool {
             format!("{}", val != 0)
         } else {
-            format!("{}", val)
+            let ty_name = self.type_name(ty, /* by_ref = */ false);
+            if ty_name == "i128" {
+                format!("{}i128", val)
+            } else {
+                format!("{}i128 as {}", val, ty_name)
+            }
         }
     }
 
@@ -523,10 +528,14 @@ impl<'a> Codegen<'a> {
                 false
             }
             &PatternInst::MatchInt {
-                ref input, int_val, ..
+                ref input,
+                int_val,
+                ty,
+                ..
             } => {
+                let int_val = self.const_int(int_val, ty);
                 let input = self.value_by_val(input, ctx);
-                writeln!(code, "{}if {} == {} {{", indent, input, int_val).unwrap();
+                writeln!(code, "{}if {} == {}  {{", indent, input, int_val).unwrap();
                 false
             }
             &PatternInst::MatchPrim { ref input, val, .. } => {

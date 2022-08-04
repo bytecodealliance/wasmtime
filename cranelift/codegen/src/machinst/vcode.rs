@@ -24,6 +24,7 @@ use crate::ir::{
 };
 use crate::machinst::*;
 use crate::timing;
+use crate::trace;
 use crate::ValueLocRange;
 use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, Operand, OperandKind, PReg, PRegSet,
@@ -587,7 +588,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         // Translate blockparam args via the vreg aliases table as well.
         for arg in &mut self.vcode.branch_block_args {
             let new_arg = Self::resolve_vreg_alias_impl(&self.vcode.vreg_aliases, *arg);
-            log::trace!("operandcollector: block arg {:?} -> {:?}", arg, new_arg);
+            trace!("operandcollector: block arg {:?} -> {:?}", arg, new_arg);
             *arg = new_arg;
         }
     }
@@ -806,7 +807,7 @@ impl<I: VCodeInst> VCode<I> {
         }
 
         for block in final_order {
-            log::trace!("emitting block {:?}", block);
+            trace!("emitting block {:?}", block);
             let new_offset = I::align_basic_block(buffer.cur_offset());
             while new_offset > buffer.cur_offset() {
                 // Pad with NOPs up to the aligned block offset.
@@ -829,7 +830,7 @@ impl<I: VCodeInst> VCode<I> {
 
             // Is this the first block? Emit the prologue directly if so.
             if block == self.entry {
-                log::trace!(" -> entry block");
+                trace!(" -> entry block");
                 buffer.start_srcloc(SourceLoc::default());
                 state.pre_sourceloc(SourceLoc::default());
                 for inst in &prologue_insts {

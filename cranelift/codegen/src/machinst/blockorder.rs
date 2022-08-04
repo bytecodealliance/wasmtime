@@ -73,7 +73,7 @@ use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::visit_block_succs;
 use crate::ir::{Block, Function, Inst, Opcode};
-use crate::machinst::*;
+use crate::{machinst::*, trace};
 
 use smallvec::SmallVec;
 
@@ -214,7 +214,7 @@ impl LoweredBlock {
 impl BlockLoweringOrder {
     /// Compute and return a lowered block order for `f`.
     pub fn new(f: &Function) -> BlockLoweringOrder {
-        log::trace!("BlockLoweringOrder: function body {:?}", f);
+        trace!("BlockLoweringOrder: function body {:?}", f);
 
         // Step 1: compute the in-edge and out-edge count of every block.
         let mut block_in_count = SecondaryMap::with_default(0);
@@ -223,7 +223,6 @@ impl BlockLoweringOrder {
         // Cache the block successors to avoid re-examining branches below.
         let mut block_succs: SmallVec<[(Inst, usize, Block); 128]> = SmallVec::new();
         let mut block_succ_range = SecondaryMap::with_default((0, 0));
-        let mut fallthrough_return_block = None;
         for block in f.layout.blocks() {
             let block_succ_start = block_succs.len();
             let mut succ_idx = 0;
@@ -240,11 +239,6 @@ impl BlockLoweringOrder {
                 if f.dfg[inst].opcode() == Opcode::Return {
                     // Implicit output edge for any return.
                     block_out_count[block] += 1;
-                }
-                if f.dfg[inst].opcode() == Opcode::FallthroughReturn {
-                    // Fallthrough return block must come last.
-                    debug_assert!(fallthrough_return_block == None);
-                    fallthrough_return_block = Some(block);
                 }
             }
         }
@@ -396,17 +390,11 @@ impl BlockLoweringOrder {
             });
         }
 
-        let mut deferred_last = None;
         while !stack.is_empty() {
             let stack_entry = stack.last_mut().unwrap();
             let range = stack_entry.succs;
             if stack_entry.cur_succ == range.0 {
-                let orig_block = stack_entry.this.orig_block();
-                if orig_block.is_some() && orig_block == fallthrough_return_block {
-                    deferred_last = Some((stack_entry.this, range));
-                } else {
-                    postorder.push((stack_entry.this, range));
-                }
+                postorder.push((stack_entry.this, range));
                 stack.pop();
             } else {
                 // Heuristic: chase the children in reverse. This puts the first
@@ -431,10 +419,7 @@ impl BlockLoweringOrder {
         }
 
         postorder.reverse();
-        let mut rpo = postorder;
-        if let Some(d) = deferred_last {
-            rpo.push(d);
-        }
+        let rpo = postorder;
 
         // Step 3: now that we have RPO, build the BlockIndex/BB fwd/rev maps.
         let mut lowered_order = vec![];
@@ -477,7 +462,7 @@ impl BlockLoweringOrder {
             orig_map,
             cold_blocks,
         };
-        log::trace!("BlockLoweringOrder: {:?}", result);
+        trace!("BlockLoweringOrder: {:?}", result);
         result
     }
 

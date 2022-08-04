@@ -8,7 +8,7 @@ use crate::ir::dfg::DataFlowGraph;
 use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder};
 use crate::ir::{Block, Inst};
 use crate::packed_option::PackedOption;
-use crate::timing;
+use crate::{timing, trace};
 use core::cmp;
 use core::iter::{IntoIterator, Iterator};
 
@@ -327,7 +327,7 @@ impl Layout {
                 next_inst = self.insts[inst].next.expand();
             }
         }
-        log::trace!("Renumbered {} program points", seq / MAJOR_STRIDE);
+        trace!("Renumbered {} program points", seq / MAJOR_STRIDE);
     }
 }
 

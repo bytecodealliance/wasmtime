@@ -96,9 +96,6 @@ pub trait MachInst: Clone + Debug {
     /// (ret/uncond/cond) and target if applicable.
     fn is_term(&self) -> MachTerminator;
 
-    /// Returns true if the instruction is an epilogue placeholder.
-    fn is_epilogue_placeholder(&self) -> bool;
-
     /// Should this instruction be included in the clobber-set?
     fn is_included_in_clobbers(&self) -> bool {
         true
@@ -272,7 +269,7 @@ pub trait MachInstEmitState<I: MachInst>: Default + Clone + Debug {
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine
 /// code (as bytes) and a disassembly, if requested.
-pub struct MachCompileResult {
+pub struct CompiledCode {
     /// Machine code.
     pub buffer: MachBufferFinalized,
     /// Size of stack frame, in bytes.
@@ -299,12 +296,17 @@ pub struct MachCompileResult {
     pub bb_edges: Vec<(CodeOffset, CodeOffset)>,
 }
 
-impl MachCompileResult {
+impl CompiledCode {
     /// Get a `CodeInfo` describing section sizes from this compilation result.
     pub fn code_info(&self) -> CodeInfo {
         CodeInfo {
             total_size: self.buffer.total_size(),
         }
+    }
+
+    /// Returns a reference to the machine code generated for this function compilation.
+    pub fn code_buffer(&self) -> &[u8] {
+        self.buffer.data()
     }
 }
 

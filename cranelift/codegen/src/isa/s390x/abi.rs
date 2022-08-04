@@ -73,7 +73,7 @@ use crate::ir::MemFlags;
 use crate::ir::Signature;
 use crate::ir::Type;
 use crate::isa;
-use crate::isa::s390x::inst::*;
+use crate::isa::s390x::{inst::*, settings as s390x_settings};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::*;
 use crate::machinst::{RealReg, Reg, RegClass, Writable};
@@ -188,7 +188,7 @@ fn get_vecreg_for_ret(idx: usize) -> Option<Reg> {
 static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
 
 /// The size of the register save area
-static REG_SAVE_AREA_SIZE: u32 = 160;
+pub static REG_SAVE_AREA_SIZE: u32 = 160;
 
 impl Into<MemArg> for StackAMode {
     fn into(self) -> MemArg {
@@ -206,8 +206,12 @@ impl Into<MemArg> for StackAMode {
 /// point for the trait; it is never actually instantiated.
 pub struct S390xMachineDeps;
 
+impl IsaFlags for s390x_settings::Flags {}
+
 impl ABIMachineSpec for S390xMachineDeps {
     type I = Inst;
+
+    type F = s390x_settings::Flags;
 
     fn word_bits() -> u32 {
         64
@@ -224,12 +228,12 @@ impl ABIMachineSpec for S390xMachineDeps {
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-    ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
+    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)> {
         let mut next_gpr = 0;
         let mut next_fpr = 0;
         let mut next_vr = 0;
         let mut next_stack: u64 = 0;
-        let mut ret = vec![];
+        let mut ret = ABIArgVec::new();
 
         if args_or_rets == ArgsOrRets::Args {
             next_stack = REG_SAVE_AREA_SIZE as u64;
@@ -243,7 +247,9 @@ impl ABIMachineSpec for S390xMachineDeps {
                 &ir::ArgumentPurpose::VMContext
                 | &ir::ArgumentPurpose::Normal
                 | &ir::ArgumentPurpose::StackLimit
-                | &ir::ArgumentPurpose::SignatureId => {}
+                | &ir::ArgumentPurpose::SignatureId
+                | &ir::ArgumentPurpose::StructReturn
+                | &ir::ArgumentPurpose::StructArgument(_) => {}
                 _ => panic!(
                     "Unsupported argument purpose {:?} in signature: {:?}",
                     param.purpose, params
@@ -283,14 +289,13 @@ impl ABIMachineSpec for S390xMachineDeps {
                     candidate
                 };
 
-            if let Some(reg) = candidate {
-                ret.push(ABIArg::reg(
-                    reg.to_real_reg().unwrap(),
-                    param.value_type,
-                    param.extension,
-                    param.purpose,
-                ));
+            let slot = if let Some(reg) = candidate {
                 *next_reg += 1;
+                ABIArgSlot::Reg {
+                    reg: reg.to_real_reg().unwrap(),
+                    ty: param.value_type,
+                    extension: param.extension,
+                }
             } else {
                 // Compute size. Every argument or return value takes a slot of
                 // at least 8 bytes, except for return values in the Wasmtime ABI.
@@ -314,13 +319,28 @@ impl ABIMachineSpec for S390xMachineDeps {
                 } else {
                     0
                 };
-                ret.push(ABIArg::stack(
-                    (next_stack + offset) as i64,
-                    param.value_type,
-                    param.extension,
-                    param.purpose,
-                ));
+                let offset = (next_stack + offset) as i64;
                 next_stack += slot_size;
+                ABIArgSlot::Stack {
+                    offset,
+                    ty: param.value_type,
+                    extension: param.extension,
+                }
+            };
+
+            if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
+                assert!(size % 8 == 0, "StructArgument size is not properly aligned");
+                ret.push(ABIArg::StructArg {
+                    pointer: Some(slot),
+                    offset: 0,
+                    size: size as u64,
+                    purpose: param.purpose,
+                });
+            } else {
+                ret.push(ABIArg::Slots {
+                    slots: smallvec![slot],
+                    purpose: param.purpose,
+                });
             }
         }
 
@@ -348,6 +368,22 @@ impl ABIMachineSpec for S390xMachineDeps {
         } else {
             None
         };
+
+        // After all arguments are in their well-defined location,
+        // allocate buffers for all StructArg arguments.
+        for i in 0..ret.len() {
+            match &mut ret[i] {
+                &mut ABIArg::StructArg {
+                    ref mut offset,
+                    size,
+                    ..
+                } => {
+                    *offset = next_stack as i64;
+                    next_stack += size;
+                }
+                _ => {}
+            }
+        }
 
         // To avoid overflow issues, limit the arg/return size to something
         // reasonable -- here, 128 MB.
@@ -391,7 +427,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
     }
 
-    fn gen_ret(rets: Vec<Reg>) -> Inst {
+    fn gen_ret(_setup_frame: bool, _isa_flags: &s390x_settings::Flags, rets: Vec<Reg>) -> Inst {
         Inst::Ret {
             link: gpr(14),
             rets,
@@ -443,10 +479,6 @@ impl ABIMachineSpec for S390xMachineDeps {
             trap_code: ir::TrapCode::StackOverflow,
         });
         insts
-    }
-
-    fn gen_epilogue_placeholder() -> Inst {
-        Inst::EpiloguePlaceholder
     }
 
     fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>, _ty: Type) -> Inst {

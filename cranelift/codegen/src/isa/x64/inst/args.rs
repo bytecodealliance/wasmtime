@@ -313,10 +313,16 @@ impl Amode {
     ) {
         match self {
             Amode::ImmReg { base, .. } => {
-                collector.reg_use(*base);
+                if *base != regs::rbp() && *base != regs::rsp() {
+                    collector.reg_use(*base);
+                }
             }
             Amode::ImmRegRegShift { base, index, .. } => {
+                debug_assert_ne!(base.to_reg(), regs::rbp());
+                debug_assert_ne!(base.to_reg(), regs::rsp());
                 collector.reg_use(base.to_reg());
+                debug_assert_ne!(index.to_reg(), regs::rbp());
+                debug_assert_ne!(index.to_reg(), regs::rsp());
                 collector.reg_use(index.to_reg());
             }
             Amode::RipRelative { .. } => {
@@ -346,8 +352,7 @@ impl Amode {
 
     pub(crate) fn get_flags(&self) -> MemFlags {
         match self {
-            Amode::ImmReg { flags, .. } => *flags,
-            Amode::ImmRegRegShift { flags, .. } => *flags,
+            Amode::ImmReg { flags, .. } | Amode::ImmRegRegShift { flags, .. } => *flags,
             Amode::RipRelative { .. } => MemFlags::trusted(),
         }
     }
@@ -364,11 +369,18 @@ impl Amode {
                 simm32,
                 base,
                 flags,
-            } => Amode::ImmReg {
-                simm32,
-                flags,
-                base: allocs.next(base),
-            },
+            } => {
+                let base = if base == regs::rsp() || base == regs::rbp() {
+                    base
+                } else {
+                    allocs.next(base)
+                };
+                Amode::ImmReg {
+                    simm32,
+                    flags,
+                    base,
+                }
+            }
             &Amode::ImmRegRegShift {
                 simm32,
                 base,

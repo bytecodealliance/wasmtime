@@ -111,3 +111,23 @@
     ))
   )
   "degenerate component adapter called")
+
+;; fiddling with 0-sized lists
+(component $c
+  (core module $m
+    (func (export "x") (param i32 i32))
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+      i32.const -1)
+    (memory (export "memory") 0)
+  )
+  (core instance $m (instantiate $m))
+  (func $f (param (list unit))
+    (canon lift
+      (core func $m "x")
+      (realloc (func $m "realloc"))
+      (memory $m "memory")
+    )
+  )
+  (export "empty-list" (func $f))
+)
+(assert_return (invoke "empty-list" (list.const)) (unit.const))

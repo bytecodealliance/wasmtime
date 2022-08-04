@@ -41,15 +41,6 @@ pub enum GlobalVariable {
     Custom,
 }
 
-/// How to return from functions.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum ReturnMode {
-    /// Use normal return instructions as needed.
-    NormalReturns,
-    /// Use a single fallthrough return at the end of the function.
-    FallthroughReturn,
-}
-
 /// Environment affecting the translation of a WebAssembly.
 pub trait TargetEnvironment {
     /// Get the information needed to produce Cranelift IR for the given target.
@@ -100,13 +91,6 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// opposed to a hidden parameter added for use by the implementation?
     fn is_wasm_return(&self, signature: &ir::Signature, index: usize) -> bool {
         signature.returns[index].purpose == ir::ArgumentPurpose::Normal
-    }
-
-    /// Should the code be structured to use a single `fallthrough_return` instruction at the end
-    /// of the function body, rather than `return` instructions as needed? This is used by VMs
-    /// to append custom epilogues.
-    fn return_mode(&self) -> ReturnMode {
-        ReturnMode::NormalReturns
     }
 
     /// Called after the locals for a function have been parsed, and the number

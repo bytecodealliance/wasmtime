@@ -332,24 +332,6 @@ fn define_control_flow(
         .is_terminator(true),
     );
 
-    let rvals = &Operand::new("rvals", &entities.varargs).with_doc("return values");
-    ig.push(
-        Inst::new(
-            "fallthrough_return",
-            r#"
-        Return from the function by fallthrough.
-
-        This is a specialized instruction for use where one wants to append
-        a custom epilogue, which will then perform the real return. This
-        instruction has no encoding.
-        "#,
-            &formats.multiary,
-        )
-        .operands_in(vec![rvals])
-        .is_return(true)
-        .is_terminator(true),
-    );
-
     let FN = &Operand::new("FN", &entities.func_ref)
         .with_doc("function to call, declared by `function`");
     let args = &Operand::new("args", &entities.varargs).with_doc("call arguments");
@@ -1314,6 +1296,43 @@ pub(crate) fn define(
         .other_side_effects(true),
     );
 
+    ig.push(
+        Inst::new(
+            "get_frame_pointer",
+            r#"
+        Get the address in the frame pointer register.
+
+        Usage of this instruction requires setting `preserve_frame_pointers` to `true`.
+        "#,
+            &formats.nullary,
+        )
+        .operands_out(vec![addr]),
+    );
+
+    ig.push(
+        Inst::new(
+            "get_stack_pointer",
+            r#"
+        Get the address in the stack pointer register.
+        "#,
+            &formats.nullary,
+        )
+        .operands_out(vec![addr]),
+    );
+
+    ig.push(
+        Inst::new(
+            "get_return_address",
+            r#"
+        Get the PC where this function will transfer control to when it returns.
+
+        Usage of this instruction requires setting `preserve_frame_pointers` to `true`.
+        "#,
+            &formats.nullary,
+        )
+        .operands_out(vec![addr]),
+    );
+
     let TableOffset = &TypeVar::new(
         "TableOffset",
         "An unsigned table offset",
@@ -1606,21 +1625,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
-            "ifcmp_sp",
-            r#"
-    Compare ``addr`` with the stack pointer and set the CPU flags.
-
-    This is like `ifcmp` where ``addr`` is the LHS operand and the stack
-    pointer is the RHS.
-    "#,
-            &formats.unary,
-        )
-        .operands_in(vec![addr])
-        .operands_out(vec![flags]),
     );
 
     let x = &Operand::new("x", TxN).with_doc("Vector to split");

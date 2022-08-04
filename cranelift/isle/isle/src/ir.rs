@@ -49,7 +49,7 @@ pub enum PatternInst {
         /// The value's type.
         ty: TypeId,
         /// The integer to match against the value.
-        int_val: i64,
+        int_val: i128,
     },
 
     /// Try matching the given value as the given constant. Produces no values.
@@ -128,7 +128,7 @@ pub enum ExprInst {
         /// This integer type.
         ty: TypeId,
         /// The integer value. Must fit within the type.
-        val: i64,
+        val: i128,
     },
 
     /// Produce a constant extern value.
@@ -222,7 +222,7 @@ impl ExprSequence {
     /// Is this expression sequence producing a constant integer?
     ///
     /// If so, return the integer type and the constant.
-    pub fn is_const_int(&self) -> Option<(TypeId, i64)> {
+    pub fn is_const_int(&self) -> Option<(TypeId, i128)> {
         if self.insts.len() == 2 && matches!(&self.insts[1], &ExprInst::Return { .. }) {
             match &self.insts[0] {
                 &ExprInst::ConstInt { ty, val } => Some((ty, val)),
@@ -266,7 +266,7 @@ impl PatternSequence {
         self.add_inst(PatternInst::MatchEqual { a, b, ty });
     }
 
-    fn add_match_int(&mut self, input: Value, ty: TypeId, int_val: i64) {
+    fn add_match_int(&mut self, input: Value, ty: TypeId, int_val: i128) {
         self.add_inst(PatternInst::MatchInt { input, ty, int_val });
     }
 
@@ -486,7 +486,7 @@ impl ExprSequence {
         id
     }
 
-    fn add_const_int(&mut self, ty: TypeId, val: i64) -> Value {
+    fn add_const_int(&mut self, ty: TypeId, val: i128) -> Value {
         let inst = InstId(self.insts.len());
         self.add_inst(ExprInst::ConstInt { ty, val });
         Value::Expr { inst, output: 0 }

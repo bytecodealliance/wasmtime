@@ -6,7 +6,7 @@ use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::CallConv;
-use crate::machinst::*;
+use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -77,7 +77,6 @@ impl Inst {
             | Inst::CvtFloatToUintSeq { .. }
             | Inst::CvtUint64ToFloatSeq { .. }
             | Inst::Div { .. }
-            | Inst::EpiloguePlaceholder
             | Inst::Fence { .. }
             | Inst::Hlt
             | Inst::Imm { .. }
@@ -92,6 +91,7 @@ impl Inst {
             | Inst::Mov64MR { .. }
             | Inst::MovRM { .. }
             | Inst::MovRR { .. }
+            | Inst::MovPReg { .. }
             | Inst::MovsxRmR { .. }
             | Inst::MovzxRmR { .. }
             | Inst::MulHi { .. }
@@ -105,6 +105,8 @@ impl Inst {
             | Inst::ShiftR { .. }
             | Inst::SignExtendData { .. }
             | Inst::TrapIf { .. }
+            | Inst::TrapIfAnd { .. }
+            | Inst::TrapIfOr { .. }
             | Inst::Ud2 { .. }
             | Inst::VirtualSPOffsetAdj { .. }
             | Inst::XmmCmove { .. }
@@ -721,10 +723,6 @@ impl Inst {
 
     pub(crate) fn ret(rets: Vec<Reg>) -> Inst {
         Inst::Ret { rets }
-    }
-
-    pub(crate) fn epilogue_placeholder() -> Inst {
-        Inst::EpiloguePlaceholder
     }
 
     pub(crate) fn jmp_known(dst: MachLabel) -> Inst {
@@ -1426,6 +1424,13 @@ impl PrettyPrint for Inst {
                 )
             }
 
+            Inst::MovPReg { src, dst } => {
+                let src: Reg = (*src).into();
+                let src = regs::show_ireg_sized(src, 8);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                format!("{} {}, {}", ljustify("movq".to_string()), src, dst)
+            }
+
             Inst::MovzxRmR {
                 ext_mode, src, dst, ..
             } => {
@@ -1627,8 +1632,6 @@ impl PrettyPrint for Inst {
 
             Inst::Ret { .. } => "ret".to_string(),
 
-            Inst::EpiloguePlaceholder => "epilogue placeholder".to_string(),
-
             Inst::JmpKnown { dst } => {
                 format!("{} {}", ljustify("jmp".to_string()), dst.to_string())
             }
@@ -1662,6 +1665,34 @@ impl PrettyPrint for Inst {
 
             Inst::TrapIf { cc, trap_code, .. } => {
                 format!("j{} ; ud2 {} ;", cc.invert().to_string(), trap_code)
+            }
+
+            Inst::TrapIfAnd {
+                cc1,
+                cc2,
+                trap_code,
+                ..
+            } => {
+                format!(
+                    "trap_if_and {}, {}, {}",
+                    cc1.invert().to_string(),
+                    cc2.invert().to_string(),
+                    trap_code
+                )
+            }
+
+            Inst::TrapIfOr {
+                cc1,
+                cc2,
+                trap_code,
+                ..
+            } => {
+                format!(
+                    "trap_if_or {}, {}, {}",
+                    cc1.to_string(),
+                    cc2.invert().to_string(),
+                    trap_code
+                )
             }
 
             Inst::LoadExtName {
@@ -1961,6 +1992,11 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_use(src.to_reg());
             collector.reg_def(dst.to_writable_reg());
         }
+        Inst::MovPReg { dst, src } => {
+            debug_assert!([regs::rsp(), regs::rbp()].contains(&(*src).into()));
+            debug_assert!(dst.to_reg().to_reg().is_virtual());
+            collector.reg_def(dst.to_writable_reg());
+        }
         Inst::XmmToGpr { src, dst, .. } => {
             collector.reg_use(src.to_reg());
             collector.reg_def(dst.to_writable_reg());
@@ -2140,12 +2176,13 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             }
         }
 
-        Inst::EpiloguePlaceholder
-        | Inst::JmpKnown { .. }
+        Inst::JmpKnown { .. }
         | Inst::JmpIf { .. }
         | Inst::JmpCond { .. }
         | Inst::Nop { .. }
         | Inst::TrapIf { .. }
+        | Inst::TrapIfAnd { .. }
+        | Inst::TrapIfOr { .. }
         | Inst::VirtualSPOffsetAdj { .. }
         | Inst::Hlt
         | Inst::Ud2 { .. }
@@ -2215,18 +2252,10 @@ impl MachInst for Inst {
         }
     }
 
-    fn is_epilogue_placeholder(&self) -> bool {
-        if let Self::EpiloguePlaceholder = self {
-            true
-        } else {
-            false
-        }
-    }
-
     fn is_term(&self) -> MachTerminator {
         match self {
             // Interesting cases.
-            &Self::Ret { .. } | &Self::EpiloguePlaceholder => MachTerminator::Ret,
+            &Self::Ret { .. } => MachTerminator::Ret,
             &Self::JmpKnown { .. } => MachTerminator::Uncond,
             &Self::JmpCond { .. } => MachTerminator::Cond,
             &Self::JmpTableSeq { .. } => MachTerminator::Indirect,
@@ -2236,7 +2265,7 @@ impl MachInst for Inst {
     }
 
     fn gen_move(dst_reg: Writable<Reg>, src_reg: Reg, ty: Type) -> Inst {
-        log::trace!(
+        trace!(
             "Inst::gen_move {:?} -> {:?} (type: {:?})",
             src_reg,
             dst_reg.to_reg(),

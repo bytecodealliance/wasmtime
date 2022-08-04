@@ -7,6 +7,7 @@ use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
 use crate::machinst::reg::count_operands;
 use crate::machinst::{Reg, RegClass};
+use crate::trace;
 use core::convert::TryFrom;
 use regalloc2::Allocation;
 
@@ -294,6 +295,35 @@ pub fn mem_imm16_emit(
         }
         _ => unreachable!(),
     }
+}
+
+pub fn mem_mem_emit(
+    dst: &MemArgPair,
+    src: &MemArgPair,
+    len_minus_one: u8,
+    opcode_ss: u8,
+    add_trap: bool,
+    sink: &mut MachBuffer<Inst>,
+    state: &mut EmitState,
+) {
+    if add_trap && (dst.can_trap() || src.can_trap()) {
+        let srcloc = state.cur_srcloc();
+        if srcloc != SourceLoc::default() {
+            sink.add_trap(TrapCode::HeapOutOfBounds);
+        }
+    }
+
+    put(
+        sink,
+        &enc_ss_a(
+            opcode_ss,
+            dst.base,
+            dst.disp.bits(),
+            src.base,
+            src.disp.bits(),
+            len_minus_one,
+        ),
+    );
 }
 
 pub fn mem_vrx_emit(
@@ -852,6 +882,31 @@ fn enc_siy(opcode: u16, b1: Reg, d1: u32, i2: u8) -> [u8; 6] {
     enc
 }
 
+/// SSa-type instructions.
+///
+///   47     39 31 27 15 11
+///   opcode  l b1 d1 b2 d2
+///       40 32 28 16 12  0
+///
+///
+fn enc_ss_a(opcode: u8, b1: Reg, d1: u32, b2: Reg, d2: u32, l: u8) -> [u8; 6] {
+    let b1 = machreg_to_gpr(b1) & 0x0f;
+    let d1_lo = (d1 & 0xff) as u8;
+    let d1_hi = ((d1 >> 8) & 0x0f) as u8;
+    let b2 = machreg_to_gpr(b2) & 0x0f;
+    let d2_lo = (d2 & 0xff) as u8;
+    let d2_hi = ((d2 >> 8) & 0x0f) as u8;
+
+    let mut enc: [u8; 6] = [0; 6];
+    enc[0] = opcode;
+    enc[1] = l;
+    enc[2] = b1 << 4 | d1_hi;
+    enc[3] = d1_lo;
+    enc[4] = b2 << 4 | d2_hi;
+    enc[5] = d2_lo;
+    enc
+}
+
 /// VRIa-type instructions.
 ///
 ///   47      39 35 31 15 11  7
@@ -1239,13 +1294,12 @@ impl EmitState {
 
 /// Constant state used during function compilation.
 pub struct EmitInfo {
-    flags: settings::Flags,
     isa_flags: s390x_settings::Flags,
 }
 
 impl EmitInfo {
-    pub(crate) fn new(flags: settings::Flags, isa_flags: s390x_settings::Flags) -> Self {
-        Self { flags, isa_flags }
+    pub(crate) fn new(isa_flags: s390x_settings::Flags) -> Self {
+        Self { isa_flags }
     }
 }
 
@@ -2025,6 +2079,16 @@ impl MachInstEmit for Inst {
                 };
                 mem_imm16_emit(imm, &mem, opcode, true, sink, emit_info, state);
             }
+            &Inst::Mvc {
+                ref dst,
+                ref src,
+                len_minus_one,
+            } => {
+                let dst = dst.with_allocs(&mut allocs);
+                let src = src.with_allocs(&mut allocs);
+                let opcode = 0xd2; // MVC
+                mem_mem_emit(&dst, &src, len_minus_one, opcode, true, sink, state);
+            }
 
             &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
                 let mem = mem.with_allocs(&mut allocs);
@@ -2080,6 +2144,12 @@ impl MachInstEmit for Inst {
 
                 let opcode = 0xb904; // LGR
                 put(sink, &enc_rre(opcode, rd.to_reg(), rm));
+            }
+            &Inst::MovPReg { rd, rm } => {
+                let rm: Reg = rm.into();
+                debug_assert!([regs::gpr(15)].contains(&rm));
+                let rd = allocs.next_writable(rd);
+                Inst::Mov64 { rd, rm }.emit(&[], sink, emit_info, state);
             }
             &Inst::Mov32 { rd, rm } => {
                 let rd = allocs.next_writable(rd);
@@ -2199,11 +2269,7 @@ impl MachInstEmit for Inst {
                 let reg = writable_spilltmp_reg().to_reg();
                 put(sink, &enc_ri_b(opcode, reg, 12));
                 sink.add_reloc(Reloc::Abs8, name, offset);
-                if emit_info.flags.emit_all_ones_funcaddrs() {
-                    sink.put8(u64::max_value());
-                } else {
-                    sink.put8(0);
-                }
+                sink.put8(0);
                 let inst = Inst::Load64 {
                     rd,
                     mem: MemArg::reg(reg, MemFlags::trusted()),
@@ -3119,9 +3185,6 @@ impl MachInstEmit for Inst {
                 let opcode = 0x07; // BCR
                 put(sink, &enc_rr(opcode, gpr(15), link));
             }
-            &Inst::EpiloguePlaceholder => {
-                // Noop; this is just a placeholder for epilogues.
-            }
             &Inst::Jump { dest } => {
                 let off = sink.cur_offset();
                 // Indicate that the jump uses a label, if so, so that a fixup can occur later.
@@ -3239,7 +3302,7 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::VirtualSPOffsetAdj { offset } => {
-                log::trace!(
+                trace!(
                     "virtual sp offset adjusted by {} -> {}",
                     offset,
                     state.virtual_sp_offset + offset

@@ -263,6 +263,8 @@ impl VMExternData {
 
     /// Drop the inner value and then free this `VMExternData` heap allocation.
     pub(crate) unsafe fn drop_and_dealloc(mut data: NonNull<VMExternData>) {
+        log::trace!("Dropping externref data @ {:p}", data);
+
         // Note: we introduce a block scope so that we drop the live
         // reference to the data before we free the heap allocation it
         // resides within after this block.
@@ -344,6 +346,7 @@ impl VMExternRef {
                 },
             );
 
+            log::trace!("New externref data @ {:p}", extern_data_ptr);
             VMExternRef(NonNull::new_unchecked(extern_data_ptr))
         }
     }
@@ -713,12 +716,15 @@ impl VMExternRefActivationsTable {
         root: NonNull<VMExternData>,
     ) {
         let root = unsafe { VMExternRef::clone_from_raw(root.as_ptr().cast()) };
+        log::trace!("Found externref on stack: {:p}", root);
         precise_stack_roots.insert(VMExternRefWithTraits(root));
     }
 
     /// Sweep the bump allocation table after we've discovered our precise stack
     /// roots.
     fn sweep(&mut self) {
+        log::trace!("begin GC sweep");
+
         // Sweep our bump chunk.
         let num_filled = self.num_filled_in_bump_chunk();
         unsafe {
@@ -767,6 +773,8 @@ impl VMExternRefActivationsTable {
         // destructors. Because of our `&mut` borrow above on this table,
         // though, we're guaranteed that nothing will touch this table.
         self.precise_stack_roots.clear();
+
+        log::trace!("end GC sweep");
     }
 
     /// Set whether it is okay to GC or not right now.
@@ -885,47 +893,73 @@ pub unsafe fn gc(
         });
     }
 
+    log::trace!("begin GC trace");
     Backtrace::trace(|frame| {
         let pc = frame.pc();
+        debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
+
         let fp = frame.fp();
+        debug_assert!(
+            fp != 0,
+            "we should always get a valid frame pointer for Wasm frames"
+        );
 
-        if let Some(module_info) = module_info_lookup.lookup(pc) {
-            if let Some(stack_map) = module_info.lookup_stack_map(pc) {
-                debug_assert!(
-                    fp != 0,
-                    "we should always get a valid frame pointer for Wasm frames"
+        let module_info = module_info_lookup
+            .lookup(pc)
+            .expect("should have module info for Wasm frame");
+
+        let stack_map = match module_info.lookup_stack_map(pc) {
+            Some(sm) => sm,
+            None => {
+                log::trace!("No stack map for this Wasm frame");
+                return std::ops::ControlFlow::Continue(());
+            }
+        };
+        log::trace!(
+            "We have a stack map that maps {} words in this Wasm frame",
+            stack_map.mapped_words()
+        );
+
+        let sp = fp - stack_map.mapped_words() as usize * mem::size_of::<usize>();
+
+        for i in 0..(stack_map.mapped_words() as usize) {
+            // Stack maps have one bit per word in the frame, and the
+            // zero^th bit is the *lowest* addressed word in the frame,
+            // i.e. the closest to the SP. So to get the `i`^th word in
+            // this frame, we add `i * sizeof(word)` to the SP.
+            let stack_slot = sp + i * mem::size_of::<usize>();
+
+            if !stack_map.get_bit(i) {
+                log::trace!(
+                    "Stack slot @ {:p} does not contain externrefs",
+                    stack_slot as *const (),
                 );
-                let sp = fp - stack_map.mapped_words() as usize * mem::size_of::<usize>();
+                continue;
+            }
 
-                for i in 0..(stack_map.mapped_words() as usize) {
-                    if stack_map.get_bit(i) {
-                        // Stack maps have one bit per word in the frame, and the
-                        // zero^th bit is the *lowest* addressed word in the frame,
-                        // i.e. the closest to the SP. So to get the `i`^th word in
-                        // this frame, we add `i * sizeof(word)` to the SP.
-                        let ptr_to_ref = sp + i * mem::size_of::<usize>();
+            let stack_slot = stack_slot as *const *mut VMExternData;
+            let r = std::ptr::read(stack_slot);
+            log::trace!("Stack slot @ {:p} = {:p}", stack_slot, r);
 
-                        let r = std::ptr::read(ptr_to_ref as *const *mut VMExternData);
-                        debug_assert!(
-                            r.is_null() || activations_table_set.contains(&r),
-                            "every on-stack externref inside a Wasm frame should \
-                            have an entry in the VMExternRefActivationsTable; \
-                            {:?} is not in the table",
-                            r
-                        );
-                        if let Some(r) = NonNull::new(r) {
-                            VMExternRefActivationsTable::insert_precise_stack_root(
-                                &mut externref_activations_table.precise_stack_roots,
-                                r,
-                            );
-                        }
-                    }
-                }
+            debug_assert!(
+                r.is_null() || activations_table_set.contains(&r),
+                "every on-stack externref inside a Wasm frame should \
+                 have an entry in the VMExternRefActivationsTable; \
+                 {:?} is not in the table",
+                r
+            );
+
+            if let Some(r) = NonNull::new(r) {
+                VMExternRefActivationsTable::insert_precise_stack_root(
+                    &mut externref_activations_table.precise_stack_roots,
+                    r,
+                );
             }
         }
 
         std::ops::ControlFlow::Continue(())
     });
+    log::trace!("end GC trace");
 
     externref_activations_table.sweep();
 

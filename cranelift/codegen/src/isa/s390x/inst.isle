@@ -351,6 +351,12 @@
       (rd Reg)
       (mem MemArg))
 
+    ;; A memory copy of 1-256 bytes.
+    (Mvc
+      (dst MemArgPair)
+      (src MemArgPair)
+      (len_minus_one u8))
+
     ;; A load-multiple instruction.
     (LoadMultiple64
       (rt WritableReg)
@@ -372,6 +378,11 @@
     (Mov64
       (rd WritableReg)
       (rm Reg))
+
+    ;; Like `Mov64` but with a particular physical register source.
+    (MovPReg
+      (rd WritableReg)
+      (rm PReg))
 
     ;; A 32-bit move instruction with a full 32-bit immediate.
     (Mov32Imm
@@ -771,10 +782,6 @@
     (Ret
       (link Reg)
       (rets VecReg))
-
-    ;; A placeholder instruction, generating no code, meaning that a function epilogue must be
-    ;; inserted there.
-    (EpiloguePlaceholder)
 
     ;; An unconditional branch.
     (Jump
@@ -1472,6 +1479,9 @@
 (decl uimm32shifted_from_inverted_value (UImm32Shifted) Value)
 (extern extractor uimm32shifted_from_inverted_value uimm32shifted_from_inverted_value)
 
+(decl len_minus_one (u8) u64)
+(extern extractor len_minus_one len_minus_one)
+
 
 ;; Helpers for masking shift amounts ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1546,6 +1556,9 @@
 
 (type MemArg extern (enum))
 
+(decl memarg_flags (MemArg) MemFlags)
+(extern constructor memarg_flags memarg_flags)
+
 (decl memarg_reg_plus_reg (Reg Reg u8 MemFlags) MemArg)
 (extern constructor memarg_reg_plus_reg memarg_reg_plus_reg)
 
@@ -1559,6 +1572,10 @@
 ;; adding a base (relative to SP) and an offset.
 (decl memarg_stack_off (i64 i64) MemArg)
 (extern constructor memarg_stack_off memarg_stack_off)
+
+;; Create a `MemArg` referring to an offset from the initial SP.
+(decl memarg_initial_sp_offset (i64) MemArg)
+(extern constructor memarg_initial_sp_offset memarg_initial_sp_offset)
 
 ;; Form the sum of two offset values, and check that the result is
 ;; a valid `MemArg::Symbol` offset (i.e. is even and fits into i32).
@@ -1615,6 +1632,26 @@
           inst)
       (if (memarg_symbol_offset_sum sym_offset load_offset))
       inst)
+
+
+;; Accessors for `MemArgPair`.
+
+(type MemArgPair extern (enum))
+
+;; Convert a MemArg to a MemArgPair, reloading the address if necessary.
+(decl memarg_pair (MemArg) MemArgPair)
+(rule (memarg_pair (memarg_pair_from_memarg mem)) mem)
+(rule (memarg_pair mem) (memarg_pair_from_reg
+                          (load_addr mem) (memarg_flags mem)))
+
+;; Convert a MemArg to a MemArgPair if no reloading is necessary.
+(decl memarg_pair_from_memarg (MemArgPair) MemArg)
+(extern extractor memarg_pair_from_memarg memarg_pair_from_memarg)
+
+;; Create a MemArgPair from a single base register.
+(decl memarg_pair_from_reg (Reg MemFlags) MemArgPair)
+(extern constructor memarg_pair_from_reg memarg_pair_from_reg)
+
 
 ;; Helpers for stack-slot addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1840,8 +1877,8 @@
 (decl umul_wide (Reg Reg) RegPair)
 (rule (umul_wide src1 src2)
       (let ((dst WritableRegPair (temp_writable_regpair))
-            (_1 Unit (emit (MInst.Mov64 (writable_regpair_lo dst) src2)))
-            (_2 Unit (emit (MInst.UMulWide src1))))
+            (_ Unit (emit (MInst.Mov64 (writable_regpair_lo dst) src2)))
+            (_ Unit (emit (MInst.UMulWide src1))))
         dst))
 
 ;; Helper for emitting `MInst.SDivMod32` instructions.
@@ -2032,6 +2069,11 @@
 (decl storerev64 (Reg MemArg) SideEffectNoResult)
 (rule (storerev64 src addr)
       (SideEffectNoResult.Inst (MInst.StoreRev64 src addr)))
+
+;; Helper for emitting `MInst.Mvc` instructions.
+(decl mvc (MemArgPair MemArgPair u8) SideEffectNoResult)
+(rule (mvc dst src len_minus_one)
+      (SideEffectNoResult.Inst (MInst.Mvc dst src len_minus_one)))
 
 ;; Helper for emitting `MInst.FpuRR` instructions.
 (decl fpu_rr (Type FPUOp1 Reg) Reg)
@@ -2425,8 +2467,8 @@
 ;; Push instructions to break out of the loop if condition is met.
 (decl push_break_if (VecMInstBuilder ProducesFlags Cond) Reg)
 (rule (push_break_if ib (ProducesFlags.ProducesFlagsSideEffect inst) cond)
-      (let ((_1 Unit (inst_builder_push ib inst))
-            (_2 Unit (inst_builder_push ib (MInst.CondBreak cond))))
+      (let ((_ Unit (inst_builder_push ib inst))
+            (_ Unit (inst_builder_push ib (MInst.CondBreak cond))))
         (invalid_reg)))
 
 ;; Emit a `MInst.Loop` instruction holding a loop body instruction sequence.
@@ -2473,6 +2515,20 @@
 (rule (emit_load $I64 dst addr)
       (emit (MInst.Load64 dst addr)))
 
+;; Helper for creating `MInst.MovPReg` instructions.
+(decl mov_preg (PReg) Reg)
+(rule (mov_preg src)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.MovPReg dst src))))
+        dst))
+
+(decl preg_stack () PReg)
+(extern constructor preg_stack preg_stack)
+
+;; Copy the physical stack register into a virtual register.
+(decl sp () Reg)
+(rule (sp)
+      (mov_preg (preg_stack)))
 
 ;; Helpers for accessing argument / return value slots ;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2502,10 +2558,35 @@
 (rule (emit_arg_load $F64 mem) (vec_load_lane_undef $F64X2 mem 0))
 (rule (emit_arg_load (ty_vec128 ty) mem) (vec_load ty mem))
 
+;; Helpers to emit a memory copy (MVC or memcpy libcall).
+(decl emit_memcpy (MemArg MemArg u64) Unit)
+(rule (emit_memcpy dst src (len_minus_one len))
+      (emit_side_effect (mvc (memarg_pair dst) (memarg_pair src) len)))
+(rule (emit_memcpy dst src len)
+      (let ((libcall LibCallInfo (lib_call_info_memcpy))
+            (_ Unit (lib_accumulate_outgoing_args_size libcall))
+            (_ Unit (emit_mov $I64 (writable_gpr 2) (load_addr dst)))
+            (_ Unit (emit_mov $I64 (writable_gpr 3) (load_addr src)))
+            (_ Unit (emit_imm $I64 (writable_gpr 4) len)))
+        (emit_side_effect (lib_call libcall))))
+
+;; Prepare a stack copy of a single (oversized) argument.
+(decl copy_to_buffer (i64 ABIArg Value) InstOutput)
+(rule (copy_to_buffer base (abi_arg_only_slot slot) _) (output_none))
+(rule (copy_to_buffer base (abi_arg_struct_pointer _ offset size) val)
+      (let ((dst MemArg (memarg_stack_off base offset))
+            (src MemArg (memarg_reg_plus_off val 0 0 (memflags_trusted)))
+            (_ Unit (emit_memcpy dst src size)))
+        (output_none)))
+
 ;; Copy a single argument/return value to its slots.
+;; For oversized arguments, set the slot to the buffer address.
 (decl copy_to_arg (i64 ABIArg Value) Unit)
 (rule (copy_to_arg base (abi_arg_only_slot slot) val)
       (copy_val_to_arg_slot base slot val))
+(rule (copy_to_arg base (abi_arg_struct_pointer slot offset _) _)
+      (let ((ptr Reg (load_addr (memarg_stack_off base offset))))
+        (copy_reg_to_arg_slot base slot ptr)))
 
 ;; Copy a single argument/return value from its slots.
 (decl copy_from_arg (i64 ABIArg) ValueRegs)
@@ -2985,12 +3066,12 @@
 
 (decl trap_if (ProducesFlags Cond TrapCode) Reg)
 (rule (trap_if (ProducesFlags.ProducesFlagsReturnsReg inst result) cond trap_code)
-      (let ((_1 Unit (emit inst))
-            (_2 Unit (emit (MInst.TrapIf cond trap_code))))
+      (let ((_ Unit (emit inst))
+            (_ Unit (emit (MInst.TrapIf cond trap_code))))
         result))
 (rule (trap_if (ProducesFlags.ProducesFlagsSideEffect inst) cond trap_code)
-      (let ((_1 Unit (emit inst))
-            (_2 Unit (emit (MInst.TrapIf cond trap_code))))
+      (let ((_ Unit (emit inst))
+            (_ Unit (emit (MInst.TrapIf cond trap_code))))
         (invalid_reg)))
 
 (decl icmps_reg_and_trap (Type Reg Reg Cond TrapCode) Reg)
@@ -3058,18 +3139,18 @@
 (decl select_bool_reg (Type ProducesBool Reg Reg) Reg)
 (rule (select_bool_reg ty (ProducesBool.ProducesBool producer cond) reg_true reg_false)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_1 Unit (emit_producer producer))
-            (_2 Unit (emit_mov ty dst reg_false))
-            (_3 Unit (emit_consumer (emit_cmov_reg ty dst cond reg_true))))
+            (_ Unit (emit_producer producer))
+            (_ Unit (emit_mov ty dst reg_false))
+            (_ Unit (emit_consumer (emit_cmov_reg ty dst cond reg_true))))
         dst))
 
 ;; Use a boolean condition to select between two immediate values.
 (decl select_bool_imm (Type ProducesBool i16 u64) Reg)
 (rule (select_bool_imm ty (ProducesBool.ProducesBool producer cond) imm_true imm_false)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_1 Unit (emit_producer producer))
-            (_2 Unit (emit_imm ty dst imm_false))
-            (_3 Unit (emit_consumer (emit_cmov_imm ty dst cond imm_true))))
+            (_ Unit (emit_producer producer))
+            (_ Unit (emit_imm ty dst imm_false))
+            (_ Unit (emit_consumer (emit_cmov_imm ty dst cond imm_true))))
         dst))
 
 ;; Lower a boolean condition to a boolean type.  The value used to represent
@@ -3129,8 +3210,8 @@
             (result Reg (push_atomic_cas ib (ty_ext32 ty)
                           (casloop_val_reg) val aligned_mem))
             ;; Emit initial load followed by compare-and-swap loop.
-            (_1 Unit (emit_load (ty_ext32 ty) (casloop_val_reg) aligned_mem))
-            (_2 Unit (emit_loop ib (intcc_as_cond (IntCC.NotEqual)))))
+            (_ Unit (emit_load (ty_ext32 ty) (casloop_val_reg) aligned_mem))
+            (_ Unit (emit_loop ib (intcc_as_cond (IntCC.NotEqual)))))
         result))
 
 ;; Compute the previous memory value after a (fullword) compare-and-swap loop.
@@ -3243,6 +3324,24 @@
 (extern constructor abi_accumulate_outgoing_args_size abi_accumulate_outgoing_args_size)
 
 
+;; Helpers for generating calls to library routines ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type LibCallInfo extern (enum))
+
+(decl lib_call_info_memcpy () LibCallInfo)
+(extern constructor lib_call_info_memcpy lib_call_info_memcpy)
+
+(decl lib_call_info (LibCallInfo) BoxCallInfo)
+(extern constructor lib_call_info lib_call_info)
+
+(decl lib_call (LibCallInfo) SideEffectNoResult)
+(rule (lib_call libcall)
+      (call_impl (writable_link_reg) (lib_call_info libcall)))
+
+(decl lib_accumulate_outgoing_args_size (LibCallInfo) Unit)
+(extern constructor lib_accumulate_outgoing_args_size lib_accumulate_outgoing_args_size)
+
+
 ;; Helpers for generating vector pack and unpack instructions ;;;;;;;;;;;;;;;;;;
 
 (decl vec_widen_type (Type) Type)
@@ -3345,8 +3444,8 @@
 ;; conditional move, and because flogr returns a register pair.
 (rule (clz_reg zeroval x)
       (let ((dst WritableRegPair (temp_writable_regpair))
-            (_1 Unit (emit (MInst.Flogr x)))
-            (_2 Unit (emit (MInst.CMov64SImm16 (writable_regpair_hi dst)
+            (_ Unit (emit (MInst.Flogr x)))
+            (_ Unit (emit (MInst.CMov64SImm16 (writable_regpair_hi dst)
                               (intcc_as_cond (IntCC.Equal)) zeroval))))
         dst))
 

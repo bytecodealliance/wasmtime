@@ -48,6 +48,8 @@ impl From<DiscriminantSize> for usize {
 
 /// Represents the number of bytes required to store a flags value in the component model
 pub enum FlagsSize {
+    /// There are no flags
+    Size0,
     /// Flags can fit in a u8
     Size1,
     /// Flags can fit in a u16
@@ -59,7 +61,9 @@ pub enum FlagsSize {
 impl FlagsSize {
     /// Calculate the size needed to represent a value with the specified number of flags.
     pub fn from_count(count: usize) -> FlagsSize {
-        if count <= 8 {
+        if count == 0 {
+            FlagsSize::Size0
+        } else if count <= 8 {
             FlagsSize::Size1
         } else if count <= 16 {
             FlagsSize::Size2

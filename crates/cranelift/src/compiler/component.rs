@@ -8,9 +8,10 @@ use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
 use cranelift_frontend::FunctionBuilder;
 use object::write::Object;
 use std::any::Any;
+use std::ops::Range;
 use wasmtime_environ::component::{
-    AlwaysTrapInfo, CanonicalOptions, Component, ComponentCompiler, ComponentTypes, LowerImport,
-    LoweredIndex, LoweringInfo, RuntimeAlwaysTrapIndex, VMComponentOffsets,
+    AlwaysTrapInfo, CanonicalOptions, Component, ComponentCompiler, ComponentTypes, FunctionInfo,
+    LowerImport, LoweredIndex, RuntimeAlwaysTrapIndex, VMComponentOffsets,
 };
 use wasmtime_environ::{PrimaryMap, SignatureIndex, Trampoline, TrapCode, WasmFuncType};
 
@@ -187,28 +188,29 @@ impl ComponentCompiler for Compiler {
         trampolines: Vec<(SignatureIndex, Box<dyn Any + Send>)>,
         obj: &mut Object<'static>,
     ) -> Result<(
-        PrimaryMap<LoweredIndex, LoweringInfo>,
+        PrimaryMap<LoweredIndex, FunctionInfo>,
         PrimaryMap<RuntimeAlwaysTrapIndex, AlwaysTrapInfo>,
         Vec<Trampoline>,
     )> {
         let module = Default::default();
         let mut text = ModuleTextBuilder::new(obj, &module, &*self.isa);
-        let mut ret = PrimaryMap::new();
-        for (idx, lowering) in lowerings.iter() {
-            let lowering = lowering.downcast_ref::<CompiledFunction>().unwrap();
-            assert!(lowering.traps.is_empty());
-            let (_symbol, range) = text.append_func(
-                false,
-                format!("_wasm_component_lowering_trampoline{}", idx.as_u32()).into_bytes(),
-                &lowering,
-            );
 
-            let i = ret.push(LoweringInfo {
-                start: u32::try_from(range.start).unwrap(),
-                length: u32::try_from(range.end - range.start).unwrap(),
-            });
-            assert_eq!(i, idx);
-        }
+        let range2info = |range: Range<u64>| FunctionInfo {
+            start: u32::try_from(range.start).unwrap(),
+            length: u32::try_from(range.end - range.start).unwrap(),
+        };
+        let ret_lowerings = lowerings
+            .iter()
+            .map(|(i, lowering)| {
+                let lowering = lowering.downcast_ref::<CompiledFunction>().unwrap();
+                assert!(lowering.traps.is_empty());
+                let range = text.named_func(
+                    &format!("_wasm_component_lowering_trampoline{}", i.as_u32()),
+                    &lowering,
+                );
+                range2info(range)
+            })
+            .collect();
         let ret_always_trap = always_trap
             .iter()
             .map(|(i, func)| {
@@ -217,11 +219,8 @@ impl ComponentCompiler for Compiler {
                 assert_eq!(func.traps[0].trap_code, TrapCode::AlwaysTrapAdapter);
                 let name = format!("_wasmtime_always_trap{}", i.as_u32());
                 let range = text.named_func(&name, func);
-                let start = u32::try_from(range.start).unwrap();
-                let end = u32::try_from(range.end).unwrap();
                 AlwaysTrapInfo {
-                    start: start,
-                    length: end - start,
+                    info: range2info(range),
                     trap_offset: func.traps[0].code_offset,
                 }
             })
@@ -238,6 +237,6 @@ impl ComponentCompiler for Compiler {
 
         text.finish()?;
 
-        Ok((ret, ret_always_trap, ret_trampolines))
+        Ok((ret_lowerings, ret_always_trap, ret_trampolines))
     }
 }

@@ -16,8 +16,8 @@ use crate::ir::{Opcode, Type, Value};
 use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::AArch64Backend;
 use crate::machinst::lower::*;
-use crate::machinst::*;
 use crate::machinst::{Reg, Writable};
+use crate::{machinst::*, trace};
 use crate::{CodegenError, CodegenResult};
 use smallvec::SmallVec;
 use std::cmp;
@@ -236,7 +236,7 @@ fn lower_value_to_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     value: Value,
 ) -> (ValueRegs<Reg>, Type, bool) {
-    log::trace!("lower_value_to_regs: value {:?}", value);
+    trace!("lower_value_to_regs: value {:?}", value);
     let ty = ctx.value_ty(value);
     let inputs = ctx.get_value_as_source_or_const(value);
     let is_const = inputs.constant.is_some();
@@ -608,7 +608,7 @@ pub(crate) fn lower_pair_address<C: LowerCtx<I = Inst>>(
     let (mut addends64, mut addends32, args_offset) = collect_address_addends(ctx, roots);
     let offset = args_offset + (offset as i64);
 
-    log::trace!(
+    trace!(
         "lower_pair_address: addends64 {:?}, addends32 {:?}, offset {}",
         addends64,
         addends32,
@@ -669,7 +669,7 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
     let (mut addends64, mut addends32, args_offset) = collect_address_addends(ctx, roots);
     let mut offset = args_offset + (offset as i64);
 
-    log::trace!(
+    trace!(
         "lower_address: addends64 {:?}, addends32 {:?}, offset {}",
         addends64,
         addends32,
@@ -1120,7 +1120,7 @@ pub(crate) fn maybe_input_insn<C: LowerCtx<I = Inst>>(
     op: Opcode,
 ) -> Option<IRInst> {
     let inputs = c.get_input_as_source_or_const(input.insn, input.input);
-    log::trace!(
+    trace!(
         "maybe_input_insn: input {:?} has options {:?}; looking for op {:?}",
         input,
         inputs,
@@ -1128,7 +1128,7 @@ pub(crate) fn maybe_input_insn<C: LowerCtx<I = Inst>>(
     );
     if let Some((src_inst, _)) = inputs.inst.as_inst() {
         let data = c.data(src_inst);
-        log::trace!(" -> input inst {:?}", data);
+        trace!(" -> input inst {:?}", data);
         if data.opcode() == op {
             return Some(src_inst);
         }
@@ -1228,7 +1228,7 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
     condcode: IntCC,
     output: IcmpOutput,
 ) -> CodegenResult<IcmpResult> {
-    log::trace!(
+    trace!(
         "lower_icmp: insn {}, condcode: {}, output: {:?}",
         insn,
         condcode,
@@ -1551,7 +1551,7 @@ impl LowerBackend for AArch64Backend {
     type MInst = Inst;
 
     fn lower<C: LowerCtx<I = Inst>>(&self, ctx: &mut C, ir_inst: IRInst) -> CodegenResult<()> {
-        lower_inst::lower_insn_to_regs(ctx, ir_inst, &self.flags, &self.isa_flags)
+        lower_inst::lower_insn_to_regs(ctx, ir_inst, &self.triple, &self.flags, &self.isa_flags)
     }
 
     fn lower_branch_group<C: LowerCtx<I = Inst>>(
