@@ -13,9 +13,9 @@ use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::isa::{x64::settings as x64_settings, x64::X64Backend, CallConv};
 use crate::machinst::lower::*;
+use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::{Flags, TlsModel};
-use crate::{machinst::*, trace};
 use alloc::boxed::Box;
 use smallvec::SmallVec;
 use std::convert::TryFrom;
@@ -27,14 +27,6 @@ use target_lexicon::Triple;
 fn is_int_or_ref_ty(ty: Type) -> bool {
     match ty {
         types::I8 | types::I16 | types::I32 | types::I64 | types::R64 => true,
-        types::B1 | types::B8 | types::B16 | types::B32 | types::B64 => true,
-        types::R32 => panic!("shouldn't have 32-bits refs on x64"),
-        _ => false,
-    }
-}
-
-fn is_bool_ty(ty: Type) -> bool {
-    match ty {
         types::B1 | types::B8 | types::B16 | types::B32 | types::B64 => true,
         types::R32 => panic!("shouldn't have 32-bits refs on x64"),
         _ => false,
@@ -2758,75 +2750,7 @@ impl LowerBackend for X64Backend {
         };
 
         if branches.len() == 2 {
-            // Must be a conditional branch followed by an unconditional branch.
-            let op0 = ctx.data(branches[0]).opcode();
-            let op1 = ctx.data(branches[1]).opcode();
-
-            trace!(
-                "lowering two-branch group: opcodes are {:?} and {:?}",
-                op0,
-                op1
-            );
-            assert!(op1 == Opcode::Jump);
-
-            let taken = targets[0];
-            // not_taken target is the target of the second branch.
-            let not_taken = targets[1];
-
-            match op0 {
-                Opcode::Brz | Opcode::Brnz => {
-                    let flag_input = InsnInput {
-                        insn: branches[0],
-                        input: 0,
-                    };
-
-                    let src_ty = ctx.input_ty(branches[0], 0);
-
-                    if let Some(_icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
-                        implemented_in_isle(ctx)
-                    } else if let Some(_fcmp) = matches_input(ctx, flag_input, Opcode::Fcmp) {
-                        implemented_in_isle(ctx)
-                    } else if src_ty == types::I128 {
-                        implemented_in_isle(ctx);
-                    } else if is_int_or_ref_ty(src_ty) || is_bool_ty(src_ty) {
-                        let src = put_input_in_reg(
-                            ctx,
-                            InsnInput {
-                                insn: branches[0],
-                                input: 0,
-                            },
-                        );
-                        let cc = match op0 {
-                            Opcode::Brz => CC::Z,
-                            Opcode::Brnz => CC::NZ,
-                            _ => unreachable!(),
-                        };
-                        // See case for `Opcode::Select` above re: testing the
-                        // boolean input.
-                        let test_input = if src_ty == types::B1 {
-                            // test src, 1
-                            RegMemImm::imm(1)
-                        } else {
-                            assert!(!is_bool_ty(src_ty));
-                            // test src, src
-                            RegMemImm::reg(src)
-                        };
-
-                        ctx.emit(Inst::test_rmi_r(
-                            OperandSize::from_ty(src_ty),
-                            test_input,
-                            src,
-                        ));
-                        ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
-                    } else {
-                        unimplemented!("brz/brnz with non-int type {:?}", src_ty);
-                    }
-                }
-
-                Opcode::BrIcmp | Opcode::Brif | Opcode::Brff => implemented_in_isle(ctx),
-
-                _ => panic!("unexpected branch opcode: {:?}", op0),
-            }
+            implemented_in_isle(ctx)
         } else {
             assert_eq!(branches.len(), 1);
 

@@ -3,6 +3,7 @@
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
 use crate::{
+    ir::types,
     ir::AtomicRmwOp,
     machinst::{InputSourceInst, Reg, Writable},
 };
@@ -558,6 +559,16 @@ where
             Some(ty)
         } else {
             None
+        }
+    }
+
+    #[inline]
+    fn ty_int_bool_or_ref(&mut self, ty: Type) -> Option<()> {
+        match ty {
+            types::I8 | types::I16 | types::I32 | types::I64 | types::R64 => Some(()),
+            types::B1 | types::B8 | types::B16 | types::B32 | types::B64 => Some(()),
+            types::R32 => panic!("shouldn't have 32-bits refs on x64"),
+            _ => None,
         }
     }
 
