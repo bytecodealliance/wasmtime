@@ -104,6 +104,7 @@ impl LowerBackend for S390xBackend {
             | Opcode::Bextend
             | Opcode::Bmask
             | Opcode::Bint
+            | Opcode::Bitrev
             | Opcode::Clz
             | Opcode::Cls
             | Opcode::Ctz
@@ -198,8 +199,7 @@ impl LowerBackend for S390xBackend {
                 )
             }
 
-            Opcode::Bitrev
-            | Opcode::ConstAddr
+            Opcode::ConstAddr
             | Opcode::TlsValue
             | Opcode::GetPinnedReg
             | Opcode::SetPinnedReg
