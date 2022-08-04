@@ -3158,6 +3158,14 @@
 
 ;; Emit a conditional move based on the result of an icmp.
 (decl select_icmp (IcmpCondResult Value Value) ValueRegs)
+
+;; Ensure that we put the `x` argument into a register for single-register
+;; gpr-typed arguments, as we rely on this for the legalization of heap_addr and
+;; loading easily computed constants (like 0) from memory is too expensive.
+(rule (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type (is_gpr_type (is_single_register_type ty))) y)
+      (with_flags producer (cmove ty cc (put_in_gpr x) y)))
+
+;; Otherwise, fall back on the behavior of `cmove_from_values`.
 (rule (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type ty) y)
       (with_flags producer (cmove_from_values ty cc x y)))
 

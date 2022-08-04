@@ -2948,8 +2948,8 @@
 
 ;; Rules for `selectif` and `selectif_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty (selectif cc (ifcmp a b) x y)))
+(rule (lower (selectif cc (ifcmp a b) x y))
       (select_icmp (emit_cmp cc a b) x y))
 
-(rule (lower (has_type ty (selectif_spectre_guard cc (ifcmp a b) x y)))
+(rule (lower (selectif_spectre_guard cc (ifcmp a b) x y))
       (select_icmp (emit_cmp cc a b) x y))
