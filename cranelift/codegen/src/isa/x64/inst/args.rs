@@ -725,13 +725,6 @@ impl fmt::Display for AluRmiROpcode {
     }
 }
 
-impl AluRmiROpcode {
-    /// Is this a special-cased 8-bit ALU op?
-    pub fn is_8bit(self) -> bool {
-        false
-    }
-}
-
 #[derive(Clone, PartialEq)]
 pub enum UnaryRmROpcode {
     /// Bit-scan reverse.
