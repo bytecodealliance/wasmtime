@@ -3,6 +3,7 @@
 // struct VMComponentContext {
 //      magic: u32,
 //      store: *mut dyn Store,
+//      limits: *const VMRuntimeLimits,
 //      flags: [VMGlobalDefinition; component.num_runtime_component_instances],
 //      lowering_anyfuncs: [VMCallerCheckedAnyfunc; component.num_lowerings],
 //      always_trap_anyfuncs: [VMCallerCheckedAnyfunc; component.num_always_trap],
@@ -60,6 +61,7 @@ pub struct VMComponentOffsets<P> {
     // precalculated offsets of various member fields
     magic: u32,
     store: u32,
+    limits: u32,
     flags: u32,
     lowering_anyfuncs: u32,
     always_trap_anyfuncs: u32,
@@ -93,6 +95,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             num_always_trap: component.num_always_trap,
             magic: 0,
             store: 0,
+            limits: 0,
             flags: 0,
             lowering_anyfuncs: 0,
             always_trap_anyfuncs: 0,
@@ -131,6 +134,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             size(magic) = 4u32,
             align(u32::from(ret.ptr.size())),
             size(store) = cmul(2, ret.ptr.size()),
+            size(limits) = ret.ptr.size(),
             align(16),
             size(flags) = cmul(ret.num_runtime_component_instances, ret.ptr.size_of_vmglobal_definition()),
             align(u32::from(ret.ptr.size())),
@@ -175,6 +179,12 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     #[inline]
     pub fn store(&self) -> u32 {
         self.store
+    }
+
+    /// The offset of the `limits` field.
+    #[inline]
+    pub fn limits(&self) -> u32 {
+        self.limits
     }
 
     /// The offset of the `lowering_anyfuncs` field.

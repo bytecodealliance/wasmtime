@@ -13,7 +13,7 @@ use wasmtime_environ::component::{
     AlwaysTrapInfo, CanonicalOptions, Component, ComponentCompiler, ComponentTypes, FunctionInfo,
     LowerImport, LoweredIndex, RuntimeAlwaysTrapIndex, VMComponentOffsets,
 };
-use wasmtime_environ::{PrimaryMap, SignatureIndex, Trampoline, TrapCode, WasmFuncType};
+use wasmtime_environ::{PrimaryMap, PtrSize, SignatureIndex, Trampoline, TrapCode, WasmFuncType};
 
 impl ComponentCompiler for Compiler {
     fn compile_lowered_trampoline(
@@ -45,6 +45,44 @@ impl ComponentCompiler for Compiler {
         let (values_vec_ptr_val, values_vec_len) =
             self.wasm_to_host_spill_args(ty, &mut builder, block0);
         let vmctx = builder.func.dfg.block_params(block0)[0];
+
+        // Save the exit FP and return address for stack walking purposes.
+        //
+        // First we need to get the `VMRuntimeLimits`.
+        let limits = builder.ins().load(
+            pointer_type,
+            MemFlags::trusted(),
+            vmctx,
+            i32::try_from(offsets.limits()).unwrap(),
+        );
+        // Then save the exit Wasm FP to the limits. We dereference the current
+        // FP to get the previous FP because the current FP is the trampoline's
+        // FP, and we want the Wasm function's FP, which is the caller of this
+        // trampoline.
+        let trampoline_fp = builder.ins().get_frame_pointer(pointer_type);
+        let wasm_fp = builder.ins().load(
+            pointer_type,
+            MemFlags::trusted(),
+            trampoline_fp,
+            // The FP always points to the next older FP for all supported
+            // targets. See assertion in
+            // `crates/runtime/src/traphandlers/backtrace.rs`.
+            0,
+        );
+        builder.ins().store(
+            MemFlags::trusted(),
+            wasm_fp,
+            limits,
+            offsets.ptr.vmruntime_limits_last_wasm_exit_fp(),
+        );
+        // Finally save the Wasm return address to the limits.
+        let wasm_pc = builder.ins().get_return_address(pointer_type);
+        builder.ins().store(
+            MemFlags::trusted(),
+            wasm_pc,
+            limits,
+            offsets.ptr.vmruntime_limits_last_wasm_exit_pc(),
+        );
 
         // Below this will incrementally build both the signature of the host
         // function we're calling as well as the list of arguments since the

@@ -30,9 +30,9 @@ pub unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize {
 
     pc
 }
-pub unsafe fn get_next_older_fp_from_fp(fp: usize) -> usize {
-    *(fp as *mut usize)
-}
+
+// And the current frame pointer points to the next older frame pointer.
+pub const NEXT_OLDER_FP_FROM_FP_OFFSET: usize = 0;
 
 pub fn reached_entry_sp(fp: usize, first_wasm_sp: usize) -> bool {
     // Calls in aarch64 push two i64s (old FP and return PC) so our entry SP is

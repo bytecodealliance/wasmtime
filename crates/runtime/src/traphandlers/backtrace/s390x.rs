@@ -5,11 +5,9 @@ pub unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize {
     *(fp as *mut usize).offset(14)
 }
 
-pub unsafe fn get_next_older_fp_from_fp(fp: usize) -> usize {
-    // The next older "FP" (backchain pointer) was saved in the slot pointed to
-    // by the current "FP".
-    *(fp as *mut usize)
-}
+// The next older "FP" (backchain pointer) was saved in the slot pointed to
+// by the current "FP".
+pub const NEXT_OLDER_FP_FROM_FP_OFFSET: usize = 0;
 
 pub fn reached_entry_sp(fp: usize, first_wasm_sp: usize) -> bool {
     // The "FP" (backchain pointer) holds the value of the stack pointer at
