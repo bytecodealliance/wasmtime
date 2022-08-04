@@ -746,6 +746,22 @@ where
             None
         }
     }
+
+    #[inline]
+    fn jump_table_targets(&mut self, targets: &MachLabelSlice) -> Option<(MachLabel, BoxVecMachLabel)> {
+        if targets.is_empty() {
+            return None
+        }
+
+        let default_label = targets[0];
+        let jt_targets = Box::new(SmallVec::from(&targets[1..]));
+        Some((default_label, jt_targets))
+    }
+
+    #[inline]
+    fn jump_table_size(&mut self, targets: &BoxVecMachLabel) -> u32 {
+        targets.len() as u32
+    }
 }
 
 impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>

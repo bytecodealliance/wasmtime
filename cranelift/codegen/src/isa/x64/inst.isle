@@ -366,7 +366,7 @@
        ;; The generated code sequence is described in the emit's function match
        ;; arm for this instruction.
        ;;
-       ;; See comment in lowering about the temporaries signedness.
+       ;; See comment on jmp_table_seq below about the temporaries signedness.
        (JmpTableSeq (idx Reg)
                     (tmp1 WritableReg)
                     (tmp2 WritableReg)
@@ -517,6 +517,10 @@
 
 (type MachLabelSlice extern (enum))
 
+;; The size of the jump table.
+(decl jump_table_size (BoxVecMachLabel) u32)
+(extern constructor jump_table_size jump_table_size)
+
 ;; Extract a the target from a MachLabelSlice with exactly one target.
 (decl single_target (MachLabel) MachLabelSlice)
 (extern extractor single_target single_target)
@@ -524,6 +528,10 @@
 ;; Extract a the targets from a MachLabelSlice with exactly two targets.
 (decl two_targets (MachLabel MachLabel) MachLabelSlice)
 (extern extractor two_targets two_targets)
+
+;; Extract the default target and jump table from a MachLabelSlice.
+(decl jump_table_targets (MachLabel BoxVecMachLabel) MachLabelSlice)
+(extern extractor jump_table_targets jump_table_targets)
 
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
 (decl operand_size_of_type_32_64 (Type) OperandSize)
@@ -3093,6 +3101,45 @@
                               (consumes_flags_concat
                                 (jmp_if cc1 taken)
                                 (jmp_cond cc2 taken not_taken))))
+
+;; Emit the compound instruction that does:
+;;
+;; lea $jt, %rA
+;; movsbl [%rA, %rIndex, 2], %rB
+;; add %rB, %rA
+;; j *%rA
+;; [jt entries]
+;;
+;; This must be *one* instruction in the vcode because we cannot allow regalloc
+;; to insert any spills/fills in the middle of the sequence; otherwise, the
+;; lea PC-rel offset to the jumptable would be incorrect.  (The alternative
+;; is to introduce a relocation pass for inlined jumptables, which is much
+;; worse.)
+(decl jmp_table_seq (Type Gpr MachLabel BoxVecMachLabel) SideEffectNoResult)
+(rule (jmp_table_seq ty idx default_target jt_targets)
+      (let (;; This temporary is used as a signed integer of 64-bits (to hold
+            ;; addresses).
+            (tmp1 WritableGpr (temp_writable_gpr))
+
+            ;; Put a zero in tmp1. This is needed for Spectre mitigations (a
+            ;; CMOV that zeroes the index on misspeculation).
+            (_ Unit (emit (MInst.Imm (OperandSize.Size32) 0 tmp1)))
+
+            ;; This temporary is used as a signed integer of 32-bits (for the
+            ;; wasm-table index) and then 64-bits (address addend). The small
+            ;; lie about the I64 type is benign, since the temporary is dead
+            ;; after this instruction (and its Cranelift type is thus unused).
+            (tmp2 WritableGpr (temp_writable_gpr))
+
+            (size OperandSize (raw_operand_size_of_type ty))
+
+            (jt_size u32 (jump_table_size jt_targets)))
+
+        (with_flags_side_effect
+          (x64_cmp size (RegMemImm.Imm jt_size) idx)
+          (ConsumesFlags.ConsumesFlagsSideEffect
+            (MInst.JmpTableSeq idx tmp1 tmp2 default_target jt_targets)))))
+
 
 ;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
