@@ -504,7 +504,7 @@ impl Compiler<'_, '_> {
     fn convert_u32_mask(&mut self, src: &Source<'_>, dst: &Destination<'_>, mask: u32) {
         self.push_dst_addr(dst);
         match src {
-            Source::Memory(mem) => self.i32_load16u(mem),
+            Source::Memory(mem) => self.i32_load(mem),
             Source::Stack(stack) => self.stack_get(stack, ValType::I32),
         }
         if mask != 0xffffffff {
