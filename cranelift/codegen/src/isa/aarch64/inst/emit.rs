@@ -2543,16 +2543,8 @@ impl MachInstEmit for Inst {
                     | VecALUOp::Fdiv
                     | VecALUOp::Fmax
                     | VecALUOp::Fmin
-                    | VecALUOp::Fmul
-                    | VecALUOp::Fmla => true,
+                    | VecALUOp::Fmul => true,
                     _ => false,
-                };
-                let enc_float_size = match (is_float, size) {
-                    (true, VectorSize::Size32x2) => 0b0,
-                    (true, VectorSize::Size32x4) => 0b0,
-                    (true, VectorSize::Size64x2) => 0b1,
-                    (true, _) => unimplemented!(),
-                    _ => 0,
                 };
 
                 let (top11, bit15_10) = match alu_op {
@@ -2574,7 +2566,6 @@ impl MachInstEmit for Inst {
                     VecALUOp::Bic => (0b000_01110_01_1, 0b000111),
                     VecALUOp::Orr => (0b000_01110_10_1, 0b000111),
                     VecALUOp::Eor => (0b001_01110_00_1, 0b000111),
-                    VecALUOp::Bsl => (0b001_01110_01_1, 0b000111),
                     VecALUOp::Umaxp => {
                         debug_assert_ne!(size, VectorSize::Size64x2);
 
@@ -2619,7 +2610,6 @@ impl MachInstEmit for Inst {
                     VecALUOp::Fmax => (0b000_01110_00_1, 0b111101),
                     VecALUOp::Fmin => (0b000_01110_10_1, 0b111101),
                     VecALUOp::Fmul => (0b001_01110_00_1, 0b110111),
-                    VecALUOp::Fmla => (0b000_01110_00_1, 0b110011),
                     VecALUOp::Addp => (0b000_01110_00_1 | enc_size << 1, 0b101111),
                     VecALUOp::Zip1 => (0b01001110_00_0 | enc_size << 1, 0b001110),
                     VecALUOp::Sqrdmulh => {
@@ -2632,9 +2622,29 @@ impl MachInstEmit for Inst {
                     }
                 };
                 let top11 = if is_float {
-                    top11 | enc_float_size << 1
+                    top11 | size.enc_float_size() << 1
                 } else {
                     top11
+                };
+                sink.put4(enc_vec_rrr(top11 | q << 9, rm, bit15_10, rn, rd));
+            }
+            &Inst::VecRRRMod {
+                rd,
+                rn,
+                rm,
+                alu_op,
+                size,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                let (q, _enc_size) = size.enc_size();
+
+                let (top11, bit15_10) = match alu_op {
+                    VecALUModOp::Bsl => (0b001_01110_01_1, 0b000111),
+                    VecALUModOp::Fmla => {
+                        (0b000_01110_00_1 | (size.enc_float_size() << 1), 0b110011)
+                    }
                 };
                 sink.put4(enc_vec_rrr(top11 | q << 9, rm, bit15_10, rn, rd));
             }

@@ -3383,8 +3383,8 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::VecRRR {
-            alu_op: VecALUOp::Bsl,
+        Inst::VecRRRMod {
+            alu_op: VecALUModOp::Bsl,
             rd: writable_vreg(8),
             rn: vreg(9),
             rm: vreg(1),
@@ -4055,8 +4055,8 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::VecRRR {
-            alu_op: VecALUOp::Fmla,
+        Inst::VecRRRMod {
+            alu_op: VecALUModOp::Fmla,
             rd: writable_vreg(2),
             rn: vreg(0),
             rm: vreg(5),
@@ -4067,8 +4067,8 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::VecRRR {
-            alu_op: VecALUOp::Fmla,
+        Inst::VecRRRMod {
+            alu_op: VecALUModOp::Fmla,
             rd: writable_vreg(2),
             rn: vreg(0),
             rm: vreg(5),
@@ -4079,8 +4079,8 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::VecRRR {
-            alu_op: VecALUOp::Fmla,
+        Inst::VecRRRMod {
+            alu_op: VecALUModOp::Fmla,
             rd: writable_vreg(2),
             rn: vreg(0),
             rm: vreg(5),

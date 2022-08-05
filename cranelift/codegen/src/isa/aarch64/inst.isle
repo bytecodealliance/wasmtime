@@ -576,6 +576,14 @@
         (rm Reg)
         (size VectorSize))
 
+       ;; A vector ALU op modifying a source register.
+       (VecRRRMod
+        (alu_op VecALUModOp)
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg)
+        (size VectorSize))
+
        ;; Vector two register miscellaneous instruction.
        (VecMisc
         (op VecMisc2)
@@ -1108,10 +1116,6 @@
     (Orr)
     ;; Bitwise exclusive or
     (Eor)
-    ;; Bitwise select
-    ;; This opcode should only be used with the `vec_rrr_inplace`
-    ;; constructor.
-    (Bsl)
     ;; Unsigned maximum pairwise
     (Umaxp)
     ;; Add
@@ -1146,16 +1150,21 @@
     (Fmin)
     ;; Floating-point multiply
     (Fmul)
-    ;; Floating-point fused multiply-add vectors
-    ;; This opcode should only be used with the `vec_rrr_inplace`
-    ;; constructor.
-    (Fmla)
     ;; Add pairwise
     (Addp)
     ;; Zip vectors (primary) [meaning, high halves]
     (Zip1)
     ;; Signed saturating rounding doubling multiply returning high half
     (Sqrdmulh)
+))
+
+;; A Vector ALU operation which modifies a source register.
+(type VecALUModOp
+  (enum
+    ;; Bitwise select
+    (Bsl)
+    ;; Floating-point fused multiply-add vectors
+    (Fmla)
 ))
 
 ;; A Vector miscellaneous operation with two registers.
@@ -1508,11 +1517,11 @@
 
 ;; Helper for emitting `MInst.VecRRR` instructions which use three registers,
 ;; one of which is both source and output.
-(decl vec_rrr_inplace (VecALUOp Reg Reg Reg VectorSize) Reg)
-(rule (vec_rrr_inplace op src1 src2 src3 size)
+(decl vec_rrr_mod (VecALUModOp Reg Reg Reg VectorSize) Reg)
+(rule (vec_rrr_mod op src1 src2 src3 size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_1 Unit (emit (MInst.FpuMove128 dst src1)))
-            (_2 Unit (emit (MInst.VecRRR op dst src2 src3 size))))
+            (_2 Unit (emit (MInst.VecRRRMod op dst src2 src3 size))))
         dst))
 
 ;; Helper for emitting `MInst.FpuRRR` instructions.
@@ -2198,10 +2207,7 @@
 
 (decl bsl (Type Reg Reg Reg) Reg)
 (rule (bsl ty c x y)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.FpuMove128 dst c)))
-            (_ Unit (emit (MInst.VecRRR (VecALUOp.Bsl) dst x y (vector_size ty)))))
-        dst))
+      (vec_rrr_mod (VecALUModOp.Bsl) c x y (vector_size ty)))
 
 ;; Helper for generating a `udf` instruction.
 
