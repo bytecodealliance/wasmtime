@@ -43,7 +43,7 @@ anyhow = "1.0.32"
 clap = { version = "3.2.0", features = ["derive"] }
 
 [features]
-default = ["disas", "wasm", "cranelift-codegen/all-arch", "souper-harvest"]
+default = ["disas", "wasm", "cranelift-codegen/all-arch", "cranelift-codegen/trace-log", "souper-harvest"]
 disas = ["capstone"]
 wasm = ["wat", "cranelift-wasm"]
 souper-harvest = ["cranelift-codegen/souper-harvest", "rayon"]
