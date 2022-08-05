@@ -83,8 +83,8 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cmpq    $0, %rdi
-;   setl    %al
+;   shrq    $63, %rdi, %rdi
+;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -99,8 +99,8 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cmpl    $0, %edi
-;   setl    %al
+;   shrl    $31, %edi, %edi
+;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
