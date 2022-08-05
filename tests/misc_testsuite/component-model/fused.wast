@@ -1393,3 +1393,182 @@
   )
   (instance (instantiate $c2 (with "" (instance $c1))))
 )
+
+(component
+  (core module $m
+    (func (export ""))
+  )
+  (core instance $m (instantiate $m))
+  (func $foo (canon lift (core func $m "")))
+
+  (component $c
+    (import "" (func $foo))
+
+    (core func $foo (canon lower (func $foo)))
+    (core module $m2
+      (import "" "" (func))
+      (start 0)
+    )
+    (core instance $m2 (instantiate $m2 (with "" (instance (export "" (func $foo))))))
+  )
+
+  (instance $c (instantiate $c (with "" (func $foo))))
+)
+
+(component
+  (component
+    (core module
+      (func $execute (param i32 i32)
+        unreachable
+      )
+      (func $canonical_abi_realloc (param i32 i32 i32 i32) (result i32)
+        unreachable
+      )
+      (memory 1)
+      (export "memory" (memory 0))
+      (export "execute" (func $execute))
+      (export "canonical_abi_realloc" (func $canonical_abi_realloc))
+    )
+    (core instance (instantiate 0))
+    (core alias export 0 "memory" (memory))
+    (core alias export 0 "canonical_abi_realloc" (func))
+    (core alias export 0 "execute" (func))
+    (func (param "x" (list u8)) (canon lift (core func 1) (memory 0) (realloc 0)))
+    (export "execute" (func 0))
+  )
+  (component
+    (type 
+      (instance
+        (export "execute" (func (param "x" (list u8))))
+      )
+    )
+    (import "backend" (instance (type 0)))
+    (core module
+      (func $execute (param i32 i32)
+        unreachable
+      )
+      (func $canonical_abi_realloc (param i32 i32 i32 i32) (result i32)
+        unreachable
+      )
+      (memory 1)
+      (export "memory" (memory 0))
+      (export "execute" (func $execute))
+      (export "canonical_abi_realloc" (func $canonical_abi_realloc))
+    )
+    (core module
+      (type (func (param i32 i32)))
+      (func (type 0) (param i32 i32)
+        local.get 0
+        local.get 1
+        call_indirect (type 0)
+      )
+      (table 1 1 funcref)
+      (export "0" (func 0))
+      (export "$imports" (table 0))
+    )
+    (core module
+      (type (func (param i32 i32)))
+      (import "" "0" (func (type 0)))
+      (import "" "$imports" (table 1 1 funcref))
+      (elem (i32.const 0) func 0)
+    )
+    (core instance (instantiate 1))
+    (core alias export 0 "0" (func))
+    (core instance 
+      (export "execute" (func 0))
+    )
+    (core instance (instantiate 0
+        (with "backend" (instance 1))
+      )
+    )
+    (core alias export 2 "memory" (memory))
+    (core alias export 2 "canonical_abi_realloc" (func))
+    (core alias export 0 "$imports" (table))
+    (alias export 0 "execute" (func))
+    (core func (canon lower (func 0) (memory 0) (realloc 1)))
+    (core instance 
+      (export "$imports" (table 0))
+      (export "0" (func 2))
+    )
+    (core instance (instantiate 2
+        (with "" (instance 3))
+      )
+    )
+    (core alias export 2 "execute" (func))
+    (func (param "x" (list u8)) (canon lift (core func 3) (memory 0) (realloc 1)))
+    (export "execute" (func 1))
+  )
+  (component
+    (type 
+      (instance
+        (export "execute" (func (param "x" (list u8))))
+      )
+    )
+    (import "backend" (instance (type 0)))
+    (core module
+      (func $execute (param i32 i32)
+        unreachable
+      )
+      (func $canonical_abi_realloc (param i32 i32 i32 i32) (result i32)
+        unreachable
+      )
+      (memory 1)
+      (export "memory" (memory 0))
+      (export "execute" (func $execute))
+      (export "canonical_abi_realloc" (func $canonical_abi_realloc))
+    )
+    (core module
+      (type (func (param i32 i32)))
+      (func (type 0) (param i32 i32)
+        local.get 0
+        local.get 1
+        call_indirect (type 0)
+      )
+      (table 1 1 funcref)
+      (export "0" (func 0))
+      (export "$imports" (table 0))
+    )
+    (core module
+      (type (func (param i32 i32)))
+      (import "" "0" (func (type 0)))
+      (import "" "$imports" (table 1 1 funcref))
+      (elem (i32.const 0) func 0)
+    )
+    (core instance (instantiate 1))
+    (core alias export 0 "0" (func))
+    (core instance 
+      (export "execute" (func 0))
+    )
+    (core instance (instantiate 0
+        (with "backend" (instance 1))
+      )
+    )
+    (core alias export 2 "memory" (memory))
+    (core alias export 2 "canonical_abi_realloc" (func))
+    (core alias export 0 "$imports" (table))
+    (alias export 0 "execute" (func))
+    (core func (canon lower (func 0) (memory 0) (realloc 1)))
+    (core instance 
+      (export "$imports" (table 0))
+      (export "0" (func 2))
+    )
+    (core instance (instantiate 2
+        (with "" (instance 3))
+      )
+    )
+    (core alias export 2 "execute" (func))
+    (func (param "x" (list u8)) (canon lift (core func 3) (memory 0) (realloc 1)))
+    (export "execute" (func 1))
+  )
+  (instance (instantiate 0))
+  (instance (instantiate 1
+      (with "backend" (instance 0))
+    )
+  )
+  (instance (instantiate 2
+      (with "backend" (instance 1))
+    )
+  )
+  (alias export 2 "execute" (func))
+  (export "execute" (func 0))
+)
