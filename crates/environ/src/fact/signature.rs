@@ -3,6 +3,7 @@
 use crate::component::{InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 use crate::fact::{Context, Module, Options};
 use wasm_encoder::ValType;
+use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 /// Metadata about a core wasm signature which is created for a component model
 /// signature.
@@ -211,11 +212,11 @@ impl Module<'_> {
                 self.record_size_align(opts, self.types[*r].fields.iter().map(|f| &f.ty))
             }
             InterfaceType::Tuple(t) => self.record_size_align(opts, self.types[*t].types.iter()),
-            InterfaceType::Flags(f) => match self.types[*f].names.len() {
-                n if n <= 8 => (1, 1),
-                n if n <= 16 => (2, 2),
-                n if n <= 32 => (4, 4),
-                n => (4 * (align_to(n, 32) / 32), 4),
+            InterfaceType::Flags(f) => match FlagsSize::from_count(self.types[*f].names.len()) {
+                FlagsSize::Size0 => (0, 1),
+                FlagsSize::Size1 => (1, 1),
+                FlagsSize::Size2 => (2, 2),
+                FlagsSize::Size4Plus(n) => (n * 4, 4),
             },
             InterfaceType::Enum(t) => self.discrim_size_align(self.types[*t].names.len()),
             InterfaceType::Option(t) => {
@@ -264,10 +265,11 @@ impl Module<'_> {
     }
 
     fn discrim_size_align<'a>(&self, cases: usize) -> (usize, usize) {
-        match cases {
-            n if n <= u8::MAX as usize => (1, 1),
-            n if n <= u16::MAX as usize => (2, 2),
-            _ => (4, 4),
+        match DiscriminantSize::from_count(cases) {
+            Some(DiscriminantSize::Size1) => (1, 1),
+            Some(DiscriminantSize::Size2) => (2, 2),
+            Some(DiscriminantSize::Size4) => (4, 4),
+            None => unreachable!(),
         }
     }
 }
