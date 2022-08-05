@@ -854,11 +854,11 @@ impl Compiler<'_, '_> {
             me.instruction(LocalGet(dst_byte_len)); // old_size
             me.ptr_uconst(dst_opts, 1); // align
             let factor = match src {
-                FE::Latin1 => 2u8,
+                FE::Latin1 => 2,
                 FE::Utf16 => 3,
                 _ => unreachable!(),
             };
-            // validate_string_length_u8(me, factor);
+            validate_string_length_u8(me, factor);
             me.convert_src_len_to_dst(src_len, src_opts.ptr(), dst_opts.ptr());
             me.ptr_uconst(dst_opts, factor.into());
             me.ptr_mul(dst_opts);
