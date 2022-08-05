@@ -223,3 +223,63 @@ block2:
 ;   popq    %rbp
 ;   ret
 
+function %f6(i64) -> b1 {
+block0(v0: i64):
+  v1 = iconst.i64 0
+  v2 = icmp slt v0, v1
+  brnz v2, block1
+  jump block2
+block1:
+  v3 = bconst.b1 true
+  return v3
+block2:
+  v4 = bconst.b1 false
+  return v4
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpq    $0, %rdi
+;   jl      label1; j label2
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   xorl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f7(i32) -> b1 {
+block0(v0: i32):
+  v1 = iconst.i32 0
+  v2 = icmp slt v0, v1
+  brnz v2, block1
+  jump block2
+block1:
+  v3 = bconst.b1 true
+  return v3
+block2:
+  v4 = bconst.b1 false
+  return v4
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpl    $0, %edi
+;   jl      label1; j label2
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   xorl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
