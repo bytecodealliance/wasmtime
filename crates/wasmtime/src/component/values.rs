@@ -4,12 +4,13 @@ use crate::store::StoreOpaque;
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{anyhow, bail, Context, Error, Result};
 use std::collections::HashMap;
+use std::fmt;
 use std::iter;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct List {
     ty: types::List,
     values: Box<[Val]>,
@@ -45,7 +46,17 @@ impl Deref for List {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+impl fmt::Debug for List {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut f = f.debug_list();
+        for val in self.iter() {
+            f.entry(val);
+        }
+        f.finish()
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
 pub struct Record {
     ty: types::Record,
     values: Box<[Val]>,
@@ -105,6 +116,16 @@ impl Record {
     }
 }
 
+impl fmt::Debug for Record {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut f = f.debug_struct("Record");
+        for (name, val) in self.fields() {
+            f.field(name, val);
+        }
+        f.finish()
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Tuple {
     ty: types::Tuple,
@@ -144,7 +165,7 @@ impl Tuple {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Variant {
     ty: types::Variant,
     discriminant: u32,
@@ -194,6 +215,14 @@ impl Variant {
     /// Returns the payload value for this variant.
     pub fn payload(&self) -> &Val {
         &self.value
+    }
+}
+
+impl fmt::Debug for Variant {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple(self.discriminant())
+            .field(self.payload())
+            .finish()
     }
 }
 
@@ -273,7 +302,7 @@ impl Union {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Option {
     ty: types::Option,
     discriminant: u32,
@@ -313,7 +342,13 @@ impl Option {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+impl fmt::Debug for Option {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.value().fmt(f)
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
 pub struct Expected {
     ty: types::Expected,
     discriminant: u32,
@@ -358,7 +393,13 @@ impl Expected {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+impl fmt::Debug for Expected {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.value().fmt(f)
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
 pub struct Flags {
     ty: types::Flags,
     count: u32,
@@ -405,6 +446,16 @@ impl Flags {
                 None
             }
         })
+    }
+}
+
+impl fmt::Debug for Flags {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut set = f.debug_set();
+        for flag in self.flags() {
+            set.entry(&flag);
+        }
+        set.finish()
     }
 }
 
