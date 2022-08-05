@@ -261,7 +261,10 @@ impl Module<'_> {
             payload_size = payload_size.max(csize);
             align = align.max(calign);
         }
-        (align_to(discrim_size, align) + payload_size, align)
+        (
+            align_to(align_to(discrim_size, align) + payload_size, align),
+            align,
+        )
     }
 
     fn discrim_size_align<'a>(&self, cases: usize) -> (usize, usize) {
