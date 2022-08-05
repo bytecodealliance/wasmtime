@@ -1,0 +1,38 @@
+{
+  "name": "@bytecode-alliance/wizer",
+  "version": "1.4.6777777",
+  "description": "The WebAssembly Pre-Initializer",
+  "type": "module",
+  "scripts": {
+    "update": "node ./update.js",
+    "postinstall": "node ./post-install.js"
+  },
+  "devDependencies": {
+    "@felipecrs/decompress-tarxz": "^4.0.0",
+    "decompress": "^4.2.1",
+    "decompress-unzip": "^4.0.1",
+    "zx": "^7.0.8"
+  },
+  "main": "index.js",
+  "engines": {
+    "node": ">=16"
+  },
+  "bin": {
+    "wizer": "wizer"
+  },
+  "optionalDependencies": {
+    "@bytecode-alliance/wizer-darwin-arm64": "1.4.6777777",
+    "@bytecode-alliance/wizer-darwin-x64": "1.4.6777777",
+    "@bytecode-alliance/wizer-linux-x64": "1.4.6777777",
+    "@bytecode-alliance/wizer-win32-x64": "1.4.6777777"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bytecodealliance/wizer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bytecodealliance/wizer/issues"
+  },
+  "homepage": "https://github.com/bytecodealliance/wizer#readme"
+}
