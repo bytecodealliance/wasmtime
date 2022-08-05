@@ -3140,7 +3140,13 @@ impl MachInstEmit for Inst {
         }
 
         let end_off = sink.cur_offset();
-        debug_assert!((end_off - start_off) <= Inst::worst_case_size());
+        debug_assert!(
+            (end_off - start_off) <= Inst::worst_case_size()
+                || matches!(self, Inst::EmitIsland { .. }),
+            "Worst case size exceed for {:?}: {}",
+            self,
+            end_off - start_off
+        );
 
         state.clear_post_insn();
     }
