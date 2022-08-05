@@ -191,9 +191,6 @@ pub trait ABICaller {
     /// Get the number of arguments expected.
     fn num_args(&self) -> usize;
 
-    /// Access the (possibly legalized) signature.
-    fn signature(&self) -> &Signature;
-
     /// Emit a copy of an argument value from a source register, prior to the call.
     /// For large arguments with associated stack buffer, this may load the address
     /// of the buffer into the argument register, if required by the ABI.
