@@ -1917,8 +1917,8 @@ impl Compiler<'_, '_> {
             _ => panic!("expected a variant"),
         };
 
-        let src_disc_size = DiscriminantSize::from_count(src_ty.cases.len()).unwrap();
-        let dst_disc_size = DiscriminantSize::from_count(dst_ty.cases.len()).unwrap();
+        let src_info = VariantInfo::new(self.module, src.opts(), src_ty.cases.iter().map(|c| c.ty));
+        let dst_info = VariantInfo::new(self.module, dst.opts(), dst_ty.cases.iter().map(|c| c.ty));
 
         let iter = src_ty.cases.iter().enumerate().map(|(src_i, src_case)| {
             let dst_i = dst_ty
@@ -1936,7 +1936,7 @@ impl Compiler<'_, '_> {
                 dst_ty: &dst_case.ty,
             }
         });
-        self.convert_variant(src, src_disc_size, dst, dst_disc_size, iter);
+        self.convert_variant(src, &src_info, dst, &dst_info, iter);
     }
 
     fn translate_union(
@@ -1952,12 +1952,14 @@ impl Compiler<'_, '_> {
             _ => panic!("expected an option"),
         };
         assert_eq!(src_ty.types.len(), dst_ty.types.len());
+        let src_info = VariantInfo::new(self.module, src.opts(), src_ty.types.iter().copied());
+        let dst_info = VariantInfo::new(self.module, dst.opts(), dst_ty.types.iter().copied());
 
         self.convert_variant(
             src,
-            DiscriminantSize::Size1,
+            &src_info,
             dst,
-            DiscriminantSize::Size1,
+            &dst_info,
             src_ty
                 .types
                 .iter()
@@ -1987,13 +1989,23 @@ impl Compiler<'_, '_> {
             InterfaceType::Enum(t) => &self.module.types[*t],
             _ => panic!("expected an option"),
         };
+        let src_info = VariantInfo::new(
+            self.module,
+            src.opts(),
+            src_ty.names.iter().map(|_| InterfaceType::Unit),
+        );
+        let dst_info = VariantInfo::new(
+            self.module,
+            dst.opts(),
+            dst_ty.names.iter().map(|_| InterfaceType::Unit),
+        );
 
         let unit = &InterfaceType::Unit;
         self.convert_variant(
             src,
-            DiscriminantSize::from_count(src_ty.names.len()).unwrap(),
+            &src_info,
             dst,
-            DiscriminantSize::from_count(dst_ty.names.len()).unwrap(),
+            &dst_info,
             src_ty.names.iter().enumerate().map(|(src_i, src_name)| {
                 let dst_i = dst_ty.names.iter().position(|n| n == src_name).unwrap();
                 let src_i = u32::try_from(src_i).unwrap();
@@ -2021,11 +2033,14 @@ impl Compiler<'_, '_> {
             _ => panic!("expected an option"),
         };
 
+        let src_info = VariantInfo::new(self.module, src.opts(), [InterfaceType::Unit, *src_ty]);
+        let dst_info = VariantInfo::new(self.module, dst.opts(), [InterfaceType::Unit, *dst_ty]);
+
         self.convert_variant(
             src,
-            DiscriminantSize::Size1,
+            &src_info,
             dst,
-            DiscriminantSize::Size1,
+            &dst_info,
             [
                 VariantCase {
                     src_i: 0,
@@ -2057,11 +2072,14 @@ impl Compiler<'_, '_> {
             _ => panic!("expected an expected"),
         };
 
+        let src_info = VariantInfo::new(self.module, src.opts(), [src_ty.ok, src_ty.err]);
+        let dst_info = VariantInfo::new(self.module, dst.opts(), [dst_ty.ok, dst_ty.err]);
+
         self.convert_variant(
             src,
-            DiscriminantSize::Size1,
+            &src_info,
             dst,
-            DiscriminantSize::Size1,
+            &dst_info,
             [
                 VariantCase {
                     src_i: 0,
@@ -2083,9 +2101,9 @@ impl Compiler<'_, '_> {
     fn convert_variant<'a>(
         &mut self,
         src: &Source<'_>,
-        src_disc_size: DiscriminantSize,
+        src_info: &VariantInfo,
         dst: &Destination,
-        dst_disc_size: DiscriminantSize,
+        dst_info: &VariantInfo,
         src_cases: impl ExactSizeIterator<Item = VariantCase<'a>>,
     ) {
         // The outermost block is special since it has the result type of the
@@ -2120,7 +2138,7 @@ impl Compiler<'_, '_> {
         // Load the discriminant
         match src {
             Source::Stack(s) => self.stack_get(&s.slice(0..1), ValType::I32),
-            Source::Memory(mem) => match src_disc_size {
+            Source::Memory(mem) => match src_info.size {
                 DiscriminantSize::Size1 => self.i32_load8u(mem),
                 DiscriminantSize::Size2 => self.i32_load16u(mem),
                 DiscriminantSize::Size4 => self.i32_load(mem),
@@ -2158,7 +2176,7 @@ impl Compiler<'_, '_> {
             self.instruction(I32Const(dst_i as i32));
             match dst {
                 Destination::Stack(stack, _) => self.stack_set(&stack[..1], ValType::I32),
-                Destination::Memory(mem) => match dst_disc_size {
+                Destination::Memory(mem) => match dst_info.size {
                     DiscriminantSize::Size1 => self.i32_store8(mem),
                     DiscriminantSize::Size2 => self.i32_store16(mem),
                     DiscriminantSize::Size4 => self.i32_store(mem),
@@ -2167,8 +2185,8 @@ impl Compiler<'_, '_> {
 
             // Translate the payload of this case using the various types from
             // the dst/src.
-            let src_payload = src.payload_src(self.module, src_disc_size, src_ty);
-            let dst_payload = dst.payload_dst(self.module, dst_disc_size, dst_ty);
+            let src_payload = src.payload_src(self.module, src_info, src_ty);
+            let dst_payload = dst.payload_dst(self.module, dst_info, dst_ty);
             self.translate(src_ty, &src_payload, dst_ty, &dst_payload);
 
             // If the results of this translation were placed on the stack then
@@ -2675,19 +2693,14 @@ impl<'a> Source<'a> {
     }
 
     /// Returns the corresponding discriminant source and payload source f
-    fn payload_src(
-        &self,
-        module: &Module,
-        size: DiscriminantSize,
-        case: &InterfaceType,
-    ) -> Source<'a> {
+    fn payload_src(&self, module: &Module, info: &VariantInfo, case: &InterfaceType) -> Source<'a> {
         match self {
             Source::Stack(s) => {
                 let flat_len = module.flatten_types(s.opts, [*case]).len();
                 Source::Stack(s.slice(1..s.locals.len()).slice(0..flat_len))
             }
             Source::Memory(mem) => {
-                let mem = payload_offset(size, module, case, mem);
+                let mem = info.payload_offset(case, mem);
                 Source::Memory(mem)
             }
         }
@@ -2729,7 +2742,7 @@ impl<'a> Destination<'a> {
     fn payload_dst(
         &self,
         module: &Module,
-        size: DiscriminantSize,
+        info: &VariantInfo,
         case: &InterfaceType,
     ) -> Destination {
         match self {
@@ -2738,7 +2751,7 @@ impl<'a> Destination<'a> {
                 Destination::Stack(&s[1..][..flat_len], opts)
             }
             Destination::Memory(mem) => {
-                let mem = payload_offset(size, module, case, mem);
+                let mem = info.payload_offset(case, mem);
                 Destination::Memory(mem)
             }
         }
@@ -2763,14 +2776,29 @@ fn next_field_offset<'a>(
     mem.bump(*offset - size)
 }
 
-fn payload_offset<'a>(
-    disc_size: DiscriminantSize,
-    module: &Module,
-    case: &InterfaceType,
-    mem: &Memory<'a>,
-) -> Memory<'a> {
-    let align = module.align(mem.opts, case);
-    mem.bump(align_to(disc_size.into(), align))
+struct VariantInfo {
+    size: DiscriminantSize,
+    align: usize,
+}
+
+impl VariantInfo {
+    fn new<I>(module: &Module, options: &Options, iter: I) -> VariantInfo
+    where
+        I: IntoIterator<Item = InterfaceType>,
+        I::IntoIter: ExactSizeIterator,
+    {
+        let iter = iter.into_iter();
+        let size = DiscriminantSize::from_count(iter.len()).unwrap();
+        VariantInfo {
+            size,
+            align: usize::from(size)
+                .max(iter.map(|i| module.align(options, &i)).max().unwrap_or(1)),
+        }
+    }
+
+    fn payload_offset<'a>(&self, _case: &InterfaceType, mem: &Memory<'a>) -> Memory<'a> {
+        mem.bump(align_to(self.size.into(), self.align))
+    }
 }
 
 impl<'a> Memory<'a> {
