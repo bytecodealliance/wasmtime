@@ -352,6 +352,7 @@ enum RuntimeInstance {
 
 impl LinearizeDfg<'_> {
     fn instantiate(&mut self, instance: InstanceId, args: &Instance) {
+        log::trace!("creating instance {instance:?}");
         let instantiation = match args {
             Instance::Static(index, args) => InstantiateModule::Static(
                 *index,
@@ -500,8 +501,10 @@ impl LinearizeDfg<'_> {
     where
         T: Clone,
     {
+        let instance = export.instance;
+        log::trace!("referencing export of {instance:?}");
         info::CoreExport {
-            instance: self.runtime_instances[&RuntimeInstance::Normal(export.instance)],
+            instance: self.runtime_instances[&RuntimeInstance::Normal(instance)],
             item: export.item.clone(),
         }
     }
