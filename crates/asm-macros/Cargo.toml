@@ -5,7 +5,7 @@ edition = "2021"
 license = "Apache-2.0 WITH LLVM-exception"
 name = "wasmtime-asm-macros"
 repository = "https://github.com/bytecodealliance/wasmtime"
-version = "0.40.0"
+version = "0.41.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
