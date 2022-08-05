@@ -41,7 +41,7 @@ pub fn run(
         Ok(testfile) => testfile,
         Err(e) => {
             if e.is_warning {
-                println!(
+                log::warn!(
                     "skipping test {:?} (line {}): {}",
                     path, e.location.line_number, e.message
                 );
