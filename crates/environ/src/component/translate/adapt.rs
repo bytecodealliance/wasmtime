@@ -296,7 +296,7 @@ impl PartitionAdapterModules {
         // didn't depend on anything in that module itself or it will be added
         // to a fresh module if this adapter depended on something that the
         // current adapter module created.
-        log::debug!("adding {id:?} to adapter module {adapter:#?}");
+        log::debug!("adding {id:?} to adapter module");
         self.next_module.adapters.push(id);
     }
 
@@ -319,8 +319,11 @@ impl PartitionAdapterModules {
                 // If this adapter is already defined then we can safely depend
                 // on it with no consequences.
                 if self.defined_items.contains(&Def::Adapter(*id)) {
+                    log::debug!("using existing adapter {id:?} ");
                     return;
                 }
+
+                log::debug!("splitting module needing {id:?} ");
 
                 // .. otherwise we found a case of an adapter depending on an
                 // adapter-module-in-progress meaning that the current adapter
@@ -337,16 +340,33 @@ impl PartitionAdapterModules {
     }
 
     fn core_export<T>(&mut self, dfg: &dfg::ComponentDfg, export: &dfg::CoreExport<T>) {
-        // If this instance has already been visited that means it can already
-        // be defined for this adapter module, so nothing else needs to be done.
-        if !self.defined_items.insert(Def::Instance(export.instance)) {
-            return;
+        // When an adapter depends on an exported item it actually depends on
+        // the instance of that exported item. The caveat here is that the
+        // adapter not only depends on that particular instance, but also all
+        // prior instances to that instance as well because instance
+        // instantiation order is fixed and cannot change.
+        //
+        // To model this the instance index space is looped over here and while
+        // an instance hasn't been visited it's visited. Note that if an
+        // instance has already been visited then all prior instances have
+        // already been visited so there's no need to continue.
+        let mut instance = export.instance;
+        while self.defined_items.insert(Def::Instance(instance)) {
+            self.instance(dfg, instance);
+            if instance.as_u32() == 0 {
+                break;
+            }
+            instance = dfg::InstanceId::from_u32(instance.as_u32() - 1);
         }
+    }
+
+    fn instance(&mut self, dfg: &dfg::ComponentDfg, instance: dfg::InstanceId) {
+        log::debug!("visiting instance {instance:?}");
 
         // ... otherwise if this is the first timet he instance has been seen
         // then the instances own arguments are recursively visited to find
         // transitive dependencies on adapters.
-        match &dfg.instances[export.instance] {
+        match &dfg.instances[instance] {
             dfg::Instance::Static(_, args) => {
                 for arg in args.iter() {
                     self.core_def(dfg, arg);
