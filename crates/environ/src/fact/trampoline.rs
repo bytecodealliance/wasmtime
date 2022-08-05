@@ -2379,8 +2379,8 @@ impl Compiler<'_, '_> {
             (ValType::I64, ValType::F64) => self.instruction(F64ReinterpretI64),
             (ValType::F64, ValType::F32) => self.instruction(F32DemoteF64),
             (ValType::I64, ValType::F32) => {
-                self.instruction(F64ReinterpretI64);
-                self.instruction(F32DemoteF64);
+                self.instruction(I32WrapI64);
+                self.instruction(F32ReinterpretI32);
             }
 
             // should not be possible given the `join` function for variants
@@ -2423,8 +2423,8 @@ impl Compiler<'_, '_> {
             (ValType::F64, ValType::I64) => self.instruction(I64ReinterpretF64),
             (ValType::F32, ValType::F64) => self.instruction(F64PromoteF32),
             (ValType::F32, ValType::I64) => {
-                self.instruction(F64PromoteF32);
-                self.instruction(I64ReinterpretF64);
+                self.instruction(I32ReinterpretF32);
+                self.instruction(I64ExtendI32U);
             }
 
             // should not be possible given the `join` function for variants

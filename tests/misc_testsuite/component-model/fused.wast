@@ -925,7 +925,7 @@
         (i32.eqz (local.get 0))
         if
           (if (i32.ne (local.get 1) (i32.const 0)) (unreachable))
-          (if (f64.ne (f64.reinterpret_i64 (local.get 2)) (f64.const 8)) (unreachable))
+          (if (f32.ne (f32.reinterpret_i32 (i32.wrap_i64 (local.get 2))) (f32.const 8)) (unreachable))
         else
           (if (i32.ne (local.get 1) (i32.const 1)) (unreachable))
           (if (f64.ne (f64.reinterpret_i64 (local.get 2)) (f64.const 9)) (unreachable))
@@ -935,7 +935,7 @@
         (i32.eqz (local.get 0))
         if
           (if (i32.ne (local.get 1) (i32.const 0)) (unreachable))
-          (if (f64.ne (f64.reinterpret_i64 (local.get 2)) (f64.const 10)) (unreachable))
+          (if (f32.ne (f32.reinterpret_i32 (i32.wrap_i64 (local.get 2))) (f32.const 10)) (unreachable))
         else
           (if (i32.ne (local.get 1) (i32.const 1)) (unreachable))
           (if (i64.ne (local.get 2) (i64.const 11)) (unreachable))
@@ -983,10 +983,10 @@
         (call $c (i32.const 0) (i32.const 0) (i64.const 6))
         (call $c (i32.const 1) (i32.const 1) (i64.reinterpret_f64 (f64.const 7)))
 
-        (call $d (i32.const 0) (i32.const 0) (i64.reinterpret_f64 (f64.const 8)))
+        (call $d (i32.const 0) (i32.const 0) (i64.extend_i32_u (i32.reinterpret_f32 (f32.const 8))))
         (call $d (i32.const 1) (i32.const 1) (i64.reinterpret_f64 (f64.const 9)))
 
-        (call $e (i32.const 0) (i32.const 0) (i64.reinterpret_f64 (f64.const 10)))
+        (call $e (i32.const 0) (i32.const 0) (i64.extend_i32_u (i32.reinterpret_f32 (f32.const 10))))
         (call $e (i32.const 1) (i32.const 1) (i64.const 11))
       )
       (start $start)
