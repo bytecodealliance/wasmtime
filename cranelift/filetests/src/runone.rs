@@ -43,7 +43,9 @@ pub fn run(
             if e.is_warning {
                 log::warn!(
                     "skipping test {:?} (line {}): {}",
-                    path, e.location.line_number, e.message
+                    path,
+                    e.location.line_number,
+                    e.message
                 );
                 return Ok(started.elapsed());
             }
