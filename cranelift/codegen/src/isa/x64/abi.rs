@@ -76,7 +76,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 | &ir::ArgumentPurpose::Normal
                 | &ir::ArgumentPurpose::StackLimit
                 | &ir::ArgumentPurpose::SignatureId
-                | &ir::ArgumentPurpose::StructReturn
                 | &ir::ArgumentPurpose::StructArgument(_) => {}
                 _ => panic!(
                     "Unsupported argument purpose {:?} in signature: {:?}",

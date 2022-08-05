@@ -255,7 +255,6 @@ impl ABIMachineSpec for S390xMachineDeps {
                 | &ir::ArgumentPurpose::Normal
                 | &ir::ArgumentPurpose::StackLimit
                 | &ir::ArgumentPurpose::SignatureId
-                | &ir::ArgumentPurpose::StructReturn
                 | &ir::ArgumentPurpose::StructArgument(_) => {}
                 _ => panic!(
                     "Unsupported argument purpose {:?} in signature: {:?}",

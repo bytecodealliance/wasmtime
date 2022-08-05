@@ -104,7 +104,7 @@
 use super::abi::*;
 use crate::binemit::StackMap;
 use crate::ir::types::*;
-use crate::ir::{ArgumentExtension, ArgumentPurpose, DynamicStackSlot, Signature, StackSlot};
+use crate::ir::{ArgumentExtension, DynamicStackSlot, Signature, StackSlot};
 use crate::isa::TargetIsa;
 use crate::settings;
 use crate::CodegenResult;
@@ -548,8 +548,6 @@ impl ABISig {
         sig: &ir::Signature,
         flags: &settings::Flags,
     ) -> CodegenResult<ABISig> {
-        let sig = ensure_struct_return_ptr_is_returned(sig);
-
         // Compute args and retvals from signature. Handle retvals first,
         // because we may need to add a return-area arg to the args.
         let (rets, sized_stack_ret_space, _) = M::compute_arg_locs(
@@ -778,7 +776,7 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
         trace!("ABI: func signature {:?}", f.signature);
 
         let flags = isa.flags().clone();
-        let ir_sig = ensure_struct_return_ptr_is_returned(&f.signature);
+        let ir_sig = f.signature.clone();
         let sig = ABISig::from_func_sig::<M>(&ir_sig, &flags)?;
 
         let call_conv = f.signature.call_conv;
@@ -1029,23 +1027,6 @@ fn gen_store_stack_multi<M: ABIMachineSpec>(
         offset += ty.bytes() as i64;
     }
     ret
-}
-
-fn ensure_struct_return_ptr_is_returned(sig: &ir::Signature) -> ir::Signature {
-    let params_structret = sig
-        .params
-        .iter()
-        .find(|p| p.purpose == ArgumentPurpose::StructReturn);
-    let rets_have_structret = sig.returns.len() > 0
-        && sig
-            .returns
-            .iter()
-            .any(|arg| arg.purpose == ArgumentPurpose::StructReturn);
-    let mut sig = sig.clone();
-    if params_structret.is_some() && !rets_have_structret {
-        sig.returns.insert(0, params_structret.unwrap().clone());
-    }
-    sig
 }
 
 impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
@@ -1633,14 +1614,13 @@ pub enum CallDest {
 impl<M: ABIMachineSpec> ABICallerImpl<M> {
     /// Create a callsite ABI object for a call directly to the specified function.
     pub fn from_func(
-        sig: &ir::Signature,
+        ir_sig: &ir::Signature,
         extname: &ir::ExternalName,
         dist: RelocDistance,
         caller_conv: isa::CallConv,
         flags: &settings::Flags,
     ) -> CodegenResult<ABICallerImpl<M>> {
-        let ir_sig = ensure_struct_return_ptr_is_returned(sig);
-        let sig = ABISig::from_func_sig::<M>(&ir_sig, flags)?;
+        let sig = ABISig::from_func_sig::<M>(ir_sig, flags)?;
         let (uses, defs, clobbers) = sig.call_uses_defs_clobbers::<M>();
         Ok(ABICallerImpl {
             sig,
@@ -1658,14 +1638,13 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
     /// Create a callsite ABI object for a call to a function pointer with the
     /// given signature.
     pub fn from_ptr(
-        sig: &ir::Signature,
+        ir_sig: &ir::Signature,
         ptr: Reg,
         opcode: ir::Opcode,
         caller_conv: isa::CallConv,
         flags: &settings::Flags,
     ) -> CodegenResult<ABICallerImpl<M>> {
-        let ir_sig = ensure_struct_return_ptr_is_returned(sig);
-        let sig = ABISig::from_func_sig::<M>(&ir_sig, flags)?;
+        let sig = ABISig::from_func_sig::<M>(ir_sig, flags)?;
         let (uses, defs, clobbers) = sig.call_uses_defs_clobbers::<M>();
         Ok(ABICallerImpl {
             sig,

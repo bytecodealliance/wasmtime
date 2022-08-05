@@ -722,24 +722,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 for insn in self.vcode.abi().gen_copy_arg_to_regs(i, regs).into_iter() {
                     self.emit(insn);
                 }
-                if self.abi().signature().params[i].purpose == ArgumentPurpose::StructReturn {
-                    assert!(regs.len() == 1);
-                    let ty = self.abi().signature().params[i].value_type;
-                    // The ABI implementation must have ensured that a StructReturn
-                    // arg is present in the return values.
-                    let struct_ret_idx = self
-                        .abi()
-                        .signature()
-                        .returns
-                        .iter()
-                        .position(|ret| ret.purpose == ArgumentPurpose::StructReturn)
-                        .expect("StructReturn return value not present!");
-                    self.emit(I::gen_move(
-                        Writable::from_reg(self.retval_regs[struct_ret_idx].regs()[0]),
-                        regs.regs()[0].to_reg(),
-                        ty,
-                    ));
-                }
             }
             if let Some(insn) = self.vcode.abi().gen_retval_area_setup() {
                 self.emit(insn);

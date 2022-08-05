@@ -87,11 +87,6 @@ impl Signature {
             .count()
     }
 
-    /// Does this signature take an struct return pointer parameter?
-    pub fn uses_struct_return_param(&self) -> bool {
-        self.uses_special_param(ArgumentPurpose::StructReturn)
-    }
-
     /// Does this return more than one normal value? (Pre-struct return
     /// legalization)
     pub fn is_multi_return(&self) -> bool {
@@ -242,16 +237,6 @@ pub enum ArgumentPurpose {
     /// A C struct passed as argument.
     StructArgument(u32),
 
-    /// Struct return pointer.
-    ///
-    /// When a function needs to return more data than will fit in registers, the caller passes a
-    /// pointer to a memory location where the return value can be written. In some ABIs, this
-    /// struct return pointer is passed in a specific register.
-    ///
-    /// This argument kind can also appear as a return value for ABIs that require a function with
-    /// a `StructReturn` pointer argument to also return that pointer in a register.
-    StructReturn,
-
     /// The link register.
     ///
     /// Most RISC architectures implement calls by saving the return address in a designated
@@ -299,7 +284,6 @@ impl fmt::Display for ArgumentPurpose {
         f.write_str(match self {
             Self::Normal => "normal",
             Self::StructArgument(size) => return write!(f, "sarg({})", size),
-            Self::StructReturn => "sret",
             Self::Link => "link",
             Self::FramePointer => "fp",
             Self::CalleeSaved => "csr",
@@ -315,7 +299,6 @@ impl FromStr for ArgumentPurpose {
     fn from_str(s: &str) -> Result<Self, ()> {
         match s {
             "normal" => Ok(Self::Normal),
-            "sret" => Ok(Self::StructReturn),
             "link" => Ok(Self::Link),
             "fp" => Ok(Self::FramePointer),
             "csr" => Ok(Self::CalleeSaved),
@@ -391,20 +374,15 @@ mod tests {
     fn argument_type() {
         let t = AbiParam::new(I32);
         assert_eq!(t.to_string(), "i32");
-        let mut t = t.uext();
+        let t = t.uext();
         assert_eq!(t.to_string(), "i32 uext");
         assert_eq!(t.sext().to_string(), "i32 sext");
-        t.purpose = ArgumentPurpose::StructReturn;
-        assert_eq!(t.to_string(), "i32 uext sret");
-        t.legalized_to_pointer = true;
-        assert_eq!(t.to_string(), "i32 ptr uext sret");
     }
 
     #[test]
     fn argument_purpose() {
         let all_purpose = [
             (ArgumentPurpose::Normal, "normal"),
-            (ArgumentPurpose::StructReturn, "sret"),
             (ArgumentPurpose::Link, "link"),
             (ArgumentPurpose::FramePointer, "fp"),
             (ArgumentPurpose::CalleeSaved, "csr"),

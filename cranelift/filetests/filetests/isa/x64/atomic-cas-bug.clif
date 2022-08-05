@@ -22,10 +22,10 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
     gv6 = symbol colocated u1:35
     gv7 = symbol colocated u1:36
     gv8 = symbol colocated u1:37
-    sig0 = (i64 sret, i64, i64, i64, i64) system_v
-    sig1 = (i64 sret, i64, i64, i64, i64) system_v
+    sig0 = (i64, i64, i64, i64, i64) system_v
+    sig1 = (i64, i64, i64, i64, i64) system_v
     sig2 = (i64, i64) system_v
-    sig3 = (i64 sret, i64, i64, i64, i64) system_v
+    sig3 = (i64, i64, i64, i64, i64) system_v
     sig4 = (i64, i64) system_v
     sig5 = (i64, i64) system_v
     fn0 = colocated u0:11 sig0

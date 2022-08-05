@@ -140,7 +140,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 | &ir::ArgumentPurpose::Normal
                 | &ir::ArgumentPurpose::StackLimit
                 | &ir::ArgumentPurpose::SignatureId
-                | &ir::ArgumentPurpose::StructReturn
                 | &ir::ArgumentPurpose::StructArgument(_) => {}
                 _ => panic!(
                     "Unsupported argument purpose {:?} in signature: {:?}",
