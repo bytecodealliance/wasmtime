@@ -1,5 +1,7 @@
+test interpret
 test run
 target x86_64 has_avx has_fma
+target aarch64
 
 function %fma_f32x4(f32x4, f32x4, f32x4) -> f32x4 {
 block0(v0: f32x4, v1: f32x4, v2: f32x4):

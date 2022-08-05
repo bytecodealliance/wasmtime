@@ -264,8 +264,11 @@
 (extern const $B32X4 Type)
 (extern const $B64X2 Type)
 
+(extern const $I8X8 Type)
 (extern const $I8X16 Type)
+(extern const $I16X4 Type)
 (extern const $I16X8 Type)
+(extern const $I32X2 Type)
 (extern const $I32X4 Type)
 (extern const $I64X2 Type)
 
@@ -359,6 +362,10 @@
 (decl ty_scalar_float (Type) Type)
 (extern extractor ty_scalar_float ty_scalar_float)
 
+;; A pure constructor that only matches 64-bit vector types.
+(decl pure ty_vec64 (Type) Type)
+(extern constructor ty_vec64 ty_vec64)
+
 ;; An extractor that only matches 128-bit vector types.
 (decl ty_vec128 (Type) Type)
 (extern extractor ty_vec128 ty_vec128)
@@ -373,7 +380,11 @@
 (decl ty_vec128_int (Type) Type)
 (extern extractor ty_vec128_int ty_vec128_int)
 
-;; An extractor that matches everything except i64x2
+;; A pure constructor that matches everything except vectors with size 32X2.
+(decl pure not_vec32x2 (Type) Type)
+(extern constructor not_vec32x2 not_vec32x2)
+
+;; An extractor that matches everything except I64X2
 (decl not_i64x2 () Type)
 (extern extractor not_i64x2 not_i64x2)
 

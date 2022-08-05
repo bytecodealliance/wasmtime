@@ -331,14 +331,15 @@ pub fn show_vreg_vector(reg: Reg, size: VectorSize) -> String {
 }
 
 /// Show an indexed vector element.
-pub fn show_vreg_element(reg: Reg, idx: u8, size: VectorSize) -> String {
+pub fn show_vreg_element(reg: Reg, idx: u8, size: ScalarSize) -> String {
     assert_eq!(RegClass::Float, reg.class());
     let s = show_reg(reg);
     let suffix = match size {
-        VectorSize::Size8x8 | VectorSize::Size8x16 => ".b",
-        VectorSize::Size16x4 | VectorSize::Size16x8 => ".h",
-        VectorSize::Size32x2 | VectorSize::Size32x4 => ".s",
-        VectorSize::Size64x2 => ".d",
+        ScalarSize::Size8 => ".b",
+        ScalarSize::Size16 => ".h",
+        ScalarSize::Size32 => ".s",
+        ScalarSize::Size64 => ".d",
+        _ => panic!("Unexpected vector element size: {:?}", size),
     };
     format!("{}{}[{}]", s, suffix, idx)
 }
@@ -373,7 +374,7 @@ pub fn pretty_print_vreg_vector(
 pub fn pretty_print_vreg_element(
     reg: Reg,
     idx: usize,
-    size: VectorSize,
+    size: ScalarSize,
     allocs: &mut AllocationConsumer<'_>,
 ) -> String {
     let reg = allocs.next(reg);

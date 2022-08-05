@@ -715,10 +715,25 @@ where
             };
             assign(count)
         }
-        Opcode::Fcmp => assign(Value::bool(
-            fcmp(inst.fp_cond_code().unwrap(), &arg(0)?, &arg(1)?)?,
-            ctrl_ty.as_bool(),
-        )?),
+
+        Opcode::Fcmp => {
+            let arg0 = extractlanes(&arg(0)?, ctrl_ty)?;
+            let arg1 = extractlanes(&arg(1)?, ctrl_ty)?;
+
+            assign(vectorizelanes(
+                &(arg0
+                    .into_iter()
+                    .zip(arg1.into_iter())
+                    .map(|(x, y)| {
+                        V::bool(
+                            fcmp(inst.fp_cond_code().unwrap(), &x, &y).unwrap(),
+                            ctrl_ty.lane_type().as_bool(),
+                        )
+                    })
+                    .collect::<ValueResult<SimdVec<V>>>()?),
+                ctrl_ty,
+            )?)
+        }
         Opcode::Ffcmp => {
             let arg0 = arg(0)?;
             let arg1 = arg(1)?;
@@ -750,7 +765,21 @@ where
         Opcode::Fmul => binary(Value::mul, arg(0)?, arg(1)?)?,
         Opcode::Fdiv => binary(Value::div, arg(0)?, arg(1)?)?,
         Opcode::Sqrt => assign(Value::sqrt(arg(0)?)?),
-        Opcode::Fma => assign(Value::fma(arg(0)?, arg(1)?, arg(2)?)?),
+        Opcode::Fma => {
+            let arg0 = extractlanes(&arg(0)?, ctrl_ty)?;
+            let arg1 = extractlanes(&arg(1)?, ctrl_ty)?;
+            let arg2 = extractlanes(&arg(2)?, ctrl_ty)?;
+
+            assign(vectorizelanes(
+                &(arg0
+                    .into_iter()
+                    .zip(arg1.into_iter())
+                    .zip(arg2.into_iter())
+                    .map(|((x, y), z)| Value::fma(x, y, z))
+                    .collect::<ValueResult<SimdVec<V>>>()?),
+                ctrl_ty,
+            )?)
+        }
         Opcode::Fneg => assign(Value::neg(arg(0)?)?),
         Opcode::Fabs => assign(Value::abs(arg(0)?)?),
         Opcode::Fcopysign => binary(Value::copysign, arg(0)?, arg(1)?)?,
@@ -1205,8 +1234,8 @@ where
     let iterations = match lane_type {
         types::I8 | types::B1 | types::B8 => 1,
         types::I16 | types::B16 => 2,
-        types::I32 | types::B32 => 4,
-        types::I64 | types::B64 => 8,
+        types::I32 | types::B32 | types::F32 => 4,
+        types::I64 | types::B64 | types::F64 => 8,
         _ => unimplemented!("vectors with lanes wider than 64-bits are currently unsupported."),
     };
 
@@ -1219,6 +1248,8 @@ where
 
         let lane_val: V = if lane_type.is_bool() {
             Value::bool(lane != 0, lane_type)?
+        } else if lane_type.is_float() {
+            Value::float(lane as u64, lane_type)?
         } else {
             Value::int(lane, lane_type)?
         };
@@ -1242,8 +1273,8 @@ where
     let iterations = match lane_type {
         types::I8 | types::B1 | types::B8 => 1,
         types::I16 | types::B16 => 2,
-        types::I32 | types::B32 => 4,
-        types::I64 | types::B64 => 8,
+        types::I32 | types::B32 | types::F32 => 4,
+        types::I64 | types::B64 | types::F64 => 8,
         _ => unimplemented!("vectors with lanes wider than 64-bits are currently unsupported."),
     };
     let mut result: [u8; 16] = [0; 16];

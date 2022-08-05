@@ -335,8 +335,10 @@
         (rn Reg))
 
        ;; 3-op FPU instruction.
+       ;; 16-bit scalars require half-precision floating-point support (FEAT_FP16).
        (FpuRRRR
         (fpu_op FPUOp3)
+        (size ScalarSize)
         (rd WritableReg)
         (rn Reg)
         (rm Reg)
@@ -478,7 +480,7 @@
         (rd WritableReg)
         (rn Reg)
         (idx u8)
-        (size VectorSize))
+        (size ScalarSize))
 
        ;; Signed move from a vector element to a GPR.
        (MovFromVecSigned
@@ -1011,8 +1013,7 @@
 ;; A floating-point unit (FPU) operation with three args.
 (type FPUOp3
   (enum
-    (MAdd32)
-    (MAdd64)
+    (MAdd)
 ))
 
 ;; A conversion from an FP to an integer value.
@@ -1108,6 +1109,8 @@
     ;; Bitwise exclusive or
     (Eor)
     ;; Bitwise select
+    ;; This opcode should only be used with the `vec_rrr_inplace`
+    ;; constructor.
     (Bsl)
     ;; Unsigned maximum pairwise
     (Umaxp)
@@ -1143,6 +1146,10 @@
     (Fmin)
     ;; Floating-point multiply
     (Fmul)
+    ;; Floating-point fused multiply-add vectors
+    ;; This opcode should only be used with the `vec_rrr_inplace`
+    ;; constructor.
+    (Fmla)
     ;; Add pairwise
     (Addp)
     ;; Zip vectors (primary) [meaning, high halves]
@@ -1364,6 +1371,9 @@
 (decl imm12_from_negated_u64 (Imm12) u64)
 (extern extractor imm12_from_negated_u64 imm12_from_negated_u64)
 
+(decl pure lshr_from_u64 (Type u64) ShiftOpAndAmt)
+(extern constructor lshr_from_u64 lshr_from_u64)
+
 (decl pure lshl_from_imm64 (Type Imm64) ShiftOpAndAmt)
 (extern constructor lshl_from_imm64 lshl_from_imm64)
 
@@ -1494,6 +1504,15 @@
 (rule (fpu_rr op src size)
       (let ((dst WritableReg (temp_writable_reg $F64))
             (_ Unit (emit (MInst.FpuRR op size dst src))))
+       dst))
+
+;; Helper for emitting `MInst.VecRRR` instructions which use three registers,
+;; one of which is both source and output.
+(decl vec_rrr_inplace (VecALUOp Reg Reg Reg VectorSize) Reg)
+(rule (vec_rrr_inplace op src1 src2 src3 size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_1 Unit (emit (MInst.FpuMove128 dst src1)))
+            (_2 Unit (emit (MInst.VecRRR op dst src2 src3 size))))
         dst))
 
 ;; Helper for emitting `MInst.FpuRRR` instructions.
@@ -1501,6 +1520,13 @@
 (rule (fpu_rrr op src1 src2 size)
       (let ((dst WritableReg (temp_writable_reg $F64))
             (_ Unit (emit (MInst.FpuRRR op size dst src1 src2))))
+        dst))
+
+;; Helper for emitting `MInst.FpuRRRR` instructions.
+(decl fpu_rrrr (FPUOp3 ScalarSize Reg Reg Reg) Reg)
+(rule (fpu_rrrr size op src1 src2 src3)
+      (let ((dst WritableReg (temp_writable_reg $F64))
+            (_ Unit (emit (MInst.FpuRRRR size op dst src1 src2 src3))))
         dst))
 
 ;; Helper for emitting `MInst.FpuCmp` instructions.
@@ -1543,6 +1569,15 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRRShift op (operand_size ty) dst src1 src2 shift))))
         dst))
+
+;; Helper for emitting `cmp` instructions, setting flags, with a right-shifted
+;; second operand register.
+(decl cmp_rr_shift (OperandSize Reg Reg u64) ProducesFlags)
+(rule (cmp_rr_shift size src1 src2 shift_amount)
+      (if-let shift (lshr_from_u64 $I64 shift_amount))
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.AluRRRShift (ALUOp.SubS) size (writable_zero_reg)
+        src1 src2 shift)))
 
 ;; Helper for emitting `MInst.AluRRRExtend` instructions.
 (decl alu_rrr_extend (ALUOp Type Reg Reg ExtendOp) Reg)
@@ -1764,7 +1799,7 @@
         dst))
 
 ;; Helper for emitting `MInst.MovFromVec` instructions.
-(decl mov_from_vec (Reg u8 VectorSize) Reg)
+(decl mov_from_vec (Reg u8 ScalarSize) Reg)
 (rule (mov_from_vec rn idx size)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.MovFromVec dst rn idx size))))
@@ -1839,6 +1874,22 @@
         (ConsumesFlags.ConsumesFlagsReturnsReg
          (MInst.CSNeg dst cond if_true if_false)
          dst)))
+
+;; Helper for generating `MInst.CCmpImm` instructions.
+(decl ccmp_imm (OperandSize u8 Reg UImm5 NZCV Cond) ConsumesFlags)
+(rule (ccmp_imm size 1 rn imm nzcv cond)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
+         (MInst.CCmpImm size rn imm nzcv cond)
+         (MInst.CSet dst cond)
+         (value_reg dst))))
+
+(rule (ccmp_imm size _ty_bits rn imm nzcv cond)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
+         (MInst.CCmpImm size rn imm nzcv cond)
+         (MInst.CSetm dst cond)
+         (value_reg dst))))
 
 ;; Helpers for generating `add` instructions.
 
