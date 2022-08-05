@@ -429,7 +429,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     match kind {
                         ElementKind::Active {
                             table_index,
-                            init_expr,
+                            offset_expr: init_expr,
                         } => {
                             let table_index = TableIndex::from_u32(table_index);
                             let mut init_expr_reader = init_expr.get_binary_reader();
@@ -547,7 +547,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     match kind {
                         DataKind::Active {
                             memory_index,
-                            init_expr,
+                            offset_expr: init_expr,
                         } => {
                             let range = mk_range(&mut self.result.total_data)?;
                             let memory_index = MemoryIndex::from_u32(memory_index);

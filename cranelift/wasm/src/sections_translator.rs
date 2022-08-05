@@ -304,7 +304,7 @@ pub fn parse_element_section<'data>(
         match kind {
             ElementKind::Active {
                 table_index,
-                init_expr,
+                offset_expr: init_expr,
             } => {
                 let mut init_expr_reader = init_expr.get_binary_reader();
                 let (base, offset) = match init_expr_reader.read_operator()? {
@@ -354,7 +354,7 @@ pub fn parse_data_section<'data>(
         match kind {
             DataKind::Active {
                 memory_index,
-                init_expr,
+                offset_expr: init_expr,
             } => {
                 let mut init_expr_reader = init_expr.get_binary_reader();
                 let (base, offset) = match init_expr_reader.read_operator()? {
