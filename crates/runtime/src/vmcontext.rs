@@ -255,7 +255,7 @@ mod test_vmmemory_definition {
     use super::VMMemoryDefinition;
     use memoffset::offset_of;
     use std::mem::size_of;
-    use wasmtime_environ::{Module, VMOffsets};
+    use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
     #[test]
     fn check_vmmemory_definition_offsets() {
@@ -263,15 +263,15 @@ mod test_vmmemory_definition {
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
             size_of::<VMMemoryDefinition>(),
-            usize::from(offsets.size_of_vmmemory_definition())
+            usize::from(offsets.ptr.size_of_vmmemory_definition())
         );
         assert_eq!(
             offset_of!(VMMemoryDefinition, base),
-            usize::from(offsets.vmmemory_definition_base())
+            usize::from(offsets.ptr.vmmemory_definition_base())
         );
         assert_eq!(
             offset_of!(VMMemoryDefinition, current_length),
-            usize::from(offsets.vmmemory_definition_current_length())
+            usize::from(offsets.ptr.vmmemory_definition_current_length())
         );
         /* TODO: Assert that the size of `current_length` matches.
         assert_eq!(
