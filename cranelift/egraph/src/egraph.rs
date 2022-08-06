@@ -1,6 +1,7 @@
 //! Egraph implementation.
 
 use crate::ctxhash::{CtxEq, CtxHash, CtxHashMap, Entry};
+use crate::unionfind::UnionFind;
 use crate::{Id, Language};
 use cranelift_entity::PrimaryMap;
 use smallvec::{smallvec, SmallVec};
@@ -15,6 +16,10 @@ pub struct EGraph<L: Language> {
     /// Eclass definitions. Each eclass consists of an enode, and
     /// parent pointer to the rest of the eclass.
     pub classes: PrimaryMap<Id, EClass>,
+    /// Union-find for canonical ID generation. This lets us name an
+    /// eclass with a canonical ID that is the same for all
+    /// generations of the class.
+    pub unionfind: UnionFind,
 }
 
 /// A reference to a node.
@@ -180,6 +185,7 @@ where
             nodes: vec![],
             node_map: CtxHashMap::new(),
             classes: PrimaryMap::new(),
+            unionfind: UnionFind::new(),
         }
     }
 
@@ -188,6 +194,7 @@ where
             nodes: vec![],
             node_map: CtxHashMap::with_capacity(nodes),
             classes: PrimaryMap::with_capacity(nodes),
+            unionfind: UnionFind::with_capacity(nodes),
         }
     }
 
@@ -217,6 +224,7 @@ where
                 // We're creating a new eclass now.
                 let eclass_id = self.classes.push(EClass::node(key));
                 log::trace!(" -> new node and eclass: {}", eclass_id);
+                self.unionfind.add(eclass_id);
 
                 // Add to interning map with a NodeKey referring to the eclass.
                 v.insert(eclass_id);
@@ -233,13 +241,14 @@ where
     pub fn union(&mut self, a: Id, b: Id) -> Id {
         assert_ne!(a, Id::invalid());
         assert_ne!(b, Id::invalid());
-        let a = std::cmp::max(a, b);
-        let b = std::cmp::min(a, b);
+        let (a, b) = (std::cmp::max(a, b), std::cmp::min(a, b));
         log::trace!("union: id {} and id {}", a, b);
         if a == b {
             log::trace!(" -> no-op");
             return a;
         }
+
+        self.unionfind.union(a, b);
 
         // If the younger eclass has no parent, we can link it
         // directly and return that eclass. Otherwise, we create a new
@@ -257,6 +266,22 @@ where
         let u = self.classes.push(EClass::union(a, b));
         log::trace!(" -> union id {} and id {} into id {}", a, b, u);
         u
+    }
+
+    /// Get the canonical ID for an eclass. This may be an older
+    /// generation, so will not be able to see all enodes in the
+    /// eclass; but it will allow us to unambiguously refer to an
+    /// eclass, even across merging.
+    pub fn canonical_id_mut(&mut self, eclass: Id) -> Id {
+        self.unionfind.find_and_update(eclass)
+    }
+
+    /// Get the canonical ID for an eclass. This may be an older
+    /// generation, so will not be able to see all enodes in the
+    /// eclass; but it will allow us to unambiguously refer to an
+    /// eclass, even across merging.
+    pub fn canonical_id(&self, eclass: Id) -> Id {
+        self.unionfind.find(eclass)
     }
 
     /// Get the enodes for a given eclass.

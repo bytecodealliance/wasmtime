@@ -169,31 +169,24 @@ impl Context {
         }
 
         self.legalize(isa)?;
+
         if !isa.flags().use_egraphs() && opt_level != OptLevel::None {
             self.compute_domtree();
             self.compute_loop_analysis();
             self.licm(isa)?;
             self.simple_gvn(isa)?;
-        }
-
-        self.compute_domtree();
-        self.eliminate_unreachable_code(isa)?;
-        if !isa.flags().use_egraphs() && opt_level != OptLevel::None {
+            self.compute_domtree();
+            self.eliminate_unreachable_code(isa)?;
             self.dce(isa)?;
-        }
-
-        self.remove_constant_phis(isa)?;
-
-        if !isa.flags().use_egraphs() && opt_level != OptLevel::None {
+            self.remove_constant_phis(isa)?;
             self.replace_redundant_loads()?;
             self.simple_gvn(isa)?;
-        }
-
-        if isa.flags().use_egraphs() {
+        } else if isa.flags().use_egraphs() {
             log::debug!(
                 "About to optimize with egraph phase:\n{}",
                 self.func.display()
             );
+            self.compute_domtree();
             self.compute_loop_analysis();
             let mut eg = FuncEGraph::new(&self.func, &self.domtree, &self.loop_analysis);
             eg.elaborate(&mut self.func);

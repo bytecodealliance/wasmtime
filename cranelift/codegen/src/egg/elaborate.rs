@@ -133,20 +133,32 @@ impl<'a> Elaborator<'a> {
     }
 
     fn add_node(&mut self, node: &Node, args: &[Value], to_block: Block) -> ValueList {
-        let (instdata, result_tys) = match node {
-            Node::Pure { op, types, .. } | Node::Inst { op, types, .. } => {
-                (op.with_args(args, &mut self.func.dfg.value_lists), types)
-            }
+        let (instdata, result_tys, single_ty) = match node {
+            Node::Pure { op, types, .. } | Node::Inst { op, types, .. } => (
+                op.with_args(args, &mut self.func.dfg.value_lists),
+                Some(types),
+                None,
+            ),
+            Node::Load { op, ty, .. } => (
+                op.with_args(args, &mut self.func.dfg.value_lists),
+                None,
+                Some(*ty),
+            ),
             _ => panic!("Cannot `add_node()` on block param or projection"),
         };
         let srcloc = match node {
-            Node::Inst { srcloc, .. } => *srcloc,
+            Node::Inst { srcloc, .. } | Node::Load { srcloc, .. } => *srcloc,
             _ => SourceLoc::default(),
         };
         let is_term = instdata.opcode().is_branch() || instdata.opcode().is_return();
         let inst = self.func.dfg.make_inst(instdata);
         self.func.srclocs[inst] = srcloc;
-        for &ty in result_tys.as_slice(&self.node_ctx.types) {
+
+        if let Some(result_tys) = result_tys {
+            for &ty in result_tys.as_slice(&self.node_ctx.types) {
+                self.func.dfg.append_result(inst, ty);
+            }
+        } else if let Some(ty) = single_ty {
             self.func.dfg.append_result(inst, ty);
         }
 
@@ -194,7 +206,7 @@ impl<'a> Elaborator<'a> {
 
         let (mut best_cost, mut best_id) = if let Some(node) = node {
             let cost = match node.node::<NodeCtx>(&self.egraph.nodes) {
-                Node::Param { .. } | Node::Inst { .. } => {
+                Node::Param { .. } | Node::Inst { .. } | Node::Load { .. } => {
                     return (0, id);
                 }
                 Node::Result { value, .. } => {
@@ -231,20 +243,26 @@ impl<'a> Elaborator<'a> {
             (None, None)
         };
 
-        for parent in parent1.into_iter().chain(parent2.into_iter()) {
-            log::trace!(" -> id {} parent {}", id, parent);
-            assert!(parent < id);
-            let (parent_best_cost, parent_best_id) = self.find_best_node(parent);
-            log::trace!(
-                " -> id {} parent {} has cost {} with best id {}",
-                id,
-                parent,
-                parent_best_cost,
-                parent_best_id
-            );
-            if best_cost.is_none() || parent_best_cost < best_cost.unwrap() {
-                best_cost = Some(parent_best_cost);
-                best_id = Some(parent_best_id);
+        // Evaluate parents as options now, but only if we haven't
+        // already found a "perfect" (zero-cost) option here. This
+        // conditional lets us short-circuit cases where e.g. a
+        // rewrite to a constant value occurs.
+        if best_cost != Some(0) {
+            for parent in parent1.into_iter().chain(parent2.into_iter()) {
+                log::trace!(" -> id {} parent {}", id, parent);
+                assert!(parent < id);
+                let (parent_best_cost, parent_best_id) = self.find_best_node(parent);
+                log::trace!(
+                    " -> id {} parent {} has cost {} with best id {}",
+                    id,
+                    parent,
+                    parent_best_cost,
+                    parent_best_id
+                );
+                if best_cost.is_none() || parent_best_cost < best_cost.unwrap() {
+                    best_cost = Some(parent_best_cost);
+                    best_id = Some(parent_best_id);
+                }
             }
         }
 
@@ -317,7 +335,7 @@ impl<'a> Elaborator<'a> {
         // Determine the location at which we emit it. This is the
         // current block *unless* we hoist above a loop when all args
         // are loop-invariant (and this op is pure).
-        let (loop_depth, scope_depth, block) = if let Node::Inst { .. } = node {
+        let (loop_depth, scope_depth, block) = if node.is_non_pure() {
             // Non-pure op: always at the current location.
             (
                 self.cur_loop_depth(),

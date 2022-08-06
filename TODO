@@ -3,18 +3,6 @@
 - all simple_preopt
 - disable simple_preopt, GVN, LICM, then profile!
 
-- perf ideas:
-  - "early selection": one enode is preemptively selected. Others are
-    kept around to steer dedup to the proper eclass, but only that one
-    enode is returned by `(pure_enode ...)` (i.e., seen by simplify
-    rules henceforth).
-  - finer-grain dirty list: apply simplify only to certain enodes, not
-    whole eclass.
-  - "cut" operator: return immediately from a multi-ctor with only
-    what we have.
-
-- "fuel" / limiting expansion.
-
 - cprop for floating-point
 - strength reduction
 - branch folding

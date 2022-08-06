@@ -1,5 +1,6 @@
 //! Node definition for EGraph representation.
 
+use super::MemoryState;
 use crate::ir::{Block, Inst, InstructionImms, Opcode, SourceLoc, Type};
 use cranelift_egraph::{BumpArena, BumpSlice, CtxEq, CtxHash, Id, Language};
 use cranelift_entity::{EntityList, ListPool};
@@ -58,6 +59,48 @@ pub enum Node {
         /// Type of the value.
         ty: Type,
     },
+
+    /// A load instruction. Nominally a side-effecting `Inst` (and
+    /// included in the list of side-effecting roots so it will always
+    /// be elaborated), but represented as a distinct kind of node so
+    /// that we can leverage deduplication to do
+    /// redundant-load-elimination for free (and make store-to-load
+    /// forwarding much easier).
+    Load {
+        // -- identity depends on:
+        /// The original load operation. Must have one argument, the
+        /// address.
+        op: InstructionImms,
+        /// The type of the load result.
+        ty: Type,
+        /// Canonicalized address. Used for identity, but not for
+        /// computing the value.
+        addr_canonical: Id,
+        /// The abstract memory state that this load accesses.
+        mem_state: MemoryState,
+
+        // -- not included in dedup key:
+        /// Address argument. Actual address has an offset, which is
+        /// included in `op` (and thus already considered as part of
+        /// the key).
+        addr: Id,
+        /// The `Inst` we will use for a trap location for this
+        /// load. Excluded from Eq/Hash so that loads that are
+        /// identical except for the specific instance will dedup on
+        /// top of each other.
+        inst: Inst,
+        /// Source location, for traps. Not included in Eq/Hash.
+        srcloc: SourceLoc,
+    },
+}
+
+impl Node {
+    pub(crate) fn is_non_pure(&self) -> bool {
+        match self {
+            Node::Inst { .. } | Node::Load { .. } => true,
+            _ => false,
+        }
+    }
 }
 
 /// Context for comparing and hashing Nodes.
@@ -129,6 +172,32 @@ impl CtxEq<Node, Node> for NodeCtx {
                     ..
                 },
             ) => inst == other_inst && args.as_slice(&self.args) == other_args.as_slice(&self.args),
+            (
+                &Node::Load {
+                    ref op,
+                    ty,
+                    addr_canonical,
+                    mem_state,
+                    ..
+                },
+                &Node::Load {
+                    op: ref other_op,
+                    ty: other_ty,
+                    addr_canonical: other_addr_canonical,
+                    mem_state: other_mem_state,
+                    // Explicitly exclude: `inst` and `srcloc`. We
+                    // want loads to merge if identical in
+                    // opcode/offset, address expression, and last
+                    // store (this does implicit
+                    // redundant-load-elimination.)
+                    ..
+                },
+            ) => {
+                op == other_op
+                    && ty == other_ty
+                    && addr_canonical == other_addr_canonical
+                    && mem_state == other_mem_state
+            }
             _ => false,
         }
     }
@@ -160,6 +229,18 @@ impl CtxHash<Node> for NodeCtx {
             &Node::Inst { inst, ref args, .. } => {
                 inst.hash(state);
                 args.as_slice(&self.args).hash(state);
+            }
+            &Node::Load {
+                ref op,
+                ty,
+                addr_canonical,
+                mem_state,
+                ..
+            } => {
+                op.hash(state);
+                ty.hash(state);
+                addr_canonical.hash(state);
+                mem_state.hash(state);
             }
         }
     }
@@ -199,6 +280,7 @@ impl Language for NodeCtx {
         match node {
             Node::Param { .. } => &[],
             Node::Pure { args, .. } | Node::Inst { args, .. } => args.as_slice(&self.args),
+            Node::Load { addr, .. } => std::slice::from_ref(addr),
             Node::Result { value, .. } => std::slice::from_ref(value),
         }
     }
@@ -207,6 +289,7 @@ impl Language for NodeCtx {
         match node {
             Node::Param { .. } => &mut [],
             Node::Pure { args, .. } | Node::Inst { args, .. } => args.as_mut_slice(&mut self.args),
+            Node::Load { addr, .. } => std::slice::from_mut(addr),
             Node::Result { value, .. } => std::slice::from_mut(value),
         }
     }

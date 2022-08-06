@@ -1,6 +1,7 @@
 //! Optimization driver using ISLE rewrite rules on an egraph.
 
 use crate::egg::FuncEGraph;
+use crate::egg::MemoryState;
 pub use crate::egg::{Node, NodeCtx};
 pub use crate::ir::condcodes::{FloatCC, IntCC};
 pub use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64, Uimm8};
@@ -16,6 +17,7 @@ use smallvec::{smallvec, SmallVec};
 use std::marker::PhantomData;
 
 pub type IdArray = EntityList<Id>;
+#[allow(dead_code)]
 pub type Unit = ();
 
 pub type ConstructorVec<T> = SmallVec<[T; 8]>;
@@ -27,8 +29,13 @@ struct IsleContext<'a, 'b> {
 }
 
 pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
-    let mut ctx = IsleContext { egraph };
     log::trace!("running rules on eclass {}", id.index());
+    // Store-to-load forwarding rewrites the ID without unioning with
+    // the original: we want to eliminate the load entirely.
+    let id = store_to_load(id, egraph);
+    // Find all possible rewrites and union them in, returning the
+    // union.
+    let mut ctx = IsleContext { egraph };
     let optimized_ids = generated_code::constructor_simplify(&mut ctx, id);
     let mut union_id = id;
     if let Some(ids) = optimized_ids {
@@ -37,6 +44,69 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
         }
     }
     union_id
+}
+
+fn store_to_load<'a>(id: Id, egraph: &FuncEGraph<'a>) -> Id {
+    if let Some(load_key) = egraph.egraph.classes[id].get_node() {
+        if let Node::Load {
+            op: load_op,
+            ty: load_ty,
+            addr: load_addr,
+            mem_state: MemoryState::Store(store_inst),
+            ..
+        } = load_key.node::<NodeCtx>(&egraph.egraph.nodes)
+        {
+            log::trace!(" -> got load op for id {}: {:?}", id, load_op);
+            if let Some((store_ty, store_id)) = egraph.store_nodes.get(&store_inst) {
+                log::trace!(" -> got store id: {} ty: {}", store_id, store_ty);
+                if *store_ty == *load_ty {
+                    if let Some(store_key) = egraph.egraph.classes[*store_id].get_node() {
+                        if let Node::Inst {
+                            op: store_op,
+                            args: store_args,
+                            ..
+                        } = store_key.node::<NodeCtx>(&egraph.egraph.nodes)
+                        {
+                            log::trace!(
+                                "load id {} from store id {}: {:?}, {:?}",
+                                id,
+                                store_id,
+                                load_op,
+                                store_op
+                            );
+                            match (load_op, store_op) {
+                                (
+                                    InstructionImms::Load {
+                                        opcode: Opcode::Load,
+                                        offset: load_offset,
+                                        ..
+                                    },
+                                    InstructionImms::Store {
+                                        opcode: Opcode::Store,
+                                        offset: store_offset,
+                                        ..
+                                    },
+                                ) if *load_offset == *store_offset => {
+                                    log::trace!(" -> same offset");
+                                    let store_args = store_args.as_slice(&egraph.node_ctx.args);
+                                    let store_data = store_args[0];
+                                    let store_addr = store_args[1];
+                                    let store_addr = egraph.egraph.canonical_id(store_addr);
+                                    if store_addr == *load_addr {
+                                        log::trace!(" -> same address; forwarding");
+                                        return store_data;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    id
 }
 
 struct PureNodesEtorIter<'a, 'b>

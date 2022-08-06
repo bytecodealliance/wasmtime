@@ -5,7 +5,7 @@ use crate::loop_analysis::LoopAnalysis;
 use crate::{
     fx::FxHashMap,
     inst_predicates::has_side_effect,
-    ir::{Block, Function, InstructionImms, Type},
+    ir::{Block, Function, Inst, InstructionImms, Opcode, Type},
 };
 use alloc::vec::Vec;
 use core::ops::Range;
@@ -16,15 +16,19 @@ use cranelift_entity::SecondaryMap;
 mod domtree;
 mod elaborate;
 mod node;
+mod stores;
 
 use elaborate::Elaborator;
 pub use node::{Node, NodeCtx};
+pub use stores::{AliasAnalysis, MemoryState};
 
 pub struct FuncEGraph<'a> {
     /// Dominator tree, used for elaboration pass.
     domtree: &'a DominatorTree,
     /// Loop analysis results, used for built-in LICM during elaboration.
     loop_analysis: &'a LoopAnalysis,
+    /// Last-store tracker for integrated alias analysis during egraph build.
+    alias_analysis: AliasAnalysis,
     /// The egraph itself.
     pub(crate) egraph: EGraph<NodeCtx>,
     /// "node context", containing arenas for node data.
@@ -33,6 +37,8 @@ pub struct FuncEGraph<'a> {
     /// eclasses per block.
     side_effects: SecondaryMap<Block, Range<u32>>,
     side_effect_ids: Vec<Id>,
+    /// Map from store instructions to their nodes; used for store-to-load forwarding.
+    pub(crate) store_nodes: FxHashMap<Inst, (Type, Id)>,
     /// Ranges in `blockparam_ids_tys` for sequences of blockparam
     /// eclass IDs and types per block.
     blockparams: SecondaryMap<Block, Range<u32>>,
@@ -49,9 +55,11 @@ impl<'a> FuncEGraph<'a> {
         loop_analysis: &'a LoopAnalysis,
     ) -> FuncEGraph<'a> {
         let node_count_estimate = func.dfg.num_values() * 2;
+        let alias_analysis = AliasAnalysis::new(func);
         let mut this = Self {
             domtree,
             loop_analysis,
+            alias_analysis,
             egraph: EGraph::with_capacity(node_count_estimate),
             node_ctx: NodeCtx::with_capacity(
                 func.dfg.num_values(),
@@ -59,6 +67,7 @@ impl<'a> FuncEGraph<'a> {
             ),
             side_effects: SecondaryMap::with_default(0..0),
             side_effect_ids: vec![],
+            store_nodes: FxHashMap::default(),
             blockparams: SecondaryMap::with_default(0..0),
             blockparam_ids_tys: vec![],
         };
@@ -119,10 +128,27 @@ impl<'a> FuncEGraph<'a> {
                     .from_iter(results.iter().map(|&val| func.dfg.value_type(val)));
                 let types = types.freeze(&mut self.node_ctx.types);
 
+                let mem_state = self.alias_analysis.get_state_for_load(inst);
+
                 // Create the egraph node.
                 let op = InstructionImms::from(&func.dfg[inst]);
+                let opcode = op.opcode();
                 let srcloc = func.srclocs[inst];
-                let node = if side_effect {
+                let node = if let Some(mem_state) = mem_state {
+                    let addr = args.as_slice(&self.node_ctx.args)[0];
+                    let addr_canonical = self.egraph.canonical_id_mut(addr);
+                    let ty = types.as_slice(&self.node_ctx.types)[0];
+                    log::trace!("load at inst {} has mem state {:?}", inst, mem_state);
+                    Node::Load {
+                        op,
+                        ty,
+                        inst,
+                        addr_canonical,
+                        addr,
+                        mem_state,
+                        srcloc,
+                    }
+                } else if side_effect {
                     Node::Inst {
                         op,
                         inst,
@@ -135,20 +161,31 @@ impl<'a> FuncEGraph<'a> {
                 };
                 let id = self.egraph.add(node, &mut self.node_ctx);
 
-                let id = match (side_effect, id) {
-                    (true, id) => {
+                if opcode == Opcode::Store {
+                    let store_data_ty = func.dfg.value_type(func.dfg.inst_args(inst)[0]);
+                    self.store_nodes.insert(inst, (store_data_ty, id.get()));
+                }
+
+                let id = match (side_effect, mem_state, id) {
+                    (_, Some(..), NewOrExisting::New(id)) => {
+                        // Loads: still optimize, but otherwise add to side-effecting roots.
+                        let id = crate::opts::optimize_eclass(id, self);
+                        self.side_effect_ids.push(id);
+                        id
+                    }
+                    (true, _, id) => {
                         let id = id.get();
                         self.side_effect_ids.push(id);
                         id
                     }
-                    (false, NewOrExisting::New(id)) => {
+                    (false, _, NewOrExisting::New(id)) => {
                         // Apply all optimization rules immediately; the
                         // aegraph (acyclic egraph) works best when we do
                         // this so all uses pick up the eclass with all
                         // possible enodes.
                         crate::opts::optimize_eclass(id, self)
                     }
-                    (false, NewOrExisting::Existing(id)) => id,
+                    (false, _, NewOrExisting::Existing(id)) => id,
                 };
 
                 // Create results and save in Value->Id map.

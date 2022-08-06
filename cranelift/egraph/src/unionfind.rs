@@ -37,19 +37,24 @@ impl UnionFind {
 
     pub fn find_and_update(&mut self, mut node: Id) -> Id {
         // "Path splitting" mutating find (Tarjan and Van Leeuwen).
+        let orig = node;
         while node != self.parent[node.index()] {
             let next = self.parent[self.parent[node.index()].index()];
             self.parent[node.index()] = next;
             node = next;
         }
+        log::trace!("find_and_update: {} -> {}", orig, node);
         node
     }
 
     pub fn union(&mut self, a: Id, b: Id) {
         let a = self.find_and_update(a);
         let b = self.find_and_update(b);
+        let (a, b) = (std::cmp::min(a, b), std::cmp::max(a, b));
         if a != b {
+            // Always canonicalize toward lower IDs.
             self.parent[b.index()] = a;
+            log::trace!("union: {}, {}", a, b);
         }
     }
 }
