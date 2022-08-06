@@ -273,31 +273,31 @@ impl CtxHash<Node> for NodeCtx {
                 hash: _,
                 block,
                 index,
-                ty,
+                ty: _,
             } => {
                 block.hash(&mut state);
                 index.hash(&mut state);
-                ty.hash(&mut state);
             }
             &Node::Result {
                 hash: _,
                 value,
                 result,
-                ty,
+                ty: _,
             } => {
                 value.hash(&mut state);
                 result.hash(&mut state);
-                ty.hash(&mut state);
             }
             &Node::Pure {
                 hash: _,
                 ref op,
                 ref args,
-                ref types,
+                types: _,
             } => {
                 op.hash(&mut state);
                 args.as_slice(&self.args).hash(&mut state);
-                types.as_slice(&self.types).hash(&mut state);
+                // Don't hash `types`: it requires an indirection
+                // (hence cache misses), and result type *should* be
+                // fully determined by op and args.
             }
             &Node::Inst {
                 hash: _,
