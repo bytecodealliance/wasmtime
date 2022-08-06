@@ -27,7 +27,6 @@ if(BUILD_SHARED_LIBS)
 endif()
 
 if(ANDROID)
-	# Check if required target is installed
 	# TODO wasmtime only supports arm64-v8a right now
 	if(ANDROID_ABI STREQUAL "armeabi-v7a")
 		set(ANDROID_TARGET "armv7-linux-androideabi")
@@ -43,44 +42,47 @@ if(ANDROID)
 		set(ANDROID_ARCH_SHORT "x86_64")
 	endif()
 
-	if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
-		execute_process(COMMAND "rustup target list | findstr /c:\"${ANDROID_TARGET} (installed)\" >NUL" RESULT_VARIABLE ret)
-	else()
-		execute_process(COMMAND "rustup target list | grep -q '${ANDROID_TARGET} (installed)'" RESULT_VARIABLE ret)
-	endif()
-	if(ret EQUAL 1)
-		# TODO if rustup is not found, this will not run either
-		message(FATAL_ERROR "Target ${ANDROID_TARGET} is not available in rustup and must be installed")
-	endif()
-
 	set(WASMTIME_BUILD_TARGET "--target=${ANDROID_TARGET}")
+endif()
+
+if (BUILD_SHARED_LIBS AND ANDROID)
+	message(FATAL_ERROR "Wasmtime cannot be built with BUILD_SHARED_LIBS on Android")
 endif()
 
 if(BUILD_SHARED_LIBS)
 	if(WIN32)
-		set(WASMTIME_BUILD_PRODUCT ${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/wasmtime.dll.lib)
+		set(WASMTIME_BUILD_PRODUCT
+			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/wasmtime.dll.lib)
 	elseif(APPLE)
-		set(WASMTIME_BUILD_PRODUCT ${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/libwasmtime.dylib)
+		set(WASMTIME_BUILD_PRODUCT
+			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/libwasmtime.dylib)
 	else()
-		set(WASMTIME_BUILD_PRODUCT ${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/libwasmtime.so)
+		set(WASMTIME_BUILD_PRODUCT
+			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/libwasmtime.so)
 	endif()
 else()
 	if(WIN32)
-		set(WASMTIME_BUILD_PRODUCT ${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/wasmtime.lib)
+		set(WASMTIME_BUILD_PRODUCT
+			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/wasmtime.lib)
 	elseif(ANDROID)
-		set(WASMTIME_BUILD_PRODUCT ${CMAKE_CURRENT_SOURCE_DIR}/../../target/${ANDROID_TARGET}/${WASMTIME_BUILD_TYPE}/libwasmtime.a)
+		set(WASMTIME_BUILD_PRODUCT
+			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${ANDROID_TARGET}/${WASMTIME_BUILD_TYPE}/libwasmtime.a)
 	else()
-		set(WASMTIME_BUILD_PRODUCT ${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/libwasmtime.a)
+		set(WASMTIME_BUILD_PRODUCT
+			${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_BUILD_TYPE}/libwasmtime.a)
 	endif()
 endif()
 
 include(ExternalProject)
 if(ANDROID)
-	# Rust still attempts to use libgcc.a, which doesn't exist for NDKs past 22
-	# Hacky workaround to this
+	# Rust attempts to use libgcc.a on NDK versions r23-beta3
+	# but it has been replaced with libunwind.a (rust-lang/rust#85806)
 	file(WRITE ${CMAKE_BINARY_DIR}/libgcc.a "INPUT(-lunwind)")
 	file(STRINGS ${ANDROID_TOOLCHAIN_ROOT}/AndroidVersion.txt CLANG_VERSION_FILE)
 	list(GET CLANG_VERSION_FILE 0 CLANG_VERSION)
+
+	# Some crates use the compiler directly, environment variables
+	# are set to make them use the Android compiler
 	ExternalProject_Add(
 		wasmtime-crate
 		DOWNLOAD_COMMAND ""
@@ -120,9 +122,7 @@ else()
 		target_compile_options(wasmtime INTERFACE -DWASM_API_EXTERN= -DWASI_API_EXTERN=)
 		target_link_libraries(wasmtime INTERFACE ${WASMTIME_BUILD_PRODUCT}
 			ws2_32 advapi32 userenv ntdll shell32 ole32 bcrypt)
-	elseif(APPLE)
-		target_link_libraries(wasmtime INTERFACE ${WASMTIME_BUILD_PRODUCT})
-	elseif(ANDROID)
+	elseif(APPLE OR ANDROID)
 		target_link_libraries(wasmtime INTERFACE ${WASMTIME_BUILD_PRODUCT})
 	else()
 		target_link_libraries(wasmtime INTERFACE ${WASMTIME_BUILD_PRODUCT}
@@ -130,4 +130,5 @@ else()
 	endif()
 endif()
 
-target_include_directories(wasmtime INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/wasm-c-api/include)
+target_include_directories(wasmtime INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include
+	${CMAKE_CURRENT_SOURCE_DIR}/wasm-c-api/include)
