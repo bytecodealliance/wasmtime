@@ -1,6 +1,7 @@
 //! Egraph-based mid-end optimization framework.
 
 use crate::dominator_tree::DominatorTree;
+use crate::flowgraph::ControlFlowGraph;
 use crate::loop_analysis::LoopAnalysis;
 use crate::{
     fx::FxHashMap,
@@ -54,9 +55,10 @@ impl<'a> FuncEGraph<'a> {
         func: &Function,
         domtree: &'a DominatorTree,
         loop_analysis: &'a LoopAnalysis,
+        cfg: &ControlFlowGraph,
     ) -> FuncEGraph<'a> {
         let node_count_estimate = func.dfg.num_values() * 2;
-        let alias_analysis = AliasAnalysis::new(func);
+        let alias_analysis = AliasAnalysis::new(func, cfg);
         let mut this = Self {
             domtree,
             loop_analysis,

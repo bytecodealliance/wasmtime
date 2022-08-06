@@ -61,8 +61,9 @@
 //! correctly when post-trap state must be correct likely reduce the
 //! potential benefit, we don't yet do this.
 
+use crate::flowgraph::ControlFlowGraph;
 use crate::fx::{FxHashMap, FxHashSet};
-use crate::inst_predicates::{has_memory_fence_semantics, visit_block_succs};
+use crate::inst_predicates::has_memory_fence_semantics;
 use crate::ir::{Block, Function, Inst};
 use cranelift_entity::EntityRef;
 
@@ -169,18 +170,22 @@ pub struct AliasAnalysis {
 
 impl AliasAnalysis {
     /// Perform an alias analysis pass.
-    pub fn new(func: &Function) -> AliasAnalysis {
+    pub fn new(func: &Function, cfg: &ControlFlowGraph) -> AliasAnalysis {
         log::trace!("alias analysis: input is:\n{:?}", func);
         let mut analysis = AliasAnalysis {
             load_mem_state: FxHashMap::default(),
         };
 
-        let block_input = analysis.compute_block_input_states(func);
+        let block_input = analysis.compute_block_input_states(func, cfg);
         analysis.compute_load_last_stores(func, block_input);
         analysis
     }
 
-    fn compute_block_input_states(&mut self, func: &Function) -> FxHashMap<Block, LastStores> {
+    fn compute_block_input_states(
+        &mut self,
+        func: &Function,
+        cfg: &ControlFlowGraph,
+    ) -> FxHashMap<Block, LastStores> {
         let mut block_input = FxHashMap::default();
         let mut queue = vec![];
         let mut queue_set = FxHashSet::default();
@@ -207,7 +212,7 @@ impl AliasAnalysis {
                 log::trace!("after inst{}: state is {:?}", inst.index(), state);
             }
 
-            visit_block_succs(func, block, |_inst, succ| {
+            for succ in cfg.succ_iter(block) {
                 let succ_first_inst = func.layout.block_insts(succ).into_iter().next().unwrap();
                 let updated = match block_input.get_mut(&succ) {
                     Some(succ_state) => {
@@ -224,7 +229,7 @@ impl AliasAnalysis {
                 if updated && queue_set.insert(succ) {
                     queue.push(succ);
                 }
-            });
+            }
         }
 
         block_input

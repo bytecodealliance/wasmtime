@@ -191,7 +191,7 @@ impl Context {
             self.dce(isa)?;
             self.remove_constant_phis(isa)?;
             self.compute_loop_analysis();
-            let mut eg = FuncEGraph::new(&self.func, &self.domtree, &self.loop_analysis);
+            let mut eg = FuncEGraph::new(&self.func, &self.domtree, &self.loop_analysis, &self.cfg);
             eg.elaborate(&mut self.func);
             log::debug!("After egraph optimization:\n{}", self.func.display());
         }
