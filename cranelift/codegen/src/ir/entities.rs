@@ -88,12 +88,15 @@ impl Value {
 ///
 /// Most usage of `Inst` is internal. `Inst`ructions are returned by
 /// [`InstBuilder`](super::InstBuilder) instructions that do not return a
-/// [`Value`], such as control flow and trap instructions.
+/// [`Value`], such as control flow and trap instructions, as well as instructions that return a
+/// variable (potentially zero!) number of values, like call or call-indirect instructions.
 ///
 /// If you look around the API, you can find many inventive uses for `Inst`,
 /// such as [annotating specific instructions with a comment][inst_comment]
 /// or [performing reflection at compile time](super::DataFlowGraph::analyze_branch)
-/// on the type of instruction.
+/// on the type of instruction. A more typical use of `Inst` would be to obtain the results of a
+/// call via [`inst_results`](super::DataFlowGraph::inst_results) or its analogue in
+/// `cranelift_frontend::FuncBuilder`.
 ///
 /// [inst_comment]: https://github.com/bjorn3/rustc_codegen_cranelift/blob/0f8814fd6da3d436a90549d4bb19b94034f2b19c/src/pretty_clif.rs
 ///
