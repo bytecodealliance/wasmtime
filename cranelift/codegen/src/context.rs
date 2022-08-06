@@ -187,6 +187,9 @@ impl Context {
                 self.func.display()
             );
             self.compute_domtree();
+            self.eliminate_unreachable_code(isa)?;
+            self.dce(isa)?;
+            self.remove_constant_phis(isa)?;
             self.compute_loop_analysis();
             let mut eg = FuncEGraph::new(&self.func, &self.domtree, &self.loop_analysis);
             eg.elaborate(&mut self.func);

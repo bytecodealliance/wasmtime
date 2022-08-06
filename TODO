@@ -13,7 +13,6 @@
 - perf ideas
   - limit nodes exposed in pure_enodes_etor: pre-extract? "subsume"
     nodes/return from simplify?
-  - make `readonly notrap` loads Pure, and let them dedup
   - make alias analysis faster to compute
     - visit_block_succs: cache successor list? or use
       ControlFlowGraph?
