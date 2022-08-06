@@ -264,6 +264,8 @@ where
         }
 
         let u = self.classes.push(EClass::union(a, b));
+        self.unionfind.add(u);
+        self.unionfind.union(u, b);
         log::trace!(" -> union id {} and id {} into id {}", a, b, u);
         u
     }
