@@ -38,4 +38,5 @@ pub trait Language: CtxEq<Self::Node, Self::Node> + CtxHash<Self::Node> {
     type Node: Debug;
     fn children<'a>(&'a self, node: &'a Self::Node) -> &'a [Id];
     fn children_mut<'a>(&'a mut self, ctx: &'a mut Self::Node) -> &'a mut [Id];
+    fn needs_dedup(&self, node: &Self::Node) -> bool;
 }

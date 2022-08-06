@@ -376,4 +376,11 @@ impl Language for NodeCtx {
             Node::Result { value, .. } => std::slice::from_mut(value),
         }
     }
+
+    fn needs_dedup(&self, node: &Node) -> bool {
+        match node {
+            Node::Pure { .. } | Node::Load { .. } => true,
+            _ => false,
+        }
+    }
 }

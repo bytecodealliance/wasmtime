@@ -205,32 +205,39 @@ where
         // we can pop the pushed node and return the existing Id.
         let node_idx = self.nodes.len();
         log::trace!("adding node: {:?}", node);
+        let needs_dedup = node_ctx.needs_dedup(&node);
         self.nodes.push(node);
 
         let key = NodeKey::from_node_idx(node_idx);
-        let ctx = NodeKeyCtx {
-            nodes: &self.nodes[..],
-            node_ctx,
-        };
+        if needs_dedup {
+            let ctx = NodeKeyCtx {
+                nodes: &self.nodes[..],
+                node_ctx,
+            };
 
-        match self.node_map.entry(key, &ctx) {
-            Entry::Occupied(o) => {
-                let eclass_id = *o.get();
-                self.nodes.pop();
-                log::trace!(" -> existing id {}", eclass_id);
-                NewOrExisting::Existing(eclass_id)
+            match self.node_map.entry(key, &ctx) {
+                Entry::Occupied(o) => {
+                    let eclass_id = *o.get();
+                    self.nodes.pop();
+                    log::trace!(" -> existing id {}", eclass_id);
+                    NewOrExisting::Existing(eclass_id)
+                }
+                Entry::Vacant(v) => {
+                    // We're creating a new eclass now.
+                    let eclass_id = self.classes.push(EClass::node(key));
+                    log::trace!(" -> new node and eclass: {}", eclass_id);
+                    self.unionfind.add(eclass_id);
+
+                    // Add to interning map with a NodeKey referring to the eclass.
+                    v.insert(eclass_id);
+
+                    NewOrExisting::New(eclass_id)
+                }
             }
-            Entry::Vacant(v) => {
-                // We're creating a new eclass now.
-                let eclass_id = self.classes.push(EClass::node(key));
-                log::trace!(" -> new node and eclass: {}", eclass_id);
-                self.unionfind.add(eclass_id);
-
-                // Add to interning map with a NodeKey referring to the eclass.
-                v.insert(eclass_id);
-
-                NewOrExisting::New(eclass_id)
-            }
+        } else {
+            let eclass_id = self.classes.push(EClass::node(key));
+            self.unionfind.add(eclass_id);
+            NewOrExisting::New(eclass_id)
         }
     }
 
