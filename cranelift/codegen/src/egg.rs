@@ -131,12 +131,24 @@ impl<'a> FuncEGraph<'a> {
                 let types = types.freeze(&mut self.node_ctx.types);
 
                 let mem_state = self.alias_analysis.get_state_for_load(inst);
+                let is_readonly_load = func.dfg[inst].opcode() == Opcode::Load && {
+                    let memflags = func.dfg[inst].memflags().unwrap();
+                    memflags.readonly() && memflags.notrap()
+                };
 
                 // Create the egraph node.
                 let op = InstructionImms::from(&func.dfg[inst]);
                 let opcode = op.opcode();
                 let srcloc = func.srclocs[inst];
-                let node = if let Some(mem_state) = mem_state {
+
+                let node = if is_readonly_load {
+                    Node::Pure {
+                        hash: Cell::new(0),
+                        op,
+                        args,
+                        types,
+                    }
+                } else if let Some(mem_state) = mem_state {
                     let addr = args.as_slice(&self.node_ctx.args)[0];
                     let addr_canonical = self.egraph.canonical_id_mut(addr);
                     let ty = types.as_slice(&self.node_ctx.types)[0];
