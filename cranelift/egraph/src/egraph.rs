@@ -191,7 +191,7 @@ where
 
     pub fn with_capacity(nodes: usize) -> Self {
         Self {
-            nodes: vec![],
+            nodes: Vec::with_capacity(nodes),
             node_map: CtxHashMap::with_capacity(nodes),
             classes: PrimaryMap::with_capacity(nodes),
             unionfind: UnionFind::with_capacity(nodes),
