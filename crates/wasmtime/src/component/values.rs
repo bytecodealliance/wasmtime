@@ -699,6 +699,7 @@ impl Val {
                 ty: handle.clone(),
                 count: u32::try_from(handle.names().len())?,
                 value: match FlagsSize::from_count(handle.names().len()) {
+                    FlagsSize::Size0 => Box::new([]),
                     FlagsSize::Size1 => iter::once(u8::load(mem, bytes)? as u32).collect(),
                     FlagsSize::Size2 => iter::once(u16::load(mem, bytes)? as u32).collect(),
                     FlagsSize::Size4Plus(n) => (0..n)
@@ -850,6 +851,7 @@ impl Val {
 
             Val::Flags(Flags { count, value, .. }) => {
                 match FlagsSize::from_count(*count as usize) {
+                    FlagsSize::Size0 => {}
                     FlagsSize::Size1 => u8::try_from(value[0]).unwrap().store(mem, offset)?,
                     FlagsSize::Size2 => u16::try_from(value[0]).unwrap().store(mem, offset)?,
                     FlagsSize::Size4Plus(_) => {
@@ -1018,6 +1020,7 @@ fn lower_list<T>(
 /// Note that this will always return at least 1, even if the `count` parameter is zero.
 pub(crate) fn u32_count_for_flag_count(count: usize) -> usize {
     match FlagsSize::from_count(count) {
+        FlagsSize::Size0 => 0,
         FlagsSize::Size1 | FlagsSize::Size2 => 1,
         FlagsSize::Size4Plus(n) => n,
     }

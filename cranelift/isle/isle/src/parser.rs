@@ -114,7 +114,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn int(&mut self) -> Result<i64> {
+    fn int(&mut self) -> Result<i128> {
         match self.take(|tok| tok.is_int())? {
             Token::Int(i) => Ok(i),
             _ => unreachable!(),
@@ -391,7 +391,7 @@ impl<'a> Parser<'a> {
                         iflets,
                         expr,
                         pos,
-                        prio,
+                        prio: prio.map(|prio| i64::try_from(prio).unwrap()),
                     });
                 }
             }

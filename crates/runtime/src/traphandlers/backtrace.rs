@@ -198,7 +198,7 @@ impl Backtrace {
         // contiguous sequence of Wasm frames, and we have nothing to
         // walk through here.
         if first_wasm_sp == -1_isize as usize {
-            log::trace!("Empty sequence of Wasm frames");
+            log::trace!("=== Done tracing (empty sequence of Wasm frames) ===");
             return ControlFlow::Continue(());
         }
 
@@ -224,8 +224,8 @@ impl Backtrace {
             arch::assert_fp_is_aligned(fp);
 
             log::trace!("--- Tracing through one Wasm frame ---");
-            log::trace!("pc = 0x{:016x}", pc);
-            log::trace!("fp = 0x{:016x}", fp);
+            log::trace!("pc = {:p}", pc as *const ());
+            log::trace!("fp = {:p}", fp as *const ());
 
             f(Frame { pc, fp })?;
 
@@ -234,6 +234,7 @@ impl Backtrace {
             // and have now reached a host frame. We're done iterating
             // through this contiguous sequence of Wasm frames.
             if arch::reached_entry_sp(fp, first_wasm_sp) {
+                log::trace!("=== Done tracing contiguous sequence of Wasm frames ===");
                 return ControlFlow::Continue(());
             }
 

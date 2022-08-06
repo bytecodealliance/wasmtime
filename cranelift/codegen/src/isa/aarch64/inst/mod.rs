@@ -36,9 +36,10 @@ mod emit_tests;
 // Instructions (top level): definition
 
 pub use crate::isa::aarch64::lower::isle::generated_code::{
-    ALUOp, ALUOp3, AtomicRMWLoopOp, AtomicRMWOp, BitOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode,
-    FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2,
-    VecPairOp, VecRRLongOp, VecRRNarrowOp, VecRRPairLongOp, VecRRRLongOp, VecShiftImmOp,
+    ALUOp, ALUOp3, APIKey, AtomicRMWLoopOp, AtomicRMWOp, BitOp, FPUOp1, FPUOp2, FPUOp3,
+    FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp, VecALUOp, VecExtendOp,
+    VecLanesOp, VecMisc2, VecPairOp, VecRRLongOp, VecRRNarrowOp, VecRRPairLongOp, VecRRRLongOp,
+    VecShiftImmOp,
 };
 
 /// A floating-point unit (FPU) operation with two args, a register and an immediate.
@@ -649,6 +650,13 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(rm);
         }
+        &Inst::MovPReg { rd, rm } => {
+            debug_assert!(
+                [regs::fp_reg(), regs::stack_reg(), regs::link_reg()].contains(&rm.into())
+            );
+            debug_assert!(rd.to_reg().is_virtual());
+            collector.reg_def(rd);
+        }
         &Inst::MovWide { op, rd, .. } => match op {
             MoveWideOp::MovK => collector.reg_mod(rd),
             _ => collector.reg_def(rd),
@@ -703,7 +711,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rn);
             collector.reg_use(rt);
         }
-        &Inst::Fence {} => {}
+        &Inst::Fence {} | &Inst::Csdb {} => {}
         &Inst::FpuMove64 { rd, rn } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
@@ -975,7 +983,12 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
                 collector.reg_use(ret);
             }
         }
-        &Inst::Jump { .. } | &Inst::EpiloguePlaceholder => {}
+        &Inst::AuthenticatedRet { ref rets, .. } => {
+            for &ret in rets {
+                collector.reg_use(ret);
+            }
+        }
+        &Inst::Jump { .. } => {}
         &Inst::Call { ref info, .. } => {
             collector.reg_uses(&info.uses[..]);
             collector.reg_defs(&info.defs[..]);
@@ -1023,6 +1036,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             memarg_operands(mem, collector);
         }
+        &Inst::Pacisp { .. } => {}
         &Inst::VirtualSPOffsetAdj { .. } => {}
 
         &Inst::ElfTlsGetAddr { .. } => {
@@ -1062,14 +1076,6 @@ impl MachInst for Inst {
         }
     }
 
-    fn is_epilogue_placeholder(&self) -> bool {
-        if let Inst::EpiloguePlaceholder = self {
-            true
-        } else {
-            false
-        }
-    }
-
     fn is_included_in_clobbers(&self) -> bool {
         // We exclude call instructions from the clobber-set when they are calls
         // from caller to callee with the same ABI. Such calls cannot possibly
@@ -1090,7 +1096,7 @@ impl MachInst for Inst {
 
     fn is_term(&self) -> MachTerminator {
         match self {
-            &Inst::Ret { .. } | &Inst::EpiloguePlaceholder => MachTerminator::Ret,
+            &Inst::Ret { .. } | &Inst::AuthenticatedRet { .. } => MachTerminator::Ret,
             &Inst::Jump { .. } => MachTerminator::Uncond,
             &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::IndirectBr { .. } => MachTerminator::Indirect,
@@ -1482,6 +1488,11 @@ impl Inst {
                 let rm = pretty_print_ireg(rm, size, allocs);
                 format!("mov {}, {}", rd, rm)
             }
+            &Inst::MovPReg { rd, rm } => {
+                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
+                let rm = show_ireg_sized(rm.into(), OperandSize::Size64);
+                format!("mov {}, {}", rd, rm)
+            }
             &Inst::MovWide {
                 op,
                 rd,
@@ -1678,6 +1689,9 @@ impl Inst {
             }
             &Inst::Fence {} => {
                 format!("dmb ish")
+            }
+            &Inst::Csdb {} => {
+                format!("csdb")
             }
             &Inst::FpuMove64 { rd, rn } => {
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64, allocs);
@@ -2469,7 +2483,18 @@ impl Inst {
                 format!("blr {}", rn)
             }
             &Inst::Ret { .. } => "ret".to_string(),
-            &Inst::EpiloguePlaceholder => "epilogue placeholder".to_string(),
+            &Inst::AuthenticatedRet { key, is_hint, .. } => {
+                let key = match key {
+                    APIKey::A => "a",
+                    APIKey::B => "b",
+                };
+
+                if is_hint {
+                    "auti".to_string() + key + "sp ; ret"
+                } else {
+                    "reta".to_string() + key
+                }
+            }
             &Inst::Jump { ref dest } => {
                 let dest = dest.pretty_print(0, allocs);
                 format!("b {}", dest)
@@ -2501,16 +2526,7 @@ impl Inst {
                 format!("br {}", rn)
             }
             &Inst::Brk => "brk #0".to_string(),
-            &Inst::Udf {
-                use_allocated_encoding,
-                ..
-            } => {
-                if use_allocated_encoding {
-                    "udf #0xc11f".to_string()
-                } else {
-                    "udf".to_string()
-                }
-            }
+            &Inst::Udf { .. } => "udf #0xc11f".to_string(),
             &Inst::TrapIf { ref kind, .. } => match kind {
                 &CondBrKind::Zero(reg) => {
                     let reg = pretty_print_reg(reg, allocs);
@@ -2545,6 +2561,8 @@ impl Inst {
                 format!(
                     concat!(
                         "b.hs {} ; ",
+                        "csel {}, xzr, {}, hs ; ",
+                        "csdb ; ",
                         "adr {}, pc+16 ; ",
                         "ldrsw {}, [{}, {}, LSL 2] ; ",
                         "add {}, {}, {} ; ",
@@ -2552,10 +2570,12 @@ impl Inst {
                         "jt_entries {:?}"
                     ),
                     default_target,
+                    rtmp2,
+                    ridx,
                     rtmp1,
                     rtmp2,
                     rtmp1,
-                    ridx,
+                    rtmp2,
                     rtmp1,
                     rtmp1,
                     rtmp2,
@@ -2648,6 +2668,14 @@ impl Inst {
                     );
                 }
                 ret
+            }
+            &Inst::Pacisp { key } => {
+                let key = match key {
+                    APIKey::A => "a",
+                    APIKey::B => "b",
+                };
+
+                "paci".to_string() + key + "sp"
             }
             &Inst::VirtualSPOffsetAdj { offset } => {
                 state.virtual_sp_offset += offset;

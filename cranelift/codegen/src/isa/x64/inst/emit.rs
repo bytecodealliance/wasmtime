@@ -678,6 +678,16 @@ pub(crate) fn emit(
             );
         }
 
+        Inst::MovPReg { src, dst } => {
+            let src: Reg = (*src).into();
+            debug_assert!([regs::rsp(), regs::rbp()].contains(&src));
+            let src = Gpr::new(src).unwrap();
+            let size = OperandSize::Size64;
+            let dst = allocs.next(dst.to_reg().to_reg());
+            let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
+            Inst::MovRR { size, src, dst }.emit(&[], sink, info, state);
+        }
+
         Inst::MovzxRmR { ext_mode, src, dst } => {
             let dst = allocs.next(dst.to_reg().to_reg());
             let (opcodes, num_opcodes, mut rex_flags) = match ext_mode {
@@ -1470,6 +1480,44 @@ pub(crate) fn emit(
             one_way_jmp(sink, cc.invert(), else_label);
 
             // Trap!
+            let inst = Inst::trap(*trap_code);
+            inst.emit(&[], sink, info, state);
+
+            sink.bind_label(else_label);
+        }
+
+        Inst::TrapIfAnd {
+            cc1,
+            cc2,
+            trap_code,
+        } => {
+            let else_label = sink.get_label();
+
+            // Jump over if either condition code is not set.
+            one_way_jmp(sink, cc1.invert(), else_label);
+            one_way_jmp(sink, cc2.invert(), else_label);
+
+            // Trap!
+            let inst = Inst::trap(*trap_code);
+            inst.emit(&[], sink, info, state);
+
+            sink.bind_label(else_label);
+        }
+
+        Inst::TrapIfOr {
+            cc1,
+            cc2,
+            trap_code,
+        } => {
+            let trap_label = sink.get_label();
+            let else_label = sink.get_label();
+
+            // trap immediately if cc1 is set, otherwise jump over the trap if cc2 is not.
+            one_way_jmp(sink, *cc1, trap_label);
+            one_way_jmp(sink, cc2.invert(), else_label);
+
+            // Trap!
+            sink.bind_label(trap_label);
             let inst = Inst::trap(*trap_code);
             inst.emit(&[], sink, info, state);
 
@@ -2608,11 +2656,7 @@ pub(crate) fn emit(
                 sink.put1(0x48 | ((enc_dst >> 3) & 1));
                 sink.put1(0xB8 | (enc_dst & 7));
                 emit_reloc(sink, Reloc::Abs8, name, *offset);
-                if info.flags.emit_all_ones_funcaddrs() {
-                    sink.put8(u64::max_value());
-                } else {
-                    sink.put8(0);
-                }
+                sink.put8(0);
             }
         }
 
@@ -2789,7 +2833,7 @@ pub(crate) fn emit(
         }
 
         Inst::VirtualSPOffsetAdj { offset } => {
-            log::trace!(
+            trace!(
                 "virtual sp offset adjusted by {} -> {}",
                 offset,
                 state.virtual_sp_offset + offset
@@ -2878,10 +2922,6 @@ pub(crate) fn emit(
                 }
                 len -= emitted;
             }
-        }
-
-        Inst::EpiloguePlaceholder => {
-            // Generate no code.
         }
 
         Inst::ElfTlsGetAddr { ref symbol } => {

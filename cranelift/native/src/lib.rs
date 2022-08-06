@@ -132,6 +132,14 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
         if std::arch::is_aarch64_feature_detected!("lse") {
             isa_builder.enable("has_lse").unwrap();
         }
+
+        if std::arch::is_aarch64_feature_detected!("paca") {
+            isa_builder.enable("has_pauth").unwrap();
+        }
+
+        if cfg!(target_os = "macos") {
+            isa_builder.enable("sign_return_address_with_bkey").unwrap();
+        }
     }
 
     // There is no is_s390x_feature_detected macro yet, so for now

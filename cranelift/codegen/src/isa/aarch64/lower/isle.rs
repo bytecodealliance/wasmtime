@@ -26,9 +26,11 @@ use crate::{
     isa::unwind::UnwindInst,
     machinst::{ty_bits, InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
 };
+use regalloc2::PReg;
 use std::boxed::Box;
 use std::convert::TryFrom;
 use std::vec::Vec;
+use target_lexicon::Triple;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
@@ -39,6 +41,7 @@ type BoxExternalName = Box<ExternalName>;
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower<C>(
     lower_ctx: &mut C,
+    triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
     outputs: &[InsnOutput],
@@ -47,9 +50,15 @@ pub(crate) fn lower<C>(
 where
     C: LowerCtx<I = MInst>,
 {
-    lower_common(lower_ctx, flags, isa_flags, outputs, inst, |cx, insn| {
-        generated_code::constructor_lower(cx, insn)
-    })
+    lower_common(
+        lower_ctx,
+        triple,
+        flags,
+        isa_flags,
+        outputs,
+        inst,
+        |cx, insn| generated_code::constructor_lower(cx, insn),
+    )
 }
 
 pub struct ExtendedValue {
@@ -465,5 +474,17 @@ where
         lower_splat_const(self.lower_ctx, rd, value, *size);
 
         rd.to_reg()
+    }
+
+    fn preg_sp(&mut self) -> PReg {
+        super::regs::stack_reg().to_real_reg().unwrap().into()
+    }
+
+    fn preg_fp(&mut self) -> PReg {
+        super::regs::fp_reg().to_real_reg().unwrap().into()
+    }
+
+    fn preg_link(&mut self) -> PReg {
+        super::regs::link_reg().to_real_reg().unwrap().into()
     }
 }

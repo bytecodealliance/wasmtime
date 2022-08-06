@@ -57,6 +57,7 @@ fn check_gdb_output(output: &str, directives: &str) -> Result<()> {
 pub fn test_debug_dwarf_gdb() -> Result<()> {
     let output = gdb_with_script(
         &[
+            "--disable-cache",
             "-g",
             "tests/all/debug/testsuite/fib-wasm.wasm",
             "--invoke",

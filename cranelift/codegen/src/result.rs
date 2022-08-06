@@ -2,7 +2,7 @@
 
 use regalloc2::checker::CheckerErrors;
 
-use crate::verifier::VerifierErrors;
+use crate::{ir::Function, verifier::VerifierErrors};
 use std::string::String;
 
 /// A compilation error.
@@ -81,3 +81,22 @@ impl From<VerifierErrors> for CodegenError {
         CodegenError::Verifier { 0: source }
     }
 }
+
+/// Compilation error, with the accompanying function to help printing it.
+pub struct CompileError<'a> {
+    /// Underlying `CodegenError` that triggered the error.
+    pub inner: CodegenError,
+    /// Function we tried to compile, for display purposes.
+    pub func: &'a Function,
+}
+
+// By default, have `CompileError` be displayed as the internal error, and let consumers care if
+// they want to use the func field for adding details.
+impl<'a> core::fmt::Debug for CompileError<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+/// A convenient alias for a `Result` that uses `CompileError` as the error type.
+pub type CompileResult<'a, T> = Result<T, CompileError<'a>>;

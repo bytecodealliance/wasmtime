@@ -1,0 +1,43 @@
+test compile precise-output
+set preserve_frame_pointers=true
+target aarch64
+
+function %fp() -> i64 {
+block0:
+    v0 = get_frame_pointer.i64
+    return v0
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   mov x0, fp
+;   ldp fp, lr, [sp], #16
+;   ret
+
+function %sp() -> i64 {
+block0:
+    v0 = get_stack_pointer.i64
+    return v0
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   mov x0, sp
+;   ldp fp, lr, [sp], #16
+;   ret
+
+function %return_address() -> i64 {
+block0:
+    v0 = get_return_address.i64
+    return v0
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   mov x0, lr
+;   ldp fp, lr, [sp], #16
+;   ret
+

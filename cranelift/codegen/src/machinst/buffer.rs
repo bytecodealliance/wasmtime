@@ -147,8 +147,8 @@ use crate::machinst::{
     BlockIndex, MachInstLabelUse, TextSectionBuilder, VCodeConstant, VCodeConstants, VCodeInst,
 };
 use crate::timing;
+use crate::trace;
 use cranelift_entity::{entity_impl, SecondaryMap};
-use log::trace;
 use smallvec::SmallVec;
 use std::convert::TryFrom;
 use std::mem;
@@ -1338,6 +1338,7 @@ impl<I: VCodeInst> MachBuffer<I> {
                 (start_offset, end_offset)
             }
         };
+        trace!("Adding stack map for offsets {start:#x}..{end:#x}");
         self.stack_maps.push(MachStackMap {
             offset: start,
             offset_end: end,
@@ -1672,7 +1673,6 @@ mod test {
 
         buf.bind_label(label(1));
         let inst = Inst::Udf {
-            use_allocated_encoding: true,
             trap_code: TrapCode::Interrupt,
         };
         inst.emit(&[], &mut buf, &info, &mut state);

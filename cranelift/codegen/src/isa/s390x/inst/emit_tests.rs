@@ -5863,6 +5863,24 @@ fn test_s390x_binemit() {
     ));
 
     insns.push((
+        Inst::Mvc {
+            dst: MemArgPair {
+                base: gpr(2),
+                disp: UImm12::maybe_from_u64(0x345).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+            src: MemArgPair {
+                base: gpr(8),
+                disp: UImm12::maybe_from_u64(0x9ab).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+            len_minus_one: 255,
+        },
+        "D2FF234589AB",
+        "mvc 837(255,%r2), 2475(%r8)",
+    ));
+
+    insns.push((
         Inst::LoadMultiple64 {
             rt: writable_gpr(8),
             rt2: writable_gpr(12),
@@ -12551,7 +12569,7 @@ fn test_s390x_binemit() {
     isa_flag_builder.enable("arch13").unwrap();
     let isa_flags = s390x_settings::Flags::new(&flags, isa_flag_builder);
 
-    let emit_info = EmitInfo::new(flags, isa_flags);
+    let emit_info = EmitInfo::new(isa_flags);
     for (insn, expected_encoding, expected_printing) in insns {
         println!(
             "S390x: {:?}, {}, {}",

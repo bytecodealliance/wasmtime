@@ -313,11 +313,7 @@ impl Module for ObjectModule {
 
         ctx.compile_and_emit(self.isa(), &mut code)?;
 
-        self.define_function_bytes(
-            func_id,
-            &code,
-            ctx.mach_compile_result.as_ref().unwrap().buffer.relocs(),
-        )
+        self.define_function_bytes(func_id, &code, ctx.compiled_code().unwrap().buffer.relocs())
     }
 
     fn define_function_bytes(

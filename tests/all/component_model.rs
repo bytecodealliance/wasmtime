@@ -88,8 +88,18 @@ const REALLOC_AND_FREE: &str = r#"
 "#;
 
 fn engine() -> Engine {
+    drop(env_logger::try_init());
+
     let mut config = Config::new();
     config.wasm_component_model(true);
+
+    // When pooling allocator tests are skipped it means we're in qemu. The
+    // component model tests create a disproportionate number of instances so
+    // try to cut down on virtual memory usage by avoiding 4G reservations.
+    if crate::skip_pooling_allocator_tests() {
+        config.static_memory_maximum_size(0);
+        config.dynamic_memory_guard_size(0);
+    }
     Engine::new(&config).unwrap()
 }
 
@@ -202,7 +212,9 @@ fn make_echo_component(type_definition: &str, type_size: u32) -> String {
 }
 
 fn make_echo_component_with_params(type_definition: &str, params: &[Param]) -> String {
-    let func = if params.len() == 1 || params.len() > 16 {
+    let func = if params.len() == 0 {
+        format!("(func (export \"echo\"))")
+    } else if params.len() == 1 || params.len() > 16 {
         let primitive = if params.len() == 1 {
             params[0].0.primitive()
         } else {

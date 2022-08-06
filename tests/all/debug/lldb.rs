@@ -62,6 +62,7 @@ fn check_lldb_output(output: &str, directives: &str) -> Result<()> {
 pub fn test_debug_dwarf_lldb() -> Result<()> {
     let output = lldb_with_script(
         &[
+            "--disable-cache",
             "-g",
             "tests/all/debug/testsuite/fib-wasm.wasm",
             "--invoke",
@@ -102,6 +103,7 @@ check: exited with status
 pub fn test_debug_dwarf5_lldb() -> Result<()> {
     let output = lldb_with_script(
         &[
+            "--disable-cache",
             "-g",
             "tests/all/debug/testsuite/fib-wasm-dwarf5.wasm",
             "--invoke",
@@ -142,6 +144,7 @@ check: exited with status
 pub fn test_debug_dwarf_ref() -> Result<()> {
     let output = lldb_with_script(
         &[
+            "--disable-cache",
             "-g",
             "--opt-level",
             "0",

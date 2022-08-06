@@ -10,6 +10,8 @@ use generated_code::{Context, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode};
+use crate::ir::LibCall;
+use crate::isa::x64::lower::emit_vm_call;
 use crate::{
     ir::{
         condcodes::{FloatCC, IntCC},
@@ -31,12 +33,15 @@ use crate::{
         VCodeConstant, VCodeConstantData,
     },
 };
+use regalloc2::PReg;
 use smallvec::SmallVec;
 use std::boxed::Box;
 use std::convert::TryFrom;
+use target_lexicon::Triple;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxVecMachLabel = Box<SmallVec<[MachLabel; 4]>>;
+type MachLabelSlice = [MachLabel];
 
 pub struct SinkableLoad {
     inst: Inst,
@@ -47,6 +52,7 @@ pub struct SinkableLoad {
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower<C>(
     lower_ctx: &mut C,
+    triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
     outputs: &[InsnOutput],
@@ -55,9 +61,37 @@ pub(crate) fn lower<C>(
 where
     C: LowerCtx<I = MInst>,
 {
-    lower_common(lower_ctx, flags, isa_flags, outputs, inst, |cx, insn| {
-        generated_code::constructor_lower(cx, insn)
-    })
+    lower_common(
+        lower_ctx,
+        triple,
+        flags,
+        isa_flags,
+        outputs,
+        inst,
+        |cx, insn| generated_code::constructor_lower(cx, insn),
+    )
+}
+
+pub(crate) fn lower_branch<C>(
+    lower_ctx: &mut C,
+    triple: &Triple,
+    flags: &Flags,
+    isa_flags: &IsaFlags,
+    branch: Inst,
+    targets: &[MachLabel],
+) -> Result<(), ()>
+where
+    C: LowerCtx<I = MInst>,
+{
+    lower_common(
+        lower_ctx,
+        triple,
+        flags,
+        isa_flags,
+        &[],
+        branch,
+        |cx, insn| generated_code::constructor_lower_branch(cx, insn, targets),
+    )
 }
 
 impl<C> Context for IsleContext<'_, C, Flags, IsaFlags, 6>
@@ -552,6 +586,11 @@ where
     }
 
     #[inline]
+    fn cc_invert(&mut self, cc: &CC) -> CC {
+        cc.invert()
+    }
+
+    #[inline]
     fn sum_extend_fits_in_32_bits(
         &mut self,
         extend_from_ty: Type,
@@ -636,6 +675,52 @@ where
 
         self.gen_call_common(abi, num_rets, caller, args)
     }
+
+    #[inline]
+    fn preg_rbp(&mut self) -> PReg {
+        regs::rbp().to_real_reg().unwrap().into()
+    }
+
+    #[inline]
+    fn preg_rsp(&mut self) -> PReg {
+        regs::rsp().to_real_reg().unwrap().into()
+    }
+
+    fn libcall_3(&mut self, libcall: &LibCall, a: Reg, b: Reg, c: Reg) -> Reg {
+        let call_conv = self.lower_ctx.abi().call_conv();
+        let ret_ty = libcall.signature(call_conv).returns[0].value_type;
+        let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
+
+        emit_vm_call(
+            self.lower_ctx,
+            self.flags,
+            self.triple,
+            libcall.clone(),
+            &[a, b, c],
+            &[output_reg],
+        )
+        .expect("Failed to emit LibCall");
+
+        output_reg.to_reg()
+    }
+
+    #[inline]
+    fn single_target(&mut self, targets: &MachLabelSlice) -> Option<MachLabel> {
+        if targets.len() == 1 {
+            Some(targets[0])
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn two_targets(&mut self, targets: &MachLabelSlice) -> Option<(MachLabel, MachLabel)> {
+        if targets.len() == 2 {
+            Some((targets[0], targets[1]))
+        } else {
+            None
+        }
+    }
 }
 
 impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>
@@ -673,12 +758,18 @@ where
             inputs.len(&self.lower_ctx.dfg().value_lists) - off,
             abi.num_args()
         );
-        for i in caller.get_copy_to_arg_order() {
+        let mut arg_regs = vec![];
+        for i in 0..abi.num_args() {
             let input = inputs
                 .get(off + i, &self.lower_ctx.dfg().value_lists)
                 .unwrap();
-            let arg_regs = self.lower_ctx.put_value_in_regs(input);
-            caller.emit_copy_regs_to_arg(self.lower_ctx, i, arg_regs);
+            arg_regs.push(self.lower_ctx.put_value_in_regs(input));
+        }
+        for (i, arg_regs) in arg_regs.iter().enumerate() {
+            caller.emit_copy_regs_to_buffer(self.lower_ctx, i, *arg_regs);
+        }
+        for (i, arg_regs) in arg_regs.iter().enumerate() {
+            caller.emit_copy_regs_to_arg(self.lower_ctx, i, *arg_regs);
         }
         caller.emit_call(self.lower_ctx);
 

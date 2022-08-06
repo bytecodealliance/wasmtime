@@ -2,7 +2,7 @@ use crate::utils::parse_sets_and_triple;
 use anyhow::{Context as _, Result};
 use clap::Parser;
 use cranelift_codegen::Context;
-use cranelift_wasm::{DummyEnvironment, ReturnMode};
+use cranelift_wasm::DummyEnvironment;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
@@ -61,11 +61,7 @@ pub fn run(options: &Options) -> Result<()> {
         .context("failed to read input file")?;
 
     let funcs = if &contents[..WASM_MAGIC.len()] == WASM_MAGIC {
-        let mut dummy_environ = DummyEnvironment::new(
-            fisa.isa.unwrap().frontend_config(),
-            ReturnMode::NormalReturns,
-            false,
-        );
+        let mut dummy_environ = DummyEnvironment::new(fisa.isa.unwrap().frontend_config(), false);
         cranelift_wasm::translate_module(&contents, &mut dummy_environ)
             .context("failed to translate Wasm module to clif")?;
         dummy_environ

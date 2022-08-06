@@ -2,6 +2,7 @@ use std::fmt::Write;
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=isle_examples");
 
     let out_dir = std::path::PathBuf::from(
         std::env::var_os("OUT_DIR").expect("The OUT_DIR environment variable must be set"),
@@ -12,6 +13,7 @@ fn main() {
     emit_tests(&mut out, "isle_examples/pass", "run_pass");
     emit_tests(&mut out, "isle_examples/fail", "run_fail");
     emit_tests(&mut out, "isle_examples/link", "run_link");
+    emit_tests(&mut out, "isle_examples/run", "run_run");
 
     let output = out_dir.join("isle_tests.rs");
     std::fs::write(output, out).unwrap();

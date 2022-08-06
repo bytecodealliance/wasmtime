@@ -57,8 +57,7 @@ mod state;
 mod translation_utils;
 
 pub use crate::environ::{
-    DummyEnvironment, FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode,
-    TargetEnvironment,
+    DummyEnvironment, FuncEnvironment, GlobalVariable, ModuleEnvironment, TargetEnvironment,
 };
 pub use crate::func_translator::FuncTranslator;
 pub use crate::module_translator::translate_module;

@@ -16,11 +16,13 @@ use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
+use target_lexicon::Triple;
 
 /// Actually codegen an instruction's results into registers.
 pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     insn: IRInst,
+    triple: &Triple,
     flags: &Flags,
     isa_flags: &aarch64_settings::Flags,
 ) -> CodegenResult<()> {
@@ -33,7 +35,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         None
     };
 
-    if let Ok(()) = super::lower::isle::lower(ctx, flags, isa_flags, &outputs, insn) {
+    if let Ok(()) = super::lower::isle::lower(ctx, triple, flags, isa_flags, &outputs, insn) {
         return Ok(());
     }
 
@@ -52,6 +54,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             "Should never see constant ops at top level lowering entry
             point, as constants are rematerialized at use-sites"
         ),
+
+        Opcode::GetFramePointer | Opcode::GetStackPointer | Opcode::GetReturnAddress => {
+            implemented_in_isle(ctx)
+        }
 
         Opcode::Iadd => implemented_in_isle(ctx),
         Opcode::Isub => implemented_in_isle(ctx),
@@ -375,6 +381,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     op, ty
                 )));
             }
+
+            if op == Opcode::SelectifSpectreGuard {
+                ctx.emit(Inst::Csdb);
+            }
         }
 
         Opcode::Bitselect | Opcode::Vselect => implemented_in_isle(ctx),
@@ -459,7 +469,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::FallthroughReturn | Opcode::Return => {
+        Opcode::Return => {
             for (i, input) in inputs.iter().enumerate() {
                 // N.B.: according to the AArch64 ABI, the top bits of a register
                 // (above the bits for the value's type) are undefined, so we
@@ -614,10 +624,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             abi.emit_stack_pre_adjust(ctx);
             assert!(inputs.len() == abi.num_args());
-            for i in abi.get_copy_to_arg_order() {
-                let input = inputs[i];
-                let arg_regs = put_input_in_regs(ctx, input);
-                abi.emit_copy_regs_to_arg(ctx, i, arg_regs);
+            let mut arg_regs = vec![];
+            for input in inputs {
+                arg_regs.push(put_input_in_regs(ctx, *input))
+            }
+            for (i, arg_regs) in arg_regs.iter().enumerate() {
+                abi.emit_copy_regs_to_buffer(ctx, i, *arg_regs);
+            }
+            for (i, arg_regs) in arg_regs.iter().enumerate() {
+                abi.emit_copy_regs_to_arg(ctx, i, *arg_regs);
             }
             abi.emit_call(ctx);
             for (i, output) in outputs.iter().enumerate() {
@@ -1790,7 +1805,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::ExtractVector => implemented_in_isle(ctx),
 
-        Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit | Opcode::IfcmpSp => {
+        Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit => {
             return Err(CodegenError::Unsupported(format!(
                 "Unimplemented lowering: {}",
                 op

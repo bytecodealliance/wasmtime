@@ -140,10 +140,12 @@ impl Inst {
             | Inst::StoreRev16 { .. }
             | Inst::StoreRev32 { .. }
             | Inst::StoreRev64 { .. }
+            | Inst::Mvc { .. }
             | Inst::LoadMultiple64 { .. }
             | Inst::StoreMultiple64 { .. }
             | Inst::Mov32 { .. }
             | Inst::Mov64 { .. }
+            | Inst::MovPReg { .. }
             | Inst::Mov32Imm { .. }
             | Inst::Mov32SImm16 { .. }
             | Inst::Mov64SImm16 { .. }
@@ -200,7 +202,6 @@ impl Inst {
             | Inst::Call { .. }
             | Inst::CallInd { .. }
             | Inst::Ret { .. }
-            | Inst::EpiloguePlaceholder
             | Inst::Jump { .. }
             | Inst::CondBr { .. }
             | Inst::TrapIf { .. }
@@ -600,6 +601,12 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         | &Inst::StoreImm64SExt16 { ref mem, .. } => {
             memarg_operands(mem, collector);
         }
+        &Inst::Mvc {
+            ref dst, ref src, ..
+        } => {
+            collector.reg_use(dst.base);
+            collector.reg_use(src.base);
+        }
         &Inst::LoadMultiple64 {
             rt, rt2, ref mem, ..
         } => {
@@ -623,6 +630,11 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         &Inst::Mov64 { rd, rm } => {
             collector.reg_def(rd);
             collector.reg_use(rm);
+        }
+        &Inst::MovPReg { rd, rm } => {
+            debug_assert!([regs::gpr(14), regs::gpr(15)].contains(&rm.into()));
+            debug_assert!(rd.to_reg().is_virtual());
+            collector.reg_def(rd);
         }
         &Inst::Mov32 { rd, rm } => {
             collector.reg_def(rd);
@@ -847,7 +859,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_use(link);
             collector.reg_uses(&rets[..]);
         }
-        &Inst::Jump { .. } | &Inst::EpiloguePlaceholder => {}
+        &Inst::Jump { .. } => {}
         &Inst::IndirectBr { rn, .. } => {
             collector.reg_use(rn);
         }
@@ -903,14 +915,6 @@ impl MachInst for Inst {
         }
     }
 
-    fn is_epilogue_placeholder(&self) -> bool {
-        if let Inst::EpiloguePlaceholder = self {
-            true
-        } else {
-            false
-        }
-    }
-
     fn is_included_in_clobbers(&self) -> bool {
         // We exclude call instructions from the clobber-set when they are calls
         // from caller to callee with the same ABI. Such calls cannot possibly
@@ -928,7 +932,7 @@ impl MachInst for Inst {
 
     fn is_term(&self) -> MachTerminator {
         match self {
-            &Inst::Ret { .. } | &Inst::EpiloguePlaceholder => MachTerminator::Ret,
+            &Inst::Ret { .. } => MachTerminator::Ret,
             &Inst::Jump { .. } => MachTerminator::Uncond,
             &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::OneWayCondBr { .. } => {
@@ -1766,6 +1770,22 @@ impl Inst {
 
                 format!("{}{} {}, {}", mem_str, op, mem, imm)
             }
+            &Inst::Mvc {
+                ref dst,
+                ref src,
+                len_minus_one,
+            } => {
+                let dst = dst.with_allocs(allocs);
+                let src = src.with_allocs(allocs);
+                format!(
+                    "mvc {}({},{}), {}({})",
+                    dst.disp.pretty_print_default(),
+                    len_minus_one,
+                    show_reg(dst.base),
+                    src.disp.pretty_print_default(),
+                    show_reg(src.base)
+                )
+            }
             &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
                 let mem = mem.with_allocs(allocs);
                 let (mem_str, mem) = mem_finalize_for_show(&mem, state, false, true, false, false);
@@ -1785,6 +1805,11 @@ impl Inst {
             &Inst::Mov64 { rd, rm } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let rm = pretty_print_reg(rm, allocs);
+                format!("lgr {}, {}", rd, rm)
+            }
+            &Inst::MovPReg { rd, rm } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rm = show_reg(rm.into());
                 format!("lgr {}, {}", rd, rm)
             }
             &Inst::Mov32 { rd, rm } => {
@@ -2778,7 +2803,6 @@ impl Inst {
                 let link = pretty_print_reg(link, allocs);
                 format!("br {}", link)
             }
-            &Inst::EpiloguePlaceholder => "epilogue placeholder".to_string(),
             &Inst::Jump { dest } => {
                 let dest = dest.to_string();
                 format!("jg {}", dest)

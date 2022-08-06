@@ -449,7 +449,7 @@ pub enum Pattern {
 
     /// Match the current value against a constant integer of the given integer
     /// type.
-    ConstInt(TypeId, i64),
+    ConstInt(TypeId, i128),
 
     /// Match the current value against a constant primitive value of the given
     /// primitive type.
@@ -474,7 +474,7 @@ pub enum Expr {
     /// Get the value of a variable that was bound in the left-hand side.
     Var(TypeId, VarId),
     /// Get a constant integer.
-    ConstInt(TypeId, i64),
+    ConstInt(TypeId, i128),
     /// Get a constant primitive.
     ConstPrim(TypeId, Sym),
     /// Evaluate the nested expressions and bind their results to the given
@@ -1951,9 +1951,6 @@ impl TermEnv {
                 for def in defs {
                     // Check that the given variable name does not already exist.
                     let name = tyenv.intern_mut(&def.var);
-                    if bindings.vars.iter().any(|bv| bv.name == name) {
-                        tyenv.report_error(pos, format!("Variable '{}' already bound", def.var.0));
-                    }
 
                     // Look up the type.
                     let tysym = match tyenv.intern(&def.ty) {

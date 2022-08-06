@@ -72,7 +72,7 @@
 //!     ("Relax verification to allow I8X16 to act as a default vector type")
 
 use super::{hash_map, HashMap};
-use crate::environ::{FuncEnvironment, GlobalVariable, ReturnMode};
+use crate::environ::{FuncEnvironment, GlobalVariable};
 use crate::state::{ControlStackFrame, ElseData, FuncTranslationState};
 use crate::translation_utils::{
     block_with_params, blocktype_params_results, f32_translation, f64_translation,
@@ -531,23 +531,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.reachable = false;
         }
         Operator::Return => {
-            let (return_count, br_destination) = {
+            let return_count = {
                 let frame = &mut state.control_stack[0];
-                if environ.return_mode() == ReturnMode::FallthroughReturn {
-                    frame.set_branched_to_exit();
-                }
-                let return_count = frame.num_return_values();
-                (return_count, frame.br_destination())
+                frame.num_return_values()
             };
             {
                 let return_args = state.peekn_mut(return_count);
                 bitcast_wasm_returns(environ, return_args, builder);
-                match environ.return_mode() {
-                    ReturnMode::NormalReturns => builder.ins().return_(return_args),
-                    ReturnMode::FallthroughReturn => {
-                        canonicalise_then_jump(builder, br_destination, return_args)
-                    }
-                };
+                builder.ins().return_(return_args);
             }
             state.popn(return_count);
             state.reachable = false;

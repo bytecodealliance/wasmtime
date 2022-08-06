@@ -693,14 +693,26 @@
 (rule (lower (has_type ty @ (not_i64x2) (imin x y)))
       (vec_rrr (VecALUOp.Smin) x y (vector_size ty)))
 
+(rule (lower (has_type $I64X2 (imin x y)))
+      (bsl $I64X2 (vec_rrr (VecALUOp.Cmgt) y x (VectorSize.Size64x2)) x y))
+
 (rule (lower (has_type ty @ (not_i64x2) (umin x y)))
       (vec_rrr (VecALUOp.Umin) x y (vector_size ty)))
+
+(rule (lower (has_type $I64X2 (umin x y)))
+      (bsl $I64X2 (vec_rrr (VecALUOp.Cmhi) y x (VectorSize.Size64x2)) x y))
 
 (rule (lower (has_type ty @ (not_i64x2) (imax x y)))
       (vec_rrr (VecALUOp.Smax) x y (vector_size ty)))
 
+(rule (lower (has_type $I64X2 (imax x y)))
+      (bsl $I64X2 (vec_rrr (VecALUOp.Cmgt) x y (VectorSize.Size64x2)) x y))
+
 (rule (lower (has_type ty @ (not_i64x2) (umax x y)))
       (vec_rrr (VecALUOp.Umax) x y (vector_size ty)))
+
+(rule (lower (has_type $I64X2 (umax x y)))
+      (bsl $I64X2 (vec_rrr (VecALUOp.Cmhi) x y (VectorSize.Size64x2)) x y))
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1512,14 +1524,12 @@
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trap trap_code))
-      (let ((use_allocated_encoding bool (is_not_baldrdash_call_conv)))
-         (side_effect (udf use_allocated_encoding trap_code))))
+      (side_effect (udf trap_code)))
 
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (resumable_trap trap_code))
-      (let ((use_allocated_encoding bool (is_not_baldrdash_call_conv)))
-         (side_effect (udf use_allocated_encoding trap_code))))
+      (side_effect (udf trap_code)))
 
 ;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1687,6 +1697,7 @@
 
 
 ;;;; Rules for `uunarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (rule (lower (has_type (ty_vec128_int ty) (uunarrow x y)))
       (if (zero_value y))
       (uqxtn x (lane_size ty)))
@@ -1700,28 +1711,37 @@
             (result Reg (uqxtn2 low_half y (lane_size ty))))
         result))
 
-;;;; Rules for `Fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `Fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (fence))
-      (let ((_ Unit (emit (MInst.Fence))))
-            (output_none)))
+      (side_effect (aarch64_fence)))
 
-;;;; Rules for `IsNull` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `IsNull` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type out_ty (is_null x @ (value_type ty))))
       (with_flags (cmp_imm (operand_size ty) x (u8_into_imm12 0))
                   (materialize_bool_result
                    (ty_bits out_ty) (Cond.Eq))))
 
-;;;; Rules for `IsInvalid` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `IsInvalid` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type out_ty (is_invalid x @ (value_type ty))))
       (with_flags (cmn_imm (operand_size ty) x (u8_into_imm12 1))
                   (materialize_bool_result
                    (ty_bits out_ty) (Cond.Eq))))
 
-;;;; Rules for `Debugtrap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `Debugtrap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (debugtrap))
-      (let ((_ Unit (emit (MInst.Brk))))
-            (output_none)))
+      (side_effect (brk)))
+
+;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;;
+
+(rule (lower (get_frame_pointer))
+      (aarch64_fp))
+
+(rule (lower (get_stack_pointer))
+      (aarch64_sp))
+
+(rule (lower (get_return_address))
+      (aarch64_link))

@@ -88,8 +88,8 @@ pub(crate) fn define() -> SettingGroup {
         "avoid_div_traps",
         "Generate explicit checks around native division instructions to avoid their trapping.",
         r#"
-            This is primarily used by SpiderMonkey which doesn't install a signal
-            handler for SIGFPE, but expects a SIGILL trap for division by zero.
+            Generate explicit checks around native division instructions to
+            avoid their trapping.
 
             On ISAs like ARM where the native division instructions don't trap,
             this setting has no effect - explicit checks are always inserted.
@@ -175,8 +175,6 @@ pub(crate) fn define() -> SettingGroup {
         vec!["none", "elf_gd", "macho", "coff"],
     );
 
-    // Settings specific to the `baldrdash` calling convention.
-
     settings.add_enum(
         "libcall_call_conv",
         "Defines the calling convention to use for LibCalls call expansion.",
@@ -196,27 +194,8 @@ pub(crate) fn define() -> SettingGroup {
             "system_v",
             "windows_fastcall",
             "apple_aarch64",
-            "baldrdash_system_v",
-            "baldrdash_windows",
-            "baldrdash_2020",
             "probestack",
         ],
-    );
-
-    settings.add_num(
-        "baldrdash_prologue_words",
-        "Number of pointer-sized words pushed by the baldrdash prologue.",
-        r#"
-            Functions with the `baldrdash` calling convention don't generate their
-            own prologue and epilogue. They depend on externally generated code
-            that pushes a fixed number of words in the prologue and restores them
-            in the epilogue.
-
-            This setting configures the number of pointer-sized words pushed on the
-            stack when the Cranelift-generated code is entered. This includes the
-            pushed return address on x86.
-        "#,
-        0,
     );
 
     settings.add_bool(
@@ -274,15 +253,6 @@ pub(crate) fn define() -> SettingGroup {
             This is useful for, e.g., machine-code analyses that verify certain
             properties of the generated code.
         "#,
-        false,
-    );
-
-    // BaldrMonkey requires that not-yet-relocated function addresses be encoded
-    // as all-ones bitpatterns.
-    settings.add_bool(
-        "emit_all_ones_funcaddrs",
-        "Emit not-yet-relocated function addresses as all-ones bit patterns.",
-        "",
         false,
     );
 

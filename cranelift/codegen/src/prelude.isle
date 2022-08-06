@@ -84,6 +84,7 @@
 (type OptionWritableReg (primitive OptionWritableReg))
 (type VecReg extern (enum))
 (type VecWritableReg extern (enum))
+(type PReg (primitive PReg))
 
 ;; Construct a `ValueRegs` of one register.
 (decl value_reg (Reg) ValueRegs)
@@ -147,6 +148,10 @@
 (decl valid_reg () Reg)
 (extern extractor valid_reg valid_reg)
 
+;; Mark this value as used, to ensure that it gets lowered.
+(decl mark_value_used (Value) Unit)
+(extern constructor mark_value_used mark_value_used)
+
 ;; Put the given value into a register.
 ;;
 ;; Asserts that the value fits into a single register, and doesn't require
@@ -191,6 +196,10 @@
 (rule (lo_reg val)
       (let ((regs ValueRegs (put_in_regs val)))
         (value_regs_get regs 0)))
+
+;; Convert a `PReg` into a `Reg`
+(decl preg_to_reg (PReg) Reg)
+(extern constructor preg_to_reg preg_to_reg)
 
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -288,6 +297,12 @@
 ;; Get the type of each lane in the given type.
 (decl lane_type (Type) Type)
 (extern constructor lane_type lane_type)
+
+;;;; `cranelift_codegen::ir::MemFlags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `MemFlags::trusted`
+(decl mem_flags_trusted () MemFlags)
+(extern constructor mem_flags_trusted mem_flags_trusted)
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -547,8 +562,8 @@
       (let ((_ Unit (emit inst)))
         (output_none)))
 (rule (side_effect (SideEffectNoResult.Inst2 inst1 inst2))
-      (let ((_1 Unit (emit inst1))
-            (_2 Unit (emit inst2)))
+      (let ((_ Unit (emit inst1))
+            (_ Unit (emit inst2)))
         (output_none)))
 
 (decl side_effect_concat (SideEffectNoResult SideEffectNoResult) SideEffectNoResult)
@@ -563,6 +578,11 @@
 ;; Variant determines how result is given when combined with a
 ;; ConsumesFlags. See `with_flags` below for more.
 (type ProducesFlags (enum
+                     ;; For cases where the flags have been produced by another
+                     ;; instruction, and we have out-of-band reasons to know
+                     ;; that they won't be clobbered by the time we depend on
+                     ;; them.
+                     (AlreadyExistingFlags)
                      (ProducesFlagsSideEffect (inst MInst))
                      ;; Not directly combinable with a ConsumesFlags;
                      ;; used in s390x and unwrapped directly by `trapif`.
@@ -574,6 +594,7 @@
 ;; Variant determines how result is given when combined with a
 ;; ProducesFlags. See `with_flags` below for more.
 (type ConsumesFlags (enum
+                     (ConsumesFlagsSideEffect (inst MInst))
                      (ConsumesFlagsReturnsResultWithProducer (inst MInst) (result Reg))
                      (ConsumesFlagsReturnsReg (inst MInst) (result Reg))
                      (ConsumesFlagsTwiceReturnsValueRegs (inst1 MInst)
@@ -667,6 +688,30 @@
       (let ((v ValueRegs (with_flags p c)))
         (value_regs_get v 0)))
 
+;; Indicate that the current state of the flags register from the instruction
+;; that produces this Value is relied on.
+(decl flags_to_producesflags (Value) ProducesFlags)
+(rule (flags_to_producesflags val)
+      (let ((_ Unit (mark_value_used val)))
+        (ProducesFlags.AlreadyExistingFlags)))
+
+;; Combine a flags-producing instruction and a flags-consuming instruction that
+;; produces no results.
+;;
+;; This function handles the following case only:
+;; - ProducesFlagsSideEffect + ConsumesFlagsSideEffect
+(decl with_flags_side_effect (ProducesFlags ConsumesFlags) SideEffectNoResult)
+
+(rule (with_flags_side_effect
+        (ProducesFlags.AlreadyExistingFlags)
+        (ConsumesFlags.ConsumesFlagsSideEffect c))
+      (SideEffectNoResult.Inst c))
+
+(rule (with_flags_side_effect
+        (ProducesFlags.ProducesFlagsSideEffect p)
+        (ConsumesFlags.ConsumesFlagsSideEffect c))
+      (SideEffectNoResult.Inst2 p c))
+
 ;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl trap_code_division_by_zero () TrapCode)
@@ -682,9 +727,6 @@
 
 (decl avoid_div_traps () Type)
 (extern extractor avoid_div_traps avoid_div_traps)
-
-(decl pure is_not_baldrdash_call_conv () bool)
-(extern constructor is_not_baldrdash_call_conv is_not_baldrdash_call_conv)
 
 ;;;; Helpers for accessing instruction data ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -786,10 +828,6 @@
     (Sext)
 ))
 
-;; Specific order for copying into arguments at callsites.
-(decl abi_copy_to_arg_order (ABISig usize) usize)
-(extern constructor abi_copy_to_arg_order abi_copy_to_arg_order)
-
 ;; Get the number of arguments expected.
 (decl abi_num_args (ABISig) usize)
 (extern constructor abi_num_args abi_num_args)
@@ -836,6 +874,11 @@
 (decl abi_arg_only_slot (ABIArgSlot) ABIArg)
 (extern extractor abi_arg_only_slot abi_arg_only_slot)
 
+;; Extractor to detect the special case where a struct argument
+;; is explicitly passed by reference using a hidden pointer.
+(decl abi_arg_struct_pointer (ABIArgSlot i64 u64) ABIArg)
+(extern extractor abi_arg_struct_pointer abi_arg_struct_pointer)
+
 ;; Convert a real register number into a virtual register.
 (decl real_reg_to_reg (RealReg) Reg)
 (extern constructor real_reg_to_reg real_reg_to_reg)
@@ -856,3 +899,4 @@
 (convert Value InstOutput output_value)
 (convert Offset32 u32 offset32_to_u32)
 (convert ExternalName BoxExternalName box_external_name)
+(convert PReg Reg preg_to_reg)

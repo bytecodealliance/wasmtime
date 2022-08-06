@@ -69,6 +69,7 @@ use crate::{
         has_memory_fence_semantics, inst_addr_offset_type, inst_store_data, visit_block_succs,
     },
     ir::{immediates::Offset32, Block, Function, Inst, Opcode, Type, Value},
+    trace,
 };
 use cranelift_entity::{packed_option::PackedOption, EntityRef};
 
@@ -198,7 +199,7 @@ pub struct AliasAnalysis<'a> {
 impl<'a> AliasAnalysis<'a> {
     /// Perform an alias analysis pass.
     pub fn new(func: &'a mut Function, domtree: &'a DominatorTree) -> AliasAnalysis<'a> {
-        log::trace!("alias analysis: input is:\n{:?}", func);
+        trace!("alias analysis: input is:\n{:?}", func);
         let mut analysis = AliasAnalysis {
             func,
             domtree,
@@ -225,7 +226,7 @@ impl<'a> AliasAnalysis<'a> {
                 .or_insert_with(|| LastStores::default())
                 .clone();
 
-            log::trace!(
+            trace!(
                 "alias analysis: input to block{} is {:?}",
                 block.index(),
                 state
@@ -233,7 +234,7 @@ impl<'a> AliasAnalysis<'a> {
 
             for inst in self.func.layout.block_insts(block) {
                 state.update(self.func, inst);
-                log::trace!("after inst{}: state is {:?}", inst.index(), state);
+                trace!("after inst{}: state is {:?}", inst.index(), state);
             }
 
             visit_block_succs(self.func, block, |_inst, succ| {
@@ -279,7 +280,7 @@ impl<'a> AliasAnalysis<'a> {
                 .unwrap_or_else(|| LastStores::default());
 
             while let Some(inst) = pos.next_inst() {
-                log::trace!(
+                trace!(
                     "alias analysis: scanning at inst{} with state {:?} ({:?})",
                     inst.index(),
                     state,
@@ -300,7 +301,7 @@ impl<'a> AliasAnalysis<'a> {
                             ty,
                             extending_opcode: get_ext_opcode(opcode),
                         };
-                        log::trace!(
+                        trace!(
                             "alias analysis: at inst{}: store with data v{} at loc {:?}",
                             inst.index(),
                             store_data.index(),
@@ -317,7 +318,7 @@ impl<'a> AliasAnalysis<'a> {
                             ty,
                             extending_opcode: get_ext_opcode(opcode),
                         };
-                        log::trace!(
+                        trace!(
                             "alias analysis: at inst{}: load with last_store inst{} at loc {:?}",
                             inst.index(),
                             last_store.map(|inst| inst.index()).unwrap_or(usize::MAX),
@@ -337,13 +338,13 @@ impl<'a> AliasAnalysis<'a> {
                         let aliased = if let Some((def_inst, value)) =
                             self.mem_values.get(&mem_loc).cloned()
                         {
-                            log::trace!(
+                            trace!(
                                 " -> sees known value v{} from inst{}",
                                 value.index(),
                                 def_inst.index()
                             );
                             if self.domtree.dominates(def_inst, inst, &pos.func.layout) {
-                                log::trace!(
+                                trace!(
                                     " -> dominates; value equiv from v{} to v{} inserted",
                                     load_result.index(),
                                     value.index()
@@ -363,7 +364,7 @@ impl<'a> AliasAnalysis<'a> {
                         // Otherwise, we can keep *this* load around
                         // as a new equivalent value.
                         if !aliased {
-                            log::trace!(
+                            trace!(
                                 " -> inserting load result v{} at loc {:?}",
                                 load_result.index(),
                                 mem_loc
