@@ -18,9 +18,7 @@ pub trait CtxEq<V1: ?Sized, V2: ?Sized> {
 
 /// Trait that allows for hashing given some external context.
 pub trait CtxHash<Value: ?Sized>: CtxEq<Value, Value> {
-    fn ctx_hash<H>(&self, value: &Value, state: &mut H)
-    where
-        H: Hasher;
+    fn ctx_hash(&self, value: &Value) -> u64;
 }
 
 // A null-comparator context type for underlying value types that
@@ -36,11 +34,10 @@ impl<V: Eq + Hash> CtxEq<V, V> for NullCtx<V> {
     }
 }
 impl<V: Eq + Hash> CtxHash<V> for NullCtx<V> {
-    fn ctx_hash<H>(&self, value: &V, state: &mut H)
-    where
-        H: Hasher,
-    {
-        value.hash(state);
+    fn ctx_hash(&self, value: &V) -> u64 {
+        let mut state = fxhash::FxHasher::default();
+        value.hash(&mut state);
+        state.finish()
     }
 }
 
@@ -75,9 +72,7 @@ fn hash<K, Ctx>(k: &K, ctx: &Ctx) -> u64
 where
     Ctx: CtxHash<K>,
 {
-    let mut hasher = fxhash::FxHasher::default();
-    ctx.ctx_hash(k, &mut hasher);
-    hasher.finish()
+    ctx.ctx_hash(k)
 }
 
 impl<K, V> CtxHashMap<K, V> {

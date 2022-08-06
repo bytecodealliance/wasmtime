@@ -83,6 +83,16 @@ where
         }
     }
 
+    /// Creates an empty `ScopedHashMap` with some pre-allocated capacity.
+    pub fn with_capacity(cap: usize) -> Self {
+        let mut map = FxHashMap::default();
+        map.reserve(cap);
+        Self {
+            map,
+            last_insert_by_depth: smallvec![None],
+        }
+    }
+
     /// Similar to `FxHashMap::entry`, gets the given key's corresponding entry in the map for
     /// in-place manipulation.
     pub fn entry<'a>(&'a mut self, key: K) -> Entry<'a, K, V> {

@@ -64,8 +64,8 @@ impl<'ctx, L: Language> CtxEq<NodeKey, NodeKey> for NodeKeyCtx<'ctx, L> {
 }
 
 impl<'ctx, L: Language> CtxHash<NodeKey> for NodeKeyCtx<'ctx, L> {
-    fn ctx_hash<H: std::hash::Hasher>(&self, value: &NodeKey, state: &mut H) {
-        self.node_ctx.ctx_hash(value.node::<L>(self.nodes), state);
+    fn ctx_hash(&self, value: &NodeKey) -> u64 {
+        self.node_ctx.ctx_hash(value.node::<L>(self.nodes))
     }
 }
 
