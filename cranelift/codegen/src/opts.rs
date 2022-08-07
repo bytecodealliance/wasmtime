@@ -30,6 +30,8 @@ struct IsleContext<'a, 'b> {
 
 pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     log::trace!("running rules on eclass {}", id.index());
+    egraph.stats.rewrite_rule_invoked += 1;
+
     // Store-to-load forwarding rewrites the ID without unioning with
     // the original: we want to eliminate the load entirely.
     let id = store_to_load(id, egraph);
@@ -39,14 +41,16 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     let optimized_ids = generated_code::constructor_simplify(&mut ctx, id);
     let mut union_id = id;
     if let Some(ids) = optimized_ids {
+        egraph.stats.rewrite_rule_return_count_sum += ids.len() as u64;
         for new_id in ids {
+            egraph.stats.node_union += 1;
             union_id = egraph.egraph.union(union_id, new_id);
         }
     }
     union_id
 }
 
-fn store_to_load<'a>(id: Id, egraph: &FuncEGraph<'a>) -> Id {
+fn store_to_load<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     if let Some(load_key) = egraph.egraph.classes[id].get_node() {
         if let Node::Load {
             op: load_op,
@@ -95,6 +99,7 @@ fn store_to_load<'a>(id: Id, egraph: &FuncEGraph<'a>) -> Id {
                                     let load_addr = egraph.egraph.canonical_id(*load_addr);
                                     if store_addr == load_addr {
                                         log::trace!(" -> same address; forwarding");
+                                        egraph.stats.store_to_load_forward += 1;
                                         return store_data;
                                     }
                                 }

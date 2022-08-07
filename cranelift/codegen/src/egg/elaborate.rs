@@ -26,6 +26,7 @@
 
 use super::domtree::DomTreeWithChildren;
 use super::node::{op_cost, Node, NodeCtx};
+use super::Stats;
 use crate::dominator_tree::DominatorTree;
 use crate::ir::{Block, Function, Inst, SourceLoc, Type, Value, ValueList};
 use crate::loop_analysis::LoopAnalysis;
@@ -48,6 +49,7 @@ pub(crate) struct Elaborator<'a> {
     loop_stack: SmallVec<[LoopStackEntry; 8]>,
     cur_block: Option<Block>,
     first_branch: SecondaryMap<Block, PackedOption<Inst>>,
+    stats: &'a mut Stats,
 }
 
 #[derive(Clone, Debug)]
@@ -77,6 +79,7 @@ impl<'a> Elaborator<'a> {
         loop_analysis: &'a LoopAnalysis,
         egraph: &'a EGraph<NodeCtx>,
         node_ctx: &'a NodeCtx,
+        stats: &'a mut Stats,
     ) -> Self {
         let num_blocks = func.dfg.num_blocks();
         Self {
@@ -90,6 +93,7 @@ impl<'a> Elaborator<'a> {
             loop_stack: smallvec![],
             cur_block: None,
             first_branch: SecondaryMap::with_capacity(num_blocks),
+            stats,
         }
     }
 
@@ -176,17 +180,21 @@ impl<'a> Elaborator<'a> {
     }
 
     fn find_best_node(&mut self, id: Id) -> (usize, Id) {
+        self.stats.elaborate_find_best_node += 1;
         log::trace!("find_best_node: {}", id);
 
         if self.id_to_value.get(&id).is_some() {
+            self.stats.elaborate_find_best_node_existing_value += 1;
             log::trace!(" -> value already available; cost 0");
             return (0, id);
         }
 
         if let Some(&(cost, node)) = self.id_to_best_cost_and_node.get(&id) {
+            self.stats.elaborate_find_best_node_memoize_hit += 1;
             log::trace!(" -> memoized to cost {} node {}", cost, node);
             return (cost, node);
         }
+        self.stats.elaborate_find_best_node_memoize_miss += 1;
 
         let eclass = self.egraph.classes[id];
         let node = eclass.get_node();
@@ -227,6 +235,7 @@ impl<'a> Elaborator<'a> {
                     .children(node.node::<NodeCtx>(&self.egraph.nodes))[child_idx];
                 assert!(child < id);
                 log::trace!("  -> id {} child {}", id, child);
+                self.stats.elaborate_find_best_node_arg_recurse += 1;
                 let (child_cost, _) = self.find_best_node(child);
                 children_cost += child_cost;
                 log::trace!("  -> id {} child {} child cost {}", id, child, child_cost);
@@ -251,6 +260,7 @@ impl<'a> Elaborator<'a> {
             for parent in parent1.into_iter().chain(parent2.into_iter()) {
                 log::trace!(" -> id {} parent {}", id, parent);
                 assert!(parent < id);
+                self.stats.elaborate_find_best_node_parent_recurse += 1;
                 let (parent_best_cost, parent_best_id) = self.find_best_node(parent);
                 log::trace!(
                     " -> id {} parent {} has cost {} with best id {}",
@@ -260,6 +270,7 @@ impl<'a> Elaborator<'a> {
                     parent_best_id
                 );
                 if best_cost.is_none() || parent_best_cost < best_cost.unwrap() {
+                    self.stats.elaborate_find_best_node_parent_better += 1;
                     best_cost = Some(parent_best_cost);
                     best_id = Some(parent_best_id);
                 }
@@ -283,11 +294,14 @@ impl<'a> Elaborator<'a> {
     }
 
     fn elaborate_eclass_use(&mut self, id: Id) -> IdValue {
+        self.stats.elaborate_visit_node += 1;
         let (_, best_node_eclass) = self.find_best_node(id);
 
         if let Some(val) = self.id_to_value.get(&best_node_eclass) {
+            self.stats.elaborate_memoize_hit += 1;
             return val.clone();
         }
+        self.stats.elaborate_memoize_miss += 1;
 
         let node_key = self.egraph.classes[best_node_eclass].get_node().unwrap();
         let node = node_key.node::<NodeCtx>(&self.egraph.nodes);
@@ -322,7 +336,10 @@ impl<'a> Elaborator<'a> {
             .node_ctx
             .children(&node)
             .iter()
-            .map(|&id| self.elaborate_eclass_use(id))
+            .map(|&id| {
+                self.stats.elaborate_visit_node_recurse += 1;
+                self.elaborate_eclass_use(id)
+            })
             .map(|idvalue| match idvalue {
                 IdValue::Value(depth, value) => {
                     max_loop_depth = std::cmp::max(max_loop_depth, depth);
@@ -419,7 +436,10 @@ impl<'a> Elaborator<'a> {
     ) {
         let domtree = DomTreeWithChildren::new(self.func, self.domtree);
         let root = domtree.root();
+        self.stats.elaborate_func += 1;
+        self.stats.elaborate_func_pre_insts += self.func.dfg.num_insts() as u64;
         self.clear_func_body();
         self.elaborate_block(None, root, &block_params_fn, &block_roots_fn, &domtree);
+        self.stats.elaborate_func_post_insts += self.func.dfg.num_insts() as u64;
     }
 }

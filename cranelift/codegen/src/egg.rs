@@ -10,7 +10,7 @@ use crate::{
 };
 use alloc::vec::Vec;
 use core::ops::Range;
-use cranelift_egraph::{EGraph, Id, NewOrExisting};
+use cranelift_egraph::{EGraph, Id, Language, NewOrExisting};
 use cranelift_entity::EntityList;
 use cranelift_entity::SecondaryMap;
 
@@ -44,6 +44,43 @@ pub struct FuncEGraph<'a> {
     /// eclass IDs and types per block.
     blockparams: SecondaryMap<Block, Range<u32>>,
     blockparam_ids_tys: Vec<(Id, Type)>,
+    /// Statistics recorded during the process of building,
+    /// optimizing, and lowering out of this egraph.
+    pub(crate) stats: Stats,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Stats {
+    pub(crate) node_created: u64,
+    pub(crate) node_param: u64,
+    pub(crate) node_result: u64,
+    pub(crate) node_pure: u64,
+    pub(crate) node_inst: u64,
+    pub(crate) node_load: u64,
+    pub(crate) node_dedup_query: u64,
+    pub(crate) node_dedup_hit: u64,
+    pub(crate) node_dedup_miss: u64,
+    pub(crate) node_union: u64,
+    pub(crate) store_map_insert: u64,
+    pub(crate) side_effect_nodes: u64,
+    pub(crate) rewrite_rule_return_count_sum: u64,
+    pub(crate) rewrite_rule_invoked: u64,
+    pub(crate) store_to_load_forward: u64,
+    pub(crate) elaborate_use_eclass: u64,
+    pub(crate) elaborate_find_best_node: u64,
+    pub(crate) elaborate_find_best_node_existing_value: u64,
+    pub(crate) elaborate_find_best_node_memoize_hit: u64,
+    pub(crate) elaborate_find_best_node_memoize_miss: u64,
+    pub(crate) elaborate_find_best_node_arg_recurse: u64,
+    pub(crate) elaborate_find_best_node_parent_recurse: u64,
+    pub(crate) elaborate_find_best_node_parent_better: u64,
+    pub(crate) elaborate_visit_node: u64,
+    pub(crate) elaborate_visit_node_recurse: u64,
+    pub(crate) elaborate_memoize_hit: u64,
+    pub(crate) elaborate_memoize_miss: u64,
+    pub(crate) elaborate_func: u64,
+    pub(crate) elaborate_func_pre_insts: u64,
+    pub(crate) elaborate_func_post_insts: u64,
 }
 
 impl<'a> FuncEGraph<'a> {
@@ -72,6 +109,7 @@ impl<'a> FuncEGraph<'a> {
             store_nodes: FxHashMap::default(),
             blockparams: SecondaryMap::with_default(0..0),
             blockparam_ids_tys: vec![],
+            stats: Default::default(),
         };
         this.build(func);
         this
@@ -100,6 +138,8 @@ impl<'a> FuncEGraph<'a> {
                     .get();
                 value_to_id.insert(value, param);
                 self.blockparam_ids_tys.push((param, ty));
+                self.stats.node_created += 1;
+                self.stats.node_param += 1;
             }
             let blockparam_end = self.blockparam_ids_tys.len() as u32;
             self.blockparams[block] = blockparam_start..blockparam_end;
@@ -142,11 +182,15 @@ impl<'a> FuncEGraph<'a> {
                 let srcloc = func.srclocs[inst];
 
                 let node = if is_readonly_load {
+                    self.stats.node_created += 1;
+                    self.stats.node_pure += 1;
                     Node::Pure { op, args, types }
                 } else if let Some(mem_state) = mem_state {
                     let addr = args.as_slice(&self.node_ctx.args)[0];
                     let ty = types.as_slice(&self.node_ctx.types)[0];
                     log::trace!("load at inst {} has mem state {:?}", inst, mem_state);
+                    self.stats.node_created += 1;
+                    self.stats.node_load += 1;
                     Node::Load {
                         op,
                         ty,
@@ -156,6 +200,8 @@ impl<'a> FuncEGraph<'a> {
                         srcloc,
                     }
                 } else if side_effect {
+                    self.stats.node_created += 1;
+                    self.stats.node_inst += 1;
                     Node::Inst {
                         op,
                         inst,
@@ -166,11 +212,26 @@ impl<'a> FuncEGraph<'a> {
                 } else {
                     Node::Pure { op, args, types }
                 };
+                let dedup_needed = self.node_ctx.needs_dedup(&node);
+
                 let id = self.egraph.add(node, &mut self.node_ctx);
+
+                if dedup_needed {
+                    self.stats.node_dedup_query += 1;
+                    match id {
+                        NewOrExisting::New(_) => {
+                            self.stats.node_dedup_miss += 1;
+                        }
+                        NewOrExisting::Existing(_) => {
+                            self.stats.node_dedup_hit += 1;
+                        }
+                    }
+                }
 
                 if opcode == Opcode::Store {
                     let store_data_ty = func.dfg.value_type(func.dfg.inst_args(inst)[0]);
                     self.store_nodes.insert(inst, (store_data_ty, id.get()));
+                    self.stats.store_map_insert += 1;
                 }
 
                 let id = match (side_effect, mem_state, id) {
@@ -178,11 +239,13 @@ impl<'a> FuncEGraph<'a> {
                         // Loads: still optimize, but otherwise add to side-effecting roots.
                         let id = crate::opts::optimize_eclass(id, self);
                         self.side_effect_ids.push(id);
+                        self.stats.side_effect_nodes += 1;
                         id
                     }
                     (true, _, id) => {
                         let id = id.get();
                         self.side_effect_ids.push(id);
+                        self.stats.side_effect_nodes += 1;
                         id
                     }
                     (false, _, NewOrExisting::New(id)) => {
@@ -216,6 +279,8 @@ impl<'a> FuncEGraph<'a> {
                                     &mut self.node_ctx,
                                 )
                                 .get();
+                            self.stats.node_created += 1;
+                            self.stats.node_result += 1;
                             value_to_id.insert(result, projection);
                         }
                     }
@@ -254,6 +319,7 @@ impl<'a> FuncEGraph<'a> {
             self.loop_analysis,
             &self.egraph,
             &self.node_ctx,
+            &mut self.stats,
         );
         elab.elaborate(
             |block| {

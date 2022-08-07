@@ -194,6 +194,7 @@ impl Context {
             let mut eg = FuncEGraph::new(&self.func, &self.domtree, &self.loop_analysis, &self.cfg);
             eg.elaborate(&mut self.func);
             log::debug!("After egraph optimization:\n{}", self.func.display());
+            log::info!("egraph stats: {:?}", eg.stats);
         }
 
         self.optimized = true;
