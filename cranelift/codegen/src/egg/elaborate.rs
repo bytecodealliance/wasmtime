@@ -368,6 +368,7 @@ impl<'a> Elaborator<'a> {
             )
         } else {
             // Pure op, and does not depend on any args at current loop depth: hoist out of loop.
+            self.stats.elaborate_licm_hoist += 1;
             let data = &self.loop_stack[max_loop_depth as usize];
             (max_loop_depth, data.scope_depth as usize, data.hoist_block)
         };

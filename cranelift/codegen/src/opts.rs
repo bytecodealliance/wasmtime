@@ -183,8 +183,16 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
             .egraph
             .add(Node::Pure { op, args, types }, &mut self.egraph.node_ctx)
         {
-            NewOrExisting::New(id) => optimize_eclass(id, self.egraph),
-            NewOrExisting::Existing(id) => id,
+            NewOrExisting::New(id) => {
+                self.egraph.stats.node_created += 1;
+                self.egraph.stats.node_pure += 1;
+                self.egraph.stats.node_ctor_created += 1;
+                optimize_eclass(id, self.egraph)
+            }
+            NewOrExisting::Existing(id) => {
+                self.egraph.stats.node_ctor_deduped += 1;
+                id
+            }
         }
     }
 

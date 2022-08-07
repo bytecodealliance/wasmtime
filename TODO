@@ -13,6 +13,10 @@
 - perf ideas
   - limit nodes exposed in pure_enodes_etor: pre-extract? "subsume"
     nodes/return from simplify?
+    - two rule entry points: "replace" and "simplify". make parent
+      pointer in union node "cut-off": we keep the enodes so they will
+      dedup into the canonical id but we don't traverse them. (or just
+      don't create a union node? union in the UnionFind only?)
   - make alias analysis faster to compute
     - cache predicates? has_side_effect, is_memory_fence, ...
   - elaboration
@@ -22,3 +26,11 @@
       independent of what's already available
   - keep Insts (side-effecting ops) in DFG, and just rewrite args and
     attach new results when elaborating.
+
+  - elaborate: when an Inst node is present, we must select that one;
+    other nodes rewriting onto it (unioning with it) don't change
+    that. pre-populate best selection.
+
+- code quality
+  - look at hot blocks again and look for missed opportunities; drive
+    rewrite rules from this
