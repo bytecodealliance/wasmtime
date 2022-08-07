@@ -92,7 +92,8 @@ fn store_to_load<'a>(id: Id, egraph: &FuncEGraph<'a>) -> Id {
                                     let store_data = store_args[0];
                                     let store_addr = store_args[1];
                                     let store_addr = egraph.egraph.canonical_id(store_addr);
-                                    if store_addr == *load_addr {
+                                    let load_addr = egraph.egraph.canonical_id(*load_addr);
+                                    if store_addr == load_addr {
                                         log::trace!(" -> same address; forwarding");
                                         return store_data;
                                     }
