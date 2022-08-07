@@ -145,14 +145,12 @@ impl<'a> FuncEGraph<'a> {
                     Node::Pure { op, args, types }
                 } else if let Some(mem_state) = mem_state {
                     let addr = args.as_slice(&self.node_ctx.args)[0];
-                    let addr_canonical = self.egraph.canonical_id_mut(addr);
                     let ty = types.as_slice(&self.node_ctx.types)[0];
                     log::trace!("load at inst {} has mem state {:?}", inst, mem_state);
                     Node::Load {
                         op,
                         ty,
                         inst,
-                        addr_canonical,
                         addr,
                         mem_state,
                         srcloc,

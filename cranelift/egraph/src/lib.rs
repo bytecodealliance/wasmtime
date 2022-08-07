@@ -16,11 +16,12 @@ use std::hash::Hash;
 mod bumpvec;
 mod ctxhash;
 mod egraph;
-pub mod unionfind;
+mod unionfind;
 
 pub use bumpvec::{BumpArena, BumpSlice, BumpVec};
 pub use ctxhash::{CtxEq, CtxHash, CtxHashMap};
 pub use egraph::{EClass, EGraph, NewOrExisting, NodeIter};
+pub use unionfind::UnionFind;
 
 /// An eclass ID.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

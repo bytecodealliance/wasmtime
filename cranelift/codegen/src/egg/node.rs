@@ -2,7 +2,7 @@
 
 use super::MemoryState;
 use crate::ir::{Block, Inst, InstructionImms, Opcode, SourceLoc, Type};
-use cranelift_egraph::{BumpArena, BumpSlice, CtxEq, CtxHash, Id, Language};
+use cranelift_egraph::{BumpArena, BumpSlice, CtxEq, CtxHash, Id, Language, UnionFind};
 use cranelift_entity::{EntityList, ListPool};
 use std::hash::{Hash, Hasher};
 
@@ -73,17 +73,14 @@ pub enum Node {
         op: InstructionImms,
         /// The type of the load result.
         ty: Type,
-        /// Canonicalized address. Used for identity, but not for
-        /// computing the value.
-        addr_canonical: Id,
-        /// The abstract memory state that this load accesses.
-        mem_state: MemoryState,
-
-        // -- not included in dedup key:
         /// Address argument. Actual address has an offset, which is
         /// included in `op` (and thus already considered as part of
         /// the key).
         addr: Id,
+        /// The abstract memory state that this load accesses.
+        mem_state: MemoryState,
+
+        // -- not included in dedup key:
         /// The `Inst` we will use for a trap location for this
         /// load. Excluded from Eq/Hash so that loads that are
         /// identical except for the specific instance will dedup on
@@ -103,7 +100,7 @@ impl Node {
     }
 }
 
-/// Context for comparing and hashing Nodes.
+/// Shared pools for type and id lists in nodes.
 pub struct NodeCtx {
     /// Arena for result-type arrays.
     pub types: BumpArena<Type>,
@@ -129,8 +126,32 @@ impl NodeCtx {
     }
 }
 
+impl NodeCtx {
+    fn id_eq(&self, a: Id, b: Id, uf: &mut UnionFind) -> bool {
+        uf.find_and_update(a) == uf.find_and_update(b)
+    }
+
+    fn ids_eq(&self, a: &EntityList<Id>, b: &EntityList<Id>, uf: &mut UnionFind) -> bool {
+        let a = a.as_slice(&self.args);
+        let b = b.as_slice(&self.args);
+        a.len() == b.len() && a.iter().zip(b.iter()).all(|(&a, &b)| self.id_eq(a, b, uf))
+    }
+
+    fn hash_id<H: Hasher>(&self, a: Id, hash: &mut H, uf: &mut UnionFind) {
+        let id = uf.find_and_update(a);
+        id.hash(hash);
+    }
+
+    fn hash_ids<H: Hasher>(&self, a: &EntityList<Id>, hash: &mut H, uf: &mut UnionFind) {
+        let a = a.as_slice(&self.args);
+        for &id in a {
+            self.hash_id(id, hash, uf);
+        }
+    }
+}
+
 impl CtxEq<Node, Node> for NodeCtx {
-    fn ctx_eq(&self, a: &Node, b: &Node) -> bool {
+    fn ctx_eq(&self, a: &Node, b: &Node, uf: &mut UnionFind) -> bool {
         match (a, b) {
             (
                 &Node::Param { block, index, ty },
@@ -147,7 +168,7 @@ impl CtxEq<Node, Node> for NodeCtx {
                     result: other_result,
                     ty: other_ty,
                 },
-            ) => value == other_value && result == other_result && ty == other_ty,
+            ) => self.id_eq(value, other_value, uf) && result == other_result && ty == other_ty,
             (
                 &Node::Pure {
                     ref op,
@@ -161,7 +182,7 @@ impl CtxEq<Node, Node> for NodeCtx {
                 },
             ) => {
                 *op == *other_op
-                    && args.as_slice(&self.args) == other_args.as_slice(&self.args)
+                    && self.ids_eq(args, other_args, uf)
                     && types.as_slice(&self.types) == other_types.as_slice(&self.types)
             }
             (
@@ -171,19 +192,19 @@ impl CtxEq<Node, Node> for NodeCtx {
                     args: ref other_args,
                     ..
                 },
-            ) => inst == other_inst && args.as_slice(&self.args) == other_args.as_slice(&self.args),
+            ) => inst == other_inst && self.ids_eq(args, other_args, uf),
             (
                 &Node::Load {
                     ref op,
                     ty,
-                    addr_canonical,
+                    addr,
                     mem_state,
                     ..
                 },
                 &Node::Load {
                     op: ref other_op,
                     ty: other_ty,
-                    addr_canonical: other_addr_canonical,
+                    addr: other_addr,
                     mem_state: other_mem_state,
                     // Explicitly exclude: `inst` and `srcloc`. We
                     // want loads to merge if identical in
@@ -195,7 +216,7 @@ impl CtxEq<Node, Node> for NodeCtx {
             ) => {
                 op == other_op
                     && ty == other_ty
-                    && addr_canonical == other_addr_canonical
+                    && self.id_eq(addr, other_addr, uf)
                     && mem_state == other_mem_state
             }
             _ => false,
@@ -204,7 +225,7 @@ impl CtxEq<Node, Node> for NodeCtx {
 }
 
 impl CtxHash<Node> for NodeCtx {
-    fn ctx_hash(&self, value: &Node) -> u64 {
+    fn ctx_hash(&self, value: &Node, uf: &mut UnionFind) -> u64 {
         let mut state = crate::fx::FxHasher::default();
         std::mem::discriminant(value).hash(&mut state);
         match value {
@@ -221,7 +242,7 @@ impl CtxHash<Node> for NodeCtx {
                 result,
                 ty: _,
             } => {
-                value.hash(&mut state);
+                self.hash_id(value, &mut state, uf);
                 result.hash(&mut state);
             }
             &Node::Pure {
@@ -230,25 +251,25 @@ impl CtxHash<Node> for NodeCtx {
                 types: _,
             } => {
                 op.hash(&mut state);
-                args.as_slice(&self.args).hash(&mut state);
+                self.hash_ids(args, &mut state, uf);
                 // Don't hash `types`: it requires an indirection
                 // (hence cache misses), and result type *should* be
                 // fully determined by op and args.
             }
             &Node::Inst { inst, ref args, .. } => {
                 inst.hash(&mut state);
-                args.as_slice(&self.args).hash(&mut state);
+                self.hash_ids(args, &mut state, uf);
             }
             &Node::Load {
                 ref op,
                 ty,
-                addr_canonical,
+                addr,
                 mem_state,
                 ..
             } => {
                 op.hash(&mut state);
                 ty.hash(&mut state);
-                addr_canonical.hash(&mut state);
+                self.hash_id(addr, &mut state, uf);
                 mem_state.hash(&mut state);
             }
         }

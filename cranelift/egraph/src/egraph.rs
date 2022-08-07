@@ -52,20 +52,20 @@ impl NodeKey {
 
 struct NodeKeyCtx<'a, L: Language> {
     nodes: &'a [L::Node],
-    node_ctx: &'a mut L,
+    node_ctx: &'a L,
 }
 
 impl<'ctx, L: Language> CtxEq<NodeKey, NodeKey> for NodeKeyCtx<'ctx, L> {
-    fn ctx_eq(&self, a: &NodeKey, b: &NodeKey) -> bool {
+    fn ctx_eq(&self, a: &NodeKey, b: &NodeKey, uf: &mut UnionFind) -> bool {
         let a = a.node::<L>(self.nodes);
         let b = b.node::<L>(self.nodes);
-        self.node_ctx.ctx_eq(a, b)
+        self.node_ctx.ctx_eq(a, b, uf)
     }
 }
 
 impl<'ctx, L: Language> CtxHash<NodeKey> for NodeKeyCtx<'ctx, L> {
-    fn ctx_hash(&self, value: &NodeKey) -> u64 {
-        self.node_ctx.ctx_hash(value.node::<L>(self.nodes))
+    fn ctx_hash(&self, value: &NodeKey, uf: &mut UnionFind) -> u64 {
+        self.node_ctx.ctx_hash(value.node::<L>(self.nodes), uf)
     }
 }
 
@@ -199,7 +199,7 @@ where
     }
 
     /// Add a new node.
-    pub fn add(&mut self, node: L::Node, node_ctx: &mut L) -> NewOrExisting<Id> {
+    pub fn add(&mut self, node: L::Node, node_ctx: &L) -> NewOrExisting<Id> {
         // Push the node. We can then build a NodeKey that refers to
         // it and look for an existing interned copy. If one exists,
         // we can pop the pushed node and return the existing Id.
@@ -215,7 +215,7 @@ where
                 node_ctx,
             };
 
-            match self.node_map.entry(key, &ctx) {
+            match self.node_map.entry(key, &ctx, &mut self.unionfind) {
                 Entry::Occupied(o) => {
                     let eclass_id = *o.get();
                     self.nodes.pop();

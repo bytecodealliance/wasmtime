@@ -4,6 +4,7 @@
 //! node-internal data references some other storage (e.g., offsets into
 //! an array or pool of shared data).
 
+use super::unionfind::UnionFind;
 use hashbrown::raw::{Bucket, RawTable};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
@@ -13,12 +14,12 @@ use std::marker::PhantomData;
 /// lifetime reasons (lack of GATs to allow `for<'ctx> Ctx<'ctx>`-like
 /// associated types in traits on the value type).
 pub trait CtxEq<V1: ?Sized, V2: ?Sized> {
-    fn ctx_eq(&self, a: &V1, b: &V2) -> bool;
+    fn ctx_eq(&self, a: &V1, b: &V2, uf: &mut UnionFind) -> bool;
 }
 
 /// Trait that allows for hashing given some external context.
 pub trait CtxHash<Value: ?Sized>: CtxEq<Value, Value> {
-    fn ctx_hash(&self, value: &Value) -> u64;
+    fn ctx_hash(&self, value: &Value, uf: &mut UnionFind) -> u64;
 }
 
 // A null-comparator context type for underlying value types that
@@ -29,12 +30,12 @@ pub struct NullCtx<V: Eq + Hash> {
 }
 
 impl<V: Eq + Hash> CtxEq<V, V> for NullCtx<V> {
-    fn ctx_eq(&self, a: &V, b: &V) -> bool {
+    fn ctx_eq(&self, a: &V, b: &V, _: &mut UnionFind) -> bool {
         a.eq(b)
     }
 }
 impl<V: Eq + Hash> CtxHash<V> for NullCtx<V> {
-    fn ctx_hash(&self, value: &V) -> u64 {
+    fn ctx_hash(&self, value: &V, _: &mut UnionFind) -> u64 {
         let mut state = fxhash::FxHasher::default();
         value.hash(&mut state);
         state.finish()
@@ -72,10 +73,16 @@ impl<K, V> CtxHashMap<K, V> {
 impl<K, V> CtxHashMap<K, V> {
     /// Insert a new key-value pair, returning the old value associated
     /// with this key (if any).
-    pub fn insert<Ctx: CtxEq<K, K> + CtxHash<K>>(&mut self, k: K, v: V, ctx: &Ctx) -> Option<V> {
-        let hash = ctx.ctx_hash(&k) as u32;
+    pub fn insert<Ctx: CtxEq<K, K> + CtxHash<K>>(
+        &mut self,
+        k: K,
+        v: V,
+        ctx: &Ctx,
+        uf: &mut UnionFind,
+    ) -> Option<V> {
+        let hash = ctx.ctx_hash(&k, uf) as u32;
         match self.raw.find(hash as u64, |bucket| {
-            hash == bucket.hash && ctx.ctx_eq(&bucket.k, &k)
+            hash == bucket.hash && ctx.ctx_eq(&bucket.k, &k, uf)
         }) {
             Some(bucket) => {
                 let data = unsafe { bucket.as_mut() };
@@ -95,11 +102,12 @@ impl<K, V> CtxHashMap<K, V> {
         &'a self,
         k: &Q,
         ctx: &Ctx,
+        uf: &mut UnionFind,
     ) -> Option<&'a V> {
-        let hash = ctx.ctx_hash(k) as u32;
+        let hash = ctx.ctx_hash(k, uf) as u32;
         self.raw
             .find(hash as u64, |bucket| {
-                hash == bucket.hash && ctx.ctx_eq(&bucket.k, k)
+                hash == bucket.hash && ctx.ctx_eq(&bucket.k, k, uf)
             })
             .map(|bucket| {
                 let data = unsafe { bucket.as_ref() };
@@ -113,10 +121,11 @@ impl<K, V> CtxHashMap<K, V> {
         &'a mut self,
         k: K,
         ctx: &'a Ctx,
+        uf: &mut UnionFind,
     ) -> Entry<'a, K, V> {
-        let hash = ctx.ctx_hash(&k) as u32;
+        let hash = ctx.ctx_hash(&k, uf) as u32;
         match self.raw.find(hash as u64, |bucket| {
-            hash == bucket.hash && ctx.ctx_eq(&bucket.k, &k)
+            hash == bucket.hash && ctx.ctx_eq(&bucket.k, &k, uf)
         }) {
             Some(bucket) => Entry::Occupied(OccupiedEntry {
                 bucket,
@@ -188,12 +197,12 @@ mod test {
         vals: &'static [&'static str],
     }
     impl CtxEq<Key, Key> for Ctx {
-        fn ctx_eq(&self, a: &Key, b: &Key) -> bool {
+        fn ctx_eq(&self, a: &Key, b: &Key, _: &mut UnionFind) -> bool {
             self.vals[a.index as usize].eq(self.vals[b.index as usize])
         }
     }
     impl CtxHash<Key> for Ctx {
-        fn ctx_hash(&self, value: &Key) -> u64 {
+        fn ctx_hash(&self, value: &Key, _: &mut UnionFind) -> u64 {
             let mut state = fxhash::FxHasher::default();
             self.vals[value.index as usize].hash(&mut state);
             state.finish()
@@ -205,20 +214,21 @@ mod test {
         let ctx = Ctx {
             vals: &["a", "b", "a"],
         };
+        let mut uf = UnionFind::new();
 
         let k0 = Key { index: 0 };
         let k1 = Key { index: 1 };
         let k2 = Key { index: 2 };
 
-        assert!(ctx.ctx_eq(&k0, &k2));
-        assert!(!ctx.ctx_eq(&k0, &k1));
-        assert!(!ctx.ctx_eq(&k2, &k1));
+        assert!(ctx.ctx_eq(&k0, &k2, &mut uf));
+        assert!(!ctx.ctx_eq(&k0, &k1, &mut uf));
+        assert!(!ctx.ctx_eq(&k2, &k1, &mut uf));
 
         let mut map: CtxHashMap<Key, u64> = CtxHashMap::new();
-        assert_eq!(map.insert(k0, 42, &ctx), None);
-        assert_eq!(map.insert(k2, 84, &ctx), Some(42));
-        assert_eq!(map.get(&k1, &ctx), None);
-        assert_eq!(*map.get(&k0, &ctx).unwrap(), 84);
+        assert_eq!(map.insert(k0, 42, &ctx, &mut uf), None);
+        assert_eq!(map.insert(k2, 84, &ctx, &mut uf), Some(42));
+        assert_eq!(map.get(&k1, &ctx, &mut uf), None);
+        assert_eq!(*map.get(&k0, &ctx, &mut uf).unwrap(), 84);
     }
 
     #[test]
@@ -226,19 +236,20 @@ mod test {
         let mut ctx = Ctx {
             vals: &["a", "b", "a"],
         };
+        let mut uf = UnionFind::new();
 
         let k0 = Key { index: 0 };
         let k1 = Key { index: 1 };
         let k2 = Key { index: 2 };
 
         let mut map: CtxHashMap<Key, u64> = CtxHashMap::new();
-        match map.entry(k0, &mut ctx) {
+        match map.entry(k0, &mut ctx, &mut uf) {
             Entry::Vacant(v) => {
                 v.insert(1);
             }
             _ => panic!(),
         }
-        match map.entry(k2, &mut ctx) {
+        match map.entry(k2, &mut ctx, &mut uf) {
             Entry::Occupied(o) => {
                 assert_eq!(*o.get(), 1);
             }
