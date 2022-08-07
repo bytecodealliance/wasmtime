@@ -4,7 +4,6 @@ use super::MemoryState;
 use crate::ir::{Block, Inst, InstructionImms, Opcode, SourceLoc, Type};
 use cranelift_egraph::{BumpArena, BumpSlice, CtxEq, CtxHash, Id, Language};
 use cranelift_entity::{EntityList, ListPool};
-use std::cell::Cell;
 use std::hash::{Hash, Hasher};
 
 #[derive(Debug)]
@@ -13,9 +12,6 @@ pub enum Node {
     /// predecessors' branch arguments, because this would create
     /// cycles.
     Param {
-        /// Cached hash.
-        hash: Cell<u32>,
-
         /// CLIF block this param comes from.
         block: Block,
         /// Index of blockparam within block.
@@ -28,9 +24,6 @@ pub enum Node {
     /// which to compute this node during lowering back out of the
     /// egraph.
     Pure {
-        /// Cached hash.
-        hash: Cell<u32>,
-
         /// The instruction data, without SSA values.
         op: InstructionImms,
         /// eclass arguments to the operator.
@@ -41,9 +34,6 @@ pub enum Node {
     /// A CLIF instruction that has side-effects or is otherwise not
     /// representable by `Pure`.
     Inst {
-        /// Cached hash.
-        hash: Cell<u32>,
-
         /// The instruction data, without SSA values.
         op: InstructionImms,
         /// eclass arguments to the operator.
@@ -62,9 +52,6 @@ pub enum Node {
     },
     /// A projection of one result of an `Inst` or `Pure`.
     Result {
-        /// Cached hash.
-        hash: Cell<u32>,
-
         /// `Inst` or `Pure` node.
         value: Id,
         /// Index of the result we want.
@@ -80,9 +67,6 @@ pub enum Node {
     /// redundant-load-elimination for free (and make store-to-load
     /// forwarding much easier).
     Load {
-        /// Cached hash.
-        hash: Cell<u32>,
-
         // -- identity depends on:
         /// The original load operation. Must have one argument, the
         /// address.
@@ -147,36 +131,18 @@ impl NodeCtx {
 
 impl CtxEq<Node, Node> for NodeCtx {
     fn ctx_eq(&self, a: &Node, b: &Node) -> bool {
-        let a_hash = a.cached_hash().get();
-        let b_hash = b.cached_hash().get();
-        if a_hash != b_hash && a_hash != 0 && b_hash != 0 {
-            return false;
-        }
-
         match (a, b) {
             (
+                &Node::Param { block, index, ty },
                 &Node::Param {
-                    hash: _,
-                    block,
-                    index,
-                    ty,
-                },
-                &Node::Param {
-                    hash: _,
                     block: other_block,
                     index: other_index,
                     ty: other_ty,
                 },
             ) => block == other_block && index == other_index && ty == other_ty,
             (
+                &Node::Result { value, result, ty },
                 &Node::Result {
-                    hash: _,
-                    value,
-                    result,
-                    ty,
-                },
-                &Node::Result {
-                    hash: _,
                     value: other_value,
                     result: other_result,
                     ty: other_ty,
@@ -184,13 +150,11 @@ impl CtxEq<Node, Node> for NodeCtx {
             ) => value == other_value && result == other_result && ty == other_ty,
             (
                 &Node::Pure {
-                    hash: _,
                     ref op,
                     ref args,
                     ref types,
                 },
                 &Node::Pure {
-                    hash: _,
                     op: ref other_op,
                     args: ref other_args,
                     types: ref other_types,
@@ -201,14 +165,8 @@ impl CtxEq<Node, Node> for NodeCtx {
                     && types.as_slice(&self.types) == other_types.as_slice(&self.types)
             }
             (
+                &Node::Inst { inst, ref args, .. },
                 &Node::Inst {
-                    hash: _,
-                    inst,
-                    ref args,
-                    ..
-                },
-                &Node::Inst {
-                    hash: _,
                     inst: other_inst,
                     args: ref other_args,
                     ..
@@ -216,7 +174,6 @@ impl CtxEq<Node, Node> for NodeCtx {
             ) => inst == other_inst && args.as_slice(&self.args) == other_args.as_slice(&self.args),
             (
                 &Node::Load {
-                    hash: _,
                     ref op,
                     ty,
                     addr_canonical,
@@ -224,7 +181,6 @@ impl CtxEq<Node, Node> for NodeCtx {
                     ..
                 },
                 &Node::Load {
-                    hash: _,
                     op: ref other_op,
                     ty: other_ty,
                     addr_canonical: other_addr_canonical,
@@ -247,30 +203,12 @@ impl CtxEq<Node, Node> for NodeCtx {
     }
 }
 
-impl Node {
-    fn cached_hash(&self) -> &Cell<u32> {
-        match self {
-            Node::Param { hash, .. }
-            | Node::Result { hash, .. }
-            | Node::Pure { hash, .. }
-            | Node::Inst { hash, .. }
-            | Node::Load { hash, .. } => hash,
-        }
-    }
-}
-
 impl CtxHash<Node> for NodeCtx {
     fn ctx_hash(&self, value: &Node) -> u64 {
-        let hash = value.cached_hash();
-        if hash.get() != 0 {
-            return hash.get() as u64;
-        }
-
         let mut state = crate::fx::FxHasher::default();
         std::mem::discriminant(value).hash(&mut state);
         match value {
             &Node::Param {
-                hash: _,
                 block,
                 index,
                 ty: _,
@@ -279,7 +217,6 @@ impl CtxHash<Node> for NodeCtx {
                 index.hash(&mut state);
             }
             &Node::Result {
-                hash: _,
                 value,
                 result,
                 ty: _,
@@ -288,7 +225,6 @@ impl CtxHash<Node> for NodeCtx {
                 result.hash(&mut state);
             }
             &Node::Pure {
-                hash: _,
                 ref op,
                 ref args,
                 types: _,
@@ -299,17 +235,11 @@ impl CtxHash<Node> for NodeCtx {
                 // (hence cache misses), and result type *should* be
                 // fully determined by op and args.
             }
-            &Node::Inst {
-                hash: _,
-                inst,
-                ref args,
-                ..
-            } => {
+            &Node::Inst { inst, ref args, .. } => {
                 inst.hash(&mut state);
                 args.as_slice(&self.args).hash(&mut state);
             }
             &Node::Load {
-                hash: _,
                 ref op,
                 ty,
                 addr_canonical,
@@ -323,9 +253,7 @@ impl CtxHash<Node> for NodeCtx {
             }
         }
 
-        let h = (state.finish() & 0xffff_ffff) as u32;
-        hash.set(h);
-        h as u64
+        state.finish()
     }
 }
 

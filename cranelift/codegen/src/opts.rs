@@ -14,7 +14,6 @@ use crate::isle_common_prelude_methods;
 pub use cranelift_egraph::{Id, NewOrExisting, NodeIter};
 use cranelift_entity::{EntityList, EntityRef};
 use smallvec::{smallvec, SmallVec};
-use std::cell::Cell;
 use std::marker::PhantomData;
 
 pub type IdArray = EntityList<Id>;
@@ -131,12 +130,7 @@ where
         while let Some(node) = self.iter.next(&ctx.egraph.egraph) {
             log::trace!("iter from root {}: node {:?}", self.root, node);
             match node {
-                Node::Pure {
-                    hash: _,
-                    op,
-                    args,
-                    types,
-                } if types.len() == 1 => {
+                Node::Pure { op, args, types } if types.len() == 1 => {
                     let ty = types.as_slice(&ctx.egraph.node_ctx.types)[0];
                     return Some((ty, op.clone(), args.clone()));
                 }
@@ -178,15 +172,11 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
         let types = self.egraph.node_ctx.types.single(ty);
         let types = types.freeze(&mut self.egraph.node_ctx.types);
         let op = op.clone();
-        match self.egraph.egraph.add(
-            Node::Pure {
-                hash: Cell::new(0),
-                op,
-                args,
-                types,
-            },
-            &mut self.egraph.node_ctx,
-        ) {
+        match self
+            .egraph
+            .egraph
+            .add(Node::Pure { op, args, types }, &mut self.egraph.node_ctx)
+        {
             NewOrExisting::New(id) => optimize_eclass(id, self.egraph),
             NewOrExisting::Existing(id) => id,
         }

@@ -14,8 +14,6 @@
   - limit nodes exposed in pure_enodes_etor: pre-extract? "subsume"
     nodes/return from simplify?
   - make alias analysis faster to compute
-    - visit_block_succs: cache successor list? or use
-      ControlFlowGraph?
     - cache predicates? has_side_effect, is_memory_fence, ...
   - elaboration
     - find_best_node: stop at sufficiently cheap node? bound the

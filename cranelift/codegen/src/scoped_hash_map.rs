@@ -6,7 +6,6 @@
 
 use crate::fx::FxHashMap;
 use core::hash::Hash;
-use core::mem;
 use smallvec::{smallvec, SmallVec};
 
 #[cfg(not(feature = "std"))]
@@ -14,17 +13,15 @@ use crate::fx::FxHasher;
 #[cfg(not(feature = "std"))]
 type Hasher = core::hash::BuildHasherDefault<FxHasher>;
 
-struct Val<K, V> {
+struct Val<V> {
     value: V,
-    next_key: Option<K>,
+    level: u32,
+    generation: u32,
 }
 
 /// A view into an occupied entry in a `ScopedHashMap`. It is part of the `Entry` enum.
 pub struct OccupiedEntry<'a, K: 'a, V: 'a> {
-    #[cfg(feature = "std")]
-    entry: super::hash_map::OccupiedEntry<'a, K, Val<K, V>>,
-    #[cfg(not(feature = "std"))]
-    entry: super::hash_map::OccupiedEntry<'a, K, Val<K, V>, Hasher>,
+    entry: super::hash_map::OccupiedEntry<'a, K, Val<V>>,
 }
 
 impl<'a, K, V> OccupiedEntry<'a, K, V> {
@@ -36,20 +33,34 @@ impl<'a, K, V> OccupiedEntry<'a, K, V> {
 
 /// A view into a vacant entry in a `ScopedHashMap`. It is part of the `Entry` enum.
 pub struct VacantEntry<'a, K: 'a, V: 'a> {
-    #[cfg(feature = "std")]
-    entry: super::hash_map::VacantEntry<'a, K, Val<K, V>>,
-    #[cfg(not(feature = "std"))]
-    entry: super::hash_map::VacantEntry<'a, K, Val<K, V>, Hasher>,
-    next_key: Option<K>,
+    entry: InsertLoc<'a, K, V>,
+    depth: u32,
+    generation: u32,
 }
 
-impl<'a, K: Hash, V> VacantEntry<'a, K, V> {
+/// Where to insert from a `VacantEntry`. May be vacant or occupied in
+/// the underlying map because of lazy (generation-based) deletion.
+enum InsertLoc<'a, K: 'a, V: 'a> {
+    Vacant(super::hash_map::VacantEntry<'a, K, Val<V>>),
+    Occupied(super::hash_map::OccupiedEntry<'a, K, Val<V>>),
+}
+
+impl<'a, K, V> VacantEntry<'a, K, V> {
     /// Sets the value of the entry with the `VacantEntry`'s key.
     pub fn insert(self, value: V) {
-        self.entry.insert(Val {
+        let val = Val {
             value,
-            next_key: self.next_key,
-        });
+            level: self.depth,
+            generation: self.generation,
+        };
+        match self.entry {
+            InsertLoc::Vacant(v) => {
+                v.insert(val);
+            }
+            InsertLoc::Occupied(mut o) => {
+                o.insert(val);
+            }
+        }
     }
 }
 
@@ -67,8 +78,9 @@ pub enum Entry<'a, K: 'a, V: 'a> {
 /// Shadowing, where one scope has entries with the same keys as a containing scope,
 /// is not supported in this implementation.
 pub struct ScopedHashMap<K, V> {
-    map: FxHashMap<K, Val<K, V>>,
-    last_insert_by_depth: SmallVec<[Option<K>; 8]>,
+    map: FxHashMap<K, Val<V>>,
+    generation_by_depth: SmallVec<[u32; 8]>,
+    generation: u32,
 }
 
 impl<K, V> ScopedHashMap<K, V>
@@ -79,7 +91,8 @@ where
     pub fn new() -> Self {
         Self {
             map: FxHashMap(),
-            last_insert_by_depth: smallvec![None],
+            generation: 0,
+            generation_by_depth: smallvec![0],
         }
     }
 
@@ -89,7 +102,8 @@ where
         map.reserve(cap);
         Self {
             map,
-            last_insert_by_depth: smallvec![None],
+            generation: 0,
+            generation_by_depth: smallvec![0],
         }
     }
 
@@ -101,24 +115,41 @@ where
 
     /// Get the entry, setting the scope depth at which to insert.
     pub fn entry_with_depth<'a>(&'a mut self, key: K, depth: usize) -> Entry<'a, K, V> {
-        debug_assert!(depth <= self.last_insert_by_depth.len());
+        debug_assert!(depth <= self.generation_by_depth.len());
+        let generation = self.generation_by_depth[depth];
+        let depth = depth as u32;
         use super::hash_map::Entry::*;
         match self.map.entry(key) {
-            Occupied(entry) => Entry::Occupied(OccupiedEntry { entry }),
-            Vacant(entry) => {
-                let head_link = self
-                    .last_insert_by_depth
-                    .get_mut(depth)
-                    .expect("Insert depth must be within current depth");
-                let next_key = mem::replace(head_link, Some(entry.key().clone()));
-                Entry::Vacant(VacantEntry { entry, next_key })
+            Occupied(entry) => {
+                let entry_generation = entry.get().generation;
+                let entry_depth = entry.get().level as usize;
+                if self.generation_by_depth.get(entry_depth).cloned() == Some(entry_generation) {
+                    Entry::Occupied(OccupiedEntry { entry })
+                } else {
+                    Entry::Vacant(VacantEntry {
+                        entry: InsertLoc::Occupied(entry),
+                        depth,
+                        generation,
+                    })
+                }
             }
+            Vacant(entry) => Entry::Vacant(VacantEntry {
+                entry: InsertLoc::Vacant(entry),
+                depth,
+                generation,
+            }),
         }
     }
 
     /// Get a value from a key, if present.
     pub fn get<'a>(&'a self, key: &K) -> Option<&'a V> {
-        self.map.get(key).map(|entry| &entry.value)
+        self.map
+            .get(key)
+            .filter(|entry| {
+                let level = entry.level as usize;
+                self.generation_by_depth.get(level).cloned() == Some(entry.generation)
+            })
+            .map(|entry| &entry.value)
     }
 
     /// Insert a key-value pair if absent, panicking otherwise.
@@ -140,33 +171,21 @@ where
 
     /// Enter a new scope.
     pub fn increment_depth(&mut self) {
-        self.last_insert_by_depth.push(None);
+        self.generation_by_depth.push(self.generation);
     }
 
     /// Exit the current scope.
     pub fn decrement_depth(&mut self) {
-        // Remove all elements inserted at the current depth.
-        let mut head = self
-            .last_insert_by_depth
-            .pop()
-            .expect("Cannot pop beyond root scope");
-        while let Some(key) = head {
-            use crate::hash_map::Entry::*;
-            match self.map.entry(key) {
-                Occupied(entry) => {
-                    head = entry.remove_entry().1.next_key;
-                }
-                Vacant(_) => panic!(),
-            }
-        }
+        self.generation += 1;
+        self.generation_by_depth.pop();
     }
 
     /// Return the current scope depth.
     pub fn depth(&self) -> usize {
-        self.last_insert_by_depth
+        self.generation_by_depth
             .len()
             .checked_sub(1)
-            .expect("last_insert_by_depth cannot be empty")
+            .expect("generation_by_depth cannot be empty")
     }
 }
 

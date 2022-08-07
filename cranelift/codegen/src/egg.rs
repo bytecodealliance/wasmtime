@@ -13,7 +13,6 @@ use core::ops::Range;
 use cranelift_egraph::{EGraph, Id, NewOrExisting};
 use cranelift_entity::EntityList;
 use cranelift_entity::SecondaryMap;
-use std::cell::Cell;
 
 mod domtree;
 mod elaborate;
@@ -92,7 +91,6 @@ impl<'a> FuncEGraph<'a> {
                     .egraph
                     .add(
                         Node::Param {
-                            hash: Cell::new(0),
                             block,
                             index: i as u32,
                             ty,
@@ -144,19 +142,13 @@ impl<'a> FuncEGraph<'a> {
                 let srcloc = func.srclocs[inst];
 
                 let node = if is_readonly_load {
-                    Node::Pure {
-                        hash: Cell::new(0),
-                        op,
-                        args,
-                        types,
-                    }
+                    Node::Pure { op, args, types }
                 } else if let Some(mem_state) = mem_state {
                     let addr = args.as_slice(&self.node_ctx.args)[0];
                     let addr_canonical = self.egraph.canonical_id_mut(addr);
                     let ty = types.as_slice(&self.node_ctx.types)[0];
                     log::trace!("load at inst {} has mem state {:?}", inst, mem_state);
                     Node::Load {
-                        hash: Cell::new(0),
                         op,
                         ty,
                         inst,
@@ -167,7 +159,6 @@ impl<'a> FuncEGraph<'a> {
                     }
                 } else if side_effect {
                     Node::Inst {
-                        hash: Cell::new(0),
                         op,
                         inst,
                         args,
@@ -175,12 +166,7 @@ impl<'a> FuncEGraph<'a> {
                         srcloc,
                     }
                 } else {
-                    Node::Pure {
-                        hash: Cell::new(0),
-                        op,
-                        args,
-                        types,
-                    }
+                    Node::Pure { op, args, types }
                 };
                 let id = self.egraph.add(node, &mut self.node_ctx);
 
@@ -225,7 +211,6 @@ impl<'a> FuncEGraph<'a> {
                                 .egraph
                                 .add(
                                     Node::Result {
-                                        hash: Cell::new(0),
                                         value: id,
                                         result: i,
                                         ty,

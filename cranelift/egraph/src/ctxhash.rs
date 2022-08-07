@@ -42,6 +42,7 @@ impl<V: Eq + Hash> CtxHash<V> for NullCtx<V> {
 }
 
 struct BucketData<K, V> {
+    hash: u32,
     k: K,
     v: V,
 }
@@ -68,27 +69,22 @@ impl<K, V> CtxHashMap<K, V> {
     }
 }
 
-fn hash<K, Ctx>(k: &K, ctx: &Ctx) -> u64
-where
-    Ctx: CtxHash<K>,
-{
-    ctx.ctx_hash(k)
-}
-
 impl<K, V> CtxHashMap<K, V> {
     /// Insert a new key-value pair, returning the old value associated
     /// with this key (if any).
     pub fn insert<Ctx: CtxEq<K, K> + CtxHash<K>>(&mut self, k: K, v: V, ctx: &Ctx) -> Option<V> {
-        let h = hash(&k, ctx);
-        match self.raw.find(h, |bucket| ctx.ctx_eq(&bucket.k, &k)) {
+        let hash = ctx.ctx_hash(&k) as u32;
+        match self.raw.find(hash as u64, |bucket| {
+            hash == bucket.hash && ctx.ctx_eq(&bucket.k, &k)
+        }) {
             Some(bucket) => {
                 let data = unsafe { bucket.as_mut() };
                 Some(std::mem::replace(&mut data.v, v))
             }
             None => {
-                let data = BucketData { k, v };
+                let data = BucketData { hash, k, v };
                 self.raw
-                    .insert_entry(h, data, |bucket| hash(&bucket.k, ctx));
+                    .insert_entry(hash as u64, data, |bucket| bucket.hash as u64);
                 None
             }
         }
@@ -100,9 +96,11 @@ impl<K, V> CtxHashMap<K, V> {
         k: &Q,
         ctx: &Ctx,
     ) -> Option<&'a V> {
-        let h = hash(k, ctx);
+        let hash = ctx.ctx_hash(k) as u32;
         self.raw
-            .find(h, |bucket| ctx.ctx_eq(&bucket.k, k))
+            .find(hash as u64, |bucket| {
+                hash == bucket.hash && ctx.ctx_eq(&bucket.k, k)
+            })
             .map(|bucket| {
                 let data = unsafe { bucket.as_ref() };
                 &data.v
@@ -115,17 +113,18 @@ impl<K, V> CtxHashMap<K, V> {
         &'a mut self,
         k: K,
         ctx: &'a Ctx,
-    ) -> Entry<'a, Ctx, K, V> {
-        let h = hash(&k, ctx);
-        match self.raw.find(h, |bucket| ctx.ctx_eq(&bucket.k, &k)) {
+    ) -> Entry<'a, K, V> {
+        let hash = ctx.ctx_hash(&k) as u32;
+        match self.raw.find(hash as u64, |bucket| {
+            hash == bucket.hash && ctx.ctx_eq(&bucket.k, &k)
+        }) {
             Some(bucket) => Entry::Occupied(OccupiedEntry {
                 bucket,
                 _phantom: PhantomData,
             }),
             None => Entry::Vacant(VacantEntry {
                 raw: &mut self.raw,
-                ctx,
-                hash: h,
+                hash,
                 key: k,
             }),
         }
@@ -133,12 +132,9 @@ impl<K, V> CtxHashMap<K, V> {
 }
 
 /// An entry in the hashmap.
-pub enum Entry<'a, Ctx, K: 'a, V>
-where
-    Ctx: CtxHash<K>,
-{
+pub enum Entry<'a, K: 'a, V> {
     Occupied(OccupiedEntry<'a, K, V>),
-    Vacant(VacantEntry<'a, Ctx, K, V>),
+    Vacant(VacantEntry<'a, K, V>),
 }
 
 /// An occupied entry.
@@ -156,27 +152,24 @@ impl<'a, K: 'a, V> OccupiedEntry<'a, K, V> {
 }
 
 /// A vacant entry.
-pub struct VacantEntry<'a, Ctx, K, V>
-where
-    Ctx: CtxHash<K>,
-{
+pub struct VacantEntry<'a, K, V> {
     raw: &'a mut RawTable<BucketData<K, V>>,
-    ctx: &'a Ctx,
-    hash: u64,
+    hash: u32,
     key: K,
 }
 
-impl<'a, Ctx, K, V> VacantEntry<'a, Ctx, K, V>
-where
-    Ctx: CtxHash<K>,
-{
+impl<'a, K, V> VacantEntry<'a, K, V> {
     /// Insert a value.
     pub fn insert(self, v: V) -> &'a V {
-        let bucket = self
-            .raw
-            .insert(self.hash, BucketData { k: self.key, v }, |bucket| {
-                hash(&bucket.k, self.ctx)
-            });
+        let bucket = self.raw.insert(
+            self.hash as u64,
+            BucketData {
+                hash: self.hash,
+                k: self.key,
+                v,
+            },
+            |bucket| bucket.hash as u64,
+        );
         let data = unsafe { bucket.as_ref() };
         &data.v
     }
@@ -200,11 +193,10 @@ mod test {
         }
     }
     impl CtxHash<Key> for Ctx {
-        fn ctx_hash<H>(&self, value: &Key, state: &mut H)
-        where
-            H: Hasher,
-        {
-            self.vals[value.index as usize].hash(state);
+        fn ctx_hash(&self, value: &Key) -> u64 {
+            let mut state = fxhash::FxHasher::default();
+            self.vals[value.index as usize].hash(&mut state);
+            state.finish()
         }
     }
 
@@ -231,7 +223,7 @@ mod test {
 
     #[test]
     fn test_entry() {
-        let ctx = Ctx {
+        let mut ctx = Ctx {
             vals: &["a", "b", "a"],
         };
 
@@ -240,6 +232,17 @@ mod test {
         let k2 = Key { index: 2 };
 
         let mut map: CtxHashMap<Key, u64> = CtxHashMap::new();
-        assert!(matches!(map.entry(k0), Entry::VacantEntry(_)));
+        match map.entry(k0, &mut ctx) {
+            Entry::Vacant(v) => {
+                v.insert(1);
+            }
+            _ => panic!(),
+        }
+        match map.entry(k2, &mut ctx) {
+            Entry::Occupied(o) => {
+                assert_eq!(*o.get(), 1);
+            }
+            _ => panic!(),
+        }
     }
 }
