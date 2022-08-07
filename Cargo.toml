@@ -43,21 +43,20 @@ rustix = { version = "0.35.6", features = ["mm", "param"] }
 
 [dev-dependencies]
 # depend again on wasmtime to activate its default features for tests
-wasmtime = { path = "crates/wasmtime", version = "0.40.0" }
+wasmtime = { path = "crates/wasmtime", version = "0.40.0", features = ['component-model'] }
 env_logger = "0.9.0"
 filecheck = "0.5.0"
-more-asserts = "0.2.1"
 tempfile = "3.1.0"
 test-programs = { path = "crates/test-programs" }
 wasmtime-runtime = { path = "crates/runtime" }
 tokio = { version = "1.8.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
 tracing-subscriber = "0.3.1"
-wast = "44.0.0"
+wast = "45.0.0"
 criterion = "0.3.4"
 num_cpus = "1.13.0"
 memchr = "2.4"
 async-trait = "0.1"
-wat = "1.0.46"
+wat = "1.0.47"
 once_cell = "1.9.0"
 rayon = "1.5.0"
 component-macro-test = { path = "crates/misc/component-macro-test" }
@@ -81,6 +80,7 @@ members = [
   "crates/bench-api",
   "crates/c-api",
   "crates/cli-flags",
+  "crates/environ/fuzz",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
   "examples/tokio/wasm",
@@ -125,9 +125,6 @@ harness = false
 [[example]]
 name = "tokio"
 required-features = ["wasmtime-wasi/tokio"]
-
-[profile.dev.package.backtrace]
-debug = false # FIXME(#1813)
 
 [[bench]]
 name = "instantiation"

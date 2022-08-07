@@ -30,6 +30,19 @@ impl List {
             values,
         })
     }
+
+    /// Returns the corresponding type of this list
+    pub fn ty(&self) -> &types::List {
+        &self.ty
+    }
+}
+
+impl Deref for List {
+    type Target = [Val];
+
+    fn deref(&self) -> &[Val] {
+        &self.values
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -76,6 +89,20 @@ impl Record {
             values: values.into(),
         })
     }
+
+    /// Returns the corresponding type of this record.
+    pub fn ty(&self) -> &types::Record {
+        &self.ty
+    }
+
+    /// Gets the value of the specified field `name` from this record.
+    pub fn fields(&self) -> impl Iterator<Item = (&str, &Val)> {
+        assert_eq!(self.values.len(), self.ty.fields().len());
+        self.ty
+            .fields()
+            .zip(self.values.iter())
+            .map(|(ty, val)| (ty.name, val))
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -104,6 +131,16 @@ impl Tuple {
             ty: ty.clone(),
             values,
         })
+    }
+
+    /// Returns the type of this tuple.
+    pub fn ty(&self) -> &types::Tuple {
+        &self.ty
+    }
+
+    /// Returns the list of values that this tuple contains.
+    pub fn values(&self) -> &[Val] {
+        &self.values
     }
 }
 
@@ -139,6 +176,25 @@ impl Variant {
             value: Box::new(value),
         })
     }
+
+    /// Returns the type of this variant.
+    pub fn ty(&self) -> &types::Variant {
+        &self.ty
+    }
+
+    /// Returns name of the discriminant of this value within the variant type.
+    pub fn discriminant(&self) -> &str {
+        self.ty
+            .cases()
+            .nth(self.discriminant as usize)
+            .unwrap()
+            .name
+    }
+
+    /// Returns the payload value for this variant.
+    pub fn payload(&self) -> &Val {
+        &self.value
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -160,6 +216,16 @@ impl Enum {
             ty: ty.clone(),
             discriminant,
         })
+    }
+
+    /// Returns the type of this value.
+    pub fn ty(&self) -> &types::Enum {
+        &self.ty
+    }
+
+    /// Returns name of this enum value.
+    pub fn discriminant(&self) -> &str {
+        self.ty.names().nth(self.discriminant as usize).unwrap()
     }
 }
 
@@ -190,6 +256,21 @@ impl Union {
             ))
         }
     }
+
+    /// Returns the type of this value.
+    pub fn ty(&self) -> &types::Union {
+        &self.ty
+    }
+
+    /// Returns name of the discriminant of this value within the union type.
+    pub fn discriminant(&self) -> u32 {
+        self.discriminant
+    }
+
+    /// Returns the payload value for this union.
+    pub fn payload(&self) -> &Val {
+        &self.value
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -215,6 +296,20 @@ impl Option {
             discriminant: if value.is_none() { 0 } else { 1 },
             value: Box::new(value.unwrap_or(Val::Unit)),
         })
+    }
+
+    /// Returns the type of this value.
+    pub fn ty(&self) -> &types::Option {
+        &self.ty
+    }
+
+    /// Returns the optional value contained within.
+    pub fn value(&self) -> std::option::Option<&Val> {
+        if self.discriminant == 0 {
+            None
+        } else {
+            Some(&self.value)
+        }
     }
 }
 
@@ -247,6 +342,20 @@ impl Expected {
             }),
         })
     }
+
+    /// Returns the type of this value.
+    pub fn ty(&self) -> &types::Expected {
+        &self.ty
+    }
+
+    /// Returns the result value contained within.
+    pub fn value(&self) -> Result<&Val, &Val> {
+        if self.discriminant == 0 {
+            Ok(&self.value)
+        } else {
+            Err(&self.value)
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -278,6 +387,23 @@ impl Flags {
             ty: ty.clone(),
             count: u32::try_from(map.len())?,
             value: values.into(),
+        })
+    }
+
+    /// Returns the type of this value.
+    pub fn ty(&self) -> &types::Flags {
+        &self.ty
+    }
+
+    /// Returns an iterator over the set of names that this flags set contains.
+    pub fn flags(&self) -> impl Iterator<Item = &str> {
+        (0..self.count).filter_map(|i| {
+            let (idx, bit) = ((i / 32) as usize, i % 32);
+            if self.value[idx] & (1 << bit) != 0 {
+                Some(self.ty.names().nth(i as usize).unwrap())
+            } else {
+                None
+            }
         })
     }
 }
@@ -573,6 +699,7 @@ impl Val {
                 ty: handle.clone(),
                 count: u32::try_from(handle.names().len())?,
                 value: match FlagsSize::from_count(handle.names().len()) {
+                    FlagsSize::Size0 => Box::new([]),
                     FlagsSize::Size1 => iter::once(u8::load(mem, bytes)? as u32).collect(),
                     FlagsSize::Size2 => iter::once(u16::load(mem, bytes)? as u32).collect(),
                     FlagsSize::Size4Plus(n) => (0..n)
@@ -724,6 +851,7 @@ impl Val {
 
             Val::Flags(Flags { count, value, .. }) => {
                 match FlagsSize::from_count(*count as usize) {
+                    FlagsSize::Size0 => {}
                     FlagsSize::Size1 => u8::try_from(value[0]).unwrap().store(mem, offset)?,
                     FlagsSize::Size2 => u16::try_from(value[0]).unwrap().store(mem, offset)?,
                     FlagsSize::Size4Plus(_) => {
@@ -892,6 +1020,7 @@ fn lower_list<T>(
 /// Note that this will always return at least 1, even if the `count` parameter is zero.
 pub(crate) fn u32_count_for_flag_count(count: usize) -> usize {
     match FlagsSize::from_count(count) {
+        FlagsSize::Size0 => 0,
         FlagsSize::Size1 | FlagsSize::Size2 => 1,
         FlagsSize::Size4Plus(n) => n,
     }

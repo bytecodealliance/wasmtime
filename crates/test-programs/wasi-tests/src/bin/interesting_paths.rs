@@ -1,4 +1,3 @@
-use more_asserts::assert_gt;
 use std::{env, process};
 use wasi_tests::{assert_errno, create_file, open_scratch_directory};
 
@@ -31,9 +30,8 @@ unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
         0,
     )
     .expect("opening a file with \"..\" in the path");
-    assert_gt!(
-        file_fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        file_fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
     wasi::fd_close(file_fd).expect("closing a file");
@@ -68,9 +66,8 @@ unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
     // Now open the directory with a trailing slash.
     file_fd = wasi::path_open(dir_fd, 0, "dir/nested/", 0, 0, 0, 0)
         .expect("opening a directory with a trailing slash");
-    assert_gt!(
-        file_fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        file_fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
     wasi::fd_close(file_fd).expect("closing a file");
@@ -78,9 +75,8 @@ unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
     // Now open the directory with trailing slashes.
     file_fd = wasi::path_open(dir_fd, 0, "dir/nested///", 0, 0, 0, 0)
         .expect("opening a directory with trailing slashes");
-    assert_gt!(
-        file_fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        file_fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
     wasi::fd_close(file_fd).expect("closing a file");

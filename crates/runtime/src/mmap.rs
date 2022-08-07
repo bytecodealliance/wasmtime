@@ -3,7 +3,6 @@
 
 use anyhow::anyhow;
 use anyhow::{Context, Result};
-use more_asserts::assert_le;
 use std::convert::TryFrom;
 use std::fs::File;
 use std::ops::Range;
@@ -160,7 +159,7 @@ impl Mmap {
     #[cfg(not(target_os = "windows"))]
     pub fn accessible_reserved(accessible_size: usize, mapping_size: usize) -> Result<Self> {
         let page_size = crate::page_size();
-        assert_le!(accessible_size, mapping_size);
+        assert!(accessible_size <= mapping_size);
         assert_eq!(mapping_size & (page_size - 1), 0);
         assert_eq!(accessible_size & (page_size - 1), 0);
 
@@ -228,7 +227,7 @@ impl Mmap {
         }
 
         let page_size = crate::page_size();
-        assert_le!(accessible_size, mapping_size);
+        assert!(accessible_size <= mapping_size);
         assert_eq!(mapping_size & (page_size - 1), 0);
         assert_eq!(accessible_size & (page_size - 1), 0);
 
@@ -284,8 +283,8 @@ impl Mmap {
         let page_size = crate::page_size();
         assert_eq!(start & (page_size - 1), 0);
         assert_eq!(len & (page_size - 1), 0);
-        assert_le!(len, self.len);
-        assert_le!(start, self.len - len);
+        assert!(len <= self.len);
+        assert!(start <= self.len - len);
 
         // Commit the accessible size.
         let ptr = self.ptr as *mut u8;
@@ -313,8 +312,8 @@ impl Mmap {
         let page_size = crate::page_size();
         assert_eq!(start & (page_size - 1), 0);
         assert_eq!(len & (page_size - 1), 0);
-        assert_le!(len, self.len);
-        assert_le!(start, self.len - len);
+        assert!(len <= self.len);
+        assert!(start <= self.len - len);
 
         // Commit the accessible size.
         let ptr = self.ptr as *const u8;

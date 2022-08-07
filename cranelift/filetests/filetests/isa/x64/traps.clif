@@ -1,0 +1,30 @@
+test compile precise-output
+target x86_64
+
+function %trap() {
+block0:
+  trap user0
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ud2 user0
+
+
+function %trap_iadd_ifcout(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2, v3 = iadd_ifcout v0, v1
+  trapif of v3, user0
+  return
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   addq    %rdi, %rsi, %rdi
+;   jno ; ud2 user0 ;
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

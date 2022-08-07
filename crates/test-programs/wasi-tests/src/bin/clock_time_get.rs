@@ -1,5 +1,3 @@
-use more_asserts::assert_le;
-
 unsafe fn test_clock_time_get() {
     // Test that clock_time_get succeeds. Even in environments where it's not
     // desirable to expose high-precision timers, it should still succeed.
@@ -10,7 +8,7 @@ unsafe fn test_clock_time_get() {
         wasi::clock_time_get(wasi::CLOCKID_MONOTONIC, 0).expect("precision 0 should work");
 
     let time = wasi::clock_time_get(wasi::CLOCKID_MONOTONIC, 0).expect("re-fetch time should work");
-    assert_le!(first_time, time, "CLOCK_MONOTONIC should be monotonic");
+    assert!(first_time <= time, "CLOCK_MONOTONIC should be monotonic");
 }
 
 fn main() {

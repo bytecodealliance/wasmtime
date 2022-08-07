@@ -1415,6 +1415,13 @@ impl Config {
             compiler.target(target.clone())?;
         }
 
+        // We require frame pointers for correct stack walking, which is safety
+        // critical in the presence of reference types, and otherwise it is just
+        // really bad developer experience to get wrong.
+        self.compiler_config
+            .settings
+            .insert("preserve_frame_pointers".into(), "true".into());
+
         // check for incompatible compiler options and set required values
         if self.wasm_backtrace || self.features.reference_types {
             if !self

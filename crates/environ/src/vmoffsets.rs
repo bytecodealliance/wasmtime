@@ -5,7 +5,9 @@
 //
 // struct VMContext {
 //      magic: u32,
+//      _padding: u32, // (On 64-bit systems)
 //      runtime_limits: *const VMRuntimeLimits,
+//      callee: *mut VMFunctionBody,
 //      externref_activations_table: *mut VMExternRefActivationsTable,
 //      store: *mut dyn Store,
 //      builtins: *mut VMBuiltinFunctionsArray,
@@ -26,7 +28,6 @@ use crate::{
     GlobalIndex, MemoryIndex, Module, TableIndex,
 };
 use cranelift_entity::packed_option::ReservedValue;
-use more_asserts::assert_lt;
 use std::convert::TryFrom;
 use wasmtime_types::OwnedMemoryIndex;
 
@@ -79,6 +80,7 @@ pub struct VMOffsets<P> {
     // precalculated offsets of various member fields
     magic: u32,
     runtime_limits: u32,
+    callee: u32,
     epoch_ptr: u32,
     externref_activations_table: u32,
     store: u32,
@@ -270,6 +272,7 @@ impl<P: PtrSize> VMOffsets<P> {
             store: "jit store state",
             externref_activations_table: "jit host externref state",
             epoch_ptr: "jit current epoch state",
+            callee: "callee function pointer",
             runtime_limits: "jit runtime limits state",
             magic: "magic value",
         }
@@ -291,6 +294,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_escaped_funcs: fields.num_escaped_funcs,
             magic: 0,
             runtime_limits: 0,
+            callee: 0,
             epoch_ptr: 0,
             externref_activations_table: 0,
             store: 0,
@@ -341,6 +345,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             size(magic) = 4u32,
             align(u32::from(ret.ptr.size())),
             size(runtime_limits) = ret.ptr.size(),
+            size(callee) = ret.ptr.size(),
             size(epoch_ptr) = ret.ptr.size(),
             size(externref_activations_table) = ret.ptr.size(),
             size(store) = ret.ptr.size() * 2,
@@ -557,7 +562,22 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset of the `epoch_deadline` field of `VMRuntimeLimits`
     #[inline]
     pub fn vmruntime_limits_epoch_deadline(&self) -> u8 {
-        self.pointer_size() + 8 // `stack_limit` is a pointer; `fuel_consumed` is an `i64`
+        self.vmruntime_limits_fuel_consumed() + 8 // `stack_limit` is a pointer; `fuel_consumed` is an `i64`
+    }
+
+    /// Return the offset of the `last_wasm_exit_fp` field of `VMRuntimeLimits`.
+    pub fn vmruntime_limits_last_wasm_exit_fp(&self) -> u8 {
+        self.vmruntime_limits_epoch_deadline() + 8
+    }
+
+    /// Return the offset of the `last_wasm_exit_pc` field of `VMRuntimeLimits`.
+    pub fn vmruntime_limits_last_wasm_exit_pc(&self) -> u8 {
+        self.vmruntime_limits_last_wasm_exit_fp() + self.pointer_size()
+    }
+
+    /// Return the offset of the `last_enty_sp` field of `VMRuntimeLimits`.
+    pub fn vmruntime_limits_last_wasm_entry_sp(&self) -> u8 {
+        self.vmruntime_limits_last_wasm_exit_pc() + self.pointer_size()
     }
 }
 
@@ -573,6 +593,11 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_runtime_limits(&self) -> u32 {
         self.runtime_limits
+    }
+
+    /// Return the offset to the `callee` member in this `VMContext`.
+    pub fn vmctx_callee(&self) -> u32 {
+        self.callee
     }
 
     /// Return the offset to the `*const AtomicU64` epoch-counter
@@ -671,7 +696,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to `VMFunctionImport` index `index`.
     #[inline]
     pub fn vmctx_vmfunction_import(&self, index: FuncIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_imported_functions);
+        assert!(index.as_u32() < self.num_imported_functions);
         self.vmctx_imported_functions_begin()
             + index.as_u32() * u32::from(self.size_of_vmfunction_import())
     }
@@ -679,7 +704,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to `VMTableImport` index `index`.
     #[inline]
     pub fn vmctx_vmtable_import(&self, index: TableIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_imported_tables);
+        assert!(index.as_u32() < self.num_imported_tables);
         self.vmctx_imported_tables_begin()
             + index.as_u32() * u32::from(self.size_of_vmtable_import())
     }
@@ -687,7 +712,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to `VMMemoryImport` index `index`.
     #[inline]
     pub fn vmctx_vmmemory_import(&self, index: MemoryIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_imported_memories);
+        assert!(index.as_u32() < self.num_imported_memories);
         self.vmctx_imported_memories_begin()
             + index.as_u32() * u32::from(self.size_of_vmmemory_import())
     }
@@ -695,7 +720,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to `VMGlobalImport` index `index`.
     #[inline]
     pub fn vmctx_vmglobal_import(&self, index: GlobalIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_imported_globals);
+        assert!(index.as_u32() < self.num_imported_globals);
         self.vmctx_imported_globals_begin()
             + index.as_u32() * u32::from(self.size_of_vmglobal_import())
     }
@@ -703,21 +728,21 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to `VMTableDefinition` index `index`.
     #[inline]
     pub fn vmctx_vmtable_definition(&self, index: DefinedTableIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_defined_tables);
+        assert!(index.as_u32() < self.num_defined_tables);
         self.vmctx_tables_begin() + index.as_u32() * u32::from(self.size_of_vmtable_definition())
     }
 
     /// Return the offset to the `*mut VMMemoryDefinition` at index `index`.
     #[inline]
     pub fn vmctx_vmmemory_pointer(&self, index: DefinedMemoryIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_defined_memories);
+        assert!(index.as_u32() < self.num_defined_memories);
         self.vmctx_memories_begin() + index.as_u32() * u32::from(self.size_of_vmmemory_pointer())
     }
 
     /// Return the offset to the owned `VMMemoryDefinition` at index `index`.
     #[inline]
     pub fn vmctx_vmmemory_definition(&self, index: OwnedMemoryIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_owned_memories);
+        assert!(index.as_u32() < self.num_owned_memories);
         self.vmctx_owned_memories_begin()
             + index.as_u32() * u32::from(self.size_of_vmmemory_definition())
     }
@@ -725,7 +750,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to the `VMGlobalDefinition` index `index`.
     #[inline]
     pub fn vmctx_vmglobal_definition(&self, index: DefinedGlobalIndex) -> u32 {
-        assert_lt!(index.as_u32(), self.num_defined_globals);
+        assert!(index.as_u32() < self.num_defined_globals);
         self.vmctx_globals_begin()
             + index.as_u32() * u32::from(self.ptr.size_of_vmglobal_definition())
     }
@@ -735,7 +760,7 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_anyfunc(&self, index: AnyfuncIndex) -> u32 {
         assert!(!index.is_reserved_value());
-        assert_lt!(index.as_u32(), self.num_escaped_funcs);
+        assert!(index.as_u32() < self.num_escaped_funcs);
         self.vmctx_anyfuncs_begin()
             + index.as_u32() * u32::from(self.ptr.size_of_vmcaller_checked_anyfunc())
     }
@@ -824,6 +849,12 @@ impl<P: PtrSize> VMOffsets<P> {
         self.pointer_size().into()
     }
 }
+
+/// Equivalent of `VMCONTEXT_MAGIC` except for host functions.
+///
+/// This is stored at the start of all `VMHostFuncContext` structures and
+/// double-checked on `VMHostFuncContext::from_opaque`.
+pub const VM_HOST_FUNC_MAGIC: u32 = u32::from_le_bytes(*b"host");
 
 #[cfg(test)]
 mod tests {

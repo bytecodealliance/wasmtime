@@ -44,6 +44,7 @@
   - [WebAssembly Text Format (`*.wat`)](./wasm-wat.md)
 - [Stability](stability.md)
   - [Release Process](./stability-release.md)
+  - [Tiers of support](./stability-tiers.md)
   - [Platform Support](./stability-platform-support.md)
   - [Wasm Proposals Support](./stability-wasm-proposals-support.md)
 - [Security](security.md)

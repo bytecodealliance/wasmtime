@@ -574,7 +574,7 @@ impl ComponentTypesBuilder {
                 .collect(),
             result: self.valtype(&ty.result),
         };
-        intern(&mut self.functions, &mut self.component_types.functions, ty)
+        self.add_func_type(ty)
     }
 
     fn defined_type(&mut self, ty: &wasmparser::ComponentDefinedType<'_>) -> InterfaceType {
@@ -588,7 +588,7 @@ impl ComponentTypesBuilder {
             }
             wasmparser::ComponentDefinedType::List(e) => {
                 let ty = self.valtype(e);
-                InterfaceType::List(self.intern_interface_type(ty))
+                InterfaceType::List(self.add_interface_type(ty))
             }
             wasmparser::ComponentDefinedType::Tuple(e) => InterfaceType::Tuple(self.tuple_type(e)),
             wasmparser::ComponentDefinedType::Flags(e) => InterfaceType::Flags(self.flags_type(e)),
@@ -596,7 +596,7 @@ impl ComponentTypesBuilder {
             wasmparser::ComponentDefinedType::Union(e) => InterfaceType::Union(self.union_type(e)),
             wasmparser::ComponentDefinedType::Option(e) => {
                 let ty = self.valtype(e);
-                InterfaceType::Option(self.intern_interface_type(ty))
+                InterfaceType::Option(self.add_interface_type(ty))
             }
             wasmparser::ComponentDefinedType::Expected { ok, error } => {
                 InterfaceType::Expected(self.expected_type(ok, error))
@@ -618,14 +618,6 @@ impl ComponentTypesBuilder {
         }
     }
 
-    fn intern_interface_type(&mut self, ty: InterfaceType) -> TypeInterfaceIndex {
-        intern(
-            &mut self.interface_types,
-            &mut self.component_types.interface_types,
-            ty,
-        )
-    }
-
     fn record_type(&mut self, record: &[(&str, wasmparser::ComponentValType)]) -> TypeRecordIndex {
         let record = TypeRecord {
             fields: record
@@ -636,7 +628,7 @@ impl ComponentTypesBuilder {
                 })
                 .collect(),
         };
-        intern(&mut self.records, &mut self.component_types.records, record)
+        self.add_record_type(record)
     }
 
     fn variant_type(&mut self, cases: &[wasmparser::VariantCase<'_>]) -> TypeVariantIndex {
@@ -654,39 +646,35 @@ impl ComponentTypesBuilder {
                 })
                 .collect(),
         };
-        intern(
-            &mut self.variants,
-            &mut self.component_types.variants,
-            variant,
-        )
+        self.add_variant_type(variant)
     }
 
     fn tuple_type(&mut self, types: &[wasmparser::ComponentValType]) -> TypeTupleIndex {
         let tuple = TypeTuple {
             types: types.iter().map(|ty| self.valtype(ty)).collect(),
         };
-        intern(&mut self.tuples, &mut self.component_types.tuples, tuple)
+        self.add_tuple_type(tuple)
     }
 
     fn flags_type(&mut self, flags: &[&str]) -> TypeFlagsIndex {
         let flags = TypeFlags {
             names: flags.iter().map(|s| s.to_string()).collect(),
         };
-        intern(&mut self.flags, &mut self.component_types.flags, flags)
+        self.add_flags_type(flags)
     }
 
     fn enum_type(&mut self, variants: &[&str]) -> TypeEnumIndex {
         let e = TypeEnum {
             names: variants.iter().map(|s| s.to_string()).collect(),
         };
-        intern(&mut self.enums, &mut self.component_types.enums, e)
+        self.add_enum_type(e)
     }
 
     fn union_type(&mut self, types: &[wasmparser::ComponentValType]) -> TypeUnionIndex {
         let union = TypeUnion {
             types: types.iter().map(|ty| self.valtype(ty)).collect(),
         };
-        intern(&mut self.unions, &mut self.component_types.unions, union)
+        self.add_union_type(union)
     }
 
     fn expected_type(
@@ -698,10 +686,55 @@ impl ComponentTypesBuilder {
             ok: self.valtype(ok),
             err: self.valtype(err),
         };
+        self.add_expected_type(expected)
+    }
+
+    /// Interns a new function type within this type information.
+    pub fn add_func_type(&mut self, ty: TypeFunc) -> TypeFuncIndex {
+        intern(&mut self.functions, &mut self.component_types.functions, ty)
+    }
+
+    /// Interns a new record type within this type information.
+    pub fn add_record_type(&mut self, ty: TypeRecord) -> TypeRecordIndex {
+        intern(&mut self.records, &mut self.component_types.records, ty)
+    }
+
+    /// Interns a new flags type within this type information.
+    pub fn add_flags_type(&mut self, ty: TypeFlags) -> TypeFlagsIndex {
+        intern(&mut self.flags, &mut self.component_types.flags, ty)
+    }
+
+    /// Interns a new tuple type within this type information.
+    pub fn add_tuple_type(&mut self, ty: TypeTuple) -> TypeTupleIndex {
+        intern(&mut self.tuples, &mut self.component_types.tuples, ty)
+    }
+
+    /// Interns a new variant type within this type information.
+    pub fn add_variant_type(&mut self, ty: TypeVariant) -> TypeVariantIndex {
+        intern(&mut self.variants, &mut self.component_types.variants, ty)
+    }
+
+    /// Interns a new union type within this type information.
+    pub fn add_union_type(&mut self, ty: TypeUnion) -> TypeUnionIndex {
+        intern(&mut self.unions, &mut self.component_types.unions, ty)
+    }
+
+    /// Interns a new enum type within this type information.
+    pub fn add_enum_type(&mut self, ty: TypeEnum) -> TypeEnumIndex {
+        intern(&mut self.enums, &mut self.component_types.enums, ty)
+    }
+
+    /// Interns a new expected type within this type information.
+    pub fn add_expected_type(&mut self, ty: TypeExpected) -> TypeExpectedIndex {
+        intern(&mut self.expecteds, &mut self.component_types.expecteds, ty)
+    }
+
+    /// Interns a new expected type within this type information.
+    pub fn add_interface_type(&mut self, ty: InterfaceType) -> TypeInterfaceIndex {
         intern(
-            &mut self.expecteds,
-            &mut self.component_types.expecteds,
-            expected,
+            &mut self.interface_types,
+            &mut self.component_types.interface_types,
+            ty,
         )
     }
 }

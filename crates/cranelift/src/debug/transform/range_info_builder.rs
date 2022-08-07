@@ -2,7 +2,6 @@ use super::address_transform::AddressTransform;
 use super::{DebugInputContext, Reader};
 use anyhow::Error;
 use gimli::{write, AttributeValue, DebuggingInformationEntry, RangeListsOffset, Unit};
-use more_asserts::assert_lt;
 use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
 pub(crate) enum RangeInfoBuilder {
@@ -206,7 +205,7 @@ impl RangeInfoBuilder {
         if let RangeInfoBuilder::Ranges(ranges) = self {
             let mut range_list = Vec::new();
             for (begin, end) in ranges {
-                assert_lt!(begin, end);
+                assert!(begin < end);
                 range_list.extend(addr_tr.translate_ranges(*begin, *end).map(|tr| {
                     write::Range::StartLength {
                         begin: tr.0,

@@ -197,9 +197,6 @@ WASMTIME_CONFIG_PROP(void, wasm_memory64, bool)
  * \brief Configures how JIT code will be compiled.
  *
  * This setting is #WASMTIME_STRATEGY_AUTO by default.
- *
- * If the compilation strategy selected could not be enabled then an error is
- * returned.
  */
 WASMTIME_CONFIG_PROP(void, strategy, wasmtime_strategy_t)
 

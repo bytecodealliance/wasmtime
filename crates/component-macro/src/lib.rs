@@ -352,6 +352,7 @@ fn expand_record_for_component_type(
         #[repr(C)]
         pub struct #lower <#lower_generic_params> {
             #lower_field_declarations
+            _align: [wasmtime::ValRaw; 0],
         }
 
         unsafe impl #impl_generics wasmtime::component::ComponentType for #name #ty_generics #where_clause {
@@ -965,6 +966,10 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
     let count = flags.flags.len();
 
     match size {
+        FlagsSize::Size0 => {
+            ty = quote!(());
+            eq = quote!(true);
+        }
         FlagsSize::Size1 => {
             ty = quote!(u8);
 
@@ -1021,6 +1026,17 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
     let mut not;
 
     match size {
+        FlagsSize::Size0 => {
+            count = 0;
+            as_array = quote!([]);
+            bitor = quote!(Self {});
+            bitor_assign = quote!();
+            bitand = quote!(Self {});
+            bitand_assign = quote!();
+            bitxor = quote!(Self {});
+            bitxor_assign = quote!();
+            not = quote!(Self {});
+        }
         FlagsSize::Size1 | FlagsSize::Size2 => {
             count = 1;
             as_array = quote!([self.__inner0 as u32]);
@@ -1085,6 +1101,7 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
         component_names.extend(quote!(#component_name,));
 
         let fields = match size {
+            FlagsSize::Size0 => quote!(),
             FlagsSize::Size1 => {
                 let init = 1_u8 << index;
                 quote!(__inner0: #init)

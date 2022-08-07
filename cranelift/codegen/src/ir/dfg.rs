@@ -14,7 +14,6 @@ use crate::ir::{
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
 use crate::HashMap;
-use alloc::vec::Vec;
 use core::fmt;
 use core::iter;
 use core::mem;
@@ -907,11 +906,8 @@ impl DataFlowGraph {
     }
 
     /// Get the types of the parameters on `block`.
-    pub fn block_param_types(&self, block: Block) -> Vec<Type> {
-        self.block_params(block)
-            .iter()
-            .map(|&v| self.value_type(v))
-            .collect()
+    pub fn block_param_types(&self, block: Block) -> impl Iterator<Item = Type> + '_ {
+        self.block_params(block).iter().map(|&v| self.value_type(v))
     }
 
     /// Append a parameter with type `ty` to `block`.

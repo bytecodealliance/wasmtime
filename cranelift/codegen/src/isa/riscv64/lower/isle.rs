@@ -31,6 +31,7 @@ use crate::machinst::Reg;
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
 type BoxExternalName = Box<ExternalName>;
+type VecMachLabel = Vec<MachLabel>;
 
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower<C>(

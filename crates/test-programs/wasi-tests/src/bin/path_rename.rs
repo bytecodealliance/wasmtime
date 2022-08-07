@@ -1,4 +1,3 @@
-use more_asserts::assert_gt;
 use std::{env, process};
 use wasi_tests::{assert_errno, create_file, open_scratch_directory, TESTCONFIG};
 
@@ -21,9 +20,8 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
     // Check that target directory exists
     let mut fd = wasi::path_open(dir_fd, 0, "target", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
         .expect("opening renamed path as a directory");
-    assert_gt!(
-        fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 
@@ -51,9 +49,8 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
         // Check that target directory exists
         fd = wasi::path_open(dir_fd, 0, "target", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
             .expect("opening renamed path as a directory");
-        assert_gt!(
-            fd,
-            libc::STDERR_FILENO as wasi::Fd,
+        assert!(
+            fd > libc::STDERR_FILENO as wasi::Fd,
             "file descriptor range check",
         );
 
@@ -117,9 +114,8 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
 
     // Check that target file exists
     fd = wasi::path_open(dir_fd, 0, "target", 0, 0, 0, 0).expect("opening renamed path");
-    assert_gt!(
-        fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 
@@ -143,9 +139,8 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
 
     // Check that target file exists
     fd = wasi::path_open(dir_fd, 0, "target", 0, 0, 0, 0).expect("opening renamed path");
-    assert_gt!(
-        fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 

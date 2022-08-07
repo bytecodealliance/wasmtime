@@ -1,7 +1,6 @@
 mod async_functions;
 mod call_hook;
 mod cli_tests;
-#[cfg(feature = "component-model")]
 mod component_model;
 mod custom_signal_handler;
 mod debug;

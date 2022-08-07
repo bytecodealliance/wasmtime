@@ -147,6 +147,10 @@
 (decl valid_reg () Reg)
 (extern extractor valid_reg valid_reg)
 
+;; Mark this value as used, to ensure that it gets lowered.
+(decl mark_value_used (Value) Unit)
+(extern constructor mark_value_used mark_value_used)
+
 ;; Put the given value into a register.
 ;;
 ;; Asserts that the value fits into a single register, and doesn't require
@@ -195,7 +199,6 @@
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type MachLabel (primitive MachLabel))
-(type VecMachLabel extern (enum))
 (type ValueLabel (primitive ValueLabel))
 (type UnwindInst (primitive UnwindInst))
 (type ExternalName (primitive ExternalName))
@@ -308,10 +311,10 @@
 (decl fits_in_64 (Type) Type)
 (extern extractor fits_in_64 fits_in_64)
 
-;; An extractor that only matches scalar booleans, integers, and references that
-;; can fit in 64 bits.
-(decl ty_int_bool_ref_scalar_64 (Type) Type)
-(extern extractor ty_int_bool_ref_scalar_64 ty_int_bool_ref_scalar_64)
+;; A pure constructor that only matches scalar booleans, integers, and
+;; references that can fit in 64 bits.
+(decl pure ty_int_bool_ref_scalar_64 (Type) Type)
+(extern constructor ty_int_bool_ref_scalar_64 ty_int_bool_ref_scalar_64)
 
 ;; An extractor that matches 32- and 64-bit types only.
 (decl ty_32_or_64 (Type) Type)
@@ -407,6 +410,10 @@
 (decl u8_from_uimm8 (u8) Uimm8)
 (extern extractor infallible u8_from_uimm8 u8_from_uimm8)
 
+;; Extract a `u64` from a `bool`.
+(decl u64_from_bool (u64) bool)
+(extern extractor infallible u64_from_bool u64_from_bool)
+
 ;; Extract a `u64` from an `Imm64`.
 (decl u64_from_imm64 (u64) Imm64)
 (extern extractor infallible u64_from_imm64 u64_from_imm64)
@@ -498,6 +505,10 @@
 (decl pure zero_value (Value) Value)
 (extern constructor zero_value zero_value)
 
+;; Match a sinkable instruction from a value operand.
+(decl pure is_sinkable_inst (Value) Inst)
+(extern constructor is_sinkable_inst is_sinkable_inst)
+
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Emit an instruction.
@@ -507,6 +518,14 @@
 
 (decl emit (MInst) Unit)
 (extern constructor emit emit)
+
+;; Sink an instruction.
+;;
+;; This is a side-effectful operation that notifies the context that the
+;; instruction has been sunk into another instruction, and no longer needs to
+;; be lowered.
+(decl sink_inst (Inst) Unit)
+(extern constructor sink_inst sink_inst)
 
 ;; Constant pool emission.
 
@@ -532,8 +551,8 @@
       (let ((_ Unit (emit inst)))
         (output_none)))
 (rule (side_effect (SideEffectNoResult.Inst2 inst1 inst2))
-      (let ((_1 Unit (emit inst1))
-            (_2 Unit (emit inst2)))
+      (let ((_ Unit (emit inst1))
+            (_ Unit (emit inst2)))
         (output_none)))
 
 (decl side_effect_concat (SideEffectNoResult SideEffectNoResult) SideEffectNoResult)
@@ -548,6 +567,11 @@
 ;; Variant determines how result is given when combined with a
 ;; ConsumesFlags. See `with_flags` below for more.
 (type ProducesFlags (enum
+                     ;; For cases where the flags have been produced by another
+                     ;; instruction, and we have out-of-band reasons to know
+                     ;; that they won't be clobbered by the time we depend on
+                     ;; them.
+                     (AlreadyExistingFlags)
                      (ProducesFlagsSideEffect (inst MInst))
                      ;; Not directly combinable with a ConsumesFlags;
                      ;; used in s390x and unwrapped directly by `trapif`.
@@ -559,6 +583,7 @@
 ;; Variant determines how result is given when combined with a
 ;; ProducesFlags. See `with_flags` below for more.
 (type ConsumesFlags (enum
+                     (ConsumesFlagsSideEffect (inst MInst))
                      (ConsumesFlagsReturnsResultWithProducer (inst MInst) (result Reg))
                      (ConsumesFlagsReturnsReg (inst MInst) (result Reg))
                      (ConsumesFlagsTwiceReturnsValueRegs (inst1 MInst)
@@ -651,6 +676,30 @@
 (rule (with_flags_reg p c)
       (let ((v ValueRegs (with_flags p c)))
         (value_regs_get v 0)))
+
+;; Indicate that the current state of the flags register from the instruction
+;; that produces this Value is relied on.
+(decl flags_to_producesflags (Value) ProducesFlags)
+(rule (flags_to_producesflags val)
+      (let ((_ Unit (mark_value_used val)))
+        (ProducesFlags.AlreadyExistingFlags)))
+
+;; Combine a flags-producing instruction and a flags-consuming instruction that
+;; produces no results.
+;;
+;; This function handles the following case only:
+;; - ProducesFlagsSideEffect + ConsumesFlagsSideEffect
+(decl with_flags_side_effect (ProducesFlags ConsumesFlags) SideEffectNoResult)
+
+(rule (with_flags_side_effect
+        (ProducesFlags.AlreadyExistingFlags)
+        (ConsumesFlags.ConsumesFlagsSideEffect c))
+      (SideEffectNoResult.Inst c))
+
+(rule (with_flags_side_effect
+        (ProducesFlags.ProducesFlagsSideEffect p)
+        (ConsumesFlags.ConsumesFlagsSideEffect c))
+      (SideEffectNoResult.Inst2 p c))
 
 ;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

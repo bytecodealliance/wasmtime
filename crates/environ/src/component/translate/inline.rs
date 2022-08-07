@@ -47,7 +47,7 @@
 
 use crate::component::translate::adapt::{Adapter, AdapterOptions, Adapters};
 use crate::component::translate::*;
-use crate::{PrimaryMap, SignatureIndex};
+use crate::{EntityType, PrimaryMap, SignatureIndex};
 use indexmap::IndexMap;
 
 pub(super) fn run(
@@ -67,6 +67,7 @@ pub(super) fn run(
         runtime_post_return_interner: Default::default(),
         runtime_memory_interner: Default::default(),
         runtime_always_trap_interner: Default::default(),
+        runtime_instances: PrimaryMap::default(),
     };
 
     // The initial arguments to the root component are all host imports. This
@@ -145,6 +146,9 @@ struct Inliner<'a> {
     runtime_post_return_interner: HashMap<CoreDef, RuntimePostReturnIndex>,
     runtime_memory_interner: HashMap<CoreExport<MemoryIndex>, RuntimeMemoryIndex>,
     runtime_always_trap_interner: HashMap<SignatureIndex, RuntimeAlwaysTrapIndex>,
+
+    /// Origin information about where each runtime instance came from
+    runtime_instances: PrimaryMap<RuntimeInstanceIndex, InstanceModule>,
 }
 
 /// A "stack frame" as part of the inlining process, or the progress through
@@ -540,6 +544,7 @@ impl<'a> Inliner<'a> {
             // and an initializer is recorded to indicate that it's being
             // instantiated.
             ModuleInstantiate(module, args) => {
+                let instance_module;
                 let init = match &frame.modules[*module] {
                     ModuleDef::Static(idx) => {
                         let mut defs = Vec::new();
@@ -549,6 +554,7 @@ impl<'a> Inliner<'a> {
                                 self.core_def_of_module_instance_export(frame, instance, name),
                             );
                         }
+                        instance_module = InstanceModule::Static(*idx);
                         InstantiateModule::Static(*idx, defs.into())
                     }
                     ModuleDef::Import(path, ty) => {
@@ -562,12 +568,15 @@ impl<'a> Inliner<'a> {
                                 .insert(name.to_string(), def);
                         }
                         let index = self.runtime_import(path);
+                        instance_module = InstanceModule::Import(*ty);
                         InstantiateModule::Import(index, defs)
                     }
                 };
 
                 let idx = RuntimeInstanceIndex::from_u32(self.result.num_runtime_instances);
                 self.result.num_runtime_instances += 1;
+                let idx2 = self.runtime_instances.push(instance_module);
+                assert_eq!(idx, idx2);
                 self.result
                     .initializers
                     .push(GlobalInitializer::InstantiateModule(init));
@@ -822,12 +831,32 @@ impl<'a> Inliner<'a> {
                 _ => unreachable!(),
             })
         });
+        let memory64 = match &memory {
+            Some(memory) => match &self.runtime_instances[memory.instance] {
+                InstanceModule::Static(idx) => match &memory.item {
+                    ExportItem::Index(i) => {
+                        let plan = &self.nested_modules[*idx].module.memory_plans[*i];
+                        plan.memory.memory64
+                    }
+                    ExportItem::Name(_) => unreachable!(),
+                },
+                InstanceModule::Import(ty) => match &memory.item {
+                    ExportItem::Name(name) => match self.types[*ty].exports[name] {
+                        EntityType::Memory(m) => m.memory64,
+                        _ => unreachable!(),
+                    },
+                    ExportItem::Index(_) => unreachable!(),
+                },
+            },
+            None => false,
+        };
         let realloc = options.realloc.map(|i| frame.funcs[i].clone());
         let post_return = options.post_return.map(|i| frame.funcs[i].clone());
         AdapterOptions {
             instance: frame.instance,
             string_encoding: options.string_encoding,
             memory,
+            memory64,
             realloc,
             post_return,
         }
@@ -1063,4 +1092,9 @@ impl<'a> ComponentItemDef<'a> {
         };
         Ok(item)
     }
+}
+
+enum InstanceModule {
+    Static(StaticModuleIndex),
+    Import(TypeModuleIndex),
 }

@@ -573,9 +573,9 @@
             (ext_y Reg (put_in_reg_sext32 y))
             (ext_ty Type (ty_ext32 ty))
             ;; Perform division-by-zero check (same as for `udiv`).
-            (_1 Reg (maybe_trap_if_zero_divisor DZcheck ext_ty ext_y))
+            (_ Reg (maybe_trap_if_zero_divisor DZcheck ext_ty ext_y))
             ;; Perform integer-overflow check if necessary.
-            (_2 Reg (maybe_trap_if_sdiv_overflow OFcheck ext_ty ty ext_x ext_y))
+            (_ Reg (maybe_trap_if_sdiv_overflow OFcheck ext_ty ty ext_x ext_y))
             ;; Emit the actual divide instruction.
             (pair RegPair (sdivmod ext_ty ext_x ext_y)))
         ;; The quotient can be found in the low half of the result.
@@ -1504,16 +1504,16 @@
                        (fcvt_to_uint x @ (value_type src_ty))))
       (let ((src Reg (put_in_reg x))
             ;; First, check whether the input is a NaN, and trap if so.
-            (_1 Reg (trap_if (fcmp_reg src_ty src src)
-                             (floatcc_as_cond (FloatCC.Unordered))
-                             (trap_code_bad_conversion_to_integer)))
+            (_ Reg (trap_if (fcmp_reg src_ty src src)
+                            (floatcc_as_cond (FloatCC.Unordered))
+                            (trap_code_bad_conversion_to_integer)))
             ;; Now check whether the input is out of range for the target type.
-            (_2 Reg (trap_if (fcmp_reg src_ty src (fcvt_to_uint_ub src_ty dst_ty))
-                             (floatcc_as_cond (FloatCC.GreaterThanOrEqual))
-                             (trap_code_integer_overflow)))
-            (_3 Reg (trap_if (fcmp_reg src_ty src (fcvt_to_uint_lb src_ty))
-                             (floatcc_as_cond (FloatCC.LessThanOrEqual))
-                             (trap_code_integer_overflow)))
+            (_ Reg (trap_if (fcmp_reg src_ty src (fcvt_to_uint_ub src_ty dst_ty))
+                            (floatcc_as_cond (FloatCC.GreaterThanOrEqual))
+                            (trap_code_integer_overflow)))
+            (_ Reg (trap_if (fcmp_reg src_ty src (fcvt_to_uint_lb src_ty))
+                            (floatcc_as_cond (FloatCC.LessThanOrEqual))
+                            (trap_code_integer_overflow)))
             ;; Perform the conversion using the larger type size.
             (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
             (src_ext Reg (fpromote_reg flt_ty src_ty src)))
@@ -1528,16 +1528,16 @@
                        (fcvt_to_sint x @ (value_type src_ty))))
       (let ((src Reg (put_in_reg x))
             ;; First, check whether the input is a NaN, and trap if so.
-            (_1 Reg (trap_if (fcmp_reg src_ty src src)
-                             (floatcc_as_cond (FloatCC.Unordered))
-                             (trap_code_bad_conversion_to_integer)))
+            (_ Reg (trap_if (fcmp_reg src_ty src src)
+                            (floatcc_as_cond (FloatCC.Unordered))
+                            (trap_code_bad_conversion_to_integer)))
             ;; Now check whether the input is out of range for the target type.
-            (_2 Reg (trap_if (fcmp_reg src_ty src (fcvt_to_sint_ub src_ty dst_ty))
-                             (floatcc_as_cond (FloatCC.GreaterThanOrEqual))
-                             (trap_code_integer_overflow)))
-            (_3 Reg (trap_if (fcmp_reg src_ty src (fcvt_to_sint_lb src_ty dst_ty))
-                             (floatcc_as_cond (FloatCC.LessThanOrEqual))
-                             (trap_code_integer_overflow)))
+            (_ Reg (trap_if (fcmp_reg src_ty src (fcvt_to_sint_ub src_ty dst_ty))
+                            (floatcc_as_cond (FloatCC.GreaterThanOrEqual))
+                            (trap_code_integer_overflow)))
+            (_ Reg (trap_if (fcmp_reg src_ty src (fcvt_to_sint_lb src_ty dst_ty))
+                            (floatcc_as_cond (FloatCC.LessThanOrEqual))
+                            (trap_code_integer_overflow)))
             ;; Perform the conversion using the larger type size.
             (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
             (src_ext Reg (fpromote_reg flt_ty src_ty src)))
@@ -1656,8 +1656,9 @@
 
 ;; Insert vector lane from general-purpose register.
 (rule (lower (insertlane x @ (value_type ty)
-                         y @ (value_type (ty_int_bool_ref_scalar_64 _))
+                         y @ (value_type in_ty)
                          (u8_from_uimm8 idx)))
+      (if (ty_int_bool_ref_scalar_64 in_ty))
       (vec_insert_lane ty x y (be_lane_idx ty idx) (zero_reg)))
 
 ;; Insert vector lane from floating-point register.
@@ -1771,8 +1772,9 @@
 ;;;; Rules for `extractlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Extract vector lane to general-purpose register.
-(rule (lower (has_type (ty_int_bool_ref_scalar_64 _)
+(rule (lower (has_type out_ty
                        (extractlane x @ (value_type ty) (u8_from_uimm8 idx))))
+      (if (ty_int_bool_ref_scalar_64 out_ty))
       (vec_extract_lane ty x (be_lane_idx ty idx) (zero_reg)))
 
 ;; Extract vector lane to floating-point register.
@@ -1828,8 +1830,8 @@
 ;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Load replicated value from general-purpose register.
-(rule (lower (has_type ty (splat
-                             x @ (value_type (ty_int_bool_ref_scalar_64 _)))))
+(rule (lower (has_type ty (splat x @ (value_type in_ty))))
+      (if (ty_int_bool_ref_scalar_64 in_ty))
       (vec_replicate_lane ty (vec_insert_lane_undef ty x 0 (zero_reg)) 0))
 
 ;; Load replicated value from floating-point register.
@@ -1888,7 +1890,8 @@
 
 ;; Load scalar value from general-purpose register.
 (rule (lower (has_type ty (scalar_to_vector
-                             x @ (value_type (ty_int_bool_ref_scalar_64 _)))))
+                             x @ (value_type in_ty))))
+      (if (ty_int_bool_ref_scalar_64 in_ty))
       (vec_insert_lane ty (vec_imm ty 0) x (be_lane_idx ty 0) (zero_reg)))
 
 ;; Load scalar value from floating-point register.
@@ -3568,27 +3571,27 @@
 ;; Direct call to an in-range function.
 (rule (lower (call (func_ref_data sig_ref name (reloc_distance_near)) args))
       (let ((abi ABISig (abi_sig sig_ref))
-            (_1 Unit (abi_accumulate_outgoing_args_size abi))
-            (_2 InstOutput (lower_call_args abi (range 0 (abi_num_args abi)) args))
-            (_3 InstOutput (side_effect (abi_call abi name (Opcode.Call)))))
+            (_ Unit (abi_accumulate_outgoing_args_size abi))
+            (_ InstOutput (lower_call_args abi (range 0 (abi_num_args abi)) args))
+            (_ InstOutput (side_effect (abi_call abi name (Opcode.Call)))))
         (lower_call_rets abi (range 0 (abi_num_rets abi)) (output_builder_new))))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
 (rule (lower (call (func_ref_data sig_ref name _) args))
       (let ((abi ABISig (abi_sig sig_ref))
-            (_1 Unit (abi_accumulate_outgoing_args_size abi))
-            (_2 InstOutput (lower_call_args abi (range 0 (abi_num_args abi)) args))
+            (_ Unit (abi_accumulate_outgoing_args_size abi))
+            (_ InstOutput (lower_call_args abi (range 0 (abi_num_args abi)) args))
             (target Reg (load_ext_name_far name 0))
-            (_3 InstOutput (side_effect (abi_call_ind abi target (Opcode.Call)))))
+            (_ InstOutput (side_effect (abi_call_ind abi target (Opcode.Call)))))
         (lower_call_rets abi (range 0 (abi_num_rets abi)) (output_builder_new))))
 
 ;; Indirect call.
 (rule (lower (call_indirect sig_ref ptr args))
       (let ((abi ABISig (abi_sig sig_ref))
             (target Reg (put_in_reg ptr))
-            (_1 Unit (abi_accumulate_outgoing_args_size abi))
-            (_2 InstOutput (lower_call_args abi (range 0 (abi_num_args abi)) args))
-            (_3 InstOutput (side_effect (abi_call_ind abi target (Opcode.CallIndirect)))))
+            (_ Unit (abi_accumulate_outgoing_args_size abi))
+            (_ InstOutput (lower_call_args abi (range 0 (abi_num_args abi)) args))
+            (_ InstOutput (side_effect (abi_call_ind abi target (Opcode.CallIndirect)))))
         (lower_call_rets abi (range 0 (abi_num_rets abi)) (output_builder_new))))
 
 ;; Lower function arguments by loading them into registers / stack slots.

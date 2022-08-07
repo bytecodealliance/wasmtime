@@ -1,4 +1,3 @@
-use more_asserts::assert_gt;
 use std::{env, process};
 use wasi_tests::open_scratch_directory;
 
@@ -6,9 +5,8 @@ unsafe fn test_isatty(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory and test if it's a tty.
     let file_fd =
         wasi::path_open(dir_fd, 0, "file", wasi::OFLAGS_CREAT, 0, 0, 0).expect("opening a file");
-    assert_gt!(
-        file_fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        file_fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
     assert_eq!(

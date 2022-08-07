@@ -189,13 +189,12 @@ impl Func {
     /// string:
     ///
     /// ```
-    /// # use wasmtime::component::{Func, Value};
+    /// # use wasmtime::component::Func;
     /// # use wasmtime::Store;
     /// # fn foo(func: &Func, mut store: Store<()>) -> anyhow::Result<()> {
-    /// let typed = func.typed::<(&str,), Value<String>, _>(&store)?;
+    /// let typed = func.typed::<(&str,), String, _>(&store)?;
     /// let ret = typed.call(&mut store, ("Hello, ",))?;
-    /// let ret = ret.cursor(&store);
-    /// println!("returned string was: {}", ret.to_str()?);
+    /// println!("returned string was: {}", ret);
     /// # Ok(())
     /// # }
     /// ```

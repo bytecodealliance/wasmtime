@@ -73,7 +73,6 @@ impl TargetIsa for AArch64Backend {
         let flags = self.flags();
         let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
 
-        let want_disasm = want_disasm || log::log_enabled!(log::Level::Debug);
         let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
@@ -359,25 +358,26 @@ mod test {
         let code = result.buffer.data();
 
         //   0:   7100081f        cmp     w0, #0x2
-        //   4:   54000102        b.cs    0x24  // b.hs, b.nlast
+        //   4:   54000122        b.cs    0x28  // b.hs, b.nlast
         //   8:   9a8023e9        csel    x9, xzr, x0, cs  // cs = hs, nlast
-        //   c:   10000088        adr     x8, 0x1c
-        //  10:   b8a95909        ldrsw   x9, [x8, w9, uxtw #2]
-        //  14:   8b090108        add     x8, x8, x9
-        //  18:   d61f0100        br      x8
-        //  1c:   00000010        udf     #16
-        //  20:   00000018        udf     #24
-        //  24:   d2800060        mov     x0, #0x3                        // #3
-        //  28:   d65f03c0        ret
-        //  2c:   d2800020        mov     x0, #0x1                        // #1
-        //  30:   d65f03c0        ret
-        //  34:   d2800040        mov     x0, #0x2                        // #2
-        //  38:   d65f03c0        ret
+        //   c:   d503229f        csdb
+        //  10:   10000088        adr     x8, 0x1c
+        //  14:   b8a95909        ldrsw   x9, [x8, w9, uxtw #2]
+        //  18:   8b090108        add     x8, x8, x9
+        //  1c:   d61f0100        br      x8
+        //  20:   00000010        udf     #16
+        //  24:   00000018        udf     #24
+        //  28:   d2800060        mov     x0, #0x3                        // #3
+        //  2c:   d65f03c0        ret
+        //  30:   d2800020        mov     x0, #0x1                        // #1
+        //  34:   d65f03c0        ret
+        //  38:   d2800040        mov     x0, #0x2                        // #2
+        //  3c:   d65f03c0        ret
 
         let golden = vec![
-            31, 8, 0, 113, 2, 1, 0, 84, 233, 35, 128, 154, 136, 0, 0, 16, 9, 89, 169, 184, 8, 1, 9,
-            139, 0, 1, 31, 214, 16, 0, 0, 0, 24, 0, 0, 0, 96, 0, 128, 210, 192, 3, 95, 214, 32, 0,
-            128, 210, 192, 3, 95, 214, 64, 0, 128, 210, 192, 3, 95, 214,
+            31, 8, 0, 113, 34, 1, 0, 84, 233, 35, 128, 154, 159, 34, 3, 213, 136, 0, 0, 16, 9, 89,
+            169, 184, 8, 1, 9, 139, 0, 1, 31, 214, 16, 0, 0, 0, 24, 0, 0, 0, 96, 0, 128, 210, 192,
+            3, 95, 214, 32, 0, 128, 210, 192, 3, 95, 214, 64, 0, 128, 210, 192, 3, 95, 214,
         ];
 
         assert_eq!(code, &golden[..]);

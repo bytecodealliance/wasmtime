@@ -7,6 +7,7 @@ use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
 use crate::machinst::reg::count_operands;
 use crate::machinst::{Reg, RegClass};
+use crate::trace;
 use core::convert::TryFrom;
 use regalloc2::Allocation;
 
@@ -3239,7 +3240,7 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::VirtualSPOffsetAdj { offset } => {
-                log::trace!(
+                trace!(
                     "virtual sp offset adjusted by {} -> {}",
                     offset,
                     state.virtual_sp_offset + offset

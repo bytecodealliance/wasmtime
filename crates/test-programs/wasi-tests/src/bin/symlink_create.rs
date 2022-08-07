@@ -1,4 +1,3 @@
-use more_asserts::assert_gt;
 use std::{env, process};
 use wasi_tests::open_scratch_directory;
 
@@ -22,9 +21,8 @@ unsafe fn create_symlink_to_file(dir_fd: wasi::Fd) {
         0,
     )
     .expect("opening a symlink as a directory");
-    assert_gt!(
-        target_file_via_symlink,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        target_file_via_symlink > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
     wasi::fd_close(target_file_via_symlink).expect("close the symlink file");
@@ -52,9 +50,8 @@ unsafe fn create_symlink_to_directory(dir_fd: wasi::Fd) {
         0,
     )
     .expect("opening a symlink as a directory");
-    assert_gt!(
-        target_dir_via_symlink,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        target_dir_via_symlink > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
     wasi::fd_close(target_dir_via_symlink).expect("closing a file");

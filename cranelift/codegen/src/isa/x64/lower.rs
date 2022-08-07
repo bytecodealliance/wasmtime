@@ -14,11 +14,10 @@ use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::isa::{x64::settings as x64_settings, x64::X64Backend, CallConv};
 use crate::machinst::lower::*;
-use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::{Flags, TlsModel};
-use alloc::vec::Vec;
-use log::trace;
+use crate::{machinst::*, trace};
+use alloc::boxed::Box;
 use smallvec::SmallVec;
 use std::convert::TryFrom;
 use target_lexicon::Triple;
@@ -925,106 +924,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::FuncAddr
         | Opcode::SymbolValue
         | Opcode::FallthroughReturn
-        | Opcode::Return => {
+        | Opcode::Return
+        | Opcode::Call
+        | Opcode::CallIndirect
+        | Opcode::Trapif
+        | Opcode::Trapff => {
             implemented_in_isle(ctx);
-        }
-
-        Opcode::Call | Opcode::CallIndirect => {
-            let caller_conv = ctx.abi().call_conv();
-            let (mut abi, inputs) = match op {
-                Opcode::Call => {
-                    let (extname, dist) = ctx.call_target(insn).unwrap();
-                    let sig = ctx.call_sig(insn).unwrap();
-                    assert_eq!(inputs.len(), sig.params.len());
-                    assert_eq!(outputs.len(), sig.returns.len());
-                    (
-                        X64ABICaller::from_func(sig, &extname, dist, caller_conv, flags)?,
-                        &inputs[..],
-                    )
-                }
-
-                Opcode::CallIndirect => {
-                    let ptr = put_input_in_reg(ctx, inputs[0]);
-                    let sig = ctx.call_sig(insn).unwrap();
-                    assert_eq!(inputs.len() - 1, sig.params.len());
-                    assert_eq!(outputs.len(), sig.returns.len());
-                    (
-                        X64ABICaller::from_ptr(sig, ptr, op, caller_conv, flags)?,
-                        &inputs[1..],
-                    )
-                }
-
-                _ => unreachable!(),
-            };
-
-            abi.emit_stack_pre_adjust(ctx);
-            assert_eq!(inputs.len(), abi.num_args());
-            for i in abi.get_copy_to_arg_order() {
-                let input = inputs[i];
-                let arg_regs = put_input_in_regs(ctx, input);
-                abi.emit_copy_regs_to_arg(ctx, i, arg_regs);
-            }
-            abi.emit_call(ctx);
-            for (i, output) in outputs.iter().enumerate() {
-                let retval_regs = get_output_reg(ctx, *output);
-                abi.emit_copy_retval_to_regs(ctx, i, retval_regs);
-            }
-            abi.emit_stack_post_adjust(ctx);
-        }
-
-        Opcode::Trapif | Opcode::Trapff => {
-            let trap_code = ctx.data(insn).trap_code().unwrap();
-
-            if matches_input(ctx, inputs[0], Opcode::IaddIfcout).is_some() {
-                let cond_code = ctx.data(insn).cond_code().unwrap();
-                // The flags must not have been clobbered by any other instruction between the
-                // iadd_ifcout and this instruction, as verified by the CLIF validator; so we can
-                // simply use the flags here.
-                let cc = CC::from_intcc(cond_code);
-
-                ctx.emit(Inst::TrapIf { trap_code, cc });
-            } else if op == Opcode::Trapif {
-                let cond_code = ctx.data(insn).cond_code().unwrap();
-
-                // Verification ensures that the input is always a single-def ifcmp.
-                let ifcmp = matches_input(ctx, inputs[0], Opcode::Ifcmp).unwrap();
-                let cond_code = emit_cmp(ctx, ifcmp, cond_code);
-                let cc = CC::from_intcc(cond_code);
-
-                ctx.emit(Inst::TrapIf { trap_code, cc });
-            } else {
-                let cond_code = ctx.data(insn).fp_cond_code().unwrap();
-
-                // Verification ensures that the input is always a single-def ffcmp.
-                let ffcmp = matches_input(ctx, inputs[0], Opcode::Ffcmp).unwrap();
-
-                match emit_fcmp(ctx, ffcmp, cond_code, FcmpSpec::Normal) {
-                    FcmpCondResult::Condition(cc) => ctx.emit(Inst::TrapIf { trap_code, cc }),
-                    FcmpCondResult::AndConditions(cc1, cc2) => {
-                        // A bit unfortunate, but materialize the flags in their own register, and
-                        // check against this.
-                        let tmp = ctx.alloc_tmp(types::I32).only_reg().unwrap();
-                        let tmp2 = ctx.alloc_tmp(types::I32).only_reg().unwrap();
-                        ctx.emit(Inst::setcc(cc1, tmp));
-                        ctx.emit(Inst::setcc(cc2, tmp2));
-                        ctx.emit(Inst::alu_rmi_r(
-                            OperandSize::Size32,
-                            AluRmiROpcode::And,
-                            RegMemImm::reg(tmp.to_reg()),
-                            tmp2,
-                        ));
-                        ctx.emit(Inst::TrapIf {
-                            trap_code,
-                            cc: CC::NZ,
-                        });
-                    }
-                    FcmpCondResult::OrConditions(cc1, cc2) => {
-                        ctx.emit(Inst::TrapIf { trap_code, cc: cc1 });
-                        ctx.emit(Inst::TrapIf { trap_code, cc: cc2 });
-                    }
-                    FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
-                };
-            };
         }
 
         Opcode::FcvtFromSint => {
@@ -3236,10 +3141,10 @@ impl LowerBackend for X64Backend {
                     };
                     ctx.emit(Inst::cmp_rmi_r(cmp_size, RegMemImm::imm(jt_size), idx));
 
-                    let targets_for_term: Vec<MachLabel> = targets.to_vec();
                     let default_target = targets[0];
 
-                    let jt_targets: Vec<MachLabel> = targets.iter().skip(1).cloned().collect();
+                    let jt_targets: Box<SmallVec<[MachLabel; 4]>> =
+                        Box::new(targets.iter().skip(1).cloned().collect());
 
                     ctx.emit(Inst::JmpTableSeq {
                         idx,
@@ -3247,7 +3152,6 @@ impl LowerBackend for X64Backend {
                         tmp2,
                         default_target,
                         targets: jt_targets,
-                        targets_for_term,
                     });
                 }
 

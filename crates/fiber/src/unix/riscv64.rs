@@ -110,10 +110,12 @@ asm_func!(
 
 
     .cfi_escape 0x0f, /* DW_CFA_def_cfa_expression */ \
-      4,            /* the byte length of this expression */ \
-      0x52,         /* DW_OP_reg2 (sp) */ \
-      0x06,         /* DW_OP_deref */ \
-      0x23, 0xc8    /* DW_OP_plus_uconst 0xc8 */
+      5,             /* the byte length of this expression */ \
+      0x52,          /* DW_OP_reg2 (sp) */ \
+      0x06,          /* DW_OP_deref */ \
+      0x08, 0xc8 ,   /* DW_OP_const1u 0xc8 */ \
+      0x22           /* DW_OP_plus */
+         
       
       .cfi_rel_offset ra,-0x8
       .cfi_rel_offset fp,-0x10

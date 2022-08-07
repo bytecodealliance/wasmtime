@@ -1,6 +1,5 @@
-use more_asserts::assert_gt;
-use std::{env, process};
 use std::convert::TryInto;
+use std::{env, process};
 use wasi_tests::open_scratch_directory;
 
 unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
@@ -15,9 +14,8 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
         0,
     )
     .expect("opening a file");
-    assert_gt!(
-        file_fd,
-        libc::STDERR_FILENO as wasi::Fd,
+    assert!(
+        file_fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
 
@@ -50,23 +48,19 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
         let mut ciovecs: Vec<wasi::Ciovec> = Vec::new();
         let mut remaining = contents.len() - offset;
         if remaining > 2 {
-            ciovecs.push(
-                wasi::Ciovec {
-                    buf: contents[offset..].as_ptr() as *const _,
-                    buf_len: 2,
-                },
-            );
+            ciovecs.push(wasi::Ciovec {
+                buf: contents[offset..].as_ptr() as *const _,
+                buf_len: 2,
+            });
             remaining -= 2;
         }
-        ciovecs.push(
-            wasi::Ciovec {
-                buf: contents[contents.len() - remaining..].as_ptr() as *const _,
-                buf_len: remaining
-            },
-        );
+        ciovecs.push(wasi::Ciovec {
+            buf: contents[contents.len() - remaining..].as_ptr() as *const _,
+            buf_len: remaining,
+        });
 
-        nwritten =
-            wasi::fd_pwrite(file_fd, ciovecs.as_slice(), offset.try_into().unwrap()).expect("writing bytes at offset 0");
+        nwritten = wasi::fd_pwrite(file_fd, ciovecs.as_slice(), offset.try_into().unwrap())
+            .expect("writing bytes at offset 0");
 
         offset += nwritten;
         if offset == contents.len() {
@@ -91,14 +85,14 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
             },
             wasi::Iovec {
                 buf: buffer[2..].as_mut_ptr() as *mut _,
-                buf_len: 2
+                buf_len: 2,
             },
         ];
         nread = wasi::fd_pread(file_fd, iovecs, offset as _).expect("reading bytes at offset 0");
         if nread == 0 {
             break;
         }
-        contents[offset..offset+nread].copy_from_slice(&buffer[0..nread]);
+        contents[offset..offset + nread].copy_from_slice(&buffer[0..nread]);
         offset += nread;
     }
     assert_eq!(offset, 4, "nread bytes check");

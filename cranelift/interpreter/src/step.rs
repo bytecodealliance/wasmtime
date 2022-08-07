@@ -597,9 +597,9 @@ where
         Opcode::Srem => binary_can_trap(Value::rem, arg(0)?, arg(1)?)?,
         Opcode::IaddImm => binary(Value::add, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::ImulImm => binary(Value::mul, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::UdivImm => binary_unsigned_can_trap(Value::div, arg(0)?, imm())?,
+        Opcode::UdivImm => binary_unsigned_can_trap(Value::div, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::SdivImm => binary_can_trap(Value::div, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::UremImm => binary_unsigned_can_trap(Value::rem, arg(0)?, imm())?,
+        Opcode::UremImm => binary_unsigned_can_trap(Value::rem, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::SremImm => binary_can_trap(Value::rem, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::IrsubImm => binary(Value::sub, imm_as_ctrl_ty()?, arg(0)?)?,
         Opcode::IaddCin => choose(

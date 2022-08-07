@@ -344,9 +344,10 @@ block0(v0: i8x16):
 
 ; block0:
 ;   movz x3, #1
-;   sub w5, wzr, w3
-;   dup v7.16b, w5
-;   ushl v0.16b, v0.16b, v7.16b
+;   and w5, w3, #7
+;   sub x7, xzr, x5
+;   dup v17.16b, w7
+;   ushl v0.16b, v0.16b, v17.16b
 ;   ret
 
 function %add_i128(i128, i128) -> i128 {
@@ -492,4 +493,3 @@ block0(v0: i64):
 ;   b.vc 8 ; udf
 ;   sdiv x0, x0, x3
 ;   ret
-

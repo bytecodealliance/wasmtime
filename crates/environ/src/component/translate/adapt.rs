@@ -159,6 +159,8 @@ pub struct AdapterOptions {
     pub string_encoding: StringEncoding,
     /// An optional memory definition supplied.
     pub memory: Option<CoreExport<MemoryIndex>>,
+    /// If `memory` is specified, whether it's a 64-bit memory.
+    pub memory64: bool,
     /// An optional definition of `realloc` to used.
     pub realloc: Option<CoreDef>,
     /// An optional definition of a `post-return` to use.
@@ -563,6 +565,7 @@ impl DefinedItems {
         let AdapterOptions {
             instance: _,
             string_encoding: _,
+            memory64: _,
             memory,
             realloc,
             post_return,

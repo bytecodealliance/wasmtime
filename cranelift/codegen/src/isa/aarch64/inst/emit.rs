@@ -7,6 +7,7 @@ use crate::ir::types::*;
 use crate::ir::{LibCall, MemFlags, TrapCode};
 use crate::isa::aarch64::inst::*;
 use crate::machinst::{ty_bits, Reg, RegClass, Writable};
+use crate::trace;
 use core::convert::TryFrom;
 
 /// Memory label/reference finalization: convert a MemLabel to a PC-relative
@@ -39,7 +40,7 @@ pub fn mem_finalize(
             };
             let adj = match mem {
                 &AMode::NominalSPOffset(..) => {
-                    log::trace!(
+                    trace!(
                         "mem_finalize: nominal SP offset {} + adj {} -> {}",
                         off,
                         state.virtual_sp_offset,
@@ -1655,6 +1656,9 @@ impl MachInstEmit for Inst {
             &Inst::Fence {} => {
                 sink.put4(enc_dmb_ish()); // dmb ish
             }
+            &Inst::Csdb {} => {
+                sink.put4(0xd503229f);
+            }
             &Inst::FpuMove64 { rd, rn } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
@@ -2258,10 +2262,10 @@ impl MachInstEmit for Inst {
                     ScalarSize::Size16 => 0b00010,
                     ScalarSize::Size32 => 0b00100,
                     ScalarSize::Size64 => 0b01000,
-                    _ => unimplemented!("Unexpected VectorSize: {:?}", size),
+                    _ => unreachable!(),
                 };
                 sink.put4(
-                    0b000_01110000_00000_000011_00000_00000
+                    0b0_0_0_01110000_00000_000011_00000_00000
                         | (q << 30)
                         | (imm5 << 16)
                         | (machreg_to_gpr(rn) << 5)
@@ -2625,13 +2629,18 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_vec_rrr(top11 | q << 9, rm, bit15_10, rn, rd));
             }
-            &Inst::VecLoadReplicate { rd, rn, size } => {
+            &Inst::VecLoadReplicate {
+                rd,
+                rn,
+                size,
+                flags,
+            } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 let (q, size) = size.enc_size();
 
                 let srcloc = state.cur_srcloc();
-                if srcloc != SourceLoc::default() {
+                if srcloc != SourceLoc::default() && !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
@@ -2906,6 +2915,8 @@ impl MachInstEmit for Inst {
                     rm: ridx,
                 };
                 inst.emit(&[], sink, emit_info, state);
+                // Prevent any data value speculation.
+                Inst::Csdb.emit(&[], sink, emit_info, state);
 
                 // Load address of jump table
                 let inst = Inst::Adr { rd: rtmp1, off: 16 };
@@ -3065,7 +3076,7 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::VirtualSPOffsetAdj { offset } => {
-                log::trace!(
+                trace!(
                     "virtual sp offset adjusted by {} -> {}",
                     offset,
                     state.virtual_sp_offset + offset,

@@ -653,7 +653,7 @@
 (type OptionFloatRoundingMode (primitive OptionFloatRoundingMode))
 (type VecU8 (primitive VecU8))
 (type AMO (primitive AMO))
-
+(type VecMachLabel extern (enum))
 
 ;; Helper for creating the zero register.
 (decl zero_reg () Reg)

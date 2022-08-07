@@ -16,9 +16,11 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    InterfaceType, TypeRecordIndex, TypeTupleIndex, FLAG_MAY_ENTER, FLAG_MAY_LEAVE,
-    MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    InterfaceType, TypeEnumIndex, TypeExpectedIndex, TypeFlagsIndex, TypeInterfaceIndex,
+    TypeRecordIndex, TypeTupleIndex, TypeUnionIndex, TypeVariantIndex, FLAG_MAY_ENTER,
+    FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
+use crate::fact::core_types::CoreTypes;
 use crate::fact::signature::{align_to, Signature};
 use crate::fact::traps::Trap;
 use crate::fact::{AdapterData, Context, Module, Options};
@@ -27,10 +29,14 @@ use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
 use wasm_encoder::{BlockType, Encode, Instruction, Instruction::*, MemArg, ValType};
+use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
-struct Compiler<'a> {
+struct Compiler<'a, 'b> {
     /// The module that the adapter will eventually be inserted into.
     module: &'a Module<'a>,
+
+    /// The type section of `module`
+    types: &'b mut CoreTypes,
 
     /// Metadata about the adapter that is being compiled.
     adapter: &'a AdapterData,
@@ -62,11 +68,16 @@ struct Compiler<'a> {
     lift_sig: &'a Signature,
 }
 
-pub(super) fn compile(module: &Module<'_>, adapter: &AdapterData) -> (Vec<u8>, Vec<(usize, Trap)>) {
-    let lower_sig = &module.signature(adapter.lower.ty, Context::Lower);
-    let lift_sig = &module.signature(adapter.lift.ty, Context::Lift);
+pub(super) fn compile(
+    module: &Module<'_>,
+    types: &mut CoreTypes,
+    adapter: &AdapterData,
+) -> (Vec<u8>, Vec<(usize, Trap)>) {
+    let lower_sig = &module.signature(&adapter.lower, Context::Lower);
+    let lift_sig = &module.signature(&adapter.lift, Context::Lift);
     Compiler {
         module,
+        types,
         adapter,
         code: Vec::new(),
         locals: Vec::new(),
@@ -90,17 +101,20 @@ enum Source<'a> {
 
     /// This value is stored in linear memory described by the `Memory`
     /// structure.
-    Memory(Memory),
+    Memory(Memory<'a>),
 }
 
 /// Same as `Source` but for where values are translated into.
-enum Destination {
+enum Destination<'a> {
     /// This value is destined for the WebAssembly stack which means that
     /// results are simply pushed as we go along.
-    Stack,
+    ///
+    /// The types listed are the types that are expected to be on the stack at
+    /// the end of translation.
+    Stack(&'a [ValType], &'a Options),
 
     /// This value is to be placed in linear memory described by `Memory`.
-    Memory(Memory),
+    Memory(Memory<'a>),
 }
 
 struct Stack<'a> {
@@ -110,22 +124,23 @@ struct Stack<'a> {
     /// up the component value. Each list has the index of the local being
     /// accessed as well as the type of the local itself.
     locals: &'a [(u32, ValType)],
+    /// The lifting/lowering options for where this stack of values comes from
+    opts: &'a Options,
 }
 
 /// Representation of where a value is going to be stored in linear memory.
-struct Memory {
+struct Memory<'a> {
+    /// The lifting/lowering options with memory configuration
+    opts: &'a Options,
     /// The index of the local that contains the base address of where the
     /// storage is happening.
     addr_local: u32,
     /// A "static" offset that will be baked into wasm instructions for where
     /// memory loads/stores happen.
     offset: u32,
-    /// The index of memory in the wasm module memory index space that this
-    /// memory is referring to.
-    memory_idx: u32,
 }
 
-impl Compiler<'_> {
+impl Compiler<'_, '_> {
     fn compile(&mut self) -> (Vec<u8>, Vec<(usize, Trap)>) {
         // Check the instance flags required for this trampoline.
         //
@@ -215,12 +230,17 @@ impl Compiler<'_> {
         // TODO: handle subtyping
         assert_eq!(src_tys.len(), dst_tys.len());
 
-        let src_flat = self.module.flatten_types(src_tys.iter().copied());
-        let dst_flat = self.module.flatten_types(dst_tys.iter().copied());
+        let src_flat = self
+            .module
+            .flatten_types(&self.adapter.lower, src_tys.iter().copied());
+        let dst_flat = self
+            .module
+            .flatten_types(&self.adapter.lift, dst_tys.iter().copied());
 
         let src = if src_flat.len() <= MAX_FLAT_PARAMS {
             Source::Stack(Stack {
                 locals: &param_locals[..src_flat.len()],
+                opts: &self.adapter.lower,
             })
         } else {
             // If there are too many parameters then that means the parameters
@@ -230,26 +250,29 @@ impl Compiler<'_> {
             assert_eq!(ty, self.adapter.lower.ptr());
             let align = src_tys
                 .iter()
-                .map(|t| self.module.align(t))
+                .map(|t| self.module.align(&self.adapter.lower, t))
                 .max()
                 .unwrap_or(1);
             Source::Memory(self.memory_operand(&self.adapter.lower, addr, align))
         };
 
         let dst = if dst_flat.len() <= MAX_FLAT_PARAMS {
-            Destination::Stack
+            Destination::Stack(&dst_flat, &self.adapter.lift)
         } else {
             // If there are too many parameters then space is allocated in the
             // destination module for the parameters via its `realloc` function.
-            let (size, align) = self.module.record_size_align(dst_tys.iter());
+            let (size, align) = self
+                .module
+                .record_size_align(&self.adapter.lift, dst_tys.iter());
+            let size = MallocSize::Const(size);
             Destination::Memory(self.malloc(&self.adapter.lift, size, align))
         };
 
         let srcs = src
-            .record_field_sources(self.module, src_tys.iter().copied())
+            .record_field_srcs(self.module, src_tys.iter().copied())
             .zip(src_tys.iter());
         let dsts = dst
-            .record_field_sources(self.module, dst_tys.iter().copied())
+            .record_field_dsts(self.module, dst_tys.iter().copied())
             .zip(dst_tys.iter());
         for ((src, src_ty), (dst, dst_ty)) in srcs.zip(dsts) {
             self.translate(&src_ty, &src, &dst_ty, &dst);
@@ -271,19 +294,20 @@ impl Compiler<'_> {
         let src_ty = self.module.types[self.adapter.lift.ty].result;
         let dst_ty = self.module.types[self.adapter.lower.ty].result;
 
-        let src_flat = self.module.flatten_types([src_ty]);
-        let dst_flat = self.module.flatten_types([dst_ty]);
+        let src_flat = self.module.flatten_types(&self.adapter.lift, [src_ty]);
+        let dst_flat = self.module.flatten_types(&self.adapter.lower, [dst_ty]);
 
         let src = if src_flat.len() <= MAX_FLAT_RESULTS {
             Source::Stack(Stack {
                 locals: result_locals,
+                opts: &self.adapter.lift,
             })
         } else {
             // The original results to read from in this case come from the
             // return value of the function itself. The imported function will
             // return a linear memory address at which the values can be read
             // from.
-            let align = self.module.align(&src_ty);
+            let align = self.module.align(&self.adapter.lift, &src_ty);
             assert_eq!(result_locals.len(), 1);
             let (addr, ty) = result_locals[0];
             assert_eq!(ty, self.adapter.lift.ptr());
@@ -291,12 +315,12 @@ impl Compiler<'_> {
         };
 
         let dst = if dst_flat.len() <= MAX_FLAT_RESULTS {
-            Destination::Stack
+            Destination::Stack(&dst_flat, &self.adapter.lower)
         } else {
             // This is slightly different than `translate_params` where the
             // return pointer was provided by the caller of this function
             // meaning the last parameter local is a pointer into linear memory.
-            let align = self.module.align(&dst_ty);
+            let align = self.module.align(&self.adapter.lower, &dst_ty);
             let (addr, ty) = *param_locals.last().expect("no retptr");
             assert_eq!(ty, self.adapter.lower.ptr());
             Destination::Memory(self.memory_operand(&self.adapter.lower, addr, align))
@@ -322,9 +346,25 @@ impl Compiler<'_> {
             InterfaceType::Unit => self.translate_unit(src, dst_ty, dst),
             InterfaceType::Bool => self.translate_bool(src, dst_ty, dst),
             InterfaceType::U8 => self.translate_u8(src, dst_ty, dst),
+            InterfaceType::S8 => self.translate_s8(src, dst_ty, dst),
+            InterfaceType::U16 => self.translate_u16(src, dst_ty, dst),
+            InterfaceType::S16 => self.translate_s16(src, dst_ty, dst),
             InterfaceType::U32 => self.translate_u32(src, dst_ty, dst),
+            InterfaceType::S32 => self.translate_s32(src, dst_ty, dst),
+            InterfaceType::U64 => self.translate_u64(src, dst_ty, dst),
+            InterfaceType::S64 => self.translate_s64(src, dst_ty, dst),
+            InterfaceType::Float32 => self.translate_f32(src, dst_ty, dst),
+            InterfaceType::Float64 => self.translate_f64(src, dst_ty, dst),
+            InterfaceType::Char => self.translate_char(src, dst_ty, dst),
+            InterfaceType::List(t) => self.translate_list(*t, src, dst_ty, dst),
             InterfaceType::Record(t) => self.translate_record(*t, src, dst_ty, dst),
+            InterfaceType::Flags(f) => self.translate_flags(*f, src, dst_ty, dst),
             InterfaceType::Tuple(t) => self.translate_tuple(*t, src, dst_ty, dst),
+            InterfaceType::Variant(v) => self.translate_variant(*v, src, dst_ty, dst),
+            InterfaceType::Union(u) => self.translate_union(*u, src, dst_ty, dst),
+            InterfaceType::Enum(t) => self.translate_enum(*t, src, dst_ty, dst),
+            InterfaceType::Option(t) => self.translate_option(*t, src, dst_ty, dst),
+            InterfaceType::Expected(t) => self.translate_expected(*t, src, dst_ty, dst),
 
             InterfaceType::String => {
                 // consider this field used for now until this is fully
@@ -332,10 +372,6 @@ impl Compiler<'_> {
                 drop(&self.adapter.lift.string_encoding);
                 unimplemented!("don't know how to translate strings")
             }
-
-            // TODO: this needs to be filled out for all the other interface
-            // types.
-            ty => unimplemented!("don't know how to translate {ty:?}"),
         }
     }
 
@@ -362,27 +398,125 @@ impl Compiler<'_> {
 
         match dst {
             Destination::Memory(mem) => self.i32_store8(mem),
-            Destination::Stack => {}
+            Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
         }
     }
 
     fn translate_u8(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
         // TODO: subtyping
         assert!(matches!(dst_ty, InterfaceType::U8));
+        self.convert_u8_mask(src, dst, 0xff);
+    }
+
+    fn convert_u8_mask(&mut self, src: &Source<'_>, dst: &Destination<'_>, mask: u8) {
         self.push_dst_addr(dst);
+        let mut needs_mask = true;
         match src {
-            Source::Memory(mem) => self.i32_load8u(mem),
-            Source::Stack(stack) => self.stack_get(stack, ValType::I32),
+            Source::Memory(mem) => {
+                self.i32_load8u(mem);
+                needs_mask = mask != 0xff;
+            }
+            Source::Stack(stack) => {
+                self.stack_get(stack, ValType::I32);
+            }
+        }
+        if needs_mask {
+            self.instruction(I32Const(i32::from(mask)));
+            self.instruction(I32And);
         }
         match dst {
             Destination::Memory(mem) => self.i32_store8(mem),
-            Destination::Stack => {}
+            Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
+        }
+    }
+
+    fn translate_s8(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::S8));
+        self.push_dst_addr(dst);
+        match src {
+            Source::Memory(mem) => self.i32_load8s(mem),
+            Source::Stack(stack) => {
+                self.stack_get(stack, ValType::I32);
+                self.instruction(I32Extend8S);
+            }
+        }
+        match dst {
+            Destination::Memory(mem) => self.i32_store8(mem),
+            Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
+        }
+    }
+
+    fn translate_u16(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::U16));
+        self.convert_u16_mask(src, dst, 0xffff);
+    }
+
+    fn convert_u16_mask(&mut self, src: &Source<'_>, dst: &Destination<'_>, mask: u16) {
+        self.push_dst_addr(dst);
+        let mut needs_mask = true;
+        match src {
+            Source::Memory(mem) => {
+                self.i32_load16u(mem);
+                needs_mask = mask != 0xffff;
+            }
+            Source::Stack(stack) => {
+                self.stack_get(stack, ValType::I32);
+            }
+        }
+        if needs_mask {
+            self.instruction(I32Const(i32::from(mask)));
+            self.instruction(I32And);
+        }
+        match dst {
+            Destination::Memory(mem) => self.i32_store16(mem),
+            Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
+        }
+    }
+
+    fn translate_s16(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::S16));
+        self.push_dst_addr(dst);
+        match src {
+            Source::Memory(mem) => self.i32_load16s(mem),
+            Source::Stack(stack) => {
+                self.stack_get(stack, ValType::I32);
+                self.instruction(I32Extend16S);
+            }
+        }
+        match dst {
+            Destination::Memory(mem) => self.i32_store16(mem),
+            Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
         }
     }
 
     fn translate_u32(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
         // TODO: subtyping
         assert!(matches!(dst_ty, InterfaceType::U32));
+        self.convert_u32_mask(src, dst, 0xffffffff)
+    }
+
+    fn convert_u32_mask(&mut self, src: &Source<'_>, dst: &Destination<'_>, mask: u32) {
+        self.push_dst_addr(dst);
+        match src {
+            Source::Memory(mem) => self.i32_load16u(mem),
+            Source::Stack(stack) => self.stack_get(stack, ValType::I32),
+        }
+        if mask != 0xffffffff {
+            self.instruction(I32Const(mask as i32));
+            self.instruction(I32And);
+        }
+        match dst {
+            Destination::Memory(mem) => self.i32_store(mem),
+            Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
+        }
+    }
+
+    fn translate_s32(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::S32));
         self.push_dst_addr(dst);
         match src {
             Source::Memory(mem) => self.i32_load(mem),
@@ -390,7 +524,510 @@ impl Compiler<'_> {
         }
         match dst {
             Destination::Memory(mem) => self.i32_store(mem),
-            Destination::Stack => {}
+            Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
+        }
+    }
+
+    fn translate_u64(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::U64));
+        self.push_dst_addr(dst);
+        match src {
+            Source::Memory(mem) => self.i64_load(mem),
+            Source::Stack(stack) => self.stack_get(stack, ValType::I64),
+        }
+        match dst {
+            Destination::Memory(mem) => self.i64_store(mem),
+            Destination::Stack(stack, _) => self.stack_set(stack, ValType::I64),
+        }
+    }
+
+    fn translate_s64(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::S64));
+        self.push_dst_addr(dst);
+        match src {
+            Source::Memory(mem) => self.i64_load(mem),
+            Source::Stack(stack) => self.stack_get(stack, ValType::I64),
+        }
+        match dst {
+            Destination::Memory(mem) => self.i64_store(mem),
+            Destination::Stack(stack, _) => self.stack_set(stack, ValType::I64),
+        }
+    }
+
+    fn translate_f32(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::Float32));
+        self.push_dst_addr(dst);
+        match src {
+            Source::Memory(mem) => self.f32_load(mem),
+            Source::Stack(stack) => self.stack_get(stack, ValType::F32),
+        }
+        match dst {
+            Destination::Memory(mem) => self.f32_store(mem),
+            Destination::Stack(stack, _) => self.stack_set(stack, ValType::F32),
+        }
+    }
+
+    fn translate_f64(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        // TODO: subtyping
+        assert!(matches!(dst_ty, InterfaceType::Float64));
+        self.push_dst_addr(dst);
+        match src {
+            Source::Memory(mem) => self.f64_load(mem),
+            Source::Stack(stack) => self.stack_get(stack, ValType::F64),
+        }
+        match dst {
+            Destination::Memory(mem) => self.f64_store(mem),
+            Destination::Stack(stack, _) => self.stack_set(stack, ValType::F64),
+        }
+    }
+
+    fn translate_char(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        assert!(matches!(dst_ty, InterfaceType::Char));
+        let local = self.gen_local(ValType::I32);
+        match src {
+            Source::Memory(mem) => self.i32_load(mem),
+            Source::Stack(stack) => self.stack_get(stack, ValType::I32),
+        }
+        self.instruction(LocalSet(local));
+
+        // This sequence is copied from the output of LLVM for:
+        //
+        //      pub extern "C" fn foo(x: u32) -> char {
+        //          char::try_from(x)
+        //              .unwrap_or_else(|_| std::arch::wasm32::unreachable())
+        //      }
+        //
+        // Apparently this does what's required by the canonical ABI:
+        //
+        //    def i32_to_char(opts, i):
+        //      trap_if(i >= 0x110000)
+        //      trap_if(0xD800 <= i <= 0xDFFF)
+        //      return chr(i)
+        //
+        // ... but I don't know how it works other than "well I trust LLVM"
+        self.instruction(Block(BlockType::Empty));
+        self.instruction(Block(BlockType::Empty));
+        self.instruction(LocalGet(local));
+        self.instruction(I32Const(0xd800));
+        self.instruction(I32Xor);
+        self.instruction(I32Const(-0x110000));
+        self.instruction(I32Add);
+        self.instruction(I32Const(-0x10f800));
+        self.instruction(I32LtU);
+        self.instruction(BrIf(0));
+        self.instruction(LocalGet(local));
+        self.instruction(I32Const(0x110000));
+        self.instruction(I32Ne);
+        self.instruction(BrIf(1));
+        self.instruction(End);
+        self.trap(Trap::InvalidChar);
+        self.instruction(End);
+
+        self.push_dst_addr(dst);
+        self.instruction(LocalGet(local));
+        match dst {
+            Destination::Memory(mem) => {
+                self.i32_store(mem);
+            }
+            Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
+        }
+    }
+
+    fn translate_list(
+        &mut self,
+        src_ty: TypeInterfaceIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let src_element_ty = &self.module.types[src_ty];
+        let dst_element_ty = match dst_ty {
+            InterfaceType::List(r) => &self.module.types[*r],
+            _ => panic!("expected a list"),
+        };
+        let src_opts = src.opts();
+        let dst_opts = dst.opts();
+        let (src_size, src_align) = self.module.size_align(src_opts, src_element_ty);
+        let (dst_size, dst_align) = self.module.size_align(dst_opts, dst_element_ty);
+
+        // Load the pointer/length of this list into temporary locals. These
+        // will be referenced a good deal so this just makes it easier to deal
+        // with them consistently below rather than trying to reload from memory
+        // for example.
+        let src_ptr = self.gen_local(src_opts.ptr());
+        let src_len = self.gen_local(src_opts.ptr());
+        match src {
+            Source::Stack(s) => {
+                assert_eq!(s.locals.len(), 2);
+                self.stack_get(&s.slice(0..1), src_opts.ptr());
+                self.instruction(LocalSet(src_ptr));
+                self.stack_get(&s.slice(1..2), src_opts.ptr());
+                self.instruction(LocalSet(src_len));
+            }
+            Source::Memory(mem) => {
+                self.ptr_load(mem);
+                self.instruction(LocalSet(src_ptr));
+                self.ptr_load(&mem.bump(src_opts.ptr_size().into()));
+                self.instruction(LocalSet(src_len));
+            }
+        }
+
+        // Create a `Memory` operand which will internally assert that the
+        // `src_ptr` value is properly aligned.
+        let src_mem = self.memory_operand(src_opts, src_ptr, src_align);
+
+        // Next the byte size of the allocation in the destination is
+        // determined. Note that this is pretty tricky because pointer widths
+        // could be changing and otherwise everything must stay within the
+        // 32-bit size-space. This internally will ensure that `src_len *
+        // dst_size` doesn't overflow 32-bits and will place the final result in
+        // `dst_byte_len` where `dst_byte_len` has the appropriate type for the
+        // destination.
+        let dst_byte_len = self.gen_local(dst_opts.ptr());
+        self.calculate_dst_byte_len(
+            src_len,
+            dst_byte_len,
+            src_opts.ptr(),
+            dst_opts.ptr(),
+            dst_size,
+        );
+
+        // Here `realloc` is invoked (in a `malloc`-like fashion) to allocate
+        // space for the list in the destination memory. This will also
+        // internally insert checks that the returned pointer is aligned
+        // correctly for the destination.
+        let dst_mem = self.malloc(dst_opts, MallocSize::Local(dst_byte_len), dst_align);
+
+        // At this point we have aligned pointers, a length, and a byte length
+        // for the destination. The spec also requires this translation to
+        // ensure that the range of memory within the source and destination
+        // memories are valid. Currently though this attempts to optimize that
+        // somewhat at least. The thinking is that if we hit an out-of-bounds
+        // memory access during translation that's the same as a trap up-front.
+        // This means we can generally minimize up-front checks in favor of
+        // simply trying to load out-of-bounds memory.
+        //
+        // This doesn't mean we can avoid a check entirely though. One major
+        // worry here is integer overflow of the pointers in linear memory as
+        // they're incremented to move to the next element as part of
+        // translation. For example if the entire 32-bit address space were
+        // valid and the base pointer was `0xffff_fff0` where the size was 17
+        // that should not be a valid list but "simply defer to the loop below"
+        // would cause a wraparound to occur and no trap would be detected.
+        //
+        // To solve this a check is inserted here that the `base + byte_len`
+        // calculation doesn't overflow the 32-bit address space. Note though
+        // that this is only done for 32-bit memories, not 64-bit memories.
+        // Given the iteration of the loop below the only worry is when the
+        // address space is 100% mapped and wraparound is possible. Otherwise if
+        // anything in the address space is unmapped then we're guaranteed to
+        // hit a trap as we march from the base pointer to the end of the array.
+        // It's assumed that it's impossible for a 64-bit memory to have the
+        // entire address space mapped, so this isn't a concern for 64-bit
+        // memories.
+        //
+        // Technically this is only a concern for 32-bit memories if the entire
+        // address space is mapped, so `memory.size` could be used to skip most
+        // of the check here but it's assume that the `memory.size` check is
+        // probably more expensive than just checking for 32-bit overflow by
+        // using 64-bit arithmetic. This should hypothetically be tested though!
+        //
+        // TODO: the most-optimal thing here is to probably, once per adapter,
+        // call `memory.size` and put that in a local. If that is not the
+        // maximum for a 32-bit memory then this entire bounds-check here can be
+        // skipped.
+        if !src_opts.memory64 && src_size > 0 {
+            self.instruction(LocalGet(src_mem.addr_local));
+            self.instruction(I64ExtendI32U);
+            if src_size < dst_size {
+                // If the source byte size is less than the destination size
+                // then we can leverage the fact that `dst_byte_len` was already
+                // calculated and didn't overflow so this is also guaranteed to
+                // not overflow.
+                self.instruction(LocalGet(src_len));
+                self.instruction(I64ExtendI32U);
+                if src_size != 1 {
+                    self.instruction(I64Const(i64::try_from(src_size).unwrap()));
+                    self.instruction(I64Mul);
+                }
+            } else if src_size == dst_size {
+                // If the source byte size is the same as the destination byte
+                // size then that can be reused. Note that the destination byte
+                // size is already guaranteed to fit in 32 bits, even if it's
+                // store in a 64-bit local.
+                self.instruction(LocalGet(dst_byte_len));
+                if dst_opts.ptr() == ValType::I32 {
+                    self.instruction(I64ExtendI32U);
+                }
+            } else {
+                // Otherwise if the source byte size is larger than the
+                // destination byte size then the source byte size needs to be
+                // calculated fresh here. Note, though, that the result of this
+                // multiplication is not checked for overflow. The reason for
+                // that is that the result here flows into the check below about
+                // overflow and if this computation overflows it should be
+                // guaranteed to overflow the next computation.
+                //
+                // In general what's being checked here is:
+                //
+                //      src_mem.addr_local + src_len * src_size
+                //
+                // These three values are all 32-bits originally and if they're
+                // all assumed to be `u32::MAX` then:
+                //
+                //      let max = u64::from(u32::MAX);
+                //      let result = max + max * max;
+                //      assert_eq!(result, 0xffffffff00000000);
+                //
+                // This means that once an upper bit is set it's guaranteed to
+                // stay set as part of this computation, so the multiplication
+                // here is left unchecked to fall through into the addition
+                // below.
+                self.instruction(LocalGet(src_len));
+                self.instruction(I64ExtendI32U);
+                self.instruction(I64Const(i64::try_from(src_size).unwrap()));
+                self.instruction(I64Mul);
+            }
+            self.instruction(I64Add);
+            self.instruction(I64Const(32));
+            self.instruction(I64ShrU);
+            self.instruction(I32WrapI64);
+            self.instruction(If(BlockType::Empty));
+            self.trap(Trap::ListByteLengthOverflow);
+            self.instruction(End);
+        }
+
+        // If the destination is a 32-bit memory then its overflow check is
+        // relatively simple since we've already calculated the byte length of
+        // the destination above and can reuse that in this check.
+        if !dst_opts.memory64 && dst_size > 0 {
+            self.instruction(LocalGet(dst_mem.addr_local));
+            self.instruction(I64ExtendI32U);
+            self.instruction(LocalGet(dst_byte_len));
+            self.instruction(I64ExtendI32U);
+            self.instruction(I64Add);
+            self.instruction(I64Const(32));
+            self.instruction(I64ShrU);
+            self.instruction(I32WrapI64);
+            self.instruction(If(BlockType::Empty));
+            self.trap(Trap::ListByteLengthOverflow);
+            self.instruction(End);
+        }
+
+        // This is the main body of the loop to actually translate list types.
+        // Note that if both element sizes are 0 then this won't actually do
+        // anything so the loop is removed entirely.
+        if src_size > 0 || dst_size > 0 {
+            let cur_dst_ptr = self.gen_local(dst_opts.ptr());
+            let cur_src_ptr = self.gen_local(src_opts.ptr());
+            let remaining = self.gen_local(src_opts.ptr());
+
+            let iconst = |i: i32, ty: ValType| match ty {
+                ValType::I32 => I32Const(i32::try_from(i).unwrap()),
+                ValType::I64 => I64Const(i64::try_from(i).unwrap()),
+                _ => unreachable!(),
+            };
+            let src_add = if src_opts.memory64 { I64Add } else { I32Add };
+            let dst_add = if dst_opts.memory64 { I64Add } else { I32Add };
+            let src_eqz = if src_opts.memory64 { I64Eqz } else { I32Eqz };
+
+            // This block encompasses the entire loop and is use to exit before even
+            // entering the loop if the list size is zero.
+            self.instruction(Block(BlockType::Empty));
+
+            // Set the `remaining` local and only continue if it's > 0
+            self.instruction(LocalGet(src_len));
+            self.instruction(LocalTee(remaining));
+            self.instruction(src_eqz.clone());
+            self.instruction(BrIf(0));
+
+            // Initialize the two destination pointers to their initial values
+            self.instruction(LocalGet(src_mem.addr_local));
+            self.instruction(LocalSet(cur_src_ptr));
+            self.instruction(LocalGet(dst_mem.addr_local));
+            self.instruction(LocalSet(cur_dst_ptr));
+
+            self.instruction(Loop(BlockType::Empty));
+
+            // Translate the next element in the list
+            let element_src = Source::Memory(Memory {
+                opts: src_opts,
+                offset: 0,
+                addr_local: cur_src_ptr,
+            });
+            let element_dst = Destination::Memory(Memory {
+                opts: dst_opts,
+                offset: 0,
+                addr_local: cur_dst_ptr,
+            });
+            self.translate(src_element_ty, &element_src, dst_element_ty, &element_dst);
+
+            // Update the two loop pointers
+            if src_size > 0 {
+                let src_size = i32::try_from(src_size).unwrap();
+                self.instruction(LocalGet(cur_src_ptr));
+                self.instruction(iconst(src_size, src_opts.ptr()));
+                self.instruction(src_add.clone());
+                self.instruction(LocalSet(cur_src_ptr));
+            }
+            if dst_size > 0 {
+                let dst_size = i32::try_from(dst_size).unwrap();
+                self.instruction(LocalGet(cur_dst_ptr));
+                self.instruction(iconst(dst_size, dst_opts.ptr()));
+                self.instruction(dst_add.clone());
+                self.instruction(LocalSet(cur_dst_ptr));
+            }
+
+            // Update the remaining count, falling through to break out if it's zero
+            // now.
+            self.instruction(LocalGet(remaining));
+            self.instruction(iconst(-1, src_opts.ptr()));
+            self.instruction(src_add.clone());
+            self.instruction(LocalTee(remaining));
+            self.instruction(src_eqz.clone());
+            self.instruction(BrIf(0));
+            self.instruction(End); // end of loop
+            self.instruction(End); // end of block
+        }
+
+        // Store the ptr/length in the desired destination
+        match dst {
+            Destination::Stack(s, _) => {
+                self.instruction(LocalGet(dst_mem.addr_local));
+                self.stack_set(&s[..1], dst_opts.ptr());
+                self.convert_src_len_to_dst(src_len, src_opts.ptr(), dst_opts.ptr());
+                self.stack_set(&s[1..], dst_opts.ptr());
+            }
+            Destination::Memory(mem) => {
+                self.instruction(LocalGet(mem.addr_local));
+                self.instruction(LocalGet(dst_mem.addr_local));
+                self.ptr_store(mem);
+                self.instruction(LocalGet(mem.addr_local));
+                self.convert_src_len_to_dst(src_len, src_opts.ptr(), dst_opts.ptr());
+                self.ptr_store(&mem.bump(dst_opts.ptr_size().into()));
+            }
+        }
+    }
+
+    fn calculate_dst_byte_len(
+        &mut self,
+        src_len_local: u32,
+        dst_len_local: u32,
+        src_ptr_ty: ValType,
+        dst_ptr_ty: ValType,
+        dst_elt_size: usize,
+    ) {
+        // Zero-size types are easy to handle here because the byte size of the
+        // destination is always zero.
+        if dst_elt_size == 0 {
+            if dst_ptr_ty == ValType::I64 {
+                self.instruction(I64Const(0));
+            } else {
+                self.instruction(I32Const(0));
+            }
+            self.instruction(LocalSet(dst_len_local));
+            return;
+        }
+
+        // For one-byte elements in the destination the check here can be a bit
+        // more optimal than the general case below. In these situations if the
+        // source pointer type is 32-bit then we're guaranteed to not overflow,
+        // so the source length is simply casted to the destination's type.
+        //
+        // If the source is 64-bit then all that needs to be checked is to
+        // ensure that it does not have the upper 32-bits set.
+        if dst_elt_size == 1 {
+            if let ValType::I64 = src_ptr_ty {
+                self.instruction(LocalGet(src_len_local));
+                self.instruction(I64Const(32));
+                self.instruction(I64ShrU);
+                self.instruction(I32WrapI64);
+                self.instruction(If(BlockType::Empty));
+                self.trap(Trap::ListByteLengthOverflow);
+                self.instruction(End);
+            }
+            self.convert_src_len_to_dst(src_len_local, src_ptr_ty, dst_ptr_ty);
+            self.instruction(LocalSet(dst_len_local));
+            return;
+        }
+
+        // The main check implemented by this function is to verify that
+        // `src_len_local` does not exceed the 32-bit range. Byte sizes for
+        // lists must always fit in 32-bits to get transferred to 32-bit
+        // memories.
+        self.instruction(Block(BlockType::Empty));
+        self.instruction(Block(BlockType::Empty));
+        self.instruction(LocalGet(src_len_local));
+        match src_ptr_ty {
+            // The source's list length is guaranteed to be less than 32-bits
+            // so simply extend it up to a 64-bit type for the multiplication
+            // below.
+            ValType::I32 => self.instruction(I64ExtendI32U),
+
+            // If the source is a 64-bit memory then if the item length doesn't
+            // fit in 32-bits the byte length definitly won't, so generate a
+            // branch to our overflow trap here if any of the upper 32-bits are set.
+            ValType::I64 => {
+                self.instruction(I64Const(32));
+                self.instruction(I64ShrU);
+                self.instruction(I32WrapI64);
+                self.instruction(BrIf(0));
+                self.instruction(LocalGet(src_len_local));
+            }
+
+            _ => unreachable!(),
+        }
+
+        // Next perform a 64-bit multiplication with the element byte size that
+        // is itself guaranteed to fit in 32-bits. The result is then checked
+        // to see if we overflowed the 32-bit space. The two input operands to
+        // the multiplication are guaranteed to be 32-bits at most which means
+        // that this multiplication shouldn't overflow.
+        //
+        // The result of the multiplication is saved into a local as well to
+        // get the result afterwards.
+        let tmp = if dst_ptr_ty != ValType::I64 {
+            self.gen_local(ValType::I64)
+        } else {
+            dst_len_local
+        };
+        self.instruction(I64Const(u32::try_from(dst_elt_size).unwrap().into()));
+        self.instruction(I64Mul);
+        self.instruction(LocalTee(tmp));
+        // Branch to success if the upper 32-bits are zero, otherwise
+        // fall-through to the trap.
+        self.instruction(I64Const(32));
+        self.instruction(I64ShrU);
+        self.instruction(I64Eqz);
+        self.instruction(BrIf(1));
+        self.instruction(End);
+        self.trap(Trap::ListByteLengthOverflow);
+        self.instruction(End);
+
+        // If a fresh local was used to store the result of the multiplication
+        // then convert it down to 32-bits which should be guaranteed to not
+        // lose information at this point.
+        if dst_ptr_ty != ValType::I64 {
+            self.instruction(LocalGet(tmp));
+            self.instruction(I32WrapI64);
+            self.instruction(LocalSet(dst_len_local));
+        }
+    }
+
+    fn convert_src_len_to_dst(
+        &mut self,
+        src_len_local: u32,
+        src_ptr_ty: ValType,
+        dst_ptr_ty: ValType,
+    ) {
+        self.instruction(LocalGet(src_len_local));
+        match (src_ptr_ty, dst_ptr_ty) {
+            (ValType::I32, ValType::I64) => self.instruction(I64ExtendI32U),
+            (ValType::I64, ValType::I32) => self.instruction(I32WrapI64),
+            (src, dst) => assert_eq!(src, dst),
         }
     }
 
@@ -415,7 +1052,7 @@ impl Compiler<'_> {
         // fields' names
         let mut src_fields = HashMap::new();
         for (i, src) in src
-            .record_field_sources(self.module, src_ty.fields.iter().map(|f| f.ty))
+            .record_field_srcs(self.module, src_ty.fields.iter().map(|f| f.ty))
             .enumerate()
         {
             let field = &src_ty.fields[i];
@@ -431,12 +1068,59 @@ impl Compiler<'_> {
         //
         // TODO: should that lookup be fallible with subtyping?
         for (i, dst) in dst
-            .record_field_sources(self.module, dst_ty.fields.iter().map(|f| f.ty))
+            .record_field_dsts(self.module, dst_ty.fields.iter().map(|f| f.ty))
             .enumerate()
         {
             let field = &dst_ty.fields[i];
             let (src, src_ty) = &src_fields[&field.name];
             self.translate(src_ty, src, &field.ty, &dst);
+        }
+    }
+
+    fn translate_flags(
+        &mut self,
+        src_ty: TypeFlagsIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let src_ty = &self.module.types[src_ty];
+        let dst_ty = match dst_ty {
+            InterfaceType::Flags(r) => &self.module.types[*r],
+            _ => panic!("expected a record"),
+        };
+
+        // TODO: subtyping
+        //
+        // Notably this implementation does not support reordering flags from
+        // the source to the destination nor having more flags in the
+        // destination. Currently this is a copy from source to destination
+        // in-bulk. Otherwise reordering indices would have to have some sort of
+        // fancy bit twiddling tricks or something like that.
+        assert_eq!(src_ty.names, dst_ty.names);
+        let cnt = src_ty.names.len();
+        match FlagsSize::from_count(cnt) {
+            FlagsSize::Size0 => {}
+            FlagsSize::Size1 => {
+                let mask = if cnt == 8 { 0xff } else { (1 << cnt) - 1 };
+                self.convert_u8_mask(src, dst, mask);
+            }
+            FlagsSize::Size2 => {
+                let mask = if cnt == 16 { 0xffff } else { (1 << cnt) - 1 };
+                self.convert_u16_mask(src, dst, mask);
+            }
+            FlagsSize::Size4Plus(n) => {
+                let srcs = src.record_field_srcs(self.module, (0..n).map(|_| InterfaceType::U32));
+                let dsts = dst.record_field_dsts(self.module, (0..n).map(|_| InterfaceType::U32));
+                for (i, (src, dst)) in srcs.zip(dsts).enumerate() {
+                    let mask = if i == n - 1 && (cnt % 32 != 0) {
+                        (1 << (cnt % 32)) - 1
+                    } else {
+                        0xffffffff
+                    };
+                    self.convert_u32_mask(&src, &dst, mask);
+                }
+            }
         }
     }
 
@@ -457,13 +1141,310 @@ impl Compiler<'_> {
         assert_eq!(src_ty.types.len(), dst_ty.types.len());
 
         let srcs = src
-            .record_field_sources(self.module, src_ty.types.iter().copied())
+            .record_field_srcs(self.module, src_ty.types.iter().copied())
             .zip(src_ty.types.iter());
         let dsts = dst
-            .record_field_sources(self.module, dst_ty.types.iter().copied())
+            .record_field_dsts(self.module, dst_ty.types.iter().copied())
             .zip(dst_ty.types.iter());
         for ((src, src_ty), (dst, dst_ty)) in srcs.zip(dsts) {
             self.translate(src_ty, &src, dst_ty, &dst);
+        }
+    }
+
+    fn translate_variant(
+        &mut self,
+        src_ty: TypeVariantIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let src_ty = &self.module.types[src_ty];
+        let dst_ty = match dst_ty {
+            InterfaceType::Variant(t) => &self.module.types[*t],
+            _ => panic!("expected a variant"),
+        };
+
+        let src_disc_size = DiscriminantSize::from_count(src_ty.cases.len()).unwrap();
+        let dst_disc_size = DiscriminantSize::from_count(dst_ty.cases.len()).unwrap();
+
+        let iter = src_ty.cases.iter().enumerate().map(|(src_i, src_case)| {
+            let dst_i = dst_ty
+                .cases
+                .iter()
+                .position(|c| c.name == src_case.name)
+                .unwrap();
+            let dst_case = &dst_ty.cases[dst_i];
+            let src_i = u32::try_from(src_i).unwrap();
+            let dst_i = u32::try_from(dst_i).unwrap();
+            VariantCase {
+                src_i,
+                src_ty: &src_case.ty,
+                dst_i,
+                dst_ty: &dst_case.ty,
+            }
+        });
+        self.convert_variant(src, src_disc_size, dst, dst_disc_size, iter);
+    }
+
+    fn translate_union(
+        &mut self,
+        src_ty: TypeUnionIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let src_ty = &self.module.types[src_ty];
+        let dst_ty = match dst_ty {
+            InterfaceType::Union(t) => &self.module.types[*t],
+            _ => panic!("expected an option"),
+        };
+        assert_eq!(src_ty.types.len(), dst_ty.types.len());
+
+        self.convert_variant(
+            src,
+            DiscriminantSize::Size1,
+            dst,
+            DiscriminantSize::Size1,
+            src_ty
+                .types
+                .iter()
+                .zip(dst_ty.types.iter())
+                .enumerate()
+                .map(|(i, (src_ty, dst_ty))| {
+                    let i = u32::try_from(i).unwrap();
+                    VariantCase {
+                        src_i: i,
+                        dst_i: i,
+                        src_ty,
+                        dst_ty,
+                    }
+                }),
+        );
+    }
+
+    fn translate_enum(
+        &mut self,
+        src_ty: TypeEnumIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let src_ty = &self.module.types[src_ty];
+        let dst_ty = match dst_ty {
+            InterfaceType::Enum(t) => &self.module.types[*t],
+            _ => panic!("expected an option"),
+        };
+
+        let unit = &InterfaceType::Unit;
+        self.convert_variant(
+            src,
+            DiscriminantSize::from_count(src_ty.names.len()).unwrap(),
+            dst,
+            DiscriminantSize::from_count(dst_ty.names.len()).unwrap(),
+            src_ty.names.iter().enumerate().map(|(src_i, src_name)| {
+                let dst_i = dst_ty.names.iter().position(|n| n == src_name).unwrap();
+                let src_i = u32::try_from(src_i).unwrap();
+                let dst_i = u32::try_from(dst_i).unwrap();
+                VariantCase {
+                    src_i,
+                    dst_i,
+                    src_ty: unit,
+                    dst_ty: unit,
+                }
+            }),
+        );
+    }
+
+    fn translate_option(
+        &mut self,
+        src_ty: TypeInterfaceIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let src_ty = &self.module.types[src_ty];
+        let dst_ty = match dst_ty {
+            InterfaceType::Option(t) => &self.module.types[*t],
+            _ => panic!("expected an option"),
+        };
+
+        self.convert_variant(
+            src,
+            DiscriminantSize::Size1,
+            dst,
+            DiscriminantSize::Size1,
+            [
+                VariantCase {
+                    src_i: 0,
+                    dst_i: 0,
+                    src_ty: &InterfaceType::Unit,
+                    dst_ty: &InterfaceType::Unit,
+                },
+                VariantCase {
+                    src_i: 1,
+                    dst_i: 1,
+                    src_ty,
+                    dst_ty,
+                },
+            ]
+            .into_iter(),
+        );
+    }
+
+    fn translate_expected(
+        &mut self,
+        src_ty: TypeExpectedIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let src_ty = &self.module.types[src_ty];
+        let dst_ty = match dst_ty {
+            InterfaceType::Expected(t) => &self.module.types[*t],
+            _ => panic!("expected an expected"),
+        };
+
+        self.convert_variant(
+            src,
+            DiscriminantSize::Size1,
+            dst,
+            DiscriminantSize::Size1,
+            [
+                VariantCase {
+                    src_i: 0,
+                    dst_i: 0,
+                    src_ty: &src_ty.ok,
+                    dst_ty: &dst_ty.ok,
+                },
+                VariantCase {
+                    src_i: 1,
+                    dst_i: 1,
+                    src_ty: &src_ty.err,
+                    dst_ty: &dst_ty.err,
+                },
+            ]
+            .into_iter(),
+        );
+    }
+
+    fn convert_variant<'a>(
+        &mut self,
+        src: &Source<'_>,
+        src_disc_size: DiscriminantSize,
+        dst: &Destination,
+        dst_disc_size: DiscriminantSize,
+        src_cases: impl ExactSizeIterator<Item = VariantCase<'a>>,
+    ) {
+        // The outermost block is special since it has the result type of the
+        // translation here. That will depend on the `dst`.
+        let outer_block_ty = match dst {
+            Destination::Stack(dst_flat, _) => match dst_flat.len() {
+                0 => BlockType::Empty,
+                1 => BlockType::Result(dst_flat[0]),
+                _ => {
+                    let ty = self.types.function(&[], &dst_flat);
+                    BlockType::FunctionType(ty)
+                }
+            },
+            Destination::Memory(_) => BlockType::Empty,
+        };
+        self.instruction(Block(outer_block_ty));
+
+        // After the outermost block generate a new block for each of the
+        // remaining cases.
+        let src_cases_len = src_cases.len();
+        for _ in 0..src_cases_len - 1 {
+            self.instruction(Block(BlockType::Empty));
+        }
+
+        // Generate a block for an invalid variant discriminant
+        self.instruction(Block(BlockType::Empty));
+
+        // And generate one final block that we'll be jumping out of with the
+        // `br_table`
+        self.instruction(Block(BlockType::Empty));
+
+        // Load the discriminant
+        match src {
+            Source::Stack(s) => self.stack_get(&s.slice(0..1), ValType::I32),
+            Source::Memory(mem) => match src_disc_size {
+                DiscriminantSize::Size1 => self.i32_load8u(mem),
+                DiscriminantSize::Size2 => self.i32_load16u(mem),
+                DiscriminantSize::Size4 => self.i32_load(mem),
+            },
+        }
+
+        // Generate the `br_table` for the discriminant. Each case has an
+        // offset of 1 to skip the trapping block.
+        let mut targets = Vec::new();
+        for i in 0..src_cases_len {
+            targets.push((i + 1) as u32);
+        }
+        self.instruction(BrTable(targets[..].into(), 0));
+        self.instruction(End); // end the `br_table` block
+
+        self.trap(Trap::InvalidDiscriminant);
+        self.instruction(End); // end the "invalid discriminant" block
+
+        // Translate each case individually within its own block. Note that the
+        // iteration order here places the first case in the innermost block
+        // and the last case in the outermost block. This matches the order
+        // of the jump targets in the `br_table` instruction.
+        let src_cases_len = u32::try_from(src_cases_len).unwrap();
+        for case in src_cases {
+            let VariantCase {
+                src_i,
+                src_ty,
+                dst_i,
+                dst_ty,
+            } = case;
+
+            // Translate the discriminant here, noting that `dst_i` may be
+            // different than `src_i`.
+            self.push_dst_addr(dst);
+            self.instruction(I32Const(dst_i as i32));
+            match dst {
+                Destination::Stack(stack, _) => self.stack_set(&stack[..1], ValType::I32),
+                Destination::Memory(mem) => match dst_disc_size {
+                    DiscriminantSize::Size1 => self.i32_store8(mem),
+                    DiscriminantSize::Size2 => self.i32_store16(mem),
+                    DiscriminantSize::Size4 => self.i32_store(mem),
+                },
+            }
+
+            // Translate the payload of this case using the various types from
+            // the dst/src.
+            let src_payload = src.payload_src(self.module, src_disc_size, src_ty);
+            let dst_payload = dst.payload_dst(self.module, dst_disc_size, dst_ty);
+            self.translate(src_ty, &src_payload, dst_ty, &dst_payload);
+
+            // If the results of this translation were placed on the stack then
+            // the stack values may need to be padded with more zeros due to
+            // this particular case being possibly smaller than the entire
+            // variant. That's handled here by pushing remaining zeros after
+            // accounting for the discriminant pushed as well as the results of
+            // this individual payload.
+            if let Destination::Stack(payload_results, _) = dst_payload {
+                if let Destination::Stack(dst_results, _) = dst {
+                    let remaining = &dst_results[1..][payload_results.len()..];
+                    for ty in remaining {
+                        match ty {
+                            ValType::I32 => self.instruction(I32Const(0)),
+                            ValType::I64 => self.instruction(I64Const(0)),
+                            ValType::F32 => self.instruction(F32Const(0.0)),
+                            ValType::F64 => self.instruction(F64Const(0.0)),
+                            _ => unreachable!(),
+                        }
+                    }
+                }
+            }
+
+            // Branch to the outermost block. Note that this isn't needed for
+            // the outermost case since it simply falls through.
+            if src_i != src_cases_len - 1 {
+                self.instruction(Br(src_cases_len - src_i - 1));
+            }
+            self.instruction(End); // end this case's block
         }
     }
 
@@ -498,17 +1479,25 @@ impl Compiler<'_> {
         self.instruction(GlobalSet(flags_global.as_u32()));
     }
 
-    fn verify_aligned(&mut self, local: u32, align: usize) {
+    fn verify_aligned(&mut self, memory: &Memory, align: usize) {
         // If the alignment is 1 then everything is trivially aligned and the
         // check can be omitted.
         if align == 1 {
             return;
         }
-        self.instruction(LocalGet(local));
+        self.instruction(LocalGet(memory.addr_local));
         assert!(align.is_power_of_two());
-        let mask = i32::try_from(align - 1).unwrap();
-        self.instruction(I32Const(mask));
-        self.instruction(I32And);
+        if memory.opts.memory64 {
+            let mask = i64::try_from(align - 1).unwrap();
+            self.instruction(I64Const(mask));
+            self.instruction(I64And);
+            self.instruction(I64Const(0));
+            self.instruction(I64Ne);
+        } else {
+            let mask = i32::try_from(align - 1).unwrap();
+            self.instruction(I32Const(mask));
+            self.instruction(I32And);
+        }
         self.instruction(If(BlockType::Empty));
         self.trap(Trap::UnalignedPointer);
         self.instruction(End);
@@ -518,49 +1507,70 @@ impl Compiler<'_> {
         if !self.module.debug {
             return;
         }
-        let align = self.module.align(ty);
+        let align = self.module.align(mem.opts, ty);
         if align == 1 {
             return;
         }
         assert!(align.is_power_of_two());
         self.instruction(LocalGet(mem.addr_local));
-        self.instruction(I32Const(mem.i32_offset()));
-        self.instruction(I32Add);
-        let mask = i32::try_from(align - 1).unwrap();
-        self.instruction(I32Const(mask));
-        self.instruction(I32And);
+        if mem.opts.memory64 {
+            self.instruction(I64Const(i64::from(mem.offset)));
+            self.instruction(I64Add);
+            let mask = i64::try_from(align - 1).unwrap();
+            self.instruction(I64Const(mask));
+            self.instruction(I64And);
+            self.instruction(I64Const(0));
+            self.instruction(I64Ne);
+        } else {
+            self.instruction(I32Const(mem.i32_offset()));
+            self.instruction(I32Add);
+            let mask = i32::try_from(align - 1).unwrap();
+            self.instruction(I32Const(mask));
+            self.instruction(I32And);
+        }
         self.instruction(If(BlockType::Empty));
         self.trap(Trap::AssertFailed("pointer not aligned"));
         self.instruction(End);
     }
 
-    fn malloc(&mut self, opts: &Options, size: usize, align: usize) -> Memory {
+    fn malloc<'a>(&mut self, opts: &'a Options, size: MallocSize, align: usize) -> Memory<'a> {
         let addr_local = self.gen_local(opts.ptr());
         let realloc = opts.realloc.unwrap();
         if opts.memory64 {
             self.instruction(I64Const(0));
             self.instruction(I64Const(0));
             self.instruction(I64Const(i64::try_from(align).unwrap()));
-            self.instruction(I64Const(i64::try_from(size).unwrap()));
+            match size {
+                MallocSize::Const(size) => self.instruction(I64Const(i64::try_from(size).unwrap())),
+                MallocSize::Local(idx) => self.instruction(LocalGet(idx)),
+            }
         } else {
             self.instruction(I32Const(0));
             self.instruction(I32Const(0));
             self.instruction(I32Const(i32::try_from(align).unwrap()));
-            self.instruction(I32Const(i32::try_from(size).unwrap()));
+            match size {
+                MallocSize::Const(size) => self.instruction(I32Const(i32::try_from(size).unwrap())),
+                MallocSize::Local(idx) => self.instruction(LocalGet(idx)),
+            }
         }
         self.instruction(Call(realloc.as_u32()));
         self.instruction(LocalSet(addr_local));
         self.memory_operand(opts, addr_local, align)
     }
 
-    fn memory_operand(&mut self, opts: &Options, addr_local: u32, align: usize) -> Memory {
-        let memory = opts.memory.unwrap();
-        self.verify_aligned(addr_local, align);
-        Memory {
+    fn memory_operand<'a>(
+        &mut self,
+        opts: &'a Options,
+        addr_local: u32,
+        align: usize,
+    ) -> Memory<'a> {
+        let ret = Memory {
             addr_local,
             offset: 0,
-            memory_idx: memory.as_u32(),
-        }
+            opts,
+        };
+        self.verify_aligned(&ret, align);
+        ret
     }
 
     fn gen_local(&mut self, ty: ValType) -> u32 {
@@ -606,6 +1616,13 @@ impl Compiler<'_> {
         (bytes, mem::take(&mut self.traps))
     }
 
+    /// Fetches the value contained with the local specified by `stack` and
+    /// converts it to `dst_ty`.
+    ///
+    /// This is only intended for use in primitive operations where `stack` is
+    /// guaranteed to have only one local. The type of the local on the stack is
+    /// then converted to `dst_ty` appropriately. Note that the types may be
+    /// different due to the "flattening" of variant types.
     fn stack_get(&mut self, stack: &Stack<'_>, dst_ty: ValType) {
         assert_eq!(stack.locals.len(), 1);
         let (idx, src_ty) = stack.locals[0];
@@ -646,14 +1663,96 @@ impl Compiler<'_> {
         }
     }
 
+    /// Converts the top value on the WebAssembly stack which has type
+    /// `src_ty` to `dst_tys[0]`.
+    ///
+    /// This is only intended for conversion of primitives where the `dst_tys`
+    /// list is known to be of length 1.
+    fn stack_set(&mut self, dst_tys: &[ValType], src_ty: ValType) {
+        assert_eq!(dst_tys.len(), 1);
+        let dst_ty = dst_tys[0];
+        match (src_ty, dst_ty) {
+            (ValType::I32, ValType::I32)
+            | (ValType::I64, ValType::I64)
+            | (ValType::F32, ValType::F32)
+            | (ValType::F64, ValType::F64) => {}
+
+            (ValType::F32, ValType::I32) => self.instruction(I32ReinterpretF32),
+            (ValType::I32, ValType::I64) => self.instruction(I64ExtendI32U),
+            (ValType::F64, ValType::I64) => self.instruction(I64ReinterpretF64),
+            (ValType::F32, ValType::F64) => self.instruction(F64PromoteF32),
+            (ValType::F32, ValType::I64) => {
+                self.instruction(F64PromoteF32);
+                self.instruction(I64ReinterpretF64);
+            }
+
+            // should not be possible given the `join` function for variants
+            (ValType::I64, ValType::I32)
+            | (ValType::F64, ValType::I32)
+            | (ValType::I32, ValType::F32)
+            | (ValType::I64, ValType::F32)
+            | (ValType::F64, ValType::F32)
+            | (ValType::I32, ValType::F64)
+            | (ValType::I64, ValType::F64)
+
+            // not used in the component model
+            | (ValType::ExternRef, _)
+            | (_, ValType::ExternRef)
+            | (ValType::FuncRef, _)
+            | (_, ValType::FuncRef)
+            | (ValType::V128, _)
+            | (_, ValType::V128) => {
+                panic!("cannot get {dst_ty:?} from {src_ty:?} local");
+            }
+        }
+    }
+
     fn i32_load8u(&mut self, mem: &Memory) {
         self.instruction(LocalGet(mem.addr_local));
         self.instruction(I32Load8_U(mem.memarg(0)));
     }
 
+    fn i32_load8s(&mut self, mem: &Memory) {
+        self.instruction(LocalGet(mem.addr_local));
+        self.instruction(I32Load8_S(mem.memarg(0)));
+    }
+
+    fn i32_load16u(&mut self, mem: &Memory) {
+        self.instruction(LocalGet(mem.addr_local));
+        self.instruction(I32Load16_U(mem.memarg(1)));
+    }
+
+    fn i32_load16s(&mut self, mem: &Memory) {
+        self.instruction(LocalGet(mem.addr_local));
+        self.instruction(I32Load16_S(mem.memarg(1)));
+    }
+
     fn i32_load(&mut self, mem: &Memory) {
         self.instruction(LocalGet(mem.addr_local));
         self.instruction(I32Load(mem.memarg(2)));
+    }
+
+    fn i64_load(&mut self, mem: &Memory) {
+        self.instruction(LocalGet(mem.addr_local));
+        self.instruction(I64Load(mem.memarg(3)));
+    }
+
+    fn ptr_load(&mut self, mem: &Memory) {
+        if mem.opts.memory64 {
+            self.i64_load(mem);
+        } else {
+            self.i32_load(mem);
+        }
+    }
+
+    fn f32_load(&mut self, mem: &Memory) {
+        self.instruction(LocalGet(mem.addr_local));
+        self.instruction(F32Load(mem.memarg(2)));
+    }
+
+    fn f64_load(&mut self, mem: &Memory) {
+        self.instruction(LocalGet(mem.addr_local));
+        self.instruction(F64Load(mem.memarg(3)));
     }
 
     fn push_dst_addr(&mut self, dst: &Destination) {
@@ -666,8 +1765,32 @@ impl Compiler<'_> {
         self.instruction(I32Store8(mem.memarg(0)));
     }
 
+    fn i32_store16(&mut self, mem: &Memory) {
+        self.instruction(I32Store16(mem.memarg(1)));
+    }
+
     fn i32_store(&mut self, mem: &Memory) {
         self.instruction(I32Store(mem.memarg(2)));
+    }
+
+    fn i64_store(&mut self, mem: &Memory) {
+        self.instruction(I64Store(mem.memarg(3)));
+    }
+
+    fn ptr_store(&mut self, mem: &Memory) {
+        if mem.opts.memory64 {
+            self.i64_store(mem);
+        } else {
+            self.i32_store(mem);
+        }
+    }
+
+    fn f32_store(&mut self, mem: &Memory) {
+        self.instruction(F32Store(mem.memarg(2)));
+    }
+
+    fn f64_store(&mut self, mem: &Memory) {
+        self.instruction(F64Store(mem.memarg(3)));
     }
 }
 
@@ -678,7 +1801,7 @@ impl<'a> Source<'a> {
     /// This will automatically slice stack-based locals to the appropriate
     /// width for each component type and additionally calculate the appropriate
     /// offset for each memory-based type.
-    fn record_field_sources<'b>(
+    fn record_field_srcs<'b>(
         &'b self,
         module: &'b Module,
         fields: impl IntoIterator<Item = InterfaceType> + 'b,
@@ -689,40 +1812,117 @@ impl<'a> Source<'a> {
         let mut offset = 0;
         fields.into_iter().map(move |ty| match self {
             Source::Memory(mem) => {
-                let (size, align) = module.size_align(&ty);
-                offset = align_to(offset, align) + size;
-                Source::Memory(mem.bump(offset - size))
+                let mem = next_field_offset(&mut offset, module, &ty, mem);
+                Source::Memory(mem)
             }
             Source::Stack(stack) => {
-                let cnt = module.flatten_types([ty]).len();
+                let cnt = module.flatten_types(stack.opts, [ty]).len();
                 offset += cnt;
                 Source::Stack(stack.slice(offset - cnt..offset))
             }
         })
     }
-}
 
-impl Destination {
-    /// Same as `Source::record_field_sources` but for destinations.
-    fn record_field_sources<'a>(
-        &'a self,
-        module: &'a Module,
-        fields: impl IntoIterator<Item = InterfaceType> + 'a,
-    ) -> impl Iterator<Item = Destination> + 'a {
-        let mut offset = 0;
-        fields.into_iter().map(move |ty| match self {
-            // TODO: dedupe with above?
-            Destination::Memory(mem) => {
-                let (size, align) = module.size_align(&ty);
-                offset = align_to(offset, align) + size;
-                Destination::Memory(mem.bump(offset - size))
+    /// Returns the corresponding discriminant source and payload source f
+    fn payload_src(
+        &self,
+        module: &Module,
+        size: DiscriminantSize,
+        case: &InterfaceType,
+    ) -> Source<'a> {
+        match self {
+            Source::Stack(s) => {
+                let flat_len = module.flatten_types(s.opts, [*case]).len();
+                Source::Stack(s.slice(1..s.locals.len()).slice(0..flat_len))
             }
-            Destination::Stack => Destination::Stack,
-        })
+            Source::Memory(mem) => {
+                let mem = payload_offset(size, module, case, mem);
+                Source::Memory(mem)
+            }
+        }
+    }
+
+    fn opts(&self) -> &'a Options {
+        match self {
+            Source::Stack(s) => s.opts,
+            Source::Memory(mem) => mem.opts,
+        }
     }
 }
 
-impl Memory {
+impl<'a> Destination<'a> {
+    /// Same as `Source::record_field_srcs` but for destinations.
+    fn record_field_dsts<'b>(
+        &'b self,
+        module: &'b Module,
+        fields: impl IntoIterator<Item = InterfaceType> + 'b,
+    ) -> impl Iterator<Item = Destination> + 'b
+    where
+        'a: 'b,
+    {
+        let mut offset = 0;
+        fields.into_iter().map(move |ty| match self {
+            Destination::Memory(mem) => {
+                let mem = next_field_offset(&mut offset, module, &ty, mem);
+                Destination::Memory(mem)
+            }
+            Destination::Stack(s, opts) => {
+                let cnt = module.flatten_types(opts, [ty]).len();
+                offset += cnt;
+                Destination::Stack(&s[offset - cnt..offset], opts)
+            }
+        })
+    }
+
+    /// Returns the corresponding discriminant source and payload source f
+    fn payload_dst(
+        &self,
+        module: &Module,
+        size: DiscriminantSize,
+        case: &InterfaceType,
+    ) -> Destination {
+        match self {
+            Destination::Stack(s, opts) => {
+                let flat_len = module.flatten_types(opts, [*case]).len();
+                Destination::Stack(&s[1..][..flat_len], opts)
+            }
+            Destination::Memory(mem) => {
+                let mem = payload_offset(size, module, case, mem);
+                Destination::Memory(mem)
+            }
+        }
+    }
+
+    fn opts(&self) -> &'a Options {
+        match self {
+            Destination::Stack(_, opts) => opts,
+            Destination::Memory(mem) => mem.opts,
+        }
+    }
+}
+
+fn next_field_offset<'a>(
+    offset: &mut usize,
+    module: &Module,
+    field: &InterfaceType,
+    mem: &Memory<'a>,
+) -> Memory<'a> {
+    let (size, align) = module.size_align(mem.opts, field);
+    *offset = align_to(*offset, align) + size;
+    mem.bump(*offset - size)
+}
+
+fn payload_offset<'a>(
+    disc_size: DiscriminantSize,
+    module: &Module,
+    case: &InterfaceType,
+    mem: &Memory<'a>,
+) -> Memory<'a> {
+    let align = module.align(mem.opts, case);
+    mem.bump(align_to(disc_size.into(), align))
+}
+
+impl<'a> Memory<'a> {
     fn i32_offset(&self) -> i32 {
         self.offset as i32
     }
@@ -731,14 +1931,14 @@ impl Memory {
         MemArg {
             offset: u64::from(self.offset),
             align,
-            memory_index: self.memory_idx,
+            memory_index: self.opts.memory.unwrap().as_u32(),
         }
     }
 
-    fn bump(&self, offset: usize) -> Memory {
+    fn bump(&self, offset: usize) -> Memory<'a> {
         Memory {
+            opts: self.opts,
             addr_local: self.addr_local,
-            memory_idx: self.memory_idx,
             offset: self.offset + u32::try_from(offset).unwrap(),
         }
     }
@@ -748,16 +1948,19 @@ impl<'a> Stack<'a> {
     fn slice(&self, range: Range<usize>) -> Stack<'a> {
         Stack {
             locals: &self.locals[range],
+            opts: self.opts,
         }
     }
 }
 
-impl Options {
-    fn ptr(&self) -> ValType {
-        if self.memory64 {
-            ValType::I64
-        } else {
-            ValType::I32
-        }
-    }
+struct VariantCase<'a> {
+    src_i: u32,
+    src_ty: &'a InterfaceType,
+    dst_i: u32,
+    dst_ty: &'a InterfaceType,
+}
+
+enum MallocSize {
+    Const(usize),
+    Local(u32),
 }

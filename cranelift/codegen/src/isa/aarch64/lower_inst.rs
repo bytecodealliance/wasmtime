@@ -254,9 +254,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::AtomicStore => implemented_in_isle(ctx),
 
-        Opcode::Fence => {
-            ctx.emit(Inst::Fence {});
-        }
+        Opcode::Fence => implemented_in_isle(ctx),
 
         Opcode::StackLoad
         | Opcode::StackStore
@@ -377,6 +375,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     op, ty
                 )));
             }
+
+            if op == Opcode::SelectifSpectreGuard {
+                ctx.emit(Inst::Csdb);
+            }
         }
 
         Opcode::Bitselect | Opcode::Vselect => implemented_in_isle(ctx),
@@ -399,34 +401,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             materialize_bool_result(ctx, insn, rd, cond);
         }
 
-        Opcode::IsNull | Opcode::IsInvalid => {
-            // Null references are represented by the constant value 0; invalid references are
-            // represented by the constant value -1. See `define_reftypes()` in
-            // `meta/src/isa/x86/encodings.rs` to confirm.
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let ty = ctx.input_ty(insn, 0);
-            let (alu_op, const_value) = match op {
-                Opcode::IsNull => {
-                    // cmp rn, #0
-                    (ALUOp::SubS, 0)
-                }
-                Opcode::IsInvalid => {
-                    // cmn rn, #1
-                    (ALUOp::AddS, 1)
-                }
-                _ => unreachable!(),
-            };
-            let const_value = ResultRSEImm12::Imm12(Imm12::maybe_from_u64(const_value).unwrap());
-            ctx.emit(alu_inst_imm12(
-                alu_op,
-                ty,
-                writable_zero_reg(),
-                rn,
-                const_value,
-            ));
-            materialize_bool_result(ctx, insn, rd, Cond::Eq);
-        }
+        Opcode::IsNull | Opcode::IsInvalid => implemented_in_isle(ctx),
 
         Opcode::Copy => {
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
@@ -546,9 +521,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::Debugtrap => {
-            ctx.emit(Inst::Brk);
-        }
+        Opcode::Debugtrap => implemented_in_isle(ctx),
 
         Opcode::Trap | Opcode::ResumableTrap => implemented_in_isle(ctx),
 
@@ -741,80 +714,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::Splat => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ty.unwrap();
-            // TODO: Handle SVE Dup.
-            let ty = if ty.is_dynamic_vector() {
-                dynamic_to_fixed(ty)
-            } else {
-                ty
-            };
-            let size = VectorSize::from_ty(ty);
-
-            if let Some((_, insn)) = maybe_input_insn_multi(
-                ctx,
-                inputs[0],
-                &[
-                    Opcode::Bconst,
-                    Opcode::F32const,
-                    Opcode::F64const,
-                    Opcode::Iconst,
-                ],
-            ) {
-                lower_splat_const(ctx, rd, ctx.get_constant(insn).unwrap(), size);
-            } else if let Some(insn) =
-                maybe_input_insn_via_conv(ctx, inputs[0], Opcode::Iconst, Opcode::Ireduce)
-            {
-                lower_splat_const(ctx, rd, ctx.get_constant(insn).unwrap(), size);
-            } else if let Some(insn) =
-                maybe_input_insn_via_conv(ctx, inputs[0], Opcode::Bconst, Opcode::Breduce)
-            {
-                lower_splat_const(ctx, rd, ctx.get_constant(insn).unwrap(), size);
-            } else if let Some((_, insn)) = maybe_input_insn_multi(
-                ctx,
-                inputs[0],
-                &[
-                    Opcode::Uload8,
-                    Opcode::Sload8,
-                    Opcode::Uload16,
-                    Opcode::Sload16,
-                    Opcode::Uload32,
-                    Opcode::Sload32,
-                    Opcode::Load,
-                ],
-            ) {
-                ctx.sink_inst(insn);
-                let load_inputs = insn_inputs(ctx, insn);
-                let load_outputs = insn_outputs(ctx, insn);
-                lower_load(
-                    ctx,
-                    insn,
-                    &load_inputs[..],
-                    load_outputs[0],
-                    |ctx, _rd, _elem_ty, mem| {
-                        let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-                        let (addr, addr_inst) = Inst::gen_load_addr(tmp, mem);
-                        if let Some(addr_inst) = addr_inst {
-                            ctx.emit(addr_inst);
-                        }
-                        ctx.emit(Inst::VecLoadReplicate { rd, rn: addr, size });
-
-                        Ok(())
-                    },
-                )?;
-            } else {
-                let input_ty = ctx.input_ty(insn, 0);
-                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let inst = if ty_has_int_representation(input_ty) {
-                    Inst::VecDup { rd, rn, size }
-                } else {
-                    Inst::VecDupFromFpu { rd, rn, size }
-                };
-
-                ctx.emit(inst);
-            }
-        }
+        Opcode::Splat => implemented_in_isle(ctx),
 
         Opcode::ScalarToVector => implemented_in_isle(ctx),
 

@@ -54,6 +54,9 @@ core = ["hashbrown"]
 # can significantly increase the size of the library.
 testing_hooks = []
 
+# Enables detailed logging which can be somewhat expensive.
+trace-log = []
+
 # This enables unwind info generation functionality.
 unwind = ["gimli"]
 

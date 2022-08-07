@@ -58,9 +58,9 @@ block0(v0: i32):
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   dup v2.4s, w0
-;   mov x4, sp
-;   str q2, [x4]
+;   dup v3.4s, w0
+;   mov x3, sp
+;   str q3, [x3]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -101,9 +101,9 @@ block0(v0: i32):
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   dup v2.4s, w0
-;   mov x4, sp
-;   str q2, [x4]
+;   dup v3.4s, w0
+;   mov x3, sp
+;   str q3, [x3]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret

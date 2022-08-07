@@ -29,6 +29,9 @@ use wasmtime_environ::DefinedMemoryIndex;
 use wasmtime_environ::FunctionInfo;
 use wasmtime_environ::SignatureIndex;
 
+#[macro_use]
+mod trampolines;
+
 #[cfg(feature = "component-model")]
 pub mod component;
 mod export;
@@ -62,15 +65,16 @@ pub use crate::memory::{
 pub use crate::mmap::Mmap;
 pub use crate::mmap_vec::MmapVec;
 pub use crate::table::{Table, TableElement};
+pub use crate::trampolines::prepare_host_to_wasm_trampoline;
 pub use crate::traphandlers::{
     catch_traps, init_traps, raise_lib_trap, raise_user_trap, resume_panic, tls_eager_initialize,
     Backtrace, SignalHandler, TlsRestore, Trap, TrapReason,
 };
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
-    VMRuntimeLimits, VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMTrampoline,
-    ValRaw,
+    VMGlobalImport, VMHostFuncContext, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport,
+    VMOpaqueContext, VMRuntimeLimits, VMSharedSignatureIndex, VMTableDefinition, VMTableImport,
+    VMTrampoline, ValRaw,
 };
 
 mod module_id;
