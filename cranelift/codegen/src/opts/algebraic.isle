@@ -133,3 +133,7 @@
       (if (u8_lt ly lx))
       (if (u8_lt lz lx))
       (iadd ty (iadd ty y z) x))
+
+;; Select's selector input doesn't need bint; remove the redundant op.
+(rule (simplify (select ty (bint _ b) x y))
+      (select ty b x y))

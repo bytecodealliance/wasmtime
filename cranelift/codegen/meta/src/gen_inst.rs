@@ -1510,7 +1510,7 @@ fn gen_common_isle(
             } else {
                 // Mid-end case.
                 let mut s = format!(
-                    "(pure_enodes ty (InstructionImms.{} (Opcode.{})",
+                    "(enodes ty (InstructionImms.{} (Opcode.{})",
                     inst.format.name, inst.camel_name
                 );
 

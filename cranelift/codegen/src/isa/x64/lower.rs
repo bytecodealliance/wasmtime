@@ -3188,7 +3188,10 @@ impl LowerBackend for X64Backend {
 
                     let src_ty = ctx.input_ty(branches[0], 0);
 
-                    if let Some(icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
+                    let maybe_bint = matches_input(ctx, flag_input, Opcode::Bint)
+                        .map(|insn| InsnInput { insn, input: 0 })
+                        .unwrap_or(flag_input);
+                    if let Some(icmp) = matches_input(ctx, maybe_bint, Opcode::Icmp) {
                         let cond_code = ctx.data(icmp).cond_code().unwrap();
                         let cond_code = emit_cmp(ctx, icmp, cond_code);
 
@@ -3200,7 +3203,7 @@ impl LowerBackend for X64Backend {
 
                         let cc = CC::from_intcc(cond_code);
                         ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
-                    } else if let Some(fcmp) = matches_input(ctx, flag_input, Opcode::Fcmp) {
+                    } else if let Some(fcmp) = matches_input(ctx, maybe_bint, Opcode::Fcmp) {
                         let cond_code = ctx.data(fcmp).fp_cond_code().unwrap();
                         let cond_code = if op0 == Opcode::Brz {
                             cond_code.inverse()

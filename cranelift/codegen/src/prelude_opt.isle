@@ -15,9 +15,9 @@
            (and (eclass_type ty)
                 id))
 
-;; Extract any pure node(s) for the given eclass ID.
-(decl multi pure_enodes (Type InstructionImms IdArray) Id)
-(extern extractor pure_enodes pure_enodes_etor)
+;; Extract any node(s) for the given eclass ID.
+(decl multi enodes (Type InstructionImms IdArray) Id)
+(extern extractor enodes enodes_etor)
 
 ;; Construct a pure node, returning a new (or deduplicated
 ;; already-existing) eclass ID.

@@ -117,7 +117,7 @@ fn store_to_load<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     id
 }
 
-struct PureNodesEtorIter<'a, 'b>
+struct NodesEtorIter<'a, 'b>
 where
     'b: 'a,
 {
@@ -127,7 +127,7 @@ where
     _phantom2: PhantomData<&'b ()>,
 }
 
-impl<'a, 'b> generated_code::ContextIter for PureNodesEtorIter<'a, 'b>
+impl<'a, 'b> generated_code::ContextIter for NodesEtorIter<'a, 'b>
 where
     'b: 'a,
 {
@@ -138,7 +138,10 @@ where
         while let Some(node) = self.iter.next(&ctx.egraph.egraph) {
             log::trace!("iter from root {}: node {:?}", self.root, node);
             match node {
-                Node::Pure { op, args, types } if types.len() == 1 => {
+                Node::Pure { op, args, types }
+                | Node::Inst {
+                    op, args, types, ..
+                } if types.len() == 1 => {
                     let ty = types.as_slice(&ctx.egraph.node_ctx.types)[0];
                     return Some((ty, op.clone(), args.clone()));
                 }
@@ -156,9 +159,10 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
         let mut iter = self.egraph.egraph.enodes(eclass);
         while let Some(node) = iter.next(&self.egraph.egraph) {
             match node {
-                &Node::Pure { types, .. } if types.len() == 1 => {
+                &Node::Pure { types, .. } | &Node::Inst { types, .. } if types.len() == 1 => {
                     return Some(types.as_slice(&self.egraph.node_ctx.types)[0]);
                 }
+                &Node::Load { ty, .. } => return Some(ty),
                 _ => {}
             }
         }
@@ -169,10 +173,10 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
         Some((self.egraph.loop_levels[eclass].level() as u8, eclass))
     }
 
-    type pure_enodes_etor_iter = PureNodesEtorIter<'a, 'b>;
+    type enodes_etor_iter = NodesEtorIter<'a, 'b>;
 
-    fn pure_enodes_etor(&mut self, eclass: Id) -> Option<PureNodesEtorIter<'a, 'b>> {
-        Some(PureNodesEtorIter {
+    fn enodes_etor(&mut self, eclass: Id) -> Option<NodesEtorIter<'a, 'b>> {
+        Some(NodesEtorIter {
             root: eclass,
             iter: self.egraph.egraph.enodes(eclass),
             _phantom1: PhantomData,
