@@ -1,7 +1,7 @@
 //! Size, align, and flattening information about component model types.
 
-use crate::component::{InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
-use crate::fact::{Context, Module, Options};
+use crate::component::{ComponentTypes, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
+use crate::fact::{AdapterOptions, Context, Options};
 use wasm_encoder::ValType;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
@@ -28,25 +28,25 @@ pub(crate) fn align_to(n: usize, align: usize) -> usize {
     (n + (align - 1)) & !(align - 1)
 }
 
-impl Module<'_> {
+impl ComponentTypes {
     /// Calculates the core wasm function signature for the component function
     /// type specified within `Context`.
     ///
     /// This is used to generate the core wasm signatures for functions that are
     /// imported (matching whatever was `canon lift`'d) and functions that are
     /// exported (matching the generated function from `canon lower`).
-    pub(super) fn signature(&self, options: &Options, context: Context) -> Signature {
-        let ty = &self.types[options.ty];
-        let ptr_ty = options.ptr();
+    pub(super) fn signature(&self, options: &AdapterOptions, context: Context) -> Signature {
+        let ty = &self[options.ty];
+        let ptr_ty = options.options.ptr();
 
-        let mut params = self.flatten_types(options, ty.params.iter().map(|(_, ty)| *ty));
+        let mut params = self.flatten_types(&options.options, ty.params.iter().map(|(_, ty)| *ty));
         let mut params_indirect = false;
         if params.len() > MAX_FLAT_PARAMS {
             params = vec![ptr_ty];
             params_indirect = true;
         }
 
-        let mut results = self.flatten_types(options, [ty.result]);
+        let mut results = self.flatten_types(&options.options, [ty.result]);
         let mut results_indirect = false;
         if results.len() > MAX_FLAT_RESULTS {
             results_indirect = true;
@@ -109,17 +109,17 @@ impl Module<'_> {
                 dst.push(opts.ptr());
             }
             InterfaceType::Record(r) => {
-                for field in self.types[*r].fields.iter() {
+                for field in self[*r].fields.iter() {
                     self.push_flat(opts, &field.ty, dst);
                 }
             }
             InterfaceType::Tuple(t) => {
-                for ty in self.types[*t].types.iter() {
+                for ty in self[*t].types.iter() {
                     self.push_flat(opts, ty, dst);
                 }
             }
             InterfaceType::Flags(f) => {
-                let flags = &self.types[*f];
+                let flags = &self[*f];
                 let nflags = align_to(flags.names.len(), 32) / 32;
                 for _ in 0..nflags {
                     dst.push(ValType::I32);
@@ -128,13 +128,13 @@ impl Module<'_> {
             InterfaceType::Enum(_) => dst.push(ValType::I32),
             InterfaceType::Option(t) => {
                 dst.push(ValType::I32);
-                self.push_flat(opts, &self.types[*t], dst);
+                self.push_flat(opts, &self[*t], dst);
             }
             InterfaceType::Variant(t) => {
                 dst.push(ValType::I32);
                 let pos = dst.len();
                 let mut tmp = Vec::new();
-                for case in self.types[*t].cases.iter() {
+                for case in self[*t].cases.iter() {
                     self.push_flat_variant(opts, &case.ty, pos, &mut tmp, dst);
                 }
             }
@@ -142,13 +142,13 @@ impl Module<'_> {
                 dst.push(ValType::I32);
                 let pos = dst.len();
                 let mut tmp = Vec::new();
-                for ty in self.types[*t].types.iter() {
+                for ty in self[*t].types.iter() {
                     self.push_flat_variant(opts, ty, pos, &mut tmp, dst);
                 }
             }
             InterfaceType::Expected(t) => {
                 dst.push(ValType::I32);
-                let e = &self.types[*t];
+                let e = &self[*t];
                 let pos = dst.len();
                 let mut tmp = Vec::new();
                 self.push_flat_variant(opts, &e.ok, pos, &mut tmp, dst);
@@ -209,26 +209,26 @@ impl Module<'_> {
             }
 
             InterfaceType::Record(r) => {
-                self.record_size_align(opts, self.types[*r].fields.iter().map(|f| &f.ty))
+                self.record_size_align(opts, self[*r].fields.iter().map(|f| &f.ty))
             }
-            InterfaceType::Tuple(t) => self.record_size_align(opts, self.types[*t].types.iter()),
-            InterfaceType::Flags(f) => match FlagsSize::from_count(self.types[*f].names.len()) {
+            InterfaceType::Tuple(t) => self.record_size_align(opts, self[*t].types.iter()),
+            InterfaceType::Flags(f) => match FlagsSize::from_count(self[*f].names.len()) {
                 FlagsSize::Size0 => (0, 1),
                 FlagsSize::Size1 => (1, 1),
                 FlagsSize::Size2 => (2, 2),
                 FlagsSize::Size4Plus(n) => (n * 4, 4),
             },
-            InterfaceType::Enum(t) => self.discrim_size_align(self.types[*t].names.len()),
+            InterfaceType::Enum(t) => self.discrim_size_align(self[*t].names.len()),
             InterfaceType::Option(t) => {
-                let ty = &self.types[*t];
+                let ty = &self[*t];
                 self.variant_size_align(opts, [&InterfaceType::Unit, ty].into_iter())
             }
             InterfaceType::Variant(t) => {
-                self.variant_size_align(opts, self.types[*t].cases.iter().map(|c| &c.ty))
+                self.variant_size_align(opts, self[*t].cases.iter().map(|c| &c.ty))
             }
-            InterfaceType::Union(t) => self.variant_size_align(opts, self.types[*t].types.iter()),
+            InterfaceType::Union(t) => self.variant_size_align(opts, self[*t].types.iter()),
             InterfaceType::Expected(t) => {
-                let e = &self.types[*t];
+                let e = &self[*t];
                 self.variant_size_align(opts, [&e.ok, &e.err].into_iter())
             }
         }
