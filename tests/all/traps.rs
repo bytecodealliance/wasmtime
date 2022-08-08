@@ -71,6 +71,7 @@ fn test_trap_trace() -> Result<()> {
 }
 
 #[test]
+#[allow(deprecated)]
 fn test_trap_backtrace_disabled() -> Result<()> {
     let mut config = Config::default();
     config.wasm_backtrace(false);

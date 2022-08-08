@@ -367,10 +367,9 @@ impl Engine {
                 }
             }
 
-            // If reference types or backtraces are enabled, we need unwind info. Otherwise, we
-            // don't care.
+            // Windows requires unwind info as part of its ABI.
             "unwind_info" => {
-                if self.config().wasm_backtrace || self.config().features.reference_types {
+                if self.target().operating_system == target_lexicon::OperatingSystem::Windows {
                     *value == FlagValue::Bool(true)
                 } else {
                     return Ok(())
@@ -544,7 +543,6 @@ mod tests {
 
     use anyhow::Result;
     use tempfile::TempDir;
-    use wasmtime_environ::FlagValue;
 
     #[test]
     fn cache_accounts_for_opt_level() -> Result<()> {
@@ -605,21 +603,5 @@ mod tests {
         assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
         Ok(())
-    }
-
-    #[test]
-    #[cfg(compiler)]
-    fn test_disable_backtraces() {
-        let engine = Engine::new(
-            Config::new()
-                .wasm_backtrace(false)
-                .wasm_reference_types(false),
-        )
-        .expect("failed to construct engine");
-        assert_eq!(
-            engine.compiler().flags().get("unwind_info"),
-            Some(&FlagValue::Bool(false)),
-            "unwind info should be disabled unless needed"
-        );
     }
 }
