@@ -83,7 +83,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   sarq    $63, %rdi, %rdi
+;   shrq    $63, %rdi, %rdi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -99,7 +99,7 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   sarl    $31, %edi, %edi
+;   shrl    $31, %edi, %edi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -115,7 +115,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   sarq    $63, %rdi, %rdi
+;   shrq    $63, %rdi, %rdi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -131,7 +131,7 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   sarl    $31, %edi, %edi
+;   shrl    $31, %edi, %edi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -147,8 +147,8 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   sarq    $63, %rdi, %rdi
 ;   notq    %rdi, %rdi
+;   shrq    $63, %rdi, %rdi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -164,8 +164,8 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   sarl    $31, %edi, %edi
-;   notl    %edi, %edi
+;   notq    %rdi, %rdi
+;   shrl    $31, %edi, %edi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -181,8 +181,8 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   sarq    $63, %rdi, %rdi
 ;   notq    %rdi, %rdi
+;   shrq    $63, %rdi, %rdi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -198,9 +198,10 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   sarl    $31, %edi, %edi
-;   notl    %edi, %edi
+;   notq    %rdi, %rdi
+;   shrl    $31, %edi, %edi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+

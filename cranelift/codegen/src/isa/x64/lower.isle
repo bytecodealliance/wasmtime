@@ -1502,36 +1502,36 @@
       (lower_icmp_bool (emit_cmp cc a b)))
 
 ;; Peephole optimization for `x < 0`, when x is a signed 64 bit value
-(rule (lower (icmp (IntCC.SignedLessThan) x @ (value_type $I64) (u64_from_iconst 0)))
-      (x64_sar $I64 x (Imm8Reg.Imm8 63)))
+(rule (lower (has_type $B1 (icmp (IntCC.SignedLessThan) x @ (value_type $I64) (u64_from_iconst 0))))
+      (x64_shr $I64 x (Imm8Reg.Imm8 63)))
 
 ;; Peephole optimization for `0 > x`, when x is a signed 64 bit value
-(rule (lower (icmp (IntCC.SignedGreaterThan) (u64_from_iconst 0) x @ (value_type $I64)))
-      (x64_sar $I64 x (Imm8Reg.Imm8 63)))
+(rule (lower (has_type $B1 (icmp (IntCC.SignedGreaterThan) (u64_from_iconst 0) x @ (value_type $I64))))
+      (x64_shr $I64 x (Imm8Reg.Imm8 63)))
 
 ;; Peephole optimization for `0 <= x`, when x is a signed 64 bit value
-(rule (lower (icmp (IntCC.SignedLessThanOrEqual) (u64_from_iconst 0) x @ (value_type $I64)))
-      (x64_not $I64 (x64_sar $I64 x (Imm8Reg.Imm8 63))))
+(rule (lower (has_type $B1 (icmp (IntCC.SignedLessThanOrEqual) (u64_from_iconst 0) x @ (value_type $I64))))
+      (x64_shr $I64 (x64_not $I64 x) (Imm8Reg.Imm8 63)))
 
 ;; Peephole optimization for `x >= 0`, when x is a signed 64 bit value
-(rule (lower (icmp (IntCC.SignedGreaterThanOrEqual) x @ (value_type $I64) (u64_from_iconst 0)))
-      (x64_not $I64 (x64_sar $I64 x (Imm8Reg.Imm8 63))))
+(rule (lower (has_type $B1 (icmp (IntCC.SignedGreaterThanOrEqual) x @ (value_type $I64) (u64_from_iconst 0))))
+      (x64_shr $I64 (x64_not $I64 x) (Imm8Reg.Imm8 63)))
 
 ;; Peephole optimization for `x < 0`, when x is a signed 32 bit value
-(rule (lower (icmp (IntCC.SignedLessThan) x @ (value_type $I32) (u64_from_iconst 0)))
-      (x64_sar $I32 x (Imm8Reg.Imm8 31)))
+(rule (lower (has_type $B1 (icmp (IntCC.SignedLessThan) x @ (value_type $I32) (u64_from_iconst 0))))
+      (x64_shr $I32 x (Imm8Reg.Imm8 31)))
 
 ;; Peephole optimization for `0 > x`, when x is a signed 32 bit value
-(rule (lower (icmp (IntCC.SignedGreaterThan) (u64_from_iconst 0) x @ (value_type $I32)))
-      (x64_sar $I32 x (Imm8Reg.Imm8 31)))
+(rule (lower (has_type $B1 (icmp (IntCC.SignedGreaterThan) (u64_from_iconst 0) x @ (value_type $I32))))
+      (x64_shr $I32 x (Imm8Reg.Imm8 31)))
 
 ;; Peephole optimization for `0 <= x`, when x is a signed 32 bit value
-(rule (lower (icmp (IntCC.SignedLessThanOrEqual) (u64_from_iconst 0) x @ (value_type $I32)))
-      (x64_not $I32 (x64_sar $I32 x (Imm8Reg.Imm8 31))))
+(rule (lower (has_type $B1 (icmp (IntCC.SignedLessThanOrEqual) (u64_from_iconst 0) x @ (value_type $I32))))
+      (x64_shr $I32 (x64_not $I64 x) (Imm8Reg.Imm8 31)))
 
 ;; Peephole optimization for `x >= 0`, when x is a signed 32 bit value
-(rule (lower (icmp (IntCC.SignedGreaterThanOrEqual) x @ (value_type $I32) (u64_from_iconst 0)))
-      (x64_not $I32 (x64_sar $I32 x (Imm8Reg.Imm8 31))))
+(rule (lower (has_type $B1 (icmp (IntCC.SignedGreaterThanOrEqual) x @ (value_type $I32) (u64_from_iconst 0))))
+      (x64_shr $I32 (x64_not $I64 x) (Imm8Reg.Imm8 31)))
 
 ;; For XMM-held values, we lower to `PCMP*` instructions, sometimes more than
 ;; one. To note: what is different here about the output values is that each
