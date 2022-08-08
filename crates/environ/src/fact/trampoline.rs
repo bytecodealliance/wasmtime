@@ -1282,7 +1282,11 @@ impl Compiler<'_, '_> {
             }
         };
 
-        self.validate_string_inbounds(src, dst_byte_len);
+        let src_byte_len = self.gen_local(src.opts.ptr());
+        self.convert_src_len_to_dst(dst_byte_len, dst.opts.ptr(), src.opts.ptr());
+        self.instruction(LocalSet(src_byte_len));
+
+        self.validate_string_inbounds(src, src.len);
         self.validate_string_inbounds(&dst, dst_byte_len);
 
         let transcode = self.transcoder(src, &dst, Transcode::Utf16ToCompactProbablyUtf16);
@@ -1533,7 +1537,7 @@ impl Compiler<'_, '_> {
             self.instruction(LocalTee(tmp));
             self.instruction(LocalGet(s.ptr));
             self.ptr_lt_u(s.opts);
-            self.ptr_br_if(s.opts, 0);
+            self.instruction(BrIf(0));
             self.instruction(LocalGet(tmp));
         }
 
