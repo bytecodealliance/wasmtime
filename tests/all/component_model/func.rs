@@ -1127,19 +1127,21 @@ fn some_traps() -> Result<()> {
             err,
         );
     }
-    instance(&mut store)?
+    let err = instance(&mut store)?
         .get_typed_func::<(&[u8],), (), _>(&mut store, "take-list-base-oob")?
         .call(&mut store, (&[],))
-        .unwrap();
+        .unwrap_err();
+    assert_oob(&err);
     let err = instance(&mut store)?
         .get_typed_func::<(&[u8],), (), _>(&mut store, "take-list-base-oob")?
         .call(&mut store, (&[1],))
         .unwrap_err();
     assert_oob(&err);
-    instance(&mut store)?
+    let err = instance(&mut store)?
         .get_typed_func::<(&str,), (), _>(&mut store, "take-string-base-oob")?
         .call(&mut store, ("",))
-        .unwrap();
+        .unwrap_err();
+    assert_oob(&err);
     let err = instance(&mut store)?
         .get_typed_func::<(&str,), (), _>(&mut store, "take-string-base-oob")?
         .call(&mut store, ("x",))
@@ -1191,13 +1193,13 @@ fn some_traps() -> Result<()> {
     // For this function the first allocation, the space to store all the
     // arguments, is in-bounds but then all further allocations, such as for
     // each individual string, are all out of bounds.
-    instance(&mut store)?
+    let err = instance(&mut store)?
         .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), (), _>(
             &mut store,
             "take-many-second-oob",
         )?
         .call(&mut store, ("", "", "", "", "", "", "", "", "", ""))
-        .unwrap();
+        .unwrap_err();
     assert_oob(&err);
     let err = instance(&mut store)?
         .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), (), _>(
