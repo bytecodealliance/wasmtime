@@ -22,7 +22,7 @@
     )
 )]
 
-pub use crate::function_runner::SingleFunctionCompiler;
+pub use crate::function_runner::TestCaseCompiler;
 use crate::runner::TestRunner;
 use cranelift_codegen::timing;
 use cranelift_reader::TestCommand;

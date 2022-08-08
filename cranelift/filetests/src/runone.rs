@@ -1,7 +1,7 @@
 //! Run the tests in a single test file.
 
 use crate::new_subtest;
-use crate::subtest::{Context, SubTest};
+use crate::subtest::SubTest;
 use anyhow::{bail, Context as _, Result};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_verifier_error;

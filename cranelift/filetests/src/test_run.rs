@@ -2,7 +2,7 @@
 //!
 //! The `run` test command compiles each function on the host machine and executes it
 
-use crate::function_runner::SingleFunctionCompiler;
+use crate::function_runner::TestCaseCompiler;
 use crate::runtest_environment::{HeapMemory, RuntestEnvironment};
 use crate::subtest::{Context, SubTest};
 use cranelift_codegen::data_value::DataValue;
@@ -144,8 +144,7 @@ impl SubTest for TestRun {
                 // Copy the requested ISA flags into the host ISA and use that.
                 let isa = build_host_isa(false, context.flags.clone(), requested_isa.isa_flags());
 
-                let compiled_fn =
-                    SingleFunctionCompiler::new(isa).compile(func.clone().into_owned())?;
+                let compiled_fn = TestCaseCompiler::new(isa).compile(func.clone().into_owned())?;
                 command
                     .run(|_, run_args| {
                         test_env.validate_signature(&func)?;

@@ -5,7 +5,7 @@ use libfuzzer_sys::fuzz_target;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
-use cranelift_filetests::function_runner::{CompiledFunction, SingleFunctionCompiler};
+use cranelift_filetests::function_runner::{CompiledFunction, TestCaseCompiler};
 use cranelift_fuzzgen::*;
 use cranelift_interpreter::environment::FuncIndex;
 use cranelift_interpreter::environment::FunctionStore;
@@ -68,7 +68,7 @@ fuzz_target!(|testcase: TestCase| {
         builder.set("enable_llvm_abi_extensions", "true").unwrap();
         settings::Flags::new(builder)
     };
-    let host_compiler = SingleFunctionCompiler::with_host_isa(flags).unwrap();
+    let host_compiler = TestCaseCompiler::with_host_isa(flags).unwrap();
     let compiled_fn = host_compiler.compile(testcase.func.clone()).unwrap();
 
     for args in &testcase.inputs {
