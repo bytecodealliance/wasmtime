@@ -3559,6 +3559,7 @@ dependencies = [
  "wasmparser",
  "wasmprinter",
  "wasmtime-environ",
+ "wat",
 ]
 
 [[package]]

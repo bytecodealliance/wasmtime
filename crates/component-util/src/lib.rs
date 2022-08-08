@@ -1,5 +1,5 @@
 /// Represents the possible sizes in bytes of the discriminant of a variant type in the component model
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum DiscriminantSize {
     /// 8-bit discriminant
     Size1,
@@ -11,7 +11,7 @@ pub enum DiscriminantSize {
 
 impl DiscriminantSize {
     /// Calculate the size of discriminant needed to represent a variant with the specified number of cases.
-    pub fn from_count(count: usize) -> Option<Self> {
+    pub const fn from_count(count: usize) -> Option<Self> {
         if count <= 0xFF {
             Some(Self::Size1)
         } else if count <= 0xFFFF {
@@ -22,16 +22,21 @@ impl DiscriminantSize {
             None
         }
     }
+
+    /// Returns the size, in bytes, of this discriminant
+    pub const fn byte_size(&self) -> u32 {
+        match self {
+            DiscriminantSize::Size1 => 1,
+            DiscriminantSize::Size2 => 2,
+            DiscriminantSize::Size4 => 4,
+        }
+    }
 }
 
 impl From<DiscriminantSize> for u32 {
     /// Size of the discriminant as a `u32`
     fn from(size: DiscriminantSize) -> u32 {
-        match size {
-            DiscriminantSize::Size1 => 1,
-            DiscriminantSize::Size2 => 2,
-            DiscriminantSize::Size4 => 4,
-        }
+        size.byte_size()
     }
 }
 
@@ -60,7 +65,7 @@ pub enum FlagsSize {
 
 impl FlagsSize {
     /// Calculate the size needed to represent a value with the specified number of flags.
-    pub fn from_count(count: usize) -> FlagsSize {
+    pub const fn from_count(count: usize) -> FlagsSize {
         if count == 0 {
             FlagsSize::Size0
         } else if count <= 8 {
@@ -74,7 +79,7 @@ impl FlagsSize {
 }
 
 /// Divide `n` by `d`, rounding up in the case of a non-zero remainder.
-fn ceiling_divide(n: usize, d: usize) -> usize {
+const fn ceiling_divide(n: usize, d: usize) -> usize {
     (n + d - 1) / d
 }
 

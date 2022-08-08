@@ -3,7 +3,7 @@
 use crate::component::{ComponentTypes, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 use crate::fact::{AdapterOptions, Context, Options};
 use wasm_encoder::ValType;
-use wasmtime_component_util::{DiscriminantSize, FlagsSize};
+use wasmtime_component_util::FlagsSize;
 
 /// Metadata about a core wasm signature which is created for a component model
 /// signature.
@@ -21,11 +21,6 @@ pub struct Signature {
     /// `results` is an `i32` or that `params` ends with an `i32` depending on
     /// the `Context`.
     pub results_indirect: bool,
-}
-
-pub(crate) fn align_to(n: usize, align: usize) -> usize {
-    assert!(align.is_power_of_two());
-    (n + (align - 1)) & !(align - 1)
 }
 
 impl ComponentTypes {
@@ -120,15 +115,18 @@ impl ComponentTypes {
             }
             InterfaceType::Flags(f) => {
                 let flags = &self[*f];
-                let nflags = align_to(flags.names.len(), 32) / 32;
-                for _ in 0..nflags {
-                    dst.push(ValType::I32);
+                match FlagsSize::from_count(flags.names.len()) {
+                    FlagsSize::Size0 => {}
+                    FlagsSize::Size1 | FlagsSize::Size2 => dst.push(ValType::I32),
+                    FlagsSize::Size4Plus(n) => {
+                        dst.extend((0..n).map(|_| ValType::I32));
+                    }
                 }
             }
             InterfaceType::Enum(_) => dst.push(ValType::I32),
             InterfaceType::Option(t) => {
                 dst.push(ValType::I32);
-                self.push_flat(opts, &self[*t], dst);
+                self.push_flat(opts, &self[*t].ty, dst);
             }
             InterfaceType::Variant(t) => {
                 dst.push(ValType::I32);
@@ -185,7 +183,7 @@ impl ComponentTypes {
         }
     }
 
-    pub(super) fn align(&self, opts: &Options, ty: &InterfaceType) -> usize {
+    pub(super) fn align(&self, opts: &Options, ty: &InterfaceType) -> u32 {
         self.size_align(opts, ty).1
     }
 
@@ -194,85 +192,12 @@ impl ComponentTypes {
     //
     // TODO: this is probably inefficient to entire recalculate at all phases,
     // seems like it would be best to intern this in some sort of map somewhere.
-    pub(super) fn size_align(&self, opts: &Options, ty: &InterfaceType) -> (usize, usize) {
-        match ty {
-            InterfaceType::Unit => (0, 1),
-            InterfaceType::Bool | InterfaceType::S8 | InterfaceType::U8 => (1, 1),
-            InterfaceType::S16 | InterfaceType::U16 => (2, 2),
-            InterfaceType::S32
-            | InterfaceType::U32
-            | InterfaceType::Char
-            | InterfaceType::Float32 => (4, 4),
-            InterfaceType::S64 | InterfaceType::U64 | InterfaceType::Float64 => (8, 8),
-            InterfaceType::String | InterfaceType::List(_) => {
-                ((2 * opts.ptr_size()).into(), opts.ptr_size().into())
-            }
-
-            InterfaceType::Record(r) => {
-                self.record_size_align(opts, self[*r].fields.iter().map(|f| &f.ty))
-            }
-            InterfaceType::Tuple(t) => self.record_size_align(opts, self[*t].types.iter()),
-            InterfaceType::Flags(f) => match FlagsSize::from_count(self[*f].names.len()) {
-                FlagsSize::Size0 => (0, 1),
-                FlagsSize::Size1 => (1, 1),
-                FlagsSize::Size2 => (2, 2),
-                FlagsSize::Size4Plus(n) => (n * 4, 4),
-            },
-            InterfaceType::Enum(t) => self.discrim_size_align(self[*t].names.len()),
-            InterfaceType::Option(t) => {
-                let ty = &self[*t];
-                self.variant_size_align(opts, [&InterfaceType::Unit, ty].into_iter())
-            }
-            InterfaceType::Variant(t) => {
-                self.variant_size_align(opts, self[*t].cases.iter().map(|c| &c.ty))
-            }
-            InterfaceType::Union(t) => self.variant_size_align(opts, self[*t].types.iter()),
-            InterfaceType::Expected(t) => {
-                let e = &self[*t];
-                self.variant_size_align(opts, [&e.ok, &e.err].into_iter())
-            }
-        }
-    }
-
-    pub(super) fn record_size_align<'a>(
-        &self,
-        opts: &Options,
-        fields: impl Iterator<Item = &'a InterfaceType>,
-    ) -> (usize, usize) {
-        let mut size = 0;
-        let mut align = 1;
-        for ty in fields {
-            let (fsize, falign) = self.size_align(opts, ty);
-            size = align_to(size, falign) + fsize;
-            align = align.max(falign);
-        }
-        (align_to(size, align), align)
-    }
-
-    fn variant_size_align<'a>(
-        &self,
-        opts: &Options,
-        cases: impl ExactSizeIterator<Item = &'a InterfaceType>,
-    ) -> (usize, usize) {
-        let (discrim_size, mut align) = self.discrim_size_align(cases.len());
-        let mut payload_size = 0;
-        for ty in cases {
-            let (csize, calign) = self.size_align(opts, ty);
-            payload_size = payload_size.max(csize);
-            align = align.max(calign);
-        }
-        (
-            align_to(align_to(discrim_size, align) + payload_size, align),
-            align,
-        )
-    }
-
-    fn discrim_size_align<'a>(&self, cases: usize) -> (usize, usize) {
-        match DiscriminantSize::from_count(cases) {
-            Some(DiscriminantSize::Size1) => (1, 1),
-            Some(DiscriminantSize::Size2) => (2, 2),
-            Some(DiscriminantSize::Size4) => (4, 4),
-            None => unreachable!(),
+    pub(super) fn size_align(&self, opts: &Options, ty: &InterfaceType) -> (u32, u32) {
+        let abi = self.canonical_abi(ty);
+        if opts.memory64 {
+            (abi.size64, abi.align64)
+        } else {
+            (abi.size32, abi.align32)
         }
     }
 }

@@ -16,11 +16,12 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    ComponentTypes, InterfaceType, StringEncoding, TypeEnumIndex, TypeExpectedIndex,
-    TypeFlagsIndex, TypeInterfaceIndex, TypeRecordIndex, TypeTupleIndex, TypeUnionIndex,
-    TypeVariantIndex, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, StringEncoding, TypeEnumIndex,
+    TypeExpectedIndex, TypeFlagsIndex, TypeInterfaceIndex, TypeOptionIndex, TypeRecordIndex,
+    TypeTupleIndex, TypeUnionIndex, TypeVariantIndex, VariantInfo, FLAG_MAY_ENTER, FLAG_MAY_LEAVE,
+    MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
-use crate::fact::signature::{align_to, Signature};
+use crate::fact::signature::Signature;
 use crate::fact::transcode::{FixedEncoding as FE, Transcode, Transcoder};
 use crate::fact::traps::Trap;
 use crate::fact::{AdapterData, Body, Context, Function, FunctionId, Module, Options};
@@ -322,7 +323,12 @@ impl Compiler<'_, '_> {
         } else {
             // If there are too many parameters then space is allocated in the
             // destination module for the parameters via its `realloc` function.
-            let (size, align) = self.types.record_size_align(lift_opts, dst_tys.iter());
+            let abi = CanonicalAbiInfo::record(dst_tys.iter().map(|t| self.types.canonical_abi(t)));
+            let (size, align) = if lift_opts.memory64 {
+                (abi.size64, abi.align64)
+            } else {
+                (abi.size32, abi.align32)
+            };
             let size = MallocSize::Const(size);
             Destination::Memory(self.malloc(lift_opts, size, align))
         };
@@ -1706,13 +1712,13 @@ impl Compiler<'_, '_> {
             // Update the two loop pointers
             if src_size > 0 {
                 self.instruction(LocalGet(cur_src_ptr.idx));
-                self.ptr_uconst(src_opts, u32::try_from(src_size).unwrap());
+                self.ptr_uconst(src_opts, src_size);
                 self.ptr_add(src_opts);
                 self.instruction(LocalSet(cur_src_ptr.idx));
             }
             if dst_size > 0 {
                 self.instruction(LocalGet(cur_dst_ptr.idx));
-                self.ptr_uconst(dst_opts, u32::try_from(dst_size).unwrap());
+                self.ptr_uconst(dst_opts, dst_size);
                 self.ptr_add(dst_opts);
                 self.instruction(LocalSet(cur_dst_ptr.idx));
             }
@@ -1759,7 +1765,7 @@ impl Compiler<'_, '_> {
         &mut self,
         opts: &Options,
         len_local: u32,
-        elt_size: usize,
+        elt_size: u32,
     ) -> TempLocal {
         // Zero-size types are easy to handle here because the byte size of the
         // destination is always zero.
@@ -1824,7 +1830,7 @@ impl Compiler<'_, '_> {
         //
         // The result of the multiplication is saved into a local as well to
         // get the result afterwards.
-        self.instruction(I64Const(u32::try_from(elt_size).unwrap().into()));
+        self.instruction(I64Const(elt_size.into()));
         self.instruction(I64Mul);
         let tmp = self.local_tee_new_tmp(ValType::I64);
         // Branch to success if the upper 32-bits are zero, otherwise
@@ -1997,8 +2003,8 @@ impl Compiler<'_, '_> {
             _ => panic!("expected a variant"),
         };
 
-        let src_info = VariantInfo::new(self.types, src.opts(), src_ty.cases.iter().map(|c| c.ty));
-        let dst_info = VariantInfo::new(self.types, dst.opts(), dst_ty.cases.iter().map(|c| c.ty));
+        let src_info = variant_info(self.types, src_ty.cases.iter().map(|c| c.ty));
+        let dst_info = variant_info(self.types, dst_ty.cases.iter().map(|c| c.ty));
 
         let iter = src_ty.cases.iter().enumerate().map(|(src_i, src_case)| {
             let dst_i = dst_ty
@@ -2032,8 +2038,8 @@ impl Compiler<'_, '_> {
             _ => panic!("expected an option"),
         };
         assert_eq!(src_ty.types.len(), dst_ty.types.len());
-        let src_info = VariantInfo::new(self.types, src.opts(), src_ty.types.iter().copied());
-        let dst_info = VariantInfo::new(self.types, dst.opts(), dst_ty.types.iter().copied());
+        let src_info = variant_info(self.types, src_ty.types.iter().copied());
+        let dst_info = variant_info(self.types, dst_ty.types.iter().copied());
 
         self.convert_variant(
             src,
@@ -2069,16 +2075,8 @@ impl Compiler<'_, '_> {
             InterfaceType::Enum(t) => &self.types[*t],
             _ => panic!("expected an option"),
         };
-        let src_info = VariantInfo::new(
-            self.types,
-            src.opts(),
-            src_ty.names.iter().map(|_| InterfaceType::Unit),
-        );
-        let dst_info = VariantInfo::new(
-            self.types,
-            dst.opts(),
-            dst_ty.names.iter().map(|_| InterfaceType::Unit),
-        );
+        let src_info = variant_info(self.types, src_ty.names.iter().map(|_| InterfaceType::Unit));
+        let dst_info = variant_info(self.types, dst_ty.names.iter().map(|_| InterfaceType::Unit));
 
         let unit = &InterfaceType::Unit;
         self.convert_variant(
@@ -2102,19 +2100,19 @@ impl Compiler<'_, '_> {
 
     fn translate_option(
         &mut self,
-        src_ty: TypeInterfaceIndex,
+        src_ty: TypeOptionIndex,
         src: &Source<'_>,
         dst_ty: &InterfaceType,
         dst: &Destination,
     ) {
-        let src_ty = &self.types[src_ty];
+        let src_ty = &self.types[src_ty].ty;
         let dst_ty = match dst_ty {
-            InterfaceType::Option(t) => &self.types[*t],
+            InterfaceType::Option(t) => &self.types[*t].ty,
             _ => panic!("expected an option"),
         };
 
-        let src_info = VariantInfo::new(self.types, src.opts(), [InterfaceType::Unit, *src_ty]);
-        let dst_info = VariantInfo::new(self.types, dst.opts(), [InterfaceType::Unit, *dst_ty]);
+        let src_info = variant_info(self.types, [InterfaceType::Unit, *src_ty]);
+        let dst_info = variant_info(self.types, [InterfaceType::Unit, *dst_ty]);
 
         self.convert_variant(
             src,
@@ -2152,8 +2150,8 @@ impl Compiler<'_, '_> {
             _ => panic!("expected an expected"),
         };
 
-        let src_info = VariantInfo::new(self.types, src.opts(), [src_ty.ok, src_ty.err]);
-        let dst_info = VariantInfo::new(self.types, dst.opts(), [dst_ty.ok, dst_ty.err]);
+        let src_info = variant_info(self.types, [src_ty.ok, src_ty.err]);
+        let dst_info = variant_info(self.types, [dst_ty.ok, dst_ty.err]);
 
         self.convert_variant(
             src,
@@ -2330,7 +2328,7 @@ impl Compiler<'_, '_> {
         self.instruction(GlobalSet(flags_global.as_u32()));
     }
 
-    fn verify_aligned(&mut self, opts: &Options, addr_local: u32, align: usize) {
+    fn verify_aligned(&mut self, opts: &Options, addr_local: u32, align: u32) {
         // If the alignment is 1 then everything is trivially aligned and the
         // check can be omitted.
         if align == 1 {
@@ -2338,7 +2336,7 @@ impl Compiler<'_, '_> {
         }
         self.instruction(LocalGet(addr_local));
         assert!(align.is_power_of_two());
-        self.ptr_uconst(opts, u32::try_from(align - 1).unwrap());
+        self.ptr_uconst(opts, align - 1);
         self.ptr_and(opts);
         self.ptr_if(opts, BlockType::Empty);
         self.trap(Trap::UnalignedPointer);
@@ -2357,20 +2355,20 @@ impl Compiler<'_, '_> {
         self.instruction(LocalGet(mem.addr.idx));
         self.ptr_uconst(mem.opts, mem.offset);
         self.ptr_add(mem.opts);
-        self.ptr_uconst(mem.opts, u32::try_from(align - 1).unwrap());
+        self.ptr_uconst(mem.opts, align - 1);
         self.ptr_and(mem.opts);
         self.ptr_if(mem.opts, BlockType::Empty);
         self.trap(Trap::AssertFailed("pointer not aligned"));
         self.instruction(End);
     }
 
-    fn malloc<'a>(&mut self, opts: &'a Options, size: MallocSize, align: usize) -> Memory<'a> {
+    fn malloc<'a>(&mut self, opts: &'a Options, size: MallocSize, align: u32) -> Memory<'a> {
         let realloc = opts.realloc.unwrap();
         self.ptr_uconst(opts, 0);
         self.ptr_uconst(opts, 0);
-        self.ptr_uconst(opts, u32::try_from(align).unwrap());
+        self.ptr_uconst(opts, align);
         match size {
-            MallocSize::Const(size) => self.ptr_uconst(opts, u32::try_from(size).unwrap()),
+            MallocSize::Const(size) => self.ptr_uconst(opts, size),
             MallocSize::Local(idx) => self.instruction(LocalGet(idx)),
         }
         self.instruction(Call(realloc.as_u32()));
@@ -2378,12 +2376,7 @@ impl Compiler<'_, '_> {
         self.memory_operand(opts, addr, align)
     }
 
-    fn memory_operand<'a>(
-        &mut self,
-        opts: &'a Options,
-        addr: TempLocal,
-        align: usize,
-    ) -> Memory<'a> {
+    fn memory_operand<'a>(&mut self, opts: &'a Options, addr: TempLocal, align: u32) -> Memory<'a> {
         let ret = Memory {
             addr,
             offset: 0,
@@ -2809,9 +2802,9 @@ impl<'a> Source<'a> {
                 Source::Memory(mem)
             }
             Source::Stack(stack) => {
-                let cnt = types.flatten_types(stack.opts, [ty]).len();
+                let cnt = types.flatten_types(stack.opts, [ty]).len() as u32;
                 offset += cnt;
-                Source::Stack(stack.slice(offset - cnt..offset))
+                Source::Stack(stack.slice((offset - cnt) as usize..offset as usize))
             }
         })
     }
@@ -2829,7 +2822,11 @@ impl<'a> Source<'a> {
                 Source::Stack(s.slice(1..s.locals.len()).slice(0..flat_len))
             }
             Source::Memory(mem) => {
-                let mem = info.payload_offset(case, mem);
+                let mem = if mem.opts.memory64 {
+                    mem.bump(info.payload_offset64)
+                } else {
+                    mem.bump(info.payload_offset32)
+                };
                 Source::Memory(mem)
             }
         }
@@ -2860,9 +2857,9 @@ impl<'a> Destination<'a> {
                 Destination::Memory(mem)
             }
             Destination::Stack(s, opts) => {
-                let cnt = types.flatten_types(opts, [ty]).len();
+                let cnt = types.flatten_types(opts, [ty]).len() as u32;
                 offset += cnt;
-                Destination::Stack(&s[offset - cnt..offset], opts)
+                Destination::Stack(&s[(offset - cnt) as usize..offset as usize], opts)
             }
         })
     }
@@ -2880,7 +2877,11 @@ impl<'a> Destination<'a> {
                 Destination::Stack(&s[1..][..flat_len], opts)
             }
             Destination::Memory(mem) => {
-                let mem = info.payload_offset(case, mem);
+                let mem = if mem.opts.memory64 {
+                    mem.bump(info.payload_offset64)
+                } else {
+                    mem.bump(info.payload_offset32)
+                };
                 Destination::Memory(mem)
             }
         }
@@ -2895,38 +2896,18 @@ impl<'a> Destination<'a> {
 }
 
 fn next_field_offset<'a>(
-    offset: &mut usize,
+    offset: &mut u32,
     types: &ComponentTypes,
     field: &InterfaceType,
     mem: &Memory<'a>,
 ) -> Memory<'a> {
-    let (size, align) = types.size_align(mem.opts, field);
-    *offset = align_to(*offset, align) + size;
-    mem.bump(*offset - size)
-}
-
-struct VariantInfo {
-    size: DiscriminantSize,
-    align: usize,
-}
-
-impl VariantInfo {
-    fn new<I>(types: &ComponentTypes, options: &Options, iter: I) -> VariantInfo
-    where
-        I: IntoIterator<Item = InterfaceType>,
-        I::IntoIter: ExactSizeIterator,
-    {
-        let iter = iter.into_iter();
-        let size = DiscriminantSize::from_count(iter.len()).unwrap();
-        VariantInfo {
-            size,
-            align: usize::from(size).max(iter.map(|i| types.align(options, &i)).max().unwrap_or(1)),
-        }
-    }
-
-    fn payload_offset<'a>(&self, _case: &InterfaceType, mem: &Memory<'a>) -> Memory<'a> {
-        mem.bump(align_to(self.size.into(), self.align))
-    }
+    let abi = types.canonical_abi(field);
+    let offset = if mem.opts.memory64 {
+        abi.next_field64(offset)
+    } else {
+        abi.next_field32(offset)
+    };
+    mem.bump(offset)
 }
 
 impl<'a> Memory<'a> {
@@ -2938,11 +2919,11 @@ impl<'a> Memory<'a> {
         }
     }
 
-    fn bump(&self, offset: usize) -> Memory<'a> {
+    fn bump(&self, offset: u32) -> Memory<'a> {
         Memory {
             opts: self.opts,
             addr: TempLocal::new(self.addr.idx, self.addr.ty),
-            offset: self.offset + u32::try_from(offset).unwrap(),
+            offset: self.offset + offset,
         }
     }
 }
@@ -2963,8 +2944,16 @@ struct VariantCase<'a> {
     dst_ty: &'a InterfaceType,
 }
 
+fn variant_info<I>(types: &ComponentTypes, cases: I) -> VariantInfo
+where
+    I: IntoIterator<Item = InterfaceType>,
+    I::IntoIter: ExactSizeIterator,
+{
+    VariantInfo::new(cases.into_iter().map(|i| types.canonical_abi(&i))).0
+}
+
 enum MallocSize {
-    Const(usize),
+    Const(u32),
     Local(u32),
 }
 
