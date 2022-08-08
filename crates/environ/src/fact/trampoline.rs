@@ -105,6 +105,7 @@ fn compile_translate_mem(
         .core_types
         .function(&[src_opts.ptr(), dst_opts.ptr()], &[]);
     let result = module.funcs.push(Function::new(None, ty));
+    module.translate_mem_funcs.insert(key, result);
     let mut compiler = Compiler {
         types: module.types,
         module,
