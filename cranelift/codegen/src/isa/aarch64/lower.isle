@@ -233,6 +233,27 @@
 (rule (lower (has_type (fits_in_32 ty) (iabs x)))
       (abs (OperandSize.Size32) (put_in_reg_sext32 x)))
 
+;;;; Rules for `avg_round` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I64X2 (avg_round x y)))
+      (let ((one Reg (splat_const 1 (VectorSize.Size64x2)))
+            (c Reg (orr_vec x y (VectorSize.Size64x2)))
+            (c Reg (and_vec c one (VectorSize.Size64x2)))
+            (x Reg (vec_shift_imm (VecShiftImmOp.Ushr) 1 x
+                    (VectorSize.Size64x2)))
+            (y Reg (vec_shift_imm (VecShiftImmOp.Ushr) 1 y
+                    (VectorSize.Size64x2)))
+            (sum Reg (add_vec x y (VectorSize.Size64x2))))
+       (add_vec c sum (VectorSize.Size64x2))))
+
+(rule (lower (has_type (lane_fits_in_32 ty) (avg_round x y)))
+      (vec_rrr (VecALUOp.Urhadd) x y (vector_size ty)))
+
+;;;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (sqmul_round_sat x y)))
+      (vec_rrr (VecALUOp.Sqrdmulh) x y (vector_size ty)))
+
 ;;;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty @ (multi_lane _ _) (fadd rn rm)))

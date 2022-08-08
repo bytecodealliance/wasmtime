@@ -592,6 +592,8 @@ fn define_simd_arithmetic(
             "avg_round",
             r#"
         Unsigned average with rounding: `a := (x + y + 1) // 2`
+
+        The addition does not lose any information (such as from overflow).
         "#,
             &formats.binary,
         )

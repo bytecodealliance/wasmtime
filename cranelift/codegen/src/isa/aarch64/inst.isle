@@ -1551,6 +1551,13 @@
             (_ Unit (emit (MInst.VecLanes op dst src size))))
         dst))
 
+;; Helper for emitting `MInst.VecShiftImm` instructions.
+(decl vec_shift_imm (VecShiftImmOp u8 Reg VectorSize) Reg)
+(rule (vec_shift_imm op imm src size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecShiftImm op dst src size imm))))
+        dst))
+
 ;; Helper for emitting `MInst.VecDup` instructions.
 (decl vec_dup (Reg VectorSize) Reg)
 (rule (vec_dup src size)
