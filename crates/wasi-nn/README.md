@@ -29,13 +29,13 @@ than building from source, will drastically improve the build times. See the [op
 
 An end-to-end example demonstrating ML classification is included in [examples]:
  - `tests/wasi-nn-rust-bindings` contains ergonomic bindings for writing Rust code against the [wasi-nn] APIs
- - `tests/classification-example` contains a standalone Rust project that uses the [wasi-nn] APIs and is compiled to the 
+ - `tests/classification-example` contains a standalone Rust project that uses the [wasi-nn] APIs and is compiled to the
  `wasm32-wasi` target using the `wasi-nn-rust-bindings`
 
 Run the example from the Wasmtime project directory:
 
 ```
-ci/run-wasi-nn-example.sh
+ci/run-wasi-nn-openvino-example.sh
 ```
 
 ### Additional Examples
