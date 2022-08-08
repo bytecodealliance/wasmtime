@@ -123,11 +123,35 @@ pub const REALLOC_AND_FREE: &str = r#"
 
         ;; save the current value of `$last` as the return value
         global.get $last
-        local.tee $ret
+        local.set $ret
+
+        ;; bump our pointer
+        (global.set $last
+            (i32.add
+                (global.get $last)
+                (local.get $new_size)))
+
+        ;; while `memory.size` is less than `$last`, grow memory
+        ;; by one page
+        (loop $loop
+            (if
+                (i32.lt_u
+                    (i32.mul (memory.size) (i32.const 65536))
+                    (global.get $last))
+                (then
+                    i32.const 1
+                    memory.grow
+                    ;; test to make sure growth succeeded
+                    i32.const -1
+                    i32.eq
+                    if unreachable end
+
+                    br $loop)))
+
 
         ;; ensure anything necessary is set to valid data by spraying a bit
         ;; pattern that is invalid
-        global.get $last
+        local.get $ret
         i32.const 0xde
         local.get $new_size
         memory.fill
@@ -142,10 +166,6 @@ pub const REALLOC_AND_FREE: &str = r#"
             memory.copy
         end
 
-        ;; bump our pointer
-        (global.set $last
-            (i32.add
-                (global.get $last)
-                (local.get $new_size)))
+        local.get $ret
     )
 "#;

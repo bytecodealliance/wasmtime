@@ -1089,20 +1089,25 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
 
     let engine = component_test_util::engine();
     let mut store = Store::new(&engine, (Box::new([]) as Box<[Val]>, None));
-    let component =
-        Component::new(&engine, case.declarations().make_component().as_bytes()).unwrap();
+    let wat = case.declarations().make_component();
+    let wat = wat.as_bytes();
+    log_wasm(wat);
+    let component = Component::new(&engine, wat).unwrap();
     let mut linker = Linker::new(&engine);
 
     linker
         .root()
         .func_new(&component, IMPORT_FUNCTION, {
             move |cx: StoreContextMut<'_, (Box<[Val]>, Option<Val>)>, args: &[Val]| -> Result<Val> {
+                log::trace!("received arguments {args:?}");
                 let (expected_args, result) = cx.data();
                 assert_eq!(args.len(), expected_args.len());
                 for (expected, actual) in expected_args.iter().zip(args) {
                     assert_eq!(expected, actual);
                 }
-                Ok(result.as_ref().unwrap().clone())
+                let result = result.as_ref().unwrap().clone();
+                log::trace!("returning result {result:?}");
+                Ok(result)
             }
         })
         .unwrap();
@@ -1122,10 +1127,10 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
 
         *store.data_mut() = (args.clone(), Some(result.clone()));
 
-        assert_eq!(
-            func.call_and_post_return(&mut store, &args).unwrap(),
-            result
-        );
+        log::trace!("passing args {args:?}");
+        let actual = func.call_and_post_return(&mut store, &args).unwrap();
+        log::trace!("received return {actual:?}");
+        assert_eq!(actual, result);
     }
 
     Ok(())

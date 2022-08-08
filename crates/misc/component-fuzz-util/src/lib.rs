@@ -8,7 +8,8 @@
 
 use arbitrary::{Arbitrary, Unstructured};
 use proc_macro2::{Ident, TokenStream};
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
+use std::borrow::Cow;
 use std::fmt::{self, Debug, Write};
 use std::iter;
 use std::ops::Deref;
@@ -328,7 +329,7 @@ fn variant_size_and_alignment<'a>(
     }
 }
 
-fn make_import_and_export(params: &[Type], result: &Type) -> Box<str> {
+fn make_import_and_export(params: &[Type], result: &Type) -> String {
     let params_lowered = params
         .iter()
         .flat_map(|ty| ty.lowered())
@@ -400,7 +401,6 @@ fn make_import_and_export(params: &[Type], result: &Type) -> Box<str> {
             )"#
         )
     }
-    .into()
 }
 
 fn make_rust_name(name_counter: &mut u32) -> Ident {
@@ -509,7 +509,7 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
             let name = make_rust_name(name_counter);
 
             declarations.extend(quote! {
-                #[derive(ComponentType, Lift, Lower, PartialEq, Debug, Clone, Arbitrary)]
+                #[derive(ComponentType, Lift, Lower, PartialEq, Debug, Copy, Clone, Arbitrary)]
                 #[component(enum)]
                 enum #name {
                     #cases
@@ -677,13 +677,17 @@ fn write_component_type(
 #[derive(Debug)]
 pub struct Declarations {
     /// Type declarations (if any) referenced by `params` and/or `result`
-    pub types: Box<str>,
+    pub types: Cow<'static, str>,
     /// Parameter declarations used for the imported and exported functions
-    pub params: Box<str>,
+    pub params: Cow<'static, str>,
     /// Result declaration used for the imported and exported functions
-    pub result: Box<str>,
+    pub result: Cow<'static, str>,
     /// A WAT fragment representing the core function import and export to use for testing
-    pub import_and_export: Box<str>,
+    pub import_and_export: Cow<'static, str>,
+    /// String encoding to use for host -> component
+    pub encoding1: StringEncoding,
+    /// String encoding to use for component -> host
+    pub encoding2: StringEncoding,
 }
 
 impl Declarations {
@@ -694,7 +698,44 @@ impl Declarations {
             params,
             result,
             import_and_export,
+            encoding1,
+            encoding2,
         } = self;
+        let mk_component = |name: &str, encoding: StringEncoding| {
+            format!(
+                r#"
+                (component ${name}
+                    (import "echo" (func $f (type $sig)))
+
+                    (core instance $libc (instantiate $libc))
+
+                    (core func $f_lower (canon lower
+                        (func $f)
+                        (memory $libc "memory")
+                        (realloc (func $libc "realloc"))
+                        string-encoding={encoding}
+                    ))
+
+                    (core instance $i (instantiate $m
+                        (with "libc" (instance $libc))
+                        (with "host" (instance (export "{IMPORT_FUNCTION}" (func $f_lower))))
+                    ))
+
+                    (func (export "echo") (type $sig)
+                        (canon lift
+                            (core func $i "echo")
+                            (memory $libc "memory")
+                            (realloc (func $libc "realloc"))
+                            string-encoding={encoding}
+                        )
+                    )
+                )
+            "#
+            )
+        };
+
+        let c1 = mk_component("c1", *encoding2);
+        let c2 = mk_component("c2", *encoding1);
 
         format!(
             r#"
@@ -704,18 +745,6 @@ impl Declarations {
                     {REALLOC_AND_FREE}
                 )
 
-                (core instance $libc (instantiate $libc))
-
-                {types}
-
-                (import "{IMPORT_FUNCTION}" (func $f {params} {result}))
-
-                (core func $f_lower (canon lower
-                    (func $f)
-                    (memory $libc "memory")
-                    (realloc (func $libc "realloc"))
-                ))
-
                 (core module $m
                     (memory (import "libc" "memory") 1)
                     (func $realloc (import "libc" "realloc") (param i32 i32 i32 i32) (result i32))
@@ -723,18 +752,16 @@ impl Declarations {
                     {import_and_export}
                 )
 
-                (core instance $i (instantiate $m
-                    (with "libc" (instance $libc))
-                    (with "host" (instance (export "{IMPORT_FUNCTION}" (func $f_lower))))
-                ))
+                {types}
 
-                (func (export "echo") {params} {result}
-                    (canon lift
-                        (core func $i "echo")
-                        (memory $libc "memory")
-                        (realloc (func $libc "realloc"))
-                    )
-                )
+                (type $sig (func {params} {result}))
+                (import "{IMPORT_FUNCTION}" (func $f (type $sig)))
+
+                {c1}
+                {c2}
+                (instance $c1 (instantiate $c1 (with "echo" (func $f))))
+                (instance $c2 (instantiate $c2 (with "echo" (func $c1 "echo"))))
+                (export "echo" (func $c2 "echo"))
             )"#,
         )
         .into()
@@ -748,6 +775,10 @@ pub struct TestCase {
     pub params: Box<[Type]>,
     /// The type of the result to be returned by the function
     pub result: Type,
+    /// String encoding to use from host-to-component.
+    pub encoding1: StringEncoding,
+    /// String encoding to use from component-to-host.
+    pub encoding2: StringEncoding,
 }
 
 impl TestCase {
@@ -781,7 +812,9 @@ impl TestCase {
             types: types.into(),
             params,
             result,
-            import_and_export,
+            import_and_export: import_and_export.into(),
+            encoding1: self.encoding1,
+            encoding2: self.encoding2,
         }
     }
 }
@@ -795,6 +828,36 @@ impl<'a> Arbitrary<'a> for TestCase {
                 .take(MAX_ARITY)
                 .collect::<arbitrary::Result<Box<[_]>>>()?,
             result: input.arbitrary()?,
+            encoding1: input.arbitrary()?,
+            encoding2: input.arbitrary()?,
         })
+    }
+}
+
+#[derive(Copy, Clone, Debug, Arbitrary)]
+pub enum StringEncoding {
+    Utf8,
+    Utf16,
+    Latin1OrUtf16,
+}
+
+impl fmt::Display for StringEncoding {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StringEncoding::Utf8 => fmt::Display::fmt(&"utf8", f),
+            StringEncoding::Utf16 => fmt::Display::fmt(&"utf16", f),
+            StringEncoding::Latin1OrUtf16 => fmt::Display::fmt(&"latin1+utf16", f),
+        }
+    }
+}
+
+impl ToTokens for StringEncoding {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let me = match self {
+            StringEncoding::Utf8 => quote!(Utf8),
+            StringEncoding::Utf16 => quote!(Utf16),
+            StringEncoding::Latin1OrUtf16 => quote!(Latin1OrUtf16),
+        };
+        tokens.extend(quote!(component_fuzz_util::StringEncoding::#me));
     }
 }

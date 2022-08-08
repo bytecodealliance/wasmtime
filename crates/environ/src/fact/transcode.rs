@@ -1,14 +1,7 @@
 use crate::fact::core_types::CoreTypes;
 use crate::MemoryIndex;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use wasm_encoder::{EntityType, ValType};
-
-pub struct Transcoders {
-    imported: HashMap<Transcoder, u32>,
-    prev_func_imports: u32,
-    imports: Vec<(String, EntityType, Transcoder)>,
-}
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
 pub struct Transcoder {
@@ -46,33 +39,8 @@ pub enum FixedEncoding {
     Latin1,
 }
 
-impl Transcoders {
-    pub fn new(prev_func_imports: u32) -> Transcoders {
-        Transcoders {
-            imported: HashMap::new(),
-            prev_func_imports,
-            imports: Vec::new(),
-        }
-    }
-
-    pub fn import(&mut self, types: &mut CoreTypes, transcoder: Transcoder) -> u32 {
-        *self.imported.entry(transcoder).or_insert_with(|| {
-            let idx = self.prev_func_imports + (self.imports.len() as u32);
-            self.imports
-                .push((transcoder.name(), transcoder.ty(types), transcoder));
-            idx
-        })
-    }
-
-    pub fn imports(&self) -> impl Iterator<Item = (&str, &str, EntityType, &Transcoder)> {
-        self.imports
-            .iter()
-            .map(|(name, ty, transcoder)| ("transcode", &name[..], *ty, transcoder))
-    }
-}
-
 impl Transcoder {
-    fn name(&self) -> String {
+    pub fn name(&self) -> String {
         format!(
             "{} (mem{} => mem{})",
             self.op.desc(),
@@ -81,7 +49,7 @@ impl Transcoder {
         )
     }
 
-    fn ty(&self, types: &mut CoreTypes) -> EntityType {
+    pub fn ty(&self, types: &mut CoreTypes) -> EntityType {
         let from_ptr = if self.from_memory64 {
             ValType::I64
         } else {
