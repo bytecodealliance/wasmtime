@@ -1080,6 +1080,9 @@
 (decl cc_invert (CC) CC)
 (extern constructor cc_invert cc_invert)
 
+(decl intcc_reverse (IntCC) IntCC)
+(extern constructor intcc_reverse intcc_reverse)
+
 (decl floatcc_inverse (FloatCC) FloatCC)
 (extern constructor floatcc_inverse floatcc_inverse)
 
@@ -3177,6 +3180,10 @@
 (rule (emit_cmp cc a @ (value_type ty) b)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
         (icmp_cond_result (x64_cmp size b a) cc)))
+
+(rule 1 (emit_cmp cc (and (simm32_from_value a) (value_type ty)) b)
+      (let ((size OperandSize (raw_operand_size_of_type ty)))
+        (icmp_cond_result (x64_cmp size a b) (intcc_reverse cc))))
 
 ;; For I128 values (held in two GPRs), the instruction sequences depend on what
 ;; kind of condition is tested.
