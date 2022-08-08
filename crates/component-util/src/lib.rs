@@ -141,7 +141,11 @@ pub const REALLOC_AND_FREE: &str = r#"
                 (then
                     i32.const 1
                     memory.grow
-                    drop
+                    ;; test to make sure growth succeeded
+                    i32.const -1
+                    i32.eq
+                    if unreachable end
+
                     br $loop)))
 
 
