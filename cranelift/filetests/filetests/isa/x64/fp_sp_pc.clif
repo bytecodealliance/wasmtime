@@ -1,0 +1,45 @@
+test compile precise-output
+set preserve_frame_pointers=true
+target x86_64
+
+function %fp() -> i64 {
+block0:
+    v0 = get_frame_pointer.i64
+    return v0
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rbp, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sp() -> i64 {
+block0:
+    v0 = get_stack_pointer.i64
+    return v0
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsp, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %return_address() -> i64 {
+block0:
+    v0 = get_return_address.i64
+    return v0
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    8(%rbp), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret

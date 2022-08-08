@@ -287,7 +287,7 @@ pub fn register_component(text: &[u8], traps: &PrimaryMap<RuntimeAlwaysTrapIndex
     let info = Arc::new(
         traps
             .iter()
-            .map(|(_, info)| info.start + info.trap_offset)
+            .map(|(_, info)| info.info.start + info.trap_offset)
             .collect::<Vec<_>>(),
     );
     let prev = GLOBAL_MODULES

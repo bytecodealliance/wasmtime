@@ -169,9 +169,8 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Fcopysign, &[F32, F32], &[F32], insert_opcode),
     (Opcode::Fcopysign, &[F64, F64], &[F64], insert_opcode),
     // Fma
-    // TODO: Missing on X86, see https://github.com/bytecodealliance/wasmtime/pull/4460
-    // (Opcode::Fma, &[F32, F32, F32], &[F32], insert_opcode),
-    // (Opcode::Fma, &[F64, F64, F64], &[F64], insert_opcode),
+    (Opcode::Fma, &[F32, F32, F32], &[F32], insert_opcode),
+    (Opcode::Fma, &[F64, F64, F64], &[F64], insert_opcode),
     // Fabs
     (Opcode::Fabs, &[F32], &[F32], insert_opcode),
     (Opcode::Fabs, &[F64], &[F64], insert_opcode),

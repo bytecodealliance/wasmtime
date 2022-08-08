@@ -298,16 +298,16 @@ pub(crate) fn emit_std_enc_mem(
 
     prefixes.emit(sink);
 
-    match mem_e {
+    match *mem_e {
         Amode::ImmReg { simm32, base, .. } => {
             // If this is an access based off of RSP, it may trap with a stack overflow if it's the
             // first touch of a new stack page.
-            if *base == regs::rsp() && !can_trap && info.flags.enable_probestack() {
+            if base == regs::rsp() && !can_trap && info.flags.enable_probestack() {
                 sink.add_trap(TrapCode::StackOverflow);
             }
 
             // First, the REX byte.
-            let enc_e = int_reg_enc(*base);
+            let enc_e = int_reg_enc(base);
             rex.emit_two_op(sink, enc_g, enc_e);
 
             // Now the opcode(s).  These include any other prefixes the caller
@@ -319,7 +319,7 @@ pub(crate) fn emit_std_enc_mem(
 
             // Now the mod/rm and associated immediates.  This is
             // significantly complicated due to the multiple special cases.
-            if *simm32 == 0
+            if simm32 == 0
                 && enc_e != regs::ENC_RSP
                 && enc_e != regs::ENC_RBP
                 && enc_e != regs::ENC_R12
@@ -329,10 +329,10 @@ pub(crate) fn emit_std_enc_mem(
                 // replaced by a single mask-and-compare check.  We should do
                 // that because this routine is likely to be hot.
                 sink.put1(encode_modrm(0, enc_g & 7, enc_e & 7));
-            } else if *simm32 == 0 && (enc_e == regs::ENC_RSP || enc_e == regs::ENC_R12) {
+            } else if simm32 == 0 && (enc_e == regs::ENC_RSP || enc_e == regs::ENC_R12) {
                 sink.put1(encode_modrm(0, enc_g & 7, 4));
                 sink.put1(0x24);
-            } else if low8_will_sign_extend_to_32(*simm32)
+            } else if low8_will_sign_extend_to_32(simm32)
                 && enc_e != regs::ENC_RSP
                 && enc_e != regs::ENC_R12
             {
@@ -340,9 +340,9 @@ pub(crate) fn emit_std_enc_mem(
                 sink.put1((simm32 & 0xFF) as u8);
             } else if enc_e != regs::ENC_RSP && enc_e != regs::ENC_R12 {
                 sink.put1(encode_modrm(2, enc_g & 7, enc_e & 7));
-                sink.put4(*simm32);
+                sink.put4(simm32);
             } else if (enc_e == regs::ENC_RSP || enc_e == regs::ENC_R12)
-                && low8_will_sign_extend_to_32(*simm32)
+                && low8_will_sign_extend_to_32(simm32)
             {
                 // REX.B distinguishes RSP from R12
                 sink.put1(encode_modrm(1, enc_g & 7, 4));
@@ -353,7 +353,7 @@ pub(crate) fn emit_std_enc_mem(
                 // REX.B distinguishes RSP from R12
                 sink.put1(encode_modrm(2, enc_g & 7, 4));
                 sink.put1(0x24);
-                sink.put4(*simm32);
+                sink.put4(simm32);
             } else {
                 unreachable!("ImmReg");
             }
@@ -385,14 +385,14 @@ pub(crate) fn emit_std_enc_mem(
             }
 
             // modrm, SIB, immediates.
-            if low8_will_sign_extend_to_32(*simm32) && enc_index != regs::ENC_RSP {
+            if low8_will_sign_extend_to_32(simm32) && enc_index != regs::ENC_RSP {
                 sink.put1(encode_modrm(1, enc_g & 7, 4));
-                sink.put1(encode_sib(*shift, enc_index & 7, enc_base & 7));
-                sink.put1(*simm32 as u8);
+                sink.put1(encode_sib(shift, enc_index & 7, enc_base & 7));
+                sink.put1(simm32 as u8);
             } else if enc_index != regs::ENC_RSP {
                 sink.put1(encode_modrm(2, enc_g & 7, 4));
-                sink.put1(encode_sib(*shift, enc_index & 7, enc_base & 7));
-                sink.put4(*simm32);
+                sink.put1(encode_sib(shift, enc_index & 7, enc_base & 7));
+                sink.put4(simm32);
             } else {
                 panic!("ImmRegRegShift");
             }

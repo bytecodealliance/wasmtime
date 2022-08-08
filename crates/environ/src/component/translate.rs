@@ -361,14 +361,14 @@ impl<'a, 'data> Translator<'a, 'data> {
         // much simpler than the original component and more efficient for
         // Wasmtime to process at runtime as well (e.g. no string lookups as
         // most everything is done through indices instead).
-        let (mut component, mut adapters) = inline::run(
+        let mut component = inline::run(
             &self.types,
             &self.result,
             &self.static_modules,
             &self.static_components,
         )?;
-        self.insert_adapter_module_initializers(&mut component, &mut adapters);
-        Ok((component, self.static_modules))
+        self.partition_adapter_modules(&mut component);
+        Ok((component.finish(), self.static_modules))
     }
 
     fn translate_payload(
@@ -612,16 +612,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                 self.validator.component_export_section(&s)?;
                 for export in s {
                     let export = export?;
-
-                    // TODO: https://github.com/bytecodealliance/wasmtime/issues/4494
-                    // Currently, wit-component-based tooling creates components that
-                    // export types to represent the interface of a component so that
-                    // bindings can (potentially) be generated directly from the component
-                    // itself without a wit file. For now, we ignore these exports in Wasmtime.
-                    if wasmparser::ComponentExternalKind::Type == export.kind {
-                        continue;
-                    }
-
                     let item = self.kind_to_item(export.kind, export.index);
                     let prev = self.result.exports.insert(export.name, item);
                     assert!(prev.is_none());
@@ -797,7 +787,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 ComponentItem::ComponentInstance(i) => Some(ComponentItemType::Instance(
                     self.result.component_instances[i],
                 )),
-                ComponentItem::Module(_) => None,
+                ComponentItem::Module(_) | ComponentItem::Type(_) => None,
             };
             map.insert(export.name, idx);
             if let Some(ty) = ty {
@@ -835,7 +825,9 @@ impl<'a, 'data> Translator<'a, 'data> {
                 unimplemented!("component values");
             }
             wasmparser::ComponentExternalKind::Type => {
-                unimplemented!("component type export");
+                let index = ComponentTypeIndex::from_u32(index);
+                let ty = self.types.component_outer_type(0, index);
+                ComponentItem::Type(ty)
             }
         }
     }
@@ -895,6 +887,9 @@ impl<'a, 'data> Translator<'a, 'data> {
                         self.result
                             .component_instances
                             .push(translation.component_instances[idx]);
+                    }
+                    ComponentItem::Type(ty) => {
+                        self.types.push_component_typedef(ty);
                     }
 
                     // ignored during this type pass

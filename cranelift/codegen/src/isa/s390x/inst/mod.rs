@@ -140,10 +140,12 @@ impl Inst {
             | Inst::StoreRev16 { .. }
             | Inst::StoreRev32 { .. }
             | Inst::StoreRev64 { .. }
+            | Inst::Mvc { .. }
             | Inst::LoadMultiple64 { .. }
             | Inst::StoreMultiple64 { .. }
             | Inst::Mov32 { .. }
             | Inst::Mov64 { .. }
+            | Inst::MovPReg { .. }
             | Inst::Mov32Imm { .. }
             | Inst::Mov32SImm16 { .. }
             | Inst::Mov64SImm16 { .. }
@@ -178,6 +180,8 @@ impl Inst {
             | Inst::VecIntCmpS { .. }
             | Inst::VecFloatCmp { .. }
             | Inst::VecFloatCmpS { .. }
+            | Inst::VecInt128SCmpHi { .. }
+            | Inst::VecInt128UCmpHi { .. }
             | Inst::VecLoad { .. }
             | Inst::VecStore { .. }
             | Inst::VecLoadReplicate { .. }
@@ -200,7 +204,6 @@ impl Inst {
             | Inst::Call { .. }
             | Inst::CallInd { .. }
             | Inst::Ret { .. }
-            | Inst::EpiloguePlaceholder
             | Inst::Jump { .. }
             | Inst::CondBr { .. }
             | Inst::TrapIf { .. }
@@ -393,6 +396,7 @@ impl Inst {
                 lane_imm: 0,
             },
             _ if ty.is_vector() && ty.bits() == 128 => Inst::VecLoad { rd: into_reg, mem },
+            types::B128 | types::I128 => Inst::VecLoad { rd: into_reg, mem },
             _ => unimplemented!("gen_load({})", ty),
         }
     }
@@ -417,6 +421,7 @@ impl Inst {
                 lane_imm: 0,
             },
             _ if ty.is_vector() && ty.bits() == 128 => Inst::VecStore { rd: from_reg, mem },
+            types::B128 | types::I128 => Inst::VecStore { rd: from_reg, mem },
             _ => unimplemented!("gen_store({})", ty),
         }
     }
@@ -600,6 +605,12 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         | &Inst::StoreImm64SExt16 { ref mem, .. } => {
             memarg_operands(mem, collector);
         }
+        &Inst::Mvc {
+            ref dst, ref src, ..
+        } => {
+            collector.reg_use(dst.base);
+            collector.reg_use(src.base);
+        }
         &Inst::LoadMultiple64 {
             rt, rt2, ref mem, ..
         } => {
@@ -623,6 +634,11 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         &Inst::Mov64 { rd, rm } => {
             collector.reg_def(rd);
             collector.reg_use(rm);
+        }
+        &Inst::MovPReg { rd, rm } => {
+            debug_assert!([regs::gpr(14), regs::gpr(15)].contains(&rm.into()));
+            debug_assert!(rd.to_reg().is_virtual());
+            collector.reg_def(rd);
         }
         &Inst::Mov32 { rd, rm } => {
             collector.reg_def(rd);
@@ -721,6 +737,11 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         }
         &Inst::VecFloatCmp { rd, rn, rm, .. } | &Inst::VecFloatCmpS { rd, rn, rm, .. } => {
             collector.reg_def(rd);
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+        }
+        &Inst::VecInt128SCmpHi { tmp, rn, rm, .. } | &Inst::VecInt128UCmpHi { tmp, rn, rm, .. } => {
+            collector.reg_def(tmp);
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
@@ -847,7 +868,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_use(link);
             collector.reg_uses(&rets[..]);
         }
-        &Inst::Jump { .. } | &Inst::EpiloguePlaceholder => {}
+        &Inst::Jump { .. } => {}
         &Inst::IndirectBr { rn, .. } => {
             collector.reg_use(rn);
         }
@@ -903,14 +924,6 @@ impl MachInst for Inst {
         }
     }
 
-    fn is_epilogue_placeholder(&self) -> bool {
-        if let Inst::EpiloguePlaceholder = self {
-            true
-        } else {
-            false
-        }
-    }
-
     fn is_included_in_clobbers(&self) -> bool {
         // We exclude call instructions from the clobber-set when they are calls
         // from caller to callee with the same ABI. Such calls cannot possibly
@@ -928,7 +941,7 @@ impl MachInst for Inst {
 
     fn is_term(&self) -> MachTerminator {
         match self {
-            &Inst::Ret { .. } | &Inst::EpiloguePlaceholder => MachTerminator::Ret,
+            &Inst::Ret { .. } => MachTerminator::Ret,
             &Inst::Jump { .. } => MachTerminator::Uncond,
             &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::OneWayCondBr { .. } => {
@@ -975,6 +988,11 @@ impl MachInst for Inst {
             .only_reg()
             .expect("multi-reg values not supported yet");
         match ty {
+            types::I128 | types::B128 => {
+                let mut ret = SmallVec::new();
+                ret.push(Inst::load_vec_constant(to_reg, value));
+                ret
+            }
             _ if ty.is_vector() && ty.bits() == 128 => {
                 let mut ret = SmallVec::new();
                 ret.push(Inst::load_vec_constant(to_reg, value));
@@ -1033,8 +1051,8 @@ impl MachInst for Inst {
             types::R64 => Ok((&[RegClass::Int], &[types::R64])),
             types::F32 => Ok((&[RegClass::Float], &[types::F32])),
             types::F64 => Ok((&[RegClass::Float], &[types::F64])),
-            types::I128 => Ok((&[RegClass::Int, RegClass::Int], &[types::I64, types::I64])),
-            types::B128 => Ok((&[RegClass::Int, RegClass::Int], &[types::B64, types::B64])),
+            types::I128 => Ok((&[RegClass::Float], &[types::I128])),
+            types::B128 => Ok((&[RegClass::Float], &[types::B128])),
             _ if ty.is_vector() && ty.bits() == 128 => Ok((&[RegClass::Float], &[types::I8X16])),
             // FIXME: We don't really have IFLAGS, but need to allow it here
             // for now to support the SelectifSpectreGuard instruction.
@@ -1766,6 +1784,22 @@ impl Inst {
 
                 format!("{}{} {}, {}", mem_str, op, mem, imm)
             }
+            &Inst::Mvc {
+                ref dst,
+                ref src,
+                len_minus_one,
+            } => {
+                let dst = dst.with_allocs(allocs);
+                let src = src.with_allocs(allocs);
+                format!(
+                    "mvc {}({},{}), {}({})",
+                    dst.disp.pretty_print_default(),
+                    len_minus_one,
+                    show_reg(dst.base),
+                    src.disp.pretty_print_default(),
+                    show_reg(src.base)
+                )
+            }
             &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
                 let mem = mem.with_allocs(allocs);
                 let (mem_str, mem) = mem_finalize_for_show(&mem, state, false, true, false, false);
@@ -1785,6 +1819,11 @@ impl Inst {
             &Inst::Mov64 { rd, rm } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let rm = pretty_print_reg(rm, allocs);
+                format!("lgr {}, {}", rd, rm)
+            }
+            &Inst::MovPReg { rd, rm } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rm = show_reg(rm.into());
                 format!("lgr {}, {}", rd, rm)
             }
             &Inst::Mov32 { rd, rm } => {
@@ -2177,10 +2216,12 @@ impl Inst {
                     VecBinaryOp::Add16x8 => "vah",
                     VecBinaryOp::Add32x4 => "vaf",
                     VecBinaryOp::Add64x2 => "vag",
+                    VecBinaryOp::Add128 => "vaq",
                     VecBinaryOp::Sub8x16 => "vsb",
                     VecBinaryOp::Sub16x8 => "vsh",
                     VecBinaryOp::Sub32x4 => "vsf",
                     VecBinaryOp::Sub64x2 => "vsg",
+                    VecBinaryOp::Sub128 => "vsq",
                     VecBinaryOp::Mul8x16 => "vmlb",
                     VecBinaryOp::Mul16x8 => "vmlhw",
                     VecBinaryOp::Mul32x4 => "vmlf",
@@ -2278,6 +2319,14 @@ impl Inst {
                     VecUnaryOp::Popcnt16x8 => "vpopcth",
                     VecUnaryOp::Popcnt32x4 => "vpopctf",
                     VecUnaryOp::Popcnt64x2 => "vpopctg",
+                    VecUnaryOp::Clz8x16 => "vclzb",
+                    VecUnaryOp::Clz16x8 => "vclzh",
+                    VecUnaryOp::Clz32x4 => "vclzf",
+                    VecUnaryOp::Clz64x2 => "vclzg",
+                    VecUnaryOp::Ctz8x16 => "vctzb",
+                    VecUnaryOp::Ctz16x8 => "vctzh",
+                    VecUnaryOp::Ctz32x4 => "vctzf",
+                    VecUnaryOp::Ctz64x2 => "vctzg",
                     VecUnaryOp::UnpackULow8x16 => "vupllb",
                     VecUnaryOp::UnpackULow16x8 => "vupllh",
                     VecUnaryOp::UnpackULow32x4 => "vupllf",
@@ -2399,6 +2448,20 @@ impl Inst {
                 let rn = pretty_print_reg(rn, allocs);
                 let rm = pretty_print_reg(rm, allocs);
                 format!("{}{} {}, {}, {}", op, s, rd, rn, rm)
+            }
+            &Inst::VecInt128SCmpHi { tmp, rn, rm } | &Inst::VecInt128UCmpHi { tmp, rn, rm } => {
+                let op = match self {
+                    &Inst::VecInt128SCmpHi { .. } => "vecg",
+                    &Inst::VecInt128UCmpHi { .. } => "veclg",
+                    _ => unreachable!(),
+                };
+                let tmp = pretty_print_reg(tmp.to_reg(), allocs);
+                let rn = pretty_print_reg(rn, allocs);
+                let rm = pretty_print_reg(rm, allocs);
+                format!(
+                    "{} {}, {} ; jne 10 ; vchlgs {}, {}, {}",
+                    op, rm, rn, tmp, rn, rm
+                )
             }
             &Inst::VecLoad { rd, ref mem } | &Inst::VecLoadRev { rd, ref mem } => {
                 let opcode = match self {
@@ -2778,7 +2841,6 @@ impl Inst {
                 let link = pretty_print_reg(link, allocs);
                 format!("br {}", link)
             }
-            &Inst::EpiloguePlaceholder => "epilogue placeholder".to_string(),
             &Inst::Jump { dest } => {
                 let dest = dest.to_string();
                 format!("jg {}", dest)

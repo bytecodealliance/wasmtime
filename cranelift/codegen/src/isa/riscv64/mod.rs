@@ -6,9 +6,7 @@ use crate::ir::Function;
 
 use crate::isa::riscv64::settings as riscv_settings;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
-use crate::machinst::{
-    compile, MachCompileResult, MachTextSectionBuilder, TextSectionBuilder, VCode,
-};
+use crate::machinst::{compile, CompiledCode, MachTextSectionBuilder, TextSectionBuilder, VCode};
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
@@ -59,17 +57,13 @@ impl Riscv64Backend {
         flags: shared_settings::Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(flags.clone(), self.isa_flags.clone());
-        let abi = Box::new(abi::Riscv64Callee::new(func, self)?);
+        let abi = Box::new(abi::Riscv64Callee::new(func, self, &self.isa_flags)?);
         compile::compile::<Riscv64Backend>(func, self, abi, &self.mach_env, emit_info)
     }
 }
 
 impl TargetIsa for Riscv64Backend {
-    fn compile_function(
-        &self,
-        func: &Function,
-        want_disasm: bool,
-    ) -> CodegenResult<MachCompileResult> {
+    fn compile_function(&self, func: &Function, want_disasm: bool) -> CodegenResult<CompiledCode> {
         let flags = self.flags();
         let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
 
@@ -85,7 +79,7 @@ impl TargetIsa for Riscv64Backend {
             log::debug!("disassembly:\n{}", disasm);
         }
 
-        Ok(MachCompileResult {
+        Ok(CompiledCode {
             buffer,
             frame_size,
             disasm: emit_result.disasm,
@@ -123,7 +117,7 @@ impl TargetIsa for Riscv64Backend {
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,
-        result: &MachCompileResult,
+        result: &CompiledCode,
         kind: crate::machinst::UnwindInfoKind,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
         use crate::isa::unwind::UnwindInfo;

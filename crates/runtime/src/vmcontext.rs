@@ -791,7 +791,7 @@ mod test_vmruntime_limits {
     use super::VMRuntimeLimits;
     use memoffset::offset_of;
     use std::mem::size_of;
-    use wasmtime_environ::{Module, VMOffsets};
+    use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
     #[test]
     fn field_offsets() {
@@ -799,27 +799,27 @@ mod test_vmruntime_limits {
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
             offset_of!(VMRuntimeLimits, stack_limit),
-            usize::from(offsets.vmruntime_limits_stack_limit())
+            usize::from(offsets.ptr.vmruntime_limits_stack_limit())
         );
         assert_eq!(
             offset_of!(VMRuntimeLimits, fuel_consumed),
-            usize::from(offsets.vmruntime_limits_fuel_consumed())
+            usize::from(offsets.ptr.vmruntime_limits_fuel_consumed())
         );
         assert_eq!(
             offset_of!(VMRuntimeLimits, epoch_deadline),
-            usize::from(offsets.vmruntime_limits_epoch_deadline())
+            usize::from(offsets.ptr.vmruntime_limits_epoch_deadline())
         );
         assert_eq!(
             offset_of!(VMRuntimeLimits, last_wasm_exit_fp),
-            usize::from(offsets.vmruntime_limits_last_wasm_exit_fp())
+            usize::from(offsets.ptr.vmruntime_limits_last_wasm_exit_fp())
         );
         assert_eq!(
             offset_of!(VMRuntimeLimits, last_wasm_exit_pc),
-            usize::from(offsets.vmruntime_limits_last_wasm_exit_pc())
+            usize::from(offsets.ptr.vmruntime_limits_last_wasm_exit_pc())
         );
         assert_eq!(
             offset_of!(VMRuntimeLimits, last_wasm_entry_sp),
-            usize::from(offsets.vmruntime_limits_last_wasm_entry_sp())
+            usize::from(offsets.ptr.vmruntime_limits_last_wasm_entry_sp())
         );
     }
 }

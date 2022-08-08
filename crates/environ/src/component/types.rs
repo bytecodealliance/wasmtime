@@ -94,7 +94,7 @@ indices! {
     pub struct TypeExpectedIndex(u32);
 
     // ========================================================================
-    // Index types used to identify modules and components during compliation.
+    // Index types used to identify modules and components during compilation.
 
     /// Index into a "closed over variables" list for components used to
     /// implement outer aliases. For more information on this see the
@@ -166,10 +166,6 @@ indices! {
     /// Index that represents an exported module from a component since that's
     /// currently the only use for saving the entire module state at runtime.
     pub struct RuntimeModuleIndex(u32);
-
-    /// Index into the list of fused adapters identified during compilation.
-    /// Used in conjuction with the `Adapters` type.
-    pub struct AdapterIndex(u32);
 }
 
 // Reexport for convenience some core-wasm indices which are also used in the
@@ -185,6 +181,7 @@ pub enum ComponentItem {
     Module(ModuleIndex),
     Component(ComponentIndex),
     ComponentInstance(ComponentInstanceIndex),
+    Type(TypeDef),
 }
 
 /// Runtime information about the type information contained within a component.

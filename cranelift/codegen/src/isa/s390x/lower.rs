@@ -30,9 +30,14 @@ impl LowerBackend for S390xBackend {
             None
         };
 
-        if let Ok(()) =
-            super::lower::isle::lower(ctx, &self.flags, &self.isa_flags, &outputs, ir_inst)
-        {
+        if let Ok(()) = super::lower::isle::lower(
+            ctx,
+            &self.triple,
+            &self.flags,
+            &self.isa_flags,
+            &outputs,
+            ir_inst,
+        ) {
             return Ok(());
         }
 
@@ -45,6 +50,8 @@ impl LowerBackend for S390xBackend {
             | Opcode::F64const
             | Opcode::Vconst
             | Opcode::Null
+            | Opcode::Isplit
+            | Opcode::Iconcat
             | Opcode::Iadd
             | Opcode::IaddIfcout
             | Opcode::Isub
@@ -97,6 +104,7 @@ impl LowerBackend for S390xBackend {
             | Opcode::Bextend
             | Opcode::Bmask
             | Opcode::Bint
+            | Opcode::Bitrev
             | Opcode::Clz
             | Opcode::Cls
             | Opcode::Ctz
@@ -177,11 +185,13 @@ impl LowerBackend for S390xBackend {
             | Opcode::Debugtrap
             | Opcode::Call
             | Opcode::CallIndirect
-            | Opcode::FallthroughReturn
             | Opcode::Return
             | Opcode::StackAddr
             | Opcode::FuncAddr
-            | Opcode::SymbolValue => {
+            | Opcode::SymbolValue
+            | Opcode::GetFramePointer
+            | Opcode::GetStackPointer
+            | Opcode::GetReturnAddress => {
                 unreachable!(
                     "implemented in ISLE: inst = `{}`, type = `{:?}`",
                     ctx.dfg().display_inst(ir_inst),
@@ -189,13 +199,10 @@ impl LowerBackend for S390xBackend {
                 )
             }
 
-            Opcode::Bitrev
-            | Opcode::ConstAddr
+            Opcode::ConstAddr
             | Opcode::TlsValue
             | Opcode::GetPinnedReg
             | Opcode::SetPinnedReg
-            | Opcode::Isplit
-            | Opcode::Iconcat
             | Opcode::Vsplit
             | Opcode::Vconcat
             | Opcode::DynamicStackLoad
@@ -222,7 +229,6 @@ impl LowerBackend for S390xBackend {
                 panic!("global_value should have been removed by legalization!");
             }
             Opcode::Ifcmp
-            | Opcode::IfcmpSp
             | Opcode::Ffcmp
             | Opcode::Trapff
             | Opcode::Trueif
@@ -294,6 +300,7 @@ impl LowerBackend for S390xBackend {
         // the second branch (if any) by emitting a two-way conditional branch.
         if let Ok(()) = super::lower::isle::lower_branch(
             ctx,
+            &self.triple,
             &self.flags,
             &self.isa_flags,
             branches[0],

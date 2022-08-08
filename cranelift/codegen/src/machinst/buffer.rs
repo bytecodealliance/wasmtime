@@ -1338,6 +1338,7 @@ impl<I: VCodeInst> MachBuffer<I> {
                 (start_offset, end_offset)
             }
         };
+        trace!("Adding stack map for offsets {start:#x}..{end:#x}");
         self.stack_maps.push(MachStackMap {
             offset: start,
             offset_end: end,
@@ -1672,7 +1673,6 @@ mod test {
 
         buf.bind_label(label(1));
         let inst = Inst::Udf {
-            use_allocated_encoding: true,
             trap_code: TrapCode::Interrupt,
         };
         inst.emit(&[], &mut buf, &info, &mut state);

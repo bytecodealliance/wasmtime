@@ -618,8 +618,6 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source-code location corresponding to instruction to be emitted.
     cur_srcloc: SourceLoc,
-    /// Is code generated for the SpiderMonkey WebAssembly convention.
-    is_baldrdash_target: bool,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -629,7 +627,6 @@ impl MachInstEmitState<Inst> for EmitState {
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: SourceLoc::default(),
-            is_baldrdash_target: abi.call_conv().extends_baldrdash(),
         }
     }
 
@@ -1337,6 +1334,15 @@ impl MachInstEmit for Inst {
                     }
                 }
             }
+            &Inst::MovPReg { rd, rm } => {
+                let rd = allocs.next_writable(rd);
+                let rm: Reg = rm.into();
+                debug_assert!([regs::fp_reg(), regs::stack_reg(), regs::link_reg()].contains(&rm));
+                assert!(rm.class() == RegClass::Int);
+                assert!(rd.to_reg().class() == rm.class());
+                let size = OperandSize::Size64;
+                Inst::Mov { size, rd, rm }.emit(&[], sink, emit_info, state);
+            }
             &Inst::MovWide { op, rd, imm, size } => {
                 let rd = allocs.next_writable(rd);
                 sink.put4(enc_move_wide(op, rd, imm, size));
@@ -1784,6 +1790,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::FpuRRRR {
                 fpu_op,
+                size,
                 rd,
                 rn,
                 rm,
@@ -1794,9 +1801,9 @@ impl MachInstEmit for Inst {
                 let rm = allocs.next(rm);
                 let ra = allocs.next(ra);
                 let top17 = match fpu_op {
-                    FPUOp3::MAdd32 => 0b000_11111_00_0_00000_0,
-                    FPUOp3::MAdd64 => 0b000_11111_01_0_00000_0,
+                    FPUOp3::MAdd => 0b000_11111_00_0_00000_0,
                 };
+                let top17 = top17 | size.ftype() << 7;
                 sink.put4(enc_fpurrrr(top17, rd, rn, rm, ra));
             }
             &Inst::VecMisc { op, rd, rn, size } => {
@@ -2203,11 +2210,11 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 let (q, imm5, shift, mask) = match size {
-                    VectorSize::Size8x16 => (0b0, 0b00001, 1, 0b1111),
-                    VectorSize::Size16x8 => (0b0, 0b00010, 2, 0b0111),
-                    VectorSize::Size32x4 => (0b0, 0b00100, 3, 0b0011),
-                    VectorSize::Size64x2 => (0b1, 0b01000, 4, 0b0001),
-                    _ => unreachable!(),
+                    ScalarSize::Size8 => (0b0, 0b00001, 1, 0b1111),
+                    ScalarSize::Size16 => (0b0, 0b00010, 2, 0b0111),
+                    ScalarSize::Size32 => (0b0, 0b00100, 3, 0b0011),
+                    ScalarSize::Size64 => (0b1, 0b01000, 4, 0b0001),
+                    _ => panic!("Unexpected scalar FP operand size: {:?}", size),
                 };
                 debug_assert_eq!(idx & mask, idx);
                 let imm5 = imm5 | ((idx as u32) << shift);
@@ -2536,7 +2543,8 @@ impl MachInstEmit for Inst {
                     | VecALUOp::Fdiv
                     | VecALUOp::Fmax
                     | VecALUOp::Fmin
-                    | VecALUOp::Fmul => true,
+                    | VecALUOp::Fmul
+                    | VecALUOp::Fmla => true,
                     _ => false,
                 };
                 let enc_float_size = match (is_float, size) {
@@ -2611,6 +2619,7 @@ impl MachInstEmit for Inst {
                     VecALUOp::Fmax => (0b000_01110_00_1, 0b111101),
                     VecALUOp::Fmin => (0b000_01110_10_1, 0b111101),
                     VecALUOp::Fmul => (0b001_01110_00_1, 0b110111),
+                    VecALUOp::Fmla => (0b000_01110_00_1, 0b110011),
                     VecALUOp::Addp => (0b000_01110_00_1 | enc_size << 1, 0b101111),
                     VecALUOp::Zip1 => (0b01001110_00_0 | enc_size << 1, 0b001110),
                     VecALUOp::Sqrdmulh => {
@@ -2768,8 +2777,18 @@ impl MachInstEmit for Inst {
             &Inst::Ret { .. } => {
                 sink.put4(0xd65f03c0);
             }
-            &Inst::EpiloguePlaceholder => {
-                // Noop; this is just a placeholder for epilogues.
+            &Inst::AuthenticatedRet { key, is_hint, .. } => {
+                let key = match key {
+                    APIKey::A => 0b0,
+                    APIKey::B => 0b1,
+                };
+
+                if is_hint {
+                    sink.put4(0xd50323bf | key << 6); // autiasp / autibsp
+                    Inst::Ret { rets: vec![] }.emit(&[], sink, emit_info, state);
+                } else {
+                    sink.put4(0xd65f0bff | key << 10); // retaa / retab
+                }
             }
             &Inst::Call { ref info } => {
                 if let Some(s) = state.take_stack_map() {
@@ -2786,13 +2805,11 @@ impl MachInstEmit for Inst {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
                 let rn = allocs.next(info.rn);
-
                 sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5));
                 if info.opcode.is_call() {
                     sink.add_call_site(info.opcode);
                 }
             }
-
             &Inst::CondBr {
                 taken,
                 not_taken,
@@ -2828,10 +2845,7 @@ impl MachInstEmit for Inst {
                 ));
                 sink.use_label_at_offset(off, label, LabelUse::Branch19);
                 // udf
-                let trap = Inst::Udf {
-                    use_allocated_encoding: !state.is_baldrdash_target,
-                    trap_code,
-                };
+                let trap = Inst::Udf { trap_code };
                 trap.emit(&[], sink, emit_info, state);
                 // LABEL:
                 sink.bind_label(label);
@@ -2847,15 +2861,10 @@ impl MachInstEmit for Inst {
             &Inst::Brk => {
                 sink.put4(0xd4200000);
             }
-            &Inst::Udf {
-                use_allocated_encoding,
-                trap_code,
-            } => {
-                let encoding = if use_allocated_encoding {
-                    0xc11f
-                } else {
-                    0xd4a00000
-                };
+            &Inst::Udf { trap_code } => {
+                // "CLIF" in hex, to make the trap recognizable during
+                // debugging.
+                let encoding = 0xc11f;
 
                 sink.add_trap(trap_code);
                 if let Some(s) = state.take_stack_map() {
@@ -2987,11 +2996,7 @@ impl MachInstEmit for Inst {
                 };
                 inst.emit(&[], sink, emit_info, state);
                 sink.add_reloc(Reloc::Abs8, name, offset);
-                if emit_info.0.emit_all_ones_funcaddrs() {
-                    sink.put8(u64::max_value());
-                } else {
-                    sink.put8(0);
-                }
+                sink.put8(0);
             }
             &Inst::LoadAddr { rd, ref mem } => {
                 let rd = allocs.next_writable(rd);
@@ -3075,6 +3080,14 @@ impl MachInstEmit for Inst {
                     add.emit(&[], sink, emit_info, state);
                 }
             }
+            &Inst::Pacisp { key } => {
+                let key = match key {
+                    APIKey::A => 0b0,
+                    APIKey::B => 0b1,
+                };
+
+                sink.put4(0xd503233f | key << 6);
+            }
             &Inst::VirtualSPOffsetAdj { offset } => {
                 trace!(
                     "virtual sp offset adjusted by {} -> {}",
@@ -3127,7 +3140,13 @@ impl MachInstEmit for Inst {
         }
 
         let end_off = sink.cur_offset();
-        debug_assert!((end_off - start_off) <= Inst::worst_case_size());
+        debug_assert!(
+            (end_off - start_off) <= Inst::worst_case_size()
+                || matches!(self, Inst::EmitIsland { .. }),
+            "Worst case size exceed for {:?}: {}",
+            self,
+            end_off - start_off
+        );
 
         state.clear_post_insn();
     }

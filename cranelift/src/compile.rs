@@ -68,17 +68,17 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             let mut mem = vec![];
 
             // Compile and encode the result to machine code.
-            context
+            let compiled_code = context
                 .compile_and_emit(isa, &mut mem)
-                .map_err(|err| anyhow::anyhow!("{}", pretty_error(&context.func, err)))?;
-            let result = context.mach_compile_result.as_ref().unwrap();
-            let code_info = result.code_info();
+                .map_err(|err| anyhow::anyhow!("{}", pretty_error(&err.func, err.inner)))?;
+            let code_info = compiled_code.code_info();
 
             if options.print {
                 println!("{}", context.func.display());
             }
 
             if options.disasm {
+                let result = context.compiled_code().unwrap();
                 print_all(
                     isa,
                     &mem,

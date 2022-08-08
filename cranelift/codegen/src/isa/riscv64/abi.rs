@@ -16,15 +16,14 @@ use crate::machinst::*;
 
 use crate::ir::LibCall;
 use crate::ir::Signature;
+use crate::isa::riscv64::settings::Flags as RiscvFlags;
 use crate::isa::unwind::UnwindInst;
 use crate::settings;
 use crate::CodegenError;
 use crate::CodegenResult;
 use alloc::boxed::Box;
-use alloc::vec;
 use alloc::vec::Vec;
 use regalloc2::PRegSet;
-
 use regs::x_reg;
 
 use smallvec::{smallvec, SmallVec};
@@ -47,8 +46,11 @@ static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
 /// point for the trait; it is never actually instantiated.
 pub(crate) struct Riscv64MachineDeps;
 
+impl IsaFlags for RiscvFlags {}
+
 impl ABIMachineSpec for Riscv64MachineDeps {
     type I = Inst;
+    type F = RiscvFlags;
 
     fn word_bits() -> u32 {
         64
@@ -65,7 +67,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-    ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
+    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)> {
         // all registers can be used as parameter.
         // both start and all included.
         let (x_start, x_end, f_start, f_end) = if args_or_rets == ArgsOrRets::Args {
@@ -77,11 +79,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let mut next_f_reg = f_start;
         // stack space
         let mut next_stack: u64 = 0;
-        let mut abi_args = vec![];
+        let mut abi_args = smallvec![];
         // when run out register , we should use stack space for parameter,
         // we should deal with paramter backwards.
         // but we need result to be the same order with "params".
-        let mut abi_args_for_stack = vec![];
+        let mut abi_args_for_stack = smallvec![];
         let mut step_last_parameter = {
             let mut params_last = if params.len() > 0 {
                 params.len() - 1
@@ -132,6 +134,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
                 next_stack += size as u64;
                 abi_args.push(ABIArg::StructArg {
+                    pointer: None,
                     offset: offset as i64,
                     size: size as u64,
                     purpose: param.purpose,
@@ -183,7 +186,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 }
                 I128 | B128 => {
                     let elem_type = if param.value_type == I128 { I64 } else { B64 };
-                    let mut slots = vec![];
+                    let mut slots = smallvec![];
                     if next_x_reg + 1 <= x_end {
                         for i in 0..2 {
                             slots.push(ABIArgSlot::Reg {
@@ -305,7 +308,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         specified
     }
 
-    fn gen_ret(rets: Vec<Reg>) -> Inst {
+    fn gen_ret(_setup_frame: bool, _isa_flags: &Self::F, rets: Vec<Reg>) -> Inst {
         Inst::Ret { rets }
     }
 
@@ -348,10 +351,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts
     }
 
-    fn gen_epilogue_placeholder() -> Inst {
-        Inst::EpiloguePlaceholder
-    }
-
     fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>, _ty: Type) -> Inst {
         Inst::LoadAddr {
             rd: into_reg,
@@ -384,15 +383,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         Inst::VirtualSPOffsetAdj {
             amount: offset as i64,
         }
-    }
-
-    fn gen_debug_frame_info(
-        _call_conv: isa::CallConv,
-        _flags: &settings::Flags,
-        _isa_flags: &Vec<settings::Value>,
-    ) -> SmallInstVec<Inst> {
-        // nothing special.
-        smallvec![]
     }
 
     /// add  sp , -16   ;; alloc stack sapce for fp

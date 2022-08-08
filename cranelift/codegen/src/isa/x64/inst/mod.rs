@@ -77,7 +77,6 @@ impl Inst {
             | Inst::CvtFloatToUintSeq { .. }
             | Inst::CvtUint64ToFloatSeq { .. }
             | Inst::Div { .. }
-            | Inst::EpiloguePlaceholder
             | Inst::Fence { .. }
             | Inst::Hlt
             | Inst::Imm { .. }
@@ -92,6 +91,7 @@ impl Inst {
             | Inst::Mov64MR { .. }
             | Inst::MovRM { .. }
             | Inst::MovRR { .. }
+            | Inst::MovPReg { .. }
             | Inst::MovsxRmR { .. }
             | Inst::MovzxRmR { .. }
             | Inst::MulHi { .. }
@@ -619,18 +619,6 @@ impl Inst {
         }
     }
 
-    /// Does a comparison of dst & src for operands of size `size`.
-    pub(crate) fn test_rmi_r(size: OperandSize, src: RegMemImm, dst: Reg) -> Inst {
-        src.assert_regclass_is(RegClass::Int);
-        debug_assert_eq!(dst.class(), RegClass::Int);
-        Inst::CmpRmiR {
-            size,
-            src: GprMemImm::new(src).unwrap(),
-            dst: Gpr::new(dst).unwrap(),
-            opcode: CmpOpcode::Test,
-        }
-    }
-
     pub(crate) fn trap(trap_code: TrapCode) -> Inst {
         Inst::Ud2 { trap_code }
     }
@@ -654,21 +642,6 @@ impl Inst {
             consequent: GprMem::new(src).unwrap(),
             alternative: Gpr::new(dst.to_reg()).unwrap(),
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
-        }
-    }
-
-    pub(crate) fn xmm_cmove(ty: Type, cc: CC, src: RegMem, dst: Writable<Reg>) -> Inst {
-        debug_assert!(ty == types::F32 || ty == types::F64 || ty.is_vector());
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        let src = XmmMem::new(src).unwrap();
-        let dst = WritableXmm::from_writable_reg(dst).unwrap();
-        Inst::XmmCmove {
-            ty,
-            cc,
-            consequent: src,
-            alternative: dst.to_reg(),
-            dst,
         }
     }
 
@@ -725,24 +698,8 @@ impl Inst {
         Inst::Ret { rets }
     }
 
-    pub(crate) fn epilogue_placeholder() -> Inst {
-        Inst::EpiloguePlaceholder
-    }
-
     pub(crate) fn jmp_known(dst: MachLabel) -> Inst {
         Inst::JmpKnown { dst }
-    }
-
-    pub(crate) fn jmp_if(cc: CC, taken: MachLabel) -> Inst {
-        Inst::JmpIf { cc, taken }
-    }
-
-    pub(crate) fn jmp_cond(cc: CC, taken: MachLabel, not_taken: MachLabel) -> Inst {
-        Inst::JmpCond {
-            cc,
-            taken,
-            not_taken,
-        }
     }
 
     pub(crate) fn jmp_unknown(target: RegMem) -> Inst {
@@ -896,21 +853,13 @@ impl PrettyPrint for Inst {
             .to_string()
         }
 
-        fn suffix_lqb(size: OperandSize, is_8: bool) -> String {
-            match (size, is_8) {
-                (_, true) => "b",
-                (OperandSize::Size32, false) => "l",
-                (OperandSize::Size64, false) => "q",
+        fn suffix_lqb(size: OperandSize) -> String {
+            match size {
+                OperandSize::Size32 => "l",
+                OperandSize::Size64 => "q",
                 _ => unreachable!(),
             }
             .to_string()
-        }
-
-        fn size_lqb(size: OperandSize, is_8: bool) -> u8 {
-            if is_8 {
-                return 1;
-            }
-            size.to_bytes()
         }
 
         fn suffix_bwlq(size: OperandSize) -> String {
@@ -926,11 +875,10 @@ impl PrettyPrint for Inst {
             Inst::Nop { len } => format!("{} len={}", ljustify("nop".to_string()), len),
 
             Inst::AluRmiR { size, op, dst, .. } if self.produces_const() => {
-                let dst =
-                    pretty_print_reg(dst.to_reg().to_reg(), size_lqb(*size, op.is_8bit()), allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
                 format!(
                     "{} {}, {}, {}",
-                    ljustify2(op.to_string(), suffix_lqb(*size, op.is_8bit())),
+                    ljustify2(op.to_string(), suffix_lqb(*size)),
                     dst,
                     dst,
                     dst
@@ -943,13 +891,13 @@ impl PrettyPrint for Inst {
                 src2,
                 dst,
             } => {
-                let size_bytes = size_lqb(*size, op.is_8bit());
+                let size_bytes = size.to_bytes();
                 let src1 = pretty_print_reg(src1.to_reg(), size_bytes, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size_bytes, allocs);
                 let src2 = src2.pretty_print(size_bytes, allocs);
                 format!(
                     "{} {}, {}, {}",
-                    ljustify2(op.to_string(), suffix_lqb(*size, op.is_8bit())),
+                    ljustify2(op.to_string(), suffix_lqb(*size)),
                     src1,
                     src2,
                     dst
@@ -961,12 +909,12 @@ impl PrettyPrint for Inst {
                 src1_dst,
                 src2,
             } => {
-                let size_bytes = size_lqb(*size, op.is_8bit());
+                let size_bytes = size.to_bytes();
                 let src2 = pretty_print_reg(src2.to_reg(), size_bytes, allocs);
                 let src1_dst = src1_dst.pretty_print(size_bytes, allocs);
                 format!(
                     "{} {}, {}",
-                    ljustify2(op.to_string(), suffix_lqb(*size, op.is_8bit())),
+                    ljustify2(op.to_string(), suffix_lqb(*size)),
                     src2,
                     src1_dst,
                 )
@@ -1428,6 +1376,13 @@ impl PrettyPrint for Inst {
                 )
             }
 
+            Inst::MovPReg { src, dst } => {
+                let src: Reg = (*src).into();
+                let src = regs::show_ireg_sized(src, 8);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                format!("{} {}, {}", ljustify("movq".to_string()), src, dst)
+            }
+
             Inst::MovzxRmR {
                 ext_mode, src, dst, ..
             } => {
@@ -1628,8 +1583,6 @@ impl PrettyPrint for Inst {
             }
 
             Inst::Ret { .. } => "ret".to_string(),
-
-            Inst::EpiloguePlaceholder => "epilogue placeholder".to_string(),
 
             Inst::JmpKnown { dst } => {
                 format!("{} {}", ljustify("jmp".to_string()), dst.to_string())
@@ -1991,6 +1944,11 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_use(src.to_reg());
             collector.reg_def(dst.to_writable_reg());
         }
+        Inst::MovPReg { dst, src } => {
+            debug_assert!([regs::rsp(), regs::rbp()].contains(&(*src).into()));
+            debug_assert!(dst.to_reg().to_reg().is_virtual());
+            collector.reg_def(dst.to_writable_reg());
+        }
         Inst::XmmToGpr { src, dst, .. } => {
             collector.reg_use(src.to_reg());
             collector.reg_def(dst.to_writable_reg());
@@ -2170,8 +2128,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             }
         }
 
-        Inst::EpiloguePlaceholder
-        | Inst::JmpKnown { .. }
+        Inst::JmpKnown { .. }
         | Inst::JmpIf { .. }
         | Inst::JmpCond { .. }
         | Inst::Nop { .. }
@@ -2247,18 +2204,10 @@ impl MachInst for Inst {
         }
     }
 
-    fn is_epilogue_placeholder(&self) -> bool {
-        if let Self::EpiloguePlaceholder = self {
-            true
-        } else {
-            false
-        }
-    }
-
     fn is_term(&self) -> MachTerminator {
         match self {
             // Interesting cases.
-            &Self::Ret { .. } | &Self::EpiloguePlaceholder => MachTerminator::Ret,
+            &Self::Ret { .. } => MachTerminator::Ret,
             &Self::JmpKnown { .. } => MachTerminator::Uncond,
             &Self::JmpCond { .. } => MachTerminator::Cond,
             &Self::JmpTableSeq { .. } => MachTerminator::Indirect,

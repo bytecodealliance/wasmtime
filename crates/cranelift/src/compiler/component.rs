@@ -8,11 +8,12 @@ use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
 use cranelift_frontend::FunctionBuilder;
 use object::write::Object;
 use std::any::Any;
+use std::ops::Range;
 use wasmtime_environ::component::{
-    AlwaysTrapInfo, CanonicalOptions, Component, ComponentCompiler, ComponentTypes, LowerImport,
-    LoweredIndex, LoweringInfo, RuntimeAlwaysTrapIndex, VMComponentOffsets,
+    AlwaysTrapInfo, CanonicalOptions, Component, ComponentCompiler, ComponentTypes, FunctionInfo,
+    LowerImport, LoweredIndex, RuntimeAlwaysTrapIndex, VMComponentOffsets,
 };
-use wasmtime_environ::{PrimaryMap, SignatureIndex, Trampoline, TrapCode, WasmFuncType};
+use wasmtime_environ::{PrimaryMap, PtrSize, SignatureIndex, Trampoline, TrapCode, WasmFuncType};
 
 impl ComponentCompiler for Compiler {
     fn compile_lowered_trampoline(
@@ -44,6 +45,44 @@ impl ComponentCompiler for Compiler {
         let (values_vec_ptr_val, values_vec_len) =
             self.wasm_to_host_spill_args(ty, &mut builder, block0);
         let vmctx = builder.func.dfg.block_params(block0)[0];
+
+        // Save the exit FP and return address for stack walking purposes.
+        //
+        // First we need to get the `VMRuntimeLimits`.
+        let limits = builder.ins().load(
+            pointer_type,
+            MemFlags::trusted(),
+            vmctx,
+            i32::try_from(offsets.limits()).unwrap(),
+        );
+        // Then save the exit Wasm FP to the limits. We dereference the current
+        // FP to get the previous FP because the current FP is the trampoline's
+        // FP, and we want the Wasm function's FP, which is the caller of this
+        // trampoline.
+        let trampoline_fp = builder.ins().get_frame_pointer(pointer_type);
+        let wasm_fp = builder.ins().load(
+            pointer_type,
+            MemFlags::trusted(),
+            trampoline_fp,
+            // The FP always points to the next older FP for all supported
+            // targets. See assertion in
+            // `crates/runtime/src/traphandlers/backtrace.rs`.
+            0,
+        );
+        builder.ins().store(
+            MemFlags::trusted(),
+            wasm_fp,
+            limits,
+            offsets.ptr.vmruntime_limits_last_wasm_exit_fp(),
+        );
+        // Finally save the Wasm return address to the limits.
+        let wasm_pc = builder.ins().get_return_address(pointer_type);
+        builder.ins().store(
+            MemFlags::trusted(),
+            wasm_pc,
+            limits,
+            offsets.ptr.vmruntime_limits_last_wasm_exit_pc(),
+        );
 
         // Below this will incrementally build both the signature of the host
         // function we're calling as well as the list of arguments since the
@@ -187,28 +226,29 @@ impl ComponentCompiler for Compiler {
         trampolines: Vec<(SignatureIndex, Box<dyn Any + Send>)>,
         obj: &mut Object<'static>,
     ) -> Result<(
-        PrimaryMap<LoweredIndex, LoweringInfo>,
+        PrimaryMap<LoweredIndex, FunctionInfo>,
         PrimaryMap<RuntimeAlwaysTrapIndex, AlwaysTrapInfo>,
         Vec<Trampoline>,
     )> {
         let module = Default::default();
         let mut text = ModuleTextBuilder::new(obj, &module, &*self.isa);
-        let mut ret = PrimaryMap::new();
-        for (idx, lowering) in lowerings.iter() {
-            let lowering = lowering.downcast_ref::<CompiledFunction>().unwrap();
-            assert!(lowering.traps.is_empty());
-            let (_symbol, range) = text.append_func(
-                false,
-                format!("_wasm_component_lowering_trampoline{}", idx.as_u32()).into_bytes(),
-                &lowering,
-            );
 
-            let i = ret.push(LoweringInfo {
-                start: u32::try_from(range.start).unwrap(),
-                length: u32::try_from(range.end - range.start).unwrap(),
-            });
-            assert_eq!(i, idx);
-        }
+        let range2info = |range: Range<u64>| FunctionInfo {
+            start: u32::try_from(range.start).unwrap(),
+            length: u32::try_from(range.end - range.start).unwrap(),
+        };
+        let ret_lowerings = lowerings
+            .iter()
+            .map(|(i, lowering)| {
+                let lowering = lowering.downcast_ref::<CompiledFunction>().unwrap();
+                assert!(lowering.traps.is_empty());
+                let range = text.named_func(
+                    &format!("_wasm_component_lowering_trampoline{}", i.as_u32()),
+                    &lowering,
+                );
+                range2info(range)
+            })
+            .collect();
         let ret_always_trap = always_trap
             .iter()
             .map(|(i, func)| {
@@ -217,11 +257,8 @@ impl ComponentCompiler for Compiler {
                 assert_eq!(func.traps[0].trap_code, TrapCode::AlwaysTrapAdapter);
                 let name = format!("_wasmtime_always_trap{}", i.as_u32());
                 let range = text.named_func(&name, func);
-                let start = u32::try_from(range.start).unwrap();
-                let end = u32::try_from(range.end).unwrap();
                 AlwaysTrapInfo {
-                    start: start,
-                    length: end - start,
+                    info: range2info(range),
                     trap_offset: func.traps[0].code_offset,
                 }
             })
@@ -238,6 +275,6 @@ impl ComponentCompiler for Compiler {
 
         text.finish()?;
 
-        Ok((ret, ret_always_trap, ret_trampolines))
+        Ok((ret_lowerings, ret_always_trap, ret_trampolines))
     }
 }

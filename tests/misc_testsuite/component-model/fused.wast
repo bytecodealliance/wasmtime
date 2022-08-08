@@ -1393,3 +1393,44 @@
   )
   (instance (instantiate $c2 (with "" (instance $c1))))
 )
+
+;; Adapters are used slightly out-of-order here to stress the internals of
+;; dependencies between adapters.
+(component
+  (core module $m
+    (func (export "execute"))
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32) unreachable)
+    (memory (export "memory") 1)
+  )
+
+  (component $root
+    (core instance $m (instantiate $m))
+    (func (export "execute")
+      (canon lift (core func $m "execute"))
+    )
+  )
+  (component $c
+    (import "backend" (instance $i
+      (export "execute" (func))
+    ))
+    (core module $shim2 (import "" "0" (func)))
+    (core instance $m (instantiate $m))
+
+    ;; This adapter, when fused with itself on the second instantiation of this
+    ;; component, will dependend on the prior instance `$m` so it which means
+    ;; that the adapter module containing this must be placed in the right
+    ;; location.
+    (core func $execute
+      (canon lower (func $i "execute") (memory $m "memory") (realloc (func $m "realloc")))
+    )
+    (core instance (instantiate $shim2
+      (with "" (instance
+        (export "0" (func $execute))
+      ))
+    ))
+    (func (export "execute") (canon lift (core func $m "execute")))
+  )
+  (instance $root (instantiate $root))
+  (instance $c1 (instantiate $c (with "backend" (instance $root))))
+  (instance $c2 (instantiate $c (with "backend" (instance $c1))))
+)

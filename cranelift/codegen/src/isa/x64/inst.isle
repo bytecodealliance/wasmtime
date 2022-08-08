@@ -104,6 +104,11 @@
               (src Gpr)
               (dst WritableGpr))
 
+       ;; Like `MovRR` but with a physical register source (for implementing
+       ;; CLIF instructions like `get_stack_pointer`).
+       (MovPReg (src PReg)
+                (dst WritableGpr))
+
        ;; Zero-extended loads, except for 64 bits: movz (bl bq wl wq lq) addr
        ;; reg.
        ;;
@@ -331,13 +336,8 @@
        ;; Return.
        (Ret (rets VecReg))
 
-       ;; A placeholder instruction, generating no code, meaning that a function
-       ;; epilogue must be inserted there.
-       (EpiloguePlaceholder)
-
        ;; Jump to a known target: jmp simm32.
        (JmpKnown (dst MachLabel))
-
 
        ;; One-way conditional branch: jcond cond target.
        ;;
@@ -366,7 +366,7 @@
        ;; The generated code sequence is described in the emit's function match
        ;; arm for this instruction.
        ;;
-       ;; See comment in lowering about the temporaries signedness.
+       ;; See comment on jmp_table_seq below about the temporaries signedness.
        (JmpTableSeq (idx Reg)
                     (tmp1 WritableReg)
                     (tmp2 WritableReg)
@@ -515,6 +515,24 @@
 
 (type BoxVecMachLabel extern (enum))
 
+(type MachLabelSlice extern (enum))
+
+;; The size of the jump table.
+(decl jump_table_size (BoxVecMachLabel) u32)
+(extern constructor jump_table_size jump_table_size)
+
+;; Extract a the target from a MachLabelSlice with exactly one target.
+(decl single_target (MachLabel) MachLabelSlice)
+(extern extractor single_target single_target)
+
+;; Extract a the targets from a MachLabelSlice with exactly two targets.
+(decl two_targets (MachLabel MachLabel) MachLabelSlice)
+(extern extractor two_targets two_targets)
+
+;; Extract the default target and jump table from a MachLabelSlice.
+(decl jump_table_targets (MachLabel BoxVecMachLabel) MachLabelSlice)
+(extern extractor jump_table_targets jump_table_targets)
+
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
 (decl operand_size_of_type_32_64 (Type) OperandSize)
 (extern constructor operand_size_of_type_32_64 operand_size_of_type_32_64)
@@ -538,9 +556,7 @@
             And
             Or
             Xor
-            Mul
-            And8
-            Or8))
+            Mul))
 
 (type UnaryRmROpcode extern
       (enum Bsr
@@ -1057,8 +1073,19 @@
             NLE
             P
             NP))
+
 (decl intcc_to_cc (IntCC) CC)
 (extern constructor intcc_to_cc intcc_to_cc)
+
+(decl cc_invert (CC) CC)
+(extern constructor cc_invert cc_invert)
+
+(decl floatcc_inverse (FloatCC) FloatCC)
+(extern constructor floatcc_inverse floatcc_inverse)
+
+;; Fails if the argument is not either CC.NZ or CC.Z.
+(decl cc_nz_or_z (CC) CC)
+(extern extractor cc_nz_or_z cc_nz_or_z)
 
 (type AvxOpcode extern
       (enum Vfmadd213ps
@@ -3039,6 +3066,80 @@
 (rule (trap_if_fcmp (FcmpCondResult.OrCondition producer cc1 cc2) tc)
       (with_flags_side_effect producer (trap_if_or cc1 cc2 tc)))
 
+;;;; Jumps ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Unconditional jump.
+(decl jmp_known (MachLabel) SideEffectNoResult)
+(rule (jmp_known target)
+      (SideEffectNoResult.Inst (MInst.JmpKnown target)))
+
+(decl jmp_if (CC MachLabel) ConsumesFlags)
+(rule (jmp_if cc taken)
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.JmpIf cc taken)))
+
+;; Conditional jump based on the condition code.
+(decl jmp_cond (CC MachLabel MachLabel) ConsumesFlags)
+(rule (jmp_cond cc taken not_taken)
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.JmpCond cc taken not_taken)))
+
+;; Conditional jump based on the result of an icmp.
+(decl jmp_cond_icmp (IcmpCondResult MachLabel MachLabel) SideEffectNoResult)
+(rule (jmp_cond_icmp (IcmpCondResult.Condition producer cc) taken not_taken)
+      (with_flags_side_effect producer (jmp_cond cc taken not_taken)))
+
+;; Conditional jump based on the result of an fcmp.
+(decl jmp_cond_fcmp (FcmpCondResult MachLabel MachLabel) SideEffectNoResult)
+(rule (jmp_cond_fcmp (FcmpCondResult.Condition producer cc) taken not_taken)
+      (with_flags_side_effect producer (jmp_cond cc taken not_taken)))
+(rule (jmp_cond_fcmp (FcmpCondResult.AndCondition producer cc1 cc2) taken not_taken)
+      (with_flags_side_effect producer
+                              (consumes_flags_concat
+                                (jmp_if (cc_invert cc1) not_taken)
+                                (jmp_cond (cc_invert cc2) not_taken taken))))
+(rule (jmp_cond_fcmp (FcmpCondResult.OrCondition producer cc1 cc2) taken not_taken)
+      (with_flags_side_effect producer
+                              (consumes_flags_concat
+                                (jmp_if cc1 taken)
+                                (jmp_cond cc2 taken not_taken))))
+
+;; Emit the compound instruction that does:
+;;
+;; lea $jt, %rA
+;; movsbl [%rA, %rIndex, 2], %rB
+;; add %rB, %rA
+;; j *%rA
+;; [jt entries]
+;;
+;; This must be *one* instruction in the vcode because we cannot allow regalloc
+;; to insert any spills/fills in the middle of the sequence; otherwise, the
+;; lea PC-rel offset to the jumptable would be incorrect.  (The alternative
+;; is to introduce a relocation pass for inlined jumptables, which is much
+;; worse.)
+(decl jmp_table_seq (Type Gpr MachLabel BoxVecMachLabel) SideEffectNoResult)
+(rule (jmp_table_seq ty idx default_target jt_targets)
+      (let (;; This temporary is used as a signed integer of 64-bits (to hold
+            ;; addresses).
+            (tmp1 WritableGpr (temp_writable_gpr))
+
+            ;; Put a zero in tmp1. This is needed for Spectre mitigations (a
+            ;; CMOV that zeroes the index on misspeculation).
+            (_ Unit (emit (MInst.Imm (OperandSize.Size32) 0 tmp1)))
+
+            ;; This temporary is used as a signed integer of 32-bits (for the
+            ;; wasm-table index) and then 64-bits (address addend). The small
+            ;; lie about the I64 type is benign, since the temporary is dead
+            ;; after this instruction (and its Cranelift type is thus unused).
+            (tmp2 WritableGpr (temp_writable_gpr))
+
+            (size OperandSize (raw_operand_size_of_type ty))
+
+            (jt_size u32 (jump_table_size jt_targets)))
+
+        (with_flags_side_effect
+          (x64_cmp size (RegMemImm.Imm jt_size) idx)
+          (ConsumesFlags.ConsumesFlagsSideEffect
+            (MInst.JmpTableSeq idx tmp1 tmp2 default_target jt_targets)))))
+
 ;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type IcmpCondResult (enum (Condition (producer ProducesFlags) (cc CC))))
@@ -3046,10 +3147,27 @@
 (decl icmp_cond_result (ProducesFlags CC) IcmpCondResult)
 (rule (icmp_cond_result producer cc) (IcmpCondResult.Condition producer cc))
 
+(decl invert_icmp_cond_result (IcmpCondResult) IcmpCondResult)
+(rule (invert_icmp_cond_result (IcmpCondResult.Condition producer cc))
+      (icmp_cond_result producer (cc_invert cc)))
+
 ;; Lower an Icmp result into a boolean value in a register.
 (decl lower_icmp_bool (IcmpCondResult) ValueRegs)
 (rule (lower_icmp_bool (IcmpCondResult.Condition producer cc))
       (with_flags producer (x64_setcc cc)))
+
+;; Emit a conditional move based on the result of an icmp.
+(decl select_icmp (IcmpCondResult Value Value) ValueRegs)
+
+;; Ensure that we put the `x` argument into a register for single-register
+;; gpr-typed arguments, as we rely on this for the legalization of heap_addr and
+;; loading easily computed constants (like 0) from memory is too expensive.
+(rule (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type (is_gpr_type (is_single_register_type ty))) y)
+      (with_flags producer (cmove ty cc (put_in_gpr x) y)))
+
+;; Otherwise, fall back on the behavior of `cmove_from_values`.
+(rule (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type ty) y)
+      (with_flags producer (cmove_from_values ty cc x y)))
 
 (decl emit_cmp (IntCC Value Value) IcmpCondResult)
 
@@ -3215,6 +3333,12 @@
       ;; Same flags as `UnorderedOrLessThanOrEqual`.
       (FcmpCondResult.Condition (x64_ucomis a b) (CC.BE)))
 
+;;;; Type Guards ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; A type guard for matching ints and bools up to 64 bits, or 64 bit references.
+(decl ty_int_bool_or_ref () Type)
+(extern extractor ty_int_bool_or_ref ty_int_bool_or_ref)
+
 ;;;; Atomics ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl x64_mfence () SideEffectNoResult)
@@ -3333,3 +3457,34 @@
 (decl synthetic_amode_to_xmm_mem (SyntheticAmode) XmmMem)
 (rule (synthetic_amode_to_xmm_mem amode)
       (synthetic_amode_to_reg_mem amode))
+
+;; Helper for creating `MovPReg` instructions.
+(decl mov_preg (PReg) Reg)
+(rule (mov_preg preg)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.MovPReg preg dst))))
+        dst))
+
+(decl preg_rbp () PReg)
+(extern constructor preg_rbp preg_rbp)
+
+(decl preg_rsp () PReg)
+(extern constructor preg_rsp preg_rsp)
+
+(decl x64_rbp () Reg)
+(rule (x64_rbp)
+      (mov_preg (preg_rbp)))
+
+(decl x64_rsp () Reg)
+(rule (x64_rsp)
+      (mov_preg (preg_rsp)))
+
+;;;; Helpers for Emitting LibCalls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type LibCall extern
+      (enum
+        FmaF32
+        FmaF64))
+
+(decl libcall_3 (LibCall Reg Reg Reg) Reg)
+(extern constructor libcall_3 libcall_3)

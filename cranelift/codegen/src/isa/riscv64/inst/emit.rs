@@ -1591,11 +1591,7 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
 
                 sink.add_reloc(Reloc::Abs8, name.as_ref(), offset);
-                if emit_info.shared_flag.emit_all_ones_funcaddrs() {
-                    sink.put8(u64::max_value());
-                } else {
-                    sink.put8(0);
-                }
+                sink.put8(0);
             }
             &Inst::TrapIfC {
                 rs1,

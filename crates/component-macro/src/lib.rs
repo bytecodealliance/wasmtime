@@ -885,7 +885,10 @@ impl Expander for ComponentTypeExpander {
                 const SIZE32: usize = {
                     let mut size = 0;
                     #sizes
-                    #internal::align_to(#discriminant_size as usize, Self::ALIGN32) + size
+                    #internal::align_to(
+                        #internal::align_to(#discriminant_size as usize, Self::ALIGN32) + size,
+                        Self::ALIGN32
+                    )
                 };
 
                 const ALIGN32: u32 = {

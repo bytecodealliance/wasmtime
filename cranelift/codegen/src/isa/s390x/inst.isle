@@ -351,6 +351,12 @@
       (rd Reg)
       (mem MemArg))
 
+    ;; A memory copy of 1-256 bytes.
+    (Mvc
+      (dst MemArgPair)
+      (src MemArgPair)
+      (len_minus_one u8))
+
     ;; A load-multiple instruction.
     (LoadMultiple64
       (rt WritableReg)
@@ -372,6 +378,11 @@
     (Mov64
       (rd WritableReg)
       (rm Reg))
+
+    ;; Like `Mov64` but with a particular physical register source.
+    (MovPReg
+      (rd WritableReg)
+      (rm PReg))
 
     ;; A 32-bit move instruction with a full 32-bit immediate.
     (Mov32Imm
@@ -589,6 +600,20 @@
       (rn Reg)
       (rm Reg))
 
+    ;; Synthetic instruction to compare signed 128-bit values.
+    ;; Sets CC 1 if rn > rm, sets a different CC otherwise.
+    (VecInt128SCmpHi
+      (tmp WritableReg)
+      (rn Reg)
+      (rm Reg))
+
+    ;; Synthetic instruction to compare unsigned 128-bit values.
+    ;; Sets CC 1 if rn > rm, sets a different CC otherwise.
+    (VecInt128UCmpHi
+      (tmp WritableReg)
+      (rn Reg)
+      (rm Reg))
+
     ;; 128-bit vector load instruction.
     (VecLoad
       (rd WritableReg)
@@ -771,10 +796,6 @@
     (Ret
       (link Reg)
       (rets VecReg))
-
-    ;; A placeholder instruction, generating no code, meaning that a function epilogue must be
-    ;; inserted there.
-    (EpiloguePlaceholder)
 
     ;; An unconditional branch.
     (Jump
@@ -989,10 +1010,12 @@
     (Add16x8)
     (Add32x4)
     (Add64x2)
+    (Add128)
     (Sub8x16)
     (Sub16x8)
     (Sub32x4)
     (Sub64x2)
+    (Sub128)
     ;; Multiplication (64-bit not supported)
     (Mul8x16)
     (Mul16x8)
@@ -1098,6 +1121,15 @@
     (Popcnt16x8)
     (Popcnt32x4)
     (Popcnt64x2)
+    ;; Count leading/trailing zeros
+    (Clz8x16)
+    (Clz16x8)
+    (Clz32x4)
+    (Clz64x2)
+    (Ctz8x16)
+    (Ctz16x8)
+    (Ctz32x4)
+    (Ctz64x2)
     ;; Unpack
     (UnpackULow8x16)
     (UnpackULow16x8)
@@ -1309,6 +1341,10 @@
 (decl gpr64_ty (Type) Type)
 (extern extractor gpr64_ty gpr64_ty)
 
+;; Types that can be operated on using 128-bit vector instructions
+(decl vr128_ty (Type) Type)
+(extern extractor vr128_ty vr128_ty)
+
 
 ;; Helpers for various immmediate constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1472,6 +1508,9 @@
 (decl uimm32shifted_from_inverted_value (UImm32Shifted) Value)
 (extern extractor uimm32shifted_from_inverted_value uimm32shifted_from_inverted_value)
 
+(decl len_minus_one (u8) u64)
+(extern extractor len_minus_one len_minus_one)
+
 
 ;; Helpers for masking shift amounts ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1487,6 +1526,22 @@
       (let ((mask u8 (mask_amt_imm ty -1)))
         (and_uimm16shifted ty reg (uimm16shifted (u8_as_u16 mask) 0))))
 (rule (mask_amt_reg (gpr64_ty ty) reg) reg)
+
+;; Load a shift amount into a GPR.
+(decl amt_reg (Value) Reg)
+(rule (amt_reg amt @ (value_type (fits_in_64 _))) amt)
+(rule (amt_reg amt @ (value_type (vr128_ty _)))
+      (vec_extract_lane $I64X2 amt 1 (zero_reg)))
+
+;; Load a shift amount into a VR, replicated across all 16 bytes.
+(decl amt_vr (Value) Reg)
+(rule (amt_vr amt @ (value_type (fits_in_64 _)))
+      (vec_replicate_lane $I8X16
+        (vec_insert_lane_undef $I8X16 amt 0 (zero_reg)) 0))
+(rule (amt_vr amt @ (value_type (vr128_ty _)))
+      (vec_replicate_lane $I8X16 amt 15))
+(rule (amt_vr (u64_from_value amt))
+      (vec_imm_splat $I8X16 amt))
 
 
 ;; Helpers for condition codes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1546,6 +1601,9 @@
 
 (type MemArg extern (enum))
 
+(decl memarg_flags (MemArg) MemFlags)
+(extern constructor memarg_flags memarg_flags)
+
 (decl memarg_reg_plus_reg (Reg Reg u8 MemFlags) MemArg)
 (extern constructor memarg_reg_plus_reg memarg_reg_plus_reg)
 
@@ -1559,6 +1617,10 @@
 ;; adding a base (relative to SP) and an offset.
 (decl memarg_stack_off (i64 i64) MemArg)
 (extern constructor memarg_stack_off memarg_stack_off)
+
+;; Create a `MemArg` referring to an offset from the initial SP.
+(decl memarg_initial_sp_offset (i64) MemArg)
+(extern constructor memarg_initial_sp_offset memarg_initial_sp_offset)
 
 ;; Form the sum of two offset values, and check that the result is
 ;; a valid `MemArg::Symbol` offset (i.e. is even and fits into i32).
@@ -1615,6 +1677,26 @@
           inst)
       (if (memarg_symbol_offset_sum sym_offset load_offset))
       inst)
+
+
+;; Accessors for `MemArgPair`.
+
+(type MemArgPair extern (enum))
+
+;; Convert a MemArg to a MemArgPair, reloading the address if necessary.
+(decl memarg_pair (MemArg) MemArgPair)
+(rule (memarg_pair (memarg_pair_from_memarg mem)) mem)
+(rule (memarg_pair mem) (memarg_pair_from_reg
+                          (load_addr mem) (memarg_flags mem)))
+
+;; Convert a MemArg to a MemArgPair if no reloading is necessary.
+(decl memarg_pair_from_memarg (MemArgPair) MemArg)
+(extern extractor memarg_pair_from_memarg memarg_pair_from_memarg)
+
+;; Create a MemArgPair from a single base register.
+(decl memarg_pair_from_reg (Reg MemFlags) MemArgPair)
+(extern constructor memarg_pair_from_reg memarg_pair_from_reg)
+
 
 ;; Helpers for stack-slot addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2033,6 +2115,11 @@
 (rule (storerev64 src addr)
       (SideEffectNoResult.Inst (MInst.StoreRev64 src addr)))
 
+;; Helper for emitting `MInst.Mvc` instructions.
+(decl mvc (MemArgPair MemArgPair u8) SideEffectNoResult)
+(rule (mvc dst src len_minus_one)
+      (SideEffectNoResult.Inst (MInst.Mvc dst src len_minus_one)))
+
 ;; Helper for emitting `MInst.FpuRR` instructions.
 (decl fpu_rr (Type FPUOp1 Reg) Reg)
 (rule (fpu_rr ty op src)
@@ -2139,6 +2226,20 @@
       (let ((tmp WritableReg (temp_writable_reg ty)))
         (ProducesFlags.ProducesFlagsSideEffect (MInst.VecFloatCmpS op tmp src1 src2))))
 
+;; Helper for emitting `MInst.VecInt128SCmpHi` instructions.
+(decl vec_int128_scmphi (Reg Reg) ProducesBool)
+(rule (vec_int128_scmphi src1 src2)
+      (let ((tmp WritableReg (temp_writable_reg $I128)))
+        (bool (ProducesFlags.ProducesFlagsSideEffect (MInst.VecInt128SCmpHi tmp src1 src2))
+              (mask_as_cond 4))))
+
+;; Helper for emitting `MInst.VecInt128UCmpHi` instructions.
+(decl vec_int128_ucmphi (Reg Reg) ProducesBool)
+(rule (vec_int128_ucmphi src1 src2)
+      (let ((tmp WritableReg (temp_writable_reg $I128)))
+        (bool (ProducesFlags.ProducesFlagsSideEffect (MInst.VecInt128UCmpHi tmp src1 src2))
+              (mask_as_cond 4))))
+
 ;; Helper for emitting `MInst.VecLoad` instructions.
 (decl vec_load (Type MemArg) Reg)
 (rule (vec_load ty addr)
@@ -2186,7 +2287,7 @@
 
 ;; Helper for emitting `MInst.VecLoadConst` instructions.
 (decl vec_load_const (Type u128) Reg)
-(rule (vec_load_const (ty_vec128 ty) n)
+(rule (vec_load_const (vr128_ty ty) n)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.VecLoadConst dst n))))
         dst))
@@ -2200,7 +2301,7 @@
 
 ;; Helper for emitting `MInst.VecImmByteMask` instructions.
 (decl vec_imm_byte_mask (Type u16) Reg)
-(rule (vec_imm_byte_mask (ty_vec128 ty) n)
+(rule (vec_imm_byte_mask (vr128_ty ty) n)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.VecImmByteMask dst n))))
         dst))
@@ -2452,7 +2553,7 @@
 (rule (emit_mov $F64 dst src)
       (emit (MInst.FpuMove64 dst src)))
 
-(rule (emit_mov (ty_vec128 ty) dst src)
+(rule (emit_mov (vr128_ty ty) dst src)
       (emit (MInst.VecMov dst src)))
 
 ;; Allocate a temporary (writable) register, initialized as a copy of the input.
@@ -2473,6 +2574,20 @@
 (rule (emit_load $I64 dst addr)
       (emit (MInst.Load64 dst addr)))
 
+;; Helper for creating `MInst.MovPReg` instructions.
+(decl mov_preg (PReg) Reg)
+(rule (mov_preg src)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.MovPReg dst src))))
+        dst))
+
+(decl preg_stack () PReg)
+(extern constructor preg_stack preg_stack)
+
+;; Copy the physical stack register into a virtual register.
+(decl sp () Reg)
+(rule (sp)
+      (mov_preg (preg_stack)))
 
 ;; Helpers for accessing argument / return value slots ;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2489,7 +2604,7 @@
       (emit_side_effect (vec_store_lane $F32X4 reg mem 0)))
 (rule (emit_arg_store $F64 reg mem)
       (emit_side_effect (vec_store_lane $F64X2 reg mem 0)))
-(rule (emit_arg_store (ty_vec128 ty) reg mem)
+(rule (emit_arg_store (vr128_ty ty) reg mem)
       (emit_side_effect (vec_store reg mem)))
 
 (decl emit_arg_load (Type MemArg) Reg)
@@ -2500,12 +2615,45 @@
 (rule (emit_arg_load $R64 mem) (load64 mem))
 (rule (emit_arg_load $F32 mem) (vec_load_lane_undef $F32X4 mem 0))
 (rule (emit_arg_load $F64 mem) (vec_load_lane_undef $F64X2 mem 0))
-(rule (emit_arg_load (ty_vec128 ty) mem) (vec_load ty mem))
+(rule (emit_arg_load (vr128_ty ty) mem) (vec_load ty mem))
+
+;; Helpers to emit a memory copy (MVC or memcpy libcall).
+(decl emit_memcpy (MemArg MemArg u64) Unit)
+(rule (emit_memcpy dst src (len_minus_one len))
+      (emit_side_effect (mvc (memarg_pair dst) (memarg_pair src) len)))
+(rule (emit_memcpy dst src len)
+      (let ((libcall LibCallInfo (lib_call_info_memcpy))
+            (_ Unit (lib_accumulate_outgoing_args_size libcall))
+            (_ Unit (emit_mov $I64 (writable_gpr 2) (load_addr dst)))
+            (_ Unit (emit_mov $I64 (writable_gpr 3) (load_addr src)))
+            (_ Unit (emit_imm $I64 (writable_gpr 4) len)))
+        (emit_side_effect (lib_call libcall))))
+
+;; Prepare a stack copy of a single (oversized) argument.
+(decl copy_to_buffer (i64 ABIArg Value) InstOutput)
+(rule (copy_to_buffer base (abi_arg_only_slot slot) _) (output_none))
+(rule (copy_to_buffer base (abi_arg_struct_pointer _ offset size) val)
+      (let ((dst MemArg (memarg_stack_off base offset))
+            (src MemArg (memarg_reg_plus_off val 0 0 (memflags_trusted)))
+            (_ Unit (emit_memcpy dst src size)))
+        (output_none)))
+(rule (copy_to_buffer base (abi_arg_implicit_pointer _ offset ty)
+                      val @ (value_type ty))
+      (let ((mem MemArg (memarg_stack_off base offset))
+            (_ Unit (emit_arg_store ty val mem)))
+        (output_none)))
 
 ;; Copy a single argument/return value to its slots.
+;; For oversized arguments, set the slot to the buffer address.
 (decl copy_to_arg (i64 ABIArg Value) Unit)
 (rule (copy_to_arg base (abi_arg_only_slot slot) val)
       (copy_val_to_arg_slot base slot val))
+(rule (copy_to_arg base (abi_arg_struct_pointer slot offset _) _)
+      (let ((ptr Reg (load_addr (memarg_stack_off base offset))))
+        (copy_reg_to_arg_slot base slot ptr)))
+(rule (copy_to_arg base (abi_arg_implicit_pointer slot offset _) _)
+      (let ((ptr Reg (load_addr (memarg_stack_off base offset))))
+        (copy_reg_to_arg_slot base slot ptr)))
 
 ;; Copy a single argument/return value from its slots.
 (decl copy_from_arg (i64 ABIArg) ValueRegs)
@@ -2630,11 +2778,11 @@
 
 ;; Allocate a temporary register, initialized with a vector immediate.
 (decl vec_imm (Type u128) Reg)
-(rule (vec_imm (ty_vec128 ty) 0)
+(rule (vec_imm (vr128_ty ty) 0)
       (vec_imm_byte_mask ty 0))
-(rule (vec_imm (ty_vec128 ty) (u64_pair n n))
+(rule (vec_imm (vr128_ty ty) (u64_pair n n))
       (vec_imm_splat $I64X2 n))
-(rule (vec_imm (ty_vec128 ty) n)
+(rule (vec_imm (vr128_ty ty) n)
       (vec_load_const ty n))
 
 ;; Variant with replicated immediate.
@@ -2690,6 +2838,13 @@
 (rule (ty_ext64 $I16) $I64)
 (rule (ty_ext64 $I32) $I64)
 (rule (ty_ext64 $I64) $I64)
+
+;; 128-bit vector type with lane type `Type`.
+(decl ty_vec128_from_lane_ty (Type) Type)
+(rule (ty_vec128_from_lane_ty $I8) $I8X16)
+(rule (ty_vec128_from_lane_ty $I16) $I16X8)
+(rule (ty_vec128_from_lane_ty $I32) $I32X4)
+(rule (ty_vec128_from_lane_ty $I64) $I64X2)
 
 ;; Zero-extend a register from a smaller `Type` into a 32-bit destination.  (Non-SSA form.)
 ;; This handles both integer and boolean input types.
@@ -2969,7 +3124,7 @@
 (rule (emit_cmov_reg $F64 dst cond src)
       (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.FpuCMov64 dst cond src)
                                              dst))
-(rule (emit_cmov_reg (ty_vec128 ty) dst cond src)
+(rule (emit_cmov_reg (vr128_ty ty) dst cond src)
       (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.VecCMov dst cond src)
                                              dst))
 
@@ -3243,6 +3398,24 @@
 (extern constructor abi_accumulate_outgoing_args_size abi_accumulate_outgoing_args_size)
 
 
+;; Helpers for generating calls to library routines ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type LibCallInfo extern (enum))
+
+(decl lib_call_info_memcpy () LibCallInfo)
+(extern constructor lib_call_info_memcpy lib_call_info_memcpy)
+
+(decl lib_call_info (LibCallInfo) BoxCallInfo)
+(extern constructor lib_call_info lib_call_info)
+
+(decl lib_call (LibCallInfo) SideEffectNoResult)
+(rule (lib_call libcall)
+      (call_impl (writable_link_reg) (lib_call_info libcall)))
+
+(decl lib_accumulate_outgoing_args_size (LibCallInfo) Unit)
+(extern constructor lib_accumulate_outgoing_args_size lib_accumulate_outgoing_args_size)
+
+
 ;; Helpers for generating vector pack and unpack instructions ;;;;;;;;;;;;;;;;;;
 
 (decl vec_widen_type (Type) Type)
@@ -3328,7 +3501,7 @@
 (rule (vec_merge_high ty x y) (vec_rrr ty (vecop_merge_high ty) x y))
 
 
-;; Helpers for generating `clz` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Helpers for generating `clz` and `ctz` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Count leading zeroes.  For a zero input, return the specified value.
 (decl clz_reg (i16 Reg) RegPair)
@@ -3349,6 +3522,26 @@
             (_ Unit (emit (MInst.CMov64SImm16 (writable_regpair_hi dst)
                               (intcc_as_cond (IntCC.Equal)) zeroval))))
         dst))
+
+;; Vector count leading zeros.
+(decl vecop_clz (Type) VecUnaryOp)
+(rule (vecop_clz $I8X16) (VecUnaryOp.Clz8x16))
+(rule (vecop_clz $I16X8) (VecUnaryOp.Clz16x8))
+(rule (vecop_clz $I32X4) (VecUnaryOp.Clz32x4))
+(rule (vecop_clz $I64X2) (VecUnaryOp.Clz64x2))
+
+(decl vec_clz (Type Reg) Reg)
+(rule (vec_clz ty x) (vec_rr ty (vecop_clz ty) x))
+
+;; Vector count trailing zeros.
+(decl vecop_ctz (Type) VecUnaryOp)
+(rule (vecop_ctz $I8X16) (VecUnaryOp.Ctz8x16))
+(rule (vecop_ctz $I16X8) (VecUnaryOp.Ctz16x8))
+(rule (vecop_ctz $I32X4) (VecUnaryOp.Ctz32x4))
+(rule (vecop_ctz $I64X2) (VecUnaryOp.Ctz64x2))
+
+(decl vec_ctz (Type Reg) Reg)
+(rule (vec_ctz ty x) (vec_rr ty (vecop_ctz ty) x))
 
 
 ;; Helpers for generating saturating integer instructions ;;;;;;;;;;;;;;;;;;;;;;
@@ -3437,6 +3630,7 @@
 (rule (vecop_add $I16X8) (VecBinaryOp.Add16x8))
 (rule (vecop_add $I32X4) (VecBinaryOp.Add32x4))
 (rule (vecop_add $I64X2) (VecBinaryOp.Add64x2))
+(rule (vecop_add $I128) (VecBinaryOp.Add128))
 
 (decl vec_add (Type Reg Reg) Reg)
 (rule (vec_add ty x y) (vec_rrr ty (vecop_add ty) x y))
@@ -3503,6 +3697,7 @@
 (rule (vecop_sub $I16X8) (VecBinaryOp.Sub16x8))
 (rule (vecop_sub $I32X4) (VecBinaryOp.Sub32x4))
 (rule (vecop_sub $I64X2) (VecBinaryOp.Sub64x2))
+(rule (vecop_sub $I128) (VecBinaryOp.Sub128))
 
 (decl vec_sub (Type Reg Reg) Reg)
 (rule (vec_sub ty x y) (vec_rrr ty (vecop_sub ty) x y))
@@ -3727,7 +3922,7 @@
 (rule (and_mem ty x y) (alu_rx ty (aluop_and ty) x y))
 
 (decl vec_and (Type Reg Reg) Reg)
-(rule (vec_and (ty_vec128 ty) x y) (vec_rrr ty (VecBinaryOp.And128) x y))
+(rule (vec_and (vr128_ty ty) x y) (vec_rrr ty (VecBinaryOp.And128) x y))
 
 
 ;; Helpers for generating `or` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3749,7 +3944,7 @@
 (rule (or_mem ty x y) (alu_rx ty (aluop_or ty) x y))
 
 (decl vec_or (Type Reg Reg) Reg)
-(rule (vec_or (ty_vec128 ty) x y) (vec_rrr ty (VecBinaryOp.Orr128) x y))
+(rule (vec_or (vr128_ty ty) x y) (vec_rrr ty (VecBinaryOp.Orr128) x y))
 
 
 ;; Helpers for generating `xor` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3772,7 +3967,7 @@
       (push_alu_uimm32shifted ib (aluop_xor ty) dst src imm))
 
 (decl vec_xor (Type Reg Reg) Reg)
-(rule (vec_xor (ty_vec128 ty) x y) (vec_rrr ty (VecBinaryOp.Xor128) x y))
+(rule (vec_xor (vr128_ty ty) x y) (vec_rrr ty (VecBinaryOp.Xor128) x y))
 
 
 ;; Helpers for generating `not` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3806,7 +4001,7 @@
 (rule (not_and_reg ty x y) (alu_rrr ty (aluop_not_and ty) x y))
 
 (decl vec_not_and (Type Reg Reg) Reg)
-(rule (vec_not_and (ty_vec128 ty) x y) (vec_rrr ty (VecBinaryOp.NotAnd128) x y))
+(rule (vec_not_and (vr128_ty ty) x y) (vec_rrr ty (VecBinaryOp.NotAnd128) x y))
 
 
 ;; Helpers for generating `not_or` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3819,7 +4014,7 @@
 (rule (not_or_reg ty x y) (alu_rrr ty (aluop_not_or ty) x y))
 
 (decl vec_not_or (Type Reg Reg) Reg)
-(rule (vec_not_or (ty_vec128 ty) x y) (vec_rrr ty (VecBinaryOp.NotOrr128) x y))
+(rule (vec_not_or (vr128_ty ty) x y) (vec_rrr ty (VecBinaryOp.NotOrr128) x y))
 
 
 ;; Helpers for generating `not_xor` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3832,7 +4027,7 @@
 (rule (not_xor_reg ty x y) (alu_rrr ty (aluop_not_xor ty) x y))
 
 (decl vec_not_xor (Type Reg Reg) Reg)
-(rule (vec_not_xor (ty_vec128 ty) x y) (vec_rrr ty (VecBinaryOp.NotXor128) x y))
+(rule (vec_not_xor (vr128_ty ty) x y) (vec_rrr ty (VecBinaryOp.NotXor128) x y))
 
 
 ;; Helpers for generating `and_not` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3845,7 +4040,7 @@
 (rule (and_not_reg ty x y) (alu_rrr ty (aluop_and_not ty) x y))
 
 (decl vec_and_not (Type Reg Reg) Reg)
-(rule (vec_and_not (ty_vec128 ty) x y) (vec_rrr ty (VecBinaryOp.AndNot128) x y))
+(rule (vec_and_not (vr128_ty ty) x y) (vec_rrr ty (VecBinaryOp.AndNot128) x y))
 
 
 ;; Helpers for generating `or_not` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3858,7 +4053,7 @@
 (rule (or_not_reg ty x y) (alu_rrr ty (aluop_or_not ty) x y))
 
 (decl vec_or_not (Type Reg Reg) Reg)
-(rule (vec_or_not (ty_vec128 ty) x y) (vec_rrr ty (VecBinaryOp.OrrNot128) x y))
+(rule (vec_or_not (vr128_ty ty) x y) (vec_rrr ty (VecBinaryOp.OrrNot128) x y))
 
 
 ;; Helpers for generating `bitpermute` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -4002,6 +4197,9 @@
 (decl vec_lshl_by_byte (Reg Reg) Reg)
 (rule (vec_lshl_by_byte x y) (vec_rrr $I8X16 (VecBinaryOp.LShLByByte128) x y))
 
+(decl vec_lshl_by_bit (Reg Reg) Reg)
+(rule (vec_lshl_by_bit x y) (vec_rrr $I8X16 (VecBinaryOp.LShLByBit128) x y))
+
 
 ;; Helpers for generating `lshr` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4034,6 +4232,9 @@
 (decl vec_lshr_by_byte (Reg Reg) Reg)
 (rule (vec_lshr_by_byte x y) (vec_rrr $I8X16 (VecBinaryOp.LShRByByte128) x y))
 
+(decl vec_lshr_by_bit (Reg Reg) Reg)
+(rule (vec_lshr_by_bit x y) (vec_rrr $I8X16 (VecBinaryOp.LShRByBit128) x y))
+
 
 ;; Helpers for generating `ashr` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4065,6 +4266,9 @@
 
 (decl vec_ashr_by_byte (Reg Reg) Reg)
 (rule (vec_ashr_by_byte x y) (vec_rrr $I8X16 (VecBinaryOp.AShRByByte128) x y))
+
+(decl vec_ashr_by_bit (Reg Reg) Reg)
+(rule (vec_ashr_by_bit x y) (vec_rrr $I8X16 (VecBinaryOp.AShRByBit128) x y))
 
 
 ;; Helpers for generating `popcnt` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

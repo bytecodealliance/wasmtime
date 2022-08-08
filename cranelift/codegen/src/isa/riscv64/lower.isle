@@ -1026,14 +1026,4 @@
   (lower (return x))
   (gen_return x)
 )
-;;;;;  Rules for `fallthrough_return`;;;;;;;;;
-(rule
-  (lower (fallthrough_return x))
-  (gen_return x)
-)
 
-;;;;;  Rules for `fallthrough_return`;;;;;;;;;
-(rule
-  (lower (fallthrough_return x))
-  (gen_return x)
-)

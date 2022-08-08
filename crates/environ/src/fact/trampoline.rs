@@ -825,15 +825,6 @@ impl Compiler<'_, '_> {
             let cur_src_ptr = self.gen_local(src_opts.ptr());
             let remaining = self.gen_local(src_opts.ptr());
 
-            let iconst = |i: i32, ty: ValType| match ty {
-                ValType::I32 => I32Const(i32::try_from(i).unwrap()),
-                ValType::I64 => I64Const(i64::try_from(i).unwrap()),
-                _ => unreachable!(),
-            };
-            let src_add = if src_opts.memory64 { I64Add } else { I32Add };
-            let dst_add = if dst_opts.memory64 { I64Add } else { I32Add };
-            let src_eqz = if src_opts.memory64 { I64Eqz } else { I32Eqz };
-
             // This block encompasses the entire loop and is use to exit before even
             // entering the loop if the list size is zero.
             self.instruction(Block(BlockType::Empty));
@@ -841,7 +832,7 @@ impl Compiler<'_, '_> {
             // Set the `remaining` local and only continue if it's > 0
             self.instruction(LocalGet(src_len));
             self.instruction(LocalTee(remaining));
-            self.instruction(src_eqz.clone());
+            self.ptr_eqz(src_opts);
             self.instruction(BrIf(0));
 
             // Initialize the two destination pointers to their initial values
@@ -867,28 +858,25 @@ impl Compiler<'_, '_> {
 
             // Update the two loop pointers
             if src_size > 0 {
-                let src_size = i32::try_from(src_size).unwrap();
                 self.instruction(LocalGet(cur_src_ptr));
-                self.instruction(iconst(src_size, src_opts.ptr()));
-                self.instruction(src_add.clone());
+                self.ptr_uconst(src_opts, u32::try_from(src_size).unwrap());
+                self.ptr_add(src_opts);
                 self.instruction(LocalSet(cur_src_ptr));
             }
             if dst_size > 0 {
-                let dst_size = i32::try_from(dst_size).unwrap();
                 self.instruction(LocalGet(cur_dst_ptr));
-                self.instruction(iconst(dst_size, dst_opts.ptr()));
-                self.instruction(dst_add.clone());
+                self.ptr_uconst(dst_opts, u32::try_from(dst_size).unwrap());
+                self.ptr_add(dst_opts);
                 self.instruction(LocalSet(cur_dst_ptr));
             }
 
             // Update the remaining count, falling through to break out if it's zero
             // now.
             self.instruction(LocalGet(remaining));
-            self.instruction(iconst(-1, src_opts.ptr()));
-            self.instruction(src_add.clone());
+            self.ptr_iconst(src_opts, -1);
+            self.ptr_add(src_opts);
             self.instruction(LocalTee(remaining));
-            self.instruction(src_eqz.clone());
-            self.instruction(BrIf(0));
+            self.ptr_br_if(src_opts, 0);
             self.instruction(End); // end of loop
             self.instruction(End); // end of block
         }
@@ -1487,18 +1475,9 @@ impl Compiler<'_, '_> {
         }
         self.instruction(LocalGet(memory.addr_local));
         assert!(align.is_power_of_two());
-        if memory.opts.memory64 {
-            let mask = i64::try_from(align - 1).unwrap();
-            self.instruction(I64Const(mask));
-            self.instruction(I64And);
-            self.instruction(I64Const(0));
-            self.instruction(I64Ne);
-        } else {
-            let mask = i32::try_from(align - 1).unwrap();
-            self.instruction(I32Const(mask));
-            self.instruction(I32And);
-        }
-        self.instruction(If(BlockType::Empty));
+        self.ptr_uconst(memory.opts, u32::try_from(align - 1).unwrap());
+        self.ptr_and(memory.opts);
+        self.ptr_if(memory.opts, BlockType::Empty);
         self.trap(Trap::UnalignedPointer);
         self.instruction(End);
     }
@@ -1513,22 +1492,11 @@ impl Compiler<'_, '_> {
         }
         assert!(align.is_power_of_two());
         self.instruction(LocalGet(mem.addr_local));
-        if mem.opts.memory64 {
-            self.instruction(I64Const(i64::from(mem.offset)));
-            self.instruction(I64Add);
-            let mask = i64::try_from(align - 1).unwrap();
-            self.instruction(I64Const(mask));
-            self.instruction(I64And);
-            self.instruction(I64Const(0));
-            self.instruction(I64Ne);
-        } else {
-            self.instruction(I32Const(mem.i32_offset()));
-            self.instruction(I32Add);
-            let mask = i32::try_from(align - 1).unwrap();
-            self.instruction(I32Const(mask));
-            self.instruction(I32And);
-        }
-        self.instruction(If(BlockType::Empty));
+        self.ptr_uconst(mem.opts, mem.offset);
+        self.ptr_add(mem.opts);
+        self.ptr_uconst(mem.opts, u32::try_from(align - 1).unwrap());
+        self.ptr_and(mem.opts);
+        self.ptr_if(mem.opts, BlockType::Empty);
         self.trap(Trap::AssertFailed("pointer not aligned"));
         self.instruction(End);
     }
@@ -1536,22 +1504,12 @@ impl Compiler<'_, '_> {
     fn malloc<'a>(&mut self, opts: &'a Options, size: MallocSize, align: usize) -> Memory<'a> {
         let addr_local = self.gen_local(opts.ptr());
         let realloc = opts.realloc.unwrap();
-        if opts.memory64 {
-            self.instruction(I64Const(0));
-            self.instruction(I64Const(0));
-            self.instruction(I64Const(i64::try_from(align).unwrap()));
-            match size {
-                MallocSize::Const(size) => self.instruction(I64Const(i64::try_from(size).unwrap())),
-                MallocSize::Local(idx) => self.instruction(LocalGet(idx)),
-            }
-        } else {
-            self.instruction(I32Const(0));
-            self.instruction(I32Const(0));
-            self.instruction(I32Const(i32::try_from(align).unwrap()));
-            match size {
-                MallocSize::Const(size) => self.instruction(I32Const(i32::try_from(size).unwrap())),
-                MallocSize::Local(idx) => self.instruction(LocalGet(idx)),
-            }
+        self.ptr_uconst(opts, 0);
+        self.ptr_uconst(opts, 0);
+        self.ptr_uconst(opts, u32::try_from(align).unwrap());
+        match size {
+            MallocSize::Const(size) => self.ptr_uconst(opts, u32::try_from(size).unwrap()),
+            MallocSize::Local(idx) => self.instruction(LocalGet(idx)),
         }
         self.instruction(Call(realloc.as_u32()));
         self.instruction(LocalSet(addr_local));
@@ -1745,6 +1703,62 @@ impl Compiler<'_, '_> {
         }
     }
 
+    fn ptr_add(&mut self, opts: &Options) {
+        if opts.memory64 {
+            self.instruction(I64Add);
+        } else {
+            self.instruction(I32Add);
+        }
+    }
+
+    fn ptr_eqz(&mut self, opts: &Options) {
+        if opts.memory64 {
+            self.instruction(I64Eqz);
+        } else {
+            self.instruction(I32Eqz);
+        }
+    }
+
+    fn ptr_uconst(&mut self, opts: &Options, val: u32) {
+        if opts.memory64 {
+            self.instruction(I64Const(val.into()));
+        } else {
+            self.instruction(I32Const(val as i32));
+        }
+    }
+
+    fn ptr_iconst(&mut self, opts: &Options, val: i32) {
+        if opts.memory64 {
+            self.instruction(I64Const(val.into()));
+        } else {
+            self.instruction(I32Const(val));
+        }
+    }
+
+    fn ptr_and(&mut self, opts: &Options) {
+        if opts.memory64 {
+            self.instruction(I64And);
+        } else {
+            self.instruction(I32And);
+        }
+    }
+
+    fn ptr_if(&mut self, opts: &Options, ty: BlockType) {
+        if opts.memory64 {
+            self.instruction(I64Const(0));
+            self.instruction(I64Ne);
+        }
+        self.instruction(If(ty));
+    }
+
+    fn ptr_br_if(&mut self, opts: &Options, depth: u32) {
+        if opts.memory64 {
+            self.instruction(I64Const(0));
+            self.instruction(I64Ne);
+        }
+        self.instruction(BrIf(depth));
+    }
+
     fn f32_load(&mut self, mem: &Memory) {
         self.instruction(LocalGet(mem.addr_local));
         self.instruction(F32Load(mem.memarg(2)));
@@ -1923,10 +1937,6 @@ fn payload_offset<'a>(
 }
 
 impl<'a> Memory<'a> {
-    fn i32_offset(&self) -> i32 {
-        self.offset as i32
-    }
-
     fn memarg(&self, align: u32) -> MemArg {
         MemArg {
             offset: u64::from(self.offset),

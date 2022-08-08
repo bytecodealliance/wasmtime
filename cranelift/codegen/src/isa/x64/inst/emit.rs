@@ -158,7 +158,7 @@ pub(crate) fn emit(
                 (reg_g, src2)
             };
 
-            let mut rex = RexFlags::from(*size);
+            let rex = RexFlags::from(*size);
             if *op == AluRmiROpcode::Mul {
                 // We kinda freeloaded Mul into RMI_R_Op, but it doesn't fit the usual pattern, so
                 // we have to special-case it.
@@ -191,26 +191,19 @@ pub(crate) fn emit(
                     }
                 }
             } else {
-                let (opcode_r, opcode_m, subopcode_i, is_8bit) = match op {
-                    AluRmiROpcode::Add => (0x01, 0x03, 0, false),
-                    AluRmiROpcode::Adc => (0x11, 0x03, 0, false),
-                    AluRmiROpcode::Sub => (0x29, 0x2B, 5, false),
-                    AluRmiROpcode::Sbb => (0x19, 0x2B, 5, false),
-                    AluRmiROpcode::And => (0x21, 0x23, 4, false),
-                    AluRmiROpcode::Or => (0x09, 0x0B, 1, false),
-                    AluRmiROpcode::Xor => (0x31, 0x33, 6, false),
-                    AluRmiROpcode::And8 => (0x20, 0x22, 4, true),
-                    AluRmiROpcode::Or8 => (0x08, 0x0A, 1, true),
+                let (opcode_r, opcode_m, subopcode_i) = match op {
+                    AluRmiROpcode::Add => (0x01, 0x03, 0),
+                    AluRmiROpcode::Adc => (0x11, 0x03, 0),
+                    AluRmiROpcode::Sub => (0x29, 0x2B, 5),
+                    AluRmiROpcode::Sbb => (0x19, 0x2B, 5),
+                    AluRmiROpcode::And => (0x21, 0x23, 4),
+                    AluRmiROpcode::Or => (0x09, 0x0B, 1),
+                    AluRmiROpcode::Xor => (0x31, 0x33, 6),
                     AluRmiROpcode::Mul => panic!("unreachable"),
                 };
-                assert!(!(is_8bit && *size == OperandSize::Size64));
 
                 match src2 {
                     RegMemImm::Reg { reg: reg_e } => {
-                        if is_8bit {
-                            rex.always_emit_if_8bit_needed(reg_e);
-                            rex.always_emit_if_8bit_needed(reg_g);
-                        }
                         // GCC/llvm use the swapped operand encoding (viz., the R/RM vs RM/R
                         // duality). Do this too, so as to be able to compare generated machine
                         // code easily.
@@ -227,9 +220,6 @@ pub(crate) fn emit(
 
                     RegMemImm::Mem { addr } => {
                         let amode = addr.finalize(state, sink);
-                        if is_8bit {
-                            rex.always_emit_if_8bit_needed(reg_g);
-                        }
                         // Here we revert to the "normal" G-E ordering.
                         emit_std_reg_mem(
                             sink,
@@ -245,7 +235,6 @@ pub(crate) fn emit(
                     }
 
                     RegMemImm::Imm { simm32 } => {
-                        assert!(!is_8bit);
                         let use_imm8 = low8_will_sign_extend_to_32(simm32);
                         let opcode = if use_imm8 { 0x83 } else { 0x81 };
                         // And also here we use the "normal" G-E ordering.
@@ -676,6 +665,16 @@ pub(crate) fn emit(
                 dst,
                 RexFlags::from(*size),
             );
+        }
+
+        Inst::MovPReg { src, dst } => {
+            let src: Reg = (*src).into();
+            debug_assert!([regs::rsp(), regs::rbp()].contains(&src));
+            let src = Gpr::new(src).unwrap();
+            let size = OperandSize::Size64;
+            let dst = allocs.next(dst.to_reg().to_reg());
+            let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
+            Inst::MovRR { size, src, dst }.emit(&[], sink, info, state);
         }
 
         Inst::MovzxRmR { ext_mode, src, dst } => {
@@ -2646,11 +2645,7 @@ pub(crate) fn emit(
                 sink.put1(0x48 | ((enc_dst >> 3) & 1));
                 sink.put1(0xB8 | (enc_dst & 7));
                 emit_reloc(sink, Reloc::Abs8, name, *offset);
-                if info.flags.emit_all_ones_funcaddrs() {
-                    sink.put8(u64::max_value());
-                } else {
-                    sink.put8(0);
-                }
+                sink.put8(0);
             }
         }
 
@@ -2916,10 +2911,6 @@ pub(crate) fn emit(
                 }
                 len -= emitted;
             }
-        }
-
-        Inst::EpiloguePlaceholder => {
-            // Generate no code.
         }
 
         Inst::ElfTlsGetAddr { ref symbol } => {

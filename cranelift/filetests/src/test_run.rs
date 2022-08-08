@@ -142,7 +142,7 @@ impl SubTest for TestRun {
         let host_isa = build_host_isa(true, context.flags.clone(), vec![]);
         let requested_isa = context.isa.unwrap();
         if let Err(e) = is_isa_compatible(context, host_isa.as_ref(), requested_isa) {
-            println!("{}", e);
+            log::info!("{}", e);
             return Ok(());
         }
 

@@ -257,6 +257,12 @@ impl Func {
             .collect()
     }
 
+    /// Get the result type for this function.
+    pub fn result(&self, store: impl AsContext) -> Type {
+        let data = &store.as_context()[self.0];
+        Type::from(&data.types[data.ty].result, &data.types)
+    }
+
     /// Invokes this function with the `params` given and returns the result.
     ///
     /// The `params` here must match the type signature of this `Func`, or this will return an error. If a trap
@@ -307,11 +313,14 @@ impl Func {
                     self.store_args(store, &options, &params, args, dst)
                 } else {
                     dst.write([ValRaw::u64(0); MAX_FLAT_PARAMS]);
-                    let dst = unsafe {
+
+                    let dst = &mut unsafe {
                         mem::transmute::<_, &mut [MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>(dst)
-                    };
+                    }
+                    .iter_mut();
+
                     args.iter()
-                        .try_for_each(|arg| arg.lower(store, &options, &mut dst.iter_mut()))
+                        .try_for_each(|arg| arg.lower(store, &options, dst))
                 }
             },
             |store, options, src: &[ValRaw; MAX_FLAT_RESULTS]| {

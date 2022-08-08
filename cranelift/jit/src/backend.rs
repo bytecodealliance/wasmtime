@@ -4,10 +4,7 @@ use crate::{compiled_blob::CompiledBlob, memory::Memory};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings, MachReloc};
-use cranelift_codegen::{
-    binemit::{CodeInfo, Reloc},
-    CodegenError,
-};
+use cranelift_codegen::{binemit::Reloc, CodegenError};
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
@@ -684,10 +681,8 @@ impl Module for JITModule {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
-        let CodeInfo {
-            total_size: code_size,
-            ..
-        } = ctx.compile(self.isa())?;
+        let compiled_code = ctx.compile(self.isa())?;
+        let code_size = compiled_code.code_info().total_size;
 
         let size = code_size as usize;
         let ptr = self
@@ -696,14 +691,12 @@ impl Module for JITModule {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        unsafe { ctx.emit_to_memory(ptr) };
-        let relocs = ctx
-            .mach_compile_result
-            .as_ref()
-            .unwrap()
-            .buffer
-            .relocs()
-            .to_vec();
+        {
+            let mem = unsafe { std::slice::from_raw_parts_mut(ptr, size) };
+            mem.copy_from_slice(compiled_code.code_buffer());
+        }
+
+        let relocs = compiled_code.buffer.relocs().to_vec();
 
         self.record_function_for_perf(ptr, size, &decl.name);
         self.compiled_functions[id] = Some(CompiledBlob { ptr, size, relocs });

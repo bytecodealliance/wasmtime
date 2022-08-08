@@ -528,7 +528,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ) -> (ir::Value, ir::immediates::Offset32) {
         (
             builder.use_var(self.vmruntime_limits_ptr),
-            i32::from(self.offsets.vmruntime_limits_fuel_consumed()).into(),
+            i32::from(self.offsets.ptr.vmruntime_limits_fuel_consumed()).into(),
         )
     }
 
@@ -628,12 +628,15 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     fn epoch_load_deadline_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
         let interrupts = builder.use_var(self.vmruntime_limits_ptr);
-        let deadline = builder.ins().load(
-            ir::types::I64,
-            ir::MemFlags::trusted(),
-            interrupts,
-            ir::immediates::Offset32::new(self.offsets.vmruntime_limits_epoch_deadline() as i32),
-        );
+        let deadline =
+            builder.ins().load(
+                ir::types::I64,
+                ir::MemFlags::trusted(),
+                interrupts,
+                ir::immediates::Offset32::new(
+                    self.offsets.ptr.vmruntime_limits_epoch_deadline() as i32
+                ),
+            );
         builder.def_var(self.epoch_deadline_var, deadline);
     }
 

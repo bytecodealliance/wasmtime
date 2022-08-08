@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use clap::Parser;
+use std::io::Write;
 use std::path::PathBuf;
-use std::str;
 use wasmparser::{Payload, Validator, WasmFeatures};
 use wasmtime_environ::component::*;
 use wasmtime_environ::fact::Module;
@@ -55,8 +55,23 @@ struct Factc {
     #[clap(short, long)]
     text: bool,
 
+    #[clap(long, parse(try_from_str = parse_string_encoding), default_value = "utf8")]
+    lift_str: StringEncoding,
+
+    #[clap(long, parse(try_from_str = parse_string_encoding), default_value = "utf8")]
+    lower_str: StringEncoding,
+
     /// TODO
     input: PathBuf,
+}
+
+fn parse_string_encoding(name: &str) -> anyhow::Result<StringEncoding> {
+    Ok(match name {
+        "utf8" => StringEncoding::Utf8,
+        "utf16" => StringEncoding::Utf16,
+        "compact-utf16" => StringEncoding::CompactUtf16,
+        other => anyhow::bail!("invalid string encoding: `{other}`"),
+    })
 }
 
 fn main() -> Result<()> {
@@ -74,7 +89,7 @@ impl Factc {
         let mut next_def = 0;
         let mut dummy_def = || {
             next_def += 1;
-            CoreDef::Adapter(AdapterIndex::from_u32(next_def))
+            dfg::CoreDef::Adapter(dfg::AdapterId::from_u32(next_def))
         };
 
         // Manufactures a `CoreExport` for a memory with the shape specified. Note
@@ -97,8 +112,8 @@ impl Factc {
             } else {
                 dst[0]
             };
-            CoreExport {
-                instance: RuntimeInstanceIndex::from_u32(idx),
+            dfg::CoreExport {
+                instance: dfg::InstanceId::from_u32(idx),
                 item: ExportItem::Name(String::new()),
             }
         };
@@ -129,7 +144,7 @@ impl Factc {
                     lower_ty: ty,
                     lower_options: AdapterOptions {
                         instance: RuntimeComponentInstanceIndex::from_u32(0),
-                        string_encoding: StringEncoding::Utf8,
+                        string_encoding: self.lower_str,
                         memory64: self.lower64,
                         // Pessimistically assume that memory/realloc are going to be
                         // required for this trampoline and provide it. Avoids doing
@@ -143,7 +158,7 @@ impl Factc {
                     },
                     lift_options: AdapterOptions {
                         instance: RuntimeComponentInstanceIndex::from_u32(1),
-                        string_encoding: StringEncoding::Utf8,
+                        string_encoding: self.lift_str,
                         memory64: self.lift64,
                         memory: Some(dummy_memory(self.lift64)),
                         realloc: Some(dummy_def()),
@@ -165,13 +180,6 @@ impl Factc {
             fact_module.adapt(&format!("adapter{i}"), adapter);
         }
         let wasm = fact_module.encode();
-        Validator::new_with_features(WasmFeatures {
-            multi_memory: true,
-            memory64: true,
-            ..WasmFeatures::default()
-        })
-        .validate_all(&wasm)
-        .context("failed to validate generated module")?;
 
         let output = if self.text {
             wasmprinter::print_bytes(&wasm)
@@ -180,12 +188,24 @@ impl Factc {
         } else if self.output.is_none() && atty::is(atty::Stream::Stdout) {
             bail!("cannot print binary wasm output to a terminal unless `-t` flag is passed")
         } else {
-            wasm
+            wasm.clone()
         };
 
         match &self.output {
             Some(file) => std::fs::write(file, output).context("failed to write output file")?,
-            None => println!("{}", str::from_utf8(&output).unwrap()),
+            None => std::io::stdout()
+                .write_all(&output)
+                .context("failed to write to stdout")?,
+        }
+
+        if !self.skip_validate {
+            Validator::new_with_features(WasmFeatures {
+                multi_memory: true,
+                memory64: true,
+                ..WasmFeatures::default()
+            })
+            .validate_all(&wasm)
+            .context("failed to validate generated module")?;
         }
 
         Ok(())

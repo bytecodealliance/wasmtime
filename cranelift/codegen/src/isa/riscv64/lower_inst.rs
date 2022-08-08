@@ -1,7 +1,5 @@
 //! Lower a single Cranelift instruction into vcode.
 
-use alloc::vec::Vec;
-
 use crate::ir::Inst as IRInst;
 
 use crate::ir::Opcode;
@@ -11,16 +9,16 @@ use crate::machinst::*;
 use crate::settings::Flags;
 use crate::CodegenResult;
 
-use crate::ir::types::I64;
-
 use super::lower::*;
 use crate::isa::riscv64::abi::*;
 use crate::isa::riscv64::inst::*;
+use target_lexicon::Triple;
 
 /// Actually codegen an instruction's results into registers.
 pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     insn: IRInst,
+    triple: &Triple,
     flags: &Flags,
     isa_flags: &aarch64_settings::Flags,
 ) -> CodegenResult<()> {
@@ -34,7 +32,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         None
     };
 
-    if let Ok(()) = super::lower::isle::lower(ctx, flags, isa_flags, &outputs, insn) {
+    if let Ok(()) = super::lower::isle::lower(ctx, flags, triple, isa_flags, &outputs, insn) {
         return Ok(());
     }
 
@@ -195,7 +193,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             implemented_in_isle(ctx);
         }
 
-        Opcode::FallthroughReturn | Opcode::Return => {
+        Opcode::Return => {
             implemented_in_isle(ctx);
         }
 
@@ -271,7 +269,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             };
             abi.emit_stack_pre_adjust(ctx);
             assert!(inputs.len() == abi.num_args());
-            for i in abi.get_copy_to_arg_order() {
+            for i in 0..abi.num_args() {
                 let input = inputs[i];
                 let arg_regs = put_input_in_regs(ctx, input);
                 abi.emit_copy_regs_to_arg(ctx, i, arg_regs);
@@ -466,13 +464,17 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             unimplemented!();
         }
 
-        Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit | Opcode::IfcmpSp => {
+        Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit => {
             unimplemented!();
         }
         Opcode::DynamicStackLoad => todo!(),
         Opcode::DynamicStackStore => todo!(),
         Opcode::DynamicStackAddr => todo!(),
         Opcode::ExtractVector => todo!(),
+
+        Opcode::GetFramePointer | Opcode::GetStackPointer | Opcode::GetReturnAddress => {
+            unimplemented!();
+        }
     }
     Ok(())
 }

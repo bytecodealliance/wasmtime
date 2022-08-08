@@ -222,6 +222,7 @@ impl Flags {
 }
 
 /// Represents the size and alignment requirements of the heap-serialized form of a type
+#[derive(Debug)]
 pub(crate) struct SizeAndAlignment {
     pub(crate) size: usize,
     pub(crate) alignment: u32,
@@ -662,7 +663,10 @@ fn variant_size_and_alignment(types: impl ExactSizeIterator<Item = Type>) -> Siz
     }
 
     SizeAndAlignment {
-        size: func::align_to(usize::from(discriminant_size), alignment) + size,
+        size: func::align_to(
+            func::align_to(usize::from(discriminant_size), alignment) + size,
+            alignment,
+        ),
         alignment,
     }
 }

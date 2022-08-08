@@ -9,7 +9,7 @@ use super::HashMap;
 use crate::data_context::DataContext;
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::{binemit, MachReloc};
-use cranelift_codegen::{ir, isa, CodegenError, Context};
+use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context};
 use std::borrow::ToOwned;
 use std::string::String;
 
@@ -190,6 +190,12 @@ pub enum ModuleError {
 
     /// Wraps a generic error from a backend
     Backend(anyhow::Error),
+}
+
+impl<'a> From<CompileError<'a>> for ModuleError {
+    fn from(err: CompileError<'a>) -> Self {
+        Self::Compilation(err.inner)
+    }
 }
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount

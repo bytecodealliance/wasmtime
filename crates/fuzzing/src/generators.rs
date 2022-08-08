@@ -10,6 +10,7 @@
 
 pub mod api;
 mod codegen_settings;
+pub mod component_types;
 mod config;
 mod instance_allocation_strategy;
 mod instance_limits;

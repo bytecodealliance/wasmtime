@@ -297,6 +297,35 @@ pub fn mem_imm16_emit(
     }
 }
 
+pub fn mem_mem_emit(
+    dst: &MemArgPair,
+    src: &MemArgPair,
+    len_minus_one: u8,
+    opcode_ss: u8,
+    add_trap: bool,
+    sink: &mut MachBuffer<Inst>,
+    state: &mut EmitState,
+) {
+    if add_trap && (dst.can_trap() || src.can_trap()) {
+        let srcloc = state.cur_srcloc();
+        if srcloc != SourceLoc::default() {
+            sink.add_trap(TrapCode::HeapOutOfBounds);
+        }
+    }
+
+    put(
+        sink,
+        &enc_ss_a(
+            opcode_ss,
+            dst.base,
+            dst.disp.bits(),
+            src.base,
+            src.disp.bits(),
+            len_minus_one,
+        ),
+    );
+}
+
 pub fn mem_vrx_emit(
     rd: Reg,
     mem: &MemArg,
@@ -853,6 +882,31 @@ fn enc_siy(opcode: u16, b1: Reg, d1: u32, i2: u8) -> [u8; 6] {
     enc
 }
 
+/// SSa-type instructions.
+///
+///   47     39 31 27 15 11
+///   opcode  l b1 d1 b2 d2
+///       40 32 28 16 12  0
+///
+///
+fn enc_ss_a(opcode: u8, b1: Reg, d1: u32, b2: Reg, d2: u32, l: u8) -> [u8; 6] {
+    let b1 = machreg_to_gpr(b1) & 0x0f;
+    let d1_lo = (d1 & 0xff) as u8;
+    let d1_hi = ((d1 >> 8) & 0x0f) as u8;
+    let b2 = machreg_to_gpr(b2) & 0x0f;
+    let d2_lo = (d2 & 0xff) as u8;
+    let d2_hi = ((d2 >> 8) & 0x0f) as u8;
+
+    let mut enc: [u8; 6] = [0; 6];
+    enc[0] = opcode;
+    enc[1] = l;
+    enc[2] = b1 << 4 | d1_hi;
+    enc[3] = d1_lo;
+    enc[4] = b2 << 4 | d2_hi;
+    enc[5] = d2_lo;
+    enc
+}
+
 /// VRIa-type instructions.
 ///
 ///   47      39 35 31 15 11  7
@@ -1240,13 +1294,12 @@ impl EmitState {
 
 /// Constant state used during function compilation.
 pub struct EmitInfo {
-    flags: settings::Flags,
     isa_flags: s390x_settings::Flags,
 }
 
 impl EmitInfo {
-    pub(crate) fn new(flags: settings::Flags, isa_flags: s390x_settings::Flags) -> Self {
-        Self { flags, isa_flags }
+    pub(crate) fn new(isa_flags: s390x_settings::Flags) -> Self {
+        Self { isa_flags }
     }
 }
 
@@ -2026,6 +2079,16 @@ impl MachInstEmit for Inst {
                 };
                 mem_imm16_emit(imm, &mem, opcode, true, sink, emit_info, state);
             }
+            &Inst::Mvc {
+                ref dst,
+                ref src,
+                len_minus_one,
+            } => {
+                let dst = dst.with_allocs(&mut allocs);
+                let src = src.with_allocs(&mut allocs);
+                let opcode = 0xd2; // MVC
+                mem_mem_emit(&dst, &src, len_minus_one, opcode, true, sink, state);
+            }
 
             &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
                 let mem = mem.with_allocs(&mut allocs);
@@ -2081,6 +2144,12 @@ impl MachInstEmit for Inst {
 
                 let opcode = 0xb904; // LGR
                 put(sink, &enc_rre(opcode, rd.to_reg(), rm));
+            }
+            &Inst::MovPReg { rd, rm } => {
+                let rm: Reg = rm.into();
+                debug_assert!([regs::gpr(15)].contains(&rm));
+                let rd = allocs.next_writable(rd);
+                Inst::Mov64 { rd, rm }.emit(&[], sink, emit_info, state);
             }
             &Inst::Mov32 { rd, rm } => {
                 let rd = allocs.next_writable(rd);
@@ -2200,11 +2269,7 @@ impl MachInstEmit for Inst {
                 let reg = writable_spilltmp_reg().to_reg();
                 put(sink, &enc_ri_b(opcode, reg, 12));
                 sink.add_reloc(Reloc::Abs8, name, offset);
-                if emit_info.flags.emit_all_ones_funcaddrs() {
-                    sink.put8(u64::max_value());
-                } else {
-                    sink.put8(0);
-                }
+                sink.put8(0);
                 let inst = Inst::Load64 {
                     rd,
                     mem: MemArg::reg(reg, MemFlags::trusted()),
@@ -2483,10 +2548,12 @@ impl MachInstEmit for Inst {
                     VecBinaryOp::Add16x8 => (0xe7f3, 1),       // VAH
                     VecBinaryOp::Add32x4 => (0xe7f3, 2),       // VAF
                     VecBinaryOp::Add64x2 => (0xe7f3, 3),       // VAG
+                    VecBinaryOp::Add128 => (0xe7f3, 4),        // VAQ
                     VecBinaryOp::Sub8x16 => (0xe7f7, 0),       // VSB
                     VecBinaryOp::Sub16x8 => (0xe7f7, 1),       // VSH
                     VecBinaryOp::Sub32x4 => (0xe7f7, 2),       // VSF
                     VecBinaryOp::Sub64x2 => (0xe7f7, 3),       // VSG
+                    VecBinaryOp::Sub128 => (0xe7f7, 4),        // VSQ
                     VecBinaryOp::Mul8x16 => (0xe7a2, 0),       // VMLB
                     VecBinaryOp::Mul16x8 => (0xe7a2, 1),       // VMLHW
                     VecBinaryOp::Mul32x4 => (0xe7a2, 2),       // VMLF
@@ -2585,6 +2652,14 @@ impl MachInstEmit for Inst {
                     VecUnaryOp::Popcnt16x8 => (0xe750, 1),      // VPOPCTH
                     VecUnaryOp::Popcnt32x4 => (0xe750, 2),      // VPOPCTF
                     VecUnaryOp::Popcnt64x2 => (0xe750, 3),      // VPOPCTG
+                    VecUnaryOp::Clz8x16 => (0xe753, 0),         // VCLZB
+                    VecUnaryOp::Clz16x8 => (0xe753, 1),         // VCLZH
+                    VecUnaryOp::Clz32x4 => (0xe753, 2),         // VCLZF
+                    VecUnaryOp::Clz64x2 => (0xe753, 3),         // VCLZG
+                    VecUnaryOp::Ctz8x16 => (0xe752, 0),         // VCTZB
+                    VecUnaryOp::Ctz16x8 => (0xe752, 1),         // VCTZH
+                    VecUnaryOp::Ctz32x4 => (0xe752, 2),         // VCTZF
+                    VecUnaryOp::Ctz64x2 => (0xe752, 3),         // VCTZG
                     VecUnaryOp::UnpackULow8x16 => (0xe7d4, 0),  // VUPLLB
                     VecUnaryOp::UnpackULow16x8 => (0xe7d4, 1),  // VUPLLH
                     VecUnaryOp::UnpackULow32x4 => (0xe7d4, 2),  // VUPLLF
@@ -2715,6 +2790,45 @@ impl MachInstEmit for Inst {
                 };
 
                 put(sink, &enc_vrr_c(opcode, rd.to_reg(), rn, rm, m4, 0, m6));
+            }
+            &Inst::VecInt128SCmpHi { tmp, rn, rm } | &Inst::VecInt128UCmpHi { tmp, rn, rm } => {
+                // Synthetic instruction to compare 128-bit values.
+                // Sets CC 1 if rn > rm, sets a different CC otherwise.
+                let tmp = allocs.next_writable(tmp);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+
+                // Use VECTOR ELEMENT COMPARE to compare the high parts.
+                // Swap the inputs to get:
+                //    CC 1 if high(rn) > high(rm)
+                //    CC 2 if high(rn) < high(rm)
+                //    CC 0 if high(rn) == high(rm)
+                let (opcode, m3) = match self {
+                    &Inst::VecInt128SCmpHi { .. } => (0xe7db, 3), // VECG
+                    &Inst::VecInt128UCmpHi { .. } => (0xe7d9, 3), // VECLG
+                    _ => unreachable!(),
+                };
+                put(sink, &enc_vrr_a(opcode, rm, rn, m3, 0, 0));
+
+                // If CC != 0, we'd done, so jump over the next instruction.
+                let opcode = 0xa74; // BCR
+                put(sink, &enc_ri_c(opcode, 7, 4 + 6));
+
+                // Otherwise, use VECTOR COMPARE HIGH LOGICAL.
+                // Since we already know the high parts are equal, the CC
+                // result will only depend on the low parts:
+                //     CC 1 if low(rn) > low(rm)
+                //     CC 3 if low(rn) <= low(rm)
+                let inst = Inst::VecIntCmpS {
+                    op: VecIntCmpOp::UCmpHi64x2,
+                    // N.B.: This is the first write to tmp, and it happens
+                    // after all uses of rn and rm.  If this were to ever
+                    // change, tmp would have to become an early-def.
+                    rd: tmp,
+                    rn,
+                    rm,
+                };
+                inst.emit(&[], sink, emit_info, state);
             }
 
             &Inst::VecLoad { rd, ref mem } | &Inst::VecLoadRev { rd, ref mem } => {
@@ -3119,9 +3233,6 @@ impl MachInstEmit for Inst {
 
                 let opcode = 0x07; // BCR
                 put(sink, &enc_rr(opcode, gpr(15), link));
-            }
-            &Inst::EpiloguePlaceholder => {
-                // Noop; this is just a placeholder for epilogues.
             }
             &Inst::Jump { dest } => {
                 let off = sink.cur_offset();

@@ -64,7 +64,7 @@ impl Instance {
     /// Looks up a function by name within this [`Instance`].
     ///
     /// This is a convenience method for calling [`Instance::exports`] followed
-    /// by [`ExportInstance::get_func`].
+    /// by [`ExportInstance::func`].
     ///
     /// # Panics
     ///
@@ -142,8 +142,6 @@ impl InstanceData {
                     },
                 })
             }
-            // This should have been processed away during compilation.
-            CoreDef::Adapter(_) => unreachable!(),
         }
     }
 

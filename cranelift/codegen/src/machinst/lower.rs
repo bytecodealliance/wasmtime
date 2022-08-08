@@ -475,11 +475,6 @@ fn alloc_vregs<I: VCodeInst>(
     Ok(regs)
 }
 
-enum GenerateReturn {
-    Yes,
-    No,
-}
-
 impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Prepare a new lowering context for the given IR function.
     pub fn new(
@@ -752,7 +747,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         }
     }
 
-    fn gen_retval_setup(&mut self, gen_ret_inst: GenerateReturn) {
+    fn gen_retval_setup(&mut self) {
         let retval_regs = self.retval_regs.clone();
         for (i, regs) in retval_regs.into_iter().enumerate() {
             let regs = writable_value_regs(regs);
@@ -765,10 +760,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 self.emit(insn);
             }
         }
-        let inst = match gen_ret_inst {
-            GenerateReturn::Yes => self.vcode.abi().gen_ret(),
-            GenerateReturn::No => self.vcode.abi().gen_epilogue_placeholder(),
-        };
+        let inst = self.vcode.abi().gen_ret();
         self.emit(inst);
 
         // Hack: generate a virtual instruction that uses vmctx in
@@ -867,13 +859,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
             if data.opcode().is_return() {
                 // Return: handle specially, using ABI-appropriate sequence.
-                let gen_ret = if data.opcode() == Opcode::Return {
-                    GenerateReturn::Yes
-                } else {
-                    debug_assert!(data.opcode() == Opcode::FallthroughReturn);
-                    GenerateReturn::No
-                };
-                self.gen_retval_setup(gen_ret);
+                self.gen_retval_setup();
             }
 
             let loc = self.srcloc(inst);
@@ -1065,13 +1051,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     pub fn lower<B: LowerBackend<MInst = I>>(mut self, backend: &B) -> CodegenResult<VCode<I>> {
         trace!("about to lower function: {:?}", self.f);
 
-        // Initialize the ABI object, giving it a temp if requested.
-        let maybe_tmp = if let Some(temp_ty) = self.vcode.abi().temp_needed() {
-            Some(self.alloc_tmp(temp_ty).only_reg().unwrap())
-        } else {
-            None
-        };
-        self.vcode.abi().init(maybe_tmp);
+        // Initialize the ABI object, giving it temps if requested.
+        let temps = self
+            .vcode
+            .abi()
+            .temps_needed()
+            .into_iter()
+            .map(|temp_ty| self.alloc_tmp(temp_ty).only_reg().unwrap())
+            .collect::<Vec<_>>();
+        self.vcode.abi().init(temps);
 
         // Get the pinned reg here (we only parameterize this function on `B`,
         // not the whole `Lower` impl).

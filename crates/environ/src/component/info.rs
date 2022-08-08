@@ -313,17 +313,6 @@ pub enum CoreDef {
     /// function is immediately `canon lower`'d in the same instance. Such a
     /// function always traps at runtime.
     AlwaysTrap(RuntimeAlwaysTrapIndex),
-    /// This refers to a core wasm function which is a synthesized fused adapter
-    /// between two other core wasm functions.
-    ///
-    /// The adapter's information is identified by `AdapterIndex` which is
-    /// available through an auxiliary map created during compilation of a
-    /// component. For more information see `adapt.rs`.
-    ///
-    /// Note that this is an intermediate variant which is replaced by the time
-    /// a component is fully compiled. This will be replaced with the `Export`
-    /// variant which refers to the export of an adapter module.
-    Adapter(AdapterIndex),
     /// This is a reference to a wasm global which represents the
     /// runtime-managed flags for a wasm instance.
     InstanceFlags(RuntimeComponentInstanceIndex),
@@ -436,7 +425,7 @@ pub struct CanonicalOptions {
 // Note that the `repr(u8)` is load-bearing here since this is used in an
 // `extern "C" fn()` function argument which is called from cranelift-compiled
 // code so we must know the representation of this.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[allow(missing_docs)]
 #[repr(u8)]
 pub enum StringEncoding {

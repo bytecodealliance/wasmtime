@@ -1,9 +1,10 @@
 use crate::component::func::{Memory, MemoryMut, Options};
-use crate::component::{ComponentParams, ComponentType, Lift, Lower};
+use crate::component::types::SizeAndAlignment;
+use crate::component::{ComponentParams, ComponentType, Lift, Lower, Type, Val};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::any::Any;
-use std::mem::MaybeUninit;
+use std::mem::{self, MaybeUninit};
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
 use std::sync::Arc;
@@ -43,7 +44,7 @@ pub trait IntoComponentFunc<T, Params, Return> {
 
 pub struct HostFunc {
     entrypoint: VMLoweringCallee,
-    typecheck: fn(TypeFuncIndex, &ComponentTypes) -> Result<()>,
+    typecheck: Box<dyn (Fn(TypeFuncIndex, &Arc<ComponentTypes>) -> Result<()>) + Send + Sync>,
     func: Box<dyn Any + Send + Sync>,
 }
 
@@ -51,17 +52,54 @@ impl HostFunc {
     fn new<F, P, R>(func: F, entrypoint: VMLoweringCallee) -> Arc<HostFunc>
     where
         F: Send + Sync + 'static,
-        P: ComponentParams + Lift,
-        R: Lower,
+        P: ComponentParams + Lift + 'static,
+        R: Lower + 'static,
     {
         Arc::new(HostFunc {
             entrypoint,
-            typecheck: typecheck::<P, R>,
+            typecheck: Box::new(typecheck::<P, R>),
             func: Box::new(func),
         })
     }
 
-    pub fn typecheck(&self, ty: TypeFuncIndex, types: &ComponentTypes) -> Result<()> {
+    pub(crate) fn new_dynamic<
+        T,
+        F: Fn(StoreContextMut<'_, T>, &[Val]) -> Result<Val> + Send + Sync + 'static,
+    >(
+        func: F,
+        index: TypeFuncIndex,
+        types: &Arc<ComponentTypes>,
+    ) -> Arc<HostFunc> {
+        let ty = &types[index];
+
+        Arc::new(HostFunc {
+            entrypoint: dynamic_entrypoint::<T, F>,
+            typecheck: Box::new({
+                let types = types.clone();
+
+                move |expected_index, expected_types| {
+                    if index == expected_index && Arc::ptr_eq(&types, expected_types) {
+                        Ok(())
+                    } else {
+                        Err(anyhow!("function type mismatch"))
+                    }
+                }
+            }),
+            func: Box::new(DynamicContext {
+                func,
+                types: Types {
+                    params: ty
+                        .params
+                        .iter()
+                        .map(|(_, ty)| Type::from(ty, types))
+                        .collect(),
+                    result: Type::from(&ty.result, types),
+                },
+            }),
+        })
+    }
+
+    pub fn typecheck(&self, ty: TypeFuncIndex, types: &Arc<ComponentTypes>) -> Result<()> {
         (self.typecheck)(ty, types)
     }
 
@@ -74,7 +112,7 @@ impl HostFunc {
     }
 }
 
-fn typecheck<P, R>(ty: TypeFuncIndex, types: &ComponentTypes) -> Result<()>
+fn typecheck<P, R>(ty: TypeFuncIndex, types: &Arc<ComponentTypes>) -> Result<()>
 where
     P: ComponentParams + Lift,
     R: Lower,
@@ -256,8 +294,8 @@ macro_rules! impl_into_component_func {
         impl<T, F, $($args,)* R> IntoComponentFunc<T, ($($args,)*), R> for F
         where
             F: Fn($($args),*) -> Result<R> + Send + Sync + 'static,
-            ($($args,)*): ComponentParams + Lift,
-            R: Lower,
+            ($($args,)*): ComponentParams + Lift + 'static,
+            R: Lower + 'static,
         {
             extern "C" fn entrypoint(
                 cx: *mut VMOpaqueContext,
@@ -294,8 +332,8 @@ macro_rules! impl_into_component_func {
         impl<T, F, $($args,)* R> IntoComponentFunc<T, (StoreContextMut<'_, T>, $($args,)*), R> for F
         where
             F: Fn(StoreContextMut<'_, T>, $($args),*) -> Result<R> + Send + Sync + 'static,
-            ($($args,)*): ComponentParams + Lift,
-            R: Lower,
+            ($($args,)*): ComponentParams + Lift + 'static,
+            R: Lower + 'static,
         {
             extern "C" fn entrypoint(
                 cx: *mut VMOpaqueContext,
@@ -330,3 +368,154 @@ macro_rules! impl_into_component_func {
 }
 
 for_each_function_signature!(impl_into_component_func);
+
+unsafe fn call_host_dynamic<T, F>(
+    Types { params, result }: &Types,
+    cx: *mut VMOpaqueContext,
+    mut flags: InstanceFlags,
+    memory: *mut VMMemoryDefinition,
+    realloc: *mut VMCallerCheckedAnyfunc,
+    string_encoding: StringEncoding,
+    storage: &mut [ValRaw],
+    closure: F,
+) -> Result<()>
+where
+    F: FnOnce(StoreContextMut<'_, T>, &[Val]) -> Result<Val>,
+{
+    let cx = VMComponentContext::from_opaque(cx);
+    let instance = (*cx).instance();
+    let mut cx = StoreContextMut::from_raw((*instance).store());
+
+    let options = Options::new(
+        cx.0.id(),
+        NonNull::new(memory),
+        NonNull::new(realloc),
+        string_encoding,
+    );
+
+    // Perform a dynamic check that this instance can indeed be left. Exiting
+    // the component is disallowed, for example, when the `realloc` function
+    // calls a canonical import.
+    if !flags.may_leave() {
+        bail!("cannot leave component instance");
+    }
+
+    let param_count = params.iter().map(|ty| ty.flatten_count()).sum::<usize>();
+
+    let args;
+    let ret_index;
+
+    if param_count <= MAX_FLAT_PARAMS {
+        let iter = &mut storage.iter();
+        args = params
+            .iter()
+            .map(|ty| Val::lift(ty, cx.0, &options, iter))
+            .collect::<Result<Box<[_]>>>()?;
+        ret_index = param_count;
+    } else {
+        let param_layout = {
+            let mut size = 0;
+            let mut alignment = 1;
+            for ty in params.iter() {
+                alignment = alignment.max(ty.size_and_alignment().alignment);
+                ty.next_field(&mut size);
+            }
+            SizeAndAlignment { size, alignment }
+        };
+
+        let memory = Memory::new(cx.0, &options);
+        let mut offset = validate_inbounds_dynamic(param_layout, memory.as_slice(), &storage[0])?;
+        args = params
+            .iter()
+            .map(|ty| {
+                Val::load(
+                    ty,
+                    &memory,
+                    &memory.as_slice()[ty.next_field(&mut offset)..]
+                        [..ty.size_and_alignment().size],
+                )
+            })
+            .collect::<Result<Box<[_]>>>()?;
+        ret_index = 1;
+    };
+
+    let ret = closure(cx.as_context_mut(), &args)?;
+    flags.set_may_leave(false);
+    result.check(&ret)?;
+
+    let result_count = result.flatten_count();
+    if result_count <= MAX_FLAT_RESULTS {
+        let dst = mem::transmute::<&mut [ValRaw], &mut [MaybeUninit<ValRaw>]>(storage);
+        ret.lower(&mut cx, &options, &mut dst.iter_mut())?;
+    } else {
+        let ret_ptr = &storage[ret_index];
+        let mut memory = MemoryMut::new(cx.as_context_mut(), &options);
+        let ptr =
+            validate_inbounds_dynamic(result.size_and_alignment(), memory.as_slice_mut(), ret_ptr)?;
+        ret.store(&mut memory, ptr)?;
+    }
+
+    flags.set_may_leave(true);
+
+    return Ok(());
+}
+
+fn validate_inbounds_dynamic(
+    SizeAndAlignment { size, alignment }: SizeAndAlignment,
+    memory: &[u8],
+    ptr: &ValRaw,
+) -> Result<usize> {
+    // FIXME: needs memory64 support
+    let ptr = usize::try_from(ptr.get_u32())?;
+    if ptr % usize::try_from(alignment)? != 0 {
+        bail!("pointer not aligned");
+    }
+    let end = match ptr.checked_add(size) {
+        Some(n) => n,
+        None => bail!("pointer size overflow"),
+    };
+    if end > memory.len() {
+        bail!("pointer out of bounds")
+    }
+    Ok(ptr)
+}
+
+struct Types {
+    params: Box<[Type]>,
+    result: Type,
+}
+
+struct DynamicContext<F> {
+    func: F,
+    types: Types,
+}
+
+extern "C" fn dynamic_entrypoint<
+    T,
+    F: Fn(StoreContextMut<'_, T>, &[Val]) -> Result<Val> + Send + Sync + 'static,
+>(
+    cx: *mut VMOpaqueContext,
+    data: *mut u8,
+    flags: InstanceFlags,
+    memory: *mut VMMemoryDefinition,
+    realloc: *mut VMCallerCheckedAnyfunc,
+    string_encoding: StringEncoding,
+    storage: *mut ValRaw,
+    storage_len: usize,
+) {
+    let data = data as *const DynamicContext<F>;
+    unsafe {
+        handle_result(|| {
+            call_host_dynamic::<T, _>(
+                &(*data).types,
+                cx,
+                flags,
+                memory,
+                realloc,
+                string_encoding,
+                std::slice::from_raw_parts_mut(storage, storage_len),
+                |store, values| ((*data).func)(store, values),
+            )
+        })
+    }
+}

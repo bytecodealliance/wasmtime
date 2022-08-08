@@ -30,8 +30,8 @@ use std::mem;
 use std::sync::Mutex;
 use wasmtime_environ::{
     AddressMapSection, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionInfo,
-    InstructionAddressMap, Module, ModuleTranslation, ModuleTypes, StackMapInformation, Trampoline,
-    TrapCode, TrapEncodingBuilder, TrapInformation, Tunables, VMOffsets,
+    InstructionAddressMap, Module, ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation,
+    Trampoline, TrapCode, TrapEncodingBuilder, TrapInformation, Tunables, VMOffsets,
 };
 
 #[cfg(feature = "component-model")]
@@ -98,14 +98,13 @@ impl Compiler {
         let start_srcloc = FilePos::new(offset as u32);
         let end_srcloc = FilePos::new((offset + len) as u32);
 
-        // New-style backend: we have a `MachCompileResult` that will give us `MachSrcLoc` mapping
+        // New-style backend: we have a `CompiledCode` that will give us `MachSrcLoc` mapping
         // tuples.
         let instructions = if tunables.generate_address_map {
             collect_address_maps(
                 body_len,
                 context
-                    .mach_compile_result
-                    .as_ref()
+                    .compiled_code()
                     .unwrap()
                     .buffer
                     .get_srclocs_sorted()
@@ -197,7 +196,7 @@ impl wasmtime_environ::Compiler for Compiler {
         });
         let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
             base: interrupts_ptr,
-            offset: i32::try_from(func_env.offsets.vmruntime_limits_stack_limit())
+            offset: i32::try_from(func_env.offsets.ptr.vmruntime_limits_stack_limit())
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
@@ -212,27 +211,25 @@ impl wasmtime_environ::Compiler for Compiler {
         )?;
 
         let mut code_buf: Vec<u8> = Vec::new();
-        context
+        let compiled_code = context
             .compile_and_emit(isa, &mut code_buf)
-            .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+            .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
 
-        let result = context.mach_compile_result.as_ref().unwrap();
-
-        let func_relocs = result
+        let func_relocs = compiled_code
             .buffer
             .relocs()
             .into_iter()
             .map(mach_reloc_to_reloc)
             .collect::<Vec<_>>();
 
-        let traps = result
+        let traps = compiled_code
             .buffer
             .traps()
             .into_iter()
             .map(mach_trap_to_trap)
             .collect::<Vec<_>>();
 
-        let stack_maps = mach_stack_maps_to_stack_maps(result.buffer.stack_maps());
+        let stack_maps = mach_stack_maps_to_stack_maps(compiled_code.buffer.stack_maps());
 
         let unwind_info = if isa.flags().unwind_info() {
             context
@@ -246,14 +243,7 @@ impl wasmtime_environ::Compiler for Compiler {
             self.get_function_address_map(&context, &input, code_buf.len() as u32, tunables);
 
         let ranges = if tunables.generate_native_debuginfo {
-            Some(
-                context
-                    .mach_compile_result
-                    .as_ref()
-                    .unwrap()
-                    .value_labels_ranges
-                    .clone(),
-            )
+            Some(context.compiled_code().unwrap().value_labels_ranges.clone())
         } else {
             None
         };
@@ -681,19 +671,18 @@ impl Compiler {
         isa: &dyn TargetIsa,
     ) -> Result<CompiledFunction, CompileError> {
         let mut code_buf = Vec::new();
-        context
+        let compiled_code = context
             .compile_and_emit(isa, &mut code_buf)
-            .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
-        let result = context.mach_compile_result.as_ref().unwrap();
+            .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
 
         // Processing relocations isn't the hardest thing in the world here but
         // no trampoline should currently generate a relocation, so assert that
         // they're all empty and if this ever trips in the future then handling
         // will need to be added here to ensure they make their way into the
         // `CompiledFunction` below.
-        assert!(result.buffer.relocs().is_empty());
+        assert!(compiled_code.buffer.relocs().is_empty());
 
-        let traps = result
+        let traps = compiled_code
             .buffer
             .traps()
             .into_iter()

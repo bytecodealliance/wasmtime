@@ -16,11 +16,13 @@ use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
+use target_lexicon::Triple;
 
 /// Actually codegen an instruction's results into registers.
 pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     insn: IRInst,
+    triple: &Triple,
     flags: &Flags,
     isa_flags: &aarch64_settings::Flags,
 ) -> CodegenResult<()> {
@@ -33,7 +35,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         None
     };
 
-    if let Ok(()) = super::lower::isle::lower(ctx, flags, isa_flags, &outputs, insn) {
+    if let Ok(()) = super::lower::isle::lower(ctx, triple, flags, isa_flags, &outputs, insn) {
         return Ok(());
     }
 
@@ -52,6 +54,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             "Should never see constant ops at top level lowering entry
             point, as constants are rematerialized at use-sites"
         ),
+
+        Opcode::GetFramePointer | Opcode::GetStackPointer | Opcode::GetReturnAddress => {
+            implemented_in_isle(ctx)
+        }
 
         Opcode::Iadd => implemented_in_isle(ctx),
         Opcode::Isub => implemented_in_isle(ctx),
@@ -451,7 +457,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 (true, false) => {
                     let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                    let size = VectorSize::from_lane_size(ScalarSize::from_bits(oty_bits), true);
+                    let size = ScalarSize::from_bits(oty_bits);
 
                     ctx.emit(Inst::MovFromVec {
                         rd,
@@ -463,7 +469,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::FallthroughReturn | Opcode::Return => {
+        Opcode::Return => {
             for (i, input) in inputs.iter().enumerate() {
                 // N.B.: according to the AArch64 ABI, the top bits of a register
                 // (above the bits for the value's type) are undefined, so we
@@ -618,10 +624,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             abi.emit_stack_pre_adjust(ctx);
             assert!(inputs.len() == abi.num_args());
-            for i in abi.get_copy_to_arg_order() {
-                let input = inputs[i];
-                let arg_regs = put_input_in_regs(ctx, input);
-                abi.emit_copy_regs_to_arg(ctx, i, arg_regs);
+            let mut arg_regs = vec![];
+            for input in inputs {
+                arg_regs.push(put_input_in_regs(ctx, *input))
+            }
+            for (i, arg_regs) in arg_regs.iter().enumerate() {
+                abi.emit_copy_regs_to_buffer(ctx, i, *arg_regs);
+            }
+            for (i, arg_regs) in arg_regs.iter().enumerate() {
+                abi.emit_copy_regs_to_arg(ctx, i, *arg_regs);
             }
             abi.emit_call(ctx);
             for (i, output) in outputs.iter().enumerate() {
@@ -674,7 +685,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let ty = ty.unwrap();
 
                 if ty_has_int_representation(ty) {
-                    ctx.emit(Inst::MovFromVec { rd, rn, idx, size });
+                    ctx.emit(Inst::MovFromVec {
+                        rd,
+                        rn,
+                        idx,
+                        size: size.lane_size(),
+                    });
                 // Plain moves are faster on some processors.
                 } else if idx == 0 {
                     ctx.emit(Inst::gen_move(rd, rn, ty));
@@ -718,115 +734,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::ScalarToVector => implemented_in_isle(ctx),
 
-        Opcode::VallTrue if ctx.input_ty(insn, 0).lane_bits() == 64 => {
-            let input_ty = ctx.input_ty(insn, 0);
-
-            if input_ty.lane_count() != 2 {
-                return Err(CodegenError::Unsupported(format!(
-                    "VallTrue: unsupported type {:?}",
-                    input_ty
-                )));
-            }
-
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let tmp = ctx.alloc_tmp(I64X2).only_reg().unwrap();
-
-            // cmeq vtmp.2d, vm.2d, #0
-            // addp dtmp, vtmp.2d
-            // fcmp dtmp, dtmp
-            // cset xd, eq
-            //
-            // Note that after the ADDP the value of the temporary register will
-            // be either 0 when all input elements are true, i.e. non-zero, or a
-            // NaN otherwise (either -1 or -2 when represented as an integer);
-            // NaNs are the only floating-point numbers that compare unequal to
-            // themselves.
-
-            ctx.emit(Inst::VecMisc {
-                op: VecMisc2::Cmeq0,
-                rd: tmp,
-                rn: rm,
-                size: VectorSize::Size64x2,
-            });
-            ctx.emit(Inst::VecRRPair {
-                op: VecPairOp::Addp,
-                rd: tmp,
-                rn: tmp.to_reg(),
-            });
-            ctx.emit(Inst::FpuCmp {
-                size: ScalarSize::Size64,
-                rn: tmp.to_reg(),
-                rm: tmp.to_reg(),
-            });
-            materialize_bool_result(ctx, insn, rd, Cond::Eq);
-        }
-
-        Opcode::VanyTrue | Opcode::VallTrue => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let src_ty = ctx.input_ty(insn, 0);
-            let tmp = ctx.alloc_tmp(src_ty).only_reg().unwrap();
-
-            // This operation is implemented by using umaxp or uminv to
-            // create a scalar value, which is then compared against zero.
-            //
-            // umaxp vn.16b, vm.16, vm.16 / uminv bn, vm.16b
-            // mov xm, vn.d[0]
-            // cmp xm, #0
-            // cset xm, ne
-
-            let s = VectorSize::from_ty(src_ty);
-            let size = if s == VectorSize::Size64x2 {
-                // `vall_true` with 64-bit elements is handled elsewhere.
-                debug_assert_ne!(op, Opcode::VallTrue);
-
-                VectorSize::Size32x4
-            } else {
-                s
-            };
-
-            if op == Opcode::VanyTrue {
-                ctx.emit(Inst::VecRRR {
-                    alu_op: VecALUOp::Umaxp,
-                    rd: tmp,
-                    rn: rm,
-                    rm,
-                    size,
-                });
-            } else {
-                if size == VectorSize::Size32x2 {
-                    return Err(CodegenError::Unsupported(format!(
-                        "VallTrue: Unsupported type: {:?}",
-                        src_ty
-                    )));
-                }
-
-                ctx.emit(Inst::VecLanes {
-                    op: VecLanesOp::Uminv,
-                    rd: tmp,
-                    rn: rm,
-                    size,
-                });
-            };
-
-            ctx.emit(Inst::MovFromVec {
-                rd,
-                rn: tmp.to_reg(),
-                idx: 0,
-                size: VectorSize::Size64x2,
-            });
-
-            ctx.emit(Inst::AluRRImm12 {
-                alu_op: ALUOp::SubS,
-                size: OperandSize::Size64,
-                rd: writable_zero_reg(),
-                rn: rd.to_reg(),
-                imm12: Imm12::zero(),
-            });
-
-            materialize_bool_result(ctx, insn, rd, Cond::Ne);
-        }
+        Opcode::VallTrue | Opcode::VanyTrue => implemented_in_isle(ctx),
 
         Opcode::VhighBits => {
             let dst_r = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
@@ -893,7 +801,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         rd: dst_r,
                         rn: tmp_v0.to_reg(),
                         idx: 0,
-                        size: VectorSize::Size16x8,
+                        size: ScalarSize::Size16,
                     });
                 }
                 I16X8 => {
@@ -951,7 +859,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         rd: dst_r,
                         rn: tmp_v0.to_reg(),
                         idx: 0,
-                        size: VectorSize::Size16x8,
+                        size: ScalarSize::Size16,
                     });
                 }
                 I32X4 => {
@@ -1007,7 +915,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         rd: dst_r,
                         rn: tmp_v0.to_reg(),
                         idx: 0,
-                        size: VectorSize::Size32x4,
+                        size: ScalarSize::Size32,
                     });
                 }
                 I64X2 => {
@@ -1020,13 +928,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         rd: dst_r,
                         rn: src_v,
                         idx: 0,
-                        size: VectorSize::Size64x2,
+                        size: ScalarSize::Size64,
                     });
                     ctx.emit(Inst::MovFromVec {
                         rd: tmp_r0,
                         rn: src_v,
                         idx: 1,
-                        size: VectorSize::Size64x2,
+                        size: ScalarSize::Size64,
                     });
                     ctx.emit(Inst::AluRRImmShift {
                         alu_op: ALUOp::Lsr,
@@ -1063,34 +971,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::Shuffle => {
-            let mask = const_param_to_u128(ctx, insn).expect("Invalid immediate mask bytes");
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rn2 = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            // 2 register table vector lookups require consecutive table registers;
-            // we satisfy this constraint by hardcoding the usage of v29 and v30.
-            let temp = writable_vreg(29);
-            let temp2 = writable_vreg(30);
-            let input_ty = ctx.input_ty(insn, 0);
-            assert_eq!(input_ty, ctx.input_ty(insn, 1));
-            // Make sure that both inputs are in virtual registers, since it is
-            // not guaranteed that we can get them safely to the temporaries if
-            // either is in a real register.
-            let rn = ctx.ensure_in_vreg(rn, input_ty);
-            let rn2 = ctx.ensure_in_vreg(rn2, input_ty);
-
-            lower_constant_f128(ctx, rd, mask);
-            ctx.emit(Inst::gen_move(temp, rn, input_ty));
-            ctx.emit(Inst::gen_move(temp2, rn2, input_ty));
-            ctx.emit(Inst::VecTbl2 {
-                rd,
-                rn: temp.to_reg(),
-                rn2: temp2.to_reg(),
-                rm: rd.to_reg(),
-                is_extension: false,
-            });
-        }
+        Opcode::Shuffle => implemented_in_isle(ctx),
 
         Opcode::Swizzle => implemented_in_isle(ctx),
 
@@ -1155,31 +1036,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Ceil | Opcode::Floor | Opcode::Trunc | Opcode::Nearest => implemented_in_isle(ctx),
 
-        Opcode::Fma => {
-            let ty = ty.unwrap();
-            let bits = ty_bits(ty);
-            let fpu_op = match bits {
-                32 => FPUOp3::MAdd32,
-                64 => FPUOp3::MAdd64,
-                _ => {
-                    return Err(CodegenError::Unsupported(format!(
-                        "Fma: Unsupported type: {:?}",
-                        ty
-                    )))
-                }
-            };
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let ra = put_input_in_reg(ctx, inputs[2], NarrowValueMode::None);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            ctx.emit(Inst::FpuRRRR {
-                fpu_op,
-                rn,
-                rm,
-                ra,
-                rd,
-            });
-        }
+        Opcode::Fma => implemented_in_isle(ctx),
 
         Opcode::Fcopysign => {
             // Copy the sign bit from inputs[1] to inputs[0]. We use the following sequence:
@@ -1794,7 +1651,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::ExtractVector => implemented_in_isle(ctx),
 
-        Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit | Opcode::IfcmpSp => {
+        Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit => {
             return Err(CodegenError::Unsupported(format!(
                 "Unimplemented lowering: {}",
                 op
