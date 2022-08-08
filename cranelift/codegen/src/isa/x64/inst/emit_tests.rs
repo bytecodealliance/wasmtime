@@ -3998,9 +3998,9 @@ fn test_x64_emit() {
     // ========================================================
     // XMM_RM_R: Integer Conversion
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Cvtdq2ps, RegMem::reg(xmm1), w_xmm8),
+        Inst::xmm_unary_rm_r(SseOpcode::Cvtdq2ps, RegMem::reg(xmm1), w_xmm8),
         "440F5BC1",
-        "cvtdq2ps %xmm8, %xmm1, %xmm8",
+        "cvtdq2ps %xmm1, %xmm8",
     ));
 
     insns.push((
