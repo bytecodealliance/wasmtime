@@ -37,9 +37,9 @@ mod emit_tests;
 
 pub use crate::isa::aarch64::lower::isle::generated_code::{
     ALUOp, ALUOp3, APIKey, AtomicRMWLoopOp, AtomicRMWOp, BitOp, FPUOp1, FPUOp2, FPUOp3,
-    FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp, VecALUOp, VecExtendOp,
-    VecLanesOp, VecMisc2, VecPairOp, VecRRLongOp, VecRRNarrowOp, VecRRPairLongOp, VecRRRLongOp,
-    VecShiftImmOp,
+    FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp, VecALUModOp, VecALUOp,
+    VecExtendOp, VecLanesOp, VecMisc2, VecPairOp, VecRRLongOp, VecRRNarrowOp, VecRRPairLongOp,
+    VecRRRLongOp, VecShiftImmOp,
 };
 
 /// A floating-point unit (FPU) operation with two args, a register and an immediate.
@@ -957,14 +957,13 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::VecRRR {
-            alu_op, rd, rn, rm, ..
-        } => {
-            if alu_op == VecALUOp::Bsl || alu_op == VecALUOp::Fmla {
-                collector.reg_mod(rd);
-            } else {
-                collector.reg_def(rd);
-            }
+        &Inst::VecRRR { rd, rn, rm, .. } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+        }
+        &Inst::VecRRRMod { rd, rn, rm, .. } => {
+            collector.reg_mod(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
@@ -2208,7 +2207,6 @@ impl Inst {
                     VecALUOp::Bic => ("bic", VectorSize::Size8x16),
                     VecALUOp::Orr => ("orr", VectorSize::Size8x16),
                     VecALUOp::Eor => ("eor", VectorSize::Size8x16),
-                    VecALUOp::Bsl => ("bsl", VectorSize::Size8x16),
                     VecALUOp::Umaxp => ("umaxp", size),
                     VecALUOp::Add => ("add", size),
                     VecALUOp::Sub => ("sub", size),
@@ -2226,10 +2224,25 @@ impl Inst {
                     VecALUOp::Fmax => ("fmax", size),
                     VecALUOp::Fmin => ("fmin", size),
                     VecALUOp::Fmul => ("fmul", size),
-                    VecALUOp::Fmla => ("fmla", size),
                     VecALUOp::Addp => ("addp", size),
                     VecALUOp::Zip1 => ("zip1", size),
                     VecALUOp::Sqrdmulh => ("sqrdmulh", size),
+                };
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
+                let rn = pretty_print_vreg_vector(rn, size, allocs);
+                let rm = pretty_print_vreg_vector(rm, size, allocs);
+                format!("{} {}, {}, {}", op, rd, rn, rm)
+            }
+            &Inst::VecRRRMod {
+                rd,
+                rn,
+                rm,
+                alu_op,
+                size,
+            } => {
+                let (op, size) = match alu_op {
+                    VecALUModOp::Bsl => ("bsl", VectorSize::Size8x16),
+                    VecALUModOp::Fmla => ("fmla", size),
                 };
                 let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
                 let rn = pretty_print_vreg_vector(rn, size, allocs);
