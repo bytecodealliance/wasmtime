@@ -32,5 +32,12 @@
     that. pre-populate best selection.
 
 - code quality
-  - look at hot blocks again and look for missed opportunities; drive
-    rewrite rules from this
+  - and x, 0xffff....
+  - x << N >> N as uextend / sextend
+  - strength reduction for mul/div/rem
+  - analyses: demanded bits, defined bits
+  - immediate reuse within basic blocks
+  - remat adds near uses? outside of basic blocks?
+  - (icmp (band (iconst 0xffff_ffff) x) ...) -> (icmp $I32 (ireduce x) ...)
+  - more legalizations of pseudoinsts in mid-end, to allow opts
+    - handle amodes this way too?
