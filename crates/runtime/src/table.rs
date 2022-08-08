@@ -103,7 +103,7 @@ impl TableElement {
     /// The same warnings as for `into_table_values()` apply.
     pub(crate) unsafe fn into_ref_asserting_initialized(self) -> usize {
         match self {
-            Self::FuncRef(e) => (e as usize),
+            Self::FuncRef(e) => e as usize,
             Self::ExternRef(e) => e.map_or(0, |e| e.into_raw() as usize),
             Self::UninitFunc => panic!("Uninitialized table element value outside of table slot"),
         }
