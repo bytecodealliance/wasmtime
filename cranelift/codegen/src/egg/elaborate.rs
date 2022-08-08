@@ -1,35 +1,12 @@
 //! Elaboration phase: lowers EGraph back to sequences of operations
 //! in CFG nodes.
 
-/* TODO: extraction:
-
-   /// Because the aegraph builds sets in a persistent-data-structure
-   /// way, where a larger set is composed of a union of two smaller
-   /// sets or else a single new node, we can do this in a single
-   /// pass over the eclasses.
-   ///
-   /// The acyclic property of ENodes -- that is, the ENode in a
-   /// given EClass can refer only to EClasses with a lower ID --
-   /// means that this single pass can compute the cost of a new
-   /// ENode just by looking up the lower-id EClasses and adding the
-   /// cost of the op.
-
-
- - actually, we want to do this *during elaboration*, because the
-   best extraction at a given point depends on what we already
-   have. Walk the enode tree for an eclass; if we already have the
-   value of one, that's it. Otherwise, find the min. Then memoize the
-   result by elaborating. Don't memoize the selection because it
-   depends on what's available in the scoped hashmap, which can
-   "retract" as we pop scopes.
-*/
-
 use super::domtree::DomTreeWithChildren;
 use super::node::{op_cost, Node, NodeCtx};
 use super::Stats;
 use crate::dominator_tree::DominatorTree;
 use crate::ir::{Block, Function, Inst, SourceLoc, Type, Value, ValueList};
-use crate::loop_analysis::LoopAnalysis;
+use crate::loop_analysis::{LoopAnalysis, LoopLevel};
 use crate::scoped_hash_map::ScopedHashMap;
 use cranelift_egraph::{EGraph, Id, Language};
 use cranelift_entity::{packed_option::PackedOption, SecondaryMap};
@@ -43,6 +20,7 @@ pub(crate) struct Elaborator<'a> {
     loop_analysis: &'a LoopAnalysis,
     node_ctx: &'a NodeCtx,
     egraph: &'a EGraph<NodeCtx>,
+    loop_levels: &'a SecondaryMap<Id, LoopLevel>,
     id_to_value: ScopedHashMap<Id, IdValue>,
     id_to_best_cost_and_node: ScopedHashMap<Id, (usize, Id)>,
     /// Stack of blocks and loops in current elaboration path.
@@ -79,6 +57,7 @@ impl<'a> Elaborator<'a> {
         loop_analysis: &'a LoopAnalysis,
         egraph: &'a EGraph<NodeCtx>,
         node_ctx: &'a NodeCtx,
+        loop_levels: &'a SecondaryMap<Id, LoopLevel>,
         stats: &'a mut Stats,
     ) -> Self {
         let num_blocks = func.dfg.num_blocks();
@@ -88,6 +67,7 @@ impl<'a> Elaborator<'a> {
             loop_analysis,
             egraph,
             node_ctx,
+            loop_levels,
             id_to_value: ScopedHashMap::with_capacity(egraph.classes.len()),
             id_to_best_cost_and_node: ScopedHashMap::with_capacity(egraph.classes.len()),
             loop_stack: smallvec![],
@@ -198,11 +178,8 @@ impl<'a> Elaborator<'a> {
 
         let eclass = self.egraph.classes[id];
         let node = eclass.get_node();
-        let parent1 = eclass
-            .as_node_and_parent()
-            .map(|(_, parent)| parent)
-            .or(eclass.as_union().map(|(p1, _)| p1));
-        let parent2 = eclass.as_union().map(|(_, p2)| p2);
+        let parent1 = eclass.parent1();
+        let parent2 = eclass.parent2();
 
         log::trace!(
             " -> id {} node expands to: node {:?} parent1 {:?} parent2 {:?}",
@@ -222,6 +199,8 @@ impl<'a> Elaborator<'a> {
                 }
                 Node::Pure { op, .. } => op_cost(op),
             };
+            let level = self.loop_levels[id].level() as u32;
+            let cost = cost * (1 << (10 * level));
             log::trace!("  -> id {} has operand cost {}", id, cost);
 
             let mut children_cost = 0;

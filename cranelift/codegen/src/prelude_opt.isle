@@ -40,6 +40,10 @@
 (extern constructor id_array_3 id_array_3_ctor)
 (extern extractor id_array_3 id_array_3_etor)
 
+;; Extractor to get the min loop-level of an eclass.
+(decl at_loop_level (u8 Id) Id)
+(extern extractor at_loop_level at_loop_level)
+
 ;;;;; helpers for (virtual) associativity and commutativity ;;;;;;;;;;;;;;;;;;;;
 
 (type Pair (enum

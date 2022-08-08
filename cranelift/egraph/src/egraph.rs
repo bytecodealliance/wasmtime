@@ -123,6 +123,16 @@ impl EClass {
             .or_else(|| self.as_node_and_parent().map(|(node, _)| node))
     }
 
+    /// Get the first parent, if any.
+    pub fn parent1(&self) -> Option<Id> {
+        self.as_node_and_parent().map(|(_, p1)| p1).or(self.as_union().map(|(p1, _)| p1))
+    }
+
+    /// Get the second parent, if any.
+    pub fn parent2(&self) -> Option<Id> {
+        self.as_union().map(|(_, p2)| p2)
+    }
+
     /// If this EClass is just a lone enode, return it.
     pub fn as_node(&self) -> Option<NodeKey> {
         if (self.bits >> 62) == 0b00 {

@@ -35,6 +35,7 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     // Store-to-load forwarding rewrites the ID without unioning with
     // the original: we want to eliminate the load entirely.
     let id = store_to_load(id, egraph);
+    egraph.compute_analyses(id);
     // Find all possible rewrites and union them in, returning the
     // union.
     let mut ctx = IsleContext { egraph };
@@ -45,6 +46,7 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
         for new_id in ids {
             egraph.stats.node_union += 1;
             union_id = egraph.egraph.union(union_id, new_id);
+            egraph.compute_analyses(union_id);
         }
     }
     union_id
@@ -163,6 +165,10 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
         None
     }
 
+    fn at_loop_level(&mut self, eclass: Id) -> Option<(u8, Id)> {
+        Some((self.egraph.loop_levels[eclass].level() as u8, eclass))
+    }
+
     type pure_enodes_etor_iter = PureNodesEtorIter<'a, 'b>;
 
     fn pure_enodes_etor(&mut self, eclass: Id) -> Option<PureNodesEtorIter<'a, 'b>> {
@@ -187,6 +193,7 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
                 self.egraph.stats.node_created += 1;
                 self.egraph.stats.node_pure += 1;
                 self.egraph.stats.node_ctor_created += 1;
+                self.egraph.compute_analyses(id);
                 optimize_eclass(id, self.egraph)
             }
             NewOrExisting::Existing(id) => {

@@ -52,6 +52,16 @@
 (decl pure u32_lteq (u32 u32) Unit)
 (extern constructor u32_lteq u32_lteq)
 
+;; Pure/fallible constructor that tests if one u8 is less than or
+;; equal to another.
+(decl pure u8_lteq (u8 u8) Unit)
+(extern constructor u8_lteq u8_lteq)
+
+;; Pure/fallible constructor that tests if one u8 is strictly less
+;;  than another.
+(decl pure u8_lt (u8 u8) Unit)
+(extern constructor u8_lt u8_lt)
+
 ;; Get a signed 32-bit immediate in an u32 from an Imm64, if possible.
 (decl simm32 (u32) Imm64)
 (extern extractor simm32 simm32)

@@ -299,6 +299,24 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u8_lteq(&mut self, a: u8, b: u8) -> Option<()> {
+            if a <= b {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn u8_lt(&mut self, a: u8, b: u8) -> Option<()> {
+            if a < b {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn imm64(&mut self, x: u64) -> Option<Imm64> {
             Some(Imm64::new(x as i64))
         }

@@ -2,7 +2,7 @@
 
 use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
-use crate::loop_analysis::LoopAnalysis;
+use crate::loop_analysis::{LoopAnalysis, LoopLevel};
 use crate::{
     fx::FxHashMap,
     inst_predicates::has_side_effect,
@@ -40,6 +40,10 @@ pub struct FuncEGraph<'a> {
     side_effect_ids: Vec<Id>,
     /// Map from store instructions to their nodes; used for store-to-load forwarding.
     pub(crate) store_nodes: FxHashMap<Inst, (Type, Id)>,
+    /// Minimum loop level for each eclass ID. Initially known for non-pure nodes by
+    /// location in input program's loop nest, and pure nodes by the
+    /// min of their args' levels.
+    pub(crate) loop_levels: SecondaryMap<Id, LoopLevel>,
     /// Ranges in `blockparam_ids_tys` for sequences of blockparam
     /// eclass IDs and types per block.
     blockparams: SecondaryMap<Block, Range<u32>>,
@@ -110,6 +114,7 @@ impl<'a> FuncEGraph<'a> {
             side_effects: SecondaryMap::with_default(0..0),
             side_effect_ids: vec![],
             store_nodes: FxHashMap::default(),
+            loop_levels: SecondaryMap::with_default(LoopLevel::invalid()),
             blockparams: SecondaryMap::with_default(0..0),
             blockparam_ids_tys: vec![],
             stats: Default::default(),
@@ -125,6 +130,7 @@ impl<'a> FuncEGraph<'a> {
         // For each block in RPO, create an enode for block entry, for
         // each block param, and for each instruction.
         for &block in self.domtree.cfg_postorder().iter().rev() {
+            let loop_level = self.loop_analysis.loop_level(block);
             let blockparam_start = self.blockparam_ids_tys.len() as u32;
             for (i, &value) in func.dfg.block_params(block).iter().enumerate() {
                 let ty = func.dfg.value_type(value);
@@ -139,6 +145,7 @@ impl<'a> FuncEGraph<'a> {
                         &mut self.node_ctx,
                     )
                     .get();
+                self.loop_levels[param] = loop_level;
                 value_to_id.insert(value, param);
                 self.blockparam_ids_tys.push((param, ty));
                 self.stats.node_created += 1;
@@ -220,6 +227,14 @@ impl<'a> FuncEGraph<'a> {
                 let dedup_needed = self.node_ctx.needs_dedup(&node);
 
                 let id = self.egraph.add(node, &mut self.node_ctx);
+
+                if !dedup_needed {
+                    self.loop_levels[id.get()] = loop_level;
+                }
+
+                if let NewOrExisting::New(id) = id {
+                    self.compute_analyses(id);
+                }
 
                 if dedup_needed {
                     self.stats.node_dedup_query += 1;
@@ -324,6 +339,7 @@ impl<'a> FuncEGraph<'a> {
             self.loop_analysis,
             &self.egraph,
             &self.node_ctx,
+            &self.loop_levels,
             &mut self.stats,
         );
         elab.elaborate(
@@ -338,5 +354,42 @@ impl<'a> FuncEGraph<'a> {
                     [side_effect_range.start as usize..side_effect_range.end as usize]
             },
         );
+    }
+
+    pub(crate) fn compute_analyses(&mut self, id: Id) {
+        // For a new eclass node, compute all analyses. These are:
+        //
+        // - Minimum loop depth.
+        // - (and that's it, for now!)
+
+        let eclass_data = self.egraph.classes[id];
+
+        if self.loop_levels[id] == LoopLevel::invalid() {
+            let node_loop_level = eclass_data
+                .get_node()
+                .map(|node_key| node_key.node::<NodeCtx>(&self.egraph.nodes))
+                .map(|node| match node {
+                    &Node::Pure { ref args, .. } => args
+                        .as_slice(&self.node_ctx.args)
+                        .iter()
+                        .map(|&arg| self.loop_levels[arg])
+                        .max()
+                        .unwrap_or(LoopLevel::root()),
+                    &Node::Load { addr, .. } => self.loop_levels[addr],
+                    &Node::Result { value, .. } => self.loop_levels[value],
+                    _ => panic!("Should have already assigned levels to all Inst and Param nodes"),
+                });
+
+            let parent1_loop_level = eclass_data.parent1().map(|p1| self.loop_levels[p1]);
+            let parent2_loop_level = eclass_data.parent2().map(|p2| self.loop_levels[p2]);
+
+            let loop_level = node_loop_level
+                .into_iter()
+                .chain(parent1_loop_level.into_iter())
+                .chain(parent2_loop_level.into_iter())
+                .max()
+                .unwrap_or(LoopLevel::root());
+            self.loop_levels[id] = loop_level;
+        }
     }
 }

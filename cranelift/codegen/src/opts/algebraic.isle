@@ -117,3 +117,21 @@
 ;; TODO: demorgan
 
 ;; TODO: mask iconst values down to type?
+
+;; Reassociate when it benefits LICM.
+(rule (simplify (iadd ty (iadd ty x y) z))
+      (if-let (at_loop_level lx _) x)
+      (if-let (at_loop_level ly _) y)
+      (if-let (at_loop_level lz _) z)
+      (if (u8_lt lx ly))
+      (if (u8_lt lz ly))
+      ;; Hide the second iadd behind a bitcast so that too-clever
+      ;; address-gen isel doesn't poke through and re-sink it.
+      (iadd ty (bitcast ty (iadd ty x z)) y))
+(rule (simplify (iadd ty (iadd ty x y) z))
+      (if-let (at_loop_level lx _) x)
+      (if-let (at_loop_level ly _) y)
+      (if-let (at_loop_level lz _) z)
+      (if (u8_lt ly lx))
+      (if (u8_lt lz lx))
+      (iadd ty (bitcast ty (iadd ty y z)) x))
