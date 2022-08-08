@@ -35,7 +35,7 @@ impl FuncExt for Func {
     }
 }
 
-pub fn engine() -> Engine {
+pub fn config() -> Config {
     drop(env_logger::try_init());
 
     let mut config = Config::new();
@@ -48,7 +48,11 @@ pub fn engine() -> Engine {
         config.static_memory_maximum_size(0);
         config.dynamic_memory_guard_size(0);
     }
-    Engine::new(&config).unwrap()
+    config
+}
+
+pub fn engine() -> Engine {
+    Engine::new(&config()).unwrap()
 }
 
 /// Newtype wrapper for `f32` whose `PartialEq` impl considers NaNs equal to each other.

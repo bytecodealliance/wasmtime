@@ -136,6 +136,8 @@ pub trait PtrSize {
         16
     }
 
+    // Offsets within `VMRuntimeLimits`
+
     /// Return the offset of the `stack_limit` field of `VMRuntimeLimits`
     #[inline]
     fn vmruntime_limits_stack_limit(&self) -> u8 {
@@ -167,6 +169,34 @@ pub trait PtrSize {
     /// Return the offset of the `last_enty_sp` field of `VMRuntimeLimits`.
     fn vmruntime_limits_last_wasm_entry_sp(&self) -> u8 {
         self.vmruntime_limits_last_wasm_exit_pc() + self.size()
+    }
+
+    // Offsets within `VMMemoryDefinition`
+
+    /// The offset of the `base` field.
+    #[allow(clippy::erasing_op)]
+    #[inline]
+    fn vmmemory_definition_base(&self) -> u8 {
+        0 * self.size()
+    }
+
+    /// The offset of the `current_length` field.
+    #[allow(clippy::identity_op)]
+    #[inline]
+    fn vmmemory_definition_current_length(&self) -> u8 {
+        1 * self.size()
+    }
+
+    /// Return the size of `VMMemoryDefinition`.
+    #[inline]
+    fn size_of_vmmemory_definition(&self) -> u8 {
+        2 * self.size()
+    }
+
+    /// Return the size of `*mut VMMemoryDefinition`.
+    #[inline]
+    fn size_of_vmmemory_pointer(&self) -> u8 {
+        self.size()
     }
 }
 
@@ -395,9 +425,9 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             size(defined_tables)
                 = cmul(ret.num_defined_tables, ret.size_of_vmtable_definition()),
             size(defined_memories)
-                = cmul(ret.num_defined_memories, ret.size_of_vmmemory_pointer()),
+                = cmul(ret.num_defined_memories, ret.ptr.size_of_vmmemory_pointer()),
             size(owned_memories)
-                = cmul(ret.num_owned_memories, ret.size_of_vmmemory_definition()),
+                = cmul(ret.num_owned_memories, ret.ptr.size_of_vmmemory_definition()),
             align(16),
             size(defined_globals)
                 = cmul(ret.num_defined_globals, ret.ptr.size_of_vmglobal_definition()),
@@ -520,35 +550,6 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn size_of_vmmemory_import(&self) -> u8 {
         3 * self.pointer_size()
-    }
-}
-
-/// Offsets for `VMMemoryDefinition`.
-impl<P: PtrSize> VMOffsets<P> {
-    /// The offset of the `base` field.
-    #[allow(clippy::erasing_op)]
-    #[inline]
-    pub fn vmmemory_definition_base(&self) -> u8 {
-        0 * self.pointer_size()
-    }
-
-    /// The offset of the `current_length` field.
-    #[allow(clippy::identity_op)]
-    #[inline]
-    pub fn vmmemory_definition_current_length(&self) -> u8 {
-        1 * self.pointer_size()
-    }
-
-    /// Return the size of `VMMemoryDefinition`.
-    #[inline]
-    pub fn size_of_vmmemory_definition(&self) -> u8 {
-        2 * self.pointer_size()
-    }
-
-    /// Return the size of `*mut VMMemoryDefinition`.
-    #[inline]
-    pub fn size_of_vmmemory_pointer(&self) -> u8 {
-        self.pointer_size()
     }
 }
 
@@ -733,7 +734,8 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_vmmemory_pointer(&self, index: DefinedMemoryIndex) -> u32 {
         assert!(index.as_u32() < self.num_defined_memories);
-        self.vmctx_memories_begin() + index.as_u32() * u32::from(self.size_of_vmmemory_pointer())
+        self.vmctx_memories_begin()
+            + index.as_u32() * u32::from(self.ptr.size_of_vmmemory_pointer())
     }
 
     /// Return the offset to the owned `VMMemoryDefinition` at index `index`.
@@ -741,7 +743,7 @@ impl<P: PtrSize> VMOffsets<P> {
     pub fn vmctx_vmmemory_definition(&self, index: OwnedMemoryIndex) -> u32 {
         assert!(index.as_u32() < self.num_owned_memories);
         self.vmctx_owned_memories_begin()
-            + index.as_u32() * u32::from(self.size_of_vmmemory_definition())
+            + index.as_u32() * u32::from(self.ptr.size_of_vmmemory_definition())
     }
 
     /// Return the offset to the `VMGlobalDefinition` index `index`.
@@ -807,13 +809,14 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to the `base` field in `VMMemoryDefinition` index `index`.
     #[inline]
     pub fn vmctx_vmmemory_definition_base(&self, index: OwnedMemoryIndex) -> u32 {
-        self.vmctx_vmmemory_definition(index) + u32::from(self.vmmemory_definition_base())
+        self.vmctx_vmmemory_definition(index) + u32::from(self.ptr.vmmemory_definition_base())
     }
 
     /// Return the offset to the `current_length` field in `VMMemoryDefinition` index `index`.
     #[inline]
     pub fn vmctx_vmmemory_definition_current_length(&self, index: OwnedMemoryIndex) -> u32 {
-        self.vmctx_vmmemory_definition(index) + u32::from(self.vmmemory_definition_current_length())
+        self.vmctx_vmmemory_definition(index)
+            + u32::from(self.ptr.vmmemory_definition_current_length())
     }
 
     /// Return the offset to the `from` field in `VMGlobalImport` index `index`.

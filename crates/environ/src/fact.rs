@@ -20,7 +20,7 @@
 
 use crate::component::dfg::CoreDef;
 use crate::component::{Adapter, AdapterOptions, ComponentTypes, StringEncoding, TypeFuncIndex};
-use crate::{FuncIndex, GlobalIndex, MemoryIndex};
+use crate::{FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap};
 use std::collections::HashMap;
 use std::mem;
 use wasm_encoder::*;
@@ -28,7 +28,10 @@ use wasm_encoder::*;
 mod core_types;
 mod signature;
 mod trampoline;
+mod transcode;
 mod traps;
+
+pub use self::transcode::{FixedEncoding, Transcode};
 
 /// Representation of an adapter module.
 pub struct Module<'a> {
@@ -46,9 +49,10 @@ pub struct Module<'a> {
     core_imports: ImportSection,
     /// Final list of imports that this module ended up using, in the same order
     /// as the imports in the import section.
-    imports: Vec<CoreDef>,
+    imports: Vec<Import>,
     /// Intern'd imports and what index they were assigned.
     imported: HashMap<CoreDef, u32>,
+    imported_memories: PrimaryMap<MemoryIndex, CoreDef>,
 
     // Current status of index spaces from the imports generated so far.
     core_funcs: u32,
@@ -100,6 +104,7 @@ impl<'a> Module<'a> {
             imported: Default::default(),
             adapters: Default::default(),
             imports: Default::default(),
+            imported_memories: PrimaryMap::new(),
             core_funcs: 0,
             core_memories: 0,
             core_globals: 0,
@@ -246,19 +251,50 @@ impl<'a> Module<'a> {
         let ret = *cnt - 1;
         self.core_imports.import(module, name, ty);
         self.imported.insert(def.clone(), ret);
-        self.imports.push(def);
+        if let EntityType::Memory(_) = ty {
+            self.imported_memories.push(def.clone());
+        }
+        self.imports.push(Import::CoreDef(def));
         ret
     }
 
     /// Encodes this module into a WebAssembly binary.
     pub fn encode(&mut self) -> Vec<u8> {
+        let mut types = mem::take(&mut self.core_types);
+        let mut transcoders = transcode::Transcoders::new(self.core_funcs);
+        let mut adapter_funcs = Vec::new();
+        for adapter in self.adapters.iter() {
+            adapter_funcs.push(trampoline::compile(
+                self,
+                &mut types,
+                &mut transcoders,
+                adapter,
+            ));
+        }
+
+        // If any string transcoding imports were needed add imported items
+        // associated with them.
+        for (module, name, ty, transcoder) in transcoders.imports() {
+            self.core_imports.import(module, name, ty);
+            let from = self.imported_memories[transcoder.from_memory].clone();
+            let to = self.imported_memories[transcoder.to_memory].clone();
+            self.imports.push(Import::Transcode {
+                op: transcoder.op,
+                from,
+                from64: transcoder.from_memory64,
+                to,
+                to64: transcoder.to_memory64,
+            });
+            self.core_funcs += 1;
+        }
+
+        // Now that all functions are known as well as all imports the actual
+        // bodies of all adapters are assembled into a final module.
         let mut funcs = FunctionSection::new();
         let mut code = CodeSection::new();
         let mut exports = ExportSection::new();
         let mut traps = traps::TrapSection::default();
-
-        let mut types = mem::take(&mut self.core_types);
-        for adapter in self.adapters.iter() {
+        for (adapter, (function, func_traps)) in self.adapters.iter().zip(adapter_funcs) {
             let idx = self.core_funcs + funcs.len();
             exports.export(&adapter.name, ExportKind::Func, idx);
 
@@ -266,7 +302,6 @@ impl<'a> Module<'a> {
             let ty = types.function(&signature.params, &signature.results);
             funcs.function(ty);
 
-            let (function, func_traps) = trampoline::compile(self, &mut types, adapter);
             code.raw(&function);
             traps.append(idx, func_traps);
         }
@@ -290,9 +325,29 @@ impl<'a> Module<'a> {
 
     /// Returns the imports that were used, in order, to create this adapter
     /// module.
-    pub fn imports(&self) -> &[CoreDef] {
+    pub fn imports(&self) -> &[Import] {
         &self.imports
     }
+}
+
+/// Possible imports into an adapter module.
+#[derive(Clone)]
+pub enum Import {
+    /// A definition required in the configuration of an `Adapter`.
+    CoreDef(CoreDef),
+    /// A transcoding function from the host to convert between string encodings.
+    Transcode {
+        /// The transcoding operation this performs.
+        op: Transcode,
+        /// The memory being read
+        from: CoreDef,
+        /// Whether or not `from` is a 64-bit memory
+        from64: bool,
+        /// The memory being written
+        to: CoreDef,
+        /// Whether or not `to` is a 64-bit memory
+        to64: bool,
+    },
 }
 
 impl Options {

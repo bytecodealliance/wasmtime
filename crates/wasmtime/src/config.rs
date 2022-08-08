@@ -1462,6 +1462,15 @@ impl Config {
 
         compiler.build()
     }
+
+    /// Internal setting for whether adapter modules for components will have
+    /// extra WebAssembly instructions inserted performing more debug checks
+    /// then are necessary.
+    #[cfg(feature = "component-model")]
+    pub fn debug_adapter_modules(&mut self, debug: bool) -> &mut Self {
+        self.tunables.debug_adapter_modules = debug;
+        self
+    }
 }
 
 fn round_up_to_pages(val: u64) -> u64 {

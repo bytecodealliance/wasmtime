@@ -18,12 +18,15 @@ use std::ops::Deref;
 use std::ptr::{self, NonNull};
 use wasmtime_environ::component::{
     Component, LoweredIndex, RuntimeAlwaysTrapIndex, RuntimeComponentInstanceIndex,
-    RuntimeMemoryIndex, RuntimePostReturnIndex, RuntimeReallocIndex, StringEncoding,
-    VMComponentOffsets, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FLAG_NEEDS_POST_RETURN, VMCOMPONENT_MAGIC,
+    RuntimeMemoryIndex, RuntimePostReturnIndex, RuntimeReallocIndex, RuntimeTranscoderIndex,
+    StringEncoding, VMComponentOffsets, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FLAG_NEEDS_POST_RETURN,
+    VMCOMPONENT_MAGIC,
 };
 use wasmtime_environ::HostPtr;
 
 const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
+
+mod transcode;
 
 /// Runtime representation of a component instance and all state necessary for
 /// the instance itself.
@@ -255,6 +258,14 @@ impl ComponentInstance {
         unsafe { self.anyfunc(self.offsets.always_trap_anyfunc(idx)) }
     }
 
+    /// Same as `lowering_anyfunc` except for the transcoding functions.
+    pub fn transcoder_anyfunc(
+        &self,
+        idx: RuntimeTranscoderIndex,
+    ) -> NonNull<VMCallerCheckedAnyfunc> {
+        unsafe { self.anyfunc(self.offsets.transcoder_anyfunc(idx)) }
+    }
+
     unsafe fn anyfunc(&self, offset: u32) -> NonNull<VMCallerCheckedAnyfunc> {
         let ret = self.vmctx_plus_offset::<VMCallerCheckedAnyfunc>(offset);
         debug_assert!((*ret).func_ptr.as_ptr() as usize != INVALID_PTR);
@@ -349,6 +360,16 @@ impl ComponentInstance {
         unsafe { self.set_anyfunc(self.offsets.always_trap_anyfunc(idx), func_ptr, type_index) }
     }
 
+    /// Same as `set_lowering` but for the transcoder functions.
+    pub fn set_transcoder(
+        &mut self,
+        idx: RuntimeTranscoderIndex,
+        func_ptr: NonNull<VMFunctionBody>,
+        type_index: VMSharedSignatureIndex,
+    ) {
+        unsafe { self.set_anyfunc(self.offsets.transcoder_anyfunc(idx), func_ptr, type_index) }
+    }
+
     unsafe fn set_anyfunc(
         &mut self,
         offset: u32,
@@ -366,6 +387,8 @@ impl ComponentInstance {
 
     unsafe fn initialize_vmctx(&mut self, store: *mut dyn Store) {
         *self.vmctx_plus_offset(self.offsets.magic()) = VMCOMPONENT_MAGIC;
+        *self.vmctx_plus_offset(self.offsets.transcode_libcalls()) =
+            &transcode::VMBuiltinTranscodeArray::INIT;
         *self.vmctx_plus_offset(self.offsets.store()) = store;
         *self.vmctx_plus_offset(self.offsets.limits()) = (*store).vmruntime_limits();
 
@@ -393,6 +416,11 @@ impl ComponentInstance {
             for i in 0..self.offsets.num_always_trap {
                 let i = RuntimeAlwaysTrapIndex::from_u32(i);
                 let offset = self.offsets.always_trap_anyfunc(i);
+                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+            }
+            for i in 0..self.offsets.num_transcoders {
+                let i = RuntimeTranscoderIndex::from_u32(i);
+                let offset = self.offsets.transcoder_anyfunc(i);
                 *self.vmctx_plus_offset(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_runtime_memories {
@@ -520,6 +548,19 @@ impl OwnedComponentInstance {
         unsafe {
             self.instance_mut()
                 .set_always_trap(idx, func_ptr, type_index)
+        }
+    }
+
+    /// See `ComponentInstance::set_transcoder`
+    pub fn set_transcoder(
+        &mut self,
+        idx: RuntimeTranscoderIndex,
+        func_ptr: NonNull<VMFunctionBody>,
+        type_index: VMSharedSignatureIndex,
+    ) {
+        unsafe {
+            self.instance_mut()
+                .set_transcoder(idx, func_ptr, type_index)
         }
     }
 }

@@ -45,9 +45,11 @@ enum GenStringEncoding {
     CompactUtf16,
 }
 
-fuzz_target!(|module: GenAdapterModule| { drop(target(module)) });
+fuzz_target!(|module: GenAdapterModule| {
+    target(module);
+});
 
-fn target(module: GenAdapterModule) -> Result<(), ()> {
+fn target(module: GenAdapterModule) {
     drop(env_logger::try_init());
 
     let mut types = ComponentTypesBuilder::default();
@@ -57,7 +59,7 @@ fn target(module: GenAdapterModule) -> Result<(), ()> {
     let mut next_def = 0;
     let mut dummy_def = || {
         next_def += 1;
-        CoreDef::Adapter(AdapterIndex::from_u32(next_def))
+        dfg::CoreDef::Adapter(dfg::AdapterId::from_u32(next_def))
     };
 
     // Manufactures a `CoreExport` for a memory with the shape specified. Note
@@ -80,8 +82,8 @@ fn target(module: GenAdapterModule) -> Result<(), ()> {
         } else {
             dst[0]
         };
-        CoreExport {
-            instance: RuntimeInstanceIndex::from_u32(idx),
+        dfg::CoreExport {
+            instance: dfg::InstanceId::from_u32(idx),
             item: ExportItem::Name(String::new()),
         }
     };
@@ -90,9 +92,9 @@ fn target(module: GenAdapterModule) -> Result<(), ()> {
     for adapter in module.adapters.iter() {
         let mut params = Vec::new();
         for param in adapter.ty.params.iter() {
-            params.push((None, intern(&mut types, param)?));
+            params.push((None, intern(&mut types, param)));
         }
-        let result = intern(&mut types, &adapter.ty.result)?;
+        let result = intern(&mut types, &adapter.ty.result);
         let signature = types.add_func_type(TypeFunc {
             params: params.into(),
             result,
@@ -143,7 +145,7 @@ fn target(module: GenAdapterModule) -> Result<(), ()> {
     .validate_all(&wasm);
 
     let err = match result {
-        Ok(_) => return Ok(()),
+        Ok(_) => return,
         Err(e) => e,
     };
     eprintln!("invalid wasm module: {err:?}");
@@ -159,8 +161,8 @@ fn target(module: GenAdapterModule) -> Result<(), ()> {
     panic!()
 }
 
-fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> Result<InterfaceType, ()> {
-    Ok(match ty {
+fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> InterfaceType {
+    match ty {
         ValType::Unit => InterfaceType::Unit,
         ValType::Bool => InterfaceType::Bool,
         ValType::U8 => InterfaceType::U8,
@@ -174,8 +176,9 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> Result<InterfaceTy
         ValType::Float32 => InterfaceType::Float32,
         ValType::Float64 => InterfaceType::Float64,
         ValType::Char => InterfaceType::Char,
+        ValType::String => InterfaceType::String,
         ValType::List(ty) => {
-            let ty = intern(types, ty)?;
+            let ty = intern(types, ty);
             InterfaceType::List(types.add_interface_type(ty))
         }
         ValType::Record(tys) => {
@@ -183,13 +186,11 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> Result<InterfaceTy
                 fields: tys
                     .iter()
                     .enumerate()
-                    .map(|(i, ty)| {
-                        Ok(RecordField {
-                            name: format!("f{i}"),
-                            ty: intern(types, ty)?,
-                        })
+                    .map(|(i, ty)| RecordField {
+                        name: format!("f{i}"),
+                        ty: intern(types, ty),
                     })
-                    .collect::<Result<_, _>>()?,
+                    .collect(),
             };
             InterfaceType::Record(types.add_record_type(ty))
         }
@@ -201,10 +202,7 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> Result<InterfaceTy
         }
         ValType::Tuple(tys) => {
             let ty = TypeTuple {
-                types: tys
-                    .iter()
-                    .map(|ty| intern(types, ty))
-                    .collect::<Result<_, _>>()?,
+                types: tys.iter().map(|ty| intern(types, ty)).collect(),
             };
             InterfaceType::Tuple(types.add_tuple_type(ty))
         }
@@ -213,22 +211,17 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> Result<InterfaceTy
                 cases: cases
                     .iter()
                     .enumerate()
-                    .map(|(i, ty)| {
-                        Ok(VariantCase {
-                            name: format!("c{i}"),
-                            ty: intern(types, ty)?,
-                        })
+                    .map(|(i, ty)| VariantCase {
+                        name: format!("c{i}"),
+                        ty: intern(types, ty),
                     })
-                    .collect::<Result<_, _>>()?,
+                    .collect(),
             };
             InterfaceType::Variant(types.add_variant_type(ty))
         }
         ValType::Union(tys) => {
             let ty = TypeUnion {
-                types: tys
-                    .iter()
-                    .map(|ty| intern(types, ty))
-                    .collect::<Result<_, _>>()?,
+                types: tys.iter().map(|ty| intern(types, ty)).collect(),
             };
             InterfaceType::Union(types.add_union_type(ty))
         }
@@ -239,16 +232,15 @@ fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> Result<InterfaceTy
             InterfaceType::Enum(types.add_enum_type(ty))
         }
         ValType::Option(ty) => {
-            let ty = intern(types, ty)?;
+            let ty = intern(types, ty);
             InterfaceType::Option(types.add_interface_type(ty))
         }
         ValType::Expected { ok, err } => {
-            let ok = intern(types, ok)?;
-            let err = intern(types, err)?;
+            let ok = intern(types, ok);
+            let err = intern(types, err);
             InterfaceType::Expected(types.add_expected_type(TypeExpected { ok, err }))
         }
-        ValType::String => return Err(()),
-    })
+    }
 }
 
 impl From<GenStringEncoding> for StringEncoding {

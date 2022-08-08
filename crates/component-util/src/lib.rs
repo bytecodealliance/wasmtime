@@ -88,6 +88,8 @@ pub const REALLOC_AND_FREE: &str = r#"
         (param $new_size i32)
         (result i32)
 
+        (local $ret i32)
+
         ;; Test if the old pointer is non-null
         local.get $old_ptr
         if
@@ -101,8 +103,8 @@ pub const REALLOC_AND_FREE: &str = r#"
                 return
             end
 
-            ;; ... otherwise this is unimplemented
-            unreachable
+            ;; otherwise fall through to allocate a new chunk which will later
+            ;; copy data over
         end
 
         ;; align up `$last`
@@ -121,6 +123,7 @@ pub const REALLOC_AND_FREE: &str = r#"
 
         ;; save the current value of `$last` as the return value
         global.get $last
+        local.tee $ret
 
         ;; ensure anything necessary is set to valid data by spraying a bit
         ;; pattern that is invalid
@@ -128,6 +131,16 @@ pub const REALLOC_AND_FREE: &str = r#"
         i32.const 0xde
         local.get $new_size
         memory.fill
+
+        ;; If the old pointer is present then that means this was a reallocation
+        ;; of an existing chunk which means the existing data must be copied.
+        local.get $old_ptr
+        if
+            local.get $ret          ;; destination
+            local.get $old_ptr      ;; source
+            local.get $old_size     ;; size
+            memory.copy
+        end
 
         ;; bump our pointer
         (global.set $last

@@ -16,12 +16,13 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    InterfaceType, TypeEnumIndex, TypeExpectedIndex, TypeFlagsIndex, TypeInterfaceIndex,
-    TypeRecordIndex, TypeTupleIndex, TypeUnionIndex, TypeVariantIndex, FLAG_MAY_ENTER,
-    FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    InterfaceType, StringEncoding, TypeEnumIndex, TypeExpectedIndex, TypeFlagsIndex,
+    TypeInterfaceIndex, TypeRecordIndex, TypeTupleIndex, TypeUnionIndex, TypeVariantIndex,
+    FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
 use crate::fact::core_types::CoreTypes;
 use crate::fact::signature::{align_to, Signature};
+use crate::fact::transcode::{FixedEncoding as FE, Transcode, Transcoder, Transcoders};
 use crate::fact::traps::Trap;
 use crate::fact::{AdapterData, Context, Module, Options};
 use crate::GlobalIndex;
@@ -31,12 +32,18 @@ use std::ops::Range;
 use wasm_encoder::{BlockType, Encode, Instruction, Instruction::*, MemArg, ValType};
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
+const MAX_STRING_BYTE_LENGTH: u32 = 1 << 31;
+const UTF16_TAG: u32 = 1 << 31;
+
 struct Compiler<'a, 'b> {
     /// The module that the adapter will eventually be inserted into.
     module: &'a Module<'a>,
 
     /// The type section of `module`
     types: &'b mut CoreTypes,
+
+    /// Imported functions to transcode between various string encodings.
+    transcoders: &'b mut Transcoders,
 
     /// Metadata about the adapter that is being compiled.
     adapter: &'a AdapterData,
@@ -71,6 +78,7 @@ struct Compiler<'a, 'b> {
 pub(super) fn compile(
     module: &Module<'_>,
     types: &mut CoreTypes,
+    transcoders: &mut Transcoders,
     adapter: &AdapterData,
 ) -> (Vec<u8>, Vec<(usize, Trap)>) {
     let lower_sig = &module.signature(&adapter.lower, Context::Lower);
@@ -79,6 +87,7 @@ pub(super) fn compile(
         module,
         types,
         adapter,
+        transcoders,
         code: Vec::new(),
         locals: Vec::new(),
         nlocals: lower_sig.params.len() as u32,
@@ -356,6 +365,7 @@ impl Compiler<'_, '_> {
             InterfaceType::Float32 => self.translate_f32(src, dst_ty, dst),
             InterfaceType::Float64 => self.translate_f64(src, dst_ty, dst),
             InterfaceType::Char => self.translate_char(src, dst_ty, dst),
+            InterfaceType::String => self.translate_string(src, dst_ty, dst),
             InterfaceType::List(t) => self.translate_list(*t, src, dst_ty, dst),
             InterfaceType::Record(t) => self.translate_record(*t, src, dst_ty, dst),
             InterfaceType::Flags(f) => self.translate_flags(*f, src, dst_ty, dst),
@@ -365,13 +375,6 @@ impl Compiler<'_, '_> {
             InterfaceType::Enum(t) => self.translate_enum(*t, src, dst_ty, dst),
             InterfaceType::Option(t) => self.translate_option(*t, src, dst_ty, dst),
             InterfaceType::Expected(t) => self.translate_expected(*t, src, dst_ty, dst),
-
-            InterfaceType::String => {
-                // consider this field used for now until this is fully
-                // implemented.
-                drop(&self.adapter.lift.string_encoding);
-                unimplemented!("don't know how to translate strings")
-            }
         }
     }
 
@@ -634,6 +637,768 @@ impl Compiler<'_, '_> {
             }
             Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
         }
+    }
+
+    fn translate_string(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
+        assert!(matches!(dst_ty, InterfaceType::String));
+        let src_opts = src.opts();
+        let dst_opts = dst.opts();
+
+        // Load the pointer/length of this string into temporary locals. These
+        // will be referenced a good deal so this just makes it easier to deal
+        // with them consistently below rather than trying to reload from memory
+        // for example.
+        let src_ptr = self.gen_local(src_opts.ptr());
+        let src_len = self.gen_local(src_opts.ptr());
+        match src {
+            Source::Stack(s) => {
+                assert_eq!(s.locals.len(), 2);
+                self.stack_get(&s.slice(0..1), src_opts.ptr());
+                self.instruction(LocalSet(src_ptr));
+                self.stack_get(&s.slice(1..2), src_opts.ptr());
+                self.instruction(LocalSet(src_len));
+            }
+            Source::Memory(mem) => {
+                self.ptr_load(mem);
+                self.instruction(LocalSet(src_ptr));
+                self.ptr_load(&mem.bump(src_opts.ptr_size().into()));
+                self.instruction(LocalSet(src_len));
+            }
+        }
+        let src_str = &WasmString {
+            ptr: src_ptr,
+            len: src_len,
+            opts: src_opts,
+        };
+
+        let dst_str = match src_opts.string_encoding {
+            StringEncoding::Utf8 => match dst_opts.string_encoding {
+                StringEncoding::Utf8 => self.string_copy(src_str, FE::Utf8, dst_opts, FE::Utf8),
+                StringEncoding::Utf16 => self.string_utf8_to_utf16(src_str, dst_opts),
+                StringEncoding::CompactUtf16 => self.string_to_compact(src_str, FE::Utf8, dst_opts),
+            },
+
+            StringEncoding::Utf16 => {
+                self.verify_aligned(src_opts, src_ptr, 2);
+                match dst_opts.string_encoding {
+                    StringEncoding::Utf8 => {
+                        self.string_deflate_to_utf8(src_str, FE::Utf16, dst_opts)
+                    }
+                    StringEncoding::Utf16 => {
+                        self.string_copy(src_str, FE::Utf16, dst_opts, FE::Utf16)
+                    }
+                    StringEncoding::CompactUtf16 => {
+                        self.string_to_compact(src_str, FE::Utf16, dst_opts)
+                    }
+                }
+            }
+
+            StringEncoding::CompactUtf16 => {
+                self.verify_aligned(src_opts, src_ptr, 2);
+
+                // Test the tag big to see if this is a utf16 or a latin1 string
+                // at runtime...
+                self.instruction(LocalGet(src_len));
+                self.ptr_uconst(src_opts, UTF16_TAG);
+                self.ptr_and(src_opts);
+                self.ptr_if(src_opts, BlockType::Empty);
+
+                // In the utf16 block unset the upper bit from the length local
+                // so further calculations have the right value. Afterwards the
+                // string transcode proceeds assuming utf16.
+                self.instruction(LocalGet(src_len));
+                self.ptr_uconst(src_opts, UTF16_TAG);
+                self.ptr_xor(src_opts);
+                self.instruction(LocalSet(src_len));
+                let s1 = match dst_opts.string_encoding {
+                    StringEncoding::Utf8 => {
+                        self.string_deflate_to_utf8(src_str, FE::Utf16, dst_opts)
+                    }
+                    StringEncoding::Utf16 => {
+                        self.string_copy(src_str, FE::Utf16, dst_opts, FE::Utf16)
+                    }
+                    StringEncoding::CompactUtf16 => {
+                        self.string_compact_utf16_to_compact(src_str, dst_opts)
+                    }
+                };
+
+                self.instruction(Else);
+
+                // In the latin1 block the `src_len` local is already the number
+                // of code units, so the string transcoding is all that needs to
+                // happen.
+                let s2 = match dst_opts.string_encoding {
+                    StringEncoding::Utf16 => {
+                        self.string_copy(src_str, FE::Latin1, dst_opts, FE::Utf16)
+                    }
+                    StringEncoding::Utf8 => {
+                        self.string_deflate_to_utf8(src_str, FE::Latin1, dst_opts)
+                    }
+                    StringEncoding::CompactUtf16 => {
+                        self.string_copy(src_str, FE::Latin1, dst_opts, FE::Latin1)
+                    }
+                };
+                // Set our `s2` generated locals to the `s2` generated locals
+                // as the resulting pointer of this transcode.
+                self.instruction(LocalGet(s2.ptr));
+                self.instruction(LocalSet(s1.ptr));
+                self.instruction(LocalGet(s2.len));
+                self.instruction(LocalSet(s1.len));
+                self.instruction(End);
+                s1
+            }
+        };
+
+        // Store the ptr/length in the desired destination
+        match dst {
+            Destination::Stack(s, _) => {
+                self.instruction(LocalGet(dst_str.ptr));
+                self.stack_set(&s[..1], dst_opts.ptr());
+                self.instruction(LocalGet(dst_str.len));
+                self.stack_set(&s[1..], dst_opts.ptr());
+            }
+            Destination::Memory(mem) => {
+                self.instruction(LocalGet(mem.addr_local));
+                self.instruction(LocalGet(dst_str.ptr));
+                self.ptr_store(mem);
+                self.instruction(LocalGet(mem.addr_local));
+                self.instruction(LocalGet(dst_str.len));
+                self.ptr_store(&mem.bump(dst_opts.ptr_size().into()));
+            }
+        }
+    }
+
+    // Corresponding function for `store_string_copy` in the spec.
+    //
+    // This performs a transcoding of the string with a one-pass copy from
+    // the `src` encoding to the `dst` encoding. This is only possible for
+    // fixed encodings where the first allocation is guaranteed to be an
+    // appropriate fit so it's not suitable for all encodings.
+    //
+    // Imported host transcoding functions here take the src/dst pointers as
+    // well as the number of code units in the source (which always matches
+    // the number of code units in the destination). There is no return
+    // value from the transcode function since the encoding should always
+    // work on the first pass.
+    fn string_copy<'a>(
+        &mut self,
+        src: &WasmString<'_>,
+        src_enc: FE,
+        dst_opts: &'a Options,
+        dst_enc: FE,
+    ) -> WasmString<'a> {
+        assert!(dst_enc.width() >= src_enc.width());
+        self.validate_string_length(src, dst_enc);
+
+        // Calculate the source byte length given the size of each code
+        // unit. Note that this shouldn't overflow given
+        // `validate_string_length` above.
+        let src_byte_len = if src_enc.width() == 1 {
+            src.len
+        } else {
+            assert_eq!(src_enc.width(), 2);
+            let tmp = self.gen_local(src.opts.ptr());
+            self.instruction(LocalGet(src.len));
+            self.ptr_uconst(src.opts, 1);
+            self.ptr_shl(src.opts);
+            self.instruction(LocalSet(tmp));
+            tmp
+        };
+
+        // Convert the source code units length to the destination byte
+        // length type.
+        self.convert_src_len_to_dst(src.len, src.opts.ptr(), dst_opts.ptr());
+        let dst_len = self.gen_local(dst_opts.ptr());
+        self.instruction(LocalTee(dst_len));
+        if dst_enc.width() > 1 {
+            assert_eq!(dst_enc.width(), 2);
+            self.ptr_uconst(dst_opts, 1);
+            self.ptr_shl(dst_opts);
+        }
+        let dst_byte_len = self.gen_local(dst_opts.ptr());
+        self.instruction(LocalSet(dst_byte_len));
+
+        // Allocate space in the destination using the calculated byte
+        // length.
+        let dst = {
+            let dst_mem = self.malloc(
+                dst_opts,
+                MallocSize::Local(dst_byte_len),
+                dst_enc.width().into(),
+            );
+            WasmString {
+                ptr: dst_mem.addr_local,
+                len: dst_len,
+                opts: dst_opts,
+            }
+        };
+
+        // Validate that `src_len + src_ptr` and
+        // `dst_mem.addr_local + dst_byte_len` are both in-bounds. This
+        // is done by loading the last byte of the string and if that
+        // doesn't trap then it's known valid.
+        self.validate_string_inbounds(src, src_byte_len);
+        self.validate_string_inbounds(&dst, dst_byte_len);
+
+        // If the validations pass then the host `transcode` intrinsic
+        // is invoked. This will either raise a trap or otherwise succeed
+        // in which case we're done.
+        let op = if src_enc == dst_enc {
+            Transcode::Copy(src_enc)
+        } else {
+            assert_eq!(src_enc, FE::Latin1);
+            assert_eq!(dst_enc, FE::Utf16);
+            Transcode::Latin1ToUtf16
+        };
+        let transcode = self.transcoder(src, &dst, op);
+        self.instruction(LocalGet(src.ptr));
+        self.instruction(LocalGet(src.len));
+        self.instruction(LocalGet(dst.ptr));
+        self.instruction(Call(transcode));
+
+        dst
+    }
+    // Corresponding function for `store_string_to_utf8` in the spec.
+    //
+    // This translation works by possibly performing a number of
+    // reallocations. First a buffer of size input-code-units is used to try
+    // to get the transcoding correct on the first try. If that fails the
+    // maximum worst-case size is used and then that is resized down if it's
+    // too large.
+    //
+    // The host transcoding function imported here will receive src ptr/len
+    // and dst ptr/len and return how many code units were consumed on both
+    // sides. The amount of code units consumed in the source dictates which
+    // branches are taken in this conversion.
+    fn string_deflate_to_utf8<'a>(
+        &mut self,
+        src: &WasmString<'_>,
+        src_enc: FE,
+        dst_opts: &'a Options,
+    ) -> WasmString<'a> {
+        self.validate_string_length(src, src_enc);
+
+        // Optimistically assume that the code unit length of the source is
+        // all that's needed in the destination. Perform that allocaiton
+        // here and proceed to transcoding below.
+        self.convert_src_len_to_dst(src.len, src.opts.ptr(), dst_opts.ptr());
+        let dst_len = self.gen_local(dst_opts.ptr());
+        self.instruction(LocalTee(dst_len));
+        let dst_byte_len = self.gen_local(dst_opts.ptr());
+        self.instruction(LocalSet(dst_byte_len));
+
+        let dst = {
+            let dst_mem = self.malloc(dst_opts, MallocSize::Local(dst_byte_len), 1);
+            WasmString {
+                ptr: dst_mem.addr_local,
+                len: dst_len,
+                opts: dst_opts,
+            }
+        };
+
+        // Ensure buffers are all in-bounds
+        let src_byte_len = match src_enc {
+            FE::Latin1 => src.len,
+            FE::Utf16 => {
+                let tmp = self.gen_local(src.opts.ptr());
+                self.instruction(LocalGet(src.len));
+                self.ptr_uconst(src.opts, 1);
+                self.ptr_shl(src.opts);
+                self.instruction(LocalSet(tmp));
+                tmp
+            }
+            FE::Utf8 => unreachable!(),
+        };
+        self.validate_string_inbounds(src, src_byte_len);
+        self.validate_string_inbounds(&dst, dst_byte_len);
+
+        // Perform the initial transcode
+        let op = match src_enc {
+            FE::Latin1 => Transcode::Latin1ToUtf8,
+            FE::Utf16 => Transcode::Utf16ToUtf8,
+            FE::Utf8 => unreachable!(),
+        };
+        let transcode = self.transcoder(src, &dst, op);
+        self.instruction(LocalGet(src.ptr));
+        self.instruction(LocalGet(src.len));
+        self.instruction(LocalGet(dst.ptr));
+        self.instruction(LocalGet(dst_byte_len));
+        self.instruction(Call(transcode));
+        self.instruction(LocalSet(dst.len));
+        let src_len_tmp = self.gen_local(src.opts.ptr());
+        self.instruction(LocalSet(src_len_tmp));
+
+        // Test if the source was entirely transcoded by comparing
+        // `src_len_tmp`, the number of code units transcoded from the
+        // source, with `src_len`, the original number of code units.
+        self.instruction(LocalGet(src_len_tmp));
+        self.instruction(LocalGet(src.len));
+        self.ptr_ne(src.opts);
+        self.instruction(If(BlockType::Empty));
+
+        // Here a worst-case reallocation is performed to grow `dst_mem`.
+        // In-line a check is also performed that the worst-case byte size
+        // fits within the maximum size of strings.
+        self.instruction(LocalGet(dst.ptr)); // old_ptr
+        self.instruction(LocalGet(dst_byte_len)); // old_size
+        self.ptr_uconst(dst.opts, 1); // align
+        let factor = match src_enc {
+            FE::Latin1 => 2,
+            FE::Utf16 => 3,
+            _ => unreachable!(),
+        };
+        self.validate_string_length_u8(src, factor);
+        self.convert_src_len_to_dst(src.len, src.opts.ptr(), dst_opts.ptr());
+        self.ptr_uconst(dst_opts, factor.into());
+        self.ptr_mul(dst_opts);
+        self.instruction(LocalTee(dst_byte_len));
+        self.instruction(Call(dst_opts.realloc.unwrap().as_u32()));
+        self.instruction(LocalSet(dst.ptr));
+
+        // Verify that the destination is still in-bounds
+        self.validate_string_inbounds(&dst, dst_byte_len);
+
+        // Perform another round of transcoding that should be guaranteed
+        // to succeed. Note that all the parameters here are offset by the
+        // results of the first transcoding to only perform the remaining
+        // transcode on the final units.
+        self.instruction(LocalGet(src.ptr));
+        self.instruction(LocalGet(src_len_tmp));
+        if let FE::Utf16 = src_enc {
+            self.ptr_uconst(src.opts, 1);
+            self.ptr_shl(src.opts);
+        }
+        self.ptr_add(src.opts);
+        self.instruction(LocalGet(src.len));
+        self.instruction(LocalGet(src_len_tmp));
+        self.ptr_sub(src.opts);
+        self.instruction(LocalGet(dst.ptr));
+        self.instruction(LocalGet(dst.len));
+        self.ptr_add(dst.opts);
+        self.instruction(LocalGet(dst_byte_len));
+        self.instruction(LocalGet(dst.len));
+        self.ptr_sub(dst.opts);
+        self.instruction(Call(transcode));
+
+        // Add the second result, the amount of destination units encoded,
+        // to `dst_len` so it's an accurate reflection of the final size of
+        // the destination buffer.
+        self.instruction(LocalGet(dst.len));
+        self.ptr_add(dst.opts);
+        self.instruction(LocalSet(dst.len));
+
+        // In debug mode verify the first result consumed the entire string,
+        // otherwise simply discard it.
+        if self.module.debug {
+            self.instruction(LocalGet(src.len));
+            self.instruction(LocalGet(src_len_tmp));
+            self.ptr_sub(src.opts);
+            self.ptr_ne(src.opts);
+            self.instruction(If(BlockType::Empty));
+            self.trap(Trap::AssertFailed("should have finished encoding"));
+            self.instruction(End);
+        } else {
+            self.instruction(Drop);
+        }
+
+        // Perform a downsizing if the worst-case size was too large
+        self.instruction(LocalGet(dst.len));
+        self.instruction(LocalGet(dst_byte_len));
+        self.ptr_ne(dst.opts);
+        self.instruction(If(BlockType::Empty));
+        self.instruction(LocalGet(dst.ptr)); // old_ptr
+        self.instruction(LocalGet(dst_byte_len)); // old_size
+        self.ptr_uconst(dst.opts, 1); // align
+        self.instruction(LocalGet(dst.len)); // new_size
+        self.instruction(Call(dst.opts.realloc.unwrap().as_u32()));
+        self.instruction(LocalSet(dst.ptr));
+        self.instruction(End);
+
+        // If the first transcode was enough then assert that the returned
+        // amount of destination items written equals the byte size.
+        if self.module.debug {
+            self.instruction(Else);
+
+            self.instruction(LocalGet(dst.len));
+            self.instruction(LocalGet(dst_byte_len));
+            self.ptr_ne(dst_opts);
+            self.instruction(If(BlockType::Empty));
+            self.trap(Trap::AssertFailed("should have finished encoding"));
+            self.instruction(End);
+        }
+
+        self.instruction(End); // end of "first transcode not enough"
+
+        dst
+    }
+
+    // Corresponds to the `store_utf8_to_utf16` function in the spec.
+    //
+    // When converting utf-8 to utf-16 a pessimistic allocation is
+    // done which is twice the byte length of the utf-8 string.
+    // The host then transcodes and returns how many code units were
+    // actually used during the transcoding and if it's beneath the
+    // pessimistic maximum then the buffer is reallocated down to
+    // a smaller amount.
+    //
+    // The host-imported transcoding function takes the src/dst pointer as
+    // well as the code unit size of both the source and destination. The
+    // destination should always be big enough to hold the result of the
+    // transcode and so the result of the host function is how many code
+    // units were written to the destination.
+    fn string_utf8_to_utf16<'a>(
+        &mut self,
+        src: &WasmString<'_>,
+        dst_opts: &'a Options,
+    ) -> WasmString<'a> {
+        self.validate_string_length(src, FE::Utf16);
+        self.convert_src_len_to_dst(src.len, src.opts.ptr(), dst_opts.ptr());
+        let dst_len = self.gen_local(dst_opts.ptr());
+        self.instruction(LocalTee(dst_len));
+        self.ptr_uconst(dst_opts, 1);
+        self.ptr_shl(dst_opts);
+        let dst_byte_len = self.gen_local(dst_opts.ptr());
+        self.instruction(LocalSet(dst_byte_len));
+        let dst = {
+            let dst_mem = self.malloc(dst_opts, MallocSize::Local(dst_byte_len), 2);
+            WasmString {
+                ptr: dst_mem.addr_local,
+                len: dst_len,
+                opts: dst_opts,
+            }
+        };
+
+        self.validate_string_inbounds(src, src.len);
+        self.validate_string_inbounds(&dst, dst_byte_len);
+
+        let transcode = self.transcoder(src, &dst, Transcode::Utf8ToUtf16);
+        self.instruction(LocalGet(src.ptr));
+        self.instruction(LocalGet(src.len));
+        self.instruction(LocalGet(dst.ptr));
+        self.instruction(Call(transcode));
+        self.instruction(LocalSet(dst.len));
+
+        // If the number of code units returned by transcode is not
+        // equal to the original number of code units then
+        // the buffer must be shrunk.
+        //
+        // Note that the byte length of the final allocation we
+        // want is twice the code unit length returned by the
+        // transcoding function.
+        self.convert_src_len_to_dst(src.len, src.opts.ptr(), dst.opts.ptr());
+        self.instruction(LocalGet(dst.len));
+        self.ptr_ne(dst_opts);
+        self.instruction(If(BlockType::Empty));
+        self.instruction(LocalGet(dst.ptr));
+        self.instruction(LocalGet(dst_byte_len));
+        self.ptr_uconst(dst.opts, 2);
+        self.instruction(LocalGet(dst.len));
+        self.ptr_uconst(dst.opts, 1);
+        self.ptr_shl(dst.opts);
+        self.instruction(Call(dst.opts.realloc.unwrap().as_u32()));
+        self.instruction(LocalSet(dst.ptr));
+        self.instruction(End); // end of shrink-to-fit
+
+        dst
+    }
+
+    // Corresponds to `store_probably_utf16_to_latin1_or_utf16` in the spec.
+    //
+    // This will try to transcode the input utf16 string to utf16 in the
+    // destination. If utf16 isn't needed though and latin1 could be used
+    // then that's used instead and a reallocation to downsize occurs
+    // afterwards.
+    //
+    // The host transcode function here will take the src/dst pointers as
+    // well as src length. The destination byte length is twice the src code
+    // unit length. The return value is the tagged length of the returned
+    // string. If the upper bit is set then utf16 was used and the
+    // conversion is done. If the upper bit is not set then latin1 was used
+    // and a downsizing needs to happen.
+    fn string_compact_utf16_to_compact<'a>(
+        &mut self,
+        src: &WasmString<'_>,
+        dst_opts: &'a Options,
+    ) -> WasmString<'a> {
+        self.validate_string_length(src, FE::Utf16);
+        self.convert_src_len_to_dst(src.len, src.opts.ptr(), dst_opts.ptr());
+        let dst_len = self.gen_local(dst_opts.ptr());
+        self.instruction(LocalTee(dst_len));
+        self.ptr_uconst(dst_opts, 1);
+        self.ptr_shl(dst_opts);
+        let dst_byte_len = self.gen_local(dst_opts.ptr());
+        self.instruction(LocalSet(dst_byte_len));
+        let dst = {
+            let dst_mem = self.malloc(dst_opts, MallocSize::Local(dst_byte_len), 2);
+            WasmString {
+                ptr: dst_mem.addr_local,
+                len: dst_len,
+                opts: dst_opts,
+            }
+        };
+
+        self.validate_string_inbounds(src, dst_byte_len);
+        self.validate_string_inbounds(&dst, dst_byte_len);
+
+        let transcode = self.transcoder(src, &dst, Transcode::Utf16ToCompactProbablyUtf16);
+        self.instruction(LocalGet(src.ptr));
+        self.instruction(LocalGet(src.len));
+        self.instruction(LocalGet(dst.ptr));
+        self.instruction(Call(transcode));
+        self.instruction(LocalSet(dst.len));
+
+        // Assert that the untagged code unit length is the same as the
+        // source code unit length.
+        if self.module.debug {
+            self.instruction(LocalGet(dst.len));
+            self.ptr_uconst(dst.opts, !UTF16_TAG);
+            self.ptr_and(dst.opts);
+            self.convert_src_len_to_dst(src.len, src.opts.ptr(), dst.opts.ptr());
+            self.ptr_ne(dst.opts);
+            self.instruction(If(BlockType::Empty));
+            self.trap(Trap::AssertFailed("expected equal code units"));
+            self.instruction(End);
+        }
+
+        // If the UTF16_TAG is set then utf16 was used and the destination
+        // should be appropriately sized. Bail out of the "is this string
+        // empty" block and fall through otherwise to resizing.
+        self.instruction(LocalGet(dst.len));
+        self.ptr_uconst(dst.opts, UTF16_TAG);
+        self.ptr_and(dst.opts);
+        self.ptr_br_if(dst.opts, 0);
+
+        // Here `realloc` is used to downsize the string
+        self.instruction(LocalGet(dst.ptr)); // old_ptr
+        self.instruction(LocalGet(dst_byte_len)); // old_size
+        self.ptr_uconst(dst.opts, 2); // align
+        self.instruction(LocalGet(dst.len)); // new_size
+        self.instruction(Call(dst.opts.realloc.unwrap().as_u32()));
+        self.instruction(LocalSet(dst.ptr));
+
+        dst
+    }
+
+    // Corresponds to `store_string_to_latin1_or_utf16` in the spec.
+    //
+    // This will attempt a first pass of transcoding to latin1 and on
+    // failure a larger buffer is allocated for utf16 and then utf16 is
+    // encoded in-place into the buffer. After either latin1 or utf16 the
+    // buffer is then resized to fit the final string allocation.
+    fn string_to_compact<'a>(
+        &mut self,
+        src: &WasmString<'_>,
+        src_enc: FE,
+        dst_opts: &'a Options,
+    ) -> WasmString<'a> {
+        self.validate_string_length(src, src_enc);
+        self.convert_src_len_to_dst(src.len, src.opts.ptr(), dst_opts.ptr());
+        let dst_len = self.gen_local(dst_opts.ptr());
+        self.instruction(LocalTee(dst_len));
+        let dst_byte_len = self.gen_local(dst_opts.ptr());
+        self.instruction(LocalSet(dst_byte_len));
+        let dst = {
+            let dst_mem = self.malloc(dst_opts, MallocSize::Local(dst_byte_len), 2);
+            WasmString {
+                ptr: dst_mem.addr_local,
+                len: dst_len,
+                opts: dst_opts,
+            }
+        };
+
+        self.validate_string_inbounds(src, src.len);
+        self.validate_string_inbounds(&dst, dst_byte_len);
+
+        // Perform the initial latin1 transcode. This returns the number of
+        // source code units consumed and the number of destination code
+        // units (bytes) written.
+        let (latin1, utf16) = match src_enc {
+            FE::Utf8 => (Transcode::Utf8ToLatin1, Transcode::Utf8ToCompactUtf16),
+            FE::Utf16 => (Transcode::Utf16ToLatin1, Transcode::Utf16ToCompactUtf16),
+            FE::Latin1 => unreachable!(),
+        };
+        let transcode_latin1 = self.transcoder(src, &dst, latin1);
+        let transcode_utf16 = self.transcoder(src, &dst, utf16);
+        self.instruction(LocalGet(src.ptr));
+        self.instruction(LocalGet(src.len));
+        self.instruction(LocalGet(dst.ptr));
+        self.instruction(Call(transcode_latin1));
+        self.instruction(LocalSet(dst.len));
+        let src_len_tmp = self.gen_local(src.opts.ptr());
+        self.instruction(LocalSet(src_len_tmp));
+
+        // If the source was entirely consumed then the transcode completed
+        // and all that's necessary is to optionally shrink the buffer.
+        self.instruction(LocalGet(src_len_tmp));
+        self.instruction(LocalGet(src.len));
+        self.ptr_eq(src.opts);
+        self.instruction(If(BlockType::Empty)); // if latin1-or-utf16 block
+
+        // Test if the original byte length of the allocation is the same as
+        // the number of written bytes, and if not then shrink the buffer
+        // with a call to `realloc`.
+        self.instruction(LocalGet(dst_byte_len));
+        self.instruction(LocalGet(dst.len));
+        self.ptr_ne(dst.opts);
+        self.instruction(If(BlockType::Empty));
+        self.instruction(LocalGet(dst.ptr)); // old_ptr
+        self.instruction(LocalGet(dst_byte_len)); // old_size
+        self.ptr_uconst(dst.opts, 2); // align
+        self.instruction(LocalGet(dst.len)); // new_size
+        self.instruction(Call(dst.opts.realloc.unwrap().as_u32()));
+        self.instruction(LocalSet(dst.ptr));
+        self.instruction(End);
+
+        // In this block the latin1 encoding failed. The host transcode
+        // returned how many units were consumed from the source and how
+        // many bytes were written to the destination. Here the buffer is
+        // inflated and sized and the second utf16 intrinsic is invoked to
+        // perform the final inflation.
+        self.instruction(Else); // else latin1-or-utf16 block
+
+        // For utf8 validate that the inflated size is still within bounds.
+        if src_enc.width() == 1 {
+            self.validate_string_length_u8(src, 2);
+        }
+
+        // Reallocate the buffer with twice the source code units in byte
+        // size.
+        self.instruction(LocalGet(dst.ptr)); // old_ptr
+        self.instruction(LocalGet(dst_byte_len)); // old_size
+        self.ptr_uconst(dst.opts, 2); // align
+        self.convert_src_len_to_dst(src.len, src.opts.ptr(), dst.opts.ptr());
+        self.ptr_uconst(dst.opts, 1);
+        self.ptr_shl(dst.opts);
+        self.instruction(LocalTee(dst_byte_len));
+        self.instruction(Call(dst.opts.realloc.unwrap().as_u32()));
+        self.instruction(LocalSet(dst.ptr));
+
+        // Call the host utf16 transcoding function. This will inflate the
+        // prior latin1 bytes and then encode the rest of the source string
+        // as utf16 into the remaining space in the destination buffer.
+        self.instruction(LocalGet(src.ptr));
+        self.instruction(LocalGet(src_len_tmp));
+        if let FE::Utf16 = src_enc {
+            self.ptr_uconst(src.opts, 1);
+            self.ptr_shl(src.opts);
+        }
+        self.ptr_add(src.opts);
+        self.instruction(LocalGet(src.len));
+        self.instruction(LocalGet(src_len_tmp));
+        self.ptr_sub(src.opts);
+        self.instruction(LocalGet(dst.ptr));
+        self.convert_src_len_to_dst(src.len, src.opts.ptr(), dst.opts.ptr());
+        self.instruction(LocalGet(dst.len));
+        self.instruction(Call(transcode_utf16));
+        self.instruction(LocalSet(dst.len));
+
+        // If the returned number of code units written to the destination
+        // is not equal to the size of the allocation then the allocation is
+        // resized down to the appropriate size.
+        //
+        // Note that the byte size desired is `2*dst_len` and the current
+        // byte buffer size is `2*src_len` so the `2` factor isn't checked
+        // here, just the lengths.
+        self.instruction(LocalGet(dst.len));
+        self.convert_src_len_to_dst(src.len, src.opts.ptr(), dst.opts.ptr());
+        self.ptr_ne(dst.opts);
+        self.instruction(If(BlockType::Empty));
+        self.instruction(LocalGet(dst.ptr)); // old_ptr
+        self.instruction(LocalGet(dst_byte_len)); // old_size
+        self.ptr_uconst(dst.opts, 2); // align
+        self.instruction(LocalGet(dst.len));
+        self.ptr_uconst(dst.opts, 1);
+        self.ptr_shl(dst.opts);
+        self.instruction(Call(dst.opts.realloc.unwrap().as_u32()));
+        self.instruction(LocalSet(dst.ptr));
+        self.instruction(End);
+
+        // Tag the returned pointer as utf16
+        self.instruction(LocalGet(dst.len));
+        self.ptr_uconst(dst.opts, UTF16_TAG);
+        self.ptr_or(dst.opts);
+        self.instruction(LocalSet(dst.len));
+
+        self.instruction(End); // end latin1-or-utf16 block
+
+        dst
+    }
+
+    fn validate_string_length(&mut self, src: &WasmString<'_>, dst: FE) {
+        self.validate_string_length_u8(src, dst.width())
+    }
+
+    fn validate_string_length_u8(&mut self, s: &WasmString<'_>, dst: u8) {
+        // Check to see if the source byte length is out of bounds in
+        // which case a trap is generated.
+        self.instruction(LocalGet(s.len));
+        let max = MAX_STRING_BYTE_LENGTH / u32::from(dst);
+        self.ptr_uconst(s.opts, max);
+        self.ptr_ge_u(s.opts);
+        self.instruction(If(BlockType::Empty));
+        self.trap(Trap::StringLengthTooBig);
+        self.instruction(End);
+    }
+
+    fn transcoder(&mut self, src: &WasmString<'_>, dst: &WasmString<'_>, op: Transcode) -> u32 {
+        self.transcoders.import(
+            self.types,
+            Transcoder {
+                from_memory: src.opts.memory.unwrap(),
+                from_memory64: src.opts.memory64,
+                to_memory: dst.opts.memory.unwrap(),
+                to_memory64: dst.opts.memory64,
+                op,
+            },
+        )
+    }
+
+    fn validate_string_inbounds(&mut self, s: &WasmString<'_>, byte_len: u32) {
+        let extend_to_64 = |me: &mut Self| {
+            if !s.opts.memory64 {
+                me.instruction(I64ExtendI32U);
+            }
+        };
+
+        self.instruction(Block(BlockType::Empty));
+        self.instruction(Block(BlockType::Empty));
+
+        // Calculate the full byte size of memory with `memory.size`. Note that
+        // arithmetic here is done always in 64-bits to accomodate 4G memories.
+        // Additionally it's assumed that 64-bit memories never fill up
+        // entirely.
+        self.instruction(MemorySize(s.opts.memory.unwrap().as_u32()));
+        extend_to_64(self);
+        self.instruction(I64Const(16));
+        self.instruction(I64Shl);
+
+        // Calculate the end address of the string. This is done by adding the
+        // base pointer to the byte length. For 32-bit memories there's no need
+        // to check for overflow since everything is extended to 64-bit, but for
+        // 64-bit memories overflow is checked.
+        self.instruction(LocalGet(s.ptr));
+        extend_to_64(self);
+        self.instruction(LocalGet(byte_len));
+        extend_to_64(self);
+        self.instruction(I64Add);
+        if s.opts.memory64 {
+            let tmp = self.gen_local(ValType::I64);
+            self.instruction(LocalTee(tmp));
+            self.instruction(LocalGet(s.ptr));
+            self.ptr_lt_u(s.opts);
+            self.ptr_br_if(s.opts, 0);
+            self.instruction(LocalGet(tmp));
+        }
+
+        // If the byte size of memory is greater than the final address of the
+        // string then the string is invalid. Note that if it's precisely equal
+        // then that's ok.
+        self.instruction(I64GtU);
+        self.instruction(BrIf(1));
+
+        self.instruction(End);
+        self.trap(Trap::StringLengthOverflow);
+        self.instruction(End);
     }
 
     fn translate_list(
@@ -1467,17 +2232,17 @@ impl Compiler<'_, '_> {
         self.instruction(GlobalSet(flags_global.as_u32()));
     }
 
-    fn verify_aligned(&mut self, memory: &Memory, align: usize) {
+    fn verify_aligned(&mut self, opts: &Options, addr_local: u32, align: usize) {
         // If the alignment is 1 then everything is trivially aligned and the
         // check can be omitted.
         if align == 1 {
             return;
         }
-        self.instruction(LocalGet(memory.addr_local));
+        self.instruction(LocalGet(addr_local));
         assert!(align.is_power_of_two());
-        self.ptr_uconst(memory.opts, u32::try_from(align - 1).unwrap());
-        self.ptr_and(memory.opts);
-        self.ptr_if(memory.opts, BlockType::Empty);
+        self.ptr_uconst(opts, u32::try_from(align - 1).unwrap());
+        self.ptr_and(opts);
+        self.ptr_if(opts, BlockType::Empty);
         self.trap(Trap::UnalignedPointer);
         self.instruction(End);
     }
@@ -1527,7 +2292,7 @@ impl Compiler<'_, '_> {
             offset: 0,
             opts,
         };
-        self.verify_aligned(&ret, align);
+        self.verify_aligned(opts, ret.addr_local, align);
         ret
     }
 
@@ -1711,6 +2476,46 @@ impl Compiler<'_, '_> {
         }
     }
 
+    fn ptr_sub(&mut self, opts: &Options) {
+        if opts.memory64 {
+            self.instruction(I64Sub);
+        } else {
+            self.instruction(I32Sub);
+        }
+    }
+
+    fn ptr_mul(&mut self, opts: &Options) {
+        if opts.memory64 {
+            self.instruction(I64Mul);
+        } else {
+            self.instruction(I32Mul);
+        }
+    }
+
+    fn ptr_ge_u(&mut self, opts: &Options) {
+        if opts.memory64 {
+            self.instruction(I64GeU);
+        } else {
+            self.instruction(I32GeU);
+        }
+    }
+
+    fn ptr_lt_u(&mut self, opts: &Options) {
+        if opts.memory64 {
+            self.instruction(I64LtU);
+        } else {
+            self.instruction(I32LtU);
+        }
+    }
+
+    fn ptr_shl(&mut self, opts: &Options) {
+        if opts.memory64 {
+            self.instruction(I64Shl);
+        } else {
+            self.instruction(I32Shl);
+        }
+    }
+
     fn ptr_eqz(&mut self, opts: &Options) {
         if opts.memory64 {
             self.instruction(I64Eqz);
@@ -1735,11 +2540,43 @@ impl Compiler<'_, '_> {
         }
     }
 
+    fn ptr_eq(&mut self, opts: &Options) {
+        if opts.memory64 {
+            self.instruction(I64Eq);
+        } else {
+            self.instruction(I32Eq);
+        }
+    }
+
+    fn ptr_ne(&mut self, opts: &Options) {
+        if opts.memory64 {
+            self.instruction(I64Ne);
+        } else {
+            self.instruction(I32Ne);
+        }
+    }
+
     fn ptr_and(&mut self, opts: &Options) {
         if opts.memory64 {
             self.instruction(I64And);
         } else {
             self.instruction(I32And);
+        }
+    }
+
+    fn ptr_or(&mut self, opts: &Options) {
+        if opts.memory64 {
+            self.instruction(I64Or);
+        } else {
+            self.instruction(I32Or);
+        }
+    }
+
+    fn ptr_xor(&mut self, opts: &Options) {
+        if opts.memory64 {
+            self.instruction(I64Xor);
+        } else {
+            self.instruction(I32Xor);
         }
     }
 
@@ -1973,4 +2810,10 @@ struct VariantCase<'a> {
 enum MallocSize {
     Const(usize),
     Local(u32),
+}
+
+struct WasmString<'a> {
+    ptr: u32,
+    len: u32,
+    opts: &'a Options,
 }
