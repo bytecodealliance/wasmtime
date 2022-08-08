@@ -833,11 +833,6 @@ impl Compiler<'_, '_> {
             }
         };
 
-        // Skip the `transcode` function if the byte length is zero
-        // because no memory is modified and bounds checks don't matter.
-        self.instruction(LocalGet(src.len));
-        self.ptr_if(src.opts, BlockType::Empty);
-
         // Validate that `src_len + src_ptr` and
         // `dst_mem.addr_local + dst_byte_len` are both in-bounds. This
         // is done by loading the last byte of the string and if that
@@ -860,8 +855,6 @@ impl Compiler<'_, '_> {
         self.instruction(LocalGet(src.len));
         self.instruction(LocalGet(dst.ptr));
         self.instruction(Call(transcode));
-
-        self.instruction(End); // end of "if not zero" block
 
         dst
     }
@@ -902,10 +895,6 @@ impl Compiler<'_, '_> {
                 opts: dst_opts,
             }
         };
-
-        // If the string is non-empty encoding is attempted.
-        self.instruction(LocalGet(src.len));
-        self.ptr_if(src.opts, BlockType::Empty);
 
         // Ensure buffers are all in-bounds
         let src_byte_len = match src_enc {
@@ -1040,8 +1029,6 @@ impl Compiler<'_, '_> {
 
         self.instruction(End); // end of "first transcode not enough"
 
-        self.instruction(End); // end of nonzero string length block
-
         dst
     }
 
@@ -1081,11 +1068,6 @@ impl Compiler<'_, '_> {
             }
         };
 
-        // If the number of original code units is non-empty then
-        // the pointer/lengths are validated and then passed to the
-        // host transcode.
-        self.instruction(LocalGet(src.len));
-        self.ptr_if(src.opts, BlockType::Empty);
         self.validate_string_inbounds(src, src.len);
         self.validate_string_inbounds(&dst, dst_byte_len);
 
@@ -1117,7 +1099,6 @@ impl Compiler<'_, '_> {
         self.instruction(LocalSet(dst.ptr));
         self.instruction(End); // end of shrink-to-fit
 
-        self.instruction(End); // end of nonzero string length
         dst
     }
 
@@ -1156,11 +1137,6 @@ impl Compiler<'_, '_> {
             }
         };
 
-        // If the number of original code units is non-empty then
-        // the pointer/lengths are validated and then passed to the
-        // host transcode.
-        self.instruction(LocalGet(src.len));
-        self.ptr_if(src.opts, BlockType::Empty);
         self.validate_string_inbounds(src, dst_byte_len);
         self.validate_string_inbounds(&dst, dst_byte_len);
 
@@ -1200,7 +1176,6 @@ impl Compiler<'_, '_> {
         self.instruction(Call(dst.opts.realloc.unwrap().as_u32()));
         self.instruction(LocalSet(dst.ptr));
 
-        self.instruction(End); // end of nonzero string length
         dst
     }
 
@@ -1231,11 +1206,6 @@ impl Compiler<'_, '_> {
             }
         };
 
-        // If the number of original code units is non-empty then
-        // the pointer/lengths are validated and then passed to the
-        // host transcode.
-        self.instruction(LocalGet(src.len));
-        self.ptr_if(src.opts, BlockType::Empty);
         self.validate_string_inbounds(src, src.len);
         self.validate_string_inbounds(&dst, dst_byte_len);
 
@@ -1350,7 +1320,6 @@ impl Compiler<'_, '_> {
         self.instruction(LocalSet(dst.len));
 
         self.instruction(End); // end latin1-or-utf16 block
-        self.instruction(End); // end empty string block
 
         dst
     }
@@ -1385,32 +1354,51 @@ impl Compiler<'_, '_> {
     }
 
     fn validate_string_inbounds(&mut self, s: &WasmString<'_>, byte_len: u32) {
-        let tmp = self.gen_local(s.opts.ptr());
+        let extend_to_64 = |me: &mut Self| {
+            if !s.opts.memory64 {
+                me.instruction(I64ExtendI32U);
+            }
+        };
 
-        // Add the ptr/len and save that into a local. If the result is less
-        // than the original pointer then wraparound occurred and this should
-        // trap.
+        self.instruction(Block(BlockType::Empty));
+        self.instruction(Block(BlockType::Empty));
+
+        // Calculate the full byte size of memory with `memory.size`. Note that
+        // arithmetic here is done always in 64-bits to accomodate 4G memories.
+        // Additionally it's assumed that 64-bit memories never fill up
+        // entirely.
+        self.instruction(MemorySize(s.opts.memory.unwrap().as_u32()));
+        extend_to_64(self);
+        self.instruction(I64Const(16));
+        self.instruction(I64Shl);
+
+        // Calculate the end address of the string. This is done by adding the
+        // base pointer to the byte length. For 32-bit memories there's no need
+        // to check for overflow since everything is extended to 64-bit, but for
+        // 64-bit memories overflow is checked.
         self.instruction(LocalGet(s.ptr));
+        extend_to_64(self);
         self.instruction(LocalGet(byte_len));
-        self.ptr_add(s.opts);
-        self.instruction(LocalTee(tmp));
-        self.instruction(LocalGet(s.ptr));
-        self.ptr_lt_u(s.opts);
-        self.instruction(If(BlockType::Empty));
+        extend_to_64(self);
+        self.instruction(I64Add);
+        if s.opts.memory64 {
+            let tmp = self.gen_local(ValType::I64);
+            self.instruction(LocalTee(tmp));
+            self.instruction(LocalGet(s.ptr));
+            self.ptr_lt_u(s.opts);
+            self.ptr_br_if(s.opts, 0);
+            self.instruction(LocalGet(tmp));
+        }
+
+        // If the byte size of memory is greater than the final address of the
+        // string then the string is invalid. Note that if it's precisely equal
+        // then that's ok.
+        self.instruction(I64GtU);
+        self.instruction(BrIf(1));
+
+        self.instruction(End);
         self.trap(Trap::StringLengthOverflow);
         self.instruction(End);
-
-        // If we didn't wrap around then load the final byte of the string which
-        // will trap if the string is itself out of bounds.
-        self.instruction(LocalGet(tmp));
-        self.ptr_iconst(s.opts, -1);
-        self.ptr_add(s.opts);
-        self.instruction(I32Load8_U(MemArg {
-            offset: 0,
-            align: 0,
-            memory_index: s.opts.memory.unwrap().as_u32(),
-        }));
-        self.instruction(Drop);
     }
 
     fn translate_list(

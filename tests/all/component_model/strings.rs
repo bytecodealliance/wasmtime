@@ -202,8 +202,9 @@ fn ptr_out_of_bounds() -> Result<()> {
 }
 
 fn test_ptr_out_of_bounds(engine: &Engine, src: &str, dst: &str) -> Result<()> {
-    let component = format!(
-        r#"
+    let test = |len: u32| -> Result<()> {
+        let component = format!(
+            r#"
 (component
   (component $c
     (core module $m
@@ -228,7 +229,7 @@ fn test_ptr_out_of_bounds(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     (core module $m
       (import "" "" (func $f (param i32 i32)))
 
-      (func $start (call $f (i32.const 0x8000_0000) (i32.const 1)))
+      (func $start (call $f (i32.const 0x8000_0000) (i32.const {len})))
       (start $start)
     )
     (core instance (instantiate $m (with "" (instance (export "" (func $f))))))
@@ -238,16 +239,21 @@ fn test_ptr_out_of_bounds(engine: &Engine, src: &str, dst: &str) -> Result<()> {
   (instance $c2 (instantiate $c2 (with "" (func $c ""))))
 )
 "#
-    );
+        );
+        let component = Component::new(engine, &component)?;
+        let mut store = Store::new(engine, ());
+        let trap = Linker::new(engine)
+            .instantiate(&mut store, &component)
+            .err()
+            .unwrap()
+            .downcast::<Trap>()?;
+        assert_eq!(trap.trap_code(), Some(TrapCode::UnreachableCodeReached));
+        Ok(())
+    };
 
-    let component = Component::new(engine, &component)?;
-    let mut store = Store::new(engine, ());
-    let trap = Linker::new(engine)
-        .instantiate(&mut store, &component)
-        .err()
-        .unwrap()
-        .downcast::<Trap>()?;
-    assert_eq!(trap.trap_code(), Some(TrapCode::MemoryOutOfBounds));
+    test(0)?;
+    test(1)?;
+
     Ok(())
 }
 
@@ -307,7 +313,7 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     let component = Component::new(engine, &component)?;
     let mut store = Store::new(engine, ());
 
-    let mut test_overflow = |size: u32, code: TrapCode| -> Result<()> {
+    let mut test_overflow = |size: u32| -> Result<()> {
         println!("src={src} dst={dst} size={size:#x}");
         let instance = Linker::new(engine).instantiate(&mut store, &component)?;
         let func = instance.get_typed_func::<(u32,), (), _>(&mut store, "f")?;
@@ -315,42 +321,40 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
             .call(&mut store, (size,))
             .unwrap_err()
             .downcast::<Trap>()?;
-        assert_eq!(trap.trap_code(), Some(code));
+        assert_eq!(trap.trap_code(), Some(TrapCode::UnreachableCodeReached));
         Ok(())
     };
 
     let max = 1 << 31;
-    let unreachable = TrapCode::UnreachableCodeReached;
-    let oob = TrapCode::MemoryOutOfBounds;
 
     match src {
         "utf8" => {
             // This exceeds MAX_STRING_BYTE_LENGTH
-            test_overflow(max, unreachable)?;
+            test_overflow(max)?;
 
             if dst == "utf16" {
                 // exceeds MAX_STRING_BYTE_LENGTH when multiplied
-                test_overflow(max / 2, unreachable)?;
+                test_overflow(max / 2)?;
 
                 // Technically this fails on the first string, not the second.
                 // Ideally this would test the overflow check on the second
                 // string though.
-                test_overflow(max / 2 - 100, oob)?;
+                test_overflow(max / 2 - 100)?;
             } else {
                 // This will point into unmapped memory
-                test_overflow(max - 100, oob)?;
+                test_overflow(max - 100)?;
             }
         }
 
         "utf16" => {
-            test_overflow(max / 2, unreachable)?;
-            test_overflow(max / 2 - 100, oob)?;
+            test_overflow(max / 2)?;
+            test_overflow(max / 2 - 100)?;
         }
 
         "latin1+utf16" => {
-            test_overflow((max / 2) | UTF16_TAG, unreachable)?;
+            test_overflow((max / 2) | UTF16_TAG)?;
             // tag a utf16 string with the max length and it should overflow.
-            test_overflow((max / 2 - 100) | UTF16_TAG, oob)?;
+            test_overflow((max / 2 - 100) | UTF16_TAG)?;
         }
 
         _ => unreachable!(),
@@ -417,7 +421,7 @@ fn test_realloc_oob(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     let instance = Linker::new(engine).instantiate(&mut store, &component)?;
     let func = instance.get_typed_func::<(), (), _>(&mut store, "f")?;
     let trap = func.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
-    assert_eq!(trap.trap_code(), Some(TrapCode::MemoryOutOfBounds));
+    assert_eq!(trap.trap_code(), Some(TrapCode::UnreachableCodeReached));
     Ok(())
 }
 

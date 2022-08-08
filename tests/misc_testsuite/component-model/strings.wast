@@ -105,4 +105,4 @@
     (instance $c (instantiate $c))
     (instance $c2 (instantiate $c2 (with "" (func $c ""))))
   )
-  "out of bounds")
+  "unreachable")
