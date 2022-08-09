@@ -76,15 +76,24 @@ impl DirEntry {
         if self.caps.contains(caps) {
             Ok(())
         } else {
-            Err(Error::not_capable().context(format!("desired {:?}, has {:?}", caps, self.caps,)))
+            let missing = caps & !self.caps;
+            if missing.intersects(DirCaps::READDIR) {
+                Err(Error::not_dir()
+                    .context(format!("desired rights {:?}, has {:?}", caps, self.caps)))
+            } else {
+                Err(Error::perm()
+                    .context(format!("desired rights {:?}, has {:?}", caps, self.caps)))
+            }
         }
     }
     pub fn capable_of_file(&self, caps: FileCaps) -> Result<(), Error> {
         if self.file_caps.contains(caps) {
             Ok(())
         } else {
-            Err(Error::not_capable()
-                .context(format!("desired {:?}, has {:?}", caps, self.file_caps)))
+            Err(Error::perm().context(format!(
+                "desired rights {:?}, has {:?}",
+                caps, self.file_caps
+            )))
         }
     }
     pub fn drop_caps_to(&mut self, caps: DirCaps, file_caps: FileCaps) -> Result<(), Error> {

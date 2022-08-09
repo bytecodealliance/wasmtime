@@ -72,6 +72,9 @@ pub enum ErrorKind {
     /// Errno::Spipe: Invalid seek
     #[error("Spipe: Invalid seek")]
     Spipe,
+    /// Errno::Perm: Permission denied
+    #[error("Permission denied")]
+    Perm,
     /// Errno::NotCapable: Not capable
     #[error("Not capable")]
     NotCapable,
@@ -92,7 +95,7 @@ pub trait ErrorExt {
     fn overflow() -> Self;
     fn range() -> Self;
     fn seek_pipe() -> Self;
-    fn not_capable() -> Self;
+    fn perm() -> Self;
 }
 
 impl ErrorExt for Error {
@@ -138,7 +141,7 @@ impl ErrorExt for Error {
     fn seek_pipe() -> Self {
         ErrorKind::Spipe.into()
     }
-    fn not_capable() -> Self {
-        ErrorKind::NotCapable.into()
+    fn perm() -> Self {
+        ErrorKind::Perm.into()
     }
 }
