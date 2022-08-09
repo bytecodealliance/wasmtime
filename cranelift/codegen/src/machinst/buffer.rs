@@ -1214,6 +1214,10 @@ impl<I: VCodeInst> MachBuffer<I> {
     pub fn finish(mut self) -> MachBufferFinalized {
         let _tt = timing::vcode_emit_finish();
 
+        // Do any optimizations on branches at tail of buffer, as if we
+        // had bound one last label.
+        self.optimize_branches();
+
         self.finish_emission_maybe_forcing_veneers(false);
 
         let mut srclocs = self.srclocs;
