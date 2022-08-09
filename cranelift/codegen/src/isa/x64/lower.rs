@@ -801,11 +801,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ctx.emit(Inst::xmm_rm_r(SseOpcode::Psubd, RegMem::from(tmp), dst));
 
                     // Convert the low 16 bits
-                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Cvtdq2ps, RegMem::from(tmp), tmp));
+                    ctx.emit(Inst::xmm_unary_rm_r(SseOpcode::Cvtdq2ps, RegMem::from(tmp), tmp));
 
                     // Shift the high bits by 1, convert, and double to get the correct value.
                     ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrld, RegMemImm::imm(1), dst));
-                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Cvtdq2ps, RegMem::from(dst), dst));
+                    ctx.emit(Inst::xmm_unary_rm_r(SseOpcode::Cvtdq2ps, RegMem::from(dst), dst));
                     ctx.emit(Inst::xmm_rm_r(
                         SseOpcode::Addps,
                         RegMem::reg(dst.to_reg()),
@@ -895,7 +895,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ));
 
                     // Convert the packed float to packed doubleword.
-                    ctx.emit(Inst::xmm_rm_r(
+                    ctx.emit(Inst::xmm_unary_rm_r(
                         SseOpcode::Cvttps2dq,
                         RegMem::reg(dst.to_reg()),
                         dst,
@@ -988,7 +988,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                     ctx.emit(Inst::xmm_rm_r(SseOpcode::Pcmpeqd, RegMem::from(tmp2), tmp2));
                     ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrld, RegMemImm::imm(1), tmp2));
-                    ctx.emit(Inst::xmm_rm_r(
+                    ctx.emit(Inst::xmm_unary_rm_r(
                         SseOpcode::Cvtdq2ps,
                         RegMem::from(tmp2),
                         tmp2,
@@ -998,7 +998,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     // Overflow lanes greater than the maximum allowed signed value will
                     // set to 0x80000000. Negative and NaN lanes will be 0x0
                     ctx.emit(Inst::xmm_mov(SseOpcode::Movaps, RegMem::from(dst), tmp1));
-                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Cvttps2dq, RegMem::from(dst), dst));
+                    ctx.emit(Inst::xmm_unary_rm_r(SseOpcode::Cvttps2dq, RegMem::from(dst), dst));
 
                     // Set lanes to src - max_signed_int
                     ctx.emit(Inst::xmm_rm_r(SseOpcode::Subps, RegMem::from(tmp2), tmp1));
@@ -1015,7 +1015,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ));
 
                     // Convert those set of lanes that have the max_signed_int factored out.
-                    ctx.emit(Inst::xmm_rm_r(
+                    ctx.emit(Inst::xmm_unary_rm_r(
                         SseOpcode::Cvttps2dq,
                         RegMem::from(tmp1),
                         tmp1,
