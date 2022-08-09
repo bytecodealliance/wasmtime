@@ -166,57 +166,6 @@ fn input_to_reg_mem<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> RegM
     )
 }
 
-/// An extension specification for `extend_input_to_reg`.
-#[derive(Clone, Copy)]
-enum ExtSpec {
-    #[allow(dead_code)]
-    ZeroExtendTo32,
-    ZeroExtendTo64,
-    #[allow(dead_code)]
-    SignExtendTo32,
-    #[allow(dead_code)] // not used just yet but may be used in the future!
-    SignExtendTo64,
-}
-
-/// Put the given input into a register, marking it as used, and do a zero- or signed- extension if
-/// required. (This obviously causes side-effects.)
-fn extend_input_to_reg<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    spec: InsnInput,
-    ext_spec: ExtSpec,
-) -> Reg {
-    let requested_size = match ext_spec {
-        ExtSpec::ZeroExtendTo32 | ExtSpec::SignExtendTo32 => 32,
-        ExtSpec::ZeroExtendTo64 | ExtSpec::SignExtendTo64 => 64,
-    };
-    let input_size = ctx.input_ty(spec.insn, spec.input).bits();
-
-    let requested_ty = if requested_size == 32 {
-        types::I32
-    } else {
-        types::I64
-    };
-
-    let ext_mode = match (input_size, requested_size) {
-        (a, b) if a == b => return put_input_in_reg(ctx, spec),
-        (1, 8) => return put_input_in_reg(ctx, spec),
-        (a, b) => ExtMode::new(a.try_into().unwrap(), b.try_into().unwrap())
-            .unwrap_or_else(|| panic!("invalid extension: {} -> {}", a, b)),
-    };
-
-    let src = input_to_reg_mem(ctx, spec);
-    let dst = ctx.alloc_tmp(requested_ty).only_reg().unwrap();
-    match ext_spec {
-        ExtSpec::ZeroExtendTo32 | ExtSpec::ZeroExtendTo64 => {
-            ctx.emit(Inst::movzx_rm_r(ext_mode, src, dst))
-        }
-        ExtSpec::SignExtendTo32 | ExtSpec::SignExtendTo64 => {
-            ctx.emit(Inst::movsx_rm_r(ext_mode, src, dst))
-        }
-    }
-    dst.to_reg()
-}
-
 fn input_to_imm<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Option<u64> {
     ctx.get_input_as_source_or_const(spec.insn, spec.input)
         .constant
@@ -642,21 +591,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             if !ty.is_vector() {
                 match input_ty {
                     types::I8 | types::I16 | types::I32 => {
-                        // Conversion from an unsigned int smaller than 64-bit is easy: zero-extend +
-                        // do a signed conversion (which won't overflow).
-                        let opcode = if ty == types::F32 {
-                            SseOpcode::Cvtsi2ss
-                        } else {
-                            assert_eq!(ty, types::F64);
-                            SseOpcode::Cvtsi2sd
-                        };
-
-                        let src = RegMem::reg(extend_input_to_reg(
-                            ctx,
-                            inputs[0],
-                            ExtSpec::ZeroExtendTo64,
-                        ));
-                        ctx.emit(Inst::gpr_to_xmm(opcode, src, OperandSize::Size64, dst));
+                        implemented_in_isle(ctx);
                     }
 
                     types::I64 => {

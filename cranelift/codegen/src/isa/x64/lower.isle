@@ -3013,3 +3013,11 @@
 
 (rule (lower (fcvt_low_from_sint a @ (value_type ty)))
       (x64_cvtdq2pd ty a))
+
+;; Rules for `fcvt_from_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fcvt_from_uint val @ (value_type (fits_in_32 (ty_int ty))))))
+      (x64_cvtsi2ss $I64 (extend_to_gpr val $I64 (ExtendKind.Zero))))
+
+(rule (lower (has_type $F64 (fcvt_from_uint val @ (value_type (fits_in_32 (ty_int ty))))))
+      (x64_cvtsi2sd $I64 (extend_to_gpr val $I64 (ExtendKind.Zero))))
