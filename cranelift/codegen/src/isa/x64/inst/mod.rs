@@ -417,27 +417,6 @@ impl Inst {
         Inst::XmmCmpRmR { op, src, dst }
     }
 
-    pub(crate) fn cvt_u64_to_float_seq(
-        dst_size: OperandSize,
-        src: Writable<Reg>,
-        tmp_gpr1: Writable<Reg>,
-        tmp_gpr2: Writable<Reg>,
-        dst: Writable<Reg>,
-    ) -> Inst {
-        debug_assert!(dst_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        debug_assert!(src.to_reg().class() == RegClass::Int);
-        debug_assert!(tmp_gpr1.to_reg().class() == RegClass::Int);
-        debug_assert!(tmp_gpr2.to_reg().class() == RegClass::Int);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::CvtUint64ToFloatSeq {
-            src: WritableGpr::from_writable_reg(src).unwrap(),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-            tmp_gpr1: WritableGpr::from_writable_reg(tmp_gpr1).unwrap(),
-            tmp_gpr2: WritableGpr::from_writable_reg(tmp_gpr2).unwrap(),
-            dst_size,
-        }
-    }
-
     pub(crate) fn cvt_float_to_sint_seq(
         src_size: OperandSize,
         dst_size: OperandSize,

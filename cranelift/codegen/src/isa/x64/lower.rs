@@ -583,39 +583,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FcvtFromUint => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
-            let input_ty = ctx.input_ty(insn, 0);
             let output_ty = ctx.output_ty(insn, 0);
 
             if !ty.is_vector() {
-                match input_ty {
-                    types::I8 | types::I16 | types::I32 => {
-                        implemented_in_isle(ctx);
-                    }
-
-                    types::I64 => {
-                        let src = put_input_in_reg(ctx, inputs[0]);
-
-                        let src_copy = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                        ctx.emit(Inst::gen_move(src_copy, src, types::I64));
-
-                        let tmp_gpr1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                        let tmp_gpr2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                        ctx.emit(Inst::cvt_u64_to_float_seq(
-                            if ty == types::F64 {
-                                OperandSize::Size64
-                            } else {
-                                OperandSize::Size32
-                            },
-                            src_copy,
-                            tmp_gpr1,
-                            tmp_gpr2,
-                            dst,
-                        ));
-                    }
-                    _ => panic!("unexpected input type for FcvtFromUint: {:?}", input_ty),
-                };
+                implemented_in_isle(ctx);
             } else if output_ty == types::F64X2 {
                 if let Some(uwiden) = matches_input(ctx, inputs[0], Opcode::UwidenLow) {
                     let uwiden_input = InsnInput {
