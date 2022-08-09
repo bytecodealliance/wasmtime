@@ -25,12 +25,6 @@ internally have been made along the lines of:
   with features like `i128` support, supporting more ABIs, etc.
 * Much more of the component model has been implemented and is now fuzzed.
 
-This release also has a number of improvements to Cranelift compile times. With
-the [sightglass benchmark suite][sightglass] benchmarks show a 30-40%
-improvement in compile times.
-
-[sightglass]: https://github.com/bytecodealliance/sightglass
-
 Finally this release is currently scheduled to be the last `0.*` release of
 Wasmtime. The upcoming release of Wasmtime on September 20 is planned to be
 Wasmtime's 1.0 release. More information about what 1.0 means for Wasmtime is
