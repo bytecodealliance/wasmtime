@@ -1,5 +1,11 @@
 ;; Algebraic optimizations.
 
+;; uextend/sextend of a constant.
+(rule (simplify (uextend $I64 (iconst $I32 imm)))
+      (iconst $I64 imm))
+(rule (simplify (sextend $I64 (iconst $I32 (u64_from_imm64 imm))))
+      (iconst $I64 (imm64 (u64_sextend_u32 imm))))
+
 ;; x+0 == 0+x == x.
 (rule (simplify (iadd ty
                       x
@@ -91,18 +97,28 @@
       (iconst ty (imm64 0)))
 
 ;; x ^ not(x) == not(x) ^ x == -1.
-
-;; x & x == x.
-(rule (simplify (band ty x x))
-      x)
+(rule (simplify (bxor $I32 x (bnot $I32 x))) (iconst $I32 (imm64 0xffff_ffff)))
+(rule (simplify (bxor $I32 (bnot $I32 x) x)) (iconst $I32 (imm64 0xffff_ffff)))
+(rule (simplify (bxor $I64 x (bnot $I64 x))) (iconst $I64 (imm64 0xffff_ffff_ffff_ffff)))
+(rule (simplify (bxor $I64 (bnot $I64 x) x)) (iconst $I64 (imm64 0xffff_ffff_ffff_ffff)))
 
 ;; x & -1 == -1 & x == x & x == x.
+(rule (simplify (band ty x x)) x)
+(rule (simplify (band $I32 x (iconst $I32 (u64_from_imm64 0xffff_ffff)))) x)
+(rule (simplify (band $I32 (iconst $I32 (u64_from_imm64 0xffff_ffff)) x)) x)
+(rule (simplify (band $I64 x (iconst $I64 (u64_from_imm64 0xffff_ffff_ffff_ffff)))) x)
+(rule (simplify (band $I64 (iconst $I64 (u64_from_imm64 0xffff_ffff_ffff_ffff)) x)) x)
 
 ;; not(not(x)) == x.
+(rule (simplify (bnot ty (bnot ty x))) x)
 
+;; DeMorgan's rule (two versions):
 ;; bnot(bor(x, y)) == band(bnot(x), bnot(y))
+(rule (simplify (bnot ty (bor ty x y)))
+      (band ty (bnot ty x) (bnot ty y)))
 ;; bnot(band(x, y)) == bor(bnot(x), bnot(y))
-
+(rule (simplify (bnot ty (band t x y)))
+      (bor ty (bnot ty x) (bnot ty y)))
 
 ;; x*2 == 2*x == x+x.
 (rule (simplify (imul ty x (iconst _ (simm32 2))))
@@ -110,13 +126,15 @@
 (rule (simplify (imul ty (iconst _ (simm32 2)) x))
       (iadd ty x x))
 
-;; TODO: strength reduction: mul/div to shifts
-;; TODO: shift patterns to sign/zero-extend
-;; TODO: div/rem by constants -> magic multiplications
-;; TODO: algebraic: add/sub 0, mul/div 1, shift by 0, rot by 0, and by all-1s, or/xor by 0, not(not(x))
-;; TODO: demorgan
+;; x<<32>>32: uextend/sextend 32->64.
+(rule (simplify (ushr $I64 (ishl $I64 (uextend $I64 x @ (eclass_type $I32)) (iconst _ (simm32 32))) (iconst _ (simm32 32))))
+      (uextend $I64 x))
 
-;; TODO: mask iconst values down to type?
+(rule (simplify (sshr $I64 (ishl $I64 (uextend $I64 x @ (eclass_type $I32)) (iconst _ (simm32 32))) (iconst _ (simm32 32))))
+      (sextend $I64 x))
+
+;; TODO: strength reduction: mul/div to shifts
+;; TODO: div/rem by constants -> magic multiplications
 
 ;; Reassociate when it benefits LICM.
 (rule (simplify (iadd ty (iadd ty x y) z))

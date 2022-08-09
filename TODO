@@ -32,12 +32,20 @@
     that. pre-populate best selection.
 
 - code quality
-  - and x, 0xffff....
-  - x << N >> N as uextend / sextend
   - strength reduction for mul/div/rem
   - analyses: demanded bits, defined bits
   - immediate reuse within basic blocks
   - remat adds near uses? outside of basic blocks?
+    - (only adds with constants?)
   - (icmp (band (iconst 0xffff_ffff) x) ...) -> (icmp $I32 (ireduce x) ...)
   - more legalizations of pseudoinsts in mid-end, to allow opts
     - handle amodes this way too?
+      - in lowering, don't generate new adds; just take pieces of toplevel add
+      - then rewrite in mid-end to reassociate as needed
+
+- features
+  - support non-pure nodes in rewrite as well?
+    - optimize once before adding to side_effects list
+    - handle varargs for calls, branches
+  - abstract the notion of an analysis; use for loop-depth
+  - use computed loop-depth when elaborating, rather than recomputing
