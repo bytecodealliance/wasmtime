@@ -348,7 +348,7 @@ pub extern "C" fn wasm_bench_create(
 pub extern "C" fn wasm_bench_free(state: *mut c_void) {
     assert!(!state.is_null());
     unsafe {
-        Box::from_raw(state as *mut BenchState);
+        drop(Box::from_raw(state as *mut BenchState));
     }
 }
 
