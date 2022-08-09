@@ -66,6 +66,7 @@ pub struct Module<'a> {
 
     funcs: PrimaryMap<FunctionId, Function>,
     translate_mem_funcs: HashMap<(InterfaceType, InterfaceType, Options, Options), FunctionId>,
+    translate_mem_worklist: Vec<(FunctionId, InterfaceType, InterfaceType, Options, Options)>,
 }
 
 struct AdapterData {
@@ -138,6 +139,7 @@ impl<'a> Module<'a> {
             imported_globals: PrimaryMap::new(),
             funcs: PrimaryMap::new(),
             translate_mem_funcs: HashMap::new(),
+            translate_mem_worklist: Vec::new(),
         }
     }
 
@@ -185,6 +187,10 @@ impl<'a> Module<'a> {
                 called_as_export: true,
             },
         );
+
+        while let Some((result, src, dst, src_opts, dst_opts)) = self.translate_mem_worklist.pop() {
+            trampoline::compile_translate_mem(self, result, src, &src_opts, dst, &dst_opts);
+        }
     }
 
     fn import_options(&mut self, ty: TypeFuncIndex, options: &AdapterOptionsDfg) -> AdapterOptions {
@@ -312,6 +318,29 @@ impl<'a> Module<'a> {
                 });
 
                 self.imported_funcs.push(None)
+            })
+    }
+
+    fn translate_mem(
+        &mut self,
+        src: InterfaceType,
+        src_opts: &Options,
+        dst: InterfaceType,
+        dst_opts: &Options,
+    ) -> FunctionId {
+        *self
+            .translate_mem_funcs
+            .entry((src, dst, *src_opts, *dst_opts))
+            .or_insert_with(|| {
+                // Generate a fresh `Function` with a unique id for what we're about to
+                // generate.
+                let ty = self
+                    .core_types
+                    .function(&[src_opts.ptr(), dst_opts.ptr()], &[]);
+                let id = self.funcs.push(Function::new(None, ty));
+                self.translate_mem_worklist
+                    .push((id, src, dst, *src_opts, *dst_opts));
+                id
             })
     }
 
