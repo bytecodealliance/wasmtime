@@ -300,7 +300,6 @@ where
             value_type,
             purpose,
             extension,
-            legalized_to_pointer: false,
         })
     }
 
