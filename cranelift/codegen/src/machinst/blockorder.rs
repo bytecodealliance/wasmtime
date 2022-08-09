@@ -432,12 +432,19 @@ impl BlockLoweringOrder {
             lowered_order.push(block);
             lowered_succ_ranges.push(succ_range);
 
-            if block
-                .orig_block()
-                .map(|b| f.layout.is_cold(b))
-                .unwrap_or(false)
-            {
-                cold_blocks.insert(index);
+            match block {
+                LoweredBlock::Orig { block }
+                | LoweredBlock::OrigAndEdge { block, .. }
+                | LoweredBlock::EdgeAndOrig { block, .. } => {
+                    if f.layout.is_cold(block) {
+                        cold_blocks.insert(index);
+                    }
+                }
+                LoweredBlock::Edge { pred, succ, .. } => {
+                    if f.layout.is_cold(pred) || f.layout.is_cold(succ) {
+                        cold_blocks.insert(index);
+                    }
+                }
             }
         }
 
