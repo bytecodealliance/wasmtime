@@ -1,0 +1,19 @@
+
+(type u32 (primitive u32))
+
+(decl identity (u32) u32)
+(extern extractor infallible identity identity)
+
+(decl is_zero (u32) u32)
+(extern extractor is_zero is_zero)
+
+(decl test (u32) u32)
+
+;; This exposes a bug where infallible extractors were running before fallible
+;; ones, as the derived ordering for the `Extract` type was ordering them ahead
+;; of the fallible ones. The result is that the fallible `is_zero` extractor
+;; never runs, as the `identity` extractor will always succeed before it's
+;; called.
+(rule (test (identity x)) x)
+
+(rule (test (is_zero x)) 2)
