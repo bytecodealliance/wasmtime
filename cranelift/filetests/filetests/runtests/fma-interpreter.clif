@@ -1,8 +1,10 @@
 test interpret
+target x86_64 has_avx=false has_fma=false
 
 ; The interpreter can run `fma.clif` on most platforms, however on `x86_64-pc-windows-gnu` we
 ; use libm which has issues with some inputs. We should delete this file and enable the interpreter
-; on the main `fma.clif` file once those are fixed.
+; on the main `fma.clif` file once those are fixed. The same issue applies to x86 with fma disabled
+; since it will call the native runtime's fma function.
 
 ; See: https://github.com/bytecodealliance/wasmtime/pull/4517
 ; See: https://github.com/rust-lang/libm/issues/263
