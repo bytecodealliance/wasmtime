@@ -1799,7 +1799,7 @@ pub(crate) fn define(
         Compare scalar integer to a constant.
 
         This is the same as the `icmp` instruction, except one operand is
-        an immediate constant.
+        a sign extended 64 bit immediate constant.
 
         This instruction can only compare scalars. Use `icmp` for
         lane-wise vector comparisons.
@@ -2058,7 +2058,7 @@ pub(crate) fn define(
             r#"
         Add immediate integer.
 
-        Same as `iadd`, but one operand is an immediate constant.
+        Same as `iadd`, but one operand is a sign extended 64 bit immediate constant.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2075,6 +2075,8 @@ pub(crate) fn define(
             r#"
         Integer multiplication by immediate constant.
 
+        Same as `imul`, but one operand is a sign extended 64 bit immediate constant.
+
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
@@ -2090,6 +2092,8 @@ pub(crate) fn define(
             r#"
         Unsigned integer division by an immediate constant.
 
+        Same as `udiv`, but one operand is a sign extended 64 bit immediate constant.
+
         This operation traps if the divisor is zero.
         "#,
             &formats.binary_imm64,
@@ -2103,6 +2107,8 @@ pub(crate) fn define(
             "sdiv_imm",
             r#"
         Signed integer division by an immediate constant.
+
+        Same as `sdiv`, but one operand is a sign extended 64 bit immediate constant.
 
         This operation traps if the divisor is zero, or if the result is not
         representable in `B` bits two's complement. This only happens
@@ -2120,6 +2126,8 @@ pub(crate) fn define(
             r#"
         Unsigned integer remainder with immediate divisor.
 
+        Same as `urem`, but one operand is a sign extended 64 bit immediate constant.
+
         This operation traps if the divisor is zero.
         "#,
             &formats.binary_imm64,
@@ -2134,6 +2142,8 @@ pub(crate) fn define(
             r#"
         Signed integer remainder with immediate divisor.
 
+        Same as `srem`, but one operand is a sign extended 64 bit immediate constant.
+
         This operation traps if the divisor is zero.
         "#,
             &formats.binary_imm64,
@@ -2147,6 +2157,8 @@ pub(crate) fn define(
             "irsub_imm",
             r#"
         Immediate reverse wrapping subtraction: `a := Y - x \pmod{2^B}`.
+        
+        The immediate operand is a sign extended 64 bit constant.
 
         Also works as integer negation when `Y = 0`. Use `iadd_imm`
         with a negative immediate operand for the reverse immediate
@@ -2550,7 +2562,7 @@ pub(crate) fn define(
             r#"
         Bitwise and with immediate.
 
-        Same as `band`, but one operand is an immediate constant.
+        Same as `band`, but one operand is a sign extended 64 bit immediate constant.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2567,7 +2579,7 @@ pub(crate) fn define(
             r#"
         Bitwise or with immediate.
 
-        Same as `bor`, but one operand is an immediate constant.
+        Same as `bor`, but one operand is a sign extended 64 bit immediate constant.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2584,7 +2596,7 @@ pub(crate) fn define(
             r#"
         Bitwise xor with immediate.
 
-        Same as `bxor`, but one operand is an immediate constant.
+        Same as `bxor`, but one operand is a sign extended 64 bit immediate constant.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2633,6 +2645,8 @@ pub(crate) fn define(
             "rotl_imm",
             r#"
         Rotate left by immediate.
+
+        Same as `rotl`, but one operand is a sign extended 64 bit immediate constant.
         "#,
             &formats.binary_imm64,
         )
@@ -2645,6 +2659,8 @@ pub(crate) fn define(
             "rotr_imm",
             r#"
         Rotate right by immediate.
+
+        Same as `rotr`, but one operand is a sign extended 64 bit immediate constant.
         "#,
             &formats.binary_imm64,
         )
