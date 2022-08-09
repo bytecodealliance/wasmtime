@@ -130,4 +130,4 @@
   )
   (export "empty-list" (func $f))
 )
-(assert_return (invoke "empty-list" (list.const)) (unit.const))
+(assert_trap (invoke "empty-list" (list.const)) "realloc return: beyond end of memory")

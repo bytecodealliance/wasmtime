@@ -875,9 +875,7 @@ fn lower_string<T>(mem: &mut MemoryMut<'_, T>, string: &str) -> Result<(usize, u
                 );
             }
             let ptr = mem.realloc(0, 0, 1, string.len())?;
-            if string.len() > 0 {
-                mem.as_slice_mut()[ptr..][..string.len()].copy_from_slice(string.as_bytes());
-            }
+            mem.as_slice_mut()[ptr..][..string.len()].copy_from_slice(string.as_bytes());
             Ok((ptr, string.len()))
         }
 
@@ -894,17 +892,15 @@ fn lower_string<T>(mem: &mut MemoryMut<'_, T>, string: &str) -> Result<(usize, u
             }
             let mut ptr = mem.realloc(0, 0, 2, size)?;
             let mut copied = 0;
-            if size > 0 {
-                let bytes = &mut mem.as_slice_mut()[ptr..][..size];
-                for (u, bytes) in string.encode_utf16().zip(bytes.chunks_mut(2)) {
-                    let u_bytes = u.to_le_bytes();
-                    bytes[0] = u_bytes[0];
-                    bytes[1] = u_bytes[1];
-                    copied += 1;
-                }
-                if (copied * 2) < size {
-                    ptr = mem.realloc(ptr, size, 2, copied * 2)?;
-                }
+            let bytes = &mut mem.as_slice_mut()[ptr..][..size];
+            for (u, bytes) in string.encode_utf16().zip(bytes.chunks_mut(2)) {
+                let u_bytes = u.to_le_bytes();
+                bytes[0] = u_bytes[0];
+                bytes[1] = u_bytes[1];
+                copied += 1;
+            }
+            if (copied * 2) < size {
+                ptr = mem.realloc(ptr, size, 2, copied * 2)?;
             }
             Ok((ptr, copied))
         }
