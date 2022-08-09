@@ -21,7 +21,7 @@ use super::function::FunctionParameters;
 /// This is used both for naming a function (for debugging purposes) and for declaring external
 /// functions. In the latter case, this becomes an `ExternalName`, which gets embedded in
 /// relocations later, etc.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum UserFuncName {
     /// A user-defined name, with semantics left to the user.
