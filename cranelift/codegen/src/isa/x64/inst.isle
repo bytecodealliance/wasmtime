@@ -2988,6 +2988,13 @@
            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtpd2ps) x dst))))
         dst))
 
+;; Helper for creating `cvtdq2pd` instructions.
+(decl x64_cvtdq2pd (Type Xmm) Xmm)
+(rule (x64_cvtdq2pd ty x)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtdq2pd) x dst))))
+        dst))
+
 ;; Helper for creating `cvtsi2ss` instructions.
 (decl x64_cvtsi2ss (Type GprMem) Xmm)
 (rule (x64_cvtsi2ss ty x)
