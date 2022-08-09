@@ -172,6 +172,7 @@ enum ExtSpec {
     #[allow(dead_code)]
     ZeroExtendTo32,
     ZeroExtendTo64,
+    #[allow(dead_code)]
     SignExtendTo32,
     #[allow(dead_code)] // not used just yet but may be used in the future!
     SignExtendTo64,
@@ -626,47 +627,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::GetReturnAddress
         | Opcode::Select
         | Opcode::Selectif
-        | Opcode::SelectifSpectreGuard => {
+        | Opcode::SelectifSpectreGuard
+        | Opcode::FcvtFromSint => {
             implemented_in_isle(ctx);
         }
 
-        Opcode::FcvtFromSint => {
-            let output_ty = ty.unwrap();
-            if !output_ty.is_vector() {
-                let (ext_spec, src_size) = match ctx.input_ty(insn, 0) {
-                    types::I8 | types::I16 => (Some(ExtSpec::SignExtendTo32), OperandSize::Size32),
-                    types::I32 => (None, OperandSize::Size32),
-                    types::I64 => (None, OperandSize::Size64),
-                    _ => unreachable!(),
-                };
-
-                let src = match ext_spec {
-                    Some(ext_spec) => RegMem::reg(extend_input_to_reg(ctx, inputs[0], ext_spec)),
-                    None => RegMem::reg(put_input_in_reg(ctx, inputs[0])),
-                };
-
-                let opcode = if output_ty == types::F32 {
-                    SseOpcode::Cvtsi2ss
-                } else {
-                    assert_eq!(output_ty, types::F64);
-                    SseOpcode::Cvtsi2sd
-                };
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::gpr_to_xmm(opcode, src, src_size, dst));
-            } else {
-                let ty = ty.unwrap();
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                let opcode = match ctx.input_ty(insn, 0) {
-                    types::I32X4 => SseOpcode::Cvtdq2ps,
-                    _ => {
-                        unimplemented!("unable to use type {} for op {}", ctx.input_ty(insn, 0), op)
-                    }
-                };
-                ctx.emit(Inst::gen_move(dst, src, ty));
-                ctx.emit(Inst::xmm_rm_r(opcode, RegMem::from(dst), dst));
-            }
-        }
         Opcode::FcvtLowFromSint => {
             let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
