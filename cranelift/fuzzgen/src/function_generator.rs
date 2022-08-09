@@ -627,11 +627,19 @@ where
 
         let blocks = (0..block_count)
             .map(|i| {
+                let is_entry = i == 0;
                 let block = builder.create_block();
+
+                // Optionally mark blocks that are not the entry block as cold
+                if !is_entry {
+                    if bool::arbitrary(self.u)? {
+                        builder.set_cold_block(block);
+                    }
+                }
 
                 // The first block has to have the function signature, but for the rest of them we generate
                 // a random signature;
-                if i == 0 {
+                if is_entry {
                     builder.append_block_params_for_function_params(block);
                     Ok((block, sig.params.iter().map(|a| a.value_type).collect()))
                 } else {
