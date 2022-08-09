@@ -806,7 +806,23 @@ impl<I: VCodeInst> VCode<I> {
             inst_offsets.resize(self.insts.len(), 0);
         }
 
-        for block in final_order {
+        // Count edits per block ahead of time; this is needed for
+        // lookahead island emission. (We could derive it per-block
+        // with binary search in the edit list, but it's more
+        // efficient to do it in one pass here.)
+        let mut ra_edits_per_block: SmallVec<[u32; 64]> = smallvec![];
+        let mut edit_idx = 0;
+        for block in 0..self.num_blocks() {
+            let end_inst = self.block_ranges[block].1;
+            let start_edit_idx = edit_idx;
+            while edit_idx < regalloc.edits.len() && regalloc.edits[edit_idx].0.inst() < end_inst {
+                edit_idx += 1;
+            }
+            let end_edit_idx = edit_idx;
+            ra_edits_per_block.push((end_edit_idx - start_edit_idx) as u32);
+        }
+
+        for (block_order_idx, &block) in final_order.iter().enumerate() {
             trace!("emitting block {:?}", block);
             let new_offset = I::align_basic_block(buffer.cur_offset());
             while new_offset > buffer.cur_offset() {
@@ -1007,11 +1023,14 @@ impl<I: VCodeInst> VCode<I> {
             // Do we need an island? Get the worst-case size of the
             // next BB and see if, having emitted that many bytes, we
             // will be beyond the deadline.
-            if block.index() < (self.num_blocks() - 1) {
-                let next_block = block.index() + 1;
-                let next_block_range = self.block_ranges[next_block];
-                let next_block_size = next_block_range.1.index() - next_block_range.0.index();
-                let worst_case_next_bb = I::worst_case_size() * next_block_size as u32;
+            if block_order_idx < final_order.len() - 1 {
+                let next_block = final_order[block_order_idx + 1];
+                let next_block_range = self.block_ranges[next_block.index()];
+                let next_block_size =
+                    (next_block_range.1.index() - next_block_range.0.index()) as u32;
+                let next_block_ra_insertions = ra_edits_per_block[next_block.index()];
+                let worst_case_next_bb =
+                    I::worst_case_size() * (next_block_size + next_block_ra_insertions);
                 if buffer.island_needed(worst_case_next_bb) {
                     buffer.emit_island(worst_case_next_bb);
                 }
