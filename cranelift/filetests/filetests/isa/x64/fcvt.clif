@@ -160,3 +160,21 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64):
 ;   popq    %rbp
 ;   ret
 
+function %f11(i32x4) -> f64x2 {
+block0(v0: i32x4):
+  v1 = uwiden_low v0
+  v2 = fcvt_from_uint.f64x2 v1
+  return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_const VCodeConstant(0), %xmm5
+;   unpcklps %xmm0, %xmm5, %xmm0
+;   load_const VCodeConstant(1), %xmm8
+;   subpd   %xmm0, %xmm8, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
