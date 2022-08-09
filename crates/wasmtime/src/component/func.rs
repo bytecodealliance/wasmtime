@@ -1,5 +1,5 @@
 use crate::component::instance::{Instance, InstanceData};
-use crate::component::types::{SizeAndAlignment, Type};
+use crate::component::types::Type;
 use crate::component::values::Val;
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
@@ -8,8 +8,8 @@ use std::mem::{self, MaybeUninit};
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    CanonicalOptions, ComponentTypes, CoreDef, RuntimeComponentInstanceIndex, TypeFuncIndex,
-    MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalAbiInfo, CanonicalOptions, ComponentTypes, CoreDef, RuntimeComponentInstanceIndex,
+    TypeFuncIndex, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
 use wasmtime_runtime::{Export, ExportFunction, VMTrampoline};
 
@@ -558,18 +558,15 @@ impl Func {
         args: &[Val],
         dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>,
     ) -> Result<()> {
-        let mut size = 0;
-        let mut alignment = 1;
-        for ty in params {
-            alignment = alignment.max(ty.size_and_alignment().alignment);
-            ty.next_field(&mut size);
-        }
+        let abi = CanonicalAbiInfo::record(params.iter().map(|t| t.canonical_abi()));
 
         let mut memory = MemoryMut::new(store.as_context_mut(), options);
-        let ptr = memory.realloc(0, 0, alignment, size)?;
+        let size = usize::try_from(abi.size32).unwrap();
+        let ptr = memory.realloc(0, 0, abi.align32, size)?;
         let mut offset = ptr;
         for (ty, arg) in params.iter().zip(args) {
-            arg.store(&mut memory, ty.next_field(&mut offset))?;
+            let abi = ty.canonical_abi();
+            arg.store(&mut memory, abi.next_field32_size(&mut offset))?;
         }
 
         map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
@@ -582,17 +579,17 @@ impl Func {
         ty: &Type,
         src: &mut std::slice::Iter<'_, ValRaw>,
     ) -> Result<Val> {
-        let SizeAndAlignment { size, alignment } = ty.size_and_alignment();
+        let abi = ty.canonical_abi();
         // FIXME: needs to read an i64 for memory64
         let ptr = usize::try_from(src.next().unwrap().get_u32())?;
-        if ptr % usize::try_from(alignment)? != 0 {
+        if ptr % usize::try_from(abi.align32)? != 0 {
             bail!("return pointer not aligned");
         }
 
         let bytes = mem
             .as_slice()
             .get(ptr..)
-            .and_then(|b| b.get(..size))
+            .and_then(|b| b.get(..usize::try_from(abi.size32).unwrap()))
             .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
 
         Val::load(ty, mem, bytes)

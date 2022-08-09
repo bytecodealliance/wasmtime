@@ -1,5 +1,4 @@
 use crate::component::func::{Memory, MemoryMut, Options};
-use crate::component::types::SizeAndAlignment;
 use crate::component::{ComponentParams, ComponentType, Lift, Lower, Type, Val};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{anyhow, bail, Context, Result};
@@ -9,7 +8,8 @@ use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    ComponentTypes, StringEncoding, TypeFuncIndex, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalAbiInfo, ComponentTypes, StringEncoding, TypeFuncIndex, MAX_FLAT_PARAMS,
+    MAX_FLAT_RESULTS,
 };
 use wasmtime_runtime::component::{
     InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
@@ -413,26 +413,19 @@ where
             .collect::<Result<Box<[_]>>>()?;
         ret_index = param_count;
     } else {
-        let param_layout = {
-            let mut size = 0;
-            let mut alignment = 1;
-            for ty in params.iter() {
-                alignment = alignment.max(ty.size_and_alignment().alignment);
-                ty.next_field(&mut size);
-            }
-            SizeAndAlignment { size, alignment }
-        };
+        let param_abi = CanonicalAbiInfo::record(params.iter().map(|t| t.canonical_abi()));
 
         let memory = Memory::new(cx.0, &options);
-        let mut offset = validate_inbounds_dynamic(param_layout, memory.as_slice(), &storage[0])?;
+        let mut offset = validate_inbounds_dynamic(&param_abi, memory.as_slice(), &storage[0])?;
         args = params
             .iter()
             .map(|ty| {
+                let abi = ty.canonical_abi();
+                let size = usize::try_from(abi.size32).unwrap();
                 Val::load(
                     ty,
                     &memory,
-                    &memory.as_slice()[ty.next_field(&mut offset)..]
-                        [..ty.size_and_alignment().size],
+                    &memory.as_slice()[abi.next_field32_size(&mut offset)..][..size],
                 )
             })
             .collect::<Result<Box<[_]>>>()?;
@@ -451,7 +444,7 @@ where
         let ret_ptr = &storage[ret_index];
         let mut memory = MemoryMut::new(cx.as_context_mut(), &options);
         let ptr =
-            validate_inbounds_dynamic(result.size_and_alignment(), memory.as_slice_mut(), ret_ptr)?;
+            validate_inbounds_dynamic(result.canonical_abi(), memory.as_slice_mut(), ret_ptr)?;
         ret.store(&mut memory, ptr)?;
     }
 
@@ -460,17 +453,13 @@ where
     return Ok(());
 }
 
-fn validate_inbounds_dynamic(
-    SizeAndAlignment { size, alignment }: SizeAndAlignment,
-    memory: &[u8],
-    ptr: &ValRaw,
-) -> Result<usize> {
+fn validate_inbounds_dynamic(abi: &CanonicalAbiInfo, memory: &[u8], ptr: &ValRaw) -> Result<usize> {
     // FIXME: needs memory64 support
     let ptr = usize::try_from(ptr.get_u32())?;
-    if ptr % usize::try_from(alignment)? != 0 {
+    if ptr % usize::try_from(abi.align32)? != 0 {
         bail!("pointer not aligned");
     }
-    let end = match ptr.checked_add(size) {
+    let end = match ptr.checked_add(usize::try_from(abi.size32).unwrap()) {
         Some(n) => n,
         None => bail!("pointer size overflow"),
     };

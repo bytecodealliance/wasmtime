@@ -2,7 +2,7 @@ use anyhow::Result;
 use arbitrary::Arbitrary;
 use std::mem::MaybeUninit;
 use wasmtime::component::__internal::{
-    ComponentTypes, InterfaceType, Memory, MemoryMut, Options, StoreOpaque,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, Memory, MemoryMut, Options, StoreOpaque,
 };
 use wasmtime::component::{ComponentParams, ComponentType, Func, Lift, Lower, TypedFunc, Val};
 use wasmtime::{AsContextMut, Config, Engine, StoreContextMut};
@@ -68,8 +68,7 @@ macro_rules! forward_impls {
         unsafe impl ComponentType for $a {
             type Lower = <$b as ComponentType>::Lower;
 
-            const SIZE32: usize = <$b as ComponentType>::SIZE32;
-            const ALIGN32: u32 = <$b as ComponentType>::ALIGN32;
+            const ABI: CanonicalAbiInfo = <$b as ComponentType>::ABI;
 
             #[inline]
             fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {

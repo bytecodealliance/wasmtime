@@ -11,6 +11,7 @@ use std::ops::Index;
 use wasmparser::{
     ComponentAlias, ComponentOuterAliasKind, ComponentTypeDeclaration, InstanceTypeDeclaration,
 };
+use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 macro_rules! indices {
     ($(
@@ -89,6 +90,9 @@ indices! {
     pub struct TypeEnumIndex(u32);
     /// Index pointing to a union type in the component model.
     pub struct TypeUnionIndex(u32);
+    /// Index pointing to an option type in the component model (aka a
+    /// `Option<T, E>`)
+    pub struct TypeOptionIndex(u32);
     /// Index pointing to an expected type in the component model (aka a
     /// `Result<T, E>`)
     pub struct TypeExpectedIndex(u32);
@@ -209,6 +213,7 @@ pub struct ComponentTypes {
     enums: PrimaryMap<TypeEnumIndex, TypeEnum>,
     flags: PrimaryMap<TypeFlagsIndex, TypeFlags>,
     unions: PrimaryMap<TypeUnionIndex, TypeUnion>,
+    options: PrimaryMap<TypeOptionIndex, TypeOption>,
     expecteds: PrimaryMap<TypeExpectedIndex, TypeExpected>,
 
     module_types: ModuleTypes,
@@ -218,6 +223,39 @@ impl ComponentTypes {
     /// Returns the core wasm module types known within this component.
     pub fn module_types(&self) -> &ModuleTypes {
         &self.module_types
+    }
+
+    /// Returns the canonical ABI information about the specified type.
+    pub fn canonical_abi(&self, ty: &InterfaceType) -> &CanonicalAbiInfo {
+        match ty {
+            InterfaceType::Unit => &CanonicalAbiInfo::ZERO,
+
+            InterfaceType::U8 | InterfaceType::S8 | InterfaceType::Bool => {
+                &CanonicalAbiInfo::SCALAR1
+            }
+
+            InterfaceType::U16 | InterfaceType::S16 => &CanonicalAbiInfo::SCALAR2,
+
+            InterfaceType::U32
+            | InterfaceType::S32
+            | InterfaceType::Float32
+            | InterfaceType::Char => &CanonicalAbiInfo::SCALAR4,
+
+            InterfaceType::U64 | InterfaceType::S64 | InterfaceType::Float64 => {
+                &CanonicalAbiInfo::SCALAR8
+            }
+
+            InterfaceType::String | InterfaceType::List(_) => &CanonicalAbiInfo::POINTER_PAIR,
+
+            InterfaceType::Record(i) => &self[*i].abi,
+            InterfaceType::Variant(i) => &self[*i].abi,
+            InterfaceType::Tuple(i) => &self[*i].abi,
+            InterfaceType::Flags(i) => &self[*i].abi,
+            InterfaceType::Enum(i) => &self[*i].abi,
+            InterfaceType::Union(i) => &self[*i].abi,
+            InterfaceType::Option(i) => &self[*i].abi,
+            InterfaceType::Expected(i) => &self[*i].abi,
+        }
     }
 }
 
@@ -244,6 +282,7 @@ impl_index! {
     impl Index<TypeEnumIndex> for ComponentTypes { TypeEnum => enums }
     impl Index<TypeFlagsIndex> for ComponentTypes { TypeFlags => flags }
     impl Index<TypeUnionIndex> for ComponentTypes { TypeUnion => unions }
+    impl Index<TypeOptionIndex> for ComponentTypes { TypeOption => options }
     impl Index<TypeExpectedIndex> for ComponentTypes { TypeExpected => expecteds }
 }
 
@@ -274,6 +313,7 @@ pub struct ComponentTypesBuilder {
     enums: HashMap<TypeEnum, TypeEnumIndex>,
     flags: HashMap<TypeFlags, TypeFlagsIndex>,
     unions: HashMap<TypeUnion, TypeUnionIndex>,
+    options: HashMap<TypeOption, TypeOptionIndex>,
     expecteds: HashMap<TypeExpected, TypeExpectedIndex>,
 
     component_types: ComponentTypes,
@@ -599,8 +639,7 @@ impl ComponentTypesBuilder {
             wasmparser::ComponentDefinedType::Enum(e) => InterfaceType::Enum(self.enum_type(e)),
             wasmparser::ComponentDefinedType::Union(e) => InterfaceType::Union(self.union_type(e)),
             wasmparser::ComponentDefinedType::Option(e) => {
-                let ty = self.valtype(e);
-                InterfaceType::Option(self.add_interface_type(ty))
+                InterfaceType::Option(self.option_type(e))
             }
             wasmparser::ComponentDefinedType::Expected { ok, error } => {
                 InterfaceType::Expected(self.expected_type(ok, error))
@@ -623,62 +662,90 @@ impl ComponentTypesBuilder {
     }
 
     fn record_type(&mut self, record: &[(&str, wasmparser::ComponentValType)]) -> TypeRecordIndex {
-        let record = TypeRecord {
-            fields: record
+        let fields = record
+            .iter()
+            .map(|(name, ty)| RecordField {
+                name: name.to_string(),
+                ty: self.valtype(ty),
+            })
+            .collect::<Box<[_]>>();
+        let abi = CanonicalAbiInfo::record(
+            fields
                 .iter()
-                .map(|(name, ty)| RecordField {
-                    name: name.to_string(),
-                    ty: self.valtype(ty),
-                })
-                .collect(),
-        };
-        self.add_record_type(record)
+                .map(|field| self.component_types.canonical_abi(&field.ty)),
+        );
+        self.add_record_type(TypeRecord { fields, abi })
     }
 
     fn variant_type(&mut self, cases: &[wasmparser::VariantCase<'_>]) -> TypeVariantIndex {
-        let variant = TypeVariant {
-            cases: cases
+        let cases = cases
+            .iter()
+            .map(|case| {
+                // FIXME: need to implement `refines`, not sure what that
+                // is at this time.
+                assert!(case.refines.is_none());
+                VariantCase {
+                    name: case.name.to_string(),
+                    ty: self.valtype(&case.ty),
+                }
+            })
+            .collect::<Box<[_]>>();
+        let (info, abi) = VariantInfo::new(
+            cases
                 .iter()
-                .map(|case| {
-                    // FIXME: need to implement `refines`, not sure what that
-                    // is at this time.
-                    assert!(case.refines.is_none());
-                    VariantCase {
-                        name: case.name.to_string(),
-                        ty: self.valtype(&case.ty),
-                    }
-                })
-                .collect(),
-        };
-        self.add_variant_type(variant)
+                .map(|c| self.component_types.canonical_abi(&c.ty)),
+        );
+        self.add_variant_type(TypeVariant { cases, abi, info })
     }
 
     fn tuple_type(&mut self, types: &[wasmparser::ComponentValType]) -> TypeTupleIndex {
-        let tuple = TypeTuple {
-            types: types.iter().map(|ty| self.valtype(ty)).collect(),
-        };
-        self.add_tuple_type(tuple)
+        let types = types
+            .iter()
+            .map(|ty| self.valtype(ty))
+            .collect::<Box<[_]>>();
+        let abi = CanonicalAbiInfo::record(
+            types
+                .iter()
+                .map(|ty| self.component_types.canonical_abi(ty)),
+        );
+        self.add_tuple_type(TypeTuple { types, abi })
     }
 
     fn flags_type(&mut self, flags: &[&str]) -> TypeFlagsIndex {
         let flags = TypeFlags {
             names: flags.iter().map(|s| s.to_string()).collect(),
+            abi: CanonicalAbiInfo::flags(flags.len()),
         };
         self.add_flags_type(flags)
     }
 
     fn enum_type(&mut self, variants: &[&str]) -> TypeEnumIndex {
-        let e = TypeEnum {
-            names: variants.iter().map(|s| s.to_string()).collect(),
-        };
-        self.add_enum_type(e)
+        let names = variants.iter().map(|s| s.to_string()).collect::<Box<[_]>>();
+        let (info, abi) = VariantInfo::new(
+            names
+                .iter()
+                .map(|_| self.component_types.canonical_abi(&InterfaceType::Unit)),
+        );
+        self.add_enum_type(TypeEnum { names, abi, info })
     }
 
     fn union_type(&mut self, types: &[wasmparser::ComponentValType]) -> TypeUnionIndex {
-        let union = TypeUnion {
-            types: types.iter().map(|ty| self.valtype(ty)).collect(),
-        };
-        self.add_union_type(union)
+        let types = types
+            .iter()
+            .map(|ty| self.valtype(ty))
+            .collect::<Box<[_]>>();
+        let (info, abi) =
+            VariantInfo::new(types.iter().map(|t| self.component_types.canonical_abi(t)));
+        self.add_union_type(TypeUnion { types, abi, info })
+    }
+
+    fn option_type(&mut self, ty: &wasmparser::ComponentValType) -> TypeOptionIndex {
+        let ty = self.valtype(ty);
+        let (info, abi) = VariantInfo::new([
+            self.component_types.canonical_abi(&InterfaceType::Unit),
+            self.component_types.canonical_abi(&ty),
+        ]);
+        self.add_option_type(TypeOption { ty, abi, info })
     }
 
     fn expected_type(
@@ -686,11 +753,13 @@ impl ComponentTypesBuilder {
         ok: &wasmparser::ComponentValType,
         err: &wasmparser::ComponentValType,
     ) -> TypeExpectedIndex {
-        let expected = TypeExpected {
-            ok: self.valtype(ok),
-            err: self.valtype(err),
-        };
-        self.add_expected_type(expected)
+        let ok = self.valtype(ok);
+        let err = self.valtype(err);
+        let (info, abi) = VariantInfo::new([
+            self.component_types.canonical_abi(&ok),
+            self.component_types.canonical_abi(&err),
+        ]);
+        self.add_expected_type(TypeExpected { ok, err, abi, info })
     }
 
     /// Interns a new function type within this type information.
@@ -726,6 +795,11 @@ impl ComponentTypesBuilder {
     /// Interns a new enum type within this type information.
     pub fn add_enum_type(&mut self, ty: TypeEnum) -> TypeEnumIndex {
         intern(&mut self.enums, &mut self.component_types.enums, ty)
+    }
+
+    /// Interns a new option type within this type information.
+    pub fn add_option_type(&mut self, ty: TypeOption) -> TypeOptionIndex {
+        intern(&mut self.options, &mut self.component_types.options, ty)
     }
 
     /// Interns a new expected type within this type information.
@@ -875,7 +949,7 @@ pub enum InterfaceType {
     Flags(TypeFlagsIndex),
     Enum(TypeEnumIndex),
     Union(TypeUnionIndex),
-    Option(TypeInterfaceIndex),
+    Option(TypeOptionIndex),
     Expected(TypeExpectedIndex),
 }
 
@@ -900,6 +974,306 @@ impl From<&wasmparser::PrimitiveValType> for InterfaceType {
     }
 }
 
+/// Bye information about a type in the canonical ABI, with metadata for both
+/// memory32 and memory64-based types.
+#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+pub struct CanonicalAbiInfo {
+    /// The byte-size of this type in a 32-bit memory.
+    pub size32: u32,
+    /// The byte-alignment of this type in a 32-bit memory.
+    pub align32: u32,
+    /// The byte-size of this type in a 64-bit memory.
+    pub size64: u32,
+    /// The byte-alignment of this type in a 64-bit memory.
+    pub align64: u32,
+}
+
+impl Default for CanonicalAbiInfo {
+    fn default() -> CanonicalAbiInfo {
+        CanonicalAbiInfo {
+            size32: 0,
+            align32: 1,
+            size64: 0,
+            align64: 1,
+        }
+    }
+}
+
+const fn align_to(a: u32, b: u32) -> u32 {
+    assert!(b.is_power_of_two());
+    (a + (b - 1)) & !(b - 1)
+}
+
+const fn max(a: u32, b: u32) -> u32 {
+    if a > b {
+        a
+    } else {
+        b
+    }
+}
+
+impl CanonicalAbiInfo {
+    /// ABI information for zero-sized types.
+    pub const ZERO: CanonicalAbiInfo = CanonicalAbiInfo {
+        size32: 0,
+        align32: 1,
+        size64: 0,
+        align64: 1,
+    };
+
+    /// ABI information for one-byte scalars.
+    pub const SCALAR1: CanonicalAbiInfo = CanonicalAbiInfo::scalar(1);
+    /// ABI information for two-byte scalars.
+    pub const SCALAR2: CanonicalAbiInfo = CanonicalAbiInfo::scalar(2);
+    /// ABI information for four-byte scalars.
+    pub const SCALAR4: CanonicalAbiInfo = CanonicalAbiInfo::scalar(4);
+    /// ABI information for eight-byte scalars.
+    pub const SCALAR8: CanonicalAbiInfo = CanonicalAbiInfo::scalar(8);
+
+    const fn scalar(size: u32) -> CanonicalAbiInfo {
+        CanonicalAbiInfo {
+            size32: size,
+            align32: size,
+            size64: size,
+            align64: size,
+        }
+    }
+
+    /// ABI information for lists/strings which are "pointer pairs"
+    pub const POINTER_PAIR: CanonicalAbiInfo = CanonicalAbiInfo {
+        size32: 8,
+        align32: 4,
+        size64: 16,
+        align64: 8,
+    };
+
+    /// Returns the abi for a record represented by the specified fields.
+    pub fn record<'a>(fields: impl Iterator<Item = &'a CanonicalAbiInfo>) -> CanonicalAbiInfo {
+        // NB: this is basically a duplicate copy of
+        // `CanonicalAbiInfo::record_static` and the two should be kept in sync.
+
+        let mut ret = CanonicalAbiInfo::default();
+        for field in fields {
+            ret.size32 = align_to(ret.size32, field.align32) + field.size32;
+            ret.align32 = ret.align32.max(field.align32);
+            ret.size64 = align_to(ret.size64, field.align64) + field.size64;
+            ret.align64 = ret.align64.max(field.align64);
+        }
+        ret.size32 = align_to(ret.size32, ret.align32);
+        ret.size64 = align_to(ret.size64, ret.align64);
+        return ret;
+    }
+
+    /// Same as `CanonicalAbiInfo::record` but in a `const`-friendly context.
+    pub const fn record_static(fields: &[CanonicalAbiInfo]) -> CanonicalAbiInfo {
+        // NB: this is basically a duplicate copy of `CanonicalAbiInfo::record`
+        // and the two should be kept in sync.
+
+        let mut ret = CanonicalAbiInfo::ZERO;
+        let mut i = 0;
+        while i < fields.len() {
+            let field = &fields[i];
+            ret.size32 = align_to(ret.size32, field.align32) + field.size32;
+            ret.align32 = max(ret.align32, field.align32);
+            ret.size64 = align_to(ret.size64, field.align64) + field.size64;
+            ret.align64 = max(ret.align64, field.align64);
+            i += 1;
+        }
+        ret.size32 = align_to(ret.size32, ret.align32);
+        ret.size64 = align_to(ret.size64, ret.align64);
+        return ret;
+    }
+
+    /// Returns the delta from the current value of `offset` to align properly
+    /// and read the next record field of type `abi` for 32-bit memories.
+    pub fn next_field32(&self, offset: &mut u32) -> u32 {
+        *offset = align_to(*offset, self.align32) + self.size32;
+        *offset - self.size32
+    }
+
+    /// Same as `next_field32`, but bumps a usize pointer
+    pub fn next_field32_size(&self, offset: &mut usize) -> usize {
+        let cur = u32::try_from(*offset).unwrap();
+        let cur = align_to(cur, self.align32) + self.size32;
+        *offset = usize::try_from(cur).unwrap();
+        usize::try_from(cur - self.size32).unwrap()
+    }
+
+    /// Returns the delta from the current value of `offset` to align properly
+    /// and read the next record field of type `abi` for 64-bit memories.
+    pub fn next_field64(&self, offset: &mut u32) -> u32 {
+        *offset = align_to(*offset, self.align64) + self.size64;
+        *offset - self.size64
+    }
+
+    /// Same as `next_field64`, but bumps a usize pointer
+    pub fn next_field64_size(&self, offset: &mut usize) -> usize {
+        let cur = u32::try_from(*offset).unwrap();
+        let cur = align_to(cur, self.align64) + self.size64;
+        *offset = usize::try_from(cur).unwrap();
+        usize::try_from(cur - self.size64).unwrap()
+    }
+
+    /// Returns ABI information for a structure which contains `count` flags.
+    pub const fn flags(count: usize) -> CanonicalAbiInfo {
+        let (size, align) = match FlagsSize::from_count(count) {
+            FlagsSize::Size0 => (0, 1),
+            FlagsSize::Size1 => (1, 1),
+            FlagsSize::Size2 => (2, 2),
+            FlagsSize::Size4Plus(n) => ((n as u32) * 4, 4),
+        };
+        CanonicalAbiInfo {
+            size32: size,
+            align32: align,
+            size64: size,
+            align64: align,
+        }
+    }
+
+    fn variant<'a, I>(cases: I) -> CanonicalAbiInfo
+    where
+        I: IntoIterator<Item = &'a CanonicalAbiInfo>,
+        I::IntoIter: ExactSizeIterator,
+    {
+        // NB: this is basically a duplicate definition of
+        // `CanonicalAbiInfo::variant_static`, these should be kept in sync.
+
+        let cases = cases.into_iter();
+        let discrim_size = u32::from(DiscriminantSize::from_count(cases.len()).unwrap());
+        let mut max_size32 = 0;
+        let mut max_align32 = discrim_size;
+        let mut max_size64 = 0;
+        let mut max_align64 = discrim_size;
+        for case in cases {
+            max_size32 = max_size32.max(case.size32);
+            max_align32 = max_align32.max(case.align32);
+            max_size64 = max_size64.max(case.size64);
+            max_align64 = max_align64.max(case.align64);
+        }
+        CanonicalAbiInfo {
+            size32: align_to(
+                align_to(discrim_size, max_align32) + max_size32,
+                max_align32,
+            ),
+            align32: max_align32,
+            size64: align_to(
+                align_to(discrim_size, max_align64) + max_size64,
+                max_align64,
+            ),
+            align64: max_align64,
+        }
+    }
+
+    /// Same as `CanonicalAbiInfo::variant` but `const`-safe
+    pub const fn variant_static(cases: &[CanonicalAbiInfo]) -> CanonicalAbiInfo {
+        // NB: this is basically a duplicate definition of
+        // `CanonicalAbiInfo::variant`, these should be kept in sync.
+
+        let discrim_size = match DiscriminantSize::from_count(cases.len()) {
+            Some(size) => size.byte_size(),
+            None => unreachable!(),
+        };
+        let mut max_size32 = 0;
+        let mut max_align32 = discrim_size;
+        let mut max_size64 = 0;
+        let mut max_align64 = discrim_size;
+        let mut i = 0;
+        while i < cases.len() {
+            let case = &cases[i];
+            max_size32 = max(max_size32, case.size32);
+            max_align32 = max(max_align32, case.align32);
+            max_size64 = max(max_size64, case.size64);
+            max_align64 = max(max_align64, case.align64);
+            i += 1;
+        }
+        CanonicalAbiInfo {
+            size32: align_to(
+                align_to(discrim_size, max_align32) + max_size32,
+                max_align32,
+            ),
+            align32: max_align32,
+            size64: align_to(
+                align_to(discrim_size, max_align64) + max_size64,
+                max_align64,
+            ),
+            align64: max_align64,
+        }
+    }
+}
+
+/// ABI information about the representation of a variant.
+#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+pub struct VariantInfo {
+    /// The size of the discriminant used.
+    #[serde(with = "serde_discrim_size")]
+    pub size: DiscriminantSize,
+    /// The offset of the payload from the start of the variant in 32-bit
+    /// memories.
+    pub payload_offset32: u32,
+    /// The offset of the payload from the start of the variant in 64-bit
+    /// memories.
+    pub payload_offset64: u32,
+}
+
+impl VariantInfo {
+    /// Returns the abi information for a variant represented by the specified
+    /// cases.
+    pub fn new<'a, I>(cases: I) -> (VariantInfo, CanonicalAbiInfo)
+    where
+        I: IntoIterator<Item = &'a CanonicalAbiInfo>,
+        I::IntoIter: ExactSizeIterator,
+    {
+        let cases = cases.into_iter();
+        let size = DiscriminantSize::from_count(cases.len()).unwrap();
+        let abi = CanonicalAbiInfo::variant(cases);
+        (
+            VariantInfo {
+                size,
+                payload_offset32: align_to(u32::from(size), abi.align32),
+                payload_offset64: align_to(u32::from(size), abi.align64),
+            },
+            abi,
+        )
+    }
+    /// TODO
+    pub const fn new_static(cases: &[CanonicalAbiInfo]) -> VariantInfo {
+        let size = match DiscriminantSize::from_count(cases.len()) {
+            Some(size) => size,
+            None => unreachable!(),
+        };
+        let abi = CanonicalAbiInfo::variant_static(cases);
+        VariantInfo {
+            size,
+            payload_offset32: align_to(size.byte_size(), abi.align32),
+            payload_offset64: align_to(size.byte_size(), abi.align64),
+        }
+    }
+}
+
+mod serde_discrim_size {
+    use super::DiscriminantSize;
+    use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S>(disc: &DiscriminantSize, ser: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        u32::from(*disc).serialize(ser)
+    }
+
+    pub fn deserialize<'de, D>(deser: D) -> Result<DiscriminantSize, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match u32::deserialize(deser)? {
+            1 => Ok(DiscriminantSize::Size1),
+            2 => Ok(DiscriminantSize::Size2),
+            4 => Ok(DiscriminantSize::Size4),
+            _ => Err(D::Error::custom("invalid discriminant size")),
+        }
+    }
+}
+
 /// Shape of a "record" type in interface types.
 ///
 /// This is equivalent to a `struct` in Rust.
@@ -907,6 +1281,8 @@ impl From<&wasmparser::PrimitiveValType> for InterfaceType {
 pub struct TypeRecord {
     /// The fields that are contained within this struct type.
     pub fields: Box<[RecordField]>,
+    /// Byte information about this type in the canonical ABI.
+    pub abi: CanonicalAbiInfo,
 }
 
 /// One field within a record.
@@ -927,6 +1303,10 @@ pub struct RecordField {
 pub struct TypeVariant {
     /// The list of cases that this variant can take.
     pub cases: Box<[VariantCase]>,
+    /// Byte information about this type in the canonical ABI.
+    pub abi: CanonicalAbiInfo,
+    /// Byte information about this variant type.
+    pub info: VariantInfo,
 }
 
 /// One case of a `variant` type which contains the name of the variant as well
@@ -947,6 +1327,8 @@ pub struct VariantCase {
 pub struct TypeTuple {
     /// The types that are contained within this tuple.
     pub types: Box<[InterfaceType]>,
+    /// Byte information about this type in the canonical ABI.
+    pub abi: CanonicalAbiInfo,
 }
 
 /// Shape of a "flags" type in interface types.
@@ -957,6 +1339,8 @@ pub struct TypeTuple {
 pub struct TypeFlags {
     /// The names of all flags, all of which are unique.
     pub names: Box<[String]>,
+    /// Byte information about this type in the canonical ABI.
+    pub abi: CanonicalAbiInfo,
 }
 
 /// Shape of an "enum" type in interface types, not to be confused with a Rust
@@ -968,6 +1352,10 @@ pub struct TypeFlags {
 pub struct TypeEnum {
     /// The names of this enum, all of which are unique.
     pub names: Box<[String]>,
+    /// Byte information about this type in the canonical ABI.
+    pub abi: CanonicalAbiInfo,
+    /// Byte information about this variant type.
+    pub info: VariantInfo,
 }
 
 /// Shape of a "union" type in interface types.
@@ -979,6 +1367,21 @@ pub struct TypeEnum {
 pub struct TypeUnion {
     /// The list of types this is a union over.
     pub types: Box<[InterfaceType]>,
+    /// Byte information about this type in the canonical ABI.
+    pub abi: CanonicalAbiInfo,
+    /// Byte information about this variant type.
+    pub info: VariantInfo,
+}
+
+/// Shape of an "option" interface type.
+#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+pub struct TypeOption {
+    /// The `T` in `Result<T, E>`
+    pub ty: InterfaceType,
+    /// Byte information about this type in the canonical ABI.
+    pub abi: CanonicalAbiInfo,
+    /// Byte information about this variant type.
+    pub info: VariantInfo,
 }
 
 /// Shape of an "expected" interface type.
@@ -988,4 +1391,8 @@ pub struct TypeExpected {
     pub ok: InterfaceType,
     /// The `E` in `Result<T, E>`
     pub err: InterfaceType,
+    /// Byte information about this type in the canonical ABI.
+    pub abi: CanonicalAbiInfo,
+    /// Byte information about this variant type.
+    pub info: VariantInfo,
 }
