@@ -25,10 +25,6 @@ pub const IMPORT_FUNCTION: &str = "echo";
 /// The name of the exported guest function which the host should call
 pub const EXPORT_FUNCTION: &str = "echo";
 
-/// Maximum length of an arbitrary tuple type.  As of this writing, the `wasmtime::component::func::typed` module
-/// only implements the `ComponentType` trait for tuples up to this length.
-const MAX_TUPLE_LENGTH: usize = 16;
-
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum CoreType {
     I32,
@@ -76,45 +72,28 @@ impl<'a, const L: usize, const H: usize> Arbitrary<'a> for UsizeInRange<L, H> {
     }
 }
 
-/// Wraps a `Box<[T]>` and provides an `Arbitrary` implementation that always generates non-empty slices
-#[derive(Debug)]
-pub struct NonEmptyArray<T>(Box<[T]>);
-
-impl<'a, T: Arbitrary<'a>> Arbitrary<'a> for NonEmptyArray<T> {
-    fn arbitrary(input: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(Self(
-            iter::once(input.arbitrary())
-                .chain(input.arbitrary_iter()?)
-                .collect::<arbitrary::Result<_>>()?,
-        ))
-    }
-}
-
-impl<T> Deref for NonEmptyArray<T> {
-    type Target = [T];
-
-    fn deref(&self) -> &[T] {
-        self.0.deref()
-    }
-}
-
 /// Wraps a `Box<[T]>` and provides an `Arbitrary` implementation that always generates slices of length less than
 /// or equal to the longest tuple for which Wasmtime generates a `ComponentType` impl
 #[derive(Debug)]
-pub struct TupleArray<T>(Box<[T]>);
+pub struct VecInRange<T, const L: usize, const H: usize>(Vec<T>);
 
-impl<'a, T: Arbitrary<'a>> Arbitrary<'a> for TupleArray<T> {
+impl<'a, T: Arbitrary<'a>, const L: usize, const H: usize> Arbitrary<'a> for VecInRange<T, L, H> {
     fn arbitrary(input: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(Self(
-            input
-                .arbitrary_iter()?
-                .take(MAX_TUPLE_LENGTH)
-                .collect::<arbitrary::Result<_>>()?,
-        ))
+        let mut ret = Vec::new();
+        while ret.len() < L {
+            ret.push(input.arbitrary()?);
+        }
+        for val in input.arbitrary_iter()? {
+            ret.push(val?);
+            if ret.len() == H {
+                break;
+            }
+        }
+        Ok(Self(ret))
     }
 }
 
-impl<T> Deref for TupleArray<T> {
+impl<T, const L: usize, const H: usize> Deref for VecInRange<T, L, H> {
     type Target = [T];
 
     fn deref(&self) -> &[T] {
@@ -141,13 +120,28 @@ pub enum Type {
     Char,
     String,
     List(Box<Type>),
-    Record(Box<[Type]>),
-    Tuple(TupleArray<Type>),
-    Variant(NonEmptyArray<Type>),
+
+    // Give records the ability to generate a generous amount of fields but
+    // don't let the fuzzer go too wild since `wasmparser`'s validator currently
+    // has hard limits in the 1000-ish range on the number of fields a record
+    // may contain.
+    Record(VecInRange<Type, 0, 200>),
+
+    // Tuples can only have up to 16 type parameters in wasmtime right now for
+    // the static API.
+    Tuple(VecInRange<Type, 0, 16>),
+
+    // Like records, allow a good number of variants, but variants require at
+    // least one case.
+    Variant(VecInRange<Type, 1, 200>),
     Enum(UsizeInRange<1, 257>),
-    Union(NonEmptyArray<Type>),
+    Union(VecInRange<Type, 1, 200>),
+
     Option(Box<Type>),
     Expected { ok: Box<Type>, err: Box<Type> },
+
+    // Generate 0 flags all the way up to 65 flags which exercises the 0 to
+    // 3 x u32 cases.
     Flags(UsizeInRange<0, 65>),
 }
 
