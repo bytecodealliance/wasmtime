@@ -3,7 +3,7 @@ target x86_64
 target s390x
 target aarch64
 
-function %load_op_store_iadd_i64(i64 vmctx, i64, i64) -> i64 {
+function %los_iadd_i64(i64 vmctx, i64, i64) -> i64 {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+0
     heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0, index_type i64
@@ -19,10 +19,10 @@ block0(v0: i64, v1: i64, v2: i64):
     return v7
 }
 ; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
-; run: %static_heap_i64_load_store(0, 1) == 43
-; run: %static_heap_i64_load_store(0, -1) == 41
+; run: %los_iadd_i64(0, 1) == 43
+; run: %los_iadd_i64(0, -1) == 41
 
-function %load_op_store_iadd_i32(i64 vmctx, i64, i32) -> i32 {
+function %los_iadd_i32(i64 vmctx, i64, i32) -> i32 {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+0
     heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0, index_type i64
@@ -38,10 +38,10 @@ block0(v0: i64, v1: i64, v2: i32):
     return v7
 }
 ; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
-; run: %static_heap_i64_load_store(0, 1) == 43
-; run: %static_heap_i64_load_store(0, -1) == 41
+; run: %los_iadd_i32(0, 1) == 43
+; run: %los_iadd_i32(0, -1) == 41
 
-function %load_op_store_iadd_i8(i64 vmctx, i64, i8) -> i8 {
+function %los_iadd_i8(i64 vmctx, i64, i8) -> i8 {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+0
     heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0, index_type i64
@@ -57,10 +57,10 @@ block0(v0: i64, v1: i64, v2: i8):
     return v7
 }
 ; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
-; run: %static_heap_i64_load_store(0, 1) == 43
-; run: %static_heap_i64_load_store(0, -1) == 41
+; run: %los_iadd_i8(0, 1) == 43
+; run: %los_iadd_i8(0, -1) == 41
 
-function %load_op_store_iadd_isub_iand_ior_ixor_i64(i64 vmctx, i64, i64) -> i64 {
+function %los_multi_i64(i64 vmctx, i64, i64) -> i64 {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+0
     heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0, index_type i64
@@ -93,4 +93,4 @@ block0(v0: i64, v1: i64, v2: i64):
     return v20
 }
 ; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
-; run: %static_heap_i64_load_store(0, 0x1234) == 236
+; run: %los_multi_i64(0, 0x1234) == 236

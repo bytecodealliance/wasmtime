@@ -8,7 +8,7 @@ target x86_64
 ; We can't test that these instructions are right regarding atomicity, but we can
 ; test if they perform their operation correctly
 
-function %atomic_rmw_add_little_i16(i32, i64, i16) -> i32 {
+function %rmw_add_i16(i32, i64, i16) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i16):
@@ -21,12 +21,12 @@ block0(v0: i32, v1: i64, v2: i16):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_add_little_i16(0x12345678, 2, 0x1111) == 0x23455678
-; run: %atomic_rmw_add_little_i16(0x12345678, 2, 0xffff) == 0x12335678
-; run: %atomic_rmw_add_little_i16(0x12345678, 0, 0x1111) == 0x12346789
-; run: %atomic_rmw_add_little_i16(0x12345678, 0, 0xffff) == 0x12345677
+; run: %rmw_add_i16(0x12345678, 2, 0x1111) == 0x23455678
+; run: %rmw_add_i16(0x12345678, 2, 0xffff) == 0x12335678
+; run: %rmw_add_i16(0x12345678, 0, 0x1111) == 0x12346789
+; run: %rmw_add_i16(0x12345678, 0, 0xffff) == 0x12345677
 
-function %atomic_rmw_add_little_i8(i32, i64, i8) -> i32 {
+function %rmw_add_i8(i32, i64, i8) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i8):
@@ -39,16 +39,16 @@ block0(v0: i32, v1: i64, v2: i8):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_add_little_i8(0x12345678, 3, 0x11) == 0x23345678
-; run: %atomic_rmw_add_little_i8(0x12345678, 3, 0xff) == 0x11345678
-; run: %atomic_rmw_add_little_i8(0x12345678, 2, 0x11) == 0x12455678
-; run: %atomic_rmw_add_little_i8(0x12345678, 2, 0xff) == 0x12335678
-; run: %atomic_rmw_add_little_i8(0x12345678, 1, 0x11) == 0x12346778
-; run: %atomic_rmw_add_little_i8(0x12345678, 1, 0xff) == 0x12345578
-; run: %atomic_rmw_add_little_i8(0x12345678, 0, 0x11) == 0x12345689
-; run: %atomic_rmw_add_little_i8(0x12345678, 0, 0xff) == 0x12345677
+; run: %rmw_add_i8(0x12345678, 3, 0x11) == 0x23345678
+; run: %rmw_add_i8(0x12345678, 3, 0xff) == 0x11345678
+; run: %rmw_add_i8(0x12345678, 2, 0x11) == 0x12455678
+; run: %rmw_add_i8(0x12345678, 2, 0xff) == 0x12335678
+; run: %rmw_add_i8(0x12345678, 1, 0x11) == 0x12346778
+; run: %rmw_add_i8(0x12345678, 1, 0xff) == 0x12345578
+; run: %rmw_add_i8(0x12345678, 0, 0x11) == 0x12345689
+; run: %rmw_add_i8(0x12345678, 0, 0xff) == 0x12345677
 
-function %atomic_rmw_sub_little_i16(i32, i64, i16) -> i32 {
+function %rmw_sub_i16(i32, i64, i16) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i16):
@@ -61,12 +61,12 @@ block0(v0: i32, v1: i64, v2: i16):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_sub_little_i16(0x12345678, 2, 0x1111) == 0x01235678
-; run: %atomic_rmw_sub_little_i16(0x12345678, 2, 0xffff) == 0x12355678
-; run: %atomic_rmw_sub_little_i16(0x12345678, 0, 0x1111) == 0x12344567
-; run: %atomic_rmw_sub_little_i16(0x12345678, 0, 0xffff) == 0x12345679
+; run: %rmw_sub_i16(0x12345678, 2, 0x1111) == 0x01235678
+; run: %rmw_sub_i16(0x12345678, 2, 0xffff) == 0x12355678
+; run: %rmw_sub_i16(0x12345678, 0, 0x1111) == 0x12344567
+; run: %rmw_sub_i16(0x12345678, 0, 0xffff) == 0x12345679
 
-function %atomic_rmw_sub_little_i8(i32, i64, i8) -> i32 {
+function %rmw_sub_i8(i32, i64, i8) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i8):
@@ -79,16 +79,16 @@ block0(v0: i32, v1: i64, v2: i8):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_sub_little_i8(0x12345678, 3, 0x11) == 0x01345678
-; run: %atomic_rmw_sub_little_i8(0x12345678, 3, 0xff) == 0x13345678
-; run: %atomic_rmw_sub_little_i8(0x12345678, 2, 0x11) == 0x12235678
-; run: %atomic_rmw_sub_little_i8(0x12345678, 2, 0xff) == 0x12355678
-; run: %atomic_rmw_sub_little_i8(0x12345678, 1, 0x11) == 0x12344578
-; run: %atomic_rmw_sub_little_i8(0x12345678, 1, 0xff) == 0x12345778
-; run: %atomic_rmw_sub_little_i8(0x12345678, 0, 0x11) == 0x12345667
-; run: %atomic_rmw_sub_little_i8(0x12345678, 0, 0xff) == 0x12345679
+; run: %rmw_sub_i8(0x12345678, 3, 0x11) == 0x01345678
+; run: %rmw_sub_i8(0x12345678, 3, 0xff) == 0x13345678
+; run: %rmw_sub_i8(0x12345678, 2, 0x11) == 0x12235678
+; run: %rmw_sub_i8(0x12345678, 2, 0xff) == 0x12355678
+; run: %rmw_sub_i8(0x12345678, 1, 0x11) == 0x12344578
+; run: %rmw_sub_i8(0x12345678, 1, 0xff) == 0x12345778
+; run: %rmw_sub_i8(0x12345678, 0, 0x11) == 0x12345667
+; run: %rmw_sub_i8(0x12345678, 0, 0xff) == 0x12345679
 
-function %atomic_rmw_and_little_i16(i32, i64, i16) -> i32 {
+function %rmw_and_i16(i32, i64, i16) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i16):
@@ -101,12 +101,12 @@ block0(v0: i32, v1: i64, v2: i16):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_and_little_i16(0x12345678, 2, 0xf000) == 0x10005678
-; run: %atomic_rmw_and_little_i16(0x12345678, 2, 0x000f) == 0x00045678
-; run: %atomic_rmw_and_little_i16(0x12345678, 0, 0xf000) == 0x12345000
-; run: %atomic_rmw_and_little_i16(0x12345678, 0, 0x000f) == 0x12340008
+; run: %rmw_and_i16(0x12345678, 2, 0xf000) == 0x10005678
+; run: %rmw_and_i16(0x12345678, 2, 0x000f) == 0x00045678
+; run: %rmw_and_i16(0x12345678, 0, 0xf000) == 0x12345000
+; run: %rmw_and_i16(0x12345678, 0, 0x000f) == 0x12340008
 
-function %atomic_rmw_and_little_i8(i32, i64, i8) -> i32 {
+function %rmw_and_i8(i32, i64, i8) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i8):
@@ -119,17 +119,17 @@ block0(v0: i32, v1: i64, v2: i8):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_and_little_i8(0x12345678, 3, 0xf0) == 0x10345678
-; run: %atomic_rmw_and_little_i8(0x12345678, 3, 0x0f) == 0x02345678
-; run: %atomic_rmw_and_little_i8(0x12345678, 2, 0xf0) == 0x12305678
-; run: %atomic_rmw_and_little_i8(0x12345678, 2, 0x0f) == 0x12045678
-; run: %atomic_rmw_and_little_i8(0x12345678, 1, 0xf0) == 0x12345078
-; run: %atomic_rmw_and_little_i8(0x12345678, 1, 0x0f) == 0x12340678
-; run: %atomic_rmw_and_little_i8(0x12345678, 0, 0xf0) == 0x12345670
-; run: %atomic_rmw_and_little_i8(0x12345678, 0, 0x0f) == 0x12345608
+; run: %rmw_and_i8(0x12345678, 3, 0xf0) == 0x10345678
+; run: %rmw_and_i8(0x12345678, 3, 0x0f) == 0x02345678
+; run: %rmw_and_i8(0x12345678, 2, 0xf0) == 0x12305678
+; run: %rmw_and_i8(0x12345678, 2, 0x0f) == 0x12045678
+; run: %rmw_and_i8(0x12345678, 1, 0xf0) == 0x12345078
+; run: %rmw_and_i8(0x12345678, 1, 0x0f) == 0x12340678
+; run: %rmw_and_i8(0x12345678, 0, 0xf0) == 0x12345670
+; run: %rmw_and_i8(0x12345678, 0, 0x0f) == 0x12345608
 
 
-function %atomic_rmw_or_little_i16(i32, i64, i16) -> i32 {
+function %rmw_or_i16(i32, i64, i16) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i16):
@@ -142,12 +142,12 @@ block0(v0: i32, v1: i64, v2: i16):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_or_little_i16(0x12345678, 2, 0xf000) == 0xf2345678
-; run: %atomic_rmw_or_little_i16(0x12345678, 2, 0x000f) == 0x123f5678
-; run: %atomic_rmw_or_little_i16(0x12345678, 0, 0xf000) == 0x1234f678
-; run: %atomic_rmw_or_little_i16(0x12345678, 0, 0x000f) == 0x1234567f
+; run: %rmw_or_i16(0x12345678, 2, 0xf000) == 0xf2345678
+; run: %rmw_or_i16(0x12345678, 2, 0x000f) == 0x123f5678
+; run: %rmw_or_i16(0x12345678, 0, 0xf000) == 0x1234f678
+; run: %rmw_or_i16(0x12345678, 0, 0x000f) == 0x1234567f
 
-function %atomic_rmw_or_little_i8(i32, i64, i8) -> i32 {
+function %rmw_or_i8(i32, i64, i8) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i8):
@@ -160,16 +160,16 @@ block0(v0: i32, v1: i64, v2: i8):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_or_little_i8(0x12345678, 3, 0xf0) == 0xf2345678
-; run: %atomic_rmw_or_little_i8(0x12345678, 3, 0x0f) == 0x1f345678
-; run: %atomic_rmw_or_little_i8(0x12345678, 2, 0xf0) == 0x12f45678
-; run: %atomic_rmw_or_little_i8(0x12345678, 2, 0x0f) == 0x123f5678
-; run: %atomic_rmw_or_little_i8(0x12345678, 1, 0xf0) == 0x1234f678
-; run: %atomic_rmw_or_little_i8(0x12345678, 1, 0x0f) == 0x12345f78
-; run: %atomic_rmw_or_little_i8(0x12345678, 0, 0xf0) == 0x123456f8
-; run: %atomic_rmw_or_little_i8(0x12345678, 0, 0x0f) == 0x1234567f
+; run: %rmw_or_i8(0x12345678, 3, 0xf0) == 0xf2345678
+; run: %rmw_or_i8(0x12345678, 3, 0x0f) == 0x1f345678
+; run: %rmw_or_i8(0x12345678, 2, 0xf0) == 0x12f45678
+; run: %rmw_or_i8(0x12345678, 2, 0x0f) == 0x123f5678
+; run: %rmw_or_i8(0x12345678, 1, 0xf0) == 0x1234f678
+; run: %rmw_or_i8(0x12345678, 1, 0x0f) == 0x12345f78
+; run: %rmw_or_i8(0x12345678, 0, 0xf0) == 0x123456f8
+; run: %rmw_or_i8(0x12345678, 0, 0x0f) == 0x1234567f
 
-function %atomic_rmw_xor_little_i16(i32, i64, i16) -> i32 {
+function %rmw_xor_i16(i32, i64, i16) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i16):
@@ -182,12 +182,12 @@ block0(v0: i32, v1: i64, v2: i16):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_xor_little_i16(0x12345678, 2, 0xf000) == 0xe2345678
-; run: %atomic_rmw_xor_little_i16(0x12345678, 2, 0x000f) == 0x123b5678
-; run: %atomic_rmw_xor_little_i16(0x12345678, 0, 0xf000) == 0x1234a678
-; run: %atomic_rmw_xor_little_i16(0x12345678, 0, 0x000f) == 0x12345677
+; run: %rmw_xor_i16(0x12345678, 2, 0xf000) == 0xe2345678
+; run: %rmw_xor_i16(0x12345678, 2, 0x000f) == 0x123b5678
+; run: %rmw_xor_i16(0x12345678, 0, 0xf000) == 0x1234a678
+; run: %rmw_xor_i16(0x12345678, 0, 0x000f) == 0x12345677
 
-function %atomic_rmw_xor_little_i8(i32, i64, i8) -> i32 {
+function %rmw_xor_i8(i32, i64, i8) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i8):
@@ -200,17 +200,17 @@ block0(v0: i32, v1: i64, v2: i8):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_xor_little_i8(0x12345678, 3, 0xf0) == 0xe2345678
-; run: %atomic_rmw_xor_little_i8(0x12345678, 3, 0x0f) == 0x1d345678
-; run: %atomic_rmw_xor_little_i8(0x12345678, 2, 0xf0) == 0x12c45678
-; run: %atomic_rmw_xor_little_i8(0x12345678, 2, 0x0f) == 0x123b5678
-; run: %atomic_rmw_xor_little_i8(0x12345678, 1, 0xf0) == 0x1234a678
-; run: %atomic_rmw_xor_little_i8(0x12345678, 1, 0x0f) == 0x12345978
-; run: %atomic_rmw_xor_little_i8(0x12345678, 0, 0xf0) == 0x12345688
-; run: %atomic_rmw_xor_little_i8(0x12345678, 0, 0x0f) == 0x12345677
+; run: %rmw_xor_i8(0x12345678, 3, 0xf0) == 0xe2345678
+; run: %rmw_xor_i8(0x12345678, 3, 0x0f) == 0x1d345678
+; run: %rmw_xor_i8(0x12345678, 2, 0xf0) == 0x12c45678
+; run: %rmw_xor_i8(0x12345678, 2, 0x0f) == 0x123b5678
+; run: %rmw_xor_i8(0x12345678, 1, 0xf0) == 0x1234a678
+; run: %rmw_xor_i8(0x12345678, 1, 0x0f) == 0x12345978
+; run: %rmw_xor_i8(0x12345678, 0, 0xf0) == 0x12345688
+; run: %rmw_xor_i8(0x12345678, 0, 0x0f) == 0x12345677
 
 
-function %atomic_rmw_nand_little_i16(i32, i64, i16) -> i32 {
+function %rmw_nand_i16(i32, i64, i16) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i16):
@@ -223,12 +223,12 @@ block0(v0: i32, v1: i64, v2: i16):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_nand_little_i16(0x12345678, 2, 0xf000) == 0xefff5678
-; run: %atomic_rmw_nand_little_i16(0x12345678, 2, 0x000f) == 0xfffb5678
-; run: %atomic_rmw_nand_little_i16(0x12345678, 0, 0xf000) == 0x1234afff
-; run: %atomic_rmw_nand_little_i16(0x12345678, 0, 0x000f) == 0x1234fff7
+; run: %rmw_nand_i16(0x12345678, 2, 0xf000) == 0xefff5678
+; run: %rmw_nand_i16(0x12345678, 2, 0x000f) == 0xfffb5678
+; run: %rmw_nand_i16(0x12345678, 0, 0xf000) == 0x1234afff
+; run: %rmw_nand_i16(0x12345678, 0, 0x000f) == 0x1234fff7
 
-function %atomic_rmw_nand_little_i8(i32, i64, i8) -> i32 {
+function %rmw_nand_i8(i32, i64, i8) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i8):
@@ -241,17 +241,17 @@ block0(v0: i32, v1: i64, v2: i8):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_nand_little_i8(0x12345678, 3, 0xf0) == 0xef345678
-; run: %atomic_rmw_nand_little_i8(0x12345678, 3, 0x0f) == 0xfd345678
-; run: %atomic_rmw_nand_little_i8(0x12345678, 2, 0xf0) == 0x12cf5678
-; run: %atomic_rmw_nand_little_i8(0x12345678, 2, 0x0f) == 0x12fb5678
-; run: %atomic_rmw_nand_little_i8(0x12345678, 1, 0xf0) == 0x1234af78
-; run: %atomic_rmw_nand_little_i8(0x12345678, 1, 0x0f) == 0x1234f978
-; run: %atomic_rmw_nand_little_i8(0x12345678, 0, 0xf0) == 0x1234568f
-; run: %atomic_rmw_nand_little_i8(0x12345678, 0, 0x0f) == 0x123456f7
+; run: %rmw_nand_i8(0x12345678, 3, 0xf0) == 0xef345678
+; run: %rmw_nand_i8(0x12345678, 3, 0x0f) == 0xfd345678
+; run: %rmw_nand_i8(0x12345678, 2, 0xf0) == 0x12cf5678
+; run: %rmw_nand_i8(0x12345678, 2, 0x0f) == 0x12fb5678
+; run: %rmw_nand_i8(0x12345678, 1, 0xf0) == 0x1234af78
+; run: %rmw_nand_i8(0x12345678, 1, 0x0f) == 0x1234f978
+; run: %rmw_nand_i8(0x12345678, 0, 0xf0) == 0x1234568f
+; run: %rmw_nand_i8(0x12345678, 0, 0x0f) == 0x123456f7
 
 
-function %atomic_rmw_umin_little_i16(i32, i64, i16) -> i32 {
+function %rmw_umin_i16(i32, i64, i16) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i16):
@@ -264,12 +264,12 @@ block0(v0: i32, v1: i64, v2: i16):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_umin_little_i16(0x12345678, 2, 0x1111) == 0x11115678
-; run: %atomic_rmw_umin_little_i16(0x12345678, 2, 0xffff) == 0x12345678
-; run: %atomic_rmw_umin_little_i16(0x12345678, 0, 0x1111) == 0x12341111
-; run: %atomic_rmw_umin_little_i16(0x12345678, 0, 0xffff) == 0x12345678
+; run: %rmw_umin_i16(0x12345678, 2, 0x1111) == 0x11115678
+; run: %rmw_umin_i16(0x12345678, 2, 0xffff) == 0x12345678
+; run: %rmw_umin_i16(0x12345678, 0, 0x1111) == 0x12341111
+; run: %rmw_umin_i16(0x12345678, 0, 0xffff) == 0x12345678
 
-function %atomic_rmw_umin_little_i8(i32, i64, i8) -> i32 {
+function %rmw_umin_i8(i32, i64, i8) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i8):
@@ -282,17 +282,17 @@ block0(v0: i32, v1: i64, v2: i8):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_umin_little_i8(0x12345678, 3, 0x11) == 0x11345678
-; run: %atomic_rmw_umin_little_i8(0x12345678, 3, 0xff) == 0x12345678
-; run: %atomic_rmw_umin_little_i8(0x12345678, 2, 0x11) == 0x12115678
-; run: %atomic_rmw_umin_little_i8(0x12345678, 2, 0xff) == 0x12345678
-; run: %atomic_rmw_umin_little_i8(0x12345678, 1, 0x11) == 0x12341178
-; run: %atomic_rmw_umin_little_i8(0x12345678, 1, 0xff) == 0x12345678
-; run: %atomic_rmw_umin_little_i8(0x12345678, 0, 0x11) == 0x12345611
-; run: %atomic_rmw_umin_little_i8(0x12345678, 0, 0xff) == 0x12345678
+; run: %rmw_umin_i8(0x12345678, 3, 0x11) == 0x11345678
+; run: %rmw_umin_i8(0x12345678, 3, 0xff) == 0x12345678
+; run: %rmw_umin_i8(0x12345678, 2, 0x11) == 0x12115678
+; run: %rmw_umin_i8(0x12345678, 2, 0xff) == 0x12345678
+; run: %rmw_umin_i8(0x12345678, 1, 0x11) == 0x12341178
+; run: %rmw_umin_i8(0x12345678, 1, 0xff) == 0x12345678
+; run: %rmw_umin_i8(0x12345678, 0, 0x11) == 0x12345611
+; run: %rmw_umin_i8(0x12345678, 0, 0xff) == 0x12345678
 
 
-function %atomic_rmw_umax_little_i16(i32, i64, i16) -> i32 {
+function %rmw_umax_i16(i32, i64, i16) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i16):
@@ -305,12 +305,12 @@ block0(v0: i32, v1: i64, v2: i16):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_umax_little_i16(0x12345678, 2, 0x1111) == 0x12345678
-; run: %atomic_rmw_umax_little_i16(0x12345678, 2, 0xffff) == 0xffff5678
-; run: %atomic_rmw_umax_little_i16(0x12345678, 0, 0x1111) == 0x12345678
-; run: %atomic_rmw_umax_little_i16(0x12345678, 0, 0xffff) == 0x1234ffff
+; run: %rmw_umax_i16(0x12345678, 2, 0x1111) == 0x12345678
+; run: %rmw_umax_i16(0x12345678, 2, 0xffff) == 0xffff5678
+; run: %rmw_umax_i16(0x12345678, 0, 0x1111) == 0x12345678
+; run: %rmw_umax_i16(0x12345678, 0, 0xffff) == 0x1234ffff
 
-function %atomic_rmw_umax_little_i8(i32, i64, i8) -> i32 {
+function %rmw_umax_i8(i32, i64, i8) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i8):
@@ -323,17 +323,17 @@ block0(v0: i32, v1: i64, v2: i8):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_umax_little_i8(0x12345678, 3, 0x11) == 0x12345678
-; run: %atomic_rmw_umax_little_i8(0x12345678, 3, 0xff) == 0xff345678
-; run: %atomic_rmw_umax_little_i8(0x12345678, 2, 0x11) == 0x12345678
-; run: %atomic_rmw_umax_little_i8(0x12345678, 2, 0xff) == 0x12ff5678
-; run: %atomic_rmw_umax_little_i8(0x12345678, 1, 0x11) == 0x12345678
-; run: %atomic_rmw_umax_little_i8(0x12345678, 1, 0xff) == 0x1234ff78
-; run: %atomic_rmw_umax_little_i8(0x12345678, 0, 0x11) == 0x12345678
-; run: %atomic_rmw_umax_little_i8(0x12345678, 0, 0xff) == 0x123456ff
+; run: %rmw_umax_i8(0x12345678, 3, 0x11) == 0x12345678
+; run: %rmw_umax_i8(0x12345678, 3, 0xff) == 0xff345678
+; run: %rmw_umax_i8(0x12345678, 2, 0x11) == 0x12345678
+; run: %rmw_umax_i8(0x12345678, 2, 0xff) == 0x12ff5678
+; run: %rmw_umax_i8(0x12345678, 1, 0x11) == 0x12345678
+; run: %rmw_umax_i8(0x12345678, 1, 0xff) == 0x1234ff78
+; run: %rmw_umax_i8(0x12345678, 0, 0x11) == 0x12345678
+; run: %rmw_umax_i8(0x12345678, 0, 0xff) == 0x123456ff
 
 
-function %atomic_rmw_smin_little_i16(i32, i64, i16) -> i32 {
+function %rmw_smin_i16(i32, i64, i16) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i16):
@@ -346,13 +346,13 @@ block0(v0: i32, v1: i64, v2: i16):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_smin_little_i16(0x12345678, 2, 0x1111) == 0x11115678
-; run: %atomic_rmw_smin_little_i16(0x12345678, 2, 0xffff) == 0xffff5678
-; run: %atomic_rmw_smin_little_i16(0x12345678, 0, 0x1111) == 0x12341111
-; run: %atomic_rmw_smin_little_i16(0x12345678, 0, 0xffff) == 0x1234ffff
+; run: %rmw_smin_i16(0x12345678, 2, 0x1111) == 0x11115678
+; run: %rmw_smin_i16(0x12345678, 2, 0xffff) == 0xffff5678
+; run: %rmw_smin_i16(0x12345678, 0, 0x1111) == 0x12341111
+; run: %rmw_smin_i16(0x12345678, 0, 0xffff) == 0x1234ffff
 
 
-function %atomic_rmw_smin_little_i8(i32, i64, i8) -> i32 {
+function %rmw_smin_i8(i32, i64, i8) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i8):
@@ -365,17 +365,17 @@ block0(v0: i32, v1: i64, v2: i8):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_smin_little_i8(0x12345678, 3, 0x11) == 0x11345678
-; run: %atomic_rmw_smin_little_i8(0x12345678, 3, 0xff) == 0xff345678
-; run: %atomic_rmw_smin_little_i8(0x12345678, 2, 0x11) == 0x12115678
-; run: %atomic_rmw_smin_little_i8(0x12345678, 2, 0xff) == 0x12ff5678
-; run: %atomic_rmw_smin_little_i8(0x12345678, 1, 0x11) == 0x12341178
-; run: %atomic_rmw_smin_little_i8(0x12345678, 1, 0xff) == 0x1234ff78
-; run: %atomic_rmw_smin_little_i8(0x12345678, 0, 0x11) == 0x12345611
-; run: %atomic_rmw_smin_little_i8(0x12345678, 0, 0xff) == 0x123456ff
+; run: %rmw_smin_i8(0x12345678, 3, 0x11) == 0x11345678
+; run: %rmw_smin_i8(0x12345678, 3, 0xff) == 0xff345678
+; run: %rmw_smin_i8(0x12345678, 2, 0x11) == 0x12115678
+; run: %rmw_smin_i8(0x12345678, 2, 0xff) == 0x12ff5678
+; run: %rmw_smin_i8(0x12345678, 1, 0x11) == 0x12341178
+; run: %rmw_smin_i8(0x12345678, 1, 0xff) == 0x1234ff78
+; run: %rmw_smin_i8(0x12345678, 0, 0x11) == 0x12345611
+; run: %rmw_smin_i8(0x12345678, 0, 0xff) == 0x123456ff
 
 
-function %atomic_rmw_smax_little_i16(i32, i64, i16) -> i32 {
+function %rmw_smax_i16(i32, i64, i16) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i16):
@@ -388,13 +388,13 @@ block0(v0: i32, v1: i64, v2: i16):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_smax_little_i16(0x12345678, 2, 0xffff) == 0x12345678
-; run: %atomic_rmw_smax_little_i16(0x12345678, 2, 0x7fff) == 0x7fff5678
-; run: %atomic_rmw_smax_little_i16(0x12345678, 0, 0xffff) == 0x12345678
-; run: %atomic_rmw_smax_little_i16(0x12345678, 0, 0x7fff) == 0x12347fff
+; run: %rmw_smax_i16(0x12345678, 2, 0xffff) == 0x12345678
+; run: %rmw_smax_i16(0x12345678, 2, 0x7fff) == 0x7fff5678
+; run: %rmw_smax_i16(0x12345678, 0, 0xffff) == 0x12345678
+; run: %rmw_smax_i16(0x12345678, 0, 0x7fff) == 0x12347fff
 
 
-function %atomic_rmw_smax_little_i8(i32, i64, i8) -> i32 {
+function %rmw_smax_i8(i32, i64, i8) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i8):
@@ -407,17 +407,17 @@ block0(v0: i32, v1: i64, v2: i8):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_smax_little_i8(0x12345678, 3, 0xff) == 0x12345678
-; run: %atomic_rmw_smax_little_i8(0x12345678, 3, 0x7f) == 0x7f345678
-; run: %atomic_rmw_smax_little_i8(0x12345678, 2, 0xff) == 0x12345678
-; run: %atomic_rmw_smax_little_i8(0x12345678, 2, 0x7f) == 0x127f5678
-; run: %atomic_rmw_smax_little_i8(0x12345678, 1, 0xff) == 0x12345678
-; run: %atomic_rmw_smax_little_i8(0x12345678, 1, 0x7f) == 0x12347f78
-; run: %atomic_rmw_smax_little_i8(0x12345678, 0, 0xff) == 0x12345678
-; run: %atomic_rmw_smax_little_i8(0x12345678, 0, 0x7f) == 0x1234567f
+; run: %rmw_smax_i8(0x12345678, 3, 0xff) == 0x12345678
+; run: %rmw_smax_i8(0x12345678, 3, 0x7f) == 0x7f345678
+; run: %rmw_smax_i8(0x12345678, 2, 0xff) == 0x12345678
+; run: %rmw_smax_i8(0x12345678, 2, 0x7f) == 0x127f5678
+; run: %rmw_smax_i8(0x12345678, 1, 0xff) == 0x12345678
+; run: %rmw_smax_i8(0x12345678, 1, 0x7f) == 0x12347f78
+; run: %rmw_smax_i8(0x12345678, 0, 0xff) == 0x12345678
+; run: %rmw_smax_i8(0x12345678, 0, 0x7f) == 0x1234567f
 
 
-function %atomic_rmw_xchg_little_i16(i32, i64, i16) -> i32 {
+function %rmw_xchg_i16(i32, i64, i16) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i16):
@@ -430,13 +430,13 @@ block0(v0: i32, v1: i64, v2: i16):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_xchg_little_i16(0x12345678, 2, 0x1111) == 0x11115678
-; run: %atomic_rmw_xchg_little_i16(0x12345678, 2, 0xffff) == 0xffff5678
-; run: %atomic_rmw_xchg_little_i16(0x12345678, 0, 0x1111) == 0x12341111
-; run: %atomic_rmw_xchg_little_i16(0x12345678, 0, 0xffff) == 0x1234ffff
+; run: %rmw_xchg_i16(0x12345678, 2, 0x1111) == 0x11115678
+; run: %rmw_xchg_i16(0x12345678, 2, 0xffff) == 0xffff5678
+; run: %rmw_xchg_i16(0x12345678, 0, 0x1111) == 0x12341111
+; run: %rmw_xchg_i16(0x12345678, 0, 0xffff) == 0x1234ffff
 
 
-function %atomic_rmw_xchg_little_i8(i32, i64, i8) -> i32 {
+function %rmw_xchg_i8(i32, i64, i8) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i8):
@@ -449,11 +449,11 @@ block0(v0: i32, v1: i64, v2: i8):
     v6 = load.i32 little v3
     return v6
 }
-; run: %atomic_rmw_xchg_little_i8(0x12345678, 3, 0x11) == 0x11345678
-; run: %atomic_rmw_xchg_little_i8(0x12345678, 3, 0xff) == 0xff345678
-; run: %atomic_rmw_xchg_little_i8(0x12345678, 2, 0x11) == 0x12115678
-; run: %atomic_rmw_xchg_little_i8(0x12345678, 2, 0xff) == 0x12ff5678
-; run: %atomic_rmw_xchg_little_i8(0x12345678, 1, 0x11) == 0x12341178
-; run: %atomic_rmw_xchg_little_i8(0x12345678, 1, 0xff) == 0x1234ff78
-; run: %atomic_rmw_xchg_little_i8(0x12345678, 0, 0x11) == 0x12345611
-; run: %atomic_rmw_xchg_little_i8(0x12345678, 0, 0xff) == 0x123456ff
+; run: %rmw_xchg_i8(0x12345678, 3, 0x11) == 0x11345678
+; run: %rmw_xchg_i8(0x12345678, 3, 0xff) == 0xff345678
+; run: %rmw_xchg_i8(0x12345678, 2, 0x11) == 0x12115678
+; run: %rmw_xchg_i8(0x12345678, 2, 0xff) == 0x12ff5678
+; run: %rmw_xchg_i8(0x12345678, 1, 0x11) == 0x12341178
+; run: %rmw_xchg_i8(0x12345678, 1, 0xff) == 0x1234ff78
+; run: %rmw_xchg_i8(0x12345678, 0, 0x11) == 0x12345611
+; run: %rmw_xchg_i8(0x12345678, 0, 0xff) == 0x123456ff
