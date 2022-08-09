@@ -117,3 +117,17 @@ block0(v0: i64):
 ;   popq    %rbp
 ;   ret
 
+function %f9(i32x4) -> f64x2 {
+block0(v0: i32x4):
+  v1 = fcvt_low_from_sint.f64x2 v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cvtdq2pd %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
