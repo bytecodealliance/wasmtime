@@ -134,20 +134,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         };
 
         for param in params {
-            // Validate "purpose".
-            match &param.purpose {
-                &ir::ArgumentPurpose::VMContext
-                | &ir::ArgumentPurpose::Normal
-                | &ir::ArgumentPurpose::StackLimit
-                | &ir::ArgumentPurpose::SignatureId
-                | &ir::ArgumentPurpose::StructReturn
-                | &ir::ArgumentPurpose::StructArgument(_) => {}
-                _ => panic!(
-                    "Unsupported argument purpose {:?} in signature: {:?}",
-                    param.purpose, params
-                ),
-            }
-
             assert!(
                 legal_type_for_machine(param.value_type),
                 "Invalid type for AArch64: {:?}",
