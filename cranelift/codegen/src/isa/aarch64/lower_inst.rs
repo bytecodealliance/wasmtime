@@ -268,12 +268,7 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::IsNull | Opcode::IsInvalid => implemented_in_isle(ctx),
 
-        Opcode::Copy => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let ty = ctx.input_ty(insn, 0);
-            ctx.emit(Inst::gen_move(rd, rn, ty));
-        }
+        Opcode::Copy => implemented_in_isle(ctx),
 
         Opcode::Breduce | Opcode::Ireduce => implemented_in_isle(ctx),
 

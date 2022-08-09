@@ -1738,6 +1738,28 @@
 (decl writable_zero_reg () WritableReg)
 (extern constructor writable_zero_reg writable_zero_reg)
 
+(decl writable_xreg (u8) WritableReg)
+(extern constructor writable_xreg writable_xreg)
+
+;; Helper for emitting `MInst.Mov` instructions.
+(decl mov (Reg Type) Reg)
+(rule (mov src ty)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.Mov (operand_size ty) dst src))))
+        dst))
+
+(decl mov64_to_real (u8 Reg) Reg)
+(rule (mov64_to_real num src)
+      (let ((dst WritableReg (writable_xreg num))
+            (_ Unit (emit (MInst.Mov (operand_size $I64) dst src))))
+        dst))
+
+(decl mov64_from_real (u8) Reg)
+(rule (mov64_from_real num)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.Mov (operand_size $I64) dst (xreg num)))))
+        dst))
+
 ;; Helper for emitting `MInst.MovZ` instructions.
 (decl movz (MoveWideConst OperandSize) Reg)
 (rule (movz imm size)
@@ -2091,6 +2113,17 @@
 (rule (fpu_round op rn)
       (let ((dst WritableReg (temp_writable_reg $F64))
             (_ Unit (emit (MInst.FpuRound op dst rn))))
+        dst))
+
+;; Helper for emitting `MInst.FpuMove64` and `MInst.FpuMove128` instructions.
+(decl fpu_move (Type Reg) Reg)
+(rule (fpu_move _ src)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.FpuMove128 dst src))))
+        dst))
+(rule (fpu_move (fits_in_64 _) src)
+      (let ((dst WritableReg (temp_writable_reg $F64))
+            (_ Unit (emit (MInst.FpuMove64 dst src))))
         dst))
 
 ;; Helper for emitting `MInst.MovToFpu` instructions.
