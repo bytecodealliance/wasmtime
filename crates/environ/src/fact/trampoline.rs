@@ -88,28 +88,14 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
 /// The generated function takes two arguments: the source pointer and
 /// destination pointer. The conversion operation is configured by the
 /// `src_opts` and `dst_opts` specified as well.
-fn compile_translate_mem(
+pub(super) fn compile_translate_mem(
     module: &mut Module<'_>,
+    result: FunctionId,
     src: InterfaceType,
     src_opts: &Options,
     dst: InterfaceType,
     dst_opts: &Options,
-) -> FunctionId {
-    // If a helper for this translation has already been generated then reuse
-    // that. Note that this is key to this function where by doing this it
-    // prevents an exponentially sized output given any particular input type.
-    let key = (src, dst, *src_opts, *dst_opts);
-    if module.translate_mem_funcs.contains_key(&key) {
-        return module.translate_mem_funcs[&key];
-    }
-
-    // Generate a fresh `Function` with a unique id for what we're about to
-    // generate.
-    let ty = module
-        .core_types
-        .function(&[src_opts.ptr(), dst_opts.ptr()], &[]);
-    let result = module.funcs.push(Function::new(None, ty));
-    module.translate_mem_funcs.insert(key, result);
+) {
     let mut compiler = Compiler {
         types: module.types,
         module,
@@ -138,7 +124,6 @@ fn compile_translate_mem(
         }),
     );
     compiler.finish();
-    result
 }
 
 /// Possible ways that a interface value is represented in the core wasm
@@ -486,8 +471,9 @@ impl Compiler<'_, '_> {
                 // because we don't know the final index of the generated
                 // function yet. It's filled in at the end of adapter module
                 // translation.
-                let helper =
-                    compile_translate_mem(self.module, *src_ty, src.opts, *dst_ty, dst.opts);
+                let helper = self
+                    .module
+                    .translate_mem(*src_ty, src.opts, *dst_ty, dst.opts);
 
                 // TODO: overflow checks?
                 self.instruction(LocalGet(src.addr.idx));
