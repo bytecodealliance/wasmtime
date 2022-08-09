@@ -13,6 +13,7 @@ build = "build.rs"
 edition = "2021"
 
 [dependencies]
+arrayvec = "0.7"
 cranelift-codegen-shared = { path = "./shared", version = "0.88.0" }
 cranelift-entity = { path = "../entity", version = "0.88.0" }
 cranelift-bforest = { path = "../bforest", version = "0.88.0" }
