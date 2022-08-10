@@ -111,7 +111,7 @@ macro_rules! compare {
 
 macro_rules! unary {
     ($inst:ident, $rust_ty:tt) => {
-        binary! { $inst, valtype!($rust_ty), valtype!($rust_ty) }
+        unary! { $inst, valtype!($rust_ty), valtype!($rust_ty) }
     };
     ($inst:ident, $argument_ty:expr, $result_ty:expr) => {
         SingleInstModule {
