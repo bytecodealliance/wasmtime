@@ -201,6 +201,7 @@ pub struct InterpreterState<'a> {
     pub heaps: Vec<HeapBacking>,
     pub iflags: HashSet<IntCC>,
     pub fflags: HashSet<FloatCC>,
+    pub pinned_reg: DataValue,
 }
 
 impl Default for InterpreterState<'_> {
@@ -213,6 +214,7 @@ impl Default for InterpreterState<'_> {
             heaps: Vec::new(),
             iflags: HashSet::new(),
             fflags: HashSet::new(),
+            pinned_reg: DataValue::U64(0),
         }
     }
 }
@@ -592,9 +594,17 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
                 }
             }
             _ => unimplemented!(),
-        }
+        };
 
         Ok(())
+    }
+
+    fn get_pinned_reg(&self) -> DataValue {
+        self.pinned_reg.clone()
+    }
+
+    fn set_pinned_reg(&mut self, v: DataValue) {
+        self.pinned_reg = v;
     }
 }
 
