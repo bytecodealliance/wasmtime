@@ -21,8 +21,9 @@ internally have been made along the lines of:
 * Many more instructions are now implemented with ISLE instead of handwritten
   lowerings.
 * Many improvements to the cranelift-based fuzzing.
-* Many platform improvements for s390x for running `rustc_codegen_cranelift`
-  with features like `i128` support, supporting more ABIs, etc.
+* Many platform improvements for s390x including full SIMD support, running
+  `rustc_codegen_cranelift` with features like `i128`, supporting more
+  ABIs, etc.
 * Much more of the component model has been implemented and is now fuzzed.
 
 Finally this release is currently scheduled to be the last `0.*` release of
