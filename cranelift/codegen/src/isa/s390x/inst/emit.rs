@@ -3216,7 +3216,7 @@ impl MachInstEmit for Inst {
                 }
 
                 let opcode = 0xc05; // BRASL
-                let reloc = Reloc::S390xPCRel32Dbl;
+                let reloc = Reloc::S390xPLTRel32Dbl;
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(6), s);
                 }

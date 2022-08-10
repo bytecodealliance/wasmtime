@@ -73,6 +73,7 @@ impl ObjectBuilder {
             target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
             target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
             target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
+            target_lexicon::Architecture::S390x => object::Architecture::S390x,
             architecture => {
                 return Err(ModuleError::Backend(anyhow!(
                     "target architecture {:?} is unsupported",
@@ -645,6 +646,36 @@ impl ObjectModule {
                     RelocationKind::Elf(object::elf::R_AARCH64_TLSGD_ADD_LO12_NC),
                     RelocationEncoding::Generic,
                     12,
+                )
+            }
+            Reloc::S390xPCRel32Dbl => (RelocationKind::Relative, RelocationEncoding::S390xDbl, 32),
+            Reloc::S390xPLTRel32Dbl => (
+                RelocationKind::PltRelative,
+                RelocationEncoding::S390xDbl,
+                32,
+            ),
+            Reloc::S390xTlsGd64 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "S390xTlsGd64 is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_390_TLS_GD64),
+                    RelocationEncoding::Generic,
+                    64,
+                )
+            }
+            Reloc::S390xTlsGdCall => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "S390xTlsGdCall is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_390_TLS_GDCALL),
+                    RelocationEncoding::Generic,
+                    0,
                 )
             }
             // FIXME
