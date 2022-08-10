@@ -1385,7 +1385,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                                     tmp1,
                                 ));
                                 ctx.emit(Inst::xmm_rm_r(SseOpcode::Minpd, RegMem::from(tmp1), dst));
-                                ctx.emit(Inst::xmm_rm_r(
+                                ctx.emit(Inst::xmm_unary_rm_r(
                                     SseOpcode::Cvttpd2dq,
                                     RegMem::from(dst),
                                     dst,
