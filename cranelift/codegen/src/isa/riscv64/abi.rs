@@ -28,9 +28,6 @@ use regs::x_reg;
 
 use smallvec::{smallvec, SmallVec};
 
-// We use a generic implementation that factors out Riscv64 and x64 ABI commonalities, because
-// these ABIs are very similar.
-
 /// Support for the Riscv64 ABI from the callee side (within a function body).
 pub(crate) type Riscv64Callee = ABICalleeImpl<Riscv64MachineDeps>;
 
@@ -80,9 +77,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // stack space
         let mut next_stack: u64 = 0;
         let mut abi_args = smallvec![];
-        // when run out register , we should use stack space for parameter,
-        // we should deal with paramter backwards.
-        // but we need result to be the same order with "params".
+        // When run out register , We should use stack space for parameter,
+        // We should deal with parameter backwards.
+        // But We need result to be the same order with `params`.
         let mut abi_args_for_stack = smallvec![];
         let mut step_last_parameter = {
             let mut params_last = if params.len() > 0 {
@@ -385,11 +382,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         }
     }
 
-    /// add  sp , -16   ;; alloc stack sapce for fp
-    /// st   ra , sp+8  ;; save ra
-    /// st   fp , sp+0  ;; store old fp
-    /// mv   fp , sp    ;; set fp to sp
     fn gen_prologue_frame_setup(flags: &settings::Flags) -> SmallInstVec<Inst> {
+        // add  sp , sp. -16    ;; alloc stack space for fp.
+        // st   ra , sp+8       ;; save ra.
+        // st   fp , sp+0       ;; store old fp.
+        // mv   fp , sp          ;; set fp to sp.
         let mut insts = SmallVec::new();
         insts.push(Inst::AjustSp { amount: -16 });
         insts.push(Self::gen_store_stack(
@@ -433,9 +430,21 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts
     }
 
-    fn gen_probestack(_: u32) -> SmallInstVec<Self::I> {
-        //
-        smallvec![]
+    fn gen_probestack(frame_size: u32) -> SmallInstVec<Self::I> {
+        let mut insts = SmallVec::new();
+        insts.extend(Inst::load_constant_u32(writable_a0(), frame_size as u64));
+        insts.push(Inst::Call {
+            info: Box::new(CallInfo {
+                dest: ExternalName::LibCall(LibCall::Probestack),
+                uses: smallvec![a0()],
+                defs: smallvec![],
+                clobbers: PRegSet::empty(),
+                opcode: Opcode::Call,
+                callee_callconv: CallConv::SystemV,
+                caller_callconv: CallConv::SystemV,
+            }),
+        });
+        insts
     }
 
     // Returns stack bytes used as well as instructions. Does not adjust
@@ -470,11 +479,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             insts.push(Inst::AjustSp {
                 amount: -(stack_size as i64),
             });
-            if flags.unwind_info() {
-                insts.push(Inst::Unwind {
-                    inst: UnwindInst::StackAlloc { size: stack_size },
-                });
-            }
+            // since we use fp, we didn't need use UnwindInst::StackAlloc.
             let mut cur_offset = 0;
             for reg in clobbered_callee_saves {
                 let r_reg = reg.to_reg();
@@ -654,13 +659,13 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn get_regs_clobbered_by_call(_call_conv_of_callee: isa::CallConv) -> PRegSet {
         let mut v = PRegSet::empty();
-        for (k, need_save) in get_caller_save_x_gpr().iter().enumerate() {
+        for (k, need_save) in CALLER_SAVE_X_REG.iter().enumerate() {
             if !*need_save {
                 continue;
             }
             v.add(px_reg(k));
         }
-        for (k, need_save) in get_caller_save_f_gpr().iter().enumerate() {
+        for (k, need_save) in CALLER_SAVE_F_REG.iter().enumerate() {
             if !*need_save {
                 continue;
             }
@@ -681,9 +686,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             .filter(|r| is_reg_saved_in_prologue(call_conv, r.to_reg()))
             .collect();
 
-        // Sort registers for deterministic code output. We can do an unstable
-        // sort because the registers will be unique (there are no dups).
-        // regs.sort_unstable_by_key(|r| r.to_reg().get_index());
         regs.sort();
         regs
     }
@@ -703,54 +705,38 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 }
 
-fn get_caller_save_x_gpr() -> [bool; 32] {
-    let mut x: [bool; 32] = [false; 32];
-    for (i, v) in get_callee_save_x_gpr().iter().enumerate() {
-        if i == 0 || i == 3 || i == 4 {
-            continue;
-        }
-        x[i] = !v;
-    }
-    x
-}
+const CALLER_SAVE_X_REG: [bool; 32] = [
+    false, true, false, false, false, true, true, true, // 0-7
+    false, false, true, true, true, true, true, true, // 8-15
+    true, true, false, false, false, false, false, false, // 16-23
+    false, false, false, false, true, true, true, true, // 24-31
+];
+const CALLEE_SAVE_X_REG: [bool; 32] = [
+    false, false, true, false, false, false, false, false, // 0-7
+    true, true, false, false, false, false, false, false, // 8-15
+    false, false, true, true, true, true, true, true, // 16-23
+    true, true, true, true, false, false, false, false, // 24-31
+];
+const CALLER_SAVE_F_REG: [bool; 32] = [
+    true, true, true, true, true, true, true, true, // 0-7
+    false, true, true, true, true, true, true, true, // 8-15
+    true, true, false, false, false, false, false, false, // 16-23
+    false, false, false, false, true, true, true, true, // 24-31
+];
+const CALLEE_SAVE_F_REG: [bool; 32] = [
+    false, false, false, false, false, false, false, false, // 0-7
+    true, false, false, false, false, false, false, false, // 8-15
+    false, false, true, true, true, true, true, true, // 16-23
+    true, true, true, true, false, false, false, false, // 24-31
+];
 
-fn get_caller_save_f_gpr() -> [bool; 32] {
-    let mut x: [bool; 32] = [false; 32];
-    for (i, v) in get_callee_save_f_gpr().iter().enumerate() {
-        x[i] = !v;
-    }
-    x
-}
-
-fn get_callee_save_x_gpr() -> [bool; 32] {
-    let mut x = [false; 32];
-    x[2] = true;
-    for i in 8..=9 {
-        x[i] = true
-    }
-    for i in 18..=27 {
-        x[i] = true
-    }
-    x
-}
-
-fn get_callee_save_f_gpr() -> [bool; 32] {
-    let mut x = [false; 32];
-    for i in 8..9 {
-        x[i] = true;
-    }
-    for i in 18..=27 {
-        x[i] = true
-    }
-    x
-}
-
-// this should be the registers must be save by callee
+/// this should be the registers must be save by callee
+#[inline]
 fn is_reg_saved_in_prologue(_conv: CallConv, reg: RealReg) -> bool {
     if reg.class() == RegClass::Int {
-        get_callee_save_x_gpr()[reg.hw_enc() as usize]
+        CALLEE_SAVE_X_REG[reg.hw_enc() as usize]
     } else {
-        get_callee_save_f_gpr()[reg.hw_enc() as usize]
+        CALLEE_SAVE_F_REG[reg.hw_enc() as usize]
     }
 }
 

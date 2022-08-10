@@ -111,6 +111,7 @@ impl BranchTarget {
             _ => None,
         }
     }
+    /// offset zero.
     #[inline(always)]
     pub(crate) fn zero() -> Self {
         Self::ResolvedOffset(0)
@@ -159,7 +160,7 @@ pub(crate) fn enc_jalr(rd: Writable<Reg>, base: Reg, offset: Imm12) -> u32 {
 }
 
 /// rd and src must have the same length.
-fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst> {
+pub(crate) fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst> {
     assert!(rd.len() == src.len());
     assert!(rd.len() > 0);
     let mut insts = SmallInstVec::new();
@@ -174,7 +175,7 @@ fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst> {
 
 /// if input or output is float,
 /// you should use special instruction.
-/// genearte a move and re interprete the data.
+/// generate a move and re-interpret the data.
 pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst {
     match (ity.is_float(), oty.is_float()) {
         (false, false) => Inst::gen_move(rd, rm, oty),
@@ -285,15 +286,6 @@ impl Inst {
         insts
     }
 
-    /// Create instructions that load a 128-bit vector constant.
-    pub fn load_fp_constant128<F: FnMut(Type) -> Writable<Reg>>(
-        _rd: Writable<Reg>,
-        _const_data: u128,
-        _alloc_tmp: F,
-    ) -> SmallVec<[Inst; 5]> {
-        todo!()
-    }
-
     /// Generic constructor for a load (zero-extending where appropriate).
     pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type, flags: MemFlags) -> Inst {
         Inst::Load {
@@ -316,7 +308,6 @@ impl Inst {
 }
 
 //=============================================================================
-// Instructions: get_regs
 fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCollector<'_, F>) {
     match inst {
         &Inst::Nop0 => {
@@ -353,7 +344,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(to.get_base_register());
             collector.reg_use(src);
         }
-        &Inst::EpiloguePlaceholder => {}
+
         &Inst::Ret { .. } => {}
         &Inst::Extend { rd, rn, .. } => {
             collector.reg_use(rn);
@@ -640,7 +631,7 @@ impl MachInst for Inst {
                 insts.extend(Inst::load_constant_u64(to_regs.regs()[1], value as u64));
                 return insts;
             }
-            _ => todo!(),
+            _ => unreachable!("vector type not implemented now."),
         }
     }
 
@@ -686,7 +677,7 @@ impl MachInst for Inst {
     }
 
     fn worst_case_size() -> CodeOffset {
-        // caculate by test function riscv64_worst_case_instruction_size()
+        // calculate by test function riscv64_worst_case_instruction_size()
         100
     }
 
@@ -1215,9 +1206,6 @@ impl Inst {
                 let src = format_reg(src, allocs);
                 format!("{} {},{}", op.op_name(), src, base,)
             }
-            &Inst::EpiloguePlaceholder => {
-                format!("epilogue place holder")
-            }
             &Inst::Ret { .. } => {
                 format!("ret")
             }
@@ -1382,13 +1370,13 @@ pub enum LabelUse {
     /// signed bits. use in Jal
     Jal20,
 
-    ///         The unconditional jump instructions all use PC-relative addressing to help support position independent code. The JALR instruction was defined to enable a two-instruction sequence to
+    /// The unconditional jump instructions all use PC-relative addressing to help support position independent code. The JALR instruction was defined to enable a two-instruction sequence to
     /// jump anywhere in a 32-bit absolute address range. A LUI instruction can first load rs1 with the
     /// upper 20 bits of a target address, then JALR can add in the lower bits. Similarly, AUIPC then
     /// JALR can jump anywhere in a 32-bit pc-relative address range.
     PCRel32,
 
-    ///     All branch instructions use the B-type instruction format. The 12-bit B-immediate encodes signed
+    /// All branch instructions use the B-type instruction format. The 12-bit B-immediate encodes signed
     /// offsets in multiples of 2, and is added to the current pc to give the target address. The conditional
     /// branch range is ±4 KiB.
     B12,

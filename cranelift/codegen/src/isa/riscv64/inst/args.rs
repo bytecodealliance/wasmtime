@@ -32,7 +32,7 @@ pub enum AMode {
     /// adjustment meta-instructions). It maintains the invariant that "nominal
     /// SP" is where the actual SP is after the function prologue and before
     /// clobber pushes. See the diagram in the documentation for
-    /// [crate::isa::aarch64::abi](the ABI module) for more details.
+    /// [crate::isa::riscv64::abi](the ABI module) for more details.
     NominalSPOffset(i64, Type),
 }
 
@@ -919,7 +919,7 @@ impl AluOPRRR {
     }
 
     pub(crate) fn reverse_rs(self) -> bool {
-        // special case
+        // special case.
         // sgt and sgtu is not defined in isa.
         // emit should reserver rs1 and rs2.
         self == AluOPRRR::Sgt || self == AluOPRRR::Sgtu

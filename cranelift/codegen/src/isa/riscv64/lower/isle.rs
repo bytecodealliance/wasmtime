@@ -22,7 +22,6 @@ use crate::{
     isa::riscv64::inst::*,
     machinst::{InsnOutput, LowerCtx},
 };
-
 use regalloc2::PReg;
 
 use std::boxed::Box;
@@ -160,7 +159,7 @@ where
         BranchTarget::Label(label)
     }
     fn gen_return(&mut self, val: ValueSlice) -> InstOutput {
-        // due to owernship error I have to clone ssa_values.
+        // due to ownership error I have to clone ssa_values.
         let ssa_values: Vec<_> = val
             .0
             .as_slice(&self.lower_ctx.dfg().value_lists)
@@ -190,29 +189,12 @@ where
         may.inst.as_inst().map(|(insn, _index)| insn)
     }
 
-    fn gen_moves(&mut self, rs: ValueRegs, in_ty: Type, out_ty: Type) -> ValueRegs {
-        match (in_ty.is_vector(), out_ty.is_vector()) {
-            (true, true) => todo!(),
-            (true, false) => todo!(),
-            (false, true) => todo!(),
-            (false, false) => {
-                match in_ty.bits() {
-                    128 => {
-                        // if 128 must not be a float.
-                        let low = self.temp_writable_reg(I64);
-                        let high = self.temp_writable_reg(I64);
-                        self.emit(&gen_move(low, I64, rs.regs()[0], I64));
-                        self.emit(&gen_move(high, I64, rs.regs()[1], I64));
-                        ValueRegs::two(low.to_reg(), high.to_reg())
-                    }
-                    _ => {
-                        let rd = self.temp_writable_reg(out_ty);
-                        self.emit(&gen_move(rd, out_ty, rs.regs()[0], in_ty));
-                        ValueRegs::one(rd.to_reg())
-                    }
-                }
-            }
-        }
+    fn gen_moves(&mut self, rs: ValueRegs, _in_ty: Type, out_ty: Type) -> ValueRegs {
+        let tmp = construct_dest(|ty| self.temp_writable_reg(ty), out_ty);
+        gen_moves(tmp.regs(), rs.regs())
+            .iter()
+            .for_each(|i| self.emit(i));
+        tmp.map(|r| r.to_reg())
     }
     fn imm12_and(&mut self, imm: Imm12, andn: i32) -> Imm12 {
         Imm12::from_bits(imm.as_i16() & (andn as i16))
@@ -577,6 +559,9 @@ where
             None
         }
     }
+    fn x_reg(&mut self, x: u8) -> Reg {
+        x_reg(x as usize)
+    }
 }
 
 impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>
@@ -612,4 +597,22 @@ where
         branch,
         |cx, insn| generated_code::constructor_lower_branch(cx, insn, &targets.to_vec()),
     )
+}
+
+/// construct destination according to ty.
+fn construct_dest<F: std::ops::FnMut(Type) -> WritableReg>(
+    mut alloc: F,
+    ty: Type,
+) -> WritableValueRegs {
+    if ty.is_bool() || ty.is_int() {
+        if ty.bits() == 128 {
+            WritableValueRegs::two(alloc(I64), alloc(I64))
+        } else {
+            WritableValueRegs::one(alloc(I64))
+        }
+    } else if ty.is_float() {
+        WritableValueRegs::one(alloc(F64))
+    } else {
+        unimplemented!("vector type not implemented.");
+    }
 }

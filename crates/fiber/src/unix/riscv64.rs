@@ -147,6 +147,7 @@ asm_func!(
       mv a1,fp
       jalr s1
       // .4byte 0 will cause panic.
+      // for safety just like x86_64.rs.
       .4byte 0
       .cfi_endproc
   ",

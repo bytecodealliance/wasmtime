@@ -24,7 +24,7 @@ impl EmitInfo {
 }
 
 /// load constant by put the constant in the code stream.
-/// caculate the pc and using load instruction.
+/// calculate the pc and using load instruction.
 #[derive(Clone, Copy)]
 pub(crate) enum LoadConstant {
     U32(u32),
@@ -199,26 +199,6 @@ impl Inst {
         }
     }
 
-    pub(crate) fn narrow_down_int(rd: Writable<Reg>, rs: Reg, ty: Type) -> SmallInstVec<Inst> {
-        assert!(ty.bits() < 64);
-        assert!(ty.is_int());
-        let mut insts = SmallInstVec::new();
-        let shift = (64 - ty.bits()) as i16;
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Slli,
-            rd: rd,
-            rs: rs,
-            imm12: Imm12::from_bits(shift),
-        });
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Srli,
-            rd: rd,
-            rs: rd.to_reg(),
-            imm12: Imm12::from_bits(shift),
-        });
-        insts
-    }
-
     pub(crate) fn lower_br_fcmp(
         cc: FloatCC,
         x: Reg,
@@ -364,7 +344,7 @@ impl Inst {
                 },
             });
         }
-        // if unorder
+        // if unordered
         if cc_args.has_and_clear(FloatCCArgs::UN) {
             insts.extend(Inst::lower_float_unordered(tmp, ty, x, y, taken, not_taken));
         } else {
@@ -475,7 +455,7 @@ impl Inst {
         insts
     }
 
-    // check if float is unordered.
+    /// check if float is unordered.
     pub(crate) fn lower_float_unordered(
         tmp: Writable<Reg>,
         ty: Type,
@@ -747,9 +727,7 @@ impl MachInstEmit for Inst {
                         .for_each(|inst| inst.emit(&[], sink, emit_info, state));
                 }
             }
-            &Inst::EpiloguePlaceholder => {
-                // Noop; this is just a placeholder for epilogues.
-            }
+
             &Inst::ReferenceCheck { rd, op, x } => {
                 let x = allocs.next(x);
                 let rd = allocs.next_writable(rd);
@@ -1959,7 +1937,7 @@ impl MachInstEmit for Inst {
                     },
                 }
                 .emit(&[], sink, emit_info, state);
-                //check if rs2 is nan.
+                // check if rs2 is nan.
                 Inst::emit_not_nan(tmp, rs2, ty).emit(&[], sink, emit_info, state);
                 Inst::CondBr {
                     taken: BranchTarget::Label(label_nan),

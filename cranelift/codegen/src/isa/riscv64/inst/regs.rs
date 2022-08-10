@@ -29,10 +29,6 @@ pub fn a1() -> Reg {
 pub fn a2() -> Reg {
     x_reg(12)
 }
-#[inline(always)]
-pub fn a7() -> Reg {
-    x_reg(17)
-}
 
 #[inline(always)]
 pub fn writable_a0() -> Writable<Reg> {
@@ -114,11 +110,8 @@ pub fn writable_fp_reg() -> Writable<Reg> {
     Writable::from_reg(fp_reg())
 }
 
-/// Get a reference to the first temporary, sometimes "spill temporary", register. This register is
-/// used to compute the address of a spill slot when a direct offset addressing mode from FP is not
-/// sufficient (+/- 2^11 words). We exclude this register from regalloc and reserve it for this
-/// purpose for simplicity; otherwise we need a multi-stage analysis where we first determine how
-/// many spill slots we have, then perhaps remove the reg from the pool and recompute regalloc.
+/// Get a reference to the first temporary, sometimes "spill temporary", register. This register used
+/// in various.
 #[inline(always)]
 pub fn spilltmp_reg() -> Reg {
     x_reg(31)
@@ -130,12 +123,13 @@ pub fn writable_spilltmp_reg() -> Writable<Reg> {
     Writable::from_reg(spilltmp_reg())
 }
 
+///spilltmp2
 #[inline(always)]
 pub fn spilltmp_reg2() -> Reg {
     x_reg(30)
 }
 
-/// Get a writable reference to the spilltmp reg.
+/// Get a writable reference to the spilltmp2 reg.
 #[inline(always)]
 pub fn writable_spilltmp_reg2() -> Writable<Reg> {
     Writable::from_reg(spilltmp_reg2())

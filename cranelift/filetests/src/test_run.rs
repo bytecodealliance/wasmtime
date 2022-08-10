@@ -107,17 +107,19 @@ impl SubTest for TestRun {
         // since we won't be able to natively execute machine code.
         let requested_arch = context.isa.unwrap().triple().architecture;
         #[cfg(target_arch = "riscv64")]
-        use target_lexicon::Riscv64Architecture;
-        match (requested_arch, Architecture::host()) {
-            // riscv64 can run on riscv64 and riscv64gc and ...
-            // we cannot use an simple requested_arch != Architecture::host() to decide.
-            (Architecture::Riscv64(Riscv64Architecture::Riscv64), _) => {}
-            _ => {
-                println!(
-                    "skipped {}: host can't run {:?} programs",
-                    context.file_path, requested_arch
-                );
-                return Ok(());
+        {
+            use target_lexicon::Riscv64Architecture;
+            match (requested_arch, Architecture::host()) {
+                // riscv64 can run on riscv64 and riscv64gc and ...
+                // we cannot use an simple requested_arch != Architecture::host() to decide.
+                (Architecture::Riscv64(Riscv64Architecture::Riscv64), _) => {}
+                _ => {
+                    println!(
+                        "skipped {}: host can't run {:?} programs",
+                        context.file_path, requested_arch
+                    );
+                    return Ok(());
+                }
             }
         }
         #[cfg(not(target_arch = "riscv64"))]

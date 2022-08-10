@@ -1027,3 +1027,16 @@
   (gen_return x)
 )
 
+;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;;
+
+(rule (lower (get_frame_pointer))
+      (gen_move (x_reg 8) $I64))
+
+(rule (lower (get_stack_pointer))
+      (gen_move (x_reg 2) $I64))
+
+(rule (lower (get_return_address))
+      (gen_move (x_reg 1) $I64))
+
+
+

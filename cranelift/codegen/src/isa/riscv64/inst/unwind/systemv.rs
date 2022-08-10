@@ -65,7 +65,10 @@ impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
 #[cfg(test)]
 mod tests {
     use crate::cursor::{Cursor, FuncCursor};
-    use crate::ir::{ExternalName, Function, InstBuilder, Signature, StackSlotData, StackSlotKind};
+    use crate::ir::{
+        types, AbiParam, ExternalName, Function, InstBuilder, Signature, StackSlotData,
+        StackSlotKind,
+    };
     use crate::isa::{lookup, CallConv};
     use crate::settings::{builder, Flags};
     use crate::Context;
@@ -112,6 +115,57 @@ mod tests {
         if let Some(stack_slot) = stack_slot {
             func.sized_stack_slots.push(stack_slot);
         }
+
+        func
+    }
+
+    #[test]
+    fn test_multi_return_func() {
+        let isa = lookup(triple!("riscv64"))
+            .expect("expect riscv64 ISA")
+            .finish(Flags::new(builder()))
+            .expect("Creating compiler backend");
+
+        let mut context = Context::for_function(create_multi_return_function(CallConv::SystemV));
+
+        context.compile(&*isa).expect("expected compilation");
+
+        let fde = match context
+            .create_unwind_info(isa.as_ref())
+            .expect("can create unwind info")
+        {
+            Some(crate::isa::unwind::UnwindInfo::SystemV(info)) => {
+                info.to_fde(Address::Constant(4321))
+            }
+            _ => panic!("expected unwind information"),
+        };
+
+        assert_eq!(
+            format!("{:?}", fde),
+            "FrameDescriptionEntry { address: Constant(4321), length: 20, lsda: None, instructions: [] }"
+        );
+    }
+
+    fn create_multi_return_function(call_conv: CallConv) -> Function {
+        let mut sig = Signature::new(call_conv);
+        sig.params.push(AbiParam::new(types::I32));
+        let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig);
+
+        let block0 = func.dfg.make_block();
+        let v0 = func.dfg.append_block_param(block0, types::I32);
+        let block1 = func.dfg.make_block();
+        let block2 = func.dfg.make_block();
+
+        let mut pos = FuncCursor::new(&mut func);
+        pos.insert_block(block0);
+        pos.ins().brnz(v0, block2, &[]);
+        pos.ins().jump(block1, &[]);
+
+        pos.insert_block(block1);
+        pos.ins().return_(&[]);
+
+        pos.insert_block(block2);
+        pos.ins().return_(&[]);
 
         func
     }

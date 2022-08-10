@@ -13,8 +13,6 @@ use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use regalloc2::MachineEnv;
 use target_lexicon::{Architecture, Triple};
-
-// New backend:
 mod abi;
 pub(crate) mod inst;
 mod lower;
@@ -95,7 +93,7 @@ impl TargetIsa for Riscv64Backend {
         "riscv64"
     }
     fn dynamic_vector_bytes(&self, _dynamic_ty: ir::Type) -> u32 {
-        unimplemented!();
+        self.isa_flags.vlen() as u32
     }
 
     fn triple(&self) -> &Triple {
@@ -133,10 +131,7 @@ impl TargetIsa for Riscv64Backend {
                     )?,
                 ))
             }
-            UnwindInfoKind::Windows => {
-                // TODO: support Windows unwind info on AArch64
-                None
-            }
+            UnwindInfoKind::Windows => None,
             _ => None,
         })
     }
@@ -223,9 +218,9 @@ mod test {
         //8:   00b5053b                addw    a0,a0,a1
         //c:   00008067                ret
         let golden = vec![
-            183, 21, 0, 0, 147, 133, 69, 35, 59, 5, 181, 0, 103, 128, 0, 0,
+            0xb7, 0x15, 0x0, 0x0, 0x93, 0x85, 0x45, 0x23, 0x3b, 0x5, 0xb5, 0x0, 0x67, 0x80, 0x0,
+            0x0,
         ];
-
         assert_eq!(code, &golden[..]);
     }
 }

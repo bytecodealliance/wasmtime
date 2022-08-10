@@ -129,7 +129,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             implemented_in_isle(ctx);
         }
 
-        Opcode::StackLoad | Opcode::StackStore => {
+        Opcode::StackLoad
+        | Opcode::StackStore
+        | Opcode::DynamicStackLoad
+        | Opcode::DynamicStackStore
+        | Opcode::DynamicStackAddr => {
             panic!("Direct stack memory access not supported; should not be used by Wasm");
         }
 
@@ -157,9 +161,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             implemented_in_isle(ctx);
         }
 
-        Opcode::Vselect => {
-            todo!()
-        }
+        Opcode::Vselect => vec_not_implemented(),
 
         Opcode::Trueif => {
             implemented_in_isle(ctx);
@@ -296,45 +298,27 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("Branch opcode reached non-branch lowering logic!");
         }
 
-        Opcode::Vconst => {
-            unimplemented!()
-        }
+        Opcode::Vconst => vec_not_implemented(),
 
         Opcode::RawBitcast => {
             implemented_in_isle(ctx);
         }
 
-        Opcode::Extractlane => {
-            unimplemented!()
-        }
+        Opcode::Extractlane => vec_not_implemented(),
 
-        Opcode::Insertlane => {
-            unimplemented!()
-        }
+        Opcode::Insertlane => vec_not_implemented(),
 
-        Opcode::Splat => {
-            unimplemented!()
-        }
+        Opcode::Splat => vec_not_implemented(),
 
-        Opcode::ScalarToVector => {
-            unimplemented!()
-        }
+        Opcode::ScalarToVector => vec_not_implemented(),
 
-        Opcode::VanyTrue | Opcode::VallTrue => {
-            unimplemented!()
-        }
+        Opcode::VanyTrue | Opcode::VallTrue => vec_not_implemented(),
 
-        Opcode::VhighBits => {
-            unimplemented!()
-        }
+        Opcode::VhighBits => vec_not_implemented(),
 
-        Opcode::Shuffle => {
-            unimplemented!()
-        }
+        Opcode::Shuffle => vec_not_implemented(),
 
-        Opcode::Swizzle => {
-            unimplemented!()
-        }
+        Opcode::Swizzle => vec_not_implemented(),
 
         Opcode::Isplit => {
             implemented_in_isle(ctx);
@@ -348,20 +332,16 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             implemented_in_isle(ctx);
         }
 
-        Opcode::IaddPairwise => {
-            todo!()
-        }
+        Opcode::IaddPairwise => vec_not_implemented(),
 
-        Opcode::WideningPairwiseDotProductS => {
-            todo!()
-        }
+        Opcode::WideningPairwiseDotProductS => vec_not_implemented(),
 
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv | Opcode::Fmin | Opcode::Fmax => {
             implemented_in_isle(ctx);
         }
 
         Opcode::FminPseudo | Opcode::FmaxPseudo => {
-            todo!();
+            implemented_in_isle(ctx);
         }
 
         Opcode::Sqrt | Opcode::Fneg | Opcode::Fabs => {
@@ -434,49 +414,37 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Iabs => {
             implemented_in_isle(ctx);
         }
-        Opcode::AvgRound => {
-            unimplemented!();
-        }
+        Opcode::AvgRound => vec_not_implemented(),
 
-        Opcode::Snarrow | Opcode::Unarrow | Opcode::Uunarrow => {
-            unimplemented!();
-        }
+        Opcode::Snarrow | Opcode::Unarrow | Opcode::Uunarrow => vec_not_implemented(),
 
         Opcode::SwidenLow | Opcode::SwidenHigh | Opcode::UwidenLow | Opcode::UwidenHigh => {
-            unimplemented!();
+            vec_not_implemented()
         }
 
         Opcode::TlsValue => {}
 
-        Opcode::SqmulRoundSat => {
-            unimplemented!();
-        }
+        Opcode::SqmulRoundSat => vec_not_implemented(),
 
-        Opcode::FcvtLowFromSint => {
-            unimplemented!();
-        }
+        Opcode::FcvtLowFromSint => vec_not_implemented(),
 
-        Opcode::FvpromoteLow => {
-            unimplemented!();
-        }
+        Opcode::FvpromoteLow => vec_not_implemented(),
 
-        Opcode::Fvdemote => {
-            unimplemented!();
-        }
+        Opcode::Fvdemote => vec_not_implemented(),
 
-        Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit => {
-            unimplemented!();
-        }
-        Opcode::DynamicStackLoad => todo!(),
-        Opcode::DynamicStackStore => todo!(),
-        Opcode::DynamicStackAddr => todo!(),
-        Opcode::ExtractVector => todo!(),
+        Opcode::ConstAddr => vec_not_implemented(),
+        Opcode::Vconcat | Opcode::Vsplit => vec_not_implemented(),
+        Opcode::ExtractVector => vec_not_implemented(),
 
         Opcode::GetFramePointer | Opcode::GetStackPointer | Opcode::GetReturnAddress => {
-            unimplemented!();
+            implemented_in_isle(ctx)
         }
     }
     Ok(())
+}
+
+fn vec_not_implemented() -> ! {
+    unreachable!()
 }
 
 fn pinned_register_not_used() -> ! {

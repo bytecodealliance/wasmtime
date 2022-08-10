@@ -148,7 +148,6 @@ impl Inst {
     ) -> Option<R> {
         if let Some(imm12) = Imm12::maybe_from_u64(value) {
             // can be load using single imm12.
-
             let r = handle_imm(None, Some(imm12));
             return Some(r);
         }
