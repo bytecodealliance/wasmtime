@@ -451,6 +451,21 @@ fn verify(crates: &[Crate]) {
     }
 
     fn verify_and_vendor(krate: &Crate) {
+        // Check that a LICENSE file is included in all published
+        // crates; license conditions usually require that we actually
+        // provide the text of the license terms with any
+        // "redistribution", and a crate upload is a redistribution.
+        // See #3761 and #4664 for more.
+        let mut license_file = krate.manifest.clone();
+        license_file.pop();
+        license_file.push("LICENSE");
+        if !license_file.is_file() {
+            panic!(
+                "Every published crate must have a LICENSE file; missing at path '{}'",
+                license_file.display()
+            );
+        }
+
         let mut cmd = Command::new("cargo");
         cmd.arg("package")
             .arg("--manifest-path")
