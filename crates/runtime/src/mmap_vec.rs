@@ -177,9 +177,9 @@ mod tests {
     fn drain() {
         let mut mmap = MmapVec::from_slice(&[1, 2, 3, 4]).unwrap();
         assert_eq!(mmap.len(), 4);
-        assert!(mmap.drain(..0).is_empty());
+        assert!(mmap.split_off(..0).is_empty());
         assert_eq!(mmap.len(), 4);
-        let one = mmap.drain(..1);
+        let one = mmap.split_off(..1);
         assert_eq!(one.len(), 1);
         assert_eq!(one[0], 1);
         assert_eq!(mmap.len(), 3);
@@ -187,16 +187,16 @@ mod tests {
         drop(one);
         assert_eq!(mmap.len(), 3);
 
-        let two = mmap.drain(..2);
+        let two = mmap.split_off(..2);
         assert_eq!(two.len(), 2);
         assert_eq!(two[0], 2);
         assert_eq!(two[1], 3);
         assert_eq!(mmap.len(), 1);
         assert_eq!(mmap[0], 4);
         drop(two);
-        assert!(mmap.drain(..0).is_empty());
-        assert!(mmap.drain(..1).len() == 1);
+        assert!(mmap.split_off(..0).is_empty());
+        assert!(mmap.split_off(..1).len() == 1);
         assert!(mmap.is_empty());
-        assert!(mmap.drain(..0).is_empty());
+        assert!(mmap.split_off(..0).is_empty());
     }
 }
