@@ -29,6 +29,12 @@ pub struct UserExternalName {
     pub index: u32,
 }
 
+impl fmt::Display for UserExternalName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "u{}:{}", self.namespace, self.index)
+    }
+}
+
 /// A name for a test case.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
@@ -37,6 +43,16 @@ pub struct TestcaseName {
     length: u8,
     /// Ascii bytes of the name.
     ascii: [u8; TESTCASE_NAME_LENGTH],
+}
+
+impl fmt::Display for TestcaseName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_char('%')?;
+        for byte in self.ascii.iter().take(self.length as usize) {
+            f.write_char(*byte as char)?;
+        }
+        Ok(())
+    }
 }
 
 impl TestcaseName {
@@ -129,23 +145,17 @@ pub struct DisplayableExternalName<'a> {
 
 impl<'a> fmt::Display for DisplayableExternalName<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self.name {
+        match &self.name {
             ExternalName::User(func_ref) => {
                 if let Some(params) = self.params {
-                    let name = &params.user_named_funcs[func_ref];
+                    let name = &params.user_named_funcs[*func_ref];
                     write!(f, "u{}:{}", name.namespace, name.index)
                 } else {
                     // Best effort.
-                    write!(f, "{}", func_ref)
+                    write!(f, "{}", *func_ref)
                 }
             }
-            ExternalName::TestCase(TestcaseName { length, ascii }) => {
-                f.write_char('%')?;
-                for byte in ascii.iter().take(length as usize) {
-                    f.write_char(*byte as char)?;
-                }
-                Ok(())
-            }
+            ExternalName::TestCase(testcase) => testcase.fmt(f),
             ExternalName::LibCall(lc) => write!(f, "%{}", lc),
         }
     }
@@ -168,7 +178,7 @@ mod tests {
     use super::ExternalName;
     use crate::ir::{
         entities::UserExternalNameRef,
-        function::{FunctionName, FunctionParameters},
+        function::{FunctionParameters, UserFuncName},
         LibCall, UserExternalName,
     };
     use alloc::string::ToString;
@@ -214,7 +224,7 @@ mod tests {
         );
 
         // ref 0
-        let mut func_params = FunctionParameters::new(FunctionName::user(13, 37));
+        let mut func_params = FunctionParameters::new(UserFuncName::user(13, 37));
 
         // ref 1
         func_params.user_named_funcs.push(UserExternalName {

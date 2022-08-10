@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{
-    self, ExternalName, Function, FunctionName, InstBuilder, MemFlags, UserExternalName, Value,
+    self, ExternalName, Function, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value,
 };
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_error;
@@ -202,22 +202,16 @@ impl wasmtime_environ::Compiler for Compiler {
         } = self.take_context();
 
         context.func.signature = func_signature(isa, translation, types, func_index);
-        context
-            .func
-            .params
-            .set_name(FunctionName::User(UserExternalName {
-                namespace: 0,
-                index: func_index.as_u32(),
-            }));
-
-        let name = ir::ExternalName::User(ir::UserExternalNameRef::new(0));
+        context.func.params.name = UserFuncName::User(UserExternalName {
+            namespace: 0,
+            index: func_index.as_u32(),
+        });
 
         if tunables.generate_native_debuginfo {
             context.func.collect_debug_info();
         }
 
         let mut func_env = FuncEnvironment::new(isa, translation, types, tunables);
-        func_env.ext_names.insert(func_index, name);
 
         // The `stack_limit` global value below is the implementation of stack
         // overflow checks in Wasmtime.
@@ -570,7 +564,7 @@ impl Compiler {
         } = self.take_context();
 
         // The name doesn't matter here.
-        context.func = ir::Function::with_name_signature(FunctionName::default(), host_signature);
+        context.func = ir::Function::with_name_signature(UserFuncName::default(), host_signature);
 
         // This trampoline will load all the parameters from the `values_vec`
         // that is passed in and then call the real function (also passed

@@ -17,7 +17,7 @@ use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::{self, InstBuilder};
-use cranelift_codegen::ir::{types::*, FunctionName};
+use cranelift_codegen::ir::{types::*, UserFuncName};
 use cranelift_codegen::isa::{CallConv, TargetFrontendConfig};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
@@ -868,7 +868,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
 
             let sig = func_environ.vmctx_sig(self.get_func_type(func_index));
             let mut func =
-                ir::Function::with_name_signature(FunctionName::user(0, func_index.as_u32()), sig);
+                ir::Function::with_name_signature(UserFuncName::user(0, func_index.as_u32()), sig);
 
             if self.debug_info {
                 func.collect_debug_info();

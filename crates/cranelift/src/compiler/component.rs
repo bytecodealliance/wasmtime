@@ -35,7 +35,7 @@ impl ComponentCompiler for Compiler {
         } = self.take_context();
 
         context.func = ir::Function::with_name_signature(
-            ir::FunctionName::user(0, 0),
+            ir::UserFuncName::user(0, 0),
             crate::indirect_signature(isa, ty),
         );
 
@@ -168,7 +168,7 @@ impl ComponentCompiler for Compiler {
             mut incremental_cache_ctx,
         } = self.take_context();
         context.func = ir::Function::with_name_signature(
-            ir::FunctionName::user(0, 0),
+            ir::UserFuncName::user(0, 0),
             crate::indirect_signature(isa, ty),
         );
         let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
@@ -208,7 +208,7 @@ impl ComponentCompiler for Compiler {
         } = self.take_context();
 
         context.func = ir::Function::with_name_signature(
-            ir::FunctionName::user(0, 0),
+            ir::UserFuncName::user(0, 0),
             crate::indirect_signature(isa, ty),
         );
 

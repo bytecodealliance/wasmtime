@@ -203,12 +203,7 @@ pub fn decorate_function<FW: FuncWriter>(
 // Function spec.
 
 fn write_spec(w: &mut dyn Write, func: &Function) -> fmt::Result {
-    write!(
-        w,
-        "{}{}",
-        func.params.name().display(Some(&func.params)),
-        func.signature
-    )
+    write!(w, "{}{}", func.params.name, func.signature)
 }
 
 //----------------------------------------------------------------------
@@ -582,7 +577,7 @@ impl<'a> fmt::Display for DisplayValuesWithDelimiter<'a> {
 mod tests {
     use crate::cursor::{Cursor, CursorPosition, FuncCursor};
     use crate::ir::types;
-    use crate::ir::{Function, FunctionName, InstBuilder, StackSlotData, StackSlotKind};
+    use crate::ir::{Function, InstBuilder, StackSlotData, StackSlotKind, UserFuncName};
     use alloc::string::ToString;
 
     #[test]
@@ -590,7 +585,7 @@ mod tests {
         let mut f = Function::new();
         assert_eq!(f.to_string(), "function u0:0() fast {\n}\n");
 
-        f.params.set_name(FunctionName::testcase("foo"));
+        f.params.name = UserFuncName::testcase("foo");
         assert_eq!(f.to_string(), "function %foo() fast {\n}\n");
 
         f.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4));

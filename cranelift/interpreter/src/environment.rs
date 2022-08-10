@@ -19,14 +19,7 @@ entity_impl!(FuncIndex, "fn");
 impl<'a> From<&'a Function> for FunctionStore<'a> {
     fn from(function: &'a Function) -> Self {
         let mut store = FunctionStore::default();
-        store.add(
-            function
-                .params
-                .name()
-                .display(Some(&function.params))
-                .to_string(),
-            function,
-        );
+        store.add(function.params.name.to_string(), function);
         store
     }
 }
@@ -83,7 +76,7 @@ fn get_function_name(func_ref: FuncRef, function: &Function) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cranelift_codegen::ir::{FunctionName, Signature};
+    use cranelift_codegen::ir::{Signature, UserFuncName};
     use cranelift_codegen::isa::CallConv;
 
     #[test]
@@ -104,7 +97,7 @@ mod tests {
 
     #[test]
     fn from() {
-        let name = FunctionName::testcase("test");
+        let name = UserFuncName::testcase("test");
         let signature = Signature::new(CallConv::Fast);
         let func = &Function::with_name_signature(name, signature);
         let env: FunctionStore = func.into();

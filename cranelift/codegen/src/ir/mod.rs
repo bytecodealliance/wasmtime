@@ -43,7 +43,7 @@ pub use crate::ir::extfunc::{
     AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature,
 };
 pub use crate::ir::extname::{ExternalName, UserExternalName};
-pub use crate::ir::function::{DisplayFunctionAnnotations, Function, FunctionName};
+pub use crate::ir::function::{DisplayFunctionAnnotations, Function, UserFuncName};
 pub use crate::ir::globalvalue::GlobalValueData;
 pub use crate::ir::heap::{HeapData, HeapStyle};
 pub use crate::ir::instructions::{
@@ -54,7 +54,8 @@ pub use crate::ir::layout::Layout;
 pub use crate::ir::libcall::{get_probestack_funcref, LibCall};
 pub use crate::ir::memflags::{Endianness, MemFlags};
 pub use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder, ProgramPoint};
-pub use crate::ir::sourceloc::{RelSourceLoc, SourceLoc};
+pub use crate::ir::sourceloc::RelSourceLoc;
+pub use crate::ir::sourceloc::SourceLoc;
 pub use crate::ir::stackslot::{
     DynamicStackSlotData, DynamicStackSlots, StackSlotData, StackSlotKind, StackSlots,
 };
@@ -69,7 +70,7 @@ use crate::entity::{entity_impl, PrimaryMap, SecondaryMap};
 pub type JumpTables = PrimaryMap<JumpTable, JumpTableData>;
 
 /// Source locations for instructions.
-pub type SourceLocs = SecondaryMap<Inst, RelSourceLoc>;
+pub(crate) type SourceLocs = SecondaryMap<Inst, RelSourceLoc>;
 
 /// Marked with a label value.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]

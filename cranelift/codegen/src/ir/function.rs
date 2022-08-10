@@ -11,7 +11,7 @@ use crate::ir::{
     ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, Inst, InstructionData,
     JumpTable, JumpTableData, Opcode, SigRef, StackSlot, StackSlotData, Table, TableData, Type,
 };
-use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};
+use crate::ir::{DataFlowGraph, Layout, Signature};
 use crate::ir::{DynamicStackSlots, SourceLocs, StackSlots};
 use crate::isa::CallConv;
 use crate::value_label::ValueLabelsRanges;
@@ -64,15 +64,17 @@ impl<'de> Deserialize<'de> for VersionMarker {
     }
 }
 
-/// An explicit name for a function.
-pub enum FunctionName {
+/// An explicit name for a user-defined function.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub enum UserFuncName {
     /// A user-defined name, with semantics left to the user.
     User(UserExternalName),
     /// A name for a test case, mostly intended for Cranelift testing.
     Testcase(TestcaseName),
 }
 
-impl FunctionName {
+impl UserFuncName {
     /// Creates a new external name from a sequence of bytes. Caller is expected
     /// to guarantee bytes are only ascii alphanumeric or `_`.
     pub fn testcase<T: AsRef<[u8]>>(v: T) -> Self {
@@ -85,9 +87,18 @@ impl FunctionName {
     }
 }
 
-impl Default for FunctionName {
+impl Default for UserFuncName {
     fn default() -> Self {
-        FunctionName::User(UserExternalName::default())
+        UserFuncName::User(UserExternalName::default())
+    }
+}
+
+impl fmt::Display for UserFuncName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UserFuncName::User(user) => user.fmt(f),
+            UserFuncName::Testcase(testcase) => testcase.fmt(f),
+        }
     }
 }
 
@@ -97,11 +108,7 @@ impl Default for FunctionName {
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct FunctionParameters {
     /// Name of this function. Mostly used by `.clif` files.
-    ///
-    /// Invariant: this name is always inserted in the `user_named_funcs` field. If this value is
-    /// changed and it was a `UserExternalName`, the corresponding (first) entry in
-    /// `user_named_funcs` must be updated too; the `set_name` function takes care of this.
-    name: ExternalName,
+    pub name: UserFuncName,
 
     /// The first `SourceLoc` appearing in the function, serving as a base for every relative
     /// source loc in the function.
@@ -113,58 +120,12 @@ pub struct FunctionParameters {
 
 impl FunctionParameters {
     /// Creates a new `FunctionParameters` with the given name.
-    pub fn new(name: FunctionName) -> Self {
-        let mut user_named_funcs = PrimaryMap::default();
-        let name = match name {
-            FunctionName::User(user_ext_name) => {
-                let name_ref = user_named_funcs.push(user_ext_name);
-                ExternalName::User(name_ref)
-            }
-            FunctionName::Testcase(name) => ExternalName::TestCase(name),
-        };
+    pub fn new(name: UserFuncName) -> Self {
         Self {
             name,
             base_srcloc: None,
-            user_named_funcs,
+            user_named_funcs: Default::default(),
         }
-    }
-
-    /// Returns the name of the current function.
-    pub fn name(&self) -> &ExternalName {
-        &self.name
-    }
-
-    /// Resets the function's name to the new given one.
-    pub fn set_name(&mut self, name: FunctionName) {
-        // if the function was named with a user function name, then we need to replace it,
-        // otherwise we need to make sure to add it, if needed.
-        let replace_by = if let ExternalName::User(user_func_ref) = self.name {
-            Some(user_func_ref)
-        } else {
-            None
-        };
-
-        let name = match name {
-            FunctionName::User(name) => {
-                if let Some(user_func_ref) = replace_by {
-                    self.user_named_funcs[user_func_ref] = name.clone();
-                    ExternalName::user(user_func_ref)
-                } else {
-                    let user_func_ref = self.user_named_funcs.push(name.clone());
-                    ExternalName::user(user_func_ref)
-                }
-            }
-            FunctionName::Testcase(testcase) => {
-                if replace_by.is_some() {
-                    // Should really remove the first entry, but who would do this in pratice.
-                    assert_eq!(self.user_named_funcs.len(), 1, "resetting a name is only possible before any other references to user functions");
-                    self.user_named_funcs.clear();
-                }
-                ExternalName::TestCase(testcase)
-            }
-        };
-
-        self.name = name;
     }
 
     /// Returns the base `SourceLoc`.
@@ -188,11 +149,8 @@ impl FunctionParameters {
 
     fn clear(&mut self) {
         self.base_srcloc = None;
-        // Maintain the invariant that the function's name is always declared in user_named_funcs.
         self.user_named_funcs.clear();
-        let new_name = Default::default();
-        let new_name_ref = self.user_named_funcs.push(new_name);
-        self.name = ExternalName::user(new_name_ref);
+        self.name = UserFuncName::default();
     }
 }
 
@@ -487,7 +445,7 @@ impl Function {
     /// TODO: `name` should probably be a `UserExternalName`, with the resulting `ExternalName`
     /// being automatically declared with `declare_imported_user_function` to allow recursive calls
     /// without extra effort.
-    pub fn with_name_signature(name: FunctionName, sig: Signature) -> Self {
+    pub fn with_name_signature(name: UserFuncName, sig: Signature) -> Self {
         Self {
             stencil: FunctionStencil {
                 version_marker: VersionMarker,

@@ -209,7 +209,7 @@ mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::types::*;
-    use crate::ir::{AbiParam, Function, FunctionName, InstBuilder, JumpTableData, Signature};
+    use crate::ir::{AbiParam, Function, InstBuilder, JumpTableData, Signature, UserFuncName};
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
@@ -218,7 +218,7 @@ mod test {
 
     #[test]
     fn test_compile_function() {
-        let name = FunctionName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -257,7 +257,7 @@ mod test {
 
     #[test]
     fn test_branch_lowering() {
-        let name = FunctionName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -325,7 +325,7 @@ mod test {
 
     #[test]
     fn test_br_table() {
-        let name = FunctionName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));

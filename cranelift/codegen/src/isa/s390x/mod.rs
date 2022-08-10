@@ -190,7 +190,7 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
 mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
-    use crate::ir::function::FunctionName;
+    use crate::ir::function::UserFuncName;
     use crate::ir::types::*;
     use crate::ir::{AbiParam, Function, InstBuilder, Signature};
     use crate::isa::CallConv;
@@ -201,7 +201,7 @@ mod test {
 
     #[test]
     fn test_compile_function() {
-        let name = FunctionName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -239,7 +239,7 @@ mod test {
 
     #[test]
     fn test_branch_lowering() {
-        let name = FunctionName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));

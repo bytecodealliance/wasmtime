@@ -1111,7 +1111,7 @@ mod tests {
     use alloc::string::ToString;
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir::condcodes::IntCC;
-    use cranelift_codegen::ir::{types::*, FunctionName};
+    use cranelift_codegen::ir::{types::*, UserFuncName};
     use cranelift_codegen::ir::{AbiParam, Function, InstBuilder, MemFlags, Signature, Value};
     use cranelift_codegen::isa::{CallConv, TargetFrontendConfig, TargetIsa};
     use cranelift_codegen::settings;
@@ -1124,7 +1124,7 @@ mod tests {
         sig.params.push(AbiParam::new(I32));
 
         let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(FunctionName::testcase("sample"), sig);
+        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
         {
             let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
 
@@ -1243,7 +1243,7 @@ mod tests {
         sig.returns.push(AbiParam::new(I32));
 
         let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(FunctionName::testcase("sample"), sig);
+        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
         {
             let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
 
@@ -1292,7 +1292,7 @@ block0:
         sig.returns.push(AbiParam::new(I32));
 
         let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(FunctionName::testcase("sample"), sig);
+        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
         {
             let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
 
@@ -1346,7 +1346,7 @@ block0:
         sig.returns.push(AbiParam::new(I32));
 
         let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(FunctionName::testcase("sample"), sig);
+        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
         {
             let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
 
@@ -1403,7 +1403,7 @@ block0:
         sig.returns.push(AbiParam::new(I32));
 
         let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(FunctionName::testcase("sample"), sig);
+        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
         {
             let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
 
@@ -1443,7 +1443,7 @@ block0:
         sig.returns.push(AbiParam::new(I32));
 
         let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(FunctionName::testcase("sample"), sig);
+        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
         {
             let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
 
@@ -1502,7 +1502,7 @@ block0:
         sig.returns.push(AbiParam::new(I32));
 
         let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(FunctionName::testcase("sample"), sig);
+        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
         {
             let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
 
@@ -1715,7 +1715,7 @@ block0:
         sig.returns.push(AbiParam::new(B1));
 
         let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(FunctionName::testcase("sample"), sig);
+        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
         {
             let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
 
@@ -1754,7 +1754,7 @@ block0:
         sig.returns.push(AbiParam::new(F32X4));
 
         let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(FunctionName::testcase("sample"), sig);
+        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
         {
             let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
 
@@ -1808,7 +1808,7 @@ block0:
         let sig = Signature::new(CallConv::SystemV);
 
         let mut fn_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(FunctionName::testcase("sample"), sig);
+        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
         {
             let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
 

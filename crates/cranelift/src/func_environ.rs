@@ -189,11 +189,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    pub(crate) fn ensure_func_name(
-        &mut self,
-        func: &mut Function,
-        index: FuncIndex,
-    ) -> ir::ExternalName {
+    fn ensure_func_name(&mut self, func: &mut Function, index: FuncIndex) -> ir::ExternalName {
         if let Some(name) = self.ext_names.get(&index) {
             name.clone()
         } else {
