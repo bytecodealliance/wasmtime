@@ -397,6 +397,23 @@ macro_rules! isle_prelude_methods {
             }
         }
 
+        fn ty_vector_float(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() && ty.lane_type().is_float() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_vector_not_float(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() && !ty.lane_type().is_float() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
         #[inline]
         fn ty_vec64_ctor(&mut self, ty: Type) -> Option<Type> {
             if ty.is_vector() && ty.bits() == 64 {

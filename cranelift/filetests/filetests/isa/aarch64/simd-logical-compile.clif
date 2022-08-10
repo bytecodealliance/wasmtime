@@ -22,7 +22,7 @@ block0(v0: b32x4):
 ;   umaxp v3.4s, v0.4s, v0.4s
 ;   mov x5, v3.d[0]
 ;   subs xzr, x5, #0
-;   csetm x0, ne
+;   cset x0, ne
 ;   ret
 
 function %vall_true_i64x2(i64x2) -> b1 {

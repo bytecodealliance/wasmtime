@@ -381,6 +381,15 @@
 (decl ty_float_or_vec (Type) Type)
 (extern extractor ty_float_or_vec ty_float_or_vec)
 
+;; A pure constructor that only matches vector floating-point types.
+(decl pure ty_vector_float (Type) Type)
+(extern constructor ty_vector_float ty_vector_float)
+
+;; A pure constructor that only matches vector types with lanes which
+;; are not floating-point.
+(decl pure ty_vector_not_float (Type) Type)
+(extern constructor ty_vector_not_float ty_vector_not_float)
+
 ;; A pure constructor/extractor that only matches 64-bit vector types.
 (decl pure ty_vec64 (Type) Type)
 (extern constructor ty_vec64 ty_vec64_ctor)
