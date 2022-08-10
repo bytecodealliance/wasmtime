@@ -155,3 +155,31 @@
 ;; Select's selector input doesn't need bint; remove the redundant op.
 (rule (simplify (select ty (bint _ b) x y))
       (select ty b x y))
+
+;; Rematerialize ALU-op-with-imm and iconsts in each block where they're
+;; used. This is neutral (add-with-imm) or positive (iconst) for
+;; register pressure, and these ops are very cheap.
+(rule (simplify x @ (iadd _ (iconst _ _) _))
+      (remat x))
+(rule (simplify x @ (iadd _ _ (iconst _ _)))
+      (remat x))
+(rule (simplify x @ (isub _ (iconst _ _) _))
+      (remat x))
+(rule (simplify x @ (isub _ _ (iconst _ _)))
+      (remat x))
+(rule (simplify x @ (band _ (iconst _ _) _))
+      (remat x))
+(rule (simplify x @ (band _ _ (iconst _ _)))
+      (remat x))
+(rule (simplify x @ (bor _ (iconst _ _) _))
+      (remat x))
+(rule (simplify x @ (bor _ _ (iconst _ _)))
+      (remat x))
+(rule (simplify x @ (bxor _ (iconst _ _) _))
+      (remat x))
+(rule (simplify x @ (bxor _ _ (iconst _ _)))
+      (remat x))
+(rule (simplify x @ (bnot _ _))
+      (remat x))
+(rule (simplify x @ (iconst _ _))
+      (remat x))

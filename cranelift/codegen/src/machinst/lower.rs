@@ -16,9 +16,9 @@ use crate::ir::{
     Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::{
-    non_writable_value_regs, writable_value_regs, ABICallee, BlockIndex, BlockLoweringOrder,
-    LoweredBlock, MachLabel, Reg, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
-    VCodeConstants, VCodeInst, ValueRegs, Writable,
+    writable_value_regs, ABICallee, BlockIndex, BlockLoweringOrder, LoweredBlock, MachLabel, Reg,
+    VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst, ValueRegs,
+    Writable,
 };
 use crate::CodegenResult;
 use alloc::boxed::Box;
@@ -1374,28 +1374,6 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         // eventually remove the `iflags` type altogether!
         let ty = self.f.dfg.value_type(val);
         assert!(ty != IFLAGS && ty != FFLAGS);
-
-        // If the value is a constant, then (re)materialize it at each use. This
-        // lowers register pressure.
-        if let Some(c) = self
-            .f
-            .dfg
-            .value_def(val)
-            .inst()
-            .and_then(|inst| self.get_constant(inst))
-        {
-            let regs = self.alloc_tmp(ty);
-            log::trace!(" -> regs {:?}", regs);
-            assert!(regs.is_valid());
-
-            let insts = I::gen_constant(regs, c.into(), ty, |ty| {
-                self.alloc_tmp(ty).only_reg().unwrap()
-            });
-            for inst in insts {
-                self.emit(inst);
-            }
-            return non_writable_value_regs(regs);
-        }
 
         let mut regs = self.value_regs[val];
         log::trace!(" -> regs {:?}", regs);

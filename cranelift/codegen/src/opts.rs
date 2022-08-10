@@ -268,4 +268,10 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
             generated_code::Pair::Id { b, a }
         ])
     }
+
+    fn remat(&mut self, id: Id) -> Id {
+        log::trace!("remat: {}", id);
+        self.egraph.remat_ids.insert(id);
+        id
+    }
 }

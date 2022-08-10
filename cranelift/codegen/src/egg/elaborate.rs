@@ -5,6 +5,7 @@ use super::domtree::DomTreeWithChildren;
 use super::node::{op_cost, Node, NodeCtx};
 use super::Stats;
 use crate::dominator_tree::DominatorTree;
+use crate::fx::FxHashSet;
 use crate::ir::{Block, Function, Inst, SourceLoc, Type, Value, ValueList};
 use crate::loop_analysis::{LoopAnalysis, LoopLevel};
 use crate::scoped_hash_map::ScopedHashMap;
@@ -27,6 +28,7 @@ pub(crate) struct Elaborator<'a> {
     loop_stack: SmallVec<[LoopStackEntry; 8]>,
     cur_block: Option<Block>,
     first_branch: SecondaryMap<Block, PackedOption<Inst>>,
+    remat_ids: &'a FxHashSet<Id>,
     stats: &'a mut Stats,
 }
 
@@ -45,9 +47,25 @@ struct LoopStackEntry {
 #[derive(Clone, Debug)]
 enum IdValue {
     /// A single value.
-    Value(LoopDepth, Value),
+    Value {
+        depth: LoopDepth,
+        block: Block,
+        value: Value,
+    },
     /// Multiple results; indices in `node_args`.
-    Values(LoopDepth, ValueList),
+    Values {
+        depth: LoopDepth,
+        block: Block,
+        values: ValueList,
+    },
+}
+
+impl IdValue {
+    fn block(&self) -> Block {
+        match self {
+            IdValue::Value { block, .. } | IdValue::Values { block, .. } => *block,
+        }
+    }
 }
 
 impl<'a> Elaborator<'a> {
@@ -58,6 +76,7 @@ impl<'a> Elaborator<'a> {
         egraph: &'a EGraph<NodeCtx>,
         node_ctx: &'a NodeCtx,
         loop_levels: &'a SecondaryMap<Id, LoopLevel>,
+        remat_ids: &'a FxHashSet<Id>,
         stats: &'a mut Stats,
     ) -> Self {
         let num_blocks = func.dfg.num_blocks();
@@ -73,6 +92,7 @@ impl<'a> Elaborator<'a> {
             loop_stack: smallvec![],
             cur_block: None,
             first_branch: SecondaryMap::with_capacity(num_blocks),
+            remat_ids,
             stats,
         }
     }
@@ -109,10 +129,16 @@ impl<'a> Elaborator<'a> {
 
         self.cur_block = Some(block);
         for &(id, ty) in block_params {
-            let val = self.func.dfg.append_block_param(block, ty);
-            log::trace!(" -> block param id {:?} value {:?}", id, val);
-            self.id_to_value
-                .insert_if_absent(id, IdValue::Value(self.cur_loop_depth(), val));
+            let value = self.func.dfg.append_block_param(block, ty);
+            log::trace!(" -> block param id {:?} value {:?}", id, value);
+            self.id_to_value.insert_if_absent(
+                id,
+                IdValue::Value {
+                    depth: self.cur_loop_depth(),
+                    block,
+                    value,
+                },
+            );
         }
     }
 
@@ -162,12 +188,6 @@ impl<'a> Elaborator<'a> {
     fn find_best_node(&mut self, id: Id) -> (usize, Id) {
         self.stats.elaborate_find_best_node += 1;
         log::trace!("find_best_node: {}", id);
-
-        if self.id_to_value.get(&id).is_some() {
-            self.stats.elaborate_find_best_node_existing_value += 1;
-            log::trace!(" -> value already available; cost 0");
-            return (0, id);
-        }
 
         if let Some(&(cost, node)) = self.id_to_best_cost_and_node.get(&id) {
             self.stats.elaborate_find_best_node_memoize_hit += 1;
@@ -275,13 +295,33 @@ impl<'a> Elaborator<'a> {
     fn elaborate_eclass_use(&mut self, id: Id) -> IdValue {
         self.stats.elaborate_visit_node += 1;
         let (_, best_node_eclass) = self.find_best_node(id);
+        log::trace!("elaborate: id {}", id);
 
         if let Some(val) = self.id_to_value.get(&best_node_eclass) {
-            self.stats.elaborate_memoize_hit += 1;
-            return val.clone();
+            // Look at the defined block, and determine whether this
+            // node kind allows rematerialization if the value comes
+            // from another block. If so, ignore the hit and recompute
+            // below.
+            let remat = val.block() != self.cur_block.unwrap()
+                && self.remat_ids.contains(&best_node_eclass);
+            if !remat {
+                log::trace!("elaborate: id {} -> {:?}", id, val);
+                self.stats.elaborate_memoize_hit += 1;
+                return val.clone();
+            } else {
+                log::trace!("elaborate: id {} -> remat", id);
+                self.stats.elaborate_memoize_miss_remat += 1;
+                self.id_to_value.remove(&best_node_eclass);
+            }
         }
         self.stats.elaborate_memoize_miss += 1;
 
+        log::trace!(
+            "elaborate: id {} -> best {} -> eclass node {:?}",
+            id,
+            best_node_eclass,
+            self.egraph.classes[best_node_eclass]
+        );
         let node_key = self.egraph.classes[best_node_eclass].get_node().unwrap();
         let node = node_key.node::<NodeCtx>(&self.egraph.nodes);
 
@@ -296,15 +336,25 @@ impl<'a> Elaborator<'a> {
         // for the result.
         if let Node::Result { value, result, .. } = node {
             let value = self.elaborate_eclass_use(*value);
-            let (depth, range) = match value {
-                IdValue::Values(depth, range) => (depth, range),
-                IdValue::Value(..) => {
+            let (depth, block, values) = match value {
+                IdValue::Values {
+                    depth,
+                    block,
+                    values,
+                    ..
+                } => (depth, block, values),
+                IdValue::Value { .. } => {
                     unreachable!("Projection nodes should not be used on single results");
                 }
             };
-            let values = range.as_slice(&self.func.dfg.value_lists);
-            let value = IdValue::Value(depth, values[*result]);
-            self.id_to_value.insert_if_absent(id, value.clone());
+            let values = values.as_slice(&self.func.dfg.value_lists);
+            let value = IdValue::Value {
+                depth,
+                block,
+                value: values[*result],
+            };
+            self.id_to_value
+                .insert_if_absent(best_node_eclass, value.clone());
             return value;
         }
 
@@ -320,11 +370,11 @@ impl<'a> Elaborator<'a> {
                 self.elaborate_eclass_use(id)
             })
             .map(|idvalue| match idvalue {
-                IdValue::Value(depth, value) => {
+                IdValue::Value { depth, value, .. } => {
                     max_loop_depth = std::cmp::max(max_loop_depth, depth);
                     value
                 }
-                IdValue::Values(..) => panic!("enode depends directly on multi-value result"),
+                IdValue::Values { .. } => panic!("enode depends directly on multi-value result"),
             })
             .collect();
 
@@ -358,13 +408,21 @@ impl<'a> Elaborator<'a> {
 
         // Build the result and memoize in the id-to-value map.
         let result = if results_slice.len() == 1 {
-            IdValue::Value(loop_depth, results_slice[0])
+            IdValue::Value {
+                depth: loop_depth,
+                block,
+                value: results_slice[0],
+            }
         } else {
-            IdValue::Values(loop_depth, results)
+            IdValue::Values {
+                depth: loop_depth,
+                block,
+                values: results,
+            }
         };
 
         self.id_to_value
-            .insert_if_absent_with_depth(id, result.clone(), scope_depth);
+            .insert_if_absent_with_depth(best_node_eclass, result.clone(), scope_depth);
         result
     }
 

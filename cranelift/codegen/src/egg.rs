@@ -4,7 +4,7 @@ use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
 use crate::loop_analysis::{LoopAnalysis, LoopLevel};
 use crate::{
-    fx::FxHashMap,
+    fx::{FxHashMap, FxHashSet},
     inst_predicates::has_side_effect,
     ir::{Block, Function, Inst, InstructionImms, Opcode, Type},
 };
@@ -48,6 +48,9 @@ pub struct FuncEGraph<'a> {
     /// eclass IDs and types per block.
     blockparams: SecondaryMap<Block, Range<u32>>,
     blockparam_ids_tys: Vec<(Id, Type)>,
+    /// Which canonical node IDs do we want to rematerialize in each
+    /// block where they're used?
+    pub(crate) remat_ids: FxHashSet<Id>,
     /// Statistics recorded during the process of building,
     /// optimizing, and lowering out of this egraph.
     pub(crate) stats: Stats,
@@ -84,6 +87,7 @@ pub(crate) struct Stats {
     pub(crate) elaborate_visit_node_recurse: u64,
     pub(crate) elaborate_memoize_hit: u64,
     pub(crate) elaborate_memoize_miss: u64,
+    pub(crate) elaborate_memoize_miss_remat: u64,
     pub(crate) elaborate_licm_hoist: u64,
     pub(crate) elaborate_func: u64,
     pub(crate) elaborate_func_pre_insts: u64,
@@ -117,6 +121,7 @@ impl<'a> FuncEGraph<'a> {
             loop_levels: SecondaryMap::with_default(LoopLevel::invalid()),
             blockparams: SecondaryMap::with_default(0..0),
             blockparam_ids_tys: vec![],
+            remat_ids: FxHashSet::default(),
             stats: Default::default(),
         };
         this.build(func);
@@ -340,6 +345,7 @@ impl<'a> FuncEGraph<'a> {
             &self.egraph,
             &self.node_ctx,
             &self.loop_levels,
+            &self.remat_ids,
             &mut self.stats,
         );
         elab.elaborate(
