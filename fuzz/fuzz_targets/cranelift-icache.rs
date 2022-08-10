@@ -28,7 +28,7 @@ fuzz_target!(|func: SingleFunction| {
 
     let isa = isa_builder.finish(flags).unwrap();
 
-    let (cache_key, _cache_key_hash) = icache::compute_cache_key(&*isa, &func);
+    let cache_key_hash = icache::compute_cache_key(&*isa, &func);
 
     let mut context = Context::for_function(func.clone());
     let prev_stencil = match context.compile_stencil(&*isa) {
@@ -36,16 +36,14 @@ fuzz_target!(|func: SingleFunction| {
         Err(_) => return,
     };
 
-    let serialized = icache::serialize_compiled(cache_key.clone(), &prev_stencil)
-        .expect("serialization failure");
+    let serialized = icache::serialize_compiled(&prev_stencil).expect("serialization failure");
 
     let prev_result = prev_stencil.apply_params(&func.params);
-    let prev_info = prev_result.code_info();
 
-    let new_result = icache::try_finish_recompile(&cache_key, &func, &serialized)
+    let new_result = icache::try_finish_recompile(&func, &serialized)
         .expect("recompilation should always work for identity");
 
-    assert_eq!(new_result, *prev_result, "MachCompileResult:s don't match");
+    assert_eq!(new_result, prev_result, "MachCompileResult:s don't match");
 
     let new_info = new_result.code_info();
     assert_eq!(new_info, prev_result.code_info(), "CodeInfo:s don't match");
@@ -115,12 +113,12 @@ fuzz_target!(|func: SingleFunction| {
         false
     };
 
-    let (new_cache_key, _cache_key_hash) = icache::compute_cache_key(&*isa, &func);
+    let new_cache_key_hash = icache::compute_cache_key(&*isa, &func);
 
     if expect_cache_hit {
-        assert!(cache_key == new_cache_key);
+        assert!(cache_key_hash == new_cache_key_hash);
     } else {
-        assert!(cache_key != new_cache_key);
+        assert!(cache_key_hash != new_cache_key_hash);
     }
 
     context = Context::for_function(func.clone());
@@ -131,9 +129,8 @@ fuzz_target!(|func: SingleFunction| {
     };
 
     if expect_cache_hit {
-        let after_mutation_result_from_cache =
-            icache::try_finish_recompile(&new_cache_key, &func, &serialized)
-                .expect("recompilation should always work for identity");
+        let after_mutation_result_from_cache = icache::try_finish_recompile(&func, &serialized)
+            .expect("recompilation should always work for identity");
         assert_eq!(*after_mutation_result, after_mutation_result_from_cache);
 
         let new_info = after_mutation_result_from_cache.code_info();
