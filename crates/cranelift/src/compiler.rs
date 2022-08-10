@@ -89,8 +89,7 @@ impl Drop for Compiler {
 
         let total = num_hits + num_cached;
         if num_hits + num_cached > 0 {
-            eprintln!(
-                //log::trace!(
+            log::trace!(
                 "Incremental compilation cache stats: {}/{} = {}% (hits/lookup)\ncached: {}",
                 num_hits,
                 total,

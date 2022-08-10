@@ -39,13 +39,13 @@ impl Context {
         isa: &dyn TargetIsa,
         cache_store: &mut dyn CacheKvStore,
     ) -> CompileResult<(&CompiledCode, bool)> {
-        let (cache_key, cache_key_hash) = {
+        let cache_key_hash = {
             let _tt = timing::try_incremental_cache();
 
-            let (cache_key, cache_key_hash) = compute_cache_key(isa, &self.func);
+            let cache_key_hash = compute_cache_key(isa, &self.func);
 
             if let Some(blob) = cache_store.get(&cache_key_hash.0) {
-                if let Ok(compiled_code) = try_finish_recompile(&cache_key, &self.func, &blob) {
+                if let Some(compiled_code) = try_finish_recompile(&self.func, &blob) {
                     let info = compiled_code.code_info();
 
                     if isa.flags().enable_incremental_compilation_cache_checks() {
@@ -61,7 +61,7 @@ impl Context {
                 }
             }
 
-            (cache_key, cache_key_hash)
+            cache_key_hash
         };
 
         let stencil = self.compile_stencil(isa).map_err(|err| CompileError {
@@ -70,7 +70,7 @@ impl Context {
         })?;
 
         let _tt = timing::store_incremental_cache();
-        if let Ok(blob) = serialize_compiled(cache_key, &stencil) {
+        if let Ok(blob) = serialize_compiled(&stencil) {
             cache_store.insert(&cache_key_hash.0, blob);
         }
 
@@ -94,28 +94,24 @@ pub trait CacheKvStore {
 
 /// Hashed `CachedKey`, to use as an identifier when looking up whether a function has already been
 /// compiled or not.
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
-pub struct CacheKeyHash([u8; 8]);
+#[derive(Clone, Hash, PartialEq, Eq)]
+pub struct CacheKeyHash([u8; 32]);
 
 impl std::fmt::Display for CacheKeyHash {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        i64::from_le_bytes(self.0).fmt(f)
+        write!(f, "CacheKeyHash:{:?}", self.0)
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct CachedFunc {
-    cache_key: CacheKey,
     stencil: CompiledCodeBase<Stencil>,
 }
 
 /// Key for caching a single function's compilation.
 ///
 /// If two functions get the same `CacheKey`, then we can reuse the compiled artifacts, modulo some
-/// relocation fixups.
-///
-/// Everything in a `Function` that uniquely identifies a function must be included in this data
-/// structure. For that matter, there's a method `check_from_func`.
+/// fixups.
 #[derive(Clone, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct CacheKey {
     stencil: FunctionStencil,
@@ -165,29 +161,34 @@ impl CacheKey {
 /// Compute a cache key, and hash it on your behalf.
 ///
 /// Since computing the `CacheKey` is a bit expensive, it should be done as least as possible.
-#[inline(never)]
-pub fn compute_cache_key(isa: &dyn TargetIsa, func: &Function) -> (CacheKey, CacheKeyHash) {
+pub fn compute_cache_key(isa: &dyn TargetIsa, func: &Function) -> CacheKeyHash {
+    use core::hash::{Hash as _, Hasher};
+    use sha2::Digest as _;
+
+    struct Sha256Hasher(sha2::Sha256);
+
+    impl Hasher for Sha256Hasher {
+        fn finish(&self) -> u64 {
+            panic!("Sha256Hasher doesn't support finish!");
+        }
+        fn write(&mut self, bytes: &[u8]) {
+            self.0.update(bytes);
+        }
+    }
+
     let cache_key = CacheKey::new(isa, func);
 
-    let hash = {
-        use core::hash::{Hash as _, Hasher as _};
-        let mut hasher = crate::fx::FxHasher::default();
-        cache_key.hash(&mut hasher);
-        hasher.finish()
-    };
+    let mut hasher = Sha256Hasher(sha2::Sha256::new());
+    cache_key.hash(&mut hasher);
+    let hash: [u8; 32] = hasher.0.finalize().into();
 
-    (cache_key, CacheKeyHash(hash.to_le_bytes()))
+    CacheKeyHash(hash)
 }
 
 /// Given a function that's been successfully compiled, serialize it to a blob that the caller may
 /// store somewhere for future use by `try_finish_recompile`.
-#[inline(never)]
-pub fn serialize_compiled(
-    cache_key: CacheKey,
-    result: &CompiledCodeBase<Stencil>,
-) -> Result<Vec<u8>, bincode::Error> {
+pub fn serialize_compiled(result: &CompiledCodeBase<Stencil>) -> Result<Vec<u8>, bincode::Error> {
     let cached = CachedFunc {
-        cache_key,
         stencil: result.clone(),
     };
     bincode::serialize(&cached)
@@ -195,31 +196,15 @@ pub fn serialize_compiled(
 
 /// Given a function that's been precompiled and its entry in the caching storage, try to shortcut
 /// compilation of the given function.
-#[inline(never)]
-pub fn try_finish_recompile(
-    cache_key: &CacheKey,
-    func: &Function,
-    bytes: &[u8],
-) -> Result<CompiledCode, ()> {
-    // try to deserialize, if not failure, return final recompiled code
+///
+/// Precondition: the bytes must have retrieved from a cache store entry which hash value
+/// is strictly the same as the `Function`'s computed hash retrieved from `compute_cache_key`.
+pub fn try_finish_recompile(func: &Function, bytes: &[u8]) -> Option<CompiledCode> {
     match bincode::deserialize::<CachedFunc>(bytes) {
-        Ok(mut result) => {
-            // Make sure the blocks and instructions are sequenced the same way as we might
-            // have serialized them earlier. This is the symmetric of what's done in
-            // `CacheKey`'s ctor.
-            result.cache_key.stencil.layout.full_renumber();
-
-            if *cache_key == result.cache_key {
-                return Ok(result.stencil.apply_params(&func.params));
-            }
-
-            trace!("{} not read from cache: source mismatch", func.name);
-        }
-
+        Ok(result) => Some(result.stencil.apply_params(&func.params)),
         Err(err) => {
             trace!("Couldn't deserialize cache entry: {err}");
+            None
         }
     }
-
-    Err(())
 }

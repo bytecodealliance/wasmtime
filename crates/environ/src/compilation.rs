@@ -73,6 +73,10 @@ pub enum CompileError {
 }
 
 /// Implementation of an incremental compilation's key/value cache store.
+///
+/// In theory, this could just be Cranelift's `CacheKvStore` trait, but it is not as we want to
+/// make sure that wasmtime isn't too tied to Cranelift internals (and as a matter of fact, we
+/// can't depend on the Cranelift trait here).
 pub trait CacheStore: Send + Sync + std::fmt::Debug {
     /// Try to retrieve an arbitrary cache key entry, and returns a reference to bytes that were
     /// inserted via `Self::insert` before.
