@@ -27,6 +27,7 @@
 //! - All predecessors in the CFG must be branches to the block.
 //! - All branches to a block must be present in the CFG.
 //! - A recomputed dominator tree is identical to the existing one.
+//! - The entry block must not be a cold block.
 //!
 //! Type checking
 //!
@@ -1224,6 +1225,16 @@ impl<'a> Verifier<'a> {
         errors.as_result()
     }
 
+    fn check_entry_not_cold(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+        if let Some(entry_block) = self.func.layout.entry_block() {
+            if self.func.layout.is_cold(entry_block) {
+                return errors
+                    .fatal((entry_block, format!("entry block cannot be marked as cold")));
+            }
+        }
+        errors.as_result()
+    }
+
     fn typecheck(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         let inst_data = &self.func.dfg[inst];
         let constraints = inst_data.opcode().constraints();
@@ -1759,6 +1770,7 @@ impl<'a> Verifier<'a> {
         self.verify_tables(errors)?;
         self.verify_jump_tables(errors)?;
         self.typecheck_entry_block_params(errors)?;
+        self.check_entry_not_cold(errors)?;
         self.typecheck_function_signature(errors)?;
 
         for block in self.func.layout.blocks() {

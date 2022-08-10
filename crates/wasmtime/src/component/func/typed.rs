@@ -8,7 +8,8 @@ use std::marker;
 use std::mem::{self, MaybeUninit};
 use std::str;
 use wasmtime_environ::component::{
-    ComponentTypes, InterfaceType, StringEncoding, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, StringEncoding, VariantInfo, MAX_FLAT_PARAMS,
+    MAX_FLAT_RESULTS,
 };
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
@@ -363,13 +364,14 @@ pub unsafe trait ComponentType {
     #[doc(hidden)]
     type Lower: Copy;
 
-    /// The size, in bytes, that this type has in the canonical ABI.
+    /// The information about this type's canonical ABI (size/align/etc).
     #[doc(hidden)]
-    const SIZE32: usize;
+    const ABI: CanonicalAbiInfo;
 
-    /// The alignment, in bytes, that this type has in the canonical ABI.
     #[doc(hidden)]
-    const ALIGN32: u32;
+    const SIZE32: usize = Self::ABI.size32 as usize;
+    #[doc(hidden)]
+    const ALIGN32: u32 = Self::ABI.align32;
 
     /// Returns the number of core wasm abi values will be used to represent
     /// this type in its lowered form.
@@ -382,12 +384,17 @@ pub unsafe trait ComponentType {
         mem::size_of::<Self::Lower>() / mem::size_of::<ValRaw>()
     }
 
-    // FIXME: need SIZE64 and ALIGN64 probably
-
     /// Performs a type-check to see whether this component value type matches
     /// the interface type `ty` provided.
     #[doc(hidden)]
     fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()>;
+}
+
+#[doc(hidden)]
+pub unsafe trait ComponentVariant: ComponentType {
+    const CASES: &'static [CanonicalAbiInfo];
+    const INFO: VariantInfo = VariantInfo::new_static(Self::CASES);
+    const PAYLOAD_OFFSET32: usize = Self::INFO.payload_offset32 as usize;
 }
 
 /// Host types which can be passed to WebAssembly components.
@@ -475,8 +482,7 @@ macro_rules! forward_type_impls {
         unsafe impl <$($generics)*> ComponentType for $a {
             type Lower = <$b as ComponentType>::Lower;
 
-            const SIZE32: usize = <$b as ComponentType>::SIZE32;
-            const ALIGN32: u32 = <$b as ComponentType>::ALIGN32;
+            const ABI: CanonicalAbiInfo = <$b as ComponentType>::ABI;
 
             #[inline]
             fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
@@ -570,17 +576,11 @@ forward_list_lifts! {
 // Macro to help generate `ComponentType` implementations for primitive types
 // such as integers, char, bool, etc.
 macro_rules! integers {
-    ($($primitive:ident = $ty:ident in $field:ident/$get:ident,)*) => ($(
+    ($($primitive:ident = $ty:ident in $field:ident/$get:ident with abi:$abi:ident,)*) => ($(
         unsafe impl ComponentType for $primitive {
             type Lower = ValRaw;
 
-            const SIZE32: usize = mem::size_of::<$primitive>();
-
-            // Note that this specifically doesn't use `align_of` as some
-            // host platforms have a 4-byte alignment for primitive types but
-            // the canonical abi always has the same size/alignment for these
-            // types.
-            const ALIGN32: u32 = mem::size_of::<$primitive>() as u32;
+            const ABI: CanonicalAbiInfo = CanonicalAbiInfo::$abi;
 
             fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
                 match ty {
@@ -624,18 +624,18 @@ macro_rules! integers {
 }
 
 integers! {
-    i8 = S8 in i32/get_i32,
-    u8 = U8 in u32/get_u32,
-    i16 = S16 in i32/get_i32,
-    u16 = U16 in u32/get_u32,
-    i32 = S32 in i32/get_i32,
-    u32 = U32 in u32/get_u32,
-    i64 = S64 in i64/get_i64,
-    u64 = U64 in u64/get_u64,
+    i8 = S8 in i32/get_i32 with abi:SCALAR1,
+    u8 = U8 in u32/get_u32 with abi:SCALAR1,
+    i16 = S16 in i32/get_i32 with abi:SCALAR2,
+    u16 = U16 in u32/get_u32 with abi:SCALAR2,
+    i32 = S32 in i32/get_i32 with abi:SCALAR4,
+    u32 = U32 in u32/get_u32 with abi:SCALAR4,
+    i64 = S64 in i64/get_i64 with abi:SCALAR8,
+    u64 = U64 in u64/get_u64 with abi:SCALAR8,
 }
 
 macro_rules! floats {
-    ($($float:ident/$get_float:ident = $ty:ident)*) => ($(const _: () = {
+    ($($float:ident/$get_float:ident = $ty:ident with abi:$abi:ident)*) => ($(const _: () = {
         /// All floats in-and-out of the canonical abi always have their nan
         /// payloads canonicalized. conveniently the `NAN` constant in rust has
         /// the same representation as canonical nan, so we can use that for the
@@ -652,11 +652,7 @@ macro_rules! floats {
         unsafe impl ComponentType for $float {
             type Lower = ValRaw;
 
-            const SIZE32: usize = mem::size_of::<$float>();
-
-            // note that like integers size is used here instead of alignment to
-            // respect the canonical abi, not host platforms.
-            const ALIGN32: u32 = mem::size_of::<$float>() as u32;
+            const ABI: CanonicalAbiInfo = CanonicalAbiInfo::$abi;
 
             fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
                 match ty {
@@ -701,15 +697,14 @@ macro_rules! floats {
 }
 
 floats! {
-    f32/get_f32 = Float32
-    f64/get_f64 = Float64
+    f32/get_f32 = Float32 with abi:SCALAR4
+    f64/get_f64 = Float64 with abi:SCALAR8
 }
 
 unsafe impl ComponentType for bool {
     type Lower = ValRaw;
 
-    const SIZE32: usize = 1;
-    const ALIGN32: u32 = 1;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR1;
 
     fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
         match ty {
@@ -758,8 +753,7 @@ unsafe impl Lift for bool {
 unsafe impl ComponentType for char {
     type Lower = ValRaw;
 
-    const SIZE32: usize = 4;
-    const ALIGN32: u32 = 4;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
 
     fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
         match ty {
@@ -810,8 +804,7 @@ const MAX_STRING_BYTE_LENGTH: usize = (1 << 31) - 1;
 unsafe impl ComponentType for str {
     type Lower = [ValRaw; 2];
 
-    const SIZE32: usize = 8;
-    const ALIGN32: u32 = 4;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
     fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
         match ty {
@@ -1078,8 +1071,7 @@ impl WasmStr {
 unsafe impl ComponentType for WasmStr {
     type Lower = <str as ComponentType>::Lower;
 
-    const SIZE32: usize = <str as ComponentType>::SIZE32;
-    const ALIGN32: u32 = <str as ComponentType>::ALIGN32;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
     fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
         match ty {
@@ -1114,8 +1106,7 @@ where
 {
     type Lower = [ValRaw; 2];
 
-    const SIZE32: usize = 8;
-    const ALIGN32: u32 = 4;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
     fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
         match ty {
@@ -1324,8 +1315,7 @@ raw_wasm_list_accessors! {
 unsafe impl<T: ComponentType> ComponentType for WasmList<T> {
     type Lower = <[T] as ComponentType>::Lower;
 
-    const SIZE32: usize = <[T] as ComponentType>::SIZE32;
-    const ALIGN32: u32 = <[T] as ComponentType>::ALIGN32;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
     fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
         match ty {
@@ -1352,24 +1342,6 @@ unsafe impl<T: Lift> Lift for WasmList<T> {
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
         WasmList::new(ptr, len, memory)
     }
-}
-
-/// Round `a` up to the next multiple of `align`, assuming that `align` is a power of 2.
-#[inline]
-pub const fn align_to(a: usize, align: u32) -> usize {
-    debug_assert!(align.is_power_of_two());
-    let align = align as usize;
-    (a + (align - 1)) & !(align - 1)
-}
-
-/// For a field of type T starting after `offset` bytes, updates the offset to reflect the correct
-/// alignment and size of T. Returns the correctly aligned offset for the start of the field.
-#[inline]
-pub fn next_field<T: ComponentType>(offset: &mut usize) -> usize {
-    *offset = align_to(*offset, T::ALIGN32);
-    let result = *offset;
-    *offset += T::SIZE32;
-    result
 }
 
 /// Verify that the given wasm type is a tuple with the expected fields in the right order.
@@ -1585,15 +1557,22 @@ where
 {
     type Lower = TupleLower2<<u32 as ComponentType>::Lower, T::Lower>;
 
-    const SIZE32: usize = align_to(1, T::ALIGN32) + T::SIZE32;
-    const ALIGN32: u32 = T::ALIGN32;
+    const ABI: CanonicalAbiInfo =
+        CanonicalAbiInfo::variant_static(&[<() as ComponentType>::ABI, T::ABI]);
 
     fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
         match ty {
-            InterfaceType::Option(t) => T::typecheck(&types[*t], types),
+            InterfaceType::Option(t) => T::typecheck(&types[*t].ty, types),
             other => bail!("expected `option` found `{}`", desc(other)),
         }
     }
+}
+
+unsafe impl<T> ComponentVariant for Option<T>
+where
+    T: ComponentType,
+{
+    const CASES: &'static [CanonicalAbiInfo] = &[<() as ComponentType>::ABI, T::ABI];
 }
 
 unsafe impl<T> Lower for Option<T>
@@ -1635,7 +1614,7 @@ where
             }
             Some(val) => {
                 mem.get::<1>(offset)[0] = 1;
-                val.store(mem, offset + align_to(1, T::ALIGN32))?;
+                val.store(mem, offset + (Self::INFO.payload_offset32 as usize))?;
             }
         }
         Ok(())
@@ -1657,7 +1636,7 @@ where
     fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
         let discrim = bytes[0];
-        let payload = &bytes[align_to(1, T::ALIGN32)..];
+        let payload = &bytes[Self::INFO.payload_offset32 as usize..];
         match discrim {
             0 => Ok(None),
             1 => Ok(Some(T::load(memory, payload)?)),
@@ -1687,17 +1666,7 @@ where
 {
     type Lower = ResultLower<T::Lower, E::Lower>;
 
-    const SIZE32: usize = align_to(1, Self::ALIGN32)
-        + if T::SIZE32 > E::SIZE32 {
-            T::SIZE32
-        } else {
-            E::SIZE32
-        };
-    const ALIGN32: u32 = if T::ALIGN32 > E::ALIGN32 {
-        T::ALIGN32
-    } else {
-        E::ALIGN32
-    };
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::variant_static(&[T::ABI, E::ABI]);
 
     fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
         match ty {
@@ -1710,6 +1679,14 @@ where
             other => bail!("expected `expected` found `{}`", desc(other)),
         }
     }
+}
+
+unsafe impl<T, E> ComponentVariant for Result<T, E>
+where
+    T: ComponentType,
+    E: ComponentType,
+{
+    const CASES: &'static [CanonicalAbiInfo] = &[T::ABI, E::ABI];
 }
 
 unsafe impl<T, E> Lower for Result<T, E>
@@ -1756,14 +1733,15 @@ where
 
     fn store<U>(&self, mem: &mut MemoryMut<'_, U>, offset: usize) -> Result<()> {
         debug_assert!(offset % (Self::ALIGN32 as usize) == 0);
+        let payload_offset = Self::INFO.payload_offset32 as usize;
         match self {
             Ok(e) => {
                 mem.get::<1>(offset)[0] = 0;
-                e.store(mem, offset + align_to(1, Self::ALIGN32))?;
+                e.store(mem, offset + payload_offset)?;
             }
             Err(e) => {
                 mem.get::<1>(offset)[0] = 1;
-                e.store(mem, offset + align_to(1, Self::ALIGN32))?;
+                e.store(mem, offset + payload_offset)?;
             }
         }
         Ok(())
@@ -1804,9 +1782,8 @@ where
 
     fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
-        let align = Self::ALIGN32;
         let discrim = bytes[0];
-        let payload = &bytes[align_to(1, align)..];
+        let payload = &bytes[Self::INFO.payload_offset32 as usize..];
         match discrim {
             0 => Ok(Ok(T::load(memory, &payload[..T::SIZE32])?)),
             1 => Ok(Err(E::load(memory, &payload[..E::SIZE32])?)),
@@ -1832,22 +1809,9 @@ macro_rules! impl_component_ty_for_tuples {
         {
             type Lower = [<TupleLower$n>]<$($t::Lower),*>;
 
-            const SIZE32: usize = {
-                let mut _size = 0;
-                $(
-                    _size = align_to(_size, $t::ALIGN32);
-                    _size += $t::SIZE32;
-                )*
-                align_to(_size, Self::ALIGN32)
-            };
-
-            const ALIGN32: u32 = {
-                let mut _align = 1;
-                $(if $t::ALIGN32 > _align {
-                    _align = $t::ALIGN32;
-                })*
-                _align
-            };
+            const ABI: CanonicalAbiInfo = CanonicalAbiInfo::record_static(&[
+                $($t::ABI),*
+            ]);
 
             fn typecheck(
                 ty: &InterfaceType,
@@ -1875,7 +1839,7 @@ macro_rules! impl_component_ty_for_tuples {
             fn store<U>(&self, _memory: &mut MemoryMut<'_, U>, mut _offset: usize) -> Result<()> {
                 debug_assert!(_offset % (Self::ALIGN32 as usize) == 0);
                 let ($($t,)*) = self;
-                $($t.store(_memory, next_field::<$t>(&mut _offset))?;)*
+                $($t.store(_memory, $t::ABI.next_field32_size(&mut _offset))?;)*
                 Ok(())
             }
         }
@@ -1891,7 +1855,7 @@ macro_rules! impl_component_ty_for_tuples {
             fn load(_memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
                 debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
                 let mut _offset = 0;
-                $(let $t = $t::load(_memory, &bytes[next_field::<$t>(&mut _offset)..][..$t::SIZE32])?;)*
+                $(let $t = $t::load(_memory, &bytes[$t::ABI.next_field32_size(&mut _offset)..][..$t::SIZE32])?;)*
                 Ok(($($t,)*))
             }
         }

@@ -897,7 +897,7 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
     use windows_sys::Win32::Foundation::HINSTANCE;
     use windows_sys::Win32::System::LibraryLoader;
 
-    const MSVCRT_DLL: &[u8] = b"msvcrt.dll\0";
+    const UCRTBASE: &[u8] = b"ucrtbase.dll\0";
 
     let c_str = CString::new(name).unwrap();
     let c_str_ptr = c_str.as_ptr();
@@ -907,7 +907,7 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
             // try to find the searched symbol in the currently running executable
             ptr::null_mut(),
             // try to find the searched symbol in local c runtime
-            LibraryLoader::GetModuleHandleA(MSVCRT_DLL.as_ptr()) as RawHandle,
+            LibraryLoader::GetModuleHandleA(UCRTBASE.as_ptr()) as RawHandle,
         ];
 
         for handle in &handles {

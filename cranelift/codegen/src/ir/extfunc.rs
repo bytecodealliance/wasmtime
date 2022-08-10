@@ -144,9 +144,6 @@ pub struct AbiParam {
     pub purpose: ArgumentPurpose,
     /// Method for extending argument to a full register.
     pub extension: ArgumentExtension,
-
-    /// Was the argument converted to pointer during legalization?
-    pub legalized_to_pointer: bool,
 }
 
 impl AbiParam {
@@ -156,7 +153,6 @@ impl AbiParam {
             value_type: vt,
             extension: ArgumentExtension::None,
             purpose: ArgumentPurpose::Normal,
-            legalized_to_pointer: false,
         }
     }
 
@@ -166,7 +162,6 @@ impl AbiParam {
             value_type: vt,
             extension: ArgumentExtension::None,
             purpose,
-            legalized_to_pointer: false,
         }
     }
 
@@ -192,9 +187,6 @@ impl AbiParam {
 impl fmt::Display for AbiParam {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.value_type)?;
-        if self.legalized_to_pointer {
-            write!(f, " ptr")?;
-        }
         match self.extension {
             ArgumentExtension::None => {}
             ArgumentExtension::Uext => write!(f, " uext")?,
@@ -254,29 +246,6 @@ pub enum ArgumentPurpose {
     /// a `StructReturn` pointer argument to also return that pointer in a register.
     StructReturn,
 
-    /// The link register.
-    ///
-    /// Most RISC architectures implement calls by saving the return address in a designated
-    /// register rather than pushing it on the stack. This is represented with a `Link` argument.
-    ///
-    /// Similarly, some return instructions expect the return address in a register represented as
-    /// a `Link` return value.
-    Link,
-
-    /// The frame pointer.
-    ///
-    /// This indicates the frame pointer register which has a special meaning in some ABIs.
-    ///
-    /// The frame pointer appears as an argument and as a return value since it is a callee-saved
-    /// register.
-    FramePointer,
-
-    /// A callee-saved register.
-    ///
-    /// Some calling conventions have registers that must be saved by the callee. These registers
-    /// are represented as `CalleeSaved` arguments and return values.
-    CalleeSaved,
-
     /// A VM context pointer.
     ///
     /// This is a pointer to a context struct containing details about the current sandbox. It is
@@ -302,9 +271,6 @@ impl fmt::Display for ArgumentPurpose {
             Self::Normal => "normal",
             Self::StructArgument(size) => return write!(f, "sarg({})", size),
             Self::StructReturn => "sret",
-            Self::Link => "link",
-            Self::FramePointer => "fp",
-            Self::CalleeSaved => "csr",
             Self::VMContext => "vmctx",
             Self::SignatureId => "sigid",
             Self::StackLimit => "stack_limit",
@@ -318,9 +284,6 @@ impl FromStr for ArgumentPurpose {
         match s {
             "normal" => Ok(Self::Normal),
             "sret" => Ok(Self::StructReturn),
-            "link" => Ok(Self::Link),
-            "fp" => Ok(Self::FramePointer),
-            "csr" => Ok(Self::CalleeSaved),
             "vmctx" => Ok(Self::VMContext),
             "sigid" => Ok(Self::SignatureId),
             "stack_limit" => Ok(Self::StackLimit),
@@ -421,8 +384,6 @@ mod tests {
         assert_eq!(t.sext().to_string(), "i32 sext");
         t.purpose = ArgumentPurpose::StructReturn;
         assert_eq!(t.to_string(), "i32 uext sret");
-        t.legalized_to_pointer = true;
-        assert_eq!(t.to_string(), "i32 ptr uext sret");
     }
 
     #[test]
@@ -430,9 +391,6 @@ mod tests {
         let all_purpose = [
             (ArgumentPurpose::Normal, "normal"),
             (ArgumentPurpose::StructReturn, "sret"),
-            (ArgumentPurpose::Link, "link"),
-            (ArgumentPurpose::FramePointer, "fp"),
-            (ArgumentPurpose::CalleeSaved, "csr"),
             (ArgumentPurpose::VMContext, "vmctx"),
             (ArgumentPurpose::SignatureId, "sigid"),
             (ArgumentPurpose::StackLimit, "stack_limit"),

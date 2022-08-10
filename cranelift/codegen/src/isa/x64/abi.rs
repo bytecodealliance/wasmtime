@@ -70,20 +70,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
 
         for param in params {
-            // Validate "purpose".
-            match &param.purpose {
-                &ir::ArgumentPurpose::VMContext
-                | &ir::ArgumentPurpose::Normal
-                | &ir::ArgumentPurpose::StackLimit
-                | &ir::ArgumentPurpose::SignatureId
-                | &ir::ArgumentPurpose::StructReturn
-                | &ir::ArgumentPurpose::StructArgument(_) => {}
-                _ => panic!(
-                    "Unsupported argument purpose {:?} in signature: {:?}",
-                    param.purpose, params
-                ),
-            }
-
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 let offset = next_stack as i64;
                 let size = size as u64;

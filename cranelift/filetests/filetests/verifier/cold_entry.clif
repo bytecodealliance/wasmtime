@@ -1,0 +1,6 @@
+test verifier
+
+function %entry_block_not_cold() {
+    block0 cold: ; error: entry block cannot be marked as cold
+        return
+}
