@@ -30,7 +30,7 @@ unsafe fn try_read_file(dir_fd: wasi::Fd) {
         wasi::fd_read(fd, &[iovec])
             .expect_err("reading bytes from file should fail")
             .raw_error(),
-        wasi::ERRNO_NOTCAPABLE
+        wasi::ERRNO_BADF
     );
 }
 
