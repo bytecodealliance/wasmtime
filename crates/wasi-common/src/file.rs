@@ -239,16 +239,15 @@ impl FileEntry {
             Ok(())
         } else {
             let missing = caps & !self.caps;
-            if missing.intersects(FileCaps::READ | FileCaps::WRITE) {
+            let err = if missing.intersects(FileCaps::READ | FileCaps::WRITE) {
                 // `EBADF` is a little surprising here because it's also used
                 // for unknown-file-descriptor errors, but it's what POSIX uses
                 // in this situation.
-                Err(Error::badf()
-                    .context(format!("desired rights {:?}, has {:?}", caps, self.caps)))
+                Error::badf()
             } else {
-                Err(Error::perm()
-                    .context(format!("desired rights {:?}, has {:?}", caps, self.caps)))
-            }
+                Error::perm()
+            };
+            Err(err.context(format!("desired rights {:?}, has {:?}", caps, self.caps)))
         }
     }
 
