@@ -2,10 +2,11 @@
 
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
-    entity::EntityRef as _,
     incremental_cache as icache,
-    ir::{self, immediates::Imm64, ExternalName, UserExternalNameRef},
-    isa, settings, Context,
+    ir::{self, immediates::Imm64, ExternalName},
+    isa,
+    settings::{self, Configurable as _},
+    Context,
 };
 use libfuzzer_sys::fuzz_target;
 
@@ -15,7 +16,12 @@ use target_lexicon::Triple;
 fuzz_target!(|func: SingleFunction| {
     let mut func = func.0;
 
-    let flags = settings::Flags::new(settings::builder());
+    let flags = settings::Flags::new({
+        let mut builder = settings::builder();
+        // We need llvm ABI extensions for i128 values on x86
+        builder.set("enable_llvm_abi_extensions", "true").unwrap();
+        builder
+    });
 
     let isa_builder = isa::lookup(Triple::host())
         .map_err(|err| match err {
@@ -50,18 +56,16 @@ fuzz_target!(|func: SingleFunction| {
 
     // If the func has at least one user-defined func ref, change it to match a
     // different external function.
-    let expect_cache_hit = if let Some((func_ref, user_ext_ref)) =
-        func.dfg.ext_funcs.iter().find_map(|(func_ref, data)| {
+    let expect_cache_hit = if let Some(user_ext_ref) =
+        func.stencil.dfg.ext_funcs.values().find_map(|data| {
             if let ExternalName::User(user_ext_ref) = &data.name {
-                Some((func_ref, user_ext_ref))
+                Some(user_ext_ref)
             } else {
                 None
             }
         }) {
-        let index = user_ext_ref.as_u32();
-        let index = index.checked_add(1).unwrap_or(index - 1);
-        func.dfg.ext_funcs[func_ref].name =
-            ExternalName::User(UserExternalNameRef::new(index as _));
+        let prev = &mut func.params.user_named_funcs[*user_ext_ref];
+        prev.index = prev.index.checked_add(1).unwrap_or_else(|| prev.index - 1);
         true
     } else {
         // otherwise just randomly change one instruction in the middle and see what happens.
