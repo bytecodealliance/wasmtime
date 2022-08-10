@@ -500,8 +500,8 @@ impl BlockLoweringOrder {
 mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
-    use crate::ir::function::UserFuncName;
     use crate::ir::types::*;
+    use crate::ir::UserFuncName;
     use crate::ir::{AbiParam, Function, InstBuilder, Signature};
     use crate::isa::CallConv;
 

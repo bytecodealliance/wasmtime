@@ -11,7 +11,6 @@ use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::entity::{EntityRef, PrimaryMap};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
-use cranelift_codegen::ir::function::UserFuncName;
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::types::INVALID;
@@ -22,7 +21,7 @@ use cranelift_codegen::ir::{
     DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef, Function,
     GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags,
     Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type,
-    Value,
+    UserFuncName, Value,
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -3238,7 +3237,7 @@ mod tests {
         )
         .parse_function()
         .unwrap();
-        assert_eq!(func.params.name.to_string(), "%qux");
+        assert_eq!(func.name.to_string(), "%qux");
         let v4 = details.map.lookup_str("v4").unwrap();
         assert_eq!(v4.to_string(), "v4");
         let v3 = details.map.lookup_str("v3").unwrap();
@@ -3315,7 +3314,7 @@ mod tests {
         )
         .parse_function()
         .unwrap();
-        assert_eq!(func.params.name.to_string(), "%foo");
+        assert_eq!(func.name.to_string(), "%foo");
         let mut iter = func.sized_stack_slots.keys();
         let _ss0 = iter.next().unwrap();
         let ss1 = iter.next().unwrap();
@@ -3360,7 +3359,7 @@ mod tests {
         )
         .parse_function()
         .unwrap();
-        assert_eq!(func.params.name.to_string(), "%blocks");
+        assert_eq!(func.name.to_string(), "%blocks");
 
         let mut blocks = func.layout.blocks();
 
@@ -3542,7 +3541,7 @@ mod tests {
         )
         .parse_function()
         .unwrap();
-        assert_eq!(func.params.name.to_string(), "%comment");
+        assert_eq!(func.name.to_string(), "%comment");
         assert_eq!(comments.len(), 8); // no 'before' comment.
         assert_eq!(
             comments[0],
@@ -3596,7 +3595,7 @@ mod tests {
         assert_eq!(tf.preamble_comments[0].text, "; before");
         assert_eq!(tf.preamble_comments[1].text, "; still preamble");
         assert_eq!(tf.functions.len(), 1);
-        assert_eq!(tf.functions[0].0.params.name.to_string(), "%comment");
+        assert_eq!(tf.functions[0].0.name.to_string(), "%comment");
     }
 
     #[test]
@@ -3645,7 +3644,7 @@ mod tests {
         .parse_function()
         .unwrap()
         .0;
-        assert_eq!(func.params.name.to_string(), "u1:2");
+        assert_eq!(func.name.to_string(), "u1:2");
 
         // Invalid characters in the name:
         let mut parser = Parser::new(

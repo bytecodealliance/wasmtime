@@ -213,7 +213,7 @@ pub fn try_finish_recompile(
                 return Ok(result.stencil.apply_params(&func.params));
             }
 
-            trace!("{} not read from cache: source mismatch", func.params.name);
+            trace!("{} not read from cache: source mismatch", func.name);
         }
 
         Err(err) => {

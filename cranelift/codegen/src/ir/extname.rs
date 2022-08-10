@@ -18,8 +18,51 @@ use super::function::FunctionParameters;
 
 pub(crate) const TESTCASE_NAME_LENGTH: usize = 16;
 
-/// A name in a user-defined symbol table. Cranelift does not interpret
-/// these numbers in any way.
+/// An explicit name for a user-defined function, be it defined in code or in CLIF text.
+///
+/// This is used both for naming a function (for debugging purposes) and for declaring external
+/// functions. In the latter case, this becomes an `ExternalName`, which gets embedded in
+/// relocations later, etc.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub enum UserFuncName {
+    /// A user-defined name, with semantics left to the user.
+    User(UserExternalName),
+    /// A name for a test case, mostly intended for Cranelift testing.
+    Testcase(TestcaseName),
+}
+
+impl UserFuncName {
+    /// Creates a new external name from a sequence of bytes. Caller is expected
+    /// to guarantee bytes are only ascii alphanumeric or `_`.
+    pub fn testcase<T: AsRef<[u8]>>(v: T) -> Self {
+        Self::Testcase(TestcaseName::new(v))
+    }
+
+    /// Create a new external name from a user-defined external function reference.
+    pub fn user(namespace: u32, index: u32) -> Self {
+        Self::User(UserExternalName { namespace, index })
+    }
+}
+
+impl Default for UserFuncName {
+    fn default() -> Self {
+        UserFuncName::User(UserExternalName::default())
+    }
+}
+
+impl fmt::Display for UserFuncName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UserFuncName::User(user) => user.fmt(f),
+            UserFuncName::Testcase(testcase) => testcase.fmt(f),
+        }
+    }
+}
+
+/// An external name in a user-defined symbol table.
+///
+/// Cranelift does not interpret these numbers in any way, so they can represent arbitrary values.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct UserExternalName {
@@ -177,9 +220,7 @@ impl FromStr for ExternalName {
 mod tests {
     use super::ExternalName;
     use crate::ir::{
-        entities::UserExternalNameRef,
-        function::{FunctionParameters, UserFuncName},
-        LibCall, UserExternalName,
+        entities::UserExternalNameRef, function::FunctionParameters, LibCall, UserExternalName,
     };
     use alloc::string::ToString;
     use core::u32;
@@ -223,7 +264,7 @@ mod tests {
             "u1"
         );
 
-        let mut func_params = FunctionParameters::new(UserFuncName::user(0, 0));
+        let mut func_params = FunctionParameters::new();
 
         // ref 0
         func_params.user_named_funcs.push(UserExternalName {

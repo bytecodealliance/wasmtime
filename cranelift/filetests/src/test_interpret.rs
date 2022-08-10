@@ -45,7 +45,7 @@ impl SubTest for TestInterpret {
                 trace!("Parsed run command: {}", command);
 
                 let mut env = FunctionStore::default();
-                env.add(func.params.name.to_string(), &func);
+                env.add(func.name.to_string(), &func);
 
                 command
                     .run(|func_name, run_args| {

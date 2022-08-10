@@ -29,8 +29,8 @@ use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 
 use super::entities::UserExternalNameRef;
-use super::extname::{TestcaseName, UserExternalName};
-use super::{RelSourceLoc, SourceLoc};
+use super::extname::UserFuncName;
+use super::{RelSourceLoc, SourceLoc, UserExternalName};
 
 /// A version marker used to ensure that serialized clif ir is never deserialized with a
 /// different version of Cranelift.
@@ -65,52 +65,11 @@ impl<'de> Deserialize<'de> for VersionMarker {
     }
 }
 
-/// An explicit name for a user-defined function.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub enum UserFuncName {
-    /// A user-defined name, with semantics left to the user.
-    User(UserExternalName),
-    /// A name for a test case, mostly intended for Cranelift testing.
-    Testcase(TestcaseName),
-}
-
-impl UserFuncName {
-    /// Creates a new external name from a sequence of bytes. Caller is expected
-    /// to guarantee bytes are only ascii alphanumeric or `_`.
-    pub fn testcase<T: AsRef<[u8]>>(v: T) -> Self {
-        Self::Testcase(TestcaseName::new(v))
-    }
-
-    /// Create a new external name from a user-defined external function reference.
-    pub fn user(namespace: u32, index: u32) -> Self {
-        Self::User(UserExternalName { namespace, index })
-    }
-}
-
-impl Default for UserFuncName {
-    fn default() -> Self {
-        UserFuncName::User(UserExternalName::default())
-    }
-}
-
-impl fmt::Display for UserFuncName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            UserFuncName::User(user) => user.fmt(f),
-            UserFuncName::Testcase(testcase) => testcase.fmt(f),
-        }
-    }
-}
-
 /// Function parameters used when creating this function, and that will become applied after
 /// compilation to materialize the final `CompiledCode`.
 #[derive(Clone)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct FunctionParameters {
-    /// Name of this function. Mostly used by `.clif` files.
-    pub name: UserFuncName,
-
     /// The first `SourceLoc` appearing in the function, serving as a base for every relative
     /// source loc in the function.
     base_srcloc: Option<SourceLoc>,
@@ -124,9 +83,8 @@ pub struct FunctionParameters {
 
 impl FunctionParameters {
     /// Creates a new `FunctionParameters` with the given name.
-    pub fn new(name: UserFuncName) -> Self {
+    pub fn new() -> Self {
         Self {
-            name,
             base_srcloc: None,
             user_named_funcs: Default::default(),
             user_ext_name_to_ref: Default::default(),
@@ -170,7 +128,6 @@ impl FunctionParameters {
         self.base_srcloc = None;
         self.user_named_funcs.clear();
         self.user_ext_name_to_ref.clear();
-        self.name = UserFuncName::default();
     }
 }
 
@@ -437,6 +394,11 @@ impl FunctionStencil {
 #[derive(Clone)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Function {
+    /// Name of this function.
+    ///
+    /// Mostly used by `.clif` files, only there for debugging / naming purposes.
+    pub name: UserFuncName,
+
     /// All the fields required for compiling a function, independently of details irrelevant to
     /// compilation and that are stored in the `FunctionParameters` `params` field instead.
     pub stencil: FunctionStencil,
@@ -464,6 +426,7 @@ impl Function {
     /// Create a function with the given name and signature.
     pub fn with_name_signature(name: UserFuncName, sig: Signature) -> Self {
         Self {
+            name,
             stencil: FunctionStencil {
                 version_marker: VersionMarker,
                 signature: sig,
@@ -478,7 +441,7 @@ impl Function {
                 srclocs: SecondaryMap::new(),
                 stack_limit: None,
             },
-            params: FunctionParameters::new(name),
+            params: FunctionParameters::new(),
         }
     }
 
@@ -486,6 +449,7 @@ impl Function {
     pub fn clear(&mut self) {
         self.stencil.clear();
         self.params.clear();
+        self.name = UserFuncName::default();
     }
 
     /// Create a new empty, anonymous function with a Fast calling convention.

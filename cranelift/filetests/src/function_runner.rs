@@ -78,11 +78,11 @@ impl SingleFunctionCompiler {
         let mut module = JITModule::new(builder);
         let mut ctx = module.make_context();
 
-        let name = function.params.name.to_string();
+        let name = function.name.to_string();
         let func_id = module.declare_function(&name, Linkage::Local, &function.signature)?;
 
         // Build and declare the trampoline in the module
-        let trampoline_name = trampoline.params.name.to_string();
+        let trampoline_name = trampoline.name.to_string();
         let trampoline_id =
             module.declare_function(&trampoline_name, Linkage::Local, &trampoline.signature)?;
 

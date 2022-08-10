@@ -202,7 +202,7 @@ impl wasmtime_environ::Compiler for Compiler {
         } = self.take_context();
 
         context.func.signature = func_signature(isa, translation, types, func_index);
-        context.func.params.name = UserFuncName::User(UserExternalName {
+        context.func.name = UserFuncName::User(UserExternalName {
             namespace: 0,
             index: func_index.as_u32(),
         });

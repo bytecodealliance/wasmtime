@@ -36,7 +36,7 @@ fn main() {
         .unwrap();
 
     ctx.func.signature = sig_a;
-    ctx.func.params.name = UserFuncName::user(0, func_a.as_u32());
+    ctx.func.name = UserFuncName::user(0, func_a.as_u32());
 
     {
         let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
@@ -55,7 +55,7 @@ fn main() {
     module.clear_context(&mut ctx);
 
     ctx.func.signature = sig_b;
-    ctx.func.params.name = UserFuncName::user(0, func_b.as_u32());
+    ctx.func.name = UserFuncName::user(0, func_b.as_u32());
 
     {
         let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);

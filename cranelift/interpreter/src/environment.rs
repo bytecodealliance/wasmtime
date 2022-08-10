@@ -19,7 +19,7 @@ entity_impl!(FuncIndex, "fn");
 impl<'a> From<&'a Function> for FunctionStore<'a> {
     fn from(function: &'a Function) -> Self {
         let mut store = FunctionStore::default();
-        store.add(function.params.name.to_string(), function);
+        store.add(function.name.to_string(), function);
         store
     }
 }
