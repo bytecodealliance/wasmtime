@@ -111,7 +111,7 @@ macro_rules! compare {
 
 macro_rules! unary {
     ($inst:ident, $rust_ty:tt) => {
-        binary! { $inst, valtype!($rust_ty), valtype!($rust_ty) }
+        unary! { $inst, valtype!($rust_ty), valtype!($rust_ty) }
     };
     ($inst:ident, $argument_ty:expr, $result_ty:expr) => {
         SingleInstModule {
@@ -241,7 +241,7 @@ static INSTRUCTIONS: &[SingleInstModule] = &[
     unary!(I32Extend16S, i32),
     unary!(I64Extend8S, i64),
     unary!(I64Extend16S, i64),
-    convert!(I64Extend32S, i32 -> i64),
+    convert!(I64Extend32S, i64 -> i64),
     convert!(I32WrapI64, i64 -> i32),
     convert!(I64ExtendI32S, i32 -> i64),
     convert!(I64ExtendI32U, i32 -> i64),
