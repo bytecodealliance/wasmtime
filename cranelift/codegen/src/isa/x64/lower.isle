@@ -3024,3 +3024,13 @@
 
 (rule (lower (has_type ty (fcvt_from_uint val @ (value_type $I64))))
       (cvt_u64_to_float_seq ty val))
+
+;; Algorithm uses unpcklps to help create a float that is equivalent
+;; 0x1.0p52 + double(src). 0x1.0p52 is unique because at this exponent
+;; every value of the mantissa represents a corresponding uint32 number.
+;; When we subtract 0x1.0p52 we are left with double(src).
+(rule (lower (has_type $F64X2 (fcvt_from_uint (uwiden_low val @ (value_type $I32X4)))))
+      (let ((uint_mask Xmm (x64_xmm_load_const $I32X4 (fcvt_uint_mask_const)))
+            (res Xmm (x64_unpcklps val uint_mask))
+            (uint_mask_high Xmm (x64_xmm_load_const $I32X4 (fcvt_uint_mask_high_const))))
+        (x64_subpd res uint_mask_high)))

@@ -2272,6 +2272,11 @@
 (rule (x64_punpcklwd src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Punpcklwd) src1 src2))
 
+;; Helper for creating `unpcklps` instructions.
+(decl x64_unpcklps (Xmm XmmMem) Xmm)
+(rule (x64_unpcklps src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Unpcklps) src1 src2))
+
 ;; Helper for creating `andnps` instructions.
 (decl x64_andnps (Xmm XmmMem) Xmm)
 (rule (x64_andnps src1 src2)
@@ -3024,6 +3029,12 @@
             (_ Unit (emit (gen_move $I64 src_copy src)))
             (_ Unit (emit (MInst.CvtUint64ToFloatSeq size src_copy dst tmp_gpr1 tmp_gpr2))))
         dst))
+
+(decl fcvt_uint_mask_const () VCodeConstant)
+(extern constructor fcvt_uint_mask_const fcvt_uint_mask_const)
+
+(decl fcvt_uint_mask_high_const () VCodeConstant)
+(extern constructor fcvt_uint_mask_high_const fcvt_uint_mask_high_const)
 
 ;; Helpers for creating `pcmpeq*` instructions.
 (decl x64_pcmpeq (Type Xmm XmmMem) Xmm)
