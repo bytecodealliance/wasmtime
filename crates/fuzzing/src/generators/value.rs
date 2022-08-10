@@ -5,9 +5,7 @@ use std::hash::Hash;
 
 /// A value passed to and from evaluation. Note that reference types are not
 /// (yet) supported.
-///
-/// TODO implement correct partial equality comparisons for FP.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 #[allow(missing_docs)]
 pub enum DiffValue {
     I32(i32),
@@ -113,6 +111,40 @@ impl Hash for DiffValue {
             DiffValue::F32(n) => n.hash(state),
             DiffValue::F64(n) => n.hash(state),
             DiffValue::V128(n) => n.hash(state),
+        }
+    }
+}
+
+/// Implement equality checks. Note that floating-point values are not compared
+/// bit-for-bit in the case of NaNs: because Wasm floating-point numbers may be
+/// [arithmetic NaNs with arbitrary payloads] and Wasm operations are [not
+/// required to propagate NaN payloads], we simply check that both sides are
+/// NaNs here. We could be more strict, though: we could check that the NaN
+/// signs are equal and that [canonical NaN payloads remain canonical].
+///
+/// [arithmetic NaNs with arbitrary payloads]:
+///     https://webassembly.github.io/spec/core/bikeshed/index.html#floating-point%E2%91%A0
+/// [not required to propagate NaN payloads]:
+///     https://webassembly.github.io/spec/core/bikeshed/index.html#floating-point-operations%E2%91%A0
+/// [canonical NaN payloads remain canonical]:
+///     https://webassembly.github.io/spec/core/bikeshed/index.html#nan-propagation%E2%91%A0
+impl PartialEq for DiffValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::I32(l0), Self::I32(r0)) => l0 == r0,
+            (Self::I64(l0), Self::I64(r0)) => l0 == r0,
+            (Self::V128(l0), Self::V128(r0)) => l0 == r0,
+            (Self::F32(l0), Self::F32(r0)) => {
+                let l0 = f32::from_bits(*l0);
+                let r0 = f32::from_bits(*r0);
+                l0 == r0 || (l0.is_nan() && r0.is_nan())
+            }
+            (Self::F64(l0), Self::F64(r0)) => {
+                let l0 = f64::from_bits(*l0);
+                let r0 = f64::from_bits(*r0);
+                l0 == r0 || (l0.is_nan() && r0.is_nan())
+            }
+            _ => false,
         }
     }
 }
