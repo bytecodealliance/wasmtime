@@ -2629,6 +2629,11 @@
             (_ Unit (emit (MInst.XmmUnaryRmREvex op src dst))))
         dst))
 
+;; Helper for creating `vcvtudq2ps` instructions.
+(decl x64_vcvtudq2ps (XmmMem) Xmm)
+(rule (x64_vcvtudq2ps src)
+      (xmm_unary_rm_r_evex (Avx512Opcode.Vcvtudq2ps) src))
+
 ;; Helper for creating `vpabsq` instructions.
 (decl x64_vpabsq (XmmMem) Xmm)
 (rule (x64_vpabsq src)

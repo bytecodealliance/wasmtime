@@ -596,13 +596,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
                 if isa_flags.use_avx512vl_simd() && isa_flags.use_avx512f_simd() {
-                    // When AVX512VL and AVX512F are available,
-                    // `fcvt_from_uint` can be lowered to a single instruction.
-                    ctx.emit(Inst::xmm_unary_rm_r_evex(
-                        Avx512Opcode::Vcvtudq2ps,
-                        RegMem::reg(src),
-                        dst,
-                    ));
+                    implemented_in_isle(ctx);
                 } else {
                     // Converting packed unsigned integers to packed floats
                     // requires a few steps. There is no single instruction

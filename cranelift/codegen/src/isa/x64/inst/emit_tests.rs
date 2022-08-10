@@ -26,6 +26,17 @@ impl Inst {
             dst: WritableGpr::from_writable_reg(src).unwrap(),
         }
     }
+
+    fn xmm_unary_rm_r_evex(op: Avx512Opcode, src: RegMem, dst: Writable<Reg>) -> Inst {
+        src.assert_regclass_is(RegClass::Float);
+        debug_assert!(dst.to_reg().class() == RegClass::Float);
+        Inst::XmmUnaryRmREvex {
+            op,
+            src: XmmMem::new(src).unwrap(),
+            dst: WritableXmm::from_writable_reg(dst).unwrap(),
+        }
+    }
+
 }
 
 #[test]

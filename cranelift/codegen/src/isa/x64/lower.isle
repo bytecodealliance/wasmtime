@@ -3034,3 +3034,12 @@
             (res Xmm (x64_unpcklps val uint_mask))
             (uint_mask_high Xmm (x64_xmm_load_const $I32X4 (fcvt_uint_mask_high_const))))
         (x64_subpd res uint_mask_high)))
+
+;; When AVX512VL and AVX512F are available,
+;; `fcvt_from_uint` can be lowered to a single instruction.
+(rule (lower (has_type (and (avx512vl_enabled) (avx512f_enabled) $F32X4)
+                       (fcvt_from_uint src)))
+      (x64_vcvtudq2ps src))
+
+;; (rule (lower (has_type $F32X4 (fcvt_from_uint src)))
+;;       (x64_vcvtudq2ps src))

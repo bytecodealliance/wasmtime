@@ -1,0 +1,18 @@
+test compile precise-output
+set enable_simd
+target x86_64 has_avx512vl has_avx512f
+
+function %f1(i32x4) -> f32x4 {
+block0(v0: i32x4):
+  v1 = fcvt_from_uint.f32x4 v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vcvtudq2ps %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
