@@ -1,0 +1,127 @@
+test compile precise-output
+target s390x
+
+function %caller_be_to_be(i64x2, i32x4, i16x8, i8x16) -> i32x4 {
+    fn0 = %callee_be(i64x2, i32x4, i16x8, i8x16) -> i32x4
+
+block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
+    v4 = call fn0(v0, v1, v2, v3)
+    return v4
+}
+
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -160
+;   virtual_sp_offset_adjust 160
+; block0:
+;   bras %r1, 12 ; data %callee_be + 0 ; lg %r3, 0(%r1)
+;   basr %r14, %r3
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+
+function %caller_be_to_le(i64x2, i32x4, i16x8, i8x16) -> i32x4 {
+    fn0 = %callee_le(i64x2, i32x4, i16x8, i8x16) -> i32x4 wasmtime_system_v
+
+block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
+    v4 = call fn0(v0, v1, v2, v3)
+    return v4
+}
+
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -224
+;   virtual_sp_offset_adjust 160
+;   std %f8, 160(%r15)
+;   std %f9, 168(%r15)
+;   std %f10, 176(%r15)
+;   std %f11, 184(%r15)
+;   std %f12, 192(%r15)
+;   std %f13, 200(%r15)
+;   std %f14, 208(%r15)
+;   std %f15, 216(%r15)
+; block0:
+;   vpdi %v24, %v24, %v24, 4
+;   vpdi %v20, %v25, %v25, 4
+;   verllg %v25, %v20, 32
+;   vpdi %v26, %v26, %v26, 4
+;   verllg %v28, %v26, 32
+;   verllf %v26, %v28, 16
+;   vpdi %v0, %v27, %v27, 4
+;   verllg %v2, %v0, 32
+;   verllf %v4, %v2, 16
+;   verllh %v27, %v4, 8
+;   bras %r1, 12 ; data %callee_le + 0 ; lg %r3, 0(%r1)
+;   basr %r14, %r3
+;   vpdi %v22, %v24, %v24, 4
+;   verllg %v24, %v22, 32
+;   ld %f8, 160(%r15)
+;   ld %f9, 168(%r15)
+;   ld %f10, 176(%r15)
+;   ld %f11, 184(%r15)
+;   ld %f12, 192(%r15)
+;   ld %f13, 200(%r15)
+;   ld %f14, 208(%r15)
+;   ld %f15, 216(%r15)
+;   lmg %r14, %r15, 336(%r15)
+;   br %r14
+
+function %caller_le_to_be(i64x2, i32x4, i16x8, i8x16) -> i32x4 wasmtime_system_v {
+    fn0 = %callee_be(i64x2, i32x4, i16x8, i8x16) -> i32x4
+
+block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
+    v4 = call fn0(v0, v1, v2, v3)
+    return v4
+}
+
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -224
+;   virtual_sp_offset_adjust 160
+;   std %f8, 160(%r15)
+;   std %f9, 168(%r15)
+;   std %f10, 176(%r15)
+;   std %f11, 184(%r15)
+;   std %f12, 192(%r15)
+;   std %f13, 200(%r15)
+;   std %f14, 208(%r15)
+;   std %f15, 216(%r15)
+; block0:
+;   vpdi %v24, %v24, %v24, 4
+;   vpdi %v20, %v25, %v25, 4
+;   verllg %v25, %v20, 32
+;   vpdi %v26, %v26, %v26, 4
+;   verllg %v28, %v26, 32
+;   verllf %v26, %v28, 16
+;   vpdi %v0, %v27, %v27, 4
+;   verllg %v2, %v0, 32
+;   verllf %v4, %v2, 16
+;   verllh %v27, %v4, 8
+;   bras %r1, 12 ; data %callee_be + 0 ; lg %r3, 0(%r1)
+;   basr %r14, %r3
+;   vpdi %v22, %v24, %v24, 4
+;   verllg %v24, %v22, 32
+;   ld %f8, 160(%r15)
+;   ld %f9, 168(%r15)
+;   ld %f10, 176(%r15)
+;   ld %f11, 184(%r15)
+;   ld %f12, 192(%r15)
+;   ld %f13, 200(%r15)
+;   ld %f14, 208(%r15)
+;   ld %f15, 216(%r15)
+;   lmg %r14, %r15, 336(%r15)
+;   br %r14
+
+function %caller_le_to_le(i64x2, i32x4, i16x8, i8x16) -> i32x4 wasmtime_system_v {
+    fn0 = %callee_le(i64x2, i32x4, i16x8, i8x16) -> i32x4 wasmtime_system_v
+
+block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
+    v4 = call fn0(v0, v1, v2, v3)
+    return v4
+}
+
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -160
+;   virtual_sp_offset_adjust 160
+; block0:
+;   bras %r1, 12 ; data %callee_le + 0 ; lg %r3, 0(%r1)
+;   basr %r14, %r3
+;   lmg %r14, %r15, 272(%r15)
+;   br %r14
+

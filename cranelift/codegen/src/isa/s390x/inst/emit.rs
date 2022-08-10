@@ -2839,24 +2839,50 @@ impl MachInstEmit for Inst {
                 inst.emit(&[], sink, emit_info, state);
             }
 
-            &Inst::VecLoad { rd, ref mem } | &Inst::VecLoadRev { rd, ref mem } => {
+            &Inst::VecLoad { rd, ref mem }
+            | &Inst::VecLoadRev { rd, ref mem }
+            | &Inst::VecLoadByte16Rev { rd, ref mem }
+            | &Inst::VecLoadByte32Rev { rd, ref mem }
+            | &Inst::VecLoadByte64Rev { rd, ref mem }
+            | &Inst::VecLoadElt16Rev { rd, ref mem }
+            | &Inst::VecLoadElt32Rev { rd, ref mem }
+            | &Inst::VecLoadElt64Rev { rd, ref mem } => {
                 let rd = allocs.next_writable(rd);
                 let mem = mem.with_allocs(&mut allocs);
 
                 let (opcode, m3) = match self {
-                    &Inst::VecLoad { .. } => (0xe706, 0),    // VL
-                    &Inst::VecLoadRev { .. } => (0xe606, 4), // VLBRQ
+                    &Inst::VecLoad { .. } => (0xe706, 0),          // VL
+                    &Inst::VecLoadRev { .. } => (0xe606, 4),       // VLBRQ
+                    &Inst::VecLoadByte16Rev { .. } => (0xe606, 1), // VLBRH
+                    &Inst::VecLoadByte32Rev { .. } => (0xe606, 2), // VLBRF
+                    &Inst::VecLoadByte64Rev { .. } => (0xe606, 3), // VLBRG
+                    &Inst::VecLoadElt16Rev { .. } => (0xe607, 1),  // VLERH
+                    &Inst::VecLoadElt32Rev { .. } => (0xe607, 2),  // VLERF
+                    &Inst::VecLoadElt64Rev { .. } => (0xe607, 3),  // VLERG
                     _ => unreachable!(),
                 };
                 mem_vrx_emit(rd.to_reg(), &mem, opcode, m3, true, sink, emit_info, state);
             }
-            &Inst::VecStore { rd, ref mem } | &Inst::VecStoreRev { rd, ref mem } => {
+            &Inst::VecStore { rd, ref mem }
+            | &Inst::VecStoreRev { rd, ref mem }
+            | &Inst::VecStoreByte16Rev { rd, ref mem }
+            | &Inst::VecStoreByte32Rev { rd, ref mem }
+            | &Inst::VecStoreByte64Rev { rd, ref mem }
+            | &Inst::VecStoreElt16Rev { rd, ref mem }
+            | &Inst::VecStoreElt32Rev { rd, ref mem }
+            | &Inst::VecStoreElt64Rev { rd, ref mem } => {
                 let rd = allocs.next(rd);
                 let mem = mem.with_allocs(&mut allocs);
 
                 let (opcode, m3) = match self {
-                    &Inst::VecStore { .. } => (0xe70e, 0),    // VST
-                    &Inst::VecStoreRev { .. } => (0xe60e, 4), // VSTBRQ
+                    &Inst::VecStore { .. } => (0xe70e, 0),          // VST
+                    &Inst::VecStoreRev { .. } => (0xe60e, 4),       // VSTBRQ
+                    &Inst::VecStoreByte16Rev { .. } => (0xe60e, 1), // VSTBRH
+                    &Inst::VecStoreByte32Rev { .. } => (0xe60e, 2), // VSTBRF
+                    &Inst::VecStoreByte64Rev { .. } => (0xe60e, 3), // VSTBRG
+                    &Inst::VecStoreElt16Rev { .. } => (0xe60f, 1),  // VSTERH
+                    &Inst::VecStoreElt32Rev { .. } => (0xe60f, 2),  // VSTERF
+                    &Inst::VecStoreElt64Rev { .. } => (0xe60f, 3),  // VSTERG
                     _ => unreachable!(),
                 };
                 mem_vrx_emit(rd, &mem, opcode, m3, true, sink, emit_info, state);
