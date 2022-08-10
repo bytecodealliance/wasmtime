@@ -75,25 +75,20 @@ impl<'a, const L: usize, const H: usize> Arbitrary<'a> for UsizeInRange<L, H> {
 /// Wraps a `Box<[T]>` and provides an `Arbitrary` implementation that always generates slices of length less than
 /// or equal to the longest tuple for which Wasmtime generates a `ComponentType` impl
 #[derive(Debug)]
-pub struct VecInRange<T, const L: usize, const H: usize>(Vec<T>);
+pub struct VecInRange<T, const L: u32, const H: u32>(Vec<T>);
 
-impl<'a, T: Arbitrary<'a>, const L: usize, const H: usize> Arbitrary<'a> for VecInRange<T, L, H> {
+impl<'a, T: Arbitrary<'a>, const L: u32, const H: u32> Arbitrary<'a> for VecInRange<T, L, H> {
     fn arbitrary(input: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         let mut ret = Vec::new();
-        while ret.len() < L {
+        input.arbitrary_loop(Some(L), Some(H), |input| {
             ret.push(input.arbitrary()?);
-        }
-        for val in input.arbitrary_iter()? {
-            ret.push(val?);
-            if ret.len() == H {
-                break;
-            }
-        }
+            Ok(std::ops::ControlFlow::Continue(()))
+        })?;
         Ok(Self(ret))
     }
 }
 
-impl<T, const L: usize, const H: usize> Deref for VecInRange<T, L, H> {
+impl<T, const L: u32, const H: u32> Deref for VecInRange<T, L, H> {
     type Target = [T];
 
     fn deref(&self) -> &[T] {
