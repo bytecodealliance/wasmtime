@@ -297,7 +297,7 @@ impl<'a> Elaborator<'a> {
         let (_, best_node_eclass) = self.find_best_node(id);
         log::trace!("elaborate: id {}", id);
 
-        if let Some(val) = self.id_to_value.get(&best_node_eclass) {
+        let remat = if let Some(val) = self.id_to_value.get(&best_node_eclass) {
             // Look at the defined block, and determine whether this
             // node kind allows rematerialization if the value comes
             // from another block. If so, ignore the hit and recompute
@@ -308,12 +308,14 @@ impl<'a> Elaborator<'a> {
                 log::trace!("elaborate: id {} -> {:?}", id, val);
                 self.stats.elaborate_memoize_hit += 1;
                 return val.clone();
-            } else {
-                log::trace!("elaborate: id {} -> remat", id);
-                self.stats.elaborate_memoize_miss_remat += 1;
-                self.id_to_value.remove(&best_node_eclass);
             }
-        }
+            log::trace!("elaborate: id {} -> remat", id);
+            self.stats.elaborate_memoize_miss_remat += 1;
+            self.id_to_value.remove(&best_node_eclass);
+            true
+        } else {
+            self.remat_ids.contains(&best_node_eclass)
+        };
         self.stats.elaborate_memoize_miss += 1;
 
         log::trace!(
@@ -388,8 +390,8 @@ impl<'a> Elaborator<'a> {
                 self.id_to_value.depth(),
                 self.cur_block.unwrap(),
             )
-        } else if max_loop_depth == self.cur_loop_depth() {
-            // Pure op, but depends on some value at the current loop depth: as above.
+        } else if max_loop_depth == self.cur_loop_depth() || remat {
+            // Pure op, but depends on some value at the current loop depth, or remat forces it here: as above.
             (
                 self.cur_loop_depth(),
                 self.id_to_value.depth(),
