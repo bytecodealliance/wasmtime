@@ -77,13 +77,12 @@ impl DirEntry {
             Ok(())
         } else {
             let missing = caps & !self.caps;
-            if missing.intersects(DirCaps::READDIR) {
-                Err(Error::not_dir()
-                    .context(format!("desired rights {:?}, has {:?}", caps, self.caps)))
+            let err = if missing.intersects(DirCaps::READDIR) {
+                Error::not_dir()
             } else {
-                Err(Error::perm()
-                    .context(format!("desired rights {:?}, has {:?}", caps, self.caps)))
-            }
+                Error::perm()
+            };
+            Err(err.context(format!("desired rights {:?}, has {:?}", caps, self.caps)))
         }
     }
     pub fn capable_of_file(&self, caps: FileCaps) -> Result<(), Error> {
