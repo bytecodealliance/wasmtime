@@ -5,13 +5,14 @@ use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature};
 use cranelift_codegen::isa::{self, TargetFrontendConfig, TargetIsa};
-use cranelift_entity::{EntityRef, SecondaryMap};
+use cranelift_entity::EntityRef;
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
     self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, MemoryIndex, TableIndex,
     TargetEnvironment, TypeIndex, WasmError, WasmResult, WasmType,
 };
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::mem;
 use wasmparser::Operator;
@@ -148,7 +149,7 @@ pub struct FuncEnvironment<'module_environment> {
 
     fuel_consumed: i64,
 
-    pub(crate) ext_names: SecondaryMap<FuncIndex, Option<ir::ExternalName>>,
+    pub(crate) ext_names: HashMap<FuncIndex, ir::ExternalName>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -193,7 +194,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         func: &mut Function,
         index: FuncIndex,
     ) -> ir::ExternalName {
-        if let Some(ref name) = self.ext_names[index] {
+        if let Some(name) = self.ext_names.get(&index) {
             name.clone()
         } else {
             let reff = func.declare_imported_user_function(ir::UserExternalName {
@@ -201,7 +202,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 index: index.as_u32(),
             });
             let name = ir::ExternalName::User(reff);
-            self.ext_names[index] = Some(name.clone());
+            self.ext_names.insert(index, name.clone());
             name
         }
     }

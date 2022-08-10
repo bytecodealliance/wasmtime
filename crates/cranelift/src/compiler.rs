@@ -217,7 +217,7 @@ impl wasmtime_environ::Compiler for Compiler {
         }
 
         let mut func_env = FuncEnvironment::new(isa, translation, types, tunables);
-        func_env.ext_names[func_index] = Some(name);
+        func_env.ext_names.insert(func_index, name);
 
         // The `stack_limit` global value below is the implementation of stack
         // overflow checks in Wasmtime.

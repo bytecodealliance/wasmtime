@@ -267,7 +267,7 @@ pub trait MachInstEmitState<I: MachInst>: Default + Clone + Debug {
     /// safepoint.
     fn pre_safepoint(&mut self, _stack_map: StackMap) {}
     /// Update the emission state to indicate instructions are associated with a
-    /// particular SourceLoc.
+    /// particular RelSourceLoc.
     fn pre_sourceloc(&mut self, _srcloc: RelSourceLoc) {}
 }
 

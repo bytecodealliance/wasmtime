@@ -162,9 +162,6 @@ impl CacheKey {
     }
 }
 
-// --
-// Our final data structure.
-
 /// Compute a cache key, and hash it on your behalf.
 ///
 /// Since computing the `CacheKey` is a bit expensive, it should be done as least as possible.

@@ -36,19 +36,19 @@ pub struct DataFlowGraph {
     /// Data about all of the instructions in the function, including opcodes and operands.
     /// The instructions in this map are not in program order. That is tracked by `Layout`, along
     /// with the block containing each instruction.
-    pub(crate) insts: PrimaryMap<Inst, InstructionData>,
+    insts: PrimaryMap<Inst, InstructionData>,
 
     /// List of result values for each instruction.
     ///
     /// This map gets resized automatically by `make_inst()` so it is always in sync with the
     /// primary `insts` map.
-    pub(crate) results: SecondaryMap<Inst, ValueList>,
+    results: SecondaryMap<Inst, ValueList>,
 
     /// basic blocks in the function and their parameters.
     ///
     /// This map is not in program order. That is handled by `Layout`, and so is the sequence of
     /// instructions contained in each block.
-    pub(crate) blocks: PrimaryMap<Block, BlockData>,
+    blocks: PrimaryMap<Block, BlockData>,
 
     /// Dynamic types created.
     pub dynamic_types: DynamicTypes,
@@ -63,7 +63,7 @@ pub struct DataFlowGraph {
     pub value_lists: ValueListPool,
 
     /// Primary value table with entries for all values.
-    pub(crate) values: PrimaryMap<Value, ValueDataPacked>,
+    values: PrimaryMap<Value, ValueDataPacked>,
 
     /// Function signature table. These signatures are referenced by indirect call instructions as
     /// well as the external function references.
@@ -437,7 +437,7 @@ impl ValueDef {
 /// Internal table storage for extended values.
 #[derive(Clone, Debug, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub(crate) enum ValueData {
+enum ValueData {
     /// Value is defined by an instruction.
     Inst { ty: Type, num: u16, inst: Inst },
 
@@ -459,7 +459,7 @@ pub(crate) enum ValueData {
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub(crate) struct ValueDataPacked(u64);
+struct ValueDataPacked(u64);
 
 impl ValueDataPacked {
     const INDEX_SHIFT: u64 = 0;
@@ -1058,7 +1058,7 @@ impl DataFlowGraph {
 /// match the function arguments.
 #[derive(Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub(crate) struct BlockData {
+struct BlockData {
     /// List of parameters to this block.
     params: ValueList,
 }

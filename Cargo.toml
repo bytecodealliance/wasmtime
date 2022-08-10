@@ -148,6 +148,3 @@ harness = false
 [[bench]]
 name = "call"
 harness = false
-
-[profile.release]
-debug = true
