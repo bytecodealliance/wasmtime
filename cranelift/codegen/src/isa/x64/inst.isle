@@ -1658,6 +1658,10 @@
 (rule (x64_movdqu from)
       (xmm_unary_rm_r (SseOpcode.Movdqu) from))
 
+(decl x64_movapd (XmmMem) Xmm)
+(rule (x64_movapd src)
+      (xmm_unary_rm_r (SseOpcode.Movapd) src))
+
 (decl x64_pmovsxbw (XmmMem) Xmm)
 (rule (x64_pmovsxbw from)
       (xmm_unary_rm_r (SseOpcode.Pmovsxbw) from))

@@ -187,15 +187,15 @@ block0(v0: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm5
-;   pslld   %xmm5, $16, %xmm5
-;   psrld   %xmm5, $16, %xmm5
-;   psubd   %xmm0, %xmm5, %xmm0
-;   cvtdq2ps %xmm5, %xmm5
+;   movdqa  %xmm0, %xmm4
+;   pslld   %xmm4, $16, %xmm4
+;   psrld   %xmm4, $16, %xmm4
+;   psubd   %xmm0, %xmm4, %xmm0
+;   cvtdq2ps %xmm4, %xmm9
 ;   psrld   %xmm0, $1, %xmm0
 ;   cvtdq2ps %xmm0, %xmm0
 ;   addps   %xmm0, %xmm0, %xmm0
-;   addps   %xmm0, %xmm5, %xmm0
+;   addps   %xmm0, %xmm9, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

@@ -3037,9 +3037,52 @@
 
 ;; When AVX512VL and AVX512F are available,
 ;; `fcvt_from_uint` can be lowered to a single instruction.
-(rule (lower (has_type (and (avx512vl_enabled) (avx512f_enabled) $F32X4)
-                       (fcvt_from_uint src)))
+;;
+;; NOTE: the priority of 1 here is to break ties with the next case for $F32X4,
+;; as it doesn't require either of the avx512 extensions to be enabled.
+(rule 1 (lower (has_type (and (avx512vl_enabled) (avx512f_enabled) $F32X4)
+                         (fcvt_from_uint src)))
       (x64_vcvtudq2ps src))
 
-;; (rule (lower (has_type $F32X4 (fcvt_from_uint src)))
-;;       (x64_vcvtudq2ps src))
+;; Converting packed unsigned integers to packed floats
+;; requires a few steps. There is no single instruction
+;; lowering for converting unsigned floats but there is for
+;; converting packed signed integers to float (cvtdq2ps). In
+;; the steps below we isolate the upper half (16 bits) and
+;; lower half (16 bits) of each lane and then we convert
+;; each half separately using cvtdq2ps meant for signed
+;; integers. In order for this to work for the upper half
+;; bits we must shift right by 1 (divide by 2) these bits in
+;; order to ensure the most significant bit is 0 not signed,
+;; and then after the conversion we double the value.
+;; Finally we add the converted values where addition will
+;; correctly round.
+;;
+;; Sequence:
+;; -> A = 0xffffffff
+;; -> Ah = 0xffff0000
+;; -> Al = 0x0000ffff
+;; -> Convert(Al) // Convert int to float
+;; -> Ah = Ah >> 1 // Shift right 1 to assure Ah conversion isn't treated as signed
+;; -> Convert(Ah) // Convert .. with no loss of significant digits from previous shift
+;; -> Ah = Ah + Ah // Double Ah to account for shift right before the conversion.
+;; -> dst = Ah + Al // Add the two floats together
+(rule (lower (has_type $F32X4 (fcvt_from_uint a)))
+      (let (;;  get the low 16 bits
+            (a_lo Xmm (x64_pslld a (RegMemImm.Imm 16)))
+            (a_lo Xmm (x64_psrld a_lo (RegMemImm.Imm 16)))
+
+            ;; get the high 16 bits
+            (a_hi Xmm (x64_psubd a a_lo))
+
+            ;; convert the low 16 bits
+            (a_lo Xmm (x64_cvtdq2ps a_lo))
+
+            ;; shift the high bits by 1, convert, and double to get the correct
+            ;; value
+            (a_hi Xmm (x64_psrld a_hi (RegMemImm.Imm 1)))
+            (a_hi Xmm (x64_cvtdq2ps a_hi))
+            (a_hi Xmm (x64_addps a_hi a_hi)))
+
+        ;; add together the two converted values
+        (x64_addps a_hi a_lo)))
