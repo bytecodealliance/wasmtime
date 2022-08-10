@@ -16,6 +16,7 @@ use crate::ir::{DynamicStackSlots, SourceLocs, StackSlots};
 use crate::isa::CallConv;
 use crate::value_label::ValueLabelsRanges;
 use crate::write::write_function;
+use crate::HashMap;
 #[cfg(feature = "enable-serde")]
 use alloc::string::String;
 use core::fmt;
@@ -116,6 +117,9 @@ pub struct FunctionParameters {
 
     /// External user-defined function references.
     pub user_named_funcs: PrimaryMap<UserExternalNameRef, UserExternalName>,
+
+    /// Inverted mapping of `user_named_funcs`, to deduplicate internally.
+    user_ext_name_to_ref: HashMap<UserExternalName, UserExternalNameRef>,
 }
 
 impl FunctionParameters {
@@ -125,6 +129,7 @@ impl FunctionParameters {
             name,
             base_srcloc: None,
             user_named_funcs: Default::default(),
+            user_ext_name_to_ref: Default::default(),
         }
     }
 
@@ -147,9 +152,24 @@ impl FunctionParameters {
         }
     }
 
+    /// Retrieve a `UserExternalNameRef` for the given name, or add a new one.
+    ///
+    /// This method internally deduplicates same `UserExternalName` so they map to the same
+    /// reference.
+    pub fn ensure_user_func_name(&mut self, name: UserExternalName) -> UserExternalNameRef {
+        if let Some(reff) = self.user_ext_name_to_ref.get(&name) {
+            *reff
+        } else {
+            let reff = self.user_named_funcs.push(name.clone());
+            self.user_ext_name_to_ref.insert(name, reff);
+            reff
+        }
+    }
+
     fn clear(&mut self) {
         self.base_srcloc = None;
         self.user_named_funcs.clear();
+        self.user_ext_name_to_ref.clear();
         self.name = UserFuncName::default();
     }
 }
@@ -442,9 +462,6 @@ impl core::ops::DerefMut for Function {
 
 impl Function {
     /// Create a function with the given name and signature.
-    /// TODO: `name` should probably be a `UserExternalName`, with the resulting `ExternalName`
-    /// being automatically declared with `declare_imported_user_function` to allow recursive calls
-    /// without extra effort.
     pub fn with_name_signature(name: UserFuncName, sig: Signature) -> Self {
         Self {
             stencil: FunctionStencil {
@@ -508,7 +525,7 @@ impl Function {
         &mut self,
         name: UserExternalName,
     ) -> UserExternalNameRef {
-        self.params.user_named_funcs.push(name)
+        self.params.ensure_user_func_name(name)
     }
 
     /// Declare an external function import.

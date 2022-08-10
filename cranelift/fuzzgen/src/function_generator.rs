@@ -614,7 +614,6 @@ where
             let (ext_name, sig) = if self.u.arbitrary::<bool>()? {
                 let func_index = self.next_func_index;
                 self.next_func_index = self.next_func_index.wrapping_add(1);
-                // TODO coalesce user func ref?
                 let user_func_ref = builder
                     .func
                     .declare_imported_user_function(UserExternalName {

@@ -207,9 +207,6 @@ impl DummyEnvironment {
 pub struct DummyFuncEnvironment<'dummy_environment> {
     pub mod_info: &'dummy_environment DummyModuleInfo,
 
-    /// User-defined external functions.
-    ext_names: SecondaryMap<FuncIndex, Option<ir::ExternalName>>,
-
     /// Expected reachability data (before/after for each op) to assert. This is used for testing.
     expected_reachability: Option<ExpectedReachability>,
 }
@@ -222,7 +219,6 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
         Self {
             mod_info,
             expected_reachability,
-            ext_names: Default::default(),
         }
     }
 
@@ -340,19 +336,11 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         // A real implementation would probably add a `vmctx` argument.
         // And maybe attempt some signature de-duplication.
         let signature = func.import_signature(self.vmctx_sig(sigidx));
-
-        let name = if let Some(name) = &self.ext_names[index] {
-            name.clone()
-        } else {
-            let name =
-                ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
-                    namespace: 0,
-                    index: index.as_u32(),
-                }));
-            self.ext_names[index] = Some(name.clone());
-            name
-        };
-
+        let name =
+            ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: index.as_u32(),
+            }));
         Ok(func.import_function(ir::ExtFuncData {
             name,
             signature,
@@ -860,11 +848,6 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
                 DummyFuncEnvironment::new(&self.info, self.expected_reachability.clone());
             let func_index =
                 FuncIndex::new(self.get_num_func_imports() + self.info.function_bodies.len());
-
-            // Predict that the first user external name ref will be 0; this is checked below.
-            let self_func_ref = ir::UserExternalNameRef::new(0);
-            let name = ir::ExternalName::User(self_func_ref);
-            func_environ.ext_names[func_index] = Some(name.clone());
 
             let sig = func_environ.vmctx_sig(self.get_func_type(func_index));
             let mut func =

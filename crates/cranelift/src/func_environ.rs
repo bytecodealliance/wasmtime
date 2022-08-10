@@ -12,7 +12,6 @@ use cranelift_wasm::{
     self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, MemoryIndex, TableIndex,
     TargetEnvironment, TypeIndex, WasmError, WasmResult, WasmType,
 };
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::mem;
 use wasmparser::Operator;
@@ -148,8 +147,6 @@ pub struct FuncEnvironment<'module_environment> {
     epoch_ptr_var: cranelift_frontend::Variable,
 
     fuel_consumed: i64,
-
-    pub(crate) ext_names: HashMap<FuncIndex, ir::ExternalName>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -181,25 +178,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             epoch_deadline_var: Variable::new(0),
             epoch_ptr_var: Variable::new(0),
             vmruntime_limits_ptr: Variable::new(0),
-            ext_names: Default::default(),
 
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
             fuel_consumed: 1,
-        }
-    }
-
-    fn ensure_func_name(&mut self, func: &mut Function, index: FuncIndex) -> ir::ExternalName {
-        if let Some(name) = self.ext_names.get(&index) {
-            name.clone()
-        } else {
-            let reff = func.declare_imported_user_function(ir::UserExternalName {
-                namespace: 0,
-                index: index.as_u32(),
-            });
-            let name = ir::ExternalName::User(reff);
-            self.ext_names.insert(index, name.clone());
-            name
         }
     }
 
@@ -1522,7 +1504,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::FuncRef> {
         let sig = crate::func_signature(self.isa, self.translation, self.types, index);
         let signature = func.import_signature(sig);
-        let name = self.ensure_func_name(func, index);
+        let name =
+            ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: index.as_u32(),
+            }));
         Ok(func.import_function(ir::ExtFuncData {
             name,
             signature,

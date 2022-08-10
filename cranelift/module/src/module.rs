@@ -529,13 +529,13 @@ pub trait Module {
     fn declare_func_in_func(&mut self, func_id: FuncId, func: &mut ir::Function) -> ir::FuncRef {
         let decl = &self.declarations().functions[func_id];
         let signature = func.import_signature(decl.signature.clone());
-        let user_ref = func.declare_imported_user_function(ir::UserExternalName {
+        let user_name_ref = func.declare_imported_user_function(ir::UserExternalName {
             namespace: 0,
             index: func_id.as_u32(),
         });
         let colocated = decl.linkage.is_final();
         func.import_function(ir::ExtFuncData {
-            name: ir::ExternalName::user(user_ref),
+            name: ir::ExternalName::user(user_name_ref),
             signature,
             colocated,
         })
@@ -547,12 +547,12 @@ pub trait Module {
     fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
         let decl = &self.declarations().data_objects[data];
         let colocated = decl.linkage.is_final();
-        let user_ref = func.declare_imported_user_function(ir::UserExternalName {
+        let user_name_ref = func.declare_imported_user_function(ir::UserExternalName {
             namespace: 1,
             index: data.as_u32(),
         });
         func.create_global_value(ir::GlobalValueData::Symbol {
-            name: ir::ExternalName::user(user_ref),
+            name: ir::ExternalName::user(user_name_ref),
             offset: ir::immediates::Imm64::new(0),
             colocated,
             tls: decl.tls,

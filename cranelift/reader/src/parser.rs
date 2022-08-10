@@ -1399,11 +1399,26 @@ impl<'a> Parser<'a> {
                                         self.error("the integer given overflows the u32 type")
                                     })?;
                                 self.consume();
-                                let name_ref =
-                                    self.predeclared_external_names.push(ir::UserExternalName {
-                                        namespace: func_ref,
-                                        index,
+
+                                // Deduplicate the reference (O(n), but should be fine for tests),
+                                // to follow `FunctionParameters::declare_imported_user_function`.
+                                let name_ref = self
+                                    .predeclared_external_names
+                                    .iter()
+                                    .find_map(|(reff, name)| {
+                                        if name.index == index && name.namespace == func_ref {
+                                            Some(reff)
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .unwrap_or_else(|| {
+                                        self.predeclared_external_names.push(ir::UserExternalName {
+                                            namespace: func_ref,
+                                            index,
+                                        })
                                     });
+
                                 Ok(ExternalName::user(name_ref))
                             }
                             _ => err!(self.loc, "expected integer"),
@@ -3650,16 +3665,13 @@ mod tests {
         );
         assert!(parser.parse_function().is_err());
 
-        let func = Parser::new(
+        let mut parser = Parser::new(
             "function u0() system_v {
                                            block0:
                                              trap int_ovf
                                            }",
-        )
-        .parse_function()
-        .unwrap()
-        .0;
-        assert_eq!(func.params.name.to_string(), "u0:0");
+        );
+        assert!(parser.parse_function().is_err());
 
         let mut parser = Parser::new(
             "function u0:() system_v {

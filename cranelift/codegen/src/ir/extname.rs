@@ -223,13 +223,18 @@ mod tests {
             "u1"
         );
 
+        let mut func_params = FunctionParameters::new(UserFuncName::user(0, 0));
+
         // ref 0
-        let mut func_params = FunctionParameters::new(UserFuncName::user(13, 37));
+        func_params.user_named_funcs.push(UserExternalName {
+            namespace: 13,
+            index: 37,
+        });
 
         // ref 1
         func_params.user_named_funcs.push(UserExternalName {
-            namespace: 1,
-            index: 42,
+            namespace: 2,
+            index: 4,
         });
 
         assert_eq!(
@@ -243,7 +248,7 @@ mod tests {
             ExternalName::user(UserExternalNameRef::new(1))
                 .display(Some(&func_params))
                 .to_string(),
-            "u1:42"
+            "u2:4"
         );
 
         assert_eq!(

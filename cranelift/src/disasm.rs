@@ -18,7 +18,7 @@ fn print_relocs(func_params: &FunctionParameters, relocs: &[MachReloc]) -> Strin
             text,
             "reloc_external: {} {} {} at {}",
             kind,
-            name.display(None),
+            name.display(Some(func_params)),
             addend,
             offset
         )
