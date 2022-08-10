@@ -121,6 +121,7 @@ pub struct ObjectModule {
     relocs: Vec<SymbolRelocs>,
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
+    known_symbols: HashMap<ir::KnownSymbol, SymbolId>,
     function_alignment: u64,
     per_function_section: bool,
     anon_func_number: u64,
@@ -141,6 +142,7 @@ impl ObjectModule {
             relocs: Vec::new(),
             libcalls: HashMap::new(),
             libcall_names: builder.libcall_names,
+            known_symbols: HashMap::new(),
             function_alignment: builder.function_alignment,
             per_function_section: builder.per_function_section,
             anon_func_number: 0,
@@ -544,6 +546,28 @@ impl ObjectModule {
                         flags: SymbolFlags::None,
                     });
                     self.libcalls.insert(*libcall, symbol);
+                    symbol
+                }
+            }
+            // These are "magic" names well-known to the linker.
+            // They require special treatment.
+            ir::ExternalName::KnownSymbol(ref known_symbol) => {
+                if let Some(symbol) = self.known_symbols.get(known_symbol) {
+                    *symbol
+                } else {
+                    let symbol = match known_symbol {
+                        ir::KnownSymbol::ElfGlobalOffsetTable => self.object.add_symbol(Symbol {
+                            name: "_GLOBAL_OFFSET_TABLE_".as_bytes().to_vec(),
+                            value: 0,
+                            size: 0,
+                            kind: SymbolKind::Data,
+                            scope: SymbolScope::Unknown,
+                            weak: false,
+                            section: SymbolSection::Undefined,
+                            flags: SymbolFlags::None,
+                        }),
+                    };
+                    self.known_symbols.insert(*known_symbol, symbol);
                     symbol
                 }
             }

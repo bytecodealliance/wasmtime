@@ -2388,7 +2388,7 @@
 
 ;; Load the address of a function, general case.
 (rule (lower (func_addr (func_ref_data _ name _)))
-      (load_ext_name_far name 0))
+      (load_symbol_reloc (SymbolReloc.Absolute name 0)))
 
 
 ;;;; Rules for `symbol_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2401,7 +2401,34 @@
 
 ;; Load the address of a symbol, general case.
 (rule (lower (symbol_value (symbol_value_data name _ offset)))
-      (load_ext_name_far name offset))
+      (load_symbol_reloc (SymbolReloc.Absolute name offset)))
+
+
+;;;; Rules for `tls_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Load the address of a TLS symbol (ELF general-dynamic model).
+(rule (lower (tls_value (symbol_value_data name _ 0)))
+      (if (tls_model_is_elf_gd))
+      (let ((symbol SymbolReloc (SymbolReloc.TlsGd name))
+            (got Reg (load_addr (memarg_got)))
+            (got_offset Reg (load_symbol_reloc symbol))
+            (tls_offset Reg (lib_call_tls_get_offset got got_offset symbol)))
+        (add_reg $I64 tls_offset (thread_pointer))))
+
+;; Helper to perform a call to the __tls_get_offset library routine.
+(decl lib_call_tls_get_offset (Reg Reg SymbolReloc) Reg)
+(rule (lib_call_tls_get_offset got got_offset symbol)
+      (let ((libcall LibCallInfo (lib_call_info_tls_get_offset symbol))
+            (_ Unit (lib_accumulate_outgoing_args_size libcall))
+            (_ Unit (emit_mov $I64 (writable_gpr 12) got))
+            (_ Unit (emit_mov $I64 (writable_gpr 2) got_offset))
+            (_ Unit (emit_side_effect (lib_call libcall))))
+        (copy_reg $I64 (writable_gpr 2))))
+
+;; Helper to extract the current thread pointer from %a0/%a1.
+(decl thread_pointer () Reg)
+(rule (thread_pointer)
+      (insert_ar (lshl_imm $I64 (load_ar 0) 32) 1))
 
 
 ;;;; Rules for `load` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3811,7 +3838,7 @@
       (let ((abi ABISig (abi_sig sig_ref))
             (_ Unit (abi_accumulate_outgoing_args_size abi))
             (_ InstOutput (lower_call_args abi (range 0 (abi_num_args abi)) args))
-            (target Reg (load_ext_name_far name 0))
+            (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0)))
             (_ InstOutput (side_effect (abi_call_ind abi target (Opcode.Call)))))
         (lower_call_rets abi (range 0 (abi_num_rets abi)) (output_builder_new))))
 

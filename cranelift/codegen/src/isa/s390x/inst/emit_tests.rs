@@ -6828,6 +6828,7 @@ fn test_s390x_binemit() {
                 opcode: Opcode::Call,
                 caller_callconv: CallConv::SystemV,
                 callee_callconv: CallConv::SystemV,
+                tls_symbol: None,
             }),
         },
         "C0E500000000",

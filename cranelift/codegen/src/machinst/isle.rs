@@ -15,6 +15,7 @@ pub use crate::isa::unwind::UnwindInst;
 pub use crate::machinst::{
     ABIArg, ABIArgSlot, ABISig, InputSourceInst, RealReg, Reg, RelocDistance, Writable,
 };
+pub use crate::settings::TlsModel;
 
 pub type Unit = ();
 pub type ValueSlice = (ValueList, usize);
@@ -627,6 +628,15 @@ macro_rules! isle_prelude_methods {
 
         fn avoid_div_traps(&mut self, _: Type) -> Option<()> {
             if self.flags.avoid_div_traps() {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn tls_model_is_elf_gd(&mut self) -> Option<()> {
+            if self.flags.tls_model() == TlsModel::ElfGd {
                 Some(())
             } else {
                 None

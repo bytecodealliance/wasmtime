@@ -7,7 +7,7 @@ pub mod generated_code;
 use crate::isa::s390x::abi::{S390xMachineDeps, REG_SAVE_AREA_SIZE};
 use crate::isa::s390x::inst::{
     gpr, stack_reg, writable_gpr, zero_reg, CallIndInfo, CallInfo, Cond, Inst as MInst, MemArg,
-    MemArgPair, UImm12, UImm16Shifted, UImm32Shifted,
+    MemArgPair, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted,
 };
 use crate::isa::s390x::settings::Flags as IsaFlags;
 use crate::machinst::isle::*;
@@ -16,7 +16,7 @@ use crate::settings::Flags;
 use crate::{
     ir::{
         condcodes::*, immediates::*, types::*, AtomicRmwOp, Endianness, Inst, InstructionData,
-        LibCall, MemFlags, Opcode, TrapCode, Value, ValueList,
+        KnownSymbol, LibCall, MemFlags, Opcode, TrapCode, Value, ValueList,
     },
     isa::unwind::UnwindInst,
     isa::CallConv,
@@ -34,12 +34,14 @@ use target_lexicon::Triple;
 /// Information describing a library call to be emitted.
 pub struct LibCallInfo {
     libcall: LibCall,
+    tls_symbol: Option<SymbolReloc>,
 }
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
 type VecMachLabel = Vec<MachLabel>;
 type BoxExternalName = Box<ExternalName>;
+type BoxSymbolReloc = Box<SymbolReloc>;
 type VecMInst = Vec<MInst>;
 type VecMInstBuilder = Cell<Vec<MInst>>;
 
@@ -117,6 +119,7 @@ where
             opcode: *opcode,
             caller_callconv: self.lower_ctx.abi().call_conv(),
             callee_callconv: abi.call_conv(),
+            tls_symbol: None,
         })
     }
 
@@ -136,6 +139,14 @@ where
     fn lib_call_info_memcpy(&mut self) -> LibCallInfo {
         LibCallInfo {
             libcall: LibCall::Memcpy,
+            tls_symbol: None,
+        }
+    }
+
+    fn lib_call_info_tls_get_offset(&mut self, tls_symbol: &SymbolReloc) -> LibCallInfo {
+        LibCallInfo {
+            libcall: LibCall::ElfTlsGetOffset,
+            tls_symbol: Some(tls_symbol.clone()),
         }
     }
 
@@ -156,6 +167,7 @@ where
                 smallvec![gpr(2), gpr(3), gpr(4)],
                 smallvec![writable_gpr(2)],
             ),
+            LibCall::ElfTlsGetOffset => (smallvec![gpr(2), gpr(12)], smallvec![writable_gpr(2)]),
             _ => unreachable!(),
         };
 
@@ -173,7 +185,13 @@ where
             opcode: Opcode::Call,
             caller_callconv,
             callee_callconv,
+            tls_symbol: info.tls_symbol.clone(),
         })
+    }
+
+    #[inline]
+    fn box_symbol_reloc(&mut self, symbol_reloc: &SymbolReloc) -> BoxSymbolReloc {
+        Box::new(symbol_reloc.clone())
     }
 
     #[inline]
@@ -704,6 +722,15 @@ where
             name: Box::new(name),
             offset,
             flags,
+        }
+    }
+
+    #[inline]
+    fn memarg_got(&mut self) -> MemArg {
+        MemArg::Symbol {
+            name: Box::new(ExternalName::KnownSymbol(KnownSymbol::ElfGlobalOffsetTable)),
+            offset: 0,
+            flags: MemFlags::trusted(),
         }
     }
 
