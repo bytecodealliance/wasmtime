@@ -73,6 +73,7 @@ impl ObjectBuilder {
             target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
             target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
             target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
+            target_lexicon::Architecture::Riscv64(_) => object::Architecture::Riscv64,
             architecture => {
                 return Err(ModuleError::Backend(anyhow!(
                     "target architecture {:?} is unsupported",

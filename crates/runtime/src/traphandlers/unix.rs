@@ -228,7 +228,14 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
                 cx.uc_mcontext.mc_rip as *const u8,
                 cx.uc_mcontext.mc_rbp as usize,
             )
-        } else {
+        } else if  #[cfg(all(target_os = "linux", target_arch = "riscv64"))] {
+            let cx = &*(cx as *const libc::ucontext_t);
+            (
+                cx.uc_mcontext.__gregs[libc::REG_PC] as *const u8,
+                cx.uc_mcontext.__gregs[libc::REG_S0] as usize,
+            )
+        }
+        else {
             compile_error!("unsupported platform");
         }
     }

@@ -42,7 +42,7 @@ asm_func!(
       fsd fs9,-0xb8(sp)
       fsd fs10,-0xc0(sp)
       fsd fs11,-0xc8(sp)
-      addi sp , sp , -0xc8
+      addi sp , sp , -0xd0
 
       ld t0 ,-0x10(a0)
       sd sp ,-0x10(a0)
@@ -50,32 +50,32 @@ asm_func!(
       // Swap stacks and restore all our callee-saved registers
       mv sp,t0
 
-      fld fs11,0x0(sp)
-      fld fs10,0x8(sp)
-      fld fs9,0x10(sp)
-      fld fs8,0x18(sp)
-      fld fs7,0x20(sp)
-      fld fs6,0x28(sp)
-      fld fs5,0x30(sp)
-      fld fs4,0x38(sp)
-      fld fs3,0x40(sp)
-      fld fs2,0x48(sp)
-      fld fs1,0x50(sp)
-      fld fs0,0x58(sp)
-      ld s11,0x60(sp)
-      ld s10,0x68(sp)
-      ld s9,0x70(sp)
-      ld s8,0x78(sp)
-      ld s7,0x80(sp)
-      ld s6,0x88(sp)
-      ld s5,0x90(sp)
-      ld s4,0x98(sp)
-      ld s3,0xa0(sp)
-      ld s2,0xa8(sp)
-      ld s1,0xb0(sp)
-      ld fp,0xb8(sp)
-      ld ra,0xc0(sp)
-      addi sp , sp , 0xc8
+      fld fs11,0x8(sp)
+      fld fs10,0x10(sp)
+      fld fs9,0x18(sp)
+      fld fs8,0x20(sp)
+      fld fs7,0x28(sp)
+      fld fs6,0x30(sp)
+      fld fs5,0x38(sp)
+      fld fs4,0x40(sp)
+      fld fs3,0x48(sp)
+      fld fs2,0x50(sp)
+      fld fs1,0x58(sp)
+      fld fs0,0x60(sp)
+      ld s11,0x68(sp)
+      ld s10,0x70(sp)
+      ld s9,0x78(sp)
+      ld s8,0x80(sp)
+      ld s7,0x88(sp)
+      ld s6,0x90(sp)
+      ld s5,0x98(sp)
+      ld s4,0xa0(sp)
+      ld s3,0xa8(sp)
+      ld s2,0xb0(sp)
+      ld s1,0xb8(sp)
+      ld fp,0xc0(sp)
+      ld ra,0xc8(sp)
+      addi sp , sp , 0xd0
       jr ra
   ",
 );
@@ -96,7 +96,7 @@ asm_func!(
       sd a2,-0x30(a0)  // entry_arg0 will load to s2.
 
       // 
-      addi t0,a0,-0xd8
+      addi t0,a0,-0xe0
       sd t0,-0x10(a0)
       ret
     ",
@@ -113,7 +113,7 @@ asm_func!(
       5,             /* the byte length of this expression */ \
       0x52,          /* DW_OP_reg2 (sp) */ \
       0x06,          /* DW_OP_deref */ \
-      0x08, 0xc8 ,   /* DW_OP_const1u 0xc8 */ \
+      0x08, 0xd0 ,   /* DW_OP_const1u 0xc8 */ \
       0x22           /* DW_OP_plus */
          
       
