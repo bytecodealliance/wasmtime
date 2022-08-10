@@ -43,6 +43,8 @@ pub enum Reloc {
     Arm64Call,
     /// s390x PC-relative 4-byte offset
     S390xPCRel32Dbl,
+    /// s390x PC-relative 4-byte offset to PLT
+    S390xPLTRel32Dbl,
 
     /// Elf x86_64 32 bit signed PC relative offset to two GOT entries for GD symbol.
     ElfX86_64TlsGd,
@@ -74,6 +76,7 @@ impl fmt::Display for Reloc {
             Self::Abs4 => write!(f, "Abs4"),
             Self::Abs8 => write!(f, "Abs8"),
             Self::S390xPCRel32Dbl => write!(f, "PCRel32Dbl"),
+            Self::S390xPLTRel32Dbl => write!(f, "PLTRel32Dbl"),
             Self::X86PCRel4 => write!(f, "PCRel4"),
             Self::X86CallPCRel4 => write!(f, "CallPCRel4"),
             Self::X86CallPLTRel4 => write!(f, "CallPLTRel4"),
