@@ -73,14 +73,15 @@ impl MmapVec {
         self.mmap.is_readonly()
     }
 
-    /// "Drains" leading bytes up to the end specified in `range` from this
+    /// "Splits off" leading bytes up to the end specified in `range` from this
     /// `MmapVec`, returning a separately owned `MmapVec` which retains access
     /// to the bytes.
     ///
-    /// This method is similar to the `Vec` type's `drain` method, except that
-    /// the return value is not an iterator but rather a new `MmapVec`. The
-    /// purpose of this method is the ability to split-off new `MmapVec` values
-    /// which are sub-slices of the original one.
+    /// This method is similar to the `Vec` type's `split_off`` method, except
+    /// that the return value for a different portion of the internal vector:
+    /// the front and not the end. The purpose of this method is the ability to
+    /// split-off new `MmapVec` values which are sub-slices of the original
+    /// one.
     ///
     /// Once data has been drained from an `MmapVec` it is no longer accessible
     /// from the original `MmapVec`, it's only accessible from the returned
@@ -91,7 +92,7 @@ impl MmapVec {
     /// to the bytes that come after the drain range.
     ///
     /// This is an `O(1)` operation which does not involve copies.
-    pub fn drain(&mut self, range: RangeTo<usize>) -> MmapVec {
+    pub fn split_off(&mut self, range: RangeTo<usize>) -> MmapVec {
         let amt = range.end;
         assert!(amt <= (self.range.end - self.range.start));
 

@@ -335,7 +335,7 @@ impl<'a> SerializedModule<'a> {
                 .section_headers(NE, data)
                 .context("failed to read section headers")?;
             let range = subslice_range(object::bytes_of_slice(sections), data);
-            Ok(mmap.drain(..range.end))
+            Ok(mmap.split_off(..range.end))
         }
     }
 
