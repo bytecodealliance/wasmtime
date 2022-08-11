@@ -8,6 +8,7 @@ use cranelift::codegen::ir::Function;
 use cranelift::codegen::Context;
 use cranelift::prelude::*;
 use cranelift_native::builder_with_options;
+use std::fmt;
 
 mod config;
 mod function_generator;
@@ -27,12 +28,64 @@ impl<'a> Arbitrary<'a> for SingleFunction {
     }
 }
 
-#[derive(Debug)]
 pub struct TestCase {
     pub func: Function,
     /// Generate multiple test inputs for each test case.
     /// This allows us to get more coverage per compilation, which may be somewhat expensive.
     pub inputs: Vec<TestCaseInput>,
+}
+
+impl fmt::Debug for TestCase {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            r#";; Fuzzgen test case
+
+test interpret
+test run
+set enable_llvm_abi_extensions
+target aarch64
+target s390x
+target x86_64
+
+"#
+        )?;
+
+        writeln!(f, "{}", self.func)?;
+
+        writeln!(f, "; Note: the results in the below test cases are simply a placeholder and probably will be wrong\n")?;
+
+        for input in self.inputs.iter() {
+            // TODO: We don't know the expected outputs, maybe we can run the interpreter
+            // here to figure them out? Should work, however we need to be careful to catch
+            // panics in case its the interpreter that is failing.
+            // For now create a placeholder output consisting of the zero value for the type
+            let returns = &self.func.signature.returns;
+            let placeholder_output = returns
+                .iter()
+                .map(|param| DataValue::read_from_slice(&[0; 16][..], param.value_type))
+                .map(|val| format!("{}", val))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            // If we have no output, we don't need the == condition
+            let test_condition = match returns.len() {
+                0 => String::new(),
+                1 => format!(" == {}", placeholder_output),
+                _ => format!(" == [{}]", placeholder_output),
+            };
+
+            let args = input
+                .iter()
+                .map(|val| format!("{}", val))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            writeln!(f, "; run: {}({}){}", self.func.name, args, test_condition)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl<'a> Arbitrary<'a> for TestCase {

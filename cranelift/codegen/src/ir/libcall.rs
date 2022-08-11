@@ -68,6 +68,8 @@ pub enum LibCall {
 
     /// Elf __tls_get_addr
     ElfTlsGetAddr,
+    /// Elf __tls_get_offset
+    ElfTlsGetOffset,
     // When adding a new variant make sure to add it to `all_libcalls` too.
 }
 
@@ -106,6 +108,7 @@ impl FromStr for LibCall {
             "Memcmp" => Ok(Self::Memcmp),
 
             "ElfTlsGetAddr" => Ok(Self::ElfTlsGetAddr),
+            "ElfTlsGetOffset" => Ok(Self::ElfTlsGetOffset),
             _ => Err(()),
         }
     }
@@ -175,6 +178,7 @@ impl LibCall {
             Memmove,
             Memcmp,
             ElfTlsGetAddr,
+            ElfTlsGetOffset,
         ]
     }
 
@@ -216,7 +220,8 @@ impl LibCall {
             | LibCall::Memset
             | LibCall::Memmove
             | LibCall::Memcmp
-            | LibCall::ElfTlsGetAddr => unimplemented!(),
+            | LibCall::ElfTlsGetAddr
+            | LibCall::ElfTlsGetOffset => unimplemented!(),
         }
 
         sig

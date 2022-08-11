@@ -290,6 +290,8 @@ pub enum ModuleExtName {
     },
     /// Call into a library function.
     LibCall(ir::LibCall),
+    /// Symbols known to the linker.
+    KnownSymbol(ir::KnownSymbol),
 }
 
 impl Display for ModuleExtName {
@@ -297,6 +299,7 @@ impl Display for ModuleExtName {
         match self {
             Self::User { namespace, index } => write!(f, "u{}:{}", namespace, index),
             Self::LibCall(lc) => write!(f, "%{}", lc),
+            Self::KnownSymbol(ks) => write!(f, "{}", ks),
         }
     }
 }
@@ -326,7 +329,9 @@ impl ModuleDeclarations {
     pub fn is_function(name: &ModuleExtName) -> bool {
         match name {
             ModuleExtName::User { namespace, .. } => *namespace == 0,
-            ModuleExtName::LibCall(_) => panic!("unexpected module ext name"),
+            ModuleExtName::LibCall(_) | ModuleExtName::KnownSymbol(_) => {
+                panic!("unexpected module ext name")
+            }
         }
     }
 

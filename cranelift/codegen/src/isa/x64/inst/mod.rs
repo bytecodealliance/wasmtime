@@ -116,6 +116,7 @@ impl Inst {
             | Inst::XmmUninitializedValue { .. }
             | Inst::ElfTlsGetAddr { .. }
             | Inst::MachOTlsGetAddr { .. }
+            | Inst::CoffTlsGetAddr { .. }
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. } => smallvec![],
 
@@ -1709,6 +1710,10 @@ impl PrettyPrint for Inst {
                 format!("%rax = macho_tls_get_addr {:?}", symbol)
             }
 
+            Inst::CoffTlsGetAddr { ref symbol } => {
+                format!("%rax = coff_tls_get_addr {:?}", symbol)
+            }
+
             Inst::Unwind { inst } => {
                 format!("unwind {:?}", inst)
             }
@@ -2153,6 +2158,17 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             let mut clobbers = X64ABIMachineSpec::get_regs_clobbered_by_call(CallConv::SystemV);
             clobbers.remove(regs::gpr_preg(regs::ENC_RAX));
             collector.reg_clobbers(clobbers);
+        }
+
+        Inst::CoffTlsGetAddr { .. } => {
+            // We also use the gs register. But that register is not allocatable by the
+            // register allocator, so we don't need to mark it as used here.
+
+            // We use %rax to set the address
+            collector.reg_def(Writable::from_reg(regs::rax()));
+
+            // We use %rcx as a temporary variable to load the _tls_index
+            collector.reg_def(Writable::from_reg(regs::rcx()));
         }
 
         Inst::Unwind { .. } => {}

@@ -424,6 +424,17 @@
       (rd WritableReg)
       (imm UImm32Shifted))
 
+    ;; Load 32-bit access register into GPR.
+    (LoadAR
+      (rd WritableReg)
+      (ar u8))
+
+    ;; Insert 32-bit access register into low half of a GPR.
+    ;; (Identical operation to LoadAR, but considers rd to be use/def.)
+    (InsertAR
+      (rd WritableReg)
+      (ar u8))
+
     ;; A sign- or zero-extend operation.
     (Extend
       (rd WritableReg)
@@ -857,11 +868,10 @@
       (ridx Reg)
       (targets VecMachLabel))
 
-    ;; Load an inline symbol reference with RelocDistance::Far.
-    (LoadExtNameFar
+    ;; Load an inline symbol reference with relocation.
+    (LoadSymbolReloc
       (rd WritableReg)
-      (name BoxExternalName)
-      (offset i64))
+      (symbol_reloc BoxSymbolReloc))
 
     ;; Load address referenced by `mem` into `rd`.
     (LoadAddr
@@ -902,6 +912,23 @@
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
 (type VecMachLabel extern (enum))
+
+;; A symbol reference carrying relocation information.
+(type SymbolReloc
+  (enum
+    ;; Absolute symbol reference (with optional offset).
+    (Absolute
+      (name ExternalName)
+      (offset i64))
+    ;; Reference to a TLS symbol in general-dynamic mode.
+    (TlsGd
+      (name ExternalName))))
+
+;; Boxed version of SymbolReloc to save space.
+(type BoxSymbolReloc (primitive BoxSymbolReloc))
+(decl box_symbol_reloc (SymbolReloc) BoxSymbolReloc)
+(extern constructor box_symbol_reloc box_symbol_reloc)
+(convert SymbolReloc BoxSymbolReloc box_symbol_reloc)
 
 ;; An ALU operation.
 (type ALUOp
@@ -1613,6 +1640,9 @@
 (decl memarg_symbol (ExternalName i32 MemFlags) MemArg)
 (extern constructor memarg_symbol memarg_symbol)
 
+(decl memarg_got () MemArg)
+(extern constructor memarg_got memarg_got)
+
 ;; Create a MemArg refering to a stack address formed by
 ;; adding a base (relative to SP) and an offset.
 (decl memarg_stack_off (i64 i64) MemArg)
@@ -2120,6 +2150,20 @@
 (rule (mvc dst src len_minus_one)
       (SideEffectNoResult.Inst (MInst.Mvc dst src len_minus_one)))
 
+;; Helper for emitting `MInst.LoadAR` instructions.
+(decl load_ar (u8) Reg)
+(rule (load_ar ar)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadAR dst ar))))
+        dst))
+
+;; Helper for emitting `MInst.InsertAR` instructions.
+(decl insert_ar (Reg u8) Reg)
+(rule (insert_ar src ar)
+      (let ((dst WritableReg (copy_writable_reg $I64 src))
+            (_ Unit (emit (MInst.InsertAR dst ar))))
+        dst))
+
 ;; Helper for emitting `MInst.FpuRR` instructions.
 (decl fpu_rr (Type FPUOp1 Reg) Reg)
 (rule (fpu_rr ty op src)
@@ -2393,12 +2437,11 @@
             (_ Unit (emit (MInst.VecReplicateLane size dst src lane_imm))))
         dst))
 
-;; Helper for emitting `MInst.LoadExtNameFar` instructions.
-(decl load_ext_name_far (ExternalName i64) Reg)
-(rule (load_ext_name_far name offset)
+;; Helper for emitting `MInst.LoadSymbolReloc` instructions.
+(decl load_symbol_reloc (SymbolReloc) Reg)
+(rule (load_symbol_reloc symbol_reloc)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (boxed_name BoxExternalName (box_external_name name))
-            (_ Unit (emit (MInst.LoadExtNameFar dst boxed_name offset))))
+            (_ Unit (emit (MInst.LoadSymbolReloc dst symbol_reloc))))
         dst))
 
 ;; Helper for emitting `MInst.LoadAddr` instructions.
@@ -3404,6 +3447,9 @@
 
 (decl lib_call_info_memcpy () LibCallInfo)
 (extern constructor lib_call_info_memcpy lib_call_info_memcpy)
+
+(decl lib_call_info_tls_get_offset (SymbolReloc) LibCallInfo)
+(extern constructor lib_call_info_tls_get_offset lib_call_info_tls_get_offset)
 
 (decl lib_call_info (LibCallInfo) BoxCallInfo)
 (extern constructor lib_call_info lib_call_info)

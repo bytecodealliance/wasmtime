@@ -40,10 +40,10 @@ impl ObjectBuilder {
     /// Create a new `ObjectBuilder` using the given Cranelift target, that
     /// can be passed to [`ObjectModule::new`].
     ///
-    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
+    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s [ir::LibCall]
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
-    /// argument, use `cranelift_module::default_libcall_names()`.
+    /// argument, use [cranelift_module::default_libcall_names]().
     pub fn new<V: Into<Vec<u8>>>(
         isa: Box<dyn TargetIsa>,
         name: V,
@@ -73,6 +73,7 @@ impl ObjectBuilder {
             target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
             target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
             target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
+            target_lexicon::Architecture::S390x => object::Architecture::S390x,
             architecture => {
                 return Err(ModuleError::Backend(anyhow!(
                     "target architecture {:?} is unsupported",
@@ -121,6 +122,7 @@ pub struct ObjectModule {
     relocs: Vec<SymbolRelocs>,
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
+    known_symbols: HashMap<ir::KnownSymbol, SymbolId>,
     function_alignment: u64,
     per_function_section: bool,
     anon_func_number: u64,
@@ -141,6 +143,7 @@ impl ObjectModule {
             relocs: Vec::new(),
             libcalls: HashMap::new(),
             libcall_names: builder.libcall_names,
+            known_symbols: HashMap::new(),
             function_alignment: builder.function_alignment,
             per_function_section: builder.per_function_section,
             anon_func_number: 0,
@@ -558,6 +561,38 @@ impl ObjectModule {
                     symbol
                 }
             }
+            // These are "magic" names well-known to the linker.
+            // They require special treatment.
+            ModuleExtName::KnownSymbol(ref known_symbol) => {
+                if let Some(symbol) = self.known_symbols.get(known_symbol) {
+                    *symbol
+                } else {
+                    let symbol = self.object.add_symbol(match known_symbol {
+                        ir::KnownSymbol::ElfGlobalOffsetTable => Symbol {
+                            name: b"_GLOBAL_OFFSET_TABLE_".to_vec(),
+                            value: 0,
+                            size: 0,
+                            kind: SymbolKind::Data,
+                            scope: SymbolScope::Unknown,
+                            weak: false,
+                            section: SymbolSection::Undefined,
+                            flags: SymbolFlags::None,
+                        },
+                        ir::KnownSymbol::CoffTlsIndex => Symbol {
+                            name: b"_tls_index".to_vec(),
+                            value: 0,
+                            size: 32,
+                            kind: SymbolKind::Tls,
+                            scope: SymbolScope::Unknown,
+                            weak: false,
+                            section: SymbolSection::Undefined,
+                            flags: SymbolFlags::None,
+                        },
+                    });
+                    self.known_symbols.insert(*known_symbol, symbol);
+                    symbol
+                }
+            }
         }
     }
 
@@ -573,6 +608,11 @@ impl ObjectModule {
             Reloc::X86CallPLTRel4 => (
                 RelocationKind::PltRelative,
                 RelocationEncoding::X86Branch,
+                32,
+            ),
+            Reloc::X86SecRel => (
+                RelocationKind::SectionOffset,
+                RelocationEncoding::Generic,
                 32,
             ),
             Reloc::X86GOTPCRel4 => (RelocationKind::GotRelative, RelocationEncoding::Generic, 32),
@@ -633,6 +673,36 @@ impl ObjectModule {
                     12,
                 )
             }
+            Reloc::S390xPCRel32Dbl => (RelocationKind::Relative, RelocationEncoding::S390xDbl, 32),
+            Reloc::S390xPLTRel32Dbl => (
+                RelocationKind::PltRelative,
+                RelocationEncoding::S390xDbl,
+                32,
+            ),
+            Reloc::S390xTlsGd64 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "S390xTlsGd64 is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_390_TLS_GD64),
+                    RelocationEncoding::Generic,
+                    64,
+                )
+            }
+            Reloc::S390xTlsGdCall => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "S390xTlsGdCall is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_390_TLS_GDCALL),
+                    RelocationEncoding::Generic,
+                    0,
+                )
+            }
             // FIXME
             reloc => unimplemented!("{:?}", reloc),
         };
@@ -647,6 +717,7 @@ impl ObjectModule {
             }
             ir::ExternalName::TestCase { .. } => unimplemented!(),
             ir::ExternalName::LibCall(libcall) => ModuleExtName::LibCall(libcall),
+            ir::ExternalName::KnownSymbol(ks) => ModuleExtName::KnownSymbol(ks),
         };
 
         ObjectRelocRecord {

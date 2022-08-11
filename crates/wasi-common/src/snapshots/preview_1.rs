@@ -84,6 +84,7 @@ impl From<ErrorKind> for types::Errno {
             ErrorKind::Range => Errno::Range,
             ErrorKind::Spipe => Errno::Spipe,
             ErrorKind::NotCapable => Errno::Notcapable,
+            ErrorKind::Perm => Errno::Perm,
         }
     }
 }

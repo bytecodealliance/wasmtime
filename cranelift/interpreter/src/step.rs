@@ -407,8 +407,11 @@ where
                 unreachable!()
             }
         }
-        Opcode::GetPinnedReg => unimplemented!("GetPinnedReg"),
-        Opcode::SetPinnedReg => unimplemented!("SetPinnedReg"),
+        Opcode::GetPinnedReg => assign(state.get_pinned_reg()),
+        Opcode::SetPinnedReg => {
+            state.set_pinned_reg(arg(0)?);
+            ControlFlow::Continue
+        }
         Opcode::TableAddr => {
             if let InstructionData::TableAddr { table, offset, .. } = inst {
                 let table = &state.get_current_function().tables[table];

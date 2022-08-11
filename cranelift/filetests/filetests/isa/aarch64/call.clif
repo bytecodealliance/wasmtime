@@ -452,3 +452,54 @@ block0:
 ;   str w7, [x11]
 ;   ret
 
+function %f17(i64 sret) {
+block0(v0: i64):
+    v1 = iconst.i64 42
+    store v1, v0
+    return
+}
+
+; block0:
+;   mov x5, x8
+;   movz x4, #42
+;   str x4, [x8]
+;   ret
+
+function %f18(i64) -> i64 {
+    fn0 = %g(i64 sret) -> i64
+
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return v1
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   mov x8, x0
+;   ldr x5, 8 ; b 12 ; data TestCase(TestcaseName { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
+;   blr x5
+;   mov x0, x8
+;   ldp fp, lr, [sp], #16
+;   ret
+
+function %f18(i64 sret) {
+    fn0 = %g(i64 sret)
+
+block0(v0: i64):
+    call fn0(v0)
+    return
+}
+
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   str x24, [sp, #-16]!
+; block0:
+;   mov x24, x8
+;   ldr x5, 8 ; b 12 ; data TestCase(TestcaseName { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
+;   blr x5
+;   mov x8, x24
+;   ldr x24, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+

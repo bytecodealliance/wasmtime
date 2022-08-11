@@ -314,6 +314,7 @@ impl JITModule {
                 self.lookup_symbol(&sym)
                     .unwrap_or_else(|| panic!("can't resolve libcall {}", sym))
             }
+            _ => panic!("invalid name"),
         }
     }
 
@@ -340,6 +341,7 @@ impl JITModule {
                 .libcall_got_entries
                 .get(libcall)
                 .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall)),
+            _ => panic!("invalid name"),
         }
     }
 
@@ -362,6 +364,7 @@ impl JITModule {
                 .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall))
                 .as_ptr()
                 .cast::<u8>(),
+            _ => panic!("invalid name"),
         }
     }
 
@@ -723,6 +726,7 @@ impl Module for JITModule {
                             .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall))
                             .as_ptr()
                             .cast::<u8>(),
+                        _ => panic!("invalid name"),
                     },
                     |name| self.get_got_address(name).as_ptr().cast(),
                     |name| self.get_plt_address(name),

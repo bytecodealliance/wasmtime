@@ -4,7 +4,7 @@
 //! function. The name of an external declaration doesn't have any meaning to
 //! Cranelift, which compiles functions independently.
 
-use crate::ir::LibCall;
+use crate::ir::{KnownSymbol, LibCall};
 use core::cmp;
 use core::fmt::{self, Write};
 use core::str::FromStr;
@@ -133,6 +133,8 @@ pub enum ExternalName {
     TestCase(TestcaseName),
     /// A well-known runtime library function.
     LibCall(LibCall),
+    /// A well-known symbol.
+    KnownSymbol(KnownSymbol),
 }
 
 impl Default for ExternalName {
@@ -200,6 +202,7 @@ impl<'a> fmt::Display for DisplayableExternalName<'a> {
             }
             ExternalName::TestCase(testcase) => testcase.fmt(f),
             ExternalName::LibCall(lc) => write!(f, "%{}", lc),
+            ExternalName::KnownSymbol(ks) => write!(f, "%{}", ks),
         }
     }
 }
@@ -208,11 +211,18 @@ impl FromStr for ExternalName {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Try to parse as a libcall name, otherwise it's a test case.
-        match s.parse() {
-            Ok(lc) => Ok(Self::LibCall(lc)),
-            Err(_) => Ok(Self::testcase(s.as_bytes())),
+        // Try to parse as a known symbol
+        if let Ok(ks) = s.parse() {
+            return Ok(Self::KnownSymbol(ks));
         }
+
+        // Try to parse as a libcall name
+        if let Ok(lc) = s.parse() {
+            return Ok(Self::LibCall(lc));
+        }
+
+        // Otherwise its a test case name
+        Ok(Self::testcase(s.as_bytes()))
     }
 }
 

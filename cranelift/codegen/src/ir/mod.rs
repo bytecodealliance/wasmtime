@@ -15,6 +15,7 @@ mod heap;
 pub mod immediates;
 pub mod instructions;
 pub mod jumptable;
+pub(crate) mod known_symbol;
 pub mod layout;
 pub(crate) mod libcall;
 mod memflags;
@@ -50,6 +51,7 @@ pub use crate::ir::instructions::{
     InstructionData, Opcode, ValueList, ValueListPool, VariableArgs,
 };
 pub use crate::ir::jumptable::JumpTableData;
+pub use crate::ir::known_symbol::KnownSymbol;
 pub use crate::ir::layout::Layout;
 pub use crate::ir::libcall::{get_probestack_funcref, LibCall};
 pub use crate::ir::memflags::{Endianness, MemFlags};
