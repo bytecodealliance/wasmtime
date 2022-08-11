@@ -249,6 +249,15 @@ where
     }
 
     #[inline]
+    fn use_fma(&mut self, _: Type) -> Option<()> {
+        if self.isa_flags.use_fma() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
     fn imm8_from_value(&mut self, val: Value) -> Option<Imm8Reg> {
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant = self.lower_ctx.get_constant(inst)?;

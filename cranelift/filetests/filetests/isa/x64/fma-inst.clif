@@ -1,0 +1,31 @@
+test compile precise-output
+target x86_64 has_avx=true has_fma=true
+
+function %fma_f32(f32, f32, f32) -> f32 {
+block0(v0: f32, v1: f32, v2: f32):
+    v3 = fma v0, v1, v2
+    return v3
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfmadd213ss %xmm0, %xmm1, %xmm2, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %fma_f64(f64, f64, f64) -> f64 {
+block0(v0: f64, v1: f64, v2: f64):
+    v3 = fma v0, v1, v2
+    return v3
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vfmadd213sd %xmm0, %xmm1, %xmm2, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
