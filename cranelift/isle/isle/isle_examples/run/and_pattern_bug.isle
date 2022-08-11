@@ -1,0 +1,9 @@
+
+(type u32 (primitive u32))
+
+(decl enabled () u32)
+(extern extractor enabled enabled)
+
+(decl test (u32) u32)
+(rule (test (and (enabled) 0)) 0)
+(rule (test 0) 23)
