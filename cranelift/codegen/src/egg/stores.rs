@@ -66,6 +66,8 @@ use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::has_memory_fence_semantics;
 use crate::ir::{Block, Function, Inst};
 use cranelift_entity::EntityRef;
+use cranelift_entity::SecondaryMap;
+use smallvec::{smallvec, SmallVec};
 
 /// For a given program point, the vector of last-store instruction
 /// indices for each disjoint category of abstract state.
@@ -181,25 +183,24 @@ impl AliasAnalysis {
         analysis
     }
 
+    #[inline(never)]
     fn compute_block_input_states(
         &mut self,
         func: &Function,
         cfg: &ControlFlowGraph,
-    ) -> FxHashMap<Block, LastStores> {
-        let mut block_input = FxHashMap::default();
-        let mut queue = vec![];
+    ) -> SecondaryMap<Block, LastStores> {
+        let mut block_input = SecondaryMap::with_default(LastStores::default());
+        block_input.resize(func.dfg.num_blocks());
+        let mut queue: SmallVec<[Block; 8]> = smallvec![];
         let mut queue_set = FxHashSet::default();
         let entry = func.layout.entry_block().unwrap();
         queue.push(entry);
         queue_set.insert(entry);
-        block_input.insert(entry, LastStores::entry());
+        block_input[entry] = LastStores::entry();
 
         while let Some(block) = queue.pop() {
             queue_set.remove(&block);
-            let mut state = block_input
-                .entry(block)
-                .or_insert_with(|| LastStores::default())
-                .clone();
+            let mut state = block_input[block].clone();
 
             log::trace!(
                 "alias analysis: input to block{} is {:?}",
@@ -214,17 +215,10 @@ impl AliasAnalysis {
 
             for succ in cfg.succ_iter(block) {
                 let succ_first_inst = func.layout.block_insts(succ).into_iter().next().unwrap();
-                let updated = match block_input.get_mut(&succ) {
-                    Some(succ_state) => {
-                        let old = succ_state.clone();
-                        succ_state.meet_from(&state, succ_first_inst);
-                        *succ_state != old
-                    }
-                    None => {
-                        block_input.insert(succ, state.clone());
-                        true
-                    }
-                };
+                let succ_state = &mut block_input[succ];
+                let old = succ_state.clone();
+                succ_state.meet_from(&state, succ_first_inst);
+                let updated = *succ_state != old;
 
                 if updated && queue_set.insert(succ) {
                     queue.push(succ);
@@ -235,16 +229,14 @@ impl AliasAnalysis {
         block_input
     }
 
+    #[inline(never)]
     fn compute_load_last_stores(
         &mut self,
         func: &Function,
-        block_input: FxHashMap<Block, LastStores>,
+        block_input: SecondaryMap<Block, LastStores>,
     ) {
         for block in func.layout.blocks() {
-            let mut state = block_input
-                .get(&block)
-                .cloned()
-                .unwrap_or_else(|| LastStores::default());
+            let mut state = block_input[block].clone();
 
             for inst in func.layout.block_insts(block) {
                 log::trace!(
