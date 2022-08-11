@@ -123,8 +123,9 @@ pub enum Type {
     Record(VecInRange<Type, 0, 200>),
 
     // Tuples can only have up to 16 type parameters in wasmtime right now for
-    // the static API.
-    Tuple(VecInRange<Type, 0, 16>),
+    // the static API, but the standard library only supports `Debug` up to 11
+    // elements, so compromise at an even 10.
+    Tuple(VecInRange<Type, 0, 10>),
 
     // Like records, allow a good number of variants, but variants require at
     // least one case.
