@@ -185,14 +185,18 @@ impl<'a> Elaborator<'a> {
         self.func.dfg.inst_results_list(inst)
     }
 
-    fn find_best_node(&mut self, id: Id) -> (usize, Id) {
+    fn find_best_node(&mut self, id: Id, mut upper_bound: Option<usize>) -> Option<(usize, Id)> {
         self.stats.elaborate_find_best_node += 1;
-        log::trace!("find_best_node: {}", id);
+        log::trace!("find_best_node: {} upper_bound {:?}", id, upper_bound);
 
         if let Some(&(cost, node)) = self.id_to_best_cost_and_node.get(&id) {
             self.stats.elaborate_find_best_node_memoize_hit += 1;
             log::trace!(" -> memoized to cost {} node {}", cost, node);
-            return (cost, node);
+            if upper_bound.is_none() || cost <= upper_bound.unwrap() {
+                return Some((cost, node));
+            } else {
+                return None;
+            }
         }
         self.stats.elaborate_find_best_node_memoize_miss += 1;
 
@@ -212,10 +216,10 @@ impl<'a> Elaborator<'a> {
         let (mut best_cost, mut best_id) = if let Some(node) = node {
             let cost = match node.node::<NodeCtx>(&self.egraph.nodes) {
                 Node::Param { .. } | Node::Inst { .. } | Node::Load { .. } => {
-                    return (0, id);
+                    return Some((0, id));
                 }
                 Node::Result { value, .. } => {
-                    return self.find_best_node(*value);
+                    return self.find_best_node(*value, upper_bound);
                 }
                 Node::Pure { op, .. } => op_cost(op),
             };
@@ -228,28 +232,49 @@ impl<'a> Elaborator<'a> {
                 .node_ctx
                 .children(node.node::<NodeCtx>(&self.egraph.nodes))
                 .len();
+            let mut exceeded = false;
             for child_idx in 0..child_count {
+                if upper_bound.is_some() && cost + children_cost >= upper_bound.unwrap() {
+                    exceeded = true;
+                    break;
+                }
                 let child = self
                     .node_ctx
                     .children(node.node::<NodeCtx>(&self.egraph.nodes))[child_idx];
                 assert!(child < id);
                 log::trace!("  -> id {} child {}", id, child);
                 self.stats.elaborate_find_best_node_arg_recurse += 1;
-                let (child_cost, _) = self.find_best_node(child);
-                children_cost += child_cost;
-                log::trace!("  -> id {} child {} child cost {}", id, child, child_cost);
+                let child_upper_bound = upper_bound.map(|u| u - (cost + children_cost));
+                if let Some((child_cost, _)) = self.find_best_node(child, child_upper_bound) {
+                    children_cost += child_cost;
+                    log::trace!("  -> id {} child {} child cost {}", id, child, child_cost);
+                } else {
+                    exceeded = true;
+                    break;
+                }
             }
-            let node_cost = cost + children_cost;
 
-            log::trace!(
-                "  -> id {} total cost of operand plus args: {}",
-                id,
-                node_cost
-            );
-            (Some(node_cost), Some(id))
+            if exceeded {
+                (None, None)
+            } else {
+                let node_cost = cost + children_cost;
+
+                log::trace!(
+                    "  -> id {} total cost of operand plus args: {}",
+                    id,
+                    node_cost
+                );
+                (Some(node_cost), Some(id))
+            }
         } else {
             (None, None)
         };
+
+        if best_cost.is_some()
+            && (upper_bound.is_none() || best_cost.unwrap() < upper_bound.unwrap())
+        {
+            upper_bound = best_cost;
+        }
 
         // Evaluate parents as options now, but only if we haven't
         // already found a "perfect" (zero-cost) option here. This
@@ -260,36 +285,55 @@ impl<'a> Elaborator<'a> {
                 log::trace!(" -> id {} parent {}", id, parent);
                 assert!(parent < id);
                 self.stats.elaborate_find_best_node_parent_recurse += 1;
-                let (parent_best_cost, parent_best_id) = self.find_best_node(parent);
-                log::trace!(
-                    " -> id {} parent {} has cost {} with best id {}",
-                    id,
-                    parent,
-                    parent_best_cost,
-                    parent_best_id
-                );
-                if best_cost.is_none() || parent_best_cost < best_cost.unwrap() {
-                    self.stats.elaborate_find_best_node_parent_better += 1;
-                    best_cost = Some(parent_best_cost);
-                    best_id = Some(parent_best_id);
+                if let Some((parent_best_cost, parent_best_id)) =
+                    self.find_best_node(parent, upper_bound)
+                {
+                    log::trace!(
+                        " -> id {} parent {} has cost {} with best id {}",
+                        id,
+                        parent,
+                        parent_best_cost,
+                        parent_best_id
+                    );
+                    if best_cost.is_none() || parent_best_cost < best_cost.unwrap() {
+                        self.stats.elaborate_find_best_node_parent_better += 1;
+                        best_cost = Some(parent_best_cost);
+                        best_id = Some(parent_best_id);
+                    }
+                    if upper_bound.is_none() || parent_best_cost < upper_bound.unwrap() {
+                        upper_bound = Some(parent_best_cost);
+                    }
+                } else {
+                    log::trace!(
+                        " -> id {} parent {} nothing below upper bound {:?}",
+                        id,
+                        parent,
+                        upper_bound
+                    );
                 }
             }
         }
 
-        let best_id = best_id.expect("Must have at least one node");
-        let best_cost = best_cost.expect("Must have at least one node");
+        if let (Some(best_id), Some(best_cost)) = (best_id, best_cost) {
+            log::trace!(
+                "-> for eclass {}, best node is in id {} with cost {}",
+                id,
+                best_id,
+                best_cost
+            );
 
-        log::trace!(
-            "-> for eclass {}, best node is in id {} with cost {}",
-            id,
-            best_id,
-            best_cost
-        );
+            self.id_to_best_cost_and_node
+                .insert_if_absent(id, (best_cost, best_id));
 
-        self.id_to_best_cost_and_node
-            .insert_if_absent(id, (best_cost, best_id));
-
-        (best_cost, best_id)
+            Some((best_cost, best_id))
+        } else {
+            log::trace!(
+                "-> for eclass {}, nothing below upper bound {:?}",
+                id,
+                upper_bound
+            );
+            None
+        }
     }
 
     fn elaborate_eclass_use(&mut self, id: Id) -> IdValue {
@@ -318,7 +362,9 @@ impl<'a> Elaborator<'a> {
         };
         self.stats.elaborate_memoize_miss += 1;
 
-        let (_, best_node_eclass) = self.find_best_node(id);
+        let (_, best_node_eclass) = self
+            .find_best_node(id, None)
+            .expect("Must have some option with unlimited upper bound");
 
         log::trace!(
             "elaborate: id {} -> best {} -> eclass node {:?}",
