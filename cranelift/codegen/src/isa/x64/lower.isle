@@ -3062,3 +3062,17 @@
 
         ;; add together the two converted values
         (x64_addps a_hi a_lo)))
+
+;; Rules for `fcvt_to_uint` and `fcvt_to_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type out_ty (fcvt_to_uint val @ (value_type (ty_scalar_float _)))))
+      (cvt_float_to_uint_seq out_ty val $false))
+
+(rule (lower (has_type out_ty (fcvt_to_uint_sat val @ (value_type (ty_scalar_float _)))))
+      (cvt_float_to_uint_seq out_ty val $true))
+
+(rule (lower (has_type out_ty (fcvt_to_sint val @ (value_type (ty_scalar_float _)))))
+      (cvt_float_to_sint_seq out_ty val $false))
+
+(rule (lower (has_type out_ty (fcvt_to_sint_sat val @ (value_type (ty_scalar_float _)))))
+      (cvt_float_to_sint_seq out_ty val $true))

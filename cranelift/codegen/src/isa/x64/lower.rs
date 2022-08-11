@@ -557,49 +557,19 @@ fn lower_insn_to_regs(
         | Opcode::SelectifSpectreGuard
         | Opcode::FcvtFromSint
         | Opcode::FcvtLowFromSint
-        | Opcode::FcvtFromUint => {
+        | Opcode::FcvtFromUint
+        | Opcode::FcvtToUint
+        | Opcode::FcvtToSint => {
             implemented_in_isle(ctx);
         }
 
-        Opcode::FcvtToUint | Opcode::FcvtToUintSat | Opcode::FcvtToSint | Opcode::FcvtToSintSat => {
+        Opcode::FcvtToUintSat | Opcode::FcvtToSintSat => {
             let src = put_input_in_reg(ctx, inputs[0]);
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
             let input_ty = ctx.input_ty(insn, 0);
             if !input_ty.is_vector() {
-                let src_size = if input_ty == types::F32 {
-                    OperandSize::Size32
-                } else {
-                    assert_eq!(input_ty, types::F64);
-                    OperandSize::Size64
-                };
-
-                let output_ty = ty.unwrap();
-                let dst_size = if output_ty == types::I32 {
-                    OperandSize::Size32
-                } else {
-                    assert_eq!(output_ty, types::I64);
-                    OperandSize::Size64
-                };
-
-                let to_signed = op == Opcode::FcvtToSint || op == Opcode::FcvtToSintSat;
-                let is_sat = op == Opcode::FcvtToUintSat || op == Opcode::FcvtToSintSat;
-
-                let src_copy = ctx.alloc_tmp(input_ty).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(src_copy, src, input_ty));
-
-                let tmp_xmm = ctx.alloc_tmp(input_ty).only_reg().unwrap();
-                let tmp_gpr = ctx.alloc_tmp(output_ty).only_reg().unwrap();
-
-                if to_signed {
-                    ctx.emit(Inst::cvt_float_to_sint_seq(
-                        src_size, dst_size, is_sat, src_copy, dst, tmp_gpr, tmp_xmm,
-                    ));
-                } else {
-                    ctx.emit(Inst::cvt_float_to_uint_seq(
-                        src_size, dst_size, is_sat, src_copy, dst, tmp_gpr, tmp_xmm,
-                    ));
-                }
+                implemented_in_isle(ctx);
             } else {
                 if op == Opcode::FcvtToSintSat {
                     // Sets destination to zero if float is NaN
