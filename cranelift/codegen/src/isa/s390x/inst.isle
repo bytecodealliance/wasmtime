@@ -635,6 +635,36 @@
       (rd WritableReg)
       (mem MemArg))
 
+    ;; 8x16-bit byte-reversed vector load instruction.
+    (VecLoadByte16Rev
+      (rd WritableReg)
+      (mem MemArg))
+
+    ;; 4x32-bit byte-reversed vector load instruction.
+    (VecLoadByte32Rev
+      (rd WritableReg)
+      (mem MemArg))
+
+    ;; 2x64-bit byte-reversed vector load instruction.
+    (VecLoadByte64Rev
+      (rd WritableReg)
+      (mem MemArg))
+
+    ;; 8x16-bit element-reversed vector load instruction.
+    (VecLoadElt16Rev
+      (rd WritableReg)
+      (mem MemArg))
+
+    ;; 4x32-bit element-reversed vector load instruction.
+    (VecLoadElt32Rev
+      (rd WritableReg)
+      (mem MemArg))
+
+    ;; 2x64-bit element-reversed vector load instruction.
+    (VecLoadElt64Rev
+      (rd WritableReg)
+      (mem MemArg))
+
     ;; 128-bit vector store instruction.
     (VecStore
       (rd Reg)
@@ -642,6 +672,36 @@
 
     ;; 128-bit byte-reversed vector store instruction.
     (VecStoreRev
+      (rd Reg)
+      (mem MemArg))
+
+    ;; 8x16-bit byte-reversed vector store instruction.
+    (VecStoreByte16Rev
+      (rd Reg)
+      (mem MemArg))
+
+    ;; 4x32-bit byte-reversed vector store instruction.
+    (VecStoreByte32Rev
+      (rd Reg)
+      (mem MemArg))
+
+    ;; 2x64-bit byte-reversed vector store instruction.
+    (VecStoreByte64Rev
+      (rd Reg)
+      (mem MemArg))
+
+    ;; 8x16-bit element-reversed vector store instruction.
+    (VecStoreElt16Rev
+      (rd Reg)
+      (mem MemArg))
+
+    ;; 4x32-bit element-reversed vector store instruction.
+    (VecStoreElt32Rev
+      (rd Reg)
+      (mem MemArg))
+
+    ;; 2x64-bit element-reversed vector store instruction.
+    (VecStoreElt64Rev
       (rd Reg)
       (mem MemArg))
 
@@ -1350,6 +1410,51 @@
 (extern extractor allow_div_traps allow_div_traps)
 
 
+;; Helpers for SIMD lane number operations ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; There are two ways to map vector types onto the SIMD vector registers
+;; supported by the ISA, differing by the way lanes are numbered.  In
+;; little-endian lane order, lane 0 of a multi-lane vector value resides
+;; in the least-significant parts of a vector register (when interpreted
+;; as holding a single $I128 value); in big-endian lane order, lane 0
+;; instead resides in the most-significant parts of the register.
+;;
+;; As long as used consistently, output of cranelift may use either lane
+;; order method to implement CLIF semantics.  However, depending on the
+;; particular use case, one or the other order will lead to more efficient
+;; code.  Therefore this back end supports both code generation options.
+;;
+;; Note that the ISA instructions use immediate lane number according
+;; to big-endian lane order; so when using little-endian lane order,
+;; immediate lane numbers have to be translated.
+(type LaneOrder
+  (enum
+    (LittleEndian)
+    (BigEndian)))
+
+;; Return the lane order to be used when compiling the current function.
+;; This will be a property of the function ABI.  Functions using the
+;; the Wasmtime ABI will use little-endian lane order, functions using
+;; other ABIs will big-endian lane order.
+(decl pure lane_order () LaneOrder)
+(extern constructor lane_order lane_order)
+
+;; Check whether two lane order values are equal.
+(decl pure lane_order_equal (LaneOrder LaneOrder) bool)
+(rule (lane_order_equal (LaneOrder.LittleEndian) (LaneOrder.LittleEndian)) $true)
+(rule (lane_order_equal (LaneOrder.LittleEndian) (LaneOrder.BigEndian)) $false)
+(rule (lane_order_equal (LaneOrder.BigEndian) (LaneOrder.LittleEndian)) $false)
+(rule (lane_order_equal (LaneOrder.BigEndian) (LaneOrder.BigEndian)) $true)
+
+;; Convert a CLIF immediate lane index value to big-endian lane order.
+(decl be_lane_idx (Type u8) u8)
+(extern constructor be_lane_idx be_lane_idx)
+
+;; Convert a CLIF immediate vector constant to big-endian lane order.
+(decl be_vec_const (Type u128) u128)
+(extern constructor be_vec_const be_vec_const)
+
+
 ;; Helpers for register numbers and types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Hard-coded registers.
@@ -1440,11 +1545,6 @@
                                (u16_pair (u8_pair e f) (u8_pair g h)))
                      (u32_pair (u16_pair (u8_pair i j) (u8_pair k l))
                                (u16_pair (u8_pair m n) (u8_pair o p)))))
-
-;; Convert a little-endian lane index to a big-endian lane index.
-
-(decl be_lane_idx (Type u8) u8)
-(extern constructor be_lane_idx be_lane_idx)
 
 ;; Construct a VGBM mask to set all bits in one lane of a vector.
 
@@ -2298,6 +2398,48 @@
             (_ Unit (emit (MInst.VecLoadRev dst addr))))
         dst))
 
+;; Helper for emitting `MInst.VecLoadByte16Rev` instructions.
+(decl vec_load_byte16rev (Type MemArg) Reg)
+(rule (vec_load_byte16rev ty addr)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecLoadByte16Rev dst addr))))
+        dst))
+
+;; Helper for emitting `MInst.VecLoadByte32Rev` instructions.
+(decl vec_load_byte32rev (Type MemArg) Reg)
+(rule (vec_load_byte32rev ty addr)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecLoadByte32Rev dst addr))))
+        dst))
+
+;; Helper for emitting `MInst.VecLoadByte64Rev` instructions.
+(decl vec_load_byte64rev (Type MemArg) Reg)
+(rule (vec_load_byte64rev ty addr)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecLoadByte64Rev dst addr))))
+        dst))
+
+;; Helper for emitting `MInst.VecLoadElt16Rev` instructions.
+(decl vec_load_elt16rev (Type MemArg) Reg)
+(rule (vec_load_elt16rev ty addr)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecLoadElt16Rev dst addr))))
+        dst))
+
+;; Helper for emitting `MInst.VecLoadElt32Rev` instructions.
+(decl vec_load_elt32rev (Type MemArg) Reg)
+(rule (vec_load_elt32rev ty addr)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecLoadElt32Rev dst addr))))
+        dst))
+
+;; Helper for emitting `MInst.VecLoadElt64Rev` instructions.
+(decl vec_load_elt64rev (Type MemArg) Reg)
+(rule (vec_load_elt64rev ty addr)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecLoadElt64Rev dst addr))))
+        dst))
+
 ;; Helper for emitting `MInst.VecStore` instructions.
 (decl vec_store (Reg MemArg) SideEffectNoResult)
 (rule (vec_store src addr)
@@ -2307,6 +2449,36 @@
 (decl vec_storerev (Reg MemArg) SideEffectNoResult)
 (rule (vec_storerev src addr)
       (SideEffectNoResult.Inst (MInst.VecStoreRev src addr)))
+
+;; Helper for emitting `MInst.VecStoreByte16Rev` instructions.
+(decl vec_store_byte16rev (Reg MemArg) SideEffectNoResult)
+(rule (vec_store_byte16rev src addr)
+      (SideEffectNoResult.Inst (MInst.VecStoreByte16Rev src addr)))
+
+;; Helper for emitting `MInst.VecStoreByte32Rev` instructions.
+(decl vec_store_byte32rev (Reg MemArg) SideEffectNoResult)
+(rule (vec_store_byte32rev src addr)
+      (SideEffectNoResult.Inst (MInst.VecStoreByte32Rev src addr)))
+
+;; Helper for emitting `MInst.VecStoreByte64Rev` instructions.
+(decl vec_store_byte64rev (Reg MemArg) SideEffectNoResult)
+(rule (vec_store_byte64rev src addr)
+      (SideEffectNoResult.Inst (MInst.VecStoreByte64Rev src addr)))
+
+;; Helper for emitting `MInst.VecStoreElt16Rev` instructions.
+(decl vec_store_elt16rev (Reg MemArg) SideEffectNoResult)
+(rule (vec_store_elt16rev src addr)
+      (SideEffectNoResult.Inst (MInst.VecStoreElt16Rev src addr)))
+
+;; Helper for emitting `MInst.VecStoreElt32Rev` instructions.
+(decl vec_store_elt32rev (Reg MemArg) SideEffectNoResult)
+(rule (vec_store_elt32rev src addr)
+      (SideEffectNoResult.Inst (MInst.VecStoreElt32Rev src addr)))
+
+;; Helper for emitting `MInst.VecStoreElt64Rev` instructions.
+(decl vec_store_elt64rev (Reg MemArg) SideEffectNoResult)
+(rule (vec_store_elt64rev src addr)
+      (SideEffectNoResult.Inst (MInst.VecStoreElt64Rev src addr)))
 
 ;; Helper for emitting `MInst.VecLoadReplicate` instructions.
 (decl vec_load_replicate (Type MemArg) Reg)
@@ -2660,6 +2832,34 @@
 (rule (emit_arg_load $F64 mem) (vec_load_lane_undef $F64X2 mem 0))
 (rule (emit_arg_load (vr128_ty ty) mem) (vec_load ty mem))
 
+;; Helper to perform a lane swap in register.
+(decl vec_elt_rev (Type Reg) Reg)
+(rule (vec_elt_rev (multi_lane 64 2) reg)
+      (vec_permute_dw_imm $I64X2 reg 1 reg 0))
+(rule (vec_elt_rev (multi_lane 32 4) reg)
+      (let ((rev Reg (vec_permute_dw_imm $I64X2 reg 1 reg 0)))
+        (vec_rot_imm $I64X2 rev 32)))
+(rule (vec_elt_rev (multi_lane 16 8) reg)
+      (let ((rev Reg (vec_permute_dw_imm $I64X2 reg 1 reg 0)))
+        (vec_rot_imm $I32X4 (vec_rot_imm $I64X2 rev 32) 16)))
+(rule (vec_elt_rev (multi_lane 8 16) reg)
+      (let ((rev Reg (vec_permute_dw_imm $I64X2 reg 1 reg 0)))
+        (vec_rot_imm $I16X8 (vec_rot_imm $I32X4 (vec_rot_imm $I64X2 rev 32) 16) 8)))
+
+;; When passing a vector value in register to a function whose ABI uses
+;; a different lane order than the current function, we need to swap lanes.
+;; The first operand is the lane order used by the callee.
+(decl abi_vec_elt_rev (LaneOrder Type Reg) Reg)
+(rule (abi_vec_elt_rev _ (gpr32_ty ty) reg) reg)
+(rule (abi_vec_elt_rev _ (gpr64_ty ty) reg) reg)
+(rule (abi_vec_elt_rev _ (ty_scalar_float ty) reg) reg)
+(rule (abi_vec_elt_rev callee_lane_order _ reg)
+      (if-let $true (lane_order_equal callee_lane_order (lane_order)))
+      reg)
+(rule (abi_vec_elt_rev callee_lane_order (vr128_ty ty) reg)
+      (if-let $false (lane_order_equal callee_lane_order (lane_order)))
+      (vec_elt_rev ty reg))
+
 ;; Helpers to emit a memory copy (MVC or memcpy libcall).
 (decl emit_memcpy (MemArg MemArg u64) Unit)
 (rule (emit_memcpy dst src (len_minus_one len))
@@ -2688,34 +2888,34 @@
 
 ;; Copy a single argument/return value to its slots.
 ;; For oversized arguments, set the slot to the buffer address.
-(decl copy_to_arg (i64 ABIArg Value) Unit)
-(rule (copy_to_arg base (abi_arg_only_slot slot) val)
-      (copy_val_to_arg_slot base slot val))
-(rule (copy_to_arg base (abi_arg_struct_pointer slot offset _) _)
+(decl copy_to_arg (LaneOrder i64 ABIArg Value) Unit)
+(rule (copy_to_arg lo base (abi_arg_only_slot slot) val)
+      (copy_val_to_arg_slot lo base slot val))
+(rule (copy_to_arg _ base (abi_arg_struct_pointer slot offset _) _)
       (let ((ptr Reg (load_addr (memarg_stack_off base offset))))
         (copy_reg_to_arg_slot base slot ptr)))
-(rule (copy_to_arg base (abi_arg_implicit_pointer slot offset _) _)
+(rule (copy_to_arg _ base (abi_arg_implicit_pointer slot offset _) _)
       (let ((ptr Reg (load_addr (memarg_stack_off base offset))))
         (copy_reg_to_arg_slot base slot ptr)))
 
 ;; Copy a single argument/return value from its slots.
-(decl copy_from_arg (i64 ABIArg) ValueRegs)
-(rule (copy_from_arg base (abi_arg_only_slot slot))
-      (value_reg (copy_reg_from_arg_slot base slot)))
+(decl copy_from_arg (LaneOrder i64 ABIArg) ValueRegs)
+(rule (copy_from_arg lo base (abi_arg_only_slot slot))
+      (value_reg (copy_reg_from_arg_slot lo base slot)))
 
 ;; Copy one component of an argument/return value to its slot.
-(decl copy_val_to_arg_slot (i64 ABIArgSlot Value) Unit)
-(rule (copy_val_to_arg_slot _ (ABIArgSlot.Reg reg ty (ArgumentExtension.None)) val)
-      (emit_mov ty (real_reg_to_writable_reg reg) val))
-(rule (copy_val_to_arg_slot _ (ABIArgSlot.Reg reg _ (ArgumentExtension.Uext)) val)
+(decl copy_val_to_arg_slot (LaneOrder i64 ABIArgSlot Value) Unit)
+(rule (copy_val_to_arg_slot lo _ (ABIArgSlot.Reg reg ty (ArgumentExtension.None)) val)
+      (emit_mov ty (real_reg_to_writable_reg reg) (abi_vec_elt_rev lo ty val)))
+(rule (copy_val_to_arg_slot _ _ (ABIArgSlot.Reg reg _ (ArgumentExtension.Uext)) val)
       (emit_put_in_reg_zext64 (real_reg_to_writable_reg reg) val))
-(rule (copy_val_to_arg_slot _ (ABIArgSlot.Reg reg _ (ArgumentExtension.Sext)) val)
+(rule (copy_val_to_arg_slot _ _ (ABIArgSlot.Reg reg _ (ArgumentExtension.Sext)) val)
       (emit_put_in_reg_sext64 (real_reg_to_writable_reg reg) val))
-(rule (copy_val_to_arg_slot base (ABIArgSlot.Stack offset ty (ArgumentExtension.None)) val)
+(rule (copy_val_to_arg_slot _ base (ABIArgSlot.Stack offset ty (ArgumentExtension.None)) val)
       (emit_arg_store ty val (memarg_stack_off base offset)))
-(rule (copy_val_to_arg_slot base (ABIArgSlot.Stack offset _ (ArgumentExtension.Uext)) val)
+(rule (copy_val_to_arg_slot _ base (ABIArgSlot.Stack offset _ (ArgumentExtension.Uext)) val)
       (emit_arg_store $I64 (put_in_reg_zext64 val) (memarg_stack_off base offset)))
-(rule (copy_val_to_arg_slot base (ABIArgSlot.Stack offset _ (ArgumentExtension.Sext)) val)
+(rule (copy_val_to_arg_slot _ base (ABIArgSlot.Stack offset _ (ArgumentExtension.Sext)) val)
       (emit_arg_store $I64 (put_in_reg_sext64 val) (memarg_stack_off base offset)))
 
 ;; Copy one component of an argument/return value to its slot, where the
@@ -2727,10 +2927,10 @@
       (emit_arg_store (abi_ext_ty ext ty) src (memarg_stack_off base offset)))
 
 ;; Copy one component of an argument/return value from its slot.
-(decl copy_reg_from_arg_slot (i64 ABIArgSlot) Reg)
-(rule (copy_reg_from_arg_slot _ (ABIArgSlot.Reg reg ty ext))
-      (copy_reg (abi_ext_ty ext ty) (real_reg_to_reg reg)))
-(rule (copy_reg_from_arg_slot base (ABIArgSlot.Stack offset ty ext))
+(decl copy_reg_from_arg_slot (LaneOrder i64 ABIArgSlot) Reg)
+(rule (copy_reg_from_arg_slot lo _ (ABIArgSlot.Reg reg ty ext))
+      (abi_vec_elt_rev lo ty (copy_reg (abi_ext_ty ext ty) (real_reg_to_reg reg))))
+(rule (copy_reg_from_arg_slot _ base (ABIArgSlot.Stack offset ty ext))
       (emit_arg_load (abi_ext_ty ext ty) (memarg_stack_off base offset)))
 
 ;; Helper to compute the type of an implicitly extended argument/return value.
@@ -2881,13 +3081,6 @@
 (rule (ty_ext64 $I16) $I64)
 (rule (ty_ext64 $I32) $I64)
 (rule (ty_ext64 $I64) $I64)
-
-;; 128-bit vector type with lane type `Type`.
-(decl ty_vec128_from_lane_ty (Type) Type)
-(rule (ty_vec128_from_lane_ty $I8) $I8X16)
-(rule (ty_vec128_from_lane_ty $I16) $I16X8)
-(rule (ty_vec128_from_lane_ty $I32) $I32X4)
-(rule (ty_vec128_from_lane_ty $I64) $I64X2)
 
 ;; Zero-extend a register from a smaller `Type` into a 32-bit destination.  (Non-SSA form.)
 ;; This handles both integer and boolean input types.
@@ -3440,6 +3633,9 @@
 (decl abi_accumulate_outgoing_args_size (ABISig) Unit)
 (extern constructor abi_accumulate_outgoing_args_size abi_accumulate_outgoing_args_size)
 
+(decl abi_lane_order (ABISig) LaneOrder)
+(extern constructor abi_lane_order abi_lane_order)
+
 
 ;; Helpers for generating calls to library routines ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3525,6 +3721,72 @@
 (decl vec_unpacku_high (Type Reg) Reg)
 (rule (vec_unpacku_high ty x) (vec_rr ty (vecop_unpacku_high ty) x))
 
+;; Versions of pack using current lane order semantics.
+;; First source operand contains values that will end up in the
+;; lower-numbered lanes of the result, second operand contains
+;; values that will end up in the higher-numbered lanes.
+
+(decl vec_pack_lane_order (Type Reg Reg) Reg)
+(rule (vec_pack_lane_order ty x y)
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (vec_pack ty x y))
+(rule (vec_pack_lane_order ty x y)
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (vec_pack ty y x))
+
+(decl vec_pack_ssat_lane_order (Type Reg Reg) Reg)
+(rule (vec_pack_ssat_lane_order ty x y)
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (vec_pack_ssat ty x y))
+(rule (vec_pack_ssat_lane_order ty x y)
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (vec_pack_ssat ty y x))
+
+(decl vec_pack_usat_lane_order (Type Reg Reg) Reg)
+(rule (vec_pack_usat_lane_order ty x y)
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (vec_pack_usat ty x y))
+(rule (vec_pack_usat_lane_order ty x y)
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (vec_pack_usat ty y x))
+
+;; Versions of unpack using current lane order semantics.
+;; unpack_low will consume values from the lower-numbered
+;; lanes of the input, and unpack_high will consume values
+;; from higher-numbered lanes.
+
+(decl vec_unpacks_low_lane_order (Type Reg) Reg)
+(rule (vec_unpacks_low_lane_order ty x)
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (vec_unpacks_high ty x))
+(rule (vec_unpacks_low_lane_order ty x)
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (vec_unpacks_low ty x))
+
+(decl vec_unpacks_high_lane_order (Type Reg) Reg)
+(rule (vec_unpacks_high_lane_order ty x)
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (vec_unpacks_low ty x))
+(rule (vec_unpacks_high_lane_order ty x)
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (vec_unpacks_high ty x))
+
+(decl vec_unpacku_low_lane_order (Type Reg) Reg)
+(rule (vec_unpacku_low_lane_order ty x)
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (vec_unpacku_high ty x))
+(rule (vec_unpacku_low_lane_order ty x)
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (vec_unpacku_low ty x))
+
+(decl vec_unpacku_high_lane_order (Type Reg) Reg)
+(rule (vec_unpacku_high_lane_order ty x)
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (vec_unpacku_low ty x))
+(rule (vec_unpacku_high_lane_order ty x)
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (vec_unpacku_high ty x))
+
 
 ;; Helpers for generating vector merge instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3545,6 +3807,30 @@
 
 (decl vec_merge_high (Type Reg Reg) Reg)
 (rule (vec_merge_high ty x y) (vec_rrr ty (vecop_merge_high ty) x y))
+
+;; Versions of merge using current lane order semantics.
+;; merge_low will consume values from the lower-numbered
+;; lanes of the inputs, and merge_high will consume values
+;; from higher-numbered lanes.  In both cases, values from
+;; the first input will end up in even-numbered lanes, and
+;; values from the second input will end up in odd-numbered
+;; lanes of the output.
+
+(decl vec_merge_low_lane_order (Type Reg Reg) Reg)
+(rule (vec_merge_low_lane_order ty x y)
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (vec_merge_high ty x y))
+(rule (vec_merge_low_lane_order ty x y)
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (vec_merge_low ty y x))
+
+(decl vec_merge_high_lane_order (Type Reg Reg) Reg)
+(rule (vec_merge_high_lane_order ty x y)
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (vec_merge_low ty x y))
+(rule (vec_merge_high_lane_order ty x y)
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (vec_merge_high ty y x))
 
 
 ;; Helpers for generating `clz` and `ctz` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;

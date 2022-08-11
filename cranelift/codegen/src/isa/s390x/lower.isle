@@ -39,7 +39,7 @@
 ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (vconst (u128_from_constant x))))
-      (vec_imm ty x))
+      (vec_imm ty (be_vec_const ty x)))
 
 
 ;;;; Rules for `null` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -148,9 +148,9 @@
 ;; Lane-wise integer pairwise addition for 8-/16/32-bit vector registers.
 (rule (lower (has_type ty @ (multi_lane bits _) (iadd_pairwise x y)))
       (let ((size Reg (vec_imm_splat $I8X16 (u32_as_u64 bits))))
-        (vec_pack (vec_widen_type ty)
-                  (vec_add ty y (vec_lshr_by_byte y size))
-                  (vec_add ty x (vec_lshr_by_byte x size)))))
+        (vec_pack_lane_order (vec_widen_type ty)
+                             (vec_add ty x (vec_lshr_by_byte x size))
+                             (vec_add ty y (vec_lshr_by_byte y size)))))
 
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -929,9 +929,14 @@
       (put_in_reg_zext64 x))
 
 ;; 128-bit target types.
-(rule (lower (has_type (vr128_ty _ty) (uextend x @ (value_type src_ty))))
-      (let ((ty Type (ty_vec128_from_lane_ty src_ty)))
-        (vec_insert_lane ty (vec_imm ty 0) x (be_lane_idx ty 0) (zero_reg))))
+(rule (lower (has_type (vr128_ty ty) (uextend x @ (value_type $I8))))
+      (vec_insert_lane $I8X16 (vec_imm ty 0) x 15 (zero_reg)))
+(rule (lower (has_type (vr128_ty ty) (uextend x @ (value_type $I16))))
+      (vec_insert_lane $I16X8 (vec_imm ty 0) x 7 (zero_reg)))
+(rule (lower (has_type (vr128_ty ty) (uextend x @ (value_type $I32))))
+      (vec_insert_lane $I32X4 (vec_imm ty 0) x 3 (zero_reg)))
+(rule (lower (has_type (vr128_ty ty) (uextend x @ (value_type $I64))))
+      (vec_insert_lane $I64X2 (vec_imm ty 0) x 1 (zero_reg)))
 
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -953,44 +958,44 @@
 ;;;; Rules for `snarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (snarrow x @ (value_type (ty_vec128 ty)) y))
-      (vec_pack_ssat ty y x))
+      (vec_pack_ssat_lane_order ty x y))
 
 
 ;;;; Rules for `uunarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (uunarrow x @ (value_type (ty_vec128 ty)) y))
-      (vec_pack_usat ty y x))
+      (vec_pack_usat_lane_order ty x y))
 
 
 ;;;; Rules for `unarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (unarrow x @ (value_type (ty_vec128 ty)) y))
       (let ((zero Reg (vec_imm ty 0)))
-        (vec_pack_usat ty (vec_smax ty y zero) (vec_smax ty x zero))))
+        (vec_pack_usat_lane_order ty (vec_smax ty x zero) (vec_smax ty y zero))))
 
 
 ;;;; Rules for `swiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (swiden_low x @ (value_type (ty_vec128 ty))))
-      (vec_unpacks_low ty x))
+      (vec_unpacks_low_lane_order ty x))
 
 
 ;;;; Rules for `swiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (swiden_high x @ (value_type (ty_vec128 ty))))
-      (vec_unpacks_high ty x))
+      (vec_unpacks_high_lane_order ty x))
 
 
 ;;;; Rules for `uwiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (uwiden_low x @ (value_type (ty_vec128 ty))))
-      (vec_unpacku_low ty x))
+      (vec_unpacku_low_lane_order ty x))
 
 
 ;;;; Rules for `uwiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (uwiden_high x @ (value_type (ty_vec128 ty))))
-      (vec_unpacku_high ty x))
+      (vec_unpacku_high_lane_order ty x))
 
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1583,7 +1588,7 @@
 
 ;; Promote a register.
 (rule (lower (has_type $F64X2 (fvpromote_low x @ (value_type $F32X4))))
-      (fpromote_reg $F64X2 $F32X4 (vec_merge_low $I32X4 x x)))
+      (fpromote_reg $F64X2 $F32X4 (vec_merge_low_lane_order $I32X4 x x)))
 
 
 ;;;; Rules for `fdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1598,9 +1603,8 @@
 ;; Demote a register.
 (rule (lower (has_type $F32X4 (fvdemote x @ (value_type $F64X2))))
       (let ((dst Reg (fdemote_reg $F32X4 $F64X2 (FpuRoundMode.Current) x)))
-        (vec_permute $F32X4 dst (vec_imm $F32X4 0)
-                     (vec_imm $I8X16 (imm8x16 16 16 16 16 16 16 16 16
-                                              0 1 2 3 8 9 10 11)))))
+        (vec_pack_lane_order $I64X2 (vec_lshr_imm $I64X2 dst 32)
+                                    (vec_imm $I64X2 0))))
 
 
 ;;;; Rules for `fcvt_from_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1690,7 +1694,7 @@
 ;; Convert the low half of a $I32X4 to a $F64X2.
 (rule (lower (has_type $F64X2 (fcvt_low_from_sint x @ (value_type $I32X4))))
       (fcvt_from_sint_reg $F64X2 (FpuRoundMode.ToNearestTiesToEven)
-                          (vec_unpacks_low $I32X4 x)))
+                          (vec_unpacks_low_lane_order $I32X4 x)))
 
 
 ;;;; Rules for `fcvt_to_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1845,7 +1849,12 @@
 
 ;;;; Rules for `raw_bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Raw bitcast is always a no-op.
+;; FIXME: There are two flavors of raw_bitcast, which are currently not
+;; distinguished in CLIF IR.  Those generated by Wasmtime assume little-endian
+;; lane order, and those generated elsewhere assume big-endian lane order.
+;; Raw bitcast is a no-op if current lane order matches that assumed lane order.
+;; However, due to our choice of lane order depending on the current function
+;; ABI, every bitcast we currently see here is indeed a no-op.
 (rule (lower (raw_bitcast x)) x)
 
 
@@ -2352,9 +2361,20 @@
 
 ;;;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; We need to modify the lane mask at runtime in two ways:
-;; - convert from little-endian to big-endian lane numbering
-;; - handle mask elements outside the range 0..15 by zeroing the lane
+;; When using big-endian lane order, the lane mask is mostly correct, but we
+;; need to handle mask elements outside the range 0..15 by zeroing the lane.
+;;
+;; To do so efficiently, we compute:
+;;     permute-lane-element := umin (16, swizzle-lane-element)
+;; and pass a zero vector as second operand to the permute instruction.
+
+(rule (lower (has_type (ty_vec128 ty) (swizzle x y)))
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (vec_permute ty x (vec_imm ty 0)
+         (vec_umin $I8X16 (vec_imm_splat $I8X16 16) y)))
+
+;; When using little-endian lane order, in addition to zeroing (as above),
+;; we need to convert from little-endian to big-endian lane numbering.
 ;;
 ;; To do so efficiently, we compute:
 ;;     permute-lane-element := umax (239, ~ swizzle-lane-element)
@@ -2368,6 +2388,7 @@
 ;; to implement the required swizzle semantics.
 
 (rule (lower (has_type (ty_vec128 ty) (swizzle x y)))
+      (if-let (LaneOrder.LittleEndian) (lane_order))
       (vec_permute ty (vec_imm ty 0) x
          (vec_umax $I8X16 (vec_imm_splat $I8X16 239)
            (vec_not $I8X16 y))))
@@ -2485,23 +2506,110 @@
 (rule (lower (has_type $F64 (load flags @ (littleendian) addr offset)))
       (vec_load_lane_little_undef $F64X2 (lower_address flags addr offset) 0))
 
-;; Load 128-bit big-endian vector values.
+;; Load 128-bit big-endian vector values, BE lane order - direct load.
 (rule (lower (has_type (vr128_ty ty) (load flags @ (bigendian) addr offset)))
+      (if-let (LaneOrder.BigEndian) (lane_order))
       (vec_load ty (lower_address flags addr offset)))
 
-;; Load 128-bit little-endian vector values (z15 instruction).
-(rule (lower (has_type (and (vxrs_ext2_enabled) (vr128_ty ty))
-                       (load flags @ (littleendian) addr offset)))
+;; Load 128-bit little-endian vector values, BE lane order - byte-reversed load.
+(rule (lower (has_type (vr128_ty ty) (load flags @ (littleendian) addr offset)))
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (vec_load_byte_rev ty flags addr offset))
+
+;; Load 128-bit big-endian vector values, LE lane order - element-reversed load.
+(rule (lower (has_type (vr128_ty ty) (load flags @ (bigendian) addr offset)))
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (vec_load_elt_rev ty flags addr offset))
+
+;; Load 128-bit little-endian vector values, LE lane order - fully-reversed load.
+(rule (lower (has_type (vr128_ty ty) (load flags @ (littleendian) addr offset)))
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (vec_load_full_rev ty flags addr offset))
+
+
+;; Helper to perform a 128-bit full-vector byte-reversed load.
+(decl vec_load_full_rev (Type MemFlags Value Offset32) Reg)
+
+;; Full-vector byte-reversed load via single instruction on z15.
+(rule (vec_load_full_rev (and (vxrs_ext2_enabled) (vr128_ty ty)) flags addr offset)
       (vec_loadrev ty (lower_address flags addr offset)))
 
-;; Load 128-bit little-endian vector values (via GPRs on z14).
-(rule (lower (has_type (and (vxrs_ext2_disabled) (vr128_ty ty))
-                       (load flags @ (littleendian) addr offset)))
+;; Full-vector byte-reversed load via GPRs on z14.
+(rule (vec_load_full_rev (and (vxrs_ext2_disabled) (vr128_ty ty)) flags addr offset)
       (let ((lo_addr MemArg (lower_address_bias flags addr offset 0))
             (hi_addr MemArg (lower_address_bias flags addr offset 8))
             (lo_val Reg (loadrev64 lo_addr))
             (hi_val Reg (loadrev64 hi_addr)))
         (mov_to_vec128 ty hi_val lo_val)))
+
+
+;; Helper to perform an element-wise byte-reversed load.
+(decl vec_load_byte_rev (Type MemFlags Value Offset32) Reg)
+
+;; Element-wise byte-reversed 1x128-bit load is a full byte-reversed load.
+(rule (vec_load_byte_rev $I128 flags addr offset)
+      (vec_load_full_rev $I128 flags addr offset))
+
+;; Element-wise byte-reversed 16x8-bit load is a direct load.
+(rule (vec_load_byte_rev ty @ (multi_lane 8 16) flags addr offset)
+      (vec_load ty (lower_address flags addr offset)))
+
+;; Element-wise byte-reversed load via single instruction on z15.
+(rule (vec_load_byte_rev (and (vxrs_ext2_enabled) ty @ (multi_lane 64 2))
+                        flags addr offset)
+      (vec_load_byte64rev ty (lower_address flags addr offset)))
+(rule (vec_load_byte_rev (and (vxrs_ext2_enabled) ty @ (multi_lane 32 4))
+                        flags addr offset)
+      (vec_load_byte32rev ty (lower_address flags addr offset)))
+(rule (vec_load_byte_rev (and (vxrs_ext2_enabled) ty @ (multi_lane 16 8))
+                        flags addr offset)
+      (vec_load_byte16rev ty (lower_address flags addr offset)))
+
+;; Element-wise byte-reversed load as element-swapped byte-reversed load on z14.
+(rule (vec_load_byte_rev (and (vxrs_ext2_disabled) ty @ (multi_lane 64 2))
+                        flags addr offset)
+      (vec_elt_rev ty (vec_load_full_rev ty flags addr offset)))
+(rule (vec_load_byte_rev (and (vxrs_ext2_disabled) ty @ (multi_lane 32 4))
+                        flags addr offset)
+      (vec_elt_rev ty (vec_load_full_rev ty flags addr offset)))
+(rule (vec_load_byte_rev (and (vxrs_ext2_disabled) ty @ (multi_lane 16 8))
+                        flags addr offset)
+      (vec_elt_rev ty (vec_load_full_rev ty flags addr offset)))
+
+
+;; Helper to perform an element-reversed load.
+(decl vec_load_elt_rev (Type MemFlags Value Offset32) Reg)
+
+;; Element-reversed 1x128-bit load is a direct load.
+;; For 1x128-bit types, this is a direct load.
+(rule (vec_load_elt_rev $I128 flags addr offset)
+      (vec_load $I128 (lower_address flags addr offset)))
+
+;; Element-reversed 16x8-bit load is a full byte-reversed load.
+(rule (vec_load_elt_rev ty @ (multi_lane 8 16) flags addr offset)
+      (vec_load_full_rev ty flags addr offset))
+
+;; Element-reversed load via single instruction on z15.
+(rule (vec_load_elt_rev (and (vxrs_ext2_enabled) ty @ (multi_lane 64 2))
+                        flags addr offset)
+      (vec_load_elt64rev ty (lower_address flags addr offset)))
+(rule (vec_load_elt_rev (and (vxrs_ext2_enabled) ty @ (multi_lane 32 4))
+                        flags addr offset)
+      (vec_load_elt32rev ty (lower_address flags addr offset)))
+(rule (vec_load_elt_rev (and (vxrs_ext2_enabled) ty @ (multi_lane 16 8))
+                        flags addr offset)
+      (vec_load_elt16rev ty (lower_address flags addr offset)))
+
+;; Element-reversed load as element-swapped direct load on z14.
+(rule (vec_load_elt_rev (and (vxrs_ext2_disabled) ty @ (multi_lane 64 2))
+                        flags addr offset)
+      (vec_elt_rev ty (vec_load ty (lower_address flags addr offset))))
+(rule (vec_load_elt_rev (and (vxrs_ext2_disabled) ty @ (multi_lane 32 4))
+                        flags addr offset)
+      (vec_elt_rev ty (vec_load ty (lower_address flags addr offset))))
+(rule (vec_load_elt_rev (and (vxrs_ext2_disabled) ty @ (multi_lane 16 8))
+                        flags addr offset)
+      (vec_elt_rev ty (vec_load ty (lower_address flags addr offset))))
 
 
 ;;;; Rules for `uload8` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2606,65 +2714,77 @@
 
 ;;;; Rules for `uloadNxM` and `sloadNxM` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Unsigned 8->16 bit extension, big-endian source value.
-(rule (lower (has_type $I16X8 (uload8x8 flags @ (bigendian) addr offset)))
-      (vec_unpacku_high $I8X16
-        (vec_load_lane_undef $I64X2 (lower_address flags addr offset) 0)))
+;; Unsigned 8->16 bit extension.
+(rule (lower (has_type $I16X8 (uload8x8 flags addr offset)))
+      (vec_unpacku_high $I8X16 (load_v64 $I8X16 flags addr offset)))
 
-;; Unsigned 8->16 bit extension, little-endian source value.
-(rule (lower (has_type $I16X8 (uload8x8 flags @ (littleendian) addr offset)))
-      (vec_unpacku_high $I8X16
-        (vec_load_lane_little_undef $I64X2 (lower_address flags addr offset) 0)))
+;; Signed 8->16 bit extension.
+(rule (lower (has_type $I16X8 (sload8x8 flags addr offset)))
+      (vec_unpacks_high $I8X16 (load_v64 $I8X16 flags addr offset)))
 
-;; Signed 8->16 bit extension, big-endian source value.
-(rule (lower (has_type $I16X8 (sload8x8 flags @ (bigendian) addr offset)))
-      (vec_unpacks_high $I8X16
-        (vec_load_lane_undef $I64X2 (lower_address flags addr offset) 0)))
+;; Unsigned 16->32 bit extension.
+(rule (lower (has_type $I32X4 (uload16x4 flags addr offset)))
+      (vec_unpacku_high $I16X8 (load_v64 $I16X8 flags addr offset)))
 
-;; Signed 8->16 bit extension, little-endian source value.
-(rule (lower (has_type $I16X8 (sload8x8 flags @ (littleendian) addr offset)))
-      (vec_unpacks_high $I8X16
-        (vec_load_lane_little_undef $I64X2 (lower_address flags addr offset) 0)))
+;; Signed 16->32 bit extension.
+(rule (lower (has_type $I32X4 (sload16x4 flags addr offset)))
+      (vec_unpacks_high $I16X8 (load_v64 $I16X8 flags addr offset)))
 
-;; Unsigned 16->32 bit extension, big-endian source value.
-(rule (lower (has_type $I32X4 (uload16x4 flags @ (bigendian) addr offset)))
-      (vec_unpacku_high $I16X8
-        (vec_load_lane_undef $I64X2 (lower_address flags addr offset) 0)))
+;; Unsigned 32->64 bit extension.
+(rule (lower (has_type $I64X2 (uload32x2 flags addr offset)))
+      (vec_unpacku_high $I32X4 (load_v64 $I32X4 flags addr offset)))
 
-;; Unsigned 16->32 bit extension, little-endian source value.
-(rule (lower (has_type $I32X4 (uload16x4 flags @ (littleendian) addr offset)))
-      (vec_unpacku_high $I16X8
-        (vec_load_lane_little_undef $I64X2 (lower_address flags addr offset) 0)))
+;; Signed 32->64 bit extension.
+(rule (lower (has_type $I64X2 (sload32x2 flags addr offset)))
+      (vec_unpacks_high $I32X4 (load_v64 $I32X4 flags addr offset)))
 
-;; Signed 16->32 bit extension, big-endian source value.
-(rule (lower (has_type $I32X4 (sload16x4 flags @ (bigendian) addr offset)))
-      (vec_unpacks_high $I16X8
-        (vec_load_lane_undef $I64X2 (lower_address flags addr offset) 0)))
 
-;; Signed 16->32 bit extension, little-endian source value.
-(rule (lower (has_type $I32X4 (sload16x4 flags @ (littleendian) addr offset)))
-      (vec_unpacks_high $I16X8
-        (vec_load_lane_little_undef $I64X2 (lower_address flags addr offset) 0)))
+;; Helper to load a 64-bit half-size vector from memory.
+(decl load_v64 (Type MemFlags Value Offset32) Reg)
 
-;; Unsigned 32->64 bit extension, big-endian source value.
-(rule (lower (has_type $I64X2 (uload32x2 flags @ (bigendian) addr offset)))
-      (vec_unpacku_high $I32X4
-        (vec_load_lane_undef $I64X2 (lower_address flags addr offset) 0)))
+;; Any big-endian source value, BE lane order.
+(rule (load_v64 _ flags @ (bigendian) addr offset)
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (vec_load_lane_undef $I64X2 (lower_address flags addr offset) 0))
 
-;; Unsigned 32->64 bit extension, little-endian source value.
-(rule (lower (has_type $I64X2 (uload32x2 flags @ (littleendian) addr offset)))
-      (vec_unpacku_high $I32X4
-        (vec_load_lane_little_undef $I64X2 (lower_address flags addr offset) 0)))
+;; Any little-endian source value, LE lane order.
+(rule (load_v64 _ flags @ (littleendian) addr offset)
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (vec_load_lane_little_undef $I64X2 (lower_address flags addr offset) 0))
 
-;; Signed 32->64 bit extension, big-endian source value.
-(rule (lower (has_type $I64X2 (sload32x2 flags @ (bigendian) addr offset)))
-      (vec_unpacks_high $I32X4
-        (vec_load_lane_undef $I64X2 (lower_address flags addr offset) 0)))
+;; Big-endian or little-endian 8x8-bit source value, BE lane order.
+(rule (load_v64 (multi_lane 8 16) flags addr offset)
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (vec_load_lane_undef $I64X2 (lower_address flags addr offset) 0))
 
-;; Signed 32->64 bit extension, little-endian source value.
-(rule (lower (has_type $I64X2 (sload32x2 flags @ (littleendian) addr offset)))
-      (vec_unpacks_high $I32X4
-        (vec_load_lane_little_undef $I64X2 (lower_address flags addr offset) 0)))
+;; Big-endian or little-endian 8x8-bit source value, LE lane order.
+(rule (load_v64 (multi_lane 8 16) flags addr offset)
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (vec_load_lane_little_undef $I64X2 (lower_address flags addr offset) 0))
+
+;; Little-endian 4x16-bit source value, BE lane order.
+(rule (load_v64 (multi_lane 16 8) flags @ (littleendian) addr offset)
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (vec_rot_imm $I16X8
+        (vec_load_lane_undef $I64X2 (lower_address flags addr offset) 0) 8))
+
+;; Big-endian 4x16-bit source value, LE lane order.
+(rule (load_v64 (multi_lane 16 8) flags @ (bigendian) addr offset)
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (vec_rot_imm $I16X8
+        (vec_load_lane_little_undef $I64X2 (lower_address flags addr offset) 0) 8))
+
+;; Little-endian 2x32-bit source value, BE lane order.
+(rule (load_v64 (multi_lane 32 4) flags @ (littleendian) addr offset)
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (vec_rot_imm $I64X2
+        (vec_load_lane_little_undef $I64X2 (lower_address flags addr offset) 0) 32))
+
+;; Big-endian 2x32-bit source value, LE lane order.
+(rule (load_v64 (multi_lane 32 4) flags @ (bigendian) addr offset)
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (vec_rot_imm $I64X2
+        (vec_load_lane_undef $I64X2 (lower_address flags addr offset) 0) 32))
 
 
 ;;;; Rules for `store` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2716,25 +2836,114 @@
       (side_effect (vec_store_lane_little $F64X2 val
                                           (lower_address flags addr offset) 0)))
 
-;; Store 128-bit big-endian vector type.
+;; Store 128-bit big-endian vector type, BE lane order - direct store.
 (rule (lower (store flags @ (bigendian)
                     val @ (value_type (vr128_ty ty)) addr offset))
+      (if-let (LaneOrder.BigEndian) (lane_order))
       (side_effect (vec_store val (lower_address flags addr offset))))
 
-;; Store 128-bit little-endian vector type (z15 instruction).
+;; Store 128-bit little-endian vector type, BE lane order - byte-reversed store.
 (rule (lower (store flags @ (littleendian)
-                    val @ (value_type (and (vr128_ty ty) (vxrs_ext2_enabled))) addr offset))
-      (side_effect (vec_storerev val (lower_address flags addr offset))))
+                    val @ (value_type (vr128_ty ty)) addr offset))
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (side_effect (vec_store_byte_rev ty val flags addr offset)))
 
-;; Store 128-bit little-endian vector type (via GPRs on z14).
+;; Store 128-bit big-endian vector type, LE lane order - element-reversed store.
+(rule (lower (store flags @ (bigendian)
+                    val @ (value_type (vr128_ty ty)) addr offset))
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (side_effect (vec_store_elt_rev ty val flags addr offset)))
+
+;; Store 128-bit little-endian vector type, LE lane order - fully-reversed store.
 (rule (lower (store flags @ (littleendian)
-                    val @ (value_type (and (vr128_ty ty) (vxrs_ext2_disabled))) addr offset))
+                    val @ (value_type (vr128_ty ty)) addr offset))
+      (if-let (LaneOrder.LittleEndian) (lane_order))
+      (side_effect (vec_store_full_rev ty val flags addr offset)))
+
+
+;; Helper to perform a 128-bit full-vector byte-reversed store.
+(decl vec_store_full_rev (Type Reg MemFlags Value Offset32) SideEffectNoResult)
+
+;; Full-vector byte-reversed store via single instruction on z15.
+(rule (vec_store_full_rev (vxrs_ext2_enabled) val flags addr offset)
+      (vec_storerev val (lower_address flags addr offset)))
+
+;; Full-vector byte-reversed store via GPRs on z14.
+(rule (vec_store_full_rev (vxrs_ext2_disabled) val flags addr offset)
       (let ((lo_addr MemArg (lower_address_bias flags addr offset 0))
             (hi_addr MemArg (lower_address_bias flags addr offset 8))
             (lo_val Reg (vec_extract_lane $I64X2 val 1 (zero_reg)))
             (hi_val Reg (vec_extract_lane $I64X2 val 0 (zero_reg))))
-        (side_effect (side_effect_concat (storerev64 lo_val lo_addr)
-                                         (storerev64 hi_val hi_addr)))))
+        (side_effect_concat (storerev64 lo_val lo_addr)
+                            (storerev64 hi_val hi_addr))))
+
+
+;; Helper to perform an element-wise byte-reversed store.
+(decl vec_store_byte_rev (Type Reg MemFlags Value Offset32) SideEffectNoResult)
+
+;; Element-wise byte-reversed 1x128-bit store is a full byte-reversed store.
+(rule (vec_store_byte_rev $I128 val flags addr offset)
+      (vec_store_full_rev $I128 val flags addr offset))
+
+;; Element-wise byte-reversed 16x8-bit store is a direct store.
+(rule (vec_store_byte_rev (multi_lane 8 16) val flags addr offset)
+      (vec_store val (lower_address flags addr offset)))
+
+;; Element-wise byte-reversed store via single instruction on z15.
+(rule (vec_store_byte_rev (and (vxrs_ext2_enabled) ty @ (multi_lane 64 2))
+                          val flags addr offset)
+      (vec_store_byte64rev val (lower_address flags addr offset)))
+(rule (vec_store_byte_rev (and (vxrs_ext2_enabled) ty @ (multi_lane 32 4))
+                          val flags addr offset)
+      (vec_store_byte32rev val (lower_address flags addr offset)))
+(rule (vec_store_byte_rev (and (vxrs_ext2_enabled) ty @ (multi_lane 16 8))
+                          val flags addr offset)
+      (vec_store_byte16rev val (lower_address flags addr offset)))
+
+;; Element-wise byte-reversed load as element-swapped byte-reversed store on z14.
+(rule (vec_store_byte_rev (and (vxrs_ext2_disabled) ty @ (multi_lane 64 2))
+                          val flags addr offset)
+      (vec_store_full_rev ty (vec_elt_rev ty val) flags addr offset))
+(rule (vec_store_byte_rev (and (vxrs_ext2_disabled) ty @ (multi_lane 32 4))
+                          val flags addr offset)
+      (vec_store_full_rev ty (vec_elt_rev ty val) flags addr offset))
+(rule (vec_store_byte_rev (and (vxrs_ext2_disabled) ty @ (multi_lane 16 8))
+                          val flags addr offset)
+      (vec_store_full_rev ty (vec_elt_rev ty val) flags addr offset))
+
+
+;; Helper to perform an element-reversed store.
+(decl vec_store_elt_rev (Type Reg MemFlags Value Offset32) SideEffectNoResult)
+
+;; Element-reversed 1x128-bit store is a direct store.
+(rule (vec_store_elt_rev $I128 val flags addr offset)
+      (vec_store val (lower_address flags addr offset)))
+
+;; Element-reversed 16x8-bit store is a full byte-reversed store.
+(rule (vec_store_elt_rev ty @ (multi_lane 8 16) val flags addr offset)
+      (vec_store_full_rev ty val flags addr offset))
+
+;; Element-reversed store via single instruction on z15.
+(rule (vec_store_elt_rev (and (vxrs_ext2_enabled) ty @ (multi_lane 64 2))
+                         val flags addr offset)
+      (vec_store_elt64rev val (lower_address flags addr offset)))
+(rule (vec_store_elt_rev (and (vxrs_ext2_enabled) ty @ (multi_lane 32 4))
+                         val flags addr offset)
+      (vec_store_elt32rev val (lower_address flags addr offset)))
+(rule (vec_store_elt_rev (and (vxrs_ext2_enabled) ty @ (multi_lane 16 8))
+                         val flags addr offset)
+      (vec_store_elt16rev val (lower_address flags addr offset)))
+
+;; Element-reversed store as element-swapped direct store on z14.
+(rule (vec_store_elt_rev (and (vxrs_ext2_disabled) ty @ (multi_lane 64 2))
+                         val flags addr offset)
+      (vec_store (vec_elt_rev ty val) (lower_address flags addr offset)))
+(rule (vec_store_elt_rev (and (vxrs_ext2_disabled) ty @ (multi_lane 32 4))
+                         val flags addr offset)
+      (vec_store (vec_elt_rev ty val) (lower_address flags addr offset)))
+(rule (vec_store_elt_rev (and (vxrs_ext2_disabled) ty @ (multi_lane 16 8))
+                         val flags addr offset)
+      (vec_store (vec_elt_rev ty val) (lower_address flags addr offset)))
 
 
 ;;;; Rules for 8-bit integer stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3591,23 +3800,47 @@
 ;;;; Rules for `vhigh_bits` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (vhigh_bits x @ (value_type (multi_lane 8 16))))
+      (if-let (LaneOrder.LittleEndian) (lane_order))
       (let ((mask Reg (vec_imm $I8X16 (imm8x16 0 8 16 24 32 40 48 56
                                                64 72 80 88 96 104 112 120))))
         (vec_extract_lane $I64X2 (vec_bitpermute x mask) 0 (zero_reg))))
+(rule (lower (vhigh_bits x @ (value_type (multi_lane 8 16))))
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (let ((mask Reg (vec_imm $I8X16 (imm8x16 120 112 104 96 88 80 72 64
+                                               56 48 40 32 24 16 8 0))))
+        (vec_extract_lane $I64X2 (vec_bitpermute x mask) 0 (zero_reg))))
 
 (rule (lower (vhigh_bits x @ (value_type (multi_lane 16 8))))
+      (if-let (LaneOrder.LittleEndian) (lane_order))
       (let ((mask Reg (vec_imm $I8X16 (imm8x16 128 128 128 128 128 128 128 128
                                                0 16 32 48 64 80 96 112))))
         (vec_extract_lane $I64X2 (vec_bitpermute x mask) 0 (zero_reg))))
+(rule (lower (vhigh_bits x @ (value_type (multi_lane 16 8))))
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (let ((mask Reg (vec_imm $I8X16 (imm8x16 128 128 128 128 128 128 128 128
+                                               112 96 80 64 48 32 16 0))))
+        (vec_extract_lane $I64X2 (vec_bitpermute x mask) 0 (zero_reg))))
 
 (rule (lower (vhigh_bits x @ (value_type (multi_lane 32 4))))
+      (if-let (LaneOrder.LittleEndian) (lane_order))
       (let ((mask Reg (vec_imm $I8X16 (imm8x16 128 128 128 128 128 128 128 128
                                                128 128 128 128 0 32 64 96))))
         (vec_extract_lane $I64X2 (vec_bitpermute x mask) 0 (zero_reg))))
+(rule (lower (vhigh_bits x @ (value_type (multi_lane 32 4))))
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (let ((mask Reg (vec_imm $I8X16 (imm8x16 128 128 128 128 128 128 128 128
+                                               128 128 128 128 96 64 32 0))))
+        (vec_extract_lane $I64X2 (vec_bitpermute x mask) 0 (zero_reg))))
 
 (rule (lower (vhigh_bits x @ (value_type (multi_lane 64 2))))
+      (if-let (LaneOrder.LittleEndian) (lane_order))
       (let ((mask Reg (vec_imm $I8X16 (imm8x16 128 128 128 128 128 128 128 128
                                                128 128 128 128 128 128 0 64))))
+        (vec_extract_lane $I64X2 (vec_bitpermute x mask) 0 (zero_reg))))
+(rule (lower (vhigh_bits x @ (value_type (multi_lane 64 2))))
+      (if-let (LaneOrder.BigEndian) (lane_order))
+      (let ((mask Reg (vec_imm $I8X16 (imm8x16 128 128 128 128 128 128 128 128
+                                               128 128 128 128 128 128 64 0))))
         (vec_extract_lane $I64X2 (vec_bitpermute x mask) 0 (zero_reg))))
 
 
@@ -3870,7 +4103,8 @@
 (decl lower_call_args_slots (ABISig Range ValueSlice) InstOutput)
 (rule (lower_call_args_slots abi (range_empty) _) (output_none))
 (rule (lower_call_args_slots abi (range_unwrap head tail) args)
-      (let ((_ Unit (copy_to_arg 0 (abi_get_arg abi head)
+      (let ((_ Unit (copy_to_arg (abi_lane_order abi)
+                                 0 (abi_get_arg abi head)
                                  (value_slice_get args head))))
         (lower_call_args_slots abi tail args)))
 
@@ -3886,7 +4120,9 @@
 (decl lower_call_rets (ABISig Range InstOutputBuilder) InstOutput)
 (rule (lower_call_rets abi (range_empty) builder) (output_builder_finish builder))
 (rule (lower_call_rets abi (range_unwrap head tail) builder)
-      (let ((ret ValueRegs (copy_from_arg (abi_sized_stack_arg_space abi) (abi_get_ret abi head)))
+      (let ((ret ValueRegs (copy_from_arg (abi_lane_order abi)
+                                          (abi_sized_stack_arg_space abi)
+                                          (abi_get_ret abi head)))
             (_ Unit (output_builder_push builder ret)))
         (lower_call_rets abi tail builder)))
 

@@ -625,7 +625,55 @@ block0(v0: f64x2, v1: f64x2):
 ;   lochio %r2, 1
 ;   br %r14
 
-function %vhigh_bits(i64x2) -> i64 {
+function %vhigh_bits_be(i64x2) -> i64 {
+block0(v0: i64x2):
+  v1 = vhigh_bits.i64 v0
+  return v1
+}
+
+; block0:
+;   bras %r1, 20 ; data.u128 0x80808080808080808080808080804000 ; vl %v3, 0(%r1)
+;   vbperm %v5, %v24, %v3
+;   lgdr %r2, %f5
+;   br %r14
+
+function %vhigh_bits_be(i32x4) -> i64 {
+block0(v0: i32x4):
+  v1 = vhigh_bits.i64 v0
+  return v1
+}
+
+; block0:
+;   bras %r1, 20 ; data.u128 0x80808080808080808080808060402000 ; vl %v3, 0(%r1)
+;   vbperm %v5, %v24, %v3
+;   lgdr %r2, %f5
+;   br %r14
+
+function %vhigh_bits_be(i16x8) -> i64 {
+block0(v0: i16x8):
+  v1 = vhigh_bits.i64 v0
+  return v1
+}
+
+; block0:
+;   bras %r1, 20 ; data.u128 0x80808080808080807060504030201000 ; vl %v3, 0(%r1)
+;   vbperm %v5, %v24, %v3
+;   lgdr %r2, %f5
+;   br %r14
+
+function %vhigh_bits_be(i8x16) -> i64 {
+block0(v0: i8x16):
+  v1 = vhigh_bits.i64 v0
+  return v1
+}
+
+; block0:
+;   bras %r1, 20 ; data.u128 0x78706860585048403830282018100800 ; vl %v3, 0(%r1)
+;   vbperm %v5, %v24, %v3
+;   lgdr %r2, %f5
+;   br %r14
+
+function %vhigh_bits_le(i64x2) -> i64 wasmtime_system_v {
 block0(v0: i64x2):
   v1 = vhigh_bits.i64 v0
   return v1
@@ -637,7 +685,7 @@ block0(v0: i64x2):
 ;   lgdr %r2, %f5
 ;   br %r14
 
-function %vhigh_bits(i32x4) -> i64 {
+function %vhigh_bits_le(i32x4) -> i64 wasmtime_system_v {
 block0(v0: i32x4):
   v1 = vhigh_bits.i64 v0
   return v1
@@ -649,7 +697,7 @@ block0(v0: i32x4):
 ;   lgdr %r2, %f5
 ;   br %r14
 
-function %vhigh_bits(i16x8) -> i64 {
+function %vhigh_bits_le(i16x8) -> i64 wasmtime_system_v {
 block0(v0: i16x8):
   v1 = vhigh_bits.i64 v0
   return v1
@@ -661,7 +709,7 @@ block0(v0: i16x8):
 ;   lgdr %r2, %f5
 ;   br %r14
 
-function %vhigh_bits(i8x16) -> i64 {
+function %vhigh_bits_le(i8x16) -> i64 wasmtime_system_v {
 block0(v0: i8x16):
   v1 = vhigh_bits.i64 v0
   return v1
