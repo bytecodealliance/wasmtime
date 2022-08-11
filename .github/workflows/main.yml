@@ -141,6 +141,8 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+      with:
+        toolchain: 1.62.1
 
     # Check some feature combinations of the `wasmtime` crate
     - run: cargo check -p wasmtime --no-default-features
@@ -237,6 +239,8 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+      with:
+        toolchain: 1.62.1
 
     # Install targets in order to build various tests throughout the repo
     - run: rustup target add wasm32-wasi wasm32-unknown-unknown ${{ matrix.target }}
@@ -408,6 +412,8 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+      with:
+        toolchain: 1.62.1
     - uses: ./.github/actions/binary-compatible-builds
       with:
         name: ${{ matrix.build }}
