@@ -1681,11 +1681,7 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
     }
 }
 
-fn adjust_stack_and_nominal_sp<M: ABIMachineSpec, C: LowerCtx<I = M::I>>(
-    ctx: &mut C,
-    off: i32,
-    is_sub: bool,
-) {
+fn adjust_stack_and_nominal_sp<M: ABIMachineSpec>(ctx: &mut Lower<M::I>, off: i32, is_sub: bool) {
     if off == 0 {
         return;
     }
@@ -1707,24 +1703,24 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         }
     }
 
-    fn accumulate_outgoing_args_size<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
+    fn accumulate_outgoing_args_size(&self, ctx: &mut Lower<Self::I>) {
         let off = self.sig.sized_stack_arg_space + self.sig.sized_stack_ret_space;
         ctx.abi().accumulate_outgoing_args_size(off as u32);
     }
 
-    fn emit_stack_pre_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
+    fn emit_stack_pre_adjust(&self, ctx: &mut Lower<Self::I>) {
         let off = self.sig.sized_stack_arg_space + self.sig.sized_stack_ret_space;
-        adjust_stack_and_nominal_sp::<M, C>(ctx, off as i32, /* is_sub = */ true)
+        adjust_stack_and_nominal_sp::<M>(ctx, off as i32, /* is_sub = */ true)
     }
 
-    fn emit_stack_post_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
+    fn emit_stack_post_adjust(&self, ctx: &mut Lower<Self::I>) {
         let off = self.sig.sized_stack_arg_space + self.sig.sized_stack_ret_space;
-        adjust_stack_and_nominal_sp::<M, C>(ctx, off as i32, /* is_sub = */ false)
+        adjust_stack_and_nominal_sp::<M>(ctx, off as i32, /* is_sub = */ false)
     }
 
-    fn emit_copy_regs_to_buffer<C: LowerCtx<I = Self::I>>(
+    fn emit_copy_regs_to_buffer(
         &self,
-        ctx: &mut C,
+        ctx: &mut Lower<Self::I>,
         idx: usize,
         from_regs: ValueRegs<Reg>,
     ) {
@@ -1754,9 +1750,9 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         }
     }
 
-    fn emit_copy_regs_to_arg<C: LowerCtx<I = Self::I>>(
+    fn emit_copy_regs_to_arg(
         &self,
-        ctx: &mut C,
+        ctx: &mut Lower<Self::I>,
         idx: usize,
         from_regs: ValueRegs<Reg>,
     ) {
@@ -1837,9 +1833,9 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         }
     }
 
-    fn emit_copy_retval_to_regs<C: LowerCtx<I = Self::I>>(
+    fn emit_copy_retval_to_regs(
         &self,
-        ctx: &mut C,
+        ctx: &mut Lower<Self::I>,
         idx: usize,
         into_regs: ValueRegs<Writable<Reg>>,
     ) {
@@ -1873,7 +1869,7 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         }
     }
 
-    fn emit_call<C: LowerCtx<I = Self::I>>(&mut self, ctx: &mut C) {
+    fn emit_call(&mut self, ctx: &mut Lower<Self::I>) {
         let (uses, defs) = (
             mem::replace(&mut self.uses, Default::default()),
             mem::replace(&mut self.defs, Default::default()),

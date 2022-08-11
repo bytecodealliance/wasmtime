@@ -21,7 +21,7 @@ use crate::{
     isa::unwind::UnwindInst,
     isa::CallConv,
     machinst::abi_impl::ABIMachineSpec,
-    machinst::{InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
+    machinst::{InsnOutput, Lower, VCodeConstant, VCodeConstantData},
 };
 use regalloc2::PReg;
 use smallvec::{smallvec, SmallVec};
@@ -46,17 +46,14 @@ type VecMInst = Vec<MInst>;
 type VecMInstBuilder = Cell<Vec<MInst>>;
 
 /// The main entry point for lowering with ISLE.
-pub(crate) fn lower<C>(
-    lower_ctx: &mut C,
+pub(crate) fn lower(
+    lower_ctx: &mut Lower<MInst>,
     triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
     outputs: &[InsnOutput],
     inst: Inst,
-) -> Result<(), ()>
-where
-    C: LowerCtx<I = MInst>,
-{
+) -> Result<(), ()> {
     lower_common(
         lower_ctx,
         triple,
@@ -69,17 +66,14 @@ where
 }
 
 /// The main entry point for branch lowering with ISLE.
-pub(crate) fn lower_branch<C>(
-    lower_ctx: &mut C,
+pub(crate) fn lower_branch(
+    lower_ctx: &mut Lower<MInst>,
     triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
     branch: Inst,
     targets: &[MachLabel],
-) -> Result<(), ()>
-where
-    C: LowerCtx<I = MInst>,
-{
+) -> Result<(), ()> {
     lower_common(
         lower_ctx,
         triple,
@@ -91,10 +85,7 @@ where
     )
 }
 
-impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
-where
-    C: LowerCtx<I = MInst>,
-{
+impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_methods!();
 
     fn abi_sig(&mut self, sig_ref: SigRef) -> ABISig {

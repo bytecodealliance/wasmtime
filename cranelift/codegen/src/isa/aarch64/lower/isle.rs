@@ -24,7 +24,7 @@ use crate::{
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::aarch64::lower::{writable_vreg, writable_xreg, xreg},
     isa::unwind::UnwindInst,
-    machinst::{ty_bits, InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
+    machinst::{ty_bits, InsnOutput, Lower, VCodeConstant, VCodeConstantData},
 };
 use regalloc2::PReg;
 use std::boxed::Box;
@@ -39,17 +39,14 @@ type BoxJTSequenceInfo = Box<JTSequenceInfo>;
 type BoxExternalName = Box<ExternalName>;
 
 /// The main entry point for lowering with ISLE.
-pub(crate) fn lower<C>(
-    lower_ctx: &mut C,
+pub(crate) fn lower(
+    lower_ctx: &mut Lower<MInst>,
     triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
     outputs: &[InsnOutput],
     inst: Inst,
-) -> Result<(), ()>
-where
-    C: LowerCtx<I = MInst>,
-{
+) -> Result<(), ()> {
     lower_common(
         lower_ctx,
         triple,
@@ -71,10 +68,7 @@ pub struct SinkableAtomicLoad {
     atomic_addr: Value,
 }
 
-impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
-where
-    C: LowerCtx<I = MInst>,
-{
+impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_methods!();
 
     fn use_lse(&mut self, _: Inst) -> Option<()> {
