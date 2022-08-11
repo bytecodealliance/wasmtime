@@ -3394,7 +3394,7 @@ fn test_x64_emit() {
             Opcode::Call,
         ),
         "E800000000",
-        "call    User(u0)",
+        "call    User(userextname0)",
     ));
 
     // ========================================================
@@ -3442,7 +3442,7 @@ fn test_x64_emit() {
             offset: 0,
         },
         "4C8B1D00000000",
-        "load_ext_name u0+0, %r11",
+        "load_ext_name userextname0+0, %r11",
     ));
     insns.push((
         Inst::LoadExtName {
@@ -3451,7 +3451,7 @@ fn test_x64_emit() {
             offset: 0x12345678,
         },
         "4C8B1D000000004981C378563412",
-        "load_ext_name u0+305419896, %r11",
+        "load_ext_name userextname0+305419896, %r11",
     ));
     insns.push((
         Inst::LoadExtName {
@@ -3460,7 +3460,7 @@ fn test_x64_emit() {
             offset: -0x12345678,
         },
         "4C8B1D000000004981EB78563412",
-        "load_ext_name u0+-305419896, %r11",
+        "load_ext_name userextname0+-305419896, %r11",
     ));
 
     // ========================================================
@@ -4661,7 +4661,7 @@ fn test_x64_emit() {
             symbol: ExternalName::User(UserExternalNameRef::new(0)),
         },
         "66488D3D00000000666648E800000000",
-        "%rax = elf_tls_get_addr User(u0)",
+        "%rax = elf_tls_get_addr User(userextname0)",
     ));
 
     insns.push((
@@ -4669,7 +4669,7 @@ fn test_x64_emit() {
             symbol: ExternalName::User(UserExternalNameRef::new(0)),
         },
         "488B3D00000000FF17",
-        "%rax = macho_tls_get_addr User(u0)",
+        "%rax = macho_tls_get_addr User(userextname0)",
     ));
 
     // ========================================================

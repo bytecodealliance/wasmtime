@@ -1385,50 +1385,48 @@ impl<'a> Parser<'a> {
                     .map_err(|_| self.error("invalid test case or libcall name"))
             }
 
-            Some(Token::UserRef(func_ref)) => {
+            Some(Token::UserNameRef(name_ref)) => {
                 self.consume();
+                Ok(ExternalName::user(UserExternalNameRef::new(
+                    name_ref as usize,
+                )))
+            }
 
-                match self.token() {
-                    Some(Token::Colon) => {
-                        self.consume();
-                        match self.token() {
-                            Some(Token::Integer(index_str)) => {
-                                let index: u32 =
-                                    u32::from_str_radix(index_str, 10).map_err(|_| {
-                                        self.error("the integer given overflows the u32 type")
-                                    })?;
-                                self.consume();
+            Some(Token::UserRef(namespace)) => {
+                self.consume();
+                if let Some(Token::Colon) = self.token() {
+                    self.consume();
+                    match self.token() {
+                        Some(Token::Integer(index_str)) => {
+                            let index: u32 = u32::from_str_radix(index_str, 10).map_err(|_| {
+                                self.error("the integer given overflows the u32 type")
+                            })?;
+                            self.consume();
 
-                                // Deduplicate the reference (O(n), but should be fine for tests),
-                                // to follow `FunctionParameters::declare_imported_user_function`.
-                                let name_ref = self
-                                    .predeclared_external_names
-                                    .iter()
-                                    .find_map(|(reff, name)| {
-                                        if name.index == index && name.namespace == func_ref {
-                                            Some(reff)
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .unwrap_or_else(|| {
-                                        self.predeclared_external_names.push(ir::UserExternalName {
-                                            namespace: func_ref,
-                                            index,
-                                        })
-                                    });
+                            // Deduplicate the reference (O(n), but should be fine for tests),
+                            // to follow `FunctionParameters::declare_imported_user_function`,
+                            // otherwise this will cause ref mismatches when asserted below.
+                            let name_ref = self
+                                .predeclared_external_names
+                                .iter()
+                                .find_map(|(reff, name)| {
+                                    if name.index == index && name.namespace == namespace {
+                                        Some(reff)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .unwrap_or_else(|| {
+                                    self.predeclared_external_names
+                                        .push(ir::UserExternalName { namespace, index })
+                                });
 
-                                Ok(ExternalName::user(name_ref))
-                            }
-                            _ => err!(self.loc, "expected integer"),
+                            Ok(ExternalName::user(name_ref))
                         }
+                        _ => err!(self.loc, "expected integer"),
                     }
-                    _ => {
-                        // Assume it's only a func ref that was predeclared:.
-                        Ok(ExternalName::user(UserExternalNameRef::new(
-                            func_ref as usize,
-                        )))
-                    }
+                } else {
+                    err!(self.loc, "expected colon")
                 }
             }
 

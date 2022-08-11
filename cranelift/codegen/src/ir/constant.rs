@@ -180,10 +180,8 @@ pub struct ConstantPool {
 
     /// Mapping of hashed `ConstantData` to the index into the other hashmap.
     ///
-    /// For `ConstantPool` to be `Hash`able, we really want to use a `BTreeMap` and not a simple
-    /// `HashMap` here, so we manually rehash the `ConstantData` (to avoid using the whole
-    /// `ConstantData` as the key in this map), and do a value comparison on matches.
-    values_to_handles: BTreeMap<u64, Vec<Constant>>,
+    /// This allows for deduplication of entries into the `handles_to_values` mapping.
+    values_to_handles: BTreeMap<ConstantData, Constant>,
 }
 
 impl ConstantPool {
@@ -201,25 +199,12 @@ impl ConstantPool {
         self.values_to_handles.clear();
     }
 
-    fn compute_hash(constant_value: &ConstantData) -> u64 {
-        use std::hash::Hasher;
-        let mut hasher = crate::hash_map::DefaultHasher::new();
-        hasher.write(constant_value.as_slice());
-        hasher.finish()
-    }
-
     /// Insert constant data into the pool, returning a handle for later referencing; when constant
     /// data is inserted that is a duplicate of previous constant data, the existing handle will be
     /// returned.
     pub fn insert(&mut self, constant_value: ConstantData) -> Constant {
-        let constant_value_hash = Self::compute_hash(&constant_value);
-
-        if let Some(constants) = self.values_to_handles.get(&constant_value_hash) {
-            for cst in constants {
-                if self.handles_to_values[cst] == constant_value {
-                    return *cst;
-                }
-            }
+        if let Some(cst) = self.values_to_handles.get(&constant_value) {
+            return *cst;
         }
 
         let constant_handle = Constant::new(self.len());
@@ -247,11 +232,8 @@ impl ConstantPool {
             &constant_value,
             replaced.unwrap()
         );
-        let constant_value_hash = Self::compute_hash(&constant_value);
         self.values_to_handles
-            .entry(constant_value_hash)
-            .or_default()
-            .push(constant_handle);
+            .insert(constant_value, constant_handle);
     }
 
     /// Iterate over the constants in insertion order.

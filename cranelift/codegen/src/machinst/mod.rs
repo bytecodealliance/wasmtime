@@ -302,7 +302,7 @@ pub struct CompiledCodeBase<T: CompilePhase> {
     pub bb_edges: Vec<(CodeOffset, CodeOffset)>,
 }
 
-impl CompiledCodeBase<Stencil> {
+impl CompiledCodeStencil {
     /// Apply function parameters to finalize a stencil into its final form.
     pub fn apply_params(self, params: &FunctionParameters) -> CompiledCode {
         CompiledCode {
@@ -331,6 +331,11 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
         self.buffer.data()
     }
 }
+
+/// Result of compiling a `FunctionStencil`, before applying `FunctionParameters` onto it.
+///
+/// Only used internally, in a transient manner, for the incremental compilation cache.
+pub type CompiledCodeStencil = CompiledCodeBase<Stencil>;
 
 /// `CompiledCode` in its final form (i.e. after `FunctionParameters` have been applied), ready for
 /// consumption.

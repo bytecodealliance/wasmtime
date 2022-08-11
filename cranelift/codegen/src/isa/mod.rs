@@ -49,9 +49,7 @@ use crate::flowgraph;
 use crate::ir::{self, Function};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
-use crate::machinst::{
-    CompiledCode, CompiledCodeBase, Stencil, TextSectionBuilder, UnwindInfoKind,
-};
+use crate::machinst::{CompiledCode, CompiledCodeStencil, TextSectionBuilder, UnwindInfoKind};
 use crate::settings;
 use crate::settings::SetResult;
 use crate::CodegenResult;
@@ -236,7 +234,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         &self,
         func: &Function,
         want_disasm: bool,
-    ) -> CodegenResult<CompiledCodeBase<Stencil>>;
+    ) -> CodegenResult<CompiledCodeStencil>;
 
     #[cfg(feature = "unwind")]
     /// Map a regalloc::Reg to its corresponding DWARF register.

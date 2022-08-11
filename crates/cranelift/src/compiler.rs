@@ -997,7 +997,7 @@ fn mach_reloc_to_reloc(func: &Function, reloc: &MachReloc) -> Relocation {
         addend,
     } = reloc;
     let reloc_target = if let ExternalName::User(user_func_ref) = *name {
-        let UserExternalName { namespace, index } = func.params.user_named_funcs[user_func_ref];
+        let UserExternalName { namespace, index } = func.params.user_named_funcs()[user_func_ref];
         debug_assert_eq!(namespace, 0);
         RelocationTarget::UserFunc(FuncIndex::from_u32(index))
     } else if let ExternalName::LibCall(libcall) = *name {

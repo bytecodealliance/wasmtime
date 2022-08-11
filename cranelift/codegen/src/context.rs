@@ -18,7 +18,7 @@ use crate::isa::TargetIsa;
 use crate::legalizer::simple_legalize;
 use crate::licm::do_licm;
 use crate::loop_analysis::LoopAnalysis;
-use crate::machinst::{CompiledCode, CompiledCodeBase, Stencil};
+use crate::machinst::{CompiledCode, CompiledCodeStencil};
 use crate::nan_canonicalization::do_nan_canonicalization;
 use crate::remove_constant_phis::do_remove_constant_phis;
 use crate::result::{CodegenResult, CompileResult};
@@ -129,10 +129,7 @@ impl Context {
     /// Internally compiles the function into a stencil.
     ///
     /// Public only for testing and fuzzing purposes.
-    pub fn compile_stencil(
-        &mut self,
-        isa: &dyn TargetIsa,
-    ) -> CodegenResult<CompiledCodeBase<Stencil>> {
+    pub fn compile_stencil(&mut self, isa: &dyn TargetIsa) -> CodegenResult<CompiledCodeStencil> {
         let _tt = timing::compile();
 
         self.verify_if(isa)?;

@@ -7,8 +7,8 @@ use crate::isa::aarch64::settings as aarch64_settings;
 use crate::isa::unwind::systemv;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeBase, MachTextSectionBuilder, Reg, Stencil,
-    TextSectionBuilder, VCode,
+    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, TextSectionBuilder,
+    VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
@@ -70,7 +70,7 @@ impl TargetIsa for AArch64Backend {
         &self,
         func: &Function,
         want_disasm: bool,
-    ) -> CodegenResult<CompiledCodeBase<Stencil>> {
+    ) -> CodegenResult<CompiledCodeStencil> {
         let flags = self.flags();
         let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
 
@@ -85,7 +85,7 @@ impl TargetIsa for AArch64Backend {
             log::debug!("disassembly:\n{}", disasm);
         }
 
-        Ok(CompiledCodeBase {
+        Ok(CompiledCodeStencil {
             buffer,
             frame_size,
             disasm: emit_result.disasm,

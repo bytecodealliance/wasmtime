@@ -8,8 +8,10 @@ use crate::ir::{condcodes::IntCC, Function, Type};
 use crate::isa::unwind::systemv;
 use crate::isa::x64::{inst::regs::create_reg_env_systemv, settings as x64_settings};
 use crate::isa::Builder as IsaBuilder;
-use crate::machinst::{compile, CompiledCode, MachTextSectionBuilder, TextSectionBuilder, VCode};
-use crate::machinst::{CompiledCodeBase, Reg, Stencil};
+use crate::machinst::{
+    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, TextSectionBuilder,
+    VCode,
+};
 use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self as shared_settings, Flags};
 use alloc::{boxed::Box, vec::Vec};
@@ -61,7 +63,7 @@ impl TargetIsa for X64Backend {
         &self,
         func: &Function,
         want_disasm: bool,
-    ) -> CodegenResult<CompiledCodeBase<Stencil>> {
+    ) -> CodegenResult<CompiledCodeStencil> {
         let flags = self.flags();
         let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
 
@@ -76,7 +78,7 @@ impl TargetIsa for X64Backend {
             log::trace!("disassembly:\n{}", disasm);
         }
 
-        Ok(CompiledCodeBase {
+        Ok(CompiledCodeStencil {
             buffer,
             frame_size,
             disasm: emit_result.disasm,

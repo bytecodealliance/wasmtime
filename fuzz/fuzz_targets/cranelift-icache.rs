@@ -34,7 +34,7 @@ fuzz_target!(|func: SingleFunction| {
 
     let isa = isa_builder.finish(flags).unwrap();
 
-    let cache_key_hash = icache::compute_cache_key(&*isa, &func);
+    let cache_key_hash = icache::compute_cache_key(&*isa, &mut func);
 
     let mut context = Context::for_function(func.clone());
     let prev_stencil = match context.compile_stencil(&*isa) {
@@ -42,7 +42,8 @@ fuzz_target!(|func: SingleFunction| {
         Err(_) => return,
     };
 
-    let serialized = icache::serialize_compiled(&prev_stencil).expect("serialization failure");
+    let (prev_stencil, serialized) =
+        icache::serialize_compiled(prev_stencil).expect("serialization failure");
 
     let prev_result = prev_stencil.apply_params(&func.params);
 
@@ -117,7 +118,7 @@ fuzz_target!(|func: SingleFunction| {
         false
     };
 
-    let new_cache_key_hash = icache::compute_cache_key(&*isa, &func);
+    let new_cache_key_hash = icache::compute_cache_key(&*isa, &mut func);
 
     if expect_cache_hit {
         assert!(cache_key_hash == new_cache_key_hash);

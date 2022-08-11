@@ -332,7 +332,7 @@ impl FuncRef {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct UserExternalNameRef(u32);
-entity_impl!(UserExternalNameRef, "u");
+entity_impl!(UserExternalNameRef, "userextname");
 
 /// An opaque reference to a function [`Signature`](super::Signature).
 ///

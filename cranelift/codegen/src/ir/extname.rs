@@ -164,7 +164,7 @@ impl ExternalName {
     /// # use cranelift_codegen::ir::{ExternalName, UserExternalNameRef};
     /// let user_func_ref: UserExternalNameRef = Default::default(); // usually obtained with `Function::declare_imported_user_function()`
     /// let name = ExternalName::user(user_func_ref);
-    /// assert_eq!(name.display(None).to_string(), "u0");
+    /// assert_eq!(name.display(None).to_string(), "userextname0");
     /// ```
     pub fn user(func_ref: UserExternalNameRef) -> Self {
         Self::User(func_ref)
@@ -191,7 +191,7 @@ impl<'a> fmt::Display for DisplayableExternalName<'a> {
         match &self.name {
             ExternalName::User(func_ref) => {
                 if let Some(params) = self.params {
-                    let name = &params.user_named_funcs[*func_ref];
+                    let name = &params.user_named_funcs()[*func_ref];
                     write!(f, "u{}:{}", name.namespace, name.index)
                 } else {
                     // Best effort.
@@ -255,25 +255,31 @@ mod tests {
             ExternalName::user(UserExternalNameRef::new(0))
                 .display(None)
                 .to_string(),
-            "u0"
+            "userextname0"
         );
         assert_eq!(
             ExternalName::user(UserExternalNameRef::new(1))
                 .display(None)
                 .to_string(),
-            "u1"
+            "userextname1"
+        );
+        assert_eq!(
+            ExternalName::user(UserExternalNameRef::new((u32::MAX - 1) as _))
+                .display(None)
+                .to_string(),
+            "userextname4294967294"
         );
 
         let mut func_params = FunctionParameters::new();
 
         // ref 0
-        func_params.user_named_funcs.push(UserExternalName {
+        func_params.ensure_user_func_name(UserExternalName {
             namespace: 13,
             index: 37,
         });
 
         // ref 1
-        func_params.user_named_funcs.push(UserExternalName {
+        func_params.ensure_user_func_name(UserExternalName {
             namespace: 2,
             index: 4,
         });
@@ -290,13 +296,6 @@ mod tests {
                 .display(Some(&func_params))
                 .to_string(),
             "u2:4"
-        );
-
-        assert_eq!(
-            ExternalName::user(UserExternalNameRef::new((u32::MAX - 1) as _))
-                .display(None)
-                .to_string(),
-            "u4294967294"
         );
     }
 

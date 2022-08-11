@@ -30,7 +30,7 @@ impl CompiledBlob {
         {
             let name = &match name {
                 ir::ExternalName::User(reff) => {
-                    let name = &self.func.params.user_named_funcs[*reff];
+                    let name = &self.func.params.user_named_funcs()[*reff];
                     ModuleExtName::User {
                         namespace: name.namespace,
                         index: name.index,

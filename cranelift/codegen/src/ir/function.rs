@@ -75,7 +75,7 @@ pub struct FunctionParameters {
     base_srcloc: Option<SourceLoc>,
 
     /// External user-defined function references.
-    pub user_named_funcs: PrimaryMap<UserExternalNameRef, UserExternalName>,
+    user_named_funcs: PrimaryMap<UserExternalNameRef, UserExternalName>,
 
     /// Inverted mapping of `user_named_funcs`, to deduplicate internally.
     user_ext_name_to_ref: HashMap<UserExternalName, UserExternalNameRef>,
@@ -122,6 +122,11 @@ impl FunctionParameters {
             self.user_ext_name_to_ref.insert(name, reff);
             reff
         }
+    }
+
+    /// Returns the internal mapping of `UserExternalNameRef` to `UserExternalName`.
+    pub fn user_named_funcs(&self) -> &PrimaryMap<UserExternalNameRef, UserExternalName> {
+        &self.user_named_funcs
     }
 
     fn clear(&mut self) {
