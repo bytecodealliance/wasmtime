@@ -111,6 +111,9 @@ block0(v0: i64):
 ;   addi t5,t5,2688
 ;   add t6,t5,a0
 ;   trap_ifc stk_ovf##(sp ult t6)
+;   lui a0,98
+;   addi a0,a0,2688
+;   call %Probestack
 ;   add sp,-400000
 ; block0:
 ;   add sp,+400000
@@ -166,6 +169,9 @@ block0(v0: i64):
 ;   addi t5,t5,2688
 ;   add t6,t5,t6
 ;   trap_ifc stk_ovf##(sp ult t6)
+;   lui a0,98
+;   addi a0,a0,2688
+;   call %Probestack
 ;   add sp,-400000
 ; block0:
 ;   add sp,+400000

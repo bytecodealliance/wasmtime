@@ -216,6 +216,7 @@ pub trait Compiler: Send + Sync {
                 Arm(_) => Architecture::Arm,
                 Aarch64(_) => Architecture::Aarch64,
                 S390x => Architecture::S390x,
+                Riscv64(_) => Architecture::Riscv64,
                 architecture => {
                     anyhow::bail!("target architecture {:?} is unsupported", architecture,);
                 }

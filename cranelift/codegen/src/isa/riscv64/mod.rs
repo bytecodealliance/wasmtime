@@ -93,7 +93,7 @@ impl TargetIsa for Riscv64Backend {
         "riscv64"
     }
     fn dynamic_vector_bytes(&self, _dynamic_ty: ir::Type) -> u32 {
-        self.isa_flags.vlen() as u32
+        16 
     }
 
     fn triple(&self) -> &Triple {

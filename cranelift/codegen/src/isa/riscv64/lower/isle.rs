@@ -144,7 +144,7 @@ where
     }
 
     fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
-        assert!(ty.is_int());
+        assert!(ty.is_int() || ty.is_bool(), "{:?}", ty);
         if ty.bits() == 128 {
             ValueRegs::two(self.zero_reg(), self.zero_reg())
         } else {
