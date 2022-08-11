@@ -1257,7 +1257,7 @@ impl PrettyPrint for Inst {
                 dst_size,
                 tmp_xmm,
                 tmp_gpr,
-                ..
+                is_saturating,
             } => {
                 let src = pretty_print_reg(src.to_reg().to_reg(), src_size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size.to_bytes(), allocs);
@@ -1266,9 +1266,10 @@ impl PrettyPrint for Inst {
                 format!(
                     "{} {}, {}, {}, {}",
                     ljustify(format!(
-                        "cvt_float{}_to_sint{}_seq",
+                        "cvt_float{}_to_sint{}{}_seq",
                         src_size.to_bits(),
-                        dst_size.to_bits()
+                        dst_size.to_bits(),
+                        if *is_saturating { "_sat" } else { "" },
                     )),
                     src,
                     dst,
@@ -1284,7 +1285,7 @@ impl PrettyPrint for Inst {
                 dst_size,
                 tmp_gpr,
                 tmp_xmm,
-                ..
+                is_saturating,
             } => {
                 let src = pretty_print_reg(src.to_reg().to_reg(), src_size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size.to_bytes(), allocs);
@@ -1293,9 +1294,10 @@ impl PrettyPrint for Inst {
                 format!(
                     "{} {}, {}, {}, {}",
                     ljustify(format!(
-                        "cvt_float{}_to_uint{}_seq",
+                        "cvt_float{}_to_uint{}{}_seq",
                         src_size.to_bits(),
-                        dst_size.to_bits()
+                        dst_size.to_bits(),
+                        if *is_saturating { "_sat" } else { "" },
                     )),
                     src,
                     dst,
