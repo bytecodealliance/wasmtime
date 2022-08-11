@@ -85,7 +85,7 @@ impl DiffInstance for WasmiInstance {
         true
     }
 
-    fn hash(&self, state: &mut std::collections::hash_map::DefaultHasher) -> Result<()> {
+    fn hash(&mut self, state: &mut std::collections::hash_map::DefaultHasher) -> Result<()> {
         for export_name in &self.exports {
             if let Some(export) = self.instance.export_by_name(export_name) {
                 match export {

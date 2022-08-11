@@ -63,7 +63,7 @@ pub trait DiffInstance {
     /// following exported items in the instance: globals, memory.
     ///
     /// TODO allow more types of hashers.
-    fn hash(&self, state: &mut DefaultHasher) -> anyhow::Result<()>;
+    fn hash(&mut self, state: &mut DefaultHasher) -> anyhow::Result<()>;
 }
 
 /// For errors that we want to ignore (not fuzz bugs), we can wrap them in this

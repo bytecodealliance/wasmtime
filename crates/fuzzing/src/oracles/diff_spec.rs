@@ -61,7 +61,7 @@ impl DiffInstance for SpecInstance {
         false
     }
 
-    fn hash(&self, _state: &mut std::collections::hash_map::DefaultHasher) -> Result<()> {
+    fn hash(&mut self, _state: &mut std::collections::hash_map::DefaultHasher) -> Result<()> {
         unimplemented!()
     }
 }

@@ -1,17 +1,14 @@
 //! Evaluate an exported Wasm function using Wasmtime.
 
+use super::engine::DiffIgnoreError;
 use crate::generators::{self, DiffValue, InstanceAllocationStrategy, ModuleFeatures};
 use crate::oracles::engine::DiffInstance;
 use crate::oracles::{compile_module, engine::DiffEngine, instantiate_with_dummy, StoreLimits};
 use anyhow::{Context, Result};
 use arbitrary::Unstructured;
-use std::cell::RefCell;
 use std::hash::Hash;
-use std::ops::{Deref, DerefMut};
 use std::slice;
-use wasmtime::{Extern, Instance, Store, Val};
-
-use super::engine::DiffIgnoreError;
+use wasmtime::{AsContextMut, Extern, Instance, Store, Val};
 
 /// A wrapper for using Wasmtime as a [`DiffEngine`].
 pub struct WasmtimeEngine {
@@ -84,10 +81,7 @@ impl DiffEngine for WasmtimeEngine {
         )?;
         let instance = instantiate_with_dummy(&mut store, &module)
             .context("unable to instantiate module in wasmtime")?;
-        let instance = WasmtimeInstance {
-            store: RefCell::new(store),
-            instance,
-        };
+        let instance = WasmtimeInstance { store, instance };
         Ok(Box::new(instance))
     }
 }
@@ -98,7 +92,7 @@ impl DiffEngine for WasmtimeEngine {
 /// Wasm module. The store is hidden in a [`RefCell`] so that we can hash, which
 /// does not modify the [`Store`] even though the API makes it appear so.
 struct WasmtimeInstance {
-    store: RefCell<Store<StoreLimits>>,
+    store: Store<StoreLimits>,
     instance: Instance,
 }
 
@@ -112,15 +106,11 @@ impl DiffInstance for WasmtimeInstance {
 
         let function = self
             .instance
-            .get_func(self.store.borrow_mut().deref_mut(), function_name)
+            .get_func(&mut self.store, function_name)
             .expect("unable to access exported function");
-        let ty = function.ty(self.store.borrow().deref());
+        let ty = function.ty(&self.store);
         let mut results = vec![Val::I32(0); ty.results().len()];
-        function.call(
-            self.store.borrow_mut().deref_mut(),
-            &arguments,
-            &mut results,
-        )?;
+        function.call(&mut self.store, &arguments, &mut results)?;
 
         let results = results.into_iter().map(Val::into).collect();
         Ok(results)
@@ -130,16 +120,20 @@ impl DiffInstance for WasmtimeInstance {
         true
     }
 
-    fn hash(&self, state: &mut std::collections::hash_map::DefaultHasher) -> Result<()> {
-        for e in self.instance.exports(self.store.borrow_mut().deref_mut()) {
-            match e.into_extern() {
+    fn hash(&mut self, state: &mut std::collections::hash_map::DefaultHasher) -> Result<()> {
+        let exports: Vec<_> = self
+            .instance
+            .exports(self.store.as_context_mut())
+            .map(|e| e.into_extern())
+            .collect();
+        for e in exports {
+            match e {
                 Extern::Global(g) => {
-                    let val: DiffValue = g.get(self.store.borrow_mut().deref_mut()).into();
+                    let val: DiffValue = g.get(&mut self.store).into();
                     val.hash(state)
                 }
                 Extern::Memory(m) => {
-                    let mut store = self.store.borrow_mut();
-                    let data = m.data(store.deref_mut());
+                    let data = m.data(&mut self.store);
                     data.hash(state)
                 }
                 Extern::SharedMemory(m) => {
