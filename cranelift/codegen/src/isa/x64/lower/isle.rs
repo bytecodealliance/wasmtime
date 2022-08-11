@@ -770,6 +770,18 @@ where
     fn jump_table_size(&mut self, targets: &BoxVecMachLabel) -> u32 {
         targets.len() as u32
     }
+
+    #[inline]
+    fn fcvt_uint_mask_const(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&UINT_MASK))
+    }
+
+    #[inline]
+    fn fcvt_uint_mask_high_const(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&UINT_MASK_HIGH))
+    }
 }
 
 impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>
@@ -891,3 +903,11 @@ fn to_simm32(constant: i64) -> Option<GprMemImm> {
         None
     }
 }
+
+const UINT_MASK: [u8; 16] = [
+    0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+];
+
+const UINT_MASK_HIGH: [u8; 16] = [
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43,
+];

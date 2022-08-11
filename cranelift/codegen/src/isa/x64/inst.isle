@@ -1662,6 +1662,10 @@
 (rule (x64_movdqu from)
       (xmm_unary_rm_r (SseOpcode.Movdqu) from))
 
+(decl x64_movapd (XmmMem) Xmm)
+(rule (x64_movapd src)
+      (xmm_unary_rm_r (SseOpcode.Movapd) src))
+
 (decl x64_pmovsxbw (XmmMem) Xmm)
 (rule (x64_pmovsxbw from)
       (xmm_unary_rm_r (SseOpcode.Pmovsxbw) from))
@@ -2276,6 +2280,11 @@
 (rule (x64_punpcklwd src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Punpcklwd) src1 src2))
 
+;; Helper for creating `unpcklps` instructions.
+(decl x64_unpcklps (Xmm XmmMem) Xmm)
+(rule (x64_unpcklps src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Unpcklps) src1 src2))
+
 ;; Helper for creating `andnps` instructions.
 (decl x64_andnps (Xmm XmmMem) Xmm)
 (rule (x64_andnps src1 src2)
@@ -2627,6 +2636,11 @@
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmUnaryRmREvex op src dst))))
         dst))
+
+;; Helper for creating `vcvtudq2ps` instructions.
+(decl x64_vcvtudq2ps (XmmMem) Xmm)
+(rule (x64_vcvtudq2ps src)
+      (xmm_unary_rm_r_evex (Avx512Opcode.Vcvtudq2ps) src))
 
 ;; Helper for creating `vpabsq` instructions.
 (decl x64_vpabsq (XmmMem) Xmm)
@@ -3017,6 +3031,23 @@
             (size OperandSize (raw_operand_size_of_type ty))
             (_ Unit (emit (MInst.GprToXmm (SseOpcode.Cvtsi2sd) x dst size))))
         dst))
+
+(decl cvt_u64_to_float_seq (Type Gpr) Xmm)
+(rule (cvt_u64_to_float_seq ty src)
+      (let ((size OperandSize (raw_operand_size_of_type ty))
+            (src_copy WritableGpr (temp_writable_gpr))
+            (dst WritableXmm (temp_writable_xmm))
+            (tmp_gpr1 WritableGpr (temp_writable_gpr))
+            (tmp_gpr2 WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (gen_move $I64 src_copy src)))
+            (_ Unit (emit (MInst.CvtUint64ToFloatSeq size src_copy dst tmp_gpr1 tmp_gpr2))))
+        dst))
+
+(decl fcvt_uint_mask_const () VCodeConstant)
+(extern constructor fcvt_uint_mask_const fcvt_uint_mask_const)
+
+(decl fcvt_uint_mask_high_const () VCodeConstant)
+(extern constructor fcvt_uint_mask_high_const fcvt_uint_mask_high_const)
 
 ;; Helpers for creating `pcmpeq*` instructions.
 (decl x64_pcmpeq (Type Xmm XmmMem) Xmm)
