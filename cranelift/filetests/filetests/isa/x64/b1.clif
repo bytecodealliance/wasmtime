@@ -10,7 +10,7 @@ block0(v0: b1, v1: i32, v2: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   testb   $1, %dil
+;   testb   %dil, %dil
 ;   cmovnzl %esi, %edx, %edx
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp

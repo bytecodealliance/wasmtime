@@ -103,8 +103,9 @@ block0(v0: i32):
 }
 
 ; block0:
-;   subs wzr, w0, #0
-;   csneg x0, x0, x0, gt
+;   sxtw w3, w0
+;   subs wzr, w3, #0
+;   csneg x0, x3, x3, gt
 ;   ret
 
 function %f11(i64) -> i64 {

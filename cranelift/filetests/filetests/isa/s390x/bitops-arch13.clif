@@ -44,6 +44,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   popcnt %r2, %r2
+;   llgcr %r5, %r2
+;   popcnt %r2, %r5, 8
 ;   br %r14
 

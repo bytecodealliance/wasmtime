@@ -438,10 +438,9 @@ block0(v0: b1):
 }
 
 ; block0:
-;   sllg %r3, %r3, 63
-;   srag %r5, %r3, 63
-;   vlvgp %v17, %r5, %r5
-;   vst %v17, 0(%r2)
+;   llgcr %r3, %r3
+;   vlvgp %v7, %r3, %r3
+;   vst %v7, 0(%r2)
 ;   br %r14
 
 function %bextend_b1_b64(b1) -> b64 {
@@ -902,7 +901,7 @@ block0(v0: b8, v1: b8):
 }
 
 ; block0:
-;   lgr %r2, %r3
+;   lbr %r2, %r3
 ;   br %r14
 
 function %bmask_b1_i128(b1, b1) -> i128 {
@@ -912,10 +911,9 @@ block0(v0: b1, v1: b1):
 }
 
 ; block0:
-;   sllg %r5, %r4, 63
-;   srag %r3, %r5, 63
-;   vlvgp %v19, %r3, %r3
-;   vst %v19, 0(%r2)
+;   llgcr %r5, %r4
+;   vlvgp %v17, %r5, %r5
+;   vst %v17, 0(%r2)
 ;   br %r14
 
 function %bmask_b1_i64(b1, b1) -> i64 {

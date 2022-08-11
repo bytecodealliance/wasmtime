@@ -10,8 +10,7 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movsbl  %dil, %ecx
-;   cvtsi2ss %ecx, %xmm0
+;   cvtsi2ss %dil, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -25,8 +24,7 @@ block0(v0: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movswl  %di, %ecx
-;   cvtsi2ss %ecx, %xmm0
+;   cvtsi2ss %di, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -68,8 +66,7 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movsbl  %dil, %ecx
-;   cvtsi2sd %ecx, %xmm0
+;   cvtsi2sd %dil, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -83,8 +80,7 @@ block0(v0: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movswl  %di, %ecx
-;   cvtsi2sd %ecx, %xmm0
+;   cvtsi2sd %di, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

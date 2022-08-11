@@ -24,7 +24,8 @@ block0:
 
 ; block0:
 ;   movz x1, #42679
-;   fmov s0, w1
+;   ubfx w3, w1, #0, #32
+;   fmov s0, w3
 ;   ret
 
 function %f3() -> f32x4 {

@@ -193,7 +193,8 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   lsr w0, w0, w1
+;   ubfx w5, w0, #0, #32
+;   lsr w0, w5, w1
 ;   ret
 
 function %f10(i16, i16) -> i16 {
@@ -279,7 +280,8 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   asr w0, w0, w1
+;   sxtw w5, w0
+;   asr w0, w5, w1
 ;   ret
 
 function %f18(i16, i16) -> i16 {
