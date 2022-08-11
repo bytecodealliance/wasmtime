@@ -279,7 +279,7 @@ fn emit_vm_call(
     let sig = libcall.signature(call_conv);
     let caller_conv = ctx.abi().call_conv();
 
-    let mut abi = X64ABICaller::from_func(&sig, &extname, dist, caller_conv, flags)?;
+    let mut abi = X64Caller::from_func(&sig, &extname, dist, caller_conv, flags)?;
 
     abi.emit_stack_pre_adjust(ctx);
 

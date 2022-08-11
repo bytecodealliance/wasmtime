@@ -24,7 +24,7 @@ use crate::{
         settings::Flags,
         unwind::UnwindInst,
         x64::{
-            abi::{X64ABICaller, X64ABIMachineSpec},
+            abi::{X64ABIMachineSpec, X64Caller},
             inst::{args::*, regs, CallInfo},
             settings::Flags as IsaFlags,
         },
@@ -673,7 +673,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         let sig = &self.lower_ctx.dfg().signatures[sig_ref];
         let num_rets = sig.returns.len();
         let abi = ABISig::from_func_sig::<X64ABIMachineSpec>(sig, self.flags).unwrap();
-        let caller = X64ABICaller::from_func(sig, &extname, dist, caller_conv, self.flags).unwrap();
+        let caller = X64Caller::from_func(sig, &extname, dist, caller_conv, self.flags).unwrap();
 
         assert_eq!(
             inputs.len(&self.lower_ctx.dfg().value_lists) - off,
@@ -695,8 +695,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         let num_rets = sig.returns.len();
         let abi = ABISig::from_func_sig::<X64ABIMachineSpec>(sig, self.flags).unwrap();
         let caller =
-            X64ABICaller::from_ptr(sig, ptr, Opcode::CallIndirect, caller_conv, self.flags)
-                .unwrap();
+            X64Caller::from_ptr(sig, ptr, Opcode::CallIndirect, caller_conv, self.flags).unwrap();
 
         assert_eq!(
             inputs.len(&self.lower_ctx.dfg().value_lists) - off,
@@ -807,7 +806,7 @@ impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         &mut self,
         abi: ABISig,
         num_rets: usize,
-        mut caller: X64ABICaller,
+        mut caller: X64Caller,
         (inputs, off): ValueSlice,
     ) -> InstOutput {
         caller.emit_stack_pre_adjust(self.lower_ctx);

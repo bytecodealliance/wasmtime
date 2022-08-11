@@ -605,7 +605,7 @@ pub(crate) fn lower_insn_to_regs(
                     assert!(inputs.len() == sig.params.len());
                     assert!(outputs.len() == sig.returns.len());
                     (
-                        AArch64ABICaller::from_func(sig, &extname, dist, caller_conv, flags)?,
+                        AArch64Caller::from_func(sig, &extname, dist, caller_conv, flags)?,
                         &inputs[..],
                     )
                 }
@@ -615,7 +615,7 @@ pub(crate) fn lower_insn_to_regs(
                     assert!(inputs.len() - 1 == sig.params.len());
                     assert!(outputs.len() == sig.returns.len());
                     (
-                        AArch64ABICaller::from_ptr(sig, ptr, op, caller_conv, flags)?,
+                        AArch64Caller::from_ptr(sig, ptr, op, caller_conv, flags)?,
                         &inputs[1..],
                     )
                 }

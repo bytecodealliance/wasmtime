@@ -1638,7 +1638,7 @@ impl<M: ABIMachineSpec> Callee<M> {
 }
 
 /// ABI object for a callsite.
-pub struct ABICallerImpl<M: ABIMachineSpec> {
+pub struct Caller<M: ABIMachineSpec> {
     /// The called function's signature.
     sig: ABISig,
     /// All uses for the callsite, i.e., function args.
@@ -1668,7 +1668,7 @@ pub enum CallDest {
     Reg(Reg),
 }
 
-impl<M: ABIMachineSpec> ABICallerImpl<M> {
+impl<M: ABIMachineSpec> Caller<M> {
     /// Create a callsite ABI object for a call directly to the specified function.
     pub fn from_func(
         sig: &ir::Signature,
@@ -1676,11 +1676,11 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
         dist: RelocDistance,
         caller_conv: isa::CallConv,
         flags: &settings::Flags,
-    ) -> CodegenResult<ABICallerImpl<M>> {
+    ) -> CodegenResult<Caller<M>> {
         let ir_sig = ensure_struct_return_ptr_is_returned(sig);
         let sig = ABISig::from_func_sig::<M>(&ir_sig, flags)?;
         let (uses, defs, clobbers) = sig.call_uses_defs_clobbers::<M>();
-        Ok(ABICallerImpl {
+        Ok(Caller {
             sig,
             uses,
             defs,
@@ -1701,11 +1701,11 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
         opcode: ir::Opcode,
         caller_conv: isa::CallConv,
         flags: &settings::Flags,
-    ) -> CodegenResult<ABICallerImpl<M>> {
+    ) -> CodegenResult<Caller<M>> {
         let ir_sig = ensure_struct_return_ptr_is_returned(sig);
         let sig = ABISig::from_func_sig::<M>(&ir_sig, flags)?;
         let (uses, defs, clobbers) = sig.call_uses_defs_clobbers::<M>();
-        Ok(ABICallerImpl {
+        Ok(Caller {
             sig,
             uses,
             defs,
@@ -1730,7 +1730,7 @@ fn adjust_stack_and_nominal_sp<M: ABIMachineSpec>(ctx: &mut Lower<M::I>, off: i3
     ctx.emit(M::gen_nominal_sp_adj(-amt));
 }
 
-impl<M: ABIMachineSpec> ABICallerImpl<M> {
+impl<M: ABIMachineSpec> Caller<M> {
     /// Get the number of arguments expected.
     pub fn num_args(&self) -> usize {
         if self.sig.stack_ret_arg.is_some() {
@@ -1924,7 +1924,7 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
     /// sense.)
     ///
     /// This function should only be called once, as it is allowed to re-use
-    /// parts of the `ABICallerImpl` object in emitting instructions.
+    /// parts of the `Caller` object in emitting instructions.
     pub fn emit_call(&mut self, ctx: &mut Lower<M::I>) {
         let (uses, defs) = (
             mem::replace(&mut self.uses, Default::default()),
