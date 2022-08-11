@@ -65,7 +65,7 @@ fn saved_reg_stack_size(
 
 /// AArch64-specific ABI behavior. This struct just serves as an implementation
 /// point for the trait; it is never actually instantiated.
-pub(crate) struct AArch64MachineDeps;
+pub struct AArch64MachineDeps;
 
 impl IsaFlags for aarch64_settings::Flags {}
 

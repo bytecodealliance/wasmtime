@@ -27,7 +27,7 @@ pub(crate) type X64ABICallee = ABICalleeImpl<X64ABIMachineSpec>;
 pub(crate) type X64ABICaller = ABICallerImpl<X64ABIMachineSpec>;
 
 /// Implementation of ABI primitives for x64.
-pub(crate) struct X64ABIMachineSpec;
+pub struct X64ABIMachineSpec;
 
 impl IsaFlags for x64_settings::Flags {}
 
