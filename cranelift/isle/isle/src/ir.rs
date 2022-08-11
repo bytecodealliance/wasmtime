@@ -29,9 +29,30 @@ pub enum Value {
     },
 }
 
+/// A single Extractor pattern (fallible or infallible).
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Extractor {
+    /// The value to extract, followed by polarity extractor args.
+    pub inputs: Vec<Value>,
+    /// The types of the inputs.
+    pub input_tys: Vec<TypeId>,
+    /// The types of the output values produced upon a successful match.
+    pub output_tys: Vec<TypeId>,
+    /// This extractor's term.
+    pub term: TermId,
+}
+
 /// A single Pattern instruction.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum PatternInst {
+    /// Invoke an extractor, taking the given values as input (the first is the
+    /// value to extract, the other are the `Input`-polarity extractor args) and
+    /// producing an output value for each `Output`-polarity extractor arg.
+    ExtractFallible {
+        /// The fallible extractor.
+        extractor: Extractor,
+    },
+
     /// Match a value as equal to another value. Produces no values.
     MatchEqual {
         /// The first value.
@@ -87,24 +108,14 @@ pub enum PatternInst {
         output_ty: TypeId,
     },
 
-    // NB: this has to come second-to-last, because it might be infallible, for
-    // the same reasons that `Arg` has to be last.
+    // NB: this has to come second-to-last, for the same reasons that `Arg` has to be last.
     //
     /// Invoke an extractor, taking the given values as input (the first is the
     /// value to extract, the other are the `Input`-polarity extractor args) and
     /// producing an output value for each `Output`-polarity extractor arg.
-    Extract {
-        /// Whether this extraction is infallible or not. `false`
-        /// comes before `true`, so fallible nodes come first.
-        infallible: bool,
-        /// The value to extract, followed by polarity extractor args.
-        inputs: Vec<Value>,
-        /// The types of the inputs.
-        input_tys: Vec<TypeId>,
-        /// The types of the output values produced upon a successful match.
-        output_tys: Vec<TypeId>,
-        /// This extractor's term.
-        term: TermId,
+    ExtractInfallible {
+        /// The infallible extractor.
+        extractor: Extractor,
     },
 
     // NB: This has to go last, since it is infallible, so that when we sort
@@ -313,13 +324,17 @@ impl PatternSequence {
             outs.push(val);
         }
         let output_tys = output_tys.iter().cloned().collect();
-        self.add_inst(PatternInst::Extract {
+        let extractor = Extractor {
             inputs,
             input_tys,
             output_tys,
             term,
-            infallible,
-        });
+        };
+        if infallible {
+            self.add_inst(PatternInst::ExtractInfallible { extractor });
+        } else {
+            self.add_inst(PatternInst::ExtractFallible { extractor });
+        }
         outs
     }
 

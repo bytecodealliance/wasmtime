@@ -1,6 +1,6 @@
 //! Generate Rust code from a series of Sequences.
 
-use crate::ir::{ExprInst, InstId, PatternInst, Value};
+use crate::ir::{ExprInst, Extractor, InstId, PatternInst, Value};
 use crate::log;
 use crate::sema::ExternalSig;
 use crate::sema::{TermEnv, TermId, Type, TypeEnv, TypeId, Variant};
@@ -572,61 +572,13 @@ impl<'a> Codegen<'a> {
                 .unwrap();
                 false
             }
-            &PatternInst::Extract {
-                ref inputs,
-                ref output_tys,
-                term,
-                infallible,
-                ..
-            } => {
-                let termdata = &self.termenv.terms[term.index()];
-                let sig = termdata.extractor_sig(self.typeenv).unwrap();
-
-                let input_values = inputs
-                    .iter()
-                    .map(|input| self.value_by_ref(input, ctx))
-                    .collect::<Vec<_>>();
-                let output_binders = output_tys
-                    .iter()
-                    .enumerate()
-                    .map(|(i, &ty)| {
-                        let output_val = Value::Pattern {
-                            inst: id,
-                            output: i,
-                        };
-                        self.define_val(&output_val, ctx, /* is_ref = */ false, ty);
-                        self.value_binder(&output_val, /* is_ref = */ false, ty)
-                    })
-                    .collect::<Vec<_>>();
-
-                if infallible {
-                    writeln!(
-                        code,
-                        "{indent}let {open_paren}{vars}{close_paren} = {name}(ctx, {args});",
-                        indent = indent,
-                        open_paren = if output_binders.len() == 1 { "" } else { "(" },
-                        vars = output_binders.join(", "),
-                        close_paren = if output_binders.len() == 1 { "" } else { ")" },
-                        name = sig.full_name,
-                        args = input_values.join(", "),
-                    )
-                    .unwrap();
-                    true
-                } else {
-                    writeln!(
-                        code,
-                        "{indent}if let Some({open_paren}{vars}{close_paren}) = {name}(ctx, {args}) {{",
-                        indent = indent,
-                        open_paren = if output_binders.len() == 1 { "" } else { "(" },
-                        vars = output_binders.join(", "),
-                        close_paren = if output_binders.len() == 1 { "" } else { ")" },
-                        name = sig.full_name,
-                        args = input_values.join(", "),
-                    )
-                    .unwrap();
-                    false
-                }
+            &PatternInst::ExtractInfallible { ref extractor } => {
+                self.generate_extract(code, id, /* infallible */ true, extractor, indent, ctx)
             }
+
+            &PatternInst::ExtractFallible { ref extractor } => self.generate_extract(
+                code, id, /* infallible */ false, extractor, indent, ctx,
+            ),
             &PatternInst::Expr {
                 ref seq, output_ty, ..
             } if seq.is_const_int().is_some() => {
@@ -680,6 +632,69 @@ impl<'a> Codegen<'a> {
 
                 false
             }
+        }
+    }
+
+    fn generate_extract(
+        &self,
+        code: &mut String,
+        id: InstId,
+        infallible: bool,
+        Extractor {
+            ref inputs,
+            ref output_tys,
+            term,
+            ..
+        }: &Extractor,
+        indent: &str,
+        ctx: &mut BodyContext,
+    ) -> bool {
+        let termdata = &self.termenv.terms[term.index()];
+        let sig = termdata.extractor_sig(self.typeenv).unwrap();
+
+        let input_values = inputs
+            .iter()
+            .map(|input| self.value_by_ref(input, ctx))
+            .collect::<Vec<_>>();
+        let output_binders = output_tys
+            .iter()
+            .enumerate()
+            .map(|(i, &ty)| {
+                let output_val = Value::Pattern {
+                    inst: id,
+                    output: i,
+                };
+                self.define_val(&output_val, ctx, /* is_ref = */ false, ty);
+                self.value_binder(&output_val, /* is_ref = */ false, ty)
+            })
+            .collect::<Vec<_>>();
+
+        if infallible {
+            writeln!(
+                code,
+                "{indent}let {open_paren}{vars}{close_paren} = {name}(ctx, {args});",
+                indent = indent,
+                open_paren = if output_binders.len() == 1 { "" } else { "(" },
+                vars = output_binders.join(", "),
+                close_paren = if output_binders.len() == 1 { "" } else { ")" },
+                name = sig.full_name,
+                args = input_values.join(", "),
+            )
+            .unwrap();
+            true
+        } else {
+            writeln!(
+                code,
+                "{indent}if let Some({open_paren}{vars}{close_paren}) = {name}(ctx, {args}) {{",
+                indent = indent,
+                open_paren = if output_binders.len() == 1 { "" } else { "(" },
+                vars = output_binders.join(", "),
+                close_paren = if output_binders.len() == 1 { "" } else { ")" },
+                name = sig.full_name,
+                args = input_values.join(", "),
+            )
+            .unwrap();
+            false
         }
     }
 
