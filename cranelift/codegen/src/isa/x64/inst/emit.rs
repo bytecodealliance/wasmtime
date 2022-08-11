@@ -1,7 +1,7 @@
 use crate::binemit::{Addend, Reloc};
 use crate::ir::immediates::{Ieee32, Ieee64};
-use crate::ir::LibCall;
 use crate::ir::TrapCode;
+use crate::ir::{KnownSymbol, LibCall};
 use crate::isa::x64::encoding::evex::{EvexInstruction, EvexVectorLength};
 use crate::isa::x64::encoding::rex::{
     emit_simm, emit_std_enc_enc, emit_std_enc_mem, emit_std_reg_mem, emit_std_reg_reg, int_reg_enc,
@@ -2950,6 +2950,52 @@ pub(crate) fn emit(
             // callq *(%rdi)
             sink.put1(0xff);
             sink.put1(0x17);
+        }
+
+        Inst::CoffTlsGetAddr { ref symbol } => {
+            // See: https://gcc.godbolt.org/z/M8or9x6ss
+            // And: https://github.com/bjorn3/rustc_codegen_cranelift/issues/388#issuecomment-532930282
+
+            // Emit the following sequence
+            // movl	(%rip), %eax          ; IMAGE_REL_AMD64_REL32	_tls_index
+            // movq	%gs:88, %rcx
+            // movq	(%rcx,%rax,8), %rax
+            // leaq	(%rax), %rax          ; Reloc: IMAGE_REL_AMD64_SECREL	symbol
+
+            // Load TLS index for current thread
+            // movl	(%rip), %eax
+            sink.put1(0x8b); // mov
+            sink.put1(0x05);
+            emit_reloc(
+                sink,
+                Reloc::X86PCRel4,
+                &ExternalName::KnownSymbol(KnownSymbol::CoffTlsIndex),
+                -4,
+            );
+            sink.put4(0); // offset
+
+            // movq	%gs:88, %rcx
+            // Load the TLS Storage Array pointer
+            // The gs segment register refers to the base address of the TEB on x64.
+            // 0x58 is the offset in the TEB for the ThreadLocalStoragePointer member on x64:
+            sink.put_data(&[
+                0x65, 0x48, // REX.W
+                0x8b, // MOV
+                0x0c, 0x25, 0x58, // 0x58 - ThreadLocalStoragePointer offset
+                0x00, 0x00, 0x00,
+            ]);
+
+            // movq	(%rcx,%rax,8), %rax
+            // Load the actual TLS entry for this thread.
+            // Computes ThreadLocalStoragePointer + _tls_index*8
+            sink.put_data(&[0x48, 0x8b, 0x04, 0xc1]);
+
+            // leaq	(%rax), %rax
+            sink.put1(0x48);
+            sink.put1(0x8d);
+            sink.put1(0x80);
+            emit_reloc(sink, Reloc::X86SecRel, symbol, 0);
+            sink.put4(0); // offset
         }
 
         Inst::Unwind { ref inst } => {

@@ -40,10 +40,10 @@ impl ObjectBuilder {
     /// Create a new `ObjectBuilder` using the given Cranelift target, that
     /// can be passed to [`ObjectModule::new`].
     ///
-    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
+    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s [ir::LibCall]
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
-    /// argument, use `cranelift_module::default_libcall_names()`.
+    /// argument, use [cranelift_module::default_libcall_names]().
     pub fn new<V: Into<Vec<u8>>>(
         isa: Box<dyn TargetIsa>,
         name: V,
@@ -556,9 +556,9 @@ impl ObjectModule {
                 if let Some(symbol) = self.known_symbols.get(known_symbol) {
                     *symbol
                 } else {
-                    let symbol = match known_symbol {
-                        ir::KnownSymbol::ElfGlobalOffsetTable => self.object.add_symbol(Symbol {
-                            name: "_GLOBAL_OFFSET_TABLE_".as_bytes().to_vec(),
+                    let symbol = self.object.add_symbol(match known_symbol {
+                        ir::KnownSymbol::ElfGlobalOffsetTable => Symbol {
+                            name: b"_GLOBAL_OFFSET_TABLE_".to_vec(),
                             value: 0,
                             size: 0,
                             kind: SymbolKind::Data,
@@ -566,8 +566,18 @@ impl ObjectModule {
                             weak: false,
                             section: SymbolSection::Undefined,
                             flags: SymbolFlags::None,
-                        }),
-                    };
+                        },
+                        ir::KnownSymbol::CoffTlsIndex => Symbol {
+                            name: b"_tls_index".to_vec(),
+                            value: 0,
+                            size: 32,
+                            kind: SymbolKind::Tls,
+                            scope: SymbolScope::Unknown,
+                            weak: false,
+                            section: SymbolSection::Undefined,
+                            flags: SymbolFlags::None,
+                        },
+                    });
                     self.known_symbols.insert(*known_symbol, symbol);
                     symbol
                 }
@@ -588,6 +598,11 @@ impl ObjectModule {
             Reloc::X86CallPLTRel4 => (
                 RelocationKind::PltRelative,
                 RelocationEncoding::X86Branch,
+                32,
+            ),
+            Reloc::X86SecRel => (
+                RelocationKind::SectionOffset,
+                RelocationEncoding::Generic,
                 32,
             ),
             Reloc::X86GOTPCRel4 => (RelocationKind::GotRelative, RelocationEncoding::Generic, 32),
