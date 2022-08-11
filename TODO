@@ -11,9 +11,6 @@
   - i128 -> i64 narrowing?
 
 - perf ideas
-  - elaboration
-    - find_best_node: avoid scoped approach; compute best nodes
-      independent of what's already available
   - keep Insts (side-effecting ops) in DFG, and just rewrite args and
     attach new results when elaborating.
 

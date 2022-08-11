@@ -23,7 +23,7 @@ pub(crate) struct Elaborator<'a> {
     egraph: &'a EGraph<NodeCtx>,
     loop_levels: &'a SecondaryMap<Id, LoopLevel>,
     id_to_value: ScopedHashMap<Id, IdValue>,
-    id_to_best_cost_and_node: ScopedHashMap<Id, (usize, Id)>,
+    id_to_best_cost_and_node: SecondaryMap<Id, (usize, Id)>,
     /// Stack of blocks and loops in current elaboration path.
     loop_stack: SmallVec<[LoopStackEntry; 8]>,
     cur_block: Option<Block>,
@@ -80,6 +80,8 @@ impl<'a> Elaborator<'a> {
         stats: &'a mut Stats,
     ) -> Self {
         let num_blocks = func.dfg.num_blocks();
+        let mut id_to_best_cost_and_node = SecondaryMap::with_default((0, Id::invalid()));
+        id_to_best_cost_and_node.resize(egraph.classes.len());
         Self {
             func,
             domtree,
@@ -88,7 +90,7 @@ impl<'a> Elaborator<'a> {
             node_ctx,
             loop_levels,
             id_to_value: ScopedHashMap::with_capacity(egraph.classes.len()),
-            id_to_best_cost_and_node: ScopedHashMap::with_capacity(egraph.classes.len()),
+            id_to_best_cost_and_node,
             loop_stack: smallvec![],
             cur_block: None,
             first_branch: SecondaryMap::with_capacity(num_blocks),
@@ -189,7 +191,8 @@ impl<'a> Elaborator<'a> {
         self.stats.elaborate_find_best_node += 1;
         log::trace!("find_best_node: {} upper_bound {:?}", id, upper_bound);
 
-        if let Some(&(cost, node)) = self.id_to_best_cost_and_node.get(&id) {
+        let (cost, node) = self.id_to_best_cost_and_node[id];
+        if node != Id::invalid() {
             self.stats.elaborate_find_best_node_memoize_hit += 1;
             log::trace!(" -> memoized to cost {} node {}", cost, node);
             if upper_bound.is_none() || cost <= upper_bound.unwrap() {
@@ -322,8 +325,7 @@ impl<'a> Elaborator<'a> {
                 best_cost
             );
 
-            self.id_to_best_cost_and_node
-                .insert_if_absent(id, (best_cost, best_id));
+            self.id_to_best_cost_and_node[id] = (best_cost, best_id);
 
             Some((best_cost, best_id))
         } else {
@@ -484,12 +486,11 @@ impl<'a> Elaborator<'a> {
         domtree: &DomTreeWithChildren,
     ) {
         self.id_to_value.increment_depth();
-        self.id_to_best_cost_and_node.increment_depth();
 
         let blockparam_ids_tys = (block_params_fn)(block);
         self.start_block(idom, block, blockparam_ids_tys);
         for &id in (block_roots_fn)(block) {
-            self.id_to_best_cost_and_node.insert_if_absent(id, (0, id));
+            self.id_to_best_cost_and_node[id] = (0, id);
             self.elaborate_eclass_use(id);
         }
 
@@ -497,7 +498,6 @@ impl<'a> Elaborator<'a> {
             self.elaborate_block(Some(block), child, block_params_fn, block_roots_fn, domtree);
         }
 
-        self.id_to_best_cost_and_node.decrement_depth();
         self.id_to_value.decrement_depth();
         if let Some(innermost_loop) = self.loop_stack.last() {
             if innermost_loop.scope_depth as usize == self.id_to_value.depth() {
