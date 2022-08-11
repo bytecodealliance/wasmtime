@@ -108,6 +108,34 @@ impl Config {
         self.module_config.config.reference_types_enabled = features.reference_types;
     }
 
+    /// Force `self` to be a configuration compatible with `other`. This is
+    /// useful for differential execution to avoid unhelpful fuzz crashes when
+    /// one engine has a feature enabled and the other does not.
+    pub fn make_compatible_with(&mut self, other: &Self) {
+        // Use the same `wasm-smith` configuration as `other` because this is
+        // used for determining what Wasm features are enabled in the engine
+        // (see `to_wasmtime`).
+        self.module_config = other.module_config.clone();
+
+        // Use the same allocation strategy between the two configs.
+        //
+        // Ideally this wouldn't be necessary, but, during differential
+        // evaluation, if the `lhs` is using ondemand and the `rhs` is using the
+        // pooling allocator (or vice versa), then the module may have been
+        // generated in such a way that is incompatible with the other
+        // allocation strategy.
+        //
+        // We can remove this in the future when it's possible to access the
+        // fields of `wasm_smith::Module` to constrain the pooling allocator
+        // based on what was actually generated.
+        self.wasmtime.strategy = other.wasmtime.strategy.clone();
+        if let InstanceAllocationStrategy::Pooling { .. } = &other.wasmtime.strategy {
+            // Also use the same memory configuration when using the pooling
+            // allocator.
+            self.wasmtime.memory_config = other.wasmtime.memory_config.clone();
+        }
+    }
+
     /// Uses this configuration and the supplied source of data to generate
     /// a wasm module.
     ///

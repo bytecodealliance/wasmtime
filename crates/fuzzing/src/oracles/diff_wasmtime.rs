@@ -1,18 +1,17 @@
 //! Evaluate an exported Wasm function using Wasmtime.
 
 use super::engine::DiffIgnoreError;
-use crate::generators::{self, DiffValue, InstanceAllocationStrategy, ModuleFeatures};
+use crate::generators::{self, DiffValue};
 use crate::oracles::engine::DiffInstance;
 use crate::oracles::{compile_module, engine::DiffEngine, instantiate_with_dummy, StoreLimits};
 use anyhow::{Context, Result};
-use arbitrary::Unstructured;
 use std::hash::Hash;
 use std::slice;
 use wasmtime::{AsContextMut, Extern, Instance, Store, Val};
 
 /// A wrapper for using Wasmtime as a [`DiffEngine`].
 pub struct WasmtimeEngine {
-    config: generators::Config,
+    pub(crate) config: generators::Config,
 }
 
 impl WasmtimeEngine {
@@ -24,52 +23,6 @@ impl WasmtimeEngine {
         Ok(Box::new(Self {
             config: config.clone(),
         }))
-    }
-
-    /// Create a new Wasmtime engine from a randomly-generated configuration
-    /// that matches the given Wasm `features`.
-    pub fn arbitrary_with_features(
-        u: &mut Unstructured<'_>,
-        features: &ModuleFeatures,
-    ) -> arbitrary::Result<Box<Self>> {
-        let mut config: generators::Config = u.arbitrary()?;
-        config.set_differential_config();
-        config.set_features(features);
-        Ok(WasmtimeEngine::new(&config).unwrap())
-    }
-
-    /// Construct a new Wasmtime engine with a randomly-generated configuration
-    /// that is compatible with `original_engine`.
-    pub fn arbitrary_with_compatible_config(
-        u: &mut Unstructured<'_>,
-        original_engine: &WasmtimeEngine,
-    ) -> Result<Box<Self>> {
-        let original_config = &original_engine.config;
-
-        // Generate a completely new Wasmtime configuration leaving the module
-        // configuration the same.
-        let mut new_config = generators::Config {
-            module_config: original_config.module_config.clone(),
-            wasmtime: u.arbitrary()?,
-        };
-
-        // Use the same allocation strategy between the two configs.
-        //
-        // Ideally this wouldn't be necessary, but if the lhs is using ondemand
-        // and the rhs is using the pooling allocator (or vice versa), then
-        // the module may have been generated in such a way that is incompatible
-        // with the other allocation strategy.
-        //
-        // We can remove this in the future when it's possible to access the
-        // fields of `wasm_smith::Module` to constrain the pooling allocator
-        // based on what was actually generated.
-        new_config.wasmtime.strategy = original_config.wasmtime.strategy.clone();
-        if let InstanceAllocationStrategy::Pooling { .. } = &new_config.wasmtime.strategy {
-            // Also use the same memory configuration when using the pooling allocator
-            new_config.wasmtime.memory_config = original_config.wasmtime.memory_config.clone();
-        }
-
-        WasmtimeEngine::new(&new_config)
     }
 }
 

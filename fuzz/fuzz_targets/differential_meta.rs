@@ -2,7 +2,7 @@
 
 use libfuzzer_sys::arbitrary::{Result, Unstructured};
 use libfuzzer_sys::fuzz_target;
-use wasmtime_fuzzing::generators::{DiffValue, SingleInstModule};
+use wasmtime_fuzzing::generators::{Config, DiffValue, SingleInstModule};
 use wasmtime_fuzzing::oracles::engine::{
     get_exported_function_signatures, DiffEngine, DiffIgnorable,
 };
@@ -38,7 +38,10 @@ fn run(data: &[u8]) -> Result<()> {
     // registered most recently and they catch failures appropriately. We create
     // `rhs` first, however, so we have the option of creating a compatible
     // Wasmtime engine (e.g., pooling allocator memory differences).
-    let rhs = diff_wasmtime::WasmtimeEngine::arbitrary_with_features(&mut u, &features)?;
+    let mut config: Config = u.arbitrary()?;
+    config.set_differential_config();
+    config.set_features(&features);
+    let rhs = diff_wasmtime::WasmtimeEngine::new(&config).unwrap();
 
     // Choose a left-hand side Wasm engine.
     let lhs = engine::choose(&mut u, &features, &rhs)?;

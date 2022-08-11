@@ -1,6 +1,6 @@
 //! Define the interface for differential evaluation of Wasm functions.
 
-use crate::generators::{DiffValue, ModuleFeatures};
+use crate::generators::{Config, DiffValue, ModuleFeatures};
 use crate::oracles::{diff_wasmi::WasmiEngine, diff_wasmtime::WasmtimeEngine};
 use arbitrary::Unstructured;
 use std::collections::hash_map::DefaultHasher;
@@ -15,7 +15,9 @@ pub fn choose(
 ) -> arbitrary::Result<Box<dyn DiffEngine>> {
     // Filter out any engines that cannot match the given configuration.
     let mut engines: Vec<Box<dyn DiffEngine>> = vec![];
-    if let Result::Ok(e) = WasmtimeEngine::arbitrary_with_compatible_config(u, wasmtime_engine) {
+    let mut config: Config = u.arbitrary()?;
+    config.make_compatible_with(&wasmtime_engine.config);
+    if let Result::Ok(e) = WasmtimeEngine::new(&config) {
         engines.push(e)
     }
     if let Result::Ok(e) = WasmiEngine::new(features) {
