@@ -44,11 +44,21 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     if let Some(ids) = optimized_ids {
         egraph.stats.rewrite_rule_return_count_sum += ids.len() as u64;
         for new_id in ids {
+            if egraph.subsume_ids.contains(&new_id) {
+                egraph.stats.node_subsume += 1;
+                // Merge in the unionfind so canonicalization still
+                // works, but take *only* the subsuming ID, and break
+                // now.
+                egraph.egraph.unionfind.union(union_id, new_id);
+                union_id = new_id;
+                break;
+            }
             egraph.stats.node_union += 1;
             union_id = egraph.egraph.union(union_id, new_id);
             egraph.compute_analyses(union_id);
         }
     }
+    egraph.subsume_ids.clear();
     union_id
 }
 
@@ -272,6 +282,12 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
     fn remat(&mut self, id: Id) -> Id {
         log::trace!("remat: {}", id);
         self.egraph.remat_ids.insert(id);
+        id
+    }
+
+    fn subsume(&mut self, id: Id) -> Id {
+        log::trace!("subsume: {}", id);
+        self.egraph.subsume_ids.insert(id);
         id
     }
 }

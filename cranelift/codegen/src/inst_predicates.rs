@@ -11,6 +11,7 @@ pub fn any_inst_results_used(inst: Inst, live: &[bool], dfg: &DataFlowGraph) -> 
 }
 
 /// Test whether the given opcode is unsafe to even consider as side-effect-free.
+#[inline(always)]
 fn trivially_has_side_effects(opcode: Opcode) -> bool {
     opcode.is_call()
         || opcode.is_branch()
@@ -24,6 +25,7 @@ fn trivially_has_side_effects(opcode: Opcode) -> bool {
 /// Load instructions without the `notrap` flag are defined to trap when
 /// operating on inaccessible memory, so we can't treat them as side-effect-free even if the loaded
 /// value is unused.
+#[inline(always)]
 fn is_load_with_defined_trapping(opcode: Opcode, data: &InstructionData) -> bool {
     if !opcode.can_load() {
         return false;
@@ -37,6 +39,7 @@ fn is_load_with_defined_trapping(opcode: Opcode, data: &InstructionData) -> bool
 
 /// Does the given instruction have any side-effect that would preclude it from being removed when
 /// its value is unused?
+#[inline(always)]
 pub fn has_side_effect(func: &Function, inst: Inst) -> bool {
     let data = &func.dfg[inst];
     let opcode = data.opcode();

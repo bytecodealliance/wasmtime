@@ -11,14 +11,6 @@
   - i128 -> i64 narrowing?
 
 - perf ideas
-  - limit nodes exposed in pure_enodes_etor: pre-extract? "subsume"
-    nodes/return from simplify?
-    - two rule entry points: "replace" and "simplify". make parent
-      pointer in union node "cut-off": we keep the enodes so they will
-      dedup into the canonical id but we don't traverse them. (or just
-      don't create a union node? union in the UnionFind only?)
-  - make alias analysis faster to compute
-    - cache predicates? has_side_effect, is_memory_fence, ...
   - elaboration
     - find_best_node: stop at sufficiently cheap node? bound the
       search to better than what's found so far?

@@ -53,12 +53,18 @@
 (decl pure multi commutative (Id Id) Pair)
 (extern constructor commutative commutative_ctor)
 
-;;;;; mark a node as requiring remat when used in a different block ;;;;;;;;;;;;
-
-(decl remat (Id) Id)
-(extern constructor remat remat)
-
 ;;;;; optimization toplevel ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The main matcher rule invoked by the toplevel driver.
 (decl multi simplify (Id) Id)
+
+;; Mark a node as requiring remat when used in a different block.
+(decl remat (Id) Id)
+(extern constructor remat remat)
+
+;; Mark a node as subsuming whatever else it's rewritten from -- this
+;; is definitely preferable, not just a possible option. Useful for,
+;; e.g., constant propagation where we arrive at a definite "final
+;; answer".
+(decl subsume (Id) Id)
+(extern constructor subsume subsume)

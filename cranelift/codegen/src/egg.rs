@@ -51,6 +51,9 @@ pub struct FuncEGraph<'a> {
     /// Which canonical node IDs do we want to rematerialize in each
     /// block where they're used?
     pub(crate) remat_ids: FxHashSet<Id>,
+    /// Which canonical node IDs have an enode whose value subsumes
+    /// all others it's unioned with?
+    pub(crate) subsume_ids: FxHashSet<Id>,
     /// Statistics recorded during the process of building,
     /// optimizing, and lowering out of this egraph.
     pub(crate) stats: Stats,
@@ -70,6 +73,7 @@ pub(crate) struct Stats {
     pub(crate) node_ctor_created: u64,
     pub(crate) node_ctor_deduped: u64,
     pub(crate) node_union: u64,
+    pub(crate) node_subsume: u64,
     pub(crate) store_map_insert: u64,
     pub(crate) side_effect_nodes: u64,
     pub(crate) rewrite_rule_return_count_sum: u64,
@@ -122,6 +126,7 @@ impl<'a> FuncEGraph<'a> {
             blockparams: SecondaryMap::with_default(0..0),
             blockparam_ids_tys: vec![],
             remat_ids: FxHashSet::default(),
+            subsume_ids: FxHashSet::default(),
             stats: Default::default(),
         };
         this.build(func);

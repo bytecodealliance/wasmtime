@@ -4,56 +4,56 @@
        (iadd (fits_in_64 ty)
              (iconst ty (u64_from_imm64 k1))
              (iconst ty (u64_from_imm64 k2))))
-      (iconst ty (imm64 (u64_add k1 k2))))
+      (subsume (iconst ty (imm64 (u64_add k1 k2)))))
 
 (rule (simplify
        (isub (fits_in_64 ty)
              (iconst ty (u64_from_imm64 k1))
              (iconst ty (u64_from_imm64 k2))))
-      (iconst ty (imm64 (u64_sub k1 k2))))
+      (subsume (iconst ty (imm64 (u64_sub k1 k2)))))
 
 (rule (simplify
        (imul (fits_in_64 ty)
              (iconst ty (u64_from_imm64 k1))
              (iconst ty (u64_from_imm64 k2))))
-      (iconst ty (imm64 (u64_mul k1 k2))))
+      (subsume (iconst ty (imm64 (u64_mul k1 k2)))))
 
 (rule (simplify
        (sdiv (fits_in_64 ty)
              (iconst ty (u64_from_imm64 k1))
              (iconst ty (u64_from_imm64 k2))))
       (if-let d (u64_sdiv k1 k2))
-      (iconst ty (imm64 d)))
+      (subsume (iconst ty (imm64 d))))
 
 (rule (simplify
        (udiv (fits_in_64 ty)
              (iconst ty (u64_from_imm64 k1))
              (iconst ty (u64_from_imm64 k2))))
       (if-let d (u64_udiv k1 k2))
-      (iconst ty (imm64 d)))
+      (subsume (iconst ty (imm64 d))))
 
 (rule (simplify
        (bor (fits_in_64 ty)
             (iconst ty (u64_from_imm64 k1))
             (iconst ty (u64_from_imm64 k2))))
-      (iconst ty (imm64 (u64_or k1 k2))))
+      (subsume (iconst ty (imm64 (u64_or k1 k2)))))
 
 (rule (simplify
        (band (fits_in_64 ty)
             (iconst ty (u64_from_imm64 k1))
             (iconst ty (u64_from_imm64 k2))))
-      (iconst ty (imm64 (u64_and k1 k2))))
+      (subsume (iconst ty (imm64 (u64_and k1 k2)))))
 
 (rule (simplify
        (bxor (fits_in_64 ty)
             (iconst ty (u64_from_imm64 k1))
             (iconst ty (u64_from_imm64 k2))))
-      (iconst ty (imm64 (u64_xor k1 k2))))
+      (subsume (iconst ty (imm64 (u64_xor k1 k2)))))
 
 (rule (simplify
        (bnot (fits_in_64 ty)
             (iconst ty (u64_from_imm64 k))))
-      (iconst ty (imm64 (u64_not k))))
+      (subsume (iconst ty (imm64 (u64_not k)))))
 
 ;; Canonicalize via commutativity: push immediates to the right.
 ;;
