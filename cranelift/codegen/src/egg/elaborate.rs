@@ -15,20 +15,26 @@ use smallvec::{smallvec, SmallVec};
 
 type LoopDepth = u32;
 
+/// Borrows of "input data". Held separately so that we can keep
+/// borrows open while calling `&mut self` methods on `Elaborator`
+/// itself.
+pub(crate) struct ElaboratorCtx<'a> {
+    pub(crate) domtree: &'a DominatorTree,
+    pub(crate) loop_analysis: &'a LoopAnalysis,
+    pub(crate) node_ctx: &'a NodeCtx,
+    pub(crate) egraph: &'a EGraph<NodeCtx>,
+    pub(crate) loop_levels: &'a SecondaryMap<Id, LoopLevel>,
+    pub(crate) remat_ids: &'a FxHashSet<Id>,
+}
+
 pub(crate) struct Elaborator<'a> {
     func: &'a mut Function,
-    domtree: &'a DominatorTree,
-    loop_analysis: &'a LoopAnalysis,
-    node_ctx: &'a NodeCtx,
-    egraph: &'a EGraph<NodeCtx>,
-    loop_levels: &'a SecondaryMap<Id, LoopLevel>,
     id_to_value: ScopedHashMap<Id, IdValue>,
     id_to_best_cost_and_node: SecondaryMap<Id, (usize, Id)>,
     /// Stack of blocks and loops in current elaboration path.
     loop_stack: SmallVec<[LoopStackEntry; 8]>,
     cur_block: Option<Block>,
     first_branch: SecondaryMap<Block, PackedOption<Inst>>,
-    remat_ids: &'a FxHashSet<Id>,
     stats: &'a mut Stats,
 }
 
@@ -71,30 +77,19 @@ impl IdValue {
 impl<'a> Elaborator<'a> {
     pub(crate) fn new(
         func: &'a mut Function,
-        domtree: &'a DominatorTree,
-        loop_analysis: &'a LoopAnalysis,
-        egraph: &'a EGraph<NodeCtx>,
-        node_ctx: &'a NodeCtx,
-        loop_levels: &'a SecondaryMap<Id, LoopLevel>,
-        remat_ids: &'a FxHashSet<Id>,
+        ctx: &ElaboratorCtx<'_>,
         stats: &'a mut Stats,
     ) -> Self {
         let num_blocks = func.dfg.num_blocks();
         let mut id_to_best_cost_and_node = SecondaryMap::with_default((0, Id::invalid()));
-        id_to_best_cost_and_node.resize(egraph.classes.len());
+        id_to_best_cost_and_node.resize(ctx.egraph.classes.len());
         Self {
             func,
-            domtree,
-            loop_analysis,
-            egraph,
-            node_ctx,
-            loop_levels,
-            id_to_value: ScopedHashMap::with_capacity(egraph.classes.len()),
+            id_to_value: ScopedHashMap::with_capacity(ctx.egraph.classes.len()),
             id_to_best_cost_and_node,
             loop_stack: smallvec![],
             cur_block: None,
             first_branch: SecondaryMap::with_capacity(num_blocks),
-            remat_ids,
             stats,
         }
     }
@@ -103,7 +98,13 @@ impl<'a> Elaborator<'a> {
         self.loop_stack.len() as LoopDepth
     }
 
-    fn start_block(&mut self, idom: Option<Block>, block: Block, block_params: &[(Id, Type)]) {
+    fn start_block(
+        &mut self,
+        ctx: &ElaboratorCtx<'_>,
+        idom: Option<Block>,
+        block: Block,
+        block_params: &[(Id, Type)],
+    ) {
         log::trace!(
             "start_block: block {:?} with idom {:?} at loop depth {} scope depth {}",
             block,
@@ -113,7 +114,7 @@ impl<'a> Elaborator<'a> {
         );
 
         if let Some(idom) = idom {
-            if self.loop_analysis.is_loop_header(block).is_some() {
+            if ctx.loop_analysis.is_loop_header(block).is_some() {
                 self.loop_stack.push(LoopStackEntry {
                     // Any code hoisted out of this loop will have code
                     // placed in `idom`, and will have def mappings
@@ -144,7 +145,13 @@ impl<'a> Elaborator<'a> {
         }
     }
 
-    fn add_node(&mut self, node: &Node, args: &[Value], to_block: Block) -> ValueList {
+    fn add_node(
+        &mut self,
+        ctx: &ElaboratorCtx<'_>,
+        node: &Node,
+        args: &[Value],
+        to_block: Block,
+    ) -> ValueList {
         let (instdata, result_tys, single_ty) = match node {
             Node::Pure { op, types, .. } | Node::Inst { op, types, .. } => (
                 op.with_args(args, &mut self.func.dfg.value_lists),
@@ -167,7 +174,7 @@ impl<'a> Elaborator<'a> {
         self.func.srclocs[inst] = srcloc;
 
         if let Some(result_tys) = result_tys {
-            for &ty in result_tys.as_slice(&self.node_ctx.types) {
+            for &ty in result_tys.as_slice(&ctx.node_ctx.types) {
                 self.func.dfg.append_result(inst, ty);
             }
         } else if let Some(ty) = single_ty {
@@ -187,7 +194,12 @@ impl<'a> Elaborator<'a> {
         self.func.dfg.inst_results_list(inst)
     }
 
-    fn find_best_node(&mut self, id: Id, mut upper_bound: Option<usize>) -> Option<(usize, Id)> {
+    fn find_best_node(
+        &mut self,
+        ctx: &ElaboratorCtx<'_>,
+        id: Id,
+        mut upper_bound: Option<usize>,
+    ) -> Option<(usize, Id)> {
         self.stats.elaborate_find_best_node += 1;
         log::trace!("find_best_node: {} upper_bound {:?}", id, upper_bound);
 
@@ -203,7 +215,7 @@ impl<'a> Elaborator<'a> {
         }
         self.stats.elaborate_find_best_node_memoize_miss += 1;
 
-        let eclass = self.egraph.classes[id];
+        let eclass = ctx.egraph.classes[id];
         let node = eclass.get_node();
         let parent1 = eclass.parent1();
         let parent2 = eclass.parent2();
@@ -217,38 +229,34 @@ impl<'a> Elaborator<'a> {
         );
 
         let (mut best_cost, mut best_id) = if let Some(node) = node {
-            let cost = match node.node::<NodeCtx>(&self.egraph.nodes) {
+            let cost = match node.node::<NodeCtx>(&ctx.egraph.nodes) {
                 Node::Param { .. } | Node::Inst { .. } | Node::Load { .. } => {
                     return Some((0, id));
                 }
                 Node::Result { value, .. } => {
-                    return self.find_best_node(*value, upper_bound);
+                    return self.find_best_node(ctx, *value, upper_bound);
                 }
                 Node::Pure { op, .. } => op_cost(op),
             };
-            let level = self.loop_levels[id].level() as u32;
+            let level = ctx.loop_levels[id].level() as u32;
             let cost = cost * (1 << (10 * level));
             log::trace!("  -> id {} has operand cost {}", id, cost);
 
             let mut children_cost = 0;
-            let child_count = self
-                .node_ctx
-                .children(node.node::<NodeCtx>(&self.egraph.nodes))
-                .len();
             let mut exceeded = false;
-            for child_idx in 0..child_count {
+            for &child in ctx
+                .node_ctx
+                .children(node.node::<NodeCtx>(&ctx.egraph.nodes))
+            {
                 if upper_bound.is_some() && cost + children_cost > upper_bound.unwrap() {
                     exceeded = true;
                     break;
                 }
-                let child = self
-                    .node_ctx
-                    .children(node.node::<NodeCtx>(&self.egraph.nodes))[child_idx];
                 assert!(child < id);
                 log::trace!("  -> id {} child {}", id, child);
                 self.stats.elaborate_find_best_node_arg_recurse += 1;
                 let child_upper_bound = upper_bound.map(|u| u - (cost + children_cost));
-                if let Some((child_cost, _)) = self.find_best_node(child, child_upper_bound) {
+                if let Some((child_cost, _)) = self.find_best_node(ctx, child, child_upper_bound) {
                     children_cost += child_cost;
                     log::trace!("  -> id {} child {} child cost {}", id, child, child_cost);
                 } else {
@@ -289,7 +297,7 @@ impl<'a> Elaborator<'a> {
                 assert!(parent < id);
                 self.stats.elaborate_find_best_node_parent_recurse += 1;
                 if let Some((parent_best_cost, parent_best_id)) =
-                    self.find_best_node(parent, upper_bound)
+                    self.find_best_node(ctx, parent, upper_bound)
                 {
                     log::trace!(
                         " -> id {} parent {} has cost {} with best id {}",
@@ -338,9 +346,9 @@ impl<'a> Elaborator<'a> {
         }
     }
 
-    fn elaborate_eclass_use(&mut self, id: Id) -> IdValue {
+    fn elaborate_eclass_use(&mut self, ctx: &ElaboratorCtx<'_>, id: Id) -> IdValue {
         self.stats.elaborate_visit_node += 1;
-        let canonical = self.egraph.canonical_id(id);
+        let canonical = ctx.egraph.canonical_id(id);
         log::trace!("elaborate: id {}", id);
 
         let remat = if let Some(val) = self.id_to_value.get(&canonical) {
@@ -349,7 +357,7 @@ impl<'a> Elaborator<'a> {
             // from another block. If so, ignore the hit and recompute
             // below.
             let remat =
-                val.block() != self.cur_block.unwrap() && self.remat_ids.contains(&canonical);
+                val.block() != self.cur_block.unwrap() && ctx.remat_ids.contains(&canonical);
             if !remat {
                 log::trace!("elaborate: id {} -> {:?}", id, val);
                 self.stats.elaborate_memoize_hit += 1;
@@ -360,22 +368,22 @@ impl<'a> Elaborator<'a> {
             self.id_to_value.remove(&canonical);
             true
         } else {
-            self.remat_ids.contains(&canonical)
+            ctx.remat_ids.contains(&canonical)
         };
         self.stats.elaborate_memoize_miss += 1;
 
         let (_, best_node_eclass) = self
-            .find_best_node(id, None)
+            .find_best_node(ctx, id, None)
             .expect("Must have some option with unlimited upper bound");
 
         log::trace!(
             "elaborate: id {} -> best {} -> eclass node {:?}",
             id,
             best_node_eclass,
-            self.egraph.classes[best_node_eclass]
+            ctx.egraph.classes[best_node_eclass]
         );
-        let node_key = self.egraph.classes[best_node_eclass].get_node().unwrap();
-        let node = node_key.node::<NodeCtx>(&self.egraph.nodes);
+        let node_key = ctx.egraph.classes[best_node_eclass].get_node().unwrap();
+        let node = node_key.node::<NodeCtx>(&ctx.egraph.nodes);
 
         // Is the node a block param? We should never get here if so
         // (they are inserted when first visiting the block).
@@ -387,7 +395,7 @@ impl<'a> Elaborator<'a> {
         // have everything we need; no need to allocate a new Value
         // for the result.
         if let Node::Result { value, result, .. } = node {
-            let value = self.elaborate_eclass_use(*value);
+            let value = self.elaborate_eclass_use(ctx, *value);
             let (depth, block, values) = match value {
                 IdValue::Values {
                     depth,
@@ -412,13 +420,13 @@ impl<'a> Elaborator<'a> {
         // We're going to need to emit this operator. First, elaborate
         // all args, recursively. Also track maximum loop depth while we're here.
         let mut max_loop_depth = 0;
-        let args: SmallVec<[Value; 8]> = self
+        let args: SmallVec<[Value; 8]> = ctx
             .node_ctx
             .children(&node)
             .iter()
             .map(|&id| {
                 self.stats.elaborate_visit_node_recurse += 1;
-                self.elaborate_eclass_use(id)
+                self.elaborate_eclass_use(ctx, id)
             })
             .map(|idvalue| match idvalue {
                 IdValue::Value { depth, value, .. } => {
@@ -454,7 +462,7 @@ impl<'a> Elaborator<'a> {
         };
 
         // This is an actual operation; emit the node in sequence now.
-        let results = self.add_node(node, &args[..], block);
+        let results = self.add_node(ctx, node, &args[..], block);
         let results_slice = results.as_slice(&self.func.dfg.value_lists);
 
         // Build the result and memoize in the id-to-value map.
@@ -479,6 +487,7 @@ impl<'a> Elaborator<'a> {
 
     fn elaborate_block<'b, PF: Fn(Block) -> &'b [(Id, Type)], RF: Fn(Block) -> &'b [Id]>(
         &mut self,
+        ctx: &ElaboratorCtx<'_>,
         idom: Option<Block>,
         block: Block,
         block_params_fn: &PF,
@@ -488,14 +497,21 @@ impl<'a> Elaborator<'a> {
         self.id_to_value.increment_depth();
 
         let blockparam_ids_tys = (block_params_fn)(block);
-        self.start_block(idom, block, blockparam_ids_tys);
+        self.start_block(ctx, idom, block, blockparam_ids_tys);
         for &id in (block_roots_fn)(block) {
             self.id_to_best_cost_and_node[id] = (0, id);
-            self.elaborate_eclass_use(id);
+            self.elaborate_eclass_use(ctx, id);
         }
 
         for child in domtree.children(block) {
-            self.elaborate_block(Some(block), child, block_params_fn, block_roots_fn, domtree);
+            self.elaborate_block(
+                ctx,
+                Some(block),
+                child,
+                block_params_fn,
+                block_roots_fn,
+                domtree,
+            );
         }
 
         self.id_to_value.decrement_depth();
@@ -519,15 +535,16 @@ impl<'a> Elaborator<'a> {
 
     pub(crate) fn elaborate<'b, PF: Fn(Block) -> &'b [(Id, Type)], RF: Fn(Block) -> &'b [Id]>(
         &mut self,
+        ctx: &ElaboratorCtx<'_>,
         block_params_fn: PF,
         block_roots_fn: RF,
     ) {
-        let domtree = DomTreeWithChildren::new(self.func, self.domtree);
+        let domtree = DomTreeWithChildren::new(self.func, ctx.domtree);
         let root = domtree.root();
         self.stats.elaborate_func += 1;
         self.stats.elaborate_func_pre_insts += self.func.dfg.num_insts() as u64;
         self.clear_func_body();
-        self.elaborate_block(None, root, &block_params_fn, &block_roots_fn, &domtree);
+        self.elaborate_block(ctx, None, root, &block_params_fn, &block_roots_fn, &domtree);
         self.stats.elaborate_func_post_insts += self.func.dfg.num_insts() as u64;
     }
 }

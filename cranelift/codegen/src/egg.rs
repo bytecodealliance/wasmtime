@@ -23,6 +23,8 @@ use elaborate::Elaborator;
 pub use node::{Node, NodeCtx};
 pub use stores::{AliasAnalysis, MemoryState};
 
+use self::elaborate::ElaboratorCtx;
+
 pub struct FuncEGraph<'a> {
     /// Dominator tree, used for elaboration pass.
     domtree: &'a DominatorTree,
@@ -346,17 +348,17 @@ impl<'a> FuncEGraph<'a> {
     /// the Id-to-Value map and available to all dominated blocks and
     /// for the rest of this block. (This subsumes GVN.)
     pub fn elaborate(&mut self, func: &mut Function) {
-        let mut elab = Elaborator::new(
-            func,
-            self.domtree,
-            self.loop_analysis,
-            &self.egraph,
-            &self.node_ctx,
-            &self.loop_levels,
-            &self.remat_ids,
-            &mut self.stats,
-        );
+        let ctx = ElaboratorCtx {
+            domtree: self.domtree,
+            loop_analysis: self.loop_analysis,
+            egraph: &self.egraph,
+            node_ctx: &self.node_ctx,
+            loop_levels: &self.loop_levels,
+            remat_ids: &self.remat_ids,
+        };
+        let mut elab = Elaborator::new(func, &ctx, &mut self.stats);
         elab.elaborate(
+            &ctx,
             |block| {
                 let blockparam_range = self.blockparams[block].clone();
                 &self.blockparam_ids_tys
