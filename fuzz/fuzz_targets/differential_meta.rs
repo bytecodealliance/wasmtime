@@ -62,7 +62,7 @@ fn run(data: &[u8]) -> Result<()> {
             let arguments = signature
                 .params
                 .iter()
-                .map(|&t| DiffValue::arbitrary_of_type(&mut u, t.into()))
+                .map(|&t| DiffValue::arbitrary_of_type(&mut u, t.try_into().unwrap()))
                 .collect::<Result<Vec<_>>>()?;
             differential(
                 lhs_instance.as_mut(),

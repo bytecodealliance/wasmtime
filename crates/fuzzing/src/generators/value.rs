@@ -160,17 +160,18 @@ pub enum DiffValueType {
     V128,
 }
 
-impl From<wasmparser::ValType> for DiffValueType {
-    fn from(ty: wasmparser::ValType) -> Self {
+impl TryFrom<wasmparser::ValType> for DiffValueType {
+    type Error = &'static str;
+    fn try_from(ty: wasmparser::ValType) -> Result<Self, Self::Error> {
         use wasmparser::ValType::*;
         match ty {
-            I32 => Self::I32,
-            I64 => Self::I64,
-            F32 => Self::F32,
-            F64 => Self::F64,
-            V128 => Self::V128,
-            FuncRef => unimplemented!(),
-            ExternRef => unimplemented!(),
+            I32 => Ok(Self::I32),
+            I64 => Ok(Self::I64),
+            F32 => Ok(Self::F32),
+            F64 => Ok(Self::F64),
+            V128 => Ok(Self::V128),
+            FuncRef => Err("unable to convert reference types"),
+            ExternRef => Err("unable to convert reference types"),
         }
     }
 }
