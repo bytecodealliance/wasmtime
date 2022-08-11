@@ -294,16 +294,16 @@ impl<'a> Elaborator<'a> {
 
     fn elaborate_eclass_use(&mut self, id: Id) -> IdValue {
         self.stats.elaborate_visit_node += 1;
-        let (_, best_node_eclass) = self.find_best_node(id);
+        let canonical = self.egraph.canonical_id(id);
         log::trace!("elaborate: id {}", id);
 
-        let remat = if let Some(val) = self.id_to_value.get(&best_node_eclass) {
+        let remat = if let Some(val) = self.id_to_value.get(&canonical) {
             // Look at the defined block, and determine whether this
             // node kind allows rematerialization if the value comes
             // from another block. If so, ignore the hit and recompute
             // below.
-            let remat = val.block() != self.cur_block.unwrap()
-                && self.remat_ids.contains(&best_node_eclass);
+            let remat =
+                val.block() != self.cur_block.unwrap() && self.remat_ids.contains(&canonical);
             if !remat {
                 log::trace!("elaborate: id {} -> {:?}", id, val);
                 self.stats.elaborate_memoize_hit += 1;
@@ -311,12 +311,14 @@ impl<'a> Elaborator<'a> {
             }
             log::trace!("elaborate: id {} -> remat", id);
             self.stats.elaborate_memoize_miss_remat += 1;
-            self.id_to_value.remove(&best_node_eclass);
+            self.id_to_value.remove(&canonical);
             true
         } else {
-            self.remat_ids.contains(&best_node_eclass)
+            self.remat_ids.contains(&canonical)
         };
         self.stats.elaborate_memoize_miss += 1;
+
+        let (_, best_node_eclass) = self.find_best_node(id);
 
         log::trace!(
             "elaborate: id {} -> best {} -> eclass node {:?}",
@@ -355,8 +357,7 @@ impl<'a> Elaborator<'a> {
                 block,
                 value: values[*result],
             };
-            self.id_to_value
-                .insert_if_absent(best_node_eclass, value.clone());
+            self.id_to_value.insert_if_absent(canonical, value.clone());
             return value;
         }
 
@@ -424,7 +425,7 @@ impl<'a> Elaborator<'a> {
         };
 
         self.id_to_value
-            .insert_if_absent_with_depth(best_node_eclass, result.clone(), scope_depth);
+            .insert_if_absent_with_depth(canonical, result.clone(), scope_depth);
         result
     }
 

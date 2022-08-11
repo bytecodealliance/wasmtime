@@ -19,10 +19,6 @@
   - keep Insts (side-effecting ops) in DFG, and just rewrite args and
     attach new results when elaborating.
 
-  - elaborate: when an Inst node is present, we must select that one;
-    other nodes rewriting onto it (unioning with it) don't change
-    that. pre-populate best selection.
-
 - code quality
   - strength reduction for mul/div/rem
   - analyses: demanded bits, defined bits

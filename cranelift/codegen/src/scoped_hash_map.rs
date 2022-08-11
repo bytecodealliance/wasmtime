@@ -152,19 +152,20 @@ where
             .map(|entry| &entry.value)
     }
 
-    /// Insert a key-value pair if absent, panicking otherwise.
+    /// Insert a key-value pair if absent. No-op if already exists.
     pub fn insert_if_absent(&mut self, key: K, value: V) {
         self.insert_if_absent_with_depth(key, value, self.depth());
     }
 
-    /// Insert a key-value pair if absent at the given depth, panicking otherwise.
+    /// Insert a key-value pair if absent, using the given depth for
+    /// the insertion. No-op if already exists.
     pub fn insert_if_absent_with_depth(&mut self, key: K, value: V, depth: usize) {
         match self.entry_with_depth(key, depth) {
             Entry::Vacant(v) => {
                 v.insert(value);
             }
             Entry::Occupied(_) => {
-                panic!("Key is already present in ScopedHashMap");
+                // Nothing.
             }
         }
     }
