@@ -2462,7 +2462,7 @@ impl MachInstEmit for Inst {
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &ABICalleeImpl<X64ABIMachineSpec>) -> Self {
+    fn new(abi: &AbiCallee<X64ABIMachineSpec>) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,

@@ -697,7 +697,7 @@ impl ABISig {
 }
 
 /// ABI object for a function body.
-pub struct ABICalleeImpl<M: ABIMachineSpec> {
+pub struct AbiCallee<M: ABIMachineSpec> {
     /// CLIF-level signature, possibly normalized.
     ir_sig: ir::Signature,
     /// Signature: arg and retval regs.
@@ -772,7 +772,7 @@ fn get_special_purpose_param_register(
     }
 }
 
-impl<M: ABIMachineSpec> ABICalleeImpl<M> {
+impl<M: ABIMachineSpec> AbiCallee<M> {
     /// Create a new body ABI instance.
     pub fn new(f: &ir::Function, isa: &dyn TargetIsa, isa_flags: &M::F) -> CodegenResult<Self> {
         trace!("ABI: func signature {:?}", f.signature);
@@ -1050,8 +1050,8 @@ fn ensure_struct_return_ptr_is_returned(sig: &ir::Signature) -> ir::Signature {
 
 /// ### Pre-Regalloc Functions
 ///
-/// These methods of `ABICalleeImpl` may only be called before regalloc.
-impl<M: ABIMachineSpec> ABICalleeImpl<M> {
+/// These methods of `AbiCallee` may only be called before regalloc.
+impl<M: ABIMachineSpec> AbiCallee<M> {
     /// Access the (possibly legalized) signature.
     pub fn signature(&self) -> &ir::Signature {
         &self.ir_sig
@@ -1078,7 +1078,7 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
         temp_tys
     }
 
-    /// Initialize. This is called after the ABICallee is constructed because it
+    /// Initialize. This is called after the AbiCallee is constructed because it
     /// may be provided with a vector of temp vregs, which can only be allocated
     /// once the lowering context exists.
     pub fn init(&mut self, temps: Vec<Writable<Reg>>) {
@@ -1419,9 +1419,9 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
 
 /// ### Post-Regalloc Functions
 ///
-/// These methods of `ABICalleeImpl` may only be called after
+/// These methods of `AbiCallee` may only be called after
 /// regalloc.
-impl<M: ABIMachineSpec> ABICalleeImpl<M> {
+impl<M: ABIMachineSpec> AbiCallee<M> {
     /// Update with the number of spillslots, post-regalloc.
     pub fn set_num_spillslots(&mut self, slots: usize) {
         self.spillslots = Some(slots);

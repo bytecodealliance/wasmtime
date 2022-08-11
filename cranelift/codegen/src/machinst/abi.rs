@@ -14,7 +14,7 @@ pub type SmallInstVec<I> = SmallVec<[I; 4]>;
 /// callsite. It will usually be computed from the called function's
 /// signature.
 ///
-/// Unlike `ABICallee` above, methods on this trait are not invoked directly
+/// Unlike `AbiCallee` above, methods on this trait are not invoked directly
 /// by the machine-independent code. Rather, the machine-specific lowering
 /// code will typically create an `ABICaller` when creating machine instructions
 /// for an IR call instruction inside `lower()`, directly emit the arg and

@@ -53,7 +53,7 @@ impl X64Backend {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
         let emit_info = EmitInfo::new(flags.clone(), self.x64_flags.clone());
-        let abi = abi::X64ABICallee::new(&func, self, &self.x64_flags)?;
+        let abi = abi::X64AbiCallee::new(&func, self, &self.x64_flags)?;
         compile::compile::<Self>(&func, self, abi, &self.reg_env, emit_info)
     }
 }

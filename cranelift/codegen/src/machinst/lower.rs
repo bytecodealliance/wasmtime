@@ -17,7 +17,7 @@ use crate::ir::{
 };
 use crate::ir::{ExternalName, RelSourceLoc};
 use crate::machinst::{
-    non_writable_value_regs, writable_value_regs, ABICalleeImpl, BlockIndex, BlockLoweringOrder,
+    non_writable_value_regs, writable_value_regs, AbiCallee, BlockIndex, BlockLoweringOrder,
     LoweredBlock, MachLabel, Reg, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
     VCodeConstants, VCodeInst, ValueRegs, Writable,
 };
@@ -344,7 +344,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Prepare a new lowering context for the given IR function.
     pub fn new(
         f: &'func Function,
-        abi: ABICalleeImpl<I::ABIMachineSpec>,
+        abi: AbiCallee<I::ABIMachineSpec>,
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
     ) -> CodegenResult<Lower<'func, I>> {
@@ -1007,8 +1007,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         &self.f.dfg
     }
 
-    /// Get the `ABICalleeImpl`.
-    pub fn abi(&mut self) -> &mut ABICalleeImpl<I::ABIMachineSpec> {
+    /// Get the `AbiCallee`.
+    pub fn abi(&mut self) -> &mut AbiCallee<I::ABIMachineSpec> {
         self.vcode.abi()
     }
 

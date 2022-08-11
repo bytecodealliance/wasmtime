@@ -264,7 +264,7 @@ pub trait MachInstEmit: MachInst {
 /// emitting a function body.
 pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
     /// Create a new emission state given the ABI object.
-    fn new(abi: &ABICalleeImpl<I::ABIMachineSpec>) -> Self;
+    fn new(abi: &AbiCallee<I::ABIMachineSpec>) -> Self;
     /// Update the emission state before emitting an instruction that is a
     /// safepoint.
     fn pre_safepoint(&mut self, _stack_map: StackMap) {}
