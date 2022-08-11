@@ -32,8 +32,9 @@ wasmtime-wasi = { path = "../wasi", optional = true }
 cap-std = { version = "0.25.0", optional = true }
 
 [features]
-default = ['jitdump', 'wat', 'wasi', 'cache', 'parallel-compilation']
+default = ['jitdump', 'wat', 'wasi', 'cache', 'parallel-compilation', 'memory-init-cow']
 jitdump = ["wasmtime/jitdump"]
 cache = ["wasmtime/cache"]
 parallel-compilation = ['wasmtime/parallel-compilation']
 wasi = ['wasi-cap-std-sync', 'wasmtime-wasi', 'cap-std']
+memory-init-cow = ["wasmtime/memory-init-cow"]
