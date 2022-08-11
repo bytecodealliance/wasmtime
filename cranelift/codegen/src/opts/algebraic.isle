@@ -183,3 +183,7 @@
       (remat x))
 (rule (simplify x @ (iconst _ _))
       (remat x))
+(rule (simplify x @ (f32const _ _))
+      (remat x))
+(rule (simplify x @ (f64const _ _))
+      (remat x))
