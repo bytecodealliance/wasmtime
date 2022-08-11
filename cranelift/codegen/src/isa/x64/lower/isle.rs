@@ -30,8 +30,8 @@ use crate::{
         },
     },
     machinst::{
-        isle::*, valueregs, ABICaller, InsnInput, InsnOutput, Lower, MachAtomicRmwOp, MachInst,
-        VCodeConstant, VCodeConstantData,
+        isle::*, valueregs, InsnInput, InsnOutput, Lower, MachAtomicRmwOp, MachInst, VCodeConstant,
+        VCodeConstantData,
     },
 };
 use regalloc2::PReg;
