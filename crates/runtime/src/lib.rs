@@ -19,7 +19,6 @@
         clippy::use_self
     )
 )]
-#![cfg_attr(not(memory_init_cow), allow(unused_variables, unreachable_code))]
 
 use anyhow::Error;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
