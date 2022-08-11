@@ -423,7 +423,8 @@ where
         }
         Opcode::GetPinnedReg => assign(state.get_pinned_reg()),
         Opcode::SetPinnedReg => {
-            state.set_pinned_reg(arg(0)?);
+            let arg0 = arg(0)?;
+            state.set_pinned_reg(arg0);
             ControlFlow::Continue
         }
         Opcode::TableAddr => {
