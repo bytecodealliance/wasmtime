@@ -583,7 +583,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             implemented_in_isle(ctx);
         }
 
-
         Opcode::FcvtToUint | Opcode::FcvtToUintSat | Opcode::FcvtToSint | Opcode::FcvtToSintSat => {
             let src = put_input_in_reg(ctx, inputs[0]);
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();

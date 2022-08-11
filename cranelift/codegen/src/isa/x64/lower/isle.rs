@@ -773,12 +773,14 @@ where
 
     #[inline]
     fn fcvt_uint_mask_const(&mut self) -> VCodeConstant {
-        self.lower_ctx.use_constant(VCodeConstantData::WellKnown(&UINT_MASK))
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&UINT_MASK))
     }
 
     #[inline]
     fn fcvt_uint_mask_high_const(&mut self) -> VCodeConstant {
-        self.lower_ctx.use_constant(VCodeConstantData::WellKnown(&UINT_MASK_HIGH))
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&UINT_MASK_HIGH))
     }
 }
 

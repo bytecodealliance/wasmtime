@@ -36,7 +36,6 @@ impl Inst {
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
-
 }
 
 #[test]
