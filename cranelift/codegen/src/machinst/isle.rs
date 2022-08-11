@@ -1,5 +1,5 @@
 use crate::ir::{types, Inst, Value, ValueList};
-use crate::machinst::{get_output_reg, InsnOutput, LowerCtx};
+use crate::machinst::{get_output_reg, InsnOutput};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use smallvec::SmallVec;
@@ -13,7 +13,8 @@ pub use crate::ir::{
 };
 pub use crate::isa::unwind::UnwindInst;
 pub use crate::machinst::{
-    ABIArg, ABIArgSlot, ABISig, InputSourceInst, RealReg, Reg, RelocDistance, Writable,
+    ABIArg, ABIArgSlot, ABISig, InputSourceInst, Lower, RealReg, Reg, RelocDistance, VCodeInst,
+    Writable,
 };
 pub use crate::settings::TlsModel;
 
@@ -948,14 +949,15 @@ macro_rules! isle_prelude_methods {
 
 /// This structure is used to implement the ISLE-generated `Context` trait and
 /// internally has a temporary reference to a machinst `LowerCtx`.
-pub(crate) struct IsleContext<'a, C: LowerCtx, F, I, const N: usize>
+pub(crate) struct IsleContext<'a, 'b, I, Flags, IsaFlags, const N: usize>
 where
-    [(C::I, bool); N]: smallvec::Array,
+    I: VCodeInst,
+    [(I, bool); N]: smallvec::Array,
 {
-    pub lower_ctx: &'a mut C,
+    pub lower_ctx: &'a mut Lower<'b, I>,
     pub triple: &'a Triple,
-    pub flags: &'a F,
-    pub isa_flags: &'a I,
+    pub flags: &'a Flags,
+    pub isa_flags: &'a IsaFlags,
 }
 
 /// Shared lowering code amongst all backends for doing ISLE-based lowering.
@@ -963,19 +965,19 @@ where
 /// The `isle_lower` argument here is an ISLE-generated function for `lower` and
 /// then this function otherwise handles register mapping and such around the
 /// lowering.
-pub(crate) fn lower_common<C, F, I, IF, const N: usize>(
-    lower_ctx: &mut C,
+pub(crate) fn lower_common<I, Flags, IsaFlags, IsleFunction, const N: usize>(
+    lower_ctx: &mut Lower<I>,
     triple: &Triple,
-    flags: &F,
-    isa_flags: &I,
+    flags: &Flags,
+    isa_flags: &IsaFlags,
     outputs: &[InsnOutput],
     inst: Inst,
-    isle_lower: IF,
+    isle_lower: IsleFunction,
 ) -> Result<(), ()>
 where
-    C: LowerCtx,
-    [(C::I, bool); N]: smallvec::Array<Item = (C::I, bool)>,
-    IF: Fn(&mut IsleContext<'_, C, F, I, N>, Inst) -> Option<InstOutput>,
+    I: VCodeInst,
+    [(I, bool); N]: smallvec::Array<Item = (I, bool)>,
+    IsleFunction: Fn(&mut IsleContext<'_, '_, I, Flags, IsaFlags, N>, Inst) -> Option<InstOutput>,
 {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.

@@ -34,11 +34,7 @@ fn is_int_or_ref_ty(ty: Type) -> bool {
 /// Returns whether the given specified `input` is a result produced by an instruction with Opcode
 /// `op`.
 // TODO investigate failures with checking against the result index.
-fn matches_input<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    input: InsnInput,
-    op: Opcode,
-) -> Option<IRInst> {
+fn matches_input(ctx: &mut Lower<Inst>, input: InsnInput, op: Opcode) -> Option<IRInst> {
     let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
     inputs.inst.as_inst().and_then(|(src_inst, _)| {
         let data = ctx.data(src_inst);
@@ -51,7 +47,7 @@ fn matches_input<C: LowerCtx<I = Inst>>(
 
 /// Emits instruction(s) to generate the given 64-bit constant value into a newly-allocated
 /// temporary register, returning that register.
-fn generate_constant<C: LowerCtx<I = Inst>>(ctx: &mut C, ty: Type, c: u64) -> ValueRegs<Reg> {
+fn generate_constant(ctx: &mut Lower<Inst>, ty: Type, c: u64) -> ValueRegs<Reg> {
     let from_bits = ty_bits(ty);
     let masked = if from_bits < 64 {
         c & ((1u64 << from_bits) - 1)
@@ -71,7 +67,7 @@ fn generate_constant<C: LowerCtx<I = Inst>>(ctx: &mut C, ty: Type, c: u64) -> Va
 }
 
 /// Put the given input into possibly multiple registers, and mark it as used (side-effect).
-fn put_input_in_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> ValueRegs<Reg> {
+fn put_input_in_regs(ctx: &mut Lower<Inst>, spec: InsnInput) -> ValueRegs<Reg> {
     let ty = ctx.input_ty(spec.insn, spec.input);
     let input = ctx.get_input_as_source_or_const(spec.insn, spec.input);
 
@@ -84,7 +80,7 @@ fn put_input_in_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Val
 }
 
 /// Put the given input into a register, and mark it as used (side-effect).
-fn put_input_in_reg<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Reg {
+fn put_input_in_reg(ctx: &mut Lower<Inst>, spec: InsnInput) -> Reg {
     put_input_in_regs(ctx, spec)
         .only_reg()
         .expect("Multi-register value not expected")
@@ -94,10 +90,7 @@ fn put_input_in_reg<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Reg 
 /// into the current lowering point. If so, returns the address-base source (as
 /// an `InsnInput`) and an offset from that address from which to perform the
 /// load.
-fn is_mergeable_load<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    src_insn: IRInst,
-) -> Option<(InsnInput, i32)> {
+fn is_mergeable_load(ctx: &mut Lower<Inst>, src_insn: IRInst) -> Option<(InsnInput, i32)> {
     let insn_data = ctx.data(src_insn);
     let inputs = ctx.num_inputs(src_insn);
     if inputs != 1 {
@@ -142,7 +135,7 @@ fn is_mergeable_load<C: LowerCtx<I = Inst>>(
 
 /// Put the given input into a register or a memory operand.
 /// Effectful: may mark the given input as used, when returning the register form.
-fn input_to_reg_mem<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> RegMem {
+fn input_to_reg_mem(ctx: &mut Lower<Inst>, spec: InsnInput) -> RegMem {
     let inputs = ctx.get_input_as_source_or_const(spec.insn, spec.input);
 
     if let Some(c) = inputs.constant {
@@ -166,19 +159,13 @@ fn input_to_reg_mem<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> RegM
     )
 }
 
-fn input_to_imm<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Option<u64> {
+fn input_to_imm(ctx: &mut Lower<Inst>, spec: InsnInput) -> Option<u64> {
     ctx.get_input_as_source_or_const(spec.insn, spec.input)
         .constant
 }
 
 /// Emit an instruction to insert a value `src` into a lane of `dst`.
-fn emit_insert_lane<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    src: RegMem,
-    dst: Writable<Reg>,
-    lane: u8,
-    ty: Type,
-) {
+fn emit_insert_lane(ctx: &mut Lower<Inst>, src: RegMem, dst: Writable<Reg>, lane: u8, ty: Type) {
     if !ty.is_float() {
         let (sse_op, size) = match ty.lane_bits() {
             8 => (SseOpcode::Pinsrb, OperandSize::Size32),
@@ -220,13 +207,7 @@ fn emit_insert_lane<C: LowerCtx<I = Inst>>(
 }
 
 /// Emit an instruction to extract a lane of `src` into `dst`.
-fn emit_extract_lane<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    src: Reg,
-    dst: Writable<Reg>,
-    lane: u8,
-    ty: Type,
-) {
+fn emit_extract_lane(ctx: &mut Lower<Inst>, src: Reg, dst: Writable<Reg>, lane: u8, ty: Type) {
     if !ty.is_float() {
         let (sse_op, size) = match ty.lane_bits() {
             8 => (SseOpcode::Pextrb, OperandSize::Size32),
@@ -277,8 +258,8 @@ fn emit_extract_lane<C: LowerCtx<I = Inst>>(
     }
 }
 
-fn emit_vm_call<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
+fn emit_vm_call(
+    ctx: &mut Lower<Inst>,
     flags: &Flags,
     triple: &Triple,
     libcall: LibCall,
@@ -319,10 +300,7 @@ fn emit_vm_call<C: LowerCtx<I = Inst>>(
 
 /// Returns whether the given input is a shift by a constant value less or equal than 3.
 /// The goal is to embed it within an address mode.
-fn matches_small_constant_shift<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    spec: InsnInput,
-) -> Option<(InsnInput, u8)> {
+fn matches_small_constant_shift(ctx: &mut Lower<Inst>, spec: InsnInput) -> Option<(InsnInput, u8)> {
     matches_input(ctx, spec, Opcode::Ishl).and_then(|shift| {
         match input_to_imm(
             ctx,
@@ -346,7 +324,7 @@ fn matches_small_constant_shift<C: LowerCtx<I = Inst>>(
 /// Lowers an instruction to one of the x86 addressing modes.
 ///
 /// Note: the 32-bit offset in Cranelift has to be sign-extended, which maps x86's behavior.
-fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i32) -> Amode {
+fn lower_to_amode(ctx: &mut Lower<Inst>, spec: InsnInput, offset: i32) -> Amode {
     let flags = ctx
         .memflags(spec.insn)
         .expect("Instruction with amode should have memflags");
@@ -443,8 +421,8 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i
 // Top-level instruction lowering entry point, for one instruction.
 
 /// Actually codegen an instruction's results into registers.
-fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
+fn lower_insn_to_regs(
+    ctx: &mut Lower<Inst>,
     insn: IRInst,
     flags: &Flags,
     isa_flags: &x64_settings::Flags,
@@ -469,7 +447,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         return Ok(());
     }
 
-    let implemented_in_isle = |ctx: &mut C| {
+    let implemented_in_isle = |ctx: &mut Lower<Inst>| {
         unreachable!(
             "implemented in ISLE: inst = `{}`, type = `{:?}`",
             ctx.dfg().display_inst(insn),
@@ -2227,13 +2205,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 impl LowerBackend for X64Backend {
     type MInst = Inst;
 
-    fn lower<C: LowerCtx<I = Inst>>(&self, ctx: &mut C, ir_inst: IRInst) -> CodegenResult<()> {
+    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> CodegenResult<()> {
         lower_insn_to_regs(ctx, ir_inst, &self.flags, &self.x64_flags, &self.triple)
     }
 
-    fn lower_branch_group<C: LowerCtx<I = Inst>>(
+    fn lower_branch_group(
         &self,
-        ctx: &mut C,
+        ctx: &mut Lower<Inst>,
         branches: &[IRInst],
         targets: &[MachLabel],
     ) -> CodegenResult<()> {

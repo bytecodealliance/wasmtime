@@ -30,7 +30,7 @@ use crate::{
         },
     },
     machinst::{
-        isle::*, valueregs, ABICaller, InsnInput, InsnOutput, LowerCtx, MachAtomicRmwOp, MachInst,
+        isle::*, valueregs, ABICaller, InsnInput, InsnOutput, Lower, MachAtomicRmwOp, MachInst,
         VCodeConstant, VCodeConstantData,
     },
 };
@@ -51,17 +51,14 @@ pub struct SinkableLoad {
 }
 
 /// The main entry point for lowering with ISLE.
-pub(crate) fn lower<C>(
-    lower_ctx: &mut C,
+pub(crate) fn lower(
+    lower_ctx: &mut Lower<MInst>,
     triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
     outputs: &[InsnOutput],
     inst: Inst,
-) -> Result<(), ()>
-where
-    C: LowerCtx<I = MInst>,
-{
+) -> Result<(), ()> {
     lower_common(
         lower_ctx,
         triple,
@@ -73,17 +70,14 @@ where
     )
 }
 
-pub(crate) fn lower_branch<C>(
-    lower_ctx: &mut C,
+pub(crate) fn lower_branch(
+    lower_ctx: &mut Lower<MInst>,
     triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
     branch: Inst,
     targets: &[MachLabel],
-) -> Result<(), ()>
-where
-    C: LowerCtx<I = MInst>,
-{
+) -> Result<(), ()> {
     lower_common(
         lower_ctx,
         triple,
@@ -95,10 +89,7 @@ where
     )
 }
 
-impl<C> Context for IsleContext<'_, C, Flags, IsaFlags, 6>
-where
-    C: LowerCtx<I = MInst>,
-{
+impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_methods!();
 
     #[inline]
@@ -784,10 +775,7 @@ where
     }
 }
 
-impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>
-where
-    C: LowerCtx<I = MInst>,
-{
+impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     fn abi_arg_slot_regs(&mut self, arg: &ABIArg) -> Option<WritableValueRegs> {
         match arg {
             &ABIArg::Slots { ref slots, .. } => match slots.len() {

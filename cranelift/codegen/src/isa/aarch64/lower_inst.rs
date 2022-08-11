@@ -19,8 +19,8 @@ use core::convert::TryFrom;
 use target_lexicon::Triple;
 
 /// Actually codegen an instruction's results into registers.
-pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
+pub(crate) fn lower_insn_to_regs(
+    ctx: &mut Lower<Inst>,
     insn: IRInst,
     triple: &Triple,
     flags: &Flags,
@@ -39,7 +39,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         return Ok(());
     }
 
-    let implemented_in_isle = |ctx: &mut C| -> ! {
+    let implemented_in_isle = |ctx: &mut Lower<Inst>| -> ! {
         unreachable!(
             "implemented in ISLE: inst = `{}`, type = `{:?}`",
             ctx.dfg().display_inst(insn),
@@ -1621,8 +1621,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     Ok(())
 }
 
-pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
+pub(crate) fn lower_branch(
+    ctx: &mut Lower<Inst>,
     branches: &[IRInst],
     targets: &[MachLabel],
 ) -> CodegenResult<()> {
