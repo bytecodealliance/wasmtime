@@ -127,21 +127,22 @@ impl NodeCtx {
 }
 
 impl NodeCtx {
+    #[inline(always)]
     fn id_eq(&self, a: Id, b: Id, uf: &mut UnionFind) -> bool {
         uf.find_and_update(a) == uf.find_and_update(b)
     }
-
+    #[inline(always)]
     fn ids_eq(&self, a: &EntityList<Id>, b: &EntityList<Id>, uf: &mut UnionFind) -> bool {
         let a = a.as_slice(&self.args);
         let b = b.as_slice(&self.args);
         a.len() == b.len() && a.iter().zip(b.iter()).all(|(&a, &b)| self.id_eq(a, b, uf))
     }
-
+    #[inline(always)]
     fn hash_id<H: Hasher>(&self, a: Id, hash: &mut H, uf: &mut UnionFind) {
         let id = uf.find_and_update(a);
         id.hash(hash);
     }
-
+    #[inline(always)]
     fn hash_ids<H: Hasher>(&self, a: &EntityList<Id>, hash: &mut H, uf: &mut UnionFind) {
         let a = a.as_slice(&self.args);
         for &id in a {

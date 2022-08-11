@@ -29,6 +29,7 @@ pub struct NodeKey {
 }
 
 impl NodeKey {
+    #[inline(always)]
     fn from_node_idx(node_idx: usize) -> NodeKey {
         NodeKey {
             index: u32::try_from(node_idx).unwrap(),
@@ -37,14 +38,17 @@ impl NodeKey {
 
     /// Get the node for this NodeKey, given the `nodes` from the
     /// appropriate `EGraph`.
+    #[inline(always)]
     pub fn node<'a, L: Language>(&self, nodes: &'a [L::Node]) -> &'a L::Node {
         &nodes[self.index as usize]
     }
 
+    #[inline(always)]
     fn bits(self) -> u32 {
         self.index
     }
 
+    #[inline(always)]
     fn from_bits(bits: u32) -> Self {
         NodeKey { index: bits }
     }
@@ -56,6 +60,7 @@ struct NodeKeyCtx<'a, L: Language> {
 }
 
 impl<'ctx, L: Language> CtxEq<NodeKey, NodeKey> for NodeKeyCtx<'ctx, L> {
+    #[inline(always)]
     fn ctx_eq(&self, a: &NodeKey, b: &NodeKey, uf: &mut UnionFind) -> bool {
         let a = a.node::<L>(self.nodes);
         let b = b.node::<L>(self.nodes);
@@ -64,6 +69,7 @@ impl<'ctx, L: Language> CtxEq<NodeKey, NodeKey> for NodeKeyCtx<'ctx, L> {
 }
 
 impl<'ctx, L: Language> CtxHash<NodeKey> for NodeKeyCtx<'ctx, L> {
+    #[inline(always)]
     fn ctx_hash(&self, value: &NodeKey, uf: &mut UnionFind) -> u64 {
         self.node_ctx.ctx_hash(value.node::<L>(self.nodes), uf)
     }
@@ -83,6 +89,7 @@ pub struct EClass {
 }
 
 impl EClass {
+    #[inline(always)]
     fn node(node: NodeKey) -> EClass {
         let node_idx = node.bits() as u64;
         debug_assert!(node_idx < (1 << 31));
@@ -91,6 +98,7 @@ impl EClass {
         }
     }
 
+    #[inline(always)]
     fn node_and_parent(node: NodeKey, eclass_parent: Id) -> EClass {
         let node_idx = node.bits() as u64;
         debug_assert!(node_idx < (1 << 31));
@@ -102,6 +110,7 @@ impl EClass {
         }
     }
 
+    #[inline(always)]
     fn union(parent1: Id, parent2: Id) -> EClass {
         debug_assert!(parent1 != Id::invalid());
         let parent1 = parent1.0 as u64;
@@ -118,22 +127,28 @@ impl EClass {
 
     /// Get the node, if any, from a node-only or node-and-parent
     /// eclass.
+    #[inline(always)]
     pub fn get_node(&self) -> Option<NodeKey> {
         self.as_node()
             .or_else(|| self.as_node_and_parent().map(|(node, _)| node))
     }
 
     /// Get the first parent, if any.
+    #[inline(always)]
     pub fn parent1(&self) -> Option<Id> {
-        self.as_node_and_parent().map(|(_, p1)| p1).or(self.as_union().map(|(p1, _)| p1))
+        self.as_node_and_parent()
+            .map(|(_, p1)| p1)
+            .or(self.as_union().map(|(p1, _)| p1))
     }
 
     /// Get the second parent, if any.
+    #[inline(always)]
     pub fn parent2(&self) -> Option<Id> {
         self.as_union().map(|(_, p2)| p2)
     }
 
     /// If this EClass is just a lone enode, return it.
+    #[inline(always)]
     pub fn as_node(&self) -> Option<NodeKey> {
         if (self.bits >> 62) == 0b00 {
             let node_idx = (self.bits & ((1 << 31) - 1)) as u32;
@@ -145,6 +160,7 @@ impl EClass {
 
     /// If this EClass is one new enode and a parent, return the node
     /// and parent ID.
+    #[inline(always)]
     pub fn as_node_and_parent(&self) -> Option<(NodeKey, Id)> {
         if (self.bits >> 62) == 0b01 {
             let node_idx = (self.bits & ((1 << 31) - 1)) as u32;
@@ -157,6 +173,7 @@ impl EClass {
 
     /// If this EClass is the union variety, return the two parent
     /// EClasses. Both are guaranteed not to be `Id::invalid()`.
+    #[inline(always)]
     pub fn as_union(&self) -> Option<(Id, Id)> {
         if (self.bits >> 62) == 0b10 {
             let parent1 = ((self.bits >> 31) & ((1 << 31) - 1)) as u32;
@@ -178,6 +195,7 @@ pub enum NewOrExisting<T> {
 
 impl<T> NewOrExisting<T> {
     /// Get the underlying value.
+    #[inline(always)]
     pub fn get(self) -> T {
         match self {
             NewOrExisting::New(t) => t,
@@ -323,6 +341,7 @@ pub struct NodeIter<L: Language> {
 }
 
 impl<L: Language> NodeIter<L> {
+    #[inline(always)]
     pub fn next<'a>(&mut self, egraph: &'a EGraph<L>) -> Option<&'a L::Node> {
         while let Some(next) = self.stack.pop() {
             let eclass = egraph.classes[next];
