@@ -268,11 +268,11 @@ impl<'a> SerializedModule<'a> {
         // First validate that this is at least somewhat an elf file within
         // `mmap` and additionally skip to the end of the elf file to find our
         // metadata.
-        let elf = take_first_elf(&mut mmap)?;
+        let metadata = data_after_elf(&mut mmap)?;
 
         // The metadata has a few guards up front which we process first, and
         // eventually this bottoms out in a `bincode::deserialize` call.
-        let metadata = mmap
+        let metadata = metadata
             .strip_prefix(HEADER)
             .ok_or_else(|| anyhow!("bytes are not a compatible serialized wasmtime module"))?;
         if metadata.is_empty() {
@@ -309,13 +309,13 @@ impl<'a> SerializedModule<'a> {
             .context("deserialize compilation artifacts")?;
 
         return Ok(SerializedModule {
-            artifacts: MyCow::Owned(elf),
+            artifacts: MyCow::Owned(mmap),
             metadata,
         });
 
         /// This function will return the trailing data behind the ELF file
         /// parsed from `data` which is where we find our metadata section.
-        fn take_first_elf(mmap: &mut MmapVec) -> Result<MmapVec> {
+        fn data_after_elf(mmap: &mut MmapVec) -> Result<MmapVec> {
             use object::NativeEndian as NE;
             // There's not actually a great utility for figuring out where
             // the end of an ELF file is in the `object` crate. In lieu of that
@@ -335,7 +335,7 @@ impl<'a> SerializedModule<'a> {
                 .section_headers(NE, data)
                 .context("failed to read section headers")?;
             let range = subslice_range(object::bytes_of_slice(sections), data);
-            Ok(mmap.split_off(..range.end))
+            Ok(mmap.split_off(range.end))
         }
     }
 
