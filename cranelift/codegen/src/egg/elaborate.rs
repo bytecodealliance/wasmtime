@@ -234,7 +234,7 @@ impl<'a> Elaborator<'a> {
                 .len();
             let mut exceeded = false;
             for child_idx in 0..child_count {
-                if upper_bound.is_some() && cost + children_cost >= upper_bound.unwrap() {
+                if upper_bound.is_some() && cost + children_cost > upper_bound.unwrap() {
                     exceeded = true;
                     break;
                 }

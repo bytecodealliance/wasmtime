@@ -12,8 +12,6 @@
 
 - perf ideas
   - elaboration
-    - find_best_node: stop at sufficiently cheap node? bound the
-      search to better than what's found so far?
     - find_best_node: avoid scoped approach; compute best nodes
       independent of what's already available
   - keep Insts (side-effecting ops) in DFG, and just rewrite args and
