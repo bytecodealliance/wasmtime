@@ -26,6 +26,13 @@
     - handle amodes this way too?
       - in lowering, don't generate new adds; just take pieces of toplevel add
       - then rewrite in mid-end to reassociate as needed
+  - amodes
+    - aarch64: better to do reg+imm with add-with-sext for heap base +
+      wasm ptr
+    - aarch64 and x64: don't gen new adds during lowering; instead
+      nudge things in right direction in mid-end and just match up the
+      tree during lowering
+  - redundant flags uses: reconsider iflags?
 
 - features
   - support non-pure nodes in rewrite as well?

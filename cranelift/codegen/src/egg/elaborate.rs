@@ -443,6 +443,7 @@ impl<'a> Elaborator<'a> {
         let blockparam_ids_tys = (block_params_fn)(block);
         self.start_block(idom, block, blockparam_ids_tys);
         for &id in (block_roots_fn)(block) {
+            self.id_to_best_cost_and_node.insert_if_absent(id, (0, id));
             self.elaborate_eclass_use(id);
         }
 

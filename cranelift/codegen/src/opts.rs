@@ -32,10 +32,8 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     log::trace!("running rules on eclass {}", id.index());
     egraph.stats.rewrite_rule_invoked += 1;
 
-    // Store-to-load forwarding rewrites the ID without unioning with
-    // the original: we want to eliminate the load entirely.
-    let id = store_to_load(id, egraph);
     egraph.compute_analyses(id);
+
     // Find all possible rewrites and union them in, returning the
     // union.
     let mut ctx = IsleContext { egraph };
@@ -62,7 +60,7 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     union_id
 }
 
-fn store_to_load<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
+pub(crate) fn store_to_load<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     if let Some(load_key) = egraph.egraph.classes[id].get_node() {
         if let Node::Load {
             op: load_op,

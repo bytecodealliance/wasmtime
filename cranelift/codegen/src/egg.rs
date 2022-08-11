@@ -266,10 +266,13 @@ impl<'a> FuncEGraph<'a> {
 
                 let id = match (side_effect, mem_state, id) {
                     (_, Some(..), NewOrExisting::New(id)) => {
-                        // Loads: still optimize, but otherwise add to side-effecting roots.
-                        let id = crate::opts::optimize_eclass(id, self);
-                        self.side_effect_ids.push(id);
-                        self.stats.side_effect_nodes += 1;
+                        // Loads: do store-to-load forwarding, and
+                        // otherwise add to side-effecting roots.
+                        let opt_id = crate::opts::store_to_load(id, self);
+                        if opt_id == id {
+                            self.side_effect_ids.push(id);
+                            self.stats.side_effect_nodes += 1;
+                        }
                         id
                     }
                     (true, _, id) => {
