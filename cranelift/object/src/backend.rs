@@ -10,7 +10,7 @@ use cranelift_codegen::{
 };
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
-    ModuleDeclarations, ModuleError, ModuleExtName, ModuleResult,
+    ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
 };
 use log::info;
 use object::write::{
@@ -370,7 +370,7 @@ impl Module for ObjectModule {
         if !relocs.is_empty() {
             let relocs = relocs
                 .iter()
-                .map(|record| self.process_reloc(&func, record))
+                .map(|record| self.process_reloc(&ModuleReloc::from_mach_reloc(&record, func)))
                 .collect();
             self.relocs.push(SymbolRelocs {
                 section,
@@ -382,12 +382,7 @@ impl Module for ObjectModule {
         Ok(ModuleCompiledFunction { size: total_size })
     }
 
-    fn define_data(
-        &mut self,
-        data_id: DataId,
-        func: &ir::Function,
-        data_ctx: &DataContext,
-    ) -> ModuleResult<()> {
+    fn define_data(&mut self, data_id: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
         let decl = self.declarations.get_data_decl(data_id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
@@ -417,7 +412,7 @@ impl Module for ObjectModule {
         let relocs = data_ctx
             .description()
             .all_relocs(pointer_reloc)
-            .map(|record| self.process_reloc(&func, &record))
+            .map(|record| self.process_reloc(&record))
             .collect::<Vec<_>>();
 
         let section = if custom_segment_section.is_none() {
@@ -596,7 +591,7 @@ impl ObjectModule {
         }
     }
 
-    fn process_reloc(&self, func: &ir::Function, record: &MachReloc) -> ObjectRelocRecord {
+    fn process_reloc(&self, record: &ModuleReloc) -> ObjectRelocRecord {
         let mut addend = record.addend;
         let (kind, encoding, size) = match record.kind {
             Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
@@ -707,22 +702,9 @@ impl ObjectModule {
             reloc => unimplemented!("{:?}", reloc),
         };
 
-        let name = match record.name {
-            ir::ExternalName::User(reff) => {
-                let name = &func.params.user_named_funcs()[reff];
-                ModuleExtName::User {
-                    namespace: name.namespace,
-                    index: name.index,
-                }
-            }
-            ir::ExternalName::TestCase { .. } => unimplemented!(),
-            ir::ExternalName::LibCall(libcall) => ModuleExtName::LibCall(libcall),
-            ir::ExternalName::KnownSymbol(ks) => ModuleExtName::KnownSymbol(ks),
-        };
-
         ObjectRelocRecord {
             offset: record.offset,
-            name,
+            name: record.name.clone(),
             kind,
             encoding,
             size,

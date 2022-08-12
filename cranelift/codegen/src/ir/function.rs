@@ -124,6 +124,15 @@ impl FunctionParameters {
         }
     }
 
+    /// Resets an already existing user function name to a new value.
+    pub fn reset_user_func_name(&mut self, index: UserExternalNameRef, name: UserExternalName) {
+        if let Some(prev_name) = self.user_named_funcs.get_mut(index) {
+            self.user_ext_name_to_ref.remove(prev_name);
+            *prev_name = name.clone();
+            self.user_ext_name_to_ref.insert(name, index);
+        }
+    }
+
     /// Returns the internal mapping of `UserExternalNameRef` to `UserExternalName`.
     pub fn user_named_funcs(&self) -> &PrimaryMap<UserExternalNameRef, UserExternalName> {
         &self.user_named_funcs

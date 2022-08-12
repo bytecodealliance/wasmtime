@@ -8,7 +8,7 @@ use cranelift_codegen::{binemit::Reloc, CodegenError};
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
-    ModuleDeclarations, ModuleError, ModuleExtName, ModuleResult,
+    ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
 };
 use log::info;
 use std::cell::RefCell;
@@ -679,7 +679,10 @@ impl Module for JITModule {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
-        let compiled_code = ctx.compile(self.isa())?;
+        // work around borrow-checker to allow reuse of ctx below
+        let _ = ctx.compile(self.isa())?;
+        let compiled_code = ctx.compiled_code().unwrap();
+
         let code_size = compiled_code.code_info().total_size;
 
         let size = code_size as usize;
@@ -694,15 +697,15 @@ impl Module for JITModule {
             mem.copy_from_slice(compiled_code.code_buffer());
         }
 
-        let relocs = compiled_code.buffer.relocs().to_vec();
+        let relocs = compiled_code
+            .buffer
+            .relocs()
+            .iter()
+            .map(|reloc| ModuleReloc::from_mach_reloc(reloc, &ctx.func))
+            .collect();
 
         self.record_function_for_perf(ptr, size, &decl.name);
-        self.compiled_functions[id] = Some(CompiledBlob {
-            ptr,
-            size,
-            relocs,
-            func: ctx.func.clone(),
-        });
+        self.compiled_functions[id] = Some(CompiledBlob { ptr, size, relocs });
 
         if self.isa.flags().is_pic() {
             self.pending_got_updates.push(GotUpdate {
@@ -775,8 +778,10 @@ impl Module for JITModule {
         self.compiled_functions[id] = Some(CompiledBlob {
             ptr,
             size,
-            relocs: relocs.to_vec(),
-            func: func.clone(),
+            relocs: relocs
+                .iter()
+                .map(|reloc| ModuleReloc::from_mach_reloc(reloc, func))
+                .collect(),
         });
 
         if self.isa.flags().is_pic() {
@@ -802,12 +807,7 @@ impl Module for JITModule {
         Ok(ModuleCompiledFunction { size: total_size })
     }
 
-    fn define_data(
-        &mut self,
-        id: DataId,
-        func: &ir::Function,
-        data: &DataContext,
-    ) -> ModuleResult<()> {
+    fn define_data(&mut self, id: DataId, data: &DataContext) -> ModuleResult<()> {
         let decl = self.declarations.get_data_decl(id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
@@ -865,12 +865,7 @@ impl Module for JITModule {
             .all_relocs(pointer_reloc)
             .collect::<Vec<_>>();
 
-        self.compiled_data_objects[id] = Some(CompiledBlob {
-            ptr,
-            size,
-            relocs,
-            func: func.clone(),
-        });
+        self.compiled_data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
         self.data_objects_to_finalize.push(id);
         if self.isa.flags().is_pic() {
             self.pending_got_updates.push(GotUpdate {
@@ -880,6 +875,33 @@ impl Module for JITModule {
         }
 
         Ok(())
+    }
+
+    fn get_name(&self, name: &str) -> Option<cranelift_module::FuncOrDataId> {
+        self.declarations().get_name(name)
+    }
+
+    fn target_config(&self) -> cranelift_codegen::isa::TargetFrontendConfig {
+        self.isa().frontend_config()
+    }
+
+    fn make_context(&self) -> cranelift_codegen::Context {
+        let mut ctx = cranelift_codegen::Context::new();
+        ctx.func.signature.call_conv = self.isa().default_call_conv();
+        ctx
+    }
+
+    fn clear_context(&self, ctx: &mut cranelift_codegen::Context) {
+        ctx.clear();
+        ctx.func.signature.call_conv = self.isa().default_call_conv();
+    }
+
+    fn make_signature(&self) -> ir::Signature {
+        ir::Signature::new(self.isa().default_call_conv())
+    }
+
+    fn clear_signature(&self, sig: &mut ir::Signature) {
+        sig.clear(self.isa().default_call_conv());
     }
 }
 

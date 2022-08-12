@@ -42,9 +42,8 @@ fuzz_target!(|func: SingleFunction| {
         Err(_) => return,
     };
 
-    let (prev_stencil, serialized) =
-        icache::serialize_compiled(prev_stencil).expect("serialization failure");
-
+    let (prev_stencil, serialized) = icache::serialize_compiled(prev_stencil);
+    let serialized = serialized.expect("serialization should work");
     let prev_result = prev_stencil.apply_params(&func.params);
 
     let new_result = icache::try_finish_recompile(&func, &serialized)
@@ -65,8 +64,9 @@ fuzz_target!(|func: SingleFunction| {
                 None
             }
         }) {
-        let prev = &mut func.params.user_named_funcs[*user_ext_ref];
+        let mut prev = func.params.user_named_funcs()[*user_ext_ref].clone();
         prev.index = prev.index.checked_add(1).unwrap_or_else(|| prev.index - 1);
+        func.params.reset_user_func_name(*user_ext_ref, prev);
         true
     } else {
         // otherwise just randomly change one instruction in the middle and see what happens.

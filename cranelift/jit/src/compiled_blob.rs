@@ -1,15 +1,13 @@
 use cranelift_codegen::binemit::Reloc;
-use cranelift_codegen::ir;
-use cranelift_codegen::MachReloc;
 use cranelift_module::ModuleExtName;
+use cranelift_module::ModuleReloc;
 use std::convert::TryFrom;
 
 #[derive(Clone)]
 pub(crate) struct CompiledBlob {
     pub(crate) ptr: *mut u8,
     pub(crate) size: usize,
-    pub(crate) relocs: Vec<MachReloc>,
-    pub(crate) func: ir::Function,
+    pub(crate) relocs: Vec<ModuleReloc>,
 }
 
 impl CompiledBlob {
@@ -21,26 +19,13 @@ impl CompiledBlob {
     ) {
         use std::ptr::write_unaligned;
 
-        for &MachReloc {
+        for &ModuleReloc {
             kind,
             offset,
             ref name,
             addend,
         } in &self.relocs
         {
-            let name = &match name {
-                ir::ExternalName::User(reff) => {
-                    let name = &self.func.params.user_named_funcs()[*reff];
-                    ModuleExtName::User {
-                        namespace: name.namespace,
-                        index: name.index,
-                    }
-                }
-                ir::ExternalName::TestCase { .. } => unimplemented!(),
-                ir::ExternalName::LibCall(libcall) => ModuleExtName::LibCall(*libcall),
-                ir::ExternalName::KnownSymbol(ks) => ModuleExtName::KnownSymbol(*ks),
-            };
-
             debug_assert!((offset as usize) < self.size);
             let at = unsafe { self.ptr.offset(isize::try_from(offset).unwrap()) };
             match kind {

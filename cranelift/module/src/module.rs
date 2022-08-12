@@ -8,11 +8,48 @@
 use super::HashMap;
 use crate::data_context::DataContext;
 use core::fmt::Display;
+use cranelift_codegen::binemit::{CodeOffset, Reloc};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
+use cranelift_codegen::ir::Function;
 use cranelift_codegen::{binemit, MachReloc};
 use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context};
 use std::borrow::ToOwned;
 use std::string::String;
+
+/// A module relocation.
+#[derive(Clone)]
+pub struct ModuleReloc {
+    /// The offset at which the relocation applies, *relative to the
+    /// containing section*.
+    pub offset: CodeOffset,
+    /// The kind of relocation.
+    pub kind: Reloc,
+    /// The external symbol / name to which this relocation refers.
+    pub name: ModuleExtName,
+    /// The addend to add to the symbol value.
+    pub addend: i64,
+}
+
+impl ModuleReloc {
+    /// Converts a `MachReloc` produced from a `Function` into a `ModuleReloc`.
+    pub fn from_mach_reloc(mach_reloc: &MachReloc, func: &Function) -> Self {
+        let name = match mach_reloc.name {
+            ir::ExternalName::User(reff) => {
+                let name = &func.params.user_named_funcs()[reff];
+                ModuleExtName::user(name.namespace, name.index)
+            }
+            ir::ExternalName::TestCase(_) => unimplemented!(),
+            ir::ExternalName::LibCall(libcall) => ModuleExtName::LibCall(libcall),
+            ir::ExternalName::KnownSymbol(ks) => ModuleExtName::KnownSymbol(ks),
+        };
+        Self {
+            offset: mach_reloc.offset,
+            kind: mach_reloc.kind,
+            name,
+            addend: mach_reloc.addend,
+        }
+    }
+}
 
 /// A function identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -294,6 +331,13 @@ pub enum ModuleExtName {
     KnownSymbol(ir::KnownSymbol),
 }
 
+impl ModuleExtName {
+    /// Creates a user-defined external name.
+    pub fn user(namespace: u32, index: u32) -> Self {
+        Self::User { namespace, index }
+    }
+}
+
 impl Display for ModuleExtName {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
@@ -564,6 +608,16 @@ pub trait Module {
         })
     }
 
+    /// TODO: Same as above.
+    fn declare_func_in_data(&self, func: FuncId, ctx: &mut DataContext) -> ir::FuncRef {
+        ctx.import_function(ModuleExtName::user(0, func.as_u32()))
+    }
+
+    /// TODO: Same as above.
+    fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalValue {
+        ctx.import_global_value(ModuleExtName::user(1, data.as_u32()))
+    }
+
     /// Define a function, producing the function body from the given `Context`.
     ///
     /// Returns the size of the function's code and constant data.
@@ -591,12 +645,7 @@ pub trait Module {
     ) -> ModuleResult<ModuleCompiledFunction>;
 
     /// Define a data object, producing the data contents from the given `DataContext`.
-    fn define_data(
-        &mut self,
-        data: DataId,
-        func: &ir::Function,
-        data_ctx: &DataContext,
-    ) -> ModuleResult<()>;
+    fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()>;
 }
 
 impl<M: Module> Module for &mut M {
@@ -685,12 +734,7 @@ impl<M: Module> Module for &mut M {
         (**self).define_function_bytes(func_id, func, bytes, relocs)
     }
 
-    fn define_data(
-        &mut self,
-        data: DataId,
-        func: &ir::Function,
-        data_ctx: &DataContext,
-    ) -> ModuleResult<()> {
-        (**self).define_data(data, func, data_ctx)
+    fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
+        (**self).define_data(data, data_ctx)
     }
 }

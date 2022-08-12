@@ -125,7 +125,7 @@ struct CachedFunc {
 /// If two functions get the same `CacheKey`, then we can reuse the compiled artifacts, modulo some
 /// fixups.
 ///
-/// Note: the key will be invalidated across different versions of wasmtime, as the
+/// Note: the key will be invalidated across different versions of cranelift, as the
 /// `FunctionStencil` contains a `VersionMarker` itself.
 #[derive(Hash)]
 struct CacheKey<'a> {
@@ -216,8 +216,9 @@ pub fn serialize_compiled(
 }
 
 /// An error returned when recompiling failed.
+#[derive(Debug)]
 pub enum RecompileError {
-    /// The version embedded in the cache entry isn't the same as wasmtime's current version.
+    /// The version embedded in the cache entry isn't the same as cranelift's current version.
     VersionMismatch,
     /// An error occurred while deserializing the cache entry.
     Deserialize(bincode::Error),
@@ -226,7 +227,7 @@ pub enum RecompileError {
 impl fmt::Display for RecompileError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            RecompileError::VersionMismatch => write!(f, "wasmtime version mismatch",),
+            RecompileError::VersionMismatch => write!(f, "cranelift version mismatch",),
             RecompileError::Deserialize(err) => {
                 write!(f, "bincode failed during deserialization: {err}")
             }
