@@ -143,7 +143,6 @@ fn target(module: GenAdapterModule) {
         types.pop_type_scope();
     }
 
-    let types = types.finish();
     let mut fact_module = Module::new(&types, module.debug);
     for (i, adapter) in adapters.iter().enumerate() {
         fact_module.adapt(&format!("adapter{i}"), adapter);
