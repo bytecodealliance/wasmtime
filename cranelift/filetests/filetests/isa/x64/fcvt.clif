@@ -433,20 +433,19 @@ block0(v0: f32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pxor    %xmm5, %xmm5, %xmm5
-;   maxps   %xmm0, %xmm5, %xmm0
-;   pcmpeqd %xmm5, %xmm5, %xmm5
-;   psrld   %xmm5, $1, %xmm5
-;   cvtdq2ps %xmm5, %xmm5
-;   movdqa  %xmm0, %xmm11
+;   pxor    %xmm3, %xmm3, %xmm3
+;   maxps   %xmm0, %xmm3, %xmm0
+;   pcmpeqd %xmm8, %xmm8, %xmm8
+;   psrld   %xmm8, $1, %xmm8
+;   cvtdq2ps %xmm8, %xmm14
+;   cvttps2dq %xmm0, %xmm13
+;   subps   %xmm0, %xmm14, %xmm0
+;   cmpps   $2, %xmm14, %xmm0, %xmm14
 ;   cvttps2dq %xmm0, %xmm0
-;   subps   %xmm11, %xmm5, %xmm11
-;   cmpps   $2, %xmm5, %xmm11, %xmm5
-;   cvttps2dq %xmm11, %xmm11
-;   pxor    %xmm11, %xmm5, %xmm11
-;   pxor    %xmm5, %xmm5, %xmm5
-;   pmaxsd  %xmm11, %xmm5, %xmm11
-;   paddd   %xmm0, %xmm11, %xmm0
+;   pxor    %xmm0, %xmm14, %xmm0
+;   pxor    %xmm7, %xmm7, %xmm7
+;   pmaxsd  %xmm0, %xmm7, %xmm0
+;   paddd   %xmm0, %xmm13, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
