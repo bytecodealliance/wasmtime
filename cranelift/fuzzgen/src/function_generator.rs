@@ -30,8 +30,18 @@ fn insert_opcode(
         arg_vals.push(val, &mut builder.func.dfg.value_lists);
     }
 
-    let typevar = rets.first().copied().unwrap_or(INVALID);
-    let (inst, dfg) = builder.ins().MultiAry(opcode, typevar, arg_vals);
+    // For pretty much every instruction the control type is the return type
+    // except for Iconcat and Isplit which are *special* and the control type
+    // is the input type.
+    let ctrl_type = if opcode == Opcode::Iconcat || opcode == Opcode::Isplit {
+        args.first()
+    } else {
+        rets.first()
+    }
+    .copied()
+    .unwrap_or(INVALID);
+
+    let (inst, dfg) = builder.ins().MultiAry(opcode, ctrl_type, arg_vals);
     let results = dfg.inst_results(inst).to_vec();
 
     for (val, &ty) in results.into_iter().zip(rets) {
@@ -307,6 +317,10 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Ireduce, &[I128], &[I16], insert_opcode),
     (Opcode::Ireduce, &[I128], &[I32], insert_opcode),
     (Opcode::Ireduce, &[I128], &[I64], insert_opcode),
+    // Isplit
+    (Opcode::Isplit, &[I128], &[I64, I64], insert_opcode),
+    // Iconcat
+    (Opcode::Iconcat, &[I64, I64], &[I128], insert_opcode),
     // Fadd
     (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),
     (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode),
