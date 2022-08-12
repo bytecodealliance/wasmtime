@@ -15,7 +15,7 @@ function %store_i64_sym(i64) {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
-  store.i64 little v0, v1
+  store.i64 aligned little v0, v1
   return
 }
 
@@ -70,7 +70,7 @@ function %istore16_i64_sym(i64) {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
-  istore16.i64 little v0, v1
+  istore16.i64 aligned little v0, v1
   return
 }
 
@@ -103,7 +103,7 @@ function %istore32_i64_sym(i64) {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
-  istore32.i64 little v0, v1
+  istore32.i64 aligned little v0, v1
   return
 }
 
@@ -137,7 +137,7 @@ function %store_i32_sym(i32) {
   gv0 = symbol colocated %sym
 block0(v0: i32):
   v1 = symbol_value.i64 gv0
-  store.i32 little v0, v1
+  store.i32 aligned little v0, v1
   return
 }
 
@@ -192,7 +192,7 @@ function %istore16_i32_sym(i32) {
   gv0 = symbol colocated %sym
 block0(v0: i32):
   v1 = symbol_value.i64 gv0
-  istore16.i32 little v0, v1
+  istore16.i32 aligned little v0, v1
   return
 }
 
@@ -225,7 +225,7 @@ function %store_i16_sym(i16) {
   gv0 = symbol colocated %sym
 block0(v0: i16):
   v1 = symbol_value.i64 gv0
-  store.i16 little v0, v1
+  store.i16 aligned little v0, v1
   return
 }
 

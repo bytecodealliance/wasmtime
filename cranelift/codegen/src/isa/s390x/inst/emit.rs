@@ -11,6 +11,20 @@ use crate::trace;
 use core::convert::TryFrom;
 use regalloc2::Allocation;
 
+/// Type(s) of memory instructions available for mem_finalize.
+pub struct MemInstType {
+    /// True if 12-bit unsigned displacement is supported.
+    pub have_d12: bool,
+    /// True if 20-bit signed displacement is supported.
+    pub have_d20: bool,
+    /// True if PC-relative addressing is supported (memory access).
+    pub have_pcrel: bool,
+    /// True if PC-relative addressing is supported (load address).
+    pub have_unaligned_pcrel: bool,
+    /// True if an index register is supported.
+    pub have_index: bool,
+}
+
 /// Memory addressing mode finalization: convert "special" modes (e.g.,
 /// generic arbitrary stack offset) into real addressing modes, possibly by
 /// emitting some helper instructions that come immediately before the use
@@ -18,10 +32,7 @@ use regalloc2::Allocation;
 pub fn mem_finalize(
     mem: &MemArg,
     state: &EmitState,
-    have_d12: bool,
-    have_d20: bool,
-    have_pcrel: bool,
-    have_index: bool,
+    mi: MemInstType,
 ) -> (SmallVec<[Inst; 4]>, MemArg) {
     let mut insts = SmallVec::new();
 
@@ -70,9 +81,10 @@ pub fn mem_finalize(
 
     // If this addressing mode cannot be handled by the instruction, use load-address.
     let need_load_address = match &mem {
-        &MemArg::Label { .. } | &MemArg::Symbol { .. } if !have_pcrel => true,
-        &MemArg::BXD20 { .. } if !have_d20 => true,
-        &MemArg::BXD12 { index, .. } | &MemArg::BXD20 { index, .. } if !have_index => {
+        &MemArg::Label { .. } | &MemArg::Symbol { .. } if !mi.have_pcrel => true,
+        &MemArg::Symbol { flags, .. } if !mi.have_unaligned_pcrel && !flags.aligned() => true,
+        &MemArg::BXD20 { .. } if !mi.have_d20 => true,
+        &MemArg::BXD12 { index, .. } | &MemArg::BXD20 { index, .. } if !mi.have_index => {
             index != zero_reg()
         }
         _ => false,
@@ -93,8 +105,8 @@ pub fn mem_finalize(
             index,
             disp,
             flags,
-        } if !have_d12 => {
-            assert!(have_d20);
+        } if !mi.have_d12 => {
+            assert!(mi.have_d20);
             MemArg::BXD20 {
                 base,
                 index,
@@ -122,10 +134,13 @@ pub fn mem_emit(
     let (mem_insts, mem) = mem_finalize(
         mem,
         state,
-        opcode_rx.is_some(),
-        opcode_rxy.is_some(),
-        opcode_ril.is_some(),
-        true,
+        MemInstType {
+            have_d12: opcode_rx.is_some(),
+            have_d20: opcode_rxy.is_some(),
+            have_pcrel: opcode_ril.is_some(),
+            have_unaligned_pcrel: opcode_ril.is_some() && !add_trap,
+            have_index: true,
+        },
     );
     for inst in mem_insts.into_iter() {
         inst.emit(&[], sink, emit_info, state);
@@ -190,10 +205,13 @@ pub fn mem_rs_emit(
     let (mem_insts, mem) = mem_finalize(
         mem,
         state,
-        opcode_rs.is_some(),
-        opcode_rsy.is_some(),
-        false,
-        false,
+        MemInstType {
+            have_d12: opcode_rs.is_some(),
+            have_d20: opcode_rsy.is_some(),
+            have_pcrel: false,
+            have_unaligned_pcrel: false,
+            have_index: false,
+        },
     );
     for inst in mem_insts.into_iter() {
         inst.emit(&[], sink, emit_info, state);
@@ -236,7 +254,17 @@ pub fn mem_imm8_emit(
     emit_info: &EmitInfo,
     state: &mut EmitState,
 ) {
-    let (mem_insts, mem) = mem_finalize(mem, state, true, true, false, false);
+    let (mem_insts, mem) = mem_finalize(
+        mem,
+        state,
+        MemInstType {
+            have_d12: true,
+            have_d20: true,
+            have_pcrel: false,
+            have_unaligned_pcrel: false,
+            have_index: false,
+        },
+    );
     for inst in mem_insts.into_iter() {
         inst.emit(&[], sink, emit_info, state);
     }
@@ -274,7 +302,17 @@ pub fn mem_imm16_emit(
     emit_info: &EmitInfo,
     state: &mut EmitState,
 ) {
-    let (mem_insts, mem) = mem_finalize(mem, state, true, false, false, false);
+    let (mem_insts, mem) = mem_finalize(
+        mem,
+        state,
+        MemInstType {
+            have_d12: true,
+            have_d20: false,
+            have_pcrel: false,
+            have_unaligned_pcrel: false,
+            have_index: false,
+        },
+    );
     for inst in mem_insts.into_iter() {
         inst.emit(&[], sink, emit_info, state);
     }
@@ -336,7 +374,17 @@ pub fn mem_vrx_emit(
     emit_info: &EmitInfo,
     state: &mut EmitState,
 ) {
-    let (mem_insts, mem) = mem_finalize(mem, state, true, false, false, true);
+    let (mem_insts, mem) = mem_finalize(
+        mem,
+        state,
+        MemInstType {
+            have_d12: true,
+            have_d20: false,
+            have_pcrel: false,
+            have_unaligned_pcrel: false,
+            have_index: true,
+        },
+    );
     for inst in mem_insts.into_iter() {
         inst.emit(&[], sink, emit_info, state);
     }
