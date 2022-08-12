@@ -2428,6 +2428,11 @@
       (if-let addr_reg (amode_is_reg addr))
       addr_reg)
 
+;; Lower a constant f64.
+(decl constant_f64 (u64) Reg)
+;; TODO: Port lower_constant_f64() to ISLE.
+(extern constructor constant_f64 constant_f64)
+
 ;; Lower a constant f128.
 (decl constant_f128 (u128) Reg)
 ;; TODO: Port lower_constant_f128() to ISLE.

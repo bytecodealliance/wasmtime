@@ -1387,15 +1387,28 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let inst_data = self.data(ir_inst);
         match inst_data {
             InstructionData::Shuffle { imm, .. } => {
-                let buffer = self.f.dfg.immediates.get(imm.clone()).unwrap().as_slice();
-                let value = DataValue::V128(buffer.try_into().expect("a 16-byte data buffer"));
+                let mask = self.f.dfg.immediates.get(imm.clone()).unwrap().as_slice();
+                let value = if mask.len() == 16 {
+                    DataValue::V128(mask.try_into().expect("a 16-byte vector mask"))
+                } else if mask.len() == 8 {
+                    DataValue::V64(mask.try_into().expect("an 8-byte vector mask"))
+                } else {
+                    panic!("unexpected Shuffle mask length {}", mask.len())
+                };
                 Some(value)
             }
             InstructionData::UnaryConst {
                 constant_handle, ..
             } => {
                 let buffer = self.f.dfg.constants.get(constant_handle.clone()).as_slice();
-                let value = DataValue::V128(buffer.try_into().expect("a 16-byte data buffer"));
+
+                let value = if buffer.len() == 16 {
+                    DataValue::V128(buffer.try_into().expect("a 16-byte data buffer"))
+                } else if buffer.len() == 8 {
+                    DataValue::V64(buffer.try_into().expect("an 8-byte data buffer"))
+                } else {
+                    panic!("unexpected UnaryConst buffer length {}", buffer.len())
+                };
                 Some(value)
             }
             _ => inst_data.imm_value(),

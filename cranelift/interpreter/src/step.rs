@@ -75,7 +75,13 @@ where
                     .constants
                     .get(constant_handle.clone())
                     .as_slice();
-                DataValue::V128(buffer.try_into().expect("a 16-byte data buffer"))
+                if ctrl_ty.bytes() == 16 {
+                    DataValue::V128(buffer.try_into().expect("a 16-byte data buffer"))
+                } else if ctrl_ty.bytes() == 8 {
+                    DataValue::V64(buffer.try_into().expect("an 8-byte data buffer"))
+                } else {
+                    panic!("unexpected UnaryConst buffer length {}", buffer.len())
+                }
             }
             InstructionData::Shuffle { imm, .. } => {
                 let mask = state
@@ -85,7 +91,13 @@ where
                     .get(imm)
                     .unwrap()
                     .as_slice();
-                DataValue::V128(mask.try_into().expect("a 16-byte vector mask"))
+                if ctrl_ty.bytes() == 16 {
+                    DataValue::V128(mask.try_into().expect("a 16-byte vector mask"))
+                } else if ctrl_ty.bytes() == 8 {
+                    DataValue::V64(mask.try_into().expect("an 8-byte vector mask"))
+                } else {
+                    panic!("unexpected Shuffle mask length {}", mask.len())
+                }
             }
             _ => inst.imm_value().unwrap(),
         })

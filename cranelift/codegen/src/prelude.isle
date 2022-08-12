@@ -799,6 +799,11 @@
 (decl u128_from_constant (u128) Constant)
 (extern extractor u128_from_constant u128_from_constant)
 
+;; Accessor for `Constant` as u64.
+
+(decl u64_from_constant (u64) Constant)
+(extern extractor u64_from_constant u64_from_constant)
+
 
 ;;;; Helpers for tail recursion loops ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
