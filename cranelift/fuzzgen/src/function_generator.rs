@@ -2,7 +2,9 @@ use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose};
 use crate::config::Config;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
+use cranelift::codegen::ir::immediates::Offset32;
 use cranelift::codegen::ir::instructions::InstructionFormat;
+use cranelift::codegen::ir::stackslot::StackSize;
 use cranelift::codegen::ir::{types::*, FuncRef, LibCall, UserExternalName, UserFuncName};
 use cranelift::codegen::ir::{
     AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, StackSlot, Type, Value,
@@ -10,7 +12,7 @@ use cranelift::codegen::ir::{
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
 use cranelift::prelude::{
-    EntityRef, ExtFuncData, FloatCC, InstBuilder, IntCC, JumpTableData, StackSlotData,
+    EntityRef, ExtFuncData, FloatCC, InstBuilder, IntCC, JumpTableData, MemFlags, StackSlotData,
     StackSlotKind,
 };
 use std::collections::HashMap;
@@ -89,9 +91,8 @@ fn insert_stack_load(
     rets: &'static [Type],
 ) -> Result<()> {
     let typevar = rets[0];
-    let slot = fgen.stack_slot_with_size(builder, typevar.bytes())?;
-    let slot_size = builder.func.sized_stack_slots[slot].size;
     let type_size = typevar.bytes();
+    let (slot, slot_size) = fgen.stack_slot_with_size(builder, type_size)?;
     let offset = fgen.u.int_in_range(0..=(slot_size - type_size))? as i32;
 
     let val = builder.ins().stack_load(typevar, slot, offset);
@@ -109,9 +110,8 @@ fn insert_stack_store(
     _rets: &'static [Type],
 ) -> Result<()> {
     let typevar = args[0];
-    let slot = fgen.stack_slot_with_size(builder, typevar.bytes())?;
-    let slot_size = builder.func.sized_stack_slots[slot].size;
     let type_size = typevar.bytes();
+    let (slot, slot_size) = fgen.stack_slot_with_size(builder, type_size)?;
     let offset = fgen.u.int_in_range(0..=(slot_size - type_size))? as i32;
 
     let arg0 = fgen.get_variable_of_type(typevar)?;
@@ -144,6 +144,7 @@ fn insert_cmp(
 
     let var = fgen.get_variable_of_type(rets[0])?;
     builder.def_var(var, res);
+
     Ok(())
 }
 
@@ -158,6 +159,41 @@ fn insert_const(
     let var = fgen.get_variable_of_type(typevar)?;
     let val = fgen.generate_const(builder, typevar)?;
     builder.def_var(var, val);
+    Ok(())
+}
+
+fn insert_load_store(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    opcode: Opcode,
+    args: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let ctrl_type = *rets.first().or(args.first()).unwrap();
+    let type_size = ctrl_type.bytes();
+    let (address, offset) = fgen.generate_load_store_address(builder, type_size)?;
+
+    // TODO: More advanced MemFlags
+    let flags = MemFlags::new();
+
+    // The variable being loaded or stored into
+    let var = fgen.get_variable_of_type(ctrl_type)?;
+
+    if opcode.can_store() {
+        let val = builder.use_var(var);
+
+        builder
+            .ins()
+            .Store(opcode, ctrl_type, flags, offset, val, address);
+    } else {
+        let (inst, dfg) = builder
+            .ins()
+            .Load(opcode, ctrl_type, flags, offset, address);
+
+        let new_val = dfg.first_result(inst);
+        builder.def_var(var, new_val);
+    }
+
     Ok(())
 }
 
@@ -450,6 +486,49 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::StackLoad, &[], &[I32], insert_stack_load),
     (Opcode::StackLoad, &[], &[I64], insert_stack_load),
     (Opcode::StackLoad, &[], &[I128], insert_stack_load),
+    // Loads
+    (Opcode::Load, &[], &[I8], insert_load_store),
+    (Opcode::Load, &[], &[I16], insert_load_store),
+    (Opcode::Load, &[], &[I32], insert_load_store),
+    (Opcode::Load, &[], &[I64], insert_load_store),
+    (Opcode::Load, &[], &[I128], insert_load_store),
+    (Opcode::Load, &[], &[F32], insert_load_store),
+    (Opcode::Load, &[], &[F64], insert_load_store),
+    // Special Loads
+    (Opcode::Uload8, &[], &[I16], insert_load_store),
+    (Opcode::Uload8, &[], &[I32], insert_load_store),
+    (Opcode::Uload8, &[], &[I64], insert_load_store),
+    (Opcode::Uload16, &[], &[I32], insert_load_store),
+    (Opcode::Uload16, &[], &[I64], insert_load_store),
+    (Opcode::Uload32, &[], &[I64], insert_load_store),
+    (Opcode::Sload8, &[], &[I16], insert_load_store),
+    (Opcode::Sload8, &[], &[I32], insert_load_store),
+    (Opcode::Sload8, &[], &[I64], insert_load_store),
+    (Opcode::Sload16, &[], &[I32], insert_load_store),
+    (Opcode::Sload16, &[], &[I64], insert_load_store),
+    (Opcode::Sload32, &[], &[I64], insert_load_store),
+    // TODO: Unimplemented in the interpreter
+    // Opcode::Uload8x8
+    // Opcode::Sload8x8
+    // Opcode::Uload16x4
+    // Opcode::Sload16x4
+    // Opcode::Uload32x2
+    // Opcode::Sload32x2
+    // Stores
+    (Opcode::Store, &[I8], &[], insert_load_store),
+    (Opcode::Store, &[I16], &[], insert_load_store),
+    (Opcode::Store, &[I32], &[], insert_load_store),
+    (Opcode::Store, &[I64], &[], insert_load_store),
+    (Opcode::Store, &[I128], &[], insert_load_store),
+    (Opcode::Store, &[F32], &[], insert_load_store),
+    (Opcode::Store, &[F64], &[], insert_load_store),
+    // Special Stores
+    (Opcode::Istore8, &[I16], &[], insert_load_store),
+    (Opcode::Istore8, &[I32], &[], insert_load_store),
+    (Opcode::Istore8, &[I64], &[], insert_load_store),
+    (Opcode::Istore16, &[I32], &[], insert_load_store),
+    (Opcode::Istore16, &[I64], &[], insert_load_store),
+    (Opcode::Istore32, &[I64], &[], insert_load_store),
     // Integer Consts
     (Opcode::Iconst, &[], &[I8], insert_const),
     (Opcode::Iconst, &[], &[I16], insert_const),
@@ -569,15 +648,55 @@ where
     }
 
     /// Finds a stack slot with size of at least n bytes
-    fn stack_slot_with_size(&mut self, builder: &mut FunctionBuilder, n: u32) -> Result<StackSlot> {
+    fn stack_slot_with_size(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        n: u32,
+    ) -> Result<(StackSlot, StackSize)> {
         let opts: Vec<_> = self
             .static_stack_slots
             .iter()
-            .filter(|ss| builder.func.sized_stack_slots[**ss].size >= n)
-            .map(|ss| *ss)
+            .map(|ss| (*ss, builder.func.sized_stack_slots[*ss].size))
+            .filter(|(_, size)| *size >= n)
             .collect();
 
         Ok(*self.u.choose(&opts[..])?)
+    }
+
+    /// Generates an address that should allow for a store or a load.
+    ///
+    /// Addresses aren't generated like other values. They are never stored in variables so that
+    /// we don't run the risk of returning them from a function, which would make the fuzzer
+    /// complain since they are different from the interpreter to the backend.
+    ///
+    /// The address is not guaranteed to be valid, but there's a chance that it is.
+    ///
+    /// `min_size`: Controls the amount of space that the address should have.This is not
+    /// guaranteed to be respected
+    fn generate_load_store_address(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        min_size: u32,
+    ) -> Result<(Value, Offset32)> {
+        // TODO: Currently our only source of addresses is stack_addr, but we should
+        // add heap_addr, global_value, symbol_value eventually
+        let (addr, available_size) = {
+            let (ss, slot_size) = self.stack_slot_with_size(builder, min_size)?;
+            let max_offset = slot_size.saturating_sub(min_size);
+            let offset = self.u.int_in_range(0..=max_offset)? as i32;
+            let base_addr = builder.ins().stack_addr(I64, ss, offset);
+            let available_size = (slot_size as i32).saturating_sub(offset);
+            (base_addr, available_size)
+        };
+
+        // TODO: Insert a bunch of amode opcodes here to modify the address!
+
+        // Now that we have an address and a size, we just choose a random offset to return to the
+        // caller. Try to preserve min_size bytes.
+        let max_offset = available_size.saturating_sub(min_size as i32);
+        let offset = self.u.int_in_range(0..=max_offset)? as i32;
+
+        Ok((addr, offset.into()))
     }
 
     /// Creates a new var
