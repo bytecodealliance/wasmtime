@@ -3047,6 +3047,10 @@
             (_ Unit (emit (MInst.GprToXmm (SseOpcode.Cvtsi2sd) x dst size))))
         dst))
 
+(decl x64_cvttps2dq (Type XmmMem) Xmm)
+(rule (x64_cvttps2dq ty x)
+      (xmm_unary_rm_r (SseOpcode.Cvttps2dq) x))
+
 (decl cvt_u64_to_float_seq (Type Gpr) Xmm)
 (rule (cvt_u64_to_float_seq ty src)
       (let ((size OperandSize (raw_operand_size_of_type ty))

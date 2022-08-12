@@ -572,61 +572,7 @@ fn lower_insn_to_regs(
                 implemented_in_isle(ctx);
             } else {
                 if op == Opcode::FcvtToSintSat {
-                    // Sets destination to zero if float is NaN
-                    assert_eq!(types::F32X4, ctx.input_ty(insn, 0));
-                    let tmp = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
-                    ctx.emit(Inst::xmm_unary_rm_r(
-                        SseOpcode::Movapd,
-                        RegMem::reg(src),
-                        tmp,
-                    ));
-                    ctx.emit(Inst::gen_move(dst, src, input_ty));
-                    let cond = FcmpImm::from(FloatCC::Equal);
-                    ctx.emit(Inst::xmm_rm_r_imm(
-                        SseOpcode::Cmpps,
-                        RegMem::reg(tmp.to_reg()),
-                        tmp,
-                        cond.encode(),
-                        OperandSize::Size32,
-                    ));
-                    ctx.emit(Inst::xmm_rm_r(
-                        SseOpcode::Andps,
-                        RegMem::reg(tmp.to_reg()),
-                        dst,
-                    ));
-
-                    // Sets top bit of tmp if float is positive
-                    // Setting up to set top bit on negative float values
-                    ctx.emit(Inst::xmm_rm_r(
-                        SseOpcode::Pxor,
-                        RegMem::reg(dst.to_reg()),
-                        tmp,
-                    ));
-
-                    // Convert the packed float to packed doubleword.
-                    ctx.emit(Inst::xmm_unary_rm_r(
-                        SseOpcode::Cvttps2dq,
-                        RegMem::reg(dst.to_reg()),
-                        dst,
-                    ));
-
-                    // Set top bit only if < 0
-                    // Saturate lane with sign (top) bit.
-                    ctx.emit(Inst::xmm_rm_r(
-                        SseOpcode::Pand,
-                        RegMem::reg(dst.to_reg()),
-                        tmp,
-                    ));
-                    ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrad, RegMemImm::imm(31), tmp));
-
-                    // On overflow 0x80000000 is returned to a lane.
-                    // Below sets positive overflow lanes to 0x7FFFFFFF
-                    // Keeps negative overflow lanes as is.
-                    ctx.emit(Inst::xmm_rm_r(
-                        SseOpcode::Pxor,
-                        RegMem::reg(tmp.to_reg()),
-                        dst,
-                    ));
+                    implemented_in_isle(ctx);
                 } else if op == Opcode::FcvtToUintSat {
                     // The algorithm for converting floats to unsigned ints is a little tricky. The
                     // complication arises because we are converting from a signed 64-bit int with a positive

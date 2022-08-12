@@ -3076,3 +3076,29 @@
 
 (rule (lower (has_type out_ty (fcvt_to_sint_sat val @ (value_type (ty_scalar_float _)))))
       (cvt_float_to_sint_seq out_ty val $true))
+
+;; The x64 backend currently only supports these two type combinations.
+(rule (lower (has_type $I32X4 (fcvt_to_sint_sat val @ (value_type $F32X4))))
+      (let (;; Sets tmp to zero if float is NaN
+            (tmp Xmm (x64_cmpps val val (FcmpImm.Equal)))
+            (dst Xmm (x64_andps val tmp))
+
+            ;; Sets top bit of tmp if float is positive
+            ;; Setting up to set top bit on negative float values
+            (tmp Xmm (x64_pxor tmp dst))
+
+            ;; Convert the packed float to packed doubleword.
+            (dst Xmm (x64_cvttps2dq $F32X4 dst))
+
+            ;; TODO: regalloc2 introduces a useless move here, is that
+            ;; acceptable?
+
+            ;; Set top bit only if < 0
+            (tmp Xmm (x64_pand dst tmp))
+            (tmp Xmm (x64_psrad tmp (RegMemImm.Imm 31))))
+
+        ;; On overflow 0x80000000 is returned to a lane.
+        ;; Below sets positive overflow lanes to 0x7FFFFFFF
+        ;; Keeps negative overflow lanes as is.
+        (x64_pxor tmp dst)))
+

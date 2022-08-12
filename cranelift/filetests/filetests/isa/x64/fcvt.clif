@@ -461,13 +461,15 @@ block0(v0: f32x4):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm5
-;   cmpps   $0, %xmm5, %xmm5, %xmm5
+;   cmpps   $0, %xmm5, %xmm0, %xmm5
 ;   andps   %xmm0, %xmm5, %xmm0
 ;   pxor    %xmm5, %xmm0, %xmm5
-;   cvttps2dq %xmm0, %xmm0
-;   pand    %xmm5, %xmm0, %xmm5
-;   psrad   %xmm5, $31, %xmm5
-;   pxor    %xmm0, %xmm5, %xmm0
+;   cvttps2dq %xmm0, %xmm9
+;   movdqa  %xmm9, %xmm0
+;   pand    %xmm0, %xmm5, %xmm0
+;   psrad   %xmm0, $31, %xmm0
+;   pxor    %xmm0, %xmm9, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+
