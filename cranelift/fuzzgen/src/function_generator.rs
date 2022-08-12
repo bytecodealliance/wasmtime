@@ -296,6 +296,17 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Sextend, &[I32], &[I64], insert_opcode),
     (Opcode::Sextend, &[I32], &[I128], insert_opcode),
     (Opcode::Sextend, &[I64], &[I128], insert_opcode),
+    // Ireduce
+    (Opcode::Ireduce, &[I16], &[I8], insert_opcode),
+    (Opcode::Ireduce, &[I32], &[I8], insert_opcode),
+    (Opcode::Ireduce, &[I32], &[I16], insert_opcode),
+    (Opcode::Ireduce, &[I64], &[I8], insert_opcode),
+    (Opcode::Ireduce, &[I64], &[I16], insert_opcode),
+    (Opcode::Ireduce, &[I64], &[I32], insert_opcode),
+    (Opcode::Ireduce, &[I128], &[I8], insert_opcode),
+    (Opcode::Ireduce, &[I128], &[I16], insert_opcode),
+    (Opcode::Ireduce, &[I128], &[I32], insert_opcode),
+    (Opcode::Ireduce, &[I128], &[I64], insert_opcode),
     // Fadd
     (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),
     (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode),
