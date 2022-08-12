@@ -20,7 +20,8 @@ block0(v0: i64x2, v1: i64x2, v2: i32x4):
     v4 = bitselect v3, v0, v1
     return v4
 }
-; run: %mask_casted([0 0], [0xFFFFFF 0xFFFF4F], [0xFFF1 0 0xF 0]) == [0xFF000E 0xFFFF40]
+; N.B. The mask is chosen such that the result is correct with either LE or BE lane order.
+; run: %mask_casted([0 0], [0xFFFFFF 0xFFFF4F], [0xFFF1 0xFFF1 0xF 0xF]) == [0xFF000E 0xFFFF40]
 
 function %good_const_mask(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):

@@ -308,16 +308,6 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_unary_rm_r_evex(op: Avx512Opcode, src: RegMem, dst: Writable<Reg>) -> Inst {
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmUnaryRmREvex {
-            op,
-            src: XmmMem::new(src).unwrap(),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
     pub(crate) fn xmm_rm_r(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Self {
         src.assert_regclass_is(RegClass::Float);
         debug_assert!(dst.to_reg().class() == RegClass::Float);
@@ -416,27 +406,6 @@ impl Inst {
         let src = XmmMem::new(src).unwrap();
         let dst = Xmm::new(dst).unwrap();
         Inst::XmmCmpRmR { op, src, dst }
-    }
-
-    pub(crate) fn cvt_u64_to_float_seq(
-        dst_size: OperandSize,
-        src: Writable<Reg>,
-        tmp_gpr1: Writable<Reg>,
-        tmp_gpr2: Writable<Reg>,
-        dst: Writable<Reg>,
-    ) -> Inst {
-        debug_assert!(dst_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        debug_assert!(src.to_reg().class() == RegClass::Int);
-        debug_assert!(tmp_gpr1.to_reg().class() == RegClass::Int);
-        debug_assert!(tmp_gpr2.to_reg().class() == RegClass::Int);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::CvtUint64ToFloatSeq {
-            src: WritableGpr::from_writable_reg(src).unwrap(),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-            tmp_gpr1: WritableGpr::from_writable_reg(tmp_gpr1).unwrap(),
-            tmp_gpr2: WritableGpr::from_writable_reg(tmp_gpr2).unwrap(),
-            dst_size,
-        }
     }
 
     pub(crate) fn cvt_float_to_sint_seq(
@@ -1878,7 +1847,12 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             // Vfmadd uses and defs the dst reg, that is not the case with all
             // AVX's ops, if you're adding a new op, make sure to correctly define
             // register uses.
-            assert!(*op == AvxOpcode::Vfmadd213ps || *op == AvxOpcode::Vfmadd213pd);
+            assert!(
+                *op == AvxOpcode::Vfmadd213ss
+                    || *op == AvxOpcode::Vfmadd213sd
+                    || *op == AvxOpcode::Vfmadd213ps
+                    || *op == AvxOpcode::Vfmadd213pd
+            );
 
             collector.reg_use(src1.to_reg());
             collector.reg_reuse_def(dst.to_writable_reg(), 0);

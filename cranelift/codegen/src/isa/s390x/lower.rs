@@ -4,7 +4,7 @@ use crate::ir::Inst as IRInst;
 use crate::ir::Opcode;
 use crate::isa::s390x::inst::Inst;
 use crate::isa::s390x::S390xBackend;
-use crate::machinst::{InsnOutput, LowerBackend, LowerCtx, MachLabel};
+use crate::machinst::{InsnOutput, Lower, LowerBackend, MachLabel};
 use crate::CodegenResult;
 use smallvec::SmallVec;
 
@@ -16,7 +16,7 @@ pub mod isle;
 impl LowerBackend for S390xBackend {
     type MInst = Inst;
 
-    fn lower<C: LowerCtx<I = Inst>>(&self, ctx: &mut C, ir_inst: IRInst) -> CodegenResult<()> {
+    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> CodegenResult<()> {
         let op = ctx.data(ir_inst).opcode();
         let outputs: SmallVec<[InsnOutput; 2]> = (0..ctx.num_outputs(ir_inst))
             .map(|i| InsnOutput {
@@ -278,9 +278,9 @@ impl LowerBackend for S390xBackend {
         }
     }
 
-    fn lower_branch_group<C: LowerCtx<I = Inst>>(
+    fn lower_branch_group(
         &self,
-        ctx: &mut C,
+        ctx: &mut Lower<Inst>,
         branches: &[IRInst],
         targets: &[MachLabel],
     ) -> CodegenResult<()> {

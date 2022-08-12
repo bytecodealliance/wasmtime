@@ -1742,6 +1742,8 @@ pub(crate) fn emit(
             let src3 = src3.clone().to_reg_mem().with_allocs(allocs);
 
             let (w, opcode) = match op {
+                AvxOpcode::Vfmadd213ss => (false, 0xA9),
+                AvxOpcode::Vfmadd213sd => (true, 0xA9),
                 AvxOpcode::Vfmadd213ps => (false, 0xA8),
                 AvxOpcode::Vfmadd213pd => (true, 0xA8),
             };

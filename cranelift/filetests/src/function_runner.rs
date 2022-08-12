@@ -285,10 +285,16 @@ fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
             // Calculate the type to load from memory, using integers for booleans (no encodings).
             let ty = param.value_type.coerce_bools_to_ints();
 
+            // We always store vector types in little-endian byte order as DataValue.
+            let mut flags = ir::MemFlags::trusted();
+            if param.value_type.is_vector() {
+                flags.set_endianness(ir::Endianness::Little);
+            }
+
             // Load the value.
             let loaded = builder.ins().load(
                 ty,
-                ir::MemFlags::trusted(),
+                flags,
                 values_vec_ptr_val,
                 (i * UnboxedValues::SLOT_SIZE) as i32,
             );
@@ -331,9 +337,14 @@ fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
         } else {
             *value
         };
+        // We always store vector types in little-endian byte order as DataValue.
+        let mut flags = ir::MemFlags::trusted();
+        if param.value_type.is_vector() {
+            flags.set_endianness(ir::Endianness::Little);
+        }
         // Store the value.
         builder.ins().store(
-            ir::MemFlags::trusted(),
+            flags,
             value,
             values_vec_ptr_val,
             (i * UnboxedValues::SLOT_SIZE) as i32,
@@ -400,11 +411,11 @@ mod test {
 block0(v0: i64, v1: i64):
     v2 = load.f32 notrap aligned v1
     v3 = load.i8 notrap aligned v1+16
-    v4 = load.i64x2 notrap aligned v1+32
+    v4 = load.i64x2 notrap aligned little v1+32
     v5 = load.i8 notrap aligned v1+48
     v6 = icmp_imm ne v5, 0
     v7, v8 = call_indirect sig0, v0(v2, v3, v4, v6)
-    store notrap aligned v7, v1
+    store notrap aligned little v7, v1
     v9 = bint.i64 v8
     store notrap aligned v9, v1+16
     return

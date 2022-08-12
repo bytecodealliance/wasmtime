@@ -35,7 +35,9 @@ impl ModuleMemoryImages {
 /// places (e.g. a `Memory`), we define a zero-sized type when memory is
 /// not included in the build.
 #[derive(Debug)]
-pub enum MemoryImageSlot {}
+pub struct MemoryImageSlot {
+    _priv: (),
+}
 
 #[allow(dead_code)]
 impl MemoryImageSlot {
@@ -48,26 +50,26 @@ impl MemoryImageSlot {
         _: usize,
         _: Option<&Arc<MemoryImage>>,
     ) -> Result<Self, InstantiationError> {
-        match *self {}
+        unreachable!();
     }
 
     pub(crate) fn no_clear_on_drop(&mut self) {
-        match *self {}
+        unreachable!();
     }
 
     pub(crate) fn clear_and_remain_ready(&mut self) -> Result<()> {
-        match *self {}
+        unreachable!();
     }
 
     pub(crate) fn has_image(&self) -> bool {
-        match *self {}
+        unreachable!();
     }
 
     pub(crate) fn is_dirty(&self) -> bool {
-        match *self {}
+        unreachable!();
     }
 
     pub(crate) fn set_heap_limit(&mut self, _: usize) -> Result<()> {
-        match *self {}
+        unreachable!();
     }
 }

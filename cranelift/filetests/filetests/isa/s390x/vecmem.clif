@@ -216,9 +216,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   lrvg %r5, 0(%r2)
-;   ldgr %f5, %r5
-;   vuplhb %v24, %v5
+;   ld %f3, 0(%r2)
+;   vuplhb %v24, %v3
 ;   br %r14
 
 function %uload16x4_little(i64) -> i32x4 {
@@ -228,8 +227,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   lrvg %r5, 0(%r2)
-;   ldgr %f5, %r5
+;   ld %f3, 0(%r2)
+;   verllh %v5, %v3, 8
 ;   vuplhh %v24, %v5
 ;   br %r14
 
@@ -242,7 +241,8 @@ block0(v0: i64):
 ; block0:
 ;   lrvg %r5, 0(%r2)
 ;   ldgr %f5, %r5
-;   vuplhf %v24, %v5
+;   verllg %v7, %v5, 32
+;   vuplhf %v24, %v7
 ;   br %r14
 
 function %sload8x8_little(i64) -> i16x8 {
@@ -252,9 +252,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   lrvg %r5, 0(%r2)
-;   ldgr %f5, %r5
-;   vuphb %v24, %v5
+;   ld %f3, 0(%r2)
+;   vuphb %v24, %v3
 ;   br %r14
 
 function %sload16x4_little(i64) -> i32x4 {
@@ -264,8 +263,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   lrvg %r5, 0(%r2)
-;   ldgr %f5, %r5
+;   ld %f3, 0(%r2)
+;   verllh %v5, %v3, 8
 ;   vuphh %v24, %v5
 ;   br %r14
 
@@ -278,7 +277,8 @@ block0(v0: i64):
 ; block0:
 ;   lrvg %r5, 0(%r2)
 ;   ldgr %f5, %r5
-;   vuphf %v24, %v5
+;   verllg %v7, %v5, 32
+;   vuphf %v24, %v7
 ;   br %r14
 
 function %load_i8x16_little(i64) -> i8x16 {
@@ -288,9 +288,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   lrvg %r5, 0(%r2)
-;   lrvg %r3, 8(%r2)
-;   vlvgp %v24, %r3, %r5
+;   vl %v24, 0(%r2)
 ;   br %r14
 
 function %load_i16x8_little(i64) -> i16x8 {
@@ -302,7 +300,10 @@ block0(v0: i64):
 ; block0:
 ;   lrvg %r5, 0(%r2)
 ;   lrvg %r3, 8(%r2)
-;   vlvgp %v24, %r3, %r5
+;   vlvgp %v7, %r3, %r5
+;   vpdi %v17, %v7, %v7, 4
+;   verllg %v19, %v17, 32
+;   verllf %v24, %v19, 16
 ;   br %r14
 
 function %load_i32x4_little(i64) -> i32x4 {
@@ -314,7 +315,9 @@ block0(v0: i64):
 ; block0:
 ;   lrvg %r5, 0(%r2)
 ;   lrvg %r3, 8(%r2)
-;   vlvgp %v24, %r3, %r5
+;   vlvgp %v7, %r3, %r5
+;   vpdi %v17, %v7, %v7, 4
+;   verllg %v24, %v17, 32
 ;   br %r14
 
 function %load_i64x2_little(i64) -> i64x2 {
@@ -326,7 +329,8 @@ block0(v0: i64):
 ; block0:
 ;   lrvg %r5, 0(%r2)
 ;   lrvg %r3, 8(%r2)
-;   vlvgp %v24, %r3, %r5
+;   vlvgp %v7, %r3, %r5
+;   vpdi %v24, %v7, %v7, 4
 ;   br %r14
 
 function %load_i128_little(i64) -> i128 {
@@ -351,7 +355,9 @@ block0(v0: i64):
 ; block0:
 ;   lrvg %r5, 0(%r2)
 ;   lrvg %r3, 8(%r2)
-;   vlvgp %v24, %r3, %r5
+;   vlvgp %v7, %r3, %r5
+;   vpdi %v17, %v7, %v7, 4
+;   verllg %v24, %v17, 32
 ;   br %r14
 
 function %load_f64x2_little(i64) -> f64x2 {
@@ -363,7 +369,8 @@ block0(v0: i64):
 ; block0:
 ;   lrvg %r5, 0(%r2)
 ;   lrvg %r3, 8(%r2)
-;   vlvgp %v24, %r3, %r5
+;   vlvgp %v7, %r3, %r5
+;   vpdi %v24, %v7, %v7, 4
 ;   br %r14
 
 function %load_f64x2_sum_little(i64, i64) -> f64x2 {
@@ -376,7 +383,8 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   lrvg %r4, 0(%r3,%r2)
 ;   lrvg %r5, 8(%r3,%r2)
-;   vlvgp %v24, %r5, %r4
+;   vlvgp %v17, %r5, %r4
+;   vpdi %v24, %v17, %v17, 4
 ;   br %r14
 
 function %load_f64x2_off_little(i64) -> f64x2 {
@@ -388,7 +396,8 @@ block0(v0: i64):
 ; block0:
 ;   lrvg %r5, 128(%r2)
 ;   lrvg %r3, 136(%r2)
-;   vlvgp %v24, %r3, %r5
+;   vlvgp %v7, %r3, %r5
+;   vpdi %v24, %v7, %v7, 4
 ;   br %r14
 
 function %store_i8x16_little(i8x16, i64) {
@@ -398,10 +407,7 @@ block0(v0: i8x16, v1: i64):
 }
 
 ; block0:
-;   vlgvg %r3, %v24, 1
-;   vlgvg %r4, %v24, 0
-;   strvg %r3, 0(%r2)
-;   strvg %r4, 8(%r2)
+;   vst %v24, 0(%r2)
 ;   br %r14
 
 function %store_i16x8_little(i16x8, i64) {
@@ -411,10 +417,13 @@ block0(v0: i16x8, v1: i64):
 }
 
 ; block0:
-;   vlgvg %r3, %v24, 1
-;   vlgvg %r4, %v24, 0
-;   strvg %r3, 0(%r2)
-;   strvg %r4, 8(%r2)
+;   vpdi %v4, %v24, %v24, 4
+;   verllg %v6, %v4, 32
+;   verllf %v16, %v6, 16
+;   vlgvg %r4, %v16, 1
+;   vlgvg %r3, %v16, 0
+;   strvg %r4, 0(%r2)
+;   strvg %r3, 8(%r2)
 ;   br %r14
 
 function %store_i32x4_little(i32x4, i64) {
@@ -424,8 +433,10 @@ block0(v0: i32x4, v1: i64):
 }
 
 ; block0:
-;   vlgvg %r3, %v24, 1
-;   vlgvg %r4, %v24, 0
+;   vpdi %v4, %v24, %v24, 4
+;   verllg %v6, %v4, 32
+;   vlgvg %r3, %v6, 1
+;   lgdr %r4, %f6
 ;   strvg %r3, 0(%r2)
 ;   strvg %r4, 8(%r2)
 ;   br %r14
@@ -437,10 +448,11 @@ block0(v0: i64x2, v1: i64):
 }
 
 ; block0:
-;   vlgvg %r3, %v24, 1
-;   vlgvg %r4, %v24, 0
-;   strvg %r3, 0(%r2)
-;   strvg %r4, 8(%r2)
+;   vpdi %v4, %v24, %v24, 4
+;   vlgvg %r4, %v4, 1
+;   lgdr %r3, %f4
+;   strvg %r4, 0(%r2)
+;   strvg %r3, 8(%r2)
 ;   br %r14
 
 function %store_i128_little(i128, i64) {
@@ -464,8 +476,10 @@ block0(v0: f32x4, v1: i64):
 }
 
 ; block0:
-;   vlgvg %r3, %v24, 1
-;   vlgvg %r4, %v24, 0
+;   vpdi %v4, %v24, %v24, 4
+;   verllg %v6, %v4, 32
+;   vlgvg %r3, %v6, 1
+;   lgdr %r4, %f6
 ;   strvg %r3, 0(%r2)
 ;   strvg %r4, 8(%r2)
 ;   br %r14
@@ -477,10 +491,11 @@ block0(v0: f64x2, v1: i64):
 }
 
 ; block0:
-;   vlgvg %r3, %v24, 1
-;   vlgvg %r4, %v24, 0
-;   strvg %r3, 0(%r2)
-;   strvg %r4, 8(%r2)
+;   vpdi %v4, %v24, %v24, 4
+;   vlgvg %r4, %v4, 1
+;   lgdr %r3, %f4
+;   strvg %r4, 0(%r2)
+;   strvg %r3, 8(%r2)
 ;   br %r14
 
 function %store_f64x2_sum_little(f64x2, i64, i64) {
@@ -491,8 +506,9 @@ block0(v0: f64x2, v1: i64, v2: i64):
 }
 
 ; block0:
-;   vlgvg %r5, %v24, 1
-;   vlgvg %r4, %v24, 0
+;   vpdi %v6, %v24, %v24, 4
+;   vlgvg %r5, %v6, 1
+;   lgdr %r4, %f6
 ;   strvg %r5, 0(%r3,%r2)
 ;   strvg %r4, 8(%r3,%r2)
 ;   br %r14
@@ -504,9 +520,10 @@ block0(v0: f64x2, v1: i64):
 }
 
 ; block0:
-;   vlgvg %r3, %v24, 1
-;   vlgvg %r4, %v24, 0
-;   strvg %r3, 128(%r2)
-;   strvg %r4, 136(%r2)
+;   vpdi %v4, %v24, %v24, 4
+;   vlgvg %r4, %v4, 1
+;   lgdr %r3, %f4
+;   strvg %r4, 128(%r2)
+;   strvg %r3, 136(%r2)
 ;   br %r14
 

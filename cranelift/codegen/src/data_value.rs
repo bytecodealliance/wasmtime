@@ -91,8 +91,8 @@ impl DataValue {
             DataValue::I128(i) => dst[..16].copy_from_slice(&i.to_ne_bytes()[..]),
             DataValue::F32(f) => dst[..4].copy_from_slice(&f.bits().to_ne_bytes()[..]),
             DataValue::F64(f) => dst[..8].copy_from_slice(&f.bits().to_ne_bytes()[..]),
-            DataValue::V128(v) => dst[..16].copy_from_slice(&u128::from_le_bytes(*v).to_ne_bytes()),
-            DataValue::V64(v) => dst[..8].copy_from_slice(&u64::from_le_bytes(*v).to_ne_bytes()),
+            DataValue::V128(v) => dst[..16].copy_from_slice(&v[..]),
+            DataValue::V64(v) => dst[..8].copy_from_slice(&v[..]),
             _ => unimplemented!(),
         };
     }
@@ -124,11 +124,9 @@ impl DataValue {
             }
             _ if ty.is_vector() => {
                 if ty.bytes() == 16 {
-                    DataValue::V128(
-                        u128::from_ne_bytes(src[..16].try_into().unwrap()).to_le_bytes(),
-                    )
+                    DataValue::V128(src[..16].try_into().unwrap())
                 } else if ty.bytes() == 8 {
-                    DataValue::V64(u64::from_ne_bytes(src[..8].try_into().unwrap()).to_le_bytes())
+                    DataValue::V64(src[..8].try_into().unwrap())
                 } else {
                     unimplemented!()
                 }

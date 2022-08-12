@@ -28,6 +28,16 @@ impl Inst {
             dst: WritableGpr::from_writable_reg(src).unwrap(),
         }
     }
+
+    fn xmm_unary_rm_r_evex(op: Avx512Opcode, src: RegMem, dst: Writable<Reg>) -> Inst {
+        src.assert_regclass_is(RegClass::Float);
+        debug_assert!(dst.to_reg().class() == RegClass::Float);
+        Inst::XmmUnaryRmREvex {
+            op,
+            src: XmmMem::new(src).unwrap(),
+            dst: WritableXmm::from_writable_reg(dst).unwrap(),
+        }
+    }
 }
 
 #[test]
@@ -3510,6 +3520,18 @@ fn test_x64_emit() {
 
     // ========================================================
     // XMM FMA
+
+    insns.push((
+        Inst::xmm_rm_r_vex(AvxOpcode::Vfmadd213ss, RegMem::reg(xmm2), xmm1, w_xmm0),
+        "C4E271A9C2",
+        "vfmadd213ss %xmm0, %xmm1, %xmm2, %xmm0",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r_vex(AvxOpcode::Vfmadd213sd, RegMem::reg(xmm5), xmm4, w_xmm3),
+        "C4E2D9A9DD",
+        "vfmadd213sd %xmm3, %xmm4, %xmm5, %xmm3",
+    ));
 
     insns.push((
         Inst::xmm_rm_r_vex(AvxOpcode::Vfmadd213ps, RegMem::reg(xmm2), xmm1, w_xmm0),
