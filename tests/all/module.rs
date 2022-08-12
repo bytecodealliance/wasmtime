@@ -76,21 +76,21 @@ fn serialize_deterministic() {
         let p1 = engine.precompile_module(wasm.as_bytes()).unwrap();
         let p2 = engine.precompile_module(wasm.as_bytes()).unwrap();
         if p1 != p2 {
-            panic!("precompile_module not determinisitc for:\n{}", wasm);
+            panic!("precompile_module not deterministic for:\n{}", wasm);
         }
 
         let module1 = Module::new(&engine, wasm).unwrap();
         let a1 = module1.serialize().unwrap();
         let a2 = module1.serialize().unwrap();
         if a1 != a2 {
-            panic!("Module::serialize not determinisitc for:\n{}", wasm);
+            panic!("Module::serialize not deterministic for:\n{}", wasm);
         }
 
         let module2 = Module::new(&engine, wasm).unwrap();
         let b1 = module2.serialize().unwrap();
         let b2 = module2.serialize().unwrap();
         if b1 != b2 {
-            panic!("Module::serialize not determinisitc for:\n{}", wasm);
+            panic!("Module::serialize not deterministic for:\n{}", wasm);
         }
 
         if a1 != b2 {

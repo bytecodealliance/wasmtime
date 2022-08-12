@@ -7,7 +7,8 @@ use crate::isa::aarch64::settings as aarch64_settings;
 use crate::isa::unwind::systemv;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, MachTextSectionBuilder, Reg, TextSectionBuilder, VCode,
+    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, TextSectionBuilder,
+    VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
@@ -65,7 +66,11 @@ impl AArch64Backend {
 }
 
 impl TargetIsa for AArch64Backend {
-    fn compile_function(&self, func: &Function, want_disasm: bool) -> CodegenResult<CompiledCode> {
+    fn compile_function(
+        &self,
+        func: &Function,
+        want_disasm: bool,
+    ) -> CodegenResult<CompiledCodeStencil> {
         let flags = self.flags();
         let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
 
@@ -80,7 +85,7 @@ impl TargetIsa for AArch64Backend {
             log::debug!("disassembly:\n{}", disasm);
         }
 
-        Ok(CompiledCode {
+        Ok(CompiledCodeStencil {
             buffer,
             frame_size,
             disasm: emit_result.disasm,
@@ -204,7 +209,7 @@ mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::types::*;
-    use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, JumpTableData, Signature};
+    use crate::ir::{AbiParam, Function, InstBuilder, JumpTableData, Signature, UserFuncName};
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
@@ -213,7 +218,7 @@ mod test {
 
     #[test]
     fn test_compile_function() {
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -252,7 +257,7 @@ mod test {
 
     #[test]
     fn test_branch_lowering() {
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -320,7 +325,7 @@ mod test {
 
     #[test]
     fn test_br_table() {
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));

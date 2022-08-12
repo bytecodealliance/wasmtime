@@ -14,7 +14,8 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   %rax = coff_tls_get_addr User { namespace: 1, index: 0 }
+;   %rax = coff_tls_get_addr User(userextname0)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+

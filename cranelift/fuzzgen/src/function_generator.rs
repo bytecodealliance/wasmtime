@@ -2,14 +2,14 @@ use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose, ValueList};
 use crate::config::Config;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
-use cranelift::codegen::ir::types::*;
+use cranelift::codegen::ir::{types::*, FuncRef, LibCall, UserExternalName, UserFuncName};
 use cranelift::codegen::ir::{
     AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, StackSlot, Type, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
 use cranelift::prelude::{
-    EntityRef, InstBuilder, IntCC, JumpTableData, StackSlotData, StackSlotKind,
+    EntityRef, ExtFuncData, InstBuilder, IntCC, JumpTableData, StackSlotData, StackSlotKind,
 };
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -38,6 +38,25 @@ fn insert_opcode(
         let var = fgen.get_variable_of_type(ty)?;
         builder.def_var(var, val);
     }
+    Ok(())
+}
+
+fn insert_call(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    opcode: Opcode,
+    _args: &'static [Type],
+    _rets: &'static [Type],
+) -> Result<()> {
+    assert_eq!(opcode, Opcode::Call, "only call handled at the moment");
+    let (sig, func_ref) = fgen.u.choose(&fgen.func_refs)?.clone();
+
+    let actuals = fgen.generate_values_for_signature(
+        builder,
+        sig.params.iter().map(|abi_param| abi_param.value_type),
+    )?;
+
+    builder.ins().call(func_ref, &actuals);
     Ok(())
 }
 
@@ -369,6 +388,8 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::F64const, &[], &[F64], insert_const),
     // Bool Consts
     (Opcode::Bconst, &[], &[B1], insert_const),
+    // Call
+    (Opcode::Call, &[], &[], insert_call),
 ];
 
 pub struct FunctionGenerator<'r, 'data>
@@ -380,6 +401,8 @@ where
     vars: Vec<(Type, Variable)>,
     blocks: Vec<(Block, BlockSignature)>,
     jump_tables: Vec<JumpTable>,
+    func_refs: Vec<(Signature, FuncRef)>,
+    next_func_index: u32,
     static_stack_slots: Vec<StackSlot>,
 }
 
@@ -394,7 +417,9 @@ where
             vars: vec![],
             blocks: vec![],
             jump_tables: vec![],
+            func_refs: vec![],
             static_stack_slots: vec![],
+            next_func_index: 0,
         }
     }
 
@@ -739,6 +764,42 @@ where
         Ok(())
     }
 
+    fn generate_funcrefs(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
+        for _ in 0..self.param(&self.config.funcrefs_per_function)? {
+            let (ext_name, sig) = if self.u.arbitrary::<bool>()? {
+                let func_index = self.next_func_index;
+                self.next_func_index = self.next_func_index.wrapping_add(1);
+                let user_func_ref = builder
+                    .func
+                    .declare_imported_user_function(UserExternalName {
+                        namespace: 0,
+                        index: func_index,
+                    });
+                let name = ExternalName::User(user_func_ref);
+                let signature = self.generate_signature()?;
+                (name, signature)
+            } else {
+                // Use udivi64 as an example of a libcall function.
+                let mut signature = Signature::new(CallConv::Fast);
+                signature.params.push(AbiParam::new(I64));
+                signature.params.push(AbiParam::new(I64));
+                signature.returns.push(AbiParam::new(I64));
+                (ExternalName::LibCall(LibCall::UdivI64), signature)
+            };
+
+            let sig_ref = builder.import_signature(sig.clone());
+            let func_ref = builder.import_function(ExtFuncData {
+                name: ext_name,
+                signature: sig_ref,
+                colocated: self.u.arbitrary()?,
+            });
+
+            self.func_refs.push((sig, func_ref));
+        }
+
+        Ok(())
+    }
+
     fn generate_stack_slots(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         for _ in 0..self.param(&self.config.static_stack_slots_per_function)? {
             let bytes = self.param(&self.config.static_stack_slot_size)? as u32;
@@ -865,7 +926,7 @@ where
         let sig = self.generate_signature()?;
 
         let mut fn_builder_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(ExternalName::user(0, 1), sig.clone());
+        let mut func = Function::with_name_signature(UserFuncName::user(0, 1), sig.clone());
 
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
 
@@ -873,6 +934,7 @@ where
 
         // Function preamble
         self.generate_jumptables(&mut builder)?;
+        self.generate_funcrefs(&mut builder)?;
         self.generate_stack_slots(&mut builder)?;
 
         // Main instruction generation loop

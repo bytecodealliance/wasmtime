@@ -9,7 +9,7 @@ use crate::ir::Type;
 use serde::{Deserialize, Serialize};
 
 /// A dynamic type object which has a base vector type and a scaling factor.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct DynamicTypeData {
     /// Base vector type, this is the minimum size of the type.

@@ -14,7 +14,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x5, 8 ; b 12 ; data TestCase { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x5, 8 ; b 12 ; data TestCase(TestcaseName { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x5
 ;   ldp fp, lr, [sp], #16
 ;   autiasp ; ret

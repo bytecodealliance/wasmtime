@@ -2932,10 +2932,12 @@ impl Inst {
                 let link = pretty_print_reg(link.to_reg(), allocs);
                 let tls_symbol = match &info.tls_symbol {
                     None => "".to_string(),
-                    Some(SymbolReloc::TlsGd { name }) => format!(":tls_gdcall:{}", name),
+                    Some(SymbolReloc::TlsGd { name }) => {
+                        format!(":tls_gdcall:{}", name.display(None))
+                    }
                     _ => unreachable!(),
                 };
-                format!("brasl {}, {}{}", link, info.dest, tls_symbol)
+                format!("brasl {}, {}{}", link, info.dest.display(None), tls_symbol)
             }
             &Inst::CallInd { link, ref info, .. } => {
                 let link = pretty_print_reg(link.to_reg(), allocs);
@@ -3003,8 +3005,10 @@ impl Inst {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg(), &mut empty_allocs);
                 let symbol = match &**symbol_reloc {
-                    SymbolReloc::Absolute { name, offset } => format!("{} + {}", name, offset),
-                    SymbolReloc::TlsGd { name } => format!("{}@tlsgd", name),
+                    SymbolReloc::Absolute { name, offset } => {
+                        format!("{} + {}", name.display(None), offset)
+                    }
+                    SymbolReloc::TlsGd { name } => format!("{}@tlsgd", name.display(None)),
                 };
                 format!("bras {}, 12 ; data {} ; lg {}, 0({})", tmp, symbol, rd, tmp)
             }

@@ -313,6 +313,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
         if let Some(total_size) = saved_size {
             print_all(
                 isa,
+                &context.func.params,
                 &mem,
                 total_size,
                 options.print,

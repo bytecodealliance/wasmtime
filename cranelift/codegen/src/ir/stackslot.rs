@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 pub type StackSize = u32;
 
 /// The kind of a stack slot.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum StackSlotKind {
     /// An explicit stack slot. This is a chunk of stack memory for use by the `stack_load`
@@ -62,7 +62,7 @@ impl fmt::Display for StackSlotKind {
 }
 
 /// Contents of a stack slot.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct StackSlotData {
     /// The kind of stack slot.
@@ -100,7 +100,7 @@ impl fmt::Display for StackSlotData {
 }
 
 /// Contents of a dynamic stack slot.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct DynamicStackSlotData {
     /// The kind of stack slot.

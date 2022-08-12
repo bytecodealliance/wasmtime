@@ -66,7 +66,7 @@ fn gen_formats(formats: &[&InstructionFormat], fmt: &mut Formatter) {
 /// 16 bytes on 64-bit architectures. If more space is needed to represent an instruction, use a
 /// `ValueList` to store the additional information out of line.
 fn gen_instruction_data(formats: &[&InstructionFormat], fmt: &mut Formatter) {
-    fmt.line("#[derive(Clone, Debug)]");
+    fmt.line("#[derive(Clone, Debug, PartialEq, Hash)]");
     fmt.line(r#"#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]"#);
     fmt.line("#[allow(missing_docs)]");
     fmt.line("pub enum InstructionData {");

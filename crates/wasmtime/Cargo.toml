@@ -72,6 +72,9 @@ default = [
 # precompiled WebAssembly modules.
 cranelift = ["dep:wasmtime-cranelift"]
 
+# Enables support for incremental compilation cache to be enabled in `Config`.
+incremental-cache = ["wasmtime-cranelift?/incremental-cache"]
+
 # Enables support for the `perf` jitdump profiler
 jitdump = ["wasmtime-jit/jitdump"]
 

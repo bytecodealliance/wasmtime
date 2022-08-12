@@ -1,8 +1,8 @@
 //! S390x ISA: binary code emission.
 
 use crate::binemit::{Reloc, StackMap};
-use crate::ir::MemFlags;
-use crate::ir::{SourceLoc, TrapCode};
+use crate::ir::TrapCode;
+use crate::ir::{MemFlags, RelSourceLoc};
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
 use crate::machinst::reg::count_operands;
@@ -133,7 +133,7 @@ pub fn mem_emit(
 
     if add_trap && mem.can_trap() {
         let srcloc = state.cur_srcloc();
-        if srcloc != SourceLoc::default() {
+        if !srcloc.is_default() {
             sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
@@ -201,7 +201,7 @@ pub fn mem_rs_emit(
 
     if add_trap && mem.can_trap() {
         let srcloc = state.cur_srcloc();
-        if srcloc != SourceLoc::default() {
+        if !srcloc.is_default() {
             sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
@@ -243,7 +243,7 @@ pub fn mem_imm8_emit(
 
     if add_trap && mem.can_trap() {
         let srcloc = state.cur_srcloc();
-        if srcloc != SourceLoc::default() {
+        if !srcloc.is_default() {
             sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
@@ -281,7 +281,7 @@ pub fn mem_imm16_emit(
 
     if add_trap && mem.can_trap() {
         let srcloc = state.cur_srcloc();
-        if srcloc != SourceLoc::default() {
+        if !srcloc.is_default() {
             sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
@@ -308,7 +308,7 @@ pub fn mem_mem_emit(
 ) {
     if add_trap && (dst.can_trap() || src.can_trap()) {
         let srcloc = state.cur_srcloc();
-        if srcloc != SourceLoc::default() {
+        if srcloc != Default::default() {
             sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
@@ -343,7 +343,7 @@ pub fn mem_vrx_emit(
 
     if add_trap && mem.can_trap() {
         let srcloc = state.cur_srcloc();
-        if srcloc != SourceLoc::default() {
+        if !srcloc.is_default() {
             sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
@@ -1256,7 +1256,7 @@ pub struct EmitState {
     /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
     stack_map: Option<StackMap>,
     /// Current source-code location corresponding to instruction to be emitted.
-    cur_srcloc: SourceLoc,
+    cur_srcloc: RelSourceLoc,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -1265,7 +1265,7 @@ impl MachInstEmitState<Inst> for EmitState {
             virtual_sp_offset: 0,
             initial_sp_offset: abi.frame_size() as i64,
             stack_map: None,
-            cur_srcloc: SourceLoc::default(),
+            cur_srcloc: Default::default(),
         }
     }
 
@@ -1273,7 +1273,7 @@ impl MachInstEmitState<Inst> for EmitState {
         self.stack_map = Some(stack_map);
     }
 
-    fn pre_sourceloc(&mut self, srcloc: SourceLoc) {
+    fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
     }
 }
@@ -1287,7 +1287,7 @@ impl EmitState {
         self.stack_map = None;
     }
 
-    fn cur_srcloc(&self) -> SourceLoc {
+    fn cur_srcloc(&self) -> RelSourceLoc {
         self.cur_srcloc
     }
 }

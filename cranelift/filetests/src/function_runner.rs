@@ -78,11 +78,11 @@ impl SingleFunctionCompiler {
         let mut module = JITModule::new(builder);
         let mut ctx = module.make_context();
 
-        let name = format!("{}", function.name);
+        let name = function.name.to_string();
         let func_id = module.declare_function(&name, Linkage::Local, &function.signature)?;
 
         // Build and declare the trampoline in the module
-        let trampoline_name = format!("{}", trampoline.name);
+        let trampoline_name = trampoline.name.to_string();
         let trampoline_id =
             module.declare_function(&trampoline_name, Linkage::Local, &trampoline.signature)?;
 
@@ -260,7 +260,7 @@ fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
     wrapper_sig.params.push(ir::AbiParam::new(pointer_type)); // Add the `callee_address` parameter.
     wrapper_sig.params.push(ir::AbiParam::new(pointer_type)); // Add the `values_vec` parameter.
 
-    let mut func = ir::Function::with_name_signature(ir::ExternalName::user(0, 0), wrapper_sig);
+    let mut func = ir::Function::with_name_signature(ir::UserFuncName::default(), wrapper_sig);
 
     // The trampoline has a single block filled with loads, one call to callee_address, and some loads.
     let mut builder_context = FunctionBuilderContext::new();

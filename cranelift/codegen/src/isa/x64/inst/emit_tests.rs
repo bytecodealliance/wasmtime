@@ -13,9 +13,11 @@
 //!   -- isa::x64::inst::emit_tests::test_x64_emit
 
 use super::*;
+use crate::ir::UserExternalNameRef;
 use crate::isa::x64;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use cranelift_entity::EntityRef as _;
 
 impl Inst {
     fn neg(size: OperandSize, src: Writable<Reg>) -> Inst {
@@ -3395,17 +3397,14 @@ fn test_x64_emit() {
     // CallKnown
     insns.push((
         Inst::call_known(
-            ExternalName::User {
-                namespace: 0,
-                index: 0,
-            },
+            ExternalName::User(UserExternalNameRef::new(0)),
             smallvec![],
             smallvec![],
             PRegSet::default(),
             Opcode::Call,
         ),
         "E800000000",
-        "call    User { namespace: 0, index: 0 }",
+        "call    User(userextname0)",
     ));
 
     // ========================================================
@@ -3449,38 +3448,29 @@ fn test_x64_emit() {
     insns.push((
         Inst::LoadExtName {
             dst: Writable::from_reg(r11),
-            name: Box::new(ExternalName::User {
-                namespace: 0,
-                index: 0,
-            }),
+            name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
             offset: 0,
         },
         "4C8B1D00000000",
-        "load_ext_name u0:0+0, %r11",
+        "load_ext_name userextname0+0, %r11",
     ));
     insns.push((
         Inst::LoadExtName {
             dst: Writable::from_reg(r11),
-            name: Box::new(ExternalName::User {
-                namespace: 0,
-                index: 0,
-            }),
+            name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
             offset: 0x12345678,
         },
         "4C8B1D000000004981C378563412",
-        "load_ext_name u0:0+305419896, %r11",
+        "load_ext_name userextname0+305419896, %r11",
     ));
     insns.push((
         Inst::LoadExtName {
             dst: Writable::from_reg(r11),
-            name: Box::new(ExternalName::User {
-                namespace: 0,
-                index: 0,
-            }),
+            name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
             offset: -0x12345678,
         },
         "4C8B1D000000004981EB78563412",
-        "load_ext_name u0:0+-305419896, %r11",
+        "load_ext_name userextname0+-305419896, %r11",
     ));
 
     // ========================================================
@@ -4690,35 +4680,26 @@ fn test_x64_emit() {
 
     insns.push((
         Inst::ElfTlsGetAddr {
-            symbol: ExternalName::User {
-                namespace: 0,
-                index: 0,
-            },
+            symbol: ExternalName::User(UserExternalNameRef::new(0)),
         },
         "66488D3D00000000666648E800000000",
-        "%rax = elf_tls_get_addr User { namespace: 0, index: 0 }",
+        "%rax = elf_tls_get_addr User(userextname0)",
     ));
 
     insns.push((
         Inst::MachOTlsGetAddr {
-            symbol: ExternalName::User {
-                namespace: 0,
-                index: 0,
-            },
+            symbol: ExternalName::User(UserExternalNameRef::new(0)),
         },
         "488B3D00000000FF17",
-        "%rax = macho_tls_get_addr User { namespace: 0, index: 0 }",
+        "%rax = macho_tls_get_addr User(userextname0)",
     ));
 
     insns.push((
         Inst::CoffTlsGetAddr {
-            symbol: ExternalName::User {
-                namespace: 0,
-                index: 0,
-            },
+            symbol: ExternalName::User(UserExternalNameRef::new(0)),
         },
         "8B050000000065488B0C2558000000488B04C1488D8000000000",
-        "%rax = coff_tls_get_addr User { namespace: 0, index: 0 }",
+        "%rax = coff_tls_get_addr User(userextname0)",
     ));
 
     // ========================================================

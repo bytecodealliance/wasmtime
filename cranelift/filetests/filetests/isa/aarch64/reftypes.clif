@@ -69,7 +69,7 @@ block3(v7: r64, v8: r64):
 ; block0:
 ;   str x1, [sp, #16]
 ;   str x0, [sp, #8]
-;   ldr x3, 8 ; b 12 ; data TestCase { length: 1, ascii: [102, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x3, 8 ; b 12 ; data TestCase(TestcaseName { length: 1, ascii: [102, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   blr x3
 ;   mov x9, sp
 ;   ldr x11, [sp, #8]

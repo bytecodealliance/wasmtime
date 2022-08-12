@@ -1,25 +1,25 @@
 use cranelift_codegen::binemit::Reloc;
-use cranelift_codegen::ir::ExternalName;
-use cranelift_codegen::MachReloc;
+use cranelift_module::ModuleExtName;
+use cranelift_module::ModuleReloc;
 use std::convert::TryFrom;
 
 #[derive(Clone)]
 pub(crate) struct CompiledBlob {
     pub(crate) ptr: *mut u8,
     pub(crate) size: usize,
-    pub(crate) relocs: Vec<MachReloc>,
+    pub(crate) relocs: Vec<ModuleReloc>,
 }
 
 impl CompiledBlob {
     pub(crate) fn perform_relocations(
         &self,
-        get_address: impl Fn(&ExternalName) -> *const u8,
-        get_got_entry: impl Fn(&ExternalName) -> *const u8,
-        get_plt_entry: impl Fn(&ExternalName) -> *const u8,
+        get_address: impl Fn(&ModuleExtName) -> *const u8,
+        get_got_entry: impl Fn(&ModuleExtName) -> *const u8,
+        get_plt_entry: impl Fn(&ModuleExtName) -> *const u8,
     ) {
         use std::ptr::write_unaligned;
 
-        for &MachReloc {
+        for &ModuleReloc {
             kind,
             offset,
             ref name,

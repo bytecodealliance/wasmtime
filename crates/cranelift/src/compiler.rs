@@ -1,18 +1,20 @@
 use crate::builder::LinkOptions;
 use crate::debug::{DwarfSectionRelocTarget, ModuleMemoryOffset};
-use crate::func_environ::{get_func_name, FuncEnvironment};
+use crate::func_environ::FuncEnvironment;
 use crate::obj::ModuleTextBuilder;
 use crate::{
     blank_sig, func_signature, indirect_signature, value_type, wasmtime_call_conv,
     CompiledFunction, CompiledFunctions, FunctionAddressMap, Relocation, RelocationTarget,
 };
 use anyhow::{Context as _, Result};
-use cranelift_codegen::ir::{self, ExternalName, InstBuilder, MemFlags, Value};
+use cranelift_codegen::ir::{
+    self, ExternalName, Function, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value,
+};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{settings, MachReloc, MachTrap};
-use cranelift_codegen::{MachSrcLoc, MachStackMap};
+use cranelift_codegen::{CompiledCode, MachSrcLoc, MachStackMap};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
@@ -27,19 +29,28 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::mem;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use wasmtime_environ::{
-    AddressMapSection, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionInfo,
-    InstructionAddressMap, Module, ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation,
-    Trampoline, TrapCode, TrapEncodingBuilder, TrapInformation, Tunables, VMOffsets,
+    AddressMapSection, CacheStore, CompileError, FilePos, FlagValue, FunctionBodyData,
+    FunctionInfo, InstructionAddressMap, Module, ModuleTranslation, ModuleTypes, PtrSize,
+    StackMapInformation, Trampoline, TrapCode, TrapEncodingBuilder, TrapInformation, Tunables,
+    VMOffsets,
 };
 
 #[cfg(feature = "component-model")]
 mod component;
 
+struct IncrementalCacheContext {
+    #[cfg(feature = "incremental-cache")]
+    cache_store: Arc<dyn CacheStore>,
+    num_hits: usize,
+    num_cached: usize,
+}
+
 struct CompilerContext {
     func_translator: FuncTranslator,
     codegen_context: Context,
+    incremental_cache_ctx: Option<IncrementalCacheContext>,
 }
 
 impl Default for CompilerContext {
@@ -47,6 +58,7 @@ impl Default for CompilerContext {
         Self {
             func_translator: FuncTranslator::new(),
             codegen_context: Context::new(),
+            incremental_cache_ctx: None,
         }
     }
 }
@@ -57,14 +69,48 @@ pub(crate) struct Compiler {
     contexts: Mutex<Vec<CompilerContext>>,
     isa: Box<dyn TargetIsa>,
     linkopts: LinkOptions,
+    cache_store: Option<Arc<dyn CacheStore>>,
+}
+
+impl Drop for Compiler {
+    fn drop(&mut self) {
+        if self.cache_store.is_none() {
+            return;
+        }
+
+        let mut num_hits = 0;
+        let mut num_cached = 0;
+        for ctx in self.contexts.lock().unwrap().iter() {
+            if let Some(ref cache_ctx) = ctx.incremental_cache_ctx {
+                num_hits += cache_ctx.num_hits;
+                num_cached += cache_ctx.num_cached;
+            }
+        }
+
+        let total = num_hits + num_cached;
+        if num_hits + num_cached > 0 {
+            log::trace!(
+                "Incremental compilation cache stats: {}/{} = {}% (hits/lookup)\ncached: {}",
+                num_hits,
+                total,
+                (num_hits as f32) / (total as f32) * 100.0,
+                num_cached
+            );
+        }
+    }
 }
 
 impl Compiler {
-    pub(crate) fn new(isa: Box<dyn TargetIsa>, linkopts: LinkOptions) -> Compiler {
+    pub(crate) fn new(
+        isa: Box<dyn TargetIsa>,
+        cache_store: Option<Arc<dyn CacheStore>>,
+        linkopts: LinkOptions,
+    ) -> Compiler {
         Compiler {
             contexts: Default::default(),
             isa,
             linkopts,
+            cache_store,
         }
     }
 
@@ -75,7 +121,17 @@ impl Compiler {
                 ctx.codegen_context.clear();
                 ctx
             })
-            .unwrap_or_else(Default::default)
+            .unwrap_or_else(|| CompilerContext {
+                #[cfg(feature = "incremental-cache")]
+                incremental_cache_ctx: self.cache_store.as_ref().map(|cache_store| {
+                    IncrementalCacheContext {
+                        cache_store: cache_store.clone(),
+                        num_hits: 0,
+                        num_cached: 0,
+                    }
+                }),
+                ..Default::default()
+            })
     }
 
     fn save_context(&self, ctx: CompilerContext) {
@@ -141,10 +197,15 @@ impl wasmtime_environ::Compiler for Compiler {
         let CompilerContext {
             mut func_translator,
             codegen_context: mut context,
+            incremental_cache_ctx: mut cache_ctx,
         } = self.take_context();
 
-        context.func.name = get_func_name(func_index);
         context.func.signature = func_signature(isa, translation, types, func_index);
+        context.func.name = UserFuncName::User(UserExternalName {
+            namespace: 0,
+            index: func_index.as_u32(),
+        });
+
         if tunables.generate_native_debuginfo {
             context.func.collect_debug_info();
         }
@@ -210,16 +271,14 @@ impl wasmtime_environ::Compiler for Compiler {
             &mut func_env,
         )?;
 
-        let mut code_buf: Vec<u8> = Vec::new();
-        let compiled_code = context
-            .compile_and_emit(isa, &mut code_buf)
-            .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
+        let (_, code_buf) = compile_maybe_cached(&mut context, isa, cache_ctx.as_mut())?;
 
+        let compiled_code = context.compiled_code().unwrap();
         let func_relocs = compiled_code
             .buffer
             .relocs()
             .into_iter()
-            .map(mach_reloc_to_reloc)
+            .map(|item| mach_reloc_to_reloc(&context.func, item))
             .collect::<Vec<_>>();
 
         let traps = compiled_code
@@ -259,6 +318,7 @@ impl wasmtime_environ::Compiler for Compiler {
         self.save_context(CompilerContext {
             func_translator,
             codegen_context: context,
+            incremental_cache_ctx: cache_ctx,
         });
 
         Ok(Box::new(CompiledFunction {
@@ -403,6 +463,74 @@ impl wasmtime_environ::Compiler for Compiler {
     }
 }
 
+#[cfg(feature = "incremental-cache")]
+mod incremental_cache {
+    use super::*;
+
+    struct CraneliftCacheStore(Arc<dyn CacheStore>);
+
+    impl cranelift_codegen::incremental_cache::CacheKvStore for CraneliftCacheStore {
+        fn get(&self, key: &[u8]) -> Option<std::borrow::Cow<[u8]>> {
+            self.0.get(key)
+        }
+        fn insert(&mut self, key: &[u8], val: Vec<u8>) {
+            self.0.insert(key, val);
+        }
+    }
+
+    pub(super) fn compile_maybe_cached<'a>(
+        context: &'a mut Context,
+        isa: &dyn TargetIsa,
+        cache_ctx: Option<&mut IncrementalCacheContext>,
+    ) -> Result<(&'a CompiledCode, Vec<u8>), CompileError> {
+        let mut code_buf = Vec::new();
+        let cache_ctx = match cache_ctx {
+            Some(ctx) => ctx,
+            None => {
+                let compiled_code =
+                    context
+                        .compile_and_emit(isa, &mut code_buf)
+                        .map_err(|error| {
+                            CompileError::Codegen(pretty_error(&error.func, error.inner))
+                        })?;
+                return Ok((compiled_code, code_buf));
+            }
+        };
+
+        let mut cache_store = CraneliftCacheStore(cache_ctx.cache_store.clone());
+        let (compiled_code, from_cache) = context
+            .compile_with_cache(isa, &mut cache_store)
+            .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
+
+        if from_cache {
+            cache_ctx.num_hits += 1;
+        } else {
+            cache_ctx.num_cached += 1;
+        }
+
+        code_buf.resize(compiled_code.code_info().total_size as _, 0);
+        code_buf.copy_from_slice(compiled_code.code_buffer());
+
+        Ok((compiled_code, code_buf))
+    }
+}
+
+#[cfg(feature = "incremental-cache")]
+use incremental_cache::*;
+
+#[cfg(not(feature = "incremental-cache"))]
+fn compile_maybe_cached<'a>(
+    context: &'a mut Context,
+    isa: &dyn TargetIsa,
+    _cache_ctx: Option<&mut IncrementalCacheContext>,
+) -> Result<(&'a CompiledCode, Vec<u8>), CompileError> {
+    let mut code_buf = Vec::new();
+    let compiled_code = context
+        .compile_and_emit(isa, &mut code_buf)
+        .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
+    return Ok((compiled_code, code_buf));
+}
+
 fn to_flag_value(v: &settings::Value) -> FlagValue {
     match v.kind() {
         settings::SettingKind::Enum => FlagValue::Enum(v.as_enum().unwrap().into()),
@@ -431,9 +559,11 @@ impl Compiler {
         let CompilerContext {
             mut func_translator,
             codegen_context: mut context,
+            incremental_cache_ctx: mut cache_ctx,
         } = self.take_context();
 
-        context.func = ir::Function::with_name_signature(ExternalName::user(0, 0), host_signature);
+        // The name doesn't matter here.
+        context.func = ir::Function::with_name_signature(UserFuncName::default(), host_signature);
 
         // This trampoline will load all the parameters from the `values_vec`
         // that is passed in and then call the real function (also passed
@@ -493,10 +623,11 @@ impl Compiler {
         builder.ins().return_(&[]);
         builder.finalize();
 
-        let func = self.finish_trampoline(&mut context, isa)?;
+        let func = self.finish_trampoline(&mut context, cache_ctx.as_mut(), isa)?;
         self.save_context(CompilerContext {
             func_translator,
             codegen_context: context,
+            incremental_cache_ctx: cache_ctx,
         });
         Ok(func)
     }
@@ -541,10 +672,11 @@ impl Compiler {
         let CompilerContext {
             mut func_translator,
             codegen_context: mut context,
+            incremental_cache_ctx: mut cache_ctx,
         } = self.take_context();
 
-        context.func =
-            ir::Function::with_name_signature(ir::ExternalName::user(0, 0), wasm_signature);
+        // The name doesn't matter here.
+        context.func = ir::Function::with_name_signature(Default::default(), wasm_signature);
 
         let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
         let block0 = builder.create_block();
@@ -570,10 +702,11 @@ impl Compiler {
 
         self.wasm_to_host_load_results(ty, &mut builder, values_vec_ptr_val);
 
-        let func = self.finish_trampoline(&mut context, isa)?;
+        let func = self.finish_trampoline(&mut context, cache_ctx.as_mut(), isa)?;
         self.save_context(CompilerContext {
             func_translator,
             codegen_context: context,
+            incremental_cache_ctx: cache_ctx,
         });
         Ok(func)
     }
@@ -668,12 +801,10 @@ impl Compiler {
     fn finish_trampoline(
         &self,
         context: &mut Context,
+        cache_ctx: Option<&mut IncrementalCacheContext>,
         isa: &dyn TargetIsa,
     ) -> Result<CompiledFunction, CompileError> {
-        let mut code_buf = Vec::new();
-        let compiled_code = context
-            .compile_and_emit(isa, &mut code_buf)
-            .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
+        let (compiled_code, code_buf) = compile_maybe_cached(context, isa, cache_ctx)?;
 
         // Processing relocations isn't the hardest thing in the world here but
         // no trampoline should currently generate a relocation, so assert that
@@ -858,14 +989,15 @@ fn collect_address_maps(
     }
 }
 
-fn mach_reloc_to_reloc(reloc: &MachReloc) -> Relocation {
+fn mach_reloc_to_reloc(func: &Function, reloc: &MachReloc) -> Relocation {
     let &MachReloc {
         offset,
         kind,
         ref name,
         addend,
     } = reloc;
-    let reloc_target = if let ExternalName::User { namespace, index } = *name {
+    let reloc_target = if let ExternalName::User(user_func_ref) = *name {
+        let UserExternalName { namespace, index } = func.params.user_named_funcs()[user_func_ref];
         debug_assert_eq!(namespace, 0);
         RelocationTarget::UserFunc(FuncIndex::from_u32(index))
     } else if let ExternalName::LibCall(libcall) = *name {

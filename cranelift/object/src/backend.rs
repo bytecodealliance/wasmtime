@@ -10,7 +10,7 @@ use cranelift_codegen::{
 };
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
-    ModuleDeclarations, ModuleError, ModuleResult,
+    ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
 };
 use log::info;
 use object::write::{
@@ -316,12 +316,18 @@ impl Module for ObjectModule {
 
         ctx.compile_and_emit(self.isa(), &mut code)?;
 
-        self.define_function_bytes(func_id, &code, ctx.compiled_code().unwrap().buffer.relocs())
+        self.define_function_bytes(
+            func_id,
+            &ctx.func,
+            &code,
+            ctx.compiled_code().unwrap().buffer.relocs(),
+        )
     }
 
     fn define_function_bytes(
         &mut self,
         func_id: FuncId,
+        func: &ir::Function,
         bytes: &[u8],
         relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction> {
@@ -364,7 +370,7 @@ impl Module for ObjectModule {
         if !relocs.is_empty() {
             let relocs = relocs
                 .iter()
-                .map(|record| self.process_reloc(record))
+                .map(|record| self.process_reloc(&ModuleReloc::from_mach_reloc(&record, func)))
                 .collect();
             self.relocs.push(SymbolRelocs {
                 section,
@@ -518,9 +524,9 @@ impl ObjectModule {
 
     /// This should only be called during finish because it creates
     /// symbols for missing libcalls.
-    fn get_symbol(&mut self, name: &ir::ExternalName) -> SymbolId {
+    fn get_symbol(&mut self, name: &ModuleExtName) -> SymbolId {
         match *name {
-            ir::ExternalName::User { .. } => {
+            ModuleExtName::User { .. } => {
                 if ModuleDeclarations::is_function(name) {
                     let id = FuncId::from_name(name);
                     self.functions[id].unwrap().0
@@ -529,7 +535,7 @@ impl ObjectModule {
                     self.data_objects[id].unwrap().0
                 }
             }
-            ir::ExternalName::LibCall(ref libcall) => {
+            ModuleExtName::LibCall(ref libcall) => {
                 let name = (self.libcall_names)(*libcall);
                 if let Some(symbol) = self.object.symbol_id(name.as_bytes()) {
                     symbol
@@ -552,7 +558,7 @@ impl ObjectModule {
             }
             // These are "magic" names well-known to the linker.
             // They require special treatment.
-            ir::ExternalName::KnownSymbol(ref known_symbol) => {
+            ModuleExtName::KnownSymbol(ref known_symbol) => {
                 if let Some(symbol) = self.known_symbols.get(known_symbol) {
                     *symbol
                 } else {
@@ -582,11 +588,10 @@ impl ObjectModule {
                     symbol
                 }
             }
-            _ => panic!("invalid ExternalName {}", name),
         }
     }
 
-    fn process_reloc(&self, record: &MachReloc) -> ObjectRelocRecord {
+    fn process_reloc(&self, record: &ModuleReloc) -> ObjectRelocRecord {
         let mut addend = record.addend;
         let (kind, encoding, size) = match record.kind {
             Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
@@ -696,6 +701,7 @@ impl ObjectModule {
             // FIXME
             reloc => unimplemented!("{:?}", reloc),
         };
+
         ObjectRelocRecord {
             offset: record.offset,
             name: record.name.clone(),
@@ -762,7 +768,7 @@ struct SymbolRelocs {
 #[derive(Clone)]
 struct ObjectRelocRecord {
     offset: CodeOffset,
-    name: ir::ExternalName,
+    name: ModuleExtName,
     kind: RelocationKind,
     encoding: RelocationEncoding,
     size: u8,

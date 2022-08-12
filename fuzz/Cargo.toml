@@ -11,7 +11,7 @@ cargo-fuzz = true
 [dependencies]
 anyhow = { version = "1.0.19" }
 arbitrary = { version = "1.1.0", features = ["derive"] }
-cranelift-codegen = { path = "../cranelift/codegen" }
+cranelift-codegen = { path = "../cranelift/codegen", features = ["incremental-cache"] }
 cranelift-reader = { path = "../cranelift/reader" }
 cranelift-wasm = { path = "../cranelift/wasm" }
 cranelift-filetests = { path = "../cranelift/filetests" }
@@ -118,5 +118,11 @@ doc = false
 [[bin]]
 name = "component_api"
 path = "fuzz_targets/component_api.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "cranelift-icache"
+path = "fuzz_targets/cranelift-icache.rs"
 test = false
 doc = false

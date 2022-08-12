@@ -21,11 +21,6 @@ use wasmtime_environ::{
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
-/// Compute an `ir::ExternalName` for a given wasm function index.
-pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
-    ir::ExternalName::user(0, func_index.as_u32())
-}
-
 macro_rules! declare_function_signatures {
     (
         $(
@@ -1509,7 +1504,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::FuncRef> {
         let sig = crate::func_signature(self.isa, self.translation, self.types, index);
         let signature = func.import_signature(sig);
-        let name = get_func_name(index);
+        let name =
+            ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: index.as_u32(),
+            }));
         Ok(func.import_function(ir::ExtFuncData {
             name,
             signature,

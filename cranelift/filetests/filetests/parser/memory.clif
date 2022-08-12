@@ -40,7 +40,7 @@ function %symbol() -> i32 {
     gv0 = symbol %something
     ; check: gv0 = symbol %something
     gv1 = symbol u8:9
-    ; check: gv1 = symbol u8:9
+    ; check: gv1 = symbol userextname0
 block0:
     v0 = global_value.i32 gv0
     ; check: v0 = global_value.i32 gv0

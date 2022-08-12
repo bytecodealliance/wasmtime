@@ -3,6 +3,7 @@
 // Pull in the ISLE generated code.
 pub mod generated_code;
 
+use crate::ir::ExternalName;
 // Types that the generated ISLE code uses via `use super::*`.
 use crate::isa::s390x::abi::{S390xMachineDeps, REG_SAVE_AREA_SIZE};
 use crate::isa::s390x::inst::{
