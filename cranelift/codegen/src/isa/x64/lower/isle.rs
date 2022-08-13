@@ -611,6 +611,11 @@ where
     }
 
     #[inline]
+    fn intcc_reverse(&mut self, cc: &IntCC) -> IntCC {
+        cc.reverse()
+    }
+
+    #[inline]
     fn floatcc_inverse(&mut self, cc: &FloatCC) -> FloatCC {
         cc.inverse()
     }

@@ -74,6 +74,7 @@ impl ObjectBuilder {
             target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
             target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
             target_lexicon::Architecture::Riscv64(_) => object::Architecture::Riscv64,
+            target_lexicon::Architecture::S390x => object::Architecture::S390x,
             architecture => {
                 return Err(ModuleError::Backend(anyhow!(
                     "target architecture {:?} is unsupported",
@@ -122,6 +123,7 @@ pub struct ObjectModule {
     relocs: Vec<SymbolRelocs>,
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
+    known_symbols: HashMap<ir::KnownSymbol, SymbolId>,
     function_alignment: u64,
     per_function_section: bool,
     anon_func_number: u64,
@@ -142,6 +144,7 @@ impl ObjectModule {
             relocs: Vec::new(),
             libcalls: HashMap::new(),
             libcall_names: builder.libcall_names,
+            known_symbols: HashMap::new(),
             function_alignment: builder.function_alignment,
             per_function_section: builder.per_function_section,
             anon_func_number: 0,
@@ -548,6 +551,28 @@ impl ObjectModule {
                     symbol
                 }
             }
+            // These are "magic" names well-known to the linker.
+            // They require special treatment.
+            ir::ExternalName::KnownSymbol(ref known_symbol) => {
+                if let Some(symbol) = self.known_symbols.get(known_symbol) {
+                    *symbol
+                } else {
+                    let symbol = match known_symbol {
+                        ir::KnownSymbol::ElfGlobalOffsetTable => self.object.add_symbol(Symbol {
+                            name: "_GLOBAL_OFFSET_TABLE_".as_bytes().to_vec(),
+                            value: 0,
+                            size: 0,
+                            kind: SymbolKind::Data,
+                            scope: SymbolScope::Unknown,
+                            weak: false,
+                            section: SymbolSection::Undefined,
+                            flags: SymbolFlags::None,
+                        }),
+                    };
+                    self.known_symbols.insert(*known_symbol, symbol);
+                    symbol
+                }
+            }
             _ => panic!("invalid ExternalName {}", name),
         }
     }
@@ -622,6 +647,36 @@ impl ObjectModule {
                     RelocationKind::Elf(object::elf::R_AARCH64_TLSGD_ADD_LO12_NC),
                     RelocationEncoding::Generic,
                     12,
+                )
+            }
+            Reloc::S390xPCRel32Dbl => (RelocationKind::Relative, RelocationEncoding::S390xDbl, 32),
+            Reloc::S390xPLTRel32Dbl => (
+                RelocationKind::PltRelative,
+                RelocationEncoding::S390xDbl,
+                32,
+            ),
+            Reloc::S390xTlsGd64 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "S390xTlsGd64 is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_390_TLS_GD64),
+                    RelocationEncoding::Generic,
+                    64,
+                )
+            }
+            Reloc::S390xTlsGdCall => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "S390xTlsGdCall is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_390_TLS_GDCALL),
+                    RelocationEncoding::Generic,
+                    0,
                 )
             }
             // FIXME

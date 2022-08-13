@@ -849,7 +849,6 @@ impl MachInstEmit for Inst {
                         .for_each(|i| i.emit(&[], sink, emit_info, state));
                 }
             }
-
             &Inst::Call { ref info } => {
                 // call
                 match info.dest {
@@ -865,7 +864,9 @@ impl MachInstEmit for Inst {
                             .into_iter()
                             .for_each(|i| i.emit(&[], sink, emit_info, state));
                     }
-                    ExternalName::LibCall(..) | ExternalName::TestCase { .. } => {
+                    ExternalName::LibCall(..)
+                    | ExternalName::TestCase { .. }
+                    | ExternalName::KnownSymbol(..) => {
                         // use indirect call. it is more simple.
                         // load ext name.
                         Inst::LoadExtName {
@@ -893,6 +894,9 @@ impl MachInstEmit for Inst {
             }
             &Inst::CallInd { ref info } => {
                 let rn = allocs.next(info.rn);
+                // if rn == x_reg(12) {
+                //     Inst::EBreak.emit(&[], sink, emit_info, state);
+                // }
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
@@ -986,6 +990,9 @@ impl MachInstEmit for Inst {
                         }
                         .emit(&[], sink, emit_info, state);
                     } else {
+                        // if rd.to_reg() == x_reg(13) && rm == x_reg(23) {
+                        //     Inst::EBreak.emit(&[], sink, emit_info, state);
+                        // }
                         let x = Inst::AluRRImm12 {
                             alu_op: AluOPRRI::Ori,
                             rd: rd,

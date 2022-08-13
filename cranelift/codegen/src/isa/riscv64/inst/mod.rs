@@ -167,7 +167,6 @@ pub(crate) fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst>
     for (dst, src) in rd.iter().zip(src.iter()) {
         let out_ty = Inst::canonical_type_for_rc(dst.to_reg().class());
         let in_ty = Inst::canonical_type_for_rc(src.class());
-        assert!(in_ty == out_ty);
         insts.push(gen_move(*dst, out_ty, *src, in_ty));
     }
     insts
@@ -182,13 +181,13 @@ pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst
         (true, true) => Inst::gen_move(rd, rm, oty),
         (false, true) => Inst::FpuRR {
             frm: None,
-            alu_op: FpuOPRR::move_f_to_x_op(ity),
+            alu_op: FpuOPRR::move_x_to_f_op(oty),
             rd: rd,
             rs: rm,
         },
         (true, false) => Inst::FpuRR {
             frm: None,
-            alu_op: FpuOPRR::move_x_to_f_op(ity),
+            alu_op: FpuOPRR::move_f_to_x_op(ity),
             rd: rd,
             rs: rm,
         },
@@ -1468,8 +1467,12 @@ impl MachInstLabelUse for LabelUse {
         (veneer_offset, Self::PCRel32)
     }
 
-    fn from_reloc(_reloc: Reloc, _addend: Addend) -> Option<LabelUse> {
-        None
+    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
+        match (reloc, addend) {
+            (Reloc::RiscvCall, 0) => Some(Self::PCRel32),
+            (Reloc::RiscvCall, _) => panic!("addend:{}", addend),
+            _ => None,
+        }
     }
 }
 

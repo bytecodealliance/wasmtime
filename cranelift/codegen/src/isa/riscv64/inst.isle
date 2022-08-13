@@ -2127,3 +2127,6 @@
 
 (decl x_reg(u8) Reg)
 (extern constructor x_reg x_reg)
+
+(decl load_ra ()Reg)
+(extern constructor load_ra load_ra)

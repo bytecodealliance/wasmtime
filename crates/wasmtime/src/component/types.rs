@@ -1,16 +1,15 @@
 //! This module defines the `Type` type, representing the dynamic form of a component interface type.
 
-use crate::component::func;
 use crate::component::values::{self, Val};
 use anyhow::{anyhow, Result};
 use std::fmt;
 use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
-use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 use wasmtime_environ::component::{
-    ComponentTypes, InterfaceType, TypeEnumIndex, TypeExpectedIndex, TypeFlagsIndex,
-    TypeInterfaceIndex, TypeRecordIndex, TypeTupleIndex, TypeUnionIndex, TypeVariantIndex,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, TypeEnumIndex, TypeExpectedIndex,
+    TypeFlagsIndex, TypeInterfaceIndex, TypeOptionIndex, TypeRecordIndex, TypeTupleIndex,
+    TypeUnionIndex, TypeVariantIndex, VariantInfo,
 };
 
 #[derive(Clone)]
@@ -125,6 +124,10 @@ impl Variant {
             ty: Type::from(&case.ty, &self.0.types),
         })
     }
+
+    pub(crate) fn variant_info(&self) -> &VariantInfo {
+        &self.0.types[self.0.index].info
+    }
 }
 
 /// An `enum` interface type
@@ -143,6 +146,10 @@ impl Enum {
             .names
             .iter()
             .map(|name| name.deref())
+    }
+
+    pub(crate) fn variant_info(&self) -> &VariantInfo {
+        &self.0.types[self.0.index].info
     }
 }
 
@@ -163,11 +170,15 @@ impl Union {
             .iter()
             .map(|ty| Type::from(ty, &self.0.types))
     }
+
+    pub(crate) fn variant_info(&self) -> &VariantInfo {
+        &self.0.types[self.0.index].info
+    }
 }
 
 /// An `option` interface type
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Option(Handle<TypeInterfaceIndex>);
+pub struct Option(Handle<TypeOptionIndex>);
 
 impl Option {
     /// Instantiate this type with the specified `value`.
@@ -177,7 +188,11 @@ impl Option {
 
     /// Retrieve the type parameter for this `option`.
     pub fn ty(&self) -> Type {
-        Type::from(&self.0.types[self.0.index], &self.0.types)
+        Type::from(&self.0.types[self.0.index].ty, &self.0.types)
+    }
+
+    pub(crate) fn variant_info(&self) -> &VariantInfo {
+        &self.0.types[self.0.index].info
     }
 }
 
@@ -200,6 +215,10 @@ impl Expected {
     pub fn err(&self) -> Type {
         Type::from(&self.0.types[self.0.index].err, &self.0.types)
     }
+
+    pub(crate) fn variant_info(&self) -> &VariantInfo {
+        &self.0.types[self.0.index].info
+    }
 }
 
 /// A `flags` interface type
@@ -219,13 +238,6 @@ impl Flags {
             .iter()
             .map(|name| name.deref())
     }
-}
-
-/// Represents the size and alignment requirements of the heap-serialized form of a type
-#[derive(Debug)]
-pub(crate) struct SizeAndAlignment {
-    pub(crate) size: usize,
-    pub(crate) alignment: u32,
 }
 
 /// Represents a component model interface type
@@ -554,119 +566,22 @@ impl Type {
     }
 
     /// Calculate the size and alignment requirements for the specified type.
-    pub(crate) fn size_and_alignment(&self) -> SizeAndAlignment {
+    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
         match self {
-            Type::Unit => SizeAndAlignment {
-                size: 0,
-                alignment: 1,
-            },
-
-            Type::Bool | Type::S8 | Type::U8 => SizeAndAlignment {
-                size: 1,
-                alignment: 1,
-            },
-
-            Type::S16 | Type::U16 => SizeAndAlignment {
-                size: 2,
-                alignment: 2,
-            },
-
-            Type::S32 | Type::U32 | Type::Char | Type::Float32 => SizeAndAlignment {
-                size: 4,
-                alignment: 4,
-            },
-
-            Type::S64 | Type::U64 | Type::Float64 => SizeAndAlignment {
-                size: 8,
-                alignment: 8,
-            },
-
-            Type::String | Type::List(_) => SizeAndAlignment {
-                size: 8,
-                alignment: 4,
-            },
-
-            Type::Record(handle) => {
-                record_size_and_alignment(handle.fields().map(|field| field.ty))
-            }
-
-            Type::Tuple(handle) => record_size_and_alignment(handle.types()),
-
-            Type::Variant(handle) => variant_size_and_alignment(handle.cases().map(|case| case.ty)),
-
-            Type::Enum(handle) => variant_size_and_alignment(handle.names().map(|_| Type::Unit)),
-
-            Type::Union(handle) => variant_size_and_alignment(handle.types()),
-
-            Type::Option(handle) => {
-                variant_size_and_alignment([Type::Unit, handle.ty()].into_iter())
-            }
-
-            Type::Expected(handle) => {
-                variant_size_and_alignment([handle.ok(), handle.err()].into_iter())
-            }
-
-            Type::Flags(handle) => match FlagsSize::from_count(handle.names().len()) {
-                FlagsSize::Size0 => SizeAndAlignment {
-                    size: 0,
-                    alignment: 1,
-                },
-                FlagsSize::Size1 => SizeAndAlignment {
-                    size: 1,
-                    alignment: 1,
-                },
-                FlagsSize::Size2 => SizeAndAlignment {
-                    size: 2,
-                    alignment: 2,
-                },
-                FlagsSize::Size4Plus(n) => SizeAndAlignment {
-                    size: n * 4,
-                    alignment: 4,
-                },
-            },
+            Type::Unit => &CanonicalAbiInfo::ZERO,
+            Type::Bool | Type::S8 | Type::U8 => &CanonicalAbiInfo::SCALAR1,
+            Type::S16 | Type::U16 => &CanonicalAbiInfo::SCALAR2,
+            Type::S32 | Type::U32 | Type::Char | Type::Float32 => &CanonicalAbiInfo::SCALAR4,
+            Type::S64 | Type::U64 | Type::Float64 => &CanonicalAbiInfo::SCALAR8,
+            Type::String | Type::List(_) => &CanonicalAbiInfo::POINTER_PAIR,
+            Type::Record(handle) => &handle.0.types[handle.0.index].abi,
+            Type::Tuple(handle) => &handle.0.types[handle.0.index].abi,
+            Type::Variant(handle) => &handle.0.types[handle.0.index].abi,
+            Type::Enum(handle) => &handle.0.types[handle.0.index].abi,
+            Type::Union(handle) => &handle.0.types[handle.0.index].abi,
+            Type::Option(handle) => &handle.0.types[handle.0.index].abi,
+            Type::Expected(handle) => &handle.0.types[handle.0.index].abi,
+            Type::Flags(handle) => &handle.0.types[handle.0.index].abi,
         }
-    }
-
-    /// Calculate the aligned offset of a field of this type, updating `offset` to point to just after that field.
-    pub(crate) fn next_field(&self, offset: &mut usize) -> usize {
-        let SizeAndAlignment { size, alignment } = self.size_and_alignment();
-        *offset = func::align_to(*offset, alignment);
-        let result = *offset;
-        *offset += size;
-        result
-    }
-}
-
-fn record_size_and_alignment(types: impl Iterator<Item = Type>) -> SizeAndAlignment {
-    let mut offset = 0;
-    let mut align = 1;
-    for ty in types {
-        let SizeAndAlignment { size, alignment } = ty.size_and_alignment();
-        offset = func::align_to(offset, alignment) + size;
-        align = align.max(alignment);
-    }
-
-    SizeAndAlignment {
-        size: func::align_to(offset, align),
-        alignment: align,
-    }
-}
-
-fn variant_size_and_alignment(types: impl ExactSizeIterator<Item = Type>) -> SizeAndAlignment {
-    let discriminant_size = DiscriminantSize::from_count(types.len()).unwrap();
-    let mut alignment = u32::from(discriminant_size);
-    let mut size = 0;
-    for ty in types {
-        let size_and_alignment = ty.size_and_alignment();
-        alignment = alignment.max(size_and_alignment.alignment);
-        size = size.max(size_and_alignment.size);
-    }
-
-    SizeAndAlignment {
-        size: func::align_to(
-            func::align_to(usize::from(discriminant_size), alignment) + size,
-            alignment,
-        ),
-        alignment,
     }
 }

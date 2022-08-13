@@ -13,6 +13,11 @@ edition = "2021"
 name = "clif-util"
 path = "src/clif-util.rs"
 
+[[test]]
+name = "filetests"
+path = "tests/filetests.rs"
+harness = false
+
 [dependencies]
 cfg-if = "1.0"
 cranelift-codegen = { path = "codegen", version = "0.88.0" }

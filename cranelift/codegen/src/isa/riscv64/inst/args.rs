@@ -287,20 +287,20 @@ impl FpuOPRR {
     }
 
     // move from x register to float register.
-    pub(crate) const fn move_x_to_f_op(ty: Type) -> Self {
+    pub(crate) fn move_x_to_f_op(ty: Type) -> Self {
         match ty {
             F32 => Self::FmvWX,
             F64 => Self::FmvDX,
-            _ => unreachable!(),
+            _ => unreachable!("ty:{:?}", ty),
         }
     }
 
     // move from f register to x register.
-    pub(crate) const fn move_f_to_x_op(ty: Type) -> Self {
+    pub(crate) fn move_f_to_x_op(ty: Type) -> Self {
         match ty {
             F32 => Self::FmvXW,
             F64 => Self::FmvXD,
-            _ => unreachable!(),
+            _ => unreachable!("ty:{:?}", ty),
         }
     }
 

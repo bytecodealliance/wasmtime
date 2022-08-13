@@ -98,6 +98,7 @@ pub struct Config {
     pub(crate) features: WasmFeatures,
     pub(crate) wasm_backtrace: bool,
     pub(crate) wasm_backtrace_details_env_used: bool,
+    pub(crate) native_unwind_info: bool,
     #[cfg(feature = "async")]
     pub(crate) async_stack_size: usize,
     pub(crate) async_support: bool,
@@ -180,6 +181,7 @@ impl Config {
             max_wasm_stack: 512 * 1024,
             wasm_backtrace: true,
             wasm_backtrace_details_env_used: false,
+            native_unwind_info: true,
             features: WasmFeatures::default(),
             #[cfg(feature = "async")]
             async_stack_size: 2 << 20,
@@ -341,6 +343,8 @@ impl Config {
     ///
     /// When disabled, wasm backtrace details are ignored, and [`crate::Trap::trace()`]
     /// will always return `None`.
+    #[deprecated = "Backtraces will always be enabled in future Wasmtime releases; if this \
+                    causes problems for you, please file an issue."]
     pub fn wasm_backtrace(&mut self, enable: bool) -> &mut Self {
         self.wasm_backtrace = enable;
         self
@@ -369,6 +373,24 @@ impl Config {
                     .unwrap_or(false)
             }
         };
+        self
+    }
+
+    /// Configures whether to generate native unwind information
+    /// (e.g. `.eh_frame` on Linux).
+    ///
+    /// This configuration option only exists to help third-party stack
+    /// capturing mechanisms, such as the system's unwinder or the `backtrace`
+    /// crate, determine how to unwind through Wasm frames. It does not affect
+    /// whether Wasmtime can capture Wasm backtraces or not, or whether
+    /// [`Trap::trace`][crate::Trap::trace] returns `Some` or `None`.
+    ///
+    /// Note that native unwind information is always generated when targeting
+    /// Windows, since the Windows ABI requires it.
+    ///
+    /// This option defaults to `true`.
+    pub fn native_unwind_info(&mut self, enable: bool) -> &mut Self {
+        self.native_unwind_info = enable;
         self
     }
 
@@ -1415,6 +1437,24 @@ impl Config {
             compiler.target(target.clone())?;
         }
 
+        if self.native_unwind_info ||
+            // Windows always needs unwind info, since it is part of the ABI.
+            self
+                .compiler_config
+                .target
+                .as_ref()
+                .map_or(cfg!(target_os = "windows"), |target| {
+                    target.operating_system == target_lexicon::OperatingSystem::Windows
+                })
+        {
+            if !self
+                .compiler_config
+                .ensure_setting_unset_or_given("unwind_info", "true")
+            {
+                bail!("compiler option 'unwind_info' must be enabled profiling");
+            }
+        }
+
         // We require frame pointers for correct stack walking, which is safety
         // critical in the presence of reference types, and otherwise it is just
         // really bad developer experience to get wrong.
@@ -1423,18 +1463,6 @@ impl Config {
             .insert("preserve_frame_pointers".into(), "true".into());
 
         // check for incompatible compiler options and set required values
-        if self.wasm_backtrace || self.features.reference_types {
-            if !self
-                .compiler_config
-                .ensure_setting_unset_or_given("unwind_info", "true")
-            {
-                bail!("compiler option 'unwind_info' must be enabled when either 'backtraces' or 'reference types' are enabled");
-            }
-        } else {
-            self.compiler_config
-                .settings
-                .insert("unwind_info".to_string(), "false".to_string());
-        }
         if self.features.reference_types {
             if !self
                 .compiler_config
@@ -1461,6 +1489,15 @@ impl Config {
         }
 
         compiler.build()
+    }
+
+    /// Internal setting for whether adapter modules for components will have
+    /// extra WebAssembly instructions inserted performing more debug checks
+    /// then are necessary.
+    #[cfg(feature = "component-model")]
+    pub fn debug_adapter_modules(&mut self, debug: bool) -> &mut Self {
+        self.tunables.debug_adapter_modules = debug;
+        self
     }
 }
 

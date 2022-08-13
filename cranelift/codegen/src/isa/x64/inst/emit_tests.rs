@@ -3998,21 +3998,21 @@ fn test_x64_emit() {
     // ========================================================
     // XMM_RM_R: Integer Conversion
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Cvtdq2ps, RegMem::reg(xmm1), w_xmm8),
+        Inst::xmm_unary_rm_r(SseOpcode::Cvtdq2ps, RegMem::reg(xmm1), w_xmm8),
         "440F5BC1",
-        "cvtdq2ps %xmm8, %xmm1, %xmm8",
+        "cvtdq2ps %xmm1, %xmm8",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Cvttpd2dq, RegMem::reg(xmm15), w_xmm7),
+        Inst::xmm_unary_rm_r(SseOpcode::Cvttpd2dq, RegMem::reg(xmm15), w_xmm7),
         "66410FE6FF",
-        "cvttpd2dq %xmm7, %xmm15, %xmm7",
+        "cvttpd2dq %xmm15, %xmm7",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Cvttps2dq, RegMem::reg(xmm9), w_xmm8),
+        Inst::xmm_unary_rm_r(SseOpcode::Cvttps2dq, RegMem::reg(xmm9), w_xmm8),
         "F3450F5BC1",
-        "cvttps2dq %xmm8, %xmm9, %xmm8",
+        "cvttps2dq %xmm9, %xmm8",
     ));
 
     // XMM_Mov_R_M: float stores

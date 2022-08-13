@@ -8,7 +8,8 @@
 
 use arbitrary::{Arbitrary, Unstructured};
 use proc_macro2::{Ident, TokenStream};
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
+use std::borrow::Cow;
 use std::fmt::{self, Debug, Write};
 use std::iter;
 use std::ops::Deref;
@@ -23,10 +24,6 @@ pub const IMPORT_FUNCTION: &str = "echo";
 
 /// The name of the exported guest function which the host should call
 pub const EXPORT_FUNCTION: &str = "echo";
-
-/// Maximum length of an arbitrary tuple type.  As of this writing, the `wasmtime::component::func::typed` module
-/// only implements the `ComponentType` trait for tuples up to this length.
-const MAX_TUPLE_LENGTH: usize = 16;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum CoreType {
@@ -75,45 +72,23 @@ impl<'a, const L: usize, const H: usize> Arbitrary<'a> for UsizeInRange<L, H> {
     }
 }
 
-/// Wraps a `Box<[T]>` and provides an `Arbitrary` implementation that always generates non-empty slices
-#[derive(Debug)]
-pub struct NonEmptyArray<T>(Box<[T]>);
-
-impl<'a, T: Arbitrary<'a>> Arbitrary<'a> for NonEmptyArray<T> {
-    fn arbitrary(input: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(Self(
-            iter::once(input.arbitrary())
-                .chain(input.arbitrary_iter()?)
-                .collect::<arbitrary::Result<_>>()?,
-        ))
-    }
-}
-
-impl<T> Deref for NonEmptyArray<T> {
-    type Target = [T];
-
-    fn deref(&self) -> &[T] {
-        self.0.deref()
-    }
-}
-
 /// Wraps a `Box<[T]>` and provides an `Arbitrary` implementation that always generates slices of length less than
 /// or equal to the longest tuple for which Wasmtime generates a `ComponentType` impl
 #[derive(Debug)]
-pub struct TupleArray<T>(Box<[T]>);
+pub struct VecInRange<T, const L: u32, const H: u32>(Vec<T>);
 
-impl<'a, T: Arbitrary<'a>> Arbitrary<'a> for TupleArray<T> {
+impl<'a, T: Arbitrary<'a>, const L: u32, const H: u32> Arbitrary<'a> for VecInRange<T, L, H> {
     fn arbitrary(input: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(Self(
-            input
-                .arbitrary_iter()?
-                .take(MAX_TUPLE_LENGTH)
-                .collect::<arbitrary::Result<_>>()?,
-        ))
+        let mut ret = Vec::new();
+        input.arbitrary_loop(Some(L), Some(H), |input| {
+            ret.push(input.arbitrary()?);
+            Ok(std::ops::ControlFlow::Continue(()))
+        })?;
+        Ok(Self(ret))
     }
 }
 
-impl<T> Deref for TupleArray<T> {
+impl<T, const L: u32, const H: u32> Deref for VecInRange<T, L, H> {
     type Target = [T];
 
     fn deref(&self) -> &[T] {
@@ -140,13 +115,28 @@ pub enum Type {
     Char,
     String,
     List(Box<Type>),
-    Record(Box<[Type]>),
-    Tuple(TupleArray<Type>),
-    Variant(NonEmptyArray<Type>),
+
+    // Give records the ability to generate a generous amount of fields but
+    // don't let the fuzzer go too wild since `wasmparser`'s validator currently
+    // has hard limits in the 1000-ish range on the number of fields a record
+    // may contain.
+    Record(VecInRange<Type, 0, 200>),
+
+    // Tuples can only have up to 16 type parameters in wasmtime right now for
+    // the static API.
+    Tuple(VecInRange<Type, 0, 16>),
+
+    // Like records, allow a good number of variants, but variants require at
+    // least one case.
+    Variant(VecInRange<Type, 1, 200>),
     Enum(UsizeInRange<1, 257>),
-    Union(NonEmptyArray<Type>),
+    Union(VecInRange<Type, 1, 200>),
+
     Option(Box<Type>),
     Expected { ok: Box<Type>, err: Box<Type> },
+
+    // Generate 0 flags all the way up to 65 flags which exercises the 0 to
+    // 3 x u32 cases.
     Flags(UsizeInRange<0, 65>),
 }
 
@@ -328,7 +318,7 @@ fn variant_size_and_alignment<'a>(
     }
 }
 
-fn make_import_and_export(params: &[Type], result: &Type) -> Box<str> {
+fn make_import_and_export(params: &[Type], result: &Type) -> String {
     let params_lowered = params
         .iter()
         .flat_map(|ty| ty.lowered())
@@ -400,7 +390,6 @@ fn make_import_and_export(params: &[Type], result: &Type) -> Box<str> {
             )"#
         )
     }
-    .into()
 }
 
 fn make_rust_name(name_counter: &mut u32) -> Ident {
@@ -509,7 +498,7 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
             let name = make_rust_name(name_counter);
 
             declarations.extend(quote! {
-                #[derive(ComponentType, Lift, Lower, PartialEq, Debug, Clone, Arbitrary)]
+                #[derive(ComponentType, Lift, Lower, PartialEq, Debug, Copy, Clone, Arbitrary)]
                 #[component(enum)]
                 enum #name {
                     #cases
@@ -677,13 +666,17 @@ fn write_component_type(
 #[derive(Debug)]
 pub struct Declarations {
     /// Type declarations (if any) referenced by `params` and/or `result`
-    pub types: Box<str>,
+    pub types: Cow<'static, str>,
     /// Parameter declarations used for the imported and exported functions
-    pub params: Box<str>,
+    pub params: Cow<'static, str>,
     /// Result declaration used for the imported and exported functions
-    pub result: Box<str>,
+    pub result: Cow<'static, str>,
     /// A WAT fragment representing the core function import and export to use for testing
-    pub import_and_export: Box<str>,
+    pub import_and_export: Cow<'static, str>,
+    /// String encoding to use for host -> component
+    pub encoding1: StringEncoding,
+    /// String encoding to use for component -> host
+    pub encoding2: StringEncoding,
 }
 
 impl Declarations {
@@ -694,7 +687,44 @@ impl Declarations {
             params,
             result,
             import_and_export,
+            encoding1,
+            encoding2,
         } = self;
+        let mk_component = |name: &str, encoding: StringEncoding| {
+            format!(
+                r#"
+                (component ${name}
+                    (import "echo" (func $f (type $sig)))
+
+                    (core instance $libc (instantiate $libc))
+
+                    (core func $f_lower (canon lower
+                        (func $f)
+                        (memory $libc "memory")
+                        (realloc (func $libc "realloc"))
+                        string-encoding={encoding}
+                    ))
+
+                    (core instance $i (instantiate $m
+                        (with "libc" (instance $libc))
+                        (with "host" (instance (export "{IMPORT_FUNCTION}" (func $f_lower))))
+                    ))
+
+                    (func (export "echo") (type $sig)
+                        (canon lift
+                            (core func $i "echo")
+                            (memory $libc "memory")
+                            (realloc (func $libc "realloc"))
+                            string-encoding={encoding}
+                        )
+                    )
+                )
+            "#
+            )
+        };
+
+        let c1 = mk_component("c1", *encoding2);
+        let c2 = mk_component("c2", *encoding1);
 
         format!(
             r#"
@@ -704,18 +734,6 @@ impl Declarations {
                     {REALLOC_AND_FREE}
                 )
 
-                (core instance $libc (instantiate $libc))
-
-                {types}
-
-                (import "{IMPORT_FUNCTION}" (func $f {params} {result}))
-
-                (core func $f_lower (canon lower
-                    (func $f)
-                    (memory $libc "memory")
-                    (realloc (func $libc "realloc"))
-                ))
-
                 (core module $m
                     (memory (import "libc" "memory") 1)
                     (func $realloc (import "libc" "realloc") (param i32 i32 i32 i32) (result i32))
@@ -723,18 +741,16 @@ impl Declarations {
                     {import_and_export}
                 )
 
-                (core instance $i (instantiate $m
-                    (with "libc" (instance $libc))
-                    (with "host" (instance (export "{IMPORT_FUNCTION}" (func $f_lower))))
-                ))
+                {types}
 
-                (func (export "echo") {params} {result}
-                    (canon lift
-                        (core func $i "echo")
-                        (memory $libc "memory")
-                        (realloc (func $libc "realloc"))
-                    )
-                )
+                (type $sig (func {params} {result}))
+                (import "{IMPORT_FUNCTION}" (func $f (type $sig)))
+
+                {c1}
+                {c2}
+                (instance $c1 (instantiate $c1 (with "echo" (func $f))))
+                (instance $c2 (instantiate $c2 (with "echo" (func $c1 "echo"))))
+                (export "echo" (func $c2 "echo"))
             )"#,
         )
         .into()
@@ -748,6 +764,10 @@ pub struct TestCase {
     pub params: Box<[Type]>,
     /// The type of the result to be returned by the function
     pub result: Type,
+    /// String encoding to use from host-to-component.
+    pub encoding1: StringEncoding,
+    /// String encoding to use from component-to-host.
+    pub encoding2: StringEncoding,
 }
 
 impl TestCase {
@@ -781,7 +801,9 @@ impl TestCase {
             types: types.into(),
             params,
             result,
-            import_and_export,
+            import_and_export: import_and_export.into(),
+            encoding1: self.encoding1,
+            encoding2: self.encoding2,
         }
     }
 }
@@ -795,6 +817,36 @@ impl<'a> Arbitrary<'a> for TestCase {
                 .take(MAX_ARITY)
                 .collect::<arbitrary::Result<Box<[_]>>>()?,
             result: input.arbitrary()?,
+            encoding1: input.arbitrary()?,
+            encoding2: input.arbitrary()?,
         })
+    }
+}
+
+#[derive(Copy, Clone, Debug, Arbitrary)]
+pub enum StringEncoding {
+    Utf8,
+    Utf16,
+    Latin1OrUtf16,
+}
+
+impl fmt::Display for StringEncoding {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StringEncoding::Utf8 => fmt::Display::fmt(&"utf8", f),
+            StringEncoding::Utf16 => fmt::Display::fmt(&"utf16", f),
+            StringEncoding::Latin1OrUtf16 => fmt::Display::fmt(&"latin1+utf16", f),
+        }
+    }
+}
+
+impl ToTokens for StringEncoding {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let me = match self {
+            StringEncoding::Utf8 => quote!(Utf8),
+            StringEncoding::Utf16 => quote!(Utf16),
+            StringEncoding::Latin1OrUtf16 => quote!(Latin1OrUtf16),
+        };
+        tokens.extend(quote!(component_fuzz_util::StringEncoding::#me));
     }
 }

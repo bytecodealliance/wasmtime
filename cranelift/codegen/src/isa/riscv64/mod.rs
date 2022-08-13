@@ -6,7 +6,9 @@ use crate::ir::Function;
 
 use crate::isa::riscv64::settings as riscv_settings;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
-use crate::machinst::{compile, CompiledCode, MachTextSectionBuilder, TextSectionBuilder, VCode};
+use crate::machinst::{
+    compile, CompiledCode, MachTextSectionBuilder, Reg, TextSectionBuilder, VCode,
+};
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
@@ -18,6 +20,8 @@ pub(crate) mod inst;
 mod lower;
 mod lower_inst;
 mod settings;
+#[cfg(feature = "unwind")]
+use crate::isa::unwind::systemv;
 
 use inst::crate_reg_eviroment;
 
@@ -93,7 +97,7 @@ impl TargetIsa for Riscv64Backend {
         "riscv64"
     }
     fn dynamic_vector_bytes(&self, _dynamic_ty: ir::Type) -> u32 {
-        16 
+        16
     }
 
     fn triple(&self) -> &Triple {
@@ -143,6 +147,11 @@ impl TargetIsa for Riscv64Backend {
 
     fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
+    }
+
+    #[cfg(feature = "unwind")]
+    fn map_regalloc_reg_to_dwarf(&self, reg: Reg) -> Result<u16, systemv::RegisterMappingError> {
+        inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
 }
 

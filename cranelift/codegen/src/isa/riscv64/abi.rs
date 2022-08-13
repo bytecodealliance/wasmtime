@@ -109,7 +109,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 &ir::ArgumentPurpose::VMContext
                 | &ir::ArgumentPurpose::Normal
                 | &ir::ArgumentPurpose::StructReturn
-                | &ir::ArgumentPurpose::FramePointer
                 | &ir::ArgumentPurpose::StackLimit
                 | &ir::ArgumentPurpose::StructArgument(_) => {}
                 _ => panic!(
@@ -696,12 +695,13 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         num_clobbered_callee_saves: usize,
         fixed_frame_storage_size: u32,
     ) -> bool {
-        !is_leaf
-            // The function arguments that are passed on the stack are addressed
-            // relative to the Frame Pointer.
-            || stack_args_size > 0
-            || num_clobbered_callee_saves > 0
-            || fixed_frame_storage_size > 0
+        true
+        // !is_leaf
+        //     // The function arguments that are passed on the stack are addressed
+        //     // relative to the Frame Pointer.
+        //     || stack_args_size > 0
+        //     || num_clobbered_callee_saves > 0
+        //     || fixed_frame_storage_size > 0
     }
 }
 
@@ -757,15 +757,15 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
 
 fn special_purpose_register(p: AbiParam) -> Option<ABIArg> {
     match p.purpose {
-        ir::ArgumentPurpose::VMContext => {
-            assert!(p.value_type == I64);
-            Some(ABIArg::reg(
-                x_reg(3).to_real_reg().unwrap(),
-                p.value_type,
-                p.extension,
-                p.purpose,
-            ))
-        }
+        // ir::ArgumentPurpose::VMContext => {
+        //     assert!(p.value_type == I64);
+        //     Some(ABIArg::reg(
+        //         x_reg(3).to_real_reg().unwrap(),
+        //         p.value_type,
+        //         p.extension,
+        //         p.purpose,
+        //     ))
+        // }
         _ => None,
     }
 }

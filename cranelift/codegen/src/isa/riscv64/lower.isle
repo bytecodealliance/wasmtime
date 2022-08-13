@@ -1036,7 +1036,7 @@
       (gen_move (x_reg 2) $I64))
 
 (rule (lower (get_return_address))
-      (gen_move (x_reg 1) $I64))
+      (load_ra))
 
 
 

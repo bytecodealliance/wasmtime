@@ -78,5 +78,6 @@ pub fn default_libcall_names() -> Box<dyn Fn(ir::LibCall) -> String + Send + Syn
         ir::LibCall::Memcmp => "memcmp".to_owned(),
 
         ir::LibCall::ElfTlsGetAddr => "__tls_get_addr".to_owned(),
+        ir::LibCall::ElfTlsGetOffset => "__tls_get_offset".to_owned(),
     })
 }

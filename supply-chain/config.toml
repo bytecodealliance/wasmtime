@@ -311,6 +311,10 @@ criteria = "safe-to-deploy"
 version = "0.3.6"
 criteria = "safe-to-deploy"
 
+[[exemptions.encoding_rs]]
+version = "0.8.31"
+criteria = "safe-to-deploy"
+
 [[exemptions.env_logger]]
 version = "0.7.1"
 criteria = "safe-to-deploy"

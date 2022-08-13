@@ -1,4 +1,4 @@
-use crate::codegen::ir::ValueList;
+use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose, ValueList};
 use crate::config::Config;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
@@ -287,9 +287,20 @@ where
     }
 
     fn generate_abi_param(&mut self) -> Result<AbiParam> {
-        // TODO: Generate more advanced abi params (structs/purposes/extensions/etc...)
-        let ty = self.generate_type()?;
-        Ok(AbiParam::new(ty))
+        let value_type = self.generate_type()?;
+        // TODO: There are more argument purposes to be explored...
+        let purpose = ArgumentPurpose::Normal;
+        let extension = match self.u.int_in_range(0..=2)? {
+            2 => ArgumentExtension::Sext,
+            1 => ArgumentExtension::Uext,
+            _ => ArgumentExtension::None,
+        };
+
+        Ok(AbiParam {
+            value_type,
+            purpose,
+            extension,
+        })
     }
 
     fn generate_signature(&mut self) -> Result<Signature> {
@@ -627,11 +638,19 @@ where
 
         let blocks = (0..block_count)
             .map(|i| {
+                let is_entry = i == 0;
                 let block = builder.create_block();
+
+                // Optionally mark blocks that are not the entry block as cold
+                if !is_entry {
+                    if bool::arbitrary(self.u)? {
+                        builder.set_cold_block(block);
+                    }
+                }
 
                 // The first block has to have the function signature, but for the rest of them we generate
                 // a random signature;
-                if i == 0 {
+                if is_entry {
                     builder.append_block_params_for_function_params(block);
                     Ok((block, sig.params.iter().map(|a| a.value_type).collect()))
                 } else {
@@ -691,7 +710,7 @@ where
         let sig = self.generate_signature()?;
 
         let mut fn_builder_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig.clone());
+        let mut func = Function::with_name_signature(ExternalName::user(0, 1), sig.clone());
 
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
 

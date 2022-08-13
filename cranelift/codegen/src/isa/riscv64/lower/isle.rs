@@ -142,7 +142,18 @@ where
         });
         InstOutput::default()
     }
+    fn load_ra(&mut self) -> Reg {
+        let tmp = self.temp_writable_reg(I64);
+        self.emit(&MInst::Load {
+            rd: tmp,
+            op: LoadOP::Ld,
+            flags: MemFlags::trusted(),
+            from: AMode::FPOffset(8, I64),
+        });
+        tmp.to_reg()
 
+        // self.gen_move(link_reg(), I64)
+    }
     fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
         assert!(ty.is_int() || ty.is_bool(), "{:?}", ty);
         if ty.bits() == 128 {

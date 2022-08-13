@@ -119,4 +119,15 @@ mod tests {
             ])]
         );
     }
+
+    // See issue https://github.com/bytecodealliance/wasmtime/issues/4671.
+    #[test]
+    fn order_of_params() {
+        let module = wat::parse_file("tests/shr_s.wat").unwrap();
+
+        let parameters = Some(vec![Value::I32(1795123818), Value::I32(-2147483648)]);
+        let results = interpret(&module, parameters.clone()).unwrap();
+
+        assert_eq!(results, vec![Value::I32(1795123818)]);
+    }
 }

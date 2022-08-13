@@ -43,6 +43,8 @@ pub enum Reloc {
     Arm64Call,
     /// s390x PC-relative 4-byte offset
     S390xPCRel32Dbl,
+    /// s390x PC-relative 4-byte offset to PLT
+    S390xPLTRel32Dbl,
 
     /// Elf x86_64 32 bit signed PC relative offset to two GOT entries for GD symbol.
     ElfX86_64TlsGd,
@@ -66,6 +68,11 @@ pub enum Reloc {
     /// auipc ra, 0
     /// jalr ra, ra, 0
     RiscvCall,
+
+    /// s390x TLS GD64 - 64-bit offset of tls_index for GD symbol in GOT
+    S390xTlsGd64,
+    /// s390x TLS GDCall - marker to enable optimization of TLS calls
+    S390xTlsGdCall,
 }
 
 impl fmt::Display for Reloc {
@@ -76,6 +83,7 @@ impl fmt::Display for Reloc {
             Self::Abs4 => write!(f, "Abs4"),
             Self::Abs8 => write!(f, "Abs8"),
             Self::S390xPCRel32Dbl => write!(f, "PCRel32Dbl"),
+            Self::S390xPLTRel32Dbl => write!(f, "PLTRel32Dbl"),
             Self::X86PCRel4 => write!(f, "PCRel4"),
             Self::X86CallPCRel4 => write!(f, "CallPCRel4"),
             Self::X86CallPLTRel4 => write!(f, "CallPLTRel4"),
@@ -87,6 +95,8 @@ impl fmt::Display for Reloc {
             Self::MachOX86_64Tlv => write!(f, "MachOX86_64Tlv"),
             Self::Aarch64TlsGdAdrPage21 => write!(f, "Aarch64TlsGdAdrPage21"),
             Self::Aarch64TlsGdAddLo12Nc => write!(f, "Aarch64TlsGdAddLo12Nc"),
+            Self::S390xTlsGd64 => write!(f, "TlsGd64"),
+            Self::S390xTlsGdCall => write!(f, "TlsGdCall"),
         }
     }
 }

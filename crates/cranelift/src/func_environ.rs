@@ -1387,9 +1387,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         global_type: pointer_type,
                         readonly: true,
                     });
-                    let base_offset = i32::from(self.offsets.vmmemory_definition_base());
+                    let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                     let current_length_offset =
-                        i32::from(self.offsets.vmmemory_definition_current_length());
+                        i32::from(self.offsets.ptr.vmmemory_definition_current_length());
                     (memory, base_offset, current_length_offset)
                 } else {
                     let owned_index = self.module.owned_memory_index(def_index);
@@ -1410,9 +1410,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     global_type: pointer_type,
                     readonly: true,
                 });
-                let base_offset = i32::from(self.offsets.vmmemory_definition_base());
+                let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                 let current_length_offset =
-                    i32::from(self.offsets.vmmemory_definition_current_length());
+                    i32::from(self.offsets.ptr.vmmemory_definition_current_length());
                 (memory, base_offset, current_length_offset)
             }
         };
@@ -1726,7 +1726,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         pos.ins()
                             .load(pointer_type, ir::MemFlags::trusted(), base, offset);
                     let vmmemory_definition_offset =
-                        i64::from(self.offsets.vmmemory_definition_current_length());
+                        i64::from(self.offsets.ptr.vmmemory_definition_current_length());
                     let vmmemory_definition_ptr =
                         pos.ins().iadd_imm(vmmemory_ptr, vmmemory_definition_offset);
                     // This atomic access of the
@@ -1758,7 +1758,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         .load(pointer_type, ir::MemFlags::trusted(), base, offset);
                 if is_shared {
                     let vmmemory_definition_offset =
-                        i64::from(self.offsets.vmmemory_definition_current_length());
+                        i64::from(self.offsets.ptr.vmmemory_definition_current_length());
                     let vmmemory_definition_ptr =
                         pos.ins().iadd_imm(vmmemory_ptr, vmmemory_definition_offset);
                     pos.ins().atomic_load(
@@ -1771,7 +1771,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         pointer_type,
                         ir::MemFlags::trusted(),
                         vmmemory_ptr,
-                        i32::from(self.offsets.vmmemory_definition_current_length()),
+                        i32::from(self.offsets.ptr.vmmemory_definition_current_length()),
                     )
                 }
             }

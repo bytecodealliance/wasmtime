@@ -216,6 +216,13 @@ impl BlockLoweringOrder {
     pub fn new(f: &Function) -> BlockLoweringOrder {
         trace!("BlockLoweringOrder: function body {:?}", f);
 
+        // Make sure that we have an entry block, and the entry block is
+        // not marked as cold. (The verifier ensures this as well, but
+        // the user may not have run the verifier, and this property is
+        // critical to avoid a miscompile, so we assert it here too.)
+        let entry = f.layout.entry_block().expect("Must have entry block");
+        assert!(!f.layout.is_cold(entry));
+
         // Step 1: compute the in-edge and out-edge count of every block.
         let mut block_in_count = SecondaryMap::with_default(0);
         let mut block_out_count = SecondaryMap::with_default(0);
@@ -243,9 +250,7 @@ impl BlockLoweringOrder {
             }
         }
         // Implicit input edge for entry block.
-        if let Some(entry) = f.layout.entry_block() {
-            block_in_count[entry] += 1;
-        }
+        block_in_count[entry] += 1;
 
         // All blocks ending in conditional branches or br_tables must
         // have edge-moves inserted at the top of successor blocks,
@@ -376,19 +381,20 @@ impl BlockLoweringOrder {
         let mut stack: SmallVec<[StackEntry; 16]> = SmallVec::new();
         let mut visited = FxHashSet::default();
         let mut postorder = vec![];
-        if let Some(entry) = f.layout.entry_block() {
-            // FIXME(cfallin): we might be able to use OrigAndEdge. Find a way
-            // to not special-case the entry block here.
-            let block = LoweredBlock::Orig { block: entry };
-            visited.insert(block);
-            let range = compute_lowered_succs(&mut lowered_succs, block);
-            lowered_succ_indices.resize(lowered_succs.len(), 0);
-            stack.push(StackEntry {
-                this: block,
-                succs: range,
-                cur_succ: range.1,
-            });
-        }
+
+        // Add the entry block.
+        //
+        // FIXME(cfallin): we might be able to use OrigAndEdge. Find a
+        // way to not special-case the entry block here.
+        let block = LoweredBlock::Orig { block: entry };
+        visited.insert(block);
+        let range = compute_lowered_succs(&mut lowered_succs, block);
+        lowered_succ_indices.resize(lowered_succs.len(), 0);
+        stack.push(StackEntry {
+            this: block,
+            succs: range,
+            cur_succ: range.1,
+        });
 
         while !stack.is_empty() {
             let stack_entry = stack.last_mut().unwrap();
@@ -432,12 +438,19 @@ impl BlockLoweringOrder {
             lowered_order.push(block);
             lowered_succ_ranges.push(succ_range);
 
-            if block
-                .orig_block()
-                .map(|b| f.layout.is_cold(b))
-                .unwrap_or(false)
-            {
-                cold_blocks.insert(index);
+            match block {
+                LoweredBlock::Orig { block }
+                | LoweredBlock::OrigAndEdge { block, .. }
+                | LoweredBlock::EdgeAndOrig { block, .. } => {
+                    if f.layout.is_cold(block) {
+                        cold_blocks.insert(index);
+                    }
+                }
+                LoweredBlock::Edge { pred, succ, .. } => {
+                    if f.layout.is_cold(pred) || f.layout.is_cold(succ) {
+                        cold_blocks.insert(index);
+                    }
+                }
             }
         }
 

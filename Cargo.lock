@@ -573,6 +573,8 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-frontend",
  "cranelift-interpreter",
+ "cranelift-jit",
+ "cranelift-module",
  "cranelift-native",
  "cranelift-preopt",
  "cranelift-reader",
@@ -580,7 +582,6 @@ dependencies = [
  "filecheck",
  "gimli",
  "log",
- "memmap2",
  "num_cpus",
  "similar",
  "target-lexicon",
@@ -1081,6 +1082,15 @@ name = "encode_unicode"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f"
+
+[[package]]
+name = "encoding_rs"
+version = "0.8.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9852635589dc9f9ea1b6fe9f05b50ef208c85c834a562f0c6abb1c475736ec2b"
+dependencies = [
+ "cfg-if",
+]
 
 [[package]]
 name = "env_logger"
@@ -1601,9 +1611,9 @@ dependencies = [
 
 [[package]]
 name = "libm"
-version = "0.2.2"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33a33a362ce288760ec6a508b94caaec573ae7d3bbbd91b87aa0bad4456839db"
+checksum = "c7ce35d4899fa3c0558d4f5082c98927789a01024270711cf113999b66ced65a"
 
 [[package]]
 name = "linux-raw-sys"
@@ -3333,6 +3343,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "cfg-if",
+ "encoding_rs",
  "indexmap",
  "libc",
  "log",
@@ -3549,6 +3560,7 @@ dependencies = [
  "wasmparser",
  "wasmprinter",
  "wasmtime-environ",
+ "wat",
 ]
 
 [[package]]
@@ -3653,6 +3665,7 @@ dependencies = [
  "anyhow",
  "cc",
  "cfg-if",
+ "encoding_rs",
  "indexmap",
  "libc",
  "log",

@@ -83,6 +83,8 @@ pub fn differential_v8_execution(wasm: &[u8], config: &crate::generators::Config
             ValType::ExternRef => Val::ExternRef(None),
             _ => unimplemented!(),
         });
+        // See https://webassembly.github.io/spec/js-api/index.html#tojsvalue
+        // for how the Wasm-to-JS conversions are done.
         v8_params.push(match param {
             ValType::I32 | ValType::F32 | ValType::F64 => v8::Number::new(&mut scope, 0.0).into(),
             ValType::I64 => v8::BigInt::new_from_i64(&mut scope, 0).into(),
@@ -215,6 +217,9 @@ fn eval<'s>(
 /// Asserts that the wasmtime value `a` matches the v8 value `b`.
 ///
 /// For NaN values simply just asserts that they're both NaN.
+///
+/// See https://webassembly.github.io/spec/js-api/index.html#towebassemblyvalue
+/// for how the JS-to-Wasm conversions are done.
 fn assert_val_match(a: &Val, b: &v8::Local<'_, v8::Value>, scope: &mut v8::HandleScope<'_>) {
     match *a {
         Val::I32(wasmtime) => {

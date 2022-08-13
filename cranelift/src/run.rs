@@ -85,12 +85,11 @@ fn run_file_contents(file_contents: String) -> Result<()> {
         ..ParseOptions::default()
     };
     let test_file = parse_test(&file_contents, options)?;
-    let isa = create_target_isa(&test_file.isa_spec)?;
-    let mut compiler = SingleFunctionCompiler::new(isa);
     for (func, Details { comments, .. }) in test_file.functions {
         for comment in comments {
             if let Some(command) = parse_run_command(comment.text, &func.signature)? {
-                let compiled_fn = compiler.compile(func.clone())?;
+                let isa = create_target_isa(&test_file.isa_spec)?;
+                let compiled_fn = SingleFunctionCompiler::new(isa).compile(func.clone())?;
                 command
                     .run(|_, args| Ok(compiled_fn.call(args)))
                     .map_err(|s| anyhow::anyhow!("{}", s))?;

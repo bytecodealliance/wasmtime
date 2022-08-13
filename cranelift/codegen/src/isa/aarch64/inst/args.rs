@@ -752,6 +752,16 @@ impl VectorSize {
 
         (q, size)
     }
+
+    /// Return the encoding bit that is used by some floating-point SIMD
+    /// instructions for a particular operand size.
+    pub fn enc_float_size(&self) -> u32 {
+        match self.lane_size() {
+            ScalarSize::Size32 => 0b0,
+            ScalarSize::Size64 => 0b1,
+            size => panic!("Unsupported floating-point size for vector op: {:?}", size),
+        }
+    }
 }
 
 pub(crate) fn dynamic_to_fixed(ty: Type) -> Type {

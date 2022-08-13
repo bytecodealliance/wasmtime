@@ -134,20 +134,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         };
 
         for param in params {
-            // Validate "purpose".
-            match &param.purpose {
-                &ir::ArgumentPurpose::VMContext
-                | &ir::ArgumentPurpose::Normal
-                | &ir::ArgumentPurpose::StackLimit
-                | &ir::ArgumentPurpose::SignatureId
-                | &ir::ArgumentPurpose::StructReturn
-                | &ir::ArgumentPurpose::StructArgument(_) => {}
-                _ => panic!(
-                    "Unsupported argument purpose {:?} in signature: {:?}",
-                    param.purpose, params
-                ),
-            }
-
             assert!(
                 legal_type_for_machine(param.value_type),
                 "Invalid type for AArch64: {:?}",
@@ -157,6 +143,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             let (rcs, reg_types) = Inst::rc_for_type(param.value_type)?;
 
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
+                assert_eq!(args_or_rets, ArgsOrRets::Args);
                 let offset = next_stack as i64;
                 let size = size as u64;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
@@ -166,6 +153,24 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     offset,
                     size,
                     purpose: param.purpose,
+                });
+                continue;
+            }
+
+            if let ir::ArgumentPurpose::StructReturn = param.purpose {
+                // FIXME add assert_eq!(args_or_rets, ArgsOrRets::Args); once
+                // ensure_struct_return_ptr_is_returned is gone.
+                assert!(
+                    param.value_type == types::I64,
+                    "StructReturn must be a pointer sized integer"
+                );
+                ret.push(ABIArg::Slots {
+                    slots: smallvec![ABIArgSlot::Reg {
+                        reg: xreg(8).to_real_reg().unwrap(),
+                        ty: types::I64,
+                        extension: param.extension,
+                    },],
+                    purpose: ir::ArgumentPurpose::StructReturn,
                 });
                 continue;
             }

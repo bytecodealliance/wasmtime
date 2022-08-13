@@ -18,7 +18,7 @@ smallvec = "1.6.1"
 thiserror = "1.0.15"
 
 [target.x86_64-pc-windows-gnu.dependencies]
-libm = "0.2"
+libm = "0.2.4"
 
 [dev-dependencies]
 cranelift-frontend = { path = "../frontend", version = "0.88.0" }

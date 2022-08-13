@@ -8,6 +8,7 @@
 
 use arbitrary::{Arbitrary, Unstructured};
 use component_fuzz_util::{Declarations, EXPORT_FUNCTION, IMPORT_FUNCTION};
+use std::any::Any;
 use std::fmt::Debug;
 use std::ops::ControlFlow;
 use wasmtime::component::{self, Component, Lift, Linker, Lower, Val};
@@ -141,25 +142,29 @@ macro_rules! define_static_api_test {
             let mut config = Config::new();
             config.wasm_component_model(true);
             let engine = Engine::new(&config).unwrap();
-            let component = Component::new(
-                &engine,
-                declarations.make_component().as_bytes()
-            ).unwrap();
+            let wat = declarations.make_component();
+            let wat = wat.as_bytes();
+            crate::oracles::log_wasm(wat);
+            let component = Component::new(&engine, wat).unwrap();
             let mut linker = Linker::new(&engine);
             linker
                 .root()
                 .func_wrap(
                     IMPORT_FUNCTION,
-                    |cx: StoreContextMut<'_, ($(Option<$param>,)* Option<R>)>,
+                    |cx: StoreContextMut<'_, Box<dyn Any>>,
                     $($param_name: $param,)*|
                     {
-                        let ($($param_expected_name,)* result) = cx.data();
-                        $(assert_eq!($param_name, *$param_expected_name.as_ref().unwrap());)*
-                        Ok(result.as_ref().unwrap().clone())
+                        log::trace!("received parameters {:?}", ($(&$param_name,)*));
+                        let data: &($($param,)* R,) =
+                            cx.data().downcast_ref().unwrap();
+                        let ($($param_expected_name,)* result,) = data;
+                        $(assert_eq!($param_name, *$param_expected_name);)*
+                        log::trace!("returning result {:?}", result);
+                        Ok(result.clone())
                     },
                 )
                 .unwrap();
-            let mut store = Store::new(&engine, Default::default());
+            let mut store: Store<Box<dyn Any>> = Store::new(&engine, Box::new(()));
             let instance = linker.instantiate(&mut store, &component).unwrap();
             let func = instance
                 .get_typed_func::<($($param,)*), R, _>(&mut store, EXPORT_FUNCTION)
@@ -168,9 +173,17 @@ macro_rules! define_static_api_test {
             while input.arbitrary()? {
                 $(let $param_name = input.arbitrary::<$param>()?;)*
                 let result = input.arbitrary::<R>()?;
-                *store.data_mut() = ($(Some($param_name.clone()),)* Some(result.clone()));
-
-                assert_eq!(func.call(&mut store, ($($param_name,)*)).unwrap(), result);
+                *store.data_mut() = Box::new((
+                    $($param_name.clone(),)*
+                    result.clone(),
+                ));
+                log::trace!(
+                    "passing in parameters {:?}",
+                    ($(&$param_name,)*),
+                );
+                let actual = func.call(&mut store, ($($param_name,)*)).unwrap();
+                log::trace!("got result {:?}", actual);
+                assert_eq!(actual, result);
                 func.post_return(&mut store).unwrap();
             }
 

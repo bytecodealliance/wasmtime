@@ -1406,10 +1406,10 @@ impl<'a> Parser<'a> {
 
     // Parse a single argument type with flags.
     fn parse_abi_param(&mut self) -> ParseResult<AbiParam> {
-        // abi-param ::= * type { flag } [ argumentloc ]
+        // abi-param ::= * type { flag }
         let mut arg = AbiParam::new(self.match_type("expected parameter type")?);
 
-        // abi-param ::= type * { flag } [ argumentloc ]
+        // abi-param ::= type * { flag }
         while let Some(Token::Identifier(s)) = self.token() {
             match s {
                 "uext" => arg.extension = ArgumentExtension::Uext,
