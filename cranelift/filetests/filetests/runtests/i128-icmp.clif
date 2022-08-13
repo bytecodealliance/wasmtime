@@ -20,6 +20,9 @@ block0(v0: i128, v1: i128):
 ; run: %icmp_eq_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x00000000_00000001_00000000_00000001) == false
 ; run: %icmp_eq_i128(0x00000000_00000001_FFFFFFFF_FFFFFFFF, 0x00000000_00000001_00000000_00000001) == false
 
+; This is a regression test for aarch64, see: https://github.com/bytecodealliance/wasmtime/issues/4705
+; run: %icmp_eq_i128(36893488147419103231, 0) == false
+
 
 function %icmp_ne_i128(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):

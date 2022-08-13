@@ -1231,7 +1231,8 @@ pub(crate) fn lower_icmp(
             IntCC::Equal | IntCC::NotEqual => {
                 // eor     tmp1, lhs_lo, rhs_lo
                 // eor     tmp2, lhs_hi, rhs_hi
-                // adds    xzr, tmp1, tmp2
+                // orr     tmp1, tmp1, tmp2
+                // subs    tmp1, tmp1, xzr
                 // cset    dst, {eq, ne}
 
                 ctx.emit(Inst::AluRRR {
@@ -1249,11 +1250,18 @@ pub(crate) fn lower_icmp(
                     rm: rhs.regs()[1],
                 });
                 ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::AddS,
+                    alu_op: ALUOp::Orr,
                     size: OperandSize::Size64,
-                    rd: writable_zero_reg(),
+                    rd: tmp1,
                     rn: tmp1.to_reg(),
                     rm: tmp2.to_reg(),
+                });
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::SubS,
+                    size: OperandSize::Size64,
+                    rd: tmp1,
+                    rn: tmp1.to_reg(),
+                    rm: zero_reg(),
                 });
                 cond
             }

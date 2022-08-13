@@ -22,7 +22,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   eor x10, x0, x2
 ;   eor x12, x1, x3
-;   adds xzr, x10, x12
+;   orr x10, x10, x12
+;   subs x10, x10, xzr
 ;   cset x0, eq
 ;   ret
 
@@ -35,7 +36,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   eor x10, x0, x2
 ;   eor x12, x1, x3
-;   adds xzr, x10, x12
+;   orr x10, x10, x12
+;   subs x10, x10, xzr
 ;   cset x0, ne
 ;   ret
 
@@ -280,7 +282,8 @@ block1:
 ; block0:
 ;   eor x8, x0, x2
 ;   eor x10, x1, x3
-;   adds xzr, x8, x10
+;   orr x8, x8, x10
+;   subs x8, x8, xzr
 ;   b.eq label1 ; b label2
 ; block1:
 ;   b label3
@@ -301,7 +304,8 @@ block1:
 ; block0:
 ;   eor x8, x0, x2
 ;   eor x10, x1, x3
-;   adds xzr, x8, x10
+;   orr x8, x8, x10
+;   subs x8, x8, xzr
 ;   b.ne label1 ; b label2
 ; block1:
 ;   b label3
