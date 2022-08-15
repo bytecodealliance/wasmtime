@@ -100,6 +100,24 @@ impl CondCode for IntCC {
 }
 
 impl IntCC {
+    /// Returns a slice with all possible [IntCC] values.
+    pub fn all() -> &'static [IntCC] {
+        &[
+            IntCC::Equal,
+            IntCC::NotEqual,
+            IntCC::SignedLessThan,
+            IntCC::SignedGreaterThanOrEqual,
+            IntCC::SignedGreaterThan,
+            IntCC::SignedLessThanOrEqual,
+            IntCC::UnsignedLessThan,
+            IntCC::UnsignedGreaterThanOrEqual,
+            IntCC::UnsignedGreaterThan,
+            IntCC::UnsignedLessThanOrEqual,
+            IntCC::Overflow,
+            IntCC::NotOverflow,
+        ]
+    }
+
     /// Get the corresponding IntCC with the equal component removed.
     /// For conditions without a zero component, this is a no-op.
     pub fn without_equal(self) -> Self {
@@ -227,6 +245,28 @@ pub enum FloatCC {
     UnorderedOrGreaterThanOrEqual,
 }
 
+impl FloatCC {
+    /// Returns a slice with all possible [FloatCC] values.
+    pub fn all() -> &'static [FloatCC] {
+        &[
+            FloatCC::Ordered,
+            FloatCC::Unordered,
+            FloatCC::Equal,
+            FloatCC::NotEqual,
+            FloatCC::OrderedNotEqual,
+            FloatCC::UnorderedOrEqual,
+            FloatCC::LessThan,
+            FloatCC::LessThanOrEqual,
+            FloatCC::GreaterThan,
+            FloatCC::GreaterThanOrEqual,
+            FloatCC::UnorderedOrLessThan,
+            FloatCC::UnorderedOrLessThanOrEqual,
+            FloatCC::UnorderedOrGreaterThan,
+            FloatCC::UnorderedOrGreaterThanOrEqual,
+        ]
+    }
+}
+
 impl CondCode for FloatCC {
     fn inverse(self) -> Self {
         use self::FloatCC::*;
@@ -320,24 +360,9 @@ mod tests {
     use super::*;
     use std::string::ToString;
 
-    static INT_ALL: [IntCC; 12] = [
-        IntCC::Equal,
-        IntCC::NotEqual,
-        IntCC::SignedLessThan,
-        IntCC::SignedGreaterThanOrEqual,
-        IntCC::SignedGreaterThan,
-        IntCC::SignedLessThanOrEqual,
-        IntCC::UnsignedLessThan,
-        IntCC::UnsignedGreaterThanOrEqual,
-        IntCC::UnsignedGreaterThan,
-        IntCC::UnsignedLessThanOrEqual,
-        IntCC::Overflow,
-        IntCC::NotOverflow,
-    ];
-
     #[test]
     fn int_inverse() {
-        for r in &INT_ALL {
+        for r in IntCC::all() {
             let cc = *r;
             let inv = cc.inverse();
             assert!(cc != inv);
@@ -347,7 +372,7 @@ mod tests {
 
     #[test]
     fn int_reverse() {
-        for r in &INT_ALL {
+        for r in IntCC::all() {
             let cc = *r;
             let rev = cc.reverse();
             assert_eq!(rev.reverse(), cc);
@@ -356,33 +381,16 @@ mod tests {
 
     #[test]
     fn int_display() {
-        for r in &INT_ALL {
+        for r in IntCC::all() {
             let cc = *r;
             assert_eq!(cc.to_string().parse(), Ok(cc));
         }
         assert_eq!("bogus".parse::<IntCC>(), Err(()));
     }
 
-    static FLOAT_ALL: [FloatCC; 14] = [
-        FloatCC::Ordered,
-        FloatCC::Unordered,
-        FloatCC::Equal,
-        FloatCC::NotEqual,
-        FloatCC::OrderedNotEqual,
-        FloatCC::UnorderedOrEqual,
-        FloatCC::LessThan,
-        FloatCC::LessThanOrEqual,
-        FloatCC::GreaterThan,
-        FloatCC::GreaterThanOrEqual,
-        FloatCC::UnorderedOrLessThan,
-        FloatCC::UnorderedOrLessThanOrEqual,
-        FloatCC::UnorderedOrGreaterThan,
-        FloatCC::UnorderedOrGreaterThanOrEqual,
-    ];
-
     #[test]
     fn float_inverse() {
-        for r in &FLOAT_ALL {
+        for r in FloatCC::all() {
             let cc = *r;
             let inv = cc.inverse();
             assert!(cc != inv);
@@ -392,7 +400,7 @@ mod tests {
 
     #[test]
     fn float_reverse() {
-        for r in &FLOAT_ALL {
+        for r in FloatCC::all() {
             let cc = *r;
             let rev = cc.reverse();
             assert_eq!(rev.reverse(), cc);
@@ -401,7 +409,7 @@ mod tests {
 
     #[test]
     fn float_display() {
-        for r in &FLOAT_ALL {
+        for r in FloatCC::all() {
             let cc = *r;
             assert_eq!(cc.to_string().parse(), Ok(cc));
         }

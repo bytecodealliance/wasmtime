@@ -9,7 +9,8 @@ use cranelift::codegen::ir::{
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
 use cranelift::prelude::{
-    EntityRef, ExtFuncData, InstBuilder, IntCC, JumpTableData, StackSlotData, StackSlotKind,
+    EntityRef, ExtFuncData, FloatCC, InstBuilder, IntCC, JumpTableData, StackSlotData,
+    StackSlotKind,
 };
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -107,6 +108,32 @@ fn insert_stack_store(
     let arg0 = builder.use_var(arg0);
 
     builder.ins().stack_store(arg0, slot, offset);
+    Ok(())
+}
+
+fn insert_cmp(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    opcode: Opcode,
+    args: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let lhs = fgen.get_variable_of_type(args[0])?;
+    let lhs = builder.use_var(lhs);
+
+    let rhs = fgen.get_variable_of_type(args[1])?;
+    let rhs = builder.use_var(rhs);
+
+    let res = if opcode == Opcode::Fcmp {
+        let cc = *fgen.u.choose(FloatCC::all())?;
+        builder.ins().fcmp(cc, lhs, rhs)
+    } else {
+        let cc = *fgen.u.choose(IntCC::all())?;
+        builder.ins().icmp(cc, lhs, rhs)
+    };
+
+    let var = fgen.get_variable_of_type(rets[0])?;
+    builder.def_var(var, res);
     Ok(())
 }
 
@@ -391,6 +418,17 @@ const OPCODE_SIGNATURES: &'static [(
     // Nearest
     (Opcode::Nearest, &[F32], &[F32], insert_opcode),
     (Opcode::Nearest, &[F64], &[F64], insert_opcode),
+    // Fcmp
+    (Opcode::Fcmp, &[F32, F32], &[B1], insert_cmp),
+    (Opcode::Fcmp, &[F64, F64], &[B1], insert_cmp),
+    // Icmp
+    (Opcode::Icmp, &[I8, I8], &[B1], insert_cmp),
+    (Opcode::Icmp, &[I16, I16], &[B1], insert_cmp),
+    (Opcode::Icmp, &[I32, I32], &[B1], insert_cmp),
+    (Opcode::Icmp, &[I64, I64], &[B1], insert_cmp),
+    // TODO: icmp of/nof broken for i128 on x86_64
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4406
+    // (Opcode::Icmp, &[I128, I128], &[B1], insert_cmp),
     // Stack Access
     (Opcode::StackStore, &[I8], &[], insert_stack_store),
     (Opcode::StackStore, &[I16], &[], insert_stack_store),
@@ -456,25 +494,6 @@ where
     fn generate_callconv(&mut self) -> Result<CallConv> {
         // TODO: Generate random CallConvs per target
         Ok(CallConv::SystemV)
-    }
-
-    fn generate_intcc(&mut self) -> Result<IntCC> {
-        Ok(*self.u.choose(
-            &[
-                IntCC::Equal,
-                IntCC::NotEqual,
-                IntCC::SignedLessThan,
-                IntCC::SignedGreaterThanOrEqual,
-                IntCC::SignedGreaterThan,
-                IntCC::SignedLessThanOrEqual,
-                IntCC::UnsignedLessThan,
-                IntCC::UnsignedGreaterThanOrEqual,
-                IntCC::UnsignedGreaterThan,
-                IntCC::UnsignedLessThanOrEqual,
-                IntCC::Overflow,
-                IntCC::NotOverflow,
-            ][..],
-        )?)
     }
 
     fn generate_type(&mut self) -> Result<Type> {
@@ -681,7 +700,7 @@ where
 
     fn generate_bricmp(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         let (block, args) = self.generate_target_block(builder)?;
-        let cond = self.generate_intcc()?;
+        let cond = *self.u.choose(IntCC::all())?;
 
         let bricmp_types = [
             I8, I16, I32,
