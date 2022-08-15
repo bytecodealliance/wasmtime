@@ -2092,7 +2092,7 @@ pub(crate) fn define(
             r#"
         Unsigned integer division by an immediate constant.
 
-        Same as `udiv`, but one operand is a sign extended 64 bit immediate constant.
+        Same as `udiv`, but one operand is a zero extended 64 bit immediate constant.
 
         This operation traps if the divisor is zero.
         "#,
@@ -2126,7 +2126,7 @@ pub(crate) fn define(
             r#"
         Unsigned integer remainder with immediate divisor.
 
-        Same as `urem`, but one operand is a sign extended 64 bit immediate constant.
+        Same as `urem`, but one operand is a zero extended 64 bit immediate constant.
 
         This operation traps if the divisor is zero.
         "#,
@@ -2562,7 +2562,7 @@ pub(crate) fn define(
             r#"
         Bitwise and with immediate.
 
-        Same as `band`, but one operand is a sign extended 64 bit immediate constant.
+        Same as `band`, but one operand is a zero extended 64 bit immediate constant.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2579,7 +2579,7 @@ pub(crate) fn define(
             r#"
         Bitwise or with immediate.
 
-        Same as `bor`, but one operand is a sign extended 64 bit immediate constant.
+        Same as `bor`, but one operand is a zero extended 64 bit immediate constant.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2596,7 +2596,7 @@ pub(crate) fn define(
             r#"
         Bitwise xor with immediate.
 
-        Same as `bxor`, but one operand is a sign extended 64 bit immediate constant.
+        Same as `bxor`, but one operand is a zero extended 64 bit immediate constant.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2646,7 +2646,7 @@ pub(crate) fn define(
             r#"
         Rotate left by immediate.
 
-        Same as `rotl`, but one operand is a sign extended 64 bit immediate constant.
+        Same as `rotl`, but one operand is a zero extended 64 bit immediate constant.
         "#,
             &formats.binary_imm64,
         )
@@ -2660,7 +2660,7 @@ pub(crate) fn define(
             r#"
         Rotate right by immediate.
 
-        Same as `rotr`, but one operand is a sign extended 64 bit immediate constant.
+        Same as `rotr`, but one operand is a zero extended 64 bit immediate constant.
         "#,
             &formats.binary_imm64,
         )
