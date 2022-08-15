@@ -553,6 +553,7 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
     }
 }
 
+#[derive(Default)]
 struct TypesBuilder<'a> {
     next: u32,
     worklist: Vec<(u32, &'a Type)>,
@@ -577,8 +578,8 @@ impl<'a> TypesBuilder<'a> {
             Type::Char => dst.push_str("char"),
             Type::String => dst.push_str("string"),
 
-            // Otherwise the items is deferred to get a type declaration to
-            // itself and it's referred to by index.
+            // Otherwise emit a reference to the type and remember to generate
+            // the corresponding type alias later.
             Type::List(_)
             | Type::Record(_)
             | Type::Tuple(_)
@@ -796,10 +797,7 @@ pub struct TestCase {
 impl TestCase {
     /// Generate a `Declarations` for this `TestCase` which may be used to build a component to execute the case.
     pub fn declarations(&self) -> Declarations {
-        let mut builder = TypesBuilder {
-            next: 0,
-            worklist: Vec::new(),
-        };
+        let mut builder = TypesBuilder::default();
 
         let mut params = String::new();
         for ty in self.params.iter() {
@@ -819,12 +817,12 @@ impl TestCase {
             type_decls.push(builder.write_decl(idx, ty));
         }
 
-        // Note that types are printed here in reverse order isnce they were
+        // Note that types are printed here in reverse order since they were
         // pushed onto `type_decls` as they were referenced meaning the last one
         // is the "base" one.
         let mut types = String::new();
-        for decl in type_decls.iter().rev() {
-            types.push_str(decl);
+        for decl in type_decls.into_iter().rev() {
+            types.push_str(&decl);
             types.push_str("\n");
         }
 
