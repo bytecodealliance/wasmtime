@@ -2157,6 +2157,8 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
 // Instructions: misc functions and external interface
 
 impl MachInst for Inst {
+    type ABIMachineSpec = X64ABIMachineSpec;
+
     fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>) {
         x64_get_operands(&self, collector)
     }
@@ -2460,7 +2462,7 @@ impl MachInstEmit for Inst {
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &dyn ABICallee<I = Inst>) -> Self {
+    fn new(abi: &Callee<X64ABIMachineSpec>) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,

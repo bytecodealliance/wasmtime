@@ -697,7 +697,7 @@ impl ABISig {
 }
 
 /// ABI object for a function body.
-pub struct ABICalleeImpl<M: ABIMachineSpec> {
+pub struct Callee<M: ABIMachineSpec> {
     /// CLIF-level signature, possibly normalized.
     ir_sig: ir::Signature,
     /// Signature: arg and retval regs.
@@ -772,7 +772,7 @@ fn get_special_purpose_param_register(
     }
 }
 
-impl<M: ABIMachineSpec> ABICalleeImpl<M> {
+impl<M: ABIMachineSpec> Callee<M> {
     /// Create a new body ABI instance.
     pub fn new(f: &ir::Function, isa: &dyn TargetIsa, isa_flags: &M::F) -> CodegenResult<Self> {
         trace!("ABI: func signature {:?}", f.signature);
@@ -1048,14 +1048,18 @@ fn ensure_struct_return_ptr_is_returned(sig: &ir::Signature) -> ir::Signature {
     sig
 }
 
-impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
-    type I = M::I;
-
-    fn signature(&self) -> &ir::Signature {
+/// ### Pre-Regalloc Functions
+///
+/// These methods of `Callee` may only be called before regalloc.
+impl<M: ABIMachineSpec> Callee<M> {
+    /// Access the (possibly legalized) signature.
+    pub fn signature(&self) -> &ir::Signature {
         &self.ir_sig
     }
 
-    fn temps_needed(&self) -> Vec<Type> {
+    /// Does the ABI-body code need temp registers (and if so, of what type)?
+    /// They will be provided to `init()` as the `temps` arg if so.
+    pub fn temps_needed(&self) -> Vec<Type> {
         let mut temp_tys = vec![];
         for arg in &self.sig.args {
             match arg {
@@ -1074,7 +1078,10 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         temp_tys
     }
 
-    fn init(&mut self, temps: Vec<Writable<Reg>>) {
+    /// Initialize. This is called after the Callee is constructed because it
+    /// may be provided with a vector of temp vregs, which can only be allocated
+    /// once the lowering context exists.
+    pub fn init(&mut self, temps: Vec<Writable<Reg>>) {
         let mut temps_iter = temps.into_iter();
         for arg in &self.sig.args {
             let temp = match arg {
@@ -1091,45 +1098,40 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         }
     }
 
-    fn accumulate_outgoing_args_size(&mut self, size: u32) {
+    /// Accumulate outgoing arguments.
+    ///
+    /// This ensures that at least `size` bytes are allocated in the prologue to
+    /// be available for use in function calls to hold arguments and/or return
+    /// values. If this function is called multiple times, the maximum of all
+    /// `size` values will be available.
+    pub fn accumulate_outgoing_args_size(&mut self, size: u32) {
         if size > self.outgoing_args_size {
             self.outgoing_args_size = size;
         }
     }
 
-    fn flags(&self) -> &settings::Flags {
-        &self.flags
-    }
-
-    fn call_conv(&self) -> isa::CallConv {
+    /// Get the calling convention implemented by this ABI object.
+    pub fn call_conv(&self) -> isa::CallConv {
         self.sig.call_conv
     }
 
-    fn num_args(&self) -> usize {
-        self.sig.args.len()
-    }
-
-    fn num_retvals(&self) -> usize {
-        self.sig.rets.len()
-    }
-
-    fn num_sized_stackslots(&self) -> usize {
-        self.sized_stackslots.len()
-    }
-
-    fn sized_stackslot_offsets(&self) -> &PrimaryMap<StackSlot, u32> {
+    /// The offsets of all sized stack slots (not spill slots) for debuginfo purposes.
+    pub fn sized_stackslot_offsets(&self) -> &PrimaryMap<StackSlot, u32> {
         &self.sized_stackslots
     }
 
-    fn dynamic_stackslot_offsets(&self) -> &PrimaryMap<DynamicStackSlot, u32> {
+    /// The offsets of all dynamic stack slots (not spill slots) for debuginfo purposes.
+    pub fn dynamic_stackslot_offsets(&self) -> &PrimaryMap<DynamicStackSlot, u32> {
         &self.dynamic_stackslots
     }
 
-    fn gen_copy_arg_to_regs(
+    /// Generate an instruction which copies an argument to a destination
+    /// register.
+    pub fn gen_copy_arg_to_regs(
         &self,
         idx: usize,
         into_regs: ValueRegs<Writable<Reg>>,
-    ) -> SmallInstVec<Self::I> {
+    ) -> SmallInstVec<M::I> {
         let mut insts = smallvec![];
         let mut copy_arg_slot_to_reg = |slot: &ABIArgSlot, into_reg: &Writable<Reg>| {
             match slot {
@@ -1219,15 +1221,19 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         insts
     }
 
-    fn arg_is_needed_in_body(&self, _idx: usize) -> bool {
+    /// Is the given argument needed in the body (as opposed to, e.g., serving
+    /// only as a special ABI-specific placeholder)? This controls whether
+    /// lowering will copy it to a virtual reg use by CLIF instructions.
+    pub fn arg_is_needed_in_body(&self, _idx: usize) -> bool {
         true
     }
 
-    fn gen_copy_regs_to_retval(
+    /// Generate an instruction which copies a source register to a return value slot.
+    pub fn gen_copy_regs_to_retval(
         &self,
         idx: usize,
         from_regs: ValueRegs<Writable<Reg>>,
-    ) -> SmallInstVec<Self::I> {
+    ) -> SmallInstVec<M::I> {
         let mut ret = smallvec![];
         let word_bits = M::word_bits() as u8;
         match &self.sig.rets[idx] {
@@ -1313,7 +1319,12 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         ret
     }
 
-    fn gen_retval_area_setup(&self) -> Option<Self::I> {
+    /// Generate any setup instruction needed to save values to the
+    /// return-value area. This is usually used when were are multiple return
+    /// values or an otherwise large return value that must be passed on the
+    /// stack; typically the ABI specifies an extra hidden argument that is a
+    /// pointer to that memory.
+    pub fn gen_retval_area_setup(&self) -> Option<M::I> {
         if let Some(i) = self.sig.stack_ret_arg {
             let insts = self.gen_copy_arg_to_regs(i, ValueRegs::one(self.ret_area_ptr.unwrap()));
             let inst = insts.into_iter().next().unwrap();
@@ -1329,7 +1340,8 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         }
     }
 
-    fn gen_ret(&self) -> Self::I {
+    /// Generate a return instruction.
+    pub fn gen_ret(&self) -> M::I {
         let mut rets = vec![];
         for ret in &self.sig.rets {
             match ret {
@@ -1348,21 +1360,13 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         M::gen_ret(self.setup_frame, &self.isa_flags, rets)
     }
 
-    fn set_num_spillslots(&mut self, slots: usize) {
-        self.spillslots = Some(slots);
-    }
-
-    fn set_clobbered(&mut self, clobbered: Vec<Writable<RealReg>>) {
-        self.clobbered = clobbered;
-    }
-
     /// Produce an instruction that computes a sized stackslot address.
-    fn sized_stackslot_addr(
+    pub fn sized_stackslot_addr(
         &self,
         slot: StackSlot,
         offset: u32,
         into_reg: Writable<Reg>,
-    ) -> Self::I {
+    ) -> M::I {
         // Offset from beginning of stackslot area, which is at nominal SP (see
         // [MemArg::NominalSPOffset] for more details on nominal SP tracking).
         let stack_off = self.sized_stackslots[slot] as i64;
@@ -1371,7 +1375,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     }
 
     /// Produce an instruction that computes a dynamic stackslot address.
-    fn dynamic_stackslot_addr(&self, slot: DynamicStackSlot, into_reg: Writable<Reg>) -> Self::I {
+    pub fn dynamic_stackslot_addr(&self, slot: DynamicStackSlot, into_reg: Writable<Reg>) -> M::I {
         let stack_off = self.dynamic_stackslots[slot] as i64;
         M::gen_get_stack_addr(
             StackAMode::NominalSPOffset(stack_off, I64X2XN),
@@ -1380,17 +1384,13 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         )
     }
 
-    fn dynamic_type_size(&self, ty: Type) -> u32 {
-        self.dynamic_type_sizes[&ty]
-    }
-
     /// Load from a spillslot.
-    fn load_spillslot(
+    pub fn load_spillslot(
         &self,
         slot: SpillSlot,
         ty: Type,
         into_regs: ValueRegs<Writable<Reg>>,
-    ) -> SmallInstVec<Self::I> {
+    ) -> SmallInstVec<M::I> {
         // Offset from beginning of spillslot area, which is at nominal SP + stackslots_size.
         let islot = slot.index() as i64;
         let spill_off = islot * M::word_bytes() as i64;
@@ -1401,12 +1401,12 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     }
 
     /// Store to a spillslot.
-    fn store_spillslot(
+    pub fn store_spillslot(
         &self,
         slot: SpillSlot,
         ty: Type,
         from_regs: ValueRegs<Reg>,
-    ) -> SmallInstVec<Self::I> {
+    ) -> SmallInstVec<M::I> {
         // Offset from beginning of spillslot area, which is at nominal SP + stackslots_size.
         let islot = slot.index() as i64;
         let spill_off = islot * M::word_bytes() as i64;
@@ -1415,11 +1415,30 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
 
         gen_store_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), from_regs, ty)
     }
+}
 
-    fn spillslots_to_stack_map(
+/// ### Post-Regalloc Functions
+///
+/// These methods of `Callee` may only be called after
+/// regalloc.
+impl<M: ABIMachineSpec> Callee<M> {
+    /// Update with the number of spillslots, post-regalloc.
+    pub fn set_num_spillslots(&mut self, slots: usize) {
+        self.spillslots = Some(slots);
+    }
+
+    /// Update with the clobbered registers, post-regalloc.
+    pub fn set_clobbered(&mut self, clobbered: Vec<Writable<RealReg>>) {
+        self.clobbered = clobbered;
+    }
+
+    /// Generate a stack map, given a list of spillslots and the emission state
+    /// at a given program point (prior to emission of the safepointing
+    /// instruction).
+    pub fn spillslots_to_stack_map(
         &self,
         slots: &[SpillSlot],
-        state: &<Self::I as MachInstEmit>::State,
+        state: &<M::I as MachInstEmit>::State,
     ) -> StackMap {
         let virtual_sp_offset = M::get_virtual_sp_offset_from_state(state);
         let nominal_sp_to_fp = M::get_nominal_sp_to_fp(state);
@@ -1446,7 +1465,13 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         StackMap::from_slice(&bits[..])
     }
 
-    fn gen_prologue(&mut self) -> SmallInstVec<Self::I> {
+    /// Generate a prologue, post-regalloc.
+    ///
+    /// This should include any stack frame or other setup necessary to use the
+    /// other methods (`load_arg`, `store_retval`, and spillslot accesses.)
+    /// `self` is mutable so that we can store information in it which will be
+    /// useful when creating the epilogue.
+    pub fn gen_prologue(&mut self) -> SmallInstVec<M::I> {
         let bytes = M::word_bytes();
         let total_stacksize = self.stackslots_size + bytes * self.spillslots.unwrap() as u32;
         let mask = M::stack_align(self.call_conv) - 1;
@@ -1523,7 +1548,12 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         insts
     }
 
-    fn gen_epilogue(&self) -> SmallInstVec<M::I> {
+    /// Generate an epilogue, post-regalloc.
+    ///
+    /// Note that this must generate the actual return instruction (rather than
+    /// emitting this in the lowering logic), because the epilogue code comes
+    /// before the return and the two are likely closely related.
+    pub fn gen_epilogue(&self) -> SmallInstVec<M::I> {
         let mut insts = smallvec![];
 
         // Restore clobbered registers.
@@ -1555,16 +1585,22 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         insts
     }
 
-    fn frame_size(&self) -> u32 {
+    /// Returns the full frame size for the given function, after prologue
+    /// emission has run. This comprises the spill slots and stack-storage slots
+    /// (but not storage for clobbered callee-save registers, arguments pushed
+    /// at callsites within this function, or other ephemeral pushes).
+    pub fn frame_size(&self) -> u32 {
         self.total_frame_size
             .expect("frame size not computed before prologue generation")
     }
 
-    fn stack_args_size(&self) -> u32 {
+    /// Returns the size of arguments expected on the stack.
+    pub fn stack_args_size(&self) -> u32 {
         self.sig.sized_stack_arg_space as u32
     }
 
-    fn get_spillslot_size(&self, rc: RegClass) -> u32 {
+    /// Get the spill-slot size.
+    pub fn get_spillslot_size(&self, rc: RegClass) -> u32 {
         let max = if self.dynamic_type_sizes.len() == 0 {
             16
         } else {
@@ -1578,16 +1614,18 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         M::get_number_of_spillslots_for_value(rc, max)
     }
 
-    fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg) -> Self::I {
-        let ty = Self::I::canonical_type_for_rc(Reg::from(from_reg).class());
+    /// Generate a spill.
+    pub fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg) -> M::I {
+        let ty = M::I::canonical_type_for_rc(Reg::from(from_reg).class());
         self.store_spillslot(to_slot, ty, ValueRegs::one(Reg::from(from_reg)))
             .into_iter()
             .next()
             .unwrap()
     }
 
-    fn gen_reload(&self, to_reg: Writable<RealReg>, from_slot: SpillSlot) -> Self::I {
-        let ty = Self::I::canonical_type_for_rc(to_reg.to_reg().class());
+    /// Generate a reload (fill).
+    pub fn gen_reload(&self, to_reg: Writable<RealReg>, from_slot: SpillSlot) -> M::I {
+        let ty = M::I::canonical_type_for_rc(to_reg.to_reg().class());
         self.load_spillslot(
             from_slot,
             ty,

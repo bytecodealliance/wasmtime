@@ -2,6 +2,7 @@
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::{types, ExternalName, Opcode, Type};
+use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
@@ -977,6 +978,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
 // Instructions: misc functions and external interface
 
 impl MachInst for Inst {
+    type ABIMachineSpec = S390xMachineDeps;
     type LabelUse = LabelUse;
 
     fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>) {
