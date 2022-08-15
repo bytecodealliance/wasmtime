@@ -14,7 +14,6 @@ use arrayvec::ArrayVec;
 use bumpalo::Bump;
 use core::hash::BuildHasherDefault;
 use smallvec::SmallVec;
-use std::vec::Vec;
 
 // A note on notation.  For the sake of clarity, this file uses the phrase
 // "formal parameters" to mean the `Value`s listed in the block head, and
@@ -221,24 +220,17 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
     let _tt = timing::remove_constant_phis();
     debug_assert!(domtree.is_valid());
 
-    // Get the blocks, in reverse postorder
-    let blocks_reverse_postorder = domtree
-        .cfg_postorder()
-        .into_iter()
-        .rev()
-        .collect::<Vec<_>>();
-
     // Phase 1 of 3: for each block, make a summary containing all relevant
     // info.  The solver will iterate over the summaries, rather than having
     // to inspect each instruction in each block.
     let bump =
-        Bump::with_capacity(blocks_reverse_postorder.len() * 4 * std::mem::size_of::<Value>());
+        Bump::with_capacity(domtree.cfg_postorder().len() * 4 * std::mem::size_of::<Value>());
     let mut summaries = FxHashMap::with_capacity_and_hasher(
-        blocks_reverse_postorder.len(),
+        domtree.cfg_postorder().len(),
         BuildHasherDefault::<FxHasher>::default(),
     );
 
-    for &&b in &blocks_reverse_postorder {
+    for b in domtree.cfg_postorder().iter().rev().copied() {
         let formals = func.dfg.block_params(b);
         let mut summary = BlockSummary::new(&bump, formals);
 
@@ -275,7 +267,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
     // Set up initial solver state
     let mut state = SolverState::new();
 
-    for &&b in &blocks_reverse_postorder {
+    for b in domtree.cfg_postorder().iter().rev().copied() {
         // For each block, get the formals
         if b == entry_block {
             continue;
@@ -294,7 +286,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
         iter_no += 1;
         let mut changed = false;
 
-        for &src in &blocks_reverse_postorder {
+        for src in domtree.cfg_postorder().iter().rev() {
             let mb_src_summary = summaries.get(src);
             // The src block might have no summary.  This means it has no
             // branches/jumps that carry parameters *and* it doesn't take any
