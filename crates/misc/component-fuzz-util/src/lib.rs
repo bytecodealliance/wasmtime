@@ -554,112 +554,136 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
     }
 }
 
-fn make_component_name(name_counter: &mut u32) -> String {
-    let name = format!("$Foo{name_counter}");
-    *name_counter += 1;
-    name
+#[derive(Default)]
+struct TypesBuilder<'a> {
+    next: u32,
+    worklist: Vec<(u32, &'a Type)>,
 }
 
-fn write_component_type(
-    ty: &Type,
-    f: &mut String,
-    name_counter: &mut u32,
-    declarations: &mut String,
-) {
-    match ty {
-        Type::Unit => f.push_str("unit"),
-        Type::Bool => f.push_str("bool"),
-        Type::S8 => f.push_str("s8"),
-        Type::U8 => f.push_str("u8"),
-        Type::S16 => f.push_str("s16"),
-        Type::U16 => f.push_str("u16"),
-        Type::S32 => f.push_str("s32"),
-        Type::U32 => f.push_str("u32"),
-        Type::S64 => f.push_str("s64"),
-        Type::U64 => f.push_str("u64"),
-        Type::Float32 => f.push_str("float32"),
-        Type::Float64 => f.push_str("float64"),
-        Type::Char => f.push_str("char"),
-        Type::String => f.push_str("string"),
-        Type::List(ty) => {
-            let mut case = String::new();
-            write_component_type(ty, &mut case, name_counter, declarations);
-            let name = make_component_name(name_counter);
-            write!(declarations, "(type {name} (list {case}))").unwrap();
-            f.push_str(&name);
-        }
-        Type::Record(types) => {
-            let mut fields = String::new();
-            for (index, ty) in types.iter().enumerate() {
-                write!(fields, r#" (field "f{index}" "#).unwrap();
-                write_component_type(ty, &mut fields, name_counter, declarations);
-                fields.push_str(")");
+impl<'a> TypesBuilder<'a> {
+    fn write_ref(&mut self, ty: &'a Type, dst: &mut String) {
+        match ty {
+            // Primitive types can be referenced directly
+            Type::Unit => dst.push_str("unit"),
+            Type::Bool => dst.push_str("bool"),
+            Type::S8 => dst.push_str("s8"),
+            Type::U8 => dst.push_str("u8"),
+            Type::S16 => dst.push_str("s16"),
+            Type::U16 => dst.push_str("u16"),
+            Type::S32 => dst.push_str("s32"),
+            Type::U32 => dst.push_str("u32"),
+            Type::S64 => dst.push_str("s64"),
+            Type::U64 => dst.push_str("u64"),
+            Type::Float32 => dst.push_str("float32"),
+            Type::Float64 => dst.push_str("float64"),
+            Type::Char => dst.push_str("char"),
+            Type::String => dst.push_str("string"),
+
+            // Otherwise emit a reference to the type and remember to generate
+            // the corresponding type alias later.
+            Type::List(_)
+            | Type::Record(_)
+            | Type::Tuple(_)
+            | Type::Variant(_)
+            | Type::Enum(_)
+            | Type::Union(_)
+            | Type::Option(_)
+            | Type::Expected { .. }
+            | Type::Flags(_) => {
+                let idx = self.next;
+                self.next += 1;
+                write!(dst, "$t{idx}").unwrap();
+                self.worklist.push((idx, ty));
             }
-            let name = make_component_name(name_counter);
-            write!(declarations, "(type {name} (record{fields}))").unwrap();
-            f.push_str(&name);
         }
-        Type::Tuple(types) => {
-            let mut fields = String::new();
-            for ty in types.0.iter() {
-                fields.push_str(" ");
-                write_component_type(ty, &mut fields, name_counter, declarations);
+    }
+
+    fn write_decl(&mut self, idx: u32, ty: &'a Type) -> String {
+        let mut decl = format!("(type $t{idx} ");
+        match ty {
+            Type::Unit
+            | Type::Bool
+            | Type::S8
+            | Type::U8
+            | Type::S16
+            | Type::U16
+            | Type::S32
+            | Type::U32
+            | Type::S64
+            | Type::U64
+            | Type::Float32
+            | Type::Float64
+            | Type::Char
+            | Type::String => unreachable!(),
+
+            Type::List(ty) => {
+                decl.push_str("(list ");
+                self.write_ref(ty, &mut decl);
+                decl.push_str(")");
             }
-            let name = make_component_name(name_counter);
-            write!(declarations, "(type {name} (tuple{fields}))").unwrap();
-            f.push_str(&name);
-        }
-        Type::Variant(types) => {
-            let mut cases = String::new();
-            for (index, ty) in types.0.iter().enumerate() {
-                write!(cases, r#" (case "C{index}" "#).unwrap();
-                write_component_type(ty, &mut cases, name_counter, declarations);
-                cases.push_str(")");
+            Type::Record(types) => {
+                decl.push_str("(record");
+                for (index, ty) in types.iter().enumerate() {
+                    write!(decl, r#" (field "f{index}" "#).unwrap();
+                    self.write_ref(ty, &mut decl);
+                    decl.push_str(")");
+                }
+                decl.push_str(")");
             }
-            let name = make_component_name(name_counter);
-            write!(declarations, "(type {name} (variant{cases}))").unwrap();
-            f.push_str(&name);
-        }
-        Type::Enum(count) => {
-            f.push_str("(enum");
-            for index in 0..count.0 {
-                write!(f, r#" "C{index}""#).unwrap();
+            Type::Tuple(types) => {
+                decl.push_str("(tuple");
+                for ty in types.iter() {
+                    decl.push_str(" ");
+                    self.write_ref(ty, &mut decl);
+                }
+                decl.push_str(")");
             }
-            f.push_str(")");
-        }
-        Type::Union(types) => {
-            let mut cases = String::new();
-            for ty in types.0.iter() {
-                cases.push_str(" ");
-                write_component_type(ty, &mut cases, name_counter, declarations);
+            Type::Variant(types) => {
+                decl.push_str("(variant");
+                for (index, ty) in types.iter().enumerate() {
+                    write!(decl, r#" (case "C{index}" "#).unwrap();
+                    self.write_ref(ty, &mut decl);
+                    decl.push_str(")");
+                }
+                decl.push_str(")");
             }
-            let name = make_component_name(name_counter);
-            write!(declarations, "(type {name} (union{cases}))").unwrap();
-            f.push_str(&name);
-        }
-        Type::Option(ty) => {
-            let mut case = String::new();
-            write_component_type(ty, &mut case, name_counter, declarations);
-            let name = make_component_name(name_counter);
-            write!(declarations, "(type {name} (option {case}))").unwrap();
-            f.push_str(&name);
-        }
-        Type::Expected { ok, err } => {
-            let mut cases = String::new();
-            write_component_type(ok, &mut cases, name_counter, declarations);
-            cases.push_str(" ");
-            write_component_type(err, &mut cases, name_counter, declarations);
-            let name = make_component_name(name_counter);
-            write!(declarations, "(type {name} (expected {cases}))").unwrap();
-            f.push_str(&name);
-        }
-        Type::Flags(count) => {
-            f.push_str("(flags");
-            for index in 0..count.0 {
-                write!(f, r#" "F{index}""#).unwrap();
+            Type::Enum(count) => {
+                decl.push_str("(enum");
+                for index in 0..count.0 {
+                    write!(decl, r#" "E{index}""#).unwrap();
+                }
+                decl.push_str(")");
             }
-            f.push_str(")");
+            Type::Union(types) => {
+                decl.push_str("(union");
+                for ty in types.iter() {
+                    decl.push_str(" ");
+                    self.write_ref(ty, &mut decl);
+                }
+                decl.push_str(")");
+            }
+            Type::Option(ty) => {
+                decl.push_str("(option ");
+                self.write_ref(ty, &mut decl);
+                decl.push_str(")");
+            }
+            Type::Expected { ok, err } => {
+                decl.push_str("(expected ");
+                self.write_ref(ok, &mut decl);
+                decl.push_str(" ");
+                self.write_ref(err, &mut decl);
+                decl.push_str(")");
+            }
+            Type::Flags(count) => {
+                decl.push_str("(flags");
+                for index in 0..count.0 {
+                    write!(decl, r#" "F{index}""#).unwrap();
+                }
+                decl.push_str(")");
+            }
         }
+        decl.push_str(")");
+        decl
     }
 }
 
@@ -774,34 +798,39 @@ pub struct TestCase {
 impl TestCase {
     /// Generate a `Declarations` for this `TestCase` which may be used to build a component to execute the case.
     pub fn declarations(&self) -> Declarations {
-        let mut types = String::new();
-        let name_counter = &mut 0;
+        let mut builder = TypesBuilder::default();
 
-        let params = self
-            .params
-            .iter()
-            .map(|ty| {
-                let mut tmp = String::new();
-                write_component_type(ty, &mut tmp, name_counter, &mut types);
-                format!("(param {tmp})")
-            })
-            .collect::<Box<[_]>>()
-            .join(" ")
-            .into();
-
-        let result = {
-            let mut tmp = String::new();
-            write_component_type(&self.result, &mut tmp, name_counter, &mut types);
-            format!("(result {tmp})")
+        let mut params = String::new();
+        for ty in self.params.iter() {
+            params.push_str(" (param ");
+            builder.write_ref(ty, &mut params);
+            params.push_str(")");
         }
-        .into();
+
+        let mut result = String::from("(result ");
+        builder.write_ref(&self.result, &mut result);
+        result.push_str(")");
 
         let import_and_export = make_import_and_export(&self.params, &self.result);
 
+        let mut type_decls = Vec::new();
+        while let Some((idx, ty)) = builder.worklist.pop() {
+            type_decls.push(builder.write_decl(idx, ty));
+        }
+
+        // Note that types are printed here in reverse order since they were
+        // pushed onto `type_decls` as they were referenced meaning the last one
+        // is the "base" one.
+        let mut types = String::new();
+        for decl in type_decls.into_iter().rev() {
+            types.push_str(&decl);
+            types.push_str("\n");
+        }
+
         Declarations {
             types: types.into(),
-            params,
-            result,
+            params: params.into(),
+            result: result.into(),
             import_and_export: import_and_export.into(),
             encoding1: self.encoding1,
             encoding2: self.encoding2,
