@@ -1942,7 +1942,7 @@ fn lower_insn_to_regs(
             assert_eq!(
                 ty,
                 types::I128,
-                "Iconcat not expected to be used for non-128-bit type"
+                "Isplit not expected to be used for non-128-bit type"
             );
             assert_eq!(ctx.output_ty(insn, 0), types::I64);
             assert_eq!(ctx.output_ty(insn, 1), types::I64);
