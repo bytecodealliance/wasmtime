@@ -766,13 +766,13 @@ impl Inst {
     /// same as the first register (already handled).
     fn produces_const(&self) -> bool {
         match self {
-            Self::AluRmiR { op, src2, dst, .. } => {
-                src2.clone().to_reg_mem_imm().to_reg() == Some(dst.to_reg().to_reg())
+            Self::AluRmiR { op, src1, src2, .. } => {
+                src2.clone().to_reg_mem_imm().to_reg() == Some(src1.to_reg())
                     && (*op == AluRmiROpcode::Xor || *op == AluRmiROpcode::Sub)
             }
 
-            Self::XmmRmR { op, src2, dst, .. } => {
-                src2.clone().to_reg_mem().to_reg() == Some(dst.to_reg().to_reg())
+            Self::XmmRmR { op, src1, src2, .. } => {
+                src2.clone().to_reg_mem().to_reg() == Some(src1.to_reg())
                     && (*op == SseOpcode::Xorps
                         || *op == SseOpcode::Xorpd
                         || *op == SseOpcode::Pxor
@@ -783,9 +783,13 @@ impl Inst {
             }
 
             Self::XmmRmRImm {
-                op, src2, dst, imm, ..
+                op,
+                src1,
+                src2,
+                imm,
+                ..
             } => {
-                src2.to_reg() == Some(dst.to_reg())
+                src2.to_reg() == Some(src1.clone())
                     && (*op == SseOpcode::Cmppd || *op == SseOpcode::Cmpps)
                     && *imm == FcmpImm::Equal.encode()
             }
