@@ -1433,7 +1433,7 @@ impl<M: ABIMachineSpec> AbiCallee<M> {
     }
 
     /// Generate a stack map, given a list of spillslots and the emission state
-    /// at a given program point (prior to emission fo the safepointing
+    /// at a given program point (prior to emission of the safepointing
     /// instruction).
     pub fn spillslots_to_stack_map(
         &self,

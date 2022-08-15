@@ -14,11 +14,11 @@ pub type SmallInstVec<I> = SmallVec<[I; 4]>;
 /// callsite. It will usually be computed from the called function's
 /// signature.
 ///
-/// Unlike `AbiCallee` above, methods on this trait are not invoked directly
-/// by the machine-independent code. Rather, the machine-specific lowering
-/// code will typically create an `ABICaller` when creating machine instructions
-/// for an IR call instruction inside `lower()`, directly emit the arg and
-/// and retval copies, and attach the register use/def info to the call.
+/// Unlike `AbiCallee`, methods on this trait are not invoked directly by the
+/// machine-independent code. Rather, the machine-specific lowering code will
+/// typically create an `ABICaller` when creating machine instructions for an IR
+/// call instruction inside `lower()`, directly emit the arg and and retval
+/// copies, and attach the register use/def info to the call.
 ///
 /// This trait is thus provided for convenience to the backends.
 pub trait ABICaller {
