@@ -15,8 +15,9 @@
 
 use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
+use crate::ir::immediates::Imm64;
 use crate::ir::types::{I128, I64};
-use crate::ir::{self, InstBuilder, InstructionData, MemFlags};
+use crate::ir::{self, InstBuilder, InstructionData, MemFlags, Value};
 use crate::isa::TargetIsa;
 
 mod globalvalue;
@@ -26,6 +27,16 @@ mod table;
 use self::globalvalue::expand_global_value;
 use self::heap::expand_heap_addr;
 use self::table::expand_table_addr;
+
+fn imm_const(pos: &mut FuncCursor, arg: Value, imm: Imm64) -> Value {
+    let ty = pos.func.dfg.value_type(arg);
+    if ty == I128 {
+        let imm = pos.ins().iconst(I64, imm);
+        pos.ins().sextend(I128, imm)
+    } else {
+        pos.ins().iconst(ty.lane_type(), imm)
+    }
+}
 
 /// Perform a simple legalization by expansion of the function, without
 /// platform-specific transforms.
@@ -158,37 +169,63 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                 } => expand_table_addr(isa, inst, &mut pos.func, table, arg, offset),
 
                 InstructionData::BinaryImm64 { opcode, arg, imm } => {
-                    let ty = pos.func.dfg.value_type(arg);
-                    let imm = if ty == I128 {
-                        let imm = pos.ins().iconst(I64, imm);
-                        pos.ins().sextend(I128, imm)
-                    } else {
-                        pos.ins().iconst(ty.lane_type(), imm)
-                    };
-
+                    let imm = imm_const(&mut pos, arg, imm);
                     let replace = pos.func.dfg.replace(inst);
                     match opcode {
                         // bitops
-                        ir::Opcode::BandImm => replace.band(arg, imm),
-                        ir::Opcode::BorImm => replace.bor(arg, imm),
-                        ir::Opcode::BxorImm => replace.bxor(arg, imm),
+                        ir::Opcode::BandImm => {
+                            replace.band(arg, imm);
+                        }
+                        ir::Opcode::BorImm => {
+                            replace.bor(arg, imm);
+                        }
+                        ir::Opcode::BxorImm => {
+                            replace.bxor(arg, imm);
+                        }
                         // bitshifting
-                        ir::Opcode::IshlImm => replace.ishl(arg, imm),
-                        ir::Opcode::RotlImm => replace.rotl(arg, imm),
-                        ir::Opcode::RotrImm => replace.rotr(arg, imm),
-                        ir::Opcode::SshrImm => replace.sshr(arg, imm),
-                        ir::Opcode::UshrImm => replace.ushr(arg, imm),
+                        ir::Opcode::IshlImm => {
+                            replace.ishl(arg, imm);
+                        }
+                        ir::Opcode::RotlImm => {
+                            replace.rotl(arg, imm);
+                        }
+                        ir::Opcode::RotrImm => {
+                            replace.rotr(arg, imm);
+                        }
+                        ir::Opcode::SshrImm => {
+                            replace.sshr(arg, imm);
+                        }
+                        ir::Opcode::UshrImm => {
+                            replace.ushr(arg, imm);
+                        }
                         // math
-                        ir::Opcode::IaddImm => replace.iadd(arg, imm),
-                        ir::Opcode::IrsubImm => replace.isub(imm, arg), // note: arg order reversed
-                        ir::Opcode::ImulImm => replace.imul(arg, imm),
-                        ir::Opcode::SdivImm => replace.sdiv(arg, imm),
-                        ir::Opcode::SremImm => replace.srem(arg, imm),
-                        ir::Opcode::UdivImm => replace.udiv(arg, imm),
-                        ir::Opcode::UremImm => replace.urem(arg, imm),
+                        ir::Opcode::IaddImm => {
+                            replace.iadd(arg, imm);
+                        }
+                        ir::Opcode::IrsubImm => {
+                            // note: arg order reversed
+                            replace.isub(imm, arg);
+                        }
+                        ir::Opcode::ImulImm => {
+                            replace.imul(arg, imm);
+                        }
+                        ir::Opcode::SdivImm => {
+                            replace.sdiv(arg, imm);
+                        }
+                        ir::Opcode::SremImm => {
+                            replace.srem(arg, imm);
+                        }
+                        ir::Opcode::UdivImm => {
+                            replace.udiv(arg, imm);
+                        }
+                        ir::Opcode::UremImm => {
+                            replace.urem(arg, imm);
+                        }
                         // comparisons
-                        ir::Opcode::IfcmpImm => replace.ifcmp(arg, imm),
-                        _ => unimplemented!(),
+                        ir::Opcode::IfcmpImm => {
+                            replace.ifcmp(arg, imm);
+                        }
+                        _ => prev_pos = pos.position(),
                     };
                 }
 
@@ -199,14 +236,7 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                     arg,
                     imm,
                 } => {
-                    let ty = pos.func.dfg.value_type(arg);
-                    let imm = if ty == I128 {
-                        let imm = pos.ins().iconst(I64, imm);
-                        pos.ins().sextend(I128, imm)
-                    } else {
-                        pos.ins().iconst(ty.lane_type(), imm)
-                    };
-
+                    let imm = imm_const(&mut pos, arg, imm);
                     pos.func.dfg.replace(inst).icmp(cond, arg, imm);
                 }
 
