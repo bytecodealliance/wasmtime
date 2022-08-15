@@ -7,6 +7,12 @@ criteria = "safe-to-deploy"
 version = "0.3.66"
 notes = "I am the author of this crate."
 
+[[audits.bumpalo]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+version = "3.9.1"
+notes = "I am the author of this crate."
+
 [[audits.cc]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -130,4 +136,3 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "1.0.47"
 notes = "The Bytecode Alliance is the author of this crate."
-
