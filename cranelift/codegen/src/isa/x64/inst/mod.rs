@@ -782,18 +782,6 @@ impl Inst {
                         || *op == SseOpcode::Pcmpeqq)
             }
 
-            Self::XmmRmRImm {
-                op,
-                src1,
-                src2,
-                imm,
-                ..
-            } => {
-                src2.to_reg() == Some(src1.clone())
-                    && (*op == SseOpcode::Cmppd || *op == SseOpcode::Cmpps)
-                    && *imm == FcmpImm::Equal.encode()
-            }
-
             _ => false,
         }
     }
