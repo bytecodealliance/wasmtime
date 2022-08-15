@@ -520,7 +520,8 @@
         (t VecExtendOp)
         (rd WritableReg)
         (rn Reg)
-        (high_half bool))
+        (high_half bool)
+        (lane_size ScalarSize))
 
        ;; Move vector element to another vector element.
        (VecMovElement
@@ -1067,18 +1068,10 @@
 ;; Type of vector element extensions.
 (type VecExtendOp
   (enum
-    ;; Signed extension of 8-bit elements
-    (Sxtl8)
-    ;; Signed extension of 16-bit elements
-    (Sxtl16)
-    ;; Signed extension of 32-bit elements
-    (Sxtl32)
-    ;; Unsigned extension of 8-bit elements
-    (Uxtl8)
-    ;; Unsigned extension of 16-bit elements
-    (Uxtl16)
-    ;; Unsigned extension of 32-bit elements
-    (Uxtl32)
+    ;; Signed extension
+    (Sxtl)
+    ;; Unsigned extension
+    (Uxtl)
 ))
 
 ;; A vector ALU operation.
@@ -1828,6 +1821,12 @@
             (_ Unit (emit (MInst.MovFromVecSigned dst rn idx size scalar_size))))
         dst))
 
+(decl fpu_move_from_vec (Reg u8 VectorSize) Reg)
+(rule (fpu_move_from_vec rn idx size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.FpuMoveFromVec dst rn idx size))))
+        dst))
+
 ;; Helper for emitting `MInst.Extend` instructions.
 (decl extend (Reg bool u8 u8) Reg)
 (rule (extend rn signed from_bits to_bits)
@@ -1840,6 +1839,13 @@
 (rule (fpu_extend src size)
       (let ((dst WritableReg (temp_writable_reg $F32X4))
             (_ Unit (emit (MInst.FpuExtend dst src size))))
+        dst))
+
+;; Helper for emitting `MInst.VecExtend` instructions.
+(decl vec_extend (VecExtendOp Reg bool ScalarSize) Reg)
+(rule (vec_extend op src high_half size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecExtend op dst src high_half size))))
         dst))
 
 ;; Helper for emitting `MInst.LoadAcquire` instructions.

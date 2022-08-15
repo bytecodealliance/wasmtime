@@ -60,9 +60,9 @@ block0(v0: i8x16, v1: i8x16):
 }
 
 ; block0:
-;   sxtl v4.8h, v0.8b
-;   sxtl2 v6.8h, v1.16b
-;   addp v0.8h, v4.8h, v6.8h
+;   sxtl v7.8h, v0.8b
+;   sxtl2 v16.8h, v1.16b
+;   addp v0.8h, v7.8h, v16.8h
 ;   ret
 
 function %fn6(i8x16, i8x16) -> i16x8 {
@@ -74,9 +74,9 @@ block0(v0: i8x16, v1: i8x16):
 }
 
 ; block0:
-;   uxtl v4.8h, v0.8b
-;   uxtl2 v6.8h, v1.16b
-;   addp v0.8h, v4.8h, v6.8h
+;   uxtl v7.8h, v0.8b
+;   uxtl2 v16.8h, v1.16b
+;   addp v0.8h, v7.8h, v16.8h
 ;   ret
 
 function %fn7(i8x16) -> i16x8 {
@@ -88,9 +88,9 @@ block0(v0: i8x16):
 }
 
 ; block0:
-;   uxtl v2.8h, v0.8b
-;   sxtl2 v4.8h, v0.16b
-;   addp v0.8h, v2.8h, v4.8h
+;   uxtl v5.8h, v0.8b
+;   sxtl2 v6.8h, v0.16b
+;   addp v0.8h, v5.8h, v6.8h
 ;   ret
 
 function %fn8(i8x16) -> i16x8 {
@@ -102,9 +102,9 @@ block0(v0: i8x16):
 }
 
 ; block0:
-;   sxtl v2.8h, v0.8b
-;   uxtl2 v4.8h, v0.16b
-;   addp v0.8h, v2.8h, v4.8h
+;   sxtl v5.8h, v0.8b
+;   uxtl2 v6.8h, v0.16b
+;   addp v0.8h, v5.8h, v6.8h
 ;   ret
 
 function %fn9(i8x8, i8x8) -> i8x8 {
@@ -155,5 +155,65 @@ block0(v0: i32x4, v1: i32x4):
 
 ; block0:
 ;   addp v0.4s, v0.4s, v1.4s
+;   ret
+
+function %fn15(i8x8, i8x8) -> i16x4 {
+block0(v0: i8x8, v1: i8x8):
+  v2 = swiden_low v0
+  v3 = swiden_high v1
+  v4 = iadd_pairwise v2, v3
+  return v4
+}
+
+; block0:
+;   sxtl v16.8h, v0.8b
+;   mov s7, v1.s[1]
+;   sxtl v17.8h, v7.8b
+;   addp v0.4h, v16.4h, v17.4h
+;   ret
+
+function %fn16(i8x8, i8x8) -> i16x4 {
+block0(v0: i8x8, v1: i8x8):
+  v2 = uwiden_low v0
+  v3 = uwiden_high v1
+  v4 = iadd_pairwise v2, v3
+  return v4
+}
+
+; block0:
+;   uxtl v16.8h, v0.8b
+;   mov s7, v1.s[1]
+;   uxtl v17.8h, v7.8b
+;   addp v0.4h, v16.4h, v17.4h
+;   ret
+
+function %fn17(i8x8) -> i16x4 {
+block0(v0: i8x8):
+  v1 = uwiden_low v0
+  v2 = swiden_high v0
+  v3 = iadd_pairwise v1, v2
+  return v3
+}
+
+; block0:
+;   uxtl v6.8h, v0.8b
+;   mov s5, v0.s[1]
+;   sxtl v7.8h, v5.8b
+;   addp v0.4h, v6.4h, v7.4h
+;   ret
+
+function %fn18(i8x8) -> i16x4 {
+block0(v0: i8x8):
+  v1 = swiden_low v0
+  v2 = uwiden_high v0
+  v3 = iadd_pairwise v1, v2
+  return v3
+}
+
+; block0:
+;   sxtl v6.8h, v0.8b
+;   mov s5, v0.s[1]
+;   uxtl v7.8h, v5.8b
+;   addp v0.4h, v6.4h, v7.4h
 ;   ret
 
