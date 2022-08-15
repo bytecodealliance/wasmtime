@@ -1,7 +1,7 @@
 use crate::Mmap;
 use anyhow::{Context, Result};
 use std::fs::File;
-use std::ops::{Deref, DerefMut, Range, RangeTo};
+use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -73,36 +73,25 @@ impl MmapVec {
         self.mmap.is_readonly()
     }
 
-    /// "Drains" leading bytes up to the end specified in `range` from this
-    /// `MmapVec`, returning a separately owned `MmapVec` which retains access
-    /// to the bytes.
+    /// Splits the collection into two at the given index.
     ///
-    /// This method is similar to the `Vec` type's `drain` method, except that
-    /// the return value is not an iterator but rather a new `MmapVec`. The
-    /// purpose of this method is the ability to split-off new `MmapVec` values
-    /// which are sub-slices of the original one.
-    ///
-    /// Once data has been drained from an `MmapVec` it is no longer accessible
-    /// from the original `MmapVec`, it's only accessible from the returned
-    /// `MmapVec`. In other words ownership of the drain'd bytes is returned
-    /// through the `MmapVec` return value.
-    ///
-    /// This `MmapVec` will shrink by `range.end` bytes, and it will only refer
-    /// to the bytes that come after the drain range.
+    /// Returns a separate `MmapVec` which shares the underlying mapping, but
+    /// only has access to elements in the range `[at, len)`. After the call,
+    /// the original `MmapVec` will be left with access to the elements in the
+    /// range `[0, at)`.
     ///
     /// This is an `O(1)` operation which does not involve copies.
-    pub fn drain(&mut self, range: RangeTo<usize>) -> MmapVec {
-        let amt = range.end;
-        assert!(amt <= (self.range.end - self.range.start));
+    pub fn split_off(&mut self, at: usize) -> MmapVec {
+        assert!(at <= self.range.len());
 
         // Create a new `MmapVec` which refers to the same underlying mmap, but
         // has a disjoint range from ours. Our own range is adjusted to be
         // disjoint just after `ret` is created.
         let ret = MmapVec {
             mmap: self.mmap.clone(),
-            range: self.range.start..self.range.start + amt,
+            range: at..self.range.end,
         };
-        self.range.start += amt;
+        self.range.end = self.range.start + at;
         return ret;
     }
 
@@ -173,29 +162,24 @@ mod tests {
     }
 
     #[test]
-    fn drain() {
-        let mut mmap = MmapVec::from_slice(&[1, 2, 3, 4]).unwrap();
-        assert_eq!(mmap.len(), 4);
-        assert!(mmap.drain(..0).is_empty());
-        assert_eq!(mmap.len(), 4);
-        let one = mmap.drain(..1);
-        assert_eq!(one.len(), 1);
-        assert_eq!(one[0], 1);
-        assert_eq!(mmap.len(), 3);
-        assert_eq!(&mmap[..], &[2, 3, 4]);
-        drop(one);
-        assert_eq!(mmap.len(), 3);
-
-        let two = mmap.drain(..2);
-        assert_eq!(two.len(), 2);
-        assert_eq!(two[0], 2);
-        assert_eq!(two[1], 3);
-        assert_eq!(mmap.len(), 1);
-        assert_eq!(mmap[0], 4);
-        drop(two);
-        assert!(mmap.drain(..0).is_empty());
-        assert!(mmap.drain(..1).len() == 1);
-        assert!(mmap.is_empty());
-        assert!(mmap.drain(..0).is_empty());
+    fn split_off() {
+        let mut vec = Vec::from([1, 2, 3, 4]);
+        let mut mmap = MmapVec::from_slice(&vec).unwrap();
+        assert_eq!(&mmap[..], &vec[..]);
+        // remove nothing; vec length remains 4
+        assert_eq!(&mmap.split_off(4)[..], &vec.split_off(4)[..]);
+        assert_eq!(&mmap[..], &vec[..]);
+        // remove 1 element; vec length is now 3
+        assert_eq!(&mmap.split_off(3)[..], &vec.split_off(3)[..]);
+        assert_eq!(&mmap[..], &vec[..]);
+        // remove 2 elements; vec length is now 1
+        assert_eq!(&mmap.split_off(1)[..], &vec.split_off(1)[..]);
+        assert_eq!(&mmap[..], &vec[..]);
+        // remove last element; vec length is now 0
+        assert_eq!(&mmap.split_off(0)[..], &vec.split_off(0)[..]);
+        assert_eq!(&mmap[..], &vec[..]);
+        // nothing left to remove, but that's okay
+        assert_eq!(&mmap.split_off(0)[..], &vec.split_off(0)[..]);
+        assert_eq!(&mmap[..], &vec[..]);
     }
 }
