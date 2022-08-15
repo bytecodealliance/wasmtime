@@ -674,6 +674,10 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::CSet { rd, .. } | &Inst::CSetm { rd, .. } => {
             collector.reg_def(rd);
         }
+        &Inst::CCmp { rn, rm, .. } => {
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+        }
         &Inst::CCmpImm { rn, .. } => {
             collector.reg_use(rn);
         }
@@ -1530,6 +1534,19 @@ impl Inst {
                 let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
                 let cond = cond.pretty_print(0, allocs);
                 format!("csetm {}, {}", rd, cond)
+            }
+            &Inst::CCmp {
+                size,
+                rn,
+                rm,
+                nzcv,
+                cond,
+            } => {
+                let rn = pretty_print_ireg(rn, size, allocs);
+                let rm = pretty_print_ireg(rm, size, allocs);
+                let nzcv = nzcv.pretty_print(0, allocs);
+                let cond = cond.pretty_print(0, allocs);
+                format!("ccmp {}, {}, {}, {}", rn, rm, nzcv, cond)
             }
             &Inst::CCmpImm {
                 size,
