@@ -621,7 +621,7 @@ pub struct EmitState {
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &AbiCallee<AArch64MachineDeps>) -> Self {
+    fn new(abi: &Callee<AArch64MachineDeps>) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,

@@ -60,7 +60,7 @@ impl AArch64Backend {
         flags: shared_settings::Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(flags.clone());
-        let abi = abi::AArch64AbiCallee::new(func, self, &self.isa_flags)?;
+        let abi = abi::AArch64Callee::new(func, self, &self.isa_flags)?;
         compile::compile::<AArch64Backend>(func, self, abi, &self.machine_env, emit_info)
     }
 }

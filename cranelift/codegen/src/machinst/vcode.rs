@@ -158,7 +158,7 @@ pub struct VCode<I: VCodeInst> {
     block_order: BlockLoweringOrder,
 
     /// ABI object.
-    abi: AbiCallee<I::ABIMachineSpec>,
+    abi: Callee<I::ABIMachineSpec>,
 
     /// Constant information used during code emission. This should be
     /// immutable across function compilations within the same module.
@@ -279,7 +279,7 @@ pub enum VCodeBuildDirection {
 impl<I: VCodeInst> VCodeBuilder<I> {
     /// Create a new VCodeBuilder.
     pub fn new(
-        abi: AbiCallee<I::ABIMachineSpec>,
+        abi: Callee<I::ABIMachineSpec>,
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
@@ -300,7 +300,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     /// Access the ABI object.
-    pub fn abi(&mut self) -> &mut AbiCallee<I::ABIMachineSpec> {
+    pub fn abi(&mut self) -> &mut Callee<I::ABIMachineSpec> {
         &mut self.vcode.abi
     }
 
@@ -625,7 +625,7 @@ fn is_reftype(ty: Type) -> bool {
 impl<I: VCodeInst> VCode<I> {
     /// New empty VCode.
     fn new(
-        abi: AbiCallee<I::ABIMachineSpec>,
+        abi: Callee<I::ABIMachineSpec>,
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,

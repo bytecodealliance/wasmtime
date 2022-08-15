@@ -21,7 +21,7 @@ use std::convert::TryFrom;
 static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
 
 /// Support for the x64 ABI from the callee side (within a function body).
-pub(crate) type X64AbiCallee = AbiCallee<X64ABIMachineSpec>;
+pub(crate) type X64Callee = Callee<X64ABIMachineSpec>;
 
 /// Support for the x64 ABI from the caller side (at a callsite).
 pub(crate) type X64ABICaller = ABICallerImpl<X64ABIMachineSpec>;

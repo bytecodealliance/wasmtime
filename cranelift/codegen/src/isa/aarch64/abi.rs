@@ -21,7 +21,7 @@ use smallvec::{smallvec, SmallVec};
 // these ABIs are very similar.
 
 /// Support for the AArch64 ABI from the callee side (within a function body).
-pub(crate) type AArch64AbiCallee = AbiCallee<AArch64MachineDeps>;
+pub(crate) type AArch64Callee = Callee<AArch64MachineDeps>;
 
 /// Support for the AArch64 ABI from the caller side (at a callsite).
 pub(crate) type AArch64ABICaller = ABICallerImpl<AArch64MachineDeps>;
