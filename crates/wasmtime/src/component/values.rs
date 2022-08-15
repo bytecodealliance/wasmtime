@@ -127,7 +127,7 @@ impl fmt::Debug for Record {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Tuple {
     ty: types::Tuple,
     values: Box<[Val]>,
@@ -163,6 +163,16 @@ impl Tuple {
     /// Returns the list of values that this tuple contains.
     pub fn values(&self) -> &[Val] {
         &self.values
+    }
+}
+
+impl fmt::Debug for Tuple {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut tuple = f.debug_tuple("");
+        for val in self.values() {
+            tuple.field(val);
+        }
+        tuple.finish()
     }
 }
 
@@ -227,7 +237,7 @@ impl fmt::Debug for Variant {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Enum {
     ty: types::Enum,
     discriminant: u32,
@@ -259,7 +269,13 @@ impl Enum {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+impl fmt::Debug for Enum {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.discriminant(), f)
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
 pub struct Union {
     ty: types::Union,
     discriminant: u32,
@@ -300,6 +316,14 @@ impl Union {
     /// Returns the payload value for this union.
     pub fn payload(&self) -> &Val {
         &self.value
+    }
+}
+
+impl fmt::Debug for Union {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple(&format!("U{}", self.discriminant()))
+            .field(self.payload())
+            .finish()
     }
 }
 
