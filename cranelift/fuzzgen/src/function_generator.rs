@@ -111,10 +111,10 @@ fn insert_stack_store(
     Ok(())
 }
 
-fn insert_fcmp(
+fn insert_cmp(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
-    _opcode: Opcode,
+    opcode: Opcode,
     args: &'static [Type],
     rets: &'static [Type],
 ) -> Result<()> {
@@ -124,9 +124,13 @@ fn insert_fcmp(
     let rhs = fgen.get_variable_of_type(args[1])?;
     let rhs = builder.use_var(rhs);
 
-    let cc = *fgen.u.choose(FloatCC::all())?;
-
-    let res = builder.ins().fcmp(cc, lhs, rhs);
+    let res = if opcode == Opcode::Fcmp {
+        let cc = *fgen.u.choose(FloatCC::all())?;
+        builder.ins().fcmp(cc, lhs, rhs)
+    } else {
+        let cc = *fgen.u.choose(IntCC::all())?;
+        builder.ins().icmp(cc, lhs, rhs)
+    };
 
     let var = fgen.get_variable_of_type(rets[0])?;
     builder.def_var(var, res);
@@ -415,8 +419,16 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Nearest, &[F32], &[F32], insert_opcode),
     (Opcode::Nearest, &[F64], &[F64], insert_opcode),
     // Fcmp
-    (Opcode::Fcmp, &[F32, F32], &[B1], insert_fcmp),
-    (Opcode::Fcmp, &[F64, F64], &[B1], insert_fcmp),
+    (Opcode::Fcmp, &[F32, F32], &[B1], insert_cmp),
+    (Opcode::Fcmp, &[F64, F64], &[B1], insert_cmp),
+    // Icmp
+    (Opcode::Icmp, &[I8, I8], &[B1], insert_cmp),
+    (Opcode::Icmp, &[I16, I16], &[B1], insert_cmp),
+    (Opcode::Icmp, &[I32, I32], &[B1], insert_cmp),
+    (Opcode::Icmp, &[I64, I64], &[B1], insert_cmp),
+    // TODO: icmp of/nof broken for i128 on x86_64
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4406
+    // (Opcode::Icmp, &[I128, I128], &[B1], insert_cmp),
     // Stack Access
     (Opcode::StackStore, &[I8], &[], insert_stack_store),
     (Opcode::StackStore, &[I16], &[], insert_stack_store),
@@ -688,7 +700,7 @@ where
 
     fn generate_bricmp(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         let (block, args) = self.generate_target_block(builder)?;
-        let cond = *fgen.u.choose(IntCC::all())?;
+        let cond = *self.u.choose(IntCC::all())?;
 
         let bricmp_types = [
             I8, I16, I32,

@@ -362,7 +362,7 @@ mod tests {
 
     #[test]
     fn int_inverse() {
-        for r in &IntCC::all() {
+        for r in IntCC::all() {
             let cc = *r;
             let inv = cc.inverse();
             assert!(cc != inv);
@@ -372,7 +372,7 @@ mod tests {
 
     #[test]
     fn int_reverse() {
-        for r in &IntCC::all() {
+        for r in IntCC::all() {
             let cc = *r;
             let rev = cc.reverse();
             assert_eq!(rev.reverse(), cc);
@@ -381,7 +381,7 @@ mod tests {
 
     #[test]
     fn int_display() {
-        for r in &IntCC::all() {
+        for r in IntCC::all() {
             let cc = *r;
             assert_eq!(cc.to_string().parse(), Ok(cc));
         }
@@ -390,7 +390,7 @@ mod tests {
 
     #[test]
     fn float_inverse() {
-        for r in &FloatCC::all() {
+        for r in FloatCC::all() {
             let cc = *r;
             let inv = cc.inverse();
             assert!(cc != inv);
@@ -400,7 +400,7 @@ mod tests {
 
     #[test]
     fn float_reverse() {
-        for r in &FloatCC::all() {
+        for r in FloatCC::all() {
             let cc = *r;
             let rev = cc.reverse();
             assert_eq!(rev.reverse(), cc);
@@ -409,7 +409,7 @@ mod tests {
 
     #[test]
     fn float_display() {
-        for r in &FloatCC::all() {
+        for r in FloatCC::all() {
             let cc = *r;
             assert_eq!(cc.to_string().parse(), Ok(cc));
         }
