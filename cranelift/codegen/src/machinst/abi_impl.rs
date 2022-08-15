@@ -1638,7 +1638,7 @@ impl<M: ABIMachineSpec> Callee<M> {
 }
 
 /// ABI object for a callsite.
-pub struct ABICallerImpl<M: ABIMachineSpec> {
+pub struct Caller<M: ABIMachineSpec> {
     /// The called function's signature.
     sig: ABISig,
     /// All uses for the callsite, i.e., function args.
@@ -1668,7 +1668,7 @@ pub enum CallDest {
     Reg(Reg),
 }
 
-impl<M: ABIMachineSpec> ABICallerImpl<M> {
+impl<M: ABIMachineSpec> Caller<M> {
     /// Create a callsite ABI object for a call directly to the specified function.
     pub fn from_func(
         sig: &ir::Signature,
@@ -1676,11 +1676,11 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
         dist: RelocDistance,
         caller_conv: isa::CallConv,
         flags: &settings::Flags,
-    ) -> CodegenResult<ABICallerImpl<M>> {
+    ) -> CodegenResult<Caller<M>> {
         let ir_sig = ensure_struct_return_ptr_is_returned(sig);
         let sig = ABISig::from_func_sig::<M>(&ir_sig, flags)?;
         let (uses, defs, clobbers) = sig.call_uses_defs_clobbers::<M>();
-        Ok(ABICallerImpl {
+        Ok(Caller {
             sig,
             uses,
             defs,
@@ -1701,11 +1701,11 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
         opcode: ir::Opcode,
         caller_conv: isa::CallConv,
         flags: &settings::Flags,
-    ) -> CodegenResult<ABICallerImpl<M>> {
+    ) -> CodegenResult<Caller<M>> {
         let ir_sig = ensure_struct_return_ptr_is_returned(sig);
         let sig = ABISig::from_func_sig::<M>(&ir_sig, flags)?;
         let (uses, defs, clobbers) = sig.call_uses_defs_clobbers::<M>();
-        Ok(ABICallerImpl {
+        Ok(Caller {
             sig,
             uses,
             defs,
@@ -1730,10 +1730,9 @@ fn adjust_stack_and_nominal_sp<M: ABIMachineSpec>(ctx: &mut Lower<M::I>, off: i3
     ctx.emit(M::gen_nominal_sp_adj(-amt));
 }
 
-impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
-    type I = M::I;
-
-    fn num_args(&self) -> usize {
+impl<M: ABIMachineSpec> Caller<M> {
+    /// Get the number of arguments expected.
+    pub fn num_args(&self) -> usize {
         if self.sig.stack_ret_arg.is_some() {
             self.sig.args.len() - 1
         } else {
@@ -1741,24 +1740,26 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         }
     }
 
-    fn accumulate_outgoing_args_size(&self, ctx: &mut Lower<Self::I>) {
-        let off = self.sig.sized_stack_arg_space + self.sig.sized_stack_ret_space;
-        ctx.abi().accumulate_outgoing_args_size(off as u32);
-    }
-
-    fn emit_stack_pre_adjust(&self, ctx: &mut Lower<Self::I>) {
+    /// Emit code to pre-adjust the stack, prior to argument copies and call.
+    pub fn emit_stack_pre_adjust(&self, ctx: &mut Lower<M::I>) {
         let off = self.sig.sized_stack_arg_space + self.sig.sized_stack_ret_space;
         adjust_stack_and_nominal_sp::<M>(ctx, off as i32, /* is_sub = */ true)
     }
 
-    fn emit_stack_post_adjust(&self, ctx: &mut Lower<Self::I>) {
+    /// Emit code to post-adjust the satck, after call return and return-value copies.
+    pub fn emit_stack_post_adjust(&self, ctx: &mut Lower<M::I>) {
         let off = self.sig.sized_stack_arg_space + self.sig.sized_stack_ret_space;
         adjust_stack_and_nominal_sp::<M>(ctx, off as i32, /* is_sub = */ false)
     }
 
-    fn emit_copy_regs_to_buffer(
+    /// Emit a copy of a large argument into its associated stack buffer, if any.
+    /// We must be careful to perform all these copies (as necessary) before setting
+    /// up the argument registers, since we may have to invoke memcpy(), which could
+    /// clobber any registers already set up.  The back-end should call this routine
+    /// for all arguments before calling emit_copy_regs_to_arg for all arguments.
+    pub fn emit_copy_regs_to_buffer(
         &self,
-        ctx: &mut Lower<Self::I>,
+        ctx: &mut Lower<M::I>,
         idx: usize,
         from_regs: ValueRegs<Reg>,
     ) {
@@ -1788,9 +1789,12 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         }
     }
 
-    fn emit_copy_regs_to_arg(
+    /// Emit a copy of an argument value from a source register, prior to the call.
+    /// For large arguments with associated stack buffer, this may load the address
+    /// of the buffer into the argument register, if required by the ABI.
+    pub fn emit_copy_regs_to_arg(
         &self,
-        ctx: &mut Lower<Self::I>,
+        ctx: &mut Lower<M::I>,
         idx: usize,
         from_regs: ValueRegs<Reg>,
     ) {
@@ -1871,9 +1875,10 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         }
     }
 
-    fn emit_copy_retval_to_regs(
+    /// Emit a copy a return value into a destination register, after the call returns.
+    pub fn emit_copy_retval_to_regs(
         &self,
-        ctx: &mut Lower<Self::I>,
+        ctx: &mut Lower<M::I>,
         idx: usize,
         into_regs: ValueRegs<Writable<Reg>>,
     ) {
@@ -1907,7 +1912,20 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         }
     }
 
-    fn emit_call(&mut self, ctx: &mut Lower<Self::I>) {
+    /// Emit the call itself.
+    ///
+    /// The returned instruction should have proper use- and def-sets according
+    /// to the argument registers, return-value registers, and clobbered
+    /// registers for this function signature in this ABI.
+    ///
+    /// (Arg registers are uses, and retval registers are defs. Clobbered
+    /// registers are also logically defs, but should never be read; their
+    /// values are "defined" (to the regalloc) but "undefined" in every other
+    /// sense.)
+    ///
+    /// This function should only be called once, as it is allowed to re-use
+    /// parts of the `Caller` object in emitting instructions.
+    pub fn emit_call(&mut self, ctx: &mut Lower<M::I>) {
         let (uses, defs) = (
             mem::replace(&mut self.uses, Default::default()),
             mem::replace(&mut self.defs, Default::default()),
