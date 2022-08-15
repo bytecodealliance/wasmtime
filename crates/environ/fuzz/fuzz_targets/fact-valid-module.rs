@@ -79,11 +79,11 @@ fn target(module: GenAdapterModule) {
         let wat = format!(
             "(component
                 {types}
-                (type (func {params} {result}))
+                (type (func {params} {results}))
             )",
             types = wat_decls.types,
             params = wat_decls.params,
-            result = wat_decls.result,
+            results = wat_decls.results,
         );
         let wasm = wat::parse_str(&wat).unwrap();
 

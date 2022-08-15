@@ -162,11 +162,12 @@ fn thread_options_through_inner() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker
         .root()
-        .func_wrap("hostfn", |param: u32| Ok(param.to_string()))?;
+        .func_wrap("hostfn", |param: u32| Ok((param.to_string(),)))?;
     let instance = linker.instantiate(&mut store, &component)?;
     let result = instance
-        .get_typed_func::<(u32,), WasmStr, _>(&mut store, "run")?
-        .call(&mut store, (43,))?;
+        .get_typed_func::<(u32,), (WasmStr,), _>(&mut store, "run")?
+        .call(&mut store, (43,))?
+        .0;
     assert_eq!(result.to_str(&store)?, "42");
     Ok(())
 }

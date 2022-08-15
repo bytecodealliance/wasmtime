@@ -17,7 +17,7 @@
 
 use crate::component::{
     CanonicalAbiInfo, ComponentTypesBuilder, InterfaceType, StringEncoding, TypeEnumIndex,
-    TypeExpectedIndex, TypeFlagsIndex, TypeInterfaceIndex, TypeOptionIndex, TypeRecordIndex,
+    TypeFlagsIndex, TypeInterfaceIndex, TypeOptionIndex, TypeRecordIndex, TypeResultIndex,
     TypeTupleIndex, TypeUnionIndex, TypeVariantIndex, VariantInfo, FLAG_MAY_ENTER, FLAG_MAY_LEAVE,
     MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
@@ -345,17 +345,19 @@ impl Compiler<'_, '_> {
         param_locals: &[(u32, ValType)],
         result_locals: &[(u32, ValType)],
     ) {
-        let src_ty = self.types[adapter.lift.ty].result;
-        let dst_ty = self.types[adapter.lower.ty].result;
+        let src_tys = &self.types[adapter.lift.ty].results;
+        let src_tys = src_tys.iter().map(|(_, ty)| *ty).collect::<Vec<_>>();
+        let dst_tys = &self.types[adapter.lower.ty].results;
+        let dst_tys = dst_tys.iter().map(|(_, ty)| *ty).collect::<Vec<_>>();
         let lift_opts = &adapter.lift.options;
         let lower_opts = &adapter.lower.options;
 
-        let src_flat = self
-            .types
-            .flatten_types(lift_opts, MAX_FLAT_RESULTS, [src_ty]);
-        let dst_flat = self
-            .types
-            .flatten_types(lower_opts, MAX_FLAT_RESULTS, [dst_ty]);
+        let src_flat =
+            self.types
+                .flatten_types(lift_opts, MAX_FLAT_RESULTS, src_tys.iter().copied());
+        let dst_flat =
+            self.types
+                .flatten_types(lower_opts, MAX_FLAT_RESULTS, dst_tys.iter().copied());
 
         let src = if src_flat.is_some() {
             Source::Stack(Stack {
@@ -367,7 +369,11 @@ impl Compiler<'_, '_> {
             // return value of the function itself. The imported function will
             // return a linear memory address at which the values can be read
             // from.
-            let align = self.types.align(lift_opts, &src_ty);
+            let align = src_tys
+                .iter()
+                .map(|t| self.types.align(lift_opts, t))
+                .max()
+                .unwrap_or(1);
             assert_eq!(result_locals.len(), 1);
             let (addr, ty) = result_locals[0];
             assert_eq!(ty, lift_opts.ptr());
@@ -380,13 +386,25 @@ impl Compiler<'_, '_> {
             // This is slightly different than `translate_params` where the
             // return pointer was provided by the caller of this function
             // meaning the last parameter local is a pointer into linear memory.
-            let align = self.types.align(lower_opts, &dst_ty);
+            let align = dst_tys
+                .iter()
+                .map(|t| self.types.align(lower_opts, t))
+                .max()
+                .unwrap_or(1);
             let (addr, ty) = *param_locals.last().expect("no retptr");
             assert_eq!(ty, lower_opts.ptr());
             Destination::Memory(self.memory_operand(lower_opts, TempLocal::new(addr, ty), align))
         };
 
-        self.translate(&src_ty, &src, &dst_ty, &dst);
+        let srcs = src
+            .record_field_srcs(self.types, src_tys.iter().copied())
+            .zip(src_tys.iter());
+        let dsts = dst
+            .record_field_dsts(self.types, dst_tys.iter().copied())
+            .zip(dst_tys.iter());
+        for ((src, src_ty), (dst, dst_ty)) in srcs.zip(dsts) {
+            self.translate(&src_ty, &src, &dst_ty, &dst);
+        }
     }
 
     fn translate(
@@ -406,8 +424,7 @@ impl Compiler<'_, '_> {
         // Classify the source type as "primitive" or not as a heuristic to
         // whether the translation should be split out into a helper function.
         let src_primitive = match src_ty {
-            InterfaceType::Unit
-            | InterfaceType::Bool
+            InterfaceType::Bool
             | InterfaceType::U8
             | InterfaceType::S8
             | InterfaceType::U16
@@ -429,7 +446,7 @@ impl Compiler<'_, '_> {
             | InterfaceType::Union(_)
             | InterfaceType::Enum(_)
             | InterfaceType::Option(_)
-            | InterfaceType::Expected(_) => false,
+            | InterfaceType::Result(_) => false,
         };
         let top_level = mem::replace(&mut self.top_level_translate, false);
 
@@ -440,10 +457,10 @@ impl Compiler<'_, '_> {
         // were translated inline then this could get arbitrarily large
         //
         //      (type $level0 (list u8))
-        //      (type $level1 (expected $level0 $level0))
-        //      (type $level2 (expected $level1 $level1))
-        //      (type $level3 (expected $level2 $level2))
-        //      (type $level4 (expected $level3 $level3))
+        //      (type $level1 (result $level0 $level0))
+        //      (type $level2 (result $level1 $level1))
+        //      (type $level3 (result $level2 $level2))
+        //      (type $level4 (result $level3 $level3))
         //      ;; ...
         //
         // If everything we inlined then translation of `$level0` would appear
@@ -505,7 +522,6 @@ impl Compiler<'_, '_> {
             }
         }
         match src_ty {
-            InterfaceType::Unit => self.translate_unit(src, dst_ty, dst),
             InterfaceType::Bool => self.translate_bool(src, dst_ty, dst),
             InterfaceType::U8 => self.translate_u8(src, dst_ty, dst),
             InterfaceType::S8 => self.translate_s8(src, dst_ty, dst),
@@ -527,16 +543,10 @@ impl Compiler<'_, '_> {
             InterfaceType::Union(u) => self.translate_union(*u, src, dst_ty, dst),
             InterfaceType::Enum(t) => self.translate_enum(*t, src, dst_ty, dst),
             InterfaceType::Option(t) => self.translate_option(*t, src, dst_ty, dst),
-            InterfaceType::Expected(t) => self.translate_expected(*t, src, dst_ty, dst),
+            InterfaceType::Result(t) => self.translate_result(*t, src, dst_ty, dst),
         }
 
         self.top_level_translate = top_level;
-    }
-
-    fn translate_unit(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
-        // TODO: subtyping
-        assert!(matches!(dst_ty, InterfaceType::Unit));
-        drop((src, dst));
     }
 
     fn translate_bool(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
@@ -1996,8 +2006,8 @@ impl Compiler<'_, '_> {
             _ => panic!("expected a variant"),
         };
 
-        let src_info = variant_info(self.types, src_ty.cases.iter().map(|c| c.ty));
-        let dst_info = variant_info(self.types, dst_ty.cases.iter().map(|c| c.ty));
+        let src_info = variant_info(self.types, src_ty.cases.iter().map(|c| c.ty.as_ref()));
+        let dst_info = variant_info(self.types, dst_ty.cases.iter().map(|c| c.ty.as_ref()));
 
         let iter = src_ty.cases.iter().enumerate().map(|(src_i, src_case)| {
             let dst_i = dst_ty
@@ -2010,9 +2020,9 @@ impl Compiler<'_, '_> {
             let dst_i = u32::try_from(dst_i).unwrap();
             VariantCase {
                 src_i,
-                src_ty: &src_case.ty,
+                src_ty: src_case.ty.as_ref(),
                 dst_i,
-                dst_ty: &dst_case.ty,
+                dst_ty: dst_case.ty.as_ref(),
             }
         });
         self.convert_variant(src, &src_info, dst, &dst_info, iter);
@@ -2031,8 +2041,8 @@ impl Compiler<'_, '_> {
             _ => panic!("expected an option"),
         };
         assert_eq!(src_ty.types.len(), dst_ty.types.len());
-        let src_info = variant_info(self.types, src_ty.types.iter().copied());
-        let dst_info = variant_info(self.types, dst_ty.types.iter().copied());
+        let src_info = variant_info(self.types, src_ty.types.iter().map(Some));
+        let dst_info = variant_info(self.types, dst_ty.types.iter().map(Some));
 
         self.convert_variant(
             src,
@@ -2049,8 +2059,8 @@ impl Compiler<'_, '_> {
                     VariantCase {
                         src_i: i,
                         dst_i: i,
-                        src_ty,
-                        dst_ty,
+                        src_ty: Some(src_ty),
+                        dst_ty: Some(dst_ty),
                     }
                 }),
         );
@@ -2068,10 +2078,9 @@ impl Compiler<'_, '_> {
             InterfaceType::Enum(t) => &self.types[*t],
             _ => panic!("expected an option"),
         };
-        let src_info = variant_info(self.types, src_ty.names.iter().map(|_| InterfaceType::Unit));
-        let dst_info = variant_info(self.types, dst_ty.names.iter().map(|_| InterfaceType::Unit));
+        let src_info = variant_info(self.types, src_ty.names.iter().map(|_| None));
+        let dst_info = variant_info(self.types, dst_ty.names.iter().map(|_| None));
 
-        let unit = &InterfaceType::Unit;
         self.convert_variant(
             src,
             &src_info,
@@ -2084,8 +2093,8 @@ impl Compiler<'_, '_> {
                 VariantCase {
                     src_i,
                     dst_i,
-                    src_ty: unit,
-                    dst_ty: unit,
+                    src_ty: None,
+                    dst_ty: None,
                 }
             }),
         );
@@ -2103,9 +2112,11 @@ impl Compiler<'_, '_> {
             InterfaceType::Option(t) => &self.types[*t].ty,
             _ => panic!("expected an option"),
         };
+        let src_ty = Some(src_ty);
+        let dst_ty = Some(dst_ty);
 
-        let src_info = variant_info(self.types, [InterfaceType::Unit, *src_ty]);
-        let dst_info = variant_info(self.types, [InterfaceType::Unit, *dst_ty]);
+        let src_info = variant_info(self.types, [None, src_ty]);
+        let dst_info = variant_info(self.types, [None, dst_ty]);
 
         self.convert_variant(
             src,
@@ -2116,8 +2127,8 @@ impl Compiler<'_, '_> {
                 VariantCase {
                     src_i: 0,
                     dst_i: 0,
-                    src_ty: &InterfaceType::Unit,
-                    dst_ty: &InterfaceType::Unit,
+                    src_ty: None,
+                    dst_ty: None,
                 },
                 VariantCase {
                     src_i: 1,
@@ -2130,21 +2141,21 @@ impl Compiler<'_, '_> {
         );
     }
 
-    fn translate_expected(
+    fn translate_result(
         &mut self,
-        src_ty: TypeExpectedIndex,
+        src_ty: TypeResultIndex,
         src: &Source<'_>,
         dst_ty: &InterfaceType,
         dst: &Destination,
     ) {
         let src_ty = &self.types[src_ty];
         let dst_ty = match dst_ty {
-            InterfaceType::Expected(t) => &self.types[*t],
-            _ => panic!("expected an expected"),
+            InterfaceType::Result(t) => &self.types[*t],
+            _ => panic!("expected a result"),
         };
 
-        let src_info = variant_info(self.types, [src_ty.ok, src_ty.err]);
-        let dst_info = variant_info(self.types, [dst_ty.ok, dst_ty.err]);
+        let src_info = variant_info(self.types, [src_ty.ok.as_ref(), src_ty.err.as_ref()]);
+        let dst_info = variant_info(self.types, [dst_ty.ok.as_ref(), dst_ty.err.as_ref()]);
 
         self.convert_variant(
             src,
@@ -2155,14 +2166,14 @@ impl Compiler<'_, '_> {
                 VariantCase {
                     src_i: 0,
                     dst_i: 0,
-                    src_ty: &src_ty.ok,
-                    dst_ty: &dst_ty.ok,
+                    src_ty: src_ty.ok.as_ref(),
+                    dst_ty: dst_ty.ok.as_ref(),
                 },
                 VariantCase {
                     src_i: 1,
                     dst_i: 1,
-                    src_ty: &src_ty.err,
-                    dst_ty: &dst_ty.err,
+                    src_ty: src_ty.err.as_ref(),
+                    dst_ty: dst_ty.err.as_ref(),
                 },
             ]
             .into_iter(),
@@ -2254,11 +2265,18 @@ impl Compiler<'_, '_> {
                 },
             }
 
-            // Translate the payload of this case using the various types from
-            // the dst/src.
             let src_payload = src.payload_src(self.types, src_info, src_ty);
             let dst_payload = dst.payload_dst(self.types, dst_info, dst_ty);
-            self.translate(src_ty, &src_payload, dst_ty, &dst_payload);
+
+            // Translate the payload of this case using the various types from
+            // the dst/src.
+            match (src_ty, dst_ty) {
+                (Some(src_ty), Some(dst_ty)) => {
+                    self.translate(src_ty, &src_payload, dst_ty, &dst_payload);
+                }
+                (None, None) => {}
+                _ => unimplemented!(),
+            }
 
             // If the results of this translation were placed on the stack then
             // the stack values may need to be padded with more zeros due to
@@ -2824,11 +2842,14 @@ impl<'a> Source<'a> {
         &self,
         types: &ComponentTypesBuilder,
         info: &VariantInfo,
-        case: &InterfaceType,
+        case: Option<&InterfaceType>,
     ) -> Source<'a> {
         match self {
             Source::Stack(s) => {
-                let flat_len = types.flat_types(case).unwrap().len();
+                let flat_len = match case {
+                    Some(case) => types.flat_types(case).unwrap().len(),
+                    None => 0,
+                };
                 Source::Stack(s.slice(1..s.locals.len()).slice(0..flat_len))
             }
             Source::Memory(mem) => {
@@ -2879,11 +2900,14 @@ impl<'a> Destination<'a> {
         &self,
         types: &ComponentTypesBuilder,
         info: &VariantInfo,
-        case: &InterfaceType,
+        case: Option<&InterfaceType>,
     ) -> Destination {
         match self {
             Destination::Stack(s, opts) => {
-                let flat_len = types.flat_types(case).unwrap().len();
+                let flat_len = match case {
+                    Some(case) => types.flat_types(case).unwrap().len(),
+                    None => 0,
+                };
                 Destination::Stack(&s[1..][..flat_len], opts)
             }
             Destination::Memory(mem) => {
@@ -2949,17 +2973,22 @@ impl<'a> Stack<'a> {
 
 struct VariantCase<'a> {
     src_i: u32,
-    src_ty: &'a InterfaceType,
+    src_ty: Option<&'a InterfaceType>,
     dst_i: u32,
-    dst_ty: &'a InterfaceType,
+    dst_ty: Option<&'a InterfaceType>,
 }
 
-fn variant_info<I>(types: &ComponentTypesBuilder, cases: I) -> VariantInfo
+fn variant_info<'a, I>(types: &ComponentTypesBuilder, cases: I) -> VariantInfo
 where
-    I: IntoIterator<Item = InterfaceType>,
+    I: IntoIterator<Item = Option<&'a InterfaceType>>,
     I::IntoIter: ExactSizeIterator,
 {
-    VariantInfo::new(cases.into_iter().map(|i| types.canonical_abi(&i))).0
+    VariantInfo::new(
+        cases
+            .into_iter()
+            .map(|ty| ty.map(|ty| types.canonical_abi(ty))),
+    )
+    .0
 }
 
 enum MallocSize {

@@ -1,5 +1,5 @@
 use crate::component::func::HostFunc;
-use crate::component::{Component, ComponentParams, Func, Lift, Lower, TypedFunc};
+use crate::component::{Component, ComponentNamedList, Func, Lift, Lower, TypedFunc};
 use crate::instance::OwnedImports;
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContextMut, Module, StoreContextMut};
@@ -90,8 +90,8 @@ impl Instance {
         name: &str,
     ) -> Result<TypedFunc<Params, Results>>
     where
-        Params: ComponentParams + Lower,
-        Results: Lift,
+        Params: ComponentNamedList + Lower,
+        Results: ComponentNamedList + Lift,
         S: AsContextMut,
     {
         let f = self
@@ -585,8 +585,8 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
     /// Same as [`Instance::get_typed_func`]
     pub fn typed_func<Params, Results>(&mut self, name: &str) -> Result<TypedFunc<Params, Results>>
     where
-        Params: ComponentParams + Lower,
-        Results: Lift,
+        Params: ComponentNamedList + Lower,
+        Results: ComponentNamedList + Lift,
     {
         let func = self
             .func(name)

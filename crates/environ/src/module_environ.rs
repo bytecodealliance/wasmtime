@@ -429,11 +429,11 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     match kind {
                         ElementKind::Active {
                             table_index,
-                            init_expr,
+                            offset_expr,
                         } => {
                             let table_index = TableIndex::from_u32(table_index);
-                            let mut init_expr_reader = init_expr.get_binary_reader();
-                            let (base, offset) = match init_expr_reader.read_operator()? {
+                            let mut offset_expr_reader = offset_expr.get_binary_reader();
+                            let (base, offset) = match offset_expr_reader.read_operator()? {
                                 Operator::I32Const { value } => (None, value as u32),
                                 Operator::GlobalGet { global_index } => {
                                     (Some(GlobalIndex::from_u32(global_index)), 0)
@@ -547,12 +547,12 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     match kind {
                         DataKind::Active {
                             memory_index,
-                            init_expr,
+                            offset_expr,
                         } => {
                             let range = mk_range(&mut self.result.total_data)?;
                             let memory_index = MemoryIndex::from_u32(memory_index);
-                            let mut init_expr_reader = init_expr.get_binary_reader();
-                            let (base, offset) = match init_expr_reader.read_operator()? {
+                            let mut offset_expr_reader = offset_expr.get_binary_reader();
+                            let (base, offset) = match offset_expr_reader.read_operator()? {
                                 Operator::I32Const { value } => (None, value as u64),
                                 Operator::I64Const { value } => (None, value as u64),
                                 Operator::GlobalGet { global_index } => {

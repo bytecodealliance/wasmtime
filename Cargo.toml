@@ -148,3 +148,12 @@ harness = false
 [[bench]]
 name = "call"
 harness = false
+
+[patch.crates-io]
+wasmparser = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'component-wast' }
+wasm-encoder = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'component-wast' }
+wasm-mutate = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'component-wast' }
+wasm-smith = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'component-wast' }
+wasmprinter = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'component-wast' }
+wast = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'component-wast' }
+wat = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'component-wast' }

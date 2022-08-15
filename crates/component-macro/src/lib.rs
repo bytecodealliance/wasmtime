@@ -753,11 +753,11 @@ impl Expander for ComponentTypeExpander {
             let name = rename.unwrap_or_else(|| Literal::string(&ident.to_string()));
 
             if let Some(ty) = ty {
-                abi_list.extend(quote!(<#ty as wasmtime::component::ComponentType>::ABI,));
+                abi_list.extend(quote!(Some(<#ty as wasmtime::component::ComponentType>::ABI),));
 
                 case_names_and_checks.extend(match style {
                     VariantStyle::Variant => {
-                        quote!((#name, <#ty as wasmtime::component::ComponentType>::typecheck),)
+                        quote!((#name, Some(<#ty as wasmtime::component::ComponentType>::typecheck)),)
                     }
                     VariantStyle::Union => {
                         quote!(<#ty as wasmtime::component::ComponentType>::typecheck,)
@@ -780,10 +780,10 @@ impl Expander for ComponentTypeExpander {
 
                 unique_types.insert(ty);
             } else {
-                abi_list.extend(quote!(<() as wasmtime::component::ComponentType>::ABI,));
+                abi_list.extend(quote!(None,));
                 case_names_and_checks.extend(match style {
                     VariantStyle::Variant => {
-                        quote!((#name, <() as wasmtime::component::ComponentType>::typecheck),)
+                        quote!((#name, None),)
                     }
                     VariantStyle::Union => {
                         quote!(<() as wasmtime::component::ComponentType>::typecheck,)
@@ -846,7 +846,7 @@ impl Expander for ComponentTypeExpander {
             }
 
             unsafe impl #impl_generics #internal::ComponentVariant for #name #ty_generics #where_clause {
-                const CASES: &'static [#internal::CanonicalAbiInfo] = &[#abi_list];
+                const CASES: &'static [Option<#internal::CanonicalAbiInfo>] = &[#abi_list];
             }
         };
 

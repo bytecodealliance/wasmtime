@@ -94,9 +94,9 @@ indices! {
     /// Index pointing to an option type in the component model (aka a
     /// `Option<T, E>`)
     pub struct TypeOptionIndex(u32);
-    /// Index pointing to an expected type in the component model (aka a
+    /// Index pointing to an result type in the component model (aka a
     /// `Result<T, E>`)
-    pub struct TypeExpectedIndex(u32);
+    pub struct TypeResultIndex(u32);
 
     // ========================================================================
     // Index types used to identify modules and components during compilation.
@@ -215,7 +215,7 @@ pub struct ComponentTypes {
     flags: PrimaryMap<TypeFlagsIndex, TypeFlags>,
     unions: PrimaryMap<TypeUnionIndex, TypeUnion>,
     options: PrimaryMap<TypeOptionIndex, TypeOption>,
-    expecteds: PrimaryMap<TypeExpectedIndex, TypeExpected>,
+    results: PrimaryMap<TypeResultIndex, TypeResult>,
 
     module_types: ModuleTypes,
 }
@@ -229,8 +229,6 @@ impl ComponentTypes {
     /// Returns the canonical ABI information about the specified type.
     pub fn canonical_abi(&self, ty: &InterfaceType) -> &CanonicalAbiInfo {
         match ty {
-            InterfaceType::Unit => &CanonicalAbiInfo::ZERO,
-
             InterfaceType::U8 | InterfaceType::S8 | InterfaceType::Bool => {
                 &CanonicalAbiInfo::SCALAR1
             }
@@ -255,7 +253,7 @@ impl ComponentTypes {
             InterfaceType::Enum(i) => &self[*i].abi,
             InterfaceType::Union(i) => &self[*i].abi,
             InterfaceType::Option(i) => &self[*i].abi,
-            InterfaceType::Expected(i) => &self[*i].abi,
+            InterfaceType::Result(i) => &self[*i].abi,
         }
     }
 }
@@ -284,7 +282,7 @@ impl_index! {
     impl Index<TypeFlagsIndex> for ComponentTypes { TypeFlags => flags }
     impl Index<TypeUnionIndex> for ComponentTypes { TypeUnion => unions }
     impl Index<TypeOptionIndex> for ComponentTypes { TypeOption => options }
-    impl Index<TypeExpectedIndex> for ComponentTypes { TypeExpected => expecteds }
+    impl Index<TypeResultIndex> for ComponentTypes { TypeResult => results }
 }
 
 // Additionally forward anything that can index `ModuleTypes` to `ModuleTypes`
@@ -315,7 +313,7 @@ pub struct ComponentTypesBuilder {
     flags: HashMap<TypeFlags, TypeFlagsIndex>,
     unions: HashMap<TypeUnion, TypeUnionIndex>,
     options: HashMap<TypeOption, TypeOptionIndex>,
-    expecteds: HashMap<TypeExpected, TypeExpectedIndex>,
+    results: HashMap<TypeResult, TypeResultIndex>,
 
     component_types: ComponentTypes,
     module_types: ModuleTypesBuilder,
@@ -637,7 +635,11 @@ impl ComponentTypesBuilder {
                 .iter()
                 .map(|(name, ty)| (name.map(|s| s.to_string()), self.valtype(ty)))
                 .collect(),
-            result: self.valtype(&ty.result),
+            results: ty
+                .results
+                .iter()
+                .map(|(name, ty)| (name.map(|s| s.to_string()), self.valtype(ty)))
+                .collect(),
         };
         self.add_func_type(ty)
     }
@@ -662,8 +664,8 @@ impl ComponentTypesBuilder {
             wasmparser::ComponentDefinedType::Option(e) => {
                 InterfaceType::Option(self.option_type(e))
             }
-            wasmparser::ComponentDefinedType::Expected { ok, error } => {
-                InterfaceType::Expected(self.expected_type(ok, error))
+            wasmparser::ComponentDefinedType::Result { ok, err } => {
+                InterfaceType::Result(self.result_type(ok, err))
             }
         }
     }
@@ -707,15 +709,14 @@ impl ComponentTypesBuilder {
                 assert!(case.refines.is_none());
                 VariantCase {
                     name: case.name.to_string(),
-                    ty: self.valtype(&case.ty),
+                    ty: case.ty.as_ref().map(|ty| self.valtype(ty)),
                 }
             })
             .collect::<Box<[_]>>();
-        let (info, abi) = VariantInfo::new(
-            cases
-                .iter()
-                .map(|c| self.component_types.canonical_abi(&c.ty)),
-        );
+        let (info, abi) = VariantInfo::new(cases.iter().map(|c| {
+            c.ty.as_ref()
+                .map(|ty| self.component_types.canonical_abi(ty))
+        }));
         self.add_variant_type(TypeVariant { cases, abi, info })
     }
 
@@ -742,11 +743,7 @@ impl ComponentTypesBuilder {
 
     fn enum_type(&mut self, variants: &[&str]) -> TypeEnumIndex {
         let names = variants.iter().map(|s| s.to_string()).collect::<Box<[_]>>();
-        let (info, abi) = VariantInfo::new(
-            names
-                .iter()
-                .map(|_| self.component_types.canonical_abi(&InterfaceType::Unit)),
-        );
+        let (info, abi) = VariantInfo::new(names.iter().map(|_| None));
         self.add_enum_type(TypeEnum { names, abi, info })
     }
 
@@ -755,32 +752,32 @@ impl ComponentTypesBuilder {
             .iter()
             .map(|ty| self.valtype(ty))
             .collect::<Box<[_]>>();
-        let (info, abi) =
-            VariantInfo::new(types.iter().map(|t| self.component_types.canonical_abi(t)));
+        let (info, abi) = VariantInfo::new(
+            types
+                .iter()
+                .map(|t| Some(self.component_types.canonical_abi(t))),
+        );
         self.add_union_type(TypeUnion { types, abi, info })
     }
 
     fn option_type(&mut self, ty: &wasmparser::ComponentValType) -> TypeOptionIndex {
         let ty = self.valtype(ty);
-        let (info, abi) = VariantInfo::new([
-            self.component_types.canonical_abi(&InterfaceType::Unit),
-            self.component_types.canonical_abi(&ty),
-        ]);
+        let (info, abi) = VariantInfo::new([None, Some(self.component_types.canonical_abi(&ty))]);
         self.add_option_type(TypeOption { ty, abi, info })
     }
 
-    fn expected_type(
+    fn result_type(
         &mut self,
-        ok: &wasmparser::ComponentValType,
-        err: &wasmparser::ComponentValType,
-    ) -> TypeExpectedIndex {
-        let ok = self.valtype(ok);
-        let err = self.valtype(err);
+        ok: &Option<wasmparser::ComponentValType>,
+        err: &Option<wasmparser::ComponentValType>,
+    ) -> TypeResultIndex {
+        let ok = ok.as_ref().map(|ty| self.valtype(ty));
+        let err = err.as_ref().map(|ty| self.valtype(ty));
         let (info, abi) = VariantInfo::new([
-            self.component_types.canonical_abi(&ok),
-            self.component_types.canonical_abi(&err),
+            ok.as_ref().map(|t| self.component_types.canonical_abi(t)),
+            err.as_ref().map(|t| self.component_types.canonical_abi(t)),
         ]);
-        self.add_expected_type(TypeExpected { ok, err, abi, info })
+        self.add_result_type(TypeResult { ok, err, abi, info })
     }
 
     /// Interns a new function type within this type information.
@@ -823,12 +820,12 @@ impl ComponentTypesBuilder {
         intern_and_fill_flat_types!(self, options, ty)
     }
 
-    /// Interns a new expected type within this type information.
-    pub fn add_expected_type(&mut self, ty: TypeExpected) -> TypeExpectedIndex {
-        intern_and_fill_flat_types!(self, expecteds, ty)
+    /// Interns a new result type within this type information.
+    pub fn add_result_type(&mut self, ty: TypeResult) -> TypeResultIndex {
+        intern_and_fill_flat_types!(self, results, ty)
     }
 
-    /// Interns a new expected type within this type information.
+    /// Interns a new type within this type information.
     pub fn add_interface_type(&mut self, ty: InterfaceType) -> TypeInterfaceIndex {
         intern(
             &mut self.interface_types,
@@ -849,7 +846,6 @@ impl ComponentTypesBuilder {
     /// in the canonical abi.
     pub fn flat_types(&self, ty: &InterfaceType) -> Option<FlatTypes<'_>> {
         match ty {
-            InterfaceType::Unit => Some(FlatTypes::EMPTY),
             InterfaceType::U8
             | InterfaceType::S8
             | InterfaceType::Bool
@@ -870,7 +866,7 @@ impl ComponentTypesBuilder {
             InterfaceType::Enum(i) => self.flat.enums[*i].as_flat_types(),
             InterfaceType::Union(i) => self.flat.unions[*i].as_flat_types(),
             InterfaceType::Option(i) => self.flat.options[*i].as_flat_types(),
-            InterfaceType::Expected(i) => self.flat.expecteds[*i].as_flat_types(),
+            InterfaceType::Result(i) => self.flat.results[*i].as_flat_types(),
         }
     }
 }
@@ -973,8 +969,8 @@ pub struct TypeFunc {
     /// The list of optionally named parameters for this function, and their
     /// types.
     pub params: Box<[(Option<String>, InterfaceType)]>,
-    /// The return value of this function.
-    pub result: InterfaceType,
+    /// The return values of this function.
+    pub results: Box<[(Option<String>, InterfaceType)]>,
 }
 
 /// All possible interface types that values can have.
@@ -986,7 +982,6 @@ pub struct TypeFunc {
 #[derive(Serialize, Deserialize, Copy, Clone, Hash, Eq, PartialEq, Debug)]
 #[allow(missing_docs)]
 pub enum InterfaceType {
-    Unit,
     Bool,
     S8,
     U8,
@@ -1008,13 +1003,12 @@ pub enum InterfaceType {
     Enum(TypeEnumIndex),
     Union(TypeUnionIndex),
     Option(TypeOptionIndex),
-    Expected(TypeExpectedIndex),
+    Result(TypeResultIndex),
 }
 
 impl From<&wasmparser::PrimitiveValType> for InterfaceType {
     fn from(ty: &wasmparser::PrimitiveValType) -> InterfaceType {
         match ty {
-            wasmparser::PrimitiveValType::Unit => InterfaceType::Unit,
             wasmparser::PrimitiveValType::Bool => InterfaceType::Bool,
             wasmparser::PrimitiveValType::S8 => InterfaceType::S8,
             wasmparser::PrimitiveValType::U8 => InterfaceType::U8,
@@ -1080,7 +1074,7 @@ const fn max(a: u32, b: u32) -> u32 {
 
 impl CanonicalAbiInfo {
     /// ABI information for zero-sized types.
-    pub const ZERO: CanonicalAbiInfo = CanonicalAbiInfo {
+    const ZERO: CanonicalAbiInfo = CanonicalAbiInfo {
         size32: 0,
         align32: 1,
         size64: 0,
@@ -1204,7 +1198,7 @@ impl CanonicalAbiInfo {
 
     fn variant<'a, I>(cases: I) -> CanonicalAbiInfo
     where
-        I: IntoIterator<Item = &'a CanonicalAbiInfo>,
+        I: IntoIterator<Item = Option<&'a CanonicalAbiInfo>>,
         I::IntoIter: ExactSizeIterator,
     {
         // NB: this is basically a duplicate definition of
@@ -1218,11 +1212,13 @@ impl CanonicalAbiInfo {
         let mut max_align64 = discrim_size;
         let mut max_case_count = Some(0);
         for case in cases {
-            max_size32 = max_size32.max(case.size32);
-            max_align32 = max_align32.max(case.align32);
-            max_size64 = max_size64.max(case.size64);
-            max_align64 = max_align64.max(case.align64);
-            max_case_count = max_flat(max_case_count, case.flat_count);
+            if let Some(case) = case {
+                max_size32 = max_size32.max(case.size32);
+                max_align32 = max_align32.max(case.align32);
+                max_size64 = max_size64.max(case.size64);
+                max_align64 = max_align64.max(case.align64);
+                max_case_count = max_flat(max_case_count, case.flat_count);
+            }
         }
         CanonicalAbiInfo {
             size32: align_to(
@@ -1240,7 +1236,7 @@ impl CanonicalAbiInfo {
     }
 
     /// Same as `CanonicalAbiInfo::variant` but `const`-safe
-    pub const fn variant_static(cases: &[CanonicalAbiInfo]) -> CanonicalAbiInfo {
+    pub const fn variant_static(cases: &[Option<CanonicalAbiInfo>]) -> CanonicalAbiInfo {
         // NB: this is basically a duplicate definition of
         // `CanonicalAbiInfo::variant`, these should be kept in sync.
 
@@ -1256,11 +1252,13 @@ impl CanonicalAbiInfo {
         let mut i = 0;
         while i < cases.len() {
             let case = &cases[i];
-            max_size32 = max(max_size32, case.size32);
-            max_align32 = max(max_align32, case.align32);
-            max_size64 = max(max_size64, case.size64);
-            max_align64 = max(max_align64, case.align64);
-            max_case_count = max_flat(max_case_count, case.flat_count);
+            if let Some(case) = case {
+                max_size32 = max(max_size32, case.size32);
+                max_align32 = max(max_align32, case.align32);
+                max_size64 = max(max_size64, case.size64);
+                max_align64 = max(max_align64, case.align64);
+                max_case_count = max_flat(max_case_count, case.flat_count);
+            }
             i += 1;
         }
         CanonicalAbiInfo {
@@ -1309,7 +1307,7 @@ impl VariantInfo {
     /// cases.
     pub fn new<'a, I>(cases: I) -> (VariantInfo, CanonicalAbiInfo)
     where
-        I: IntoIterator<Item = &'a CanonicalAbiInfo>,
+        I: IntoIterator<Item = Option<&'a CanonicalAbiInfo>>,
         I::IntoIter: ExactSizeIterator,
     {
         let cases = cases.into_iter();
@@ -1325,7 +1323,7 @@ impl VariantInfo {
         )
     }
     /// TODO
-    pub const fn new_static(cases: &[CanonicalAbiInfo]) -> VariantInfo {
+    pub const fn new_static(cases: &[Option<CanonicalAbiInfo>]) -> VariantInfo {
         let size = match DiscriminantSize::from_count(cases.len()) {
             Some(size) => size,
             None => unreachable!(),
@@ -1404,8 +1402,8 @@ pub struct TypeVariant {
 pub struct VariantCase {
     /// Name of the variant, unique amongst all cases in a variant.
     pub name: String,
-    /// Type associated with this payload, maybe `Unit`.
-    pub ty: InterfaceType,
+    /// Optional type associated with this payload.
+    pub ty: Option<InterfaceType>,
 }
 
 /// Shape of a "tuple" type in interface types.
@@ -1473,13 +1471,13 @@ pub struct TypeOption {
     pub info: VariantInfo,
 }
 
-/// Shape of an "expected" interface type.
+/// Shape of a "result" interface type.
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
-pub struct TypeExpected {
+pub struct TypeResult {
     /// The `T` in `Result<T, E>`
-    pub ok: InterfaceType,
+    pub ok: Option<InterfaceType>,
     /// The `E` in `Result<T, E>`
-    pub err: InterfaceType,
+    pub err: Option<InterfaceType>,
     /// Byte information about this type in the canonical ABI.
     pub abi: CanonicalAbiInfo,
     /// Byte information about this variant type.
@@ -1531,7 +1529,6 @@ pub struct FlatTypes<'a> {
 
 #[allow(missing_docs)]
 impl FlatTypes<'_> {
-    pub const EMPTY: FlatTypes<'static> = FlatTypes::new(&[]);
     pub const I32: FlatTypes<'static> = FlatTypes::new(&[FlatType::I32]);
     pub const I64: FlatTypes<'static> = FlatTypes::new(&[FlatType::I64]);
     pub const F32: FlatTypes<'static> = FlatTypes::new(&[FlatType::F32]);
@@ -1578,7 +1575,7 @@ struct FlatTypesCache {
     flags: PrimaryMap<TypeFlagsIndex, FlatTypesStorage>,
     unions: PrimaryMap<TypeUnionIndex, FlatTypesStorage>,
     options: PrimaryMap<TypeOptionIndex, FlatTypesStorage>,
-    expecteds: PrimaryMap<TypeExpectedIndex, FlatTypesStorage>,
+    results: PrimaryMap<TypeResultIndex, FlatTypesStorage>,
 }
 
 struct FlatTypesStorage {
@@ -1662,22 +1659,33 @@ impl FlatTypesStorage {
     /// Builds up the flat types used to represent a `variant` which notably
     /// handles "join"ing types together so each case is representable as a
     /// single flat list of types.
+    ///
+    /// The iterator item is:
+    ///
+    /// * `None` - no payload for this case
+    /// * `Some(None)` - this case has a payload but can't be represented with
+    ///   flat types
+    /// * `Some(Some(types))` - this case has a payload and is represented with
+    ///   the types specified in the flat representation.
     fn build_variant<'a, I>(&mut self, cases: I)
     where
-        I: IntoIterator<Item = Option<FlatTypes<'a>>>,
+        I: IntoIterator<Item = Option<Option<FlatTypes<'a>>>>,
     {
         let cases = cases.into_iter();
         self.push(FlatType::I32, FlatType::I32);
 
         for ty in cases {
             let types = match ty {
-                Some(types) => types,
+                Some(Some(types)) => types,
                 // If this case isn't representable with a flat list of types
                 // then this variant also isn't representable.
-                None => {
+                Some(None) => {
                     self.len = u8::try_from(MAX_FLAT_TYPES + 1).unwrap();
                     return;
                 }
+                // If this case doesn't have a payload then it doesn't change
+                // whether this is representable or not.
+                None => continue,
             };
             // If the case used all of the flat types then the discriminant
             // added for this variant means that this variant is no longer
@@ -1739,19 +1747,26 @@ impl FlatTypesStorage {
     }
 
     fn variants(&mut self, types: &ComponentTypesBuilder, ty: &TypeVariant) {
-        self.build_variant(ty.cases.iter().map(|c| types.flat_types(&c.ty)))
+        self.build_variant(
+            ty.cases
+                .iter()
+                .map(|c| c.ty.as_ref().map(|ty| types.flat_types(ty))),
+        )
     }
 
     fn unions(&mut self, types: &ComponentTypesBuilder, ty: &TypeUnion) {
-        self.build_variant(ty.types.iter().map(|t| types.flat_types(t)))
+        self.build_variant(ty.types.iter().map(|t| Some(types.flat_types(t))))
     }
 
-    fn expecteds(&mut self, types: &ComponentTypesBuilder, ty: &TypeExpected) {
-        self.build_variant([types.flat_types(&ty.ok), types.flat_types(&ty.err)]);
+    fn results(&mut self, types: &ComponentTypesBuilder, ty: &TypeResult) {
+        self.build_variant([
+            ty.ok.as_ref().map(|ty| types.flat_types(ty)),
+            ty.err.as_ref().map(|ty| types.flat_types(ty)),
+        ])
     }
 
     fn options(&mut self, types: &ComponentTypesBuilder, ty: &TypeOption) {
-        self.build_variant([Some(FlatTypes::EMPTY), types.flat_types(&ty.ty)]);
+        self.build_variant([None, Some(types.flat_types(&ty.ty))]);
     }
 }
 

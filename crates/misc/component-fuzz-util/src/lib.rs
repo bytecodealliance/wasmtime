@@ -17,7 +17,7 @@ use wasmtime_component_util::{DiscriminantSize, FlagsSize, REALLOC_AND_FREE};
 
 const MAX_FLAT_PARAMS: usize = 16;
 const MAX_FLAT_RESULTS: usize = 1;
-const MAX_ARITY: usize = 5;
+const MAX_ARITY: u32 = 5;
 
 /// The name of the imported host function which the generated component will call
 pub const IMPORT_FUNCTION: &str = "echo";
@@ -57,7 +57,7 @@ impl fmt::Display for CoreType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UsizeInRange<const L: usize, const H: usize>(usize);
 
 impl<const L: usize, const H: usize> UsizeInRange<L, H> {
@@ -74,7 +74,7 @@ impl<'a, const L: usize, const H: usize> Arbitrary<'a> for UsizeInRange<L, H> {
 
 /// Wraps a `Box<[T]>` and provides an `Arbitrary` implementation that always generates slices of length less than
 /// or equal to the longest tuple for which Wasmtime generates a `ComponentType` impl
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VecInRange<T, const L: u32, const H: u32>(Vec<T>);
 
 impl<'a, T: Arbitrary<'a>, const L: u32, const H: u32> Arbitrary<'a> for VecInRange<T, L, H> {
@@ -98,9 +98,8 @@ impl<T, const L: u32, const H: u32> Deref for VecInRange<T, L, H> {
 
 /// Represents a component model interface type
 #[allow(missing_docs)]
-#[derive(Arbitrary, Debug)]
+#[derive(Arbitrary, Debug, Clone)]
 pub enum Type {
-    Unit,
     Bool,
     S8,
     U8,
@@ -129,12 +128,15 @@ pub enum Type {
 
     // Like records, allow a good number of variants, but variants require at
     // least one case.
-    Variant(VecInRange<Type, 1, 200>),
+    Variant(VecInRange<Option<Type>, 1, 200>),
     Enum(UsizeInRange<1, 257>),
     Union(VecInRange<Type, 1, 200>),
 
     Option(Box<Type>),
-    Expected { ok: Box<Type>, err: Box<Type> },
+    Result {
+        ok: Option<Box<Type>>,
+        err: Option<Box<Type>>,
+    },
 
     // Generate 0 flags all the way up to 65 flags which exercises the 0 to
     // 3 x u32 cases.
@@ -147,10 +149,14 @@ fn lower_record<'a>(types: impl Iterator<Item = &'a Type>, vec: &mut Vec<CoreTyp
     }
 }
 
-fn lower_variant<'a>(types: impl Iterator<Item = &'a Type>, vec: &mut Vec<CoreType>) {
+fn lower_variant<'a>(types: impl Iterator<Item = Option<&'a Type>>, vec: &mut Vec<CoreType>) {
     vec.push(CoreType::I32);
     let offset = vec.len();
     for ty in types {
+        let ty = match ty {
+            Some(ty) => ty,
+            None => continue,
+        };
         for (index, ty) in ty.lowered().iter().enumerate() {
             let index = offset + index;
             if index < vec.len() {
@@ -184,7 +190,6 @@ impl Type {
 
     fn lower(&self, vec: &mut Vec<CoreType>) {
         match self {
-            Type::Unit => (),
             Type::Bool
             | Type::U8
             | Type::S8
@@ -203,9 +208,12 @@ impl Type {
             }
             Type::Record(types) => lower_record(types.iter(), vec),
             Type::Tuple(types) => lower_record(types.0.iter(), vec),
-            Type::Variant(types) | Type::Union(types) => lower_variant(types.0.iter(), vec),
-            Type::Option(ty) => lower_variant([&Type::Unit, ty].into_iter(), vec),
-            Type::Expected { ok, err } => lower_variant([ok.deref(), err].into_iter(), vec),
+            Type::Variant(types) => lower_variant(types.0.iter().map(|t| t.as_ref()), vec),
+            Type::Union(types) => lower_variant(types.0.iter().map(Some), vec),
+            Type::Option(ty) => lower_variant([None, Some(&**ty)].into_iter(), vec),
+            Type::Result { ok, err } => {
+                lower_variant([ok.as_deref(), err.as_deref()].into_iter(), vec)
+            }
             Type::Flags(count) => {
                 vec.extend(iter::repeat(CoreType::I32).take(u32_count_from_flag_count(count.0)))
             }
@@ -214,11 +222,6 @@ impl Type {
 
     fn size_and_alignment(&self) -> SizeAndAlignment {
         match self {
-            Type::Unit => SizeAndAlignment {
-                size: 0,
-                alignment: 1,
-            },
-
             Type::Bool | Type::S8 | Type::U8 => SizeAndAlignment {
                 size: 1,
                 alignment: 1,
@@ -248,13 +251,16 @@ impl Type {
 
             Type::Tuple(types) => record_size_and_alignment(types.0.iter()),
 
-            Type::Variant(types) | Type::Union(types) => variant_size_and_alignment(types.0.iter()),
+            Type::Variant(types) => variant_size_and_alignment(types.0.iter().map(|t| t.as_ref())),
+            Type::Union(types) => variant_size_and_alignment(types.0.iter().map(Some)),
 
-            Type::Enum(count) => variant_size_and_alignment((0..count.0).map(|_| &Type::Unit)),
+            Type::Enum(count) => variant_size_and_alignment((0..count.0).map(|_| None)),
 
-            Type::Option(ty) => variant_size_and_alignment([&Type::Unit, ty].into_iter()),
+            Type::Option(ty) => variant_size_and_alignment([None, Some(&**ty)].into_iter()),
 
-            Type::Expected { ok, err } => variant_size_and_alignment([ok.deref(), err].into_iter()),
+            Type::Result { ok, err } => {
+                variant_size_and_alignment([ok.as_deref(), err.as_deref()].into_iter())
+            }
 
             Type::Flags(count) => match FlagsSize::from_count(count.0) {
                 FlagsSize::Size0 => SizeAndAlignment {
@@ -299,15 +305,17 @@ fn record_size_and_alignment<'a>(types: impl Iterator<Item = &'a Type>) -> SizeA
 }
 
 fn variant_size_and_alignment<'a>(
-    types: impl ExactSizeIterator<Item = &'a Type>,
+    types: impl ExactSizeIterator<Item = Option<&'a Type>>,
 ) -> SizeAndAlignment {
     let discriminant_size = DiscriminantSize::from_count(types.len()).unwrap();
     let mut alignment = u32::from(discriminant_size);
     let mut size = 0;
     for ty in types {
-        let size_and_alignment = ty.size_and_alignment();
-        alignment = alignment.max(size_and_alignment.alignment);
-        size = size.max(size_and_alignment.size);
+        if let Some(ty) = ty {
+            let size_and_alignment = ty.size_and_alignment();
+            alignment = alignment.max(size_and_alignment.alignment);
+            size = size.max(size_and_alignment.size);
+        }
     }
 
     SizeAndAlignment {
@@ -319,12 +327,15 @@ fn variant_size_and_alignment<'a>(
     }
 }
 
-fn make_import_and_export(params: &[Type], result: &Type) -> String {
+fn make_import_and_export(params: &[Type], results: &[Type]) -> String {
     let params_lowered = params
         .iter()
         .flat_map(|ty| ty.lowered())
         .collect::<Box<[_]>>();
-    let result_lowered = result.lowered();
+    let results_lowered = results
+        .iter()
+        .flat_map(|ty| ty.lowered())
+        .collect::<Box<[_]>>();
 
     let mut core_params = String::new();
     let mut gets = String::new();
@@ -345,13 +356,13 @@ fn make_import_and_export(params: &[Type], result: &Type) -> String {
         format!("(param{core_params})")
     };
 
-    if result_lowered.len() <= MAX_FLAT_RESULTS {
+    if results_lowered.len() <= MAX_FLAT_RESULTS {
         let mut core_results = String::new();
-        for result in result_lowered.iter() {
+        for result in results_lowered.iter() {
             write!(&mut core_results, " {result}").unwrap();
         }
 
-        let maybe_core_results = if result_lowered.is_empty() {
+        let maybe_core_results = if results_lowered.is_empty() {
             String::new()
         } else {
             format!("(result{core_results})")
@@ -368,7 +379,8 @@ fn make_import_and_export(params: &[Type], result: &Type) -> String {
             )"#
         )
     } else {
-        let SizeAndAlignment { size, alignment } = result.size_and_alignment();
+        let SizeAndAlignment { size, alignment } =
+            Type::Record(VecInRange(results.to_vec())).size_and_alignment();
 
         format!(
             r#"
@@ -405,7 +417,6 @@ fn make_rust_name(name_counter: &mut u32) -> Ident {
 /// parameter is used to accumulate declarations for each recursively visited type.
 pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStream) -> TokenStream {
     match ty {
-        Type::Unit => quote!(()),
         Type::Bool => quote!(bool),
         Type::S8 => quote!(i8),
         Type::U8 => quote!(u8),
@@ -458,29 +469,51 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
 
             quote!((#fields))
         }
-        Type::Variant(types) | Type::Union(types) => {
+        Type::Variant(types) => {
             let cases = types
                 .0
                 .iter()
                 .enumerate()
                 .map(|(index, ty)| {
                     let name = format_ident!("C{index}");
-                    let ty = rust_type(ty, name_counter, declarations);
-                    quote!(#name(#ty),)
+                    let ty = match ty {
+                        Some(ty) => {
+                            let ty = rust_type(ty, name_counter, declarations);
+                            quote!((#ty))
+                        }
+                        None => quote!(),
+                    };
+                    quote!(#name #ty,)
                 })
                 .collect::<TokenStream>();
 
             let name = make_rust_name(name_counter);
+            declarations.extend(quote! {
+                #[derive(ComponentType, Lift, Lower, PartialEq, Debug, Clone, Arbitrary)]
+                #[component(variant)]
+                enum #name {
+                    #cases
+                }
+            });
 
-            let which = if let Type::Variant(_) = ty {
-                quote!(variant)
-            } else {
-                quote!(union)
-            };
+            quote!(#name)
+        }
+        Type::Union(types) => {
+            let cases = types
+                .0
+                .iter()
+                .enumerate()
+                .map(|(index, ty)| {
+                    let name = format_ident!("U{index}");
+                    let ty = rust_type(ty, name_counter, declarations);
+                    quote!(#name(#ty),)
+                })
+                .collect::<TokenStream>();
+            let name = make_rust_name(name_counter);
 
             declarations.extend(quote! {
                 #[derive(ComponentType, Lift, Lower, PartialEq, Debug, Clone, Arbitrary)]
-                #[component(#which)]
+                #[component(union)]
                 enum #name {
                     #cases
                 }
@@ -491,7 +524,7 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
         Type::Enum(count) => {
             let cases = (0..count.0)
                 .map(|index| {
-                    let name = format_ident!("C{index}");
+                    let name = format_ident!("E{index}");
                     quote!(#name,)
                 })
                 .collect::<TokenStream>();
@@ -512,9 +545,15 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
             let ty = rust_type(ty, name_counter, declarations);
             quote!(Option<#ty>)
         }
-        Type::Expected { ok, err } => {
-            let ok = rust_type(ok, name_counter, declarations);
-            let err = rust_type(err, name_counter, declarations);
+        Type::Result { ok, err } => {
+            let ok = match ok {
+                Some(ok) => rust_type(ok, name_counter, declarations),
+                None => quote!(()),
+            };
+            let err = match err {
+                Some(err) => rust_type(err, name_counter, declarations),
+                None => quote!(()),
+            };
             quote!(Result<#ok, #err>)
         }
         Type::Flags(count) => {
@@ -564,7 +603,6 @@ impl<'a> TypesBuilder<'a> {
     fn write_ref(&mut self, ty: &'a Type, dst: &mut String) {
         match ty {
             // Primitive types can be referenced directly
-            Type::Unit => dst.push_str("unit"),
             Type::Bool => dst.push_str("bool"),
             Type::S8 => dst.push_str("s8"),
             Type::U8 => dst.push_str("u8"),
@@ -588,7 +626,7 @@ impl<'a> TypesBuilder<'a> {
             | Type::Enum(_)
             | Type::Union(_)
             | Type::Option(_)
-            | Type::Expected { .. }
+            | Type::Result { .. }
             | Type::Flags(_) => {
                 let idx = self.next;
                 self.next += 1;
@@ -601,8 +639,7 @@ impl<'a> TypesBuilder<'a> {
     fn write_decl(&mut self, idx: u32, ty: &'a Type) -> String {
         let mut decl = format!("(type $t{idx} ");
         match ty {
-            Type::Unit
-            | Type::Bool
+            Type::Bool
             | Type::S8
             | Type::U8
             | Type::S16
@@ -641,8 +678,11 @@ impl<'a> TypesBuilder<'a> {
             Type::Variant(types) => {
                 decl.push_str("(variant");
                 for (index, ty) in types.iter().enumerate() {
-                    write!(decl, r#" (case "C{index}" "#).unwrap();
-                    self.write_ref(ty, &mut decl);
+                    write!(decl, r#" (case "C{index}""#).unwrap();
+                    if let Some(ty) = ty {
+                        decl.push_str(" ");
+                        self.write_ref(ty, &mut decl);
+                    }
                     decl.push_str(")");
                 }
                 decl.push_str(")");
@@ -667,11 +707,17 @@ impl<'a> TypesBuilder<'a> {
                 self.write_ref(ty, &mut decl);
                 decl.push_str(")");
             }
-            Type::Expected { ok, err } => {
-                decl.push_str("(expected ");
-                self.write_ref(ok, &mut decl);
-                decl.push_str(" ");
-                self.write_ref(err, &mut decl);
+            Type::Result { ok, err } => {
+                decl.push_str("(result");
+                if let Some(ok) = ok {
+                    decl.push_str(" ");
+                    self.write_ref(ok, &mut decl);
+                }
+                if let Some(err) = err {
+                    decl.push_str(" (error ");
+                    self.write_ref(err, &mut decl);
+                    decl.push_str(")");
+                }
                 decl.push_str(")");
             }
             Type::Flags(count) => {
@@ -695,7 +741,7 @@ pub struct Declarations {
     /// Parameter declarations used for the imported and exported functions
     pub params: Cow<'static, str>,
     /// Result declaration used for the imported and exported functions
-    pub result: Cow<'static, str>,
+    pub results: Cow<'static, str>,
     /// A WAT fragment representing the core function import and export to use for testing
     pub import_and_export: Cow<'static, str>,
     /// String encoding to use for host -> component
@@ -710,7 +756,7 @@ impl Declarations {
         let Self {
             types,
             params,
-            result,
+            results,
             import_and_export,
             encoding1,
             encoding2,
@@ -768,7 +814,7 @@ impl Declarations {
 
                 {types}
 
-                (type $sig (func {params} {result}))
+                (type $sig (func {params} {results}))
                 (import "{IMPORT_FUNCTION}" (func $f (type $sig)))
 
                 {c1}
@@ -783,12 +829,12 @@ impl Declarations {
 }
 
 /// Represents a test case for calling a component function
-#[derive(Debug)]
+#[derive(Arbitrary, Debug)]
 pub struct TestCase {
     /// The types of parameters to pass to the function
-    pub params: Box<[Type]>,
-    /// The type of the result to be returned by the function
-    pub result: Type,
+    pub params: VecInRange<Type, 0, MAX_ARITY>,
+    /// The result types of the the function
+    pub results: VecInRange<Type, 0, MAX_ARITY>,
     /// String encoding to use from host-to-component.
     pub encoding1: StringEncoding,
     /// String encoding to use from component-to-host.
@@ -801,17 +847,20 @@ impl TestCase {
         let mut builder = TypesBuilder::default();
 
         let mut params = String::new();
-        for ty in self.params.iter() {
-            params.push_str(" (param ");
+        for (i, ty) in self.params.iter().enumerate() {
+            params.push_str(&format!(" (param \"p{i}\" "));
             builder.write_ref(ty, &mut params);
             params.push_str(")");
         }
 
-        let mut result = String::from("(result ");
-        builder.write_ref(&self.result, &mut result);
-        result.push_str(")");
+        let mut results = String::new();
+        for (i, ty) in self.results.iter().enumerate() {
+            results.push_str(&format!(" (result \"r{i}\" "));
+            builder.write_ref(ty, &mut results);
+            results.push_str(")");
+        }
 
-        let import_and_export = make_import_and_export(&self.params, &self.result);
+        let import_and_export = make_import_and_export(&self.params, &self.results);
 
         let mut type_decls = Vec::new();
         while let Some((idx, ty)) = builder.worklist.pop() {
@@ -830,26 +879,11 @@ impl TestCase {
         Declarations {
             types: types.into(),
             params: params.into(),
-            result: result.into(),
+            results: results.into(),
             import_and_export: import_and_export.into(),
             encoding1: self.encoding1,
             encoding2: self.encoding2,
         }
-    }
-}
-
-impl<'a> Arbitrary<'a> for TestCase {
-    /// Generate an arbitrary [`TestCase`].
-    fn arbitrary(input: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(Self {
-            params: input
-                .arbitrary_iter()?
-                .take(MAX_ARITY)
-                .collect::<arbitrary::Result<Box<[_]>>>()?,
-            result: input.arbitrary()?,
-            encoding1: input.arbitrary()?,
-            encoding2: input.arbitrary()?,
-        })
     }
 }
 
