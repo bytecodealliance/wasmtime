@@ -2183,6 +2183,28 @@ fn test_aarch64_binemit() {
         "csetm x16, vs",
     ));
     insns.push((
+        Inst::CCmp {
+            size: OperandSize::Size64,
+            rn: xreg(22),
+            rm: xreg(1),
+            nzcv: NZCV::new(false, false, true, true),
+            cond: Cond::Eq,
+        },
+        "C30241FA",
+        "ccmp x22, x1, #nzCV, eq",
+    ));
+    insns.push((
+        Inst::CCmp {
+            size: OperandSize::Size32,
+            rn: xreg(3),
+            rm: xreg(28),
+            nzcv: NZCV::new(true, true, true, true),
+            cond: Cond::Gt,
+        },
+        "6FC05C7A",
+        "ccmp w3, w28, #NZCV, gt",
+    ));
+    insns.push((
         Inst::CCmpImm {
             size: OperandSize::Size64,
             rn: xreg(22),

@@ -353,6 +353,15 @@ fn enc_fcsel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond, size: ScalarSize) 
         | (cond.bits() << 12)
 }
 
+fn enc_ccmp(size: OperandSize, rn: Reg, rm: Reg, nzcv: NZCV, cond: Cond) -> u32 {
+    0b0_1_1_11010010_00000_0000_00_00000_0_0000
+        | size.sf_bit() << 31
+        | machreg_to_gpr(rm) << 16
+        | cond.bits() << 12
+        | machreg_to_gpr(rn) << 5
+        | nzcv.bits()
+}
+
 fn enc_ccmp_imm(size: OperandSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) -> u32 {
     0b0_1_1_11010010_00000_0000_10_00000_0_0000
         | size.sf_bit() << 31
@@ -1366,6 +1375,17 @@ impl MachInstEmit for Inst {
             &Inst::CSetm { rd, cond } => {
                 let rd = allocs.next_writable(rd);
                 sink.put4(enc_csel(rd, zero_reg(), zero_reg(), cond.invert(), 1, 0));
+            }
+            &Inst::CCmp {
+                size,
+                rn,
+                rm,
+                nzcv,
+                cond,
+            } => {
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                sink.put4(enc_ccmp(size, rn, rm, nzcv, cond));
             }
             &Inst::CCmpImm {
                 size,
