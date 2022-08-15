@@ -15,8 +15,9 @@
 
 use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
-use crate::ir::types::I32;
-use crate::ir::{self, InstBuilder, InstructionData, MemFlags};
+use crate::ir::immediates::Imm64;
+use crate::ir::types::{I128, I64};
+use crate::ir::{self, InstBuilder, InstructionData, MemFlags, Value};
 use crate::isa::TargetIsa;
 
 mod globalvalue;
@@ -26,6 +27,21 @@ mod table;
 use self::globalvalue::expand_global_value;
 use self::heap::expand_heap_addr;
 use self::table::expand_table_addr;
+
+fn imm_const(pos: &mut FuncCursor, arg: Value, imm: Imm64, is_signed: bool) -> Value {
+    let ty = pos.func.dfg.value_type(arg);
+    match (ty, is_signed) {
+        (I128, true) => {
+            let imm = pos.ins().iconst(I64, imm);
+            pos.ins().sextend(I128, imm)
+        }
+        (I128, false) => {
+            let imm = pos.ins().iconst(I64, imm);
+            pos.ins().uextend(I128, imm)
+        }
+        _ => pos.ins().iconst(ty.lane_type(), imm),
+    }
+}
 
 /// Perform a simple legalization by expansion of the function, without
 /// platform-specific transforms.
@@ -157,160 +173,85 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                     offset,
                 } => expand_table_addr(isa, inst, &mut pos.func, table, arg, offset),
 
-                // bitops
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::BandImm,
-                    arg,
-                    imm,
-                } => {
-                    let ty = pos.func.dfg.value_type(arg);
-                    let imm = pos.ins().iconst(ty, imm);
-                    pos.func.dfg.replace(inst).band(arg, imm);
-                }
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::BorImm,
-                    arg,
-                    imm,
-                } => {
-                    let ty = pos.func.dfg.value_type(arg);
-                    let imm = pos.ins().iconst(ty, imm);
-                    pos.func.dfg.replace(inst).bor(arg, imm);
-                }
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::BxorImm,
-                    arg,
-                    imm,
-                } => {
-                    let ty = pos.func.dfg.value_type(arg);
-                    let imm = pos.ins().iconst(ty, imm);
-                    pos.func.dfg.replace(inst).bxor(arg, imm);
-                }
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::IaddImm,
-                    arg,
-                    imm,
-                } => {
-                    let ty = pos.func.dfg.value_type(arg);
-                    let imm = pos.ins().iconst(ty, imm);
-                    pos.func.dfg.replace(inst).iadd(arg, imm);
-                }
+                InstructionData::BinaryImm64 { opcode, arg, imm } => {
+                    let is_signed = match opcode {
+                        ir::Opcode::IaddImm
+                        | ir::Opcode::IrsubImm
+                        | ir::Opcode::ImulImm
+                        | ir::Opcode::SdivImm
+                        | ir::Opcode::SremImm
+                        | ir::Opcode::IfcmpImm => true,
+                        _ => false,
+                    };
 
-                // bitshifting
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::IshlImm,
-                    arg,
-                    imm,
-                } => {
-                    let imm = pos.ins().iconst(I32, imm);
-                    pos.func.dfg.replace(inst).ishl(arg, imm);
-                }
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::RotlImm,
-                    arg,
-                    imm,
-                } => {
-                    let imm = pos.ins().iconst(I32, imm);
-                    pos.func.dfg.replace(inst).rotl(arg, imm);
-                }
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::RotrImm,
-                    arg,
-                    imm,
-                } => {
-                    let imm = pos.ins().iconst(I32, imm);
-                    pos.func.dfg.replace(inst).rotr(arg, imm);
-                }
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::SshrImm,
-                    arg,
-                    imm,
-                } => {
-                    let imm = pos.ins().iconst(I32, imm);
-                    pos.func.dfg.replace(inst).sshr(arg, imm);
-                }
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::UshrImm,
-                    arg,
-                    imm,
-                } => {
-                    let imm = pos.ins().iconst(I32, imm);
-                    pos.func.dfg.replace(inst).ushr(arg, imm);
-                }
-
-                // math
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::IrsubImm,
-                    arg,
-                    imm,
-                } => {
-                    let ty = pos.func.dfg.value_type(arg);
-                    let imm = pos.ins().iconst(ty, imm);
-                    pos.func.dfg.replace(inst).isub(imm, arg); // note: arg order reversed
-                }
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::ImulImm,
-                    arg,
-                    imm,
-                } => {
-                    let ty = pos.func.dfg.value_type(arg);
-                    let imm = pos.ins().iconst(ty, imm);
-                    pos.func.dfg.replace(inst).imul(arg, imm);
-                }
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::SdivImm,
-                    arg,
-                    imm,
-                } => {
-                    let ty = pos.func.dfg.value_type(arg);
-                    let imm = pos.ins().iconst(ty, imm);
-                    pos.func.dfg.replace(inst).sdiv(arg, imm);
-                }
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::SremImm,
-                    arg,
-                    imm,
-                } => {
-                    let ty = pos.func.dfg.value_type(arg);
-                    let imm = pos.ins().iconst(ty, imm);
-                    pos.func.dfg.replace(inst).srem(arg, imm);
-                }
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::UdivImm,
-                    arg,
-                    imm,
-                } => {
-                    let ty = pos.func.dfg.value_type(arg);
-                    let imm = pos.ins().iconst(ty, imm);
-                    pos.func.dfg.replace(inst).udiv(arg, imm);
-                }
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::UremImm,
-                    arg,
-                    imm,
-                } => {
-                    let ty = pos.func.dfg.value_type(arg);
-                    let imm = pos.ins().iconst(ty, imm);
-                    pos.func.dfg.replace(inst).urem(arg, imm);
+                    let imm = imm_const(&mut pos, arg, imm, is_signed);
+                    let replace = pos.func.dfg.replace(inst);
+                    match opcode {
+                        // bitops
+                        ir::Opcode::BandImm => {
+                            replace.band(arg, imm);
+                        }
+                        ir::Opcode::BorImm => {
+                            replace.bor(arg, imm);
+                        }
+                        ir::Opcode::BxorImm => {
+                            replace.bxor(arg, imm);
+                        }
+                        // bitshifting
+                        ir::Opcode::IshlImm => {
+                            replace.ishl(arg, imm);
+                        }
+                        ir::Opcode::RotlImm => {
+                            replace.rotl(arg, imm);
+                        }
+                        ir::Opcode::RotrImm => {
+                            replace.rotr(arg, imm);
+                        }
+                        ir::Opcode::SshrImm => {
+                            replace.sshr(arg, imm);
+                        }
+                        ir::Opcode::UshrImm => {
+                            replace.ushr(arg, imm);
+                        }
+                        // math
+                        ir::Opcode::IaddImm => {
+                            replace.iadd(arg, imm);
+                        }
+                        ir::Opcode::IrsubImm => {
+                            // note: arg order reversed
+                            replace.isub(imm, arg);
+                        }
+                        ir::Opcode::ImulImm => {
+                            replace.imul(arg, imm);
+                        }
+                        ir::Opcode::SdivImm => {
+                            replace.sdiv(arg, imm);
+                        }
+                        ir::Opcode::SremImm => {
+                            replace.srem(arg, imm);
+                        }
+                        ir::Opcode::UdivImm => {
+                            replace.udiv(arg, imm);
+                        }
+                        ir::Opcode::UremImm => {
+                            replace.urem(arg, imm);
+                        }
+                        // comparisons
+                        ir::Opcode::IfcmpImm => {
+                            replace.ifcmp(arg, imm);
+                        }
+                        _ => prev_pos = pos.position(),
+                    };
                 }
 
                 // comparisons
-                InstructionData::BinaryImm64 {
-                    opcode: ir::Opcode::IfcmpImm,
-                    arg,
-                    imm,
-                } => {
-                    let ty = pos.func.dfg.value_type(arg);
-                    let imm = pos.ins().iconst(ty, imm);
-                    pos.func.dfg.replace(inst).ifcmp(arg, imm);
-                }
                 InstructionData::IntCompareImm {
                     opcode: ir::Opcode::IcmpImm,
                     cond,
                     arg,
                     imm,
                 } => {
-                    let ty = pos.func.dfg.value_type(arg);
-                    let imm = pos.ins().iconst(ty, imm);
+                    let imm = imm_const(&mut pos, arg, imm, true);
                     pos.func.dfg.replace(inst).icmp(cond, arg, imm);
                 }
 
