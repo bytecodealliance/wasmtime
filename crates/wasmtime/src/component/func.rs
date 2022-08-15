@@ -302,15 +302,15 @@ impl Func {
             result = Type::from(&ty.result, &data.types);
         }
 
-        let param_count = params.iter().map(|ty| ty.flatten_count()).sum::<usize>();
-        let result_count = result.flatten_count();
+        let param_abi = CanonicalAbiInfo::record(params.iter().map(|t| t.canonical_abi()));
+        let result_count = result.canonical_abi().flat_count(MAX_FLAT_RESULTS);
 
         self.call_raw(
             store,
             args,
             |store, options, args, dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>| {
-                if param_count > MAX_FLAT_PARAMS {
-                    self.store_args(store, &options, &params, args, dst)
+                if param_abi.flat_count(MAX_FLAT_PARAMS).is_none() {
+                    self.store_args(store, &options, &param_abi, &params, args, dst)
                 } else {
                     dst.write([ValRaw::u64(0); MAX_FLAT_PARAMS]);
 
@@ -324,7 +324,7 @@ impl Func {
                 }
             },
             |store, options, src: &[ValRaw; MAX_FLAT_RESULTS]| {
-                if result_count > MAX_FLAT_RESULTS {
+                if result_count.is_none() {
                     Self::load_result(&Memory::new(store, &options), &result, &mut src.iter())
                 } else {
                     Val::lift(&result, store, &options, &mut src.iter())
@@ -554,12 +554,11 @@ impl Func {
         &self,
         store: &mut StoreContextMut<'_, T>,
         options: &Options,
+        abi: &CanonicalAbiInfo,
         params: &[Type],
         args: &[Val],
         dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>,
     ) -> Result<()> {
-        let abi = CanonicalAbiInfo::record(params.iter().map(|t| t.canonical_abi()));
-
         let mut memory = MemoryMut::new(store.as_context_mut(), options);
         let size = usize::try_from(abi.size32).unwrap();
         let ptr = memory.realloc(0, 0, abi.align32, size)?;

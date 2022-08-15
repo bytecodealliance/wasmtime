@@ -416,7 +416,8 @@ impl Flags {
             .map(|(index, name)| (name, index))
             .collect::<HashMap<_, _>>();
 
-        let mut values = vec![0_u32; u32_count_for_flag_count(ty.names().len())];
+        let count = usize::from(ty.canonical_abi().flat_count.unwrap());
+        let mut values = vec![0_u32; count];
 
         for name in names {
             let index = map
@@ -587,7 +588,7 @@ impl Val {
             }),
             Type::Variant(handle) => {
                 let (discriminant, value) = lift_variant(
-                    ty.flatten_count(),
+                    handle.canonical_abi().flat_count(usize::MAX).unwrap(),
                     handle.cases().map(|case| case.ty),
                     store,
                     options,
@@ -602,7 +603,7 @@ impl Val {
             }
             Type::Enum(handle) => {
                 let (discriminant, _) = lift_variant(
-                    ty.flatten_count(),
+                    handle.canonical_abi().flat_count(usize::MAX).unwrap(),
                     handle.names().map(|_| Type::Unit),
                     store,
                     options,
@@ -615,8 +616,13 @@ impl Val {
                 })
             }
             Type::Union(handle) => {
-                let (discriminant, value) =
-                    lift_variant(ty.flatten_count(), handle.types(), store, options, src)?;
+                let (discriminant, value) = lift_variant(
+                    handle.canonical_abi().flat_count(usize::MAX).unwrap(),
+                    handle.types(),
+                    store,
+                    options,
+                    src,
+                )?;
 
                 Val::Union(Union {
                     ty: handle.clone(),
@@ -626,7 +632,7 @@ impl Val {
             }
             Type::Option(handle) => {
                 let (discriminant, value) = lift_variant(
-                    ty.flatten_count(),
+                    handle.canonical_abi().flat_count(usize::MAX).unwrap(),
                     [Type::Unit, handle.ty()].into_iter(),
                     store,
                     options,
@@ -641,7 +647,7 @@ impl Val {
             }
             Type::Expected(handle) => {
                 let (discriminant, value) = lift_variant(
-                    ty.flatten_count(),
+                    handle.canonical_abi().flat_count(usize::MAX).unwrap(),
                     [handle.ok(), handle.err()].into_iter(),
                     store,
                     options,
@@ -656,8 +662,9 @@ impl Val {
             }
             Type::Flags(handle) => {
                 let count = u32::try_from(handle.names().len()).unwrap();
+                let u32_count = handle.canonical_abi().flat_count(usize::MAX).unwrap();
                 let value = iter::repeat_with(|| u32::lift(store, options, next(src)))
-                    .take(u32_count_for_flag_count(count.try_into()?))
+                    .take(u32_count)
                     .collect::<Result<_>>()?;
 
                 Val::Flags(Flags {
@@ -773,7 +780,7 @@ impl Val {
                     FlagsSize::Size1 => iter::once(u8::load(mem, bytes)? as u32).collect(),
                     FlagsSize::Size2 => iter::once(u16::load(mem, bytes)? as u32).collect(),
                     FlagsSize::Size4Plus(n) => (0..n)
-                        .map(|index| u32::load(mem, &bytes[index * 4..][..4]))
+                        .map(|index| u32::load(mem, &bytes[usize::from(index) * 4..][..4]))
                         .collect::<Result<_>>()?,
                 },
             }),
@@ -844,7 +851,9 @@ impl Val {
             }) => {
                 next_mut(dst).write(ValRaw::u32(*discriminant));
                 value.lower(store, options, dst)?;
-                for _ in (1 + value.ty().flatten_count())..self.ty().flatten_count() {
+                let value_flat = value.ty().canonical_abi().flat_count(usize::MAX).unwrap();
+                let variant_flat = self.ty().canonical_abi().flat_count(usize::MAX).unwrap();
+                for _ in (1 + value_flat)..variant_flat {
                     next_mut(dst).write(ValRaw::u32(0));
                 }
             }
@@ -1046,7 +1055,8 @@ fn lift_variant<'a>(
         .nth(discriminant as usize)
         .ok_or_else(|| anyhow!("discriminant {} out of range [0..{})", discriminant, len))?;
     let value = Val::lift(&ty, store, options, src)?;
-    for _ in (1 + ty.flatten_count())..flatten_count {
+    let value_flat = ty.canonical_abi().flat_count(usize::MAX).unwrap();
+    for _ in (1 + value_flat)..flatten_count {
         next(src);
     }
     Ok((discriminant, value))
@@ -1072,17 +1082,6 @@ fn lower_list<T>(
         element_ptr += elt_size;
     }
     Ok((ptr, items.len()))
-}
-
-/// Calculate the size of a u32 array needed to represent the specified number of bit flags.
-///
-/// Note that this will always return at least 1, even if the `count` parameter is zero.
-pub(crate) fn u32_count_for_flag_count(count: usize) -> usize {
-    match FlagsSize::from_count(count) {
-        FlagsSize::Size0 => 0,
-        FlagsSize::Size1 | FlagsSize::Size2 => 1,
-        FlagsSize::Size4Plus(n) => n,
-    }
 }
 
 fn next<'a>(src: &mut std::slice::Iter<'a, ValRaw>) -> &'a ValRaw {

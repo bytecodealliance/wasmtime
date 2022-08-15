@@ -400,12 +400,19 @@ where
         bail!("cannot leave component instance");
     }
 
-    let param_count = params.iter().map(|ty| ty.flatten_count()).sum::<usize>();
-
     let args;
     let ret_index;
 
-    if param_count <= MAX_FLAT_PARAMS {
+    let param_abi = CanonicalAbiInfo::record(params.iter().map(|t| t.canonical_abi()));
+    let param_count = param_abi.flat_count.and_then(|i| {
+        let i = usize::from(i);
+        if i > MAX_FLAT_PARAMS {
+            None
+        } else {
+            Some(i)
+        }
+    });
+    if let Some(param_count) = param_count {
         let iter = &mut storage.iter();
         args = params
             .iter()
@@ -413,8 +420,6 @@ where
             .collect::<Result<Box<[_]>>>()?;
         ret_index = param_count;
     } else {
-        let param_abi = CanonicalAbiInfo::record(params.iter().map(|t| t.canonical_abi()));
-
         let memory = Memory::new(cx.0, &options);
         let mut offset = validate_inbounds_dynamic(&param_abi, memory.as_slice(), &storage[0])?;
         args = params
@@ -436,8 +441,8 @@ where
     flags.set_may_leave(false);
     result.check(&ret)?;
 
-    let result_count = result.flatten_count();
-    if result_count <= MAX_FLAT_RESULTS {
+    let result_count = result.canonical_abi().flat_count(MAX_FLAT_RESULTS);
+    if result_count.is_some() {
         let dst = mem::transmute::<&mut [ValRaw], &mut [MaybeUninit<ValRaw>]>(storage);
         ret.lower(&mut cx, &options, &mut dst.iter_mut())?;
     } else {

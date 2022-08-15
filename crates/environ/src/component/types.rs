@@ -1044,6 +1044,13 @@ pub struct CanonicalAbiInfo {
     pub size64: u32,
     /// The byte-alignment of this type in a 64-bit memory.
     pub align64: u32,
+    /// The number of types it takes to represents this type in the "flat"
+    /// representation of the canonical abi where everything is passed as
+    /// immediate arguments or results.
+    ///
+    /// If this is `None` then this type is not representable in the flat ABI
+    /// because it is too large.
+    pub flat_count: Option<u8>,
 }
 
 impl Default for CanonicalAbiInfo {
@@ -1053,6 +1060,7 @@ impl Default for CanonicalAbiInfo {
             align32: 1,
             size64: 0,
             align64: 1,
+            flat_count: Some(0),
         }
     }
 }
@@ -1077,6 +1085,7 @@ impl CanonicalAbiInfo {
         align32: 1,
         size64: 0,
         align64: 1,
+        flat_count: Some(0),
     };
 
     /// ABI information for one-byte scalars.
@@ -1094,6 +1103,7 @@ impl CanonicalAbiInfo {
             align32: size,
             size64: size,
             align64: size,
+            flat_count: Some(1),
         }
     }
 
@@ -1103,6 +1113,7 @@ impl CanonicalAbiInfo {
         align32: 4,
         size64: 16,
         align64: 8,
+        flat_count: Some(2),
     };
 
     /// Returns the abi for a record represented by the specified fields.
@@ -1116,6 +1127,7 @@ impl CanonicalAbiInfo {
             ret.align32 = ret.align32.max(field.align32);
             ret.size64 = align_to(ret.size64, field.align64) + field.size64;
             ret.align64 = ret.align64.max(field.align64);
+            ret.flat_count = add_flat(ret.flat_count, field.flat_count);
         }
         ret.size32 = align_to(ret.size32, ret.align32);
         ret.size64 = align_to(ret.size64, ret.align64);
@@ -1135,6 +1147,7 @@ impl CanonicalAbiInfo {
             ret.align32 = max(ret.align32, field.align32);
             ret.size64 = align_to(ret.size64, field.align64) + field.size64;
             ret.align64 = max(ret.align64, field.align64);
+            ret.flat_count = add_flat(ret.flat_count, field.flat_count);
             i += 1;
         }
         ret.size32 = align_to(ret.size32, ret.align32);
@@ -1174,17 +1187,18 @@ impl CanonicalAbiInfo {
 
     /// Returns ABI information for a structure which contains `count` flags.
     pub const fn flags(count: usize) -> CanonicalAbiInfo {
-        let (size, align) = match FlagsSize::from_count(count) {
-            FlagsSize::Size0 => (0, 1),
-            FlagsSize::Size1 => (1, 1),
-            FlagsSize::Size2 => (2, 2),
-            FlagsSize::Size4Plus(n) => ((n as u32) * 4, 4),
+        let (size, align, flat_count) = match FlagsSize::from_count(count) {
+            FlagsSize::Size0 => (0, 1, 0),
+            FlagsSize::Size1 => (1, 1, 1),
+            FlagsSize::Size2 => (2, 2, 1),
+            FlagsSize::Size4Plus(n) => ((n as u32) * 4, 4, n),
         };
         CanonicalAbiInfo {
             size32: size,
             align32: align,
             size64: size,
             align64: align,
+            flat_count: Some(flat_count),
         }
     }
 
@@ -1202,11 +1216,13 @@ impl CanonicalAbiInfo {
         let mut max_align32 = discrim_size;
         let mut max_size64 = 0;
         let mut max_align64 = discrim_size;
+        let mut max_case_count = Some(0);
         for case in cases {
             max_size32 = max_size32.max(case.size32);
             max_align32 = max_align32.max(case.align32);
             max_size64 = max_size64.max(case.size64);
             max_align64 = max_align64.max(case.align64);
+            max_case_count = max_flat(max_case_count, case.flat_count);
         }
         CanonicalAbiInfo {
             size32: align_to(
@@ -1219,6 +1235,7 @@ impl CanonicalAbiInfo {
                 max_align64,
             ),
             align64: max_align64,
+            flat_count: add_flat(max_case_count, Some(1)),
         }
     }
 
@@ -1235,6 +1252,7 @@ impl CanonicalAbiInfo {
         let mut max_align32 = discrim_size;
         let mut max_size64 = 0;
         let mut max_align64 = discrim_size;
+        let mut max_case_count = Some(0);
         let mut i = 0;
         while i < cases.len() {
             let case = &cases[i];
@@ -1242,6 +1260,7 @@ impl CanonicalAbiInfo {
             max_align32 = max(max_align32, case.align32);
             max_size64 = max(max_size64, case.size64);
             max_align64 = max(max_align64, case.align64);
+            max_case_count = max_flat(max_case_count, case.flat_count);
             i += 1;
         }
         CanonicalAbiInfo {
@@ -1255,6 +1274,18 @@ impl CanonicalAbiInfo {
                 max_align64,
             ),
             align64: max_align64,
+            flat_count: add_flat(max_case_count, Some(1)),
+        }
+    }
+
+    /// Returns the flat count of this ABI information so long as the count
+    /// doesn't exceed the `max` specified.
+    pub fn flat_count(&self, max: usize) -> Option<usize> {
+        let flat = usize::from(self.flat_count?);
+        if flat > max {
+            None
+        } else {
+            Some(flat)
         }
     }
 }
@@ -1460,6 +1491,35 @@ const MAX_FLAT_TYPES: usize = if MAX_FLAT_PARAMS > MAX_FLAT_RESULTS {
 } else {
     MAX_FLAT_RESULTS
 };
+
+const fn add_flat(a: Option<u8>, b: Option<u8>) -> Option<u8> {
+    const MAX: u8 = MAX_FLAT_TYPES as u8;
+    let sum = match (a, b) {
+        (Some(a), Some(b)) => match a.checked_add(b) {
+            Some(c) => c,
+            None => return None,
+        },
+        _ => return None,
+    };
+    if sum > MAX {
+        None
+    } else {
+        Some(sum)
+    }
+}
+
+const fn max_flat(a: Option<u8>, b: Option<u8>) -> Option<u8> {
+    match (a, b) {
+        (Some(a), Some(b)) => {
+            if a > b {
+                Some(a)
+            } else {
+                Some(b)
+            }
+        }
+        _ => None,
+    }
+}
 
 /// Flat representation of a type in just core wasm types.
 pub struct FlatTypes<'a> {

@@ -1943,6 +1943,7 @@ impl Compiler<'_, '_> {
             FlagsSize::Size4Plus(n) => {
                 let srcs = src.record_field_srcs(self.types, (0..n).map(|_| InterfaceType::U32));
                 let dsts = dst.record_field_dsts(self.types, (0..n).map(|_| InterfaceType::U32));
+                let n = usize::from(n);
                 for (i, (src, dst)) in srcs.zip(dsts).enumerate() {
                     let mask = if i == n - 1 && (cnt % 32 != 0) {
                         (1 << (cnt % 32)) - 1

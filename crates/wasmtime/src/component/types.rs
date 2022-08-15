@@ -78,6 +78,10 @@ impl Record {
             ty: Type::from(&field.ty, &self.0.types),
         })
     }
+
+    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
+        &self.0.types[self.0.index].abi
+    }
 }
 
 /// A `tuple` interface type
@@ -96,6 +100,10 @@ impl Tuple {
             .types
             .iter()
             .map(|ty| Type::from(ty, &self.0.types))
+    }
+
+    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
+        &self.0.types[self.0.index].abi
     }
 }
 
@@ -128,6 +136,10 @@ impl Variant {
     pub(crate) fn variant_info(&self) -> &VariantInfo {
         &self.0.types[self.0.index].info
     }
+
+    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
+        &self.0.types[self.0.index].abi
+    }
 }
 
 /// An `enum` interface type
@@ -150,6 +162,10 @@ impl Enum {
 
     pub(crate) fn variant_info(&self) -> &VariantInfo {
         &self.0.types[self.0.index].info
+    }
+
+    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
+        &self.0.types[self.0.index].abi
     }
 }
 
@@ -174,6 +190,10 @@ impl Union {
     pub(crate) fn variant_info(&self) -> &VariantInfo {
         &self.0.types[self.0.index].info
     }
+
+    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
+        &self.0.types[self.0.index].abi
+    }
 }
 
 /// An `option` interface type
@@ -193,6 +213,10 @@ impl Option {
 
     pub(crate) fn variant_info(&self) -> &VariantInfo {
         &self.0.types[self.0.index].info
+    }
+
+    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
+        &self.0.types[self.0.index].abi
     }
 }
 
@@ -219,6 +243,10 @@ impl Expected {
     pub(crate) fn variant_info(&self) -> &VariantInfo {
         &self.0.types[self.0.index].info
     }
+
+    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
+        &self.0.types[self.0.index].abi
+    }
 }
 
 /// A `flags` interface type
@@ -237,6 +265,10 @@ impl Flags {
             .names
             .iter()
             .map(|name| name.deref())
+    }
+
+    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
+        &self.0.types[self.0.index].abi
     }
 }
 
@@ -483,60 +515,6 @@ impl Type {
         }
     }
 
-    /// Return the number of stack slots needed to store values of this type in lowered form.
-    pub(crate) fn flatten_count(&self) -> usize {
-        match self {
-            Type::Unit => 0,
-
-            Type::Bool
-            | Type::S8
-            | Type::U8
-            | Type::S16
-            | Type::U16
-            | Type::S32
-            | Type::U32
-            | Type::S64
-            | Type::U64
-            | Type::Float32
-            | Type::Float64
-            | Type::Char
-            | Type::Enum(_) => 1,
-
-            Type::String | Type::List(_) => 2,
-
-            Type::Record(handle) => handle.fields().map(|field| field.ty.flatten_count()).sum(),
-
-            Type::Tuple(handle) => handle.types().map(|ty| ty.flatten_count()).sum(),
-
-            Type::Variant(handle) => {
-                1 + handle
-                    .cases()
-                    .map(|case| case.ty.flatten_count())
-                    .max()
-                    .unwrap_or(0)
-            }
-
-            Type::Union(handle) => {
-                1 + handle
-                    .types()
-                    .map(|ty| ty.flatten_count())
-                    .max()
-                    .unwrap_or(0)
-            }
-
-            Type::Option(handle) => 1 + handle.ty().flatten_count(),
-
-            Type::Expected(handle) => {
-                1 + handle
-                    .ok()
-                    .flatten_count()
-                    .max(handle.err().flatten_count())
-            }
-
-            Type::Flags(handle) => values::u32_count_for_flag_count(handle.names().len()),
-        }
-    }
-
     fn desc(&self) -> &'static str {
         match self {
             Type::Unit => "unit",
@@ -574,14 +552,14 @@ impl Type {
             Type::S32 | Type::U32 | Type::Char | Type::Float32 => &CanonicalAbiInfo::SCALAR4,
             Type::S64 | Type::U64 | Type::Float64 => &CanonicalAbiInfo::SCALAR8,
             Type::String | Type::List(_) => &CanonicalAbiInfo::POINTER_PAIR,
-            Type::Record(handle) => &handle.0.types[handle.0.index].abi,
-            Type::Tuple(handle) => &handle.0.types[handle.0.index].abi,
-            Type::Variant(handle) => &handle.0.types[handle.0.index].abi,
-            Type::Enum(handle) => &handle.0.types[handle.0.index].abi,
-            Type::Union(handle) => &handle.0.types[handle.0.index].abi,
-            Type::Option(handle) => &handle.0.types[handle.0.index].abi,
-            Type::Expected(handle) => &handle.0.types[handle.0.index].abi,
-            Type::Flags(handle) => &handle.0.types[handle.0.index].abi,
+            Type::Record(handle) => handle.canonical_abi(),
+            Type::Tuple(handle) => handle.canonical_abi(),
+            Type::Variant(handle) => handle.canonical_abi(),
+            Type::Enum(handle) => handle.canonical_abi(),
+            Type::Union(handle) => handle.canonical_abi(),
+            Type::Option(handle) => handle.canonical_abi(),
+            Type::Expected(handle) => handle.canonical_abi(),
+            Type::Flags(handle) => handle.canonical_abi(),
         }
     }
 }
