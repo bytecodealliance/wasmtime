@@ -484,25 +484,6 @@ where
         Ok(CallConv::SystemV)
     }
 
-    fn generate_intcc(&mut self) -> Result<IntCC> {
-        Ok(*self.u.choose(
-            &[
-                IntCC::Equal,
-                IntCC::NotEqual,
-                IntCC::SignedLessThan,
-                IntCC::SignedGreaterThanOrEqual,
-                IntCC::SignedGreaterThan,
-                IntCC::SignedLessThanOrEqual,
-                IntCC::UnsignedLessThan,
-                IntCC::UnsignedGreaterThanOrEqual,
-                IntCC::UnsignedGreaterThan,
-                IntCC::UnsignedLessThanOrEqual,
-                IntCC::Overflow,
-                IntCC::NotOverflow,
-            ][..],
-        )?)
-    }
-
     fn generate_type(&mut self) -> Result<Type> {
         // TODO: It would be nice if we could get these directly from cranelift
         let scalars = [
@@ -707,7 +688,7 @@ where
 
     fn generate_bricmp(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         let (block, args) = self.generate_target_block(builder)?;
-        let cond = self.generate_intcc()?;
+        let cond = *fgen.u.choose(IntCC::all())?;
 
         let bricmp_types = [
             I8, I16, I32,

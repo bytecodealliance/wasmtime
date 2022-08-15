@@ -100,6 +100,24 @@ impl CondCode for IntCC {
 }
 
 impl IntCC {
+    /// Returns a slice with all possible [IntCC] values.
+    pub fn all() -> &'static [IntCC] {
+        &[
+            IntCC::Equal,
+            IntCC::NotEqual,
+            IntCC::SignedLessThan,
+            IntCC::SignedGreaterThanOrEqual,
+            IntCC::SignedGreaterThan,
+            IntCC::SignedLessThanOrEqual,
+            IntCC::UnsignedLessThan,
+            IntCC::UnsignedGreaterThanOrEqual,
+            IntCC::UnsignedGreaterThan,
+            IntCC::UnsignedLessThanOrEqual,
+            IntCC::Overflow,
+            IntCC::NotOverflow,
+        ]
+    }
+
     /// Get the corresponding IntCC with the equal component removed.
     /// For conditions without a zero component, this is a no-op.
     pub fn without_equal(self) -> Self {
@@ -342,24 +360,9 @@ mod tests {
     use super::*;
     use std::string::ToString;
 
-    static INT_ALL: [IntCC; 12] = [
-        IntCC::Equal,
-        IntCC::NotEqual,
-        IntCC::SignedLessThan,
-        IntCC::SignedGreaterThanOrEqual,
-        IntCC::SignedGreaterThan,
-        IntCC::SignedLessThanOrEqual,
-        IntCC::UnsignedLessThan,
-        IntCC::UnsignedGreaterThanOrEqual,
-        IntCC::UnsignedGreaterThan,
-        IntCC::UnsignedLessThanOrEqual,
-        IntCC::Overflow,
-        IntCC::NotOverflow,
-    ];
-
     #[test]
     fn int_inverse() {
-        for r in &INT_ALL {
+        for r in &IntCC::all() {
             let cc = *r;
             let inv = cc.inverse();
             assert!(cc != inv);
@@ -369,7 +372,7 @@ mod tests {
 
     #[test]
     fn int_reverse() {
-        for r in &INT_ALL {
+        for r in &IntCC::all() {
             let cc = *r;
             let rev = cc.reverse();
             assert_eq!(rev.reverse(), cc);
@@ -378,7 +381,7 @@ mod tests {
 
     #[test]
     fn int_display() {
-        for r in &INT_ALL {
+        for r in &IntCC::all() {
             let cc = *r;
             assert_eq!(cc.to_string().parse(), Ok(cc));
         }
