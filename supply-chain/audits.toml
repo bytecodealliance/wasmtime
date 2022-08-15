@@ -1,6 +1,15 @@
 
 # cargo-vet audits file
 
+[[audits.arrayvec]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+version = "0.7.2"
+notes = """
+Well documented invariants, good assertions for those invariants in unsafe code,
+and tested with MIRI to boot. LGTM.
+"""
+
 [[audits.backtrace]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -136,3 +145,4 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "1.0.47"
 notes = "The Bytecode Alliance is the author of this crate."
+
