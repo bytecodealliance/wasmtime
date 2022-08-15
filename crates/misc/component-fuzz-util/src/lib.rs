@@ -166,7 +166,7 @@ fn u32_count_from_flag_count(count: usize) -> usize {
     match FlagsSize::from_count(count) {
         FlagsSize::Size0 => 0,
         FlagsSize::Size1 | FlagsSize::Size2 => 1,
-        FlagsSize::Size4Plus(n) => n,
+        FlagsSize::Size4Plus(n) => n.into(),
     }
 }
 
@@ -270,7 +270,7 @@ impl Type {
                     alignment: 2,
                 },
                 FlagsSize::Size4Plus(n) => SizeAndAlignment {
-                    size: n * 4,
+                    size: usize::from(n) * 4,
                     alignment: 4,
                 },
             },
