@@ -17,7 +17,7 @@ use crate::ir::{
 };
 use crate::ir::{ExternalName, RelSourceLoc};
 use crate::machinst::{
-    non_writable_value_regs, writable_value_regs, Callee, BlockIndex, BlockLoweringOrder,
+    non_writable_value_regs, writable_value_regs, BlockIndex, BlockLoweringOrder, Callee,
     LoweredBlock, MachLabel, Reg, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
     VCodeConstants, VCodeInst, ValueRegs, Writable,
 };
