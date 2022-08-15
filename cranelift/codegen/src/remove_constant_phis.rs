@@ -4,7 +4,6 @@ use crate::dominator_tree::DominatorTree;
 use crate::entity::EntityList;
 use crate::fx::FxHashMap;
 use crate::fx::FxHashSet;
-use crate::fx::FxHasher;
 use crate::ir;
 use crate::ir::instructions::BranchInfo;
 use crate::ir::Function;
@@ -12,7 +11,7 @@ use crate::ir::{Block, Inst, Value};
 use crate::timing;
 use arrayvec::ArrayVec;
 use bumpalo::Bump;
-use core::hash::BuildHasherDefault;
+use cranelift_entity::SecondaryMap;
 use smallvec::SmallVec;
 
 // A note on notation.  For the sake of clarity, this file uses the phrase
@@ -110,7 +109,7 @@ impl AbstractValue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 struct OutEdge<'a> {
     /// An instruction that transfers control.
     inst: Inst,
@@ -153,7 +152,7 @@ impl<'a> OutEdge<'a> {
 /// `summaries` below.  For the `SmallVec` tuning params: most blocks have
 /// few parameters, hence `4`.  And almost all blocks have either one or two
 /// successors, hence `2`.
-#[derive(Debug)]
+#[derive(Clone, Debug, Default)]
 struct BlockSummary<'a> {
     /// Formal parameters for this `Block`.
     ///
@@ -225,10 +224,8 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
     // to inspect each instruction in each block.
     let bump =
         Bump::with_capacity(domtree.cfg_postorder().len() * 4 * std::mem::size_of::<Value>());
-    let mut summaries = FxHashMap::with_capacity_and_hasher(
-        domtree.cfg_postorder().len(),
-        BuildHasherDefault::<FxHasher>::default(),
-    );
+    let mut summaries =
+        SecondaryMap::<Block, BlockSummary>::with_capacity(domtree.cfg_postorder().len());
 
     for b in domtree.cfg_postorder().iter().rev().copied() {
         let formals = func.dfg.block_params(b);
@@ -251,7 +248,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
         // in the summary, *unless* they have neither formals nor any
         // param-carrying branches/jumps.
         if formals.len() > 0 || summary.dests.len() > 0 {
-            summaries.insert(b, summary);
+            summaries[b] = summary;
         }
     }
 
@@ -286,24 +283,15 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
         iter_no += 1;
         let mut changed = false;
 
-        for src in domtree.cfg_postorder().iter().rev() {
-            let mb_src_summary = summaries.get(src);
-            // The src block might have no summary.  This means it has no
-            // branches/jumps that carry parameters *and* it doesn't take any
-            // parameters itself.  Phase 1 ensures this.  So we can ignore it.
-            if mb_src_summary.is_none() {
-                continue;
-            }
-            let src_summary = mb_src_summary.unwrap();
+        for src in domtree.cfg_postorder().iter().rev().copied() {
+            let src_summary = &summaries[src];
             for edge in &src_summary.dests {
                 assert!(edge.block != entry_block);
                 // By contrast, the dst block must have a summary.  Phase 1
                 // will have only included an entry in `src_summary.dests` if
                 // that branch/jump carried at least one parameter.  So the
                 // dst block does take parameters, so it must have a summary.
-                let dst_summary = summaries
-                    .get(&edge.block)
-                    .expect("remove_constant_phis: dst block has no summary");
+                let dst_summary = &summaries[edge.block];
                 let dst_formals = &dst_summary.formals;
                 assert_eq!(edge.args.len(), dst_formals.len());
                 for (formal, actual) in dst_formals.iter().zip(edge.args) {
@@ -345,14 +333,14 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
 
     // Make up a set of blocks that need editing.
     let mut need_editing = FxHashSet::<Block>::default();
-    for (block, summary) in &summaries {
-        if *block == entry_block {
+    for (block, summary) in summaries.iter() {
+        if block == entry_block {
             continue;
         }
         for formal in summary.formals {
             let formal_absval = state.get(*formal);
             if formal_absval.is_one() {
-                need_editing.insert(*block);
+                need_editing.insert(block);
                 break;
             }
         }
@@ -384,7 +372,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
     // Secondly, visit all branch insns.  If the destination has had its
     // formals changed, change the actuals accordingly.  Don't scan all insns,
     // rather just visit those as listed in the summaries we prepared earlier.
-    for (_src_block, summary) in &summaries {
+    for summary in summaries.values() {
         for edge in &summary.dests {
             if !need_editing.contains(&edge.block) {
                 continue;
@@ -396,7 +384,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
                 .opcode()
                 .constraints()
                 .num_fixed_value_arguments();
-            let dst_summary = summaries.get(&edge.block).unwrap();
+            let dst_summary = &summaries[edge.block];
 
             // Check that the numbers of arguments make sense.
             assert!(num_fixed_actuals <= num_old_actuals);
