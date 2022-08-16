@@ -3260,16 +3260,16 @@ checksum = "d554b7f530dee5964d9a9468d95c1f8b8acae4f282807e7d27d4b03099a46744"
 
 [[package]]
 name = "wasm-encoder"
-version = "0.15.0"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=component-wast#458426690fdc1a598e9f033fa3c290de3a30cd76"
+version = "0.16.0"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#ee171691c6eaeb57f22cea97e159eb1b27c81f54"
 dependencies = [
  "leb128",
 ]
 
 [[package]]
 name = "wasm-mutate"
-version = "0.2.6"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=component-wast#458426690fdc1a598e9f033fa3c290de3a30cd76"
+version = "0.2.7"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#ee171691c6eaeb57f22cea97e159eb1b27c81f54"
 dependencies = [
  "egg",
  "log",
@@ -3281,8 +3281,8 @@ dependencies = [
 
 [[package]]
 name = "wasm-smith"
-version = "0.11.3"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=component-wast#458426690fdc1a598e9f033fa3c290de3a30cd76"
+version = "0.11.4"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#ee171691c6eaeb57f22cea97e159eb1b27c81f54"
 dependencies = [
  "arbitrary",
  "flagset",
@@ -3327,16 +3327,16 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.88.0"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=component-wast#458426690fdc1a598e9f033fa3c290de3a30cd76"
+version = "0.89.0"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#ee171691c6eaeb57f22cea97e159eb1b27c81f54"
 dependencies = [
  "indexmap",
 ]
 
 [[package]]
 name = "wasmprinter"
-version = "0.2.38"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=component-wast#458426690fdc1a598e9f033fa3c290de3a30cd76"
+version = "0.2.39"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#ee171691c6eaeb57f22cea97e159eb1b27c81f54"
 dependencies = [
  "anyhow",
  "wasmparser",
@@ -3482,7 +3482,7 @@ dependencies = [
  "wasmtime-wasi-crypto",
  "wasmtime-wasi-nn",
  "wasmtime-wast",
- "wast 45.0.0",
+ "wast 46.0.0",
  "wat",
  "windows-sys",
 ]
@@ -3740,7 +3740,7 @@ dependencies = [
  "anyhow",
  "log",
  "wasmtime",
- "wast 45.0.0",
+ "wast 46.0.0",
 ]
 
 [[package]]
@@ -3754,8 +3754,8 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "45.0.0"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=component-wast#458426690fdc1a598e9f033fa3c290de3a30cd76"
+version = "46.0.0"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#ee171691c6eaeb57f22cea97e159eb1b27c81f54"
 dependencies = [
  "leb128",
  "memchr",
@@ -3765,10 +3765,10 @@ dependencies = [
 
 [[package]]
 name = "wat"
-version = "1.0.47"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=component-wast#458426690fdc1a598e9f033fa3c290de3a30cd76"
+version = "1.0.48"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#ee171691c6eaeb57f22cea97e159eb1b27c81f54"
 dependencies = [
- "wast 45.0.0",
+ "wast 46.0.0",
 ]
 
 [[package]]

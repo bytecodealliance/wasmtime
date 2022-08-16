@@ -51,12 +51,12 @@ test-programs = { path = "crates/test-programs" }
 wasmtime-runtime = { path = "crates/runtime" }
 tokio = { version = "1.8.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
 tracing-subscriber = "0.3.1"
-wast = "45.0.0"
+wast = "46.0.0"
 criterion = "0.3.4"
 num_cpus = "1.13.0"
 memchr = "2.4"
 async-trait = "0.1"
-wat = "1.0.47"
+wat = "1.0.48"
 once_cell = "1.9.0"
 rayon = "1.5.0"
 component-macro-test = { path = "crates/misc/component-macro-test" }
@@ -150,10 +150,10 @@ name = "call"
 harness = false
 
 [patch.crates-io]
-wasmparser = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'component-wast' }
-wasm-encoder = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'component-wast' }
-wasm-mutate = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'component-wast' }
-wasm-smith = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'component-wast' }
-wasmprinter = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'component-wast' }
-wast = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'component-wast' }
-wat = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'component-wast' }
+wasmparser = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
+wasm-encoder = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
+wasm-mutate = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
+wasm-smith = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
+wasmprinter = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
+wast = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
+wat = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
