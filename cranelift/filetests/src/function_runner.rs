@@ -166,6 +166,7 @@ impl TestFileCompiler {
         defined_func: &DefinedFunction,
     ) -> Result<Function> {
         // First, rename the function
+        let func_original_name = func.name;
         func.name = UserFuncName::User(defined_func.new_name.clone());
 
         // Rename any functions that it references
@@ -184,7 +185,7 @@ impl TestFileCompiler {
             let target_df = self.defined_functions.get(&old_name).ok_or(anyhow!(
                 "Undeclared function {} is referenced by {}!",
                 &old_name,
-                &func.name
+                &func_original_name
             ))?;
 
             redefines.push((ext_ref, target_df.new_name.clone()));
