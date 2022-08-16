@@ -141,6 +141,7 @@ macro_rules! define_static_api_test {
 
             let mut config = Config::new();
             config.wasm_component_model(true);
+            config.debug_adapter_modules(input.arbitrary()?);
             let engine = Engine::new(&config).unwrap();
             let wat = declarations.make_component();
             let wat = wat.as_bytes();

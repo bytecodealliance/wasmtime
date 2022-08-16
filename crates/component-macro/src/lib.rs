@@ -618,7 +618,7 @@ impl Expander for LowerExpander {
 
             if ty.is_some() {
                 pattern = quote!(Self::#ident(value));
-                lower = quote!(value.lower(store, options, #internal::map_maybe_uninit!(dst.payload.#ident)));
+                lower = quote!(value.lower(store, options, dst));
                 store = quote!(value.store(
                     memory,
                     offset + <Self as #internal::ComponentVariant>::PAYLOAD_OFFSET32,
@@ -630,8 +630,14 @@ impl Expander for LowerExpander {
             }
 
             lowers.extend(quote!(#pattern => {
-                #internal::map_maybe_uninit!(dst.tag).write(wasmtime::ValRaw::i32(#index_u32 as i32));
-                #lower
+                #internal::map_maybe_uninit!(dst.tag).write(wasmtime::ValRaw::u32(#index_u32));
+                unsafe {
+                    #internal::lower_payload(
+                        #internal::map_maybe_uninit!(dst.payload),
+                        |payload| #internal::map_maybe_uninit!(payload.#ident),
+                        |dst| #lower,
+                    )
+                }
             }));
 
             stores.extend(quote!(#pattern => {
@@ -652,13 +658,6 @@ impl Expander for LowerExpander {
                     options: &#internal::Options,
                     dst: &mut std::mem::MaybeUninit<Self::Lower>,
                 ) -> #internal::anyhow::Result<()> {
-                    // See comment in <Result<T, E> as Lower>::lower for why we zero out the payload here
-                    unsafe {
-                        #internal::map_maybe_uninit!(dst.payload)
-                            .as_mut_ptr()
-                            .write_bytes(0u8, 1);
-                    }
-
                     match self {
                         #lowers
                     }
@@ -791,11 +790,8 @@ impl Expander for ComponentTypeExpander {
                     }
                     VariantStyle::Enum => quote!(#name,),
                 });
+                lower_payload_case_declarations.extend(quote!(#ident: [wasmtime::ValRaw; 0],));
             }
-        }
-
-        if lower_payload_case_declarations.is_empty() {
-            lower_payload_case_declarations.extend(quote!(_dummy: ()));
         }
 
         let typecheck = match style {

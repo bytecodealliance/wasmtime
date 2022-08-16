@@ -8,6 +8,7 @@ mod func;
 mod instance;
 mod linker;
 mod matching;
+mod storage;
 mod store;
 pub mod types;
 mod values;
@@ -28,8 +29,9 @@ pub use wasmtime_component_macro::{flags, ComponentType, Lift, Lower};
 #[doc(hidden)]
 pub mod __internal {
     pub use super::func::{
-        format_flags, typecheck_enum, typecheck_flags, typecheck_record, typecheck_union,
-        typecheck_variant, ComponentVariant, MaybeUninitExt, Memory, MemoryMut, Options,
+        format_flags, lower_payload, typecheck_enum, typecheck_flags, typecheck_record,
+        typecheck_union, typecheck_variant, ComponentVariant, MaybeUninitExt, Memory, MemoryMut,
+        Options,
     };
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;

@@ -1,4 +1,5 @@
 use crate::component::instance::{Instance, InstanceData};
+use crate::component::storage::storage_as_slice;
 use crate::component::types::Type;
 use crate::component::values::Val;
 use crate::store::{StoreOpaque, Stored};
@@ -317,8 +318,6 @@ impl Func {
                 if param_abi.flat_count(MAX_FLAT_PARAMS).is_none() {
                     self.store_args(store, &options, &param_abi, &params, args, dst)
                 } else {
-                    dst.write([ValRaw::u64(0); MAX_FLAT_PARAMS]);
-
                     let dst = &mut unsafe {
                         mem::transmute::<_, &mut [MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>(dst)
                     }
@@ -443,7 +442,7 @@ impl Func {
             // later get used in post-return.
             flags.set_needs_post_return(true);
             let val = lift(store.0, &options, ret)?;
-            let ret_slice = cast_storage(ret);
+            let ret_slice = storage_as_slice(ret);
             let data = &mut store.0[self.0];
             assert!(data.post_return_arg.is_none());
             match ret_slice.len() {
@@ -452,16 +451,6 @@ impl Func {
                 _ => unreachable!(),
             }
             return Ok(val);
-        }
-
-        unsafe fn cast_storage<T>(storage: &T) -> &[ValRaw] {
-            assert!(std::mem::size_of_val(storage) % std::mem::size_of::<ValRaw>() == 0);
-            assert!(std::mem::align_of_val(storage) == std::mem::align_of::<ValRaw>());
-
-            std::slice::from_raw_parts(
-                (storage as *const T).cast(),
-                mem::size_of_val(storage) / mem::size_of::<ValRaw>(),
-            )
         }
     }
 

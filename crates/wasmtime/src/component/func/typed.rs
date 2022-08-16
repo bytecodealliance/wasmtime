@@ -1,4 +1,5 @@
 use crate::component::func::{Func, Memory, MemoryMut, Options};
+use crate::component::storage::{storage_as_slice, storage_as_slice_mut};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use anyhow::{anyhow, bail, Context, Result};
@@ -1681,6 +1682,34 @@ where
     }
 }
 
+/// Lowers the payload of a variant into the storage for the entire payload,
+/// handling writing zeros at the end of the representation if this payload is
+/// smaller than the entire flat representation.
+///
+/// * `payload` - the flat storage space for the entire payload of the variant
+/// * `typed_payload` - projection from the payload storage space to the
+///   individaul storage space for this variant.
+/// * `lower` - lowering operation used to initialize the `typed_payload` return
+///   value.
+///
+/// For more information on this se the comments in the `Lower for Result`
+/// implementation below.
+pub unsafe fn lower_payload<P, T>(
+    payload: &mut MaybeUninit<P>,
+    typed_payload: impl FnOnce(&mut MaybeUninit<P>) -> &mut MaybeUninit<T>,
+    lower: impl FnOnce(&mut MaybeUninit<T>) -> Result<()>,
+) -> Result<()> {
+    let typed = typed_payload(payload);
+    lower(typed)?;
+
+    let typed_len = storage_as_slice(typed).len();
+    let payload = storage_as_slice_mut(payload);
+    for slot in payload[typed_len..].iter_mut() {
+        *slot = ValRaw::u64(0);
+    }
+    Ok(())
+}
+
 unsafe impl<T, E> ComponentVariant for Result<T, E>
 where
     T: ComponentType,
@@ -1700,35 +1729,89 @@ where
         options: &Options,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        // Start out by zeroing out the payload. This will ensure that if either
-        // arm doesn't initialize some values then everything is still
-        // deterministically set.
+        // This implementation of `Lower::lower`, if you're reading these from
+        // the top of this file, is the first location that the "join" logic of
+        // the component model's canonical ABI encountered. The rough problem is
+        // that let's say we have a component model type of the form:
         //
-        // Additionally, this initialization of zero means that the specific
-        // types written by each `lower` call below on each arm still has the
-        // correct value even when "joined" with the other arm.
+        //      (result u64 (error (tuple f32 u16)))
         //
-        // Finally note that this is required by the canonical ABI to some
-        // degree where if the `Ok` arm initializes fewer values than the `Err`
-        // arm then all the remaining values must be initialized to zero, and
-        // that's what this does.
-        unsafe {
-            map_maybe_uninit!(dst.payload)
-                .as_mut_ptr()
-                .write_bytes(0u8, 1);
-        }
-
+        // The flat representation of this is actually pretty tricky. Currently
+        // it is:
+        //
+        //      i32 i64 i32
+        //
+        // The first `i32` is the discriminant for the `result`, and the payload
+        // is represented by `i64 i32`. The "ok" variant will only use the `i64`
+        // and the "err" variant will use both `i64` and `i32`.
+        //
+        // In the "ok" variant the first issue is encountered. The size of one
+        // variant may not match the size of the other variants. All variants
+        // start at the "front" but when lowering a type we need to be sure to
+        // initialize the later variants (lest we leak random host memory into
+        // the guest module). Due to how the `Lower` type is represented as a
+        // `union` of all the variants what ends up happening here is that
+        // internally within the `lower_payload` after the typed payload is
+        // lowered the remaining bits of the payload that weren't initialized
+        // are all set to zero. This will guarantee that we'll write to all the
+        // slots for each variant.
+        //
+        // The "err" variant encounters the second issue, however, which is that
+        // the flat representation for each type may differ between payloads. In
+        // the "ok" arm an `i64` is written, but the `lower` implementation for
+        // the "err" arm will write an `f32` and then an `i32`. For this
+        // implementation of `lower` to be valid the `f32` needs to get inflated
+        // to an `i64` with zero-padding in the upper bits. What may be
+        // surprising, however, is that none of this is handled in this file.
+        // This implementation looks like it's blindly deferring to `E::lower`
+        // and hoping it does the right thing.
+        //
+        // In reality, however, the correctness of variant lowering relies on
+        // two subtle details of the `ValRaw` implementation in Wasmtime:
+        //
+        // 1. First the `ValRaw` value always contains little-endian values.
+        //    This means that if a `u32` is written, a `u64` is read, and then
+        //    the `u64` has its upper bits truncated the original value will
+        //    always be retained. This is primarily here for big-endian
+        //    platforms where if it weren't little endian then the opposite
+        //    would occur and the wrong value would be read.
+        //
+        // 2. Second, and perhaps even more subtly, the `ValRaw` constructors
+        //    for 32-bit types actually always initialize 64-bits of the
+        //    `ValRaw`. In the component model flat ABI only 32 and 64-bit types
+        //    are used so 64-bits is big enough to contain everything. This
+        //    means that when a `ValRaw` is written into the destination it will
+        //    always, whether it's needed or not, be "ready" to get extended up
+        //    to 64-bits.
+        //
+        // Put together these two subtle guarantees means that all `Lower`
+        // implementations can be written "naturally" as one might naively
+        // expect. Variants will, on each arm, zero out remaining fields and all
+        // writes to the flat representation will automatically be 64-bit writes
+        // meaning that if the value is read as a 64-bit value, which isn't
+        // known at the time of the write, it'll still be correct.
         match self {
             Ok(e) => {
                 map_maybe_uninit!(dst.tag).write(ValRaw::i32(0));
-                e.lower(store, options, map_maybe_uninit!(dst.payload.ok))?;
+                unsafe {
+                    lower_payload(
+                        map_maybe_uninit!(dst.payload),
+                        |payload| map_maybe_uninit!(payload.ok),
+                        |dst| e.lower(store, options, dst),
+                    )
+                }
             }
             Err(e) => {
                 map_maybe_uninit!(dst.tag).write(ValRaw::i32(1));
-                e.lower(store, options, map_maybe_uninit!(dst.payload.err))?;
+                unsafe {
+                    lower_payload(
+                        map_maybe_uninit!(dst.payload),
+                        |payload| map_maybe_uninit!(payload.err),
+                        |dst| e.lower(store, options, dst),
+                    )
+                }
             }
         }
-        Ok(())
     }
 
     fn store<U>(&self, mem: &mut MemoryMut<'_, U>, offset: usize) -> Result<()> {

@@ -2485,10 +2485,13 @@ impl Compiler<'_, '_> {
             | (ValType::F64, ValType::F64) => {}
 
             (ValType::I32, ValType::F32) => self.instruction(F32ReinterpretI32),
-            (ValType::I64, ValType::I32) => self.instruction(I32WrapI64),
+            (ValType::I64, ValType::I32) => {
+                self.assert_i64_upper_bits_not_set(idx);
+                self.instruction(I32WrapI64);
+            }
             (ValType::I64, ValType::F64) => self.instruction(F64ReinterpretI64),
-            (ValType::F64, ValType::F32) => self.instruction(F32DemoteF64),
             (ValType::I64, ValType::F32) => {
+                self.assert_i64_upper_bits_not_set(idx);
                 self.instruction(I32WrapI64);
                 self.instruction(F32ReinterpretI32);
             }
@@ -2501,6 +2504,7 @@ impl Compiler<'_, '_> {
             | (ValType::F32, ValType::F64)
             | (ValType::F64, ValType::I32)
             | (ValType::F64, ValType::I64)
+            | (ValType::F64, ValType::F32)
 
             // not used in the component model
             | (ValType::ExternRef, _)
@@ -2512,6 +2516,19 @@ impl Compiler<'_, '_> {
                 panic!("cannot get {dst_ty:?} from {src_ty:?} local");
             }
         }
+    }
+
+    fn assert_i64_upper_bits_not_set(&mut self, local: u32) {
+        if !self.module.debug {
+            return;
+        }
+        self.instruction(LocalGet(local));
+        self.instruction(I64Const(32));
+        self.instruction(I64ShrU);
+        self.instruction(I32WrapI64);
+        self.instruction(If(BlockType::Empty));
+        self.trap(Trap::AssertFailed("upper bits are unexpectedly set"));
+        self.instruction(End);
     }
 
     /// Converts the top value on the WebAssembly stack which has type
@@ -2531,7 +2548,6 @@ impl Compiler<'_, '_> {
             (ValType::F32, ValType::I32) => self.instruction(I32ReinterpretF32),
             (ValType::I32, ValType::I64) => self.instruction(I64ExtendI32U),
             (ValType::F64, ValType::I64) => self.instruction(I64ReinterpretF64),
-            (ValType::F32, ValType::F64) => self.instruction(F64PromoteF32),
             (ValType::F32, ValType::I64) => {
                 self.instruction(I32ReinterpretF32);
                 self.instruction(I64ExtendI32U);
@@ -2545,6 +2561,7 @@ impl Compiler<'_, '_> {
             | (ValType::F64, ValType::F32)
             | (ValType::I32, ValType::F64)
             | (ValType::I64, ValType::F64)
+            | (ValType::F32, ValType::F64)
 
             // not used in the component model
             | (ValType::ExternRef, _)
