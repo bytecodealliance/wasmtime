@@ -14,8 +14,8 @@ block0(v0: i8x16):
 ; block0:
 ;   movdqa  %xmm0, %xmm5
 ;   load_const VCodeConstant(0), %xmm0
-;   movdqa  %xmm5, %xmm7
-;   pmaddubsw %xmm0, %xmm7, %xmm0
+;   movdqa  %xmm5, %xmm6
+;   pmaddubsw %xmm0, %xmm6, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

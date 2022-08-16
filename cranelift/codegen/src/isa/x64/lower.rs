@@ -566,63 +566,11 @@ fn lower_insn_to_regs(
         }
 
         Opcode::IaddPairwise => {
-            if let (Some(swiden_low), Some(swiden_high)) = (
+            if let (Some(_swiden_low), Some(_swiden_high)) = (
                 matches_input(ctx, inputs[0], Opcode::SwidenLow),
                 matches_input(ctx, inputs[1], Opcode::SwidenHigh),
             ) {
-                let swiden_input = &[
-                    InsnInput {
-                        insn: swiden_low,
-                        input: 0,
-                    },
-                    InsnInput {
-                        insn: swiden_high,
-                        input: 0,
-                    },
-                ];
-
-                let input_ty = ctx.input_ty(swiden_low, 0);
-                let output_ty = ctx.output_ty(insn, 0);
-                let src0 = put_input_in_reg(ctx, swiden_input[0]);
-                let src1 = put_input_in_reg(ctx, swiden_input[1]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                if src0 != src1 {
-                    unimplemented!(
-                        "iadd_pairwise not implemented for general case with different inputs"
-                    );
-                }
-                match (input_ty, output_ty) {
-                    (types::I8X16, types::I16X8) => {
-                        static MUL_CONST: [u8; 16] = [0x01; 16];
-                        let mul_const = ctx.use_constant(VCodeConstantData::WellKnown(&MUL_CONST));
-                        let mul_const_reg = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
-                        ctx.emit(Inst::xmm_load_const(mul_const, mul_const_reg, types::I8X16));
-                        ctx.emit(Inst::xmm_mov(
-                            SseOpcode::Movdqa,
-                            RegMem::reg(mul_const_reg.to_reg()),
-                            dst,
-                        ));
-                        ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmaddubsw, RegMem::reg(src0), dst));
-                    }
-                    (types::I16X8, types::I32X4) => {
-                        static MUL_CONST: [u8; 16] = [
-                            0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00,
-                            0x01, 0x00, 0x01, 0x00,
-                        ];
-                        let mul_const = ctx.use_constant(VCodeConstantData::WellKnown(&MUL_CONST));
-                        let mul_const_reg = ctx.alloc_tmp(types::I16X8).only_reg().unwrap();
-                        ctx.emit(Inst::xmm_load_const(mul_const, mul_const_reg, types::I16X8));
-                        ctx.emit(Inst::xmm_mov(SseOpcode::Movdqa, RegMem::reg(src0), dst));
-                        ctx.emit(Inst::xmm_rm_r(
-                            SseOpcode::Pmaddwd,
-                            RegMem::reg(mul_const_reg.to_reg()),
-                            dst,
-                        ));
-                    }
-                    _ => {
-                        unimplemented!("Type not supported for {:?}", op);
-                    }
-                }
+                implemented_in_isle(ctx);
             } else if let (Some(uwiden_low), Some(uwiden_high)) = (
                 matches_input(ctx, inputs[0], Opcode::UwidenLow),
                 matches_input(ctx, inputs[1], Opcode::UwidenHigh),

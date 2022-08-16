@@ -781,6 +781,18 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         self.lower_ctx
             .use_constant(VCodeConstantData::WellKnown(&UINT_MASK_HIGH))
     }
+
+    #[inline]
+    fn iadd_pairwise_mul_const_16(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_MUL_CONST_16))
+    }
+
+    #[inline]
+    fn iadd_pairwise_mul_const_32(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_MUL_CONST_32))
+    }
 }
 
 impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
@@ -906,4 +918,10 @@ const UINT_MASK: [u8; 16] = [
 
 const UINT_MASK_HIGH: [u8; 16] = [
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43,
+];
+
+const IADD_PAIRWISE_MUL_CONST_16: [u8; 16] = [0x01; 16];
+
+const IADD_PAIRWISE_MUL_CONST_32: [u8; 16] = [
+    0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00,
 ];
