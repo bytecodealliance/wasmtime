@@ -540,6 +540,9 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
                 UnaryIeee32 { imm, .. } => imm.to_string(),
                 UnaryIeee64 { imm, .. } => imm.to_string(),
                 UnaryBool { imm, .. } => imm.to_string(),
+                UnaryConst {
+                    constant_handle, ..
+                } => constant_handle.to_string(),
                 _ => continue,
             };
             write!(w, "{}{} = {}", sep, arg, imm)?;

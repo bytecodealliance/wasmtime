@@ -1237,7 +1237,7 @@ mod tests {
         let actual_ir = func.display().to_string();
         assert!(
             expected_ir == actual_ir,
-            "Expected\n{}, but got\n{}",
+            "Expected:\n{}\nGot:\n{}",
             expected_ir,
             actual_ir
         );
@@ -1800,7 +1800,7 @@ block0:
     v1 -> v4
     v3 = vconst.i8x16 const0
     v0 -> v3
-    return v0, v1, v2
+    return v0, v1, v2  ; v0 = const0, v1 = const0
 }
 ",
         );

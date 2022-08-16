@@ -1077,7 +1077,7 @@ mod tests {
             let expected_ir = expected_str.replace("\r\n", "\n");
             assert!(
                 expected_ir == actual_ir,
-                "Expected:\n{}\nbut got:\n{}",
+                "Expected:\n{}\nGot:\n{}",
                 expected_ir,
                 actual_ir,
             );
