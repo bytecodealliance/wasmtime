@@ -2500,6 +2500,11 @@
 (rule (x64_packsswb src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Packsswb) src1 src2))
 
+;; Helper for creating `packssdw` instructions.
+(decl x64_packssdw (Xmm XmmMem) Xmm)
+(rule (x64_packssdw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Packssdw) src1 src2))
+
 ;; Helper for creating `MInst.XmmRmRImm` instructions.
 (decl xmm_rm_r_imm (SseOpcode Reg RegMem u8 OperandSize) Xmm)
 (rule (xmm_rm_r_imm op src1 src2 imm size)
@@ -3051,9 +3056,15 @@
             (_ Unit (emit (MInst.GprToXmm (SseOpcode.Cvtsi2sd) x dst size))))
         dst))
 
+;; Helper for creating `cvttps2dq` instructions.
 (decl x64_cvttps2dq (Type XmmMem) Xmm)
 (rule (x64_cvttps2dq ty x)
       (xmm_unary_rm_r (SseOpcode.Cvttps2dq) x))
+
+;; Helper for creating `cvttpd2dq` instructions.
+(decl x64_cvttpd2dq (XmmMem) Xmm)
+(rule (x64_cvttpd2dq x)
+      (xmm_unary_rm_r (SseOpcode.Cvttpd2dq) x))
 
 (decl cvt_u64_to_float_seq (Type Gpr) Xmm)
 (rule (cvt_u64_to_float_seq ty src)
@@ -3272,6 +3283,11 @@
 
 (decl iadd_pairwise_addd_const_32 () VCodeConstant)
 (extern constructor iadd_pairwise_addd_const_32 iadd_pairwise_addd_const_32)
+
+;;;; snarrow constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl snarrow_umax_mask () VCodeConstant)
+(extern constructor snarrow_umax_mask snarrow_umax_mask)
 
 ;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

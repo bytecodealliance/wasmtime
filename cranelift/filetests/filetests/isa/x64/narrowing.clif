@@ -40,12 +40,10 @@ block0(v0: f64x2, v1: i64x2):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm7
-;   movdqa  %xmm7, %xmm8
-;   movdqa  %xmm7, %xmm10
-;   cmppd   $0, %xmm8, %xmm10, %xmm8
-;   load_const VCodeConstant(0), %xmm10
-;   andps   %xmm8, %xmm10, %xmm8
-;   minpd   %xmm0, %xmm8, %xmm0
+;   cmppd   $0, %xmm7, %xmm0, %xmm7
+;   load_const VCodeConstant(0), %xmm8
+;   andps   %xmm7, %xmm8, %xmm7
+;   minpd   %xmm0, %xmm7, %xmm0
 ;   cvttpd2dq %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

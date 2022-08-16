@@ -805,6 +805,17 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         self.lower_ctx
             .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_ADDD_CONST_32))
     }
+
+    #[inline]
+    fn snarrow_umax_mask(&mut self) -> VCodeConstant {
+        // 2147483647.0 is equivalent to 0x41DFFFFFFFC00000
+        static UMAX_MASK: [u8; 16] = [
+            0x00, 0x00, 0xC0, 0xFF, 0xFF, 0xFF, 0xDF, 0x41, 0x00, 0x00, 0xC0, 0xFF, 0xFF, 0xFF,
+            0xDF, 0x41,
+        ];
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&UMAX_MASK))
+    }
 }
 
 impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
