@@ -10,11 +10,9 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm5
-;   movabsq $9223372036854775807, %rdx
-;   movq    %rdx, %xmm0
-;   movdqa  %xmm5, %xmm7
-;   andpd   %xmm0, %xmm7, %xmm0
+;   movabsq $9223372036854775807, %rcx
+;   movq    %rcx, %xmm5
+;   andpd   %xmm0, %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -29,10 +27,10 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movsd   0(%rdi), %xmm5
-;   movabsq $9223372036854775807, %r8
-;   movq    %r8, %xmm0
-;   andpd   %xmm0, %xmm5, %xmm0
+;   movsd   0(%rdi), %xmm0
+;   movabsq $9223372036854775807, %rdx
+;   movq    %rdx, %xmm6
+;   andpd   %xmm0, %xmm6, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

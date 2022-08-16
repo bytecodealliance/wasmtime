@@ -569,11 +569,12 @@ fn lower_insn_to_regs(
         | Opcode::SwidenLow
         | Opcode::Snarrow
         | Opcode::Unarrow
-        | Opcode::Bitcast => {
+        | Opcode::Bitcast
+        | Opcode::Fabs => {
             implemented_in_isle(ctx);
         }
 
-        Opcode::Fabs | Opcode::Fneg => {
+        Opcode::Fneg => {
             let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
@@ -586,12 +587,12 @@ fn lower_insn_to_regs(
             if !output_ty.is_vector() {
                 let (val, opcode): (u64, _) = match output_ty {
                     types::F32 => match op {
-                        Opcode::Fabs => (0x7fffffff, SseOpcode::Andps),
+                        Opcode::Fabs => implemented_in_isle(ctx),
                         Opcode::Fneg => (0x80000000, SseOpcode::Xorps),
                         _ => unreachable!(),
                     },
                     types::F64 => match op {
-                        Opcode::Fabs => (0x7fffffffffffffff, SseOpcode::Andpd),
+                        Opcode::Fabs => implemented_in_isle(ctx),
                         Opcode::Fneg => (0x8000000000000000, SseOpcode::Xorpd),
                         _ => unreachable!(),
                     },
