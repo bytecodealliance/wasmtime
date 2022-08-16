@@ -1232,6 +1232,17 @@ mod tests {
         sample_function(true)
     }
 
+    #[track_caller]
+    fn check(func: &Function, expected_ir: &str) {
+        let actual_ir = func.display().to_string();
+        assert!(
+            expected_ir == actual_ir,
+            "Expected\n{}, but got\n{}",
+            expected_ir,
+            actual_ir
+        );
+    }
+
     /// Helper function to construct a fixed frontend configuration.
     fn systemv_frontend_config() -> TargetFrontendConfig {
         TargetFrontendConfig {
@@ -1271,8 +1282,8 @@ mod tests {
             builder.finalize();
         }
 
-        assert_eq!(
-            func.display().to_string(),
+        check(
+            &func,
             "function %sample() -> i32 system_v {
     sig0 = (i64, i64, i64) system_v
     fn0 = %Memcpy sig0
@@ -1282,10 +1293,10 @@ block0:
     v1 -> v3
     v2 = iconst.i64 0
     v0 -> v2
-    call fn0(v1, v0, v1)
-    return v1
+    call fn0(v1, v0, v1)  ; v1 = 0, v0 = 0, v1 = 0
+    return v1  ; v1 = 0
 }
-"
+",
         );
     }
 
@@ -1327,19 +1338,19 @@ block0:
             builder.finalize();
         }
 
-        assert_eq!(
-            func.display().to_string(),
+        check(
+            &func,
             "function %sample() -> i32 system_v {
 block0:
     v4 = iconst.i64 0
     v1 -> v4
     v3 = iconst.i64 0
     v0 -> v3
-    v2 = load.i64 aligned v0
-    store aligned v2, v1
-    return v1
+    v2 = load.i64 aligned v0  ; v0 = 0
+    store aligned v2, v1  ; v1 = 0
+    return v1  ; v1 = 0
 }
-"
+",
         );
     }
 
@@ -1381,8 +1392,8 @@ block0:
             builder.finalize();
         }
 
-        assert_eq!(
-            func.display().to_string(),
+        check(
+            &func,
             "function %sample() -> i32 system_v {
     sig0 = (i64, i64, i64) system_v
     fn0 = %Memcpy sig0
@@ -1393,10 +1404,10 @@ block0:
     v3 = iconst.i64 0
     v0 -> v3
     v2 = iconst.i64 8192
-    call fn0(v1, v0, v2)
-    return v1
+    call fn0(v1, v0, v2)  ; v1 = 0, v0 = 0, v2 = 8192
+    return v1  ; v1 = 0
 }
-"
+",
         );
     }
 
@@ -1426,17 +1437,17 @@ block0:
             builder.finalize();
         }
 
-        assert_eq!(
-            func.display().to_string(),
+        check(
+            &func,
             "function %sample() -> i32 system_v {
 block0:
     v2 = iconst.i64 0
     v0 -> v2
     v1 = iconst.i64 0x0101_0101_0101_0101
-    store aligned v1, v0
-    return v0
+    store aligned v1, v0  ; v1 = 0x0101_0101_0101_0101, v0 = 0
+    return v0  ; v0 = 0
 }
-"
+",
         );
     }
 
@@ -1466,8 +1477,8 @@ block0:
             builder.finalize();
         }
 
-        assert_eq!(
-            func.display().to_string(),
+        check(
+            &func,
             "function %sample() -> i32 system_v {
     sig0 = (i64, i32, i64) system_v
     fn0 = %Memset sig0
@@ -1477,11 +1488,11 @@ block0:
     v0 -> v4
     v1 = iconst.i8 1
     v2 = iconst.i64 8192
-    v3 = uextend.i32 v1
-    call fn0(v0, v3, v2)
-    return v0
+    v3 = uextend.i32 v1  ; v1 = 1
+    call fn0(v0, v3, v2)  ; v0 = 0, v2 = 8192
+    return v0  ; v0 = 0
 }
-"
+",
         );
     }
 
@@ -1530,8 +1541,8 @@ block0:
             builder.finalize();
         }
 
-        assert_eq!(
-            func.display().to_string(),
+        check(
+            &func,
             "function %sample() -> i32 system_v {
     sig0 = (i64, i64, i64) -> i32 system_v
     fn0 = %Memcmp sig0
@@ -1543,10 +1554,10 @@ block0:
     v1 -> v5
     v4 = iconst.i64 0
     v0 -> v4
-    v3 = call fn0(v0, v1, v2)
+    v3 = call fn0(v0, v1, v2)  ; v0 = 0, v1 = 0, v2 = 0
     return v3
 }
-"
+",
         );
     }
 
@@ -1561,7 +1572,7 @@ block0:
     v3 = iconst.i64 0
     v0 -> v3
     v2 = bconst.b1 true
-    return v2",
+    return v2  ; v2 = true",
             |builder, target, x, y| {
                 builder.emit_small_memory_compare(
                     target.frontend_config(),
@@ -1587,8 +1598,8 @@ block0:
     v1 -> v6
     v5 = iconst.i64 0
     v0 -> v5
-    v2 = load.i8 aligned v0
-    v3 = load.i8 aligned v1
+    v2 = load.i8 aligned v0  ; v0 = 0
+    v3 = load.i8 aligned v1  ; v1 = 0
     v4 = icmp ugt v2, v3
     return v4",
             |builder, target, x, y| {
@@ -1616,8 +1627,8 @@ block0:
     v1 -> v6
     v5 = iconst.i64 0
     v0 -> v5
-    v2 = load.i32 aligned v0
-    v3 = load.i32 aligned v1
+    v2 = load.i32 aligned v0  ; v0 = 0
+    v3 = load.i32 aligned v1  ; v1 = 0
     v4 = icmp eq v2, v3
     return v4",
             |builder, target, x, y| {
@@ -1645,8 +1656,8 @@ block0:
     v1 -> v6
     v5 = iconst.i64 0
     v0 -> v5
-    v2 = load.i128 v0
-    v3 = load.i128 v1
+    v2 = load.i128 v0  ; v0 = 0
+    v3 = load.i128 v1  ; v1 = 0
     v4 = icmp ne v2, v3
     return v4",
             |builder, target, x, y| {
@@ -1678,7 +1689,7 @@ block0:
     v5 = iconst.i64 0
     v0 -> v5
     v2 = iconst.i64 3
-    v3 = call fn0(v0, v1, v2)
+    v3 = call fn0(v0, v1, v2)  ; v0 = 0, v1 = 0, v2 = 3
     v4 = icmp_imm sge v3, 0
     return v4",
             |builder, target, x, y| {
@@ -1740,13 +1751,9 @@ block0:
             builder.finalize();
         }
 
-        let actual_ir = func.display().to_string();
-        let expected_ir = format!("function %sample() -> b1 system_v {{{}\n}}\n", expected);
-        assert!(
-            expected_ir == actual_ir,
-            "Expected\n{}, but got\n{}",
-            expected_ir,
-            actual_ir
+        check(
+            &func,
+            &format!("function %sample() -> b1 system_v {{{}\n}}\n", expected),
         );
     }
 
@@ -1780,14 +1787,14 @@ block0:
             builder.finalize();
         }
 
-        assert_eq!(
-            func.display().to_string(),
+        check(
+            &func,
             "function %sample() -> i8x16, b8x16, f32x4 system_v {
     const0 = 0x00000000000000000000000000000000
 
 block0:
     v5 = f32const 0.0
-    v6 = splat.f32x4 v5
+    v6 = splat.f32x4 v5  ; v5 = 0.0
     v2 -> v6
     v4 = vconst.b8x16 const0
     v1 -> v4
@@ -1795,7 +1802,7 @@ block0:
     v0 -> v3
     return v0, v1, v2
 }
-"
+",
         );
     }
 

@@ -7,7 +7,7 @@ use crate::entity::SecondaryMap;
 use crate::ir::entities::AnyEntity;
 use crate::ir::{Block, DataFlowGraph, Function, Inst, SigRef, Type, Value, ValueDef};
 use crate::packed_option::ReservedValue;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt::{self, Write};
 
@@ -530,7 +530,23 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         FloatCondTrap {
             cond, arg, code, ..
         } => write!(w, " {} {}, {}", cond, arg, code),
+    }?;
+
+    let mut sep = "  ; ";
+    for &arg in dfg.inst_args(inst) {
+        if let ValueDef::Result(src, _) = dfg.value_def(arg) {
+            let imm = match dfg[src] {
+                UnaryImm { imm, .. } => imm.to_string(),
+                UnaryIeee32 { imm, .. } => imm.to_string(),
+                UnaryIeee64 { imm, .. } => imm.to_string(),
+                UnaryBool { imm, .. } => imm.to_string(),
+                _ => continue,
+            };
+            write!(w, "{}{} = {}", sep, arg, imm)?;
+            sep = ", ";
+        }
     }
+    Ok(())
 }
 
 /// Write block args using optional parantheses.

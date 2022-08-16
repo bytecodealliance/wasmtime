@@ -48,11 +48,9 @@ function %fn_call_too_few_args() {
         return
 }
 
-function %fn_call_too_many_args() {
+function %fn_call_too_many_args(i64, f32) {
     fn5 = %best_fn()
-    block0:
-        v0 = iconst.i64 56
-        v1 = f32const 0.0
+    block0(v0: i64, v1: f32):
         call fn5(v0, v1) ; error: mismatched argument count for `call fn5(v0, v1)`: got 2, expected 0
         return
 }
