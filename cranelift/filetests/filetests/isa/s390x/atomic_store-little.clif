@@ -16,7 +16,7 @@ function %atomic_store_i64_sym(i64) {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
-  atomic_store.i64 little v0, v1
+  atomic_store.i64 aligned little v0, v1
   return
 }
 
@@ -53,7 +53,7 @@ function %atomic_store_i32_sym(i32) {
   gv0 = symbol colocated %sym
 block0(v0: i32):
   v1 = symbol_value.i64 gv0
-  atomic_store.i32 little v0, v1
+  atomic_store.i32 aligned little v0, v1
   return
 }
 
@@ -90,7 +90,7 @@ function %atomic_store_i16_sym(i16) {
   gv0 = symbol colocated %sym
 block0(v0: i16):
   v1 = symbol_value.i64 gv0
-  atomic_store.i16 little v0, v1
+  atomic_store.i16 aligned little v0, v1
   return
 }
 

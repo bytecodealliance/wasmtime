@@ -73,7 +73,7 @@ use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::visit_block_succs;
 use crate::ir::{Block, Function, Inst, Opcode};
-use crate::machinst::*;
+use crate::{machinst::*, trace};
 
 use smallvec::SmallVec;
 
@@ -214,7 +214,14 @@ impl LoweredBlock {
 impl BlockLoweringOrder {
     /// Compute and return a lowered block order for `f`.
     pub fn new(f: &Function) -> BlockLoweringOrder {
-        log::trace!("BlockLoweringOrder: function body {:?}", f);
+        trace!("BlockLoweringOrder: function body {:?}", f);
+
+        // Make sure that we have an entry block, and the entry block is
+        // not marked as cold. (The verifier ensures this as well, but
+        // the user may not have run the verifier, and this property is
+        // critical to avoid a miscompile, so we assert it here too.)
+        let entry = f.layout.entry_block().expect("Must have entry block");
+        assert!(!f.layout.is_cold(entry));
 
         // Step 1: compute the in-edge and out-edge count of every block.
         let mut block_in_count = SecondaryMap::with_default(0);
@@ -223,7 +230,6 @@ impl BlockLoweringOrder {
         // Cache the block successors to avoid re-examining branches below.
         let mut block_succs: SmallVec<[(Inst, usize, Block); 128]> = SmallVec::new();
         let mut block_succ_range = SecondaryMap::with_default((0, 0));
-        let mut fallthrough_return_block = None;
         for block in f.layout.blocks() {
             let block_succ_start = block_succs.len();
             let mut succ_idx = 0;
@@ -241,17 +247,10 @@ impl BlockLoweringOrder {
                     // Implicit output edge for any return.
                     block_out_count[block] += 1;
                 }
-                if f.dfg[inst].opcode() == Opcode::FallthroughReturn {
-                    // Fallthrough return block must come last.
-                    debug_assert!(fallthrough_return_block == None);
-                    fallthrough_return_block = Some(block);
-                }
             }
         }
         // Implicit input edge for entry block.
-        if let Some(entry) = f.layout.entry_block() {
-            block_in_count[entry] += 1;
-        }
+        block_in_count[entry] += 1;
 
         // All blocks ending in conditional branches or br_tables must
         // have edge-moves inserted at the top of successor blocks,
@@ -382,31 +381,26 @@ impl BlockLoweringOrder {
         let mut stack: SmallVec<[StackEntry; 16]> = SmallVec::new();
         let mut visited = FxHashSet::default();
         let mut postorder = vec![];
-        if let Some(entry) = f.layout.entry_block() {
-            // FIXME(cfallin): we might be able to use OrigAndEdge. Find a way
-            // to not special-case the entry block here.
-            let block = LoweredBlock::Orig { block: entry };
-            visited.insert(block);
-            let range = compute_lowered_succs(&mut lowered_succs, block);
-            lowered_succ_indices.resize(lowered_succs.len(), 0);
-            stack.push(StackEntry {
-                this: block,
-                succs: range,
-                cur_succ: range.1,
-            });
-        }
 
-        let mut deferred_last = None;
+        // Add the entry block.
+        //
+        // FIXME(cfallin): we might be able to use OrigAndEdge. Find a
+        // way to not special-case the entry block here.
+        let block = LoweredBlock::Orig { block: entry };
+        visited.insert(block);
+        let range = compute_lowered_succs(&mut lowered_succs, block);
+        lowered_succ_indices.resize(lowered_succs.len(), 0);
+        stack.push(StackEntry {
+            this: block,
+            succs: range,
+            cur_succ: range.1,
+        });
+
         while !stack.is_empty() {
             let stack_entry = stack.last_mut().unwrap();
             let range = stack_entry.succs;
             if stack_entry.cur_succ == range.0 {
-                let orig_block = stack_entry.this.orig_block();
-                if orig_block.is_some() && orig_block == fallthrough_return_block {
-                    deferred_last = Some((stack_entry.this, range));
-                } else {
-                    postorder.push((stack_entry.this, range));
-                }
+                postorder.push((stack_entry.this, range));
                 stack.pop();
             } else {
                 // Heuristic: chase the children in reverse. This puts the first
@@ -431,10 +425,7 @@ impl BlockLoweringOrder {
         }
 
         postorder.reverse();
-        let mut rpo = postorder;
-        if let Some(d) = deferred_last {
-            rpo.push(d);
-        }
+        let rpo = postorder;
 
         // Step 3: now that we have RPO, build the BlockIndex/BB fwd/rev maps.
         let mut lowered_order = vec![];
@@ -447,12 +438,19 @@ impl BlockLoweringOrder {
             lowered_order.push(block);
             lowered_succ_ranges.push(succ_range);
 
-            if block
-                .orig_block()
-                .map(|b| f.layout.is_cold(b))
-                .unwrap_or(false)
-            {
-                cold_blocks.insert(index);
+            match block {
+                LoweredBlock::Orig { block }
+                | LoweredBlock::OrigAndEdge { block, .. }
+                | LoweredBlock::EdgeAndOrig { block, .. } => {
+                    if f.layout.is_cold(block) {
+                        cold_blocks.insert(index);
+                    }
+                }
+                LoweredBlock::Edge { pred, succ, .. } => {
+                    if f.layout.is_cold(pred) || f.layout.is_cold(succ) {
+                        cold_blocks.insert(index);
+                    }
+                }
             }
         }
 
@@ -477,7 +475,7 @@ impl BlockLoweringOrder {
             orig_map,
             cold_blocks,
         };
-        log::trace!("BlockLoweringOrder: {:?}", result);
+        trace!("BlockLoweringOrder: {:?}", result);
         result
     }
 
@@ -503,13 +501,14 @@ mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::types::*;
-    use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
+    use crate::ir::UserFuncName;
+    use crate::ir::{AbiParam, Function, InstBuilder, Signature};
     use crate::isa::CallConv;
 
     fn build_test_func(n_blocks: usize, edges: &[(usize, usize)]) -> Function {
         assert!(n_blocks > 0);
 
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         let mut func = Function::with_name_signature(name, sig);

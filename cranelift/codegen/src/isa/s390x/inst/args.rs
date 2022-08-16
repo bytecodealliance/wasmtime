@@ -145,6 +145,66 @@ impl MemArg {
     }
 }
 
+/// A memory argument for an instruction with two memory operands.
+/// We cannot use two instances of MemArg, because we do not have
+/// two free temp registers that would be needed to reload two
+/// addresses in the general case.  Also, two copies of MemArg would
+/// increase the size of Inst beyond its current limit.  Use this
+/// simplified form instead that never needs any reloads, and suffices
+/// for all current users.
+#[derive(Clone, Debug)]
+pub struct MemArgPair {
+    pub base: Reg,
+    pub disp: UImm12,
+    pub flags: MemFlags,
+}
+
+impl MemArgPair {
+    /// Convert a MemArg to a MemArgPair if possible.
+    pub fn maybe_from_memarg(mem: &MemArg) -> Option<MemArgPair> {
+        match mem {
+            &MemArg::BXD12 {
+                base,
+                index,
+                disp,
+                flags,
+            } => {
+                if index != zero_reg() {
+                    None
+                } else {
+                    Some(MemArgPair { base, disp, flags })
+                }
+            }
+            &MemArg::RegOffset { reg, off, flags } => {
+                if off < 0 {
+                    None
+                } else {
+                    let disp = UImm12::maybe_from_u64(off as u64)?;
+                    Some(MemArgPair {
+                        base: reg,
+                        disp,
+                        flags,
+                    })
+                }
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn can_trap(&self) -> bool {
+        !self.flags.notrap()
+    }
+
+    /// Edit registers with allocations.
+    pub fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
+        MemArgPair {
+            base: allocs.next(self.base),
+            disp: self.disp,
+            flags: self.flags,
+        }
+    }
+}
+
 //=============================================================================
 // Instruction sub-components (conditions, branches and branch targets):
 // definitions
@@ -266,7 +326,7 @@ impl PrettyPrint for MemArg {
             &MemArg::Label { target } => target.to_string(),
             &MemArg::Symbol {
                 ref name, offset, ..
-            } => format!("{} + {}", name, offset),
+            } => format!("{} + {}", name.display(None), offset),
             // Eliminated by `mem_finalize()`.
             &MemArg::InitialSPOffset { .. }
             | &MemArg::NominalSPOffset { .. }

@@ -9,7 +9,9 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
-cranelift-codegen = { path = "../cranelift/codegen" }
+anyhow = { version = "1.0.19" }
+arbitrary = { version = "1.1.0", features = ["derive"] }
+cranelift-codegen = { path = "../cranelift/codegen", features = ["incremental-cache"] }
 cranelift-reader = { path = "../cranelift/reader" }
 cranelift-wasm = { path = "../cranelift/wasm" }
 cranelift-filetests = { path = "../cranelift/filetests" }
@@ -19,6 +21,16 @@ libfuzzer-sys = "0.4.0"
 target-lexicon = "0.12"
 wasmtime = { path = "../crates/wasmtime" }
 wasmtime-fuzzing = { path = "../crates/fuzzing" }
+component-test-util = { path = "../crates/misc/component-test-util" }
+component-fuzz-util = { path = "../crates/misc/component-fuzz-util" }
+
+[build-dependencies]
+anyhow = "1.0.19"
+proc-macro2 = "1.0"
+arbitrary = { version = "1.1.0", features = ["derive"] }
+rand = { version = "0.8.0" }
+quote = "1.0"
+component-fuzz-util = { path = "../crates/misc/component-fuzz-util" }
 
 [features]
 default = ['fuzz-spec-interpreter']
@@ -100,5 +112,17 @@ doc = false
 [[bin]]
 name = "instantiate-many"
 path = "fuzz_targets/instantiate-many.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "component_api"
+path = "fuzz_targets/component_api.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "cranelift-icache"
+path = "fuzz_targets/cranelift-icache.rs"
 test = false
 doc = false

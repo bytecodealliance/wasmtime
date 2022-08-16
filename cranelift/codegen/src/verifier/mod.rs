@@ -27,6 +27,7 @@
 //! - All predecessors in the CFG must be branches to the block.
 //! - All branches to a block must be present in the CFG.
 //! - A recomputed dominator tree is identical to the existing one.
+//! - The entry block must not be a cold block.
 //!
 //! Type checking
 //!
@@ -721,6 +722,26 @@ impl<'a> Verifier<'a> {
                     ));
                 }
             }
+            NullAry {
+                opcode: Opcode::GetFramePointer | Opcode::GetReturnAddress,
+            } => {
+                if let Some(isa) = &self.isa {
+                    if !isa.flags().preserve_frame_pointers() {
+                        return errors.fatal((
+                            inst,
+                            self.context(inst),
+                            "`get_frame_pointer`/`get_return_address` cannot be used without \
+                             enabling `preserve_frame_pointers`",
+                        ));
+                    }
+                } else {
+                    return errors.fatal((
+                        inst,
+                        self.context(inst),
+                        "`get_frame_pointer`/`get_return_address` require an ISA!",
+                    ));
+                }
+            }
             Unary {
                 opcode: Opcode::Bitcast,
                 arg,
@@ -1201,6 +1222,16 @@ impl<'a> Verifier<'a> {
             }
         }
 
+        errors.as_result()
+    }
+
+    fn check_entry_not_cold(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+        if let Some(entry_block) = self.func.layout.entry_block() {
+            if self.func.layout.is_cold(entry_block) {
+                return errors
+                    .fatal((entry_block, format!("entry block cannot be marked as cold")));
+            }
+        }
         errors.as_result()
     }
 
@@ -1739,6 +1770,7 @@ impl<'a> Verifier<'a> {
         self.verify_tables(errors)?;
         self.verify_jump_tables(errors)?;
         self.typecheck_entry_block_params(errors)?;
+        self.check_entry_not_cold(errors)?;
         self.typecheck_function_signature(errors)?;
 
         for block in self.func.layout.blocks() {
@@ -1813,8 +1845,8 @@ mod tests {
             imm: 0.into(),
         });
         func.layout.append_inst(nullary_with_bad_opcode, block0);
-        func.layout.append_inst(
-            func.dfg.make_inst(InstructionData::Jump {
+        func.stencil.layout.append_inst(
+            func.stencil.dfg.make_inst(InstructionData::Jump {
                 opcode: Opcode::Jump,
                 destination: block0,
                 args: EntityList::default(),

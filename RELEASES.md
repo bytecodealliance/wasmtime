@@ -1,12 +1,68 @@
 --------------------------------------------------------------------------------
 
-## 0.40.0
+## 0.41.0
 
 Unreleased.
 
 ### Added
 
 ### Changed
+
+--------------------------------------------------------------------------------
+
+## 0.40.0
+
+Unreleased.
+
+This was a relatively quiet release in terms of user-facing features where most
+of the work was around the internals of Wasmtime and Cranelift. Improvements
+internally have been made along the lines of:
+
+* Many more instructions are now implemented with ISLE instead of handwritten
+  lowerings.
+* Many improvements to the cranelift-based fuzzing.
+* Many platform improvements for s390x including full SIMD support, running
+  `rustc_codegen_cranelift` with features like `i128`, supporting more
+  ABIs, etc.
+* Much more of the component model has been implemented and is now fuzzed.
+
+Finally this release is currently scheduled to be the last `0.*` release of
+Wasmtime. The upcoming release of Wasmtime on September 20 is planned to be
+Wasmtime's 1.0 release. More information about what 1.0 means for Wasmtime is
+available in the [1.0 RFC]
+
+[1.0 RFC]: https://github.com/bytecodealliance/rfcs/blob/main/accepted/wasmtime-one-dot-oh.md
+
+### Added
+
+* Stack walking has been reimplemented with frame pointers rather than with
+  native unwind information. This means that backtraces are feasible to capture
+  in performance-critical environments and in general stack walking is much
+  faster than before.
+  [#4431](https://github.com/bytecodealliance/wasmtime/pull/4431)
+
+* The WebAssembly `simd` proposal is now fully implemented for the s390x
+  backend.
+  [#4427](https://github.com/bytecodealliance/wasmtime/pull/4427)
+
+* Support for AArch64 has been added in the experimental native debuginfo
+  support that Wasmtime has.
+  [#4468](https://github.com/bytecodealliance/wasmtime/pull/4468)
+
+* Support building the C API of Wasmtime with CMake has been added.
+  [#4369](https://github.com/bytecodealliance/wasmtime/pull/4369)
+
+* Clarification was added to Wasmtime's documentation about "tiers of support"
+  for various features.
+  [#4479](https://github.com/bytecodealliance/wasmtime/pull/4479)
+
+### Fixed
+
+* Support for `filestat_get` has been improved for stdio streams in WASI.
+  [#4531](https://github.com/bytecodealliance/wasmtime/pull/4531)
+
+* Enabling the `vtune` feature no longer breaks builds on AArch64.
+  [#4533](https://github.com/bytecodealliance/wasmtime/pull/4533)
 
 --------------------------------------------------------------------------------
 

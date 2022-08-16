@@ -595,13 +595,16 @@ pub fn table_ops(
                                 caller.gc();
                             }
 
+                            let a = ExternRef::new(CountDrops(num_dropped.clone()));
+                            let b = ExternRef::new(CountDrops(num_dropped.clone()));
+                            let c = ExternRef::new(CountDrops(num_dropped.clone()));
+
+                            log::info!("table_ops: make_refs() -> ({:p}, {:p}, {:p})", a, b, c);
+
                             expected_drops.fetch_add(3, SeqCst);
-                            results[0] =
-                                Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
-                            results[1] =
-                                Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
-                            results[2] =
-                                Some(ExternRef::new(CountDrops(num_dropped.clone()))).into();
+                            results[0] = Some(a).into();
+                            results[1] = Some(b).into();
+                            results[2] = Some(c).into();
                             Ok(())
                         }
                     },
@@ -613,7 +616,22 @@ pub fn table_ops(
             .func_wrap("", "take_refs", {
                 let expected_drops = expected_drops.clone();
                 move |a: Option<ExternRef>, b: Option<ExternRef>, c: Option<ExternRef>| {
-                    log::info!("table_ops: take_refs");
+                    log::info!(
+                        "table_ops: take_refs({}, {}, {})",
+                        a.as_ref().map_or_else(
+                            || format!("{:p}", std::ptr::null::<()>()),
+                            |r| format!("{:p}", *r)
+                        ),
+                        b.as_ref().map_or_else(
+                            || format!("{:p}", std::ptr::null::<()>()),
+                            |r| format!("{:p}", *r)
+                        ),
+                        c.as_ref().map_or_else(
+                            || format!("{:p}", std::ptr::null::<()>()),
+                            |r| format!("{:p}", *r)
+                        ),
+                    );
+
                     // Do the assertion on each ref's inner data, even though it
                     // all points to the same atomic, so that if we happen to
                     // run into a use-after-free bug with one of these refs we
@@ -1054,4 +1072,66 @@ fn set_fuel<T>(store: &mut Store<T>, fuel: u64) {
     }
     // double-check that the store has the expected amount of fuel remaining
     assert_eq!(store.consume_fuel(0).unwrap(), fuel);
+}
+
+/// Generate and execute a `crate::generators::component_types::TestCase` using the specified `input` to create
+/// arbitrary types and values.
+pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbitrary::Result<()> {
+    use crate::generators::component_types;
+    use anyhow::Result;
+    use component_fuzz_util::{TestCase, EXPORT_FUNCTION, IMPORT_FUNCTION};
+    use component_test_util::FuncExt;
+    use wasmtime::component::{Component, Linker, Val};
+
+    crate::init_fuzzing();
+
+    let case = input.arbitrary::<TestCase>()?;
+
+    let engine = component_test_util::engine();
+    let mut store = Store::new(&engine, (Box::new([]) as Box<[Val]>, None));
+    let wat = case.declarations().make_component();
+    let wat = wat.as_bytes();
+    log_wasm(wat);
+    let component = Component::new(&engine, wat).unwrap();
+    let mut linker = Linker::new(&engine);
+
+    linker
+        .root()
+        .func_new(&component, IMPORT_FUNCTION, {
+            move |cx: StoreContextMut<'_, (Box<[Val]>, Option<Val>)>, args: &[Val]| -> Result<Val> {
+                log::trace!("received arguments {args:?}");
+                let (expected_args, result) = cx.data();
+                assert_eq!(args.len(), expected_args.len());
+                for (expected, actual) in expected_args.iter().zip(args) {
+                    assert_eq!(expected, actual);
+                }
+                let result = result.as_ref().unwrap().clone();
+                log::trace!("returning result {result:?}");
+                Ok(result)
+            }
+        })
+        .unwrap();
+
+    let instance = linker.instantiate(&mut store, &component).unwrap();
+    let func = instance.get_func(&mut store, EXPORT_FUNCTION).unwrap();
+    let params = func.params(&store);
+    let result = func.result(&store);
+
+    while input.arbitrary()? {
+        let args = params
+            .iter()
+            .map(|ty| component_types::arbitrary_val(ty, input))
+            .collect::<arbitrary::Result<Box<[_]>>>()?;
+
+        let result = component_types::arbitrary_val(&result, input)?;
+
+        *store.data_mut() = (args.clone(), Some(result.clone()));
+
+        log::trace!("passing args {args:?}");
+        let actual = func.call_and_post_return(&mut store, &args).unwrap();
+        log::trace!("received return {actual:?}");
+        assert_eq!(actual, result);
+    }
+
+    Ok(())
 }

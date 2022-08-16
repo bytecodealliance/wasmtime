@@ -1,5 +1,6 @@
 use crate::component::{
     Component, ComponentTypes, LowerImport, LoweredIndex, RuntimeAlwaysTrapIndex,
+    RuntimeTranscoderIndex, Transcoder,
 };
 use crate::{PrimaryMap, SignatureIndex, Trampoline, WasmFuncType};
 use anyhow::Result;
@@ -10,7 +11,7 @@ use std::any::Any;
 /// Description of where a trampoline is located in the text section of a
 /// compiled image.
 #[derive(Serialize, Deserialize)]
-pub struct LoweringInfo {
+pub struct FunctionInfo {
     /// The byte offset from the start of the text section where this trampoline
     /// starts.
     pub start: u32,
@@ -22,11 +23,8 @@ pub struct LoweringInfo {
 /// `ComponentCompiler::compile_always_trap`.
 #[derive(Serialize, Deserialize)]
 pub struct AlwaysTrapInfo {
-    /// The byte offset from the start of the text section where this trampoline
-    /// starts.
-    pub start: u32,
-    /// The byte length of this trampoline's function body.
-    pub length: u32,
+    /// Information about the extent of this generated function.
+    pub info: FunctionInfo,
     /// The offset from `start` of where the trapping instruction is located.
     pub trap_offset: u32,
 }
@@ -64,6 +62,24 @@ pub trait ComponentCompiler: Send + Sync {
     /// `canon lift`'d function immediately being `canon lower`'d.
     fn compile_always_trap(&self, ty: &WasmFuncType) -> Result<Box<dyn Any + Send>>;
 
+    /// Compiles a trampoline to implement string transcoding from adapter
+    /// modules.
+    ///
+    /// The generated trampoline will invoke the `transcoder.op` libcall with
+    /// the various memory configuration provided in `transcoder`. This is used
+    /// to pass raw pointers to host functions to avoid the host having to deal
+    /// with base pointers, offsets, memory32-vs-64, etc.
+    ///
+    /// Note that all bounds checks for memories are present in adapters
+    /// themselves, and the host libcalls simply assume that the pointers are
+    /// valid.
+    fn compile_transcoder(
+        &self,
+        component: &Component,
+        transcoder: &Transcoder,
+        types: &ComponentTypes,
+    ) -> Result<Box<dyn Any + Send>>;
+
     /// Emits the `lowerings` and `trampolines` specified into the in-progress
     /// ELF object specified by `obj`.
     ///
@@ -76,11 +92,13 @@ pub trait ComponentCompiler: Send + Sync {
         &self,
         lowerings: PrimaryMap<LoweredIndex, Box<dyn Any + Send>>,
         always_trap: PrimaryMap<RuntimeAlwaysTrapIndex, Box<dyn Any + Send>>,
+        transcoders: PrimaryMap<RuntimeTranscoderIndex, Box<dyn Any + Send>>,
         tramplines: Vec<(SignatureIndex, Box<dyn Any + Send>)>,
         obj: &mut Object<'static>,
     ) -> Result<(
-        PrimaryMap<LoweredIndex, LoweringInfo>,
+        PrimaryMap<LoweredIndex, FunctionInfo>,
         PrimaryMap<RuntimeAlwaysTrapIndex, AlwaysTrapInfo>,
+        PrimaryMap<RuntimeTranscoderIndex, FunctionInfo>,
         Vec<Trampoline>,
     )>;
 }

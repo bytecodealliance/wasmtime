@@ -208,37 +208,41 @@ block0(v0: i128, v1: i128):
 ;   setnz   %r8b
 ;   movq    %r8, rsp(0 + virtual offset)
 ;   cmpq    %rcx, %rsi
-;   setl    %r8b
-;   setz    %r10b
+;   setl    %r10b
+;   setz    %r11b
 ;   cmpq    %rdx, %rdi
-;   setb    %r11b
-;   andq    %r10, %r11, %r10
-;   orq     %r8, %r10, %r8
-;   andq    %r8, $1, %r8
+;   setb    %r9b
+;   andq    %r11, %r9, %r11
+;   orq     %r10, %r11, %r10
+;   testq   $1, %r10
+;   setnz   %r9b
 ;   cmpq    %rcx, %rsi
 ;   setl    %r10b
 ;   setz    %r11b
 ;   cmpq    %rdx, %rdi
-;   setbe   %r13b
-;   andq    %r11, %r13, %r11
+;   setbe   %r14b
+;   andq    %r11, %r14, %r11
 ;   orq     %r10, %r11, %r10
-;   andq    %r10, $1, %r10
+;   testq   $1, %r10
+;   setnz   %r10b
 ;   cmpq    %rcx, %rsi
 ;   setnle  %r11b
-;   setz    %r14b
-;   cmpq    %rdx, %rdi
-;   setnbe  %r15b
-;   andq    %r14, %r15, %r14
-;   orq     %r11, %r14, %r11
-;   andq    %r11, $1, %r11
-;   cmpq    %rcx, %rsi
-;   setnle  %r12b
 ;   setz    %bl
 ;   cmpq    %rdx, %rdi
-;   setnb   %r13b
-;   andq    %rbx, %r13, %rbx
-;   orq     %r12, %rbx, %r12
-;   andq    %r12, $1, %r12
+;   setnbe  %r12b
+;   andq    %rbx, %r12, %rbx
+;   orq     %r11, %rbx, %r11
+;   testq   $1, %r11
+;   setnz   %r11b
+;   cmpq    %rcx, %rsi
+;   setnle  %r14b
+;   setz    %r15b
+;   cmpq    %rdx, %rdi
+;   setnb   %bl
+;   andq    %r15, %rbx, %r15
+;   orq     %r14, %r15, %r14
+;   testq   $1, %r14
+;   setnz   %r12b
 ;   cmpq    %rcx, %rsi
 ;   setb    %r13b
 ;   setz    %r14b
@@ -246,41 +250,45 @@ block0(v0: i128, v1: i128):
 ;   setb    %r15b
 ;   andq    %r14, %r15, %r14
 ;   orq     %r13, %r14, %r13
-;   andq    %r13, $1, %r13
+;   testq   $1, %r13
+;   setnz   %r13b
 ;   cmpq    %rcx, %rsi
-;   setb    %bl
-;   setz    %r15b
+;   setb    %r15b
+;   setz    %bl
 ;   cmpq    %rdx, %rdi
 ;   setbe   %r14b
-;   andq    %r15, %r14, %r15
-;   orq     %rbx, %r15, %rbx
-;   andq    %rbx, $1, %rbx
+;   andq    %rbx, %r14, %rbx
+;   orq     %r15, %rbx, %r15
+;   testq   $1, %r15
+;   setnz   %r14b
 ;   cmpq    %rcx, %rsi
-;   setnbe  %r14b
-;   setz    %r15b
+;   setnbe  %r15b
+;   setz    %bl
 ;   cmpq    %rdx, %rdi
-;   setnbe  %r9b
-;   andq    %r15, %r9, %r15
-;   orq     %r14, %r15, %r14
-;   andq    %r14, $1, %r14
+;   setnbe  %r8b
+;   andq    %rbx, %r8, %rbx
+;   orq     %r15, %rbx, %r15
+;   testq   $1, %r15
+;   setnz   %r15b
 ;   cmpq    %rcx, %rsi
-;   setnbe  %sil
-;   setz    %cl
+;   setnbe  %cl
+;   setz    %sil
 ;   cmpq    %rdx, %rdi
 ;   setnb   %dl
-;   andq    %rcx, %rdx, %rcx
-;   orq     %rsi, %rcx, %rsi
-;   andq    %rsi, $1, %rsi
-;   movq    rsp(0 + virtual offset), %r9
-;   andl    %eax, %r9d, %eax
-;   andl    %r8d, %r10d, %r8d
+;   andq    %rsi, %rdx, %rsi
+;   orq     %rcx, %rsi, %rcx
+;   testq   $1, %rcx
+;   setnz   %sil
+;   movq    rsp(0 + virtual offset), %rdx
+;   andl    %eax, %edx, %eax
+;   andl    %r9d, %r10d, %r9d
 ;   andl    %r11d, %r12d, %r11d
-;   andl    %r13d, %ebx, %r13d
-;   andl    %r14d, %esi, %r14d
-;   andl    %eax, %r8d, %eax
+;   andl    %r13d, %r14d, %r13d
+;   andl    %r15d, %esi, %r15d
+;   andl    %eax, %r9d, %eax
 ;   andl    %r11d, %r13d, %r11d
 ;   andl    %eax, %r11d, %eax
-;   andl    %eax, %r14d, %eax
+;   andl    %eax, %r15d, %eax
 ;   movq    16(%rsp), %rbx
 ;   movq    24(%rsp), %r12
 ;   movq    32(%rsp), %r13
@@ -312,7 +320,7 @@ block2:
 ;   setz    %r11b
 ;   cmpq    $0, %rsi
 ;   setz    %al
-;   andb    %al, %r11b, %al
+;   testb   %r11b, %al
 ;   jnz     label1; j label2
 ; block1:
 ;   movl    $1, %eax
@@ -343,11 +351,11 @@ block2:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   cmpq    $0, %rdi
-;   setnz   %r11b
+;   setz    %r11b
 ;   cmpq    $0, %rsi
-;   setnz   %al
-;   orb     %al, %r11b, %al
-;   jnz     label1; j label2
+;   setz    %al
+;   testb   %r11b, %al
+;   jz      label1; j label2
 ; block1:
 ;   movl    $1, %eax
 ;   movq    %rbp, %rsp

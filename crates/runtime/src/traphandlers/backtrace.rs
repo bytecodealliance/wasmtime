@@ -114,6 +114,7 @@ impl Backtrace {
         trap_pc_and_fp: Option<(usize, usize)>,
         mut f: impl FnMut(Frame) -> ControlFlow<()>,
     ) {
+        log::trace!("====== Capturing Backtrace ======");
         let (last_wasm_exit_pc, last_wasm_exit_fp) = match trap_pc_and_fp {
             // If we exited Wasm by catching a trap, then the Wasm-to-host
             // trampoline did not get a chance to save the last Wasm PC and FP,
@@ -137,6 +138,7 @@ impl Backtrace {
             *(*state.limits).last_wasm_entry_sp.get(),
             &mut f,
         ) {
+            log::trace!("====== Done Capturing Backtrace ======");
             return;
         }
 
@@ -151,6 +153,7 @@ impl Backtrace {
                 debug_assert_eq!(state.old_last_wasm_exit_pc, 0);
                 debug_assert_eq!(state.old_last_wasm_exit_fp, 0);
                 debug_assert_eq!(state.old_last_wasm_entry_sp, 0);
+                log::trace!("====== Done Capturing Backtrace ======");
                 return;
             }
 
@@ -160,9 +163,12 @@ impl Backtrace {
                 state.old_last_wasm_entry_sp,
                 &mut f,
             ) {
+                log::trace!("====== Done Capturing Backtrace ======");
                 return;
             }
         }
+
+        unreachable!()
     }
 
     /// Walk through a contiguous sequence of Wasm frames starting with the
@@ -198,7 +204,7 @@ impl Backtrace {
         // contiguous sequence of Wasm frames, and we have nothing to
         // walk through here.
         if first_wasm_sp == -1_isize as usize {
-            log::trace!("Empty sequence of Wasm frames");
+            log::trace!("=== Done tracing (empty sequence of Wasm frames) ===");
             return ControlFlow::Continue(());
         }
 
@@ -224,8 +230,8 @@ impl Backtrace {
             arch::assert_fp_is_aligned(fp);
 
             log::trace!("--- Tracing through one Wasm frame ---");
-            log::trace!("pc = 0x{:016x}", pc);
-            log::trace!("fp = 0x{:016x}", fp);
+            log::trace!("pc = {:p}", pc as *const ());
+            log::trace!("fp = {:p}", fp as *const ());
 
             f(Frame { pc, fp })?;
 
@@ -234,6 +240,7 @@ impl Backtrace {
             // and have now reached a host frame. We're done iterating
             // through this contiguous sequence of Wasm frames.
             if arch::reached_entry_sp(fp, first_wasm_sp) {
+                log::trace!("=== Done tracing contiguous sequence of Wasm frames ===");
                 return ControlFlow::Continue(());
             }
 
@@ -244,7 +251,13 @@ impl Backtrace {
 
             pc = arch::get_next_older_pc_from_fp(fp);
 
-            let next_older_fp = arch::get_next_older_fp_from_fp(fp);
+            // We rely on this offset being zero for all supported architectures
+            // in `crates/cranelift/src/component/compiler.rs` when we set the
+            // Wasm exit FP. If this ever changes, we will need to update that
+            // code as well!
+            assert_eq!(arch::NEXT_OLDER_FP_FROM_FP_OFFSET, 0);
+
+            let next_older_fp = *(fp as *mut usize).add(arch::NEXT_OLDER_FP_FROM_FP_OFFSET);
             // Because the stack always grows down, the older FP must be greater
             // than the current FP.
             assert!(next_older_fp > fp, "{next_older_fp:#x} > {fp:#x}");

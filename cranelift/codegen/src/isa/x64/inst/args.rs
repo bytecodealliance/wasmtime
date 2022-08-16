@@ -313,10 +313,16 @@ impl Amode {
     ) {
         match self {
             Amode::ImmReg { base, .. } => {
-                collector.reg_use(*base);
+                if *base != regs::rbp() && *base != regs::rsp() {
+                    collector.reg_use(*base);
+                }
             }
             Amode::ImmRegRegShift { base, index, .. } => {
+                debug_assert_ne!(base.to_reg(), regs::rbp());
+                debug_assert_ne!(base.to_reg(), regs::rsp());
                 collector.reg_use(base.to_reg());
+                debug_assert_ne!(index.to_reg(), regs::rbp());
+                debug_assert_ne!(index.to_reg(), regs::rsp());
                 collector.reg_use(index.to_reg());
             }
             Amode::RipRelative { .. } => {
@@ -346,8 +352,7 @@ impl Amode {
 
     pub(crate) fn get_flags(&self) -> MemFlags {
         match self {
-            Amode::ImmReg { flags, .. } => *flags,
-            Amode::ImmRegRegShift { flags, .. } => *flags,
+            Amode::ImmReg { flags, .. } | Amode::ImmRegRegShift { flags, .. } => *flags,
             Amode::RipRelative { .. } => MemFlags::trusted(),
         }
     }
@@ -364,11 +369,18 @@ impl Amode {
                 simm32,
                 base,
                 flags,
-            } => Amode::ImmReg {
-                simm32,
-                flags,
-                base: allocs.next(base),
-            },
+            } => {
+                let base = if base == regs::rsp() || base == regs::rbp() {
+                    base
+                } else {
+                    allocs.next(base)
+                };
+                Amode::ImmReg {
+                    simm32,
+                    flags,
+                    base,
+                }
+            }
             &Amode::ImmRegRegShift {
                 simm32,
                 base,
@@ -689,12 +701,6 @@ pub enum AluRmiROpcode {
     Xor,
     /// The signless, non-extending (N x N -> N, for N in {32,64}) variant.
     Mul,
-    /// 8-bit form of And. Handled separately as we don't have full 8-bit op
-    /// support (we just use wider instructions). Used only with some sequences
-    /// with SETcc.
-    And8,
-    /// 8-bit form of Or.
-    Or8,
 }
 
 impl fmt::Debug for AluRmiROpcode {
@@ -708,8 +714,6 @@ impl fmt::Debug for AluRmiROpcode {
             AluRmiROpcode::Or => "or",
             AluRmiROpcode::Xor => "xor",
             AluRmiROpcode::Mul => "imul",
-            AluRmiROpcode::And8 => "and",
-            AluRmiROpcode::Or8 => "or",
         };
         write!(fmt, "{}", name)
     }
@@ -718,16 +722,6 @@ impl fmt::Debug for AluRmiROpcode {
 impl fmt::Display for AluRmiROpcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
-    }
-}
-
-impl AluRmiROpcode {
-    /// Is this a special-cased 8-bit ALU op?
-    pub fn is_8bit(self) -> bool {
-        match self {
-            AluRmiROpcode::And8 | AluRmiROpcode::Or8 => true,
-            _ => false,
-        }
     }
 }
 
@@ -1389,6 +1383,8 @@ impl fmt::Display for SseOpcode {
 
 #[derive(Clone, PartialEq)]
 pub enum AvxOpcode {
+    Vfmadd213ss,
+    Vfmadd213sd,
     Vfmadd213ps,
     Vfmadd213pd,
 }
@@ -1397,8 +1393,10 @@ impl AvxOpcode {
     /// Which `InstructionSet`s support the opcode?
     pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
         match self {
-            AvxOpcode::Vfmadd213ps => smallvec![InstructionSet::FMA],
-            AvxOpcode::Vfmadd213pd => smallvec![InstructionSet::FMA],
+            AvxOpcode::Vfmadd213ss
+            | AvxOpcode::Vfmadd213sd
+            | AvxOpcode::Vfmadd213ps
+            | AvxOpcode::Vfmadd213pd => smallvec![InstructionSet::FMA],
         }
     }
 }
@@ -1406,6 +1404,8 @@ impl AvxOpcode {
 impl fmt::Debug for AvxOpcode {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let name = match self {
+            AvxOpcode::Vfmadd213ss => "vfmadd213ss",
+            AvxOpcode::Vfmadd213sd => "vfmadd213sd",
             AvxOpcode::Vfmadd213ps => "vfmadd213ps",
             AvxOpcode::Vfmadd213pd => "vfmadd213pd",
         };
@@ -1689,32 +1689,6 @@ impl CC {
 
             CC::P => CC::NP,
             CC::NP => CC::P,
-        }
-    }
-
-    pub(crate) fn from_floatcc(floatcc: FloatCC) -> Self {
-        match floatcc {
-            FloatCC::Ordered => CC::NP,
-            FloatCC::Unordered => CC::P,
-            // Alias for NE
-            FloatCC::OrderedNotEqual => CC::NZ,
-            // Alias for E
-            FloatCC::UnorderedOrEqual => CC::Z,
-            // Alias for A
-            FloatCC::GreaterThan => CC::NBE,
-            // Alias for AE
-            FloatCC::GreaterThanOrEqual => CC::NB,
-            FloatCC::UnorderedOrLessThan => CC::B,
-            FloatCC::UnorderedOrLessThanOrEqual => CC::BE,
-            FloatCC::Equal
-            | FloatCC::NotEqual
-            | FloatCC::LessThan
-            | FloatCC::LessThanOrEqual
-            | FloatCC::UnorderedOrGreaterThan
-            | FloatCC::UnorderedOrGreaterThanOrEqual => panic!(
-                "{:?} can't be lowered to a CC code; treat as special case.",
-                floatcc
-            ),
         }
     }
 

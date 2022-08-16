@@ -298,7 +298,7 @@ fn expand_record_for_component_type(
     let mut lower_generic_params = TokenStream::new();
     let mut lower_generic_args = TokenStream::new();
     let mut lower_field_declarations = TokenStream::new();
-    let mut sizes = TokenStream::new();
+    let mut abi_list = TokenStream::new();
     let mut unique_types = HashSet::new();
 
     for (index, syn::Field { ident, ty, .. }) in fields.iter().enumerate() {
@@ -309,23 +309,12 @@ fn expand_record_for_component_type(
 
         lower_field_declarations.extend(quote!(#ident: #generic,));
 
-        sizes.extend(quote!(
-            size = #internal::align_to(size, <#ty as wasmtime::component::ComponentType>::ALIGN32);
-            size += <#ty as wasmtime::component::ComponentType>::SIZE32;
+        abi_list.extend(quote!(
+            <#ty as wasmtime::component::ComponentType>::ABI,
         ));
 
         unique_types.insert(ty);
     }
-
-    let alignments = unique_types
-        .into_iter()
-        .map(|ty| {
-            let align = quote!(<#ty as wasmtime::component::ComponentType>::ALIGN32);
-            quote!(if #align > align {
-                align = #align;
-            })
-        })
-        .collect::<TokenStream>();
 
     let generics = add_trait_bounds(generics, parse_quote!(wasmtime::component::ComponentType));
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
@@ -352,22 +341,14 @@ fn expand_record_for_component_type(
         #[repr(C)]
         pub struct #lower <#lower_generic_params> {
             #lower_field_declarations
+            _align: [wasmtime::ValRaw; 0],
         }
 
         unsafe impl #impl_generics wasmtime::component::ComponentType for #name #ty_generics #where_clause {
             type Lower = #lower <#lower_generic_args>;
 
-            const SIZE32: usize = {
-                let mut size = 0;
-                #sizes
-                #internal::align_to(size, Self::ALIGN32)
-            };
-
-            const ALIGN32: u32 = {
-                let mut align = 1;
-                #alignments
-                align
-            };
+            const ABI: #internal::CanonicalAbiInfo =
+                #internal::CanonicalAbiInfo::record_static(&[#abi_list]);
 
             #[inline]
             fn typecheck(
@@ -428,7 +409,7 @@ impl Expander for LiftExpander {
             loads.extend(quote!(#ident: <#ty as wasmtime::component::Lift>::load(
                 memory,
                 &bytes
-                    [#internal::next_field::<#ty>(&mut offset)..]
+                    [<#ty as wasmtime::component::ComponentType>::ABI.next_field32_size(&mut offset)..]
                     [..<#ty as wasmtime::component::ComponentType>::SIZE32]
             )?,));
         }
@@ -513,8 +494,6 @@ impl Expander for LiftExpander {
             DiscriminantSize::Size4 => quote!(u32::from_le_bytes(bytes[0..4].try_into()?)),
         };
 
-        let payload_offset = usize::from(discriminant_size);
-
         let expanded = quote! {
             unsafe impl #impl_generics wasmtime::component::Lift for #name #ty_generics #where_clause {
                 #[inline]
@@ -534,7 +513,8 @@ impl Expander for LiftExpander {
                     let align = <Self as wasmtime::component::ComponentType>::ALIGN32;
                     debug_assert!((bytes.as_ptr() as usize) % (align as usize) == 0);
                     let discrim = #from_bytes;
-                    let payload = &bytes[#internal::align_to(#payload_offset, align)..];
+                    let payload_offset = <Self as #internal::ComponentVariant>::PAYLOAD_OFFSET32;
+                    let payload = &bytes[payload_offset..];
                     Ok(match discrim {
                         #loads
                         discrim => #internal::anyhow::bail!("unexpected discriminant: {}", discrim),
@@ -574,7 +554,9 @@ impl Expander for LowerExpander {
             )?;));
 
             stores.extend(quote!(wasmtime::component::Lower::store(
-                &self.#ident, memory, #internal::next_field::<#ty>(&mut offset)
+                &self.#ident,
+                memory,
+                <#ty as wasmtime::component::ComponentType>::ABI.next_field32_size(&mut offset),
             )?;));
         }
 
@@ -639,10 +621,7 @@ impl Expander for LowerExpander {
                 lower = quote!(value.lower(store, options, #internal::map_maybe_uninit!(dst.payload.#ident)));
                 store = quote!(value.store(
                     memory,
-                    offset + #internal::align_to(
-                        #discriminant_size,
-                        <Self as wasmtime::component::ComponentType>::ALIGN32
-                    )
+                    offset + <Self as #internal::ComponentVariant>::PAYLOAD_OFFSET32,
                 ));
             } else {
                 pattern = quote!(Self::#ident);
@@ -748,7 +727,7 @@ impl Expander for ComponentTypeExpander {
         &self,
         name: &syn::Ident,
         generics: &syn::Generics,
-        discriminant_size: DiscriminantSize,
+        _discriminant_size: DiscriminantSize,
         cases: &[VariantCase],
         style: VariantStyle,
     ) -> Result<TokenStream> {
@@ -759,7 +738,7 @@ impl Expander for ComponentTypeExpander {
         let mut lower_payload_generic_args = TokenStream::new();
         let mut lower_payload_case_declarations = TokenStream::new();
         let mut lower_generic_args = TokenStream::new();
-        let mut sizes = TokenStream::new();
+        let mut abi_list = TokenStream::new();
         let mut unique_types = HashSet::new();
 
         for (index, VariantCase { attrs, ident, ty }) in cases.iter().enumerate() {
@@ -775,12 +754,7 @@ impl Expander for ComponentTypeExpander {
             let name = rename.unwrap_or_else(|| Literal::string(&ident.to_string()));
 
             if let Some(ty) = ty {
-                sizes.extend({
-                    let size = quote!(<#ty as wasmtime::component::ComponentType>::SIZE32);
-                    quote!(if #size > size {
-                        size = #size;
-                    })
-                });
+                abi_list.extend(quote!(<#ty as wasmtime::component::ComponentType>::ABI,));
 
                 case_names_and_checks.extend(match style {
                     VariantStyle::Variant => {
@@ -807,6 +781,7 @@ impl Expander for ComponentTypeExpander {
 
                 unique_types.insert(ty);
             } else {
+                abi_list.extend(quote!(<() as wasmtime::component::ComponentType>::ABI,));
                 case_names_and_checks.extend(match style {
                     VariantStyle::Variant => {
                         quote!((#name, <() as wasmtime::component::ComponentType>::typecheck),)
@@ -823,16 +798,6 @@ impl Expander for ComponentTypeExpander {
             lower_payload_case_declarations.extend(quote!(_dummy: ()));
         }
 
-        let alignments = unique_types
-            .into_iter()
-            .map(|ty| {
-                let align = quote!(<#ty as wasmtime::component::ComponentType>::ALIGN32);
-                quote!(if #align > align {
-                    align = #align;
-                })
-            })
-            .collect::<TokenStream>();
-
         let typecheck = match style {
             VariantStyle::Variant => quote!(typecheck_variant),
             VariantStyle::Union => quote!(typecheck_union),
@@ -843,7 +808,6 @@ impl Expander for ComponentTypeExpander {
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
         let lower = format_ident!("Lower{}", name);
         let lower_payload = format_ident!("LowerPayload{}", name);
-        let discriminant_size = u32::from(discriminant_size);
 
         // You may wonder why we make the types of all the fields of the #lower struct and #lower_payload union
         // generic.  This is to work around a [normalization bug in
@@ -881,17 +845,12 @@ impl Expander for ComponentTypeExpander {
                     #internal::#typecheck(ty, types, &[#case_names_and_checks])
                 }
 
-                const SIZE32: usize = {
-                    let mut size = 0;
-                    #sizes
-                    #internal::align_to(#discriminant_size as usize, Self::ALIGN32) + size
-                };
+                const ABI: #internal::CanonicalAbiInfo =
+                    #internal::CanonicalAbiInfo::variant_static(&[#abi_list]);
+            }
 
-                const ALIGN32: u32 = {
-                    let mut align = #discriminant_size;
-                    #alignments
-                    align
-                };
+            unsafe impl #impl_generics #internal::ComponentVariant for #name #ty_generics #where_clause {
+                const CASES: &'static [#internal::CanonicalAbiInfo] = &[#abi_list];
             }
         };
 
@@ -965,6 +924,10 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
     let count = flags.flags.len();
 
     match size {
+        FlagsSize::Size0 => {
+            ty = quote!(());
+            eq = quote!(true);
+        }
         FlagsSize::Size1 => {
             ty = quote!(u8);
 
@@ -1021,6 +984,17 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
     let mut not;
 
     match size {
+        FlagsSize::Size0 => {
+            count = 0;
+            as_array = quote!([]);
+            bitor = quote!(Self {});
+            bitor_assign = quote!();
+            bitand = quote!(Self {});
+            bitand_assign = quote!();
+            bitxor = quote!(Self {});
+            bitxor_assign = quote!();
+            not = quote!(Self {});
+        }
         FlagsSize::Size1 | FlagsSize::Size2 => {
             count = 1;
             as_array = quote!([self.__inner0 as u32]);
@@ -1041,7 +1015,7 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
             });
         }
         FlagsSize::Size4Plus(n) => {
-            count = n;
+            count = usize::from(n);
             as_array = TokenStream::new();
             bitor = TokenStream::new();
             bitor_assign = TokenStream::new();
@@ -1085,6 +1059,7 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
         component_names.extend(quote!(#component_name,));
 
         let fields = match size {
+            FlagsSize::Size0 => quote!(),
             FlagsSize::Size1 => {
                 let init = 1_u8 << index;
                 quote!(__inner0: #init)
@@ -1097,7 +1072,7 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                 .map(|i| {
                     let field = format_ident!("__inner{}", i);
 
-                    let init = if index / 32 == i {
+                    let init = if index / 32 == usize::from(i) {
                         1_u32 << (index % 32)
                     } else {
                         0

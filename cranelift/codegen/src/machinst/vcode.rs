@@ -19,18 +19,17 @@
 
 use crate::fx::FxHashMap;
 use crate::fx::FxHashSet;
-use crate::ir::{
-    self, types, Constant, ConstantData, DynamicStackSlot, LabelValueLoc, SourceLoc, ValueLabel,
-};
+use crate::ir::RelSourceLoc;
+use crate::ir::{self, types, Constant, ConstantData, DynamicStackSlot, LabelValueLoc, ValueLabel};
 use crate::machinst::*;
 use crate::timing;
+use crate::trace;
 use crate::ValueLocRange;
 use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, Operand, OperandKind, PReg, PRegSet,
     RegClass, VReg,
 };
 
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 use cranelift_entity::{entity_impl, Keys, PrimaryMap};
 use std::collections::hash_map::Entry;
@@ -89,7 +88,7 @@ pub struct VCode<I: VCodeInst> {
 
     /// Source locations for each instruction. (`SourceLoc` is a `u32`, so it is
     /// reasonable to keep one of these per instruction.)
-    srclocs: Vec<SourceLoc>,
+    srclocs: Vec<RelSourceLoc>,
 
     /// Entry block.
     entry: BlockIndex,
@@ -159,7 +158,7 @@ pub struct VCode<I: VCodeInst> {
     block_order: BlockLoweringOrder,
 
     /// ABI object.
-    abi: Box<dyn ABICallee<I = I>>,
+    abi: Callee<I::ABIMachineSpec>,
 
     /// Constant information used during code emission. This should be
     /// immutable across function compilations within the same module.
@@ -260,7 +259,7 @@ pub struct VCodeBuilder<I: VCodeInst> {
     branch_block_arg_succ_start: usize,
 
     /// Current source location.
-    cur_srcloc: SourceLoc,
+    cur_srcloc: RelSourceLoc,
 
     /// Debug-value label in-progress map, keyed by label. For each
     /// label, we keep disjoint ranges mapping to vregs. We'll flatten
@@ -280,7 +279,7 @@ pub enum VCodeBuildDirection {
 impl<I: VCodeInst> VCodeBuilder<I> {
     /// Create a new VCodeBuilder.
     pub fn new(
-        abi: Box<dyn ABICallee<I = I>>,
+        abi: Callee<I::ABIMachineSpec>,
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
@@ -295,14 +294,14 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             succ_start: 0,
             block_params_start: 0,
             branch_block_arg_succ_start: 0,
-            cur_srcloc: SourceLoc::default(),
+            cur_srcloc: Default::default(),
             debug_info: FxHashMap::default(),
         }
     }
 
     /// Access the ABI object.
-    pub fn abi(&mut self) -> &mut dyn ABICallee<I = I> {
-        &mut *self.vcode.abi
+    pub fn abi(&mut self) -> &mut Callee<I::ABIMachineSpec> {
+        &mut self.vcode.abi
     }
 
     /// Access to the BlockLoweringOrder object.
@@ -398,7 +397,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     /// Set the current source location.
-    pub fn set_srcloc(&mut self, srcloc: SourceLoc) {
+    pub fn set_srcloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
     }
 
@@ -587,7 +586,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         // Translate blockparam args via the vreg aliases table as well.
         for arg in &mut self.vcode.branch_block_args {
             let new_arg = Self::resolve_vreg_alias_impl(&self.vcode.vreg_aliases, *arg);
-            log::trace!("operandcollector: block arg {:?} -> {:?}", arg, new_arg);
+            trace!("operandcollector: block arg {:?} -> {:?}", arg, new_arg);
             *arg = new_arg;
         }
     }
@@ -626,7 +625,7 @@ fn is_reftype(ty: Type) -> bool {
 impl<I: VCodeInst> VCode<I> {
     /// New empty VCode.
     fn new(
-        abi: Box<dyn ABICallee<I = I>>,
+        abi: Callee<I::ABIMachineSpec>,
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
@@ -797,7 +796,7 @@ impl<I: VCodeInst> VCode<I> {
         let mut cur_srcloc = None;
         let mut last_offset = None;
         let mut inst_offsets = vec![];
-        let mut state = I::State::new(&*self.abi);
+        let mut state = I::State::new(&self.abi);
 
         let mut disasm = String::new();
 
@@ -805,8 +804,24 @@ impl<I: VCodeInst> VCode<I> {
             inst_offsets.resize(self.insts.len(), 0);
         }
 
-        for block in final_order {
-            log::trace!("emitting block {:?}", block);
+        // Count edits per block ahead of time; this is needed for
+        // lookahead island emission. (We could derive it per-block
+        // with binary search in the edit list, but it's more
+        // efficient to do it in one pass here.)
+        let mut ra_edits_per_block: SmallVec<[u32; 64]> = smallvec![];
+        let mut edit_idx = 0;
+        for block in 0..self.num_blocks() {
+            let end_inst = self.block_ranges[block].1;
+            let start_edit_idx = edit_idx;
+            while edit_idx < regalloc.edits.len() && regalloc.edits[edit_idx].0.inst() < end_inst {
+                edit_idx += 1;
+            }
+            let end_edit_idx = edit_idx;
+            ra_edits_per_block.push((end_edit_idx - start_edit_idx) as u32);
+        }
+
+        for (block_order_idx, &block) in final_order.iter().enumerate() {
+            trace!("emitting block {:?}", block);
             let new_offset = I::align_basic_block(buffer.cur_offset());
             while new_offset > buffer.cur_offset() {
                 // Pad with NOPs up to the aligned block offset.
@@ -829,9 +844,9 @@ impl<I: VCodeInst> VCode<I> {
 
             // Is this the first block? Emit the prologue directly if so.
             if block == self.entry {
-                log::trace!(" -> entry block");
-                buffer.start_srcloc(SourceLoc::default());
-                state.pre_sourceloc(SourceLoc::default());
+                trace!(" -> entry block");
+                buffer.start_srcloc(Default::default());
+                state.pre_sourceloc(Default::default());
                 for inst in &prologue_insts {
                     do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state);
                 }
@@ -902,7 +917,7 @@ impl<I: VCodeInst> VCode<I> {
                             buffer.start_srcloc(srcloc);
                             cur_srcloc = Some(srcloc);
                         }
-                        state.pre_sourceloc(cur_srcloc.unwrap_or(SourceLoc::default()));
+                        state.pre_sourceloc(cur_srcloc.unwrap_or_default());
 
                         // If this is a safepoint, compute a stack map
                         // and pass it to the emit state.
@@ -1006,11 +1021,14 @@ impl<I: VCodeInst> VCode<I> {
             // Do we need an island? Get the worst-case size of the
             // next BB and see if, having emitted that many bytes, we
             // will be beyond the deadline.
-            if block.index() < (self.num_blocks() - 1) {
-                let next_block = block.index() + 1;
-                let next_block_range = self.block_ranges[next_block];
-                let next_block_size = next_block_range.1.index() - next_block_range.0.index();
-                let worst_case_next_bb = I::worst_case_size() * next_block_size as u32;
+            if block_order_idx < final_order.len() - 1 {
+                let next_block = final_order[block_order_idx + 1];
+                let next_block_range = self.block_ranges[next_block.index()];
+                let next_block_size =
+                    (next_block_range.1.index() - next_block_range.0.index()) as u32;
+                let next_block_ra_insertions = ra_edits_per_block[next_block.index()];
+                let worst_case_next_bb =
+                    I::worst_case_size() * (next_block_size + next_block_ra_insertions);
                 if buffer.island_needed(worst_case_next_bb) {
                     buffer.emit_island(worst_case_next_bb);
                 }

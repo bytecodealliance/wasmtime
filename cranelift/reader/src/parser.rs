@@ -9,19 +9,19 @@ use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
 use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::entity::EntityRef;
-use cranelift_codegen::ir;
+use cranelift_codegen::entity::{EntityRef, PrimaryMap};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
+use cranelift_codegen::ir::{self, UserExternalNameRef};
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentPurpose, Block, Constant, ConstantData, DynamicStackSlot,
     DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef, Function,
     GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags,
     Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type,
-    Value,
+    UserFuncName, Value,
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -224,6 +224,12 @@ pub struct Parser<'a> {
 
     /// Comments collected so far.
     comments: Vec<Comment<'a>>,
+
+    /// Maps inlined external names to a ref value, so they can be declared before parsing the rest
+    /// of the function later.
+    ///
+    /// This maintains backward compatibility with previous ways for declaring external names.
+    predeclared_external_names: PrimaryMap<UserExternalNameRef, ir::UserExternalName>,
 
     /// Default calling conventions; used when none is specified.
     default_calling_convention: CallConv,
@@ -508,6 +514,7 @@ impl<'a> Parser<'a> {
             gathered_comments: Vec::new(),
             comments: Vec::new(),
             default_calling_convention: CallConv::Fast,
+            predeclared_external_names: Default::default(),
         }
     }
 
@@ -1282,7 +1289,7 @@ impl<'a> Parser<'a> {
         let location = self.loc;
 
         // function ::= "function" * name signature "{" preamble function-body "}"
-        let name = self.parse_external_name()?;
+        let name = self.parse_user_func_name()?;
 
         // function ::= "function" name * signature "{" preamble function-body "}"
         let sig = self.parse_signature()?;
@@ -1307,6 +1314,16 @@ impl<'a> Parser<'a> {
         self.token();
         self.claim_gathered_comments(AnyEntity::Function);
 
+        // Claim all the declared user-defined function names.
+        for (user_func_ref, user_external_name) in
+            std::mem::take(&mut self.predeclared_external_names)
+        {
+            let actual_ref = ctx
+                .function
+                .declare_imported_user_function(user_external_name);
+            assert_eq!(user_func_ref, actual_ref);
+        }
+
         let details = Details {
             location,
             comments: self.take_comments(),
@@ -1316,18 +1333,17 @@ impl<'a> Parser<'a> {
         Ok((ctx.function, details))
     }
 
-    // Parse an external name.
+    // Parse a user-defined function name
     //
     // For example, in a function decl, the parser would be in this state:
     //
     // function ::= "function" * name signature { ... }
     //
-    fn parse_external_name(&mut self) -> ParseResult<ExternalName> {
+    fn parse_user_func_name(&mut self) -> ParseResult<UserFuncName> {
         match self.token() {
             Some(Token::Name(s)) => {
                 self.consume();
-                s.parse()
-                    .map_err(|_| self.error("invalid test case or libcall name"))
+                Ok(UserFuncName::testcase(s))
             }
             Some(Token::UserRef(namespace)) => {
                 self.consume();
@@ -1336,19 +1352,84 @@ impl<'a> Parser<'a> {
                         self.consume();
                         match self.token() {
                             Some(Token::Integer(index_str)) => {
+                                self.consume();
                                 let index: u32 =
                                     u32::from_str_radix(index_str, 10).map_err(|_| {
                                         self.error("the integer given overflows the u32 type")
                                     })?;
-                                self.consume();
-                                Ok(ExternalName::user(namespace, index))
+                                Ok(UserFuncName::user(namespace, index))
                             }
                             _ => err!(self.loc, "expected integer"),
                         }
                     }
-                    _ => err!(self.loc, "expected colon"),
+                    _ => {
+                        err!(self.loc, "expected user function name in the form uX:Y")
+                    }
                 }
             }
+            _ => err!(self.loc, "expected external name"),
+        }
+    }
+
+    // Parse an external name.
+    //
+    // For example, in a function reference decl, the parser would be in this state:
+    //
+    // fn0 = * name signature
+    //
+    fn parse_external_name(&mut self) -> ParseResult<ExternalName> {
+        match self.token() {
+            Some(Token::Name(s)) => {
+                self.consume();
+                s.parse()
+                    .map_err(|_| self.error("invalid test case or libcall name"))
+            }
+
+            Some(Token::UserNameRef(name_ref)) => {
+                self.consume();
+                Ok(ExternalName::user(UserExternalNameRef::new(
+                    name_ref as usize,
+                )))
+            }
+
+            Some(Token::UserRef(namespace)) => {
+                self.consume();
+                if let Some(Token::Colon) = self.token() {
+                    self.consume();
+                    match self.token() {
+                        Some(Token::Integer(index_str)) => {
+                            let index: u32 = u32::from_str_radix(index_str, 10).map_err(|_| {
+                                self.error("the integer given overflows the u32 type")
+                            })?;
+                            self.consume();
+
+                            // Deduplicate the reference (O(n), but should be fine for tests),
+                            // to follow `FunctionParameters::declare_imported_user_function`,
+                            // otherwise this will cause ref mismatches when asserted below.
+                            let name_ref = self
+                                .predeclared_external_names
+                                .iter()
+                                .find_map(|(reff, name)| {
+                                    if name.index == index && name.namespace == namespace {
+                                        Some(reff)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .unwrap_or_else(|| {
+                                    self.predeclared_external_names
+                                        .push(ir::UserExternalName { namespace, index })
+                                });
+
+                            Ok(ExternalName::user(name_ref))
+                        }
+                        _ => err!(self.loc, "expected integer"),
+                    }
+                } else {
+                    err!(self.loc, "expected colon")
+                }
+            }
+
             _ => err!(self.loc, "expected external name"),
         }
     }
@@ -1406,10 +1487,10 @@ impl<'a> Parser<'a> {
 
     // Parse a single argument type with flags.
     fn parse_abi_param(&mut self) -> ParseResult<AbiParam> {
-        // abi-param ::= * type { flag } [ argumentloc ]
+        // abi-param ::= * type { flag }
         let mut arg = AbiParam::new(self.match_type("expected parameter type")?);
 
-        // abi-param ::= type * { flag } [ argumentloc ]
+        // abi-param ::= type * { flag }
         while let Some(Token::Identifier(s)) = self.token() {
             match s {
                 "uext" => arg.extension = ArgumentExtension::Uext,
@@ -2249,7 +2330,7 @@ impl<'a> Parser<'a> {
             .expect("duplicate inst references created");
 
         if !srcloc.is_default() {
-            ctx.function.srclocs[inst] = srcloc;
+            ctx.function.set_srcloc(inst, srcloc);
         }
 
         if results.len() != num_results {
@@ -3175,14 +3256,14 @@ mod tests {
         assert_eq!(sig.returns.len(), 0);
         assert_eq!(sig.call_conv, CallConv::SystemV);
 
-        let sig2 = Parser::new("(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 baldrdash_system_v")
+        let sig2 = Parser::new("(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 system_v")
             .parse_signature()
             .unwrap();
         assert_eq!(
             sig2.to_string(),
-            "(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 baldrdash_system_v"
+            "(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 system_v"
         );
-        assert_eq!(sig2.call_conv, CallConv::BaldrdashSystemV);
+        assert_eq!(sig2.call_conv, CallConv::SystemV);
 
         // Old-style signature without a calling convention.
         assert_eq!(

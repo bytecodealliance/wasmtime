@@ -1,15 +1,17 @@
-use crate::component::func::{self, Lift, Lower, Memory, MemoryMut, Options};
-use crate::component::types::{self, SizeAndAlignment, Type};
+use crate::component::func::{Lift, Lower, Memory, MemoryMut, Options};
+use crate::component::types::{self, Type};
 use crate::store::StoreOpaque;
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{anyhow, bail, Context, Error, Result};
 use std::collections::HashMap;
+use std::fmt;
 use std::iter;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
+use wasmtime_environ::component::VariantInfo;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct List {
     ty: types::List,
     values: Box<[Val]>,
@@ -45,7 +47,17 @@ impl Deref for List {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+impl fmt::Debug for List {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut f = f.debug_list();
+        for val in self.iter() {
+            f.entry(val);
+        }
+        f.finish()
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
 pub struct Record {
     ty: types::Record,
     values: Box<[Val]>,
@@ -105,7 +117,17 @@ impl Record {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+impl fmt::Debug for Record {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut f = f.debug_struct("Record");
+        for (name, val) in self.fields() {
+            f.field(name, val);
+        }
+        f.finish()
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
 pub struct Tuple {
     ty: types::Tuple,
     values: Box<[Val]>,
@@ -144,7 +166,17 @@ impl Tuple {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+impl fmt::Debug for Tuple {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut tuple = f.debug_tuple("");
+        for val in self.values() {
+            tuple.field(val);
+        }
+        tuple.finish()
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
 pub struct Variant {
     ty: types::Variant,
     discriminant: u32,
@@ -197,7 +229,15 @@ impl Variant {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+impl fmt::Debug for Variant {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple(self.discriminant())
+            .field(self.payload())
+            .finish()
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
 pub struct Enum {
     ty: types::Enum,
     discriminant: u32,
@@ -229,7 +269,13 @@ impl Enum {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+impl fmt::Debug for Enum {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.discriminant(), f)
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
 pub struct Union {
     ty: types::Union,
     discriminant: u32,
@@ -273,7 +319,15 @@ impl Union {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+impl fmt::Debug for Union {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple(&format!("U{}", self.discriminant()))
+            .field(self.payload())
+            .finish()
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
 pub struct Option {
     ty: types::Option,
     discriminant: u32,
@@ -313,7 +367,13 @@ impl Option {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+impl fmt::Debug for Option {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.value().fmt(f)
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
 pub struct Expected {
     ty: types::Expected,
     discriminant: u32,
@@ -358,7 +418,13 @@ impl Expected {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+impl fmt::Debug for Expected {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.value().fmt(f)
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
 pub struct Flags {
     ty: types::Flags,
     count: u32,
@@ -374,7 +440,8 @@ impl Flags {
             .map(|(index, name)| (name, index))
             .collect::<HashMap<_, _>>();
 
-        let mut values = vec![0_u32; u32_count_for_flag_count(ty.names().len())];
+        let count = usize::from(ty.canonical_abi().flat_count.unwrap());
+        let mut values = vec![0_u32; count];
 
         for name in names {
             let index = map
@@ -405,6 +472,16 @@ impl Flags {
                 None
             }
         })
+    }
+}
+
+impl fmt::Debug for Flags {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut set = f.debug_set();
+        for flag in self.flags() {
+            set.entry(&flag);
+        }
+        set.finish()
     }
 }
 
@@ -535,7 +612,7 @@ impl Val {
             }),
             Type::Variant(handle) => {
                 let (discriminant, value) = lift_variant(
-                    ty.flatten_count(),
+                    handle.canonical_abi().flat_count(usize::MAX).unwrap(),
                     handle.cases().map(|case| case.ty),
                     store,
                     options,
@@ -550,7 +627,7 @@ impl Val {
             }
             Type::Enum(handle) => {
                 let (discriminant, _) = lift_variant(
-                    ty.flatten_count(),
+                    handle.canonical_abi().flat_count(usize::MAX).unwrap(),
                     handle.names().map(|_| Type::Unit),
                     store,
                     options,
@@ -563,8 +640,13 @@ impl Val {
                 })
             }
             Type::Union(handle) => {
-                let (discriminant, value) =
-                    lift_variant(ty.flatten_count(), handle.types(), store, options, src)?;
+                let (discriminant, value) = lift_variant(
+                    handle.canonical_abi().flat_count(usize::MAX).unwrap(),
+                    handle.types(),
+                    store,
+                    options,
+                    src,
+                )?;
 
                 Val::Union(Union {
                     ty: handle.clone(),
@@ -574,7 +656,7 @@ impl Val {
             }
             Type::Option(handle) => {
                 let (discriminant, value) = lift_variant(
-                    ty.flatten_count(),
+                    handle.canonical_abi().flat_count(usize::MAX).unwrap(),
                     [Type::Unit, handle.ty()].into_iter(),
                     store,
                     options,
@@ -589,7 +671,7 @@ impl Val {
             }
             Type::Expected(handle) => {
                 let (discriminant, value) = lift_variant(
-                    ty.flatten_count(),
+                    handle.canonical_abi().flat_count(usize::MAX).unwrap(),
                     [handle.ok(), handle.err()].into_iter(),
                     store,
                     options,
@@ -604,8 +686,10 @@ impl Val {
             }
             Type::Flags(handle) => {
                 let count = u32::try_from(handle.names().len()).unwrap();
-                assert!(count <= 32);
-                let value = iter::once(u32::lift(store, options, next(src))?).collect();
+                let u32_count = handle.canonical_abi().flat_count(usize::MAX).unwrap();
+                let value = iter::repeat_with(|| u32::lift(store, options, next(src)))
+                    .take(u32_count)
+                    .collect::<Result<_>>()?;
 
                 Val::Flags(Flags {
                     ty: handle.clone(),
@@ -648,8 +732,12 @@ impl Val {
                 values: load_record(handle.types(), mem, bytes)?,
             }),
             Type::Variant(handle) => {
-                let (discriminant, value) =
-                    load_variant(ty, handle.cases().map(|case| case.ty), mem, bytes)?;
+                let (discriminant, value) = load_variant(
+                    handle.variant_info(),
+                    handle.cases().map(|case| case.ty),
+                    mem,
+                    bytes,
+                )?;
 
                 Val::Variant(Variant {
                     ty: handle.clone(),
@@ -658,8 +746,12 @@ impl Val {
                 })
             }
             Type::Enum(handle) => {
-                let (discriminant, _) =
-                    load_variant(ty, handle.names().map(|_| Type::Unit), mem, bytes)?;
+                let (discriminant, _) = load_variant(
+                    handle.variant_info(),
+                    handle.names().map(|_| Type::Unit),
+                    mem,
+                    bytes,
+                )?;
 
                 Val::Enum(Enum {
                     ty: handle.clone(),
@@ -667,7 +759,8 @@ impl Val {
                 })
             }
             Type::Union(handle) => {
-                let (discriminant, value) = load_variant(ty, handle.types(), mem, bytes)?;
+                let (discriminant, value) =
+                    load_variant(handle.variant_info(), handle.types(), mem, bytes)?;
 
                 Val::Union(Union {
                     ty: handle.clone(),
@@ -676,8 +769,12 @@ impl Val {
                 })
             }
             Type::Option(handle) => {
-                let (discriminant, value) =
-                    load_variant(ty, [Type::Unit, handle.ty()].into_iter(), mem, bytes)?;
+                let (discriminant, value) = load_variant(
+                    handle.variant_info(),
+                    [Type::Unit, handle.ty()].into_iter(),
+                    mem,
+                    bytes,
+                )?;
 
                 Val::Option(Option {
                     ty: handle.clone(),
@@ -686,8 +783,12 @@ impl Val {
                 })
             }
             Type::Expected(handle) => {
-                let (discriminant, value) =
-                    load_variant(ty, [handle.ok(), handle.err()].into_iter(), mem, bytes)?;
+                let (discriminant, value) = load_variant(
+                    handle.variant_info(),
+                    [handle.ok(), handle.err()].into_iter(),
+                    mem,
+                    bytes,
+                )?;
 
                 Val::Expected(Expected {
                     ty: handle.clone(),
@@ -699,10 +800,11 @@ impl Val {
                 ty: handle.clone(),
                 count: u32::try_from(handle.names().len())?,
                 value: match FlagsSize::from_count(handle.names().len()) {
+                    FlagsSize::Size0 => Box::new([]),
                     FlagsSize::Size1 => iter::once(u8::load(mem, bytes)? as u32).collect(),
                     FlagsSize::Size2 => iter::once(u16::load(mem, bytes)? as u32).collect(),
                     FlagsSize::Size4Plus(n) => (0..n)
-                        .map(|index| u32::load(mem, &bytes[index * 4..][..4]))
+                        .map(|index| u32::load(mem, &bytes[usize::from(index) * 4..][..4]))
                         .collect::<Result<_>>()?,
                 },
             }),
@@ -773,7 +875,9 @@ impl Val {
             }) => {
                 next_mut(dst).write(ValRaw::u32(*discriminant));
                 value.lower(store, options, dst)?;
-                for _ in (1 + value.ty().flatten_count())..self.ty().flatten_count() {
+                let value_flat = value.ty().canonical_abi().flat_count(usize::MAX).unwrap();
+                let variant_flat = self.ty().canonical_abi().flat_count(usize::MAX).unwrap();
+                for _ in (1 + value_flat)..variant_flat {
                     next_mut(dst).write(ValRaw::u32(0));
                 }
             }
@@ -792,7 +896,7 @@ impl Val {
 
     /// Serialize this value to the heap at the specified memory location.
     pub(crate) fn store<T>(&self, mem: &mut MemoryMut<'_, T>, offset: usize) -> Result<()> {
-        debug_assert!(offset % usize::try_from(self.ty().size_and_alignment().alignment)? == 0);
+        debug_assert!(offset % usize::try_from(self.ty().canonical_abi().align32)? == 0);
 
         match self {
             Val::Unit => (),
@@ -818,38 +922,43 @@ impl Val {
             Val::Record(Record { values, .. }) | Val::Tuple(Tuple { values, .. }) => {
                 let mut offset = offset;
                 for value in values.deref() {
-                    value.store(mem, value.ty().next_field(&mut offset))?;
+                    value.store(
+                        mem,
+                        value.ty().canonical_abi().next_field32_size(&mut offset),
+                    )?;
                 }
             }
             Val::Variant(Variant {
                 discriminant,
                 value,
                 ty,
-            }) => self.store_variant(*discriminant, value, ty.cases().len(), mem, offset)?,
+            }) => self.store_variant(*discriminant, value, ty.variant_info(), mem, offset)?,
 
             Val::Enum(Enum { discriminant, ty }) => {
-                self.store_variant(*discriminant, &Val::Unit, ty.names().len(), mem, offset)?
+                self.store_variant(*discriminant, &Val::Unit, ty.variant_info(), mem, offset)?
             }
 
             Val::Union(Union {
                 discriminant,
                 value,
                 ty,
-            }) => self.store_variant(*discriminant, value, ty.types().len(), mem, offset)?,
+            }) => self.store_variant(*discriminant, value, ty.variant_info(), mem, offset)?,
 
             Val::Option(Option {
                 discriminant,
                 value,
-                ..
-            })
-            | Val::Expected(Expected {
+                ty,
+            }) => self.store_variant(*discriminant, value, ty.variant_info(), mem, offset)?,
+
+            Val::Expected(Expected {
                 discriminant,
                 value,
-                ..
-            }) => self.store_variant(*discriminant, value, 2, mem, offset)?,
+                ty,
+            }) => self.store_variant(*discriminant, value, ty.variant_info(), mem, offset)?,
 
             Val::Flags(Flags { count, value, .. }) => {
                 match FlagsSize::from_count(*count as usize) {
+                    FlagsSize::Size0 => {}
                     FlagsSize::Size1 => u8::try_from(value[0]).unwrap().store(mem, offset)?,
                     FlagsSize::Size2 => u16::try_from(value[0]).unwrap().store(mem, offset)?,
                     FlagsSize::Size4Plus(_) => {
@@ -870,34 +979,26 @@ impl Val {
         &self,
         discriminant: u32,
         value: &Val,
-        case_count: usize,
+        info: &VariantInfo,
         mem: &mut MemoryMut<'_, T>,
         offset: usize,
     ) -> Result<()> {
-        let discriminant_size = DiscriminantSize::from_count(case_count).unwrap();
-        match discriminant_size {
+        match info.size {
             DiscriminantSize::Size1 => u8::try_from(discriminant).unwrap().store(mem, offset)?,
             DiscriminantSize::Size2 => u16::try_from(discriminant).unwrap().store(mem, offset)?,
-            DiscriminantSize::Size4 => (discriminant).store(mem, offset)?,
+            DiscriminantSize::Size4 => discriminant.store(mem, offset)?,
         }
 
-        value.store(
-            mem,
-            offset
-                + func::align_to(
-                    discriminant_size.into(),
-                    self.ty().size_and_alignment().alignment,
-                ),
-        )
+        let offset = offset + usize::try_from(info.payload_offset32).unwrap();
+        value.store(mem, offset)
     }
 }
 
 fn load_list(handle: &types::List, mem: &Memory, ptr: usize, len: usize) -> Result<Val> {
     let element_type = handle.ty();
-    let SizeAndAlignment {
-        size: element_size,
-        alignment: element_alignment,
-    } = element_type.size_and_alignment();
+    let abi = element_type.canonical_abi();
+    let element_size = usize::try_from(abi.size32).unwrap();
+    let element_alignment = abi.align32;
 
     match len
         .checked_mul(element_size)
@@ -932,25 +1033,24 @@ fn load_record(
     let mut offset = 0;
     types
         .map(|ty| {
-            Val::load(
-                &ty,
-                mem,
-                &bytes[ty.next_field(&mut offset)..][..ty.size_and_alignment().size],
-            )
+            let abi = ty.canonical_abi();
+            let offset = abi.next_field32(&mut offset);
+            let offset = usize::try_from(offset).unwrap();
+            let size = usize::try_from(abi.size32).unwrap();
+            Val::load(&ty, mem, &bytes[offset..][..size])
         })
         .collect()
 }
 
 fn load_variant(
-    ty: &Type,
+    info: &VariantInfo,
     mut types: impl ExactSizeIterator<Item = Type>,
     mem: &Memory,
     bytes: &[u8],
 ) -> Result<(u32, Val)> {
-    let discriminant_size = DiscriminantSize::from_count(types.len()).unwrap();
-    let discriminant = match discriminant_size {
-        DiscriminantSize::Size1 => u8::load(mem, &bytes[..1])? as u32,
-        DiscriminantSize::Size2 => u16::load(mem, &bytes[..2])? as u32,
+    let discriminant = match info.size {
+        DiscriminantSize::Size1 => u32::from(u8::load(mem, &bytes[..1])?),
+        DiscriminantSize::Size2 => u32::from(u16::load(mem, &bytes[..2])?),
         DiscriminantSize::Size4 => u32::load(mem, &bytes[..4])?,
     };
     let case_ty = types.nth(discriminant as usize).ok_or_else(|| {
@@ -960,14 +1060,9 @@ fn load_variant(
             types.len()
         )
     })?;
-    let value = Val::load(
-        &case_ty,
-        mem,
-        &bytes[func::align_to(
-            usize::from(discriminant_size),
-            ty.size_and_alignment().alignment,
-        )..][..case_ty.size_and_alignment().size],
-    )?;
+    let payload_offset = usize::try_from(info.payload_offset32).unwrap();
+    let case_size = usize::try_from(case_ty.canonical_abi().size32).unwrap();
+    let value = Val::load(&case_ty, mem, &bytes[payload_offset..][..case_size])?;
     Ok((discriminant, value))
 }
 
@@ -984,7 +1079,8 @@ fn lift_variant<'a>(
         .nth(discriminant as usize)
         .ok_or_else(|| anyhow!("discriminant {} out of range [0..{})", discriminant, len))?;
     let value = Val::lift(&ty, store, options, src)?;
-    for _ in (1 + ty.flatten_count())..flatten_count {
+    let value_flat = ty.canonical_abi().flat_count(usize::MAX).unwrap();
+    for _ in (1 + value_flat)..flatten_count {
         next(src);
     }
     Ok((discriminant, value))
@@ -996,31 +1092,20 @@ fn lower_list<T>(
     mem: &mut MemoryMut<'_, T>,
     items: &[Val],
 ) -> Result<(usize, usize)> {
-    let SizeAndAlignment {
-        size: element_size,
-        alignment: element_alignment,
-    } = element_type.size_and_alignment();
+    let abi = element_type.canonical_abi();
+    let elt_size = usize::try_from(abi.size32)?;
+    let elt_align = abi.align32;
     let size = items
         .len()
-        .checked_mul(element_size)
+        .checked_mul(elt_size)
         .ok_or_else(|| anyhow::anyhow!("size overflow copying a list"))?;
-    let ptr = mem.realloc(0, 0, element_alignment, size)?;
+    let ptr = mem.realloc(0, 0, elt_align, size)?;
     let mut element_ptr = ptr;
     for item in items {
         item.store(mem, element_ptr)?;
-        element_ptr += element_size;
+        element_ptr += elt_size;
     }
     Ok((ptr, items.len()))
-}
-
-/// Calculate the size of a u32 array needed to represent the specified number of bit flags.
-///
-/// Note that this will always return at least 1, even if the `count` parameter is zero.
-pub(crate) fn u32_count_for_flag_count(count: usize) -> usize {
-    match FlagsSize::from_count(count) {
-        FlagsSize::Size1 | FlagsSize::Size2 => 1,
-        FlagsSize::Size4Plus(n) => n,
-    }
 }
 
 fn next<'a>(src: &mut std::slice::Iter<'a, ValRaw>) -> &'a ValRaw {

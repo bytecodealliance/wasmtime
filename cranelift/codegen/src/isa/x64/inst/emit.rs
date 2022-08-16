@@ -1,7 +1,7 @@
 use crate::binemit::{Addend, Reloc};
 use crate::ir::immediates::{Ieee32, Ieee64};
-use crate::ir::LibCall;
 use crate::ir::TrapCode;
+use crate::ir::{KnownSymbol, LibCall};
 use crate::isa::x64::encoding::evex::{EvexInstruction, EvexVectorLength};
 use crate::isa::x64::encoding::rex::{
     emit_simm, emit_std_enc_enc, emit_std_enc_mem, emit_std_reg_mem, emit_std_reg_reg, int_reg_enc,
@@ -158,7 +158,7 @@ pub(crate) fn emit(
                 (reg_g, src2)
             };
 
-            let mut rex = RexFlags::from(*size);
+            let rex = RexFlags::from(*size);
             if *op == AluRmiROpcode::Mul {
                 // We kinda freeloaded Mul into RMI_R_Op, but it doesn't fit the usual pattern, so
                 // we have to special-case it.
@@ -191,26 +191,19 @@ pub(crate) fn emit(
                     }
                 }
             } else {
-                let (opcode_r, opcode_m, subopcode_i, is_8bit) = match op {
-                    AluRmiROpcode::Add => (0x01, 0x03, 0, false),
-                    AluRmiROpcode::Adc => (0x11, 0x03, 0, false),
-                    AluRmiROpcode::Sub => (0x29, 0x2B, 5, false),
-                    AluRmiROpcode::Sbb => (0x19, 0x2B, 5, false),
-                    AluRmiROpcode::And => (0x21, 0x23, 4, false),
-                    AluRmiROpcode::Or => (0x09, 0x0B, 1, false),
-                    AluRmiROpcode::Xor => (0x31, 0x33, 6, false),
-                    AluRmiROpcode::And8 => (0x20, 0x22, 4, true),
-                    AluRmiROpcode::Or8 => (0x08, 0x0A, 1, true),
+                let (opcode_r, opcode_m, subopcode_i) = match op {
+                    AluRmiROpcode::Add => (0x01, 0x03, 0),
+                    AluRmiROpcode::Adc => (0x11, 0x03, 0),
+                    AluRmiROpcode::Sub => (0x29, 0x2B, 5),
+                    AluRmiROpcode::Sbb => (0x19, 0x2B, 5),
+                    AluRmiROpcode::And => (0x21, 0x23, 4),
+                    AluRmiROpcode::Or => (0x09, 0x0B, 1),
+                    AluRmiROpcode::Xor => (0x31, 0x33, 6),
                     AluRmiROpcode::Mul => panic!("unreachable"),
                 };
-                assert!(!(is_8bit && *size == OperandSize::Size64));
 
                 match src2 {
                     RegMemImm::Reg { reg: reg_e } => {
-                        if is_8bit {
-                            rex.always_emit_if_8bit_needed(reg_e);
-                            rex.always_emit_if_8bit_needed(reg_g);
-                        }
                         // GCC/llvm use the swapped operand encoding (viz., the R/RM vs RM/R
                         // duality). Do this too, so as to be able to compare generated machine
                         // code easily.
@@ -227,9 +220,6 @@ pub(crate) fn emit(
 
                     RegMemImm::Mem { addr } => {
                         let amode = addr.finalize(state, sink);
-                        if is_8bit {
-                            rex.always_emit_if_8bit_needed(reg_g);
-                        }
                         // Here we revert to the "normal" G-E ordering.
                         emit_std_reg_mem(
                             sink,
@@ -245,7 +235,6 @@ pub(crate) fn emit(
                     }
 
                     RegMemImm::Imm { simm32 } => {
-                        assert!(!is_8bit);
                         let use_imm8 = low8_will_sign_extend_to_32(simm32);
                         let opcode = if use_imm8 { 0x83 } else { 0x81 };
                         // And also here we use the "normal" G-E ordering.
@@ -676,6 +665,16 @@ pub(crate) fn emit(
                 dst,
                 RexFlags::from(*size),
             );
+        }
+
+        Inst::MovPReg { src, dst } => {
+            let src: Reg = (*src).into();
+            debug_assert!([regs::rsp(), regs::rbp()].contains(&src));
+            let src = Gpr::new(src).unwrap();
+            let size = OperandSize::Size64;
+            let dst = allocs.next(dst.to_reg().to_reg());
+            let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
+            Inst::MovRR { size, src, dst }.emit(&[], sink, info, state);
         }
 
         Inst::MovzxRmR { ext_mode, src, dst } => {
@@ -1476,6 +1475,44 @@ pub(crate) fn emit(
             sink.bind_label(else_label);
         }
 
+        Inst::TrapIfAnd {
+            cc1,
+            cc2,
+            trap_code,
+        } => {
+            let else_label = sink.get_label();
+
+            // Jump over if either condition code is not set.
+            one_way_jmp(sink, cc1.invert(), else_label);
+            one_way_jmp(sink, cc2.invert(), else_label);
+
+            // Trap!
+            let inst = Inst::trap(*trap_code);
+            inst.emit(&[], sink, info, state);
+
+            sink.bind_label(else_label);
+        }
+
+        Inst::TrapIfOr {
+            cc1,
+            cc2,
+            trap_code,
+        } => {
+            let trap_label = sink.get_label();
+            let else_label = sink.get_label();
+
+            // trap immediately if cc1 is set, otherwise jump over the trap if cc2 is not.
+            one_way_jmp(sink, *cc1, trap_label);
+            one_way_jmp(sink, cc2.invert(), else_label);
+
+            // Trap!
+            sink.bind_label(trap_label);
+            let inst = Inst::trap(*trap_code);
+            inst.emit(&[], sink, info, state);
+
+            sink.bind_label(else_label);
+        }
+
         Inst::XmmUnaryRmR {
             op,
             src: src_e,
@@ -1490,8 +1527,11 @@ pub(crate) fn emit(
                 SseOpcode::Cvtdq2pd => (LegacyPrefixes::_F3, 0x0FE6, 2),
                 SseOpcode::Cvtpd2ps => (LegacyPrefixes::_66, 0x0F5A, 2),
                 SseOpcode::Cvtps2pd => (LegacyPrefixes::None, 0x0F5A, 2),
+                SseOpcode::Cvtdq2ps => (LegacyPrefixes::None, 0x0F5B, 2),
                 SseOpcode::Cvtss2sd => (LegacyPrefixes::_F3, 0x0F5A, 2),
                 SseOpcode::Cvtsd2ss => (LegacyPrefixes::_F2, 0x0F5A, 2),
+                SseOpcode::Cvttpd2dq => (LegacyPrefixes::_66, 0x0FE6, 2),
+                SseOpcode::Cvttps2dq => (LegacyPrefixes::_F3, 0x0F5B, 2),
                 SseOpcode::Movaps => (LegacyPrefixes::None, 0x0F28, 2),
                 SseOpcode::Movapd => (LegacyPrefixes::_66, 0x0F28, 2),
                 SseOpcode::Movdqa => (LegacyPrefixes::_66, 0x0F6F, 2),
@@ -1586,9 +1626,6 @@ pub(crate) fn emit(
                 SseOpcode::Andnpd => (LegacyPrefixes::_66, 0x0F55, 2),
                 SseOpcode::Blendvps => (LegacyPrefixes::_66, 0x0F3814, 3),
                 SseOpcode::Blendvpd => (LegacyPrefixes::_66, 0x0F3815, 3),
-                SseOpcode::Cvttpd2dq => (LegacyPrefixes::_66, 0x0FE6, 2),
-                SseOpcode::Cvttps2dq => (LegacyPrefixes::_F3, 0x0F5B, 2),
-                SseOpcode::Cvtdq2ps => (LegacyPrefixes::None, 0x0F5B, 2),
                 SseOpcode::Divps => (LegacyPrefixes::None, 0x0F5E, 2),
                 SseOpcode::Divpd => (LegacyPrefixes::_66, 0x0F5E, 2),
                 SseOpcode::Divss => (LegacyPrefixes::_F3, 0x0F5E, 2),
@@ -1705,6 +1742,8 @@ pub(crate) fn emit(
             let src3 = src3.clone().to_reg_mem().with_allocs(allocs);
 
             let (w, opcode) = match op {
+                AvxOpcode::Vfmadd213ss => (false, 0xA9),
+                AvxOpcode::Vfmadd213sd => (true, 0xA9),
                 AvxOpcode::Vfmadd213ps => (false, 0xA8),
                 AvxOpcode::Vfmadd213pd => (true, 0xA8),
             };
@@ -2608,11 +2647,7 @@ pub(crate) fn emit(
                 sink.put1(0x48 | ((enc_dst >> 3) & 1));
                 sink.put1(0xB8 | (enc_dst & 7));
                 emit_reloc(sink, Reloc::Abs8, name, *offset);
-                if info.flags.emit_all_ones_funcaddrs() {
-                    sink.put8(u64::max_value());
-                } else {
-                    sink.put8(0);
-                }
+                sink.put8(0);
             }
         }
 
@@ -2789,7 +2824,7 @@ pub(crate) fn emit(
         }
 
         Inst::VirtualSPOffsetAdj { offset } => {
-            log::trace!(
+            trace!(
                 "virtual sp offset adjusted by {} -> {}",
                 offset,
                 state.virtual_sp_offset + offset
@@ -2880,10 +2915,6 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::EpiloguePlaceholder => {
-            // Generate no code.
-        }
-
         Inst::ElfTlsGetAddr { ref symbol } => {
             // N.B.: Must be exactly this byte sequence; the linker requires it,
             // because it must know how to rewrite the bytes.
@@ -2921,6 +2952,52 @@ pub(crate) fn emit(
             // callq *(%rdi)
             sink.put1(0xff);
             sink.put1(0x17);
+        }
+
+        Inst::CoffTlsGetAddr { ref symbol } => {
+            // See: https://gcc.godbolt.org/z/M8or9x6ss
+            // And: https://github.com/bjorn3/rustc_codegen_cranelift/issues/388#issuecomment-532930282
+
+            // Emit the following sequence
+            // movl	(%rip), %eax          ; IMAGE_REL_AMD64_REL32	_tls_index
+            // movq	%gs:88, %rcx
+            // movq	(%rcx,%rax,8), %rax
+            // leaq	(%rax), %rax          ; Reloc: IMAGE_REL_AMD64_SECREL	symbol
+
+            // Load TLS index for current thread
+            // movl	(%rip), %eax
+            sink.put1(0x8b); // mov
+            sink.put1(0x05);
+            emit_reloc(
+                sink,
+                Reloc::X86PCRel4,
+                &ExternalName::KnownSymbol(KnownSymbol::CoffTlsIndex),
+                -4,
+            );
+            sink.put4(0); // offset
+
+            // movq	%gs:88, %rcx
+            // Load the TLS Storage Array pointer
+            // The gs segment register refers to the base address of the TEB on x64.
+            // 0x58 is the offset in the TEB for the ThreadLocalStoragePointer member on x64:
+            sink.put_data(&[
+                0x65, 0x48, // REX.W
+                0x8b, // MOV
+                0x0c, 0x25, 0x58, // 0x58 - ThreadLocalStoragePointer offset
+                0x00, 0x00, 0x00,
+            ]);
+
+            // movq	(%rcx,%rax,8), %rax
+            // Load the actual TLS entry for this thread.
+            // Computes ThreadLocalStoragePointer + _tls_index*8
+            sink.put_data(&[0x48, 0x8b, 0x04, 0xc1]);
+
+            // leaq	(%rax), %rax
+            sink.put1(0x48);
+            sink.put1(0x8d);
+            sink.put1(0x80);
+            emit_reloc(sink, Reloc::X86SecRel, symbol, 0);
+            sink.put4(0); // offset
         }
 
         Inst::Unwind { ref inst } => {

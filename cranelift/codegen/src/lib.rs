@@ -89,7 +89,7 @@ pub mod write;
 
 pub use crate::entity::packed_option;
 pub use crate::machinst::buffer::{MachCallSite, MachReloc, MachSrcLoc, MachStackMap, MachTrap};
-pub use crate::machinst::TextSectionBuilder;
+pub use crate::machinst::{CompiledCode, TextSectionBuilder};
 
 mod alias_analysis;
 mod bitset;
@@ -114,6 +114,20 @@ mod value_label;
 #[cfg(feature = "souper-harvest")]
 mod souper_harvest;
 
-pub use crate::result::{CodegenError, CodegenResult};
+pub use crate::result::{CodegenError, CodegenResult, CompileError};
+
+#[cfg(feature = "incremental-cache")]
+pub mod incremental_cache;
+
+/// Even when trace logging is disabled, the trace macro has a significant performance cost so we
+/// disable it by default.
+#[macro_export]
+macro_rules! trace {
+    ($($tt:tt)*) => {
+        if cfg!(feature = "trace-log") {
+            ::log::trace!($($tt)*);
+        }
+    };
+}
 
 include!(concat!(env!("OUT_DIR"), "/version.rs"));

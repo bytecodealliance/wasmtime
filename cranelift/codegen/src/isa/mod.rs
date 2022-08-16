@@ -49,7 +49,7 @@ use crate::flowgraph;
 use crate::ir::{self, Function};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
-use crate::machinst::{MachCompileResult, TextSectionBuilder, UnwindInfoKind};
+use crate::machinst::{CompiledCode, CompiledCodeStencil, TextSectionBuilder, UnwindInfoKind};
 use crate::settings;
 use crate::settings::SetResult;
 use crate::CodegenResult;
@@ -234,7 +234,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         &self,
         func: &Function,
         want_disasm: bool,
-    ) -> CodegenResult<MachCompileResult>;
+    ) -> CodegenResult<CompiledCodeStencil>;
 
     #[cfg(feature = "unwind")]
     /// Map a regalloc::Reg to its corresponding DWARF register.
@@ -254,7 +254,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,
-        result: &MachCompileResult,
+        result: &CompiledCode,
         kind: UnwindInfoKind,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>>;
 
@@ -309,6 +309,15 @@ impl<'a> dyn TargetIsa + 'a {
             // supported by the architecture and is used on some platforms.
             (_, Architecture::Aarch64(..)) => 0x10000,
             _ => 0x1000,
+        }
+    }
+
+    /// Returns the minimum symbol alignment for this ISA.
+    pub fn symbol_alignment(&self) -> u64 {
+        match self.triple().architecture {
+            // All symbols need to be aligned to at least 2 on s390x.
+            Architecture::S390x => 2,
+            _ => 1,
         }
     }
 

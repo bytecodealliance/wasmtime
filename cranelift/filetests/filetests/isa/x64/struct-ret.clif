@@ -18,3 +18,45 @@ block0(v0: i64):
 ;   popq    %rbp
 ;   ret
 
+
+function %f1(i64, i64) -> i64 {
+    fn0 = %f2(i64 sret) -> i64
+
+block0(v0: i64, v1: i64):
+    v2 = call fn0(v1)
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rdi
+;   load_ext_name %f2+0, %r9
+;   call    *%r9
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f3(i64 sret) {
+    fn0 = %f4(i64 sret)
+
+block0(v0: i64):
+    call fn0(v0)
+    return
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $16, %rsp
+;   movq    %r15, 0(%rsp)
+; block0:
+;   movq    %rdi, %r15
+;   load_ext_name %f4+0, %r8
+;   call    *%r8
+;   movq    %r15, %rax
+;   movq    0(%rsp), %r15
+;   addq    %rsp, $16, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

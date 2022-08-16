@@ -11,6 +11,6 @@ block0:
 }
 
 ; block0:
-;   ldr x0, 8 ; b 12 ; data TestCase { length: 9, ascii: [109, 121, 95, 103, 108, 111, 98, 97, 108, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   ldr x0, 8 ; b 12 ; data TestCase(TestcaseName { length: 9, ascii: [109, 121, 95, 103, 108, 111, 98, 97, 108, 0, 0, 0, 0, 0, 0, 0] }) + 0
 ;   ret
 

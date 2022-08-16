@@ -4,7 +4,7 @@ use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::types::{
     B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS, R32, R64,
 };
-use crate::ir::{types, ExternalName, MemFlags, Opcode, SourceLoc, Type};
+use crate::ir::{types, ExternalName, MemFlags, Opcode, Type};
 use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
@@ -36,9 +36,10 @@ mod emit_tests;
 // Instructions (top level): definition
 
 pub use crate::isa::aarch64::lower::isle::generated_code::{
-    ALUOp, ALUOp3, AtomicRMWLoopOp, AtomicRMWOp, BitOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode,
-    FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2,
-    VecPairOp, VecRRLongOp, VecRRNarrowOp, VecRRPairLongOp, VecRRRLongOp, VecShiftImmOp,
+    ALUOp, ALUOp3, APIKey, AtomicRMWLoopOp, AtomicRMWOp, BitOp, FPUOp1, FPUOp2, FPUOp3,
+    FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp, VecALUModOp, VecALUOp,
+    VecExtendOp, VecLanesOp, VecMisc2, VecPairOp, VecRRLongOp, VecRRNarrowOp, VecRRPairLongOp,
+    VecRRRLongOp, VecShiftImmOp,
 };
 
 /// A floating-point unit (FPU) operation with two args, a register and an immediate.
@@ -649,6 +650,13 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(rm);
         }
+        &Inst::MovPReg { rd, rm } => {
+            debug_assert!(
+                [regs::fp_reg(), regs::stack_reg(), regs::link_reg()].contains(&rm.into())
+            );
+            debug_assert!(rd.to_reg().is_virtual());
+            collector.reg_def(rd);
+        }
         &Inst::MovWide { op, rd, .. } => match op {
             MoveWideOp::MovK => collector.reg_mod(rd),
             _ => collector.reg_def(rd),
@@ -665,6 +673,10 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
         &Inst::CSet { rd, .. } | &Inst::CSetm { rd, .. } => {
             collector.reg_def(rd);
+        }
+        &Inst::CCmp { rn, rm, .. } => {
+            collector.reg_use(rn);
+            collector.reg_use(rm);
         }
         &Inst::CCmpImm { rn, .. } => {
             collector.reg_use(rn);
@@ -703,7 +715,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rn);
             collector.reg_use(rt);
         }
-        &Inst::Fence {} => {}
+        &Inst::Fence {} | &Inst::Csdb {} => {}
         &Inst::FpuMove64 { rd, rn } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
@@ -949,14 +961,13 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::VecRRR {
-            alu_op, rd, rn, rm, ..
-        } => {
-            if alu_op == VecALUOp::Bsl {
-                collector.reg_mod(rd);
-            } else {
-                collector.reg_def(rd);
-            }
+        &Inst::VecRRR { rd, rn, rm, .. } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+        }
+        &Inst::VecRRRMod { rd, rn, rm, .. } => {
+            collector.reg_mod(rd);
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
@@ -975,7 +986,12 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
                 collector.reg_use(ret);
             }
         }
-        &Inst::Jump { .. } | &Inst::EpiloguePlaceholder => {}
+        &Inst::AuthenticatedRet { ref rets, .. } => {
+            for &ret in rets {
+                collector.reg_use(ret);
+            }
+        }
+        &Inst::Jump { .. } => {}
         &Inst::Call { ref info, .. } => {
             collector.reg_uses(&info.uses[..]);
             collector.reg_defs(&info.defs[..]);
@@ -1023,6 +1039,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             memarg_operands(mem, collector);
         }
+        &Inst::Pacisp { .. } => {}
         &Inst::VirtualSPOffsetAdj { .. } => {}
 
         &Inst::ElfTlsGetAddr { .. } => {
@@ -1043,6 +1060,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
 // Instructions: misc functions and external interface
 
 impl MachInst for Inst {
+    type ABIMachineSpec = AArch64MachineDeps;
     type LabelUse = LabelUse;
 
     fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>) {
@@ -1059,14 +1077,6 @@ impl MachInst for Inst {
             &Inst::FpuMove64 { rd, rn } => Some((rd, rn)),
             &Inst::FpuMove128 { rd, rn } => Some((rd, rn)),
             _ => None,
-        }
-    }
-
-    fn is_epilogue_placeholder(&self) -> bool {
-        if let Inst::EpiloguePlaceholder = self {
-            true
-        } else {
-            false
         }
     }
 
@@ -1090,7 +1100,7 @@ impl MachInst for Inst {
 
     fn is_term(&self) -> MachTerminator {
         match self {
-            &Inst::Ret { .. } | &Inst::EpiloguePlaceholder => MachTerminator::Ret,
+            &Inst::Ret { .. } | &Inst::AuthenticatedRet { .. } => MachTerminator::Ret,
             &Inst::Jump { .. } => MachTerminator::Uncond,
             &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::IndirectBr { .. } => MachTerminator::Indirect,
@@ -1482,6 +1492,11 @@ impl Inst {
                 let rm = pretty_print_ireg(rm, size, allocs);
                 format!("mov {}, {}", rd, rm)
             }
+            &Inst::MovPReg { rd, rm } => {
+                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
+                let rm = show_ireg_sized(rm.into(), OperandSize::Size64);
+                format!("mov {}, {}", rd, rm)
+            }
             &Inst::MovWide {
                 op,
                 rd,
@@ -1520,6 +1535,19 @@ impl Inst {
                 let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
                 let cond = cond.pretty_print(0, allocs);
                 format!("csetm {}, {}", rd, cond)
+            }
+            &Inst::CCmp {
+                size,
+                rn,
+                rm,
+                nzcv,
+                cond,
+            } => {
+                let rn = pretty_print_ireg(rn, size, allocs);
+                let rm = pretty_print_ireg(rm, size, allocs);
+                let nzcv = nzcv.pretty_print(0, allocs);
+                let cond = cond.pretty_print(0, allocs);
+                format!("ccmp {}, {}, {}, {}", rn, rm, nzcv, cond)
             }
             &Inst::CCmpImm {
                 size,
@@ -1679,6 +1707,9 @@ impl Inst {
             &Inst::Fence {} => {
                 format!("dmb ish")
             }
+            &Inst::Csdb {} => {
+                format!("csdb")
+            }
             &Inst::FpuMove64 { rd, rn } => {
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), ScalarSize::Size64, allocs);
                 let rn = pretty_print_vreg_scalar(rn, ScalarSize::Size64, allocs);
@@ -1691,7 +1722,7 @@ impl Inst {
             }
             &Inst::FpuMoveFromVec { rd, rn, idx, size } => {
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), size.lane_size(), allocs);
-                let rn = pretty_print_vreg_element(rn, idx as usize, size, allocs);
+                let rn = pretty_print_vreg_element(rn, idx as usize, size.lane_size(), allocs);
                 format!("mov {}, {}", rd, rn)
             }
             &Inst::FpuExtend { rd, rn, size } => {
@@ -1763,14 +1794,14 @@ impl Inst {
             }
             &Inst::FpuRRRR {
                 fpu_op,
+                size,
                 rd,
                 rn,
                 rm,
                 ra,
             } => {
-                let (op, size) = match fpu_op {
-                    FPUOp3::MAdd32 => ("fmadd", ScalarSize::Size32),
-                    FPUOp3::MAdd64 => ("fmadd", ScalarSize::Size64),
+                let op = match fpu_op {
+                    FPUOp3::MAdd => "fmadd",
                 };
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), size, allocs);
                 let rn = pretty_print_vreg_scalar(rn, size, allocs);
@@ -1951,16 +1982,17 @@ impl Inst {
                 format!("fmov {}, {}", rd, imm)
             }
             &Inst::MovToVec { rd, rn, idx, size } => {
-                let rd = pretty_print_vreg_element(rd.to_reg(), idx as usize, size, allocs);
+                let rd =
+                    pretty_print_vreg_element(rd.to_reg(), idx as usize, size.lane_size(), allocs);
                 let rn = pretty_print_ireg(rn, size.operand_size(), allocs);
                 format!("mov {}, {}", rd, rn)
             }
             &Inst::MovFromVec { rd, rn, idx, size } => {
                 let op = match size {
-                    VectorSize::Size8x16 => "umov",
-                    VectorSize::Size16x8 => "umov",
-                    VectorSize::Size32x4 => "mov",
-                    VectorSize::Size64x2 => "mov",
+                    ScalarSize::Size8 => "umov",
+                    ScalarSize::Size16 => "umov",
+                    ScalarSize::Size32 => "mov",
+                    ScalarSize::Size64 => "mov",
                     _ => unimplemented!(),
                 };
                 let rd = pretty_print_ireg(rd.to_reg(), size.operand_size(), allocs);
@@ -1975,7 +2007,7 @@ impl Inst {
                 scalar_size,
             } => {
                 let rd = pretty_print_ireg(rd.to_reg(), scalar_size, allocs);
-                let rn = pretty_print_vreg_element(rn, idx as usize, size, allocs);
+                let rn = pretty_print_vreg_element(rn, idx as usize, size.lane_size(), allocs);
                 format!("smov {}, {}", rd, rn)
             }
             &Inst::VecDup { rd, rn, size } => {
@@ -1985,7 +2017,7 @@ impl Inst {
             }
             &Inst::VecDupFromFpu { rd, rn, size } => {
                 let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
-                let rn = pretty_print_vreg_element(rn, 0, size, allocs);
+                let rn = pretty_print_vreg_element(rn, 0, size.lane_size(), allocs);
                 format!("dup {}, {}", rd, rn)
             }
             &Inst::VecDupFPImm { rd, imm, size } => {
@@ -2061,8 +2093,13 @@ impl Inst {
                 src_idx,
                 size,
             } => {
-                let rd = pretty_print_vreg_element(rd.to_reg(), dest_idx as usize, size, allocs);
-                let rn = pretty_print_vreg_element(rn, src_idx as usize, size, allocs);
+                let rd = pretty_print_vreg_element(
+                    rd.to_reg(),
+                    dest_idx as usize,
+                    size.lane_size(),
+                    allocs,
+                );
+                let rn = pretty_print_vreg_element(rn, src_idx as usize, size.lane_size(), allocs);
                 format!("mov {}, {}", rd, rn)
             }
             &Inst::VecRRLong {
@@ -2188,7 +2225,6 @@ impl Inst {
                     VecALUOp::Bic => ("bic", VectorSize::Size8x16),
                     VecALUOp::Orr => ("orr", VectorSize::Size8x16),
                     VecALUOp::Eor => ("eor", VectorSize::Size8x16),
-                    VecALUOp::Bsl => ("bsl", VectorSize::Size8x16),
                     VecALUOp::Umaxp => ("umaxp", size),
                     VecALUOp::Add => ("add", size),
                     VecALUOp::Sub => ("sub", size),
@@ -2209,6 +2245,22 @@ impl Inst {
                     VecALUOp::Addp => ("addp", size),
                     VecALUOp::Zip1 => ("zip1", size),
                     VecALUOp::Sqrdmulh => ("sqrdmulh", size),
+                };
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
+                let rn = pretty_print_vreg_vector(rn, size, allocs);
+                let rm = pretty_print_vreg_vector(rm, size, allocs);
+                format!("{} {}, {}, {}", op, rd, rn, rm)
+            }
+            &Inst::VecRRRMod {
+                rd,
+                rn,
+                rm,
+                alu_op,
+                size,
+            } => {
+                let (op, size) = match alu_op {
+                    VecALUModOp::Bsl => ("bsl", VectorSize::Size8x16),
+                    VecALUModOp::Fmla => ("fmla", size),
                 };
                 let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
                 let rn = pretty_print_vreg_vector(rn, size, allocs);
@@ -2469,7 +2521,18 @@ impl Inst {
                 format!("blr {}", rn)
             }
             &Inst::Ret { .. } => "ret".to_string(),
-            &Inst::EpiloguePlaceholder => "epilogue placeholder".to_string(),
+            &Inst::AuthenticatedRet { key, is_hint, .. } => {
+                let key = match key {
+                    APIKey::A => "a",
+                    APIKey::B => "b",
+                };
+
+                if is_hint {
+                    "auti".to_string() + key + "sp ; ret"
+                } else {
+                    "reta".to_string() + key
+                }
+            }
             &Inst::Jump { ref dest } => {
                 let dest = dest.pretty_print(0, allocs);
                 format!("b {}", dest)
@@ -2501,16 +2564,7 @@ impl Inst {
                 format!("br {}", rn)
             }
             &Inst::Brk => "brk #0".to_string(),
-            &Inst::Udf {
-                use_allocated_encoding,
-                ..
-            } => {
-                if use_allocated_encoding {
-                    "udf #0xc11f".to_string()
-                } else {
-                    "udf".to_string()
-                }
-            }
+            &Inst::Udf { .. } => "udf #0xc11f".to_string(),
             &Inst::TrapIf { ref kind, .. } => match kind {
                 &CondBrKind::Zero(reg) => {
                     let reg = pretty_print_reg(reg, allocs);
@@ -2545,6 +2599,8 @@ impl Inst {
                 format!(
                     concat!(
                         "b.hs {} ; ",
+                        "csel {}, xzr, {}, hs ; ",
+                        "csdb ; ",
                         "adr {}, pc+16 ; ",
                         "ldrsw {}, [{}, {}, LSL 2] ; ",
                         "add {}, {}, {} ; ",
@@ -2552,10 +2608,12 @@ impl Inst {
                         "jt_entries {:?}"
                     ),
                     default_target,
+                    rtmp2,
+                    ridx,
                     rtmp1,
                     rtmp2,
                     rtmp1,
-                    ridx,
+                    rtmp2,
                     rtmp1,
                     rtmp1,
                     rtmp2,
@@ -2649,6 +2707,14 @@ impl Inst {
                 }
                 ret
             }
+            &Inst::Pacisp { key } => {
+                let key = match key {
+                    APIKey::A => "a",
+                    APIKey::B => "b",
+                };
+
+                "paci".to_string() + key + "sp"
+            }
             &Inst::VirtualSPOffsetAdj { offset } => {
                 state.virtual_sp_offset += offset;
                 format!("virtual_sp_offset_adjust {}", offset)
@@ -2656,7 +2722,7 @@ impl Inst {
             &Inst::EmitIsland { needed_space } => format!("emit_island {}", needed_space),
 
             &Inst::ElfTlsGetAddr { ref symbol } => {
-                format!("x0 = elf_tls_get_addr {}", symbol)
+                format!("x0 = elf_tls_get_addr {}", symbol.display(None))
             }
             &Inst::Unwind { ref inst } => {
                 format!("unwind {:?}", inst)

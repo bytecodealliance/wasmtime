@@ -1,5 +1,7 @@
+test interpret
 test run
 target aarch64
+target s390x
 
 ; TODO: Merge this with the main i128-shifts file when x86_64 passes these.
 

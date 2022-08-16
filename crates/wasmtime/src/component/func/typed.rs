@@ -1,14 +1,15 @@
 use crate::component::func::{Func, Memory, MemoryMut, Options};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContext, StoreContextMut, ValRaw};
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::borrow::Cow;
 use std::fmt;
 use std::marker;
 use std::mem::{self, MaybeUninit};
 use std::str;
 use wasmtime_environ::component::{
-    ComponentTypes, InterfaceType, StringEncoding, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, StringEncoding, VariantInfo, MAX_FLAT_PARAMS,
+    MAX_FLAT_RESULTS,
 };
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
@@ -363,13 +364,14 @@ pub unsafe trait ComponentType {
     #[doc(hidden)]
     type Lower: Copy;
 
-    /// The size, in bytes, that this type has in the canonical ABI.
+    /// The information about this type's canonical ABI (size/align/etc).
     #[doc(hidden)]
-    const SIZE32: usize;
+    const ABI: CanonicalAbiInfo;
 
-    /// The alignment, in bytes, that this type has in the canonical ABI.
     #[doc(hidden)]
-    const ALIGN32: u32;
+    const SIZE32: usize = Self::ABI.size32 as usize;
+    #[doc(hidden)]
+    const ALIGN32: u32 = Self::ABI.align32;
 
     /// Returns the number of core wasm abi values will be used to represent
     /// this type in its lowered form.
@@ -382,12 +384,17 @@ pub unsafe trait ComponentType {
         mem::size_of::<Self::Lower>() / mem::size_of::<ValRaw>()
     }
 
-    // FIXME: need SIZE64 and ALIGN64 probably
-
     /// Performs a type-check to see whether this component value type matches
     /// the interface type `ty` provided.
     #[doc(hidden)]
     fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()>;
+}
+
+#[doc(hidden)]
+pub unsafe trait ComponentVariant: ComponentType {
+    const CASES: &'static [CanonicalAbiInfo];
+    const INFO: VariantInfo = VariantInfo::new_static(Self::CASES);
+    const PAYLOAD_OFFSET32: usize = Self::INFO.payload_offset32 as usize;
 }
 
 /// Host types which can be passed to WebAssembly components.
@@ -475,8 +482,7 @@ macro_rules! forward_type_impls {
         unsafe impl <$($generics)*> ComponentType for $a {
             type Lower = <$b as ComponentType>::Lower;
 
-            const SIZE32: usize = <$b as ComponentType>::SIZE32;
-            const ALIGN32: u32 = <$b as ComponentType>::ALIGN32;
+            const ABI: CanonicalAbiInfo = <$b as ComponentType>::ABI;
 
             #[inline]
             fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
@@ -570,17 +576,11 @@ forward_list_lifts! {
 // Macro to help generate `ComponentType` implementations for primitive types
 // such as integers, char, bool, etc.
 macro_rules! integers {
-    ($($primitive:ident = $ty:ident in $field:ident/$get:ident,)*) => ($(
+    ($($primitive:ident = $ty:ident in $field:ident/$get:ident with abi:$abi:ident,)*) => ($(
         unsafe impl ComponentType for $primitive {
             type Lower = ValRaw;
 
-            const SIZE32: usize = mem::size_of::<$primitive>();
-
-            // Note that this specifically doesn't use `align_of` as some
-            // host platforms have a 4-byte alignment for primitive types but
-            // the canonical abi always has the same size/alignment for these
-            // types.
-            const ALIGN32: u32 = mem::size_of::<$primitive>() as u32;
+            const ABI: CanonicalAbiInfo = CanonicalAbiInfo::$abi;
 
             fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
                 match ty {
@@ -624,18 +624,18 @@ macro_rules! integers {
 }
 
 integers! {
-    i8 = S8 in i32/get_i32,
-    u8 = U8 in u32/get_u32,
-    i16 = S16 in i32/get_i32,
-    u16 = U16 in u32/get_u32,
-    i32 = S32 in i32/get_i32,
-    u32 = U32 in u32/get_u32,
-    i64 = S64 in i64/get_i64,
-    u64 = U64 in u64/get_u64,
+    i8 = S8 in i32/get_i32 with abi:SCALAR1,
+    u8 = U8 in u32/get_u32 with abi:SCALAR1,
+    i16 = S16 in i32/get_i32 with abi:SCALAR2,
+    u16 = U16 in u32/get_u32 with abi:SCALAR2,
+    i32 = S32 in i32/get_i32 with abi:SCALAR4,
+    u32 = U32 in u32/get_u32 with abi:SCALAR4,
+    i64 = S64 in i64/get_i64 with abi:SCALAR8,
+    u64 = U64 in u64/get_u64 with abi:SCALAR8,
 }
 
 macro_rules! floats {
-    ($($float:ident/$get_float:ident = $ty:ident)*) => ($(const _: () = {
+    ($($float:ident/$get_float:ident = $ty:ident with abi:$abi:ident)*) => ($(const _: () = {
         /// All floats in-and-out of the canonical abi always have their nan
         /// payloads canonicalized. conveniently the `NAN` constant in rust has
         /// the same representation as canonical nan, so we can use that for the
@@ -652,11 +652,7 @@ macro_rules! floats {
         unsafe impl ComponentType for $float {
             type Lower = ValRaw;
 
-            const SIZE32: usize = mem::size_of::<$float>();
-
-            // note that like integers size is used here instead of alignment to
-            // respect the canonical abi, not host platforms.
-            const ALIGN32: u32 = mem::size_of::<$float>() as u32;
+            const ABI: CanonicalAbiInfo = CanonicalAbiInfo::$abi;
 
             fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
                 match ty {
@@ -701,15 +697,14 @@ macro_rules! floats {
 }
 
 floats! {
-    f32/get_f32 = Float32
-    f64/get_f64 = Float64
+    f32/get_f32 = Float32 with abi:SCALAR4
+    f64/get_f64 = Float64 with abi:SCALAR8
 }
 
 unsafe impl ComponentType for bool {
     type Lower = ValRaw;
 
-    const SIZE32: usize = 1;
-    const ALIGN32: u32 = 1;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR1;
 
     fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
         match ty {
@@ -758,8 +753,7 @@ unsafe impl Lift for bool {
 unsafe impl ComponentType for char {
     type Lower = ValRaw;
 
-    const SIZE32: usize = 4;
-    const ALIGN32: u32 = 4;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
 
     fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
         match ty {
@@ -801,13 +795,16 @@ unsafe impl Lift for char {
     }
 }
 
+// TODO: these probably need different constants for memory64
+const UTF16_TAG: usize = 1 << 31;
+const MAX_STRING_BYTE_LENGTH: usize = (1 << 31) - 1;
+
 // Note that this is similar to `ComponentType for WasmStr` except it can only
 // be used for lowering, not lifting.
 unsafe impl ComponentType for str {
     type Lower = [ValRaw; 2];
 
-    const SIZE32: usize = 8;
-    const ALIGN32: u32 = 4;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
     fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
         match ty {
@@ -843,17 +840,52 @@ unsafe impl Lower for str {
 }
 
 fn lower_string<T>(mem: &mut MemoryMut<'_, T>, string: &str) -> Result<(usize, usize)> {
+    // Note that in general the wasm module can't assume anything about what the
+    // host strings are encoded as. Additionally hosts are allowed to have
+    // differently-encoded strings at runtime. Finally when copying a string
+    // into wasm it's somewhat strict in the sense that the various patterns of
+    // allocation and such are already dictated for us.
+    //
+    // In general what this means is that when copying a string from the host
+    // into the destination we need to follow one of the cases of copying into
+    // WebAssembly. It doesn't particularly matter which case as long as it ends
+    // up in the right encoding. For example a destination encoding of
+    // latin1+utf16 has a number of ways to get copied into and we do something
+    // here that isn't the default "utf8 to latin1+utf16" since we have access
+    // to simd-accelerated helpers in the `encoding_rs` crate. This is ok though
+    // because we can fake that the host string was already stored in latin1
+    // format and follow that copy pattern instead.
     match mem.string_encoding() {
+        // This corresponds to `store_string_copy` in the canonical ABI where
+        // the host's representation is utf-8 and the wasm module wants utf-8 so
+        // a copy is all that's needed (and the `realloc` can be precise for the
+        // initial memory allocation).
         StringEncoding::Utf8 => {
+            if string.len() > MAX_STRING_BYTE_LENGTH {
+                bail!(
+                    "string length of {} too large to copy into wasm",
+                    string.len()
+                );
+            }
             let ptr = mem.realloc(0, 0, 1, string.len())?;
             mem.as_slice_mut()[ptr..][..string.len()].copy_from_slice(string.as_bytes());
             Ok((ptr, string.len()))
         }
+
+        // This corresponds to `store_utf8_to_utf16` in the canonical ABI. Here
+        // an over-large allocation is performed and then shrunk afterwards if
+        // necessary.
         StringEncoding::Utf16 => {
             let size = string.len() * 2;
+            if size > MAX_STRING_BYTE_LENGTH {
+                bail!(
+                    "string length of {} too large to copy into wasm",
+                    string.len()
+                );
+            }
             let mut ptr = mem.realloc(0, 0, 2, size)?;
-            let bytes = &mut mem.as_slice_mut()[ptr..][..size];
             let mut copied = 0;
+            let bytes = &mut mem.as_slice_mut()[ptr..][..size];
             for (u, bytes) in string.encode_utf16().zip(bytes.chunks_mut(2)) {
                 let u_bytes = u.to_le_bytes();
                 bytes[0] = u_bytes[0];
@@ -865,8 +897,60 @@ fn lower_string<T>(mem: &mut MemoryMut<'_, T>, string: &str) -> Result<(usize, u
             }
             Ok((ptr, copied))
         }
+
         StringEncoding::CompactUtf16 => {
-            unimplemented!("compact-utf-16");
+            // This corresponds to `store_string_to_latin1_or_utf16`
+            let bytes = string.as_bytes();
+            let mut iter = string.char_indices();
+            let mut ptr = mem.realloc(0, 0, 2, bytes.len())?;
+            let mut dst = &mut mem.as_slice_mut()[ptr..][..bytes.len()];
+            let mut result = 0;
+            while let Some((i, ch)) = iter.next() {
+                // Test if this `char` fits into the latin1 encoding.
+                if let Ok(byte) = u8::try_from(u32::from(ch)) {
+                    dst[result] = byte;
+                    result += 1;
+                    continue;
+                }
+
+                // .. if utf16 is forced to be used then the allocation is
+                // bumped up to the maximum size.
+                let worst_case = bytes
+                    .len()
+                    .checked_mul(2)
+                    .ok_or_else(|| anyhow!("byte length overflow"))?;
+                if worst_case > MAX_STRING_BYTE_LENGTH {
+                    bail!("byte length too large");
+                }
+                ptr = mem.realloc(ptr, bytes.len(), 2, worst_case)?;
+                dst = &mut mem.as_slice_mut()[ptr..][..worst_case];
+
+                // Previously encoded latin1 bytes are inflated to their 16-bit
+                // size for utf16
+                for i in (0..result).rev() {
+                    dst[2 * i] = dst[i];
+                    dst[2 * i + 1] = 0;
+                }
+
+                // and then the remainder of the string is encoded.
+                for (u, bytes) in string[i..]
+                    .encode_utf16()
+                    .zip(dst[2 * result..].chunks_mut(2))
+                {
+                    let u_bytes = u.to_le_bytes();
+                    bytes[0] = u_bytes[0];
+                    bytes[1] = u_bytes[1];
+                    result += 1;
+                }
+                if worst_case > 2 * result {
+                    ptr = mem.realloc(ptr, worst_case, 2, 2 * result)?;
+                }
+                return Ok((ptr, result | UTF16_TAG));
+            }
+            if result < bytes.len() {
+                ptr = mem.realloc(ptr, bytes.len(), 2, result)?;
+            }
+            Ok((ptr, result))
         }
     }
 }
@@ -894,7 +978,13 @@ impl WasmStr {
         let byte_len = match memory.string_encoding() {
             StringEncoding::Utf8 => Some(len),
             StringEncoding::Utf16 => len.checked_mul(2),
-            StringEncoding::CompactUtf16 => unimplemented!(),
+            StringEncoding::CompactUtf16 => {
+                if len & UTF16_TAG == 0 {
+                    Some(len)
+                } else {
+                    (len ^ UTF16_TAG).checked_mul(2)
+                }
+            }
         };
         match byte_len.and_then(|len| ptr.checked_add(len)) {
             Some(n) if n <= memory.as_slice().len() => {}
@@ -935,8 +1025,14 @@ impl WasmStr {
     fn to_str_from_store<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
         match self.options.string_encoding() {
             StringEncoding::Utf8 => self.decode_utf8(store),
-            StringEncoding::Utf16 => self.decode_utf16(store),
-            StringEncoding::CompactUtf16 => unimplemented!(),
+            StringEncoding::Utf16 => self.decode_utf16(store, self.len),
+            StringEncoding::CompactUtf16 => {
+                if self.len & UTF16_TAG == 0 {
+                    self.decode_latin1(store)
+                } else {
+                    self.decode_utf16(store, self.len ^ UTF16_TAG)
+                }
+            }
         }
     }
 
@@ -948,10 +1044,10 @@ impl WasmStr {
         Ok(str::from_utf8(&memory[self.ptr..][..self.len])?.into())
     }
 
-    fn decode_utf16<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
+    fn decode_utf16<'a>(&self, store: &'a StoreOpaque, len: usize) -> Result<Cow<'a, str>> {
         let memory = self.options.memory(store);
         // See notes in `decode_utf8` for why this is panicking indexing.
-        let memory = &memory[self.ptr..][..self.len * 2];
+        let memory = &memory[self.ptr..][..len * 2];
         Ok(std::char::decode_utf16(
             memory
                 .chunks(2)
@@ -960,6 +1056,14 @@ impl WasmStr {
         .collect::<Result<String, _>>()?
         .into())
     }
+
+    fn decode_latin1<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
+        // See notes in `decode_utf8` for why this is panicking indexing.
+        let memory = self.options.memory(store);
+        Ok(encoding_rs::mem::decode_latin1(
+            &memory[self.ptr..][..self.len],
+        ))
+    }
 }
 
 // Note that this is similar to `ComponentType for str` except it can only be
@@ -967,8 +1071,7 @@ impl WasmStr {
 unsafe impl ComponentType for WasmStr {
     type Lower = <str as ComponentType>::Lower;
 
-    const SIZE32: usize = <str as ComponentType>::SIZE32;
-    const ALIGN32: u32 = <str as ComponentType>::ALIGN32;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
     fn typecheck(ty: &InterfaceType, _types: &ComponentTypes) -> Result<()> {
         match ty {
@@ -1003,8 +1106,7 @@ where
 {
     type Lower = [ValRaw; 2];
 
-    const SIZE32: usize = 8;
-    const ALIGN32: u32 = 4;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
     fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
         match ty {
@@ -1064,7 +1166,7 @@ where
     let size = list
         .len()
         .checked_mul(elem_size)
-        .ok_or_else(|| anyhow::anyhow!("size overflow copying a list"))?;
+        .ok_or_else(|| anyhow!("size overflow copying a list"))?;
     let ptr = mem.realloc(0, 0, T::ALIGN32, size)?;
     let mut cur = ptr;
     for item in list {
@@ -1213,8 +1315,7 @@ raw_wasm_list_accessors! {
 unsafe impl<T: ComponentType> ComponentType for WasmList<T> {
     type Lower = <[T] as ComponentType>::Lower;
 
-    const SIZE32: usize = <[T] as ComponentType>::SIZE32;
-    const ALIGN32: u32 = <[T] as ComponentType>::ALIGN32;
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
     fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
         match ty {
@@ -1241,24 +1342,6 @@ unsafe impl<T: Lift> Lift for WasmList<T> {
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
         WasmList::new(ptr, len, memory)
     }
-}
-
-/// Round `a` up to the next multiple of `align`, assuming that `align` is a power of 2.
-#[inline]
-pub const fn align_to(a: usize, align: u32) -> usize {
-    debug_assert!(align.is_power_of_two());
-    let align = align as usize;
-    (a + (align - 1)) & !(align - 1)
-}
-
-/// For a field of type T starting after `offset` bytes, updates the offset to reflect the correct
-/// alignment and size of T. Returns the correctly aligned offset for the start of the field.
-#[inline]
-pub fn next_field<T: ComponentType>(offset: &mut usize) -> usize {
-    *offset = align_to(*offset, T::ALIGN32);
-    let result = *offset;
-    *offset += T::SIZE32;
-    result
 }
 
 /// Verify that the given wasm type is a tuple with the expected fields in the right order.
@@ -1474,15 +1557,22 @@ where
 {
     type Lower = TupleLower2<<u32 as ComponentType>::Lower, T::Lower>;
 
-    const SIZE32: usize = align_to(1, T::ALIGN32) + T::SIZE32;
-    const ALIGN32: u32 = T::ALIGN32;
+    const ABI: CanonicalAbiInfo =
+        CanonicalAbiInfo::variant_static(&[<() as ComponentType>::ABI, T::ABI]);
 
     fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
         match ty {
-            InterfaceType::Option(t) => T::typecheck(&types[*t], types),
+            InterfaceType::Option(t) => T::typecheck(&types[*t].ty, types),
             other => bail!("expected `option` found `{}`", desc(other)),
         }
     }
+}
+
+unsafe impl<T> ComponentVariant for Option<T>
+where
+    T: ComponentType,
+{
+    const CASES: &'static [CanonicalAbiInfo] = &[<() as ComponentType>::ABI, T::ABI];
 }
 
 unsafe impl<T> Lower for Option<T>
@@ -1524,7 +1614,7 @@ where
             }
             Some(val) => {
                 mem.get::<1>(offset)[0] = 1;
-                val.store(mem, offset + align_to(1, T::ALIGN32))?;
+                val.store(mem, offset + (Self::INFO.payload_offset32 as usize))?;
             }
         }
         Ok(())
@@ -1546,7 +1636,7 @@ where
     fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
         let discrim = bytes[0];
-        let payload = &bytes[align_to(1, T::ALIGN32)..];
+        let payload = &bytes[Self::INFO.payload_offset32 as usize..];
         match discrim {
             0 => Ok(None),
             1 => Ok(Some(T::load(memory, payload)?)),
@@ -1576,17 +1666,7 @@ where
 {
     type Lower = ResultLower<T::Lower, E::Lower>;
 
-    const SIZE32: usize = align_to(1, Self::ALIGN32)
-        + if T::SIZE32 > E::SIZE32 {
-            T::SIZE32
-        } else {
-            E::SIZE32
-        };
-    const ALIGN32: u32 = if T::ALIGN32 > E::ALIGN32 {
-        T::ALIGN32
-    } else {
-        E::ALIGN32
-    };
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::variant_static(&[T::ABI, E::ABI]);
 
     fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
         match ty {
@@ -1599,6 +1679,14 @@ where
             other => bail!("expected `expected` found `{}`", desc(other)),
         }
     }
+}
+
+unsafe impl<T, E> ComponentVariant for Result<T, E>
+where
+    T: ComponentType,
+    E: ComponentType,
+{
+    const CASES: &'static [CanonicalAbiInfo] = &[T::ABI, E::ABI];
 }
 
 unsafe impl<T, E> Lower for Result<T, E>
@@ -1645,14 +1733,15 @@ where
 
     fn store<U>(&self, mem: &mut MemoryMut<'_, U>, offset: usize) -> Result<()> {
         debug_assert!(offset % (Self::ALIGN32 as usize) == 0);
+        let payload_offset = Self::INFO.payload_offset32 as usize;
         match self {
             Ok(e) => {
                 mem.get::<1>(offset)[0] = 0;
-                e.store(mem, offset + align_to(1, Self::ALIGN32))?;
+                e.store(mem, offset + payload_offset)?;
             }
             Err(e) => {
                 mem.get::<1>(offset)[0] = 1;
-                e.store(mem, offset + align_to(1, Self::ALIGN32))?;
+                e.store(mem, offset + payload_offset)?;
             }
         }
         Ok(())
@@ -1693,9 +1782,8 @@ where
 
     fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
-        let align = Self::ALIGN32;
         let discrim = bytes[0];
-        let payload = &bytes[align_to(1, align)..];
+        let payload = &bytes[Self::INFO.payload_offset32 as usize..];
         match discrim {
             0 => Ok(Ok(T::load(memory, &payload[..T::SIZE32])?)),
             1 => Ok(Err(E::load(memory, &payload[..E::SIZE32])?)),
@@ -1721,22 +1809,9 @@ macro_rules! impl_component_ty_for_tuples {
         {
             type Lower = [<TupleLower$n>]<$($t::Lower),*>;
 
-            const SIZE32: usize = {
-                let mut _size = 0;
-                $(
-                    _size = align_to(_size, $t::ALIGN32);
-                    _size += $t::SIZE32;
-                )*
-                _size
-            };
-
-            const ALIGN32: u32 = {
-                let mut _align = 1;
-                $(if $t::ALIGN32 > _align {
-                    _align = $t::ALIGN32;
-                })*
-                _align
-            };
+            const ABI: CanonicalAbiInfo = CanonicalAbiInfo::record_static(&[
+                $($t::ABI),*
+            ]);
 
             fn typecheck(
                 ty: &InterfaceType,
@@ -1764,7 +1839,7 @@ macro_rules! impl_component_ty_for_tuples {
             fn store<U>(&self, _memory: &mut MemoryMut<'_, U>, mut _offset: usize) -> Result<()> {
                 debug_assert!(_offset % (Self::ALIGN32 as usize) == 0);
                 let ($($t,)*) = self;
-                $($t.store(_memory, next_field::<$t>(&mut _offset))?;)*
+                $($t.store(_memory, $t::ABI.next_field32_size(&mut _offset))?;)*
                 Ok(())
             }
         }
@@ -1780,7 +1855,7 @@ macro_rules! impl_component_ty_for_tuples {
             fn load(_memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
                 debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
                 let mut _offset = 0;
-                $(let $t = $t::load(_memory, &bytes[next_field::<$t>(&mut _offset)..][..$t::SIZE32])?;)*
+                $(let $t = $t::load(_memory, &bytes[$t::ABI.next_field32_size(&mut _offset)..][..$t::SIZE32])?;)*
                 Ok(($($t,)*))
             }
         }

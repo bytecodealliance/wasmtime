@@ -925,7 +925,7 @@
         (i32.eqz (local.get 0))
         if
           (if (i32.ne (local.get 1) (i32.const 0)) (unreachable))
-          (if (f64.ne (f64.reinterpret_i64 (local.get 2)) (f64.const 8)) (unreachable))
+          (if (f32.ne (f32.reinterpret_i32 (i32.wrap_i64 (local.get 2))) (f32.const 8)) (unreachable))
         else
           (if (i32.ne (local.get 1) (i32.const 1)) (unreachable))
           (if (f64.ne (f64.reinterpret_i64 (local.get 2)) (f64.const 9)) (unreachable))
@@ -935,7 +935,7 @@
         (i32.eqz (local.get 0))
         if
           (if (i32.ne (local.get 1) (i32.const 0)) (unreachable))
-          (if (f64.ne (f64.reinterpret_i64 (local.get 2)) (f64.const 10)) (unreachable))
+          (if (f32.ne (f32.reinterpret_i32 (i32.wrap_i64 (local.get 2))) (f32.const 10)) (unreachable))
         else
           (if (i32.ne (local.get 1) (i32.const 1)) (unreachable))
           (if (i64.ne (local.get 2) (i64.const 11)) (unreachable))
@@ -983,10 +983,10 @@
         (call $c (i32.const 0) (i32.const 0) (i64.const 6))
         (call $c (i32.const 1) (i32.const 1) (i64.reinterpret_f64 (f64.const 7)))
 
-        (call $d (i32.const 0) (i32.const 0) (i64.reinterpret_f64 (f64.const 8)))
+        (call $d (i32.const 0) (i32.const 0) (i64.extend_i32_u (i32.reinterpret_f32 (f32.const 8))))
         (call $d (i32.const 1) (i32.const 1) (i64.reinterpret_f64 (f64.const 9)))
 
-        (call $e (i32.const 0) (i32.const 0) (i64.reinterpret_f64 (f64.const 10)))
+        (call $e (i32.const 0) (i32.const 0) (i64.extend_i32_u (i32.reinterpret_f32 (f32.const 10))))
         (call $e (i32.const 1) (i32.const 1) (i64.const 11))
       )
       (start $start)
@@ -1228,6 +1228,7 @@
 
 ;; test that flags get their upper bits all masked off
 (component
+  (type $f0 (flags))
   (type $f1 (flags "f1"))
   (type $f8 (flags "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8"))
   (type $f9 (flags "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8" "f9"))
@@ -1277,6 +1278,7 @@
 
   (component $c1
     (core module $m
+      (func (export "f0"))
       (func (export "f1") (param i32)
         (if (i32.ne (local.get 0) (i32.const 0x1)) (unreachable))
       )
@@ -1310,6 +1312,7 @@
       )
     )
     (core instance $m (instantiate $m))
+    (func (export "f0") (param $f0) (canon lift (core func $m "f0")))
     (func (export "f1") (param $f1) (canon lift (core func $m "f1")))
     (func (export "f8") (param $f8) (canon lift (core func $m "f8")))
     (func (export "f9") (param $f9) (canon lift (core func $m "f9")))
@@ -1324,6 +1327,7 @@
 
   (component $c2
     (import "" (instance $i
+      (export "f0" (func (param $f0)))
       (export "f1" (func (param $f1)))
       (export "f8" (func (param $f8)))
       (export "f9" (func (param $f9)))
@@ -1334,6 +1338,7 @@
       (export "f64" (func (param $f64)))
       (export "f65" (func (param $f65)))
     ))
+    (core func $f0 (canon lower (func $i "f0")))
     (core func $f1 (canon lower (func $i "f1")))
     (core func $f8 (canon lower (func $i "f8")))
     (core func $f9 (canon lower (func $i "f9")))
@@ -1345,6 +1350,7 @@
     (core func $f65 (canon lower (func $i "f65")))
 
     (core module $m
+      (import "" "f0" (func $f0))
       (import "" "f1" (func $f1 (param i32)))
       (import "" "f8" (func $f8 (param i32)))
       (import "" "f9" (func $f9 (param i32)))
@@ -1356,6 +1362,7 @@
       (import "" "f65" (func $f65 (param i32 i32 i32)))
 
       (func $start
+        (call $f0)
         (call $f1 (i32.const 0xffffff01))
         (call $f8 (i32.const 0xffffff11))
         (call $f9 (i32.const 0xffffff11))
@@ -1371,6 +1378,7 @@
     )
     (core instance $m (instantiate $m
       (with "" (instance
+        (export "f0" (func $f0))
         (export "f1" (func $f1))
         (export "f8" (func $f8))
         (export "f9" (func $f9))
@@ -1384,4 +1392,45 @@
     ))
   )
   (instance (instantiate $c2 (with "" (instance $c1))))
+)
+
+;; Adapters are used slightly out-of-order here to stress the internals of
+;; dependencies between adapters.
+(component
+  (core module $m
+    (func (export "execute"))
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32) unreachable)
+    (memory (export "memory") 1)
+  )
+
+  (component $root
+    (core instance $m (instantiate $m))
+    (func (export "execute")
+      (canon lift (core func $m "execute"))
+    )
+  )
+  (component $c
+    (import "backend" (instance $i
+      (export "execute" (func))
+    ))
+    (core module $shim2 (import "" "0" (func)))
+    (core instance $m (instantiate $m))
+
+    ;; This adapter, when fused with itself on the second instantiation of this
+    ;; component, will dependend on the prior instance `$m` so it which means
+    ;; that the adapter module containing this must be placed in the right
+    ;; location.
+    (core func $execute
+      (canon lower (func $i "execute") (memory $m "memory") (realloc (func $m "realloc")))
+    )
+    (core instance (instantiate $shim2
+      (with "" (instance
+        (export "0" (func $execute))
+      ))
+    ))
+    (func (export "execute") (canon lift (core func $m "execute")))
+  )
+  (instance $root (instantiate $root))
+  (instance $c1 (instantiate $c (with "backend" (instance $root))))
+  (instance $c2 (instantiate $c (with "backend" (instance $c1))))
 )

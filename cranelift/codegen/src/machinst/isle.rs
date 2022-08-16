@@ -1,9 +1,10 @@
 use crate::ir::{types, Inst, Value, ValueList};
-use crate::machinst::{get_output_reg, InsnOutput, LowerCtx};
+use crate::machinst::{get_output_reg, InsnOutput};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use smallvec::SmallVec;
 use std::cell::Cell;
+use target_lexicon::Triple;
 
 pub use super::MachLabel;
 pub use crate::ir::{
@@ -12,8 +13,10 @@ pub use crate::ir::{
 };
 pub use crate::isa::unwind::UnwindInst;
 pub use crate::machinst::{
-    ABIArg, ABIArgSlot, ABISig, InputSourceInst, RealReg, Reg, RelocDistance, Writable,
+    ABIArg, ABIArgSlot, ABISig, InputSourceInst, Lower, RealReg, Reg, RelocDistance, VCodeInst,
+    Writable,
 };
+pub use crate::settings::TlsModel;
 
 pub type Unit = ();
 pub type ValueSlice = (ValueList, usize);
@@ -142,6 +145,11 @@ macro_rules! isle_prelude_methods {
             } else {
                 None
             }
+        }
+
+        #[inline]
+        fn mark_value_used(&mut self, val: Value) {
+            self.lower_ctx.increment_lowered_uses(val);
         }
 
         #[inline]
@@ -348,6 +356,15 @@ macro_rules! isle_prelude_methods {
             match ty {
                 F32 | F64 => Some(ty),
                 _ => None,
+            }
+        }
+
+        #[inline]
+        fn ty_vec64(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() && ty.bits() == 64 {
+                Some(ty)
+            } else {
+                None
             }
         }
 
@@ -582,6 +599,14 @@ macro_rules! isle_prelude_methods {
             }
         }
 
+        fn not_vec32x2(&mut self, ty: Type) -> Option<Type> {
+            if ty.lane_bits() == 32 && ty.lane_count() == 2 {
+                None
+            } else {
+                Some(ty)
+            }
+        }
+
         fn not_i64x2(&mut self, ty: Type) -> Option<()> {
             if ty == I64X2 {
                 None
@@ -611,8 +636,12 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
-        fn is_not_baldrdash_call_conv(&mut self) -> Option<bool> {
-            Some(!self.lower_ctx.abi().call_conv().extends_baldrdash())
+        fn tls_model_is_elf_gd(&mut self) -> Option<()> {
+            if self.flags.tls_model() == TlsModel::ElfGd {
+                Some(())
+            } else {
+                None
+            }
         }
 
         #[inline]
@@ -779,10 +808,6 @@ macro_rules! isle_prelude_methods {
             regs.regs()[idx]
         }
 
-        fn abi_copy_to_arg_order(&mut self, abi: &ABISig, idx: usize) -> usize {
-            abi.copy_to_arg_order(idx)
-        }
-
         fn abi_num_args(&mut self, abi: &ABISig) -> usize {
             abi.num_args()
         }
@@ -828,6 +853,36 @@ macro_rules! isle_prelude_methods {
                         None
                     }
                 }
+                _ => None,
+            }
+        }
+
+        fn abi_arg_struct_pointer(&mut self, arg: &ABIArg) -> Option<(ABIArgSlot, i64, u64)> {
+            match arg {
+                &ABIArg::StructArg {
+                    pointer,
+                    offset,
+                    size,
+                    ..
+                } => {
+                    if let Some(pointer) = pointer {
+                        Some((pointer, offset, size))
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            }
+        }
+
+        fn abi_arg_implicit_pointer(&mut self, arg: &ABIArg) -> Option<(ABIArgSlot, i64, Type)> {
+            match arg {
+                &ABIArg::ImplicitPtrArg {
+                    pointer,
+                    offset,
+                    ty,
+                    ..
+                } => Some((pointer, offset, ty)),
                 _ => None,
             }
         }
@@ -879,18 +934,30 @@ macro_rules! isle_prelude_methods {
         fn sink_inst(&mut self, inst: Inst) {
             self.lower_ctx.sink_inst(inst);
         }
+
+        #[inline]
+        fn mem_flags_trusted(&mut self) -> MemFlags {
+            MemFlags::trusted()
+        }
+
+        #[inline]
+        fn preg_to_reg(&mut self, preg: PReg) -> Reg {
+            preg.into()
+        }
     };
 }
 
 /// This structure is used to implement the ISLE-generated `Context` trait and
 /// internally has a temporary reference to a machinst `LowerCtx`.
-pub(crate) struct IsleContext<'a, C: LowerCtx, F, I, const N: usize>
+pub(crate) struct IsleContext<'a, 'b, I, Flags, IsaFlags, const N: usize>
 where
-    [(C::I, bool); N]: smallvec::Array,
+    I: VCodeInst,
+    [(I, bool); N]: smallvec::Array,
 {
-    pub lower_ctx: &'a mut C,
-    pub flags: &'a F,
-    pub isa_flags: &'a I,
+    pub lower_ctx: &'a mut Lower<'b, I>,
+    pub triple: &'a Triple,
+    pub flags: &'a Flags,
+    pub isa_flags: &'a IsaFlags,
 }
 
 /// Shared lowering code amongst all backends for doing ISLE-based lowering.
@@ -898,23 +965,25 @@ where
 /// The `isle_lower` argument here is an ISLE-generated function for `lower` and
 /// then this function otherwise handles register mapping and such around the
 /// lowering.
-pub(crate) fn lower_common<C, F, I, IF, const N: usize>(
-    lower_ctx: &mut C,
-    flags: &F,
-    isa_flags: &I,
+pub(crate) fn lower_common<I, Flags, IsaFlags, IsleFunction, const N: usize>(
+    lower_ctx: &mut Lower<I>,
+    triple: &Triple,
+    flags: &Flags,
+    isa_flags: &IsaFlags,
     outputs: &[InsnOutput],
     inst: Inst,
-    isle_lower: IF,
+    isle_lower: IsleFunction,
 ) -> Result<(), ()>
 where
-    C: LowerCtx,
-    [(C::I, bool); N]: smallvec::Array<Item = (C::I, bool)>,
-    IF: Fn(&mut IsleContext<'_, C, F, I, N>, Inst) -> Option<InstOutput>,
+    I: VCodeInst,
+    [(I, bool); N]: smallvec::Array<Item = (I, bool)>,
+    IsleFunction: Fn(&mut IsleContext<'_, '_, I, Flags, IsaFlags, N>, Inst) -> Option<InstOutput>,
 {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
     let mut isle_ctx = IsleContext {
         lower_ctx,
+        triple,
         flags,
         isa_flags,
     };

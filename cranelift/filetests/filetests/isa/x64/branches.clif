@@ -126,3 +126,160 @@ block2:
 ;   popq    %rbp
 ;   ret
 
+function %f4(f32, f32) -> b1 {
+block0(v0: f32, v1: f32):
+  v2 = fcmp eq v0, v1
+  brz v2, block1
+  jump block2
+block1:
+  v3 = bconst.b1 true
+  return v3
+block2:
+  v4 = bconst.b1 false
+  return v4
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ucomiss %xmm1, %xmm0
+;   jp      label1
+;   jnz     label1; j label2
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   xorl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f4(f32, f32) -> b1 {
+block0(v0: f32, v1: f32):
+  v2 = fcmp ne v0, v1
+  brz v2, block1
+  jump block2
+block1:
+  v3 = bconst.b1 true
+  return v3
+block2:
+  v4 = bconst.b1 false
+  return v4
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ucomiss %xmm1, %xmm0
+;   jp      label2
+;   jnz     label2; j label1
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   xorl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+
+function %f5(i32) -> b1 {
+  jt0 = jump_table [block1, block2]
+
+block0(v0: i32):
+  br_table v0, block1, jt0
+
+block1:
+  v1 = bconst.b1 true
+  return v1
+
+block2:
+  v2 = bconst.b1 false
+  return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $0, %r8d
+;   cmpl    $2, %edi
+;   br_table %rdi
+; block1:
+;   jmp     label3
+; block2:
+;   jmp     label3
+; block3:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block4:
+;   xorl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f6(i64) -> b1 {
+block0(v0: i64):
+  v1 = iconst.i64 0
+  v2 = icmp slt v0, v1
+  brnz v2, block1
+  jump block2
+block1:
+  v3 = bconst.b1 true
+  return v3
+block2:
+  v4 = bconst.b1 false
+  return v4
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpq    $0, %rdi
+;   jl      label1; j label2
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   xorl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f7(i32) -> b1 {
+block0(v0: i32):
+  v1 = iconst.i32 0
+  v2 = icmp slt v0, v1
+  brnz v2, block1
+  jump block2
+block1:
+  v3 = bconst.b1 true
+  return v3
+block2:
+  v4 = bconst.b1 false
+  return v4
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   cmpl    $0, %edi
+;   jl      label1; j label2
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   xorl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

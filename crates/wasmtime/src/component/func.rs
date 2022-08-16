@@ -1,5 +1,5 @@
 use crate::component::instance::{Instance, InstanceData};
-use crate::component::types::{SizeAndAlignment, Type};
+use crate::component::types::Type;
 use crate::component::values::Val;
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
@@ -8,8 +8,8 @@ use std::mem::{self, MaybeUninit};
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    CanonicalOptions, ComponentTypes, CoreDef, RuntimeComponentInstanceIndex, TypeFuncIndex,
-    MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalAbiInfo, CanonicalOptions, ComponentTypes, CoreDef, RuntimeComponentInstanceIndex,
+    TypeFuncIndex, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
 use wasmtime_runtime::{Export, ExportFunction, VMTrampoline};
 
@@ -189,13 +189,12 @@ impl Func {
     /// string:
     ///
     /// ```
-    /// # use wasmtime::component::{Func, Value};
+    /// # use wasmtime::component::Func;
     /// # use wasmtime::Store;
     /// # fn foo(func: &Func, mut store: Store<()>) -> anyhow::Result<()> {
-    /// let typed = func.typed::<(&str,), Value<String>, _>(&store)?;
+    /// let typed = func.typed::<(&str,), String, _>(&store)?;
     /// let ret = typed.call(&mut store, ("Hello, ",))?;
-    /// let ret = ret.cursor(&store);
-    /// println!("returned string was: {}", ret.to_str()?);
+    /// println!("returned string was: {}", ret);
     /// # Ok(())
     /// # }
     /// ```
@@ -258,6 +257,12 @@ impl Func {
             .collect()
     }
 
+    /// Get the result type for this function.
+    pub fn result(&self, store: impl AsContext) -> Type {
+        let data = &store.as_context()[self.0];
+        Type::from(&data.types[data.ty].result, &data.types)
+    }
+
     /// Invokes this function with the `params` given and returns the result.
     ///
     /// The `params` here must match the type signature of this `Func`, or this will return an error. If a trap
@@ -297,26 +302,29 @@ impl Func {
             result = Type::from(&ty.result, &data.types);
         }
 
-        let param_count = params.iter().map(|ty| ty.flatten_count()).sum::<usize>();
-        let result_count = result.flatten_count();
+        let param_abi = CanonicalAbiInfo::record(params.iter().map(|t| t.canonical_abi()));
+        let result_count = result.canonical_abi().flat_count(MAX_FLAT_RESULTS);
 
         self.call_raw(
             store,
             args,
             |store, options, args, dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>| {
-                if param_count > MAX_FLAT_PARAMS {
-                    self.store_args(store, &options, &params, args, dst)
+                if param_abi.flat_count(MAX_FLAT_PARAMS).is_none() {
+                    self.store_args(store, &options, &param_abi, &params, args, dst)
                 } else {
                     dst.write([ValRaw::u64(0); MAX_FLAT_PARAMS]);
-                    let dst = unsafe {
+
+                    let dst = &mut unsafe {
                         mem::transmute::<_, &mut [MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>(dst)
-                    };
+                    }
+                    .iter_mut();
+
                     args.iter()
-                        .try_for_each(|arg| arg.lower(store, &options, &mut dst.iter_mut()))
+                        .try_for_each(|arg| arg.lower(store, &options, dst))
                 }
             },
             |store, options, src: &[ValRaw; MAX_FLAT_RESULTS]| {
-                if result_count > MAX_FLAT_RESULTS {
+                if result_count.is_none() {
                     Self::load_result(&Memory::new(store, &options), &result, &mut src.iter())
                 } else {
                     Val::lift(&result, store, &options, &mut src.iter())
@@ -546,22 +554,18 @@ impl Func {
         &self,
         store: &mut StoreContextMut<'_, T>,
         options: &Options,
+        abi: &CanonicalAbiInfo,
         params: &[Type],
         args: &[Val],
         dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>,
     ) -> Result<()> {
-        let mut size = 0;
-        let mut alignment = 1;
-        for ty in params {
-            alignment = alignment.max(ty.size_and_alignment().alignment);
-            ty.next_field(&mut size);
-        }
-
         let mut memory = MemoryMut::new(store.as_context_mut(), options);
-        let ptr = memory.realloc(0, 0, alignment, size)?;
+        let size = usize::try_from(abi.size32).unwrap();
+        let ptr = memory.realloc(0, 0, abi.align32, size)?;
         let mut offset = ptr;
         for (ty, arg) in params.iter().zip(args) {
-            arg.store(&mut memory, ty.next_field(&mut offset))?;
+            let abi = ty.canonical_abi();
+            arg.store(&mut memory, abi.next_field32_size(&mut offset))?;
         }
 
         map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
@@ -574,17 +578,17 @@ impl Func {
         ty: &Type,
         src: &mut std::slice::Iter<'_, ValRaw>,
     ) -> Result<Val> {
-        let SizeAndAlignment { size, alignment } = ty.size_and_alignment();
+        let abi = ty.canonical_abi();
         // FIXME: needs to read an i64 for memory64
         let ptr = usize::try_from(src.next().unwrap().get_u32())?;
-        if ptr % usize::try_from(alignment)? != 0 {
+        if ptr % usize::try_from(abi.align32)? != 0 {
             bail!("return pointer not aligned");
         }
 
         let bytes = mem
             .as_slice()
             .get(ptr..)
-            .and_then(|b| b.get(..size))
+            .and_then(|b| b.get(..usize::try_from(abi.size32).unwrap()))
             .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
 
         Val::load(ty, mem, bytes)

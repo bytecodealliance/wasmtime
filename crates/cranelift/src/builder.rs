@@ -7,12 +7,14 @@ use anyhow::Result;
 use cranelift_codegen::isa;
 use cranelift_codegen::settings::{self, Configurable, SetError};
 use std::fmt;
-use wasmtime_environ::{CompilerBuilder, Setting, SettingKind};
+use std::sync::Arc;
+use wasmtime_environ::{CacheStore, CompilerBuilder, Setting, SettingKind};
 
 struct Builder {
     flags: settings::Builder,
     isa_flags: isa::Builder,
     linkopts: LinkOptions,
+    cache_store: Option<Arc<dyn CacheStore>>,
 }
 
 #[derive(Clone, Default)]
@@ -46,6 +48,7 @@ pub fn builder() -> Box<dyn CompilerBuilder> {
         flags,
         isa_flags: cranelift_native::builder().expect("host machine is not a supported target"),
         linkopts: LinkOptions::default(),
+        cache_store: None,
     })
 }
 
@@ -103,6 +106,7 @@ impl CompilerBuilder for Builder {
             .finish(settings::Flags::new(self.flags.clone()))?;
         Ok(Box::new(crate::compiler::Compiler::new(
             isa,
+            self.cache_store.clone(),
             self.linkopts.clone(),
         )))
     }
@@ -122,6 +126,13 @@ impl CompilerBuilder for Builder {
                 },
             })
             .collect()
+    }
+
+    fn enable_incremental_compilation(
+        &mut self,
+        cache_store: Arc<dyn wasmtime_environ::CacheStore>,
+    ) {
+        self.cache_store = Some(cache_store);
     }
 }
 

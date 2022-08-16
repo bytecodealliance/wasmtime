@@ -15,7 +15,7 @@ function %load_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = load.i64 little v0
+  v1 = load.i64 aligned little v0
   return v1
 }
 
@@ -58,7 +58,7 @@ function %uload16_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = uload16.i64 little v0
+  v1 = uload16.i64 aligned little v0
   return v1
 }
 
@@ -82,7 +82,7 @@ function %sload16_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = sload16.i64 little v0
+  v1 = sload16.i64 aligned little v0
   return v1
 }
 
@@ -106,7 +106,7 @@ function %uload32_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = uload32.i64 little v0
+  v1 = uload32.i64 aligned little v0
   return v1
 }
 
@@ -130,7 +130,7 @@ function %sload32_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = sload32.i64 little v0
+  v1 = sload32.i64 aligned little v0
   return v1
 }
 
@@ -153,7 +153,7 @@ function %load_i32_sym() -> i32 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = load.i32 little v0
+  v1 = load.i32 aligned little v0
   return v1
 }
 
@@ -196,7 +196,7 @@ function %uload16_i32_sym() -> i32 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = uload16.i32 little v0
+  v1 = uload16.i32 aligned little v0
   return v1
 }
 
@@ -220,7 +220,7 @@ function %sload16_i32_sym() -> i32 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = sload16.i32 little v0
+  v1 = sload16.i32 aligned little v0
   return v1
 }
 
@@ -243,7 +243,7 @@ function %load_i16_sym() -> i16 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = load.i16 little v0
+  v1 = load.i16 aligned little v0
   return v1
 }
 

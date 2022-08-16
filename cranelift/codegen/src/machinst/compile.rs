@@ -4,6 +4,7 @@ use crate::ir::Function;
 use crate::isa::TargetIsa;
 use crate::machinst::*;
 use crate::timing;
+use crate::trace;
 
 use regalloc2::RegallocOptions;
 use regalloc2::{self, MachineEnv};
@@ -13,7 +14,7 @@ use regalloc2::{self, MachineEnv};
 pub fn compile<B: LowerBackend + TargetIsa>(
     f: &Function,
     b: &B,
-    abi: Box<dyn ABICallee<I = B::MInst>>,
+    abi: Callee<<<B as LowerBackend>::MInst as MachInst>::ABIMachineSpec>,
     machine_env: &MachineEnv,
     emit_info: <B::MInst as MachInstEmit>::Info,
 ) -> CodegenResult<(VCode<B::MInst>, regalloc2::Output)> {
@@ -27,7 +28,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
         lower.lower(b)?
     };
 
-    log::trace!("vcode from lowering: \n{:?}", vcode);
+    trace!("vcode from lowering: \n{:?}", vcode);
 
     // Perform register allocation.
     let regalloc_result = {

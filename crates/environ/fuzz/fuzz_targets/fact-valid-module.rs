@@ -9,10 +9,10 @@
 
 #![no_main]
 
-use arbitrary::{Arbitrary, Unstructured};
+use arbitrary::Arbitrary;
+use component_fuzz_util::TestCase;
 use libfuzzer_sys::fuzz_target;
-use std::fmt;
-use wasmparser::{Validator, WasmFeatures};
+use wasmparser::{Parser, Payload, Validator, WasmFeatures};
 use wasmtime_environ::component::*;
 use wasmtime_environ::fact::Module;
 
@@ -24,89 +24,17 @@ struct GenAdapterModule {
 
 #[derive(Arbitrary, Debug)]
 struct GenAdapter {
-    ty: FuncType,
     post_return: bool,
     lift_memory64: bool,
     lower_memory64: bool,
-    lift_encoding: GenStringEncoding,
-    lower_encoding: GenStringEncoding,
-}
-
-#[derive(Arbitrary, Debug)]
-struct FuncType {
-    params: Vec<ValType>,
-    result: ValType,
-}
-
-#[derive(Arbitrary, Debug)]
-enum ValType {
-    Unit,
-    U8,
-    S8,
-    U16,
-    S16,
-    U32,
-    S32,
-    U64,
-    S64,
-    Float32,
-    Float64,
-    Char,
-    Record(Vec<ValType>),
-    // FIXME(WebAssembly/component-model#75) are zero-sized flags allowed?
-    //
-    // ... otherwise go up to 65 flags to exercise up to 3 u32 values
-    Flags(UsizeInRange<1, 65>),
-    Tuple(Vec<ValType>),
-    Variant(NonZeroLenVec<ValType>),
-    Union(NonZeroLenVec<ValType>),
-    // at least one enum variant but no more than what's necessary to inflate to
-    // 16 bits to keep this reasonably sized
-    Enum(UsizeInRange<1, 257>),
-    Option(Box<ValType>),
-    Expected(Box<ValType>, Box<ValType>),
-}
-
-#[derive(Copy, Clone, Arbitrary, Debug)]
-enum GenStringEncoding {
-    Utf8,
-    Utf16,
-    CompactUtf16,
-}
-
-pub struct NonZeroLenVec<T>(Vec<T>);
-
-impl<'a, T: Arbitrary<'a>> Arbitrary<'a> for NonZeroLenVec<T> {
-    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        let mut items = Vec::arbitrary(u)?;
-        if items.is_empty() {
-            items.push(u.arbitrary()?);
-        }
-        Ok(NonZeroLenVec(items))
-    }
-}
-
-impl<T: fmt::Debug> fmt::Debug for NonZeroLenVec<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-pub struct UsizeInRange<const L: usize, const H: usize>(usize);
-
-impl<'a, const L: usize, const H: usize> Arbitrary<'a> for UsizeInRange<L, H> {
-    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(UsizeInRange(u.int_in_range(L..=H)?))
-    }
-}
-
-impl<const L: usize, const H: usize> fmt::Debug for UsizeInRange<L, H> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
+    test: TestCase,
 }
 
 fuzz_target!(|module: GenAdapterModule| {
+    target(module);
+});
+
+fn target(module: GenAdapterModule) {
     drop(env_logger::try_init());
 
     let mut types = ComponentTypesBuilder::default();
@@ -116,7 +44,7 @@ fuzz_target!(|module: GenAdapterModule| {
     let mut next_def = 0;
     let mut dummy_def = || {
         next_def += 1;
-        CoreDef::Adapter(AdapterIndex::from_u32(next_def))
+        dfg::CoreDef::Adapter(dfg::AdapterId::from_u32(next_def))
     };
 
     // Manufactures a `CoreExport` for a memory with the shape specified. Note
@@ -139,56 +67,82 @@ fuzz_target!(|module: GenAdapterModule| {
         } else {
             dst[0]
         };
-        CoreExport {
-            instance: RuntimeInstanceIndex::from_u32(idx),
+        dfg::CoreExport {
+            instance: dfg::InstanceId::from_u32(idx),
             item: ExportItem::Name(String::new()),
         }
     };
 
     let mut adapters = Vec::new();
     for adapter in module.adapters.iter() {
-        let mut params = Vec::new();
-        for param in adapter.ty.params.iter() {
-            params.push((None, intern(&mut types, param)));
+        let wat_decls = adapter.test.declarations();
+        let wat = format!(
+            "(component
+                {types}
+                (type (func {params} {result}))
+            )",
+            types = wat_decls.types,
+            params = wat_decls.params,
+            result = wat_decls.result,
+        );
+        let wasm = wat::parse_str(&wat).unwrap();
+
+        let mut validator = Validator::new_with_features(WasmFeatures {
+            component_model: true,
+            ..Default::default()
+        });
+
+        types.push_type_scope();
+        for payload in Parser::new(0).parse_all(&wasm) {
+            let payload = payload.unwrap();
+            validator.payload(&payload).unwrap();
+            let section = match payload {
+                Payload::ComponentTypeSection(s) => s,
+                _ => continue,
+            };
+            for ty in section {
+                let ty = types.intern_component_type(&ty.unwrap()).unwrap();
+                types.push_component_typedef(ty);
+                let ty = match ty {
+                    TypeDef::ComponentFunc(ty) => ty,
+                    _ => continue,
+                };
+                adapters.push(Adapter {
+                    lift_ty: ty,
+                    lower_ty: ty,
+                    lower_options: AdapterOptions {
+                        instance: RuntimeComponentInstanceIndex::from_u32(0),
+                        string_encoding: convert_encoding(adapter.test.encoding1),
+                        memory64: adapter.lower_memory64,
+                        // Pessimistically assume that memory/realloc are going to be
+                        // required for this trampoline and provide it. Avoids doing
+                        // calculations to figure out whether they're necessary and
+                        // simplifies the fuzzer here without reducing coverage within FACT
+                        // itself.
+                        memory: Some(dummy_memory(adapter.lower_memory64)),
+                        realloc: Some(dummy_def()),
+                        // Lowering never allows `post-return`
+                        post_return: None,
+                    },
+                    lift_options: AdapterOptions {
+                        instance: RuntimeComponentInstanceIndex::from_u32(1),
+                        string_encoding: convert_encoding(adapter.test.encoding2),
+                        memory64: adapter.lift_memory64,
+                        memory: Some(dummy_memory(adapter.lift_memory64)),
+                        realloc: Some(dummy_def()),
+                        post_return: if adapter.post_return {
+                            Some(dummy_def())
+                        } else {
+                            None
+                        },
+                    },
+                    func: dummy_def(),
+                });
+            }
         }
-        let result = intern(&mut types, &adapter.ty.result);
-        let signature = types.add_func_type(TypeFunc {
-            params: params.into(),
-            result,
-        });
-        adapters.push(Adapter {
-            lift_ty: signature,
-            lower_ty: signature,
-            lower_options: AdapterOptions {
-                instance: RuntimeComponentInstanceIndex::from_u32(0),
-                string_encoding: adapter.lower_encoding.into(),
-                memory64: adapter.lower_memory64,
-                // Pessimistically assume that memory/realloc are going to be
-                // required for this trampoline and provide it. Avoids doing
-                // calculations to figure out whether they're necessary and
-                // simplifies the fuzzer here without reducing coverage within FACT
-                // itself.
-                memory: Some(dummy_memory(adapter.lower_memory64)),
-                realloc: Some(dummy_def()),
-                // Lowering never allows `post-return`
-                post_return: None,
-            },
-            lift_options: AdapterOptions {
-                instance: RuntimeComponentInstanceIndex::from_u32(1),
-                string_encoding: adapter.lift_encoding.into(),
-                memory64: adapter.lift_memory64,
-                memory: Some(dummy_memory(adapter.lift_memory64)),
-                realloc: Some(dummy_def()),
-                post_return: if adapter.post_return {
-                    Some(dummy_def())
-                } else {
-                    None
-                },
-            },
-            func: dummy_def(),
-        });
+        types.pop_type_scope();
     }
-    let types = types.finish();
+
     let mut fact_module = Module::new(&types, module.debug);
     for (i, adapter) in adapters.iter().enumerate() {
         fact_module.adapt(&format!("adapter{i}"), adapter);
@@ -216,90 +170,12 @@ fuzz_target!(|module: GenAdapterModule| {
     }
 
     panic!()
-});
-
-fn intern(types: &mut ComponentTypesBuilder, ty: &ValType) -> InterfaceType {
-    match ty {
-        ValType::Unit => InterfaceType::Unit,
-        ValType::U8 => InterfaceType::U8,
-        ValType::S8 => InterfaceType::S8,
-        ValType::U16 => InterfaceType::U16,
-        ValType::S16 => InterfaceType::S16,
-        ValType::U32 => InterfaceType::U32,
-        ValType::S32 => InterfaceType::S32,
-        ValType::U64 => InterfaceType::U64,
-        ValType::S64 => InterfaceType::S64,
-        ValType::Float32 => InterfaceType::Float32,
-        ValType::Float64 => InterfaceType::Float64,
-        ValType::Char => InterfaceType::Char,
-        ValType::Record(tys) => {
-            let ty = TypeRecord {
-                fields: tys
-                    .iter()
-                    .enumerate()
-                    .map(|(i, ty)| RecordField {
-                        name: format!("f{i}"),
-                        ty: intern(types, ty),
-                    })
-                    .collect(),
-            };
-            InterfaceType::Record(types.add_record_type(ty))
-        }
-        ValType::Flags(size) => {
-            let ty = TypeFlags {
-                names: (0..size.0).map(|i| format!("f{i}")).collect(),
-            };
-            InterfaceType::Flags(types.add_flags_type(ty))
-        }
-        ValType::Tuple(tys) => {
-            let ty = TypeTuple {
-                types: tys.iter().map(|ty| intern(types, ty)).collect(),
-            };
-            InterfaceType::Tuple(types.add_tuple_type(ty))
-        }
-        ValType::Variant(NonZeroLenVec(cases)) => {
-            let ty = TypeVariant {
-                cases: cases
-                    .iter()
-                    .enumerate()
-                    .map(|(i, ty)| VariantCase {
-                        name: format!("c{i}"),
-                        ty: intern(types, ty),
-                    })
-                    .collect(),
-            };
-            InterfaceType::Variant(types.add_variant_type(ty))
-        }
-        ValType::Union(tys) => {
-            let ty = TypeUnion {
-                types: tys.0.iter().map(|ty| intern(types, ty)).collect(),
-            };
-            InterfaceType::Union(types.add_union_type(ty))
-        }
-        ValType::Enum(size) => {
-            let ty = TypeEnum {
-                names: (0..size.0).map(|i| format!("c{i}")).collect(),
-            };
-            InterfaceType::Enum(types.add_enum_type(ty))
-        }
-        ValType::Option(ty) => {
-            let ty = intern(types, ty);
-            InterfaceType::Option(types.add_interface_type(ty))
-        }
-        ValType::Expected(ok, err) => {
-            let ok = intern(types, ok);
-            let err = intern(types, err);
-            InterfaceType::Expected(types.add_expected_type(TypeExpected { ok, err }))
-        }
-    }
 }
 
-impl From<GenStringEncoding> for StringEncoding {
-    fn from(gen: GenStringEncoding) -> StringEncoding {
-        match gen {
-            GenStringEncoding::Utf8 => StringEncoding::Utf8,
-            GenStringEncoding::Utf16 => StringEncoding::Utf16,
-            GenStringEncoding::CompactUtf16 => StringEncoding::CompactUtf16,
-        }
+fn convert_encoding(encoding: component_fuzz_util::StringEncoding) -> StringEncoding {
+    match encoding {
+        component_fuzz_util::StringEncoding::Utf8 => StringEncoding::Utf8,
+        component_fuzz_util::StringEncoding::Utf16 => StringEncoding::Utf16,
+        component_fuzz_util::StringEncoding::Latin1OrUtf16 => StringEncoding::CompactUtf16,
     }
 }

@@ -45,17 +45,20 @@
 //! ```
 
 use crate::binemit::{Addend, CodeInfo, CodeOffset, Reloc, StackMap};
-use crate::ir::{DynamicStackSlot, SourceLoc, StackSlot, Type};
+use crate::ir::function::FunctionParameters;
+use crate::ir::{DynamicStackSlot, RelSourceLoc, StackSlot, Type};
 use crate::result::CodegenResult;
 use crate::settings::Flags;
 use crate::value_label::ValueLabelsRanges;
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use cranelift_entity::PrimaryMap;
 use regalloc2::{Allocation, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::string::String;
+
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
 
 #[macro_use]
 pub mod isle;
@@ -85,6 +88,9 @@ pub mod reg;
 
 /// A machine instruction.
 pub trait MachInst: Clone + Debug {
+    /// The ABI machine spec for this `MachInst`.
+    type ABIMachineSpec: ABIMachineSpec<I = Self>;
+
     /// Return the registers referenced by this machine instruction along with
     /// the modes of reference (use, def, modify).
     fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>);
@@ -95,9 +101,6 @@ pub trait MachInst: Clone + Debug {
     /// Is this a terminator (branch or ret)? If so, return its type
     /// (ret/uncond/cond) and target if applicable.
     fn is_term(&self) -> MachTerminator;
-
-    /// Returns true if the instruction is an epilogue placeholder.
-    fn is_epilogue_placeholder(&self) -> bool;
 
     /// Should this instruction be included in the clobber-set?
     fn is_included_in_clobbers(&self) -> bool {
@@ -259,22 +262,24 @@ pub trait MachInstEmit: MachInst {
 
 /// A trait describing the emission state carried between MachInsts when
 /// emitting a function body.
-pub trait MachInstEmitState<I: MachInst>: Default + Clone + Debug {
+pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
     /// Create a new emission state given the ABI object.
-    fn new(abi: &dyn ABICallee<I = I>) -> Self;
+    fn new(abi: &Callee<I::ABIMachineSpec>) -> Self;
     /// Update the emission state before emitting an instruction that is a
     /// safepoint.
     fn pre_safepoint(&mut self, _stack_map: StackMap) {}
     /// Update the emission state to indicate instructions are associated with a
-    /// particular SourceLoc.
-    fn pre_sourceloc(&mut self, _srcloc: SourceLoc) {}
+    /// particular RelSourceLoc.
+    fn pre_sourceloc(&mut self, _srcloc: RelSourceLoc) {}
 }
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine
 /// code (as bytes) and a disassembly, if requested.
-pub struct MachCompileResult {
+#[derive(PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct CompiledCodeBase<T: CompilePhase> {
     /// Machine code.
-    pub buffer: MachBufferFinalized,
+    pub buffer: MachBufferFinalized<T>,
     /// Size of stack frame, in bytes.
     pub frame_size: u32,
     /// Disassembly, if requested.
@@ -299,14 +304,44 @@ pub struct MachCompileResult {
     pub bb_edges: Vec<(CodeOffset, CodeOffset)>,
 }
 
-impl MachCompileResult {
+impl CompiledCodeStencil {
+    /// Apply function parameters to finalize a stencil into its final form.
+    pub fn apply_params(self, params: &FunctionParameters) -> CompiledCode {
+        CompiledCode {
+            buffer: self.buffer.apply_params(params),
+            frame_size: self.frame_size,
+            disasm: self.disasm,
+            value_labels_ranges: self.value_labels_ranges,
+            sized_stackslot_offsets: self.sized_stackslot_offsets,
+            dynamic_stackslot_offsets: self.dynamic_stackslot_offsets,
+            bb_starts: self.bb_starts,
+            bb_edges: self.bb_edges,
+        }
+    }
+}
+
+impl<T: CompilePhase> CompiledCodeBase<T> {
     /// Get a `CodeInfo` describing section sizes from this compilation result.
     pub fn code_info(&self) -> CodeInfo {
         CodeInfo {
             total_size: self.buffer.total_size(),
         }
     }
+
+    /// Returns a reference to the machine code generated for this function compilation.
+    pub fn code_buffer(&self) -> &[u8] {
+        self.buffer.data()
+    }
 }
+
+/// Result of compiling a `FunctionStencil`, before applying `FunctionParameters` onto it.
+///
+/// Only used internally, in a transient manner, for the incremental compilation cache.
+pub type CompiledCodeStencil = CompiledCodeBase<Stencil>;
+
+/// `CompiledCode` in its final form (i.e. after `FunctionParameters` have been applied), ready for
+/// consumption.
+pub type CompiledCode = CompiledCodeBase<Final>;
 
 /// An object that can be used to create the text section of an executable.
 ///

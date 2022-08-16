@@ -3,7 +3,7 @@
 
 #[cfg(test)]
 mod host_to_wasm_trampoline_offsets_tests {
-    use wasmtime_environ::{Module, VMOffsets};
+    use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
     #[test]
     fn test() {
@@ -11,7 +11,7 @@ mod host_to_wasm_trampoline_offsets_tests {
         let offsets = VMOffsets::new(std::mem::size_of::<*mut u8>() as u8, &module);
 
         assert_eq!(8, offsets.vmctx_runtime_limits());
-        assert_eq!(40, offsets.vmruntime_limits_last_wasm_entry_sp());
+        assert_eq!(40, offsets.ptr.vmruntime_limits_last_wasm_entry_sp());
         assert_eq!(16, offsets.vmctx_callee());
         assert_eq!(0x65726f63, u32::from_le_bytes(*b"core"));
     }
@@ -24,7 +24,7 @@ mod host_to_wasm_trampoline_offsets_tests {
 mod wasm_to_host_trampoline_offsets_tests {
     use crate::VMHostFuncContext;
     use memoffset::offset_of;
-    use wasmtime_environ::{Module, VMOffsets};
+    use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
     #[test]
     fn test() {
@@ -32,8 +32,8 @@ mod wasm_to_host_trampoline_offsets_tests {
         let offsets = VMOffsets::new(std::mem::size_of::<*mut u8>() as u8, &module);
 
         assert_eq!(8, offsets.vmctx_runtime_limits());
-        assert_eq!(24, offsets.vmruntime_limits_last_wasm_exit_fp());
-        assert_eq!(32, offsets.vmruntime_limits_last_wasm_exit_pc());
+        assert_eq!(24, offsets.ptr.vmruntime_limits_last_wasm_exit_fp());
+        assert_eq!(32, offsets.ptr.vmruntime_limits_last_wasm_exit_pc());
         assert_eq!(8, offset_of!(VMHostFuncContext, host_func));
     }
 }

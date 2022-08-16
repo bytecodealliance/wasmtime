@@ -351,9 +351,7 @@ impl Engine {
             // Features wasmtime doesn't use should all be disabled, since
             // otherwise if they are enabled it could change the behavior of
             // generated code.
-            "baldrdash_prologue_words" => *value == FlagValue::Num(0),
             "enable_llvm_abi_extensions" => *value == FlagValue::Bool(false),
-            "emit_all_ones_funcaddrs" => *value == FlagValue::Bool(false),
             "enable_pinned_reg" => *value == FlagValue::Bool(false),
             "enable_probestack" => *value == FlagValue::Bool(false),
             "use_colocated_libcalls" => *value == FlagValue::Bool(false),
@@ -369,10 +367,9 @@ impl Engine {
                 }
             }
 
-            // If reference types or backtraces are enabled, we need unwind info. Otherwise, we
-            // don't care.
+            // Windows requires unwind info as part of its ABI.
             "unwind_info" => {
-                if self.config().wasm_backtrace || self.config().features.reference_types {
+                if self.target().operating_system == target_lexicon::OperatingSystem::Windows {
                     *value == FlagValue::Bool(true)
                 } else {
                     return Ok(())
@@ -399,6 +396,7 @@ impl Engine {
             | "probestack_func_adjusts_sp" // probestack above asserted disabled
             | "probestack_size_log2" // probestack above asserted disabled
             | "regalloc" // shouldn't change semantics
+            | "enable_incremental_compilation_cache_checks" // shouldn't change semantics
             | "enable_atomics" => return Ok(()),
 
             // Everything else is unknown and needs to be added somewhere to
@@ -451,6 +449,18 @@ impl Engine {
         {
             enabled = match flag {
                 "has_lse" => Some(std::arch::is_aarch64_feature_detected!("lse")),
+                // No effect on its own, but in order to simplify the code on a
+                // platform without pointer authentication support we fail if
+                // "has_pauth" is enabled, but "sign_return_address" is not.
+                "has_pauth" => Some(std::arch::is_aarch64_feature_detected!("paca")),
+                // No effect on its own.
+                "sign_return_address_all" => Some(true),
+                // The pointer authentication instructions act as a `NOP` when
+                // unsupported (but keep in mind "has_pauth" as well), so it is
+                // safe to enable them.
+                "sign_return_address" => Some(true),
+                // No effect on its own.
+                "sign_return_address_with_bkey" => Some(true),
                 // fall through to the very bottom to indicate that support is
                 // not enabled to test whether this feature is enabled on the
                 // host.
@@ -534,7 +544,6 @@ mod tests {
 
     use anyhow::Result;
     use tempfile::TempDir;
-    use wasmtime_environ::FlagValue;
 
     #[test]
     fn cache_accounts_for_opt_level() -> Result<()> {
@@ -584,35 +593,16 @@ mod tests {
         assert_eq!(engine.config().cache_config.cache_hits(), 1);
         assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
-        // FIXME(#1523) need debuginfo on aarch64 before we run this test there
-        if !cfg!(target_arch = "aarch64") {
-            let mut cfg = Config::new();
-            cfg.debug_info(true).cache_config_load(&config_path)?;
-            let engine = Engine::new(&cfg)?;
-            Module::new(&engine, "(module (func))")?;
-            assert_eq!(engine.config().cache_config.cache_hits(), 0);
-            assert_eq!(engine.config().cache_config.cache_misses(), 1);
-            Module::new(&engine, "(module (func))")?;
-            assert_eq!(engine.config().cache_config.cache_hits(), 1);
-            assert_eq!(engine.config().cache_config.cache_misses(), 1);
-        }
+        let mut cfg = Config::new();
+        cfg.debug_info(true).cache_config_load(&config_path)?;
+        let engine = Engine::new(&cfg)?;
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 0);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 1);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
         Ok(())
-    }
-
-    #[test]
-    #[cfg(compiler)]
-    fn test_disable_backtraces() {
-        let engine = Engine::new(
-            Config::new()
-                .wasm_backtrace(false)
-                .wasm_reference_types(false),
-        )
-        .expect("failed to construct engine");
-        assert_eq!(
-            engine.compiler().flags().get("unwind_info"),
-            Some(&FlagValue::Bool(false)),
-            "unwind info should be disabled unless needed"
-        );
     }
 }

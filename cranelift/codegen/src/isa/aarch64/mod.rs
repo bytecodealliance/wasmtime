@@ -7,14 +7,15 @@ use crate::isa::aarch64::settings as aarch64_settings;
 use crate::isa::unwind::systemv;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
-    compile, MachCompileResult, MachTextSectionBuilder, Reg, TextSectionBuilder, VCode,
+    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, TextSectionBuilder,
+    VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use regalloc2::MachineEnv;
-use target_lexicon::{Aarch64Architecture, Architecture, Triple};
+use target_lexicon::{Aarch64Architecture, Architecture, OperatingSystem, Triple};
 
 // New backend:
 mod abi;
@@ -59,7 +60,7 @@ impl AArch64Backend {
         flags: shared_settings::Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(flags.clone());
-        let abi = Box::new(abi::AArch64ABICallee::new(func, self)?);
+        let abi = abi::AArch64Callee::new(func, self, &self.isa_flags)?;
         compile::compile::<AArch64Backend>(func, self, abi, &self.machine_env, emit_info)
     }
 }
@@ -69,11 +70,10 @@ impl TargetIsa for AArch64Backend {
         &self,
         func: &Function,
         want_disasm: bool,
-    ) -> CodegenResult<MachCompileResult> {
+    ) -> CodegenResult<CompiledCodeStencil> {
         let flags = self.flags();
         let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
 
-        let want_disasm = want_disasm || log::log_enabled!(log::Level::Debug);
         let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
@@ -85,7 +85,7 @@ impl TargetIsa for AArch64Backend {
             log::debug!("disassembly:\n{}", disasm);
         }
 
-        Ok(MachCompileResult {
+        Ok(CompiledCodeStencil {
             buffer,
             frame_size,
             disasm: emit_result.disasm,
@@ -126,7 +126,7 @@ impl TargetIsa for AArch64Backend {
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,
-        result: &MachCompileResult,
+        result: &CompiledCode,
         kind: crate::machinst::UnwindInfoKind,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
         use crate::isa::unwind::UnwindInfo;
@@ -152,6 +152,21 @@ impl TargetIsa for AArch64Backend {
 
     #[cfg(feature = "unwind")]
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        let is_apple_os = match self.triple.operating_system {
+            OperatingSystem::Darwin
+            | OperatingSystem::Ios
+            | OperatingSystem::MacOSX { .. }
+            | OperatingSystem::Tvos => true,
+            _ => false,
+        };
+
+        if self.isa_flags.sign_return_address()
+            && self.isa_flags.sign_return_address_with_bkey()
+            && !is_apple_os
+        {
+            unimplemented!("Specifying that the B key is used with pointer authentication instructions in the CIE is not implemented.");
+        }
+
         Some(inst::unwind::systemv::create_cie())
     }
 
@@ -194,7 +209,7 @@ mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::types::*;
-    use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, JumpTableData, Signature};
+    use crate::ir::{AbiParam, Function, InstBuilder, JumpTableData, Signature, UserFuncName};
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
@@ -203,7 +218,7 @@ mod test {
 
     #[test]
     fn test_compile_function() {
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -242,7 +257,7 @@ mod test {
 
     #[test]
     fn test_branch_lowering() {
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -310,7 +325,7 @@ mod test {
 
     #[test]
     fn test_br_table() {
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -359,25 +374,26 @@ mod test {
         let code = result.buffer.data();
 
         //   0:   7100081f        cmp     w0, #0x2
-        //   4:   54000102        b.cs    0x24  // b.hs, b.nlast
+        //   4:   54000122        b.cs    0x28  // b.hs, b.nlast
         //   8:   9a8023e9        csel    x9, xzr, x0, cs  // cs = hs, nlast
-        //   c:   10000088        adr     x8, 0x1c
-        //  10:   b8a95909        ldrsw   x9, [x8, w9, uxtw #2]
-        //  14:   8b090108        add     x8, x8, x9
-        //  18:   d61f0100        br      x8
-        //  1c:   00000010        udf     #16
-        //  20:   00000018        udf     #24
-        //  24:   d2800060        mov     x0, #0x3                        // #3
-        //  28:   d65f03c0        ret
-        //  2c:   d2800020        mov     x0, #0x1                        // #1
-        //  30:   d65f03c0        ret
-        //  34:   d2800040        mov     x0, #0x2                        // #2
-        //  38:   d65f03c0        ret
+        //   c:   d503229f        csdb
+        //  10:   10000088        adr     x8, 0x1c
+        //  14:   b8a95909        ldrsw   x9, [x8, w9, uxtw #2]
+        //  18:   8b090108        add     x8, x8, x9
+        //  1c:   d61f0100        br      x8
+        //  20:   00000010        udf     #16
+        //  24:   00000018        udf     #24
+        //  28:   d2800060        mov     x0, #0x3                        // #3
+        //  2c:   d65f03c0        ret
+        //  30:   d2800020        mov     x0, #0x1                        // #1
+        //  34:   d65f03c0        ret
+        //  38:   d2800040        mov     x0, #0x2                        // #2
+        //  3c:   d65f03c0        ret
 
         let golden = vec![
-            31, 8, 0, 113, 2, 1, 0, 84, 233, 35, 128, 154, 136, 0, 0, 16, 9, 89, 169, 184, 8, 1, 9,
-            139, 0, 1, 31, 214, 16, 0, 0, 0, 24, 0, 0, 0, 96, 0, 128, 210, 192, 3, 95, 214, 32, 0,
-            128, 210, 192, 3, 95, 214, 64, 0, 128, 210, 192, 3, 95, 214,
+            31, 8, 0, 113, 34, 1, 0, 84, 233, 35, 128, 154, 159, 34, 3, 213, 136, 0, 0, 16, 9, 89,
+            169, 184, 8, 1, 9, 139, 0, 1, 31, 214, 16, 0, 0, 0, 24, 0, 0, 0, 96, 0, 128, 210, 192,
+            3, 95, 214, 32, 0, 128, 210, 192, 3, 95, 214, 64, 0, 128, 210, 192, 3, 95, 214,
         ];
 
         assert_eq!(code, &golden[..]);

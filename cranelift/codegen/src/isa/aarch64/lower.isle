@@ -99,6 +99,12 @@
           (add_with_flags_paired $I64 x_lo y_lo)
           (adc_paired $I64 x_hi y_hi))))
 
+;;;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (shuffle rn rn2 (u128_from_immediate mask))))
+      (let ((mask_reg Reg (constant_f128 mask)))
+       (vec_tbl2 rn rn2 mask_reg $false ty)))
+
 ;;;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type vec_i128_ty (swizzle rn rm)))
@@ -132,6 +138,69 @@
 (rule (lower (scalar_to_vector x @ (value_type (int_bool_fits_in_32 _))))
       (mov_to_fpu (put_in_reg_zext32 x) (ScalarSize.Size32)))
 
+;;;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; cmeq vtmp.2d, vm.2d, #0
+;; addp dtmp, vtmp.2d
+;; fcmp dtmp, dtmp
+;; cset xd, eq
+;;
+;; Note that after the ADDP the value of the temporary register will be either
+;; 0 when all input elements are true, i.e. non-zero, or a NaN otherwise
+;; (either -1 or -2 when represented as an integer); NaNs are the only
+;; floating-point numbers that compare unequal to themselves.
+(rule (lower (has_type out_ty (vall_true x @ (value_type (multi_lane 64 2)))))
+      (let ((x1 Reg (cmeq0 x (VectorSize.Size64x2)))
+            (x2 Reg (addp x1 x1 (VectorSize.Size64x2))))
+       (with_flags (fpu_cmp (ScalarSize.Size64) x2 x2)
+                   (materialize_bool_result (ty_bits out_ty) (Cond.Eq)))))
+
+(rule (lower (has_type out_ty (vall_true x @ (value_type (multi_lane 32 2)))))
+      (let ((x1 Reg (mov_from_vec x 0 (ScalarSize.Size64))))
+       (with_flags (cmp_rr_shift (OperandSize.Size64) (zero_reg) x1 32)
+                   (ccmp_imm
+                    (OperandSize.Size32)
+                    (ty_bits out_ty)
+                    x1
+                    (u8_into_uimm5 0)
+                    (nzcv $false $true $false $false)
+                    (Cond.Ne)))))
+
+;; This operation is implemented by using uminv to create a scalar value, which
+;; is then compared against zero.
+;;
+;; uminv bn, vm.16b
+;; mov xm, vn.d[0]
+;; cmp xm, #0
+;; cset xm, ne
+(rule (lower (has_type out_ty (vall_true x @ (value_type (lane_fits_in_32 ty)))))
+      (if (not_vec32x2 ty))
+      (let ((x1 Reg (vec_lanes (VecLanesOp.Uminv) x (vector_size ty)))
+            (x2 Reg (mov_from_vec x1 0 (ScalarSize.Size64))))
+       (with_flags (cmp_imm (OperandSize.Size64) x2 (u8_into_imm12 0))
+                   (materialize_bool_result (ty_bits out_ty) (Cond.Ne)))))
+
+;;;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; This operation is implemented by using umaxp to create a scalar value, which
+;; is then compared against zero.
+;;
+;; umaxp vn.4s, vm.4s, vm.4s
+;; mov xm, vn.d[0]
+;; cmp xm, #0
+;; cset xm, ne
+(rule (lower (vany_true x @ (value_type (ty_vec128 ty))))
+      (let ((x1 Reg (vec_rrr (VecALUOp.Umaxp) x x (VectorSize.Size32x4)))
+            (x2 Reg (mov_from_vec x1 0 (ScalarSize.Size64))))
+       (with_flags (cmp_imm (OperandSize.Size64) x2 (u8_into_imm12 0))
+                   (materialize_bool_result (ty_bits ty) (Cond.Ne)))))
+
+(rule (lower (vany_true x @ (value_type ty)))
+      (if (ty_vec64 ty))
+      (let ((x1 Reg (mov_from_vec x 0 (ScalarSize.Size64))))
+       (with_flags (cmp_imm (OperandSize.Size64) x1 (u8_into_imm12 0))
+                   (materialize_bool_result (ty_bits ty) (Cond.Ne)))))
+
 ;;;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I16X8 (iadd_pairwise (swiden_low x) (swiden_high y))))
@@ -163,6 +232,27 @@
 
 (rule (lower (has_type (fits_in_32 ty) (iabs x)))
       (abs (OperandSize.Size32) (put_in_reg_sext32 x)))
+
+;;;; Rules for `avg_round` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I64X2 (avg_round x y)))
+      (let ((one Reg (splat_const 1 (VectorSize.Size64x2)))
+            (c Reg (orr_vec x y (VectorSize.Size64x2)))
+            (c Reg (and_vec c one (VectorSize.Size64x2)))
+            (x Reg (vec_shift_imm (VecShiftImmOp.Ushr) 1 x
+                    (VectorSize.Size64x2)))
+            (y Reg (vec_shift_imm (VecShiftImmOp.Ushr) 1 y
+                    (VectorSize.Size64x2)))
+            (sum Reg (add_vec x y (VectorSize.Size64x2))))
+       (add_vec c sum (VectorSize.Size64x2))))
+
+(rule (lower (has_type (lane_fits_in_32 ty) (avg_round x y)))
+      (vec_rrr (VecALUOp.Urhadd) x y (vector_size ty)))
+
+;;;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (sqmul_round_sat x y)))
+      (vec_rrr (VecALUOp.Sqrdmulh) x y (vector_size ty)))
 
 ;;;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -308,6 +398,13 @@
 (rule (lower (has_type $F64 (nearest x)))
       (fpu_round (FpuRoundMode.Nearest64) x))
 
+;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _ _) (fma x y z)))
+      (vec_rrr_mod (VecALUModOp.Fmla) z x y (vector_size ty)))
+
+(rule (lower (has_type (ty_scalar_float ty) (fma x y z)))
+      (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -693,14 +790,26 @@
 (rule (lower (has_type ty @ (not_i64x2) (imin x y)))
       (vec_rrr (VecALUOp.Smin) x y (vector_size ty)))
 
+(rule (lower (has_type $I64X2 (imin x y)))
+      (bsl $I64X2 (vec_rrr (VecALUOp.Cmgt) y x (VectorSize.Size64x2)) x y))
+
 (rule (lower (has_type ty @ (not_i64x2) (umin x y)))
       (vec_rrr (VecALUOp.Umin) x y (vector_size ty)))
+
+(rule (lower (has_type $I64X2 (umin x y)))
+      (bsl $I64X2 (vec_rrr (VecALUOp.Cmhi) y x (VectorSize.Size64x2)) x y))
 
 (rule (lower (has_type ty @ (not_i64x2) (imax x y)))
       (vec_rrr (VecALUOp.Smax) x y (vector_size ty)))
 
+(rule (lower (has_type $I64X2 (imax x y)))
+      (bsl $I64X2 (vec_rrr (VecALUOp.Cmgt) x y (VectorSize.Size64x2)) x y))
+
 (rule (lower (has_type ty @ (not_i64x2) (umax x y)))
       (vec_rrr (VecALUOp.Umax) x y (vector_size ty)))
+
+(rule (lower (has_type $I64X2 (umax x y)))
+      (bsl $I64X2 (vec_rrr (VecALUOp.Cmhi) x y (VectorSize.Size64x2)) x y))
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -714,7 +823,7 @@
 (rule (lower (has_type (fits_in_64 out)
                        (uextend (extractlane vec @ (value_type in)
                                              (u8_from_uimm8 lane)))))
-      (mov_from_vec (put_in_reg vec) lane (vector_size in)))
+      (mov_from_vec (put_in_reg vec) lane (lane_size in)))
 
 ;; Atomic loads will also automatically zero their upper bits so the `uextend`
 ;; instruction can effectively get skipped here.
@@ -732,7 +841,7 @@
 (rule (lower (has_type $I128
                        (uextend (extractlane vec @ (value_type in)
                                              (u8_from_uimm8 lane)))))
-      (value_regs (mov_from_vec (put_in_reg vec) lane (vector_size in)) (imm $I64 (ImmExtend.Zero) 0)))
+      (value_regs (mov_from_vec (put_in_reg vec) lane (lane_size in)) (imm $I64 (ImmExtend.Zero) 0)))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -778,7 +887,7 @@
                                              (u8_from_uimm8 lane)))))
       (let ((lo Reg (mov_from_vec (put_in_reg vec)
                                   lane
-                                  (VectorSize.Size64x2)))
+                                  (ScalarSize.Size64)))
             (hi Reg (asr_imm $I64 lo (imm_shift_from_u8 63))))
         (value_regs lo hi)))
 
@@ -1392,26 +1501,26 @@
 (rule (lower (has_type $I8 (popcnt x)))
       (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size32)))
             (nbits Reg (vec_cnt tmp (VectorSize.Size8x8))))
-        (mov_from_vec nbits 0 (VectorSize.Size8x16))))
+        (mov_from_vec nbits 0 (ScalarSize.Size8))))
 
 ;; Note that this uses `addp` instead of `addv` as it's usually cheaper.
 (rule (lower (has_type $I16 (popcnt x)))
       (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size32)))
             (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
             (added Reg (addp nbits nbits (VectorSize.Size8x8))))
-        (mov_from_vec added 0 (VectorSize.Size8x16))))
+        (mov_from_vec added 0 (ScalarSize.Size8))))
 
 (rule (lower (has_type $I32 (popcnt x)))
       (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size32)))
             (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
             (added Reg (addv nbits (VectorSize.Size8x8))))
-        (mov_from_vec added 0 (VectorSize.Size8x16))))
+        (mov_from_vec added 0 (ScalarSize.Size8))))
 
 (rule (lower (has_type $I64 (popcnt x)))
       (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size64)))
             (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
             (added Reg (addv nbits (VectorSize.Size8x8))))
-        (mov_from_vec added 0 (VectorSize.Size8x16))))
+        (mov_from_vec added 0 (ScalarSize.Size8))))
 
 (rule (lower (has_type $I128 (popcnt x)))
       (let ((val ValueRegs x)
@@ -1419,7 +1528,7 @@
             (tmp Reg (mov_to_vec tmp_half (value_regs_get val 1) 1 (VectorSize.Size64x2)))
             (nbits Reg (vec_cnt tmp (VectorSize.Size8x16)))
             (added Reg (addv nbits (VectorSize.Size8x16))))
-        (value_regs (mov_from_vec added 0 (VectorSize.Size8x16)) (imm $I64 (ImmExtend.Zero) 0))))
+        (value_regs (mov_from_vec added 0 (ScalarSize.Size8)) (imm $I64 (ImmExtend.Zero) 0))))
 
 (rule (lower (has_type $I8X16 (popcnt x)))
       (vec_cnt x (VectorSize.Size8x16)))
@@ -1512,14 +1621,12 @@
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trap trap_code))
-      (let ((use_allocated_encoding bool (is_not_baldrdash_call_conv)))
-         (side_effect (udf use_allocated_encoding trap_code))))
+      (side_effect (udf trap_code)))
 
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (resumable_trap trap_code))
-      (let ((use_allocated_encoding bool (is_not_baldrdash_call_conv)))
-         (side_effect (udf use_allocated_encoding trap_code))))
+      (side_effect (udf trap_code)))
 
 ;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1687,6 +1794,7 @@
 
 
 ;;;; Rules for `uunarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (rule (lower (has_type (ty_vec128_int ty) (uunarrow x y)))
       (if (zero_value y))
       (uqxtn x (lane_size ty)))
@@ -1700,28 +1808,37 @@
             (result Reg (uqxtn2 low_half y (lane_size ty))))
         result))
 
-;;;; Rules for `Fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `Fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (fence))
-      (let ((_ Unit (emit (MInst.Fence))))
-            (output_none)))
+      (side_effect (aarch64_fence)))
 
-;;;; Rules for `IsNull` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `IsNull` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type out_ty (is_null x @ (value_type ty))))
       (with_flags (cmp_imm (operand_size ty) x (u8_into_imm12 0))
                   (materialize_bool_result
                    (ty_bits out_ty) (Cond.Eq))))
 
-;;;; Rules for `IsInvalid` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `IsInvalid` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type out_ty (is_invalid x @ (value_type ty))))
       (with_flags (cmn_imm (operand_size ty) x (u8_into_imm12 1))
                   (materialize_bool_result
                    (ty_bits out_ty) (Cond.Eq))))
 
-;;;; Rules for `Debugtrap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `Debugtrap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (debugtrap))
-      (let ((_ Unit (emit (MInst.Brk))))
-            (output_none)))
+      (side_effect (brk)))
+
+;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;;
+
+(rule (lower (get_frame_pointer))
+      (aarch64_fp))
+
+(rule (lower (get_stack_pointer))
+      (aarch64_sp))
+
+(rule (lower (get_return_address))
+      (aarch64_link))

@@ -3,6 +3,7 @@
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
 use crate::{
+    ir::types,
     ir::AtomicRmwOp,
     machinst::{InputSourceInst, Reg, Writable},
 };
@@ -10,9 +11,11 @@ use generated_code::{Context, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode};
+use crate::ir::LibCall;
+use crate::isa::x64::lower::emit_vm_call;
 use crate::{
     ir::{
-        condcodes::{FloatCC, IntCC},
+        condcodes::{CondCode, FloatCC, IntCC},
         immediates::*,
         types::*,
         Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueList,
@@ -21,22 +24,25 @@ use crate::{
         settings::Flags,
         unwind::UnwindInst,
         x64::{
-            abi::{X64ABICaller, X64ABIMachineSpec},
+            abi::{X64ABIMachineSpec, X64Caller},
             inst::{args::*, regs, CallInfo},
             settings::Flags as IsaFlags,
         },
     },
     machinst::{
-        isle::*, valueregs, ABICaller, InsnInput, InsnOutput, LowerCtx, MachAtomicRmwOp, MachInst,
-        VCodeConstant, VCodeConstantData,
+        isle::*, valueregs, InsnInput, InsnOutput, Lower, MachAtomicRmwOp, MachInst, VCodeConstant,
+        VCodeConstantData,
     },
 };
+use regalloc2::PReg;
 use smallvec::SmallVec;
 use std::boxed::Box;
 use std::convert::TryFrom;
+use target_lexicon::Triple;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxVecMachLabel = Box<SmallVec<[MachLabel; 4]>>;
+type MachLabelSlice = [MachLabel];
 
 pub struct SinkableLoad {
     inst: Inst,
@@ -45,25 +51,45 @@ pub struct SinkableLoad {
 }
 
 /// The main entry point for lowering with ISLE.
-pub(crate) fn lower<C>(
-    lower_ctx: &mut C,
+pub(crate) fn lower(
+    lower_ctx: &mut Lower<MInst>,
+    triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
     outputs: &[InsnOutput],
     inst: Inst,
-) -> Result<(), ()>
-where
-    C: LowerCtx<I = MInst>,
-{
-    lower_common(lower_ctx, flags, isa_flags, outputs, inst, |cx, insn| {
-        generated_code::constructor_lower(cx, insn)
-    })
+) -> Result<(), ()> {
+    lower_common(
+        lower_ctx,
+        triple,
+        flags,
+        isa_flags,
+        outputs,
+        inst,
+        |cx, insn| generated_code::constructor_lower(cx, insn),
+    )
 }
 
-impl<C> Context for IsleContext<'_, C, Flags, IsaFlags, 6>
-where
-    C: LowerCtx<I = MInst>,
-{
+pub(crate) fn lower_branch(
+    lower_ctx: &mut Lower<MInst>,
+    triple: &Triple,
+    flags: &Flags,
+    isa_flags: &IsaFlags,
+    branch: Inst,
+    targets: &[MachLabel],
+) -> Result<(), ()> {
+    lower_common(
+        lower_ctx,
+        triple,
+        flags,
+        isa_flags,
+        &[],
+        branch,
+        |cx, insn| generated_code::constructor_lower_branch(cx, insn, targets),
+    )
+}
+
+impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_methods!();
 
     #[inline]
@@ -207,6 +233,15 @@ where
     #[inline]
     fn use_popcnt(&mut self, _: Type) -> Option<()> {
         if self.isa_flags.use_popcnt() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn use_fma(&mut self, _: Type) -> Option<()> {
+        if self.isa_flags.use_fma() {
             Some(())
         } else {
             None
@@ -528,6 +563,16 @@ where
     }
 
     #[inline]
+    fn ty_int_bool_or_ref(&mut self, ty: Type) -> Option<()> {
+        match ty {
+            types::I8 | types::I16 | types::I32 | types::I64 | types::R64 => Some(()),
+            types::B1 | types::B8 | types::B16 | types::B32 | types::B64 => Some(()),
+            types::R32 => panic!("shouldn't have 32-bits refs on x64"),
+            _ => None,
+        }
+    }
+
+    #[inline]
     fn intcc_neq(&mut self, x: &IntCC, y: &IntCC) -> Option<IntCC> {
         if x != y {
             Some(*x)
@@ -549,6 +594,30 @@ where
     #[inline]
     fn intcc_to_cc(&mut self, intcc: &IntCC) -> CC {
         CC::from_intcc(*intcc)
+    }
+
+    #[inline]
+    fn cc_invert(&mut self, cc: &CC) -> CC {
+        cc.invert()
+    }
+
+    #[inline]
+    fn cc_nz_or_z(&mut self, cc: &CC) -> Option<CC> {
+        match cc {
+            CC::Z => Some(*cc),
+            CC::NZ => Some(*cc),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    fn intcc_reverse(&mut self, cc: &IntCC) -> IntCC {
+        cc.reverse()
+    }
+
+    #[inline]
+    fn floatcc_inverse(&mut self, cc: &FloatCC) -> FloatCC {
+        cc.inverse()
     }
 
     #[inline]
@@ -604,7 +673,7 @@ where
         let sig = &self.lower_ctx.dfg().signatures[sig_ref];
         let num_rets = sig.returns.len();
         let abi = ABISig::from_func_sig::<X64ABIMachineSpec>(sig, self.flags).unwrap();
-        let caller = X64ABICaller::from_func(sig, &extname, dist, caller_conv, self.flags).unwrap();
+        let caller = X64Caller::from_func(sig, &extname, dist, caller_conv, self.flags).unwrap();
 
         assert_eq!(
             inputs.len(&self.lower_ctx.dfg().value_lists) - off,
@@ -626,8 +695,7 @@ where
         let num_rets = sig.returns.len();
         let abi = ABISig::from_func_sig::<X64ABIMachineSpec>(sig, self.flags).unwrap();
         let caller =
-            X64ABICaller::from_ptr(sig, ptr, Opcode::CallIndirect, caller_conv, self.flags)
-                .unwrap();
+            X64Caller::from_ptr(sig, ptr, Opcode::CallIndirect, caller_conv, self.flags).unwrap();
 
         assert_eq!(
             inputs.len(&self.lower_ctx.dfg().value_lists) - off,
@@ -636,12 +704,110 @@ where
 
         self.gen_call_common(abi, num_rets, caller, args)
     }
+
+    #[inline]
+    fn preg_rbp(&mut self) -> PReg {
+        regs::rbp().to_real_reg().unwrap().into()
+    }
+
+    #[inline]
+    fn preg_rsp(&mut self) -> PReg {
+        regs::rsp().to_real_reg().unwrap().into()
+    }
+
+    fn libcall_3(&mut self, libcall: &LibCall, a: Reg, b: Reg, c: Reg) -> Reg {
+        let call_conv = self.lower_ctx.abi().call_conv();
+        let ret_ty = libcall.signature(call_conv).returns[0].value_type;
+        let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
+
+        emit_vm_call(
+            self.lower_ctx,
+            self.flags,
+            self.triple,
+            libcall.clone(),
+            &[a, b, c],
+            &[output_reg],
+        )
+        .expect("Failed to emit LibCall");
+
+        output_reg.to_reg()
+    }
+
+    #[inline]
+    fn single_target(&mut self, targets: &MachLabelSlice) -> Option<MachLabel> {
+        if targets.len() == 1 {
+            Some(targets[0])
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn two_targets(&mut self, targets: &MachLabelSlice) -> Option<(MachLabel, MachLabel)> {
+        if targets.len() == 2 {
+            Some((targets[0], targets[1]))
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn jump_table_targets(
+        &mut self,
+        targets: &MachLabelSlice,
+    ) -> Option<(MachLabel, BoxVecMachLabel)> {
+        if targets.is_empty() {
+            return None;
+        }
+
+        let default_label = targets[0];
+        let jt_targets = Box::new(SmallVec::from(&targets[1..]));
+        Some((default_label, jt_targets))
+    }
+
+    #[inline]
+    fn jump_table_size(&mut self, targets: &BoxVecMachLabel) -> u32 {
+        targets.len() as u32
+    }
+
+    #[inline]
+    fn fcvt_uint_mask_const(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&UINT_MASK))
+    }
+
+    #[inline]
+    fn fcvt_uint_mask_high_const(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&UINT_MASK_HIGH))
+    }
+
+    #[inline]
+    fn iadd_pairwise_mul_const_16(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_MUL_CONST_16))
+    }
+
+    #[inline]
+    fn iadd_pairwise_mul_const_32(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_MUL_CONST_32))
+    }
+
+    #[inline]
+    fn iadd_pairwise_xor_const_32(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_XOR_CONST_32))
+    }
+
+    #[inline]
+    fn iadd_pairwise_addd_const_32(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_ADDD_CONST_32))
+    }
 }
 
-impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>
-where
-    C: LowerCtx<I = MInst>,
-{
+impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     fn abi_arg_slot_regs(&mut self, arg: &ABIArg) -> Option<WritableValueRegs> {
         match arg {
             &ABIArg::Slots { ref slots, .. } => match slots.len() {
@@ -664,7 +830,7 @@ where
         &mut self,
         abi: ABISig,
         num_rets: usize,
-        mut caller: X64ABICaller,
+        mut caller: X64Caller,
         (inputs, off): ValueSlice,
     ) -> InstOutput {
         caller.emit_stack_pre_adjust(self.lower_ctx);
@@ -673,12 +839,18 @@ where
             inputs.len(&self.lower_ctx.dfg().value_lists) - off,
             abi.num_args()
         );
-        for i in caller.get_copy_to_arg_order() {
+        let mut arg_regs = vec![];
+        for i in 0..abi.num_args() {
             let input = inputs
                 .get(off + i, &self.lower_ctx.dfg().value_lists)
                 .unwrap();
-            let arg_regs = self.lower_ctx.put_value_in_regs(input);
-            caller.emit_copy_regs_to_arg(self.lower_ctx, i, arg_regs);
+            arg_regs.push(self.lower_ctx.put_value_in_regs(input));
+        }
+        for (i, arg_regs) in arg_regs.iter().enumerate() {
+            caller.emit_copy_regs_to_buffer(self.lower_ctx, i, *arg_regs);
+        }
+        for (i, arg_regs) in arg_regs.iter().enumerate() {
+            caller.emit_copy_regs_to_arg(self.lower_ctx, i, *arg_regs);
         }
         caller.emit_call(self.lower_ctx);
 
@@ -751,3 +923,25 @@ fn to_simm32(constant: i64) -> Option<GprMemImm> {
         None
     }
 }
+
+const UINT_MASK: [u8; 16] = [
+    0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+];
+
+const UINT_MASK_HIGH: [u8; 16] = [
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43,
+];
+
+const IADD_PAIRWISE_MUL_CONST_16: [u8; 16] = [0x01; 16];
+
+const IADD_PAIRWISE_MUL_CONST_32: [u8; 16] = [
+    0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00,
+];
+
+const IADD_PAIRWISE_XOR_CONST_32: [u8; 16] = [
+    0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80,
+];
+
+const IADD_PAIRWISE_ADDD_CONST_32: [u8; 16] = [
+    0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00,
+];

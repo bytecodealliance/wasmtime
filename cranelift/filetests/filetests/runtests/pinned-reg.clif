@@ -1,0 +1,13 @@
+test interpret
+set enable_pinned_reg
+target x86_64
+
+function %read_write(i64) -> i64 {
+block0(v0: i64):
+    set_pinned_reg v0
+    v1 = get_pinned_reg.i64
+    return v1
+}
+; run: %read_write(0) == 0
+; run: %read_write(-1) == -1
+; run: %read_write(0xDEADBEEF_C0FFEEEE) == 0xDEADBEEF_C0FFEEEE

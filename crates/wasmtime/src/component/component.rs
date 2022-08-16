@@ -10,8 +10,8 @@ use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    AlwaysTrapInfo, ComponentTypes, GlobalInitializer, LoweredIndex, LoweringInfo,
-    RuntimeAlwaysTrapIndex, StaticModuleIndex, Translator,
+    AlwaysTrapInfo, ComponentTypes, FunctionInfo, GlobalInitializer, LoweredIndex,
+    RuntimeAlwaysTrapIndex, RuntimeTranscoderIndex, StaticModuleIndex, Translator,
 };
 use wasmtime_environ::{PrimaryMap, ScopeVec, SignatureIndex, Trampoline, TrapCode};
 use wasmtime_jit::CodeMemory;
@@ -56,7 +56,7 @@ struct ComponentInner {
     /// These trampolines are the function pointer within the
     /// `VMCallerCheckedAnyfunc` and will delegate indirectly to a host function
     /// pointer when called.
-    lowerings: PrimaryMap<LoweredIndex, LoweringInfo>,
+    lowerings: PrimaryMap<LoweredIndex, FunctionInfo>,
 
     /// Where the "always trap" functions are located within the `text` section
     /// of `trampoline_obj`.
@@ -64,6 +64,10 @@ struct ComponentInner {
     /// These functions are "degenerate functions" here solely to implement
     /// functions that are `canon lift`'d then immediately `canon lower`'d.
     always_trap: PrimaryMap<RuntimeAlwaysTrapIndex, AlwaysTrapInfo>,
+
+    /// Where all the cranelift-generated transcode functions are located in the
+    /// compiled image of this component.
+    transcoders: PrimaryMap<RuntimeTranscoderIndex, FunctionInfo>,
 }
 
 impl Component {
@@ -158,7 +162,7 @@ impl Component {
             || Component::compile_component(engine, &component, &types, &provided_trampolines),
         );
         let static_modules = static_modules?;
-        let (lowerings, always_trap, trampolines, trampoline_obj) = trampolines?;
+        let (lowerings, always_trap, transcoders, trampolines, trampoline_obj) = trampolines?;
         let mut trampoline_obj = CodeMemory::new(trampoline_obj);
         let code = trampoline_obj.publish()?;
         let text = wasmtime_jit::subslice_range(code.text, code.mmap);
@@ -205,7 +209,7 @@ impl Component {
             .values()
             .as_slice()
             .windows(2)
-            .all(|window| { window[0].start < window[1].start }));
+            .all(|window| { window[0].info.start < window[1].info.start }));
 
         crate::module::register_component(code.text, &always_trap);
         Ok(Component {
@@ -218,6 +222,7 @@ impl Component {
                 text,
                 lowerings,
                 always_trap,
+                transcoders,
             }),
         })
     }
@@ -229,8 +234,9 @@ impl Component {
         types: &ComponentTypes,
         provided_trampolines: &HashSet<SignatureIndex>,
     ) -> Result<(
-        PrimaryMap<LoweredIndex, LoweringInfo>,
+        PrimaryMap<LoweredIndex, FunctionInfo>,
         PrimaryMap<RuntimeAlwaysTrapIndex, AlwaysTrapInfo>,
+        PrimaryMap<RuntimeTranscoderIndex, FunctionInfo>,
         Vec<Trampoline>,
         wasmtime_runtime::MmapVec,
     )> {
@@ -239,22 +245,31 @@ impl Component {
             || -> Result<_> {
                 Ok(engine.join_maybe_parallel(
                     || compile_always_trap(engine, component, types),
-                    || compile_trampolines(engine, component, types, provided_trampolines),
+                    || -> Result<_> {
+                        Ok(engine.join_maybe_parallel(
+                            || compile_transcoders(engine, component, types),
+                            || compile_trampolines(engine, component, types, provided_trampolines),
+                        ))
+                    },
                 ))
             },
         );
         let (lowerings, other) = results;
-        let (always_trap, trampolines) = other?;
+        let (always_trap, other) = other?;
+        let (transcoders, trampolines) = other?;
         let mut obj = engine.compiler().object()?;
-        let (lower, traps, trampolines) = engine.compiler().component_compiler().emit_obj(
-            lowerings?,
-            always_trap?,
-            trampolines?,
-            &mut obj,
-        )?;
+        let (lower, traps, transcoders, trampolines) =
+            engine.compiler().component_compiler().emit_obj(
+                lowerings?,
+                always_trap?,
+                transcoders?,
+                trampolines?,
+                &mut obj,
+            )?;
         return Ok((
             lower,
             traps,
+            transcoders,
             trampolines,
             wasmtime_jit::mmap_vec_from_obj(obj)?,
         ));
@@ -302,6 +317,30 @@ impl Component {
                         .compiler()
                         .component_compiler()
                         .compile_always_trap(&types[info.canonical_abi])
+                })?
+                .into_iter()
+                .collect())
+        }
+
+        fn compile_transcoders(
+            engine: &Engine,
+            component: &wasmtime_environ::component::Component,
+            types: &ComponentTypes,
+        ) -> Result<PrimaryMap<RuntimeTranscoderIndex, Box<dyn Any + Send>>> {
+            let always_trap = component
+                .initializers
+                .iter()
+                .filter_map(|init| match init {
+                    GlobalInitializer::Transcoder(i) => Some(i),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            Ok(engine
+                .run_maybe_parallel(always_trap, |info| {
+                    engine
+                        .compiler()
+                        .component_compiler()
+                        .compile_transcoder(component, info, types)
                 })?
                 .into_iter()
                 .collect())
@@ -368,17 +407,22 @@ impl Component {
 
     pub(crate) fn lowering_ptr(&self, index: LoweredIndex) -> NonNull<VMFunctionBody> {
         let info = &self.inner.lowerings[index];
-        self.func(info.start, info.length)
+        self.func(info)
     }
 
     pub(crate) fn always_trap_ptr(&self, index: RuntimeAlwaysTrapIndex) -> NonNull<VMFunctionBody> {
         let info = &self.inner.always_trap[index];
-        self.func(info.start, info.length)
+        self.func(&info.info)
     }
 
-    fn func(&self, start: u32, len: u32) -> NonNull<VMFunctionBody> {
+    pub(crate) fn transcoder_ptr(&self, index: RuntimeTranscoderIndex) -> NonNull<VMFunctionBody> {
+        let info = &self.inner.transcoders[index];
+        self.func(info)
+    }
+
+    fn func(&self, info: &FunctionInfo) -> NonNull<VMFunctionBody> {
         let text = self.text();
-        let trampoline = &text[start as usize..][..len as usize];
+        let trampoline = &text[info.start as usize..][..info.length as usize];
         NonNull::new(trampoline.as_ptr() as *mut VMFunctionBody).unwrap()
     }
 
@@ -393,7 +437,7 @@ impl Component {
             .always_trap
             .values()
             .as_slice()
-            .binary_search_by_key(&offset, |info| info.start + info.trap_offset)
+            .binary_search_by_key(&offset, |info| info.info.start + info.trap_offset)
         {
             Ok(_) => Some(TrapCode::AlwaysTrapAdapter),
             Err(_) => None,

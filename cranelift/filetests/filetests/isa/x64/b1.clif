@@ -73,3 +73,199 @@ block2:
 ;   popq    %rbp
 ;   ret
 
+function %f3(i64) -> i32 {
+block0(v0: i64):
+  v1 = iconst.i32 1
+  v2 = load.i32 v0
+  v3 = icmp eq v1, v2
+  brnz v3, block1
+  jump block2
+block1:
+  v4 = iconst.i32 1
+  return v4
+block2:
+  v5 = iconst.i32 1
+  return v5
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    0(%rdi), %r8d
+;   cmpl    $1, %r8d
+;   jz      label1; j label2
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f4(i64) -> i32 {
+block0(v0: i64):
+  v1 = iconst.i32 1
+  v2 = load.i32 v0
+  v3 = icmp eq v2, v1
+  brnz v3, block1
+  jump block2
+block1:
+  v4 = iconst.i32 1
+  return v4
+block2:
+  v5 = iconst.i32 1
+  return v5
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    0(%rdi), %r8d
+;   cmpl    $1, %r8d
+;   jz      label1; j label2
+; block1:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %test_x_slt_0_i64(i64) -> b1 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = icmp slt v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   shrq    $63, %rdi, %rdi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %test_x_slt_0_i32f4(i32) -> b1 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp slt v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   shrl    $31, %edi, %edi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %test_0_sgt_x_i64(i64) -> b1 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = icmp sgt v1, v0
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   shrq    $63, %rdi, %rdi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %test_0_sgt_x_i32f4(i32) -> b1 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp sgt v1, v0
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   shrl    $31, %edi, %edi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %test_0_sle_x_i64(i64) -> b1 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = icmp sle v1, v0
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   notq    %rdi, %rdi
+;   shrq    $63, %rdi, %rdi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %test_0_sle_x_i32f4(i32) -> b1 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp sle v1, v0
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   notq    %rdi, %rdi
+;   shrl    $31, %edi, %edi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %test_x_sge_x_i64(i64) -> b1 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = icmp sge v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   notq    %rdi, %rdi
+;   shrq    $63, %rdi, %rdi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %test_x_sge_x_i32f4(i32) -> b1 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp sge v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   notq    %rdi, %rdi
+;   shrl    $31, %edi, %edi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

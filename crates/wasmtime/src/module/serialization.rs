@@ -264,11 +264,11 @@ impl<'a> SerializedModule<'a> {
         )
     }
 
-    pub fn from_mmap(mmap: MmapVec, version_strat: &ModuleVersionStrategy) -> Result<Self> {
+    pub fn from_mmap(mut mmap: MmapVec, version_strat: &ModuleVersionStrategy) -> Result<Self> {
         // First validate that this is at least somewhat an elf file within
         // `mmap` and additionally skip to the end of the elf file to find our
         // metadata.
-        let metadata = data_after_elf(&mmap)?;
+        let metadata = data_after_elf(&mut mmap)?;
 
         // The metadata has a few guards up front which we process first, and
         // eventually this bottoms out in a `bincode::deserialize` call.
@@ -315,7 +315,7 @@ impl<'a> SerializedModule<'a> {
 
         /// This function will return the trailing data behind the ELF file
         /// parsed from `data` which is where we find our metadata section.
-        fn data_after_elf(data: &[u8]) -> Result<&[u8]> {
+        fn data_after_elf(mmap: &mut MmapVec) -> Result<MmapVec> {
             use object::NativeEndian as NE;
             // There's not actually a great utility for figuring out where
             // the end of an ELF file is in the `object` crate. In lieu of that
@@ -323,6 +323,7 @@ impl<'a> SerializedModule<'a> {
             // is that the header comes first, that tells us where the section
             // headers are, and for our ELF files the end of the file is the
             // end of the section headers.
+            let data = &mmap[..];
             let mut bytes = Bytes(data);
             let header = bytes
                 .read::<object::elf::FileHeader64<NE>>()
@@ -334,7 +335,7 @@ impl<'a> SerializedModule<'a> {
                 .section_headers(NE, data)
                 .context("failed to read section headers")?;
             let range = subslice_range(object::bytes_of_slice(sections), data);
-            Ok(&data[range.end..])
+            Ok(mmap.split_off(range.end))
         }
     }
 

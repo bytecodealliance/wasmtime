@@ -1,12 +1,12 @@
 //! This module defines x86_64-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
-use crate::ir::{types, ExternalName, Opcode, SourceLoc, TrapCode, Type};
+use crate::ir::{types, ExternalName, Opcode, RelSourceLoc, TrapCode, Type};
 use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::CallConv;
-use crate::machinst::*;
+use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -77,7 +77,6 @@ impl Inst {
             | Inst::CvtFloatToUintSeq { .. }
             | Inst::CvtUint64ToFloatSeq { .. }
             | Inst::Div { .. }
-            | Inst::EpiloguePlaceholder
             | Inst::Fence { .. }
             | Inst::Hlt
             | Inst::Imm { .. }
@@ -92,6 +91,7 @@ impl Inst {
             | Inst::Mov64MR { .. }
             | Inst::MovRM { .. }
             | Inst::MovRR { .. }
+            | Inst::MovPReg { .. }
             | Inst::MovsxRmR { .. }
             | Inst::MovzxRmR { .. }
             | Inst::MulHi { .. }
@@ -105,6 +105,8 @@ impl Inst {
             | Inst::ShiftR { .. }
             | Inst::SignExtendData { .. }
             | Inst::TrapIf { .. }
+            | Inst::TrapIfAnd { .. }
+            | Inst::TrapIfOr { .. }
             | Inst::Ud2 { .. }
             | Inst::VirtualSPOffsetAdj { .. }
             | Inst::XmmCmove { .. }
@@ -114,6 +116,7 @@ impl Inst {
             | Inst::XmmUninitializedValue { .. }
             | Inst::ElfTlsGetAddr { .. }
             | Inst::MachOTlsGetAddr { .. }
+            | Inst::CoffTlsGetAddr { .. }
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. } => smallvec![],
 
@@ -305,16 +308,6 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_unary_rm_r_evex(op: Avx512Opcode, src: RegMem, dst: Writable<Reg>) -> Inst {
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmUnaryRmREvex {
-            op,
-            src: XmmMem::new(src).unwrap(),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
     pub(crate) fn xmm_rm_r(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Self {
         src.assert_regclass_is(RegClass::Float);
         debug_assert!(dst.to_reg().class() == RegClass::Float);
@@ -413,79 +406,6 @@ impl Inst {
         let src = XmmMem::new(src).unwrap();
         let dst = Xmm::new(dst).unwrap();
         Inst::XmmCmpRmR { op, src, dst }
-    }
-
-    pub(crate) fn cvt_u64_to_float_seq(
-        dst_size: OperandSize,
-        src: Writable<Reg>,
-        tmp_gpr1: Writable<Reg>,
-        tmp_gpr2: Writable<Reg>,
-        dst: Writable<Reg>,
-    ) -> Inst {
-        debug_assert!(dst_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        debug_assert!(src.to_reg().class() == RegClass::Int);
-        debug_assert!(tmp_gpr1.to_reg().class() == RegClass::Int);
-        debug_assert!(tmp_gpr2.to_reg().class() == RegClass::Int);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::CvtUint64ToFloatSeq {
-            src: WritableGpr::from_writable_reg(src).unwrap(),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-            tmp_gpr1: WritableGpr::from_writable_reg(tmp_gpr1).unwrap(),
-            tmp_gpr2: WritableGpr::from_writable_reg(tmp_gpr2).unwrap(),
-            dst_size,
-        }
-    }
-
-    pub(crate) fn cvt_float_to_sint_seq(
-        src_size: OperandSize,
-        dst_size: OperandSize,
-        is_saturating: bool,
-        src: Writable<Reg>,
-        dst: Writable<Reg>,
-        tmp_gpr: Writable<Reg>,
-        tmp_xmm: Writable<Reg>,
-    ) -> Inst {
-        debug_assert!(src_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        debug_assert!(dst_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        debug_assert!(src.to_reg().class() == RegClass::Float);
-        debug_assert!(tmp_xmm.to_reg().class() == RegClass::Float);
-        debug_assert!(tmp_gpr.to_reg().class() == RegClass::Int);
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        Inst::CvtFloatToSintSeq {
-            src_size,
-            dst_size,
-            is_saturating,
-            src: WritableXmm::from_writable_reg(src).unwrap(),
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-            tmp_gpr: WritableGpr::from_writable_reg(tmp_gpr).unwrap(),
-            tmp_xmm: WritableXmm::from_writable_reg(tmp_xmm).unwrap(),
-        }
-    }
-
-    pub(crate) fn cvt_float_to_uint_seq(
-        src_size: OperandSize,
-        dst_size: OperandSize,
-        is_saturating: bool,
-        src: Writable<Reg>,
-        dst: Writable<Reg>,
-        tmp_gpr: Writable<Reg>,
-        tmp_xmm: Writable<Reg>,
-    ) -> Inst {
-        debug_assert!(src_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        debug_assert!(dst_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        debug_assert!(src.to_reg().class() == RegClass::Float);
-        debug_assert!(tmp_xmm.to_reg().class() == RegClass::Float);
-        debug_assert!(tmp_gpr.to_reg().class() == RegClass::Int);
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        Inst::CvtFloatToUintSeq {
-            src_size,
-            dst_size,
-            is_saturating,
-            src: WritableXmm::from_writable_reg(src).unwrap(),
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-            tmp_gpr: WritableGpr::from_writable_reg(tmp_gpr).unwrap(),
-            tmp_xmm: WritableXmm::from_writable_reg(tmp_xmm).unwrap(),
-        }
     }
 
     #[allow(dead_code)]
@@ -617,18 +537,6 @@ impl Inst {
         }
     }
 
-    /// Does a comparison of dst & src for operands of size `size`.
-    pub(crate) fn test_rmi_r(size: OperandSize, src: RegMemImm, dst: Reg) -> Inst {
-        src.assert_regclass_is(RegClass::Int);
-        debug_assert_eq!(dst.class(), RegClass::Int);
-        Inst::CmpRmiR {
-            size,
-            src: GprMemImm::new(src).unwrap(),
-            dst: Gpr::new(dst).unwrap(),
-            opcode: CmpOpcode::Test,
-        }
-    }
-
     pub(crate) fn trap(trap_code: TrapCode) -> Inst {
         Inst::Ud2 { trap_code }
     }
@@ -652,21 +560,6 @@ impl Inst {
             consequent: GprMem::new(src).unwrap(),
             alternative: Gpr::new(dst.to_reg()).unwrap(),
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
-        }
-    }
-
-    pub(crate) fn xmm_cmove(ty: Type, cc: CC, src: RegMem, dst: Writable<Reg>) -> Inst {
-        debug_assert!(ty == types::F32 || ty == types::F64 || ty.is_vector());
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        let src = XmmMem::new(src).unwrap();
-        let dst = WritableXmm::from_writable_reg(dst).unwrap();
-        Inst::XmmCmove {
-            ty,
-            cc,
-            consequent: src,
-            alternative: dst.to_reg(),
-            dst,
         }
     }
 
@@ -723,24 +616,8 @@ impl Inst {
         Inst::Ret { rets }
     }
 
-    pub(crate) fn epilogue_placeholder() -> Inst {
-        Inst::EpiloguePlaceholder
-    }
-
     pub(crate) fn jmp_known(dst: MachLabel) -> Inst {
         Inst::JmpKnown { dst }
-    }
-
-    pub(crate) fn jmp_if(cc: CC, taken: MachLabel) -> Inst {
-        Inst::JmpIf { cc, taken }
-    }
-
-    pub(crate) fn jmp_cond(cc: CC, taken: MachLabel, not_taken: MachLabel) -> Inst {
-        Inst::JmpCond {
-            cc,
-            taken,
-            not_taken,
-        }
     }
 
     pub(crate) fn jmp_unknown(target: RegMem) -> Inst {
@@ -837,13 +714,13 @@ impl Inst {
     /// same as the first register (already handled).
     fn produces_const(&self) -> bool {
         match self {
-            Self::AluRmiR { op, src2, dst, .. } => {
-                src2.clone().to_reg_mem_imm().to_reg() == Some(dst.to_reg().to_reg())
+            Self::AluRmiR { op, src1, src2, .. } => {
+                src2.clone().to_reg_mem_imm().to_reg() == Some(src1.to_reg())
                     && (*op == AluRmiROpcode::Xor || *op == AluRmiROpcode::Sub)
             }
 
-            Self::XmmRmR { op, src2, dst, .. } => {
-                src2.clone().to_reg_mem().to_reg() == Some(dst.to_reg().to_reg())
+            Self::XmmRmR { op, src1, src2, .. } => {
+                src2.clone().to_reg_mem().to_reg() == Some(src1.to_reg())
                     && (*op == SseOpcode::Xorps
                         || *op == SseOpcode::Xorpd
                         || *op == SseOpcode::Pxor
@@ -851,14 +728,6 @@ impl Inst {
                         || *op == SseOpcode::Pcmpeqw
                         || *op == SseOpcode::Pcmpeqd
                         || *op == SseOpcode::Pcmpeqq)
-            }
-
-            Self::XmmRmRImm {
-                op, src2, dst, imm, ..
-            } => {
-                src2.to_reg() == Some(dst.to_reg())
-                    && (*op == SseOpcode::Cmppd || *op == SseOpcode::Cmpps)
-                    && *imm == FcmpImm::Equal.encode()
             }
 
             _ => false,
@@ -894,21 +763,13 @@ impl PrettyPrint for Inst {
             .to_string()
         }
 
-        fn suffix_lqb(size: OperandSize, is_8: bool) -> String {
-            match (size, is_8) {
-                (_, true) => "b",
-                (OperandSize::Size32, false) => "l",
-                (OperandSize::Size64, false) => "q",
+        fn suffix_lqb(size: OperandSize) -> String {
+            match size {
+                OperandSize::Size32 => "l",
+                OperandSize::Size64 => "q",
                 _ => unreachable!(),
             }
             .to_string()
-        }
-
-        fn size_lqb(size: OperandSize, is_8: bool) -> u8 {
-            if is_8 {
-                return 1;
-            }
-            size.to_bytes()
         }
 
         fn suffix_bwlq(size: OperandSize) -> String {
@@ -924,11 +785,10 @@ impl PrettyPrint for Inst {
             Inst::Nop { len } => format!("{} len={}", ljustify("nop".to_string()), len),
 
             Inst::AluRmiR { size, op, dst, .. } if self.produces_const() => {
-                let dst =
-                    pretty_print_reg(dst.to_reg().to_reg(), size_lqb(*size, op.is_8bit()), allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
                 format!(
                     "{} {}, {}, {}",
-                    ljustify2(op.to_string(), suffix_lqb(*size, op.is_8bit())),
+                    ljustify2(op.to_string(), suffix_lqb(*size)),
                     dst,
                     dst,
                     dst
@@ -941,13 +801,13 @@ impl PrettyPrint for Inst {
                 src2,
                 dst,
             } => {
-                let size_bytes = size_lqb(*size, op.is_8bit());
+                let size_bytes = size.to_bytes();
                 let src1 = pretty_print_reg(src1.to_reg(), size_bytes, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size_bytes, allocs);
                 let src2 = src2.pretty_print(size_bytes, allocs);
                 format!(
                     "{} {}, {}, {}",
-                    ljustify2(op.to_string(), suffix_lqb(*size, op.is_8bit())),
+                    ljustify2(op.to_string(), suffix_lqb(*size)),
                     src1,
                     src2,
                     dst
@@ -959,12 +819,12 @@ impl PrettyPrint for Inst {
                 src1_dst,
                 src2,
             } => {
-                let size_bytes = size_lqb(*size, op.is_8bit());
+                let size_bytes = size.to_bytes();
                 let src2 = pretty_print_reg(src2.to_reg(), size_bytes, allocs);
                 let src1_dst = src1_dst.pretty_print(size_bytes, allocs);
                 format!(
                     "{} {}, {}",
-                    ljustify2(op.to_string(), suffix_lqb(*size, op.is_8bit())),
+                    ljustify2(op.to_string(), suffix_lqb(*size)),
                     src2,
                     src1_dst,
                 )
@@ -1345,7 +1205,7 @@ impl PrettyPrint for Inst {
                 dst_size,
                 tmp_xmm,
                 tmp_gpr,
-                ..
+                is_saturating,
             } => {
                 let src = pretty_print_reg(src.to_reg().to_reg(), src_size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size.to_bytes(), allocs);
@@ -1354,9 +1214,10 @@ impl PrettyPrint for Inst {
                 format!(
                     "{} {}, {}, {}, {}",
                     ljustify(format!(
-                        "cvt_float{}_to_sint{}_seq",
+                        "cvt_float{}_to_sint{}{}_seq",
                         src_size.to_bits(),
-                        dst_size.to_bits()
+                        dst_size.to_bits(),
+                        if *is_saturating { "_sat" } else { "" },
                     )),
                     src,
                     dst,
@@ -1372,7 +1233,7 @@ impl PrettyPrint for Inst {
                 dst_size,
                 tmp_gpr,
                 tmp_xmm,
-                ..
+                is_saturating,
             } => {
                 let src = pretty_print_reg(src.to_reg().to_reg(), src_size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size.to_bytes(), allocs);
@@ -1381,9 +1242,10 @@ impl PrettyPrint for Inst {
                 format!(
                     "{} {}, {}, {}, {}",
                     ljustify(format!(
-                        "cvt_float{}_to_uint{}_seq",
+                        "cvt_float{}_to_uint{}{}_seq",
                         src_size.to_bits(),
-                        dst_size.to_bits()
+                        dst_size.to_bits(),
+                        if *is_saturating { "_sat" } else { "" },
                     )),
                     src,
                     dst,
@@ -1424,6 +1286,13 @@ impl PrettyPrint for Inst {
                     src,
                     dst
                 )
+            }
+
+            Inst::MovPReg { src, dst } => {
+                let src: Reg = (*src).into();
+                let src = regs::show_ireg_sized(src, 8);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                format!("{} {}, {}", ljustify("movq".to_string()), src, dst)
             }
 
             Inst::MovzxRmR {
@@ -1627,8 +1496,6 @@ impl PrettyPrint for Inst {
 
             Inst::Ret { .. } => "ret".to_string(),
 
-            Inst::EpiloguePlaceholder => "epilogue placeholder".to_string(),
-
             Inst::JmpKnown { dst } => {
                 format!("{} {}", ljustify("jmp".to_string()), dst.to_string())
             }
@@ -1664,6 +1531,34 @@ impl PrettyPrint for Inst {
                 format!("j{} ; ud2 {} ;", cc.invert().to_string(), trap_code)
             }
 
+            Inst::TrapIfAnd {
+                cc1,
+                cc2,
+                trap_code,
+                ..
+            } => {
+                format!(
+                    "trap_if_and {}, {}, {}",
+                    cc1.invert().to_string(),
+                    cc2.invert().to_string(),
+                    trap_code
+                )
+            }
+
+            Inst::TrapIfOr {
+                cc1,
+                cc2,
+                trap_code,
+                ..
+            } => {
+                format!(
+                    "trap_if_or {}, {}, {}",
+                    cc1.to_string(),
+                    cc2.invert().to_string(),
+                    trap_code
+                )
+            }
+
             Inst::LoadExtName {
                 dst, name, offset, ..
             } => {
@@ -1671,7 +1566,7 @@ impl PrettyPrint for Inst {
                 format!(
                     "{} {}+{}, {}",
                     ljustify("load_ext_name".into()),
-                    name,
+                    name.display(None),
                     offset,
                     dst,
                 )
@@ -1724,6 +1619,10 @@ impl PrettyPrint for Inst {
 
             Inst::MachOTlsGetAddr { ref symbol } => {
                 format!("%rax = macho_tls_get_addr {:?}", symbol)
+            }
+
+            Inst::CoffTlsGetAddr { ref symbol } => {
+                format!("%rax = coff_tls_get_addr {:?}", symbol)
             }
 
             Inst::Unwind { inst } => {
@@ -1890,7 +1789,12 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             // Vfmadd uses and defs the dst reg, that is not the case with all
             // AVX's ops, if you're adding a new op, make sure to correctly define
             // register uses.
-            assert!(*op == AvxOpcode::Vfmadd213ps || *op == AvxOpcode::Vfmadd213pd);
+            assert!(
+                *op == AvxOpcode::Vfmadd213ss
+                    || *op == AvxOpcode::Vfmadd213sd
+                    || *op == AvxOpcode::Vfmadd213ps
+                    || *op == AvxOpcode::Vfmadd213pd
+            );
 
             collector.reg_use(src1.to_reg());
             collector.reg_reuse_def(dst.to_writable_reg(), 0);
@@ -1959,6 +1863,11 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
         Inst::MovRR { src, dst, .. } => {
             collector.reg_use(src.to_reg());
+            collector.reg_def(dst.to_writable_reg());
+        }
+        Inst::MovPReg { dst, src } => {
+            debug_assert!([regs::rsp(), regs::rbp()].contains(&(*src).into()));
+            debug_assert!(dst.to_reg().to_reg().is_virtual());
             collector.reg_def(dst.to_writable_reg());
         }
         Inst::XmmToGpr { src, dst, .. } => {
@@ -2140,12 +2049,13 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             }
         }
 
-        Inst::EpiloguePlaceholder
-        | Inst::JmpKnown { .. }
+        Inst::JmpKnown { .. }
         | Inst::JmpIf { .. }
         | Inst::JmpCond { .. }
         | Inst::Nop { .. }
         | Inst::TrapIf { .. }
+        | Inst::TrapIfAnd { .. }
+        | Inst::TrapIfOr { .. }
         | Inst::VirtualSPOffsetAdj { .. }
         | Inst::Hlt
         | Inst::Ud2 { .. }
@@ -2166,6 +2076,17 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_clobbers(clobbers);
         }
 
+        Inst::CoffTlsGetAddr { .. } => {
+            // We also use the gs register. But that register is not allocatable by the
+            // register allocator, so we don't need to mark it as used here.
+
+            // We use %rax to set the address
+            collector.reg_def(Writable::from_reg(regs::rax()));
+
+            // We use %rcx as a temporary variable to load the _tls_index
+            collector.reg_def(Writable::from_reg(regs::rcx()));
+        }
+
         Inst::Unwind { .. } => {}
 
         Inst::DummyUse { reg } => {
@@ -2178,6 +2099,8 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
 // Instructions: misc functions and external interface
 
 impl MachInst for Inst {
+    type ABIMachineSpec = X64ABIMachineSpec;
+
     fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>) {
         x64_get_operands(&self, collector)
     }
@@ -2215,18 +2138,10 @@ impl MachInst for Inst {
         }
     }
 
-    fn is_epilogue_placeholder(&self) -> bool {
-        if let Self::EpiloguePlaceholder = self {
-            true
-        } else {
-            false
-        }
-    }
-
     fn is_term(&self) -> MachTerminator {
         match self {
             // Interesting cases.
-            &Self::Ret { .. } | &Self::EpiloguePlaceholder => MachTerminator::Ret,
+            &Self::Ret { .. } => MachTerminator::Ret,
             &Self::JmpKnown { .. } => MachTerminator::Uncond,
             &Self::JmpCond { .. } => MachTerminator::Cond,
             &Self::JmpTableSeq { .. } => MachTerminator::Indirect,
@@ -2236,7 +2151,7 @@ impl MachInst for Inst {
     }
 
     fn gen_move(dst_reg: Writable<Reg>, src_reg: Reg, ty: Type) -> Inst {
-        log::trace!(
+        trace!(
             "Inst::gen_move {:?} -> {:?} (type: {:?})",
             src_reg,
             dst_reg.to_reg(),
@@ -2453,7 +2368,7 @@ pub struct EmitState {
     /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
     stack_map: Option<StackMap>,
     /// Current source location.
-    cur_srcloc: SourceLoc,
+    cur_srcloc: RelSourceLoc,
 }
 
 /// Constant state used during emissions of a sequence of instructions.
@@ -2489,12 +2404,12 @@ impl MachInstEmit for Inst {
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &dyn ABICallee<I = Inst>) -> Self {
+    fn new(abi: &Callee<X64ABIMachineSpec>) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
-            cur_srcloc: SourceLoc::default(),
+            cur_srcloc: Default::default(),
         }
     }
 
@@ -2502,7 +2417,7 @@ impl MachInstEmitState<Inst> for EmitState {
         self.stack_map = Some(stack_map);
     }
 
-    fn pre_sourceloc(&mut self, srcloc: SourceLoc) {
+    fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
     }
 }

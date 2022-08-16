@@ -58,7 +58,7 @@ block0:
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x00000000000000020000000000000001 ; vl %v24, 0(%r1)
+;   bras %r1, 20 ; data.u128 0x00000000000000010000000000000002 ; vl %v24, 0(%r1)
 ;   br %r14
 
 function %vconst_i32x4_zero() -> i32x4 {
@@ -118,7 +118,7 @@ block0:
 }
 
 ; block0:
-;   bras %r1, 12 ; data.u64 0x0000000200000001 ; vlrepg %v24, 0(%r1)
+;   bras %r1, 12 ; data.u64 0x0000000100000002 ; vlrepg %v24, 0(%r1)
 ;   br %r14
 
 function %vconst_i32x4_mixed() -> i32x4 {
@@ -128,7 +128,7 @@ block0:
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x00000004000000030000000200000001 ; vl %v24, 0(%r1)
+;   bras %r1, 20 ; data.u128 0x00000001000000020000000300000004 ; vl %v24, 0(%r1)
 ;   br %r14
 
 function %vconst_i16x8_zero() -> i16x8 {
@@ -168,7 +168,7 @@ block0:
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x00080007000600050004000300020001 ; vl %v24, 0(%r1)
+;   bras %r1, 20 ; data.u128 0x00010002000300040005000600070008 ; vl %v24, 0(%r1)
 ;   br %r14
 
 function %vconst_i8x16_zero() -> i8x16 {
@@ -208,6 +208,6 @@ block0:
 }
 
 ; block0:
-;   bras %r1, 20 ; data.u128 0x100f0e0d0c0b0a090807060504030201 ; vl %v24, 0(%r1)
+;   bras %r1, 20 ; data.u128 0x0102030405060708090a0b0c0d0e0f10 ; vl %v24, 0(%r1)
 ;   br %r14
 

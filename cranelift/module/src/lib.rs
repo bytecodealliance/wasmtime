@@ -43,15 +43,15 @@ mod traps;
 pub use crate::data_context::{DataContext, DataDescription, Init};
 pub use crate::module::{
     DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleCompiledFunction, ModuleDeclarations,
-    ModuleError, ModuleResult,
+    ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
 };
 pub use crate::traps::TrapSite;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Default names for `ir::LibCall`s. A function by this name is imported into the object as
-/// part of the translation of a `ir::ExternalName::LibCall` variant.
+/// Default names for [ir::LibCall]s. A function by this name is imported into the object as
+/// part of the translation of a [ir::ExternalName::LibCall] variant.
 pub fn default_libcall_names() -> Box<dyn Fn(ir::LibCall) -> String + Send + Sync> {
     Box::new(move |libcall| match libcall {
         ir::LibCall::Probestack => "__cranelift_probestack".to_owned(),
@@ -70,11 +70,14 @@ pub fn default_libcall_names() -> Box<dyn Fn(ir::LibCall) -> String + Send + Syn
         ir::LibCall::TruncF64 => "trunc".to_owned(),
         ir::LibCall::NearestF32 => "nearbyintf".to_owned(),
         ir::LibCall::NearestF64 => "nearbyint".to_owned(),
+        ir::LibCall::FmaF32 => "fmaf".to_owned(),
+        ir::LibCall::FmaF64 => "fma".to_owned(),
         ir::LibCall::Memcpy => "memcpy".to_owned(),
         ir::LibCall::Memset => "memset".to_owned(),
         ir::LibCall::Memmove => "memmove".to_owned(),
         ir::LibCall::Memcmp => "memcmp".to_owned(),
 
         ir::LibCall::ElfTlsGetAddr => "__tls_get_addr".to_owned(),
+        ir::LibCall::ElfTlsGetOffset => "__tls_get_offset".to_owned(),
     })
 }

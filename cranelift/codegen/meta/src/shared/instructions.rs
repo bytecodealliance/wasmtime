@@ -332,24 +332,6 @@ fn define_control_flow(
         .is_terminator(true),
     );
 
-    let rvals = &Operand::new("rvals", &entities.varargs).with_doc("return values");
-    ig.push(
-        Inst::new(
-            "fallthrough_return",
-            r#"
-        Return from the function by fallthrough.
-
-        This is a specialized instruction for use where one wants to append
-        a custom epilogue, which will then perform the real return. This
-        instruction has no encoding.
-        "#,
-            &formats.multiary,
-        )
-        .operands_in(vec![rvals])
-        .is_return(true)
-        .is_terminator(true),
-    );
-
     let FN = &Operand::new("FN", &entities.func_ref)
         .with_doc("function to call, declared by `function`");
     let args = &Operand::new("args", &entities.varargs).with_doc("call arguments");
@@ -610,6 +592,8 @@ fn define_simd_arithmetic(
             "avg_round",
             r#"
         Unsigned average with rounding: `a := (x + y + 1) // 2`
+
+        The addition does not lose any information (such as from overflow).
         "#,
             &formats.binary,
         )
@@ -1314,6 +1298,43 @@ pub(crate) fn define(
         .other_side_effects(true),
     );
 
+    ig.push(
+        Inst::new(
+            "get_frame_pointer",
+            r#"
+        Get the address in the frame pointer register.
+
+        Usage of this instruction requires setting `preserve_frame_pointers` to `true`.
+        "#,
+            &formats.nullary,
+        )
+        .operands_out(vec![addr]),
+    );
+
+    ig.push(
+        Inst::new(
+            "get_stack_pointer",
+            r#"
+        Get the address in the stack pointer register.
+        "#,
+            &formats.nullary,
+        )
+        .operands_out(vec![addr]),
+    );
+
+    ig.push(
+        Inst::new(
+            "get_return_address",
+            r#"
+        Get the PC where this function will transfer control to when it returns.
+
+        Usage of this instruction requires setting `preserve_frame_pointers` to `true`.
+        "#,
+            &formats.nullary,
+        )
+        .operands_out(vec![addr]),
+    );
+
     let TableOffset = &TypeVar::new(
         "TableOffset",
         "An unsigned table offset",
@@ -1608,21 +1629,6 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    ig.push(
-        Inst::new(
-            "ifcmp_sp",
-            r#"
-    Compare ``addr`` with the stack pointer and set the CPU flags.
-
-    This is like `ifcmp` where ``addr`` is the LHS operand and the stack
-    pointer is the RHS.
-    "#,
-            &formats.unary,
-        )
-        .operands_in(vec![addr])
-        .operands_out(vec![flags]),
-    );
-
     let x = &Operand::new("x", TxN).with_doc("Vector to split");
     let lo = &Operand::new("lo", &TxN.half_vector()).with_doc("Low-numbered lanes of `x`");
     let hi = &Operand::new("hi", &TxN.half_vector()).with_doc("High-numbered lanes of `x`");
@@ -1795,7 +1801,7 @@ pub(crate) fn define(
         Compare scalar integer to a constant.
 
         This is the same as the `icmp` instruction, except one operand is
-        an immediate constant.
+        a sign extended 64 bit immediate constant.
 
         This instruction can only compare scalars. Use `icmp` for
         lane-wise vector comparisons.
@@ -2054,7 +2060,7 @@ pub(crate) fn define(
             r#"
         Add immediate integer.
 
-        Same as `iadd`, but one operand is an immediate constant.
+        Same as `iadd`, but one operand is a sign extended 64 bit immediate constant.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2071,6 +2077,8 @@ pub(crate) fn define(
             r#"
         Integer multiplication by immediate constant.
 
+        Same as `imul`, but one operand is a sign extended 64 bit immediate constant.
+
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
@@ -2086,6 +2094,8 @@ pub(crate) fn define(
             r#"
         Unsigned integer division by an immediate constant.
 
+        Same as `udiv`, but one operand is a zero extended 64 bit immediate constant.
+
         This operation traps if the divisor is zero.
         "#,
             &formats.binary_imm64,
@@ -2099,6 +2109,8 @@ pub(crate) fn define(
             "sdiv_imm",
             r#"
         Signed integer division by an immediate constant.
+
+        Same as `sdiv`, but one operand is a sign extended 64 bit immediate constant.
 
         This operation traps if the divisor is zero, or if the result is not
         representable in `B` bits two's complement. This only happens
@@ -2116,6 +2128,8 @@ pub(crate) fn define(
             r#"
         Unsigned integer remainder with immediate divisor.
 
+        Same as `urem`, but one operand is a zero extended 64 bit immediate constant.
+
         This operation traps if the divisor is zero.
         "#,
             &formats.binary_imm64,
@@ -2130,6 +2144,8 @@ pub(crate) fn define(
             r#"
         Signed integer remainder with immediate divisor.
 
+        Same as `srem`, but one operand is a sign extended 64 bit immediate constant.
+
         This operation traps if the divisor is zero.
         "#,
             &formats.binary_imm64,
@@ -2143,6 +2159,8 @@ pub(crate) fn define(
             "irsub_imm",
             r#"
         Immediate reverse wrapping subtraction: `a := Y - x \pmod{2^B}`.
+        
+        The immediate operand is a sign extended 64 bit constant.
 
         Also works as integer negation when `Y = 0`. Use `iadd_imm`
         with a negative immediate operand for the reverse immediate
@@ -2546,7 +2564,7 @@ pub(crate) fn define(
             r#"
         Bitwise and with immediate.
 
-        Same as `band`, but one operand is an immediate constant.
+        Same as `band`, but one operand is a zero extended 64 bit immediate constant.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2563,7 +2581,7 @@ pub(crate) fn define(
             r#"
         Bitwise or with immediate.
 
-        Same as `bor`, but one operand is an immediate constant.
+        Same as `bor`, but one operand is a zero extended 64 bit immediate constant.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2580,7 +2598,7 @@ pub(crate) fn define(
             r#"
         Bitwise xor with immediate.
 
-        Same as `bxor`, but one operand is an immediate constant.
+        Same as `bxor`, but one operand is a zero extended 64 bit immediate constant.
 
         Polymorphic over all scalar integer types, but does not support vector
         types.
@@ -2629,6 +2647,8 @@ pub(crate) fn define(
             "rotl_imm",
             r#"
         Rotate left by immediate.
+
+        Same as `rotl`, but one operand is a zero extended 64 bit immediate constant.
         "#,
             &formats.binary_imm64,
         )
@@ -2641,6 +2661,8 @@ pub(crate) fn define(
             "rotr_imm",
             r#"
         Rotate right by immediate.
+
+        Same as `rotr`, but one operand is a zero extended 64 bit immediate constant.
         "#,
             &formats.binary_imm64,
         )

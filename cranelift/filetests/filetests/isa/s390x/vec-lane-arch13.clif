@@ -9,7 +9,7 @@ block0(v0: i64x2, v1: i64):
 }
 
 ; block0:
-;   vleg %v24, 0(%r2), 1
+;   vleg %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i64x2_mem_1(i64x2, i64) -> i64x2 {
@@ -20,7 +20,7 @@ block0(v0: i64x2, v1: i64):
 }
 
 ; block0:
-;   vleg %v24, 0(%r2), 0
+;   vleg %v24, 0(%r2), 1
 ;   br %r14
 
 function %insertlane_i64x2_mem_little_0(i64x2, i64) -> i64x2 {
@@ -31,7 +31,7 @@ block0(v0: i64x2, v1: i64):
 }
 
 ; block0:
-;   vlebrg %v24, 0(%r2), 1
+;   vlebrg %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i64x2_mem_little_1(i64x2, i64) -> i64x2 {
@@ -42,7 +42,7 @@ block0(v0: i64x2, v1: i64):
 }
 
 ; block0:
-;   vlebrg %v24, 0(%r2), 0
+;   vlebrg %v24, 0(%r2), 1
 ;   br %r14
 
 function %insertlane_i32x4_mem_0(i32x4, i64) -> i32x4 {
@@ -53,7 +53,7 @@ block0(v0: i32x4, v1: i64):
 }
 
 ; block0:
-;   vlef %v24, 0(%r2), 3
+;   vlef %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i32x4_mem_3(i32x4, i64) -> i32x4 {
@@ -64,7 +64,7 @@ block0(v0: i32x4, v1: i64):
 }
 
 ; block0:
-;   vlef %v24, 0(%r2), 0
+;   vlef %v24, 0(%r2), 3
 ;   br %r14
 
 function %insertlane_i32x4_mem_little_0(i32x4, i64) -> i32x4 {
@@ -75,7 +75,7 @@ block0(v0: i32x4, v1: i64):
 }
 
 ; block0:
-;   vlebrf %v24, 0(%r2), 3
+;   vlebrf %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i32x4_mem_little_3(i32x4, i64) -> i32x4 {
@@ -86,7 +86,7 @@ block0(v0: i32x4, v1: i64):
 }
 
 ; block0:
-;   vlebrf %v24, 0(%r2), 0
+;   vlebrf %v24, 0(%r2), 3
 ;   br %r14
 
 function %insertlane_i16x8_mem_0(i16x8, i64) -> i16x8 {
@@ -97,7 +97,7 @@ block0(v0: i16x8, v1: i64):
 }
 
 ; block0:
-;   vleh %v24, 0(%r2), 7
+;   vleh %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i16x8_mem_7(i16x8, i64) -> i16x8 {
@@ -108,7 +108,7 @@ block0(v0: i16x8, v1: i64):
 }
 
 ; block0:
-;   vleh %v24, 0(%r2), 0
+;   vleh %v24, 0(%r2), 7
 ;   br %r14
 
 function %insertlane_i16x8_mem_little_0(i16x8, i64) -> i16x8 {
@@ -119,7 +119,7 @@ block0(v0: i16x8, v1: i64):
 }
 
 ; block0:
-;   vlebrh %v24, 0(%r2), 7
+;   vlebrh %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i16x8_mem_little_7(i16x8, i64) -> i16x8 {
@@ -130,7 +130,7 @@ block0(v0: i16x8, v1: i64):
 }
 
 ; block0:
-;   vlebrh %v24, 0(%r2), 0
+;   vlebrh %v24, 0(%r2), 7
 ;   br %r14
 
 function %insertlane_i8x16_mem_0(i8x16, i64) -> i8x16 {
@@ -141,7 +141,7 @@ block0(v0: i8x16, v1: i64):
 }
 
 ; block0:
-;   vleb %v24, 0(%r2), 15
+;   vleb %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i8x16_mem_15(i8x16, i64) -> i8x16 {
@@ -152,7 +152,7 @@ block0(v0: i8x16, v1: i64):
 }
 
 ; block0:
-;   vleb %v24, 0(%r2), 0
+;   vleb %v24, 0(%r2), 15
 ;   br %r14
 
 function %insertlane_i8x16_mem_little_0(i8x16, i64) -> i8x16 {
@@ -163,7 +163,7 @@ block0(v0: i8x16, v1: i64):
 }
 
 ; block0:
-;   vleb %v24, 0(%r2), 15
+;   vleb %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i8x16_mem_little_15(i8x16, i64) -> i8x16 {
@@ -174,7 +174,7 @@ block0(v0: i8x16, v1: i64):
 }
 
 ; block0:
-;   vleb %v24, 0(%r2), 0
+;   vleb %v24, 0(%r2), 15
 ;   br %r14
 
 function %insertlane_f64x2_mem_0(f64x2, i64) -> f64x2 {
@@ -185,7 +185,7 @@ block0(v0: f64x2, v1: i64):
 }
 
 ; block0:
-;   vleg %v24, 0(%r2), 1
+;   vleg %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_f64x2_mem_1(f64x2, i64) -> f64x2 {
@@ -196,7 +196,7 @@ block0(v0: f64x2, v1: i64):
 }
 
 ; block0:
-;   vleg %v24, 0(%r2), 0
+;   vleg %v24, 0(%r2), 1
 ;   br %r14
 
 function %insertlane_f64x2_mem_little_0(f64x2, i64) -> f64x2 {
@@ -207,7 +207,7 @@ block0(v0: f64x2, v1: i64):
 }
 
 ; block0:
-;   vlebrg %v24, 0(%r2), 1
+;   vlebrg %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_f64x2_mem_little_1(f64x2, i64) -> f64x2 {
@@ -218,7 +218,7 @@ block0(v0: f64x2, v1: i64):
 }
 
 ; block0:
-;   vlebrg %v24, 0(%r2), 0
+;   vlebrg %v24, 0(%r2), 1
 ;   br %r14
 
 function %insertlane_f32x4_mem_0(f32x4, i64) -> f32x4 {
@@ -229,7 +229,7 @@ block0(v0: f32x4, v1: i64):
 }
 
 ; block0:
-;   vlef %v24, 0(%r2), 3
+;   vlef %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i32x4_mem_3(i32x4, i64) -> i32x4 {
@@ -240,7 +240,7 @@ block0(v0: i32x4, v1: i64):
 }
 
 ; block0:
-;   vlef %v24, 0(%r2), 0
+;   vlef %v24, 0(%r2), 3
 ;   br %r14
 
 function %insertlane_f32x4_mem_little_0(f32x4, i64) -> f32x4 {
@@ -251,7 +251,7 @@ block0(v0: f32x4, v1: i64):
 }
 
 ; block0:
-;   vlebrf %v24, 0(%r2), 3
+;   vlebrf %v24, 0(%r2), 0
 ;   br %r14
 
 function %insertlane_i32x4_mem_little_3(i32x4, i64) -> i32x4 {
@@ -262,7 +262,7 @@ block0(v0: i32x4, v1: i64):
 }
 
 ; block0:
-;   vlebrf %v24, 0(%r2), 0
+;   vlebrf %v24, 0(%r2), 3
 ;   br %r14
 
 function %extractlane_i64x2_mem_0(i64x2, i64) {
@@ -273,7 +273,7 @@ block0(v0: i64x2, v1: i64):
 }
 
 ; block0:
-;   vsteg %v24, 0(%r2), 1
+;   vsteg %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_i64x2_mem_1(i64x2, i64) {
@@ -284,7 +284,7 @@ block0(v0: i64x2, v1: i64):
 }
 
 ; block0:
-;   vsteg %v24, 0(%r2), 0
+;   vsteg %v24, 0(%r2), 1
 ;   br %r14
 
 function %extractlane_i64x2_mem_little_0(i64x2, i64) {
@@ -295,7 +295,7 @@ block0(v0: i64x2, v1: i64):
 }
 
 ; block0:
-;   vstebrg %v24, 0(%r2), 1
+;   vstebrg %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_i64x2_mem_little_1(i64x2, i64) {
@@ -306,7 +306,7 @@ block0(v0: i64x2, v1: i64):
 }
 
 ; block0:
-;   vstebrg %v24, 0(%r2), 0
+;   vstebrg %v24, 0(%r2), 1
 ;   br %r14
 
 function %extractlane_i32x4_mem_0(i32x4, i64) {
@@ -317,7 +317,7 @@ block0(v0: i32x4, v1: i64):
 }
 
 ; block0:
-;   vstef %v24, 0(%r2), 3
+;   vstef %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_i32x4_mem_3(i32x4, i64) {
@@ -328,7 +328,7 @@ block0(v0: i32x4, v1: i64):
 }
 
 ; block0:
-;   vstef %v24, 0(%r2), 0
+;   vstef %v24, 0(%r2), 3
 ;   br %r14
 
 function %extractlane_i32x4_mem_little_0(i32x4, i64) {
@@ -339,7 +339,7 @@ block0(v0: i32x4, v1: i64):
 }
 
 ; block0:
-;   vstebrf %v24, 0(%r2), 3
+;   vstebrf %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_i32x4_mem_little_3(i32x4, i64) {
@@ -350,7 +350,7 @@ block0(v0: i32x4, v1: i64):
 }
 
 ; block0:
-;   vstebrf %v24, 0(%r2), 0
+;   vstebrf %v24, 0(%r2), 3
 ;   br %r14
 
 function %extractlane_i16x8_mem_0(i16x8, i64) {
@@ -361,7 +361,7 @@ block0(v0: i16x8, v1: i64):
 }
 
 ; block0:
-;   vsteh %v24, 0(%r2), 7
+;   vsteh %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_i16x8_mem_7(i16x8, i64) {
@@ -372,7 +372,7 @@ block0(v0: i16x8, v1: i64):
 }
 
 ; block0:
-;   vsteh %v24, 0(%r2), 0
+;   vsteh %v24, 0(%r2), 7
 ;   br %r14
 
 function %extractlane_i16x8_mem_little_0(i16x8, i64) {
@@ -383,7 +383,7 @@ block0(v0: i16x8, v1: i64):
 }
 
 ; block0:
-;   vstebrh %v24, 0(%r2), 7
+;   vstebrh %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_i16x8_mem_little_7(i16x8, i64) {
@@ -394,7 +394,7 @@ block0(v0: i16x8, v1: i64):
 }
 
 ; block0:
-;   vstebrh %v24, 0(%r2), 0
+;   vstebrh %v24, 0(%r2), 7
 ;   br %r14
 
 function %extractlane_i8x16_mem_0(i8x16, i64) {
@@ -405,7 +405,7 @@ block0(v0: i8x16, v1: i64):
 }
 
 ; block0:
-;   vsteb %v24, 0(%r2), 15
+;   vsteb %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_i8x16_mem_15(i8x16, i64) {
@@ -416,7 +416,7 @@ block0(v0: i8x16, v1: i64):
 }
 
 ; block0:
-;   vsteb %v24, 0(%r2), 0
+;   vsteb %v24, 0(%r2), 15
 ;   br %r14
 
 function %extractlane_i8x16_mem_little_0(i8x16, i64) {
@@ -427,7 +427,7 @@ block0(v0: i8x16, v1: i64):
 }
 
 ; block0:
-;   vsteb %v24, 0(%r2), 15
+;   vsteb %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_i8x16_mem_little_15(i8x16, i64) {
@@ -438,7 +438,7 @@ block0(v0: i8x16, v1: i64):
 }
 
 ; block0:
-;   vsteb %v24, 0(%r2), 0
+;   vsteb %v24, 0(%r2), 15
 ;   br %r14
 
 function %extractlane_f64x2_mem_0(f64x2, i64) {
@@ -449,7 +449,7 @@ block0(v0: f64x2, v1: i64):
 }
 
 ; block0:
-;   vsteg %v24, 0(%r2), 1
+;   vsteg %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_f64x2_mem_1(f64x2, i64) {
@@ -460,7 +460,7 @@ block0(v0: f64x2, v1: i64):
 }
 
 ; block0:
-;   vsteg %v24, 0(%r2), 0
+;   vsteg %v24, 0(%r2), 1
 ;   br %r14
 
 function %extractlane_f64x2_mem_little_0(f64x2, i64) {
@@ -471,7 +471,7 @@ block0(v0: f64x2, v1: i64):
 }
 
 ; block0:
-;   vstebrg %v24, 0(%r2), 1
+;   vstebrg %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_f64x2_mem_little_1(f64x2, i64) {
@@ -482,7 +482,7 @@ block0(v0: f64x2, v1: i64):
 }
 
 ; block0:
-;   vstebrg %v24, 0(%r2), 0
+;   vstebrg %v24, 0(%r2), 1
 ;   br %r14
 
 function %extractlane_f32x4_mem_0(f32x4, i64) {
@@ -493,7 +493,7 @@ block0(v0: f32x4, v1: i64):
 }
 
 ; block0:
-;   vstef %v24, 0(%r2), 3
+;   vstef %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_f32x4_mem_3(f32x4, i64) {
@@ -504,7 +504,7 @@ block0(v0: f32x4, v1: i64):
 }
 
 ; block0:
-;   vstef %v24, 0(%r2), 0
+;   vstef %v24, 0(%r2), 3
 ;   br %r14
 
 function %extractlane_f32x4_mem_little_0(f32x4, i64) {
@@ -515,7 +515,7 @@ block0(v0: f32x4, v1: i64):
 }
 
 ; block0:
-;   vstebrf %v24, 0(%r2), 3
+;   vstebrf %v24, 0(%r2), 0
 ;   br %r14
 
 function %extractlane_f32x4_mem_little_3(f32x4, i64) {
@@ -526,7 +526,7 @@ block0(v0: f32x4, v1: i64):
 }
 
 ; block0:
-;   vstebrf %v24, 0(%r2), 0
+;   vstebrf %v24, 0(%r2), 3
 ;   br %r14
 
 function %splat_i64x2_mem(i64) -> i64x2 {
@@ -670,7 +670,7 @@ block0(v0: i64):
 
 ; block0:
 ;   vgbm %v24, 0
-;   vleg %v24, 0(%r2), 1
+;   vleg %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_i64x2_mem_little(i64) -> i64x2 {
@@ -682,7 +682,7 @@ block0(v0: i64):
 
 ; block0:
 ;   vgbm %v24, 0
-;   vlebrg %v24, 0(%r2), 1
+;   vlebrg %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_i32x4_mem(i64) -> i32x4 {
@@ -694,7 +694,7 @@ block0(v0: i64):
 
 ; block0:
 ;   vgbm %v24, 0
-;   vlef %v24, 0(%r2), 3
+;   vlef %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_i32x4_mem_little(i64) -> i32x4 {
@@ -706,7 +706,7 @@ block0(v0: i64):
 
 ; block0:
 ;   vgbm %v24, 0
-;   vlebrf %v24, 0(%r2), 3
+;   vlebrf %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_i16x8_mem(i64) -> i16x8 {
@@ -718,7 +718,7 @@ block0(v0: i64):
 
 ; block0:
 ;   vgbm %v24, 0
-;   vleh %v24, 0(%r2), 7
+;   vleh %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_i16x8_mem_little(i64) -> i16x8 {
@@ -730,7 +730,7 @@ block0(v0: i64):
 
 ; block0:
 ;   vgbm %v24, 0
-;   vlebrh %v24, 0(%r2), 7
+;   vlebrh %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_i8x16_mem(i64) -> i8x16 {
@@ -742,7 +742,7 @@ block0(v0: i64):
 
 ; block0:
 ;   vgbm %v24, 0
-;   vleb %v24, 0(%r2), 15
+;   vleb %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_i8x16_mem_little(i64) -> i8x16 {
@@ -754,7 +754,7 @@ block0(v0: i64):
 
 ; block0:
 ;   vgbm %v24, 0
-;   vleb %v24, 0(%r2), 15
+;   vleb %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_f64x2_mem(i64) -> f64x2 {
@@ -766,7 +766,7 @@ block0(v0: i64):
 
 ; block0:
 ;   vgbm %v24, 0
-;   vleg %v24, 0(%r2), 1
+;   vleg %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_f64x2_mem_little(i64) -> f64x2 {
@@ -778,7 +778,7 @@ block0(v0: i64):
 
 ; block0:
 ;   vgbm %v24, 0
-;   vlebrg %v24, 0(%r2), 1
+;   vlebrg %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_f32x4_mem(i64) -> f32x4 {
@@ -790,7 +790,7 @@ block0(v0: i64):
 
 ; block0:
 ;   vgbm %v24, 0
-;   vlef %v24, 0(%r2), 3
+;   vlef %v24, 0(%r2), 0
 ;   br %r14
 
 function %scalar_to_vector_f32x4_mem_little(i64) -> f32x4 {
@@ -802,6 +802,6 @@ block0(v0: i64):
 
 ; block0:
 ;   vgbm %v24, 0
-;   vlebrf %v24, 0(%r2), 3
+;   vlebrf %v24, 0(%r2), 0
 ;   br %r14
 

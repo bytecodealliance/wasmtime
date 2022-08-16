@@ -5,11 +5,11 @@ pub mod generated_code;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
-    insn_inputs, writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget,
-    CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift,
-    Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MoveWideConst, MoveWideOp, NarrowValueMode,
-    Opcode, OperandSize, PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize,
-    NZCV,
+    insn_inputs, lower_constant_f128, writable_zero_reg, zero_reg, AMode, ASIMDFPModImm,
+    ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI,
+    FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, JTSequenceInfo, MachLabel,
+    MoveWideConst, MoveWideOp, NarrowValueMode, Opcode, OperandSize, PairAMode, Reg, ScalarSize,
+    ShiftOpAndAmt, UImm5, VecMisc2, VectorSize, NZCV,
 };
 use crate::isa::aarch64::lower::{lower_address, lower_splat_const};
 use crate::isa::aarch64::settings::Flags as IsaFlags;
@@ -22,13 +22,15 @@ use crate::{
         TrapCode, Value, ValueList,
     },
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
-    isa::aarch64::lower::{writable_xreg, xreg},
+    isa::aarch64::lower::{writable_vreg, writable_xreg, xreg},
     isa::unwind::UnwindInst,
-    machinst::{ty_bits, InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
+    machinst::{ty_bits, InsnOutput, Lower, VCodeConstant, VCodeConstantData},
 };
+use regalloc2::PReg;
 use std::boxed::Box;
 use std::convert::TryFrom;
 use std::vec::Vec;
+use target_lexicon::Triple;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
@@ -37,19 +39,23 @@ type BoxJTSequenceInfo = Box<JTSequenceInfo>;
 type BoxExternalName = Box<ExternalName>;
 
 /// The main entry point for lowering with ISLE.
-pub(crate) fn lower<C>(
-    lower_ctx: &mut C,
+pub(crate) fn lower(
+    lower_ctx: &mut Lower<MInst>,
+    triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
     outputs: &[InsnOutput],
     inst: Inst,
-) -> Result<(), ()>
-where
-    C: LowerCtx<I = MInst>,
-{
-    lower_common(lower_ctx, flags, isa_flags, outputs, inst, |cx, insn| {
-        generated_code::constructor_lower(cx, insn)
-    })
+) -> Result<(), ()> {
+    lower_common(
+        lower_ctx,
+        triple,
+        flags,
+        isa_flags,
+        outputs,
+        inst,
+        |cx, insn| generated_code::constructor_lower(cx, insn),
+    )
 }
 
 pub struct ExtendedValue {
@@ -62,10 +68,7 @@ pub struct SinkableAtomicLoad {
     atomic_addr: Value,
 }
 
-impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
-where
-    C: LowerCtx<I = MInst>,
-{
+impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_methods!();
 
     fn use_lse(&mut self, _: Inst) -> Option<()> {
@@ -95,6 +98,16 @@ where
 
     fn imm_shift_from_u8(&mut self, n: u8) -> ImmShift {
         ImmShift::maybe_from_u64(n.into()).unwrap()
+    }
+
+    fn lshr_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {
+        let shiftimm = ShiftOpShiftImm::maybe_from_shift(n)?;
+        if let Ok(bits) = u8::try_from(ty_bits(ty)) {
+            let shiftimm = shiftimm.mask(bits);
+            Some(ShiftOpAndAmt::new(ShiftOp::LSR, shiftimm))
+        } else {
+            None
+        }
     }
 
     fn lshl_from_imm64(&mut self, ty: Type, n: Imm64) -> Option<ShiftOpAndAmt> {
@@ -264,6 +277,10 @@ where
 
     fn writable_xreg(&mut self, index: u8) -> WritableReg {
         writable_xreg(index)
+    }
+
+    fn writable_vreg(&mut self, index: u8) -> WritableReg {
+        writable_vreg(index)
     }
 
     fn extended_value_from_value(&mut self, val: Value) -> Option<ExtendedValue> {
@@ -459,11 +476,31 @@ where
         address.is_reg()
     }
 
+    fn constant_f128(&mut self, value: u128) -> Reg {
+        let rd = self.temp_writable_reg(I8X16);
+
+        lower_constant_f128(self.lower_ctx, rd, value);
+
+        rd.to_reg()
+    }
+
     fn splat_const(&mut self, value: u64, size: &VectorSize) -> Reg {
         let rd = self.temp_writable_reg(I8X16);
 
         lower_splat_const(self.lower_ctx, rd, value, *size);
 
         rd.to_reg()
+    }
+
+    fn preg_sp(&mut self) -> PReg {
+        super::regs::stack_reg().to_real_reg().unwrap().into()
+    }
+
+    fn preg_fp(&mut self) -> PReg {
+        super::regs::fp_reg().to_real_reg().unwrap().into()
+    }
+
+    fn preg_link(&mut self) -> PReg {
+        super::regs::link_reg().to_real_reg().unwrap().into()
     }
 }

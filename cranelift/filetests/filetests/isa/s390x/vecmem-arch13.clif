@@ -107,6 +107,17 @@ block0(v0: i64):
 ;   vl %v24, 0(%r2)
 ;   br %r14
 
+function %load_i128_big(i64) -> i128 {
+block0(v0: i64):
+  v1 = load.i128 big v0
+  return v1
+}
+
+; block0:
+;   vl %v5, 0(%r3)
+;   vst %v5, 0(%r2)
+;   br %r14
+
 function %load_f32x4_big(i64) -> f32x4 {
 block0(v0: i64):
   v1 = load.f32x4 big v0
@@ -167,6 +178,17 @@ block0(v0: i64x2, v1: i64):
 ;   vst %v24, 0(%r2)
 ;   br %r14
 
+function %store_i128_big(i128, i64) {
+block0(v0: i128, v1: i64):
+  store.i128 big v0, v1
+  return
+}
+
+; block0:
+;   vl %v0, 0(%r2)
+;   vst %v0, 0(%r3)
+;   br %r14
+
 function %store_f32x4_big(f32x4, i64) {
 block0(v0: f32x4, v1: i64):
   store.f32x4 big v0, v1
@@ -194,7 +216,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrg %v3, 0(%r2), 0
+;   ld %f3, 0(%r2)
 ;   vuplhb %v24, %v3
 ;   br %r14
 
@@ -205,8 +227,9 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrg %v3, 0(%r2), 0
-;   vuplhh %v24, %v3
+;   ld %f3, 0(%r2)
+;   verllh %v5, %v3, 8
+;   vuplhh %v24, %v5
 ;   br %r14
 
 function %uload32x2_little(i64) -> i64x2 {
@@ -217,7 +240,8 @@ block0(v0: i64):
 
 ; block0:
 ;   vlebrg %v3, 0(%r2), 0
-;   vuplhf %v24, %v3
+;   verllg %v5, %v3, 32
+;   vuplhf %v24, %v5
 ;   br %r14
 
 function %sload8x8_little(i64) -> i16x8 {
@@ -227,7 +251,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrg %v3, 0(%r2), 0
+;   ld %f3, 0(%r2)
 ;   vuphb %v24, %v3
 ;   br %r14
 
@@ -238,8 +262,9 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlebrg %v3, 0(%r2), 0
-;   vuphh %v24, %v3
+;   ld %f3, 0(%r2)
+;   verllh %v5, %v3, 8
+;   vuphh %v24, %v5
 ;   br %r14
 
 function %sload32x2_little(i64) -> i64x2 {
@@ -250,7 +275,8 @@ block0(v0: i64):
 
 ; block0:
 ;   vlebrg %v3, 0(%r2), 0
-;   vuphf %v24, %v3
+;   verllg %v5, %v3, 32
+;   vuphf %v24, %v5
 ;   br %r14
 
 function %load_i8x16_little(i64) -> i8x16 {
@@ -260,7 +286,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlbrq %v24, 0(%r2)
+;   vl %v24, 0(%r2)
 ;   br %r14
 
 function %load_i16x8_little(i64) -> i16x8 {
@@ -270,7 +296,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlbrq %v24, 0(%r2)
+;   vlbrh %v24, 0(%r2)
 ;   br %r14
 
 function %load_i32x4_little(i64) -> i32x4 {
@@ -280,7 +306,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlbrq %v24, 0(%r2)
+;   vlbrf %v24, 0(%r2)
 ;   br %r14
 
 function %load_i64x2_little(i64) -> i64x2 {
@@ -290,7 +316,18 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlbrq %v24, 0(%r2)
+;   vlbrg %v24, 0(%r2)
+;   br %r14
+
+function %load_i128_little(i64) -> i128 {
+block0(v0: i64):
+  v1 = load.i128 little v0
+  return v1
+}
+
+; block0:
+;   vlbrq %v5, 0(%r3)
+;   vst %v5, 0(%r2)
 ;   br %r14
 
 function %load_f32x4_little(i64) -> f32x4 {
@@ -300,7 +337,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlbrq %v24, 0(%r2)
+;   vlbrf %v24, 0(%r2)
 ;   br %r14
 
 function %load_f64x2_little(i64) -> f64x2 {
@@ -310,7 +347,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlbrq %v24, 0(%r2)
+;   vlbrg %v24, 0(%r2)
 ;   br %r14
 
 function %store_i8x16_little(i8x16, i64) {
@@ -320,7 +357,7 @@ block0(v0: i8x16, v1: i64):
 }
 
 ; block0:
-;   vstbrq %v24, 0(%r2)
+;   vst %v24, 0(%r2)
 ;   br %r14
 
 function %store_i16x8_little(i16x8, i64) {
@@ -330,7 +367,7 @@ block0(v0: i16x8, v1: i64):
 }
 
 ; block0:
-;   vstbrq %v24, 0(%r2)
+;   vstbrh %v24, 0(%r2)
 ;   br %r14
 
 function %store_i32x4_little(i32x4, i64) {
@@ -340,7 +377,7 @@ block0(v0: i32x4, v1: i64):
 }
 
 ; block0:
-;   vstbrq %v24, 0(%r2)
+;   vstbrf %v24, 0(%r2)
 ;   br %r14
 
 function %store_i64x2_little(i64x2, i64) {
@@ -350,7 +387,18 @@ block0(v0: i64x2, v1: i64):
 }
 
 ; block0:
-;   vstbrq %v24, 0(%r2)
+;   vstbrg %v24, 0(%r2)
+;   br %r14
+
+function %store_i128_little(i128, i64) {
+block0(v0: i128, v1: i64):
+  store.i128 little v0, v1
+  return
+}
+
+; block0:
+;   vl %v0, 0(%r2)
+;   vstbrq %v0, 0(%r3)
 ;   br %r14
 
 function %store_f32x4_little(f32x4, i64) {
@@ -360,7 +408,7 @@ block0(v0: f32x4, v1: i64):
 }
 
 ; block0:
-;   vstbrq %v24, 0(%r2)
+;   vstbrf %v24, 0(%r2)
 ;   br %r14
 
 function %store_f64x2_little(f64x2, i64) {
@@ -370,6 +418,6 @@ block0(v0: f64x2, v1: i64):
 }
 
 ; block0:
-;   vstbrq %v24, 0(%r2)
+;   vstbrg %v24, 0(%r2)
 ;   br %r14
 

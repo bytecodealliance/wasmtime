@@ -21,11 +21,14 @@ pub struct Config {
     /// decides to insert more.
     pub jump_tables_per_function: RangeInclusive<usize>,
     pub jump_table_entries: RangeInclusive<usize>,
+
     /// The Switch API specializes either individual blocks or contiguous ranges.
     /// In `switch_cases` we decide to produce either a single block or a range.
     /// The size of the range is controlled by `switch_max_range_size`.
     pub switch_cases: RangeInclusive<usize>,
     pub switch_max_range_size: RangeInclusive<usize>,
+
+    pub funcrefs_per_function: RangeInclusive<usize>,
 
     /// Stack slots.
     /// The combination of these two determines stack usage per function
@@ -49,6 +52,7 @@ impl Default for Config {
             switch_cases: 0..=64,
             // Ranges smaller than 2 don't make sense.
             switch_max_range_size: 2..=32,
+            funcrefs_per_function: 0..=8,
             static_stack_slots_per_function: 0..=8,
             static_stack_slot_size: 0..=128,
         }

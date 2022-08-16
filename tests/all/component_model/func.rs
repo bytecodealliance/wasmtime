@@ -1201,6 +1201,14 @@ fn some_traps() -> Result<()> {
         .call(&mut store, ("", "", "", "", "", "", "", "", "", ""))
         .unwrap_err();
     assert_oob(&err);
+    let err = instance(&mut store)?
+        .get_typed_func::<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str), (), _>(
+            &mut store,
+            "take-many-second-oob",
+        )?
+        .call(&mut store, ("", "", "", "", "", "", "", "", "", "x"))
+        .unwrap_err();
+    assert_oob(&err);
     Ok(())
 }
 

@@ -8,9 +8,9 @@ use crate::ir::{condcodes::IntCC, Function, Type};
 use crate::isa::unwind::systemv;
 use crate::isa::x64::{inst::regs::create_reg_env_systemv, settings as x64_settings};
 use crate::isa::Builder as IsaBuilder;
-use crate::machinst::Reg;
 use crate::machinst::{
-    compile, MachCompileResult, MachTextSectionBuilder, TextSectionBuilder, VCode,
+    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, TextSectionBuilder,
+    VCode,
 };
 use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self as shared_settings, Flags};
@@ -53,7 +53,7 @@ impl X64Backend {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
         let emit_info = EmitInfo::new(flags.clone(), self.x64_flags.clone());
-        let abi = Box::new(abi::X64ABICallee::new(&func, self)?);
+        let abi = abi::X64Callee::new(&func, self, &self.x64_flags)?;
         compile::compile::<Self>(&func, self, abi, &self.reg_env, emit_info)
     }
 }
@@ -63,11 +63,10 @@ impl TargetIsa for X64Backend {
         &self,
         func: &Function,
         want_disasm: bool,
-    ) -> CodegenResult<MachCompileResult> {
+    ) -> CodegenResult<CompiledCodeStencil> {
         let flags = self.flags();
         let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
 
-        let want_disasm = want_disasm || log::log_enabled!(log::Level::Debug);
         let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
@@ -79,7 +78,7 @@ impl TargetIsa for X64Backend {
             log::trace!("disassembly:\n{}", disasm);
         }
 
-        Ok(MachCompileResult {
+        Ok(CompiledCodeStencil {
             buffer,
             frame_size,
             disasm: emit_result.disasm,
@@ -120,7 +119,7 @@ impl TargetIsa for X64Backend {
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,
-        result: &MachCompileResult,
+        result: &CompiledCode,
         kind: crate::machinst::UnwindInfoKind,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
         use crate::isa::unwind::UnwindInfo;
@@ -208,8 +207,8 @@ fn isa_constructor(
 mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
-    use crate::ir::{types::*, SourceLoc, ValueLabel, ValueLabelStart};
-    use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, JumpTableData, Signature};
+    use crate::ir::{types::*, RelSourceLoc, SourceLoc, UserFuncName, ValueLabel, ValueLabelStart};
+    use crate::ir::{AbiParam, Function, InstBuilder, JumpTableData, Signature};
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
@@ -224,7 +223,7 @@ mod test {
     /// well do the test here, where we have a backend to use.
     #[test]
     fn test_cold_blocks() {
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));
@@ -278,35 +277,35 @@ mod test {
         pos.func.dfg.values_labels.as_mut().unwrap().insert(
             v0,
             crate::ir::ValueLabelAssignments::Starts(vec![ValueLabelStart {
-                from: SourceLoc::new(1),
+                from: RelSourceLoc::new(1),
                 label: ValueLabel::new(1),
             }]),
         );
         pos.func.dfg.values_labels.as_mut().unwrap().insert(
             v1,
             crate::ir::ValueLabelAssignments::Starts(vec![ValueLabelStart {
-                from: SourceLoc::new(2),
+                from: RelSourceLoc::new(2),
                 label: ValueLabel::new(1),
             }]),
         );
         pos.func.dfg.values_labels.as_mut().unwrap().insert(
             v2,
             crate::ir::ValueLabelAssignments::Starts(vec![ValueLabelStart {
-                from: SourceLoc::new(3),
+                from: RelSourceLoc::new(3),
                 label: ValueLabel::new(1),
             }]),
         );
         pos.func.dfg.values_labels.as_mut().unwrap().insert(
             v3,
             crate::ir::ValueLabelAssignments::Starts(vec![ValueLabelStart {
-                from: SourceLoc::new(4),
+                from: RelSourceLoc::new(4),
                 label: ValueLabel::new(1),
             }]),
         );
         pos.func.dfg.values_labels.as_mut().unwrap().insert(
             v4,
             crate::ir::ValueLabelAssignments::Starts(vec![ValueLabelStart {
-                from: SourceLoc::new(5),
+                from: RelSourceLoc::new(5),
                 label: ValueLabel::new(1),
             }]),
         );
@@ -378,7 +377,7 @@ mod test {
     // expands during emission.
     #[test]
     fn br_table() {
-        let name = ExternalName::testcase("test0");
+        let name = UserFuncName::testcase("test0");
         let mut sig = Signature::new(CallConv::SystemV);
         sig.params.push(AbiParam::new(I32));
         sig.returns.push(AbiParam::new(I32));

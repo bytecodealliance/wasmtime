@@ -1,9 +1,18 @@
 test compile precise-output
 target s390x
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; IADD
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+function %iadd_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = iadd.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   vaq %v7, %v0, %v1
+;   vst %v7, 0(%r2)
+;   br %r14
 
 function %iadd_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -323,6 +332,19 @@ block0(v0: i32, v1: i64):
 ;   alr %r2, %r4
 ;   br %r14
 
+function %isub_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = isub.i128 v0, v1
+  return v2
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   vsq %v7, %v0, %v1
+;   vst %v7, 0(%r2)
+;   br %r14
+
 function %isub_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = isub.i64 v0, v1
@@ -540,6 +562,22 @@ block0(v0: i8, v1: i64):
 ;   sr %r2, %r4
 ;   br %r14
 
+function %iabs_i128(i128) -> i128 {
+block0(v0: i128):
+  v1 = iabs.i128 v0
+  return v1
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vgbm %v5, 0
+;   vsq %v7, %v5, %v0
+;   vrepg %v17, %v0, 0
+;   vchg %v19, %v5, %v17
+;   vsel %v21, %v7, %v0, %v19
+;   vst %v21, 0(%r2)
+;   br %r14
+
 function %iabs_i64(i64) -> i64 {
 block0(v0: i64):
   v1 = iabs.i64 v0
@@ -593,6 +631,19 @@ block0(v0: i8):
 ;   lpr %r2, %r5
 ;   br %r14
 
+function %ineg_i128(i128) -> i128 {
+block0(v0: i128):
+  v1 = ineg.i128 v0
+  return v1
+}
+
+; block0:
+;   vl %v0, 0(%r3)
+;   vgbm %v5, 0
+;   vsq %v7, %v5, %v0
+;   vst %v7, 0(%r2)
+;   br %r14
+
 function %ineg_i64(i64) -> i64 {
 block0(v0: i64):
   v1 = ineg.i64 v0
@@ -642,6 +693,32 @@ block0(v0: i8):
 
 ; block0:
 ;   lcr %r2, %r2
+;   br %r14
+
+function %imul_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = imul.i128 v0, v1
+  return v2
+}
+
+;   stmg %r13, %r15, 104(%r15)
+; block0:
+;   vl %v0, 0(%r3)
+;   vl %v1, 0(%r4)
+;   lgdr %r5, %f0
+;   vlgvg %r3, %v0, 1
+;   lgdr %r4, %f1
+;   vlgvg %r1, %v1, 1
+;   lgr %r13, %r1
+;   mlgr %r0, %r3
+;   msgr %r3, %r4
+;   lgr %r4, %r13
+;   msgr %r5, %r4
+;   agr %r3, %r0
+;   agr %r5, %r3
+;   vlvgp %v5, %r5, %r1
+;   vst %v5, 0(%r2)
+;   lmg %r13, %r15, 104(%r15)
 ;   br %r14
 
 function %imul_i64(i64, i64) -> i64 {

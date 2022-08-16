@@ -1,6 +1,7 @@
 test interpret
 test run
 target x86_64
+target x86_64 has_sse41=false
 target aarch64
 target s390x
 

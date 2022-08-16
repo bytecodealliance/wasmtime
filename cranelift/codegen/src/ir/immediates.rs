@@ -426,6 +426,12 @@ impl From<i32> for Offset32 {
     }
 }
 
+impl From<u8> for Offset32 {
+    fn from(val: u8) -> Offset32 {
+        Self(val.into())
+    }
+}
+
 impl Display for Offset32 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         // 0 displays as an empty offset.

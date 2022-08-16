@@ -10,11 +10,29 @@
 //
 // - AAPCS64 section 6.2.3 The Frame Pointer[0]
 pub unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize {
-    *(fp as *mut usize).offset(1)
+    let mut pc = *(fp as *mut usize).offset(1);
+
+    // The return address might be signed, so we need to strip the highest bits
+    // (where the authentication code might be located) in order to obtain a
+    // valid address. We use the `XPACLRI` instruction, which is executed as a
+    // no-op by processors that do not support pointer authentication, so that
+    // the implementation is backward-compatible and there is no duplication.
+    // However, this instruction requires the LR register for both its input and
+    // output.
+    std::arch::asm!(
+        "mov lr, {pc}",
+        "xpaclri",
+        "mov {pc}, lr",
+        pc = inout(reg) pc,
+        out("lr") _,
+        options(nomem, nostack, preserves_flags, pure),
+    );
+
+    pc
 }
-pub unsafe fn get_next_older_fp_from_fp(fp: usize) -> usize {
-    *(fp as *mut usize)
-}
+
+// And the current frame pointer points to the next older frame pointer.
+pub const NEXT_OLDER_FP_FROM_FP_OFFSET: usize = 0;
 
 pub fn reached_entry_sp(fp: usize, first_wasm_sp: usize) -> bool {
     // Calls in aarch64 push two i64s (old FP and return PC) so our entry SP is

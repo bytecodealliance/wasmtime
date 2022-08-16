@@ -810,9 +810,9 @@ fn inst_count(func: &Function) -> usize {
 }
 
 fn resolve_aliases(func: &mut Function) {
-    for block in func.layout.blocks() {
-        for inst in func.layout.block_insts(block) {
-            func.dfg.resolve_aliases_in_arguments(inst);
+    for block in func.stencil.layout.blocks() {
+        for inst in func.stencil.layout.block_insts(block) {
+            func.stencil.dfg.resolve_aliases_in_arguments(inst);
         }
     }
 }

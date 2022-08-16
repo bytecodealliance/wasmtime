@@ -5,9 +5,7 @@
 //! [wasmtime-environ]: https://crates.io/crates/wasmtime-environ
 //! [Wasmtime]: https://github.com/bytecodealliance/wasmtime
 
-use crate::environ::{
-    FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, TargetEnvironment,
-};
+use crate::environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, TargetEnvironment};
 use crate::func_translator::FuncTranslator;
 use crate::state::FuncTranslationState;
 use crate::WasmType;
@@ -18,8 +16,8 @@ use crate::{
 use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
-use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder};
+use cranelift_codegen::ir::{types::*, UserFuncName};
 use cranelift_codegen::isa::{CallConv, TargetFrontendConfig};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
@@ -27,11 +25,6 @@ use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
 use wasmparser::{FuncValidator, FunctionBody, Operator, ValidatorResources, WasmFeatures};
-
-/// Compute a `ir::ExternalName` for a given wasm function index.
-fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
-    ir::ExternalName::user(0, func_index.as_u32())
-}
 
 /// A collection of names under which a given entity is exported.
 pub struct Exportable<T> {
@@ -150,9 +143,6 @@ pub struct DummyEnvironment {
     /// Vector of wasm bytecode size for each function.
     pub func_bytecode_sizes: Vec<usize>,
 
-    /// How to return from functions.
-    return_mode: ReturnMode,
-
     /// Instructs to collect debug data during translation.
     debug_info: bool,
 
@@ -168,12 +158,11 @@ pub struct DummyEnvironment {
 
 impl DummyEnvironment {
     /// Creates a new `DummyEnvironment` instance.
-    pub fn new(config: TargetFrontendConfig, return_mode: ReturnMode, debug_info: bool) -> Self {
+    pub fn new(config: TargetFrontendConfig, debug_info: bool) -> Self {
         Self {
             info: DummyModuleInfo::new(config),
             trans: FuncTranslator::new(),
             func_bytecode_sizes: Vec::new(),
-            return_mode,
             debug_info,
             module_name: None,
             function_names: SecondaryMap::new(),
@@ -184,11 +173,7 @@ impl DummyEnvironment {
     /// Return a `DummyFuncEnvironment` for translating functions within this
     /// `DummyEnvironment`.
     pub fn func_env(&self) -> DummyFuncEnvironment {
-        DummyFuncEnvironment::new(
-            &self.info,
-            self.return_mode,
-            self.expected_reachability.clone(),
-        )
+        DummyFuncEnvironment::new(&self.info, self.expected_reachability.clone())
     }
 
     fn get_func_type(&self, func_index: FuncIndex) -> TypeIndex {
@@ -222,8 +207,6 @@ impl DummyEnvironment {
 pub struct DummyFuncEnvironment<'dummy_environment> {
     pub mod_info: &'dummy_environment DummyModuleInfo,
 
-    return_mode: ReturnMode,
-
     /// Expected reachability data (before/after for each op) to assert. This is used for testing.
     expected_reachability: Option<ExpectedReachability>,
 }
@@ -231,12 +214,10 @@ pub struct DummyFuncEnvironment<'dummy_environment> {
 impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
     pub fn new(
         mod_info: &'dummy_environment DummyModuleInfo,
-        return_mode: ReturnMode,
         expected_reachability: Option<ExpectedReachability>,
     ) -> Self {
         Self {
             mod_info,
-            return_mode,
             expected_reachability,
         }
     }
@@ -268,10 +249,6 @@ impl<'dummy_environment> TargetEnvironment for DummyFuncEnvironment<'dummy_envir
 }
 
 impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environment> {
-    fn return_mode(&self) -> ReturnMode {
-        self.return_mode
-    }
-
     fn make_global(
         &mut self,
         func: &mut ir::Function,
@@ -359,7 +336,11 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         // A real implementation would probably add a `vmctx` argument.
         // And maybe attempt some signature de-duplication.
         let signature = func.import_signature(self.vmctx_sig(sigidx));
-        let name = get_func_name(index);
+        let name =
+            ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: index.as_u32(),
+            }));
         Ok(func.import_function(ir::ExtFuncData {
             name,
             signature,
@@ -863,19 +844,19 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         self.func_bytecode_sizes
             .push(body.get_binary_reader().bytes_remaining());
         let func = {
-            let mut func_environ = DummyFuncEnvironment::new(
-                &self.info,
-                self.return_mode,
-                self.expected_reachability.clone(),
-            );
+            let mut func_environ =
+                DummyFuncEnvironment::new(&self.info, self.expected_reachability.clone());
             let func_index =
                 FuncIndex::new(self.get_num_func_imports() + self.info.function_bodies.len());
-            let name = get_func_name(func_index);
+
             let sig = func_environ.vmctx_sig(self.get_func_type(func_index));
-            let mut func = ir::Function::with_name_signature(name, sig);
+            let mut func =
+                ir::Function::with_name_signature(UserFuncName::user(0, func_index.as_u32()), sig);
+
             if self.debug_info {
                 func.collect_debug_info();
             }
+
             self.trans
                 .translate_body(&mut validator, body, &mut func, &mut func_environ)?;
             func

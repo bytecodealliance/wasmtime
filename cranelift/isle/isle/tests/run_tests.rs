@@ -11,11 +11,15 @@ fn build(filename: &str) -> Result<String> {
 }
 
 pub fn run_pass(filename: &str) {
-    assert!(build(filename).is_ok());
+    if let Err(err) = build(filename) {
+        panic!("pass test failed:\n{}", err);
+    }
 }
 
 pub fn run_fail(filename: &str) {
-    assert!(build(filename).is_err());
+    if build(filename).is_ok() {
+        panic!("test {} passed unexpectedly", filename);
+    }
 }
 
 fn build_and_link_isle(isle_filename: &str) -> (tempfile::TempDir, std::path::PathBuf) {

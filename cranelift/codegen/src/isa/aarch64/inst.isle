@@ -165,6 +165,12 @@
         (rd WritableReg)
         (rm Reg))
 
+       ;; Like `Move` but with a particular `PReg` source (for implementing CLIF
+       ;; instructions like `get_stack_pointer`).
+       (MovPReg
+        (rd WritableReg)
+        (rm PReg))
+
        ;; A MOV[Z,N,K] with a 16-bit immediate.
        (MovWide
         (op MoveWideOp)
@@ -202,6 +208,14 @@
        ;; A conditional-set-mask operation.
        (CSetm
         (rd WritableReg)
+        (cond Cond))
+
+       ;; A conditional comparison with a second register.
+       (CCmp
+        (size OperandSize)
+        (rn Reg)
+        (rm Reg)
+        (nzcv NZCV)
         (cond Cond))
 
        ;; A conditional comparison with an immediate.
@@ -280,6 +294,9 @@
        ;; ish".  This instruction is sequentially consistent.
        (Fence)
 
+       ;; Consumption of speculative data barrier.
+       (Csdb)
+
        ;; FPU move. Note that this is distinct from a vector-register
        ;; move; moving just 64 bits seems to be significantly faster.
        (FpuMove64
@@ -326,8 +343,10 @@
         (rn Reg))
 
        ;; 3-op FPU instruction.
+       ;; 16-bit scalars require half-precision floating-point support (FEAT_FP16).
        (FpuRRRR
         (fpu_op FPUOp3)
+        (size ScalarSize)
         (rd WritableReg)
         (rn Reg)
         (rm Reg)
@@ -469,7 +488,7 @@
         (rd WritableReg)
         (rn Reg)
         (idx u8)
-        (size VectorSize))
+        (size ScalarSize))
 
        ;; Signed move from a vector element to a GPR.
        (MovFromVecSigned
@@ -560,6 +579,14 @@
        ;; A vector ALU op.
        (VecRRR
         (alu_op VecALUOp)
+        (rd WritableReg)
+        (rn Reg)
+        (rm Reg)
+        (size VectorSize))
+
+       ;; A vector ALU op modifying a source register.
+       (VecRRRMod
+        (alu_op VecALUModOp)
         (rd WritableReg)
         (rn Reg)
         (rm Reg)
@@ -663,9 +690,15 @@
        (Ret
         (rets VecReg))
 
-       ;; A placeholder instruction, generating no code, meaning that a function epilogue must be
-       ;; inserted there.
-       (EpiloguePlaceholder)
+       ;; A machine return instruction with pointer authentication using SP as the
+       ;; modifier. This instruction requires pointer authentication support
+       ;; (FEAT_PAuth) unless `is_hint` is true, in which case it is equivalent to
+       ;; the combination of a no-op and a return instruction on platforms without
+       ;; the relevant support.
+       (AuthenticatedRet
+        (key APIKey)
+        (is_hint bool)
+        (rets VecReg))
 
        ;; An unconditional branch.
        (Jump
@@ -704,7 +737,6 @@
        ;; An instruction guaranteed to always be undefined and to trigger an illegal instruction at
        ;; runtime.
        (Udf
-        (use_allocated_encoding bool)
         (trap_code TrapCode))
 
        ;; Compute the address (using a PC-relative offset) of a memory location, using the `ADR`
@@ -741,6 +773,12 @@
        (LoadAddr
         (rd WritableReg)
         (mem AMode))
+
+       ;; Pointer authentication code for instruction address with modifier in SP;
+       ;; equivalent to a no-op if Pointer authentication (FEAT_PAuth) is not
+       ;; supported.
+       (Pacisp
+        (key APIKey))
 
        ;; Marker, no-op in generated code: SP "virtual offset" is adjusted. This
        ;; controls how AMode::NominalSPOffset args are lowered.
@@ -991,8 +1029,7 @@
 ;; A floating-point unit (FPU) operation with three args.
 (type FPUOp3
   (enum
-    (MAdd32)
-    (MAdd64)
+    (MAdd)
 ))
 
 ;; A conversion from an FP to an integer value.
@@ -1087,8 +1124,6 @@
     (Orr)
     ;; Bitwise exclusive or
     (Eor)
-    ;; Bitwise select
-    (Bsl)
     ;; Unsigned maximum pairwise
     (Umaxp)
     ;; Add
@@ -1129,6 +1164,15 @@
     (Zip1)
     ;; Signed saturating rounding doubling multiply returning high half
     (Sqrdmulh)
+))
+
+;; A Vector ALU operation which modifies a source register.
+(type VecALUModOp
+  (enum
+    ;; Bitwise select
+    (Bsl)
+    ;; Floating-point fused multiply-add vectors
+    (Fmla)
 ))
 
 ;; A Vector miscellaneous operation with two registers.
@@ -1304,6 +1348,13 @@
     (Xchg)
 ))
 
+;; Keys for instruction address PACs
+(type APIKey
+  (enum
+    (A)
+    (B)
+))
+
 ;; Extractors for target features ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (decl use_lse () Inst)
 (extern extractor use_lse use_lse)
@@ -1336,6 +1387,9 @@
 
 (decl imm12_from_negated_u64 (Imm12) u64)
 (extern extractor imm12_from_negated_u64 imm12_from_negated_u64)
+
+(decl pure lshr_from_u64 (Type u64) ShiftOpAndAmt)
+(extern constructor lshr_from_u64 lshr_from_u64)
 
 (decl pure lshl_from_imm64 (Type Imm64) ShiftOpAndAmt)
 (extern constructor lshl_from_imm64 lshl_from_imm64)
@@ -1401,6 +1455,9 @@
 (decl xreg (u8) Reg)
 (extern constructor xreg xreg)
 
+(decl writable_vreg (u8) WritableReg)
+(extern constructor writable_vreg writable_vreg)
+
 (decl writable_xreg (u8) WritableReg)
 (extern constructor writable_xreg writable_xreg)
 
@@ -1464,6 +1521,15 @@
 (rule (fpu_rr op src size)
       (let ((dst WritableReg (temp_writable_reg $F64))
             (_ Unit (emit (MInst.FpuRR op size dst src))))
+       dst))
+
+;; Helper for emitting `MInst.VecRRR` instructions which use three registers,
+;; one of which is both source and output.
+(decl vec_rrr_mod (VecALUModOp Reg Reg Reg VectorSize) Reg)
+(rule (vec_rrr_mod op src1 src2 src3 size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_1 Unit (emit (MInst.FpuMove128 dst src1)))
+            (_2 Unit (emit (MInst.VecRRRMod op dst src2 src3 size))))
         dst))
 
 ;; Helper for emitting `MInst.FpuRRR` instructions.
@@ -1471,6 +1537,13 @@
 (rule (fpu_rrr op src1 src2 size)
       (let ((dst WritableReg (temp_writable_reg $F64))
             (_ Unit (emit (MInst.FpuRRR op size dst src1 src2))))
+        dst))
+
+;; Helper for emitting `MInst.FpuRRRR` instructions.
+(decl fpu_rrrr (FPUOp3 ScalarSize Reg Reg Reg) Reg)
+(rule (fpu_rrrr size op src1 src2 src3)
+      (let ((dst WritableReg (temp_writable_reg $F64))
+            (_ Unit (emit (MInst.FpuRRRR size op dst src1 src2 src3))))
         dst))
 
 ;; Helper for emitting `MInst.FpuCmp` instructions.
@@ -1484,6 +1557,13 @@
 (rule (vec_lanes op src size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecLanes op dst src size))))
+        dst))
+
+;; Helper for emitting `MInst.VecShiftImm` instructions.
+(decl vec_shift_imm (VecShiftImmOp u8 Reg VectorSize) Reg)
+(rule (vec_shift_imm op imm src size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecShiftImm op dst src size imm))))
         dst))
 
 ;; Helper for emitting `MInst.VecDup` instructions.
@@ -1513,6 +1593,15 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRRShift op (operand_size ty) dst src1 src2 shift))))
         dst))
+
+;; Helper for emitting `cmp` instructions, setting flags, with a right-shifted
+;; second operand register.
+(decl cmp_rr_shift (OperandSize Reg Reg u64) ProducesFlags)
+(rule (cmp_rr_shift size src1 src2 shift_amount)
+      (if-let shift (lshr_from_u64 $I64 shift_amount))
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.AluRRRShift (ALUOp.SubS) size (writable_zero_reg)
+        src1 src2 shift)))
 
 ;; Helper for emitting `MInst.AluRRRExtend` instructions.
 (decl alu_rrr_extend (ALUOp Type Reg Reg ExtendOp) Reg)
@@ -1620,6 +1709,26 @@
             (_ Unit (emit (MInst.VecTbl dst rn rm is_extension))))
         dst))
 
+;; Helper for emitting `MInst.VecTbl2` instructions.
+;; - 2 register table vector lookups require consecutive table registers;
+;;   we satisfy this constraint by hardcoding the usage of v30 and v31.
+;; - Make sure that both args are in virtual regs, since it is not guaranteed
+;;   that we can get them safely to the temporaries if either is in a real
+;;   register.
+(decl vec_tbl2 (Reg Reg Reg bool Type) Reg)
+(rule (vec_tbl2 rn rn2 rm is_extension ty)
+      (let (
+            (temp WritableReg (writable_vreg 30))
+            (temp2 WritableReg (writable_vreg 31))
+            (dst WritableReg (temp_writable_reg $I8X16))
+            (rn Reg (ensure_in_vreg rn ty))
+            (rn2 Reg (ensure_in_vreg rn2 ty))
+            (_ Unit (emit (MInst.FpuMove128 temp rn)))
+            (_ Unit (emit (MInst.FpuMove128 temp2 rn2)))
+            (_ Unit (emit (MInst.VecTbl2 dst temp temp2 rm is_extension)))
+        )
+        dst))
+
 ;; Helper for emitting `MInst.VecRRRLong` instructions.
 (decl vec_rrr_long (VecRRRLongOp Reg Reg bool) Reg)
 (rule (vec_rrr_long op src1 src2 high_half)
@@ -1641,8 +1750,8 @@
 (decl vec_rrrr_long (VecRRRLongOp Reg Reg Reg bool) Reg)
 (rule (vec_rrrr_long op src1 src2 src3 high_half)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_1 Unit (emit (MInst.FpuMove128 dst src1)))
-            (_2 Unit (emit (MInst.VecRRRLong op dst src2 src3 high_half))))
+            (_ Unit (emit (MInst.FpuMove128 dst src1)))
+            (_ Unit (emit (MInst.VecRRRLong op dst src2 src3 high_half))))
         dst))
 
 ;; Helper for emitting `MInst.VecRRNarrow` instructions.
@@ -1657,8 +1766,8 @@
 (decl vec_rr_narrow_high (VecRRNarrowOp Reg Reg ScalarSize) Reg)
 (rule (vec_rr_narrow_high op mod src size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_1 Unit (emit (MInst.FpuMove128 dst mod)))
-            (_2 Unit (emit (MInst.VecRRNarrow op dst src $true size))))
+            (_ Unit (emit (MInst.FpuMove128 dst mod)))
+            (_ Unit (emit (MInst.VecRRNarrow op dst src $true size))))
         dst))
 
 ;; Helper for emitting `MInst.VecRRLong` instructions.
@@ -1701,20 +1810,20 @@
 (decl mov_to_vec (Reg Reg u8 VectorSize) Reg)
 (rule (mov_to_vec src1 src2 lane size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_1 Unit (emit (MInst.FpuMove128 dst src1)))
-            (_2 Unit (emit (MInst.MovToVec dst src2 lane size))))
+            (_ Unit (emit (MInst.FpuMove128 dst src1)))
+            (_ Unit (emit (MInst.MovToVec dst src2 lane size))))
         dst))
 
 ;; Helper for emitting `MInst.VecMovElement` instructions.
 (decl mov_vec_elem (Reg Reg u8 u8 VectorSize) Reg)
 (rule (mov_vec_elem src1 src2 dst_idx src_idx size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_1 Unit (emit (MInst.FpuMove128 dst src1)))
-            (_2 Unit (emit (MInst.VecMovElement dst src2 dst_idx src_idx size))))
+            (_ Unit (emit (MInst.FpuMove128 dst src1)))
+            (_ Unit (emit (MInst.VecMovElement dst src2 dst_idx src_idx size))))
         dst))
 
 ;; Helper for emitting `MInst.MovFromVec` instructions.
-(decl mov_from_vec (Reg u8 VectorSize) Reg)
+(decl mov_from_vec (Reg u8 ScalarSize) Reg)
 (rule (mov_from_vec rn idx size)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.MovFromVec dst rn idx size))))
@@ -1789,6 +1898,22 @@
         (ConsumesFlags.ConsumesFlagsReturnsReg
          (MInst.CSNeg dst cond if_true if_false)
          dst)))
+
+;; Helper for generating `MInst.CCmpImm` instructions.
+(decl ccmp_imm (OperandSize u8 Reg UImm5 NZCV Cond) ConsumesFlags)
+(rule (ccmp_imm size 1 rn imm nzcv cond)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
+         (MInst.CCmpImm size rn imm nzcv cond)
+         (MInst.CSet dst cond)
+         (value_reg dst))))
+
+(rule (ccmp_imm size _ty_bits rn imm nzcv cond)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
+         (MInst.CCmpImm size rn imm nzcv cond)
+         (MInst.CSetm dst cond)
+         (value_reg dst))))
 
 ;; Helpers for generating `add` instructions.
 
@@ -1901,6 +2026,16 @@
 ;; Helper for generating `uqxtn2` instructions.
 (decl uqxtn2 (Reg Reg ScalarSize) Reg)
 (rule (uqxtn2 x y size) (vec_rr_narrow_high (VecRRNarrowOp.Uqxtn) x y size))
+
+;; Helper for generating `fence` instructions.
+(decl aarch64_fence () SideEffectNoResult)
+(rule (aarch64_fence)
+      (SideEffectNoResult.Inst (MInst.Fence)))
+
+;; Helper for generating `brk` instructions.
+(decl brk () SideEffectNoResult)
+(rule (brk)
+      (SideEffectNoResult.Inst (MInst.Brk)))
 
 ;; Helper for generating `addp` instructions.
 (decl addp (Reg Reg VectorSize) Reg)
@@ -2087,16 +2222,13 @@
 
 (decl bsl (Type Reg Reg Reg) Reg)
 (rule (bsl ty c x y)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (_1 Unit (emit (MInst.FpuMove128 dst c)))
-            (_2 Unit (emit (MInst.VecRRR (VecALUOp.Bsl) dst x y (vector_size ty)))))
-        dst))
+      (vec_rrr_mod (VecALUModOp.Bsl) c x y (vector_size ty)))
 
 ;; Helper for generating a `udf` instruction.
 
-(decl udf (bool TrapCode) SideEffectNoResult)
-(rule (udf use_allocated_encoding trap_code)
-      (SideEffectNoResult.Inst (MInst.Udf use_allocated_encoding trap_code)))
+(decl udf (TrapCode) SideEffectNoResult)
+(rule (udf trap_code)
+      (SideEffectNoResult.Inst (MInst.Udf trap_code)))
 
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2185,16 +2317,16 @@
 (rule (trap_if_div_overflow ty x y)
       (let (
           ;; Check RHS is -1.
-          (_1 Unit (emit (MInst.AluRRImm12 (ALUOp.AddS) (operand_size ty) (writable_zero_reg) y (u8_into_imm12 1))))
+          (_ Unit (emit (MInst.AluRRImm12 (ALUOp.AddS) (operand_size ty) (writable_zero_reg) y (u8_into_imm12 1))))
 
           ;; Check LHS is min_value, by subtracting 1 and branching if
           ;; there is overflow.
-          (_2 Unit (emit (MInst.CCmpImm (size_from_ty ty)
-                                        x
-                                        (u8_into_uimm5 1)
-                                        (nzcv $false $false $false $false)
-                                        (Cond.Eq))))
-          (_3 Unit (emit (MInst.TrapIf (cond_br_cond (Cond.Vs))
+          (_ Unit (emit (MInst.CCmpImm (size_from_ty ty)
+                                       x
+                                       (u8_into_uimm5 1)
+                                       (nzcv $false $false $false $false)
+                                       (Cond.Eq))))
+          (_ Unit (emit (MInst.TrapIf (cond_br_cond (Cond.Vs))
                                       (trap_code_integer_overflow))))
         )
         x))
@@ -2288,6 +2420,11 @@
       (if-let addr_reg (amode_is_reg addr))
       addr_reg)
 
+;; Lower a constant f128.
+(decl constant_f128 (u128) Reg)
+;; TODO: Port lower_constant_f128() to ISLE.
+(extern constructor constant_f128 constant_f128)
+
 ;; Lower a vector splat with a constant parameter.
 (decl splat_const (u64 VectorSize) Reg)
 ;; TODO: Port lower_splat_const() to ISLE.
@@ -2368,8 +2505,8 @@
 (rule (lse_atomic_cas addr expect replace ty)
       (let (
             (dst WritableReg (temp_writable_reg ty))
-            (_1 Unit (emit (MInst.Mov (operand_size ty) dst expect)))
-            (_2 Unit (emit (MInst.AtomicCAS dst replace addr ty)))
+            (_ Unit (emit (MInst.Mov (operand_size ty) dst expect)))
+            (_ Unit (emit (MInst.AtomicCAS dst replace addr ty)))
           )
           dst))
 
@@ -2413,3 +2550,31 @@
         ;; And finally, copy the preordained AtomicCASLoop output reg to its destination.
         ;; Also, x24 and x28 are trashed.
         (mov64_from_real 27)))
+
+;; Helper for emitting `MInst.MovPReg` instructions.
+(decl mov_preg (PReg) Reg)
+(rule (mov_preg src)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.MovPReg dst src))))
+        dst))
+
+(decl preg_sp () PReg)
+(extern constructor preg_sp preg_sp)
+
+(decl preg_fp () PReg)
+(extern constructor preg_fp preg_fp)
+
+(decl preg_link () PReg)
+(extern constructor preg_link preg_link)
+
+(decl aarch64_sp () Reg)
+(rule (aarch64_sp)
+      (mov_preg (preg_sp)))
+
+(decl aarch64_fp () Reg)
+(rule (aarch64_fp)
+      (mov_preg (preg_fp)))
+
+(decl aarch64_link () Reg)
+(rule (aarch64_link)
+      (mov_preg (preg_link)))

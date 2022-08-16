@@ -5863,6 +5863,24 @@ fn test_s390x_binemit() {
     ));
 
     insns.push((
+        Inst::Mvc {
+            dst: MemArgPair {
+                base: gpr(2),
+                disp: UImm12::maybe_from_u64(0x345).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+            src: MemArgPair {
+                base: gpr(8),
+                disp: UImm12::maybe_from_u64(0x9ab).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+            len_minus_one: 255,
+        },
+        "D2FF234589AB",
+        "mvc 837(255,%r2), 2475(%r8)",
+    ));
+
+    insns.push((
         Inst::LoadMultiple64 {
             rt: writable_gpr(8),
             rt2: writable_gpr(12),
@@ -6810,6 +6828,7 @@ fn test_s390x_binemit() {
                 opcode: Opcode::Call,
                 caller_callconv: CallConv::SystemV,
                 callee_callconv: CallConv::SystemV,
+                tls_symbol: None,
             }),
         },
         "C0E500000000",
@@ -8154,6 +8173,16 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::VecRRR {
+            op: VecBinaryOp::Add128,
+            rd: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E748C00048F3",
+        "vaq %v20, %v8, %v12",
+    ));
+    insns.push((
+        Inst::VecRRR {
             op: VecBinaryOp::Sub8x16,
             rd: writable_vr(20),
             rn: vr(8),
@@ -8191,6 +8220,16 @@ fn test_s390x_binemit() {
         },
         "E748C00038F7",
         "vsg %v20, %v8, %v12",
+    ));
+    insns.push((
+        Inst::VecRRR {
+            op: VecBinaryOp::Sub128,
+            rd: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E748C00048F7",
+        "vsq %v20, %v8, %v12",
     ));
     insns.push((
         Inst::VecRRR {
@@ -9073,6 +9112,78 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::VecRR {
+            op: VecUnaryOp::Clz8x16,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800000853",
+        "vclzb %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
+            op: VecUnaryOp::Clz16x8,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800001853",
+        "vclzh %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
+            op: VecUnaryOp::Clz32x4,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800002853",
+        "vclzf %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
+            op: VecUnaryOp::Clz64x2,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800003853",
+        "vclzg %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
+            op: VecUnaryOp::Ctz8x16,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800000852",
+        "vctzb %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
+            op: VecUnaryOp::Ctz16x8,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800001852",
+        "vctzh %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
+            op: VecUnaryOp::Ctz32x4,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800002852",
+        "vctzf %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
+            op: VecUnaryOp::Ctz64x2,
+            rd: writable_vr(20),
+            rn: vr(8),
+        },
+        "E74800003852",
+        "vctzg %v20, %v8",
+    ));
+    insns.push((
+        Inst::VecRR {
             op: VecUnaryOp::UnpackULow8x16,
             rd: writable_vr(20),
             rn: vr(8),
@@ -9762,6 +9873,24 @@ fn test_s390x_binemit() {
         "E748C01038F9",
         "vchlgs %v20, %v8, %v12",
     ));
+    insns.push((
+        Inst::VecInt128SCmpHi {
+            tmp: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E7C8000030DBA7740005E748C01038F9",
+        "vecg %v12, %v8 ; jne 10 ; vchlgs %v20, %v8, %v12",
+    ));
+    insns.push((
+        Inst::VecInt128UCmpHi {
+            tmp: writable_vr(20),
+            rn: vr(8),
+            rm: vr(12),
+        },
+        "E7C8000030D9A7740005E748C01038F9",
+        "veclg %v12, %v8 ; jne 10 ; vchlgs %v20, %v8, %v12",
+    ));
 
     insns.push((
         Inst::VecFloatCmp {
@@ -9963,6 +10092,240 @@ fn test_s390x_binemit() {
         "vlbrq %v17, 0(%r2,%r3)",
     ));
     insns.push((
+        Inst::VecLoadByte16Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E61020001806",
+        "vlbrh %v17, 0(%r2)",
+    ));
+    insns.push((
+        Inst::VecLoadByte16Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102FFF1806",
+        "vlbrh %v17, 4095(%r2)",
+    ));
+    insns.push((
+        Inst::VecLoadByte16Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E61230001806",
+        "vlbrh %v17, 0(%r2,%r3)",
+    ));
+    insns.push((
+        Inst::VecLoadByte32Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E61020002806",
+        "vlbrf %v17, 0(%r2)",
+    ));
+    insns.push((
+        Inst::VecLoadByte32Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102FFF2806",
+        "vlbrf %v17, 4095(%r2)",
+    ));
+    insns.push((
+        Inst::VecLoadByte32Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E61230002806",
+        "vlbrf %v17, 0(%r2,%r3)",
+    ));
+    insns.push((
+        Inst::VecLoadByte64Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E61020003806",
+        "vlbrg %v17, 0(%r2)",
+    ));
+    insns.push((
+        Inst::VecLoadByte64Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102FFF3806",
+        "vlbrg %v17, 4095(%r2)",
+    ));
+    insns.push((
+        Inst::VecLoadByte64Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E61230003806",
+        "vlbrg %v17, 0(%r2,%r3)",
+    ));
+    insns.push((
+        Inst::VecLoadElt16Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E61020001807",
+        "vlerh %v17, 0(%r2)",
+    ));
+    insns.push((
+        Inst::VecLoadElt16Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102FFF1807",
+        "vlerh %v17, 4095(%r2)",
+    ));
+    insns.push((
+        Inst::VecLoadElt16Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E61230001807",
+        "vlerh %v17, 0(%r2,%r3)",
+    ));
+    insns.push((
+        Inst::VecLoadElt32Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E61020002807",
+        "vlerf %v17, 0(%r2)",
+    ));
+    insns.push((
+        Inst::VecLoadElt32Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102FFF2807",
+        "vlerf %v17, 4095(%r2)",
+    ));
+    insns.push((
+        Inst::VecLoadElt32Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E61230002807",
+        "vlerf %v17, 0(%r2,%r3)",
+    ));
+    insns.push((
+        Inst::VecLoadElt64Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E61020003807",
+        "vlerg %v17, 0(%r2)",
+    ));
+    insns.push((
+        Inst::VecLoadElt64Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102FFF3807",
+        "vlerg %v17, 4095(%r2)",
+    ));
+    insns.push((
+        Inst::VecLoadElt64Rev {
+            rd: writable_vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E61230003807",
+        "vlerg %v17, 0(%r2,%r3)",
+    ));
+    insns.push((
         Inst::VecStore {
             rd: vr(17),
             mem: MemArg::BXD12 {
@@ -10039,6 +10402,240 @@ fn test_s390x_binemit() {
         },
         "E6123000480E",
         "vstbrq %v17, 0(%r2,%r3)",
+    ));
+    insns.push((
+        Inst::VecStoreByte16Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102000180E",
+        "vstbrh %v17, 0(%r2)",
+    ));
+    insns.push((
+        Inst::VecStoreByte16Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102FFF180E",
+        "vstbrh %v17, 4095(%r2)",
+    ));
+    insns.push((
+        Inst::VecStoreByte16Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6123000180E",
+        "vstbrh %v17, 0(%r2,%r3)",
+    ));
+    insns.push((
+        Inst::VecStoreByte32Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102000280E",
+        "vstbrf %v17, 0(%r2)",
+    ));
+    insns.push((
+        Inst::VecStoreByte32Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102FFF280E",
+        "vstbrf %v17, 4095(%r2)",
+    ));
+    insns.push((
+        Inst::VecStoreByte32Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6123000280E",
+        "vstbrf %v17, 0(%r2,%r3)",
+    ));
+    insns.push((
+        Inst::VecStoreByte64Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102000380E",
+        "vstbrg %v17, 0(%r2)",
+    ));
+    insns.push((
+        Inst::VecStoreByte64Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102FFF380E",
+        "vstbrg %v17, 4095(%r2)",
+    ));
+    insns.push((
+        Inst::VecStoreByte64Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6123000380E",
+        "vstbrg %v17, 0(%r2,%r3)",
+    ));
+    insns.push((
+        Inst::VecStoreElt16Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102000180F",
+        "vsterh %v17, 0(%r2)",
+    ));
+    insns.push((
+        Inst::VecStoreElt16Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102FFF180F",
+        "vsterh %v17, 4095(%r2)",
+    ));
+    insns.push((
+        Inst::VecStoreElt16Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6123000180F",
+        "vsterh %v17, 0(%r2,%r3)",
+    ));
+    insns.push((
+        Inst::VecStoreElt32Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102000280F",
+        "vsterf %v17, 0(%r2)",
+    ));
+    insns.push((
+        Inst::VecStoreElt32Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102FFF280F",
+        "vsterf %v17, 4095(%r2)",
+    ));
+    insns.push((
+        Inst::VecStoreElt32Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6123000280F",
+        "vsterf %v17, 0(%r2,%r3)",
+    ));
+    insns.push((
+        Inst::VecStoreElt64Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102000380F",
+        "vsterg %v17, 0(%r2)",
+    ));
+    insns.push((
+        Inst::VecStoreElt64Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::maybe_from_u64(4095).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6102FFF380F",
+        "vsterg %v17, 4095(%r2)",
+    ));
+    insns.push((
+        Inst::VecStoreElt64Rev {
+            rd: vr(17),
+            mem: MemArg::BXD12 {
+                base: gpr(3),
+                index: gpr(2),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E6123000380F",
+        "vsterg %v17, 0(%r2,%r3)",
     ));
     insns.push((
         Inst::VecLoadReplicate {
@@ -12551,7 +13148,7 @@ fn test_s390x_binemit() {
     isa_flag_builder.enable("arch13").unwrap();
     let isa_flags = s390x_settings::Flags::new(&flags, isa_flag_builder);
 
-    let emit_info = EmitInfo::new(flags, isa_flags);
+    let emit_info = EmitInfo::new(isa_flags);
     for (insn, expected_encoding, expected_printing) in insns {
         println!(
             "S390x: {:?}, {}, {}",

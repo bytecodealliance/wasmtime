@@ -68,7 +68,7 @@ fuzz_target!(|testcase: TestCase| {
         builder.set("enable_llvm_abi_extensions", "true").unwrap();
         settings::Flags::new(builder)
     };
-    let mut host_compiler = SingleFunctionCompiler::with_host_isa(flags).unwrap();
+    let host_compiler = SingleFunctionCompiler::with_host_isa(flags).unwrap();
     let compiled_fn = host_compiler.compile(testcase.func.clone()).unwrap();
 
     for args in &testcase.inputs {

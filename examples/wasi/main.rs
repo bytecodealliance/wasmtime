@@ -1,7 +1,11 @@
 //! Example of instantiating of instantiating a wasm module which uses WASI
 //! imports.
 
-// You can execute this example with `cargo run --example wasi`
+/*
+You can execute this example with:
+    cmake example/
+    cargo run --example wasi
+*/
 
 use anyhow::Result;
 use wasmtime::*;

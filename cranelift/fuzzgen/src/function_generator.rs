@@ -1,15 +1,16 @@
-use crate::codegen::ir::ValueList;
+use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose, ValueList};
 use crate::config::Config;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
-use cranelift::codegen::ir::types::*;
+use cranelift::codegen::ir::{types::*, FuncRef, LibCall, UserExternalName, UserFuncName};
 use cranelift::codegen::ir::{
     AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, StackSlot, Type, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
 use cranelift::prelude::{
-    EntityRef, InstBuilder, IntCC, JumpTableData, StackSlotData, StackSlotKind,
+    EntityRef, ExtFuncData, FloatCC, InstBuilder, IntCC, JumpTableData, StackSlotData,
+    StackSlotKind,
 };
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -30,14 +31,43 @@ fn insert_opcode(
         arg_vals.push(val, &mut builder.func.dfg.value_lists);
     }
 
-    let typevar = rets.first().copied().unwrap_or(INVALID);
-    let (inst, dfg) = builder.ins().MultiAry(opcode, typevar, arg_vals);
+    // For pretty much every instruction the control type is the return type
+    // except for Iconcat and Isplit which are *special* and the control type
+    // is the input type.
+    let ctrl_type = if opcode == Opcode::Iconcat || opcode == Opcode::Isplit {
+        args.first()
+    } else {
+        rets.first()
+    }
+    .copied()
+    .unwrap_or(INVALID);
+
+    let (inst, dfg) = builder.ins().MultiAry(opcode, ctrl_type, arg_vals);
     let results = dfg.inst_results(inst).to_vec();
 
     for (val, &ty) in results.into_iter().zip(rets) {
         let var = fgen.get_variable_of_type(ty)?;
         builder.def_var(var, val);
     }
+    Ok(())
+}
+
+fn insert_call(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    opcode: Opcode,
+    _args: &'static [Type],
+    _rets: &'static [Type],
+) -> Result<()> {
+    assert_eq!(opcode, Opcode::Call, "only call handled at the moment");
+    let (sig, func_ref) = fgen.u.choose(&fgen.func_refs)?.clone();
+
+    let actuals = fgen.generate_values_for_signature(
+        builder,
+        sig.params.iter().map(|abi_param| abi_param.value_type),
+    )?;
+
+    builder.ins().call(func_ref, &actuals);
     Ok(())
 }
 
@@ -78,6 +108,32 @@ fn insert_stack_store(
     let arg0 = builder.use_var(arg0);
 
     builder.ins().stack_store(arg0, slot, offset);
+    Ok(())
+}
+
+fn insert_cmp(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    opcode: Opcode,
+    args: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let lhs = fgen.get_variable_of_type(args[0])?;
+    let lhs = builder.use_var(lhs);
+
+    let rhs = fgen.get_variable_of_type(args[1])?;
+    let rhs = builder.use_var(rhs);
+
+    let res = if opcode == Opcode::Fcmp {
+        let cc = *fgen.u.choose(FloatCC::all())?;
+        builder.ins().fcmp(cc, lhs, rhs)
+    } else {
+        let cc = *fgen.u.choose(IntCC::all())?;
+        builder.ins().icmp(cc, lhs, rhs)
+    };
+
+    let var = fgen.get_variable_of_type(rets[0])?;
+    builder.def_var(var, res);
     Ok(())
 }
 
@@ -141,6 +197,176 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
+    // Rotr
+    (Opcode::Rotr, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Rotr, &[I8, I16], &[I8], insert_opcode),
+    (Opcode::Rotr, &[I8, I32], &[I8], insert_opcode),
+    (Opcode::Rotr, &[I8, I64], &[I8], insert_opcode),
+    (Opcode::Rotr, &[I8, I128], &[I8], insert_opcode),
+    (Opcode::Rotr, &[I16, I8], &[I16], insert_opcode),
+    (Opcode::Rotr, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Rotr, &[I16, I32], &[I16], insert_opcode),
+    (Opcode::Rotr, &[I16, I64], &[I16], insert_opcode),
+    (Opcode::Rotr, &[I16, I128], &[I16], insert_opcode),
+    (Opcode::Rotr, &[I32, I8], &[I32], insert_opcode),
+    (Opcode::Rotr, &[I32, I16], &[I32], insert_opcode),
+    (Opcode::Rotr, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Rotr, &[I32, I64], &[I32], insert_opcode),
+    (Opcode::Rotr, &[I32, I128], &[I32], insert_opcode),
+    (Opcode::Rotr, &[I64, I8], &[I64], insert_opcode),
+    (Opcode::Rotr, &[I64, I16], &[I64], insert_opcode),
+    (Opcode::Rotr, &[I64, I32], &[I64], insert_opcode),
+    (Opcode::Rotr, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Rotr, &[I64, I128], &[I64], insert_opcode),
+    (Opcode::Rotr, &[I128, I8], &[I128], insert_opcode),
+    (Opcode::Rotr, &[I128, I16], &[I128], insert_opcode),
+    (Opcode::Rotr, &[I128, I32], &[I128], insert_opcode),
+    (Opcode::Rotr, &[I128, I64], &[I128], insert_opcode),
+    (Opcode::Rotr, &[I128, I128], &[I128], insert_opcode),
+    // Rotl
+    (Opcode::Rotl, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Rotl, &[I8, I16], &[I8], insert_opcode),
+    (Opcode::Rotl, &[I8, I32], &[I8], insert_opcode),
+    (Opcode::Rotl, &[I8, I64], &[I8], insert_opcode),
+    (Opcode::Rotl, &[I8, I128], &[I8], insert_opcode),
+    (Opcode::Rotl, &[I16, I8], &[I16], insert_opcode),
+    (Opcode::Rotl, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Rotl, &[I16, I32], &[I16], insert_opcode),
+    (Opcode::Rotl, &[I16, I64], &[I16], insert_opcode),
+    (Opcode::Rotl, &[I16, I128], &[I16], insert_opcode),
+    (Opcode::Rotl, &[I32, I8], &[I32], insert_opcode),
+    (Opcode::Rotl, &[I32, I16], &[I32], insert_opcode),
+    (Opcode::Rotl, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Rotl, &[I32, I64], &[I32], insert_opcode),
+    (Opcode::Rotl, &[I32, I128], &[I32], insert_opcode),
+    (Opcode::Rotl, &[I64, I8], &[I64], insert_opcode),
+    (Opcode::Rotl, &[I64, I16], &[I64], insert_opcode),
+    (Opcode::Rotl, &[I64, I32], &[I64], insert_opcode),
+    (Opcode::Rotl, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Rotl, &[I64, I128], &[I64], insert_opcode),
+    (Opcode::Rotl, &[I128, I8], &[I128], insert_opcode),
+    (Opcode::Rotl, &[I128, I16], &[I128], insert_opcode),
+    (Opcode::Rotl, &[I128, I32], &[I128], insert_opcode),
+    (Opcode::Rotl, &[I128, I64], &[I128], insert_opcode),
+    (Opcode::Rotl, &[I128, I128], &[I128], insert_opcode),
+    // Ishl
+    // Some test cases disabled due to: https://github.com/bytecodealliance/wasmtime/issues/4699
+    (Opcode::Ishl, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Ishl, &[I8, I16], &[I8], insert_opcode),
+    (Opcode::Ishl, &[I8, I32], &[I8], insert_opcode),
+    (Opcode::Ishl, &[I8, I64], &[I8], insert_opcode),
+    // (Opcode::Ishl, &[I8, I128], &[I8], insert_opcode),
+    (Opcode::Ishl, &[I16, I8], &[I16], insert_opcode),
+    (Opcode::Ishl, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Ishl, &[I16, I32], &[I16], insert_opcode),
+    (Opcode::Ishl, &[I16, I64], &[I16], insert_opcode),
+    // (Opcode::Ishl, &[I16, I128], &[I16], insert_opcode),
+    (Opcode::Ishl, &[I32, I8], &[I32], insert_opcode),
+    (Opcode::Ishl, &[I32, I16], &[I32], insert_opcode),
+    (Opcode::Ishl, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Ishl, &[I32, I64], &[I32], insert_opcode),
+    (Opcode::Ishl, &[I32, I128], &[I32], insert_opcode),
+    (Opcode::Ishl, &[I64, I8], &[I64], insert_opcode),
+    (Opcode::Ishl, &[I64, I16], &[I64], insert_opcode),
+    (Opcode::Ishl, &[I64, I32], &[I64], insert_opcode),
+    (Opcode::Ishl, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Ishl, &[I64, I128], &[I64], insert_opcode),
+    (Opcode::Ishl, &[I128, I8], &[I128], insert_opcode),
+    (Opcode::Ishl, &[I128, I16], &[I128], insert_opcode),
+    (Opcode::Ishl, &[I128, I32], &[I128], insert_opcode),
+    (Opcode::Ishl, &[I128, I64], &[I128], insert_opcode),
+    (Opcode::Ishl, &[I128, I128], &[I128], insert_opcode),
+    // Sshr
+    // Some test cases disabled due to: https://github.com/bytecodealliance/wasmtime/issues/4699
+    (Opcode::Sshr, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Sshr, &[I8, I16], &[I8], insert_opcode),
+    (Opcode::Sshr, &[I8, I32], &[I8], insert_opcode),
+    (Opcode::Sshr, &[I8, I64], &[I8], insert_opcode),
+    // (Opcode::Sshr, &[I8, I128], &[I8], insert_opcode),
+    (Opcode::Sshr, &[I16, I8], &[I16], insert_opcode),
+    (Opcode::Sshr, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Sshr, &[I16, I32], &[I16], insert_opcode),
+    (Opcode::Sshr, &[I16, I64], &[I16], insert_opcode),
+    // (Opcode::Sshr, &[I16, I128], &[I16], insert_opcode),
+    (Opcode::Sshr, &[I32, I8], &[I32], insert_opcode),
+    (Opcode::Sshr, &[I32, I16], &[I32], insert_opcode),
+    (Opcode::Sshr, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Sshr, &[I32, I64], &[I32], insert_opcode),
+    (Opcode::Sshr, &[I32, I128], &[I32], insert_opcode),
+    (Opcode::Sshr, &[I64, I8], &[I64], insert_opcode),
+    (Opcode::Sshr, &[I64, I16], &[I64], insert_opcode),
+    (Opcode::Sshr, &[I64, I32], &[I64], insert_opcode),
+    (Opcode::Sshr, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Sshr, &[I64, I128], &[I64], insert_opcode),
+    (Opcode::Sshr, &[I128, I8], &[I128], insert_opcode),
+    (Opcode::Sshr, &[I128, I16], &[I128], insert_opcode),
+    (Opcode::Sshr, &[I128, I32], &[I128], insert_opcode),
+    (Opcode::Sshr, &[I128, I64], &[I128], insert_opcode),
+    (Opcode::Sshr, &[I128, I128], &[I128], insert_opcode),
+    // Ushr
+    // Some test cases disabled due to: https://github.com/bytecodealliance/wasmtime/issues/4699
+    (Opcode::Ushr, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Ushr, &[I8, I16], &[I8], insert_opcode),
+    (Opcode::Ushr, &[I8, I32], &[I8], insert_opcode),
+    (Opcode::Ushr, &[I8, I64], &[I8], insert_opcode),
+    // (Opcode::Ushr, &[I8, I128], &[I8], insert_opcode),
+    (Opcode::Ushr, &[I16, I8], &[I16], insert_opcode),
+    (Opcode::Ushr, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Ushr, &[I16, I32], &[I16], insert_opcode),
+    (Opcode::Ushr, &[I16, I64], &[I16], insert_opcode),
+    // (Opcode::Ushr, &[I16, I128], &[I16], insert_opcode),
+    (Opcode::Ushr, &[I32, I8], &[I32], insert_opcode),
+    (Opcode::Ushr, &[I32, I16], &[I32], insert_opcode),
+    (Opcode::Ushr, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Ushr, &[I32, I64], &[I32], insert_opcode),
+    (Opcode::Ushr, &[I32, I128], &[I32], insert_opcode),
+    (Opcode::Ushr, &[I64, I8], &[I64], insert_opcode),
+    (Opcode::Ushr, &[I64, I16], &[I64], insert_opcode),
+    (Opcode::Ushr, &[I64, I32], &[I64], insert_opcode),
+    (Opcode::Ushr, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Ushr, &[I64, I128], &[I64], insert_opcode),
+    (Opcode::Ushr, &[I128, I8], &[I128], insert_opcode),
+    (Opcode::Ushr, &[I128, I16], &[I128], insert_opcode),
+    (Opcode::Ushr, &[I128, I32], &[I128], insert_opcode),
+    (Opcode::Ushr, &[I128, I64], &[I128], insert_opcode),
+    (Opcode::Ushr, &[I128, I128], &[I128], insert_opcode),
+    // Uextend
+    (Opcode::Uextend, &[I8], &[I16], insert_opcode),
+    (Opcode::Uextend, &[I8], &[I32], insert_opcode),
+    (Opcode::Uextend, &[I8], &[I64], insert_opcode),
+    (Opcode::Uextend, &[I8], &[I128], insert_opcode),
+    (Opcode::Uextend, &[I16], &[I32], insert_opcode),
+    (Opcode::Uextend, &[I16], &[I64], insert_opcode),
+    (Opcode::Uextend, &[I16], &[I128], insert_opcode),
+    (Opcode::Uextend, &[I32], &[I64], insert_opcode),
+    (Opcode::Uextend, &[I32], &[I128], insert_opcode),
+    (Opcode::Uextend, &[I64], &[I128], insert_opcode),
+    // Sextend
+    (Opcode::Sextend, &[I8], &[I16], insert_opcode),
+    (Opcode::Sextend, &[I8], &[I32], insert_opcode),
+    (Opcode::Sextend, &[I8], &[I64], insert_opcode),
+    (Opcode::Sextend, &[I8], &[I128], insert_opcode),
+    (Opcode::Sextend, &[I16], &[I32], insert_opcode),
+    (Opcode::Sextend, &[I16], &[I64], insert_opcode),
+    (Opcode::Sextend, &[I16], &[I128], insert_opcode),
+    (Opcode::Sextend, &[I32], &[I64], insert_opcode),
+    (Opcode::Sextend, &[I32], &[I128], insert_opcode),
+    (Opcode::Sextend, &[I64], &[I128], insert_opcode),
+    // Ireduce
+    (Opcode::Ireduce, &[I16], &[I8], insert_opcode),
+    (Opcode::Ireduce, &[I32], &[I8], insert_opcode),
+    (Opcode::Ireduce, &[I32], &[I16], insert_opcode),
+    (Opcode::Ireduce, &[I64], &[I8], insert_opcode),
+    (Opcode::Ireduce, &[I64], &[I16], insert_opcode),
+    (Opcode::Ireduce, &[I64], &[I32], insert_opcode),
+    (Opcode::Ireduce, &[I128], &[I8], insert_opcode),
+    (Opcode::Ireduce, &[I128], &[I16], insert_opcode),
+    (Opcode::Ireduce, &[I128], &[I32], insert_opcode),
+    (Opcode::Ireduce, &[I128], &[I64], insert_opcode),
+    // Isplit
+    (Opcode::Isplit, &[I128], &[I64, I64], insert_opcode),
+    // Iconcat
+    (Opcode::Iconcat, &[I64, I64], &[I128], insert_opcode),
     // Fadd
     (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),
     (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode),
@@ -169,9 +395,8 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Fcopysign, &[F32, F32], &[F32], insert_opcode),
     (Opcode::Fcopysign, &[F64, F64], &[F64], insert_opcode),
     // Fma
-    // TODO: Missing on X86, see https://github.com/bytecodealliance/wasmtime/pull/4460
-    // (Opcode::Fma, &[F32, F32, F32], &[F32], insert_opcode),
-    // (Opcode::Fma, &[F64, F64, F64], &[F64], insert_opcode),
+    (Opcode::Fma, &[F32, F32, F32], &[F32], insert_opcode),
+    (Opcode::Fma, &[F64, F64, F64], &[F64], insert_opcode),
     // Fabs
     (Opcode::Fabs, &[F32], &[F32], insert_opcode),
     (Opcode::Fabs, &[F64], &[F64], insert_opcode),
@@ -193,6 +418,17 @@ const OPCODE_SIGNATURES: &'static [(
     // Nearest
     (Opcode::Nearest, &[F32], &[F32], insert_opcode),
     (Opcode::Nearest, &[F64], &[F64], insert_opcode),
+    // Fcmp
+    (Opcode::Fcmp, &[F32, F32], &[B1], insert_cmp),
+    (Opcode::Fcmp, &[F64, F64], &[B1], insert_cmp),
+    // Icmp
+    (Opcode::Icmp, &[I8, I8], &[B1], insert_cmp),
+    (Opcode::Icmp, &[I16, I16], &[B1], insert_cmp),
+    (Opcode::Icmp, &[I32, I32], &[B1], insert_cmp),
+    (Opcode::Icmp, &[I64, I64], &[B1], insert_cmp),
+    // TODO: icmp of/nof broken for i128 on x86_64
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4406
+    // (Opcode::Icmp, &[I128, I128], &[B1], insert_cmp),
     // Stack Access
     (Opcode::StackStore, &[I8], &[], insert_stack_store),
     (Opcode::StackStore, &[I16], &[], insert_stack_store),
@@ -215,6 +451,8 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::F64const, &[], &[F64], insert_const),
     // Bool Consts
     (Opcode::Bconst, &[], &[B1], insert_const),
+    // Call
+    (Opcode::Call, &[], &[], insert_call),
 ];
 
 pub struct FunctionGenerator<'r, 'data>
@@ -226,6 +464,8 @@ where
     vars: Vec<(Type, Variable)>,
     blocks: Vec<(Block, BlockSignature)>,
     jump_tables: Vec<JumpTable>,
+    func_refs: Vec<(Signature, FuncRef)>,
+    next_func_index: u32,
     static_stack_slots: Vec<StackSlot>,
 }
 
@@ -240,7 +480,9 @@ where
             vars: vec![],
             blocks: vec![],
             jump_tables: vec![],
+            func_refs: vec![],
             static_stack_slots: vec![],
+            next_func_index: 0,
         }
     }
 
@@ -252,25 +494,6 @@ where
     fn generate_callconv(&mut self) -> Result<CallConv> {
         // TODO: Generate random CallConvs per target
         Ok(CallConv::SystemV)
-    }
-
-    fn generate_intcc(&mut self) -> Result<IntCC> {
-        Ok(*self.u.choose(
-            &[
-                IntCC::Equal,
-                IntCC::NotEqual,
-                IntCC::SignedLessThan,
-                IntCC::SignedGreaterThanOrEqual,
-                IntCC::SignedGreaterThan,
-                IntCC::SignedLessThanOrEqual,
-                IntCC::UnsignedLessThan,
-                IntCC::UnsignedGreaterThanOrEqual,
-                IntCC::UnsignedGreaterThan,
-                IntCC::UnsignedLessThanOrEqual,
-                IntCC::Overflow,
-                IntCC::NotOverflow,
-            ][..],
-        )?)
     }
 
     fn generate_type(&mut self) -> Result<Type> {
@@ -288,9 +511,20 @@ where
     }
 
     fn generate_abi_param(&mut self) -> Result<AbiParam> {
-        // TODO: Generate more advanced abi params (structs/purposes/extensions/etc...)
-        let ty = self.generate_type()?;
-        Ok(AbiParam::new(ty))
+        let value_type = self.generate_type()?;
+        // TODO: There are more argument purposes to be explored...
+        let purpose = ArgumentPurpose::Normal;
+        let extension = match self.u.int_in_range(0..=2)? {
+            2 => ArgumentExtension::Sext,
+            1 => ArgumentExtension::Uext,
+            _ => ArgumentExtension::None,
+        };
+
+        Ok(AbiParam {
+            value_type,
+            purpose,
+            extension,
+        })
     }
 
     fn generate_signature(&mut self) -> Result<Signature> {
@@ -466,7 +700,7 @@ where
 
     fn generate_bricmp(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         let (block, args) = self.generate_target_block(builder)?;
-        let cond = self.generate_intcc()?;
+        let cond = *self.u.choose(IntCC::all())?;
 
         let bricmp_types = [
             I8, I16, I32,
@@ -574,6 +808,42 @@ where
         Ok(())
     }
 
+    fn generate_funcrefs(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
+        for _ in 0..self.param(&self.config.funcrefs_per_function)? {
+            let (ext_name, sig) = if self.u.arbitrary::<bool>()? {
+                let func_index = self.next_func_index;
+                self.next_func_index = self.next_func_index.wrapping_add(1);
+                let user_func_ref = builder
+                    .func
+                    .declare_imported_user_function(UserExternalName {
+                        namespace: 0,
+                        index: func_index,
+                    });
+                let name = ExternalName::User(user_func_ref);
+                let signature = self.generate_signature()?;
+                (name, signature)
+            } else {
+                // Use udivi64 as an example of a libcall function.
+                let mut signature = Signature::new(CallConv::Fast);
+                signature.params.push(AbiParam::new(I64));
+                signature.params.push(AbiParam::new(I64));
+                signature.returns.push(AbiParam::new(I64));
+                (ExternalName::LibCall(LibCall::UdivI64), signature)
+            };
+
+            let sig_ref = builder.import_signature(sig.clone());
+            let func_ref = builder.import_function(ExtFuncData {
+                name: ext_name,
+                signature: sig_ref,
+                colocated: self.u.arbitrary()?,
+            });
+
+            self.func_refs.push((sig, func_ref));
+        }
+
+        Ok(())
+    }
+
     fn generate_stack_slots(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         for _ in 0..self.param(&self.config.static_stack_slots_per_function)? {
             let bytes = self.param(&self.config.static_stack_slot_size)? as u32;
@@ -628,11 +898,19 @@ where
 
         let blocks = (0..block_count)
             .map(|i| {
+                let is_entry = i == 0;
                 let block = builder.create_block();
+
+                // Optionally mark blocks that are not the entry block as cold
+                if !is_entry {
+                    if bool::arbitrary(self.u)? {
+                        builder.set_cold_block(block);
+                    }
+                }
 
                 // The first block has to have the function signature, but for the rest of them we generate
                 // a random signature;
-                if i == 0 {
+                if is_entry {
                     builder.append_block_params_for_function_params(block);
                     Ok((block, sig.params.iter().map(|a| a.value_type).collect()))
                 } else {
@@ -692,7 +970,7 @@ where
         let sig = self.generate_signature()?;
 
         let mut fn_builder_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig.clone());
+        let mut func = Function::with_name_signature(UserFuncName::user(0, 1), sig.clone());
 
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
 
@@ -700,6 +978,7 @@ where
 
         // Function preamble
         self.generate_jumptables(&mut builder)?;
+        self.generate_funcrefs(&mut builder)?;
         self.generate_stack_slots(&mut builder)?;
 
         // Main instruction generation loop

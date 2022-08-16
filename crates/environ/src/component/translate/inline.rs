@@ -45,9 +45,9 @@
 //! side-effectful initializers are emitted to the `GlobalInitializer` list in the
 //! final `Component`.
 
-use crate::component::translate::adapt::{Adapter, AdapterOptions, Adapters};
+use crate::component::translate::adapt::{Adapter, AdapterOptions};
 use crate::component::translate::*;
-use crate::{EntityType, PrimaryMap, SignatureIndex};
+use crate::{EntityType, PrimaryMap};
 use indexmap::IndexMap;
 
 pub(super) fn run(
@@ -55,18 +55,13 @@ pub(super) fn run(
     result: &Translation<'_>,
     nested_modules: &PrimaryMap<StaticModuleIndex, ModuleTranslation<'_>>,
     nested_components: &PrimaryMap<StaticComponentIndex, Translation<'_>>,
-) -> Result<(Component, Adapters)> {
+) -> Result<dfg::ComponentDfg> {
     let mut inliner = Inliner {
         types,
         nested_modules,
         nested_components,
-        result: Component::default(),
-        adapters: Adapters::default(),
+        result: Default::default(),
         import_path_interner: Default::default(),
-        runtime_realloc_interner: Default::default(),
-        runtime_post_return_interner: Default::default(),
-        runtime_memory_interner: Default::default(),
-        runtime_always_trap_interner: Default::default(),
         runtime_instances: PrimaryMap::default(),
     };
 
@@ -109,7 +104,7 @@ pub(super) fn run(
     }
     inliner.result.exports = export_map;
 
-    Ok((inliner.result, inliner.adapters))
+    Ok(inliner.result)
 }
 
 struct Inliner<'a> {
@@ -134,21 +129,14 @@ struct Inliner<'a> {
 
     /// The final `Component` that is being constructed and returned from this
     /// inliner.
-    result: Component,
-
-    /// Metadata about fused adapters identified throughout inlining.
-    adapters: Adapters,
+    result: dfg::ComponentDfg,
 
     // Maps used to "intern" various runtime items to only save them once at
     // runtime instead of multiple times.
     import_path_interner: HashMap<ImportPath<'a>, RuntimeImportIndex>,
-    runtime_realloc_interner: HashMap<CoreDef, RuntimeReallocIndex>,
-    runtime_post_return_interner: HashMap<CoreDef, RuntimePostReturnIndex>,
-    runtime_memory_interner: HashMap<CoreExport<MemoryIndex>, RuntimeMemoryIndex>,
-    runtime_always_trap_interner: HashMap<SignatureIndex, RuntimeAlwaysTrapIndex>,
 
     /// Origin information about where each runtime instance came from
-    runtime_instances: PrimaryMap<RuntimeInstanceIndex, InstanceModule>,
+    runtime_instances: PrimaryMap<dfg::InstanceId, InstanceModule>,
 }
 
 /// A "stack frame" as part of the inlining process, or the progress through
@@ -180,10 +168,10 @@ struct InlinerFrame<'a> {
     args: HashMap<&'a str, ComponentItemDef<'a>>,
 
     // core wasm index spaces
-    funcs: PrimaryMap<FuncIndex, CoreDef>,
-    memories: PrimaryMap<MemoryIndex, CoreExport<EntityIndex>>,
-    tables: PrimaryMap<TableIndex, CoreExport<EntityIndex>>,
-    globals: PrimaryMap<GlobalIndex, CoreExport<EntityIndex>>,
+    funcs: PrimaryMap<FuncIndex, dfg::CoreDef>,
+    memories: PrimaryMap<MemoryIndex, dfg::CoreExport<EntityIndex>>,
+    tables: PrimaryMap<TableIndex, dfg::CoreExport<EntityIndex>>,
+    globals: PrimaryMap<GlobalIndex, dfg::CoreExport<EntityIndex>>,
     modules: PrimaryMap<ModuleIndex, ModuleDef<'a>>,
 
     // component model index spaces
@@ -236,6 +224,10 @@ enum ComponentItemDef<'a> {
     Instance(ComponentInstanceDef<'a>),
     Func(ComponentFuncDef<'a>),
     Module(ModuleDef<'a>),
+    // TODO: https://github.com/bytecodealliance/wasmtime/issues/4494
+    // The entity is a type; currently unsupported but represented here
+    // so that type exports can be ignored for now.
+    Type,
 }
 
 #[derive(Clone)]
@@ -261,7 +253,7 @@ enum ModuleInstanceDef<'a> {
     /// The `RuntimeInstanceIndex` was the index allocated as this was the
     /// `n`th instantiation and the `ModuleIndex` points into an
     /// `InlinerFrame`'s local index space.
-    Instantiated(RuntimeInstanceIndex, ModuleIndex),
+    Instantiated(dfg::InstanceId, ModuleIndex),
 
     /// A "synthetic" core wasm module which is just a bag of named indices.
     ///
@@ -278,7 +270,7 @@ enum ComponentFuncDef<'a> {
     /// A core wasm function was lifted into a component function.
     Lifted {
         ty: TypeFuncIndex,
-        func: CoreDef,
+        func: dfg::CoreDef,
         options: AdapterOptions,
     },
 }
@@ -389,6 +381,7 @@ impl<'a> Inliner<'a> {
                 ComponentItemDef::Func(i) => {
                     frame.component_funcs.push(i.clone());
                 }
+                ComponentItemDef::Type => {}
             },
 
             // Lowering a component function to a core wasm function is
@@ -408,19 +401,14 @@ impl<'a> Inliner<'a> {
                     // trampoline to enter WebAssembly. That's recorded here
                     // with all relevant information.
                     ComponentFuncDef::Import(path) => {
-                        let index = LoweredIndex::from_u32(self.result.num_lowerings);
-                        self.result.num_lowerings += 1;
                         let import = self.runtime_import(path);
                         let options = self.canonical_options(options_lower);
-                        self.result
-                            .initializers
-                            .push(GlobalInitializer::LowerImport(LowerImport {
-                                canonical_abi,
-                                import,
-                                index,
-                                options,
-                            }));
-                        CoreDef::Lowered(index)
+                        let index = self.result.lowerings.push_uniq(dfg::LowerImport {
+                            canonical_abi,
+                            import,
+                            options,
+                        });
+                        dfg::CoreDef::Lowered(index)
                     }
 
                     // This case handles when a lifted function is later
@@ -452,22 +440,8 @@ impl<'a> Inliner<'a> {
                         options: options_lift,
                         ..
                     } if options_lift.instance == options_lower.instance => {
-                        let index = *self
-                            .runtime_always_trap_interner
-                            .entry(canonical_abi)
-                            .or_insert_with(|| {
-                                let index =
-                                    RuntimeAlwaysTrapIndex::from_u32(self.result.num_always_trap);
-                                self.result.num_always_trap += 1;
-                                self.result.initializers.push(GlobalInitializer::AlwaysTrap(
-                                    AlwaysTrap {
-                                        canonical_abi,
-                                        index,
-                                    },
-                                ));
-                                index
-                            });
-                        CoreDef::AlwaysTrap(index)
+                        let index = self.result.always_trap.push_uniq(canonical_abi);
+                        dfg::CoreDef::AlwaysTrap(index)
                     }
 
                     // Lowering a lifted function where the destination
@@ -503,14 +477,14 @@ impl<'a> Inliner<'a> {
                         func,
                         options: options_lift,
                     } => {
-                        let adapter_idx = self.adapters.adapters.push(Adapter {
+                        let adapter_idx = self.result.adapters.push_uniq(Adapter {
                             lift_ty: *lift_ty,
                             lift_options: options_lift.clone(),
                             lower_ty,
                             lower_options: options_lower,
                             func: func.clone(),
                         });
-                        CoreDef::Adapter(adapter_idx)
+                        dfg::CoreDef::Adapter(adapter_idx)
                     }
                 };
                 frame.funcs.push(func);
@@ -555,7 +529,7 @@ impl<'a> Inliner<'a> {
                             );
                         }
                         instance_module = InstanceModule::Static(*idx);
-                        InstantiateModule::Static(*idx, defs.into())
+                        dfg::Instance::Static(*idx, defs.into())
                     }
                     ModuleDef::Import(path, ty) => {
                         let mut defs = IndexMap::new();
@@ -569,17 +543,13 @@ impl<'a> Inliner<'a> {
                         }
                         let index = self.runtime_import(path);
                         instance_module = InstanceModule::Import(*ty);
-                        InstantiateModule::Import(index, defs)
+                        dfg::Instance::Import(index, defs)
                     }
                 };
 
-                let idx = RuntimeInstanceIndex::from_u32(self.result.num_runtime_instances);
-                self.result.num_runtime_instances += 1;
+                let idx = self.result.instances.push(init);
                 let idx2 = self.runtime_instances.push(instance_module);
                 assert_eq!(idx, idx2);
-                self.result
-                    .initializers
-                    .push(GlobalInitializer::InstantiateModule(init));
                 frame
                     .module_instances
                     .push(ModuleInstanceDef::Instantiated(idx, *module));
@@ -663,7 +633,7 @@ impl<'a> Inliner<'a> {
             AliasExportTable(instance, name) => {
                 frame.tables.push(
                     match self.core_def_of_module_instance_export(frame, *instance, *name) {
-                        CoreDef::Export(e) => e,
+                        dfg::CoreDef::Export(e) => e,
                         _ => unreachable!(),
                     },
                 );
@@ -672,7 +642,7 @@ impl<'a> Inliner<'a> {
             AliasExportGlobal(instance, name) => {
                 frame.globals.push(
                     match self.core_def_of_module_instance_export(frame, *instance, *name) {
-                        CoreDef::Export(e) => e,
+                        dfg::CoreDef::Export(e) => e,
                         _ => unreachable!(),
                     },
                 );
@@ -681,7 +651,7 @@ impl<'a> Inliner<'a> {
             AliasExportMemory(instance, name) => {
                 frame.memories.push(
                     match self.core_def_of_module_instance_export(frame, *instance, *name) {
-                        CoreDef::Export(e) => e,
+                        dfg::CoreDef::Export(e) => e,
                         _ => unreachable!(),
                     },
                 );
@@ -738,6 +708,9 @@ impl<'a> Inliner<'a> {
                             let instance = i.clone();
                             frame.component_instances.push(instance);
                         }
+                        ComponentItemDef::Type => {
+                            // Ignore type aliases for now
+                        }
                     },
                 }
             }
@@ -783,7 +756,7 @@ impl<'a> Inliner<'a> {
         frame: &InlinerFrame<'a>,
         instance: ModuleInstanceIndex,
         name: &'a str,
-    ) -> CoreDef {
+    ) -> dfg::CoreDef {
         match &frame.module_instances[instance] {
             // Instantiations of a statically known module means that we can
             // refer to the exported item by a precise index, skipping name
@@ -800,7 +773,7 @@ impl<'a> Inliner<'a> {
                     }
                     ModuleDef::Import(..) => ExportItem::Name(name.to_string()),
                 };
-                CoreExport {
+                dfg::CoreExport {
                     instance: *instance,
                     item,
                 }
@@ -866,57 +839,17 @@ impl<'a> Inliner<'a> {
     /// memories/functions are inserted into the global initializer list for
     /// use at runtime. This is only used for lowered host functions and lifted
     /// functions exported to the host.
-    fn canonical_options(&mut self, options: AdapterOptions) -> CanonicalOptions {
-        let memory = options.memory.map(|export| {
-            *self
-                .runtime_memory_interner
-                .entry(export.clone())
-                .or_insert_with(|| {
-                    let index = RuntimeMemoryIndex::from_u32(self.result.num_runtime_memories);
-                    self.result.num_runtime_memories += 1;
-                    self.result
-                        .initializers
-                        .push(GlobalInitializer::ExtractMemory(ExtractMemory {
-                            index,
-                            export,
-                        }));
-                    index
-                })
-        });
-        let realloc = options.realloc.map(|def| {
-            *self
-                .runtime_realloc_interner
-                .entry(def.clone())
-                .or_insert_with(|| {
-                    let index = RuntimeReallocIndex::from_u32(self.result.num_runtime_reallocs);
-                    self.result.num_runtime_reallocs += 1;
-                    self.result
-                        .initializers
-                        .push(GlobalInitializer::ExtractRealloc(ExtractRealloc {
-                            index,
-                            def,
-                        }));
-                    index
-                })
-        });
-        let post_return = options.post_return.map(|def| {
-            *self
-                .runtime_post_return_interner
-                .entry(def.clone())
-                .or_insert_with(|| {
-                    let index =
-                        RuntimePostReturnIndex::from_u32(self.result.num_runtime_post_returns);
-                    self.result.num_runtime_post_returns += 1;
-                    self.result
-                        .initializers
-                        .push(GlobalInitializer::ExtractPostReturn(ExtractPostReturn {
-                            index,
-                            def,
-                        }));
-                    index
-                })
-        });
-        CanonicalOptions {
+    fn canonical_options(&mut self, options: AdapterOptions) -> dfg::CanonicalOptions {
+        let memory = options
+            .memory
+            .map(|export| self.result.memories.push_uniq(export));
+        let realloc = options
+            .realloc
+            .map(|def| self.result.reallocs.push_uniq(def));
+        let post_return = options
+            .post_return
+            .map(|def| self.result.post_returns.push_uniq(def));
+        dfg::CanonicalOptions {
             instance: options.instance,
             string_encoding: options.string_encoding,
             memory,
@@ -929,25 +862,17 @@ impl<'a> Inliner<'a> {
         &mut self,
         name: &str,
         def: ComponentItemDef<'a>,
-        map: &mut IndexMap<String, Export>,
+        map: &mut IndexMap<String, dfg::Export>,
     ) -> Result<()> {
         let export = match def {
             // Exported modules are currently saved in a `PrimaryMap`, at
             // runtime, so an index (`RuntimeModuleIndex`) is assigned here and
             // then an initializer is recorded about where the module comes
             // from.
-            ComponentItemDef::Module(module) => {
-                let index = RuntimeModuleIndex::from_u32(self.result.num_runtime_modules);
-                self.result.num_runtime_modules += 1;
-                let init = match module {
-                    ModuleDef::Static(idx) => GlobalInitializer::SaveStaticModule(idx),
-                    ModuleDef::Import(path, _) => {
-                        GlobalInitializer::SaveModuleImport(self.runtime_import(&path))
-                    }
-                };
-                self.result.initializers.push(init);
-                Export::Module(index)
-            }
+            ComponentItemDef::Module(module) => match module {
+                ModuleDef::Static(idx) => dfg::Export::ModuleStatic(idx),
+                ModuleDef::Import(path, _) => dfg::Export::ModuleImport(self.runtime_import(&path)),
+            },
 
             ComponentItemDef::Func(func) => match func {
                 // If this is a lifted function from something lowered in this
@@ -955,7 +880,7 @@ impl<'a> Inliner<'a> {
                 // here.
                 ComponentFuncDef::Lifted { ty, func, options } => {
                     let options = self.canonical_options(options);
-                    Export::LiftedFunction { ty, func, options }
+                    dfg::Export::LiftedFunction { ty, func, options }
                 }
 
                 // Currently reexported functions from an import are not
@@ -995,13 +920,18 @@ impl<'a> Inliner<'a> {
                         }
                     }
                 }
-                Export::Instance(result)
+                dfg::Export::Instance(result)
             }
 
             // FIXME(#4283) should make an official decision on whether this is
             // the final treatment of this or not.
             ComponentItemDef::Component(_) => {
                 bail!("exporting a component from the root component is not supported")
+            }
+
+            ComponentItemDef::Type => {
+                // Ignore type exports for now
+                return Ok(());
             }
         };
 
@@ -1049,6 +979,7 @@ impl<'a> InlinerFrame<'a> {
                 ComponentItemDef::Instance(self.component_instances[i].clone())
             }
             ComponentItem::Module(i) => ComponentItemDef::Module(self.modules[i].clone()),
+            ComponentItem::Type(_) => ComponentItemDef::Type,
         }
     }
 

@@ -1951,9 +1951,6 @@ impl TermEnv {
                 for def in defs {
                     // Check that the given variable name does not already exist.
                     let name = tyenv.intern_mut(&def.var);
-                    if bindings.vars.iter().any(|bv| bv.name == name) {
-                        tyenv.report_error(pos, format!("Variable '{}' already bound", def.var.0));
-                    }
 
                     // Look up the type.
                     let tysym = match tyenv.intern(&def.ty) {

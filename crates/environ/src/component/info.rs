@@ -147,6 +147,10 @@ pub struct Component {
     /// The number of functions which "always trap" used to implement
     /// `canon.lower` of `canon.lift`'d functions within the same component.
     pub num_always_trap: u32,
+
+    /// The number of host transcoder functions needed for strings in adapter
+    /// modules.
+    pub num_transcoders: u32,
 }
 
 /// GlobalInitializer instructions to get processed when instantiating a component
@@ -207,6 +211,11 @@ pub enum GlobalInitializer {
 
     /// Same as `SaveModuleUpvar`, but for imports.
     SaveModuleImport(RuntimeImportIndex),
+
+    /// Similar to `ExtractMemory` and friends and indicates that a
+    /// `VMCallerCheckedAnyfunc` needs to be initialized for a transcoder
+    /// function and this will later be used to instantiate an adapter module.
+    Transcoder(Transcoder),
 }
 
 /// Metadata for extraction of a memory of what's being extracted and where it's
@@ -313,20 +322,12 @@ pub enum CoreDef {
     /// function is immediately `canon lower`'d in the same instance. Such a
     /// function always traps at runtime.
     AlwaysTrap(RuntimeAlwaysTrapIndex),
-    /// This refers to a core wasm function which is a synthesized fused adapter
-    /// between two other core wasm functions.
-    ///
-    /// The adapter's information is identified by `AdapterIndex` which is
-    /// available through an auxiliary map created during compilation of a
-    /// component. For more information see `adapt.rs`.
-    ///
-    /// Note that this is an intermediate variant which is replaced by the time
-    /// a component is fully compiled. This will be replaced with the `Export`
-    /// variant which refers to the export of an adapter module.
-    Adapter(AdapterIndex),
     /// This is a reference to a wasm global which represents the
     /// runtime-managed flags for a wasm instance.
     InstanceFlags(RuntimeComponentInstanceIndex),
+    /// This refers to a cranelift-generated trampoline which calls to a
+    /// host-defined transcoding function.
+    Transcoder(RuntimeTranscoderIndex),
 }
 
 impl<T> From<CoreExport<T>> for CoreDef
@@ -436,7 +437,7 @@ pub struct CanonicalOptions {
 // Note that the `repr(u8)` is load-bearing here since this is used in an
 // `extern "C" fn()` function argument which is called from cranelift-compiled
 // code so we must know the representation of this.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[allow(missing_docs)]
 #[repr(u8)]
 pub enum StringEncoding {
@@ -444,3 +445,42 @@ pub enum StringEncoding {
     Utf16,
     CompactUtf16,
 }
+
+/// Information about a string transcoding function required by an adapter
+/// module.
+///
+/// A transcoder is used when strings are passed between adapter modules,
+/// optionally changing string encodings at the same time. The transcoder is
+/// implemented in a few different layers:
+///
+/// * Each generated adapter module has some glue around invoking the transcoder
+///   represented by this item. This involves bounds-checks and handling
+///   `realloc` for example.
+/// * Each transcoder gets a cranelift-generated trampoline which has the
+///   appropriate signature for the adapter module in question. Existence of
+///   this initializer indicates that this should be compiled by Cranelift.
+/// * The cranelift-generated trampoline will invoke a "transcoder libcall"
+///   which is implemented natively in Rust that has a signature independent of
+///   memory64 configuration options for example.
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
+pub struct Transcoder {
+    /// The index of the transcoder being defined and initialized.
+    ///
+    /// This indicates which `VMCallerCheckedAnyfunc` slot is written to in a
+    /// `VMComponentContext`.
+    pub index: RuntimeTranscoderIndex,
+    /// The transcoding operation being performed.
+    pub op: Transcode,
+    /// The linear memory that the string is being read from.
+    pub from: RuntimeMemoryIndex,
+    /// Whether or not the source linear memory is 64-bit or not.
+    pub from64: bool,
+    /// The linear memory that the string is being written to.
+    pub to: RuntimeMemoryIndex,
+    /// Whether or not the destination linear memory is 64-bit or not.
+    pub to64: bool,
+    /// The wasm signature of the cranelift-generated trampoline.
+    pub signature: SignatureIndex,
+}
+
+pub use crate::fact::{FixedEncoding, Transcode};

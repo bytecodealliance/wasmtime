@@ -404,8 +404,11 @@ paramlist    : param { "," param }
 retlist      : paramlist
 param        : type [paramext] [paramspecial]
 paramext     : "uext" | "sext"
-paramspecial : "sret" | "link" | "fp" | "csr" | "vmctx" | "sigid" | "stack_limit"
-callconv     : "fast" | "cold" | "system_v" | "fastcall" | "baldrdash_system_v" | "baldrdash_windows"
+paramspecial : "sarg" ( num ) | "sret" | "vmctx" | "sigid" | "stack_limit"
+callconv     : "fast" | "cold" | "system_v" | "windows_fastcall"
+             | "wasmtime_system_v" | "wasmtime_fastcall"
+             | "apple_aarch64" | "wasmtime_apple_aarch64"
+             | "probestack"
 ```
 
 A function's calling convention determines exactly how arguments and return
@@ -430,8 +433,6 @@ system, a function's calling convention is only fully determined by a
 | cold      |  not-ABI-stable convention for infrequently executed code |
 | system_v  |  System V-style convention used on many platforms |
 | fastcall  |  Windows "fastcall" convention, also used for x64 and ARM |
-| baldrdash_system_v |  SpiderMonkey WebAssembly convention on platforms natively using SystemV. |
-| baldrdash_windows  | SpiderMonkey WebAssembly convention on platforms natively using Windows. |
 
 The "not-ABI-stable" conventions do not follow an external specification and
 may change between versions of Cranelift.
@@ -682,7 +683,7 @@ H = dynamic Base, min MinBytes, bound BoundGV, offset_guard OffsetGuardBytes
 
 #### Heap examples
 
-The SpiderMonkey VM prefers to use fixed heaps with a 4 GB bound and 2 GB of
+Some Wasm VMs prefer to use fixed heaps with a 4 GB bound and 2 GB of
 offset-guard pages when running WebAssembly code on 64-bit CPUs. The combination
 of a 4 GB fixed bound and 1-byte bounds checks means that no code needs to be
 generated for bounds checks at all:
@@ -690,7 +691,7 @@ generated for bounds checks at all:
 ```
 test verifier
 
-function %add_members(i32, i64 vmctx) -> f32 baldrdash_system_v {
+function %add_members(i32, i64 vmctx) -> f32 {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+64
     heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0x8000_0000
@@ -711,7 +712,7 @@ KB offset-guard page still has opportunities for sharing bounds checking code:
 ```
 test verifier
 
-function %add_members(i32, i32 vmctx) -> f32 baldrdash_system_v {
+function %add_members(i32, i32 vmctx) -> f32 {
     gv0 = vmctx
     gv1 = load.i32 notrap aligned gv0+64
     heap0 = static gv1, min 0x1000, bound 0x10_0000, offset_guard 0x1000
@@ -735,7 +736,7 @@ full bounds checking is required for each access:
 ```
 test verifier
 
-function %add_members(i32, i64 vmctx) -> f32 baldrdash_system_v {
+function %add_members(i32, i64 vmctx) -> f32 {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+64
     gv2 = load.i32 notrap aligned gv0+72

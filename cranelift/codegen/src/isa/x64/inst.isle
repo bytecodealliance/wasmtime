@@ -104,6 +104,11 @@
               (src Gpr)
               (dst WritableGpr))
 
+       ;; Like `MovRR` but with a physical register source (for implementing
+       ;; CLIF instructions like `get_stack_pointer`).
+       (MovPReg (src PReg)
+                (dst WritableGpr))
+
        ;; Zero-extended loads, except for 64 bits: movz (bl bq wl wq lq) addr
        ;; reg.
        ;;
@@ -331,13 +336,8 @@
        ;; Return.
        (Ret (rets VecReg))
 
-       ;; A placeholder instruction, generating no code, meaning that a function
-       ;; epilogue must be inserted there.
-       (EpiloguePlaceholder)
-
        ;; Jump to a known target: jmp simm32.
        (JmpKnown (dst MachLabel))
-
 
        ;; One-way conditional branch: jcond cond target.
        ;;
@@ -366,7 +366,7 @@
        ;; The generated code sequence is described in the emit's function match
        ;; arm for this instruction.
        ;;
-       ;; See comment in lowering about the temporaries signedness.
+       ;; See comment on jmp_table_seq below about the temporaries signedness.
        (JmpTableSeq (idx Reg)
                     (tmp1 WritableReg)
                     (tmp2 WritableReg)
@@ -379,6 +379,16 @@
        ;; Traps if the condition code is set.
        (TrapIf (cc CC)
                (trap_code TrapCode))
+
+       ;; Traps if both of the condition codes are set.
+       (TrapIfAnd (cc1 CC)
+                  (cc2 CC)
+                  (trap_code TrapCode))
+
+       ;; Traps if either of the condition codes are set.
+       (TrapIfOr (cc1 CC)
+                 (cc2 CC)
+                 (trap_code TrapCode))
 
        ;; A debug trap.
        (Hlt)
@@ -483,6 +493,10 @@
        ;; `rax`.
        (MachOTlsGetAddr (symbol ExternalName))
 
+       ;; A Coff TLS symbol access. Returns address of the TLS symbol in
+       ;; `rax`.
+       (CoffTlsGetAddr (symbol ExternalName))
+
        ;; An unwind pseudoinstruction describing the state of the machine at
        ;; this program point.
        (Unwind (inst UnwindInst))
@@ -504,6 +518,24 @@
 (type BoxCallInfo extern (enum))
 
 (type BoxVecMachLabel extern (enum))
+
+(type MachLabelSlice extern (enum))
+
+;; The size of the jump table.
+(decl jump_table_size (BoxVecMachLabel) u32)
+(extern constructor jump_table_size jump_table_size)
+
+;; Extract a the target from a MachLabelSlice with exactly one target.
+(decl single_target (MachLabel) MachLabelSlice)
+(extern extractor single_target single_target)
+
+;; Extract a the targets from a MachLabelSlice with exactly two targets.
+(decl two_targets (MachLabel MachLabel) MachLabelSlice)
+(extern extractor two_targets two_targets)
+
+;; Extract the default target and jump table from a MachLabelSlice.
+(decl jump_table_targets (MachLabel BoxVecMachLabel) MachLabelSlice)
+(extern extractor jump_table_targets jump_table_targets)
 
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
 (decl operand_size_of_type_32_64 (Type) OperandSize)
@@ -528,9 +560,7 @@
             And
             Or
             Xor
-            Mul
-            And8
-            Or8))
+            Mul))
 
 (type UnaryRmROpcode extern
       (enum Bsr
@@ -1047,11 +1077,27 @@
             NLE
             P
             NP))
+
 (decl intcc_to_cc (IntCC) CC)
 (extern constructor intcc_to_cc intcc_to_cc)
 
+(decl cc_invert (CC) CC)
+(extern constructor cc_invert cc_invert)
+
+(decl intcc_reverse (IntCC) IntCC)
+(extern constructor intcc_reverse intcc_reverse)
+
+(decl floatcc_inverse (FloatCC) FloatCC)
+(extern constructor floatcc_inverse floatcc_inverse)
+
+;; Fails if the argument is not either CC.NZ or CC.Z.
+(decl cc_nz_or_z (CC) CC)
+(extern extractor cc_nz_or_z cc_nz_or_z)
+
 (type AvxOpcode extern
-      (enum Vfmadd213ps
+      (enum Vfmadd213ss
+            Vfmadd213sd
+            Vfmadd213ps
             Vfmadd213pd))
 
 (type Avx512Opcode extern
@@ -1345,6 +1391,9 @@
 (decl use_popcnt () Type)
 (extern extractor use_popcnt use_popcnt)
 
+(decl use_fma () Type)
+(extern extractor use_fma use_fma)
+
 ;;;; Helpers for Merging and Sinking Immediates/Loads  ;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Extract a constant `Imm8Reg.Imm8` from a value operand.
@@ -1482,19 +1531,19 @@
 (rule (make_i64x2_from_lanes lo hi)
       (let ((dst_xmm WritableXmm (temp_writable_xmm))
             (dst_reg WritableReg dst_xmm)
-            (_0 Unit (emit (MInst.XmmUninitializedValue dst_xmm)))
-            (_1 Unit (emit (MInst.XmmRmRImm (SseOpcode.Pinsrd)
-                                            dst_reg
-                                            lo
-                                            dst_reg
-                                            0
-                                            (OperandSize.Size64))))
-            (_2 Unit (emit (MInst.XmmRmRImm (SseOpcode.Pinsrd)
-                                            dst_reg
-                                            hi
-                                            dst_reg
-                                            1
-                                            (OperandSize.Size64)))))
+            (_ Unit (emit (MInst.XmmUninitializedValue dst_xmm)))
+            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pinsrd)
+                                           dst_reg
+                                           lo
+                                           dst_reg
+                                           0
+                                           (OperandSize.Size64))))
+            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pinsrd)
+                                           dst_reg
+                                           hi
+                                           dst_reg
+                                           1
+                                           (OperandSize.Size64)))))
         dst_xmm))
 
 ;; Move a `RegMemImm.Reg` operand to an XMM register, if necessary.
@@ -1617,6 +1666,10 @@
 (decl x64_movdqu (XmmMem) Xmm)
 (rule (x64_movdqu from)
       (xmm_unary_rm_r (SseOpcode.Movdqu) from))
+
+(decl x64_movapd (XmmMem) Xmm)
+(rule (x64_movapd src)
+      (xmm_unary_rm_r (SseOpcode.Movapd) src))
 
 (decl x64_pmovsxbw (XmmMem) Xmm)
 (rule (x64_pmovsxbw from)
@@ -2232,6 +2285,11 @@
 (rule (x64_punpcklwd src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Punpcklwd) src1 src2))
 
+;; Helper for creating `unpcklps` instructions.
+(decl x64_unpcklps (Xmm XmmMem) Xmm)
+(rule (x64_unpcklps src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Unpcklps) src1 src2))
+
 ;; Helper for creating `andnps` instructions.
 (decl x64_andnps (Xmm XmmMem) Xmm)
 (rule (x64_andnps src1 src2)
@@ -2524,6 +2582,10 @@
                                         dst))))
         dst))
 
+(decl x64_pmaddubsw (Xmm XmmMem) Xmm)
+(rule (x64_pmaddubsw src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pmaddubsw) src1 src2))
+
 ;; Helper for creating `insertps` instructions.
 (decl x64_insertps (Xmm XmmMem u8) Xmm)
 (rule (x64_insertps src1 src2 lane)
@@ -2583,6 +2645,11 @@
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmUnaryRmREvex op src dst))))
         dst))
+
+;; Helper for creating `vcvtudq2ps` instructions.
+(decl x64_vcvtudq2ps (XmmMem) Xmm)
+(rule (x64_vcvtudq2ps src)
+      (xmm_unary_rm_r_evex (Avx512Opcode.Vcvtudq2ps) src))
 
 ;; Helper for creating `vpabsq` instructions.
 (decl x64_vpabsq (XmmMem) Xmm)
@@ -2877,6 +2944,16 @@
                                            dst))))
         dst))
 
+;; Helper for creating `vfmadd213ss` instructions.
+(decl x64_vfmadd213ss (Xmm Xmm XmmMem) Xmm)
+(rule (x64_vfmadd213ss x y z)
+      (xmm_rmr_vex (AvxOpcode.Vfmadd213ss) x y z))
+
+;; Helper for creating `vfmadd213sd` instructions.
+(decl x64_vfmadd213sd (Xmm Xmm XmmMem) Xmm)
+(rule (x64_vfmadd213sd x y z)
+      (xmm_rmr_vex (AvxOpcode.Vfmadd213sd) x y z))
+
 ;; Helper for creating `vfmadd213ps` instructions.
 (decl x64_vfmadd213ps (Xmm Xmm XmmMem) Xmm)
 (rule (x64_vfmadd213ps x y z)
@@ -2930,6 +3007,13 @@
             (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtsd2ss) x dst))))
         dst))
 
+;; Helper for creating `cvtdq2ps` instructions.
+(decl x64_cvtdq2ps (Xmm) Xmm)
+(rule (x64_cvtdq2ps x)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtdq2ps) x dst))))
+        dst))
+
 ;; Helper for creating `cvtps2pd` instructions.
 (decl x64_cvtps2pd (Xmm) Xmm)
 (rule (x64_cvtps2pd x)
@@ -2943,6 +3027,78 @@
       (let ((dst WritableXmm (temp_writable_xmm))
            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtpd2ps) x dst))))
         dst))
+
+;; Helper for creating `cvtdq2pd` instructions.
+(decl x64_cvtdq2pd (Type Xmm) Xmm)
+(rule (x64_cvtdq2pd ty x)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Cvtdq2pd) x dst))))
+        dst))
+
+;; Helper for creating `cvtsi2ss` instructions.
+(decl x64_cvtsi2ss (Type GprMem) Xmm)
+(rule (x64_cvtsi2ss ty x)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (size OperandSize (raw_operand_size_of_type ty))
+            (_ Unit (emit (MInst.GprToXmm (SseOpcode.Cvtsi2ss) x dst size))))
+        dst))
+
+;; Helper for creating `cvtsi2sd` instructions.
+(decl x64_cvtsi2sd (Type GprMem) Xmm)
+(rule (x64_cvtsi2sd ty x)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (size OperandSize (raw_operand_size_of_type ty))
+            (_ Unit (emit (MInst.GprToXmm (SseOpcode.Cvtsi2sd) x dst size))))
+        dst))
+
+(decl x64_cvttps2dq (Type XmmMem) Xmm)
+(rule (x64_cvttps2dq ty x)
+      (xmm_unary_rm_r (SseOpcode.Cvttps2dq) x))
+
+(decl cvt_u64_to_float_seq (Type Gpr) Xmm)
+(rule (cvt_u64_to_float_seq ty src)
+      (let ((size OperandSize (raw_operand_size_of_type ty))
+            (src_copy WritableGpr (temp_writable_gpr))
+            (dst WritableXmm (temp_writable_xmm))
+            (tmp_gpr1 WritableGpr (temp_writable_gpr))
+            (tmp_gpr2 WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (gen_move $I64 src_copy src)))
+            (_ Unit (emit (MInst.CvtUint64ToFloatSeq size src_copy dst tmp_gpr1 tmp_gpr2))))
+        dst))
+
+(decl cvt_float_to_uint_seq (Type Value bool) Gpr)
+(rule (cvt_float_to_uint_seq out_ty src @ (value_type src_ty) is_saturating)
+      (let ((out_size OperandSize (raw_operand_size_of_type out_ty))
+            (src_size OperandSize (raw_operand_size_of_type src_ty))
+
+            (tmp WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (gen_move src_ty tmp src)))
+
+            (dst WritableGpr (temp_writable_gpr))
+            (tmp_xmm WritableXmm (temp_writable_xmm))
+            (tmp_gpr WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.CvtFloatToUintSeq out_size src_size is_saturating tmp dst tmp_gpr tmp_xmm))))
+        dst))
+
+(decl cvt_float_to_sint_seq (Type Value bool) Gpr)
+(rule (cvt_float_to_sint_seq out_ty src @ (value_type src_ty) is_saturating)
+      (let ((out_size OperandSize (raw_operand_size_of_type out_ty))
+            (src_size OperandSize (raw_operand_size_of_type src_ty))
+
+            (tmp WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (gen_move src_ty tmp src)))
+
+            (dst WritableGpr (temp_writable_gpr))
+            (tmp_xmm WritableXmm (temp_writable_xmm))
+            (tmp_gpr WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.CvtFloatToSintSeq out_size src_size is_saturating tmp dst tmp_gpr tmp_xmm))))
+        dst))
+
+(decl fcvt_uint_mask_const () VCodeConstant)
+(extern constructor fcvt_uint_mask_const fcvt_uint_mask_const)
+
+(decl fcvt_uint_mask_high_const () VCodeConstant)
+(extern constructor fcvt_uint_mask_high_const fcvt_uint_mask_high_const)
 
 ;; Helpers for creating `pcmpeq*` instructions.
 (decl x64_pcmpeq (Type Xmm XmmMem) Xmm)
@@ -3001,6 +3157,327 @@
 (decl x64_xor_mem (Type Amode Gpr) SideEffectNoResult)
 (rule (x64_xor_mem ty addr val)
       (alu_rm ty (AluRmiROpcode.Xor) addr val))
+
+;; Trap if the condition code supplied is set.
+(decl trap_if (CC TrapCode) ConsumesFlags)
+(rule (trap_if cc tc)
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.TrapIf cc tc)))
+
+;; Trap if both of the condition codes supplied are set.
+(decl trap_if_and (CC CC TrapCode) ConsumesFlags)
+(rule (trap_if_and cc1 cc2 tc)
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.TrapIfAnd cc1 cc2 tc)))
+
+;; Trap if either of the condition codes supplied are set.
+(decl trap_if_or (CC CC TrapCode) ConsumesFlags)
+(rule (trap_if_or cc1 cc2 tc)
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.TrapIfOr cc1 cc2 tc)))
+
+(decl trap_if_icmp (IcmpCondResult TrapCode) SideEffectNoResult)
+(rule (trap_if_icmp (IcmpCondResult.Condition producer cc) tc)
+      (with_flags_side_effect producer (trap_if cc tc)))
+
+(decl trap_if_fcmp (FcmpCondResult TrapCode) SideEffectNoResult)
+(rule (trap_if_fcmp (FcmpCondResult.Condition producer cc) tc)
+      (with_flags_side_effect producer (trap_if cc tc)))
+(rule (trap_if_fcmp (FcmpCondResult.AndCondition producer cc1 cc2) tc)
+      (with_flags_side_effect producer (trap_if_and cc1 cc2 tc)))
+(rule (trap_if_fcmp (FcmpCondResult.OrCondition producer cc1 cc2) tc)
+      (with_flags_side_effect producer (trap_if_or cc1 cc2 tc)))
+
+;;;; Jumps ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Unconditional jump.
+(decl jmp_known (MachLabel) SideEffectNoResult)
+(rule (jmp_known target)
+      (SideEffectNoResult.Inst (MInst.JmpKnown target)))
+
+(decl jmp_if (CC MachLabel) ConsumesFlags)
+(rule (jmp_if cc taken)
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.JmpIf cc taken)))
+
+;; Conditional jump based on the condition code.
+(decl jmp_cond (CC MachLabel MachLabel) ConsumesFlags)
+(rule (jmp_cond cc taken not_taken)
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.JmpCond cc taken not_taken)))
+
+;; Conditional jump based on the result of an icmp.
+(decl jmp_cond_icmp (IcmpCondResult MachLabel MachLabel) SideEffectNoResult)
+(rule (jmp_cond_icmp (IcmpCondResult.Condition producer cc) taken not_taken)
+      (with_flags_side_effect producer (jmp_cond cc taken not_taken)))
+
+;; Conditional jump based on the result of an fcmp.
+(decl jmp_cond_fcmp (FcmpCondResult MachLabel MachLabel) SideEffectNoResult)
+(rule (jmp_cond_fcmp (FcmpCondResult.Condition producer cc) taken not_taken)
+      (with_flags_side_effect producer (jmp_cond cc taken not_taken)))
+(rule (jmp_cond_fcmp (FcmpCondResult.AndCondition producer cc1 cc2) taken not_taken)
+      (with_flags_side_effect producer
+                              (consumes_flags_concat
+                                (jmp_if (cc_invert cc1) not_taken)
+                                (jmp_cond (cc_invert cc2) not_taken taken))))
+(rule (jmp_cond_fcmp (FcmpCondResult.OrCondition producer cc1 cc2) taken not_taken)
+      (with_flags_side_effect producer
+                              (consumes_flags_concat
+                                (jmp_if cc1 taken)
+                                (jmp_cond cc2 taken not_taken))))
+
+;; Emit the compound instruction that does:
+;;
+;; lea $jt, %rA
+;; movsbl [%rA, %rIndex, 2], %rB
+;; add %rB, %rA
+;; j *%rA
+;; [jt entries]
+;;
+;; This must be *one* instruction in the vcode because we cannot allow regalloc
+;; to insert any spills/fills in the middle of the sequence; otherwise, the
+;; lea PC-rel offset to the jumptable would be incorrect.  (The alternative
+;; is to introduce a relocation pass for inlined jumptables, which is much
+;; worse.)
+(decl jmp_table_seq (Type Gpr MachLabel BoxVecMachLabel) SideEffectNoResult)
+(rule (jmp_table_seq ty idx default_target jt_targets)
+      (let (;; This temporary is used as a signed integer of 64-bits (to hold
+            ;; addresses).
+            (tmp1 WritableGpr (temp_writable_gpr))
+
+            ;; Put a zero in tmp1. This is needed for Spectre mitigations (a
+            ;; CMOV that zeroes the index on misspeculation).
+            (_ Unit (emit (MInst.Imm (OperandSize.Size32) 0 tmp1)))
+
+            ;; This temporary is used as a signed integer of 32-bits (for the
+            ;; wasm-table index) and then 64-bits (address addend). The small
+            ;; lie about the I64 type is benign, since the temporary is dead
+            ;; after this instruction (and its Cranelift type is thus unused).
+            (tmp2 WritableGpr (temp_writable_gpr))
+
+            (size OperandSize (raw_operand_size_of_type ty))
+
+            (jt_size u32 (jump_table_size jt_targets)))
+
+        (with_flags_side_effect
+          (x64_cmp size (RegMemImm.Imm jt_size) idx)
+          (ConsumesFlags.ConsumesFlagsSideEffect
+            (MInst.JmpTableSeq idx tmp1 tmp2 default_target jt_targets)))))
+
+;;;; iadd_pairwise constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl iadd_pairwise_mul_const_16 () VCodeConstant)
+(extern constructor iadd_pairwise_mul_const_16 iadd_pairwise_mul_const_16)
+
+(decl iadd_pairwise_mul_const_32 () VCodeConstant)
+(extern constructor iadd_pairwise_mul_const_32 iadd_pairwise_mul_const_32)
+
+(decl iadd_pairwise_xor_const_32 () VCodeConstant)
+(extern constructor iadd_pairwise_xor_const_32 iadd_pairwise_xor_const_32)
+
+(decl iadd_pairwise_addd_const_32 () VCodeConstant)
+(extern constructor iadd_pairwise_addd_const_32 iadd_pairwise_addd_const_32)
+
+;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type IcmpCondResult (enum (Condition (producer ProducesFlags) (cc CC))))
+
+(decl icmp_cond_result (ProducesFlags CC) IcmpCondResult)
+(rule (icmp_cond_result producer cc) (IcmpCondResult.Condition producer cc))
+
+(decl invert_icmp_cond_result (IcmpCondResult) IcmpCondResult)
+(rule (invert_icmp_cond_result (IcmpCondResult.Condition producer cc))
+      (icmp_cond_result producer (cc_invert cc)))
+
+;; Lower an Icmp result into a boolean value in a register.
+(decl lower_icmp_bool (IcmpCondResult) ValueRegs)
+(rule (lower_icmp_bool (IcmpCondResult.Condition producer cc))
+      (with_flags producer (x64_setcc cc)))
+
+;; Emit a conditional move based on the result of an icmp.
+(decl select_icmp (IcmpCondResult Value Value) ValueRegs)
+
+;; Ensure that we put the `x` argument into a register for single-register
+;; gpr-typed arguments, as we rely on this for the legalization of heap_addr and
+;; loading easily computed constants (like 0) from memory is too expensive.
+(rule (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type (is_gpr_type (is_single_register_type ty))) y)
+      (with_flags producer (cmove ty cc (put_in_gpr x) y)))
+
+;; Otherwise, fall back on the behavior of `cmove_from_values`.
+(rule (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type ty) y)
+      (with_flags producer (cmove_from_values ty cc x y)))
+
+(decl emit_cmp (IntCC Value Value) IcmpCondResult)
+
+;; For GPR-held values we only need to emit `CMP + SETCC`. We rely here on
+;; Cranelift's verification that `a` and `b` are of the same type.
+;; Unfortunately for clarity, the registers are flipped here (TODO).
+(rule (emit_cmp cc a @ (value_type ty) b)
+      (let ((size OperandSize (raw_operand_size_of_type ty)))
+        (icmp_cond_result (x64_cmp size b a) cc)))
+
+;; As a special case, reverse the arguments to the comparison when the LHS is a
+;; constant. This ensures that we avoid moving the constant into a register when
+;; performing the comparison.
+(rule (emit_cmp cc (and (simm32_from_value a) (value_type ty)) b)
+      (let ((size OperandSize (raw_operand_size_of_type ty)))
+        (icmp_cond_result (x64_cmp size a b) (intcc_reverse cc))))
+
+;; For I128 values (held in two GPRs), the instruction sequences depend on what
+;; kind of condition is tested.
+(rule (emit_cmp (IntCC.Equal) a @ (value_type $I128) b)
+      (let ((a_lo Gpr (value_regs_get_gpr a 0))
+            (a_hi Gpr (value_regs_get_gpr a 1))
+            (b_lo Gpr (value_regs_get_gpr b 0))
+            (b_hi Gpr (value_regs_get_gpr b 1))
+            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo) (x64_setcc (CC.Z))))
+            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_hi a_hi) (x64_setcc (CC.Z))))
+            ;; At this point, `cmp_lo` and `cmp_hi` contain either 0 or 1 in the
+            ;; lowest 8 bits--`SETcc` guarantees this. The upper bits may be
+            ;; unchanged so we must compare against 1 below; this instruction
+            ;; combines `cmp_lo` and `cmp_hi` for that final comparison.
+            (cmp Reg (x64_and $I64 cmp_lo cmp_hi)))
+        ;; We must compare one more time against the immediate value 1 to
+        ;; check if both `cmp_lo` and `cmp_hi` are true. If `cmp AND 1 == 0`
+        ;; then the `ZF` will be set (see `TEST` definition); if either of
+        ;; the halves `AND`s to 0, they were not equal, therefore we `SETcc`
+        ;; with `NZ`.
+        (icmp_cond_result
+          (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp)
+          (CC.NZ))))
+
+(rule (emit_cmp (IntCC.NotEqual) a @ (value_type $I128) b)
+      (let ((a_lo Gpr (value_regs_get_gpr a 0))
+            (a_hi Gpr (value_regs_get_gpr a 1))
+            (b_lo Gpr (value_regs_get_gpr b 0))
+            (b_hi Gpr (value_regs_get_gpr b 1))
+            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo) (x64_setcc (CC.NZ))))
+            (cmp_hi Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_hi a_hi) (x64_setcc (CC.NZ))))
+            ;; See comments for `IntCC.Equal`.
+            (cmp Reg (x64_or $I64 cmp_lo cmp_hi)))
+           (icmp_cond_result
+             (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp)
+             (CC.NZ))))
+
+;; Result = (a_hi <> b_hi) ||
+;;          (a_hi == b_hi && a_lo <> b_lo)
+(rule (emit_cmp cc a @ (value_type $I128) b)
+      (if (intcc_neq cc (IntCC.Equal)))
+      (if (intcc_neq cc (IntCC.NotEqual)))
+      (let ((a_lo Gpr (value_regs_get_gpr a 0))
+            (a_hi Gpr (value_regs_get_gpr a 1))
+            (b_lo Gpr (value_regs_get_gpr b 0))
+            (b_hi Gpr (value_regs_get_gpr b 1))
+            (cmp_hi ValueRegs (with_flags (x64_cmp (OperandSize.Size64) b_hi a_hi)
+                                       (consumes_flags_concat
+                                                 (x64_setcc (intcc_without_eq cc))
+                                                 (x64_setcc (CC.Z)))))
+            (cc_hi Reg (value_regs_get cmp_hi 0))
+            (eq_hi Reg (value_regs_get cmp_hi 1))
+
+            (cmp_lo Reg (with_flags_reg (x64_cmp (OperandSize.Size64) b_lo a_lo)
+                                        (x64_setcc (intcc_unsigned cc))))
+
+            (res_lo Reg (x64_and $I64 eq_hi cmp_lo))
+            (res Reg (x64_or $I64 cc_hi res_lo)))
+        (icmp_cond_result
+          (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) res)
+          (CC.NZ))))
+
+(type FcmpCondResult
+      (enum
+        ;; The given condition code must be set.
+        (Condition (producer ProducesFlags) (cc CC))
+
+        ;; Both condition codes must be set.
+        (AndCondition (producer ProducesFlags) (cc1 CC) (cc2 CC))
+
+        ;; Either of the conditions codes must be set.
+        (OrCondition (producer ProducesFlags) (cc1 CC) (cc2 CC))))
+
+;; Lower a FcmpCondResult to a boolean value in a register.
+(decl lower_fcmp_bool (FcmpCondResult) ValueRegs)
+
+(rule (lower_fcmp_bool (FcmpCondResult.Condition producer cc))
+      (with_flags producer (x64_setcc cc)))
+
+(rule (lower_fcmp_bool (FcmpCondResult.AndCondition producer cc1 cc2))
+      (let ((maybe ValueRegs (with_flags producer
+                                         (consumes_flags_concat
+                                           (x64_setcc cc1)
+                                           (x64_setcc cc2))))
+            (maybe0 Gpr (value_regs_get_gpr maybe 0))
+            (maybe1 Gpr (value_regs_get_gpr maybe 1)))
+        (value_reg (x64_and $I8 maybe0 maybe1))))
+
+(rule (lower_fcmp_bool (FcmpCondResult.OrCondition producer cc1 cc2))
+      (let ((maybe ValueRegs (with_flags producer
+                                         (consumes_flags_concat
+                                           (x64_setcc cc1)
+                                           (x64_setcc cc2))))
+            (maybe0 Gpr (value_regs_get_gpr maybe 0))
+            (maybe1 Gpr (value_regs_get_gpr maybe 1)))
+        (value_reg (x64_or $I8 maybe0 maybe1))))
+
+;; CLIF's `fcmp` instruction always operates on XMM registers--both scalar and
+;; vector. For the scalar versions, we use the flag-setting behavior of the
+;; `UCOMIS*` instruction to `SETcc` a 0 or 1 in a GPR register. Note that CLIF's
+;; `select` uses the same kind of flag-setting behavior but chooses values other
+;; than 0 or 1.
+;;
+;; Checking the result of `UCOMIS*` is unfortunately difficult in some cases
+;; because we do not have `SETcc` instructions that explicitly check
+;; simultaneously for the condition (i.e., `eq`, `le`, `gt`, etc.) *and*
+;; orderedness. Instead, we must check the flags multiple times. The UCOMIS*
+;; documentation (see Intel's Software Developer's Manual, volume 2, chapter 4)
+;; is helpful:
+;;  - unordered assigns    Z = 1, P = 1, C = 1
+;;  - greater than assigns Z = 0, P = 0, C = 0
+;;  - less than assigns    Z = 0, P = 0, C = 1
+;;  - equal assigns        Z = 1, P = 0, C = 0
+(decl emit_fcmp (FloatCC Value Value) FcmpCondResult)
+
+(rule (emit_fcmp (FloatCC.Equal) a @ (value_type (ty_scalar_float _)) b)
+      (FcmpCondResult.AndCondition (x64_ucomis b a) (CC.NP) (CC.Z)))
+
+(rule (emit_fcmp (FloatCC.NotEqual) a @ (value_type (ty_scalar_float _)) b)
+      (FcmpCondResult.OrCondition (x64_ucomis b a) (CC.P) (CC.NZ)))
+
+;; Some scalar lowerings correspond to one condition code.
+
+(rule (emit_fcmp (FloatCC.Ordered) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NP)))
+(rule (emit_fcmp (FloatCC.Unordered) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.P)))
+(rule (emit_fcmp (FloatCC.OrderedNotEqual) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NZ)))
+(rule (emit_fcmp (FloatCC.UnorderedOrEqual) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.Z)))
+(rule (emit_fcmp (FloatCC.GreaterThan) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NBE)))
+(rule (emit_fcmp (FloatCC.GreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.NB)))
+(rule (emit_fcmp (FloatCC.UnorderedOrLessThan) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.B)))
+(rule (emit_fcmp (FloatCC.UnorderedOrLessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
+      (FcmpCondResult.Condition (x64_ucomis b a) (CC.BE)))
+
+;; Other scalar lowerings are made possible by flipping the operands and
+;; reversing the condition code.
+
+(rule (emit_fcmp (FloatCC.LessThan) a @ (value_type (ty_scalar_float ty)) b)
+      ;; Same flags as `GreaterThan`.
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NBE)))
+(rule (emit_fcmp (FloatCC.LessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
+      ;; Same flags as `GreaterThanOrEqual`.
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.NB)))
+(rule (emit_fcmp (FloatCC.UnorderedOrGreaterThan) a @ (value_type (ty_scalar_float ty)) b)
+      ;; Same flags as `UnorderedOrLessThan`.
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.B)))
+(rule (emit_fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
+      ;; Same flags as `UnorderedOrLessThanOrEqual`.
+      (FcmpCondResult.Condition (x64_ucomis a b) (CC.BE)))
+
+;;;; Type Guards ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; A type guard for matching ints and bools up to 64 bits, or 64 bit references.
+(decl ty_int_bool_or_ref () Type)
+(extern extractor ty_int_bool_or_ref ty_int_bool_or_ref)
 
 ;;;; Atomics ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3120,3 +3597,34 @@
 (decl synthetic_amode_to_xmm_mem (SyntheticAmode) XmmMem)
 (rule (synthetic_amode_to_xmm_mem amode)
       (synthetic_amode_to_reg_mem amode))
+
+;; Helper for creating `MovPReg` instructions.
+(decl mov_preg (PReg) Reg)
+(rule (mov_preg preg)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.MovPReg preg dst))))
+        dst))
+
+(decl preg_rbp () PReg)
+(extern constructor preg_rbp preg_rbp)
+
+(decl preg_rsp () PReg)
+(extern constructor preg_rsp preg_rsp)
+
+(decl x64_rbp () Reg)
+(rule (x64_rbp)
+      (mov_preg (preg_rbp)))
+
+(decl x64_rsp () Reg)
+(rule (x64_rsp)
+      (mov_preg (preg_rsp)))
+
+;;;; Helpers for Emitting LibCalls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type LibCall extern
+      (enum
+        FmaF32
+        FmaF64))
+
+(decl libcall_3 (LibCall Reg Reg Reg) Reg)
+(extern constructor libcall_3 libcall_3)

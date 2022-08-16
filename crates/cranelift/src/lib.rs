@@ -8,7 +8,7 @@ use cranelift_codegen::ir;
 use cranelift_codegen::isa::{unwind::UnwindInfo, CallConv, TargetIsa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmType};
-use target_lexicon::CallingConvention;
+use target_lexicon::{Architecture, CallingConvention};
 use wasmtime_environ::{
     FilePos, FunctionInfo, InstructionAddressMap, ModuleTranslation, ModuleTypes, TrapInformation,
 };
@@ -190,6 +190,10 @@ fn func_signature(
                 // about pointer authentication usage, so we can't just use
                 // `CallConv::Fast`.
                 CallConv::WasmtimeAppleAarch64
+            } else if isa.triple().architecture == Architecture::S390x {
+                // On S390x we need a Wasmtime calling convention to ensure
+                // we're using little-endian vector lane order.
+                wasmtime_call_conv(isa)
             } else {
                 CallConv::Fast
             }

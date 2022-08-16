@@ -974,7 +974,7 @@ impl Module {
 
     /// Returns an iterator of all the imports in this module, along with their
     /// module name, field name, and type that's being imported.
-    pub fn imports(&self) -> impl Iterator<Item = (&str, &str, EntityType)> {
+    pub fn imports(&self) -> impl ExactSizeIterator<Item = (&str, &str, EntityType)> {
         self.initializers.iter().map(move |i| match i {
             Initializer::Import { name, field, index } => {
                 (name.as_str(), field.as_str(), self.type_of(*index))

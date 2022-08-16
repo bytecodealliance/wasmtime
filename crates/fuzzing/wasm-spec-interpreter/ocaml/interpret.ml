@@ -55,7 +55,7 @@ let extract_exported_func export = match export with
 (** Interpret the first exported function and return the result. Use provided
 parameters if they exist, otherwise use default (zeroed) values. *)
 let interpret_exn module_bytes opt_params =
-  let opt_params_ = Option.map (List.map convert_to_wasm) opt_params in
+  let opt_params_ = Option.map (List.rev_map convert_to_wasm) opt_params in
   let module_ = parse module_bytes in
   let m_isa = Ast_convert.convert_module (module_.it) in
   let fuel = Z.of_string "4611686018427387904" in
