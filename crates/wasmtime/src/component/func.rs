@@ -37,15 +37,20 @@ use wasmtime_runtime::{Export, ExportFunction, VMTrampoline};
 #[doc(hidden)]
 #[macro_export]
 macro_rules! map_maybe_uninit {
-    ($maybe_uninit:ident $($field:tt)*) => (#[allow(unused_unsafe)] unsafe {
-        use $crate::component::__internal::MaybeUninitExt;
+    ($maybe_uninit:ident $($field:tt)*) => ({
+        #[allow(unused_unsafe)]
+        {
+            unsafe {
+                use $crate::component::__internal::MaybeUninitExt;
 
-        let m: &mut std::mem::MaybeUninit<_> = $maybe_uninit;
-        // Note the usage of `addr_of_mut!` here which is an attempt to "stay
-        // safe" here where we never accidentally create `&mut T` where `T` is
-        // actually uninitialized, hopefully appeasing the Rust unsafe
-        // guidelines gods.
-        m.map(|p| std::ptr::addr_of_mut!((*p)$($field)*))
+                let m: &mut std::mem::MaybeUninit<_> = $maybe_uninit;
+                // Note the usage of `addr_of_mut!` here which is an attempt to "stay
+                // safe" here where we never accidentally create `&mut T` where `T` is
+                // actually uninitialized, hopefully appeasing the Rust unsafe
+                // guidelines gods.
+                m.map(|p| std::ptr::addr_of_mut!((*p)$($field)*))
+            }
+        }
     })
 }
 
