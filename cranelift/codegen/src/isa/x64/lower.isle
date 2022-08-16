@@ -3189,3 +3189,40 @@
         ;; Add this second set of converted lanes to the original to properly handle
         ;; values greater than max signed int.
         (x64_paddd tmp1 dst)))
+
+;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower
+        (has_type $I16X8 (iadd_pairwise
+                           (swiden_low val @ (value_type $I8X16))
+                           (swiden_high val))))
+      (let ((mul_const Xmm (x64_xmm_load_const $I8X16 (iadd_pairwise_mul_const_16))))
+        (x64_pmaddubsw mul_const val)))
+
+(rule (lower
+        (has_type $I32X4 (iadd_pairwise
+                           (swiden_low val @ (value_type $I16X8))
+                           (swiden_high val))))
+      (let ((mul_const Xmm (x64_xmm_load_const $I16X8 (iadd_pairwise_mul_const_32))))
+        (x64_pmaddwd val mul_const)))
+
+(rule (lower
+        (has_type $I16X8 (iadd_pairwise
+                           (uwiden_low val @ (value_type $I8X16))
+                           (uwiden_high val))))
+      (let ((mul_const Xmm (x64_xmm_load_const $I8X16 (iadd_pairwise_mul_const_16))))
+        (x64_pmaddubsw val mul_const)))
+
+(rule (lower
+        (has_type $I32X4 (iadd_pairwise
+                           (uwiden_low val @ (value_type $I16X8))
+                           (uwiden_high val))))
+      (let ((xor_const Xmm (x64_xmm_load_const $I16X8 (iadd_pairwise_xor_const_32)))
+            (dst Xmm (x64_pxor val xor_const))
+
+            (madd_const Xmm (x64_xmm_load_const $I16X8 (iadd_pairwise_mul_const_32)))
+            (dst Xmm (x64_pmaddwd dst madd_const))
+
+            (addd_const Xmm (x64_xmm_load_const $I16X8 (iadd_pairwise_addd_const_32))))
+        (x64_paddd dst addd_const)))
+

@@ -2582,6 +2582,10 @@
                                         dst))))
         dst))
 
+(decl x64_pmaddubsw (Xmm XmmMem) Xmm)
+(rule (x64_pmaddubsw src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pmaddubsw) src1 src2))
+
 ;; Helper for creating `insertps` instructions.
 (decl x64_insertps (Xmm XmmMem u8) Xmm)
 (rule (x64_insertps src1 src2 lane)
@@ -3254,6 +3258,20 @@
           (x64_cmp size (RegMemImm.Imm jt_size) idx)
           (ConsumesFlags.ConsumesFlagsSideEffect
             (MInst.JmpTableSeq idx tmp1 tmp2 default_target jt_targets)))))
+
+;;;; iadd_pairwise constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl iadd_pairwise_mul_const_16 () VCodeConstant)
+(extern constructor iadd_pairwise_mul_const_16 iadd_pairwise_mul_const_16)
+
+(decl iadd_pairwise_mul_const_32 () VCodeConstant)
+(extern constructor iadd_pairwise_mul_const_32 iadd_pairwise_mul_const_32)
+
+(decl iadd_pairwise_xor_const_32 () VCodeConstant)
+(extern constructor iadd_pairwise_xor_const_32 iadd_pairwise_xor_const_32)
+
+(decl iadd_pairwise_addd_const_32 () VCodeConstant)
+(extern constructor iadd_pairwise_addd_const_32 iadd_pairwise_addd_const_32)
 
 ;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
