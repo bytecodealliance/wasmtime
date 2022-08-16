@@ -1,3 +1,4 @@
+use crate::component::{MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 use crate::{
     EntityType, Global, GlobalInit, ModuleTypes, ModuleTypesBuilder, PrimaryMap, SignatureIndex,
 };
@@ -318,12 +319,32 @@ pub struct ComponentTypesBuilder {
 
     component_types: ComponentTypes,
     module_types: ModuleTypesBuilder,
+
+    // Cache of what the "flat" representation of all types are which is only
+    // used at compile-time and not used at runtime, hence the location here
+    // as opposed to `ComponentTypes`.
+    flat: FlatTypesCache,
 }
 
 #[derive(Default)]
 struct TypeScope {
     core: PrimaryMap<TypeIndex, TypeDef>,
     component: PrimaryMap<ComponentTypeIndex, TypeDef>,
+}
+
+macro_rules! intern_and_fill_flat_types {
+    ($me:ident, $name:ident, $val:ident) => {{
+        if let Some(idx) = $me.$name.get(&$val) {
+            return *idx;
+        }
+        let idx = $me.component_types.$name.push($val.clone());
+        let mut storage = FlatTypesStorage::new();
+        storage.$name($me, &$val);
+        let idx2 = $me.flat.$name.push(storage);
+        assert_eq!(idx, idx2);
+        $me.$name.insert($val, idx);
+        return idx;
+    }};
 }
 
 impl ComponentTypesBuilder {
@@ -769,42 +790,42 @@ impl ComponentTypesBuilder {
 
     /// Interns a new record type within this type information.
     pub fn add_record_type(&mut self, ty: TypeRecord) -> TypeRecordIndex {
-        intern(&mut self.records, &mut self.component_types.records, ty)
+        intern_and_fill_flat_types!(self, records, ty)
     }
 
     /// Interns a new flags type within this type information.
     pub fn add_flags_type(&mut self, ty: TypeFlags) -> TypeFlagsIndex {
-        intern(&mut self.flags, &mut self.component_types.flags, ty)
+        intern_and_fill_flat_types!(self, flags, ty)
     }
 
     /// Interns a new tuple type within this type information.
     pub fn add_tuple_type(&mut self, ty: TypeTuple) -> TypeTupleIndex {
-        intern(&mut self.tuples, &mut self.component_types.tuples, ty)
+        intern_and_fill_flat_types!(self, tuples, ty)
     }
 
     /// Interns a new variant type within this type information.
     pub fn add_variant_type(&mut self, ty: TypeVariant) -> TypeVariantIndex {
-        intern(&mut self.variants, &mut self.component_types.variants, ty)
+        intern_and_fill_flat_types!(self, variants, ty)
     }
 
     /// Interns a new union type within this type information.
     pub fn add_union_type(&mut self, ty: TypeUnion) -> TypeUnionIndex {
-        intern(&mut self.unions, &mut self.component_types.unions, ty)
+        intern_and_fill_flat_types!(self, unions, ty)
     }
 
     /// Interns a new enum type within this type information.
     pub fn add_enum_type(&mut self, ty: TypeEnum) -> TypeEnumIndex {
-        intern(&mut self.enums, &mut self.component_types.enums, ty)
+        intern_and_fill_flat_types!(self, enums, ty)
     }
 
     /// Interns a new option type within this type information.
     pub fn add_option_type(&mut self, ty: TypeOption) -> TypeOptionIndex {
-        intern(&mut self.options, &mut self.component_types.options, ty)
+        intern_and_fill_flat_types!(self, options, ty)
     }
 
     /// Interns a new expected type within this type information.
     pub fn add_expected_type(&mut self, ty: TypeExpected) -> TypeExpectedIndex {
-        intern(&mut self.expecteds, &mut self.component_types.expecteds, ty)
+        intern_and_fill_flat_types!(self, expecteds, ty)
     }
 
     /// Interns a new expected type within this type information.
@@ -814,6 +835,43 @@ impl ComponentTypesBuilder {
             &mut self.component_types.interface_types,
             ty,
         )
+    }
+
+    /// Returns the canonical ABI information about the specified type.
+    pub fn canonical_abi(&self, ty: &InterfaceType) -> &CanonicalAbiInfo {
+        self.component_types.canonical_abi(ty)
+    }
+
+    /// Returns the "flat types" for the given interface type used in the
+    /// canonical ABI.
+    ///
+    /// Returns `None` if the type is too large to be represented via flat types
+    /// in the canonical abi.
+    pub fn flat_types(&self, ty: &InterfaceType) -> Option<FlatTypes<'_>> {
+        match ty {
+            InterfaceType::Unit => Some(FlatTypes::EMPTY),
+            InterfaceType::U8
+            | InterfaceType::S8
+            | InterfaceType::Bool
+            | InterfaceType::U16
+            | InterfaceType::S16
+            | InterfaceType::U32
+            | InterfaceType::S32
+            | InterfaceType::Char => Some(FlatTypes::I32),
+            InterfaceType::U64 | InterfaceType::S64 => Some(FlatTypes::I64),
+            InterfaceType::Float32 => Some(FlatTypes::F32),
+            InterfaceType::Float64 => Some(FlatTypes::F64),
+            InterfaceType::String | InterfaceType::List(_) => Some(FlatTypes::POINTER_PAIR),
+
+            InterfaceType::Record(i) => self.flat.records[*i].as_flat_types(),
+            InterfaceType::Variant(i) => self.flat.variants[*i].as_flat_types(),
+            InterfaceType::Tuple(i) => self.flat.tuples[*i].as_flat_types(),
+            InterfaceType::Flags(i) => self.flat.flags[*i].as_flat_types(),
+            InterfaceType::Enum(i) => self.flat.enums[*i].as_flat_types(),
+            InterfaceType::Union(i) => self.flat.unions[*i].as_flat_types(),
+            InterfaceType::Option(i) => self.flat.options[*i].as_flat_types(),
+            InterfaceType::Expected(i) => self.flat.expecteds[*i].as_flat_types(),
+        }
     }
 }
 
@@ -986,6 +1044,13 @@ pub struct CanonicalAbiInfo {
     pub size64: u32,
     /// The byte-alignment of this type in a 64-bit memory.
     pub align64: u32,
+    /// The number of types it takes to represents this type in the "flat"
+    /// representation of the canonical abi where everything is passed as
+    /// immediate arguments or results.
+    ///
+    /// If this is `None` then this type is not representable in the flat ABI
+    /// because it is too large.
+    pub flat_count: Option<u8>,
 }
 
 impl Default for CanonicalAbiInfo {
@@ -995,6 +1060,7 @@ impl Default for CanonicalAbiInfo {
             align32: 1,
             size64: 0,
             align64: 1,
+            flat_count: Some(0),
         }
     }
 }
@@ -1019,6 +1085,7 @@ impl CanonicalAbiInfo {
         align32: 1,
         size64: 0,
         align64: 1,
+        flat_count: Some(0),
     };
 
     /// ABI information for one-byte scalars.
@@ -1036,6 +1103,7 @@ impl CanonicalAbiInfo {
             align32: size,
             size64: size,
             align64: size,
+            flat_count: Some(1),
         }
     }
 
@@ -1045,6 +1113,7 @@ impl CanonicalAbiInfo {
         align32: 4,
         size64: 16,
         align64: 8,
+        flat_count: Some(2),
     };
 
     /// Returns the abi for a record represented by the specified fields.
@@ -1058,6 +1127,7 @@ impl CanonicalAbiInfo {
             ret.align32 = ret.align32.max(field.align32);
             ret.size64 = align_to(ret.size64, field.align64) + field.size64;
             ret.align64 = ret.align64.max(field.align64);
+            ret.flat_count = add_flat(ret.flat_count, field.flat_count);
         }
         ret.size32 = align_to(ret.size32, ret.align32);
         ret.size64 = align_to(ret.size64, ret.align64);
@@ -1077,6 +1147,7 @@ impl CanonicalAbiInfo {
             ret.align32 = max(ret.align32, field.align32);
             ret.size64 = align_to(ret.size64, field.align64) + field.size64;
             ret.align64 = max(ret.align64, field.align64);
+            ret.flat_count = add_flat(ret.flat_count, field.flat_count);
             i += 1;
         }
         ret.size32 = align_to(ret.size32, ret.align32);
@@ -1116,17 +1187,18 @@ impl CanonicalAbiInfo {
 
     /// Returns ABI information for a structure which contains `count` flags.
     pub const fn flags(count: usize) -> CanonicalAbiInfo {
-        let (size, align) = match FlagsSize::from_count(count) {
-            FlagsSize::Size0 => (0, 1),
-            FlagsSize::Size1 => (1, 1),
-            FlagsSize::Size2 => (2, 2),
-            FlagsSize::Size4Plus(n) => ((n as u32) * 4, 4),
+        let (size, align, flat_count) = match FlagsSize::from_count(count) {
+            FlagsSize::Size0 => (0, 1, 0),
+            FlagsSize::Size1 => (1, 1, 1),
+            FlagsSize::Size2 => (2, 2, 1),
+            FlagsSize::Size4Plus(n) => ((n as u32) * 4, 4, n),
         };
         CanonicalAbiInfo {
             size32: size,
             align32: align,
             size64: size,
             align64: align,
+            flat_count: Some(flat_count),
         }
     }
 
@@ -1144,11 +1216,13 @@ impl CanonicalAbiInfo {
         let mut max_align32 = discrim_size;
         let mut max_size64 = 0;
         let mut max_align64 = discrim_size;
+        let mut max_case_count = Some(0);
         for case in cases {
             max_size32 = max_size32.max(case.size32);
             max_align32 = max_align32.max(case.align32);
             max_size64 = max_size64.max(case.size64);
             max_align64 = max_align64.max(case.align64);
+            max_case_count = max_flat(max_case_count, case.flat_count);
         }
         CanonicalAbiInfo {
             size32: align_to(
@@ -1161,6 +1235,7 @@ impl CanonicalAbiInfo {
                 max_align64,
             ),
             align64: max_align64,
+            flat_count: add_flat(max_case_count, Some(1)),
         }
     }
 
@@ -1177,6 +1252,7 @@ impl CanonicalAbiInfo {
         let mut max_align32 = discrim_size;
         let mut max_size64 = 0;
         let mut max_align64 = discrim_size;
+        let mut max_case_count = Some(0);
         let mut i = 0;
         while i < cases.len() {
             let case = &cases[i];
@@ -1184,6 +1260,7 @@ impl CanonicalAbiInfo {
             max_align32 = max(max_align32, case.align32);
             max_size64 = max(max_size64, case.size64);
             max_align64 = max(max_align64, case.align64);
+            max_case_count = max_flat(max_case_count, case.flat_count);
             i += 1;
         }
         CanonicalAbiInfo {
@@ -1197,6 +1274,18 @@ impl CanonicalAbiInfo {
                 max_align64,
             ),
             align64: max_align64,
+            flat_count: add_flat(max_case_count, Some(1)),
+        }
+    }
+
+    /// Returns the flat count of this ABI information so long as the count
+    /// doesn't exceed the `max` specified.
+    pub fn flat_count(&self, max: usize) -> Option<usize> {
+        let flat = usize::from(self.flat_count?);
+        if flat > max {
+            None
+        } else {
+            Some(flat)
         }
     }
 }
@@ -1395,4 +1484,285 @@ pub struct TypeExpected {
     pub abi: CanonicalAbiInfo,
     /// Byte information about this variant type.
     pub info: VariantInfo,
+}
+
+const MAX_FLAT_TYPES: usize = if MAX_FLAT_PARAMS > MAX_FLAT_RESULTS {
+    MAX_FLAT_PARAMS
+} else {
+    MAX_FLAT_RESULTS
+};
+
+const fn add_flat(a: Option<u8>, b: Option<u8>) -> Option<u8> {
+    const MAX: u8 = MAX_FLAT_TYPES as u8;
+    let sum = match (a, b) {
+        (Some(a), Some(b)) => match a.checked_add(b) {
+            Some(c) => c,
+            None => return None,
+        },
+        _ => return None,
+    };
+    if sum > MAX {
+        None
+    } else {
+        Some(sum)
+    }
+}
+
+const fn max_flat(a: Option<u8>, b: Option<u8>) -> Option<u8> {
+    match (a, b) {
+        (Some(a), Some(b)) => {
+            if a > b {
+                Some(a)
+            } else {
+                Some(b)
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Flat representation of a type in just core wasm types.
+pub struct FlatTypes<'a> {
+    /// The flat representation of this type in 32-bit memories.
+    pub memory32: &'a [FlatType],
+    /// The flat representation of this type in 64-bit memories.
+    pub memory64: &'a [FlatType],
+}
+
+#[allow(missing_docs)]
+impl FlatTypes<'_> {
+    pub const EMPTY: FlatTypes<'static> = FlatTypes::new(&[]);
+    pub const I32: FlatTypes<'static> = FlatTypes::new(&[FlatType::I32]);
+    pub const I64: FlatTypes<'static> = FlatTypes::new(&[FlatType::I64]);
+    pub const F32: FlatTypes<'static> = FlatTypes::new(&[FlatType::F32]);
+    pub const F64: FlatTypes<'static> = FlatTypes::new(&[FlatType::F64]);
+    pub const POINTER_PAIR: FlatTypes<'static> = FlatTypes {
+        memory32: &[FlatType::I32, FlatType::I32],
+        memory64: &[FlatType::I64, FlatType::I64],
+    };
+
+    const fn new(flat: &[FlatType]) -> FlatTypes<'_> {
+        FlatTypes {
+            memory32: flat,
+            memory64: flat,
+        }
+    }
+
+    /// Returns the number of flat types used to represent this type.
+    ///
+    /// Note that this length is the same regardless to the size of memory.
+    pub fn len(&self) -> usize {
+        assert_eq!(self.memory32.len(), self.memory64.len());
+        self.memory32.len()
+    }
+}
+
+// Note that this is intentionally duplicated here to keep the size to 1 byte
+// irregardless to changes in the core wasm type system since this will only
+// ever use integers/floats for the forseeable future.
+#[derive(PartialEq, Eq, Copy, Clone)]
+#[allow(missing_docs)]
+pub enum FlatType {
+    I32,
+    I64,
+    F32,
+    F64,
+}
+
+#[derive(Default)]
+struct FlatTypesCache {
+    records: PrimaryMap<TypeRecordIndex, FlatTypesStorage>,
+    variants: PrimaryMap<TypeVariantIndex, FlatTypesStorage>,
+    tuples: PrimaryMap<TypeTupleIndex, FlatTypesStorage>,
+    enums: PrimaryMap<TypeEnumIndex, FlatTypesStorage>,
+    flags: PrimaryMap<TypeFlagsIndex, FlatTypesStorage>,
+    unions: PrimaryMap<TypeUnionIndex, FlatTypesStorage>,
+    options: PrimaryMap<TypeOptionIndex, FlatTypesStorage>,
+    expecteds: PrimaryMap<TypeExpectedIndex, FlatTypesStorage>,
+}
+
+struct FlatTypesStorage {
+    // This could be represented as `Vec<FlatType>` but on 64-bit architectures
+    // that's 24 bytes. Otherwise `FlatType` is 1 byte large and
+    // `MAX_FLAT_TYPES` is 16, so it should ideally be more space-efficient to
+    // use a flat array instead of a heap-based vector.
+    memory32: [FlatType; MAX_FLAT_TYPES],
+    memory64: [FlatType; MAX_FLAT_TYPES],
+
+    // Tracks the number of flat types pushed into this storage. If this is
+    // `MAX_FLAT_TYPES + 1` then this storage represents an un-reprsentable
+    // type in flat types.
+    len: u8,
+}
+
+impl FlatTypesStorage {
+    fn new() -> FlatTypesStorage {
+        FlatTypesStorage {
+            memory32: [FlatType::I32; MAX_FLAT_TYPES],
+            memory64: [FlatType::I32; MAX_FLAT_TYPES],
+            len: 0,
+        }
+    }
+
+    fn as_flat_types(&self) -> Option<FlatTypes<'_>> {
+        let len = usize::from(self.len);
+        if len > MAX_FLAT_TYPES {
+            assert_eq!(len, MAX_FLAT_TYPES + 1);
+            None
+        } else {
+            Some(FlatTypes {
+                memory32: &self.memory32[..len],
+                memory64: &self.memory64[..len],
+            })
+        }
+    }
+
+    /// Pushes a new flat type into this list using `t32` for 32-bit memories
+    /// and `t64` for 64-bit memories.
+    ///
+    /// Returns whether the type was actually pushed or whether this list of
+    /// flat types just exceeded the maximum meaning that it is now
+    /// unrepresentable with a flat list of types.
+    fn push(&mut self, t32: FlatType, t64: FlatType) -> bool {
+        let len = usize::from(self.len);
+        if len < MAX_FLAT_TYPES {
+            self.memory32[len] = t32;
+            self.memory64[len] = t64;
+            self.len += 1;
+            true
+        } else {
+            // If this was the first one to go over then flag the length as
+            // being incompatible with a flat representation.
+            if len == MAX_FLAT_TYPES {
+                self.len += 1;
+            }
+            false
+        }
+    }
+
+    /// Builds up all flat types internally using the specified representation
+    /// for all of the component fields of the record.
+    fn build_record<'a>(&mut self, types: impl Iterator<Item = Option<FlatTypes<'a>>>) {
+        for ty in types {
+            let types = match ty {
+                Some(types) => types,
+                None => {
+                    self.len = u8::try_from(MAX_FLAT_TYPES + 1).unwrap();
+                    return;
+                }
+            };
+            for (t32, t64) in types.memory32.iter().zip(types.memory64) {
+                if !self.push(*t32, *t64) {
+                    return;
+                }
+            }
+        }
+    }
+
+    /// Builds up the flat types used to represent a `variant` which notably
+    /// handles "join"ing types together so each case is representable as a
+    /// single flat list of types.
+    fn build_variant<'a, I>(&mut self, cases: I)
+    where
+        I: IntoIterator<Item = Option<FlatTypes<'a>>>,
+    {
+        let cases = cases.into_iter();
+        self.push(FlatType::I32, FlatType::I32);
+
+        for ty in cases {
+            let types = match ty {
+                Some(types) => types,
+                // If this case isn't representable with a flat list of types
+                // then this variant also isn't representable.
+                None => {
+                    self.len = u8::try_from(MAX_FLAT_TYPES + 1).unwrap();
+                    return;
+                }
+            };
+            // If the case used all of the flat types then the discriminant
+            // added for this variant means that this variant is no longer
+            // representable.
+            if types.memory32.len() >= MAX_FLAT_TYPES {
+                self.len = u8::try_from(MAX_FLAT_TYPES + 1).unwrap();
+                return;
+            }
+            let dst = self.memory32.iter_mut().zip(&mut self.memory64).skip(1);
+            for (i, ((t32, t64), (dst32, dst64))) in types
+                .memory32
+                .iter()
+                .zip(types.memory64)
+                .zip(dst)
+                .enumerate()
+            {
+                if i + 1 < usize::from(self.len) {
+                    // If this index hs already been set by some previous case
+                    // then the types are joined together.
+                    dst32.join(*t32);
+                    dst64.join(*t64);
+                } else {
+                    // Otherwise if this is the first time that the
+                    // representation has gotten this large then the destination
+                    // is simply whatever the type is. The length is also
+                    // increased here to indicate this.
+                    self.len += 1;
+                    *dst32 = *t32;
+                    *dst64 = *t64;
+                }
+            }
+        }
+    }
+
+    fn records(&mut self, types: &ComponentTypesBuilder, ty: &TypeRecord) {
+        self.build_record(ty.fields.iter().map(|f| types.flat_types(&f.ty)));
+    }
+
+    fn tuples(&mut self, types: &ComponentTypesBuilder, ty: &TypeTuple) {
+        self.build_record(ty.types.iter().map(|t| types.flat_types(t)));
+    }
+
+    fn enums(&mut self, _types: &ComponentTypesBuilder, _ty: &TypeEnum) {
+        self.push(FlatType::I32, FlatType::I32);
+    }
+
+    fn flags(&mut self, _types: &ComponentTypesBuilder, ty: &TypeFlags) {
+        match FlagsSize::from_count(ty.names.len()) {
+            FlagsSize::Size0 => {}
+            FlagsSize::Size1 | FlagsSize::Size2 => {
+                self.push(FlatType::I32, FlatType::I32);
+            }
+            FlagsSize::Size4Plus(n) => {
+                for _ in 0..n {
+                    self.push(FlatType::I32, FlatType::I32);
+                }
+            }
+        }
+    }
+
+    fn variants(&mut self, types: &ComponentTypesBuilder, ty: &TypeVariant) {
+        self.build_variant(ty.cases.iter().map(|c| types.flat_types(&c.ty)))
+    }
+
+    fn unions(&mut self, types: &ComponentTypesBuilder, ty: &TypeUnion) {
+        self.build_variant(ty.types.iter().map(|t| types.flat_types(t)))
+    }
+
+    fn expecteds(&mut self, types: &ComponentTypesBuilder, ty: &TypeExpected) {
+        self.build_variant([types.flat_types(&ty.ok), types.flat_types(&ty.err)]);
+    }
+
+    fn options(&mut self, types: &ComponentTypesBuilder, ty: &TypeOption) {
+        self.build_variant([Some(FlatTypes::EMPTY), types.flat_types(&ty.ty)]);
+    }
+}
+
+impl FlatType {
+    fn join(&mut self, other: FlatType) {
+        if *self == other {
+            return;
+        }
+        *self = match (*self, other) {
+            (FlatType::I32, FlatType::F32) | (FlatType::F32, FlatType::I32) => FlatType::I32,
+            _ => FlatType::I64,
+        };
+    }
 }

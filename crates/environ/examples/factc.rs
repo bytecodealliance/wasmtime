@@ -174,7 +174,6 @@ impl Factc {
         }
         types.pop_type_scope();
 
-        let types = types.finish();
         let mut fact_module = Module::new(&types, self.debug);
         for (i, adapter) in adapters.iter().enumerate() {
             fact_module.adapt(&format!("adapter{i}"), adapter);

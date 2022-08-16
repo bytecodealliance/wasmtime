@@ -1015,7 +1015,7 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
             });
         }
         FlagsSize::Size4Plus(n) => {
-            count = n;
+            count = usize::from(n);
             as_array = TokenStream::new();
             bitor = TokenStream::new();
             bitor_assign = TokenStream::new();
@@ -1072,7 +1072,7 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                 .map(|i| {
                     let field = format_ident!("__inner{}", i);
 
-                    let init = if index / 32 == i {
+                    let init = if index / 32 == usize::from(i) {
                         1_u32 << (index % 32)
                     } else {
                         0
