@@ -3948,6 +3948,7 @@ version = "0.41.0"
 dependencies = [
  "anyhow",
  "openvino",
+ "tempfile",
  "tensorflow",
  "thiserror",
  "walkdir",

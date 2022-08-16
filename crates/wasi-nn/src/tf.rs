@@ -3,7 +3,7 @@ use crate::api::{Backend, BackendError, BackendExecutionContext, BackendGraph};
 use crate::witx::types::{ExecutionTarget, GraphBuilderArray, Tensor, TensorType};
 use std::collections::HashMap;
 use std::ops::Deref;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str;
 use std::sync::Arc;
 use tensorflow::{
@@ -24,56 +24,66 @@ impl Backend for TensorflowBackend {
         &mut self,
         builders: &GraphBuilderArray<'_>,
         _target: ExecutionTarget,
-        map_dir: &Option<Vec<(String, String)>>,
+        map_dirs: &Vec<(String, String)>,
     ) -> Result<Box<dyn BackendGraph>, BackendError> {
-        if let Some(dir) = map_dir {
-            if builders.len() != 2 {
-                return Err(BackendError::InvalidNumberOfBuilders(2, builders.len()).into());
+        if !map_dirs.is_empty() {
+            if builders.len() < 1 {
+                return Err(BackendError::InvalidNumberOfBuilders(1, builders.len()).into());
             }
-            // Initialize the Tensorflow backend
+            // Initialize the Tensorflow backend.
             let _retval = tensorflow::library::load().or_else(|e| {
                 println!("Error loading the TensorFlow backend: \n {}", e);
                 Err(e)
             });
 
-            let mut graph = Graph::new();
+            // Tensorflow wants to read models from a directory. This path here
+            // is the guest-side (WebAssembly) version of that path which we map
+            // (from `--mapdir` CLI option) to the host-side path with the
+            // actual files. If in the future Tensorflow allows loading models
+            // from bytes, that would be a better solution (TODO).
             let builders = builders.as_ptr();
             let guest_map = builders.read()?.as_slice()?;
-            let guest_map_str = str::from_utf8(&guest_map).unwrap();
-            let exp_dir = builders.add(1)?.read()?.as_slice()?;
-            let exp_str = str::from_utf8(&exp_dir).unwrap();
+            let mapped_directory =
+                build_path(&guest_map, map_dirs).ok_or(BackendError::MissingMapDir())?;
 
-            // Don't allow navigation outside of the sandbox
-            if !exp_str.contains("..") {
-                for i in 0..dir.len() {
-                    if dir[i].0 == guest_map_str {
-                        //Append the stored mapdir path with the user path.
-                        let full_path = std::fs::canonicalize(
-                            Path::new(&dir[i].1.clone()).join(Path::new(exp_str)),
-                        );
-
-                        //Check that path actually exists
-                        let full_path = match full_path {
-                            Ok(fp) => fp,
-                            Err(_e) => return Err(BackendError::MissingMapDir()),
-                        };
-
-                        let bundle = SavedModelBundle::load(
-                            &SessionOptions::new(),
-                            &["serve"],
-                            &mut graph,
-                            full_path,
-                        )?;
-                        return Ok(Box::new(TensorflowGraph(Arc::new(graph), Arc::new(bundle))));
-                    }
-                }
-            }
+            // Load the model.
+            let mut graph = Graph::new();
+            let bundle = SavedModelBundle::load(
+                &SessionOptions::new(),
+                &["serve"],
+                &mut graph,
+                mapped_directory,
+            )?;
+            return Ok(Box::new(TensorflowGraph(Arc::new(graph), Arc::new(bundle))));
         }
-
         Err(BackendError::MissingMapDir())
     }
 }
-
+/// Map the `guest_path` to its equivalent host path *if* there is a mapping for
+/// it in the `map_dirs`.
+fn build_path(guest_path: &[u8], map_dirs: &Vec<(String, String)>) -> Option<PathBuf> {
+    let guest_path = Path::new(str::from_utf8(guest_path).ok()?);
+    for (guest_base, host_base) in map_dirs {
+        let host_base = Path::new(host_base);
+        // If this is the map_dir we are looking for...
+        if guest_path.starts_with(guest_base) {
+            let guest_suffix = guest_path.strip_prefix(guest_base).ok()?;
+            let host_path: PathBuf = [host_base, guest_suffix].iter().collect();
+            // Get the actual full path
+            let canon_path = match host_path.canonicalize() {
+                Ok(path) => path,
+                Err(_) => return None,
+            };
+            // Check that the guest path isn't trying to get outside of the host path.
+            if canon_path.starts_with(&host_base) {
+                return Some(host_path);
+            } else {
+                return None;
+            }
+        }
+    }
+    None
+}
 struct TensorflowGraph(Arc<Graph>, Arc<SavedModelBundle>);
 
 impl<'a> BackendGraph for TensorflowGraph {
@@ -291,5 +301,75 @@ fn t_to_u8<T>(data: &[T]) -> &[u8] {
             data.as_ptr() as *const u8,
             data.len() * std::mem::size_of::<T>(),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::Builder;
+    #[test]
+    fn valid_path() {
+        let tmp_dir = Builder::new().prefix("build").tempdir().unwrap();
+        let tmp_dir2 = Builder::new().prefix("test").tempdir_in(&tmp_dir).unwrap();
+        let tmp_dir_str =
+            String::from(&tmp_dir.into_path().into_os_string().into_string().unwrap());
+        let suffix = tmp_dir2
+            .into_path()
+            .strip_prefix(&tmp_dir_str)
+            .ok()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+        let guest_test = format!("{}/{}", "fixture".to_owned(), &suffix);
+        let map_dirs = vec![("fixture".to_string(), String::from(tmp_dir_str))];
+        let result = build_path(guest_test.as_bytes(), &map_dirs);
+        assert_eq!(true, result.is_some());
+    }
+
+    #[test]
+    fn valid_path_dots() {
+        let tmp_dir = Builder::new().prefix("build").tempdir().unwrap();
+        let tmp_dir2 = Builder::new().prefix("test").tempdir_in(&tmp_dir).unwrap();
+        let tmp_dir_str =
+            String::from(&tmp_dir.into_path().into_os_string().into_string().unwrap());
+        let suffix = format!(
+            "{}/{}",
+            tmp_dir2
+                .into_path()
+                .strip_prefix(&tmp_dir_str)
+                .ok()
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+            "..".to_string()
+        );
+        let guest_test = format!("{}/{}", "fixture".to_owned(), &suffix);
+        let map_dirs = vec![("fixture".to_string(), String::from(tmp_dir_str))];
+        let result = build_path(guest_test.as_bytes(), &map_dirs);
+        assert_eq!(true, result.is_some());
+    }
+
+    #[test]
+    fn path_escape_attempt() {
+        let tmp_dir = Builder::new().prefix("build").tempdir().unwrap();
+        let tmp_dir2 = Builder::new().prefix("test").tempdir_in(&tmp_dir).unwrap();
+        let tmp_dir_str =
+            String::from(&tmp_dir.into_path().into_os_string().into_string().unwrap());
+        let suffix = format!(
+            "{}/{}",
+            tmp_dir2
+                .into_path()
+                .strip_prefix(&tmp_dir_str)
+                .ok()
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+            "../../".to_string()
+        );
+        let guest_test = format!("{}/{}", "fixture".to_owned(), &suffix);
+        let map_dirs = vec![("fixture".to_string(), String::from(tmp_dir_str))];
+        let result = build_path(guest_test.as_bytes(), &map_dirs);
+        assert_eq!(false, result.is_some());
     }
 }

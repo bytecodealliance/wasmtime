@@ -22,15 +22,18 @@ wasi_nn.add_to_linker(&mut linker)?;
 
 ### Build
 
-This crate should build as usual (i.e. `cargo build`) but note that using an existing installation of OpenVINO™ or TensorFlow, rather
-than building from source, will drastically improve the build times. See the [openvino] and [tensorflow] crates for more information
+This crate should build as usual (i.e. `cargo build`) but note that using an
+existing installation of OpenVINO™ or TensorFlow, rather than building from
+source, will drastically improve the build times. See the [openvino] and
+[tensorflow] crates for more information.
 
 ### Example
 
 An end-to-end example demonstrating ML classification is included in [examples]:
- - `tests/wasi-nn-rust-bindings` contains ergonomic bindings for writing Rust code against the [wasi-nn] APIs
- - `tests/classification-example` contains a standalone Rust project that uses the [wasi-nn] APIs and is compiled to the
- `wasm32-wasi` target using the `wasi-nn-rust-bindings`
+ - `examples/openvino` contains a standalone Rust project that uses the
+    [wasi-nn] APIs to use OpenVINO models for inference
+ - `examples/tensorflow` is the same as `examples/openvino` but for the
+   Tensorflow backend
 
 Run the example from the Wasmtime project directory:
 

@@ -13,7 +13,7 @@ pub(crate) trait Backend {
         &mut self,
         builders: &GraphBuilderArray<'_>,
         target: ExecutionTarget,
-        map_dir: &Option<Vec<(String, String)>>,
+        map_dirs: &Vec<(String, String)>,
     ) -> Result<Box<dyn BackendGraph>, BackendError>;
 }
 

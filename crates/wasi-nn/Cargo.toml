@@ -27,3 +27,6 @@ walkdir = "2.3"
 
 [badges]
 maintenance = { status = "experimental" }
+
+[dev-dependencies]
+tempfile = "3"
