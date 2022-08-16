@@ -65,8 +65,8 @@ block3(v7: r64, v8: r64):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
+;   sd s9,-8(sp)
 ;   add sp,-48
-;   sd s9,0(sp)
 ; block0:
 ;   sd a1,16(nominal_sp)
 ;   mv s9,a2
@@ -95,8 +95,8 @@ block3(v7: r64, v8: r64):
 ;   ld t4,0(t4)
 ;   mv a2,s9
 ;   sd t4,0(a2)
-;   ld s9,0(sp)
 ;   add sp,+48
+;   ld s9,-8(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16

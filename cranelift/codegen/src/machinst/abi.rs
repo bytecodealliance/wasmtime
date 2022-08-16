@@ -194,45 +194,40 @@ pub trait ABICaller {
     /// Emit a copy of an argument value from a source register, prior to the call.
     /// For large arguments with associated stack buffer, this may load the address
     /// of the buffer into the argument register, if required by the ABI.
-    fn emit_copy_regs_to_arg<C: LowerCtx<I = Self::I>>(
-        &self,
-        ctx: &mut C,
-        idx: usize,
-        from_reg: ValueRegs<Reg>,
-    );
+    fn emit_copy_regs_to_arg(&self, ctx: &mut Lower<Self::I>, idx: usize, from_reg: ValueRegs<Reg>);
 
     /// Emit a copy of a large argument into its associated stack buffer, if any.
     /// We must be careful to perform all these copies (as necessary) before setting
     /// up the argument registers, since we may have to invoke memcpy(), which could
     /// clobber any registers already set up.  The back-end should call this routine
     /// for all arguments before calling emit_copy_regs_to_arg for all arguments.
-    fn emit_copy_regs_to_buffer<C: LowerCtx<I = Self::I>>(
+    fn emit_copy_regs_to_buffer(
         &self,
-        ctx: &mut C,
+        ctx: &mut Lower<Self::I>,
         idx: usize,
         from_reg: ValueRegs<Reg>,
     );
 
     /// Emit a copy a return value into a destination register, after the call returns.
-    fn emit_copy_retval_to_regs<C: LowerCtx<I = Self::I>>(
+    fn emit_copy_retval_to_regs(
         &self,
-        ctx: &mut C,
+        ctx: &mut Lower<Self::I>,
         idx: usize,
         into_reg: ValueRegs<Writable<Reg>>,
     );
 
     /// Emit code to pre-adjust the stack, prior to argument copies and call.
-    fn emit_stack_pre_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C);
+    fn emit_stack_pre_adjust(&self, ctx: &mut Lower<Self::I>);
 
     /// Emit code to post-adjust the satck, after call return and return-value copies.
-    fn emit_stack_post_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C);
+    fn emit_stack_post_adjust(&self, ctx: &mut Lower<Self::I>);
 
     /// Accumulate outgoing arguments.  This ensures that the caller (as
     /// identified via the CTX argument) allocates enough space in the
     /// prologue to hold all arguments and return values for this call.
     /// There is no code emitted at the call site, everything is done
     /// in the caller's function prologue.
-    fn accumulate_outgoing_args_size<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C);
+    fn accumulate_outgoing_args_size(&self, ctx: &mut Lower<Self::I>);
 
     /// Emit the call itself.
     ///
@@ -247,5 +242,5 @@ pub trait ABICaller {
     ///
     /// This function should only be called once, as it is allowed to re-use
     /// parts of the ABICaller object in emitting instructions.
-    fn emit_call<C: LowerCtx<I = Self::I>>(&mut self, ctx: &mut C);
+    fn emit_call(&mut self, ctx: &mut Lower<Self::I>);
 }

@@ -461,7 +461,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // Adjust the stack pointer downward for clobbers and the function fixed
         // frame (spillslots and storage slots).
         let stack_size = fixed_frame_storage_size + clobbered_size;
-
         if flags.unwind_info() && setup_frame {
             // The *unwind* frame (but not the actual frame) starts at the
             // clobbers, just below the saved FP/LR pair.
@@ -475,11 +474,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // Store each clobbered register in order at offsets from SP,
         // placing them above the fixed frame slots.
         if stack_size > 0 {
-            insts.push(Inst::AjustSp {
-                amount: -(stack_size as i64),
-            });
             // since we use fp, we didn't need use UnwindInst::StackAlloc.
-            let mut cur_offset = 0;
+            let mut cur_offset = 8;
             for reg in clobbered_callee_saves {
                 let r_reg = reg.to_reg();
                 let ty = match r_reg.class() {
@@ -489,18 +485,21 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 if flags.unwind_info() {
                     insts.push(Inst::Unwind {
                         inst: UnwindInst::SaveReg {
-                            clobber_offset: cur_offset as u32,
+                            clobber_offset: clobbered_size - cur_offset,
                             reg: r_reg,
                         },
                     });
                 }
                 insts.push(Self::gen_store_stack(
-                    StackAMode::SPOffset(cur_offset, ty),
+                    StackAMode::SPOffset(-(cur_offset as i64), ty),
                     real_reg_to_reg(reg.to_reg()),
                     ty,
                 ));
                 cur_offset += 8
             }
+            insts.push(Inst::AjustSp {
+                amount: -(stack_size as i64),
+            });
         }
         (clobbered_size as u64, insts)
     }
@@ -517,7 +516,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let clobbered_callee_saves =
             Self::get_clobbered_callee_saves(call_conv, _flags, sig, clobbers);
         let stack_size = fixed_frame_storage_size + compute_clobber_size(&clobbered_callee_saves);
-        let mut cur_offset = 0;
+        if stack_size > 0 {
+            insts.push(Inst::AjustSp {
+                amount: stack_size as i64,
+            });
+        }
+        let mut cur_offset = 8;
         for reg in &clobbered_callee_saves {
             let rreg = reg.to_reg();
             let ty = match rreg.class() {
@@ -525,16 +529,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 regalloc2::RegClass::Float => F64,
             };
             insts.push(Self::gen_load_stack(
-                StackAMode::SPOffset(cur_offset, ty),
+                StackAMode::SPOffset(-cur_offset, ty),
                 Writable::from_reg(real_reg_to_reg(reg.to_reg())),
                 ty,
             ));
             cur_offset += 8
-        }
-        if stack_size > 0 {
-            insts.push(Inst::AjustSp {
-                amount: stack_size as i64,
-            });
         }
         insts
     }
@@ -551,11 +550,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     ) -> SmallVec<[Self::I; 2]> {
         let mut insts = SmallVec::new();
         fn use_direct_call(name: &ir::ExternalName, distance: RelocDistance) -> bool {
-            if let &ExternalName::User {
-                namespace: _namespace,
-                index: _index,
-            } = name
-            {
+            if let &ExternalName::User(..) = name {
                 if RelocDistance::Near == distance {
                     return true;
                 }
@@ -695,13 +690,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         num_clobbered_callee_saves: usize,
         fixed_frame_storage_size: u32,
     ) -> bool {
-        true
-        // !is_leaf
-        //     // The function arguments that are passed on the stack are addressed
-        //     // relative to the Frame Pointer.
-        //     || stack_args_size > 0
-        //     || num_clobbered_callee_saves > 0
-        //     || fixed_frame_storage_size > 0
+        !is_leaf
+            // The function arguments that are passed on the stack are addressed
+            // relative to the Frame Pointer.
+            || stack_args_size > 0
+            || num_clobbered_callee_saves > 0
+            || fixed_frame_storage_size > 0
     }
 }
 

@@ -4,7 +4,7 @@ use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::types::{
     B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS, R32, R64,
 };
-use crate::ir::{types, ExternalName, MemFlags, Opcode, SourceLoc, Type};
+use crate::ir::{types, ExternalName, MemFlags, Opcode, Type};
 use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
@@ -2704,7 +2704,7 @@ impl Inst {
             &Inst::EmitIsland { needed_space } => format!("emit_island {}", needed_space),
 
             &Inst::ElfTlsGetAddr { ref symbol } => {
-                format!("x0 = elf_tls_get_addr {}", symbol)
+                format!("x0 = elf_tls_get_addr {}", symbol.display(None))
             }
             &Inst::Unwind { ref inst } => {
                 format!("unwind {:?}", inst)

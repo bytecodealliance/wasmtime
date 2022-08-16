@@ -81,6 +81,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                 let result = context.compiled_code().unwrap();
                 print_all(
                     isa,
+                    &context.func.params,
                     &mem,
                     code_info.total_size,
                     options.print,

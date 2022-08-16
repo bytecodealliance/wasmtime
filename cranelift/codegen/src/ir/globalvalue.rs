@@ -10,7 +10,7 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 /// Information about a global value declaration.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum GlobalValueData {
     /// Value is the address of the VM context struct.
@@ -151,7 +151,7 @@ impl fmt::Display for GlobalValueData {
                     "symbol {}{}{}",
                     if colocated { "colocated " } else { "" },
                     if tls { "tls " } else { "" },
-                    name
+                    name.display(None)
                 )?;
                 let offset_val: i64 = offset.into();
                 if offset_val > 0 {

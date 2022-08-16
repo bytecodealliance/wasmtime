@@ -35,6 +35,10 @@ pub enum Reloc {
     X86CallPLTRel4,
     /// x86 GOT PC-relative 4-byte
     X86GOTPCRel4,
+    /// The 32-bit offset of the target from the beginning of its section.
+    /// Equivalent to `IMAGE_REL_AMD64_SECREL`.
+    /// See: [PE Format](https://docs.microsoft.com/en-us/windows/win32/debug/pe-format)
+    X86SecRel,
     /// Arm32 call target
     Arm32Call,
     /// Arm64 call target. Encoded as bottom 26 bits of instruction. This
@@ -88,6 +92,7 @@ impl fmt::Display for Reloc {
             Self::X86CallPCRel4 => write!(f, "CallPCRel4"),
             Self::X86CallPLTRel4 => write!(f, "CallPLTRel4"),
             Self::X86GOTPCRel4 => write!(f, "GOTPCRel4"),
+            Self::X86SecRel => write!(f, "SecRel"),
             Self::Arm32Call | Self::Arm64Call => write!(f, "Call"),
             Self::RiscvCall => write!(f, "RiscvCall"),
 
@@ -106,7 +111,7 @@ impl fmt::Display for Reloc {
 /// The code starts at offset 0 and is followed optionally by relocatable jump tables and copyable
 /// (raw binary) read-only data.  Any padding between sections is always part of the section that
 /// precedes the boundary between the sections.
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct CodeInfo {
     /// Number of bytes in total.
     pub total_size: CodeOffset,

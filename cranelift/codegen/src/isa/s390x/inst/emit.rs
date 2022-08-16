@@ -1,8 +1,8 @@
 //! S390x ISA: binary code emission.
 
 use crate::binemit::{Reloc, StackMap};
-use crate::ir::MemFlags;
-use crate::ir::{SourceLoc, TrapCode};
+use crate::ir::TrapCode;
+use crate::ir::{MemFlags, RelSourceLoc};
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
 use crate::machinst::reg::count_operands;
@@ -133,7 +133,7 @@ pub fn mem_emit(
 
     if add_trap && mem.can_trap() {
         let srcloc = state.cur_srcloc();
-        if srcloc != SourceLoc::default() {
+        if !srcloc.is_default() {
             sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
@@ -201,7 +201,7 @@ pub fn mem_rs_emit(
 
     if add_trap && mem.can_trap() {
         let srcloc = state.cur_srcloc();
-        if srcloc != SourceLoc::default() {
+        if !srcloc.is_default() {
             sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
@@ -243,7 +243,7 @@ pub fn mem_imm8_emit(
 
     if add_trap && mem.can_trap() {
         let srcloc = state.cur_srcloc();
-        if srcloc != SourceLoc::default() {
+        if !srcloc.is_default() {
             sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
@@ -281,7 +281,7 @@ pub fn mem_imm16_emit(
 
     if add_trap && mem.can_trap() {
         let srcloc = state.cur_srcloc();
-        if srcloc != SourceLoc::default() {
+        if !srcloc.is_default() {
             sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
@@ -308,7 +308,7 @@ pub fn mem_mem_emit(
 ) {
     if add_trap && (dst.can_trap() || src.can_trap()) {
         let srcloc = state.cur_srcloc();
-        if srcloc != SourceLoc::default() {
+        if srcloc != Default::default() {
             sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
@@ -343,7 +343,7 @@ pub fn mem_vrx_emit(
 
     if add_trap && mem.can_trap() {
         let srcloc = state.cur_srcloc();
-        if srcloc != SourceLoc::default() {
+        if !srcloc.is_default() {
             sink.add_trap(TrapCode::HeapOutOfBounds);
         }
     }
@@ -1256,7 +1256,7 @@ pub struct EmitState {
     /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
     stack_map: Option<StackMap>,
     /// Current source-code location corresponding to instruction to be emitted.
-    cur_srcloc: SourceLoc,
+    cur_srcloc: RelSourceLoc,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -1265,7 +1265,7 @@ impl MachInstEmitState<Inst> for EmitState {
             virtual_sp_offset: 0,
             initial_sp_offset: abi.frame_size() as i64,
             stack_map: None,
-            cur_srcloc: SourceLoc::default(),
+            cur_srcloc: Default::default(),
         }
     }
 
@@ -1273,7 +1273,7 @@ impl MachInstEmitState<Inst> for EmitState {
         self.stack_map = Some(stack_map);
     }
 
-    fn pre_sourceloc(&mut self, srcloc: SourceLoc) {
+    fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
     }
 }
@@ -1287,7 +1287,7 @@ impl EmitState {
         self.stack_map = None;
     }
 
-    fn cur_srcloc(&self) -> SourceLoc {
+    fn cur_srcloc(&self) -> RelSourceLoc {
         self.cur_srcloc
     }
 }
@@ -2839,24 +2839,50 @@ impl MachInstEmit for Inst {
                 inst.emit(&[], sink, emit_info, state);
             }
 
-            &Inst::VecLoad { rd, ref mem } | &Inst::VecLoadRev { rd, ref mem } => {
+            &Inst::VecLoad { rd, ref mem }
+            | &Inst::VecLoadRev { rd, ref mem }
+            | &Inst::VecLoadByte16Rev { rd, ref mem }
+            | &Inst::VecLoadByte32Rev { rd, ref mem }
+            | &Inst::VecLoadByte64Rev { rd, ref mem }
+            | &Inst::VecLoadElt16Rev { rd, ref mem }
+            | &Inst::VecLoadElt32Rev { rd, ref mem }
+            | &Inst::VecLoadElt64Rev { rd, ref mem } => {
                 let rd = allocs.next_writable(rd);
                 let mem = mem.with_allocs(&mut allocs);
 
                 let (opcode, m3) = match self {
-                    &Inst::VecLoad { .. } => (0xe706, 0),    // VL
-                    &Inst::VecLoadRev { .. } => (0xe606, 4), // VLBRQ
+                    &Inst::VecLoad { .. } => (0xe706, 0),          // VL
+                    &Inst::VecLoadRev { .. } => (0xe606, 4),       // VLBRQ
+                    &Inst::VecLoadByte16Rev { .. } => (0xe606, 1), // VLBRH
+                    &Inst::VecLoadByte32Rev { .. } => (0xe606, 2), // VLBRF
+                    &Inst::VecLoadByte64Rev { .. } => (0xe606, 3), // VLBRG
+                    &Inst::VecLoadElt16Rev { .. } => (0xe607, 1),  // VLERH
+                    &Inst::VecLoadElt32Rev { .. } => (0xe607, 2),  // VLERF
+                    &Inst::VecLoadElt64Rev { .. } => (0xe607, 3),  // VLERG
                     _ => unreachable!(),
                 };
                 mem_vrx_emit(rd.to_reg(), &mem, opcode, m3, true, sink, emit_info, state);
             }
-            &Inst::VecStore { rd, ref mem } | &Inst::VecStoreRev { rd, ref mem } => {
+            &Inst::VecStore { rd, ref mem }
+            | &Inst::VecStoreRev { rd, ref mem }
+            | &Inst::VecStoreByte16Rev { rd, ref mem }
+            | &Inst::VecStoreByte32Rev { rd, ref mem }
+            | &Inst::VecStoreByte64Rev { rd, ref mem }
+            | &Inst::VecStoreElt16Rev { rd, ref mem }
+            | &Inst::VecStoreElt32Rev { rd, ref mem }
+            | &Inst::VecStoreElt64Rev { rd, ref mem } => {
                 let rd = allocs.next(rd);
                 let mem = mem.with_allocs(&mut allocs);
 
                 let (opcode, m3) = match self {
-                    &Inst::VecStore { .. } => (0xe70e, 0),    // VST
-                    &Inst::VecStoreRev { .. } => (0xe60e, 4), // VSTBRQ
+                    &Inst::VecStore { .. } => (0xe70e, 0),          // VST
+                    &Inst::VecStoreRev { .. } => (0xe60e, 4),       // VSTBRQ
+                    &Inst::VecStoreByte16Rev { .. } => (0xe60e, 1), // VSTBRH
+                    &Inst::VecStoreByte32Rev { .. } => (0xe60e, 2), // VSTBRF
+                    &Inst::VecStoreByte64Rev { .. } => (0xe60e, 3), // VSTBRG
+                    &Inst::VecStoreElt16Rev { .. } => (0xe60f, 1),  // VSTERH
+                    &Inst::VecStoreElt32Rev { .. } => (0xe60f, 2),  // VSTERF
+                    &Inst::VecStoreElt64Rev { .. } => (0xe60f, 3),  // VSTERG
                     _ => unreachable!(),
                 };
                 mem_vrx_emit(rd, &mem, opcode, m3, true, sink, emit_info, state);

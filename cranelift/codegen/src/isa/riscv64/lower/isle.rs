@@ -20,7 +20,7 @@ use crate::{
         StackSlot, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
-    machinst::{InsnOutput, LowerCtx},
+    machinst::{InsnOutput, Lower},
 };
 use regalloc2::PReg;
 
@@ -35,17 +35,14 @@ type BoxExternalName = Box<ExternalName>;
 type VecMachLabel = Vec<MachLabel>;
 
 /// The main entry point for lowering with ISLE.
-pub(crate) fn lower<C>(
-    lower_ctx: &mut C,
+pub(crate) fn lower(
+    lower_ctx: &mut Lower<MInst>,
     flags: &Flags,
     triple: &Triple,
     isa_flags: &IsaFlags,
     outputs: &[InsnOutput],
     inst: Inst,
-) -> Result<(), ()>
-where
-    C: LowerCtx<I = MInst>,
-{
+) -> Result<(), ()> {
     lower_common(
         lower_ctx,
         triple,
@@ -57,10 +54,7 @@ where
     )
 }
 
-impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
-where
-    C: LowerCtx<I = MInst>,
-{
+impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_methods!();
     fn vec_regs_to_value_regs(&mut self, val: &VecWritableReg) -> ValueRegs {
         match val.len() {
@@ -103,12 +97,10 @@ where
     fn lower_brz_or_nz(
         &mut self,
         cc: &IntCC,
-        a: Value,
+        a: ValueRegs,
         targets: &VecMachLabel,
         ty: Type,
     ) -> InstOutput {
-        let a = self.put_in_regs(a);
-        let a = generated_code::constructor_uext_int_if_need(self, a, ty).unwrap();
         MInst::lower_br_icmp(
             *cc,
             a,
@@ -119,14 +111,13 @@ where
         )
         .iter()
         .for_each(|i| self.emit(i));
-
         InstOutput::default()
     }
     fn lower_br_icmp(
         &mut self,
         cc: &IntCC,
-        a: Value,
-        b: Value,
+        a: ValueRegs,
+        b: ValueRegs,
         targets: &VecMachLabel,
         ty: Type,
     ) -> InstOutput {
@@ -143,16 +134,18 @@ where
         InstOutput::default()
     }
     fn load_ra(&mut self) -> Reg {
-        let tmp = self.temp_writable_reg(I64);
-        self.emit(&MInst::Load {
-            rd: tmp,
-            op: LoadOP::Ld,
-            flags: MemFlags::trusted(),
-            from: AMode::FPOffset(8, I64),
-        });
-        tmp.to_reg()
+        //todo https://bytecodealliance.zulipchat.com/#narrow/stream/206238-general/topic/cranelift.20opcode.20get_return_address.2E
+        // right now I will always setup frame.
+        // let tmp = self.temp_writable_reg(I64);
+        // self.emit(&MInst::Load {
+        //     rd: tmp,
+        //     op: LoadOP::Ld,
+        //     flags: MemFlags::trusted(),
+        //     from: AMode::FPOffset(8, I64),
+        // });
+        // tmp.to_reg()
 
-        // self.gen_move(link_reg(), I64)
+        self.gen_move(link_reg(), I64)
     }
     fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
         assert!(ty.is_int() || ty.is_bool(), "{:?}", ty);
@@ -352,6 +345,10 @@ where
         ValueRegs::two(shamt, len_sub_shamt)
     }
 
+    fn has_b(&mut self) -> Option<bool> {
+        Some(self.isa_flags.has_b())
+    }
+
     fn valueregs_2_reg(&mut self, val: Value) -> Reg {
         self.put_in_regs(val).regs()[0]
     }
@@ -373,13 +370,14 @@ where
     fn inst_output_get(&mut self, x: InstOutput, index: u8) -> ValueRegs {
         x[index as usize]
     }
-    fn iadd_ifcout_parameter(&mut self, val: Value) -> Option<(Value, Value, Type)> {
+    fn iadd_ifcout_parameters(&mut self, val: Value) -> Option<(Value, Value, Type)> {
         let inst = self.value_inst(val)?;
         let opcode = self.lower_ctx.data(inst).opcode();
         if opcode == crate::ir::Opcode::IaddIfcout {
             let a = self.lower_ctx.input_as_value(inst, 0);
             let b = self.lower_ctx.input_as_value(inst, 1);
             let ty = self.lower_ctx.input_ty(inst, 0);
+
             Some((a, b, ty))
         } else {
             None
@@ -493,32 +491,20 @@ where
         tmp.to_reg()
     }
 
-    fn sext_int_if_need(&mut self, val: Value) -> Option<(ValueRegs, Type)> {
-        let (ty, val) = self.type_and_value(val);
-        if !ty.is_int() {
-            return None;
-        }
+    fn sext_int_if_need(&mut self, val: ValueRegs, ty: Type) -> ValueRegs {
+        assert!(ty.is_int());
         match ty.bits() {
-            128 => {
-                let r = self.put_in_regs(val);
-                Some((r, ty))
-            }
-            64 => {
-                let r = self.put_in_reg(val);
-                Some((ValueRegs::one(r), ty))
-            }
+            128 | 64 => val,
             _ => {
-                let rs = self.put_in_reg(val);
                 let rd = self.temp_writable_reg(I64);
                 self.emit(&MInst::Extend {
                     rd,
-                    rn: rs,
+                    rn: val.regs()[0],
                     signed: true,
                     from_bits: ty.bits() as u8,
                     to_bits: 64,
                 });
-
-                Some((ValueRegs::one(rd.to_reg()), ty))
+                ValueRegs::one(rd.to_reg())
             }
         }
     }
@@ -575,10 +561,7 @@ where
     }
 }
 
-impl<C> IsleContext<'_, C, Flags, IsaFlags, 6>
-where
-    C: LowerCtx<I = MInst>,
-{
+impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     #[inline(always)]
     fn emit_list(&mut self, list: &SmallInstVec<MInst>) {
         for i in list {
@@ -588,17 +571,14 @@ where
 }
 
 /// The main entry point for branch lowering with ISLE.
-pub(crate) fn lower_branch<C>(
-    lower_ctx: &mut C,
+pub(crate) fn lower_branch(
+    lower_ctx: &mut Lower<MInst>,
     triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
     branch: Inst,
     targets: &[MachLabel],
-) -> Result<(), ()>
-where
-    C: LowerCtx<I = MInst>,
-{
+) -> Result<(), ()> {
     lower_common(
         lower_ctx,
         triple,

@@ -1,6 +1,7 @@
 //! Riscv64 ISA: binary code emission.
 
 use crate::binemit::StackMap;
+use crate::ir::RelSourceLoc;
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::inst::{zero_reg, AluOPRRR};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
@@ -99,7 +100,7 @@ pub struct EmitState {
     /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
     stack_map: Option<StackMap>,
     /// Current source-code location corresponding to instruction to be emitted.
-    cur_srcloc: SourceLoc,
+    cur_srcloc: RelSourceLoc,
 }
 
 impl EmitState {
@@ -111,7 +112,7 @@ impl EmitState {
         self.stack_map = None;
     }
 
-    fn cur_srcloc(&self) -> SourceLoc {
+    fn cur_srcloc(&self) -> RelSourceLoc {
         self.cur_srcloc
     }
 }
@@ -122,7 +123,7 @@ impl MachInstEmitState<Inst> for EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
-            cur_srcloc: SourceLoc::default(),
+            cur_srcloc: RelSourceLoc::default(),
         }
     }
 
@@ -130,7 +131,7 @@ impl MachInstEmitState<Inst> for EmitState {
         self.stack_map = Some(stack_map);
     }
 
-    fn pre_sourceloc(&mut self, srcloc: SourceLoc) {
+    fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
     }
 }
@@ -529,6 +530,9 @@ impl MachInstEmit for Inst {
         emit_info: &Self::Info,
         state: &mut EmitState,
     ) {
+        //extra check certain extension enabled.
+        // check_isa_flags(self, &emit_info.isa_flags).unwrap();
+
         let mut allocs = AllocationConsumer::new(allocs);
         // N.B.: we *must* not exceed the "worst-case size" used to compute
         // where to insert islands, except when islands are explicitly triggered
@@ -1180,12 +1184,12 @@ impl MachInstEmit for Inst {
 
             &Inst::Select {
                 ref dst,
-                conditon,
+                condition,
                 ref x,
                 ref y,
                 ty: _ty,
             } => {
-                let conditon = allocs.next(conditon);
+                let condition = allocs.next(condition);
                 let x = alloc_value_regs(x, &mut allocs);
                 let y = alloc_value_regs(y, &mut allocs);
                 let dst: Vec<_> = dst
@@ -1201,7 +1205,7 @@ impl MachInstEmit for Inst {
                     not_taken: BranchTarget::zero(),
                     kind: IntegerCompare {
                         kind: IntCC::Equal,
-                        rs1: conditon,
+                        rs1: condition,
                         rs2: zero_reg(),
                     },
                 });
@@ -2078,6 +2082,105 @@ impl MachInstEmit for Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 sink.bind_label(label_jump_over);
+            }
+            &Inst::Popcnt {
+                sum,
+                tmp,
+                step,
+                rs,
+                ty,
+            } => {
+                let rs = allocs.next(rs);
+                let tmp = allocs.next_writable(tmp);
+                let step = allocs.next_writable(step);
+                let sum = allocs.next_writable(sum);
+                // load 0 to sum , init.
+                Inst::gen_move(sum, zero_reg(), I64).emit(&[], sink, emit_info, state);
+                // load
+                Inst::load_constant_imm12(step, Imm12::from_bits(ty.bits() as i16)).emit(
+                    &[],
+                    sink,
+                    emit_info,
+                    state,
+                );
+                //
+                Inst::load_constant_imm12(tmp, Imm12::from_bits(1)).emit(
+                    &[],
+                    sink,
+                    emit_info,
+                    state,
+                );
+                Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Slli,
+                    rd: tmp,
+                    rs: tmp.to_reg(),
+                    imm12: Imm12::from_bits((ty.bits() - 1) as i16),
+                }
+                .emit(&[], sink, emit_info, state);
+                let label_done = sink.get_label();
+                let label_loop = sink.get_label();
+                sink.bind_label(label_loop);
+                Inst::CondBr {
+                    taken: BranchTarget::Label(label_done),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::SignedLessThanOrEqual,
+                        rs1: step.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+                //test and add sum .
+                {
+                    Inst::AluRRR {
+                        alu_op: AluOPRRR::And,
+                        rd: writable_spilltmp_reg2(),
+                        rs1: tmp.to_reg(),
+                        rs2: rs,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    let lable_over = sink.get_label();
+                    Inst::CondBr {
+                        taken: BranchTarget::Label(lable_over),
+                        not_taken: BranchTarget::zero(),
+                        kind: IntegerCompare {
+                            kind: IntCC::Equal,
+                            rs1: zero_reg(),
+                            rs2: spilltmp_reg2(),
+                        },
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Addi,
+                        rd: sum,
+                        rs: sum.to_reg(),
+                        imm12: Imm12::from_bits(1),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    sink.bind_label(lable_over);
+                }
+                // set step and tmp.
+                {
+                    Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Addi,
+                        rd: step,
+                        rs: step.to_reg(),
+                        imm12: Imm12::from_bits(-1),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Srli,
+                        rd: tmp,
+                        rs: tmp.to_reg(),
+                        imm12: Imm12::from_bits(1),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    Inst::Jal {
+                        dest: BranchTarget::Label(label_loop),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
+                sink.bind_label(label_done);
             }
         };
         let end_off = sink.cur_offset();

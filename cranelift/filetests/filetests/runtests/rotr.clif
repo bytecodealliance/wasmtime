@@ -1,0 +1,244 @@
+test interpret
+test run
+target aarch64
+target x86_64
+target s390x
+target riscv64
+
+
+function %rotr_i64_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = rotr.i64 v0, v1
+    return v2
+}
+; run: %rotr_i64_i64(0xe0000000_00000000, 0) == 0xe0000000_00000000
+; run: %rotr_i64_i64(0xe0000000_00000000, 1) == 0x70000000_00000000
+; run: %rotr_i64_i64(0xe000000f_0000000f, 0) == 0xe000000f_0000000f
+; run: %rotr_i64_i64(0xe000000f_0000000f, 4) == 0xfe000000_f0000000
+; run: %rotr_i64_i64(0xe0000000_00000004, 64) == 0xe0000000_00000004
+; run: %rotr_i64_i64(0xe0000000_00000004, 65) == 0x70000000_00000002
+; run: %rotr_i64_i64(0xe0000000_00000004, 66) == 0x38000000_00000001
+; run: %rotr_i64_i64(0xe0000000_00000004, 257) == 0x70000000_00000002
+
+function %rotr_i64_i32(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = rotr.i64 v0, v1
+    return v2
+}
+; run: %rotr_i64_i32(0xe0000000_00000000, 0) == 0xe0000000_00000000
+; run: %rotr_i64_i32(0xe0000000_00000000, 1) == 0x70000000_00000000
+; run: %rotr_i64_i32(0xe000000f_0000000f, 0) == 0xe000000f_0000000f
+; run: %rotr_i64_i32(0xe000000f_0000000f, 4) == 0xfe000000_f0000000
+; run: %rotr_i64_i32(0xe0000000_00000004, 64) == 0xe0000000_00000004
+; run: %rotr_i64_i32(0xe0000000_00000004, 65) == 0x70000000_00000002
+; run: %rotr_i64_i32(0xe0000000_00000004, 66) == 0x38000000_00000001
+; run: %rotr_i64_i32(0xe0000000_00000004, 257) == 0x70000000_00000002
+
+function %rotr_i64_i16(i64, i16) -> i64 {
+block0(v0: i64, v1: i16):
+    v2 = rotr.i64 v0, v1
+    return v2
+}
+; run: %rotr_i64_i16(0xe0000000_00000000, 0) == 0xe0000000_00000000
+; run: %rotr_i64_i16(0xe0000000_00000000, 1) == 0x70000000_00000000
+; run: %rotr_i64_i16(0xe000000f_0000000f, 0) == 0xe000000f_0000000f
+; run: %rotr_i64_i16(0xe000000f_0000000f, 4) == 0xfe000000_f0000000
+; run: %rotr_i64_i16(0xe0000000_00000004, 64) == 0xe0000000_00000004
+; run: %rotr_i64_i16(0xe0000000_00000004, 65) == 0x70000000_00000002
+; run: %rotr_i64_i16(0xe0000000_00000004, 66) == 0x38000000_00000001
+; run: %rotr_i64_i16(0xe0000000_00000004, 257) == 0x70000000_00000002
+
+function %rotr_i64_i8(i64, i8) -> i64 {
+block0(v0: i64, v1: i8):
+    v2 = rotr.i64 v0, v1
+    return v2
+}
+; run: %rotr_i64_i8(0xe0000000_00000000, 0) == 0xe0000000_00000000
+; run: %rotr_i64_i8(0xe0000000_00000000, 1) == 0x70000000_00000000
+; run: %rotr_i64_i8(0xe000000f_0000000f, 0) == 0xe000000f_0000000f
+; run: %rotr_i64_i8(0xe000000f_0000000f, 4) == 0xfe000000_f0000000
+; run: %rotr_i64_i8(0xe0000000_00000004, 64) == 0xe0000000_00000004
+; run: %rotr_i64_i8(0xe0000000_00000004, 65) == 0x70000000_00000002
+; run: %rotr_i64_i8(0xe0000000_00000004, 66) == 0x38000000_00000001
+
+
+function %rotr_i32_i64(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+    v2 = rotr.i32 v0, v1
+    return v2
+}
+; run: %rotr_i32_i64(0xe0000000, 0) == 0xe0000000
+; run: %rotr_i32_i64(0xe0000000, 1) == 0x70000000
+; run: %rotr_i32_i64(0xe00f000f, 0) == 0xe00f000f
+; run: %rotr_i32_i64(0xe00f000f, 4) == 0xfe00f000
+; run: %rotr_i32_i64(0xe0000004, 64) == 0xe0000004
+; run: %rotr_i32_i64(0xe0000004, 65) == 0x70000002
+; run: %rotr_i32_i64(0xe0000004, 66) == 0x38000001
+; run: %rotr_i32_i64(0xe0000004, 257) == 0x70000002
+
+function %rotr_i32_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = rotr.i32 v0, v1
+    return v2
+}
+; run: %rotr_i32_i32(0xe0000000, 0) == 0xe0000000
+; run: %rotr_i32_i32(0xe0000000, 1) == 0x70000000
+; run: %rotr_i32_i32(0xe00f000f, 0) == 0xe00f000f
+; run: %rotr_i32_i32(0xe00f000f, 4) == 0xfe00f000
+; run: %rotr_i32_i32(0xe0000004, 64) == 0xe0000004
+; run: %rotr_i32_i32(0xe0000004, 65) == 0x70000002
+; run: %rotr_i32_i32(0xe0000004, 66) == 0x38000001
+; run: %rotr_i32_i32(0xe0000004, 257) == 0x70000002
+
+function %rotr_i32_i16(i32, i16) -> i32 {
+block0(v0: i32, v1: i16):
+    v2 = rotr.i32 v0, v1
+    return v2
+}
+; run: %rotr_i32_i16(0xe0000000, 0) == 0xe0000000
+; run: %rotr_i32_i16(0xe0000000, 1) == 0x70000000
+; run: %rotr_i32_i16(0xe00f000f, 0) == 0xe00f000f
+; run: %rotr_i32_i16(0xe00f000f, 4) == 0xfe00f000
+; run: %rotr_i32_i16(0xe0000004, 64) == 0xe0000004
+; run: %rotr_i32_i16(0xe0000004, 65) == 0x70000002
+; run: %rotr_i32_i16(0xe0000004, 66) == 0x38000001
+; run: %rotr_i32_i16(0xe0000004, 257) == 0x70000002
+
+function %rotr_i32_i8(i32, i8) -> i32 {
+block0(v0: i32, v1: i8):
+    v2 = rotr.i32 v0, v1
+    return v2
+}
+; run: %rotr_i32_i8(0xe0000000, 0) == 0xe0000000
+; run: %rotr_i32_i8(0xe0000000, 1) == 0x70000000
+; run: %rotr_i32_i8(0xe00f000f, 0) == 0xe00f000f
+; run: %rotr_i32_i8(0xe00f000f, 4) == 0xfe00f000
+; run: %rotr_i32_i8(0xe0000004, 64) == 0xe0000004
+; run: %rotr_i32_i8(0xe0000004, 65) == 0x70000002
+; run: %rotr_i32_i8(0xe0000004, 66) == 0x38000001
+
+
+function %rotr_i16_i64(i16, i64) -> i16 {
+block0(v0: i16, v1: i64):
+    v2 = rotr.i16 v0, v1
+    return v2
+}
+; run: %rotr_i16_i64(0xe000, 0) == 0xe000
+; run: %rotr_i16_i64(0xe000, 1) == 0x7000
+; run: %rotr_i16_i64(0xef0f, 0) == 0xef0f
+; run: %rotr_i16_i64(0xef0f, 4) == 0xfef0
+; run: %rotr_i16_i64(0xe004, 64) == 0xe004
+; run: %rotr_i16_i64(0xe004, 65) == 0x7002
+; run: %rotr_i16_i64(0xe004, 66) == 0x3801
+; run: %rotr_i16_i64(0xe004, 257) == 0x7002
+
+function %rotr_i16_i32(i16, i32) -> i16 {
+block0(v0: i16, v1: i32):
+    v2 = rotr.i16 v0, v1
+    return v2
+}
+; run: %rotr_i16_i32(0xe000, 0) == 0xe000
+; run: %rotr_i16_i32(0xe000, 1) == 0x7000
+; run: %rotr_i16_i32(0xef0f, 0) == 0xef0f
+; run: %rotr_i16_i32(0xef0f, 4) == 0xfef0
+; run: %rotr_i16_i32(0xe004, 64) == 0xe004
+; run: %rotr_i16_i32(0xe004, 65) == 0x7002
+; run: %rotr_i16_i32(0xe004, 66) == 0x3801
+; run: %rotr_i16_i32(0xe004, 257) == 0x7002
+
+function %rotr_i16_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = rotr.i16 v0, v1
+    return v2
+}
+; run: %rotr_i16_i16(0xe000, 0) == 0xe000
+; run: %rotr_i16_i16(0xe000, 1) == 0x7000
+; run: %rotr_i16_i16(0xef0f, 0) == 0xef0f
+; run: %rotr_i16_i16(0xef0f, 4) == 0xfef0
+; run: %rotr_i16_i16(0xe004, 64) == 0xe004
+; run: %rotr_i16_i16(0xe004, 65) == 0x7002
+; run: %rotr_i16_i16(0xe004, 66) == 0x3801
+; run: %rotr_i16_i16(0xe004, 257) == 0x7002
+
+function %rotr_i16_i8(i16, i8) -> i16 {
+block0(v0: i16, v1: i8):
+    v2 = rotr.i16 v0, v1
+    return v2
+}
+; run: %rotr_i16_i8(0xe000, 0) == 0xe000
+; run: %rotr_i16_i8(0xe000, 1) == 0x7000
+; run: %rotr_i16_i8(0xef0f, 0) == 0xef0f
+; run: %rotr_i16_i8(0xef0f, 4) == 0xfef0
+; run: %rotr_i16_i8(0xe004, 64) == 0xe004
+; run: %rotr_i16_i8(0xe004, 65) == 0x7002
+; run: %rotr_i16_i8(0xe004, 66) == 0x3801
+
+
+function %rotr_i8_i64(i8, i64) -> i8 {
+block0(v0: i8, v1: i64):
+    v2 = rotr.i8 v0, v1
+    return v2
+}
+; run: %rotr_i8_i64(0xe0, 0) == 0xe0
+; run: %rotr_i8_i64(0xe0, 1) == 0x70
+; run: %rotr_i8_i64(0xef, 0) == 0xef
+; run: %rotr_i8_i64(0xef, 4) == 0xfe
+; run: %rotr_i8_i64(0xe0, 64) == 0xe0
+; run: %rotr_i8_i64(0xe0, 65) == 0x70
+; run: %rotr_i8_i64(0xe0, 66) == 0x38
+; run: %rotr_i8_i64(0xe0, 257) == 0x70
+
+function %rotr_i8_i32(i8, i32) -> i8 {
+block0(v0: i8, v1: i32):
+    v2 = rotr.i8 v0, v1
+    return v2
+}
+; run: %rotr_i8_i32(0xe0, 0) == 0xe0
+; run: %rotr_i8_i32(0xe0, 1) == 0x70
+; run: %rotr_i8_i32(0xef, 0) == 0xef
+; run: %rotr_i8_i32(0xef, 4) == 0xfe
+; run: %rotr_i8_i32(0xe0, 64) == 0xe0
+; run: %rotr_i8_i32(0xe0, 65) == 0x70
+; run: %rotr_i8_i32(0xe0, 66) == 0x38
+; run: %rotr_i8_i32(0xe0, 257) == 0x70
+
+function %rotr_i8_i16(i8, i16) -> i8 {
+block0(v0: i8, v1: i16):
+    v2 = rotr.i8 v0, v1
+    return v2
+}
+; run: %rotr_i8_i16(0xe0, 0) == 0xe0
+; run: %rotr_i8_i16(0xe0, 1) == 0x70
+; run: %rotr_i8_i16(0xef, 0) == 0xef
+; run: %rotr_i8_i16(0xef, 4) == 0xfe
+; run: %rotr_i8_i16(0xe0, 64) == 0xe0
+; run: %rotr_i8_i16(0xe0, 65) == 0x70
+; run: %rotr_i8_i16(0xe0, 66) == 0x38
+; run: %rotr_i8_i16(0xe0, 257) == 0x70
+
+function %rotr_i8_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = rotr.i8 v0, v1
+    return v2
+}
+; run: %rotr_i8_i8(0xe0, 0) == 0xe0
+; run: %rotr_i8_i8(0xe0, 1) == 0x70
+; run: %rotr_i8_i8(0xef, 0) == 0xef
+; run: %rotr_i8_i8(0xef, 4) == 0xfe
+; run: %rotr_i8_i8(0xe0, 64) == 0xe0
+; run: %rotr_i8_i8(0xe0, 65) == 0x70
+; run: %rotr_i8_i8(0xe0, 66) == 0x38
+
+
+
+;; This is a regression test for rotates on x64
+;; See: https://github.com/bytecodealliance/wasmtime/pull/3610
+function %rotr_i8_const_37(i8) -> i8 {
+block0(v0: i8):
+  v1 = iconst.i8 37
+  v2 = rotr.i8 v0, v1
+  return v2
+}
+; run: %rotr_i8_const_37(0x00) == 0x00
+; run: %rotr_i8_const_37(0x01) == 0x08
+; run: %rotr_i8_const_37(0x12) == 0x90

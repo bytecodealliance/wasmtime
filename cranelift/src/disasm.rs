@@ -1,10 +1,11 @@
 use anyhow::Result;
 use cfg_if::cfg_if;
+use cranelift_codegen::ir::function::FunctionParameters;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{MachReloc, MachStackMap, MachTrap};
 use std::fmt::Write;
 
-pub fn print_relocs(relocs: &[MachReloc]) -> String {
+fn print_relocs(func_params: &FunctionParameters, relocs: &[MachReloc]) -> String {
     let mut text = String::new();
     for &MachReloc {
         kind,
@@ -16,7 +17,10 @@ pub fn print_relocs(relocs: &[MachReloc]) -> String {
         writeln!(
             text,
             "reloc_external: {} {} {} at {}",
-            kind, name, addend, offset
+            kind,
+            name.display(Some(func_params)),
+            addend,
+            offset
         )
         .unwrap();
     }
@@ -172,6 +176,7 @@ cfg_if! {
 
 pub fn print_all(
     isa: &dyn TargetIsa,
+    func_params: &FunctionParameters,
     mem: &[u8],
     code_size: u32,
     print: bool,
@@ -184,7 +189,7 @@ pub fn print_all(
     if print {
         println!(
             "\n{}\n{}\n{}",
-            print_relocs(relocs),
+            print_relocs(func_params, relocs),
             print_traps(traps),
             print_stack_maps(stack_maps)
         );

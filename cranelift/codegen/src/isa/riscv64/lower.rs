@@ -9,15 +9,12 @@ use crate::CodegenResult;
 pub mod isle;
 
 /// Put the given input into possibly multiple registers, and mark it as used (side-effect).
-pub(crate) fn put_input_in_regs<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    spec: InsnInput,
-) -> ValueRegs<Reg> {
+pub(crate) fn put_input_in_regs(ctx: &mut Lower<Inst>, spec: InsnInput) -> ValueRegs<Reg> {
     ctx.put_input_in_regs(spec.insn, spec.input)
 }
 
 /// Put the given input into a register, and mark it as used (side-effect).
-pub(crate) fn put_input_in_reg<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Reg {
+pub(crate) fn put_input_in_reg(ctx: &mut Lower<Inst>, spec: InsnInput) -> Reg {
     put_input_in_regs(ctx, spec)
         .only_reg()
         .expect("Multi-register value not expected")
@@ -29,13 +26,13 @@ pub(crate) fn put_input_in_reg<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInp
 impl LowerBackend for Riscv64Backend {
     type MInst = Inst;
 
-    fn lower<C: LowerCtx<I = Inst>>(&self, ctx: &mut C, ir_inst: IRInst) -> CodegenResult<()> {
+    fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> CodegenResult<()> {
         lower_inst::lower_insn_to_regs(ctx, ir_inst, &self.triple, &self.flags, &self.isa_flags)
     }
 
-    fn lower_branch_group<C: LowerCtx<I = Inst>>(
+    fn lower_branch_group(
         &self,
-        ctx: &mut C,
+        ctx: &mut Lower<Inst>,
         branches: &[IRInst],
         targets: &[MachLabel],
     ) -> CodegenResult<()> {

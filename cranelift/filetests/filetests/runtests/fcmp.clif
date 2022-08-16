@@ -2,6 +2,7 @@ test run
 target aarch64
 target s390x
 target x86_64
+target riscv64
 
 function %fcmp_eq(f64, f64) -> b1 {
 block0(v0: f64, v1: f64):

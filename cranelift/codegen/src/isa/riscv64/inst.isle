@@ -195,7 +195,7 @@
     (Select 
       (dst VecWritableReg)
       (ty Type)
-      (conditon Reg)
+      (condition Reg)
       (x ValueRegs)
       (y ValueRegs))
 
@@ -293,6 +293,16 @@
       (rs1 Reg)
       (rs2 Reg)
       (ty Type))
+    
+    ;; popcnt  is target doesn't support extension B 
+    ;; use iteration to implement.
+    (Popcnt
+      (sum WritableReg)
+      (step WritableReg)
+      (tmp WritableReg)
+      (rs Reg)
+      (ty Type)
+    )
 ))
 
 
@@ -1103,22 +1113,47 @@
   )
 )
 
+;;; has extension B??
+(decl pure has_b() bool)
+(extern constructor has_b has_b)
 
 (decl lower_rotl(Type Reg Reg) Reg)
 
 (rule
   (lower_rotl $I64 rs amount)
+  (if-let $true (has_b))
   (alu_rrr (AluOPRRR.Rol) rs amount)
 )
 
 (rule
+  (lower_rotl $I64 rs amount)
+  (if-let $false (has_b))
+  (lower_rotl_shift $I64 rs amount)
+)
+
+(rule
   (lower_rotl $I32 rs amount)
+  (if-let $true (has_b))
   (alu_rrr (AluOPRRR.Rolw) rs amount)
 )
 
-;;; for I8 and I16.
+(rule
+  (lower_rotl $I32 rs amount)
+  (if-let $false (has_b))
+  (lower_rotl_shift $I32 rs amount)
+)
+
 (rule
   (lower_rotl ty rs amount)
+  (lower_rotl_shift ty rs amount)
+)
+
+;;; using shift to implement rotl.
+(decl lower_rotl_shift(Type Reg Reg) Reg)
+
+;;; for I8 and I16 ... 
+(rule
+  (lower_rotl_shift ty rs amount)
   (let
     (
      
@@ -1141,18 +1176,39 @@
 (extern constructor gen_shamt gen_shamt)
 
 (decl lower_rotr(Type Reg Reg) Reg)
+
 (rule
   (lower_rotr $I64 rs amount)
+  (if-let $true (has_b) )
   (alu_rrr (AluOPRRR.Ror) rs amount)
 )
 (rule
+  (lower_rotr $I64 rs amount)
+  (if-let $false (has_b) )
+  (lower_rotr_shift  $I64 rs amount)
+)
+
+(rule
   (lower_rotr $I32 rs amount)
+  (if-let $true (has_b) )
   (alu_rrr (AluOPRRR.Rorw) rs amount)
 )
 
-;;; for I8 and I16.
 (rule
-  (lower_rotr ty rs amount)
+  (lower_rotr $I32 rs amount)
+  (if-let $false (has_b) )
+  (lower_rotr_shift $I32 rs amount)
+)
+
+(rule  (lower_rotr ty rs amount)
+  (lower_rotr_shift ty rs amount)
+)
+
+(decl lower_rotr_shift (Type Reg Reg) Reg )
+ 
+;;; 
+(rule
+  (lower_rotr_shift ty rs amount)
   (let
     (
       (x ValueRegs (gen_shamt ty amount))
@@ -1182,6 +1238,29 @@
     (alu_rr_imm12 (AluOPRRI.Addi) tmp3 (imm12_const -1))
   )
 )
+(decl gen_popcnt(Reg Type) Reg)
+(rule
+  (gen_popcnt rs ty)
+  (let
+    (
+      (tmp WritableReg (temp_writable_reg $I64))
+      (step WritableReg (temp_writable_reg $I64))
+      (sum WritableReg (temp_writable_reg $I64))
+      (_ Unit (emit (MInst.Popcnt sum step tmp  rs ty )))
+    )
+    (writable_reg_to_reg sum)
+  )
+)
+
+(decl lower_popcnt (Reg Type) Reg)
+(rule (lower_popcnt rs ty )
+  (if-let $true (has_b))
+  (alu_rr_funct12 (AluOPRRI.Cpop) (uext_int_if_need rs ty))
+)
+(rule (lower_popcnt rs ty )
+  (if-let $false (has_b))
+  (gen_popcnt rs ty)
+)
 
 (decl lower_popcnt_i128(ValueRegs) ValueRegs)
 (rule 
@@ -1189,9 +1268,9 @@
   (let
     (
       ;; low part.
-      (low Reg (alu_rr_funct12 (AluOPRRI.Cpop) (value_regs_get a 0) ))
+      (low Reg (lower_popcnt (value_regs_get a 0) $I64 ))
       ;; high part.
-      (high Reg (alu_rr_funct12 (AluOPRRI.Cpop) (value_regs_get a 1)  ))
+      (high Reg (lower_popcnt  (value_regs_get a 1) $I64 ))
       ;; add toghter.
       (result Reg (alu_add low high))
     )
@@ -1882,8 +1961,8 @@
 
 ;;; sign extend integet if need.
 ;;; some operation like icmp I need extend to value to 64-bit.
-(decl sext_int_if_need(ValueRegs Type) Value)
-(extern extractor sext_int_if_need sext_int_if_need)
+(decl sext_int_if_need(ValueRegs Type) ValueRegs)
+(extern constructor sext_int_if_need sext_int_if_need)
 
 (decl convert_valueregs_reg(ValueRegs)Reg)
 (rule
@@ -1903,7 +1982,7 @@
 (extern extractor intcc_is_overflow_or_nof intcc_is_overflow_or_nof)
 
 ;;; lower icmp 
-(decl lower_icmp(IntCC Value Value Type) Reg)
+(decl lower_icmp(IntCC ValueRegs ValueRegs Type) Reg)
 ;;; eq or ne.
 (rule
   (lower_icmp (intcc_is_eq_or_ne cc) x y ty)
@@ -1911,8 +1990,8 @@
 )
 ;;;; singed >= ... 
 (rule
-  (lower_icmp (intcc_is_ueq_compare cc $true) (sext_int_if_need x _) (sext_int_if_need y _) ty)
-  (gen_icmp cc x y ty)
+  (lower_icmp (intcc_is_ueq_compare cc $true)  x  y ty)
+  (gen_icmp cc (sext_int_if_need x ty) (sext_int_if_need  y ty) ty)
 )
 ;;;; unsigned >= ... 
 (rule
@@ -1930,14 +2009,14 @@
   (gen_bit_not (lower_icmp_over_flow x y ty))
 )
 
-(decl lower_icmp_over_flow(Value Value Type)Reg)
+(decl lower_icmp_over_flow(ValueRegs ValueRegs Type)Reg)
 
 ;;; for I8 I16 I32
 (rule 1
-  (lower_icmp_over_flow (sext_int_if_need x _)  (sext_int_if_need y _)  ty )
+  (lower_icmp_over_flow  x  y  ty )
   (let
     (
-      (tmp Reg (alu_sub x y ))
+      (tmp Reg (alu_sub (sext_int_if_need x ty ) (sext_int_if_need y ty) ))
       (tmp2 WritableReg (temp_writable_reg $I64))
       (_ Unit (emit (MInst.Extend tmp2 tmp $true (ty_bits ty) 64 ))  )
     )
@@ -2038,8 +2117,6 @@
   )
 )
 
-(decl iadd_ifcout_parameter (Value Value Type)Value)
-(extern extractor iadd_ifcout_parameter iadd_ifcout_parameter)
 
 (decl inst_output_get (InstOutput u8) ValueRegs)
 (extern constructor inst_output_get inst_output_get)
@@ -2062,7 +2139,7 @@
 )
 
 ;;; cc a b targets Type
-(decl lower_br_icmp (IntCC Value Value VecMachLabel Type) InstOutput )
+(decl lower_br_icmp (IntCC ValueRegs ValueRegs VecMachLabel Type) InstOutput )
 (extern constructor lower_br_icmp lower_br_icmp)
 
 (decl lower_br_fcmp (FloatCC Reg Reg VecMachLabel Type) InstOutput )
@@ -2072,7 +2149,7 @@
 (decl int_zero_reg (Type) ValueRegs)
 (extern constructor int_zero_reg int_zero_reg)
 
-(decl lower_brz_or_nz (IntCC Value VecMachLabel Type) InstOutput )
+(decl lower_brz_or_nz (IntCC ValueRegs VecMachLabel Type) InstOutput )
 (extern constructor lower_brz_or_nz lower_brz_or_nz)
 
 ;;;;; 
@@ -2130,3 +2207,44 @@
 
 (decl load_ra ()Reg)
 (extern constructor load_ra load_ra)
+
+(decl iadd_ifcout_parameters(Value Value Type)Value)
+(extern extractor iadd_ifcout_parameters iadd_ifcout_parameters)
+
+;;; 
+(decl gen_andn(Reg Reg) Reg)
+(rule
+  (gen_andn rs1 rs2 )
+  (if-let $true (has_b))
+  (alu_rrr (AluOPRRR.Andn)  rs1 rs2)
+)
+
+(rule
+  (gen_andn rs1 rs2)
+  (if-let $false (has_b))
+  (let
+    (
+      (tmp Reg (gen_bit_not rs2))
+    )
+    (alu_and rs1 tmp)
+  )
+)
+
+;;; 
+(decl gen_orn (Reg Reg)Reg)
+(rule
+  (gen_orn rs1 rs2 )
+  (if-let $true (has_b))
+  (alu_rrr (AluOPRRR.Orn) rs1 rs2)
+)
+
+(rule
+  (gen_orn rs1 rs2)
+  (if-let $false (has_b))
+  (let
+    (
+      (tmp Reg (gen_bit_not rs2))
+    )
+    (alu_rrr (AluOPRRR.Or) rs1  tmp)
+  )
+)

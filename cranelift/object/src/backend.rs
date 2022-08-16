@@ -10,7 +10,7 @@ use cranelift_codegen::{
 };
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
-    ModuleDeclarations, ModuleError, ModuleResult,
+    ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
 };
 use log::info;
 use object::write::{
@@ -40,10 +40,10 @@ impl ObjectBuilder {
     /// Create a new `ObjectBuilder` using the given Cranelift target, that
     /// can be passed to [`ObjectModule::new`].
     ///
-    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
+    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s [ir::LibCall]
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
-    /// argument, use `cranelift_module::default_libcall_names()`.
+    /// argument, use [cranelift_module::default_libcall_names]().
     pub fn new<V: Into<Vec<u8>>>(
         isa: Box<dyn TargetIsa>,
         name: V,
@@ -317,12 +317,18 @@ impl Module for ObjectModule {
 
         ctx.compile_and_emit(self.isa(), &mut code)?;
 
-        self.define_function_bytes(func_id, &code, ctx.compiled_code().unwrap().buffer.relocs())
+        self.define_function_bytes(
+            func_id,
+            &ctx.func,
+            &code,
+            ctx.compiled_code().unwrap().buffer.relocs(),
+        )
     }
 
     fn define_function_bytes(
         &mut self,
         func_id: FuncId,
+        func: &ir::Function,
         bytes: &[u8],
         relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction> {
@@ -365,7 +371,7 @@ impl Module for ObjectModule {
         if !relocs.is_empty() {
             let relocs = relocs
                 .iter()
-                .map(|record| self.process_reloc(record))
+                .map(|record| self.process_reloc(&ModuleReloc::from_mach_reloc(&record, func)))
                 .collect();
             self.relocs.push(SymbolRelocs {
                 section,
@@ -519,9 +525,9 @@ impl ObjectModule {
 
     /// This should only be called during finish because it creates
     /// symbols for missing libcalls.
-    fn get_symbol(&mut self, name: &ir::ExternalName) -> SymbolId {
+    fn get_symbol(&mut self, name: &ModuleExtName) -> SymbolId {
         match *name {
-            ir::ExternalName::User { .. } => {
+            ModuleExtName::User { .. } => {
                 if ModuleDeclarations::is_function(name) {
                     let id = FuncId::from_name(name);
                     self.functions[id].unwrap().0
@@ -530,7 +536,7 @@ impl ObjectModule {
                     self.data_objects[id].unwrap().0
                 }
             }
-            ir::ExternalName::LibCall(ref libcall) => {
+            ModuleExtName::LibCall(ref libcall) => {
                 let name = (self.libcall_names)(*libcall);
                 if let Some(symbol) = self.object.symbol_id(name.as_bytes()) {
                     symbol
@@ -553,13 +559,13 @@ impl ObjectModule {
             }
             // These are "magic" names well-known to the linker.
             // They require special treatment.
-            ir::ExternalName::KnownSymbol(ref known_symbol) => {
+            ModuleExtName::KnownSymbol(ref known_symbol) => {
                 if let Some(symbol) = self.known_symbols.get(known_symbol) {
                     *symbol
                 } else {
-                    let symbol = match known_symbol {
-                        ir::KnownSymbol::ElfGlobalOffsetTable => self.object.add_symbol(Symbol {
-                            name: "_GLOBAL_OFFSET_TABLE_".as_bytes().to_vec(),
+                    let symbol = self.object.add_symbol(match known_symbol {
+                        ir::KnownSymbol::ElfGlobalOffsetTable => Symbol {
+                            name: b"_GLOBAL_OFFSET_TABLE_".to_vec(),
                             value: 0,
                             size: 0,
                             kind: SymbolKind::Data,
@@ -567,17 +573,26 @@ impl ObjectModule {
                             weak: false,
                             section: SymbolSection::Undefined,
                             flags: SymbolFlags::None,
-                        }),
-                    };
+                        },
+                        ir::KnownSymbol::CoffTlsIndex => Symbol {
+                            name: b"_tls_index".to_vec(),
+                            value: 0,
+                            size: 32,
+                            kind: SymbolKind::Tls,
+                            scope: SymbolScope::Unknown,
+                            weak: false,
+                            section: SymbolSection::Undefined,
+                            flags: SymbolFlags::None,
+                        },
+                    });
                     self.known_symbols.insert(*known_symbol, symbol);
                     symbol
                 }
             }
-            _ => panic!("invalid ExternalName {}", name),
         }
     }
 
-    fn process_reloc(&self, record: &MachReloc) -> ObjectRelocRecord {
+    fn process_reloc(&self, record: &ModuleReloc) -> ObjectRelocRecord {
         let mut addend = record.addend;
         let (kind, encoding, size) = match record.kind {
             Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
@@ -589,6 +604,11 @@ impl ObjectModule {
             Reloc::X86CallPLTRel4 => (
                 RelocationKind::PltRelative,
                 RelocationEncoding::X86Branch,
+                32,
+            ),
+            Reloc::X86SecRel => (
+                RelocationKind::SectionOffset,
+                RelocationEncoding::Generic,
                 32,
             ),
             Reloc::X86GOTPCRel4 => (RelocationKind::GotRelative, RelocationEncoding::Generic, 32),
@@ -682,6 +702,7 @@ impl ObjectModule {
             // FIXME
             reloc => unimplemented!("{:?}", reloc),
         };
+
         ObjectRelocRecord {
             offset: record.offset,
             name: record.name.clone(),
@@ -748,7 +769,7 @@ struct SymbolRelocs {
 #[derive(Clone)]
 struct ObjectRelocRecord {
     offset: CodeOffset,
-    name: ir::ExternalName,
+    name: ModuleExtName,
     kind: RelocationKind,
     encoding: RelocationEncoding,
     size: u8,

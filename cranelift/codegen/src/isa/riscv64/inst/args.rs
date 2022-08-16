@@ -1748,6 +1748,320 @@ impl FloatRoundOP {
     }
 }
 
+/// certain instruction like `rev8` need have b extension to be enabled.
+pub(crate) fn check_isa_flags(
+    inst: &Inst,
+    isa_flags: &crate::isa::riscv64::settings::Flags,
+) -> std::result::Result<(), String> {
+    fn need_extension(x: impl FnOnce() -> bool, name: &str) -> std::result::Result<(), String> {
+        if x() {
+            Ok(())
+        } else {
+            Err(format!("need '{}' extension to be enable.", name))
+        }
+    }
+    let need_f = || need_extension(|| isa_flags.has_f(), "F");
+
+    let need_d = || need_extension(|| isa_flags.has_d(), "D");
+    let need_b = || need_extension(|| isa_flags.has_b(), "B");
+    let need_a = || need_extension(|| isa_flags.has_a(), "A");
+    let need_m = || need_extension(|| isa_flags.has_m(), "M");
+    let need_zbkb = || need_extension(|| isa_flags.has_zbkb(), "zbkb");
+    match inst {
+        &MInst::Nop0 => Ok(()),
+        &MInst::Nop4 => Ok(()),
+        &MInst::Lui { .. } => Ok(()),
+        &MInst::Auipc { .. } => Ok(()),
+        &MInst::Popcnt { .. } => Ok(()),
+        &MInst::FpuRR { alu_op, .. } => match alu_op {
+            FpuOPRR::FsqrtS
+            | FpuOPRR::FcvtWS
+            | FpuOPRR::FcvtWuS
+            | FpuOPRR::FmvXW
+            | FpuOPRR::FclassS
+            | FpuOPRR::FcvtSw
+            | FpuOPRR::FcvtSwU
+            | FpuOPRR::FmvWX
+            | FpuOPRR::FcvtLS
+            | FpuOPRR::FcvtLuS
+            | FpuOPRR::FcvtSL
+            | FpuOPRR::FcvtSLU => need_f(),
+            FpuOPRR::FcvtLD
+            | FpuOPRR::FcvtLuD
+            | FpuOPRR::FmvXD
+            | FpuOPRR::FcvtDL
+            | FpuOPRR::FcvtDLu
+            | FpuOPRR::FmvDX
+            | FpuOPRR::FsqrtD
+            | FpuOPRR::FcvtSD
+            | FpuOPRR::FcvtDS
+            | FpuOPRR::FclassD
+            | FpuOPRR::FcvtWD
+            | FpuOPRR::FcvtWuD
+            | FpuOPRR::FcvtDW
+            | FpuOPRR::FcvtDWU => need_d(),
+        },
+        &MInst::AluRRR { alu_op, .. } => match alu_op {
+            AluOPRRR::Add
+            | AluOPRRR::Sub
+            | AluOPRRR::Sll
+            | AluOPRRR::Slt
+            | AluOPRRR::Sgt
+            | AluOPRRR::SltU
+            | AluOPRRR::Sgtu
+            | AluOPRRR::Xor
+            | AluOPRRR::Srl
+            | AluOPRRR::Sra
+            | AluOPRRR::Or
+            | AluOPRRR::And
+            | AluOPRRR::Addw
+            | AluOPRRR::Subw
+            | AluOPRRR::Sllw
+            | AluOPRRR::Srlw
+            | AluOPRRR::Sraw => Ok(()),
+            AluOPRRR::Mul
+            | AluOPRRR::Mulh
+            | AluOPRRR::Mulhsu
+            | AluOPRRR::Mulhu
+            | AluOPRRR::Div
+            | AluOPRRR::DivU
+            | AluOPRRR::Rem
+            | AluOPRRR::RemU
+            | AluOPRRR::Mulw
+            | AluOPRRR::Divw
+            | AluOPRRR::Divuw
+            | AluOPRRR::Remw
+            | AluOPRRR::Remuw => need_m(),
+
+            AluOPRRR::Adduw
+            | AluOPRRR::Andn
+            | AluOPRRR::Bclr
+            | AluOPRRR::Bext
+            | AluOPRRR::Binv
+            | AluOPRRR::Bset
+            | AluOPRRR::Clmul
+            | AluOPRRR::Clmulh
+            | AluOPRRR::Clmulr
+            | AluOPRRR::Max
+            | AluOPRRR::Maxu
+            | AluOPRRR::Min
+            | AluOPRRR::Minu
+            | AluOPRRR::Orn
+            | AluOPRRR::Rol
+            | AluOPRRR::Rolw
+            | AluOPRRR::Ror
+            | AluOPRRR::Rorw
+            | AluOPRRR::Sh1add
+            | AluOPRRR::Sh1adduw
+            | AluOPRRR::Sh2add
+            | AluOPRRR::Sh2adduw
+            | AluOPRRR::Sh3add
+            | AluOPRRR::Sh3adduw
+            | AluOPRRR::Xnor => need_b(),
+        },
+        &MInst::FpuRRR { alu_op, .. } => match alu_op {
+            FpuOPRRR::FaddS
+            | FpuOPRRR::FsubS
+            | FpuOPRRR::FmulS
+            | FpuOPRRR::FdivS
+            | FpuOPRRR::FsgnjS
+            | FpuOPRRR::FsgnjnS
+            | FpuOPRRR::FsgnjxS
+            | FpuOPRRR::FminS
+            | FpuOPRRR::FmaxS
+            | FpuOPRRR::FeqS
+            | FpuOPRRR::FltS
+            | FpuOPRRR::FleS => need_f(),
+
+            FpuOPRRR::FaddD
+            | FpuOPRRR::FsubD
+            | FpuOPRRR::FmulD
+            | FpuOPRRR::FdivD
+            | FpuOPRRR::FsgnjD
+            | FpuOPRRR::FsgnjnD
+            | FpuOPRRR::FsgnjxD
+            | FpuOPRRR::FminD
+            | FpuOPRRR::FmaxD
+            | FpuOPRRR::FeqD
+            | FpuOPRRR::FltD
+            | FpuOPRRR::FleD => need_d(),
+        },
+        &MInst::FpuRRRR { alu_op, .. } => match alu_op {
+            FpuOPRRRR::FmaddS | FpuOPRRRR::FmsubS | FpuOPRRRR::FnmsubS | FpuOPRRRR::FnmaddS => {
+                need_f()
+            }
+
+            FpuOPRRRR::FmaddD | FpuOPRRRR::FmsubD | FpuOPRRRR::FnmsubD | FpuOPRRRR::FnmaddD => {
+                need_d()
+            }
+        },
+        &MInst::AluRRImm12 { alu_op, .. } => match alu_op {
+            AluOPRRI::Addi
+            | AluOPRRI::Slti
+            | AluOPRRI::SltiU
+            | AluOPRRI::Xori
+            | AluOPRRI::Ori
+            | AluOPRRI::Andi
+            | AluOPRRI::Slli
+            | AluOPRRI::Srli
+            | AluOPRRI::Srai
+            | AluOPRRI::Addiw
+            | AluOPRRI::Slliw
+            | AluOPRRI::SrliW
+            | AluOPRRI::Sraiw => Ok(()),
+
+            AluOPRRI::Bclri
+            | AluOPRRI::Bexti
+            | AluOPRRI::Binvi
+            | AluOPRRI::Bseti
+            | AluOPRRI::Rori
+            | AluOPRRI::Roriw
+            | AluOPRRI::SlliUw
+            | AluOPRRI::Clz
+            | AluOPRRI::Clzw
+            | AluOPRRI::Cpop
+            | AluOPRRI::Cpopw
+            | AluOPRRI::Ctz
+            | AluOPRRI::Ctzw
+            | AluOPRRI::Rev8
+            | AluOPRRI::Sextb
+            | AluOPRRI::Sexth
+            | AluOPRRI::Zexth
+            | AluOPRRI::Orcb => need_b(),
+            AluOPRRI::Brev8 => need_zbkb(),
+        },
+        &MInst::Load { op, .. } => match op {
+            LoadOP::Lb
+            | LoadOP::Lh
+            | LoadOP::Lw
+            | LoadOP::Lbu
+            | LoadOP::Lhu
+            | LoadOP::Lwu
+            | LoadOP::Ld => Ok(()),
+            LoadOP::Flw => need_f(),
+            LoadOP::Fld => need_d(),
+        },
+        &MInst::Store { op, .. } => match op {
+            StoreOP::Sb | StoreOP::Sh | StoreOP::Sw | StoreOP::Sd => Ok(()),
+            StoreOP::Fsw => need_f(),
+            StoreOP::Fsd => need_d(),
+        },
+        &MInst::Ret { .. } => Ok(()),
+        &MInst::Extend { .. } => Ok(()),
+        &MInst::AjustSp { .. } => Ok(()),
+        &MInst::Call { .. } => Ok(()),
+        &MInst::CallInd { .. } => Ok(()),
+        &MInst::TrapIf { .. } => Ok(()),
+        &MInst::TrapIfC { .. } => Ok(()),
+        &MInst::TrapFf { ty, .. } => {
+            if ty == F32 {
+                need_f()
+            } else {
+                need_d()
+            }
+        }
+        &MInst::Jal { .. } => Ok(()),
+        &MInst::CondBr { .. } => Ok(()),
+        &MInst::LoadExtName { .. } => Ok(()),
+        &MInst::LoadAddr { .. } => Ok(()),
+        &MInst::VirtualSPOffsetAdj { .. } => Ok(()),
+        &MInst::Mov { ty, .. } => {
+            if ty.is_float() {
+                if ty == F32 {
+                    need_f()
+                } else {
+                    need_d()
+                }
+            } else {
+                Ok(())
+            }
+        }
+        &MInst::Fence { .. } => Ok(()),
+        &MInst::FenceI => Ok(()),
+        &MInst::ECall => Ok(()),
+        &MInst::EBreak => Ok(()),
+        &MInst::Udf { .. } => Ok(()),
+        &MInst::Jalr { .. } => Ok(()),
+        &MInst::Atomic { .. } => need_a(),
+        &MInst::AtomicStore { .. } => Ok(()),
+        &MInst::AtomicLoad { .. } => Ok(()),
+        &MInst::AtomicNand { .. } => need_a(),
+        &MInst::Fcmp { ty, .. } => {
+            if ty == F32 {
+                need_f()
+            } else {
+                need_d()
+            }
+        }
+        &MInst::Select { ty, .. } => {
+            if ty == F32 {
+                need_f()
+            } else if ty == F64 {
+                need_d()
+            } else {
+                Ok(())
+            }
+        }
+        &MInst::ReferenceCheck { .. } => Ok(()),
+        &MInst::BrTable { .. } => Ok(()),
+        &MInst::AtomicCas { .. } => need_a(),
+        &MInst::IntSelect { .. } => Ok(()), // rightnow I am using compare to implement.
+        &MInst::Csr { .. } => Ok(()),
+        &MInst::Icmp { .. } => Ok(()),
+        &MInst::SelectReg { rs1, .. } => {
+            let ty = Inst::canonical_type_for_rc(rs1.class());
+            if ty == F32 {
+                need_f()
+            } else if ty == F64 {
+                need_d()
+            } else {
+                Ok(())
+            }
+        }
+        &MInst::FcvtToIntSat { in_type, .. } => {
+            if in_type == F32 {
+                need_f()
+            } else {
+                need_d()
+            }
+        }
+        &MInst::SelectIf { x, .. } => {
+            let ty = Inst::canonical_type_for_rc(x.regs()[0].class());
+            if ty == F32 {
+                need_f()
+            } else if ty == F64 {
+                need_d()
+            } else {
+                Ok(())
+            }
+        }
+        &MInst::RawData { .. } => Ok(()),
+        &MInst::Unwind { .. } => Ok(()),
+        &MInst::DummyUse { .. } => Ok(()),
+        &MInst::FloatRound { ty, .. } => {
+            if ty == F32 {
+                need_f()
+            } else {
+                need_d()
+            }
+        }
+        &MInst::FloatSelect { ty, .. } => {
+            if ty == F32 {
+                need_f()
+            } else {
+                need_d()
+            }
+        }
+        &MInst::FloatSelectPseudo { ty, .. } => {
+            if ty == F32 {
+                need_f()
+            } else {
+                need_d()
+            }
+        }
+    }
+}
+
 impl FloatSelectOP {
     pub(crate) fn op_name(self) -> &'static str {
         match self {

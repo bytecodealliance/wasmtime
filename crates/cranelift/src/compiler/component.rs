@@ -31,10 +31,11 @@ impl ComponentCompiler for Compiler {
         let CompilerContext {
             mut func_translator,
             codegen_context: mut context,
+            mut incremental_cache_ctx,
         } = self.take_context();
 
         context.func = ir::Function::with_name_signature(
-            ir::ExternalName::user(0, 0),
+            ir::UserFuncName::user(0, 0),
             crate::indirect_signature(isa, ty),
         );
 
@@ -149,10 +150,12 @@ impl ComponentCompiler for Compiler {
         // `values_vec_ptr_val` and then returned.
         self.wasm_to_host_load_results(ty, &mut builder, values_vec_ptr_val);
 
-        let func: CompiledFunction = self.finish_trampoline(&mut context, isa)?;
+        let func: CompiledFunction =
+            self.finish_trampoline(&mut context, incremental_cache_ctx.as_mut(), isa)?;
         self.save_context(CompilerContext {
             func_translator,
             codegen_context: context,
+            incremental_cache_ctx,
         });
         Ok(Box::new(func))
     }
@@ -162,9 +165,10 @@ impl ComponentCompiler for Compiler {
         let CompilerContext {
             mut func_translator,
             codegen_context: mut context,
+            mut incremental_cache_ctx,
         } = self.take_context();
         context.func = ir::Function::with_name_signature(
-            ir::ExternalName::user(0, 0),
+            ir::UserFuncName::user(0, 0),
             crate::indirect_signature(isa, ty),
         );
         let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
@@ -177,10 +181,12 @@ impl ComponentCompiler for Compiler {
             .trap(ir::TrapCode::User(super::ALWAYS_TRAP_CODE));
         builder.finalize();
 
-        let func: CompiledFunction = self.finish_trampoline(&mut context, isa)?;
+        let func: CompiledFunction =
+            self.finish_trampoline(&mut context, incremental_cache_ctx.as_mut(), isa)?;
         self.save_context(CompilerContext {
             func_translator,
             codegen_context: context,
+            incremental_cache_ctx,
         });
         Ok(Box::new(func))
     }
@@ -198,10 +204,11 @@ impl ComponentCompiler for Compiler {
         let CompilerContext {
             mut func_translator,
             codegen_context: mut context,
+            mut incremental_cache_ctx,
         } = self.take_context();
 
         context.func = ir::Function::with_name_signature(
-            ir::ExternalName::user(0, 0),
+            ir::UserFuncName::user(0, 0),
             crate::indirect_signature(isa, ty),
         );
 
@@ -213,10 +220,12 @@ impl ComponentCompiler for Compiler {
 
         self.translate_transcode(&mut builder, &offsets, transcoder, block0);
 
-        let func: CompiledFunction = self.finish_trampoline(&mut context, isa)?;
+        let func: CompiledFunction =
+            self.finish_trampoline(&mut context, incremental_cache_ctx.as_mut(), isa)?;
         self.save_context(CompilerContext {
             func_translator,
             codegen_context: context,
+            incremental_cache_ctx,
         });
         Ok(Box::new(func))
     }

@@ -62,7 +62,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// The index stored in an `EntityList` points to part 2, the list elements. The value 0 is
 /// reserved for the empty list which isn't allocated in the vector.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct EntityList<T: EntityRef + ReservedValue> {
     index: u32,
@@ -88,6 +88,20 @@ pub struct ListPool<T: EntityRef + ReservedValue> {
 
     // Heads of the free lists, one for each size class.
     free: Vec<usize>,
+}
+
+impl<T: EntityRef + ReservedValue> PartialEq for ListPool<T> {
+    fn eq(&self, other: &Self) -> bool {
+        // ignore the free list
+        self.data == other.data
+    }
+}
+
+impl<T: core::hash::Hash + EntityRef + ReservedValue> core::hash::Hash for ListPool<T> {
+    fn hash<H: __core::hash::Hasher>(&self, state: &mut H) {
+        // ignore the free list
+        self.data.hash(state);
+    }
 }
 
 /// Lists are allocated in sizes that are powers of two, starting from 4.

@@ -310,7 +310,7 @@ mod tests {
 
         let mut ctx = Context::new();
 
-        ctx.func.name = ir::ExternalName::testcase("small1");
+        ctx.func.name = ir::UserFuncName::testcase("small1");
         ctx.func.signature.params.push(ir::AbiParam::new(I32));
         ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
@@ -348,7 +348,7 @@ mod tests {
 
         let mut ctx = Context::new();
 
-        ctx.func.name = ir::ExternalName::testcase("small2");
+        ctx.func.name = ir::UserFuncName::testcase("small2");
         ctx.func.signature.params.push(ir::AbiParam::new(I32));
         ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
@@ -391,7 +391,7 @@ mod tests {
 
         let mut ctx = Context::new();
 
-        ctx.func.name = ir::ExternalName::testcase("infloop");
+        ctx.func.name = ir::UserFuncName::testcase("infloop");
         ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
         let (body, mut validator) = extract_func(&wasm);

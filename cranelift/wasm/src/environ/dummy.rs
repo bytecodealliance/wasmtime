@@ -16,8 +16,8 @@ use crate::{
 use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
-use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder};
+use cranelift_codegen::ir::{types::*, UserFuncName};
 use cranelift_codegen::isa::{CallConv, TargetFrontendConfig};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
@@ -25,11 +25,6 @@ use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
 use wasmparser::{FuncValidator, FunctionBody, Operator, ValidatorResources, WasmFeatures};
-
-/// Compute a `ir::ExternalName` for a given wasm function index.
-fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
-    ir::ExternalName::user(0, func_index.as_u32())
-}
 
 /// A collection of names under which a given entity is exported.
 pub struct Exportable<T> {
@@ -341,7 +336,11 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         // A real implementation would probably add a `vmctx` argument.
         // And maybe attempt some signature de-duplication.
         let signature = func.import_signature(self.vmctx_sig(sigidx));
-        let name = get_func_name(index);
+        let name =
+            ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: index.as_u32(),
+            }));
         Ok(func.import_function(ir::ExtFuncData {
             name,
             signature,
@@ -849,12 +848,15 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
                 DummyFuncEnvironment::new(&self.info, self.expected_reachability.clone());
             let func_index =
                 FuncIndex::new(self.get_num_func_imports() + self.info.function_bodies.len());
-            let name = get_func_name(func_index);
+
             let sig = func_environ.vmctx_sig(self.get_func_type(func_index));
-            let mut func = ir::Function::with_name_signature(name, sig);
+            let mut func =
+                ir::Function::with_name_signature(UserFuncName::user(0, func_index.as_u32()), sig);
+
             if self.debug_info {
                 func.collect_debug_info();
             }
+
             self.trans
                 .translate_body(&mut validator, body, &mut func, &mut func_environ)?;
             func

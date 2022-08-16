@@ -19,9 +19,8 @@
 
 use crate::fx::FxHashMap;
 use crate::fx::FxHashSet;
-use crate::ir::{
-    self, types, Constant, ConstantData, DynamicStackSlot, LabelValueLoc, SourceLoc, ValueLabel,
-};
+use crate::ir::RelSourceLoc;
+use crate::ir::{self, types, Constant, ConstantData, DynamicStackSlot, LabelValueLoc, ValueLabel};
 use crate::machinst::*;
 use crate::timing;
 use crate::trace;
@@ -90,7 +89,7 @@ pub struct VCode<I: VCodeInst> {
 
     /// Source locations for each instruction. (`SourceLoc` is a `u32`, so it is
     /// reasonable to keep one of these per instruction.)
-    srclocs: Vec<SourceLoc>,
+    srclocs: Vec<RelSourceLoc>,
 
     /// Entry block.
     entry: BlockIndex,
@@ -261,7 +260,7 @@ pub struct VCodeBuilder<I: VCodeInst> {
     branch_block_arg_succ_start: usize,
 
     /// Current source location.
-    cur_srcloc: SourceLoc,
+    cur_srcloc: RelSourceLoc,
 
     /// Debug-value label in-progress map, keyed by label. For each
     /// label, we keep disjoint ranges mapping to vregs. We'll flatten
@@ -296,7 +295,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             succ_start: 0,
             block_params_start: 0,
             branch_block_arg_succ_start: 0,
-            cur_srcloc: SourceLoc::default(),
+            cur_srcloc: Default::default(),
             debug_info: FxHashMap::default(),
         }
     }
@@ -399,7 +398,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     /// Set the current source location.
-    pub fn set_srcloc(&mut self, srcloc: SourceLoc) {
+    pub fn set_srcloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
     }
 
@@ -847,8 +846,8 @@ impl<I: VCodeInst> VCode<I> {
             // Is this the first block? Emit the prologue directly if so.
             if block == self.entry {
                 trace!(" -> entry block");
-                buffer.start_srcloc(SourceLoc::default());
-                state.pre_sourceloc(SourceLoc::default());
+                buffer.start_srcloc(Default::default());
+                state.pre_sourceloc(Default::default());
                 for inst in &prologue_insts {
                     do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state);
                 }
@@ -919,7 +918,7 @@ impl<I: VCodeInst> VCode<I> {
                             buffer.start_srcloc(srcloc);
                             cur_srcloc = Some(srcloc);
                         }
-                        state.pre_sourceloc(cur_srcloc.unwrap_or(SourceLoc::default()));
+                        state.pre_sourceloc(cur_srcloc.unwrap_or_default());
 
                         // If this is a safepoint, compute a stack map
                         // and pass it to the emit state.

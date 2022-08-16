@@ -116,5 +116,4 @@ block0(v0: i8):
 ;   slt a3,a1,zero
 ;   sext.b1 a1,a3
 ;   ret
- 
 

@@ -3,11 +3,12 @@
 // Pull in the ISLE generated code.
 pub mod generated_code;
 
+use crate::ir::ExternalName;
 // Types that the generated ISLE code uses via `use super::*`.
 use crate::isa::s390x::abi::{S390xMachineDeps, REG_SAVE_AREA_SIZE};
 use crate::isa::s390x::inst::{
-    gpr, stack_reg, writable_gpr, zero_reg, CallIndInfo, CallInfo, Cond, Inst as MInst, MemArg,
-    MemArgPair, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted,
+    gpr, stack_reg, writable_gpr, zero_reg, CallIndInfo, CallInfo, Cond, Inst as MInst, LaneOrder,
+    MemArg, MemArgPair, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted,
 };
 use crate::isa::s390x::settings::Flags as IsaFlags;
 use crate::machinst::isle::*;
@@ -21,7 +22,7 @@ use crate::{
     isa::unwind::UnwindInst,
     isa::CallConv,
     machinst::abi_impl::ABIMachineSpec,
-    machinst::{InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData},
+    machinst::{InsnOutput, Lower, VCodeConstant, VCodeConstantData},
 };
 use regalloc2::PReg;
 use smallvec::{smallvec, SmallVec};
@@ -46,17 +47,14 @@ type VecMInst = Vec<MInst>;
 type VecMInstBuilder = Cell<Vec<MInst>>;
 
 /// The main entry point for lowering with ISLE.
-pub(crate) fn lower<C>(
-    lower_ctx: &mut C,
+pub(crate) fn lower(
+    lower_ctx: &mut Lower<MInst>,
     triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
     outputs: &[InsnOutput],
     inst: Inst,
-) -> Result<(), ()>
-where
-    C: LowerCtx<I = MInst>,
-{
+) -> Result<(), ()> {
     lower_common(
         lower_ctx,
         triple,
@@ -69,17 +67,14 @@ where
 }
 
 /// The main entry point for branch lowering with ISLE.
-pub(crate) fn lower_branch<C>(
-    lower_ctx: &mut C,
+pub(crate) fn lower_branch(
+    lower_ctx: &mut Lower<MInst>,
     triple: &Triple,
     flags: &Flags,
     isa_flags: &IsaFlags,
     branch: Inst,
     targets: &[MachLabel],
-) -> Result<(), ()>
-where
-    C: LowerCtx<I = MInst>,
-{
+) -> Result<(), ()> {
     lower_common(
         lower_ctx,
         triple,
@@ -91,15 +86,16 @@ where
     )
 }
 
-impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
-where
-    C: LowerCtx<I = MInst>,
-{
+impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_methods!();
 
     fn abi_sig(&mut self, sig_ref: SigRef) -> ABISig {
         let sig = &self.lower_ctx.dfg().signatures[sig_ref];
         ABISig::from_func_sig::<S390xMachineDeps>(sig, self.flags).unwrap()
+    }
+
+    fn abi_lane_order(&mut self, abi: &ABISig) -> LaneOrder {
+        lane_order_for_call_conv(abi.call_conv())
     }
 
     fn abi_accumulate_outgoing_args_size(&mut self, abi: &ABISig) -> Unit {
@@ -406,8 +402,35 @@ where
     }
 
     #[inline]
+    fn lane_order(&mut self) -> Option<LaneOrder> {
+        Some(lane_order_for_call_conv(self.lower_ctx.abi().call_conv()))
+    }
+
+    #[inline]
     fn be_lane_idx(&mut self, ty: Type, idx: u8) -> u8 {
-        ty.lane_count() as u8 - 1 - idx
+        match self.lane_order().unwrap() {
+            LaneOrder::LittleEndian => ty.lane_count() as u8 - 1 - idx,
+            LaneOrder::BigEndian => idx,
+        }
+    }
+
+    #[inline]
+    fn be_vec_const(&mut self, ty: Type, n: u128) -> u128 {
+        match self.lane_order().unwrap() {
+            LaneOrder::LittleEndian => n,
+            LaneOrder::BigEndian => {
+                let lane_count = ty.lane_count();
+                let lane_bits = ty.lane_bits();
+                let lane_mask = (1u128 << lane_bits) - 1;
+                let mut n_le = n;
+                let mut n_be = 0u128;
+                for _ in 0..lane_count {
+                    n_be = (n_be << lane_bits) | (n_le & lane_mask);
+                    n_le = n_le >> lane_bits;
+                }
+                n_be
+            }
+        }
     }
 
     #[inline]
@@ -419,17 +442,19 @@ where
 
     #[inline]
     fn shuffle_mask_from_u128(&mut self, idx: u128) -> (u128, u16) {
-        let bytes = idx.to_be_bytes();
+        let bytes = match self.lane_order().unwrap() {
+            LaneOrder::LittleEndian => idx.to_be_bytes().map(|x| {
+                if x < 16 {
+                    15 - x
+                } else if x < 32 {
+                    47 - x
+                } else {
+                    128
+                }
+            }),
+            LaneOrder::BigEndian => idx.to_le_bytes().map(|x| if x < 32 { x } else { 128 }),
+        };
         let and_mask = bytes.iter().fold(0, |acc, &x| (acc << 1) | (x < 32) as u16);
-        let bytes = bytes.map(|x| {
-            if x < 16 {
-                15 - x
-            } else if x < 32 {
-                47 - x
-            } else {
-                128
-            }
-        });
         let permute_mask = u128::from_be_bytes(bytes);
         (permute_mask, and_mask)
     }
@@ -810,6 +835,16 @@ where
     #[inline]
     fn preg_stack(&mut self) -> PReg {
         stack_reg().to_real_reg().unwrap().into()
+    }
+}
+
+/// Lane order to be used for a given calling convention.
+#[inline]
+fn lane_order_for_call_conv(call_conv: CallConv) -> LaneOrder {
+    if call_conv.extends_wasmtime() {
+        LaneOrder::LittleEndian
+    } else {
+        LaneOrder::BigEndian
     }
 }
 

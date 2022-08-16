@@ -420,12 +420,12 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
         &Inst::Select {
             ref dst,
-            conditon,
+            condition,
             x,
             y,
             ..
         } => {
-            collector.reg_use(conditon);
+            collector.reg_use(condition);
             collector.reg_uses(x.regs());
             collector.reg_uses(y.regs());
             collector.reg_defs(&dst[..]);
@@ -545,6 +545,14 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_uses(&[rs1, rs2]);
             collector.reg_early_def(tmp);
             collector.reg_early_def(rd);
+        }
+        &Inst::Popcnt {
+            sum, step, rs, tmp, ..
+        } => {
+            collector.reg_use(rs);
+            collector.reg_early_def(tmp);
+            collector.reg_early_def(step);
+            collector.reg_early_def(sum);
         }
     }
 }
@@ -929,6 +937,19 @@ impl Inst {
                     test
                 )
             }
+            &Inst::Popcnt {
+                sum,
+                step,
+                rs,
+                tmp,
+                ty,
+            } => {
+                let rs = format_reg(rs, allocs);
+                let tmp = format_reg(tmp.to_reg(), allocs);
+                let step = format_reg(step.to_reg(), allocs);
+                let sum = format_reg(sum.to_reg(), allocs);
+                format!("popcnt {},{}##ty={} tmp={} step={}", sum, rs, ty, tmp , step )
+            }
             &Inst::FcvtToIntSat {
                 rd,
                 rs,
@@ -1228,7 +1249,7 @@ impl Inst {
             &MInst::AjustSp { amount } => {
                 format!("{} sp,{:+}", "add", amount)
             }
-            &MInst::Call { ref info } => format!("call {}", info.dest),
+            &MInst::Call { ref info } => format!("call {}", info.dest.display(None)),
             &MInst::CallInd { ref info } => {
                 let rd = format_reg(info.rn, allocs);
                 format!("callind {}", rd)
@@ -1311,7 +1332,7 @@ impl Inst {
                 offset,
             } => {
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("load_sym {},{}{:+}", rd, name, offset)
+                format!("load_sym {},{}{:+}", rd, name.display(None), offset)
             }
             &MInst::LoadAddr { ref rd, ref mem } => {
                 let mem = mem.to_string_with_alloc(allocs);
@@ -1343,12 +1364,12 @@ impl Inst {
             &MInst::FenceI => "fence.i".into(),
             &MInst::Select {
                 ref dst,
-                conditon,
+                condition,
                 ref x,
                 ref y,
                 ty,
             } => {
-                let condition = format_reg(conditon, allocs);
+                let condition = format_reg(condition, allocs);
                 let x = format_regs(x.regs(), allocs);
                 let y = format_regs(y.regs(), allocs);
                 let dst: Vec<_> = dst.clone().into_iter().map(|r| r.to_reg()).collect();

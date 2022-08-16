@@ -167,10 +167,10 @@ block0:
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
+;   fsd fs2,-8(sp)
+;   fsd fs3,-16(sp)
+;   fsd fs11,-24(sp)
 ;   add sp,-32
-;   fsd fs2,0(sp)
-;   fsd fs3,8(sp)
-;   fsd fs11,16(sp)
 ; block0:
 ;   load_sym a6,%g0+0
 ;   callind a6
@@ -192,10 +192,10 @@ block0:
 ;   fmv.d fa0,fs11
 ;   load_sym a5,%g4+0
 ;   callind a5
-;   fld fs2,0(sp)
-;   fld fs3,8(sp)
-;   fld fs11,16(sp)
 ;   add sp,+32
+;   fld fs2,-8(sp)
+;   fld fs3,-16(sp)
+;   fld fs11,-24(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16

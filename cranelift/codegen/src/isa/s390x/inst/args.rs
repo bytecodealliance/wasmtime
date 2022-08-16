@@ -326,7 +326,7 @@ impl PrettyPrint for MemArg {
             &MemArg::Label { target } => target.to_string(),
             &MemArg::Symbol {
                 ref name, offset, ..
-            } => format!("{} + {}", name, offset),
+            } => format!("{} + {}", name.display(None), offset),
             // Eliminated by `mem_finalize()`.
             &MemArg::InitialSPOffset { .. }
             | &MemArg::NominalSPOffset { .. }

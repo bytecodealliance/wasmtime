@@ -28,8 +28,9 @@ mod emit_tests;
 // Instructions (top level): definition
 
 pub use crate::isa::s390x::lower::isle::generated_code::{
-    ALUOp, CmpOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuRoundOp, MInst as Inst, RxSBGOp,
-    ShiftOp, SymbolReloc, UnaryOp, VecBinaryOp, VecFloatCmpOp, VecIntCmpOp, VecShiftOp, VecUnaryOp,
+    ALUOp, CmpOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuRoundOp, LaneOrder, MInst as Inst,
+    RxSBGOp, ShiftOp, SymbolReloc, UnaryOp, VecBinaryOp, VecFloatCmpOp, VecIntCmpOp, VecShiftOp,
+    VecUnaryOp,
 };
 
 /// Additional information for (direct) Call instructions, left out of line to lower the size of
@@ -245,7 +246,19 @@ impl Inst {
 
             // These are all part of VXRS_EXT2
             Inst::VecLoadRev { .. }
+            | Inst::VecLoadByte16Rev { .. }
+            | Inst::VecLoadByte32Rev { .. }
+            | Inst::VecLoadByte64Rev { .. }
+            | Inst::VecLoadElt16Rev { .. }
+            | Inst::VecLoadElt32Rev { .. }
+            | Inst::VecLoadElt64Rev { .. }
             | Inst::VecStoreRev { .. }
+            | Inst::VecStoreByte16Rev { .. }
+            | Inst::VecStoreByte32Rev { .. }
+            | Inst::VecStoreByte64Rev { .. }
+            | Inst::VecStoreElt16Rev { .. }
+            | Inst::VecStoreElt32Rev { .. }
+            | Inst::VecStoreElt64Rev { .. }
             | Inst::VecLoadReplicateRev { .. }
             | Inst::VecLoadLaneRev { .. }
             | Inst::VecLoadLaneRevUndef { .. }
@@ -762,11 +775,59 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_def(rd);
             memarg_operands(mem, collector);
         }
+        &Inst::VecLoadByte16Rev { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadByte32Rev { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadByte64Rev { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadElt16Rev { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadElt32Rev { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecLoadElt64Rev { rd, ref mem, .. } => {
+            collector.reg_def(rd);
+            memarg_operands(mem, collector);
+        }
         &Inst::VecStore { rd, ref mem, .. } => {
             collector.reg_use(rd);
             memarg_operands(mem, collector);
         }
         &Inst::VecStoreRev { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStoreByte16Rev { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStoreByte32Rev { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStoreByte64Rev { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStoreElt16Rev { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStoreElt32Rev { rd, ref mem, .. } => {
+            collector.reg_use(rd);
+            memarg_operands(mem, collector);
+        }
+        &Inst::VecStoreElt64Rev { rd, ref mem, .. } => {
             collector.reg_use(rd);
             memarg_operands(mem, collector);
         }
@@ -2476,10 +2537,23 @@ impl Inst {
                     op, rm, rn, tmp, rn, rm
                 )
             }
-            &Inst::VecLoad { rd, ref mem } | &Inst::VecLoadRev { rd, ref mem } => {
+            &Inst::VecLoad { rd, ref mem }
+            | &Inst::VecLoadRev { rd, ref mem }
+            | &Inst::VecLoadByte16Rev { rd, ref mem }
+            | &Inst::VecLoadByte32Rev { rd, ref mem }
+            | &Inst::VecLoadByte64Rev { rd, ref mem }
+            | &Inst::VecLoadElt16Rev { rd, ref mem }
+            | &Inst::VecLoadElt32Rev { rd, ref mem }
+            | &Inst::VecLoadElt64Rev { rd, ref mem } => {
                 let opcode = match self {
                     &Inst::VecLoad { .. } => "vl",
                     &Inst::VecLoadRev { .. } => "vlbrq",
+                    &Inst::VecLoadByte16Rev { .. } => "vlbrh",
+                    &Inst::VecLoadByte32Rev { .. } => "vlbrf",
+                    &Inst::VecLoadByte64Rev { .. } => "vlbrg",
+                    &Inst::VecLoadElt16Rev { .. } => "vlerh",
+                    &Inst::VecLoadElt32Rev { .. } => "vlerf",
+                    &Inst::VecLoadElt64Rev { .. } => "vlerg",
                     _ => unreachable!(),
                 };
 
@@ -2489,10 +2563,23 @@ impl Inst {
                 let mem = mem.pretty_print_default();
                 format!("{}{} {}, {}", mem_str, opcode, rd, mem)
             }
-            &Inst::VecStore { rd, ref mem } | &Inst::VecStoreRev { rd, ref mem } => {
+            &Inst::VecStore { rd, ref mem }
+            | &Inst::VecStoreRev { rd, ref mem }
+            | &Inst::VecStoreByte16Rev { rd, ref mem }
+            | &Inst::VecStoreByte32Rev { rd, ref mem }
+            | &Inst::VecStoreByte64Rev { rd, ref mem }
+            | &Inst::VecStoreElt16Rev { rd, ref mem }
+            | &Inst::VecStoreElt32Rev { rd, ref mem }
+            | &Inst::VecStoreElt64Rev { rd, ref mem } => {
                 let opcode = match self {
                     &Inst::VecStore { .. } => "vst",
                     &Inst::VecStoreRev { .. } => "vstbrq",
+                    &Inst::VecStoreByte16Rev { .. } => "vstbrh",
+                    &Inst::VecStoreByte32Rev { .. } => "vstbrf",
+                    &Inst::VecStoreByte64Rev { .. } => "vstbrg",
+                    &Inst::VecStoreElt16Rev { .. } => "vsterh",
+                    &Inst::VecStoreElt32Rev { .. } => "vsterf",
+                    &Inst::VecStoreElt64Rev { .. } => "vsterg",
                     _ => unreachable!(),
                 };
 
@@ -2845,10 +2932,12 @@ impl Inst {
                 let link = pretty_print_reg(link.to_reg(), allocs);
                 let tls_symbol = match &info.tls_symbol {
                     None => "".to_string(),
-                    Some(SymbolReloc::TlsGd { name }) => format!(":tls_gdcall:{}", name),
+                    Some(SymbolReloc::TlsGd { name }) => {
+                        format!(":tls_gdcall:{}", name.display(None))
+                    }
                     _ => unreachable!(),
                 };
-                format!("brasl {}, {}{}", link, info.dest, tls_symbol)
+                format!("brasl {}, {}{}", link, info.dest.display(None), tls_symbol)
             }
             &Inst::CallInd { link, ref info, .. } => {
                 let link = pretty_print_reg(link.to_reg(), allocs);
@@ -2916,8 +3005,10 @@ impl Inst {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg(), &mut empty_allocs);
                 let symbol = match &**symbol_reloc {
-                    SymbolReloc::Absolute { name, offset } => format!("{} + {}", name, offset),
-                    SymbolReloc::TlsGd { name } => format!("{}@tlsgd", name),
+                    SymbolReloc::Absolute { name, offset } => {
+                        format!("{} + {}", name.display(None), offset)
+                    }
+                    SymbolReloc::TlsGd { name } => format!("{}@tlsgd", name.display(None)),
                 };
                 format!("bras {}, 12 ; data {} ; lg {}, 0({})", tmp, symbol, rd, tmp)
             }

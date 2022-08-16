@@ -2093,8 +2093,10 @@ fn test_riscv64_binemit() {
 fn make_test_flags() -> (settings::Flags, super::super::riscv_settings::Flags) {
     let b = settings::builder();
     let flags = settings::Flags::new(b.clone());
-    let isa_flags =
-        super::super::riscv_settings::Flags::new(&flags, super::super::riscv_settings::builder());
+    let b2 = super::super::riscv_settings::builder();
+
+    let mut isa_flags = super::super::riscv_settings::Flags::new(&flags, b2);
+
     (flags, isa_flags)
 }
 

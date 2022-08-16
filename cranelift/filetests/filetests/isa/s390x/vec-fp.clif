@@ -21,7 +21,17 @@ block0:
 ;   vgbm %v24, 0
 ;   br %r14
 
-function %vconst_f32x4_mixed() -> f32x4 {
+function %vconst_f32x4_mixed_be() -> f32x4 {
+block0:
+  v1 = vconst.f32x4 [0x1.0 0x2.0 0x3.0 0x4.0]
+  return v1
+}
+
+; block0:
+;   bras %r1, 20 ; data.u128 0x3f800000400000004040000040800000 ; vl %v24, 0(%r1)
+;   br %r14
+
+function %vconst_f32x4_mixed_le() -> f32x4 wasmtime_system_v {
 block0:
   v1 = vconst.f32x4 [0x1.0 0x2.0 0x3.0 0x4.0]
   return v1
@@ -31,7 +41,17 @@ block0:
 ;   bras %r1, 20 ; data.u128 0x4080000040400000400000003f800000 ; vl %v24, 0(%r1)
 ;   br %r14
 
-function %vconst_f64x2_mixed() -> f64x2 {
+function %vconst_f64x2_mixed_be() -> f64x2 {
+block0:
+  v1 = vconst.f64x2 [0x1.0 0x2.0]
+  return v1
+}
+
+; block0:
+;   bras %r1, 20 ; data.u128 0x3ff00000000000004000000000000000 ; vl %v24, 0(%r1)
+;   br %r14
+
+function %vconst_f64x2_mixed_le() -> f64x2 wasmtime_system_v {
 block0:
   v1 = vconst.f64x2 [0x1.0 0x2.0]
   return v1
@@ -261,7 +281,18 @@ block0(v0: f64x2):
 ;   vflcdb %v24, %v24
 ;   br %r14
 
-function %fvpromote_low_f32x4(f32x4) -> f64x2 {
+function %fvpromote_low_f32x4_be(f32x4) -> f64x2 {
+block0(v0: f32x4):
+  v1 = fvpromote_low v0
+  return v1
+}
+
+; block0:
+;   vmrhf %v3, %v24, %v24
+;   vldeb %v24, %v3
+;   br %r14
+
+function %fvpromote_low_f32x4_le(f32x4) -> f64x2 wasmtime_system_v {
 block0(v0: f32x4):
   v1 = fvpromote_low v0
   return v1
@@ -272,7 +303,7 @@ block0(v0: f32x4):
 ;   vldeb %v24, %v3
 ;   br %r14
 
-function %fvdemote_f64x2(f64x2) -> f32x4 {
+function %fvdemote_f64x2_be(f64x2) -> f32x4 {
 block0(v0: f64x2):
   v1 = fvdemote v0
   return v1
@@ -280,9 +311,22 @@ block0(v0: f64x2):
 
 ; block0:
 ;   vledb %v3, %v24, 0, 0
-;   vgbm %v5, 0
-;   bras %r1, 20 ; data.u128 0x10101010101010100001020308090a0b ; vl %v7, 0(%r1)
-;   vperm %v24, %v3, %v5, %v7
+;   vesrlg %v5, %v3, 32
+;   vgbm %v7, 0
+;   vpkg %v24, %v5, %v7
+;   br %r14
+
+function %fvdemote_f64x2_le(f64x2) -> f32x4 wasmtime_system_v {
+block0(v0: f64x2):
+  v1 = fvdemote v0
+  return v1
+}
+
+; block0:
+;   vledb %v3, %v24, 0, 0
+;   vesrlg %v5, %v3, 32
+;   vgbm %v7, 0
+;   vpkg %v24, %v7, %v5
 ;   br %r14
 
 function %ceil_f32x4(f32x4) -> f32x4 {
@@ -462,7 +506,18 @@ block0(v0: i64x2):
 ;   br %r14
 
 
-function %fcvt_low_from_sint_i32x4_f64x2(i32x4) -> f64x2 {
+function %fcvt_low_from_sint_i32x4_f64x2_be(i32x4) -> f64x2 {
+block0(v0: i32x4):
+  v1 = fcvt_low_from_sint.f64x2 v0
+  return v1
+}
+
+; block0:
+;   vuphf %v3, %v24
+;   vcdgb %v24, %v3, 0, 4
+;   br %r14
+
+function %fcvt_low_from_sint_i32x4_f64x2_le(i32x4) -> f64x2 wasmtime_system_v {
 block0(v0: i32x4):
   v1 = fcvt_low_from_sint.f64x2 v0
   return v1

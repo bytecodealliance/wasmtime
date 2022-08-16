@@ -1,5 +1,6 @@
 test run
 target aarch64
+target riscv64
 
 ; TODO: Merge this with the main i128-bricmp file when s390x supports overflows.
 ; See: https://github.com/bytecodealliance/wasmtime/issues/3060

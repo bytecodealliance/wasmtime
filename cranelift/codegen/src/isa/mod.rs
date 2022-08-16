@@ -49,7 +49,7 @@ use crate::flowgraph;
 use crate::ir::{self, Function};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
-use crate::machinst::{CompiledCode, TextSectionBuilder, UnwindInfoKind};
+use crate::machinst::{CompiledCode, CompiledCodeStencil, TextSectionBuilder, UnwindInfoKind};
 use crate::settings;
 use crate::settings::SetResult;
 use crate::CodegenResult;
@@ -234,7 +234,11 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     fn dynamic_vector_bytes(&self, dynamic_ty: ir::Type) -> u32;
 
     /// Compile the given function.
-    fn compile_function(&self, func: &Function, want_disasm: bool) -> CodegenResult<CompiledCode>;
+    fn compile_function(
+        &self,
+        func: &Function,
+        want_disasm: bool,
+    ) -> CodegenResult<CompiledCodeStencil>;
 
     #[cfg(feature = "unwind")]
     /// Map a regalloc::Reg to its corresponding DWARF register.

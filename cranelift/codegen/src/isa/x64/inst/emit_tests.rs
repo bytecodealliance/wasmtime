@@ -13,9 +13,11 @@
 //!   -- isa::x64::inst::emit_tests::test_x64_emit
 
 use super::*;
+use crate::ir::UserExternalNameRef;
 use crate::isa::x64;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use cranelift_entity::EntityRef as _;
 
 impl Inst {
     fn neg(size: OperandSize, src: Writable<Reg>) -> Inst {
@@ -24,6 +26,16 @@ impl Inst {
             size,
             src: Gpr::new(src.to_reg()).unwrap(),
             dst: WritableGpr::from_writable_reg(src).unwrap(),
+        }
+    }
+
+    fn xmm_unary_rm_r_evex(op: Avx512Opcode, src: RegMem, dst: Writable<Reg>) -> Inst {
+        src.assert_regclass_is(RegClass::Float);
+        debug_assert!(dst.to_reg().class() == RegClass::Float);
+        Inst::XmmUnaryRmREvex {
+            op,
+            src: XmmMem::new(src).unwrap(),
+            dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
 }
@@ -3385,17 +3397,14 @@ fn test_x64_emit() {
     // CallKnown
     insns.push((
         Inst::call_known(
-            ExternalName::User {
-                namespace: 0,
-                index: 0,
-            },
+            ExternalName::User(UserExternalNameRef::new(0)),
             smallvec![],
             smallvec![],
             PRegSet::default(),
             Opcode::Call,
         ),
         "E800000000",
-        "call    User { namespace: 0, index: 0 }",
+        "call    User(userextname0)",
     ));
 
     // ========================================================
@@ -3439,38 +3448,29 @@ fn test_x64_emit() {
     insns.push((
         Inst::LoadExtName {
             dst: Writable::from_reg(r11),
-            name: Box::new(ExternalName::User {
-                namespace: 0,
-                index: 0,
-            }),
+            name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
             offset: 0,
         },
         "4C8B1D00000000",
-        "load_ext_name u0:0+0, %r11",
+        "load_ext_name userextname0+0, %r11",
     ));
     insns.push((
         Inst::LoadExtName {
             dst: Writable::from_reg(r11),
-            name: Box::new(ExternalName::User {
-                namespace: 0,
-                index: 0,
-            }),
+            name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
             offset: 0x12345678,
         },
         "4C8B1D000000004981C378563412",
-        "load_ext_name u0:0+305419896, %r11",
+        "load_ext_name userextname0+305419896, %r11",
     ));
     insns.push((
         Inst::LoadExtName {
             dst: Writable::from_reg(r11),
-            name: Box::new(ExternalName::User {
-                namespace: 0,
-                index: 0,
-            }),
+            name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
             offset: -0x12345678,
         },
         "4C8B1D000000004981EB78563412",
-        "load_ext_name u0:0+-305419896, %r11",
+        "load_ext_name userextname0+-305419896, %r11",
     ));
 
     // ========================================================
@@ -3520,6 +3520,18 @@ fn test_x64_emit() {
 
     // ========================================================
     // XMM FMA
+
+    insns.push((
+        Inst::xmm_rm_r_vex(AvxOpcode::Vfmadd213ss, RegMem::reg(xmm2), xmm1, w_xmm0),
+        "C4E271A9C2",
+        "vfmadd213ss %xmm0, %xmm1, %xmm2, %xmm0",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r_vex(AvxOpcode::Vfmadd213sd, RegMem::reg(xmm5), xmm4, w_xmm3),
+        "C4E2D9A9DD",
+        "vfmadd213sd %xmm3, %xmm4, %xmm5, %xmm3",
+    ));
 
     insns.push((
         Inst::xmm_rm_r_vex(AvxOpcode::Vfmadd213ps, RegMem::reg(xmm2), xmm1, w_xmm0),
@@ -4668,24 +4680,26 @@ fn test_x64_emit() {
 
     insns.push((
         Inst::ElfTlsGetAddr {
-            symbol: ExternalName::User {
-                namespace: 0,
-                index: 0,
-            },
+            symbol: ExternalName::User(UserExternalNameRef::new(0)),
         },
         "66488D3D00000000666648E800000000",
-        "%rax = elf_tls_get_addr User { namespace: 0, index: 0 }",
+        "%rax = elf_tls_get_addr User(userextname0)",
     ));
 
     insns.push((
         Inst::MachOTlsGetAddr {
-            symbol: ExternalName::User {
-                namespace: 0,
-                index: 0,
-            },
+            symbol: ExternalName::User(UserExternalNameRef::new(0)),
         },
         "488B3D00000000FF17",
-        "%rax = macho_tls_get_addr User { namespace: 0, index: 0 }",
+        "%rax = macho_tls_get_addr User(userextname0)",
+    ));
+
+    insns.push((
+        Inst::CoffTlsGetAddr {
+            symbol: ExternalName::User(UserExternalNameRef::new(0)),
+        },
+        "8B050000000065488B0C2558000000488B04C1488D8000000000",
+        "%rax = coff_tls_get_addr User(userextname0)",
     ));
 
     // ========================================================

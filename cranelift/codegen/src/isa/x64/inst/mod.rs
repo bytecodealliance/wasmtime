@@ -1,7 +1,7 @@
 //! This module defines x86_64-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
-use crate::ir::{types, ExternalName, Opcode, SourceLoc, TrapCode, Type};
+use crate::ir::{types, ExternalName, Opcode, RelSourceLoc, TrapCode, Type};
 use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::isa::x64::settings as x64_settings;
@@ -116,6 +116,7 @@ impl Inst {
             | Inst::XmmUninitializedValue { .. }
             | Inst::ElfTlsGetAddr { .. }
             | Inst::MachOTlsGetAddr { .. }
+            | Inst::CoffTlsGetAddr { .. }
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. } => smallvec![],
 
@@ -307,16 +308,6 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_unary_rm_r_evex(op: Avx512Opcode, src: RegMem, dst: Writable<Reg>) -> Inst {
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmUnaryRmREvex {
-            op,
-            src: XmmMem::new(src).unwrap(),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
     pub(crate) fn xmm_rm_r(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Self {
         src.assert_regclass_is(RegClass::Float);
         debug_assert!(dst.to_reg().class() == RegClass::Float);
@@ -415,27 +406,6 @@ impl Inst {
         let src = XmmMem::new(src).unwrap();
         let dst = Xmm::new(dst).unwrap();
         Inst::XmmCmpRmR { op, src, dst }
-    }
-
-    pub(crate) fn cvt_u64_to_float_seq(
-        dst_size: OperandSize,
-        src: Writable<Reg>,
-        tmp_gpr1: Writable<Reg>,
-        tmp_gpr2: Writable<Reg>,
-        dst: Writable<Reg>,
-    ) -> Inst {
-        debug_assert!(dst_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        debug_assert!(src.to_reg().class() == RegClass::Int);
-        debug_assert!(tmp_gpr1.to_reg().class() == RegClass::Int);
-        debug_assert!(tmp_gpr2.to_reg().class() == RegClass::Int);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::CvtUint64ToFloatSeq {
-            src: WritableGpr::from_writable_reg(src).unwrap(),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-            tmp_gpr1: WritableGpr::from_writable_reg(tmp_gpr1).unwrap(),
-            tmp_gpr2: WritableGpr::from_writable_reg(tmp_gpr2).unwrap(),
-            dst_size,
-        }
     }
 
     pub(crate) fn cvt_float_to_sint_seq(
@@ -1654,7 +1624,7 @@ impl PrettyPrint for Inst {
                 format!(
                     "{} {}+{}, {}",
                     ljustify("load_ext_name".into()),
-                    name,
+                    name.display(None),
                     offset,
                     dst,
                 )
@@ -1707,6 +1677,10 @@ impl PrettyPrint for Inst {
 
             Inst::MachOTlsGetAddr { ref symbol } => {
                 format!("%rax = macho_tls_get_addr {:?}", symbol)
+            }
+
+            Inst::CoffTlsGetAddr { ref symbol } => {
+                format!("%rax = coff_tls_get_addr {:?}", symbol)
             }
 
             Inst::Unwind { inst } => {
@@ -1873,7 +1847,12 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             // Vfmadd uses and defs the dst reg, that is not the case with all
             // AVX's ops, if you're adding a new op, make sure to correctly define
             // register uses.
-            assert!(*op == AvxOpcode::Vfmadd213ps || *op == AvxOpcode::Vfmadd213pd);
+            assert!(
+                *op == AvxOpcode::Vfmadd213ss
+                    || *op == AvxOpcode::Vfmadd213sd
+                    || *op == AvxOpcode::Vfmadd213ps
+                    || *op == AvxOpcode::Vfmadd213pd
+            );
 
             collector.reg_use(src1.to_reg());
             collector.reg_reuse_def(dst.to_writable_reg(), 0);
@@ -2155,6 +2134,17 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_clobbers(clobbers);
         }
 
+        Inst::CoffTlsGetAddr { .. } => {
+            // We also use the gs register. But that register is not allocatable by the
+            // register allocator, so we don't need to mark it as used here.
+
+            // We use %rax to set the address
+            collector.reg_def(Writable::from_reg(regs::rax()));
+
+            // We use %rcx as a temporary variable to load the _tls_index
+            collector.reg_def(Writable::from_reg(regs::rcx()));
+        }
+
         Inst::Unwind { .. } => {}
 
         Inst::DummyUse { reg } => {
@@ -2434,7 +2424,7 @@ pub struct EmitState {
     /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
     stack_map: Option<StackMap>,
     /// Current source location.
-    cur_srcloc: SourceLoc,
+    cur_srcloc: RelSourceLoc,
 }
 
 /// Constant state used during emissions of a sequence of instructions.
@@ -2475,7 +2465,7 @@ impl MachInstEmitState<Inst> for EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
-            cur_srcloc: SourceLoc::default(),
+            cur_srcloc: Default::default(),
         }
     }
 
@@ -2483,7 +2473,7 @@ impl MachInstEmitState<Inst> for EmitState {
         self.stack_map = Some(stack_map);
     }
 
-    fn pre_sourceloc(&mut self, srcloc: SourceLoc) {
+    fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
     }
 }

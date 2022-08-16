@@ -93,8 +93,8 @@
   (alu_rrr (AluOPRRR.Mulw) x y))
 
 ;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (smulhi (sext_int_if_need x _) (sext_int_if_need y _) )))
-  (lower_smlhi ty x y))
+(rule (lower (has_type (fits_in_64 ty) (smulhi  x y )))
+  (lower_smlhi ty (sext_int_if_need x ty) (sext_int_if_need y ty)))
 
 ;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (umulhi x y)))
@@ -109,8 +109,8 @@
 
 (rule (lower (has_type (fits_in_16 ty) (udiv x y)))
   (alu_rrr (AluOPRRR.Divuw) (uext_int_if_need x ty ) (uext_int_if_need y ty )))
-(rule (lower (has_type (fits_in_16 ty) (sdiv (sext_int_if_need x _ )  (sext_int_if_need y _) )))
-  (alu_rrr (AluOPRRR.Divw) x y ))
+(rule (lower (has_type (fits_in_16 ty) (sdiv  x  y )))
+  (alu_rrr (AluOPRRR.Divw) (sext_int_if_need x ty) (sext_int_if_need y ty) ))
 
 (rule (lower (has_type $I32 (sdiv x y)))
   (alu_rrr (AluOPRRR.Divw) x y))
@@ -129,8 +129,8 @@
 (rule (lower (has_type (fits_in_16 ty) (urem x y)))
   (alu_rrr (AluOPRRR.Remuw) (uext_int_if_need  x ty) (uext_int_if_need y ty)))
 
-(rule (lower (has_type (fits_in_16 ty) (srem (sext_int_if_need x _)  (sext_int_if_need y _)  )))
-  (alu_rrr (AluOPRRR.Remuw) x  y))
+(rule (lower (has_type (fits_in_16 ty) (srem  x  y  )))
+  (alu_rrr (AluOPRRR.Remuw) (sext_int_if_need x ty)  (sext_int_if_need y ty)))
 
 (rule (lower (has_type $I32 (srem x y)))
   (alu_rrr (AluOPRRR.Remw) x y))
@@ -263,22 +263,22 @@
 
 ;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (band_not x y)))
-  (alu_rrr (AluOPRRR.Andn) x y))
+  (gen_andn x y ))
 (rule (lower (has_type  $I128 (band_not x y)))
-  (lower_b128_binary (AluOPRRR.Andn) x y))
-(rule (lower (has_type $F32 (band_not x y)))
-  (lower_float_binary (AluOPRRR.Andn) x y $F32))
-(rule (lower (has_type $F64 (band_not x y)))
-  (lower_float_binary (AluOPRRR.Andn) x y $F64))
+  (let
+    (
+      (low Reg (gen_andn (value_regs_get x 0 ) (value_regs_get y 0 ) ))
+      (high Reg (gen_andn (value_regs_get x 1 ) (value_regs_get y 1 ) ))
+    )
+    (value_regs low high )
+  )
+)
+
 
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_16 ty) (popcnt x)))
-  (alu_rr_funct12 (AluOPRRI.Cpopw) (uext_int_if_need x ty)))
-(rule (lower (has_type $I32 (popcnt x)))
-  (alu_rr_funct12 (AluOPRRI.Cpopw) x))
-(rule (lower (has_type $I64 (popcnt x)))
-  (alu_rr_funct12 (AluOPRRI.Cpop) x))
+(rule (lower (has_type (fits_in_64 ty) (popcnt x)))
+  (lower_popcnt x ty ))
 (rule (lower (has_type $I128 (popcnt x)))
   (lower_popcnt_i128 x))
 
@@ -336,17 +336,17 @@
 
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type $I8 (sshr (sext_int_if_need x _) (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Sra) x (alu_andi y 7))
+(rule (lower (has_type $I8 (sshr x (valueregs_2_reg y))))
+  (alu_rrr (AluOPRRR.Sra) (sext_int_if_need x $I8) (alu_andi y 7))
 )
-(rule (lower (has_type $I8(sshr (sext_int_if_need x _) (imm12_from_value y))))
-  (alu_rr_imm12 (AluOPRRI.Srai) x (imm12_and y 7) ))
+(rule (lower (has_type $I8(sshr  x (imm12_from_value y))))
+  (alu_rr_imm12 (AluOPRRI.Srai) (sext_int_if_need x $I8) (imm12_and y 7) ))
 
-(rule (lower (has_type $I16 (sshr (sext_int_if_need x _) (valueregs_2_reg y))))
-  (alu_rrr (AluOPRRR.Sra) x (alu_andi y 15))
+(rule (lower (has_type $I16 (sshr x (valueregs_2_reg y))))
+  (alu_rrr (AluOPRRR.Sra) (sext_int_if_need x $I16) (alu_andi y 15))
 )
-(rule (lower (has_type $I16(sshr (sext_int_if_need x _) (imm12_from_value y))))
-  (alu_rr_imm12 (AluOPRRI.Srai) x (imm12_and y 15) ))
+(rule (lower (has_type $I16(sshr  x (imm12_from_value y))))
+  (alu_rr_imm12 (AluOPRRI.Srai) (sext_int_if_need x $I16) (imm12_and y 15) ))
 
 (rule (lower (has_type  $I32 (sshr x (valueregs_2_reg y))))
   (alu_rrr (AluOPRRR.Sraw) x y))
@@ -390,14 +390,17 @@
 
 ;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(bor_not x y)))
-  (alu_rrr  (AluOPRRR.Orn) x y))  
+  (gen_orn  x y ))  
 
 (rule (lower (has_type  $I128 (bor_not x y)))
-  (lower_b128_binary (AluOPRRR.Orn) x y)) 
-(rule (lower (has_type $F32 (bor_not x y)))
-  (lower_float_binary (AluOPRRR.Orn) x y $F32))
-(rule (lower (has_type $F64 (bor_not x y)))
-  (lower_float_binary (AluOPRRR.Orn) x y $F64))
+  (let
+    (
+      (low Reg (gen_orn (value_regs_get x 0) (value_regs_get y 0) ))
+      (high Reg (gen_orn (value_regs_get x 1) (value_regs_get y 1) ))
+    )
+    (value_regs  low high)
+  )
+) 
 
 
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -658,14 +661,14 @@
 
 ;;;;;  Rules for `imax`;;;;;;;;;
 (rule
-  (lower (has_type ty (imax ( sext_int_if_need x _)  (sext_int_if_need y _) )))
-  (gen_int_select ty (IntSelectOP.Imax)x y)
+  (lower (has_type ty (imax  x y )))
+  (gen_int_select ty (IntSelectOP.Imax) (sext_int_if_need  x ty) (sext_int_if_need y ty))
 )
 
 ;;;;;  Rules for `imin`;;;;;;;;;
 (rule
-  (lower (has_type ty (imin (sext_int_if_need x _)  (sext_int_if_need y _) )))
-  (gen_int_select ty(IntSelectOP.Imin) x y)
+  (lower (has_type ty (imin  x   y )))
+  (gen_int_select ty(IntSelectOP.Imin) (sext_int_if_need  x ty) (sext_int_if_need y ty))
 )
 ;;;;;  Rules for `umax`;;;;;;;;;
 (rule
@@ -805,6 +808,17 @@
   (lower (icmp cc (type_and_value ty x) y ))
   (lower_icmp cc x y ty)
 )
+;; special for `iadd_ifcout` first out.
+(rule
+  (lower (icmp cc (iadd_ifcout_parameters a b ty ) y ))
+  (lower_icmp cc (alu_add a b) y ty)
+)
+
+(rule
+  (lower (icmp cc  x  (iadd_ifcout_parameters a b ty) ))
+  (lower_icmp cc  x  (alu_add  a b ) ty)
+)
+
 
 (decl gen_fcmp(FloatCC Value Value Type)Reg)
 (rule
@@ -962,7 +976,7 @@
 )
 
 (rule
-  (lower (trapif _ (iadd_ifcout_parameter a b ty) trap_code ))
+  (lower (trapif _ (iadd_ifcout_parameters a b ty) trap_code ))
   (let
     (
       (tmp InstOutput (lower_iadd_overflow  a b ty  ) )

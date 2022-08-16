@@ -13,14 +13,14 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   uext.w t0,a0
-;   ld t1,0(gp)
+;   uext.w t0,a1
+;   ld t1,0(a0)
 ;   addi t1,t1,0
 ;   ugt t2,t0,t1##ty=i64
 ;   uext.b1 t2,t2
 ;   beq t2,zero,taken(label1),not_taken(label2)
 ; block1:
-;   add t2,gp,t0
+;   add t2,a0,t0
 ;   ugt t0,t0,t1##ty=i64
 ;   li a0,0
 ;   selectif_spectre_guard a0,a0,t2##test=t0
@@ -38,13 +38,13 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   uext.w t0,a0
+;   uext.w t0,a1
 ;   lui t4,16
 ;   ugt t1,t0,t4##ty=i64
 ;   uext.b1 t1,t1
 ;   beq t1,zero,taken(label1),not_taken(label2)
 ; block1:
-;   add t1,gp,t0
+;   add t1,a0,t0
 ;   lui t4,16
 ;   ugt t2,t0,t4##ty=i64
 ;   li a0,0
