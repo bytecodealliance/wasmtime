@@ -3226,3 +3226,46 @@
             (addd_const Xmm (x64_xmm_load_const $I16X8 (iadd_pairwise_addd_const_32))))
         (x64_paddd dst addd_const)))
 
+;; Rules for `swiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16X8 (swiden_low val @ (value_type $I8X16))))
+      (x64_pmovsxbw val))
+
+(rule (lower (has_type $I32X4 (swiden_low val @ (value_type $I16X8))))
+      (x64_pmovsxwd val))
+
+(rule (lower (has_type $I64X2 (swiden_low val @ (value_type $I32X4))))
+      (x64_pmovsxdq val))
+
+;; Rules for `swiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16X8 (swiden_high val @ (value_type $I8X16))))
+      (x64_pmovsxbw (x64_palignr val val 8 (OperandSize.Size32))))
+
+(rule (lower (has_type $I32X4 (swiden_high val @ (value_type $I16X8))))
+      (x64_pmovsxwd (x64_palignr val val 8 (OperandSize.Size32))))
+
+(rule (lower (has_type $I64X2 (swiden_high val @ (value_type $I32X4))))
+      (x64_pmovsxdq (x64_pshufd val 0xEE (OperandSize.Size32))))
+
+;; Rules for `uwiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16X8 (uwiden_low val @ (value_type $I8X16))))
+      (x64_pmovzxbw val))
+
+(rule (lower (has_type $I32X4 (uwiden_low val @ (value_type $I16X8))))
+      (x64_pmovzxwd val))
+
+(rule (lower (has_type $I64X2 (uwiden_low val @ (value_type $I32X4))))
+      (x64_pmovzxdq val))
+
+;; Rules for `uwiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16X8 (uwiden_high val @ (value_type $I8X16))))
+      (x64_pmovzxbw (x64_palignr val val 8 (OperandSize.Size32))))
+
+(rule (lower (has_type $I32X4 (uwiden_high val @ (value_type $I16X8))))
+      (x64_pmovzxwd (x64_palignr val val 8 (OperandSize.Size32))))
+
+(rule (lower (has_type $I64X2 (uwiden_high val @ (value_type $I32X4))))
+      (x64_pmovzxdq (x64_pshufd val 0xEE (OperandSize.Size32))))
