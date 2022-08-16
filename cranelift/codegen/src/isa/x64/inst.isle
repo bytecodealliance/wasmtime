@@ -3267,6 +3267,12 @@
 (decl iadd_pairwise_mul_const_32 () VCodeConstant)
 (extern constructor iadd_pairwise_mul_const_32 iadd_pairwise_mul_const_32)
 
+(decl iadd_pairwise_xor_const_32 () VCodeConstant)
+(extern constructor iadd_pairwise_xor_const_32 iadd_pairwise_xor_const_32)
+
+(decl iadd_pairwise_addd_const_32 () VCodeConstant)
+(extern constructor iadd_pairwise_addd_const_32 iadd_pairwise_addd_const_32)
+
 ;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type IcmpCondResult (enum (Condition (producer ProducesFlags) (cc CC))))

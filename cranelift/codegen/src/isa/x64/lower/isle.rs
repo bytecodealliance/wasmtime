@@ -793,6 +793,18 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         self.lower_ctx
             .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_MUL_CONST_32))
     }
+
+    #[inline]
+    fn iadd_pairwise_xor_const_32(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_XOR_CONST_32))
+    }
+
+    #[inline]
+    fn iadd_pairwise_addd_const_32(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_ADDD_CONST_32))
+    }
 }
 
 impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
@@ -924,4 +936,12 @@ const IADD_PAIRWISE_MUL_CONST_16: [u8; 16] = [0x01; 16];
 
 const IADD_PAIRWISE_MUL_CONST_32: [u8; 16] = [
     0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00,
+];
+
+const IADD_PAIRWISE_XOR_CONST_32: [u8; 16] = [
+    0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80,
+];
+
+const IADD_PAIRWISE_ADDD_CONST_32: [u8; 16] = [
+    0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00,
 ];
