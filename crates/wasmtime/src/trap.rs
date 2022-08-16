@@ -88,6 +88,9 @@ pub enum TrapCode {
     /// Execution has potentially run too long and may be interrupted.
     Interrupt,
 
+    /// Okay why is this defined three times i am losing my mind
+    NullReference,
+
     /// When the `component-model` feature is enabled this trap represents a
     /// function that was `canon lift`'d, then `canon lower`'d, then called.
     /// This combination of creation of a function in the component model
@@ -111,6 +114,7 @@ impl TrapCode {
             EnvTrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
             EnvTrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
             EnvTrapCode::Interrupt => TrapCode::Interrupt,
+            EnvTrapCode::NullReference => TrapCode::NullReference,
             EnvTrapCode::AlwaysTrapAdapter => TrapCode::AlwaysTrapAdapter,
         }
     }
@@ -131,6 +135,7 @@ impl fmt::Display for TrapCode {
             BadConversionToInteger => "invalid conversion to integer",
             UnreachableCodeReached => "wasm `unreachable` instruction executed",
             Interrupt => "interrupt",
+            NullReference => "null reference",
             AlwaysTrapAdapter => "degenerate component adapter called",
         };
         write!(f, "{}", desc)

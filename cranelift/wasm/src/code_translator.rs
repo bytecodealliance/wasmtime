@@ -2025,8 +2025,15 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::BrOnNull { .. }
         | Operator::BrOnNonNull { .. }
         | Operator::CallRef
-        | Operator::ReturnCallRef
-        | Operator::RefAsNonNull => todo!("Implement Operator::[BrOnNull,BrOnNonNull,CallRef] for translate_operator"), // TODO(dhil) fixme
+        | Operator::ReturnCallRef => {
+            todo!("Implement Operator::[BrOnNull,BrOnNonNull,CallRef] for translate_operator")
+        } // TODO(dhil) fixme
+        Operator::RefAsNonNull => {
+            let r = state.pop1();
+            let is_null = environ.translate_ref_is_null(builder.cursor(), r)?;
+            builder.ins().trapnz(is_null, ir::TrapCode::NullReference);
+            state.push1(r);
+        }
     };
     Ok(())
 }

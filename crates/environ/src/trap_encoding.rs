@@ -1,5 +1,6 @@
 use object::write::{Object, StandardSegment};
 use object::{Bytes, LittleEndian, SectionKind, U32Bytes};
+
 use std::convert::TryFrom;
 use std::ops::Range;
 
@@ -98,6 +99,9 @@ pub enum TrapCode {
     /// Execution has potentially run too long and may be interrupted.
     /// This trap is resumable.
     Interrupt,
+
+    /// A reference was null
+    NullReference,
 
     /// Used for the component model when functions are lifted/lowered in a way
     /// that generates a function that always traps.
@@ -209,6 +213,7 @@ pub fn lookup_trap_code(section: &[u8], offset: usize) -> Option<TrapCode> {
         BadConversionToInteger
         UnreachableCodeReached
         Interrupt
+        NullReference
         AlwaysTrapAdapter
     }
 

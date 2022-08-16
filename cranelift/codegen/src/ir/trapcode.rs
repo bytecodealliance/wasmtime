@@ -49,6 +49,9 @@ pub enum TrapCode {
     /// This trap is resumable.
     Interrupt,
 
+    /// A reference that should not be null was null
+    NullReference,
+
     /// A user-defined trap code.
     User(u16),
 }
@@ -68,6 +71,7 @@ impl Display for TrapCode {
             BadConversionToInteger => "bad_toint",
             UnreachableCodeReached => "unreachable",
             Interrupt => "interrupt",
+            NullReference => "null_reference",
             User(x) => return write!(f, "user{}", x),
         };
         f.write_str(identifier)
@@ -91,6 +95,7 @@ impl FromStr for TrapCode {
             "bad_toint" => Ok(BadConversionToInteger),
             "unreachable" => Ok(UnreachableCodeReached),
             "interrupt" => Ok(Interrupt),
+            "null_reference" => Ok(NullReference),
             _ if s.starts_with("user") => s[4..].parse().map(User).map_err(|_| ()),
             _ => Err(()),
         }

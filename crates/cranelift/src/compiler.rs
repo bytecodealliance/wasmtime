@@ -899,6 +899,7 @@ fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
             ir::TrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
             ir::TrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
             ir::TrapCode::Interrupt => TrapCode::Interrupt,
+            ir::TrapCode::NullReference => TrapCode::NullReference,
             ir::TrapCode::User(ALWAYS_TRAP_CODE) => TrapCode::AlwaysTrapAdapter,
 
             // these should never be emitted by wasmtime-cranelift
