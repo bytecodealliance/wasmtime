@@ -1,0 +1,81 @@
+test compile precise-output
+target x86_64
+
+function %f1(i16x8, i16x8) -> i8x16 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = snarrow v0, v1
+  return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   packsswb %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f2(i32x4, i32x4) -> i16x8 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = snarrow v0, v1
+  return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   packssdw %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f3(f64x2, i64x2) -> i32x4 {
+block0(v0: f64x2, v1: i64x2):
+  v2 = fcvt_to_sint_sat.i64x2 v0
+  v3 = snarrow v2, v1
+  return v3
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm7
+;   movdqa  %xmm7, %xmm8
+;   movdqa  %xmm7, %xmm10
+;   cmppd   $0, %xmm8, %xmm10, %xmm8
+;   load_const VCodeConstant(0), %xmm10
+;   andps   %xmm8, %xmm10, %xmm8
+;   minpd   %xmm0, %xmm8, %xmm0
+;   cvttpd2dq %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f4(i16x8, i16x8) -> i8x16 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = unarrow v0, v1
+  return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   packuswb %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f5(i32x4, i32x4) -> i16x8 {
+block0(v0: i32x4, v1: i32x4):
+  v2 = unarrow v0, v1
+  return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   packusdw %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
