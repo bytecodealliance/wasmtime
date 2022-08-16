@@ -1,0 +1,73 @@
+test compile precise-output
+target x86_64
+
+function %f1(f32) -> f32 {
+block0(v0: f32):
+  v1 = fneg v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm5
+;   movl    $-2147483648, %edx
+;   movd    %edx, %xmm0
+;   movdqa  %xmm5, %xmm7
+;   xorps   %xmm0, %xmm7, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f2(f64) -> f64 {
+block0(v0: f64):
+  v1 = fneg v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm5
+;   movabsq $-9223372036854775808, %rdx
+;   movq    %rdx, %xmm0
+;   movdqa  %xmm5, %xmm7
+;   xorpd   %xmm0, %xmm7, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f3(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = fneg v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   xorps   %xmm5, %xmm5, %xmm5
+;   cmpps   $0, %xmm5, %xmm5, %xmm5
+;   pslld   %xmm5, $31, %xmm5
+;   xorps   %xmm0, %xmm5, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f4(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = fneg v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   xorps   %xmm5, %xmm5, %xmm5
+;   cmpps   $0, %xmm5, %xmm5, %xmm5
+;   psllq   %xmm5, $63, %xmm5
+;   xorpd   %xmm0, %xmm5, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
