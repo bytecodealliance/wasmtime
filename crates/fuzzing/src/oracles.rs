@@ -1087,7 +1087,9 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
 
     let case = input.arbitrary::<TestCase>()?;
 
-    let engine = component_test_util::engine();
+    let mut config = component_test_util::config();
+    config.debug_adapter_modules(input.arbitrary()?);
+    let engine = Engine::new(&config).unwrap();
     let mut store = Store::new(&engine, (Box::new([]) as Box<[Val]>, None));
     let wat = case.declarations().make_component();
     let wat = wat.as_bytes();

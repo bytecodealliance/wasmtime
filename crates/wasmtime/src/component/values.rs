@@ -875,10 +875,14 @@ impl Val {
             }) => {
                 next_mut(dst).write(ValRaw::u32(*discriminant));
                 value.lower(store, options, dst)?;
+
+                // For the remaining lowered representation of this variant that
+                // the payload didn't write we write out zeros here to ensure
+                // the entire variant is written.
                 let value_flat = value.ty().canonical_abi().flat_count(usize::MAX).unwrap();
                 let variant_flat = self.ty().canonical_abi().flat_count(usize::MAX).unwrap();
                 for _ in (1 + value_flat)..variant_flat {
-                    next_mut(dst).write(ValRaw::u32(0));
+                    next_mut(dst).write(ValRaw::u64(0));
                 }
             }
             Val::Enum(Enum { discriminant, .. }) => {

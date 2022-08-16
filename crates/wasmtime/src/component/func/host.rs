@@ -1,4 +1,5 @@
 use crate::component::func::{Memory, MemoryMut, Options};
+use crate::component::storage::slice_to_storage_mut;
 use crate::component::{ComponentParams, ComponentType, Lift, Lower, Type, Val};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{anyhow, bail, Context, Result};
@@ -197,7 +198,7 @@ where
     // There's a 2x2 matrix of whether parameters and results are stored on the
     // stack or on the heap. Each of the 4 branches here have a different
     // representation of the storage of arguments/returns which is represented
-    // by the type parameter that we pass to `cast_storage`.
+    // by the type parameter that we pass to `slice_to_storage_mut`.
     //
     // Also note that while four branches are listed here only one is taken for
     // any particular `Params` and `Return` combination. This should be
@@ -206,13 +207,15 @@ where
     // branch, but today is not that day.
     if Params::flatten_count() <= MAX_FLAT_PARAMS {
         if Return::flatten_count() <= MAX_FLAT_RESULTS {
-            let storage = cast_storage::<ReturnStack<Params::Lower, Return::Lower>>(storage);
+            let storage =
+                slice_to_storage_mut::<ReturnStack<Params::Lower, Return::Lower>>(storage);
             let params = Params::lift(cx.0, &options, &storage.assume_init_ref().args)?;
             let ret = closure(cx.as_context_mut(), params)?;
             flags.set_may_leave(false);
             ret.lower(&mut cx, &options, map_maybe_uninit!(storage.ret))?;
         } else {
-            let storage = cast_storage::<ReturnPointer<Params::Lower>>(storage).assume_init_ref();
+            let storage =
+                slice_to_storage_mut::<ReturnPointer<Params::Lower>>(storage).assume_init_ref();
             let params = Params::lift(cx.0, &options, &storage.args)?;
             let ret = closure(cx.as_context_mut(), params)?;
             let mut memory = MemoryMut::new(cx.as_context_mut(), &options);
@@ -223,7 +226,7 @@ where
     } else {
         let memory = Memory::new(cx.0, &options);
         if Return::flatten_count() <= MAX_FLAT_RESULTS {
-            let storage = cast_storage::<ReturnStack<ValRaw, Return::Lower>>(storage);
+            let storage = slice_to_storage_mut::<ReturnStack<ValRaw, Return::Lower>>(storage);
             let ptr =
                 validate_inbounds::<Params>(memory.as_slice(), &storage.assume_init_ref().args)?;
             let params = Params::load(&memory, &memory.as_slice()[ptr..][..Params::SIZE32])?;
@@ -231,7 +234,7 @@ where
             flags.set_may_leave(false);
             ret.lower(&mut cx, &options, map_maybe_uninit!(storage.ret))?;
         } else {
-            let storage = cast_storage::<ReturnPointer<ValRaw>>(storage).assume_init_ref();
+            let storage = slice_to_storage_mut::<ReturnPointer<ValRaw>>(storage).assume_init_ref();
             let ptr = validate_inbounds::<Params>(memory.as_slice(), &storage.args)?;
             let params = Params::load(&memory, &memory.as_slice()[ptr..][..Params::SIZE32])?;
             let ret = closure(cx.as_context_mut(), params)?;
@@ -261,22 +264,6 @@ fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<us
         bail!("pointer out of bounds")
     }
     Ok(ptr)
-}
-
-unsafe fn cast_storage<T>(storage: &mut [ValRaw]) -> &mut MaybeUninit<T> {
-    // Assertions that LLVM can easily optimize away but are sanity checks here
-    assert!(std::mem::size_of::<T>() % std::mem::size_of::<ValRaw>() == 0);
-    assert!(std::mem::align_of::<T>() == std::mem::align_of::<ValRaw>());
-    assert!(std::mem::align_of_val(storage) == std::mem::align_of::<T>());
-
-    // This is an actual runtime assertion which if performance calls for we may
-    // need to relax to a debug assertion. This notably tries to ensure that we
-    // stay within the bounds of the number of actual values given rather than
-    // reading past the end of an array. This shouldn't actually trip unless
-    // there's a bug in Wasmtime though.
-    assert!(std::mem::size_of_val(storage) >= std::mem::size_of::<T>());
-
-    &mut *storage.as_mut_ptr().cast()
 }
 
 unsafe fn handle_result(func: impl FnOnce() -> Result<()>) {
