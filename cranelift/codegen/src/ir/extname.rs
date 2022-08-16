@@ -39,7 +39,7 @@ impl UserFuncName {
 
     /// Create a new external name from a user-defined external function reference.
     pub fn user(namespace: u32, index: u32) -> Self {
-        Self::User(UserExternalName { namespace, index })
+        Self::User(UserExternalName::new(namespace, index))
     }
 }
 
@@ -68,6 +68,13 @@ pub struct UserExternalName {
     pub namespace: u32,
     /// Arbitrary.
     pub index: u32,
+}
+
+impl UserExternalName {
+    /// Creates a new [UserExternalName].
+    pub fn new(namespace: u32, index: u32) -> Self {
+        Self { namespace, index }
+    }
 }
 
 impl fmt::Display for UserExternalName {

@@ -2,7 +2,10 @@
 use anyhow::{anyhow, Result};
 use core::mem;
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::{condcodes::IntCC, Function, InstBuilder, Signature, UserFuncName};
+use cranelift_codegen::ir::{
+    condcodes::IntCC, ExternalName, Function, InstBuilder, Signature, UserExternalName,
+    UserFuncName,
+};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{ir, settings, CodegenError, Context};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
@@ -15,7 +18,27 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use thiserror::Error;
 
-const TRAMPOLINE_NAMESPACE: u32 = 0;
+const TESTFILE_NAMESPACE: u32 = 0;
+
+/// Holds information about a previously defined function.
+#[derive(Debug)]
+struct DefinedFunction {
+    /// This is the name that the function is internally known as.
+    ///
+    /// The JIT module does not support linking / calling [TestcaseName]'s, so
+    /// we rename every function into a [UserExternalName].
+    ///
+    /// By doing this we also have to rename functions that previously were using a
+    /// [UserFuncName], since they may now be in conflict after the renaming that
+    /// occurred.
+    new_name: UserExternalName,
+
+    /// The function signature
+    signature: ir::Signature,
+
+    /// JIT [FuncId]
+    func_id: FuncId,
+}
 
 /// Compile a test case.
 ///
@@ -47,14 +70,17 @@ pub struct TestFileCompiler {
     module: JITModule,
     ctx: Context,
 
-    /// Maps the [UserFuncName] of a function to its [FuncId].
-    function_ids: HashMap<UserFuncName, FuncId>,
+    /// Holds info about the functions that have already been defined.
+    /// Use look them up by their original [UserFuncName] since that's how the caller
+    /// passes them to us.
+    defined_functions: HashMap<UserFuncName, DefinedFunction>,
 
-    /// Maps the [UserFuncName] of a function to its [Signature].
-    function_signatures: HashMap<UserFuncName, Signature>,
-
-    /// Maps the [UserFuncName] of a function to its trampoline [FuncId]. (not the [UserFuncName] of the trampoline!)
-    trampoline_ids: HashMap<UserFuncName, FuncId>,
+    /// We deduplicate trampolines by the signature of the function that they target.
+    /// This map holds as a key the [Signature] of the target function, and as a value
+    /// the [UserFuncName] of the trampoline for that [Signature].
+    ///
+    /// The trampoline is defined in `defined_functions` as any other regular function.
+    trampolines: HashMap<Signature, UserFuncName>,
 }
 
 impl TestFileCompiler {
@@ -69,9 +95,8 @@ impl TestFileCompiler {
         Self {
             module,
             ctx,
-            function_ids: HashMap::new(),
-            function_signatures: HashMap::new(),
-            trampoline_ids: HashMap::new(),
+            defined_functions: HashMap::new(),
+            trampolines: HashMap::new(),
         }
     }
 
@@ -109,60 +134,107 @@ impl TestFileCompiler {
 
     /// Declares a function an registers it as a linkable and callable target internally
     pub fn declare_function(&mut self, func: &Function) -> Result<()> {
-        let name = format!("{}", &func.name);
-
-        match self.function_ids.entry(func.name.clone()) {
+        let next_id = self.defined_functions.len() as u32;
+        match self.defined_functions.entry(func.name.clone()) {
             Entry::Occupied(_) => {
                 anyhow::bail!("Duplicate function with name {} found!", &func.name)
             }
             Entry::Vacant(v) => {
-                v.insert(
+                let name = func.name.to_string();
+                let func_id =
                     self.module
-                        .declare_function(&name, Linkage::Local, &func.signature)?,
-                );
+                        .declare_function(&name, Linkage::Local, &func.signature)?;
 
-                self.function_signatures
-                    .insert(func.name.clone(), func.signature.clone());
+                v.insert(DefinedFunction {
+                    new_name: UserExternalName::new(TESTFILE_NAMESPACE, next_id),
+                    signature: func.signature.clone(),
+                    func_id,
+                });
             }
         };
 
         Ok(())
     }
 
+    /// Renames the function to its new [UserExternalName], as well as any other function that
+    /// it may reference.
+    ///
+    /// We have to do this since the JIT cannot link Testcase functions.
+    fn apply_func_rename(
+        &self,
+        mut func: Function,
+        defined_func: &DefinedFunction,
+    ) -> Result<Function> {
+        // First, rename the function
+        func.name = UserFuncName::User(defined_func.new_name.clone());
+
+        // Rename any functions that it references
+        // Do this in stages to appease the borrow checker
+        let mut redefines = Vec::with_capacity(func.dfg.ext_funcs.len());
+        for (ext_ref, ext_func) in &func.dfg.ext_funcs {
+            let old_name = match &ext_func.name {
+                ExternalName::TestCase(tc) => UserFuncName::Testcase(tc.clone()),
+                ExternalName::User(username) => {
+                    UserFuncName::User(func.params.user_named_funcs()[*username].clone())
+                }
+                // The other cases don't need renaming, so lets just continue...
+                _ => continue,
+            };
+
+            let target_df = self.defined_functions.get(&old_name).ok_or(anyhow!(
+                "Undeclared function {} is referenced by {}!",
+                &old_name,
+                &func.name
+            ))?;
+
+            redefines.push((ext_ref, target_df.new_name.clone()));
+        }
+
+        // Now register the redefines
+        for (ext_ref, new_name) in redefines.into_iter() {
+            // Register the new name in the func, so that we can get a reference to it.
+            let new_name_ref = func.params.ensure_user_func_name(new_name);
+
+            // Finally rename the ExtFunc
+            func.dfg.ext_funcs[ext_ref].name = ExternalName::User(new_name_ref)
+        }
+
+        Ok(func)
+    }
+
     /// Defines the body of a function
     pub fn define_function(&mut self, func: Function) -> Result<()> {
-        let func_id = self
-            .function_ids
+        let defined_func = self
+            .defined_functions
             .get(&func.name)
             .ok_or(anyhow!("Undeclared function {} found!", &func.name))?;
 
-        self.ctx.func = func;
-        self.module.define_function(*func_id, &mut self.ctx)?;
+        self.ctx.func = self.apply_func_rename(func, defined_func)?;
+        self.module
+            .define_function(defined_func.func_id, &mut self.ctx)?;
         self.module.clear_context(&mut self.ctx);
         Ok(())
     }
 
-    /// Creates and registers a trampoline for a function
+    /// Creates and registers a trampoline for a function if none exists.
     pub fn create_trampoline_for_function(&mut self, func: &Function) -> Result<()> {
-        if !self.function_ids.contains_key(&func.name) {
+        if !self.defined_functions.contains_key(&func.name) {
             anyhow::bail!("Undeclared function {} found!", &func.name);
         }
 
-        // Select the next available id by counting the existing trampolines
-        let trampoline_name_id = self.trampoline_ids.len() as u32;
-        let trampoline_extname = UserFuncName::user(TRAMPOLINE_NAMESPACE, trampoline_name_id);
-        let trampoline = make_trampoline(trampoline_extname, &func.signature, self.module.isa());
+        // Check if a trampoline for this function signature already exists
+        if self.trampolines.contains_key(&func.signature) {
+            return Ok(());
+        }
 
-        // Declare function requests a str name, so we use the original name with a _trampoline suffixed
-        let trampoline_name = format!("{}_trampoline", &func.name);
-        let trampoline_id =
-            self.module
-                .declare_function(&trampoline_name, Linkage::Local, &func.signature)?;
-        self.trampoline_ids.insert(func.name.clone(), trampoline_id);
+        // Create a trampoline and register it
+        let name = UserFuncName::user(TESTFILE_NAMESPACE, self.defined_functions.len() as u32);
+        let trampoline = make_trampoline(name.clone(), &func.signature, self.module.isa());
 
-        self.ctx.func = trampoline;
-        self.module.define_function(trampoline_id, &mut self.ctx)?;
-        self.module.clear_context(&mut self.ctx);
+        self.declare_function(&trampoline)?;
+        self.define_function(trampoline)?;
+
+        self.trampolines.insert(func.signature.clone(), name);
 
         Ok(())
     }
@@ -176,9 +248,8 @@ impl TestFileCompiler {
 
         Ok(CompiledTestFile {
             module: Some(self.module),
-            function_ids: self.function_ids,
-            function_signatures: self.function_signatures,
-            trampoline_ids: self.trampoline_ids,
+            defined_functions: self.defined_functions,
+            trampolines: self.trampolines,
         })
     }
 }
@@ -189,14 +260,13 @@ pub struct CompiledTestFile {
     /// Store it in an [Option] so that we can later drop it.
     module: Option<JITModule>,
 
-    /// Maps the [UserFuncName] of a function to its [FuncId].
-    function_ids: HashMap<UserFuncName, FuncId>,
+    /// Holds info about the functions that have been registered in `module`.
+    /// See [TestFileCompiler] for more info.
+    defined_functions: HashMap<UserFuncName, DefinedFunction>,
 
-    /// Maps the [UserFuncName] of a function to its [Signature].
-    function_signatures: HashMap<UserFuncName, Signature>,
-
-    /// Maps the [UserFuncName] of a function to its trampoline [FuncId]. (not the [UserFuncName] of the trampoline!)
-    trampoline_ids: HashMap<UserFuncName, FuncId>,
+    /// Trampolines available in this [JITModule].
+    /// See [TestFileCompiler] for more info.
+    trampolines: HashMap<Signature, UserFuncName>,
 }
 
 impl CompiledTestFile {
@@ -204,11 +274,17 @@ impl CompiledTestFile {
     ///
     /// Returns None if [TestFileCompiler::create_trampoline_for_function] wasn't called for this function.
     pub fn get_trampoline(&self, func: &Function) -> Option<Trampoline> {
+        let defined_func = self.defined_functions.get(&func.name)?;
+        let trampoline_id = self
+            .trampolines
+            .get(&func.signature)
+            .and_then(|name| self.defined_functions.get(name))
+            .map(|df| df.func_id)?;
         Some(Trampoline {
             module: self.module.as_ref()?,
-            func_id: *self.function_ids.get(&func.name)?,
-            func_signature: self.function_signatures.get(&func.name)?,
-            trampoline_id: *self.trampoline_ids.get(&func.name)?,
+            func_id: defined_func.func_id,
+            func_signature: &defined_func.signature,
+            trampoline_id,
         })
     }
 }
