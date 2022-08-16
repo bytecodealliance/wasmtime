@@ -566,38 +566,12 @@ fn lower_insn_to_regs(
         | Opcode::UwidenHigh
         | Opcode::UwidenLow
         | Opcode::SwidenHigh
-        | Opcode::SwidenLow => {
+        | Opcode::SwidenLow
+        | Opcode::Snarrow
+        | Opcode::Unarrow => {
             implemented_in_isle(ctx);
         }
 
-        Opcode::Snarrow | Opcode::Unarrow => {
-            let input_ty = ctx.input_ty(insn, 0);
-            let output_ty = ctx.output_ty(insn, 0);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            if output_ty.is_vector() {
-                match op {
-                    Opcode::Snarrow => implemented_in_isle(ctx),
-                    Opcode::Unarrow => match (input_ty, output_ty) {
-                        (types::I16X8, types::I8X16) => {
-                            let src1 = put_input_in_reg(ctx, inputs[0]);
-                            let src2 = put_input_in_reg(ctx, inputs[1]);
-                            ctx.emit(Inst::gen_move(dst, src1, input_ty));
-                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Packuswb, RegMem::reg(src2), dst));
-                        }
-                        (types::I32X4, types::I16X8) => {
-                            let src1 = put_input_in_reg(ctx, inputs[0]);
-                            let src2 = put_input_in_reg(ctx, inputs[1]);
-                            ctx.emit(Inst::gen_move(dst, src1, input_ty));
-                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Packusdw, RegMem::reg(src2), dst));
-                        }
-                        _ => unreachable!(),
-                    },
-                    _ => unreachable!(),
-                }
-            } else {
-                panic!("Unsupported non-vector type for widen instruction {:?}", ty);
-            }
-        }
         Opcode::Bitcast => {
             let input_ty = ctx.input_ty(insn, 0);
             let output_ty = ctx.output_ty(insn, 0);

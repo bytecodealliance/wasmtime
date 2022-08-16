@@ -2505,6 +2505,16 @@
 (rule (x64_packssdw src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Packssdw) src1 src2))
 
+;; Helper for creating `packuswb` instructions.
+(decl x64_packuswb (Xmm XmmMem) Xmm)
+(rule (x64_packuswb src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Packuswb) src1 src2))
+
+;; Helper for creating `packusdw` instructions.
+(decl x64_packusdw (Xmm XmmMem) Xmm)
+(rule (x64_packusdw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Packusdw) src1 src2))
+
 ;; Helper for creating `MInst.XmmRmRImm` instructions.
 (decl xmm_rm_r_imm (SseOpcode Reg RegMem u8 OperandSize) Xmm)
 (rule (xmm_rm_r_imm op src1 src2 imm size)

@@ -3300,3 +3300,11 @@
             (tmp1 Xmm (x64_andps tmp1 umax_mask))
             (dst Xmm (x64_minpd a tmp1)))
         (x64_cvttpd2dq dst)))
+
+;; Rules for `unarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8X16 (unarrow a @ (value_type $I16X8) b)))
+      (x64_packuswb a b))
+
+(rule (lower (has_type $I16X8 (unarrow a @ (value_type $I32X4) b)))
+      (x64_packusdw a b))
