@@ -3281,3 +3281,17 @@
 
 ;; We're missing a `unarrow` case for $I64X2
 ;; https://github.com/bytecodealliance/wasmtime/issues/4734
+
+;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (bitcast src @ (value_type $F32))))
+      (bitcast_xmm_to_gpr $F32 src))
+
+(rule (lower (has_type $F32 (bitcast src @ (value_type $I32))))
+      (bitcast_gpr_to_xmm $I32 src))
+
+(rule (lower (has_type $I64 (bitcast src @ (value_type $F64))))
+      (bitcast_xmm_to_gpr $F64 src))
+
+(rule (lower (has_type $F64 (bitcast src @ (value_type $I64))))
+      (bitcast_gpr_to_xmm $I64 src))

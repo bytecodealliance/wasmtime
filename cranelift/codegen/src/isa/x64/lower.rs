@@ -568,56 +568,9 @@ fn lower_insn_to_regs(
         | Opcode::SwidenHigh
         | Opcode::SwidenLow
         | Opcode::Snarrow
-        | Opcode::Unarrow => {
+        | Opcode::Unarrow
+        | Opcode::Bitcast => {
             implemented_in_isle(ctx);
-        }
-
-        Opcode::Bitcast => {
-            let input_ty = ctx.input_ty(insn, 0);
-            let output_ty = ctx.output_ty(insn, 0);
-            match (input_ty, output_ty) {
-                (types::F32, types::I32) => {
-                    let src = put_input_in_reg(ctx, inputs[0]);
-                    let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                    ctx.emit(Inst::xmm_to_gpr(
-                        SseOpcode::Movd,
-                        src,
-                        dst,
-                        OperandSize::Size32,
-                    ));
-                }
-                (types::I32, types::F32) => {
-                    let src = input_to_reg_mem(ctx, inputs[0]);
-                    let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                    ctx.emit(Inst::gpr_to_xmm(
-                        SseOpcode::Movd,
-                        src,
-                        OperandSize::Size32,
-                        dst,
-                    ));
-                }
-                (types::F64, types::I64) => {
-                    let src = put_input_in_reg(ctx, inputs[0]);
-                    let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                    ctx.emit(Inst::xmm_to_gpr(
-                        SseOpcode::Movq,
-                        src,
-                        dst,
-                        OperandSize::Size64,
-                    ));
-                }
-                (types::I64, types::F64) => {
-                    let src = input_to_reg_mem(ctx, inputs[0]);
-                    let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                    ctx.emit(Inst::gpr_to_xmm(
-                        SseOpcode::Movq,
-                        src,
-                        OperandSize::Size64,
-                        dst,
-                    ));
-                }
-                _ => unreachable!("invalid bitcast from {:?} to {:?}", input_ty, output_ty),
-            }
         }
 
         Opcode::Fabs | Opcode::Fneg => {
