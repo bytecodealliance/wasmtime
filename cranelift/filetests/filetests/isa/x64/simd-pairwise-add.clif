@@ -31,8 +31,46 @@ block0(v0: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   load_const VCodeConstant(0), %xmm3
+;   pmaddwd %xmm0, %xmm3, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %fn3(i8x16) -> i16x8 {
+block0(v0: i8x16):
+  v1 = uwiden_low v0
+  v2 = uwiden_high v0
+  v3 = iadd_pairwise v1, v2
+  return v3
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
 ;   load_const VCodeConstant(0), %xmm4
-;   pmaddwd %xmm0, %xmm4, %xmm0
+;   pmaddubsw %xmm0, %xmm4, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %fn4(i16x8) -> i32x4 {
+block0(v0: i16x8):
+  v1 = uwiden_low v0
+  v2 = uwiden_high v0
+  v3 = iadd_pairwise v1, v2
+  return v3
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_const VCodeConstant(0), %xmm4
+;   pxor    %xmm0, %xmm4, %xmm0
+;   load_const VCodeConstant(1), %xmm8
+;   pmaddwd %xmm0, %xmm8, %xmm0
+;   load_const VCodeConstant(2), %xmm11
+;   paddd   %xmm0, %xmm11, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
