@@ -472,19 +472,9 @@ where
             &arg(0)?,
             &arg(1)?,
         )?),
-        Opcode::IcmpImm => assign(icmp(
-            ctrl_ty,
-            inst.cond_code().unwrap(),
-            &arg(0)?,
-            &imm_as_ctrl_ty()?,
-        )?),
-        Opcode::Ifcmp | Opcode::IfcmpImm => {
+        Opcode::Ifcmp => {
             let arg0 = arg(0)?;
-            let arg1 = match inst.opcode() {
-                Opcode::Ifcmp => arg(1)?,
-                Opcode::IfcmpImm => imm_as_ctrl_ty()?,
-                _ => unreachable!(),
-            };
+            let arg1 = arg(1)?;
             state.clear_flags();
             for f in &[
                 IntCC::Equal,
@@ -639,13 +629,6 @@ where
         Opcode::Sdiv => binary_can_trap(Value::div, arg(0)?, arg(1)?)?,
         Opcode::Urem => binary_unsigned_can_trap(Value::rem, arg(0)?, arg(1)?)?,
         Opcode::Srem => binary_can_trap(Value::rem, arg(0)?, arg(1)?)?,
-        Opcode::IaddImm => binary(Value::add, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::ImulImm => binary(Value::mul, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::UdivImm => binary_unsigned_can_trap(Value::div, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::SdivImm => binary_can_trap(Value::div, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::UremImm => binary_unsigned_can_trap(Value::rem, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::SremImm => binary_can_trap(Value::rem, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::IrsubImm => binary(Value::sub, imm_as_ctrl_ty()?, arg(0)?)?,
         Opcode::IaddCin => choose(
             Value::into_bool(arg(2)?)?,
             Value::add(Value::add(arg(0)?, arg(1)?)?, Value::int(1, ctrl_ty)?)?,
@@ -697,19 +680,11 @@ where
         Opcode::BandNot => binary(Value::and, arg(0)?, Value::not(arg(1)?)?)?,
         Opcode::BorNot => binary(Value::or, arg(0)?, Value::not(arg(1)?)?)?,
         Opcode::BxorNot => binary(Value::xor, arg(0)?, Value::not(arg(1)?)?)?,
-        Opcode::BandImm => binary(Value::and, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::BorImm => binary(Value::or, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::BxorImm => binary(Value::xor, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::Rotl => binary(Value::rotl, arg(0)?, arg(1)?)?,
         Opcode::Rotr => binary(Value::rotr, arg(0)?, arg(1)?)?,
-        Opcode::RotlImm => binary(Value::rotl, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::RotrImm => binary(Value::rotr, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::Ishl => binary(Value::shl, arg(0)?, arg(1)?)?,
         Opcode::Ushr => binary_unsigned(Value::ushr, arg(0)?, arg(1)?)?,
         Opcode::Sshr => binary(Value::ishr, arg(0)?, arg(1)?)?,
-        Opcode::IshlImm => binary(Value::shl, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::UshrImm => binary_unsigned(Value::ushr, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::SshrImm => binary(Value::ishr, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::Bitrev => assign(Value::reverse_bits(arg(0)?)?),
         Opcode::Clz => assign(arg(0)?.leading_zeros()?),
         Opcode::Cls => {

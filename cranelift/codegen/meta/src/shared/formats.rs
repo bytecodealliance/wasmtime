@@ -7,7 +7,6 @@ pub(crate) struct Formats {
     pub(crate) atomic_rmw: Rc<InstructionFormat>,
     pub(crate) binary: Rc<InstructionFormat>,
     pub(crate) binary_imm8: Rc<InstructionFormat>,
-    pub(crate) binary_imm64: Rc<InstructionFormat>,
     pub(crate) branch: Rc<InstructionFormat>,
     pub(crate) branch_float: Rc<InstructionFormat>,
     pub(crate) branch_icmp: Rc<InstructionFormat>,
@@ -22,7 +21,6 @@ pub(crate) struct Formats {
     pub(crate) func_addr: Rc<InstructionFormat>,
     pub(crate) heap_addr: Rc<InstructionFormat>,
     pub(crate) int_compare: Rc<InstructionFormat>,
-    pub(crate) int_compare_imm: Rc<InstructionFormat>,
     pub(crate) int_cond: Rc<InstructionFormat>,
     pub(crate) int_cond_trap: Rc<InstructionFormat>,
     pub(crate) int_select: Rc<InstructionFormat>,
@@ -74,8 +72,6 @@ impl Formats {
 
             binary_imm8: Builder::new("BinaryImm8").value().imm(&imm.uimm8).build(),
 
-            binary_imm64: Builder::new("BinaryImm64").value().imm(&imm.imm64).build(),
-
             // The select instructions are controlled by the second VALUE operand.
             // The first VALUE operand is the controlling flag which has a derived type.
             // The fma instruction has the same constraint on all inputs.
@@ -108,12 +104,6 @@ impl Formats {
                 .imm(&imm.intcc)
                 .value()
                 .value()
-                .build(),
-
-            int_compare_imm: Builder::new("IntCompareImm")
-                .imm(&imm.intcc)
-                .value()
-                .imm(&imm.imm64)
                 .build(),
 
             int_cond: Builder::new("IntCond").imm(&imm.intcc).value().build(),

@@ -3,7 +3,9 @@ use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature};
+use cranelift_codegen::ir::{
+    AbiParam, ArgumentPurpose, Function, InstBuilder, InstImmBuilder, Signature,
+};
 use cranelift_codegen::isa::{self, TargetFrontendConfig, TargetIsa};
 use cranelift_entity::EntityRef;
 use cranelift_frontend::FunctionBuilder;

@@ -2,7 +2,7 @@
 use anyhow::Result;
 use core::mem;
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::{condcodes::IntCC, Function, InstBuilder, Signature};
+use cranelift_codegen::ir::{condcodes::IntCC, Function, InstBuilder, InstImmBuilder, Signature};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{ir, settings, CodegenError};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
@@ -405,22 +405,27 @@ mod test {
 
         let compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
         let trampoline = make_trampoline(&function.signature, compiler.isa.as_ref());
-        assert!(format!("{}", trampoline).ends_with(
-            "sig0 = (f32, i8, i64x2, b1) -> f32x4, b64 fast
+        assert!(
+            format!("{}", trampoline).ends_with(
+                "sig0 = (f32, i8, i64x2, b1) -> f32x4, b64 fast
 
 block0(v0: i64, v1: i64):
     v2 = load.f32 notrap aligned v1
     v3 = load.i8 notrap aligned v1+16
     v4 = load.i64x2 notrap aligned little v1+32
     v5 = load.i8 notrap aligned v1+48
-    v6 = icmp_imm ne v5, 0
-    v7, v8 = call_indirect sig0, v0(v2, v3, v4, v6)
-    store notrap aligned little v7, v1
-    v9 = bint.i64 v8
-    store notrap aligned v9, v1+16
+    v6 = iconst.i8 0
+    v7 = icmp ne v5, v6
+    v8, v9 = call_indirect sig0, v0(v2, v3, v4, v7)
+    store notrap aligned little v8, v1
+    v10 = bint.i64 v9
+    store notrap aligned v10, v1+16
     return
 }
 "
-        ));
+            ),
+            "got:\n{}",
+            trampoline
+        );
     }
 }

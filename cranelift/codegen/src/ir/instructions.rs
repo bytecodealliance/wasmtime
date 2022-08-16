@@ -309,9 +309,7 @@ impl InstructionData {
             | &InstructionData::StackStore { offset, .. }
             | &InstructionData::TableAddr { offset, .. } => Some(DataValue::from(offset)),
             // 64-bit.
-            &InstructionData::UnaryImm { imm, .. }
-            | &InstructionData::BinaryImm64 { imm, .. }
-            | &InstructionData::IntCompareImm { imm, .. } => Some(DataValue::from(imm.bits())),
+            &InstructionData::UnaryImm { imm, .. } => Some(DataValue::from(imm.bits())),
             &InstructionData::UnaryIeee64 { imm, .. } => Some(DataValue::from(imm)),
             // 128-bit; though these immediates are present logically in the IR they are not
             // included in the `InstructionData` for memory-size reasons. This case, returning
@@ -343,8 +341,7 @@ impl InstructionData {
             | &InstructionData::IntCompare { cond, .. }
             | &InstructionData::IntCondTrap { cond, .. }
             | &InstructionData::BranchInt { cond, .. }
-            | &InstructionData::IntSelect { cond, .. }
-            | &InstructionData::IntCompareImm { cond, .. } => Some(cond),
+            | &InstructionData::IntSelect { cond, .. } => Some(cond),
             _ => None,
         }
     }
@@ -431,37 +428,7 @@ impl InstructionData {
     }
 
     #[inline]
-    pub(crate) fn sign_extend_immediates(&mut self, ctrl_typevar: Type) {
-        if ctrl_typevar.is_invalid() {
-            return;
-        }
-
-        let bit_width = ctrl_typevar.bits();
-
-        match self {
-            Self::BinaryImm64 {
-                opcode,
-                arg: _,
-                imm,
-            } => {
-                if *opcode == Opcode::SdivImm || *opcode == Opcode::SremImm {
-                    imm.sign_extend_from_width(bit_width);
-                }
-            }
-            Self::IntCompareImm {
-                opcode,
-                arg: _,
-                cond,
-                imm,
-            } => {
-                debug_assert_eq!(*opcode, Opcode::IcmpImm);
-                if cond.unsigned() != *cond {
-                    imm.sign_extend_from_width(bit_width);
-                }
-            }
-            _ => {}
-        }
-    }
+    pub(crate) fn sign_extend_immediates(&mut self, _ctrl_typevar: Type) {}
 }
 
 /// Information about branch and jump instructions.
@@ -821,12 +788,8 @@ mod tests {
         assert_eq!(x, y);
         assert_eq!(x.format(), InstructionFormat::Binary);
 
-        assert_eq!(format!("{:?}", Opcode::IaddImm), "IaddImm");
-        assert_eq!(Opcode::IaddImm.to_string(), "iadd_imm");
-
         // Check the matcher.
         assert_eq!("iadd".parse::<Opcode>(), Ok(Opcode::Iadd));
-        assert_eq!("iadd_imm".parse::<Opcode>(), Ok(Opcode::IaddImm));
         assert_eq!("iadd\0".parse::<Opcode>(), Err("Unknown opcode"));
         assert_eq!("".parse::<Opcode>(), Err("Unknown opcode"));
         assert_eq!("\0".parse::<Opcode>(), Err("Unknown opcode"));

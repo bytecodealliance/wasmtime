@@ -2,7 +2,7 @@
 //!
 //! This module defines cursor data types that can be used for inserting instructions.
 
-use crate::ir;
+use crate::ir::{self, InstBuilder, InstInserterBase};
 
 /// The possible positions of a cursor.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -596,6 +596,13 @@ impl<'f> FuncCursor<'f> {
     pub fn ins(&mut self) -> ir::InsertBuilder<&mut FuncCursor<'f>> {
         ir::InsertBuilder::new(self)
     }
+
+    /// Like DataFlowGraph::replace but remembers the current insertion position. If the
+    /// replacement instruction needs additional instructions inserted beforehand, they'll be
+    /// inserted here.
+    pub fn replace(&'_ mut self, inst: ir::Inst) -> CursorReplaceBuilder<'f, '_> {
+        CursorReplaceBuilder { cursor: self, inst }
+    }
 }
 
 impl<'f> Cursor for FuncCursor<'f> {
@@ -625,7 +632,7 @@ impl<'f> Cursor for FuncCursor<'f> {
     }
 }
 
-impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
+impl<'c, 'f> InstInserterBase<'c> for &'c mut FuncCursor<'f> {
     fn data_flow_graph(&self) -> &ir::DataFlowGraph {
         &self.func.dfg
     }
@@ -662,5 +669,39 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
             self.func.set_srcloc(inst, self.srcloc);
         }
         &mut self.func.dfg
+    }
+}
+
+/// Like ReplaceBuilder but with an associated cursor.
+pub struct CursorReplaceBuilder<'f, 'c> {
+    cursor: &'c mut FuncCursor<'f>,
+    inst: ir::Inst,
+}
+
+impl<'f, 'c> ir::InstBuilderBase<'c> for CursorReplaceBuilder<'f, 'c> {
+    fn data_flow_graph(&self) -> &ir::DataFlowGraph {
+        self.cursor.data_flow_graph()
+    }
+
+    fn data_flow_graph_mut(&mut self) -> &mut ir::DataFlowGraph {
+        self.cursor.data_flow_graph_mut()
+    }
+
+    fn build(
+        self,
+        data: ir::InstructionData,
+        ctrl_typevar: ir::Type,
+    ) -> (ir::Inst, &'c mut ir::DataFlowGraph) {
+        self.cursor
+            .func
+            .dfg
+            .replace(self.inst)
+            .build(data, ctrl_typevar)
+    }
+}
+
+impl<'f, 'c> ir::InstImmBuilder<'c> for CursorReplaceBuilder<'f, 'c> {
+    fn insert_const(&mut self, ty: ir::Type, c: ir::immediates::Imm64) -> ir::Value {
+        self.cursor.ins().iconst(ty, c)
     }
 }

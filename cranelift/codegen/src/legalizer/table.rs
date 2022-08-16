@@ -6,7 +6,7 @@
 use crate::cursor::{Cursor, FuncCursor};
 use crate::ir::condcodes::IntCC;
 use crate::ir::immediates::Offset32;
-use crate::ir::{self, InstBuilder};
+use crate::ir::{self, InstBuilder, InstImmBuilder};
 use crate::isa::TargetIsa;
 
 /// Expand a `table_addr` instruction according to the definition of the table.

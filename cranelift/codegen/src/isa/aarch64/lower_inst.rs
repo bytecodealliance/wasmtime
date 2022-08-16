@@ -1470,14 +1470,7 @@ pub(crate) fn lower_insn_to_regs(
             ctx.emit(alu_inst_imm12(ALUOp::AddS, ty, rd, rn, rm));
         }
 
-        Opcode::IaddImm
-        | Opcode::ImulImm
-        | Opcode::UdivImm
-        | Opcode::SdivImm
-        | Opcode::UremImm
-        | Opcode::SremImm
-        | Opcode::IrsubImm
-        | Opcode::IaddCin
+        Opcode::IaddCin
         | Opcode::IaddIfcin
         | Opcode::IaddCout
         | Opcode::IaddCarry
@@ -1487,17 +1480,7 @@ pub(crate) fn lower_insn_to_regs(
         | Opcode::IsubBout
         | Opcode::IsubIfbout
         | Opcode::IsubBorrow
-        | Opcode::IsubIfborrow
-        | Opcode::BandImm
-        | Opcode::BorImm
-        | Opcode::BxorImm
-        | Opcode::RotlImm
-        | Opcode::RotrImm
-        | Opcode::IshlImm
-        | Opcode::UshrImm
-        | Opcode::SshrImm
-        | Opcode::IcmpImm
-        | Opcode::IfcmpImm => {
+        | Opcode::IsubIfborrow => {
             panic!("ALU+imm and ALU+carry ops should not appear here!");
         }
 

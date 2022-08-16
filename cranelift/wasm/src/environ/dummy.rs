@@ -16,7 +16,7 @@ use crate::{
 use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
-use cranelift_codegen::ir::{self, InstBuilder};
+use cranelift_codegen::ir::{self, InstBuilder, InstImmBuilder};
 use cranelift_codegen::ir::{types::*, UserFuncName};
 use cranelift_codegen::isa::{CallConv, TargetFrontendConfig};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};

@@ -12,7 +12,8 @@ use crate::ir::{
     condcodes::{CondCode, IntCC},
     instructions::Opcode,
     types::{I32, I64},
-    Block, DataFlowGraph, Function, Inst, InstBuilder, InstructionData, Type, Value,
+    Block, DataFlowGraph, Function, Inst, InstBuilder, InstImmBuilder, InstructionData, Type,
+    Value,
 };
 use crate::isa::TargetIsa;
 use crate::timing;
@@ -81,87 +82,16 @@ enum DivRemByConstInfo {
     RemS64(Value, i64),
 }
 
-/// Possibly create a DivRemByConstInfo from the given components, by figuring out which, if any,
-/// of the 8 cases apply, and also taking care to sanity-check the immediate.
-fn package_up_divrem_info(
-    value: Value,
-    value_type: Type,
-    imm_i64: i64,
-    is_signed: bool,
-    is_rem: bool,
-) -> Option<DivRemByConstInfo> {
-    let imm_u64 = imm_i64 as u64;
-
-    match (is_signed, value_type) {
-        (false, I32) => {
-            if imm_u64 < 0x1_0000_0000 {
-                if is_rem {
-                    Some(DivRemByConstInfo::RemU32(value, imm_u64 as u32))
-                } else {
-                    Some(DivRemByConstInfo::DivU32(value, imm_u64 as u32))
-                }
-            } else {
-                None
-            }
-        }
-
-        (false, I64) => {
-            // unsigned 64, no range constraint.
-            if is_rem {
-                Some(DivRemByConstInfo::RemU64(value, imm_u64))
-            } else {
-                Some(DivRemByConstInfo::DivU64(value, imm_u64))
-            }
-        }
-
-        (true, I32) => {
-            if imm_u64 <= 0x7fff_ffff || imm_u64 >= 0xffff_ffff_8000_0000 {
-                if is_rem {
-                    Some(DivRemByConstInfo::RemS32(value, imm_u64 as i32))
-                } else {
-                    Some(DivRemByConstInfo::DivS32(value, imm_u64 as i32))
-                }
-            } else {
-                None
-            }
-        }
-
-        (true, I64) => {
-            // signed 64, no range constraint.
-            if is_rem {
-                Some(DivRemByConstInfo::RemS64(value, imm_u64 as i64))
-            } else {
-                Some(DivRemByConstInfo::DivS64(value, imm_u64 as i64))
-            }
-        }
-
-        _ => None,
-    }
-}
-
-/// Examine `inst` to see if it is a div or rem by a constant, and if so return the operands,
-/// signedness, operation size and div-vs-rem-ness in a handy bundle.
-fn get_div_info(inst: Inst, dfg: &DataFlowGraph) -> Option<DivRemByConstInfo> {
-    if let InstructionData::BinaryImm64 { opcode, arg, imm } = dfg[inst] {
-        let (is_signed, is_rem) = match opcode {
-            Opcode::UdivImm => (false, false),
-            Opcode::UremImm => (false, true),
-            Opcode::SdivImm => (true, false),
-            Opcode::SremImm => (true, true),
-            _ => return None,
-        };
-        return package_up_divrem_info(arg, dfg.value_type(arg), imm.into(), is_signed, is_rem);
-    }
-
-    None
-}
-
 /// Actually do the transformation given a bundle containing the relevant information.
 /// `divrem_info` describes a div or rem by a constant, that `pos` currently points at, and `inst`
 /// is the associated instruction.  `inst` is replaced by a sequence of other operations that
 /// calculate the same result. Note that there are various `divrem_info` cases where we cannot do
 /// any transformation, in which case `inst` is left unchanged.
-fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCursor, inst: Inst) {
+fn do_divrem_transformation<'a>(
+    divrem_info: &DivRemByConstInfo,
+    pos: &'a mut FuncCursor<'a>,
+    inst: Inst,
+) {
     let is_rem = match *divrem_info {
         DivRemByConstInfo::DivU32(_, _)
         | DivRemByConstInfo::DivU64(_, _)
@@ -199,9 +129,9 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             debug_assert!(k >= 1 && k <= 31);
             if is_rem {
                 let mask = (1u64 << k) - 1;
-                pos.func.dfg.replace(inst).band_imm(n1, mask as i64);
+                pos.replace(inst).band_imm(n1, mask as i64);
             } else {
-                pos.func.dfg.replace(inst).ushr_imm(n1, k as i64);
+                pos.replace(inst).ushr_imm(n1, k as i64);
             }
         }
 
@@ -269,9 +199,9 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             debug_assert!(k >= 1 && k <= 63);
             if is_rem {
                 let mask = (1u64 << k) - 1;
-                pos.func.dfg.replace(inst).band_imm(n1, mask as i64);
+                pos.replace(inst).band_imm(n1, mask as i64);
             } else {
-                pos.func.dfg.replace(inst).ushr_imm(n1, k as i64);
+                pos.replace(inst).ushr_imm(n1, k as i64);
             }
         }
 
@@ -352,7 +282,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                     // S32 div by a power-of-2
                     let t4 = pos.ins().sshr_imm(t3, k as i64);
                     if is_negative {
-                        pos.func.dfg.replace(inst).irsub_imm(t4, 0);
+                        pos.replace(inst).irsub_imm(t4, 0);
                     } else {
                         replace_single_result_with_alias(&mut pos.func.dfg, inst, t4);
                     }
@@ -427,7 +357,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                     // S64 div by a power-of-2
                     let t4 = pos.ins().sshr_imm(t3, k as i64);
                     if is_negative {
-                        pos.func.dfg.replace(inst).irsub_imm(t4, 0);
+                        pos.replace(inst).irsub_imm(t4, 0);
                     } else {
                         replace_single_result_with_alias(&mut pos.func.dfg, inst, t4);
                     }
@@ -610,12 +540,7 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, 
 
 mod simplify {
     use super::*;
-    use crate::ir::{
-        dfg::ValueDef,
-        immediates,
-        instructions::{Opcode, ValueList},
-        types::{B8, I16, I32, I8},
-    };
+    use crate::ir::{dfg::ValueDef, immediates, instructions::Opcode, types::B8};
     use std::marker::PhantomData;
 
     pub struct PeepholeOptimizer<'a, 'b> {
@@ -635,7 +560,6 @@ mod simplify {
         native_word_width: u32,
     ) {
         simplify(pos, inst, native_word_width);
-        branch_opt(pos, inst);
     }
 
     #[inline]
@@ -652,56 +576,6 @@ mod simplify {
         None
     }
 
-    /// Try to transform [(x << N) >> N] into a (un)signed-extending move.
-    /// Returns true if the final instruction has been converted to such a move.
-    fn try_fold_extended_move(
-        pos: &mut FuncCursor,
-        inst: Inst,
-        opcode: Opcode,
-        arg: Value,
-        imm: immediates::Imm64,
-    ) -> bool {
-        if let ValueDef::Result(arg_inst, _) = pos.func.dfg.value_def(arg) {
-            if let InstructionData::BinaryImm64 {
-                opcode: Opcode::IshlImm,
-                arg: prev_arg,
-                imm: prev_imm,
-            } = &pos.func.dfg[arg_inst]
-            {
-                if imm != *prev_imm {
-                    return false;
-                }
-
-                let dest_ty = pos.func.dfg.ctrl_typevar(inst);
-                if dest_ty != pos.func.dfg.ctrl_typevar(arg_inst) || !dest_ty.is_int() {
-                    return false;
-                }
-
-                let imm_bits: i64 = imm.into();
-                let ireduce_ty = match (dest_ty.lane_bits() as i64).wrapping_sub(imm_bits) {
-                    8 => I8,
-                    16 => I16,
-                    32 => I32,
-                    _ => return false,
-                };
-                let ireduce_ty = ireduce_ty.by(dest_ty.lane_count()).unwrap();
-
-                // This becomes a no-op, since ireduce_ty has a smaller lane width than
-                // the argument type (also the destination type).
-                let arg = *prev_arg;
-                let narrower_arg = pos.ins().ireduce(ireduce_ty, arg);
-
-                if opcode == Opcode::UshrImm {
-                    pos.func.dfg.replace(inst).uextend(dest_ty, narrower_arg);
-                } else {
-                    pos.func.dfg.replace(inst).sextend(dest_ty, narrower_arg);
-                }
-                return true;
-            }
-        }
-        false
-    }
-
     /// Apply basic simplifications.
     ///
     /// This folds constants with arithmetic to form `_imm` instructions, and other minor
@@ -711,156 +585,8 @@ mod simplify {
     /// controlling type's width of the instruction. This would result in an illegal instruction that
     /// would likely be expanded back into an instruction on smaller types with the same initial
     /// opcode, creating unnecessary churn.
-    fn simplify(pos: &mut FuncCursor, inst: Inst, native_word_width: u32) {
+    fn simplify(pos: &mut FuncCursor, inst: Inst, _native_word_width: u32) {
         match pos.func.dfg[inst] {
-            InstructionData::Binary { opcode, args } => {
-                if let Some(mut imm) = resolve_imm64_value(&pos.func.dfg, args[1]) {
-                    let new_opcode = match opcode {
-                        Opcode::Iadd => Opcode::IaddImm,
-                        Opcode::Imul => Opcode::ImulImm,
-                        Opcode::Sdiv => Opcode::SdivImm,
-                        Opcode::Udiv => Opcode::UdivImm,
-                        Opcode::Srem => Opcode::SremImm,
-                        Opcode::Urem => Opcode::UremImm,
-                        Opcode::Band => Opcode::BandImm,
-                        Opcode::Bor => Opcode::BorImm,
-                        Opcode::Bxor => Opcode::BxorImm,
-                        Opcode::Rotl => Opcode::RotlImm,
-                        Opcode::Rotr => Opcode::RotrImm,
-                        Opcode::Ishl => Opcode::IshlImm,
-                        Opcode::Ushr => Opcode::UshrImm,
-                        Opcode::Sshr => Opcode::SshrImm,
-                        Opcode::Isub => {
-                            imm = imm.wrapping_neg();
-                            Opcode::IaddImm
-                        }
-                        Opcode::Ifcmp => Opcode::IfcmpImm,
-                        _ => return,
-                    };
-                    let ty = pos.func.dfg.ctrl_typevar(inst);
-                    if ty.bytes() <= native_word_width {
-                        pos.func
-                            .dfg
-                            .replace(inst)
-                            .BinaryImm64(new_opcode, ty, imm, args[0]);
-
-                        // Repeat for BinaryImm simplification.
-                        simplify(pos, inst, native_word_width);
-                    }
-                } else if let Some(imm) = resolve_imm64_value(&pos.func.dfg, args[0]) {
-                    let new_opcode = match opcode {
-                        Opcode::Iadd => Opcode::IaddImm,
-                        Opcode::Imul => Opcode::ImulImm,
-                        Opcode::Band => Opcode::BandImm,
-                        Opcode::Bor => Opcode::BorImm,
-                        Opcode::Bxor => Opcode::BxorImm,
-                        Opcode::Isub => Opcode::IrsubImm,
-                        _ => return,
-                    };
-                    let ty = pos.func.dfg.ctrl_typevar(inst);
-                    if ty.bytes() <= native_word_width {
-                        pos.func
-                            .dfg
-                            .replace(inst)
-                            .BinaryImm64(new_opcode, ty, imm, args[1]);
-                    }
-                }
-            }
-
-            InstructionData::BinaryImm64 { opcode, arg, imm } => {
-                let ty = pos.func.dfg.ctrl_typevar(inst);
-
-                let mut arg = arg;
-                let mut imm = imm;
-                match opcode {
-                    Opcode::IaddImm
-                    | Opcode::ImulImm
-                    | Opcode::BorImm
-                    | Opcode::BandImm
-                    | Opcode::BxorImm => {
-                        // Fold binary_op(C2, binary_op(C1, x)) into binary_op(binary_op(C1, C2), x)
-                        if let ValueDef::Result(arg_inst, _) = pos.func.dfg.value_def(arg) {
-                            if let InstructionData::BinaryImm64 {
-                                opcode: prev_opcode,
-                                arg: prev_arg,
-                                imm: prev_imm,
-                            } = &pos.func.dfg[arg_inst]
-                            {
-                                if opcode == *prev_opcode
-                                    && ty == pos.func.dfg.ctrl_typevar(arg_inst)
-                                {
-                                    let lhs: i64 = imm.into();
-                                    let rhs: i64 = (*prev_imm).into();
-                                    let new_imm = match opcode {
-                                        Opcode::BorImm => lhs | rhs,
-                                        Opcode::BandImm => lhs & rhs,
-                                        Opcode::BxorImm => lhs ^ rhs,
-                                        Opcode::IaddImm => lhs.wrapping_add(rhs),
-                                        Opcode::ImulImm => lhs.wrapping_mul(rhs),
-                                        _ => panic!("can't happen"),
-                                    };
-                                    let new_imm = immediates::Imm64::from(new_imm);
-                                    let new_arg = *prev_arg;
-                                    pos.func
-                                        .dfg
-                                        .replace(inst)
-                                        .BinaryImm64(opcode, ty, new_imm, new_arg);
-                                    imm = new_imm;
-                                    arg = new_arg;
-                                }
-                            }
-                        }
-                    }
-
-                    Opcode::UshrImm | Opcode::SshrImm => {
-                        if pos.func.dfg.ctrl_typevar(inst).bytes() <= native_word_width
-                            && try_fold_extended_move(pos, inst, opcode, arg, imm)
-                        {
-                            return;
-                        }
-                    }
-
-                    _ => {}
-                };
-
-                // Replace operations that are no-ops.
-                match (opcode, imm.into()) {
-                    (Opcode::IaddImm, 0)
-                    | (Opcode::ImulImm, 1)
-                    | (Opcode::SdivImm, 1)
-                    | (Opcode::UdivImm, 1)
-                    | (Opcode::BorImm, 0)
-                    | (Opcode::BandImm, -1)
-                    | (Opcode::BxorImm, 0)
-                    | (Opcode::RotlImm, 0)
-                    | (Opcode::RotrImm, 0)
-                    | (Opcode::IshlImm, 0)
-                    | (Opcode::UshrImm, 0)
-                    | (Opcode::SshrImm, 0) => {
-                        // Alias the result value with the original argument.
-                        replace_single_result_with_alias(&mut pos.func.dfg, inst, arg);
-                    }
-                    (Opcode::ImulImm, 0) | (Opcode::BandImm, 0) => {
-                        // Replace by zero.
-                        pos.func.dfg.replace(inst).iconst(ty, 0);
-                    }
-                    (Opcode::BorImm, -1) => {
-                        // Replace by minus one.
-                        pos.func.dfg.replace(inst).iconst(ty, -1);
-                    }
-                    _ => {}
-                }
-            }
-
-            InstructionData::IntCompare { opcode, cond, args } => {
-                debug_assert_eq!(opcode, Opcode::Icmp);
-                if let Some(imm) = resolve_imm64_value(&pos.func.dfg, args[1]) {
-                    if pos.func.dfg.ctrl_typevar(inst).bytes() <= native_word_width {
-                        pos.func.dfg.replace(inst).icmp_imm(cond, args[0], imm);
-                    }
-                }
-            }
-
             InstructionData::CondTrap { .. }
             | InstructionData::Branch { .. }
             | InstructionData::Ternary {
@@ -950,84 +676,6 @@ mod simplify {
             _ => {}
         }
     }
-
-    struct BranchOptInfo {
-        br_inst: Inst,
-        cmp_arg: Value,
-        args: ValueList,
-        new_opcode: Opcode,
-    }
-
-    /// Fold comparisons into branch operations when possible.
-    ///
-    /// This matches against operations which compare against zero, then use the
-    /// result in a `brz` or `brnz` branch. It folds those two operations into a
-    /// single `brz` or `brnz`.
-    fn branch_opt(pos: &mut FuncCursor, inst: Inst) {
-        let mut info = if let InstructionData::Branch {
-            opcode: br_opcode,
-            args: ref br_args,
-            ..
-        } = pos.func.dfg[inst]
-        {
-            let first_arg = {
-                let args = pos.func.dfg.inst_args(inst);
-                args[0]
-            };
-
-            let icmp_inst =
-                if let ValueDef::Result(icmp_inst, _) = pos.func.dfg.value_def(first_arg) {
-                    icmp_inst
-                } else {
-                    return;
-                };
-
-            if let InstructionData::IntCompareImm {
-                opcode: Opcode::IcmpImm,
-                arg: cmp_arg,
-                cond: cmp_cond,
-                imm: cmp_imm,
-            } = pos.func.dfg[icmp_inst]
-            {
-                let cmp_imm: i64 = cmp_imm.into();
-                if cmp_imm != 0 {
-                    return;
-                }
-
-                // icmp_imm returns non-zero when the comparison is true. So, if
-                // we're branching on zero, we need to invert the condition.
-                let cond = match br_opcode {
-                    Opcode::Brz => cmp_cond.inverse(),
-                    Opcode::Brnz => cmp_cond,
-                    _ => return,
-                };
-
-                let new_opcode = match cond {
-                    IntCC::Equal => Opcode::Brz,
-                    IntCC::NotEqual => Opcode::Brnz,
-                    _ => return,
-                };
-
-                BranchOptInfo {
-                    br_inst: inst,
-                    cmp_arg,
-                    args: br_args.clone(),
-                    new_opcode,
-                }
-            } else {
-                return;
-            }
-        } else {
-            return;
-        };
-
-        info.args.as_mut_slice(&mut pos.func.dfg.value_lists)[0] = info.cmp_arg;
-        if let InstructionData::Branch { ref mut opcode, .. } = pos.func.dfg[info.br_inst] {
-            *opcode = info.new_opcode;
-        } else {
-            panic!();
-        }
-    }
 }
 
 /// The main pre-opt pass.
@@ -1041,12 +689,6 @@ pub fn do_preopt(func: &mut Function, cfg: &mut ControlFlowGraph, isa: &dyn Targ
     while let Some(block) = pos.next_block() {
         while let Some(inst) = pos.next_inst() {
             simplify::apply_all(&mut optimizer, &mut pos, inst, native_word_width);
-
-            // Try to transform divide-by-constant into simpler operations.
-            if let Some(divrem_info) = get_div_info(inst, &pos.func.dfg) {
-                do_divrem_transformation(&divrem_info, &mut pos, inst);
-                continue;
-            }
 
             branch_order(&mut pos, cfg, block, inst);
         }

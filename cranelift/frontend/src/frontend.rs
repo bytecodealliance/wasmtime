@@ -9,9 +9,9 @@ use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{
     types, AbiParam, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, ExtFuncData,
     ExternalName, FuncRef, Function, GlobalValue, GlobalValueData, Heap, HeapData, Inst,
-    InstBuilder, InstBuilderBase, InstructionData, JumpTable, JumpTableData, LibCall, MemFlags,
-    RelSourceLoc, SigRef, Signature, StackSlot, StackSlotData, Type, Value, ValueLabel,
-    ValueLabelAssignments, ValueLabelStart,
+    InstBuilder, InstBuilderBase, InstImmBuilder, InstructionData, JumpTable, JumpTableData,
+    LibCall, MemFlags, RelSourceLoc, SigRef, Signature, StackSlot, StackSlotData, Type, Value,
+    ValueLabel, ValueLabelAssignments, ValueLabelStart,
 };
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_codegen::packed_option::PackedOption;
@@ -160,6 +160,12 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
             self.builder.fill_current_block()
         }
         (inst, &mut self.builder.func.dfg)
+    }
+}
+
+impl<'f, 'c> InstImmBuilder<'c> for FuncInstBuilder<'c, 'f> {
+    fn insert_const(&mut self, ty: ir::Type, c: ir::immediates::Imm64) -> Value {
+        self.builder.ins().iconst(ty, c)
     }
 }
 

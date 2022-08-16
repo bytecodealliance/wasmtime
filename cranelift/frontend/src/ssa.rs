@@ -766,7 +766,9 @@ mod tests {
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir::instructions::BranchInfo;
     use cranelift_codegen::ir::types::*;
-    use cranelift_codegen::ir::{Function, Inst, InstBuilder, JumpTableData, Opcode};
+    use cranelift_codegen::ir::{
+        Function, Inst, InstBuilder, InstImmBuilder, JumpTableData, Opcode,
+    };
     use cranelift_codegen::settings;
     use cranelift_codegen::verify_function;
 

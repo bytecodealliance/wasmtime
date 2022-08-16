@@ -245,14 +245,7 @@ impl LowerBackend for S390xBackend {
             | Opcode::BrTable => {
                 panic!("Branch opcode reached non-branch lowering logic!");
             }
-            Opcode::IaddImm
-            | Opcode::ImulImm
-            | Opcode::UdivImm
-            | Opcode::SdivImm
-            | Opcode::UremImm
-            | Opcode::SremImm
-            | Opcode::IrsubImm
-            | Opcode::IaddCin
+            Opcode::IaddCin
             | Opcode::IaddIfcin
             | Opcode::IaddCout
             | Opcode::IaddCarry
@@ -262,17 +255,7 @@ impl LowerBackend for S390xBackend {
             | Opcode::IsubBout
             | Opcode::IsubIfbout
             | Opcode::IsubBorrow
-            | Opcode::IsubIfborrow
-            | Opcode::BandImm
-            | Opcode::BorImm
-            | Opcode::BxorImm
-            | Opcode::RotlImm
-            | Opcode::RotrImm
-            | Opcode::IshlImm
-            | Opcode::UshrImm
-            | Opcode::SshrImm
-            | Opcode::IcmpImm
-            | Opcode::IfcmpImm => {
+            | Opcode::IsubIfborrow => {
                 panic!("ALU+imm and ALU+carry ops should not appear here!");
             }
         }

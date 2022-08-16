@@ -4,7 +4,7 @@ use crate::compiler::{Compiler, CompilerContext};
 use crate::obj::ModuleTextBuilder;
 use crate::CompiledFunction;
 use anyhow::Result;
-use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
+use cranelift_codegen::ir::{self, InstBuilder, InstImmBuilder, MemFlags};
 use cranelift_frontend::FunctionBuilder;
 use object::write::Object;
 use std::any::Any;

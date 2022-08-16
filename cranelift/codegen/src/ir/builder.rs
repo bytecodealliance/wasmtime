@@ -37,6 +37,352 @@ pub trait InstBuilderBase<'f>: Sized {
 // instruction format and per opcode.
 include!(concat!(env!("OUT_DIR"), "/inst_builder.rs"));
 
+/// Helpers for building instruction combinations where one operand is a constant.
+pub trait InstImmBuilder<'f>: InstBuilderBase<'f> {
+    /// Inserts an `iconst` instruction to materialize the specified immediate operand.
+    fn insert_const(&mut self, ty: ir::Type, c: ir::immediates::Imm64) -> Value;
+
+    /// Compare scalar integer to a constant.
+    ///
+    /// This is the same as the `icmp` instruction, except one operand is
+    /// an immediate constant.
+    ///
+    /// This instruction can only compare scalars. Use `icmp` for
+    /// lane-wise vector comparisons.
+    ///
+    /// Inputs:
+    ///
+    /// - Cond: An integer comparison condition code.
+    /// - x: A scalar integer type
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A boolean type with 1 bits.
+    fn icmp_imm<T1: Into<ir::condcodes::IntCC>, T2: Into<ir::immediates::Imm64>>(
+        mut self,
+        cond: T1,
+        x: ir::Value,
+        y: T2,
+    ) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.icmp(cond, x, y)
+    }
+
+    /// Compare scalar integer to a constant and return flags.
+    ///
+    /// Like `icmp_imm`, but returns integer CPU flags instead of testing
+    /// a specific condition code.
+    ///
+    /// Inputs:
+    ///
+    /// - x: A scalar integer type
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - f: CPU flags representing the result of an integer comparison. These flags
+    /// can be tested with an :type:`intcc` condition code.
+    fn ifcmp_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.ifcmp(x, y)
+    }
+
+    /// Add immediate integer.
+    ///
+    /// Same as `iadd`, but one operand is an immediate constant.
+    ///
+    /// Polymorphic over all scalar integer types, but does not support vector
+    /// types.
+    ///
+    /// Inputs:
+    ///
+    /// - x: A scalar integer type
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A scalar integer type
+    fn iadd_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.iadd(x, y)
+    }
+
+    /// Integer multiplication by immediate constant.
+    ///
+    /// Polymorphic over all scalar integer types, but does not support vector
+    /// types.
+    ///
+    /// Inputs:
+    ///
+    /// - x: A scalar integer type
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A scalar integer type
+    fn imul_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.imul(x, y)
+    }
+
+    /// Unsigned integer division by an immediate constant.
+    ///
+    /// This operation traps if the divisor is zero.
+    ///
+    /// Inputs:
+    ///
+    /// - x: A scalar integer type
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A scalar integer type
+    fn udiv_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.udiv(x, y)
+    }
+
+    /// Signed integer division by an immediate constant.
+    ///
+    /// This operation traps if the divisor is zero, or if the result is not
+    /// representable in `B` bits two's complement. This only happens
+    /// when `x = -2^{B-1}, Y = -1`.
+    ///
+    /// Inputs:
+    ///
+    /// - x: A scalar integer type
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A scalar integer type
+    fn sdiv_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.sdiv(x, y)
+    }
+
+    /// Unsigned integer remainder with immediate divisor.
+    ///
+    /// This operation traps if the divisor is zero.
+    ///
+    /// Inputs:
+    ///
+    /// - x: A scalar integer type
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A scalar integer type
+    fn urem_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.urem(x, y)
+    }
+
+    /// Signed integer remainder with immediate divisor.
+    ///
+    /// This operation traps if the divisor is zero.
+    ///
+    /// Inputs:
+    ///
+    /// - x: A scalar integer type
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A scalar integer type
+    fn srem_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.srem(x, y)
+    }
+
+    /// Immediate reverse wrapping subtraction: `a := Y - x \pmod{2^B}`.
+    ///
+    /// Also works as integer negation when `Y = 0`. Use `iadd_imm`
+    /// with a negative immediate operand for the reverse immediate
+    /// subtraction.
+    ///
+    /// Polymorphic over all scalar integer types, but does not support vector
+    /// types.
+    ///
+    /// Inputs:
+    ///
+    /// - x: A scalar integer type
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A scalar integer type
+    fn irsub_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.isub(y, x)
+    }
+
+    /// Bitwise and with immediate.
+    ///
+    /// Same as `band`, but one operand is an immediate constant.
+    ///
+    /// Polymorphic over all scalar integer types, but does not support vector
+    /// types.
+    ///
+    /// Inputs:
+    ///
+    /// - x: A scalar integer type
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A scalar integer type
+    fn band_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.band(x, y)
+    }
+
+    /// Bitwise or with immediate.
+    ///
+    /// Same as `bor`, but one operand is an immediate constant.
+    ///
+    /// Polymorphic over all scalar integer types, but does not support vector
+    /// types.
+    ///
+    /// Inputs:
+    ///
+    /// - x: A scalar integer type
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A scalar integer type
+    fn bor_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.bor(x, y)
+    }
+
+    /// Bitwise xor with immediate.
+    ///
+    /// Same as `bxor`, but one operand is an immediate constant.
+    ///
+    /// Polymorphic over all scalar integer types, but does not support vector
+    /// types.
+    ///
+    /// Inputs:
+    ///
+    /// - x: A scalar integer type
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A scalar integer type
+    fn bxor_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.bxor(x, y)
+    }
+
+    /// Rotate left by immediate.
+    ///
+    /// Inputs:
+    ///
+    /// - x: Scalar or vector value to shift
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A scalar or vector integer type
+    fn rotl_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.rotl(x, y)
+    }
+
+    /// Rotate right by immediate.
+    ///
+    /// Inputs:
+    ///
+    /// - x: Scalar or vector value to shift
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A scalar or vector integer type
+    fn rotr_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.rotr(x, y)
+    }
+
+    /// Integer shift left by immediate.
+    ///
+    /// The shift amount is masked to the size of ``x``.
+    ///
+    /// Inputs:
+    ///
+    /// - x: Scalar or vector value to shift
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A scalar or vector integer type
+    fn ishl_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.ishl(x, y)
+    }
+
+    /// Unsigned shift right by immediate.
+    ///
+    /// The shift amount is masked to the size of the register.
+    ///
+    /// Inputs:
+    ///
+    /// - x: Scalar or vector value to shift
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A scalar or vector integer type
+    fn ushr_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.ushr(x, y)
+    }
+
+    /// Signed shift right by immediate.
+    ///
+    /// The shift amount is masked to the size of the register.
+    ///
+    /// Inputs:
+    ///
+    /// - x: Scalar or vector value to shift
+    /// - Y: A 64-bit immediate integer.
+    ///
+    /// Outputs:
+    ///
+    /// - a: A scalar or vector integer type
+    fn sshr_imm<T1: Into<ir::immediates::Imm64>>(mut self, x: ir::Value, y: T1) -> Value {
+        let ctrl_typevar = self.data_flow_graph().value_type(x);
+        let y = self.insert_const(ctrl_typevar, y.into());
+        self.sshr(x, y)
+    }
+}
+
+impl<'f, 'c> InstImmBuilder<'c> for InsertBuilder<'c, &'c mut crate::cursor::FuncCursor<'f>> {
+    fn insert_const(&mut self, ty: ir::Type, c: ir::immediates::Imm64) -> Value {
+        self.inserter.ins().iconst(ty, c)
+    }
+}
+
 /// Any type implementing `InstBuilderBase` gets all the `InstBuilder` methods for free.
 impl<'f, T: InstBuilderBase<'f>> InstBuilder<'f> for T {}
 
@@ -217,7 +563,7 @@ mod tests {
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::condcodes::*;
     use crate::ir::types::*;
-    use crate::ir::{Function, InstBuilder, ValueDef};
+    use crate::ir::{Function, InstBuilder, InstImmBuilder, ValueDef};
 
     #[test]
     fn types() {

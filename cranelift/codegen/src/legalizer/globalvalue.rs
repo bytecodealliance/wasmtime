@@ -4,7 +4,7 @@
 //! instruction into code that depends on the kind of global value referenced.
 
 use crate::cursor::{Cursor, FuncCursor};
-use crate::ir::{self, InstBuilder};
+use crate::ir::{self, InstBuilder, InstImmBuilder};
 use crate::isa::TargetIsa;
 
 /// Expand a `global_value` instruction according to the definition of the global value.
@@ -80,7 +80,7 @@ fn iadd_imm_addr(
     };
 
     // Simply replace the `global_value` instruction with an `iadd_imm`, reusing the result value.
-    pos.func.dfg.replace(inst).iadd_imm(lhs, offset);
+    pos.replace(inst).iadd_imm(lhs, offset);
 }
 
 /// Expand a `global_value` instruction for a load global.

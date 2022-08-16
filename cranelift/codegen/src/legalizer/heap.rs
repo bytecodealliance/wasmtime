@@ -7,7 +7,7 @@ use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::condcodes::IntCC;
 use crate::ir::immediates::Uimm32;
-use crate::ir::{self, InstBuilder, RelSourceLoc};
+use crate::ir::{self, InstBuilder, InstImmBuilder, RelSourceLoc};
 use crate::isa::TargetIsa;
 
 /// Expand a `heap_addr` instruction according to the definition of the heap.
