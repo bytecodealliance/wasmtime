@@ -1,7 +1,13 @@
 use wasmtime::*;
 
-const EXTERN_REF : RefType = RefType { nullable: true, heap_type: HeapType::Extern };
-const FUNC_REF : RefType = RefType { nullable: true, heap_type: HeapType::Func };
+const EXTERN_REF: RefType = RefType {
+    nullable: true,
+    heap_type: HeapType::Extern,
+};
+const FUNC_REF: RefType = RefType {
+    nullable: true,
+    heap_type: HeapType::Func,
+};
 
 #[test]
 fn bad_globals() {
@@ -23,11 +29,6 @@ fn bad_globals() {
 #[test]
 fn bad_tables() {
     let mut store = Store::<()>::default();
-
-    // TODO(dhil) fixme: this test is not meaningful since the refactoring of the ValType.
-    // i32 not supported yet
-    // let ty = TableType::new(ValType::I32, 0, Some(1));
-    // assert!(Table::new(&mut store, ty.clone(), Val::I32(0)).is_err());
 
     // mismatched initializer
     let ty = TableType::new(FUNC_REF, 0, Some(1));
