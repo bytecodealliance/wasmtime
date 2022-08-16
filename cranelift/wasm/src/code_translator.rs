@@ -2022,12 +2022,21 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 
         // TODO(dhil) fixme: merge into the above list.
         // Function references instructions
-        Operator::BrOnNull { .. }
-        | Operator::BrOnNonNull { .. }
-        | Operator::CallRef
-        | Operator::ReturnCallRef => {
+        Operator::BrOnNonNull { .. } | Operator::CallRef | Operator::ReturnCallRef => {
             todo!("Implement Operator::[BrOnNull,BrOnNonNull,CallRef] for translate_operator")
         } // TODO(dhil) fixme
+        Operator::BrOnNull { relative_depth } => {
+            let r = state.pop1();
+            let (br_destination, inputs) = translate_br_if_args(*relative_depth, state);
+            let is_null = environ.translate_ref_is_null(builder.cursor(), r)?;
+            canonicalise_then_brnz(builder, is_null, br_destination, inputs);
+
+            let next_block = builder.create_block();
+            canonicalise_then_jump(builder, next_block, &[]);
+            builder.seal_block(next_block); // The only predecessor is the current block.
+            builder.switch_to_block(next_block);
+            state.push1(r);
+        }
         Operator::RefAsNonNull => {
             let r = state.pop1();
             let is_null = environ.translate_ref_is_null(builder.cursor(), r)?;
