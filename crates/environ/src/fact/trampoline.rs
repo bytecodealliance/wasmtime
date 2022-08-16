@@ -1574,7 +1574,7 @@ impl Compiler<'_, '_> {
         // If the byte size of memory is greater than the final address of the
         // string then the string is invalid. Note that if it's precisely equal
         // then that's ok.
-        self.instruction(I64GtU);
+        self.instruction(I64GeU);
         self.instruction(BrIf(1));
 
         self.instruction(End);
