@@ -816,7 +816,9 @@ impl<'a> FunctionBuilder<'a> {
             return;
         }
 
-        flags.set_aligned();
+        if u64::from(src_align) >= access_size && u64::from(dest_align) >= access_size {
+            flags.set_aligned();
+        }
 
         // Load all of the memory first. This is necessary in case `dest` overlaps.
         // It can also improve performance a bit.
@@ -903,7 +905,9 @@ impl<'a> FunctionBuilder<'a> {
             let size = self.ins().iconst(config.pointer_type(), size as i64);
             self.call_memset(config, buffer, ch, size);
         } else {
-            flags.set_aligned();
+            if u64::from(buffer_align) >= access_size {
+                flags.set_aligned();
+            }
 
             let ch = u64::from(ch);
             let raw_value = if int_type == types::I64 {
