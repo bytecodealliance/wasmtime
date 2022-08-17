@@ -572,24 +572,24 @@ fn lower_insn_to_regs(
         | Opcode::Fneg
         | Opcode::Fcopysign
         | Opcode::Ceil
-        | Opcode::Floor => {
+        | Opcode::Floor
+        | Opcode::Nearest => {
             implemented_in_isle(ctx);
         }
 
-        Opcode::Nearest | Opcode::Trunc => {
+        Opcode::Trunc => {
             let ty = ty.unwrap();
             if isa_flags.use_sse41() {
                 let mode = match op {
-                    Opcode::Nearest => RoundImm::RoundNearest,
                     Opcode::Trunc => RoundImm::RoundZero,
-                    _ => panic!("unexpected opcode {:?} in Nearest/Trunc", op),
+                    _ => panic!("unexpected opcode {:?} in Trunc", op),
                 };
                 let op = match ty {
                     types::F32 => SseOpcode::Roundss,
                     types::F64 => SseOpcode::Roundsd,
                     types::F32X4 => SseOpcode::Roundps,
                     types::F64X2 => SseOpcode::Roundpd,
-                    _ => panic!("unexpected type {:?} in Nearest/Trunc", ty),
+                    _ => panic!("unexpected type {:?} in Trunc", ty),
                 };
                 let src = input_to_reg_mem(ctx, inputs[0]);
                 let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
@@ -605,14 +605,9 @@ fn lower_insn_to_regs(
                 // Note, for vector types on platforms that don't support sse41
                 // the execution will panic here.
                 let libcall = match (op, ty) {
-                    (Opcode::Nearest, types::F32) => LibCall::NearestF32,
-                    (Opcode::Nearest, types::F64) => LibCall::NearestF64,
                     (Opcode::Trunc, types::F32) => LibCall::TruncF32,
                     (Opcode::Trunc, types::F64) => LibCall::TruncF64,
-                    _ => panic!(
-                        "unexpected type/opcode {:?}/{:?} in Nearest/Trunc",
-                        ty, op
-                    ),
+                    _ => panic!("unexpected type/opcode {:?}/{:?} in Trunc", ty, op),
                 };
 
                 let input = put_input_in_reg(ctx, inputs[0]);
