@@ -1503,8 +1503,6 @@
 (rule (sse_cmp_op (multi_lane 16 8)) (SseOpcode.Pcmpeqw))
 (rule (sse_cmp_op (multi_lane 32 4)) (SseOpcode.Pcmpeqd))
 (rule (sse_cmp_op (multi_lane 64 2)) (SseOpcode.Pcmpeqq))
-(rule (sse_cmp_op $F32X4) (SseOpcode.Cmpps))
-(rule (sse_cmp_op $F64X2) (SseOpcode.Cmppd))
 
 ;; Generates a register value which has an all-ones pattern of the specified
 ;; type.
