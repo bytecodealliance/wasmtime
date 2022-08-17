@@ -49,7 +49,11 @@ impl ComponentTypesBuilder {
         };
 
         let mut results_indirect = false;
-        let results = match self.flatten_types(&options.options, MAX_FLAT_RESULTS, [ty.result]) {
+        let results = match self.flatten_types(
+            &options.options,
+            MAX_FLAT_RESULTS,
+            ty.results.iter().map(|(_, ty)| *ty),
+        ) {
             Some(list) => list,
             None => {
                 results_indirect = true;

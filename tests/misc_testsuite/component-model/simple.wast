@@ -39,4 +39,4 @@
   (func (export "") (canon lift (core func $m "")))
 )
 
-(assert_return (invoke "") (unit.const))
+(assert_return (invoke ""))

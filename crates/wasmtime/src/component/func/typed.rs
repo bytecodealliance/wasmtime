@@ -60,7 +60,7 @@ impl<Params, Return> Clone for TypedFunc<Params, Return> {
 
 impl<Params, Return> TypedFunc<Params, Return>
 where
-    Params: ComponentParams + Lower,
+    Params: ComponentNamedList + Lower,
     Return: Lift,
 {
     /// Creates a new [`TypedFunc`] from the provided component [`Func`],
@@ -288,8 +288,8 @@ where
     }
 }
 
-/// A trait representing a static list of parameters that can be passed to a
-/// [`TypedFunc`].
+/// A trait representing a static list of named types that can be passed to or
+/// returned from a [`TypedFunc`].
 ///
 /// This trait is implemented for a number of tuple types and is not expected
 /// to be implemented externally. The contents of this trait are hidden as it's
@@ -304,11 +304,11 @@ where
 // would not be memory safe. The main reason this is `unsafe` is the
 // `typecheck` function which must operate correctly relative to the `AsTuple`
 // interpretation of the implementor.
-pub unsafe trait ComponentParams: ComponentType {
-    /// Performs a typecheck to ensure that this `ComponentParams` implementor
-    /// matches the types of the types in `params`.
+pub unsafe trait ComponentNamedList: ComponentType {
+    /// Performs a typecheck to ensure that this `ComponentNamedList`
+    /// implementor matches the types of the types in `params`.
     #[doc(hidden)]
-    fn typecheck_params(
+    fn typecheck_named_list(
         params: &[(Option<String>, InterfaceType)],
         types: &ComponentTypes,
     ) -> Result<()>;
@@ -374,6 +374,9 @@ pub unsafe trait ComponentType {
     #[doc(hidden)]
     const ALIGN32: u32 = Self::ABI.align32;
 
+    #[doc(hidden)]
+    const IS_RUST_UNIT_TYPE: bool = false;
+
     /// Returns the number of core wasm abi values will be used to represent
     /// this type in its lowered form.
     ///
@@ -393,7 +396,7 @@ pub unsafe trait ComponentType {
 
 #[doc(hidden)]
 pub unsafe trait ComponentVariant: ComponentType {
-    const CASES: &'static [CanonicalAbiInfo];
+    const CASES: &'static [Option<CanonicalAbiInfo>];
     const INFO: VariantInfo = VariantInfo::new_static(Self::CASES);
     const PAYLOAD_OFFSET32: usize = Self::INFO.payload_offset32 as usize;
 }
@@ -1352,16 +1355,9 @@ fn typecheck_tuple(
     expected: &[fn(&InterfaceType, &ComponentTypes) -> Result<()>],
 ) -> Result<()> {
     match ty {
-        InterfaceType::Unit if expected.len() == 0 => Ok(()),
         InterfaceType::Tuple(t) => {
             let tuple = &types[*t];
             if tuple.types.len() != expected.len() {
-                if expected.len() == 0 {
-                    bail!(
-                        "expected unit or 0-tuple, found {}-tuple",
-                        tuple.types.len(),
-                    );
-                }
                 bail!(
                     "expected {}-tuple, found {}-tuple",
                     expected.len(),
@@ -1372,9 +1368,6 @@ fn typecheck_tuple(
                 check(ty, types)?;
             }
             Ok(())
-        }
-        other if expected.len() == 0 => {
-            bail!("expected `unit` or 0-tuple found `{}`", desc(other))
         }
         other => bail!("expected `tuple` found `{}`", desc(other)),
     }
@@ -1419,7 +1412,10 @@ pub fn typecheck_record(
 pub fn typecheck_variant(
     ty: &InterfaceType,
     types: &ComponentTypes,
-    expected: &[(&str, fn(&InterfaceType, &ComponentTypes) -> Result<()>)],
+    expected: &[(
+        &str,
+        Option<fn(&InterfaceType, &ComponentTypes) -> Result<()>>,
+    )],
 ) -> Result<()> {
     match ty {
         InterfaceType::Variant(index) => {
@@ -1434,11 +1430,20 @@ pub fn typecheck_variant(
             }
 
             for (case, &(name, check)) in cases.iter().zip(expected) {
-                check(&case.ty, types)
-                    .with_context(|| format!("type mismatch for case {}", name))?;
-
                 if case.name != name {
-                    bail!("expected variant case named {}, found {}", name, case.name);
+                    bail!("expected variant case named {name}, found {}", case.name);
+                }
+
+                match (check, &case.ty) {
+                    (Some(check), Some(ty)) => check(ty, types)
+                        .with_context(|| format!("type mismatch for case {name}"))?,
+                    (None, None) => {}
+                    (Some(_), None) => {
+                        bail!("case `{name}` has no type but one was expected")
+                    }
+                    (None, Some(_)) => {
+                        bail!("case `{name}` has a type but none was expected")
+                    }
                 }
             }
 
@@ -1558,8 +1563,7 @@ where
 {
     type Lower = TupleLower2<<u32 as ComponentType>::Lower, T::Lower>;
 
-    const ABI: CanonicalAbiInfo =
-        CanonicalAbiInfo::variant_static(&[<() as ComponentType>::ABI, T::ABI]);
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::variant_static(&[None, Some(T::ABI)]);
 
     fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
         match ty {
@@ -1573,7 +1577,7 @@ unsafe impl<T> ComponentVariant for Option<T>
 where
     T: ComponentType,
 {
-    const CASES: &'static [CanonicalAbiInfo] = &[<() as ComponentType>::ABI, T::ABI];
+    const CASES: &'static [Option<CanonicalAbiInfo>] = &[None, Some(T::ABI)];
 }
 
 unsafe impl<T> Lower for Option<T>
@@ -1667,17 +1671,25 @@ where
 {
     type Lower = ResultLower<T::Lower, E::Lower>;
 
-    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::variant_static(&[T::ABI, E::ABI]);
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::variant_static(&[Some(T::ABI), Some(E::ABI)]);
 
     fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
         match ty {
-            InterfaceType::Expected(r) => {
-                let expected = &types[*r];
-                T::typecheck(&expected.ok, types)?;
-                E::typecheck(&expected.err, types)?;
+            InterfaceType::Result(r) => {
+                let result = &types[*r];
+                match &result.ok {
+                    Some(ty) => T::typecheck(ty, types)?,
+                    None if T::IS_RUST_UNIT_TYPE => {}
+                    None => bail!("expected no `ok` type"),
+                }
+                match &result.err {
+                    Some(ty) => E::typecheck(ty, types)?,
+                    None if E::IS_RUST_UNIT_TYPE => {}
+                    None => bail!("expected no `err` type"),
+                }
                 Ok(())
             }
-            other => bail!("expected `expected` found `{}`", desc(other)),
+            other => bail!("expected `result` found `{}`", desc(other)),
         }
     }
 }
@@ -1715,7 +1727,7 @@ where
     T: ComponentType,
     E: ComponentType,
 {
-    const CASES: &'static [CanonicalAbiInfo] = &[T::ABI, E::ABI];
+    const CASES: &'static [Option<CanonicalAbiInfo>] = &[Some(T::ABI), Some(E::ABI)];
 }
 
 unsafe impl<T, E> Lower for Result<T, E>
@@ -1896,6 +1908,15 @@ macro_rules! impl_component_ty_for_tuples {
                 $($t::ABI),*
             ]);
 
+            const IS_RUST_UNIT_TYPE: bool = {
+                let mut _is_unit = true;
+                $(
+                    let _anything_to_bind_the_macro_variable = $t::IS_RUST_UNIT_TYPE;
+                    _is_unit = false;
+                )*
+                _is_unit
+            };
+
             fn typecheck(
                 ty: &InterfaceType,
                 types: &ComponentTypes,
@@ -1944,19 +1965,19 @@ macro_rules! impl_component_ty_for_tuples {
         }
 
         #[allow(non_snake_case)]
-        unsafe impl<$($t,)*> ComponentParams for ($($t,)*)
+        unsafe impl<$($t,)*> ComponentNamedList for ($($t,)*)
             where $($t: ComponentType),*
         {
-            fn typecheck_params(
-                params: &[(Option<String>, InterfaceType)],
+            fn typecheck_named_list(
+                names: &[(Option<String>, InterfaceType)],
                 _types: &ComponentTypes,
             ) -> Result<()> {
-                if params.len() != $n {
-                    bail!("expected {} types, found {}", $n, params.len());
+                if names.len() != $n {
+                    bail!("expected {} types, found {}", $n, names.len());
                 }
-                let mut params = params.iter().map(|i| &i.1);
-                $($t::typecheck(params.next().unwrap(), _types)?;)*
-                debug_assert!(params.next().is_none());
+                let mut names = names.iter().map(|i| &i.1);
+                $($t::typecheck(names.next().unwrap(), _types)?;)*
+                debug_assert!(names.next().is_none());
                 Ok(())
             }
         }
@@ -1978,14 +1999,13 @@ fn desc(ty: &InterfaceType) -> &'static str {
         InterfaceType::S64 => "s64",
         InterfaceType::Float32 => "f32",
         InterfaceType::Float64 => "f64",
-        InterfaceType::Unit => "unit",
         InterfaceType::Bool => "bool",
         InterfaceType::Char => "char",
         InterfaceType::String => "string",
         InterfaceType::List(_) => "list",
         InterfaceType::Tuple(_) => "tuple",
         InterfaceType::Option(_) => "option",
-        InterfaceType::Expected(_) => "expected",
+        InterfaceType::Result(_) => "result",
 
         InterfaceType::Record(_) => "record",
         InterfaceType::Variant(_) => "variant",

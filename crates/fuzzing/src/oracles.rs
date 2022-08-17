@@ -1090,7 +1090,7 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
     let mut config = component_test_util::config();
     config.debug_adapter_modules(input.arbitrary()?);
     let engine = Engine::new(&config).unwrap();
-    let mut store = Store::new(&engine, (Box::new([]) as Box<[Val]>, None));
+    let mut store = Store::new(&engine, (Vec::new(), None));
     let wat = case.declarations().make_component();
     let wat = wat.as_bytes();
     log_wasm(wat);
@@ -1100,39 +1100,46 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
     linker
         .root()
         .func_new(&component, IMPORT_FUNCTION, {
-            move |cx: StoreContextMut<'_, (Box<[Val]>, Option<Val>)>, args: &[Val]| -> Result<Val> {
-                log::trace!("received arguments {args:?}");
-                let (expected_args, result) = cx.data();
-                assert_eq!(args.len(), expected_args.len());
-                for (expected, actual) in expected_args.iter().zip(args) {
+            move |mut cx: StoreContextMut<'_, (Vec<Val>, Option<Vec<Val>>)>,
+                  params: &[Val],
+                  results: &mut [Val]|
+                  -> Result<()> {
+                log::trace!("received params {params:?}");
+                let (expected_args, expected_results) = cx.data_mut();
+                assert_eq!(params.len(), expected_args.len());
+                for (expected, actual) in expected_args.iter().zip(params) {
                     assert_eq!(expected, actual);
                 }
-                let result = result.as_ref().unwrap().clone();
-                log::trace!("returning result {result:?}");
-                Ok(result)
+                results.clone_from_slice(&expected_results.take().unwrap());
+                log::trace!("returning results {results:?}");
+                Ok(())
             }
         })
         .unwrap();
 
     let instance = linker.instantiate(&mut store, &component).unwrap();
     let func = instance.get_func(&mut store, EXPORT_FUNCTION).unwrap();
-    let params = func.params(&store);
-    let result = func.result(&store);
+    let param_tys = func.params(&store);
+    let result_tys = func.results(&store);
 
     while input.arbitrary()? {
-        let args = params
+        let params = param_tys
             .iter()
             .map(|ty| component_types::arbitrary_val(ty, input))
-            .collect::<arbitrary::Result<Box<[_]>>>()?;
+            .collect::<arbitrary::Result<Vec<_>>>()?;
+        let results = result_tys
+            .iter()
+            .map(|ty| component_types::arbitrary_val(ty, input))
+            .collect::<arbitrary::Result<Vec<_>>>()?;
 
-        let result = component_types::arbitrary_val(&result, input)?;
+        *store.data_mut() = (params.clone(), Some(results.clone()));
 
-        *store.data_mut() = (args.clone(), Some(result.clone()));
-
-        log::trace!("passing args {args:?}");
-        let actual = func.call_and_post_return(&mut store, &args).unwrap();
-        log::trace!("received return {actual:?}");
-        assert_eq!(actual, result);
+        log::trace!("passing params {params:?}");
+        let mut actual = vec![Val::Bool(false); results.len()];
+        func.call_and_post_return(&mut store, &params, &mut actual)
+            .unwrap();
+        log::trace!("received results {actual:?}");
+        assert_eq!(actual, results);
     }
 
     Ok(())

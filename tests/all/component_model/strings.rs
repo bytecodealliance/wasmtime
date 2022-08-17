@@ -175,15 +175,15 @@ fn test_roundtrip(engine: &Engine, src: &str, dst: &str) -> Result<()> {
         .root()
         .func_wrap("host", |store: StoreContextMut<String>, arg: String| {
             assert_eq!(*store.data(), arg);
-            Ok(arg)
+            Ok((arg,))
         })?;
     let instance = linker.instantiate(&mut store, &component)?;
-    let func = instance.get_typed_func::<(String,), String, _>(&mut store, "echo")?;
+    let func = instance.get_typed_func::<(String,), (String,), _>(&mut store, "echo")?;
 
     for string in STRINGS {
         println!("testing string {string:?}");
         *store.data_mut() = string.to_string();
-        let ret = func.call(&mut store, (string.to_string(),))?;
+        let (ret,) = func.call(&mut store, (string.to_string(),))?;
         assert_eq!(ret, *string);
         func.post_return(&mut store)?;
     }
@@ -554,7 +554,7 @@ fn test_raw_when_encoded(
       (func (export "f") (param i32 i32 i32) (call $f (local.get 0) (local.get 2)))
     )
     (core instance $m (instantiate $m (with "" (instance (export "" (func $f))))))
-    (func (export "f") (param (list u8)) (param u32) (canon lift (core func $m "f")
+    (func (export "f") (param "a" (list u8)) (param "b" u32) (canon lift (core func $m "f")
         (memory $libc "memory")
         (realloc (func $libc "realloc"))))
   )

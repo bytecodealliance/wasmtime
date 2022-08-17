@@ -12,7 +12,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.19"
 wasmtime = { path = "../wasmtime", version = "0.41.0", default-features = false, features = ['cranelift'] }
-wast = "45.0.0"
+wast = "46.0.0"
 log = "0.4"
 
 [badges]
