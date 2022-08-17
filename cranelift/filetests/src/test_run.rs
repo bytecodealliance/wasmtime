@@ -14,7 +14,6 @@ use cranelift_reader::parse_run_command;
 use cranelift_reader::TestCommand;
 use log::trace;
 use std::borrow::Cow;
-use target_lexicon::Architecture;
 
 struct TestRun;
 
@@ -71,17 +70,16 @@ fn is_isa_compatible(
     let requested_arch = requested.triple().architecture;
     #[cfg(target_arch = "riscv64")]
     {
-        use target_lexicon::Riscv64Architecture;
-        match (requested_arch, Architecture::host()) {
+        use target_lexicon::{Architecture, Riscv64Architecture};
+        match (requested_arch, host_arch) {
             // riscv64 can run on riscv64 and riscv64gc and ...
             // we cannot use an simple requested_arch != Architecture::host() to decide.
             (Architecture::Riscv64(Riscv64Architecture::Riscv64), _) => {}
             _ => {
-                println!(
+                return Err(format!(
                     "skipped {}: host can't run {:?} programs",
                     context.file_path, requested_arch
-                );
-                return Ok(());
+                ));
             }
         }
     }
@@ -133,35 +131,6 @@ impl SubTest for TestRun {
     }
 
     fn run(&self, func: Cow<ir::Function>, context: &Context) -> anyhow::Result<()> {
-        // If this test requests to run on a completely different
-        // architecture than the host platform then we skip it entirely,
-        // since we won't be able to natively execute machine code.
-        let requested_arch = context.isa.unwrap().triple().architecture;
-        #[cfg(target_arch = "riscv64")]
-        {
-            use target_lexicon::Riscv64Architecture;
-            match (requested_arch, Architecture::host()) {
-                // riscv64 can run on riscv64 and riscv64gc and ...
-                // we cannot use an simple requested_arch != Architecture::host() to decide.
-                (Architecture::Riscv64(Riscv64Architecture::Riscv64), _) => {}
-                _ => {
-                    println!(
-                        "skipped {}: host can't run {:?} programs",
-                        context.file_path, requested_arch
-                    );
-                    return Ok(());
-                }
-            }
-        }
-        #[cfg(not(target_arch = "riscv64"))]
-        if requested_arch != Architecture::host() {
-            println!(
-                "skipped {}: host can't run {:?} programs",
-                context.file_path, requested_arch
-            );
-            return Ok(());
-        }
-
         // Disable runtests with pinned reg enabled.
         // We've had some abi issues that the trampoline isn't quite ready for.
         if context.flags.enable_pinned_reg() {

@@ -1047,7 +1047,7 @@
       ;;; load constant 64.
       (constant_64 Reg (load_u64_constant 64))
       (low Reg (gen_select_reg (IntCC.Equal) constant_64 high low_part (zero_reg)))
-      ;; add low and high toghter.
+      ;; add low and high together.
       (result Reg (alu_add high low))
     )
     (value_regs result (zero_reg))
@@ -2353,7 +2353,7 @@
   )
 )
 
-
+;;; x ^ ~y
 (decl gen_xor_not(Reg Reg) Reg)
 (rule
   (gen_xor_not x y)
@@ -2364,3 +2364,20 @@
     (alu_rrr (AluOPRRR.Xor) x tmp )
   )
 )
+
+(decl lower_iabs(Reg Type)Reg)
+(rule
+  (lower_iabs r ty)
+  (let
+    (
+      (tmp Reg (sext_int_if_need r ty))
+      (a Reg (gen_bit_not r))
+      (a2 Reg (alu_rr_imm12 (AluOPRRI.Addi) a (imm12_const 1) ))
+    )
+    (gen_select_reg (IntCC.SignedLessThan) r (zero_reg) a2 r)
+  )
+)
+
+(decl output_ifcout (Reg) InstOutput)
+(rule (output_ifcout reg)
+      (output_pair reg (value_regs_invalid)))

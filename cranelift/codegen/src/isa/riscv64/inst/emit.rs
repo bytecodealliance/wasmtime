@@ -898,7 +898,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::CallInd { ref info } => {
                 let rn = allocs.next(info.rn);
-                // if rn == x_reg(12) {
+                // if rn == x_reg(15) {
                 //     Inst::EBreak.emit(&[], sink, emit_info, state);
                 // }
                 if let Some(s) = state.take_stack_map() {
@@ -2428,7 +2428,7 @@ impl MachInstEmit for Inst {
                         // if (step %=8 == 0) then tmp2 = tmp2 >> 15
                         // if (step %=8 != 0) then tmp2 = tmp2 << 1
                         let label_over = sink.get_label();
-                        let label_not = sink.get_label();
+                        let label_sll_1 = sink.get_label();
                         Inst::load_constant_imm12(writable_spilltmp_reg2(), Imm12::from_bits(8))
                             .emit(&[], sink, emit_info, state);
                         Inst::AluRRR {
@@ -2439,7 +2439,7 @@ impl MachInstEmit for Inst {
                         }
                         .emit(&[], sink, emit_info, state);
                         Inst::CondBr {
-                            taken: BranchTarget::Label(label_not),
+                            taken: BranchTarget::Label(label_sll_1),
                             not_taken: BranchTarget::zero(),
                             kind: IntegerCompare {
                                 kind: IntCC::NotEqual,
@@ -2459,7 +2459,7 @@ impl MachInstEmit for Inst {
                             dest: BranchTarget::Label(label_over),
                         }
                         .emit(&[], sink, emit_info, state);
-                        sink.bind_label(label_not);
+                        sink.bind_label(label_sll_1);
                         Inst::AluRRImm12 {
                             alu_op: AluOPRRI::Slli,
                             rd: tmp2,

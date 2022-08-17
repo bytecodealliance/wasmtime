@@ -1,11 +1,8 @@
 //! Implementation of a standard Riscv64 ABI.
 
-use core::panic;
-
 use crate::ir;
-
 use crate::ir::types::*;
-use crate::ir::AbiParam;
+
 use crate::ir::ExternalName;
 use crate::ir::MemFlags;
 use crate::isa;
@@ -77,54 +74,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // stack space
         let mut next_stack: u64 = 0;
         let mut abi_args = smallvec![];
-        // When run out register , We should use stack space for parameter,
-        // We should deal with parameter backwards.
-        // But We need result to be the same order with `params`.
-        let mut abi_args_for_stack = smallvec![];
-        let mut step_last_parameter = {
-            let mut params_last = if params.len() > 0 {
-                params.len() - 1
-            } else {
-                0
-            };
-            move || -> AbiParam {
-                params_last -= 1;
-                params[params_last].clone()
-            }
-        };
-
-        for i in 0..params.len() {
-            let mut param = params[i];
-            let run_out_of_registers = {
-                (param.value_type.is_float() && next_f_reg > f_end)
-                    || (param.value_type.is_int() && next_x_reg > x_end)
-            };
-            param = if run_out_of_registers {
-                step_last_parameter()
-            } else {
-                param
-            };
-            // Validate "purpose".
-            match &param.purpose {
-                &ir::ArgumentPurpose::VMContext
-                | &ir::ArgumentPurpose::Normal
-                | &ir::ArgumentPurpose::StructReturn
-                | &ir::ArgumentPurpose::StackLimit
-                | &ir::ArgumentPurpose::StructArgument(_) => {}
-                _ => panic!(
-                    "Unsupported argument purpose {:?} in signature: {:?}",
-                    param.purpose, params
-                ),
-            }
-            let abi_args = if run_out_of_registers {
-                &mut abi_args_for_stack
-            } else {
-                &mut abi_args
-            };
-            if let Some(p) = special_purpose_register(param) {
-                abi_args.push(p);
-                continue;
-            }
+        for param in params {
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 let offset = next_stack;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
@@ -137,96 +87,58 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 });
                 continue;
             }
-            match param.value_type {
-                F32 | F64 => {
-                    if next_f_reg <= f_end {
-                        let arg = ABIArg::reg(
-                            f_reg(next_f_reg).to_real_reg().unwrap(),
-                            param.value_type,
-                            param.extension,
-                            param.purpose,
-                        );
-                        abi_args.push(arg);
-                        next_f_reg += 1;
-                    } else {
-                        let arg = ABIArg::stack(
-                            next_stack as i64,
-                            param.value_type,
-                            param.extension,
-                            param.purpose,
-                        );
-                        abi_args.push(arg);
-                        next_stack += 8
-                    }
-                }
-                B1 | B8 | B16 | B32 | B64 | I8 | I16 | I32 | I64 | R32 | R64 => {
-                    if next_x_reg <= x_end {
-                        let arg = ABIArg::reg(
-                            x_reg(next_x_reg).to_real_reg().unwrap(),
-                            param.value_type,
-                            param.extension,
-                            param.purpose,
-                        );
-                        next_x_reg += 1;
-                        abi_args.push(arg);
-                    } else {
-                        let arg = ABIArg::stack(
-                            next_stack as i64,
-                            param.value_type,
-                            param.extension,
-                            param.purpose,
-                        );
-                        abi_args.push(arg);
-                        next_stack += 8
-                    }
-                }
-                I128 | B128 => {
-                    let elem_type = if param.value_type == I128 { I64 } else { B64 };
-                    let mut slots = smallvec![];
-                    if next_x_reg + 1 <= x_end {
-                        for i in 0..2 {
-                            slots.push(ABIArgSlot::Reg {
-                                reg: x_reg(next_x_reg + i).to_real_reg().unwrap(),
-                                ty: elem_type,
-                                extension: param.extension,
-                            });
-                        }
-                        next_x_reg += 2;
-                    } else if next_x_reg <= x_end {
-                        // put in register
-                        slots.push(ABIArgSlot::Reg {
-                            reg: x_reg(next_x_reg).to_real_reg().unwrap(),
-                            ty: elem_type,
-                            extension: param.extension,
-                        });
-                        next_x_reg += 1;
-                        slots.push(ABIArgSlot::Stack {
-                            offset: next_stack as i64,
-                            ty: elem_type,
-                            extension: param.extension,
-                        });
-                        next_stack += 8;
-                    } else {
-                        for _i in 0..2 {
-                            slots.push(ABIArgSlot::Stack {
-                                offset: next_stack as i64,
-                                ty: elem_type,
-                                extension: param.extension,
-                            });
-                            next_stack += 8;
-                        }
-                    }
-                    abi_args.push(ABIArg::Slots {
-                        slots,
-                        purpose: ir::ArgumentPurpose::Normal,
+            // Find regclass(es) of the register(s) used to store a value of this type.
+            let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
+            let mut slots = ABIArgSlotVec::new();
+            for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
+                let nextreg = if (next_x_reg <= x_end) && *rc == RegClass::Int {
+                    let x = Some(x_reg(next_x_reg));
+                    next_x_reg += 1;
+                    x
+                } else if (next_f_reg <= f_end) && *rc == RegClass::Float {
+                    let x = Some(f_reg(next_f_reg));
+                    next_f_reg += 1;
+                    x
+                } else {
+                    None
+                };
+                if let Some(reg) = nextreg {
+                    slots.push(ABIArgSlot::Reg {
+                        reg: reg.to_real_reg().unwrap(),
+                        ty: *reg_ty,
+                        extension: param.extension,
                     });
+                } else {
+                    // Compute size. For the wasmtime ABI it differs from native
+                    // ABIs in how multiple values are returned, so we take a
+                    // leaf out of arm64's book by not rounding everything up to
+                    // 8 bytes. For all ABI arguments, and other ABI returns,
+                    // though, each slot takes a minimum of 8 bytes.
+                    //
+                    // Note that in all cases 16-byte stack alignment happens
+                    // separately after all args.
+                    let size = (reg_ty.bits() / 8) as u64;
+                    let size = if args_or_rets == ArgsOrRets::Rets && call_conv.extends_wasmtime() {
+                        size
+                    } else {
+                        std::cmp::max(size, 8)
+                    };
+                    // Align.
+                    debug_assert!(size.is_power_of_two());
+                    next_stack = align_to(next_stack, size);
+                    slots.push(ABIArgSlot::Stack {
+                        offset: next_stack as i64,
+                        ty: *reg_ty,
+                        extension: param.extension,
+                    });
+                    next_stack += size;
                 }
-                _ => todo!("type not supported {}", param.value_type),
-            };
+            }
+            abi_args.push(ABIArg::Slots {
+                slots,
+                purpose: param.purpose,
+            });
         }
-
-        abi_args_for_stack.reverse();
-        abi_args.extend(abi_args_for_stack.into_iter());
         let pos: Option<usize> = if add_ret_area_ptr {
             assert!(ArgsOrRets::Args == args_or_rets);
             if next_x_reg <= x_end {
@@ -253,7 +165,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             None
         };
         next_stack = align_to(next_stack, Self::stack_align(call_conv) as u64);
-
         // To avoid overflow issues, limit the arg/return size to something
         // reasonable -- here, 128 MB.
         if next_stack > STACK_ARG_RET_SIZE_LIMIT {
@@ -382,10 +293,10 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_prologue_frame_setup(flags: &settings::Flags) -> SmallInstVec<Inst> {
-        // add  sp , sp. -16    ;; alloc stack space for fp.
-        // st   ra , sp+8       ;; save ra.
-        // st   fp , sp+0       ;; store old fp.
-        // mv   fp , sp          ;; set fp to sp.
+        // add  sp,sp,-16    ;; alloc stack space for fp.
+        // sd   ra,8(sp)     ;; save ra.
+        // sd   fp,0(sp）    ;; store old fp.
+        // mv   fp,sp        ;; set fp to sp.
         let mut insts = SmallVec::new();
         insts.push(Inst::AjustSp { amount: -16 });
         insts.push(Self::gen_store_stack(
@@ -747,19 +658,4 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
         }
     }
     align_to(clobbered_size, 16)
-}
-
-fn special_purpose_register(p: AbiParam) -> Option<ABIArg> {
-    match p.purpose {
-        // ir::ArgumentPurpose::VMContext => {
-        //     assert!(p.value_type == I64);
-        //     Some(ABIArg::reg(
-        //         x_reg(3).to_real_reg().unwrap(),
-        //         p.value_type,
-        //         p.extension,
-        //         p.purpose,
-        //     ))
-        // }
-        _ => None,
-    }
 }

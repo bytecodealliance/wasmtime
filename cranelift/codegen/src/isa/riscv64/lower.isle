@@ -56,6 +56,12 @@
   )
 )
 
+;;; Rules for `iadd_ifcout` ;;;;;;;;;;;;;
+(rule
+  (lower (has_type (fits_in_64 ty) (iadd_ifcout x y) ))
+  (output_ifcout (alu_add x y))
+)
+
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base case, simply subtracting things in registers.
@@ -1056,5 +1062,9 @@
 (rule (lower (get_return_address))
       (load_ra))
 
-
+;;; Rules for `iabs` ;;;;;;;;;;;;;
+(rule
+  (lower (has_type (fits_in_64 ty) (iabs x) ))
+  (lower_iabs x ty)
+)
 

@@ -22,3 +22,11 @@ block0(v0: i64x2):
 }
 ; run: %popcnt_i64x2([1 0x4000000000000000]) == [1 1]
 ; run: %popcnt_i64x2([0xffffffffffffffff 0]) == [64 0]
+
+
+function %popcnt_i8x16(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = popcnt v0
+    return v1
+}
+; run: %popcnt_i8x16([1 1 1 1 0x40 0x40 0x40 0x40 0xff 0xff 0xff 0xff 0 0 0 0]) == [1 1 1 1 1 1 1 1 8 8 8 8 0 0 0 0]
