@@ -3709,7 +3709,13 @@
         FmaF32
         FmaF64
         CeilF32
-        CeilF64))
+        CeilF64
+        FloorF32
+        FloorF64
+        NearestF32
+        NearestF64
+        TruncF32
+        TruncF64))
 
 (decl libcall_1 (LibCall Reg) Reg)
 (extern constructor libcall_1 libcall_1)
