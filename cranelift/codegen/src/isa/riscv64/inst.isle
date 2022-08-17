@@ -294,7 +294,7 @@
       (rs2 Reg)
       (ty Type))
     
-    ;; popcnt  is target doesn't support extension B 
+    ;; popcnt  if target doesn't support extension B 
     ;; use iteration to implement.
     (Popcnt
       (sum WritableReg)
@@ -303,8 +303,38 @@
       (rs Reg)
       (ty Type)
     )
-))
+    ;;; counting leading or trailing zeros.
+    (Cltz
+      ;; leading or trailing.
+      (leading bool)
+      (sum WritableReg)
+      (step WritableReg)
+      (tmp WritableReg)
+      (rs Reg)
+      (ty Type)
+    )
+    ;; Byte-reverse register
+    (Rev8
+      (rs Reg)
+      (rd WritableReg)
+    )
+    ;; 
+    (Brev8
+      (rs Reg)
+      (ty Type)
+      (step WritableReg)
+      (tmp WritableReg)
+      (tmp2 WritableReg)
+      (rd WritableReg)
+    )
+    ;; 
+    ;;(Iabs 
+    ;;  (rs Reg)
+    ;;  (rd WritableReg)
+    ;; (ty Type)
+    ;;)
 
+))
 
 
 (type FloatSelectOP (enum
@@ -857,19 +887,19 @@
   )
 )
 
-(decl lower_bit_reverse (Type Reg)Reg)
+(decl lower_bit_reverse (Reg Type)Reg)
 
 (rule
-  (lower_bit_reverse $I8 r)
-  (alu_rr_funct12 (AluOPRRI.Brev8) r)
+  (lower_bit_reverse r $I8)
+  (gen_brev8  r  $I8)
 )
 
 (rule
-  (lower_bit_reverse $I16 r)
+  (lower_bit_reverse r $I16)
   (let 
     (
-      (tmp Reg (alu_rr_funct12 (AluOPRRI.Rev8) r))
-      (tmp2 Reg (alu_rr_funct12 (AluOPRRI.Brev8) tmp))
+      (tmp Reg (gen_brev8 r $I16))
+      (tmp2 Reg (gen_rev8 tmp))
       (result Reg (alu_rr_imm12 (AluOPRRI.Srli) tmp2 (imm12_const 48)))
     )
     result
@@ -877,11 +907,11 @@
 )
 
 (rule
-  (lower_bit_reverse $I32 r)
+  (lower_bit_reverse r $I32)
   (let 
     (
-      (tmp Reg (alu_rr_funct12 (AluOPRRI.Rev8) r))
-      (tmp2 Reg (alu_rr_funct12 (AluOPRRI.Brev8) tmp))
+      (tmp Reg (gen_brev8 r $I32))
+      (tmp2 Reg (gen_rev8 tmp))
       (result Reg (alu_rr_imm12 (AluOPRRI.Srli) tmp2 (imm12_const 32)))
     )
     result
@@ -889,13 +919,12 @@
 )
 
 (rule
-  (lower_bit_reverse $I64 r)
+  (lower_bit_reverse r $I64)
   (let 
     (
-      (tmp Reg (alu_rr_funct12 (AluOPRRI.Rev8) r))
-      (result Reg (alu_rr_funct12 (AluOPRRI.Brev8) tmp))
+      (tmp Reg (gen_rev8 r))
     )
-    result
+    (gen_brev8 tmp $I64)
   )
 )
 
@@ -907,24 +936,31 @@
 )
 
 (decl lower_ctz (Type Reg)Reg)
-
+(rule
+  (lower_ctz ty x)
+  (if-let $false(has_b))
+  (gen_cltz $false x ty)
+)
 (rule
   (lower_ctz $I64 x)
+  (if-let $true(has_b))
   (alu_rr_funct12 (AluOPRRI.Ctz) x)
 )
 (rule
   (lower_ctz $I32 x)
+  (if-let $true(has_b))
   (alu_rr_funct12 (AluOPRRI.Ctzw) x)
 )
 ;;;; for I8 and I16
 (rule
   (lower_ctz ty x)
+  (if-let $true(has_b))
   (let
     (
       ;; 
       (tmp Reg (alu_rr_imm12 (AluOPRRI.Bseti) x (imm12_const (ty_bits ty)) ))
     )
-    (lower_ctz $I32 tmp)
+    (alu_rr_funct12 (AluOPRRI.Ctzw) x)
   ) 
 )
 
@@ -958,18 +994,26 @@
 
 
 (decl lower_clz (Type Reg)Reg)
+(rule
+  (lower_clz ty rs)
+  (if-let $false (has_b))
+  (gen_cltz $true rs ty)
+)
 (rule 
   (lower_clz $I64 r)
+  (if-let $true (has_b))
   (alu_rr_funct12 (AluOPRRI.Clz) r) 
 )
 (rule 
   (lower_clz $I32 r)
+  (if-let $true (has_b))
   (alu_rr_funct12 (AluOPRRI.Clzw) r) 
 )
 
 ;;; for I8 and I16
 (rule 
   (lower_clz ty r)
+  (if-let $true (has_b))
   (let
     (
       ;; narrow int make all upper bits are zeros.
@@ -1164,8 +1208,9 @@
       (part1 Reg(alu_rrr (AluOPRRR.Sll) rs shamt))
       ;;
       (part2 Reg(alu_rrr (AluOPRRR.Srl) rs len_sub_shamt))
+      (part3 Reg (gen_select_reg  (IntCC.Equal) shamt (zero_reg) (zero_reg) part2 ))
     )
-    (alu_rrr (AluOPRRR.Or) part1 part2)
+    (alu_rrr (AluOPRRR.Or) part1 part3)
   )
 )
 
@@ -1218,8 +1263,10 @@
       (part1 Reg(alu_rrr (AluOPRRR.Srl) rs shamt))
       ;;
       (part2 Reg(alu_rrr (AluOPRRR.Sll) rs len_sub_shamt))
+      ;;
+      (part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg)  part2 ) )
     )
-    (alu_rrr (AluOPRRR.Or) part1 part2)
+    (alu_rrr (AluOPRRR.Or) part1 part3)
   )
 )
 
@@ -1229,15 +1276,30 @@
   (let
     (
       ;; extract sign bit.
-      (tmp Reg (alu_rr_imm12 (AluOPRRI.Bexti) r (imm12_const_add (ty_bits ty) -1)))
+      (tmp Reg (sext_int_if_need r ty))
       ;;
-      (tmp2 Reg (gen_select_reg (IntCC.Equal) tmp (zero_reg) r (gen_bit_not r) ))
+      (tmp2 Reg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (gen_bit_not r) r))
       ;; 
       (tmp3 Reg (lower_clz ty tmp2))
     )
     (alu_rr_imm12 (AluOPRRI.Addi) tmp3 (imm12_const -1))
   )
 )
+
+(decl gen_cltz(bool Reg Type) Reg)
+(rule
+  (gen_cltz leading rs ty)
+  (let
+    (
+      (tmp WritableReg (temp_writable_reg $I64))
+      (step WritableReg (temp_writable_reg $I64))
+      (sum WritableReg (temp_writable_reg $I64))
+      (_ Unit (emit (MInst.Cltz leading sum step tmp  rs ty )))
+    )
+    (writable_reg_to_reg sum)
+  )
+)
+
 (decl gen_popcnt(Reg Type) Reg)
 (rule
   (gen_popcnt rs ty)
@@ -2246,5 +2308,59 @@
       (tmp Reg (gen_bit_not rs2))
     )
     (alu_rrr (AluOPRRR.Or) rs1  tmp)
+  )
+)
+
+(decl gen_rev8(Reg)Reg)
+(rule
+  (gen_rev8 rs)
+  (if-let $true (has_b))
+  (alu_rr_funct12 (AluOPRRI.Rev8) rs)
+)
+
+(rule
+  (gen_rev8 rs)
+  (if-let $false (has_b))
+  (let
+    (
+      (tmp WritableReg (temp_writable_reg $I64))
+      (_ Unit (emit (MInst.Rev8 rs tmp)) )
+    )
+    (writable_reg_to_reg tmp)
+  )
+)
+(decl pure has_zbkb()bool)
+(extern constructor  has_zbkb has_zbkb)
+
+(decl gen_brev8 (Reg Type) Reg)
+(rule
+  (gen_brev8 rs _)
+  (if-let $true (has_zbkb))
+  (alu_rr_funct12 (AluOPRRI.Brev8) rs)
+)
+(rule
+  (gen_brev8 rs ty)
+  (if-let $false (has_zbkb))
+  (let
+    (
+      (tmp WritableReg (temp_writable_reg $I64))
+      (tmp2 WritableReg (temp_writable_reg $I64))
+      (step WritableReg (temp_writable_reg $I64))
+      (rd WritableReg (temp_writable_reg $I64))
+      (_ Unit (emit (MInst.Brev8 rs ty step tmp tmp2 rd  )))
+    )
+    (writable_reg_to_reg rd)
+  )
+)
+
+
+(decl gen_xor_not(Reg Reg) Reg)
+(rule
+  (gen_xor_not x y)
+  (let
+    (
+      (tmp Reg (gen_bit_not y))
+    )
+    (alu_rrr (AluOPRRR.Xor) x tmp )
   )
 )

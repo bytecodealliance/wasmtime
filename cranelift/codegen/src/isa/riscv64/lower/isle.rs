@@ -348,6 +348,9 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     fn has_b(&mut self) -> Option<bool> {
         Some(self.isa_flags.has_b())
     }
+    fn has_zbkb(&mut self) -> Option<bool> {
+        Some(self.isa_flags.has_zbkb())
+    }
 
     fn valueregs_2_reg(&mut self, val: Value) -> Reg {
         self.put_in_regs(val).regs()[0]

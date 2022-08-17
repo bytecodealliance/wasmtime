@@ -69,6 +69,23 @@ fn is_isa_compatible(
     // since we won't be able to natively execute machine code.
     let host_arch = host.triple().architecture;
     let requested_arch = requested.triple().architecture;
+    #[cfg(target_arch = "riscv64")]
+    {
+        use target_lexicon::Riscv64Architecture;
+        match (requested_arch, Architecture::host()) {
+            // riscv64 can run on riscv64 and riscv64gc and ...
+            // we cannot use an simple requested_arch != Architecture::host() to decide.
+            (Architecture::Riscv64(Riscv64Architecture::Riscv64), _) => {}
+            _ => {
+                println!(
+                    "skipped {}: host can't run {:?} programs",
+                    context.file_path, requested_arch
+                );
+                return Ok(());
+            }
+        }
+    }
+    #[cfg(not(target_arch = "riscv64"))]
     if host_arch != requested_arch {
         return Err(format!(
             "skipped {}: host can't run {:?} programs",

@@ -3,7 +3,7 @@ test run
 target x86_64
 target s390x
 target aarch64
-target riscv64
+;; target riscv64 vector type not supported.
 
 function %fpromote_f32_f64(i64 vmctx, i64, f32) -> f64 {
     gv0 = vmctx

@@ -130,7 +130,7 @@
   (alu_rrr (AluOPRRR.Remuw) (uext_int_if_need  x ty) (uext_int_if_need y ty)))
 
 (rule (lower (has_type (fits_in_16 ty) (srem  x  y  )))
-  (alu_rrr (AluOPRRR.Remuw) (sext_int_if_need x ty)  (sext_int_if_need y ty)))
+  (alu_rrr (AluOPRRR.Remw) (sext_int_if_need x ty)  (sext_int_if_need y ty)))
 
 (rule (lower (has_type $I32 (srem x y)))
   (alu_rrr (AluOPRRR.Remw) x y))
@@ -230,12 +230,12 @@
 
 ;;;; Rules for `bit_reverse` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty (bitrev x)))
-  (lower_bit_reverse ty x))
+  (lower_bit_reverse x ty))
 
 (rule (lower (has_type $I128 (bitrev x)))
   (let ((val ValueRegs x)
-    (lo_rev Reg (lower_bit_reverse $I64 (value_regs_get val 0)))
-    (hi_rev Reg (lower_bit_reverse $I64 (value_regs_get val 1))))
+    (lo_rev Reg (lower_bit_reverse  (value_regs_get val 0) $I64))
+    (hi_rev Reg (lower_bit_reverse  (value_regs_get val 1) $I64)))
     (value_regs hi_rev lo_rev)))
 
 
@@ -362,14 +362,14 @@
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(rotl x y)))
-  (lower_rotl ty x y))
+  (lower_rotl ty (uext_int_if_need x ty) y))
 
 (rule (lower (has_type  $I128 (rotl x y)))
   (lower_i128_rotl x y))
 
 ;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty)(rotr x y)))
-  (lower_rotr ty x y))
+  (lower_rotr ty (uext_int_if_need x ty) y))
 
 (rule (lower (has_type  $I128 (rotr x y)))
   (lower_i128_rotr  x y))
@@ -378,13 +378,17 @@
 ;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; notice x y order!!!
 (rule (lower (has_type (fits_in_64 ty)(bxor_not x y)))
-  (alu_rrr  (AluOPRRR.Xnor) y x))
+  (gen_xor_not x y))
 (rule (lower (has_type  $I128 (bxor_not x y)))
-  (lower_b128_binary (AluOPRRR.Xnor) y x))
-(rule (lower (has_type $F32 (bxor_not x y)))
-  (lower_float_binary (AluOPRRR.Xnor) y x $F32))
-(rule (lower (has_type $F64 (bxor_not x y)))
-  (lower_float_binary (AluOPRRR.Xnor) y x $F64))
+  (let
+    (
+      (low Reg (gen_xor_not (value_regs_get x 0) (value_regs_get y 0) ))
+      (high Reg (gen_xor_not (value_regs_get x 1) (value_regs_get y 1) ))
+    )
+    (value_regs low high)
+  )
+)
+
 
 
 

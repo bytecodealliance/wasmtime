@@ -554,6 +554,32 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(step);
             collector.reg_early_def(sum);
         }
+        &Inst::Rev8 { rs, rd } => {
+            collector.reg_use(rs);
+            collector.reg_early_def(rd);
+        }
+        &Inst::Cltz {
+            sum, step, tmp, rs, ..
+        } => {
+            collector.reg_use(rs);
+            collector.reg_early_def(tmp);
+            collector.reg_early_def(step);
+            collector.reg_early_def(sum);
+        }
+        &Inst::Brev8 {
+            rs,
+            rd,
+            step,
+            tmp,
+            tmp2,
+            ..
+        } => {
+            collector.reg_use(rs);
+            collector.reg_early_def(step);
+            collector.reg_early_def(tmp);
+            collector.reg_early_def(tmp2);
+            collector.reg_early_def(rd);
+        }
     }
 }
 
@@ -896,14 +922,14 @@ impl Inst {
                     for i in 0..bytes.len() {
                         bytes[i] = data[i];
                     }
-                    format!(".u32 0x{:x}", u32::from_le_bytes(bytes))
+                    format!(".4byte 0x{:x}", u32::from_le_bytes(bytes))
                 }
                 8 => {
                     let mut bytes = [0; 8];
                     for i in 0..bytes.len() {
                         bytes[i] = data[i];
                     }
-                    format!(".u64 0x{:x}", u64::from_le_bytes(bytes))
+                    format!(".8byte 0x{:x}", u64::from_le_bytes(bytes))
                 }
                 _ => {
                     format!(".data {:?}", data)
@@ -911,6 +937,24 @@ impl Inst {
             },
             &Inst::Unwind { ref inst } => {
                 format!("unwind {:?}", inst)
+            }
+            &Inst::Brev8 {
+                rs,
+                ty,
+                step,
+                tmp,
+                tmp2,
+                rd,
+            } => {
+                let rs = format_reg(rs, allocs);
+                let step = format_reg(step.to_reg(), allocs);
+                let tmp = format_reg(tmp.to_reg(), allocs);
+                let tmp2 = format_reg(tmp2.to_reg(), allocs);
+                let rd = format_reg(rd.to_reg(), allocs);
+                format!(
+                    "brev8 {},{}##tmp={} tmp2={} step={} ty={}",
+                    rd, rs, tmp, tmp2, step, ty
+                )
             }
             &Inst::SelectIf {
                 if_spectre_guard,
@@ -948,7 +992,34 @@ impl Inst {
                 let tmp = format_reg(tmp.to_reg(), allocs);
                 let step = format_reg(step.to_reg(), allocs);
                 let sum = format_reg(sum.to_reg(), allocs);
-                format!("popcnt {},{}##ty={} tmp={} step={}", sum, rs, ty, tmp , step )
+                format!("popcnt {},{}##ty={} tmp={} step={}", sum, rs, ty, tmp, step)
+            }
+            &Inst::Rev8 { rs, rd } => {
+                let rs = format_reg(rs, allocs);
+                let rd = format_reg(rd.to_reg(), allocs);
+                format!("rev8 {},{}", rd, rs)
+            }
+            &Inst::Cltz {
+                sum,
+                step,
+                rs,
+                tmp,
+                ty,
+                leading,
+            } => {
+                let rs = format_reg(rs, allocs);
+                let tmp = format_reg(tmp.to_reg(), allocs);
+                let step = format_reg(step.to_reg(), allocs);
+                let sum = format_reg(sum.to_reg(), allocs);
+                format!(
+                    "{} {},{}##ty={} tmp={} step={}",
+                    if leading { "clz" } else { "ctz" },
+                    sum,
+                    rs,
+                    ty,
+                    tmp,
+                    step
+                )
             }
             &Inst::FcvtToIntSat {
                 rd,
