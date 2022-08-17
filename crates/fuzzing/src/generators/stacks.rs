@@ -51,10 +51,10 @@ impl Stacks {
         let mut work_list = vec![0];
 
         while let Some(f) = work_list.pop() {
-            let mut ops = u
-                .arbitrary_iter::<Op>()?
-                .take(MAX_OPS)
-                .collect::<Result<Vec<_>>>()?;
+            let mut ops = Vec::with_capacity(u.arbitrary_len::<Op>()?.max(MAX_OPS));
+            for _ in 0..ops.capacity() {
+                ops.push(u.arbitrary()?);
+            }
             for op in &mut ops {
                 match op {
                     Op::CallThroughHost(idx) | Op::Call(idx) => {
