@@ -177,6 +177,11 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
+    fn encode_round_imm(&mut self, imm: &RoundImm) -> u8 {
+        imm.encode()
+    }
+
+    #[inline]
     fn avx512vl_enabled(&mut self, _: Type) -> Option<()> {
         if self.isa_flags.use_avx512vl_simd() {
             Some(())
@@ -242,6 +247,15 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     #[inline]
     fn use_fma(&mut self, _: Type) -> Option<()> {
         if self.isa_flags.use_fma() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn use_sse41(&mut self, _: Type) -> Option<()> {
+        if self.isa_flags.use_sse41() {
             Some(())
         } else {
             None
@@ -713,6 +727,24 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     #[inline]
     fn preg_rsp(&mut self) -> PReg {
         regs::rsp().to_real_reg().unwrap().into()
+    }
+
+    fn libcall_1(&mut self, libcall: &LibCall, a: Reg) -> Reg {
+        let call_conv = self.lower_ctx.abi().call_conv();
+        let ret_ty = libcall.signature(call_conv).returns[0].value_type;
+        let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
+
+        emit_vm_call(
+            self.lower_ctx,
+            self.flags,
+            self.triple,
+            libcall.clone(),
+            &[a],
+            &[output_reg],
+        )
+        .expect("Failed to emit LibCall");
+
+        output_reg.to_reg()
     }
 
     fn libcall_3(&mut self, libcall: &LibCall, a: Reg, b: Reg, c: Reg) -> Reg {
