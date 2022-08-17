@@ -51,7 +51,7 @@ impl Stacks {
         let mut work_list = vec![0];
 
         while let Some(f) = work_list.pop() {
-            let mut ops = Vec::with_capacity(u.arbitrary_len::<Op>()?.max(MAX_OPS));
+            let mut ops = Vec::with_capacity(u.arbitrary_len::<Op>()?.min(MAX_OPS));
             for _ in 0..ops.capacity() {
                 ops.push(u.arbitrary()?);
             }
