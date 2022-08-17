@@ -23,10 +23,16 @@ pub fn main() {
 }
 
 fn execute(backend: wasi_nn::GraphEncoding, dimensions: &[u32], mut output_buffer: Vec<f32>) {
-    let gba: Vec<Vec<u8>> = create_gba(backend);
+    let mut gba_r: Vec<&[u8]> = vec![];
+    let gba = create_gba(backend);
+
+    for i in 0..gba.len() {
+        gba_r.push(gba[i].as_slice());
+    }
+
     let graph = unsafe {
         wasi_nn::load(
-            &[&gba[0], &gba[1]],
+            &gba_r,
             backend,
             wasi_nn::EXECUTION_TARGET_CPU,
         )
@@ -73,7 +79,7 @@ fn execute(backend: wasi_nn::GraphEncoding, dimensions: &[u32], mut output_buffe
     )
 }
 
-fn create_gba (backend: u8) -> Vec<Vec<u8>> {
+fn create_gba (backend: u8) ->Vec<Vec<u8>>  {
     let result: Vec<Vec<u8>> = match backend {
         wasi_nn::GRAPH_ENCODING_OPENVINO => {
             let xml = fs::read_to_string("fixture/model.xml").unwrap();
@@ -82,8 +88,10 @@ fn create_gba (backend: u8) -> Vec<Vec<u8>> {
         },
         GRAPH_ENCODING_TENSORFLOW => {
             let model_path: String = env!("MAPDIR").to_string();
-            let options = "".to_string();
-            Vec::from([model_path.into_bytes(), options.into_bytes()])
+            Vec::from([model_path.into_bytes(),
+                        "signature,serving_default".to_owned().into_bytes(),
+                        "tag,serve".to_owned().into_bytes(),
+                        ])
         },
         _ => {
             println!("Unknown backend {}", backend);

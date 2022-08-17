@@ -13,7 +13,9 @@ use tensorflow::{SignatureDef, Tensor as TFTensor};
 use tensorflow::{TensorInfo, DEFAULT_SERVING_SIGNATURE_DEF_KEY};
 
 #[derive(Default)]
-pub(crate) struct TensorflowBackend();
+pub(crate) struct TensorflowBackend {
+    signature: String,
+}
 
 impl Backend for TensorflowBackend {
     fn name(&self) -> &str {
@@ -41,16 +43,36 @@ impl Backend for TensorflowBackend {
             // (from `--mapdir` CLI option) to the host-side path with the
             // actual files. If in the future Tensorflow allows loading models
             // from bytes, that would be a better solution (TODO).
+            let builders_len = builders.len();
             let builders = builders.as_ptr();
             let guest_map = builders.read()?.as_slice()?;
             let mapped_directory =
                 build_path(&guest_map, map_dirs).ok_or(BackendError::MissingMapDir())?;
+            let mut tags: Vec<String> = vec![];
+            let mut itr: u32 = 1;
+
+            // Get all the user provided options
+            while itr < builders_len {
+                let opt = builders.add(itr)?.read()?.as_slice()?.to_owned();
+                let mut opt_str = str::from_utf8(&opt).ok().unwrap().split(',');
+
+                match opt_str.next().unwrap() {
+                    "signature" => {
+                        self.signature = opt_str.next().unwrap().to_owned();
+                    }
+                    "tag" => tags.push(opt_str.next().unwrap().to_owned()),
+                    o => {
+                        println!("** Unknown Tensorflow option {}, ignoring... **", o);
+                    }
+                }
+                itr += 1;
+            }
 
             // Load the model.
             let mut graph = Graph::new();
             let bundle = SavedModelBundle::load(
                 &SessionOptions::new(),
-                &["serve"],
+                &tags,
                 &mut graph,
                 mapped_directory,
             )?;
@@ -84,6 +106,7 @@ fn build_path(guest_path: &[u8], map_dirs: &Vec<(String, String)>) -> Option<Pat
     }
     None
 }
+
 struct TensorflowGraph(Arc<Graph>, Arc<SavedModelBundle>);
 
 impl<'a> BackendGraph for TensorflowGraph {
