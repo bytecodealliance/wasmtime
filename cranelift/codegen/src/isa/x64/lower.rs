@@ -569,64 +569,9 @@ fn lower_insn_to_regs(
         | Opcode::Unarrow
         | Opcode::Bitcast
         | Opcode::Fabs
-        | Opcode::Fneg => {
+        | Opcode::Fneg
+        | Opcode::Fcopysign => {
             implemented_in_isle(ctx);
-        }
-
-        Opcode::Fcopysign => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let lhs = put_input_in_reg(ctx, inputs[0]);
-            let rhs = put_input_in_reg(ctx, inputs[1]);
-
-            let ty = ty.unwrap();
-
-            // We're going to generate the following sequence:
-            //
-            // movabs     $INT_MIN, tmp_gpr1
-            // mov{d,q}   tmp_gpr1, tmp_xmm1
-            // movap{s,d} tmp_xmm1, dst
-            // andnp{s,d} src_1, dst
-            // movap{s,d} src_2, tmp_xmm2
-            // andp{s,d}  tmp_xmm1, tmp_xmm2
-            // orp{s,d}   tmp_xmm2, dst
-
-            let tmp_xmm1 = ctx.alloc_tmp(types::F32).only_reg().unwrap();
-            let tmp_xmm2 = ctx.alloc_tmp(types::F32).only_reg().unwrap();
-
-            let (sign_bit_cst, mov_op, and_not_op, and_op, or_op) = match ty {
-                types::F32 => (
-                    0x8000_0000,
-                    SseOpcode::Movaps,
-                    SseOpcode::Andnps,
-                    SseOpcode::Andps,
-                    SseOpcode::Orps,
-                ),
-                types::F64 => (
-                    0x8000_0000_0000_0000,
-                    SseOpcode::Movapd,
-                    SseOpcode::Andnpd,
-                    SseOpcode::Andpd,
-                    SseOpcode::Orpd,
-                ),
-                _ => {
-                    panic!("unexpected type {:?} for copysign", ty);
-                }
-            };
-
-            for inst in Inst::gen_constant(ValueRegs::one(tmp_xmm1), sign_bit_cst, ty, |ty| {
-                ctx.alloc_tmp(ty).only_reg().unwrap()
-            }) {
-                ctx.emit(inst);
-            }
-            ctx.emit(Inst::xmm_mov(mov_op, RegMem::reg(tmp_xmm1.to_reg()), dst));
-            ctx.emit(Inst::xmm_rm_r(and_not_op, RegMem::reg(lhs), dst));
-            ctx.emit(Inst::xmm_mov(mov_op, RegMem::reg(rhs), tmp_xmm2));
-            ctx.emit(Inst::xmm_rm_r(
-                and_op,
-                RegMem::reg(tmp_xmm1.to_reg()),
-                tmp_xmm2,
-            ));
-            ctx.emit(Inst::xmm_rm_r(or_op, RegMem::reg(tmp_xmm2.to_reg()), dst));
         }
 
         Opcode::Ceil | Opcode::Floor | Opcode::Nearest | Opcode::Trunc => {
