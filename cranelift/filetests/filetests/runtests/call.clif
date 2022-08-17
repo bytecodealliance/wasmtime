@@ -20,6 +20,15 @@ block0(v0: i64):
 }
 ; run: %call_i64(10) == 20
 
+function %colocated_i64(i64) -> i64 {
+    fn0 = colocated %callee_i64(i64) -> i64
+
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return v1
+}
+; run: %colocated_i64(10) == 20
+
 
 
 
