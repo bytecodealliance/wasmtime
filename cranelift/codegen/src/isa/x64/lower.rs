@@ -573,48 +573,9 @@ fn lower_insn_to_regs(
         | Opcode::Fcopysign
         | Opcode::Ceil
         | Opcode::Floor
-        | Opcode::Nearest => {
+        | Opcode::Nearest
+        | Opcode::Trunc => {
             implemented_in_isle(ctx);
-        }
-
-        Opcode::Trunc => {
-            let ty = ty.unwrap();
-            if isa_flags.use_sse41() {
-                let mode = match op {
-                    Opcode::Trunc => RoundImm::RoundZero,
-                    _ => panic!("unexpected opcode {:?} in Trunc", op),
-                };
-                let op = match ty {
-                    types::F32 => SseOpcode::Roundss,
-                    types::F64 => SseOpcode::Roundsd,
-                    types::F32X4 => SseOpcode::Roundps,
-                    types::F64X2 => SseOpcode::Roundpd,
-                    _ => panic!("unexpected type {:?} in Trunc", ty),
-                };
-                let src = input_to_reg_mem(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::xmm_rm_r_imm(
-                    op,
-                    src,
-                    dst,
-                    mode.encode(),
-                    OperandSize::Size32,
-                ));
-            } else {
-                // Lower to VM calls when there's no access to SSE4.1.
-                // Note, for vector types on platforms that don't support sse41
-                // the execution will panic here.
-                let libcall = match (op, ty) {
-                    (Opcode::Trunc, types::F32) => LibCall::TruncF32,
-                    (Opcode::Trunc, types::F64) => LibCall::TruncF64,
-                    _ => panic!("unexpected type/opcode {:?}/{:?} in Trunc", ty, op),
-                };
-
-                let input = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                emit_vm_call(ctx, flags, triple, libcall, &[input], &[dst])?;
-            }
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),

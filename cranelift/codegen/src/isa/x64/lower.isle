@@ -3393,3 +3393,23 @@
 
 (rule (lower (has_type (use_sse41) (nearest a @ (value_type $F64X2))))
       (x64_roundpd a (RoundImm.RoundNearest)))
+
+;; Rules for `trunc` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F32))))
+      (x64_roundss a (RoundImm.RoundZero)))
+
+(rule (lower (trunc a @ (value_type $F32)))
+      (libcall_1 (LibCall.TruncF32) a))
+
+(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F64))))
+      (x64_roundsd a (RoundImm.RoundZero)))
+
+(rule (lower (trunc a @ (value_type $F64)))
+      (libcall_1 (LibCall.TruncF64) a))
+
+(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F32X4))))
+      (x64_roundps a (RoundImm.RoundZero)))
+
+(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F64X2))))
+      (x64_roundpd a (RoundImm.RoundZero)))
