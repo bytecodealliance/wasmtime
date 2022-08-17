@@ -1496,33 +1496,19 @@
 (decl sse_xor (Type Xmm XmmMem) Xmm)
 (rule (sse_xor ty x y) (xmm_rm_r ty (sse_xor_op ty) x y))
 
-;; Determine the appropriate operation to compare two vectors of the specified
-;; type.
-(decl sse_cmp_op (Type) SseOpcode)
-(rule (sse_cmp_op (multi_lane 8 16)) (SseOpcode.Pcmpeqb))
-(rule (sse_cmp_op (multi_lane 16 8)) (SseOpcode.Pcmpeqw))
-(rule (sse_cmp_op (multi_lane 32 4)) (SseOpcode.Pcmpeqd))
-(rule (sse_cmp_op (multi_lane 64 2)) (SseOpcode.Pcmpeqq))
-
-;; Generates a register value which has an all-ones pattern of the specified
-;; type.
+;; Generates a register value which has an all-ones pattern.
 ;;
 ;; Note that this is accomplished by comparing a fresh register with itself,
 ;; which for integers is always true. Also note that the comparison is always
-;; done for integers, it doesn't actually take the input `ty` into account. This
-;; is because we're comparing a fresh register to itself and we don't know the
-;; previous contents of the register. If a floating-point comparison is used
-;; then it runs the risk of comparing NaN against NaN and not actually producing
-;; an all-ones mask. By using integer comparision operations we're guaranteeed
-;; that everything is equal to itself.
-(decl vector_all_ones (Type) Xmm)
-(rule (vector_all_ones ty)
-      (let ((r WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmR (sse_cmp_op $I32X4)
-                                        r
-                                        r
-                                        r))))
-        r))
+;; done for integers. This is because we're comparing a fresh register to itself
+;; and we don't know the previous contents of the register. If a floating-point
+;; comparison is used then it runs the risk of comparing NaN against NaN and not
+;; actually producing an all-ones mask. By using integer comparision operations
+;; we're guaranteeed that everything is equal to itself.
+(decl vector_all_ones () Xmm)
+(rule (vector_all_ones)
+      (let ((r WritableXmm (temp_writable_xmm)))
+        (x64_pcmpeqd r r)))
 
 ;; Helper for creating an SSE register holding an `i64x2` from two `i64` values.
 (decl make_i64x2_from_lanes (GprMem GprMem) Xmm)

@@ -1228,13 +1228,13 @@
 ;; Special case for `f32x4.abs`.
 (rule (lower (has_type $F32X4 (fabs x)))
       (x64_andps x
-             (x64_psrld (vector_all_ones $F32X4)
+             (x64_psrld (vector_all_ones)
                     (RegMemImm.Imm 1))))
 
 ;; Special case for `f64x2.abs`.
 (rule (lower (has_type $F64X2 (fabs x)))
       (x64_andpd x
-             (x64_psrlq (vector_all_ones $F64X2)
+             (x64_psrlq (vector_all_ones)
                     (RegMemImm.Imm 1))))
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1263,7 +1263,7 @@
 ;; Special case for vector-types where bit-negation is an xor against an
 ;; all-one value
 (rule (lower (has_type ty @ (multi_lane _bits _lanes) (bnot x)))
-      (sse_xor ty x (vector_all_ones ty)))
+      (sse_xor ty x (vector_all_ones)))
 
 ;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1517,7 +1517,7 @@
 ;; (PCMPEQ*) and then invert the bits (PXOR with all 1s).
 (rule (lower (icmp (IntCC.NotEqual) a @ (value_type (ty_vec128 ty)) b))
       (let ((checked Xmm (x64_pcmpeq ty a b))
-            (all_ones Xmm (vector_all_ones ty)))
+            (all_ones Xmm (vector_all_ones)))
            (x64_pxor checked all_ones)))
 ;; Signed comparisons have a single-instruction lowering, unlike their unsigned
 ;; counterparts. These latter instructions use the unsigned min/max
@@ -1534,7 +1534,7 @@
             (xmm_b Xmm (put_in_xmm b))
             (max Xmm (x64_pmaxu ty xmm_a xmm_b))
             (eq Xmm (x64_pcmpeq ty max xmm_b))
-            (all_ones Xmm (vector_all_ones ty)))
+            (all_ones Xmm (vector_all_ones)))
            (x64_pxor eq all_ones)))
 (rule (lower (icmp (IntCC.UnsignedLessThan) a @ (value_type (ty_vec128 ty)) b))
       ;; N.B.: see note above.
@@ -1542,7 +1542,7 @@
             (xmm_b Xmm (put_in_xmm b))
             (min Xmm (x64_pminu ty xmm_a xmm_b))
             (eq Xmm (x64_pcmpeq ty min xmm_b))
-            (all_ones Xmm (vector_all_ones ty)))
+            (all_ones Xmm (vector_all_ones)))
            (x64_pxor eq all_ones)))
 ;; To lower signed and unsigned *-or-equals comparisons, we find the minimum
 ;; number (PMIN[U|S]*) and compare that to one of the terms (PCMPEQ*). Note that
@@ -1564,11 +1564,11 @@
 ;; 1s), emitting one more instruction than the smaller-lane versions.
 (rule (lower (icmp (IntCC.SignedGreaterThanOrEqual) a @ (value_type $I64X2) b))
       (let ((checked Xmm (x64_pcmpgt $I64X2 b a))
-            (all_ones Xmm (vector_all_ones $I64X2)))
+            (all_ones Xmm (vector_all_ones)))
            (x64_pxor checked all_ones)))
 (rule (lower (icmp (IntCC.SignedLessThanOrEqual) a @ (value_type $I64X2) b))
       (let ((checked Xmm (x64_pcmpgt $I64X2 a b))
-            (all_ones Xmm (vector_all_ones $I64X2)))
+            (all_ones Xmm (vector_all_ones)))
            (x64_pxor checked all_ones)))
 ;; TODO: not used by WebAssembly translation
 ;; (rule (lower (icmp (IntCC.UnsignedGreaterThanOrEqual) a @ (value_type $I64X2) b))
