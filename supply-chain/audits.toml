@@ -128,6 +128,12 @@ criteria = "safe-to-deploy"
 version = "0.89.0"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.wasmparser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.89.1"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.wasmprinter]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
