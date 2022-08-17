@@ -981,12 +981,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::Ret { ref rets } => {
-            for &ret in rets {
-                collector.reg_use(ret);
-            }
-        }
-        &Inst::AuthenticatedRet { ref rets, .. } => {
+        &Inst::Ret { ref rets } | &Inst::AuthenticatedRet { ref rets, .. } => {
             for &ret in rets {
                 collector.reg_use(ret);
             }
@@ -1039,7 +1034,10 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             memarg_operands(mem, collector);
         }
-        &Inst::Pacisp { .. } => {}
+        &Inst::Pacisp { .. } | &Inst::Xpaclri => {
+            // Neither LR nor SP is an allocatable register, so there is no need
+            // to do anything.
+        }
         &Inst::VirtualSPOffsetAdj { .. } => {}
 
         &Inst::ElfTlsGetAddr { .. } => {
@@ -2715,6 +2713,7 @@ impl Inst {
 
                 "paci".to_string() + key + "sp"
             }
+            &Inst::Xpaclri => "xpaclri".to_string(),
             &Inst::VirtualSPOffsetAdj { offset } => {
                 state.virtual_sp_offset += offset;
                 format!("virtual_sp_offset_adjust {}", offset)
