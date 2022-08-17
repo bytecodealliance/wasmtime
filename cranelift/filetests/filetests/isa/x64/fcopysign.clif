@@ -1,0 +1,43 @@
+test compile precise-output
+target x86_64
+
+function %f1(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fcopysign v0, v1
+  return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $-2147483648, %r11d
+;   movd    %r11d, %xmm7
+;   movdqa  %xmm0, %xmm14
+;   movdqa  %xmm7, %xmm0
+;   andnps  %xmm0, %xmm14, %xmm0
+;   andps   %xmm1, %xmm7, %xmm1
+;   orps    %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f1(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fcopysign v0, v1
+  return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movabsq $-9223372036854775808, %r11
+;   movq    %r11, %xmm7
+;   movdqa  %xmm0, %xmm14
+;   movdqa  %xmm7, %xmm0
+;   andnpd  %xmm0, %xmm14, %xmm0
+;   andpd   %xmm1, %xmm7, %xmm1
+;   orpd    %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
