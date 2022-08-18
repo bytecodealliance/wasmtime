@@ -96,7 +96,7 @@ fuzz_target!(|func: SingleFunction| {
                     let imm = imm.bits();
                     cursor.func.dfg[inst] = ir::InstructionData::UnaryImm {
                         opcode: ir::Opcode::Iconst,
-                        imm: Imm64::new(imm.checked_add(1).unwrap_or(imm - 1)),
+                        imm: Imm64::new(imm.checked_add(1).unwrap_or_else(|| imm - 1)),
                     };
                 } else {
                     cursor.func.dfg[inst] = ir::InstructionData::UnaryImm {
