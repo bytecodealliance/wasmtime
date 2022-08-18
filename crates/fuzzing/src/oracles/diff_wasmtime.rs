@@ -1,13 +1,12 @@
 //! Evaluate an exported Wasm function using Wasmtime.
 
-use super::engine::DiffIgnoreError;
 use crate::generators::{self, DiffValue};
 use crate::oracles::engine::DiffInstance;
 use crate::oracles::{compile_module, engine::DiffEngine, instantiate_with_dummy, StoreLimits};
 use anyhow::{Context, Result};
 use std::hash::Hash;
 use std::slice;
-use wasmtime::{AsContextMut, Extern, Instance, Store, Val};
+use wasmtime::{AsContextMut, Extern, Instance, Module, Store, Val};
 
 /// A wrapper for using Wasmtime as a [`DiffEngine`].
 pub struct WasmtimeEngine {
@@ -27,14 +26,14 @@ impl WasmtimeEngine {
 }
 
 impl DiffEngine for WasmtimeEngine {
+    fn name(&self) -> &'static str {
+        "wasmtime"
+    }
+
     fn instantiate(&self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
-        let mut store = self.config.to_store();
-        let module = compile_module(store.engine(), wasm, true, &self.config).ok_or(
-            DiffIgnoreError("unable to compile module in wasmtime".into()),
-        )?;
-        let instance = instantiate_with_dummy(&mut store, &module)
-            .context("unable to instantiate module in wasmtime")?;
-        let instance = WasmtimeInstance { store, instance };
+        let store = self.config.to_store();
+        let module = compile_module(store.engine(), wasm, true, &self.config).unwrap();
+        let instance = WasmtimeInstance::new(store, module)?;
         Ok(Box::new(instance))
     }
 }
@@ -42,11 +41,19 @@ impl DiffEngine for WasmtimeEngine {
 /// A wrapper around a Wasmtime instance.
 ///
 /// The Wasmtime engine constructs a new store and compiles an instance of a
-/// Wasm module. The store is hidden in a [`RefCell`] so that we can hash, which
-/// does not modify the [`Store`] even though the API makes it appear so.
-struct WasmtimeInstance {
+/// Wasm module.
+pub struct WasmtimeInstance {
     store: Store<StoreLimits>,
     instance: Instance,
+}
+
+impl WasmtimeInstance {
+    /// Instantiate a new Wasmtime instance.
+    pub fn new(mut store: Store<StoreLimits>, module: Module) -> Result<Self> {
+        let instance = instantiate_with_dummy(&mut store, &module)
+            .context("unable to instantiate module in wasmtime")?;
+        Ok(Self { store, instance })
+    }
 }
 
 impl DiffInstance for WasmtimeInstance {
@@ -96,7 +103,6 @@ impl DiffInstance for WasmtimeInstance {
                 Extern::Table(_) => {
                     // TODO: it's unclear whether it is worth it to iterate
                     // through the table and hash the values.
-                    todo!()
                 }
                 Extern::Func(_) => {
                     // Note: no need to hash exported functions.

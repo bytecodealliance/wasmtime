@@ -1,8 +1,8 @@
 //! Generate a configuration for both Wasmtime and the Wasm module to execute.
 
 use super::{
-    CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig, ModuleFeatures,
-    NormalMemoryConfig, UnalignedMemoryCreator,
+    CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig, NormalMemoryConfig,
+    UnalignedMemoryCreator,
 };
 use crate::oracles::{StoreLimits, Timeout};
 use anyhow::Result;
@@ -92,6 +92,8 @@ impl Config {
             limits.tables = 1;
             limits.table_elements = 1_000;
 
+            limits.size = 1_000_000;
+
             match &mut self.wasmtime.memory_config {
                 MemoryConfig::Normal(config) => {
                     config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
@@ -99,13 +101,6 @@ impl Config {
                 MemoryConfig::CustomUnaligned => unreachable!(), // Arbitrary impl for `Config` should have prevented this
             }
         }
-    }
-
-    /// Modify this configuration to use the given [`ModuleFeatures`].
-    pub fn set_features(&mut self, features: &ModuleFeatures) {
-        self.module_config.config.simd_enabled = features.simd;
-        self.module_config.config.multi_value_enabled = features.multi_value;
-        self.module_config.config.reference_types_enabled = features.reference_types;
     }
 
     /// Force `self` to be a configuration compatible with `other`. This is

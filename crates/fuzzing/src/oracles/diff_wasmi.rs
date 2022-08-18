@@ -1,11 +1,9 @@
 //! Evaluate an exported Wasm function using the wasmi interpreter.
 
-use crate::generators::{DiffValue, ModuleFeatures};
+use crate::generators::{DiffValue, ModuleConfig};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use std::hash::Hash;
-
-use super::engine::DiffIgnoreError;
 
 /// A wrapper for `wasmi` as a [`DiffEngine`].
 pub struct WasmiEngine;
@@ -13,28 +11,33 @@ pub struct WasmiEngine;
 impl WasmiEngine {
     /// Build a new [`WasmiEngine`] but only if the configuration does not rely
     /// on features that `wasmi` does not support.
-    pub fn new(features: &ModuleFeatures) -> Result<Box<Self>> {
-        if features.reference_types {
+    pub fn new(config: &ModuleConfig) -> Result<Box<Self>> {
+        if config.config.reference_types_enabled {
             bail!("wasmi does not support reference types")
         }
-        if features.simd {
+        if config.config.simd_enabled {
             bail!("wasmi does not support SIMD")
         }
-        if features.multi_value {
+        if config.config.multi_value_enabled {
             bail!("wasmi does not support multi-value")
+        }
+        if config.config.saturating_float_to_int_enabled {
+            bail!("wasmi does not support saturating float-to-int conversions")
+        }
+        if config.config.sign_extension_enabled {
+            bail!("wasmi does not support sign-extension")
         }
         Ok(Box::new(Self))
     }
 }
 
 impl DiffEngine for WasmiEngine {
+    fn name(&self) -> &'static str {
+        "wasmi"
+    }
+
     fn instantiate(&self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
-        let module = wasmi::Module::from_buffer(wasm).map_err(|e| match e {
-            // Ignore `wasmi` validation errors; some opcodes not supported
-            // (TODO).
-            wasmi::Error::Validation(e) => anyhow!(DiffIgnoreError(e)),
-            e => anyhow!(e),
-        })?;
+        let module = wasmi::Module::from_buffer(wasm).context("unable to validate Wasm module")?;
         let instance = wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default())
             .context("unable to instantiate module in wasmi")?;
         let instance = instance.assert_no_start();
@@ -90,7 +93,7 @@ impl DiffInstance for WasmiInstance {
             if let Some(export) = self.instance.export_by_name(export_name) {
                 match export {
                     wasmi::ExternVal::Func(_) => {}
-                    wasmi::ExternVal::Table(_) => todo!(),
+                    wasmi::ExternVal::Table(_) => {} // TODO eventually we can hash whether the values are null or non-null.
                     wasmi::ExternVal::Memory(m) => {
                         // `wasmi` memory may be stored non-contiguously; copy
                         // it out to a contiguous chunk.

@@ -1,7 +1,7 @@
 //! Evaluate an exported Wasm function using the WebAssembly specification
 //! reference interpreter.
 
-use crate::generators::{DiffValue, ModuleFeatures};
+use crate::generators::{DiffValue, ModuleConfig};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
 use anyhow::{anyhow, bail, Result};
 use wasm_spec_interpreter::Value;
@@ -13,15 +13,27 @@ impl SpecInterpreter {
     /// Build a new [`SpecInterpreter`] but only if the configuration does not
     /// rely on features that the current bindings (i.e.,
     /// `wasm-spec-interpreter`) do not support.
-    pub fn new(features: &ModuleFeatures) -> Result<Box<Self>> {
-        if features.reference_types {
+    pub fn new(config: &ModuleConfig) -> Result<Box<Self>> {
+        if config.config.reference_types_enabled {
             bail!("the spec interpreter bindings do not support reference types")
+        }
+        if config.config.max_funcs > 1 {
+            // TODO
+            bail!("the spec interpreter bindings can only support one function for now")
+        }
+        if config.config.max_tables > 0 {
+            // TODO
+            bail!("the spec interpreter bindings do not fail as they should with out-of-bounds table accesses")
         }
         Ok(Box::new(Self))
     }
 }
 
 impl DiffEngine for SpecInterpreter {
+    fn name(&self) -> &'static str {
+        "spec"
+    }
+
     fn instantiate(&self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
         // TODO: ideally we would avoid copying the module bytes here.
         Ok(Box::new(SpecInstance {

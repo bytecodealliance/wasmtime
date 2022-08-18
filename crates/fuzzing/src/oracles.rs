@@ -18,6 +18,7 @@ pub mod dummy;
 pub mod engine;
 mod stacks;
 
+use self::diff_wasmtime::WasmtimeInstance;
 use self::engine::DiffInstance;
 use crate::generators::{self, DiffValue};
 use arbitrary::Arbitrary;
@@ -272,11 +273,17 @@ fn compile_module(
     }
 }
 
-// TODO: we should implement tracing versions of these dummy imports that record
-// a trace of the order that imported functions were called in and with what
-// values. Like the results of exported functions, calls to imports should also
-// yield the same values for each configuration, and we should assert that.
-fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Option<Instance> {
+/// Create a Wasmtime [`Instance`] from a [`Module`] and fill in all imports
+/// with dummy values (e.g., zeroed values, immediately-trapping functions).
+/// Also, this function catches certain fuzz-related instantiation failures and
+/// returns `None` instead of panicking.
+///
+/// TODO: we should implement tracing versions of these dummy imports that
+/// record a trace of the order that imported functions were called in and with
+/// what values. Like the results of exported functions, calls to imports should
+/// also yield the same values for each configuration, and we should assert
+/// that.
+pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Option<Instance> {
     // Creation of imports can fail due to resource limit constraints, and then
     // instantiation can naturally fail for a number of reasons as well. Bundle
     // the two steps together to match on the error below.
@@ -292,12 +299,14 @@ fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Op
     // expected that fuzz-generated programs try to allocate lots of
     // stuff.
     if store.data().0.oom.get() {
+        log::debug!("failed to instantiate: OOM");
         return None;
     }
 
     // Allow traps which can happen normally with `unreachable` or a
     // timeout or such
-    if e.downcast_ref::<Trap>().is_some() {
+    if let Some(trap) = e.downcast_ref::<Trap>() {
+        log::debug!("failed to instantiate: {}", trap);
         return None;
     }
 
@@ -309,11 +318,13 @@ fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Op
         // rather than positional-based resolution
         || string.contains("incompatible import type")
     {
+        log::debug!("failed to instantiate: {}", string);
         return None;
     }
 
     // Also allow failures to instantiate as a result of hitting instance limits
     if string.contains("concurrent instances has been reached") {
+        log::debug!("failed to instantiate: {}", string);
         return None;
     }
 
@@ -330,7 +341,7 @@ fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Op
 /// results are different, hashed instance is different, one side traps, etc.).
 pub fn differential(
     lhs: &mut dyn DiffInstance,
-    rhs: &mut dyn DiffInstance,
+    rhs: &mut WasmtimeInstance,
     name: &str,
     args: &[DiffValue],
 ) -> anyhow::Result<()> {
