@@ -6,7 +6,7 @@ use crate::oracles::{compile_module, engine::DiffEngine, instantiate_with_dummy,
 use anyhow::{Context, Result};
 use std::hash::Hash;
 use std::slice;
-use wasmtime::{AsContextMut, Extern, Instance, Module, Store, Val};
+use wasmtime::{AsContextMut, Extern, FuncType, Instance, Module, Store, Val};
 
 /// A wrapper for using Wasmtime as a [`DiffEngine`].
 pub struct WasmtimeEngine {
@@ -53,6 +53,25 @@ impl WasmtimeInstance {
         let instance = instantiate_with_dummy(&mut store, &module)
             .context("unable to instantiate module in wasmtime")?;
         Ok(Self { store, instance })
+    }
+
+    /// Retrieve the names and types of all exported functions in the instance.
+    ///
+    /// This is useful for evaluating each exported function with different
+    /// values. The [`DiffInstance`] trait asks for the function name and we
+    /// need to know the function signature in order to pass in the right
+    /// arguments.
+    pub fn exported_functions(&mut self) -> Vec<(String, FuncType)> {
+        let exported_functions = self
+            .instance
+            .exports(&mut self.store)
+            .map(|e| (e.name().to_owned(), e.into_func()))
+            .filter_map(|(n, f)| f.map(|f| (n, f)))
+            .collect::<Vec<_>>();
+        exported_functions
+            .into_iter()
+            .map(|(n, f)| (n, f.ty(&self.store)))
+            .collect()
     }
 }
 

@@ -8,7 +8,6 @@ use std::sync::Once;
 use wasmtime_fuzzing::generators::{Config, DiffValue, SingleInstModule};
 use wasmtime_fuzzing::oracles::diff_spec;
 use wasmtime_fuzzing::oracles::diff_wasmtime::WasmtimeInstance;
-use wasmtime_fuzzing::oracles::engine::get_exported_function_signatures;
 use wasmtime_fuzzing::oracles::{differential, engine, log_wasm};
 
 // Upper limit on the number of invocations for each WebAssembly function
@@ -83,15 +82,12 @@ fn run(data: &[u8]) -> Result<()> {
     };
 
     // Call each exported function with different sets of arguments.
-    for (name, signature) in get_exported_function_signatures(&wasm)
-        .expect("failed to extract exported function signatures")
-    {
+    for (name, signature) in rhs_instance.exported_functions() {
         let mut invocations = 0;
         loop {
             let arguments = signature
-                .params
-                .iter()
-                .map(|&t| DiffValue::arbitrary_of_type(&mut u, t.try_into().unwrap()))
+                .params()
+                .map(|t| DiffValue::arbitrary_of_type(&mut u, t.try_into().unwrap()))
                 .collect::<Result<Vec<_>>>()?;
             differential(lhs_instance.as_mut(), &mut rhs_instance, &name, &arguments)
                 .expect("failed to run differential evaluation");

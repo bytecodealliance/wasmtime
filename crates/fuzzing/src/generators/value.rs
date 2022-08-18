@@ -160,10 +160,10 @@ pub enum DiffValueType {
     V128,
 }
 
-impl TryFrom<wasmparser::ValType> for DiffValueType {
+impl TryFrom<wasmtime::ValType> for DiffValueType {
     type Error = &'static str;
-    fn try_from(ty: wasmparser::ValType) -> Result<Self, Self::Error> {
-        use wasmparser::ValType::*;
+    fn try_from(ty: wasmtime::ValType) -> Result<Self, Self::Error> {
+        use wasmtime::ValType::*;
         match ty {
             I32 => Ok(Self::I32),
             I64 => Ok(Self::I64),
