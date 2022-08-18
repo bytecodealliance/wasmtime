@@ -328,6 +328,8 @@ impl<T> WastContext<T> {
             // specifies which element is uninitialized, but our traps don't
             // shepherd that information out.
             || (expected.contains("uninitialized element 2") && actual.contains("uninitialized element"))
+            // function references call_ref
+            || (expected.contains("null function") && actual.contains("null reference"))
         {
             return Ok(());
         }

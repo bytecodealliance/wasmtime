@@ -194,6 +194,23 @@ pub trait FuncEnvironment: TargetEnvironment {
         Ok(pos.ins().call(callee, call_args))
     }
 
+    /// Translate a `call_ref` WebAssembly instruction at `pos`.
+    ///
+    /// Insert instructions at `pos` for an indirect call to the
+    /// function `callee`. The `callee` value will have type `Ref`. TODO
+    ///
+    /// The signature `sig_ref` was previously created by `make_indirect_sig()`.
+    ///
+    /// Return the call instruction whose results are the WebAssembly return values.
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::too_many_arguments))]
+    fn translate_call_ref(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        sig_ref: ir::SigRef,
+        callee: ir::Value,
+        call_args: &[ir::Value],
+    ) -> WasmResult<ir::Inst>;
+
     /// Translate a `memory.grow` WebAssembly instruction.
     ///
     /// The `index` provided identifies the linear memory to grow, and `heap` is the heap reference

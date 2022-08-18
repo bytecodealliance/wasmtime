@@ -449,6 +449,16 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         Ok(pos.ins().Call(ir::Opcode::Call, INVALID, callee, args).0)
     }
 
+    fn translate_call_ref(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _sig_ref: ir::SigRef,
+        _callee: ir::Value,
+        _call_args: &[ir::Value],
+    ) -> WasmResult<ir::Inst> {
+        todo!("Implement dummy translate_call_ref")
+    }
+
     fn translate_memory_grow(
         &mut self,
         mut pos: FuncCursor,
