@@ -75,6 +75,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // stack space
         let mut next_stack: u64 = 0;
         let mut abi_args = smallvec![];
+        let mut return_one_register_used = false;
+
         for param in params {
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 let offset = next_stack;
@@ -92,17 +94,27 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
             let mut slots = ABIArgSlotVec::new();
             for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
-                let next_reg = if (next_x_reg <= x_end) && *rc == RegClass::Int {
-                    let x = Some(x_reg(next_x_reg));
-                    next_x_reg += 1;
-                    x
-                } else if (next_f_reg <= f_end) && *rc == RegClass::Float {
-                    let x = Some(f_reg(next_f_reg));
-                    next_f_reg += 1;
-                    x
-                } else {
-                    None
-                };
+                let next_reg =
+                    if (next_x_reg <= x_end) && *rc == RegClass::Int && !return_one_register_used {
+                        let x = Some(x_reg(next_x_reg));
+                        if args_or_rets == ArgsOrRets::Rets && call_conv.extends_wasmtime() {
+                            return_one_register_used = true;
+                        }
+                        next_x_reg += 1;
+                        x
+                    } else if (next_f_reg <= f_end)
+                        && *rc == RegClass::Float
+                        && !return_one_register_used
+                    {
+                        let x = Some(f_reg(next_f_reg));
+                        if args_or_rets == ArgsOrRets::Rets && call_conv.extends_wasmtime() {
+                            return_one_register_used = true;
+                        }
+                        next_f_reg += 1;
+                        x
+                    } else {
+                        None
+                    };
                 if let Some(reg) = next_reg {
                     slots.push(ABIArgSlot::Reg {
                         reg: reg.to_real_reg().unwrap(),
