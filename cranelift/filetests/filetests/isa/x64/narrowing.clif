@@ -29,21 +29,22 @@ block0(v0: i32x4, v1: i32x4):
 ;   popq    %rbp
 ;   ret
 
-function %f3(f64x2, i64x2) -> i32x4 {
-block0(v0: f64x2, v1: i64x2):
-  v2 = fcvt_to_sint_sat.i64x2 v0
-  v3 = snarrow v2, v1
+function %f3(f64x2) -> i32x4 {
+block0(v0: f64x2):
+  v1 = fcvt_to_sint_sat.i64x2 v0
+  v2 = vconst.i64x2 0x00
+  v3 = snarrow v1, v2
   return v3
 }
 
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm7
-;   cmppd   $0, %xmm7, %xmm0, %xmm7
-;   load_const VCodeConstant(0), %xmm8
-;   andps   %xmm7, %xmm8, %xmm7
-;   minpd   %xmm0, %xmm7, %xmm0
+;   movdqa  %xmm0, %xmm5
+;   cmppd   $0, %xmm5, %xmm0, %xmm5
+;   load_const VCodeConstant(0), %xmm6
+;   andps   %xmm5, %xmm6, %xmm5
+;   minpd   %xmm0, %xmm5, %xmm0
 ;   cvttpd2dq %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
