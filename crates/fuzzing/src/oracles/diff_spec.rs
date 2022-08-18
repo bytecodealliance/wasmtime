@@ -104,3 +104,20 @@ impl Into<DiffValue> for Value {
         }
     }
 }
+
+/// Set up the OCaml runtime for triggering its signal handler configuration.
+///
+/// Because both the OCaml runtime and Wasmtime set up signal handlers, we must
+/// carefully decide when to instantiate them; this function allows us to
+/// control when. Wasmtime uses these signal handlers for catching various
+/// WebAssembly failures. On certain OSes (e.g. Linux `x86_64`), the signal
+/// handlers interfere, observable as an uncaught `SIGSEGV`--not even caught by
+/// libFuzzer.
+///
+/// This failure can be mitigated by always running Wasmtime second in
+/// differential fuzzing. In some cases, however, this is not possible because
+/// which engine will execute first is unknown. This function can be explicitly
+/// executed first, e.g., during global initialization, to avoid this issue.
+pub fn setup_ocaml_runtime() {
+    wasm_spec_interpreter::setup_ocaml_runtime();
+}

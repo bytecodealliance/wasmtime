@@ -4,10 +4,16 @@ use libfuzzer_sys::arbitrary::{Result, Unstructured};
 use libfuzzer_sys::fuzz_target;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
+use std::sync::Once;
 use wasmtime_fuzzing::generators::{Config, DiffValue, SingleInstModule};
+use wasmtime_fuzzing::oracles::diff_spec;
 use wasmtime_fuzzing::oracles::diff_wasmtime::WasmtimeInstance;
 use wasmtime_fuzzing::oracles::engine::get_exported_function_signatures;
 use wasmtime_fuzzing::oracles::{differential, engine, log_wasm};
+
+// Upper limit on the number of invocations for each WebAssembly function
+// executed by this fuzz target.
+const NUM_INVOCATIONS: usize = 5;
 
 // Keep track of how many WebAssembly modules we actually executed (i.e. ran to
 // completion) versus how many were tried.
@@ -15,10 +21,15 @@ static TOTAL_INVOCATIONS: AtomicUsize = AtomicUsize::new(0);
 static TOTAL_SUCCESSES: AtomicUsize = AtomicUsize::new(0);
 static TOTAL_ATTEMPTED: AtomicUsize = AtomicUsize::new(0);
 
-const NUM_INVOCATIONS: usize = 5;
+// The spec interpreter requires special one-time setup.
+static SETUP: Once = Once::new();
 
 fuzz_target!(|data: &[u8]| {
-    // errors in `run` have to do with not enough input in `data`, which we
+    // To avoid a uncaught `SIGSEGV` due to signal handlers; see comments on
+    // `setup_ocaml_runtime`.
+    SETUP.call_once(|| diff_spec::setup_ocaml_runtime());
+
+    // Errors in `run` have to do with not enough input in `data`, which we
     // ignore here since it doesn't affect how we'd like to fuzz.
     drop(run(&data));
 });
@@ -55,16 +66,7 @@ fn run(data: &[u8]) -> Result<()> {
     let lhs = engine::choose(&mut u, &config)?;
     let lhs_instance = lhs.instantiate(&wasm);
 
-    // Choose a right-hand side Wasm engine--this will always be Wasmtime. The
-    // order (execute `lhs` first, then `rhs`) is important because, in some
-    // cases (e.g., OCaml spec interpreter), both sides register signal
-    // handlers; Wasmtime uses these signal handlers for catching various
-    // WebAssembly failures. On certain OSes (e.g. Linux x86_64), the signal
-    // handlers interfere, observable as an uncaught `SIGSEGV`--not even caught
-    // by libFuzzer. By always running Wasmtime second, its signal handlers are
-    // registered most recently and they catch failures appropriately. We create
-    // `rhs` first, however, so we have the option of creating a compatible
-    // Wasmtime engine (e.g., pooling allocator memory differences).
+    // Choose a right-hand side Wasm engine--this will always be Wasmtime.
     let rhs_store = config.to_store();
     let rhs_module = wasmtime::Module::new(rhs_store.engine(), &wasm).unwrap();
     let rhs_instance = WasmtimeInstance::new(rhs_store, rhs_module);
@@ -80,6 +82,7 @@ fn run(data: &[u8]) -> Result<()> {
         ),
     };
 
+    // Call each exported function with different sets of arguments.
     for (name, signature) in get_exported_function_signatures(&wasm)
         .expect("failed to extract exported function signatures")
     {
