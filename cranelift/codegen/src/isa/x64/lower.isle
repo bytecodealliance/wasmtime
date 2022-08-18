@@ -3426,3 +3426,8 @@
 
 (rule (lower (has_type (use_sse41) (trunc a @ (value_type $F64X2))))
       (x64_roundpd a (RoundImm.RoundZero)))
+
+;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (stack_addr stack_slot offset))
+      (stack_addr_impl stack_slot offset))

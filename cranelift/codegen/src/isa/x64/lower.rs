@@ -14,7 +14,6 @@ use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::{Flags, TlsModel};
 use smallvec::SmallVec;
-use std::convert::TryFrom;
 use target_lexicon::Triple;
 
 //=============================================================================
@@ -574,28 +573,12 @@ fn lower_insn_to_regs(
         | Opcode::Ceil
         | Opcode::Floor
         | Opcode::Nearest
-        | Opcode::Trunc => {
+        | Opcode::Trunc
+        | Opcode::StackAddr => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::StackAddr => {
-            let (stack_slot, offset) = match *ctx.data(insn) {
-                InstructionData::StackLoad {
-                    opcode: Opcode::StackAddr,
-                    stack_slot,
-                    offset,
-                } => (stack_slot, offset),
-                _ => unreachable!(),
-            };
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let offset: i32 = offset.into();
-            let inst =
-                ctx.abi()
-                    .sized_stackslot_addr(stack_slot, u32::try_from(offset).unwrap(), dst);
-            ctx.emit(inst);
-        }
 
         Opcode::Udiv | Opcode::Urem | Opcode::Sdiv | Opcode::Srem => {
             let kind = match op {

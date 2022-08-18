@@ -3587,6 +3587,14 @@
 (rule (bitcast_gpr_to_xmm $I64 src)
       (gpr_to_xmm (SseOpcode.Movq) src (OperandSize.Size64)))
 
+;;;; Stack Addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl stack_addr_impl (StackSlot Offset32) Gpr)
+(rule (stack_addr_impl stack_slot offset)
+      (let ((dst WritableGpr (temp_writable_gpr))
+           (_ Unit (emit (abi_stackslot_addr dst stack_slot offset))))
+        dst))
+
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Gpr InstOutput output_gpr)
