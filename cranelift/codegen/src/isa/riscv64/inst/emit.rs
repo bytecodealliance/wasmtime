@@ -2203,36 +2203,80 @@ impl MachInstEmit for Inst {
                 }
                 sink.bind_label(label_done);
             }
-            &Inst::Rev8 { rs, rd } => {
+            &Inst::Rev8 { rs, rd, tmp, step } => {
                 let rs = allocs.next(rs);
+                let tmp = allocs.next_writable(tmp);
+                let step = allocs.next_writable(step);
                 let rd = allocs.next_writable(rd);
-                let mut first_time = true;
-                for i in 1..=8 {
-                    let get_rs = || if first_time { rs } else { rd.to_reg() };
-                    Inst::Store {
-                        to: AMode::SPOffset(-i, I8),
-                        op: StoreOP::Sb,
-                        flags: MemFlags::new(),
-                        src: get_rs(),
+                // init.
+                Inst::gen_move(rd, zero_reg(), I64).emit(&[], sink, emit_info, state);
+                Inst::gen_move(tmp, rs, I64).emit(&[], sink, emit_info, state);
+                // load 56 to step.
+                Inst::load_constant_imm12(step, Imm12::from_bits(56)).emit(
+                    &[],
+                    sink,
+                    emit_info,
+                    state,
+                );
+                let label_done = sink.get_label();
+                let label_loop = sink.get_label();
+                sink.bind_label(label_loop);
+                Inst::CondBr {
+                    taken: BranchTarget::Label(label_done),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::SignedLessThan,
+                        rs1: step.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Andi,
+                    rd: writable_spilltmp_reg(),
+                    rs: tmp.to_reg(),
+                    imm12: Imm12::from_bits(255),
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::AluRRR {
+                    alu_op: AluOPRRR::Sll,
+                    rd: writable_spilltmp_reg(),
+                    rs1: spilltmp_reg(),
+                    rs2: step.to_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                Inst::AluRRR {
+                    alu_op: AluOPRRR::Or,
+                    rd: rd,
+                    rs1: rd.to_reg(),
+                    rs2: spilltmp_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
+                {
+                    // reset step
+                    Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Addi,
+                        rd: step,
+                        rs: step.to_reg(),
+                        imm12: Imm12::from_bits(-8),
                     }
                     .emit(&[], sink, emit_info, state);
+                    //reset tmp.
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Srli,
-                        rd: rd,
-                        rs: get_rs(),
+                        rd: tmp,
+                        rs: tmp.to_reg(),
                         imm12: Imm12::from_bits(8),
                     }
                     .emit(&[], sink, emit_info, state);
-                    first_time = false;
-                }
-                // load
-                Inst::Load {
-                    rd: rd,
-                    op: LoadOP::Ld,
-                    flags: MemFlags::trusted(),
-                    from: AMode::SPOffset(-8, I64),
+                    // loop.
+                    Inst::Jal {
+                        dest: BranchTarget::Label(label_loop),
+                    }
                 }
                 .emit(&[], sink, emit_info, state);
+                sink.bind_label(label_done);
             }
             &Inst::Cltz {
                 sum,

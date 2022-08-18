@@ -316,6 +316,8 @@
     ;; Byte-reverse register
     (Rev8
       (rs Reg)
+      (step WritableReg)
+      (tmp WritableReg)
       (rd WritableReg)
     )
     ;; 
@@ -823,6 +825,15 @@
 (decl alu_andi (Reg i32)Reg)
 (rule (alu_andi r i) 
   (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const i) )
+)
+
+(decl alu_slli (Reg i32)Reg)
+(rule (alu_slli r i) 
+  (alu_rr_imm12 (AluOPRRI.Slli) r (imm12_const i) )
+)
+(decl alu_srli (Reg i32)Reg)
+(rule (alu_srli r i) 
+  (alu_rr_imm12 (AluOPRRI.Srli) r (imm12_const i) )
 )
 
 ;; some instruction use imm12 as funct12.
@@ -2323,10 +2334,12 @@
   (if-let $false (has_b))
   (let
     (
+      (rd WritableReg (temp_writable_reg $I64))
       (tmp WritableReg (temp_writable_reg $I64))
-      (_ Unit (emit (MInst.Rev8 rs tmp)) )
+      (step WritableReg (temp_writable_reg $I64))
+      (_ Unit (emit (MInst.Rev8 rs step tmp  rd)) )
     )
-    (writable_reg_to_reg tmp)
+    (writable_reg_to_reg rd)
   )
 )
 (decl pure has_zbkb()bool)
@@ -2381,3 +2394,5 @@
 (decl output_ifcout (Reg) InstOutput)
 (rule (output_ifcout reg)
       (output_pair reg (value_regs_invalid)))
+
+

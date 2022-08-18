@@ -554,8 +554,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(step);
             collector.reg_early_def(sum);
         }
-        &Inst::Rev8 { rs, rd } => {
+        &Inst::Rev8 { rs, rd, tmp, step } => {
             collector.reg_use(rs);
+            collector.reg_early_def(tmp);
+            collector.reg_early_def(step);
             collector.reg_early_def(rd);
         }
         &Inst::Cltz {
@@ -994,10 +996,12 @@ impl Inst {
                 let sum = format_reg(sum.to_reg(), allocs);
                 format!("popcnt {},{}##ty={} tmp={} step={}", sum, rs, ty, tmp, step)
             }
-            &Inst::Rev8 { rs, rd } => {
+            &Inst::Rev8 { rs, rd, tmp, step } => {
                 let rs = format_reg(rs, allocs);
+                let tmp = format_reg(tmp.to_reg(), allocs);
+                let step = format_reg(step.to_reg(), allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("rev8 {},{}", rd, rs)
+                format!("rev8 {},{}##step={} tmp={}", rd, rs, step, tmp)
             }
             &Inst::Cltz {
                 sum,

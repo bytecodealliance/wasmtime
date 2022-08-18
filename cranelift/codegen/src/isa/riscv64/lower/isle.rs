@@ -468,6 +468,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         });
         tmp.to_reg()
     }
+
     fn offset32_add(&mut self, a: Offset32, adden: i64) -> Offset32 {
         a.try_add_i64(adden).expect("offset exceed range.")
     }
