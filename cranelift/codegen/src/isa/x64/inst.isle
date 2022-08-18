@@ -177,6 +177,11 @@
        ;; popq reg
        (Pop64 (dst WritableGpr))
 
+      ;; Emits a inline stack probe loop.
+      (StackProbeLoop (tmp WritableReg)
+                      (frame_size u32)
+                      (guard_size u32))
+
        ;; =========================================
        ;; Floating-point operations.
 

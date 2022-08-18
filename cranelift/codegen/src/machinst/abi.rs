@@ -108,6 +108,7 @@ use crate::ir::types::*;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, DynamicStackSlot, Signature, StackSlot};
 use crate::isa::TargetIsa;
 use crate::settings;
+use crate::settings::ProbestackStrategy;
 use crate::CodegenResult;
 use crate::{ir, isa};
 use crate::{machinst::*, trace};
@@ -429,6 +430,9 @@ pub trait ABIMachineSpec {
 
     /// Generate a probestack call.
     fn gen_probestack(_frame_size: u32) -> SmallInstVec<Self::I>;
+
+    /// Generate a inline stack probe.
+    fn gen_inline_probestack(_frame_size: u32, _guard_size: u32) -> SmallInstVec<Self::I>;
 
     /// Get all clobbered registers that are callee-saved according to the ABI; the result
     /// contains the registers in a sorted order.
@@ -1660,10 +1664,20 @@ impl<M: ABIMachineSpec> Callee<M> {
                 insts.extend(stack_limit_load.clone());
                 self.insert_stack_check(*reg, total_stacksize, &mut insts);
             }
-            if let Some(min_frame) = &self.probestack_min_frame {
-                if total_stacksize >= *min_frame {
-                    insts.extend(M::gen_probestack(total_stacksize));
-                }
+
+            let needs_probestack = self
+                .probestack_min_frame
+                .map_or(false, |min_frame| total_stacksize >= min_frame);
+
+            if needs_probestack {
+                insts.extend(
+                    if self.flags.probestack_strategy() == ProbestackStrategy::Inline {
+                        let guard_size = 1 << self.flags.probestack_size_log2();
+                        M::gen_inline_probestack(total_stacksize, guard_size)
+                    } else {
+                        M::gen_probestack(total_stacksize)
+                    },
+                );
             }
         }
 

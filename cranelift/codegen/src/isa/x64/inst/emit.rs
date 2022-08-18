@@ -1234,6 +1234,113 @@ pub(crate) fn emit(
             sink.put1(0x58 + (enc_dst & 7));
         }
 
+        Inst::StackProbeLoop {
+            tmp,
+            frame_size,
+            guard_size,
+        } => {
+            assert!(info.flags.enable_probestack());
+            assert!(guard_size.is_power_of_two());
+
+            let tmp = allocs.next_writable(*tmp);
+
+            // Number of probes that we need to perform
+            let probe_count = align_to(*frame_size, *guard_size) / guard_size;
+
+            // The inline stack probe loop has 3 phases
+            //
+            // We generate the "guard area" register which is essentially the framze_size aligned to
+            // guard_size. We copy the stack pointer and and subtract the guard area from it. This
+            // gets us a register that we can use to compare when looping.
+            //
+            // After that we emit the loop, Essentially we just adjust the stack pointer one guard_size'd
+            // distance at a time and then touch the stack by writing anything to it. We use the previously
+            // created "guard area" register to know when to stop looping.
+            //
+            // When we have touched all the pages that we need, we have to restore the stack pointer
+            // to where it was before.
+            //
+            // If you are editing this code, make sure to manually update the jump offset below
+            // We don't have relocations/labels on this part of the pipeline, so we need
+            // to manually do the offsets.
+            //
+            // Generate the following code:
+            //         mov  tmp_reg, rsp
+            //         sub  tmp_reg, guard_size * probe_count
+            // .loop_start:
+            //         sub  rsp, guard_size
+            //         mov  [rsp], rsp
+            //         cmp  rsp, tmp_reg
+            //         jne  .loop_start
+            //         add  rsp, guard_size * probe_count
+
+            // Create the guard bound register
+            // mov  tmp_reg, rsp
+            let inst = Inst::gen_move(tmp, regs::rsp(), types::I64);
+            inst.emit(&[], sink, info, state);
+
+            // sub  tmp_reg, GUARD_SIZE * probe_count
+            let inst = Inst::alu_rmi_r(
+                OperandSize::Size64,
+                AluRmiROpcode::Sub,
+                RegMemImm::imm(guard_size * probe_count),
+                tmp,
+            );
+            inst.emit(&[], sink, info, state);
+
+            // Emit the main loop!
+            let loop_start = sink.get_label();
+            sink.bind_label(loop_start);
+
+            // sub  rsp, GUARD_SIZE
+            let inst = Inst::alu_rmi_r(
+                OperandSize::Size64,
+                AluRmiROpcode::Sub,
+                RegMemImm::imm(*guard_size),
+                Writable::from_reg(regs::rsp()),
+            );
+            inst.emit(&[], sink, info, state);
+
+            // TODO: `mov [rsp], 0` would be better, but we don't have that instruction
+            // Probe the stack! We don't use Inst::gen_store_stack here because we need a predictable
+            // instruction size.
+            // mov  [rsp], rsp
+            let inst = Inst::mov_r_m(
+                OperandSize::Size32, // Use Size32 since it saves us one byte
+                regs::rsp(),
+                SyntheticAmode::Real(Amode::imm_reg(0, regs::rsp())),
+            );
+            inst.emit(&[], sink, info, state);
+
+            // Compare and jump if we are not done yet
+            // cmp  rsp, tmp_reg
+            let inst = Inst::cmp_rmi_r(
+                OperandSize::Size64,
+                RegMemImm::reg(regs::rsp()),
+                tmp.to_reg(),
+            );
+            inst.emit(&[], sink, info, state);
+
+            // jne  .loop_start
+            // TODO: Encoding the JmpIf as a short jump saves us 4 bytes here.
+            one_way_jmp(sink, CC::NZ, loop_start);
+
+            // The regular prologue code is going to emit a `sub` after this, so we need to
+            // reset the stack pointer
+            //
+            // TODO: It would be better if we could avoid the `add` + `sub` that is generated here
+            // and in the stack adj portion of the prologue
+            //
+            // add rsp, GUARD_SIZE * probe_count
+            let inst = Inst::alu_rmi_r(
+                OperandSize::Size64,
+                AluRmiROpcode::Add,
+                RegMemImm::imm(guard_size * probe_count),
+                Writable::from_reg(regs::rsp()),
+            );
+            inst.emit(&[], sink, info, state);
+        }
+
         Inst::CallKnown {
             dest,
             info: call_info,

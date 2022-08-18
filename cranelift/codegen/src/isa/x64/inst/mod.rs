@@ -100,6 +100,7 @@ impl Inst {
             | Inst::Nop { .. }
             | Inst::Pop64 { .. }
             | Inst::Push64 { .. }
+            | Inst::StackProbeLoop { .. }
             | Inst::Ret { .. }
             | Inst::Setcc { .. }
             | Inst::ShiftR { .. }
@@ -1427,6 +1428,21 @@ impl PrettyPrint for Inst {
                 format!("{} {}", ljustify("pushq".to_string()), src)
             }
 
+            Inst::StackProbeLoop {
+                tmp,
+                frame_size,
+                guard_size,
+            } => {
+                let tmp = pretty_print_reg(tmp.to_reg(), 8, allocs);
+                format!(
+                    "{} {}, frame_size={}, guard_size={}",
+                    ljustify("stack_probe_loop".to_string()),
+                    tmp,
+                    frame_size,
+                    guard_size
+                )
+            }
+
             Inst::Pop64 { dst } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 format!("{} {}", ljustify("popq".to_string()), dst)
@@ -1945,6 +1961,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
         Inst::Pop64 { dst } => {
             collector.reg_def(dst.to_writable_reg());
+        }
+        Inst::StackProbeLoop { tmp, .. } => {
+            collector.reg_early_def(*tmp);
         }
 
         Inst::CallKnown { ref info, .. } => {
