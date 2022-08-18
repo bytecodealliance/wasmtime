@@ -136,16 +136,15 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     fn load_ra(&mut self) -> Reg {
         //todo https://bytecodealliance.zulipchat.com/#narrow/stream/206238-general/topic/cranelift.20opcode.20get_return_address.2E
         // right now I will always setup frame.
-        // let tmp = self.temp_writable_reg(I64);
-        // self.emit(&MInst::Load {
-        //     rd: tmp,
-        //     op: LoadOP::Ld,
-        //     flags: MemFlags::trusted(),
-        //     from: AMode::FPOffset(8, I64),
-        // });
-        // tmp.to_reg()
 
-        self.gen_move(link_reg(), I64)
+        let tmp = self.temp_writable_reg(I64);
+        self.emit(&MInst::Load {
+            rd: tmp,
+            op: LoadOP::Ld,
+            flags: MemFlags::trusted(),
+            from: AMode::FPOffset(8, I64),
+        });
+        tmp.to_reg()
     }
     fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
         assert!(ty.is_int() || ty.is_bool(), "{:?}", ty);
@@ -241,31 +240,31 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         self.emit_list(&MInst::load_constant_u64(tmp, val));
         tmp.to_reg()
     }
-    #[inline(always)]
+    #[inline]
     fn emit(&mut self, arg0: &MInst) -> Unit {
         self.lower_ctx.emit(arg0.clone());
     }
-    #[inline(always)]
+    #[inline]
     fn imm12_from_u64(&mut self, arg0: u64) -> Option<Imm12> {
         Imm12::maybe_from_u64(arg0)
     }
-    #[inline(always)]
+    #[inline]
     fn writable_zero_reg(&mut self) -> WritableReg {
         writable_zero_reg()
     }
-    #[inline(always)]
+    #[inline]
     fn neg_imm12(&mut self, arg0: Imm12) -> Imm12 {
         -arg0
     }
-    #[inline(always)]
+    #[inline]
     fn zero_reg(&mut self) -> Reg {
         zero_reg()
     }
-    #[inline(always)]
+    #[inline]
     fn imm_from_bits(&mut self, val: u64) -> Imm12 {
         Imm12::maybe_from_u64(val).unwrap()
     }
-    #[inline(always)]
+    #[inline]
     fn imm_from_neg_bits(&mut self, val: i64) -> Imm12 {
         Imm12::maybe_from_u64(val as u64).unwrap()
     }
@@ -565,7 +564,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 }
 
 impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
-    #[inline(always)]
+    #[inline]
     fn emit_list(&mut self, list: &SmallInstVec<MInst>) {
         for i in list {
             self.lower_ctx.emit(i.clone());

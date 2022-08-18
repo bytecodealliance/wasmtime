@@ -2,6 +2,7 @@
 
 use crate::binemit::StackMap;
 use crate::ir::RelSourceLoc;
+use crate::ir::TrapCode;
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::inst::{zero_reg, AluOPRRR};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
@@ -682,6 +683,11 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let offset = from.get_offset_with_state(state);
                 if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
+                    let srcloc = state.cur_srcloc();
+                    if !srcloc.is_default() && !flags.notrap() {
+                        // Register the offset at which the actual load instruction starts.
+                        sink.add_trap(TrapCode::HeapOutOfBounds);
+                    }
                     x = op.op_code()
                         | reg_to_gpr_num(rd.to_reg()) << 7
                         | op.funct3() << 12
@@ -692,6 +698,11 @@ impl MachInstEmit for Inst {
                     let tmp = writable_spilltmp_reg();
                     let mut insts =
                         LoadConstant::U64(offset as u64).load_constant_and_add(tmp, base);
+                    let srcloc = state.cur_srcloc();
+                    if !srcloc.is_default() && !flags.notrap() {
+                        // Register the offset at which the actual load instruction starts.
+                        sink.add_trap(TrapCode::HeapOutOfBounds);
+                    }
                     insts.push(Inst::Load {
                         op,
                         from: AMode::RegOffset(tmp.to_reg(), 0, I64),
@@ -709,6 +720,11 @@ impl MachInstEmit for Inst {
                 let offset = to.get_offset_with_state(state);
                 let x;
                 if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
+                    let srcloc = state.cur_srcloc();
+                    if !srcloc.is_default() && !flags.notrap() {
+                        // Register the offset at which the actual load instruction starts.
+                        sink.add_trap(TrapCode::HeapOutOfBounds);
+                    }
                     x = op.op_code()
                         | (imm12.as_u32() & 0x1f) << 7
                         | op.funct3() << 12
@@ -720,6 +736,11 @@ impl MachInstEmit for Inst {
                     let tmp = writable_spilltmp_reg();
                     let mut insts =
                         LoadConstant::U64(offset as u64).load_constant_and_add(tmp, base);
+                    let srcloc = state.cur_srcloc();
+                    if !srcloc.is_default() && !flags.notrap() {
+                        // Register the offset at which the actual load instruction starts.
+                        sink.add_trap(TrapCode::HeapOutOfBounds);
+                    }
                     insts.push(Inst::Store {
                         op,
                         to: AMode::RegOffset(tmp.to_reg(), 0, I64),
@@ -898,9 +919,6 @@ impl MachInstEmit for Inst {
             }
             &Inst::CallInd { ref info } => {
                 let rn = allocs.next(info.rn);
-                // if rn == x_reg(15) {
-                //     Inst::EBreak.emit(&[], sink, emit_info, state);
-                // }
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
@@ -1099,6 +1117,10 @@ impl MachInstEmit for Inst {
                 let addr = allocs.next(addr);
                 let src = allocs.next(src);
                 let rd = allocs.next_writable(rd);
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() {
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
                 let x = op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | op.funct3() << 12
@@ -1309,7 +1331,6 @@ impl MachInstEmit for Inst {
                 let fail_label = sink.get_label();
                 let cas_lebel = sink.get_label();
                 sink.bind_label(cas_lebel);
-
                 Inst::Atomic {
                     op: AtomicOP::load_op(ty),
                     rd: dst,
@@ -1724,7 +1745,7 @@ impl MachInstEmit for Inst {
                 Inst::Load {
                     rd: rd,
                     op: LoadOP::from_type(ty),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlags::new(),
                     from: AMode::RegOffset(p, 0, ty),
                 }
                 .emit(&[], sink, emit_info, state);
@@ -1745,7 +1766,7 @@ impl MachInstEmit for Inst {
                 Inst::Store {
                     to: AMode::RegOffset(p, 0, ty),
                     op: StoreOP::from_type(ty),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlags::new(),
                     src,
                 }
                 .emit(&[], sink, emit_info, state);
@@ -2191,7 +2212,7 @@ impl MachInstEmit for Inst {
                     Inst::Store {
                         to: AMode::SPOffset(-i, I8),
                         op: StoreOP::Sb,
-                        flags: MemFlags::trusted(),
+                        flags: MemFlags::new(),
                         src: get_rs(),
                     }
                     .emit(&[], sink, emit_info, state);

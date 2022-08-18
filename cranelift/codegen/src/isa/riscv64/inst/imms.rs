@@ -29,20 +29,20 @@ impl Imm12 {
             None
         }
     }
-    #[inline(always)]
+    #[inline]
     pub fn from_bits(bits: i16) -> Self {
         Self { bits: bits & 0xfff }
     }
     /// Create a zero immediate of this format.
-    #[inline(always)]
+    #[inline]
     pub fn zero() -> Self {
         Imm12 { bits: 0 }
     }
-    #[inline(always)]
+    #[inline]
     pub fn as_i16(self) -> i16 {
         self.bits
     }
-    #[inline(always)]
+    #[inline]
     pub fn as_u32(&self) -> u32 {
         (self.bits as u32) & 0xfff
     }
@@ -75,13 +75,13 @@ pub struct Imm20 {
 }
 
 impl Imm20 {
-    #[inline(always)]
+    #[inline]
     pub fn from_bits(bits: i32) -> Self {
         Self {
             bits: bits & 0xf_ffff,
         }
     }
-    #[inline(always)]
+    #[inline]
     pub fn as_u32(&self) -> u32 {
         (self.bits as u32) & 0xf_ffff
     }

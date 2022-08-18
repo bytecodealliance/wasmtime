@@ -13,54 +13,54 @@ use regalloc2::VReg;
 use regalloc2::{MachineEnv, PReg, RegClass};
 
 // first argument of function call
-#[inline(always)]
+#[inline]
 pub fn a0() -> Reg {
     x_reg(10)
 }
 
 // second argument of function call
-#[inline(always)]
+#[inline]
 pub fn a1() -> Reg {
     x_reg(11)
 }
 
 // third argument of function call
-#[inline(always)]
+#[inline]
 pub fn a2() -> Reg {
     x_reg(12)
 }
 
-#[inline(always)]
+#[inline]
 pub fn writable_a0() -> Writable<Reg> {
     Writable::from_reg(a0())
 }
-#[inline(always)]
+#[inline]
 pub fn writable_a1() -> Writable<Reg> {
     Writable::from_reg(a1())
 }
-#[inline(always)]
+#[inline]
 pub fn writable_a2() -> Writable<Reg> {
     Writable::from_reg(a2())
 }
 
-#[inline(always)]
+#[inline]
 pub fn fa0() -> Reg {
     f_reg(10)
 }
-#[inline(always)]
+#[inline]
 pub fn writable_fa0() -> Writable<Reg> {
     Writable::from_reg(fa0())
 }
-#[inline(always)]
+#[inline]
 pub fn writable_fa1() -> Writable<Reg> {
     Writable::from_reg(fa1())
 }
-#[inline(always)]
+#[inline]
 pub fn fa1() -> Reg {
     f_reg(11)
 }
 
-#[inline(always)]
+#[inline]
 pub fn fa7() -> Reg {
     f_reg(17)
 }
@@ -76,13 +76,13 @@ pub fn zero_reg() -> Reg {
 pub fn writable_zero_reg() -> Writable<Reg> {
     Writable::from_reg(zero_reg())
 }
-#[inline(always)]
+#[inline]
 pub fn stack_reg() -> Reg {
     x_reg(2)
 }
 
 /// Get a writable reference to the stack-pointer register.
-#[inline(always)]
+#[inline]
 pub fn writable_stack_reg() -> Writable<Reg> {
     Writable::from_reg(stack_reg())
 }
@@ -93,44 +93,44 @@ pub fn link_reg() -> Reg {
 }
 
 /// Get a writable reference to the link register.
-#[inline(always)]
+#[inline]
 pub fn writable_link_reg() -> Writable<Reg> {
     Writable::from_reg(link_reg())
 }
 
 /// Get a reference to the frame pointer (x29).
-#[inline(always)]
+#[inline]
 pub fn fp_reg() -> Reg {
     x_reg(8)
 }
 
 /// Get a writable reference to the frame pointer.
-#[inline(always)]
+#[inline]
 pub fn writable_fp_reg() -> Writable<Reg> {
     Writable::from_reg(fp_reg())
 }
 
 /// Get a reference to the first temporary, sometimes "spill temporary", register. This register used
 /// in various.
-#[inline(always)]
+#[inline]
 pub fn spilltmp_reg() -> Reg {
     x_reg(31)
 }
 
 /// Get a writable reference to the spilltmp reg.
-#[inline(always)]
+#[inline]
 pub fn writable_spilltmp_reg() -> Writable<Reg> {
     Writable::from_reg(spilltmp_reg())
 }
 
 ///spilltmp2
-#[inline(always)]
+#[inline]
 pub fn spilltmp_reg2() -> Reg {
     x_reg(30)
 }
 
 /// Get a writable reference to the spilltmp2 reg.
-#[inline(always)]
+#[inline]
 pub fn writable_spilltmp_reg2() -> Writable<Reg> {
     Writable::from_reg(spilltmp_reg2())
 }
@@ -185,7 +185,7 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
     }
 }
 
-#[inline(always)]
+#[inline]
 pub fn x_reg(enc: usize) -> Reg {
     let p_reg = PReg::new(enc, RegClass::Int);
     let v_reg = VReg::new(p_reg.index(), p_reg.class());
@@ -195,7 +195,7 @@ pub fn px_reg(enc: usize) -> PReg {
     PReg::new(enc, RegClass::Int)
 }
 
-#[inline(always)]
+#[inline]
 pub fn f_reg(enc: usize) -> Reg {
     let p_reg = PReg::new(enc, RegClass::Float);
     let v_reg = VReg::new(p_reg.index(), p_reg.class());
@@ -204,7 +204,7 @@ pub fn f_reg(enc: usize) -> Reg {
 pub const fn pf_reg(enc: usize) -> PReg {
     PReg::new(enc, RegClass::Float)
 }
-#[inline(always)]
+#[inline]
 pub(crate) fn real_reg_to_reg(x: RealReg) -> Reg {
     let v_reg = VReg::new(x.hw_enc() as usize, x.class());
     Reg::from(v_reg)

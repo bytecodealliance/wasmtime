@@ -178,7 +178,7 @@ impl IntegerCompare {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn op_name(&self) -> &'static str {
         match self.kind {
             IntCC::Equal => "beq",
@@ -1117,7 +1117,7 @@ impl FRM {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn bits(self) -> u8 {
         match self {
             FRM::RNE => 0b000,
@@ -1134,7 +1134,7 @@ impl FRM {
 }
 
 impl FFlagsException {
-    #[inline(always)]
+    #[inline]
     pub(crate) fn mask(self) -> u32 {
         match self {
             FFlagsException::NV => 1 << 4,
@@ -1336,7 +1336,7 @@ impl FloatCCArgs {
 }
 
 impl AtomicOP {
-    #[inline(always)]
+    #[inline]
     pub(crate) fn is_load(self) -> bool {
         match self {
             Self::LrW | Self::LrD => true,
@@ -1344,7 +1344,7 @@ impl AtomicOP {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn op_name(self, amo: AMO) -> String {
         let s = match self {
             Self::LrW => "lr.w",
@@ -1373,12 +1373,12 @@ impl AtomicOP {
         };
         format!("{}{}", s, amo.to_static_str())
     }
-    #[inline(always)]
+    #[inline]
     pub(crate) fn op_code(self) -> u32 {
         0b0101111
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn funct7(self, amo: AMO) -> u32 {
         self.funct5() << 2 | amo.as_u32() & 0b11
     }
@@ -1453,7 +1453,7 @@ impl AtomicOP {
 }
 
 impl IntSelectOP {
-    #[inline(always)]
+    #[inline]
     pub(crate) fn from_ir_op(op: crate::ir::Opcode) -> Self {
         match op {
             crate::ir::Opcode::Imax => Self::Imax,
@@ -1463,7 +1463,7 @@ impl IntSelectOP {
             _ => unreachable!(),
         }
     }
-    #[inline(always)]
+    #[inline]
     pub(crate) fn op_name(self) -> &'static str {
         match self {
             IntSelectOP::Imax => "imax",
@@ -1472,7 +1472,7 @@ impl IntSelectOP {
             IntSelectOP::Umin => "umin",
         }
     }
-    #[inline(always)]
+    #[inline]
     pub(crate) fn to_int_cc(self) -> IntCC {
         match self {
             IntSelectOP::Imax => IntCC::SignedGreaterThan,
@@ -1490,7 +1490,7 @@ impl ReferenceCheckOP {
             ReferenceCheckOP::IsInvalid => "is_invalid",
         }
     }
-    #[inline(always)]
+    #[inline]
     pub(crate) fn from_ir_op(op: crate::ir::Opcode) -> Self {
         match op {
             crate::ir::Opcode::IsInvalid => Self::IsInvalid,

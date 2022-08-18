@@ -112,22 +112,22 @@ impl BranchTarget {
         }
     }
     /// offset zero.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn zero() -> Self {
         Self::ResolvedOffset(0)
     }
-    #[inline(always)]
+    #[inline]
     pub(crate) fn offset(off: i32) -> Self {
         Self::ResolvedOffset(off)
     }
-    #[inline(always)]
+    #[inline]
     pub(crate) fn is_zero(self) -> bool {
         match self {
             BranchTarget::Label(_) => false,
             BranchTarget::ResolvedOffset(off) => off == 0,
         }
     }
-    #[inline(always)]
+    #[inline]
     pub(crate) fn as_offset(self) -> Option<i32> {
         match self {
             BranchTarget::Label(_) => None,
@@ -197,7 +197,7 @@ pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst
 impl Inst {
     const INSTRUCTION_SIZE: i32 = 4;
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn load_constant_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Addi,
