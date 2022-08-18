@@ -67,7 +67,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let (x_start, x_end, f_start, f_end) = if args_or_rets == ArgsOrRets::Args {
             (10, 17, 10, 17)
         } else {
-            (10, 11, 10, 11)
+            let end = if call_conv.extends_wasmtime() { 10 } else { 11 };
+            (10, end, 10, end)
         };
         let mut next_x_reg = x_start;
         let mut next_f_reg = f_start;
@@ -91,7 +92,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
             let mut slots = ABIArgSlotVec::new();
             for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
-                let nextreg = if (next_x_reg <= x_end) && *rc == RegClass::Int {
+                let next_reg = if (next_x_reg <= x_end) && *rc == RegClass::Int {
                     let x = Some(x_reg(next_x_reg));
                     next_x_reg += 1;
                     x
@@ -102,7 +103,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 } else {
                     None
                 };
-                if let Some(reg) = nextreg {
+                if let Some(reg) = next_reg {
                     slots.push(ABIArgSlot::Reg {
                         reg: reg.to_real_reg().unwrap(),
                         ty: *reg_ty,
