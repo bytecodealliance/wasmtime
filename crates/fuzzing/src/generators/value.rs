@@ -13,6 +13,8 @@ pub enum DiffValue {
     F32(u32),
     F64(u64),
     V128(u128),
+    FuncRef { null: bool },
+    ExternRef { null: bool },
 }
 
 impl DiffValue {
@@ -23,6 +25,8 @@ impl DiffValue {
             DiffValue::F32(_) => DiffValueType::F32,
             DiffValue::F64(_) => DiffValueType::F64,
             DiffValue::V128(_) => DiffValueType::V128,
+            DiffValue::FuncRef { .. } => DiffValueType::FuncRef,
+            DiffValue::ExternRef { .. } => DiffValueType::ExternRef,
         }
     }
 
@@ -51,7 +55,18 @@ impl DiffValue {
                     (1.0f32).to_bits(),
                     f32::MAX.to_bits(),
                 ];
-                DiffValue::F32(biased_arbitrary_value(u, known_f32_values)?)
+                let bits = biased_arbitrary_value(u, known_f32_values)?;
+
+                // If the chosen bits are NAN then always use the canonical bit
+                // pattern of nan to enable better compatibility with engines
+                // where arbitrary nan patterns can't make their way into wasm
+                // (e.g. v8 through JS can't do that).
+                let bits = if f32::from_bits(bits).is_nan() {
+                    f32::NAN.to_bits()
+                } else {
+                    bits
+                };
+                DiffValue::F32(bits)
             }
             F64 => {
                 // TODO once `to_bits` is stable as a `const` function, move
@@ -66,9 +81,23 @@ impl DiffValue {
                     (1.0f64).to_bits(),
                     f64::MAX.to_bits(),
                 ];
-                DiffValue::F64(biased_arbitrary_value(u, known_f64_values)?)
+                let bits = biased_arbitrary_value(u, known_f64_values)?;
+                // See `f32` above for why canonical nan patterns are always
+                // used.
+                let bits = if f64::from_bits(bits).is_nan() {
+                    f64::NAN.to_bits()
+                } else {
+                    bits
+                };
+                DiffValue::F64(bits)
             }
             V128 => DiffValue::V128(biased_arbitrary_value(u, KNOWN_U128_VALUES)?),
+
+            // TODO: this isn't working in most engines so just always pass a
+            // null in which if an engine supports this is should at least
+            // support doing that.
+            FuncRef => DiffValue::FuncRef { null: true },
+            ExternRef => DiffValue::ExternRef { null: true },
         };
         arbitrary::Result::Ok(val)
     }
@@ -111,6 +140,8 @@ impl Hash for DiffValue {
             DiffValue::F32(n) => n.hash(state),
             DiffValue::F64(n) => n.hash(state),
             DiffValue::V128(n) => n.hash(state),
+            DiffValue::ExternRef { null } => null.hash(state),
+            DiffValue::FuncRef { null } => null.hash(state),
         }
     }
 }
@@ -144,13 +175,15 @@ impl PartialEq for DiffValue {
                 let r0 = f64::from_bits(*r0);
                 l0 == r0 || (l0.is_nan() && r0.is_nan())
             }
+            (Self::FuncRef { null: a }, Self::FuncRef { null: b }) => a == b,
+            (Self::ExternRef { null: a }, Self::ExternRef { null: b }) => a == b,
             _ => false,
         }
     }
 }
 
 /// Enumerate the supported value types.
-#[derive(Clone, Debug, Arbitrary, Hash)]
+#[derive(Copy, Clone, Debug, Arbitrary, Hash)]
 #[allow(missing_docs)]
 pub enum DiffValueType {
     I32,
@@ -158,6 +191,8 @@ pub enum DiffValueType {
     F32,
     F64,
     V128,
+    FuncRef,
+    ExternRef,
 }
 
 impl TryFrom<wasmtime::ValType> for DiffValueType {
@@ -170,8 +205,8 @@ impl TryFrom<wasmtime::ValType> for DiffValueType {
             F32 => Ok(Self::F32),
             F64 => Ok(Self::F64),
             V128 => Ok(Self::V128),
-            FuncRef => Err("unable to convert reference types"),
-            ExternRef => Err("unable to convert reference types"),
+            FuncRef => Ok(Self::FuncRef),
+            ExternRef => Ok(Self::ExternRef),
         }
     }
 }

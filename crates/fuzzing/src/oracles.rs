@@ -20,12 +20,10 @@ mod stacks;
 
 use self::diff_wasmtime::WasmtimeInstance;
 use self::engine::DiffInstance;
-use crate::generators::{self, DiffValue};
+use crate::generators::{self, DiffValue, DiffValueType};
 use arbitrary::Arbitrary;
 pub use stacks::check_stacks;
 use std::cell::Cell;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hasher;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
@@ -34,9 +32,7 @@ use wasmtime::*;
 use wasmtime_wast::WastContext;
 
 #[cfg(not(any(windows, target_arch = "s390x")))]
-pub use self::v8::*;
-#[cfg(not(any(windows, target_arch = "s390x")))]
-mod v8;
+mod diff_v8;
 
 static CNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -343,12 +339,24 @@ pub fn differential(
     rhs: &mut WasmtimeInstance,
     name: &str,
     args: &[DiffValue],
+    result_tys: &[DiffValueType],
 ) -> anyhow::Result<()> {
-    log::debug!("Evaluating: {}({:?})", name, args);
-    let lhs_results = lhs.evaluate(name, args);
+    log::debug!("Evaluating: `{}` with {:?}", name, args);
+    let lhs_results = match lhs.evaluate(name, args, result_tys) {
+        Ok(Some(results)) => Ok(results),
+        Err(e) => Err(e),
+        // this engine couldn't execute this type signature, so discard this
+        // execution by returning success.
+        Ok(None) => return Ok(()),
+    };
     log::debug!(" -> results on {}: {:?}", lhs.name(), &lhs_results);
-    let rhs_results = rhs.evaluate(name, args);
+
+    let rhs_results = rhs
+        .evaluate(name, args, result_tys)
+        // wasmtime should be able to invoke any signature, so unwrap this result
+        .map(|results| results.unwrap());
     log::debug!(" -> results on {}: {:?}", rhs.name(), &rhs_results);
+
     match (lhs_results, rhs_results) {
         // If the evaluation succeeds, we compare the results.
         (Ok(lhs_results), Ok(rhs_results)) => assert_eq!(lhs_results, rhs_results),
@@ -362,19 +370,26 @@ pub fn differential(
         (Err(_), Ok(_)) => panic!("only the `lhs` ({}) failed for this input", lhs.name()),
     };
 
-    let hash = |i: &mut dyn DiffInstance| -> anyhow::Result<u64> {
-        let mut hasher = DefaultHasher::new();
-        i.hash(&mut hasher)?;
-        Ok(hasher.finish())
-    };
-
-    if lhs.is_hashable() && rhs.is_hashable() {
-        log::debug!("Hashing instances:");
-        let lhs_hash = hash(lhs)?;
-        log::debug!(" -> hash of {}: {:?}", lhs.name(), lhs_hash);
-        let rhs_hash = hash(rhs)?;
-        log::debug!(" -> hash of {}: {:?}", rhs.name(), rhs_hash);
-        assert_eq!(lhs_hash, rhs_hash);
+    for (global, ty) in rhs.exported_globals() {
+        log::debug!("Comparing global `{global}`");
+        let lhs = match lhs.get_global(&global, ty) {
+            Some(val) => val,
+            None => continue,
+        };
+        let rhs = rhs.get_global(&global, ty).unwrap();
+        assert_eq!(lhs, rhs);
+    }
+    for (memory, shared) in rhs.exported_memories() {
+        log::debug!("Comparing memory `{memory}`");
+        let lhs = match lhs.get_memory(&memory, shared) {
+            Some(val) => val,
+            None => continue,
+        };
+        let rhs = rhs.get_memory(&memory, shared).unwrap();
+        if lhs == rhs {
+            continue;
+        }
+        panic!("memories have differing values");
     }
 
     Ok(())
