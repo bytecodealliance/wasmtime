@@ -1,7 +1,8 @@
-use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose, ValueList};
+use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose};
 use crate::config::Config;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
+use cranelift::codegen::ir::instructions::InstructionFormat;
 use cranelift::codegen::ir::{types::*, FuncRef, LibCall, UserExternalName, UserFuncName};
 use cranelift::codegen::ir::{
     AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, StackSlot, Type, Value,
@@ -24,11 +25,11 @@ fn insert_opcode(
     args: &'static [Type],
     rets: &'static [Type],
 ) -> Result<()> {
-    let mut arg_vals = ValueList::new();
+    let mut vals = Vec::with_capacity(args.len());
     for &arg in args.into_iter() {
         let var = fgen.get_variable_of_type(arg)?;
         let val = builder.use_var(var);
-        arg_vals.push(val, &mut builder.func.dfg.value_lists);
+        vals.push(val);
     }
 
     // For pretty much every instruction the control type is the return type
@@ -42,7 +43,16 @@ fn insert_opcode(
     .copied()
     .unwrap_or(INVALID);
 
-    let (inst, dfg) = builder.ins().MultiAry(opcode, ctrl_type, arg_vals);
+    // Choose the appropriate instruction format for this opcode
+    let (inst, dfg) = match opcode.format() {
+        InstructionFormat::NullAry => builder.ins().NullAry(opcode, ctrl_type),
+        InstructionFormat::Unary => builder.ins().Unary(opcode, ctrl_type, vals[0]),
+        InstructionFormat::Binary => builder.ins().Binary(opcode, ctrl_type, vals[0], vals[1]),
+        InstructionFormat::Ternary => builder
+            .ins()
+            .Ternary(opcode, ctrl_type, vals[0], vals[1], vals[2]),
+        _ => unimplemented!(),
+    };
     let results = dfg.inst_results(inst).to_vec();
 
     for (val, &ty) in results.into_iter().zip(rets) {
