@@ -1266,6 +1266,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let ty = self.f.dfg.value_type(val);
         assert!(ty != IFLAGS && ty != FFLAGS);
 
+        if let Some(inst) = self.f.dfg.value_def(val).inst() {
+            assert!(!self.inst_sunk.contains(&inst));
+        }
+
         // If the value is a constant, then (re)materialize it at each use. This
         // lowers register pressure.
         if let Some(c) = self
@@ -1346,6 +1350,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     pub fn sink_inst(&mut self, ir_inst: Inst) {
         assert!(has_lowering_side_effect(self.f, ir_inst));
         assert!(self.cur_scan_entry_color.is_some());
+
+        for result in self.dfg().inst_results(ir_inst) {
+            assert!(self.value_lowered_uses[*result] == 0);
+        }
 
         let sunk_inst_entry_color = self
             .side_effect_inst_entry_colors
