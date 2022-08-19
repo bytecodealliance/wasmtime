@@ -61,6 +61,13 @@ test = false
 doc = false
 
 [[bin]]
+name = "differential_meta"
+path = "fuzz_targets/differential_meta.rs"
+test = false
+doc = false
+
+
+[[bin]]
 name = "differential_spec"
 path = "fuzz_targets/differential_spec.rs"
 test = false

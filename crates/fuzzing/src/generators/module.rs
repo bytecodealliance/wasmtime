@@ -1,4 +1,4 @@
-//! Generate a configuration for generating a Wasm module.
+//! Generate a Wasm module and the configuration for generating it.
 
 use arbitrary::{Arbitrary, Unstructured};
 use wasm_smith::SwarmConfig;
@@ -34,5 +34,28 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         config.threads_enabled = !config.memory64_enabled && u.arbitrary()?;
 
         Ok(ModuleConfig { config })
+    }
+}
+
+impl ModuleConfig {
+    /// Uses this configuration and the supplied source of data to generate a
+    /// Wasm module.
+    ///
+    /// If a `default_fuel` is provided, the resulting module will be configured
+    /// to ensure termination; as doing so will add an additional global to the
+    /// module, the pooling allocator, if configured, must also have its globals
+    /// limit updated.
+    pub fn generate(
+        &self,
+        input: &mut Unstructured<'_>,
+        default_fuel: Option<u32>,
+    ) -> arbitrary::Result<wasm_smith::Module> {
+        let mut module = wasm_smith::Module::new(self.config.clone(), input)?;
+
+        if let Some(default_fuel) = default_fuel {
+            module.ensure_termination(default_fuel);
+        }
+
+        Ok(module)
     }
 }
