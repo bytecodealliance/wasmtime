@@ -34,9 +34,7 @@ At the time of writing, we have the following fuzz targets:
   to its source, yielding a function A', and checks that A compiled +
   incremental compilation generates the same machine code as if A' was compiled
   from scratch.
-* `differential`: Generate a Wasm module and check that Wasmtime returns
-  the same results when run with two different configurations.
-* `differential_meta`: Generate a Wasm module, evaluate each exported function
+* `differential`: Generate a Wasm module, evaluate each exported function
   with random inputs, and check that Wasmtime returns the same results as a
   choice of another engine: the Wasm spec interpreter (see the
   `wasm-spec-interpreter` crate), the `wasmi` interpreter, or Wasmtime itself
