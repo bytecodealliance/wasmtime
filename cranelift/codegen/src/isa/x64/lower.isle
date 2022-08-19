@@ -1194,6 +1194,12 @@
 
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(rule (lower (has_type $F32 (fabs x)))
+      (x64_andps x (imm $F32 0x7fffffff)))
+
+(rule (lower (has_type $F64 (fabs x)))
+      (x64_andpd x (imm $F64 0x7fffffffffffffff)))
+
 ;; Special case for `f32x4.abs`.
 (rule (lower (has_type $F32X4 (fabs x)))
       (x64_andps x
@@ -1205,6 +1211,24 @@
       (x64_andpd x
              (x64_psrlq (vector_all_ones)
                     (RegMemImm.Imm 1))))
+
+;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fneg x)))
+      (x64_xorps x (imm $F32 0x80000000)))
+
+(rule (lower (has_type $F64 (fneg x)))
+      (x64_xorpd x (imm $F64 0x8000000000000000)))
+
+(rule (lower (has_type $F32X4 (fneg x)))
+      (x64_xorps x
+             (x64_pslld (vector_all_ones)
+                    (RegMemImm.Imm 31))))
+
+(rule (lower (has_type $F64X2 (fneg x)))
+      (x64_xorpd x
+             (x64_psllq (vector_all_ones)
+                    (RegMemImm.Imm 63))))
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3281,3 +3305,17 @@
 
 ;; We're missing a `unarrow` case for $I64X2
 ;; https://github.com/bytecodealliance/wasmtime/issues/4734
+
+;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (bitcast src @ (value_type $F32))))
+      (bitcast_xmm_to_gpr $F32 src))
+
+(rule (lower (has_type $F32 (bitcast src @ (value_type $I32))))
+      (bitcast_gpr_to_xmm $I32 src))
+
+(rule (lower (has_type $I64 (bitcast src @ (value_type $F64))))
+      (bitcast_xmm_to_gpr $F64 src))
+
+(rule (lower (has_type $F64 (bitcast src @ (value_type $I64))))
+      (bitcast_gpr_to_xmm $I64 src))

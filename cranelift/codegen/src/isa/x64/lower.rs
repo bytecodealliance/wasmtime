@@ -4,9 +4,7 @@
 pub(super) mod isle;
 
 use crate::data_value::DataValue;
-use crate::ir::{
-    condcodes::FloatCC, types, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type,
-};
+use crate::ir::{types, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type};
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
@@ -568,143 +566,11 @@ fn lower_insn_to_regs(
         | Opcode::SwidenHigh
         | Opcode::SwidenLow
         | Opcode::Snarrow
-        | Opcode::Unarrow => {
+        | Opcode::Unarrow
+        | Opcode::Bitcast
+        | Opcode::Fabs
+        | Opcode::Fneg => {
             implemented_in_isle(ctx);
-        }
-
-        Opcode::Bitcast => {
-            let input_ty = ctx.input_ty(insn, 0);
-            let output_ty = ctx.output_ty(insn, 0);
-            match (input_ty, output_ty) {
-                (types::F32, types::I32) => {
-                    let src = put_input_in_reg(ctx, inputs[0]);
-                    let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                    ctx.emit(Inst::xmm_to_gpr(
-                        SseOpcode::Movd,
-                        src,
-                        dst,
-                        OperandSize::Size32,
-                    ));
-                }
-                (types::I32, types::F32) => {
-                    let src = input_to_reg_mem(ctx, inputs[0]);
-                    let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                    ctx.emit(Inst::gpr_to_xmm(
-                        SseOpcode::Movd,
-                        src,
-                        OperandSize::Size32,
-                        dst,
-                    ));
-                }
-                (types::F64, types::I64) => {
-                    let src = put_input_in_reg(ctx, inputs[0]);
-                    let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                    ctx.emit(Inst::xmm_to_gpr(
-                        SseOpcode::Movq,
-                        src,
-                        dst,
-                        OperandSize::Size64,
-                    ));
-                }
-                (types::I64, types::F64) => {
-                    let src = input_to_reg_mem(ctx, inputs[0]);
-                    let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                    ctx.emit(Inst::gpr_to_xmm(
-                        SseOpcode::Movq,
-                        src,
-                        OperandSize::Size64,
-                        dst,
-                    ));
-                }
-                _ => unreachable!("invalid bitcast from {:?} to {:?}", input_ty, output_ty),
-            }
-        }
-
-        Opcode::Fabs | Opcode::Fneg => {
-            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            // In both cases, generate a constant and apply a single binary instruction:
-            // - to compute the absolute value, set all bits to 1 but the MSB to 0, and bit-AND the
-            // src with it.
-            // - to compute the negated value, set all bits to 0 but the MSB to 1, and bit-XOR the
-            // src with it.
-            let output_ty = ty.unwrap();
-            if !output_ty.is_vector() {
-                let (val, opcode): (u64, _) = match output_ty {
-                    types::F32 => match op {
-                        Opcode::Fabs => (0x7fffffff, SseOpcode::Andps),
-                        Opcode::Fneg => (0x80000000, SseOpcode::Xorps),
-                        _ => unreachable!(),
-                    },
-                    types::F64 => match op {
-                        Opcode::Fabs => (0x7fffffffffffffff, SseOpcode::Andpd),
-                        Opcode::Fneg => (0x8000000000000000, SseOpcode::Xorpd),
-                        _ => unreachable!(),
-                    },
-                    _ => panic!("unexpected type {:?} for Fabs", output_ty),
-                };
-
-                for inst in Inst::gen_constant(ValueRegs::one(dst), val as u128, output_ty, |ty| {
-                    ctx.alloc_tmp(ty).only_reg().unwrap()
-                }) {
-                    ctx.emit(inst);
-                }
-
-                ctx.emit(Inst::xmm_rm_r(opcode, src, dst));
-            } else {
-                // Eventually vector constants should be available in `gen_constant` and this block
-                // can be merged with the one above (TODO).
-                if output_ty.bits() == 128 {
-                    // Move the `lhs` to the same register as `dst`; this may not emit an actual move
-                    // but ensures that the registers are the same to match x86's read-write operand
-                    // encoding.
-                    let src = put_input_in_reg(ctx, inputs[0]);
-                    ctx.emit(Inst::gen_move(dst, src, output_ty));
-
-                    // Generate an all 1s constant in an XMM register. This uses CMPPS but could
-                    // have used CMPPD with the same effect. Note, we zero the temp we allocate
-                    // because if not, there is a chance that the register we use could be initialized
-                    // with NaN .. in which case the CMPPS would fail since NaN != NaN.
-                    let tmp = ctx.alloc_tmp(output_ty).only_reg().unwrap();
-                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Xorps, RegMem::from(tmp), tmp));
-                    let cond = FcmpImm::from(FloatCC::Equal);
-                    let cmpps = Inst::xmm_rm_r_imm(
-                        SseOpcode::Cmpps,
-                        RegMem::reg(tmp.to_reg()),
-                        tmp,
-                        cond.encode(),
-                        OperandSize::Size32,
-                    );
-                    ctx.emit(cmpps);
-
-                    // Shift the all 1s constant to generate the mask.
-                    let lane_bits = output_ty.lane_bits();
-                    let (shift_opcode, opcode, shift_by) = match (op, lane_bits) {
-                        (Opcode::Fabs, _) => {
-                            unreachable!(
-                                "implemented in ISLE: inst = `{}`, type = `{:?}`",
-                                ctx.dfg().display_inst(insn),
-                                ty
-                            );
-                        }
-                        (Opcode::Fneg, 32) => (SseOpcode::Pslld, SseOpcode::Xorps, 31),
-                        (Opcode::Fneg, 64) => (SseOpcode::Psllq, SseOpcode::Xorpd, 63),
-                        _ => unreachable!(
-                            "unexpected opcode and lane size: {:?}, {} bits",
-                            op, lane_bits
-                        ),
-                    };
-                    let shift = Inst::xmm_rmi_reg(shift_opcode, RegMemImm::imm(shift_by), tmp);
-                    ctx.emit(shift);
-
-                    // Apply shifted mask (XOR or AND).
-                    let mask = Inst::xmm_rm_r(opcode, RegMem::reg(tmp.to_reg()), dst);
-                    ctx.emit(mask);
-                } else {
-                    panic!("unexpected type {:?} for Fabs", output_ty);
-                }
-            }
         }
 
         Opcode::Fcopysign => {

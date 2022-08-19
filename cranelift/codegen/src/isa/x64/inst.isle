@@ -1647,6 +1647,10 @@
 (rule (x64_movupd from)
       (xmm_unary_rm_r (SseOpcode.Movupd) from))
 
+(decl x64_movd (Xmm) Gpr)
+(rule (x64_movd from)
+      (xmm_to_gpr (SseOpcode.Movd) from (OperandSize.Size32)))
+
 (decl x64_movdqu (XmmMem) Xmm)
 (rule (x64_movdqu from)
       (xmm_unary_rm_r (SseOpcode.Movdqu) from))
@@ -2763,6 +2767,13 @@
                                            (operand_size_of_type_32_64 (lane_type ty))))))
         dst))
 
+;; Helper for creating `MInst.XmmToGpr` instructions.
+(decl xmm_to_gpr (SseOpcode Xmm OperandSize) Gpr)
+(rule (xmm_to_gpr op src size)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.XmmToGpr op src dst size))))
+        dst))
+
 ;; Helper for creating `MInst.GprToXmm` instructions.
 (decl gpr_to_xmm (SseOpcode GprMem OperandSize) Xmm)
 (rule (gpr_to_xmm op src size)
@@ -3513,6 +3524,20 @@
 (type MachAtomicRmwOp extern (enum))
 (decl atomic_rmw_op_to_mach_atomic_rmw_op (AtomicRmwOp) MachAtomicRmwOp)
 (extern constructor atomic_rmw_op_to_mach_atomic_rmw_op atomic_rmw_op_to_mach_atomic_rmw_op)
+
+;;;; Casting ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl bitcast_xmm_to_gpr (Type Xmm) Gpr)
+(rule (bitcast_xmm_to_gpr $F32 src)
+      (xmm_to_gpr (SseOpcode.Movd) src (OperandSize.Size32)))
+(rule (bitcast_xmm_to_gpr $F64 src)
+      (xmm_to_gpr (SseOpcode.Movq) src (OperandSize.Size64)))
+
+(decl bitcast_gpr_to_xmm (Type Gpr) Xmm)
+(rule (bitcast_gpr_to_xmm $I32 src)
+      (gpr_to_xmm (SseOpcode.Movd) src (OperandSize.Size32)))
+(rule (bitcast_gpr_to_xmm $I64 src)
+      (gpr_to_xmm (SseOpcode.Movq) src (OperandSize.Size64)))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
