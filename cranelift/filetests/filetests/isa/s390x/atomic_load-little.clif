@@ -15,7 +15,7 @@ function %atomic_load_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = atomic_load.i64 little v0
+  v1 = atomic_load.i64 aligned little v0
   return v1
 }
 
@@ -37,7 +37,7 @@ function %atomic_load_i32_sym() -> i32 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = atomic_load.i32 little v0
+  v1 = atomic_load.i32 aligned little v0
   return v1
 }
 
@@ -59,7 +59,7 @@ function %atomic_load_i16_sym() -> i16 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = atomic_load.i16 little v0
+  v1 = atomic_load.i16 aligned little v0
   return v1
 }
 

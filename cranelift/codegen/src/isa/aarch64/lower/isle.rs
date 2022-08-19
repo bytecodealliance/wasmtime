@@ -71,6 +71,14 @@ pub struct SinkableAtomicLoad {
 impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_methods!();
 
+    fn sign_return_address_disabled(&mut self) -> Option<()> {
+        if self.isa_flags.sign_return_address() {
+            None
+        } else {
+            Some(())
+        }
+    }
+
     fn use_lse(&mut self, _: Inst) -> Option<()> {
         if self.isa_flags.has_lse() {
             Some(())

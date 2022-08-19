@@ -3121,6 +3121,7 @@ impl MachInstEmit for Inst {
 
                 sink.put4(0xd503233f | key << 6);
             }
+            &Inst::Xpaclri => sink.put4(0xd50320ff),
             &Inst::Bti { targets } => {
                 let targets = match targets {
                     BranchTargetType::None => 0b00,

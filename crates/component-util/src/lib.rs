@@ -60,7 +60,7 @@ pub enum FlagsSize {
     /// Flags can fit in a u16
     Size2,
     /// Flags can fit in a specified number of u32 fields
-    Size4Plus(usize),
+    Size4Plus(u8),
 }
 
 impl FlagsSize {
@@ -73,7 +73,11 @@ impl FlagsSize {
         } else if count <= 16 {
             FlagsSize::Size2
         } else {
-            FlagsSize::Size4Plus(ceiling_divide(count, 32))
+            let amt = ceiling_divide(count, 32);
+            if amt > (u8::MAX as usize) {
+                panic!("too many flags");
+            }
+            FlagsSize::Size4Plus(amt as u8)
         }
     }
 }

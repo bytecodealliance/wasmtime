@@ -1073,9 +1073,13 @@ mod tests {
                 "reduction wasn't maximal for insts"
             );
 
-            assert_eq!(
-                format!("{}", reduced_func),
-                expected_str.replace("\r\n", "\n")
+            let actual_ir = format!("{}", reduced_func);
+            let expected_ir = expected_str.replace("\r\n", "\n");
+            assert!(
+                expected_ir == actual_ir,
+                "Expected:\n{}\nGot:\n{}",
+                expected_ir,
+                actual_ir,
             );
         }
     }

@@ -20,8 +20,8 @@
 
 use crate::component::dfg::CoreDef;
 use crate::component::{
-    Adapter, AdapterOptions as AdapterOptionsDfg, ComponentTypes, InterfaceType, StringEncoding,
-    TypeFuncIndex,
+    Adapter, AdapterOptions as AdapterOptionsDfg, ComponentTypesBuilder, InterfaceType,
+    StringEncoding, TypeFuncIndex,
 };
 use crate::fact::transcode::Transcoder;
 use crate::{EntityRef, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap};
@@ -41,7 +41,7 @@ pub struct Module<'a> {
     /// Whether or not debug code is inserted into the adapters themselves.
     debug: bool,
     /// Type information from the creator of this `Module`
-    types: &'a ComponentTypes,
+    types: &'a ComponentTypesBuilder,
 
     /// Core wasm type section that's incrementally built
     core_types: core_types::CoreTypes,
@@ -125,7 +125,7 @@ enum Context {
 
 impl<'a> Module<'a> {
     /// Creates an empty module.
-    pub fn new(types: &'a ComponentTypes, debug: bool) -> Module<'a> {
+    pub fn new(types: &'a ComponentTypesBuilder, debug: bool) -> Module<'a> {
         Module {
             debug,
             types,

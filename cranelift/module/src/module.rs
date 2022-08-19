@@ -716,6 +716,14 @@ impl<M: Module> Module for &mut M {
         (**self).declare_data_in_func(data, func)
     }
 
+    fn declare_func_in_data(&self, func: FuncId, ctx: &mut DataContext) -> ir::FuncRef {
+        (**self).declare_func_in_data(func, ctx)
+    }
+
+    fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalValue {
+        (**self).declare_data_in_data(data, ctx)
+    }
+
     fn define_function(
         &mut self,
         func: FuncId,

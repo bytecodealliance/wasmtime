@@ -1,9 +1,12 @@
 (component
   (type string)
   (type (func (param string)))
-  (type $r (record (field "x" unit) (field "y" string)))
+  (type $r (record (field "x" (record)) (field "y" string)))
   (type $u (union $r string))
-  (type $e (expected $u u32))
+  (type $e (result $u (error u32)))
+  (type (result $u))
+  (type (result (error $u)))
+  (type (result))
 
   (type (func (param $e) (result (option $r))))
 
@@ -21,17 +24,17 @@
 
   ;; primitives in functions
   (type (func
-    (param bool)
-    (param u8)
-    (param s8)
-    (param u16)
-    (param s16)
-    (param u32)
-    (param s32)
-    (param u64)
-    (param s64)
-    (param char)
-    (param string)
+    (param "a" bool)
+    (param "b" u8)
+    (param "c" s8)
+    (param "d" u16)
+    (param "e" s16)
+    (param "f" u32)
+    (param "g" s32)
+    (param "h" u64)
+    (param "i" s64)
+    (param "j" char)
+    (param "k" string)
   ))
 
   ;; primitives in types

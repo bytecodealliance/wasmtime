@@ -129,6 +129,16 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
 
                     std: "bti" => clif: "use_bti",
                     std: "lse" => clif: "has_lse",
+                    // even though the natural correspondence seems to be
+                    // between "paca" and "has_pauth", the latter has no effect
+                    // in isolation, so we actually use the setting that affects
+                    // code generation
+                    std: "paca" => clif: "sign_return_address",
+                    // "paca" and "pacg" check for the same underlying
+                    // architectural feature, so we use the latter to cover more
+                    // code generation settings, of which we have chosen the one
+                    // with the most significant effect
+                    std: "pacg" => clif: "sign_return_address_all" ratio: 1 in 2,
                 },
             };
             return Ok(CodegenSettings::Target {

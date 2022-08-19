@@ -14,7 +14,7 @@ edition = "2021"
 anyhow = "1.0"
 cranelift-entity = { path = "../../cranelift/entity", version = "0.88.0" }
 wasmtime-types = { path = "../types", version = "0.41.0" }
-wasmparser = "0.88.0"
+wasmparser = "0.89.0"
 indexmap = { version = "1.0.2", features = ["serde-1"] }
 thiserror = "1.0.4"
 serde = { version = "1.0.94", features = ["derive"] }
@@ -22,15 +22,15 @@ log = { version = "0.4.8", default-features = false }
 gimli = { version = "0.26.0", default-features = false, features = ['read'] }
 object = { version = "0.29.0", default-features = false, features = ['read_core', 'write_core', 'elf'] }
 target-lexicon = "0.12"
-wasm-encoder = { version = "0.15.0", optional = true }
-wasmprinter = { version = "0.2.38", optional = true }
+wasm-encoder = { version = "0.16.0", optional = true }
+wasmprinter = { version = "0.2.39", optional = true }
 wasmtime-component-util = { path = "../component-util", version = "=0.41.0", optional = true }
 
 [dev-dependencies]
 atty = "0.2.14"
 clap = { version = "3.2.8", features = ['derive'] }
 env_logger = "0.9.0"
-wat = "1.0.47"
+wat = "1.0.48"
 
 [[example]]
 name = "factc"

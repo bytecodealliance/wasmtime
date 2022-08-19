@@ -92,12 +92,42 @@ impl Config {
             limits.tables = 1;
             limits.table_elements = 1_000;
 
+            limits.size = 1_000_000;
+
             match &mut self.wasmtime.memory_config {
                 MemoryConfig::Normal(config) => {
                     config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
                 }
                 MemoryConfig::CustomUnaligned => unreachable!(), // Arbitrary impl for `Config` should have prevented this
             }
+        }
+    }
+
+    /// Force `self` to be a configuration compatible with `other`. This is
+    /// useful for differential execution to avoid unhelpful fuzz crashes when
+    /// one engine has a feature enabled and the other does not.
+    pub fn make_compatible_with(&mut self, other: &Self) {
+        // Use the same `wasm-smith` configuration as `other` because this is
+        // used for determining what Wasm features are enabled in the engine
+        // (see `to_wasmtime`).
+        self.module_config = other.module_config.clone();
+
+        // Use the same allocation strategy between the two configs.
+        //
+        // Ideally this wouldn't be necessary, but, during differential
+        // evaluation, if the `lhs` is using ondemand and the `rhs` is using the
+        // pooling allocator (or vice versa), then the module may have been
+        // generated in such a way that is incompatible with the other
+        // allocation strategy.
+        //
+        // We can remove this in the future when it's possible to access the
+        // fields of `wasm_smith::Module` to constrain the pooling allocator
+        // based on what was actually generated.
+        self.wasmtime.strategy = other.wasmtime.strategy.clone();
+        if let InstanceAllocationStrategy::Pooling { .. } = &other.wasmtime.strategy {
+            // Also use the same memory configuration when using the pooling
+            // allocator.
+            self.wasmtime.memory_config = other.wasmtime.memory_config.clone();
         }
     }
 
@@ -112,13 +142,7 @@ impl Config {
         input: &mut Unstructured<'_>,
         default_fuel: Option<u32>,
     ) -> arbitrary::Result<wasm_smith::Module> {
-        let mut module = wasm_smith::Module::new(self.module_config.config.clone(), input)?;
-
-        if let Some(default_fuel) = default_fuel {
-            module.ensure_termination(default_fuel);
-        }
-
-        Ok(module)
+        self.module_config.generate(input, default_fuel)
     }
 
     /// Indicates that this configuration should be spec-test-compliant,

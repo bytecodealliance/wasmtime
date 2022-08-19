@@ -69,7 +69,7 @@ function %icmp_slt_i64_sym(i64) -> b1 {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
-  v2 = load.i64 v1
+  v2 = load.i64 aligned v1
   v3 = icmp.i64 slt v0, v2
   return v3
 }
@@ -97,7 +97,7 @@ function %icmp_slt_i64_sym_ext16(i64) -> b1 {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
-  v2 = sload16.i64 v1
+  v2 = sload16.i64 aligned v1
   v3 = icmp.i64 slt v0, v2
   return v3
 }
@@ -125,7 +125,7 @@ function %icmp_slt_i64_sym_ext32(i64) -> b1 {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
-  v2 = sload32.i64 v1
+  v2 = sload32.i64 aligned v1
   v3 = icmp.i64 slt v0, v2
   return v3
 }
@@ -204,7 +204,7 @@ function %icmp_slt_i32_sym(i32) -> b1 {
   gv0 = symbol colocated %sym
 block0(v0: i32):
   v1 = symbol_value.i64 gv0
-  v2 = load.i32 v1
+  v2 = load.i32 aligned v1
   v3 = icmp.i32 slt v0, v2
   return v3
 }
@@ -245,7 +245,7 @@ function %icmp_slt_i32_sym_ext16(i32) -> b1 {
   gv0 = symbol colocated %sym
 block0(v0: i32):
   v1 = symbol_value.i64 gv0
-  v2 = sload16.i32 v1
+  v2 = sload16.i32 aligned v1
   v3 = icmp.i32 slt v0, v2
   return v3
 }
@@ -303,7 +303,7 @@ function %icmp_slt_i16_sym(i16) -> b1 {
   gv0 = symbol colocated %sym
 block0(v0: i16):
   v1 = symbol_value.i64 gv0
-  v2 = load.i16 v1
+  v2 = load.i16 aligned v1
   v3 = icmp.i16 slt v0, v2
   return v3
 }
@@ -415,7 +415,7 @@ function %icmp_ult_i64_sym(i64) -> b1 {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
-  v2 = load.i64 v1
+  v2 = load.i64 aligned v1
   v3 = icmp.i64 ult v0, v2
   return v3
 }
@@ -443,7 +443,7 @@ function %icmp_ult_i64_sym_ext32(i64) -> b1 {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
-  v2 = uload32.i64 v1
+  v2 = uload32.i64 aligned v1
   v3 = icmp.i64 ult v0, v2
   return v3
 }
@@ -472,7 +472,7 @@ function %icmp_ult_i64_sym_ext16(i64) -> b1 {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
-  v2 = uload16.i64 v1
+  v2 = uload16.i64 aligned v1
   v3 = icmp.i64 ult v0, v2
   return v3
 }
@@ -538,7 +538,7 @@ function %icmp_ult_i32_sym(i32) -> b1 {
   gv0 = symbol colocated %sym
 block0(v0: i32):
   v1 = symbol_value.i64 gv0
-  v2 = load.i32 v1
+  v2 = load.i32 aligned v1
   v3 = icmp.i32 ult v0, v2
   return v3
 }
@@ -567,7 +567,7 @@ function %icmp_ult_i32_sym_ext16(i32) -> b1 {
   gv0 = symbol colocated %sym
 block0(v0: i32):
   v1 = symbol_value.i64 gv0
-  v2 = uload16.i32 v1
+  v2 = uload16.i32 aligned v1
   v3 = icmp.i32 ult v0, v2
   return v3
 }
@@ -627,7 +627,7 @@ function %icmp_ult_i16_mem(i16) -> b1 {
   gv0 = symbol colocated %sym
 block0(v0: i16):
   v1 = symbol_value.i64 gv0
-  v2 = load.i16 v1
+  v2 = load.i16 aligned v1
   v3 = icmp.i16 ult v0, v2
   return v3
 }

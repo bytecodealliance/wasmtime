@@ -1,0 +1,77 @@
+test compile precise-output
+target x86_64
+
+function %fn1(i8x16) -> i16x8 {
+block0(v0: i8x16):
+  v1 = swiden_low v0
+  v2 = swiden_high v0
+  v3 = iadd_pairwise v1, v2
+  return v3
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm5
+;   load_const VCodeConstant(0), %xmm0
+;   movdqa  %xmm5, %xmm6
+;   pmaddubsw %xmm0, %xmm6, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %fn2(i16x8) -> i32x4 {
+block0(v0: i16x8):
+  v1 = swiden_low v0
+  v2 = swiden_high v0
+  v3 = iadd_pairwise v1, v2
+  return v3
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_const VCodeConstant(0), %xmm3
+;   pmaddwd %xmm0, %xmm3, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %fn3(i8x16) -> i16x8 {
+block0(v0: i8x16):
+  v1 = uwiden_low v0
+  v2 = uwiden_high v0
+  v3 = iadd_pairwise v1, v2
+  return v3
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_const VCodeConstant(0), %xmm3
+;   pmaddubsw %xmm0, %xmm3, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %fn4(i16x8) -> i32x4 {
+block0(v0: i16x8):
+  v1 = uwiden_low v0
+  v2 = uwiden_high v0
+  v3 = iadd_pairwise v1, v2
+  return v3
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_const VCodeConstant(0), %xmm3
+;   pxor    %xmm0, %xmm3, %xmm0
+;   load_const VCodeConstant(1), %xmm7
+;   pmaddwd %xmm0, %xmm7, %xmm0
+;   load_const VCodeConstant(2), %xmm11
+;   paddd   %xmm0, %xmm11, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

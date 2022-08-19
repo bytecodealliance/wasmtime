@@ -408,58 +408,6 @@ impl Inst {
         Inst::XmmCmpRmR { op, src, dst }
     }
 
-    pub(crate) fn cvt_float_to_sint_seq(
-        src_size: OperandSize,
-        dst_size: OperandSize,
-        is_saturating: bool,
-        src: Writable<Reg>,
-        dst: Writable<Reg>,
-        tmp_gpr: Writable<Reg>,
-        tmp_xmm: Writable<Reg>,
-    ) -> Inst {
-        debug_assert!(src_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        debug_assert!(dst_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        debug_assert!(src.to_reg().class() == RegClass::Float);
-        debug_assert!(tmp_xmm.to_reg().class() == RegClass::Float);
-        debug_assert!(tmp_gpr.to_reg().class() == RegClass::Int);
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        Inst::CvtFloatToSintSeq {
-            src_size,
-            dst_size,
-            is_saturating,
-            src: WritableXmm::from_writable_reg(src).unwrap(),
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-            tmp_gpr: WritableGpr::from_writable_reg(tmp_gpr).unwrap(),
-            tmp_xmm: WritableXmm::from_writable_reg(tmp_xmm).unwrap(),
-        }
-    }
-
-    pub(crate) fn cvt_float_to_uint_seq(
-        src_size: OperandSize,
-        dst_size: OperandSize,
-        is_saturating: bool,
-        src: Writable<Reg>,
-        dst: Writable<Reg>,
-        tmp_gpr: Writable<Reg>,
-        tmp_xmm: Writable<Reg>,
-    ) -> Inst {
-        debug_assert!(src_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        debug_assert!(dst_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        debug_assert!(src.to_reg().class() == RegClass::Float);
-        debug_assert!(tmp_xmm.to_reg().class() == RegClass::Float);
-        debug_assert!(tmp_gpr.to_reg().class() == RegClass::Int);
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        Inst::CvtFloatToUintSeq {
-            src_size,
-            dst_size,
-            is_saturating,
-            src: WritableXmm::from_writable_reg(src).unwrap(),
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-            tmp_gpr: WritableGpr::from_writable_reg(tmp_gpr).unwrap(),
-            tmp_xmm: WritableXmm::from_writable_reg(tmp_xmm).unwrap(),
-        }
-    }
-
     #[allow(dead_code)]
     pub(crate) fn xmm_min_max_seq(
         size: OperandSize,
@@ -505,17 +453,6 @@ impl Inst {
         let src = GprMem::new(src).unwrap();
         let dst = WritableGpr::from_writable_reg(dst).unwrap();
         Inst::MovzxRmR { ext_mode, src, dst }
-    }
-
-    pub(crate) fn xmm_rmi_reg(opcode: SseOpcode, src: RegMemImm, dst: Writable<Reg>) -> Inst {
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmRmiReg {
-            opcode,
-            src1: Xmm::new(dst.to_reg()).unwrap(),
-            src2: XmmMemImm::new(src).unwrap(),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
     }
 
     pub(crate) fn movsx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
@@ -1257,7 +1194,7 @@ impl PrettyPrint for Inst {
                 dst_size,
                 tmp_xmm,
                 tmp_gpr,
-                ..
+                is_saturating,
             } => {
                 let src = pretty_print_reg(src.to_reg().to_reg(), src_size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size.to_bytes(), allocs);
@@ -1266,9 +1203,10 @@ impl PrettyPrint for Inst {
                 format!(
                     "{} {}, {}, {}, {}",
                     ljustify(format!(
-                        "cvt_float{}_to_sint{}_seq",
+                        "cvt_float{}_to_sint{}{}_seq",
                         src_size.to_bits(),
-                        dst_size.to_bits()
+                        dst_size.to_bits(),
+                        if *is_saturating { "_sat" } else { "" },
                     )),
                     src,
                     dst,
@@ -1284,7 +1222,7 @@ impl PrettyPrint for Inst {
                 dst_size,
                 tmp_gpr,
                 tmp_xmm,
-                ..
+                is_saturating,
             } => {
                 let src = pretty_print_reg(src.to_reg().to_reg(), src_size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size.to_bytes(), allocs);
@@ -1293,9 +1231,10 @@ impl PrettyPrint for Inst {
                 format!(
                     "{} {}, {}, {}, {}",
                     ljustify(format!(
-                        "cvt_float{}_to_uint{}_seq",
+                        "cvt_float{}_to_uint{}{}_seq",
                         src_size.to_bits(),
-                        dst_size.to_bits()
+                        dst_size.to_bits(),
+                        if *is_saturating { "_sat" } else { "" },
                     )),
                     src,
                     dst,

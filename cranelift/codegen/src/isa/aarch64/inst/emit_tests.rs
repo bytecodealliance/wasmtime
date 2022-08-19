@@ -57,6 +57,7 @@ fn test_aarch64_binemit() {
         "retab",
     ));
     insns.push((Inst::Pacisp { key: APIKey::B }, "7F2303D5", "pacibsp"));
+    insns.push((Inst::Xpaclri, "FF2003D5", "xpaclri"));
     insns.push((
         Inst::Bti {
             targets: BranchTargetType::J,

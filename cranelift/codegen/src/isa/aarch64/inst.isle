@@ -780,6 +780,11 @@
        (Pacisp
         (key APIKey))
 
+       ;; Strip pointer authentication code from instruction address in LR;
+       ;; equivalent to a no-op if Pointer authentication (FEAT_PAuth) is not
+       ;; supported.
+       (Xpaclri)
+
        ;; Branch target identification; equivalent to a no-op if Branch Target
        ;; Identification (FEAT_BTI) is not supported.
        (Bti
@@ -1370,6 +1375,9 @@
 ))
 
 ;; Extractors for target features ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(decl pure sign_return_address_disabled () Unit)
+(extern constructor sign_return_address_disabled sign_return_address_disabled)
+
 (decl use_lse () Inst)
 (extern extractor use_lse use_lse)
 
@@ -2591,4 +2599,11 @@
 
 (decl aarch64_link () Reg)
 (rule (aarch64_link)
+      (if (sign_return_address_disabled))
       (mov_preg (preg_link)))
+
+(rule (aarch64_link)
+      ;; This constructor is always used for non-leaf functions, so it is safe
+      ;; to clobber LR.
+      (let ((_ Unit (emit (MInst.Xpaclri))))
+           (mov_preg (preg_link))))
