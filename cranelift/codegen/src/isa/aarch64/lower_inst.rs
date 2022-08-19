@@ -569,31 +569,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("trapz / trapnz / resumable_trapnz should have been removed by legalization!");
         }
 
-        Opcode::FuncAddr => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let (extname, _) = ctx.call_target(insn).unwrap();
-            let extname = extname.clone();
-            ctx.emit(Inst::LoadExtName {
-                rd,
-                name: Box::new(extname),
-                offset: 0,
-            });
-        }
+        Opcode::FuncAddr => implemented_in_isle(ctx),
 
         Opcode::GlobalValue => {
             panic!("global_value should have been removed by legalization!");
         }
 
-        Opcode::SymbolValue => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let (extname, _, offset) = ctx.symbol_value(insn).unwrap();
-            let extname = extname.clone();
-            ctx.emit(Inst::LoadExtName {
-                rd,
-                name: Box::new(extname),
-                offset,
-            });
-        }
+        Opcode::SymbolValue => implemented_in_isle(ctx),
 
         Opcode::Call | Opcode::CallIndirect => {
             let caller_conv = ctx.abi().call_conv();
