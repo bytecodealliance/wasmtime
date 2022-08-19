@@ -55,12 +55,6 @@ test = false
 doc = false
 
 [[bin]]
-name = "differential"
-path = "fuzz_targets/differential.rs"
-test = false
-doc = false
-
-[[bin]]
 name = "differential_meta"
 path = "fuzz_targets/differential_meta.rs"
 test = false
