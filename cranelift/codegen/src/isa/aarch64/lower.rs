@@ -1229,31 +1229,23 @@ pub(crate) fn lower_icmp(
 
         match condcode {
             IntCC::Equal | IntCC::NotEqual => {
-                // eor     tmp1, lhs_lo, rhs_lo
-                // eor     tmp2, lhs_hi, rhs_hi
-                // adds    xzr, tmp1, tmp2
-                // cset    dst, {eq, ne}
+                // cmp lhs_lo, rhs_lo
+                // ccmp lhs_hi, rhs_hi, #0, eq
+                // cset dst, {eq, ne}
 
                 ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::Eor,
+                    alu_op: ALUOp::SubS,
                     size: OperandSize::Size64,
-                    rd: tmp1,
+                    rd: writable_zero_reg(),
                     rn: lhs.regs()[0],
                     rm: rhs.regs()[0],
                 });
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::Eor,
+                ctx.emit(Inst::CCmp {
                     size: OperandSize::Size64,
-                    rd: tmp2,
                     rn: lhs.regs()[1],
                     rm: rhs.regs()[1],
-                });
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::AddS,
-                    size: OperandSize::Size64,
-                    rd: writable_zero_reg(),
-                    rn: tmp1.to_reg(),
-                    rm: tmp2.to_reg(),
+                    nzcv: NZCV::new(false, false, false, false),
+                    cond: Cond::Eq,
                 });
                 cond
             }

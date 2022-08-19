@@ -12,8 +12,8 @@ cargo-fuzz = true
 arbitrary = { version = "1.1.0", features = ["derive"] }
 env_logger = "0.9.0"
 libfuzzer-sys = "0.4"
-wasmparser = "0.88.0"
-wasmprinter = "0.2.37"
+wasmparser = "0.89.0"
+wasmprinter = "0.2.39"
 wat = "1.0"
 wasmtime-environ = { path = ".." }
 component-fuzz-util = { path = "../../misc/component-fuzz-util", optional = true }

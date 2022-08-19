@@ -674,6 +674,10 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::CSet { rd, .. } | &Inst::CSetm { rd, .. } => {
             collector.reg_def(rd);
         }
+        &Inst::CCmp { rn, rm, .. } => {
+            collector.reg_use(rn);
+            collector.reg_use(rm);
+        }
         &Inst::CCmpImm { rn, .. } => {
             collector.reg_use(rn);
         }
@@ -977,12 +981,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::Ret { ref rets } => {
-            for &ret in rets {
-                collector.reg_use(ret);
-            }
-        }
-        &Inst::AuthenticatedRet { ref rets, .. } => {
+        &Inst::Ret { ref rets } | &Inst::AuthenticatedRet { ref rets, .. } => {
             for &ret in rets {
                 collector.reg_use(ret);
             }
@@ -1035,7 +1034,10 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             memarg_operands(mem, collector);
         }
-        &Inst::Pacisp { .. } => {}
+        &Inst::Pacisp { .. } | &Inst::Xpaclri => {
+            // Neither LR nor SP is an allocatable register, so there is no need
+            // to do anything.
+        }
         &Inst::VirtualSPOffsetAdj { .. } => {}
 
         &Inst::ElfTlsGetAddr { .. } => {
@@ -1056,6 +1058,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
 // Instructions: misc functions and external interface
 
 impl MachInst for Inst {
+    type ABIMachineSpec = AArch64MachineDeps;
     type LabelUse = LabelUse;
 
     fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>) {
@@ -1530,6 +1533,19 @@ impl Inst {
                 let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size64, allocs);
                 let cond = cond.pretty_print(0, allocs);
                 format!("csetm {}, {}", rd, cond)
+            }
+            &Inst::CCmp {
+                size,
+                rn,
+                rm,
+                nzcv,
+                cond,
+            } => {
+                let rn = pretty_print_ireg(rn, size, allocs);
+                let rm = pretty_print_ireg(rm, size, allocs);
+                let nzcv = nzcv.pretty_print(0, allocs);
+                let cond = cond.pretty_print(0, allocs);
+                format!("ccmp {}, {}, {}, {}", rn, rm, nzcv, cond)
             }
             &Inst::CCmpImm {
                 size,
@@ -2697,6 +2713,7 @@ impl Inst {
 
                 "paci".to_string() + key + "sp"
             }
+            &Inst::Xpaclri => "xpaclri".to_string(),
             &Inst::VirtualSPOffsetAdj { offset } => {
                 state.virtual_sp_offset += offset;
                 format!("virtual_sp_offset_adjust {}", offset)

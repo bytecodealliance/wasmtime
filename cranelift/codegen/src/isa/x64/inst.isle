@@ -1496,35 +1496,19 @@
 (decl sse_xor (Type Xmm XmmMem) Xmm)
 (rule (sse_xor ty x y) (xmm_rm_r ty (sse_xor_op ty) x y))
 
-;; Determine the appropriate operation to compare two vectors of the specified
-;; type.
-(decl sse_cmp_op (Type) SseOpcode)
-(rule (sse_cmp_op (multi_lane 8 16)) (SseOpcode.Pcmpeqb))
-(rule (sse_cmp_op (multi_lane 16 8)) (SseOpcode.Pcmpeqw))
-(rule (sse_cmp_op (multi_lane 32 4)) (SseOpcode.Pcmpeqd))
-(rule (sse_cmp_op (multi_lane 64 2)) (SseOpcode.Pcmpeqq))
-(rule (sse_cmp_op $F32X4) (SseOpcode.Cmpps))
-(rule (sse_cmp_op $F64X2) (SseOpcode.Cmppd))
-
-;; Generates a register value which has an all-ones pattern of the specified
-;; type.
+;; Generates a register value which has an all-ones pattern.
 ;;
 ;; Note that this is accomplished by comparing a fresh register with itself,
 ;; which for integers is always true. Also note that the comparison is always
-;; done for integers, it doesn't actually take the input `ty` into account. This
-;; is because we're comparing a fresh register to itself and we don't know the
-;; previous contents of the register. If a floating-point comparison is used
-;; then it runs the risk of comparing NaN against NaN and not actually producing
-;; an all-ones mask. By using integer comparision operations we're guaranteeed
-;; that everything is equal to itself.
-(decl vector_all_ones (Type) Xmm)
-(rule (vector_all_ones ty)
-      (let ((r WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmR (sse_cmp_op $I32X4)
-                                        r
-                                        r
-                                        r))))
-        r))
+;; done for integers. This is because we're comparing a fresh register to itself
+;; and we don't know the previous contents of the register. If a floating-point
+;; comparison is used then it runs the risk of comparing NaN against NaN and not
+;; actually producing an all-ones mask. By using integer comparision operations
+;; we're guaranteeed that everything is equal to itself.
+(decl vector_all_ones () Xmm)
+(rule (vector_all_ones)
+      (let ((r WritableXmm (temp_writable_xmm)))
+        (x64_pcmpeqd r r)))
 
 ;; Helper for creating an SSE register holding an `i64x2` from two `i64` values.
 (decl make_i64x2_from_lanes (GprMem GprMem) Xmm)
@@ -1662,6 +1646,10 @@
 (decl x64_movupd (XmmMem) Xmm)
 (rule (x64_movupd from)
       (xmm_unary_rm_r (SseOpcode.Movupd) from))
+
+(decl x64_movd (Xmm) Gpr)
+(rule (x64_movd from)
+      (xmm_to_gpr (SseOpcode.Movd) from (OperandSize.Size32)))
 
 (decl x64_movdqu (XmmMem) Xmm)
 (rule (x64_movdqu from)
@@ -2500,6 +2488,21 @@
 (rule (x64_packsswb src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Packsswb) src1 src2))
 
+;; Helper for creating `packssdw` instructions.
+(decl x64_packssdw (Xmm XmmMem) Xmm)
+(rule (x64_packssdw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Packssdw) src1 src2))
+
+;; Helper for creating `packuswb` instructions.
+(decl x64_packuswb (Xmm XmmMem) Xmm)
+(rule (x64_packuswb src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Packuswb) src1 src2))
+
+;; Helper for creating `packusdw` instructions.
+(decl x64_packusdw (Xmm XmmMem) Xmm)
+(rule (x64_packusdw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Packusdw) src1 src2))
+
 ;; Helper for creating `MInst.XmmRmRImm` instructions.
 (decl xmm_rm_r_imm (SseOpcode Reg RegMem u8 OperandSize) Xmm)
 (rule (xmm_rm_r_imm op src1 src2 imm size)
@@ -2581,6 +2584,10 @@
                                         src2
                                         dst))))
         dst))
+
+(decl x64_pmaddubsw (Xmm XmmMem) Xmm)
+(rule (x64_pmaddubsw src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pmaddubsw) src1 src2))
 
 ;; Helper for creating `insertps` instructions.
 (decl x64_insertps (Xmm XmmMem u8) Xmm)
@@ -2758,6 +2765,13 @@
                                            dst
                                            lane
                                            (operand_size_of_type_32_64 (lane_type ty))))))
+        dst))
+
+;; Helper for creating `MInst.XmmToGpr` instructions.
+(decl xmm_to_gpr (SseOpcode Xmm OperandSize) Gpr)
+(rule (xmm_to_gpr op src size)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.XmmToGpr op src dst size))))
         dst))
 
 ;; Helper for creating `MInst.GprToXmm` instructions.
@@ -3047,6 +3061,16 @@
             (_ Unit (emit (MInst.GprToXmm (SseOpcode.Cvtsi2sd) x dst size))))
         dst))
 
+;; Helper for creating `cvttps2dq` instructions.
+(decl x64_cvttps2dq (Type XmmMem) Xmm)
+(rule (x64_cvttps2dq ty x)
+      (xmm_unary_rm_r (SseOpcode.Cvttps2dq) x))
+
+;; Helper for creating `cvttpd2dq` instructions.
+(decl x64_cvttpd2dq (XmmMem) Xmm)
+(rule (x64_cvttpd2dq x)
+      (xmm_unary_rm_r (SseOpcode.Cvttpd2dq) x))
+
 (decl cvt_u64_to_float_seq (Type Gpr) Xmm)
 (rule (cvt_u64_to_float_seq ty src)
       (let ((size OperandSize (raw_operand_size_of_type ty))
@@ -3056,6 +3080,34 @@
             (tmp_gpr2 WritableGpr (temp_writable_gpr))
             (_ Unit (emit (gen_move $I64 src_copy src)))
             (_ Unit (emit (MInst.CvtUint64ToFloatSeq size src_copy dst tmp_gpr1 tmp_gpr2))))
+        dst))
+
+(decl cvt_float_to_uint_seq (Type Value bool) Gpr)
+(rule (cvt_float_to_uint_seq out_ty src @ (value_type src_ty) is_saturating)
+      (let ((out_size OperandSize (raw_operand_size_of_type out_ty))
+            (src_size OperandSize (raw_operand_size_of_type src_ty))
+
+            (tmp WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (gen_move src_ty tmp src)))
+
+            (dst WritableGpr (temp_writable_gpr))
+            (tmp_xmm WritableXmm (temp_writable_xmm))
+            (tmp_gpr WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.CvtFloatToUintSeq out_size src_size is_saturating tmp dst tmp_gpr tmp_xmm))))
+        dst))
+
+(decl cvt_float_to_sint_seq (Type Value bool) Gpr)
+(rule (cvt_float_to_sint_seq out_ty src @ (value_type src_ty) is_saturating)
+      (let ((out_size OperandSize (raw_operand_size_of_type out_ty))
+            (src_size OperandSize (raw_operand_size_of_type src_ty))
+
+            (tmp WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (gen_move src_ty tmp src)))
+
+            (dst WritableGpr (temp_writable_gpr))
+            (tmp_xmm WritableXmm (temp_writable_xmm))
+            (tmp_gpr WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.CvtFloatToSintSeq out_size src_size is_saturating tmp dst tmp_gpr tmp_xmm))))
         dst))
 
 (decl fcvt_uint_mask_const () VCodeConstant)
@@ -3222,6 +3274,25 @@
           (x64_cmp size (RegMemImm.Imm jt_size) idx)
           (ConsumesFlags.ConsumesFlagsSideEffect
             (MInst.JmpTableSeq idx tmp1 tmp2 default_target jt_targets)))))
+
+;;;; iadd_pairwise constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl iadd_pairwise_mul_const_16 () VCodeConstant)
+(extern constructor iadd_pairwise_mul_const_16 iadd_pairwise_mul_const_16)
+
+(decl iadd_pairwise_mul_const_32 () VCodeConstant)
+(extern constructor iadd_pairwise_mul_const_32 iadd_pairwise_mul_const_32)
+
+(decl iadd_pairwise_xor_const_32 () VCodeConstant)
+(extern constructor iadd_pairwise_xor_const_32 iadd_pairwise_xor_const_32)
+
+(decl iadd_pairwise_addd_const_32 () VCodeConstant)
+(extern constructor iadd_pairwise_addd_const_32 iadd_pairwise_addd_const_32)
+
+;;;; snarrow constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl snarrow_umax_mask () VCodeConstant)
+(extern constructor snarrow_umax_mask snarrow_umax_mask)
 
 ;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3453,6 +3524,20 @@
 (type MachAtomicRmwOp extern (enum))
 (decl atomic_rmw_op_to_mach_atomic_rmw_op (AtomicRmwOp) MachAtomicRmwOp)
 (extern constructor atomic_rmw_op_to_mach_atomic_rmw_op atomic_rmw_op_to_mach_atomic_rmw_op)
+
+;;;; Casting ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl bitcast_xmm_to_gpr (Type Xmm) Gpr)
+(rule (bitcast_xmm_to_gpr $F32 src)
+      (xmm_to_gpr (SseOpcode.Movd) src (OperandSize.Size32)))
+(rule (bitcast_xmm_to_gpr $F64 src)
+      (xmm_to_gpr (SseOpcode.Movq) src (OperandSize.Size64)))
+
+(decl bitcast_gpr_to_xmm (Type Gpr) Xmm)
+(rule (bitcast_gpr_to_xmm $I32 src)
+      (gpr_to_xmm (SseOpcode.Movd) src (OperandSize.Size32)))
+(rule (bitcast_gpr_to_xmm $I64 src)
+      (gpr_to_xmm (SseOpcode.Movq) src (OperandSize.Size64)))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

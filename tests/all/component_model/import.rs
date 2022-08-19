@@ -147,11 +147,11 @@ fn simple() -> Result<()> {
     linker.root().func_new(
         &component,
         "",
-        |mut store: StoreContextMut<'_, Option<String>>, args| {
+        |mut store: StoreContextMut<'_, Option<String>>, args, _results| {
             if let Val::String(s) = &args[0] {
                 assert!(store.data().is_none());
                 *store.data_mut() = Some(s.to_string());
-                Ok(Val::Unit)
+                Ok(())
             } else {
                 panic!()
             }
@@ -161,7 +161,7 @@ fn simple() -> Result<()> {
     instance
         .get_func(&mut store, "call")
         .unwrap()
-        .call(&mut store, &[])?;
+        .call(&mut store, &[], &mut [])?;
     assert_eq!(store.data().as_ref().unwrap(), "hello world");
 
     Ok(())
@@ -244,9 +244,7 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
         .func_wrap("thunk", || -> Result<()> { panic!("should not get here") })?;
     linker
         .root()
-        .func_wrap("ret-string", || -> Result<String> {
-            Ok("hello".to_string())
-        })?;
+        .func_wrap("ret-string", || -> Result<_> { Ok(("hello".to_string(),)) })?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
 
@@ -368,22 +366,22 @@ fn attempt_to_reenter_during_host() -> Result<()> {
     linker.root().func_new(
         &component,
         "thunk",
-        |mut store: StoreContextMut<'_, DynamicState>, _| {
+        |mut store: StoreContextMut<'_, DynamicState>, _, _| {
             let func = store.data_mut().func.take().unwrap();
-            let trap = func.call(&mut store, &[]).unwrap_err();
+            let trap = func.call(&mut store, &[], &mut []).unwrap_err();
             assert!(
                 trap.to_string()
                     .contains("cannot reenter component instance"),
                 "bad trap: {}",
                 trap,
             );
-            Ok(Val::Unit)
+            Ok(())
         },
     )?;
     let instance = linker.instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "run").unwrap();
     store.data_mut().func = Some(func);
-    func.call(&mut store, &[])?;
+    func.call(&mut store, &[], &mut [])?;
 
     Ok(())
 }
@@ -532,9 +530,9 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
     // First, test the static API
 
     let mut linker = Linker::new(&engine);
-    linker.root().func_wrap("f1", |x: u32| -> Result<u32> {
+    linker.root().func_wrap("f1", |x: u32| -> Result<(u32,)> {
         assert_eq!(x, 1);
-        Ok(2)
+        Ok((2,))
     })?;
     linker.root().func_wrap(
         "f2",
@@ -550,16 +548,16 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
             WasmStr,
             WasmStr,
         )|
-         -> Result<u32> {
+         -> Result<(u32,)> {
             assert_eq!(arg.0.to_str(&cx).unwrap(), "abc");
-            Ok(3)
+            Ok((3,))
         },
     )?;
     linker
         .root()
-        .func_wrap("f3", |arg: u32| -> Result<String> {
+        .func_wrap("f3", |arg: u32| -> Result<(String,)> {
             assert_eq!(arg, 8);
-            Ok("xyz".to_string())
+            Ok(("xyz".to_string(),))
         })?;
     linker.root().func_wrap(
         "f4",
@@ -575,9 +573,9 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
             WasmStr,
             WasmStr,
         )|
-         -> Result<String> {
+         -> Result<(String,)> {
             assert_eq!(arg.0.to_str(&cx).unwrap(), "abc");
-            Ok("xyz".to_string())
+            Ok(("xyz".to_string(),))
         },
     )?;
     let instance = linker.instantiate(&mut store, &component)?;
@@ -588,51 +586,63 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
     // Next, test the dynamic API
 
     let mut linker = Linker::new(&engine);
-    linker.root().func_new(&component, "f1", |_, args| {
-        if let Val::U32(x) = &args[0] {
-            assert_eq!(*x, 1);
-            Ok(Val::U32(2))
-        } else {
-            panic!()
-        }
-    })?;
-    linker.root().func_new(&component, "f2", |_, args| {
-        if let Val::Tuple(tuple) = &args[0] {
-            if let Val::String(s) = &tuple.values()[0] {
-                assert_eq!(s.deref(), "abc");
-                Ok(Val::U32(3))
+    linker
+        .root()
+        .func_new(&component, "f1", |_, args, results| {
+            if let Val::U32(x) = &args[0] {
+                assert_eq!(*x, 1);
+                results[0] = Val::U32(2);
+                Ok(())
             } else {
                 panic!()
             }
-        } else {
-            panic!()
-        }
-    })?;
-    linker.root().func_new(&component, "f3", |_, args| {
-        if let Val::U32(x) = &args[0] {
-            assert_eq!(*x, 8);
-            Ok(Val::String("xyz".into()))
-        } else {
-            panic!();
-        }
-    })?;
-    linker.root().func_new(&component, "f4", |_, args| {
-        if let Val::Tuple(tuple) = &args[0] {
-            if let Val::String(s) = &tuple.values()[0] {
-                assert_eq!(s.deref(), "abc");
-                Ok(Val::String("xyz".into()))
+        })?;
+    linker
+        .root()
+        .func_new(&component, "f2", |_, args, results| {
+            if let Val::Tuple(tuple) = &args[0] {
+                if let Val::String(s) = &tuple.values()[0] {
+                    assert_eq!(s.deref(), "abc");
+                    results[0] = Val::U32(3);
+                    Ok(())
+                } else {
+                    panic!()
+                }
             } else {
                 panic!()
             }
-        } else {
-            panic!()
-        }
-    })?;
+        })?;
+    linker
+        .root()
+        .func_new(&component, "f3", |_, args, results| {
+            if let Val::U32(x) = &args[0] {
+                assert_eq!(*x, 8);
+                results[0] = Val::String("xyz".into());
+                Ok(())
+            } else {
+                panic!();
+            }
+        })?;
+    linker
+        .root()
+        .func_new(&component, "f4", |_, args, results| {
+            if let Val::Tuple(tuple) = &args[0] {
+                if let Val::String(s) = &tuple.values()[0] {
+                    assert_eq!(s.deref(), "abc");
+                    results[0] = Val::String("xyz".into());
+                    Ok(())
+                } else {
+                    panic!()
+                }
+            } else {
+                panic!()
+            }
+        })?;
     let instance = linker.instantiate(&mut store, &component)?;
     instance
         .get_func(&mut store, "run")
         .unwrap()
-        .call(&mut store, &[])?;
+        .call(&mut store, &[], &mut [])?;
 
     Ok(())
 }
@@ -693,8 +703,8 @@ fn bad_import_alignment() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker
         .root()
-        .func_wrap("unaligned-retptr", || -> Result<String> {
-            Ok(String::new())
+        .func_wrap("unaligned-retptr", || -> Result<(String,)> {
+            Ok((String::new(),))
         })?;
     linker.root().func_wrap(
         "unaligned-argptr",
@@ -783,18 +793,20 @@ fn no_actual_wasm_code() -> Result<()> {
 
     *store.data_mut() = 0;
     let mut linker = Linker::new(&engine);
-    linker
-        .root()
-        .func_new(&component, "f", |mut store: StoreContextMut<'_, u32>, _| {
+    linker.root().func_new(
+        &component,
+        "f",
+        |mut store: StoreContextMut<'_, u32>, _, _| {
             *store.data_mut() += 1;
-            Ok(Val::Unit)
-        })?;
+            Ok(())
+        },
+    )?;
 
     let instance = linker.instantiate(&mut store, &component)?;
     let thunk = instance.get_func(&mut store, "thunk").unwrap();
 
     assert_eq!(*store.data(), 0);
-    thunk.call(&mut store, &[])?;
+    thunk.call(&mut store, &[], &mut [])?;
     assert_eq!(*store.data(), 1);
 
     Ok(())

@@ -50,7 +50,6 @@ use crate::ir::{DynamicStackSlot, RelSourceLoc, StackSlot, Type};
 use crate::result::CodegenResult;
 use crate::settings::Flags;
 use crate::value_label::ValueLabelsRanges;
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use cranelift_entity::PrimaryMap;
@@ -89,6 +88,9 @@ pub mod reg;
 
 /// A machine instruction.
 pub trait MachInst: Clone + Debug {
+    /// The ABI machine spec for this `MachInst`.
+    type ABIMachineSpec: ABIMachineSpec<I = Self>;
+
     /// Return the registers referenced by this machine instruction along with
     /// the modes of reference (use, def, modify).
     fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>);
@@ -260,9 +262,9 @@ pub trait MachInstEmit: MachInst {
 
 /// A trait describing the emission state carried between MachInsts when
 /// emitting a function body.
-pub trait MachInstEmitState<I: MachInst>: Default + Clone + Debug {
+pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
     /// Create a new emission state given the ABI object.
-    fn new(abi: &dyn ABICallee<I = I>) -> Self;
+    fn new(abi: &Callee<I::ABIMachineSpec>) -> Self;
     /// Update the emission state before emitting an instruction that is a
     /// safepoint.
     fn pre_safepoint(&mut self, _stack_map: StackMap) {}

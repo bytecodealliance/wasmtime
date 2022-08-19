@@ -21,10 +21,10 @@ use smallvec::{smallvec, SmallVec};
 // these ABIs are very similar.
 
 /// Support for the AArch64 ABI from the callee side (within a function body).
-pub(crate) type AArch64ABICallee = ABICalleeImpl<AArch64MachineDeps>;
+pub(crate) type AArch64Callee = Callee<AArch64MachineDeps>;
 
 /// Support for the AArch64 ABI from the caller side (at a callsite).
-pub(crate) type AArch64ABICaller = ABICallerImpl<AArch64MachineDeps>;
+pub(crate) type AArch64Caller = Caller<AArch64MachineDeps>;
 
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues
@@ -65,7 +65,7 @@ fn saved_reg_stack_size(
 
 /// AArch64-specific ABI behavior. This struct just serves as an implementation
 /// point for the trait; it is never actually instantiated.
-pub(crate) struct AArch64MachineDeps;
+pub struct AArch64MachineDeps;
 
 impl IsaFlags for aarch64_settings::Flags {}
 

@@ -17,12 +17,11 @@ use crate::ir::{
 };
 use crate::ir::{ExternalName, RelSourceLoc};
 use crate::machinst::{
-    non_writable_value_regs, writable_value_regs, ABICallee, BlockIndex, BlockLoweringOrder,
+    non_writable_value_regs, writable_value_regs, BlockIndex, BlockLoweringOrder, Callee,
     LoweredBlock, MachLabel, Reg, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
     VCodeConstants, VCodeInst, ValueRegs, Writable,
 };
 use crate::{trace, CodegenResult};
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::convert::TryInto;
 use regalloc2::VReg;
@@ -345,7 +344,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Prepare a new lowering context for the given IR function.
     pub fn new(
         f: &'func Function,
-        abi: Box<dyn ABICallee<I = I>>,
+        abi: Callee<I::ABIMachineSpec>,
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
     ) -> CodegenResult<Lower<'func, I>> {
@@ -1008,8 +1007,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         &self.f.dfg
     }
 
-    /// Get the `ABICallee`.
-    pub fn abi(&mut self) -> &mut dyn ABICallee<I = I> {
+    /// Get the `Callee`.
+    pub fn abi(&mut self) -> &mut Callee<I::ABIMachineSpec> {
         self.vcode.abi()
     }
 

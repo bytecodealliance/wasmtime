@@ -38,6 +38,17 @@ impl Inst {
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
+
+    fn xmm_rmi_reg(opcode: SseOpcode, src: RegMemImm, dst: Writable<Reg>) -> Inst {
+        src.assert_regclass_is(RegClass::Float);
+        debug_assert!(dst.to_reg().class() == RegClass::Float);
+        Inst::XmmRmiReg {
+            opcode,
+            src1: Xmm::new(dst.to_reg()).unwrap(),
+            src2: XmmMemImm::new(src).unwrap(),
+            dst: WritableXmm::from_writable_reg(dst).unwrap(),
+        }
+    }
 }
 
 #[test]

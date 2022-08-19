@@ -11,7 +11,7 @@ use component_fuzz_util::{Declarations, EXPORT_FUNCTION, IMPORT_FUNCTION};
 use std::any::Any;
 use std::fmt::Debug;
 use std::ops::ControlFlow;
-use wasmtime::component::{self, Component, Lift, Linker, Lower, Val};
+use wasmtime::component::{self, Component, ComponentNamedList, Lift, Linker, Lower, Val};
 use wasmtime::{Config, Engine, Store, StoreContextMut};
 
 /// Minimum length of an arbitrary list value generated for a test case
@@ -25,7 +25,6 @@ pub fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrar
     use component::Type;
 
     Ok(match ty {
-        Type::Unit => Val::Unit,
         Type::Bool => Val::Bool(input.arbitrary()?),
         Type::S8 => Val::S8(input.arbitrary()?),
         Type::U8 => Val::U8(input.arbitrary()?),
@@ -66,18 +65,18 @@ pub fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrar
             )
             .unwrap(),
         Type::Variant(variant) => {
-            let mut cases = variant.cases();
-            let discriminant = input.int_in_range(0..=cases.len() - 1)?;
-            variant
-                .new_val(
-                    &format!("C{discriminant}"),
-                    arbitrary_val(&cases.nth(discriminant).unwrap().ty, input)?,
-                )
-                .unwrap()
+            let cases = variant.cases().collect::<Vec<_>>();
+            let case = input.choose(&cases)?;
+            let payload = match &case.ty {
+                Some(ty) => Some(arbitrary_val(ty, input)?),
+                None => None,
+            };
+            variant.new_val(case.name, payload).unwrap()
         }
         Type::Enum(en) => {
-            let discriminant = input.int_in_range(0..=en.names().len() - 1)?;
-            en.new_val(&format!("C{discriminant}")).unwrap()
+            let names = en.names().collect::<Vec<_>>();
+            let name = input.choose(&names)?;
+            en.new_val(name).unwrap()
         }
         Type::Union(un) => {
             let mut types = un.types();
@@ -98,12 +97,18 @@ pub fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrar
                 })
                 .unwrap()
         }
-        Type::Expected(expected) => {
+        Type::Result(result) => {
             let discriminant = input.int_in_range(0..=1)?;
-            expected
+            result
                 .new_val(match discriminant {
-                    0 => Ok(arbitrary_val(&expected.ok(), input)?),
-                    1 => Err(arbitrary_val(&expected.err(), input)?),
+                    0 => Ok(match result.ok() {
+                        Some(ty) => Some(arbitrary_val(&ty, input)?),
+                        None => None,
+                    }),
+                    1 => Err(match result.err() {
+                        Some(ty) => Some(arbitrary_val(&ty, input)?),
+                        None => None,
+                    }),
                     _ => unreachable!(),
                 })
                 .unwrap()
@@ -135,12 +140,13 @@ macro_rules! define_static_api_test {
         ) -> arbitrary::Result<()>
         where
             $($param: Lift + Lower + Clone + PartialEq + Debug + Arbitrary<'a> + 'static,)*
-            R: Lift + Lower + Clone + PartialEq + Debug + Arbitrary<'a> + 'static
+            R: ComponentNamedList + Lift + Lower + Clone + PartialEq + Debug + Arbitrary<'a> + 'static
         {
             crate::init_fuzzing();
 
             let mut config = Config::new();
             config.wasm_component_model(true);
+            config.debug_adapter_modules(input.arbitrary()?);
             let engine = Engine::new(&config).unwrap();
             let wat = declarations.make_component();
             let wat = wat.as_bytes();

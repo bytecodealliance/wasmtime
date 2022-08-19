@@ -349,22 +349,18 @@ impl Module for ObjectModule {
         }
         *defined = true;
 
+        let align = std::cmp::max(self.function_alignment, self.isa.symbol_alignment());
         let (section, offset) = if self.per_function_section {
             let symbol_name = self.object.symbol(symbol).name.clone();
-            let (section, offset) = self.object.add_subsection(
-                StandardSection::Text,
-                &symbol_name,
-                bytes,
-                self.function_alignment,
-            );
+            let (section, offset) =
+                self.object
+                    .add_subsection(StandardSection::Text, &symbol_name, bytes, align);
             self.object.symbol_mut(symbol).section = SymbolSection::Section(section);
             self.object.symbol_mut(symbol).value = offset;
             (section, offset)
         } else {
             let section = self.object.section_id(StandardSection::Text);
-            let offset =
-                self.object
-                    .add_symbol_data(symbol, section, bytes, self.function_alignment);
+            let offset = self.object.add_symbol_data(symbol, section, bytes, align);
             (section, offset)
         };
 
@@ -453,7 +449,7 @@ impl Module for ObjectModule {
             )
         };
 
-        let align = align.unwrap_or(1);
+        let align = std::cmp::max(align.unwrap_or(1), self.isa.symbol_alignment());
         let offset = match *init {
             Init::Uninitialized => {
                 panic!("data is not initialized yet");

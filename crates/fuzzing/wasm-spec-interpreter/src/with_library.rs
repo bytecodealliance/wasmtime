@@ -71,6 +71,16 @@ mod ocaml_bindings {
     }
 }
 
+/// Initialize a persistent OCaml runtime.
+///
+/// When used for fuzzing differentially with engines that also use signal
+/// handlers, this function provides a way to explicitly set up the OCaml
+/// runtime and configure its signal handlers.
+pub fn setup_ocaml_runtime() {
+    let _lock = INTERPRET.lock().unwrap();
+    OCamlRuntime::init_persistent();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

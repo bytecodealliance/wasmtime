@@ -87,7 +87,7 @@ use std::convert::TryFrom;
 // We use a generic implementation that factors out ABI commonalities.
 
 /// Support for the S390x ABI from the callee side (within a function body).
-pub type S390xABICallee = ABICalleeImpl<S390xMachineDeps>;
+pub type S390xCallee = Callee<S390xMachineDeps>;
 
 /// ABI Register usage
 

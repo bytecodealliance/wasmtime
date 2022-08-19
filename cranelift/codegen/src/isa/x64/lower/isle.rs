@@ -24,14 +24,14 @@ use crate::{
         settings::Flags,
         unwind::UnwindInst,
         x64::{
-            abi::{X64ABICaller, X64ABIMachineSpec},
+            abi::{X64ABIMachineSpec, X64Caller},
             inst::{args::*, regs, CallInfo},
             settings::Flags as IsaFlags,
         },
     },
     machinst::{
-        isle::*, valueregs, ABICaller, InsnInput, InsnOutput, Lower, MachAtomicRmwOp, MachInst,
-        VCodeConstant, VCodeConstantData,
+        isle::*, valueregs, InsnInput, InsnOutput, Lower, MachAtomicRmwOp, MachInst, VCodeConstant,
+        VCodeConstantData,
     },
 };
 use regalloc2::PReg;
@@ -673,7 +673,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         let sig = &self.lower_ctx.dfg().signatures[sig_ref];
         let num_rets = sig.returns.len();
         let abi = ABISig::from_func_sig::<X64ABIMachineSpec>(sig, self.flags).unwrap();
-        let caller = X64ABICaller::from_func(sig, &extname, dist, caller_conv, self.flags).unwrap();
+        let caller = X64Caller::from_func(sig, &extname, dist, caller_conv, self.flags).unwrap();
 
         assert_eq!(
             inputs.len(&self.lower_ctx.dfg().value_lists) - off,
@@ -695,8 +695,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         let num_rets = sig.returns.len();
         let abi = ABISig::from_func_sig::<X64ABIMachineSpec>(sig, self.flags).unwrap();
         let caller =
-            X64ABICaller::from_ptr(sig, ptr, Opcode::CallIndirect, caller_conv, self.flags)
-                .unwrap();
+            X64Caller::from_ptr(sig, ptr, Opcode::CallIndirect, caller_conv, self.flags).unwrap();
 
         assert_eq!(
             inputs.len(&self.lower_ctx.dfg().value_lists) - off,
@@ -782,6 +781,41 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         self.lower_ctx
             .use_constant(VCodeConstantData::WellKnown(&UINT_MASK_HIGH))
     }
+
+    #[inline]
+    fn iadd_pairwise_mul_const_16(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_MUL_CONST_16))
+    }
+
+    #[inline]
+    fn iadd_pairwise_mul_const_32(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_MUL_CONST_32))
+    }
+
+    #[inline]
+    fn iadd_pairwise_xor_const_32(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_XOR_CONST_32))
+    }
+
+    #[inline]
+    fn iadd_pairwise_addd_const_32(&mut self) -> VCodeConstant {
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_ADDD_CONST_32))
+    }
+
+    #[inline]
+    fn snarrow_umax_mask(&mut self) -> VCodeConstant {
+        // 2147483647.0 is equivalent to 0x41DFFFFFFFC00000
+        static UMAX_MASK: [u8; 16] = [
+            0x00, 0x00, 0xC0, 0xFF, 0xFF, 0xFF, 0xDF, 0x41, 0x00, 0x00, 0xC0, 0xFF, 0xFF, 0xFF,
+            0xDF, 0x41,
+        ];
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&UMAX_MASK))
+    }
 }
 
 impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
@@ -807,7 +841,7 @@ impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         &mut self,
         abi: ABISig,
         num_rets: usize,
-        mut caller: X64ABICaller,
+        mut caller: X64Caller,
         (inputs, off): ValueSlice,
     ) -> InstOutput {
         caller.emit_stack_pre_adjust(self.lower_ctx);
@@ -907,4 +941,18 @@ const UINT_MASK: [u8; 16] = [
 
 const UINT_MASK_HIGH: [u8; 16] = [
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43,
+];
+
+const IADD_PAIRWISE_MUL_CONST_16: [u8; 16] = [0x01; 16];
+
+const IADD_PAIRWISE_MUL_CONST_32: [u8; 16] = [
+    0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00,
+];
+
+const IADD_PAIRWISE_XOR_CONST_32: [u8; 16] = [
+    0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80,
+];
+
+const IADD_PAIRWISE_ADDD_CONST_32: [u8; 16] = [
+    0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00,
 ];

@@ -14,7 +14,7 @@ use regalloc2::{self, MachineEnv};
 pub fn compile<B: LowerBackend + TargetIsa>(
     f: &Function,
     b: &B,
-    abi: Box<dyn ABICallee<I = B::MInst>>,
+    abi: Callee<<<B as LowerBackend>::MInst as MachInst>::ABIMachineSpec>,
     machine_env: &MachineEnv,
     emit_info: <B::MInst as MachInstEmit>::Info,
 ) -> CodegenResult<(VCode<B::MInst>, regalloc2::Output)> {

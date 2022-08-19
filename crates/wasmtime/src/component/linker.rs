@@ -238,7 +238,7 @@ impl<T> LinkerInstance<'_, T> {
     /// called, which must return a `Val` which is an instance of the result
     /// type of the import.
     pub fn func_new<
-        F: Fn(StoreContextMut<'_, T>, &[Val]) -> Result<Val> + Send + Sync + 'static,
+        F: Fn(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     >(
         &mut self,
         component: &Component,

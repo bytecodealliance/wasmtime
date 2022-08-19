@@ -1,6 +1,7 @@
 //! Generate Wasm modules that contain a single instruction.
 
-use arbitrary::{Arbitrary, Unstructured};
+use super::ModuleConfig;
+use arbitrary::Unstructured;
 use wasm_encoder::{
     CodeSection, ExportKind, ExportSection, Function, FunctionSection, Instruction, Module,
     TypeSection, ValType,
@@ -13,17 +14,38 @@ const FUNCTION_NAME: &'static str = "test";
 ///
 /// By explicitly defining the parameter and result types (versus generating the
 /// module directly), we can more easily generate values of the right type.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct SingleInstModule<'a> {
     instruction: Instruction<'a>,
     parameters: &'a [ValType],
     results: &'a [ValType],
+    feature: fn(&ModuleConfig) -> bool,
 }
 
 impl<'a> SingleInstModule<'a> {
-    /// Generate a binary Wasm module with a single exported function, `test`,
+    /// Choose a single-instruction module that matches `config`.
+    pub fn new(u: &mut Unstructured<'a>, config: &mut ModuleConfig) -> arbitrary::Result<&'a Self> {
+        // To avoid skipping modules unnecessarily during fuzzing, fix up the
+        // `ModuleConfig` to match the inherent limits of a single-instruction
+        // module.
+        config.config.min_funcs = 1;
+        config.config.max_funcs = 1;
+        config.config.min_tables = 0;
+        config.config.max_tables = 0;
+        config.config.min_memories = 0;
+        config.config.max_memories = 0;
+
+        // Only select instructions that match the `ModuleConfig`.
+        let instructions = &INSTRUCTIONS
+            .iter()
+            .filter(|i| (i.feature)(config))
+            .collect::<Vec<_>>();
+        u.choose(&instructions[..]).copied()
+    }
+
+    /// Encode a binary Wasm module with a single exported function, `test`,
     /// that executes the single instruction.
-    pub fn encode(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Vec<u8> {
         let mut module = Module::new();
 
         // Encode the type section.
@@ -61,12 +83,6 @@ impl<'a> SingleInstModule<'a> {
     }
 }
 
-impl<'a> Arbitrary<'a> for &SingleInstModule<'_> {
-    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        u.choose(&INSTRUCTIONS)
-    }
-}
-
 // MACROS
 //
 // These macros make it a bit easier to define the instructions available for
@@ -91,39 +107,52 @@ macro_rules! valtype {
 
 macro_rules! binary {
     ($inst:ident, $rust_ty:tt) => {
-        binary! { $inst, valtype!($rust_ty), valtype!($rust_ty) }
+        binary! { $inst, $rust_ty, $rust_ty }
     };
-    ($inst:ident, $arguments_ty:expr,  $result_ty:expr) => {
+    ($inst:ident, $arguments_ty:tt,  $result_ty:tt) => {
         SingleInstModule {
             instruction: Instruction::$inst,
-            parameters: &[$arguments_ty, $arguments_ty],
-            results: &[$result_ty],
+            parameters: &[valtype!($arguments_ty), valtype!($arguments_ty)],
+            results: &[valtype!($result_ty)],
+            feature: |_| true,
         }
     };
 }
 
 macro_rules! compare {
     ($inst:ident, $rust_ty:tt) => {
-        binary! { $inst, valtype!($rust_ty), ValType::I32 }
+        binary! { $inst, $rust_ty, i32 }
     };
 }
 
 macro_rules! unary {
     ($inst:ident, $rust_ty:tt) => {
-        unary! { $inst, valtype!($rust_ty), valtype!($rust_ty) }
+        unary! { $inst, $rust_ty, $rust_ty }
     };
-    ($inst:ident, $argument_ty:expr, $result_ty:expr) => {
+    ($inst:ident, $argument_ty:tt, $result_ty:tt) => {
         SingleInstModule {
             instruction: Instruction::$inst,
-            parameters: &[$argument_ty],
-            results: &[$result_ty],
+            parameters: &[valtype!($argument_ty)],
+            results: &[valtype!($result_ty)],
+            feature: |_| true,
+        }
+    };
+    ($inst:ident, $argument_ty:tt, $result_ty:tt, $feature:expr) => {
+        SingleInstModule {
+            instruction: Instruction::$inst,
+            parameters: &[valtype!($argument_ty)],
+            results: &[valtype!($result_ty)],
+            feature: $feature,
         }
     };
 }
 
 macro_rules! convert {
     ($inst:ident, $from_ty:tt -> $to_ty:tt) => {
-        unary! { $inst, valtype!($from_ty), valtype!($to_ty) }
+        unary! { $inst, $from_ty, $to_ty }
+    };
+    ($inst:ident, $from_ty:tt -> $to_ty:tt, $feature:expr) => {
+        unary! { $inst, $from_ty, $to_ty, $feature }
     };
 }
 
@@ -172,7 +201,7 @@ static INSTRUCTIONS: &[SingleInstModule] = &[
     binary!(I64Rotr, i64),
     // Integer comparison.
     unary!(I32Eqz, i32),
-    unary!(I64Eqz, ValType::I64, ValType::I32),
+    unary!(I64Eqz, i64, i32),
     compare!(I32Eq, i32),
     compare!(I64Eq, i64),
     compare!(I32Ne, i32),
@@ -236,11 +265,11 @@ static INSTRUCTIONS: &[SingleInstModule] = &[
     compare!(F32Ge, f32),
     compare!(F64Ge, f64),
     // Integer conversions ("to integer").
-    unary!(I32Extend8S, i32),
-    unary!(I32Extend16S, i32),
-    unary!(I64Extend8S, i64),
-    unary!(I64Extend16S, i64),
-    convert!(I64Extend32S, i64 -> i64),
+    unary!(I32Extend8S, i32, i32, |c| c.config.sign_extension_enabled),
+    unary!(I32Extend16S, i32, i32, |c| c.config.sign_extension_enabled),
+    unary!(I64Extend8S, i64, i64, |c| c.config.sign_extension_enabled),
+    unary!(I64Extend16S, i64, i64, |c| c.config.sign_extension_enabled),
+    convert!(I64Extend32S, i64 -> i64, |c| c.config.sign_extension_enabled),
     convert!(I32WrapI64, i64 -> i32),
     convert!(I64ExtendI32S, i32 -> i64),
     convert!(I64ExtendI32U, i32 -> i64),
@@ -252,14 +281,14 @@ static INSTRUCTIONS: &[SingleInstModule] = &[
     convert!(I64TruncF32U, f32 -> i64),
     convert!(I64TruncF64S, f64 -> i64),
     convert!(I64TruncF64U, f64 -> i64),
-    convert!(I32TruncSatF32S, f32 -> i32),
-    convert!(I32TruncSatF32U, f32 -> i32),
-    convert!(I32TruncSatF64S, f64 -> i32),
-    convert!(I32TruncSatF64U, f64 -> i32),
-    convert!(I64TruncSatF32S, f32 -> i64),
-    convert!(I64TruncSatF32U, f32 -> i64),
-    convert!(I64TruncSatF64S, f64 -> i64),
-    convert!(I64TruncSatF64U, f64 -> i64),
+    convert!(I32TruncSatF32S, f32 -> i32, |c| c.config.saturating_float_to_int_enabled),
+    convert!(I32TruncSatF32U, f32 -> i32, |c| c.config.saturating_float_to_int_enabled),
+    convert!(I32TruncSatF64S, f64 -> i32, |c| c.config.saturating_float_to_int_enabled),
+    convert!(I32TruncSatF64U, f64 -> i32, |c| c.config.saturating_float_to_int_enabled),
+    convert!(I64TruncSatF32S, f32 -> i64, |c| c.config.saturating_float_to_int_enabled),
+    convert!(I64TruncSatF32U, f32 -> i64, |c| c.config.saturating_float_to_int_enabled),
+    convert!(I64TruncSatF64S, f64 -> i64, |c| c.config.saturating_float_to_int_enabled),
+    convert!(I64TruncSatF64U, f64 -> i64, |c| c.config.saturating_float_to_int_enabled),
     convert!(I32ReinterpretF32, f32 -> i32),
     convert!(I64ReinterpretF64, f64 -> i64),
     // Floating-point conversions ("to float").
@@ -287,8 +316,9 @@ mod test {
             instruction: Instruction::I32Add,
             parameters: &[ValType::I32, ValType::I32],
             results: &[ValType::I32],
+            feature: |_| true,
         };
-        let wasm = sut.encode();
+        let wasm = sut.to_bytes();
         let wat = wasmprinter::print_bytes(wasm).unwrap();
         assert_eq!(
             wat,
@@ -307,7 +337,7 @@ mod test {
     #[test]
     fn instructions_encode_to_valid_modules() {
         for inst in INSTRUCTIONS {
-            assert!(wat::parse_bytes(&inst.encode()).is_ok());
+            assert!(wat::parse_bytes(&inst.to_bytes()).is_ok());
         }
     }
 }

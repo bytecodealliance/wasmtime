@@ -316,6 +316,15 @@ impl<'a> dyn TargetIsa + 'a {
         }
     }
 
+    /// Returns the minimum symbol alignment for this ISA.
+    pub fn symbol_alignment(&self) -> u64 {
+        match self.triple().architecture {
+            // All symbols need to be aligned to at least 2 on s390x.
+            Architecture::S390x => 2,
+            _ => 1,
+        }
+    }
+
     /// Get the pointer type of this ISA.
     pub fn pointer_type(&self) -> ir::Type {
         ir::Type::int(self.pointer_bits() as u16).unwrap()

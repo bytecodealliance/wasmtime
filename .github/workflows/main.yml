@@ -413,6 +413,10 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
+    # On one builder produce the source tarball since there's no need to produce
+    # it everywhere
+    - run: ./ci/build-src-tarball.sh
+      if: matrix.build == 'x86_64-linux'
     - uses: ./.github/actions/install-rust
     - uses: ./.github/actions/binary-compatible-builds
       with:
