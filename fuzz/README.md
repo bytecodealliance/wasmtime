@@ -37,10 +37,8 @@ At the time of writing, we have the following fuzz targets:
 * `differential`: Generate a Wasm module, evaluate each exported function
   with random inputs, and check that Wasmtime returns the same results as a
   choice of another engine: the Wasm spec interpreter (see the
-  `wasm-spec-interpreter` crate), the `wasmi` interpreter, or Wasmtime itself
-  run with a different configuration.
-* `differential_v8`: Generate a Wasm module and check that Wasmtime returns
-  the same results as V8.
+  `wasm-spec-interpreter` crate), the `wasmi` interpreter, V8 (through the `v8`
+  crate), or Wasmtime itself run with a different configuration.
 * `instantiate`: Generate a Wasm module and Wasmtime configuration and attempt
   to compile and instantiate with them.
 * `instantiate-many`: Generate many Wasm modules and attempt to compile and
