@@ -574,110 +574,15 @@ fn lower_insn_to_regs(
         | Opcode::Floor
         | Opcode::Nearest
         | Opcode::Trunc
-        | Opcode::StackAddr => {
+        | Opcode::StackAddr
+        | Opcode::Udiv
+        | Opcode::Urem
+        | Opcode::Sdiv
+        | Opcode::Srem => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::Udiv | Opcode::Urem | Opcode::Sdiv | Opcode::Srem => {
-            let kind = match op {
-                Opcode::Udiv => implemented_in_isle(ctx),
-                Opcode::Sdiv => DivOrRemKind::SignedDiv,
-                Opcode::Urem => DivOrRemKind::UnsignedRem,
-                Opcode::Srem => DivOrRemKind::SignedRem,
-                _ => unreachable!(),
-            };
-            let is_div = kind.is_div();
-
-            let input_ty = ctx.input_ty(insn, 0);
-            let size = OperandSize::from_ty(input_ty);
-
-            let dividend = put_input_in_reg(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            ctx.emit(Inst::gen_move(
-                Writable::from_reg(regs::rax()),
-                dividend,
-                input_ty,
-            ));
-
-            // Always do explicit checks for `srem`: otherwise, INT_MIN % -1 is not handled properly.
-            if flags.avoid_div_traps() || op == Opcode::Srem {
-                // A vcode meta-instruction is used to lower the inline checks, since they embed
-                // pc-relative offsets that must not change, thus requiring regalloc to not
-                // interfere by introducing spills and reloads.
-                //
-                // Note it keeps the result in $rax (for divide) or $rdx (for rem), so that
-                // regalloc is aware of the coalescing opportunity between rax/rdx and the
-                // destination register.
-                let divisor = put_input_in_reg(ctx, inputs[1]);
-
-                let divisor_copy = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(divisor_copy, divisor, types::I64));
-
-                let tmp = if op == Opcode::Sdiv && size == OperandSize::Size64 {
-                    Some(ctx.alloc_tmp(types::I64).only_reg().unwrap())
-                } else {
-                    None
-                };
-                // TODO use xor
-                ctx.emit(Inst::imm(
-                    OperandSize::Size32,
-                    0,
-                    Writable::from_reg(regs::rdx()),
-                ));
-                ctx.emit(Inst::checked_div_or_rem_seq(kind, size, divisor_copy, tmp));
-            } else {
-                // We don't want more than one trap record for a single instruction,
-                // so let's not allow the "mem" case (load-op merging) here; force
-                // divisor into a register instead.
-                let divisor = RegMem::reg(put_input_in_reg(ctx, inputs[1]));
-
-                // Fill in the high parts:
-                if kind.is_signed() {
-                    // sign-extend the sign-bit of al into ah for size 1, or rax into rdx, for
-                    // signed opcodes.
-                    ctx.emit(Inst::sign_extend_data(size));
-                } else if input_ty == types::I8 {
-                    ctx.emit(Inst::movzx_rm_r(
-                        ExtMode::BL,
-                        RegMem::reg(regs::rax()),
-                        Writable::from_reg(regs::rax()),
-                    ));
-                } else {
-                    // zero for unsigned opcodes.
-                    ctx.emit(Inst::imm(
-                        OperandSize::Size64,
-                        0,
-                        Writable::from_reg(regs::rdx()),
-                    ));
-                }
-
-                // Emit the actual idiv.
-                ctx.emit(Inst::div(size, kind.is_signed(), divisor));
-            }
-
-            // Move the result back into the destination reg.
-            if is_div {
-                // The quotient is in rax.
-                ctx.emit(Inst::gen_move(dst, regs::rax(), input_ty));
-            } else {
-                if size == OperandSize::Size8 {
-                    // The remainder is in AH. Right-shift by 8 bits then move from rax.
-                    ctx.emit(Inst::shift_r(
-                        OperandSize::Size64,
-                        ShiftKind::ShiftRightLogical,
-                        Some(8),
-                        Writable::from_reg(regs::rax()),
-                    ));
-                    ctx.emit(Inst::gen_move(dst, regs::rax(), input_ty));
-                } else {
-                    // The remainder is in rdx.
-                    ctx.emit(Inst::gen_move(dst, regs::rdx(), input_ty));
-                }
-            }
-        }
 
         Opcode::Umulhi | Opcode::Smulhi => {
             let input_ty = ctx.input_ty(insn, 0);

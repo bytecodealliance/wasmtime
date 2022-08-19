@@ -3436,3 +3436,18 @@
 
 (rule (lower (udiv a @ (value_type ty) b))
       (div_or_rem (DivOrRemKind.UnsignedDiv) a b))
+
+;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (sdiv a @ (value_type ty) b))
+      (div_or_rem (DivOrRemKind.SignedDiv) a b))
+
+;; Rules for `urem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (urem a @ (value_type ty) b))
+      (div_or_rem (DivOrRemKind.UnsignedRem) a b))
+
+;; Rules for `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (srem a @ (value_type ty) b))
+      (div_or_rem (DivOrRemKind.SignedRem) a b))
