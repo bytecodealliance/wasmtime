@@ -1,4 +1,5 @@
-use super::{first_exported_function, first_exported_memory, log_wasm};
+use super::{compile_module, log_wasm};
+use crate::generators;
 use std::convert::TryFrom;
 use std::sync::Once;
 use wasmtime::*;
@@ -16,7 +17,7 @@ use wasmtime::*;
 pub fn differential_v8_execution(wasm: &[u8], config: &crate::generators::Config) -> Option<()> {
     // Wasmtime setup
     log_wasm(wasm);
-    let (wasmtime_module, mut wasmtime_store) = super::differential_store(wasm, config);
+    let (wasmtime_module, mut wasmtime_store) = differential_store(wasm, config);
     let wasmtime_module = wasmtime_module?;
     log::trace!("compiled module with wasmtime");
 
@@ -338,4 +339,34 @@ fn assert_error_matches(wasmtime: &anyhow::Error, v8: &str) {
         }
     }
     verify_wasmtime("not possibly present in an error, just panic please");
+}
+
+fn differential_store(
+    wasm: &[u8],
+    fuzz_config: &generators::Config,
+) -> (Option<Module>, Store<super::StoreLimits>) {
+    let store = fuzz_config.to_store();
+    let module = compile_module(store.engine(), wasm, true, fuzz_config);
+    (module, store)
+}
+
+// Introspect wasmtime module to find the name of the first exported function.
+fn first_exported_function(module: &wasmtime::Module) -> Option<(&str, FuncType)> {
+    for e in module.exports() {
+        match e.ty() {
+            wasmtime::ExternType::Func(ty) => return Some((e.name(), ty)),
+            _ => {}
+        }
+    }
+    None
+}
+
+fn first_exported_memory(module: &Module) -> Option<&str> {
+    for e in module.exports() {
+        match e.ty() {
+            wasmtime::ExternType::Memory(..) => return Some(e.name()),
+            _ => {}
+        }
+    }
+    None
 }

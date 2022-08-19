@@ -831,36 +831,6 @@ fn table_ops_eventually_gcs() {
     panic!("after {n} runs nothing ever gc'd, something is probably wrong");
 }
 
-fn differential_store(
-    wasm: &[u8],
-    fuzz_config: &generators::Config,
-) -> (Option<Module>, Store<StoreLimits>) {
-    let store = fuzz_config.to_store();
-    let module = compile_module(store.engine(), wasm, true, fuzz_config);
-    (module, store)
-}
-
-// Introspect wasmtime module to find the name of the first exported function.
-fn first_exported_function(module: &wasmtime::Module) -> Option<(&str, FuncType)> {
-    for e in module.exports() {
-        match e.ty() {
-            wasmtime::ExternType::Func(ty) => return Some((e.name(), ty)),
-            _ => {}
-        }
-    }
-    None
-}
-
-fn first_exported_memory(module: &Module) -> Option<&str> {
-    for e in module.exports() {
-        match e.ty() {
-            wasmtime::ExternType::Memory(..) => return Some(e.name()),
-            _ => {}
-        }
-    }
-    None
-}
-
 #[derive(Default)]
 struct SignalOnDrop {
     state: Arc<(Mutex<bool>, Condvar)>,
