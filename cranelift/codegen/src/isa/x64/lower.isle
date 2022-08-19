@@ -3431,3 +3431,8 @@
 
 (rule (lower (stack_addr stack_slot offset))
       (stack_addr_impl stack_slot offset))
+
+;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (udiv a @ (value_type ty) b))
+      (div_or_rem (DivOrRemKind.UnsignedDiv) a b))

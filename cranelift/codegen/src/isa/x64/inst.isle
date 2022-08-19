@@ -3595,6 +3595,17 @@
            (_ Unit (emit (abi_stackslot_addr dst stack_slot offset))))
         dst))
 
+;;;; Division/Remainders ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl emit_div_or_rem (DivOrRemKind Type WritableGpr Gpr Gpr) Unit)
+(extern constructor emit_div_or_rem emit_div_or_rem)
+
+(decl div_or_rem (DivOrRemKind Value Value) Gpr)
+(rule (div_or_rem kind a @ (value_type ty) b)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit_div_or_rem kind ty dst a b)))
+        dst))
+
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Gpr InstOutput output_gpr)

@@ -582,7 +582,7 @@ fn lower_insn_to_regs(
 
         Opcode::Udiv | Opcode::Urem | Opcode::Sdiv | Opcode::Srem => {
             let kind = match op {
-                Opcode::Udiv => DivOrRemKind::UnsignedDiv,
+                Opcode::Udiv => implemented_in_isle(ctx),
                 Opcode::Sdiv => DivOrRemKind::SignedDiv,
                 Opcode::Urem => DivOrRemKind::UnsignedRem,
                 Opcode::Srem => DivOrRemKind::SignedRem,
