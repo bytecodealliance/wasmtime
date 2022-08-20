@@ -903,7 +903,7 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
         }
 
         // Assert that this opcode belongs to this format
-        fmtln!(fmt, "assert_eq!(opcode.format(), InstructionFormat::from(&data), \"Wrong InstructionFormat for Opcode: {}\", opcode);");
+        fmtln!(fmt, "debug_assert_eq!(opcode.format(), InstructionFormat::from(&data), \"Wrong InstructionFormat for Opcode: {}\", opcode);");
 
         fmt.line("self.build(data, ctrl_typevar)");
     });
