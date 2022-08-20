@@ -19,6 +19,9 @@ const MAX_FLAT_PARAMS: usize = 16;
 const MAX_FLAT_RESULTS: usize = 1;
 const MAX_ARITY: u32 = 5;
 
+// Wasmtime allows up to 100 type depth so limit this to just under that.
+const MAX_TYPE_DEPTH: u32 = 90;
+
 /// The name of the imported host function which the generated component will call
 pub const IMPORT_FUNCTION: &str = "echo";
 
@@ -77,14 +80,23 @@ impl<'a, const L: usize, const H: usize> Arbitrary<'a> for UsizeInRange<L, H> {
 #[derive(Debug, Clone)]
 pub struct VecInRange<T, const L: u32, const H: u32>(Vec<T>);
 
-impl<'a, T: Arbitrary<'a>, const L: u32, const H: u32> Arbitrary<'a> for VecInRange<T, L, H> {
-    fn arbitrary(input: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+impl<T, const L: u32, const H: u32> VecInRange<T, L, H> {
+    fn new<'a>(
+        input: &mut Unstructured<'a>,
+        gen: impl Fn(&mut Unstructured<'a>) -> arbitrary::Result<T>,
+    ) -> arbitrary::Result<Self> {
         let mut ret = Vec::new();
         input.arbitrary_loop(Some(L), Some(H), |input| {
-            ret.push(input.arbitrary()?);
+            ret.push(gen(input)?);
             Ok(std::ops::ControlFlow::Continue(()))
         })?;
         Ok(Self(ret))
+    }
+}
+
+impl<'a, T: Arbitrary<'a>, const L: u32, const H: u32> Arbitrary<'a> for VecInRange<T, L, H> {
+    fn arbitrary(input: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        VecInRange::new(input, |input| input.arbitrary())
     }
 }
 
@@ -98,7 +110,7 @@ impl<T, const L: u32, const H: u32> Deref for VecInRange<T, L, H> {
 
 /// Represents a component model interface type
 #[allow(missing_docs)]
-#[derive(Arbitrary, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub enum Type {
     Bool,
     S8,
@@ -141,6 +153,63 @@ pub enum Type {
     // Generate 0 flags all the way up to 65 flags which exercises the 0 to
     // 3 x u32 cases.
     Flags(UsizeInRange<0, 65>),
+}
+
+impl Type {
+    fn generate(u: &mut Unstructured<'_>, depth: u32) -> arbitrary::Result<Type> {
+        let max = if depth == 0 { 12 } else { 21 };
+        Ok(match u.int_in_range(0..=max)? {
+            0 => Type::Bool,
+            1 => Type::S8,
+            2 => Type::U8,
+            3 => Type::S16,
+            4 => Type::U16,
+            5 => Type::S32,
+            6 => Type::U32,
+            7 => Type::S64,
+            8 => Type::U64,
+            9 => Type::Float32,
+            10 => Type::Float64,
+            11 => Type::Char,
+            12 => Type::String,
+            // ^-- if you add something here update the `depth == 0` case above
+            13 => Type::List(Box::new(Type::generate(u, depth - 1)?)),
+            14 => Type::Record(Type::generate_list(u, depth - 1)?),
+            15 => Type::Tuple(Type::generate_list(u, depth - 1)?),
+            16 => Type::Variant(VecInRange::new(u, |u| Type::generate_opt(u, depth - 1))?),
+            17 => Type::Enum(u.arbitrary()?),
+            18 => Type::Union(Type::generate_list(u, depth - 1)?),
+            19 => Type::Option(Box::new(Type::generate(u, depth - 1)?)),
+            20 => Type::Result {
+                ok: Type::generate_opt(u, depth - 1)?.map(Box::new),
+                err: Type::generate_opt(u, depth - 1)?.map(Box::new),
+            },
+            21 => Type::Flags(u.arbitrary()?),
+            // ^-- if you add something here update the `depth != 0` case above
+            _ => unreachable!(),
+        })
+    }
+
+    fn generate_opt(u: &mut Unstructured<'_>, depth: u32) -> arbitrary::Result<Option<Type>> {
+        Ok(if u.arbitrary()? {
+            Some(Type::generate(u, depth)?)
+        } else {
+            None
+        })
+    }
+
+    fn generate_list<const L: u32, const H: u32>(
+        u: &mut Unstructured<'_>,
+        depth: u32,
+    ) -> arbitrary::Result<VecInRange<Type, L, H>> {
+        VecInRange::new(u, |u| Type::generate(u, depth))
+    }
+}
+
+impl<'a> Arbitrary<'a> for Type {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Type> {
+        Type::generate(u, MAX_TYPE_DEPTH)
+    }
 }
 
 fn lower_record<'a>(types: impl Iterator<Item = &'a Type>, vec: &mut Vec<CoreType>) {
