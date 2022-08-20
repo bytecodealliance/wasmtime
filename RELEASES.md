@@ -12,7 +12,7 @@ Unreleased.
 
 ## 0.40.0
 
-Unreleased.
+Released 2022-08-20
 
 This was a relatively quiet release in terms of user-facing features where most
 of the work was around the internals of Wasmtime and Cranelift. Improvements
