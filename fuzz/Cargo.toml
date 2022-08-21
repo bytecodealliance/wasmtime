@@ -61,32 +61,6 @@ test = false
 doc = false
 
 [[bin]]
-name = "differential_meta"
-path = "fuzz_targets/differential_meta.rs"
-test = false
-doc = false
-
-
-[[bin]]
-name = "differential_spec"
-path = "fuzz_targets/differential_spec.rs"
-test = false
-doc = false
-required-features = ['fuzz-spec-interpreter']
-
-[[bin]]
-name = "differential_wasmi"
-path = "fuzz_targets/differential_wasmi.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "differential_v8"
-path = "fuzz_targets/differential_v8.rs"
-test = false
-doc = false
-
-[[bin]]
 name = "spectests"
 path = "fuzz_targets/spectests.rs"
 test = false

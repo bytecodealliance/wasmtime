@@ -1,9 +1,9 @@
 //! Evaluate an exported Wasm function using the wasmi interpreter.
 
-use crate::generators::{DiffValue, ModuleConfig};
+use crate::generators::{DiffValue, DiffValueType, ModuleConfig};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
-use anyhow::{bail, Context, Result};
-use std::hash::Hash;
+use anyhow::{bail, Context, Error, Result};
+use wasmtime::Trap;
 
 /// A wrapper for `wasmi` as a [`DiffEngine`].
 pub struct WasmiEngine;
@@ -11,7 +11,7 @@ pub struct WasmiEngine;
 impl WasmiEngine {
     /// Build a new [`WasmiEngine`] but only if the configuration does not rely
     /// on features that `wasmi` does not support.
-    pub fn new(config: &ModuleConfig) -> Result<Box<Self>> {
+    pub fn new(config: &ModuleConfig) -> Result<Self> {
         if config.config.reference_types_enabled {
             bail!("wasmi does not support reference types")
         }
@@ -27,7 +27,16 @@ impl WasmiEngine {
         if config.config.sign_extension_enabled {
             bail!("wasmi does not support sign-extension")
         }
-        Ok(Box::new(Self))
+        if config.config.memory64_enabled {
+            bail!("wasmi does not support memory64");
+        }
+        if config.config.bulk_memory_enabled {
+            bail!("wasmi does not support bulk memory");
+        }
+        if config.config.threads_enabled {
+            bail!("wasmi does not support threads");
+        }
+        Ok(Self)
     }
 }
 
@@ -36,17 +45,17 @@ impl DiffEngine for WasmiEngine {
         "wasmi"
     }
 
-    fn instantiate(&self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
+    fn instantiate(&mut self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
         let module = wasmi::Module::from_buffer(wasm).context("unable to validate Wasm module")?;
         let instance = wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default())
             .context("unable to instantiate module in wasmi")?;
         let instance = instance.assert_no_start();
-        let exports = list_export_names(wasm);
-        Ok(Box::new(WasmiInstance {
-            module,
-            exports,
-            instance,
-        }))
+        Ok(Box::new(WasmiInstance { module, instance }))
+    }
+
+    fn assert_error_match(&self, trap: &Trap, err: Error) {
+        // TODO: should implement this for `wasmi`
+        drop((trap, err));
     }
 }
 
@@ -55,9 +64,6 @@ struct WasmiInstance {
     #[allow(dead_code)] // reason = "the module must live as long as its reference"
     module: wasmi::Module,
     instance: wasmi::ModuleRef,
-    /// `wasmi`'s instances have no way of listing their exports so, in order to
-    /// properly hash the instance, we keep track of the export names.
-    exports: Vec<String>,
 }
 
 impl DiffInstance for WasmiInstance {
@@ -65,7 +71,12 @@ impl DiffInstance for WasmiInstance {
         "wasmi"
     }
 
-    fn evaluate(&mut self, function_name: &str, arguments: &[DiffValue]) -> Result<Vec<DiffValue>> {
+    fn evaluate(
+        &mut self,
+        function_name: &str,
+        arguments: &[DiffValue],
+        _results: &[DiffValueType],
+    ) -> Result<Option<Vec<DiffValue>>> {
         let arguments: Vec<_> = arguments.iter().map(wasmi::RuntimeValue::from).collect();
         let export = self
             .instance
@@ -77,60 +88,34 @@ impl DiffInstance for WasmiInstance {
         let function = export.as_func().context("wasmi export is not a function")?;
         let result = wasmi::FuncInstance::invoke(&function, &arguments, &mut wasmi::NopExternals)
             .context("failed while invoking function in wasmi")?;
-        Ok(if let Some(result) = result {
+        Ok(Some(if let Some(result) = result {
             vec![result.into()]
         } else {
             vec![]
-        })
+        }))
     }
 
-    fn is_hashable(&self) -> bool {
-        true
-    }
-
-    fn hash(&mut self, state: &mut std::collections::hash_map::DefaultHasher) -> Result<()> {
-        for export_name in &self.exports {
-            if let Some(export) = self.instance.export_by_name(export_name) {
-                match export {
-                    wasmi::ExternVal::Func(_) => {}
-                    wasmi::ExternVal::Table(_) => {} // TODO eventually we can hash whether the values are null or non-null.
-                    wasmi::ExternVal::Memory(m) => {
-                        // `wasmi` memory may be stored non-contiguously; copy
-                        // it out to a contiguous chunk.
-                        let mut buffer: Vec<u8> = vec![0; m.current_size().0 * 65536];
-                        m.get_into(0, &mut buffer[..])
-                            .expect("can access wasmi memory");
-                        buffer.hash(state)
-                    }
-                    wasmi::ExternVal::Global(g) => {
-                        let val: DiffValue = g.get().into();
-                        val.hash(state);
-                    }
-                }
-            } else {
-                panic!("unable to find export: {}", export_name)
-            }
-        }
-        Ok(())
-    }
-}
-
-/// List the names of all exported items in a binary Wasm module.
-fn list_export_names(wasm: &[u8]) -> Vec<String> {
-    let mut exports = vec![];
-    for payload in wasmparser::Parser::new(0).parse_all(&wasm) {
-        match payload.unwrap() {
-            wasmparser::Payload::ExportSection(s) => {
-                for export in s {
-                    exports.push(export.unwrap().name.to_string());
-                }
-            }
-            _ => {
-                // Ignore any other sections.
-            }
+    fn get_global(&mut self, name: &str, _ty: DiffValueType) -> Option<DiffValue> {
+        match self.instance.export_by_name(name) {
+            Some(wasmi::ExternVal::Global(g)) => Some(g.get().into()),
+            _ => unreachable!(),
         }
     }
-    exports
+
+    fn get_memory(&mut self, name: &str, shared: bool) -> Option<Vec<u8>> {
+        assert!(!shared);
+        match self.instance.export_by_name(name) {
+            Some(wasmi::ExternVal::Memory(m)) => {
+                // `wasmi` memory may be stored non-contiguously; copy
+                // it out to a contiguous chunk.
+                let mut buffer: Vec<u8> = vec![0; m.current_size().0 * 65536];
+                m.get_into(0, &mut buffer[..])
+                    .expect("can access wasmi memory");
+                Some(buffer)
+            }
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl From<&DiffValue> for wasmi::RuntimeValue {
@@ -141,7 +126,9 @@ impl From<&DiffValue> for wasmi::RuntimeValue {
             DiffValue::I64(n) => I64(n),
             DiffValue::F32(n) => F32(wasmi::nan_preserving_float::F32::from_bits(n)),
             DiffValue::F64(n) => F64(wasmi::nan_preserving_float::F64::from_bits(n)),
-            DiffValue::V128(_) => unimplemented!(),
+            DiffValue::V128(_) | DiffValue::FuncRef { .. } | DiffValue::ExternRef { .. } => {
+                unimplemented!()
+            }
         }
     }
 }
@@ -158,21 +145,7 @@ impl Into<DiffValue> for wasmi::RuntimeValue {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_list_export_names() {
-        let wat = r#"(module
-            (func (export "a") (result i32) (i32.const 42))
-            (global (export "b") (mut i32) (i32.const 42))
-            (memory (export "c") 1 2 shared)
-        )"#;
-        let wasm = wat::parse_str(wat).unwrap();
-        assert_eq!(
-            list_export_names(&wasm),
-            vec!["a".to_string(), "b".to_string(), "c".to_string()],
-        );
-    }
+#[test]
+fn smoke() {
+    crate::oracles::engine::smoke_test_engine(|config| WasmiEngine::new(&config.module_config))
 }
