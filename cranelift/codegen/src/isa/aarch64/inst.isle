@@ -2417,6 +2417,13 @@
             (_ Unit (emit (MInst.VecLoadReplicate dst src size flags))))
         dst))
 
+;; Helper for emitting `MInst.LoadExtName` instructions.
+(decl load_ext_name (BoxExternalName i64) Reg)
+(rule (load_ext_name extname offset)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadExtName dst extname offset))))
+        dst))
+
 ;; Helper for emitting `MInst.LoadAddr` instructions.
 (decl load_addr (AMode) Reg)
 (rule (load_addr addr)
