@@ -1196,6 +1196,10 @@
 (decl temp_writable_xmm () WritableXmm)
 (extern constructor temp_writable_xmm temp_writable_xmm)
 
+;; Fetch the special pinned register.
+(decl pinned_writable_gpr () WritableGpr)
+(extern constructor pinned_writable_gpr pinned_writable_gpr)
+
 ;; Construct a new `XmmMem` from the given `RegMem`.
 ;;
 ;; Asserts that the `RegMem`'s register, if any, is an XMM register.
@@ -3605,6 +3609,17 @@
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit_div_or_rem kind ty dst a b)))
         dst))
+
+;;;; Pinned Register ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl read_pinned_gpr () Gpr)
+(rule (read_pinned_gpr)
+      (pinned_writable_gpr))
+
+(decl write_pinned_gpr (Gpr) SideEffectNoResult)
+(rule (write_pinned_gpr val)
+      (let ((dst WritableGpr (pinned_writable_gpr)))
+        (SideEffectNoResult.Inst (gen_move $I64 dst val))))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

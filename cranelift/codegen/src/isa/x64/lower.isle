@@ -3485,3 +3485,13 @@
       (let ((res ValueRegs (mul_hi $I64 $true a b))
             (hi Gpr (value_regs_get_gpr res 1)))
         hi))
+
+;; Rules for `get_pinned_reg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (get_pinned_reg))
+      (read_pinned_gpr))
+
+;; Rules for `set_pinned_reg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (set_pinned_reg a @ (value_type ty)))
+      (side_effect (write_pinned_gpr a)))

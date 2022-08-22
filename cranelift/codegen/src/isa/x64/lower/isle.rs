@@ -849,6 +849,11 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
             .use_constant(VCodeConstantData::WellKnown(&UMAX_MASK))
     }
 
+    #[inline]
+    fn pinned_writable_gpr(&mut self) -> WritableGpr {
+        Writable::from_reg(Gpr::new(regs::pinned_reg()).unwrap())
+    }
+
     fn emit_div_or_rem(
         &mut self,
         kind: &DivOrRemKind,

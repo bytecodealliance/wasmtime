@@ -580,25 +580,13 @@ fn lower_insn_to_regs(
         | Opcode::Sdiv
         | Opcode::Srem
         | Opcode::Umulhi
-        | Opcode::Smulhi => {
+        | Opcode::Smulhi
+        | Opcode::GetPinnedReg
+        | Opcode::SetPinnedReg => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::GetPinnedReg => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            ctx.emit(Inst::gen_move(dst, regs::pinned_reg(), types::I64));
-        }
-
-        Opcode::SetPinnedReg => {
-            let src = put_input_in_reg(ctx, inputs[0]);
-            ctx.emit(Inst::gen_move(
-                Writable::from_reg(regs::pinned_reg()),
-                src,
-                types::I64,
-            ));
-        }
 
         Opcode::Vconst => {
             let used_constant = if let &InstructionData::UnaryConst {
