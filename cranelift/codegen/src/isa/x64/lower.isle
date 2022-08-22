@@ -3451,3 +3451,20 @@
 
 (rule (lower (srem a @ (value_type ty) b))
       (div_or_rem (DivOrRemKind.SignedRem) a b))
+
+;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (umulhi a @ (value_type $I16) b))
+      (let ((res ValueRegs (mul_hi $I16 $false a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+(rule (lower (umulhi a @ (value_type $I32) b))
+      (let ((res ValueRegs (mul_hi $I32 $false a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+(rule (lower (umulhi a @ (value_type $I64) b))
+      (let ((res ValueRegs (mul_hi $I64 $false a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))

@@ -2738,7 +2738,7 @@
 (rule (mul_hi ty signed src1 src2)
       (let ((dst_lo WritableGpr (temp_writable_gpr))
             (dst_hi WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
+            (size OperandSize (raw_operand_size_of_type ty))
             (_ Unit (emit (MInst.MulHi size
                                        signed
                                        src1

@@ -578,13 +578,14 @@ fn lower_insn_to_regs(
         | Opcode::Udiv
         | Opcode::Urem
         | Opcode::Sdiv
-        | Opcode::Srem => {
+        | Opcode::Srem
+        | Opcode::Umulhi => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
 
-        Opcode::Umulhi | Opcode::Smulhi => {
+        Opcode::Smulhi => {
             let input_ty = ctx.input_ty(insn, 0);
 
             let lhs = put_input_in_reg(ctx, inputs[0]);
