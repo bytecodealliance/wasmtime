@@ -569,116 +569,13 @@ fn lower_insn_to_regs(
         | Opcode::Unarrow
         | Opcode::Bitcast
         | Opcode::Fabs
-        | Opcode::Fneg => {
+        | Opcode::Fneg
+        | Opcode::Fcopysign
+        | Opcode::Ceil
+        | Opcode::Floor
+        | Opcode::Nearest
+        | Opcode::Trunc => {
             implemented_in_isle(ctx);
-        }
-
-        Opcode::Fcopysign => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let lhs = put_input_in_reg(ctx, inputs[0]);
-            let rhs = put_input_in_reg(ctx, inputs[1]);
-
-            let ty = ty.unwrap();
-
-            // We're going to generate the following sequence:
-            //
-            // movabs     $INT_MIN, tmp_gpr1
-            // mov{d,q}   tmp_gpr1, tmp_xmm1
-            // movap{s,d} tmp_xmm1, dst
-            // andnp{s,d} src_1, dst
-            // movap{s,d} src_2, tmp_xmm2
-            // andp{s,d}  tmp_xmm1, tmp_xmm2
-            // orp{s,d}   tmp_xmm2, dst
-
-            let tmp_xmm1 = ctx.alloc_tmp(types::F32).only_reg().unwrap();
-            let tmp_xmm2 = ctx.alloc_tmp(types::F32).only_reg().unwrap();
-
-            let (sign_bit_cst, mov_op, and_not_op, and_op, or_op) = match ty {
-                types::F32 => (
-                    0x8000_0000,
-                    SseOpcode::Movaps,
-                    SseOpcode::Andnps,
-                    SseOpcode::Andps,
-                    SseOpcode::Orps,
-                ),
-                types::F64 => (
-                    0x8000_0000_0000_0000,
-                    SseOpcode::Movapd,
-                    SseOpcode::Andnpd,
-                    SseOpcode::Andpd,
-                    SseOpcode::Orpd,
-                ),
-                _ => {
-                    panic!("unexpected type {:?} for copysign", ty);
-                }
-            };
-
-            for inst in Inst::gen_constant(ValueRegs::one(tmp_xmm1), sign_bit_cst, ty, |ty| {
-                ctx.alloc_tmp(ty).only_reg().unwrap()
-            }) {
-                ctx.emit(inst);
-            }
-            ctx.emit(Inst::xmm_mov(mov_op, RegMem::reg(tmp_xmm1.to_reg()), dst));
-            ctx.emit(Inst::xmm_rm_r(and_not_op, RegMem::reg(lhs), dst));
-            ctx.emit(Inst::xmm_mov(mov_op, RegMem::reg(rhs), tmp_xmm2));
-            ctx.emit(Inst::xmm_rm_r(
-                and_op,
-                RegMem::reg(tmp_xmm1.to_reg()),
-                tmp_xmm2,
-            ));
-            ctx.emit(Inst::xmm_rm_r(or_op, RegMem::reg(tmp_xmm2.to_reg()), dst));
-        }
-
-        Opcode::Ceil | Opcode::Floor | Opcode::Nearest | Opcode::Trunc => {
-            let ty = ty.unwrap();
-            if isa_flags.use_sse41() {
-                let mode = match op {
-                    Opcode::Ceil => RoundImm::RoundUp,
-                    Opcode::Floor => RoundImm::RoundDown,
-                    Opcode::Nearest => RoundImm::RoundNearest,
-                    Opcode::Trunc => RoundImm::RoundZero,
-                    _ => panic!("unexpected opcode {:?} in Ceil/Floor/Nearest/Trunc", op),
-                };
-                let op = match ty {
-                    types::F32 => SseOpcode::Roundss,
-                    types::F64 => SseOpcode::Roundsd,
-                    types::F32X4 => SseOpcode::Roundps,
-                    types::F64X2 => SseOpcode::Roundpd,
-                    _ => panic!("unexpected type {:?} in Ceil/Floor/Nearest/Trunc", ty),
-                };
-                let src = input_to_reg_mem(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::xmm_rm_r_imm(
-                    op,
-                    src,
-                    dst,
-                    mode.encode(),
-                    OperandSize::Size32,
-                ));
-            } else {
-                // Lower to VM calls when there's no access to SSE4.1.
-                // Note, for vector types on platforms that don't support sse41
-                // the execution will panic here.
-                let libcall = match (op, ty) {
-                    (Opcode::Ceil, types::F32) => LibCall::CeilF32,
-                    (Opcode::Ceil, types::F64) => LibCall::CeilF64,
-                    (Opcode::Floor, types::F32) => LibCall::FloorF32,
-                    (Opcode::Floor, types::F64) => LibCall::FloorF64,
-                    (Opcode::Nearest, types::F32) => LibCall::NearestF32,
-                    (Opcode::Nearest, types::F64) => LibCall::NearestF64,
-                    (Opcode::Trunc, types::F32) => LibCall::TruncF32,
-                    (Opcode::Trunc, types::F64) => LibCall::TruncF64,
-                    _ => panic!(
-                        "unexpected type/opcode {:?}/{:?} in Ceil/Floor/Nearest/Trunc",
-                        ty, op
-                    ),
-                };
-
-                let input = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                emit_vm_call(ctx, flags, triple, libcall, &[input], &[dst])?;
-            }
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
