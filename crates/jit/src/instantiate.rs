@@ -403,24 +403,10 @@ impl CompiledModule {
         profiler: &dyn ProfilingAgent,
         id_allocator: &CompiledModuleIdAllocator,
     ) -> Result<Self> {
-        let (remap, is_branch_protection_enabled) = if let Some(ref info) = info {
-            (false, info.meta.is_branch_protection_enabled)
-        } else {
-            (true, false)
-        };
-        // Transfer ownership of `obj` to a `CodeMemory` object which will
-        // manage permissions, such as the executable bit. Once it's located
-        // there we also publish it for being able to execute. Note that this
-        // step will also resolve pending relocations in the compiled image.
-        let mut code_memory = CodeMemory::new(mmap);
-        let code = code_memory
-            .publish(is_branch_protection_enabled)
-            .context("failed to publish code memory")?;
-
+        let obj = File::parse(&mmap[..]).context("failed to parse internal elf file")?;
+        let opt_section = |name: &str| obj.section_by_name(name).and_then(|s| s.data().ok());
         let section = |name: &str| {
-            code.obj
-                .section_by_name(name)
-                .and_then(|s| s.data().ok())
+            opt_section(name)
                 .ok_or_else(|| anyhow!("missing section `{}` in compilation artifacts", name))
         };
 
@@ -431,49 +417,29 @@ impl CompiledModule {
             None => bincode::deserialize(section(ELF_WASMTIME_INFO)?)
                 .context("failed to deserialize wasmtime module info")?,
         };
-        let is_branch_protection_enabled = info.meta.is_branch_protection_enabled;
-
-        if remap && is_branch_protection_enabled {
-            // TODO: Get the correct mapping the first time.
-            let text_offset = code.text.as_ptr() as usize - code.mmap.as_ptr() as usize;
-            let text_range = text_offset..text_offset + code.text.len();
-
-            unsafe {
-                code.mmap
-                    .make_executable(text_range, is_branch_protection_enabled)
-                    .expect("unable to make memory executable");
-            }
-        }
-
-        let func_name_data = match code
-            .obj
-            .section_by_name(ELF_NAME_DATA)
-            .and_then(|s| s.data().ok())
-        {
-            Some(data) => subslice_range(data, code.mmap),
-            None => 0..0,
-        };
 
         let mut ret = Self {
             module: Arc::new(info.module),
             funcs: info.funcs,
             trampolines: info.trampolines,
-            wasm_data: subslice_range(section(ELF_WASM_DATA)?, code.mmap),
-            address_map_data: code
-                .obj
-                .section_by_name(ELF_WASMTIME_ADDRMAP)
-                .and_then(|s| s.data().ok())
-                .map(|slice| subslice_range(slice, code.mmap))
+            wasm_data: subslice_range(section(ELF_WASM_DATA)?, &mmap),
+            address_map_data: opt_section(ELF_WASMTIME_ADDRMAP)
+                .map(|slice| subslice_range(slice, &mmap))
                 .unwrap_or(0..0),
-            trap_data: subslice_range(section(ELF_WASMTIME_TRAPS)?, code.mmap),
-            code: subslice_range(code.text, code.mmap),
+            func_name_data: opt_section(ELF_NAME_DATA)
+                .map(|slice| subslice_range(slice, &mmap))
+                .unwrap_or(0..0),
+            trap_data: subslice_range(section(ELF_WASMTIME_TRAPS)?, &mmap),
+            code: subslice_range(section(".text")?, &mmap),
             dbg_jit_registration: None,
-            code_memory,
+            code_memory: CodeMemory::new(mmap),
             meta: info.meta,
             unique_id: id_allocator.alloc(),
             func_names: info.func_names,
-            func_name_data,
         };
+        ret.code_memory
+            .publish(ret.meta.is_branch_protection_enabled)
+            .context("failed to publish code memory")?;
         ret.register_debug_and_profiling(profiler)?;
 
         Ok(ret)
