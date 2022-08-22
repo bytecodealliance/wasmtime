@@ -3468,3 +3468,20 @@
       (let ((res ValueRegs (mul_hi $I64 $false a b))
             (hi Gpr (value_regs_get_gpr res 1)))
         hi))
+
+;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (smulhi a @ (value_type $I16) b))
+      (let ((res ValueRegs (mul_hi $I16 $true a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+(rule (lower (smulhi a @ (value_type $I32) b))
+      (let ((res ValueRegs (mul_hi $I32 $true a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+(rule (lower (smulhi a @ (value_type $I64) b))
+      (let ((res ValueRegs (mul_hi $I64 $true a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))

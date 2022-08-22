@@ -579,33 +579,12 @@ fn lower_insn_to_regs(
         | Opcode::Urem
         | Opcode::Sdiv
         | Opcode::Srem
-        | Opcode::Umulhi => {
+        | Opcode::Umulhi
+        | Opcode::Smulhi => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::Smulhi => {
-            let input_ty = ctx.input_ty(insn, 0);
-
-            let lhs = put_input_in_reg(ctx, inputs[0]);
-            let rhs = input_to_reg_mem(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            // Move lhs in %rax.
-            ctx.emit(Inst::gen_move(
-                Writable::from_reg(regs::rax()),
-                lhs,
-                input_ty,
-            ));
-
-            // Emit the actual mul or imul.
-            let signed = op == Opcode::Smulhi;
-            ctx.emit(Inst::mul_hi(OperandSize::from_ty(input_ty), signed, rhs));
-
-            // Read the result from the high part (stored in %rdx).
-            ctx.emit(Inst::gen_move(dst, regs::rdx(), input_ty));
-        }
 
         Opcode::GetPinnedReg => {
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
