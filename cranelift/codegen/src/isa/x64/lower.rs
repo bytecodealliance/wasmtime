@@ -580,54 +580,16 @@ fn lower_insn_to_regs(
         | Opcode::Sdiv
         | Opcode::Srem
         | Opcode::Umulhi
-        | Opcode::Smulhi => {
+        | Opcode::Smulhi
+        | Opcode::GetPinnedReg
+        | Opcode::SetPinnedReg
+        | Opcode::Vconst
+        | Opcode::RawBitcast
+        | Opcode::Insertlane => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::GetPinnedReg => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            ctx.emit(Inst::gen_move(dst, regs::pinned_reg(), types::I64));
-        }
-
-        Opcode::SetPinnedReg => {
-            let src = put_input_in_reg(ctx, inputs[0]);
-            ctx.emit(Inst::gen_move(
-                Writable::from_reg(regs::pinned_reg()),
-                src,
-                types::I64,
-            ));
-        }
-
-        Opcode::Vconst => {
-            let used_constant = if let &InstructionData::UnaryConst {
-                constant_handle, ..
-            } = ctx.data(insn)
-            {
-                ctx.use_constant(VCodeConstantData::Pool(
-                    constant_handle,
-                    ctx.get_constant_data(constant_handle).clone(),
-                ))
-            } else {
-                unreachable!("vconst should always have unary_const format")
-            };
-            // TODO use Inst::gen_constant() instead.
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ty.unwrap();
-            ctx.emit(Inst::xmm_load_const(used_constant, dst, ty));
-        }
-
-        Opcode::RawBitcast => {
-            // A raw_bitcast is just a mechanism for correcting the type of V128 values (see
-            // https://github.com/bytecodealliance/wasmtime/issues/1147). As such, this IR
-            // instruction should emit no machine code but a move is necessary to give the register
-            // allocator a definition for the output virtual register.
-            let src = put_input_in_reg(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ty.unwrap();
-            ctx.emit(Inst::gen_move(dst, src, ty));
-        }
 
         Opcode::Shuffle => {
             let ty = ty.unwrap();
@@ -754,14 +716,6 @@ fn lower_insn_to_regs(
                 RegMem::from(swizzle_mask_tmp),
                 dst,
             ));
-        }
-
-        Opcode::Insertlane => {
-            unreachable!(
-                "implemented in ISLE: inst = `{}`, type = `{:?}`",
-                ctx.dfg().display_inst(insn),
-                ty
-            );
         }
 
         Opcode::Extractlane => {

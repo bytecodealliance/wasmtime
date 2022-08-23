@@ -3485,3 +3485,28 @@
       (let ((res ValueRegs (mul_hi $I64 $true a b))
             (hi Gpr (value_regs_get_gpr res 1)))
         hi))
+
+;; Rules for `get_pinned_reg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (get_pinned_reg))
+      (read_pinned_gpr))
+
+;; Rules for `set_pinned_reg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (set_pinned_reg a @ (value_type ty)))
+      (side_effect (write_pinned_gpr a)))
+
+;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (vconst const)))
+      ;; TODO use Inst::gen_constant() instead.
+      (x64_xmm_load_const ty (const_to_vconst const)))
+
+;; Rules for `raw_bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; A raw_bitcast is just a mechanism for correcting the type of V128 values (see
+;; https://github.com/bytecodealliance/wasmtime/issues/1147). As such, this IR
+;; instruction should emit no machine code but a move is necessary to give the
+;; register allocator a definition for the output virtual register.
+(rule (lower (raw_bitcast val))
+      (put_in_regs val))
