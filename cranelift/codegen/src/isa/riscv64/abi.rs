@@ -26,10 +26,10 @@ use regs::x_reg;
 use smallvec::{smallvec, SmallVec};
 
 /// Support for the Riscv64 ABI from the callee side (within a function body).
-pub(crate) type Riscv64Callee = ABICalleeImpl<Riscv64MachineDeps>;
+pub(crate) type Riscv64Callee = Callee<Riscv64MachineDeps>;
 
 /// Support for the Riscv64 ABI from the caller side (at a callsite).
-pub(crate) type Riscv64ABICaller = ABICallerImpl<Riscv64MachineDeps>;
+pub(crate) type Riscv64ABICaller = Caller<Riscv64MachineDeps>;
 
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues
@@ -38,7 +38,7 @@ static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
 
 /// Riscv64-specific ABI behavior. This struct just serves as an implementation
 /// point for the trait; it is never actually instantiated.
-pub(crate) struct Riscv64MachineDeps;
+pub struct Riscv64MachineDeps;
 
 impl IsaFlags for RiscvFlags {}
 
@@ -62,7 +62,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
     ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)> {
-        // all registers can be used as parameter.
+        // all registers can be used as parameters or rets.
         // both start and all included.
         let (x_start, x_end, f_start, f_end) = if args_or_rets == ArgsOrRets::Args {
             (10, 17, 10, 17)
@@ -74,7 +74,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let mut next_f_reg = f_start;
         // stack space
         let mut next_stack: u64 = 0;
-        let mut abi_args = smallvec![];
+        let mut ret = smallvec![];
         let mut return_one_register_used = false;
 
         for param in params {
@@ -82,7 +82,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 let offset = next_stack;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
                 next_stack += size as u64;
-                abi_args.push(ABIArg::StructArg {
+                ret.push(ABIArg::StructArg {
                     pointer: None,
                     offset: offset as i64,
                     size: size as u64,
@@ -90,6 +90,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 });
                 continue;
             }
+
             // Find regclass(es) of the register(s) used to store a value of this type.
             let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
             let mut slots = ABIArgSlotVec::new();
@@ -147,7 +148,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     next_stack += size;
                 }
             }
-            abi_args.push(ABIArg::Slots {
+            ret.push(ABIArg::Slots {
                 slots,
                 purpose: param.purpose,
             });
@@ -161,8 +162,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
                 );
-                abi_args.push(arg);
-                Some(abi_args.len() - 1)
+                ret.push(arg);
             } else {
                 let arg = ABIArg::stack(
                     next_stack as i64,
@@ -170,10 +170,10 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
                 );
-                abi_args.push(arg);
+                ret.push(arg);
                 next_stack += 8;
-                Some(abi_args.len() - 1)
             }
+            Some(ret.len() - 1)
         } else {
             None
         };
@@ -183,8 +183,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         if next_stack > STACK_ARG_RET_SIZE_LIMIT {
             return Err(CodegenError::ImplLimitExceeded);
         }
-
-        CodegenResult::Ok((abi_args, next_stack as i64, pos))
+        CodegenResult::Ok((ret, next_stack as i64, pos))
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
@@ -473,57 +472,45 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         caller_conv: isa::CallConv,
     ) -> SmallVec<[Self::I; 2]> {
         let mut insts = SmallVec::new();
-        fn use_direct_call(name: &ir::ExternalName, distance: RelocDistance) -> bool {
-            if let &ExternalName::User(..) = name {
-                if RelocDistance::Near == distance {
-                    return true;
-                }
-            }
-            false
-        }
         match &dest {
-            &CallDest::ExtName(ref name, distance) => {
-                let direct = use_direct_call(name, *distance);
-                if direct {
-                    insts.push(Inst::Call {
-                        info: Box::new(CallInfo {
-                            uses,
-                            defs,
-                            opcode,
-                            caller_callconv: caller_conv,
-                            callee_callconv: callee_conv,
-                            dest: name.clone(),
-                            clobbers,
-                        }),
-                    });
-                } else {
-                    insts.push(Inst::LoadExtName {
-                        rd: tmp,
-                        name: Box::new(name.clone()),
-                        offset: 0,
-                    });
-                    insts.push(Inst::CallInd {
-                        info: Box::new(CallIndInfo {
-                            rn: tmp.to_reg(),
-                            uses,
-                            defs,
-                            opcode,
-                            caller_callconv: caller_conv,
-                            callee_callconv: callee_conv,
-                            clobbers,
-                        }),
-                    });
-                }
+            &CallDest::ExtName(ref name, RelocDistance::Near) => insts.push(Inst::Call {
+                info: Box::new(CallInfo {
+                    dest: name.clone(),
+                    uses,
+                    defs,
+                    clobbers,
+                    opcode,
+                    caller_callconv: caller_conv,
+                    callee_callconv: callee_conv,
+                }),
+            }),
+            &CallDest::ExtName(ref name, RelocDistance::Far) => {
+                insts.push(Inst::LoadExtName {
+                    rd: tmp,
+                    name: Box::new(name.clone()),
+                    offset: 0,
+                });
+                insts.push(Inst::CallInd {
+                    info: Box::new(CallIndInfo {
+                        rn: tmp.to_reg(),
+                        uses,
+                        defs,
+                        clobbers,
+                        opcode,
+                        caller_callconv: caller_conv,
+                        callee_callconv: callee_conv,
+                    }),
+                });
             }
             &CallDest::Reg(reg) => insts.push(Inst::CallInd {
                 info: Box::new(CallIndInfo {
                     rn: *reg,
                     uses,
                     defs,
+                    clobbers,
                     opcode,
                     caller_callconv: caller_conv,
                     callee_callconv: callee_conv,
-                    clobbers,
                 }),
             }),
         }
@@ -614,13 +601,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         num_clobbered_callee_saves: usize,
         fixed_frame_storage_size: u32,
     ) -> bool {
-        true
-        // !is_leaf
-        //     // The function arguments that are passed on the stack are addressed
-        //     // relative to the Frame Pointer.
-        //     || stack_args_size > 0
-        //     || num_clobbered_callee_saves > 0
-        // || fixed_frame_storage_size > 0
+        !is_leaf
+            // The function arguments that are passed on the stack are addressed
+            // relative to the Frame Pointer.
+            || stack_args_size > 0
+            || num_clobbered_callee_saves > 0
+        || fixed_frame_storage_size > 0
     }
 }
 

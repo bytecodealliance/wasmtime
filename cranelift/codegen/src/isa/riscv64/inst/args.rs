@@ -5,7 +5,8 @@
 use super::*;
 use crate::ir::condcodes::{CondCode, FloatCC};
 
-use crate::isa::riscv64::inst::reg_to_gpr_num;
+use crate::isa::riscv64::inst::{reg_name, reg_to_gpr_num};
+use crate::machinst::isle::WritableReg;
 
 use std::fmt::{Display, Formatter, Result};
 
@@ -73,6 +74,16 @@ impl AMode {
         match self {
             &AMode::NominalSPOffset(..) => format!("{}", self),
             _ => format!("{}({})", offset, reg_name(next),),
+        }
+    }
+
+    pub(crate) fn to_addr(&self, allocs: &mut AllocationConsumer<'_>) -> String {
+        let reg = self.get_base_register();
+        let next = allocs.next(reg);
+        let offset = self.get_offset();
+        match self {
+            &AMode::NominalSPOffset(..) => format!("nsp{:+}", offset),
+            _ => format!("{}{:+}", reg_name(next), offset),
         }
     }
 }
@@ -286,6 +297,19 @@ impl FpuOPRR {
         }
     }
 
+    pub(crate) fn is_convert_to_int(self) -> bool {
+        match self {
+            Self::FcvtWS
+            | Self::FcvtWuS
+            | Self::FcvtLS
+            | Self::FcvtLuS
+            | Self::FcvtWD
+            | Self::FcvtWuD
+            | Self::FcvtLD
+            | Self::FcvtLuD => true,
+            _ => false,
+        }
+    }
     // move from x register to float register.
     pub(crate) fn move_x_to_f_op(ty: Type) -> Self {
         match ty {
@@ -724,6 +748,21 @@ impl AluOPRRR {
             Self::Sh3add => "sh3add",
             Self::Sh3adduw => "sh3add.uw",
             Self::Xnor => "xnor",
+        }
+    }
+
+    /// div and rem and lead div 0 exception
+    pub fn is_div_or_rem(self) -> bool {
+        match self {
+            Self::Div
+            | Self::DivU
+            | Self::Rem
+            | Self::RemU
+            | Self::Divw
+            | Self::Divuw
+            | Self::Remw
+            | Self::Remuw => true,
+            _ => false,
         }
     }
 
@@ -1437,18 +1476,142 @@ impl AtomicOP {
     }
 
     pub(crate) fn load_op(t: Type) -> Self {
-        if t == I32 {
+        if t.bits() <= 32 {
             Self::LrW
         } else {
             Self::LrD
         }
     }
     pub(crate) fn store_op(t: Type) -> Self {
-        if t == I32 {
+        if t.bits() <= 32 {
             Self::ScW
         } else {
             Self::ScD
         }
+    }
+    pub(crate) fn compute_offset(rd: WritableReg, offset: Reg) -> Inst {
+        Inst::AluRRR {
+            alu_op: AluOPRRR::Add,
+            rd,
+            rs1: offset,
+            rs2: stack_reg(),
+        }
+    }
+    /// extract
+    pub(crate) fn extract(rd: WritableReg, offset: Reg, rs: Reg, ty: Type) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::Srl,
+            rd: rd,
+            rs1: rs,
+            rs2: offset,
+        });
+        //
+        insts.push(Inst::Extend {
+            rd: rd,
+            rn: rd.to_reg(),
+            signed: false,
+            from_bits: ty.bits() as u8,
+            to_bits: 64,
+        });
+        insts
+    }
+
+    /// like extract but sign extend the value.
+    /// suitable for imax.
+    pub(crate) fn extract_sext(
+        rd: WritableReg,
+        offset: Reg,
+        rs: Reg,
+        ty: Type,
+    ) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::Srl,
+            rd: rd,
+            rs1: rs,
+            rs2: offset,
+        });
+        //
+        insts.push(Inst::Extend {
+            rd: rd,
+            rn: rd.to_reg(),
+            signed: true,
+            from_bits: ty.bits() as u8,
+            to_bits: 64,
+        });
+        insts
+    }
+
+    pub(crate) fn unset(
+        rd: WritableReg,
+        tmp: WritableReg,
+        offset: Reg,
+        ty: Type,
+    ) -> SmallInstVec<Inst> {
+        assert!(rd != tmp);
+        let mut insts = SmallInstVec::new();
+        insts.extend(Inst::load_int_mask(tmp, ty));
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::Sll,
+            rd: tmp,
+            rs1: tmp.to_reg(),
+            rs2: offset,
+        });
+        insts.push(Inst::construct_bit_not(tmp, tmp.to_reg()));
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::And,
+            rd: rd,
+            rs1: rd.to_reg(),
+            rs2: tmp.to_reg(),
+        });
+        insts
+    }
+
+    pub(crate) fn set(
+        rd: WritableReg,
+        tmp: WritableReg,
+        offset: Reg,
+        rs: Reg,
+        ty: Type,
+    ) -> SmallInstVec<Inst> {
+        assert!(rd != tmp);
+        let mut insts = SmallInstVec::new();
+        // make rs into tmp.
+        insts.push(Inst::Extend {
+            rd: tmp,
+            rn: rs,
+            signed: false,
+            from_bits: ty.bits() as u8,
+            to_bits: 64,
+        });
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::Sll,
+            rd: tmp,
+            rs1: tmp.to_reg(),
+            rs2: offset,
+        });
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::Or,
+            rd: rd,
+            rs1: rd.to_reg(),
+            rs2: tmp.to_reg(),
+        });
+        insts
+    }
+
+    /// Merge reset part of rs into rd.
+    /// Call this function must make sure that other part of value is already in rd.
+    pub(crate) fn merge(
+        rd: WritableReg,
+        tmp: WritableReg,
+        offset: Reg,
+        rs: Reg,
+        ty: Type,
+    ) -> SmallInstVec<Inst> {
+        let mut insts = Self::unset(rd, tmp, offset, ty);
+        insts.extend(Self::set(rd, tmp, offset, rs, ty));
+        insts
     }
 }
 

@@ -176,7 +176,9 @@
       (p Reg))
       
     ;; an atomic nand need using loop to implement.
-    (AtomicNand 
+    (AtomicRmwLoop
+      (offset Reg)
+      (op AtomicRmwOp)
       (dst WritableReg)
       (ty Type)
       (p Reg)
@@ -212,6 +214,7 @@
 
     ;; atomic compare and set operation
     (AtomicCas
+      (offset Reg)
       (t0 WritableReg)
       (dst WritableReg)
       (e Reg)
@@ -247,7 +250,8 @@
       (rs2 Reg)
       (condition IntegerCompare))
     ;; 
-    (FcvtToIntSat
+    (FcvtToInt
+      (is_sat bool)
       (rd WritableReg)
       (rs Reg)
       (is_signed bool)
@@ -826,6 +830,7 @@
 (rule (alu_andi r i) 
   (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const i) )
 )
+
 
 (decl alu_slli (Reg i32)Reg)
 (rule (alu_slli r i) 
@@ -1961,13 +1966,13 @@
 (extern constructor int_convert_2_float_op int_convert_2_float_op)
 
 ;;;; 
-(decl gen_fcvt_int_sat(Reg bool Type Type)Reg)
+(decl gen_fcvt_int(bool Reg bool Type Type)Reg)
 (rule
-  (gen_fcvt_int_sat rs is_signed in_type out_type)
+  (gen_fcvt_int is_sat rs is_signed in_type out_type)
   (let
     (
       (result WritableReg (temp_writable_reg out_type))
-      (_ Unit(emit (MInst.FcvtToIntSat result rs is_signed in_type out_type)))
+      (_ Unit(emit (MInst.FcvtToInt is_sat result rs is_signed in_type out_type)))
     )
     result
   )
@@ -2394,5 +2399,7 @@
 (decl output_ifcout (Reg) InstOutput)
 (rule (output_ifcout reg)
       (output_pair reg (value_regs_invalid)))
+
+
 
 

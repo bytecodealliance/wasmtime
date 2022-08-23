@@ -96,7 +96,7 @@ block0(v0: i8):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   mv t3,a0
+;   mv t0,a0
 ;   add sp,-16
 ;   virtual_sp_offset_adj +16
 ;   li a0,42
@@ -107,7 +107,9 @@ block0(v0: i8):
 ;   li a5,42
 ;   li a6,42
 ;   li a7,42
-;   sw t3,0(sp)
+;   mv t3,t0
+;   sext.b t3,t3
+;   sd t3,0(sp)
 ;   load_sym t3,%g+0
 ;   callind t3
 ;   add sp,+16
@@ -124,8 +126,8 @@ block0(v0: i8):
 }
 
 ; block0:
-;   mv a4,a0
-;   mv t1,a1
+;   mv a7,a0
+;   mv t3,a1
 ;   li a0,42
 ;   li a1,42
 ;   li a3,42
@@ -134,15 +136,16 @@ block0(v0: i8):
 ;   li t2,42
 ;   li a2,42
 ;   li a5,42
-;   mv t0,a4
-;   mv a1,t1
-;   sw a3,48(a1)
-;   sw a6,40(a1)
-;   sw t4,32(a1)
-;   sw t2,24(a1)
-;   sw a2,16(a1)
-;   sw a5,8(a1)
-;   sw t0,0(a1)
+;   mv a4,t3
+;   sw a3,0(a4)
+;   sw a6,8(a4)
+;   sw t4,16(a4)
+;   sw t2,24(a4)
+;   sw a2,32(a4)
+;   sw a5,40(a4)
+;   mv a5,a7
+;   sext.b a5,a5
+;   sd a5,48(a4)
 ;   ret
 
 function %f8() {

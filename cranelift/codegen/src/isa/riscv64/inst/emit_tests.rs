@@ -2218,17 +2218,6 @@ fn riscv64_worst_case_instruction_size() {
         rs2: fa0(),
     });
 
-    // brtable max size is base one how many "targets" it's has.
-    // cas
-    candidates.push(Inst::AtomicCas {
-        dst: writable_a0(),
-        ty: I64,
-        t0: writable_a1(),
-        e: a0(),
-        addr: a1(),
-        v: a2(),
-    });
-
     candidates.push(Inst::IntSelect {
         dst: vec![writable_a0(), writable_a0()],
         ty: I128,
@@ -2237,20 +2226,22 @@ fn riscv64_worst_case_instruction_size() {
         y: ValueRegs::two(x_reg(3), x_reg(4)),
     });
 
-    candidates.push(Inst::FcvtToIntSat {
+    candidates.push(Inst::FcvtToInt {
         rd: writable_a0(),
         rs: fa0(),
         is_signed: true,
         in_type: F64,
         out_type: I64,
+        is_sat: true,
     });
 
-    candidates.push(Inst::FcvtToIntSat {
+    candidates.push(Inst::FcvtToInt {
         rd: writable_a0(),
         rs: fa0(),
         is_signed: true,
         in_type: F64,
         out_type: I64,
+        is_sat: false,
     });
 
     candidates.push(Inst::FloatRound {

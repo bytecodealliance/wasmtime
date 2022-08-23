@@ -11,10 +11,10 @@ block0(v0: i8, v1: i64, v2: i64):
 }
 
 ; block0:
-;   uext.b a5,a0
-;   li a7,42
-;   uext.b t4,a7
-;   eq t1,a5,t4##ty=i8
+;   li a5,42
+;   uext.b a7,a0
+;   uext.b t4,a5
+;   eq t1,a7,t4##ty=i8
 ;   selectif a0,a1,a2##test=t1
 ;   ret
 
@@ -27,10 +27,11 @@ block0(v0: i8):
 }
 
 ; block0:
-;   uext.b a0,a0
-;   li a2,42
-;   uext.b a4,a2
-;   eq a0,a0,a4##ty=i8
+;   mv a5,a0
+;   li a0,42
+;   uext.b a2,a5
+;   uext.b a4,a0
+;   eq a0,a2,a4##ty=i8
 ;   ret
 
 function %h(i8, i8, i8) -> i8 {
@@ -65,10 +66,10 @@ block0(v0: i32, v1: i8, v2: i8):
 }
 
 ; block0:
-;   uext.w a5,a0
-;   li a7,42
-;   uext.w t4,a7
-;   eq t1,a5,t4##ty=i32
+;   li a5,42
+;   uext.w a7,a0
+;   uext.w t4,a5
+;   eq t1,a7,t4##ty=i32
 ;   select_i8 a0,a1,a2##condition=t1
 ;   ret
 

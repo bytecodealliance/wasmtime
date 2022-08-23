@@ -474,6 +474,36 @@
   (gen_atomic (get_atomic_rmw_op ty op) addr x (atomic_amo)) 
 )
 
+;;; for I8 and I16
+(rule 
+  ;; 
+  (lower 
+    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw flags op addr x))
+  )
+  ;;
+  (gen_atomic_rmw_loop op ty addr x ) 
+)
+;;;special for I8 and I16 max min etc.
+;;;because I need uextend or sextend the value.
+
+(rule 
+  ;; 
+  (lower 
+    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw flags (is_atomoc_rmw_max_etc op $true) addr x))
+  )
+  ;;
+  (gen_atomic_rmw_loop op ty addr (sext_int_if_need x ty) ) 
+)
+(rule 
+  ;; 
+  (lower 
+    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw flags (is_atomoc_rmw_max_etc op $false) addr x))
+  )
+  ;;
+  (gen_atomic_rmw_loop op ty addr (uext_int_if_need x ty) ) 
+)
+
+
 ;;;;;  Rules for `AtomicRmwOp.Sub`
 (rule 
   (lower 
@@ -490,11 +520,9 @@
   )
 )
 
-;;;;;  Rules for `AtomicRmwOp.Nand`
-(rule 
-  (lower 
-    (has_type (valid_atomic_transaction ty) (atomic_rmw flags (AtomicRmwOp.Nand) addr x))
-  )
+(decl gen_atomic_rmw_loop (AtomicRmwOp Type Reg Reg ) Reg)
+(rule
+  (gen_atomic_rmw_loop op ty addr x)
   (let
     (
       ;;
@@ -502,11 +530,22 @@
       ;;
       (t0 WritableReg (temp_writable_reg $I64))
       ;; 
-      (_ Unit (emit (MInst.AtomicNand dst ty addr x t0 ))  )
+      (_ Unit (emit (MInst.AtomicRmwLoop (gen_atomic_offset addr ty) op dst ty (gen_atomic_p addr ty) x t0 ))  )
     )
     (writable_reg_to_reg dst)
   )
 )
+
+;;;;;  Rules for `AtomicRmwOp.Nand`
+(rule 
+  (lower 
+    (has_type (valid_atomic_transaction ty) (atomic_rmw flags (AtomicRmwOp.Nand) addr x))
+  )
+  (gen_atomic_rmw_loop (AtomicRmwOp.Nand) ty addr x )
+)
+
+(decl is_atomoc_rmw_max_etc (AtomicRmwOp bool)AtomicRmwOp)
+(extern extractor  is_atomoc_rmw_max_etc is_atomoc_rmw_max_etc)
 
 ;;;;;  Rules for `atomic load`;;;;;;;;;;;;;;;;;
 (rule 
@@ -514,11 +553,35 @@
   (gen_atomic_load p ty)
 )
 
+
 ;;;;;  Rules for `atomic store`;;;;;;;;;;;;;;;;;
 (rule 
   (lower (atomic_store flags (type_and_value (valid_atomic_transaction ty) src) p))
   (gen_atomic_store p ty src)
 )
+
+(decl gen_atomic_offset (Reg Type) Reg)
+(
+  rule (gen_atomic_offset p (fits_in_16 ty))
+  (alu_slli (alu_andi p 3) 3)
+)
+
+(
+  rule (gen_atomic_offset p _)
+  (zero_reg)
+)
+
+(decl gen_atomic_p (Reg Type) Reg)
+(
+  rule (gen_atomic_p p (fits_in_16 ty))
+  (alu_andi p -4)
+)
+
+(
+  rule (gen_atomic_p p _)
+  p
+)
+
 
 ;;;;;  Rules for `atomic cas`;;;;;;;;;;;;;;;;;
 (rule
@@ -527,7 +590,7 @@
     (
       (t0 WritableReg (temp_writable_reg ty))
       (dst WritableReg (temp_writable_reg ty))
-      (_ Unit(emit (MInst.AtomicCas t0 dst e p x ty)))
+      (_ Unit(emit (MInst.AtomicCas (gen_atomic_offset p ty) t0 dst (uext_int_if_need e ty) (gen_atomic_p p ty) x ty)))
     )
     (writable_reg_to_reg dst)
   )
@@ -857,25 +920,25 @@
 ;;;;;  Rules for `fcvt_to_uint`;;;;;;;;;
 (rule
   (lower (has_type to (fcvt_to_uint (type_and_value from v))))
-  (fpu_rr (float_convert_2_int_op from $false to) to v)
+  (gen_fcvt_int $false  v $true from to)
 )
 
 ;;;;;  Rules for `fcvt_to_sint`;;;;;;;;;
 (rule
   (lower (has_type to (fcvt_to_sint (type_and_value from v))))
-  (fpu_rr (float_convert_2_int_op from $true to) to v)
+  (gen_fcvt_int $false  v $true from to)
 )
 
 ;;;;;  Rules for `fcvt_to_sint_sat`;;;;;;;;;
 (rule
   (lower (has_type to (fcvt_to_sint_sat (type_and_value from v))))
-  (gen_fcvt_int_sat v $true from to)
+  (gen_fcvt_int $true  v $true from to)
 )
 
 ;;;;;  Rules for `fcvt_to_uint_sat`;;;;;;;;;
 (rule
   (lower (has_type to (fcvt_to_uint_sat (type_and_value from v))))
-  (gen_fcvt_int_sat v $false from to)
+  (gen_fcvt_int $true v $false from to)
 )
 
 

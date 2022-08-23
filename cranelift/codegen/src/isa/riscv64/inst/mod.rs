@@ -41,6 +41,8 @@ pub use self::emit::*;
 
 pub mod unwind;
 
+use crate::isa::riscv64::abi::Riscv64MachineDeps;
+
 #[cfg(test)]
 mod emit_tests;
 
@@ -344,7 +346,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(src);
         }
 
-        &Inst::Ret { .. } => {}
+        &Inst::Ret { ref rets } => {
+            collector.reg_uses(&rets[..]);
+        }
+
         &Inst::Extend { rd, rn, .. } => {
             collector.reg_use(rn);
             collector.reg_def(rd);
@@ -435,6 +440,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
         &Inst::AtomicCas {
+            offset,
             t0,
             dst,
             e,
@@ -442,7 +448,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             v,
             ..
         } => {
-            collector.reg_uses(&[e, addr, v]);
+            collector.reg_uses(&[offset, e, addr, v]);
             collector.reg_early_def(t0);
             collector.reg_early_def(dst);
         }
@@ -482,7 +488,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rs2);
             collector.reg_def(rd);
         }
-        &Inst::FcvtToIntSat { rd, rs, .. } => {
+        &Inst::FcvtToInt { rd, rs, .. } => {
             collector.reg_use(rs);
             collector.reg_def(rd);
         }
@@ -507,8 +513,15 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(p);
             collector.reg_def(rd);
         }
-        &Inst::AtomicNand { dst, p, x, t0, .. } => {
-            collector.reg_uses(&[p, x]);
+        &Inst::AtomicRmwLoop {
+            offset,
+            dst,
+            p,
+            x,
+            t0,
+            ..
+        } => {
+            collector.reg_uses(&[offset, p, x]);
             collector.reg_early_def(t0);
             collector.reg_early_def(dst);
         }
@@ -587,6 +600,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
 
 impl MachInst for Inst {
     type LabelUse = LabelUse;
+    type ABIMachineSpec = Riscv64MachineDeps;
 
     fn gen_dummy_use(reg: Reg) -> Self {
         Inst::DummyUse { reg }
@@ -601,8 +615,10 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            &Inst::Call { .. } => true,
-            &Inst::CallInd { .. } => true,
+            &Inst::Call { .. }
+            | &Inst::CallInd { .. }
+            | &Inst::TrapIf { .. }
+            | &Inst::Udf { .. } => true,
             _ => false,
         }
     }
@@ -910,12 +926,24 @@ impl Inst {
                 format!("atomic_load.{} {},({})", ty, rd, p)
             }
 
-            &Inst::AtomicNand { dst, ty, p, x, t0 } => {
+            &Inst::AtomicRmwLoop {
+                offset,
+                op,
+                dst,
+                ty,
+                p,
+                x,
+                t0,
+            } => {
+                let offset = format_reg(offset, allocs);
                 let p = format_reg(p, allocs);
                 let x = format_reg(x, allocs);
                 let t0 = format_reg(t0.to_reg(), allocs);
                 let dst = format_reg(dst.to_reg(), allocs);
-                format!("atomic_nand.{} {},{},({})##t0={}", ty, dst, x, p, t0)
+                format!(
+                    "atomic_rmw.{} {} {},{},({})##t0={} offset={}",
+                    ty, op, dst, x, p, t0, offset
+                )
             }
 
             &Inst::RawData { ref data } => match data.len() {
@@ -1025,7 +1053,8 @@ impl Inst {
                     step
                 )
             }
-            &Inst::FcvtToIntSat {
+            &Inst::FcvtToInt {
+                is_sat,
                 rd,
                 rs,
                 is_signed,
@@ -1036,8 +1065,9 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
 
                 format!(
-                    "fcvt_to_{}int_sat {},{}##in_ty={} out_ty={}",
+                    "fcvt_to_{}int{} {},{}##in_ty={} out_ty={}",
                     if is_signed { "s" } else { "u" },
+                    if is_sat { "_sat" } else { "" },
                     rd,
                     rs,
                     in_type,
@@ -1064,6 +1094,7 @@ impl Inst {
                 )
             }
             &Inst::AtomicCas {
+                offset,
                 t0,
                 dst,
                 e,
@@ -1071,14 +1102,15 @@ impl Inst {
                 v,
                 ty,
             } => {
+                let offset = format_reg(offset, allocs);
                 let e = format_reg(e, allocs);
                 let addr = format_reg(addr, allocs);
                 let v = format_reg(v, allocs);
                 let t0 = format_reg(t0.to_reg(), allocs);
                 let dst = format_reg(dst.to_reg(), allocs);
                 format!(
-                    "atomic_cas.{} {},{},{},({})##t0={}",
-                    ty, dst, e, v, addr, t0,
+                    "atomic_cas.{} {},{},{},({})##t0={} offset={}",
+                    ty, dst, e, v, addr, t0, offset,
                 )
             }
             &Inst::Icmp { cc, rd, a, b, ty } => {
@@ -1410,9 +1442,9 @@ impl Inst {
                 format!("load_sym {},{}{:+}", rd, name.display(None), offset)
             }
             &MInst::LoadAddr { ref rd, ref mem } => {
-                let mem = mem.to_string_with_alloc(allocs);
+                let rs = mem.to_addr(allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("load_addr {},{}", rd, mem)
+                format!("load_addr {},{}", rd, rs)
             }
             &MInst::VirtualSPOffsetAdj { amount } => {
                 format!("virtual_sp_offset_adj {:+}", amount)

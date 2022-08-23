@@ -134,17 +134,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         InstOutput::default()
     }
     fn load_ra(&mut self) -> Reg {
-        //todo https://bytecodealliance.zulipchat.com/#narrow/stream/206238-general/topic/cranelift.20opcode.20get_return_address.2E
-        // right now I will always setup frame.
-
-        let tmp = self.temp_writable_reg(I64);
-        self.emit(&MInst::Load {
-            rd: tmp,
-            op: LoadOP::Ld,
-            flags: MemFlags::trusted(),
-            from: AMode::FPOffset(8, I64),
-        });
-        tmp.to_reg()
+        self.gen_move(link_reg(), I64)
     }
     fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
         assert!(ty.is_int() || ty.is_bool(), "{:?}", ty);
@@ -203,7 +193,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         Imm12::from_bits(imm.as_i16() & (andn as i16))
     }
     fn alloc_vec_writable(&mut self, ty: Type) -> VecWritableReg {
-        if ty.is_int() || ty.is_bool() {
+        if ty.is_int() || ty.is_bool() || ty == R32 || ty == R64 {
             if ty.bits() <= 64 {
                 vec![self.temp_writable_reg(I64)]
             } else {
@@ -446,13 +436,22 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         AMode::RegOffset(base, i64::from(offset), ty)
     }
     fn valid_atomic_transaction(&mut self, ty: Type) -> Option<Type> {
-        if ty == I32 || ty == I64 {
+        if ty.is_int() && ty.bits() <= 64 {
             Some(ty)
         } else {
             None
         }
     }
-
+    fn is_atomoc_rmw_max_etc(&mut self, op: &AtomicRmwOp) -> Option<(AtomicRmwOp, bool)> {
+        let op = *op;
+        match op {
+            crate::ir::AtomicRmwOp::Umin => Some((op, false)),
+            crate::ir::AtomicRmwOp::Umax => Some((op, false)),
+            crate::ir::AtomicRmwOp::Smin => Some((op, true)),
+            crate::ir::AtomicRmwOp::Smax => Some((op, true)),
+            _ => None,
+        }
+    }
     fn load_op(&mut self, ty: Type) -> LoadOP {
         LoadOP::from_type(ty)
     }

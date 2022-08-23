@@ -60,7 +60,7 @@ impl Riscv64Backend {
         flags: shared_settings::Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(flags.clone(), self.isa_flags.clone());
-        let abi = Box::new(abi::Riscv64Callee::new(func, self, &self.isa_flags)?);
+        let abi = abi::Riscv64Callee::new(func, self, &self.isa_flags)?;
         compile::compile::<Riscv64Backend>(func, self, abi, &self.mach_env, emit_info)
     }
 }

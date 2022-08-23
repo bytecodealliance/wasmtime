@@ -273,12 +273,18 @@ pub(crate) fn lower_insn_to_regs(
                 }
                 _ => unreachable!(),
             };
+
             abi.emit_stack_pre_adjust(ctx);
             assert!(inputs.len() == abi.num_args());
-            for i in 0..abi.num_args() {
-                let input = inputs[i];
-                let arg_regs = put_input_in_regs(ctx, input);
-                abi.emit_copy_regs_to_arg(ctx, i, arg_regs);
+            let mut arg_regs = vec![];
+            for input in inputs {
+                arg_regs.push(put_input_in_regs(ctx, *input))
+            }
+            for (i, arg_regs) in arg_regs.iter().enumerate() {
+                abi.emit_copy_regs_to_buffer(ctx, i, *arg_regs);
+            }
+            for (i, arg_regs) in arg_regs.iter().enumerate() {
+                abi.emit_copy_regs_to_arg(ctx, i, *arg_regs);
             }
             abi.emit_call(ctx);
             for (i, output) in outputs.iter().enumerate() {

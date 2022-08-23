@@ -53,7 +53,7 @@ block0:
 ;   auipc a0,0
 ;   ld a0,12(a0)
 ;   j 12
-;   .u64 0xffff0000
+;   .8byte 0xffff0000
 ;   ret
 
 function %f() -> i64 {
@@ -66,7 +66,7 @@ block0:
 ;   auipc a0,0
 ;   ld a0,12(a0)
 ;   j 12
-;   .u64 0xffff00000000
+;   .8byte 0xffff00000000
 ;   ret
 
 function %f() -> i64 {
@@ -79,7 +79,7 @@ block0:
 ;   auipc a0,0
 ;   ld a0,12(a0)
 ;   j 12
-;   .u64 0xffff000000000000
+;   .8byte 0xffff000000000000
 ;   ret
 
 function %f() -> i64 {
@@ -112,7 +112,7 @@ block0:
 ;   auipc a0,0
 ;   ld a0,12(a0)
 ;   j 12
-;   .u64 0xffffffff0000ffff
+;   .8byte 0xffffffff0000ffff
 ;   ret
 
 function %f() -> i64 {
@@ -125,7 +125,7 @@ block0:
 ;   auipc a0,0
 ;   ld a0,12(a0)
 ;   j 12
-;   .u64 0xffff0000ffffffff
+;   .8byte 0xffff0000ffffffff
 ;   ret
 
 function %f() -> i64 {
@@ -138,7 +138,7 @@ block0:
 ;   auipc a0,0
 ;   ld a0,12(a0)
 ;   j 12
-;   .u64 0xffffffffffff
+;   .8byte 0xffffffffffff
 ;   ret
 
 function %f() -> i64 {
@@ -151,7 +151,7 @@ block0:
 ;   auipc a0,0
 ;   ld a0,12(a0)
 ;   j 12
-;   .u64 0xf34bf0a31212003a
+;   .8byte 0xf34bf0a31212003a
 ;   ret
 
 function %f() -> i64 {
@@ -164,7 +164,7 @@ block0:
 ;   auipc a0,0
 ;   ld a0,12(a0)
 ;   j 12
-;   .u64 0x12e900001ef40000
+;   .8byte 0x12e900001ef40000
 ;   ret
 
 function %f() -> i64 {
@@ -177,7 +177,7 @@ block0:
 ;   auipc a0,0
 ;   ld a0,12(a0)
 ;   j 12
-;   .u64 0x12e9ffff1ef4ffff
+;   .8byte 0x12e9ffff1ef4ffff
 ;   ret
 
 function %f() -> i32 {
@@ -200,7 +200,7 @@ block0:
 ;   auipc a0,0
 ;   ld a0,12(a0)
 ;   j 12
-;   .u64 0xfffffff7
+;   .8byte 0xfffffff7
 ;   ret
 
 function %f() -> i64 {
@@ -213,7 +213,7 @@ block0:
 ;   auipc a0,0
 ;   ld a0,12(a0)
 ;   j 12
-;   .u64 0xfffffff7
+;   .8byte 0xfffffff7
 ;   ret
 
 function %f() -> i64 {
@@ -236,7 +236,7 @@ block0:
 ;   auipc t6,0
 ;   ld t6,12(t6)
 ;   j 12
-;   .u64 0x3ff0000000000000
+;   .8byte 0x3ff0000000000000
 ;   fmv.d.x fa0,t6
 ;   ret
 
@@ -261,7 +261,7 @@ block0:
 ;   auipc t6,0
 ;   ld t6,12(t6)
 ;   j 12
-;   .u64 0x4049000000000000
+;   .8byte 0x4049000000000000
 ;   fmv.d.x fa0,t6
 ;   ret
 
@@ -308,7 +308,7 @@ block0:
 ;   auipc t6,0
 ;   ld t6,12(t6)
 ;   j 12
-;   .u64 0xc030000000000000
+;   .8byte 0xc030000000000000
 ;   fmv.d.x fa0,t6
 ;   ret
 
@@ -322,7 +322,7 @@ block0:
 ;   auipc t6,0
 ;   lwu t6,12(t6)
 ;   j 8
-;   .u32 0xc1800000
+;   .4byte 0xc1800000
 ;   fmv.w.x fa0,t6
 ;   ret
 

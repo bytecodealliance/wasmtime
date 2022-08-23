@@ -119,7 +119,7 @@ impl EmitState {
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &dyn ABICallee<I = Inst>) -> Self {
+    fn new(abi: &Callee<crate::isa::riscv64::abi::Riscv64MachineDeps>) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
@@ -150,6 +150,32 @@ impl Inst {
         insts
     }
 
+    /// Load int mask.
+    /// If ty is int then 0xff in rd.
+    pub(crate) fn load_int_mask(rd: Writable<Reg>, ty: Type) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        assert!(ty.is_int() && ty.bits() <= 64);
+        match ty {
+            I64 => {
+                insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
+            }
+            I32 | I16 => {
+                insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
+                insts.push(Inst::Extend {
+                    rd: rd,
+                    rn: rd.to_reg(),
+                    signed: false,
+                    from_bits: ty.bits() as u8,
+                    to_bits: 64,
+                });
+            }
+            I8 => {
+                insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(255)));
+            }
+            _ => unreachable!("ty:{:?}", ty),
+        }
+        insts
+    }
     ///  inverse all bit
     pub(crate) fn construct_bit_not(rd: Writable<Reg>, rs: Reg) -> Inst {
         Inst::AluRRImm12 {
@@ -174,6 +200,7 @@ impl Inst {
             rs2: rs,
         }
     }
+
     pub(crate) fn emit_fabs(rd: Writable<Reg>, rs: Reg, ty: Type) -> Inst {
         Inst::FpuRRR {
             alu_op: if ty == F32 {
@@ -186,6 +213,43 @@ impl Inst {
             rs1: rs,
             rs2: rs,
         }
+    }
+    /// If a float is zero.
+    pub(crate) fn emit_if_float_not_zero(
+        tmp: Writable<Reg>,
+        rs: Reg,
+        ty: Type,
+        taken: BranchTarget,
+        not_taken: BranchTarget,
+    ) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        let class_op = if ty == F32 {
+            FpuOPRR::FclassS
+        } else {
+            FpuOPRR::FclassD
+        };
+        insts.push(Inst::FpuRR {
+            alu_op: class_op,
+            frm: None,
+            rd: tmp,
+            rs: rs,
+        });
+        insts.push(Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Andi,
+            rd: tmp,
+            rs: tmp.to_reg(),
+            imm12: Imm12::from_bits(FClassResult::is_zero_bits() as i16),
+        });
+        insts.push(Inst::CondBr {
+            taken,
+            not_taken,
+            kind: IntegerCompare {
+                kind: IntCC::Equal,
+                rs1: tmp.to_reg(),
+                rs2: zero_reg(),
+            },
+        });
+        insts
     }
     pub(crate) fn emit_fneg(rd: Writable<Reg>, rs: Reg, ty: Type) -> Inst {
         Inst::FpuRRR {
@@ -557,7 +621,6 @@ impl MachInstEmit for Inst {
             }
             &Inst::RawData { ref data } => {
                 // emit_island if need, right now data is not very long.
-
                 let length = data.len() as CodeOffset;
                 if sink.island_needed(length) {
                     sink.emit_island(length);
@@ -585,6 +648,10 @@ impl MachInstEmit for Inst {
                     | reg_to_gpr_num(rs) << 15
                     | alu_op.rs2_funct5() << 20
                     | alu_op.funct7() << 25;
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && alu_op.is_convert_to_int() {
+                    sink.add_trap(TrapCode::BadConversionToInteger);
+                }
                 sink.put4(x);
             }
             &Inst::FpuRRRR {
@@ -654,6 +721,10 @@ impl MachInstEmit for Inst {
                     | reg_to_gpr_num(rs1) << 15
                     | reg_to_gpr_num(rs2) << 20
                     | alu_op.funct7() << 25;
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && alu_op.is_div_or_rem() {
+                    sink.add_trap(TrapCode::IntegerDivisionByZero);
+                }
                 sink.put4(x);
             }
             &Inst::AluRRImm12 {
@@ -820,18 +891,14 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let mut insts = SmallInstVec::new();
                 let shift_bits = (64 - from_bits) as i16;
-                if signed {
+                let is_u8 = || from_bits == 8 && signed == false;
+                if is_u8() {
+                    // special for u8.
                     insts.push(Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Slli,
+                        alu_op: AluOPRRI::Andi,
                         rd,
                         rs: rn,
-                        imm12: Imm12::from_bits(shift_bits),
-                    });
-                    insts.push(Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Srai,
-                        rd,
-                        rs: rd.to_reg(),
-                        imm12: Imm12::from_bits(shift_bits),
+                        imm12: Imm12::from_bits(255),
                     });
                 } else {
                     insts.push(Inst::AluRRImm12 {
@@ -841,7 +908,11 @@ impl MachInstEmit for Inst {
                         imm12: Imm12::from_bits(shift_bits),
                     });
                     insts.push(Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Srli,
+                        alu_op: if signed {
+                            AluOPRRI::Srai
+                        } else {
+                            AluOPRRI::Srli
+                        },
                         rd,
                         rs: rd.to_reg(),
                         imm12: Imm12::from_bits(shift_bits),
@@ -932,6 +1003,9 @@ impl MachInstEmit for Inst {
                     offset: Imm12::zero(),
                 }
                 .emit(&[], sink, emit_info, state);
+                // if rn == x_reg(13) {
+                //     Inst::EBreak.emit(&[], sink, emit_info, state);
+                // }
             }
 
             &Inst::Jal { dest } => {
@@ -975,6 +1049,7 @@ impl MachInstEmit for Inst {
                         sink.put4(code);
                     }
                     BranchTarget::ResolvedOffset(offset) => {
+                        assert!(offset != 0, "offset:{}", offset);
                         if LabelUse::B12.offset_in_range(offset as i64) {
                             let code = kind.emit();
                             let mut code = code.to_le_bytes();
@@ -1304,6 +1379,7 @@ impl MachInstEmit for Inst {
                 );
             }
             &Inst::AtomicCas {
+                offset,
                 t0,
                 dst,
                 e,
@@ -1311,6 +1387,7 @@ impl MachInstEmit for Inst {
                 v,
                 ty,
             } => {
+                let offset = allocs.next(offset);
                 let e = allocs.next(e);
                 let addr = allocs.next(addr);
                 let v = allocs.next(v);
@@ -1327,7 +1404,6 @@ impl MachInstEmit for Inst {
                 //     sc.w t0, v, (addr)     # Try to update.
                 //     bnez t0 , cas          # if store not ok,retry.
                 // fail:
-
                 let fail_label = sink.get_label();
                 let cas_lebel = sink.get_label();
                 sink.bind_label(cas_lebel);
@@ -1339,21 +1415,57 @@ impl MachInstEmit for Inst {
                     amo: AMO::SeqCst,
                 }
                 .emit(&[], sink, emit_info, state);
+                let origin_value = if ty.bits() < 32 {
+                    AtomicOP::extract(t0, offset, dst.to_reg(), ty)
+                        .iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    t0.to_reg()
+                } else if ty.bits() == 32 {
+                    Inst::Extend {
+                        rd: t0,
+                        rn: dst.to_reg(),
+                        signed: false,
+                        from_bits: 32,
+                        to_bits: 64,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    t0.to_reg()
+                } else {
+                    dst.to_reg()
+                };
                 Inst::CondBr {
                     taken: BranchTarget::Label(fail_label),
                     not_taken: BranchTarget::zero(),
                     kind: IntegerCompare {
                         kind: IntCC::NotEqual,
                         rs1: e,
-                        rs2: dst.to_reg(),
+                        rs2: origin_value,
                     },
                 }
                 .emit(&[], sink, emit_info, state);
+                let store_value = if ty.bits() < 32 {
+                    // reload value to t0.
+                    Inst::Atomic {
+                        op: AtomicOP::load_op(ty),
+                        rd: t0,
+                        addr,
+                        src: zero_reg(),
+                        amo: AMO::SeqCst,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    // set reset part.
+                    AtomicOP::merge(t0, writable_spilltmp_reg(), offset, v, ty)
+                        .iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    t0.to_reg()
+                } else {
+                    v
+                };
                 Inst::Atomic {
                     op: AtomicOP::store_op(ty),
                     rd: t0,
                     addr,
-                    src: v,
+                    src: store_value,
                     amo: AMO::SeqCst,
                 }
                 .emit(&[], sink, emit_info, state);
@@ -1370,7 +1482,16 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 sink.bind_label(fail_label);
             }
-            &Inst::AtomicNand { dst, ty, p, x, t0 } => {
+            &Inst::AtomicRmwLoop {
+                offset,
+                op,
+                dst,
+                ty,
+                p,
+                x,
+                t0,
+            } => {
+                let offset = allocs.next(offset);
                 let p = allocs.next(p);
                 let x = allocs.next(x);
                 let t0 = allocs.next_writable(t0);
@@ -1387,20 +1508,168 @@ impl MachInstEmit for Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 //
-                Inst::AluRRR {
-                    alu_op: AluOPRRR::And,
-                    rd: t0,
-                    rs1: dst.to_reg(),
-                    rs2: x,
-                }
-                .emit(&[], sink, emit_info, state);
-                Inst::construct_bit_not(t0, t0.to_reg()).emit(&[], sink, emit_info, state);
-                // try store.
+
+                let store_value: Reg = match op {
+                    crate::ir::AtomicRmwOp::Add
+                    | crate::ir::AtomicRmwOp::Sub
+                    | crate::ir::AtomicRmwOp::And
+                    | crate::ir::AtomicRmwOp::Or
+                    | crate::ir::AtomicRmwOp::Xor => {
+                        AtomicOP::extract(t0, offset, dst.to_reg(), ty)
+                            .iter()
+                            .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        Inst::AluRRR {
+                            alu_op: match op {
+                                crate::ir::AtomicRmwOp::Add => AluOPRRR::Add,
+                                crate::ir::AtomicRmwOp::Sub => AluOPRRR::Sub,
+                                crate::ir::AtomicRmwOp::And => AluOPRRR::And,
+                                crate::ir::AtomicRmwOp::Or => AluOPRRR::Or,
+                                crate::ir::AtomicRmwOp::Xor => AluOPRRR::Xor,
+                                _ => unreachable!(),
+                            },
+                            rd: t0,
+                            rs1: t0.to_reg(),
+                            rs2: x,
+                        }
+                        .emit(&[], sink, emit_info, state);
+                        Inst::Atomic {
+                            op: AtomicOP::load_op(ty),
+                            rd: writable_spilltmp_reg2(),
+                            addr: p,
+                            src: zero_reg(),
+                            amo: AMO::SeqCst,
+                        }
+                        .emit(&[], sink, emit_info, state);
+                        AtomicOP::merge(
+                            writable_spilltmp_reg2(),
+                            writable_spilltmp_reg(),
+                            offset,
+                            t0.to_reg(),
+                            ty,
+                        )
+                        .iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        spilltmp_reg2()
+                    }
+                    crate::ir::AtomicRmwOp::Nand => {
+                        let x2 = if ty.bits() < 32 {
+                            AtomicOP::extract(t0, offset, dst.to_reg(), ty)
+                                .iter()
+                                .for_each(|i| i.emit(&[], sink, emit_info, state));
+                            t0.to_reg()
+                        } else {
+                            dst.to_reg()
+                        };
+                        Inst::AluRRR {
+                            alu_op: AluOPRRR::And,
+                            rd: t0,
+                            rs1: x,
+                            rs2: x2,
+                        }
+                        .emit(&[], sink, emit_info, state);
+                        Inst::construct_bit_not(t0, t0.to_reg()).emit(&[], sink, emit_info, state);
+                        if ty.bits() < 32 {
+                            Inst::Atomic {
+                                op: AtomicOP::load_op(ty),
+                                rd: writable_spilltmp_reg2(),
+                                addr: p,
+                                src: zero_reg(),
+                                amo: AMO::SeqCst,
+                            }
+                            .emit(&[], sink, emit_info, state);
+                            AtomicOP::merge(
+                                writable_spilltmp_reg2(),
+                                writable_spilltmp_reg(),
+                                offset,
+                                t0.to_reg(),
+                                ty,
+                            )
+                            .iter()
+                            .for_each(|i| i.emit(&[], sink, emit_info, state));
+                            spilltmp_reg2()
+                        } else {
+                            t0.to_reg()
+                        }
+                    }
+
+                    crate::ir::AtomicRmwOp::Umin
+                    | crate::ir::AtomicRmwOp::Umax
+                    | crate::ir::AtomicRmwOp::Smin
+                    | crate::ir::AtomicRmwOp::Smax => {
+                        let label_select_done = sink.get_label();
+                        if op == crate::ir::AtomicRmwOp::Umin || op == crate::ir::AtomicRmwOp::Umax
+                        {
+                            AtomicOP::extract(t0, offset, dst.to_reg(), ty)
+                        } else {
+                            AtomicOP::extract_sext(t0, offset, dst.to_reg(), ty)
+                        }
+                        .iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        Inst::lower_br_icmp(
+                            match op {
+                                crate::ir::AtomicRmwOp::Umin => IntCC::UnsignedLessThan,
+                                crate::ir::AtomicRmwOp::Umax => IntCC::UnsignedGreaterThan,
+                                crate::ir::AtomicRmwOp::Smin => IntCC::SignedLessThan,
+                                crate::ir::AtomicRmwOp::Smax => IntCC::SignedGreaterThan,
+                                _ => unreachable!(),
+                            },
+                            ValueRegs::one(t0.to_reg()),
+                            ValueRegs::one(x),
+                            BranchTarget::Label(label_select_done),
+                            BranchTarget::zero(),
+                            ty,
+                        )
+                        .iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        // here we select x.
+                        Inst::gen_move(t0, x, I64).emit(&[], sink, emit_info, state);
+                        sink.bind_label(label_select_done);
+                        Inst::Atomic {
+                            op: AtomicOP::load_op(ty),
+                            rd: writable_spilltmp_reg2(),
+                            addr: p,
+                            src: zero_reg(),
+                            amo: AMO::SeqCst,
+                        }
+                        .emit(&[], sink, emit_info, state);
+                        AtomicOP::merge(
+                            writable_spilltmp_reg2(),
+                            writable_spilltmp_reg(),
+                            offset,
+                            t0.to_reg(),
+                            ty,
+                        )
+                        .iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        spilltmp_reg2()
+                    }
+                    crate::ir::AtomicRmwOp::Xchg => {
+                        Inst::Atomic {
+                            op: AtomicOP::load_op(ty),
+                            rd: writable_spilltmp_reg2(),
+                            addr: p,
+                            src: zero_reg(),
+                            amo: AMO::SeqCst,
+                        }
+                        .emit(&[], sink, emit_info, state);
+                        AtomicOP::merge(
+                            writable_spilltmp_reg2(),
+                            writable_spilltmp_reg(),
+                            offset,
+                            x,
+                            ty,
+                        )
+                        .iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        spilltmp_reg2()
+                    }
+                };
+
                 Inst::Atomic {
                     op: AtomicOP::store_op(ty),
                     rd: t0,
                     addr: p,
-                    src: t0.to_reg(),
+                    src: store_value,
                     amo: AMO::SeqCst,
                 }
                 .emit(&[], sink, emit_info, state);
@@ -1520,7 +1789,8 @@ impl MachInstEmit for Inst {
                 Inst::gen_move(rd, rs1, I64).emit(&[], sink, emit_info, state);
                 sink.bind_label(label_jump_over);
             }
-            &Inst::FcvtToIntSat {
+            &Inst::FcvtToInt {
+                is_sat,
                 rd,
                 rs,
                 is_signed,
@@ -1992,61 +2262,27 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 // special handle for +0 or -0.
                 {
+                    // check is rs1 and rs2 all equal to zero.
                     let label_done = sink.get_label();
                     {
                         // if rs1 == 0
-                        Inst::FpuRR {
-                            alu_op: FpuOPRR::move_f_to_x_op(ty),
-                            frm: None,
-                            rd: tmp,
-                            rs: rs1,
-                        }
-                        .emit(&[], sink, emit_info, state);
-                        Inst::AluRRImm12 {
-                            alu_op: AluOPRRI::Slli,
-                            rd: tmp,
-                            rs: tmp.to_reg(),
-                            imm12: Imm12::from_bits(if ty == F32 { 33 } else { 1 }),
-                        }
-                        .emit(&[], sink, emit_info, state);
-                        Inst::CondBr {
-                            taken: BranchTarget::Label(label_done),
-                            not_taken: BranchTarget::zero(),
-                            kind: IntegerCompare {
-                                kind: IntCC::NotEqual,
-                                rs1: tmp.to_reg(),
-                                rs2: zero_reg(),
-                            },
-                        }
-                        .emit(&[], sink, emit_info, state);
-                    }
-                    {
-                        // and if rs2 == 0
-                        Inst::FpuRR {
-                            alu_op: FpuOPRR::move_f_to_x_op(ty),
-                            frm: None,
-                            rd: tmp,
-                            rs: rs2,
-                        }
-                        .emit(&[], sink, emit_info, state);
-                        // sign bit not known.
-                        Inst::AluRRImm12 {
-                            alu_op: AluOPRRI::Slli,
-                            rd: tmp,
-                            rs: tmp.to_reg(),
-                            imm12: Imm12::from_bits(if ty == F32 { 33 } else { 1 }),
-                        }
-                        .emit(&[], sink, emit_info, state);
-                        Inst::CondBr {
-                            taken: BranchTarget::Label(label_done),
-                            not_taken: BranchTarget::zero(),
-                            kind: IntegerCompare {
-                                kind: IntCC::NotEqual,
-                                rs1: tmp.to_reg(),
-                                rs2: zero_reg(),
-                            },
-                        }
-                        .emit(&[], sink, emit_info, state);
+                        let mut insts = Inst::emit_if_float_not_zero(
+                            tmp,
+                            rs1,
+                            ty,
+                            BranchTarget::Label(label_done),
+                            BranchTarget::zero(),
+                        );
+                        insts.extend(Inst::emit_if_float_not_zero(
+                            tmp,
+                            rs2,
+                            ty,
+                            BranchTarget::Label(label_done),
+                            BranchTarget::zero(),
+                        ));
+                        insts
+                            .iter()
+                            .for_each(|i| i.emit(&[], sink, emit_info, state));
                     }
                     Inst::FpuRR {
                         alu_op: FpuOPRR::move_f_to_x_op(ty),

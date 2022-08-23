@@ -16,7 +16,7 @@ block0:
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr a0,0(nominal_sp)
+;   load_addr a0,nsp+0
 ;   add sp,+16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -41,7 +41,7 @@ block0:
 ;   call %Probestack
 ;   add sp,-100016
 ; block0:
-;   load_addr a0,0(nominal_sp)
+;   load_addr a0,nsp+0
 ;   add sp,+100016
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -62,7 +62,7 @@ block0:
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr t2,0(nominal_sp)
+;   load_addr t2,nsp+0
 ;   ld a0,0(t2)
 ;   add sp,+16
 ;   ld ra,8(sp)
@@ -88,7 +88,7 @@ block0:
 ;   call %Probestack
 ;   add sp,-100016
 ; block0:
-;   load_addr t2,0(nominal_sp)
+;   load_addr t2,nsp+0
 ;   ld a0,0(t2)
 ;   add sp,+100016
 ;   ld ra,8(sp)
@@ -110,7 +110,7 @@ block0(v0: i64):
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr t2,0(nominal_sp)
+;   load_addr t2,nsp+0
 ;   sd a0,0(t2)
 ;   add sp,+16
 ;   ld ra,8(sp)
@@ -136,7 +136,7 @@ block0(v0: i64):
 ;   call %Probestack
 ;   add sp,-100016
 ; block0:
-;   load_addr t2,0(nominal_sp)
+;   load_addr t2,nsp+0
 ;   sd a0,0(t2)
 ;   add sp,+100016
 ;   ld ra,8(sp)
@@ -491,7 +491,7 @@ block0(v0: i128):
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr a2,0(nominal_sp)
+;   load_addr a2,nsp+0
 ;   sd a0,0(a2)
 ;   sd a1,8(a2)
 ;   add sp,+16
@@ -515,7 +515,7 @@ block0(v0: i128):
 ;   mv fp,sp
 ;   add sp,-32
 ; block0:
-;   load_addr a2,32(nominal_sp)
+;   load_addr a2,nsp+32
 ;   sd a0,0(a2)
 ;   sd a1,8(a2)
 ;   add sp,+32
@@ -542,7 +542,7 @@ block0(v0: i128):
 ;   call %Probestack
 ;   add sp,-100016
 ; block0:
-;   load_addr a2,0(nominal_sp)
+;   load_addr a2,nsp+0
 ;   sd a0,0(a2)
 ;   sd a1,8(a2)
 ;   add sp,+100016
@@ -565,7 +565,7 @@ block0:
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr a1,0(nominal_sp)
+;   load_addr a1,nsp+0
 ;   ld a0,0(a1)
 ;   ld a1,8(a1)
 ;   add sp,+16
@@ -589,7 +589,7 @@ block0:
 ;   mv fp,sp
 ;   add sp,-32
 ; block0:
-;   load_addr a1,32(nominal_sp)
+;   load_addr a1,nsp+32
 ;   ld a0,0(a1)
 ;   ld a1,8(a1)
 ;   add sp,+32
@@ -616,7 +616,7 @@ block0:
 ;   call %Probestack
 ;   add sp,-100016
 ; block0:
-;   load_addr a1,0(nominal_sp)
+;   load_addr a1,nsp+0
 ;   ld a0,0(a1)
 ;   ld a1,8(a1)
 ;   add sp,+100016

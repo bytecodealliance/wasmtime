@@ -36,7 +36,13 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   ror a0,a0,a1
+;   andi a2,a1,63
+;   li a4,64
+;   sub a4,a4,a2
+;   srl a7,a0,a2
+;   sll t4,a0,a4
+;   select_reg t1,zero,t4##condition=(a2 eq zero)
+;   or a0,a7,t1
 ;   ret
 
 function %f1(i32, i32) -> i32 {
@@ -46,7 +52,14 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   rorw a0,a0,a1
+;   uext.w a2,a0
+;   andi a4,a1,31
+;   li a6,32
+;   sub a6,a6,a4
+;   srl t4,a2,a4
+;   sll t1,a2,a6
+;   select_reg a0,zero,t1##condition=(a4 eq zero)
+;   or a0,t4,a0
 ;   ret
 
 function %f2(i16, i16) -> i16 {
@@ -56,12 +69,14 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   andi a2,a1,15
-;   li a4,16
-;   sub a4,a4,a2
-;   srl a7,a0,a2
-;   sll t4,a0,a4
-;   or a0,a7,t4
+;   uext.h a2,a0
+;   andi a4,a1,15
+;   li a6,16
+;   sub a6,a6,a4
+;   srl t4,a2,a4
+;   sll t1,a2,a6
+;   select_reg a0,zero,t1##condition=(a4 eq zero)
+;   or a0,t4,a0
 ;   ret
 
 function %f3(i8, i8) -> i8 {
@@ -71,12 +86,14 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   andi a2,a1,7
-;   li a4,8
-;   sub a4,a4,a2
-;   srl a7,a0,a2
-;   sll t4,a0,a4
-;   or a0,a7,t4
+;   uext.b a2,a0
+;   andi a4,a1,7
+;   li a6,8
+;   sub a6,a6,a4
+;   srl t4,a2,a4
+;   sll t1,a2,a6
+;   select_reg a0,zero,t1##condition=(a4 eq zero)
+;   or a0,t4,a0
 ;   ret
 
 function %i128_rotl(i128, i128) -> i128 {
@@ -109,7 +126,13 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   rol a0,a0,a1
+;   andi a2,a1,63
+;   li a4,64
+;   sub a4,a4,a2
+;   sll a7,a0,a2
+;   srl t4,a0,a4
+;   select_reg t1,zero,t4##condition=(a2 eq zero)
+;   or a0,a7,t1
 ;   ret
 
 function %f5(i32, i32) -> i32 {
@@ -119,7 +142,14 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   rolw a0,a0,a1
+;   uext.w a2,a0
+;   andi a4,a1,31
+;   li a6,32
+;   sub a6,a6,a4
+;   sll t4,a2,a4
+;   srl t1,a2,a6
+;   select_reg a0,zero,t1##condition=(a4 eq zero)
+;   or a0,t4,a0
 ;   ret
 
 function %f6(i16, i16) -> i16 {
@@ -129,12 +159,14 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   andi a2,a1,15
-;   li a4,16
-;   sub a4,a4,a2
-;   sll a7,a0,a2
-;   srl t4,a0,a4
-;   or a0,a7,t4
+;   uext.h a2,a0
+;   andi a4,a1,15
+;   li a6,16
+;   sub a6,a6,a4
+;   sll t4,a2,a4
+;   srl t1,a2,a6
+;   select_reg a0,zero,t1##condition=(a4 eq zero)
+;   or a0,t4,a0
 ;   ret
 
 function %f7(i8, i8) -> i8 {
@@ -144,12 +176,14 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   andi a2,a1,7
-;   li a4,8
-;   sub a4,a4,a2
-;   sll a7,a0,a2
-;   srl t4,a0,a4
-;   or a0,a7,t4
+;   uext.b a2,a0
+;   andi a4,a1,7
+;   li a6,8
+;   sub a6,a6,a4
+;   sll t4,a2,a4
+;   srl t1,a2,a6
+;   select_reg a0,zero,t1##condition=(a4 eq zero)
+;   or a0,t4,a0
 ;   ret
 
 function %f8(i64, i64) -> i64 {
@@ -291,7 +325,13 @@ block0(v0: i64):
 
 ; block0:
 ;   li a1,17
-;   ror a0,a0,a1
+;   andi a2,a1,63
+;   li a4,64
+;   sub a4,a4,a2
+;   srl a7,a0,a2
+;   sll t4,a0,a4
+;   select_reg t1,zero,t4##condition=(a2 eq zero)
+;   or a0,a7,t1
 ;   ret
 
 function %f21(i64) -> i64 {
@@ -303,7 +343,13 @@ block0(v0: i64):
 
 ; block0:
 ;   li a1,17
-;   rol a0,a0,a1
+;   andi a2,a1,63
+;   li a4,64
+;   sub a4,a4,a2
+;   sll a7,a0,a2
+;   srl t4,a0,a4
+;   select_reg t1,zero,t4##condition=(a2 eq zero)
+;   or a0,a7,t1
 ;   ret
 
 function %f22(i32) -> i32 {
@@ -314,8 +360,15 @@ block0(v0: i32):
 }
 
 ; block0:
-;   li a1,17
-;   rolw a0,a0,a1
+;   uext.w a0,a0
+;   li a2,17
+;   andi a4,a2,31
+;   li a6,32
+;   sub a6,a6,a4
+;   sll t4,a0,a4
+;   srl t1,a0,a6
+;   select_reg a0,zero,t1##condition=(a4 eq zero)
+;   or a0,t4,a0
 ;   ret
 
 function %f23(i16) -> i16 {
@@ -326,13 +379,15 @@ block0(v0: i16):
 }
 
 ; block0:
-;   li a1,10
-;   andi a2,a1,15
-;   li a4,16
-;   sub a4,a4,a2
-;   sll a7,a0,a2
-;   srl t4,a0,a4
-;   or a0,a7,t4
+;   uext.h a0,a0
+;   li a2,10
+;   andi a4,a2,15
+;   li a6,16
+;   sub a6,a6,a4
+;   sll t4,a0,a4
+;   srl t1,a0,a6
+;   select_reg a0,zero,t1##condition=(a4 eq zero)
+;   or a0,t4,a0
 ;   ret
 
 function %f24(i8) -> i8 {
@@ -343,13 +398,15 @@ block0(v0: i8):
 }
 
 ; block0:
-;   li a1,3
-;   andi a2,a1,7
-;   li a4,8
-;   sub a4,a4,a2
-;   sll a7,a0,a2
-;   srl t4,a0,a4
-;   or a0,a7,t4
+;   uext.b a0,a0
+;   li a2,3
+;   andi a4,a2,7
+;   li a6,8
+;   sub a6,a6,a4
+;   sll t4,a0,a4
+;   srl t1,a0,a6
+;   select_reg a0,zero,t1##condition=(a4 eq zero)
+;   or a0,t4,a0
 ;   ret
 
 function %f25(i64) -> i64 {
