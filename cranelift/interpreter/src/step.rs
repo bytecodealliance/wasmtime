@@ -75,12 +75,10 @@ where
                     .constants
                     .get(constant_handle.clone())
                     .as_slice();
-                if ctrl_ty.bytes() == 16 {
-                    DataValue::V128(buffer.try_into().expect("a 16-byte data buffer"))
-                } else if ctrl_ty.bytes() == 8 {
-                    DataValue::V64(buffer.try_into().expect("an 8-byte data buffer"))
-                } else {
-                    panic!("unexpected UnaryConst buffer length {}", buffer.len())
+                match ctrl_ty.bytes() {
+                    16 => DataValue::V128(buffer.try_into().expect("a 16-byte data buffer")),
+                    8 => DataValue::V64(buffer.try_into().expect("an 8-byte data buffer")),
+                    length => panic!("unexpected UnaryConst buffer length {}", length),
                 }
             }
             InstructionData::Shuffle { imm, .. } => {
@@ -91,12 +89,10 @@ where
                     .get(imm)
                     .unwrap()
                     .as_slice();
-                if ctrl_ty.bytes() == 16 {
-                    DataValue::V128(mask.try_into().expect("a 16-byte vector mask"))
-                } else if ctrl_ty.bytes() == 8 {
-                    DataValue::V64(mask.try_into().expect("an 8-byte vector mask"))
-                } else {
-                    panic!("unexpected Shuffle mask length {}", mask.len())
+                match ctrl_ty.bytes() {
+                    16 => DataValue::V128(mask.try_into().expect("a 16-byte vector mask")),
+                    8 => DataValue::V64(mask.try_into().expect("an 8-byte vector mask")),
+                    length => panic!("unexpected Shuffle mask length {}", length),
                 }
             }
             _ => inst.imm_value().unwrap(),
