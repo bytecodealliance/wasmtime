@@ -162,8 +162,8 @@ block0(v0: i64, v1: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rsi, %rcx
-;   andq    %rcx, $63, %rcx
+;   movq    %rsi, %r9
+;   movq    %r9, %rcx
 ;   shlq    %cl, %rdi, %rdi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
@@ -179,8 +179,8 @@ block0(v0: i32, v1: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rsi, %rcx
-;   andq    %rcx, $31, %rcx
+;   movq    %rsi, %r9
+;   movq    %r9, %rcx
 ;   shll    %cl, %edi, %edi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
@@ -231,7 +231,6 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
-;   andq    %rcx, $63, %rcx
 ;   shlq    %cl, %rdi, %rdi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
@@ -248,7 +247,6 @@ block0(v0: i64, v1: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
-;   andq    %rcx, $63, %rcx
 ;   shlq    %cl, %rdi, %rdi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
@@ -265,7 +263,6 @@ block0(v0: i64, v1: i16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
-;   andq    %rcx, $63, %rcx
 ;   shlq    %cl, %rdi, %rdi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
@@ -282,7 +279,6 @@ block0(v0: i64, v1: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
-;   andq    %rcx, $63, %rcx
 ;   shlq    %cl, %rdi, %rdi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
@@ -299,7 +295,6 @@ block0(v0: i32, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
-;   andq    %rcx, $31, %rcx
 ;   shll    %cl, %edi, %edi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
@@ -316,7 +311,6 @@ block0(v0: i32, v1: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
-;   andq    %rcx, $31, %rcx
 ;   shll    %cl, %edi, %edi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
@@ -333,7 +327,6 @@ block0(v0: i32, v1: i16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
-;   andq    %rcx, $31, %rcx
 ;   shll    %cl, %edi, %edi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
@@ -350,7 +343,6 @@ block0(v0: i32, v1: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
-;   andq    %rcx, $31, %rcx
 ;   shll    %cl, %edi, %edi
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp

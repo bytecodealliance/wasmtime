@@ -300,15 +300,15 @@ block0(v0: i64x2, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrd.w $0, %xmm0, %r11
-;   pextrd.w $1, %xmm0, %rax
-;   movq    %rdi, %rcx
-;   andq    %rcx, $63, %rcx
-;   sarq    %cl, %r11, %r11
-;   sarq    %cl, %rax, %rax
+;   movq    %rdi, %rax
+;   pextrd.w $0, %xmm0, %r10
+;   pextrd.w $1, %xmm0, %rsi
+;   movq    %rax, %rcx
+;   sarq    %cl, %r10, %r10
+;   sarq    %cl, %rsi, %rsi
 ;   uninit  %xmm0
-;   pinsrd.w $0, %xmm0, %r11, %xmm0
-;   pinsrd.w $1, %xmm0, %rax, %xmm0
+;   pinsrd.w $0, %xmm0, %r10, %xmm0
+;   pinsrd.w $1, %xmm0, %rsi, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
