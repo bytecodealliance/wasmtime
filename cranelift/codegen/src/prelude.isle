@@ -571,6 +571,16 @@
 (decl pure is_sinkable_inst (Value) Inst)
 (extern constructor is_sinkable_inst is_sinkable_inst)
 
+;; This is a direct import of `IntCC::unsigned`.
+;; Get the corresponding IntCC with the signed component removed.
+;; For conditions without a signed component, this is a no-op.
+(decl intcc_unsigned (IntCC) IntCC)
+(extern constructor intcc_unsigned intcc_unsigned)
+
+;; Pure constructor that only matches signed integer cond codes.
+(decl pure signed_cond_code (IntCC) IntCC)
+(extern constructor signed_cond_code signed_cond_code)
+
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Emit an instruction.

@@ -605,11 +605,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
-    fn intcc_unsigned(&mut self, x: &IntCC) -> IntCC {
-        x.unsigned()
-    }
-
-    #[inline]
     fn intcc_to_cc(&mut self, intcc: &IntCC) -> CC {
         CC::from_intcc(*intcc)
     }

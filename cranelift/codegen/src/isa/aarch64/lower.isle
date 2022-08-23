@@ -1730,6 +1730,9 @@
             (vec_size VectorSize (vector_size ty)))
           (value_reg (int_cmp_zero_swap cond rn vec_size))))
 
+(rule -1 (lower (has_type out_ty (icmp cond x @ (value_type in_ty) y)))
+      (lower_icmp_into_reg cond x y in_ty out_ty))
+
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trap trap_code))

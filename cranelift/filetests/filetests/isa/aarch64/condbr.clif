@@ -22,6 +22,7 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   subs xzr, x0, x2
 ;   ccmp x1, x3, #nzcv, eq
+;   nop-zero-len
 ;   cset x0, eq
 ;   ret
 
@@ -34,6 +35,7 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   subs xzr, x0, x2
 ;   ccmp x1, x3, #nzcv, eq
+;   nop-zero-len
 ;   cset x0, ne
 ;   ret
 
@@ -45,10 +47,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x8, lo
+;   cset x7, lo
 ;   subs xzr, x1, x3
-;   cset x11, lt
-;   csel x0, x8, x11, eq
+;   cset x10, lt
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %icmp_ult_i128(i128, i128) -> b1 {
@@ -59,10 +61,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x8, lo
+;   cset x7, lo
 ;   subs xzr, x1, x3
-;   cset x11, lo
-;   csel x0, x8, x11, eq
+;   cset x10, lo
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %icmp_sle_i128(i128, i128) -> b1 {
@@ -73,10 +75,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x8, ls
+;   cset x7, ls
 ;   subs xzr, x1, x3
-;   cset x11, le
-;   csel x0, x8, x11, eq
+;   cset x10, le
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %icmp_ule_i128(i128, i128) -> b1 {
@@ -87,10 +89,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x8, ls
+;   cset x7, ls
 ;   subs xzr, x1, x3
-;   cset x11, ls
-;   csel x0, x8, x11, eq
+;   cset x10, ls
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %icmp_sgt_i128(i128, i128) -> b1 {
@@ -101,10 +103,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x8, hi
+;   cset x7, hi
 ;   subs xzr, x1, x3
-;   cset x11, gt
-;   csel x0, x8, x11, eq
+;   cset x10, gt
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %icmp_ugt_i128(i128, i128) -> b1 {
@@ -115,10 +117,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x8, hi
+;   cset x7, hi
 ;   subs xzr, x1, x3
-;   cset x11, hi
-;   csel x0, x8, x11, eq
+;   cset x10, hi
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %icmp_sge_i128(i128, i128) -> b1 {
@@ -129,10 +131,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x8, hs
+;   cset x7, hs
 ;   subs xzr, x1, x3
-;   cset x11, ge
-;   csel x0, x8, x11, eq
+;   cset x10, ge
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %icmp_uge_i128(i128, i128) -> b1 {
@@ -143,10 +145,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x8, hs
+;   cset x7, hs
 ;   subs xzr, x1, x3
-;   cset x11, hs
-;   csel x0, x8, x11, eq
+;   cset x10, hs
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %f(i64, i64) -> i64 {
