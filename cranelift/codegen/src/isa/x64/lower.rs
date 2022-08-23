@@ -582,29 +582,12 @@ fn lower_insn_to_regs(
         | Opcode::Umulhi
         | Opcode::Smulhi
         | Opcode::GetPinnedReg
-        | Opcode::SetPinnedReg => {
+        | Opcode::SetPinnedReg
+        | Opcode::Vconst => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::Vconst => {
-            let used_constant = if let &InstructionData::UnaryConst {
-                constant_handle, ..
-            } = ctx.data(insn)
-            {
-                ctx.use_constant(VCodeConstantData::Pool(
-                    constant_handle,
-                    ctx.get_constant_data(constant_handle).clone(),
-                ))
-            } else {
-                unreachable!("vconst should always have unary_const format")
-            };
-            // TODO use Inst::gen_constant() instead.
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ty.unwrap();
-            ctx.emit(Inst::xmm_load_const(used_constant, dst, ty));
-        }
 
         Opcode::RawBitcast => {
             // A raw_bitcast is just a mechanism for correcting the type of V128 values (see
