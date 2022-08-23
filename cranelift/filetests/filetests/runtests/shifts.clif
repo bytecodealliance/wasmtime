@@ -544,6 +544,9 @@ block0(v0: i16, v1: i64):
 ; run: %sshr_i16_i64(0x8000, 1) == 0xC000
 ; run: %sshr_i16_i64(0xf000, 0) == 0xf000
 ; run: %sshr_i16_i64(0xf000, 4) == 0xff00
+; run: %sshr_i16_i64(0x4000, 16) == 0x4000
+; run: %sshr_i16_i64(0x4000, 17) == 0x2000
+; run: %sshr_i16_i64(0x4000, 18) == 0x1000
 ; run: %sshr_i16_i64(0x4000, 32) == 0x4000
 ; run: %sshr_i16_i64(0x4000, 33) == 0x2000
 ; run: %sshr_i16_i64(0x4000, 34) == 0x1000
@@ -557,6 +560,9 @@ block0(v0: i16, v1: i32):
 ; run: %sshr_i16_i32(0x8000, 1) == 0xC000
 ; run: %sshr_i16_i32(0xf000, 0) == 0xf000
 ; run: %sshr_i16_i32(0xf000, 4) == 0xff00
+; run: %sshr_i16_i32(0x4000, 16) == 0x4000
+; run: %sshr_i16_i32(0x4000, 17) == 0x2000
+; run: %sshr_i16_i32(0x4000, 18) == 0x1000
 ; run: %sshr_i16_i32(0x4000, 32) == 0x4000
 ; run: %sshr_i16_i32(0x4000, 33) == 0x2000
 ; run: %sshr_i16_i32(0x4000, 34) == 0x1000
@@ -570,6 +576,9 @@ block0(v0: i16, v1: i16):
 ; run: %sshr_i16_i16(0x8000, 1) == 0xC000
 ; run: %sshr_i16_i16(0xf000, 0) == 0xf000
 ; run: %sshr_i16_i16(0xf000, 4) == 0xff00
+; run: %sshr_i16_i16(0x4000, 16) == 0x4000
+; run: %sshr_i16_i16(0x4000, 17) == 0x2000
+; run: %sshr_i16_i16(0x4000, 18) == 0x1000
 ; run: %sshr_i16_i16(0x4000, 32) == 0x4000
 ; run: %sshr_i16_i16(0x4000, 33) == 0x2000
 ; run: %sshr_i16_i16(0x4000, 34) == 0x1000
@@ -583,6 +592,9 @@ block0(v0: i16, v1: i8):
 ; run: %sshr_i16_i8(0x8000, 1) == 0xC000
 ; run: %sshr_i16_i8(0xf000, 0) == 0xf000
 ; run: %sshr_i16_i8(0xf000, 4) == 0xff00
+; run: %sshr_i16_i8(0x4000, 16) == 0x4000
+; run: %sshr_i16_i8(0x4000, 17) == 0x2000
+; run: %sshr_i16_i8(0x4000, 18) == 0x1000
 ; run: %sshr_i16_i8(0x4000, 32) == 0x4000
 ; run: %sshr_i16_i8(0x4000, 33) == 0x2000
 ; run: %sshr_i16_i8(0x4000, 34) == 0x1000
@@ -597,6 +609,9 @@ block0(v0: i8, v1: i64):
 ; run: %sshr_i8_i64(0x80, 1) == 0xC0
 ; run: %sshr_i8_i64(0xf0, 0) == 0xf0
 ; run: %sshr_i8_i64(0xf0, 4) == 0xff
+; run: %sshr_i8_i64(0x40, 8) == 0x40
+; run: %sshr_i8_i64(0x40, 9) == 0x20
+; run: %sshr_i8_i64(0x40, 10) == 0x10
 ; run: %sshr_i8_i64(0x40, 32) == 0x40
 ; run: %sshr_i8_i64(0x40, 33) == 0x20
 ; run: %sshr_i8_i64(0x40, 34) == 0x10
@@ -610,6 +625,9 @@ block0(v0: i8, v1: i32):
 ; run: %sshr_i8_i32(0x80, 1) == 0xC0
 ; run: %sshr_i8_i32(0xf0, 0) == 0xf0
 ; run: %sshr_i8_i32(0xf0, 4) == 0xff
+; run: %sshr_i8_i32(0x40, 8) == 0x40
+; run: %sshr_i8_i32(0x40, 9) == 0x20
+; run: %sshr_i8_i32(0x40, 10) == 0x10
 ; run: %sshr_i8_i32(0x40, 32) == 0x40
 ; run: %sshr_i8_i32(0x40, 33) == 0x20
 ; run: %sshr_i8_i32(0x40, 34) == 0x10
@@ -623,6 +641,9 @@ block0(v0: i8, v1: i16):
 ; run: %sshr_i8_i16(0x80, 1) == 0xC0
 ; run: %sshr_i8_i16(0xf0, 0) == 0xf0
 ; run: %sshr_i8_i16(0xf0, 4) == 0xff
+; run: %sshr_i8_i16(0x40, 8) == 0x40
+; run: %sshr_i8_i16(0x40, 9) == 0x20
+; run: %sshr_i8_i16(0x40, 10) == 0x10
 ; run: %sshr_i8_i16(0x40, 32) == 0x40
 ; run: %sshr_i8_i16(0x40, 33) == 0x20
 ; run: %sshr_i8_i16(0x40, 34) == 0x10
@@ -636,6 +657,9 @@ block0(v0: i8, v1: i8):
 ; run: %sshr_i8_i8(0x80, 1) == 0xC0
 ; run: %sshr_i8_i8(0xf0, 0) == 0xf0
 ; run: %sshr_i8_i8(0xf0, 4) == 0xff
+; run: %sshr_i8_i8(0x40, 8) == 0x40
+; run: %sshr_i8_i8(0x40, 9) == 0x20
+; run: %sshr_i8_i8(0x40, 10) == 0x10
 ; run: %sshr_i8_i8(0x40, 32) == 0x40
 ; run: %sshr_i8_i8(0x40, 33) == 0x20
 ; run: %sshr_i8_i8(0x40, 34) == 0x10
