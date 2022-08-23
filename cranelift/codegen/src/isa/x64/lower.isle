@@ -3501,3 +3501,12 @@
 (rule (lower (has_type ty (vconst const)))
       ;; TODO use Inst::gen_constant() instead.
       (x64_xmm_load_const ty (const_to_vconst const)))
+
+;; Rules for `raw_bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; A raw_bitcast is just a mechanism for correcting the type of V128 values (see
+;; https://github.com/bytecodealliance/wasmtime/issues/1147). As such, this IR
+;; instruction should emit no machine code but a move is necessary to give the
+;; register allocator a definition for the output virtual register.
+(rule (lower (raw_bitcast val))
+      (put_in_regs val))

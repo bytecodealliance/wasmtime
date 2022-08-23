@@ -583,22 +583,12 @@ fn lower_insn_to_regs(
         | Opcode::Smulhi
         | Opcode::GetPinnedReg
         | Opcode::SetPinnedReg
-        | Opcode::Vconst => {
+        | Opcode::Vconst
+        | Opcode::RawBitcast => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::RawBitcast => {
-            // A raw_bitcast is just a mechanism for correcting the type of V128 values (see
-            // https://github.com/bytecodealliance/wasmtime/issues/1147). As such, this IR
-            // instruction should emit no machine code but a move is necessary to give the register
-            // allocator a definition for the output virtual register.
-            let src = put_input_in_reg(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ty.unwrap();
-            ctx.emit(Inst::gen_move(dst, src, ty));
-        }
 
         Opcode::Shuffle => {
             let ty = ty.unwrap();
