@@ -73,42 +73,33 @@ else()
 	endif()
 endif()
 
-include(ExternalProject)
 if(ANDROID)
-	# Rust attempts to use libgcc.a on NDK versions r23-beta3
+	# Rust attempts to use libgcc.a on NDK versions r23-beta3 and up
 	# but it has been replaced with libunwind.a (rust-lang/rust#85806)
 	file(WRITE ${CMAKE_BINARY_DIR}/libgcc.a "INPUT(-lunwind)")
+	# The version of the clang compiler is part of the libunwind.a path
 	file(STRINGS ${ANDROID_TOOLCHAIN_ROOT}/AndroidVersion.txt CLANG_VERSION_FILE)
 	list(GET CLANG_VERSION_FILE 0 CLANG_VERSION)
 
 	# Some crates use the compiler directly, environment variables
 	# are set to make them use the Android compiler
-	ExternalProject_Add(
-		wasmtime-crate
-		DOWNLOAD_COMMAND ""
-		CONFIGURE_COMMAND ""
-		INSTALL_COMMAND "${WASMTIME_INSTALL_COMMAND}"
-		BUILD_COMMAND ${CMAKE_COMMAND} -E env
-			CC=${ANDROID_TOOLCHAIN_ROOT}/bin/clang
-			AR=${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-ar
-			"RUSTFLAGS=-L ${CMAKE_SYSROOT}/usr/lib/${ANDROID_TARGET}/${ANDROID_NATIVE_API_LEVEL} \
-                -L ${ANDROID_TOOLCHAIN_ROOT}/lib64/clang/${CLANG_VERSION}/lib/linux/${ANDROID_ARCH_SHORT} \
-                -L ${CMAKE_BINARY_DIR} -C linker=${ANDROID_TOOLCHAIN_ROOT}/bin/ld"
-			cargo build ${WASMTIME_BUILD_TYPE_FLAG} ${WASMTIME_BUILD_TARGET}
-		BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}
-		BUILD_ALWAYS ON
-		BUILD_BYPRODUCTS ${WASMTIME_BUILD_PRODUCT})
-else()
-	ExternalProject_Add(
-		wasmtime-crate
-		DOWNLOAD_COMMAND ""
-		CONFIGURE_COMMAND ""
-		INSTALL_COMMAND "${WASMTIME_INSTALL_COMMAND}"
-		BUILD_COMMAND cargo build ${WASMTIME_BUILD_TYPE_FLAG}
-		BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}
-		BUILD_ALWAYS ON
-		BUILD_BYPRODUCTS ${WASMTIME_BUILD_PRODUCT})
+	set(WASMTIME_PREBUILD_COMMAND ${CMAKE_COMMAND} -E env
+	CC=${ANDROID_TOOLCHAIN_ROOT}/bin/clang
+	AR=${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-ar
+	"RUSTFLAGS=-L ${CMAKE_SYSROOT}/usr/lib/${ANDROID_TARGET}/${ANDROID_NATIVE_API_LEVEL} \
+		-L ${ANDROID_TOOLCHAIN_ROOT}/lib64/clang/${CLANG_VERSION}/lib/linux/${ANDROID_ARCH_SHORT} \
+		-L ${CMAKE_BINARY_DIR} -C linker=${ANDROID_TOOLCHAIN_ROOT}/bin/ld")
 endif()
+include(ExternalProject)
+ExternalProject_Add(
+	wasmtime-crate
+	DOWNLOAD_COMMAND ""
+	CONFIGURE_COMMAND ""
+	INSTALL_COMMAND "${WASMTIME_INSTALL_COMMAND}"
+	BUILD_COMMAND ${WASMTIME_PREBUILD_COMMAND} cargo build ${WASMTIME_BUILD_TYPE_FLAG} ${WASMTIME_BUILD_TARGET}
+	BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}
+	BUILD_ALWAYS ON
+	BUILD_BYPRODUCTS ${WASMTIME_BUILD_PRODUCT})
 add_library(wasmtime INTERFACE)
 add_dependencies(wasmtime wasmtime-crate)
 
