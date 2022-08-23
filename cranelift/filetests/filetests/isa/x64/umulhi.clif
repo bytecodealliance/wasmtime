@@ -1,0 +1,51 @@
+test compile precise-output
+target x86_64
+
+function %f1(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = umulhi v0, v1
+  return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   mul     %ax, %si, %ax, %dx
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f2(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = umulhi v0, v1
+  return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   mul     %eax, %esi, %eax, %edx
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f3(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = umulhi v0, v1
+  return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   mul     %rax, %rsi, %rax, %rdx
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

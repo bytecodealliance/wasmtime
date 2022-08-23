@@ -1575,7 +1575,7 @@ impl fmt::Display for ShiftKind {
 }
 
 /// What kind of division or remainer instruction this is?
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum DivOrRemKind {
     SignedDiv,
     UnsignedDiv,

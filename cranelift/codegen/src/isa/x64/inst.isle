@@ -2738,7 +2738,7 @@
 (rule (mul_hi ty signed src1 src2)
       (let ((dst_lo WritableGpr (temp_writable_gpr))
             (dst_hi WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
+            (size OperandSize (raw_operand_size_of_type ty))
             (_ Unit (emit (MInst.MulHi size
                                        signed
                                        src1
@@ -3586,6 +3586,25 @@
       (gpr_to_xmm (SseOpcode.Movd) src (OperandSize.Size32)))
 (rule (bitcast_gpr_to_xmm $I64 src)
       (gpr_to_xmm (SseOpcode.Movq) src (OperandSize.Size64)))
+
+;;;; Stack Addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl stack_addr_impl (StackSlot Offset32) Gpr)
+(rule (stack_addr_impl stack_slot offset)
+      (let ((dst WritableGpr (temp_writable_gpr))
+           (_ Unit (emit (abi_stackslot_addr dst stack_slot offset))))
+        dst))
+
+;;;; Division/Remainders ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl emit_div_or_rem (DivOrRemKind Type WritableGpr Gpr Gpr) Unit)
+(extern constructor emit_div_or_rem emit_div_or_rem)
+
+(decl div_or_rem (DivOrRemKind Value Value) Gpr)
+(rule (div_or_rem kind a @ (value_type ty) b)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit_div_or_rem kind ty dst a b)))
+        dst))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

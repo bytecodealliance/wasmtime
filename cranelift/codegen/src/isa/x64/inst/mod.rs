@@ -208,23 +208,6 @@ impl Inst {
         }
     }
 
-    pub(crate) fn mul_hi(size: OperandSize, signed: bool, rhs: RegMem) -> Inst {
-        debug_assert!(size.is_one_of(&[
-            OperandSize::Size16,
-            OperandSize::Size32,
-            OperandSize::Size64
-        ]));
-        rhs.assert_regclass_is(RegClass::Int);
-        Inst::MulHi {
-            size,
-            signed,
-            src1: Gpr::new(regs::rax()).unwrap(),
-            src2: GprMem::new(rhs).unwrap(),
-            dst_lo: WritableGpr::from_reg(Gpr::new(regs::rax()).unwrap()),
-            dst_hi: WritableGpr::from_reg(Gpr::new(regs::rdx()).unwrap()),
-        }
-    }
-
     pub(crate) fn checked_div_or_rem_seq(
         kind: DivOrRemKind,
         size: OperandSize,
