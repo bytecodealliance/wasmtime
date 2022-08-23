@@ -3466,6 +3466,7 @@ dependencies = [
  "humantime 2.1.0",
  "libc",
  "listenfd",
+ "log",
  "memchr",
  "num_cpus",
  "once_cell",
