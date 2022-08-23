@@ -584,7 +584,8 @@ fn lower_insn_to_regs(
         | Opcode::GetPinnedReg
         | Opcode::SetPinnedReg
         | Opcode::Vconst
-        | Opcode::RawBitcast => {
+        | Opcode::RawBitcast
+        | Opcode::Insertlane => {
             implemented_in_isle(ctx);
         }
 
@@ -715,14 +716,6 @@ fn lower_insn_to_regs(
                 RegMem::from(swizzle_mask_tmp),
                 dst,
             ));
-        }
-
-        Opcode::Insertlane => {
-            unreachable!(
-                "implemented in ISLE: inst = `{}`, type = `{:?}`",
-                ctx.dfg().display_inst(insn),
-                ty
-            );
         }
 
         Opcode::Extractlane => {
