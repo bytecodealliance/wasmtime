@@ -5,9 +5,9 @@ pub mod generated_code;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
-    insn_inputs, lower_constant_f128, writable_zero_reg, zero_reg, AMode, ASIMDFPModImm,
-    ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI,
-    FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, JTSequenceInfo, MachLabel,
+    insn_inputs, lower_constant_f128, lower_constant_f64, writable_zero_reg, zero_reg, AMode,
+    ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp,
+    FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, JTSequenceInfo, MachLabel,
     MoveWideConst, MoveWideOp, NarrowValueMode, Opcode, OperandSize, PairAMode, Reg, ScalarSize,
     ShiftOpAndAmt, UImm5, VecMisc2, VectorSize, NZCV,
 };
@@ -482,6 +482,14 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     fn amode_is_reg(&mut self, address: &AMode) -> Option<Reg> {
         address.is_reg()
+    }
+
+    fn constant_f64(&mut self, value: u64) -> Reg {
+        let rd = self.temp_writable_reg(I8X16);
+
+        lower_constant_f64(self.lower_ctx, rd, f64::from_bits(value));
+
+        rd.to_reg()
     }
 
     fn constant_f128(&mut self, value: u128) -> Reg {

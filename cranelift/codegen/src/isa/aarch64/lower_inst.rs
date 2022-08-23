@@ -644,11 +644,7 @@ pub(crate) fn lower_insn_to_regs(
             panic!("Branch opcode reached non-branch lowering logic!");
         }
 
-        Opcode::Vconst => {
-            let value = const_param_to_u128(ctx, insn).expect("Invalid immediate bytes");
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            lower_constant_f128(ctx, rd, value);
-        }
+        Opcode::Vconst => implemented_in_isle(ctx),
 
         Opcode::RawBitcast => {
             let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);

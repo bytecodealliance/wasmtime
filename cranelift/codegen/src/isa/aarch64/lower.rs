@@ -8,7 +8,6 @@
 //! - Floating-point immediates (FIMM instruction).
 
 use super::lower_inst;
-use crate::data_value::DataValue;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
@@ -92,13 +91,6 @@ pub(crate) fn input_to_shiftimm(
     input: InsnInput,
 ) -> Option<ShiftOpShiftImm> {
     input_to_const(ctx, input).and_then(ShiftOpShiftImm::maybe_from_shift)
-}
-
-pub(crate) fn const_param_to_u128(ctx: &mut Lower<Inst>, inst: IRInst) -> Option<u128> {
-    match ctx.get_immediate(inst) {
-        Some(DataValue::V128(bytes)) => Some(u128::from_le_bytes(bytes)),
-        _ => None,
-    }
 }
 
 /// How to handle narrow values loaded into registers; see note on `narrow_mode`

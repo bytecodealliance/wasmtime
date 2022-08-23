@@ -1628,6 +1628,15 @@
 (rule (lower (resumable_trap trap_code))
       (side_effect (udf trap_code)))
 
+;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec128 _) (vconst (u128_from_constant x))))
+      (constant_f128 x))
+
+(rule (lower (has_type ty (vconst (u64_from_constant x))))
+      (if (ty_vec64 ty))
+      (constant_f64 x))
+
 ;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (splat x @ (value_type in_ty))))
