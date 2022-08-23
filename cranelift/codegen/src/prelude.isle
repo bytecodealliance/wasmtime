@@ -559,6 +559,10 @@
 (decl emit_u64_le_const (u64) VCodeConstant)
 (extern constructor emit_u64_le_const emit_u64_le_const)
 
+;; Fetch the VCodeConstant associated with a Constant.
+(decl const_to_vconst (Constant) VCodeConstant)
+(extern constructor const_to_vconst const_to_vconst)
+
 ;;;; Helpers for Side-Effectful Instructions Without Results ;;;;;;;;;;;;;;;;;;;
 
 (type SideEffectNoResult (enum
@@ -803,7 +807,6 @@
 
 (decl u64_from_constant (u64) Constant)
 (extern extractor u64_from_constant u64_from_constant)
-
 
 ;;;; Helpers for tail recursion loops ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

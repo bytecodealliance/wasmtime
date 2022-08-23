@@ -3495,3 +3495,8 @@
 
 (rule (lower (set_pinned_reg a @ (value_type ty)))
       (side_effect (write_pinned_gpr a)))
+
+;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (vconst const)))
+      (x64_xmm_load_const ty (const_to_vconst const)))

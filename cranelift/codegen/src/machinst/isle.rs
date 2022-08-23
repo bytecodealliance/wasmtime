@@ -774,6 +774,14 @@ macro_rules! isle_prelude_methods {
             self.lower_ctx.use_constant(data)
         }
 
+        #[inline]
+        fn const_to_vconst(&mut self, constant: Constant) -> VCodeConstant {
+            self.lower_ctx.use_constant(VCodeConstantData::Pool(
+                constant,
+                self.lower_ctx.get_constant_data(constant).clone(),
+            ))
+        }
+
         fn range(&mut self, start: usize, end: usize) -> Range {
             (start, end)
         }
