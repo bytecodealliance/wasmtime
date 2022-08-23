@@ -1817,6 +1817,48 @@
             (result Reg (uqxtn2 low_half y (lane_size ty))))
         result))
 
+;;;; Rules for `swiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (swiden_low x)))
+      (vec_extend (VecExtendOp.Sxtl) x $false (lane_size ty)))
+
+;;;; Rules for `swiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec128 ty) (swiden_high x)))
+      (vec_extend (VecExtendOp.Sxtl) x $true (lane_size ty)))
+
+(rule (lower (has_type ty (swiden_high x)))
+      (if (ty_vec64 ty))
+      (let ((tmp Reg (fpu_move_from_vec x 1 (VectorSize.Size32x2))))
+       (vec_extend (VecExtendOp.Sxtl) tmp $false (lane_size ty))))
+
+;;;; Rules for `uwiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (uwiden_low x)))
+      (vec_extend (VecExtendOp.Uxtl) x $false (lane_size ty)))
+
+;;;; Rules for `uwiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec128 ty) (uwiden_high x)))
+      (vec_extend (VecExtendOp.Uxtl) x $true (lane_size ty)))
+
+(rule (lower (has_type ty (uwiden_high x)))
+      (if (ty_vec64 ty))
+      (let ((tmp Reg (fpu_move_from_vec x 1 (VectorSize.Size32x2))))
+       (vec_extend (VecExtendOp.Uxtl) tmp $false (lane_size ty))))
+
+;;;; Rules for `widening_pairwise_dot_product_s` ;;;;;;;;;;;;;;;;;;;;;;
+
+;; The args have type I16X8.
+;; "dst = i32x4.dot_i16x8_s(x, y)"
+;; => smull  tmp, x, y
+;;    smull2 dst, x, y
+;;    addp   dst, tmp, dst
+(rule (lower (has_type $I32X4 (widening_pairwise_dot_product_s x y)))
+      (let ((tmp Reg (vec_rrr_long (VecRRRLongOp.Smull16) x y $false))
+            (dst Reg (vec_rrr_long (VecRRRLongOp.Smull16) x y $true)))
+       (vec_rrr (VecALUOp.Addp) tmp dst (VectorSize.Size32x4))))
+
 ;;;; Rules for `Fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (fence))

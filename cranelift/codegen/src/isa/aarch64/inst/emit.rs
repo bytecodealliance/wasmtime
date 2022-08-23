@@ -2382,16 +2382,19 @@ impl MachInstEmit for Inst {
                 rd,
                 rn,
                 high_half,
+                lane_size,
             } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
-                let (u, immh) = match t {
-                    VecExtendOp::Sxtl8 => (0b0, 0b001),
-                    VecExtendOp::Sxtl16 => (0b0, 0b010),
-                    VecExtendOp::Sxtl32 => (0b0, 0b100),
-                    VecExtendOp::Uxtl8 => (0b1, 0b001),
-                    VecExtendOp::Uxtl16 => (0b1, 0b010),
-                    VecExtendOp::Uxtl32 => (0b1, 0b100),
+                let immh = match lane_size {
+                    ScalarSize::Size16 => 0b001,
+                    ScalarSize::Size32 => 0b010,
+                    ScalarSize::Size64 => 0b100,
+                    _ => panic!("Unexpected VecExtend to lane size of {:?}", lane_size),
+                };
+                let u = match t {
+                    VecExtendOp::Sxtl => 0b0,
+                    VecExtendOp::Uxtl => 0b1,
                 };
                 sink.put4(
                     0b000_011110_0000_000_101001_00000_00000
