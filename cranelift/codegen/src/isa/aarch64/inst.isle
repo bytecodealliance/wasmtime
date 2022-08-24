@@ -1401,21 +1401,45 @@
 (decl u64_into_imm_logic (Type u64) ImmLogic)
 (extern constructor u64_into_imm_logic u64_into_imm_logic)
 
+;; Calculate the minimum floating-point bound for a conversion to floating
+;; point from an integer type.
+;; Accepts whether the output is signed, the size of the input
+;; floating point type in bits, and the size of the output integer type
+;; in bits.
 (decl min_fp_value (bool u8 u8) Reg)
 (extern constructor min_fp_value min_fp_value)
 
+;; Calculate the maximum floating-point bound for a conversion to floating
+;; point from an integer type.
+;; Accepts whether the output is signed, the size of the input
+;; floating point type in bits, and the size of the output integer type
+;; in bits.
 (decl max_fp_value (bool u8 u8) Reg)
 (extern constructor max_fp_value max_fp_value)
 
+;; Calculate the minimum acceptable floating-point value for a conversion to
+;; floating point from an integer type.
+;; Accepts whether the output is signed, the size of the input
+;; floating point type in bits, and the size of the output integer type
+;; in bits.
 (decl min_fp_value_sat (bool u8 u8) Reg)
 (extern constructor min_fp_value_sat min_fp_value_sat)
 
+;; Calculate the maximum acceptable floating-point value for a conversion to
+;; floating point from an integer type.
+;; Accepts whether the output is signed, the size of the input
+;; floating point type in bits, and the size of the output integer type
+;; in bits.
 (decl max_fp_value_sat (bool u8 u8) Reg)
 (extern constructor max_fp_value_sat max_fp_value_sat)
 
+;; Constructs an FPUOpRI.Ushr* given the size in bits of the value (or lane)
+;; and the amount to shift by.
 (decl fpu_op_ri_ushr (u8 u8) FPUOpRI)
 (extern constructor fpu_op_ri_ushr fpu_op_ri_ushr)
 
+;; Constructs an FPUOpRI.Sli* given the size in bits of the value (or lane)
+;; and the amount to shift by.
 (decl fpu_op_ri_sli (u8 u8) FPUOpRI)
 (extern constructor fpu_op_ri_sli fpu_op_ri_sli)
 
@@ -2675,43 +2699,62 @@
 
 ;; Helpers for generating `MInst.FpuToInt` instructions.
 
-(decl fpu_to_int_nan_check () ConsumesFlags)
-(rule (fpu_to_int_nan_check)
-      (ConsumesFlags.ConsumesFlagsSideEffect
-      (MInst.TrapIf (cond_br_cond (Cond.Vs))
-                    (trap_code_bad_conversion_to_integer))))
+(decl fpu_to_int_nan_check (ScalarSize Reg) Reg)
+(rule (fpu_to_int_nan_check size src)
+      (let ((r ValueRegs
+                  (with_flags (fpu_cmp size src src)
+                   (ConsumesFlags.ConsumesFlagsReturnsReg
+                    (MInst.TrapIf (cond_br_cond (Cond.Vs))
+                        (trap_code_bad_conversion_to_integer))
+                    src))))
+       (value_regs_get r 0)))
 
-;; Emits the appropriate flag-reading op for an underflow check,
+;; Checks that the value is not less than the minimum bound,
 ;; accepting a boolean (whether the type is signed), input type,
-;; and output type.
-(decl fpu_to_int_underflow_check (bool Type Type) ConsumesFlags)
-(rule (fpu_to_int_underflow_check $true $F32 (fits_in_16 out_ty))
-      (ConsumesFlags.ConsumesFlagsSideEffect
-      (MInst.TrapIf (cond_br_cond
-                  (Cond.Le))
-                  (trap_code_integer_overflow))))
-(rule (fpu_to_int_underflow_check $true $F64 (fits_in_32 out_ty))
-      (ConsumesFlags.ConsumesFlagsSideEffect
-      (MInst.TrapIf (cond_br_cond
-                  (Cond.Le))
-                  (trap_code_integer_overflow))))
-(rule -1 (fpu_to_int_underflow_check $true _in_ty _out_ty)
-      (ConsumesFlags.ConsumesFlagsSideEffect
-      (MInst.TrapIf (cond_br_cond
-                  (Cond.Lt))
-                  (trap_code_integer_overflow))))
-(rule (fpu_to_int_underflow_check $false _in_ty _out_ty)
-      (ConsumesFlags.ConsumesFlagsSideEffect
-      (MInst.TrapIf (cond_br_cond
-                  (Cond.Le))
-                  (trap_code_integer_overflow))))
+;; output type, and registers containing the source and minimum bound.
+(decl fpu_to_int_underflow_check (bool Type Type Reg Reg) Reg)
+(rule (fpu_to_int_underflow_check $true $F32 (fits_in_16 out_ty) src min)
+      (let ((r ValueRegs
+                  (with_flags (fpu_cmp (ScalarSize.Size32) src min)
+                   (ConsumesFlags.ConsumesFlagsReturnsReg
+                    (MInst.TrapIf (cond_br_cond (Cond.Le))
+                        (trap_code_integer_overflow))
+                    src))))
+       (value_regs_get r 0)))
+(rule (fpu_to_int_underflow_check $true $F64 (fits_in_32 out_ty) src min)
+      (let ((r ValueRegs
+                  (with_flags (fpu_cmp (ScalarSize.Size64) src min)
+                   (ConsumesFlags.ConsumesFlagsReturnsReg
+                    (MInst.TrapIf (cond_br_cond (Cond.Le))
+                        (trap_code_integer_overflow))
+                    src))))
+       (value_regs_get r 0)))
+(rule -1 (fpu_to_int_underflow_check $true in_ty _out_ty src min)
+      (let ((r ValueRegs
+                  (with_flags (fpu_cmp (scalar_size in_ty) src min)
+                   (ConsumesFlags.ConsumesFlagsReturnsReg
+                    (MInst.TrapIf (cond_br_cond (Cond.Lt))
+                        (trap_code_integer_overflow))
+                    src))))
+       (value_regs_get r 0)))
+(rule (fpu_to_int_underflow_check $false in_ty _out_ty src min)
+      (let ((r ValueRegs
+                  (with_flags (fpu_cmp (scalar_size in_ty) src min)
+                   (ConsumesFlags.ConsumesFlagsReturnsReg
+                    (MInst.TrapIf (cond_br_cond (Cond.Le))
+                        (trap_code_integer_overflow))
+                    src))))
+       (value_regs_get r 0)))
 
-(decl fpu_to_int_overflow_check () ConsumesFlags)
-(rule (fpu_to_int_overflow_check)
-      (ConsumesFlags.ConsumesFlagsSideEffect
-      (MInst.TrapIf (cond_br_cond
-                  (Cond.Ge))
-                  (trap_code_integer_overflow))))
+(decl fpu_to_int_overflow_check (ScalarSize Reg Reg) Reg)
+(rule (fpu_to_int_overflow_check size src max)
+      (let ((r ValueRegs
+                  (with_flags (fpu_cmp size src max)
+                   (ConsumesFlags.ConsumesFlagsReturnsReg
+                    (MInst.TrapIf (cond_br_cond (Cond.Ge))
+                        (trap_code_integer_overflow))
+                    src))))
+       (value_regs_get r 0)))
 
 ;; Emits the appropriate instruction sequence to convert a
 ;; floating-point value to an integer, trapping if the value
@@ -2724,17 +2767,11 @@
       (let ((size ScalarSize (scalar_size in_ty))
             (in_bits u8 (ty_bits in_ty))
             (out_bits u8 (ty_bits out_ty))
-            (_ InstOutput (side_effect (with_flags_side_effect
-                   (fpu_cmp size src src)
-                   (fpu_to_int_nan_check))))
+            (src Reg (fpu_to_int_nan_check size src))
             (min Reg (min_fp_value signed in_bits out_bits))
-            (_ InstOutput (side_effect (with_flags_side_effect
-                   (fpu_cmp size src min)
-                   (fpu_to_int_underflow_check signed in_ty out_ty))))
+            (src Reg (fpu_to_int_underflow_check signed in_ty out_ty src min))
             (max Reg (max_fp_value signed in_bits out_bits))
-            (_ InstOutput (side_effect (with_flags_side_effect
-                   (fpu_cmp size src max)
-                   (fpu_to_int_overflow_check)))))
+            (src Reg (fpu_to_int_overflow_check size src max)))
        (fpu_to_int op src)))
 
 ;; Emits the appropriate instruction sequence to convert a
