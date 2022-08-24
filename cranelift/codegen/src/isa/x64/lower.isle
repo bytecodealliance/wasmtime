@@ -793,11 +793,6 @@
 (rule (lower (has_type (fits_in_64 ty) (rotl src amt)))
         (x64_rotl ty src (put_masked_in_imm8_gpr amt ty)))
 
-(rule (lower (has_type (fits_in_64 ty)
-                       (rotl src (u64_from_iconst amt))))
-      (x64_rotl ty src
-                (const_to_type_masked_imm8 amt ty)))
-
 
 ;; `i128`.
 
@@ -818,11 +813,6 @@
 
 (rule (lower (has_type (fits_in_64 ty) (rotr src amt)))
         (x64_rotr ty src (put_masked_in_imm8_gpr amt ty)))
-
-(rule (lower (has_type (fits_in_64 ty)
-                       (rotr src (u64_from_iconst amt))))
-      (x64_rotr ty src
-                (const_to_type_masked_imm8 amt ty)))
 
 
 ;; `i128`.
