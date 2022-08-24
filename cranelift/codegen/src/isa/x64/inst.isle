@@ -3656,10 +3656,14 @@
 (extern constructor shuffle_16_31_mask shuffle_16_31_mask)
 
 ;; Produce a permutation suitable for use with `vpermi2b`, for permuting two
-;; I8X16 vectors simultaneously. NOTE: this will not avoid out-of-bounds values,
-;; and the internal lane value masking of vpermi2b will come into play. If you
-;; need the out-of-bounds behavior of shuffle, you'll need to also mask the
-;; result of vpermi2b to get the expected out-of-bounds behavior.
+;; I8X16 vectors simultaneously.
+;;
+;; NOTE: `vpermi2b` will mask the indices in each lane to 5 bits when indexing
+;; into vectors, so this constructor makes no effort to handle indices that are
+;; larger than 31. If you are lowering a clif opcode like `shuffle` that has
+;; special behavior for out of bounds indices (emitting a `0` in the resulting
+;; vector in the case of `shuffle`) you'll need to handle that behavior
+;; separately.
 (decl perm_from_mask (VecMask) VCodeConstant)
 (extern constructor perm_from_mask perm_from_mask)
 
