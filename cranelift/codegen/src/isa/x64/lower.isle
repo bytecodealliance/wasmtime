@@ -3520,7 +3520,9 @@
 (rule (lower (shuffle a a (vec_mask_from_immediate mask)))
       (x64_pshufb a (x64_xmm_load_const $I8X16 (shuffle_0_31_mask mask))))
 
-
+;; TODO: this isn't correct, as `vec_mask_from_immediate` will panic if it's
+;; given a permutation that has elements that are >= 32. Without avx512vl and
+;; avx512vbmi support, that panic won't happen.
 (rule (lower (has_type (and (avx512vl_enabled) (avx512vbmi_enabled))
                        (shuffle a b (vec_mask_from_immediate mask))))
       (x64_vpermi2b a b (x64_xmm_load_const $I8X16 (perm_from_mask mask))))
