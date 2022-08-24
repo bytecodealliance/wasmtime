@@ -492,3 +492,66 @@ block0(v0: i8, v1: i8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+
+
+
+function %ushr_i64_const(i64) -> i64 {
+block0(v0: i64):
+    v1 = ushr_imm.i64 v0, 65
+    return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   shrq    $1, %rdi, %rdi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %ushr_i32_const(i32) -> i32 {
+block0(v0: i32):
+    v1 = ushr_imm.i32 v0, 33
+    return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   shrl    $1, %edi, %edi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %ushr_i16_const(i16) -> i16 {
+block0(v0: i16):
+    v1 = ushr_imm.i16 v0, 17
+    return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   shrw    $1, %di, %di
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %ushr_i8_const(i8) -> i8 {
+block0(v0: i8):
+    v1 = ushr_imm.i8 v0, 9
+    return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   shrb    $1, %dil, %dil
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
