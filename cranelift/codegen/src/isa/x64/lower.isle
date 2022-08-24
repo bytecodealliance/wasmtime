@@ -3578,3 +3578,24 @@
 
 (rule (lower (extractlane val @ (value_type ty @ (multi_lane 64 2)) (u8_from_uimm8 lane)))
       (x64_pextrd ty val lane))
+
+;; Rules for `scalar_to_vector` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Case 1: when moving a scalar float, we simply move from one XMM register
+;; to another, expecting the register allocator to elide this. Here we
+;; assume that the upper bits of a scalar float have not been munged with
+;; (the same assumption the old backend makes).
+(rule (lower (scalar_to_vector src @ (value_type (ty_scalar_float _))))
+      src)
+
+;; Case 2: when moving a scalar value of any other type, use MOVD to zero
+;; the upper lanes.
+(rule (lower (scalar_to_vector src @ (value_type ty)))
+      (bitcast_gpr_to_xmm ty src))
+
+;; Case 3: when presented with `load + scalar_to_vector`, coalesce into a single
+;; MOVSS/MOVSD instruction.
+(rule (lower (scalar_to_vector (and (sinkable_load src) (value_type (ty_32 _)))))
+      (x64_movss_load (sink_load_to_xmm_mem src)))
+(rule (lower (scalar_to_vector (and (sinkable_load src) (value_type (ty_64 _)))))
+      (x64_movsd_load (sink_load_to_xmm_mem src)))
