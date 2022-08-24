@@ -306,10 +306,10 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         None
     }
 
-    fn sink_load(&mut self, load: &SinkableLoad) -> RegMemImm {
+    fn sink_load(&mut self, load: &SinkableLoad) -> RegMem {
         self.lower_ctx.sink_inst(load.inst);
         let addr = lower_to_amode(self.lower_ctx, load.addr_input, load.offset);
-        RegMemImm::Mem {
+        RegMem::Mem {
             addr: SyntheticAmode::Real(addr),
         }
     }
