@@ -2828,6 +2828,30 @@
 (rule (x64_psrad src1 src2)
       (xmm_rmi_xmm (SseOpcode.Psrad) src1 src2))
 
+;; Helper for creating `pextrb` instructions.
+(decl x64_pextrb (Type Xmm u8) Gpr)
+(rule (x64_pextrb ty src lane)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pextrb)
+                                           dst
+                                           src
+                                           dst
+                                           lane
+                                           (operand_size_of_type_32_64 (lane_type ty))))))
+        dst))
+
+;; Helper for creating `pextrw` instructions.
+(decl x64_pextrw (Type Xmm u8) Gpr)
+(rule (x64_pextrw ty src lane)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pextrw)
+                                           dst
+                                           src
+                                           dst
+                                           lane
+                                           (operand_size_of_type_32_64 (lane_type ty))))))
+        dst))
+
 ;; Helper for creating `pextrd` instructions.
 (decl x64_pextrd (Type Xmm u8) Gpr)
 (rule (x64_pextrd ty src lane)

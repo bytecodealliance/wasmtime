@@ -3,7 +3,7 @@
 // ISLE integration glue.
 pub(super) mod isle;
 
-use crate::ir::{types, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type};
+use crate::ir::{types, ExternalName, Inst as IRInst, LibCall, Opcode, Type};
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
@@ -199,58 +199,6 @@ fn emit_insert_lane(ctx: &mut Lower<Inst>, src: RegMem, dst: Writable<Reg>, lane
         ctx.emit(Inst::xmm_rm_r(sse_op, src, dst));
     } else {
         panic!("unable to emit insertlane for type: {}", ty)
-    }
-}
-
-/// Emit an instruction to extract a lane of `src` into `dst`.
-fn emit_extract_lane(ctx: &mut Lower<Inst>, src: Reg, dst: Writable<Reg>, lane: u8, ty: Type) {
-    if !ty.is_float() {
-        let (sse_op, size) = match ty.lane_bits() {
-            8 => (SseOpcode::Pextrb, OperandSize::Size32),
-            16 => (SseOpcode::Pextrw, OperandSize::Size32),
-            32 => (SseOpcode::Pextrd, OperandSize::Size32),
-            64 => (SseOpcode::Pextrd, OperandSize::Size64),
-            _ => panic!("Unable to extractlane for lane size: {}", ty.lane_bits()),
-        };
-        let src = RegMem::reg(src);
-        ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, size));
-    } else if ty == types::F32 || ty == types::F64 {
-        if lane == 0 {
-            // Remove the extractlane instruction, leaving the float where it is. The upper
-            // bits will remain unchanged; for correctness, this relies on Cranelift type
-            // checking to avoid using those bits.
-            ctx.emit(Inst::gen_move(dst, src, ty));
-        } else {
-            // Otherwise, shuffle the bits in `lane` to the lowest lane.
-            let sse_op = SseOpcode::Pshufd;
-            let mask = match ty {
-                // Move the value at `lane` to lane 0, copying existing value at lane 0 to
-                // other lanes. Again, this relies on Cranelift type checking to avoid
-                // using those bits.
-                types::F32 => {
-                    assert!(lane > 0 && lane < 4);
-                    0b00_00_00_00 | lane
-                }
-                // Move the value at `lane` 1 (we know it must be 1 because of the `if`
-                // statement above) to lane 0 and leave lane 1 unchanged. The Cranelift type
-                // checking assumption also applies here.
-                types::F64 => {
-                    assert!(lane == 1);
-                    0b11_10_11_10
-                }
-                _ => unreachable!(),
-            };
-            let src = RegMem::reg(src);
-            ctx.emit(Inst::xmm_rm_r_imm(
-                sse_op,
-                src,
-                dst,
-                mask,
-                OperandSize::Size32,
-            ));
-        }
-    } else {
-        panic!("unable to emit extractlane for type: {}", ty)
     }
 }
 
@@ -586,28 +534,12 @@ fn lower_insn_to_regs(
         | Opcode::RawBitcast
         | Opcode::Insertlane
         | Opcode::Shuffle
-        | Opcode::Swizzle => {
+        | Opcode::Swizzle
+        | Opcode::Extractlane => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::Extractlane => {
-            // The instruction format maps to variables like: %dst = extractlane %src, %lane
-            let ty = ty.unwrap();
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let src_ty = ctx.input_ty(insn, 0);
-            assert_eq!(src_ty.bits(), 128);
-            let src = put_input_in_reg(ctx, inputs[0]);
-            let lane = if let InstructionData::BinaryImm8 { imm, .. } = ctx.data(insn) {
-                *imm
-            } else {
-                unreachable!();
-            };
-            debug_assert!(lane < src_ty.lane_count() as u8);
-
-            emit_extract_lane(ctx, src, dst, lane, ty);
-        }
 
         Opcode::ScalarToVector => {
             // When moving a scalar value to a vector register, we must be handle several
