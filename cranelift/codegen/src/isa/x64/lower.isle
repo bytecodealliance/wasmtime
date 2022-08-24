@@ -3332,3 +3332,181 @@
 
 (rule (lower (has_type $F64 (bitcast src @ (value_type $I64))))
       (bitcast_gpr_to_xmm $I64 src))
+
+;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fcopysign a @ (value_type $F32) b)))
+      (let ((sign_bit Xmm (imm $F32 0x80000000)))
+        (x64_orps
+          (x64_andnps sign_bit a)
+          (x64_andps sign_bit b))))
+
+(rule (lower (has_type $F64 (fcopysign a @ (value_type $F64) b)))
+      (let ((sign_bit Xmm (imm $F64 0x8000000000000000)))
+        (x64_orpd
+          (x64_andnpd sign_bit a)
+          (x64_andpd sign_bit b))))
+
+;; Rules for `ceil` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (use_sse41) (ceil a @ (value_type $F32))))
+      (x64_roundss a (RoundImm.RoundUp)))
+
+(rule (lower (ceil a @ (value_type $F32)))
+      (libcall_1 (LibCall.CeilF32) a))
+
+(rule (lower (has_type (use_sse41) (ceil a @ (value_type $F64))))
+      (x64_roundsd a (RoundImm.RoundUp)))
+
+(rule (lower (ceil a @ (value_type $F64)))
+      (libcall_1 (LibCall.CeilF64) a))
+
+(rule (lower (has_type (use_sse41) (ceil a @ (value_type $F32X4))))
+      (x64_roundps a (RoundImm.RoundUp)))
+
+(rule (lower (has_type (use_sse41) (ceil a @ (value_type $F64X2))))
+      (x64_roundpd a (RoundImm.RoundUp)))
+
+;; Rules for `floor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (use_sse41) (floor a @ (value_type $F32))))
+      (x64_roundss a (RoundImm.RoundDown)))
+
+(rule (lower (floor a @ (value_type $F32)))
+      (libcall_1 (LibCall.FloorF32) a))
+
+(rule (lower (has_type (use_sse41) (floor a @ (value_type $F64))))
+      (x64_roundsd a (RoundImm.RoundDown)))
+
+(rule (lower (floor a @ (value_type $F64)))
+      (libcall_1 (LibCall.FloorF64) a))
+
+(rule (lower (has_type (use_sse41) (floor a @ (value_type $F32X4))))
+      (x64_roundps a (RoundImm.RoundDown)))
+
+(rule (lower (has_type (use_sse41) (floor a @ (value_type $F64X2))))
+      (x64_roundpd a (RoundImm.RoundDown)))
+
+;; Rules for `nearest` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (use_sse41) (nearest a @ (value_type $F32))))
+      (x64_roundss a (RoundImm.RoundNearest)))
+
+(rule (lower (nearest a @ (value_type $F32)))
+      (libcall_1 (LibCall.NearestF32) a))
+
+(rule (lower (has_type (use_sse41) (nearest a @ (value_type $F64))))
+      (x64_roundsd a (RoundImm.RoundNearest)))
+
+(rule (lower (nearest a @ (value_type $F64)))
+      (libcall_1 (LibCall.NearestF64) a))
+
+(rule (lower (has_type (use_sse41) (nearest a @ (value_type $F32X4))))
+      (x64_roundps a (RoundImm.RoundNearest)))
+
+(rule (lower (has_type (use_sse41) (nearest a @ (value_type $F64X2))))
+      (x64_roundpd a (RoundImm.RoundNearest)))
+
+;; Rules for `trunc` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F32))))
+      (x64_roundss a (RoundImm.RoundZero)))
+
+(rule (lower (trunc a @ (value_type $F32)))
+      (libcall_1 (LibCall.TruncF32) a))
+
+(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F64))))
+      (x64_roundsd a (RoundImm.RoundZero)))
+
+(rule (lower (trunc a @ (value_type $F64)))
+      (libcall_1 (LibCall.TruncF64) a))
+
+(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F32X4))))
+      (x64_roundps a (RoundImm.RoundZero)))
+
+(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F64X2))))
+      (x64_roundpd a (RoundImm.RoundZero)))
+
+;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (stack_addr stack_slot offset))
+      (stack_addr_impl stack_slot offset))
+
+;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (udiv a @ (value_type ty) b))
+      (div_or_rem (DivOrRemKind.UnsignedDiv) a b))
+
+;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (sdiv a @ (value_type ty) b))
+      (div_or_rem (DivOrRemKind.SignedDiv) a b))
+
+;; Rules for `urem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (urem a @ (value_type ty) b))
+      (div_or_rem (DivOrRemKind.UnsignedRem) a b))
+
+;; Rules for `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (srem a @ (value_type ty) b))
+      (div_or_rem (DivOrRemKind.SignedRem) a b))
+
+;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (umulhi a @ (value_type $I16) b))
+      (let ((res ValueRegs (mul_hi $I16 $false a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+(rule (lower (umulhi a @ (value_type $I32) b))
+      (let ((res ValueRegs (mul_hi $I32 $false a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+(rule (lower (umulhi a @ (value_type $I64) b))
+      (let ((res ValueRegs (mul_hi $I64 $false a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (smulhi a @ (value_type $I16) b))
+      (let ((res ValueRegs (mul_hi $I16 $true a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+(rule (lower (smulhi a @ (value_type $I32) b))
+      (let ((res ValueRegs (mul_hi $I32 $true a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+(rule (lower (smulhi a @ (value_type $I64) b))
+      (let ((res ValueRegs (mul_hi $I64 $true a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+;; Rules for `get_pinned_reg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (get_pinned_reg))
+      (read_pinned_gpr))
+
+;; Rules for `set_pinned_reg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (set_pinned_reg a @ (value_type ty)))
+      (side_effect (write_pinned_gpr a)))
+
+;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (vconst const)))
+      ;; TODO use Inst::gen_constant() instead.
+      (x64_xmm_load_const ty (const_to_vconst const)))
+
+;; Rules for `raw_bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; A raw_bitcast is just a mechanism for correcting the type of V128 values (see
+;; https://github.com/bytecodealliance/wasmtime/issues/1147). As such, this IR
+;; instruction should emit no machine code but a move is necessary to give the
+;; register allocator a definition for the output virtual register.
+(rule (lower (raw_bitcast val))
+      (put_in_regs val))

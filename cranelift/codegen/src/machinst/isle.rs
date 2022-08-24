@@ -684,6 +684,12 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn u64_from_constant(&mut self, constant: Constant) -> Option<u64> {
+            let bytes = self.lower_ctx.get_constant_data(constant).as_slice();
+            Some(u64::from_le_bytes(bytes.try_into().ok()?))
+        }
+
+        #[inline]
         fn u128_from_constant(&mut self, constant: Constant) -> Option<u128> {
             let bytes = self.lower_ctx.get_constant_data(constant).as_slice();
             Some(u128::from_le_bytes(bytes.try_into().ok()?))
@@ -766,6 +772,14 @@ macro_rules! isle_prelude_methods {
         fn emit_u64_le_const(&mut self, value: u64) -> VCodeConstant {
             let data = VCodeConstantData::U64(value.to_le_bytes());
             self.lower_ctx.use_constant(data)
+        }
+
+        #[inline]
+        fn const_to_vconst(&mut self, constant: Constant) -> VCodeConstant {
+            self.lower_ctx.use_constant(VCodeConstantData::Pool(
+                constant,
+                self.lower_ctx.get_constant_data(constant).clone(),
+            ))
         }
 
         fn range(&mut self, start: usize, end: usize) -> Range {

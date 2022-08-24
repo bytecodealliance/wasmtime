@@ -14,7 +14,6 @@ use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::{Flags, TlsModel};
 use smallvec::SmallVec;
-use std::convert::TryFrom;
 use target_lexicon::Triple;
 
 //=============================================================================
@@ -569,300 +568,28 @@ fn lower_insn_to_regs(
         | Opcode::Unarrow
         | Opcode::Bitcast
         | Opcode::Fabs
-        | Opcode::Fneg => {
+        | Opcode::Fneg
+        | Opcode::Fcopysign
+        | Opcode::Ceil
+        | Opcode::Floor
+        | Opcode::Nearest
+        | Opcode::Trunc
+        | Opcode::StackAddr
+        | Opcode::Udiv
+        | Opcode::Urem
+        | Opcode::Sdiv
+        | Opcode::Srem
+        | Opcode::Umulhi
+        | Opcode::Smulhi
+        | Opcode::GetPinnedReg
+        | Opcode::SetPinnedReg
+        | Opcode::Vconst
+        | Opcode::RawBitcast
+        | Opcode::Insertlane => {
             implemented_in_isle(ctx);
         }
 
-        Opcode::Fcopysign => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let lhs = put_input_in_reg(ctx, inputs[0]);
-            let rhs = put_input_in_reg(ctx, inputs[1]);
-
-            let ty = ty.unwrap();
-
-            // We're going to generate the following sequence:
-            //
-            // movabs     $INT_MIN, tmp_gpr1
-            // mov{d,q}   tmp_gpr1, tmp_xmm1
-            // movap{s,d} tmp_xmm1, dst
-            // andnp{s,d} src_1, dst
-            // movap{s,d} src_2, tmp_xmm2
-            // andp{s,d}  tmp_xmm1, tmp_xmm2
-            // orp{s,d}   tmp_xmm2, dst
-
-            let tmp_xmm1 = ctx.alloc_tmp(types::F32).only_reg().unwrap();
-            let tmp_xmm2 = ctx.alloc_tmp(types::F32).only_reg().unwrap();
-
-            let (sign_bit_cst, mov_op, and_not_op, and_op, or_op) = match ty {
-                types::F32 => (
-                    0x8000_0000,
-                    SseOpcode::Movaps,
-                    SseOpcode::Andnps,
-                    SseOpcode::Andps,
-                    SseOpcode::Orps,
-                ),
-                types::F64 => (
-                    0x8000_0000_0000_0000,
-                    SseOpcode::Movapd,
-                    SseOpcode::Andnpd,
-                    SseOpcode::Andpd,
-                    SseOpcode::Orpd,
-                ),
-                _ => {
-                    panic!("unexpected type {:?} for copysign", ty);
-                }
-            };
-
-            for inst in Inst::gen_constant(ValueRegs::one(tmp_xmm1), sign_bit_cst, ty, |ty| {
-                ctx.alloc_tmp(ty).only_reg().unwrap()
-            }) {
-                ctx.emit(inst);
-            }
-            ctx.emit(Inst::xmm_mov(mov_op, RegMem::reg(tmp_xmm1.to_reg()), dst));
-            ctx.emit(Inst::xmm_rm_r(and_not_op, RegMem::reg(lhs), dst));
-            ctx.emit(Inst::xmm_mov(mov_op, RegMem::reg(rhs), tmp_xmm2));
-            ctx.emit(Inst::xmm_rm_r(
-                and_op,
-                RegMem::reg(tmp_xmm1.to_reg()),
-                tmp_xmm2,
-            ));
-            ctx.emit(Inst::xmm_rm_r(or_op, RegMem::reg(tmp_xmm2.to_reg()), dst));
-        }
-
-        Opcode::Ceil | Opcode::Floor | Opcode::Nearest | Opcode::Trunc => {
-            let ty = ty.unwrap();
-            if isa_flags.use_sse41() {
-                let mode = match op {
-                    Opcode::Ceil => RoundImm::RoundUp,
-                    Opcode::Floor => RoundImm::RoundDown,
-                    Opcode::Nearest => RoundImm::RoundNearest,
-                    Opcode::Trunc => RoundImm::RoundZero,
-                    _ => panic!("unexpected opcode {:?} in Ceil/Floor/Nearest/Trunc", op),
-                };
-                let op = match ty {
-                    types::F32 => SseOpcode::Roundss,
-                    types::F64 => SseOpcode::Roundsd,
-                    types::F32X4 => SseOpcode::Roundps,
-                    types::F64X2 => SseOpcode::Roundpd,
-                    _ => panic!("unexpected type {:?} in Ceil/Floor/Nearest/Trunc", ty),
-                };
-                let src = input_to_reg_mem(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::xmm_rm_r_imm(
-                    op,
-                    src,
-                    dst,
-                    mode.encode(),
-                    OperandSize::Size32,
-                ));
-            } else {
-                // Lower to VM calls when there's no access to SSE4.1.
-                // Note, for vector types on platforms that don't support sse41
-                // the execution will panic here.
-                let libcall = match (op, ty) {
-                    (Opcode::Ceil, types::F32) => LibCall::CeilF32,
-                    (Opcode::Ceil, types::F64) => LibCall::CeilF64,
-                    (Opcode::Floor, types::F32) => LibCall::FloorF32,
-                    (Opcode::Floor, types::F64) => LibCall::FloorF64,
-                    (Opcode::Nearest, types::F32) => LibCall::NearestF32,
-                    (Opcode::Nearest, types::F64) => LibCall::NearestF64,
-                    (Opcode::Trunc, types::F32) => LibCall::TruncF32,
-                    (Opcode::Trunc, types::F64) => LibCall::TruncF64,
-                    _ => panic!(
-                        "unexpected type/opcode {:?}/{:?} in Ceil/Floor/Nearest/Trunc",
-                        ty, op
-                    ),
-                };
-
-                let input = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                emit_vm_call(ctx, flags, triple, libcall, &[input], &[dst])?;
-            }
-        }
-
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::StackAddr => {
-            let (stack_slot, offset) = match *ctx.data(insn) {
-                InstructionData::StackLoad {
-                    opcode: Opcode::StackAddr,
-                    stack_slot,
-                    offset,
-                } => (stack_slot, offset),
-                _ => unreachable!(),
-            };
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let offset: i32 = offset.into();
-            let inst =
-                ctx.abi()
-                    .sized_stackslot_addr(stack_slot, u32::try_from(offset).unwrap(), dst);
-            ctx.emit(inst);
-        }
-
-        Opcode::Udiv | Opcode::Urem | Opcode::Sdiv | Opcode::Srem => {
-            let kind = match op {
-                Opcode::Udiv => DivOrRemKind::UnsignedDiv,
-                Opcode::Sdiv => DivOrRemKind::SignedDiv,
-                Opcode::Urem => DivOrRemKind::UnsignedRem,
-                Opcode::Srem => DivOrRemKind::SignedRem,
-                _ => unreachable!(),
-            };
-            let is_div = kind.is_div();
-
-            let input_ty = ctx.input_ty(insn, 0);
-            let size = OperandSize::from_ty(input_ty);
-
-            let dividend = put_input_in_reg(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            ctx.emit(Inst::gen_move(
-                Writable::from_reg(regs::rax()),
-                dividend,
-                input_ty,
-            ));
-
-            // Always do explicit checks for `srem`: otherwise, INT_MIN % -1 is not handled properly.
-            if flags.avoid_div_traps() || op == Opcode::Srem {
-                // A vcode meta-instruction is used to lower the inline checks, since they embed
-                // pc-relative offsets that must not change, thus requiring regalloc to not
-                // interfere by introducing spills and reloads.
-                //
-                // Note it keeps the result in $rax (for divide) or $rdx (for rem), so that
-                // regalloc is aware of the coalescing opportunity between rax/rdx and the
-                // destination register.
-                let divisor = put_input_in_reg(ctx, inputs[1]);
-
-                let divisor_copy = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(divisor_copy, divisor, types::I64));
-
-                let tmp = if op == Opcode::Sdiv && size == OperandSize::Size64 {
-                    Some(ctx.alloc_tmp(types::I64).only_reg().unwrap())
-                } else {
-                    None
-                };
-                // TODO use xor
-                ctx.emit(Inst::imm(
-                    OperandSize::Size32,
-                    0,
-                    Writable::from_reg(regs::rdx()),
-                ));
-                ctx.emit(Inst::checked_div_or_rem_seq(kind, size, divisor_copy, tmp));
-            } else {
-                // We don't want more than one trap record for a single instruction,
-                // so let's not allow the "mem" case (load-op merging) here; force
-                // divisor into a register instead.
-                let divisor = RegMem::reg(put_input_in_reg(ctx, inputs[1]));
-
-                // Fill in the high parts:
-                if kind.is_signed() {
-                    // sign-extend the sign-bit of al into ah for size 1, or rax into rdx, for
-                    // signed opcodes.
-                    ctx.emit(Inst::sign_extend_data(size));
-                } else if input_ty == types::I8 {
-                    ctx.emit(Inst::movzx_rm_r(
-                        ExtMode::BL,
-                        RegMem::reg(regs::rax()),
-                        Writable::from_reg(regs::rax()),
-                    ));
-                } else {
-                    // zero for unsigned opcodes.
-                    ctx.emit(Inst::imm(
-                        OperandSize::Size64,
-                        0,
-                        Writable::from_reg(regs::rdx()),
-                    ));
-                }
-
-                // Emit the actual idiv.
-                ctx.emit(Inst::div(size, kind.is_signed(), divisor));
-            }
-
-            // Move the result back into the destination reg.
-            if is_div {
-                // The quotient is in rax.
-                ctx.emit(Inst::gen_move(dst, regs::rax(), input_ty));
-            } else {
-                if size == OperandSize::Size8 {
-                    // The remainder is in AH. Right-shift by 8 bits then move from rax.
-                    ctx.emit(Inst::shift_r(
-                        OperandSize::Size64,
-                        ShiftKind::ShiftRightLogical,
-                        Some(8),
-                        Writable::from_reg(regs::rax()),
-                    ));
-                    ctx.emit(Inst::gen_move(dst, regs::rax(), input_ty));
-                } else {
-                    // The remainder is in rdx.
-                    ctx.emit(Inst::gen_move(dst, regs::rdx(), input_ty));
-                }
-            }
-        }
-
-        Opcode::Umulhi | Opcode::Smulhi => {
-            let input_ty = ctx.input_ty(insn, 0);
-
-            let lhs = put_input_in_reg(ctx, inputs[0]);
-            let rhs = input_to_reg_mem(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            // Move lhs in %rax.
-            ctx.emit(Inst::gen_move(
-                Writable::from_reg(regs::rax()),
-                lhs,
-                input_ty,
-            ));
-
-            // Emit the actual mul or imul.
-            let signed = op == Opcode::Smulhi;
-            ctx.emit(Inst::mul_hi(OperandSize::from_ty(input_ty), signed, rhs));
-
-            // Read the result from the high part (stored in %rdx).
-            ctx.emit(Inst::gen_move(dst, regs::rdx(), input_ty));
-        }
-
-        Opcode::GetPinnedReg => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            ctx.emit(Inst::gen_move(dst, regs::pinned_reg(), types::I64));
-        }
-
-        Opcode::SetPinnedReg => {
-            let src = put_input_in_reg(ctx, inputs[0]);
-            ctx.emit(Inst::gen_move(
-                Writable::from_reg(regs::pinned_reg()),
-                src,
-                types::I64,
-            ));
-        }
-
-        Opcode::Vconst => {
-            let used_constant = if let &InstructionData::UnaryConst {
-                constant_handle, ..
-            } = ctx.data(insn)
-            {
-                ctx.use_constant(VCodeConstantData::Pool(
-                    constant_handle,
-                    ctx.get_constant_data(constant_handle).clone(),
-                ))
-            } else {
-                unreachable!("vconst should always have unary_const format")
-            };
-            // TODO use Inst::gen_constant() instead.
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ty.unwrap();
-            ctx.emit(Inst::xmm_load_const(used_constant, dst, ty));
-        }
-
-        Opcode::RawBitcast => {
-            // A raw_bitcast is just a mechanism for correcting the type of V128 values (see
-            // https://github.com/bytecodealliance/wasmtime/issues/1147). As such, this IR
-            // instruction should emit no machine code but a move is necessary to give the register
-            // allocator a definition for the output virtual register.
-            let src = put_input_in_reg(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ty.unwrap();
-            ctx.emit(Inst::gen_move(dst, src, ty));
-        }
 
         Opcode::Shuffle => {
             let ty = ty.unwrap();
@@ -989,14 +716,6 @@ fn lower_insn_to_regs(
                 RegMem::from(swizzle_mask_tmp),
                 dst,
             ));
-        }
-
-        Opcode::Insertlane => {
-            unreachable!(
-                "implemented in ISLE: inst = `{}`, type = `{:?}`",
-                ctx.dfg().display_inst(insn),
-                ty
-            );
         }
 
         Opcode::Extractlane => {

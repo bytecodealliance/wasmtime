@@ -159,22 +159,23 @@ pub(crate) fn lower_insn_to_regs(
                         });
 
                         let vec_extend = match op {
-                            Opcode::Sload8x8 => Some(VecExtendOp::Sxtl8),
-                            Opcode::Uload8x8 => Some(VecExtendOp::Uxtl8),
-                            Opcode::Sload16x4 => Some(VecExtendOp::Sxtl16),
-                            Opcode::Uload16x4 => Some(VecExtendOp::Uxtl16),
-                            Opcode::Sload32x2 => Some(VecExtendOp::Sxtl32),
-                            Opcode::Uload32x2 => Some(VecExtendOp::Uxtl32),
+                            Opcode::Sload8x8 => Some((VecExtendOp::Sxtl, ScalarSize::Size16)),
+                            Opcode::Uload8x8 => Some((VecExtendOp::Uxtl, ScalarSize::Size16)),
+                            Opcode::Sload16x4 => Some((VecExtendOp::Sxtl, ScalarSize::Size32)),
+                            Opcode::Uload16x4 => Some((VecExtendOp::Uxtl, ScalarSize::Size32)),
+                            Opcode::Sload32x2 => Some((VecExtendOp::Sxtl, ScalarSize::Size64)),
+                            Opcode::Uload32x2 => Some((VecExtendOp::Uxtl, ScalarSize::Size64)),
                             _ => None,
                         };
 
-                        if let Some(t) = vec_extend {
+                        if let Some((t, lane_size)) = vec_extend {
                             let rd = dst.only_reg().unwrap();
                             ctx.emit(Inst::VecExtend {
                                 t,
                                 rd,
                                 rn: rd.to_reg(),
                                 high_half: false,
+                                lane_size,
                             });
                         }
 
@@ -569,31 +570,13 @@ pub(crate) fn lower_insn_to_regs(
             panic!("trapz / trapnz / resumable_trapnz should have been removed by legalization!");
         }
 
-        Opcode::FuncAddr => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let (extname, _) = ctx.call_target(insn).unwrap();
-            let extname = extname.clone();
-            ctx.emit(Inst::LoadExtName {
-                rd,
-                name: Box::new(extname),
-                offset: 0,
-            });
-        }
+        Opcode::FuncAddr => implemented_in_isle(ctx),
 
         Opcode::GlobalValue => {
             panic!("global_value should have been removed by legalization!");
         }
 
-        Opcode::SymbolValue => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let (extname, _, offset) = ctx.symbol_value(insn).unwrap();
-            let extname = extname.clone();
-            ctx.emit(Inst::LoadExtName {
-                rd,
-                name: Box::new(extname),
-                offset,
-            });
-        }
+        Opcode::SymbolValue => implemented_in_isle(ctx),
 
         Opcode::Call | Opcode::CallIndirect => {
             let caller_conv = ctx.abi().call_conv();
@@ -662,11 +645,7 @@ pub(crate) fn lower_insn_to_regs(
             panic!("Branch opcode reached non-branch lowering logic!");
         }
 
-        Opcode::Vconst => {
-            let value = const_param_to_u128(ctx, insn).expect("Invalid immediate bytes");
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            lower_constant_f128(ctx, rd, value);
-        }
+        Opcode::Vconst => implemented_in_isle(ctx),
 
         Opcode::RawBitcast => {
             let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
@@ -983,46 +962,7 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::IaddPairwise => implemented_in_isle(ctx),
 
-        Opcode::WideningPairwiseDotProductS => {
-            let r_y = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let r_a = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let r_b = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let ty = ty.unwrap();
-            if ty == I32X4 {
-                let tmp = ctx.alloc_tmp(I8X16).only_reg().unwrap();
-                // The args have type I16X8.
-                // "y = i32x4.dot_i16x8_s(a, b)"
-                // => smull  tmp, a, b
-                //    smull2 y,   a, b
-                //    addp   y,   tmp, y
-                ctx.emit(Inst::VecRRRLong {
-                    alu_op: VecRRRLongOp::Smull16,
-                    rd: tmp,
-                    rn: r_a,
-                    rm: r_b,
-                    high_half: false,
-                });
-                ctx.emit(Inst::VecRRRLong {
-                    alu_op: VecRRRLongOp::Smull16,
-                    rd: r_y,
-                    rn: r_a,
-                    rm: r_b,
-                    high_half: true,
-                });
-                ctx.emit(Inst::VecRRR {
-                    alu_op: VecALUOp::Addp,
-                    rd: r_y,
-                    rn: tmp.to_reg(),
-                    rm: r_y.to_reg(),
-                    size: VectorSize::Size32x4,
-                });
-            } else {
-                return Err(CodegenError::Unsupported(format!(
-                    "Opcode::WideningPairwiseDotProductS: unsupported laneage: {:?}",
-                    ty
-                )));
-            }
-        }
+        Opcode::WideningPairwiseDotProductS => implemented_in_isle(ctx),
 
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv | Opcode::Fmin | Opcode::Fmax => {
             implemented_in_isle(ctx)
@@ -1507,42 +1447,7 @@ pub(crate) fn lower_insn_to_regs(
         Opcode::Snarrow | Opcode::Unarrow | Opcode::Uunarrow => implemented_in_isle(ctx),
 
         Opcode::SwidenLow | Opcode::SwidenHigh | Opcode::UwidenLow | Opcode::UwidenHigh => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let ty = ty.unwrap();
-            let ty = if ty.is_dynamic_vector() {
-                ty.dynamic_to_vector()
-                    .unwrap_or_else(|| panic!("Unsupported dynamic type: {}?", ty))
-            } else {
-                ty
-            };
-            let (t, high_half) = match (ty, op) {
-                (I16X8, Opcode::SwidenLow) => (VecExtendOp::Sxtl8, false),
-                (I16X8, Opcode::SwidenHigh) => (VecExtendOp::Sxtl8, true),
-                (I16X8, Opcode::UwidenLow) => (VecExtendOp::Uxtl8, false),
-                (I16X8, Opcode::UwidenHigh) => (VecExtendOp::Uxtl8, true),
-                (I32X4, Opcode::SwidenLow) => (VecExtendOp::Sxtl16, false),
-                (I32X4, Opcode::SwidenHigh) => (VecExtendOp::Sxtl16, true),
-                (I32X4, Opcode::UwidenLow) => (VecExtendOp::Uxtl16, false),
-                (I32X4, Opcode::UwidenHigh) => (VecExtendOp::Uxtl16, true),
-                (I64X2, Opcode::SwidenLow) => (VecExtendOp::Sxtl32, false),
-                (I64X2, Opcode::SwidenHigh) => (VecExtendOp::Sxtl32, true),
-                (I64X2, Opcode::UwidenLow) => (VecExtendOp::Uxtl32, false),
-                (I64X2, Opcode::UwidenHigh) => (VecExtendOp::Uxtl32, true),
-                (ty, _) => {
-                    return Err(CodegenError::Unsupported(format!(
-                        "{}: Unsupported type: {:?}",
-                        op, ty
-                    )));
-                }
-            };
-
-            ctx.emit(Inst::VecExtend {
-                t,
-                rd,
-                rn,
-                high_half,
-            });
+            implemented_in_isle(ctx)
         }
 
         Opcode::TlsValue => match flags.tls_model() {
@@ -1579,10 +1484,11 @@ pub(crate) fn lower_insn_to_regs(
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
 
             ctx.emit(Inst::VecExtend {
-                t: VecExtendOp::Sxtl32,
+                t: VecExtendOp::Sxtl,
                 rd,
                 rn,
                 high_half: false,
+                lane_size: ScalarSize::Size64,
             });
             ctx.emit(Inst::VecMisc {
                 op: VecMisc2::Scvtf,

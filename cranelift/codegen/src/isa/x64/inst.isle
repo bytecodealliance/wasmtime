@@ -1120,6 +1120,15 @@
 (decl encode_fcmp_imm (FcmpImm) u8)
 (extern constructor encode_fcmp_imm encode_fcmp_imm)
 
+(type RoundImm extern
+      (enum RoundNearest
+            RoundDown
+            RoundUp
+            RoundZero))
+
+(decl encode_round_imm (RoundImm) u8)
+(extern constructor encode_round_imm encode_round_imm)
+
 ;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type Gpr (primitive Gpr))
@@ -1186,6 +1195,10 @@
 ;; Allocate a new temporary XMM register.
 (decl temp_writable_xmm () WritableXmm)
 (extern constructor temp_writable_xmm temp_writable_xmm)
+
+;; Fetch the special pinned register.
+(decl pinned_writable_gpr () WritableGpr)
+(extern constructor pinned_writable_gpr pinned_writable_gpr)
 
 ;; Construct a new `XmmMem` from the given `RegMem`.
 ;;
@@ -1393,6 +1406,9 @@
 
 (decl use_fma () Type)
 (extern extractor use_fma use_fma)
+
+(decl use_sse41 () Type)
+(extern extractor use_sse41 use_sse41)
 
 ;;;; Helpers for Merging and Sinking Immediates/Loads  ;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2575,6 +2591,42 @@
                     lane
                     size))
 
+;; Helper for creating `roundss` instructions.
+(decl x64_roundss (Xmm RoundImm) Xmm)
+(rule (x64_roundss src1 round)
+      (xmm_rm_r_imm (SseOpcode.Roundss)
+                    src1
+                    src1
+                    (encode_round_imm round)
+                    (OperandSize.Size32)))
+
+;; Helper for creating `roundsd` instructions.
+(decl x64_roundsd (Xmm RoundImm) Xmm)
+(rule (x64_roundsd src1 round)
+      (xmm_rm_r_imm (SseOpcode.Roundsd)
+                    src1
+                    src1
+                    (encode_round_imm round)
+                    (OperandSize.Size32)))
+
+;; Helper for creating `roundps` instructions.
+(decl x64_roundps (Xmm RoundImm) Xmm)
+(rule (x64_roundps src1 round)
+      (xmm_rm_r_imm (SseOpcode.Roundps)
+                    src1
+                    src1
+                    (encode_round_imm round)
+                    (OperandSize.Size32)))
+
+;; Helper for creating `roundpd` instructions.
+(decl x64_roundpd (Xmm RoundImm) Xmm)
+(rule (x64_roundpd src1 round)
+      (xmm_rm_r_imm (SseOpcode.Roundpd)
+                    src1
+                    src1
+                    (encode_round_imm round)
+                    (OperandSize.Size32)))
+
 ;; Helper for creating `pmaddwd` instructions.
 (decl x64_pmaddwd (Xmm XmmMem) Xmm)
 (rule (x64_pmaddwd src1 src2)
@@ -2690,7 +2742,7 @@
 (rule (mul_hi ty signed src1 src2)
       (let ((dst_lo WritableGpr (temp_writable_gpr))
             (dst_hi WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
+            (size OperandSize (raw_operand_size_of_type ty))
             (_ Unit (emit (MInst.MulHi size
                                        signed
                                        src1
@@ -3539,6 +3591,36 @@
 (rule (bitcast_gpr_to_xmm $I64 src)
       (gpr_to_xmm (SseOpcode.Movq) src (OperandSize.Size64)))
 
+;;;; Stack Addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl stack_addr_impl (StackSlot Offset32) Gpr)
+(rule (stack_addr_impl stack_slot offset)
+      (let ((dst WritableGpr (temp_writable_gpr))
+           (_ Unit (emit (abi_stackslot_addr dst stack_slot offset))))
+        dst))
+
+;;;; Division/Remainders ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl emit_div_or_rem (DivOrRemKind Type WritableGpr Gpr Gpr) Unit)
+(extern constructor emit_div_or_rem emit_div_or_rem)
+
+(decl div_or_rem (DivOrRemKind Value Value) Gpr)
+(rule (div_or_rem kind a @ (value_type ty) b)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit_div_or_rem kind ty dst a b)))
+        dst))
+
+;;;; Pinned Register ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl read_pinned_gpr () Gpr)
+(rule (read_pinned_gpr)
+      (pinned_writable_gpr))
+
+(decl write_pinned_gpr (Gpr) SideEffectNoResult)
+(rule (write_pinned_gpr val)
+      (let ((dst WritableGpr (pinned_writable_gpr)))
+        (SideEffectNoResult.Inst (gen_move $I64 dst val))))
+
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Gpr InstOutput output_gpr)
@@ -3659,7 +3741,18 @@
 (type LibCall extern
       (enum
         FmaF32
-        FmaF64))
+        FmaF64
+        CeilF32
+        CeilF64
+        FloorF32
+        FloorF64
+        NearestF32
+        NearestF64
+        TruncF32
+        TruncF64))
+
+(decl libcall_1 (LibCall Reg) Reg)
+(extern constructor libcall_1 libcall_1)
 
 (decl libcall_3 (LibCall Reg Reg Reg) Reg)
 (extern constructor libcall_3 libcall_3)

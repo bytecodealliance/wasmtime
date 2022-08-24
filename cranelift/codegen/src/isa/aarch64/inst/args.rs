@@ -653,6 +653,16 @@ impl ScalarSize {
             ScalarSize::Size128 => panic!("can't widen 128-bits"),
         }
     }
+
+    pub fn narrow(&self) -> ScalarSize {
+        match self {
+            ScalarSize::Size8 => panic!("can't narrow 8-bits"),
+            ScalarSize::Size16 => ScalarSize::Size8,
+            ScalarSize::Size32 => ScalarSize::Size16,
+            ScalarSize::Size64 => ScalarSize::Size32,
+            ScalarSize::Size128 => ScalarSize::Size64,
+        }
+    }
 }
 
 /// Type used to communicate the size of a vector operand.

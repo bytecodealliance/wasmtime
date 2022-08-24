@@ -1,0 +1,39 @@
+test interpret
+test run
+target aarch64
+; x86_64 and s390x do not support 64-bit vectors.
+
+function %vconst_zeroes() -> i8x8 {
+block0:
+    v0 = vconst.i8x8 0x00
+    return v0
+}
+; run: %vconst_zeroes() == [0 0 0 0 0 0 0 0]
+
+function %vconst_ones() -> i8x8 {
+block0:
+    v0 = vconst.i8x8 0xffffffffffffffff
+    return v0
+}
+; run: %vconst_ones() == [255 255 255 255 255 255 255 255]
+
+function %vconst_i8x8() -> i8x8 {
+block0:
+    v0 = vconst.i8x8 [0 31 63 95 127 159 191 255]
+    return v0
+}
+; run: %vconst_i8x8() == [0 31 63 95 127 159 191 255]
+
+function %vconst_i16x4() -> i16x4 {
+block0:
+    v0 = vconst.i16x4 [0 255 32767 65535]
+    return v0
+}
+; run: %vconst_i16x4() == [0 255 32767 65535]
+
+function %vconst_i32x2() -> i32x2 {
+block0:
+    v0 = vconst.i32x2 [0 4294967295]
+    return v0
+}
+; run: %vconst_i32x2() == [0 4294967295]

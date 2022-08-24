@@ -2041,47 +2041,19 @@ impl Inst {
                 rd,
                 rn,
                 high_half,
+                lane_size,
             } => {
-                let (op, dest, src) = match (t, high_half) {
-                    (VecExtendOp::Sxtl8, false) => {
-                        ("sxtl", VectorSize::Size16x8, VectorSize::Size8x8)
-                    }
-                    (VecExtendOp::Sxtl8, true) => {
-                        ("sxtl2", VectorSize::Size16x8, VectorSize::Size8x16)
-                    }
-                    (VecExtendOp::Sxtl16, false) => {
-                        ("sxtl", VectorSize::Size32x4, VectorSize::Size16x4)
-                    }
-                    (VecExtendOp::Sxtl16, true) => {
-                        ("sxtl2", VectorSize::Size32x4, VectorSize::Size16x8)
-                    }
-                    (VecExtendOp::Sxtl32, false) => {
-                        ("sxtl", VectorSize::Size64x2, VectorSize::Size32x2)
-                    }
-                    (VecExtendOp::Sxtl32, true) => {
-                        ("sxtl2", VectorSize::Size64x2, VectorSize::Size32x4)
-                    }
-                    (VecExtendOp::Uxtl8, false) => {
-                        ("uxtl", VectorSize::Size16x8, VectorSize::Size8x8)
-                    }
-                    (VecExtendOp::Uxtl8, true) => {
-                        ("uxtl2", VectorSize::Size16x8, VectorSize::Size8x16)
-                    }
-                    (VecExtendOp::Uxtl16, false) => {
-                        ("uxtl", VectorSize::Size32x4, VectorSize::Size16x4)
-                    }
-                    (VecExtendOp::Uxtl16, true) => {
-                        ("uxtl2", VectorSize::Size32x4, VectorSize::Size16x8)
-                    }
-                    (VecExtendOp::Uxtl32, false) => {
-                        ("uxtl", VectorSize::Size64x2, VectorSize::Size32x2)
-                    }
-                    (VecExtendOp::Uxtl32, true) => {
-                        ("uxtl2", VectorSize::Size64x2, VectorSize::Size32x4)
-                    }
+                let vec64 = VectorSize::from_lane_size(lane_size.narrow(), false);
+                let vec128 = VectorSize::from_lane_size(lane_size.narrow(), true);
+                let rd_size = VectorSize::from_lane_size(lane_size, true);
+                let (op, rn_size) = match (t, high_half) {
+                    (VecExtendOp::Sxtl, false) => ("sxtl", vec64),
+                    (VecExtendOp::Sxtl, true) => ("sxtl2", vec128),
+                    (VecExtendOp::Uxtl, false) => ("uxtl", vec64),
+                    (VecExtendOp::Uxtl, true) => ("uxtl2", vec128),
                 };
-                let rd = pretty_print_vreg_vector(rd.to_reg(), dest, allocs);
-                let rn = pretty_print_vreg_vector(rn, src, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), rd_size, allocs);
+                let rn = pretty_print_vreg_vector(rn, rn_size, allocs);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::VecMovElement {

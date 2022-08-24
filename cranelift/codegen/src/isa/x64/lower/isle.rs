@@ -177,6 +177,11 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
+    fn encode_round_imm(&mut self, imm: &RoundImm) -> u8 {
+        imm.encode()
+    }
+
+    #[inline]
     fn avx512vl_enabled(&mut self, _: Type) -> Option<()> {
         if self.isa_flags.use_avx512vl_simd() {
             Some(())
@@ -242,6 +247,15 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     #[inline]
     fn use_fma(&mut self, _: Type) -> Option<()> {
         if self.isa_flags.use_fma() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn use_sse41(&mut self, _: Type) -> Option<()> {
+        if self.isa_flags.use_sse41() {
             Some(())
         } else {
             None
@@ -715,6 +729,24 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         regs::rsp().to_real_reg().unwrap().into()
     }
 
+    fn libcall_1(&mut self, libcall: &LibCall, a: Reg) -> Reg {
+        let call_conv = self.lower_ctx.abi().call_conv();
+        let ret_ty = libcall.signature(call_conv).returns[0].value_type;
+        let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
+
+        emit_vm_call(
+            self.lower_ctx,
+            self.flags,
+            self.triple,
+            libcall.clone(),
+            &[a],
+            &[output_reg],
+        )
+        .expect("Failed to emit LibCall");
+
+        output_reg.to_reg()
+    }
+
     fn libcall_3(&mut self, libcall: &LibCall, a: Reg, b: Reg, c: Reg) -> Reg {
         let call_conv = self.lower_ctx.abi().call_conv();
         let ret_ty = libcall.signature(call_conv).returns[0].value_type;
@@ -815,6 +847,113 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         ];
         self.lower_ctx
             .use_constant(VCodeConstantData::WellKnown(&UMAX_MASK))
+    }
+
+    #[inline]
+    fn pinned_writable_gpr(&mut self) -> WritableGpr {
+        Writable::from_reg(Gpr::new(regs::pinned_reg()).unwrap())
+    }
+
+    fn emit_div_or_rem(
+        &mut self,
+        kind: &DivOrRemKind,
+        ty: Type,
+        dst: WritableGpr,
+        dividend: Gpr,
+        divisor: Gpr,
+    ) {
+        let is_div = kind.is_div();
+        let size = OperandSize::from_ty(ty);
+
+        self.lower_ctx.emit(MInst::gen_move(
+            Writable::from_reg(regs::rax()),
+            dividend.to_reg(),
+            ty,
+        ));
+
+        // Always do explicit checks for `srem`: otherwise, INT_MIN % -1 is not handled properly.
+        if self.flags.avoid_div_traps() || *kind == DivOrRemKind::SignedRem {
+            // A vcode meta-instruction is used to lower the inline checks, since they embed
+            // pc-relative offsets that must not change, thus requiring regalloc to not
+            // interfere by introducing spills and reloads.
+            //
+            // Note it keeps the result in $rax (for divide) or $rdx (for rem), so that
+            // regalloc is aware of the coalescing opportunity between rax/rdx and the
+            // destination register.
+            let divisor_copy = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
+            self.lower_ctx
+                .emit(MInst::gen_move(divisor_copy, divisor.to_reg(), types::I64));
+
+            let tmp = if *kind == DivOrRemKind::SignedDiv && size == OperandSize::Size64 {
+                Some(self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap())
+            } else {
+                None
+            };
+            // TODO use xor
+            self.lower_ctx.emit(MInst::imm(
+                OperandSize::Size32,
+                0,
+                Writable::from_reg(regs::rdx()),
+            ));
+            self.lower_ctx.emit(MInst::checked_div_or_rem_seq(
+                kind.clone(),
+                size,
+                divisor_copy,
+                tmp,
+            ));
+        } else {
+            // We don't want more than one trap record for a single instruction,
+            // so let's not allow the "mem" case (load-op merging) here; force
+            // divisor into a register instead.
+            let divisor = RegMem::reg(divisor.to_reg());
+
+            // Fill in the high parts:
+            if kind.is_signed() {
+                // sign-extend the sign-bit of al into ah for size 1, or rax into rdx, for
+                // signed opcodes.
+                self.lower_ctx.emit(MInst::sign_extend_data(size));
+            } else if ty == types::I8 {
+                self.lower_ctx.emit(MInst::movzx_rm_r(
+                    ExtMode::BL,
+                    RegMem::reg(regs::rax()),
+                    Writable::from_reg(regs::rax()),
+                ));
+            } else {
+                // zero for unsigned opcodes.
+                self.lower_ctx.emit(MInst::imm(
+                    OperandSize::Size64,
+                    0,
+                    Writable::from_reg(regs::rdx()),
+                ));
+            }
+
+            // Emit the actual idiv.
+            self.lower_ctx
+                .emit(MInst::div(size, kind.is_signed(), divisor));
+        }
+
+        // Move the result back into the destination reg.
+        if is_div {
+            // The quotient is in rax.
+            self.lower_ctx
+                .emit(MInst::gen_move(dst.to_writable_reg(), regs::rax(), ty));
+        } else {
+            if size == OperandSize::Size8 {
+                // The remainder is in AH. Right-shift by 8 bits then move from rax.
+                self.lower_ctx.emit(MInst::shift_r(
+                    OperandSize::Size64,
+                    ShiftKind::ShiftRightLogical,
+                    Some(8),
+                    Writable::from_reg(regs::rax()),
+                ));
+                self.lower_ctx
+                    .emit(MInst::gen_move(dst.to_writable_reg(), regs::rax(), ty));
+            } else {
+                // The remainder is in rdx.
+                self.lower_ctx
+                    .emit(MInst::gen_move(dst.to_writable_reg(), regs::rdx(), ty));
+            }
+        }
     }
 }
 

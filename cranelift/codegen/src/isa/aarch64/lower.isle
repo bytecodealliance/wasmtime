@@ -1628,6 +1628,15 @@
 (rule (lower (resumable_trap trap_code))
       (side_effect (udf trap_code)))
 
+;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec128 _) (vconst (u128_from_constant x))))
+      (constant_f128 x))
+
+(rule (lower (has_type ty (vconst (u64_from_constant x))))
+      (if (ty_vec64 ty))
+      (constant_f64 x))
+
 ;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (splat x @ (value_type in_ty))))
@@ -1808,6 +1817,48 @@
             (result Reg (uqxtn2 low_half y (lane_size ty))))
         result))
 
+;;;; Rules for `swiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (swiden_low x)))
+      (vec_extend (VecExtendOp.Sxtl) x $false (lane_size ty)))
+
+;;;; Rules for `swiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec128 ty) (swiden_high x)))
+      (vec_extend (VecExtendOp.Sxtl) x $true (lane_size ty)))
+
+(rule (lower (has_type ty (swiden_high x)))
+      (if (ty_vec64 ty))
+      (let ((tmp Reg (fpu_move_from_vec x 1 (VectorSize.Size32x2))))
+       (vec_extend (VecExtendOp.Sxtl) tmp $false (lane_size ty))))
+
+;;;; Rules for `uwiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (uwiden_low x)))
+      (vec_extend (VecExtendOp.Uxtl) x $false (lane_size ty)))
+
+;;;; Rules for `uwiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec128 ty) (uwiden_high x)))
+      (vec_extend (VecExtendOp.Uxtl) x $true (lane_size ty)))
+
+(rule (lower (has_type ty (uwiden_high x)))
+      (if (ty_vec64 ty))
+      (let ((tmp Reg (fpu_move_from_vec x 1 (VectorSize.Size32x2))))
+       (vec_extend (VecExtendOp.Uxtl) tmp $false (lane_size ty))))
+
+;;;; Rules for `widening_pairwise_dot_product_s` ;;;;;;;;;;;;;;;;;;;;;;
+
+;; The args have type I16X8.
+;; "dst = i32x4.dot_i16x8_s(x, y)"
+;; => smull  tmp, x, y
+;;    smull2 dst, x, y
+;;    addp   dst, tmp, dst
+(rule (lower (has_type $I32X4 (widening_pairwise_dot_product_s x y)))
+      (let ((tmp Reg (vec_rrr_long (VecRRRLongOp.Smull16) x y $false))
+            (dst Reg (vec_rrr_long (VecRRRLongOp.Smull16) x y $true)))
+       (vec_rrr (VecALUOp.Addp) tmp dst (VectorSize.Size32x4))))
+
 ;;;; Rules for `Fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (fence))
@@ -1831,6 +1882,16 @@
 
 (rule (lower (debugtrap))
       (side_effect (brk)))
+
+;;;; Rules for `func_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (func_addr (func_ref_data _ extname _)))
+      (load_ext_name (box_external_name extname) 0))
+
+;;;; Rules for `symbol_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (symbol_value (symbol_value_data extname _ offset)))
+      (load_ext_name (box_external_name extname) offset))
 
 ;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;;
 

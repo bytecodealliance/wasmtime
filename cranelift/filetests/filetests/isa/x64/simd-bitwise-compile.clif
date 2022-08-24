@@ -141,11 +141,11 @@ block0:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   load_const VCodeConstant(0), %xmm0
-;   load_const VCodeConstant(0), %xmm5
-;   load_const VCodeConstant(0), %xmm4
-;   pand    %xmm5, %xmm0, %xmm5
-;   pandn   %xmm0, %xmm4, %xmm0
-;   por     %xmm0, %xmm5, %xmm0
+;   load_const VCodeConstant(0), %xmm2
+;   load_const VCodeConstant(0), %xmm6
+;   pand    %xmm2, %xmm0, %xmm2
+;   pandn   %xmm0, %xmm6, %xmm0
+;   por     %xmm0, %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -207,12 +207,12 @@ block0(v0: i32):
 ; block0:
 ;   load_const VCodeConstant(1), %xmm0
 ;   andq    %rdi, $7, %rdi
-;   movd    %edi, %xmm7
-;   psllw   %xmm0, %xmm7, %xmm0
+;   movd    %edi, %xmm6
+;   psllw   %xmm0, %xmm6, %xmm0
 ;   lea     const(VCodeConstant(0)), %rax
 ;   shlq    $4, %rdi, %rdi
-;   movdqu  0(%rax,%rdi,1), %xmm15
-;   pand    %xmm0, %xmm15, %xmm0
+;   movdqu  0(%rax,%rdi,1), %xmm14
+;   pand    %xmm0, %xmm14, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -229,14 +229,14 @@ block0:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   load_const VCodeConstant(1), %xmm0
-;   movl    $1, %r11d
-;   andq    %r11, $7, %r11
-;   movd    %r11d, %xmm7
-;   psrlw   %xmm0, %xmm7, %xmm0
-;   lea     const(VCodeConstant(0)), %rax
-;   shlq    $4, %r11, %r11
-;   movdqu  0(%rax,%r11,1), %xmm15
-;   pand    %xmm0, %xmm15, %xmm0
+;   movl    $1, %r10d
+;   andq    %r10, $7, %r10
+;   movd    %r10d, %xmm6
+;   psrlw   %xmm0, %xmm6, %xmm0
+;   lea     const(VCodeConstant(0)), %rdi
+;   shlq    $4, %r10, %r10
+;   movdqu  0(%rdi,%r10,1), %xmm14
+;   pand    %xmm0, %xmm14, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -251,16 +251,16 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_const VCodeConstant(0), %xmm10
+;   load_const VCodeConstant(0), %xmm9
 ;   andq    %rdi, $7, %rdi
-;   movdqa  %xmm10, %xmm0
-;   punpcklbw %xmm0, %xmm10, %xmm0
-;   punpckhbw %xmm10, %xmm10, %xmm10
+;   movdqa  %xmm9, %xmm0
+;   punpcklbw %xmm0, %xmm9, %xmm0
+;   punpckhbw %xmm9, %xmm9, %xmm9
 ;   addl    %edi, $8, %edi
-;   movd    %edi, %xmm13
-;   psraw   %xmm0, %xmm13, %xmm0
-;   psraw   %xmm10, %xmm13, %xmm10
-;   packsswb %xmm0, %xmm10, %xmm0
+;   movd    %edi, %xmm12
+;   psraw   %xmm0, %xmm12, %xmm0
+;   psraw   %xmm9, %xmm12, %xmm9
+;   packsswb %xmm0, %xmm9, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
