@@ -8,22 +8,48 @@ use std::sync::Once;
 use wasmtime::Trap;
 use wasmtime_fuzzing::generators::{Config, DiffValue, DiffValueType, SingleInstModule};
 use wasmtime_fuzzing::oracles::diff_wasmtime::WasmtimeInstance;
+use wasmtime_fuzzing::oracles::engine::{build_allowed_env_list, parse_env_list};
 use wasmtime_fuzzing::oracles::{differential, engine, log_wasm};
 
 // Upper limit on the number of invocations for each WebAssembly function
 // executed by this fuzz target.
 const NUM_INVOCATIONS: usize = 5;
 
+// Only run once when the fuzz target loads.
+static SETUP: Once = Once::new();
+
+// Environment-specified configuration for controlling the kinds of engines and
+// modules used by this fuzz target. E.g.:
+// - ALLOWED_ENGINES=wasmi,spec cargo +nightly fuzz run ...
+// - ALLOWED_ENGINES=-v8 cargo +nightly fuzz run ...
+// - ALLOWED_MODULES=single-inst cargo +nightly fuzz run ...
+static mut ALLOWED_ENGINES: Vec<&str> = vec![];
+static mut ALLOWED_MODULES: Vec<&str> = vec![];
+
 // Statistics about what's actually getting executed during fuzzing
 static STATS: RuntimeStats = RuntimeStats::new();
 
-// The spec interpreter requires special one-time setup.
-static SETUP: Once = Once::new();
-
 fuzz_target!(|data: &[u8]| {
-    // To avoid a uncaught `SIGSEGV` due to signal handlers; see comments on
-    // `setup_ocaml_runtime`.
-    SETUP.call_once(|| engine::setup_engine_runtimes());
+    SETUP.call_once(|| {
+        // To avoid a uncaught `SIGSEGV` due to signal handlers; see comments on
+        // `setup_ocaml_runtime`.
+        engine::setup_engine_runtimes();
+
+        // Retrieve the configuration for this fuzz target from `ALLOWED_*`
+        // environment variables.
+        let allowed_engines = build_allowed_env_list(
+            parse_env_list("ALLOWED_ENGINES"),
+            &["wasmtime", "wasmi", "spec", "v8"],
+        );
+        let allowed_modules = build_allowed_env_list(
+            parse_env_list("ALLOWED_MODULES"),
+            &["wasm-smith", "single-inst"],
+        );
+        unsafe {
+            ALLOWED_ENGINES = allowed_engines;
+            ALLOWED_MODULES = allowed_modules;
+        }
+    });
 
     // Errors in `run` have to do with not enough input in `data`, which we
     // ignore here since it doesn't affect how we'd like to fuzz.
@@ -37,20 +63,31 @@ fn run(data: &[u8]) -> Result<()> {
     let mut config: Config = u.arbitrary()?;
     config.set_differential_config();
 
-    // Generate the Wasm module.
-    let wasm = if u.arbitrary()? {
+    // Generate the Wasm module; this is specified by either the ALLOWED_MODULES
+    // environment variable or a random selection between wasm-smith and
+    // single-inst.
+    let build_wasm_smith_module = |u: &mut Unstructured, config: &mut Config| -> Result<_> {
         STATS.wasm_smith_modules.fetch_add(1, SeqCst);
-        let module = config.generate(&mut u, Some(1000))?;
-        module.to_bytes()
-    } else {
+        let module = config.generate(u, Some(1000))?;
+        Ok(module.to_bytes())
+    };
+    let build_single_inst_module = |u: &mut Unstructured, config: &mut Config| -> Result<_> {
         STATS.single_instruction_modules.fetch_add(1, SeqCst);
-        let module = SingleInstModule::new(&mut u, &mut config.module_config)?;
-        module.to_bytes()
+        let module = SingleInstModule::new(u, &mut config.module_config)?;
+        Ok(module.to_bytes())
+    };
+    if unsafe { ALLOWED_MODULES.is_empty() } {
+        panic!("unable to generate a module to fuzz against; check `ALLOWED_MODULES`")
+    }
+    let wasm = match *u.choose(unsafe { ALLOWED_MODULES.as_slice() })? {
+        "wasm-smith" => build_wasm_smith_module(&mut u, &mut config)?,
+        "single-inst" => build_single_inst_module(&mut u, &mut config)?,
+        _ => unreachable!(),
     };
     log_wasm(&wasm);
 
     // Choose a left-hand side Wasm engine.
-    let mut lhs = engine::choose(&mut u, &config)?;
+    let mut lhs = engine::choose(&mut u, &config, unsafe { &ALLOWED_ENGINES })?;
     let lhs_instance = lhs.instantiate(&wasm);
     STATS.bump_engine(lhs.name());
 
