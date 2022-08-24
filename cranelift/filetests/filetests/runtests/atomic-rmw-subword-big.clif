@@ -5,7 +5,7 @@ target s390x has_mie2
 ; We can't test that these instructions are right regarding atomicity, but we can
 ; test if they perform their operation correctly
 
-function %rmw_add_big_i16(i32, i64, i16) -> i32 {
+function %atomic_rmw_add_big_i16(i32, i64, i16) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i16):
@@ -18,12 +18,12 @@ block0(v0: i32, v1: i64, v2: i16):
     v6 = load.i32 big v3
     return v6
 }
-; run: %rmw_add_big_i16(0x12345678, 0, 0x1111) == 0x23455678
-; run: %rmw_add_big_i16(0x12345678, 0, 0xffff) == 0x12335678
-; run: %rmw_add_big_i16(0x12345678, 2, 0x1111) == 0x12346789
-; run: %rmw_add_big_i16(0x12345678, 2, 0xffff) == 0x12345677
+; run: %atomic_rmw_add_big_i16(0x12345678, 0, 0x1111) == 0x23455678
+; run: %atomic_rmw_add_big_i16(0x12345678, 0, 0xffff) == 0x12335678
+; run: %atomic_rmw_add_big_i16(0x12345678, 2, 0x1111) == 0x12346789
+; run: %atomic_rmw_add_big_i16(0x12345678, 2, 0xffff) == 0x12345677
 
-function %rmw_add_big_i8(i32, i64, i8) -> i32 {
+function %atomic_rmw_add_big_i8(i32, i64, i8) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i64, v2: i8):
@@ -36,14 +36,14 @@ block0(v0: i32, v1: i64, v2: i8):
     v6 = load.i32 big v3
     return v6
 }
-; run: %rmw_add_big_i8(0x12345678, 0, 0x11) == 0x23345678
-; run: %rmw_add_big_i8(0x12345678, 0, 0xff) == 0x11345678
-; run: %rmw_add_big_i8(0x12345678, 1, 0x11) == 0x12455678
-; run: %rmw_add_big_i8(0x12345678, 1, 0xff) == 0x12335678
-; run: %rmw_add_big_i8(0x12345678, 2, 0x11) == 0x12346778
-; run: %rmw_add_big_i8(0x12345678, 2, 0xff) == 0x12345578
-; run: %rmw_add_big_i8(0x12345678, 3, 0x11) == 0x12345689
-; run: %rmw_add_big_i8(0x12345678, 3, 0xff) == 0x12345677
+; run: %atomic_rmw_add_big_i8(0x12345678, 0, 0x11) == 0x23345678
+; run: %atomic_rmw_add_big_i8(0x12345678, 0, 0xff) == 0x11345678
+; run: %atomic_rmw_add_big_i8(0x12345678, 1, 0x11) == 0x12455678
+; run: %atomic_rmw_add_big_i8(0x12345678, 1, 0xff) == 0x12335678
+; run: %atomic_rmw_add_big_i8(0x12345678, 2, 0x11) == 0x12346778
+; run: %atomic_rmw_add_big_i8(0x12345678, 2, 0xff) == 0x12345578
+; run: %atomic_rmw_add_big_i8(0x12345678, 3, 0x11) == 0x12345689
+; run: %atomic_rmw_add_big_i8(0x12345678, 3, 0xff) == 0x12345677
 
 function %rmw_sub_big_i16(i32, i64, i16) -> i32 {
     ss0 = explicit_slot 4

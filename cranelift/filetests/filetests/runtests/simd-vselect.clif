@@ -25,7 +25,7 @@ block0:
 }
 ; run: %vselect_i16x8() == [200 101 202 103 204 105 106 107]
 
-function %vselect_i32x4_c() -> i32x4 {
+function %vselect_i32x4_const() -> i32x4 {
 block0:
     v1 = vconst.b32x4 [false true false true]
     v2 = vconst.i32x4 [100 101 102 103]
@@ -33,7 +33,7 @@ block0:
     v4 = vselect v1, v2, v3
     return v4
 }
-; run: %vselect_i32x4_c() == [200 101 202 103]
+; run: %vselect_i32x4_const() == [200 101 202 103]
 
 function %vselect_i32x4(b32x4, i32x4, i32x4) -> i32x4 {
 block0(v0: b32x4, v1: i32x4, v2: i32x4):

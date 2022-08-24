@@ -77,19 +77,19 @@ block0(v1: f32x4, v2: f32):
 }
 ; run: %insertlane_f32x4_second([0.0 0.0 0.0 0.0], 0x42.42) == [0.0 0x42.42 0.0 0.0]
 
-function %inslane_f64x2_first(f64x2, f64) -> f64x2 {
+function %insertlane_f64x2_first(f64x2, f64) -> f64x2 {
 block0(v1: f64x2, v2: f64):
     v3 = insertlane v1, v2, 0
     return v3
 }
-; run: %inslane_f64x2_first([0.0 0.0], 0x42.42) == [0x42.42 0.0]
+; run: %insertlane_f64x2_first([0.0 0.0], 0x42.42) == [0x42.42 0.0]
 
-function %inslane_f64x2_second(f64x2, f64) -> f64x2 {
+function %insertlane_f64x2_second(f64x2, f64) -> f64x2 {
 block0(v1: f64x2, v2: f64):
     v3 = insertlane v1, v2, 1
     return v3
 }
-; run: %inslane_f64x2_second([0.0 0.0], 0x42.42) == [0.0 0x42.42]
+; run: %insertlane_f64x2_second([0.0 0.0], 0x42.42) == [0.0 0x42.42]
 
 
 
