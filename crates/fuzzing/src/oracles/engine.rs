@@ -12,13 +12,13 @@ use wasmtime::Trap;
 pub fn choose(
     u: &mut Unstructured<'_>,
     existing_config: &Config,
-    allowed: &[String],
+    allowed: &[&str],
 ) -> arbitrary::Result<Box<dyn DiffEngine>> {
     // Filter out any engines that cannot match the `existing_config` or are not
     // `allowed`.
     let mut engines: Vec<Box<dyn DiffEngine>> = vec![];
 
-    if allowed.iter().any(|a| a == "wasmtime") {
+    if allowed.contains(&"wasmtime") {
         let mut new_wasmtime_config: WasmtimeConfig = u.arbitrary()?;
         new_wasmtime_config.make_compatible_with(&existing_config.wasmtime);
         let new_config = Config {
@@ -30,14 +30,14 @@ pub fn choose(
         }
     }
 
-    if allowed.iter().any(|a| a == "wasmi") {
+    if allowed.contains(&"wasmi") {
         if let Result::Ok(e) = WasmiEngine::new(&existing_config.module_config) {
             engines.push(Box::new(e))
         }
     }
 
     #[cfg(feature = "fuzz-spec-interpreter")]
-    if allowed.iter().any(|a| a == "spec") {
+    if allowed.contains(&"spec") {
         if let Result::Ok(e) =
             crate::oracles::diff_spec::SpecInterpreter::new(&existing_config.module_config)
         {
@@ -46,7 +46,7 @@ pub fn choose(
     }
 
     #[cfg(not(any(windows, target_arch = "s390x")))]
-    if allowed.iter().any(|a| a == "v8") {
+    if allowed.contains(&"v8") {
         if let Result::Ok(e) =
             crate::oracles::diff_v8::V8Engine::new(&existing_config.module_config)
         {
@@ -127,55 +127,48 @@ pub fn setup_engine_runtimes() {
 /// // will panic:
 /// build_allowed_env_list(Some(vec!["-a".to_string(), "b".to_string()]), &["a", "b"]);
 /// ```
-pub fn build_allowed_env_list(env_list: Option<Vec<String>>, defaults: &[&str]) -> Vec<String> {
+/// ```should_panic
+/// # use wasmtime_fuzzing::oracles::engine::build_allowed_env_list;
+/// // This will also panic if invalid values are used:
+/// build_allowed_env_list(Some(vec!["c".to_string()]), &["a", "b"]);
+/// ```
+pub fn build_allowed_env_list<'a>(
+    env_list: Option<Vec<String>>,
+    defaults: &[&'a str],
+) -> Vec<&'a str> {
     if let Some(configured) = &env_list {
+        // Check that the names are either all additions or all subtractions.
         let subtract_from_defaults = configured.iter().all(|c| c.starts_with("-"));
         let add_from_defaults = configured.iter().all(|c| !c.starts_with("-"));
-        if subtract_from_defaults {
-            // Strip all "-" from subtraction strings; check that the values are
-            // valid.
-            let mut configured_stripped = Vec::with_capacity(configured.len());
-            for c in configured {
-                let c = &c[1..];
-                if !defaults.contains(&c) {
-                    panic!(
-                        "invalid environment configuration `{}`; must be one of: {:?}",
-                        c, defaults
-                    );
-                } else {
-                    configured_stripped.push(c);
-                }
-            }
-            // Allow all defaults that aren't subtracted.
-            let mut allowed = Vec::with_capacity(defaults.len());
-            for &d in defaults {
-                if !configured_stripped.contains(&d) {
-                    allowed.push(d.to_owned());
-                }
-            }
-            allowed
-        } else if add_from_defaults {
-            // Allow all passed values if they are valid defaults.
-            let mut allowed = Vec::with_capacity(configured.len());
-            for c in configured {
-                if defaults.contains(&&c[..]) {
-                    allowed.push(c.to_owned());
-                } else {
-                    panic!(
-                        "invalid environment configuration `{}`; must be one of: {:?}",
-                        c, defaults
-                    );
-                }
-            }
-            allowed
-        } else {
+        let keep = if subtract_from_defaults { 1.. } else { 0.. };
+        if !subtract_from_defaults && !add_from_defaults {
             panic!(
-                "all values must either subtract or add from defaults; found mixed values: {:?}",
+                "all configured values must either subtract or add from defaults; found mixed values: {:?}",
                 &env_list
             );
         }
+
+        // Check that the configured names are valid ones.
+        for c in configured {
+            if !defaults.contains(&&c[keep.clone()]) {
+                panic!(
+                    "invalid environment configuration `{}`; must be one of: {:?}",
+                    c, defaults
+                );
+            }
+        }
+
+        // Select only the allowed names.
+        let mut allowed = Vec::with_capacity(defaults.len());
+        for &d in defaults {
+            let mentioned = configured.iter().any(|c| &c[keep.clone()] == d);
+            if (add_from_defaults && mentioned) || (subtract_from_defaults && !mentioned) {
+                allowed.push(d);
+            }
+        }
+        allowed
     } else {
-        defaults.iter().map(|&s| s.to_owned()).collect()
+        defaults.to_vec()
     }
 }
 

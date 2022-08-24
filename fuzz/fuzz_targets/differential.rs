@@ -23,8 +23,8 @@ static SETUP: Once = Once::new();
 // - ALLOWED_ENGINES=wasmi,spec cargo +nightly fuzz run ...
 // - ALLOWED_ENGINES=-v8 cargo +nightly fuzz run ...
 // - ALLOWED_MODULES=single-inst cargo +nightly fuzz run ...
-static mut ALLOWED_ENGINES: Vec<String> = vec![];
-static mut ALLOWED_MODULES: Vec<String> = vec![];
+static mut ALLOWED_ENGINES: Vec<&str> = vec![];
+static mut ALLOWED_MODULES: Vec<&str> = vec![];
 
 // Statistics about what's actually getting executed during fuzzing
 static STATS: RuntimeStats = RuntimeStats::new();
@@ -76,10 +76,10 @@ fn run(data: &[u8]) -> Result<()> {
         let module = SingleInstModule::new(u, &mut config.module_config)?;
         Ok(module.to_bytes())
     };
-    if unsafe { ALLOWED_MODULES }.is_empty() {
+    if unsafe { ALLOWED_MODULES.is_empty() } {
         panic!("unable to generate a module to fuzz against; check `ALLOWED_MODULES`")
     }
-    let wasm = match u.choose(unsafe { &ALLOWED_MODULES.as_slice() }).unwrap() {
+    let wasm = match *u.choose(unsafe { ALLOWED_MODULES.as_slice() })? {
         "wasm-smith" => build_wasm_smith_module(&mut u, &mut config)?,
         "single-inst" => build_single_inst_module(&mut u, &mut config)?,
         _ => unreachable!(),
