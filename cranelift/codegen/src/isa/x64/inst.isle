@@ -3660,6 +3660,12 @@
 (decl perm_from_mask (VecMask) VCodeConstant)
 (extern constructor perm_from_mask perm_from_mask)
 
+;;;; Swizzle ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Create a mask for zeroing out-of-bounds lanes of the swizzle mask.
+(decl swizzle_zero_mask () VCodeConstant)
+(extern constructor swizzle_zero_mask swizzle_zero_mask)
+
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Gpr InstOutput output_gpr)

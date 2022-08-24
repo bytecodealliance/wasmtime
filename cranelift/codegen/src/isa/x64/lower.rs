@@ -585,51 +585,12 @@ fn lower_insn_to_regs(
         | Opcode::Vconst
         | Opcode::RawBitcast
         | Opcode::Insertlane
-        | Opcode::Shuffle => {
+        | Opcode::Shuffle
+        | Opcode::Swizzle => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::Swizzle => {
-            // SIMD swizzle; the following inefficient implementation is due to the Wasm SIMD spec
-            // requiring mask indexes greater than 15 to have the same semantics as a 0 index. For
-            // the spec discussion, see https://github.com/WebAssembly/simd/issues/93. The CLIF
-            // semantics match the Wasm SIMD semantics for this instruction.
-            // The instruction format maps to variables like: %dst = swizzle %src, %mask
-            let ty = ty.unwrap();
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let src = put_input_in_reg(ctx, inputs[0]);
-            let swizzle_mask = put_input_in_reg(ctx, inputs[1]);
-
-            // Inform the register allocator that `src` and `dst` should be in the same register.
-            ctx.emit(Inst::gen_move(dst, src, ty));
-
-            // Create a mask for zeroing out-of-bounds lanes of the swizzle mask.
-            let zero_mask = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
-            static ZERO_MASK_VALUE: [u8; 16] = [
-                0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70,
-                0x70, 0x70,
-            ];
-            let constant = ctx.use_constant(VCodeConstantData::WellKnown(&ZERO_MASK_VALUE));
-            ctx.emit(Inst::xmm_load_const(constant, zero_mask, ty));
-
-            // Use the `zero_mask` on a writable `swizzle_mask`.
-            let swizzle_mask_tmp = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
-            ctx.emit(Inst::gen_move(swizzle_mask_tmp, swizzle_mask, ty));
-            ctx.emit(Inst::xmm_rm_r(
-                SseOpcode::Paddusb,
-                RegMem::from(zero_mask),
-                swizzle_mask_tmp,
-            ));
-
-            // Shuffle `dst` using the fixed-up `swizzle_mask`.
-            ctx.emit(Inst::xmm_rm_r(
-                SseOpcode::Pshufb,
-                RegMem::from(swizzle_mask_tmp),
-                dst,
-            ));
-        }
 
         Opcode::Extractlane => {
             // The instruction format maps to variables like: %dst = extractlane %src, %lane

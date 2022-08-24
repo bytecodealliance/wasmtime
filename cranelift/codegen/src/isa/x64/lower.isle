@@ -3534,3 +3534,17 @@
       (x64_por
         (x64_pshufb a (x64_xmm_load_const $I8X16 (shuffle_0_15_mask mask)))
         (x64_pshufb b (x64_xmm_load_const $I8X16 (shuffle_16_31_mask mask)))))
+
+;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; SIMD swizzle; the following inefficient implementation is due to the Wasm
+;; SIMD spec requiring mask indexes greater than 15 to have the same semantics
+;; as a 0 index. For the spec discussion, see
+;; https://github.com/WebAssembly/simd/issues/93. The CLIF semantics match the
+;; Wasm SIMD semantics for this instruction. The instruction format maps to
+;; variables like: %dst = swizzle %src, %mask
+(rule (lower (swizzle src mask))
+      (let ((mask Xmm (x64_paddusb
+                        mask
+                        (x64_xmm_load_const $I8X16 (swizzle_zero_mask)))))
+        (x64_pshufb src mask)))

@@ -907,6 +907,13 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
             .use_constant(VCodeConstantData::Generated(mask))
     }
 
+    #[inline]
+    fn swizzle_zero_mask(&mut self) -> VCodeConstant {
+        static ZERO_MASK_VALUE: [u8; 16] = [0x70; 16];
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&ZERO_MASK_VALUE))
+    }
+
     fn emit_div_or_rem(
         &mut self,
         kind: &DivOrRemKind,
