@@ -12,7 +12,6 @@ use std::convert::TryInto;
 use std::io;
 #[cfg(unix)]
 use system_interface::fs::GetSetFdFlags;
-#[cfg(unix)]
 use system_interface::io::IoExt;
 use system_interface::io::IsReadWrite;
 use system_interface::io::ReadReady;
