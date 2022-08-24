@@ -1400,6 +1400,9 @@
 (decl avx512bitalg_enabled () Type)
 (extern extractor avx512bitalg_enabled avx512bitalg_enabled)
 
+(decl avx512vbmi_enabled () Type)
+(extern extractor avx512vbmi_enabled avx512vbmi_enabled)
+
 (decl use_lzcnt () Type)
 (extern extractor use_lzcnt use_lzcnt)
 
@@ -2740,6 +2743,19 @@
                      src1
                      src2))
 
+;; Helper for creating `vpermi2b` instructions.
+;;
+;; Requires AVX-512 vl and vbmi extensions.
+(decl x64_vpermi2b (Xmm Xmm Xmm) Xmm)
+(rule (x64_vpermi2b src1 src2 src3)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (gen_move $I8X16 dst src3)))
+            (_ Unit (emit (MInst.XmmRmREvex (Avx512Opcode.Vpermi2b)
+                                            src1
+                                            src2
+                                            dst))))
+        dst))
+
 ;; Helper for creating `MInst.MulHi` instructions.
 ;;
 ;; Returns the (lo, hi) register halves of the multiplication.
@@ -3633,6 +3649,47 @@
 (rule (write_pinned_gpr val)
       (let ((dst WritableGpr (pinned_writable_gpr)))
         (SideEffectNoResult.Inst (gen_move $I64 dst val))))
+
+;;;; Shuffle ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Produce a mask suitable for use with `pshufb` for permuting the argument to
+;; shuffle, when the arguments are the same (i.e. `shuffle a a mask`). This will
+;; map all indices in the range 0..31 to the range 0..15.
+(decl shuffle_0_31_mask (VecMask) VCodeConstant)
+(extern constructor shuffle_0_31_mask shuffle_0_31_mask)
+
+;; Produce a mask suitable for use with `pshufb` for permuting the lhs of a
+;; `shuffle` operation (lanes 0-15).
+(decl shuffle_0_15_mask (VecMask) VCodeConstant)
+(extern constructor shuffle_0_15_mask shuffle_0_15_mask)
+
+;; Produce a mask suitable for use with `pshufb` for permuting the rhs of a
+;; `shuffle` operation (lanes 16-31).
+(decl shuffle_16_31_mask (VecMask) VCodeConstant)
+(extern constructor shuffle_16_31_mask shuffle_16_31_mask)
+
+;; Produce a permutation suitable for use with `vpermi2b`, for permuting two
+;; I8X16 vectors simultaneously.
+;;
+;; NOTE: `vpermi2b` will mask the indices in each lane to 5 bits when indexing
+;; into vectors, so this constructor makes no effort to handle indices that are
+;; larger than 31. If you are lowering a clif opcode like `shuffle` that has
+;; special behavior for out of bounds indices (emitting a `0` in the resulting
+;; vector in the case of `shuffle`) you'll need to handle that behavior
+;; separately.
+(decl perm_from_mask (VecMask) VCodeConstant)
+(extern constructor perm_from_mask perm_from_mask)
+
+;; If the mask that would be given to `shuffle` contains any out-of-bounds
+;; indices, return a mask that will zero those.
+(decl perm_from_mask_with_zeros (VCodeConstant VCodeConstant) VecMask)
+(extern extractor perm_from_mask_with_zeros perm_from_mask_with_zeros)
+
+;;;; Swizzle ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Create a mask for zeroing out-of-bounds lanes of the swizzle mask.
+(decl swizzle_zero_mask () VCodeConstant)
+(extern constructor swizzle_zero_mask swizzle_zero_mask)
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

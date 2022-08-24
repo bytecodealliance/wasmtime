@@ -66,6 +66,18 @@ impl Inst {
             dst_hi: WritableGpr::from_reg(Gpr::new(regs::rdx()).unwrap()),
         }
     }
+
+    fn xmm_rm_r_evex(op: Avx512Opcode, src1: RegMem, src2: Reg, dst: Writable<Reg>) -> Self {
+        src1.assert_regclass_is(RegClass::Float);
+        debug_assert!(src2.class() == RegClass::Float);
+        debug_assert!(dst.to_reg().class() == RegClass::Float);
+        Inst::XmmRmREvex {
+            op,
+            src1: XmmMem::new(src1).unwrap(),
+            src2: Xmm::new(src2).unwrap(),
+            dst: WritableXmm::from_writable_reg(dst).unwrap(),
+        }
+    }
 }
 
 #[test]

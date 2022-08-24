@@ -3500,3 +3500,50 @@
 ;; register allocator a definition for the output virtual register.
 (rule (lower (raw_bitcast val))
       (put_in_regs val))
+
+;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; If `lhs` and `rhs` are the same we can use a single PSHUFB to shuffle the XMM
+;; register. We statically build `constructed_mask` to zero out any unknown lane
+;; indices (may not be completely necessary: verification could fail incorrect
+;; mask values) and fix the indexes to all point to the `dst` vector.
+(rule (lower (shuffle a a (vec_mask_from_immediate mask)))
+      (x64_pshufb a (x64_xmm_load_const $I8X16 (shuffle_0_31_mask mask))))
+
+;; For the case where the shuffle mask contains out-of-bounds values (values
+;; greater than 31) we must mask off those resulting values in the result of
+;; `vpermi2b`.
+(rule (lower (has_type (and (avx512vl_enabled) (avx512vbmi_enabled))
+                       (shuffle a b (vec_mask_from_immediate
+                                      (perm_from_mask_with_zeros mask zeros)))))
+      (x64_andps
+        (x64_xmm_load_const $I8X16 zeros)
+        (x64_vpermi2b b a (x64_xmm_load_const $I8X16 mask))))
+
+;; However, if the shuffle mask contains no out-of-bounds values, we can use
+;; `vpermi2b` without any masking.
+(rule (lower (has_type (and (avx512vl_enabled) (avx512vbmi_enabled))
+                       (shuffle a b (vec_mask_from_immediate mask))))
+      (x64_vpermi2b b a (x64_xmm_load_const $I8X16 (perm_from_mask mask))))
+
+;; If `lhs` and `rhs` are different, we must shuffle each separately and then OR
+;; them together. This is necessary due to PSHUFB semantics. As in the case
+;; above, we build the `constructed_mask` for each case statically.
+(rule (lower (shuffle a b (vec_mask_from_immediate mask)))
+      (x64_por
+        (x64_pshufb a (x64_xmm_load_const $I8X16 (shuffle_0_15_mask mask)))
+        (x64_pshufb b (x64_xmm_load_const $I8X16 (shuffle_16_31_mask mask)))))
+
+;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; SIMD swizzle; the following inefficient implementation is due to the Wasm
+;; SIMD spec requiring mask indexes greater than 15 to have the same semantics
+;; as a 0 index. For the spec discussion, see
+;; https://github.com/WebAssembly/simd/issues/93. The CLIF semantics match the
+;; Wasm SIMD semantics for this instruction. The instruction format maps to
+;; variables like: %dst = swizzle %src, %mask
+(rule (lower (swizzle src mask))
+      (let ((mask Xmm (x64_paddusb
+                        mask
+                        (x64_xmm_load_const $I8X16 (swizzle_zero_mask)))))
+        (x64_pshufb src mask)))

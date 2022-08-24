@@ -34,6 +34,7 @@ use crate::{
         VCodeConstantData,
     },
 };
+use alloc::vec::Vec;
 use regalloc2::PReg;
 use smallvec::SmallVec;
 use std::boxed::Box;
@@ -194,6 +195,15 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     #[inline]
     fn avx512bitalg_enabled(&mut self, _: Type) -> Option<()> {
         if self.isa_flags.use_avx512bitalg_simd() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn avx512vbmi_enabled(&mut self, _: Type) -> Option<()> {
+        if self.isa_flags.use_avx512vbmi_simd() {
             Some(())
         } else {
             None
@@ -837,6 +847,73 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     #[inline]
     fn pinned_writable_gpr(&mut self) -> WritableGpr {
         Writable::from_reg(Gpr::new(regs::pinned_reg()).unwrap())
+    }
+
+    #[inline]
+    fn shuffle_0_31_mask(&mut self, mask: &VecMask) -> VCodeConstant {
+        let mask = mask
+            .iter()
+            .map(|&b| if b > 15 { b.wrapping_sub(15) } else { b })
+            .map(|b| if b > 15 { 0b10000000 } else { b })
+            .collect();
+        self.lower_ctx
+            .use_constant(VCodeConstantData::Generated(mask))
+    }
+
+    #[inline]
+    fn shuffle_0_15_mask(&mut self, mask: &VecMask) -> VCodeConstant {
+        let mask = mask
+            .iter()
+            .map(|&b| if b > 15 { 0b10000000 } else { b })
+            .collect();
+        self.lower_ctx
+            .use_constant(VCodeConstantData::Generated(mask))
+    }
+
+    #[inline]
+    fn shuffle_16_31_mask(&mut self, mask: &VecMask) -> VCodeConstant {
+        let mask = mask
+            .iter()
+            .map(|&b| b.wrapping_sub(16))
+            .map(|b| if b > 15 { 0b10000000 } else { b })
+            .collect();
+        self.lower_ctx
+            .use_constant(VCodeConstantData::Generated(mask))
+    }
+
+    #[inline]
+    fn perm_from_mask_with_zeros(
+        &mut self,
+        mask: &VecMask,
+    ) -> Option<(VCodeConstant, VCodeConstant)> {
+        if !mask.iter().any(|&b| b > 31) {
+            return None;
+        }
+
+        let zeros = mask
+            .iter()
+            .map(|&b| if b > 31 { 0x00 } else { 0xff })
+            .collect();
+
+        Some((
+            self.perm_from_mask(mask),
+            self.lower_ctx
+                .use_constant(VCodeConstantData::Generated(zeros)),
+        ))
+    }
+
+    #[inline]
+    fn perm_from_mask(&mut self, mask: &VecMask) -> VCodeConstant {
+        let mask = mask.iter().cloned().collect();
+        self.lower_ctx
+            .use_constant(VCodeConstantData::Generated(mask))
+    }
+
+    #[inline]
+    fn swizzle_zero_mask(&mut self) -> VCodeConstant {
+        static ZERO_MASK_VALUE: [u8; 16] = [0x70; 16];
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&ZERO_MASK_VALUE))
     }
 
     fn emit_div_or_rem(

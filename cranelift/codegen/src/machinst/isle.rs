@@ -7,6 +7,7 @@ use std::cell::Cell;
 use target_lexicon::Triple;
 
 pub use super::MachLabel;
+pub use crate::data_value::DataValue;
 pub use crate::ir::{
     ArgumentExtension, Constant, DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate,
     SigRef, StackSlot,
@@ -24,6 +25,7 @@ pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 pub type WritableReg = Writable<Reg>;
 pub type VecReg = Vec<Reg>;
+pub type VecMask = Vec<u8>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
 pub type WritableValueRegs = crate::machinst::ValueRegs<WritableReg>;
 pub type InstOutput = SmallVec<[ValueRegs; 2]>;
@@ -681,6 +683,16 @@ macro_rules! isle_prelude_methods {
         fn u128_from_immediate(&mut self, imm: Immediate) -> Option<u128> {
             let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
             Some(u128::from_le_bytes(bytes.try_into().ok()?))
+        }
+
+        #[inline]
+        fn vec_mask_from_immediate(&mut self, imm: Immediate) -> Option<VecMask> {
+            let data = self.lower_ctx.get_immediate_data(imm);
+            if data.len() == 16 {
+                Some(Vec::from(data.as_slice()))
+            } else {
+                None
+            }
         }
 
         #[inline]
