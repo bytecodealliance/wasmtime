@@ -140,7 +140,7 @@ pub fn build_allowed_env_list<'a>(
         // Check that the names are either all additions or all subtractions.
         let subtract_from_defaults = configured.iter().all(|c| c.starts_with("-"));
         let add_from_defaults = configured.iter().all(|c| !c.starts_with("-"));
-        let keep = if subtract_from_defaults { 1.. } else { 0.. };
+        let start = if subtract_from_defaults { 1 } else { 0 };
         if !subtract_from_defaults && !add_from_defaults {
             panic!(
                 "all configured values must either subtract or add from defaults; found mixed values: {:?}",
@@ -150,7 +150,7 @@ pub fn build_allowed_env_list<'a>(
 
         // Check that the configured names are valid ones.
         for c in configured {
-            if !defaults.contains(&&c[keep.clone()]) {
+            if !defaults.contains(&&c[start..]) {
                 panic!(
                     "invalid environment configuration `{}`; must be one of: {:?}",
                     c, defaults
@@ -161,7 +161,7 @@ pub fn build_allowed_env_list<'a>(
         // Select only the allowed names.
         let mut allowed = Vec::with_capacity(defaults.len());
         for &d in defaults {
-            let mentioned = configured.iter().any(|c| &c[keep.clone()] == d);
+            let mentioned = configured.iter().any(|c| &c[start..] == d);
             if (add_from_defaults && mentioned) || (subtract_from_defaults && !mentioned) {
                 allowed.push(d);
             }
