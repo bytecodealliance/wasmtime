@@ -897,11 +897,28 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
+    fn perm_from_mask_with_zeros(
+        &mut self,
+        mask: &VecMask,
+    ) -> Option<(VCodeConstant, VCodeConstant)> {
+        if !mask.iter().any(|&b| b > 31) {
+            return None;
+        }
+
+        let zeros = mask
+            .iter()
+            .map(|&b| if b > 31 { 0x00 } else { 0xff })
+            .collect();
+
+        Some((
+            self.perm_from_mask(mask),
+            self.lower_ctx
+                .use_constant(VCodeConstantData::Generated(zeros)),
+        ))
+    }
+
+    #[inline]
     fn perm_from_mask(&mut self, mask: &VecMask) -> VCodeConstant {
-        assert!(
-            mask.iter().all(|b| *b < 32),
-            "shuffle mask values must be between 0 and 31"
-        );
         let mask = mask.iter().cloned().collect();
         self.lower_ctx
             .use_constant(VCodeConstantData::Generated(mask))

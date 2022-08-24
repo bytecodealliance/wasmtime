@@ -3656,9 +3656,17 @@
 (extern constructor shuffle_16_31_mask shuffle_16_31_mask)
 
 ;; Produce a permutation suitable for use with `vpermi2b`, for permuting two
-;; I8X16 vectors simultaneously.
+;; I8X16 vectors simultaneously. NOTE: this will not avoid out-of-bounds values,
+;; and the internal lane value masking of vpermi2b will come into play. If you
+;; need the out-of-bounds behavior of shuffle, you'll need to also mask the
+;; result of vpermi2b to get the expected out-of-bounds behavior.
 (decl perm_from_mask (VecMask) VCodeConstant)
 (extern constructor perm_from_mask perm_from_mask)
+
+;; If the mask that would be given to `shuffle` contains any out-of-bounds
+;; indices, return a mask that will zero those.
+(decl perm_from_mask_with_zeros (VCodeConstant VCodeConstant) VecMask)
+(extern extractor perm_from_mask_with_zeros perm_from_mask_with_zeros)
 
 ;;;; Swizzle ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
