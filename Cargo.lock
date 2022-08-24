@@ -2973,8 +2973,9 @@ dependencies = [
 
 [[package]]
 name = "tensorflow"
-version = "0.18.0"
-source = "git+https://github.com/tensorflow/rust.git?rev=110b139696794f18bcd8b66429ab587693e8b1dc#110b139696794f18bcd8b66429ab587693e8b1dc"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b42f8c521521a493ebd6ae45a6bd5f889cc715f5fb8dbe013cf4296ed9a337be"
 dependencies = [
  "byteorder",
  "crc",
@@ -2989,8 +2990,9 @@ dependencies = [
 
 [[package]]
 name = "tensorflow-internal-macros"
-version = "0.0.2"
-source = "git+https://github.com/tensorflow/rust.git?rev=110b139696794f18bcd8b66429ab587693e8b1dc#110b139696794f18bcd8b66429ab587693e8b1dc"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4975c975b6d9c05a7cbf007ebc8e01e92e7e0907be9efcc74074857fc92ceb54"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2999,8 +3001,9 @@ dependencies = [
 
 [[package]]
 name = "tensorflow-sys"
-version = "0.21.0"
-source = "git+https://github.com/tensorflow/rust.git?rev=110b139696794f18bcd8b66429ab587693e8b1dc#110b139696794f18bcd8b66429ab587693e8b1dc"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd4ceac1b6b0b263e3bb9f1d74009fe25def6e96429d736f4fc633b947859fd0"
 dependencies = [
  "cfg-if",
  "curl",

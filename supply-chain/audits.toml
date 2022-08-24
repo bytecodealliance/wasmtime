@@ -62,6 +62,12 @@ criteria = "safe-to-deploy"
 version = "0.14.0"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.tensorflow]]
+who = "Adam Crume"
+criteria = "safe-to-deploy"
+version = "0.19.0"
+notes = ""
+
 [[audits.wasm-encoder]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
