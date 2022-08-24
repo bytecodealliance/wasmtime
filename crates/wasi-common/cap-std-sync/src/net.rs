@@ -11,9 +11,9 @@ use std::any::Any;
 use std::convert::TryInto;
 use std::io;
 #[cfg(unix)]
-use system_interface::fs::FileIoExt;
-#[cfg(unix)]
 use system_interface::fs::GetSetFdFlags;
+#[cfg(unix)]
+use system_interface::io::IoExt;
 use system_interface::io::IsReadWrite;
 use system_interface::io::ReadReady;
 use wasi_common::{
