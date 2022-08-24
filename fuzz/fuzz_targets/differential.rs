@@ -76,17 +76,13 @@ fn run(data: &[u8]) -> Result<()> {
         let module = SingleInstModule::new(u, &mut config.module_config)?;
         Ok(module.to_bytes())
     };
-    let wasm = match unsafe { &ALLOWED_MODULES.as_slice() } {
-        &[] => panic!("unable to generate a module to fuzz against; check `ALLOWED_MODULES`"),
-        &[n] if n == "wasm-smith" => build_wasm_smith_module(&mut u, &mut config)?,
-        &[n] if n == "single-inst" => build_single_inst_module(&mut u, &mut config)?,
-        _ => {
-            if u.arbitrary()? {
-                build_wasm_smith_module(&mut u, &mut config)?
-            } else {
-                build_single_inst_module(&mut u, &mut config)?
-            }
-        }
+    if unsafe { ALLOWED_MODULES }.is_empty() {
+        panic!("unable to generate a module to fuzz against; check `ALLOWED_MODULES`")
+    }
+    let wasm = match u.choose(unsafe { &ALLOWED_MODULES.as_slice() }).unwrap() {
+        "wasm-smith" => build_wasm_smith_module(&mut u, &mut config)?,
+        "single-inst" => build_single_inst_module(&mut u, &mut config)?,
+        _ => unreachable!(),
     };
     log_wasm(&wasm);
 
