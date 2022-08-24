@@ -37,15 +37,17 @@ fuzz_target!(|data: &[u8]| {
 
         // Retrieve the configuration for this fuzz target from `ALLOWED_*`
         // environment variables.
+        let allowed_engines = build_allowed_env_list(
+            parse_env_list("ALLOWED_ENGINES"),
+            &["wasmtime", "wasmi", "spec", "v8"],
+        );
+        let allowed_modules = build_allowed_env_list(
+            parse_env_list("ALLOWED_MODULES"),
+            &["wasm-smith", "single-inst"],
+        );
         unsafe {
-            ALLOWED_ENGINES = build_allowed_env_list(
-                parse_env_list("ALLOWED_ENGINES"),
-                &["wasmtime", "wasmi", "spec", "v8"],
-            );
-            ALLOWED_MODULES = build_allowed_env_list(
-                parse_env_list("ALLOWED_MODULES"),
-                &["wasm-smith", "single-inst"],
-            );
+            ALLOWED_ENGINES = allowed_engines;
+            ALLOWED_MODULES = allowed_modules;
         }
     });
 
