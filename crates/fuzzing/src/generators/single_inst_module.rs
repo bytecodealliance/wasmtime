@@ -106,13 +106,13 @@ macro_rules! valtype {
 }
 
 macro_rules! inst {
-    ($inst:ident, ($($arguments_ty:tt),+) -> $result_ty:tt) => {
-        inst! { $inst, ($($arguments_ty),+) -> $result_ty, |_| true }
+    ($inst:ident, ($($arguments_ty:tt),*) -> $result_ty:tt) => {
+        inst! { $inst, ($($arguments_ty),*) -> $result_ty, |_| true }
     };
-    ($inst:ident, ($($arguments_ty:tt),+) -> $result_ty:tt, $feature:expr) => {
+    ($inst:ident, ($($arguments_ty:tt),*) -> $result_ty:tt, $feature:expr) => {
         SingleInstModule {
             instruction: Instruction::$inst,
-            parameters: &[$(valtype!($arguments_ty)),+],
+            parameters: &[$(valtype!($arguments_ty)),*],
             results: &[valtype!($result_ty)],
             feature: $feature,
         }
