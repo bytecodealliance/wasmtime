@@ -5,7 +5,7 @@
 //! Cranelift, which compiles functions independently.
 
 use crate::ir::{KnownSymbol, LibCall};
-use core::cmp;
+use alloc::boxed::Box;
 use core::fmt::{self, Write};
 use core::str::FromStr;
 
@@ -15,8 +15,6 @@ use serde::{Deserialize, Serialize};
 
 use super::entities::UserExternalNameRef;
 use super::function::FunctionParameters;
-
-pub(crate) const TESTCASE_NAME_LENGTH: usize = 16;
 
 /// An explicit name for a user-defined function, be it defined in code or in CLIF text.
 ///
@@ -79,36 +77,26 @@ impl fmt::Display for UserExternalName {
 }
 
 /// A name for a test case.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct TestcaseName {
-    /// How many of the bytes in `ascii` are valid?
-    length: u8,
-    /// Ascii bytes of the name.
-    ascii: [u8; TESTCASE_NAME_LENGTH],
-}
+pub struct TestcaseName(Box<[u8]>);
 
 impl fmt::Display for TestcaseName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_char('%')?;
-        for byte in self.ascii.iter().take(self.length as usize) {
-            f.write_char(*byte as char)?;
-        }
-        Ok(())
+        f.write_str(std::str::from_utf8(&self.0).unwrap())
+    }
+}
+
+impl fmt::Debug for TestcaseName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
 impl TestcaseName {
     pub(crate) fn new<T: AsRef<[u8]>>(v: T) -> Self {
-        let vec = v.as_ref();
-        let len = cmp::min(vec.len(), TESTCASE_NAME_LENGTH);
-        let mut bytes = [0u8; TESTCASE_NAME_LENGTH];
-        bytes[0..len].copy_from_slice(&vec[0..len]);
-
-        Self {
-            length: len as u8,
-            ascii: bytes,
-        }
+        Self(v.as_ref().into())
     }
 }
 
@@ -236,6 +224,12 @@ mod tests {
     use core::u32;
     use cranelift_entity::EntityRef as _;
 
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn externalname_size() {
+        assert_eq!(core::mem::size_of::<ExternalName>(), 24);
+    }
+
     #[test]
     fn display_testcase() {
         assert_eq!(ExternalName::testcase("").display(None).to_string(), "%");
@@ -250,12 +244,11 @@ mod tests {
                 .to_string(),
             "%longname12345678"
         );
-        // Constructor will silently drop bytes beyond the 16th
         assert_eq!(
             ExternalName::testcase("longname123456789")
                 .display(None)
                 .to_string(),
-            "%longname12345678"
+            "%longname123456789"
         );
     }
 

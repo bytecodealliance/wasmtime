@@ -41,7 +41,7 @@ block2:
     v4 = iconst.i32 2
     return v4
 }
-; sameln: function %icmp_to_brz_inve
+; sameln: function %icmp_to_brz_inverted_fold
 ; nextln: block0(v0: i32):
 ; nextln:     v1 = icmp_imm ne v0, 0
 ; nextln:     brnz v0, block2
@@ -67,7 +67,7 @@ block2:
     v3 = iconst.i32 2
     return v3
 }
-; sameln: function %br_icmp_inversio
+; sameln: function %br_icmp_inversion
 ; nextln: block0(v0: i32, v1: i32):
 ; nextln:     br_icmp ule v0, v1, block2
 ; nextln:     jump block1
