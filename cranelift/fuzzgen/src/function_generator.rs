@@ -196,17 +196,19 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Imul, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Imul, &[I128, I128], &[I128], insert_opcode),
     // Udiv
+    // udiv.i128 not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/4756
     (Opcode::Udiv, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Udiv, &[I128, I128], &[I128], insert_opcode),
+    // (Opcode::Udiv, &[I128, I128], &[I128], insert_opcode),
     // Sdiv
+    // sdiv.i128 not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/4770
     (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
+    // (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
     // Rotr
     (Opcode::Rotr, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Rotr, &[I8, I16], &[I8], insert_opcode),
