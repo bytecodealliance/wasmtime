@@ -1057,7 +1057,12 @@
 ;;
 ;; This is used when lowering various shifts and rotates.
 (decl put_masked_in_imm8_gpr (Value Type) Imm8Gpr)
-(extern constructor put_masked_in_imm8_gpr put_masked_in_imm8_gpr)
+(rule (put_masked_in_imm8_gpr (u64_from_iconst amt) ty)
+      (const_to_type_masked_imm8 amt ty))
+(rule (put_masked_in_imm8_gpr amt (fits_in_16 ty))
+      (x64_and $I64 (value_regs_get_gpr amt 0) (RegMemImm.Imm (shift_mask ty))))
+(rule (put_masked_in_imm8_gpr amt ty)
+      (value_regs_get_gpr amt 0))
 
 ;; Condition codes
 (type CC extern

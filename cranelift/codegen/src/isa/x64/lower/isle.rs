@@ -154,23 +154,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         RegMem::reg(self.put_in_reg(val))
     }
 
-    fn put_masked_in_imm8_gpr(&mut self, val: Value, ty: Type) -> Imm8Gpr {
-        let inputs = self.lower_ctx.get_value_as_source_or_const(val);
-
-        if let Some(c) = inputs.constant {
-            let mask = 1_u64.checked_shl(ty.bits()).map_or(u64::MAX, |x| x - 1);
-            return Imm8Gpr::new(Imm8Reg::Imm8 {
-                imm: (c & mask) as u8,
-            })
-            .unwrap();
-        }
-
-        Imm8Gpr::new(Imm8Reg::Reg {
-            reg: self.put_in_regs(val).regs()[0],
-        })
-        .unwrap()
-    }
-
     #[inline]
     fn encode_fcmp_imm(&mut self, imm: &FcmpImm) -> u8 {
         imm.encode()
@@ -272,7 +255,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
     #[inline]
     fn const_to_type_masked_imm8(&mut self, c: u64, ty: Type) -> Imm8Gpr {
-        let mask = 1_u64.checked_shl(ty.bits()).map_or(u64::MAX, |x| x - 1);
+        let mask = self.shift_mask(ty) as u64;
         Imm8Gpr::new(Imm8Reg::Imm8 {
             imm: (c & mask) as u8,
         })
@@ -281,6 +264,8 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
     #[inline]
     fn shift_mask(&mut self, ty: Type) -> u32 {
+        debug_assert!(ty.lane_bits().is_power_of_two());
+
         ty.lane_bits() - 1
     }
 

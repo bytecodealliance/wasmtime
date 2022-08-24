@@ -1,0 +1,566 @@
+test compile precise-output
+set enable_llvm_abi_extensions=true
+target x86_64
+
+
+function %sshr_i128_i128(i128, i8) -> i128 {
+block0(v0: i128, v1: i8):
+    v2 = uextend.i64 v1
+    v3 = iconcat v2, v2
+
+    v4 = sshr.i128 v0, v3
+
+    return v4
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movzbq  %dl, %rdx
+;   movq    %rdx, %rcx
+;   shrq    %cl, %rdi, %rdi
+;   movq    %rsi, %r9
+;   sarq    %cl, %r9, %r9
+;   movl    $64, %ecx
+;   subq    %rcx, %rdx, %rcx
+;   movq    %rsi, %r8
+;   shlq    %cl, %r8, %r8
+;   xorq    %r10, %r10, %r10
+;   testq   $127, %rdx
+;   cmovzq  %r10, %r8, %r8
+;   orq     %rdi, %r8, %rdi
+;   sarq    $63, %rsi, %rsi
+;   testq   $64, %rdx
+;   movq    %r9, %rax
+;   cmovzq  %rdi, %rax, %rax
+;   cmovzq  %r9, %rsi, %rsi
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i128_i64(i128, i64) -> i128 {
+block0(v0: i128, v1: i64):
+    v2 = sshr.i128 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdx, %rcx
+;   shrq    %cl, %rdi, %rdi
+;   movq    %rsi, %rdx
+;   sarq    %cl, %rdx, %rdx
+;   movq    %rcx, %rax
+;   movl    $64, %ecx
+;   movq    %rax, %r10
+;   subq    %rcx, %r10, %rcx
+;   movq    %rsi, %rax
+;   shlq    %cl, %rax, %rax
+;   xorq    %r8, %r8, %r8
+;   testq   $127, %r10
+;   cmovzq  %r8, %rax, %rax
+;   orq     %rdi, %rax, %rdi
+;   sarq    $63, %rsi, %rsi
+;   testq   $64, %r10
+;   movq    %rdx, %rax
+;   cmovzq  %rdi, %rax, %rax
+;   cmovzq  %rdx, %rsi, %rsi
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i128_i32(i128, i32) -> i128 {
+block0(v0: i128, v1: i32):
+    v2 = sshr.i128 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdx, %rcx
+;   shrq    %cl, %rdi, %rdi
+;   movq    %rsi, %rdx
+;   sarq    %cl, %rdx, %rdx
+;   movq    %rcx, %rax
+;   movl    $64, %ecx
+;   movq    %rax, %r10
+;   subq    %rcx, %r10, %rcx
+;   movq    %rsi, %rax
+;   shlq    %cl, %rax, %rax
+;   xorq    %r8, %r8, %r8
+;   testq   $127, %r10
+;   cmovzq  %r8, %rax, %rax
+;   orq     %rdi, %rax, %rdi
+;   sarq    $63, %rsi, %rsi
+;   testq   $64, %r10
+;   movq    %rdx, %rax
+;   cmovzq  %rdi, %rax, %rax
+;   cmovzq  %rdx, %rsi, %rsi
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i128_i16(i128, i16) -> i128 {
+block0(v0: i128, v1: i16):
+    v2 = sshr.i128 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdx, %rcx
+;   shrq    %cl, %rdi, %rdi
+;   movq    %rsi, %rdx
+;   sarq    %cl, %rdx, %rdx
+;   movq    %rcx, %rax
+;   movl    $64, %ecx
+;   movq    %rax, %r10
+;   subq    %rcx, %r10, %rcx
+;   movq    %rsi, %rax
+;   shlq    %cl, %rax, %rax
+;   xorq    %r8, %r8, %r8
+;   testq   $127, %r10
+;   cmovzq  %r8, %rax, %rax
+;   orq     %rdi, %rax, %rdi
+;   sarq    $63, %rsi, %rsi
+;   testq   $64, %r10
+;   movq    %rdx, %rax
+;   cmovzq  %rdi, %rax, %rax
+;   cmovzq  %rdx, %rsi, %rsi
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i128_i8(i128, i8) -> i128 {
+block0(v0: i128, v1: i8):
+    v2 = sshr.i128 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdx, %rcx
+;   shrq    %cl, %rdi, %rdi
+;   movq    %rsi, %rdx
+;   sarq    %cl, %rdx, %rdx
+;   movq    %rcx, %rax
+;   movl    $64, %ecx
+;   movq    %rax, %r10
+;   subq    %rcx, %r10, %rcx
+;   movq    %rsi, %rax
+;   shlq    %cl, %rax, %rax
+;   xorq    %r8, %r8, %r8
+;   testq   $127, %r10
+;   cmovzq  %r8, %rax, %rax
+;   orq     %rdi, %rax, %rdi
+;   sarq    $63, %rsi, %rsi
+;   testq   $64, %r10
+;   movq    %rdx, %rax
+;   cmovzq  %rdi, %rax, %rax
+;   cmovzq  %rdx, %rsi, %rsi
+;   movq    %rsi, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i64_i128(i64, i128) -> i64 {
+block0(v0: i64, v1: i128):
+    v2 = sshr.i64 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %r9
+;   movq    %r9, %rcx
+;   sarq    %cl, %rdi, %rdi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i32_i128(i32, i128) -> i32 {
+block0(v0: i32, v1: i128):
+    v2 = sshr.i32 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %r9
+;   movq    %r9, %rcx
+;   sarl    %cl, %edi, %edi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i16_i128(i16, i128) -> i16 {
+block0(v0: i16, v1: i128):
+    v2 = sshr.i16 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   andq    %rcx, $15, %rcx
+;   sarw    %cl, %di, %di
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i8_i128(i8, i128) -> i8 {
+block0(v0: i8, v1: i128):
+    v2 = sshr.i8 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   andq    %rcx, $7, %rcx
+;   sarb    %cl, %dil, %dil
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i64_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = sshr.i64 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   sarq    %cl, %rdi, %rdi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i64_i32(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = sshr.i64 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   sarq    %cl, %rdi, %rdi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i64_i16(i64, i16) -> i64 {
+block0(v0: i64, v1: i16):
+    v2 = sshr.i64 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   sarq    %cl, %rdi, %rdi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i64_i8(i64, i8) -> i64 {
+block0(v0: i64, v1: i8):
+    v2 = sshr.i64 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   sarq    %cl, %rdi, %rdi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i32_i64(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+    v2 = sshr.i32 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   sarl    %cl, %edi, %edi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i32_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = sshr.i32 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   sarl    %cl, %edi, %edi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i32_i16(i32, i16) -> i32 {
+block0(v0: i32, v1: i16):
+    v2 = sshr.i32 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   sarl    %cl, %edi, %edi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i32_i8(i32, i8) -> i32 {
+block0(v0: i32, v1: i8):
+    v2 = sshr.i32 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   sarl    %cl, %edi, %edi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i16_i64(i16, i64) -> i16 {
+block0(v0: i16, v1: i64):
+    v2 = sshr.i16 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   andq    %rcx, $15, %rcx
+;   sarw    %cl, %di, %di
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i16_i32(i16, i32) -> i16 {
+block0(v0: i16, v1: i32):
+    v2 = sshr.i16 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   andq    %rcx, $15, %rcx
+;   sarw    %cl, %di, %di
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i16_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = sshr.i16 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   andq    %rcx, $15, %rcx
+;   sarw    %cl, %di, %di
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i16_i8(i16, i8) -> i16 {
+block0(v0: i16, v1: i8):
+    v2 = sshr.i16 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   andq    %rcx, $15, %rcx
+;   sarw    %cl, %di, %di
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i8_i64(i8, i64) -> i8 {
+block0(v0: i8, v1: i64):
+    v2 = sshr.i8 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   andq    %rcx, $7, %rcx
+;   sarb    %cl, %dil, %dil
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i8_i32(i8, i32) -> i8 {
+block0(v0: i8, v1: i32):
+    v2 = sshr.i8 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   andq    %rcx, $7, %rcx
+;   sarb    %cl, %dil, %dil
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i8_i16(i8, i16) -> i8 {
+block0(v0: i8, v1: i16):
+    v2 = sshr.i8 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   andq    %rcx, $7, %rcx
+;   sarb    %cl, %dil, %dil
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i8_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = sshr.i8 v0, v1
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   andq    %rcx, $7, %rcx
+;   sarb    %cl, %dil, %dil
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+
+function %sshr_i64_const(i64) -> i64 {
+block0(v0: i64):
+    v1 = sshr_imm.i64 v0, 65
+    return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   sarq    $1, %rdi, %rdi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i32_const(i32) -> i32 {
+block0(v0: i32):
+    v1 = sshr_imm.i32 v0, 33
+    return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   sarl    $1, %edi, %edi
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i16_const(i16) -> i16 {
+block0(v0: i16):
+    v1 = sshr_imm.i16 v0, 17
+    return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   sarw    $1, %di, %di
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %sshr_i8_const(i8) -> i8 {
+block0(v0: i8):
+    v1 = sshr_imm.i8 v0, 9
+    return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   sarb    $1, %dil, %dil
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
