@@ -34,6 +34,7 @@ use crate::{
         VCodeConstantData,
     },
 };
+use alloc::vec::Vec;
 use regalloc2::PReg;
 use smallvec::SmallVec;
 use std::boxed::Box;
@@ -211,6 +212,15 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     #[inline]
     fn avx512bitalg_enabled(&mut self, _: Type) -> Option<()> {
         if self.isa_flags.use_avx512bitalg_simd() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn avx512vbmi_enabled(&mut self, _: Type) -> Option<()> {
+        if self.isa_flags.use_avx512vbmi_simd() {
             Some(())
         } else {
             None
@@ -852,6 +862,49 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     #[inline]
     fn pinned_writable_gpr(&mut self) -> WritableGpr {
         Writable::from_reg(Gpr::new(regs::pinned_reg()).unwrap())
+    }
+
+    #[inline]
+    fn shuffle_0_31_mask(&mut self, mask: &VecMask) -> VCodeConstant {
+        let mask = mask
+            .iter()
+            .map(|&b| if b > 15 { b.wrapping_sub(15) } else { b })
+            .map(|b| if b > 15 { 0b10000000 } else { b })
+            .collect();
+        self.lower_ctx
+            .use_constant(VCodeConstantData::Generated(mask))
+    }
+
+    #[inline]
+    fn shuffle_0_15_mask(&mut self, mask: &VecMask) -> VCodeConstant {
+        let mask = mask
+            .iter()
+            .map(|&b| if b > 15 { 0b10000000 } else { b })
+            .collect();
+        self.lower_ctx
+            .use_constant(VCodeConstantData::Generated(mask))
+    }
+
+    #[inline]
+    fn shuffle_16_31_mask(&mut self, mask: &VecMask) -> VCodeConstant {
+        let mask = mask
+            .iter()
+            .map(|&b| b.wrapping_sub(16))
+            .map(|b| if b > 15 { 0b10000000 } else { b })
+            .collect();
+        self.lower_ctx
+            .use_constant(VCodeConstantData::Generated(mask))
+    }
+
+    #[inline]
+    fn perm_from_mask(&mut self, mask: &VecMask) -> VCodeConstant {
+        assert!(
+            mask.iter().all(|b| *b < 32),
+            "shuffle mask values must be between 0 and 31"
+        );
+        let mask = mask.iter().cloned().collect();
+        self.lower_ctx
+            .use_constant(VCodeConstantData::Generated(mask))
     }
 
     fn emit_div_or_rem(

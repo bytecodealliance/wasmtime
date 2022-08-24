@@ -3510,3 +3510,25 @@
 ;; register allocator a definition for the output virtual register.
 (rule (lower (raw_bitcast val))
       (put_in_regs val))
+
+;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; If `lhs` and `rhs` are the same we can use a single PSHUFB to shuffle the XMM
+;; register. We statically build `constructed_mask` to zero out any unknown lane
+;; indices (may not be completely necessary: verification could fail incorrect
+;; mask values) and fix the indexes to all point to the `dst` vector.
+(rule (lower (shuffle a a (vec_mask_from_immediate mask)))
+      (x64_pshufb a (x64_xmm_load_const $I8X16 (shuffle_0_31_mask mask))))
+
+
+(rule (lower (has_type (and (avx512vl_enabled) (avx512vbmi_enabled))
+                       (shuffle a b (vec_mask_from_immediate mask))))
+      (x64_vpermi2b a b (x64_xmm_load_const $I8X16 (perm_from_mask mask))))
+
+;; If `lhs` and `rhs` are different, we must shuffle each separately and then OR
+;; them together. This is necessary due to PSHUFB semantics. As in the case
+;; above, we build the `constructed_mask` for each case statically.
+(rule (lower (shuffle a b (vec_mask_from_immediate mask)))
+      (x64_por
+        (x64_pshufb a (x64_xmm_load_const $I8X16 (shuffle_0_15_mask mask)))
+        (x64_pshufb b (x64_xmm_load_const $I8X16 (shuffle_16_31_mask mask)))))

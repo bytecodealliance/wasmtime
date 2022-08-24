@@ -35,6 +35,9 @@
 ;; ISLE representation of `&[Value]`.
 (type ValueSlice (primitive ValueSlice))
 
+;; ISLE representation of `Vec<u8>`
+(type VecMask extern (enum))
+
 (type ValueList (primitive ValueList))
 (type ValueRegs (primitive ValueRegs))
 (type WritableValueRegs (primitive WritableValueRegs))
@@ -797,6 +800,11 @@
 
 (decl u128_from_immediate (u128) Immediate)
 (extern extractor u128_from_immediate u128_from_immediate)
+
+;; Accessor for `Immediate` as a vector of u8 values.
+
+(decl vec_mask_from_immediate (VecMask) Immediate)
+(extern extractor vec_mask_from_immediate vec_mask_from_immediate)
 
 ;; Accessor for `Constant` as u128.
 
