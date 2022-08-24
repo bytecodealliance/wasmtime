@@ -39,7 +39,7 @@ pub use crate::isa::aarch64::lower::isle::generated_code::{
     ALUOp, ALUOp3, APIKey, AtomicRMWLoopOp, AtomicRMWOp, BitOp, FPUOp1, FPUOp2, FPUOp3,
     FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp, VecALUModOp, VecALUOp,
     VecExtendOp, VecLanesOp, VecMisc2, VecPairOp, VecRRLongOp, VecRRNarrowOp, VecRRPairLongOp,
-    VecRRRLongOp, VecShiftImmOp,
+    VecRRRLongOp, VecShiftImmModOp, VecShiftImmOp,
 };
 
 /// A floating-point unit (FPU) operation with two args, a register and an immediate.
@@ -765,6 +765,10 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
         &Inst::VecShiftImm { rd, rn, .. } => {
             collector.reg_def(rd);
+            collector.reg_use(rn);
+        }
+        &Inst::VecShiftImmMod { rd, rn, .. } => {
+            collector.reg_mod(rd);
             collector.reg_use(rn);
         }
         &Inst::VecExtract { rd, rn, rm, .. } => {
@@ -2366,6 +2370,20 @@ impl Inst {
                     VecShiftImmOp::Shl => "shl",
                     VecShiftImmOp::Ushr => "ushr",
                     VecShiftImmOp::Sshr => "sshr",
+                };
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
+                let rn = pretty_print_vreg_vector(rn, size, allocs);
+                format!("{} {}, {}, #{}", op, rd, rn, imm)
+            }
+            &Inst::VecShiftImmMod {
+                op,
+                rd,
+                rn,
+                size,
+                imm,
+            } => {
+                let op = match op {
+                    VecShiftImmModOp::Sli => "sli",
                 };
                 let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
                 let rn = pretty_print_vreg_vector(rn, size, allocs);
