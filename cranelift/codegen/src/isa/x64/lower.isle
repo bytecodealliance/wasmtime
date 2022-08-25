@@ -3688,3 +3688,16 @@
             (tmp Xmm (x64_packsswb src src))
             (tmp Gpr (x64_pmovmskb (OperandSize.Size32) tmp)))
         (x64_shr $I64 tmp (Imm8Reg.Imm8 8))))
+
+;; Rules for `iconcat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (iconcat lo @ (value_type $I64) hi))
+      (value_regs lo hi))
+
+;; Rules for `isplit` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (isplit val @ (value_type $I128)))
+      (let ((regs ValueRegs val)
+            (lo Reg (value_regs_get regs 0))
+            (hi Reg (value_regs_get regs 1)))
+        (output_pair lo hi)))

@@ -472,43 +472,13 @@ fn lower_insn_to_regs(
         | Opcode::Splat
         | Opcode::VanyTrue
         | Opcode::VallTrue
-        | Opcode::VhighBits => {
+        | Opcode::VhighBits
+        | Opcode::Iconcat
+        | Opcode::Isplit => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::Iconcat => {
-            let ty = ctx.output_ty(insn, 0);
-            assert_eq!(
-                ty,
-                types::I128,
-                "Iconcat not expected to be used for non-128-bit type"
-            );
-            assert_eq!(ctx.input_ty(insn, 0), types::I64);
-            assert_eq!(ctx.input_ty(insn, 1), types::I64);
-            let lo = put_input_in_reg(ctx, inputs[0]);
-            let hi = put_input_in_reg(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]);
-            ctx.emit(Inst::gen_move(dst.regs()[0], lo, types::I64));
-            ctx.emit(Inst::gen_move(dst.regs()[1], hi, types::I64));
-        }
-
-        Opcode::Isplit => {
-            let ty = ctx.input_ty(insn, 0);
-            assert_eq!(
-                ty,
-                types::I128,
-                "Isplit not expected to be used for non-128-bit type"
-            );
-            assert_eq!(ctx.output_ty(insn, 0), types::I64);
-            assert_eq!(ctx.output_ty(insn, 1), types::I64);
-            let src = put_input_in_regs(ctx, inputs[0]);
-            let dst_lo = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let dst_hi = get_output_reg(ctx, outputs[1]).only_reg().unwrap();
-            ctx.emit(Inst::gen_move(dst_lo, src.regs()[0], types::I64));
-            ctx.emit(Inst::gen_move(dst_hi, src.regs()[1], types::I64));
-        }
 
         Opcode::TlsValue => {
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
