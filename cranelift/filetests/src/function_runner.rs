@@ -197,7 +197,7 @@ impl TestFileCompiler {
             let new_name_ref = func.params.ensure_user_func_name(new_name);
 
             // Finally rename the ExtFunc
-            func.dfg.ext_funcs[ext_ref].name = ExternalName::User(new_name_ref)
+            func.dfg.ext_funcs[ext_ref].name = ExternalName::User(new_name_ref);
         }
 
         Ok(func)
