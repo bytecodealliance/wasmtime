@@ -3599,3 +3599,47 @@
       (x64_movss_load (sink_load_to_xmm_mem src)))
 (rule (lower (scalar_to_vector (and (sinkable_load src) (value_type (ty_64 _)))))
       (x64_movsd_load (sink_load_to_xmm_mem src)))
+
+;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (multi_lane 8 16) (splat src)))
+      (let ((vec Xmm (vec_insert_lane $I8X16 (xmm_uninit_value) src 0))
+            (zeros Xmm (x64_pxor vec vec)))
+        ;; Shuffle the lowest byte lane to all other lanes.
+        (x64_pshufb vec zeros)))
+
+(rule (lower (has_type (multi_lane 16 8) (splat src)))
+      (let (;; Force the input into a register so that we don't create a
+            ;; VCodeConstant.
+            (src RegMem (RegMem.Reg src))
+            (vec Xmm (vec_insert_lane $I16X8 (xmm_uninit_value) src 0))
+            (vec Xmm (vec_insert_lane $I16X8 vec src 1)))
+        ;; Shuffle the lowest two lanes to all other lanes.
+        (x64_pshufd vec 0 (OperandSize.Size32))))
+
+(rule (lower (has_type (multi_lane 32 4) (splat src @ (value_type (ty_scalar_float _)))))
+      (lower_splat_32x4 $F32X4 src))
+
+(rule (lower (has_type (multi_lane 32 4) (splat src)))
+      (lower_splat_32x4 $I32X4 src))
+
+(decl lower_splat_32x4 (Type Value) Xmm)
+(rule (lower_splat_32x4 ty src)
+      (let ((src RegMem src)
+            (vec Xmm (vec_insert_lane ty (xmm_uninit_value) src 0)))
+        ;; Shuffle the lowest lane to all other lanes.
+        (x64_pshufd vec 0 (OperandSize.Size32))))
+
+(rule (lower (has_type (multi_lane 64 2) (splat src @ (value_type (ty_scalar_float _)))))
+      (lower_splat_64x2 $F64X2 src))
+
+(rule (lower (has_type (multi_lane 64 2) (splat src)))
+      (lower_splat_64x2 $I64X2 src))
+
+(decl lower_splat_64x2 (Type Value) Xmm)
+(rule (lower_splat_64x2 ty src)
+      (let (;; Force the input into a register so that we don't create a
+            ;; VCodeConstant.
+            (src RegMem (RegMem.Reg src))
+            (vec Xmm (vec_insert_lane ty (xmm_uninit_value) src 0)))
+        (vec_insert_lane ty vec src 1)))

@@ -1545,6 +1545,13 @@
       (let ((r WritableXmm (temp_writable_xmm)))
         (x64_pcmpeqd r r)))
 
+;; Helper for creating XmmUninitializedValue instructions.
+(decl xmm_uninit_value () Xmm)
+(rule (xmm_uninit_value)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUninitializedValue dst))))
+        dst))
+
 ;; Helper for creating an SSE register holding an `i64x2` from two `i64` values.
 (decl make_i64x2_from_lanes (GprMem GprMem) Xmm)
 (rule (make_i64x2_from_lanes lo hi)

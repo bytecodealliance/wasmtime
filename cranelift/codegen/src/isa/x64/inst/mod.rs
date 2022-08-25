@@ -305,13 +305,6 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_uninit_value(dst: Writable<Reg>) -> Self {
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmUninitializedValue {
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
     pub(crate) fn xmm_mov_r_m(op: SseOpcode, src: Reg, dst: impl Into<SyntheticAmode>) -> Inst {
         debug_assert!(src.class() == RegClass::Float);
         Inst::XmmMovRM {
