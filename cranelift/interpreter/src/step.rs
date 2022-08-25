@@ -7,7 +7,8 @@ use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, Block, FuncRef, Function, InstructionData, Opcode, TrapCode, Type, Value as ValueRef,
+    types, Block, ExternalName, FuncRef, Function, InstructionData, LibCall, Opcode, TrapCode,
+    Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
@@ -25,7 +26,7 @@ pub fn step<'a, V, I>(
     inst_context: I,
 ) -> Result<ControlFlow<'a, V>, StepError>
 where
-    V: Value,
+    V: Value + Debug,
     I: InstructionContext,
 {
     let inst = inst_context.data();
@@ -295,13 +296,74 @@ where
         ),
         Opcode::Return => ControlFlow::Return(args()?),
         Opcode::Call => {
-            if let InstructionData::Call { func_ref, .. } = inst {
-                let function = state
-                    .get_function(func_ref)
-                    .ok_or(StepError::UnknownFunction(func_ref))?;
-                ControlFlow::Call(function, args()?)
+            let func_ref = if let InstructionData::Call { func_ref, .. } = inst {
+                func_ref
             } else {
                 unreachable!()
+            };
+
+            let curr_func = state.get_current_function();
+            let ext_data = curr_func
+                .dfg
+                .ext_funcs
+                .get(func_ref)
+                .ok_or(StepError::UnknownFunction(func_ref))?;
+
+            let signature = if let Some(sig) = curr_func.dfg.signatures.get(ext_data.signature) {
+                sig
+            } else {
+                return Ok(ControlFlow::Trap(CraneliftTrap::User(
+                    TrapCode::BadSignature,
+                )));
+            };
+
+            let args = args()?;
+
+            // Check the types of the arguments. This is usually done by the verifier, but nothing
+            // guarantees that the user has ran that.
+            let args_diff = args
+                .iter()
+                .map(|r| r.ty())
+                .zip(signature.params.iter().map(|r| r.value_type))
+                .any(|(a, b)| a != b);
+
+            if args_diff {
+                return Ok(ControlFlow::Trap(CraneliftTrap::User(
+                    TrapCode::BadSignature,
+                )));
+            }
+
+            match ext_data.name {
+                // These functions should be registered in the regular function store
+                ExternalName::User(_) | ExternalName::TestCase(_) => {
+                    let function = state
+                        .get_function(func_ref)
+                        .ok_or(StepError::UnknownFunction(func_ref))?;
+
+                    ControlFlow::Call(function, args)
+                }
+                ExternalName::LibCall(libcall) => {
+                    let handler = state
+                        .get_libcall(libcall)
+                        .ok_or(StepError::UnknownLibCall(libcall))?;
+
+                    // We don't transfer control to a libcall, we just execute it and return the results
+                    let res = handler(args);
+
+                    // Check that what the handler returned is what we expect.
+                    let rets_diff = res
+                        .iter()
+                        .map(|r| r.ty())
+                        .zip(signature.returns.iter().map(|r| r.value_type))
+                        .any(|(a, b)| a != b);
+
+                    if rets_diff {
+                        ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
+                    } else {
+                        ControlFlow::Assign(res)
+                    }
+                }
+                ExternalName::KnownSymbol(_) => unimplemented!(),
             }
         }
         Opcode::CallIndirect => unimplemented!("CallIndirect"),
@@ -1111,6 +1173,8 @@ pub enum StepError {
     UnknownValue(ValueRef),
     #[error("unable to find the following function: {0}")]
     UnknownFunction(FuncRef),
+    #[error("unable to find the following libcall: {0}")]
+    UnknownLibCall(LibCall),
     #[error("cannot step with these values")]
     ValueError(#[from] ValueError),
     #[error("failed to access memory")]

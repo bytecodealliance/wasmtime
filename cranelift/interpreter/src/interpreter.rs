@@ -12,11 +12,12 @@ use crate::value::{Value, ValueError};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    ArgumentPurpose, Block, FuncRef, Function, GlobalValue, GlobalValueData, Heap, StackSlot, Type,
-    Value as ValueRef,
+    ArgumentPurpose, Block, FuncRef, Function, GlobalValue, GlobalValueData, Heap, LibCall,
+    StackSlot, Type, Value as ValueRef,
 };
 use log::trace;
-use std::collections::HashSet;
+use smallvec::SmallVec;
+use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 use std::iter;
@@ -191,9 +192,12 @@ pub enum HeapInit {
     FromBacking(HeapBacking),
 }
 
+pub type LibCallHandler<'a, V> = &'a dyn Fn(SmallVec<[V; 1]>) -> SmallVec<[V; 1]>;
+
 /// Maintains the [Interpreter]'s state, implementing the [State] trait.
 pub struct InterpreterState<'a> {
     pub functions: FunctionStore<'a>,
+    pub libcalls: HashMap<LibCall, LibCallHandler<'a, DataValue>>,
     pub frame_stack: Vec<Frame<'a>>,
     /// Number of bytes from the bottom of the stack where the current frame's stack space is
     pub frame_offset: usize,
@@ -208,6 +212,7 @@ impl Default for InterpreterState<'_> {
     fn default() -> Self {
         Self {
             functions: FunctionStore::default(),
+            libcalls: HashMap::default(),
             frame_stack: vec![],
             frame_offset: 0,
             stack: Vec::with_capacity(1024),
@@ -222,6 +227,16 @@ impl Default for InterpreterState<'_> {
 impl<'a> InterpreterState<'a> {
     pub fn with_function_store(self, functions: FunctionStore<'a>) -> Self {
         Self { functions, ..self }
+    }
+
+    /// Registers a libcall handler
+    pub fn with_libcall(
+        mut self,
+        libcall: LibCall,
+        handler: LibCallHandler<'a, DataValue>,
+    ) -> Self {
+        self.libcalls.insert(libcall, handler);
+        self
     }
 
     /// Registers a static heap and returns a reference to it
@@ -299,6 +314,10 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
     }
     fn get_current_function(&self) -> &'a Function {
         self.current_frame().function
+    }
+
+    fn get_libcall(&self, libcall: LibCall) -> Option<LibCallHandler<DataValue>> {
+        self.libcalls.get(&libcall).copied()
     }
 
     fn push_frame(&mut self, function: &'a Function) {
@@ -615,6 +634,7 @@ mod tests {
     use cranelift_codegen::ir::types::I64;
     use cranelift_codegen::ir::TrapCode;
     use cranelift_reader::parse_functions;
+    use smallvec::smallvec;
 
     // Most interpreter tests should use the more ergonomic `test interpret` filetest but this
     // unit test serves as a sanity check that the interpreter still works without all of the
@@ -1044,5 +1064,36 @@ mod tests {
             .unwrap_trap();
 
         assert_eq!(trap, CraneliftTrap::User(TrapCode::IntegerOverflow));
+    }
+
+    #[test]
+    fn libcall() {
+        let code = "function %test() -> i64 {
+            fn0 = colocated %UdivI64 (i64, i64) -> i64 fast
+        block0:
+            v0 = iconst.i64 10
+            v1 = iconst.i64 5
+            v2 = call fn0(v0, v1)
+            return v2
+        }";
+
+        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
+        let mut env = FunctionStore::default();
+        env.add(func.name.to_string(), &func);
+        let state = InterpreterState::default()
+            .with_function_store(env)
+            .with_libcall(LibCall::UdivI64, &|args| {
+                smallvec![match &args[..] {
+                    [DataValue::I64(a), DataValue::I64(b)] => DataValue::I64(a / b),
+                    _ => panic!("Unexpected args"),
+                }]
+            });
+
+        let result = Interpreter::new(state)
+            .call_by_name("%test", &[])
+            .unwrap()
+            .unwrap_return();
+
+        assert_eq!(result, vec![DataValue::I64(2)])
     }
 }
