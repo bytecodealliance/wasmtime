@@ -230,7 +230,7 @@ macro_rules! wasi_stream_write_impl {
                 Ok(val)
             }
             async fn readable(&self) -> Result<(), Error> {
-                let (readable, _writeable) = self.0.is_read_write()?;
+                let (readable, _writeable) = is_read_write(&self.0)?;
                 if readable {
                     Ok(())
                 } else {
@@ -238,7 +238,7 @@ macro_rules! wasi_stream_write_impl {
                 }
             }
             async fn writable(&self) -> Result<(), Error> {
-                let (_readable, writeable) = self.0.is_read_write()?;
+                let (_readable, writeable) = is_read_write(&self.0)?;
                 if writeable {
                     Ok(())
                 } else {
@@ -315,4 +315,11 @@ pub fn get_fd_flags<Filelike: AsFilelike>(f: Filelike) -> io::Result<wasi_common
         out |= wasi_common::file::FdFlags::NONBLOCK;
     }
     Ok(out)
+}
+
+/// Return the file-descriptor flags for a given file-like object.
+///
+/// This returns the flags needed to implement [`WasiFile::get_fdflags`].
+pub fn is_read_write<Filelike: AsFilelike>(f: Filelike) -> io::Result<(bool, bool)> {
+    f.as_filelike().is_read_write()
 }
