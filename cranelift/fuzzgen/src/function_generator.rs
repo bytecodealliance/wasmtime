@@ -833,12 +833,11 @@ where
                 let signature = self.generate_signature()?;
                 (name, signature)
             } else {
-                // Use udivi64 as an example of a libcall function.
-                let mut signature = Signature::new(CallConv::Fast);
-                signature.params.push(AbiParam::new(I64));
-                signature.params.push(AbiParam::new(I64));
-                signature.returns.push(AbiParam::new(I64));
-                (ExternalName::LibCall(LibCall::UdivI64), signature)
+                // Use ishli64 as an example of a libcall function.
+                // TODO: Expand this to more libcall's
+                let libcall = LibCall::IshlI64;
+                let signature = libcall.signature(CallConv::Fast);
+                (ExternalName::LibCall(libcall), signature)
             };
 
             let sig_ref = builder.import_signature(sig.clone());
