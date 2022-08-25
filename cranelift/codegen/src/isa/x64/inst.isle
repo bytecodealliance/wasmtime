@@ -486,16 +486,19 @@
        (XmmUninitializedValue (dst WritableXmm))
 
        ;; A call to the `ElfTlsGetAddr` libcall. Returns address of TLS symbol
-       ;; in `rax`.
-       (ElfTlsGetAddr (symbol ExternalName))
+       ;; `dst`, which is constrained to `rax`.
+       (ElfTlsGetAddr (symbol ExternalName)
+                      (dst WritableGpr))
 
        ;; A Mach-O TLS symbol access. Returns address of the TLS symbol in
-       ;; `rax`.
-       (MachOTlsGetAddr (symbol ExternalName))
+       ;; `dst`, which is constrained to `rax`.
+       (MachOTlsGetAddr (symbol ExternalName)
+                        (dst WritableGpr))
 
        ;; A Coff TLS symbol access. Returns address of the TLS symbol in
-       ;; `rax`.
-       (CoffTlsGetAddr (symbol ExternalName))
+       ;; `dst`, which is constrained to `rax`.
+       (CoffTlsGetAddr (symbol ExternalName)
+                       (dst WritableGpr))
 
        ;; An unwind pseudoinstruction describing the state of the machine at
        ;; this program point.
@@ -3757,6 +3760,29 @@
 ;; Create a mask for zeroing out-of-bounds lanes of the swizzle mask.
 (decl swizzle_zero_mask () VCodeConstant)
 (extern constructor swizzle_zero_mask swizzle_zero_mask)
+
+;;;; TLS Values ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Helper for emitting ElfTlsGetAddr.
+(decl elf_tls_get_addr (ExternalName) Gpr)
+(rule (elf_tls_get_addr name)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.ElfTlsGetAddr name dst))))
+        dst))
+
+;; Helper for emitting MachOTlsGetAddr.
+(decl macho_tls_get_addr (ExternalName) Gpr)
+(rule (macho_tls_get_addr name)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.MachOTlsGetAddr name dst))))
+        dst))
+
+;; Helper for emitting CoffTlsGetAddr.
+(decl coff_tls_get_addr (ExternalName) Gpr)
+(rule (coff_tls_get_addr name)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.CoffTlsGetAddr name dst))))
+        dst))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

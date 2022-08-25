@@ -1544,16 +1544,19 @@ impl PrettyPrint for Inst {
 
             Inst::Ud2 { trap_code } => format!("ud2 {}", trap_code),
 
-            Inst::ElfTlsGetAddr { ref symbol } => {
-                format!("%rax = elf_tls_get_addr {:?}", symbol)
+            Inst::ElfTlsGetAddr { ref symbol, dst } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                format!("{} = elf_tls_get_addr {:?}", dst, symbol)
             }
 
-            Inst::MachOTlsGetAddr { ref symbol } => {
-                format!("%rax = macho_tls_get_addr {:?}", symbol)
+            Inst::MachOTlsGetAddr { ref symbol, dst } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                format!("{} = macho_tls_get_addr {:?}", dst, symbol)
             }
 
-            Inst::CoffTlsGetAddr { ref symbol } => {
-                format!("%rax = coff_tls_get_addr {:?}", symbol)
+            Inst::CoffTlsGetAddr { ref symbol, dst } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                format!("{} = coff_tls_get_addr {:?}", dst, symbol)
             }
 
             Inst::Unwind { inst } => {
@@ -1994,8 +1997,8 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             // No registers are used.
         }
 
-        Inst::ElfTlsGetAddr { .. } | Inst::MachOTlsGetAddr { .. } => {
-            collector.reg_def(Writable::from_reg(regs::rax()));
+        Inst::ElfTlsGetAddr { dst, .. } | Inst::MachOTlsGetAddr { dst, .. } => {
+            collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
             // All caller-saves are clobbered.
             //
             // We use the SysV calling convention here because the
@@ -2007,12 +2010,12 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_clobbers(clobbers);
         }
 
-        Inst::CoffTlsGetAddr { .. } => {
+        Inst::CoffTlsGetAddr { dst, .. } => {
             // We also use the gs register. But that register is not allocatable by the
             // register allocator, so we don't need to mark it as used here.
 
             // We use %rax to set the address
-            collector.reg_def(Writable::from_reg(regs::rax()));
+            collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
 
             // We use %rcx as a temporary variable to load the _tls_index
             collector.reg_def(Writable::from_reg(regs::rcx()));

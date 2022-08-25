@@ -11,7 +11,7 @@ use crate::isa::{x64::settings as x64_settings, x64::X64Backend, CallConv};
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
-use crate::settings::{Flags, TlsModel};
+use crate::settings::Flags;
 use smallvec::SmallVec;
 use target_lexicon::Triple;
 
@@ -474,36 +474,12 @@ fn lower_insn_to_regs(
         | Opcode::VallTrue
         | Opcode::VhighBits
         | Opcode::Iconcat
-        | Opcode::Isplit => {
+        | Opcode::Isplit
+        | Opcode::TlsValue => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::TlsValue => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let (name, _, _) = ctx.symbol_value(insn).unwrap();
-            let symbol = name.clone();
-
-            match flags.tls_model() {
-                TlsModel::ElfGd => {
-                    ctx.emit(Inst::ElfTlsGetAddr { symbol });
-                    ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
-                }
-                TlsModel::Macho => {
-                    ctx.emit(Inst::MachOTlsGetAddr { symbol });
-                    ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
-                }
-                TlsModel::Coff => {
-                    ctx.emit(Inst::CoffTlsGetAddr { symbol });
-                    ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
-                }
-                _ => todo!(
-                    "Unimplemented TLS model in x64 backend: {:?}",
-                    flags.tls_model()
-                ),
-            }
-        }
 
         Opcode::SqmulRoundSat => {
             // Lane-wise saturating rounding multiplication in Q15 format

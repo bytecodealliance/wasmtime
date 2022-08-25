@@ -3701,3 +3701,17 @@
             (lo Reg (value_regs_get regs 0))
             (hi Reg (value_regs_get regs 1)))
         (output_pair lo hi)))
+
+;; Rules for `tls_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (tls_value (symbol_value_data name _ _)))
+      (if (tls_model_is_elf_gd))
+      (elf_tls_get_addr name))
+
+(rule (lower (tls_value (symbol_value_data name _ _)))
+      (if (tls_model_is_macho))
+      (macho_tls_get_addr name))
+
+(rule (lower (tls_value (symbol_value_data name _ _)))
+      (if (tls_model_is_coff))
+      (coff_tls_get_addr name))

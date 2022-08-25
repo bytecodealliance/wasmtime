@@ -790,6 +790,12 @@
 (decl pure tls_model_is_elf_gd () Unit)
 (extern constructor tls_model_is_elf_gd tls_model_is_elf_gd)
 
+(decl pure tls_model_is_macho () Unit)
+(extern constructor tls_model_is_macho tls_model_is_macho)
+
+(decl pure tls_model_is_coff () Unit)
+(extern constructor tls_model_is_coff tls_model_is_coff)
+
 ;;;; Helpers for accessing instruction data ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Accessor for `FuncRef`.

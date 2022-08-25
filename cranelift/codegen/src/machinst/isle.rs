@@ -665,6 +665,24 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn tls_model_is_macho(&mut self) -> Option<()> {
+            if self.flags.tls_model() == TlsModel::Macho {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn tls_model_is_coff(&mut self) -> Option<()> {
+            if self.flags.tls_model() == TlsModel::Coff {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn func_ref_data(&mut self, func_ref: FuncRef) -> (SigRef, ExternalName, RelocDistance) {
             let funcdata = &self.lower_ctx.dfg().ext_funcs[func_ref];
             (

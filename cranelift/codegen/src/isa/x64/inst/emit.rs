@@ -2915,7 +2915,10 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::ElfTlsGetAddr { ref symbol } => {
+        Inst::ElfTlsGetAddr { ref symbol, dst } => {
+            let dst = allocs.next(dst.to_reg().to_reg());
+            debug_assert_eq!(dst, regs::rax());
+
             // N.B.: Must be exactly this byte sequence; the linker requires it,
             // because it must know how to rewrite the bytes.
 
@@ -2941,7 +2944,10 @@ pub(crate) fn emit(
             sink.put4(0); // offset
         }
 
-        Inst::MachOTlsGetAddr { ref symbol } => {
+        Inst::MachOTlsGetAddr { ref symbol, dst } => {
+            let dst = allocs.next(dst.to_reg().to_reg());
+            debug_assert_eq!(dst, regs::rax());
+
             // movq gv@tlv(%rip), %rdi
             sink.put1(0x48); // REX.w
             sink.put1(0x8b); // MOV
@@ -2954,7 +2960,10 @@ pub(crate) fn emit(
             sink.put1(0x17);
         }
 
-        Inst::CoffTlsGetAddr { ref symbol } => {
+        Inst::CoffTlsGetAddr { ref symbol, dst } => {
+            let dst = allocs.next(dst.to_reg().to_reg());
+            debug_assert_eq!(dst, regs::rax());
+
             // See: https://gcc.godbolt.org/z/M8or9x6ss
             // And: https://github.com/bjorn3/rustc_codegen_cranelift/issues/388#issuecomment-532930282
 

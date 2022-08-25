@@ -4738,6 +4738,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::ElfTlsGetAddr {
             symbol: ExternalName::User(UserExternalNameRef::new(0)),
+            dst: WritableGpr::from_writable_reg(w_rax).unwrap(),
         },
         "66488D3D00000000666648E800000000",
         "%rax = elf_tls_get_addr User(userextname0)",
@@ -4746,6 +4747,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MachOTlsGetAddr {
             symbol: ExternalName::User(UserExternalNameRef::new(0)),
+            dst: WritableGpr::from_writable_reg(w_rax).unwrap(),
         },
         "488B3D00000000FF17",
         "%rax = macho_tls_get_addr User(userextname0)",
@@ -4754,6 +4756,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::CoffTlsGetAddr {
             symbol: ExternalName::User(UserExternalNameRef::new(0)),
+            dst: WritableGpr::from_writable_reg(w_rax).unwrap(),
         },
         "8B050000000065488B0C2558000000488B04C1488D8000000000",
         "%rax = coff_tls_get_addr User(userextname0)",
