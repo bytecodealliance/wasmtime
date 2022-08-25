@@ -1,7 +1,5 @@
 #[cfg(windows)]
 use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
-#[cfg(unix)]
-use io_lifetimes::AsFilelike;
 use io_lifetimes::AsSocketlike;
 #[cfg(unix)]
 use io_lifetimes::{AsFd, BorrowedFd};
@@ -306,9 +304,11 @@ pub fn filetype_from(ft: &cap_std::fs::FileType) -> FileType {
 /// Return the file-descriptor flags for a given file-like object.
 ///
 /// This returns the flags needed to implement [`WasiFile::get_fdflags`].
-pub fn get_fd_flags<Filelike: AsFilelike>(f: Filelike) -> io::Result<wasi_common::file::FdFlags> {
+pub fn get_fd_flags<Socketlike: AsSocketlike>(
+    f: Socketlike,
+) -> io::Result<wasi_common::file::FdFlags> {
     let mut out = wasi_common::file::FdFlags::empty();
-    if f.as_filelike()
+    if f.as_socketlike()
         .get_fd_flags()?
         .contains(system_interface::fs::FdFlags::NONBLOCK)
     {
@@ -320,6 +320,6 @@ pub fn get_fd_flags<Filelike: AsFilelike>(f: Filelike) -> io::Result<wasi_common
 /// Return the file-descriptor flags for a given file-like object.
 ///
 /// This returns the flags needed to implement [`WasiFile::get_fdflags`].
-pub fn is_read_write<Filelike: AsFilelike>(f: Filelike) -> io::Result<(bool, bool)> {
-    f.as_filelike().is_read_write()
+pub fn is_read_write<Socketlike: AsSocketlike>(f: Socketlike) -> io::Result<(bool, bool)> {
+    f.as_socketlike().is_read_write()
 }
