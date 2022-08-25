@@ -71,14 +71,6 @@
 
 (rule (lower (has_type (fits_in_32 ty) (isub x y)))
   (alu_rrr (AluOPRRR.Subw) x y))
-  
-;; Special case for when one operand is an immediate that fits in 12 bits.
-(rule (lower (has_type (fits_in_64 ty) (isub x (imm12_from_value y))))
-  (alu_rr_imm12  (select_addi ty) x (neg_imm12 y)))
-
-;; Special case for when one operand is an immediate that fits in 12 bits.
-(rule (lower (has_type (fits_in_64 ty) (isub (imm12_from_value y) x)))
-  (alu_rr_imm12  (select_addi ty) x (neg_imm12 y)))
 
 (rule (lower (has_type $I128 (isub x y)))
   (i128_sub x y)
@@ -115,17 +107,29 @@
 
 (rule (lower (has_type (fits_in_16 ty) (udiv x y)))
   (alu_rrr (AluOPRRR.Divuw) (uext_int_if_need x ty ) (uext_int_if_need y ty )))
-(rule (lower (has_type (fits_in_16 ty) (sdiv  x  y )))
-  (alu_rrr (AluOPRRR.Divw) (sext_int_if_need x ty) (sext_int_if_need y ty) ))
 
-(rule (lower (has_type $I32 (sdiv x y)))
-  (alu_rrr (AluOPRRR.Divw) x y))
+(rule (lower (has_type (fits_in_32 ty) (sdiv  x  y )))
+  (let
+    (
+      (a Reg  (sext_int_if_need x ty))
+      (b Reg (sext_int_if_need y ty ))
+      (_ InstOutput (gen_div_overflow a b ty))
+    )
+    (alu_rrr (AluOPRRR.Divw) a  b)
+  )
+)
 
 (rule (lower (has_type $I32 (udiv x y)))
   (alu_rrr (AluOPRRR.Divuw)  x y))
 
-(rule (lower (has_type $I64 (sdiv x y)))
-  (alu_rrr (AluOPRRR.Div) x y))
+(rule (lower (has_type $I64 (sdiv  x  y )))
+  (let
+    (
+      (_ InstOutput (gen_div_overflow x y $I64))
+    )
+    (alu_rrr (AluOPRRR.Div) x y)
+  )
+)
 
 (rule (lower (has_type $I64 (udiv x y)))
   (alu_rrr (AluOPRRR.DivU) x y))
@@ -442,19 +446,6 @@
 (rule (lower (has_type $F64 (fma  x y z )))
   (fpu_rrrr (FpuOPRRRR.FmaddD) $F64 x y z))
 
-;;;; Rules for `FmaddS` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type $F32 (fadd (fmul x y) z )))
-  (fpu_rrrr (FpuOPRRRR.FmaddS) $F64 x y z))
-
-(rule (lower (has_type $F32 (fadd x (fmul y z) )))
-  (fpu_rrrr (FpuOPRRRR.FmaddS) $F64 y z x))
-
-;;;; Rules for `FmaddD` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type $F64 (fadd (fmul x y) z )))
-  (fpu_rrrr (FpuOPRRRR.FmaddD) $F64 x y z))
-
-(rule (lower (has_type $F64 (fadd x (fmul y z) )))
-  (fpu_rrrr (FpuOPRRRR.FmaddD) $F64 y z x))
 
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type $F32 (sqrt x)))
@@ -489,7 +480,7 @@
 (rule 
   ;; 
   (lower 
-    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw flags (is_atomoc_rmw_max_etc op $true) addr x))
+    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw flags (is_atomic_rmw_max_etc op $true) addr x))
   )
   ;;
   (gen_atomic_rmw_loop op ty addr (sext_int_if_need x ty) ) 
@@ -497,7 +488,7 @@
 (rule 
   ;; 
   (lower 
-    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw flags (is_atomoc_rmw_max_etc op $false) addr x))
+    (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw flags (is_atomic_rmw_max_etc op $false) addr x))
   )
   ;;
   (gen_atomic_rmw_loop op ty addr (uext_int_if_need x ty) ) 
@@ -544,8 +535,8 @@
   (gen_atomic_rmw_loop (AtomicRmwOp.Nand) ty addr x )
 )
 
-(decl is_atomoc_rmw_max_etc (AtomicRmwOp bool)AtomicRmwOp)
-(extern extractor  is_atomoc_rmw_max_etc is_atomoc_rmw_max_etc)
+(decl is_atomic_rmw_max_etc (AtomicRmwOp bool)AtomicRmwOp)
+(extern extractor  is_atomic_rmw_max_etc is_atomic_rmw_max_etc)
 
 ;;;;;  Rules for `atomic load`;;;;;;;;;;;;;;;;;
 (rule 
@@ -920,7 +911,7 @@
 ;;;;;  Rules for `fcvt_to_uint`;;;;;;;;;
 (rule
   (lower (has_type to (fcvt_to_uint (type_and_value from v))))
-  (gen_fcvt_int $false  v $true from to)
+  (gen_fcvt_int $false v $false from to)
 )
 
 ;;;;;  Rules for `fcvt_to_sint`;;;;;;;;;
@@ -1044,7 +1035,7 @@
     (
       (test Reg (lower_icmp  cc a b ty  ) )
     )
-    (side_effect (SideEffectNoResult.Inst(MInst.TrapIf test trap_code )))
+    (gen_trapif test trap_code)
   )
 )
 
@@ -1055,19 +1046,15 @@
       (tmp InstOutput (lower_iadd_overflow  a b ty  ) )
       (test Reg (inst_output_get tmp 1) )
     )
-    (side_effect (SideEffectNoResult.Inst(MInst.TrapIf test trap_code )))
+    (gen_trapif test trap_code)
   )
 )
+
 
 ;;;;;  Rules for `trapff`;;;;;;;;;
 (rule
   (lower (trapff cc (ffcmp_parameters a b ty) trap_code ))
-  (let
-    (
-      (tmp WritableReg (temp_writable_reg $I64))
-    )
-    (side_effect (SideEffectNoResult.Inst(MInst.TrapFf cc a b ty tmp trap_code )))
-  )
+  (gen_trapff cc a b ty trap_code)
 )
 
 ;;;;;  Rules for `bmask`;;;;;;;;;

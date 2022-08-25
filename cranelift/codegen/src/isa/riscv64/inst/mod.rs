@@ -12,6 +12,7 @@ use crate::ir::types::{
 
 pub use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, Type, ValueLabel};
 use crate::isa::CallConv;
+use crate::machinst::isle::WritableReg;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
@@ -260,8 +261,11 @@ impl Inst {
     }
 
     /// Create instructions that load a 32-bit floating-point constant.
-    pub fn load_fp_constant32(rd: Writable<Reg>, const_data: u32) -> SmallVec<[Inst; 4]> {
-        let tmp = writable_spilltmp_reg();
+    pub fn load_fp_constant32(
+        rd: Writable<Reg>,
+        const_data: u32,
+        tmp: Writable<Reg>,
+    ) -> SmallVec<[Inst; 4]> {
         let mut insts = SmallVec::new();
         insts.extend(Self::load_constant_u32(tmp, const_data as u64));
         insts.push(Inst::FpuRR {
@@ -274,9 +278,12 @@ impl Inst {
     }
 
     /// Create instructions that load a 64-bit floating-point constant.
-    pub fn load_fp_constant64(rd: Writable<Reg>, const_data: u64) -> SmallVec<[Inst; 4]> {
+    pub fn load_fp_constant64(
+        rd: Writable<Reg>,
+        const_data: u64,
+        tmp: WritableReg,
+    ) -> SmallVec<[Inst; 4]> {
         let mut insts = SmallInstVec::new();
-        let tmp = writable_spilltmp_reg();
         insts.extend(Self::load_constant_u64(tmp, const_data));
         insts.push(Inst::FpuRR {
             frm: None,
@@ -488,8 +495,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rs2);
             collector.reg_def(rd);
         }
-        &Inst::FcvtToInt { rd, rs, .. } => {
+        &Inst::FcvtToInt { rd, rs, tmp, .. } => {
             collector.reg_use(rs);
+            collector.reg_early_def(tmp);
             collector.reg_def(rd);
         }
         &Inst::SelectIf {
@@ -671,8 +679,16 @@ impl MachInst for Inst {
             return Inst::load_constant_u64(to_regs.only_reg().unwrap(), value as u64);
         };
         match ty {
-            F32 => Inst::load_fp_constant32(to_regs.only_reg().unwrap(), value as u32),
-            F64 => Inst::load_fp_constant64(to_regs.only_reg().unwrap(), value as u64),
+            F32 => Inst::load_fp_constant32(
+                to_regs.only_reg().unwrap(),
+                value as u32,
+                writable_spilltmp_reg(),
+            ),
+            F64 => Inst::load_fp_constant64(
+                to_regs.only_reg().unwrap(),
+                value as u64,
+                writable_spilltmp_reg(),
+            ),
             I128 | B128 => {
                 let mut insts = SmallInstVec::new();
                 insts.extend(Inst::load_constant_u64(
@@ -800,8 +816,10 @@ impl Inst {
             }
             x
         };
-        let format_lables = |labels: &[MachLabel]| -> String {
-            assert!(labels.len() > 0);
+        let format_labels = |labels: &[MachLabel]| -> String {
+            if labels.len() == 0 {
+                return String::from("[_]");
+            }
             let mut x = String::from("[");
             labels.iter().for_each(|l| {
                 x.push_str(
@@ -1060,18 +1078,20 @@ impl Inst {
                 is_signed,
                 in_type,
                 out_type,
+                tmp,
             } => {
                 let rs = format_reg(rs, allocs);
+                let tmp = format_reg(tmp.to_reg(), allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-
                 format!(
-                    "fcvt_to_{}int{} {},{}##in_ty={} out_ty={}",
+                    "fcvt_to_{}int{}.{} {},{}##in_ty={} tmp={}",
                     if is_signed { "s" } else { "u" },
                     if is_sat { "_sat" } else { "" },
+                    out_type,
                     rd,
                     rs,
                     in_type,
-                    out_type,
+                    tmp
                 )
             }
             &Inst::SelectReg {
@@ -1139,12 +1159,13 @@ impl Inst {
                 ref targets,
             } => {
                 let targets: Vec<_> = targets.iter().map(|x| x.as_label().unwrap()).collect();
+
                 format!(
                     "{} {},{},{}##tmp1={}",
                     "br_table",
                     format_reg(index, allocs),
                     default_,
-                    format_lables(&targets[..]),
+                    format_labels(&targets[..]),
                     format_reg(tmp1.to_reg(), allocs),
                 )
             }
@@ -1547,7 +1568,11 @@ impl MachInstLabelUse for LabelUse {
         //check range
         assert!(
             offset >= -(self.max_neg_range() as i64) && offset <= (self.max_pos_range() as i64),
-            "offset must not exceed max range."
+            "{:?} offset '{}' use_offset:'{}' label_offset:'{}'  must not exceed max range.",
+            self,
+            offset,
+            use_offset,
+            label_offset,
         );
         self.patch_raw_offset(buffer, offset);
     }
@@ -1597,8 +1622,7 @@ impl MachInstLabelUse for LabelUse {
 
     fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
         match (reloc, addend) {
-            (Reloc::RiscvCall, 0) => Some(Self::PCRel32),
-            (Reloc::RiscvCall, _) => panic!("addend:{}", addend),
+            (Reloc::RiscvCall, _) => Some(Self::PCRel32),
             _ => None,
         }
     }
@@ -1646,7 +1670,10 @@ impl LabelUse {
             }
 
             LabelUse::B12 => {
-                let offset = offset as u32;
+                let mut offset = offset as u32;
+                if offset == 0 {
+                    offset = 4;
+                }
                 let raw = &mut buffer[0] as *mut u8 as *mut u32;
                 let v = ((offset >> 11 & 0b1) << 7)
                     | ((offset >> 1 & 0b1111) << 8)

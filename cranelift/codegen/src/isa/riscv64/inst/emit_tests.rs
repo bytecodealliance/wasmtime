@@ -2233,6 +2233,7 @@ fn riscv64_worst_case_instruction_size() {
         in_type: F64,
         out_type: I64,
         is_sat: true,
+        tmp: writable_a1(),
     });
 
     candidates.push(Inst::FcvtToInt {
@@ -2242,6 +2243,7 @@ fn riscv64_worst_case_instruction_size() {
         in_type: F64,
         out_type: I64,
         is_sat: false,
+        tmp: writable_a1(),
     });
 
     candidates.push(Inst::FloatRound {

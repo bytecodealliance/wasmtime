@@ -751,18 +751,18 @@ impl AluOPRRR {
         }
     }
 
-    /// div and rem and lead div 0 exception
-    pub fn is_div_or_rem(self) -> bool {
+    /// Div and rem can lead some exception.
+    pub fn is_div_or_rem(self) -> Option<u8> {
         match self {
-            Self::Div
-            | Self::DivU
-            | Self::Rem
-            | Self::RemU
-            | Self::Divw
-            | Self::Divuw
-            | Self::Remw
-            | Self::Remuw => true,
-            _ => false,
+            Self::Div => Some(64),
+            Self::DivU => Some(64),
+            Self::Rem => Some(64),
+            Self::RemU => Some(64),
+            Self::Divw => Some(32),
+            Self::Divuw => Some(32),
+            Self::Remw => Some(32),
+            Self::Remuw => Some(32),
+            _ => None,
         }
     }
 
@@ -1957,6 +1957,52 @@ impl FloatSelectOP {
         insts
     }
 }
+
+pub(crate) fn f32_bits(f: f32) -> u32 {
+    u32::from_le_bytes(f.to_le_bytes())
+}
+pub(crate) fn f64_bits(f: f64) -> u64 {
+    u64::from_le_bytes(f.to_le_bytes())
+}
+
+pub(crate) fn f32_to_int_bounds(signed: bool, out_bits: u8) -> (f32, f32) {
+    match (signed, out_bits) {
+        (true, 8) => (i8::min_value() as f32 - 1., i8::max_value() as f32 + 1.),
+        (true, 16) => (i16::min_value() as f32 - 1., i16::max_value() as f32 + 1.),
+        (true, 32) => (-2147483904.0, 2147483648.0),
+        (true, 64) => (-9223373136366403584.0, 9223372036854775808.0),
+        (false, 8) => (-1., u8::max_value() as f32 + 1.),
+        (false, 16) => (-1., u16::max_value() as f32 + 1.),
+        (false, 32) => (-1., 4294967296.0),
+        (false, 64) => (-1., 18446744073709551616.0),
+        _ => unreachable!(),
+    }
+}
+
+pub(crate) fn f64_to_int_bounds(signed: bool, out_bits: u8) -> (f64, f64) {
+    match (signed, out_bits) {
+        (true, 8) => (i8::min_value() as f64 - 1., i8::max_value() as f64 + 1.),
+        (true, 16) => (i16::min_value() as f64 - 1., i16::max_value() as f64 + 1.),
+        (true, 32) => (-2147483649.0, 2147483648.0),
+        (true, 64) => (-9223372036854777856.0, 9223372036854775808.0),
+        (false, 8) => (-1., u8::max_value() as f64 + 1.),
+        (false, 16) => (-1., u16::max_value() as f64 + 1.),
+        (false, 32) => (-1., 4294967296.0),
+        (false, 64) => (-1., 18446744073709551616.0),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn print_f_conversion_max_values() {
+    println!(
+        "f32_to_int_bounds:{:?} {:?}  {:?}",
+        f32_to_int_bounds(false, 32),
+        u32::MAX as f32,
+        4294967296.0
+    );
+}
+
 #[cfg(test)]
 mod test {
     use super::FloatCCArgs;

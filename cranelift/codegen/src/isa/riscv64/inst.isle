@@ -253,6 +253,7 @@
     (FcvtToInt
       (is_sat bool)
       (rd WritableReg)
+      (tmp WritableReg) ;; a float register to load bounds.
       (rs Reg)
       (is_signed bool)
       (in_type Type)
@@ -888,6 +889,7 @@
 (decl select_addi (Type) AluOPRRI)
 (rule (select_addi (fits_in_32 ty)) (AluOPRRI.Addiw))
 (rule (select_addi (fits_in_64 ty)) (AluOPRRI.Addi))
+
 
 (decl bnot_128 (ValueRegs) ValueRegs)
 (rule 
@@ -1796,8 +1798,6 @@
 (decl move_x_to_f(Reg Type) Reg)
 (extern constructor move_x_to_f move_x_to_f)
 
-(decl load_float_const (u64 Type) Reg)
-(extern constructor load_float_const load_float_const)
 
 ;;float copy sign bit op.
 (decl f_copysign_op (Type)FpuOPRRR)
@@ -1972,7 +1972,8 @@
   (let
     (
       (result WritableReg (temp_writable_reg out_type))
-      (_ Unit(emit (MInst.FcvtToInt is_sat result rs is_signed in_type out_type)))
+      (tmp WritableReg (temp_writable_reg $F64))
+      (_ Unit(emit (MInst.FcvtToInt is_sat result tmp rs is_signed in_type out_type)))
     )
     result
   )
@@ -2400,6 +2401,41 @@
 (rule (output_ifcout reg)
       (output_pair reg (value_regs_invalid)))
 
+(decl gen_trapff (FloatCC Reg Reg Type TrapCode)InstOutput)
+(rule
+  (gen_trapff cc a b ty trap_code)
+  (let
+    (
+      (tmp WritableReg (temp_writable_reg $I64))
+    )
+    (side_effect (SideEffectNoResult.Inst(MInst.TrapFf cc a b ty tmp trap_code )))
+  )
+)
+
+(decl gen_trapif (Reg TrapCode)InstOutput)
+(rule
+  (gen_trapif test trap_code)
+  (side_effect (SideEffectNoResult.Inst(MInst.TrapIf test trap_code )))
+)
+
+(decl shift_int_to_most_significant (Reg Type) Reg)
+(extern constructor shift_int_to_most_significant shift_int_to_most_significant)
 
 
-
+;;; the result is not used.
+;;; how to return mark a value not used.
+(decl gen_div_overflow (Reg Reg Type) InstOutput)
+(rule
+  (gen_div_overflow rs1 rs2 ty)
+  (let
+    (
+      (r_const_neg_1 Reg (load_imm12 -1))
+      (r_const_min Reg ( alu_slli (load_imm12 1) 63))
+      (tmp_rs1 Reg (shift_int_to_most_significant rs1 ty))
+      (t1  Reg (gen_icmp (IntCC.Equal) r_const_neg_1 rs2 ty))
+      (t2  Reg (gen_icmp (IntCC.Equal) r_const_min tmp_rs1 ty))
+      (test Reg (alu_and t1 t2 ))
+    )
+    (gen_trapif test (TrapCode.IntegerOverflow))
+  )
+)

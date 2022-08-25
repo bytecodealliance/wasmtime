@@ -150,6 +150,44 @@ impl Inst {
         insts
     }
 
+    // /// Emit
+    // pub(crate) fn emit_div_overflow(
+    //     tmp: Writable<Reg>,
+    //     dividend: Reg,
+    //     divisor: Reg,
+    //     token: BranchTarget,
+    //     not_taken: BranchTarget,
+    // ) -> SmallInstVec<Inst> {
+    //     let mut insts = SmallInstVec::new();
+    //     insts.push(Inst::load_constant_imm12(tmp, Imm12::from_bits(-1)));
+    //     // if divisor is not -1.
+    //     insts.push(Inst::CondBr {
+    //         taken: not_taken,
+    //         not_taken: BranchTarget::zero(),
+    //         kind: IntegerCompare {
+    //             kind: IntCC::Equal,
+    //             rs1: tmp.to_reg(),
+    //             rs2: divisor,
+    //         },
+    //     });
+    //     insts.push(Inst::AluRRImm12 {
+    //         alu_op: AluOPRRI::Slli,
+    //         rd: tmp,
+    //         rs: tmp.to_reg(),
+    //         imm12: Imm12::from_bits(63),
+    //     });
+    //     insts.push(Inst::CondBr {
+    //         taken: taken,
+    //         not_taken: not_taken,
+    //         kind: IntegerCompare {
+    //             kind: IntCC::Equal,
+    //             rs1: tmp.to_reg(),
+    //             rs2: divisor,
+    //         },
+    //     });
+    //     insts
+    // }
+
     /// Load int mask.
     /// If ty is int then 0xff in rd.
     pub(crate) fn load_int_mask(rd: Writable<Reg>, ty: Type) -> SmallInstVec<Inst> {
@@ -686,6 +724,7 @@ impl MachInstEmit for Inst {
                 let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
                 let rd = allocs.next_writable(rd);
+
                 let x: u32 = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | (alu_op.funct3(frm)) << 12
@@ -709,22 +748,41 @@ impl MachInstEmit for Inst {
                 let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
                 let rd = allocs.next_writable(rd);
-
                 let (rs1, rs2) = if alu_op.reverse_rs() {
                     (rs2, rs1)
                 } else {
                     (rs1, rs2)
                 };
+
+                if let Some(bits) = alu_op.is_div_or_rem() {
+                    Inst::TrapIfC {
+                        rs1: zero_reg(),
+                        rs2: if bits == 32 {
+                            // If this op is 32-bit.
+                            // should shift out high parts.
+                            Inst::AluRRImm12 {
+                                alu_op: AluOPRRI::Slli,
+                                rd: writable_spilltmp_reg2(),
+                                rs: rs2,
+                                imm12: Imm12::from_bits(32),
+                            }
+                            .emit(&[], sink, emit_info, state);
+                            spilltmp_reg2()
+                        } else {
+                            rs2
+                        },
+                        cc: IntCC::Equal,
+                        trap_code: TrapCode::IntegerDivisionByZero,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
+
                 let x: u32 = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | (alu_op.funct3()) << 12
                     | reg_to_gpr_num(rs1) << 15
                     | reg_to_gpr_num(rs2) << 20
                     | alu_op.funct7() << 25;
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && alu_op.is_div_or_rem() {
-                    sink.add_trap(TrapCode::IntegerDivisionByZero);
-                }
                 sink.put4(x);
             }
             &Inst::AluRRImm12 {
@@ -1049,7 +1107,10 @@ impl MachInstEmit for Inst {
                         sink.put4(code);
                     }
                     BranchTarget::ResolvedOffset(offset) => {
-                        assert!(offset != 0, "offset:{}", offset);
+                        let mut offset = offset;
+                        if offset == 0 {
+                            offset = 4;
+                        }
                         if LabelUse::B12.offset_in_range(offset as i64) {
                             let code = kind.emit();
                             let mut code = code.to_le_bytes();
@@ -1796,15 +1857,18 @@ impl MachInstEmit for Inst {
                 is_signed,
                 in_type,
                 out_type,
+                tmp,
             } => {
                 let rs = allocs.next(rs);
+                let tmp = allocs.next_writable(tmp);
                 let rd = allocs.next_writable(rd);
-                // get class information.
+                let label_nan = sink.get_label();
+                let label_jump_over = sink.get_label();
+                // get if nan?
                 Inst::emit_not_nan(rd, rs, in_type).emit(&[], sink, emit_info, state);
                 // jump to nan
-                let label_jump_nan = sink.get_label();
                 Inst::CondBr {
-                    taken: BranchTarget::Label(label_jump_nan),
+                    taken: BranchTarget::Label(label_nan),
                     not_taken: BranchTarget::zero(),
                     kind: IntegerCompare {
                         kind: IntCC::Equal,
@@ -1813,28 +1877,88 @@ impl MachInstEmit for Inst {
                     },
                 }
                 .emit(&[], sink, emit_info, state);
+
+                if !is_sat {
+                    let f32_bounds = f32_to_int_bounds(is_signed, out_type.bits() as u8);
+                    let f64_bounds = f64_to_int_bounds(is_signed, out_type.bits() as u8);
+                    if in_type == F32 {
+                        Inst::load_fp_constant32(
+                            tmp,
+                            f32_bits(f32_bounds.0),
+                            writable_spilltmp_reg(),
+                        )
+                    } else {
+                        Inst::load_fp_constant64(
+                            tmp,
+                            f64_bits(f64_bounds.0),
+                            writable_spilltmp_reg(),
+                        )
+                    }
+                    .iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    Inst::TrapFf {
+                        cc: FloatCC::LessThanOrEqual,
+                        x: rs,
+                        y: tmp.to_reg(),
+                        ty: in_type,
+                        tmp: rd,
+                        trap_code: TrapCode::IntegerOverflow,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    if in_type == F32 {
+                        Inst::load_fp_constant32(
+                            tmp,
+                            f32_bits(f32_bounds.1),
+                            writable_spilltmp_reg(),
+                        )
+                    } else {
+                        Inst::load_fp_constant64(
+                            tmp,
+                            f64_bits(f64_bounds.1),
+                            writable_spilltmp_reg(),
+                        )
+                    }
+                    .iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    Inst::TrapFf {
+                        cc: FloatCC::GreaterThanOrEqual,
+                        x: rs,
+                        y: tmp.to_reg(),
+                        ty: in_type,
+                        tmp: rd,
+                        trap_code: TrapCode::IntegerOverflow,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
                 // convert to int normally.
                 Inst::FpuRR {
-                    frm: None,
+                    frm: Some(FRM::RTZ),
                     alu_op: FpuOPRR::float_convert_2_int_op(in_type, is_signed, out_type),
                     rd,
                     rs,
                 }
                 .emit(&[], sink, emit_info, state);
                 // I already have the result,jump over.
-                let label_jump_over = sink.get_label();
                 Inst::Jal {
                     dest: BranchTarget::Label(label_jump_over),
                 }
                 .emit(&[], sink, emit_info, state);
                 // here is nan , move 0 into rd register
-                sink.bind_label(label_jump_nan);
-                Inst::load_constant_imm12(rd, Imm12::from_bits(0)).emit(
-                    &[],
-                    sink,
-                    emit_info,
-                    state,
-                );
+                sink.bind_label(label_nan);
+                if is_sat {
+                    Inst::load_constant_imm12(rd, Imm12::from_bits(0)).emit(
+                        &[],
+                        sink,
+                        emit_info,
+                        state,
+                    );
+                } else {
+                    // here is ud2.
+                    Inst::Udf {
+                        trap_code: TrapCode::BadConversionToInteger,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
                 // bind jump_over
                 sink.bind_label(label_jump_over);
             }
@@ -2087,9 +2211,17 @@ impl MachInstEmit for Inst {
                 }
                 // load max value need to round.
                 if ty == F32 {
-                    Inst::load_fp_constant32(f_tmp, max_value_need_round(ty) as u32)
+                    Inst::load_fp_constant32(
+                        f_tmp,
+                        max_value_need_round(ty) as u32,
+                        writable_spilltmp_reg(),
+                    )
                 } else {
-                    Inst::load_fp_constant64(f_tmp, max_value_need_round(ty))
+                    Inst::load_fp_constant64(
+                        f_tmp,
+                        max_value_need_round(ty),
+                        writable_spilltmp_reg(),
+                    )
                 }
                 .into_iter()
                 .for_each(|i| i.emit(&[], sink, emit_info, state));

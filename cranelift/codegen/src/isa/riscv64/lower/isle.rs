@@ -391,21 +391,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         let ty = self.lower_ctx.input_ty(inst, 0);
         Some((a, b, ty))
     }
-    fn load_float_const(&mut self, val: u64, ty: Type) -> Reg {
-        let result = self.temp_writable_reg(ty);
-        if ty == F32 {
-            MInst::load_fp_constant32(result, val as u32)
-                .into_iter()
-                .for_each(|i| self.emit(&i));
-        } else if ty == F64 {
-            MInst::load_fp_constant64(result, val)
-                .into_iter()
-                .for_each(|i| self.emit(&i));
-        } else {
-            unimplemented!()
-        }
-        result.to_reg()
-    }
+
     fn move_f_to_x(&mut self, r: Reg, ty: Type) -> Reg {
         let result = self.temp_writable_reg(I64);
         self.emit(&gen_move(result, I64, r, ty));
@@ -442,7 +428,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
             None
         }
     }
-    fn is_atomoc_rmw_max_etc(&mut self, op: &AtomicRmwOp) -> Option<(AtomicRmwOp, bool)> {
+    fn is_atomic_rmw_max_etc(&mut self, op: &AtomicRmwOp) -> Option<(AtomicRmwOp, bool)> {
         let op = *op;
         match op {
             crate::ir::AtomicRmwOp::Umin => Some((op, false)),
@@ -560,6 +546,21 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     }
     fn x_reg(&mut self, x: u8) -> Reg {
         x_reg(x as usize)
+    }
+    fn shift_int_to_most_significant(&mut self, v: Reg, ty: Type) -> Reg {
+        assert!(ty.is_int() && ty.bits() <= 64);
+        if ty == I64 {
+            return v;
+        }
+        let tmp = self.temp_writable_reg(I64);
+        self.emit(&MInst::AluRRImm12 {
+            alu_op: AluOPRRI::Slli,
+            rd: tmp,
+            rs: v,
+            imm12: Imm12::from_bits((64 - ty.bits()) as i16),
+        });
+
+        tmp.to_reg()
     }
 }
 
