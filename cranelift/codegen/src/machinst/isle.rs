@@ -299,6 +299,24 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_32(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 32 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_64(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 64 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn ty_32_or_64(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() == 32 || ty.bits() == 64 {
                 Some(ty)

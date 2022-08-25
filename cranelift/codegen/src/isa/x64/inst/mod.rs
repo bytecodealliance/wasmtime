@@ -263,17 +263,6 @@ impl Inst {
         Inst::MovRR { size, src, dst }
     }
 
-    // TODO Can be replaced by `Inst::move` (high-level) and `Inst::unary_rm_r` (low-level)
-    pub(crate) fn xmm_mov(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Inst {
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmUnaryRmR {
-            op,
-            src: XmmMem::new(src).unwrap(),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
     pub(crate) fn xmm_load_const(src: VCodeConstant, dst: Writable<Reg>, ty: Type) -> Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         debug_assert!(ty.is_vector() && ty.bits() == 128);
@@ -312,13 +301,6 @@ impl Inst {
             src3: XmmMem::new(src3).unwrap(),
             src2: Xmm::new(src2).unwrap(),
             src1: Xmm::new(dst.to_reg()).unwrap(),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
-    pub(crate) fn xmm_uninit_value(dst: Writable<Reg>) -> Self {
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmUninitializedValue {
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }

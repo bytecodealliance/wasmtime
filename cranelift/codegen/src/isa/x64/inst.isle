@@ -777,6 +777,13 @@
        (Reg (reg Reg))
        (Mem (addr SyntheticAmode))))
 
+;; Convert a RegMem to a RegMemImm.
+(decl reg_mem_to_reg_mem_imm (RegMem) RegMemImm)
+(rule (reg_mem_to_reg_mem_imm (RegMem.Reg reg))
+      (RegMemImm.Reg reg))
+(rule (reg_mem_to_reg_mem_imm (RegMem.Mem addr))
+      (RegMemImm.Mem addr))
+
 ;; Put the given clif value into a `RegMem` operand.
 ;;
 ;; Asserts that the value fits into a single register, and doesn't require
@@ -1456,12 +1463,16 @@
 ;; This is a side-effectful operation that notifies the context that the
 ;; instruction that produced the `SinkableImm` has been sunk into another
 ;; instruction, and no longer needs to be lowered.
-(decl sink_load (SinkableLoad) RegMemImm)
+(decl sink_load (SinkableLoad) RegMem)
 (extern constructor sink_load sink_load)
 
 (decl sink_load_to_gpr_mem_imm (SinkableLoad) GprMemImm)
 (rule (sink_load_to_gpr_mem_imm load)
       (gpr_mem_imm_new (sink_load load)))
+
+(decl sink_load_to_xmm_mem (SinkableLoad) XmmMem)
+(rule (sink_load_to_xmm_mem load)
+      (reg_mem_to_xmm_mem (sink_load load)))
 
 ;;;; Helpers for Sign/Zero Extending ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1533,6 +1544,13 @@
 (rule (vector_all_ones)
       (let ((r WritableXmm (temp_writable_xmm)))
         (x64_pcmpeqd r r)))
+
+;; Helper for creating XmmUninitializedValue instructions.
+(decl xmm_uninit_value () Xmm)
+(rule (xmm_uninit_value)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUninitializedValue dst))))
+        dst))
 
 ;; Helper for creating an SSE register holding an `i64x2` from two `i64` values.
 (decl make_i64x2_from_lanes (GprMem GprMem) Xmm)
@@ -2828,6 +2846,30 @@
 (rule (x64_psrad src1 src2)
       (xmm_rmi_xmm (SseOpcode.Psrad) src1 src2))
 
+;; Helper for creating `pextrb` instructions.
+(decl x64_pextrb (Type Xmm u8) Gpr)
+(rule (x64_pextrb ty src lane)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pextrb)
+                                           dst
+                                           src
+                                           dst
+                                           lane
+                                           (operand_size_of_type_32_64 (lane_type ty))))))
+        dst))
+
+;; Helper for creating `pextrw` instructions.
+(decl x64_pextrw (Type Xmm u8) Gpr)
+(rule (x64_pextrw ty src lane)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pextrw)
+                                           dst
+                                           src
+                                           dst
+                                           lane
+                                           (operand_size_of_type_32_64 (lane_type ty))))))
+        dst))
+
 ;; Helper for creating `pextrd` instructions.
 (decl x64_pextrd (Type Xmm u8) Gpr)
 (rule (x64_pextrd ty src lane)
@@ -3707,6 +3749,7 @@
 (convert WritableGpr Gpr writable_gpr_to_gpr)
 (convert RegMemImm GprMemImm gpr_mem_imm_new)
 (convert RegMem GprMem reg_mem_to_gpr_mem)
+(convert RegMem RegMemImm reg_mem_to_reg_mem_imm)
 (convert Reg GprMem reg_to_gpr_mem)
 (convert Reg GprMemImm reg_to_gpr_mem_imm)
 (convert WritableGpr WritableReg writable_gpr_to_reg)

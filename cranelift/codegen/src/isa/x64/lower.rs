@@ -3,7 +3,7 @@
 // ISLE integration glue.
 pub(super) mod isle;
 
-use crate::ir::{types, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type};
+use crate::ir::{types, ExternalName, Inst as IRInst, LibCall, Opcode, Type};
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
@@ -158,100 +158,6 @@ fn input_to_reg_mem(ctx: &mut Lower<Inst>, spec: InsnInput) -> RegMem {
 fn input_to_imm(ctx: &mut Lower<Inst>, spec: InsnInput) -> Option<u64> {
     ctx.get_input_as_source_or_const(spec.insn, spec.input)
         .constant
-}
-
-/// Emit an instruction to insert a value `src` into a lane of `dst`.
-fn emit_insert_lane(ctx: &mut Lower<Inst>, src: RegMem, dst: Writable<Reg>, lane: u8, ty: Type) {
-    if !ty.is_float() {
-        let (sse_op, size) = match ty.lane_bits() {
-            8 => (SseOpcode::Pinsrb, OperandSize::Size32),
-            16 => (SseOpcode::Pinsrw, OperandSize::Size32),
-            32 => (SseOpcode::Pinsrd, OperandSize::Size32),
-            64 => (SseOpcode::Pinsrd, OperandSize::Size64),
-            _ => panic!("Unable to insertlane for lane size: {}", ty.lane_bits()),
-        };
-        ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, size));
-    } else if ty == types::F32 {
-        let sse_op = SseOpcode::Insertps;
-        // Insert 32-bits from replacement (at index 00, bits 7:8) to vector (lane
-        // shifted into bits 5:6).
-        let lane = 0b00_00_00_00 | lane << 4;
-        ctx.emit(Inst::xmm_rm_r_imm(
-            sse_op,
-            src,
-            dst,
-            lane,
-            OperandSize::Size32,
-        ));
-    } else if ty == types::F64 {
-        let sse_op = match lane {
-            // Move the lowest quadword in replacement to vector without changing
-            // the upper bits.
-            0 => SseOpcode::Movsd,
-            // Move the low 64 bits of replacement vector to the high 64 bits of the
-            // vector.
-            1 => SseOpcode::Movlhps,
-            _ => unreachable!(),
-        };
-        // Here we use the `xmm_rm_r` encoding because it correctly tells the register
-        // allocator how we are using `dst`: we are using `dst` as a `mod` whereas other
-        // encoding formats like `xmm_unary_rm_r` treat it as a `def`.
-        ctx.emit(Inst::xmm_rm_r(sse_op, src, dst));
-    } else {
-        panic!("unable to emit insertlane for type: {}", ty)
-    }
-}
-
-/// Emit an instruction to extract a lane of `src` into `dst`.
-fn emit_extract_lane(ctx: &mut Lower<Inst>, src: Reg, dst: Writable<Reg>, lane: u8, ty: Type) {
-    if !ty.is_float() {
-        let (sse_op, size) = match ty.lane_bits() {
-            8 => (SseOpcode::Pextrb, OperandSize::Size32),
-            16 => (SseOpcode::Pextrw, OperandSize::Size32),
-            32 => (SseOpcode::Pextrd, OperandSize::Size32),
-            64 => (SseOpcode::Pextrd, OperandSize::Size64),
-            _ => panic!("Unable to extractlane for lane size: {}", ty.lane_bits()),
-        };
-        let src = RegMem::reg(src);
-        ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, size));
-    } else if ty == types::F32 || ty == types::F64 {
-        if lane == 0 {
-            // Remove the extractlane instruction, leaving the float where it is. The upper
-            // bits will remain unchanged; for correctness, this relies on Cranelift type
-            // checking to avoid using those bits.
-            ctx.emit(Inst::gen_move(dst, src, ty));
-        } else {
-            // Otherwise, shuffle the bits in `lane` to the lowest lane.
-            let sse_op = SseOpcode::Pshufd;
-            let mask = match ty {
-                // Move the value at `lane` to lane 0, copying existing value at lane 0 to
-                // other lanes. Again, this relies on Cranelift type checking to avoid
-                // using those bits.
-                types::F32 => {
-                    assert!(lane > 0 && lane < 4);
-                    0b00_00_00_00 | lane
-                }
-                // Move the value at `lane` 1 (we know it must be 1 because of the `if`
-                // statement above) to lane 0 and leave lane 1 unchanged. The Cranelift type
-                // checking assumption also applies here.
-                types::F64 => {
-                    assert!(lane == 1);
-                    0b11_10_11_10
-                }
-                _ => unreachable!(),
-            };
-            let src = RegMem::reg(src);
-            ctx.emit(Inst::xmm_rm_r_imm(
-                sse_op,
-                src,
-                dst,
-                mask,
-                OperandSize::Size32,
-            ));
-        }
-    } else {
-        panic!("unable to emit extractlane for type: {}", ty)
-    }
 }
 
 fn emit_vm_call(
@@ -586,131 +492,14 @@ fn lower_insn_to_regs(
         | Opcode::RawBitcast
         | Opcode::Insertlane
         | Opcode::Shuffle
-        | Opcode::Swizzle => {
+        | Opcode::Swizzle
+        | Opcode::Extractlane
+        | Opcode::ScalarToVector
+        | Opcode::Splat => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::Extractlane => {
-            // The instruction format maps to variables like: %dst = extractlane %src, %lane
-            let ty = ty.unwrap();
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let src_ty = ctx.input_ty(insn, 0);
-            assert_eq!(src_ty.bits(), 128);
-            let src = put_input_in_reg(ctx, inputs[0]);
-            let lane = if let InstructionData::BinaryImm8 { imm, .. } = ctx.data(insn) {
-                *imm
-            } else {
-                unreachable!();
-            };
-            debug_assert!(lane < src_ty.lane_count() as u8);
-
-            emit_extract_lane(ctx, src, dst, lane, ty);
-        }
-
-        Opcode::ScalarToVector => {
-            // When moving a scalar value to a vector register, we must be handle several
-            // situations:
-            //  1. a scalar float is already in an XMM register, so we simply move it
-            //  2. a scalar of any other type resides in a GPR register: MOVD moves the bits to an
-            //     XMM register and zeroes the upper bits
-            //  3. a scalar (float or otherwise) that has previously been loaded from memory (e.g.
-            //     the default lowering of Wasm's `load[32|64]_zero`) can be lowered to a single
-            //     MOVSS/MOVSD instruction; to do this, we rely on `input_to_reg_mem` to sink the
-            //     unused load.
-            let src = input_to_reg_mem(ctx, inputs[0]);
-            let src_ty = ctx.input_ty(insn, 0);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let dst_ty = ty.unwrap();
-            assert!(src_ty == dst_ty.lane_type() && dst_ty.bits() == 128);
-            match src {
-                RegMem::Reg { reg } => {
-                    if src_ty.is_float() {
-                        // Case 1: when moving a scalar float, we simply move from one XMM register
-                        // to another, expecting the register allocator to elide this. Here we
-                        // assume that the upper bits of a scalar float have not been munged with
-                        // (the same assumption the old backend makes).
-                        ctx.emit(Inst::gen_move(dst, reg, dst_ty));
-                    } else {
-                        // Case 2: when moving a scalar value of any other type, use MOVD to zero
-                        // the upper lanes.
-                        let src_size = match src_ty.bits() {
-                            32 => OperandSize::Size32,
-                            64 => OperandSize::Size64,
-                            _ => unimplemented!("invalid source size for type: {}", src_ty),
-                        };
-                        ctx.emit(Inst::gpr_to_xmm(SseOpcode::Movd, src, src_size, dst));
-                    }
-                }
-                RegMem::Mem { .. } => {
-                    // Case 3: when presented with `load + scalar_to_vector`, coalesce into a single
-                    // MOVSS/MOVSD instruction.
-                    let opcode = match src_ty.bits() {
-                        32 => SseOpcode::Movss,
-                        64 => SseOpcode::Movsd,
-                        _ => unimplemented!("unable to move scalar to vector for type: {}", src_ty),
-                    };
-                    ctx.emit(Inst::xmm_mov(opcode, src, dst));
-                }
-            }
-        }
-
-        Opcode::Splat => {
-            let ty = ty.unwrap();
-            assert_eq!(ty.bits(), 128);
-            let src_ty = ctx.input_ty(insn, 0);
-            assert!(src_ty.bits() < 128);
-
-            let src = input_to_reg_mem(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            // We know that splat will overwrite all of the lanes of `dst` but it takes several
-            // instructions to do so. Because of the multiple instructions, there is no good way to
-            // declare `dst` a `def` except with the following pseudo-instruction.
-            ctx.emit(Inst::xmm_uninit_value(dst));
-
-            // TODO: eventually many of these sequences could be optimized with AVX's VBROADCAST*
-            // and VPBROADCAST*.
-            match ty.lane_bits() {
-                8 => {
-                    emit_insert_lane(ctx, src, dst, 0, ty.lane_type());
-                    // Initialize a register with all 0s.
-                    let tmp = ctx.alloc_tmp(ty).only_reg().unwrap();
-                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), tmp));
-                    // Shuffle the lowest byte lane to all other lanes.
-                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::from(tmp), dst))
-                }
-                16 => {
-                    emit_insert_lane(ctx, src.clone(), dst, 0, ty.lane_type());
-                    emit_insert_lane(ctx, src, dst, 1, ty.lane_type());
-                    // Shuffle the lowest two lanes to all other lanes.
-                    ctx.emit(Inst::xmm_rm_r_imm(
-                        SseOpcode::Pshufd,
-                        RegMem::from(dst),
-                        dst,
-                        0,
-                        OperandSize::Size32,
-                    ))
-                }
-                32 => {
-                    emit_insert_lane(ctx, src, dst, 0, ty.lane_type());
-                    // Shuffle the lowest lane to all other lanes.
-                    ctx.emit(Inst::xmm_rm_r_imm(
-                        SseOpcode::Pshufd,
-                        RegMem::from(dst),
-                        dst,
-                        0,
-                        OperandSize::Size32,
-                    ))
-                }
-                64 => {
-                    emit_insert_lane(ctx, src.clone(), dst, 0, ty.lane_type());
-                    emit_insert_lane(ctx, src, dst, 1, ty.lane_type());
-                }
-                _ => panic!("Invalid type to splat: {}", ty),
-            }
-        }
 
         Opcode::VanyTrue => {
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
