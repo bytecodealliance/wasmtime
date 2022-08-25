@@ -13,7 +13,7 @@ use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     ArgumentPurpose, Block, FuncRef, Function, GlobalValue, GlobalValueData, Heap, LibCall,
-    StackSlot, Type, Value as ValueRef,
+    StackSlot, TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::SmallVec;
@@ -192,7 +192,7 @@ pub enum HeapInit {
     FromBacking(HeapBacking),
 }
 
-pub type LibCallHandler<'a, V> = &'a dyn Fn(SmallVec<[V; 1]>) -> SmallVec<[V; 1]>;
+pub type LibCallHandler<'a, V> = &'a dyn Fn(SmallVec<[V; 1]>) -> Result<SmallVec<[V; 1]>, TrapCode>;
 
 /// Maintains the [Interpreter]'s state, implementing the [State] trait.
 pub struct InterpreterState<'a> {
@@ -1083,10 +1083,10 @@ mod tests {
         let state = InterpreterState::default()
             .with_function_store(env)
             .with_libcall(LibCall::UdivI64, &|args| {
-                smallvec![match &args[..] {
+                Ok(smallvec![match &args[..] {
                     [DataValue::I64(a), DataValue::I64(b)] => DataValue::I64(a / b),
                     _ => panic!("Unexpected args"),
-                }]
+                }])
             });
 
         let result = Interpreter::new(state)

@@ -3,7 +3,7 @@
 use libfuzzer_sys::fuzz_target;
 
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::LibCall;
+use cranelift_codegen::ir::{LibCall, TrapCode};
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_filetests::function_runner::{CompiledFunction, SingleFunctionCompiler};
@@ -14,7 +14,6 @@ use cranelift_interpreter::interpreter::{Interpreter, InterpreterError, Interpre
 use cranelift_interpreter::step::ControlFlow;
 use cranelift_interpreter::step::CraneliftTrap;
 use smallvec::smallvec;
-use std::ops::Shl;
 
 const INTERPRETER_FUEL: u64 = 4096;
 
@@ -61,9 +60,11 @@ fuzz_target!(|testcase: TestCase| {
 
         let state = InterpreterState::default()
             .with_function_store(env)
-            .with_libcall(LibCall::IshlI64, &|args| match &args[..] {
-                [DataValue::I64(_), DataValue::I64(b)] if *b > 63 => smallvec![DataValue::I64(0)],
-                [DataValue::I64(a), DataValue::I64(b)] => smallvec![DataValue::I64(a.shl(b))],
+            .with_libcall(LibCall::UdivI64, &|args| match &args[..] {
+                [DataValue::I64(a), DataValue::I64(b)] => a
+                    .checked_div(*b)
+                    .map(|res| Ok(smallvec![DataValue::I64(res)]))
+                    .unwrap_or(Err(TrapCode::IntegerDivisionByZero)),
                 _ => unreachable!(),
             });
         let interpreter = Interpreter::new(state).with_fuel(Some(INTERPRETER_FUEL));

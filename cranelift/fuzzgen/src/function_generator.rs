@@ -833,9 +833,9 @@ where
                 let signature = self.generate_signature()?;
                 (name, signature)
             } else {
-                // Use ishli64 as an example of a libcall function.
+                // Use udivi64 as an example of a libcall function.
                 // TODO: Expand this to more libcall's
-                let libcall = LibCall::IshlI64;
+                let libcall = LibCall::UdivI64;
                 let signature = libcall.signature(CallConv::Fast);
                 (ExternalName::LibCall(libcall), signature)
             };

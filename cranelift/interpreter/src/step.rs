@@ -349,6 +349,10 @@ where
 
                     // We don't transfer control to a libcall, we just execute it and return the results
                     let res = handler(args);
+                    let res = match res {
+                        Err(trap) => return Ok(ControlFlow::Trap(CraneliftTrap::User(trap))),
+                        Ok(rets) => rets,
+                    };
 
                     // Check that what the handler returned is what we expect.
                     let rets_diff = res
