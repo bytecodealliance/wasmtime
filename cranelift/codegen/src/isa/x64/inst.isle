@@ -2901,6 +2901,21 @@
             (_ Unit (emit (MInst.XmmToGpr op src dst size))))
         dst))
 
+;; Helper for creating `pmovmskb` instructions.
+(decl x64_pmovmskb (OperandSize Xmm) Gpr)
+(rule (x64_pmovmskb size src)
+      (xmm_to_gpr (SseOpcode.Pmovmskb) src size))
+
+;; Helper for creating `movmskps` instructions.
+(decl x64_movmskps (OperandSize Xmm) Gpr)
+(rule (x64_movmskps size src)
+      (xmm_to_gpr (SseOpcode.Movmskps) src size))
+
+;; Helper for creating `movmskpd` instructions.
+(decl x64_movmskpd (OperandSize Xmm) Gpr)
+(rule (x64_movmskpd size src)
+      (xmm_to_gpr (SseOpcode.Movmskpd) src size))
+
 ;; Helper for creating `MInst.GprToXmm` instructions.
 (decl gpr_to_xmm (SseOpcode GprMem OperandSize) Xmm)
 (rule (gpr_to_xmm op src size)

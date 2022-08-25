@@ -38,9 +38,8 @@ block0(v0: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm5
-;   packsswb %xmm5, %xmm0, %xmm5
-;   pmovmskb %xmm5, %eax
+;   packsswb %xmm0, %xmm0, %xmm0
+;   pmovmskb %xmm0, %eax
 ;   shrq    $8, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

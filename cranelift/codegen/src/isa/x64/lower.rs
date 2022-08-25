@@ -471,63 +471,12 @@ fn lower_insn_to_regs(
         | Opcode::ScalarToVector
         | Opcode::Splat
         | Opcode::VanyTrue
-        | Opcode::VallTrue => {
+        | Opcode::VallTrue
+        | Opcode::VhighBits => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::VhighBits => {
-            let src = put_input_in_reg(ctx, inputs[0]);
-            let src_ty = ctx.input_ty(insn, 0);
-            debug_assert!(src_ty.is_vector() && src_ty.bits() == 128);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            debug_assert!(dst.to_reg().class() == RegClass::Int);
-
-            // The Intel specification allows using both 32-bit and 64-bit GPRs as destination for
-            // the "move mask" instructions. This is controlled by the REX.R bit: "In 64-bit mode,
-            // the instruction can access additional registers when used with a REX.R prefix. The
-            // default operand size is 64-bit in 64-bit mode" (PMOVMSKB in IA Software Development
-            // Manual, vol. 2). This being the case, we will always clear REX.W since its use is
-            // unnecessary (`OperandSize` is used for setting/clearing REX.W).
-            let size = OperandSize::Size32;
-
-            match src_ty {
-                types::I8X16 | types::B8X16 => {
-                    ctx.emit(Inst::xmm_to_gpr(SseOpcode::Pmovmskb, src, dst, size))
-                }
-                types::I32X4 | types::B32X4 | types::F32X4 => {
-                    ctx.emit(Inst::xmm_to_gpr(SseOpcode::Movmskps, src, dst, size))
-                }
-                types::I64X2 | types::B64X2 | types::F64X2 => {
-                    ctx.emit(Inst::xmm_to_gpr(SseOpcode::Movmskpd, src, dst, size))
-                }
-                types::I16X8 | types::B16X8 => {
-                    // There is no x86 instruction for extracting the high bit of 16-bit lanes so
-                    // here we:
-                    // - duplicate the 16-bit lanes of `src` into 8-bit lanes:
-                    //     PACKSSWB([x1, x2, ...], [x1, x2, ...]) = [x1', x2', ..., x1', x2', ...]
-                    // - use PMOVMSKB to gather the high bits; now we have duplicates, though
-                    // - shift away the bottom 8 high bits to remove the duplicates.
-                    let tmp = ctx.alloc_tmp(src_ty).only_reg().unwrap();
-                    ctx.emit(Inst::gen_move(tmp, src, src_ty));
-                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Packsswb, RegMem::reg(src), tmp));
-                    ctx.emit(Inst::xmm_to_gpr(
-                        SseOpcode::Pmovmskb,
-                        tmp.to_reg(),
-                        dst,
-                        size,
-                    ));
-                    ctx.emit(Inst::shift_r(
-                        OperandSize::Size64,
-                        ShiftKind::ShiftRightLogical,
-                        Some(8),
-                        dst,
-                    ));
-                }
-                _ => unimplemented!("unknown input type {} for {}", src_ty, op),
-            }
-        }
 
         Opcode::Iconcat => {
             let ty = ctx.output_ty(insn, 0);
