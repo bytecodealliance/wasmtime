@@ -478,12 +478,6 @@ impl Inst {
         Inst::Ud2 { trap_code }
     }
 
-    pub(crate) fn setcc(cc: CC, dst: Writable<Reg>) -> Inst {
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        let dst = WritableGpr::from_writable_reg(dst).unwrap();
-        Inst::Setcc { cc, dst }
-    }
-
     pub(crate) fn cmove(size: OperandSize, cc: CC, src: RegMem, dst: Writable<Reg>) -> Inst {
         debug_assert!(size.is_one_of(&[
             OperandSize::Size16,

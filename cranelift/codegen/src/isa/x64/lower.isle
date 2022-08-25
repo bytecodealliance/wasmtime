@@ -3643,3 +3643,16 @@
             (src RegMem (RegMem.Reg src))
             (vec Xmm (vec_insert_lane ty (xmm_uninit_value) src 0)))
         (vec_insert_lane ty vec src 1)))
+
+;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (vany_true val))
+      (with_flags (x64_ptest val val) (x64_setcc (CC.NZ))))
+
+;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (vall_true val @ (value_type ty)))
+      (let ((src Xmm val)
+            (zeros Xmm (x64_pxor src src))
+            (cmp Xmm (x64_pcmpeq (vec_int_type ty) src zeros)))
+        (with_flags (x64_ptest cmp cmp) (x64_setcc (CC.Z)))))

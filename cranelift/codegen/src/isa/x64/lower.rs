@@ -129,32 +129,6 @@ fn is_mergeable_load(ctx: &mut Lower<Inst>, src_insn: IRInst) -> Option<(InsnInp
     }
 }
 
-/// Put the given input into a register or a memory operand.
-/// Effectful: may mark the given input as used, when returning the register form.
-fn input_to_reg_mem(ctx: &mut Lower<Inst>, spec: InsnInput) -> RegMem {
-    let inputs = ctx.get_input_as_source_or_const(spec.insn, spec.input);
-
-    if let Some(c) = inputs.constant {
-        // Generate constants fresh at each use to minimize long-range register pressure.
-        let ty = ctx.input_ty(spec.insn, spec.input);
-        return RegMem::reg(generate_constant(ctx, ty, c).only_reg().unwrap());
-    }
-
-    if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
-        if let Some((addr_input, offset)) = is_mergeable_load(ctx, src_insn) {
-            ctx.sink_inst(src_insn);
-            let amode = lower_to_amode(ctx, addr_input, offset);
-            return RegMem::mem(amode);
-        }
-    }
-
-    RegMem::reg(
-        ctx.put_input_in_regs(spec.insn, spec.input)
-            .only_reg()
-            .unwrap(),
-    )
-}
-
 fn input_to_imm(ctx: &mut Lower<Inst>, spec: InsnInput) -> Option<u64> {
     ctx.get_input_as_source_or_const(spec.insn, spec.input)
         .constant
@@ -495,51 +469,13 @@ fn lower_insn_to_regs(
         | Opcode::Swizzle
         | Opcode::Extractlane
         | Opcode::ScalarToVector
-        | Opcode::Splat => {
+        | Opcode::Splat
+        | Opcode::VanyTrue
+        | Opcode::VallTrue => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::VanyTrue => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let src_ty = ctx.input_ty(insn, 0);
-            assert_eq!(src_ty.bits(), 128);
-            let src = put_input_in_reg(ctx, inputs[0]);
-            // Set the ZF if the result is all zeroes.
-            ctx.emit(Inst::xmm_cmp_rm_r(SseOpcode::Ptest, RegMem::reg(src), src));
-            // If the ZF is not set, place a 1 in `dst`.
-            ctx.emit(Inst::setcc(CC::NZ, dst));
-        }
-
-        Opcode::VallTrue => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let src_ty = ctx.input_ty(insn, 0);
-            assert_eq!(src_ty.bits(), 128);
-            let src = input_to_reg_mem(ctx, inputs[0]);
-
-            let eq = |ty: Type| match ty.lane_bits() {
-                8 => SseOpcode::Pcmpeqb,
-                16 => SseOpcode::Pcmpeqw,
-                32 => SseOpcode::Pcmpeqd,
-                64 => SseOpcode::Pcmpeqq,
-                _ => panic!("Unable to find an instruction for {} for type: {}", op, ty),
-            };
-
-            // Initialize a register with all 0s.
-            let tmp = ctx.alloc_tmp(src_ty).only_reg().unwrap();
-            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), tmp));
-            // Compare to see what lanes are filled with all 1s.
-            ctx.emit(Inst::xmm_rm_r(eq(src_ty), src, tmp));
-            // Set the ZF if the result is all zeroes.
-            ctx.emit(Inst::xmm_cmp_rm_r(
-                SseOpcode::Ptest,
-                RegMem::from(tmp),
-                tmp.to_reg(),
-            ));
-            // If the ZF is set, place a 1 in `dst`.
-            ctx.emit(Inst::setcc(CC::Z, dst));
-        }
 
         Opcode::VhighBits => {
             let src = put_input_in_reg(ctx, inputs[0]);

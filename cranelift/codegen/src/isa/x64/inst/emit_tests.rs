@@ -89,6 +89,12 @@ impl Inst {
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
+
+    fn setcc(cc: CC, dst: Writable<Reg>) -> Inst {
+        debug_assert!(dst.to_reg().class() == RegClass::Int);
+        let dst = WritableGpr::from_writable_reg(dst).unwrap();
+        Inst::Setcc { cc, dst }
+    }
 }
 
 #[test]
