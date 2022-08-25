@@ -745,6 +745,15 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn preserve_frame_pointers(&mut self) -> Option<()> {
+            if self.flags.preserve_frame_pointers() {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn func_ref_data(&mut self, func_ref: FuncRef) -> (SigRef, ExternalName, RelocDistance) {
             let funcdata = &self.lower_ctx.dfg().ext_funcs[func_ref];
             (
