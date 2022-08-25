@@ -1564,7 +1564,9 @@ impl Inst {
                 let cond = cond.pretty_print(0, allocs);
                 format!("ccmp {}, {}, {}, {}", rn, imm, nzcv, cond)
             }
-            &Inst::AtomicRMW { rs, rt, rn, ty, op } => {
+            &Inst::AtomicRMW {
+                rs, rt, rn, ty, op, ..
+            } => {
                 let op = match op {
                     AtomicRMWOp::Add => "ldaddal",
                     AtomicRMWOp::Clr => "ldclral",
@@ -1657,7 +1659,7 @@ impl Inst {
                 loop_str.push_str(&format!("cbnz {}, 1b", r_status));
                 loop_str
             }
-            &Inst::AtomicCAS { rs, rt, rn, ty } => {
+            &Inst::AtomicCAS { rs, rt, rn, ty, .. } => {
                 let op = match ty {
                     I8 => "casalb",
                     I16 => "casalh",
@@ -1671,7 +1673,7 @@ impl Inst {
 
                 format!("{} {}, {}, [{}]", op, rs, rt, rn)
             }
-            &Inst::AtomicCASLoop { ty } => {
+            &Inst::AtomicCASLoop { ty, .. } => {
                 format!(
                     "atomically {{ compare-and-swap({}_bits_at_[x25], x26 -> x28), x27 = old_value_at_[x25]; x24 = trash }}",
                     ty.bits())

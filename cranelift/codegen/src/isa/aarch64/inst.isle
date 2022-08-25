@@ -240,7 +240,8 @@
        ;; x28   (wr) scratch reg; value afterwards has no meaning
        (AtomicRMWLoop
         (ty Type) ;; I8, I16, I32 or I64
-        (op AtomicRMWLoopOp))
+        (op AtomicRMWLoopOp)
+        (flags MemFlags))
 
        ;; Similar to AtomicRMWLoop, a compare-and-swap operation implemented using a load-linked
        ;; store-conditional loop, with acquire-release semantics.
@@ -253,7 +254,7 @@
        ;; x24   (wr) scratch reg; value afterwards has no meaning
        (AtomicCASLoop
         (ty Type) ;; I8, I16, I32 or I64
-        )
+        (flags MemFlags))
 
        ;; An atomic read-modify-write operation. These instructions require the
        ;; Large System Extension (LSE) ISA support (FEAT_LSE). The instructions have
@@ -263,7 +264,8 @@
          (rs Reg)
          (rt WritableReg)
          (rn Reg)
-         (ty Type))
+         (ty Type)
+         (flags MemFlags))
 
        ;; An atomic compare-and-swap operation. These instructions require the
        ;; Large System Extension (LSE) ISA support (FEAT_LSE). The instructions have
@@ -272,7 +274,8 @@
          (rs WritableReg)
          (rt Reg)
          (rn Reg)
-         (ty Type))
+         (ty Type)
+         (flags MemFlags))
 
        ;; Read `access_ty` bits from address `rt`, either 8, 16, 32 or 64-bits, and put
        ;; it in `rn`, optionally zero-extending to fill a word or double word result.
@@ -280,14 +283,16 @@
        (LoadAcquire
         (access_ty Type) ;; I8, I16, I32 or I64
         (rt WritableReg)
-        (rn Reg))
+        (rn Reg)
+        (flags MemFlags))
 
        ;; Write the lowest `ty` bits of `rt` to address `rn`.
        ;; This instruction is sequentially consistent.
        (StoreRelease
         (access_ty Type) ;; I8, I16, I32 or I64
         (rt Reg)
-        (rn Reg))
+        (rn Reg)
+        (flags MemFlags))
 
        ;; A memory fence.  This must provide ordering to ensure that, at a minimum, neither loads
        ;; nor stores may move forwards or backwards across the fence.  Currently emitted as "dmb
@@ -1958,16 +1963,16 @@
         dst))
 
 ;; Helper for emitting `MInst.LoadAcquire` instructions.
-(decl load_acquire (Type Reg) Reg)
-(rule (load_acquire ty addr)
+(decl load_acquire (Type MemFlags Reg) Reg)
+(rule (load_acquire ty flags addr)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.LoadAcquire ty dst addr))))
+            (_ Unit (emit (MInst.LoadAcquire ty dst addr flags))))
         dst))
 
 ;; Helper for emitting `MInst.StoreRelease` instructions.
-(decl store_release (Type Reg Reg) SideEffectNoResult)
-(rule (store_release ty src addr)
-      (SideEffectNoResult.Inst (MInst.StoreRelease ty src addr)))
+(decl store_release (Type MemFlags Reg Reg) SideEffectNoResult)
+(rule (store_release ty flags src addr)
+      (SideEffectNoResult.Inst (MInst.StoreRelease ty src addr flags)))
 
 ;; Helper for generating a `tst` instruction.
 ;;
@@ -2528,21 +2533,10 @@
         )
         x))
 
-;; An atomic load that can be sunk into another operation.
-(type SinkableAtomicLoad extern (enum))
-
-;; Extract a `SinkableAtomicLoad` that works with `Reg` from a value
-;; operand.
-(decl sinkable_atomic_load (SinkableAtomicLoad) Value)
-(extern extractor sinkable_atomic_load sinkable_atomic_load)
-
-;; Sink a `SinkableAtomicLoad` into a `Reg`.
-;;
-;; This is a side-effectful operation that notifies the context that the
-;; instruction that produced the `SinkableAtomicLoad` has been sunk into another
-;; instruction, and no longer needs to be lowered.
-(decl sink_atomic_load (SinkableAtomicLoad) Reg)
-(extern constructor sink_atomic_load sink_atomic_load)
+(decl sink_atomic_load (Inst) Reg)
+(rule (sink_atomic_load x @ (atomic_load _ addr))
+      (let ((_ Unit (sink_inst x)))
+           (put_in_reg addr)))
 
 ;; Helper for generating either an `AluRRR`, `AluRRRShift`, or `AluRRImmLogic`
 ;; instruction depending on the input. Note that this requires that the `ALUOp`
@@ -2705,22 +2699,22 @@
       (vec_misc (VecMisc2.Cmeq0) rn size))
 
 ;; Helper for emitting `MInst.AtomicRMW` instructions.
-(decl lse_atomic_rmw (AtomicRMWOp Value Reg Type) Reg)
-(rule (lse_atomic_rmw op p r_arg2 ty)
+(decl lse_atomic_rmw (AtomicRMWOp Value Reg Type MemFlags) Reg)
+(rule (lse_atomic_rmw op p r_arg2 ty flags)
       (let (
           (r_addr Reg p)
           (dst WritableReg (temp_writable_reg ty))
-          (_ Unit (emit (MInst.AtomicRMW op r_arg2 dst r_addr ty)))
+          (_ Unit (emit (MInst.AtomicRMW op r_arg2 dst r_addr ty flags)))
         )
         dst))
 
 ;; Helper for emitting `MInst.AtomicCAS` instructions.
-(decl lse_atomic_cas (Reg Reg Reg Type) Reg)
-(rule (lse_atomic_cas addr expect replace ty)
+(decl lse_atomic_cas (Reg Reg Reg Type MemFlags) Reg)
+(rule (lse_atomic_cas addr expect replace ty flags)
       (let (
             (dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov (operand_size ty) dst expect)))
-            (_ Unit (emit (MInst.AtomicCAS dst replace addr ty)))
+            (_ Unit (emit (MInst.AtomicCAS dst replace addr ty flags)))
           )
           dst))
 
@@ -2730,14 +2724,14 @@
 ;; regs, and that's not guaranteed safe if either is in a real reg.
 ;; - Move the args to the preordained AtomicRMW input regs
 ;; - And finally, copy the preordained AtomicRMW output reg to its destination.
-(decl atomic_rmw_loop (AtomicRMWLoopOp Value Value Type) Reg)
-(rule (atomic_rmw_loop op p arg2 ty)
+(decl atomic_rmw_loop (AtomicRMWLoopOp Value Value Type MemFlags) Reg)
+(rule (atomic_rmw_loop op p arg2 ty flags)
       (let (
           (v_addr Reg (ensure_in_vreg p $I64))
           (v_arg2 Reg (ensure_in_vreg arg2 $I64))
           (r_addr Reg (mov64_to_real 25 v_addr))
           (r_arg2 Reg (mov64_to_real 26 v_arg2))
-          (_ Unit (emit (MInst.AtomicRMWLoop ty op)))
+          (_ Unit (emit (MInst.AtomicRMWLoop ty op flags)))
         )
         (mov64_from_real 27)))
 
@@ -2747,8 +2741,8 @@
 ;; about zero-extending narrow (I8/I16/I32) values here.
 ;; Make sure that all three args are in virtual regs.  See corresponding comment
 ;; for `atomic_rmw_loop` above.
-(decl atomic_cas_loop (Reg Reg Reg Type) Reg)
-(rule (atomic_cas_loop addr expect replace ty)
+(decl atomic_cas_loop (Reg Reg Reg Type MemFlags) Reg)
+(rule (atomic_cas_loop addr expect replace ty flags)
       (let (
           (v_addr Reg (ensure_in_vreg addr $I64))
           (v_exp Reg (ensure_in_vreg expect $I64))
@@ -2759,7 +2753,7 @@
           (r_rep Reg (mov64_to_real 28 v_rep))
           ;; Now the AtomicCASLoop itself, implemented in the normal way, with a
           ;; load-exclusive, store-exclusive loop
-          (_ Unit (emit (MInst.AtomicCASLoop ty)))
+          (_ Unit (emit (MInst.AtomicCASLoop ty flags)))
         )
         ;; And finally, copy the preordained AtomicCASLoop output reg to its destination.
         ;; Also, x24 and x28 are trashed.
