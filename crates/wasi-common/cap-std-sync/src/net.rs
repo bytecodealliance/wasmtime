@@ -105,8 +105,8 @@ macro_rules! wasi_listen_write_impl {
             }
             #[cfg(unix)]
             async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
-                let fdflags = self.0.as_filelike().get_fd_flags()?;
-                Ok(from_sysif_fdflags(fdflags))
+                let fdflags = get_fd_flags(&self.0)?;
+                Ok(fdflags)
             }
             async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
                 if fdflags == wasi_common::file::FdFlags::NONBLOCK {
@@ -193,8 +193,8 @@ macro_rules! wasi_stream_write_impl {
             }
             #[cfg(unix)]
             async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
-                let fdflags = self.0.as_filelike().get_fd_flags()?;
-                Ok(from_sysif_fdflags(fdflags))
+                let fdflags = get_fd_flags(&self.0)?;
+                Ok(fdflags)
             }
             async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
                 if fdflags == wasi_common::file::FdFlags::NONBLOCK {
@@ -303,10 +303,16 @@ pub fn filetype_from(ft: &cap_std::fs::FileType) -> FileType {
     }
 }
 
-pub fn from_sysif_fdflags(f: system_interface::fs::FdFlags) -> wasi_common::file::FdFlags {
+/// Return the file-descriptor flags for a given file-like object.
+///
+/// This returns the flags needed to implement [`WasiFile::get_fdflags`].
+pub fn get_fd_flags<Filelike: AsFilelike>(f: Filelike) -> io::Result<wasi_common::file::FdFlags> {
     let mut out = wasi_common::file::FdFlags::empty();
-    if f.contains(system_interface::fs::FdFlags::NONBLOCK) {
+    if f.as_filelike()
+        .get_fd_flags()?
+        .contains(system_interface::fs::FdFlags::NONBLOCK)
+    {
         out |= wasi_common::file::FdFlags::NONBLOCK;
     }
-    out
+    Ok(out)
 }
