@@ -307,19 +307,44 @@ pub fn filetype_from(ft: &cap_std::fs::FileType) -> FileType {
 pub fn get_fd_flags<Socketlike: AsSocketlike>(
     f: Socketlike,
 ) -> io::Result<wasi_common::file::FdFlags> {
-    let mut out = wasi_common::file::FdFlags::empty();
-    if f.as_socketlike()
-        .get_fd_flags()?
-        .contains(system_interface::fs::FdFlags::NONBLOCK)
+    // On Unix-family platforms, we can use the same system call that we'd use
+    // for files on sockets here.
+    #[cfg(not(windows))]
     {
-        out |= wasi_common::file::FdFlags::NONBLOCK;
+        let mut out = wasi_common::file::FdFlags::empty();
+        if f.get_fd_flags()?
+            .contains(system_interface::fs::FdFlags::NONBLOCK)
+        {
+            out |= wasi_common::file::FdFlags::NONBLOCK;
+        }
+        Ok(out)
     }
-    Ok(out)
+
+    // On Windows, sockets are different, and there is no direct way to
+    // query for the non-blocking flag. We can get a sufficient approximation
+    // by testing whether a zero-length `recv` appears to block.
+    #[cfg(windows)]
+    match rustix::net::recv(f, &mut [], rustix::net::RecvFlags::empty()) {
+        Ok(_) => Ok(wasi_common::file::FdFlags::empty()),
+        Err(rustix::io::Errno::WOULDBLOCK) => Ok(wasi_common::file::FdFlags::NONBLOCK),
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// Return the file-descriptor flags for a given file-like object.
 ///
 /// This returns the flags needed to implement [`WasiFile::get_fdflags`].
 pub fn is_read_write<Socketlike: AsSocketlike>(f: Socketlike) -> io::Result<(bool, bool)> {
-    f.as_socketlike().is_read_write()
+    // On Unix-family platforms, we have an `IsReadWrite` impl.
+    #[cfg(not(windows))]
+    {
+        f.is_read_write()
+    }
+
+    // On Windows, we only have a `TcpStream` impl, so make a view first.
+    #[cfg(windows)]
+    {
+        f.as_socketlike_view::<std::net::TcpStream>()
+            .is_read_write()
+    }
 }
