@@ -60,7 +60,7 @@ fuzz_target!(|testcase: TestCase| {
 
         let state = InterpreterState::default()
             .with_function_store(env)
-            .with_libcall(LibCall::UdivI64, &|args| match &args[..] {
+            .with_libcall(LibCall::SdivI64, &|args| match &args[..] {
                 [DataValue::I64(a), DataValue::I64(b)] => a
                     .checked_div(*b)
                     .map(|res| Ok(smallvec![DataValue::I64(res)]))
