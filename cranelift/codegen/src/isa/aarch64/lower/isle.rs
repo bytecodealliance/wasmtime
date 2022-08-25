@@ -2,6 +2,7 @@
 
 // Pull in the ISLE generated code.
 pub mod generated_code;
+use generated_code::Context;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
@@ -14,6 +15,7 @@ use super::{
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm};
 use crate::isa::aarch64::lower::{lower_address, lower_splat_const};
 use crate::isa::aarch64::settings::Flags as IsaFlags;
+use crate::machinst::valueregs;
 use crate::machinst::{isle::*, InputSourceInst};
 use crate::settings::Flags;
 use crate::{
@@ -22,10 +24,11 @@ use crate::{
         immediates::*, types::*, AtomicRmwOp, ExternalName, Inst, InstructionData, MemFlags,
         TrapCode, Value, ValueList,
     },
+    isa::aarch64::abi::{AArch64Caller, AArch64MachineDeps},
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::aarch64::lower::{writable_vreg, writable_xreg, xreg},
     isa::unwind::UnwindInst,
-    machinst::{ty_bits, InsnOutput, Lower, VCodeConstant, VCodeConstantData},
+    machinst::{ty_bits, InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData},
 };
 use regalloc2::PReg;
 use std::boxed::Box;
@@ -69,8 +72,13 @@ pub struct SinkableAtomicLoad {
     atomic_addr: Value,
 }
 
-impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+    isle_prelude_method_helpers!(AArch64Caller);
+}
+
+impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_methods!();
+    isle_prelude_caller_methods!(AArch64MachineDeps, AArch64Caller);
 
     fn sign_return_address_disabled(&mut self) -> Option<()> {
         if self.isa_flags.sign_return_address() {

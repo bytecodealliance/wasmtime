@@ -225,12 +225,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
                         slots: smallvec![
                             ABIArgSlot::Reg {
                                 reg: lower_reg.to_real_reg().unwrap(),
-                                ty: param.value_type,
+                                ty: reg_types[0],
                                 extension: param.extension,
                             },
                             ABIArgSlot::Reg {
                                 reg: upper_reg.to_real_reg().unwrap(),
-                                ty: param.value_type,
+                                ty: reg_types[1],
                                 extension: param.extension,
                             },
                         ],

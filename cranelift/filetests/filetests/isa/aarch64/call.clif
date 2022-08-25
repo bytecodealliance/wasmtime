@@ -14,8 +14,8 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x5, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x5
+;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
+;   blr x4
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -30,8 +30,8 @@ block0(v0: i32):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x5, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x5
+;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
+;   blr x4
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -54,8 +54,8 @@ block0(v0: i32):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x5, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x5
+;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
+;   blr x4
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -91,8 +91,8 @@ block0(v0: i8):
 ;   movz x6, #42
 ;   movz x7, #42
 ;   strb w15, [sp]
-;   ldr x15, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x15
+;   ldr x14, 8 ; b 12 ; data TestCase(%g) + 0
+;   blr x14
 ;   add sp, sp, #16
 ;   virtual_sp_offset_adjust -16
 ;   ldp fp, lr, [sp], #16
@@ -140,26 +140,26 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #48
 ; block0:
-;   ldr x9, 8 ; b 12 ; data TestCase(%g0) + 0
-;   blr x9
-;   str q0, [sp]
-;   ldr x11, 8 ; b 12 ; data TestCase(%g1) + 0
-;   blr x11
-;   str q0, [sp, #16]
-;   ldr x13, 8 ; b 12 ; data TestCase(%g1) + 0
-;   blr x13
+;   ldr x8, 8 ; b 12 ; data TestCase(%g0) + 0
+;   blr x8
 ;   str q0, [sp, #32]
-;   ldr x15, 8 ; b 12 ; data TestCase(%g2) + 0
-;   blr x15
-;   ldr q0, [sp]
-;   ldr x1, 8 ; b 12 ; data TestCase(%g3) + 0
-;   blr x1
-;   ldr q0, [sp, #16]
-;   ldr x3, 8 ; b 12 ; data TestCase(%g4) + 0
-;   blr x3
+;   ldr x9, 8 ; b 12 ; data TestCase(%g1) + 0
+;   blr x9
+;   str q0, [sp, #16]
+;   ldr x10, 8 ; b 12 ; data TestCase(%g1) + 0
+;   blr x10
+;   str q0, [sp]
+;   ldr x12, 8 ; b 12 ; data TestCase(%g2) + 0
+;   blr x12
 ;   ldr q0, [sp, #32]
-;   ldr x5, 8 ; b 12 ; data TestCase(%g4) + 0
-;   blr x5
+;   ldr x14, 8 ; b 12 ; data TestCase(%g3) + 0
+;   blr x14
+;   ldr q0, [sp, #16]
+;   ldr x0, 8 ; b 12 ; data TestCase(%g4) + 0
+;   blr x0
+;   ldr q0, [sp]
+;   ldr x2, 8 ; b 12 ; data TestCase(%g4) + 0
+;   blr x2
 ;   add sp, sp, #48
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -184,26 +184,26 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #48
 ; block0:
+;   ldr x8, 8 ; b 12 ; data TestCase(%g0) + 0
+;   blr x8
+;   str q0, [sp, #32]
 ;   ldr x9, 8 ; b 12 ; data TestCase(%g0) + 0
 ;   blr x9
-;   str q0, [sp]
-;   ldr x11, 8 ; b 12 ; data TestCase(%g0) + 0
-;   blr x11
 ;   str q0, [sp, #16]
-;   ldr x13, 8 ; b 12 ; data TestCase(%g0) + 0
-;   blr x13
-;   str q0, [sp, #32]
-;   ldr x15, 8 ; b 12 ; data TestCase(%g1) + 0
-;   blr x15
-;   ldr q0, [sp]
-;   ldr x1, 8 ; b 12 ; data TestCase(%g2) + 0
-;   blr x1
-;   ldr q0, [sp, #16]
-;   ldr x3, 8 ; b 12 ; data TestCase(%g2) + 0
-;   blr x3
+;   ldr x10, 8 ; b 12 ; data TestCase(%g0) + 0
+;   blr x10
+;   str q0, [sp]
+;   ldr x12, 8 ; b 12 ; data TestCase(%g1) + 0
+;   blr x12
 ;   ldr q0, [sp, #32]
-;   ldr x5, 8 ; b 12 ; data TestCase(%g2) + 0
-;   blr x5
+;   ldr x14, 8 ; b 12 ; data TestCase(%g2) + 0
+;   blr x14
+;   ldr q0, [sp, #16]
+;   ldr x0, 8 ; b 12 ; data TestCase(%g2) + 0
+;   blr x0
+;   ldr q0, [sp]
+;   ldr x2, 8 ; b 12 ; data TestCase(%g2) + 0
+;   blr x2
 ;   add sp, sp, #48
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -232,26 +232,26 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #48
 ; block0:
-;   ldr x9, 8 ; b 12 ; data TestCase(%g0) + 0
-;   blr x9
-;   str q0, [sp]
-;   ldr x11, 8 ; b 12 ; data TestCase(%g1) + 0
-;   blr x11
-;   str q0, [sp, #16]
-;   ldr x13, 8 ; b 12 ; data TestCase(%g2) + 0
-;   blr x13
+;   ldr x8, 8 ; b 12 ; data TestCase(%g0) + 0
+;   blr x8
 ;   str q0, [sp, #32]
-;   ldr x15, 8 ; b 12 ; data TestCase(%g3) + 0
-;   blr x15
-;   ldr q0, [sp]
-;   ldr x1, 8 ; b 12 ; data TestCase(%g4) + 0
-;   blr x1
-;   ldr q0, [sp, #16]
-;   ldr x3, 8 ; b 12 ; data TestCase(%g5) + 0
-;   blr x3
+;   ldr x9, 8 ; b 12 ; data TestCase(%g1) + 0
+;   blr x9
+;   str q0, [sp, #16]
+;   ldr x10, 8 ; b 12 ; data TestCase(%g2) + 0
+;   blr x10
+;   str q0, [sp]
+;   ldr x12, 8 ; b 12 ; data TestCase(%g3) + 0
+;   blr x12
 ;   ldr q0, [sp, #32]
-;   ldr x5, 8 ; b 12 ; data TestCase(%g6) + 0
-;   blr x5
+;   ldr x14, 8 ; b 12 ; data TestCase(%g4) + 0
+;   blr x14
+;   ldr q0, [sp, #16]
+;   ldr x0, 8 ; b 12 ; data TestCase(%g5) + 0
+;   blr x0
+;   ldr q0, [sp]
+;   ldr x2, 8 ; b 12 ; data TestCase(%g6) + 0
+;   blr x2
 ;   add sp, sp, #48
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -283,8 +283,8 @@ block0(v0: i64):
 ;   movz x0, #42
 ;   movz x2, #42
 ;   mov x1, x7
-;   ldr x10, 8 ; b 12 ; data TestCase(%f11) + 0
-;   blr x10
+;   ldr x9, 8 ; b 12 ; data TestCase(%f11) + 0
+;   blr x9
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -315,8 +315,8 @@ block0(v0: i64):
 ;   movz x3, #42
 ;   movz x0, #42
 ;   mov x2, x7
-;   ldr x10, 8 ; b 12 ; data TestCase(%f12) + 0
-;   blr x10
+;   ldr x9, 8 ; b 12 ; data TestCase(%f12) + 0
+;   blr x9
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -347,8 +347,8 @@ block0(v0: i64):
 ;   movz x2, #42
 ;   movz x0, #42
 ;   mov x1, x7
-;   ldr x10, 8 ; b 12 ; data TestCase(%f13) + 0
-;   blr x10
+;   ldr x9, 8 ; b 12 ; data TestCase(%f13) + 0
+;   blr x9
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -477,8 +477,8 @@ block0(v0: i64):
 ;   mov fp, sp
 ; block0:
 ;   mov x8, x0
-;   ldr x5, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x5
+;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
+;   blr x4
 ;   mov x0, x8
 ;   ldp fp, lr, [sp], #16
 ;   ret
