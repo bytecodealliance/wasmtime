@@ -1456,11 +1456,7 @@ impl VCodeConstantData {
 
     /// Calculate the alignment of the constant data.
     pub fn alignment(&self) -> u32 {
-        if self.as_slice().len() <= 8 {
-            8
-        } else {
-            16
-        }
+        16
     }
 }
 
