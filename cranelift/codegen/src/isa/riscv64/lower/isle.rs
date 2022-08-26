@@ -319,7 +319,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         };
         let len_sub_shamt = {
             let len_sub_shamt = self.temp_writable_reg(I64);
-            self.emit(&MInst::load_constant_imm12(
+            self.emit(&MInst::load_imm12(
                 len_sub_shamt,
                 Imm12::from_bits(ty.bits() as i16),
             ));
@@ -528,10 +528,14 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
             .skip(1)
             .map(|bix| BranchTarget::Label(*bix))
             .collect();
+        self.emit(&MInst::BrTableCheck {
+            index,
+            targets_len: targets.len() as i32,
+            default_: default_,
+        });
         self.emit(&MInst::BrTable {
             index,
             tmp1: tmp,
-            default_,
             targets,
         });
         InstOutput::default()

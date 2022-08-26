@@ -1043,8 +1043,7 @@
   (lower (trapif _ (iadd_ifcout_parameters a b ty) trap_code ))
   (let
     (
-      (tmp InstOutput (lower_iadd_overflow  a b ty  ) )
-      (test Reg (inst_output_get tmp 1) )
+      (test Reg (lower_trap_if_add_overflow  a b ty  ) )
     )
     (gen_trapif test trap_code)
   )

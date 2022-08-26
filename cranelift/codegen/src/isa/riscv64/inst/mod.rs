@@ -201,7 +201,7 @@ impl Inst {
     const INSTRUCTION_SIZE: i32 = 4;
 
     #[inline]
-    pub(crate) fn load_constant_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
+    pub(crate) fn load_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
         Inst::AluRRImm12 {
             alu_op: AluOPRRI::Addi,
             rd: rd,
@@ -244,15 +244,19 @@ impl Inst {
         insts.unwrap_or(LoadConstant::U64(value).load_constant(rd))
     }
 
-    pub(crate) fn construct_auipc_and_jalr(link: Writable<Reg>, offset: i64) -> [Inst; 2] {
+    pub(crate) fn construct_auipc_and_jalr(
+        link: Option<Writable<Reg>>,
+        tmp: Writable<Reg>,
+        offset: i64,
+    ) -> [Inst; 2] {
         Inst::generate_imm(offset as u64, |imm20, imm12| {
             let a = Inst::Auipc {
-                rd: link,
+                rd: tmp,
                 imm: imm20.unwrap_or_default(),
             };
             let b = Inst::Jalr {
-                rd: link,
-                base: link.to_reg(),
+                rd: link.unwrap_or(writable_zero_reg()),
+                base: tmp.to_reg(),
                 offset: imm12.unwrap_or_default(),
             };
             [a, b]
@@ -318,15 +322,14 @@ impl Inst {
 //=============================================================================
 fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCollector<'_, F>) {
     match inst {
-        &Inst::Nop0 => {
-            // do nothing.
-        }
-        &Inst::Nop4 => {
-            // do nothing.
-        }
+        &Inst::Nop0 => {}
+        &Inst::Nop4 => {}
         &Inst::BrTable { index, tmp1, .. } => {
             collector.reg_use(index);
             collector.reg_early_def(tmp1);
+        }
+        &Inst::BrTableCheck { index, .. } => {
+            collector.reg_use(index);
         }
         &Inst::Auipc { rd, .. } => collector.reg_def(rd),
         &Inst::Lui { rd, .. } => collector.reg_def(rd),
@@ -652,7 +655,9 @@ impl MachInst for Inst {
             &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::Jalr { .. } => MachTerminator::Uncond,
             &Inst::Ret { .. } => MachTerminator::Ret,
-            &Inst::BrTable { .. } => MachTerminator::Indirect,
+            // BrTableCheck is a check before BrTable
+            // can lead transfer to default_.
+            &Inst::BrTable { .. } | &Inst::BrTableCheck { .. } => MachTerminator::Indirect,
             _ => MachTerminator::None,
         }
     }
@@ -1152,19 +1157,27 @@ impl Inst {
                 let dst = format_regs(&dst[..], allocs);
                 format!("{} {},{},{}##ty={}", op.op_name(), dst, x, y, ty,)
             }
+            &Inst::BrTableCheck {
+                index,
+                targets_len,
+                default_,
+            } => {
+                let index = format_reg(index, allocs);
+                format!(
+                    "br_table_check {}##targets_len={} default_={}",
+                    index, targets_len, default_
+                )
+            }
             &Inst::BrTable {
                 index,
                 tmp1,
-                default_,
                 ref targets,
             } => {
                 let targets: Vec<_> = targets.iter().map(|x| x.as_label().unwrap()).collect();
-
                 format!(
-                    "{} {},{},{}##tmp1={}",
+                    "{} {},{}##tmp1={}",
                     "br_table",
                     format_reg(index, allocs),
-                    default_,
                     format_labels(&targets[..]),
                     format_reg(tmp1.to_reg(), allocs),
                 )
@@ -1565,6 +1578,8 @@ impl MachInstLabelUse for LabelUse {
         assert!(use_offset % 4 == 0);
         assert!(label_offset % 4 == 0);
         let offset = (label_offset as i64) - (use_offset as i64);
+        // println!("use_offset:{} label_offset:{}", use_offset, label_offset);
+
         //check range
         assert!(
             offset >= -(self.max_neg_range() as i64) && offset <= (self.max_pos_range() as i64),
@@ -1636,6 +1651,7 @@ impl LabelUse {
     }
 
     fn patch_raw_offset(self, buffer: &mut [u8], offset: i64) {
+        assert!(offset != 0);
         match self {
             LabelUse::Jal20 => {
                 let offset = offset as u32;
@@ -1648,14 +1664,12 @@ impl LabelUse {
                     *raw |= v;
                 }
             }
-
             LabelUse::PCRel32 => {
                 let auipc = { &mut buffer[0] as *mut u8 as *mut u32 };
                 let jalr = { &mut buffer[4] as *mut u8 as *mut u32 };
                 Inst::generate_imm(offset as u64, |imm20, imm12| {
                     let imm20 = imm20.unwrap_or_default();
                     let imm12 = imm12.unwrap_or_default();
-
                     // zero_reg() is fine, the register parameter must have be in code stream.
                     // because of "|=" zero_reg() would not change the old value.
                     unsafe {
@@ -1671,9 +1685,6 @@ impl LabelUse {
 
             LabelUse::B12 => {
                 let mut offset = offset as u32;
-                if offset == 0 {
-                    offset = 4;
-                }
                 let raw = &mut buffer[0] as *mut u8 as *mut u32;
                 let v = ((offset >> 11 & 0b1) << 7)
                     | ((offset >> 1 & 0b1111) << 8)

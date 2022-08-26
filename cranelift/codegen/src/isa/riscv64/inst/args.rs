@@ -1940,7 +1940,7 @@ impl FloatSelectOP {
     // move qnan bits into int register.
     pub(crate) fn snan_bits(self, rd: Writable<Reg>, ty: Type) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
-        insts.push(Inst::load_constant_imm12(rd, Imm12::from_bits(-1)));
+        insts.push(Inst::load_imm12(rd, Imm12::from_bits(-1)));
         let x = if ty == F32 { 22 } else { 51 };
         insts.push(Inst::AluRRImm12 {
             alu_op: AluOPRRI::Srli,

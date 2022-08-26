@@ -206,10 +206,14 @@
       (op ReferenceCheckOP)
       (x Reg))
     
+    (BrTableCheck
+      (index Reg)
+      (targets_len i32)
+      (default_ BranchTarget)
+    )
     (BrTable
       (index Reg)
       (tmp1 WritableReg)
-      (default_ BranchTarget)
       (targets VecBranchTarget))
 
     ;; atomic compare and set operation
@@ -2177,22 +2181,17 @@
 )
 
 ;;; right now only return if overflow.
-(decl lower_iadd_overflow (Value Value Type) InstOutput)
+(decl lower_trap_if_add_overflow (Reg Reg Type) Reg)
 
 (rule
-  (lower_iadd_overflow x y $I64)
+  (lower_trap_if_add_overflow x y $I64)
   (let
     (
       ;;
-      (y_sign Reg (alu_rrr (AluOPRRR.Sgt) y (zero_reg)) )
-      ;; 
-      (tmp Reg (alu_add x y ) )
-      ;;
-      (tmp2 Reg (alu_rrr (AluOPRRR.Sgt) tmp x  ))
+      (tmp Reg (alu_add  x y))
       ;;;
-      (tmp3 Reg (alu_rrr (AluOPRRR.Xor) tmp2  y_sign) )  
     )
-     (output_2 tmp  (gen_extend tmp3 $true 1 64 )) 
+     (gen_icmp  (IntCC.UnsignedLessThan) tmp x $I64) 
   )
 )
 
@@ -2422,8 +2421,7 @@
 (extern constructor shift_int_to_most_significant shift_int_to_most_significant)
 
 
-;;; the result is not used.
-;;; how to return mark a value not used.
+;;; generate div overflow.
 (decl gen_div_overflow (Reg Reg Type) InstOutput)
 (rule
   (gen_div_overflow rs1 rs2 ty)
