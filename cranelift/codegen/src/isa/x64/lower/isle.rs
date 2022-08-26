@@ -140,28 +140,14 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
             if let Some(imm) = to_simm32(c as i64) {
                 return XmmMemImm::new(imm.to_reg_mem_imm()).unwrap();
             }
-
-            // A load from the constant pool is better than a rematerialization into a register,
-            // because it reduces register pressure.
-            //
-            // NOTE: this is where behavior differs from `put_in_reg_mem`, as we always force
-            // constants to be 16 bytes when a constant will be used in place of an xmm register.
-            let vcode_constant = self.emit_u128_le_const(c as u128);
-            return XmmMemImm::new(RegMemImm::mem(SyntheticAmode::ConstantOffset(
-                vcode_constant,
-            )))
-            .unwrap();
         }
 
-        if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
-            if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, src_insn) {
-                self.lower_ctx.sink_inst(src_insn);
-                let amode = lower_to_amode(self.lower_ctx, addr_input, offset);
-                return XmmMemImm::new(RegMemImm::mem(amode)).unwrap();
-            }
-        }
+        let res = match self.put_in_xmm_mem(val).to_reg_mem() {
+            RegMem::Reg { reg } => RegMemImm::Reg { reg },
+            RegMem::Mem { addr } => RegMemImm::Mem { addr },
+        };
 
-        XmmMemImm::new(RegMemImm::reg(self.put_in_reg(val))).unwrap()
+        XmmMemImm::new(res).unwrap()
     }
 
     fn put_in_xmm_mem(&mut self, val: Value) -> XmmMem {
