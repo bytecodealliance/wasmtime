@@ -628,6 +628,7 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
 mod tests {
     use super::*;
     use crate::step::CraneliftTrap;
+    use cranelift_codegen::ir::immediates::Ieee32;
     use cranelift_codegen::ir::types::I64;
     use cranelift_codegen::ir::TrapCode;
     use cranelift_reader::parse_functions;
@@ -1066,11 +1067,10 @@ mod tests {
     #[test]
     fn libcall() {
         let code = "function %test() -> i64 {
-            fn0 = colocated %UdivI64 (i64, i64) -> i64 fast
+            fn0 = colocated %CeilF32 (f32) -> f32 fast
         block0:
-            v0 = iconst.i64 10
-            v1 = iconst.i64 5
-            v2 = call fn0(v0, v1)
+            v1 = f32const 0x0.5
+            v2 = call fn0(v1)
             return v2
         }";
 
@@ -1081,8 +1081,7 @@ mod tests {
             .with_function_store(env)
             .with_libcall_handler(&|libcall, args| {
                 Ok(smallvec![match (libcall, &args[..]) {
-                    (LibCall::UdivI64, [DataValue::I64(a), DataValue::I64(b)]) =>
-                        DataValue::I64(a / b),
+                    (LibCall::CeilF32, [DataValue::F32(a)]) => DataValue::F32(a.ceil()),
                     _ => panic!("Unexpected args"),
                 }])
             });
@@ -1092,6 +1091,6 @@ mod tests {
             .unwrap()
             .unwrap_return();
 
-        assert_eq!(result, vec![DataValue::I64(2)])
+        assert_eq!(result, vec![DataValue::F32(Ieee32::with_float(1.0))])
     }
 }
