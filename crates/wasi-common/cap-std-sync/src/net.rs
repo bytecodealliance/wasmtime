@@ -1,7 +1,5 @@
 #[cfg(windows)]
 use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
-#[cfg(unix)]
-use io_lifetimes::AsFilelike;
 use io_lifetimes::AsSocketlike;
 #[cfg(unix)]
 use io_lifetimes::{AsFd, BorrowedFd};
@@ -105,8 +103,8 @@ macro_rules! wasi_listen_write_impl {
             }
             #[cfg(unix)]
             async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
-                let fdflags = self.0.as_filelike().get_fd_flags()?;
-                Ok(from_sysif_fdflags(fdflags))
+                let fdflags = get_fd_flags(&self.0)?;
+                Ok(fdflags)
             }
             async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
                 if fdflags == wasi_common::file::FdFlags::NONBLOCK {
@@ -193,8 +191,8 @@ macro_rules! wasi_stream_write_impl {
             }
             #[cfg(unix)]
             async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
-                let fdflags = self.0.as_filelike().get_fd_flags()?;
-                Ok(from_sysif_fdflags(fdflags))
+                let fdflags = get_fd_flags(&self.0)?;
+                Ok(fdflags)
             }
             async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
                 if fdflags == wasi_common::file::FdFlags::NONBLOCK {
@@ -230,7 +228,7 @@ macro_rules! wasi_stream_write_impl {
                 Ok(val)
             }
             async fn readable(&self) -> Result<(), Error> {
-                let (readable, _writeable) = self.0.is_read_write()?;
+                let (readable, _writeable) = is_read_write(&self.0)?;
                 if readable {
                     Ok(())
                 } else {
@@ -238,7 +236,7 @@ macro_rules! wasi_stream_write_impl {
                 }
             }
             async fn writable(&self) -> Result<(), Error> {
-                let (_readable, writeable) = self.0.is_read_write()?;
+                let (_readable, writeable) = is_read_write(&self.0)?;
                 if writeable {
                     Ok(())
                 } else {
@@ -303,10 +301,50 @@ pub fn filetype_from(ft: &cap_std::fs::FileType) -> FileType {
     }
 }
 
-pub fn from_sysif_fdflags(f: system_interface::fs::FdFlags) -> wasi_common::file::FdFlags {
-    let mut out = wasi_common::file::FdFlags::empty();
-    if f.contains(system_interface::fs::FdFlags::NONBLOCK) {
-        out |= wasi_common::file::FdFlags::NONBLOCK;
+/// Return the file-descriptor flags for a given file-like object.
+///
+/// This returns the flags needed to implement [`WasiFile::get_fdflags`].
+pub fn get_fd_flags<Socketlike: AsSocketlike>(
+    f: Socketlike,
+) -> io::Result<wasi_common::file::FdFlags> {
+    // On Unix-family platforms, we can use the same system call that we'd use
+    // for files on sockets here.
+    #[cfg(not(windows))]
+    {
+        let mut out = wasi_common::file::FdFlags::empty();
+        if f.get_fd_flags()?
+            .contains(system_interface::fs::FdFlags::NONBLOCK)
+        {
+            out |= wasi_common::file::FdFlags::NONBLOCK;
+        }
+        Ok(out)
     }
-    out
+
+    // On Windows, sockets are different, and there is no direct way to
+    // query for the non-blocking flag. We can get a sufficient approximation
+    // by testing whether a zero-length `recv` appears to block.
+    #[cfg(windows)]
+    match rustix::net::recv(f, &mut [], rustix::net::RecvFlags::empty()) {
+        Ok(_) => Ok(wasi_common::file::FdFlags::empty()),
+        Err(rustix::io::Errno::WOULDBLOCK) => Ok(wasi_common::file::FdFlags::NONBLOCK),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Return the file-descriptor flags for a given file-like object.
+///
+/// This returns the flags needed to implement [`WasiFile::get_fdflags`].
+pub fn is_read_write<Socketlike: AsSocketlike>(f: Socketlike) -> io::Result<(bool, bool)> {
+    // On Unix-family platforms, we have an `IsReadWrite` impl.
+    #[cfg(not(windows))]
+    {
+        f.is_read_write()
+    }
+
+    // On Windows, we only have a `TcpStream` impl, so make a view first.
+    #[cfg(windows)]
+    {
+        f.as_socketlike_view::<std::net::TcpStream>()
+            .is_read_write()
+    }
 }
