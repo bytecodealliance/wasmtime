@@ -98,8 +98,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   ldr w2, [x0]
-;   fmov s0, w2
+;   ldr w4, [x0]
+;   fmov s0, w4
 ;   ret
 
 function %load32_zero_int(i32) -> i32x4 {
