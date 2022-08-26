@@ -2716,6 +2716,15 @@
                                         dst))))
         dst))
 
+;; Helper for creating `shufps` instructions.
+(decl x64_shufps (Xmm XmmMem u8) Xmm)
+(rule (x64_shufps src1 src2 byte)
+      (xmm_rm_r_imm (SseOpcode.Shufps)
+                    src1
+                    src2
+                    byte
+                    (OperandSize.Size32)))
+
 ;; Helper for creating `MInst.XmmUnaryRmR` instructions.
 (decl xmm_unary_rm_r (SseOpcode XmmMem) Xmm)
 (rule (xmm_unary_rm_r op src)
@@ -3793,6 +3802,14 @@
 
 (decl sqmul_round_sat_mask () VCodeConstant)
 (extern constructor sqmul_round_sat_mask sqmul_round_sat_mask)
+
+;;;; uunarrow ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl uunarrow_umax_mask () VCodeConstant)
+(extern constructor uunarrow_umax_mask uunarrow_umax_mask)
+
+(decl uunarrow_uint_mask () VCodeConstant)
+(extern constructor uunarrow_uint_mask uunarrow_uint_mask)
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

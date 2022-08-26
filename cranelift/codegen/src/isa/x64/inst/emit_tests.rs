@@ -95,6 +95,24 @@ impl Inst {
         let dst = WritableGpr::from_writable_reg(dst).unwrap();
         Inst::Setcc { cc, dst }
     }
+
+    fn xmm_rm_r_imm(
+        op: SseOpcode,
+        src: RegMem,
+        dst: Writable<Reg>,
+        imm: u8,
+        size: OperandSize,
+    ) -> Inst {
+        debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
+        Inst::XmmRmRImm {
+            op,
+            src1: dst.to_reg(),
+            src2: src,
+            dst,
+            imm,
+            size,
+        }
+    }
 }
 
 #[test]

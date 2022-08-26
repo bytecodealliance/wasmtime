@@ -968,6 +968,29 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
             .use_constant(VCodeConstantData::WellKnown(&SAT_MASK))
     }
 
+    #[inline]
+    fn uunarrow_umax_mask(&mut self) -> VCodeConstant {
+        // 4294967295.0 is equivalent to 0x41EFFFFFFFE00000
+        static UMAX_MASK: [u8; 16] = [
+            0x00, 0x00, 0xE0, 0xFF, 0xFF, 0xFF, 0xEF, 0x41, 0x00, 0x00, 0xE0, 0xFF, 0xFF, 0xFF,
+            0xEF, 0x41,
+        ];
+
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&UMAX_MASK))
+    }
+
+    #[inline]
+    fn uunarrow_uint_mask(&mut self) -> VCodeConstant {
+        static UINT_MASK: [u8; 16] = [
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x30, 0x43,
+        ];
+
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&UINT_MASK))
+    }
+
     fn emit_div_or_rem(
         &mut self,
         kind: &DivOrRemKind,
