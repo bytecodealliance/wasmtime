@@ -980,7 +980,8 @@ where
         let sig = self.generate_signature()?;
 
         let mut fn_builder_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(UserFuncName::user(0, 1), sig.clone());
+        // function name must be in a different namespace than TESTFILE_NAMESPACE (0)
+        let mut func = Function::with_name_signature(UserFuncName::user(1, 0), sig.clone());
 
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
 
