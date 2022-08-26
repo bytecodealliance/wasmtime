@@ -21,7 +21,7 @@ use super::function::FunctionParameters;
 /// This is used both for naming a function (for debugging purposes) and for declaring external
 /// functions. In the latter case, this becomes an `ExternalName`, which gets embedded in
 /// relocations later, etc.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum UserFuncName {
     /// A user-defined name, with semantics left to the user.
@@ -39,7 +39,7 @@ impl UserFuncName {
 
     /// Create a new external name from a user-defined external function reference.
     pub fn user(namespace: u32, index: u32) -> Self {
-        Self::User(UserExternalName { namespace, index })
+        Self::User(UserExternalName::new(namespace, index))
     }
 }
 
@@ -68,6 +68,13 @@ pub struct UserExternalName {
     pub namespace: u32,
     /// Arbitrary.
     pub index: u32,
+}
+
+impl UserExternalName {
+    /// Creates a new [UserExternalName].
+    pub fn new(namespace: u32, index: u32) -> Self {
+        Self { namespace, index }
+    }
 }
 
 impl fmt::Display for UserExternalName {
