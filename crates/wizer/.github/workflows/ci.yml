@@ -1,10 +1,6 @@
 name: CI
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+on: pull_request
 
 env:
   CARGO_TERM_COLOR: always
@@ -19,8 +15,14 @@ jobs:
           os: ubuntu-latest
         - build: x86_64-macos
           os: macos-latest
+        - build: aarch64-macos
+          os: macos-latest
+          target: aarch64-apple-darwin
         - build: x86_64-windows
           os: windows-latest
+        - build: x86_64-mingw
+          os: windows-latest
+          target: x86_64-pc-windows-gnu
     steps:
     - uses: actions/checkout@v2
     - name: Build
@@ -29,22 +31,6 @@ jobs:
       run: cargo test --verbose
     - name: Checking benches
       run : cargo check --benches
-    - name: Build release binary
-      run: cargo build --release --bin wizer --features="env_logger structopt"
-
-    - name: Create dist
-      run: mkdir dist
-
-    # Move binaries to dist folder
-    - run: cp target/release/wizer dist
-      if: matrix.os != 'windows-latest' && matrix.target == ''
-    - run: cp target/release/wizer.exe dist
-      if: matrix.build == 'x86_64-windows'
-
-    - uses: actions/upload-artifact@v1
-      with:
-        name: bins-${{ matrix.build }}
-        path: dist
 
   check_fuzz:
     runs-on: ubuntu-latest
@@ -61,66 +47,3 @@ jobs:
     - run: rustup default stable
     - run: rustup component add rustfmt
     - run: cargo fmt --all -- --check
-
-
-  # Consumes all published artifacts from all the previous build steps, creates
-  # a bunch of tarballs for all of them, and then publishes the tarballs
-  # themselves as an artifact (for inspection) and then optionally creates
-  # github releases and/or tags for pushes.
-  publish:
-    name: Publish
-    needs: [build, rustfmt]
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-
-    # Download all the artifacts that we'll be publishing. Should keep an eye on
-    # the `download-artifact` repository to see if we can ever get something
-    # like "download all artifacts" or "download this list of artifacts"
-    - name: Download x86_64 macOS binaries
-      uses: actions/download-artifact@v1
-      with:
-        name: bins-x86_64-macos
-    - name: Download x86_64 Linux binaries
-      uses: actions/download-artifact@v1
-      with:
-        name: bins-x86_64-linux
-    - name: Download x86_64 Windows binaries
-      uses: actions/download-artifact@v1
-      with:
-        name: bins-x86_64-windows
-
-    - name: Calculate tag name
-      run: |
-        name=dev
-        if [[ $GITHUB_REF == refs/tags/v* ]]; then
-          name=${GITHUB_REF:10}
-        fi
-        echo ::set-output name=val::$name
-        echo TAG=$name >> $GITHUB_ENV
-      id: tagname
-
-    # Assemble all the build artifacts into tarballs and zip archives.
-    - name: Assemble tarballs
-      run: |
-        ./ci/build-tarballs.sh x86_64-linux
-        ./ci/build-tarballs.sh x86_64-macos
-        ./ci/build-tarballs.sh x86_64-windows .exe
-
-    # Upload all assembled tarballs as an artifact of the github action run, so
-    # that way even PRs can inspect the output.
-    - uses: actions/upload-artifact@v1
-      with:
-        name: tarballs
-        path: dist
-
-    # ... and if this was an actual push (tag or `main`) then we publish a
-    # new release. This'll automatically publish a tag release or update `dev`
-    # with this `sha`
-    - name: Publish Release
-      uses: ./.github/actions/github-release
-      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
-      with:
-        files: "dist/*"
-        name: ${{ steps.tagname.outputs.val }}
-        token: ${{ secrets.GITHUB_TOKEN }}

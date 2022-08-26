@@ -1,91 +1,132 @@
-# This is nearly entirely copied from
-# https://github.com/fastly/Viceroy/blob/b37b89fc07ecd5845f1103380c5e4fae9cc13b30/.github/workflows/release.yml#L1
-# The changes made are to add the `--bin wizer` flag and change the filesystem paths to use wizer instead of viceroy
 name: Release
-
 on:
   push:
-    tags:
-      - "v*.*.*"
+    branches: [main]
+    tags-ignore: [dev]
+  pull_request:
+defaults:
+  run:
+    shell: bash
+
+# Cancel any in-flight jobs for the same PR/branch so there's only one active
+# at a time
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        rust-toolchain: [stable]
-        os: [ubuntu-latest, macos-11, windows-latest]
-        arch: [amd64, arm64]
-        exclude:
-          - os: windows-latest
-            arch: arm64
         include:
-          - os: ubuntu-latest
-            name: linux
-            rust_abi: unknown-linux-gnu
-          - os: macos-11
-            name: darwin
-            rust_abi: apple-darwin
-          - os: windows-latest
-            name: windows
-            rust_abi: pc-windows-msvc
-            extension: .exe
-          - arch: arm64
-            rust_arch: aarch64
-          - arch: amd64
-            rust_arch: x86_64
-
-    runs-on: ${{ matrix.os }}
+        - build: x86_64-linux
+          os: ubuntu-latest
+        - build: x86_64-macos
+          os: macos-latest
+        - build: aarch64-macos
+          os: macos-latest
+          target: aarch64-apple-darwin
+        - build: x86_64-windows
+          os: windows-latest
+        - build: x86_64-mingw
+          os: windows-latest
+          target: x86_64-pc-windows-gnu
+          
+        # TODO: aarch64-linux and s390x-linux are commented out due to build errors
+        # these errors are solved in a newer version of wasmtime, when wizer
+        # updates to the newer wasmtime then we should uncomment these builds
+          
+        #src/arch/aarch64.S: Assembler messages:
+        #src/arch/aarch64.S:21: Error: operand 1 should be a floating-point register -- `stp lr,fp,[sp,-16]!'
+        #src/arch/aarch64.S:50: Error: operand 1 should be a floating-point register -- `ldp lr,fp,[sp],16'
+        #src/arch/aarch64.S:90: Error: bad register expression
+        #exit status: 1
+        #- build: aarch64-linux
+          #os: ubuntu-latest
+          #target: aarch64-unknown-linux-gnu
+          
+        #/rust/lib/rustlib/s390x-unknown-linux-gnu/lib/libstd-f6c951af7877beaf.rlib(std-f6c951af7877beaf.std.e2801c51-cgu.0.rcgu.o): In function `std::sys::unix::rand::imp::getrandom_fill_bytes::hb641b796bca799e8':
+        #/rustc/4b91a6ea7258a947e59c6522cd5898e7c0a6a88f/library/std/src/sys/unix/rand.rs:(.text._ZN3std3sys4unix4rand19hashmap_random_keys17h949023c83f75d545E+0x30): undefined reference to `getrandom'
+        #/rust/lib/rustlib/s390x-unknown-linux-gnu/lib/libstd-f6c951af7877beaf.rlib(std-f6c951af7877beaf.std.e2801c51-cgu.0.rcgu.o): In function `std::sys::unix::rand::imp::getrandom::getrandom::h09b00f3fdb24c5b7':
+        #/rustc/4b91a6ea7258a947e59c6522cd5898e7c0a6a88f/library/std/src/sys/unix/weak.rs:176: undefined reference to `getrandom'
+        #/rustc/4b91a6ea7258a947e59c6522cd5898e7c0a6a88f/library/std/src/sys/unix/weak.rs:176: undefined reference to `getrandom'
+        #collect2: error: ld returned 1 exit status
+        #- build: s390x-linux
+          #os: ubuntu-latest
+          #target: s390x-unknown-linux-gnu
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - uses: ./.github/actions/binary-compatible-builds
+      with:
+        name: ${{ matrix.build }}
+    - run: |
+        echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
+        rustup target add ${{ matrix.target }}
+      if: matrix.target != ''
+
+    # Build `wizer` and executables
+    - run: $CENTOS cargo build --release --locked --bin wizer --all-features
+
+    # Assemble release artifats appropriate for this platform, then upload them
+    # unconditionally to this workflow's files so we have a copy of them.
+    - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
+    - uses: actions/upload-artifact@v1
+      with:
+        name: bins-${{ matrix.build }}
+        path: dist
+  publish:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      # Download all the artifacts that we'll be publishing. Should keep an eye on
+      # the `download-artifact` repository to see if we can ever get something
+      # like "download all artifacts" or "download this list of artifacts"
+      - uses: actions/download-artifact@v1
         with:
-          submodules: true
-
-      - name: Install latest Rust toolchain
-        uses: actions-rs/toolchain@v1
+          name: bins-x86_64-macos
+          path: dist
+      - uses: actions/download-artifact@v1
         with:
-          toolchain: ${{ matrix.rust-toolchain }}
-          target: ${{ matrix.rust_arch }}-${{ matrix.rust_abi }}
-          default: true
-          override: true
-
-      - name: Install C cross-compilation toolchain
-        if: ${{ matrix.name == 'linux' && matrix.arch != 'amd64' }}
-        run: |
-          sudo apt-get update
-          sudo apt install -f -y gcc-${{ matrix.rust_arch }}-linux-gnu
-          echo CC=${{ matrix.rust_arch }}-linux-gnu-gcc >> $GITHUB_ENV
-          echo RUSTFLAGS='-C linker=${{ matrix.rust_arch }}-linux-gnu-gcc' >> $GITHUB_ENV
-
-      - name: Extract tag name
-        uses: olegtarasov/get-tag@v2.1
-        id: tagName
-
-      - name: Build
-        uses: actions-rs/cargo@v1
+          name: bins-aarch64-macos
+          path: dist
+      - uses: actions/download-artifact@v1
         with:
-          command: build
-          args: --release --locked --bin wizer --target=${{ matrix.rust_arch }}-${{ matrix.rust_abi }} --all-features
-
-      - name: Strip symbols (linux)
-        if: ${{ matrix.name == 'linux' }}
-        run: |
-          ${{ matrix.rust_arch }}-linux-gnu-strip target/${{ matrix.rust_arch }}-${{ matrix.rust_abi }}/release/wizer${{ matrix.extension }}
-
-      - name: Strip symbols (non-linux)
-        if: ${{ matrix.name != 'linux' }}
-        run: |
-          strip target/${{ matrix.rust_arch }}-${{ matrix.rust_abi }}/release/wizer${{ matrix.extension }}
-
-      - name: Package
-        run: |
-          cd target/${{ matrix.rust_arch }}-${{ matrix.rust_abi }}/release
-          tar czf wizer_${{ steps.tagName.outputs.tag }}_${{ matrix.name }}-${{ matrix.arch }}.tar.gz wizer${{ matrix.extension }}
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
+          name: bins-x86_64-windows
+          path: dist
+      - uses: actions/download-artifact@v1
         with:
-          files: |
-            target/${{ matrix.rust_arch }}-${{ matrix.rust_abi }}/release/wizer_${{ steps.tagName.outputs.tag }}_${{ matrix.name }}-${{ matrix.arch }}.tar.gz
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: bins-x86_64-mingw
+          path: dist
+      - uses: actions/download-artifact@v1
+        with:
+          name: bins-x86_64-linux
+          path: dist
+
+      - name: Calculate tag name
+        run: |
+          name=dev
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            name=${GITHUB_REF:10}
+          fi
+          echo ::set-output name=val::$name
+          echo TAG=$name >> $GITHUB_ENV
+        id: tagname
+
+      # ... and if this was an actual push (tag or `main`) then we publish a
+      # new release. This'll automatically publish a tag release or update `dev`
+      # with this `sha`. Note that `continue-on-error` is set here so if this hits
+      # a bug we can go back and fetch and upload the release ourselves.
+      - run: cd .github/actions/github-release && npm install --production
+      - name: Publish Release
+        uses: ./.github/actions/github-release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        with:
+          files: "dist/*"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: ${{ steps.tagname.outputs.val }}
+        continue-on-error: true
