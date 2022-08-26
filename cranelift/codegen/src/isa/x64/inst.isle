@@ -486,16 +486,19 @@
        (XmmUninitializedValue (dst WritableXmm))
 
        ;; A call to the `ElfTlsGetAddr` libcall. Returns address of TLS symbol
-       ;; in `rax`.
-       (ElfTlsGetAddr (symbol ExternalName))
+       ;; `dst`, which is constrained to `rax`.
+       (ElfTlsGetAddr (symbol ExternalName)
+                      (dst WritableGpr))
 
        ;; A Mach-O TLS symbol access. Returns address of the TLS symbol in
-       ;; `rax`.
-       (MachOTlsGetAddr (symbol ExternalName))
+       ;; `dst`, which is constrained to `rax`.
+       (MachOTlsGetAddr (symbol ExternalName)
+                        (dst WritableGpr))
 
        ;; A Coff TLS symbol access. Returns address of the TLS symbol in
-       ;; `rax`.
-       (CoffTlsGetAddr (symbol ExternalName))
+       ;; `dst`, which is constrained to `rax`.
+       (CoffTlsGetAddr (symbol ExternalName)
+                       (dst WritableGpr))
 
        ;; An unwind pseudoinstruction describing the state of the machine at
        ;; this program point.
@@ -2275,6 +2278,11 @@
 (rule (x64_pmulhw src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Pmulhw) src1 src2))
 
+;; Helper for creating `pmulhrsw` instructions.
+(decl x64_pmulhrsw (Xmm XmmMem) Xmm)
+(rule (x64_pmulhrsw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Pmulhrsw) src1 src2))
+
 ;; Helper for creating `pmulhuw` instructions.
 (decl x64_pmulhuw (Xmm XmmMem) Xmm)
 (rule (x64_pmulhuw src1 src2)
@@ -2682,6 +2690,15 @@
                                         src2
                                         dst))))
         dst))
+
+;; Helper for creating `shufps` instructions.
+(decl x64_shufps (Xmm XmmMem u8) Xmm)
+(rule (x64_shufps src1 src2 byte)
+      (xmm_rm_r_imm (SseOpcode.Shufps)
+                    src1
+                    src2
+                    byte
+                    (OperandSize.Size32)))
 
 ;; Helper for creating `MInst.XmmUnaryRmR` instructions.
 (decl xmm_unary_rm_r (SseOpcode XmmMem) Xmm)
@@ -3732,6 +3749,42 @@
 ;; Create a mask for zeroing out-of-bounds lanes of the swizzle mask.
 (decl swizzle_zero_mask () VCodeConstant)
 (extern constructor swizzle_zero_mask swizzle_zero_mask)
+
+;;;; TLS Values ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Helper for emitting ElfTlsGetAddr.
+(decl elf_tls_get_addr (ExternalName) Gpr)
+(rule (elf_tls_get_addr name)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.ElfTlsGetAddr name dst))))
+        dst))
+
+;; Helper for emitting MachOTlsGetAddr.
+(decl macho_tls_get_addr (ExternalName) Gpr)
+(rule (macho_tls_get_addr name)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.MachOTlsGetAddr name dst))))
+        dst))
+
+;; Helper for emitting CoffTlsGetAddr.
+(decl coff_tls_get_addr (ExternalName) Gpr)
+(rule (coff_tls_get_addr name)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.CoffTlsGetAddr name dst))))
+        dst))
+
+;;;; sqmul_round_sat ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl sqmul_round_sat_mask () VCodeConstant)
+(extern constructor sqmul_round_sat_mask sqmul_round_sat_mask)
+
+;;;; uunarrow ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl uunarrow_umax_mask () VCodeConstant)
+(extern constructor uunarrow_umax_mask uunarrow_umax_mask)
+
+(decl uunarrow_uint_mask () VCodeConstant)
+(extern constructor uunarrow_uint_mask uunarrow_uint_mask)
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

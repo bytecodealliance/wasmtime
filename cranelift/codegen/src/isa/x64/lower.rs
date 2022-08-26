@@ -11,7 +11,7 @@ use crate::isa::{x64::settings as x64_settings, x64::X64Backend, CallConv};
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
-use crate::settings::{Flags, TlsModel};
+use crate::settings::Flags;
 use smallvec::SmallVec;
 use target_lexicon::Triple;
 
@@ -304,33 +304,15 @@ fn lower_insn_to_regs(
     isa_flags: &x64_settings::Flags,
     triple: &Triple,
 ) -> CodegenResult<()> {
-    let op = ctx.data(insn).opcode();
-
-    let inputs: SmallVec<[InsnInput; 4]> = (0..ctx.num_inputs(insn))
-        .map(|i| InsnInput { insn, input: i })
-        .collect();
     let outputs: SmallVec<[InsnOutput; 2]> = (0..ctx.num_outputs(insn))
         .map(|i| InsnOutput { insn, output: i })
         .collect();
-
-    let ty = if outputs.len() > 0 {
-        Some(ctx.output_ty(insn, 0))
-    } else {
-        None
-    };
 
     if let Ok(()) = isle::lower(ctx, triple, flags, isa_flags, &outputs, insn) {
         return Ok(());
     }
 
-    let implemented_in_isle = |ctx: &mut Lower<Inst>| {
-        unreachable!(
-            "implemented in ISLE: inst = `{}`, type = `{:?}`",
-            ctx.dfg().display_inst(insn),
-            ty
-        )
-    };
-
+    let op = ctx.data(insn).opcode();
     match op {
         Opcode::Iconst
         | Opcode::Bconst
@@ -474,151 +456,24 @@ fn lower_insn_to_regs(
         | Opcode::VallTrue
         | Opcode::VhighBits
         | Opcode::Iconcat
-        | Opcode::Isplit => {
-            implemented_in_isle(ctx);
+        | Opcode::Isplit
+        | Opcode::TlsValue
+        | Opcode::SqmulRoundSat
+        | Opcode::Uunarrow => {
+            let ty = if outputs.len() > 0 {
+                Some(ctx.output_ty(insn, 0))
+            } else {
+                None
+            };
+
+            unreachable!(
+                "implemented in ISLE: inst = `{}`, type = `{:?}`",
+                ctx.dfg().display_inst(insn),
+                ty
+            )
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::TlsValue => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let (name, _, _) = ctx.symbol_value(insn).unwrap();
-            let symbol = name.clone();
-
-            match flags.tls_model() {
-                TlsModel::ElfGd => {
-                    ctx.emit(Inst::ElfTlsGetAddr { symbol });
-                    ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
-                }
-                TlsModel::Macho => {
-                    ctx.emit(Inst::MachOTlsGetAddr { symbol });
-                    ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
-                }
-                TlsModel::Coff => {
-                    ctx.emit(Inst::CoffTlsGetAddr { symbol });
-                    ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
-                }
-                _ => todo!(
-                    "Unimplemented TLS model in x64 backend: {:?}",
-                    flags.tls_model()
-                ),
-            }
-        }
-
-        Opcode::SqmulRoundSat => {
-            // Lane-wise saturating rounding multiplication in Q15 format
-            // Optimal lowering taken from instruction proposal https://github.com/WebAssembly/simd/pull/365
-            // y = i16x8.q15mulr_sat_s(a, b) is lowered to:
-            //MOVDQA xmm_y, xmm_a
-            //MOVDQA xmm_tmp, wasm_i16x8_splat(0x8000)
-            //PMULHRSW xmm_y, xmm_b
-            //PCMPEQW xmm_tmp, xmm_y
-            //PXOR xmm_y, xmm_tmp
-            let input_ty = ctx.input_ty(insn, 0);
-            let src1 = put_input_in_reg(ctx, inputs[0]);
-            let src2 = put_input_in_reg(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            ctx.emit(Inst::gen_move(dst, src1, input_ty));
-            static SAT_MASK: [u8; 16] = [
-                0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80,
-                0x00, 0x80,
-            ];
-            let mask_const = ctx.use_constant(VCodeConstantData::WellKnown(&SAT_MASK));
-            let mask = ctx.alloc_tmp(types::I16X8).only_reg().unwrap();
-            ctx.emit(Inst::xmm_load_const(mask_const, mask, types::I16X8));
-
-            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmulhrsw, RegMem::reg(src2), dst));
-            ctx.emit(Inst::xmm_rm_r(
-                SseOpcode::Pcmpeqw,
-                RegMem::reg(dst.to_reg()),
-                mask,
-            ));
-            ctx.emit(Inst::xmm_rm_r(
-                SseOpcode::Pxor,
-                RegMem::reg(mask.to_reg()),
-                dst,
-            ));
-        }
-
-        Opcode::Uunarrow => {
-            if let Some(fcvt_inst) = matches_input(ctx, inputs[0], Opcode::FcvtToUintSat) {
-                //y = i32x4.trunc_sat_f64x2_u_zero(x) is lowered to:
-                //MOVAPD xmm_y, xmm_x
-                //XORPD xmm_tmp, xmm_tmp
-                //MAXPD xmm_y, xmm_tmp
-                //MINPD xmm_y, [wasm_f64x2_splat(4294967295.0)]
-                //ROUNDPD xmm_y, xmm_y, 0x0B
-                //ADDPD xmm_y, [wasm_f64x2_splat(0x1.0p+52)]
-                //SHUFPS xmm_y, xmm_xmp, 0x88
-
-                let fcvt_input = InsnInput {
-                    insn: fcvt_inst,
-                    input: 0,
-                };
-                let input_ty = ctx.input_ty(fcvt_inst, 0);
-                let output_ty = ctx.output_ty(insn, 0);
-                let src = put_input_in_reg(ctx, fcvt_input);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                ctx.emit(Inst::gen_move(dst, src, input_ty));
-                let tmp1 = ctx.alloc_tmp(output_ty).only_reg().unwrap();
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Xorpd, RegMem::from(tmp1), tmp1));
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Maxpd, RegMem::from(tmp1), dst));
-
-                // 4294967295.0 is equivalent to 0x41EFFFFFFFE00000
-                static UMAX_MASK: [u8; 16] = [
-                    0x00, 0x00, 0xE0, 0xFF, 0xFF, 0xFF, 0xEF, 0x41, 0x00, 0x00, 0xE0, 0xFF, 0xFF,
-                    0xFF, 0xEF, 0x41,
-                ];
-                let umax_const = ctx.use_constant(VCodeConstantData::WellKnown(&UMAX_MASK));
-                let umax_mask = ctx.alloc_tmp(types::F64X2).only_reg().unwrap();
-                ctx.emit(Inst::xmm_load_const(umax_const, umax_mask, types::F64X2));
-
-                //MINPD xmm_y, [wasm_f64x2_splat(4294967295.0)]
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Minpd,
-                    RegMem::from(umax_mask),
-                    dst,
-                ));
-                //ROUNDPD xmm_y, xmm_y, 0x0B
-                ctx.emit(Inst::xmm_rm_r_imm(
-                    SseOpcode::Roundpd,
-                    RegMem::reg(dst.to_reg()),
-                    dst,
-                    RoundImm::RoundZero.encode(),
-                    OperandSize::Size32,
-                ));
-                //ADDPD xmm_y, [wasm_f64x2_splat(0x1.0p+52)]
-                static UINT_MASK: [u8; 16] = [
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x30, 0x43,
-                ];
-                let uint_mask_const = ctx.use_constant(VCodeConstantData::WellKnown(&UINT_MASK));
-                let uint_mask = ctx.alloc_tmp(types::F64X2).only_reg().unwrap();
-                ctx.emit(Inst::xmm_load_const(
-                    uint_mask_const,
-                    uint_mask,
-                    types::F64X2,
-                ));
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Addpd,
-                    RegMem::from(uint_mask),
-                    dst,
-                ));
-
-                //SHUFPS xmm_y, xmm_xmp, 0x88
-                ctx.emit(Inst::xmm_rm_r_imm(
-                    SseOpcode::Shufps,
-                    RegMem::reg(tmp1.to_reg()),
-                    dst,
-                    0x88,
-                    OperandSize::Size32,
-                ));
-            } else {
-                println!("Did not match fcvt input!");
-            }
-        }
 
         // Unimplemented opcodes below. These are not currently used by Wasm
         // lowering or other known embeddings, but should be either supported or

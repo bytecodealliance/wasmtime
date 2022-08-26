@@ -1,0 +1,19 @@
+test compile precise-output
+target x86_64
+
+function %f1(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+  v2 = sqmul_round_sat v0, v1
+  return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_const VCodeConstant(0), %xmm7
+;   pmulhrsw %xmm0, %xmm1, %xmm0
+;   pcmpeqw %xmm7, %xmm0, %xmm7
+;   pxor    %xmm0, %xmm7, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret

@@ -263,12 +263,6 @@ impl Inst {
         Inst::MovRR { size, src, dst }
     }
 
-    pub(crate) fn xmm_load_const(src: VCodeConstant, dst: Writable<Reg>, ty: Type) -> Inst {
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        debug_assert!(ty.is_vector() && ty.bits() == 128);
-        Inst::XmmLoadConst { src, dst, ty }
-    }
-
     /// Convenient helper for unary float operations.
     pub(crate) fn xmm_unary_rm_r(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Inst {
         src.assert_regclass_is(RegClass::Float);
@@ -374,24 +368,6 @@ impl Inst {
             lhs: Xmm::new(lhs).unwrap(),
             rhs: Xmm::new(rhs).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
-    pub(crate) fn xmm_rm_r_imm(
-        op: SseOpcode,
-        src: RegMem,
-        dst: Writable<Reg>,
-        imm: u8,
-        size: OperandSize,
-    ) -> Inst {
-        debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        Inst::XmmRmRImm {
-            op,
-            src1: dst.to_reg(),
-            src2: src,
-            dst,
-            imm,
-            size,
         }
     }
 
@@ -1544,16 +1520,19 @@ impl PrettyPrint for Inst {
 
             Inst::Ud2 { trap_code } => format!("ud2 {}", trap_code),
 
-            Inst::ElfTlsGetAddr { ref symbol } => {
-                format!("%rax = elf_tls_get_addr {:?}", symbol)
+            Inst::ElfTlsGetAddr { ref symbol, dst } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                format!("{} = elf_tls_get_addr {:?}", dst, symbol)
             }
 
-            Inst::MachOTlsGetAddr { ref symbol } => {
-                format!("%rax = macho_tls_get_addr {:?}", symbol)
+            Inst::MachOTlsGetAddr { ref symbol, dst } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                format!("{} = macho_tls_get_addr {:?}", dst, symbol)
             }
 
-            Inst::CoffTlsGetAddr { ref symbol } => {
-                format!("%rax = coff_tls_get_addr {:?}", symbol)
+            Inst::CoffTlsGetAddr { ref symbol, dst } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                format!("{} = coff_tls_get_addr {:?}", dst, symbol)
             }
 
             Inst::Unwind { inst } => {
@@ -1994,8 +1973,8 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             // No registers are used.
         }
 
-        Inst::ElfTlsGetAddr { .. } | Inst::MachOTlsGetAddr { .. } => {
-            collector.reg_def(Writable::from_reg(regs::rax()));
+        Inst::ElfTlsGetAddr { dst, .. } | Inst::MachOTlsGetAddr { dst, .. } => {
+            collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
             // All caller-saves are clobbered.
             //
             // We use the SysV calling convention here because the
@@ -2007,12 +1986,12 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_clobbers(clobbers);
         }
 
-        Inst::CoffTlsGetAddr { .. } => {
+        Inst::CoffTlsGetAddr { dst, .. } => {
             // We also use the gs register. But that register is not allocatable by the
             // register allocator, so we don't need to mark it as used here.
 
             // We use %rax to set the address
-            collector.reg_def(Writable::from_reg(regs::rax()));
+            collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
 
             // We use %rcx as a temporary variable to load the _tls_index
             collector.reg_def(Writable::from_reg(regs::rcx()));

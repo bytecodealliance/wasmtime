@@ -3694,3 +3694,66 @@
             (lo Reg (value_regs_get regs 0))
             (hi Reg (value_regs_get regs 1)))
         (output_pair lo hi)))
+
+;; Rules for `tls_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (tls_value (symbol_value_data name _ _)))
+      (if (tls_model_is_elf_gd))
+      (elf_tls_get_addr name))
+
+(rule (lower (tls_value (symbol_value_data name _ _)))
+      (if (tls_model_is_macho))
+      (macho_tls_get_addr name))
+
+(rule (lower (tls_value (symbol_value_data name _ _)))
+      (if (tls_model_is_coff))
+      (coff_tls_get_addr name))
+
+;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (sqmul_round_sat qx @ (value_type $I16X8) qy))
+      (let ((src1 Xmm qx)
+            (src2 Xmm qy)
+
+            (mask Xmm (x64_xmm_load_const $I16X8 (sqmul_round_sat_mask)))
+            (dst Xmm (x64_pmulhrsw src1 src2))
+            (cmp Xmm (x64_pcmpeqw mask dst)))
+        (x64_pxor dst cmp)))
+
+;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; TODO: currently we only lower a special case of `uunarrow` needed to support
+;; the translation of wasm's i32x4.trunc_sat_f64x2_u_zero operation.
+;; https://github.com/bytecodealliance/wasmtime/issues/4791
+;;
+;; y = i32x4.trunc_sat_f64x2_u_zero(x) is lowered to:
+;; MOVAPD xmm_y, xmm_x
+;; XORPD xmm_tmp, xmm_tmp
+;; MAXPD xmm_y, xmm_tmp
+;; MINPD xmm_y, [wasm_f64x2_splat(4294967295.0)]
+;; ROUNDPD xmm_y, xmm_y, 0x0B
+;; ADDPD xmm_y, [wasm_f64x2_splat(0x1.0p+52)]
+;; SHUFPS xmm_y, xmm_xmp, 0x88
+(rule (lower (uunarrow (fcvt_to_uint_sat src @ (value_type $F64X2))
+                       (vconst (u128_from_constant 0))))
+      (let ((src Xmm src)
+
+            ;; MOVAPD xmm_y, xmm_x
+            ;; XORPD xmm_tmp, xmm_tmp
+            (zeros Xmm (x64_xorpd src src))
+            (dst Xmm (x64_maxpd src zeros))
+
+            (umax_mask Xmm (x64_xmm_load_const $F64X2 (uunarrow_umax_mask)))
+
+            ;; MINPD xmm_y, [wasm_f64x2_splat(4294967295.0)]
+            (dst Xmm (x64_minpd dst umax_mask))
+
+            ;; ROUNDPD xmm_y, xmm_y, 0x0B
+            (dst Xmm (x64_roundpd dst (RoundImm.RoundZero)))
+
+            ;; ADDPD xmm_y, [wasm_f64x2_splat(0x1.0p+52)]
+            (uint_mask Xmm (x64_xmm_load_const $F64X2 (uunarrow_uint_mask)))
+            (dst Xmm (x64_addpd dst uint_mask)))
+
+        ;; SHUFPS xmm_y, xmm_xmp, 0x88
+        (x64_shufps dst zeros 0x88)))
