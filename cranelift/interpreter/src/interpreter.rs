@@ -17,7 +17,7 @@ use cranelift_codegen::ir::{
 };
 use log::trace;
 use smallvec::SmallVec;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 use std::iter;
@@ -192,12 +192,13 @@ pub enum HeapInit {
     FromBacking(HeapBacking),
 }
 
-pub type LibCallHandler<'a, V> = &'a dyn Fn(SmallVec<[V; 1]>) -> Result<SmallVec<[V; 1]>, TrapCode>;
+pub type LibCallHandler<'a, V> =
+    &'a dyn Fn(LibCall, SmallVec<[V; 1]>) -> Result<SmallVec<[V; 1]>, TrapCode>;
 
 /// Maintains the [Interpreter]'s state, implementing the [State] trait.
 pub struct InterpreterState<'a> {
     pub functions: FunctionStore<'a>,
-    pub libcalls: HashMap<LibCall, LibCallHandler<'a, DataValue>>,
+    pub libcall_handler: LibCallHandler<'a, DataValue>,
     pub frame_stack: Vec<Frame<'a>>,
     /// Number of bytes from the bottom of the stack where the current frame's stack space is
     pub frame_offset: usize,
@@ -212,7 +213,7 @@ impl Default for InterpreterState<'_> {
     fn default() -> Self {
         Self {
             functions: FunctionStore::default(),
-            libcalls: HashMap::default(),
+            libcall_handler: &|_, _| Err(TrapCode::UnreachableCodeReached),
             frame_stack: vec![],
             frame_offset: 0,
             stack: Vec::with_capacity(1024),
@@ -230,12 +231,8 @@ impl<'a> InterpreterState<'a> {
     }
 
     /// Registers a libcall handler
-    pub fn with_libcall(
-        mut self,
-        libcall: LibCall,
-        handler: LibCallHandler<'a, DataValue>,
-    ) -> Self {
-        self.libcalls.insert(libcall, handler);
+    pub fn with_libcall_handler(mut self, handler: LibCallHandler<'a, DataValue>) -> Self {
+        self.libcall_handler = handler;
         self
     }
 
@@ -316,8 +313,8 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         self.current_frame().function
     }
 
-    fn get_libcall(&self, libcall: LibCall) -> Option<LibCallHandler<DataValue>> {
-        self.libcalls.get(&libcall).copied()
+    fn get_libcall_handler(&self) -> LibCallHandler<DataValue> {
+        self.libcall_handler
     }
 
     fn push_frame(&mut self, function: &'a Function) {
@@ -1082,9 +1079,10 @@ mod tests {
         env.add(func.name.to_string(), &func);
         let state = InterpreterState::default()
             .with_function_store(env)
-            .with_libcall(LibCall::UdivI64, &|args| {
-                Ok(smallvec![match &args[..] {
-                    [DataValue::I64(a), DataValue::I64(b)] => DataValue::I64(a / b),
+            .with_libcall_handler(&|libcall, args| {
+                Ok(smallvec![match (libcall, &args[..]) {
+                    (LibCall::UdivI64, [DataValue::I64(a), DataValue::I64(b)]) =>
+                        DataValue::I64(a / b),
                     _ => panic!("Unexpected args"),
                 }])
             });

@@ -4,9 +4,7 @@ use crate::address::{Address, AddressSize};
 use crate::interpreter::LibCallHandler;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
-use cranelift_codegen::ir::{
-    FuncRef, Function, GlobalValue, Heap, LibCall, StackSlot, Type, Value,
-};
+use cranelift_codegen::ir::{FuncRef, Function, GlobalValue, Heap, StackSlot, Type, Value};
 use cranelift_entity::PrimaryMap;
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -27,7 +25,7 @@ pub trait State<'a, V> {
     /// Retrieve a reference to the currently executing [Function].
     fn get_current_function(&self) -> &'a Function;
     /// Retrieve the handler callback for a [LibCall]
-    fn get_libcall(&self, libcall: LibCall) -> Option<LibCallHandler<V>>;
+    fn get_libcall_handler(&self) -> LibCallHandler<V>;
     /// Record that an interpreter has called into a new [Function].
     fn push_frame(&mut self, function: &'a Function);
     /// Record that an interpreter has returned from a called [Function].
@@ -134,7 +132,7 @@ where
         unimplemented!()
     }
 
-    fn get_libcall(&self, _libcall: LibCall) -> Option<LibCallHandler<V>> {
+    fn get_libcall_handler(&self) -> LibCallHandler<V> {
         unimplemented!()
     }
 

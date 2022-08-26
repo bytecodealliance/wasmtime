@@ -7,8 +7,8 @@ use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, Block, ExternalName, FuncRef, Function, InstructionData, LibCall, Opcode, TrapCode,
-    Type, Value as ValueRef,
+    types, Block, ExternalName, FuncRef, Function, InstructionData, Opcode, TrapCode, Type,
+    Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
@@ -343,12 +343,10 @@ where
                     ControlFlow::Call(function, args)
                 }
                 ExternalName::LibCall(libcall) => {
-                    let handler = state
-                        .get_libcall(libcall)
-                        .ok_or(StepError::UnknownLibCall(libcall))?;
+                    let libcall_handler = state.get_libcall_handler();
 
                     // We don't transfer control to a libcall, we just execute it and return the results
-                    let res = handler(args);
+                    let res = libcall_handler(libcall, args);
                     let res = match res {
                         Err(trap) => return Ok(ControlFlow::Trap(CraneliftTrap::User(trap))),
                         Ok(rets) => rets,
@@ -1177,8 +1175,6 @@ pub enum StepError {
     UnknownValue(ValueRef),
     #[error("unable to find the following function: {0}")]
     UnknownFunction(FuncRef),
-    #[error("unable to find the following libcall: {0}")]
-    UnknownLibCall(LibCall),
     #[error("cannot step with these values")]
     ValueError(#[from] ValueError),
     #[error("failed to access memory")]

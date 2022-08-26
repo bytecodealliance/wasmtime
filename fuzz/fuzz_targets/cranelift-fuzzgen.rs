@@ -53,37 +53,24 @@ fn run_in_host(compiled_fn: &CompiledFunction, args: &[DataValue]) -> RunResult 
     RunResult::Success(res)
 }
 
-fn interp_libcall_handler(
-    libcall: LibCall,
-    args: SmallVec<[DataValue; 1]>,
-) -> SmallVec<[DataValue; 1]> {
-    use LibCall::*;
-
-    smallvec![match (libcall, &args[..]) {
-        (CeilF32, [DataValue::F32(a)]) => DataValue::F32(a.ceil()),
-        (CeilF64, [DataValue::F64(a)]) => DataValue::F64(a.ceil()),
-        (FloorF32, [DataValue::F32(a)]) => DataValue::F32(a.floor()),
-        (FloorF64, [DataValue::F64(a)]) => DataValue::F64(a.floor()),
-        (TruncF32, [DataValue::F32(a)]) => DataValue::F32(a.trunc()),
-        (TruncF64, [DataValue::F64(a)]) => DataValue::F64(a.trunc()),
-        _ => unreachable!(),
-    }]
-}
-
 fn build_interpreter(testcase: &TestCase) -> Interpreter {
-    use LibCall::*;
-
     let mut env = FunctionStore::default();
     env.add(testcase.func.name.to_string(), &testcase.func);
 
     let state = InterpreterState::default()
         .with_function_store(env)
-        .with_libcall(CeilF32, &|args| Ok(interp_libcall_handler(CeilF32, args)))
-        .with_libcall(CeilF64, &|args| Ok(interp_libcall_handler(CeilF64, args)))
-        .with_libcall(FloorF32, &|args| Ok(interp_libcall_handler(FloorF32, args)))
-        .with_libcall(FloorF64, &|args| Ok(interp_libcall_handler(FloorF64, args)))
-        .with_libcall(TruncF32, &|args| Ok(interp_libcall_handler(TruncF32, args)))
-        .with_libcall(TruncF64, &|args| Ok(interp_libcall_handler(TruncF64, args)));
+        .with_libcall_handler(&|libcall: LibCall, args: SmallVec<[DataValue; 1]>| {
+            use LibCall::*;
+            Ok(smallvec![match (libcall, &args[..]) {
+                (CeilF32, [DataValue::F32(a)]) => DataValue::F32(a.ceil()),
+                (CeilF64, [DataValue::F64(a)]) => DataValue::F64(a.ceil()),
+                (FloorF32, [DataValue::F32(a)]) => DataValue::F32(a.floor()),
+                (FloorF64, [DataValue::F64(a)]) => DataValue::F64(a.floor()),
+                (TruncF32, [DataValue::F32(a)]) => DataValue::F32(a.trunc()),
+                (TruncF64, [DataValue::F64(a)]) => DataValue::F64(a.trunc()),
+                _ => unreachable!(),
+            }])
+        });
 
     let interpreter = Interpreter::new(state).with_fuel(Some(INTERPRETER_FUEL));
     interpreter
