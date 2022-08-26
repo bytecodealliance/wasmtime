@@ -805,6 +805,18 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn emit_u128_le_const(&mut self, lower: u64, upper: u64) -> VCodeConstant {
+            let bytes = lower
+                .to_le_bytes()
+                .iter()
+                .chain(upper.to_le_bytes().iter())
+                .cloned()
+                .collect();
+            let data = VCodeConstantData::Generated(bytes);
+            self.lower_ctx.use_constant(data)
+        }
+
+        #[inline]
         fn const_to_vconst(&mut self, constant: Constant) -> VCodeConstant {
             self.lower_ctx.use_constant(VCodeConstantData::Pool(
                 constant,

@@ -1309,15 +1309,13 @@
 ;;
 ;; Asserts that the value goes into a XMM.
 (decl put_in_xmm_mem (Value) XmmMem)
-(rule (put_in_xmm_mem val)
-      (reg_mem_to_xmm_mem (put_in_reg_mem val)))
+(extern constructor put_in_xmm_mem put_in_xmm_mem)
 
 ;; Put a value into a `XmmMemImm`.
 ;;
 ;; Asserts that the value goes into a XMM.
 (decl put_in_xmm_mem_imm (Value) XmmMemImm)
-(rule (put_in_xmm_mem_imm val)
-      (xmm_mem_imm_new (put_in_reg_mem_imm val)))
+(extern constructor put_in_xmm_mem_imm put_in_xmm_mem_imm)
 
 ;; Construct an `InstOutput` out of a single GPR register.
 (decl output_gpr (Gpr) InstOutput)

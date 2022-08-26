@@ -570,6 +570,12 @@
 (decl emit_u64_le_const (u64) VCodeConstant)
 (extern constructor emit_u64_le_const emit_u64_le_const)
 
+;; Add a u128 little-endian constant to the in-memory constant pool and
+;; return a VCodeConstant index that refers to it. This is
+;; side-effecting but idempotent (constants are deduplicated).
+(decl emit_u128_le_const (u64 u64) VCodeConstant)
+(extern constructor emit_u128_le_const emit_u128_le_const)
+
 ;; Fetch the VCodeConstant associated with a Constant.
 (decl const_to_vconst (Constant) VCodeConstant)
 (extern constructor const_to_vconst const_to_vconst)

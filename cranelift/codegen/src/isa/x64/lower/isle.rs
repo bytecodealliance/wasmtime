@@ -133,6 +133,62 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         RegMemImm::reg(self.put_in_reg(val))
     }
 
+    fn put_in_xmm_mem_imm(&mut self, val: Value) -> XmmMemImm {
+        let inputs = self.lower_ctx.get_value_as_source_or_const(val);
+
+        if let Some(c) = inputs.constant {
+            if let Some(imm) = to_simm32(c as i64) {
+                return XmmMemImm::new(imm.to_reg_mem_imm()).unwrap();
+            }
+
+            // A load from the constant pool is better than a rematerialization into a register,
+            // because it reduces register pressure.
+            //
+            // NOTE: this is where behavior differs from `put_in_reg_mem`, as we always force
+            // constants to be 16 bytes when a constant will be used in place of an xmm register.
+            let vcode_constant = self.emit_u128_le_const(c, 0);
+            return XmmMemImm::new(RegMemImm::mem(SyntheticAmode::ConstantOffset(
+                vcode_constant,
+            )))
+            .unwrap();
+        }
+
+        if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
+            if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, src_insn) {
+                self.lower_ctx.sink_inst(src_insn);
+                let amode = lower_to_amode(self.lower_ctx, addr_input, offset);
+                return XmmMemImm::new(RegMemImm::mem(amode)).unwrap();
+            }
+        }
+
+        XmmMemImm::new(RegMemImm::reg(self.put_in_reg(val))).unwrap()
+    }
+
+    fn put_in_xmm_mem(&mut self, val: Value) -> XmmMem {
+        let inputs = self.lower_ctx.get_value_as_source_or_const(val);
+
+        if let Some(c) = inputs.constant {
+            // A load from the constant pool is better than a rematerialization into a register,
+            // because it reduces register pressure.
+            //
+            // NOTE: this is where behavior differs from `put_in_reg_mem`, as we always force
+            // constants to be 16 bytes when a constant will be used in place of an xmm register.
+            let vcode_constant = self.emit_u128_le_const(c, 0);
+            return XmmMem::new(RegMem::mem(SyntheticAmode::ConstantOffset(vcode_constant)))
+                .unwrap();
+        }
+
+        if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
+            if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, src_insn) {
+                self.lower_ctx.sink_inst(src_insn);
+                let amode = lower_to_amode(self.lower_ctx, addr_input, offset);
+                return XmmMem::new(RegMem::mem(amode)).unwrap();
+            }
+        }
+
+        XmmMem::new(RegMem::reg(self.put_in_reg(val))).unwrap()
+    }
+
     fn put_in_reg_mem(&mut self, val: Value) -> RegMem {
         let inputs = self.lower_ctx.get_value_as_source_or_const(val);
 
