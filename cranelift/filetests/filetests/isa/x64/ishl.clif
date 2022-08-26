@@ -17,20 +17,20 @@ block0(v0: i128, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzbq  %dl, %rax
-;   movq    %rax, %rcx
+;   movzbq  %dl, %rcx
 ;   movq    %rdi, %rdx
 ;   shlq    %cl, %rdx, %rdx
 ;   shlq    %cl, %rsi, %rsi
-;   movq    %rcx, %r8
+;   movq    %rcx, %rax
 ;   movl    $64, %ecx
-;   subq    %rcx, %r8, %rcx
+;   movq    %rax, %r10
+;   subq    %rcx, %r10, %rcx
 ;   shrq    %cl, %rdi, %rdi
 ;   xorq    %rax, %rax, %rax
-;   testq   $127, %r8
+;   testq   $127, %r10
 ;   cmovzq  %rax, %rdi, %rdi
 ;   orq     %rdi, %rsi, %rdi
-;   testq   $64, %r8
+;   testq   $64, %r10
 ;   cmovzq  %rdx, %rax, %rax
 ;   cmovzq  %rdi, %rdx, %rdx
 ;   movq    %rbp, %rsp

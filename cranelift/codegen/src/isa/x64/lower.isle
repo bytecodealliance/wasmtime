@@ -3643,3 +3643,61 @@
             (src RegMem (RegMem.Reg src))
             (vec Xmm (vec_insert_lane ty (xmm_uninit_value) src 0)))
         (vec_insert_lane ty vec src 1)))
+
+;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (vany_true val))
+      (with_flags (x64_ptest val val) (x64_setcc (CC.NZ))))
+
+;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (vall_true val @ (value_type ty)))
+      (let ((src Xmm val)
+            (zeros Xmm (x64_pxor src src))
+            (cmp Xmm (x64_pcmpeq (vec_int_type ty) src zeros)))
+        (with_flags (x64_ptest cmp cmp) (x64_setcc (CC.Z)))))
+
+;; Rules for `vhigh_bits` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; The Intel specification allows using both 32-bit and 64-bit GPRs as
+;; destination for the "move mask" instructions. This is controlled by the REX.R
+;; bit: "In 64-bit mode, the instruction can access additional registers when
+;; used with a REX.R prefix. The default operand size is 64-bit in 64-bit mode"
+;; (PMOVMSKB in IA Software Development Manual, vol. 2). This being the case, we
+;; will always clear REX.W since its use is unnecessary (`OperandSize` is used
+;; for setting/clearing REX.W) as we need at most 16 bits of output for
+;; `vhigh_bits`.
+
+(rule (lower (vhigh_bits val @ (value_type (multi_lane 8 16))))
+      (x64_pmovmskb (OperandSize.Size32) val))
+
+(rule (lower (vhigh_bits val @ (value_type (multi_lane 32 4))))
+      (x64_movmskps (OperandSize.Size32) val))
+
+(rule (lower (vhigh_bits val @ (value_type (multi_lane 64 2))))
+      (x64_movmskpd (OperandSize.Size32) val))
+
+;; There is no x86 instruction for extracting the high bit of 16-bit lanes so
+;; here we:
+;; - duplicate the 16-bit lanes of `src` into 8-bit lanes:
+;;     PACKSSWB([x1, x2, ...], [x1, x2, ...]) = [x1', x2', ..., x1', x2', ...]
+;; - use PMOVMSKB to gather the high bits; now we have duplicates, though
+;; - shift away the bottom 8 high bits to remove the duplicates.
+(rule (lower (vhigh_bits val @ (value_type (multi_lane 16 8))))
+      (let ((src Xmm val)
+            (tmp Xmm (x64_packsswb src src))
+            (tmp Gpr (x64_pmovmskb (OperandSize.Size32) tmp)))
+        (x64_shr $I64 tmp (Imm8Reg.Imm8 8))))
+
+;; Rules for `iconcat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (iconcat lo @ (value_type $I64) hi))
+      (value_regs lo hi))
+
+;; Rules for `isplit` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (isplit val @ (value_type $I128)))
+      (let ((regs ValueRegs val)
+            (lo Reg (value_regs_get regs 0))
+            (hi Reg (value_regs_get regs 1)))
+        (output_pair lo hi)))

@@ -129,32 +129,6 @@ fn is_mergeable_load(ctx: &mut Lower<Inst>, src_insn: IRInst) -> Option<(InsnInp
     }
 }
 
-/// Put the given input into a register or a memory operand.
-/// Effectful: may mark the given input as used, when returning the register form.
-fn input_to_reg_mem(ctx: &mut Lower<Inst>, spec: InsnInput) -> RegMem {
-    let inputs = ctx.get_input_as_source_or_const(spec.insn, spec.input);
-
-    if let Some(c) = inputs.constant {
-        // Generate constants fresh at each use to minimize long-range register pressure.
-        let ty = ctx.input_ty(spec.insn, spec.input);
-        return RegMem::reg(generate_constant(ctx, ty, c).only_reg().unwrap());
-    }
-
-    if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
-        if let Some((addr_input, offset)) = is_mergeable_load(ctx, src_insn) {
-            ctx.sink_inst(src_insn);
-            let amode = lower_to_amode(ctx, addr_input, offset);
-            return RegMem::mem(amode);
-        }
-    }
-
-    RegMem::reg(
-        ctx.put_input_in_regs(spec.insn, spec.input)
-            .only_reg()
-            .unwrap(),
-    )
-}
-
 fn input_to_imm(ctx: &mut Lower<Inst>, spec: InsnInput) -> Option<u64> {
     ctx.get_input_as_source_or_const(spec.insn, spec.input)
         .constant
@@ -495,135 +469,16 @@ fn lower_insn_to_regs(
         | Opcode::Swizzle
         | Opcode::Extractlane
         | Opcode::ScalarToVector
-        | Opcode::Splat => {
+        | Opcode::Splat
+        | Opcode::VanyTrue
+        | Opcode::VallTrue
+        | Opcode::VhighBits
+        | Opcode::Iconcat
+        | Opcode::Isplit => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::VanyTrue => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let src_ty = ctx.input_ty(insn, 0);
-            assert_eq!(src_ty.bits(), 128);
-            let src = put_input_in_reg(ctx, inputs[0]);
-            // Set the ZF if the result is all zeroes.
-            ctx.emit(Inst::xmm_cmp_rm_r(SseOpcode::Ptest, RegMem::reg(src), src));
-            // If the ZF is not set, place a 1 in `dst`.
-            ctx.emit(Inst::setcc(CC::NZ, dst));
-        }
-
-        Opcode::VallTrue => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let src_ty = ctx.input_ty(insn, 0);
-            assert_eq!(src_ty.bits(), 128);
-            let src = input_to_reg_mem(ctx, inputs[0]);
-
-            let eq = |ty: Type| match ty.lane_bits() {
-                8 => SseOpcode::Pcmpeqb,
-                16 => SseOpcode::Pcmpeqw,
-                32 => SseOpcode::Pcmpeqd,
-                64 => SseOpcode::Pcmpeqq,
-                _ => panic!("Unable to find an instruction for {} for type: {}", op, ty),
-            };
-
-            // Initialize a register with all 0s.
-            let tmp = ctx.alloc_tmp(src_ty).only_reg().unwrap();
-            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), tmp));
-            // Compare to see what lanes are filled with all 1s.
-            ctx.emit(Inst::xmm_rm_r(eq(src_ty), src, tmp));
-            // Set the ZF if the result is all zeroes.
-            ctx.emit(Inst::xmm_cmp_rm_r(
-                SseOpcode::Ptest,
-                RegMem::from(tmp),
-                tmp.to_reg(),
-            ));
-            // If the ZF is set, place a 1 in `dst`.
-            ctx.emit(Inst::setcc(CC::Z, dst));
-        }
-
-        Opcode::VhighBits => {
-            let src = put_input_in_reg(ctx, inputs[0]);
-            let src_ty = ctx.input_ty(insn, 0);
-            debug_assert!(src_ty.is_vector() && src_ty.bits() == 128);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            debug_assert!(dst.to_reg().class() == RegClass::Int);
-
-            // The Intel specification allows using both 32-bit and 64-bit GPRs as destination for
-            // the "move mask" instructions. This is controlled by the REX.R bit: "In 64-bit mode,
-            // the instruction can access additional registers when used with a REX.R prefix. The
-            // default operand size is 64-bit in 64-bit mode" (PMOVMSKB in IA Software Development
-            // Manual, vol. 2). This being the case, we will always clear REX.W since its use is
-            // unnecessary (`OperandSize` is used for setting/clearing REX.W).
-            let size = OperandSize::Size32;
-
-            match src_ty {
-                types::I8X16 | types::B8X16 => {
-                    ctx.emit(Inst::xmm_to_gpr(SseOpcode::Pmovmskb, src, dst, size))
-                }
-                types::I32X4 | types::B32X4 | types::F32X4 => {
-                    ctx.emit(Inst::xmm_to_gpr(SseOpcode::Movmskps, src, dst, size))
-                }
-                types::I64X2 | types::B64X2 | types::F64X2 => {
-                    ctx.emit(Inst::xmm_to_gpr(SseOpcode::Movmskpd, src, dst, size))
-                }
-                types::I16X8 | types::B16X8 => {
-                    // There is no x86 instruction for extracting the high bit of 16-bit lanes so
-                    // here we:
-                    // - duplicate the 16-bit lanes of `src` into 8-bit lanes:
-                    //     PACKSSWB([x1, x2, ...], [x1, x2, ...]) = [x1', x2', ..., x1', x2', ...]
-                    // - use PMOVMSKB to gather the high bits; now we have duplicates, though
-                    // - shift away the bottom 8 high bits to remove the duplicates.
-                    let tmp = ctx.alloc_tmp(src_ty).only_reg().unwrap();
-                    ctx.emit(Inst::gen_move(tmp, src, src_ty));
-                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Packsswb, RegMem::reg(src), tmp));
-                    ctx.emit(Inst::xmm_to_gpr(
-                        SseOpcode::Pmovmskb,
-                        tmp.to_reg(),
-                        dst,
-                        size,
-                    ));
-                    ctx.emit(Inst::shift_r(
-                        OperandSize::Size64,
-                        ShiftKind::ShiftRightLogical,
-                        Some(8),
-                        dst,
-                    ));
-                }
-                _ => unimplemented!("unknown input type {} for {}", src_ty, op),
-            }
-        }
-
-        Opcode::Iconcat => {
-            let ty = ctx.output_ty(insn, 0);
-            assert_eq!(
-                ty,
-                types::I128,
-                "Iconcat not expected to be used for non-128-bit type"
-            );
-            assert_eq!(ctx.input_ty(insn, 0), types::I64);
-            assert_eq!(ctx.input_ty(insn, 1), types::I64);
-            let lo = put_input_in_reg(ctx, inputs[0]);
-            let hi = put_input_in_reg(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]);
-            ctx.emit(Inst::gen_move(dst.regs()[0], lo, types::I64));
-            ctx.emit(Inst::gen_move(dst.regs()[1], hi, types::I64));
-        }
-
-        Opcode::Isplit => {
-            let ty = ctx.input_ty(insn, 0);
-            assert_eq!(
-                ty,
-                types::I128,
-                "Isplit not expected to be used for non-128-bit type"
-            );
-            assert_eq!(ctx.output_ty(insn, 0), types::I64);
-            assert_eq!(ctx.output_ty(insn, 1), types::I64);
-            let src = put_input_in_regs(ctx, inputs[0]);
-            let dst_lo = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let dst_hi = get_output_reg(ctx, outputs[1]).only_reg().unwrap();
-            ctx.emit(Inst::gen_move(dst_lo, src.regs()[0], types::I64));
-            ctx.emit(Inst::gen_move(dst_hi, src.regs()[1], types::I64));
-        }
 
         Opcode::TlsValue => {
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();

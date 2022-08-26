@@ -1521,6 +1521,13 @@
 
 ;;;; Helpers for Working SSE tidbits ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Turn a vector type into its integer-typed vector equivalent.
+(decl vec_int_type (Type) Type)
+(rule (vec_int_type (multi_lane 8 16)) $I8X16)
+(rule (vec_int_type (multi_lane 16 8)) $I16X8)
+(rule (vec_int_type (multi_lane 32 4)) $I32X4)
+(rule (vec_int_type (multi_lane 64 2)) $I64X2)
+
 ;; Determine the appropriate operation for xor-ing vectors of the specified type
 (decl sse_xor_op (Type) SseOpcode)
 (rule (sse_xor_op $F32X4) (SseOpcode.Xorps))
@@ -2020,6 +2027,11 @@
 (decl x64_test (OperandSize GprMemImm Gpr) ProducesFlags)
 (rule (x64_test size src1 src2)
       (cmp_rmi_r size (CmpOpcode.Test) src1 src2))
+
+;; Helper for creating `ptest` instructions.
+(decl x64_ptest (XmmMem Xmm) ProducesFlags)
+(rule (x64_ptest src1 src2)
+      (xmm_cmp_rm_r (SseOpcode.Ptest) src1 src2))
 
 ;; Helper for creating `cmove` instructions. Note that these instructions do not
 ;; always result in a single emitted x86 instruction; e.g., XmmCmove uses jumps
@@ -2888,6 +2900,21 @@
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.XmmToGpr op src dst size))))
         dst))
+
+;; Helper for creating `pmovmskb` instructions.
+(decl x64_pmovmskb (OperandSize Xmm) Gpr)
+(rule (x64_pmovmskb size src)
+      (xmm_to_gpr (SseOpcode.Pmovmskb) src size))
+
+;; Helper for creating `movmskps` instructions.
+(decl x64_movmskps (OperandSize Xmm) Gpr)
+(rule (x64_movmskps size src)
+      (xmm_to_gpr (SseOpcode.Movmskps) src size))
+
+;; Helper for creating `movmskpd` instructions.
+(decl x64_movmskpd (OperandSize Xmm) Gpr)
+(rule (x64_movmskpd size src)
+      (xmm_to_gpr (SseOpcode.Movmskpd) src size))
 
 ;; Helper for creating `MInst.GprToXmm` instructions.
 (decl gpr_to_xmm (SseOpcode GprMem OperandSize) Xmm)
