@@ -146,7 +146,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
             //
             // NOTE: this is where behavior differs from `put_in_reg_mem`, as we always force
             // constants to be 16 bytes when a constant will be used in place of an xmm register.
-            let vcode_constant = self.emit_u128_le_const(c, 0);
+            let vcode_constant = self.emit_u128_le_const(c as u128);
             return XmmMemImm::new(RegMemImm::mem(SyntheticAmode::ConstantOffset(
                 vcode_constant,
             )))
@@ -173,7 +173,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
             //
             // NOTE: this is where behavior differs from `put_in_reg_mem`, as we always force
             // constants to be 16 bytes when a constant will be used in place of an xmm register.
-            let vcode_constant = self.emit_u128_le_const(c, 0);
+            let vcode_constant = self.emit_u128_le_const(c as u128);
             return XmmMem::new(RegMem::mem(SyntheticAmode::ConstantOffset(vcode_constant)))
                 .unwrap();
         }
