@@ -9,13 +9,12 @@ use std::any::Any;
 use std::convert::TryInto;
 use std::io;
 #[cfg(unix)]
-use system_interface::fs::FileIoExt;
-#[cfg(unix)]
 use system_interface::fs::GetSetFdFlags;
+use system_interface::io::IoExt;
 use system_interface::io::IsReadWrite;
 use system_interface::io::ReadReady;
 use wasi_common::{
-    file::{FdFlags, FileType, WasiFile},
+    file::{FdFlags, FileType, RiFlags, RoFlags, SdFlags, SiFlags, WasiFile},
     Error, ErrorExt,
 };
 
@@ -242,6 +241,61 @@ macro_rules! wasi_stream_write_impl {
                 } else {
                     Err(Error::io())
                 }
+            }
+
+            async fn sock_recv<'a>(
+                &mut self,
+                ri_data: &mut [std::io::IoSliceMut<'a>],
+                ri_flags: RiFlags,
+            ) -> Result<(u64, RoFlags), Error> {
+                if (ri_flags & !(RiFlags::RECV_PEEK | RiFlags::RECV_WAITALL)) != RiFlags::empty() {
+                    return Err(Error::not_supported());
+                }
+
+                if ri_flags.contains(RiFlags::RECV_PEEK) {
+                    if let Some(first) = ri_data.iter_mut().next() {
+                        let n = self.0.peek(first)?;
+                        return Ok((n as u64, RoFlags::empty()));
+                    } else {
+                        return Ok((0, RoFlags::empty()));
+                    }
+                }
+
+                if ri_flags.contains(RiFlags::RECV_WAITALL) {
+                    let n: usize = ri_data.iter().map(|buf| buf.len()).sum();
+                    self.0.read_exact_vectored(ri_data)?;
+                    return Ok((n as u64, RoFlags::empty()));
+                }
+
+                let n = self.0.read_vectored(ri_data)?;
+                Ok((n as u64, RoFlags::empty()))
+            }
+
+            async fn sock_send<'a>(
+                &mut self,
+                si_data: &[std::io::IoSlice<'a>],
+                si_flags: SiFlags,
+            ) -> Result<u64, Error> {
+                if si_flags != SiFlags::empty() {
+                    return Err(Error::not_supported());
+                }
+
+                let n = self.0.write_vectored(si_data)?;
+                Ok(n as u64)
+            }
+
+            async fn sock_shutdown(&mut self, how: SdFlags) -> Result<(), Error> {
+                let how = if how == SdFlags::RD | SdFlags::WR {
+                    cap_std::net::Shutdown::Both
+                } else if how == SdFlags::RD {
+                    cap_std::net::Shutdown::Read
+                } else if how == SdFlags::WR {
+                    cap_std::net::Shutdown::Write
+                } else {
+                    return Err(Error::invalid_argument());
+                };
+                self.0.shutdown(how)?;
+                Ok(())
             }
         }
         #[cfg(unix)]

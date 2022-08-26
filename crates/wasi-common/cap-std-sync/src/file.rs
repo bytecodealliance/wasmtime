@@ -7,7 +7,7 @@ use std::convert::TryInto;
 use std::io;
 use system_interface::{
     fs::{FileIoExt, GetSetFdFlags},
-    io::ReadReady,
+    io::{IoExt, ReadReady},
 };
 use wasi_common::{
     file::{Advice, FdFlags, FileType, Filestat, WasiFile},
