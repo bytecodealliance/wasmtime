@@ -2303,6 +2303,11 @@
 (rule (x64_pmulhw src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Pmulhw) src1 src2))
 
+;; Helper for creating `pmulhrsw` instructions.
+(decl x64_pmulhrsw (Xmm XmmMem) Xmm)
+(rule (x64_pmulhrsw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Pmulhrsw) src1 src2))
+
 ;; Helper for creating `pmulhuw` instructions.
 (decl x64_pmulhuw (Xmm XmmMem) Xmm)
 (rule (x64_pmulhuw src1 src2)
@@ -3783,6 +3788,11 @@
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.CoffTlsGetAddr name dst))))
         dst))
+
+;;;; sqmul_round_sat ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl sqmul_round_sat_mask () VCodeConstant)
+(extern constructor sqmul_round_sat_mask sqmul_round_sat_mask)
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

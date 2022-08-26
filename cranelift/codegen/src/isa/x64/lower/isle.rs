@@ -958,6 +958,16 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
             .use_constant(VCodeConstantData::WellKnown(&ZERO_MASK_VALUE))
     }
 
+    #[inline]
+    fn sqmul_round_sat_mask(&mut self) -> VCodeConstant {
+        static SAT_MASK: [u8; 16] = [
+            0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80,
+            0x00, 0x80,
+        ];
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&SAT_MASK))
+    }
+
     fn emit_div_or_rem(
         &mut self,
         kind: &DivOrRemKind,

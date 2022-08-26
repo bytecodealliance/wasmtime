@@ -3715,3 +3715,14 @@
 (rule (lower (tls_value (symbol_value_data name _ _)))
       (if (tls_model_is_coff))
       (coff_tls_get_addr name))
+
+;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (sqmul_round_sat qx @ (value_type $I16X8) qy))
+      (let ((src1 Xmm qx)
+            (src2 Xmm qy)
+
+            (mask Xmm (x64_xmm_load_const $I16X8 (sqmul_round_sat_mask)))
+            (dst Xmm (x64_pmulhrsw src1 src2))
+            (cmp Xmm (x64_pcmpeqw mask dst)))
+        (x64_pxor dst cmp)))

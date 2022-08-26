@@ -475,47 +475,12 @@ fn lower_insn_to_regs(
         | Opcode::VhighBits
         | Opcode::Iconcat
         | Opcode::Isplit
-        | Opcode::TlsValue => {
+        | Opcode::TlsValue
+        | Opcode::SqmulRoundSat => {
             implemented_in_isle(ctx);
         }
 
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackAddr"),
-
-        Opcode::SqmulRoundSat => {
-            // Lane-wise saturating rounding multiplication in Q15 format
-            // Optimal lowering taken from instruction proposal https://github.com/WebAssembly/simd/pull/365
-            // y = i16x8.q15mulr_sat_s(a, b) is lowered to:
-            //MOVDQA xmm_y, xmm_a
-            //MOVDQA xmm_tmp, wasm_i16x8_splat(0x8000)
-            //PMULHRSW xmm_y, xmm_b
-            //PCMPEQW xmm_tmp, xmm_y
-            //PXOR xmm_y, xmm_tmp
-            let input_ty = ctx.input_ty(insn, 0);
-            let src1 = put_input_in_reg(ctx, inputs[0]);
-            let src2 = put_input_in_reg(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            ctx.emit(Inst::gen_move(dst, src1, input_ty));
-            static SAT_MASK: [u8; 16] = [
-                0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80,
-                0x00, 0x80,
-            ];
-            let mask_const = ctx.use_constant(VCodeConstantData::WellKnown(&SAT_MASK));
-            let mask = ctx.alloc_tmp(types::I16X8).only_reg().unwrap();
-            ctx.emit(Inst::xmm_load_const(mask_const, mask, types::I16X8));
-
-            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmulhrsw, RegMem::reg(src2), dst));
-            ctx.emit(Inst::xmm_rm_r(
-                SseOpcode::Pcmpeqw,
-                RegMem::reg(dst.to_reg()),
-                mask,
-            ));
-            ctx.emit(Inst::xmm_rm_r(
-                SseOpcode::Pxor,
-                RegMem::reg(mask.to_reg()),
-                dst,
-            ));
-        }
 
         Opcode::Uunarrow => {
             if let Some(fcvt_inst) = matches_input(ctx, inputs[0], Opcode::FcvtToUintSat) {
