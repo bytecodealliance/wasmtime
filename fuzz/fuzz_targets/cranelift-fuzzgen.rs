@@ -3,7 +3,7 @@
 use libfuzzer_sys::fuzz_target;
 
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::{LibCall, TrapCode};
+use cranelift_codegen::ir::LibCall;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_filetests::function_runner::{CompiledFunction, SingleFunctionCompiler};
@@ -13,7 +13,7 @@ use cranelift_interpreter::environment::FunctionStore;
 use cranelift_interpreter::interpreter::{Interpreter, InterpreterError, InterpreterState};
 use cranelift_interpreter::step::ControlFlow;
 use cranelift_interpreter::step::CraneliftTrap;
-use smallvec::smallvec;
+use smallvec::{smallvec, SmallVec};
 
 const INTERPRETER_FUEL: u64 = 4096;
 
@@ -53,24 +53,43 @@ fn run_in_host(compiled_fn: &CompiledFunction, args: &[DataValue]) -> RunResult 
     RunResult::Success(res)
 }
 
+fn interp_libcall_handler(
+    libcall: LibCall,
+    args: SmallVec<[DataValue; 1]>,
+) -> SmallVec<[DataValue; 1]> {
+    use LibCall::*;
+
+    smallvec![match (libcall, &args[..]) {
+        (CeilF32, [DataValue::F32(a)]) => DataValue::F32(a.ceil()),
+        (CeilF64, [DataValue::F64(a)]) => DataValue::F64(a.ceil()),
+        (FloorF32, [DataValue::F32(a)]) => DataValue::F32(a.floor()),
+        (FloorF64, [DataValue::F64(a)]) => DataValue::F64(a.floor()),
+        (TruncF32, [DataValue::F32(a)]) => DataValue::F32(a.trunc()),
+        (TruncF64, [DataValue::F64(a)]) => DataValue::F64(a.trunc()),
+        _ => unreachable!(),
+    }]
+}
+
+fn build_interpreter(testcase: &TestCase) -> Interpreter {
+    use LibCall::*;
+
+    let mut env = FunctionStore::default();
+    env.add(testcase.func.name.to_string(), &testcase.func);
+
+    let state = InterpreterState::default()
+        .with_function_store(env)
+        .with_libcall(CeilF32, &|args| Ok(interp_libcall_handler(CeilF32, args)))
+        .with_libcall(CeilF64, &|args| Ok(interp_libcall_handler(CeilF64, args)))
+        .with_libcall(FloorF32, &|args| Ok(interp_libcall_handler(FloorF32, args)))
+        .with_libcall(FloorF64, &|args| Ok(interp_libcall_handler(FloorF64, args)))
+        .with_libcall(TruncF32, &|args| Ok(interp_libcall_handler(TruncF32, args)))
+        .with_libcall(TruncF64, &|args| Ok(interp_libcall_handler(TruncF64, args)));
+
+    let interpreter = Interpreter::new(state).with_fuel(Some(INTERPRETER_FUEL));
+    interpreter
+}
+
 fuzz_target!(|testcase: TestCase| {
-    let build_interpreter = || {
-        let mut env = FunctionStore::default();
-        env.add(testcase.func.name.to_string(), &testcase.func);
-
-        let state = InterpreterState::default()
-            .with_function_store(env)
-            .with_libcall(LibCall::SdivI64, &|args| match &args[..] {
-                [DataValue::I64(a), DataValue::I64(b)] => a
-                    .checked_div(*b)
-                    .map(|res| Ok(smallvec![DataValue::I64(res)]))
-                    .unwrap_or(Err(TrapCode::IntegerDivisionByZero)),
-                _ => unreachable!(),
-            });
-        let interpreter = Interpreter::new(state).with_fuel(Some(INTERPRETER_FUEL));
-        interpreter
-    };
-
     // Native fn
     let flags = {
         let mut builder = settings::builder();
@@ -84,7 +103,7 @@ fuzz_target!(|testcase: TestCase| {
     for args in &testcase.inputs {
         // We rebuild the interpreter every run so that we don't accidentally carry over any state
         // between runs, such as fuel remaining.
-        let mut interpreter = build_interpreter();
+        let mut interpreter = build_interpreter(&testcase);
         let int_res = run_in_interpreter(&mut interpreter, args);
         match int_res {
             RunResult::Success(_) => {}
