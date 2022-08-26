@@ -92,8 +92,8 @@ block0(v0: i32x4):
 }
 
 ; block0:
-;   sxtl v0.2d, v0.2s
-;   scvtf v0.2d, v0.2d
+;   sxtl v3.2d, v0.2s
+;   scvtf v0.2d, v3.2d
 ;   ret
 
 function %f10(i8, i16, i32, i64) -> f32 {

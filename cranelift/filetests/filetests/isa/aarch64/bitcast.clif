@@ -18,8 +18,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   mov w4, w0
-;   fmov d0, x4
+;   fmov s0, w0
 ;   ret
 
 function %f3(f64) -> i64 {

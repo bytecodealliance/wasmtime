@@ -365,6 +365,10 @@
 (decl ty_int_bool_128 (Type) Type)
 (extern extractor ty_int_bool_128 ty_int_bool_128)
 
+;; An extractor that matches any int or bool.
+(decl ty_int_bool (Type) Type)
+(extern extractor ty_int_bool ty_int_bool)
+
 ;; An extractor that only matches integers.
 (decl ty_int (Type) Type)
 (extern extractor ty_int ty_int)
@@ -372,6 +376,10 @@
 ;; An extractor that only matches scalar floating-point types--F32 or F64.
 (decl ty_scalar_float (Type) Type)
 (extern extractor ty_scalar_float ty_scalar_float)
+
+;; An extractor that matches scalar floating-point types or vector types.
+(decl ty_float_or_vec (Type) Type)
+(extern extractor ty_float_or_vec ty_float_or_vec)
 
 ;; A pure constructor that only matches 64-bit vector types.
 (decl pure ty_vec64 (Type) Type)
