@@ -164,7 +164,7 @@ block0:
 }
 
 ; block0:
-;   orr x0, xzr, #4294967295
+;   movn x0, #0
 ;   ret
 
 function %f() -> i32 {

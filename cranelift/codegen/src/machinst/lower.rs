@@ -11,8 +11,8 @@ use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::{
     types::{FFLAGS, IFLAGS},
     ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, Function, GlobalValue,
-    GlobalValueData, Immediate, Inst, InstructionData, MemFlags, Opcode, Signature, Type, Value,
-    ValueDef, ValueLabelAssignments, ValueLabelStart,
+    GlobalValueData, Immediate, Inst, InstructionData, MemFlags, Opcode, Type, Value, ValueDef,
+    ValueLabelAssignments, ValueLabelStart,
 };
 use crate::ir::{ExternalName, RelSourceLoc};
 use crate::machinst::{
@@ -1024,34 +1024,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get the instdata for a given IR instruction.
     pub fn data(&self, ir_inst: Inst) -> &InstructionData {
         &self.f.dfg[ir_inst]
-    }
-
-    /// Get the target for a call instruction, as an `ExternalName`. Returns a tuple
-    /// providing this name and the "relocation distance", i.e., whether the backend
-    /// can assume the target will be "nearby" (within some small offset) or an
-    /// arbitrary address. (This comes from the `colocated` bit in the CLIF.)
-    pub fn call_target<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance)> {
-        match &self.f.dfg[ir_inst] {
-            &InstructionData::Call { func_ref, .. }
-            | &InstructionData::FuncAddr { func_ref, .. } => {
-                let funcdata = &self.f.dfg.ext_funcs[func_ref];
-                let dist = funcdata.reloc_distance();
-                Some((&funcdata.name, dist))
-            }
-            _ => None,
-        }
-    }
-
-    /// Get the signature for a call or call-indirect instruction.
-    pub fn call_sig<'b>(&'b self, ir_inst: Inst) -> Option<&'b Signature> {
-        match &self.f.dfg[ir_inst] {
-            &InstructionData::Call { func_ref, .. } => {
-                let funcdata = &self.f.dfg.ext_funcs[func_ref];
-                Some(&self.f.dfg.signatures[funcdata.signature])
-            }
-            &InstructionData::CallIndirect { sig_ref, .. } => Some(&self.f.dfg.signatures[sig_ref]),
-            _ => None,
-        }
     }
 
     /// Get the symbol name, relocation distance estimate, and offset for a
