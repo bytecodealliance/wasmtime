@@ -77,6 +77,7 @@ opt-level = 0
 resolver = '2'
 members = [
   "cranelift",
+  "cranelift/egraph",
   "cranelift/isle/fuzz",
   "cranelift/isle/islec",
   "cranelift/serde",

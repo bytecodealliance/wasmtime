@@ -1,0 +1,17 @@
+[package]
+authors = ["The Cranelift Project Developers"]
+name = "cranelift-egraph"
+version = "0.88.0"
+description = "acyclic-egraph (aegraph) implementation for Cranelift"
+license = "Apache-2.0 WITH LLVM-exception"
+documentation = "https://docs.rs/cranelift-egraph"
+repository = "https://github.com/bytecodealliance/wasmtime"
+edition = "2021"
+
+[dependencies]
+cranelift-entity = { path = "../entity", version = "0.88.0" }
+log = { version = "0.4.6", default-features = false }
+smallvec = { version = "1.6.1" }
+indexmap = { version = "1.9.1" }
+hashbrown = { version = "0.12.2", features = ["raw"] }
+fxhash = "0.2.1"
