@@ -192,13 +192,13 @@ pub enum HeapInit {
     FromBacking(HeapBacking),
 }
 
-pub type LibCallHandler<'a, V> =
-    &'a dyn Fn(LibCall, SmallVec<[V; 1]>) -> Result<SmallVec<[V; 1]>, TrapCode>;
+pub type LibCallValues<V> = SmallVec<[V; 1]>;
+pub type LibCallHandler<V> = fn(LibCall, LibCallValues<V>) -> Result<LibCallValues<V>, TrapCode>;
 
 /// Maintains the [Interpreter]'s state, implementing the [State] trait.
 pub struct InterpreterState<'a> {
     pub functions: FunctionStore<'a>,
-    pub libcall_handler: LibCallHandler<'a, DataValue>,
+    pub libcall_handler: LibCallHandler<DataValue>,
     pub frame_stack: Vec<Frame<'a>>,
     /// Number of bytes from the bottom of the stack where the current frame's stack space is
     pub frame_offset: usize,
@@ -213,7 +213,7 @@ impl Default for InterpreterState<'_> {
     fn default() -> Self {
         Self {
             functions: FunctionStore::default(),
-            libcall_handler: &|_, _| Err(TrapCode::UnreachableCodeReached),
+            libcall_handler: |_, _| Err(TrapCode::UnreachableCodeReached),
             frame_stack: vec![],
             frame_offset: 0,
             stack: Vec::with_capacity(1024),
@@ -231,7 +231,7 @@ impl<'a> InterpreterState<'a> {
     }
 
     /// Registers a libcall handler
-    pub fn with_libcall_handler(mut self, handler: LibCallHandler<'a, DataValue>) -> Self {
+    pub fn with_libcall_handler(mut self, handler: LibCallHandler<DataValue>) -> Self {
         self.libcall_handler = handler;
         self
     }
@@ -1079,7 +1079,7 @@ mod tests {
         env.add(func.name.to_string(), &func);
         let state = InterpreterState::default()
             .with_function_store(env)
-            .with_libcall_handler(&|libcall, args| {
+            .with_libcall_handler(|libcall, args| {
                 Ok(smallvec![match (libcall, &args[..]) {
                     (LibCall::CeilF32, [DataValue::F32(a)]) => DataValue::F32(a.ceil()),
                     _ => panic!("Unexpected args"),

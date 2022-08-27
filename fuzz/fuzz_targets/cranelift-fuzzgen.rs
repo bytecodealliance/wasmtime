@@ -10,7 +10,9 @@ use cranelift_filetests::function_runner::{CompiledFunction, SingleFunctionCompi
 use cranelift_fuzzgen::*;
 use cranelift_interpreter::environment::FuncIndex;
 use cranelift_interpreter::environment::FunctionStore;
-use cranelift_interpreter::interpreter::{Interpreter, InterpreterError, InterpreterState};
+use cranelift_interpreter::interpreter::{
+    Interpreter, InterpreterError, InterpreterState, LibCallValues,
+};
 use cranelift_interpreter::step::ControlFlow;
 use cranelift_interpreter::step::CraneliftTrap;
 use smallvec::{smallvec, SmallVec};
@@ -59,7 +61,7 @@ fn build_interpreter(testcase: &TestCase) -> Interpreter {
 
     let state = InterpreterState::default()
         .with_function_store(env)
-        .with_libcall_handler(&|libcall: LibCall, args: SmallVec<[DataValue; 1]>| {
+        .with_libcall_handler(|libcall: LibCall, args: LibCallValues<DataValue>| {
             use LibCall::*;
             Ok(smallvec![match (libcall, &args[..]) {
                 (CeilF32, [DataValue::F32(a)]) => DataValue::F32(a.ceil()),
