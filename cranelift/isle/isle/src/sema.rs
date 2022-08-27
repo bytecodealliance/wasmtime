@@ -236,6 +236,8 @@ pub enum TermKind {
     Decl {
         /// Whether the term is marked as `pure`.
         pure: bool,
+        /// Whether the term is marked as `multi`.
+        multi: bool,
         /// The kind of this term's constructor, if any.
         constructor_kind: Option<ConstructorKind>,
         /// The kind of this term's extractor, if any.
@@ -290,6 +292,23 @@ pub struct ExternalSig {
     pub ret_tys: Vec<TypeId>,
     /// Whether this signature is infallible or not.
     pub infallible: bool,
+    /// "Multiplicity" mode: iterator, vec-return, or none.
+    pub multi: MultiMode,
+}
+
+/// The mode by which a term (extractor or constructor) returns
+/// multiple values.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum MultiMode {
+    /// Function (constructor or extractor) logically returns only one
+    /// result (or none).
+    None,
+    /// Function logically returns multiple results, and returns these
+    /// as an iterator that implements a custom iterator trait.
+    Iter,
+    /// Function logically returns multiple results, and returns these
+    /// as a vector.
+    Vec,
 }
 
 impl Term {
@@ -353,6 +372,7 @@ impl Term {
     pub fn extractor_sig(&self, tyenv: &TypeEnv) -> Option<ExternalSig> {
         match &self.kind {
             TermKind::Decl {
+                multi,
                 extractor_kind:
                     Some(ExtractorKind::ExternalExtractor {
                         name, infallible, ..
@@ -363,7 +383,12 @@ impl Term {
                 full_name: format!("C::{}", tyenv.syms[name.index()]),
                 param_tys: vec![self.ret_ty],
                 ret_tys: self.arg_tys.clone(),
-                infallible: *infallible,
+                infallible: *infallible && !*multi,
+                multi: if *multi {
+                    MultiMode::Iter
+                } else {
+                    MultiMode::None
+                },
             }),
             _ => None,
         }
@@ -374,6 +399,7 @@ impl Term {
         match &self.kind {
             TermKind::Decl {
                 constructor_kind: Some(ConstructorKind::ExternalConstructor { name }),
+                multi,
                 pure,
                 ..
             } => Some(ExternalSig {
@@ -381,10 +407,16 @@ impl Term {
                 full_name: format!("C::{}", tyenv.syms[name.index()]),
                 param_tys: self.arg_tys.clone(),
                 ret_tys: vec![self.ret_ty],
-                infallible: !pure,
+                infallible: !pure && !*multi,
+                multi: if *multi {
+                    MultiMode::Vec
+                } else {
+                    MultiMode::None
+                },
             }),
             TermKind::Decl {
                 constructor_kind: Some(ConstructorKind::InternalConstructor { .. }),
+                multi,
                 ..
             } => {
                 let name = format!("constructor_{}", tyenv.syms[self.name.index()]);
@@ -398,6 +430,11 @@ impl Term {
                     // matching at the toplevel (an entry point can
                     // fail to rewrite).
                     infallible: false,
+                    multi: if *multi {
+                        MultiMode::Vec
+                    } else {
+                        MultiMode::None
+                    },
                 })
             }
             _ => None,
@@ -854,6 +891,7 @@ impl TermEnv {
                             constructor_kind: None,
                             extractor_kind: None,
                             pure: decl.pure,
+                            multi: decl.multi,
                         },
                     });
                 }
@@ -1014,8 +1052,18 @@ impl TermEnv {
                         );
                         continue;
                     }
-                    TermKind::Decl { extractor_kind, .. } => match extractor_kind {
+                    TermKind::Decl {
+                        multi,
+                        extractor_kind,
+                        ..
+                    } => match extractor_kind {
                         None => {
+                            if *multi {
+                                tyenv.report_error(
+                                    ext.pos,
+                                    "A term declared with `multi` cannot have an internal extractor.".to_string());
+                                continue;
+                            }
                             *extractor_kind = Some(ExtractorKind::InternalExtractor { template });
                         }
                         Some(ext_kind) => {
