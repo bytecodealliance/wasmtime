@@ -24,7 +24,7 @@ pub trait State<'a, V> {
     fn get_function(&self, func_ref: FuncRef) -> Option<&'a Function>;
     /// Retrieve a reference to the currently executing [Function].
     fn get_current_function(&self) -> &'a Function;
-    /// Retrieve the handler callback for a [LibCall]
+    /// Retrieve the handler callback for a [LibCall](cranelift_codegen::ir::LibCall)
     fn get_libcall_handler(&self) -> LibCallHandler<V>;
     /// Record that an interpreter has called into a new [Function].
     fn push_frame(&mut self, function: &'a Function);
