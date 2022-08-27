@@ -1,8 +1,7 @@
 test compile precise-output
-set unwind_info=false
 target aarch64
 
-function %f() {
+function %trap() {
 block0:
   trap user0
 }
@@ -10,26 +9,14 @@ block0:
 ; block0:
 ;   udf #0xc11f
 
-function %g(i64) {
-block0(v0: i64):
-  v1 = iconst.i64 42
-  v2 = ifcmp v0, v1
-  trapif eq v2, user0
+function %trap_iadd_ifcout(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2, v3 = iadd_ifcout v0, v1
+  trapif of v3, user0
   return
 }
 
 ; block0:
-;   subs xzr, x0, #42
-;   b.ne 8 ; udf
-;   ret
-
-function %h() {
-block0:
-  debugtrap
-  return
-}
-
-; block0:
-;   brk #0
+;   b.vc 8 ; udf
 ;   ret
 
