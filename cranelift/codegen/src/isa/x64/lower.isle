@@ -3757,3 +3757,9 @@
 
         ;; SHUFPS xmm_y, xmm_xmp, 0x88
         (x64_shufps dst zeros 0x88)))
+
+;; Rules for `nop` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (nop))
+      (invalid_reg))
+
