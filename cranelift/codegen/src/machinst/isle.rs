@@ -372,9 +372,27 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_int_bool(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_int() || ty.is_bool() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn ty_scalar_float(&mut self, ty: Type) -> Option<Type> {
             match ty {
                 F32 | F64 => Some(ty),
+                _ => None,
+            }
+        }
+
+        #[inline]
+        fn ty_float_or_vec(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                F32 | F64 => Some(ty),
+                ty if ty.is_vector() => Some(ty),
                 _ => None,
             }
         }

@@ -128,7 +128,11 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     fn lshl_from_imm64(&mut self, ty: Type, n: Imm64) -> Option<ShiftOpAndAmt> {
-        let shiftimm = ShiftOpShiftImm::maybe_from_shift(n.bits() as u64)?;
+        self.lshl_from_u64(ty, n.bits() as u64)
+    }
+
+    fn lshl_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {
+        let shiftimm = ShiftOpShiftImm::maybe_from_shift(n)?;
         let shiftee_bits = ty_bits(ty);
         if shiftee_bits <= std::u8::MAX as usize {
             let shiftimm = shiftimm.mask(shiftee_bits as u8);
@@ -721,5 +725,9 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
                 shift
             );
         }
+    }
+
+    fn writable_pinned_reg(&mut self) -> WritableReg {
+        super::regs::writable_xreg(super::regs::PINNED_REG)
     }
 }
