@@ -190,6 +190,11 @@ where
     }
 
     pub fn generate_test(mut self) -> Result<TestCase> {
+        // If we're generating test inputs as well as a function, then we're planning to execute
+        // this function. That means that any function references in it need to exist. We don't yet
+        // have infrastructure for generating multiple functions, so just don't generate funcrefs.
+        self.config.funcrefs_per_function = 0..=0;
+
         let func = self.generate_func()?;
         let inputs = self.generate_test_inputs(&func.signature)?;
         Ok(TestCase { func, inputs })
