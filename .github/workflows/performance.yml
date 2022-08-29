@@ -1,0 +1,111 @@
+# This is a workflow triggered by PR or triggered manually
+# Runs quick performance tests and reports the comparison against HEAD
+# Test should take less than 10 minutes to run on current self-hosted devices
+name: "Performance Testing"
+
+# Controls when the action will run.
+# This workflow runs when manually triggered using the UI or API.
+on:
+  issue_comment:
+    types: [created, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+#  push:
+
+# Env variables
+env:
+  SG_COMMIT: HEAD
+  TOKEN: ${{ secrets.SIGHTGLASS_BENCHMARKING_TOKEN }}
+  GITHUB_CONTEXT: ${{ toJson(github) }}
+  GITHUB_CONTEXT_FROM_PATCH: ""
+
+jobs:
+  Wasmtime_Repo_On_PR_Comment:
+    name: Benchmark x64 on PR comment Wasmtime repo
+    runs-on: ubuntu-latest
+#    if: (github.event_name == 'push') && (github.repository != 'bytecodealliance/wasmtime-sightglass-benchmarking')
+    if: |
+      startsWith(github.event.comment.body, '/bench_x64') &&
+      (github.event.issue.pull_request) &&
+      (('abrown' == github.event.comment.user.login)
+        || ('afonso360' == github.event.comment.user.login)
+        || ('akirilov-arm' == github.event.comment.user.login)
+        || ('alexcrichton' == github.event.comment.user.login)
+        || ('bbouvier' == github.event.comment.user.login)
+        || ('bjorn3' == github.event.comment.user.login)
+        || ('cfallin' == github.event.comment.user.login)
+        || ('fitzgen' == github.event.comment.user.login)
+        || ('jlb6740' == github.event.comment.user.login)
+        || ('sparker-arm' == github.event.comment.user.login)
+        || ('uweigand' == github.event.comment.user.login))
+    steps:
+      - run: echo "MESSAGE=Requested from pull request comment." >> $GITHUB_ENV
+      - run: echo "ACTOR=${{ github.event.comment.user.login }}" >> $GITHUB_ENV
+      - run: echo "REPOSITORY=${{ github.repository }}" >> $GITHUB_ENV
+      - run: echo "REFS=${{ github.ref }}" >> $GITHUB_ENV
+      - run: echo "PR_NUMBER=${{ github.event.issue.number }}" >> $GITHUB_ENV
+      - run: echo "PUBLISH=true" >> $GITHUB_ENV
+      - run: echo "$GITHUB_CONTEXT"
+      - run: echo "$GITHUB_ENV"
+      - run: |
+          # Create and Push Branch
+          git clone https://jlb6740:${{env.TOKEN}}@github.com/bytecodealliance/wasmtime-sightglass-benchmarking.git
+          cd wasmtime-sightglass-benchmarking
+          git remote add wasmtime ${{ github.event.repository.clone_url }}
+          git fetch wasmtime
+          git checkout wasmtime/${{ github.ref_name }} -b ${{ github.ref_name }}
+          git submodule update --init --recursive
+          git checkout -b wasmtime-performance-testing/FB/${{ github.ref_name }}/${{ github.sha }}
+          echo ${{ github.event.commits[0].committer.name  }}
+          echo "email - ${{ github.event.commits[0].committer.email }}"
+          git config user.name '${{ github.event.commits[0].committer.name }}'
+          git config user.email '${{ github.event.commits[0].committer.email }}'
+          git commit --allow-empty -m "${GITHUB_CONTEXT}"
+          git push origin wasmtime-performance-testing/FB/${{ github.ref_name }}/${{ github.sha }}
+          #curl -X POST -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ env.TOKEN }}" https://api.github.com/repos/bytecodealliance/wasmtime-sightglass-benchmarking/dispatches -d '{"event_type":"Performance Testing", "client_payload":{"message":"${{ env.MESSAGE }}", "actor":"${{ env.ACTOR }}", "repository":"${{ env.REPOSITORY }}", "ref":"${{ env.REFS }}", "pr_number":"${{ env.PR_NUMBER }}", "publish":"${{ env.PUBLISH }}" }'
+
+  Performance_Repo_On_Push:
+    name: Benchmark x64 on push Performance repo
+    runs-on: [self-hosted, linux, x64]
+    if: (github.event_name == 'push') && (github.repository == 'bytecodealliance/wasmtime-sightglass-benchmarking')
+    steps:
+#      - run: echo "$GITHUB_CONTEXT"
+      - run: echo "${{ github.event.head_commit.message }}"
+#      - name: "Build sightglass commit '${{ env.SG_COMMIT }}'"
+#        run: |
+#          cd ../ && ls -l && rm -rf ./sightglass
+#          git clone https://github.com/bytecodealliance/sightglass.git && cd ./sightglass
+#          git checkout ${{env.SG_COMMIT}}
+#          cargo build --release
+
+#      - name: Checkout ${{ env.event.ref_name }}
+#        uses: actions/checkout@v3
+#        with:
+#          submodules: true
+#          repository: ${{ env.repository }}
+#          ref: ${{ env.event.ref_name }}
+#          path: wasmtime_commit
+
+
+#      - name: Build ${{ env.REF }} from ${{ env.REPOSITORY }}
+#        working-directory: ./wasmtime_commit
+#          cargo build --release -p wasmtime-bench-api
+#          cp target/release/libwasmtime_bench_api.so /tmp/wasmtime_commit.so
+
+          #echo "${{fromJson(GITHUB_CONTEXT_PERFORMANCE).ref}}"
+          #echo "${{fromJson(steps.set_var.outputs.packageJson).version}}"
+
+
+#      - name: Checkout main from bytecodealliance/wasmtime
+#        uses: actions/checkout@v3
+#        with:
+#          ref: 'main'
+#          repository: 'bytecodealliance/wasmtime'
+#          submodules: true
+#          path: wasmtime_main
+
+#      - name: Build main from bytecodealliance/wasmtime
+#        working-directory: ./wasmtime_main
+#        run: |
+#          cargo build --release -p wasmtime-bench-api
+#          cp target/release/libwasmtime_bench_api.so /tmp/wasmtime_main.so
