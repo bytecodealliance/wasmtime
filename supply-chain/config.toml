@@ -1011,10 +1011,6 @@ criteria = "safe-to-deploy"
 version = "0.12.6"
 criteria = "safe-to-deploy"
 
-[[exemptions.system-interface]]
-version = "0.21.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.target-lexicon]]
 version = "0.12.3"
 criteria = "safe-to-deploy"

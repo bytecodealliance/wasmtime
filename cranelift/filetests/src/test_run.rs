@@ -2,17 +2,19 @@
 //!
 //! The `run` test command compiles each function on the host machine and executes it
 
-use crate::function_runner::SingleFunctionCompiler;
+use crate::function_runner::{CompiledTestFile, TestFileCompiler};
+use crate::runone::FileUpdate;
 use crate::runtest_environment::{HeapMemory, RuntestEnvironment};
 use crate::subtest::{Context, SubTest};
+use anyhow::Context as _;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::Type;
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::settings::Configurable;
+use cranelift_codegen::settings::{Configurable, Flags};
 use cranelift_codegen::{ir, settings};
-use cranelift_reader::parse_run_command;
 use cranelift_reader::TestCommand;
-use log::trace;
+use cranelift_reader::{parse_run_command, TestFile};
+use log::{info, trace};
 use std::borrow::Cow;
 use target_lexicon::Architecture;
 
@@ -60,7 +62,7 @@ fn build_host_isa(
 
 /// Checks if the host's ISA is compatible with the one requested by the test.
 fn is_isa_compatible(
-    context: &Context,
+    file_path: &str,
     host: &dyn TargetIsa,
     requested: &dyn TargetIsa,
 ) -> Result<(), String> {
@@ -76,7 +78,7 @@ fn is_isa_compatible(
         _ => {
             return Err(format!(
                 "skipped {}: host can't run {:?} programs",
-                context.file_path, requested_arch
+                file_path, requested_arch
             ))
         }
     }
@@ -96,7 +98,7 @@ fn is_isa_compatible(
             if requested && !available_in_host {
                 return Err(format!(
                     "skipped {}: host does not support ISA flag {}",
-                    context.file_path, req_value.name
+                    file_path, req_value.name
                 ));
             }
         } else {
@@ -104,6 +106,54 @@ fn is_isa_compatible(
         }
     }
 
+    Ok(())
+}
+
+fn compile_testfile(
+    testfile: &TestFile,
+    flags: &Flags,
+    isa: &dyn TargetIsa,
+) -> anyhow::Result<CompiledTestFile> {
+    // We can't use the requested ISA directly since it does not contain info
+    // about the operating system / calling convention / etc..
+    //
+    // Copy the requested ISA flags into the host ISA and use that.
+    let isa = build_host_isa(false, flags.clone(), isa.isa_flags());
+
+    let mut tfc = TestFileCompiler::new(isa);
+    tfc.add_testfile(testfile)?;
+    Ok(tfc.compile()?)
+}
+
+fn run_test(
+    testfile: &CompiledTestFile,
+    func: &ir::Function,
+    context: &Context,
+) -> anyhow::Result<()> {
+    let test_env = RuntestEnvironment::parse(&context.details.comments[..])?;
+
+    for comment in context.details.comments.iter() {
+        if let Some(command) = parse_run_command(comment.text, &func.signature)? {
+            trace!("Parsed run command: {}", command);
+
+            command
+                .run(|_, run_args| {
+                    test_env.validate_signature(&func)?;
+                    let (_heaps, _ctx_struct, vmctx_ptr) =
+                        build_vmctx_struct(&test_env, context.isa.unwrap().pointer_type());
+
+                    let mut args = Vec::with_capacity(run_args.len());
+                    if test_env.is_active() {
+                        args.push(vmctx_ptr);
+                    }
+                    args.extend_from_slice(run_args);
+
+                    let trampoline = testfile.get_trampoline(func).unwrap();
+                    Ok(trampoline.call(&args))
+                })
+                .map_err(|s| anyhow::anyhow!("{}", s))?;
+        }
+    }
     Ok(())
 }
 
@@ -120,10 +170,19 @@ impl SubTest for TestRun {
         true
     }
 
-    fn run(&self, func: Cow<ir::Function>, context: &Context) -> anyhow::Result<()> {
+    /// Runs the entire subtest for a given target, invokes [Self::run] for running
+    /// individual tests.
+    fn run_target<'a>(
+        &self,
+        testfile: &TestFile,
+        file_update: &mut FileUpdate,
+        file_path: &'a str,
+        flags: &'a Flags,
+        isa: Option<&'a dyn TargetIsa>,
+    ) -> anyhow::Result<()> {
         // Disable runtests with pinned reg enabled.
         // We've had some abi issues that the trampoline isn't quite ready for.
-        if context.flags.enable_pinned_reg() {
+        if flags.enable_pinned_reg() {
             return Err(anyhow::anyhow!([
                 "Cannot run runtests with pinned_reg enabled.",
                 "See https://github.com/bytecodealliance/wasmtime/issues/4376 for more info"
@@ -131,45 +190,40 @@ impl SubTest for TestRun {
             .join("\n")));
         }
 
-        let host_isa = build_host_isa(true, context.flags.clone(), vec![]);
-        let requested_isa = context.isa.unwrap();
-        if let Err(e) = is_isa_compatible(context, host_isa.as_ref(), requested_isa) {
+        // Check that the host machine can run this test case (i.e. has all extensions)
+        let host_isa = build_host_isa(true, flags.clone(), vec![]);
+        if let Err(e) = is_isa_compatible(file_path, host_isa.as_ref(), isa.unwrap()) {
             log::info!("{}", e);
             return Ok(());
         }
 
-        let test_env = RuntestEnvironment::parse(&context.details.comments[..])?;
+        let compiled_testfile = compile_testfile(&testfile, flags, isa.unwrap())?;
 
-        for comment in context.details.comments.iter() {
-            if let Some(command) = parse_run_command(comment.text, &func.signature)? {
-                trace!("Parsed run command: {}", command);
+        for (func, details) in &testfile.functions {
+            info!(
+                "Test: {}({}) {}",
+                self.name(),
+                func.name,
+                isa.map_or("-", TargetIsa::name)
+            );
 
-                // We can't use the requested ISA directly since it does not contain info
-                // about the operating system / calling convention / etc..
-                //
-                // Copy the requested ISA flags into the host ISA and use that.
-                let isa = build_host_isa(false, context.flags.clone(), requested_isa.isa_flags());
+            let context = Context {
+                preamble_comments: &testfile.preamble_comments,
+                details,
+                flags,
+                isa,
+                file_path: file_path.as_ref(),
+                file_update,
+            };
 
-                let compiled_fn =
-                    SingleFunctionCompiler::new(isa).compile(func.clone().into_owned())?;
-                command
-                    .run(|_, run_args| {
-                        test_env.validate_signature(&func)?;
-                        let (_heaps, _ctx_struct, vmctx_ptr) =
-                            build_vmctx_struct(&test_env, context.isa.unwrap().pointer_type());
-
-                        let mut args = Vec::with_capacity(run_args.len());
-                        if test_env.is_active() {
-                            args.push(vmctx_ptr);
-                        }
-                        args.extend_from_slice(run_args);
-
-                        Ok(compiled_fn.call(&args))
-                    })
-                    .map_err(|s| anyhow::anyhow!("{}", s))?;
-            }
+            run_test(&compiled_testfile, &func, &context).context(self.name())?;
         }
+
         Ok(())
+    }
+
+    fn run(&self, _func: Cow<ir::Function>, _context: &Context) -> anyhow::Result<()> {
+        unreachable!()
     }
 }
 

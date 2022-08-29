@@ -6,36 +6,52 @@ use anyhow::Error;
 use arbitrary::Unstructured;
 use wasmtime::Trap;
 
-/// Pick one of the engines implemented in this module that is compatible with
-/// the Wasm features passed in `features` and, when fuzzing Wasmtime against
-/// itself, an existing `wasmtime_engine`.
+/// Pick one of the engines implemented in this module that is:
+/// - in the list of `allowed` engines
+/// - can evaluate Wasm modules compatible with `existing_config`.
 pub fn choose(
     u: &mut Unstructured<'_>,
     existing_config: &Config,
+    allowed: &[&str],
 ) -> arbitrary::Result<Box<dyn DiffEngine>> {
-    // Filter out any engines that cannot match the given configuration.
+    // Filter out any engines that cannot match the `existing_config` or are not
+    // `allowed`.
     let mut engines: Vec<Box<dyn DiffEngine>> = vec![];
-    let mut config2: WasmtimeConfig = u.arbitrary()?; // TODO change to WasmtimeConfig
-    config2.make_compatible_with(&existing_config.wasmtime);
-    let config2 = Config {
-        wasmtime: config2,
-        module_config: existing_config.module_config.clone(),
-    };
-    if let Result::Ok(e) = WasmtimeEngine::new(config2) {
-        engines.push(Box::new(e))
+
+    if allowed.contains(&"wasmtime") {
+        let mut new_wasmtime_config: WasmtimeConfig = u.arbitrary()?;
+        new_wasmtime_config.make_compatible_with(&existing_config.wasmtime);
+        let new_config = Config {
+            wasmtime: new_wasmtime_config,
+            module_config: existing_config.module_config.clone(),
+        };
+        if let Result::Ok(e) = WasmtimeEngine::new(new_config) {
+            engines.push(Box::new(e))
+        }
     }
-    if let Result::Ok(e) = WasmiEngine::new(&existing_config.module_config) {
-        engines.push(Box::new(e))
+
+    if allowed.contains(&"wasmi") {
+        if let Result::Ok(e) = WasmiEngine::new(&existing_config.module_config) {
+            engines.push(Box::new(e))
+        }
     }
+
     #[cfg(feature = "fuzz-spec-interpreter")]
-    if let Result::Ok(e) =
-        crate::oracles::diff_spec::SpecInterpreter::new(&existing_config.module_config)
-    {
-        engines.push(Box::new(e))
+    if allowed.contains(&"spec") {
+        if let Result::Ok(e) =
+            crate::oracles::diff_spec::SpecInterpreter::new(&existing_config.module_config)
+        {
+            engines.push(Box::new(e))
+        }
     }
+
     #[cfg(not(any(windows, target_arch = "s390x")))]
-    if let Result::Ok(e) = crate::oracles::diff_v8::V8Engine::new(&existing_config.module_config) {
-        engines.push(Box::new(e))
+    if allowed.contains(&"v8") {
+        if let Result::Ok(e) =
+            crate::oracles::diff_v8::V8Engine::new(&existing_config.module_config)
+        {
+            engines.push(Box::new(e))
+        }
     }
 
     // Use the input of the fuzzer to pick an engine that we'll be fuzzing
@@ -91,6 +107,76 @@ pub trait DiffInstance {
 pub fn setup_engine_runtimes() {
     #[cfg(feature = "fuzz-spec-interpreter")]
     crate::oracles::diff_spec::setup_ocaml_runtime();
+}
+
+/// Build a list of allowed values from the given `defaults` using the
+/// `env_list`.
+///
+/// ```
+/// # use wasmtime_fuzzing::oracles::engine::build_allowed_env_list;
+/// // Passing no `env_list` returns the defaults:
+/// assert_eq!(build_allowed_env_list(None, &["a"]), vec!["a"]);
+/// // We can build up a subset of the defaults:
+/// assert_eq!(build_allowed_env_list(Some(vec!["b".to_string()]), &["a","b"]), vec!["b"]);
+/// // Alternately we can subtract from the defaults:
+/// assert_eq!(build_allowed_env_list(Some(vec!["-a".to_string()]), &["a","b"]), vec!["b"]);
+/// ```
+/// ```should_panic
+/// # use wasmtime_fuzzing::oracles::engine::build_allowed_env_list;
+/// // We are not allowed to mix set "addition" and "subtraction"; the following
+/// // will panic:
+/// build_allowed_env_list(Some(vec!["-a".to_string(), "b".to_string()]), &["a", "b"]);
+/// ```
+/// ```should_panic
+/// # use wasmtime_fuzzing::oracles::engine::build_allowed_env_list;
+/// // This will also panic if invalid values are used:
+/// build_allowed_env_list(Some(vec!["c".to_string()]), &["a", "b"]);
+/// ```
+pub fn build_allowed_env_list<'a>(
+    env_list: Option<Vec<String>>,
+    defaults: &[&'a str],
+) -> Vec<&'a str> {
+    if let Some(configured) = &env_list {
+        // Check that the names are either all additions or all subtractions.
+        let subtract_from_defaults = configured.iter().all(|c| c.starts_with("-"));
+        let add_from_defaults = configured.iter().all(|c| !c.starts_with("-"));
+        let start = if subtract_from_defaults { 1 } else { 0 };
+        if !subtract_from_defaults && !add_from_defaults {
+            panic!(
+                "all configured values must either subtract or add from defaults; found mixed values: {:?}",
+                &env_list
+            );
+        }
+
+        // Check that the configured names are valid ones.
+        for c in configured {
+            if !defaults.contains(&&c[start..]) {
+                panic!(
+                    "invalid environment configuration `{}`; must be one of: {:?}",
+                    c, defaults
+                );
+            }
+        }
+
+        // Select only the allowed names.
+        let mut allowed = Vec::with_capacity(defaults.len());
+        for &d in defaults {
+            let mentioned = configured.iter().any(|c| &c[start..] == d);
+            if (add_from_defaults && mentioned) || (subtract_from_defaults && !mentioned) {
+                allowed.push(d);
+            }
+        }
+        allowed
+    } else {
+        defaults.to_vec()
+    }
+}
+
+/// Retrieve a comma-delimited list of values from an environment variable.
+pub fn parse_env_list(env_variable: &str) -> Option<Vec<String>> {
+    std::env::var(env_variable)
+        .ok()
+        .map(|l| l.split(",").map(|s| s.to_owned()).collect())
 }
 
 #[cfg(test)]

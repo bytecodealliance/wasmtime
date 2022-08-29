@@ -7,6 +7,7 @@ use std::cell::Cell;
 use target_lexicon::Triple;
 
 pub use super::MachLabel;
+pub use crate::data_value::DataValue;
 pub use crate::ir::{
     ArgumentExtension, Constant, DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate,
     SigRef, StackSlot,
@@ -24,6 +25,7 @@ pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 pub type WritableReg = Writable<Reg>;
 pub type VecReg = Vec<Reg>;
+pub type VecMask = Vec<u8>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
 pub type WritableValueRegs = crate::machinst::ValueRegs<WritableReg>;
 pub type InstOutput = SmallVec<[ValueRegs; 2]>;
@@ -290,6 +292,24 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn ty_int_bool_ref_scalar_64(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() <= 64 && !ty.is_float() && !ty.is_vector() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_32(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 32 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_64(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 64 {
                 Some(ty)
             } else {
                 None
@@ -645,6 +665,24 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn tls_model_is_macho(&mut self) -> Option<()> {
+            if self.flags.tls_model() == TlsModel::Macho {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn tls_model_is_coff(&mut self) -> Option<()> {
+            if self.flags.tls_model() == TlsModel::Coff {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn func_ref_data(&mut self, func_ref: FuncRef) -> (SigRef, ExternalName, RelocDistance) {
             let funcdata = &self.lower_ctx.dfg().ext_funcs[func_ref];
             (
@@ -681,6 +719,16 @@ macro_rules! isle_prelude_methods {
         fn u128_from_immediate(&mut self, imm: Immediate) -> Option<u128> {
             let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
             Some(u128::from_le_bytes(bytes.try_into().ok()?))
+        }
+
+        #[inline]
+        fn vec_mask_from_immediate(&mut self, imm: Immediate) -> Option<VecMask> {
+            let data = self.lower_ctx.get_immediate_data(imm);
+            if data.len() == 16 {
+                Some(Vec::from(data.as_slice()))
+            } else {
+                None
+            }
         }
 
         #[inline]
@@ -771,6 +819,12 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn emit_u64_le_const(&mut self, value: u64) -> VCodeConstant {
             let data = VCodeConstantData::U64(value.to_le_bytes());
+            self.lower_ctx.use_constant(data)
+        }
+
+        #[inline]
+        fn emit_u128_le_const(&mut self, value: u128) -> VCodeConstant {
+            let data = VCodeConstantData::Generated(value.to_le_bytes().as_slice().into());
             self.lower_ctx.use_constant(data)
         }
 
@@ -957,6 +1011,129 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn preg_to_reg(&mut self, preg: PReg) -> Reg {
             preg.into()
+        }
+
+        #[inline]
+        fn gen_move(&mut self, ty: Type, dst: WritableReg, src: Reg) -> MInst {
+            MInst::gen_move(dst, src, ty)
+        }
+    };
+}
+
+/// Helpers specifically for machines that use ABICaller.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! isle_prelude_caller_methods {
+    ($abispec:ty, $abicaller:ty) => {
+        fn gen_call(
+            &mut self,
+            sig_ref: SigRef,
+            extname: ExternalName,
+            dist: RelocDistance,
+            args @ (inputs, off): ValueSlice,
+        ) -> InstOutput {
+            let caller_conv = self.lower_ctx.abi().call_conv();
+            let sig = &self.lower_ctx.dfg().signatures[sig_ref];
+            let num_rets = sig.returns.len();
+            let abi = ABISig::from_func_sig::<$abispec>(sig, self.flags).unwrap();
+            let caller =
+                <$abicaller>::from_func(sig, &extname, dist, caller_conv, self.flags).unwrap();
+
+            assert_eq!(
+                inputs.len(&self.lower_ctx.dfg().value_lists) - off,
+                sig.params.len()
+            );
+
+            self.gen_call_common(abi, num_rets, caller, args)
+        }
+
+        fn gen_call_indirect(
+            &mut self,
+            sig_ref: SigRef,
+            val: Value,
+            args @ (inputs, off): ValueSlice,
+        ) -> InstOutput {
+            let caller_conv = self.lower_ctx.abi().call_conv();
+            let ptr = self.put_in_reg(val);
+            let sig = &self.lower_ctx.dfg().signatures[sig_ref];
+            let num_rets = sig.returns.len();
+            let abi = ABISig::from_func_sig::<$abispec>(sig, self.flags).unwrap();
+            let caller =
+                <$abicaller>::from_ptr(sig, ptr, Opcode::CallIndirect, caller_conv, self.flags)
+                    .unwrap();
+
+            assert_eq!(
+                inputs.len(&self.lower_ctx.dfg().value_lists) - off,
+                sig.params.len()
+            );
+
+            self.gen_call_common(abi, num_rets, caller, args)
+        }
+    };
+}
+
+/// Helpers for the above ISLE prelude implementations. Meant to go
+/// inside the `impl` for the context type, not the trait impl.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! isle_prelude_method_helpers {
+    ($abicaller:ty) => {
+        fn gen_call_common(
+            &mut self,
+            abi: ABISig,
+            num_rets: usize,
+            mut caller: $abicaller,
+            (inputs, off): ValueSlice,
+        ) -> InstOutput {
+            caller.emit_stack_pre_adjust(self.lower_ctx);
+
+            assert_eq!(
+                inputs.len(&self.lower_ctx.dfg().value_lists) - off,
+                abi.num_args()
+            );
+            let mut arg_regs = vec![];
+            for i in 0..abi.num_args() {
+                let input = inputs
+                    .get(off + i, &self.lower_ctx.dfg().value_lists)
+                    .unwrap();
+                arg_regs.push(self.lower_ctx.put_value_in_regs(input));
+            }
+            for (i, arg_regs) in arg_regs.iter().enumerate() {
+                caller.emit_copy_regs_to_buffer(self.lower_ctx, i, *arg_regs);
+            }
+            for (i, arg_regs) in arg_regs.iter().enumerate() {
+                caller.emit_copy_regs_to_arg(self.lower_ctx, i, *arg_regs);
+            }
+            caller.emit_call(self.lower_ctx);
+
+            let mut outputs = InstOutput::new();
+            for i in 0..num_rets {
+                let ret = abi.get_ret(i);
+                let retval_regs = self.abi_arg_slot_regs(&ret).unwrap();
+                caller.emit_copy_retval_to_regs(self.lower_ctx, i, retval_regs.clone());
+                outputs.push(valueregs::non_writable_value_regs(retval_regs));
+            }
+            caller.emit_stack_post_adjust(self.lower_ctx);
+
+            outputs
+        }
+
+        fn abi_arg_slot_regs(&mut self, arg: &ABIArg) -> Option<WritableValueRegs> {
+            match arg {
+                &ABIArg::Slots { ref slots, .. } => match slots.len() {
+                    1 => {
+                        let a = self.temp_writable_reg(slots[0].get_type());
+                        Some(WritableValueRegs::one(a))
+                    }
+                    2 => {
+                        let a = self.temp_writable_reg(slots[0].get_type());
+                        let b = self.temp_writable_reg(slots[1].get_type());
+                        Some(WritableValueRegs::two(a, b))
+                    }
+                    _ => panic!("Expected to see one or two slots only from {:?}", arg),
+                },
+                _ => None,
+            }
         }
     };
 }

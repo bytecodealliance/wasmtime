@@ -5,15 +5,14 @@
 // TODO: separate the IR-query core of `Lower` from the lowering logic built on
 // top of it, e.g. the side-effect/coloring analysis and the scan support.
 
-use crate::data_value::DataValue;
 use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::{
     types::{FFLAGS, IFLAGS},
     ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, Function, GlobalValue,
-    GlobalValueData, Immediate, Inst, InstructionData, MemFlags, Opcode, Signature, Type, Value,
-    ValueDef, ValueLabelAssignments, ValueLabelStart,
+    GlobalValueData, Immediate, Inst, InstructionData, MemFlags, Opcode, Type, Value, ValueDef,
+    ValueLabelAssignments, ValueLabelStart,
 };
 use crate::ir::{ExternalName, RelSourceLoc};
 use crate::machinst::{
@@ -23,7 +22,6 @@ use crate::machinst::{
 };
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
-use core::convert::TryInto;
 use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
@@ -1028,34 +1026,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         &self.f.dfg[ir_inst]
     }
 
-    /// Get the target for a call instruction, as an `ExternalName`. Returns a tuple
-    /// providing this name and the "relocation distance", i.e., whether the backend
-    /// can assume the target will be "nearby" (within some small offset) or an
-    /// arbitrary address. (This comes from the `colocated` bit in the CLIF.)
-    pub fn call_target<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance)> {
-        match &self.f.dfg[ir_inst] {
-            &InstructionData::Call { func_ref, .. }
-            | &InstructionData::FuncAddr { func_ref, .. } => {
-                let funcdata = &self.f.dfg.ext_funcs[func_ref];
-                let dist = funcdata.reloc_distance();
-                Some((&funcdata.name, dist))
-            }
-            _ => None,
-        }
-    }
-
-    /// Get the signature for a call or call-indirect instruction.
-    pub fn call_sig<'b>(&'b self, ir_inst: Inst) -> Option<&'b Signature> {
-        match &self.f.dfg[ir_inst] {
-            &InstructionData::Call { func_ref, .. } => {
-                let funcdata = &self.f.dfg.ext_funcs[func_ref];
-                Some(&self.f.dfg.signatures[funcdata.signature])
-            }
-            &InstructionData::CallIndirect { sig_ref, .. } => Some(&self.f.dfg.signatures[sig_ref]),
-            _ => None,
-        }
-    }
-
     /// Get the symbol name, relocation distance estimate, and offset for a
     /// symbol_value instruction.
     pub fn symbol_value<'b>(
@@ -1379,35 +1349,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Indicate that a constant should be emitted.
     pub fn use_constant(&mut self, constant: VCodeConstantData) -> VCodeConstant {
         self.vcode.constants().insert(constant)
-    }
-
-    /// Retrieve the value immediate from an instruction. This will perform necessary lookups on the
-    /// `DataFlowGraph` to retrieve even large immediates.
-    pub fn get_immediate(&self, ir_inst: Inst) -> Option<DataValue> {
-        let inst_data = self.data(ir_inst);
-        match inst_data {
-            InstructionData::Shuffle { imm, .. } => {
-                let mask = self.f.dfg.immediates.get(imm.clone()).unwrap().as_slice();
-                let value = match mask.len() {
-                    16 => DataValue::V128(mask.try_into().expect("a 16-byte vector mask")),
-                    8 => DataValue::V64(mask.try_into().expect("an 8-byte vector mask")),
-                    length => panic!("unexpected Shuffle mask length {}", length),
-                };
-                Some(value)
-            }
-            InstructionData::UnaryConst {
-                constant_handle, ..
-            } => {
-                let buffer = self.f.dfg.constants.get(constant_handle.clone()).as_slice();
-                let value = match buffer.len() {
-                    16 => DataValue::V128(buffer.try_into().expect("a 16-byte data buffer")),
-                    8 => DataValue::V64(buffer.try_into().expect("an 8-byte data buffer")),
-                    length => panic!("unexpected UnaryConst buffer length {}", length),
-                };
-                Some(value)
-            }
-            _ => inst_data.imm_value(),
-        }
     }
 
     /// Cause the value in `reg` to be in a virtual reg, by copying it into a new virtual reg

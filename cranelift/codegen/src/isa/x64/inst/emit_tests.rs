@@ -66,6 +66,53 @@ impl Inst {
             dst_hi: WritableGpr::from_reg(Gpr::new(regs::rdx()).unwrap()),
         }
     }
+
+    fn xmm_rm_r_evex(op: Avx512Opcode, src1: RegMem, src2: Reg, dst: Writable<Reg>) -> Self {
+        src1.assert_regclass_is(RegClass::Float);
+        debug_assert!(src2.class() == RegClass::Float);
+        debug_assert!(dst.to_reg().class() == RegClass::Float);
+        Inst::XmmRmREvex {
+            op,
+            src1: XmmMem::new(src1).unwrap(),
+            src2: Xmm::new(src2).unwrap(),
+            dst: WritableXmm::from_writable_reg(dst).unwrap(),
+        }
+    }
+
+    // TODO Can be replaced by `Inst::move` (high-level) and `Inst::unary_rm_r` (low-level)
+    fn xmm_mov(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Inst {
+        src.assert_regclass_is(RegClass::Float);
+        debug_assert!(dst.to_reg().class() == RegClass::Float);
+        Inst::XmmUnaryRmR {
+            op,
+            src: XmmMem::new(src).unwrap(),
+            dst: WritableXmm::from_writable_reg(dst).unwrap(),
+        }
+    }
+
+    fn setcc(cc: CC, dst: Writable<Reg>) -> Inst {
+        debug_assert!(dst.to_reg().class() == RegClass::Int);
+        let dst = WritableGpr::from_writable_reg(dst).unwrap();
+        Inst::Setcc { cc, dst }
+    }
+
+    fn xmm_rm_r_imm(
+        op: SseOpcode,
+        src: RegMem,
+        dst: Writable<Reg>,
+        imm: u8,
+        size: OperandSize,
+    ) -> Inst {
+        debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
+        Inst::XmmRmRImm {
+            op,
+            src1: dst.to_reg(),
+            src2: src,
+            dst,
+            imm,
+            size,
+        }
+    }
 }
 
 #[test]
@@ -4709,6 +4756,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::ElfTlsGetAddr {
             symbol: ExternalName::User(UserExternalNameRef::new(0)),
+            dst: WritableGpr::from_writable_reg(w_rax).unwrap(),
         },
         "66488D3D00000000666648E800000000",
         "%rax = elf_tls_get_addr User(userextname0)",
@@ -4717,6 +4765,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MachOTlsGetAddr {
             symbol: ExternalName::User(UserExternalNameRef::new(0)),
+            dst: WritableGpr::from_writable_reg(w_rax).unwrap(),
         },
         "488B3D00000000FF17",
         "%rax = macho_tls_get_addr User(userextname0)",
@@ -4725,6 +4774,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::CoffTlsGetAddr {
             symbol: ExternalName::User(UserExternalNameRef::new(0)),
+            dst: WritableGpr::from_writable_reg(w_rax).unwrap(),
         },
         "8B050000000065488B0C2558000000488B04C1488D8000000000",
         "%rax = coff_tls_get_addr User(userextname0)",

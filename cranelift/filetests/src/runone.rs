@@ -1,17 +1,15 @@
 //! Run the tests in a single test file.
 
 use crate::new_subtest;
-use crate::subtest::{Context, SubTest};
+use crate::subtest::SubTest;
 use anyhow::{bail, Context as _, Result};
-use cranelift_codegen::ir::Function;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_verifier_error;
-use cranelift_codegen::settings::Flags;
+use cranelift_codegen::settings::{Flags, FlagsOrIsa};
 use cranelift_codegen::timing;
 use cranelift_codegen::verify_function;
-use cranelift_reader::{parse_test, IsaSpec, Location, ParseOptions};
+use cranelift_reader::{parse_test, IsaSpec, Location, ParseOptions, TestFile};
 use log::info;
-use std::borrow::Cow;
 use std::cell::Cell;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -78,37 +76,36 @@ pub fn run(
     tests.sort_by_key(|st| (st.is_mutating(), st.needs_verifier()));
 
     // Expand the tests into (test, flags, isa) tuples.
-    let mut tuples = test_tuples(&tests, &testfile.isa_spec, flags)?;
+    let tuples = test_tuples(&tests, &testfile.isa_spec, flags)?;
 
-    // Isolate the last test in the hope that this is the only mutating test.
-    // If so, we can completely avoid cloning functions.
-    let last_tuple = match tuples.pop() {
-        None => anyhow::bail!("no test commands found"),
-        Some(t) => t,
-    };
+    // Bail if the test has no runnable commands
+    if tuples.is_empty() {
+        anyhow::bail!("no test commands found");
+    }
 
     let mut file_update = FileUpdate::new(&path);
     let file_path = path.to_string_lossy();
-    for (func, details) in testfile.functions {
-        let mut context = Context {
-            preamble_comments: &testfile.preamble_comments,
-            details,
-            verified: false,
-            flags,
-            isa: None,
-            file_path: file_path.as_ref(),
-            file_update: &mut file_update,
-        };
-
-        for tuple in &tuples {
-            run_one_test(*tuple, Cow::Borrowed(&func), &mut context)?;
+    for (test, flags, isa) in &tuples {
+        // Should we run the verifier before this test?
+        if test.needs_verifier() {
+            let fisa = FlagsOrIsa { flags, isa: *isa };
+            verify_testfile(&testfile, fisa)?;
         }
-        // Run the last test with an owned function which means it won't need to clone it before
-        // mutating.
-        run_one_test(last_tuple, Cow::Owned(func), &mut context)?;
+
+        test.run_target(&testfile, &mut file_update, file_path.as_ref(), flags, *isa)?;
     }
 
     Ok(started.elapsed())
+}
+
+// Verifies all functions in a testfile
+fn verify_testfile(testfile: &TestFile, fisa: FlagsOrIsa) -> anyhow::Result<()> {
+    for (func, _) in &testfile.functions {
+        verify_function(func, fisa)
+            .map_err(|errors| anyhow::anyhow!("{}", pretty_verifier_error(&func, None, errors)))?;
+    }
+
+    Ok(())
 }
 
 // Given a slice of tests, generate a vector of (test, flags, isa) tuples.
@@ -139,29 +136,6 @@ fn test_tuples<'a>(
         }
     }
     Ok(out)
-}
-
-fn run_one_test<'a>(
-    tuple: (&'a dyn SubTest, &'a Flags, Option<&'a dyn TargetIsa>),
-    func: Cow<Function>,
-    context: &mut Context<'a>,
-) -> anyhow::Result<()> {
-    let (test, flags, isa) = tuple;
-    let name = format!("{}({})", test.name(), func.name);
-    info!("Test: {} {}", name, isa.map_or("-", TargetIsa::name));
-
-    context.flags = flags;
-    context.isa = isa;
-
-    // Should we run the verifier before this test?
-    if !context.verified && test.needs_verifier() {
-        verify_function(&func, context.flags_or_isa())
-            .map_err(|errors| anyhow::anyhow!("{}", pretty_verifier_error(&func, None, errors)))?;
-        context.verified = true;
-    }
-
-    test.run(func, context).context(test.name())?;
-    Ok(())
 }
 
 /// A helper struct to update a file in-place as test expectations are

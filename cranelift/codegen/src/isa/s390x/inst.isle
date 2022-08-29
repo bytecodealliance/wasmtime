@@ -2940,8 +2940,8 @@
 (rule (abi_ext_ty (ArgumentExtension.Sext) _) $I64)
 
 ;; Copy a return value to a set of registers.
-(decl copy_to_regs (WritableValueRegs Value) Unit)
-(rule (copy_to_regs (only_writable_reg reg) val @ (value_type ty))
+(decl s390x_copy_to_regs (WritableValueRegs Value) Unit)
+(rule (s390x_copy_to_regs (only_writable_reg reg) val @ (value_type ty))
       (emit_mov ty reg val))
 
 

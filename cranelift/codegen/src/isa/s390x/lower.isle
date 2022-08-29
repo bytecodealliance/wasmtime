@@ -4047,13 +4047,13 @@
 ;;;; Rules for `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (return args))
-      (lower_return (range 0 (value_slice_len args)) args))
+      (s390x_lower_return (range 0 (value_slice_len args)) args))
 
-(decl lower_return (Range ValueSlice) InstOutput)
-(rule (lower_return (range_empty) _) (output_none))
-(rule (lower_return (range_unwrap head tail) args)
-      (let ((_ Unit (copy_to_regs (retval head) (value_slice_get args head))))
-         (lower_return tail args)))
+(decl s390x_lower_return (Range ValueSlice) InstOutput)
+(rule (s390x_lower_return (range_empty) _) (output_none))
+(rule (s390x_lower_return (range_unwrap head tail) args)
+      (let ((_ Unit (s390x_copy_to_regs (retval head) (value_slice_get args head))))
+         (s390x_lower_return tail args)))
 
 
 ;;;; Rules for `call` and `call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

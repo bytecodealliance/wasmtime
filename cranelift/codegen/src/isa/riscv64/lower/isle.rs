@@ -3,10 +3,12 @@
 // Pull in the ISLE generated code.
 #[allow(unused)]
 pub mod generated_code;
+use generated_code::{Context, MInst};
+
 use target_lexicon::Triple;
 
 // Types that the generated ISLE code uses via `use super::*`.
-use super::{writable_zero_reg, zero_reg, Inst as MInst};
+use super::{writable_zero_reg, zero_reg};
 use std::vec::Vec;
 
 use crate::isa::riscv64::settings::Flags as IsaFlags;
@@ -24,6 +26,7 @@ use crate::{
 };
 use regalloc2::PReg;
 
+use crate::isa::riscv64::abi::Riscv64ABICaller;
 use std::boxed::Box;
 use std::convert::TryFrom;
 
@@ -33,6 +36,8 @@ type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
 type BoxExternalName = Box<ExternalName>;
 type VecMachLabel = Vec<MachLabel>;
+use crate::isa::riscv64::abi::Riscv64MachineDeps;
+use crate::machinst::valueregs;
 
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(
@@ -54,8 +59,14 @@ pub(crate) fn lower(
     )
 }
 
+impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+    isle_prelude_method_helpers!(Riscv64ABICaller);
+}
+
 impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_methods!();
+    isle_prelude_caller_methods!(Riscv64MachineDeps, Riscv64ABICaller);
+
     fn vec_regs_to_value_regs(&mut self, val: &VecWritableReg) -> ValueRegs {
         match val.len() {
             1 => ValueRegs::one(val[0].to_reg()),
@@ -134,7 +145,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         InstOutput::default()
     }
     fn load_ra(&mut self) -> Reg {
-        self.gen_move(link_reg(), I64)
+        self.gen_move2(link_reg(), I64, I64)
     }
     fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
         assert!(ty.is_int() || ty.is_bool(), "{:?}", ty);
@@ -144,6 +155,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
             ValueRegs::one(self.zero_reg())
         }
     }
+
     fn vec_label_get(&mut self, val: &VecMachLabel, x: u8) -> MachLabel {
         val[x as usize]
     }
@@ -151,26 +163,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     fn label_to_br_target(&mut self, label: MachLabel) -> BranchTarget {
         BranchTarget::Label(label)
     }
-    fn gen_return(&mut self, val: ValueSlice) -> InstOutput {
-        // due to ownership error I have to clone ssa_values.
-        let ssa_values: Vec<_> = val
-            .0
-            .as_slice(&self.lower_ctx.dfg().value_lists)
-            .iter()
-            .map(|v| *v)
-            .collect();
 
-        for (i, ssa_value) in ssa_values.iter().enumerate() {
-            let src_reg = self.lower_ctx.put_value_in_regs(*ssa_value);
-            let retval_reg = self.lower_ctx.retval(i);
-            assert!(src_reg.len() == retval_reg.len());
-            for (&src, &dst) in src_reg.regs().iter().zip(retval_reg.regs().iter()) {
-                let ty = MInst::canonical_type_for_rc(src.class());
-                self.emit(&MInst::gen_move(dst, src, ty));
-            }
-        }
-        InstOutput::default()
-    }
     fn output_2(&mut self, x: ValueRegs, y: ValueRegs) -> InstOutput {
         InstOutput::from_iter([x, y].into_iter())
     }
@@ -182,11 +175,15 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         may.inst.as_inst().map(|(insn, _index)| insn)
     }
 
-    fn gen_moves(&mut self, rs: ValueRegs, _in_ty: Type, out_ty: Type) -> ValueRegs {
+    fn gen_moves(&mut self, rs: ValueRegs, in_ty: Type, out_ty: Type) -> ValueRegs {
         let tmp = construct_dest(|ty| self.temp_writable_reg(ty), out_ty);
-        gen_moves(tmp.regs(), rs.regs())
-            .iter()
-            .for_each(|i| self.emit(i));
+        if in_ty.bits() < 64 {
+            self.emit(&gen_move(tmp.regs()[0], out_ty, rs.regs()[0], in_ty));
+        } else {
+            gen_moves(tmp.regs(), rs.regs())
+                .iter()
+                .for_each(|i| self.emit(i));
+        }
         tmp.map(|r| r.to_reg())
     }
     fn imm12_and(&mut self, imm: Imm12, andn: i32) -> Imm12 {
@@ -412,9 +409,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     fn pack_float_rounding_mode(&mut self, f: &FRM) -> OptionFloatRoundingMode {
         Some(*f)
     }
-    fn float_convert_2_int_op(&mut self, from: Type, is_signed: bool, to: Type) -> FpuOPRR {
-        FpuOPRR::float_convert_2_int_op(from, is_signed, to)
-    }
+
     fn int_convert_2_float_op(&mut self, from: Type, is_signed: bool, to: Type) -> FpuOPRR {
         FpuOPRR::int_convert_2_float_op(from, is_signed, to)
     }
@@ -473,9 +468,10 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     fn atomic_amo(&mut self) -> AMO {
         AMO::SeqCst
     }
-    fn gen_move(&mut self, r: Reg, ty: Type) -> Reg {
-        let tmp = self.temp_writable_reg(ty);
-        self.emit(&gen_move(tmp, ty, r, ty));
+
+    fn gen_move2(&mut self, r: Reg, ity: Type, oty: Type) -> Reg {
+        let tmp = self.temp_writable_reg(oty);
+        self.emit(&gen_move(tmp, oty, r, ity));
         tmp.to_reg()
     }
 

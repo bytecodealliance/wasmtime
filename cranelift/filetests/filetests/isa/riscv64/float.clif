@@ -341,7 +341,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt.wu.s a0,fa0
+;   fcvt_to_uint.i32 a0,fa0##in_ty=f32 tmp=ft4
 ;   ret
 
 function %f34(f32) -> i32 {
@@ -351,7 +351,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt.w.s a0,fa0
+;   fcvt_to_sint.i32 a0,fa0##in_ty=f32 tmp=ft4
 ;   ret
 
 function %f35(f32) -> i64 {
@@ -361,7 +361,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt.lu.s a0,fa0
+;   fcvt_to_uint.i64 a0,fa0##in_ty=f32 tmp=ft4
 ;   ret
 
 function %f36(f32) -> i64 {
@@ -371,7 +371,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt.l.s a0,fa0
+;   fcvt_to_sint.i64 a0,fa0##in_ty=f32 tmp=ft4
 ;   ret
 
 function %f37(f64) -> i32 {
@@ -381,7 +381,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt.wu.d a0,fa0
+;   fcvt_to_uint.i32 a0,fa0##in_ty=f64 tmp=ft4
 ;   ret
 
 function %f38(f64) -> i32 {
@@ -391,7 +391,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt.w.d a0,fa0
+;   fcvt_to_sint.i32 a0,fa0##in_ty=f64 tmp=ft4
 ;   ret
 
 function %f39(f64) -> i64 {
@@ -401,7 +401,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt.lu.d a0,fa0
+;   fcvt_to_uint.i64 a0,fa0##in_ty=f64 tmp=ft4
 ;   ret
 
 function %f40(f64) -> i64 {
@@ -411,7 +411,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt.l.d a0,fa0
+;   fcvt_to_sint.i64 a0,fa0##in_ty=f64 tmp=ft4
 ;   ret
 
 function %f41(i32) -> f32 {
@@ -501,7 +501,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt_to_uint_sat a0,fa0##in_ty=f32 out_ty=i32
+;   fcvt_to_uint_sat.i32 a0,fa0##in_ty=f32 tmp=ft4
 ;   ret
 
 function %f50(f32) -> i32 {
@@ -511,7 +511,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt_to_sint_sat a0,fa0##in_ty=f32 out_ty=i32
+;   fcvt_to_sint_sat.i32 a0,fa0##in_ty=f32 tmp=ft4
 ;   ret
 
 function %f51(f32) -> i64 {
@@ -521,7 +521,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt_to_uint_sat a0,fa0##in_ty=f32 out_ty=i64
+;   fcvt_to_uint_sat.i64 a0,fa0##in_ty=f32 tmp=ft4
 ;   ret
 
 function %f52(f32) -> i64 {
@@ -531,7 +531,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   fcvt_to_sint_sat a0,fa0##in_ty=f32 out_ty=i64
+;   fcvt_to_sint_sat.i64 a0,fa0##in_ty=f32 tmp=ft4
 ;   ret
 
 function %f53(f64) -> i32 {
@@ -541,7 +541,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt_to_uint_sat a0,fa0##in_ty=f64 out_ty=i32
+;   fcvt_to_uint_sat.i32 a0,fa0##in_ty=f64 tmp=ft4
 ;   ret
 
 function %f54(f64) -> i32 {
@@ -551,7 +551,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt_to_sint_sat a0,fa0##in_ty=f64 out_ty=i32
+;   fcvt_to_sint_sat.i32 a0,fa0##in_ty=f64 tmp=ft4
 ;   ret
 
 function %f55(f64) -> i64 {
@@ -561,7 +561,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt_to_uint_sat a0,fa0##in_ty=f64 out_ty=i64
+;   fcvt_to_uint_sat.i64 a0,fa0##in_ty=f64 tmp=ft4
 ;   ret
 
 function %f56(f64) -> i64 {
@@ -571,6 +571,6 @@ block0(v0: f64):
 }
 
 ; block0:
-;   fcvt_to_sint_sat a0,fa0##in_ty=f64 out_ty=i64
+;   fcvt_to_sint_sat.i64 a0,fa0##in_ty=f64 tmp=ft4
 ;   ret
 

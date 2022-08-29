@@ -1,12 +1,13 @@
 use cap_fs_ext::MetadataExt;
 use fs_set_times::{SetTimes, SystemTimeSpec};
+use io_lifetimes::AsFilelike;
 use is_terminal::IsTerminal;
 use std::any::Any;
 use std::convert::TryInto;
 use std::io;
 use system_interface::{
     fs::{FileIoExt, GetSetFdFlags},
-    io::ReadReady,
+    io::{IoExt, ReadReady},
 };
 use wasi_common::{
     file::{Advice, FdFlags, FileType, Filestat, WasiFile},
@@ -48,8 +49,8 @@ impl WasiFile for File {
         Ok(filetype_from(&meta.file_type()))
     }
     async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
-        let fdflags = self.0.get_fd_flags()?;
-        Ok(from_sysif_fdflags(fdflags))
+        let fdflags = get_fd_flags(&self.0)?;
+        Ok(fdflags)
     }
     async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
         if fdflags.intersects(
@@ -187,7 +188,10 @@ impl AsFd for File {
         self.0.as_fd()
     }
 }
-pub fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<SystemTimeSpec> {
+
+pub(crate) fn convert_systimespec(
+    t: Option<wasi_common::SystemTimeSpec>,
+) -> Option<SystemTimeSpec> {
     match t {
         Some(wasi_common::SystemTimeSpec::Absolute(t)) => {
             Some(SystemTimeSpec::Absolute(t.into_std()))
@@ -197,7 +201,7 @@ pub fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<Sys
     }
 }
 
-pub fn to_sysif_fdflags(f: wasi_common::file::FdFlags) -> system_interface::fs::FdFlags {
+pub(crate) fn to_sysif_fdflags(f: wasi_common::file::FdFlags) -> system_interface::fs::FdFlags {
     let mut out = system_interface::fs::FdFlags::empty();
     if f.contains(wasi_common::file::FdFlags::APPEND) {
         out |= system_interface::fs::FdFlags::APPEND;
@@ -216,7 +220,12 @@ pub fn to_sysif_fdflags(f: wasi_common::file::FdFlags) -> system_interface::fs::
     }
     out
 }
-pub fn from_sysif_fdflags(f: system_interface::fs::FdFlags) -> wasi_common::file::FdFlags {
+
+/// Return the file-descriptor flags for a given file-like object.
+///
+/// This returns the flags needed to implement [`WasiFile::get_fdflags`].
+pub fn get_fd_flags<Filelike: AsFilelike>(f: Filelike) -> io::Result<wasi_common::file::FdFlags> {
+    let f = f.as_filelike().get_fd_flags()?;
     let mut out = wasi_common::file::FdFlags::empty();
     if f.contains(system_interface::fs::FdFlags::APPEND) {
         out |= wasi_common::file::FdFlags::APPEND;
@@ -233,9 +242,10 @@ pub fn from_sysif_fdflags(f: system_interface::fs::FdFlags) -> wasi_common::file
     if f.contains(system_interface::fs::FdFlags::SYNC) {
         out |= wasi_common::file::FdFlags::SYNC;
     }
-    out
+    Ok(out)
 }
-pub fn convert_advice(advice: Advice) -> system_interface::fs::Advice {
+
+fn convert_advice(advice: Advice) -> system_interface::fs::Advice {
     match advice {
         Advice::Normal => system_interface::fs::Advice::Normal,
         Advice::Sequential => system_interface::fs::Advice::Sequential,

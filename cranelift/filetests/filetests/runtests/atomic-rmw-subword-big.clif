@@ -18,10 +18,10 @@ block0(v0: i32, v1: i64, v2: i16):
     v6 = load.i32 big v3
     return v6
 }
-; run: %atomic_rmw_add_little_i16(0x12345678, 0, 0x1111) == 0x23455678
-; run: %atomic_rmw_add_little_i16(0x12345678, 0, 0xffff) == 0x12335678
-; run: %atomic_rmw_add_little_i16(0x12345678, 2, 0x1111) == 0x12346789
-; run: %atomic_rmw_add_little_i16(0x12345678, 2, 0xffff) == 0x12345677
+; run: %atomic_rmw_add_big_i16(0x12345678, 0, 0x1111) == 0x23455678
+; run: %atomic_rmw_add_big_i16(0x12345678, 0, 0xffff) == 0x12335678
+; run: %atomic_rmw_add_big_i16(0x12345678, 2, 0x1111) == 0x12346789
+; run: %atomic_rmw_add_big_i16(0x12345678, 2, 0xffff) == 0x12345677
 
 function %atomic_rmw_add_big_i8(i32, i64, i8) -> i32 {
     ss0 = explicit_slot 4

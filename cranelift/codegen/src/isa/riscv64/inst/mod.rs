@@ -1578,7 +1578,7 @@ impl MachInstLabelUse for LabelUse {
         assert!(use_offset % 4 == 0);
         assert!(label_offset % 4 == 0);
         let offset = (label_offset as i64) - (use_offset as i64);
-        // println!("use_offset:{} label_offset:{}", use_offset, label_offset);
+        // println!("self: {:?} use_offset:{} label_offset:{}", self ,use_offset, label_offset);
 
         //check range
         assert!(
@@ -1651,7 +1651,7 @@ impl LabelUse {
     }
 
     fn patch_raw_offset(self, buffer: &mut [u8], offset: i64) {
-        assert!(offset != 0);
+
         match self {
             LabelUse::Jal20 => {
                 let offset = offset as u32;

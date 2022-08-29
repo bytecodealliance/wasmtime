@@ -1102,7 +1102,7 @@
       (tmp Reg (alu_rrr  (AluOPRRR.Slt) r  (zero_reg)))
       (high Reg (gen_extend tmp $true 1 64))
     )
-    (value_regs (gen_move r $I64) high)
+    (value_regs (gen_move2 r $I64 $I64) high)
   )
 )
 
@@ -1114,7 +1114,7 @@
       (tmp2 Reg (alu_rrr  (AluOPRRR.Slt) tmp  (zero_reg)))
       (high Reg (gen_extend tmp2 $true 1 64))
     )
-    (value_regs (gen_move r $I64) high)
+    (value_regs (gen_move2 r $I64 $I64) high)
   )
 )
 
@@ -1122,7 +1122,7 @@
 ;;;; for I128 unsigned extend.
 (rule
   (lower_extend r $false 64 128)
-  (value_regs (gen_move r $I64) (zero_reg))
+  (value_regs (gen_move2 r $I64 $I64) (zero_reg))
 )
 
 (rule
@@ -1821,9 +1821,9 @@
 (extern constructor gen_stack_addr gen_stack_addr)
 
 
-;; 
-(decl gen_move(Reg Type) Reg)
-(extern constructor gen_move gen_move)
+;; parameter are 'source register' 'in_ty' 'out_ty'
+(decl gen_move2(Reg Type Type) Reg)
+(extern constructor gen_move2 gen_move2)
 
 ;;; generate a move and reinterprete the data
 ;; parameter is "rs" "in_type" "out_type"
@@ -1963,8 +1963,6 @@
 (extern constructor load_ext_name load_ext_name)
 
 
-(decl float_convert_2_int_op(Type bool Type)FpuOPRR)
-(extern constructor float_convert_2_int_op float_convert_2_int_op)
 
 (decl int_convert_2_float_op(Type bool Type)FpuOPRR)
 (extern constructor int_convert_2_float_op int_convert_2_float_op)
@@ -1999,10 +1997,6 @@
 ;;;; out_type is returned.
 (decl pure valid_bextend_ty(Type Type) Type)
 (extern constructor valid_bextend_ty valid_bextend_ty)
-
-;; 
-(decl gen_return(ValueSlice)InstOutput)
-(extern constructor gen_return gen_return)
 
 
 ;;; some float binary operation 
@@ -2437,3 +2431,11 @@
     (gen_trapif test (TrapCode.IntegerOverflow))
   )
 )
+
+;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl gen_call (SigRef ExternalName RelocDistance ValueSlice) InstOutput)
+(extern constructor gen_call gen_call)
+
+(decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
+(extern constructor gen_call_indirect gen_call_indirect)

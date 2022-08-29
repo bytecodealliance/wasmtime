@@ -15,8 +15,8 @@ block0(v0: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   load_sym a2,%g+0
-;   callind a2
+;   load_sym a1,%g+0
+;   callind a1
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
@@ -36,8 +36,8 @@ block0(v0: i32):
 ;   mv fp,sp
 ; block0:
 ;   uext.w a0,a0
-;   load_sym a2,%g+0
-;   callind a2
+;   load_sym a1,%g+0
+;   callind a1
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
@@ -66,8 +66,8 @@ block0(v0: i32):
 ;   mv fp,sp
 ; block0:
 ;   sext.w a0,a0
-;   load_sym a2,%g+0
-;   callind a2
+;   load_sym a1,%g+0
+;   callind a1
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
@@ -175,26 +175,26 @@ block0:
 ;   fsd fs11,-24(sp)
 ;   add sp,-32
 ; block0:
-;   load_sym a6,%g0+0
-;   callind a6
-;   fmv.d fs3,fa0
-;   load_sym t3,%g1+0
-;   callind t3
-;   fmv.d fs2,fa0
-;   load_sym t0,%g1+0
-;   callind t0
-;   fmv.d fs11,fa0
-;   load_sym t2,%g2+0
-;   callind t2
-;   fmv.d fa0,fs3
-;   load_sym a1,%g3+0
-;   callind a1
-;   fmv.d fa0,fs2
-;   load_sym a3,%g4+0
-;   callind a3
-;   fmv.d fa0,fs11
-;   load_sym a5,%g4+0
+;   load_sym a5,%g0+0
 ;   callind a5
+;   fmv.d fs11,fa0
+;   load_sym a6,%g1+0
+;   callind a6
+;   fmv.d fs2,fa0
+;   load_sym a7,%g1+0
+;   callind a7
+;   fmv.d fs3,fa0
+;   load_sym t4,%g2+0
+;   callind t4
+;   fmv.d fa0,fs11
+;   load_sym t1,%g3+0
+;   callind t1
+;   fmv.d fa0,fs2
+;   load_sym a0,%g4+0
+;   callind a0
+;   fmv.d fa0,fs3
+;   load_sym a2,%g4+0
+;   callind a2
 ;   add sp,+32
 ;   fld fs2,-8(sp)
 ;   fld fs3,-16(sp)
@@ -233,8 +233,8 @@ block0(v0: i64):
 ;   li a0,42
 ;   mv a1,a6
 ;   li a2,42
-;   load_sym t4,%f11+0
-;   callind t4
+;   load_sym t3,%f11+0
+;   callind t3
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
@@ -268,8 +268,8 @@ block0(v0: i64):
 ;   mv a1,a0
 ;   li a2,42
 ;   li a0,42
-;   load_sym t4,%f12+0
-;   callind t4
+;   load_sym t3,%f12+0
+;   callind t3
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
@@ -303,8 +303,8 @@ block0(v0: i64):
 ;   mv a1,a0
 ;   li a2,42
 ;   li a0,42
-;   load_sym t4,%f13+0
-;   callind t4
+;   load_sym t3,%f13+0
+;   callind t3
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16

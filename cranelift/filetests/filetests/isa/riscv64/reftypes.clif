@@ -71,11 +71,11 @@ block3(v7: r64, v8: r64):
 ;   sd a1,16(nominal_sp)
 ;   mv s8,a2
 ;   sd a0,8(nominal_sp)
-;   load_sym a4,%f+0
-;   callind a4
-;   load_addr a6,nsp+0
+;   load_sym a3,%f+0
+;   callind a3
+;   load_addr a5,nsp+0
 ;   ld a1,8(nominal_sp)
-;   sd a1,0(a6)
+;   sd a1,0(a5)
 ;   beq a0,zero,taken(label1),not_taken(label3)
 ; block1:
 ;   j label2
@@ -89,10 +89,10 @@ block3(v7: r64, v8: r64):
 ;   ld a1,16(nominal_sp)
 ;   j label5
 ; block5:
-;   load_addr t3,nsp+0
-;   ld t3,0(t3)
+;   load_addr a7,nsp+0
+;   ld a7,0(a7)
 ;   mv a2,s8
-;   sd t3,0(a2)
+;   sd a7,0(a2)
 ;   add sp,+48
 ;   ld s8,-8(sp)
 ;   ld ra,8(sp)

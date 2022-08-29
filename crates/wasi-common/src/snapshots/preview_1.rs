@@ -1090,6 +1090,33 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                             sub.userdata.into(),
                         )
                     }
+                    types::Clockid::Realtime => {
+                        // POSIX specifies that functions like `nanosleep` and others use the
+                        // `REALTIME` clock. But it also says that `clock_settime` has no effect
+                        // on threads waiting in these functions. MONOTONIC should always have
+                        // resolution at least as good as REALTIME, so we can translate a
+                        // non-absolute `REALTIME` request into a `MONOTONIC` request.
+                        let clock = self.clocks.monotonic.deref();
+                        let precision = Duration::from_nanos(clocksub.precision);
+                        let duration = Duration::from_nanos(clocksub.timeout);
+                        let deadline = if clocksub
+                            .flags
+                            .contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME)
+                        {
+                            return Err(Error::not_supported());
+                        } else {
+                            clock
+                                .now(precision)
+                                .checked_add(duration)
+                                .ok_or_else(|| Error::overflow().context("deadline"))?
+                        };
+                        poll.subscribe_monotonic_clock(
+                            clock,
+                            deadline,
+                            precision,
+                            sub.userdata.into(),
+                        )
+                    }
                     _ => Err(Error::invalid_argument()
                         .context("timer subscriptions only support monotonic timer"))?,
                 },

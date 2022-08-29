@@ -227,10 +227,10 @@ mod test {
         );
         let buffer = backend.compile_function(&mut func, true).unwrap();
         let code = buffer.buffer.data();
-        //0:   000015b7                lui     a1,0x1
-        //4:   23458593                addi    a1,a1,564 # 0x1234
-        //8:   00b5053b                addw    a0,a0,a1
-        //c:   00008067                ret
+        // 0:   000015b7                lui     a1,0x1
+        // 4:   23458593                addi    a1,a1,564 # 0x1234
+        // 8:   00b5053b                addw    a0,a0,a1
+        // c:   00008067                ret
         let golden = vec![
             0xb7, 0x15, 0x0, 0x0, 0x93, 0x85, 0x45, 0x23, 0x3b, 0x5, 0xb5, 0x0, 0x67, 0x80, 0x0,
             0x0,
