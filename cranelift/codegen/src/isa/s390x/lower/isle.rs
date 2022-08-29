@@ -21,7 +21,7 @@ use crate::{
     },
     isa::unwind::UnwindInst,
     isa::CallConv,
-    machinst::abi_impl::ABIMachineSpec,
+    machinst::abi::ABIMachineSpec,
     machinst::{InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData},
 };
 use regalloc2::PReg;

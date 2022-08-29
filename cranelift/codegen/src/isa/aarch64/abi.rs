@@ -617,7 +617,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     // Returns stack bytes used as well as instructions. Does not adjust
-    // nominal SP offset; abi_impl generic code will do that.
+    // nominal SP offset; abi generic code will do that.
     fn gen_clobber_save(
         _call_conv: isa::CallConv,
         setup_frame: bool,
