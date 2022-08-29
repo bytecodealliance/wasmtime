@@ -575,8 +575,8 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
                     }
                 }
 
-                impl<'a> Arbitrary<'a> for #type_name {
-                    fn arbitrary(input: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+                impl<'a> arbitrary::Arbitrary<'a> for #type_name {
+                    fn arbitrary(input: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
                         let mut flags = #type_name::default();
                         for flag in [#names] {
                             if input.arbitrary()? {
