@@ -1,6 +1,6 @@
 #![no_main]
 
-use libfuzzer_sys::arbitrary::{Arbitrary, Unstructured};
+use libfuzzer_sys::arbitrary::{Result, Arbitrary, Unstructured};
 use libfuzzer_sys::fuzz_target;
 use wasmtime_fuzzing::generators::Config;
 use wasmtime_fuzzing::oracles::{instantiate, Timeout};
@@ -14,7 +14,7 @@ struct InstantiateInput {
 }
 
 impl<'a> Arbitrary<'a> for InstantiateInput {
-    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
         let mut config: Config = u.arbitrary()?;
 
         // Pick either fuel, duration-based, or module-based timeout. Note that the
