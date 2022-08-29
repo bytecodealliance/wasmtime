@@ -15,7 +15,7 @@ use cranelift_interpreter::interpreter::{
 };
 use cranelift_interpreter::step::ControlFlow;
 use cranelift_interpreter::step::CraneliftTrap;
-use smallvec::{smallvec, SmallVec};
+use smallvec::smallvec;
 
 const INTERPRETER_FUEL: u64 = 4096;
 
