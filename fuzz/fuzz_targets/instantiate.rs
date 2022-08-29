@@ -1,6 +1,6 @@
 #![no_main]
 
-use libfuzzer_sys::arbitrary::{Result, Arbitrary, Unstructured};
+use libfuzzer_sys::arbitrary::{Arbitrary, Result, Unstructured};
 use libfuzzer_sys::fuzz_target;
 use wasmtime_fuzzing::generators::Config;
 use wasmtime_fuzzing::oracles::{instantiate, Timeout};
