@@ -3,15 +3,19 @@
 use libfuzzer_sys::fuzz_target;
 
 use cranelift_codegen::data_value::DataValue;
+use cranelift_codegen::ir::LibCall;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_filetests::function_runner::{TestFileCompiler, Trampoline};
 use cranelift_fuzzgen::*;
 use cranelift_interpreter::environment::FuncIndex;
 use cranelift_interpreter::environment::FunctionStore;
-use cranelift_interpreter::interpreter::{Interpreter, InterpreterError, InterpreterState};
+use cranelift_interpreter::interpreter::{
+    Interpreter, InterpreterError, InterpreterState, LibCallValues,
+};
 use cranelift_interpreter::step::ControlFlow;
 use cranelift_interpreter::step::CraneliftTrap;
+use smallvec::{smallvec, SmallVec};
 
 const INTERPRETER_FUEL: u64 = 4096;
 
@@ -51,16 +55,30 @@ fn run_in_host(trampoline: &Trampoline, args: &[DataValue]) -> RunResult {
     RunResult::Success(res)
 }
 
+fn build_interpreter(testcase: &TestCase) -> Interpreter {
+    let mut env = FunctionStore::default();
+    env.add(testcase.func.name.to_string(), &testcase.func);
+
+    let state = InterpreterState::default()
+        .with_function_store(env)
+        .with_libcall_handler(|libcall: LibCall, args: LibCallValues<DataValue>| {
+            use LibCall::*;
+            Ok(smallvec![match (libcall, &args[..]) {
+                (CeilF32, [DataValue::F32(a)]) => DataValue::F32(a.ceil()),
+                (CeilF64, [DataValue::F64(a)]) => DataValue::F64(a.ceil()),
+                (FloorF32, [DataValue::F32(a)]) => DataValue::F32(a.floor()),
+                (FloorF64, [DataValue::F64(a)]) => DataValue::F64(a.floor()),
+                (TruncF32, [DataValue::F32(a)]) => DataValue::F32(a.trunc()),
+                (TruncF64, [DataValue::F64(a)]) => DataValue::F64(a.trunc()),
+                _ => unreachable!(),
+            }])
+        });
+
+    let interpreter = Interpreter::new(state).with_fuel(Some(INTERPRETER_FUEL));
+    interpreter
+}
+
 fuzz_target!(|testcase: TestCase| {
-    let build_interpreter = || {
-        let mut env = FunctionStore::default();
-        env.add(testcase.func.name.to_string(), &testcase.func);
-
-        let state = InterpreterState::default().with_function_store(env);
-        let interpreter = Interpreter::new(state).with_fuel(Some(INTERPRETER_FUEL));
-        interpreter
-    };
-
     // Native fn
     let flags = {
         let mut builder = settings::builder();
@@ -80,7 +98,7 @@ fuzz_target!(|testcase: TestCase| {
     for args in &testcase.inputs {
         // We rebuild the interpreter every run so that we don't accidentally carry over any state
         // between runs, such as fuel remaining.
-        let mut interpreter = build_interpreter();
+        let mut interpreter = build_interpreter(&testcase);
         let int_res = run_in_interpreter(&mut interpreter, args);
         match int_res {
             RunResult::Success(_) => {}

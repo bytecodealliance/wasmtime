@@ -465,6 +465,16 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Call, &[], &[], insert_call),
 ];
 
+/// These libcalls need a interpreter implementation in `cranelift-fuzzgen.rs`
+const ALLOWED_LIBCALLS: &'static [LibCall] = &[
+    LibCall::CeilF32,
+    LibCall::CeilF64,
+    LibCall::FloorF32,
+    LibCall::FloorF64,
+    LibCall::TruncF32,
+    LibCall::TruncF64,
+];
+
 pub struct FunctionGenerator<'r, 'data>
 where
     'data: 'r,
@@ -504,6 +514,12 @@ where
     fn generate_callconv(&mut self) -> Result<CallConv> {
         // TODO: Generate random CallConvs per target
         Ok(CallConv::SystemV)
+    }
+
+    fn system_callconv(&mut self) -> CallConv {
+        // TODO: This currently only runs on linux, so this is the only choice
+        // We should improve this once we generate flags and targets
+        CallConv::SystemV
     }
 
     fn generate_type(&mut self) -> Result<Type> {
@@ -833,12 +849,11 @@ where
                 let signature = self.generate_signature()?;
                 (name, signature)
             } else {
-                // Use udivi64 as an example of a libcall function.
-                let mut signature = Signature::new(CallConv::Fast);
-                signature.params.push(AbiParam::new(I64));
-                signature.params.push(AbiParam::new(I64));
-                signature.returns.push(AbiParam::new(I64));
-                (ExternalName::LibCall(LibCall::UdivI64), signature)
+                let libcall = *self.u.choose(ALLOWED_LIBCALLS)?;
+                // TODO: Use [CallConv::for_libcall] once we generate flags.
+                let callconv = self.system_callconv();
+                let signature = libcall.signature(callconv);
+                (ExternalName::LibCall(libcall), signature)
             };
 
             let sig_ref = builder.import_signature(sig.clone());

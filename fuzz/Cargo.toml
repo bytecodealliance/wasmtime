@@ -19,6 +19,7 @@ cranelift-interpreter = { path = "../cranelift/interpreter" }
 cranelift-fuzzgen = { path = "../cranelift/fuzzgen" }
 libfuzzer-sys = "0.4.0"
 target-lexicon = "0.12"
+smallvec = "1.6.1"
 wasmtime = { path = "../crates/wasmtime" }
 wasmtime-fuzzing = { path = "../crates/fuzzing" }
 component-test-util = { path = "../crates/misc/component-test-util" }
