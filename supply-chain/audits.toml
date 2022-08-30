@@ -56,6 +56,12 @@ criteria = "safe-to-deploy"
 version = "0.1.21"
 notes = "I am the author of this crate."
 
+[[audits.system-interface]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.22.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.wasm-encoder]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -194,8 +200,3 @@ criteria = "safe-to-deploy"
 version = "1.0.48"
 notes = "The Bytecode Alliance is the author of this crate."
 
-[[audits.system-interface]]
-who = "Dan Gohman <dev@sunfishcode.online>"
-criteria = "safe-to-deploy"
-version = "0.22.0"
-notes = "The Bytecode Alliance is the author of this crate."
