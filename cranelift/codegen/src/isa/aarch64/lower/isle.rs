@@ -6,14 +6,14 @@ use generated_code::Context;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
-    insn_inputs, lower_constant_f128, lower_constant_f32, lower_constant_f64, writable_zero_reg,
-    zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond,
-    CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC,
-    JTSequenceInfo, MachLabel, MoveWideConst, MoveWideOp, NarrowValueMode, Opcode, OperandSize,
-    PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize, NZCV,
+    lower_constant_f128, lower_constant_f32, lower_constant_f64, writable_zero_reg, zero_reg,
+    AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond, CondBrKind,
+    ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, JTSequenceInfo,
+    MachLabel, MoveWideConst, MoveWideOp, NarrowValueMode, Opcode, OperandSize, PairAMode, Reg,
+    ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize, NZCV,
 };
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm};
-use crate::isa::aarch64::lower::{lower_address, lower_splat_const};
+use crate::isa::aarch64::lower::{lower_address, lower_pair_address, lower_splat_const};
 use crate::isa::aarch64::settings::Flags as IsaFlags;
 use crate::machinst::valueregs;
 use crate::machinst::{isle::*, InputSourceInst};
@@ -484,13 +484,12 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         }
     }
 
-    fn amode(&mut self, ty: Type, mem_op: Inst, offset: u32) -> AMode {
-        lower_address(
-            self.lower_ctx,
-            ty,
-            &insn_inputs(self.lower_ctx, mem_op)[..],
-            offset as i32,
-        )
+    fn amode(&mut self, ty: Type, addr: Value, offset: u32) -> AMode {
+        lower_address(self.lower_ctx, ty, addr, offset as i32)
+    }
+
+    fn pair_amode(&mut self, addr: Value, offset: u32) -> PairAMode {
+        lower_pair_address(self.lower_ctx, addr, offset as i32)
     }
 
     fn amode_is_reg(&mut self, address: &AMode) -> Option<Reg> {

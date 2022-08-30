@@ -9,8 +9,8 @@ use target_lexicon::Triple;
 pub use super::MachLabel;
 pub use crate::data_value::DataValue;
 pub use crate::ir::{
-    ArgumentExtension, Constant, DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate,
-    SigRef, StackSlot,
+    dynamic_to_fixed, ArgumentExtension, Constant, DynamicStackSlot, ExternalName, FuncRef,
+    GlobalValue, Immediate, SigRef, StackSlot,
 };
 pub use crate::isa::unwind::UnwindInst;
 pub use crate::machinst::{
@@ -398,6 +398,15 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_vec64_ctor(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() && ty.bits() == 64 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn ty_vec64(&mut self, ty: Type) -> Option<Type> {
             if ty.is_vector() && ty.bits() == 64 {
                 Some(ty)
@@ -409,6 +418,24 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn ty_vec128(&mut self, ty: Type) -> Option<Type> {
             if ty.is_vector() && ty.bits() == 128 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_dyn_vec64(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_dynamic_vector() && dynamic_to_fixed(ty).bits() == 64 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_dyn_vec128(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_dynamic_vector() && dynamic_to_fixed(ty).bits() == 128 {
                 Some(ty)
             } else {
                 None

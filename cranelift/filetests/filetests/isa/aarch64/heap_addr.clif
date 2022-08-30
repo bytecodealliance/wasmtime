@@ -15,15 +15,15 @@ block0(v0: i64, v1: i32):
 
 ; block0:
 ;   mov w10, w1
-;   ldr x5, [x0]
-;   mov x11, x5
+;   ldr x11, [x0]
+;   mov x11, x11
 ;   subs xzr, x10, x11
 ;   b.ls label1 ; b label2
 ; block1:
-;   add x13, x0, x1, UXTW
+;   add x12, x0, x1, UXTW
 ;   subs xzr, x10, x11
-;   movz x14, #0
-;   csel x0, x14, x13, hi
+;   movz x13, #0
+;   csel x0, x13, x12, hi
 ;   csdb
 ;   ret
 ; block2:
