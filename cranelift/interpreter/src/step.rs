@@ -22,7 +22,17 @@ fn validate_signature_params(sig: &[AbiParam], args: &[impl Value]) -> bool {
     args.iter()
         .map(|r| r.ty())
         .zip(sig.iter().map(|r| r.value_type))
-        .all(|(a, b)| a == b)
+        .all(|(a, b)| match (a, b) {
+            // For these two cases we don't have precise type information for `a`.
+            // We don't distinguish between different bool types, or different vector types
+            // The actual error is in `Value::ty` that returns default types for some values
+            // but we don't have enough information there either.
+            //
+            // Ideally the user has run the verifier and caught this properly...
+            (a, b) if a.is_bool() && b.is_bool() => true,
+            (a, b) if a.is_vector() && b.is_vector() => true,
+            (a, b) => a == b,
+        })
 }
 
 /// Interpret a single Cranelift instruction. Note that program traps and interpreter errors are
