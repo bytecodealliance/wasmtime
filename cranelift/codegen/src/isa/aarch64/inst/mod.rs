@@ -1044,8 +1044,8 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
         &Inst::VirtualSPOffsetAdj { .. } => {}
 
-        &Inst::ElfTlsGetAddr { .. } => {
-            collector.reg_def(Writable::from_reg(regs::xreg(0)));
+        &Inst::ElfTlsGetAddr { rd, .. } => {
+            collector.reg_fixed_def(rd, regs::xreg(0));
             let mut clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(CallConv::SystemV);
             clobbers.remove(regs::xreg_preg(0));
             collector.reg_clobbers(clobbers);
@@ -2710,8 +2710,9 @@ impl Inst {
             }
             &Inst::EmitIsland { needed_space } => format!("emit_island {}", needed_space),
 
-            &Inst::ElfTlsGetAddr { ref symbol } => {
-                format!("x0 = elf_tls_get_addr {}", symbol.display(None))
+            &Inst::ElfTlsGetAddr { ref symbol, rd } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                format!("elf_tls_get_addr {}, {}", rd, symbol.display(None))
             }
             &Inst::Unwind { ref inst } => {
                 format!("unwind {:?}", inst)
