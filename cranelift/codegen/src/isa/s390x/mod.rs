@@ -7,8 +7,8 @@ use crate::isa::s390x::settings as s390x_settings;
 use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, TextSectionBuilder,
-    VCode,
+    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
@@ -56,10 +56,11 @@ impl S390xBackend {
     fn compile_vcode(
         &self,
         func: &Function,
-    ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
+    ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output, SigSet)> {
         let emit_info = EmitInfo::new(self.isa_flags.clone());
-        let abi = abi::S390xCallee::new(func, self, &self.isa_flags)?;
-        compile::compile::<S390xBackend>(func, self, abi, &self.machine_env, emit_info)
+        let sigs = SigSet::new::<abi::S390xMachineDeps>(func, &self.flags)?;
+        let abi = abi::S390xCallee::new(func, self, &self.isa_flags, &sigs)?;
+        compile::compile::<S390xBackend>(func, self, abi, &self.machine_env, emit_info, sigs)
     }
 }
 
@@ -70,9 +71,14 @@ impl TargetIsa for S390xBackend {
         want_disasm: bool,
     ) -> CodegenResult<CompiledCodeStencil> {
         let flags = self.flags();
-        let (vcode, regalloc_result) = self.compile_vcode(func)?;
+        let (vcode, regalloc_result, sigs) = self.compile_vcode(func)?;
 
-        let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
+        let emit_result = vcode.emit(
+            &sigs,
+            &regalloc_result,
+            want_disasm,
+            flags.machine_code_cfg_info(),
+        );
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer.finish();

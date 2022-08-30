@@ -17,13 +17,16 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     abi: Callee<<<B as LowerBackend>::MInst as MachInst>::ABIMachineSpec>,
     machine_env: &MachineEnv,
     emit_info: <B::MInst as MachInstEmit>::Info,
-) -> CodegenResult<(VCode<B::MInst>, regalloc2::Output)> {
+    sigs: SigSet,
+) -> CodegenResult<(VCode<B::MInst>, regalloc2::Output, SigSet)> {
     // Compute lowered block order.
     let block_order = BlockLoweringOrder::new(f);
+
     // Build the lowering context.
-    let lower = Lower::new(f, abi, emit_info, block_order)?;
+    let lower = crate::machinst::Lower::new(f, abi, emit_info, block_order, sigs)?;
+
     // Lower the IR.
-    let vcode = {
+    let (vcode, sigs) = {
         let _tt = timing::vcode_lower();
         lower.lower(b)?
     };
@@ -66,5 +69,5 @@ pub fn compile<B: LowerBackend + TargetIsa>(
             .expect("register allocation checker");
     }
 
-    Ok((vcode, regalloc_result))
+    Ok((vcode, regalloc_result, sigs))
 }

@@ -300,7 +300,12 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     /// Access the ABI object.
-    pub fn abi(&mut self) -> &mut Callee<I::ABIMachineSpec> {
+    pub fn abi(&self) -> &Callee<I::ABIMachineSpec> {
+        &self.vcode.abi
+    }
+
+    /// Access the ABI object.
+    pub fn abi_mut(&mut self) -> &mut Callee<I::ABIMachineSpec> {
         &mut self.vcode.abi
     }
 
@@ -743,12 +748,13 @@ impl<I: VCodeInst> VCode<I> {
     /// is consumed by the emission process.
     pub fn emit(
         mut self,
+        sigs: &SigSet,
         regalloc: &regalloc2::Output,
         want_disasm: bool,
         want_metadata: bool,
     ) -> EmitResult<I>
     where
-        I: MachInstEmit,
+        I: VCodeInst,
     {
         // To write into disasm string.
         use core::fmt::Write;
@@ -790,7 +796,7 @@ impl<I: VCodeInst> VCode<I> {
         // We need to generate the prologue in order to get the ABI
         // object into the right state first. We'll emit it when we
         // hit the right block below.
-        let prologue_insts = self.abi.gen_prologue();
+        let prologue_insts = self.abi.gen_prologue(sigs);
 
         // Emit blocks.
         let mut cur_srcloc = None;
