@@ -968,7 +968,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
             } else {
                 None
             };
-            // TODO use xor
             let dividend_hi = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
             self.lower_ctx.emit(MInst::alu_rmi_r(
                 OperandSize::Size32,
