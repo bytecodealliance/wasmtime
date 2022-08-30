@@ -21,6 +21,17 @@ TODO_paste_the_base64_encoded_input_here
 </details>
 
 <details>
+<summary>`cargo +nightly fuzz fmt` output</summary>
+
+<!-- Please passte the output of `cargo +nightly fuzz fmt` for your input in the code-block below -->
+
+```
+TODO_paste_cargo_fuzz_fmt_output_here
+```
+
+</details>
+
+<details>
 <summary>Stack trace or other relevant details</summary>
 
 <!-- Please copy the relevant parts of the failure and paste them in the code-block below -->
