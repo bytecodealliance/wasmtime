@@ -825,7 +825,8 @@
 
        ;; A call to the `ElfTlsGetAddr` libcall. Returns address of TLS symbol in x0.
        (ElfTlsGetAddr
-        (symbol ExternalName))
+        (symbol ExternalName)
+        (rd WritableReg))
 
        ;; An unwind pseudo-instruction.
        (Unwind
@@ -3068,3 +3069,12 @@
       (if (ty_vec64 ty))
       (let ((src Reg (mov_from_vec src 0 (ScalarSize.Size64))))
        (cmp_imm (OperandSize.Size64) src (u8_into_imm12 0))))
+
+;;;; TLS Values ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Helper for emitting ElfTlsGetAddr.
+(decl elf_tls_get_addr (ExternalName) Reg)
+(rule (elf_tls_get_addr name)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.ElfTlsGetAddr name dst))))
+        dst))

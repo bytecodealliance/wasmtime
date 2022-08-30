@@ -9,7 +9,7 @@ use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::settings as aarch64_settings;
 use crate::machinst::lower::*;
 use crate::machinst::*;
-use crate::settings::{Flags, TlsModel};
+use crate::settings::Flags;
 use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -459,23 +459,7 @@ pub(crate) fn lower_insn_to_regs(
             implemented_in_isle(ctx)
         }
 
-        Opcode::TlsValue => match flags.tls_model() {
-            TlsModel::ElfGd => {
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                let (name, _, _) = ctx.symbol_value(insn).unwrap();
-                let symbol = name.clone();
-                ctx.emit(Inst::ElfTlsGetAddr { symbol });
-
-                let x0 = xreg(0);
-                ctx.emit(Inst::gen_move(dst, x0, I64));
-            }
-            _ => {
-                return Err(CodegenError::Unsupported(format!(
-                    "Unimplemented TLS model in AArch64 backend: {:?}",
-                    flags.tls_model()
-                )));
-            }
-        },
+        Opcode::TlsValue => implemented_in_isle(ctx),
 
         Opcode::SqmulRoundSat => implemented_in_isle(ctx),
 

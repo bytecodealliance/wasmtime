@@ -1026,20 +1026,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         &self.f.dfg[ir_inst]
     }
 
-    /// Get the symbol name, relocation distance estimate, and offset for a
-    /// symbol_value instruction.
-    pub fn symbol_value<'b>(
-        &'b self,
-        ir_inst: Inst,
-    ) -> Option<(&'b ExternalName, RelocDistance, i64)> {
-        match &self.f.dfg[ir_inst] {
-            &InstructionData::UnaryGlobalValue { global_value, .. } => {
-                self.symbol_value_data(global_value)
-            }
-            _ => None,
-        }
-    }
-
     /// Likewise, but starting with a GlobalValue identifier.
     pub fn symbol_value_data<'b>(
         &'b self,

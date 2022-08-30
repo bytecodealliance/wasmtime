@@ -3191,7 +3191,10 @@ impl MachInstEmit for Inst {
                 }
             }
 
-            &Inst::ElfTlsGetAddr { ref symbol } => {
+            &Inst::ElfTlsGetAddr { ref symbol, rd } => {
+                let rd = allocs.next_writable(rd);
+                assert_eq!(xreg(0), rd.to_reg());
+
                 // This is the instruction sequence that GCC emits for ELF GD TLS Relocations in aarch64
                 // See: https://gcc.godbolt.org/z/KhMh5Gvra
 
