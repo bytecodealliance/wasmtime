@@ -753,3 +753,252 @@ fn traps_without_address_map() -> Result<()> {
     assert_eq!(trace[1].module_offset(), None);
     Ok(())
 }
+
+#[test]
+fn catch_trap_calling_across_stores() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let engine = Engine::default();
+
+    let mut child_store = Store::new(&engine, ());
+    let child_module = Module::new(
+        child_store.engine(),
+        r#"
+            (module $child
+              (func $trap (export "trap")
+                unreachable
+              )
+            )
+        "#,
+    )?;
+    let child_instance = Instance::new(&mut child_store, &child_module, &[])?;
+
+    struct ParentCtx {
+        child_store: Store<()>,
+        child_instance: Instance,
+    }
+
+    let mut linker = Linker::new(&engine);
+    linker.func_wrap(
+        "host",
+        "catch_child_trap",
+        move |mut caller: Caller<'_, ParentCtx>| {
+            let mut ctx = caller.as_context_mut();
+            let data = ctx.data_mut();
+            let func = data
+                .child_instance
+                .get_typed_func::<(), (), _>(&mut data.child_store, "trap")
+                .expect("trap function should be exported");
+
+            let trap = func
+                .call(&mut data.child_store, ())
+                .err()
+                .expect("should trap");
+            assert!(
+                trap.to_string().contains("unreachable"),
+                "trap should contain 'unreachable', got: {trap}"
+            );
+
+            let trace = trap.trace().unwrap();
+
+            assert_eq!(trace.len(), 1);
+            assert_eq!(trace[0].func_name(), Some("trap"));
+            // For now, we only get stack frames for Wasm in this store, not
+            // across all stores.
+            //
+            // assert_eq!(trace[1].func_name(), Some("run"));
+
+            Ok(())
+        },
+    )?;
+
+    let mut store = Store::new(
+        &engine,
+        ParentCtx {
+            child_store,
+            child_instance,
+        },
+    );
+
+    let parent_module = Module::new(
+        store.engine(),
+        r#"
+            (module $parent
+              (func $host.catch_child_trap (import "host" "catch_child_trap"))
+              (func $run (export "run")
+                call $host.catch_child_trap
+              )
+            )
+        "#,
+    )?;
+
+    let parent_instance = linker.instantiate(&mut store, &parent_module)?;
+
+    let func = parent_instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    func.call(store, ())?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn async_then_sync_trap() -> Result<()> {
+    // Test the trapping and capturing the stack with the following sequence of
+    // calls:
+    //
+    // a[async] ---> b[host] ---> c[sync]
+
+    drop(env_logger::try_init());
+
+    let wat = r#"
+        (module
+            (import "" "b" (func $b))
+            (func $a (export "a")
+                call $b
+            )
+            (func $c (export "c")
+                unreachable
+            )
+        )
+    "#;
+
+    let mut sync_store = Store::new(&Engine::default(), ());
+
+    let sync_module = Module::new(sync_store.engine(), wat)?;
+
+    let mut sync_linker = Linker::new(sync_store.engine());
+    sync_linker.func_wrap("", "b", |_caller: Caller<_>| unreachable!())?;
+
+    let sync_instance = sync_linker.instantiate(&mut sync_store, &sync_module)?;
+
+    struct AsyncCtx {
+        sync_instance: Instance,
+        sync_store: Store<()>,
+    }
+
+    let mut async_store = Store::new(
+        &Engine::new(Config::new().async_support(true)).unwrap(),
+        AsyncCtx {
+            sync_instance,
+            sync_store,
+        },
+    );
+
+    let async_module = Module::new(async_store.engine(), wat)?;
+
+    let mut async_linker = Linker::new(async_store.engine());
+    async_linker.func_wrap("", "b", move |mut caller: Caller<AsyncCtx>| {
+        log::info!("Called `b`...");
+        let sync_instance = caller.data().sync_instance;
+        let sync_store = &mut caller.data_mut().sync_store;
+
+        log::info!("Calling `c`...");
+        let c = sync_instance
+            .get_typed_func::<(), (), _>(&mut *sync_store, "c")
+            .unwrap();
+        c.call(sync_store, ())?;
+        Ok(())
+    })?;
+
+    let async_instance = async_linker
+        .instantiate_async(&mut async_store, &async_module)
+        .await?;
+
+    log::info!("Calling `a`...");
+    let a = async_instance
+        .get_typed_func::<(), (), _>(&mut async_store, "a")
+        .unwrap();
+    let trap = a.call_async(&mut async_store, ()).await.unwrap_err();
+
+    let trace = trap.trace().unwrap();
+    // We don't support cross-store or cross-engine symbolication currently, so
+    // the other frames are ignored.
+    assert_eq!(trace.len(), 1);
+    assert_eq!(trace[0].func_name(), Some("c"));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sync_then_async_trap() -> Result<()> {
+    // Test the trapping and capturing the stack with the following sequence of
+    // calls:
+    //
+    // a[sync] ---> b[host] ---> c[async]
+
+    drop(env_logger::try_init());
+
+    let wat = r#"
+        (module
+            (import "" "b" (func $b))
+            (func $a (export "a")
+                call $b
+            )
+            (func $c (export "c")
+                unreachable
+            )
+        )
+    "#;
+
+    let mut async_store = Store::new(&Engine::new(Config::new().async_support(true)).unwrap(), ());
+
+    let async_module = Module::new(async_store.engine(), wat)?;
+
+    let mut async_linker = Linker::new(async_store.engine());
+    async_linker.func_wrap("", "b", |_caller: Caller<_>| unreachable!())?;
+
+    let async_instance = async_linker
+        .instantiate_async(&mut async_store, &async_module)
+        .await?;
+
+    struct SyncCtx {
+        async_instance: Instance,
+        async_store: Store<()>,
+    }
+
+    let mut sync_store = Store::new(
+        &Engine::default(),
+        SyncCtx {
+            async_instance,
+            async_store,
+        },
+    );
+
+    let sync_module = Module::new(sync_store.engine(), wat)?;
+
+    let mut sync_linker = Linker::new(sync_store.engine());
+    sync_linker.func_wrap(
+        "",
+        "b",
+        move |mut caller: Caller<SyncCtx>| -> Result<(), Trap> {
+            log::info!("Called `b`...");
+            let async_instance = caller.data().async_instance;
+            let async_store = &mut caller.data_mut().async_store;
+
+            log::info!("Calling `c`...");
+            let c = async_instance
+                .get_typed_func::<(), (), _>(&mut *async_store, "c")
+                .unwrap();
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current()
+                    .block_on(async move { c.call_async(async_store, ()).await })
+            })?;
+            Ok(())
+        },
+    )?;
+
+    let sync_instance = sync_linker.instantiate(&mut sync_store, &sync_module)?;
+
+    log::info!("Calling `a`...");
+    let a = sync_instance
+        .get_typed_func::<(), (), _>(&mut sync_store, "a")
+        .unwrap();
+    let trap = a.call(&mut sync_store, ()).unwrap_err();
+
+    let trace = trap.trace().unwrap();
+    // We don't support cross-store or cross-engine symbolication currently, so
+    // the other frames are ignored.
+    assert_eq!(trace.len(), 1);
+    assert_eq!(trace[0].func_name(), Some("c"));
+
+    Ok(())
+}
