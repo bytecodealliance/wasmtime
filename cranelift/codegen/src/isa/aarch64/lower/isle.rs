@@ -6,12 +6,14 @@ use generated_code::Context;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
-    lower_constant_f128, lower_constant_f32, lower_constant_f64, writable_zero_reg, zero_reg,
-    AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond, CondBrKind,
-    ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, JTSequenceInfo,
-    MachLabel, MoveWideConst, MoveWideOp, NarrowValueMode, Opcode, OperandSize, PairAMode, Reg,
-    ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize, NZCV,
+    lower_constant_f128, lower_constant_f32, lower_constant_f64, lower_fp_condcode,
+    writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo,
+    CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift,
+    Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MoveWideConst, MoveWideOp, NarrowValueMode,
+    Opcode, OperandSize, PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize,
+    NZCV,
 };
+use crate::ir::condcodes;
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm};
 use crate::isa::aarch64::lower::{lower_address, lower_pair_address, lower_splat_const};
 use crate::isa::aarch64::settings::Flags as IsaFlags;
@@ -518,6 +520,10 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         lower_splat_const(self.lower_ctx, rd, value, *size);
 
         rd.to_reg()
+    }
+
+    fn fp_cond_code(&mut self, cc: &condcodes::FloatCC) -> Cond {
+        lower_fp_condcode(*cc)
     }
 
     fn preg_sp(&mut self) -> PReg {

@@ -2638,6 +2638,11 @@
 ;; TODO: Port lower_splat_const() to ISLE.
 (extern constructor splat_const splat_const)
 
+;; Lower a FloatCC to a Cond.
+(decl fp_cond_code (FloatCC) Cond)
+;; TODO: Port lower_fp_condcode() to ISLE.
+(extern constructor fp_cond_code fp_cond_code)
+
 ;; Generate comparison to zero operator from input condition code
 (decl float_cc_cmp_zero_to_vec_misc_op (FloatCC) VecMisc2)
 (extern constructor float_cc_cmp_zero_to_vec_misc_op float_cc_cmp_zero_to_vec_misc_op)
@@ -2966,3 +2971,100 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
            (_ Unit (emit (abi_stackslot_addr dst stack_slot offset))))
         dst))
+
+;; Helper for emitting instruction sequences to perform a vector comparison.
+
+(decl vec_cmp_vc (Reg Reg VectorSize) Reg)
+(rule (vec_cmp_vc rn rm size)
+      (let ((dst Reg (vec_rrr (VecALUOp.Fcmeq) rn rn size))
+            (tmp Reg (vec_rrr (VecALUOp.Fcmeq) rm rm size))
+            (dst Reg (vec_rrr (VecALUOp.And) dst tmp size)))
+       dst))
+
+(decl vec_cmp (Reg Reg Type Cond) Reg)
+
+;; Floating point Vs / Vc
+(rule (vec_cmp rn rm ty (Cond.Vc))
+      (if (ty_vector_float ty))
+      (vec_cmp_vc rn rm (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Vs))
+      (if (ty_vector_float ty))
+      (let ((tmp Reg (vec_cmp_vc rn rm (vector_size ty))))
+       (vec_misc (VecMisc2.Not) tmp (vector_size ty))))
+
+;; 'Less than' operations are implemented by swapping the order of
+;; operands and using the 'greater than' instructions.
+;; 'Not equal' is implemented with 'equal' and inverting the result.
+
+;; Floating-point
+(rule (vec_cmp rn rm ty (Cond.Eq))
+      (if (ty_vector_float ty))
+      (vec_rrr (VecALUOp.Fcmeq) rn rm (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Ne))
+      (if (ty_vector_float ty))
+      (let ((tmp Reg (vec_rrr (VecALUOp.Fcmeq) rn rm (vector_size ty))))
+       (vec_misc (VecMisc2.Not) tmp (vector_size ty))))
+(rule (vec_cmp rn rm ty (Cond.Ge))
+      (if (ty_vector_float ty))
+      (vec_rrr (VecALUOp.Fcmge) rn rm (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Gt))
+      (if (ty_vector_float ty))
+      (vec_rrr (VecALUOp.Fcmgt) rn rm (vector_size ty)))
+;; Floating-point swapped-operands
+(rule (vec_cmp rn rm ty (Cond.Mi))
+      (if (ty_vector_float ty))
+      (vec_rrr (VecALUOp.Fcmgt) rm rn (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Ls))
+      (if (ty_vector_float ty))
+      (vec_rrr (VecALUOp.Fcmge) rm rn (vector_size ty)))
+
+;; Integer
+(rule (vec_cmp rn rm ty (Cond.Eq))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmeq) rn rm (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Ne))
+      (if (ty_vector_not_float ty))
+      (let ((tmp Reg (vec_rrr (VecALUOp.Cmeq) rn rm (vector_size ty))))
+       (vec_misc (VecMisc2.Not) tmp (vector_size ty))))
+(rule (vec_cmp rn rm ty (Cond.Ge))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmge) rn rm (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Gt))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmgt) rn rm (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Hs))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmhs) rn rm (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Hi))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmhi) rn rm (vector_size ty)))
+;; Integer swapped-operands
+(rule (vec_cmp rn rm ty (Cond.Le))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmge) rm rn (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Lt))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmgt) rm rn (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Ls))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmhs) rm rn (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Lo))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmhi) rm rn (vector_size ty)))
+
+;; Helper for determining if any value in a vector is true.
+;; This operation is implemented by using umaxp to create a scalar value, which
+;; is then compared against zero.
+;;
+;; umaxp vn.4s, vm.4s, vm.4s
+;; mov xm, vn.d[0]
+;; cmp xm, #0
+(decl vanytrue (Reg Type) ProducesFlags)
+(rule (vanytrue src (ty_vec128 ty))
+      (let ((src Reg (vec_rrr (VecALUOp.Umaxp) src src (VectorSize.Size32x4)))
+            (src Reg (mov_from_vec src 0 (ScalarSize.Size64))))
+       (cmp_imm (OperandSize.Size64) src (u8_into_imm12 0))))
+(rule (vanytrue src ty)
+      (if (ty_vec64 ty))
+      (let ((src Reg (mov_from_vec src 0 (ScalarSize.Size64))))
+       (cmp_imm (OperandSize.Size64) src (u8_into_imm12 0))))

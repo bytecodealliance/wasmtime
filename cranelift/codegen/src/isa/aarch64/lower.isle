@@ -182,24 +182,9 @@
 
 ;;;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; This operation is implemented by using umaxp to create a scalar value, which
-;; is then compared against zero.
-;;
-;; umaxp vn.4s, vm.4s, vm.4s
-;; mov xm, vn.d[0]
-;; cmp xm, #0
-;; cset xm, ne
-(rule (lower (vany_true x @ (value_type (ty_vec128 ty))))
-      (let ((x1 Reg (vec_rrr (VecALUOp.Umaxp) x x (VectorSize.Size32x4)))
-            (x2 Reg (mov_from_vec x1 0 (ScalarSize.Size64))))
-       (with_flags (cmp_imm (OperandSize.Size64) x2 (u8_into_imm12 0))
-                   (materialize_bool_result (ty_bits ty) (Cond.Ne)))))
-
-(rule (lower (vany_true x @ (value_type ty)))
-      (if (ty_vec64 ty))
-      (let ((x1 Reg (mov_from_vec x 0 (ScalarSize.Size64))))
-       (with_flags (cmp_imm (OperandSize.Size64) x1 (u8_into_imm12 0))
-                   (materialize_bool_result (ty_bits ty) (Cond.Ne)))))
+(rule (lower (has_type out_ty (vany_true x @ (value_type in_ty))))
+      (with_flags (vanytrue x in_ty)
+                  (materialize_bool_result (ty_bits out_ty) (Cond.Ne))))
 
 ;;;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1704,6 +1689,16 @@
             (vec_size VectorSize (vector_size ty)))
           (value_reg (float_cmp_zero_swap cond rn vec_size))))
 
+(rule (lower (has_type out_ty
+              (fcmp cond x @ (value_type (ty_scalar_float in_ty)) y)))
+      (with_flags (fpu_cmp (scalar_size in_ty) x y)
+                  (materialize_bool_result
+                   (ty_bits out_ty)
+                   (fp_cond_code cond))))
+
+(rule (lower (has_type out_ty (fcmp cond x @ (value_type in_ty) y)))
+      (if (ty_vector_float in_ty))
+      (vec_cmp x y in_ty (fp_cond_code cond)))
 
 ;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1878,7 +1873,6 @@
 (rule (lower (and (has_type (valid_atomic_transaction ty)
                   (atomic_cas flags addr src1 src2))))
       (atomic_cas_loop addr src1 src2 ty))
-
 
 ;;;; Rules for 'fvdemote' ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (fvdemote x))
@@ -2345,20 +2339,20 @@
 ;; uses. Its second output is a flags output only ever meant to
 ;; check for overflow using the
 ;; `backend.unsigned_add_overflow_condition()` condition.
-;; 
+;;
 ;; Note that the CLIF validation will ensure that no flag-setting
 ;; operation comes between this IaddIfcout and its use (e.g., a
 ;; Trapif). Thus, we can rely on implicit communication through the
 ;; processor flags rather than explicitly generating flags into a
 ;; register. We simply use the variant of the add instruction that
 ;; sets flags (`adds`) here.
-;; 
+;;
 ;; Note that the second output (the flags) need not be generated,
 ;; because flags are never materialized into a register; the only
 ;; instructions that can use a value of type `iflags` or `fflags`
 ;; will look directly for the flags-producing instruction (which can
 ;; always be found, by construction) and merge it.
-;; 
+;;
 ;; Now handle the iadd as above, except use an AddS opcode that sets
 ;; flags.
 

@@ -299,25 +299,7 @@ pub(crate) fn lower_insn_to_regs(
             lower_icmp(ctx, insn, condcode, IcmpOutput::Register(rd))?;
         }
 
-        Opcode::Fcmp => {
-            let condcode = ctx.data(insn).fp_cond_code().unwrap();
-            let cond = lower_fp_condcode(condcode);
-            let ty = ctx.input_ty(insn, 0);
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            if !ty.is_vector() {
-                ctx.emit(Inst::FpuCmp {
-                    size: ScalarSize::from_ty(ty),
-                    rn,
-                    rm,
-                });
-                materialize_bool_result(ctx, insn, rd, cond);
-            } else {
-                lower_vector_compare(ctx, rd, rn, rm, ty, cond)?;
-            }
-        }
+        Opcode::Fcmp => implemented_in_isle(ctx),
 
         Opcode::Debugtrap => implemented_in_isle(ctx),
 

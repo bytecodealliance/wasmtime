@@ -2349,13 +2349,15 @@ impl MachInstEmit for Inst {
             &Inst::VecDupFromFpu { rd, rn, size } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
-                let imm5 = match size {
-                    VectorSize::Size32x4 => 0b00100,
-                    VectorSize::Size64x2 => 0b01000,
+                let q = size.is_128bits() as u32;
+                let imm5 = match size.lane_size() {
+                    ScalarSize::Size32 => 0b00100,
+                    ScalarSize::Size64 => 0b01000,
                     _ => unimplemented!(),
                 };
                 sink.put4(
-                    0b010_01110000_00000_000001_00000_00000
+                    0b000_01110000_00000_000001_00000_00000
+                        | (q << 30)
                         | (imm5 << 16)
                         | (machreg_to_vec(rn) << 5)
                         | machreg_to_vec(rd.to_reg()),
