@@ -160,6 +160,10 @@ impl TargetIsa for S390xBackend {
     fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
     }
+
+    fn function_alignment(&self) -> u32 {
+        4
+    }
 }
 
 impl fmt::Display for S390xBackend {

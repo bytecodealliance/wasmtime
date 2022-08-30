@@ -157,6 +157,10 @@ impl TargetIsa for X64Backend {
     fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
     }
+
+    fn function_alignment(&self) -> u32 {
+        16
+    }
 }
 
 impl fmt::Display for X64Backend {

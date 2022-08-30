@@ -178,6 +178,10 @@ impl TargetIsa for AArch64Backend {
     fn map_regalloc_reg_to_dwarf(&self, reg: Reg) -> Result<u16, systemv::RegisterMappingError> {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
+
+    fn function_alignment(&self) -> u32 {
+        4
+    }
 }
 
 impl fmt::Display for AArch64Backend {
