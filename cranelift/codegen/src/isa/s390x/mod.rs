@@ -92,7 +92,7 @@ impl TargetIsa for S390xBackend {
             dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
-            function_alignment: emit_result.constant_alignment,
+            alignment: emit_result.alignment,
         })
     }
 
