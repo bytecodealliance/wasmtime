@@ -18,7 +18,7 @@ wiggle = { path = "..", features = ["tracing_log"] }
 [dev-dependencies]
 thiserror = "1.0"
 tracing = "0.1.26"
-tracing-subscriber = "0.3.1"
+tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt'] }
 env_logger = "0.9"
 
 [badges]

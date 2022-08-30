@@ -50,7 +50,6 @@ tempfile = "3.1.0"
 test-programs = { path = "crates/test-programs" }
 wasmtime-runtime = { path = "crates/runtime" }
 tokio = { version = "1.8.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
-tracing-subscriber = "0.3.1"
 wast = "46.0.0"
 criterion = "0.3.4"
 num_cpus = "1.13.0"
