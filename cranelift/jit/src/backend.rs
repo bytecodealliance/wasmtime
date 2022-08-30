@@ -745,9 +745,12 @@ impl Module for JITModule {
         &mut self,
         id: FuncId,
         func: &ir::Function,
+        _alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction> {
+        // NOTE: the alignment parameter is unused as the jit always aligns functions on 16-byte
+        // boundaries.
         info!("defining function {} with bytes", id);
         let total_size: u32 = match bytes.len().try_into() {
             Ok(total_size) => total_size,
