@@ -222,6 +222,16 @@
                     (src XmmMem)
                     (dst WritableXmm))
 
+       ;; XMM (scalar or vector) unary op with immediate: roundss, roundsd, etc.
+       ;;
+       ;; This differs from XMM_RM_R_IMM in that the dst register of
+       ;; XmmUnaryRmRImm is not used in the computation of the instruction dst
+       ;; value and so does not have to be a previously valid value.
+       (XmmUnaryRmRImm (op SseOpcode)
+                       (src XmmMem)
+                       (imm u8)
+                       (dst WritableXmm))
+
        ;; XMM (scalar or vector) unary op that relies on the EVEX prefix.
        (XmmUnaryRmREvex (op Avx512Opcode)
                         (src XmmMem)
@@ -2610,41 +2620,32 @@
                     lane
                     size))
 
+;; Helper for constructing `XmmUnaryRmRImm` instructions.
+(decl xmm_unary_rm_r_imm (SseOpcode XmmMem u8) Xmm)
+(rule (xmm_unary_rm_r_imm op src1 imm)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmRImm op src1 imm dst))))
+        dst))
+
 ;; Helper for creating `roundss` instructions.
-(decl x64_roundss (Xmm RoundImm) Xmm)
+(decl x64_roundss (XmmMem RoundImm) Xmm)
 (rule (x64_roundss src1 round)
-      (xmm_rm_r_imm (SseOpcode.Roundss)
-                    src1
-                    src1
-                    (encode_round_imm round)
-                    (OperandSize.Size32)))
+      (xmm_unary_rm_r_imm (SseOpcode.Roundss) src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundsd` instructions.
-(decl x64_roundsd (Xmm RoundImm) Xmm)
+(decl x64_roundsd (XmmMem RoundImm) Xmm)
 (rule (x64_roundsd src1 round)
-      (xmm_rm_r_imm (SseOpcode.Roundsd)
-                    src1
-                    src1
-                    (encode_round_imm round)
-                    (OperandSize.Size32)))
+      (xmm_unary_rm_r_imm (SseOpcode.Roundsd) src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundps` instructions.
-(decl x64_roundps (Xmm RoundImm) Xmm)
+(decl x64_roundps (XmmMem RoundImm) Xmm)
 (rule (x64_roundps src1 round)
-      (xmm_rm_r_imm (SseOpcode.Roundps)
-                    src1
-                    src1
-                    (encode_round_imm round)
-                    (OperandSize.Size32)))
+      (xmm_unary_rm_r_imm (SseOpcode.Roundps) src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundpd` instructions.
-(decl x64_roundpd (Xmm RoundImm) Xmm)
+(decl x64_roundpd (XmmMem RoundImm) Xmm)
 (rule (x64_roundpd src1 round)
-      (xmm_rm_r_imm (SseOpcode.Roundpd)
-                    src1
-                    src1
-                    (encode_round_imm round)
-                    (OperandSize.Size32)))
+      (xmm_unary_rm_r_imm (SseOpcode.Roundpd) src1 (encode_round_imm round)))
 
 ;; Helper for creating `pmaddwd` instructions.
 (decl x64_pmaddwd (Xmm XmmMem) Xmm)
