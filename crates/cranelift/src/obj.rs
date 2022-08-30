@@ -95,9 +95,11 @@ impl<'a> ModuleTextBuilder<'a> {
         func: &'a CompiledFunction,
     ) -> (SymbolId, Range<u64>) {
         let body_len = func.body.len() as u64;
-        let off = self
-            .text
-            .append(labeled, &func.body, self.isa.function_alignment());
+        let off = self.text.append(
+            labeled,
+            &func.body,
+            self.isa.function_alignment().max(func.info.alignment),
+        );
 
         let symbol_id = self.obj.add_symbol(Symbol {
             name,

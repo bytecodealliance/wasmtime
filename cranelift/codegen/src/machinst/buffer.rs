@@ -468,7 +468,11 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// Align up to the given alignment.
     pub fn align_to(&mut self, align_to: CodeOffset) {
         trace!("MachBuffer: align to {}", align_to);
-        assert!(align_to.is_power_of_two());
+        assert!(
+            align_to.is_power_of_two(),
+            "{} is not a power of two",
+            align_to
+        );
         while self.cur_offset() & (align_to - 1) != 0 {
             self.put1(0);
         }

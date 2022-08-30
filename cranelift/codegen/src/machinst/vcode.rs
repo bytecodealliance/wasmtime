@@ -219,6 +219,9 @@ pub struct EmitResult<I: VCodeInst> {
 
     /// Stack frame size.
     pub frame_size: u32,
+
+    /// The alignment requirement for pc-relative loads.
+    pub constant_alignment: u32,
 }
 
 /// A builder for a VCode function body.
@@ -1036,7 +1039,10 @@ impl<I: VCodeInst> VCode<I> {
         }
 
         // Emit the constants used by the function.
+        let mut constant_alignment = 1;
         for (constant, data) in self.constants.iter() {
+            constant_alignment = data.alignment().max(constant_alignment);
+
             let label = buffer.get_label_for_constant(constant);
             buffer.defer_constant(label, data.alignment(), data.as_slice(), u32::max_value());
         }
@@ -1079,6 +1085,7 @@ impl<I: VCodeInst> VCode<I> {
             dynamic_stackslot_offsets: self.abi.dynamic_stackslot_offsets().clone(),
             value_labels_ranges,
             frame_size,
+            constant_alignment,
         }
     }
 
