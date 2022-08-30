@@ -459,7 +459,8 @@ fn lower_insn_to_regs(
         | Opcode::Isplit
         | Opcode::TlsValue
         | Opcode::SqmulRoundSat
-        | Opcode::Uunarrow => {
+        | Opcode::Uunarrow
+        | Opcode::Nop => {
             let ty = if outputs.len() > 0 {
                 Some(ctx.output_ty(insn, 0))
             } else {
@@ -572,13 +573,7 @@ fn lower_insn_to_regs(
         | Opcode::BrTable => {
             panic!("Branch opcode reached non-branch lowering logic!");
         }
-
-        Opcode::Nop => {
-            // Nothing.
-        }
     }
-
-    Ok(())
 }
 
 //=============================================================================
