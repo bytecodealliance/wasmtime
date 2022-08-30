@@ -955,40 +955,35 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         let is_div = kind.is_div();
         let size = OperandSize::from_ty(ty);
 
-        self.lower_ctx.emit(MInst::gen_move(
-            Writable::from_reg(regs::rax()),
-            dividend.to_reg(),
-            ty,
-        ));
+        let dst_quotient = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
+        let dst_remainder = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
 
         // Always do explicit checks for `srem`: otherwise, INT_MIN % -1 is not handled properly.
         if self.flags.avoid_div_traps() || *kind == DivOrRemKind::SignedRem {
             // A vcode meta-instruction is used to lower the inline checks, since they embed
             // pc-relative offsets that must not change, thus requiring regalloc to not
             // interfere by introducing spills and reloads.
-            //
-            // Note it keeps the result in $rax (for divide) or $rdx (for rem), so that
-            // regalloc is aware of the coalescing opportunity between rax/rdx and the
-            // destination register.
-            let divisor_copy = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
-            self.lower_ctx
-                .emit(MInst::gen_move(divisor_copy, divisor.to_reg(), types::I64));
-
             let tmp = if *kind == DivOrRemKind::SignedDiv && size == OperandSize::Size64 {
                 Some(self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap())
             } else {
                 None
             };
             // TODO use xor
-            self.lower_ctx.emit(MInst::imm(
+            let dividend_hi = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
+            self.lower_ctx.emit(MInst::alu_rmi_r(
                 OperandSize::Size32,
-                0,
-                Writable::from_reg(regs::rdx()),
+                AluRmiROpcode::Xor,
+                RegMemImm::reg(dividend_hi.to_reg()),
+                dividend_hi,
             ));
             self.lower_ctx.emit(MInst::checked_div_or_rem_seq(
                 kind.clone(),
                 size,
-                divisor_copy,
+                divisor.to_reg(),
+                Gpr::new(dividend.to_reg()).unwrap(),
+                Gpr::new(dividend_hi.to_reg()).unwrap(),
+                WritableGpr::from_reg(Gpr::new(dst_quotient.to_reg()).unwrap()),
+                WritableGpr::from_reg(Gpr::new(dst_remainder.to_reg()).unwrap()),
                 tmp,
             ));
         } else {
@@ -997,51 +992,89 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
             // divisor into a register instead.
             let divisor = RegMem::reg(divisor.to_reg());
 
+            let dividend_hi = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
+
             // Fill in the high parts:
-            if kind.is_signed() {
-                // sign-extend the sign-bit of al into ah for size 1, or rax into rdx, for
-                // signed opcodes.
-                self.lower_ctx.emit(MInst::sign_extend_data(size));
+            let dividend_lo = if kind.is_signed() && ty == types::I8 {
+                let dividend_lo = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                // 8-bit div takes its dividend in only the `lo` reg.
+                self.lower_ctx.emit(MInst::sign_extend_data(
+                    size,
+                    Gpr::new(dividend.to_reg()).unwrap(),
+                    WritableGpr::from_reg(Gpr::new(dividend_lo.to_reg()).unwrap()),
+                ));
+                // `dividend_hi` is not used by the Div below, so we
+                // don't def it here.
+
+                dividend_lo.to_reg()
+            } else if kind.is_signed() {
+                // 16-bit and higher div takes its operand in hi:lo
+                // with half in each (64:64, 32:32 or 16:16).
+                self.lower_ctx.emit(MInst::sign_extend_data(
+                    size,
+                    Gpr::new(dividend.to_reg()).unwrap(),
+                    WritableGpr::from_reg(Gpr::new(dividend_hi.to_reg()).unwrap()),
+                ));
+
+                dividend.to_reg()
             } else if ty == types::I8 {
+                let dividend_lo = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
                 self.lower_ctx.emit(MInst::movzx_rm_r(
                     ExtMode::BL,
-                    RegMem::reg(regs::rax()),
-                    Writable::from_reg(regs::rax()),
+                    RegMem::reg(dividend.to_reg()),
+                    dividend_lo,
                 ));
+
+                dividend_lo.to_reg()
             } else {
                 // zero for unsigned opcodes.
-                self.lower_ctx.emit(MInst::imm(
-                    OperandSize::Size64,
-                    0,
-                    Writable::from_reg(regs::rdx()),
-                ));
-            }
+                self.lower_ctx
+                    .emit(MInst::imm(OperandSize::Size64, 0, dividend_hi));
+
+                dividend.to_reg()
+            };
 
             // Emit the actual idiv.
-            self.lower_ctx
-                .emit(MInst::div(size, kind.is_signed(), divisor));
+            self.lower_ctx.emit(MInst::div(
+                size,
+                kind.is_signed(),
+                divisor,
+                Gpr::new(dividend_lo).unwrap(),
+                Gpr::new(dividend_hi.to_reg()).unwrap(),
+                WritableGpr::from_reg(Gpr::new(dst_quotient.to_reg()).unwrap()),
+                WritableGpr::from_reg(Gpr::new(dst_remainder.to_reg()).unwrap()),
+            ));
         }
 
         // Move the result back into the destination reg.
         if is_div {
             // The quotient is in rax.
-            self.lower_ctx
-                .emit(MInst::gen_move(dst.to_writable_reg(), regs::rax(), ty));
+            self.lower_ctx.emit(MInst::gen_move(
+                dst.to_writable_reg(),
+                dst_quotient.to_reg(),
+                ty,
+            ));
         } else {
             if size == OperandSize::Size8 {
                 // The remainder is in AH. Right-shift by 8 bits then move from rax.
                 self.lower_ctx.emit(MInst::shift_r(
                     OperandSize::Size64,
                     ShiftKind::ShiftRightLogical,
-                    Some(8),
-                    Writable::from_reg(regs::rax()),
+                    Imm8Gpr::new(Imm8Reg::Imm8 { imm: 8 }).unwrap(),
+                    dst_quotient,
                 ));
-                self.lower_ctx
-                    .emit(MInst::gen_move(dst.to_writable_reg(), regs::rax(), ty));
+                self.lower_ctx.emit(MInst::gen_move(
+                    dst.to_writable_reg(),
+                    dst_quotient.to_reg(),
+                    ty,
+                ));
             } else {
                 // The remainder is in rdx.
-                self.lower_ctx
-                    .emit(MInst::gen_move(dst.to_writable_reg(), regs::rdx(), ty));
+                self.lower_ctx.emit(MInst::gen_move(
+                    dst.to_writable_reg(),
+                    dst_remainder.to_reg(),
+                    ty,
+                ));
             }
         }
     }

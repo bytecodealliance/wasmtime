@@ -10,8 +10,9 @@ block0(v0: i8, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   xorl    %r11d, %r11d, %r11d
 ;   movq    %rdi, %rax
-;   movl    $0, %edx
+;   movq    %r11, %rdx
 ;   srem_seq %al, %dl, %sil, %al, %dl, tmp=(none)
 ;   shrq    $8, %rax, %rax
 ;   movq    %rbp, %rsp
@@ -27,8 +28,9 @@ block0(v0: i16, v1: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   xorl    %r11d, %r11d, %r11d
 ;   movq    %rdi, %rax
-;   movl    $0, %edx
+;   movq    %r11, %rdx
 ;   srem_seq %ax, %dx, %si, %ax, %dx, tmp=(none)
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
@@ -44,8 +46,9 @@ block0(v0: i32, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   xorl    %r11d, %r11d, %r11d
 ;   movq    %rdi, %rax
-;   movl    $0, %edx
+;   movq    %r11, %rdx
 ;   srem_seq %eax, %edx, %esi, %eax, %edx, tmp=(none)
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
@@ -61,8 +64,9 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   xorl    %r11d, %r11d, %r11d
 ;   movq    %rdi, %rax
-;   movl    $0, %edx
+;   movq    %r11, %rdx
 ;   srem_seq %rax, %rdx, %rsi, %rax, %rdx, tmp=(none)
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp

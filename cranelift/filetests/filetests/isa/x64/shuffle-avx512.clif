@@ -12,9 +12,10 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm9
+;   movdqa  %xmm0, %xmm6
 ;   load_const VCodeConstant(0), %xmm0
-;   vpermi2b %xmm1, %xmm0, %xmm9
+;   movdqa  %xmm6, %xmm8
+;   vpermi2b %xmm1, %xmm8, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -31,11 +32,12 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm12
+;   movdqa  %xmm0, %xmm9
 ;   load_const VCodeConstant(1), %xmm0
-;   load_const VCodeConstant(0), %xmm7
-;   vpermi2b %xmm1, %xmm7, %xmm12
-;   andps   %xmm0, %xmm7, %xmm0
+;   load_const VCodeConstant(0), %xmm8
+;   movdqa  %xmm9, %xmm11
+;   vpermi2b %xmm1, %xmm11, %xmm8, %xmm8
+;   andps   %xmm0, %xmm8, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -49,9 +51,10 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm9
+;   movdqa  %xmm0, %xmm6
 ;   load_const VCodeConstant(0), %xmm0
-;   vpermi2b %xmm1, %xmm0, %xmm9
+;   movdqa  %xmm6, %xmm8
+;   vpermi2b %xmm1, %xmm8, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

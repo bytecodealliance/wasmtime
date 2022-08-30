@@ -205,9 +205,8 @@ block2:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $0, %r8d
 ;   cmpl    $2, %edi
-;   br_table %rdi
+;   br_table %rdi, %r9, %r10
 ; block1:
 ;   jmp     label3
 ; block2:
