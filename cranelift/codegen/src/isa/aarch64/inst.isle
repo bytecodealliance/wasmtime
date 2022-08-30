@@ -2077,6 +2077,14 @@
          (MInst.FpuCSel64 dst if_true if_false cond)
          dst)))
 
+;; Helper for emitting `MInst.VecCSel` instructions.
+(decl vec_csel (Cond Reg Reg) ConsumesFlags)
+(rule (vec_csel cond if_true if_false)
+      (let ((dst WritableReg (temp_writable_reg $I8X16)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg
+         (MInst.VecCSel dst if_true if_false cond)
+         dst)))
+
 ;; Helper for emitting `MInst.FpuRound` instructions.
 (decl fpu_round (FpuRoundMode Reg) Reg)
 (rule (fpu_round op rn)
@@ -2352,6 +2360,11 @@
 (decl aarch64_fence () SideEffectNoResult)
 (rule (aarch64_fence)
       (SideEffectNoResult.Inst (MInst.Fence)))
+
+;; Helper for generating `csdb` instructions.
+(decl csdb () SideEffectNoResult)
+(rule (csdb)
+      (SideEffectNoResult.Inst (MInst.Csdb)))
 
 ;; Helper for generating `brk` instructions.
 (decl brk () SideEffectNoResult)
@@ -2640,6 +2653,15 @@
 (decl aarch64_storep64 (PairAMode MemFlags Reg Reg) SideEffectNoResult)
 (rule (aarch64_storep64 amode flags val1 val2)
       (SideEffectNoResult.Inst (MInst.StoreP64 val1 val2 amode flags)))
+
+;; Helper for generating a `trapif` instruction.
+
+(decl trap_if (ProducesFlags TrapCode Cond) InstOutput)
+(rule (trap_if flags trap_code cond)
+      (side_effect
+       (with_flags_side_effect flags
+        (ConsumesFlags.ConsumesFlagsSideEffect
+         (MInst.TrapIf (cond_br_cond cond) trap_code)))))
 
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3378,7 +3400,9 @@
 ;; ccmp lhs_hi, rhs_hi, #0, eq
 (decl lower_icmp_i128_eq_ne (Value Value) ProducesFlags)
 (rule (lower_icmp_i128_eq_ne lhs rhs)
-      (let ((lhs_lo Reg (value_regs_get lhs 0))
+      (let ((lhs ValueRegs (put_in_regs lhs))
+            (rhs ValueRegs (put_in_regs rhs))
+            (lhs_lo Reg (value_regs_get lhs 0))
             (lhs_hi Reg (value_regs_get lhs 1))
             (rhs_lo Reg (value_regs_get rhs 0))
             (rhs_hi Reg (value_regs_get rhs 1))
@@ -3399,6 +3423,8 @@
 (rule -1 (lower_icmp_into_reg cond lhs rhs $I128 out_ty)
       (let ((unsigned_cond Cond (cond_code (intcc_unsigned cond)))
             (cond Cond (cond_code cond))
+            (lhs ValueRegs (put_in_regs lhs))
+            (rhs ValueRegs (put_in_regs rhs))
             (lhs_lo Reg (value_regs_get lhs 0))
             (lhs_hi Reg (value_regs_get lhs 1))
             (rhs_lo Reg (value_regs_get rhs 0))
@@ -3477,3 +3503,30 @@
       (let ((dst ValueRegs (lower_icmp_into_reg cond lhs rhs $I128 $B1))
             (dst Reg (value_regs_get dst 0)))
        (cmp (OperandSize.Size64) (zero_reg) dst)))
+
+;; Helpers for generating select instruction sequences.
+(decl lower_select (ProducesFlags Cond Type Value Value) ValueRegs)
+(rule (lower_select flags cond (ty_scalar_float ty) rn rm)
+      (with_flags flags (fpu_csel ty cond rn rm)))
+(rule (lower_select flags cond (ty_vec128 ty) rn rm)
+      (with_flags flags (vec_csel cond rn rm)))
+(rule (lower_select flags cond ty rn rm)
+      (if (ty_vec64 ty))
+      (with_flags flags (fpu_csel $F64 cond rn rm)))
+(rule (lower_select flags cond $I128 rn rm)
+      (let ((dst_lo WritableReg (temp_writable_reg $I64))
+            (dst_hi WritableReg (temp_writable_reg $I64))
+            (rn ValueRegs (put_in_regs rn))
+            (rm ValueRegs (put_in_regs rm))
+            (rn_lo Reg (value_regs_get rn 0))
+            (rn_hi Reg (value_regs_get rn 1))
+            (rm_lo Reg (value_regs_get rm 0))
+            (rm_hi Reg (value_regs_get rm 1)))
+       (with_flags flags
+        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
+         (MInst.CSel dst_lo cond rn_lo rm_lo)
+         (MInst.CSel dst_hi cond rn_hi rm_hi)
+         (value_regs dst_lo dst_hi)))))
+(rule (lower_select flags cond ty rn rm)
+      (if (ty_int_bool_ref_scalar_64 ty))
+      (with_flags flags (csel cond rn rm)))

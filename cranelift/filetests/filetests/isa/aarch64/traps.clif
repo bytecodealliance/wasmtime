@@ -17,6 +17,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
+;   adds x3, x0, x1
 ;   b.hs 8 ; udf
 ;   ret
 

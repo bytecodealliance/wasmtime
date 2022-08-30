@@ -1738,10 +1738,110 @@
 (rule (lower (trap trap_code))
       (side_effect (udf trap_code)))
 
+;;;; Rules for `trapif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (trapif cc insn @ (iadd_ifcout x y) trap_code))
+      ;; The flags must not have been clobbered by any other instruction, as
+      ;; verified by the CLIF validator; so we can simply use the flags here.
+      (let ((insn ProducesFlags (flags_to_producesflags insn)))
+       (trap_if insn trap_code (cond_code cc))))
+
+;; Verification ensures the input is always a single-def ifcmp.
+(rule (lower (trapif cc insn @ (ifcmp x @ (value_type ty) y) trap_code))
+      (let ((cond Cond (cond_code cc)))
+       (trap_if (lower_icmp_into_flags cc x y ty) trap_code cond)))
+
+;;;; Rules for `trapff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Verification ensures the input is always a single-def ffcmp.
+(rule (lower (trapff cc insn @ (ffcmp x @ (value_type ty) y) trap_code))
+      (let ((cond Cond (fp_cond_code cc)))
+       (trap_if (fpu_cmp (scalar_size ty) x y) trap_code cond)))
+
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (resumable_trap trap_code))
       (side_effect (udf trap_code)))
+
+;;;; Rules for `trueif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Verification ensures the input is always a single-def ifcmp.
+(rule (lower (has_type out_ty
+       (trueif cc insn @ (ifcmp x @ (value_type in_ty) y))))
+      (lower_icmp_into_reg cc x y in_ty out_ty))
+
+;;;; Rules for `trueff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Verification ensures the input is always a single-def ffcmp.
+(rule (lower (has_type ty (trueff cc insn @ (ffcmp x @ (value_type in_ty) y))))
+      (with_flags_reg
+       (fpu_cmp (scalar_size in_ty) x y)
+       (materialize_bool_result (ty_bits ty) (fp_cond_code cc))))
+
+;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty
+       (select _flags @ (icmp cc x @ (value_type in_ty) y) rn rm)))
+      (let ((cond Cond (cond_code cc)))
+       (lower_select
+        (lower_icmp_into_flags cc x y in_ty)
+        cond ty rn rm)))
+
+(rule (lower (has_type ty
+       (select _flags @ (bint (icmp cc x @ (value_type in_ty) y)) rn rm)))
+      (let ((cond Cond (cond_code cc)))
+       (lower_select
+        (lower_icmp_into_flags cc x y in_ty)
+        cond ty rn rm)))
+
+(rule (lower (has_type ty
+       (select _flags @ (fcmp cc x @ (value_type in_ty) y) rn rm)))
+      (let ((cond Cond (fp_cond_code cc)))
+       (lower_select
+        (fpu_cmp (scalar_size in_ty) x y)
+        cond ty rn rm)))
+
+(rule (lower (has_type ty
+       (select _flags @ (bint (fcmp cc x @ (value_type in_ty) y)) rn rm)))
+      (let ((cond Cond (fp_cond_code cc)))
+       (lower_select
+        (fpu_cmp (scalar_size in_ty) x y)
+        cond ty rn rm)))
+
+(rule -1 (lower (has_type ty (select rcond @ (value_type (fits_in_32 _)) rn rm)))
+      (let ((rcond Reg (put_in_reg_zext32 rcond)))
+       (lower_select
+        (cmp (OperandSize.Size32) rcond (zero_reg))
+        (Cond.Ne) ty rn rm)))
+
+(rule -2 (lower (has_type ty (select rcond rn rm)))
+      (let ((rcond Reg (put_in_reg_zext64 rcond)))
+       (lower_select
+        (cmp (OperandSize.Size64) rcond (zero_reg))
+        (Cond.Ne) ty rn rm)))
+
+;;;; Rules for `selectif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Verification ensures that the input is always a single-def ifcmp.
+(rule (lower (has_type ty
+       (selectif cc flags @ (ifcmp x @ (value_type in_ty) y)
+        if_true if_false)))
+      (let ((cond Cond (cond_code cc)))
+       (lower_select
+        (lower_icmp_into_flags cc x y in_ty)
+        cond ty if_true if_false)))
+
+;;;; Rules for `selectif_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty
+       (selectif_spectre_guard cc
+        flags @ (ifcmp x @ (value_type in_ty) y) if_true if_false)))
+      (let ((cond Cond (cond_code cc))
+            (dst ValueRegs (lower_select
+                      (lower_icmp_into_flags cc x y in_ty)
+                      cond ty if_true if_false))
+            (_ InstOutput (side_effect (csdb))))
+       dst))
 
 ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2394,18 +2494,6 @@
 
 (rule (lower (fvpromote_low val))
       (vec_rr_long (VecRRLongOp.Fcvtl32) val $false))
-
-;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; TODO: requires icmp/fcmp first.
-
-;;; Rules for `selectif` / `selectif_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; TODO: requires icmp/fcmp first.
-
-;;; Rules for `trueif` / `trueff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; TODO: requires icmp/fcmp first.
 
 ;;; Rules for `brz`/`brnz`/`brif`/`brff`/`bricmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

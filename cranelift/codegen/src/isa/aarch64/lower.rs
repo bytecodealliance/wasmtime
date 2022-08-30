@@ -1178,15 +1178,12 @@ pub(crate) enum IcmpOutput {
     /// Lowers the comparison into a cond code, discarding the results. The cond code emitted can
     /// be checked in the resulting [IcmpResult].
     CondCode,
-    /// Materializes the results into a register. This may overwrite any flags previously set.
-    Register(Writable<Reg>),
 }
 
 impl IcmpOutput {
     pub fn reg(&self) -> Option<Writable<Reg>> {
         match self {
             IcmpOutput::CondCode => None,
-            IcmpOutput::Register(reg) => Some(*reg),
         }
     }
 }
@@ -1197,15 +1194,12 @@ pub(crate) enum IcmpResult {
     /// The result was output into the given [Cond]. Callers may perform operations using this [Cond]
     /// and its inverse, other [Cond]'s are not guaranteed to be correct.
     CondCode(Cond),
-    /// The result was materialized into the output register.
-    Register,
 }
 
 impl IcmpResult {
     pub fn unwrap_cond(&self) -> Cond {
         match self {
             IcmpResult::CondCode(c) => *c,
-            _ => panic!("Unwrapped cond, but IcmpResult was {:?}", self),
         }
     }
 }
@@ -1364,8 +1358,6 @@ pub(crate) fn lower_icmp(
     }
 
     Ok(match output {
-        // We currently never emit a different register than what was asked for
-        IcmpOutput::Register(_) => IcmpResult::Register,
         IcmpOutput::CondCode => IcmpResult::CondCode(out_condcode),
     })
 }
