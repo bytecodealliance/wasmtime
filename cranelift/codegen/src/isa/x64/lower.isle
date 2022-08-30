@@ -3640,7 +3640,8 @@
 ;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (vany_true val))
-      (with_flags (x64_ptest val val) (x64_setcc (CC.NZ))))
+      (let ((val Xmm val))
+        (with_flags (x64_ptest val val) (x64_setcc (CC.NZ)))))
 
 ;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
