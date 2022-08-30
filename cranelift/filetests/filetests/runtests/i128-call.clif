@@ -1,4 +1,3 @@
-test interpret
 test run
 set enable_llvm_abi_extensions=true
 target x86_64
