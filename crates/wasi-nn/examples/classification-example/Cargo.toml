@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 image = { version = "0.23.14", default-features = false, features = ["gif", "jpeg", "ico", "png", "pnm", "tga", "tiff", "webp", "bmp", "hdr", "dxt", "dds", "farbfeld"]  }
-wasi-nn = "0.1.0"
+wasi-nn = "0.2.0"
 
 # This crate is built with the wasm32-wasi target, so it's separate
 # from the main Wasmtime build, so use this directive to exclude it

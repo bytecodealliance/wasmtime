@@ -5,7 +5,7 @@ use std::fs;
 use wasi_nn;
 
 // TODO change this to wasi_nn::GRAPH_ENCODING_TENSORFLOW once wasi-nn is updated.
-const GRAPH_ENCODING_TENSORFLOW: u8 = 1;
+// const GRAPH_ENCODING_TENSORFLOW: u8 = 1;
 
 pub fn main() {
     match env!("BACKEND") {
@@ -13,7 +13,7 @@ pub fn main() {
             execute(wasi_nn::GRAPH_ENCODING_OPENVINO, &[1, 3, 224, 224], vec![0f32; 1001]);
         },
         "tensorflow" => {
-            execute(GRAPH_ENCODING_TENSORFLOW, &[1, 224, 224, 3], vec![0f32; 1001]);
+            execute(wasi_nn::GRAPH_ENCODING_TENSORFLOW, &[1, 224, 224, 3], vec![0f32; 1001]);
         },
         _ => {
             println!("Unknown backend, exiting...");
@@ -86,7 +86,7 @@ fn create_gba (backend: u8) ->Vec<Vec<u8>>  {
             let weights = fs::read("fixture/model.bin").unwrap();
             Vec::from([xml.into_bytes(), weights])
         },
-        GRAPH_ENCODING_TENSORFLOW => {
+        wasi_nn::GRAPH_ENCODING_TENSORFLOW => {
             let model_path: String = env!("MAPDIR").to_string();
             Vec::from([model_path.into_bytes(),
                         "signature,serving_default".to_owned().into_bytes(),
@@ -148,7 +148,7 @@ fn image_to_tensor(path: String, dimensions: &[u32], backend: u8) -> Vec<u8> {
             }
             u8_f32_arr
         },
-        GRAPH_ENCODING_TENSORFLOW => {
+        wasi_nn::GRAPH_ENCODING_TENSORFLOW => {
             let pixels = Reader::open(path).unwrap().decode().unwrap();
             let dyn_img: DynamicImage = pixels.resize_exact(dimensions[1], dimensions[2], image::imageops::Triangle);
             let bgr_img = dyn_img.to_rgb8();
