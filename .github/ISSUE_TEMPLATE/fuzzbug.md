@@ -8,7 +8,17 @@ assignees: ''
 
 Thanks for filing an issue! Please fill out the TODOs below, and change `<target>` in the title to the corresponding fuzzing target.
 
-TODO: add link to an external bug report, if there is one, such as from OSS-Fuzz
+<!-- TODO: add link to an external bug report, if there is one, such as from OSS-Fuzz -->
+
+<details>
+<summary>Test case input</summary>
+
+<!-- Please base64-encode the input that libFuzzer generated, and paste it in the code-block below -->
+```
+TODO_paste_the_base64_encoded_input_here
+```
+
+</details>
 
 <details>
 <summary>Stack trace or other relevant details</summary>
@@ -17,16 +27,6 @@ TODO: add link to an external bug report, if there is one, such as from OSS-Fuzz
 
 ```
 TODO_paste_the_report_here
-```
-
-</details>
-
-<details>
-<summary>Test case input</summary>
-
-<!-- Please base64-encode the input that libFuzzer generated, and paste it in the code-block below -->
-```
-TODO_paste_the_base64_encoded_input_here
 ```
 
 </details>
