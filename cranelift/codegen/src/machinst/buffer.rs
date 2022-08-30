@@ -1620,7 +1620,7 @@ impl<I: VCodeInst> MachTextSectionBuilder<I> {
 }
 
 impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
-    fn append(&mut self, named: bool, func: &[u8], align: Option<u32>) -> u64 {
+    fn append(&mut self, named: bool, func: &[u8], align: u32) -> u64 {
         // Conditionally emit an island if it's necessary to resolve jumps
         // between functions which are too far away.
         let size = func.len() as u32;
@@ -1628,7 +1628,7 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
             self.buf.emit_island_maybe_forced(self.force_veneers, size);
         }
 
-        self.buf.align_to(align.unwrap_or(I::LabelUse::ALIGN));
+        self.buf.align_to(align);
         let pos = self.buf.cur_offset();
         if named {
             self.buf
