@@ -11,7 +11,7 @@ block0:
 
 ; block0:
 ;   movz x2, #1
-;   movk x2, #1, LSL #48
+;   movk x2, x2, #1, LSL #48
 ;   dup v0.2d, x2
 ;   ret
 
