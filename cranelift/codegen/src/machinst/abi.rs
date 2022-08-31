@@ -1914,14 +1914,14 @@ impl<M: ABIMachineSpec> Caller<M> {
     /// Emit code to pre-adjust the stack, prior to argument copies and call.
     pub fn emit_stack_pre_adjust(&self, ctx: &mut Lower<M::I>) {
         let off =
-            ctx.sigs[self.sig].sized_stack_arg_space + ctx.sigs[self.sig].sized_stack_ret_space;
+            ctx.sigs()[self.sig].sized_stack_arg_space + ctx.sigs()[self.sig].sized_stack_ret_space;
         adjust_stack_and_nominal_sp::<M>(ctx, off as i32, /* is_sub = */ true)
     }
 
     /// Emit code to post-adjust the satck, after call return and return-value copies.
     pub fn emit_stack_post_adjust(&self, ctx: &mut Lower<M::I>) {
         let off =
-            ctx.sigs[self.sig].sized_stack_arg_space + ctx.sigs[self.sig].sized_stack_ret_space;
+            ctx.sigs()[self.sig].sized_stack_arg_space + ctx.sigs()[self.sig].sized_stack_ret_space;
         adjust_stack_and_nominal_sp::<M>(ctx, off as i32, /* is_sub = */ false)
     }
 
@@ -1936,7 +1936,7 @@ impl<M: ABIMachineSpec> Caller<M> {
         idx: usize,
         from_regs: ValueRegs<Reg>,
     ) {
-        match &ctx.sigs[self.sig].args[idx] {
+        match &ctx.sigs()[self.sig].args[idx] {
             &ABIArg::Slots { .. } => {}
             &ABIArg::StructArg { offset, size, .. } => {
                 let src_ptr = from_regs.only_reg().unwrap();
@@ -1951,7 +1951,7 @@ impl<M: ABIMachineSpec> Caller<M> {
                 // safe w.r.t. clobbers: we have not yet filled in any other
                 // arg regs.
                 let memcpy_call_conv =
-                    isa::CallConv::for_libcall(&self.flags, ctx.sigs[self.sig].call_conv);
+                    isa::CallConv::for_libcall(&self.flags, ctx.sigs()[self.sig].call_conv);
                 for insn in
                     M::gen_memcpy(memcpy_call_conv, dst_ptr.to_reg(), src_ptr, size as usize)
                         .into_iter()
@@ -1976,7 +1976,7 @@ impl<M: ABIMachineSpec> Caller<M> {
         let mut insts = smallvec![];
         let word_rc = M::word_reg_class();
         let word_bits = M::word_bits() as usize;
-        match &ctx.sigs[self.sig].args[idx] {
+        match &ctx.sigs()[self.sig].args[idx] {
             &ABIArg::Slots { ref slots, .. } => {
                 assert_eq!(from_regs.len(), slots.len());
                 for (slot, from_reg) in slots.iter().zip(from_regs.regs().iter()) {
@@ -1984,7 +1984,7 @@ impl<M: ABIMachineSpec> Caller<M> {
                         &ABIArgSlot::Reg {
                             reg, ty, extension, ..
                         } => {
-                            let ext = M::get_ext_mode(ctx.sigs[self.sig].call_conv, extension);
+                            let ext = M::get_ext_mode(ctx.sigs()[self.sig].call_conv, extension);
                             if ext != ir::ArgumentExtension::None && ty_bits(ty) < word_bits {
                                 assert_eq!(word_rc, reg.class());
                                 let signed = match ext {
@@ -2014,7 +2014,7 @@ impl<M: ABIMachineSpec> Caller<M> {
                             ..
                         } => {
                             let mut ty = ty;
-                            let ext = M::get_ext_mode(ctx.sigs[self.sig].call_conv, extension);
+                            let ext = M::get_ext_mode(ctx.sigs()[self.sig].call_conv, extension);
                             if ext != ir::ArgumentExtension::None && ty_bits(ty) < word_bits {
                                 assert_eq!(word_rc, from_reg.class());
                                 let signed = match ext {
@@ -2060,7 +2060,7 @@ impl<M: ABIMachineSpec> Caller<M> {
         into_regs: ValueRegs<Writable<Reg>>,
     ) -> SmallInstVec<M::I> {
         let mut insts = smallvec![];
-        match &ctx.sigs[self.sig].rets[idx] {
+        match &ctx.sigs()[self.sig].rets[idx] {
             &ABIArg::Slots { ref slots, .. } => {
                 assert_eq!(into_regs.len(), slots.len());
                 for (slot, into_reg) in slots.iter().zip(into_regs.regs().iter()) {
@@ -2071,7 +2071,7 @@ impl<M: ABIMachineSpec> Caller<M> {
                             insts.push(M::gen_move(*into_reg, Reg::from(reg), ty));
                         }
                         &ABIArgSlot::Stack { offset, ty, .. } => {
-                            let ret_area_base = ctx.sigs[self.sig].sized_stack_arg_space;
+                            let ret_area_base = ctx.sigs()[self.sig].sized_stack_arg_space;
                             insts.push(M::gen_load_stack(
                                 StackAMode::SPOffset(offset + ret_area_base, ty),
                                 *into_reg,
@@ -2110,9 +2110,9 @@ impl<M: ABIMachineSpec> Caller<M> {
             mem::replace(&mut self.defs, Default::default()),
         );
         let word_type = M::word_type();
-        if let Some(i) = ctx.sigs[self.sig].stack_ret_arg {
+        if let Some(i) = ctx.sigs()[self.sig].stack_ret_arg {
             let rd = ctx.alloc_tmp(word_type).only_reg().unwrap();
-            let ret_area_base = ctx.sigs[self.sig].sized_stack_arg_space;
+            let ret_area_base = ctx.sigs()[self.sig].sized_stack_arg_space;
             ctx.emit(M::gen_get_stack_addr(
                 StackAMode::SPOffset(ret_area_base, I8),
                 rd,
@@ -2130,7 +2130,7 @@ impl<M: ABIMachineSpec> Caller<M> {
             self.clobbers,
             self.opcode,
             tmp,
-            ctx.sigs[self.sig].call_conv,
+            ctx.sigs()[self.sig].call_conv,
             self.caller_conv,
         )
         .into_iter()

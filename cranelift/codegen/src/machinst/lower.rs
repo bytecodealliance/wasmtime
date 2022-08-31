@@ -200,9 +200,6 @@ pub struct Lower<'func, I: VCodeInst> {
 
     /// The register to use for GetPinnedReg, if any, on this architecture.
     pinned_reg: Option<Reg>,
-
-    /// The ABI signatures used when lowering this function.
-    pub(crate) sigs: SigSet,
 }
 
 /// How is a value used in the IR?
@@ -351,6 +348,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     ) -> CodegenResult<Lower<'func, I>> {
         let constants = VCodeConstants::with_capacity(f.dfg.constants.len());
         let mut vcode = VCodeBuilder::new(
+            sigs,
             abi,
             emit_info,
             block_order,
@@ -445,8 +443,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             cur_inst: None,
             ir_insts: vec![],
             pinned_reg: None,
-            sigs,
         })
+    }
+
+    pub fn sigs(&self) -> &SigSet {
+        self.vcode.sigs()
+    }
+
+    pub fn sigs_mut(&mut self) -> &mut SigSet {
+        self.vcode.sigs_mut()
     }
 
     /// Pre-analysis: compute `value_ir_uses`. See comment on
@@ -578,7 +583,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 for insn in self
                     .vcode
                     .abi()
-                    .gen_copy_arg_to_regs(&self.sigs, i, regs)
+                    .gen_copy_arg_to_regs(self.sigs(), i, regs)
                     .into_iter()
                 {
                     self.emit(insn);
@@ -602,7 +607,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     ));
                 }
             }
-            if let Some(insn) = self.vcode.abi().gen_retval_area_setup(&self.sigs) {
+            if let Some(insn) = self.vcode.abi().gen_retval_area_setup(self.sigs()) {
                 self.emit(insn);
             }
         }
@@ -615,13 +620,13 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for insn in self
                 .vcode
                 .abi()
-                .gen_copy_regs_to_retval(&self.sigs, i, regs)
+                .gen_copy_regs_to_retval(self.sigs(), i, regs)
                 .into_iter()
             {
                 self.emit(insn);
             }
         }
-        let inst = self.vcode.abi().gen_ret(&self.sigs);
+        let inst = self.vcode.abi().gen_ret(self.sigs());
         self.emit(inst);
 
         // Hack: generate a virtual instruction that uses vmctx in
@@ -908,21 +913,18 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     /// Lower the function.
-    pub fn lower<B: LowerBackend<MInst = I>>(
-        mut self,
-        backend: &B,
-    ) -> CodegenResult<(VCode<I>, SigSet)> {
+    pub fn lower<B: LowerBackend<MInst = I>>(mut self, backend: &B) -> CodegenResult<VCode<I>> {
         trace!("about to lower function: {:?}", self.f);
 
         // Initialize the ABI object, giving it temps if requested.
         let temps = self
             .vcode
             .abi()
-            .temps_needed(&self.sigs)
+            .temps_needed(self.sigs())
             .into_iter()
             .map(|temp_ty| self.alloc_tmp(temp_ty).only_reg().unwrap())
             .collect::<Vec<_>>();
-        self.vcode.abi_mut().init(&self.sigs, temps);
+        self.vcode.init_abi(temps);
 
         // Get the pinned reg here (we only parameterize this function on `B`,
         // not the whole `Lower` impl).
@@ -1007,7 +1009,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let vcode = self.vcode.build();
         trace!("built vcode: {:?}", vcode);
 
-        Ok((vcode, self.sigs))
+        Ok(vcode)
     }
 }
 

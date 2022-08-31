@@ -90,16 +90,16 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     isle_prelude_methods!();
 
     fn abi_sig(&mut self, sig_ref: SigRef) -> Sig {
-        self.lower_ctx.sigs.abi_sig_for_sig_ref(sig_ref)
+        self.lower_ctx.sigs().abi_sig_for_sig_ref(sig_ref)
     }
 
     fn abi_lane_order(&mut self, abi: &Sig) -> LaneOrder {
-        lane_order_for_call_conv(self.lower_ctx.sigs[*abi].call_conv())
+        lane_order_for_call_conv(self.lower_ctx.sigs()[*abi].call_conv())
     }
 
     fn abi_accumulate_outgoing_args_size(&mut self, abi: &Sig) -> Unit {
-        let off = self.lower_ctx.sigs[*abi].sized_stack_arg_space()
-            + self.lower_ctx.sigs[*abi].sized_stack_ret_space();
+        let off = self.lower_ctx.sigs()[*abi].sized_stack_arg_space()
+            + self.lower_ctx.sigs()[*abi].sized_stack_ret_space();
         self.lower_ctx
             .abi_mut()
             .accumulate_outgoing_args_size(off as u32);
@@ -107,30 +107,30 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     fn abi_call_info(&mut self, abi: &Sig, name: ExternalName, opcode: &Opcode) -> BoxCallInfo {
         let (uses, defs, clobbers) =
-            self.lower_ctx.sigs[*abi].call_uses_defs_clobbers::<S390xMachineDeps>();
+            self.lower_ctx.sigs()[*abi].call_uses_defs_clobbers::<S390xMachineDeps>();
         Box::new(CallInfo {
             dest: name.clone(),
             uses,
             defs,
             clobbers,
             opcode: *opcode,
-            caller_callconv: self.lower_ctx.abi().call_conv(&self.lower_ctx.sigs),
-            callee_callconv: self.lower_ctx.sigs[*abi].call_conv(),
+            caller_callconv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
+            callee_callconv: self.lower_ctx.sigs()[*abi].call_conv(),
             tls_symbol: None,
         })
     }
 
     fn abi_call_ind_info(&mut self, abi: &Sig, target: Reg, opcode: &Opcode) -> BoxCallIndInfo {
         let (uses, defs, clobbers) =
-            self.lower_ctx.sigs[*abi].call_uses_defs_clobbers::<S390xMachineDeps>();
+            self.lower_ctx.sigs()[*abi].call_uses_defs_clobbers::<S390xMachineDeps>();
         Box::new(CallIndInfo {
             rn: target,
             uses,
             defs,
             clobbers,
             opcode: *opcode,
-            caller_callconv: self.lower_ctx.abi().call_conv(&self.lower_ctx.sigs),
-            callee_callconv: self.lower_ctx.sigs[*abi].call_conv(),
+            caller_callconv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
+            callee_callconv: self.lower_ctx.sigs()[*abi].call_conv(),
         })
     }
 
@@ -156,7 +156,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     }
 
     fn lib_call_info(&mut self, info: &LibCallInfo) -> BoxCallInfo {
-        let caller_callconv = self.lower_ctx.abi().call_conv(&self.lower_ctx.sigs);
+        let caller_callconv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
         let callee_callconv = CallConv::for_libcall(&self.flags, caller_callconv);
 
         // Uses and defs are defined by the particular libcall.
@@ -406,7 +406,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     #[inline]
     fn lane_order(&mut self) -> Option<LaneOrder> {
         Some(lane_order_for_call_conv(
-            self.lower_ctx.abi().call_conv(&self.lower_ctx.sigs),
+            self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
         ))
     }
 

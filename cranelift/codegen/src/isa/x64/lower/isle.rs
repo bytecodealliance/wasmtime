@@ -720,7 +720,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     fn libcall_1(&mut self, libcall: &LibCall, a: Reg) -> Reg {
-        let call_conv = self.lower_ctx.abi().call_conv(&self.lower_ctx.sigs);
+        let call_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
         let ret_ty = libcall.signature(call_conv).returns[0].value_type;
         let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
 
@@ -738,7 +738,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     fn libcall_3(&mut self, libcall: &LibCall, a: Reg, b: Reg, c: Reg) -> Reg {
-        let call_conv = self.lower_ctx.abi().call_conv(&self.lower_ctx.sigs);
+        let call_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
         let ret_ty = libcall.signature(call_conv).returns[0].value_type;
         let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
 

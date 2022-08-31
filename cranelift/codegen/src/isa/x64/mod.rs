@@ -49,7 +49,7 @@ impl X64Backend {
         &self,
         func: &Function,
         flags: Flags,
-    ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output, SigSet)> {
+    ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
         let emit_info = EmitInfo::new(flags.clone(), self.x64_flags.clone());
@@ -66,14 +66,9 @@ impl TargetIsa for X64Backend {
         want_disasm: bool,
     ) -> CodegenResult<CompiledCodeStencil> {
         let flags = self.flags();
-        let (vcode, regalloc_result, sigs) = self.compile_vcode(func, flags.clone())?;
+        let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
 
-        let emit_result = vcode.emit(
-            &sigs,
-            &regalloc_result,
-            want_disasm,
-            flags.machine_code_cfg_info(),
-        );
+        let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer.finish();

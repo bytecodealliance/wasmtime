@@ -939,27 +939,27 @@ macro_rules! isle_prelude_methods {
         }
 
         fn abi_num_args(&mut self, abi: &Sig) -> usize {
-            self.lower_ctx.sigs[*abi].num_args()
+            self.lower_ctx.sigs()[*abi].num_args()
         }
 
         fn abi_get_arg(&mut self, abi: &Sig, idx: usize) -> ABIArg {
-            self.lower_ctx.sigs[*abi].get_arg(idx)
+            self.lower_ctx.sigs()[*abi].get_arg(idx)
         }
 
         fn abi_num_rets(&mut self, abi: &Sig) -> usize {
-            self.lower_ctx.sigs[*abi].num_rets()
+            self.lower_ctx.sigs()[*abi].num_rets()
         }
 
         fn abi_get_ret(&mut self, abi: &Sig, idx: usize) -> ABIArg {
-            self.lower_ctx.sigs[*abi].get_ret(idx)
+            self.lower_ctx.sigs()[*abi].get_ret(idx)
         }
 
         fn abi_ret_arg(&mut self, abi: &Sig) -> Option<ABIArg> {
-            self.lower_ctx.sigs[*abi].get_ret_arg()
+            self.lower_ctx.sigs()[*abi].get_ret_arg()
         }
 
         fn abi_no_ret_arg(&mut self, abi: &Sig) -> Option<()> {
-            if let Some(_) = self.lower_ctx.sigs[*abi].get_ret_arg() {
+            if let Some(_) = self.lower_ctx.sigs()[*abi].get_ret_arg() {
                 None
             } else {
                 Some(())
@@ -967,11 +967,11 @@ macro_rules! isle_prelude_methods {
         }
 
         fn abi_sized_stack_arg_space(&mut self, abi: &Sig) -> i64 {
-            self.lower_ctx.sigs[*abi].sized_stack_arg_space()
+            self.lower_ctx.sigs()[*abi].sized_stack_arg_space()
         }
 
         fn abi_sized_stack_ret_space(&mut self, abi: &Sig) -> i64 {
-            self.lower_ctx.sigs[*abi].sized_stack_ret_space()
+            self.lower_ctx.sigs()[*abi].sized_stack_ret_space()
         }
 
         fn abi_arg_only_slot(&mut self, arg: &ABIArg) -> Option<ABIArgSlot> {
@@ -1094,12 +1094,12 @@ macro_rules! isle_prelude_caller_methods {
             dist: RelocDistance,
             args @ (inputs, off): ValueSlice,
         ) -> InstOutput {
-            let caller_conv = self.lower_ctx.abi().call_conv(&self.lower_ctx.sigs);
+            let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
             let sig = &self.lower_ctx.dfg().signatures[sig_ref];
             let num_rets = sig.returns.len();
-            let abi = self.lower_ctx.sigs.abi_sig_for_sig_ref(sig_ref);
+            let abi = self.lower_ctx.sigs().abi_sig_for_sig_ref(sig_ref);
             let caller = <$abicaller>::from_func(
-                &self.lower_ctx.sigs,
+                self.lower_ctx.sigs(),
                 sig_ref,
                 &extname,
                 dist,
@@ -1122,13 +1122,13 @@ macro_rules! isle_prelude_caller_methods {
             val: Value,
             args @ (inputs, off): ValueSlice,
         ) -> InstOutput {
-            let caller_conv = self.lower_ctx.abi().call_conv(&self.lower_ctx.sigs);
+            let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
             let ptr = self.put_in_reg(val);
             let sig = &self.lower_ctx.dfg().signatures[sig_ref];
             let num_rets = sig.returns.len();
-            let abi = self.lower_ctx.sigs.abi_sig_for_sig_ref(sig_ref);
+            let abi = self.lower_ctx.sigs().abi_sig_for_sig_ref(sig_ref);
             let caller = <$abicaller>::from_ptr(
-                &self.lower_ctx.sigs,
+                self.lower_ctx.sigs(),
                 sig_ref,
                 ptr,
                 Opcode::CallIndirect,
@@ -1162,7 +1162,7 @@ macro_rules! isle_prelude_method_helpers {
         ) -> InstOutput {
             caller.emit_stack_pre_adjust(self.lower_ctx);
 
-            let num_args = self.lower_ctx.sigs[abi].num_args();
+            let num_args = self.lower_ctx.sigs()[abi].num_args();
 
             assert_eq!(
                 inputs.len(&self.lower_ctx.dfg().value_lists) - off,
@@ -1187,7 +1187,7 @@ macro_rules! isle_prelude_method_helpers {
 
             let mut outputs = InstOutput::new();
             for i in 0..num_rets {
-                let ret = self.lower_ctx.sigs[abi].get_ret(i);
+                let ret = self.lower_ctx.sigs()[abi].get_ret(i);
                 let retval_regs = self.abi_arg_slot_regs(&ret).unwrap();
                 for inst in caller.gen_copy_retval_to_regs(self.lower_ctx, i, retval_regs.clone()) {
                     self.lower_ctx.emit(inst);

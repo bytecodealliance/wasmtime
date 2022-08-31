@@ -178,6 +178,8 @@ pub struct VCode<I: VCodeInst> {
 
     /// Value labels for debuginfo attached to vregs.
     debug_value_labels: Vec<(VReg, InsnIndex, InsnIndex, u32)>,
+
+    sigs: SigSet,
 }
 
 /// The result of `VCode::emit`. Contains all information computed
@@ -279,13 +281,14 @@ pub enum VCodeBuildDirection {
 impl<I: VCodeInst> VCodeBuilder<I> {
     /// Create a new VCodeBuilder.
     pub fn new(
+        sigs: SigSet,
         abi: Callee<I::ABIMachineSpec>,
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
         direction: VCodeBuildDirection,
     ) -> VCodeBuilder<I> {
-        let vcode = VCode::new(abi, emit_info, block_order, constants);
+        let vcode = VCode::new(sigs, abi, emit_info, block_order, constants);
 
         VCodeBuilder {
             vcode,
@@ -299,6 +302,10 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         }
     }
 
+    pub fn init_abi(&mut self, temps: Vec<Writable<Reg>>) {
+        self.vcode.abi.init(&self.vcode.sigs, temps);
+    }
+
     /// Access the ABI object.
     pub fn abi(&self) -> &Callee<I::ABIMachineSpec> {
         &self.vcode.abi
@@ -307,6 +314,14 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     /// Access the ABI object.
     pub fn abi_mut(&mut self) -> &mut Callee<I::ABIMachineSpec> {
         &mut self.vcode.abi
+    }
+
+    pub fn sigs(&self) -> &SigSet {
+        &self.vcode.sigs
+    }
+
+    pub fn sigs_mut(&mut self) -> &mut SigSet {
+        &mut self.vcode.sigs
     }
 
     /// Access to the BlockLoweringOrder object.
@@ -630,6 +645,7 @@ fn is_reftype(ty: Type) -> bool {
 impl<I: VCodeInst> VCode<I> {
     /// New empty VCode.
     fn new(
+        sigs: SigSet,
         abi: Callee<I::ABIMachineSpec>,
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
@@ -637,6 +653,7 @@ impl<I: VCodeInst> VCode<I> {
     ) -> VCode<I> {
         let n_blocks = block_order.lowered_order().len();
         VCode {
+            sigs,
             vreg_types: vec![],
             have_ref_values: false,
             insts: Vec::with_capacity(10 * n_blocks),
@@ -748,7 +765,6 @@ impl<I: VCodeInst> VCode<I> {
     /// is consumed by the emission process.
     pub fn emit(
         mut self,
-        sigs: &SigSet,
         regalloc: &regalloc2::Output,
         want_disasm: bool,
         want_metadata: bool,
@@ -796,7 +812,7 @@ impl<I: VCodeInst> VCode<I> {
         // We need to generate the prologue in order to get the ABI
         // object into the right state first. We'll emit it when we
         // hit the right block below.
-        let prologue_insts = self.abi.gen_prologue(sigs);
+        let prologue_insts = self.abi.gen_prologue(&self.sigs);
 
         // Emit blocks.
         let mut cur_srcloc = None;

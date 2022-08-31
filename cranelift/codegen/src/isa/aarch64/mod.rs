@@ -58,7 +58,7 @@ impl AArch64Backend {
         &self,
         func: &Function,
         flags: shared_settings::Flags,
-    ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output, SigSet)> {
+    ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(flags.clone());
         let sigs = SigSet::new::<abi::AArch64MachineDeps>(func, &self.flags)?;
         let abi = abi::AArch64Callee::new(func, self, &self.isa_flags, &sigs)?;
@@ -73,10 +73,9 @@ impl TargetIsa for AArch64Backend {
         want_disasm: bool,
     ) -> CodegenResult<CompiledCodeStencil> {
         let flags = self.flags();
-        let (vcode, regalloc_result, sigs) = self.compile_vcode(func, flags.clone())?;
+        let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
 
         let emit_result = vcode.emit(
-            &sigs,
             &regalloc_result,
             want_disasm,
             flags.machine_code_cfg_info(),
