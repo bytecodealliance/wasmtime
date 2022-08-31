@@ -10,6 +10,16 @@ Well documented invariants, good assertions for those invariants in unsafe code,
 and tested with MIRI to boot. LGTM.
 """
 
+[[audits.atty]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.2.14"
+notes = """
+Contains only unsafe code for what this crate's purpose is and only accesses
+the environment's terminal information when asked. Does its stated purpose and
+no more.
+"""
+
 [[audits.backtrace]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -21,6 +31,18 @@ who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
 version = "3.9.1"
 notes = "I am the author of this crate."
+
+[[audits.cap-rand]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.25.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.cap-time-ext]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.25.0"
+notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.cc]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -34,6 +56,28 @@ criteria = "safe-to-deploy"
 version = "1.0.0"
 notes = "I am the author of this crate."
 
+[[audits.file-per-thread-logger]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.1.5"
+notes = """
+Contains no unsafe code but does write log files to the filesystem. Log files
+are only created when requested by the application, however, and otherwise
+only does its stated purpose.
+"""
+
+[[audits.heck]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.4.0"
+notes = "Contains `forbid_unsafe` and only uses `std::fmt` from the standard library. Otherwise only contains string manipulation."
+
+[[audits.is-terminal]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.3.0"
+notes = "Contains only unsafe code for interacting with the crate's intended purpose."
+
 [[audits.libm]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -42,6 +86,16 @@ notes = """
 This diff primarily fixes a few issues with the `fma`-related functions,
 but also contains some other minor fixes as well. Everything looks A-OK and
 as expected.
+"""
+
+[[audits.memfd]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.6.1"
+notes = """
+Does not interact with the system in any way than otherwise instructed to.
+Contains unsafe blocks but are encapsulated and required for the operation at
+hand.
 """
 
 [[audits.regalloc2]]
