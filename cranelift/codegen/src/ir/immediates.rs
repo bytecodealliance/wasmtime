@@ -473,7 +473,7 @@ impl FromStr for Offset32 {
 /// containing the bit pattern.
 ///
 /// All bit patterns are allowed.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 #[repr(C)]
 pub struct Ieee32(u32);
@@ -482,7 +482,7 @@ pub struct Ieee32(u32);
 /// containing the bit pattern.
 ///
 /// All bit patterns are allowed.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 #[repr(C)]
 pub struct Ieee64(u64);
@@ -839,6 +839,12 @@ impl PartialOrd for Ieee32 {
     }
 }
 
+impl PartialEq<Ieee32> for Ieee32 {
+    fn eq(&self, other: &Ieee32) -> bool {
+        self.as_f32().eq(&other.as_f32())
+    }
+}
+
 impl Display for Ieee32 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let bits: u32 = self.0;
@@ -1022,6 +1028,12 @@ impl Ieee64 {
 impl PartialOrd for Ieee64 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.as_f64().partial_cmp(&other.as_f64())
+    }
+}
+
+impl PartialEq<Ieee64> for Ieee64 {
+    fn eq(&self, other: &Ieee64) -> bool {
+        self.as_f64().eq(&other.as_f64())
     }
 }
 

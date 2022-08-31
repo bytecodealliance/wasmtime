@@ -1,4 +1,4 @@
-; test interpret
+test interpret
 test run
 target x86_64
 target aarch64
