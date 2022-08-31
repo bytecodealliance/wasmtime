@@ -64,24 +64,13 @@
        ;; A synthetic sequence to implement the right inline checks for
        ;; remainder and division, assuming the dividend is in %rax.
        ;;
-       ;; Puts the result back into %rax if is_div, %rdx if !is_div, to mimic
-       ;; what the div instruction does.
-       ;;
        ;; The generated code sequence is described in the emit's function match
        ;; arm for this instruction.
-       ;;
-       ;; Note: %rdx is marked as modified by this instruction, to avoid an
-       ;; early clobber problem with the temporary and divisor registers. Make
-       ;; sure to zero %rdx right before this instruction, or you might run into
-       ;; regalloc failures where %rdx is live before its first def!
        (CheckedDivOrRemSeq (kind DivOrRemKind)
                            (size OperandSize)
                            (dividend_lo Gpr)
                            (dividend_hi Gpr)
-                           ;; The divisor operand. Note it's marked as modified
-                           ;; so that it gets assigned a register different from
-                           ;; the temporary.
-                           (divisor WritableGpr)
+                           (divisor Gpr)
                            (dst_quotient WritableGpr)
                            (dst_remainder WritableGpr)
                            (tmp OptionWritableGpr))
@@ -205,10 +194,19 @@
                    (src3 XmmMem)
                    (dst WritableXmm))
 
-       ;; XMM (scalar or vector) binary op that relies on the EVEX prefix.
+       ;; XMM (scalar or vector) binary op that relies on the EVEX
+       ;; prefix. Takes two inputs.
        (XmmRmREvex (op Avx512Opcode)
                    (src1 XmmMem)
                    (src2 Xmm)
+                   (dst WritableXmm))
+
+       ;; XMM (scalar or vector) binary op that relies on the EVEX
+       ;; prefix. Takes three inputs.
+       (XmmRmREvex3 (op Avx512Opcode)
+                   (src1 XmmMem)
+                   (src2 Xmm)
+                   (src3 Xmm)
                    (dst WritableXmm))
 
        ;; XMM (scalar or vector) unary op: mov between XMM registers (32 64)
@@ -255,13 +253,7 @@
 
        ;; Converts an unsigned int64 to a float32/float64.
        (CvtUint64ToFloatSeq (dst_size OperandSize) ;; 4 or 8
-                            ;; A copy of the source register, fed by
-                            ;; lowering. It is marked as modified during
-                            ;; register allocation to make sure that the
-                            ;; temporary registers differ from the src register,
-                            ;; since both registers are live at the same time in
-                            ;; the generated code sequence.
-                            (src WritableGpr)
+                            (src Gpr)
                             (dst WritableXmm)
                             (tmp_gpr1 WritableGpr)
                             (tmp_gpr2 WritableGpr))
@@ -270,13 +262,7 @@
        (CvtFloatToSintSeq (dst_size OperandSize)
                           (src_size OperandSize)
                           (is_saturating bool)
-                          ;; A copy of the source register, fed by
-                          ;; lowering. It is marked as modified during
-                          ;; register allocation to make sure that the
-                          ;; temporary registers differ from the src register,
-                          ;; since both registers are live at the same time in
-                          ;; the generated code sequence.
-                          (src WritableXmm)
+                          (src Xmm)
                           (dst WritableGpr)
                           (tmp_gpr WritableGpr)
                           (tmp_xmm WritableXmm))
@@ -285,13 +271,7 @@
        (CvtFloatToUintSeq (dst_size OperandSize)
                           (src_size OperandSize)
                           (is_saturating bool)
-                          ;; A copy of the source register, fed by
-                          ;; lowering. It is marked as modified during
-                          ;; register allocation to make sure that the
-                          ;; temporary registers differ from the src register,
-                          ;; since both registers are live at the same time in
-                          ;; the generated code sequence.
-                          (src WritableXmm)
+                          (src Xmm)
                           (dst WritableGpr)
                           (tmp_gpr WritableGpr)
                           (tmp_xmm WritableXmm))
@@ -2769,11 +2749,11 @@
 (decl x64_vpermi2b (Xmm Xmm Xmm) Xmm)
 (rule (x64_vpermi2b src1 src2 src3)
       (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (gen_move $I8X16 dst src3)))
-            (_ Unit (emit (MInst.XmmRmREvex (Avx512Opcode.Vpermi2b)
-                                            src1
-                                            src2
-                                            dst))))
+            (_ Unit (emit (MInst.XmmRmREvex3 (Avx512Opcode.Vpermi2b)
+                                             src1
+                                             src2
+                                             src3
+                                             dst))))
         dst))
 
 ;; Helper for creating `MInst.MulHi` instructions.
@@ -3214,12 +3194,10 @@
 (decl cvt_u64_to_float_seq (Type Gpr) Xmm)
 (rule (cvt_u64_to_float_seq ty src)
       (let ((size OperandSize (raw_operand_size_of_type ty))
-            (src_copy WritableGpr (temp_writable_gpr))
             (dst WritableXmm (temp_writable_xmm))
             (tmp_gpr1 WritableGpr (temp_writable_gpr))
             (tmp_gpr2 WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (gen_move $I64 src_copy src)))
-            (_ Unit (emit (MInst.CvtUint64ToFloatSeq size src_copy dst tmp_gpr1 tmp_gpr2))))
+            (_ Unit (emit (MInst.CvtUint64ToFloatSeq size src dst tmp_gpr1 tmp_gpr2))))
         dst))
 
 (decl cvt_float_to_uint_seq (Type Value bool) Gpr)
@@ -3227,13 +3205,10 @@
       (let ((out_size OperandSize (raw_operand_size_of_type out_ty))
             (src_size OperandSize (raw_operand_size_of_type src_ty))
 
-            (tmp WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (gen_move src_ty tmp src)))
-
             (dst WritableGpr (temp_writable_gpr))
             (tmp_xmm WritableXmm (temp_writable_xmm))
             (tmp_gpr WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.CvtFloatToUintSeq out_size src_size is_saturating tmp dst tmp_gpr tmp_xmm))))
+            (_ Unit (emit (MInst.CvtFloatToUintSeq out_size src_size is_saturating src dst tmp_gpr tmp_xmm))))
         dst))
 
 (decl cvt_float_to_sint_seq (Type Value bool) Gpr)
@@ -3241,13 +3216,10 @@
       (let ((out_size OperandSize (raw_operand_size_of_type out_ty))
             (src_size OperandSize (raw_operand_size_of_type src_ty))
 
-            (tmp WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (gen_move src_ty tmp src)))
-
             (dst WritableGpr (temp_writable_gpr))
             (tmp_xmm WritableXmm (temp_writable_xmm))
             (tmp_gpr WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.CvtFloatToSintSeq out_size src_size is_saturating tmp dst tmp_gpr tmp_xmm))))
+            (_ Unit (emit (MInst.CvtFloatToSintSeq out_size src_size is_saturating src dst tmp_gpr tmp_xmm))))
         dst))
 
 (decl fcvt_uint_mask_const () VCodeConstant)
@@ -3395,10 +3367,6 @@
       (let (;; This temporary is used as a signed integer of 64-bits (to hold
             ;; addresses).
             (tmp1 WritableGpr (temp_writable_gpr))
-
-            ;; Put a zero in tmp1. This is needed for Spectre mitigations (a
-            ;; CMOV that zeroes the index on misspeculation).
-            (_ Unit (emit (MInst.Imm (OperandSize.Size32) 0 tmp1)))
 
             ;; This temporary is used as a signed integer of 32-bits (for the
             ;; wasm-table index) and then 64-bits (address addend). The small

@@ -131,7 +131,9 @@ impl Inst {
             | Inst::XmmToGpr { op, .. }
             | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
 
-            Inst::XmmUnaryRmREvex { op, .. } | Inst::XmmRmREvex { op, .. } => op.available_from(),
+            Inst::XmmUnaryRmREvex { op, .. }
+            | Inst::XmmRmREvex { op, .. }
+            | Inst::XmmRmREvex3 { op, .. } => op.available_from(),
 
             Inst::XmmRmRVex { op, .. } => op.available_from(),
         }
@@ -195,47 +197,55 @@ impl Inst {
         }
     }
 
-    pub(crate) fn div(size: OperandSize, signed: bool, divisor: RegMem) -> Inst {
+    pub(crate) fn div(
+        size: OperandSize,
+        signed: bool,
+        divisor: RegMem,
+        dividend_lo: Gpr,
+        dividend_hi: Gpr,
+        dst_quotient: WritableGpr,
+        dst_remainder: WritableGpr,
+    ) -> Inst {
         divisor.assert_regclass_is(RegClass::Int);
         Inst::Div {
             size,
             signed,
             divisor: GprMem::new(divisor).unwrap(),
-            dividend_lo: Gpr::new(regs::rax()).unwrap(),
-            dividend_hi: Gpr::new(regs::rdx()).unwrap(),
-            dst_quotient: WritableGpr::from_reg(Gpr::new(regs::rax()).unwrap()),
-            dst_remainder: Writable::from_reg(Gpr::new(regs::rdx()).unwrap()),
+            dividend_lo,
+            dividend_hi,
+            dst_quotient,
+            dst_remainder,
         }
     }
 
     pub(crate) fn checked_div_or_rem_seq(
         kind: DivOrRemKind,
         size: OperandSize,
-        divisor: Writable<Reg>,
+        divisor: Reg,
+        dividend_lo: Gpr,
+        dividend_hi: Gpr,
+        dst_quotient: WritableGpr,
+        dst_remainder: WritableGpr,
         tmp: Option<Writable<Reg>>,
     ) -> Inst {
-        debug_assert!(divisor.to_reg().class() == RegClass::Int);
+        debug_assert!(divisor.class() == RegClass::Int);
         debug_assert!(tmp
             .map(|tmp| tmp.to_reg().class() == RegClass::Int)
             .unwrap_or(true));
         Inst::CheckedDivOrRemSeq {
             kind,
             size,
-            divisor: WritableGpr::from_writable_reg(divisor).unwrap(),
-            dividend_lo: Gpr::new(regs::rax()).unwrap(),
-            dividend_hi: Gpr::new(regs::rdx()).unwrap(),
-            dst_quotient: Writable::from_reg(Gpr::new(regs::rax()).unwrap()),
-            dst_remainder: Writable::from_reg(Gpr::new(regs::rdx()).unwrap()),
+            divisor: Gpr::new(divisor).unwrap(),
+            dividend_lo,
+            dividend_hi,
+            dst_quotient,
+            dst_remainder,
             tmp: tmp.map(|tmp| WritableGpr::from_writable_reg(tmp).unwrap()),
         }
     }
 
-    pub(crate) fn sign_extend_data(size: OperandSize) -> Inst {
-        Inst::SignExtendData {
-            size,
-            src: Gpr::new(regs::rax()).unwrap(),
-            dst: Writable::from_reg(Gpr::new(regs::rdx()).unwrap()),
-        }
+    pub(crate) fn sign_extend_data(size: OperandSize, src: Gpr, dst: WritableGpr) -> Inst {
+        Inst::SignExtendData { size, src, dst }
     }
 
     pub(crate) fn imm(dst_size: OperandSize, simm64: u64, dst: Writable<Reg>) -> Inst {
@@ -415,24 +425,18 @@ impl Inst {
     pub(crate) fn shift_r(
         size: OperandSize,
         kind: ShiftKind,
-        num_bits: Option<u8>,
+        num_bits: Imm8Gpr,
         dst: Writable<Reg>,
     ) -> Inst {
-        debug_assert!(if let Some(num_bits) = num_bits {
-            num_bits < size.to_bits()
-        } else {
-            true
-        });
+        if let Imm8Reg::Imm8 { imm: num_bits } = num_bits.clone().to_imm8_reg() {
+            debug_assert!(num_bits < size.to_bits());
+        }
         debug_assert!(dst.to_reg().class() == RegClass::Int);
         Inst::ShiftR {
             size,
             kind,
             src: Gpr::new(dst.to_reg()).unwrap(),
-            num_bits: Imm8Gpr::new(match num_bits {
-                Some(imm) => Imm8Reg::Imm8 { imm },
-                None => Imm8Reg::Reg { reg: regs::rcx() },
-            })
-            .unwrap(),
+            num_bits,
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
     }
@@ -781,8 +785,11 @@ impl PrettyPrint for Inst {
                 let dividend_lo = pretty_print_reg(dividend_lo.to_reg(), size.to_bytes(), allocs);
                 let dst_quotient =
                     pretty_print_reg(dst_quotient.to_reg().to_reg(), size.to_bytes(), allocs);
-                let dst_remainder =
-                    pretty_print_reg(dst_remainder.to_reg().to_reg(), size.to_bytes(), allocs);
+                let dst_remainder = if size.to_bits() > 8 {
+                    pretty_print_reg(dst_remainder.to_reg().to_reg(), size.to_bytes(), allocs)
+                } else {
+                    "(none)".to_string()
+                };
                 let dividend_hi = if size.to_bits() > 8 {
                     pretty_print_reg(dividend_hi.to_reg(), size.to_bytes(), allocs)
                 } else {
@@ -842,7 +849,7 @@ impl PrettyPrint for Inst {
             } => {
                 let dividend_lo = pretty_print_reg(dividend_lo.to_reg(), size.to_bytes(), allocs);
                 let dividend_hi = pretty_print_reg(dividend_hi.to_reg(), size.to_bytes(), allocs);
-                let divisor = pretty_print_reg(divisor.to_reg().to_reg(), size.to_bytes(), allocs);
+                let divisor = pretty_print_reg(divisor.to_reg(), size.to_bytes(), allocs);
                 let dst_quotient =
                     pretty_print_reg(dst_quotient.to_reg().to_reg(), size.to_bytes(), allocs);
                 let dst_remainder =
@@ -949,10 +956,32 @@ impl PrettyPrint for Inst {
                 dst,
                 ..
             } => {
-                let src2 = pretty_print_reg(src2.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                let src2 = pretty_print_reg(src2.to_reg(), 8, allocs);
                 let src1 = src1.pretty_print(8, allocs);
                 format!("{} {}, {}, {}", ljustify(op.to_string()), src1, src2, dst)
+            }
+
+            Inst::XmmRmREvex3 {
+                op,
+                src1,
+                src2,
+                src3,
+                dst,
+                ..
+            } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                let src2 = pretty_print_reg(src2.to_reg(), 8, allocs);
+                let src3 = pretty_print_reg(src3.to_reg(), 8, allocs);
+                let src1 = src1.pretty_print(8, allocs);
+                format!(
+                    "{} {}, {}, {}, {}",
+                    ljustify(op.to_string()),
+                    src1,
+                    src2,
+                    src3,
+                    dst
+                )
             }
 
             Inst::XmmMinMaxSeq {
@@ -1084,7 +1113,7 @@ impl PrettyPrint for Inst {
                 tmp_gpr2,
                 ..
             } => {
-                let src = pretty_print_reg(src.to_reg().to_reg(), 8, allocs);
+                let src = pretty_print_reg(src.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size.to_bytes(), allocs);
                 let tmp_gpr1 = pretty_print_reg(tmp_gpr1.to_reg().to_reg(), 8, allocs);
                 let tmp_gpr2 = pretty_print_reg(tmp_gpr2.to_reg().to_reg(), 8, allocs);
@@ -1114,7 +1143,7 @@ impl PrettyPrint for Inst {
                 tmp_gpr,
                 is_saturating,
             } => {
-                let src = pretty_print_reg(src.to_reg().to_reg(), src_size.to_bytes(), allocs);
+                let src = pretty_print_reg(src.to_reg(), src_size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size.to_bytes(), allocs);
                 let tmp_gpr = pretty_print_reg(tmp_gpr.to_reg().to_reg(), 8, allocs);
                 let tmp_xmm = pretty_print_reg(tmp_xmm.to_reg().to_reg(), 8, allocs);
@@ -1142,7 +1171,7 @@ impl PrettyPrint for Inst {
                 tmp_xmm,
                 is_saturating,
             } => {
-                let src = pretty_print_reg(src.to_reg().to_reg(), src_size.to_bytes(), allocs);
+                let src = pretty_print_reg(src.to_reg(), src_size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size.to_bytes(), allocs);
                 let tmp_gpr = pretty_print_reg(tmp_gpr.to_reg().to_reg(), 8, allocs);
                 let tmp_xmm = pretty_print_reg(tmp_xmm.to_reg().to_reg(), 8, allocs);
@@ -1424,9 +1453,19 @@ impl PrettyPrint for Inst {
                 not_taken.to_string()
             ),
 
-            Inst::JmpTableSeq { idx, .. } => {
+            Inst::JmpTableSeq {
+                idx, tmp1, tmp2, ..
+            } => {
                 let idx = pretty_print_reg(*idx, 8, allocs);
-                format!("{} {}", ljustify("br_table".into()), idx)
+                let tmp1 = pretty_print_reg(tmp1.to_reg(), 8, allocs);
+                let tmp2 = pretty_print_reg(tmp2.to_reg(), 8, allocs);
+                format!(
+                    "{} {}, {}, {}",
+                    ljustify("br_table".into()),
+                    idx,
+                    tmp1,
+                    tmp2
+                )
             }
 
             Inst::JmpUnknown { target } => {
@@ -1605,8 +1644,8 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         } => {
             collector.reg_fixed_use(dividend_lo.to_reg(), regs::rax());
             collector.reg_fixed_def(dst_quotient.to_writable_reg(), regs::rax());
-            collector.reg_fixed_def(dst_remainder.to_writable_reg(), regs::rdx());
             if size.to_bits() > 8 {
+                collector.reg_fixed_def(dst_remainder.to_writable_reg(), regs::rdx());
                 collector.reg_fixed_use(dividend_hi.to_reg(), regs::rdx());
             }
             divisor.get_operands(collector);
@@ -1634,10 +1673,12 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         } => {
             collector.reg_fixed_use(dividend_lo.to_reg(), regs::rax());
             collector.reg_fixed_use(dividend_hi.to_reg(), regs::rdx());
-            collector.reg_mod(divisor.to_writable_reg());
+            collector.reg_use(divisor.to_reg());
             collector.reg_fixed_def(dst_quotient.to_writable_reg(), regs::rax());
             collector.reg_fixed_def(dst_remainder.to_writable_reg(), regs::rdx());
             if let Some(tmp) = tmp {
+                // Early def so that the temporary register does not
+                // conflict with inputs or outputs.
                 collector.reg_early_def(tmp.to_writable_reg());
             }
         }
@@ -1718,11 +1759,23 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             dst,
             ..
         } => {
-            match *op {
-                Avx512Opcode::Vpermi2b => collector.reg_mod(dst.to_writable_reg()),
-                _ => collector.reg_def(dst.to_writable_reg()),
-            }
+            assert_ne!(*op, Avx512Opcode::Vpermi2b);
+            collector.reg_def(dst.to_writable_reg());
             collector.reg_use(src2.to_reg());
+            src1.get_operands(collector);
+        }
+        Inst::XmmRmREvex3 {
+            op,
+            src1,
+            src2,
+            src3,
+            dst,
+            ..
+        } => {
+            assert_eq!(*op, Avx512Opcode::Vpermi2b);
+            collector.reg_reuse_def(dst.to_writable_reg(), 2); // Reuse `src3`.
+            collector.reg_use(src2.to_reg());
+            collector.reg_use(src3.to_reg());
             src1.get_operands(collector);
         }
         Inst::XmmRmRImm {
@@ -1795,7 +1848,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             tmp_gpr2,
             ..
         } => {
-            collector.reg_mod(src.to_writable_reg());
+            collector.reg_use(src.to_reg());
             collector.reg_def(dst.to_writable_reg());
             collector.reg_early_def(tmp_gpr1.to_writable_reg());
             collector.reg_early_def(tmp_gpr2.to_writable_reg());
@@ -1814,7 +1867,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             tmp_xmm,
             ..
         } => {
-            collector.reg_mod(src.to_writable_reg());
+            collector.reg_use(src.to_reg());
             collector.reg_def(dst.to_writable_reg());
             collector.reg_early_def(tmp_gpr.to_writable_reg());
             collector.reg_early_def(tmp_xmm.to_writable_reg());
@@ -1911,7 +1964,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             ..
         } => {
             collector.reg_use(*idx);
-            collector.reg_mod(*tmp1);
+            collector.reg_early_def(*tmp1);
             collector.reg_early_def(*tmp2);
         }
 
