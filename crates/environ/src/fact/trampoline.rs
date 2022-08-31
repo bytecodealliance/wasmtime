@@ -17,7 +17,7 @@
 
 use crate::component::{
     CanonicalAbiInfo, ComponentTypesBuilder, FlatType, InterfaceType, StringEncoding,
-    TypeEnumIndex, TypeFlagsIndex, TypeInterfaceIndex, TypeOptionIndex, TypeRecordIndex,
+    TypeEnumIndex, TypeFlagsIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
     TypeResultIndex, TypeTupleIndex, TypeUnionIndex, TypeVariantIndex, VariantInfo, FLAG_MAY_ENTER,
     FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
@@ -1723,14 +1723,14 @@ impl Compiler<'_, '_> {
 
     fn translate_list(
         &mut self,
-        src_ty: TypeInterfaceIndex,
+        src_ty: TypeListIndex,
         src: &Source<'_>,
         dst_ty: &InterfaceType,
         dst: &Destination,
     ) {
-        let src_element_ty = &self.types[src_ty];
+        let src_element_ty = &self.types[src_ty].element;
         let dst_element_ty = match dst_ty {
-            InterfaceType::List(r) => &self.types[*r],
+            InterfaceType::List(r) => &self.types[*r].element,
             _ => panic!("expected a list"),
         };
         let src_opts = src.opts();

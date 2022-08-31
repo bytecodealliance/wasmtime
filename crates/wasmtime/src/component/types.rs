@@ -7,9 +7,9 @@ use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, TypeEnumIndex, TypeFlagsIndex,
-    TypeInterfaceIndex, TypeOptionIndex, TypeRecordIndex, TypeResultIndex, TypeTupleIndex,
-    TypeUnionIndex, TypeVariantIndex, VariantInfo,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, TypeEnumIndex, TypeFlagsIndex, TypeListIndex,
+    TypeOptionIndex, TypeRecordIndex, TypeResultIndex, TypeTupleIndex, TypeUnionIndex,
+    TypeVariantIndex, VariantInfo,
 };
 
 #[derive(Clone)]
@@ -39,7 +39,7 @@ impl<T: Eq> Eq for Handle<T> {}
 
 /// A `list` interface type
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct List(Handle<TypeInterfaceIndex>);
+pub struct List(Handle<TypeListIndex>);
 
 impl List {
     /// Instantiate this type with the specified `values`.
@@ -49,7 +49,7 @@ impl List {
 
     /// Retreive the element type of this `list`.
     pub fn ty(&self) -> Type {
-        Type::from(&self.0.types[self.0.index], &self.0.types)
+        Type::from(&self.0.types[self.0.index].element, &self.0.types)
     }
 }
 
