@@ -20,7 +20,7 @@
 
 use crate::component::dfg::CoreDef;
 use crate::component::{
-    Adapter, AdapterOptions as AdapterOptionsDfg, ComponentTypesBuilder, InterfaceType,
+    Adapter, AdapterOptions as AdapterOptionsDfg, ComponentTypesBuilder, FlatType, InterfaceType,
     StringEncoding, TypeFuncIndex,
 };
 use crate::fact::transcode::Transcoder;
@@ -65,8 +65,8 @@ pub struct Module<'a> {
     imported_globals: PrimaryMap<GlobalIndex, CoreDef>,
 
     funcs: PrimaryMap<FunctionId, Function>,
-    translate_mem_funcs: HashMap<(InterfaceType, InterfaceType, Options, Options), FunctionId>,
-    translate_mem_worklist: Vec<(FunctionId, InterfaceType, InterfaceType, Options, Options)>,
+    helper_funcs: HashMap<Helper, FunctionId>,
+    helper_worklist: Vec<(FunctionId, Helper)>,
 }
 
 struct AdapterData {
@@ -123,6 +123,43 @@ enum Context {
     Lower,
 }
 
+/// Representation of a "helper function" which may be generated as part of
+/// generating an adapter trampoline.
+///
+/// Helper functions are created when inlining the translation for a type in its
+/// entirety would make a function excessively large. This is currently done via
+/// a simple fuel/cost heuristic based on the type being translated but may get
+/// fancier over time.
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+struct Helper {
+    /// Metadata about the source type of what's being translated.
+    src: HelperType,
+    /// Metadata about the destination type which is being translated to.
+    dst: HelperType,
+}
+
+/// Information about a source or destination type in a `Helper` which is
+/// generated.
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+struct HelperType {
+    /// The concrete type being translated.
+    ty: InterfaceType,
+    /// The configuration options (memory, etc) for the adapter.
+    opts: Options,
+    /// Where the type is located (either the stack or in memory)
+    loc: HelperLocation,
+}
+
+/// Where a `HelperType` is located, dictating the signature of the helper
+/// function.
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+enum HelperLocation {
+    /// Located on the stack in wasm locals.
+    Stack,
+    /// Located in linear memory as configured by `opts`.
+    Memory,
+}
+
 impl<'a> Module<'a> {
     /// Creates an empty module.
     pub fn new(types: &'a ComponentTypesBuilder, debug: bool) -> Module<'a> {
@@ -138,8 +175,8 @@ impl<'a> Module<'a> {
             imported_memories: PrimaryMap::new(),
             imported_globals: PrimaryMap::new(),
             funcs: PrimaryMap::new(),
-            translate_mem_funcs: HashMap::new(),
-            translate_mem_worklist: Vec::new(),
+            helper_funcs: HashMap::new(),
+            helper_worklist: Vec::new(),
         }
     }
 
@@ -188,8 +225,8 @@ impl<'a> Module<'a> {
             },
         );
 
-        while let Some((result, src, dst, src_opts, dst_opts)) = self.translate_mem_worklist.pop() {
-            trampoline::compile_translate_mem(self, result, src, &src_opts, dst, &dst_opts);
+        while let Some((result, helper)) = self.helper_worklist.pop() {
+            trampoline::compile_helper(self, result, helper);
         }
     }
 
@@ -321,27 +358,15 @@ impl<'a> Module<'a> {
             })
     }
 
-    fn translate_mem(
-        &mut self,
-        src: InterfaceType,
-        src_opts: &Options,
-        dst: InterfaceType,
-        dst_opts: &Options,
-    ) -> FunctionId {
-        *self
-            .translate_mem_funcs
-            .entry((src, dst, *src_opts, *dst_opts))
-            .or_insert_with(|| {
-                // Generate a fresh `Function` with a unique id for what we're about to
-                // generate.
-                let ty = self
-                    .core_types
-                    .function(&[src_opts.ptr(), dst_opts.ptr()], &[]);
-                let id = self.funcs.push(Function::new(None, ty));
-                self.translate_mem_worklist
-                    .push((id, src, dst, *src_opts, *dst_opts));
-                id
-            })
+    fn translate_helper(&mut self, helper: Helper) -> FunctionId {
+        *self.helper_funcs.entry(helper).or_insert_with(|| {
+            // Generate a fresh `Function` with a unique id for what we're about to
+            // generate.
+            let ty = helper.core_type(self.types, &mut self.core_types);
+            let id = self.funcs.push(Function::new(None, ty));
+            self.helper_worklist.push((id, helper));
+            id
+        })
     }
 
     /// Encodes this module into a WebAssembly binary.
@@ -462,6 +487,19 @@ impl Options {
             4
         }
     }
+
+    fn flat_types<'a>(
+        &self,
+        ty: &InterfaceType,
+        types: &'a ComponentTypesBuilder,
+    ) -> Option<&'a [FlatType]> {
+        let flat = types.flat_types(ty)?;
+        Some(if self.memory64 {
+            flat.memory64
+        } else {
+            flat.memory32
+        })
+    }
 }
 
 /// Temporary index which is not the same as `FuncIndex`.
@@ -539,6 +577,46 @@ impl Function {
             locals: Vec::new(),
             export,
             body: Vec::new(),
+        }
+    }
+}
+
+impl Helper {
+    fn core_type(
+        &self,
+        types: &ComponentTypesBuilder,
+        core_types: &mut core_types::CoreTypes,
+    ) -> u32 {
+        let mut params = Vec::new();
+        let mut results = Vec::new();
+        // The source type being translated is always pushed onto the
+        // parameters first, either a pointer for memory or its flat
+        // representation.
+        self.src.push_flat(&mut params, types);
+
+        // The destination type goes into the parameter list if it's from
+        // memory or otherwise is the result of the function itself for a
+        // stack-based representation.
+        match self.dst.loc {
+            HelperLocation::Stack => self.dst.push_flat(&mut results, types),
+            HelperLocation::Memory => params.push(self.dst.opts.ptr()),
+        }
+
+        core_types.function(&params, &results)
+    }
+}
+
+impl HelperType {
+    fn push_flat(&self, dst: &mut Vec<ValType>, types: &ComponentTypesBuilder) {
+        match self.loc {
+            HelperLocation::Stack => {
+                for ty in self.opts.flat_types(&self.ty, types).unwrap() {
+                    dst.push((*ty).into());
+                }
+            }
+            HelperLocation::Memory => {
+                dst.push(self.opts.ptr());
+            }
         }
     }
 }
