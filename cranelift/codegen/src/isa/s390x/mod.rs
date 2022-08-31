@@ -93,6 +93,7 @@ impl TargetIsa for S390xBackend {
             dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
+            alignment: emit_result.alignment,
         })
     }
 
@@ -160,6 +161,10 @@ impl TargetIsa for S390xBackend {
 
     fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
+    }
+
+    fn function_alignment(&self) -> u32 {
+        4
     }
 }
 

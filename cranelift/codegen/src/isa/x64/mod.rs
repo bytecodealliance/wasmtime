@@ -88,6 +88,7 @@ impl TargetIsa for X64Backend {
             dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
+            alignment: emit_result.alignment,
         })
     }
 
@@ -157,6 +158,12 @@ impl TargetIsa for X64Backend {
 
     fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
+    }
+
+    /// Align functions on x86 to 16 bytes, ensuring that rip-relative loads to SSE registers are
+    /// always from aligned memory.
+    fn function_alignment(&self) -> u32 {
+        16
     }
 }
 

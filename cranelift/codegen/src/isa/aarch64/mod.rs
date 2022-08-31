@@ -95,6 +95,7 @@ impl TargetIsa for AArch64Backend {
             dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
+            alignment: emit_result.alignment,
         })
     }
 
@@ -178,6 +179,12 @@ impl TargetIsa for AArch64Backend {
     #[cfg(feature = "unwind")]
     fn map_regalloc_reg_to_dwarf(&self, reg: Reg) -> Result<u16, systemv::RegisterMappingError> {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
+    }
+
+    fn function_alignment(&self) -> u32 {
+        // We use 32-byte alignment for performance reasons, but for correctness we would only need
+        // 4-byte alignment.
+        32
     }
 }
 
