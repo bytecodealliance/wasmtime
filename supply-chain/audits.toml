@@ -1,6 +1,18 @@
 
 # cargo-vet audits file
 
+[[audits.arbitrary]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+version = "1.1.0"
+notes = "I am the author of this crate."
+
+[[audits.arbitrary]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+version = "1.1.4"
+notes = "I am the author of this crate."
+
 [[audits.arrayvec]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -56,6 +68,18 @@ criteria = "safe-to-deploy"
 version = "1.0.0"
 notes = "I am the author of this crate."
 
+[[audits.derive_arbitrary]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+version = "1.1.0"
+notes = "I am the author of this crate."
+
+[[audits.derive_arbitrary]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+version = "1.1.4"
+notes = "I am the author of this crate."
+
 [[audits.file-per-thread-logger]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -72,11 +96,23 @@ criteria = "safe-to-deploy"
 version = "0.4.0"
 notes = "Contains `forbid_unsafe` and only uses `std::fmt` from the standard library. Otherwise only contains string manipulation."
 
+[[audits.id-arena]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+version = "2.2.1"
+notes = "I am the author of this crate."
+
 [[audits.is-terminal]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.3.0"
 notes = "Contains only unsafe code for interacting with the crate's intended purpose."
+
+[[audits.leb128]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+version = "0.2.5"
+notes = "I am the author of this crate."
 
 [[audits.libm]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -97,6 +133,12 @@ Does not interact with the system in any way than otherwise instructed to.
 Contains unsafe blocks but are encapsulated and required for the operation at
 hand.
 """
+
+[[audits.peeking_take_while]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+version = "1.0.0"
+notes = "I am the author of this crate."
 
 [[audits.regalloc2]]
 who = "Jamey Sharp <jsharp@fastly.com>"
