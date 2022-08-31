@@ -307,7 +307,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     fn gen_prologue_frame_setup(flags: &settings::Flags) -> SmallInstVec<Inst> {
         // add  sp,sp,-16    ;; alloc stack space for fp.
         // sd   ra,8(sp)     ;; save ra.
-        // sd   fp,0(sp）    ;; store old fp.
+        // sd   fp,0(sp)     ;; store old fp.
         // mv   fp,sp        ;; set fp to sp.
         let mut insts = SmallVec::new();
         insts.push(Inst::AjustSp { amount: -16 });

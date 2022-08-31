@@ -8,18 +8,6 @@ use crate::machinst::*;
 use crate::CodegenResult;
 pub mod isle;
 
-/// Put the given input into possibly multiple registers, and mark it as used (side-effect).
-pub(crate) fn put_input_in_regs(ctx: &mut Lower<Inst>, spec: InsnInput) -> ValueRegs<Reg> {
-    ctx.put_input_in_regs(spec.insn, spec.input)
-}
-
-/// Put the given input into a register, and mark it as used (side-effect).
-pub(crate) fn put_input_in_reg(ctx: &mut Lower<Inst>, spec: InsnInput) -> Reg {
-    put_input_in_regs(ctx, spec)
-        .only_reg()
-        .expect("Multi-register value not expected")
-}
-
 //=============================================================================
 // Lowering-backend trait implementation.
 

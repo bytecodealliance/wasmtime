@@ -691,9 +691,6 @@ impl MachInstEmit for Inst {
                     | reg_to_gpr_num(rs2) << 20
                     | alu_op.funct7() << 25;
                 sink.put4(x);
-                // if alu_op == FpuOPRRR::FeqS {
-                //     Inst::EBreak.emit(&[], sink, emit_info, state);
-                // }
             }
             &Inst::Unwind { ref inst } => {
                 sink.add_unwind(inst.clone());
@@ -715,28 +712,7 @@ impl MachInstEmit for Inst {
                 } else {
                     (rs1, rs2)
                 };
-                if let Some(bits) = alu_op.is_div_or_rem() {
-                    Inst::TrapIfC {
-                        rs1: zero_reg(),
-                        rs2: if bits == 32 {
-                            // If this op is 32-bit.
-                            // should shift out high parts.
-                            Inst::AluRRImm12 {
-                                alu_op: AluOPRRI::Slli,
-                                rd: writable_spilltmp_reg2(),
-                                rs: rs2,
-                                imm12: Imm12::from_bits(32),
-                            }
-                            .emit(&[], sink, emit_info, state);
-                            spilltmp_reg2()
-                        } else {
-                            rs2
-                        },
-                        cc: IntCC::Equal,
-                        trap_code: TrapCode::IntegerDivisionByZero,
-                    }
-                    .emit(&[], sink, emit_info, state);
-                }
+
                 let x: u32 = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | (alu_op.funct3()) << 12
@@ -1025,9 +1001,6 @@ impl MachInstEmit for Inst {
                     offset: Imm12::zero(),
                 }
                 .emit(&[], sink, emit_info, state);
-                // if rn == x_reg(13) {
-                //     Inst::EBreak.emit(&[], sink, emit_info, state);
-                // }
             }
 
             &Inst::Jal { dest } => {
@@ -1171,7 +1144,7 @@ impl MachInstEmit for Inst {
                     rd: tmp1,
                     imm: Imm20::from_bits(0),
                 });
-                // t *= 8; very lable is 8 byte size.
+                // t *= 8; very jump that I emit is 8 byte size.
                 insts.push(Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Slli,
                     rd: writable_spilltmp_reg(),
@@ -1842,9 +1815,9 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let label_nan = sink.get_label();
                 let label_jump_over = sink.get_label();
-                // get if nan?
+                // get if nan.
                 Inst::emit_not_nan(rd, rs, in_type).emit(&[], sink, emit_info, state);
-                // jump to nan
+                // jump to nan.
                 Inst::CondBr {
                     taken: BranchTarget::Label(label_nan),
                     not_taken: BranchTarget::zero(),
@@ -1857,8 +1830,8 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
 
                 if !is_sat {
-                    let f32_bounds = f32_to_int_bounds(is_signed, out_type.bits() as u8);
-                    let f64_bounds = f64_to_int_bounds(is_signed, out_type.bits() as u8);
+                    let f32_bounds = f32_cvt_to_int_bounds(is_signed, out_type.bits() as u8);
+                    let f64_bounds = f64_cvt_to_int_bounds(is_signed, out_type.bits() as u8);
                     if in_type == F32 {
                         Inst::load_fp_constant32(
                             tmp,
@@ -2109,6 +2082,7 @@ impl MachInstEmit for Inst {
                     succ: Inst::FENCE_REQ_R | Inst::FENCE_REQ_W,
                 }
                 .emit(&[], sink, emit_info, state);
+                // load.
                 Inst::Load {
                     rd: rd,
                     op: LoadOP::from_type(ty),
@@ -2880,10 +2854,9 @@ impl MachInstEmit for Inst {
 
 // helper function.
 fn alloc_value_regs(orgin: &ValueRegs<Reg>, alloc: &mut AllocationConsumer) -> ValueRegs<Reg> {
-    let x: Vec<_> = orgin.regs().into_iter().map(|r| alloc.next(*r)).collect();
-    match x.len() {
-        1 => ValueRegs::one(x[0]),
-        2 => ValueRegs::two(x[0], x[1]),
+    match orgin.regs().len() {
+        1 => ValueRegs::one(alloc.next(orgin.regs()[0])),
+        2 => ValueRegs::two(alloc.next(orgin.regs()[0]), alloc.next(orgin.regs()[1])),
         _ => unreachable!(),
     }
 }

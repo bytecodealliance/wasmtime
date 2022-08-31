@@ -2048,9 +2048,11 @@
 )
 (convert ValueRegs Reg convert_valueregs_reg)
 
-;;; intcc is a not equal compare like greaterthan and ...
-(decl intcc_is_ueq_compare (IntCC bool)IntCC)
-(extern extractor intcc_is_ueq_compare intcc_is_ueq_compare)
+;;; intcc is not equal nor ne.
+;;; intcc is >= <= ... 
+;;; return alongside with if signed.
+(decl intcc_is_gt_etc (IntCC bool)IntCC)
+(extern extractor intcc_is_gt_etc intcc_is_gt_etc)
 
 (decl intcc_is_eq_or_ne (IntCC)IntCC)
 (extern extractor intcc_is_eq_or_ne intcc_is_eq_or_ne)
@@ -2067,12 +2069,12 @@
 )
 ;;;; singed >= ... 
 (rule
-  (lower_icmp (intcc_is_ueq_compare cc $true)  x  y ty)
+  (lower_icmp (intcc_is_gt_etc cc $true)  x  y ty)
   (gen_icmp cc (sext_int_if_need x ty) (sext_int_if_need  y ty) ty)
 )
 ;;;; unsigned >= ... 
 (rule
-  (lower_icmp (intcc_is_ueq_compare cc $false) x y ty)
+  (lower_icmp (intcc_is_gt_etc cc $false) x y ty)
   (gen_icmp cc (uext_int_if_need x ty ) (uext_int_if_need y ty ) ty)
 )
 ;;; overflow 
@@ -2411,6 +2413,12 @@
   (side_effect (SideEffectNoResult.Inst(MInst.TrapIf test trap_code )))
 )
 
+(decl gen_trapifc (IntCC Reg Reg TrapCode)InstOutput)
+(rule
+  (gen_trapifc cc a b trap_code)
+  (side_effect (SideEffectNoResult.Inst(MInst.TrapIfC a b cc  trap_code )))
+)
+
 (decl shift_int_to_most_significant (Reg Type) Reg)
 (extern constructor shift_int_to_most_significant shift_int_to_most_significant)
 
@@ -2430,6 +2438,12 @@
     )
     (gen_trapif test (TrapCode.IntegerOverflow))
   )
+)
+
+(decl gen_div_by_zero(Reg)InstOutput)
+(rule
+  (gen_div_by_zero r)
+  (gen_trapifc (IntCC.Equal) (zero_reg) r (TrapCode.IntegerDivisionByZero))
 )
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

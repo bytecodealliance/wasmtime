@@ -675,7 +675,7 @@ impl MachInst for Inst {
         to_regs: ValueRegs<Writable<Reg>>,
         mut value: u128,
         ty: Type,
-        _alloc_tmp: F,
+        mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         if ty.is_bool() && value != 0 {
             value = !0;
@@ -684,16 +684,12 @@ impl MachInst for Inst {
             return Inst::load_constant_u64(to_regs.only_reg().unwrap(), value as u64);
         };
         match ty {
-            F32 => Inst::load_fp_constant32(
-                to_regs.only_reg().unwrap(),
-                value as u32,
-                writable_spilltmp_reg(),
-            ),
-            F64 => Inst::load_fp_constant64(
-                to_regs.only_reg().unwrap(),
-                value as u64,
-                writable_spilltmp_reg(),
-            ),
+            F32 => {
+                Inst::load_fp_constant32(to_regs.only_reg().unwrap(), value as u32, alloc_tmp(I64))
+            }
+            F64 => {
+                Inst::load_fp_constant64(to_regs.only_reg().unwrap(), value as u64, alloc_tmp(I64))
+            }
             I128 | B128 => {
                 let mut insts = SmallInstVec::new();
                 insts.extend(Inst::load_constant_u64(
@@ -1498,8 +1494,8 @@ impl Inst {
             &MInst::Fence { pred, succ } => {
                 format!(
                     "fence {},{}",
-                    Inst::fence_req_to_static_str(pred),
-                    Inst::fence_req_to_static_str(succ),
+                    Inst::fence_req_to_string(pred),
+                    Inst::fence_req_to_string(succ),
                 )
             }
             &MInst::FenceI => "fence.i".into(),
@@ -1578,9 +1574,8 @@ impl MachInstLabelUse for LabelUse {
         assert!(use_offset % 4 == 0);
         assert!(label_offset % 4 == 0);
         let offset = (label_offset as i64) - (use_offset as i64);
-        // println!("self: {:?} use_offset:{} label_offset:{}", self ,use_offset, label_offset);
 
-        //check range
+        // re-check range
         assert!(
             offset >= -(self.max_neg_range() as i64) && offset <= (self.max_pos_range() as i64),
             "{:?} offset '{}' use_offset:'{}' label_offset:'{}'  must not exceed max range.",
@@ -1651,7 +1646,6 @@ impl LabelUse {
     }
 
     fn patch_raw_offset(self, buffer: &mut [u8], offset: i64) {
-
         match self {
             LabelUse::Jal20 => {
                 let offset = offset as u32;
@@ -1684,7 +1678,7 @@ impl LabelUse {
             }
 
             LabelUse::B12 => {
-                let mut offset = offset as u32;
+                let offset = offset as u32;
                 let raw = &mut buffer[0] as *mut u8 as *mut u32;
                 let v = ((offset >> 11 & 0b1) << 7)
                     | ((offset >> 1 & 0b1111) << 8)
@@ -1699,7 +1693,7 @@ impl LabelUse {
 }
 
 pub(crate) fn overflow_already_lowerd() -> ! {
-    unreachable!("overflow and nof should be lowerd at early phase.")
+    unreachable!("overflow and nof should be lowered at early phase.")
 }
 #[cfg(test)]
 mod test {

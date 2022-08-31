@@ -105,54 +105,107 @@
 
 ;;;; Rules for `div` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (fits_in_16 ty) (udiv x y)))
-  (alu_rrr (AluOPRRR.Divuw) (uext_int_if_need x ty ) (uext_int_if_need y ty )))
+(rule (lower (has_type (fits_in_32 ty) (udiv x y)))
+  (let
+    (
+      (y2 Reg (uext_int_if_need y ty))
+      (_ InstOutput (gen_div_by_zero y2))
+    )
+    (alu_rrr (AluOPRRR.Divuw) (uext_int_if_need x ty ) y2)
+  )
+)
 
 (rule (lower (has_type (fits_in_32 ty) (sdiv  x  y )))
   (let
     (
-      (a Reg  (sext_int_if_need x ty))
+      (a Reg (sext_int_if_need x ty))
       (b Reg (sext_int_if_need y ty ))
       (_ InstOutput (gen_div_overflow a b ty))
+      (_ InstOutput (gen_div_by_zero b))
     )
     (alu_rrr (AluOPRRR.Divw) a  b)
   )
 )
 
-(rule (lower (has_type $I32 (udiv x y)))
-  (alu_rrr (AluOPRRR.Divuw)  x y))
-
 (rule (lower (has_type $I64 (sdiv  x  y )))
   (let
     (
       (_ InstOutput (gen_div_overflow x y $I64))
+      (_ InstOutput (gen_div_by_zero y))
     )
     (alu_rrr (AluOPRRR.Div) x y)
   )
 )
 
 (rule (lower (has_type $I64 (udiv x y)))
-  (alu_rrr (AluOPRRR.DivU) x y))
+  (let
+    (
+      (_ InstOutput (gen_div_by_zero y))
+    )
+    (alu_rrr (AluOPRRR.DivU) x y)
+  )
+)
 
 ;;;; Rules for `rem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_16 ty) (urem x y)))
-  (alu_rrr (AluOPRRR.Remuw) (uext_int_if_need  x ty) (uext_int_if_need y ty)))
+  (let
+    (
+      (y2 Reg(uext_int_if_need y ty))
+      (_ InstOutput (gen_div_by_zero y2))
+    )
+    (alu_rrr (AluOPRRR.Remuw) (uext_int_if_need  x ty) y2)
+  ) 
+)
 
 (rule (lower (has_type (fits_in_16 ty) (srem  x  y  )))
-  (alu_rrr (AluOPRRR.Remw) (sext_int_if_need x ty)  (sext_int_if_need y ty)))
+  (let 
+    (
+      (y2 Reg (sext_int_if_need y ty))
+      (_ InstOutput (gen_div_by_zero y2))
+    )
+    (alu_rrr (AluOPRRR.Remw) (sext_int_if_need x ty) y2)
+  )
+)
 
 (rule (lower (has_type $I32 (srem x y)))
-  (alu_rrr (AluOPRRR.Remw) x y))
+  (let 
+    (
+      (y2 Reg (sext_int_if_need y $I32))
+      (_ InstOutput (gen_div_by_zero y2))
+    )
+  (alu_rrr (AluOPRRR.Remw) x y2)
+  )
+)
 
 (rule (lower (has_type $I32 (urem x y)))
-  (alu_rrr (AluOPRRR.Remuw) x y))
+(let 
+    (
+      (y2 Reg (uext_int_if_need y $I32))
+      (_ InstOutput (gen_div_by_zero y2))
+    )
+  (alu_rrr (AluOPRRR.Remuw) x y2)
+  )
+)
 
-(rule (lower (has_type (fits_in_64 ty) (srem x y)))
-  (alu_rrr (AluOPRRR.Rem)  x y))
+(rule (lower (has_type $I64 (srem x y)))
+  (let
+    (
+      (_ InstOutput (gen_div_by_zero y))
+    )
+    (alu_rrr (AluOPRRR.Rem)  x y)
+  )
+  
+)
 
-(rule (lower (has_type (fits_in_64 ty) (urem x y)))
-  (alu_rrr (AluOPRRR.RemU) x y))
+(rule (lower (has_type  $I64  (urem x y)))
+  (let
+    (
+      (_ InstOutput (gen_div_by_zero y))
+    )
+    (alu_rrr (AluOPRRR.RemU) x y)
+  )
+)
 
 ;;;; Rules for `and` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (band x y)))

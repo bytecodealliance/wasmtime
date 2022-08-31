@@ -186,8 +186,8 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         }
         tmp.map(|r| r.to_reg())
     }
-    fn imm12_and(&mut self, imm: Imm12, andn: i32) -> Imm12 {
-        Imm12::from_bits(imm.as_i16() & (andn as i16))
+    fn imm12_and(&mut self, imm: Imm12, x: i32) -> Imm12 {
+        Imm12::from_bits(imm.as_i16() & (x as i16))
     }
     fn alloc_vec_writable(&mut self, ty: Type) -> VecWritableReg {
         if ty.is_int() || ty.is_bool() || ty == R32 || ty == R64 {
@@ -493,7 +493,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         }
     }
 
-    fn intcc_is_ueq_compare(&mut self, cc: &IntCC) -> Option<(IntCC, bool)> {
+    fn intcc_is_gt_etc(&mut self, cc: &IntCC) -> Option<(IntCC, bool)> {
         let cc = *cc;
         match cc {
             IntCC::SignedLessThan => Some((cc, true)),

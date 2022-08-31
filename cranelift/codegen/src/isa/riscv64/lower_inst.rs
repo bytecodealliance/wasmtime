@@ -29,11 +29,7 @@ pub(crate) fn lower_insn_to_regs(
     } else {
         None
     };
-    log::debug!(
-        "lowering inst inst = `{}`, type = `{:?}`",
-        ctx.dfg().display_inst(insn),
-        ty
-    );
+
     if let Ok(()) = super::lower::isle::lower(ctx, flags, triple, isa_flags, &outputs, insn) {
         return Ok(());
     }
@@ -246,51 +242,6 @@ pub(crate) fn lower_insn_to_regs(
         }
 
         Opcode::Call | Opcode::CallIndirect => {
-            // let caller_conv = ctx.abi().call_conv();
-            // let (mut abi, inputs) = match op {
-            //     Opcode::Call => {
-            //         let (extname, dist) = ctx.ca(insn).unwrap();
-            //         ctx.
-            //         let extname = extname.clone();
-            //         let sig = ctx.call_sig(insn).unwrap();
-            //         assert!(inputs.len() == sig.params.len());
-            //         assert!(outputs.len() == sig.returns.len());
-            //         (
-            //             Riscv64ABICaller::from_func(sig, &extname, dist, caller_conv, flags)?,
-            //             &inputs[..],
-            //         )
-            //     }
-            //     Opcode::CallIndirect => {
-            //         let ptr = put_input_in_reg(ctx, inputs[0]);
-            //         let sig = ctx.call_sig(insn).unwrap();
-            //         assert!(inputs.len() - 1 == sig.params.len());
-            //         assert!(outputs.len() == sig.returns.len());
-            //         (
-            //             Riscv64ABICaller::from_ptr(sig, ptr, op, caller_conv, flags)?,
-            //             &inputs[1..],
-            //         )
-            //     }
-            //     _ => unreachable!(),
-            // };
-            //
-            // abi.emit_stack_pre_adjust(ctx);
-            // assert!(inputs.len() == abi.num_args());
-            // let mut arg_regs = vec![];
-            // for input in inputs {
-            //     arg_regs.push(put_input_in_regs(ctx, *input))
-            // }
-            // for (i, arg_regs) in arg_regs.iter().enumerate() {
-            //     abi.emit_copy_regs_to_buffer(ctx, i, *arg_regs);
-            // }
-            // for (i, arg_regs) in arg_regs.iter().enumerate() {
-            //     abi.emit_copy_regs_to_arg(ctx, i, *arg_regs);
-            // }
-            // abi.emit_call(ctx);
-            // for (i, output) in outputs.iter().enumerate() {
-            //     let retval_regs = get_output_reg(ctx, *output);
-            //     abi.emit_copy_retval_to_regs(ctx, i, retval_regs);
-            // }
-            // abi.emit_stack_post_adjust(ctx);
             implemented_in_isle(ctx);
         }
 

@@ -66,6 +66,7 @@ block0(v0: i64, v1: i64):
 ;   eq t0,a6,a0##ty=i64
 ;   and t2,t3,t0
 ;   trap_if t2,int_ovf
+;   trap_ifc int_divz##(zero eq a1)
 ;   div a0,a0,a1
 ;   ret
 
@@ -86,7 +87,9 @@ block0(v0: i64):
 ;   and t2,t3,t0
 ;   trap_if t2,int_ovf
 ;   li a2,2
-;   div a0,a0,a2
+;   trap_ifc int_divz##(zero eq a2)
+;   li a5,2
+;   div a0,a0,a5
 ;   ret
 
 function %f8(i64, i64) -> i64 {
@@ -96,6 +99,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
+;   trap_ifc int_divz##(zero eq a1)
 ;   divu a0,a0,a1
 ;   ret
 
@@ -108,7 +112,9 @@ block0(v0: i64):
 
 ; block0:
 ;   li a1,2
-;   divu a0,a0,a1
+;   trap_ifc int_divz##(zero eq a1)
+;   li a3,2
+;   divu a0,a0,a3
 ;   ret
 
 function %f10(i64, i64) -> i64 {
@@ -118,6 +124,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
+;   trap_ifc int_divz##(zero eq a1)
 ;   rem a0,a0,a1
 ;   ret
 
@@ -128,6 +135,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
+;   trap_ifc int_divz##(zero eq a1)
 ;   remu a0,a0,a1
 ;   ret
 
@@ -148,6 +156,7 @@ block0(v0: i32, v1: i32):
 ;   eq a3,t0,t2##ty=i32
 ;   and a5,a1,a3
 ;   trap_if a5,int_ovf
+;   trap_ifc int_divz##(zero eq a4)
 ;   divw a0,a2,a4
 ;   ret
 
@@ -170,6 +179,7 @@ block0(v0: i32):
 ;   eq a3,t0,t2##ty=i32
 ;   and a5,a1,a3
 ;   trap_if a5,int_ovf
+;   trap_ifc int_divz##(zero eq a4)
 ;   divw a0,a0,a4
 ;   ret
 
@@ -180,7 +190,10 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   divuw a0,a0,a1
+;   uext.w a2,a1
+;   trap_ifc int_divz##(zero eq a2)
+;   uext.w a5,a0
+;   divuw a0,a5,a2
 ;   ret
 
 function %f15(i32) -> i32 {
@@ -192,7 +205,10 @@ block0(v0: i32):
 
 ; block0:
 ;   li a1,2
-;   divuw a0,a0,a1
+;   uext.w a2,a1
+;   trap_ifc int_divz##(zero eq a2)
+;   uext.w a5,a0
+;   divuw a0,a5,a2
 ;   ret
 
 function %f16(i32, i32) -> i32 {
@@ -202,7 +218,9 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   remw a0,a0,a1
+;   sext.w a2,a1
+;   trap_ifc int_divz##(zero eq a2)
+;   remw a0,a0,a2
 ;   ret
 
 function %f17(i32, i32) -> i32 {
@@ -212,7 +230,9 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   remuw a0,a0,a1
+;   uext.w a2,a1
+;   trap_ifc int_divz##(zero eq a2)
+;   remuw a0,a0,a2
 ;   ret
 
 function %f18(i64, i64) -> i64 {
@@ -446,7 +466,9 @@ block0(v0: i64):
 
 ; block0:
 ;   li a1,2
-;   rem a0,a0,a1
+;   trap_ifc int_divz##(zero eq a1)
+;   li a3,2
+;   rem a0,a0,a3
 ;   ret
 
 function %urem_const (i64) -> i64 {
@@ -458,7 +480,9 @@ block0(v0: i64):
 
 ; block0:
 ;   li a1,2
-;   remu a0,a0,a1
+;   trap_ifc int_divz##(zero eq a1)
+;   li a3,2
+;   remu a0,a0,a3
 ;   ret
 
 function %sdiv_minus_one(i64) -> i64 {
@@ -478,6 +502,8 @@ block0(v0: i64):
 ;   and t2,t3,t0
 ;   trap_if t2,int_ovf
 ;   li a2,-1
-;   div a0,a0,a2
+;   trap_ifc int_divz##(zero eq a2)
+;   li a5,-1
+;   div a0,a0,a5
 ;   ret
 

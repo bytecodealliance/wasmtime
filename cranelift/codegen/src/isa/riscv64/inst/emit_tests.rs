@@ -2069,8 +2069,8 @@ fn test_riscv64_binemit() {
         let buffer = buffer.finish();
         if buffer.data() != unit.code.to_le_bytes() {
             {
-                let gnu = DebugRTypeIns::from_bs(&unit.code.to_le_bytes());
-                let my = DebugRTypeIns::from_bs(buffer.data());
+                let gnu = DebugRTypeInst::from_bs(&unit.code.to_le_bytes());
+                let my = DebugRTypeInst::from_bs(buffer.data());
                 println!("gnu:{:?}", gnu);
                 println!("my :{:?}", my);
                 // println!("gnu:{:b}", gnu.funct7);
@@ -2078,8 +2078,8 @@ fn test_riscv64_binemit() {
             }
 
             {
-                let gnu = DebugITypeIns::from_bs(&unit.code.to_le_bytes());
-                let my = DebugITypeIns::from_bs(buffer.data());
+                let gnu = DebugITypeInst::from_bs(&unit.code.to_le_bytes());
+                let my = DebugITypeInst::from_bs(buffer.data());
                 println!("gnu:{:?}", gnu);
                 println!("my :{:?}", my);
                 println!("gnu:{:b}", gnu.op_code);
@@ -2094,14 +2094,12 @@ fn make_test_flags() -> (settings::Flags, super::super::riscv_settings::Flags) {
     let b = settings::builder();
     let flags = settings::Flags::new(b.clone());
     let b2 = super::super::riscv_settings::builder();
-
-    let mut isa_flags = super::super::riscv_settings::Flags::new(&flags, b2);
-
+    let isa_flags = super::super::riscv_settings::Flags::new(&flags, b2);
     (flags, isa_flags)
 }
 
 #[derive(Debug)]
-pub(crate) struct DebugRTypeIns {
+pub(crate) struct DebugRTypeInst {
     op_code: u32,
     rd: u32,
     funct3: u32,
@@ -2110,7 +2108,7 @@ pub(crate) struct DebugRTypeIns {
     funct7: u32,
 }
 
-impl DebugRTypeIns {
+impl DebugRTypeInst {
     pub(crate) fn from_bs(x: &[u8]) -> Self {
         let a = [x[0], x[1], x[2], x[3]];
         Self::from_u32(u32::from_le_bytes(a))
@@ -2140,7 +2138,7 @@ impl DebugRTypeIns {
 }
 
 #[derive(Debug)]
-pub(crate) struct DebugITypeIns {
+pub(crate) struct DebugITypeInst {
     op_code: u32,
     rd: u32,
     funct3: u32,
@@ -2152,7 +2150,7 @@ pub(crate) struct DebugITypeIns {
     funct6: u32,
 }
 
-impl DebugITypeIns {
+impl DebugITypeInst {
     pub(crate) fn from_bs(x: &[u8]) -> Self {
         let a = [x[0], x[1], x[2], x[3]];
         Self::from_u32(u32::from_le_bytes(a))
@@ -2198,7 +2196,7 @@ impl DebugITypeIns {
 #[test]
 fn xxx() {
     let x = 1240847763;
-    let x = DebugITypeIns::from_u32(x);
+    let x = DebugITypeInst::from_u32(x);
     x.print_b();
 }
 
@@ -2276,6 +2274,6 @@ fn riscv64_worst_case_instruction_size() {
         }
         println!("insn:{:?}  length: {}", i, length);
     }
-    println!("caculate max size is {} , inst is {:?}", max.0, max.1);
+    println!("calculate max size is {} , inst is {:?}", max.0, max.1);
     assert!(max.0 <= Inst::worst_case_size());
 }

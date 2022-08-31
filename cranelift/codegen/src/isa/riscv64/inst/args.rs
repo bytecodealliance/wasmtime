@@ -142,7 +142,7 @@ pub(crate) enum BranchFunct3 {
 }
 
 impl BranchFunct3 {
-    pub(crate) fn bits(self) -> u32 {
+    pub(crate) fn funct3(self) -> u32 {
         match self {
             BranchFunct3::Eq => 0b000,
             BranchFunct3::Ne => 0b001,
@@ -215,7 +215,10 @@ impl IntegerCompare {
             (self.rs1, self.rs2)
         };
 
-        self.op_code() | funct3.bits() << 12 | reg_to_gpr_num(rs1) << 15 | reg_to_gpr_num(rs2) << 20
+        self.op_code()
+            | funct3.funct3() << 12
+            | reg_to_gpr_num(rs1) << 15
+            | reg_to_gpr_num(rs2) << 20
     }
 
     pub(crate) fn inverse(self) -> Self {
@@ -751,21 +754,6 @@ impl AluOPRRR {
         }
     }
 
-    /// Div and rem can lead some exception.
-    pub fn is_div_or_rem(self) -> Option<u8> {
-        match self {
-            Self::Div => Some(64),
-            Self::DivU => Some(64),
-            Self::Rem => Some(64),
-            Self::RemU => Some(64),
-            Self::Divw => Some(32),
-            Self::Divuw => Some(32),
-            Self::Remw => Some(32),
-            Self::Remuw => Some(32),
-            _ => None,
-        }
-    }
-
     pub fn funct3(self) -> u32 {
         match self {
             AluOPRRR::Add => 0b000,
@@ -960,7 +948,7 @@ impl AluOPRRR {
     pub(crate) fn reverse_rs(self) -> bool {
         // special case.
         // sgt and sgtu is not defined in isa.
-        // emit should reserver rs1 and rs2.
+        // emit should reverse rs1 and rs2.
         self == AluOPRRR::Sgt || self == AluOPRRR::Sgtu
     }
 }
@@ -1489,14 +1477,7 @@ impl AtomicOP {
             Self::ScD
         }
     }
-    pub(crate) fn compute_offset(rd: WritableReg, offset: Reg) -> Inst {
-        Inst::AluRRR {
-            alu_op: AluOPRRR::Add,
-            rd,
-            rs1: offset,
-            rs2: stack_reg(),
-        }
-    }
+
     /// extract
     pub(crate) fn extract(rd: WritableReg, offset: Reg, rs: Reg, ty: Type) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
@@ -1861,7 +1842,7 @@ impl Inst {
     pub(crate) const FENCE_REQ_O: u8 = 1 << 2;
     pub(crate) const FENCE_REQ_R: u8 = 1 << 1;
     pub(crate) const FENCE_REQ_W: u8 = 1 << 0;
-    pub(crate) fn fence_req_to_static_str(x: u8) -> String {
+    pub(crate) fn fence_req_to_string(x: u8) -> String {
         let mut s = String::default();
         if x & Self::FENCE_REQ_I != 0 {
             s.push_str("i");
@@ -1965,7 +1946,7 @@ pub(crate) fn f64_bits(f: f64) -> u64 {
     u64::from_le_bytes(f.to_le_bytes())
 }
 
-pub(crate) fn f32_to_int_bounds(signed: bool, out_bits: u8) -> (f32, f32) {
+pub(crate) fn f32_cvt_to_int_bounds(signed: bool, out_bits: u8) -> (f32, f32) {
     match (signed, out_bits) {
         (true, 8) => (i8::min_value() as f32 - 1., i8::max_value() as f32 + 1.),
         (true, 16) => (i16::min_value() as f32 - 1., i16::max_value() as f32 + 1.),
@@ -1979,7 +1960,7 @@ pub(crate) fn f32_to_int_bounds(signed: bool, out_bits: u8) -> (f32, f32) {
     }
 }
 
-pub(crate) fn f64_to_int_bounds(signed: bool, out_bits: u8) -> (f64, f64) {
+pub(crate) fn f64_cvt_to_int_bounds(signed: bool, out_bits: u8) -> (f64, f64) {
     match (signed, out_bits) {
         (true, 8) => (i8::min_value() as f64 - 1., i8::max_value() as f64 + 1.),
         (true, 16) => (i16::min_value() as f64 - 1., i16::max_value() as f64 + 1.),
@@ -1991,16 +1972,6 @@ pub(crate) fn f64_to_int_bounds(signed: bool, out_bits: u8) -> (f64, f64) {
         (false, 64) => (-1., 18446744073709551616.0),
         _ => unreachable!(),
     }
-}
-
-#[test]
-fn print_f_conversion_max_values() {
-    println!(
-        "f32_to_int_bounds:{:?} {:?}  {:?}",
-        f32_to_int_bounds(false, 32),
-        u32::MAX as f32,
-        4294967296.0
-    );
 }
 
 #[cfg(test)]
