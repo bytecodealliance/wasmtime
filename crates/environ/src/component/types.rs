@@ -1674,7 +1674,6 @@ struct TypeInformationCache {
 
 struct TypeInformation {
     depth: u32,
-    size: u32,
     flat: FlatTypesStorage,
 }
 
@@ -1682,7 +1681,6 @@ impl TypeInformation {
     const fn new() -> TypeInformation {
         TypeInformation {
             depth: 0,
-            size: 0,
             flat: FlatTypesStorage::new(),
         }
     }
@@ -1690,7 +1688,6 @@ impl TypeInformation {
     const fn primitive(flat: FlatType) -> TypeInformation {
         let mut info = TypeInformation::new();
         info.depth = 1;
-        info.size = 1;
         info.flat.memory32[0] = flat;
         info.flat.memory64[0] = flat;
         info.flat.len = 1;
@@ -1700,7 +1697,6 @@ impl TypeInformation {
     const fn string() -> TypeInformation {
         let mut info = TypeInformation::new();
         info.depth = 1;
-        info.size = 2;
         info.flat.memory32[0] = FlatType::I32;
         info.flat.memory32[1] = FlatType::I32;
         info.flat.memory64[0] = FlatType::I64;
@@ -1715,7 +1711,6 @@ impl TypeInformation {
         self.depth = 1;
         for info in types {
             self.depth = self.depth.max(1 + info.depth);
-            self.size += info.size;
             match info.flat.as_flat_types() {
                 Some(types) => {
                     for (t32, t64) in types.memory32.iter().zip(types.memory64) {
@@ -1749,17 +1744,15 @@ impl TypeInformation {
         let cases = cases.into_iter();
         self.flat.push(FlatType::I32, FlatType::I32);
         self.depth = 1;
-        self.size = 1;
 
         for info in cases {
             let info = match info {
                 Some(info) => info,
                 // If this case doesn't have a payload then it doesn't change
-                // the size/depth/flat representation
+                // the depth/flat representation
                 None => continue,
             };
             self.depth = self.depth.max(1 + info.depth);
-            self.size += info.size + 1;
 
             // If this variant is already unrepresentable in a flat
             // representation then this can be skipped.
@@ -1822,24 +1815,19 @@ impl TypeInformation {
         self.build_record(ty.types.iter().map(|t| types.type_information(t)));
     }
 
-    fn enums(&mut self, _types: &ComponentTypesBuilder, ty: &TypeEnum) {
+    fn enums(&mut self, _types: &ComponentTypesBuilder, _ty: &TypeEnum) {
         self.depth = 1;
-        self.size = ty.names.len() as u32;
         self.flat.push(FlatType::I32, FlatType::I32);
     }
 
     fn flags(&mut self, _types: &ComponentTypesBuilder, ty: &TypeFlags) {
         self.depth = 1;
         match FlagsSize::from_count(ty.names.len()) {
-            FlagsSize::Size0 => {
-                self.size = 0;
-            }
+            FlagsSize::Size0 => {}
             FlagsSize::Size1 | FlagsSize::Size2 => {
-                self.size = 1;
                 self.flat.push(FlatType::I32, FlatType::I32);
             }
             FlagsSize::Size4Plus(n) => {
-                self.size = n.into();
                 for _ in 0..n {
                     self.flat.push(FlatType::I32, FlatType::I32);
                 }
@@ -1874,6 +1862,5 @@ impl TypeInformation {
         *self = TypeInformation::string();
         let info = types.type_information(&ty.element);
         self.depth += info.depth;
-        self.size += info.size;
     }
 }
