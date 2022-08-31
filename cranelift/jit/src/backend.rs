@@ -21,7 +21,6 @@ use std::ptr::NonNull;
 use std::sync::atomic::{AtomicPtr, Ordering};
 use target_lexicon::PointerWidth;
 
-const EXECUTABLE_DATA_ALIGNMENT: u64 = 0x10;
 const WRITABLE_DATA_ALIGNMENT: u64 = 0x8;
 const READONLY_DATA_ALIGNMENT: u64 = 0x1;
 
@@ -234,7 +233,12 @@ impl JITModule {
         let plt_entry = self
             .memory
             .code
-            .allocate(std::mem::size_of::<[u8; 16]>(), EXECUTABLE_DATA_ALIGNMENT)
+            .allocate(
+                std::mem::size_of::<[u8; 16]>(),
+                self.isa
+                    .symbol_alignment()
+                    .max(self.isa.function_alignment() as u64),
+            )
             .unwrap()
             .cast::<[u8; 16]>();
         unsafe {
@@ -680,16 +684,20 @@ impl Module for JITModule {
         }
 
         // work around borrow-checker to allow reuse of ctx below
-        let _ = ctx.compile(self.isa())?;
+        let res = ctx.compile(self.isa())?;
+        let alignment = res.alignment as u64;
         let compiled_code = ctx.compiled_code().unwrap();
 
         let code_size = compiled_code.code_info().total_size;
 
         let size = code_size as usize;
+        let align = alignment
+            .max(self.isa.function_alignment() as u64)
+            .max(self.isa.symbol_alignment());
         let ptr = self
             .memory
             .code
-            .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
+            .allocate(size, align)
             .expect("TODO: handle OOM etc.");
 
         {
@@ -745,12 +753,10 @@ impl Module for JITModule {
         &mut self,
         id: FuncId,
         func: &ir::Function,
-        _alignment: u64,
+        alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction> {
-        // NOTE: the alignment parameter is unused as the jit always aligns functions on 16-byte
-        // boundaries.
         info!("defining function {} with bytes", id);
         let total_size: u32 = match bytes.len().try_into() {
             Ok(total_size) => total_size,
@@ -767,10 +773,13 @@ impl Module for JITModule {
         }
 
         let size = bytes.len();
+        let align = alignment
+            .max(self.isa.function_alignment() as u64)
+            .max(self.isa.symbol_alignment());
         let ptr = self
             .memory
             .code
-            .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
+            .allocate(size, align)
             .expect("TODO: handle OOM etc.");
 
         unsafe {
