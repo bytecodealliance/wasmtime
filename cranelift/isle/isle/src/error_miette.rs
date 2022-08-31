@@ -45,12 +45,14 @@ impl miette::Diagnostic for Error {
                     .into_iter(),
                 ))
             }
+
             _ => None,
         }
     }
     fn source_code(&self) -> std::option::Option<&dyn miette::SourceCode> {
         match self {
             Self::ParseError { src, .. } | Self::TypeError { src, .. } => Some(src),
+
             _ => None,
         }
     }
