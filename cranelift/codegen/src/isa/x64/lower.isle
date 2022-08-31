@@ -3640,7 +3640,8 @@
 ;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (vany_true val))
-      (with_flags (x64_ptest val val) (x64_setcc (CC.NZ))))
+      (let ((val Xmm val))
+        (with_flags (x64_ptest val val) (x64_setcc (CC.NZ)))))
 
 ;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3757,3 +3758,9 @@
 
         ;; SHUFPS xmm_y, xmm_xmp, 0x88
         (x64_shufps dst zeros 0x88)))
+
+;; Rules for `nop` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (nop))
+      (invalid_reg))
+

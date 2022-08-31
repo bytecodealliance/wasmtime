@@ -4,16 +4,15 @@ use super::lower::*;
 use crate::binemit::CodeOffset;
 use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
-use crate::ir::{InstructionData, Opcode};
+use crate::ir::Opcode;
 use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::settings as aarch64_settings;
 use crate::machinst::lower::*;
 use crate::machinst::*;
-use crate::settings::{Flags, TlsModel};
+use crate::settings::Flags;
 use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::convert::TryFrom;
 use target_lexicon::Triple;
 
 /// Actually codegen an instruction's results into registers.
@@ -102,152 +101,13 @@ pub(crate) fn lower_insn_to_regs(
         | Opcode::Sload16x4
         | Opcode::Uload16x4
         | Opcode::Sload32x2
-        | Opcode::Uload32x2 => {
-            let sign_extend = match op {
-                Opcode::Sload8 | Opcode::Sload16 | Opcode::Sload32 => true,
-                _ => false,
-            };
-            let flags = ctx
-                .memflags(insn)
-                .expect("Load instruction should have memflags");
-
-            let out_ty = ctx.output_ty(insn, 0);
-            if out_ty == I128 {
-                let off = ctx.data(insn).load_store_offset().unwrap();
-                let mem = lower_pair_address(ctx, &inputs[..], off);
-                let dst = get_output_reg(ctx, outputs[0]);
-                ctx.emit(Inst::LoadP64 {
-                    rt: dst.regs()[0],
-                    rt2: dst.regs()[1],
-                    mem,
-                    flags,
-                });
-            } else {
-                lower_load(
-                    ctx,
-                    insn,
-                    &inputs[..],
-                    outputs[0],
-                    |ctx, dst, mut elem_ty, mem| {
-                        if elem_ty.is_dynamic_vector() {
-                            elem_ty = dynamic_to_fixed(elem_ty);
-                        }
-                        let rd = dst.only_reg().unwrap();
-                        let is_float = ty_has_float_or_vec_representation(elem_ty);
-                        ctx.emit(match (ty_bits(elem_ty), sign_extend, is_float) {
-                            (1, _, _) => Inst::ULoad8 { rd, mem, flags },
-                            (8, false, _) => Inst::ULoad8 { rd, mem, flags },
-                            (8, true, _) => Inst::SLoad8 { rd, mem, flags },
-                            (16, false, _) => Inst::ULoad16 { rd, mem, flags },
-                            (16, true, _) => Inst::SLoad16 { rd, mem, flags },
-                            (32, false, false) => Inst::ULoad32 { rd, mem, flags },
-                            (32, true, false) => Inst::SLoad32 { rd, mem, flags },
-                            (32, _, true) => Inst::FpuLoad32 { rd, mem, flags },
-                            (64, _, false) => Inst::ULoad64 { rd, mem, flags },
-                            // Note that we treat some of the vector loads as scalar floating-point loads,
-                            // which is correct in a little endian environment.
-                            (64, _, true) => Inst::FpuLoad64 { rd, mem, flags },
-                            (128, _, true) => Inst::FpuLoad128 { rd, mem, flags },
-                            _ => {
-                                return Err(CodegenError::Unsupported(format!(
-                                    "Unsupported type in load: {:?}",
-                                    elem_ty
-                                )))
-                            }
-                        });
-
-                        let vec_extend = match op {
-                            Opcode::Sload8x8 => Some((VecExtendOp::Sxtl, ScalarSize::Size16)),
-                            Opcode::Uload8x8 => Some((VecExtendOp::Uxtl, ScalarSize::Size16)),
-                            Opcode::Sload16x4 => Some((VecExtendOp::Sxtl, ScalarSize::Size32)),
-                            Opcode::Uload16x4 => Some((VecExtendOp::Uxtl, ScalarSize::Size32)),
-                            Opcode::Sload32x2 => Some((VecExtendOp::Sxtl, ScalarSize::Size64)),
-                            Opcode::Uload32x2 => Some((VecExtendOp::Uxtl, ScalarSize::Size64)),
-                            _ => None,
-                        };
-
-                        if let Some((t, lane_size)) = vec_extend {
-                            let rd = dst.only_reg().unwrap();
-                            ctx.emit(Inst::VecExtend {
-                                t,
-                                rd,
-                                rn: rd.to_reg(),
-                                high_half: false,
-                                lane_size,
-                            });
-                        }
-
-                        Ok(())
-                    },
-                )?;
-            }
-        }
+        | Opcode::Uload32x2 => implemented_in_isle(ctx),
 
         Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
-            let off = ctx.data(insn).load_store_offset().unwrap();
-            let mut elem_ty = match op {
-                Opcode::Istore8 => I8,
-                Opcode::Istore16 => I16,
-                Opcode::Istore32 => I32,
-                Opcode::Store => ctx.input_ty(insn, 0),
-                _ => unreachable!(),
-            };
-            let is_float = ty_has_float_or_vec_representation(elem_ty);
-            let flags = ctx
-                .memflags(insn)
-                .expect("Store instruction should have memflags");
-
-            let dst = put_input_in_regs(ctx, inputs[0]);
-
-            if elem_ty == I128 {
-                let mem = lower_pair_address(ctx, &inputs[1..], off);
-                ctx.emit(Inst::StoreP64 {
-                    rt: dst.regs()[0],
-                    rt2: dst.regs()[1],
-                    mem,
-                    flags,
-                });
-            } else {
-                if elem_ty.is_dynamic_vector() {
-                    elem_ty = dynamic_to_fixed(elem_ty);
-                }
-                let rd = dst.only_reg().unwrap();
-                let mem = lower_address(ctx, elem_ty, &inputs[1..], off);
-                ctx.emit(match (ty_bits(elem_ty), is_float) {
-                    (1, _) | (8, _) => Inst::Store8 { rd, mem, flags },
-                    (16, _) => Inst::Store16 { rd, mem, flags },
-                    (32, false) => Inst::Store32 { rd, mem, flags },
-                    (32, true) => Inst::FpuStore32 { rd, mem, flags },
-                    (64, false) => Inst::Store64 { rd, mem, flags },
-                    (64, true) => Inst::FpuStore64 { rd, mem, flags },
-                    (128, _) => Inst::FpuStore128 { rd, mem, flags },
-                    _ => {
-                        return Err(CodegenError::Unsupported(format!(
-                            "Unsupported type in store: {:?}",
-                            elem_ty
-                        )))
-                    }
-                });
-            }
+            implemented_in_isle(ctx)
         }
 
-        Opcode::StackAddr => {
-            let (stack_slot, offset) = match *ctx.data(insn) {
-                InstructionData::StackLoad {
-                    opcode: Opcode::StackAddr,
-                    stack_slot,
-                    offset,
-                } => (stack_slot, offset),
-                _ => unreachable!(),
-            };
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let offset: i32 = offset.into();
-            assert!(ctx.abi().sized_stackslot_offsets().is_valid(stack_slot));
-            let inst =
-                ctx.abi()
-                    .sized_stackslot_addr(stack_slot, u32::try_from(offset).unwrap(), rd);
-            ctx.emit(inst);
-        }
+        Opcode::StackAddr => implemented_in_isle(ctx),
 
         Opcode::DynamicStackAddr => implemented_in_isle(ctx),
 
@@ -421,52 +281,7 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::Bint => implemented_in_isle(ctx),
 
-        Opcode::Bitcast => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ity = ctx.input_ty(insn, 0);
-            let oty = ctx.output_ty(insn, 0);
-            let ity_bits = ty_bits(ity);
-            let ity_vec_reg = ty_has_float_or_vec_representation(ity);
-            let oty_bits = ty_bits(oty);
-            let oty_vec_reg = ty_has_float_or_vec_representation(oty);
-
-            debug_assert_eq!(ity_bits, oty_bits);
-
-            match (ity_vec_reg, oty_vec_reg) {
-                (true, true) => {
-                    let narrow_mode = if ity_bits <= 32 {
-                        NarrowValueMode::ZeroExtend32
-                    } else {
-                        NarrowValueMode::ZeroExtend64
-                    };
-                    let rm = put_input_in_reg(ctx, inputs[0], narrow_mode);
-                    ctx.emit(Inst::gen_move(rd, rm, oty));
-                }
-                (false, false) => {
-                    let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                    ctx.emit(Inst::gen_move(rd, rm, oty));
-                }
-                (false, true) => {
-                    let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::ZeroExtend64);
-                    ctx.emit(Inst::MovToFpu {
-                        rd,
-                        rn,
-                        size: ScalarSize::Size64,
-                    });
-                }
-                (true, false) => {
-                    let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                    let size = ScalarSize::from_bits(oty_bits);
-
-                    ctx.emit(Inst::MovFromVec {
-                        rd,
-                        rn,
-                        idx: 0,
-                        size,
-                    });
-                }
-            }
-        }
+        Opcode::Bitcast => implemented_in_isle(ctx),
 
         Opcode::Return => implemented_in_isle(ctx),
 
@@ -484,25 +299,7 @@ pub(crate) fn lower_insn_to_regs(
             lower_icmp(ctx, insn, condcode, IcmpOutput::Register(rd))?;
         }
 
-        Opcode::Fcmp => {
-            let condcode = ctx.data(insn).fp_cond_code().unwrap();
-            let cond = lower_fp_condcode(condcode);
-            let ty = ctx.input_ty(insn, 0);
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            if !ty.is_vector() {
-                ctx.emit(Inst::FpuCmp {
-                    size: ScalarSize::from_ty(ty),
-                    rn,
-                    rm,
-                });
-                materialize_bool_result(ctx, insn, rd, cond);
-            } else {
-                lower_vector_compare(ctx, rd, rn, rm, ty, cond)?;
-            }
-        }
+        Opcode::Fcmp => implemented_in_isle(ctx),
 
         Opcode::Debugtrap => implemented_in_isle(ctx),
 
@@ -556,15 +353,7 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::Call | Opcode::CallIndirect => implemented_in_isle(ctx),
 
-        Opcode::GetPinnedReg => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            ctx.emit(Inst::gen_move(rd, xreg(PINNED_REG), I64));
-        }
-
-        Opcode::SetPinnedReg => {
-            let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            ctx.emit(Inst::gen_move(writable_xreg(PINNED_REG), rm, I64));
-        }
+        Opcode::GetPinnedReg | Opcode::SetPinnedReg => implemented_in_isle(ctx),
 
         Opcode::Jump
         | Opcode::Brz
@@ -578,67 +367,11 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::Vconst => implemented_in_isle(ctx),
 
-        Opcode::RawBitcast => {
-            let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ctx.input_ty(insn, 0);
-            ctx.emit(Inst::gen_move(rd, rm, ty));
-        }
+        Opcode::RawBitcast => implemented_in_isle(ctx),
 
-        Opcode::Extractlane => {
-            if let InstructionData::BinaryImm8 { imm, .. } = ctx.data(insn) {
-                let idx = *imm;
-                let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let input_ty = ctx.input_ty(insn, 0);
-                let size = VectorSize::from_ty(input_ty);
-                let ty = ty.unwrap();
+        Opcode::Extractlane => implemented_in_isle(ctx),
 
-                if ty_has_int_representation(ty) {
-                    ctx.emit(Inst::MovFromVec {
-                        rd,
-                        rn,
-                        idx,
-                        size: size.lane_size(),
-                    });
-                // Plain moves are faster on some processors.
-                } else if idx == 0 {
-                    ctx.emit(Inst::gen_move(rd, rn, ty));
-                } else {
-                    ctx.emit(Inst::FpuMoveFromVec { rd, rn, idx, size });
-                }
-            } else {
-                unreachable!();
-            }
-        }
-
-        Opcode::Insertlane => {
-            let idx = if let InstructionData::TernaryImm8 { imm, .. } = ctx.data(insn) {
-                *imm
-            } else {
-                unreachable!();
-            };
-            let input_ty = ctx.input_ty(insn, 1);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rn = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let ty = ty.unwrap();
-            let size = VectorSize::from_ty(ty);
-
-            ctx.emit(Inst::gen_move(rd, rm, ty));
-
-            if ty_has_int_representation(input_ty) {
-                ctx.emit(Inst::MovToVec { rd, rn, idx, size });
-            } else {
-                ctx.emit(Inst::VecMovElement {
-                    rd,
-                    rn,
-                    dest_idx: idx,
-                    src_idx: 0,
-                    size,
-                });
-            }
-        }
+        Opcode::Insertlane => implemented_in_isle(ctx),
 
         Opcode::Splat => implemented_in_isle(ctx),
 
@@ -646,240 +379,7 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::VallTrue | Opcode::VanyTrue => implemented_in_isle(ctx),
 
-        Opcode::VhighBits => {
-            let dst_r = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let src_v = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let ty = ctx.input_ty(insn, 0);
-            // All three sequences use one integer temporary and two vector temporaries.  The
-            // shift is done early so as to give the register allocator the possibility of using
-            // the same reg for `tmp_v1` and `src_v` in the case that this is the last use of
-            // `src_v`.  See https://github.com/WebAssembly/simd/pull/201 for the background and
-            // derivation of these sequences.  Alternative sequences are discussed in
-            // https://github.com/bytecodealliance/wasmtime/issues/2296, although they are not
-            // used here.
-            let tmp_r0 = ctx.alloc_tmp(I64).only_reg().unwrap();
-            let tmp_v0 = ctx.alloc_tmp(I8X16).only_reg().unwrap();
-            let tmp_v1 = ctx.alloc_tmp(I8X16).only_reg().unwrap();
-            match ty {
-                I8X16 => {
-                    // sshr  tmp_v1.16b, src_v.16b, #7
-                    // mov   tmp_r0, #0x0201
-                    // movk  tmp_r0, #0x0804, lsl 16
-                    // movk  tmp_r0, #0x2010, lsl 32
-                    // movk  tmp_r0, #0x8040, lsl 48
-                    // dup   tmp_v0.2d, tmp_r0
-                    // and   tmp_v1.16b, tmp_v1.16b, tmp_v0.16b
-                    // ext   tmp_v0.16b, tmp_v1.16b, tmp_v1.16b, #8
-                    // zip1  tmp_v0.16b, tmp_v1.16b, tmp_v0.16b
-                    // addv  tmp_v0h, tmp_v0.8h
-                    // mov   dst_r, tmp_v0.h[0]
-                    ctx.emit(Inst::VecShiftImm {
-                        op: VecShiftImmOp::Sshr,
-                        rd: tmp_v1,
-                        rn: src_v,
-                        size: VectorSize::Size8x16,
-                        imm: 7,
-                    });
-                    lower_splat_const(ctx, tmp_v0, 0x8040201008040201u64, VectorSize::Size64x2);
-                    ctx.emit(Inst::VecRRR {
-                        alu_op: VecALUOp::And,
-                        rd: tmp_v1,
-                        rn: tmp_v1.to_reg(),
-                        rm: tmp_v0.to_reg(),
-                        size: VectorSize::Size8x16,
-                    });
-                    ctx.emit(Inst::VecExtract {
-                        rd: tmp_v0,
-                        rn: tmp_v1.to_reg(),
-                        rm: tmp_v1.to_reg(),
-                        imm4: 8,
-                    });
-                    ctx.emit(Inst::VecRRR {
-                        alu_op: VecALUOp::Zip1,
-                        rd: tmp_v0,
-                        rn: tmp_v1.to_reg(),
-                        rm: tmp_v0.to_reg(),
-                        size: VectorSize::Size8x16,
-                    });
-                    ctx.emit(Inst::VecLanes {
-                        op: VecLanesOp::Addv,
-                        rd: tmp_v0,
-                        rn: tmp_v0.to_reg(),
-                        size: VectorSize::Size16x8,
-                    });
-                    ctx.emit(Inst::MovFromVec {
-                        rd: dst_r,
-                        rn: tmp_v0.to_reg(),
-                        idx: 0,
-                        size: ScalarSize::Size16,
-                    });
-                }
-                I16X8 => {
-                    // sshr  tmp_v1.8h, src_v.8h, #15
-                    // mov   tmp_r0, #0x1
-                    // movk  tmp_r0, #0x2, lsl 16
-                    // movk  tmp_r0, #0x4, lsl 32
-                    // movk  tmp_r0, #0x8, lsl 48
-                    // dup   tmp_v0.2d, tmp_r0
-                    // shl   tmp_r0, tmp_r0, #4
-                    // mov   tmp_v0.d[1], tmp_r0
-                    // and   tmp_v0.16b, tmp_v1.16b, tmp_v0.16b
-                    // addv  tmp_v0h, tmp_v0.8h
-                    // mov   dst_r, tmp_v0.h[0]
-                    ctx.emit(Inst::VecShiftImm {
-                        op: VecShiftImmOp::Sshr,
-                        rd: tmp_v1,
-                        rn: src_v,
-                        size: VectorSize::Size16x8,
-                        imm: 15,
-                    });
-                    lower_constant_u64(ctx, tmp_r0, 0x0008000400020001u64);
-                    ctx.emit(Inst::VecDup {
-                        rd: tmp_v0,
-                        rn: tmp_r0.to_reg(),
-                        size: VectorSize::Size64x2,
-                    });
-                    ctx.emit(Inst::AluRRImmShift {
-                        alu_op: ALUOp::Lsl,
-                        size: OperandSize::Size64,
-                        rd: tmp_r0,
-                        rn: tmp_r0.to_reg(),
-                        immshift: ImmShift { imm: 4 },
-                    });
-                    ctx.emit(Inst::MovToVec {
-                        rd: tmp_v0,
-                        rn: tmp_r0.to_reg(),
-                        idx: 1,
-                        size: VectorSize::Size64x2,
-                    });
-                    ctx.emit(Inst::VecRRR {
-                        alu_op: VecALUOp::And,
-                        rd: tmp_v0,
-                        rn: tmp_v1.to_reg(),
-                        rm: tmp_v0.to_reg(),
-                        size: VectorSize::Size8x16,
-                    });
-                    ctx.emit(Inst::VecLanes {
-                        op: VecLanesOp::Addv,
-                        rd: tmp_v0,
-                        rn: tmp_v0.to_reg(),
-                        size: VectorSize::Size16x8,
-                    });
-                    ctx.emit(Inst::MovFromVec {
-                        rd: dst_r,
-                        rn: tmp_v0.to_reg(),
-                        idx: 0,
-                        size: ScalarSize::Size16,
-                    });
-                }
-                I32X4 => {
-                    // sshr  tmp_v1.4s, src_v.4s, #31
-                    // mov   tmp_r0, #0x1
-                    // movk  tmp_r0, #0x2, lsl 32
-                    // dup   tmp_v0.2d, tmp_r0
-                    // shl   tmp_r0, tmp_r0, #2
-                    // mov   tmp_v0.d[1], tmp_r0
-                    // and   tmp_v0.16b, tmp_v1.16b, tmp_v0.16b
-                    // addv  tmp_v0s, tmp_v0.4s
-                    // mov   dst_r, tmp_v0.s[0]
-                    ctx.emit(Inst::VecShiftImm {
-                        op: VecShiftImmOp::Sshr,
-                        rd: tmp_v1,
-                        rn: src_v,
-                        size: VectorSize::Size32x4,
-                        imm: 31,
-                    });
-                    lower_constant_u64(ctx, tmp_r0, 0x0000000200000001u64);
-                    ctx.emit(Inst::VecDup {
-                        rd: tmp_v0,
-                        rn: tmp_r0.to_reg(),
-                        size: VectorSize::Size64x2,
-                    });
-                    ctx.emit(Inst::AluRRImmShift {
-                        alu_op: ALUOp::Lsl,
-                        size: OperandSize::Size64,
-                        rd: tmp_r0,
-                        rn: tmp_r0.to_reg(),
-                        immshift: ImmShift { imm: 2 },
-                    });
-                    ctx.emit(Inst::MovToVec {
-                        rd: tmp_v0,
-                        rn: tmp_r0.to_reg(),
-                        idx: 1,
-                        size: VectorSize::Size64x2,
-                    });
-                    ctx.emit(Inst::VecRRR {
-                        alu_op: VecALUOp::And,
-                        rd: tmp_v0,
-                        rn: tmp_v1.to_reg(),
-                        rm: tmp_v0.to_reg(),
-                        size: VectorSize::Size8x16,
-                    });
-                    ctx.emit(Inst::VecLanes {
-                        op: VecLanesOp::Addv,
-                        rd: tmp_v0,
-                        rn: tmp_v0.to_reg(),
-                        size: VectorSize::Size32x4,
-                    });
-                    ctx.emit(Inst::MovFromVec {
-                        rd: dst_r,
-                        rn: tmp_v0.to_reg(),
-                        idx: 0,
-                        size: ScalarSize::Size32,
-                    });
-                }
-                I64X2 => {
-                    // mov dst_r, src_v.d[0]
-                    // mov tmp_r0, src_v.d[1]
-                    // lsr dst_r, dst_r, #63
-                    // lsr tmp_r0, tmp_r0, #63
-                    // add dst_r, dst_r, tmp_r0, lsl #1
-                    ctx.emit(Inst::MovFromVec {
-                        rd: dst_r,
-                        rn: src_v,
-                        idx: 0,
-                        size: ScalarSize::Size64,
-                    });
-                    ctx.emit(Inst::MovFromVec {
-                        rd: tmp_r0,
-                        rn: src_v,
-                        idx: 1,
-                        size: ScalarSize::Size64,
-                    });
-                    ctx.emit(Inst::AluRRImmShift {
-                        alu_op: ALUOp::Lsr,
-                        size: OperandSize::Size64,
-                        rd: dst_r,
-                        rn: dst_r.to_reg(),
-                        immshift: ImmShift::maybe_from_u64(63).unwrap(),
-                    });
-                    ctx.emit(Inst::AluRRImmShift {
-                        alu_op: ALUOp::Lsr,
-                        size: OperandSize::Size64,
-                        rd: tmp_r0,
-                        rn: tmp_r0.to_reg(),
-                        immshift: ImmShift::maybe_from_u64(63).unwrap(),
-                    });
-                    ctx.emit(Inst::AluRRRShift {
-                        alu_op: ALUOp::Add,
-                        size: OperandSize::Size32,
-                        rd: dst_r,
-                        rn: dst_r.to_reg(),
-                        rm: tmp_r0.to_reg(),
-                        shiftop: ShiftOpAndAmt::new(
-                            ShiftOp::LSL,
-                            ShiftOpShiftImm::maybe_from_shift(1).unwrap(),
-                        ),
-                    });
-                }
-                _ => {
-                    return Err(CodegenError::Unsupported(format!(
-                        "VhighBits: Unsupported type: {:?}",
-                        ty
-                    )))
-                }
-            }
-        }
+        Opcode::VhighBits => implemented_in_isle(ctx),
 
         Opcode::Shuffle => implemented_in_isle(ctx),
 
@@ -917,34 +417,7 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::FcvtToUintSat | Opcode::FcvtToSintSat => implemented_in_isle(ctx),
 
-        Opcode::IaddIfcout => {
-            // This is a two-output instruction that is needed for the
-            // legalizer's explicit heap-check sequence, among possible other
-            // uses. Its second output is a flags output only ever meant to
-            // check for overflow using the
-            // `backend.unsigned_add_overflow_condition()` condition.
-            //
-            // Note that the CLIF validation will ensure that no flag-setting
-            // operation comes between this IaddIfcout and its use (e.g., a
-            // Trapif). Thus, we can rely on implicit communication through the
-            // processor flags rather than explicitly generating flags into a
-            // register. We simply use the variant of the add instruction that
-            // sets flags (`adds`) here.
-
-            // Note that the second output (the flags) need not be generated,
-            // because flags are never materialized into a register; the only
-            // instructions that can use a value of type `iflags` or `fflags`
-            // will look directly for the flags-producing instruction (which can
-            // always be found, by construction) and merge it.
-
-            // Now handle the iadd as above, except use an AddS opcode that sets
-            // flags.
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rm = put_input_in_rse_imm12(ctx, inputs[1], NarrowValueMode::None);
-            let ty = ty.unwrap();
-            ctx.emit(alu_inst_imm12(ALUOp::AddS, ty, rd, rn, rm));
-        }
+        Opcode::IaddIfcout => implemented_in_isle(ctx),
 
         Opcode::IaddImm
         | Opcode::ImulImm
@@ -986,67 +459,13 @@ pub(crate) fn lower_insn_to_regs(
             implemented_in_isle(ctx)
         }
 
-        Opcode::TlsValue => match flags.tls_model() {
-            TlsModel::ElfGd => {
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                let (name, _, _) = ctx.symbol_value(insn).unwrap();
-                let symbol = name.clone();
-                ctx.emit(Inst::ElfTlsGetAddr { symbol });
-
-                let x0 = xreg(0);
-                ctx.emit(Inst::gen_move(dst, x0, I64));
-            }
-            _ => {
-                return Err(CodegenError::Unsupported(format!(
-                    "Unimplemented TLS model in AArch64 backend: {:?}",
-                    flags.tls_model()
-                )));
-            }
-        },
+        Opcode::TlsValue => implemented_in_isle(ctx),
 
         Opcode::SqmulRoundSat => implemented_in_isle(ctx),
 
-        Opcode::FcvtLowFromSint => {
-            let ty = ty.unwrap();
+        Opcode::FcvtLowFromSint => implemented_in_isle(ctx),
 
-            if ty != F64X2 {
-                return Err(CodegenError::Unsupported(format!(
-                    "FcvtLowFromSint: Unsupported type: {:?}",
-                    ty
-                )));
-            }
-
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-
-            ctx.emit(Inst::VecExtend {
-                t: VecExtendOp::Sxtl,
-                rd,
-                rn,
-                high_half: false,
-                lane_size: ScalarSize::Size64,
-            });
-            ctx.emit(Inst::VecMisc {
-                op: VecMisc2::Scvtf,
-                rd,
-                rn: rd.to_reg(),
-                size: VectorSize::Size64x2,
-            });
-        }
-
-        Opcode::FvpromoteLow => {
-            debug_assert_eq!(ty.unwrap(), F64X2);
-
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-
-            ctx.emit(Inst::VecRRLong {
-                op: VecRRLongOp::Fcvtl32,
-                rd,
-                rn,
-                high_half: false,
-            });
-        }
+        Opcode::FvpromoteLow => implemented_in_isle(ctx),
 
         Opcode::Fvdemote => implemented_in_isle(ctx),
 

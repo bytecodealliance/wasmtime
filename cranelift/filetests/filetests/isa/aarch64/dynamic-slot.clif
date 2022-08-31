@@ -15,9 +15,9 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   mov x0, sp
+;   mov x1, sp
 ;   movz x2, #1
-;   str x2, [x0]
+;   str x2, [x1]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -36,9 +36,9 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   mov x0, sp
+;   mov x1, sp
 ;   movz x2, #1
-;   str x2, [x0]
+;   str x2, [x1]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret

@@ -6,14 +6,16 @@ use generated_code::Context;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
-    insn_inputs, lower_constant_f128, lower_constant_f32, lower_constant_f64, writable_zero_reg,
-    zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond,
-    CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC,
-    JTSequenceInfo, MachLabel, MoveWideConst, MoveWideOp, NarrowValueMode, Opcode, OperandSize,
-    PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize, NZCV,
+    lower_constant_f128, lower_constant_f32, lower_constant_f64, lower_fp_condcode,
+    writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo,
+    CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift,
+    Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MoveWideConst, MoveWideOp, NarrowValueMode,
+    Opcode, OperandSize, PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize,
+    NZCV,
 };
+use crate::ir::condcodes;
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm};
-use crate::isa::aarch64::lower::{lower_address, lower_splat_const};
+use crate::isa::aarch64::lower::{lower_address, lower_pair_address, lower_splat_const};
 use crate::isa::aarch64::settings::Flags as IsaFlags;
 use crate::machinst::valueregs;
 use crate::machinst::{isle::*, InputSourceInst};
@@ -128,7 +130,11 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     fn lshl_from_imm64(&mut self, ty: Type, n: Imm64) -> Option<ShiftOpAndAmt> {
-        let shiftimm = ShiftOpShiftImm::maybe_from_shift(n.bits() as u64)?;
+        self.lshl_from_u64(ty, n.bits() as u64)
+    }
+
+    fn lshl_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {
+        let shiftimm = ShiftOpShiftImm::maybe_from_shift(n)?;
         let shiftee_bits = ty_bits(ty);
         if shiftee_bits <= std::u8::MAX as usize {
             let shiftimm = shiftimm.mask(shiftee_bits as u8);
@@ -480,13 +486,12 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         }
     }
 
-    fn amode(&mut self, ty: Type, mem_op: Inst, offset: u32) -> AMode {
-        lower_address(
-            self.lower_ctx,
-            ty,
-            &insn_inputs(self.lower_ctx, mem_op)[..],
-            offset as i32,
-        )
+    fn amode(&mut self, ty: Type, addr: Value, offset: u32) -> AMode {
+        lower_address(self.lower_ctx, ty, addr, offset as i32)
+    }
+
+    fn pair_amode(&mut self, addr: Value, offset: u32) -> PairAMode {
+        lower_pair_address(self.lower_ctx, addr, offset as i32)
     }
 
     fn amode_is_reg(&mut self, address: &AMode) -> Option<Reg> {
@@ -515,6 +520,10 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         lower_splat_const(self.lower_ctx, rd, value, *size);
 
         rd.to_reg()
+    }
+
+    fn fp_cond_code(&mut self, cc: &condcodes::FloatCC) -> Cond {
+        lower_fp_condcode(*cc)
     }
 
     fn preg_sp(&mut self) -> PReg {
@@ -721,5 +730,9 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
                 shift
             );
         }
+    }
+
+    fn writable_pinned_reg(&mut self) -> WritableReg {
+        super::regs::writable_xreg(super::regs::PINNED_REG)
     }
 }

@@ -2159,7 +2159,7 @@ pub(crate) fn define(
             "irsub_imm",
             r#"
         Immediate reverse wrapping subtraction: `a := Y - x \pmod{2^B}`.
-        
+
         The immediate operand is a sign extended 64 bit constant.
 
         Also works as integer negation when `Y = 0`. Use `iadd_imm`
@@ -3845,20 +3845,24 @@ pub(crate) fn define(
         .operands_out(vec![x]),
     );
 
-    let x = &Operand::new("x", Float);
+    let FloatScalar = &TypeVar::new(
+        "FloatScalar",
+        "A scalar only floating point number",
+        TypeSetBuilder::new().floats(Interval::All).build(),
+    );
+    let x = &Operand::new("x", FloatScalar);
     let a = &Operand::new("a", IntTo);
 
     ig.push(
         Inst::new(
             "fcvt_to_uint",
             r#"
-        Convert floating point to unsigned integer.
+        Converts floating point scalars to unsigned integer.
 
-        Each lane in `x` is converted to an unsigned integer by rounding
-        towards zero. If `x` is NaN or if the unsigned integral value cannot be
-        represented in the result type, this instruction traps.
+        Only operates on `x` if it is a scalar. If `x` is NaN or if
+        the unsigned integral value cannot be represented in the result
+        type, this instruction traps.
 
-        The result type must have the same number of vector lanes as the input.
         "#,
             &formats.unary,
         )
@@ -3866,6 +3870,27 @@ pub(crate) fn define(
         .operands_out(vec![a])
         .can_trap(true),
     );
+
+    ig.push(
+        Inst::new(
+            "fcvt_to_sint",
+            r#"
+        Converts floating point scalars to signed integer.
+
+        Only operates on `x` if it is a scalar. If `x` is NaN or if
+        the unsigned integral value cannot be represented in the result
+        type, this instruction traps.
+
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a])
+        .can_trap(true),
+    );
+
+    let x = &Operand::new("x", Float);
+    let a = &Operand::new("a", IntTo);
 
     ig.push(
         Inst::new(
@@ -3879,25 +3904,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![x])
         .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
-            "fcvt_to_sint",
-            r#"
-        Convert floating point to signed integer.
-
-        Each lane in `x` is converted to a signed integer by rounding towards
-        zero. If `x` is NaN or if the signed integral value cannot be
-        represented in the result type, this instruction traps.
-
-        The result type must have the same number of vector lanes as the input.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![a])
-        .can_trap(true),
     );
 
     ig.push(

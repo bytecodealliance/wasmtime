@@ -9,8 +9,8 @@ use target_lexicon::Triple;
 pub use super::MachLabel;
 pub use crate::data_value::DataValue;
 pub use crate::ir::{
-    ArgumentExtension, Constant, DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate,
-    SigRef, StackSlot,
+    dynamic_to_fixed, ArgumentExtension, Constant, DynamicStackSlot, ExternalName, FuncRef,
+    GlobalValue, Immediate, SigRef, StackSlot,
 };
 pub use crate::isa::unwind::UnwindInst;
 pub use crate::machinst::{
@@ -372,10 +372,54 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_int_bool(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_int() || ty.is_bool() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn ty_scalar_float(&mut self, ty: Type) -> Option<Type> {
             match ty {
                 F32 | F64 => Some(ty),
                 _ => None,
+            }
+        }
+
+        #[inline]
+        fn ty_float_or_vec(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                F32 | F64 => Some(ty),
+                ty if ty.is_vector() => Some(ty),
+                _ => None,
+            }
+        }
+
+        fn ty_vector_float(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() && ty.lane_type().is_float() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_vector_not_float(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() && !ty.lane_type().is_float() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_vec64_ctor(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() && ty.bits() == 64 {
+                Some(ty)
+            } else {
+                None
             }
         }
 
@@ -391,6 +435,24 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn ty_vec128(&mut self, ty: Type) -> Option<Type> {
             if ty.is_vector() && ty.bits() == 128 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_dyn_vec64(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_dynamic_vector() && dynamic_to_fixed(ty).bits() == 64 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_dyn_vec128(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_dynamic_vector() && dynamic_to_fixed(ty).bits() == 128 {
                 Some(ty)
             } else {
                 None

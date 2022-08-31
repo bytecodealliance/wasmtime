@@ -121,15 +121,15 @@ mod component {
 
         let module = quote! {
             #[allow(unused_imports)]
-            fn static_component_api_target(input: &mut arbitrary::Unstructured) -> arbitrary::Result<()> {
+            fn static_component_api_target(input: &mut libfuzzer_sys::arbitrary::Unstructured) -> libfuzzer_sys::arbitrary::Result<()> {
                 use anyhow::Result;
-                use arbitrary::{Unstructured, Arbitrary};
-                use component_test_util::{self, Float32, Float64};
                 use component_fuzz_util::Declarations;
+                use component_test_util::{self, Float32, Float64};
+                use libfuzzer_sys::arbitrary::{self, Arbitrary};
+                use std::borrow::Cow;
                 use std::sync::{Arc, Once};
                 use wasmtime::component::{ComponentType, Lift, Lower};
                 use wasmtime_fuzzing::generators::component_types;
-                use std::borrow::Cow;
 
                 const SEED: u64 = #seed;
 

@@ -365,6 +365,10 @@
 (decl ty_int_bool_128 (Type) Type)
 (extern extractor ty_int_bool_128 ty_int_bool_128)
 
+;; An extractor that matches any int or bool.
+(decl ty_int_bool (Type) Type)
+(extern extractor ty_int_bool ty_int_bool)
+
 ;; An extractor that only matches integers.
 (decl ty_int (Type) Type)
 (extern extractor ty_int ty_int)
@@ -373,13 +377,37 @@
 (decl ty_scalar_float (Type) Type)
 (extern extractor ty_scalar_float ty_scalar_float)
 
-;; A pure constructor that only matches 64-bit vector types.
+;; An extractor that matches scalar floating-point types or vector types.
+(decl ty_float_or_vec (Type) Type)
+(extern extractor ty_float_or_vec ty_float_or_vec)
+
+;; A pure constructor that only matches vector floating-point types.
+(decl pure ty_vector_float (Type) Type)
+(extern constructor ty_vector_float ty_vector_float)
+
+;; A pure constructor that only matches vector types with lanes which
+;; are not floating-point.
+(decl pure ty_vector_not_float (Type) Type)
+(extern constructor ty_vector_not_float ty_vector_not_float)
+
+;; A pure constructor/extractor that only matches 64-bit vector types.
 (decl pure ty_vec64 (Type) Type)
-(extern constructor ty_vec64 ty_vec64)
+(extern constructor ty_vec64 ty_vec64_ctor)
+(extern extractor ty_vec64 ty_vec64)
 
 ;; An extractor that only matches 128-bit vector types.
 (decl ty_vec128 (Type) Type)
 (extern extractor ty_vec128 ty_vec128)
+
+;; An extractor that only matches dynamic vector types with a 64-bit
+;; base type.
+(decl ty_dyn_vec64 (Type) Type)
+(extern extractor ty_dyn_vec64 ty_dyn_vec64)
+
+;; An extractor that only matches dynamic vector types with a 128-bit
+;; base type.
+(decl ty_dyn_vec128 (Type) Type)
+(extern extractor ty_dyn_vec128 ty_dyn_vec128)
 
 ;; An extractor that only matches 64-bit vector types with integer
 ;; lanes (I8X8, I16X4, I32X2)

@@ -1,38 +1,48 @@
 #![no_main]
 
-use libfuzzer_sys::arbitrary::{Result, Unstructured};
+use libfuzzer_sys::arbitrary::{Arbitrary, Result, Unstructured};
 use libfuzzer_sys::fuzz_target;
-use wasmtime_fuzzing::oracles::Timeout;
-use wasmtime_fuzzing::{generators, oracles};
+use wasmtime_fuzzing::generators::Config;
+use wasmtime_fuzzing::oracles::{instantiate, Timeout};
+use wasmtime_fuzzing::wasm_smith::Module;
 
-fuzz_target!(|data: &[u8]| {
-    // errors in `run` have to do with not enough input in `data`, which we
-    // ignore here since it doesn't affect how we'd like to fuzz.
-    drop(run(data));
-});
-
-fn run(data: &[u8]) -> Result<()> {
-    let mut u = Unstructured::new(data);
-    let mut config: generators::Config = u.arbitrary()?;
-
-    // Pick either fuel, duration-based, or module-based timeout. Note that the
-    // module-based timeout is implemented with wasm-smith's
-    // `ensure_termination` option.
-    let timeout = if u.arbitrary()? {
-        config.generate_timeout(&mut u)?
-    } else {
-        Timeout::None
-    };
-
-    let module = config.generate(
-        &mut u,
-        if let Timeout::None = timeout {
-            Some(1000)
-        } else {
-            None
-        },
-    )?;
-
-    oracles::instantiate(&module.to_bytes(), true, &config, timeout);
-    Ok(())
+#[derive(Debug)]
+struct InstantiateInput {
+    config: Config,
+    timeout: Timeout,
+    module: Module,
 }
+
+impl<'a> Arbitrary<'a> for InstantiateInput {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
+        let mut config: Config = u.arbitrary()?;
+
+        // Pick either fuel, duration-based, or module-based timeout. Note that the
+        // module-based timeout is implemented with wasm-smith's
+        // `ensure_termination` option.
+        let timeout = if u.arbitrary()? {
+            config.generate_timeout(u)?
+        } else {
+            Timeout::None
+        };
+
+        let module = config.generate(
+            u,
+            if let Timeout::None = timeout {
+                Some(1000)
+            } else {
+                None
+            },
+        )?;
+
+        Ok(InstantiateInput {
+            config,
+            timeout,
+            module,
+        })
+    }
+}
+
+fuzz_target!(|data: InstantiateInput| {
+    instantiate(&data.module.to_bytes(), true, &data.config, data.timeout);
+});
