@@ -181,7 +181,9 @@ impl TargetIsa for AArch64Backend {
     }
 
     fn function_alignment(&self) -> u32 {
-        4
+        // We use 32-byte alignment for performance reasons, but for correctness we would only need
+        // 4-byte alignment.
+        32
     }
 }
 
