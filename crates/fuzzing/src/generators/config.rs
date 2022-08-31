@@ -181,7 +181,8 @@ impl Config {
                 self.wasmtime.memory_guaranteed_dense_image_size,
             ))
             .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
-            .generate_address_map(self.wasmtime.generate_address_map);
+            .generate_address_map(self.wasmtime.generate_address_map)
+            .async_stack_zeroing(self.wasmtime.async_stack_zeroing);
 
         self.wasmtime.codegen.configure(&mut cfg);
 
@@ -386,6 +387,7 @@ pub struct WasmtimeConfig {
     padding_between_functions: Option<u16>,
     generate_address_map: bool,
     native_unwind_info: bool,
+    async_stack_zeroing: bool,
 }
 
 impl WasmtimeConfig {
