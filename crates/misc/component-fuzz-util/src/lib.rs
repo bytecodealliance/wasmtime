@@ -20,7 +20,7 @@ const MAX_FLAT_RESULTS: usize = 1;
 const MAX_ARITY: u32 = 5;
 
 // Wasmtime allows up to 100 type depth so limit this to just under that.
-const MAX_TYPE_DEPTH: u32 = 90;
+const MAX_TYPE_DEPTH: u32 = 99;
 
 /// The name of the imported host function which the generated component will call
 pub const IMPORT_FUNCTION: &str = "echo";
