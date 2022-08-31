@@ -1,5 +1,17 @@
 --------------------------------------------------------------------------------
 
+## 0.40.1
+
+Released 2022-08-31.
+
+### Fixed
+
+* Fixed a potential panic when capturing a Wasm stack trace if there were
+  multiple Wasm activations on the stack from two different
+  stores. [#4779](https://github.com/bytecodealliance/wasmtime/pull/4779/)
+
+--------------------------------------------------------------------------------
+
 ## 0.40.0
 
 Released 2022-08-20.
