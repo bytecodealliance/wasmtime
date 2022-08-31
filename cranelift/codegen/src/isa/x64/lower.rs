@@ -153,21 +153,31 @@ fn emit_vm_call(
     // TODO avoid recreating signatures for every single Libcall function.
     let call_conv = CallConv::for_libcall(flags, CallConv::triple_default(triple));
     let sig = libcall.signature(call_conv);
-    let caller_conv = ctx.abi().call_conv();
+    let caller_conv = ctx.abi().call_conv(ctx.sigs());
 
-    let mut abi = X64Caller::from_func(&sig, &extname, dist, caller_conv, flags)?;
+    if !ctx.sigs().have_abi_sig_for_signature(&sig) {
+        ctx.sigs_mut()
+            .make_abi_sig_from_ir_signature::<X64ABIMachineSpec>(sig.clone(), flags)?;
+    }
+
+    let mut abi =
+        X64Caller::from_libcall(ctx.sigs(), &sig, &extname, dist, caller_conv, flags.clone())?;
 
     abi.emit_stack_pre_adjust(ctx);
 
-    assert_eq!(inputs.len(), abi.num_args());
+    assert_eq!(inputs.len(), abi.num_args(ctx.sigs()));
 
     for (i, input) in inputs.iter().enumerate() {
-        abi.emit_copy_regs_to_arg(ctx, i, ValueRegs::one(*input));
+        for inst in abi.gen_copy_regs_to_arg(ctx, i, ValueRegs::one(*input)) {
+            ctx.emit(inst);
+        }
     }
 
     abi.emit_call(ctx);
     for (i, output) in outputs.iter().enumerate() {
-        abi.emit_copy_retval_to_regs(ctx, i, ValueRegs::one(*output));
+        for inst in abi.gen_copy_retval_to_regs(ctx, i, ValueRegs::one(*output)) {
+            ctx.emit(inst);
+        }
     }
     abi.emit_stack_post_adjust(ctx);
 

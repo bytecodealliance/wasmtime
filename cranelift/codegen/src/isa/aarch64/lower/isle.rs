@@ -26,7 +26,7 @@ use crate::{
         immediates::*, types::*, AtomicRmwOp, ExternalName, Inst, InstructionData, MemFlags,
         TrapCode, Value, ValueList,
     },
-    isa::aarch64::abi::{AArch64Caller, AArch64MachineDeps},
+    isa::aarch64::abi::AArch64Caller,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::aarch64::lower::{writable_vreg, writable_xreg, xreg},
     isa::unwind::UnwindInst,
@@ -80,7 +80,7 @@ impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
 impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_methods!();
-    isle_prelude_caller_methods!(AArch64MachineDeps, AArch64Caller);
+    isle_prelude_caller_methods!(crate::isa::aarch64::abi::AArch64MachineDeps, AArch64Caller);
 
     fn sign_return_address_disabled(&mut self) -> Option<()> {
         if self.isa_flags.sign_return_address() {

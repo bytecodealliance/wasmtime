@@ -9,8 +9,8 @@ use crate::isa::unwind::systemv;
 use crate::isa::x64::{inst::regs::create_reg_env_systemv, settings as x64_settings};
 use crate::isa::Builder as IsaBuilder;
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, TextSectionBuilder,
-    VCode,
+    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    TextSectionBuilder, VCode,
 };
 use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self as shared_settings, Flags};
@@ -53,8 +53,9 @@ impl X64Backend {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
         let emit_info = EmitInfo::new(flags.clone(), self.x64_flags.clone());
-        let abi = abi::X64Callee::new(&func, self, &self.x64_flags)?;
-        compile::compile::<Self>(&func, self, abi, &self.reg_env, emit_info)
+        let sigs = SigSet::new::<abi::X64ABIMachineSpec>(func, &self.flags)?;
+        let abi = abi::X64Callee::new(&func, self, &self.x64_flags, &sigs)?;
+        compile::compile::<Self>(&func, self, abi, &self.reg_env, emit_info, sigs)
     }
 }
 
