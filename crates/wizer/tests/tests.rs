@@ -13,6 +13,7 @@ fn get_wizer() -> Wizer {
     wizer.allow_wasi(true).unwrap();
     wizer.wasm_multi_memory(true);
     wizer.wasm_module_linking(true);
+    wizer.wasm_bulk_memory(true);
     wizer
 }
 
@@ -1011,6 +1012,76 @@ fn reject_import_instance_memory() -> Result<()> {
               (import "x" (instance (export "m" (memory 0))))
               (func (export "wizer.initialize"))
             )
+        "#,
+    )
+}
+
+#[test]
+fn accept_bulk_memory_copy() -> Result<()> {
+    run_wat(
+        &[],
+        ('h' as i32) + ('w' as i32),
+        r#"
+            (module
+              (memory $memory (data "hello, wizer!"))
+              (func (export "wizer.initialize")
+                i32.const 42 ;; dst
+                i32.const 0  ;; src
+                i32.const 13 ;; size
+                memory.copy)
+              (func (export "run") (result i32)
+                i32.const 42
+                i32.load8_u
+                i32.const 42
+                i32.load8_u offset=7
+                i32.add))
+        "#,
+    )
+}
+
+#[test]
+fn accept_bulk_memory_fill() -> Result<()> {
+    run_wat(
+        &[],
+        77 + 77,
+        r#"
+            (module
+              (memory 1)
+              (func (export "wizer.initialize")
+                i32.const 42 ;; dst
+                i32.const 77 ;; value
+                i32.const 13 ;; size
+                memory.fill)
+              (func (export "run") (result i32)
+                i32.const 42
+                i32.load8_u
+                i32.const 42
+                i32.load8_u offset=7
+                i32.add))
+        "#,
+    )
+}
+
+#[test]
+fn accept_bulk_memory_init() -> Result<()> {
+    run_wat(
+        &[],
+        ('h' as i32) + ('w' as i32),
+        r#"
+            (module
+              (memory 1)
+              (data $data "hello, wizer!")
+              (func (export "wizer.initialize")
+                i32.const 42 ;; dst
+                i32.const 0  ;; offset
+                i32.const 13 ;; size
+                memory.init $data)
+              (func (export "run") (result i32)
+                i32.const 42
+                i32.load8_u
+                i32.const 42
+                i32.load8_u offset=7
+                i32.add))
         "#,
     )
 }
