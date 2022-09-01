@@ -84,7 +84,12 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ModuleContext<'a>
                 elems.range(),
                 full_wasm,
             ),
-            DataCountSection { .. } => unreachable!("validation rejects bulk memory"),
+            DataCountSection { range, .. } => stack.top_mut().module.add_raw_section(
+                &mut cx,
+                SectionId::DataCount,
+                range,
+                full_wasm,
+            ),
             DataSection(data) => stack.top_mut().module.add_raw_section(
                 &mut cx,
                 SectionId::Data,

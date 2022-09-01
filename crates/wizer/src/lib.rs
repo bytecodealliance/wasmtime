@@ -34,6 +34,7 @@ const DEFAULT_KEEP_INIT_FUNC: bool = false;
 const DEFAULT_WASM_MULTI_VALUE: bool = true;
 const DEFAULT_WASM_MULTI_MEMORY: bool = true;
 const DEFAULT_WASM_MODULE_LINKING: bool = false;
+const DEFAULT_WASM_BULK_MEMORY: bool = false;
 
 /// We only ever use `Store<T>` with a fixed `T` that is our optional WASI
 /// context.
@@ -198,6 +199,16 @@ pub struct Wizer {
     /// Disabled by default.
     #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
     wasm_module_linking: Option<bool>,
+
+    /// Enable or disable Wasm bulk memory operations.
+    ///
+    /// Note that only `memory.copy`, `memory.fill`, and `memory.init` operations
+    /// are currently supported.  Modules which use other instructions, such as
+    /// `table.copy` will be rejected.
+    ///
+    /// Disabled by default.
+    #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
+    wasm_bulk_memory: Option<bool>,
 }
 
 impl std::fmt::Debug for Wizer {
@@ -215,6 +226,7 @@ impl std::fmt::Debug for Wizer {
             wasm_multi_memory,
             wasm_multi_value,
             wasm_module_linking,
+            wasm_bulk_memory,
         } = self;
         f.debug_struct("Wizer")
             .field("init_func", &init_func)
@@ -229,6 +241,7 @@ impl std::fmt::Debug for Wizer {
             .field("wasm_multi_memory", &wasm_multi_memory)
             .field("wasm_multi_value", &wasm_multi_value)
             .field("wasm_module_linking", &wasm_module_linking)
+            .field("wasm_bulk_memory", &wasm_bulk_memory)
             .finish()
     }
 }
@@ -290,6 +303,7 @@ impl Wizer {
             wasm_multi_memory: None,
             wasm_multi_value: None,
             wasm_module_linking: None,
+            wasm_bulk_memory: None,
         }
     }
 
@@ -429,6 +443,18 @@ impl Wizer {
         self
     }
 
+    /// Enable or disable Wasm bulk memory operations.
+    ///
+    /// Note that only `memory.copy`, `memory.fill`, and `memory.init`
+    /// operations are currently supported.  Modules which use other
+    /// instructions, such as `table.copy` will be rejected.
+    ///
+    /// Defaults to `false`.
+    pub fn wasm_bulk_memory(&mut self, enable: bool) -> &mut Self {
+        self.wasm_bulk_memory = Some(enable);
+        self
+    }
+
     /// Initialize the given Wasm, snapshot it, and return the serialized
     /// snapshot as a new, pre-initialized Wasm module.
     pub fn run(&self, wasm: &[u8]) -> anyhow::Result<Vec<u8>> {
@@ -503,12 +529,14 @@ impl Wizer {
             self.wasm_module_linking
                 .unwrap_or(DEFAULT_WASM_MODULE_LINKING),
         );
+        // Note that we only support `memory.copy`, `memory.fill`, and
+        // `memory.init` for the time being:
+        config.wasm_bulk_memory(self.wasm_bulk_memory.unwrap_or(DEFAULT_WASM_BULK_MEMORY));
 
-        // Proposoals that we should add support for.
+        // Proposals that we should add support for.
         config.wasm_reference_types(false);
         config.wasm_simd(false);
         config.wasm_threads(false);
-        config.wasm_bulk_memory(false);
 
         Ok(config)
     }
@@ -531,7 +559,7 @@ impl Wizer {
             memory64: false,
             exceptions: false,
 
-            // XXX: Though we don't actually support bulk memory yet, we
+            // XXX: Though we don't fully support bulk memory yet, we
             // unconditionally turn it on.
             //
             // Many parsers, notably our own `wasmparser`, assume that which
@@ -606,14 +634,6 @@ impl Wizer {
                 }
                 wasmparser::Payload::ModuleSectionEntry { parser, .. } => {
                     parsers.push(parser);
-                }
-                wasmparser::Payload::DataSection(mut data) => {
-                    let count = data.get_count();
-                    for _ in 0..count {
-                        if let wasmparser::DataKind::Passive = data.read().unwrap().kind {
-                            anyhow::bail!("unsupported passive data segment");
-                        }
-                    }
                 }
                 wasmparser::Payload::End => {
                     parsers.pop();

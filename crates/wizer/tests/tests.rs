@@ -13,6 +13,7 @@ fn get_wizer() -> Wizer {
     wizer.allow_wasi(true).unwrap();
     wizer.wasm_multi_memory(true);
     wizer.wasm_module_linking(true);
+    wizer.wasm_bulk_memory(true);
     wizer
 }
 
@@ -193,7 +194,7 @@ fn reject_imported_table() -> Result<()> {
 }
 
 #[test]
-fn reject_bulk_memory() -> Result<()> {
+fn reject_table_copy() -> Result<()> {
     let result = run_wat(
         &[],
         42,
@@ -221,6 +222,127 @@ fn reject_bulk_memory() -> Result<()> {
     assert!(err
         .to_string()
         .contains("unsupported `table.copy` instruction"));
+
+    Ok(())
+}
+
+#[test]
+fn reject_table_get_set() -> Result<()> {
+    let result = run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (table 3 funcref)
+
+  (func $f (result i32) (i32.const 0))
+  (func $g (result i32) (i32.const 0))
+  (func $h (result i32) (i32.const 0))
+
+  (func (export "main")
+    i32.const 0
+    i32.const 1
+    table.get
+    table.set)
+
+  (elem (i32.const 0) $f $g $h)
+)
+"#,
+    );
+    assert!(result.is_err());
+
+    let err = result.unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("reference types support is not enabled"),);
+
+    Ok(())
+}
+
+#[test]
+fn reject_table_init() -> Result<()> {
+    let result = run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (table 3 funcref)
+
+  (func $f (result i32) (i32.const 0))
+  (func $g (result i32) (i32.const 0))
+  (func $h (result i32) (i32.const 0))
+
+  (elem $elem $f $g $h)
+
+  (func (export "main")
+    i32.const 0
+    i32.const 0
+    i32.const 3
+    table.init $elem)
+)
+"#,
+    );
+    assert!(result.is_err());
+
+    let err = result.unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("unsupported `table.init` instruction"));
+
+    Ok(())
+}
+
+#[test]
+fn reject_elem_drop() -> Result<()> {
+    let result = run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (table 3 funcref)
+
+  (func $f (result i32) (i32.const 0))
+  (func $g (result i32) (i32.const 0))
+  (func $h (result i32) (i32.const 0))
+
+  (elem $elem $f $g $h)
+
+  (func (export "main")
+    elem.drop $elem)
+)
+"#,
+    );
+    assert!(result.is_err());
+
+    let err = result.unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("unsupported `elem.drop` instruction"));
+
+    Ok(())
+}
+
+#[test]
+fn reject_data_drop() -> Result<()> {
+    let result = run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (memory 1)
+  (data $data "hello, wizer!")
+
+  (func (export "main")
+    data.drop $data)
+)
+"#,
+    );
+    assert!(result.is_err());
+
+    let err = result.unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("unsupported `data.drop` instruction"));
 
     Ok(())
 }
@@ -1011,6 +1133,76 @@ fn reject_import_instance_memory() -> Result<()> {
               (import "x" (instance (export "m" (memory 0))))
               (func (export "wizer.initialize"))
             )
+        "#,
+    )
+}
+
+#[test]
+fn accept_bulk_memory_copy() -> Result<()> {
+    run_wat(
+        &[],
+        ('h' as i32) + ('w' as i32),
+        r#"
+            (module
+              (memory $memory (data "hello, wizer!"))
+              (func (export "wizer.initialize")
+                i32.const 42 ;; dst
+                i32.const 0  ;; src
+                i32.const 13 ;; size
+                memory.copy)
+              (func (export "run") (result i32)
+                i32.const 42
+                i32.load8_u
+                i32.const 42
+                i32.load8_u offset=7
+                i32.add))
+        "#,
+    )
+}
+
+#[test]
+fn accept_bulk_memory_fill() -> Result<()> {
+    run_wat(
+        &[],
+        77 + 77,
+        r#"
+            (module
+              (memory 1)
+              (func (export "wizer.initialize")
+                i32.const 42 ;; dst
+                i32.const 77 ;; value
+                i32.const 13 ;; size
+                memory.fill)
+              (func (export "run") (result i32)
+                i32.const 42
+                i32.load8_u
+                i32.const 42
+                i32.load8_u offset=7
+                i32.add))
+        "#,
+    )
+}
+
+#[test]
+fn accept_bulk_memory_init() -> Result<()> {
+    run_wat(
+        &[],
+        ('h' as i32) + ('w' as i32),
+        r#"
+            (module
+              (memory 1)
+              (data $data "hello, wizer!")
+              (func (export "wizer.initialize")
+                i32.const 42 ;; dst
+                i32.const 0  ;; offset
+                i32.const 13 ;; size
+                memory.init $data)
+              (func (export "run") (result i32)
+                i32.const 42
+                i32.load8_u
+                i32.const 42
+                i32.load8_u offset=7
+                i32.add))
         "#,
     )
 }
