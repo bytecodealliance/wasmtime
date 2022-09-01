@@ -31,12 +31,12 @@ block0:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   movz w16, #34480
-;   movk w16, #1, LSL #16
+;   movk w16, w16, #1, LSL #16
 ;   sub sp, sp, x16, UXTX
 ; block0:
 ;   mov x0, sp
 ;   movz w16, #34480
-;   movk w16, #1, LSL #16
+;   movk w16, w16, #1, LSL #16
 ;   add sp, sp, x16, UXTX
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -71,13 +71,13 @@ block0:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   movz w16, #34480
-;   movk w16, #1, LSL #16
+;   movk w16, w16, #1, LSL #16
 ;   sub sp, sp, x16, UXTX
 ; block0:
 ;   mov x2, sp
 ;   ldr x0, [x2]
 ;   movz w16, #34480
-;   movk w16, #1, LSL #16
+;   movk w16, w16, #1, LSL #16
 ;   add sp, sp, x16, UXTX
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -112,13 +112,13 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   movz w16, #34480
-;   movk w16, #1, LSL #16
+;   movk w16, w16, #1, LSL #16
 ;   sub sp, sp, x16, UXTX
 ; block0:
 ;   mov x2, sp
 ;   str x0, [x2]
 ;   movz w16, #34480
-;   movk w16, #1, LSL #16
+;   movk w16, w16, #1, LSL #16
 ;   add sp, sp, x16, UXTX
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -479,13 +479,13 @@ block0(v0: i128):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   movz w16, #34480
-;   movk w16, #1, LSL #16
+;   movk w16, w16, #1, LSL #16
 ;   sub sp, sp, x16, UXTX
 ; block0:
 ;   mov x5, sp
 ;   stp x0, x1, [x5]
 ;   movz w16, #34480
-;   movk w16, #1, LSL #16
+;   movk w16, w16, #1, LSL #16
 ;   add sp, sp, x16, UXTX
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -539,13 +539,13 @@ block0:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   movz w16, #34480
-;   movk w16, #1, LSL #16
+;   movk w16, w16, #1, LSL #16
 ;   sub sp, sp, x16, UXTX
 ; block0:
 ;   mov x5, sp
 ;   ldp x0, x1, [x5]
 ;   movz w16, #34480
-;   movk w16, #1, LSL #16
+;   movk w16, w16, #1, LSL #16
 ;   add sp, sp, x16, UXTX
 ;   ldp fp, lr, [sp], #16
 ;   ret

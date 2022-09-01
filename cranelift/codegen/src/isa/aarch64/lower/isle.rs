@@ -8,7 +8,7 @@ use generated_code::Context;
 use super::{
     lower_constant_f128, lower_constant_f32, lower_constant_f64, lower_fp_condcode,
     writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo,
-    CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift,
+    CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift,
     Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MoveWideConst, MoveWideOp, NarrowValueMode,
     Opcode, OperandSize, PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize,
     NZCV,
@@ -28,7 +28,6 @@ use crate::{
     },
     isa::aarch64::abi::AArch64Caller,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
-    isa::aarch64::lower::{writable_vreg, writable_xreg, xreg},
     isa::unwind::UnwindInst,
     machinst::{ty_bits, InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData},
 };
@@ -209,9 +208,9 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
                 });
 
                 if upper_halfword != 0 {
-                    self.emit(&MInst::MovWide {
-                        op: MoveWideOp::MovK,
+                    self.emit(&MInst::MovK {
                         rd,
+                        rn: rd.to_reg(),
                         imm: MoveWideConst::maybe_with_shift(upper_halfword, 16).unwrap(),
                         size,
                     });
@@ -263,9 +262,9 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
                     }
                 } else {
                     let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                    self.emit(&MInst::MovWide {
-                        op: MoveWideOp::MovK,
+                    self.emit(&MInst::MovK {
                         rd,
+                        rn: rd.to_reg(),
                         imm,
                         size,
                     });
@@ -292,18 +291,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
     fn zero_reg(&mut self) -> Reg {
         zero_reg()
-    }
-
-    fn xreg(&mut self, index: u8) -> Reg {
-        xreg(index)
-    }
-
-    fn writable_xreg(&mut self, index: u8) -> WritableReg {
-        writable_xreg(index)
-    }
-
-    fn writable_vreg(&mut self, index: u8) -> WritableReg {
-        writable_vreg(index)
     }
 
     fn extended_value_from_value(&mut self, val: Value) -> Option<ExtendedValue> {
@@ -718,11 +705,11 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         }
     }
 
-    fn fpu_op_ri_sli(&mut self, ty_bits: u8, shift: u8) -> FPUOpRI {
+    fn fpu_op_ri_sli(&mut self, ty_bits: u8, shift: u8) -> FPUOpRIMod {
         if ty_bits == 32 {
-            FPUOpRI::Sli32(FPULeftShiftImm::maybe_from_u8(shift, ty_bits).unwrap())
+            FPUOpRIMod::Sli32(FPULeftShiftImm::maybe_from_u8(shift, ty_bits).unwrap())
         } else if ty_bits == 64 {
-            FPUOpRI::Sli64(FPULeftShiftImm::maybe_from_u8(shift, ty_bits).unwrap())
+            FPUOpRIMod::Sli64(FPULeftShiftImm::maybe_from_u8(shift, ty_bits).unwrap())
         } else {
             unimplemented!(
                 "unexpected input size for fpu_op_ri_sli: {} (shift: {})",

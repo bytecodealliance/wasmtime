@@ -3,7 +3,7 @@
 use crate::ir::types::*;
 use crate::ir::Type;
 use crate::isa::aarch64::inst::*;
-use crate::machinst::{ty_bits, MachLabel, PrettyPrint, Reg, Writable};
+use crate::machinst::{ty_bits, MachLabel, PrettyPrint, Reg};
 use core::convert::Into;
 use std::string::String;
 
@@ -122,9 +122,11 @@ pub enum AMode {
     // Real ARM64 addressing modes:
     //
     /// "post-indexed" mode as per AArch64 docs: postincrement reg after address computation.
-    PostIndexed(Writable<Reg>, SImm9),
+    /// Specialized here to SP so we don't have to emit regalloc metadata.
+    SPPostIndexed(SImm9),
     /// "pre-indexed" mode as per AArch64 docs: preincrement reg before address computation.
-    PreIndexed(Writable<Reg>, SImm9),
+    /// Specialized here to SP so we don't have to emit regalloc metadata.
+    SPPreIndexed(SImm9),
 
     // N.B.: RegReg, RegScaled, and RegScaledExtended all correspond to
     // what the ISA calls the "register offset" addressing mode. We split out
@@ -220,10 +222,12 @@ impl AMode {
             &AMode::RegExtended(r1, r2, ext) => {
                 AMode::RegExtended(allocs.next(r1), allocs.next(r2), ext)
             }
-            &AMode::PreIndexed(reg, simm9) => AMode::PreIndexed(allocs.next_writable(reg), simm9),
-            &AMode::PostIndexed(reg, simm9) => AMode::PostIndexed(allocs.next_writable(reg), simm9),
+            // Note that SP is not managed by regalloc, so there is no register to report in the
+            // pre/post-indexed amodes.
             &AMode::RegOffset(r, off, ty) => AMode::RegOffset(allocs.next(r), off, ty),
-            &AMode::FPOffset(..)
+            &AMode::SPPreIndexed(..)
+            | &AMode::SPPostIndexed(..)
+            | &AMode::FPOffset(..)
             | &AMode::SPOffset(..)
             | &AMode::NominalSPOffset(..)
             | AMode::Label(..) => self.clone(),
@@ -235,8 +239,8 @@ impl AMode {
 #[derive(Clone, Debug)]
 pub enum PairAMode {
     SignedOffset(Reg, SImm7Scaled),
-    PreIndexed(Writable<Reg>, SImm7Scaled),
-    PostIndexed(Writable<Reg>, SImm7Scaled),
+    SPPreIndexed(SImm7Scaled),
+    SPPostIndexed(SImm7Scaled),
 }
 
 impl PairAMode {
@@ -246,12 +250,7 @@ impl PairAMode {
             &PairAMode::SignedOffset(reg, simm7scaled) => {
                 PairAMode::SignedOffset(allocs.next(reg), simm7scaled)
             }
-            &PairAMode::PreIndexed(reg, simm7scaled) => {
-                PairAMode::PreIndexed(allocs.next_writable(reg), simm7scaled)
-            }
-            &PairAMode::PostIndexed(reg, simm7scaled) => {
-                PairAMode::PostIndexed(allocs.next_writable(reg), simm7scaled)
-            }
+            &PairAMode::SPPreIndexed(..) | &PairAMode::SPPostIndexed(..) => self.clone(),
         }
     }
 }
@@ -470,15 +469,13 @@ impl PrettyPrint for AMode {
                 format!("[{}, {}, {}]", r1, r2, op)
             }
             &AMode::Label(ref label) => label.pretty_print(0, allocs),
-            &AMode::PreIndexed(r, simm9) => {
-                let r = pretty_print_reg(r.to_reg(), allocs);
+            &AMode::SPPreIndexed(simm9) => {
                 let simm9 = simm9.pretty_print(8, allocs);
-                format!("[{}, {}]!", r, simm9)
+                format!("[sp, {}]!", simm9)
             }
-            &AMode::PostIndexed(r, simm9) => {
-                let r = pretty_print_reg(r.to_reg(), allocs);
+            &AMode::SPPostIndexed(simm9) => {
                 let simm9 = simm9.pretty_print(8, allocs);
-                format!("[{}], {}", r, simm9)
+                format!("[sp], {}", simm9)
             }
             // Eliminated by `mem_finalize()`.
             &AMode::SPOffset(..)
@@ -503,15 +500,13 @@ impl PrettyPrint for PairAMode {
                     format!("[{}]", reg)
                 }
             }
-            &PairAMode::PreIndexed(reg, simm7) => {
-                let reg = pretty_print_reg(reg.to_reg(), allocs);
+            &PairAMode::SPPreIndexed(simm7) => {
                 let simm7 = simm7.pretty_print(8, allocs);
-                format!("[{}, {}]!", reg, simm7)
+                format!("[sp, {}]!", simm7)
             }
-            &PairAMode::PostIndexed(reg, simm7) => {
-                let reg = pretty_print_reg(reg.to_reg(), allocs);
+            &PairAMode::SPPostIndexed(simm7) => {
                 let simm7 = simm7.pretty_print(8, allocs);
-                format!("[{}], {}", reg, simm7)
+                format!("[sp], {}", simm7)
             }
         }
     }
