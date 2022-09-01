@@ -1,5 +1,7 @@
 test interpret
 test run
+; Disable stack probes since these tests don't require them
+set enable_probestack=false
 target x86_64
 target s390x
 target aarch64
