@@ -328,7 +328,7 @@ impl Value for DataValue {
                     };
                     DataValue::int(val, t)?
                 }
-                (dv, t) if t.is_int() && dv.ty() == t => dv,
+                (dv, t) if (t.is_int() || t.is_float()) && dv.ty() == t => dv,
                 (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
             },
             ValueConversionKind::Truncate(ty) => {
