@@ -103,12 +103,12 @@
 
 (rule (lower (has_type ty (shuffle rn rn2 (u128_from_immediate mask))))
       (let ((mask_reg Reg (constant_f128 mask)))
-       (vec_tbl2 rn rn2 mask_reg $false ty)))
+       (vec_tbl2 rn rn2 mask_reg ty)))
 
 ;;;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type vec_i128_ty (swizzle rn rm)))
-      (vec_tbl rn rm #f))
+      (vec_tbl rn rm))
 
 ;;;; Rules for `isplit` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

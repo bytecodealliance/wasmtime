@@ -10,9 +10,9 @@ block0(v0: i8x16):
 ; block0:
 ;   sshr v3.16b, v0.16b, #7
 ;   movz x6, #513
-;   movk x6, #2052, LSL #16
-;   movk x6, #8208, LSL #32
-;   movk x6, #32832, LSL #48
+;   movk x6, x6, #2052, LSL #16
+;   movk x6, x6, #8208, LSL #32
+;   movk x6, x6, #32832, LSL #48
 ;   dup v17.2d, x6
 ;   and v20.16b, v3.16b, v17.16b
 ;   ext v22.16b, v20.16b, v20.16b, #8
@@ -30,9 +30,9 @@ block0(v0: i8x16):
 ; block0:
 ;   sshr v3.16b, v0.16b, #7
 ;   movz x6, #513
-;   movk x6, #2052, LSL #16
-;   movk x6, #8208, LSL #32
-;   movk x6, #32832, LSL #48
+;   movk x6, x6, #2052, LSL #16
+;   movk x6, x6, #8208, LSL #32
+;   movk x6, x6, #32832, LSL #48
 ;   dup v17.2d, x6
 ;   and v20.16b, v3.16b, v17.16b
 ;   ext v22.16b, v20.16b, v20.16b, #8

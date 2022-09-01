@@ -139,7 +139,7 @@ block0(v0: i64):
 
 ; block0:
 ;   movz w3, #51712
-;   movk w3, #15258, LSL #16
+;   movk w3, w3, #15258, LSL #16
 ;   add x3, x3, x0
 ;   ldr w0, [x3]
 ;   ret

@@ -29,6 +29,17 @@ impl Inst {
         }
     }
 
+    fn xmm_unary_rm_r_imm(op: SseOpcode, src: RegMem, dst: Writable<Reg>, imm: u8) -> Inst {
+        src.assert_regclass_is(RegClass::Float);
+        debug_assert!(dst.to_reg().class() == RegClass::Float);
+        Inst::XmmUnaryRmRImm {
+            op,
+            src: XmmMem::new(src).unwrap(),
+            imm,
+            dst: WritableXmm::from_writable_reg(dst).unwrap(),
+        }
+    }
+
     fn xmm_unary_rm_r_evex(op: Avx512Opcode, src: RegMem, dst: Writable<Reg>) -> Inst {
         src.assert_regclass_is(RegClass::Float);
         debug_assert!(dst.to_reg().class() == RegClass::Float);
@@ -4611,46 +4622,22 @@ fn test_x64_emit() {
     ));
 
     insns.push((
-        Inst::xmm_rm_r_imm(
-            SseOpcode::Roundps,
-            RegMem::reg(xmm7),
-            w_xmm8,
-            3,
-            OperandSize::Size32,
-        ),
+        Inst::xmm_unary_rm_r_imm(SseOpcode::Roundps, RegMem::reg(xmm7), w_xmm8, 3),
         "66440F3A08C703",
         "roundps $3, %xmm7, %xmm8",
     ));
     insns.push((
-        Inst::xmm_rm_r_imm(
-            SseOpcode::Roundpd,
-            RegMem::reg(xmm10),
-            w_xmm7,
-            2,
-            OperandSize::Size32,
-        ),
+        Inst::xmm_unary_rm_r_imm(SseOpcode::Roundpd, RegMem::reg(xmm10), w_xmm7, 2),
         "66410F3A09FA02",
         "roundpd $2, %xmm10, %xmm7",
     ));
     insns.push((
-        Inst::xmm_rm_r_imm(
-            SseOpcode::Roundps,
-            RegMem::reg(xmm4),
-            w_xmm8,
-            1,
-            OperandSize::Size32,
-        ),
+        Inst::xmm_unary_rm_r_imm(SseOpcode::Roundps, RegMem::reg(xmm4), w_xmm8, 1),
         "66440F3A08C401",
         "roundps $1, %xmm4, %xmm8",
     ));
     insns.push((
-        Inst::xmm_rm_r_imm(
-            SseOpcode::Roundpd,
-            RegMem::reg(xmm15),
-            w_xmm15,
-            0,
-            OperandSize::Size32,
-        ),
+        Inst::xmm_unary_rm_r_imm(SseOpcode::Roundpd, RegMem::reg(xmm15), w_xmm15, 0),
         "66450F3A09FF00",
         "roundpd $0, %xmm15, %xmm15",
     ));

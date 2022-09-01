@@ -184,11 +184,19 @@ fn enc_move_wide(op: MoveWideOp, rd: Writable<Reg>, imm: MoveWideConst, size: Op
     let op = match op {
         MoveWideOp::MovN => 0b00,
         MoveWideOp::MovZ => 0b10,
-        MoveWideOp::MovK => 0b11,
     };
     0x12800000
         | size.sf_bit() << 31
         | op << 29
+        | u32::from(imm.shift) << 21
+        | u32::from(imm.bits) << 5
+        | machreg_to_gpr(rd.to_reg())
+}
+
+fn enc_movk(rd: Writable<Reg>, imm: MoveWideConst, size: OperandSize) -> u32 {
+    assert!(imm.shift <= 0b11);
+    0x72800000
+        | size.sf_bit() << 31
         | u32::from(imm.shift) << 21
         | u32::from(imm.bits) << 5
         | machreg_to_gpr(rd.to_reg())
@@ -1040,12 +1048,12 @@ impl MachInstEmit for Inst {
                             _ => panic!("Unspported size for LDR from constant pool!"),
                         }
                     }
-                    &AMode::PreIndexed(reg, simm9) => {
-                        let reg = allocs.next(reg.to_reg());
+                    &AMode::SPPreIndexed(simm9) => {
+                        let reg = stack_reg();
                         sink.put4(enc_ldst_simm9(op, simm9, 0b11, reg, rd));
                     }
-                    &AMode::PostIndexed(reg, simm9) => {
-                        let reg = allocs.next(reg.to_reg());
+                    &AMode::SPPostIndexed(simm9) => {
+                        let reg = stack_reg();
                         sink.put4(enc_ldst_simm9(op, simm9, 0b01, reg, rd));
                     }
                     // Eliminated by `mem_finalize()` above.
@@ -1134,12 +1142,12 @@ impl MachInstEmit for Inst {
                     &AMode::Label(..) => {
                         panic!("Store to a MemLabel not implemented!");
                     }
-                    &AMode::PreIndexed(reg, simm9) => {
-                        let reg = allocs.next(reg.to_reg());
+                    &AMode::SPPreIndexed(simm9) => {
+                        let reg = stack_reg();
                         sink.put4(enc_ldst_simm9(op, simm9, 0b11, reg, rd));
                     }
-                    &AMode::PostIndexed(reg, simm9) => {
-                        let reg = allocs.next(reg.to_reg());
+                    &AMode::SPPostIndexed(simm9) => {
+                        let reg = stack_reg();
                         sink.put4(enc_ldst_simm9(op, simm9, 0b01, reg, rd));
                     }
                     // Eliminated by `mem_finalize()` above.
@@ -1170,14 +1178,14 @@ impl MachInstEmit for Inst {
                         let reg = allocs.next(reg);
                         sink.put4(enc_ldst_pair(0b1010100100, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::PreIndexed(reg, simm7) => {
+                    &PairAMode::SPPreIndexed(simm7) => {
                         assert_eq!(simm7.scale_ty, I64);
-                        let reg = allocs.next(reg.to_reg());
+                        let reg = stack_reg();
                         sink.put4(enc_ldst_pair(0b1010100110, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::PostIndexed(reg, simm7) => {
+                    &PairAMode::SPPostIndexed(simm7) => {
                         assert_eq!(simm7.scale_ty, I64);
-                        let reg = allocs.next(reg.to_reg());
+                        let reg = stack_reg();
                         sink.put4(enc_ldst_pair(0b1010100010, simm7, reg, rt, rt2));
                     }
                 }
@@ -1203,14 +1211,14 @@ impl MachInstEmit for Inst {
                         let reg = allocs.next(reg);
                         sink.put4(enc_ldst_pair(0b1010100101, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::PreIndexed(reg, simm7) => {
+                    &PairAMode::SPPreIndexed(simm7) => {
                         assert_eq!(simm7.scale_ty, I64);
-                        let reg = allocs.next(reg.to_reg());
+                        let reg = stack_reg();
                         sink.put4(enc_ldst_pair(0b1010100111, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::PostIndexed(reg, simm7) => {
+                    &PairAMode::SPPostIndexed(simm7) => {
                         assert_eq!(simm7.scale_ty, I64);
-                        let reg = allocs.next(reg.to_reg());
+                        let reg = stack_reg();
                         sink.put4(enc_ldst_pair(0b1010100011, simm7, reg, rt, rt2));
                     }
                 }
@@ -1249,14 +1257,14 @@ impl MachInstEmit for Inst {
                         let reg = allocs.next(reg);
                         sink.put4(enc_ldst_vec_pair(opc, 0b10, true, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::PreIndexed(reg, simm7) => {
+                    &PairAMode::SPPreIndexed(simm7) => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
-                        let reg = allocs.next(reg.to_reg());
+                        let reg = stack_reg();
                         sink.put4(enc_ldst_vec_pair(opc, 0b11, true, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::PostIndexed(reg, simm7) => {
+                    &PairAMode::SPPostIndexed(simm7) => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
-                        let reg = allocs.next(reg.to_reg());
+                        let reg = stack_reg();
                         sink.put4(enc_ldst_vec_pair(opc, 0b01, true, simm7, reg, rt, rt2));
                     }
                 }
@@ -1295,14 +1303,14 @@ impl MachInstEmit for Inst {
                         let reg = allocs.next(reg);
                         sink.put4(enc_ldst_vec_pair(opc, 0b10, false, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::PreIndexed(reg, simm7) => {
+                    &PairAMode::SPPreIndexed(simm7) => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
-                        let reg = allocs.next(reg.to_reg());
+                        let reg = stack_reg();
                         sink.put4(enc_ldst_vec_pair(opc, 0b11, false, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::PostIndexed(reg, simm7) => {
+                    &PairAMode::SPPostIndexed(simm7) => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
-                        let reg = allocs.next(reg.to_reg());
+                        let reg = stack_reg();
                         sink.put4(enc_ldst_vec_pair(opc, 0b01, false, simm7, reg, rt, rt2));
                     }
                 }
@@ -1355,6 +1363,12 @@ impl MachInstEmit for Inst {
             &Inst::MovWide { op, rd, imm, size } => {
                 let rd = allocs.next_writable(rd);
                 sink.put4(enc_move_wide(op, rd, imm, size));
+            }
+            &Inst::MovK { rd, rn, imm, size } => {
+                let rn = allocs.next(rn);
+                let rd = allocs.next_writable(rd);
+                debug_assert_eq!(rn, rd.to_reg());
+                sink.put4(enc_movk(rd, imm, size));
             }
             &Inst::CSel { rd, rn, rm, cond } => {
                 let rd = allocs.next_writable(rd);
@@ -1416,7 +1430,7 @@ impl MachInstEmit for Inst {
 
                 sink.put4(enc_acq_rel(ty, op, rs, rt, rn));
             }
-            &Inst::AtomicRMWLoop { ty, op, flags } => {
+            &Inst::AtomicRMWLoop { ty, op, flags, .. } => {
                 /* Emit this:
                      again:
                       ldaxr{,b,h}  x/w27, [x25]
@@ -1597,13 +1611,16 @@ impl MachInstEmit for Inst {
                 sink.use_label_at_offset(br_offset, again_label, LabelUse::Branch19);
             }
             &Inst::AtomicCAS {
+                rd,
                 rs,
                 rt,
                 rn,
                 ty,
                 flags,
             } => {
-                let rs = allocs.next_writable(rs);
+                let rd = allocs.next_writable(rd);
+                let rs = allocs.next(rs);
+                debug_assert_eq!(rd.to_reg(), rs);
                 let rt = allocs.next(rt);
                 let rn = allocs.next(rn);
                 let size = match ty {
@@ -1619,9 +1636,9 @@ impl MachInstEmit for Inst {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
-                sink.put4(enc_cas(size, rs, rt, rn));
+                sink.put4(enc_cas(size, rd, rt, rn));
             }
-            &Inst::AtomicCASLoop { ty, flags } => {
+            &Inst::AtomicCASLoop { ty, flags, .. } => {
                 /* Emit this:
                     again:
                      ldaxr{,b,h} x/w27, [x25]
@@ -1839,7 +1856,15 @@ impl MachInstEmit for Inst {
                                 | machreg_to_vec(rd.to_reg()),
                         )
                     }
-                    FPUOpRI::Sli64(imm) => {
+                }
+            }
+            &Inst::FpuRRIMod { fpu_op, rd, ri, rn } => {
+                let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                let rn = allocs.next(rn);
+                debug_assert_eq!(rd.to_reg(), ri);
+                match fpu_op {
+                    FPUOpRIMod::Sli64(imm) => {
                         debug_assert_eq!(64, imm.lane_size_in_bits);
                         sink.put4(
                             0b01_1_111110_0000000_010101_00000_00000
@@ -1848,7 +1873,7 @@ impl MachInstEmit for Inst {
                                 | machreg_to_vec(rd.to_reg()),
                         )
                     }
-                    FPUOpRI::Sli32(imm) => {
+                    FPUOpRIMod::Sli32(imm) => {
                         debug_assert_eq!(32, imm.lane_size_in_bits);
                         sink.put4(
                             0b0_0_1_011110_0000000_010101_00000_00000
@@ -2087,11 +2112,14 @@ impl MachInstEmit for Inst {
             &Inst::VecShiftImmMod {
                 op,
                 rd,
+                ri,
                 rn,
                 size,
                 imm,
             } => {
                 let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
                 let rn = allocs.next(rn);
                 let (is_shr, mut template) = match op {
                     VecShiftImmModOp::Sli => (false, 0b_001_011110_0000_000_010101_00000_00000_u32),
@@ -2147,30 +2175,43 @@ impl MachInstEmit for Inst {
                     );
                 }
             }
-            &Inst::VecTbl {
-                rd,
-                rn,
-                rm,
-                is_extension,
-            } => {
+            &Inst::VecTbl { rd, rn, rm } => {
                 let rn = allocs.next(rn);
                 let rm = allocs.next(rm);
                 let rd = allocs.next_writable(rd);
-                sink.put4(enc_tbl(is_extension, 0b00, rd, rn, rm));
+                sink.put4(enc_tbl(/* is_extension = */ false, 0b00, rd, rn, rm));
             }
-            &Inst::VecTbl2 {
-                rd,
-                rn,
-                rn2,
-                rm,
-                is_extension,
-            } => {
+            &Inst::VecTblExt { rd, ri, rn, rm } => {
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
+                sink.put4(enc_tbl(/* is_extension = */ true, 0b00, rd, rn, rm));
+            }
+            &Inst::VecTbl2 { rd, rn, rn2, rm } => {
                 let rn = allocs.next(rn);
                 let rn2 = allocs.next(rn2);
                 let rm = allocs.next(rm);
                 let rd = allocs.next_writable(rd);
                 assert_eq!(machreg_to_vec(rn2), (machreg_to_vec(rn) + 1) % 32);
-                sink.put4(enc_tbl(is_extension, 0b01, rd, rn, rm));
+                sink.put4(enc_tbl(/* is_extension = */ false, 0b01, rd, rn, rm));
+            }
+            &Inst::VecTbl2Ext {
+                rd,
+                ri,
+                rn,
+                rn2,
+                rm,
+            } => {
+                let rn = allocs.next(rn);
+                let rn2 = allocs.next(rn2);
+                let rm = allocs.next(rm);
+                let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
+                assert_eq!(machreg_to_vec(rn2), (machreg_to_vec(rn) + 1) % 32);
+                sink.put4(enc_tbl(/* is_extension = */ true, 0b01, rd, rn, rm));
             }
             &Inst::FpuCmp { size, rn, rm } => {
                 let rn = allocs.next(rn);
@@ -2305,8 +2346,16 @@ impl MachInstEmit for Inst {
                         | machreg_to_vec(rd.to_reg()),
                 );
             }
-            &Inst::MovToVec { rd, rn, idx, size } => {
+            &Inst::MovToVec {
+                rd,
+                ri,
+                rn,
+                idx,
+                size,
+            } => {
                 let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
                 let rn = allocs.next(rn);
                 let (imm5, shift) = match size.lane_size() {
                     ScalarSize::Size8 => (0b00001, 1),
@@ -2526,15 +2575,26 @@ impl MachInstEmit for Inst {
                     rn,
                 ));
             }
-            &Inst::VecRRNarrow {
+            &Inst::VecRRNarrowLow {
                 op,
                 rd,
                 rn,
-                high_half,
                 lane_size,
+            }
+            | &Inst::VecRRNarrowHigh {
+                op,
+                rd,
+                rn,
+                lane_size,
+                ..
             } => {
                 let rn = allocs.next(rn);
                 let rd = allocs.next_writable(rd);
+                let high_half = match self {
+                    &Inst::VecRRNarrowLow { .. } => false,
+                    &Inst::VecRRNarrowHigh { .. } => true,
+                    _ => unreachable!(),
+                };
 
                 let size = match lane_size {
                     ScalarSize::Size8 => 0b00,
@@ -2567,12 +2627,15 @@ impl MachInstEmit for Inst {
             }
             &Inst::VecMovElement {
                 rd,
+                ri,
                 rn,
                 dest_idx,
                 src_idx,
                 size,
             } => {
                 let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
                 let rn = allocs.next(rn);
                 let (imm5, shift) = match size.lane_size() {
                     ScalarSize::Size8 => (0b00001, 1),
@@ -2620,9 +2683,34 @@ impl MachInstEmit for Inst {
                     VecRRRLongOp::Umull8 => (0b1, 0b00, 0b1),
                     VecRRRLongOp::Umull16 => (0b1, 0b01, 0b1),
                     VecRRRLongOp::Umull32 => (0b1, 0b10, 0b1),
-                    VecRRRLongOp::Umlal8 => (0b1, 0b00, 0b0),
-                    VecRRRLongOp::Umlal16 => (0b1, 0b01, 0b0),
-                    VecRRRLongOp::Umlal32 => (0b1, 0b10, 0b0),
+                };
+                sink.put4(enc_vec_rrr_long(
+                    high_half as u32,
+                    u,
+                    size,
+                    bit14,
+                    rm,
+                    rn,
+                    rd,
+                ));
+            }
+            &Inst::VecRRRLongMod {
+                rd,
+                ri,
+                rn,
+                rm,
+                alu_op,
+                high_half,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                let (u, size, bit14) = match alu_op {
+                    VecRRRLongModOp::Umlal8 => (0b1, 0b00, 0b0),
+                    VecRRRLongModOp::Umlal16 => (0b1, 0b01, 0b0),
+                    VecRRRLongModOp::Umlal32 => (0b1, 0b10, 0b0),
                 };
                 sink.put4(enc_vec_rrr_long(
                     high_half as u32,
@@ -2753,12 +2841,15 @@ impl MachInstEmit for Inst {
             }
             &Inst::VecRRRMod {
                 rd,
+                ri,
                 rn,
                 rm,
                 alu_op,
                 size,
             } => {
                 let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
                 let rn = allocs.next(rn);
                 let rm = allocs.next(rm);
                 let (q, _enc_size) = size.enc_size();
