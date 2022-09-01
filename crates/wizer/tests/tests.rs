@@ -194,7 +194,7 @@ fn reject_imported_table() -> Result<()> {
 }
 
 #[test]
-fn reject_bulk_memory() -> Result<()> {
+fn reject_table_copy() -> Result<()> {
     let result = run_wat(
         &[],
         42,
@@ -222,6 +222,127 @@ fn reject_bulk_memory() -> Result<()> {
     assert!(err
         .to_string()
         .contains("unsupported `table.copy` instruction"));
+
+    Ok(())
+}
+
+#[test]
+fn reject_table_get_set() -> Result<()> {
+    let result = run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (table 3 funcref)
+
+  (func $f (result i32) (i32.const 0))
+  (func $g (result i32) (i32.const 0))
+  (func $h (result i32) (i32.const 0))
+
+  (func (export "main")
+    i32.const 0
+    i32.const 1
+    table.get
+    table.set)
+
+  (elem (i32.const 0) $f $g $h)
+)
+"#,
+    );
+    assert!(result.is_err());
+
+    let err = result.unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("reference types support is not enabled"),);
+
+    Ok(())
+}
+
+#[test]
+fn reject_table_init() -> Result<()> {
+    let result = run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (table 3 funcref)
+
+  (func $f (result i32) (i32.const 0))
+  (func $g (result i32) (i32.const 0))
+  (func $h (result i32) (i32.const 0))
+
+  (elem $elem $f $g $h)
+
+  (func (export "main")
+    i32.const 0
+    i32.const 0
+    i32.const 3
+    table.init $elem)
+)
+"#,
+    );
+    assert!(result.is_err());
+
+    let err = result.unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("unsupported `table.init` instruction"));
+
+    Ok(())
+}
+
+#[test]
+fn reject_elem_drop() -> Result<()> {
+    let result = run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (table 3 funcref)
+
+  (func $f (result i32) (i32.const 0))
+  (func $g (result i32) (i32.const 0))
+  (func $h (result i32) (i32.const 0))
+
+  (elem $elem $f $g $h)
+
+  (func (export "main")
+    elem.drop $elem)
+)
+"#,
+    );
+    assert!(result.is_err());
+
+    let err = result.unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("unsupported `elem.drop` instruction"));
+
+    Ok(())
+}
+
+#[test]
+fn reject_data_drop() -> Result<()> {
+    let result = run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (memory 1)
+  (data $data "hello, wizer!")
+
+  (func (export "main")
+    data.drop $data)
+)
+"#,
+    );
+    assert!(result.is_err());
+
+    let err = result.unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("unsupported `data.drop` instruction"));
 
     Ok(())
 }
