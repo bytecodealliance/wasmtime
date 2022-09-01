@@ -503,8 +503,6 @@ fn lower_insn_to_regs(
 
         Opcode::Trueif | Opcode::Trueff => unimplemented!("trueif / trueff not implemented"),
 
-        Opcode::ConstAddr => unimplemented!("ConstAddr not implemented"),
-
         Opcode::Vsplit | Opcode::Vconcat => {
             unimplemented!("Vector split/concat ops not implemented.");
         }

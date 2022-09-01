@@ -533,7 +533,6 @@ where
         Opcode::F64const => assign(imm()),
         Opcode::Bconst => assign(imm()),
         Opcode::Vconst => assign(imm()),
-        Opcode::ConstAddr => unimplemented!("ConstAddr"),
         Opcode::Null => unimplemented!("Null"),
         Opcode::Nop => ControlFlow::Continue,
         Opcode::Select => choose(arg(0)?.into_bool()?, arg(1)?, arg(2)?),

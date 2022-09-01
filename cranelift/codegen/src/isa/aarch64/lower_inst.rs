@@ -471,7 +471,7 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::ExtractVector => implemented_in_isle(ctx),
 
-        Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit => {
+        Opcode::Vconcat | Opcode::Vsplit => {
             return Err(CodegenError::Unsupported(format!(
                 "Unimplemented lowering: {}",
                 op
