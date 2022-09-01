@@ -7,7 +7,8 @@ use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, Block, FuncRef, Function, InstructionData, Opcode, TrapCode, Type, Value as ValueRef,
+    types, AbiParam, Block, ExternalName, FuncRef, Function, InstructionData, Opcode, TrapCode,
+    Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
@@ -15,6 +16,24 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 use std::ops::RangeFrom;
 use thiserror::Error;
+
+/// Ensures that all types in args are the same as expected by the signature
+fn validate_signature_params(sig: &[AbiParam], args: &[impl Value]) -> bool {
+    args.iter()
+        .map(|r| r.ty())
+        .zip(sig.iter().map(|r| r.value_type))
+        .all(|(a, b)| match (a, b) {
+            // For these two cases we don't have precise type information for `a`.
+            // We don't distinguish between different bool types, or different vector types
+            // The actual error is in `Value::ty` that returns default types for some values
+            // but we don't have enough information there either.
+            //
+            // Ideally the user has run the verifier and caught this properly...
+            (a, b) if a.is_bool() && b.is_bool() => true,
+            (a, b) if a.is_vector() && b.is_vector() => true,
+            (a, b) => a == b,
+        })
+}
 
 /// Interpret a single Cranelift instruction. Note that program traps and interpreter errors are
 /// distinct: a program trap results in `Ok(Flow::Trap(...))` whereas an interpretation error (e.g.
@@ -25,7 +44,7 @@ pub fn step<'a, V, I>(
     inst_context: I,
 ) -> Result<ControlFlow<'a, V>, StepError>
 where
-    V: Value,
+    V: Value + Debug,
     I: InstructionContext,
 {
     let inst = inst_context.data();
@@ -75,7 +94,11 @@ where
                     .constants
                     .get(constant_handle.clone())
                     .as_slice();
-                DataValue::V128(buffer.try_into().expect("a 16-byte data buffer"))
+                match ctrl_ty.bytes() {
+                    16 => DataValue::V128(buffer.try_into().expect("a 16-byte data buffer")),
+                    8 => DataValue::V64(buffer.try_into().expect("an 8-byte data buffer")),
+                    length => panic!("unexpected UnaryConst buffer length {}", length),
+                }
             }
             InstructionData::Shuffle { imm, .. } => {
                 let mask = state
@@ -85,7 +108,11 @@ where
                     .get(imm)
                     .unwrap()
                     .as_slice();
-                DataValue::V128(mask.try_into().expect("a 16-byte vector mask"))
+                match ctrl_ty.bytes() {
+                    16 => DataValue::V128(mask.try_into().expect("a 16-byte vector mask")),
+                    8 => DataValue::V64(mask.try_into().expect("an 8-byte vector mask")),
+                    length => panic!("unexpected Shuffle mask length {}", length),
+                }
             }
             _ => inst.imm_value().unwrap(),
         })
@@ -287,13 +314,65 @@ where
         ),
         Opcode::Return => ControlFlow::Return(args()?),
         Opcode::Call => {
-            if let InstructionData::Call { func_ref, .. } = inst {
-                let function = state
-                    .get_function(func_ref)
-                    .ok_or(StepError::UnknownFunction(func_ref))?;
-                ControlFlow::Call(function, args()?)
+            let func_ref = if let InstructionData::Call { func_ref, .. } = inst {
+                func_ref
             } else {
                 unreachable!()
+            };
+
+            let curr_func = state.get_current_function();
+            let ext_data = curr_func
+                .dfg
+                .ext_funcs
+                .get(func_ref)
+                .ok_or(StepError::UnknownFunction(func_ref))?;
+
+            let signature = if let Some(sig) = curr_func.dfg.signatures.get(ext_data.signature) {
+                sig
+            } else {
+                return Ok(ControlFlow::Trap(CraneliftTrap::User(
+                    TrapCode::BadSignature,
+                )));
+            };
+
+            let args = args()?;
+
+            // Check the types of the arguments. This is usually done by the verifier, but nothing
+            // guarantees that the user has ran that.
+            let args_match = validate_signature_params(&signature.params[..], &args[..]);
+            if !args_match {
+                return Ok(ControlFlow::Trap(CraneliftTrap::User(
+                    TrapCode::BadSignature,
+                )));
+            }
+
+            match ext_data.name {
+                // These functions should be registered in the regular function store
+                ExternalName::User(_) | ExternalName::TestCase(_) => {
+                    let function = state
+                        .get_function(func_ref)
+                        .ok_or(StepError::UnknownFunction(func_ref))?;
+
+                    ControlFlow::Call(function, args)
+                }
+                ExternalName::LibCall(libcall) => {
+                    let libcall_handler = state.get_libcall_handler();
+
+                    // We don't transfer control to a libcall, we just execute it and return the results
+                    let res = libcall_handler(libcall, args);
+                    let res = match res {
+                        Err(trap) => return Ok(ControlFlow::Trap(CraneliftTrap::User(trap))),
+                        Ok(rets) => rets,
+                    };
+
+                    // Check that what the handler returned is what we expect.
+                    if validate_signature_params(&signature.returns[..], &res[..]) {
+                        ControlFlow::Assign(res)
+                    } else {
+                        ControlFlow::Trap(CraneliftTrap::User(TrapCode::BadSignature))
+                    }
+                }
+                ExternalName::KnownSymbol(_) => unimplemented!(),
             }
         }
         Opcode::CallIndirect => unimplemented!("CallIndirect"),
@@ -800,7 +879,19 @@ where
         }
         Opcode::Fneg => assign(Value::neg(arg(0)?)?),
         Opcode::Fabs => assign(Value::abs(arg(0)?)?),
-        Opcode::Fcopysign => binary(Value::copysign, arg(0)?, arg(1)?)?,
+        Opcode::Fcopysign => {
+            let arg0 = extractlanes(&arg(0)?, ctrl_ty)?;
+            let arg1 = extractlanes(&arg(1)?, ctrl_ty)?;
+
+            assign(vectorizelanes(
+                &arg0
+                    .into_iter()
+                    .zip(arg1.into_iter())
+                    .map(|(x, y)| V::copysign(x, y))
+                    .collect::<ValueResult<SimdVec<V>>>()?,
+                ctrl_ty,
+            )?)
+        }
         Opcode::Fmin => assign(match (arg(0)?, arg(1)?) {
             (a, _) if a.is_nan()? => a,
             (_, b) if b.is_nan()? => b,

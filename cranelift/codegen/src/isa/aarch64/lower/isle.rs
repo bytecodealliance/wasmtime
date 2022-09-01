@@ -2,17 +2,22 @@
 
 // Pull in the ISLE generated code.
 pub mod generated_code;
+use generated_code::Context;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
-    insn_inputs, lower_constant_f128, writable_zero_reg, zero_reg, AMode, ASIMDFPModImm,
-    ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI,
-    FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, JTSequenceInfo, MachLabel,
-    MoveWideConst, MoveWideOp, NarrowValueMode, Opcode, OperandSize, PairAMode, Reg, ScalarSize,
-    ShiftOpAndAmt, UImm5, VecMisc2, VectorSize, NZCV,
+    lower_constant_f128, lower_constant_f32, lower_constant_f64, lower_fp_condcode,
+    writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo,
+    CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift,
+    Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MoveWideConst, MoveWideOp, NarrowValueMode,
+    Opcode, OperandSize, PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize,
+    NZCV,
 };
-use crate::isa::aarch64::lower::{lower_address, lower_splat_const};
+use crate::ir::condcodes;
+use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm};
+use crate::isa::aarch64::lower::{lower_address, lower_pair_address, lower_splat_const};
 use crate::isa::aarch64::settings::Flags as IsaFlags;
+use crate::machinst::valueregs;
 use crate::machinst::{isle::*, InputSourceInst};
 use crate::settings::Flags;
 use crate::{
@@ -21,10 +26,11 @@ use crate::{
         immediates::*, types::*, AtomicRmwOp, ExternalName, Inst, InstructionData, MemFlags,
         TrapCode, Value, ValueList,
     },
+    isa::aarch64::abi::AArch64Caller,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::aarch64::lower::{writable_vreg, writable_xreg, xreg},
     isa::unwind::UnwindInst,
-    machinst::{ty_bits, InsnOutput, Lower, VCodeConstant, VCodeConstantData},
+    machinst::{ty_bits, InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData},
 };
 use regalloc2::PReg;
 use std::boxed::Box;
@@ -68,8 +74,21 @@ pub struct SinkableAtomicLoad {
     atomic_addr: Value,
 }
 
-impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+    isle_prelude_method_helpers!(AArch64Caller);
+}
+
+impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_methods!();
+    isle_prelude_caller_methods!(crate::isa::aarch64::abi::AArch64MachineDeps, AArch64Caller);
+
+    fn sign_return_address_disabled(&mut self) -> Option<()> {
+        if self.isa_flags.sign_return_address() {
+            None
+        } else {
+            Some(())
+        }
+    }
 
     fn use_lse(&mut self, _: Inst) -> Option<()> {
         if self.isa_flags.use_lse() {
@@ -111,7 +130,11 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     }
 
     fn lshl_from_imm64(&mut self, ty: Type, n: Imm64) -> Option<ShiftOpAndAmt> {
-        let shiftimm = ShiftOpShiftImm::maybe_from_shift(n.bits() as u64)?;
+        self.lshl_from_u64(ty, n.bits() as u64)
+    }
+
+    fn lshl_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {
+        let shiftimm = ShiftOpShiftImm::maybe_from_shift(n)?;
         let shiftee_bits = ty_bits(ty);
         if shiftee_bits <= std::u8::MAX as usize {
             let shiftimm = shiftimm.mask(shiftee_bits as u8);
@@ -463,17 +486,24 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         }
     }
 
-    fn amode(&mut self, ty: Type, mem_op: Inst, offset: u32) -> AMode {
-        lower_address(
-            self.lower_ctx,
-            ty,
-            &insn_inputs(self.lower_ctx, mem_op)[..],
-            offset as i32,
-        )
+    fn amode(&mut self, ty: Type, addr: Value, offset: u32) -> AMode {
+        lower_address(self.lower_ctx, ty, addr, offset as i32)
+    }
+
+    fn pair_amode(&mut self, addr: Value, offset: u32) -> PairAMode {
+        lower_pair_address(self.lower_ctx, addr, offset as i32)
     }
 
     fn amode_is_reg(&mut self, address: &AMode) -> Option<Reg> {
         address.is_reg()
+    }
+
+    fn constant_f64(&mut self, value: u64) -> Reg {
+        let rd = self.temp_writable_reg(I8X16);
+
+        lower_constant_f64(self.lower_ctx, rd, f64::from_bits(value));
+
+        rd.to_reg()
     }
 
     fn constant_f128(&mut self, value: u128) -> Reg {
@@ -492,6 +522,10 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         rd.to_reg()
     }
 
+    fn fp_cond_code(&mut self, cc: &condcodes::FloatCC) -> Cond {
+        lower_fp_condcode(*cc)
+    }
+
     fn preg_sp(&mut self) -> PReg {
         super::regs::stack_reg().to_real_reg().unwrap().into()
     }
@@ -502,5 +536,203 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
 
     fn preg_link(&mut self) -> PReg {
         super::regs::link_reg().to_real_reg().unwrap().into()
+    }
+
+    fn min_fp_value(&mut self, signed: bool, in_bits: u8, out_bits: u8) -> Reg {
+        let tmp = self.lower_ctx.alloc_tmp(I8X16).only_reg().unwrap();
+
+        if in_bits == 32 {
+            // From float32.
+            let min = match (signed, out_bits) {
+                (true, 8) => i8::MIN as f32 - 1.,
+                (true, 16) => i16::MIN as f32 - 1.,
+                (true, 32) => i32::MIN as f32, // I32_MIN - 1 isn't precisely representable as a f32.
+                (true, 64) => i64::MIN as f32, // I64_MIN - 1 isn't precisely representable as a f32.
+
+                (false, _) => -1.,
+                _ => unimplemented!(
+                    "unexpected {} output size of {} bits for 32-bit input",
+                    if signed { "signed" } else { "unsigned" },
+                    out_bits
+                ),
+            };
+
+            lower_constant_f32(self.lower_ctx, tmp, min);
+        } else if in_bits == 64 {
+            // From float64.
+            let min = match (signed, out_bits) {
+                (true, 8) => i8::MIN as f64 - 1.,
+                (true, 16) => i16::MIN as f64 - 1.,
+                (true, 32) => i32::MIN as f64 - 1.,
+                (true, 64) => i64::MIN as f64,
+
+                (false, _) => -1.,
+                _ => unimplemented!(
+                    "unexpected {} output size of {} bits for 64-bit input",
+                    if signed { "signed" } else { "unsigned" },
+                    out_bits
+                ),
+            };
+
+            lower_constant_f64(self.lower_ctx, tmp, min);
+        } else {
+            unimplemented!(
+                "unexpected input size for min_fp_value: {} (signed: {}, output size: {})",
+                in_bits,
+                signed,
+                out_bits
+            );
+        }
+
+        tmp.to_reg()
+    }
+
+    fn max_fp_value(&mut self, signed: bool, in_bits: u8, out_bits: u8) -> Reg {
+        let tmp = self.lower_ctx.alloc_tmp(I8X16).only_reg().unwrap();
+
+        if in_bits == 32 {
+            // From float32.
+            let max = match (signed, out_bits) {
+                (true, 8) => i8::MAX as f32 + 1.,
+                (true, 16) => i16::MAX as f32 + 1.,
+                (true, 32) => (i32::MAX as u64 + 1) as f32,
+                (true, 64) => (i64::MAX as u64 + 1) as f32,
+
+                (false, 8) => u8::MAX as f32 + 1.,
+                (false, 16) => u16::MAX as f32 + 1.,
+                (false, 32) => (u32::MAX as u64 + 1) as f32,
+                (false, 64) => (u64::MAX as u128 + 1) as f32,
+                _ => unimplemented!(
+                    "unexpected {} output size of {} bits for 32-bit input",
+                    if signed { "signed" } else { "unsigned" },
+                    out_bits
+                ),
+            };
+
+            lower_constant_f32(self.lower_ctx, tmp, max);
+        } else if in_bits == 64 {
+            // From float64.
+            let max = match (signed, out_bits) {
+                (true, 8) => i8::MAX as f64 + 1.,
+                (true, 16) => i16::MAX as f64 + 1.,
+                (true, 32) => i32::MAX as f64 + 1.,
+                (true, 64) => (i64::MAX as u64 + 1) as f64,
+
+                (false, 8) => u8::MAX as f64 + 1.,
+                (false, 16) => u16::MAX as f64 + 1.,
+                (false, 32) => u32::MAX as f64 + 1.,
+                (false, 64) => (u64::MAX as u128 + 1) as f64,
+                _ => unimplemented!(
+                    "unexpected {} output size of {} bits for 64-bit input",
+                    if signed { "signed" } else { "unsigned" },
+                    out_bits
+                ),
+            };
+
+            lower_constant_f64(self.lower_ctx, tmp, max);
+        } else {
+            unimplemented!(
+                "unexpected input size for max_fp_value: {} (signed: {}, output size: {})",
+                in_bits,
+                signed,
+                out_bits
+            );
+        }
+
+        tmp.to_reg()
+    }
+
+    fn min_fp_value_sat(&mut self, signed: bool, in_bits: u8, out_bits: u8) -> Reg {
+        let tmp = self.lower_ctx.alloc_tmp(I8X16).only_reg().unwrap();
+
+        let min: f64 = match (out_bits, signed) {
+            (32, true) => i32::MIN as f64,
+            (32, false) => 0.0,
+            (64, true) => i64::MIN as f64,
+            (64, false) => 0.0,
+            _ => unimplemented!(
+                "unexpected {} output size of {} bits",
+                if signed { "signed" } else { "unsigned" },
+                out_bits
+            ),
+        };
+
+        if in_bits == 32 {
+            lower_constant_f32(self.lower_ctx, tmp, min as f32)
+        } else if in_bits == 64 {
+            lower_constant_f64(self.lower_ctx, tmp, min)
+        } else {
+            unimplemented!(
+                "unexpected input size for min_fp_value_sat: {} (signed: {}, output size: {})",
+                in_bits,
+                signed,
+                out_bits
+            );
+        }
+
+        tmp.to_reg()
+    }
+
+    fn max_fp_value_sat(&mut self, signed: bool, in_bits: u8, out_bits: u8) -> Reg {
+        let tmp = self.lower_ctx.alloc_tmp(I8X16).only_reg().unwrap();
+
+        let max = match (out_bits, signed) {
+            (32, true) => i32::MAX as f64,
+            (32, false) => u32::MAX as f64,
+            (64, true) => i64::MAX as f64,
+            (64, false) => u64::MAX as f64,
+            _ => unimplemented!(
+                "unexpected {} output size of {} bits",
+                if signed { "signed" } else { "unsigned" },
+                out_bits
+            ),
+        };
+
+        if in_bits == 32 {
+            lower_constant_f32(self.lower_ctx, tmp, max as f32)
+        } else if in_bits == 64 {
+            lower_constant_f64(self.lower_ctx, tmp, max)
+        } else {
+            unimplemented!(
+                "unexpected input size for max_fp_value_sat: {} (signed: {}, output size: {})",
+                in_bits,
+                signed,
+                out_bits
+            );
+        }
+
+        tmp.to_reg()
+    }
+
+    fn fpu_op_ri_ushr(&mut self, ty_bits: u8, shift: u8) -> FPUOpRI {
+        if ty_bits == 32 {
+            FPUOpRI::UShr32(FPURightShiftImm::maybe_from_u8(shift, ty_bits).unwrap())
+        } else if ty_bits == 64 {
+            FPUOpRI::UShr64(FPURightShiftImm::maybe_from_u8(shift, ty_bits).unwrap())
+        } else {
+            unimplemented!(
+                "unexpected input size for fpu_op_ri_ushr: {} (shift: {})",
+                ty_bits,
+                shift
+            );
+        }
+    }
+
+    fn fpu_op_ri_sli(&mut self, ty_bits: u8, shift: u8) -> FPUOpRI {
+        if ty_bits == 32 {
+            FPUOpRI::Sli32(FPULeftShiftImm::maybe_from_u8(shift, ty_bits).unwrap())
+        } else if ty_bits == 64 {
+            FPUOpRI::Sli64(FPULeftShiftImm::maybe_from_u8(shift, ty_bits).unwrap())
+        } else {
+            unimplemented!(
+                "unexpected input size for fpu_op_ri_sli: {} (shift: {})",
+                ty_bits,
+                shift
+            );
+        }
+    }
+
+    fn writable_pinned_reg(&mut self) -> WritableReg {
+        super::regs::writable_xreg(super::regs::PINNED_REG)
     }
 }

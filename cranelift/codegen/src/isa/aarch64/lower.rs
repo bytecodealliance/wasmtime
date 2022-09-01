@@ -8,7 +8,6 @@
 //! - Floating-point immediates (FIMM instruction).
 
 use super::lower_inst;
-use crate::data_value::DataValue;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
@@ -19,7 +18,7 @@ use crate::machinst::lower::*;
 use crate::machinst::{Reg, Writable};
 use crate::{machinst::*, trace};
 use crate::{CodegenError, CodegenResult};
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use std::cmp;
 
 pub mod isle;
@@ -92,13 +91,6 @@ pub(crate) fn input_to_shiftimm(
     input: InsnInput,
 ) -> Option<ShiftOpShiftImm> {
     input_to_const(ctx, input).and_then(ShiftOpShiftImm::maybe_from_shift)
-}
-
-pub(crate) fn const_param_to_u128(ctx: &mut Lower<Inst>, inst: IRInst) -> Option<u128> {
-    match ctx.get_immediate(inst) {
-        Some(DataValue::V128(bytes)) => Some(u128::from_le_bytes(bytes)),
-        _ => None,
-    }
 }
 
 /// How to handle narrow values loaded into registers; see note on `narrow_mode`
@@ -515,19 +507,19 @@ type AddressAddend64List = SmallVec<[Reg; 4]>;
 /// then possibly support extensions at these leaves.
 fn collect_address_addends(
     ctx: &mut Lower<Inst>,
-    roots: &[InsnInput],
+    root: Value,
 ) -> (AddressAddend64List, AddressAddend32List, i64) {
     let mut result32: AddressAddend32List = SmallVec::new();
     let mut result64: AddressAddend64List = SmallVec::new();
     let mut offset: i64 = 0;
 
-    let mut workqueue: SmallVec<[InsnInput; 4]> = roots.iter().cloned().collect();
+    let mut workqueue: SmallVec<[Value; 4]> = smallvec![root];
 
-    while let Some(input) = workqueue.pop() {
-        debug_assert!(ty_bits(ctx.input_ty(input.insn, input.input)) == 64);
-        if let Some((op, insn)) = maybe_input_insn_multi(
+    while let Some(value) = workqueue.pop() {
+        debug_assert_eq!(ty_bits(ctx.value_ty(value)), 64);
+        if let Some((op, insn)) = maybe_value_multi(
             ctx,
-            input,
+            value,
             &[
                 Opcode::Uextend,
                 Opcode::Sextend,
@@ -559,12 +551,12 @@ fn collect_address_addends(
                     }
                 }
                 Opcode::Uextend | Opcode::Sextend => {
-                    let reg = put_input_in_reg(ctx, input, NarrowValueMode::None);
+                    let reg = put_value_in_reg(ctx, value, NarrowValueMode::None);
                     result64.push(reg);
                 }
                 Opcode::Iadd => {
                     for input in 0..ctx.num_inputs(insn) {
-                        let addend = InsnInput { insn, input };
+                        let addend = ctx.input_as_value(insn, input);
                         workqueue.push(addend);
                     }
                 }
@@ -575,7 +567,7 @@ fn collect_address_addends(
                 _ => panic!("Unexpected opcode from maybe_input_insn_multi"),
             }
         } else {
-            let reg = put_input_in_reg(ctx, input, NarrowValueMode::ZeroExtend64);
+            let reg = put_value_in_reg(ctx, value, NarrowValueMode::ZeroExtend64);
             result64.push(reg);
         }
     }
@@ -584,15 +576,11 @@ fn collect_address_addends(
 }
 
 /// Lower the address of a pair load or store.
-pub(crate) fn lower_pair_address(
-    ctx: &mut Lower<Inst>,
-    roots: &[InsnInput],
-    offset: i32,
-) -> PairAMode {
+pub(crate) fn lower_pair_address(ctx: &mut Lower<Inst>, addr: Value, offset: i32) -> PairAMode {
     // Collect addends through an arbitrary tree of 32-to-64-bit sign/zero
     // extends and addition ops. We update these as we consume address
     // components, so they represent the remaining addends not yet handled.
-    let (mut addends64, mut addends32, args_offset) = collect_address_addends(ctx, roots);
+    let (mut addends64, mut addends32, args_offset) = collect_address_addends(ctx, addr);
     let offset = args_offset + (offset as i64);
 
     trace!(
@@ -644,7 +632,7 @@ pub(crate) fn lower_pair_address(
 pub(crate) fn lower_address(
     ctx: &mut Lower<Inst>,
     elem_ty: Type,
-    roots: &[InsnInput],
+    addr: Value,
     offset: i32,
 ) -> AMode {
     // TODO: support base_reg + scale * index_reg. For this, we would need to
@@ -653,7 +641,7 @@ pub(crate) fn lower_address(
     // Collect addends through an arbitrary tree of 32-to-64-bit sign/zero
     // extends and addition ops. We update these as we consume address
     // components, so they represent the remaining addends not yet handled.
-    let (mut addends64, mut addends32, args_offset) = collect_address_addends(ctx, roots);
+    let (mut addends64, mut addends32, args_offset) = collect_address_addends(ctx, addr);
     let mut offset = args_offset + (offset as i64);
 
     trace!(
@@ -1073,17 +1061,6 @@ pub(crate) fn condcode_is_signed(cc: IntCC) -> bool {
 //=============================================================================
 // Helpers for instruction lowering.
 
-pub(crate) fn choose_32_64<T: Copy>(ty: Type, op32: T, op64: T) -> T {
-    let bits = ty_bits(ty);
-    if bits <= 32 {
-        op32
-    } else if bits == 64 {
-        op64
-    } else {
-        panic!("choose_32_64 on > 64 bits!")
-    }
-}
-
 /// Checks for an instance of `op` feeding the given input.
 pub(crate) fn maybe_input_insn(
     c: &mut Lower<Inst>,
@@ -1107,14 +1084,26 @@ pub(crate) fn maybe_input_insn(
     None
 }
 
-/// Checks for an instance of any one of `ops` feeding the given input.
-pub(crate) fn maybe_input_insn_multi(
+/// Checks for an instance of `op` defining the given value.
+pub(crate) fn maybe_value(c: &mut Lower<Inst>, value: Value, op: Opcode) -> Option<IRInst> {
+    let inputs = c.get_value_as_source_or_const(value);
+    if let Some((src_inst, _)) = inputs.inst.as_inst() {
+        let data = c.data(src_inst);
+        if data.opcode() == op {
+            return Some(src_inst);
+        }
+    }
+    None
+}
+
+/// Checks for an instance of any one of `ops` defining the given value.
+pub(crate) fn maybe_value_multi(
     c: &mut Lower<Inst>,
-    input: InsnInput,
+    value: Value,
     ops: &[Opcode],
 ) -> Option<(Opcode, IRInst)> {
     for &op in ops {
-        if let Some(inst) = maybe_input_insn(c, input, op) {
+        if let Some(inst) = maybe_value(c, value, op) {
             return Some((op, inst));
         }
     }
@@ -1469,41 +1458,6 @@ pub(crate) fn materialize_bool_result(
     } else {
         ctx.emit(Inst::CSet { rd, cond });
     }
-}
-
-fn load_op_to_ty(op: Opcode) -> Option<Type> {
-    match op {
-        Opcode::Sload8 | Opcode::Uload8 => Some(I8),
-        Opcode::Sload16 | Opcode::Uload16 => Some(I16),
-        Opcode::Sload32 | Opcode::Uload32 => Some(I32),
-        Opcode::Load => None,
-        Opcode::Sload8x8 | Opcode::Uload8x8 => Some(I8X8),
-        Opcode::Sload16x4 | Opcode::Uload16x4 => Some(I16X4),
-        Opcode::Sload32x2 | Opcode::Uload32x2 => Some(I32X2),
-        _ => None,
-    }
-}
-
-/// Helper to lower a load instruction; this is used in several places, because
-/// a load can sometimes be merged into another operation.
-pub(crate) fn lower_load<
-    F: FnMut(&mut Lower<Inst>, ValueRegs<Writable<Reg>>, Type, AMode) -> CodegenResult<()>,
->(
-    ctx: &mut Lower<Inst>,
-    ir_inst: IRInst,
-    inputs: &[InsnInput],
-    output: InsnOutput,
-    mut f: F,
-) -> CodegenResult<()> {
-    let op = ctx.data(ir_inst).opcode();
-
-    let elem_ty = load_op_to_ty(op).unwrap_or_else(|| ctx.output_ty(ir_inst, 0));
-
-    let off = ctx.data(ir_inst).load_store_offset().unwrap();
-    let mem = lower_address(ctx, elem_ty, &inputs[..], off);
-    let rd = get_output_reg(ctx, output);
-
-    f(ctx, rd, elem_ty, mem)
 }
 
 //=============================================================================

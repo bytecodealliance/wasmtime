@@ -425,4 +425,3 @@ version = "0.2.3"
 who = "Brian Jones <brian.j.jones@intel.com>"
 criteria = "safe-to-deploy"
 version = "0.5.13"
-

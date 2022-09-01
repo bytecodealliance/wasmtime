@@ -1,8 +1,6 @@
 //! Size, align, and flattening information about component model types.
 
-use crate::component::{
-    ComponentTypesBuilder, FlatType, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
-};
+use crate::component::{ComponentTypesBuilder, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 use crate::fact::{AdapterOptions, Context, Options};
 use wasm_encoder::ValType;
 
@@ -49,7 +47,11 @@ impl ComponentTypesBuilder {
         };
 
         let mut results_indirect = false;
-        let results = match self.flatten_types(&options.options, MAX_FLAT_RESULTS, [ty.result]) {
+        let results = match self.flatten_types(
+            &options.options,
+            MAX_FLAT_RESULTS,
+            ty.results.iter().map(|(_, ty)| *ty),
+        ) {
             Some(list) => list,
             None => {
                 results_indirect = true;
@@ -86,23 +88,11 @@ impl ComponentTypesBuilder {
     ) -> Option<Vec<ValType>> {
         let mut dst = Vec::new();
         for ty in tys {
-            let flat = self.flat_types(&ty)?;
-            let types = if opts.memory64 {
-                flat.memory64
-            } else {
-                flat.memory32
-            };
-            for ty in types {
-                let ty = match ty {
-                    FlatType::I32 => ValType::I32,
-                    FlatType::I64 => ValType::I64,
-                    FlatType::F32 => ValType::F32,
-                    FlatType::F64 => ValType::F64,
-                };
+            for ty in opts.flat_types(&ty, self)? {
                 if dst.len() == max {
                     return None;
                 }
-                dst.push(ty);
+                dst.push((*ty).into());
             }
         }
         Some(dst)

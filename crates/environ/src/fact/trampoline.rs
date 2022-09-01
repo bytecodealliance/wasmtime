@@ -16,15 +16,18 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    CanonicalAbiInfo, ComponentTypesBuilder, InterfaceType, StringEncoding, TypeEnumIndex,
-    TypeExpectedIndex, TypeFlagsIndex, TypeInterfaceIndex, TypeOptionIndex, TypeRecordIndex,
-    TypeTupleIndex, TypeUnionIndex, TypeVariantIndex, VariantInfo, FLAG_MAY_ENTER, FLAG_MAY_LEAVE,
-    MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalAbiInfo, ComponentTypesBuilder, FlatType, InterfaceType, StringEncoding,
+    TypeEnumIndex, TypeFlagsIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
+    TypeResultIndex, TypeTupleIndex, TypeUnionIndex, TypeVariantIndex, VariantInfo, FLAG_MAY_ENTER,
+    FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::{FixedEncoding as FE, Transcode, Transcoder};
 use crate::fact::traps::Trap;
-use crate::fact::{AdapterData, Body, Context, Function, FunctionId, Module, Options};
+use crate::fact::{
+    AdapterData, Body, Context, Function, FunctionId, Helper, HelperLocation, HelperType, Module,
+    Options,
+};
 use crate::{FuncIndex, GlobalIndex};
 use std::collections::HashMap;
 use std::mem;
@@ -34,6 +37,10 @@ use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 const MAX_STRING_BYTE_LENGTH: u32 = 1 << 31;
 const UTF16_TAG: u32 = 1 << 31;
+
+/// This value is arbitrarily chosen and should be fine to change at any time,
+/// it just seemed like a halfway reasonable starting point.
+const INITIAL_FUEL: usize = 1_000;
 
 struct Compiler<'a, 'b> {
     types: &'a ComponentTypesBuilder,
@@ -54,11 +61,15 @@ struct Compiler<'a, 'b> {
     /// well.
     traps: Vec<(usize, Trap)>,
 
-    /// Indicates whether this call to `translate` is a "top level" on where
-    /// it's the first call from the root of the generated function. This is
-    /// used as a heuristic to know when to split helpers out to a separate
-    /// function.
-    top_level_translate: bool,
+    /// A heuristic which is intended to limit the size of a generated function
+    /// to a certain maximum to avoid generating arbitrarily large functions.
+    ///
+    /// This fuel counter is decremented each time `translate` is called and
+    /// when fuel is entirely consumed further translations, if necessary, will
+    /// be done through calls to other functions in the module. This is intended
+    /// to be a heuristic to split up the main function into theoretically
+    /// reusable portions.
+    fuel: usize,
 }
 
 pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
@@ -78,52 +89,84 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
         free_locals: HashMap::new(),
         traps: Vec::new(),
         result,
-        top_level_translate: true,
+        fuel: INITIAL_FUEL,
     }
     .compile_adapter(adapter, &lower_sig, &lift_sig)
 }
 
-/// Compiles a helper function which is used to translate `src` to `dst`
-/// in-memory.
+/// Compiles a helper function as specified by the `Helper` configuration.
 ///
-/// The generated function takes two arguments: the source pointer and
-/// destination pointer. The conversion operation is configured by the
-/// `src_opts` and `dst_opts` specified as well.
-pub(super) fn compile_translate_mem(
-    module: &mut Module<'_>,
-    result: FunctionId,
-    src: InterfaceType,
-    src_opts: &Options,
-    dst: InterfaceType,
-    dst_opts: &Options,
-) {
+/// This function is invoked when the translation process runs out of fuel for
+/// some prior function which enqueues a helper to get translated later. This
+/// translation function will perform one type translation as specified by
+/// `Helper` which can either be in the stack or memory for each side.
+pub(super) fn compile_helper(module: &mut Module<'_>, result: FunctionId, helper: Helper) {
+    let mut nlocals = 0;
+    let src_flat;
+    let src = match helper.src.loc {
+        // If the source is on the stack then it's specified in the parameters
+        // to the function, so this creates the flattened representation and
+        // then lists those as the locals with appropriate types for the source
+        // values.
+        HelperLocation::Stack => {
+            src_flat = module
+                .types
+                .flatten_types(&helper.src.opts, usize::MAX, [helper.src.ty])
+                .unwrap()
+                .iter()
+                .enumerate()
+                .map(|(i, ty)| (i as u32, *ty))
+                .collect::<Vec<_>>();
+            nlocals += src_flat.len() as u32;
+            Source::Stack(Stack {
+                locals: &src_flat,
+                opts: &helper.src.opts,
+            })
+        }
+        // If the source is in memory then that's just propagated here as the
+        // first local is the pointer to the source.
+        HelperLocation::Memory => {
+            nlocals += 1;
+            Source::Memory(Memory {
+                opts: &helper.src.opts,
+                addr: TempLocal::new(0, helper.src.opts.ptr()),
+                offset: 0,
+            })
+        }
+    };
+    let dst_flat;
+    let dst = match helper.dst.loc {
+        // This is the same as the stack-based source although `Destination` is
+        // configured slightly differently.
+        HelperLocation::Stack => {
+            dst_flat = module
+                .types
+                .flatten_types(&helper.dst.opts, usize::MAX, [helper.dst.ty])
+                .unwrap();
+            Destination::Stack(&dst_flat, &helper.dst.opts)
+        }
+        // This is the same as a memroy-based source but note that the address
+        // of the destination is passed as the final parameter to the function.
+        HelperLocation::Memory => {
+            nlocals += 1;
+            Destination::Memory(Memory {
+                opts: &helper.dst.opts,
+                addr: TempLocal::new(nlocals - 1, helper.dst.opts.ptr()),
+                offset: 0,
+            })
+        }
+    };
     let mut compiler = Compiler {
         types: module.types,
         module,
         code: Vec::new(),
-        nlocals: 2,
+        nlocals,
         free_locals: HashMap::new(),
         traps: Vec::new(),
         result,
-        top_level_translate: true,
+        fuel: INITIAL_FUEL,
     };
-    // This function only does one thing which is to translate between memory,
-    // so only one call to `translate` is necessary. Note that the `addr_local`
-    // values come from the function arguments.
-    compiler.translate(
-        &src,
-        &Source::Memory(Memory {
-            opts: src_opts,
-            addr: TempLocal::new(0, src_opts.ptr()),
-            offset: 0,
-        }),
-        &dst,
-        &Destination::Memory(Memory {
-            opts: dst_opts,
-            addr: TempLocal::new(1, dst_opts.ptr()),
-            offset: 0,
-        }),
-    );
+    compiler.translate(&helper.src.ty, &src, &helper.dst.ty, &dst);
     compiler.finish();
 }
 
@@ -345,17 +388,19 @@ impl Compiler<'_, '_> {
         param_locals: &[(u32, ValType)],
         result_locals: &[(u32, ValType)],
     ) {
-        let src_ty = self.types[adapter.lift.ty].result;
-        let dst_ty = self.types[adapter.lower.ty].result;
+        let src_tys = &self.types[adapter.lift.ty].results;
+        let src_tys = src_tys.iter().map(|(_, ty)| *ty).collect::<Vec<_>>();
+        let dst_tys = &self.types[adapter.lower.ty].results;
+        let dst_tys = dst_tys.iter().map(|(_, ty)| *ty).collect::<Vec<_>>();
         let lift_opts = &adapter.lift.options;
         let lower_opts = &adapter.lower.options;
 
-        let src_flat = self
-            .types
-            .flatten_types(lift_opts, MAX_FLAT_RESULTS, [src_ty]);
-        let dst_flat = self
-            .types
-            .flatten_types(lower_opts, MAX_FLAT_RESULTS, [dst_ty]);
+        let src_flat =
+            self.types
+                .flatten_types(lift_opts, MAX_FLAT_RESULTS, src_tys.iter().copied());
+        let dst_flat =
+            self.types
+                .flatten_types(lower_opts, MAX_FLAT_RESULTS, dst_tys.iter().copied());
 
         let src = if src_flat.is_some() {
             Source::Stack(Stack {
@@ -367,7 +412,11 @@ impl Compiler<'_, '_> {
             // return value of the function itself. The imported function will
             // return a linear memory address at which the values can be read
             // from.
-            let align = self.types.align(lift_opts, &src_ty);
+            let align = src_tys
+                .iter()
+                .map(|t| self.types.align(lift_opts, t))
+                .max()
+                .unwrap_or(1);
             assert_eq!(result_locals.len(), 1);
             let (addr, ty) = result_locals[0];
             assert_eq!(ty, lift_opts.ptr());
@@ -380,13 +429,25 @@ impl Compiler<'_, '_> {
             // This is slightly different than `translate_params` where the
             // return pointer was provided by the caller of this function
             // meaning the last parameter local is a pointer into linear memory.
-            let align = self.types.align(lower_opts, &dst_ty);
+            let align = dst_tys
+                .iter()
+                .map(|t| self.types.align(lower_opts, t))
+                .max()
+                .unwrap_or(1);
             let (addr, ty) = *param_locals.last().expect("no retptr");
             assert_eq!(ty, lower_opts.ptr());
             Destination::Memory(self.memory_operand(lower_opts, TempLocal::new(addr, ty), align))
         };
 
-        self.translate(&src_ty, &src, &dst_ty, &dst);
+        let srcs = src
+            .record_field_srcs(self.types, src_tys.iter().copied())
+            .zip(src_tys.iter());
+        let dsts = dst
+            .record_field_dsts(self.types, dst_tys.iter().copied())
+            .zip(dst_tys.iter());
+        for ((src, src_ty), (dst, dst_ty)) in srcs.zip(dsts) {
+            self.translate(&src_ty, &src, &dst_ty, &dst);
+        }
     }
 
     fn translate(
@@ -403,11 +464,40 @@ impl Compiler<'_, '_> {
             self.assert_aligned(dst_ty, mem);
         }
 
-        // Classify the source type as "primitive" or not as a heuristic to
-        // whether the translation should be split out into a helper function.
-        let src_primitive = match src_ty {
-            InterfaceType::Unit
-            | InterfaceType::Bool
+        // Calculate a cost heuristic for what the translation of this specific
+        // layer of the type is going to incur. The purpose of this cost is that
+        // we'll deduct it from `self.fuel` and if no fuel is remaining then
+        // translation is outlined into a separate function rather than being
+        // translated into this function.
+        //
+        // The general goal is to avoid creating an exponentially sized function
+        // for a linearly sized input (the type section). By outlining helper
+        // functions there will ideally be a constant set of helper functions
+        // per type (to accomodate in-memory or on-stack transfers as well as
+        // src/dst options) which means that each function is at most a certain
+        // size and we have a linear number of functions which should guarantee
+        // an overall linear size of the output.
+        //
+        // To implement this the current heuristic is that each layer of
+        // translating a type has a cost associated with it and this cost is
+        // accounted for in `self.fuel`. Some conversions are considered free as
+        // they generate basically as much code as the `call` to the translation
+        // function while other are considered proportionally expensive to the
+        // size of the type. The hope is that some upper layers are of a type's
+        // translation are all inlined into one function but bottom layers end
+        // up getting outlined to separate functions. Theoretically, again this
+        // is built on hopes and dreams, the outlining can be shared amongst
+        // tightly-intertwined type hierarchies which will reduce the size of
+        // the output module due to the helpers being used.
+        //
+        // This heuristic of how to split functions has changed a few times in
+        // the past and this isn't necessarily guaranteed to be the final
+        // iteration.
+        let cost = match src_ty {
+            // These types are all quite simple to load/store and equate to
+            // basically the same cost of the `call` instruction to call an
+            // out-of-line translation function, so give them 0 cost.
+            InterfaceType::Bool
             | InterfaceType::U8
             | InterfaceType::S8
             | InterfaceType::U16
@@ -417,126 +507,169 @@ impl Compiler<'_, '_> {
             | InterfaceType::U64
             | InterfaceType::S64
             | InterfaceType::Float32
-            | InterfaceType::Float64
-            | InterfaceType::Char
-            | InterfaceType::Flags(_) => true,
+            | InterfaceType::Float64 => 0,
 
-            InterfaceType::String
-            | InterfaceType::List(_)
-            | InterfaceType::Record(_)
-            | InterfaceType::Tuple(_)
-            | InterfaceType::Variant(_)
-            | InterfaceType::Union(_)
-            | InterfaceType::Enum(_)
-            | InterfaceType::Option(_)
-            | InterfaceType::Expected(_) => false,
+            // This has a small amount of validation associated with it, so
+            // give it a cost of 1.
+            InterfaceType::Char => 1,
+
+            // This has a fair bit of code behind it depending on the
+            // strings/encodings in play, so arbitrarily assign it a cost a 5.
+            InterfaceType::String => 5,
+
+            // Iteration of a loop is along the lines of the cost of a string
+            // so give it the same cost
+            InterfaceType::List(_) => 5,
+
+            InterfaceType::Flags(i) => {
+                let count = self.module.types[*i].names.len();
+                match FlagsSize::from_count(count) {
+                    FlagsSize::Size0 => 0,
+                    FlagsSize::Size1 | FlagsSize::Size2 => 1,
+                    FlagsSize::Size4Plus(n) => n.into(),
+                }
+            }
+
+            InterfaceType::Record(i) => self.types[*i].fields.len(),
+            InterfaceType::Tuple(i) => self.types[*i].types.len(),
+            InterfaceType::Variant(i) => self.types[*i].cases.len(),
+            InterfaceType::Union(i) => self.types[*i].types.len(),
+            InterfaceType::Enum(i) => self.types[*i].names.len(),
+
+            // 2 cases to consider for each of these variants.
+            InterfaceType::Option(_) | InterfaceType::Result(_) => 2,
         };
-        let top_level = mem::replace(&mut self.top_level_translate, false);
 
-        // Use a number of heuristics to determine whether this translation
-        // should be split out into a helper function rather than translated
-        // inline. The goal of this heuristic is to avoid a function that is
-        // exponential in the size of a type. For example if everything
-        // were translated inline then this could get arbitrarily large
-        //
-        //      (type $level0 (list u8))
-        //      (type $level1 (expected $level0 $level0))
-        //      (type $level2 (expected $level1 $level1))
-        //      (type $level3 (expected $level2 $level2))
-        //      (type $level4 (expected $level3 $level3))
-        //      ;; ...
-        //
-        // If everything we inlined then translation of `$level0` would appear
-        // in 2^n different locations depending on the depth of the type. By
-        // splitting out the translation to a helper function, though, it
-        // means there could be one function for each level, keeping the size
-        // of translation on par with the size of the module itself.
-        //
-        // The heuristics which go into this splitting currently are:
-        //
-        // * Both the source and destination must be memory. This skips "top
-        //   level" translation for adapters where arguments/results come from
-        //   direct parameters or get placed on the stack.
-        //
-        // * Primitive types are skipped here since they have no need to be
-        //   split out. This is for types like integers and floats.
-        //
-        // * The "top level" of a function is also skipped. That basically
-        //   means that the first call to `translate` will never split out
-        //   a helper function (since if we're already in a helper function
-        //   that could cause infinite recursion in the wasm). Otherwise
-        //   this keeps the top-level list of types in adapters nice and inline
-        //   too while only possibly considering splitting out deeper types.
-        //
-        // This heuristic may need tweaking over time naturally as more modules
-        // in the wild are seen and performance measurements are taken. For now
-        // this keeps the fuzzers happy by avoiding exponentially-sized output
-        // given an input.
-        if let (Source::Memory(src), Destination::Memory(dst)) = (src, dst) {
-            if !src_primitive && !top_level {
-                // Compile the helper function which will translate the source
-                // type to the destination type. The two parameters to this
-                // function are the source/destination pointers which are
-                // calculated here to pass through. Our own function then
-                // grows a `Body::Call` to the function generated. Note that
-                // `Body::Call` is used here instead of `Instruction::Call`
-                // because we don't know the final index of the generated
-                // function yet. It's filled in at the end of adapter module
-                // translation.
-                let helper = self
-                    .module
-                    .translate_mem(*src_ty, src.opts, *dst_ty, dst.opts);
+        match self.fuel.checked_sub(cost) {
+            // This function has enough fuel to perform the layer of translation
+            // necessary for this type, so the fuel is updated in-place and
+            // translation continues. Note that the recursion here is bounded by
+            // the static recursion limit for all interface types as imposed
+            // during the translation phase.
+            Some(n) => {
+                self.fuel = n;
+                match src_ty {
+                    InterfaceType::Bool => self.translate_bool(src, dst_ty, dst),
+                    InterfaceType::U8 => self.translate_u8(src, dst_ty, dst),
+                    InterfaceType::S8 => self.translate_s8(src, dst_ty, dst),
+                    InterfaceType::U16 => self.translate_u16(src, dst_ty, dst),
+                    InterfaceType::S16 => self.translate_s16(src, dst_ty, dst),
+                    InterfaceType::U32 => self.translate_u32(src, dst_ty, dst),
+                    InterfaceType::S32 => self.translate_s32(src, dst_ty, dst),
+                    InterfaceType::U64 => self.translate_u64(src, dst_ty, dst),
+                    InterfaceType::S64 => self.translate_s64(src, dst_ty, dst),
+                    InterfaceType::Float32 => self.translate_f32(src, dst_ty, dst),
+                    InterfaceType::Float64 => self.translate_f64(src, dst_ty, dst),
+                    InterfaceType::Char => self.translate_char(src, dst_ty, dst),
+                    InterfaceType::String => self.translate_string(src, dst_ty, dst),
+                    InterfaceType::List(t) => self.translate_list(*t, src, dst_ty, dst),
+                    InterfaceType::Record(t) => self.translate_record(*t, src, dst_ty, dst),
+                    InterfaceType::Flags(f) => self.translate_flags(*f, src, dst_ty, dst),
+                    InterfaceType::Tuple(t) => self.translate_tuple(*t, src, dst_ty, dst),
+                    InterfaceType::Variant(v) => self.translate_variant(*v, src, dst_ty, dst),
+                    InterfaceType::Union(u) => self.translate_union(*u, src, dst_ty, dst),
+                    InterfaceType::Enum(t) => self.translate_enum(*t, src, dst_ty, dst),
+                    InterfaceType::Option(t) => self.translate_option(*t, src, dst_ty, dst),
+                    InterfaceType::Result(t) => self.translate_result(*t, src, dst_ty, dst),
+                }
+            }
 
-                // TODO: overflow checks?
-                self.instruction(LocalGet(src.addr.idx));
-                if src.offset != 0 {
-                    self.ptr_uconst(src.opts, src.offset);
-                    self.ptr_add(src.opts);
-                }
-                self.instruction(LocalGet(dst.addr.idx));
-                if dst.offset != 0 {
-                    self.ptr_uconst(dst.opts, dst.offset);
-                    self.ptr_add(dst.opts);
-                }
+            // This function does not have enough fuel left to perform this
+            // layer of translation so the translation is deferred to a helper
+            // function. The actual translation here is then done by marshalling
+            // the src/dst into the function we're calling and then processing
+            // the results.
+            None => {
+                let src_loc = match src {
+                    // If the source is on the stack then `stack_get` is used to
+                    // convert everything to the appropriate flat representation
+                    // for the source type.
+                    Source::Stack(stack) => {
+                        for (i, ty) in stack
+                            .opts
+                            .flat_types(src_ty, self.types)
+                            .unwrap()
+                            .iter()
+                            .enumerate()
+                        {
+                            let stack = stack.slice(i..i + 1);
+                            self.stack_get(&stack, (*ty).into());
+                        }
+                        HelperLocation::Stack
+                    }
+                    // If the source is in memory then the pointer is passed
+                    // through, but note that the offset must be factored in
+                    // here since the translation function will start from
+                    // offset 0.
+                    Source::Memory(mem) => {
+                        self.push_mem_addr(mem);
+                        HelperLocation::Memory
+                    }
+                };
+                let dst_loc = match dst {
+                    Destination::Stack(..) => HelperLocation::Stack,
+                    Destination::Memory(mem) => {
+                        self.push_mem_addr(mem);
+                        HelperLocation::Memory
+                    }
+                };
+                // Generate a `FunctionId` corresponding to the `Helper`
+                // configuration that is necessary here. This will ideally be a
+                // "cache hit" and use a preexisting helper which represents
+                // outlining what would otherwise be duplicate code within a
+                // function to one function.
+                let helper = self.module.translate_helper(Helper {
+                    src: HelperType {
+                        ty: *src_ty,
+                        opts: *src.opts(),
+                        loc: src_loc,
+                    },
+                    dst: HelperType {
+                        ty: *dst_ty,
+                        opts: *dst.opts(),
+                        loc: dst_loc,
+                    },
+                });
+                // Emit a `call` instruction which will get "relocated" to a
+                // function index once translation has completely finished.
                 self.flush_code();
                 self.module.funcs[self.result].body.push(Body::Call(helper));
-                self.top_level_translate = true;
-                return;
+
+                // If the destination of the translation was on the stack then
+                // the types on the stack need to be optionally converted to
+                // different types (e.g. if the result here is part of a variant
+                // somewhere else).
+                //
+                // This translation happens inline here by popping the results
+                // into new locals and then using those locals to do a
+                // `stack_set`.
+                if let Destination::Stack(tys, opts) = dst {
+                    let flat = self
+                        .types
+                        .flatten_types(opts, usize::MAX, [*dst_ty])
+                        .unwrap();
+                    assert_eq!(flat.len(), tys.len());
+                    let locals = flat
+                        .iter()
+                        .rev()
+                        .map(|ty| self.local_set_new_tmp(*ty))
+                        .collect::<Vec<_>>();
+                    for (ty, local) in tys.iter().zip(locals.into_iter().rev()) {
+                        self.instruction(LocalGet(local.idx));
+                        self.stack_set(std::slice::from_ref(ty), local.ty);
+                        self.free_temp_local(local);
+                    }
+                }
             }
         }
-        match src_ty {
-            InterfaceType::Unit => self.translate_unit(src, dst_ty, dst),
-            InterfaceType::Bool => self.translate_bool(src, dst_ty, dst),
-            InterfaceType::U8 => self.translate_u8(src, dst_ty, dst),
-            InterfaceType::S8 => self.translate_s8(src, dst_ty, dst),
-            InterfaceType::U16 => self.translate_u16(src, dst_ty, dst),
-            InterfaceType::S16 => self.translate_s16(src, dst_ty, dst),
-            InterfaceType::U32 => self.translate_u32(src, dst_ty, dst),
-            InterfaceType::S32 => self.translate_s32(src, dst_ty, dst),
-            InterfaceType::U64 => self.translate_u64(src, dst_ty, dst),
-            InterfaceType::S64 => self.translate_s64(src, dst_ty, dst),
-            InterfaceType::Float32 => self.translate_f32(src, dst_ty, dst),
-            InterfaceType::Float64 => self.translate_f64(src, dst_ty, dst),
-            InterfaceType::Char => self.translate_char(src, dst_ty, dst),
-            InterfaceType::String => self.translate_string(src, dst_ty, dst),
-            InterfaceType::List(t) => self.translate_list(*t, src, dst_ty, dst),
-            InterfaceType::Record(t) => self.translate_record(*t, src, dst_ty, dst),
-            InterfaceType::Flags(f) => self.translate_flags(*f, src, dst_ty, dst),
-            InterfaceType::Tuple(t) => self.translate_tuple(*t, src, dst_ty, dst),
-            InterfaceType::Variant(v) => self.translate_variant(*v, src, dst_ty, dst),
-            InterfaceType::Union(u) => self.translate_union(*u, src, dst_ty, dst),
-            InterfaceType::Enum(t) => self.translate_enum(*t, src, dst_ty, dst),
-            InterfaceType::Option(t) => self.translate_option(*t, src, dst_ty, dst),
-            InterfaceType::Expected(t) => self.translate_expected(*t, src, dst_ty, dst),
-        }
-
-        self.top_level_translate = top_level;
     }
 
-    fn translate_unit(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
-        // TODO: subtyping
-        assert!(matches!(dst_ty, InterfaceType::Unit));
-        drop((src, dst));
+    fn push_mem_addr(&mut self, mem: &Memory<'_>) {
+        self.instruction(LocalGet(mem.addr.idx));
+        if mem.offset != 0 {
+            self.ptr_uconst(mem.opts, mem.offset);
+            self.ptr_add(mem.opts);
+        }
     }
 
     fn translate_bool(&mut self, src: &Source<'_>, dst_ty: &InterfaceType, dst: &Destination) {
@@ -1590,14 +1723,14 @@ impl Compiler<'_, '_> {
 
     fn translate_list(
         &mut self,
-        src_ty: TypeInterfaceIndex,
+        src_ty: TypeListIndex,
         src: &Source<'_>,
         dst_ty: &InterfaceType,
         dst: &Destination,
     ) {
-        let src_element_ty = &self.types[src_ty];
+        let src_element_ty = &self.types[src_ty].element;
         let dst_element_ty = match dst_ty {
-            InterfaceType::List(r) => &self.types[*r],
+            InterfaceType::List(r) => &self.types[*r].element,
             _ => panic!("expected a list"),
         };
         let src_opts = src.opts();
@@ -1996,8 +2129,8 @@ impl Compiler<'_, '_> {
             _ => panic!("expected a variant"),
         };
 
-        let src_info = variant_info(self.types, src_ty.cases.iter().map(|c| c.ty));
-        let dst_info = variant_info(self.types, dst_ty.cases.iter().map(|c| c.ty));
+        let src_info = variant_info(self.types, src_ty.cases.iter().map(|c| c.ty.as_ref()));
+        let dst_info = variant_info(self.types, dst_ty.cases.iter().map(|c| c.ty.as_ref()));
 
         let iter = src_ty.cases.iter().enumerate().map(|(src_i, src_case)| {
             let dst_i = dst_ty
@@ -2010,9 +2143,9 @@ impl Compiler<'_, '_> {
             let dst_i = u32::try_from(dst_i).unwrap();
             VariantCase {
                 src_i,
-                src_ty: &src_case.ty,
+                src_ty: src_case.ty.as_ref(),
                 dst_i,
-                dst_ty: &dst_case.ty,
+                dst_ty: dst_case.ty.as_ref(),
             }
         });
         self.convert_variant(src, &src_info, dst, &dst_info, iter);
@@ -2031,8 +2164,8 @@ impl Compiler<'_, '_> {
             _ => panic!("expected an option"),
         };
         assert_eq!(src_ty.types.len(), dst_ty.types.len());
-        let src_info = variant_info(self.types, src_ty.types.iter().copied());
-        let dst_info = variant_info(self.types, dst_ty.types.iter().copied());
+        let src_info = variant_info(self.types, src_ty.types.iter().map(Some));
+        let dst_info = variant_info(self.types, dst_ty.types.iter().map(Some));
 
         self.convert_variant(
             src,
@@ -2049,8 +2182,8 @@ impl Compiler<'_, '_> {
                     VariantCase {
                         src_i: i,
                         dst_i: i,
-                        src_ty,
-                        dst_ty,
+                        src_ty: Some(src_ty),
+                        dst_ty: Some(dst_ty),
                     }
                 }),
         );
@@ -2068,10 +2201,9 @@ impl Compiler<'_, '_> {
             InterfaceType::Enum(t) => &self.types[*t],
             _ => panic!("expected an option"),
         };
-        let src_info = variant_info(self.types, src_ty.names.iter().map(|_| InterfaceType::Unit));
-        let dst_info = variant_info(self.types, dst_ty.names.iter().map(|_| InterfaceType::Unit));
+        let src_info = variant_info(self.types, src_ty.names.iter().map(|_| None));
+        let dst_info = variant_info(self.types, dst_ty.names.iter().map(|_| None));
 
-        let unit = &InterfaceType::Unit;
         self.convert_variant(
             src,
             &src_info,
@@ -2084,8 +2216,8 @@ impl Compiler<'_, '_> {
                 VariantCase {
                     src_i,
                     dst_i,
-                    src_ty: unit,
-                    dst_ty: unit,
+                    src_ty: None,
+                    dst_ty: None,
                 }
             }),
         );
@@ -2103,9 +2235,11 @@ impl Compiler<'_, '_> {
             InterfaceType::Option(t) => &self.types[*t].ty,
             _ => panic!("expected an option"),
         };
+        let src_ty = Some(src_ty);
+        let dst_ty = Some(dst_ty);
 
-        let src_info = variant_info(self.types, [InterfaceType::Unit, *src_ty]);
-        let dst_info = variant_info(self.types, [InterfaceType::Unit, *dst_ty]);
+        let src_info = variant_info(self.types, [None, src_ty]);
+        let dst_info = variant_info(self.types, [None, dst_ty]);
 
         self.convert_variant(
             src,
@@ -2116,8 +2250,8 @@ impl Compiler<'_, '_> {
                 VariantCase {
                     src_i: 0,
                     dst_i: 0,
-                    src_ty: &InterfaceType::Unit,
-                    dst_ty: &InterfaceType::Unit,
+                    src_ty: None,
+                    dst_ty: None,
                 },
                 VariantCase {
                     src_i: 1,
@@ -2130,21 +2264,21 @@ impl Compiler<'_, '_> {
         );
     }
 
-    fn translate_expected(
+    fn translate_result(
         &mut self,
-        src_ty: TypeExpectedIndex,
+        src_ty: TypeResultIndex,
         src: &Source<'_>,
         dst_ty: &InterfaceType,
         dst: &Destination,
     ) {
         let src_ty = &self.types[src_ty];
         let dst_ty = match dst_ty {
-            InterfaceType::Expected(t) => &self.types[*t],
-            _ => panic!("expected an expected"),
+            InterfaceType::Result(t) => &self.types[*t],
+            _ => panic!("expected a result"),
         };
 
-        let src_info = variant_info(self.types, [src_ty.ok, src_ty.err]);
-        let dst_info = variant_info(self.types, [dst_ty.ok, dst_ty.err]);
+        let src_info = variant_info(self.types, [src_ty.ok.as_ref(), src_ty.err.as_ref()]);
+        let dst_info = variant_info(self.types, [dst_ty.ok.as_ref(), dst_ty.err.as_ref()]);
 
         self.convert_variant(
             src,
@@ -2155,14 +2289,14 @@ impl Compiler<'_, '_> {
                 VariantCase {
                     src_i: 0,
                     dst_i: 0,
-                    src_ty: &src_ty.ok,
-                    dst_ty: &dst_ty.ok,
+                    src_ty: src_ty.ok.as_ref(),
+                    dst_ty: dst_ty.ok.as_ref(),
                 },
                 VariantCase {
                     src_i: 1,
                     dst_i: 1,
-                    src_ty: &src_ty.err,
-                    dst_ty: &dst_ty.err,
+                    src_ty: src_ty.err.as_ref(),
+                    dst_ty: dst_ty.err.as_ref(),
                 },
             ]
             .into_iter(),
@@ -2254,11 +2388,18 @@ impl Compiler<'_, '_> {
                 },
             }
 
-            // Translate the payload of this case using the various types from
-            // the dst/src.
             let src_payload = src.payload_src(self.types, src_info, src_ty);
             let dst_payload = dst.payload_dst(self.types, dst_info, dst_ty);
-            self.translate(src_ty, &src_payload, dst_ty, &dst_payload);
+
+            // Translate the payload of this case using the various types from
+            // the dst/src.
+            match (src_ty, dst_ty) {
+                (Some(src_ty), Some(dst_ty)) => {
+                    self.translate(src_ty, &src_payload, dst_ty, &dst_payload);
+                }
+                (None, None) => {}
+                _ => unimplemented!(),
+            }
 
             // If the results of this translation were placed on the stack then
             // the stack values may need to be padded with more zeros due to
@@ -2485,10 +2626,13 @@ impl Compiler<'_, '_> {
             | (ValType::F64, ValType::F64) => {}
 
             (ValType::I32, ValType::F32) => self.instruction(F32ReinterpretI32),
-            (ValType::I64, ValType::I32) => self.instruction(I32WrapI64),
+            (ValType::I64, ValType::I32) => {
+                self.assert_i64_upper_bits_not_set(idx);
+                self.instruction(I32WrapI64);
+            }
             (ValType::I64, ValType::F64) => self.instruction(F64ReinterpretI64),
-            (ValType::F64, ValType::F32) => self.instruction(F32DemoteF64),
             (ValType::I64, ValType::F32) => {
+                self.assert_i64_upper_bits_not_set(idx);
                 self.instruction(I32WrapI64);
                 self.instruction(F32ReinterpretI32);
             }
@@ -2501,6 +2645,7 @@ impl Compiler<'_, '_> {
             | (ValType::F32, ValType::F64)
             | (ValType::F64, ValType::I32)
             | (ValType::F64, ValType::I64)
+            | (ValType::F64, ValType::F32)
 
             // not used in the component model
             | (ValType::ExternRef, _)
@@ -2512,6 +2657,19 @@ impl Compiler<'_, '_> {
                 panic!("cannot get {dst_ty:?} from {src_ty:?} local");
             }
         }
+    }
+
+    fn assert_i64_upper_bits_not_set(&mut self, local: u32) {
+        if !self.module.debug {
+            return;
+        }
+        self.instruction(LocalGet(local));
+        self.instruction(I64Const(32));
+        self.instruction(I64ShrU);
+        self.instruction(I32WrapI64);
+        self.instruction(If(BlockType::Empty));
+        self.trap(Trap::AssertFailed("upper bits are unexpectedly set"));
+        self.instruction(End);
     }
 
     /// Converts the top value on the WebAssembly stack which has type
@@ -2531,7 +2689,6 @@ impl Compiler<'_, '_> {
             (ValType::F32, ValType::I32) => self.instruction(I32ReinterpretF32),
             (ValType::I32, ValType::I64) => self.instruction(I64ExtendI32U),
             (ValType::F64, ValType::I64) => self.instruction(I64ReinterpretF64),
-            (ValType::F32, ValType::F64) => self.instruction(F64PromoteF32),
             (ValType::F32, ValType::I64) => {
                 self.instruction(I32ReinterpretF32);
                 self.instruction(I64ExtendI32U);
@@ -2545,6 +2702,7 @@ impl Compiler<'_, '_> {
             | (ValType::F64, ValType::F32)
             | (ValType::I32, ValType::F64)
             | (ValType::I64, ValType::F64)
+            | (ValType::F32, ValType::F64)
 
             // not used in the component model
             | (ValType::ExternRef, _)
@@ -2807,11 +2965,14 @@ impl<'a> Source<'a> {
         &self,
         types: &ComponentTypesBuilder,
         info: &VariantInfo,
-        case: &InterfaceType,
+        case: Option<&InterfaceType>,
     ) -> Source<'a> {
         match self {
             Source::Stack(s) => {
-                let flat_len = types.flat_types(case).unwrap().len();
+                let flat_len = match case {
+                    Some(case) => types.flat_types(case).unwrap().len(),
+                    None => 0,
+                };
                 Source::Stack(s.slice(1..s.locals.len()).slice(0..flat_len))
             }
             Source::Memory(mem) => {
@@ -2862,11 +3023,14 @@ impl<'a> Destination<'a> {
         &self,
         types: &ComponentTypesBuilder,
         info: &VariantInfo,
-        case: &InterfaceType,
+        case: Option<&InterfaceType>,
     ) -> Destination {
         match self {
             Destination::Stack(s, opts) => {
-                let flat_len = types.flat_types(case).unwrap().len();
+                let flat_len = match case {
+                    Some(case) => types.flat_types(case).unwrap().len(),
+                    None => 0,
+                };
                 Destination::Stack(&s[1..][..flat_len], opts)
             }
             Destination::Memory(mem) => {
@@ -2932,17 +3096,22 @@ impl<'a> Stack<'a> {
 
 struct VariantCase<'a> {
     src_i: u32,
-    src_ty: &'a InterfaceType,
+    src_ty: Option<&'a InterfaceType>,
     dst_i: u32,
-    dst_ty: &'a InterfaceType,
+    dst_ty: Option<&'a InterfaceType>,
 }
 
-fn variant_info<I>(types: &ComponentTypesBuilder, cases: I) -> VariantInfo
+fn variant_info<'a, I>(types: &ComponentTypesBuilder, cases: I) -> VariantInfo
 where
-    I: IntoIterator<Item = InterfaceType>,
+    I: IntoIterator<Item = Option<&'a InterfaceType>>,
     I::IntoIter: ExactSizeIterator,
 {
-    VariantInfo::new(cases.into_iter().map(|i| types.canonical_abi(&i))).0
+    VariantInfo::new(
+        cases
+            .into_iter()
+            .map(|ty| ty.map(|ty| types.canonical_abi(ty))),
+    )
+    .0
 }
 
 enum MallocSize {
@@ -2976,6 +3145,17 @@ impl std::ops::Drop for TempLocal {
     fn drop(&mut self) {
         if self.needs_free {
             panic!("temporary local not free'd");
+        }
+    }
+}
+
+impl From<FlatType> for ValType {
+    fn from(ty: FlatType) -> ValType {
+        match ty {
+            FlatType::I32 => ValType::I32,
+            FlatType::I64 => ValType::I64,
+            FlatType::F32 => ValType::F32,
+            FlatType::F64 => ValType::F64,
         }
     }
 }

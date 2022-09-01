@@ -1,0 +1,43 @@
+test compile precise-output
+target aarch64
+
+function %f1(f32) -> i32 {
+block0(v0: f32):
+  v1 = bitcast.i32 v0
+  return v1
+}
+
+; block0:
+;   mov w0, v0.s[0]
+;   ret
+
+function %f2(i32) -> f32 {
+block0(v0: i32):
+  v1 = bitcast.f32 v0
+  return v1
+}
+
+; block0:
+;   fmov s0, w0
+;   ret
+
+function %f3(f64) -> i64 {
+block0(v0: f64):
+  v1 = bitcast.i64 v0
+  return v1
+}
+
+; block0:
+;   mov x0, v0.d[0]
+;   ret
+
+function %f4(i64) -> f64 {
+block0(v0: i64):
+  v1 = bitcast.f64 v0
+  return v1
+}
+
+; block0:
+;   fmov d0, x0
+;   ret
+

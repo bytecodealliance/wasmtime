@@ -653,6 +653,16 @@ impl ScalarSize {
             ScalarSize::Size128 => panic!("can't widen 128-bits"),
         }
     }
+
+    pub fn narrow(&self) -> ScalarSize {
+        match self {
+            ScalarSize::Size8 => panic!("can't narrow 8-bits"),
+            ScalarSize::Size16 => ScalarSize::Size8,
+            ScalarSize::Size32 => ScalarSize::Size16,
+            ScalarSize::Size64 => ScalarSize::Size32,
+            ScalarSize::Size128 => ScalarSize::Size64,
+        }
+    }
 }
 
 /// Type used to communicate the size of a vector operand.
@@ -761,20 +771,5 @@ impl VectorSize {
             ScalarSize::Size64 => 0b1,
             size => panic!("Unsupported floating-point size for vector op: {:?}", size),
         }
-    }
-}
-
-pub(crate) fn dynamic_to_fixed(ty: Type) -> Type {
-    match ty {
-        I8X8XN => I8X8,
-        I8X16XN => I8X16,
-        I16X4XN => I16X4,
-        I16X8XN => I16X8,
-        I32X2XN => I32X2,
-        I32X4XN => I32X4,
-        I64X2XN => I64X2,
-        F32X4XN => F32X4,
-        F64X2XN => F64X2,
-        _ => unreachable!("unhandled type: {}", ty),
     }
 }

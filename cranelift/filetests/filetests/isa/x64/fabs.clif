@@ -1,0 +1,67 @@
+test compile precise-output
+target x86_64
+
+function %f1(f32) -> f32 {
+block0(v0: f32):
+  v1 = fabs v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $2147483647, %ecx
+;   movd    %ecx, %xmm5
+;   andps   %xmm0, %xmm5, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f2(f64) -> f64 {
+block0(v0: f64):
+  v1 = fabs v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movabsq $9223372036854775807, %rcx
+;   movq    %rcx, %xmm5
+;   andpd   %xmm0, %xmm5, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f3(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = fabs v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pcmpeqd %xmm4, %xmm4, %xmm4
+;   psrld   %xmm4, $1, %xmm4
+;   andps   %xmm0, %xmm4, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f4(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = fabs v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pcmpeqd %xmm4, %xmm4, %xmm4
+;   psrlq   %xmm4, $1, %xmm4
+;   andpd   %xmm0, %xmm4, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

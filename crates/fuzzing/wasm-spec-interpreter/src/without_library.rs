@@ -15,3 +15,6 @@ pub fn interpret(_module: &[u8], _parameters: Option<Vec<Value>>) -> Result<Vec<
         library; re-compile with the dependencies listed in its README.md."
     );
 }
+
+#[allow(dead_code)]
+pub fn setup_ocaml_runtime() {}

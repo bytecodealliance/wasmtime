@@ -27,14 +27,23 @@ pub struct Config {
 
 impl Config {
     /// Indicates that this configuration is being used for differential
-    /// execution so only a single function should be generated since that's all
-    /// that's going to be exercised.
+    /// execution.
+    ///
+    /// The purpose of this function is to update the configuration which was
+    /// generated to be compatible with execution in multiple engines. The goal
+    /// is to produce the exact same result in all engines so we need to paper
+    /// over things like nan differences and memory/table behavior differences.
     pub fn set_differential_config(&mut self) {
         let config = &mut self.module_config.config;
 
+        // Disable the start function for now.
+        //
+        // TODO: should probably allow this after testing it works with the new
+        // differential setup in all engines.
         config.allow_start_export = false;
 
-        // Make sure there's a type available for the function.
+        // Make it more likely that there are types available to generate a
+        // function with.
         config.min_types = 1;
         config.max_types = config.max_types.max(1);
 
@@ -70,15 +79,6 @@ impl Config {
         // can paper over NaN differences between engines.
         config.canonicalize_nans = true;
 
-        // When diffing against a non-wasmtime engine then disable wasm
-        // features to get selectively re-enabled against each differential
-        // engine.
-        config.bulk_memory_enabled = false;
-        config.reference_types_enabled = false;
-        config.simd_enabled = false;
-        config.memory64_enabled = false;
-        config.threads_enabled = false;
-
         // If using the pooling allocator, update the instance limits too
         if let InstanceAllocationStrategy::Pooling {
             instance_limits: limits,
@@ -91,6 +91,8 @@ impl Config {
 
             limits.tables = 1;
             limits.table_elements = 1_000;
+
+            limits.size = 1_000_000;
 
             match &mut self.wasmtime.memory_config {
                 MemoryConfig::Normal(config) => {
@@ -112,13 +114,7 @@ impl Config {
         input: &mut Unstructured<'_>,
         default_fuel: Option<u32>,
     ) -> arbitrary::Result<wasm_smith::Module> {
-        let mut module = wasm_smith::Module::new(self.module_config.config.clone(), input)?;
-
-        if let Some(default_fuel) = default_fuel {
-            module.ensure_termination(default_fuel);
-        }
-
-        Ok(module)
+        self.module_config.generate(input, default_fuel)
     }
 
     /// Indicates that this configuration should be spec-test-compliant,
@@ -185,7 +181,8 @@ impl Config {
                 self.wasmtime.memory_guaranteed_dense_image_size,
             ))
             .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
-            .generate_address_map(self.wasmtime.generate_address_map);
+            .generate_address_map(self.wasmtime.generate_address_map)
+            .async_stack_zeroing(self.wasmtime.async_stack_zeroing);
 
         self.wasmtime.codegen.configure(&mut cfg);
 
@@ -390,6 +387,32 @@ pub struct WasmtimeConfig {
     padding_between_functions: Option<u16>,
     generate_address_map: bool,
     native_unwind_info: bool,
+    async_stack_zeroing: bool,
+}
+
+impl WasmtimeConfig {
+    /// Force `self` to be a configuration compatible with `other`. This is
+    /// useful for differential execution to avoid unhelpful fuzz crashes when
+    /// one engine has a feature enabled and the other does not.
+    pub fn make_compatible_with(&mut self, other: &Self) {
+        // Use the same allocation strategy between the two configs.
+        //
+        // Ideally this wouldn't be necessary, but, during differential
+        // evaluation, if the `lhs` is using ondemand and the `rhs` is using the
+        // pooling allocator (or vice versa), then the module may have been
+        // generated in such a way that is incompatible with the other
+        // allocation strategy.
+        //
+        // We can remove this in the future when it's possible to access the
+        // fields of `wasm_smith::Module` to constrain the pooling allocator
+        // based on what was actually generated.
+        self.strategy = other.strategy.clone();
+        if let InstanceAllocationStrategy::Pooling { .. } = &other.strategy {
+            // Also use the same memory configuration when using the pooling
+            // allocator.
+            self.memory_config = other.memory_config.clone();
+        }
+    }
 }
 
 #[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]

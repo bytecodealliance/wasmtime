@@ -1,5 +1,6 @@
 use crate::component::func::{Memory, MemoryMut, Options};
-use crate::component::{ComponentParams, ComponentType, Lift, Lower, Type, Val};
+use crate::component::storage::slice_to_storage_mut;
+use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Type, Val};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{anyhow, bail, Context, Result};
 use std::any::Any;
@@ -52,8 +53,8 @@ impl HostFunc {
     fn new<F, P, R>(func: F, entrypoint: VMLoweringCallee) -> Arc<HostFunc>
     where
         F: Send + Sync + 'static,
-        P: ComponentParams + Lift + 'static,
-        R: Lower + 'static,
+        P: ComponentNamedList + Lift + 'static,
+        R: ComponentNamedList + Lower + 'static,
     {
         Arc::new(HostFunc {
             entrypoint,
@@ -62,14 +63,14 @@ impl HostFunc {
         })
     }
 
-    pub(crate) fn new_dynamic<
-        T,
-        F: Fn(StoreContextMut<'_, T>, &[Val]) -> Result<Val> + Send + Sync + 'static,
-    >(
+    pub(crate) fn new_dynamic<T, F>(
         func: F,
         index: TypeFuncIndex,
         types: &Arc<ComponentTypes>,
-    ) -> Arc<HostFunc> {
+    ) -> Arc<HostFunc>
+    where
+        F: Fn(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
+    {
         let ty = &types[index];
 
         Arc::new(HostFunc {
@@ -93,7 +94,11 @@ impl HostFunc {
                         .iter()
                         .map(|(_, ty)| Type::from(ty, types))
                         .collect(),
-                    result: Type::from(&ty.result, types),
+                    results: ty
+                        .results
+                        .iter()
+                        .map(|(_, ty)| Type::from(ty, types))
+                        .collect(),
                 },
             }),
         })
@@ -114,12 +119,12 @@ impl HostFunc {
 
 fn typecheck<P, R>(ty: TypeFuncIndex, types: &Arc<ComponentTypes>) -> Result<()>
 where
-    P: ComponentParams + Lift,
-    R: Lower,
+    P: ComponentNamedList + Lift,
+    R: ComponentNamedList + Lower,
 {
     let ty = &types[ty];
-    P::typecheck_params(&ty.params, types).context("type mismatch with parameters")?;
-    R::typecheck(&ty.result, types).context("type mismatch with result")?;
+    P::typecheck_named_list(&ty.params, types).context("type mismatch with parameters")?;
+    R::typecheck_named_list(&ty.results, types).context("type mismatch with results")?;
     Ok(())
 }
 
@@ -197,7 +202,7 @@ where
     // There's a 2x2 matrix of whether parameters and results are stored on the
     // stack or on the heap. Each of the 4 branches here have a different
     // representation of the storage of arguments/returns which is represented
-    // by the type parameter that we pass to `cast_storage`.
+    // by the type parameter that we pass to `slice_to_storage_mut`.
     //
     // Also note that while four branches are listed here only one is taken for
     // any particular `Params` and `Return` combination. This should be
@@ -206,13 +211,15 @@ where
     // branch, but today is not that day.
     if Params::flatten_count() <= MAX_FLAT_PARAMS {
         if Return::flatten_count() <= MAX_FLAT_RESULTS {
-            let storage = cast_storage::<ReturnStack<Params::Lower, Return::Lower>>(storage);
+            let storage =
+                slice_to_storage_mut::<ReturnStack<Params::Lower, Return::Lower>>(storage);
             let params = Params::lift(cx.0, &options, &storage.assume_init_ref().args)?;
             let ret = closure(cx.as_context_mut(), params)?;
             flags.set_may_leave(false);
             ret.lower(&mut cx, &options, map_maybe_uninit!(storage.ret))?;
         } else {
-            let storage = cast_storage::<ReturnPointer<Params::Lower>>(storage).assume_init_ref();
+            let storage =
+                slice_to_storage_mut::<ReturnPointer<Params::Lower>>(storage).assume_init_ref();
             let params = Params::lift(cx.0, &options, &storage.args)?;
             let ret = closure(cx.as_context_mut(), params)?;
             let mut memory = MemoryMut::new(cx.as_context_mut(), &options);
@@ -223,7 +230,7 @@ where
     } else {
         let memory = Memory::new(cx.0, &options);
         if Return::flatten_count() <= MAX_FLAT_RESULTS {
-            let storage = cast_storage::<ReturnStack<ValRaw, Return::Lower>>(storage);
+            let storage = slice_to_storage_mut::<ReturnStack<ValRaw, Return::Lower>>(storage);
             let ptr =
                 validate_inbounds::<Params>(memory.as_slice(), &storage.assume_init_ref().args)?;
             let params = Params::load(&memory, &memory.as_slice()[ptr..][..Params::SIZE32])?;
@@ -231,7 +238,7 @@ where
             flags.set_may_leave(false);
             ret.lower(&mut cx, &options, map_maybe_uninit!(storage.ret))?;
         } else {
-            let storage = cast_storage::<ReturnPointer<ValRaw>>(storage).assume_init_ref();
+            let storage = slice_to_storage_mut::<ReturnPointer<ValRaw>>(storage).assume_init_ref();
             let ptr = validate_inbounds::<Params>(memory.as_slice(), &storage.args)?;
             let params = Params::load(&memory, &memory.as_slice()[ptr..][..Params::SIZE32])?;
             let ret = closure(cx.as_context_mut(), params)?;
@@ -263,22 +270,6 @@ fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<us
     Ok(ptr)
 }
 
-unsafe fn cast_storage<T>(storage: &mut [ValRaw]) -> &mut MaybeUninit<T> {
-    // Assertions that LLVM can easily optimize away but are sanity checks here
-    assert!(std::mem::size_of::<T>() % std::mem::size_of::<ValRaw>() == 0);
-    assert!(std::mem::align_of::<T>() == std::mem::align_of::<ValRaw>());
-    assert!(std::mem::align_of_val(storage) == std::mem::align_of::<T>());
-
-    // This is an actual runtime assertion which if performance calls for we may
-    // need to relax to a debug assertion. This notably tries to ensure that we
-    // stay within the bounds of the number of actual values given rather than
-    // reading past the end of an array. This shouldn't actually trip unless
-    // there's a bug in Wasmtime though.
-    assert!(std::mem::size_of_val(storage) >= std::mem::size_of::<T>());
-
-    &mut *storage.as_mut_ptr().cast()
-}
-
 unsafe fn handle_result(func: impl FnOnce() -> Result<()>) {
     match panic::catch_unwind(AssertUnwindSafe(func)) {
         Ok(Ok(())) => {}
@@ -294,8 +285,8 @@ macro_rules! impl_into_component_func {
         impl<T, F, $($args,)* R> IntoComponentFunc<T, ($($args,)*), R> for F
         where
             F: Fn($($args),*) -> Result<R> + Send + Sync + 'static,
-            ($($args,)*): ComponentParams + Lift + 'static,
-            R: Lower + 'static,
+            ($($args,)*): ComponentNamedList + Lift + 'static,
+            R: ComponentNamedList + Lower + 'static,
         {
             extern "C" fn entrypoint(
                 cx: *mut VMOpaqueContext,
@@ -332,8 +323,8 @@ macro_rules! impl_into_component_func {
         impl<T, F, $($args,)* R> IntoComponentFunc<T, (StoreContextMut<'_, T>, $($args,)*), R> for F
         where
             F: Fn(StoreContextMut<'_, T>, $($args),*) -> Result<R> + Send + Sync + 'static,
-            ($($args,)*): ComponentParams + Lift + 'static,
-            R: Lower + 'static,
+            ($($args,)*): ComponentNamedList + Lift + 'static,
+            R: ComponentNamedList + Lower + 'static,
         {
             extern "C" fn entrypoint(
                 cx: *mut VMOpaqueContext,
@@ -370,7 +361,7 @@ macro_rules! impl_into_component_func {
 for_each_function_signature!(impl_into_component_func);
 
 unsafe fn call_host_dynamic<T, F>(
-    Types { params, result }: &Types,
+    Types { params, results }: &Types,
     cx: *mut VMOpaqueContext,
     mut flags: InstanceFlags,
     memory: *mut VMMemoryDefinition,
@@ -380,7 +371,7 @@ unsafe fn call_host_dynamic<T, F>(
     closure: F,
 ) -> Result<()>
 where
-    F: FnOnce(StoreContextMut<'_, T>, &[Val]) -> Result<Val>,
+    F: FnOnce(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()>,
 {
     let cx = VMComponentContext::from_opaque(cx);
     let instance = (*cx).instance();
@@ -404,15 +395,7 @@ where
     let ret_index;
 
     let param_abi = CanonicalAbiInfo::record(params.iter().map(|t| t.canonical_abi()));
-    let param_count = param_abi.flat_count.and_then(|i| {
-        let i = usize::from(i);
-        if i > MAX_FLAT_PARAMS {
-            None
-        } else {
-            Some(i)
-        }
-    });
-    if let Some(param_count) = param_count {
+    if let Some(param_count) = param_abi.flat_count(MAX_FLAT_PARAMS) {
         let iter = &mut storage.iter();
         args = params
             .iter()
@@ -437,20 +420,31 @@ where
         ret_index = 1;
     };
 
-    let ret = closure(cx.as_context_mut(), &args)?;
+    let mut result_vals = Vec::with_capacity(results.len());
+    for _ in results.iter() {
+        result_vals.push(Val::Bool(false));
+    }
+    closure(cx.as_context_mut(), &args, &mut result_vals)?;
     flags.set_may_leave(false);
-    result.check(&ret)?;
+    for (val, ty) in result_vals.iter().zip(results.iter()) {
+        ty.check(val)?;
+    }
 
-    let result_count = result.canonical_abi().flat_count(MAX_FLAT_RESULTS);
-    if result_count.is_some() {
+    let result_abi = CanonicalAbiInfo::record(results.iter().map(|t| t.canonical_abi()));
+    if result_abi.flat_count(MAX_FLAT_RESULTS).is_some() {
         let dst = mem::transmute::<&mut [ValRaw], &mut [MaybeUninit<ValRaw>]>(storage);
-        ret.lower(&mut cx, &options, &mut dst.iter_mut())?;
+        let mut dst = dst.iter_mut();
+        for val in result_vals.iter() {
+            val.lower(&mut cx, &options, &mut dst)?;
+        }
     } else {
         let ret_ptr = &storage[ret_index];
         let mut memory = MemoryMut::new(cx.as_context_mut(), &options);
-        let ptr =
-            validate_inbounds_dynamic(result.canonical_abi(), memory.as_slice_mut(), ret_ptr)?;
-        ret.store(&mut memory, ptr)?;
+        let mut ptr = validate_inbounds_dynamic(&result_abi, memory.as_slice_mut(), ret_ptr)?;
+        for (val, ty) in result_vals.iter().zip(results.iter()) {
+            let offset = ty.canonical_abi().next_field32_size(&mut ptr);
+            val.store(&mut memory, offset)?;
+        }
     }
 
     flags.set_may_leave(true);
@@ -476,7 +470,7 @@ fn validate_inbounds_dynamic(abi: &CanonicalAbiInfo, memory: &[u8], ptr: &ValRaw
 
 struct Types {
     params: Box<[Type]>,
-    result: Type,
+    results: Box<[Type]>,
 }
 
 struct DynamicContext<F> {
@@ -484,10 +478,7 @@ struct DynamicContext<F> {
     types: Types,
 }
 
-extern "C" fn dynamic_entrypoint<
-    T,
-    F: Fn(StoreContextMut<'_, T>, &[Val]) -> Result<Val> + Send + Sync + 'static,
->(
+extern "C" fn dynamic_entrypoint<T, F>(
     cx: *mut VMOpaqueContext,
     data: *mut u8,
     flags: InstanceFlags,
@@ -496,7 +487,9 @@ extern "C" fn dynamic_entrypoint<
     string_encoding: StringEncoding,
     storage: *mut ValRaw,
     storage_len: usize,
-) {
+) where
+    F: Fn(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
+{
     let data = data as *const DynamicContext<F>;
     unsafe {
         handle_result(|| {
@@ -508,7 +501,7 @@ extern "C" fn dynamic_entrypoint<
                 realloc,
                 string_encoding,
                 std::slice::from_raw_parts_mut(storage, storage_len),
-                |store, values| ((*data).func)(store, values),
+                |store, params, results| ((*data).func)(store, params, results),
             )
         })
     }

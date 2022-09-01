@@ -189,37 +189,6 @@
 
 ;; (No `iadd_ifcout` for `i128`.)
 
-;;;; Rules for `iadd_imm` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; `i64` and smaller.
-
-;; When the immediate fits in a `RegMemImm.Imm`, use that.
-(rule (lower (has_type (fits_in_64 ty) (iadd_imm y (simm32_from_imm64 x))))
-      (x64_add ty y x))
-
-;; Otherwise, put the immediate into a register.
-(rule (lower (has_type (fits_in_64 ty) (iadd_imm y (u64_from_imm64 x))))
-      (x64_add ty y (imm ty x)))
-
-;; `i128`
-
-;; When the immediate fits in a `RegMemImm.Imm`, use that.
-(rule (lower (has_type $I128 (iadd_imm y (simm32_from_imm64 x))))
-      (let ((y_regs ValueRegs y)
-            (y_lo Gpr (value_regs_get_gpr y_regs 0))
-            (y_hi Gpr (value_regs_get_gpr y_regs 1)))
-        (with_flags (x64_add_with_flags_paired $I64 y_lo x)
-                    (x64_adc_paired $I64 y_hi (RegMemImm.Imm 0)))))
-
-;; Otherwise, put the immediate into a register.
-(rule (lower (has_type $I128 (iadd_imm y (u64_from_imm64 x))))
-      (let ((y_regs ValueRegs y)
-            (y_lo Gpr (value_regs_get_gpr y_regs 0))
-            (y_hi Gpr (value_regs_get_gpr y_regs 1))
-            (x_lo Gpr (imm $I64 x)))
-        (with_flags (x64_add_with_flags_paired $I64 y_lo x_lo)
-                    (x64_adc_paired $I64 y_hi (RegMemImm.Imm 0)))))
-
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.
@@ -824,11 +793,6 @@
 (rule (lower (has_type (fits_in_64 ty) (rotl src amt)))
         (x64_rotl ty src (put_masked_in_imm8_gpr amt ty)))
 
-(rule (lower (has_type (fits_in_64 ty)
-                       (rotl src (u64_from_iconst amt))))
-      (x64_rotl ty src
-                (const_to_type_masked_imm8 amt ty)))
-
 
 ;; `i128`.
 
@@ -849,11 +813,6 @@
 
 (rule (lower (has_type (fits_in_64 ty) (rotr src amt)))
         (x64_rotr ty src (put_masked_in_imm8_gpr amt ty)))
-
-(rule (lower (has_type (fits_in_64 ty)
-                       (rotr src (u64_from_iconst amt))))
-      (x64_rotr ty src
-                (const_to_type_masked_imm8 amt ty)))
 
 
 ;; `i128`.
@@ -1225,17 +1184,41 @@
 
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(rule (lower (has_type $F32 (fabs x)))
+      (x64_andps x (imm $F32 0x7fffffff)))
+
+(rule (lower (has_type $F64 (fabs x)))
+      (x64_andpd x (imm $F64 0x7fffffffffffffff)))
+
 ;; Special case for `f32x4.abs`.
 (rule (lower (has_type $F32X4 (fabs x)))
       (x64_andps x
-             (x64_psrld (vector_all_ones $F32X4)
+             (x64_psrld (vector_all_ones)
                     (RegMemImm.Imm 1))))
 
 ;; Special case for `f64x2.abs`.
 (rule (lower (has_type $F64X2 (fabs x)))
       (x64_andpd x
-             (x64_psrlq (vector_all_ones $F64X2)
+             (x64_psrlq (vector_all_ones)
                     (RegMemImm.Imm 1))))
+
+;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fneg x)))
+      (x64_xorps x (imm $F32 0x80000000)))
+
+(rule (lower (has_type $F64 (fneg x)))
+      (x64_xorpd x (imm $F64 0x8000000000000000)))
+
+(rule (lower (has_type $F32X4 (fneg x)))
+      (x64_xorps x
+             (x64_pslld (vector_all_ones)
+                    (RegMemImm.Imm 31))))
+
+(rule (lower (has_type $F64X2 (fneg x)))
+      (x64_xorpd x
+             (x64_psllq (vector_all_ones)
+                    (RegMemImm.Imm 63))))
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1263,7 +1246,7 @@
 ;; Special case for vector-types where bit-negation is an xor against an
 ;; all-one value
 (rule (lower (has_type ty @ (multi_lane _bits _lanes) (bnot x)))
-      (sse_xor ty x (vector_all_ones ty)))
+      (sse_xor ty x (vector_all_ones)))
 
 ;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1458,13 +1441,6 @@
 (rule (lower (return args))
       (lower_return (range 0 (value_slice_len args)) args))
 
-(decl lower_return (Range ValueSlice) InstOutput)
-(rule (lower_return (range_empty) _) (output_none))
-(rule (lower_return (range_unwrap head tail) args)
-      (let ((_ Unit (copy_to_regs (retval head) (value_slice_get args head))))
-        (lower_return tail args)))
-
-
 ;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (icmp cc a @ (value_type (fits_in_64 ty)) b))
@@ -1517,7 +1493,7 @@
 ;; (PCMPEQ*) and then invert the bits (PXOR with all 1s).
 (rule (lower (icmp (IntCC.NotEqual) a @ (value_type (ty_vec128 ty)) b))
       (let ((checked Xmm (x64_pcmpeq ty a b))
-            (all_ones Xmm (vector_all_ones ty)))
+            (all_ones Xmm (vector_all_ones)))
            (x64_pxor checked all_ones)))
 ;; Signed comparisons have a single-instruction lowering, unlike their unsigned
 ;; counterparts. These latter instructions use the unsigned min/max
@@ -1534,7 +1510,7 @@
             (xmm_b Xmm (put_in_xmm b))
             (max Xmm (x64_pmaxu ty xmm_a xmm_b))
             (eq Xmm (x64_pcmpeq ty max xmm_b))
-            (all_ones Xmm (vector_all_ones ty)))
+            (all_ones Xmm (vector_all_ones)))
            (x64_pxor eq all_ones)))
 (rule (lower (icmp (IntCC.UnsignedLessThan) a @ (value_type (ty_vec128 ty)) b))
       ;; N.B.: see note above.
@@ -1542,7 +1518,7 @@
             (xmm_b Xmm (put_in_xmm b))
             (min Xmm (x64_pminu ty xmm_a xmm_b))
             (eq Xmm (x64_pcmpeq ty min xmm_b))
-            (all_ones Xmm (vector_all_ones ty)))
+            (all_ones Xmm (vector_all_ones)))
            (x64_pxor eq all_ones)))
 ;; To lower signed and unsigned *-or-equals comparisons, we find the minimum
 ;; number (PMIN[U|S]*) and compare that to one of the terms (PCMPEQ*). Note that
@@ -1564,11 +1540,11 @@
 ;; 1s), emitting one more instruction than the smaller-lane versions.
 (rule (lower (icmp (IntCC.SignedGreaterThanOrEqual) a @ (value_type $I64X2) b))
       (let ((checked Xmm (x64_pcmpgt $I64X2 b a))
-            (all_ones Xmm (vector_all_ones $I64X2)))
+            (all_ones Xmm (vector_all_ones)))
            (x64_pxor checked all_ones)))
 (rule (lower (icmp (IntCC.SignedLessThanOrEqual) a @ (value_type $I64X2) b))
       (let ((checked Xmm (x64_pcmpgt $I64X2 a b))
-            (all_ones Xmm (vector_all_ones $I64X2)))
+            (all_ones Xmm (vector_all_ones)))
            (x64_pxor checked all_ones)))
 ;; TODO: not used by WebAssembly translation
 ;; (rule (lower (icmp (IntCC.UnsignedGreaterThanOrEqual) a @ (value_type $I64X2) b))
@@ -2941,8 +2917,9 @@
 (rule (cmp_zero_int_bool_ref val @ (value_type $B1))
       (x64_test (OperandSize.Size8) (RegMemImm.Imm 1) val))
 (rule (cmp_zero_int_bool_ref val @ (value_type ty))
-      (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (x64_test size val val)))
+      (let ((size OperandSize (raw_operand_size_of_type ty))
+            (src Gpr val))
+        (x64_test size src src)))
 
 ;; Rules for `bricmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3043,8 +3020,10 @@
 ;; -> Convert(Ah) // Convert .. with no loss of significant digits from previous shift
 ;; -> Ah = Ah + Ah // Double Ah to account for shift right before the conversion.
 ;; -> dst = Ah + Al // Add the two floats together
-(rule (lower (has_type $F32X4 (fcvt_from_uint a)))
-      (let (;;  get the low 16 bits
+(rule (lower (has_type $F32X4 (fcvt_from_uint val)))
+      (let ((a Xmm val)
+
+            ;;  get the low 16 bits
             (a_lo Xmm (x64_pslld a (RegMemImm.Imm 16)))
             (a_lo Xmm (x64_psrld a_lo (RegMemImm.Imm 16)))
 
@@ -3079,9 +3058,11 @@
 
 ;; The x64 backend currently only supports these two type combinations.
 (rule (lower (has_type $I32X4 (fcvt_to_sint_sat val @ (value_type $F32X4))))
-      (let (;; Sets tmp to zero if float is NaN
-            (tmp Xmm (x64_cmpps val val (FcmpImm.Equal)))
-            (dst Xmm (x64_andps val tmp))
+      (let ((src Xmm val)
+
+            ;; Sets tmp to zero if float is NaN
+            (tmp Xmm (x64_cmpps src src (FcmpImm.Equal)))
+            (dst Xmm (x64_andps src tmp))
 
             ;; Sets top bit of tmp if float is positive
             ;; Setting up to set top bit on negative float values
@@ -3148,10 +3129,12 @@
 ;; |                       Step 6                        |                 Step 7                 |
 ;; | (0-(INT_MAX+1))..(UINT_MAX-(INT_MAX+1))(w/overflow) | ((INT_MAX+1)-(INT_MAX+1))..(INT_MAX+1) |
 (rule (lower (has_type $I32X4 (fcvt_to_uint_sat val @ (value_type $F32X4))))
-      (let (;; Converting to unsigned int so if float src is negative or NaN
+      (let ((src Xmm val)
+
+            ;; Converting to unsigned int so if float src is negative or NaN
             ;; will first set to zero.
-            (tmp2 Xmm (x64_pxor val val)) ;; make a zero
-            (dst Xmm (x64_maxps val tmp2))
+            (tmp2 Xmm (x64_pxor src src)) ;; make a zero
+            (dst Xmm (x64_maxps src tmp2))
 
             ;; Set tmp2 to INT_MAX+1. It is important to note here that after it looks
             ;; like we are only converting INT_MAX (0x7FFFFFFF) but in fact because
@@ -3225,4 +3208,559 @@
 
             (addd_const Xmm (x64_xmm_load_const $I16X8 (iadd_pairwise_addd_const_32))))
         (x64_paddd dst addd_const)))
+
+;; Rules for `swiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16X8 (swiden_low val @ (value_type $I8X16))))
+      (x64_pmovsxbw val))
+
+(rule (lower (has_type $I32X4 (swiden_low val @ (value_type $I16X8))))
+      (x64_pmovsxwd val))
+
+(rule (lower (has_type $I64X2 (swiden_low val @ (value_type $I32X4))))
+      (x64_pmovsxdq val))
+
+;; Rules for `swiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16X8 (swiden_high val @ (value_type $I8X16))))
+      (let ((x Xmm val))
+        (x64_pmovsxbw (x64_palignr x x 8 (OperandSize.Size32)))))
+
+(rule (lower (has_type $I32X4 (swiden_high val @ (value_type $I16X8))))
+      (let ((x Xmm val))
+        (x64_pmovsxwd (x64_palignr x x 8 (OperandSize.Size32)))))
+
+(rule (lower (has_type $I64X2 (swiden_high val @ (value_type $I32X4))))
+      (x64_pmovsxdq (x64_pshufd val 0xEE (OperandSize.Size32))))
+
+;; Rules for `uwiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16X8 (uwiden_low val @ (value_type $I8X16))))
+      (x64_pmovzxbw val))
+
+(rule (lower (has_type $I32X4 (uwiden_low val @ (value_type $I16X8))))
+      (x64_pmovzxwd val))
+
+(rule (lower (has_type $I64X2 (uwiden_low val @ (value_type $I32X4))))
+      (x64_pmovzxdq val))
+
+;; Rules for `uwiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16X8 (uwiden_high val @ (value_type $I8X16))))
+      (let ((x Xmm val))
+        (x64_pmovzxbw (x64_palignr x x 8 (OperandSize.Size32)))))
+
+(rule (lower (has_type $I32X4 (uwiden_high val @ (value_type $I16X8))))
+      (let ((x Xmm val))
+        (x64_pmovzxwd (x64_palignr x x 8 (OperandSize.Size32)))))
+
+(rule (lower (has_type $I64X2 (uwiden_high val @ (value_type $I32X4))))
+      (x64_pmovzxdq (x64_pshufd val 0xEE (OperandSize.Size32))))
+
+;; Rules for `snarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8X16 (snarrow a @ (value_type $I16X8) b)))
+      (x64_packsswb a b))
+
+(rule (lower (has_type $I16X8 (snarrow a @ (value_type $I32X4) b)))
+      (x64_packssdw a b))
+
+;; We're missing a `snarrow` case for $I64X2
+;; https://github.com/bytecodealliance/wasmtime/issues/4734
+
+;; This rule is a special case for handling the translation of the wasm op
+;; `i32x4.trunc_sat_f64x2_s_zero`. It can be removed once we have an
+;; implementation of `snarrow` for `I64X2`.
+(rule (lower (has_type $I32X4 (snarrow (has_type $I64X2 (fcvt_to_sint_sat val))
+                                       (vconst (u128_from_constant 0)))))
+      (let ((a Xmm val)
+
+            ;; y = i32x4.trunc_sat_f64x2_s_zero(x) is lowered to:
+            ;; MOVE xmm_tmp, xmm_x
+            ;; CMPEQPD xmm_tmp, xmm_x
+            ;; MOVE xmm_y, xmm_x
+            ;; ANDPS xmm_tmp, [wasm_f64x2_splat(2147483647.0)]
+            ;; MINPD xmm_y, xmm_tmp
+            ;; CVTTPD2DQ xmm_y, xmm_y
+
+            (tmp1 Xmm (x64_cmppd a a (FcmpImm.Equal)))
+            (umax_mask Xmm (x64_xmm_load_const $F64X2 (snarrow_umax_mask)))
+
+            ;; ANDPD xmm_y, [wasm_f64x2_splat(2147483647.0)]
+            (tmp1 Xmm (x64_andps tmp1 umax_mask))
+            (dst Xmm (x64_minpd a tmp1)))
+        (x64_cvttpd2dq dst)))
+
+;; Rules for `unarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8X16 (unarrow a @ (value_type $I16X8) b)))
+      (x64_packuswb a b))
+
+(rule (lower (has_type $I16X8 (unarrow a @ (value_type $I32X4) b)))
+      (x64_packusdw a b))
+
+;; We're missing a `unarrow` case for $I64X2
+;; https://github.com/bytecodealliance/wasmtime/issues/4734
+
+;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (bitcast src @ (value_type $F32))))
+      (bitcast_xmm_to_gpr $F32 src))
+
+(rule (lower (has_type $F32 (bitcast src @ (value_type $I32))))
+      (bitcast_gpr_to_xmm $I32 src))
+
+(rule (lower (has_type $I64 (bitcast src @ (value_type $F64))))
+      (bitcast_xmm_to_gpr $F64 src))
+
+(rule (lower (has_type $F64 (bitcast src @ (value_type $I64))))
+      (bitcast_gpr_to_xmm $I64 src))
+
+;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fcopysign a @ (value_type $F32) b)))
+      (let ((sign_bit Xmm (imm $F32 0x80000000)))
+        (x64_orps
+          (x64_andnps sign_bit a)
+          (x64_andps sign_bit b))))
+
+(rule (lower (has_type $F64 (fcopysign a @ (value_type $F64) b)))
+      (let ((sign_bit Xmm (imm $F64 0x8000000000000000)))
+        (x64_orpd
+          (x64_andnpd sign_bit a)
+          (x64_andpd sign_bit b))))
+
+;; Rules for `ceil` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (use_sse41) (ceil a @ (value_type $F32))))
+      (x64_roundss a (RoundImm.RoundUp)))
+
+(rule (lower (ceil a @ (value_type $F32)))
+      (libcall_1 (LibCall.CeilF32) a))
+
+(rule (lower (has_type (use_sse41) (ceil a @ (value_type $F64))))
+      (x64_roundsd a (RoundImm.RoundUp)))
+
+(rule (lower (ceil a @ (value_type $F64)))
+      (libcall_1 (LibCall.CeilF64) a))
+
+(rule (lower (has_type (use_sse41) (ceil a @ (value_type $F32X4))))
+      (x64_roundps a (RoundImm.RoundUp)))
+
+(rule (lower (has_type (use_sse41) (ceil a @ (value_type $F64X2))))
+      (x64_roundpd a (RoundImm.RoundUp)))
+
+;; Rules for `floor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (use_sse41) (floor a @ (value_type $F32))))
+      (x64_roundss a (RoundImm.RoundDown)))
+
+(rule (lower (floor a @ (value_type $F32)))
+      (libcall_1 (LibCall.FloorF32) a))
+
+(rule (lower (has_type (use_sse41) (floor a @ (value_type $F64))))
+      (x64_roundsd a (RoundImm.RoundDown)))
+
+(rule (lower (floor a @ (value_type $F64)))
+      (libcall_1 (LibCall.FloorF64) a))
+
+(rule (lower (has_type (use_sse41) (floor a @ (value_type $F32X4))))
+      (x64_roundps a (RoundImm.RoundDown)))
+
+(rule (lower (has_type (use_sse41) (floor a @ (value_type $F64X2))))
+      (x64_roundpd a (RoundImm.RoundDown)))
+
+;; Rules for `nearest` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (use_sse41) (nearest a @ (value_type $F32))))
+      (x64_roundss a (RoundImm.RoundNearest)))
+
+(rule (lower (nearest a @ (value_type $F32)))
+      (libcall_1 (LibCall.NearestF32) a))
+
+(rule (lower (has_type (use_sse41) (nearest a @ (value_type $F64))))
+      (x64_roundsd a (RoundImm.RoundNearest)))
+
+(rule (lower (nearest a @ (value_type $F64)))
+      (libcall_1 (LibCall.NearestF64) a))
+
+(rule (lower (has_type (use_sse41) (nearest a @ (value_type $F32X4))))
+      (x64_roundps a (RoundImm.RoundNearest)))
+
+(rule (lower (has_type (use_sse41) (nearest a @ (value_type $F64X2))))
+      (x64_roundpd a (RoundImm.RoundNearest)))
+
+;; Rules for `trunc` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F32))))
+      (x64_roundss a (RoundImm.RoundZero)))
+
+(rule (lower (trunc a @ (value_type $F32)))
+      (libcall_1 (LibCall.TruncF32) a))
+
+(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F64))))
+      (x64_roundsd a (RoundImm.RoundZero)))
+
+(rule (lower (trunc a @ (value_type $F64)))
+      (libcall_1 (LibCall.TruncF64) a))
+
+(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F32X4))))
+      (x64_roundps a (RoundImm.RoundZero)))
+
+(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F64X2))))
+      (x64_roundpd a (RoundImm.RoundZero)))
+
+;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (stack_addr stack_slot offset))
+      (stack_addr_impl stack_slot offset))
+
+;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (udiv a @ (value_type ty) b))
+      (div_or_rem (DivOrRemKind.UnsignedDiv) a b))
+
+;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (sdiv a @ (value_type ty) b))
+      (div_or_rem (DivOrRemKind.SignedDiv) a b))
+
+;; Rules for `urem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (urem a @ (value_type ty) b))
+      (div_or_rem (DivOrRemKind.UnsignedRem) a b))
+
+;; Rules for `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (srem a @ (value_type ty) b))
+      (div_or_rem (DivOrRemKind.SignedRem) a b))
+
+;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (umulhi a @ (value_type $I16) b))
+      (let ((res ValueRegs (mul_hi $I16 $false a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+(rule (lower (umulhi a @ (value_type $I32) b))
+      (let ((res ValueRegs (mul_hi $I32 $false a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+(rule (lower (umulhi a @ (value_type $I64) b))
+      (let ((res ValueRegs (mul_hi $I64 $false a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (smulhi a @ (value_type $I16) b))
+      (let ((res ValueRegs (mul_hi $I16 $true a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+(rule (lower (smulhi a @ (value_type $I32) b))
+      (let ((res ValueRegs (mul_hi $I32 $true a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+(rule (lower (smulhi a @ (value_type $I64) b))
+      (let ((res ValueRegs (mul_hi $I64 $true a b))
+            (hi Gpr (value_regs_get_gpr res 1)))
+        hi))
+
+;; Rules for `get_pinned_reg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (get_pinned_reg))
+      (read_pinned_gpr))
+
+;; Rules for `set_pinned_reg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (set_pinned_reg a @ (value_type ty)))
+      (side_effect (write_pinned_gpr a)))
+
+;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (vconst const)))
+      ;; TODO use Inst::gen_constant() instead.
+      (x64_xmm_load_const ty (const_to_vconst const)))
+
+;; Rules for `raw_bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; A raw_bitcast is just a mechanism for correcting the type of V128 values (see
+;; https://github.com/bytecodealliance/wasmtime/issues/1147). As such, this IR
+;; instruction should emit no machine code but a move is necessary to give the
+;; register allocator a definition for the output virtual register.
+(rule (lower (raw_bitcast val))
+      (put_in_regs val))
+
+;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; If `lhs` and `rhs` are the same we can use a single PSHUFB to shuffle the XMM
+;; register. We statically build `constructed_mask` to zero out any unknown lane
+;; indices (may not be completely necessary: verification could fail incorrect
+;; mask values) and fix the indexes to all point to the `dst` vector.
+(rule (lower (shuffle a a (vec_mask_from_immediate mask)))
+      (x64_pshufb a (x64_xmm_load_const $I8X16 (shuffle_0_31_mask mask))))
+
+;; For the case where the shuffle mask contains out-of-bounds values (values
+;; greater than 31) we must mask off those resulting values in the result of
+;; `vpermi2b`.
+(rule (lower (has_type (and (avx512vl_enabled) (avx512vbmi_enabled))
+                       (shuffle a b (vec_mask_from_immediate
+                                      (perm_from_mask_with_zeros mask zeros)))))
+      (x64_andps
+        (x64_xmm_load_const $I8X16 zeros)
+        (x64_vpermi2b b a (x64_xmm_load_const $I8X16 mask))))
+
+;; However, if the shuffle mask contains no out-of-bounds values, we can use
+;; `vpermi2b` without any masking.
+(rule (lower (has_type (and (avx512vl_enabled) (avx512vbmi_enabled))
+                       (shuffle a b (vec_mask_from_immediate mask))))
+      (x64_vpermi2b b a (x64_xmm_load_const $I8X16 (perm_from_mask mask))))
+
+;; If `lhs` and `rhs` are different, we must shuffle each separately and then OR
+;; them together. This is necessary due to PSHUFB semantics. As in the case
+;; above, we build the `constructed_mask` for each case statically.
+(rule (lower (shuffle a b (vec_mask_from_immediate mask)))
+      (x64_por
+        (x64_pshufb a (x64_xmm_load_const $I8X16 (shuffle_0_15_mask mask)))
+        (x64_pshufb b (x64_xmm_load_const $I8X16 (shuffle_16_31_mask mask)))))
+
+;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; SIMD swizzle; the following inefficient implementation is due to the Wasm
+;; SIMD spec requiring mask indexes greater than 15 to have the same semantics
+;; as a 0 index. For the spec discussion, see
+;; https://github.com/WebAssembly/simd/issues/93. The CLIF semantics match the
+;; Wasm SIMD semantics for this instruction. The instruction format maps to
+;; variables like: %dst = swizzle %src, %mask
+(rule (lower (swizzle src mask))
+      (let ((mask Xmm (x64_paddusb
+                        mask
+                        (x64_xmm_load_const $I8X16 (swizzle_zero_mask)))))
+        (x64_pshufb src mask)))
+
+;; Rules for `extractlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Remove the extractlane instruction, leaving the float where it is. The upper
+;; bits will remain unchanged; for correctness, this relies on Cranelift type
+;; checking to avoid using those bits.
+(rule (lower (has_type (ty_scalar_float _) (extractlane val (u8_from_uimm8 0))))
+      val)
+
+;; Cases 2-4 for an F32X4
+(rule (lower (has_type $F32 (extractlane val @ (value_type (ty_vec128 ty))
+                                         (u8_from_uimm8 lane))))
+      (x64_pshufd val lane (OperandSize.Size32)))
+
+;; This is the only remaining case for F64X2 
+(rule (lower (has_type $F64 (extractlane val @ (value_type (ty_vec128 ty))
+                                         (u8_from_uimm8 1))))
+      ;; 0xee == 0b11_10_11_10
+      (x64_pshufd val 0xee (OperandSize.Size32)))
+
+(rule (lower (extractlane val @ (value_type ty @ (multi_lane 8 16)) (u8_from_uimm8 lane)))
+      (x64_pextrb ty val lane))
+
+(rule (lower (extractlane val @ (value_type ty @ (multi_lane 16 8)) (u8_from_uimm8 lane)))
+      (x64_pextrw ty val lane))
+
+(rule (lower (extractlane val @ (value_type ty @ (multi_lane 32 4)) (u8_from_uimm8 lane)))
+      (x64_pextrd ty val lane))
+
+(rule (lower (extractlane val @ (value_type ty @ (multi_lane 64 2)) (u8_from_uimm8 lane)))
+      (x64_pextrd ty val lane))
+
+;; Rules for `scalar_to_vector` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Case 1: when moving a scalar float, we simply move from one XMM register
+;; to another, expecting the register allocator to elide this. Here we
+;; assume that the upper bits of a scalar float have not been munged with
+;; (the same assumption the old backend makes).
+(rule (lower (scalar_to_vector src @ (value_type (ty_scalar_float _))))
+      src)
+
+;; Case 2: when moving a scalar value of any other type, use MOVD to zero
+;; the upper lanes.
+(rule (lower (scalar_to_vector src @ (value_type ty)))
+      (bitcast_gpr_to_xmm ty src))
+
+;; Case 3: when presented with `load + scalar_to_vector`, coalesce into a single
+;; MOVSS/MOVSD instruction.
+(rule (lower (scalar_to_vector (and (sinkable_load src) (value_type (ty_32 _)))))
+      (x64_movss_load (sink_load_to_xmm_mem src)))
+(rule (lower (scalar_to_vector (and (sinkable_load src) (value_type (ty_64 _)))))
+      (x64_movsd_load (sink_load_to_xmm_mem src)))
+
+;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (multi_lane 8 16) (splat src)))
+      (let ((vec Xmm (vec_insert_lane $I8X16 (xmm_uninit_value) src 0))
+            (zeros Xmm (x64_pxor vec vec)))
+        ;; Shuffle the lowest byte lane to all other lanes.
+        (x64_pshufb vec zeros)))
+
+(rule (lower (has_type (multi_lane 16 8) (splat src)))
+      (let (;; Force the input into a register so that we don't create a
+            ;; VCodeConstant.
+            (src RegMem (RegMem.Reg src))
+            (vec Xmm (vec_insert_lane $I16X8 (xmm_uninit_value) src 0))
+            (vec Xmm (vec_insert_lane $I16X8 vec src 1)))
+        ;; Shuffle the lowest two lanes to all other lanes.
+        (x64_pshufd vec 0 (OperandSize.Size32))))
+
+(rule (lower (has_type (multi_lane 32 4) (splat src @ (value_type (ty_scalar_float _)))))
+      (lower_splat_32x4 $F32X4 src))
+
+(rule (lower (has_type (multi_lane 32 4) (splat src)))
+      (lower_splat_32x4 $I32X4 src))
+
+(decl lower_splat_32x4 (Type Value) Xmm)
+(rule (lower_splat_32x4 ty src)
+      (let ((src RegMem src)
+            (vec Xmm (vec_insert_lane ty (xmm_uninit_value) src 0)))
+        ;; Shuffle the lowest lane to all other lanes.
+        (x64_pshufd vec 0 (OperandSize.Size32))))
+
+(rule (lower (has_type (multi_lane 64 2) (splat src @ (value_type (ty_scalar_float _)))))
+      (lower_splat_64x2 $F64X2 src))
+
+(rule (lower (has_type (multi_lane 64 2) (splat src)))
+      (lower_splat_64x2 $I64X2 src))
+
+(decl lower_splat_64x2 (Type Value) Xmm)
+(rule (lower_splat_64x2 ty src)
+      (let (;; Force the input into a register so that we don't create a
+            ;; VCodeConstant.
+            (src RegMem (RegMem.Reg src))
+            (vec Xmm (vec_insert_lane ty (xmm_uninit_value) src 0)))
+        (vec_insert_lane ty vec src 1)))
+
+;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (vany_true val))
+      (let ((val Xmm val))
+        (with_flags (x64_ptest val val) (x64_setcc (CC.NZ)))))
+
+;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (vall_true val @ (value_type ty)))
+      (let ((src Xmm val)
+            (zeros Xmm (x64_pxor src src))
+            (cmp Xmm (x64_pcmpeq (vec_int_type ty) src zeros)))
+        (with_flags (x64_ptest cmp cmp) (x64_setcc (CC.Z)))))
+
+;; Rules for `vhigh_bits` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; The Intel specification allows using both 32-bit and 64-bit GPRs as
+;; destination for the "move mask" instructions. This is controlled by the REX.R
+;; bit: "In 64-bit mode, the instruction can access additional registers when
+;; used with a REX.R prefix. The default operand size is 64-bit in 64-bit mode"
+;; (PMOVMSKB in IA Software Development Manual, vol. 2). This being the case, we
+;; will always clear REX.W since its use is unnecessary (`OperandSize` is used
+;; for setting/clearing REX.W) as we need at most 16 bits of output for
+;; `vhigh_bits`.
+
+(rule (lower (vhigh_bits val @ (value_type (multi_lane 8 16))))
+      (x64_pmovmskb (OperandSize.Size32) val))
+
+(rule (lower (vhigh_bits val @ (value_type (multi_lane 32 4))))
+      (x64_movmskps (OperandSize.Size32) val))
+
+(rule (lower (vhigh_bits val @ (value_type (multi_lane 64 2))))
+      (x64_movmskpd (OperandSize.Size32) val))
+
+;; There is no x86 instruction for extracting the high bit of 16-bit lanes so
+;; here we:
+;; - duplicate the 16-bit lanes of `src` into 8-bit lanes:
+;;     PACKSSWB([x1, x2, ...], [x1, x2, ...]) = [x1', x2', ..., x1', x2', ...]
+;; - use PMOVMSKB to gather the high bits; now we have duplicates, though
+;; - shift away the bottom 8 high bits to remove the duplicates.
+(rule (lower (vhigh_bits val @ (value_type (multi_lane 16 8))))
+      (let ((src Xmm val)
+            (tmp Xmm (x64_packsswb src src))
+            (tmp Gpr (x64_pmovmskb (OperandSize.Size32) tmp)))
+        (x64_shr $I64 tmp (Imm8Reg.Imm8 8))))
+
+;; Rules for `iconcat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (iconcat lo @ (value_type $I64) hi))
+      (value_regs lo hi))
+
+;; Rules for `isplit` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (isplit val @ (value_type $I128)))
+      (let ((regs ValueRegs val)
+            (lo Reg (value_regs_get regs 0))
+            (hi Reg (value_regs_get regs 1)))
+        (output_pair lo hi)))
+
+;; Rules for `tls_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (tls_value (symbol_value_data name _ _)))
+      (if (tls_model_is_elf_gd))
+      (elf_tls_get_addr name))
+
+(rule (lower (tls_value (symbol_value_data name _ _)))
+      (if (tls_model_is_macho))
+      (macho_tls_get_addr name))
+
+(rule (lower (tls_value (symbol_value_data name _ _)))
+      (if (tls_model_is_coff))
+      (coff_tls_get_addr name))
+
+;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (sqmul_round_sat qx @ (value_type $I16X8) qy))
+      (let ((src1 Xmm qx)
+            (src2 Xmm qy)
+
+            (mask Xmm (x64_xmm_load_const $I16X8 (sqmul_round_sat_mask)))
+            (dst Xmm (x64_pmulhrsw src1 src2))
+            (cmp Xmm (x64_pcmpeqw mask dst)))
+        (x64_pxor dst cmp)))
+
+;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; TODO: currently we only lower a special case of `uunarrow` needed to support
+;; the translation of wasm's i32x4.trunc_sat_f64x2_u_zero operation.
+;; https://github.com/bytecodealliance/wasmtime/issues/4791
+;;
+;; y = i32x4.trunc_sat_f64x2_u_zero(x) is lowered to:
+;; MOVAPD xmm_y, xmm_x
+;; XORPD xmm_tmp, xmm_tmp
+;; MAXPD xmm_y, xmm_tmp
+;; MINPD xmm_y, [wasm_f64x2_splat(4294967295.0)]
+;; ROUNDPD xmm_y, xmm_y, 0x0B
+;; ADDPD xmm_y, [wasm_f64x2_splat(0x1.0p+52)]
+;; SHUFPS xmm_y, xmm_xmp, 0x88
+(rule (lower (uunarrow (fcvt_to_uint_sat src @ (value_type $F64X2))
+                       (vconst (u128_from_constant 0))))
+      (let ((src Xmm src)
+
+            ;; MOVAPD xmm_y, xmm_x
+            ;; XORPD xmm_tmp, xmm_tmp
+            (zeros Xmm (x64_xorpd src src))
+            (dst Xmm (x64_maxpd src zeros))
+
+            (umax_mask Xmm (x64_xmm_load_const $F64X2 (uunarrow_umax_mask)))
+
+            ;; MINPD xmm_y, [wasm_f64x2_splat(4294967295.0)]
+            (dst Xmm (x64_minpd dst umax_mask))
+
+            ;; ROUNDPD xmm_y, xmm_y, 0x0B
+            (dst Xmm (x64_roundpd dst (RoundImm.RoundZero)))
+
+            ;; ADDPD xmm_y, [wasm_f64x2_splat(0x1.0p+52)]
+            (uint_mask Xmm (x64_xmm_load_const $F64X2 (uunarrow_uint_mask)))
+            (dst Xmm (x64_addpd dst uint_mask)))
+
+        ;; SHUFPS xmm_y, xmm_xmp, 0x88
+        (x64_shufps dst zeros 0x88)))
+
+;; Rules for `nop` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (nop))
+      (invalid_reg))
 

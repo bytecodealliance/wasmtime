@@ -5,7 +5,7 @@ use crate::ir::types;
 use crate::ir::types::*;
 use crate::ir::MemFlags;
 use crate::ir::Opcode;
-use crate::ir::{ExternalName, LibCall, Signature};
+use crate::ir::{dynamic_to_fixed, ExternalName, LibCall, Signature};
 use crate::isa;
 use crate::isa::aarch64::{inst::EmitState, inst::*, settings as aarch64_settings};
 use crate::isa::unwind::UnwindInst;
@@ -225,12 +225,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
                         slots: smallvec![
                             ABIArgSlot::Reg {
                                 reg: lower_reg.to_real_reg().unwrap(),
-                                ty: param.value_type,
+                                ty: reg_types[0],
                                 extension: param.extension,
                             },
                             ABIArgSlot::Reg {
                                 reg: upper_reg.to_real_reg().unwrap(),
-                                ty: param.value_type,
+                                ty: reg_types[1],
                                 extension: param.extension,
                             },
                         ],
@@ -617,7 +617,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     // Returns stack bytes used as well as instructions. Does not adjust
-    // nominal SP offset; abi_impl generic code will do that.
+    // nominal SP offset; abi generic code will do that.
     fn gen_clobber_save(
         _call_conv: isa::CallConv,
         setup_frame: bool,

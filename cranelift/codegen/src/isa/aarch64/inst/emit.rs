@@ -2033,6 +2033,50 @@ impl MachInstEmit for Inst {
                 let rd_enc = machreg_to_vec(rd.to_reg());
                 sink.put4(template | (immh_immb << 16) | (rn_enc << 5) | rd_enc);
             }
+            &Inst::VecShiftImmMod {
+                op,
+                rd,
+                rn,
+                size,
+                imm,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let rn = allocs.next(rn);
+                let (is_shr, mut template) = match op {
+                    VecShiftImmModOp::Sli => (false, 0b_001_011110_0000_000_010101_00000_00000_u32),
+                };
+                if size.is_128bits() {
+                    template |= 0b1 << 30;
+                }
+                let imm = imm as u32;
+                // Deal with the somewhat strange encoding scheme for, and limits on,
+                // the shift amount.
+                let immh_immb = match (size.lane_size(), is_shr) {
+                    (ScalarSize::Size64, true) if imm >= 1 && imm <= 64 => {
+                        0b_1000_000_u32 | (64 - imm)
+                    }
+                    (ScalarSize::Size32, true) if imm >= 1 && imm <= 32 => {
+                        0b_0100_000_u32 | (32 - imm)
+                    }
+                    (ScalarSize::Size16, true) if imm >= 1 && imm <= 16 => {
+                        0b_0010_000_u32 | (16 - imm)
+                    }
+                    (ScalarSize::Size8, true) if imm >= 1 && imm <= 8 => {
+                        0b_0001_000_u32 | (8 - imm)
+                    }
+                    (ScalarSize::Size64, false) if imm <= 63 => 0b_1000_000_u32 | imm,
+                    (ScalarSize::Size32, false) if imm <= 31 => 0b_0100_000_u32 | imm,
+                    (ScalarSize::Size16, false) if imm <= 15 => 0b_0010_000_u32 | imm,
+                    (ScalarSize::Size8, false) if imm <= 7 => 0b_0001_000_u32 | imm,
+                    _ => panic!(
+                        "aarch64: Inst::VecShiftImmMod: emit: invalid op/size/imm {:?}, {:?}, {:?}",
+                        op, size, imm
+                    ),
+                };
+                let rn_enc = machreg_to_vec(rn);
+                let rd_enc = machreg_to_vec(rd.to_reg());
+                sink.put4(template | (immh_immb << 16) | (rn_enc << 5) | rd_enc);
+            }
             &Inst::VecExtract { rd, rn, rm, imm4 } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
@@ -2305,13 +2349,15 @@ impl MachInstEmit for Inst {
             &Inst::VecDupFromFpu { rd, rn, size } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
-                let imm5 = match size {
-                    VectorSize::Size32x4 => 0b00100,
-                    VectorSize::Size64x2 => 0b01000,
+                let q = size.is_128bits() as u32;
+                let imm5 = match size.lane_size() {
+                    ScalarSize::Size32 => 0b00100,
+                    ScalarSize::Size64 => 0b01000,
                     _ => unimplemented!(),
                 };
                 sink.put4(
-                    0b010_01110000_00000_000001_00000_00000
+                    0b000_01110000_00000_000001_00000_00000
+                        | (q << 30)
                         | (imm5 << 16)
                         | (machreg_to_vec(rn) << 5)
                         | machreg_to_vec(rd.to_reg()),
@@ -2382,16 +2428,19 @@ impl MachInstEmit for Inst {
                 rd,
                 rn,
                 high_half,
+                lane_size,
             } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
-                let (u, immh) = match t {
-                    VecExtendOp::Sxtl8 => (0b0, 0b001),
-                    VecExtendOp::Sxtl16 => (0b0, 0b010),
-                    VecExtendOp::Sxtl32 => (0b0, 0b100),
-                    VecExtendOp::Uxtl8 => (0b1, 0b001),
-                    VecExtendOp::Uxtl16 => (0b1, 0b010),
-                    VecExtendOp::Uxtl32 => (0b1, 0b100),
+                let immh = match lane_size {
+                    ScalarSize::Size16 => 0b001,
+                    ScalarSize::Size32 => 0b010,
+                    ScalarSize::Size64 => 0b100,
+                    _ => panic!("Unexpected VecExtend to lane size of {:?}", lane_size),
+                };
+                let u = match t {
+                    VecExtendOp::Sxtl => 0b0,
+                    VecExtendOp::Uxtl => 0b1,
                 };
                 sink.put4(
                     0b000_011110_0000_000_101001_00000_00000
@@ -3121,6 +3170,7 @@ impl MachInstEmit for Inst {
 
                 sink.put4(0xd503233f | key << 6);
             }
+            &Inst::Xpaclri => sink.put4(0xd50320ff),
             &Inst::VirtualSPOffsetAdj { offset } => {
                 trace!(
                     "virtual sp offset adjusted by {} -> {}",
@@ -3141,7 +3191,10 @@ impl MachInstEmit for Inst {
                 }
             }
 
-            &Inst::ElfTlsGetAddr { ref symbol } => {
+            &Inst::ElfTlsGetAddr { ref symbol, rd } => {
+                let rd = allocs.next_writable(rd);
+                assert_eq!(xreg(0), rd.to_reg());
+
                 // This is the instruction sequence that GCC emits for ELF GD TLS Relocations in aarch64
                 // See: https://gcc.godbolt.org/z/KhMh5Gvra
 

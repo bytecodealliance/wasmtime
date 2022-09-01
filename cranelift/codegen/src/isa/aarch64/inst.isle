@@ -528,7 +528,8 @@
         (t VecExtendOp)
         (rd WritableReg)
         (rn Reg)
-        (high_half bool))
+        (high_half bool)
+        (lane_size ScalarSize))
 
        ;; Move vector element to another vector element.
        (VecMovElement
@@ -613,6 +614,14 @@
        ;; values from 0 to lane-size-in-bits - 1 inclusive.
        (VecShiftImm
         (op VecShiftImmOp)
+        (rd WritableReg)
+        (rn Reg)
+        (size VectorSize)
+        (imm u8))
+
+       ;; Destructive vector shift by immediate.
+       (VecShiftImmMod
+        (op VecShiftImmModOp)
         (rd WritableReg)
         (rn Reg)
         (size VectorSize)
@@ -780,6 +789,11 @@
        (Pacisp
         (key APIKey))
 
+       ;; Strip pointer authentication code from instruction address in LR;
+       ;; equivalent to a no-op if Pointer authentication (FEAT_PAuth) is not
+       ;; supported.
+       (Xpaclri)
+
        ;; Marker, no-op in generated code: SP "virtual offset" is adjusted. This
        ;; controls how AMode::NominalSPOffset args are lowered.
        (VirtualSPOffsetAdj
@@ -811,7 +825,8 @@
 
        ;; A call to the `ElfTlsGetAddr` libcall. Returns address of TLS symbol in x0.
        (ElfTlsGetAddr
-        (symbol ExternalName))
+        (symbol ExternalName)
+        (rd WritableReg))
 
        ;; An unwind pseudo-instruction.
        (Unwind
@@ -938,11 +953,19 @@
 
 ;; Helper for calculating the `ScalarSize` corresponding to a type
 (decl scalar_size (Type) ScalarSize)
+
 (rule (scalar_size $I8) (ScalarSize.Size8))
 (rule (scalar_size $I16) (ScalarSize.Size16))
 (rule (scalar_size $I32) (ScalarSize.Size32))
 (rule (scalar_size $I64) (ScalarSize.Size64))
 (rule (scalar_size $I128) (ScalarSize.Size128))
+
+(rule (scalar_size $B8) (ScalarSize.Size8))
+(rule (scalar_size $B16) (ScalarSize.Size16))
+(rule (scalar_size $B32) (ScalarSize.Size32))
+(rule (scalar_size $B64) (ScalarSize.Size64))
+(rule (scalar_size $B128) (ScalarSize.Size128))
+
 (rule (scalar_size $F32) (ScalarSize.Size32))
 (rule (scalar_size $F64) (ScalarSize.Size64))
 
@@ -1075,18 +1098,10 @@
 ;; Type of vector element extensions.
 (type VecExtendOp
   (enum
-    ;; Signed extension of 8-bit elements
-    (Sxtl8)
-    ;; Signed extension of 16-bit elements
-    (Sxtl16)
-    ;; Signed extension of 32-bit elements
-    (Sxtl32)
-    ;; Unsigned extension of 8-bit elements
-    (Uxtl8)
-    ;; Unsigned extension of 16-bit elements
-    (Uxtl16)
-    ;; Unsigned extension of 32-bit elements
-    (Uxtl32)
+    ;; Signed extension
+    (Sxtl)
+    ;; Unsigned extension
+    (Uxtl)
 ))
 
 ;; A vector ALU operation.
@@ -1317,6 +1332,13 @@
     (Sshr)
 ))
 
+;; Destructive shift-by-immediate operation on each lane of a vector.
+(type VecShiftImmModOp
+  (enum
+    ;; Shift left and insert
+    (Sli)
+))
+
 ;; Atomic read-modify-write operations with acquire-release semantics
 (type AtomicRMWOp
   (enum
@@ -1356,6 +1378,9 @@
 ))
 
 ;; Extractors for target features ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(decl pure sign_return_address_disabled () Unit)
+(extern constructor sign_return_address_disabled sign_return_address_disabled)
+
 (decl use_lse () Inst)
 (extern extractor use_lse use_lse)
 
@@ -1385,6 +1410,48 @@
 (decl u64_into_imm_logic (Type u64) ImmLogic)
 (extern constructor u64_into_imm_logic u64_into_imm_logic)
 
+;; Calculate the minimum floating-point bound for a conversion to floating
+;; point from an integer type.
+;; Accepts whether the output is signed, the size of the input
+;; floating point type in bits, and the size of the output integer type
+;; in bits.
+(decl min_fp_value (bool u8 u8) Reg)
+(extern constructor min_fp_value min_fp_value)
+
+;; Calculate the maximum floating-point bound for a conversion to floating
+;; point from an integer type.
+;; Accepts whether the output is signed, the size of the input
+;; floating point type in bits, and the size of the output integer type
+;; in bits.
+(decl max_fp_value (bool u8 u8) Reg)
+(extern constructor max_fp_value max_fp_value)
+
+;; Calculate the minimum acceptable floating-point value for a conversion to
+;; floating point from an integer type.
+;; Accepts whether the output is signed, the size of the input
+;; floating point type in bits, and the size of the output integer type
+;; in bits.
+(decl min_fp_value_sat (bool u8 u8) Reg)
+(extern constructor min_fp_value_sat min_fp_value_sat)
+
+;; Calculate the maximum acceptable floating-point value for a conversion to
+;; floating point from an integer type.
+;; Accepts whether the output is signed, the size of the input
+;; floating point type in bits, and the size of the output integer type
+;; in bits.
+(decl max_fp_value_sat (bool u8 u8) Reg)
+(extern constructor max_fp_value_sat max_fp_value_sat)
+
+;; Constructs an FPUOpRI.Ushr* given the size in bits of the value (or lane)
+;; and the amount to shift by.
+(decl fpu_op_ri_ushr (u8 u8) FPUOpRI)
+(extern constructor fpu_op_ri_ushr fpu_op_ri_ushr)
+
+;; Constructs an FPUOpRI.Sli* given the size in bits of the value (or lane)
+;; and the amount to shift by.
+(decl fpu_op_ri_sli (u8 u8) FPUOpRI)
+(extern constructor fpu_op_ri_sli fpu_op_ri_sli)
+
 (decl imm12_from_negated_u64 (Imm12) u64)
 (extern extractor imm12_from_negated_u64 imm12_from_negated_u64)
 
@@ -1393,6 +1460,9 @@
 
 (decl pure lshl_from_imm64 (Type Imm64) ShiftOpAndAmt)
 (extern constructor lshl_from_imm64 lshl_from_imm64)
+
+(decl pure lshl_from_u64 (Type u64) ShiftOpAndAmt)
+(extern constructor lshl_from_u64 lshl_from_u64)
 
 (decl integral_ty (Type) Type)
 (extern extractor integral_ty integral_ty)
@@ -1433,9 +1503,12 @@
 (extern constructor cond_br_cond cond_br_cond)
 
 ;; Lower the address of a load or a store.
-(decl amode (Type Inst u32) AMode)
+(decl amode (Type Value u32) AMode)
 ;; TODO: Port lower_address() to ISLE.
 (extern constructor amode amode)
+
+(decl pair_amode (Value u32) PairAMode)
+(extern constructor pair_amode pair_amode)
 
 ;; Matches an `AMode` that is just a register.
 (decl pure amode_is_reg (AMode) Reg)
@@ -1530,6 +1603,12 @@
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_1 Unit (emit (MInst.FpuMove128 dst src1)))
             (_2 Unit (emit (MInst.VecRRRMod op dst src2 src3 size))))
+        dst))
+
+(decl fpu_rri (FPUOpRI Reg) Reg)
+(rule (fpu_rri op src)
+      (let ((dst WritableReg (temp_writable_reg $F64))
+            (_ Unit (emit (MInst.FpuRRI op dst src))))
         dst))
 
 ;; Helper for emitting `MInst.FpuRRR` instructions.
@@ -1639,6 +1718,14 @@
         (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
          (MInst.AluRRR (ALUOp.AddS) (operand_size ty) dst src1 src2)
          dst)))
+
+;; Helper for emitting `adds` instructions, setting flags in ambient
+;; state. Used only for `iadd_ifcout`.
+(decl add_with_flags (Type Reg Reg) Reg)
+(rule (add_with_flags ty src1 src2)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AluRRR (ALUOp.AddS) (operand_size ty) dst src1 src2))))
+        dst))
 
 ;; Helper for emitting `adc` instructions.
 (decl adc_paired (Type Reg Reg) ConsumesFlags)
@@ -1836,6 +1923,12 @@
             (_ Unit (emit (MInst.MovFromVecSigned dst rn idx size scalar_size))))
         dst))
 
+(decl fpu_move_from_vec (Reg u8 VectorSize) Reg)
+(rule (fpu_move_from_vec rn idx size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.FpuMoveFromVec dst rn idx size))))
+        dst))
+
 ;; Helper for emitting `MInst.Extend` instructions.
 (decl extend (Reg bool u8 u8) Reg)
 (rule (extend rn signed from_bits to_bits)
@@ -1848,6 +1941,20 @@
 (rule (fpu_extend src size)
       (let ((dst WritableReg (temp_writable_reg $F32X4))
             (_ Unit (emit (MInst.FpuExtend dst src size))))
+        dst))
+
+;; Helper for emitting `MInst.VecExtend` instructions.
+(decl vec_extend (VecExtendOp Reg bool ScalarSize) Reg)
+(rule (vec_extend op src high_half size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecExtend op dst src high_half size))))
+        dst))
+
+;; Helper for emitting `MInst.VecExtract` instructions.
+(decl vec_extract (Reg Reg u8) Reg)
+(rule (vec_extract src1 src2 idx)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecExtract dst src1 src2 idx))))
         dst))
 
 ;; Helper for emitting `MInst.LoadAcquire` instructions.
@@ -2041,6 +2148,10 @@
 (decl addp (Reg Reg VectorSize) Reg)
 (rule (addp x y size) (vec_rrr (VecALUOp.Addp) x y size))
 
+;; Helper for generating `zip1` instructions.
+(decl zip1 (Reg Reg VectorSize) Reg)
+(rule (zip1 x y size) (vec_rrr (VecALUOp.Zip1) x y size))
+
 ;; Helper for generating vector `abs` instructions.
 (decl vec_abs (Reg VectorSize) Reg)
 (rule (vec_abs x size) (vec_misc (VecMisc2.Abs) x size))
@@ -2230,6 +2341,92 @@
 (rule (udf trap_code)
       (SideEffectNoResult.Inst (MInst.Udf trap_code)))
 
+;; Helpers for generating various load instructions, with varying
+;; widths and sign/zero-extending properties.
+(decl aarch64_uload8 (AMode MemFlags) Reg)
+(rule (aarch64_uload8 amode flags)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.ULoad8 dst amode flags))))
+        dst))
+(decl aarch64_sload8 (AMode MemFlags) Reg)
+(rule (aarch64_sload8 amode flags)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.SLoad8 dst amode flags))))
+        dst))
+(decl aarch64_uload16 (AMode MemFlags) Reg)
+(rule (aarch64_uload16 amode flags)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.ULoad16 dst amode flags))))
+        dst))
+(decl aarch64_sload16 (AMode MemFlags) Reg)
+(rule (aarch64_sload16 amode flags)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.SLoad16 dst amode flags))))
+        dst))
+(decl aarch64_uload32 (AMode MemFlags) Reg)
+(rule (aarch64_uload32 amode flags)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.ULoad32 dst amode flags))))
+        dst))
+(decl aarch64_sload32 (AMode MemFlags) Reg)
+(rule (aarch64_sload32 amode flags)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.SLoad32 dst amode flags))))
+        dst))
+(decl aarch64_uload64 (AMode MemFlags) Reg)
+(rule (aarch64_uload64 amode flags)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.ULoad64 dst amode flags))))
+        dst))
+(decl aarch64_fpuload32 (AMode MemFlags) Reg)
+(rule (aarch64_fpuload32 amode flags)
+      (let ((dst WritableReg (temp_writable_reg $F64))
+            (_ Unit (emit (MInst.FpuLoad32 dst amode flags))))
+        dst))
+(decl aarch64_fpuload64 (AMode MemFlags) Reg)
+(rule (aarch64_fpuload64 amode flags)
+      (let ((dst WritableReg (temp_writable_reg $F64))
+            (_ Unit (emit (MInst.FpuLoad64 dst amode flags))))
+        dst))
+(decl aarch64_fpuload128 (AMode MemFlags) Reg)
+(rule (aarch64_fpuload128 amode flags)
+      (let ((dst WritableReg (temp_writable_reg $F64X2))
+            (_ Unit (emit (MInst.FpuLoad128 dst amode flags))))
+        dst))
+(decl aarch64_loadp64 (PairAMode MemFlags) ValueRegs)
+(rule (aarch64_loadp64 amode flags)
+      (let ((dst1 WritableReg (temp_writable_reg $I64))
+            (dst2 WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadP64 dst1 dst2 amode flags))))
+        (value_regs dst1 dst2)))
+
+;; Helpers for generating various store instructions with varying
+;; widths.
+(decl aarch64_store8 (AMode MemFlags Reg) SideEffectNoResult)
+(rule (aarch64_store8 amode flags val)
+      (SideEffectNoResult.Inst (MInst.Store8 val amode flags)))
+(decl aarch64_store16 (AMode MemFlags Reg) SideEffectNoResult)
+(rule (aarch64_store16 amode flags val)
+      (SideEffectNoResult.Inst (MInst.Store16 val amode flags)))
+(decl aarch64_store32 (AMode MemFlags Reg) SideEffectNoResult)
+(rule (aarch64_store32 amode flags val)
+      (SideEffectNoResult.Inst (MInst.Store32 val amode flags)))
+(decl aarch64_store64 (AMode MemFlags Reg) SideEffectNoResult)
+(rule (aarch64_store64 amode flags val)
+      (SideEffectNoResult.Inst (MInst.Store64 val amode flags)))
+(decl aarch64_fpustore32 (AMode MemFlags Reg) SideEffectNoResult)
+(rule (aarch64_fpustore32 amode flags val)
+      (SideEffectNoResult.Inst (MInst.FpuStore32 val amode flags)))
+(decl aarch64_fpustore64 (AMode MemFlags Reg) SideEffectNoResult)
+(rule (aarch64_fpustore64 amode flags val)
+      (SideEffectNoResult.Inst (MInst.FpuStore64 val amode flags)))
+(decl aarch64_fpustore128 (AMode MemFlags Reg) SideEffectNoResult)
+(rule (aarch64_fpustore128 amode flags val)
+      (SideEffectNoResult.Inst (MInst.FpuStore128 val amode flags)))
+(decl aarch64_storep64 (PairAMode MemFlags Reg Reg) SideEffectNoResult)
+(rule (aarch64_storep64 amode flags val1 val2)
+      (SideEffectNoResult.Inst (MInst.StoreP64 val1 val2 amode flags)))
+
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Type of extension performed by an immediate helper
@@ -2409,6 +2606,13 @@
             (_ Unit (emit (MInst.VecLoadReplicate dst src size flags))))
         dst))
 
+;; Helper for emitting `MInst.LoadExtName` instructions.
+(decl load_ext_name (BoxExternalName i64) Reg)
+(rule (load_ext_name extname offset)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadExtName dst extname offset))))
+        dst))
+
 ;; Helper for emitting `MInst.LoadAddr` instructions.
 (decl load_addr (AMode) Reg)
 (rule (load_addr addr)
@@ -2420,6 +2624,11 @@
       (if-let addr_reg (amode_is_reg addr))
       addr_reg)
 
+;; Lower a constant f64.
+(decl constant_f64 (u64) Reg)
+;; TODO: Port lower_constant_f64() to ISLE.
+(extern constructor constant_f64 constant_f64)
+
 ;; Lower a constant f128.
 (decl constant_f128 (u128) Reg)
 ;; TODO: Port lower_constant_f128() to ISLE.
@@ -2429,6 +2638,11 @@
 (decl splat_const (u64 VectorSize) Reg)
 ;; TODO: Port lower_splat_const() to ISLE.
 (extern constructor splat_const splat_const)
+
+;; Lower a FloatCC to a Cond.
+(decl fp_cond_code (FloatCC) Cond)
+;; TODO: Port lower_fp_condcode() to ISLE.
+(extern constructor fp_cond_code fp_cond_code)
 
 ;; Generate comparison to zero operator from input condition code
 (decl float_cc_cmp_zero_to_vec_misc_op (FloatCC) VecMisc2)
@@ -2577,4 +2791,290 @@
 
 (decl aarch64_link () Reg)
 (rule (aarch64_link)
+      (if (sign_return_address_disabled))
       (mov_preg (preg_link)))
+
+(rule (aarch64_link)
+      ;; This constructor is always used for non-leaf functions, so it is safe
+      ;; to clobber LR.
+      (let ((_ Unit (emit (MInst.Xpaclri))))
+           (mov_preg (preg_link))))
+
+;; Helper for getting the maximum shift amount for a type.
+
+(decl max_shift (Type) u8)
+(rule (max_shift $F64) 63)
+(rule (max_shift $F32) 31)
+
+;; Helper for generating `fcopysign` instruction sequences.
+
+(decl fcopy_sign (Reg Reg Type) Reg)
+(rule (fcopy_sign x y (ty_scalar_float ty))
+      (let ((dst WritableReg (temp_writable_reg $F64))
+            (_ Unit (emit (MInst.FpuMove64 dst x)))
+            (tmp Reg (fpu_rri (fpu_op_ri_ushr (ty_bits ty) (max_shift ty)) y))
+            (_ Unit (emit (MInst.FpuRRI (fpu_op_ri_sli (ty_bits ty) (max_shift ty)) dst tmp))))
+       dst))
+(rule (fcopy_sign x y ty @ (multi_lane _ _))
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.FpuMove128 dst x)))
+            (tmp Reg (vec_shift_imm (VecShiftImmOp.Ushr) (max_shift (lane_type ty)) y (vector_size ty)))
+            (_ Unit (emit (MInst.VecShiftImmMod (VecShiftImmModOp.Sli) dst tmp (vector_size ty) (max_shift (lane_type ty))))))
+       dst))
+
+;; Helpers for generating `MInst.FpuToInt` instructions.
+
+(decl fpu_to_int_nan_check (ScalarSize Reg) Reg)
+(rule (fpu_to_int_nan_check size src)
+      (let ((r ValueRegs
+                  (with_flags (fpu_cmp size src src)
+                   (ConsumesFlags.ConsumesFlagsReturnsReg
+                    (MInst.TrapIf (cond_br_cond (Cond.Vs))
+                        (trap_code_bad_conversion_to_integer))
+                    src))))
+       (value_regs_get r 0)))
+
+;; Checks that the value is not less than the minimum bound,
+;; accepting a boolean (whether the type is signed), input type,
+;; output type, and registers containing the source and minimum bound.
+(decl fpu_to_int_underflow_check (bool Type Type Reg Reg) Reg)
+(rule (fpu_to_int_underflow_check $true $F32 (fits_in_16 out_ty) src min)
+      (let ((r ValueRegs
+                  (with_flags (fpu_cmp (ScalarSize.Size32) src min)
+                   (ConsumesFlags.ConsumesFlagsReturnsReg
+                    (MInst.TrapIf (cond_br_cond (Cond.Le))
+                        (trap_code_integer_overflow))
+                    src))))
+       (value_regs_get r 0)))
+(rule (fpu_to_int_underflow_check $true $F64 (fits_in_32 out_ty) src min)
+      (let ((r ValueRegs
+                  (with_flags (fpu_cmp (ScalarSize.Size64) src min)
+                   (ConsumesFlags.ConsumesFlagsReturnsReg
+                    (MInst.TrapIf (cond_br_cond (Cond.Le))
+                        (trap_code_integer_overflow))
+                    src))))
+       (value_regs_get r 0)))
+(rule -1 (fpu_to_int_underflow_check $true in_ty _out_ty src min)
+      (let ((r ValueRegs
+                  (with_flags (fpu_cmp (scalar_size in_ty) src min)
+                   (ConsumesFlags.ConsumesFlagsReturnsReg
+                    (MInst.TrapIf (cond_br_cond (Cond.Lt))
+                        (trap_code_integer_overflow))
+                    src))))
+       (value_regs_get r 0)))
+(rule (fpu_to_int_underflow_check $false in_ty _out_ty src min)
+      (let ((r ValueRegs
+                  (with_flags (fpu_cmp (scalar_size in_ty) src min)
+                   (ConsumesFlags.ConsumesFlagsReturnsReg
+                    (MInst.TrapIf (cond_br_cond (Cond.Le))
+                        (trap_code_integer_overflow))
+                    src))))
+       (value_regs_get r 0)))
+
+(decl fpu_to_int_overflow_check (ScalarSize Reg Reg) Reg)
+(rule (fpu_to_int_overflow_check size src max)
+      (let ((r ValueRegs
+                  (with_flags (fpu_cmp size src max)
+                   (ConsumesFlags.ConsumesFlagsReturnsReg
+                    (MInst.TrapIf (cond_br_cond (Cond.Ge))
+                        (trap_code_integer_overflow))
+                    src))))
+       (value_regs_get r 0)))
+
+;; Emits the appropriate instruction sequence to convert a
+;; floating-point value to an integer, trapping if the value
+;; is a NaN or does not fit in the target type.
+;; Accepts the specific conversion op, the source register,
+;; whether the input is signed, and finally the input and output
+;; types.
+(decl fpu_to_int_cvt (FpuToIntOp Reg bool Type Type) Reg)
+(rule (fpu_to_int_cvt op src signed in_ty out_ty)
+      (let ((size ScalarSize (scalar_size in_ty))
+            (in_bits u8 (ty_bits in_ty))
+            (out_bits u8 (ty_bits out_ty))
+            (src Reg (fpu_to_int_nan_check size src))
+            (min Reg (min_fp_value signed in_bits out_bits))
+            (src Reg (fpu_to_int_underflow_check signed in_ty out_ty src min))
+            (max Reg (max_fp_value signed in_bits out_bits))
+            (src Reg (fpu_to_int_overflow_check size src max)))
+       (fpu_to_int op src)))
+
+;; Emits the appropriate instruction sequence to convert a
+;; floating-point value to an integer, saturating if the value
+;; does not fit in the target type.
+;; Accepts the specific conversion op, the source register,
+;; whether the input is signed, and finally the input and output
+;; types.
+(decl fpu_to_int_cvt_sat (FpuToIntOp Reg bool Type Type) Reg)
+(rule (fpu_to_int_cvt_sat op src $true in_ty out_ty)
+      (let ((size ScalarSize (scalar_size in_ty))
+            (in_bits u8 (ty_bits in_ty))
+            (out_bits u8 (ty_bits out_ty))
+            (max Reg (max_fp_value_sat $true in_bits out_bits))
+            (tmp Reg (fpu_rrr (FPUOp2.Min) src max size))
+            (min Reg (min_fp_value_sat $true in_bits out_bits))
+            (tmp Reg (fpu_rrr (FPUOp2.Max) tmp min size))
+            (zero Reg (constant_f128 0))
+            (tmp ValueRegs (with_flags (fpu_cmp size src src)
+                    (fpu_csel in_ty (Cond.Ne) zero tmp))))
+       (fpu_to_int op (value_regs_get tmp 0))))
+(rule (fpu_to_int_cvt_sat op src $false in_ty out_ty)
+      (let ((size ScalarSize (scalar_size in_ty))
+            (in_bits u8 (ty_bits in_ty))
+            (out_bits u8 (ty_bits out_ty))
+            (max Reg (max_fp_value_sat $false in_bits out_bits))
+            (tmp Reg (fpu_rrr (FPUOp2.Min) src max size))
+            (min Reg (min_fp_value_sat $false in_bits out_bits))
+            (tmp Reg (fpu_rrr (FPUOp2.Max) tmp min size))
+            (tmp ValueRegs (with_flags (fpu_cmp size src src)
+                    (fpu_csel in_ty (Cond.Ne) min tmp))))
+       (fpu_to_int op (value_regs_get tmp 0))))
+
+(decl fpu_to_int (FpuToIntOp Reg) Reg)
+(rule (fpu_to_int op src)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.FpuToInt op dst src))))
+       dst))
+
+;; Helper for generating `MInst.IntToFpu` instructions.
+
+(decl int_to_fpu (IntToFpuOp Reg) Reg)
+(rule (int_to_fpu op src)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.IntToFpu op dst src))))
+       dst))
+
+;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl gen_call (SigRef ExternalName RelocDistance ValueSlice) InstOutput)
+(extern constructor gen_call gen_call)
+
+(decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
+(extern constructor gen_call_indirect gen_call_indirect)
+
+;; Helpers for pinned register manipulation.
+
+(decl writable_pinned_reg () WritableReg)
+(extern constructor writable_pinned_reg writable_pinned_reg)
+
+(decl pinned_reg () Reg)
+(rule (pinned_reg) (writable_pinned_reg))
+
+(decl write_pinned_reg (Reg) SideEffectNoResult)
+(rule (write_pinned_reg val)
+      (let ((dst WritableReg (writable_pinned_reg)))
+        (SideEffectNoResult.Inst (gen_move $I64 dst val))))
+
+;; Helpers for stackslot effective address generation.
+
+(decl compute_stack_addr (StackSlot Offset32) Reg)
+(rule (compute_stack_addr stack_slot offset)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+           (_ Unit (emit (abi_stackslot_addr dst stack_slot offset))))
+        dst))
+
+;; Helper for emitting instruction sequences to perform a vector comparison.
+
+(decl vec_cmp_vc (Reg Reg VectorSize) Reg)
+(rule (vec_cmp_vc rn rm size)
+      (let ((dst Reg (vec_rrr (VecALUOp.Fcmeq) rn rn size))
+            (tmp Reg (vec_rrr (VecALUOp.Fcmeq) rm rm size))
+            (dst Reg (vec_rrr (VecALUOp.And) dst tmp size)))
+       dst))
+
+(decl vec_cmp (Reg Reg Type Cond) Reg)
+
+;; Floating point Vs / Vc
+(rule (vec_cmp rn rm ty (Cond.Vc))
+      (if (ty_vector_float ty))
+      (vec_cmp_vc rn rm (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Vs))
+      (if (ty_vector_float ty))
+      (let ((tmp Reg (vec_cmp_vc rn rm (vector_size ty))))
+       (vec_misc (VecMisc2.Not) tmp (vector_size ty))))
+
+;; 'Less than' operations are implemented by swapping the order of
+;; operands and using the 'greater than' instructions.
+;; 'Not equal' is implemented with 'equal' and inverting the result.
+
+;; Floating-point
+(rule (vec_cmp rn rm ty (Cond.Eq))
+      (if (ty_vector_float ty))
+      (vec_rrr (VecALUOp.Fcmeq) rn rm (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Ne))
+      (if (ty_vector_float ty))
+      (let ((tmp Reg (vec_rrr (VecALUOp.Fcmeq) rn rm (vector_size ty))))
+       (vec_misc (VecMisc2.Not) tmp (vector_size ty))))
+(rule (vec_cmp rn rm ty (Cond.Ge))
+      (if (ty_vector_float ty))
+      (vec_rrr (VecALUOp.Fcmge) rn rm (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Gt))
+      (if (ty_vector_float ty))
+      (vec_rrr (VecALUOp.Fcmgt) rn rm (vector_size ty)))
+;; Floating-point swapped-operands
+(rule (vec_cmp rn rm ty (Cond.Mi))
+      (if (ty_vector_float ty))
+      (vec_rrr (VecALUOp.Fcmgt) rm rn (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Ls))
+      (if (ty_vector_float ty))
+      (vec_rrr (VecALUOp.Fcmge) rm rn (vector_size ty)))
+
+;; Integer
+(rule (vec_cmp rn rm ty (Cond.Eq))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmeq) rn rm (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Ne))
+      (if (ty_vector_not_float ty))
+      (let ((tmp Reg (vec_rrr (VecALUOp.Cmeq) rn rm (vector_size ty))))
+       (vec_misc (VecMisc2.Not) tmp (vector_size ty))))
+(rule (vec_cmp rn rm ty (Cond.Ge))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmge) rn rm (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Gt))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmgt) rn rm (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Hs))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmhs) rn rm (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Hi))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmhi) rn rm (vector_size ty)))
+;; Integer swapped-operands
+(rule (vec_cmp rn rm ty (Cond.Le))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmge) rm rn (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Lt))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmgt) rm rn (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Ls))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmhs) rm rn (vector_size ty)))
+(rule (vec_cmp rn rm ty (Cond.Lo))
+      (if (ty_vector_not_float ty))
+      (vec_rrr (VecALUOp.Cmhi) rm rn (vector_size ty)))
+
+;; Helper for determining if any value in a vector is true.
+;; This operation is implemented by using umaxp to create a scalar value, which
+;; is then compared against zero.
+;;
+;; umaxp vn.4s, vm.4s, vm.4s
+;; mov xm, vn.d[0]
+;; cmp xm, #0
+(decl vanytrue (Reg Type) ProducesFlags)
+(rule (vanytrue src (ty_vec128 ty))
+      (let ((src Reg (vec_rrr (VecALUOp.Umaxp) src src (VectorSize.Size32x4)))
+            (src Reg (mov_from_vec src 0 (ScalarSize.Size64))))
+       (cmp_imm (OperandSize.Size64) src (u8_into_imm12 0))))
+(rule (vanytrue src ty)
+      (if (ty_vec64 ty))
+      (let ((src Reg (mov_from_vec src 0 (ScalarSize.Size64))))
+       (cmp_imm (OperandSize.Size64) src (u8_into_imm12 0))))
+
+;;;; TLS Values ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Helper for emitting ElfTlsGetAddr.
+(decl elf_tls_get_addr (ExternalName) Reg)
+(rule (elf_tls_get_addr name)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.ElfTlsGetAddr name dst))))
+        dst))

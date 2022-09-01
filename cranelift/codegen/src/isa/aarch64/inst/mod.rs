@@ -39,7 +39,7 @@ pub use crate::isa::aarch64::lower::isle::generated_code::{
     ALUOp, ALUOp3, APIKey, AtomicRMWLoopOp, AtomicRMWOp, BitOp, FPUOp1, FPUOp2, FPUOp3,
     FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp, VecALUModOp, VecALUOp,
     VecExtendOp, VecLanesOp, VecMisc2, VecPairOp, VecRRLongOp, VecRRNarrowOp, VecRRPairLongOp,
-    VecRRRLongOp, VecShiftImmOp,
+    VecRRRLongOp, VecShiftImmModOp, VecShiftImmOp,
 };
 
 /// A floating-point unit (FPU) operation with two args, a register and an immediate.
@@ -767,6 +767,10 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
+        &Inst::VecShiftImmMod { rd, rn, .. } => {
+            collector.reg_mod(rd);
+            collector.reg_use(rn);
+        }
         &Inst::VecExtract { rd, rn, rm, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
@@ -981,12 +985,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::Ret { ref rets } => {
-            for &ret in rets {
-                collector.reg_use(ret);
-            }
-        }
-        &Inst::AuthenticatedRet { ref rets, .. } => {
+        &Inst::Ret { ref rets } | &Inst::AuthenticatedRet { ref rets, .. } => {
             for &ret in rets {
                 collector.reg_use(ret);
             }
@@ -1039,11 +1038,14 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             memarg_operands(mem, collector);
         }
-        &Inst::Pacisp { .. } => {}
+        &Inst::Pacisp { .. } | &Inst::Xpaclri => {
+            // Neither LR nor SP is an allocatable register, so there is no need
+            // to do anything.
+        }
         &Inst::VirtualSPOffsetAdj { .. } => {}
 
-        &Inst::ElfTlsGetAddr { .. } => {
-            collector.reg_def(Writable::from_reg(regs::xreg(0)));
+        &Inst::ElfTlsGetAddr { rd, .. } => {
+            collector.reg_fixed_def(rd, regs::xreg(0));
             let mut clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(CallConv::SystemV);
             clobbers.remove(regs::xreg_preg(0));
             collector.reg_clobbers(clobbers);
@@ -2043,47 +2045,19 @@ impl Inst {
                 rd,
                 rn,
                 high_half,
+                lane_size,
             } => {
-                let (op, dest, src) = match (t, high_half) {
-                    (VecExtendOp::Sxtl8, false) => {
-                        ("sxtl", VectorSize::Size16x8, VectorSize::Size8x8)
-                    }
-                    (VecExtendOp::Sxtl8, true) => {
-                        ("sxtl2", VectorSize::Size16x8, VectorSize::Size8x16)
-                    }
-                    (VecExtendOp::Sxtl16, false) => {
-                        ("sxtl", VectorSize::Size32x4, VectorSize::Size16x4)
-                    }
-                    (VecExtendOp::Sxtl16, true) => {
-                        ("sxtl2", VectorSize::Size32x4, VectorSize::Size16x8)
-                    }
-                    (VecExtendOp::Sxtl32, false) => {
-                        ("sxtl", VectorSize::Size64x2, VectorSize::Size32x2)
-                    }
-                    (VecExtendOp::Sxtl32, true) => {
-                        ("sxtl2", VectorSize::Size64x2, VectorSize::Size32x4)
-                    }
-                    (VecExtendOp::Uxtl8, false) => {
-                        ("uxtl", VectorSize::Size16x8, VectorSize::Size8x8)
-                    }
-                    (VecExtendOp::Uxtl8, true) => {
-                        ("uxtl2", VectorSize::Size16x8, VectorSize::Size8x16)
-                    }
-                    (VecExtendOp::Uxtl16, false) => {
-                        ("uxtl", VectorSize::Size32x4, VectorSize::Size16x4)
-                    }
-                    (VecExtendOp::Uxtl16, true) => {
-                        ("uxtl2", VectorSize::Size32x4, VectorSize::Size16x8)
-                    }
-                    (VecExtendOp::Uxtl32, false) => {
-                        ("uxtl", VectorSize::Size64x2, VectorSize::Size32x2)
-                    }
-                    (VecExtendOp::Uxtl32, true) => {
-                        ("uxtl2", VectorSize::Size64x2, VectorSize::Size32x4)
-                    }
+                let vec64 = VectorSize::from_lane_size(lane_size.narrow(), false);
+                let vec128 = VectorSize::from_lane_size(lane_size.narrow(), true);
+                let rd_size = VectorSize::from_lane_size(lane_size, true);
+                let (op, rn_size) = match (t, high_half) {
+                    (VecExtendOp::Sxtl, false) => ("sxtl", vec64),
+                    (VecExtendOp::Sxtl, true) => ("sxtl2", vec128),
+                    (VecExtendOp::Uxtl, false) => ("uxtl", vec64),
+                    (VecExtendOp::Uxtl, true) => ("uxtl2", vec128),
                 };
-                let rd = pretty_print_vreg_vector(rd.to_reg(), dest, allocs);
-                let rn = pretty_print_vreg_vector(rn, src, allocs);
+                let rd = pretty_print_vreg_vector(rd.to_reg(), rd_size, allocs);
+                let rn = pretty_print_vreg_vector(rn, rn_size, allocs);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::VecMovElement {
@@ -2396,6 +2370,20 @@ impl Inst {
                     VecShiftImmOp::Shl => "shl",
                     VecShiftImmOp::Ushr => "ushr",
                     VecShiftImmOp::Sshr => "sshr",
+                };
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
+                let rn = pretty_print_vreg_vector(rn, size, allocs);
+                format!("{} {}, {}, #{}", op, rd, rn, imm)
+            }
+            &Inst::VecShiftImmMod {
+                op,
+                rd,
+                rn,
+                size,
+                imm,
+            } => {
+                let op = match op {
+                    VecShiftImmModOp::Sli => "sli",
                 };
                 let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
                 let rn = pretty_print_vreg_vector(rn, size, allocs);
@@ -2715,14 +2703,16 @@ impl Inst {
 
                 "paci".to_string() + key + "sp"
             }
+            &Inst::Xpaclri => "xpaclri".to_string(),
             &Inst::VirtualSPOffsetAdj { offset } => {
                 state.virtual_sp_offset += offset;
                 format!("virtual_sp_offset_adjust {}", offset)
             }
             &Inst::EmitIsland { needed_space } => format!("emit_island {}", needed_space),
 
-            &Inst::ElfTlsGetAddr { ref symbol } => {
-                format!("x0 = elf_tls_get_addr {}", symbol.display(None))
+            &Inst::ElfTlsGetAddr { ref symbol, rd } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                format!("elf_tls_get_addr {}, {}", rd, symbol.display(None))
             }
             &Inst::Unwind { ref inst } => {
                 format!("unwind {:?}", inst)

@@ -391,7 +391,7 @@ mod tests {
             func,
             "block0:
     v0 = iconst.i8 0
-    brz v0, block1
+    brz v0, block1  ; v0 = 0
     jump block0"
         );
     }
@@ -403,7 +403,7 @@ mod tests {
             func,
             "block0:
     v0 = iconst.i8 0
-    v1 = icmp_imm eq v0, 1
+    v1 = icmp_imm eq v0, 1  ; v0 = 0
     brnz v1, block1
     jump block0"
         );
@@ -421,7 +421,7 @@ block0:
     jump block3
 
 block3:
-    v1 = uextend.i32 v0
+    v1 = uextend.i32 v0  ; v0 = 0
     br_table v1, block0, jt0"
         );
     }
@@ -433,12 +433,12 @@ block3:
             func,
             "block0:
     v0 = iconst.i8 0
-    v1 = icmp_imm eq v0, 2
+    v1 = icmp_imm eq v0, 2  ; v0 = 0
     brnz v1, block2
     jump block3
 
 block3:
-    brz.i8 v0, block1
+    brz.i8 v0, block1  ; v0 = 0
     jump block0"
         );
     }
@@ -453,31 +453,31 @@ block3:
 
 block0:
     v0 = iconst.i8 0
-    v1 = icmp_imm uge v0, 7
+    v1 = icmp_imm uge v0, 7  ; v0 = 0
     brnz v1, block9
     jump block8
 
 block9:
-    v2 = icmp_imm.i8 uge v0, 10
+    v2 = icmp_imm.i8 uge v0, 10  ; v0 = 0
     brnz v2, block10
     jump block11
 
 block11:
-    v3 = icmp_imm.i8 eq v0, 7
+    v3 = icmp_imm.i8 eq v0, 7  ; v0 = 0
     brnz v3, block4
     jump block0
 
 block8:
-    v4 = icmp_imm.i8 eq v0, 5
+    v4 = icmp_imm.i8 eq v0, 5  ; v0 = 0
     brnz v4, block3
     jump block12
 
 block12:
-    v5 = uextend.i32 v0
+    v5 = uextend.i32 v0  ; v0 = 0
     br_table v5, block0, jt0
 
 block10:
-    v6 = iadd_imm.i8 v0, -10
+    v6 = iadd_imm.i8 v0, -10  ; v0 = 0
     v7 = uextend.i32 v6
     br_table v7, block0, jt1"
         );
@@ -490,12 +490,12 @@ block10:
             func,
             "block0:
     v0 = iconst.i8 0
-    v1 = icmp_imm eq v0, 128
+    v1 = icmp_imm eq v0, 128  ; v0 = 0
     brnz v1, block1
     jump block3
 
 block3:
-    v2 = icmp_imm.i8 eq v0, 1
+    v2 = icmp_imm.i8 eq v0, 1  ; v0 = 0
     brnz v2, block2
     jump block0"
         );
@@ -508,12 +508,12 @@ block3:
             func,
             "block0:
     v0 = iconst.i8 0
-    v1 = icmp_imm eq v0, 127
+    v1 = icmp_imm eq v0, 127  ; v0 = 0
     brnz v1, block1
     jump block3
 
 block3:
-    v2 = icmp_imm.i8 eq v0, 1
+    v2 = icmp_imm.i8 eq v0, 1  ; v0 = 0
     brnz v2, block2
     jump block0"
         )
@@ -528,12 +528,12 @@ block3:
 
 block0:
     v0 = iconst.i8 0
-    v1 = icmp_imm eq v0, 255
+    v1 = icmp_imm eq v0, 255  ; v0 = 0
     brnz v1, block1
     jump block4
 
 block4:
-    v2 = uextend.i32 v0
+    v2 = uextend.i32 v0  ; v0 = 0
     br_table v2, block0, jt0"
         );
     }
@@ -626,12 +626,12 @@ block0:
     jump block4
 
 block4:
-    v1 = icmp_imm.i64 ugt v0, 0xffff_ffff
+    v1 = icmp_imm.i64 ugt v0, 0xffff_ffff  ; v0 = 0
     brnz v1, block3
     jump block5
 
 block5:
-    v2 = ireduce.i32 v0
+    v2 = ireduce.i32 v0  ; v0 = 0
     br_table v2, block3, jt0"
         );
     }
@@ -667,12 +667,12 @@ block0:
     jump block4
 
 block4:
-    v1 = icmp_imm.i128 ugt v0, 0xffff_ffff
+    v1 = icmp_imm.i128 ugt v0, 0xffff_ffff  ; v0 = 0
     brnz v1, block3
     jump block5
 
 block5:
-    v2 = ireduce.i32 v0
+    v2 = ireduce.i32 v0  ; v0 = 0
     br_table v2, block3, jt0"
         );
     }

@@ -47,7 +47,7 @@ impl<T> Outcome<T> {
 enum Results {
     Core(Vec<Val>),
     #[cfg(feature = "component-model")]
-    Component(component::Val),
+    Component(Vec<component::Val>),
 }
 
 enum InstanceKind {
@@ -148,7 +148,7 @@ impl<T> WastContext<T> {
                 #[cfg(feature = "component-model")]
                 Wat::Component(m) => self
                     .instantiate_component(&m.encode()?)?
-                    .map(|_| Results::Component(component::Val::Unit)),
+                    .map(|_| Results::Component(Vec::new())),
                 #[cfg(not(feature = "component-model"))]
                 Wat::Component(_) => bail!("component-model support not enabled"),
             }),
@@ -193,8 +193,10 @@ impl<T> WastContext<T> {
                     })
                     .collect::<Result<Vec<_>>>()?;
 
-                Ok(match func.call(&mut self.store, &values) {
-                    Ok(results) => {
+                let mut results =
+                    vec![component::Val::Bool(false); func.results(&self.store).len()];
+                Ok(match func.call(&mut self.store, &values, &mut results) {
+                    Ok(()) => {
                         func.post_return(&mut self.store)?;
                         Outcome::Ok(Results::Component(results.into()))
                     }
@@ -290,6 +292,9 @@ impl<T> WastContext<T> {
     fn assert_return(&self, result: Outcome, results: &[WastRet<'_>]) -> Result<()> {
         match result.into_result()? {
             Results::Core(values) => {
+                if values.len() != results.len() {
+                    bail!("expected {} results found {}", results.len(), values.len());
+                }
                 for (i, (v, e)) in values.iter().zip(results).enumerate() {
                     let e = match e {
                         WastRet::Core(core) => core,
@@ -301,17 +306,20 @@ impl<T> WastContext<T> {
                 }
             }
             #[cfg(feature = "component-model")]
-            Results::Component(value) => {
-                if results.len() != 1 {
-                    bail!("expected one result value assertion");
+            Results::Component(values) => {
+                if values.len() != results.len() {
+                    bail!("expected {} results found {}", results.len(), values.len());
                 }
-                let result = match &results[0] {
-                    WastRet::Component(ret) => ret,
-                    WastRet::Core(_) => {
-                        bail!("expected core value found component value")
-                    }
-                };
-                component::match_val(&result, &value)?;
+                for (i, (v, e)) in values.iter().zip(results).enumerate() {
+                    let e = match e {
+                        WastRet::Core(_) => {
+                            bail!("expected component value found core value")
+                        }
+                        WastRet::Component(val) => val,
+                    };
+                    component::match_val(e, v)
+                        .with_context(|| format!("result {} didn't match", i))?;
+                }
             }
         }
         Ok(())

@@ -121,7 +121,7 @@
     (memory (export "memory") 0)
   )
   (core instance $m (instantiate $m))
-  (func $f (param (list unit))
+  (func $f (param (list (record)))
     (canon lift
       (core func $m "x")
       (realloc (func $m "realloc"))

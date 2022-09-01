@@ -75,7 +75,7 @@ mod component {
             let Declarations {
                 types,
                 params,
-                result,
+                results,
                 import_and_export,
                 encoding1,
                 encoding2,
@@ -92,16 +92,22 @@ mod component {
                 })
                 .collect::<TokenStream>();
 
-            let rust_result =
-                component_fuzz_util::rust_type(&case.result, name_counter, &mut declarations);
+            let rust_results = case
+                .results
+                .iter()
+                .map(|ty| {
+                    let ty = component_fuzz_util::rust_type(&ty, name_counter, &mut declarations);
+                    quote!(#ty,)
+                })
+                .collect::<TokenStream>();
 
-            let test = quote!(#index => component_types::#test::<#rust_params #rust_result>(
+            let test = quote!(#index => component_types::#test::<#rust_params (#rust_results)>(
                 input,
                 {
                     static DECLS: Declarations = Declarations {
                         types: Cow::Borrowed(#types),
                         params: Cow::Borrowed(#params),
-                        result: Cow::Borrowed(#result),
+                        results: Cow::Borrowed(#results),
                         import_and_export: Cow::Borrowed(#import_and_export),
                         encoding1: #encoding1,
                         encoding2: #encoding2,
@@ -115,15 +121,15 @@ mod component {
 
         let module = quote! {
             #[allow(unused_imports)]
-            fn static_component_api_target(input: &mut arbitrary::Unstructured) -> arbitrary::Result<()> {
+            fn static_component_api_target(input: &mut libfuzzer_sys::arbitrary::Unstructured) -> libfuzzer_sys::arbitrary::Result<()> {
                 use anyhow::Result;
-                use arbitrary::{Unstructured, Arbitrary};
-                use component_test_util::{self, Float32, Float64};
                 use component_fuzz_util::Declarations;
+                use component_test_util::{self, Float32, Float64};
+                use libfuzzer_sys::arbitrary::{self, Arbitrary};
+                use std::borrow::Cow;
                 use std::sync::{Arc, Once};
                 use wasmtime::component::{ComponentType, Lift, Lower};
                 use wasmtime_fuzzing::generators::component_types;
-                use std::borrow::Cow;
 
                 const SEED: u64 = #seed;
 

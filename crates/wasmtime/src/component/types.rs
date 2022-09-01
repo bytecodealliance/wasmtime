@@ -7,9 +7,9 @@ use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, TypeEnumIndex, TypeExpectedIndex,
-    TypeFlagsIndex, TypeInterfaceIndex, TypeOptionIndex, TypeRecordIndex, TypeTupleIndex,
-    TypeUnionIndex, TypeVariantIndex, VariantInfo,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, TypeEnumIndex, TypeFlagsIndex, TypeListIndex,
+    TypeOptionIndex, TypeRecordIndex, TypeResultIndex, TypeTupleIndex, TypeUnionIndex,
+    TypeVariantIndex, VariantInfo,
 };
 
 #[derive(Clone)]
@@ -39,7 +39,7 @@ impl<T: Eq> Eq for Handle<T> {}
 
 /// A `list` interface type
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct List(Handle<TypeInterfaceIndex>);
+pub struct List(Handle<TypeListIndex>);
 
 impl List {
     /// Instantiate this type with the specified `values`.
@@ -49,7 +49,7 @@ impl List {
 
     /// Retreive the element type of this `list`.
     pub fn ty(&self) -> Type {
-        Type::from(&self.0.types[self.0.index], &self.0.types)
+        Type::from(&self.0.types[self.0.index].element, &self.0.types)
     }
 }
 
@@ -111,8 +111,8 @@ impl Tuple {
 pub struct Case<'a> {
     /// The name of the case
     pub name: &'a str,
-    /// The type of the case
-    pub ty: Type,
+    /// The optional payload type of the case
+    pub ty: Option<Type>,
 }
 
 /// A `variant` interface type
@@ -121,7 +121,7 @@ pub struct Variant(Handle<TypeVariantIndex>);
 
 impl Variant {
     /// Instantiate this type with the specified case `name` and `value`.
-    pub fn new_val(&self, name: &str, value: Val) -> Result<Val> {
+    pub fn new_val(&self, name: &str, value: Option<Val>) -> Result<Val> {
         Ok(Val::Variant(values::Variant::new(self, name, value)?))
     }
 
@@ -129,7 +129,7 @@ impl Variant {
     pub fn cases(&self) -> impl ExactSizeIterator<Item = Case> {
         self.0.types[self.0.index].cases.iter().map(|case| Case {
             name: &case.name,
-            ty: Type::from(&case.ty, &self.0.types),
+            ty: case.ty.as_ref().map(|ty| Type::from(ty, &self.0.types)),
         })
     }
 
@@ -198,12 +198,12 @@ impl Union {
 
 /// An `option` interface type
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Option(Handle<TypeOptionIndex>);
+pub struct OptionType(Handle<TypeOptionIndex>);
 
-impl Option {
+impl OptionType {
     /// Instantiate this type with the specified `value`.
-    pub fn new_val(&self, value: std::option::Option<Val>) -> Result<Val> {
-        Ok(Val::Option(values::Option::new(self, value)?))
+    pub fn new_val(&self, value: Option<Val>) -> Result<Val> {
+        Ok(Val::Option(values::OptionVal::new(self, value)?))
     }
 
     /// Retrieve the type parameter for this `option`.
@@ -222,22 +222,28 @@ impl Option {
 
 /// An `expected` interface type
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Expected(Handle<TypeExpectedIndex>);
+pub struct ResultType(Handle<TypeResultIndex>);
 
-impl Expected {
+impl ResultType {
     /// Instantiate this type with the specified `value`.
-    pub fn new_val(&self, value: Result<Val, Val>) -> Result<Val> {
-        Ok(Val::Expected(values::Expected::new(self, value)?))
+    pub fn new_val(&self, value: Result<Option<Val>, Option<Val>>) -> Result<Val> {
+        Ok(Val::Result(values::ResultVal::new(self, value)?))
     }
 
     /// Retrieve the `ok` type parameter for this `option`.
-    pub fn ok(&self) -> Type {
-        Type::from(&self.0.types[self.0.index].ok, &self.0.types)
+    pub fn ok(&self) -> Option<Type> {
+        Some(Type::from(
+            self.0.types[self.0.index].ok.as_ref()?,
+            &self.0.types,
+        ))
     }
 
     /// Retrieve the `err` type parameter for this `option`.
-    pub fn err(&self) -> Type {
-        Type::from(&self.0.types[self.0.index].err, &self.0.types)
+    pub fn err(&self) -> Option<Type> {
+        Some(Type::from(
+            self.0.types[self.0.index].err.as_ref()?,
+            &self.0.types,
+        ))
     }
 
     pub(crate) fn variant_info(&self) -> &VariantInfo {
@@ -274,52 +280,29 @@ impl Flags {
 
 /// Represents a component model interface type
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[allow(missing_docs)]
 pub enum Type {
-    /// Unit
-    Unit,
-    /// Boolean
     Bool,
-    /// Signed 8-bit integer
     S8,
-    /// Unsigned 8-bit integer
     U8,
-    /// Signed 16-bit integer
     S16,
-    /// Unsigned 16-bit integer
     U16,
-    /// Signed 32-bit integer
     S32,
-    /// Unsigned 32-bit integer
     U32,
-    /// Signed 64-bit integer
     S64,
-    /// Unsigned 64-bit integer
     U64,
-    /// 64-bit floating point value
     Float32,
-    /// 64-bit floating point value
     Float64,
-    /// 32-bit character
     Char,
-    /// Character string
     String,
-    /// List of values
     List(List),
-    /// Record
     Record(Record),
-    /// Tuple
     Tuple(Tuple),
-    /// Variant
     Variant(Variant),
-    /// Enum
     Enum(Enum),
-    /// Union
     Union(Union),
-    /// Option
-    Option(Option),
-    /// Expected
-    Expected(Expected),
-    /// Bit flags
+    Option(OptionType),
+    Result(ResultType),
     Flags(Flags),
 }
 
@@ -402,12 +385,12 @@ impl Type {
         }
     }
 
-    /// Retrieve the inner [`Option`] of a [`Type::Option`].
+    /// Retrieve the inner [`OptionType`] of a [`Type::Option`].
     ///
     /// # Panics
     ///
     /// This will panic if `self` is not a [`Type::Option`].
-    pub fn unwrap_option(&self) -> &Option {
+    pub fn unwrap_option(&self) -> &OptionType {
         if let Type::Option(handle) = self {
             &handle
         } else {
@@ -415,16 +398,16 @@ impl Type {
         }
     }
 
-    /// Retrieve the inner [`Expected`] of a [`Type::Expected`].
+    /// Retrieve the inner [`ResultType`] of a [`Type::Result`].
     ///
     /// # Panics
     ///
-    /// This will panic if `self` is not a [`Type::Expected`].
-    pub fn unwrap_expected(&self) -> &Expected {
-        if let Type::Expected(handle) = self {
+    /// This will panic if `self` is not a [`Type::Result`].
+    pub fn unwrap_result(&self) -> &ResultType {
+        if let Type::Result(handle) = self {
             &handle
         } else {
-            panic!("attempted to unwrap a {} as a expected", self.desc())
+            panic!("attempted to unwrap a {} as a result", self.desc())
         }
     }
 
@@ -462,7 +445,6 @@ impl Type {
     /// Convert the specified `InterfaceType` to a `Type`.
     pub(crate) fn from(ty: &InterfaceType, types: &Arc<ComponentTypes>) -> Self {
         match ty {
-            InterfaceType::Unit => Type::Unit,
             InterfaceType::Bool => Type::Bool,
             InterfaceType::S8 => Type::S8,
             InterfaceType::U8 => Type::U8,
@@ -500,11 +482,11 @@ impl Type {
                 index: *index,
                 types: types.clone(),
             })),
-            InterfaceType::Option(index) => Type::Option(Option(Handle {
+            InterfaceType::Option(index) => Type::Option(OptionType(Handle {
                 index: *index,
                 types: types.clone(),
             })),
-            InterfaceType::Expected(index) => Type::Expected(Expected(Handle {
+            InterfaceType::Result(index) => Type::Result(ResultType(Handle {
                 index: *index,
                 types: types.clone(),
             })),
@@ -517,7 +499,6 @@ impl Type {
 
     fn desc(&self) -> &'static str {
         match self {
-            Type::Unit => "unit",
             Type::Bool => "bool",
             Type::S8 => "s8",
             Type::U8 => "u8",
@@ -538,7 +519,7 @@ impl Type {
             Type::Enum(_) => "enum",
             Type::Union(_) => "union",
             Type::Option(_) => "option",
-            Type::Expected(_) => "expected",
+            Type::Result(_) => "result",
             Type::Flags(_) => "flags",
         }
     }
@@ -546,7 +527,6 @@ impl Type {
     /// Calculate the size and alignment requirements for the specified type.
     pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
         match self {
-            Type::Unit => &CanonicalAbiInfo::ZERO,
             Type::Bool | Type::S8 | Type::U8 => &CanonicalAbiInfo::SCALAR1,
             Type::S16 | Type::U16 => &CanonicalAbiInfo::SCALAR2,
             Type::S32 | Type::U32 | Type::Char | Type::Float32 => &CanonicalAbiInfo::SCALAR4,
@@ -558,7 +538,7 @@ impl Type {
             Type::Enum(handle) => handle.canonical_abi(),
             Type::Union(handle) => handle.canonical_abi(),
             Type::Option(handle) => handle.canonical_abi(),
-            Type::Expected(handle) => handle.canonical_abi(),
+            Type::Result(handle) => handle.canonical_abi(),
             Type::Flags(handle) => handle.canonical_abi(),
         }
     }

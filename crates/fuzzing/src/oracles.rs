@@ -10,12 +10,18 @@
 //! When an oracle finds a bug, it should report it to the fuzzing engine by
 //! panicking.
 
+#[cfg(feature = "fuzz-spec-interpreter")]
+pub mod diff_spec;
+pub mod diff_wasmi;
+pub mod diff_wasmtime;
 pub mod dummy;
+pub mod engine;
 mod stacks;
 
-use crate::generators;
+use self::diff_wasmtime::WasmtimeInstance;
+use self::engine::DiffInstance;
+use crate::generators::{self, DiffValue, DiffValueType};
 use arbitrary::Arbitrary;
-use log::debug;
 pub use stacks::check_stacks;
 use std::cell::Cell;
 use std::rc::Rc;
@@ -26,9 +32,7 @@ use wasmtime::*;
 use wasmtime_wast::WastContext;
 
 #[cfg(not(any(windows, target_arch = "s390x")))]
-pub use self::v8::*;
-#[cfg(not(any(windows, target_arch = "s390x")))]
-mod v8;
+mod diff_v8;
 
 static CNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -240,9 +244,10 @@ fn compile_module(
             if let generators::InstanceAllocationStrategy::Pooling { .. } =
                 &config.wasmtime.strategy
             {
-                // When using the pooling allocator, accept failures to compile when arbitrary
-                // table element limits have been exceeded as there is currently no way
-                // to constrain the generated module table types.
+                // When using the pooling allocator, accept failures to compile
+                // when arbitrary table element limits have been exceeded as
+                // there is currently no way to constrain the generated module
+                // table types.
                 let string = e.to_string();
                 if string.contains("minimum element size") {
                     return None;
@@ -250,7 +255,7 @@ fn compile_module(
 
                 // Allow modules-failing-to-compile which exceed the requested
                 // size for each instance. This is something that is difficult
-                // to control and ensure it always suceeds, so we simply have a
+                // to control and ensure it always succeeds, so we simply have a
                 // "random" instance size limit and if a module doesn't fit we
                 // move on to the next fuzz input.
                 if string.contains("instance allocation for this module requires") {
@@ -263,7 +268,17 @@ fn compile_module(
     }
 }
 
-fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Option<Instance> {
+/// Create a Wasmtime [`Instance`] from a [`Module`] and fill in all imports
+/// with dummy values (e.g., zeroed values, immediately-trapping functions).
+/// Also, this function catches certain fuzz-related instantiation failures and
+/// returns `None` instead of panicking.
+///
+/// TODO: we should implement tracing versions of these dummy imports that
+/// record a trace of the order that imported functions were called in and with
+/// what values. Like the results of exported functions, calls to imports should
+/// also yield the same values for each configuration, and we should assert
+/// that.
+pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Option<Instance> {
     // Creation of imports can fail due to resource limit constraints, and then
     // instantiation can naturally fail for a number of reasons as well. Bundle
     // the two steps together to match on the error below.
@@ -279,12 +294,14 @@ fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Op
     // expected that fuzz-generated programs try to allocate lots of
     // stuff.
     if store.data().0.oom.get() {
+        log::debug!("failed to instantiate: OOM");
         return None;
     }
 
     // Allow traps which can happen normally with `unreachable` or a
     // timeout or such
-    if e.downcast_ref::<Trap>().is_some() {
+    if let Some(trap) = e.downcast_ref::<Trap>() {
+        log::debug!("failed to instantiate: {}", trap);
         return None;
     }
 
@@ -296,11 +313,13 @@ fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Op
         // rather than positional-based resolution
         || string.contains("incompatible import type")
     {
+        log::debug!("failed to instantiate: {}", string);
         return None;
     }
 
     // Also allow failures to instantiate as a result of hitting instance limits
     if string.contains("concurrent instances has been reached") {
+        log::debug!("failed to instantiate: {}", string);
         return None;
     }
 
@@ -308,134 +327,72 @@ fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Op
     panic!("failed to instantiate: {:?}", e);
 }
 
-/// Instantiate the given Wasm module with each `Config` and call all of its
-/// exports. Modulo OOM, non-canonical NaNs, and usage of Wasm features that are
-/// or aren't enabled for different configs, we should get the same results when
-/// we call the exported functions for all of our different configs.
+/// Evaluate the function identified by `name` in two different engine
+/// instances--`lhs` and `rhs`.
 ///
-/// Returns `None` if a fuzz configuration was rejected (should happen rarely).
-pub fn differential_execution(
-    wasm: &[u8],
-    module_config: &generators::ModuleConfig,
-    configs: &[generators::WasmtimeConfig],
-) -> Option<()> {
-    use std::collections::{HashMap, HashSet};
+/// # Panics
+///
+/// This will panic if the evaluation is different between engines (e.g.,
+/// results are different, hashed instance is different, one side traps, etc.).
+pub fn differential(
+    lhs: &mut dyn DiffInstance,
+    rhs: &mut WasmtimeInstance,
+    name: &str,
+    args: &[DiffValue],
+    result_tys: &[DiffValueType],
+) -> anyhow::Result<()> {
+    log::debug!("Evaluating: `{}` with {:?}", name, args);
+    let lhs_results = match lhs.evaluate(name, args, result_tys) {
+        Ok(Some(results)) => Ok(results),
+        Err(e) => Err(e),
+        // this engine couldn't execute this type signature, so discard this
+        // execution by returning success.
+        Ok(None) => return Ok(()),
+    };
+    log::debug!(" -> results on {}: {:?}", lhs.name(), &lhs_results);
 
-    // We need at least two configs.
-    if configs.len() < 2
-        // And all the configs should be unique.
-        || configs.iter().collect::<HashSet<_>>().len() != configs.len()
-    {
-        return None;
-    }
+    let rhs_results = rhs
+        .evaluate(name, args, result_tys)
+        // wasmtime should be able to invoke any signature, so unwrap this result
+        .map(|results| results.unwrap());
+    log::debug!(" -> results on {}: {:?}", rhs.name(), &rhs_results);
 
-    let mut export_func_results: HashMap<String, Result<Box<[Val]>, Trap>> = Default::default();
-    log_wasm(&wasm);
+    match (lhs_results, rhs_results) {
+        // If the evaluation succeeds, we compare the results.
+        (Ok(lhs_results), Ok(rhs_results)) => assert_eq!(lhs_results, rhs_results),
+        // Both sides failed--this is an acceptable result (e.g., both sides
+        // trap at a divide by zero). We could compare the error strings perhaps
+        // (since the `lhs` and `rhs` could be failing for different reasons)
+        // but this seems good enough for now.
+        (Err(_), Err(_)) => {}
+        // A real bug is found if only one side fails.
+        (Ok(_), Err(_)) => panic!("only the `rhs` ({}) failed for this input", rhs.name()),
+        (Err(_), Ok(_)) => panic!("only the `lhs` ({}) failed for this input", lhs.name()),
+    };
 
-    for fuzz_config in configs {
-        let fuzz_config = generators::Config {
-            module_config: module_config.clone(),
-            wasmtime: fuzz_config.clone(),
-        };
-        log::debug!("fuzz config: {:?}", fuzz_config);
-
-        let mut store = fuzz_config.to_store();
-        let module = compile_module(store.engine(), &wasm, true, &fuzz_config)?;
-
-        // TODO: we should implement tracing versions of these dummy imports
-        // that record a trace of the order that imported functions were called
-        // in and with what values. Like the results of exported functions,
-        // calls to imports should also yield the same values for each
-        // configuration, and we should assert that.
-        let instance = match instantiate_with_dummy(&mut store, &module) {
-            Some(instance) => instance,
+    for (global, ty) in rhs.exported_globals() {
+        log::debug!("Comparing global `{global}`");
+        let lhs = match lhs.get_global(&global, ty) {
+            Some(val) => val,
             None => continue,
         };
-
-        let exports = instance
-            .exports(&mut store)
-            .filter_map(|e| {
-                let name = e.name().to_string();
-                e.into_func().map(|f| (name, f))
-            })
-            .collect::<Vec<_>>();
-        for (name, f) in exports {
-            log::debug!("invoke export {:?}", name);
-            let ty = f.ty(&store);
-            let params = dummy::dummy_values(ty.params());
-            let mut results = vec![Val::I32(0); ty.results().len()];
-            let this_result = f
-                .call(&mut store, &params, &mut results)
-                .map(|()| results.into())
-                .map_err(|e| e.downcast::<Trap>().unwrap());
-
-            let existing_result = export_func_results
-                .entry(name.to_string())
-                .or_insert_with(|| this_result.clone());
-            assert_same_export_func_result(&existing_result, &this_result, &name);
-        }
+        let rhs = rhs.get_global(&global, ty).unwrap();
+        assert_eq!(lhs, rhs);
     }
-
-    return Some(());
-
-    fn assert_same_export_func_result(
-        lhs: &Result<Box<[Val]>, Trap>,
-        rhs: &Result<Box<[Val]>, Trap>,
-        func_name: &str,
-    ) {
-        let fail = || {
-            panic!(
-                "differential fuzzing failed: exported func {} returned two \
-                 different results: {:?} != {:?}",
-                func_name, lhs, rhs
-            )
+    for (memory, shared) in rhs.exported_memories() {
+        log::debug!("Comparing memory `{memory}`");
+        let lhs = match lhs.get_memory(&memory, shared) {
+            Some(val) => val,
+            None => continue,
         };
-
-        match (lhs, rhs) {
-            // Different compilation settings can lead to different amounts
-            // of stack space being consumed, so if either the lhs or the rhs
-            // hit a stack overflow then we discard the result of the other side
-            // since if it ran successfully or trapped that's ok in both
-            // situations.
-            (Err(e), _) | (_, Err(e)) if e.trap_code() == Some(TrapCode::StackOverflow) => {}
-
-            (Err(a), Err(b)) => {
-                if a.trap_code() != b.trap_code() {
-                    fail();
-                }
-            }
-            (Ok(lhs), Ok(rhs)) => {
-                if lhs.len() != rhs.len() {
-                    fail();
-                }
-                for (lhs, rhs) in lhs.iter().zip(rhs.iter()) {
-                    match (lhs, rhs) {
-                        (Val::I32(lhs), Val::I32(rhs)) if lhs == rhs => continue,
-                        (Val::I64(lhs), Val::I64(rhs)) if lhs == rhs => continue,
-                        (Val::V128(lhs), Val::V128(rhs)) if lhs == rhs => continue,
-                        (Val::F32(lhs), Val::F32(rhs)) if f32_equal(*lhs, *rhs) => continue,
-                        (Val::F64(lhs), Val::F64(rhs)) if f64_equal(*lhs, *rhs) => continue,
-                        (Val::ExternRef(_), Val::ExternRef(_))
-                        | (Val::FuncRef(_), Val::FuncRef(_)) => continue,
-                        _ => fail(),
-                    }
-                }
-            }
-            _ => fail(),
+        let rhs = rhs.get_memory(&memory, shared).unwrap();
+        if lhs == rhs {
+            continue;
         }
+        panic!("memories have differing values");
     }
-}
 
-fn f32_equal(a: u32, b: u32) -> bool {
-    let a = f32::from_bits(a);
-    let b = f32::from_bits(b);
-    a == b || (a.is_nan() && b.is_nan())
-}
-
-fn f64_equal(a: u64, b: u64) -> bool {
-    let a = f64::from_bits(a);
-    let b = f64::from_bits(b);
-    a == b || (a.is_nan() && b.is_nan())
+    Ok(())
 }
 
 /// Invoke the given API calls.
@@ -759,254 +716,6 @@ fn table_ops_eventually_gcs() {
     panic!("after {n} runs nothing ever gc'd, something is probably wrong");
 }
 
-/// Perform differential execution between Cranelift and wasmi, diffing the
-/// resulting memory image when execution terminates. This relies on the
-/// module-under-test to be instrumented to bound the execution time. Invoke
-/// with a module generated by `wasm-smith` using the
-/// `SingleFunctionModuleConfig` configuration type for best results.
-///
-/// May return `None` if we early-out due to a rejected fuzz config; these
-/// should be rare if modules are generated appropriately.
-pub fn differential_wasmi_execution(wasm: &[u8], config: &generators::Config) -> Option<()> {
-    crate::init_fuzzing();
-    log_wasm(wasm);
-
-    // Instantiate wasmi module and instance.
-    let wasmi_module = wasmi::Module::from_buffer(&wasm[..]).ok()?;
-    let wasmi_instance =
-        wasmi::ModuleInstance::new(&wasmi_module, &wasmi::ImportsBuilder::default()).ok()?;
-    let wasmi_instance = wasmi_instance.assert_no_start();
-
-    // If wasmi succeeded then we assert that wasmtime will also succeed.
-    let (wasmtime_module, mut wasmtime_store) = differential_store(wasm, config);
-    let wasmtime_module = wasmtime_module?;
-    let wasmtime_instance = Instance::new(&mut wasmtime_store, &wasmtime_module, &[])
-        .expect("Wasmtime can instantiate module");
-
-    // Introspect wasmtime module to find name of an exported function and of an
-    // exported memory.
-    let (func_name, ty) = first_exported_function(&wasmtime_module)?;
-
-    let wasmi_main_export = wasmi_instance.export_by_name(func_name).unwrap();
-    let wasmi_main = wasmi_main_export.as_func().unwrap();
-    let wasmi_val = wasmi::FuncInstance::invoke(&wasmi_main, &[], &mut wasmi::NopExternals);
-
-    let wasmtime_main = wasmtime_instance
-        .get_func(&mut wasmtime_store, func_name)
-        .expect("function export is present");
-    let mut wasmtime_results = vec![Val::I32(0); ty.results().len()];
-    let wasmtime_val = wasmtime_main
-        .call(&mut wasmtime_store, &[], &mut wasmtime_results)
-        .map(|()| wasmtime_results.get(0).cloned());
-
-    debug!(
-        "Successful execution: wasmi returned {:?}, wasmtime returned {:?}",
-        wasmi_val, wasmtime_val
-    );
-
-    match (&wasmi_val, &wasmtime_val) {
-        (&Ok(Some(wasmi::RuntimeValue::I32(a))), &Ok(Some(Val::I32(b)))) if a == b => {}
-        (&Ok(Some(wasmi::RuntimeValue::F32(a))), &Ok(Some(Val::F32(b))))
-            if f32_equal(a.to_bits(), b) => {}
-        (&Ok(Some(wasmi::RuntimeValue::I64(a))), &Ok(Some(Val::I64(b)))) if a == b => {}
-        (&Ok(Some(wasmi::RuntimeValue::F64(a))), &Ok(Some(Val::F64(b))))
-            if f64_equal(a.to_bits(), b) => {}
-        (&Ok(None), &Ok(None)) => {}
-        (&Err(_), &Err(_)) => {}
-        _ => {
-            panic!(
-                "Values do not match: wasmi returned {:?}; wasmtime returned {:?}",
-                wasmi_val, wasmtime_val
-            );
-        }
-    }
-
-    // Compare linear memories if there's an exported linear memory
-    let memory_name = match first_exported_memory(&wasmtime_module) {
-        Some(name) => name,
-        None => return Some(()),
-    };
-    let wasmi_mem_export = wasmi_instance.export_by_name(memory_name).unwrap();
-    let wasmi_mem = wasmi_mem_export.as_memory().unwrap();
-    let wasmtime_mem = wasmtime_instance
-        .get_memory(&mut wasmtime_store, memory_name)
-        .expect("memory export is present");
-
-    if wasmi_mem.current_size().0 != wasmtime_mem.size(&wasmtime_store) as usize {
-        panic!("resulting memories are not the same size");
-    }
-
-    // Wasmi memory may be stored non-contiguously; copy it out to a contiguous chunk.
-    let mut wasmi_buf: Vec<u8> = vec![0; wasmtime_mem.data_size(&wasmtime_store)];
-    wasmi_mem
-        .get_into(0, &mut wasmi_buf[..])
-        .expect("can access wasmi memory");
-
-    let wasmtime_slice = wasmtime_mem.data(&wasmtime_store);
-
-    if wasmi_buf.len() >= 64 {
-        debug!("-> First 64 bytes of wasmi heap: {:?}", &wasmi_buf[0..64]);
-        debug!(
-            "-> First 64 bytes of Wasmtime heap: {:?}",
-            &wasmtime_slice[0..64]
-        );
-    }
-
-    if &wasmi_buf[..] != &wasmtime_slice[..] {
-        panic!("memory contents are not equal");
-    }
-
-    Some(())
-}
-
-/// Perform differential execution between Wasmtime and the official WebAssembly
-/// specification interpreter.
-///
-/// May return `None` if we early-out due to a rejected fuzz config.
-#[cfg(feature = "fuzz-spec-interpreter")]
-pub fn differential_spec_execution(wasm: &[u8], config: &generators::Config) -> Option<()> {
-    use anyhow::Context;
-
-    crate::init_fuzzing();
-    debug!("config: {:#?}", config);
-    log_wasm(wasm);
-
-    // Run the spec interpreter first, then Wasmtime. The order is important
-    // because both sides (OCaml runtime and Wasmtime) register signal handlers;
-    // Wasmtime uses these signal handlers for catching various WebAssembly
-    // failures. On certain OSes (e.g. Linux x86_64), the signal handlers
-    // interfere, observable as an uncaught `SIGSEGV`--not even caught by
-    // libFuzzer. By running Wasmtime second, its signal handlers are registered
-    // most recently and they catch failures appropriately.
-    //
-    // For now, execute with dummy (zeroed) function arguments.
-    let spec_vals = wasm_spec_interpreter::interpret(wasm, None);
-    debug!("spec interpreter returned: {:?}", &spec_vals);
-
-    let (wasmtime_module, mut wasmtime_store) = differential_store(wasm, config);
-    let wasmtime_module = match wasmtime_module {
-        Some(m) => m,
-        None => return None,
-    };
-
-    let wasmtime_vals =
-        Instance::new(&mut wasmtime_store, &wasmtime_module, &[]).and_then(|wasmtime_instance| {
-            // Find the first exported function.
-            let (func_name, ty) = first_exported_function(&wasmtime_module)
-                .context("Cannot find exported function")?;
-            let wasmtime_main = wasmtime_instance
-                .get_func(&mut wasmtime_store, &func_name[..])
-                .expect("function export is present");
-
-            let dummy_params = dummy::dummy_values(ty.params());
-
-            // Execute the function and return the values.
-            let mut results = vec![Val::I32(0); ty.results().len()];
-            wasmtime_main
-                .call(&mut wasmtime_store, &dummy_params, &mut results)
-                .map(|()| Some(results))
-        });
-
-    // Match a spec interpreter value against a Wasmtime value. Eventually this
-    // should support references and `v128` (TODO).
-    fn matches(spec_val: &wasm_spec_interpreter::Value, wasmtime_val: &wasmtime::Val) -> bool {
-        match (spec_val, wasmtime_val) {
-            (wasm_spec_interpreter::Value::I32(a), wasmtime::Val::I32(b)) => a == b,
-            (wasm_spec_interpreter::Value::I64(a), wasmtime::Val::I64(b)) => a == b,
-            (wasm_spec_interpreter::Value::F32(a), wasmtime::Val::F32(b)) => {
-                f32_equal(*a as u32, *b)
-            }
-            (wasm_spec_interpreter::Value::F64(a), wasmtime::Val::F64(b)) => {
-                f64_equal(*a as u64, *b)
-            }
-            (wasm_spec_interpreter::Value::V128(a), wasmtime::Val::V128(b)) => {
-                assert_eq!(a.len(), 16);
-                let a_num = u128::from_le_bytes(a.as_slice().try_into().unwrap());
-                a_num == *b
-            }
-            (_, _) => {
-                unreachable!("TODO: only fuzzing of scalar and vector value types is supported")
-            }
-        }
-    }
-
-    match (&spec_vals, &wasmtime_vals) {
-        // Compare the returned values, failing if they do not match.
-        (Ok(spec_vals), Ok(Some(wasmtime_vals))) => {
-            let all_match = spec_vals
-                .iter()
-                .zip(wasmtime_vals)
-                .all(|(s, w)| matches(s, w));
-            if !all_match {
-                panic!(
-                    "Values do not match: spec returned {:?}; wasmtime returned {:?}",
-                    spec_vals, wasmtime_vals
-                );
-            }
-        }
-        (_, Ok(None)) => {
-            // `run_in_wasmtime` rejected the config
-            return None;
-        }
-        // If both sides fail, skip this fuzz execution.
-        (Err(spec_error), Err(wasmtime_error)) => {
-            // The `None` value returned here indicates that both sides
-            // failed--if we see too many of these we might be failing too often
-            // to check instruction semantics. At some point it would be
-            // beneficial to compare the error messages from both sides (TODO).
-            // It would also be good to keep track of statistics about the
-            // ratios of the kinds of errors the fuzzer sees (TODO).
-            log::warn!(
-                "Both sides failed: spec returned '{}'; wasmtime returned {:?}",
-                spec_error,
-                wasmtime_error
-            );
-            return None;
-        }
-        // If only one side fails, fail the fuzz the test.
-        _ => {
-            panic!(
-                "Only one side failed: spec returned {:?}; wasmtime returned {:?}",
-                &spec_vals, &wasmtime_vals
-            );
-        }
-    }
-
-    // TODO Compare memory contents.
-
-    Some(())
-}
-
-fn differential_store(
-    wasm: &[u8],
-    fuzz_config: &generators::Config,
-) -> (Option<Module>, Store<StoreLimits>) {
-    let store = fuzz_config.to_store();
-    let module = compile_module(store.engine(), wasm, true, fuzz_config);
-    (module, store)
-}
-
-// Introspect wasmtime module to find the name of the first exported function.
-fn first_exported_function(module: &wasmtime::Module) -> Option<(&str, FuncType)> {
-    for e in module.exports() {
-        match e.ty() {
-            wasmtime::ExternType::Func(ty) => return Some((e.name(), ty)),
-            _ => {}
-        }
-    }
-    None
-}
-
-fn first_exported_memory(module: &Module) -> Option<&str> {
-    for e in module.exports() {
-        match e.ty() {
-            wasmtime::ExternType::Memory(..) => return Some(e.name()),
-            _ => {}
-        }
-    }
-    None
-}
-
 #[derive(Default)]
 struct SignalOnDrop {
     state: Arc<(Mutex<bool>, Condvar)>,
@@ -1087,8 +796,10 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
 
     let case = input.arbitrary::<TestCase>()?;
 
-    let engine = component_test_util::engine();
-    let mut store = Store::new(&engine, (Box::new([]) as Box<[Val]>, None));
+    let mut config = component_test_util::config();
+    config.debug_adapter_modules(input.arbitrary()?);
+    let engine = Engine::new(&config).unwrap();
+    let mut store = Store::new(&engine, (Vec::new(), None));
     let wat = case.declarations().make_component();
     let wat = wat.as_bytes();
     log_wasm(wat);
@@ -1098,39 +809,46 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
     linker
         .root()
         .func_new(&component, IMPORT_FUNCTION, {
-            move |cx: StoreContextMut<'_, (Box<[Val]>, Option<Val>)>, args: &[Val]| -> Result<Val> {
-                log::trace!("received arguments {args:?}");
-                let (expected_args, result) = cx.data();
-                assert_eq!(args.len(), expected_args.len());
-                for (expected, actual) in expected_args.iter().zip(args) {
+            move |mut cx: StoreContextMut<'_, (Vec<Val>, Option<Vec<Val>>)>,
+                  params: &[Val],
+                  results: &mut [Val]|
+                  -> Result<()> {
+                log::trace!("received params {params:?}");
+                let (expected_args, expected_results) = cx.data_mut();
+                assert_eq!(params.len(), expected_args.len());
+                for (expected, actual) in expected_args.iter().zip(params) {
                     assert_eq!(expected, actual);
                 }
-                let result = result.as_ref().unwrap().clone();
-                log::trace!("returning result {result:?}");
-                Ok(result)
+                results.clone_from_slice(&expected_results.take().unwrap());
+                log::trace!("returning results {results:?}");
+                Ok(())
             }
         })
         .unwrap();
 
     let instance = linker.instantiate(&mut store, &component).unwrap();
     let func = instance.get_func(&mut store, EXPORT_FUNCTION).unwrap();
-    let params = func.params(&store);
-    let result = func.result(&store);
+    let param_tys = func.params(&store);
+    let result_tys = func.results(&store);
 
     while input.arbitrary()? {
-        let args = params
+        let params = param_tys
             .iter()
             .map(|ty| component_types::arbitrary_val(ty, input))
-            .collect::<arbitrary::Result<Box<[_]>>>()?;
+            .collect::<arbitrary::Result<Vec<_>>>()?;
+        let results = result_tys
+            .iter()
+            .map(|ty| component_types::arbitrary_val(ty, input))
+            .collect::<arbitrary::Result<Vec<_>>>()?;
 
-        let result = component_types::arbitrary_val(&result, input)?;
+        *store.data_mut() = (params.clone(), Some(results.clone()));
 
-        *store.data_mut() = (args.clone(), Some(result.clone()));
-
-        log::trace!("passing args {args:?}");
-        let actual = func.call_and_post_return(&mut store, &args).unwrap();
-        log::trace!("received return {actual:?}");
-        assert_eq!(actual, result);
+        log::trace!("passing params {params:?}");
+        let mut actual = vec![Val::Bool(false); results.len()];
+        func.call_and_post_return(&mut store, &params, &mut actual)
+            .unwrap();
+        log::trace!("received results {actual:?}");
+        assert_eq!(actual, results);
     }
 
     Ok(())

@@ -1,7 +1,8 @@
-use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose, ValueList};
+use crate::codegen::ir::{ArgumentExtension, ArgumentPurpose};
 use crate::config::Config;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
+use cranelift::codegen::ir::instructions::InstructionFormat;
 use cranelift::codegen::ir::{types::*, FuncRef, LibCall, UserExternalName, UserFuncName};
 use cranelift::codegen::ir::{
     AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, StackSlot, Type, Value,
@@ -24,11 +25,11 @@ fn insert_opcode(
     args: &'static [Type],
     rets: &'static [Type],
 ) -> Result<()> {
-    let mut arg_vals = ValueList::new();
+    let mut vals = Vec::with_capacity(args.len());
     for &arg in args.into_iter() {
         let var = fgen.get_variable_of_type(arg)?;
         let val = builder.use_var(var);
-        arg_vals.push(val, &mut builder.func.dfg.value_lists);
+        vals.push(val);
     }
 
     // For pretty much every instruction the control type is the return type
@@ -42,7 +43,16 @@ fn insert_opcode(
     .copied()
     .unwrap_or(INVALID);
 
-    let (inst, dfg) = builder.ins().MultiAry(opcode, ctrl_type, arg_vals);
+    // Choose the appropriate instruction format for this opcode
+    let (inst, dfg) = match opcode.format() {
+        InstructionFormat::NullAry => builder.ins().NullAry(opcode, ctrl_type),
+        InstructionFormat::Unary => builder.ins().Unary(opcode, ctrl_type, vals[0]),
+        InstructionFormat::Binary => builder.ins().Binary(opcode, ctrl_type, vals[0], vals[1]),
+        InstructionFormat::Ternary => builder
+            .ins()
+            .Ternary(opcode, ctrl_type, vals[0], vals[1], vals[2]),
+        _ => unimplemented!(),
+    };
     let results = dfg.inst_results(inst).to_vec();
 
     for (val, &ty) in results.into_iter().zip(rets) {
@@ -186,17 +196,19 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Imul, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Imul, &[I128, I128], &[I128], insert_opcode),
     // Udiv
+    // udiv.i128 not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/4756
     (Opcode::Udiv, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Udiv, &[I128, I128], &[I128], insert_opcode),
+    // (Opcode::Udiv, &[I128, I128], &[I128], insert_opcode),
     // Sdiv
+    // sdiv.i128 not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/4770
     (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
+    // (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
     // Rotr
     (Opcode::Rotr, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Rotr, &[I8, I16], &[I8], insert_opcode),
@@ -277,17 +289,16 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Ishl, &[I128, I64], &[I128], insert_opcode),
     (Opcode::Ishl, &[I128, I128], &[I128], insert_opcode),
     // Sshr
-    // Some test cases disabled due to: https://github.com/bytecodealliance/wasmtime/issues/4699
     (Opcode::Sshr, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Sshr, &[I8, I16], &[I8], insert_opcode),
     (Opcode::Sshr, &[I8, I32], &[I8], insert_opcode),
     (Opcode::Sshr, &[I8, I64], &[I8], insert_opcode),
-    // (Opcode::Sshr, &[I8, I128], &[I8], insert_opcode),
+    (Opcode::Sshr, &[I8, I128], &[I8], insert_opcode),
     (Opcode::Sshr, &[I16, I8], &[I16], insert_opcode),
     (Opcode::Sshr, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Sshr, &[I16, I32], &[I16], insert_opcode),
     (Opcode::Sshr, &[I16, I64], &[I16], insert_opcode),
-    // (Opcode::Sshr, &[I16, I128], &[I16], insert_opcode),
+    (Opcode::Sshr, &[I16, I128], &[I16], insert_opcode),
     (Opcode::Sshr, &[I32, I8], &[I32], insert_opcode),
     (Opcode::Sshr, &[I32, I16], &[I32], insert_opcode),
     (Opcode::Sshr, &[I32, I32], &[I32], insert_opcode),
@@ -304,17 +315,16 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Sshr, &[I128, I64], &[I128], insert_opcode),
     (Opcode::Sshr, &[I128, I128], &[I128], insert_opcode),
     // Ushr
-    // Some test cases disabled due to: https://github.com/bytecodealliance/wasmtime/issues/4699
     (Opcode::Ushr, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Ushr, &[I8, I16], &[I8], insert_opcode),
     (Opcode::Ushr, &[I8, I32], &[I8], insert_opcode),
     (Opcode::Ushr, &[I8, I64], &[I8], insert_opcode),
-    // (Opcode::Ushr, &[I8, I128], &[I8], insert_opcode),
+    (Opcode::Ushr, &[I8, I128], &[I8], insert_opcode),
     (Opcode::Ushr, &[I16, I8], &[I16], insert_opcode),
     (Opcode::Ushr, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Ushr, &[I16, I32], &[I16], insert_opcode),
     (Opcode::Ushr, &[I16, I64], &[I16], insert_opcode),
-    // (Opcode::Ushr, &[I16, I128], &[I16], insert_opcode),
+    (Opcode::Ushr, &[I16, I128], &[I16], insert_opcode),
     (Opcode::Ushr, &[I32, I8], &[I32], insert_opcode),
     (Opcode::Ushr, &[I32, I16], &[I32], insert_opcode),
     (Opcode::Ushr, &[I32, I32], &[I32], insert_opcode),
@@ -455,6 +465,16 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Call, &[], &[], insert_call),
 ];
 
+/// These libcalls need a interpreter implementation in `cranelift-fuzzgen.rs`
+const ALLOWED_LIBCALLS: &'static [LibCall] = &[
+    LibCall::CeilF32,
+    LibCall::CeilF64,
+    LibCall::FloorF32,
+    LibCall::FloorF64,
+    LibCall::TruncF32,
+    LibCall::TruncF64,
+];
+
 pub struct FunctionGenerator<'r, 'data>
 where
     'data: 'r,
@@ -494,6 +514,12 @@ where
     fn generate_callconv(&mut self) -> Result<CallConv> {
         // TODO: Generate random CallConvs per target
         Ok(CallConv::SystemV)
+    }
+
+    fn system_callconv(&mut self) -> CallConv {
+        // TODO: This currently only runs on linux, so this is the only choice
+        // We should improve this once we generate flags and targets
+        CallConv::SystemV
     }
 
     fn generate_type(&mut self) -> Result<Type> {
@@ -823,12 +849,11 @@ where
                 let signature = self.generate_signature()?;
                 (name, signature)
             } else {
-                // Use udivi64 as an example of a libcall function.
-                let mut signature = Signature::new(CallConv::Fast);
-                signature.params.push(AbiParam::new(I64));
-                signature.params.push(AbiParam::new(I64));
-                signature.returns.push(AbiParam::new(I64));
-                (ExternalName::LibCall(LibCall::UdivI64), signature)
+                let libcall = *self.u.choose(ALLOWED_LIBCALLS)?;
+                // TODO: Use [CallConv::for_libcall] once we generate flags.
+                let callconv = self.system_callconv();
+                let signature = libcall.signature(callconv);
+                (ExternalName::LibCall(libcall), signature)
             };
 
             let sig_ref = builder.import_signature(sig.clone());
@@ -970,7 +995,8 @@ where
         let sig = self.generate_signature()?;
 
         let mut fn_builder_ctx = FunctionBuilderContext::new();
-        let mut func = Function::with_name_signature(UserFuncName::user(0, 1), sig.clone());
+        // function name must be in a different namespace than TESTFILE_NAMESPACE (0)
+        let mut func = Function::with_name_signature(UserFuncName::user(1, 0), sig.clone());
 
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
 

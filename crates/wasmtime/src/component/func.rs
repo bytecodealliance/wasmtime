@@ -1,4 +1,5 @@
 use crate::component::instance::{Instance, InstanceData};
+use crate::component::storage::storage_as_slice;
 use crate::component::types::Type;
 use crate::component::values::Val;
 use crate::store::{StoreOpaque, Stored};
@@ -37,15 +38,20 @@ use wasmtime_runtime::{Export, ExportFunction, VMTrampoline};
 #[doc(hidden)]
 #[macro_export]
 macro_rules! map_maybe_uninit {
-    ($maybe_uninit:ident $($field:tt)*) => (#[allow(unused_unsafe)] unsafe {
-        use $crate::component::__internal::MaybeUninitExt;
+    ($maybe_uninit:ident $($field:tt)*) => ({
+        #[allow(unused_unsafe)]
+        {
+            unsafe {
+                use $crate::component::__internal::MaybeUninitExt;
 
-        let m: &mut std::mem::MaybeUninit<_> = $maybe_uninit;
-        // Note the usage of `addr_of_mut!` here which is an attempt to "stay
-        // safe" here where we never accidentally create `&mut T` where `T` is
-        // actually uninitialized, hopefully appeasing the Rust unsafe
-        // guidelines gods.
-        m.map(|p| std::ptr::addr_of_mut!((*p)$($field)*))
+                let m: &mut std::mem::MaybeUninit<_> = $maybe_uninit;
+                // Note the usage of `addr_of_mut!` here which is an attempt to "stay
+                // safe" here where we never accidentally create `&mut T` where `T` is
+                // actually uninitialized, hopefully appeasing the Rust unsafe
+                // guidelines gods.
+                m.map(|p| std::ptr::addr_of_mut!((*p)$($field)*))
+            }
+        }
     })
 }
 
@@ -192,8 +198,8 @@ impl Func {
     /// # use wasmtime::component::Func;
     /// # use wasmtime::Store;
     /// # fn foo(func: &Func, mut store: Store<()>) -> anyhow::Result<()> {
-    /// let typed = func.typed::<(&str,), String, _>(&store)?;
-    /// let ret = typed.call(&mut store, ("Hello, ",))?;
+    /// let typed = func.typed::<(&str,), (String,), _>(&store)?;
+    /// let ret = typed.call(&mut store, ("Hello, ",))?.0;
     /// println!("returned string was: {}", ret);
     /// # Ok(())
     /// # }
@@ -205,16 +211,16 @@ impl Func {
     /// # use wasmtime::component::Func;
     /// # use wasmtime::Store;
     /// # fn foo(func: &Func, mut store: Store<()>) -> anyhow::Result<()> {
-    /// let typed = func.typed::<(u32, Option<&str>, &[u8]), bool, _>(&store)?;
-    /// let ok: bool = typed.call(&mut store, (1, Some("hello"), b"bytes!"))?;
+    /// let typed = func.typed::<(u32, Option<&str>, &[u8]), (bool,), _>(&store)?;
+    /// let ok: bool = typed.call(&mut store, (1, Some("hello"), b"bytes!"))?.0;
     /// println!("return value was: {ok}");
     /// # Ok(())
     /// # }
     /// ```
     pub fn typed<Params, Return, S>(&self, store: S) -> Result<TypedFunc<Params, Return>>
     where
-        Params: ComponentParams + Lower,
-        Return: Lift,
+        Params: ComponentNamedList + Lower,
+        Return: ComponentNamedList + Lift,
         S: AsContext,
     {
         self._typed(store.as_context().0)
@@ -225,8 +231,8 @@ impl Func {
         store: &StoreOpaque,
     ) -> Result<TypedFunc<Params, Return>>
     where
-        Params: ComponentParams + Lower,
-        Return: Lift,
+        Params: ComponentNamedList + Lower,
+        Return: ComponentNamedList + Lift,
     {
         self.typecheck::<Params, Return>(store)?;
         unsafe { Ok(TypedFunc::new_unchecked(*self)) }
@@ -234,15 +240,16 @@ impl Func {
 
     fn typecheck<Params, Return>(&self, store: &StoreOpaque) -> Result<()>
     where
-        Params: ComponentParams + Lower,
-        Return: Lift,
+        Params: ComponentNamedList + Lower,
+        Return: ComponentNamedList + Lift,
     {
         let data = &store[self.0];
         let ty = &data.types[data.ty];
 
-        Params::typecheck_params(&ty.params, &data.types)
+        Params::typecheck_named_list(&ty.params, &data.types)
             .context("type mismatch with parameters")?;
-        Return::typecheck(&ty.result, &data.types).context("type mismatch with result")?;
+        Return::typecheck_named_list(&ty.results, &data.types)
+            .context("type mismatch with results")?;
 
         Ok(())
     }
@@ -257,10 +264,14 @@ impl Func {
             .collect()
     }
 
-    /// Get the result type for this function.
-    pub fn result(&self, store: impl AsContext) -> Type {
+    /// Get the result types for this function.
+    pub fn results(&self, store: impl AsContext) -> Box<[Type]> {
         let data = &store.as_context()[self.0];
-        Type::from(&data.types[data.ty].result, &data.types)
+        data.types[data.ty]
+            .results
+            .iter()
+            .map(|(_, ty)| Type::from(ty, &data.types))
+            .collect()
     }
 
     /// Invokes this function with the `params` given and returns the result.
@@ -268,66 +279,71 @@ impl Func {
     /// The `params` here must match the type signature of this `Func`, or this will return an error. If a trap
     /// occurs while executing this function, then an error will also be returned.
     // TODO: say more -- most of the docs for `TypedFunc::call` apply here, too
-    pub fn call(&self, mut store: impl AsContextMut, args: &[Val]) -> Result<Val> {
+    pub fn call(
+        &self,
+        mut store: impl AsContextMut,
+        params: &[Val],
+        results: &mut [Val],
+    ) -> Result<()> {
         let store = &mut store.as_context_mut();
 
-        let params;
-        let result;
+        let param_tys = self.params(&store);
+        let result_tys = self.results(&store);
 
-        {
-            let data = &store[self.0];
-            let ty = &data.types[data.ty];
-
-            if ty.params.len() != args.len() {
-                bail!(
-                    "expected {} argument(s), got {}",
-                    ty.params.len(),
-                    args.len()
-                );
-            }
-
-            params = ty
-                .params
-                .iter()
-                .zip(args)
-                .map(|((_, ty), arg)| {
-                    let ty = Type::from(ty, &data.types);
-
-                    ty.check(arg).context("type mismatch with parameters")?;
-
-                    Ok(ty)
-                })
-                .collect::<Result<Vec<_>>>()?;
-
-            result = Type::from(&ty.result, &data.types);
+        if param_tys.len() != params.len() {
+            bail!(
+                "expected {} argument(s), got {}",
+                param_tys.len(),
+                params.len()
+            );
+        }
+        if result_tys.len() != results.len() {
+            bail!(
+                "expected {} results(s), got {}",
+                result_tys.len(),
+                results.len()
+            );
         }
 
-        let param_abi = CanonicalAbiInfo::record(params.iter().map(|t| t.canonical_abi()));
-        let result_count = result.canonical_abi().flat_count(MAX_FLAT_RESULTS);
+        for (param, ty) in params.iter().zip(param_tys.iter()) {
+            ty.check(param).context("type mismatch with parameters")?;
+        }
+
+        let param_abi = CanonicalAbiInfo::record(param_tys.iter().map(|t| t.canonical_abi()));
+        let result_abi = CanonicalAbiInfo::record(result_tys.iter().map(|t| t.canonical_abi()));
 
         self.call_raw(
             store,
-            args,
-            |store, options, args, dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>| {
-                if param_abi.flat_count(MAX_FLAT_PARAMS).is_none() {
-                    self.store_args(store, &options, &param_abi, &params, args, dst)
-                } else {
-                    dst.write([ValRaw::u64(0); MAX_FLAT_PARAMS]);
-
+            params,
+            |store, options, params, dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>| {
+                if param_abi.flat_count(MAX_FLAT_PARAMS).is_some() {
                     let dst = &mut unsafe {
                         mem::transmute::<_, &mut [MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>(dst)
                     }
                     .iter_mut();
 
-                    args.iter()
-                        .try_for_each(|arg| arg.lower(store, &options, dst))
+                    params
+                        .iter()
+                        .try_for_each(|param| param.lower(store, &options, dst))
+                } else {
+                    self.store_args(store, &options, &param_abi, &param_tys, params, dst)
                 }
             },
             |store, options, src: &[ValRaw; MAX_FLAT_RESULTS]| {
-                if result_count.is_none() {
-                    Self::load_result(&Memory::new(store, &options), &result, &mut src.iter())
+                if result_abi.flat_count(MAX_FLAT_RESULTS).is_some() {
+                    let mut flat = src.iter();
+                    for (ty, slot) in result_tys.iter().zip(results) {
+                        *slot = Val::lift(ty, store, &options, &mut flat)?;
+                    }
+                    Ok(())
                 } else {
-                    Val::lift(&result, store, &options, &mut src.iter())
+                    Self::load_results(
+                        &Memory::new(store, &options),
+                        &result_abi,
+                        &result_tys,
+                        results,
+                        &mut src.iter(),
+                    )
                 }
             },
         )
@@ -438,7 +454,7 @@ impl Func {
             // later get used in post-return.
             flags.set_needs_post_return(true);
             let val = lift(store.0, &options, ret)?;
-            let ret_slice = cast_storage(ret);
+            let ret_slice = storage_as_slice(ret);
             let data = &mut store.0[self.0];
             assert!(data.post_return_arg.is_none());
             match ret_slice.len() {
@@ -447,16 +463,6 @@ impl Func {
                 _ => unreachable!(),
             }
             return Ok(val);
-        }
-
-        unsafe fn cast_storage<T>(storage: &T) -> &[ValRaw] {
-            assert!(std::mem::size_of_val(storage) % std::mem::size_of::<ValRaw>() == 0);
-            assert!(std::mem::align_of_val(storage) == std::mem::align_of::<ValRaw>());
-
-            std::slice::from_raw_parts(
-                (storage as *const T).cast(),
-                mem::size_of_val(storage) / mem::size_of::<ValRaw>(),
-            )
         }
     }
 
@@ -573,12 +579,13 @@ impl Func {
         Ok(())
     }
 
-    fn load_result<'a>(
+    fn load_results<'a>(
         mem: &Memory,
-        ty: &Type,
+        abi: &CanonicalAbiInfo,
+        result_tys: &[Type],
+        results: &mut [Val],
         src: &mut std::slice::Iter<'_, ValRaw>,
-    ) -> Result<Val> {
-        let abi = ty.canonical_abi();
+    ) -> Result<()> {
         // FIXME: needs to read an i64 for memory64
         let ptr = usize::try_from(src.next().unwrap().get_u32())?;
         if ptr % usize::try_from(abi.align32)? != 0 {
@@ -591,6 +598,12 @@ impl Func {
             .and_then(|b| b.get(..usize::try_from(abi.size32).unwrap()))
             .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
 
-        Val::load(ty, mem, bytes)
+        let mut offset = 0;
+        for (ty, slot) in result_tys.iter().zip(results) {
+            let abi = ty.canonical_abi();
+            let offset = abi.next_field32_size(&mut offset);
+            *slot = Val::load(ty, mem, &bytes[offset..][..abi.size32 as usize])?;
+        }
+        Ok(())
     }
 }

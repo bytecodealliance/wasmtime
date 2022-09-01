@@ -7,13 +7,14 @@ use std::cell::Cell;
 use target_lexicon::Triple;
 
 pub use super::MachLabel;
+pub use crate::data_value::DataValue;
 pub use crate::ir::{
-    ArgumentExtension, Constant, DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate,
-    SigRef, StackSlot,
+    dynamic_to_fixed, ArgumentExtension, Constant, DynamicStackSlot, ExternalName, FuncRef,
+    GlobalValue, Immediate, SigRef, StackSlot,
 };
 pub use crate::isa::unwind::UnwindInst;
 pub use crate::machinst::{
-    ABIArg, ABIArgSlot, ABISig, InputSourceInst, Lower, RealReg, Reg, RelocDistance, VCodeInst,
+    ABIArg, ABIArgSlot, InputSourceInst, Lower, RealReg, Reg, RelocDistance, Sig, VCodeInst,
     Writable,
 };
 pub use crate::settings::TlsModel;
@@ -24,6 +25,7 @@ pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 pub type WritableReg = Writable<Reg>;
 pub type VecReg = Vec<Reg>;
+pub type VecMask = Vec<u8>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
 pub type WritableValueRegs = crate::machinst::ValueRegs<WritableReg>;
 pub type InstOutput = SmallVec<[ValueRegs; 2]>;
@@ -297,6 +299,24 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_32(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 32 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_64(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 64 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn ty_32_or_64(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() == 32 || ty.bits() == 64 {
                 Some(ty)
@@ -352,10 +372,54 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_int_bool(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_int() || ty.is_bool() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn ty_scalar_float(&mut self, ty: Type) -> Option<Type> {
             match ty {
                 F32 | F64 => Some(ty),
                 _ => None,
+            }
+        }
+
+        #[inline]
+        fn ty_float_or_vec(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                F32 | F64 => Some(ty),
+                ty if ty.is_vector() => Some(ty),
+                _ => None,
+            }
+        }
+
+        fn ty_vector_float(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() && ty.lane_type().is_float() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_vector_not_float(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() && !ty.lane_type().is_float() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_vec64_ctor(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() && ty.bits() == 64 {
+                Some(ty)
+            } else {
+                None
             }
         }
 
@@ -371,6 +435,24 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn ty_vec128(&mut self, ty: Type) -> Option<Type> {
             if ty.is_vector() && ty.bits() == 128 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_dyn_vec64(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_dynamic_vector() && dynamic_to_fixed(ty).bits() == 64 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_dyn_vec128(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_dynamic_vector() && dynamic_to_fixed(ty).bits() == 128 {
                 Some(ty)
             } else {
                 None
@@ -645,6 +727,24 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn tls_model_is_macho(&mut self) -> Option<()> {
+            if self.flags.tls_model() == TlsModel::Macho {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn tls_model_is_coff(&mut self) -> Option<()> {
+            if self.flags.tls_model() == TlsModel::Coff {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn func_ref_data(&mut self, func_ref: FuncRef) -> (SigRef, ExternalName, RelocDistance) {
             let funcdata = &self.lower_ctx.dfg().ext_funcs[func_ref];
             (
@@ -681,6 +781,22 @@ macro_rules! isle_prelude_methods {
         fn u128_from_immediate(&mut self, imm: Immediate) -> Option<u128> {
             let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
             Some(u128::from_le_bytes(bytes.try_into().ok()?))
+        }
+
+        #[inline]
+        fn vec_mask_from_immediate(&mut self, imm: Immediate) -> Option<VecMask> {
+            let data = self.lower_ctx.get_immediate_data(imm);
+            if data.len() == 16 {
+                Some(Vec::from(data.as_slice()))
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn u64_from_constant(&mut self, constant: Constant) -> Option<u64> {
+            let bytes = self.lower_ctx.get_constant_data(constant).as_slice();
+            Some(u64::from_le_bytes(bytes.try_into().ok()?))
         }
 
         #[inline]
@@ -768,6 +884,20 @@ macro_rules! isle_prelude_methods {
             self.lower_ctx.use_constant(data)
         }
 
+        #[inline]
+        fn emit_u128_le_const(&mut self, value: u128) -> VCodeConstant {
+            let data = VCodeConstantData::Generated(value.to_le_bytes().as_slice().into());
+            self.lower_ctx.use_constant(data)
+        }
+
+        #[inline]
+        fn const_to_vconst(&mut self, constant: Constant) -> VCodeConstant {
+            self.lower_ctx.use_constant(VCodeConstantData::Pool(
+                constant,
+                self.lower_ctx.get_constant_data(constant).clone(),
+            ))
+        }
+
         fn range(&mut self, start: usize, end: usize) -> Range {
             (start, end)
         }
@@ -808,40 +938,40 @@ macro_rules! isle_prelude_methods {
             regs.regs()[idx]
         }
 
-        fn abi_num_args(&mut self, abi: &ABISig) -> usize {
-            abi.num_args()
+        fn abi_num_args(&mut self, abi: &Sig) -> usize {
+            self.lower_ctx.sigs()[*abi].num_args()
         }
 
-        fn abi_get_arg(&mut self, abi: &ABISig, idx: usize) -> ABIArg {
-            abi.get_arg(idx)
+        fn abi_get_arg(&mut self, abi: &Sig, idx: usize) -> ABIArg {
+            self.lower_ctx.sigs()[*abi].get_arg(idx)
         }
 
-        fn abi_num_rets(&mut self, abi: &ABISig) -> usize {
-            abi.num_rets()
+        fn abi_num_rets(&mut self, abi: &Sig) -> usize {
+            self.lower_ctx.sigs()[*abi].num_rets()
         }
 
-        fn abi_get_ret(&mut self, abi: &ABISig, idx: usize) -> ABIArg {
-            abi.get_ret(idx)
+        fn abi_get_ret(&mut self, abi: &Sig, idx: usize) -> ABIArg {
+            self.lower_ctx.sigs()[*abi].get_ret(idx)
         }
 
-        fn abi_ret_arg(&mut self, abi: &ABISig) -> Option<ABIArg> {
-            abi.get_ret_arg()
+        fn abi_ret_arg(&mut self, abi: &Sig) -> Option<ABIArg> {
+            self.lower_ctx.sigs()[*abi].get_ret_arg()
         }
 
-        fn abi_no_ret_arg(&mut self, abi: &ABISig) -> Option<()> {
-            if let Some(_) = abi.get_ret_arg() {
+        fn abi_no_ret_arg(&mut self, abi: &Sig) -> Option<()> {
+            if let Some(_) = self.lower_ctx.sigs()[*abi].get_ret_arg() {
                 None
             } else {
                 Some(())
             }
         }
 
-        fn abi_sized_stack_arg_space(&mut self, abi: &ABISig) -> i64 {
-            abi.sized_stack_arg_space()
+        fn abi_sized_stack_arg_space(&mut self, abi: &Sig) -> i64 {
+            self.lower_ctx.sigs()[*abi].sized_stack_arg_space()
         }
 
-        fn abi_sized_stack_ret_space(&mut self, abi: &ABISig) -> i64 {
-            abi.sized_stack_ret_space()
+        fn abi_sized_stack_ret_space(&mut self, abi: &Sig) -> i64 {
+            self.lower_ctx.sigs()[*abi].sized_stack_ret_space()
         }
 
         fn abi_arg_only_slot(&mut self, arg: &ABIArg) -> Option<ABIArgSlot> {
@@ -943,6 +1073,148 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn preg_to_reg(&mut self, preg: PReg) -> Reg {
             preg.into()
+        }
+
+        #[inline]
+        fn gen_move(&mut self, ty: Type, dst: WritableReg, src: Reg) -> MInst {
+            MInst::gen_move(dst, src, ty)
+        }
+    };
+}
+
+/// Helpers specifically for machines that use ABICaller.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! isle_prelude_caller_methods {
+    ($abispec:ty, $abicaller:ty) => {
+        fn gen_call(
+            &mut self,
+            sig_ref: SigRef,
+            extname: ExternalName,
+            dist: RelocDistance,
+            args @ (inputs, off): ValueSlice,
+        ) -> InstOutput {
+            let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
+            let sig = &self.lower_ctx.dfg().signatures[sig_ref];
+            let num_rets = sig.returns.len();
+            let abi = self.lower_ctx.sigs().abi_sig_for_sig_ref(sig_ref);
+            let caller = <$abicaller>::from_func(
+                self.lower_ctx.sigs(),
+                sig_ref,
+                &extname,
+                dist,
+                caller_conv,
+                self.flags.clone(),
+            )
+            .unwrap();
+
+            assert_eq!(
+                inputs.len(&self.lower_ctx.dfg().value_lists) - off,
+                sig.params.len()
+            );
+
+            self.gen_call_common(abi, num_rets, caller, args)
+        }
+
+        fn gen_call_indirect(
+            &mut self,
+            sig_ref: SigRef,
+            val: Value,
+            args @ (inputs, off): ValueSlice,
+        ) -> InstOutput {
+            let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
+            let ptr = self.put_in_reg(val);
+            let sig = &self.lower_ctx.dfg().signatures[sig_ref];
+            let num_rets = sig.returns.len();
+            let abi = self.lower_ctx.sigs().abi_sig_for_sig_ref(sig_ref);
+            let caller = <$abicaller>::from_ptr(
+                self.lower_ctx.sigs(),
+                sig_ref,
+                ptr,
+                Opcode::CallIndirect,
+                caller_conv,
+                self.flags.clone(),
+            )
+            .unwrap();
+
+            assert_eq!(
+                inputs.len(&self.lower_ctx.dfg().value_lists) - off,
+                sig.params.len()
+            );
+
+            self.gen_call_common(abi, num_rets, caller, args)
+        }
+    };
+}
+
+/// Helpers for the above ISLE prelude implementations. Meant to go
+/// inside the `impl` for the context type, not the trait impl.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! isle_prelude_method_helpers {
+    ($abicaller:ty) => {
+        fn gen_call_common(
+            &mut self,
+            abi: Sig,
+            num_rets: usize,
+            mut caller: $abicaller,
+            (inputs, off): ValueSlice,
+        ) -> InstOutput {
+            caller.emit_stack_pre_adjust(self.lower_ctx);
+
+            let num_args = self.lower_ctx.sigs()[abi].num_args();
+
+            assert_eq!(
+                inputs.len(&self.lower_ctx.dfg().value_lists) - off,
+                num_args
+            );
+            let mut arg_regs = vec![];
+            for i in 0..num_args {
+                let input = inputs
+                    .get(off + i, &self.lower_ctx.dfg().value_lists)
+                    .unwrap();
+                arg_regs.push(self.lower_ctx.put_value_in_regs(input));
+            }
+            for (i, arg_regs) in arg_regs.iter().enumerate() {
+                caller.emit_copy_regs_to_buffer(self.lower_ctx, i, *arg_regs);
+            }
+            for (i, arg_regs) in arg_regs.iter().enumerate() {
+                for inst in caller.gen_copy_regs_to_arg(self.lower_ctx, i, *arg_regs) {
+                    self.lower_ctx.emit(inst);
+                }
+            }
+            caller.emit_call(self.lower_ctx);
+
+            let mut outputs = InstOutput::new();
+            for i in 0..num_rets {
+                let ret = self.lower_ctx.sigs()[abi].get_ret(i);
+                let retval_regs = self.abi_arg_slot_regs(&ret).unwrap();
+                for inst in caller.gen_copy_retval_to_regs(self.lower_ctx, i, retval_regs.clone()) {
+                    self.lower_ctx.emit(inst);
+                }
+                outputs.push(valueregs::non_writable_value_regs(retval_regs));
+            }
+            caller.emit_stack_post_adjust(self.lower_ctx);
+
+            outputs
+        }
+
+        fn abi_arg_slot_regs(&mut self, arg: &ABIArg) -> Option<WritableValueRegs> {
+            match arg {
+                &ABIArg::Slots { ref slots, .. } => match slots.len() {
+                    1 => {
+                        let a = self.temp_writable_reg(slots[0].get_type());
+                        Some(WritableValueRegs::one(a))
+                    }
+                    2 => {
+                        let a = self.temp_writable_reg(slots[0].get_type());
+                        let b = self.temp_writable_reg(slots[1].get_type());
+                        Some(WritableValueRegs::two(a, b))
+                    }
+                    _ => panic!("Expected to see one or two slots only from {:?}", arg),
+                },
+                _ => None,
+            }
         }
     };
 }

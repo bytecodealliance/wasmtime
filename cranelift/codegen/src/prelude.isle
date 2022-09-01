@@ -35,6 +35,9 @@
 ;; ISLE representation of `&[Value]`.
 (type ValueSlice (primitive ValueSlice))
 
+;; ISLE representation of `Vec<u8>`
+(type VecMask extern (enum))
+
 (type ValueList (primitive ValueList))
 (type ValueRegs (primitive ValueRegs))
 (type WritableValueRegs (primitive WritableValueRegs))
@@ -325,6 +328,14 @@
 (decl fits_in_64 (Type) Type)
 (extern extractor fits_in_64 fits_in_64)
 
+;; An extractor that only matches types that fit in exactly 32 bits.
+(decl ty_32 (Type) Type)
+(extern extractor ty_32 ty_32)
+
+;; An extractor that only matches types that fit in exactly 64 bits.
+(decl ty_64 (Type) Type)
+(extern extractor ty_64 ty_64)
+
 ;; A pure constructor that only matches scalar booleans, integers, and
 ;; references that can fit in 64 bits.
 (decl pure ty_int_bool_ref_scalar_64 (Type) Type)
@@ -354,6 +365,10 @@
 (decl ty_int_bool_128 (Type) Type)
 (extern extractor ty_int_bool_128 ty_int_bool_128)
 
+;; An extractor that matches any int or bool.
+(decl ty_int_bool (Type) Type)
+(extern extractor ty_int_bool ty_int_bool)
+
 ;; An extractor that only matches integers.
 (decl ty_int (Type) Type)
 (extern extractor ty_int ty_int)
@@ -362,13 +377,37 @@
 (decl ty_scalar_float (Type) Type)
 (extern extractor ty_scalar_float ty_scalar_float)
 
-;; A pure constructor that only matches 64-bit vector types.
+;; An extractor that matches scalar floating-point types or vector types.
+(decl ty_float_or_vec (Type) Type)
+(extern extractor ty_float_or_vec ty_float_or_vec)
+
+;; A pure constructor that only matches vector floating-point types.
+(decl pure ty_vector_float (Type) Type)
+(extern constructor ty_vector_float ty_vector_float)
+
+;; A pure constructor that only matches vector types with lanes which
+;; are not floating-point.
+(decl pure ty_vector_not_float (Type) Type)
+(extern constructor ty_vector_not_float ty_vector_not_float)
+
+;; A pure constructor/extractor that only matches 64-bit vector types.
 (decl pure ty_vec64 (Type) Type)
-(extern constructor ty_vec64 ty_vec64)
+(extern constructor ty_vec64 ty_vec64_ctor)
+(extern extractor ty_vec64 ty_vec64)
 
 ;; An extractor that only matches 128-bit vector types.
 (decl ty_vec128 (Type) Type)
 (extern extractor ty_vec128 ty_vec128)
+
+;; An extractor that only matches dynamic vector types with a 64-bit
+;; base type.
+(decl ty_dyn_vec64 (Type) Type)
+(extern extractor ty_dyn_vec64 ty_dyn_vec64)
+
+;; An extractor that only matches dynamic vector types with a 128-bit
+;; base type.
+(decl ty_dyn_vec128 (Type) Type)
+(extern extractor ty_dyn_vec128 ty_dyn_vec128)
 
 ;; An extractor that only matches 64-bit vector types with integer
 ;; lanes (I8X8, I16X4, I32X2)
@@ -558,6 +597,16 @@
 ;; side-effecting but idempotent (constants are deduplicated).
 (decl emit_u64_le_const (u64) VCodeConstant)
 (extern constructor emit_u64_le_const emit_u64_le_const)
+
+;; Add a u128 little-endian constant to the in-memory constant pool and
+;; return a VCodeConstant index that refers to it. This is
+;; side-effecting but idempotent (constants are deduplicated).
+(decl emit_u128_le_const (u128) VCodeConstant)
+(extern constructor emit_u128_le_const emit_u128_le_const)
+
+;; Fetch the VCodeConstant associated with a Constant.
+(decl const_to_vconst (Constant) VCodeConstant)
+(extern constructor const_to_vconst const_to_vconst)
 
 ;;;; Helpers for Side-Effectful Instructions Without Results ;;;;;;;;;;;;;;;;;;;
 
@@ -769,6 +818,12 @@
 (decl pure tls_model_is_elf_gd () Unit)
 (extern constructor tls_model_is_elf_gd tls_model_is_elf_gd)
 
+(decl pure tls_model_is_macho () Unit)
+(extern constructor tls_model_is_macho tls_model_is_macho)
+
+(decl pure tls_model_is_coff () Unit)
+(extern constructor tls_model_is_coff tls_model_is_coff)
+
 ;;;; Helpers for accessing instruction data ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Accessor for `FuncRef`.
@@ -794,11 +849,20 @@
 (decl u128_from_immediate (u128) Immediate)
 (extern extractor u128_from_immediate u128_from_immediate)
 
+;; Accessor for `Immediate` as a vector of u8 values.
+
+(decl vec_mask_from_immediate (VecMask) Immediate)
+(extern extractor vec_mask_from_immediate vec_mask_from_immediate)
+
 ;; Accessor for `Constant` as u128.
 
 (decl u128_from_constant (u128) Constant)
 (extern extractor u128_from_constant u128_from_constant)
 
+;; Accessor for `Constant` as u64.
+
+(decl u64_from_constant (u64) Constant)
+(extern extractor u64_from_constant u64_from_constant)
 
 ;;;; Helpers for tail recursion loops ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -840,7 +904,7 @@
 ;;;; Helpers for generating calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Type to hold information about a function call signature.
-(type ABISig extern (enum))
+(type Sig extern (enum))
 
 ;; Information how to pass one argument or return value.
 (type ABIArg extern (enum))
@@ -870,36 +934,36 @@
 ))
 
 ;; Get the number of arguments expected.
-(decl abi_num_args (ABISig) usize)
+(decl abi_num_args (Sig) usize)
 (extern constructor abi_num_args abi_num_args)
 
 ;; Get information specifying how to pass one argument.
-(decl abi_get_arg (ABISig usize) ABIArg)
+(decl abi_get_arg (Sig usize) ABIArg)
 (extern constructor abi_get_arg abi_get_arg)
 
 ;; Get the number of return values expected.
-(decl abi_num_rets (ABISig) usize)
+(decl abi_num_rets (Sig) usize)
 (extern constructor abi_num_rets abi_num_rets)
 
 ;; Get information specifying how to pass one return value.
-(decl abi_get_ret (ABISig usize) ABIArg)
+(decl abi_get_ret (Sig usize) ABIArg)
 (extern constructor abi_get_ret abi_get_ret)
 
 ;; Get information specifying how to pass the implicit pointer
 ;; to the return-value area on the stack, if required.
-(decl abi_ret_arg (ABIArg) ABISig)
+(decl abi_ret_arg (ABIArg) Sig)
 (extern extractor abi_ret_arg abi_ret_arg)
 
 ;; Succeeds if no implicit return-value area pointer is required.
-(decl abi_no_ret_arg () ABISig)
+(decl abi_no_ret_arg () Sig)
 (extern extractor abi_no_ret_arg abi_no_ret_arg)
 
 ;; Size of the argument area.
-(decl abi_sized_stack_arg_space (ABISig) i64)
+(decl abi_sized_stack_arg_space (Sig) i64)
 (extern constructor abi_sized_stack_arg_space abi_sized_stack_arg_space)
 
 ;; Size of the return-value area.
-(decl abi_sized_stack_ret_space (ABISig) i64)
+(decl abi_sized_stack_ret_space (Sig) i64)
 (extern constructor abi_sized_stack_ret_space abi_sized_stack_ret_space)
 
 ;; StackSlot addr
@@ -932,6 +996,37 @@
 ;; Convert a real register number into a writable virtual register.
 (decl real_reg_to_writable_reg (RealReg) WritableReg)
 (extern constructor real_reg_to_writable_reg real_reg_to_writable_reg)
+
+;; Generate a move between two registers.
+(decl gen_move (Type WritableReg Reg) MInst)
+(extern constructor gen_move gen_move)
+
+;; Copy a return value to a set of registers.
+(decl copy_to_regs (WritableValueRegs Value) Unit)
+(rule (copy_to_regs dsts val @ (value_type ty))
+      (let ((srcs ValueRegs (put_in_regs val)))
+        (copy_to_regs_range ty (value_regs_range srcs) dsts srcs)))
+
+;; Helper for `copy_to_regs` that uses a range to index into the reg/value
+;; vectors. Fails for the empty range.
+(decl copy_to_regs_range (Type Range WritableValueRegs ValueRegs) Unit)
+
+(rule (copy_to_regs_range ty (range_singleton idx) dsts srcs)
+      (let ((dst WritableReg (writable_regs_get dsts idx))
+            (src Reg (value_regs_get srcs idx)))
+        (emit (gen_move ty dst src))))
+
+(rule (copy_to_regs_range ty (range_unwrap head tail) dsts srcs)
+      (let ((dst WritableReg (writable_regs_get dsts head))
+            (src Reg (value_regs_get srcs head))
+            (_ Unit (emit (gen_move ty dst src))))
+        (copy_to_regs_range ty tail dsts srcs)))
+
+(decl lower_return (Range ValueSlice) InstOutput)
+(rule (lower_return (range_empty) _) (output_none))
+(rule (lower_return (range_unwrap head tail) args)
+      (let ((_ Unit (copy_to_regs (retval head) (value_slice_get args head))))
+        (lower_return tail args)))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

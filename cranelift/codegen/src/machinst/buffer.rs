@@ -468,7 +468,11 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// Align up to the given alignment.
     pub fn align_to(&mut self, align_to: CodeOffset) {
         trace!("MachBuffer: align to {}", align_to);
-        assert!(align_to.is_power_of_two());
+        assert!(
+            align_to.is_power_of_two(),
+            "{} is not a power of two",
+            align_to
+        );
         while self.cur_offset() & (align_to - 1) != 0 {
             self.put1(0);
         }
@@ -1620,7 +1624,7 @@ impl<I: VCodeInst> MachTextSectionBuilder<I> {
 }
 
 impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
-    fn append(&mut self, named: bool, func: &[u8], align: Option<u32>) -> u64 {
+    fn append(&mut self, named: bool, func: &[u8], align: u32) -> u64 {
         // Conditionally emit an island if it's necessary to resolve jumps
         // between functions which are too far away.
         let size = func.len() as u32;
@@ -1628,7 +1632,7 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
             self.buf.emit_island_maybe_forced(self.force_veneers, size);
         }
 
-        self.buf.align_to(align.unwrap_or(I::LabelUse::ALIGN));
+        self.buf.align_to(align);
         let pos = self.buf.cur_offset();
         if named {
             self.buf

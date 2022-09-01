@@ -73,8 +73,6 @@ pub mod blockorder;
 pub use blockorder::*;
 pub mod abi;
 pub use abi::*;
-pub mod abi_impl;
-pub use abi_impl::*;
 pub mod buffer;
 pub use buffer::*;
 pub mod helpers;
@@ -302,6 +300,9 @@ pub struct CompiledCodeBase<T: CompilePhase> {
     /// This info is generated only if the `machine_code_cfg_info`
     /// flag is set.
     pub bb_edges: Vec<(CodeOffset, CodeOffset)>,
+    /// Minimum alignment for the function, derived from the use of any
+    /// pc-relative loads.
+    pub alignment: u32,
 }
 
 impl CompiledCodeStencil {
@@ -316,6 +317,7 @@ impl CompiledCodeStencil {
             dynamic_stackslot_offsets: self.dynamic_stackslot_offsets,
             bb_starts: self.bb_starts,
             bb_edges: self.bb_edges,
+            alignment: self.alignment,
         }
     }
 }
@@ -357,7 +359,7 @@ pub trait TextSectionBuilder {
     ///
     /// This function returns the offset at which the data was placed in the
     /// text section.
-    fn append(&mut self, labeled: bool, data: &[u8], align: Option<u32>) -> u64;
+    fn append(&mut self, labeled: bool, data: &[u8], align: u32) -> u64;
 
     /// Attempts to resolve a relocation for this function.
     ///

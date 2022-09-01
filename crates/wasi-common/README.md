@@ -32,14 +32,7 @@ Please note that the library requires Rust compiler version at least 1.37.0.
 
 ### *nix
 In our *nix implementation, we currently support the entire [WASI API]
-with the exception of socket hostcalls:
-- `sock_recv`
-- `sock_send`
-- `sock_shutdown`
-
-We expect these to be implemented when network access is standardised.
-
-We also currently do not support the `proc_raise` hostcall, as it is expected to
+with the exception of the `proc_raise` hostcall, as it is expected to
 be dropped entirely from WASI.
 
 [WASI API]: https://github.com/WebAssembly/WASI/blob/master/phases/snapshot/docs.md

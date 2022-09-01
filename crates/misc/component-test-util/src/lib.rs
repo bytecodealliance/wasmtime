@@ -4,7 +4,7 @@ use std::mem::MaybeUninit;
 use wasmtime::component::__internal::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, Memory, MemoryMut, Options, StoreOpaque,
 };
-use wasmtime::component::{ComponentParams, ComponentType, Func, Lift, Lower, TypedFunc, Val};
+use wasmtime::component::{ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, Val};
 use wasmtime::{AsContextMut, Config, Engine, StoreContextMut};
 
 pub trait TypedFuncExt<P, R> {
@@ -13,8 +13,8 @@ pub trait TypedFuncExt<P, R> {
 
 impl<P, R> TypedFuncExt<P, R> for TypedFunc<P, R>
 where
-    P: ComponentParams + Lower,
-    R: Lift,
+    P: ComponentNamedList + Lower,
+    R: ComponentNamedList + Lift,
 {
     fn call_and_post_return(&self, mut store: impl AsContextMut, params: P) -> Result<R> {
         let result = self.call(&mut store, params)?;
@@ -24,14 +24,24 @@ where
 }
 
 pub trait FuncExt {
-    fn call_and_post_return(&self, store: impl AsContextMut, args: &[Val]) -> Result<Val>;
+    fn call_and_post_return(
+        &self,
+        store: impl AsContextMut,
+        params: &[Val],
+        results: &mut [Val],
+    ) -> Result<()>;
 }
 
 impl FuncExt for Func {
-    fn call_and_post_return(&self, mut store: impl AsContextMut, args: &[Val]) -> Result<Val> {
-        let result = self.call(&mut store, args)?;
+    fn call_and_post_return(
+        &self,
+        mut store: impl AsContextMut,
+        params: &[Val],
+        results: &mut [Val],
+    ) -> Result<()> {
+        self.call(&mut store, params, results)?;
         self.post_return(&mut store)?;
-        Ok(result)
+        Ok(())
     }
 }
 

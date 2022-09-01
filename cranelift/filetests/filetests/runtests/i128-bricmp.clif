@@ -232,17 +232,3 @@ block2:
 ; run: %i128_bricmp_uge(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == false
 ; run: %i128_bricmp_uge(0xC0FFEEEE_C0FFEEEE_00000000_00000000, 0xDECAFFFF_DECAFFFF_00000000_00000000) == false
 ; run: %i128_bricmp_uge(0xDECAFFFF_DECAFFFF_00000000_00000000, 0xC0FFEEEE_C0FFEEEE_00000000_00000000) == true
-
-function %i128_bricmp_of(i128, i128) -> b1 {
-block0(v0: i128,v1: i128):
-    br_icmp.i128 of v0, v1, block2
-    jump block1
-
-block1:
-    v2 = bconst.b1 false
-    return v2
-
-block2:
-    v3 = bconst.b1 true
-    return v3
-}

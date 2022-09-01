@@ -1,0 +1,24 @@
+test interpret
+test run
+set enable_llvm_abi_extensions=true
+target x86_64
+target aarch64
+target aarch64 sign_return_address
+target aarch64 has_pauth sign_return_address
+target s390x
+
+
+function %callee_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = iadd_imm.i128 v0, 10
+    return v1
+}
+
+function %call_i128(i128) -> i128 {
+    fn0 = %callee_i128(i128) -> i128
+
+block0(v0: i128):
+    v1 = call fn0(v0)
+    return v1
+}
+; run: %call_i128(10) == 20

@@ -4,7 +4,7 @@ use crate::utils::{iterate_files, read_to_string};
 use anyhow::Result;
 use clap::Parser;
 use cranelift_codegen::isa::{CallConv, TargetIsa};
-use cranelift_filetests::SingleFunctionCompiler;
+use cranelift_filetests::TestFileCompiler;
 use cranelift_native::builder as host_isa_builder;
 use cranelift_reader::{parse_run_command, parse_test, Details, IsaSpec, ParseOptions};
 use std::path::{Path, PathBuf};
@@ -85,13 +85,18 @@ fn run_file_contents(file_contents: String) -> Result<()> {
         ..ParseOptions::default()
     };
     let test_file = parse_test(&file_contents, options)?;
+    let isa = create_target_isa(&test_file.isa_spec)?;
+    let mut tfc = TestFileCompiler::new(isa);
+    tfc.add_testfile(&test_file)?;
+    let compiled = tfc.compile()?;
+
     for (func, Details { comments, .. }) in test_file.functions {
         for comment in comments {
             if let Some(command) = parse_run_command(comment.text, &func.signature)? {
-                let isa = create_target_isa(&test_file.isa_spec)?;
-                let compiled_fn = SingleFunctionCompiler::new(isa).compile(func.clone())?;
+                let trampoline = compiled.get_trampoline(&func).unwrap();
+
                 command
-                    .run(|_, args| Ok(compiled_fn.call(args)))
+                    .run(|_, args| Ok(trampoline.call(args)))
                     .map_err(|s| anyhow::anyhow!("{}", s))?;
             }
         }

@@ -94,10 +94,10 @@
 (component
   (type $roundtrip (func
     ;; 20 u32 params
-    (param u32) (param u32) (param u32) (param u32) (param u32)
-    (param u32) (param u32) (param u32) (param u32) (param u32)
-    (param u32) (param u32) (param u32) (param u32) (param u32)
-    (param u32) (param u32) (param u32) (param u32) (param u32)
+    (param "a1" u32) (param "a2" u32) (param "a3" u32) (param "a4" u32) (param "a5" u32)
+    (param "a6" u32) (param "a7" u32) (param "a8" u32) (param "a9" u32) (param "a10" u32)
+    (param "a11" u32) (param "a12" u32) (param "a13" u32) (param "a14" u32) (param "a15" u32)
+    (param "a16" u32) (param "a17" u32) (param "a18" u32) (param "a19" u32) (param "a20" u32)
 
     ;; 10 u32 results
     (result (tuple u32 u32 u32 u32 u32 u32 u32 u32 u32 u32))
@@ -717,8 +717,8 @@
 
 ;; simple variant translation
 (component
-  (type $a (variant (case "x" unit)))
-  (type $b (variant (case "y" unit)))
+  (type $a (variant (case "x")))
+  (type $b (variant (case "y")))
 
   (component $c1
     (core module $m
@@ -756,7 +756,7 @@
 ;; invalid variant discriminant in a parameter
 (assert_trap
   (component
-    (type $a (variant (case "x" unit)))
+    (type $a (variant (case "x")))
 
     (component $c1
       (core module $m
@@ -789,7 +789,7 @@
 ;; invalid variant discriminant in a result
 (assert_trap
   (component
-    (type $a (variant (case "x" unit)))
+    (type $a (variant (case "x")))
 
     (component $c1
       (core module $m
@@ -889,6 +889,12 @@
   (type $d (variant (case "a" float32) (case "b" float64)))
   (type $e (variant (case "a" float32) (case "b" s64)))
 
+  (type $func_a (func (param "x" bool) (param "a" $a)))
+  (type $func_b (func (param "x" bool) (param "b" $b)))
+  (type $func_c (func (param "x" bool) (param "c" $c)))
+  (type $func_d (func (param "x" bool) (param "d" $d)))
+  (type $func_e (func (param "x" bool) (param "e" $d)))
+
   (component $c1
     (core module $m
       (func (export "a") (param i32 i32 i32)
@@ -943,19 +949,19 @@
       )
     )
     (core instance $m (instantiate $m))
-    (func (export "a") (param bool) (param $a) (canon lift (core func $m "a")))
-    (func (export "b") (param bool) (param $b) (canon lift (core func $m "b")))
-    (func (export "c") (param bool) (param $c) (canon lift (core func $m "c")))
-    (func (export "d") (param bool) (param $d) (canon lift (core func $m "d")))
-    (func (export "e") (param bool) (param $e) (canon lift (core func $m "e")))
+    (func (export "a") (type $func_a) (canon lift (core func $m "a")))
+    (func (export "b") (type $func_b) (canon lift (core func $m "b")))
+    (func (export "c") (type $func_c) (canon lift (core func $m "c")))
+    (func (export "d") (type $func_d) (canon lift (core func $m "d")))
+    (func (export "e") (type $func_e) (canon lift (core func $m "e")))
   )
   (component $c2
     (import "" (instance $i
-      (export "a" (func (param bool) (param $a)))
-      (export "b" (func (param bool) (param $b)))
-      (export "c" (func (param bool) (param $c)))
-      (export "d" (func (param bool) (param $d)))
-      (export "e" (func (param bool) (param $e)))
+      (export "a" (func (type $func_a)))
+      (export "b" (func (type $func_b)))
+      (export "c" (func (type $func_c)))
+      (export "d" (func (type $func_d)))
+      (export "e" (func (type $func_e)))
     ))
 
     (core func $a (canon lower (func $i "a")))
@@ -1008,10 +1014,10 @@
 ;; different size variants
 (component
   (type $a (variant
-    (case "a" unit)
+    (case "a")
     (case "b" float32)
     (case "c" (tuple float32 u32))
-    (case "d" (tuple float32 unit u64 u8))
+    (case "d" (tuple float32 (record)  u64 u8))
   ))
 
   (component $c1
@@ -1054,11 +1060,11 @@
       )
     )
     (core instance $m (instantiate $m))
-    (func (export "a") (param u8) (param $a) (canon lift (core func $m "a")))
+    (func (export "a") (param "x" u8) (param "a" $a) (canon lift (core func $m "a")))
   )
   (component $c2
     (import "" (instance $i
-      (export "a" (func (param u8) (param $a)))
+      (export "a" (func (param "x" u8) (param "a" $a)))
     ))
 
     (core func $a (canon lower (func $i "a")))
@@ -1157,9 +1163,9 @@
   (export "roundtrip" (func $c2 "roundtrip"))
 )
 
-(assert_return (invoke "roundtrip" (char.const "x")) (unit.const))
-(assert_return (invoke "roundtrip" (char.const "⛳")) (unit.const))
-(assert_return (invoke "roundtrip" (char.const "🍰")) (unit.const))
+(assert_return (invoke "roundtrip" (char.const "x")))
+(assert_return (invoke "roundtrip" (char.const "⛳")))
+(assert_return (invoke "roundtrip" (char.const "🍰")))
 
 ;; invalid chars
 (assert_trap

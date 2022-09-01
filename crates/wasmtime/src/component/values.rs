@@ -180,12 +180,12 @@ impl fmt::Debug for Tuple {
 pub struct Variant {
     ty: types::Variant,
     discriminant: u32,
-    value: Box<Val>,
+    value: Option<Box<Val>>,
 }
 
 impl Variant {
     /// Instantiate the specified type with the specified case `name` and `value`.
-    pub fn new(ty: &types::Variant, name: &str, value: Val) -> Result<Self> {
+    pub fn new(ty: &types::Variant, name: &str, value: Option<Val>) -> Result<Self> {
         let (discriminant, case_type) = ty
             .cases()
             .enumerate()
@@ -198,14 +198,12 @@ impl Variant {
             })
             .ok_or_else(|| anyhow!("unknown variant case: {name}"))?;
 
-        case_type
-            .check(&value)
-            .with_context(|| format!("type mismatch for case {name} of variant"))?;
+        typecheck_payload(name, case_type.as_ref(), value.as_ref())?;
 
         Ok(Self {
             ty: ty.clone(),
             discriminant: u32::try_from(discriminant)?,
-            value: Box::new(value),
+            value: value.map(Box::new),
         })
     }
 
@@ -224,15 +222,26 @@ impl Variant {
     }
 
     /// Returns the payload value for this variant.
-    pub fn payload(&self) -> &Val {
-        &self.value
+    pub fn payload(&self) -> Option<&Val> {
+        self.value.as_deref()
+    }
+}
+
+fn typecheck_payload(name: &str, case_type: Option<&Type>, value: Option<&Val>) -> Result<()> {
+    match (case_type, value) {
+        (Some(expected), Some(actual)) => expected
+            .check(&actual)
+            .with_context(|| format!("type mismatch for case {name} of variant")),
+        (None, None) => Ok(()),
+        (Some(_), None) => bail!("expected a payload for case `{name}`"),
+        (None, Some(_)) => bail!("did not expect payload for case `{name}`"),
     }
 }
 
 impl fmt::Debug for Variant {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple(self.discriminant())
-            .field(self.payload())
+            .field(&self.payload())
             .finish()
     }
 }
@@ -279,7 +288,7 @@ impl fmt::Debug for Enum {
 pub struct Union {
     ty: types::Union,
     discriminant: u32,
-    value: Box<Val>,
+    value: Option<Box<Val>>,
 }
 
 impl Union {
@@ -293,7 +302,7 @@ impl Union {
             Ok(Self {
                 ty: ty.clone(),
                 discriminant,
-                value: Box::new(value),
+                value: Some(Box::new(value)),
             })
         } else {
             Err(anyhow!(
@@ -315,7 +324,7 @@ impl Union {
 
     /// Returns the payload value for this union.
     pub fn payload(&self) -> &Val {
-        &self.value
+        self.value.as_ref().unwrap()
     }
 }
 
@@ -328,15 +337,15 @@ impl fmt::Debug for Union {
 }
 
 #[derive(PartialEq, Eq, Clone)]
-pub struct Option {
-    ty: types::Option,
+pub struct OptionVal {
+    ty: types::OptionType,
     discriminant: u32,
-    value: Box<Val>,
+    value: Option<Box<Val>>,
 }
 
-impl Option {
+impl OptionVal {
     /// Instantiate the specified type with the specified `value`.
-    pub fn new(ty: &types::Option, value: std::option::Option<Val>) -> Result<Self> {
+    pub fn new(ty: &types::OptionType, value: Option<Val>) -> Result<Self> {
         let value = value
             .map(|value| {
                 ty.ty().check(&value).context("type mismatch for option")?;
@@ -348,77 +357,69 @@ impl Option {
         Ok(Self {
             ty: ty.clone(),
             discriminant: if value.is_none() { 0 } else { 1 },
-            value: Box::new(value.unwrap_or(Val::Unit)),
+            value: value.map(Box::new),
         })
     }
 
     /// Returns the type of this value.
-    pub fn ty(&self) -> &types::Option {
+    pub fn ty(&self) -> &types::OptionType {
         &self.ty
     }
 
     /// Returns the optional value contained within.
-    pub fn value(&self) -> std::option::Option<&Val> {
-        if self.discriminant == 0 {
-            None
-        } else {
-            Some(&self.value)
-        }
+    pub fn value(&self) -> Option<&Val> {
+        self.value.as_deref()
     }
 }
 
-impl fmt::Debug for Option {
+impl fmt::Debug for OptionVal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.value().fmt(f)
     }
 }
 
 #[derive(PartialEq, Eq, Clone)]
-pub struct Expected {
-    ty: types::Expected,
+pub struct ResultVal {
+    ty: types::ResultType,
     discriminant: u32,
-    value: Box<Val>,
+    value: Option<Box<Val>>,
 }
 
-impl Expected {
+impl ResultVal {
     /// Instantiate the specified type with the specified `value`.
-    pub fn new(ty: &types::Expected, value: Result<Val, Val>) -> Result<Self> {
+    pub fn new(ty: &types::ResultType, value: Result<Option<Val>, Option<Val>>) -> Result<Self> {
         Ok(Self {
             ty: ty.clone(),
             discriminant: if value.is_ok() { 0 } else { 1 },
-            value: Box::new(match value {
+            value: match value {
                 Ok(value) => {
-                    ty.ok()
-                        .check(&value)
-                        .context("type mismatch for ok case of expected")?;
-                    value
+                    typecheck_payload("ok", ty.ok().as_ref(), value.as_ref())?;
+                    value.map(Box::new)
                 }
                 Err(value) => {
-                    ty.err()
-                        .check(&value)
-                        .context("type mismatch for err case of expected")?;
-                    value
+                    typecheck_payload("err", ty.err().as_ref(), value.as_ref())?;
+                    value.map(Box::new)
                 }
-            }),
+            },
         })
     }
 
     /// Returns the type of this value.
-    pub fn ty(&self) -> &types::Expected {
+    pub fn ty(&self) -> &types::ResultType {
         &self.ty
     }
 
     /// Returns the result value contained within.
-    pub fn value(&self) -> Result<&Val, &Val> {
+    pub fn value(&self) -> Result<Option<&Val>, Option<&Val>> {
         if self.discriminant == 0 {
-            Ok(&self.value)
+            Ok(self.value.as_deref())
         } else {
-            Err(&self.value)
+            Err(self.value.as_deref())
         }
     }
 }
 
-impl fmt::Debug for Expected {
+impl fmt::Debug for ResultVal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.value().fmt(f)
     }
@@ -487,52 +488,29 @@ impl fmt::Debug for Flags {
 
 /// Represents possible runtime values which a component function can either consume or produce
 #[derive(Debug, PartialEq, Eq, Clone)]
+#[allow(missing_docs)]
 pub enum Val {
-    /// Unit
-    Unit,
-    /// Boolean
     Bool(bool),
-    /// Signed 8-bit integer
     S8(i8),
-    /// Unsigned 8-bit integer
     U8(u8),
-    /// Signed 16-bit integer
     S16(i16),
-    /// Unsigned 16-bit integer
     U16(u16),
-    /// Signed 32-bit integer
     S32(i32),
-    /// Unsigned 32-bit integer
     U32(u32),
-    /// Signed 64-bit integer
     S64(i64),
-    /// Unsigned 64-bit integer
     U64(u64),
-    /// 32-bit floating point value
     Float32(u32),
-    /// 64-bit floating point value
     Float64(u64),
-    /// 32-bit character
     Char(char),
-    /// Character string
     String(Box<str>),
-    /// List of values
     List(List),
-    /// Record
     Record(Record),
-    /// Tuple
     Tuple(Tuple),
-    /// Variant
     Variant(Variant),
-    /// Enum
     Enum(Enum),
-    /// Union
     Union(Union),
-    /// Option
-    Option(Option),
-    /// Expected
-    Expected(Expected),
-    /// Bit flags
+    Option(OptionVal),
+    Result(ResultVal),
     Flags(Flags),
 }
 
@@ -540,7 +518,6 @@ impl Val {
     /// Retrieve the [`Type`] of this value.
     pub fn ty(&self) -> Type {
         match self {
-            Val::Unit => Type::Unit,
             Val::Bool(_) => Type::Bool,
             Val::S8(_) => Type::S8,
             Val::U8(_) => Type::U8,
@@ -560,8 +537,8 @@ impl Val {
             Val::Variant(Variant { ty, .. }) => Type::Variant(ty.clone()),
             Val::Enum(Enum { ty, .. }) => Type::Enum(ty.clone()),
             Val::Union(Union { ty, .. }) => Type::Union(ty.clone()),
-            Val::Option(Option { ty, .. }) => Type::Option(ty.clone()),
-            Val::Expected(Expected { ty, .. }) => Type::Expected(ty.clone()),
+            Val::Option(OptionVal { ty, .. }) => Type::Option(ty.clone()),
+            Val::Result(ResultVal { ty, .. }) => Type::Result(ty.clone()),
             Val::Flags(Flags { ty, .. }) => Type::Flags(ty.clone()),
         }
     }
@@ -574,7 +551,6 @@ impl Val {
         src: &mut std::slice::Iter<'_, ValRaw>,
     ) -> Result<Val> {
         Ok(match ty {
-            Type::Unit => Val::Unit,
             Type::Bool => Val::Bool(bool::lift(store, options, next(src))?),
             Type::S8 => Val::S8(i8::lift(store, options, next(src))?),
             Type::U8 => Val::U8(u8::lift(store, options, next(src))?),
@@ -622,13 +598,13 @@ impl Val {
                 Val::Variant(Variant {
                     ty: handle.clone(),
                     discriminant,
-                    value: Box::new(value),
+                    value,
                 })
             }
             Type::Enum(handle) => {
                 let (discriminant, _) = lift_variant(
                     handle.canonical_abi().flat_count(usize::MAX).unwrap(),
-                    handle.names().map(|_| Type::Unit),
+                    handle.names().map(|_| None),
                     store,
                     options,
                     src,
@@ -642,7 +618,7 @@ impl Val {
             Type::Union(handle) => {
                 let (discriminant, value) = lift_variant(
                     handle.canonical_abi().flat_count(usize::MAX).unwrap(),
-                    handle.types(),
+                    handle.types().map(Some),
                     store,
                     options,
                     src,
@@ -651,25 +627,25 @@ impl Val {
                 Val::Union(Union {
                     ty: handle.clone(),
                     discriminant,
-                    value: Box::new(value),
+                    value,
                 })
             }
             Type::Option(handle) => {
                 let (discriminant, value) = lift_variant(
                     handle.canonical_abi().flat_count(usize::MAX).unwrap(),
-                    [Type::Unit, handle.ty()].into_iter(),
+                    [None, Some(handle.ty())].into_iter(),
                     store,
                     options,
                     src,
                 )?;
 
-                Val::Option(Option {
+                Val::Option(OptionVal {
                     ty: handle.clone(),
                     discriminant,
-                    value: Box::new(value),
+                    value,
                 })
             }
-            Type::Expected(handle) => {
+            Type::Result(handle) => {
                 let (discriminant, value) = lift_variant(
                     handle.canonical_abi().flat_count(usize::MAX).unwrap(),
                     [handle.ok(), handle.err()].into_iter(),
@@ -678,10 +654,10 @@ impl Val {
                     src,
                 )?;
 
-                Val::Expected(Expected {
+                Val::Result(ResultVal {
                     ty: handle.clone(),
                     discriminant,
-                    value: Box::new(value),
+                    value,
                 })
             }
             Type::Flags(handle) => {
@@ -703,7 +679,6 @@ impl Val {
     /// Deserialize a value of this type from the heap.
     pub(crate) fn load(ty: &Type, mem: &Memory, bytes: &[u8]) -> Result<Val> {
         Ok(match ty {
-            Type::Unit => Val::Unit,
             Type::Bool => Val::Bool(bool::load(mem, bytes)?),
             Type::S8 => Val::S8(i8::load(mem, bytes)?),
             Type::U8 => Val::U8(u8::load(mem, bytes)?),
@@ -742,13 +717,13 @@ impl Val {
                 Val::Variant(Variant {
                     ty: handle.clone(),
                     discriminant,
-                    value: Box::new(value),
+                    value,
                 })
             }
             Type::Enum(handle) => {
                 let (discriminant, _) = load_variant(
                     handle.variant_info(),
-                    handle.names().map(|_| Type::Unit),
+                    handle.names().map(|_| None),
                     mem,
                     bytes,
                 )?;
@@ -760,29 +735,29 @@ impl Val {
             }
             Type::Union(handle) => {
                 let (discriminant, value) =
-                    load_variant(handle.variant_info(), handle.types(), mem, bytes)?;
+                    load_variant(handle.variant_info(), handle.types().map(Some), mem, bytes)?;
 
                 Val::Union(Union {
                     ty: handle.clone(),
                     discriminant,
-                    value: Box::new(value),
+                    value,
                 })
             }
             Type::Option(handle) => {
                 let (discriminant, value) = load_variant(
                     handle.variant_info(),
-                    [Type::Unit, handle.ty()].into_iter(),
+                    [None, Some(handle.ty())].into_iter(),
                     mem,
                     bytes,
                 )?;
 
-                Val::Option(Option {
+                Val::Option(OptionVal {
                     ty: handle.clone(),
                     discriminant,
-                    value: Box::new(value),
+                    value,
                 })
             }
-            Type::Expected(handle) => {
+            Type::Result(handle) => {
                 let (discriminant, value) = load_variant(
                     handle.variant_info(),
                     [handle.ok(), handle.err()].into_iter(),
@@ -790,10 +765,10 @@ impl Val {
                     bytes,
                 )?;
 
-                Val::Expected(Expected {
+                Val::Result(ResultVal {
                     ty: handle.clone(),
                     discriminant,
-                    value: Box::new(value),
+                    value,
                 })
             }
             Type::Flags(handle) => Val::Flags(Flags {
@@ -819,7 +794,6 @@ impl Val {
         dst: &mut std::slice::IterMut<'_, MaybeUninit<ValRaw>>,
     ) -> Result<()> {
         match self {
-            Val::Unit => (),
             Val::Bool(value) => value.lower(store, options, next_mut(dst))?,
             Val::S8(value) => value.lower(store, options, next_mut(dst))?,
             Val::U8(value) => value.lower(store, options, next_mut(dst))?,
@@ -863,22 +837,31 @@ impl Val {
                 value,
                 ..
             })
-            | Val::Option(Option {
+            | Val::Option(OptionVal {
                 discriminant,
                 value,
                 ..
             })
-            | Val::Expected(Expected {
+            | Val::Result(ResultVal {
                 discriminant,
                 value,
                 ..
             }) => {
                 next_mut(dst).write(ValRaw::u32(*discriminant));
-                value.lower(store, options, dst)?;
-                let value_flat = value.ty().canonical_abi().flat_count(usize::MAX).unwrap();
+
+                // For the remaining lowered representation of this variant that
+                // the payload didn't write we write out zeros here to ensure
+                // the entire variant is written.
+                let value_flat = match value {
+                    Some(value) => {
+                        value.lower(store, options, dst)?;
+                        value.ty().canonical_abi().flat_count(usize::MAX).unwrap()
+                    }
+                    None => 0,
+                };
                 let variant_flat = self.ty().canonical_abi().flat_count(usize::MAX).unwrap();
                 for _ in (1 + value_flat)..variant_flat {
-                    next_mut(dst).write(ValRaw::u32(0));
+                    next_mut(dst).write(ValRaw::u64(0));
                 }
             }
             Val::Enum(Enum { discriminant, .. }) => {
@@ -899,7 +882,6 @@ impl Val {
         debug_assert!(offset % usize::try_from(self.ty().canonical_abi().align32)? == 0);
 
         match self {
-            Val::Unit => (),
             Val::Bool(value) => value.store(mem, offset)?,
             Val::S8(value) => value.store(mem, offset)?,
             Val::U8(value) => value.store(mem, offset)?,
@@ -932,29 +914,53 @@ impl Val {
                 discriminant,
                 value,
                 ty,
-            }) => self.store_variant(*discriminant, value, ty.variant_info(), mem, offset)?,
+            }) => self.store_variant(
+                *discriminant,
+                value.as_deref(),
+                ty.variant_info(),
+                mem,
+                offset,
+            )?,
 
             Val::Enum(Enum { discriminant, ty }) => {
-                self.store_variant(*discriminant, &Val::Unit, ty.variant_info(), mem, offset)?
+                self.store_variant(*discriminant, None, ty.variant_info(), mem, offset)?
             }
 
             Val::Union(Union {
                 discriminant,
                 value,
                 ty,
-            }) => self.store_variant(*discriminant, value, ty.variant_info(), mem, offset)?,
+            }) => self.store_variant(
+                *discriminant,
+                value.as_deref(),
+                ty.variant_info(),
+                mem,
+                offset,
+            )?,
 
-            Val::Option(Option {
+            Val::Option(OptionVal {
                 discriminant,
                 value,
                 ty,
-            }) => self.store_variant(*discriminant, value, ty.variant_info(), mem, offset)?,
+            }) => self.store_variant(
+                *discriminant,
+                value.as_deref(),
+                ty.variant_info(),
+                mem,
+                offset,
+            )?,
 
-            Val::Expected(Expected {
+            Val::Result(ResultVal {
                 discriminant,
                 value,
                 ty,
-            }) => self.store_variant(*discriminant, value, ty.variant_info(), mem, offset)?,
+            }) => self.store_variant(
+                *discriminant,
+                value.as_deref(),
+                ty.variant_info(),
+                mem,
+                offset,
+            )?,
 
             Val::Flags(Flags { count, value, .. }) => {
                 match FlagsSize::from_count(*count as usize) {
@@ -978,7 +984,7 @@ impl Val {
     fn store_variant<T>(
         &self,
         discriminant: u32,
-        value: &Val,
+        value: Option<&Val>,
         info: &VariantInfo,
         mem: &mut MemoryMut<'_, T>,
         offset: usize,
@@ -989,8 +995,12 @@ impl Val {
             DiscriminantSize::Size4 => discriminant.store(mem, offset)?,
         }
 
-        let offset = offset + usize::try_from(info.payload_offset32).unwrap();
-        value.store(mem, offset)
+        if let Some(value) = value {
+            let offset = offset + usize::try_from(info.payload_offset32).unwrap();
+            value.store(mem, offset)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -1044,10 +1054,10 @@ fn load_record(
 
 fn load_variant(
     info: &VariantInfo,
-    mut types: impl ExactSizeIterator<Item = Type>,
+    mut types: impl ExactSizeIterator<Item = Option<Type>>,
     mem: &Memory,
     bytes: &[u8],
-) -> Result<(u32, Val)> {
+) -> Result<(u32, Option<Box<Val>>)> {
     let discriminant = match info.size {
         DiscriminantSize::Size1 => u32::from(u8::load(mem, &bytes[..1])?),
         DiscriminantSize::Size2 => u32::from(u16::load(mem, &bytes[..2])?),
@@ -1060,26 +1070,40 @@ fn load_variant(
             types.len()
         )
     })?;
-    let payload_offset = usize::try_from(info.payload_offset32).unwrap();
-    let case_size = usize::try_from(case_ty.canonical_abi().size32).unwrap();
-    let value = Val::load(&case_ty, mem, &bytes[payload_offset..][..case_size])?;
+    let value = match case_ty {
+        Some(case_ty) => {
+            let payload_offset = usize::try_from(info.payload_offset32).unwrap();
+            let case_size = usize::try_from(case_ty.canonical_abi().size32).unwrap();
+            Some(Box::new(Val::load(
+                &case_ty,
+                mem,
+                &bytes[payload_offset..][..case_size],
+            )?))
+        }
+        None => None,
+    };
     Ok((discriminant, value))
 }
 
 fn lift_variant<'a>(
     flatten_count: usize,
-    mut types: impl ExactSizeIterator<Item = Type>,
+    mut types: impl ExactSizeIterator<Item = Option<Type>>,
     store: &StoreOpaque,
     options: &Options,
     src: &mut std::slice::Iter<'_, ValRaw>,
-) -> Result<(u32, Val)> {
+) -> Result<(u32, Option<Box<Val>>)> {
     let len = types.len();
     let discriminant = next(src).get_u32();
     let ty = types
         .nth(discriminant as usize)
         .ok_or_else(|| anyhow!("discriminant {} out of range [0..{})", discriminant, len))?;
-    let value = Val::lift(&ty, store, options, src)?;
-    let value_flat = ty.canonical_abi().flat_count(usize::MAX).unwrap();
+    let (value, value_flat) = match ty {
+        Some(ty) => (
+            Some(Box::new(Val::lift(&ty, store, options, src)?)),
+            ty.canonical_abi().flat_count(usize::MAX).unwrap(),
+        ),
+        None => (None, 0),
+    };
     for _ in (1 + value_flat)..flatten_count {
         next(src);
     }

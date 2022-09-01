@@ -618,7 +618,7 @@ impl Expander for LowerExpander {
 
             if ty.is_some() {
                 pattern = quote!(Self::#ident(value));
-                lower = quote!(value.lower(store, options, #internal::map_maybe_uninit!(dst.payload.#ident)));
+                lower = quote!(value.lower(store, options, dst));
                 store = quote!(value.store(
                     memory,
                     offset + <Self as #internal::ComponentVariant>::PAYLOAD_OFFSET32,
@@ -630,8 +630,14 @@ impl Expander for LowerExpander {
             }
 
             lowers.extend(quote!(#pattern => {
-                #internal::map_maybe_uninit!(dst.tag).write(wasmtime::ValRaw::i32(#index_u32 as i32));
-                #lower
+                #internal::map_maybe_uninit!(dst.tag).write(wasmtime::ValRaw::u32(#index_u32));
+                unsafe {
+                    #internal::lower_payload(
+                        #internal::map_maybe_uninit!(dst.payload),
+                        |payload| #internal::map_maybe_uninit!(payload.#ident),
+                        |dst| #lower,
+                    )
+                }
             }));
 
             stores.extend(quote!(#pattern => {
@@ -652,13 +658,6 @@ impl Expander for LowerExpander {
                     options: &#internal::Options,
                     dst: &mut std::mem::MaybeUninit<Self::Lower>,
                 ) -> #internal::anyhow::Result<()> {
-                    // See comment in <Result<T, E> as Lower>::lower for why we zero out the payload here
-                    unsafe {
-                        #internal::map_maybe_uninit!(dst.payload)
-                            .as_mut_ptr()
-                            .write_bytes(0u8, 1);
-                    }
-
                     match self {
                         #lowers
                     }
@@ -754,11 +753,11 @@ impl Expander for ComponentTypeExpander {
             let name = rename.unwrap_or_else(|| Literal::string(&ident.to_string()));
 
             if let Some(ty) = ty {
-                abi_list.extend(quote!(<#ty as wasmtime::component::ComponentType>::ABI,));
+                abi_list.extend(quote!(Some(<#ty as wasmtime::component::ComponentType>::ABI),));
 
                 case_names_and_checks.extend(match style {
                     VariantStyle::Variant => {
-                        quote!((#name, <#ty as wasmtime::component::ComponentType>::typecheck),)
+                        quote!((#name, Some(<#ty as wasmtime::component::ComponentType>::typecheck)),)
                     }
                     VariantStyle::Union => {
                         quote!(<#ty as wasmtime::component::ComponentType>::typecheck,)
@@ -781,21 +780,18 @@ impl Expander for ComponentTypeExpander {
 
                 unique_types.insert(ty);
             } else {
-                abi_list.extend(quote!(<() as wasmtime::component::ComponentType>::ABI,));
+                abi_list.extend(quote!(None,));
                 case_names_and_checks.extend(match style {
                     VariantStyle::Variant => {
-                        quote!((#name, <() as wasmtime::component::ComponentType>::typecheck),)
+                        quote!((#name, None),)
                     }
                     VariantStyle::Union => {
                         quote!(<() as wasmtime::component::ComponentType>::typecheck,)
                     }
                     VariantStyle::Enum => quote!(#name,),
                 });
+                lower_payload_case_declarations.extend(quote!(#ident: [wasmtime::ValRaw; 0],));
             }
-        }
-
-        if lower_payload_case_declarations.is_empty() {
-            lower_payload_case_declarations.extend(quote!(_dummy: ()));
         }
 
         let typecheck = match style {
@@ -850,7 +846,7 @@ impl Expander for ComponentTypeExpander {
             }
 
             unsafe impl #impl_generics #internal::ComponentVariant for #name #ty_generics #where_clause {
-                const CASES: &'static [#internal::CanonicalAbiInfo] = &[#abi_list];
+                const CASES: &'static [Option<#internal::CanonicalAbiInfo>] = &[#abi_list];
             }
         };
 

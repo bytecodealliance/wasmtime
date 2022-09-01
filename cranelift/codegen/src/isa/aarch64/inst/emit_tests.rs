@@ -57,6 +57,7 @@ fn test_aarch64_binemit() {
         "retab",
     ));
     insns.push((Inst::Pacisp { key: APIKey::B }, "7F2303D5", "pacibsp"));
+    insns.push((Inst::Xpaclri, "FF2003D5", "xpaclri"));
     insns.push((Inst::Nop0, "", "nop-zero-len"));
     insns.push((Inst::Nop4, "1F2003D5", "nop"));
     insns.push((Inst::Csdb, "9F2203D5", "csdb"));
@@ -2580,60 +2581,66 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::VecExtend {
-            t: VecExtendOp::Sxtl8,
+            t: VecExtendOp::Sxtl,
             rd: writable_vreg(4),
             rn: vreg(27),
             high_half: false,
+            lane_size: ScalarSize::Size16,
         },
         "64A7080F",
         "sxtl v4.8h, v27.8b",
     ));
     insns.push((
         Inst::VecExtend {
-            t: VecExtendOp::Sxtl16,
+            t: VecExtendOp::Sxtl,
             rd: writable_vreg(17),
             rn: vreg(19),
             high_half: true,
+            lane_size: ScalarSize::Size32,
         },
         "71A6104F",
         "sxtl2 v17.4s, v19.8h",
     ));
     insns.push((
         Inst::VecExtend {
-            t: VecExtendOp::Sxtl32,
+            t: VecExtendOp::Sxtl,
             rd: writable_vreg(30),
             rn: vreg(6),
             high_half: false,
+            lane_size: ScalarSize::Size64,
         },
         "DEA4200F",
         "sxtl v30.2d, v6.2s",
     ));
     insns.push((
         Inst::VecExtend {
-            t: VecExtendOp::Uxtl8,
+            t: VecExtendOp::Uxtl,
             rd: writable_vreg(3),
             rn: vreg(29),
             high_half: true,
+            lane_size: ScalarSize::Size16,
         },
         "A3A7086F",
         "uxtl2 v3.8h, v29.16b",
     ));
     insns.push((
         Inst::VecExtend {
-            t: VecExtendOp::Uxtl16,
+            t: VecExtendOp::Uxtl,
             rd: writable_vreg(15),
             rn: vreg(12),
             high_half: false,
+            lane_size: ScalarSize::Size32,
         },
         "8FA5102F",
         "uxtl v15.4s, v12.4h",
     ));
     insns.push((
         Inst::VecExtend {
-            t: VecExtendOp::Uxtl32,
+            t: VecExtendOp::Uxtl,
             rd: writable_vreg(28),
             rn: vreg(2),
             high_half: true,
+            lane_size: ScalarSize::Size64,
         },
         "5CA4206F",
         "uxtl2 v28.2d, v2.4s",
