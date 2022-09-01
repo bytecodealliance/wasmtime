@@ -343,19 +343,28 @@ impl Config {
         self
     }
 
-    /// Configures whether or not stacks used for async futures are reset to zero after usage.
+    /// Configures whether or not stacks used for async futures are reset to
+    /// zero after usage.
     ///
-    /// When the async_support method is enabled for Wasmtime and the call_async variant of
-    /// calling WebAssembly is used then Wasmtime will create a separate runtime execution
-    /// stack for each future produced by call_async. When using the pooling instance
-    /// allocator this allocation will happen from a pool of stacks and additionally
-    /// deallocation will simply release the stack back to the pool. During the deallocation
-    /// process Wasmtime won't by default reset the contents of the stack back to zero.
+    /// When the [`async_support`](Config::async_support) method is enabled for
+    /// Wasmtime and the [`call_async`] variant
+    /// of calling WebAssembly is used then Wasmtime will create a separate
+    /// runtime execution stack for each future produced by [`call_async`].
+    /// When using the pooling instance allocator
+    /// ([`InstanceAllocationStrategy::Pooling`]) this allocation will happen
+    /// from a pool of stacks and additionally deallocation will simply release
+    /// the stack back to the pool. During the deallocation process Wasmtime
+    /// won't by default reset the contents of the stack back to zero.
     ///
-    /// This reset back to zero, however, is a defense-in-depth mechanism and is not required
-    /// for correctness. The operation to reset a stack back to zero can be a costly operation
-    /// in highly concurrent environments. By setting this option to false this zero-ing
-    /// operation will not occur which may prove beneficial to throughput in these environments.
+    /// When this option is enabled it can be seen as a defense-in-depth
+    /// mechanism to reset a stack back to zero. This is not required for
+    /// correctness and can be a costly operation in highly concurrent
+    /// environments due to modifications of the virtual address space requiring
+    /// process-wide synchronization.
+    ///
+    /// This option defaults to `false`.
+    ///
+    /// [`call_async`]: crate::TypedFunc::call_async
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub fn async_stack_zeroing(&mut self, enable: bool) -> &mut Self {
