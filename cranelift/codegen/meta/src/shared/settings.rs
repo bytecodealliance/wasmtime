@@ -284,6 +284,18 @@ pub(crate) fn define() -> SettingGroup {
         12,
     );
 
+    settings.add_enum(
+        "probestack_strategy",
+        "Controls what kinds of stack probes are emitted.",
+        r#"
+            Supported strategies:
+
+            - `outline`: Always emits stack probes as calls to a probe stack function.
+            - `inline`: Always emits inline stack probes.
+        "#,
+        vec!["outline", "inline"],
+    );
+
     // Jump table options.
 
     settings.add_bool(

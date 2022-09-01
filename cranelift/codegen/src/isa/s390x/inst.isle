@@ -3610,30 +3610,30 @@
 
 ;; Helpers for generating `call` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl abi_sig (SigRef) ABISig)
+(decl abi_sig (SigRef) Sig)
 (extern constructor abi_sig abi_sig)
 
-(decl abi_call_info (ABISig ExternalName Opcode) BoxCallInfo)
+(decl abi_call_info (Sig ExternalName Opcode) BoxCallInfo)
 (extern constructor abi_call_info abi_call_info)
 
-(decl abi_call_ind_info (ABISig Reg Opcode) BoxCallIndInfo)
+(decl abi_call_ind_info (Sig Reg Opcode) BoxCallIndInfo)
 (extern constructor abi_call_ind_info abi_call_ind_info)
 
 (decl writable_link_reg () WritableReg)
 (rule (writable_link_reg) (writable_gpr 14))
 
-(decl abi_call (ABISig ExternalName Opcode) SideEffectNoResult)
+(decl abi_call (Sig ExternalName Opcode) SideEffectNoResult)
 (rule (abi_call abi name opcode)
       (call_impl (writable_link_reg) (abi_call_info abi name opcode)))
 
-(decl abi_call_ind (ABISig Reg Opcode) SideEffectNoResult)
+(decl abi_call_ind (Sig Reg Opcode) SideEffectNoResult)
 (rule (abi_call_ind abi target opcode)
       (call_ind_impl (writable_link_reg) (abi_call_ind_info abi target opcode)))
 
-(decl abi_accumulate_outgoing_args_size (ABISig) Unit)
+(decl abi_accumulate_outgoing_args_size (Sig) Unit)
 (extern constructor abi_accumulate_outgoing_args_size abi_accumulate_outgoing_args_size)
 
-(decl abi_lane_order (ABISig) LaneOrder)
+(decl abi_lane_order (Sig) LaneOrder)
 (extern constructor abi_lane_order abi_lane_order)
 
 

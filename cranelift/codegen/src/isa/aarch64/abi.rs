@@ -568,10 +568,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts.push(Inst::StoreP64 {
             rt: fp_reg(),
             rt2: link_reg(),
-            mem: PairAMode::PreIndexed(
-                writable_stack_reg(),
-                SImm7Scaled::maybe_from_i64(-16, types::I64).unwrap(),
-            ),
+            mem: PairAMode::SPPreIndexed(SImm7Scaled::maybe_from_i64(-16, types::I64).unwrap()),
             flags: MemFlags::trusted(),
         });
 
@@ -609,10 +606,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts.push(Inst::LoadP64 {
             rt: writable_fp_reg(),
             rt2: writable_link_reg(),
-            mem: PairAMode::PostIndexed(
-                writable_stack_reg(),
-                SImm7Scaled::maybe_from_i64(16, types::I64).unwrap(),
-            ),
+            mem: PairAMode::SPPostIndexed(SImm7Scaled::maybe_from_i64(16, types::I64).unwrap()),
             flags: MemFlags::trusted(),
         });
         insts
@@ -622,6 +616,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
         // TODO: implement if we ever require stack probes on an AArch64 host
         // (unlikely unless Lucet is ported)
         smallvec![]
+    }
+
+    fn gen_inline_probestack(_frame_size: u32, _guard_size: u32) -> SmallInstVec<Self::I> {
+        unimplemented!("Inline stack probing is unimplemented on AArch64");
     }
 
     // Returns stack bytes used as well as instructions. Does not adjust
@@ -684,8 +682,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // str rd, [sp, #-16]!
             insts.push(Inst::Store64 {
                 rd,
-                mem: AMode::PreIndexed {
-                    rn: writable_stack_reg(),
+                mem: AMode::SPPreIndexed {
                     simm9: SImm9::maybe_from_i64(-clobber_offset_change).unwrap(),
                 },
                 flags: MemFlags::trusted(),
@@ -716,8 +713,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             insts.push(Inst::StoreP64 {
                 rt,
                 rt2,
-                mem: PairAMode::PreIndexed(
-                    writable_stack_reg(),
+                mem: PairAMode::SPPreIndexed(
                     SImm7Scaled::maybe_from_i64(-clobber_offset_change, types::I64).unwrap(),
                 ),
                 flags: MemFlags::trusted(),
@@ -742,8 +738,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         let store_vec_reg = |rd| Inst::FpuStore64 {
             rd,
-            mem: AMode::PreIndexed {
-                rn: writable_stack_reg(),
+            mem: AMode::SPPreIndexed {
                 simm9: SImm9::maybe_from_i64(-clobber_offset_change).unwrap(),
             },
             flags: MemFlags::trusted(),
@@ -774,8 +769,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 Inst::FpuStoreP64 {
                     rt,
                     rt2,
-                    mem: PairAMode::PreIndexed(
-                        writable_stack_reg(),
+                    mem: PairAMode::SPPreIndexed(
                         SImm7Scaled::maybe_from_i64(-clobber_offset_change, F64).unwrap(),
                     ),
                     flags: MemFlags::trusted(),
@@ -839,8 +833,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         let load_vec_reg = |rd| Inst::FpuLoad64 {
             rd,
-            mem: AMode::PostIndexed {
-                rn: writable_stack_reg(),
+            mem: AMode::SPPostIndexed {
                 simm9: SImm9::maybe_from_i64(16).unwrap(),
             },
             flags: MemFlags::trusted(),
@@ -848,10 +841,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let load_vec_reg_pair = |rt, rt2| Inst::FpuLoadP64 {
             rt,
             rt2,
-            mem: PairAMode::PostIndexed(
-                writable_stack_reg(),
-                SImm7Scaled::maybe_from_i64(16, F64).unwrap(),
-            ),
+            mem: PairAMode::SPPostIndexed(SImm7Scaled::maybe_from_i64(16, F64).unwrap()),
             flags: MemFlags::trusted(),
         };
 
@@ -887,10 +877,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             insts.push(Inst::LoadP64 {
                 rt,
                 rt2,
-                mem: PairAMode::PostIndexed(
-                    writable_stack_reg(),
-                    SImm7Scaled::maybe_from_i64(16, I64).unwrap(),
-                ),
+                mem: PairAMode::SPPostIndexed(SImm7Scaled::maybe_from_i64(16, I64).unwrap()),
                 flags: MemFlags::trusted(),
             });
         }
@@ -904,8 +891,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // ldr rd, [sp], #16
             insts.push(Inst::ULoad64 {
                 rd,
-                mem: AMode::PostIndexed {
-                    rn: writable_stack_reg(),
+                mem: AMode::SPPostIndexed {
                     simm9: SImm9::maybe_from_i64(16).unwrap(),
                 },
                 flags: MemFlags::trusted(),

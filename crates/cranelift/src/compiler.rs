@@ -271,7 +271,8 @@ impl wasmtime_environ::Compiler for Compiler {
             &mut func_env,
         )?;
 
-        let (_, code_buf) = compile_maybe_cached(&mut context, isa, cache_ctx.as_mut())?;
+        let (code, code_buf) = compile_maybe_cached(&mut context, isa, cache_ctx.as_mut())?;
+        let alignment = code.alignment;
 
         let compiled_code = context.compiled_code().unwrap();
         let func_relocs = compiled_code
@@ -333,6 +334,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 stack_maps,
                 start: 0,
                 length,
+                alignment,
             },
             address_map: address_transform,
         }))

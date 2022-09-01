@@ -39,7 +39,7 @@ cfg_if::cfg_if! {
 use imp::{commit_memory_pages, commit_table_pages, decommit_memory_pages, decommit_table_pages};
 
 #[cfg(all(feature = "async", unix))]
-use imp::{commit_stack_pages, decommit_stack_pages};
+use imp::{commit_stack_pages, reset_stack_pages_to_zero};
 
 #[cfg(feature = "async")]
 use super::FiberStackError;
@@ -887,11 +887,16 @@ struct StackPool {
     max_instances: usize,
     page_size: usize,
     index_allocator: Mutex<PoolingAllocationState>,
+    async_stack_zeroing: bool,
 }
 
 #[cfg(all(feature = "async", unix))]
 impl StackPool {
-    fn new(instance_limits: &InstanceLimits, stack_size: usize) -> Result<Self> {
+    fn new(
+        instance_limits: &InstanceLimits,
+        stack_size: usize,
+        async_stack_zeroing: bool,
+    ) -> Result<Self> {
         use rustix::mm::{mprotect, MprotectFlags};
 
         let page_size = crate::page_size();
@@ -931,6 +936,7 @@ impl StackPool {
             stack_size,
             max_instances,
             page_size,
+            async_stack_zeroing,
             // We always use a `NextAvailable` strategy for stack
             // allocation. We don't want or need an affinity policy
             // here: stacks do not benefit from being allocated to the
@@ -997,7 +1003,9 @@ impl StackPool {
         let index = (start_of_stack - base) / self.stack_size;
         assert!(index < self.max_instances);
 
-        decommit_stack_pages(bottom_of_stack as _, stack_size).unwrap();
+        if self.async_stack_zeroing {
+            reset_stack_pages_to_zero(bottom_of_stack as _, stack_size).unwrap();
+        }
 
         self.index_allocator.lock().unwrap().free(SlotId(index));
     }
@@ -1024,6 +1032,7 @@ impl PoolingInstanceAllocator {
         instance_limits: InstanceLimits,
         stack_size: usize,
         tunables: &Tunables,
+        async_stack_zeroing: bool,
     ) -> Result<Self> {
         if instance_limits.count == 0 {
             bail!("the instance count limit cannot be zero");
@@ -1032,11 +1041,12 @@ impl PoolingInstanceAllocator {
         let instances = InstancePool::new(strategy, &instance_limits, tunables)?;
 
         drop(stack_size); // suppress unused warnings w/o async feature
+        drop(async_stack_zeroing); // suppress unused warnings w/o async feature
 
         Ok(Self {
             instances: instances,
             #[cfg(all(feature = "async", unix))]
-            stacks: StackPool::new(&instance_limits, stack_size)?,
+            stacks: StackPool::new(&instance_limits, stack_size, async_stack_zeroing)?,
             #[cfg(all(feature = "async", windows))]
             stack_size,
         })
@@ -1332,6 +1342,7 @@ mod test {
                 ..Default::default()
             },
             1,
+            true,
         )?;
 
         let native_page_size = crate::page_size();
@@ -1408,6 +1419,7 @@ mod test {
                 },
                 4096,
                 &Tunables::default(),
+                true,
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
@@ -1430,6 +1442,7 @@ mod test {
                     static_memory_bound: 1,
                     ..Tunables::default()
                 },
+                true,
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
@@ -1453,6 +1466,7 @@ mod test {
                     static_memory_offset_guard_size: 0,
                     ..Tunables::default()
                 },
+                true
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
@@ -1473,12 +1487,13 @@ mod test {
                 memories: 0,
                 ..Default::default()
             },
-            4096,
+            128,
             &Tunables::default(),
+            true,
         )?;
 
         unsafe {
-            for _ in 0..10 {
+            for _ in 0..255 {
                 let stack = allocator.allocate_fiber_stack()?;
 
                 // The stack pointer is at the top, so decrement it first
@@ -1486,6 +1501,41 @@ mod test {
 
                 assert_eq!(*addr, 0);
                 *addr = 1;
+
+                allocator.deallocate_fiber_stack(&stack);
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
+    #[test]
+    fn test_stack_unzeroed() -> Result<()> {
+        let allocator = PoolingInstanceAllocator::new(
+            PoolingAllocationStrategy::NextAvailable,
+            InstanceLimits {
+                count: 1,
+                table_elements: 0,
+                memory_pages: 0,
+                tables: 0,
+                memories: 0,
+                ..Default::default()
+            },
+            128,
+            &Tunables::default(),
+            false,
+        )?;
+
+        unsafe {
+            for i in 0..255 {
+                let stack = allocator.allocate_fiber_stack()?;
+
+                // The stack pointer is at the top, so decrement it first
+                let addr = stack.top().unwrap().sub(1);
+
+                assert_eq!(*addr, i);
+                *addr = i + 1;
 
                 allocator.deallocate_fiber_stack(&stack);
             }

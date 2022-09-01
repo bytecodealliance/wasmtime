@@ -77,6 +77,6 @@ pub fn commit_stack_pages(_addr: *mut u8, _len: usize) -> Result<()> {
 }
 
 #[cfg(feature = "async")]
-pub fn decommit_stack_pages(addr: *mut u8, len: usize) -> Result<()> {
+pub fn reset_stack_pages_to_zero(addr: *mut u8, len: usize) -> Result<()> {
     decommit(addr, len, false)
 }

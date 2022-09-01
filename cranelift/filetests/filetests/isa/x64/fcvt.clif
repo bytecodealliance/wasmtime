@@ -209,7 +209,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint32_seq %xmm0, %eax, %r8, %xmm4
+;   cvt_float32_to_uint32_seq %xmm0, %eax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -223,7 +223,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint64_seq %xmm0, %rax, %r8, %xmm4
+;   cvt_float32_to_uint64_seq %xmm0, %rax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -237,7 +237,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint32_seq %xmm0, %eax, %r8, %xmm4
+;   cvt_float64_to_uint32_seq %xmm0, %eax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -251,7 +251,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint64_seq %xmm0, %rax, %r8, %xmm4
+;   cvt_float64_to_uint64_seq %xmm0, %rax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -265,7 +265,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint32_sat_seq %xmm0, %eax, %r8, %xmm4
+;   cvt_float32_to_uint32_sat_seq %xmm0, %eax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -279,7 +279,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint64_sat_seq %xmm0, %rax, %r8, %xmm4
+;   cvt_float32_to_uint64_sat_seq %xmm0, %rax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -293,7 +293,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint32_sat_seq %xmm0, %eax, %r8, %xmm4
+;   cvt_float64_to_uint32_sat_seq %xmm0, %eax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -307,7 +307,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint64_sat_seq %xmm0, %rax, %r8, %xmm4
+;   cvt_float64_to_uint64_sat_seq %xmm0, %rax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

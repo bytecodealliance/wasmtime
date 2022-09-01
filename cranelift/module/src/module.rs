@@ -640,6 +640,7 @@ pub trait Module {
         &mut self,
         func_id: FuncId,
         func: &ir::Function,
+        alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction>;
@@ -736,10 +737,11 @@ impl<M: Module> Module for &mut M {
         &mut self,
         func_id: FuncId,
         func: &ir::Function,
+        alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction> {
-        (**self).define_function_bytes(func_id, func, bytes, relocs)
+        (**self).define_function_bytes(func_id, func, alignment, bytes, relocs)
     }
 
     fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()> {

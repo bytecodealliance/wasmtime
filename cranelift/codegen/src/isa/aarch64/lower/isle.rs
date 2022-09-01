@@ -8,10 +8,10 @@ use generated_code::Context;
 use super::{
     fp_reg, lower_constant_f128, lower_constant_f32, lower_constant_f64, lower_fp_condcode,
     stack_reg, writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget,
-    CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FloatCC, Imm12, ImmLogic, ImmShift,
-    Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MemLabel, MoveWideConst, MoveWideOp,
-    NarrowValueMode, Opcode, OperandSize, PairAMode, Reg, SImm9, ScalarSize, ShiftOpAndAmt,
-    UImm12Scaled, UImm5, VecMisc2, VectorSize, NZCV,
+    CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FPUOpRIMod, FloatCC, Imm12,
+    ImmLogic, ImmShift, Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MemLabel, MoveWideConst,
+    MoveWideOp, NarrowValueMode, Opcode, OperandSize, PairAMode, Reg, SImm9, ScalarSize,
+    ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize, NZCV,
 };
 use crate::ir::condcodes;
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm};
@@ -26,9 +26,8 @@ use crate::{
         immediates::*, types::*, AtomicRmwOp, ExternalName, Inst, InstructionData, MemFlags,
         TrapCode, Value, ValueList,
     },
-    isa::aarch64::abi::{AArch64Caller, AArch64MachineDeps},
+    isa::aarch64::abi::AArch64Caller,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
-    isa::aarch64::lower::{writable_vreg, writable_xreg, xreg},
     isa::unwind::UnwindInst,
     machinst::{ty_bits, InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData},
 };
@@ -80,7 +79,7 @@ impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
 impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_methods!();
-    isle_prelude_caller_methods!(AArch64MachineDeps, AArch64Caller);
+    isle_prelude_caller_methods!(crate::isa::aarch64::abi::AArch64MachineDeps, AArch64Caller);
 
     fn sign_return_address_disabled(&mut self) -> Option<()> {
         if self.isa_flags.sign_return_address() {
@@ -225,9 +224,9 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
                 });
 
                 if upper_halfword != 0 {
-                    self.emit(&MInst::MovWide {
-                        op: MoveWideOp::MovK,
+                    self.emit(&MInst::MovK {
                         rd,
+                        rn: rd.to_reg(),
                         imm: MoveWideConst::maybe_with_shift(upper_halfword, 16).unwrap(),
                         size,
                     });
@@ -279,9 +278,9 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
                     }
                 } else {
                     let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                    self.emit(&MInst::MovWide {
-                        op: MoveWideOp::MovK,
+                    self.emit(&MInst::MovK {
                         rd,
+                        rn: rd.to_reg(),
                         imm,
                         size,
                     });
@@ -316,18 +315,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
     fn fp_reg(&mut self) -> Reg {
         fp_reg()
-    }
-
-    fn xreg(&mut self, index: u8) -> Reg {
-        xreg(index)
-    }
-
-    fn writable_xreg(&mut self, index: u8) -> WritableReg {
-        writable_xreg(index)
-    }
-
-    fn writable_vreg(&mut self, index: u8) -> WritableReg {
-        writable_vreg(index)
     }
 
     fn extended_value_from_value(&mut self, val: Value) -> Option<ExtendedValue> {
@@ -738,11 +725,11 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         }
     }
 
-    fn fpu_op_ri_sli(&mut self, ty_bits: u8, shift: u8) -> FPUOpRI {
+    fn fpu_op_ri_sli(&mut self, ty_bits: u8, shift: u8) -> FPUOpRIMod {
         if ty_bits == 32 {
-            FPUOpRI::Sli32(FPULeftShiftImm::maybe_from_u8(shift, ty_bits).unwrap())
+            FPUOpRIMod::Sli32(FPULeftShiftImm::maybe_from_u8(shift, ty_bits).unwrap())
         } else if ty_bits == 64 {
-            FPUOpRI::Sli64(FPULeftShiftImm::maybe_from_u8(shift, ty_bits).unwrap())
+            FPUOpRIMod::Sli64(FPULeftShiftImm::maybe_from_u8(shift, ty_bits).unwrap())
         } else {
             unimplemented!(
                 "unexpected input size for fpu_op_ri_sli: {} (shift: {})",

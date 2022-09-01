@@ -43,19 +43,6 @@ fn build_host_isa(
         builder.set(value.name, &value.value_string()).unwrap();
     }
 
-    // We need to force disable stack probing, since we don't support it yet.
-    let flags = {
-        let mut flags_builder = settings::builder();
-
-        // Copy all flags
-        for flag in flags.iter() {
-            flags_builder.set(flag.name, &flag.value_string()).unwrap();
-        }
-
-        flags_builder.set("enable_probestack", "false").unwrap();
-        settings::Flags::new(flags_builder)
-    };
-
     builder.finish(flags).unwrap()
 }
 

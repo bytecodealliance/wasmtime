@@ -95,7 +95,11 @@ impl<'a> ModuleTextBuilder<'a> {
         func: &'a CompiledFunction,
     ) -> (SymbolId, Range<u64>) {
         let body_len = func.body.len() as u64;
-        let off = self.text.append(labeled, &func.body, None);
+        let off = self.text.append(
+            labeled,
+            &func.body,
+            self.isa.function_alignment().max(func.info.alignment),
+        );
 
         let symbol_id = self.obj.add_symbol(Symbol {
             name,
@@ -198,7 +202,7 @@ impl<'a> ModuleTextBuilder<'a> {
         if padding == 0 {
             return;
         }
-        self.text.append(false, &vec![0; padding], Some(1));
+        self.text.append(false, &vec![0; padding], 1);
     }
 
     /// Indicates that the text section has been written completely and this

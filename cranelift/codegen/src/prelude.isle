@@ -904,7 +904,7 @@
 ;;;; Helpers for generating calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Type to hold information about a function call signature.
-(type ABISig extern (enum))
+(type Sig extern (enum))
 
 ;; Information how to pass one argument or return value.
 (type ABIArg extern (enum))
@@ -934,36 +934,36 @@
 ))
 
 ;; Get the number of arguments expected.
-(decl abi_num_args (ABISig) usize)
+(decl abi_num_args (Sig) usize)
 (extern constructor abi_num_args abi_num_args)
 
 ;; Get information specifying how to pass one argument.
-(decl abi_get_arg (ABISig usize) ABIArg)
+(decl abi_get_arg (Sig usize) ABIArg)
 (extern constructor abi_get_arg abi_get_arg)
 
 ;; Get the number of return values expected.
-(decl abi_num_rets (ABISig) usize)
+(decl abi_num_rets (Sig) usize)
 (extern constructor abi_num_rets abi_num_rets)
 
 ;; Get information specifying how to pass one return value.
-(decl abi_get_ret (ABISig usize) ABIArg)
+(decl abi_get_ret (Sig usize) ABIArg)
 (extern constructor abi_get_ret abi_get_ret)
 
 ;; Get information specifying how to pass the implicit pointer
 ;; to the return-value area on the stack, if required.
-(decl abi_ret_arg (ABIArg) ABISig)
+(decl abi_ret_arg (ABIArg) Sig)
 (extern extractor abi_ret_arg abi_ret_arg)
 
 ;; Succeeds if no implicit return-value area pointer is required.
-(decl abi_no_ret_arg () ABISig)
+(decl abi_no_ret_arg () Sig)
 (extern extractor abi_no_ret_arg abi_no_ret_arg)
 
 ;; Size of the argument area.
-(decl abi_sized_stack_arg_space (ABISig) i64)
+(decl abi_sized_stack_arg_space (Sig) i64)
 (extern constructor abi_sized_stack_arg_space abi_sized_stack_arg_space)
 
 ;; Size of the return-value area.
-(decl abi_sized_stack_ret_space (ABISig) i64)
+(decl abi_sized_stack_ret_space (Sig) i64)
 (extern constructor abi_sized_stack_ret_space abi_sized_stack_ret_space)
 
 ;; StackSlot addr
