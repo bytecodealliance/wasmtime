@@ -1179,14 +1179,16 @@ impl PrettyPrint for Inst {
                 dst_size,
                 tmp_gpr,
                 tmp_xmm,
+                tmp_xmm2,
                 is_saturating,
             } => {
                 let src = pretty_print_reg(src.to_reg(), src_size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size.to_bytes(), allocs);
                 let tmp_gpr = pretty_print_reg(tmp_gpr.to_reg().to_reg(), 8, allocs);
                 let tmp_xmm = pretty_print_reg(tmp_xmm.to_reg().to_reg(), 8, allocs);
+                let tmp_xmm2 = pretty_print_reg(tmp_xmm2.to_reg().to_reg(), 8, allocs);
                 format!(
-                    "{} {}, {}, {}, {}",
+                    "{} {}, {}, {}, {}, {}",
                     ljustify(format!(
                         "cvt_float{}_to_uint{}{}_seq",
                         src_size.to_bits(),
@@ -1197,6 +1199,7 @@ impl PrettyPrint for Inst {
                     dst,
                     tmp_gpr,
                     tmp_xmm,
+                    tmp_xmm2,
                 )
             }
 
@@ -1876,7 +1879,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             ..
         } => {
             collector.reg_use(src.to_reg());
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_early_def(dst.to_writable_reg());
             collector.reg_early_def(tmp_gpr1.to_writable_reg());
             collector.reg_early_def(tmp_gpr2.to_writable_reg());
         }
@@ -1886,18 +1889,25 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             tmp_xmm,
             tmp_gpr,
             ..
+        } => {
+            collector.reg_use(src.to_reg());
+            collector.reg_early_def(dst.to_writable_reg());
+            collector.reg_early_def(tmp_gpr.to_writable_reg());
+            collector.reg_early_def(tmp_xmm.to_writable_reg());
         }
-        | Inst::CvtFloatToUintSeq {
+        Inst::CvtFloatToUintSeq {
             src,
             dst,
             tmp_gpr,
             tmp_xmm,
+            tmp_xmm2,
             ..
         } => {
             collector.reg_use(src.to_reg());
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_early_def(dst.to_writable_reg());
             collector.reg_early_def(tmp_gpr.to_writable_reg());
             collector.reg_early_def(tmp_xmm.to_writable_reg());
+            collector.reg_early_def(tmp_xmm2.to_writable_reg());
         }
         Inst::MovzxRmR { src, dst, .. } => {
             collector.reg_def(dst.to_writable_reg());

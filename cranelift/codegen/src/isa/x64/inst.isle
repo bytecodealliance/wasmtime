@@ -289,7 +289,8 @@
                           (src Xmm)
                           (dst WritableGpr)
                           (tmp_gpr WritableGpr)
-                          (tmp_xmm WritableXmm))
+                          (tmp_xmm WritableXmm)
+                          (tmp_xmm2 WritableXmm))
 
        ;; A sequence to compute min/max with the proper NaN semantics for xmm
        ;; registers.
@@ -3213,8 +3214,9 @@
 
             (dst WritableGpr (temp_writable_gpr))
             (tmp_xmm WritableXmm (temp_writable_xmm))
+            (tmp_xmm2 WritableXmm (temp_writable_xmm))
             (tmp_gpr WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.CvtFloatToUintSeq out_size src_size is_saturating src dst tmp_gpr tmp_xmm))))
+            (_ Unit (emit (MInst.CvtFloatToUintSeq out_size src_size is_saturating src dst tmp_gpr tmp_xmm tmp_xmm2))))
         dst))
 
 (decl cvt_float_to_sint_seq (Type Value bool) Gpr)

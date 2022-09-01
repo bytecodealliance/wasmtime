@@ -2593,11 +2593,13 @@ pub(crate) fn emit(
             dst,
             tmp_gpr,
             tmp_xmm,
+            tmp_xmm2,
         } => {
             let src = allocs.next(src.to_reg());
             let dst = allocs.next(dst.to_reg().to_reg());
             let tmp_gpr = allocs.next(tmp_gpr.to_reg().to_reg());
             let tmp_xmm = allocs.next(tmp_xmm.to_reg().to_reg());
+            let tmp_xmm2 = allocs.next(tmp_xmm2.to_reg().to_reg());
 
             // The only difference in behavior between saturating and non-saturating is how we
             // handle errors. Emits the following sequence:
@@ -2620,7 +2622,8 @@ pub(crate) fn emit(
             // -- saturating: xor %dst, %dst; j done
             //
             // is_large:
-            // subss/subsd %tmp_xmm, %src ; <-- we clobber %src here
+            // mov %src, %tmp_xmm2
+            // subss/subsd %tmp_xmm, %tmp_xmm2
             // cvttss2si/cvttss2sd %tmp_x, %dst
             // cmp 0, %dst
             // jnl next_is_large
@@ -2732,10 +2735,13 @@ pub(crate) fn emit(
 
             sink.bind_label(handle_large);
 
-            let inst = Inst::xmm_rm_r(sub_op, RegMem::reg(tmp_xmm), Writable::from_reg(src));
+            let inst = Inst::gen_move(Writable::from_reg(tmp_xmm2), src, types::F64);
             inst.emit(&[], sink, info, state);
 
-            let inst = Inst::xmm_to_gpr(trunc_op, src, Writable::from_reg(dst), *dst_size);
+            let inst = Inst::xmm_rm_r(sub_op, RegMem::reg(tmp_xmm), Writable::from_reg(tmp_xmm2));
+            inst.emit(&[], sink, info, state);
+
+            let inst = Inst::xmm_to_gpr(trunc_op, tmp_xmm2, Writable::from_reg(dst), *dst_size);
             inst.emit(&[], sink, info, state);
 
             let inst = Inst::cmp_rmi_r(*dst_size, RegMemImm::imm(0), dst);
