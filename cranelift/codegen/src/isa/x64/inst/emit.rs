@@ -1247,22 +1247,18 @@ pub(crate) fn emit(
             // Number of probes that we need to perform
             let probe_count = align_to(*frame_size, *guard_size) / guard_size;
 
-            // The inline stack probe loop has 3 phases
+            // The inline stack probe loop has 3 phases:
             //
-            // We generate the "guard area" register which is essentially the framze_size aligned to
-            // guard_size. We copy the stack pointer and and subtract the guard area from it. This
+            // We generate the "guard area" register which is essentially the frame_size aligned to
+            // guard_size. We copy the stack pointer and subtract the guard area from it. This
             // gets us a register that we can use to compare when looping.
             //
-            // After that we emit the loop, Essentially we just adjust the stack pointer one guard_size'd
+            // After that we emit the loop. Essentially we just adjust the stack pointer one guard_size'd
             // distance at a time and then touch the stack by writing anything to it. We use the previously
             // created "guard area" register to know when to stop looping.
             //
             // When we have touched all the pages that we need, we have to restore the stack pointer
             // to where it was before.
-            //
-            // If you are editing this code, make sure to manually update the jump offset below
-            // We don't have relocations/labels on this part of the pipeline, so we need
-            // to manually do the offsets.
             //
             // Generate the following code:
             //         mov  tmp_reg, rsp
