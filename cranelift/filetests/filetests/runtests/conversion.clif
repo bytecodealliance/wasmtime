@@ -1,0 +1,28 @@
+test interpret
+test run
+target aarch64
+target s390x
+set enable_simd
+target x86_64 has_sse3 has_ssse3 has_sse41
+
+function %fcvt_to_sint(f32) -> i32 {
+block0(v0: f32):
+    v1 = fcvt_to_sint.i32 v0
+    return v1
+}
+; run: %fcvt_to_sint(0x0.0) == 0
+; run: %fcvt_to_sint(0x1.0) == 1
+; run: %fcvt_to_sint(0x1.d6f346p26) == 123456792
+; run: %fcvt_to_sint(0x8.1) == 8
+
+function %fcvt_to_uint(f32) -> i32 {
+block0(v0:f32):
+    v1 = fcvt_to_uint.i32 v0
+    return v1
+}
+; run: %fcvt_to_uint(0x0.0) == 0
+; run: %fcvt_to_uint(0x1.0) == 1
+; run: %fcvt_to_uint(0x4.2) == 4
+; run: %fcvt_to_uint(0x4.6) == 4
+; run: %fcvt_to_uint(0x1.d6f346p26) == 123456792
+; run: %fcvt_to_uint(0xB2D05E00.0) == 3000000000

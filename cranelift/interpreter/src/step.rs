@@ -1119,15 +1119,123 @@ where
             };
             assign(vectorizelanes(&new_vec, new_type)?)
         }
-        Opcode::FcvtToUint => unimplemented!("FcvtToUint"),
-        Opcode::FcvtToUintSat => unimplemented!("FcvtToUintSat"),
-        Opcode::FcvtToSint => unimplemented!("FcvtToSint"),
-        Opcode::FcvtToSintSat => unimplemented!("FcvtToSintSat"),
-        Opcode::FcvtFromUint => unimplemented!("FcvtFromUint"),
-        Opcode::FcvtFromSint => unimplemented!("FcvtFromSint"),
-        Opcode::FcvtLowFromSint => unimplemented!("FcvtLowFromSint"),
-        Opcode::FvpromoteLow => unimplemented!("FvpromoteLow"),
-        Opcode::Fvdemote => unimplemented!("Fvdemote"),
+        Opcode::FcvtToUint | Opcode::FcvtToSint => {
+            // NaN check
+            if !(arg(0)?.eq(&arg(0)?)?) {
+                return Ok(ControlFlow::Trap(CraneliftTrap::User(
+                    TrapCode::BadConversionToInteger,
+                )));
+            }
+            let x = arg(0)?.into_float()? as i128;
+            let (min, max) = ctrl_ty.bounds(inst.opcode() == Opcode::FcvtToSint);
+            // bounds check
+            if x < (min as i128) || x > (max as i128) {
+                return Ok(ControlFlow::Trap(CraneliftTrap::User(
+                    TrapCode::IntegerOverflow,
+                )));
+            }
+            // perform the conversion.
+            assign(Value::int(x, ctrl_ty)?)
+        }
+        Opcode::FcvtToUintSat | Opcode::FcvtToSintSat => {
+            let in_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
+            let cvt = |x: V| -> ValueResult<V> {
+                // NaN check
+                if !(x.eq(&x)?) {
+                    V::int(0, ctrl_ty.lane_type())
+                } else {
+                    let (min, max) = ctrl_ty.bounds(inst.opcode() == Opcode::FcvtToSintSat);
+                    let x = x.into_float()? as i128;
+                    let x = i128::max(x, min as i128);
+                    let x = i128::min(x, max as i128);
+                    V::int(x, ctrl_ty.lane_type())
+                }
+            };
+
+            let x = extractlanes(&arg(0)?, in_ty)?;
+
+            assign(vectorizelanes(
+                &x.into_iter()
+                    .map(cvt)
+                    .collect::<ValueResult<SimdVec<V>>>()?,
+                ctrl_ty,
+            )?)
+        }
+        Opcode::FcvtFromUint | Opcode::FcvtFromSint => {
+            let x = extractlanes(
+                &arg(0)?,
+                inst_context.type_of(inst_context.args()[0]).unwrap(),
+            )?;
+            let bits = |x: V| -> ValueResult<u64> {
+                let x = if inst.opcode() == Opcode::FcvtFromUint {
+                    x.convert(ValueConversionKind::ToUnsigned)?
+                } else {
+                    x
+                };
+                Ok(match ctrl_ty.lane_type() {
+                    types::F32 => (x.into_int()? as f32).to_bits() as u64,
+                    types::F64 => (x.into_int()? as f64).to_bits(),
+                    _ => unimplemented!("unexpected conversion to {:?}", ctrl_ty.lane_type()),
+                })
+            };
+            assign(vectorizelanes(
+                &x.into_iter()
+                    .map(|x| V::float(bits(x)?, ctrl_ty.lane_type()))
+                    .collect::<ValueResult<SimdVec<V>>>()?,
+                ctrl_ty,
+            )?)
+        }
+        Opcode::FcvtLowFromSint => {
+            let in_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
+            let x = extractlanes(&arg(0)?, in_ty)?;
+
+            assign(vectorizelanes(
+                &(x[..(ctrl_ty.lane_count() as usize)]
+                    .into_iter()
+                    .map(|x| {
+                        V::float(
+                            match ctrl_ty.lane_type() {
+                                types::F32 => (x.to_owned().into_int()? as f32).to_bits() as u64,
+                                types::F64 => (x.to_owned().into_int()? as f64).to_bits(),
+                                _ => unimplemented!("unexpected promotion to {:?}", ctrl_ty),
+                            },
+                            ctrl_ty.lane_type(),
+                        )
+                    })
+                    .collect::<ValueResult<SimdVec<V>>>()?),
+                ctrl_ty,
+            )?)
+        }
+        Opcode::FvpromoteLow => {
+            let in_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
+            assert_eq!(in_ty, types::F32X4);
+            let out_ty = types::F64X2;
+            let x = extractlanes(&arg(0)?, in_ty)?;
+            assign(vectorizelanes(
+                &x[..(out_ty.lane_count() as usize)]
+                    .into_iter()
+                    .map(|x| {
+                        V::convert(x.to_owned(), ValueConversionKind::Exact(out_ty.lane_type()))
+                    })
+                    .collect::<ValueResult<SimdVec<V>>>()?,
+                out_ty,
+            )?)
+        }
+        Opcode::Fvdemote => {
+            let in_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
+            assert_eq!(in_ty, types::F64X2);
+            let out_ty = types::F32X4;
+            let x = extractlanes(&arg(0)?, in_ty)?;
+            let x = &mut x
+                .into_iter()
+                .map(|x| V::convert(x, ValueConversionKind::RoundNearestEven(out_ty.lane_type())))
+                .collect::<ValueResult<SimdVec<V>>>()?;
+            // zero the high bits.
+            for _ in 0..(out_ty.lane_count() as usize - x.len()) {
+                x.push(V::float(0, out_ty.lane_type())?);
+            }
+            assign(vectorizelanes(x, out_ty)?)
+        }
         Opcode::Isplit => assign_multiple(&[
             Value::convert(arg(0)?, ValueConversionKind::Truncate(types::I64))?,
             Value::convert(arg(0)?, ValueConversionKind::ExtractUpper(types::I64))?,
