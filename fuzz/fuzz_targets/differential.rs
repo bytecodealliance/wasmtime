@@ -86,8 +86,13 @@ fn run(data: &[u8]) -> Result<()> {
     };
     log_wasm(&wasm);
 
-    // Choose a left-hand side Wasm engine.
-    let mut lhs = engine::choose(&mut u, &config, unsafe { &ALLOWED_ENGINES })?;
+    // Choose a left-hand side Wasm engine. If no engine could be chosen then
+    // that means the configuration selected above doesn't match any allowed
+    // engine (configured via an env var) so the test case is thrown out.
+    let mut lhs = match engine::choose(&mut u, &config, unsafe { &ALLOWED_ENGINES })? {
+        Some(engine) => engine,
+        None => return Ok(()),
+    };
     let lhs_instance = lhs.instantiate(&wasm);
     STATS.bump_engine(lhs.name());
 
