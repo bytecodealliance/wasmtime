@@ -36,12 +36,6 @@ impl Config {
     pub fn set_differential_config(&mut self) {
         let config = &mut self.module_config.config;
 
-        // Disable the start function for now.
-        //
-        // TODO: should probably allow this after testing it works with the new
-        // differential setup in all engines.
-        config.allow_start_export = false;
-
         // Make it more likely that there are types available to generate a
         // function with.
         config.min_types = 1;
