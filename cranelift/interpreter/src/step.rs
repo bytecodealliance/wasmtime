@@ -1309,16 +1309,14 @@ where
         FloatCC::OrderedNotEqual => Value::lt(left, right)? || Value::gt(left, right)?,
         FloatCC::UnorderedOrEqual => Value::eq(left, right)? || Value::uno(left, right)?,
         FloatCC::LessThan => Value::lt(left, right)?,
-        FloatCC::LessThanOrEqual => Value::lt(left, right)? || Value::eq(left, right)?,
+        FloatCC::LessThanOrEqual => Value::le(left, right)?,
         FloatCC::GreaterThan => Value::gt(left, right)?,
-        FloatCC::GreaterThanOrEqual => Value::gt(left, right)? || Value::eq(left, right)?,
+        FloatCC::GreaterThanOrEqual => Value::ge(left, right)?,
         FloatCC::UnorderedOrLessThan => Value::uno(left, right)? || Value::lt(left, right)?,
-        FloatCC::UnorderedOrLessThanOrEqual => {
-            Value::uno(left, right)? || Value::lt(left, right)? || Value::eq(left, right)?
-        }
+        FloatCC::UnorderedOrLessThanOrEqual => Value::uno(left, right)? || Value::le(left, right)?,
         FloatCC::UnorderedOrGreaterThan => Value::uno(left, right)? || Value::gt(left, right)?,
         FloatCC::UnorderedOrGreaterThanOrEqual => {
-            Value::uno(left, right)? || Value::gt(left, right)? || Value::eq(left, right)?
+            Value::uno(left, right)? || Value::ge(left, right)?
         }
     })
 }
