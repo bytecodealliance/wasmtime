@@ -7,7 +7,6 @@ use std::cell::Cell;
 use target_lexicon::Triple;
 
 pub use super::MachLabel;
-pub use crate::data_value::DataValue;
 pub use crate::ir::{
     dynamic_to_fixed, ArgumentExtension, Constant, DynamicStackSlot, ExternalName, FuncRef,
     GlobalValue, Immediate, SigRef, StackSlot,
