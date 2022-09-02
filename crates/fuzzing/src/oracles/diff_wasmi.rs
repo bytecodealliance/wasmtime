@@ -3,7 +3,7 @@
 use crate::generators::{DiffValue, DiffValueType, ModuleConfig};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
 use anyhow::{bail, Context, Error, Result};
-use wasmtime::Trap;
+use wasmtime::{Trap, TrapCode};
 
 /// A wrapper for `wasmi` as a [`DiffEngine`].
 pub struct WasmiEngine;
@@ -36,6 +36,9 @@ impl WasmiEngine {
         if config.config.threads_enabled {
             bail!("wasmi does not support threads");
         }
+        if config.config.max_memories > 1 {
+            bail!("wasmi does not support multi-memory");
+        }
         Ok(Self)
     }
 }
@@ -49,13 +52,86 @@ impl DiffEngine for WasmiEngine {
         let module = wasmi::Module::from_buffer(wasm).context("unable to validate Wasm module")?;
         let instance = wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default())
             .context("unable to instantiate module in wasmi")?;
-        let instance = instance.assert_no_start();
+        let instance = instance.run_start(&mut wasmi::NopExternals)?;
         Ok(Box::new(WasmiInstance { module, instance }))
     }
 
-    fn assert_error_match(&self, trap: &Trap, err: Error) {
-        // TODO: should implement this for `wasmi`
-        drop((trap, err));
+    fn assert_error_match(&self, trap: &Trap, err: &Error) {
+        // Acquire a `wasmi::Trap` from the wasmi error which we'll use to
+        // assert that it has the same kind of trap as the wasmtime-based trap.
+        let wasmi = match err.downcast_ref::<wasmi::Error>() {
+            Some(wasmi::Error::Trap(trap)) => trap,
+
+            // Out-of-bounds data segments turn into this category which
+            // Wasmtime reports as a `MemoryOutOfBounds`.
+            Some(wasmi::Error::Memory(msg)) => {
+                assert_eq!(
+                    trap.trap_code(),
+                    Some(TrapCode::MemoryOutOfBounds),
+                    "wasmtime error did not match wasmi: {msg}"
+                );
+                return;
+            }
+
+            // Ignore this for now, looks like "elements segment does not fit"
+            // falls into this category and to avoid doing string matching this
+            // is just ignored.
+            Some(wasmi::Error::Instantiation(msg)) => {
+                log::debug!("ignoring wasmi instantiation error: {msg}");
+                return;
+            }
+
+            Some(other) => panic!("unexpected wasmi error: {}", other),
+
+            None => err
+                .downcast_ref::<wasmi::Trap>()
+                .expect(&format!("not a trap: {:?}", err)),
+        };
+        match wasmi.kind() {
+            wasmi::TrapKind::StackOverflow => {
+                assert_eq!(trap.trap_code(), Some(TrapCode::StackOverflow))
+            }
+            wasmi::TrapKind::MemoryAccessOutOfBounds => {
+                assert_eq!(trap.trap_code(), Some(TrapCode::MemoryOutOfBounds))
+            }
+            wasmi::TrapKind::Unreachable => {
+                assert_eq!(trap.trap_code(), Some(TrapCode::UnreachableCodeReached))
+            }
+            wasmi::TrapKind::TableAccessOutOfBounds => {
+                assert_eq!(trap.trap_code(), Some(TrapCode::TableOutOfBounds))
+            }
+            wasmi::TrapKind::ElemUninitialized => {
+                assert_eq!(trap.trap_code(), Some(TrapCode::IndirectCallToNull))
+            }
+            wasmi::TrapKind::DivisionByZero => {
+                assert_eq!(trap.trap_code(), Some(TrapCode::IntegerDivisionByZero))
+            }
+            wasmi::TrapKind::IntegerOverflow => {
+                assert_eq!(trap.trap_code(), Some(TrapCode::IntegerOverflow))
+            }
+            wasmi::TrapKind::InvalidConversionToInt => {
+                assert_eq!(trap.trap_code(), Some(TrapCode::BadConversionToInteger))
+            }
+            wasmi::TrapKind::UnexpectedSignature => {
+                assert_eq!(trap.trap_code(), Some(TrapCode::BadSignature))
+            }
+            wasmi::TrapKind::Host(_) => unreachable!(),
+        }
+    }
+
+    fn is_stack_overflow(&self, err: &Error) -> bool {
+        let trap = match err.downcast_ref::<wasmi::Error>() {
+            Some(wasmi::Error::Trap(trap)) => trap,
+            Some(_) => return false,
+            None => match err.downcast_ref::<wasmi::Trap>() {
+                Some(trap) => trap,
+                None => return false,
+            },
+        };
+        match trap.kind() {
+            wasmi::TrapKind::StackOverflow => true,
+            _ => false,
+        }
     }
 }
 
