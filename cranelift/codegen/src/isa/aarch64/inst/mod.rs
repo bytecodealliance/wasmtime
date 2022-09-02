@@ -1604,7 +1604,9 @@ impl Inst {
                 let cond = cond.pretty_print(0, allocs);
                 format!("ccmp {}, {}, {}, {}", rn, imm, nzcv, cond)
             }
-            &Inst::AtomicRMW { rs, rt, rn, ty, op } => {
+            &Inst::AtomicRMW {
+                rs, rt, rn, ty, op, ..
+            } => {
                 let op = match op {
                     AtomicRMWOp::Add => "ldaddal",
                     AtomicRMWOp::Clr => "ldclral",
@@ -1637,6 +1639,7 @@ impl Inst {
                 oldval,
                 scratch1,
                 scratch2,
+                ..
             } => {
                 let op = match op {
                     AtomicRMWLoopOp::Add => "add",
@@ -1667,7 +1670,9 @@ impl Inst {
                     scratch2,
                 )
             }
-            &Inst::AtomicCAS { rd, rs, rt, rn, ty } => {
+            &Inst::AtomicCAS {
+                rd, rs, rt, rn, ty, ..
+            } => {
                 let op = match ty {
                     I8 => "casalb",
                     I16 => "casalh",
@@ -1689,6 +1694,7 @@ impl Inst {
                 replacement,
                 oldval,
                 scratch,
+                ..
             } => {
                 let addr = pretty_print_ireg(addr, OperandSize::Size64, allocs);
                 let expected = pretty_print_ireg(expected, OperandSize::Size64, allocs);

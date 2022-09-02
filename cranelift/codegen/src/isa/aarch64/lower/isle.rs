@@ -68,11 +68,6 @@ pub struct ExtendedValue {
     extend: ExtendOp,
 }
 
-pub struct SinkableAtomicLoad {
-    atomic_load: Inst,
-    atomic_addr: Value,
-}
-
 impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_method_helpers!(AArch64Caller);
 }
@@ -364,25 +359,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
             0 | -1 => None,
             n => Some(n as u64),
         }
-    }
-
-    fn sinkable_atomic_load(&mut self, val: Value) -> Option<SinkableAtomicLoad> {
-        let input = self.lower_ctx.get_value_as_source_or_const(val);
-        if let InputSourceInst::UniqueUse(atomic_load, 0) = input.inst {
-            if self.lower_ctx.data(atomic_load).opcode() == Opcode::AtomicLoad {
-                let atomic_addr = self.lower_ctx.input_as_value(atomic_load, 0);
-                return Some(SinkableAtomicLoad {
-                    atomic_load,
-                    atomic_addr,
-                });
-            }
-        }
-        None
-    }
-
-    fn sink_atomic_load(&mut self, load: &SinkableAtomicLoad) -> Reg {
-        self.lower_ctx.sink_inst(load.atomic_load);
-        self.put_in_reg(load.atomic_addr)
     }
 
     fn shift_mask(&mut self, ty: Type) -> ImmLogic {

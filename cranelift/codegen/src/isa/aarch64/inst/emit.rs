@@ -1424,13 +1424,26 @@ impl MachInstEmit for Inst {
                 let rn = allocs.next(rn);
                 sink.put4(enc_ccmp_imm(size, rn, imm, nzcv, cond));
             }
-            &Inst::AtomicRMW { ty, op, rs, rt, rn } => {
+            &Inst::AtomicRMW {
+                ty,
+                op,
+                rs,
+                rt,
+                rn,
+                flags,
+            } => {
                 let rs = allocs.next(rs);
                 let rt = allocs.next_writable(rt);
                 let rn = allocs.next(rn);
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+
                 sink.put4(enc_acq_rel(ty, op, rs, rt, rn));
             }
-            &Inst::AtomicRMWLoop { ty, op, .. } => {
+            &Inst::AtomicRMWLoop { ty, op, flags, .. } => {
                 /* Emit this:
                      again:
                       ldaxr{,b,h}  x/w27, [x25]
@@ -1463,10 +1476,12 @@ impl MachInstEmit for Inst {
 
                 // again:
                 sink.bind_label(again_label);
+
                 let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() {
+                if !srcloc.is_default() && !flags.notrap() {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
+
                 sink.put4(enc_ldaxr(ty, x27wr, x25)); // ldaxr x27, [x25]
                 let size = OperandSize::from_ty(ty);
                 let sign_ext = match op {
@@ -1588,7 +1603,7 @@ impl MachInstEmit for Inst {
                 }
 
                 let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() {
+                if !srcloc.is_default() && !flags.notrap() {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
                 if op == AtomicRMWLoopOp::Xchg {
@@ -1608,7 +1623,14 @@ impl MachInstEmit for Inst {
                 ));
                 sink.use_label_at_offset(br_offset, again_label, LabelUse::Branch19);
             }
-            &Inst::AtomicCAS { rd, rs, rt, rn, ty } => {
+            &Inst::AtomicCAS {
+                rd,
+                rs,
+                rt,
+                rn,
+                ty,
+                flags,
+            } => {
                 let rd = allocs.next_writable(rd);
                 let rs = allocs.next(rs);
                 debug_assert_eq!(rd.to_reg(), rs);
@@ -1622,9 +1644,14 @@ impl MachInstEmit for Inst {
                     _ => panic!("Unsupported type: {}", ty),
                 };
 
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+
                 sink.put4(enc_cas(size, rd, rt, rn));
             }
-            &Inst::AtomicCASLoop { ty, .. } => {
+            &Inst::AtomicCASLoop { ty, flags, .. } => {
                 /* Emit this:
                     again:
                      ldaxr{,b,h} x/w27, [x25]
@@ -1651,10 +1678,12 @@ impl MachInstEmit for Inst {
 
                 // again:
                 sink.bind_label(again_label);
+
                 let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() {
+                if !srcloc.is_default() && !flags.notrap() {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
+
                 // ldaxr x27, [x25]
                 sink.put4(enc_ldaxr(ty, x27wr, x25));
 
@@ -1679,9 +1708,10 @@ impl MachInstEmit for Inst {
                 sink.use_label_at_offset(br_out_offset, out_label, LabelUse::Branch19);
 
                 let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() {
+                if !srcloc.is_default() && !flags.notrap() {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
+
                 sink.put4(enc_stlxr(ty, x24wr, x28, x25)); // stlxr w24, x28, [x25]
 
                 // cbnz w24, again.
@@ -1698,14 +1728,36 @@ impl MachInstEmit for Inst {
                 // out:
                 sink.bind_label(out_label);
             }
-            &Inst::LoadAcquire { access_ty, rt, rn } => {
+            &Inst::LoadAcquire {
+                access_ty,
+                rt,
+                rn,
+                flags,
+            } => {
                 let rn = allocs.next(rn);
                 let rt = allocs.next_writable(rt);
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+
                 sink.put4(enc_ldar(access_ty, rt, rn));
             }
-            &Inst::StoreRelease { access_ty, rt, rn } => {
+            &Inst::StoreRelease {
+                access_ty,
+                rt,
+                rn,
+                flags,
+            } => {
                 let rn = allocs.next(rn);
                 let rt = allocs.next(rt);
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+
                 sink.put4(enc_stlr(access_ty, rt, rn));
             }
             &Inst::Fence {} => {
