@@ -514,12 +514,12 @@ impl Compiler<'_, '_> {
             InterfaceType::Char => 1,
 
             // This has a fair bit of code behind it depending on the
-            // strings/encodings in play, so arbitrarily assign it a cost a 5.
-            InterfaceType::String => 5,
+            // strings/encodings in play, so arbitrarily assign it this cost.
+            InterfaceType::String => 40,
 
             // Iteration of a loop is along the lines of the cost of a string
             // so give it the same cost
-            InterfaceType::List(_) => 5,
+            InterfaceType::List(_) => 40,
 
             InterfaceType::Flags(i) => {
                 let count = self.module.types[*i].names.len();
