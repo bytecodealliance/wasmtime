@@ -3015,6 +3015,10 @@ impl MachInstEmit for Inst {
                 // Emit the jump itself.
                 sink.put4(enc_jump26(0b000101, dest.as_offset26_or_zero()));
             }
+            &Inst::Args { .. } => {
+                // Nothing: this is a pseudoinstruction that serves
+                // only to constrain registers at a certain point.
+            }
             &Inst::Ret { .. } => {
                 sink.put4(0xd65f03c0);
             }

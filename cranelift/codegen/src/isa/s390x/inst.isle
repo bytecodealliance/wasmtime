@@ -860,6 +860,10 @@
     (CallInd
       (link WritableReg)
       (info BoxCallIndInfo))
+    
+    ;; A pseudo-instruction that captures register arguments in vregs.
+    (Args
+      (args BoxArgInfo))
 
     ;; ---- branches (exactly one must appear at end of BB) ----
 

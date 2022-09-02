@@ -30,8 +30,8 @@ use crate::{
         },
     },
     machinst::{
-        isle::*, valueregs, InsnInput, InsnOutput, Lower, MachAtomicRmwOp, MachInst, VCodeConstant,
-        VCodeConstantData,
+        isle::*, valueregs, ArgInfo, InsnInput, InsnOutput, Lower, MachAtomicRmwOp, MachInst,
+        VCodeConstant, VCodeConstantData,
     },
 };
 use alloc::vec::Vec;
@@ -44,6 +44,7 @@ use target_lexicon::Triple;
 type BoxCallInfo = Box<CallInfo>;
 type BoxVecMachLabel = Box<SmallVec<[MachLabel; 4]>>;
 type MachLabelSlice = [MachLabel];
+type BoxArgInfo = Box<ArgInfo>;
 
 pub struct SinkableLoad {
     inst: Inst,

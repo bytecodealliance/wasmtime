@@ -3319,6 +3319,7 @@ impl MachInstEmit for Inst {
                     sink.add_call_site(info.opcode);
                 }
             }
+            &Inst::Args { .. } => {}
             &Inst::Ret { link, .. } => {
                 let link = allocs.next(link);
 

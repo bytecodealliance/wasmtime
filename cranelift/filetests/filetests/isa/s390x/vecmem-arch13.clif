@@ -114,8 +114,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vl %v5, 0(%r3)
-;   vst %v5, 0(%r2)
+;   vl %v4, 0(%r3)
+;   vst %v4, 0(%r2)
 ;   br %r14
 
 function %load_f32x4_big(i64) -> f32x4 {
@@ -326,8 +326,8 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vlbrq %v5, 0(%r3)
-;   vst %v5, 0(%r2)
+;   vlbrq %v4, 0(%r3)
+;   vst %v4, 0(%r2)
 ;   br %r14
 
 function %load_f32x4_little(i64) -> f32x4 {

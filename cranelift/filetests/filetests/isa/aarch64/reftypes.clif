@@ -69,28 +69,28 @@ block3(v7: r64, v8: r64):
 ; block0:
 ;   str x1, [sp, #16]
 ;   str x0, [sp, #8]
-;   ldr x2, 8 ; b 12 ; data TestCase(%f) + 0
-;   blr x2
-;   mov x4, sp
-;   ldr x11, [sp, #8]
-;   str x11, [x4]
-;   and w5, w0, #1
-;   cbz x5, label1 ; b label3
+;   ldr x1, 8 ; b 12 ; data TestCase(%f) + 0
+;   blr x1
+;   mov x3, sp
+;   ldr x9, [sp, #8]
+;   str x9, [x3]
+;   and w4, w0, #1
+;   cbz x4, label1 ; b label3
 ; block1:
 ;   b label2
 ; block2:
-;   mov x1, x11
+;   mov x1, x9
 ;   ldr x0, [sp, #16]
 ;   b label5
 ; block3:
 ;   b label4
 ; block4:
-;   mov x0, x11
+;   mov x0, x9
 ;   ldr x1, [sp, #16]
 ;   b label5
 ; block5:
-;   mov x6, sp
-;   ldr x2, [x6]
+;   mov x5, sp
+;   ldr x2, [x5]
 ;   add sp, sp, #32
 ;   ldp fp, lr, [sp], #16
 ;   ret

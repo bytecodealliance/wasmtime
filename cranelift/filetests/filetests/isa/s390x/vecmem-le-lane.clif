@@ -153,10 +153,10 @@ block0(v0: i8x16, v1: i64):
 }
 
 ; block0:
-;   vlgvg %r3, %v24, 1
-;   vlgvg %r4, %v24, 0
-;   strvg %r3, 0(%r2)
-;   strvg %r4, 8(%r2)
+;   vlgvg %r5, %v24, 1
+;   vlgvg %r3, %v24, 0
+;   strvg %r5, 0(%r2)
+;   strvg %r3, 8(%r2)
 ;   br %r14
 
 function %store_i16x8_big(i16x8, i64) wasmtime_system_v {
@@ -166,10 +166,10 @@ block0(v0: i16x8, v1: i64):
 }
 
 ; block0:
-;   vpdi %v4, %v24, %v24, 4
-;   verllg %v6, %v4, 32
-;   verllf %v16, %v6, 16
-;   vst %v16, 0(%r2)
+;   vpdi %v3, %v24, %v24, 4
+;   verllg %v5, %v3, 32
+;   verllf %v7, %v5, 16
+;   vst %v7, 0(%r2)
 ;   br %r14
 
 function %store_i32x4_big(i32x4, i64) wasmtime_system_v {
@@ -179,9 +179,9 @@ block0(v0: i32x4, v1: i64):
 }
 
 ; block0:
-;   vpdi %v4, %v24, %v24, 4
-;   verllg %v6, %v4, 32
-;   vst %v6, 0(%r2)
+;   vpdi %v3, %v24, %v24, 4
+;   verllg %v5, %v3, 32
+;   vst %v5, 0(%r2)
 ;   br %r14
 
 function %store_i64x2_big(i64x2, i64) wasmtime_system_v {
@@ -191,8 +191,8 @@ block0(v0: i64x2, v1: i64):
 }
 
 ; block0:
-;   vpdi %v4, %v24, %v24, 4
-;   vst %v4, 0(%r2)
+;   vpdi %v3, %v24, %v24, 4
+;   vst %v3, 0(%r2)
 ;   br %r14
 
 function %store_f32x4_big(f32x4, i64) wasmtime_system_v {
@@ -202,9 +202,9 @@ block0(v0: f32x4, v1: i64):
 }
 
 ; block0:
-;   vpdi %v4, %v24, %v24, 4
-;   verllg %v6, %v4, 32
-;   vst %v6, 0(%r2)
+;   vpdi %v3, %v24, %v24, 4
+;   verllg %v5, %v3, 32
+;   vst %v5, 0(%r2)
 ;   br %r14
 
 function %store_f64x2_big(f64x2, i64) wasmtime_system_v {
@@ -214,8 +214,8 @@ block0(v0: f64x2, v1: i64):
 }
 
 ; block0:
-;   vpdi %v4, %v24, %v24, 4
-;   vst %v4, 0(%r2)
+;   vpdi %v3, %v24, %v24, 4
+;   vst %v3, 0(%r2)
 ;   br %r14
 
 function %uload8x8_little(i64) -> i16x8 wasmtime_system_v {
@@ -394,10 +394,10 @@ block0(v0: i8x16, v1: i64):
 }
 
 ; block0:
-;   vlgvg %r3, %v24, 1
-;   vlgvg %r4, %v24, 0
-;   strvg %r3, 0(%r2)
-;   strvg %r4, 8(%r2)
+;   vlgvg %r5, %v24, 1
+;   vlgvg %r3, %v24, 0
+;   strvg %r5, 0(%r2)
+;   strvg %r3, 8(%r2)
 ;   br %r14
 
 function %store_i16x8_little(i16x8, i64) wasmtime_system_v {
@@ -407,10 +407,10 @@ block0(v0: i16x8, v1: i64):
 }
 
 ; block0:
-;   vlgvg %r3, %v24, 1
-;   vlgvg %r4, %v24, 0
-;   strvg %r3, 0(%r2)
-;   strvg %r4, 8(%r2)
+;   vlgvg %r5, %v24, 1
+;   vlgvg %r3, %v24, 0
+;   strvg %r5, 0(%r2)
+;   strvg %r3, 8(%r2)
 ;   br %r14
 
 function %store_i32x4_little(i32x4, i64) wasmtime_system_v {
@@ -420,10 +420,10 @@ block0(v0: i32x4, v1: i64):
 }
 
 ; block0:
-;   vlgvg %r3, %v24, 1
-;   vlgvg %r4, %v24, 0
-;   strvg %r3, 0(%r2)
-;   strvg %r4, 8(%r2)
+;   vlgvg %r5, %v24, 1
+;   vlgvg %r3, %v24, 0
+;   strvg %r5, 0(%r2)
+;   strvg %r3, 8(%r2)
 ;   br %r14
 
 function %store_i64x2_little(i64x2, i64) wasmtime_system_v {
@@ -433,10 +433,10 @@ block0(v0: i64x2, v1: i64):
 }
 
 ; block0:
-;   vlgvg %r3, %v24, 1
-;   vlgvg %r4, %v24, 0
-;   strvg %r3, 0(%r2)
-;   strvg %r4, 8(%r2)
+;   vlgvg %r5, %v24, 1
+;   vlgvg %r3, %v24, 0
+;   strvg %r5, 0(%r2)
+;   strvg %r3, 8(%r2)
 ;   br %r14
 
 function %store_f32x4_little(f32x4, i64) wasmtime_system_v {
@@ -446,10 +446,10 @@ block0(v0: f32x4, v1: i64):
 }
 
 ; block0:
-;   vlgvg %r3, %v24, 1
-;   vlgvg %r4, %v24, 0
-;   strvg %r3, 0(%r2)
-;   strvg %r4, 8(%r2)
+;   vlgvg %r5, %v24, 1
+;   vlgvg %r3, %v24, 0
+;   strvg %r5, 0(%r2)
+;   strvg %r3, 8(%r2)
 ;   br %r14
 
 function %store_f64x2_little(f64x2, i64) wasmtime_system_v {
@@ -459,10 +459,10 @@ block0(v0: f64x2, v1: i64):
 }
 
 ; block0:
-;   vlgvg %r3, %v24, 1
-;   vlgvg %r4, %v24, 0
-;   strvg %r3, 0(%r2)
-;   strvg %r4, 8(%r2)
+;   vlgvg %r5, %v24, 1
+;   vlgvg %r3, %v24, 0
+;   strvg %r5, 0(%r2)
+;   strvg %r3, 8(%r2)
 ;   br %r14
 
 function %store_f64x2_sum_little(f64x2, i64, i64) wasmtime_system_v {
@@ -486,9 +486,9 @@ block0(v0: f64x2, v1: i64):
 }
 
 ; block0:
-;   vlgvg %r3, %v24, 1
-;   vlgvg %r4, %v24, 0
-;   strvg %r3, 128(%r2)
-;   strvg %r4, 136(%r2)
+;   vlgvg %r5, %v24, 1
+;   vlgvg %r3, %v24, 0
+;   strvg %r5, 128(%r2)
+;   strvg %r3, 136(%r2)
 ;   br %r14
 

@@ -582,8 +582,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 let regs = writable_value_regs(self.value_regs[*param]);
                 for insn in self
                     .vcode
-                    .abi()
-                    .gen_copy_arg_to_regs(self.sigs(), i, regs)
+                    .vcode
+                    .abi
+                    .gen_copy_arg_to_regs(&self.vcode.vcode.sigs, i, regs)
                     .into_iter()
                 {
                     self.emit(insn);
@@ -607,7 +608,20 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     ));
                 }
             }
-            if let Some(insn) = self.vcode.abi().gen_retval_area_setup(self.sigs()) {
+            if let Some(insn) = self
+                .vcode
+                .vcode
+                .abi
+                .gen_retval_area_setup(&self.vcode.vcode.sigs)
+            {
+                self.emit(insn);
+            }
+
+            // The below must come first. Finish the current "IR inst"
+            // and continue the scan backward.
+            self.finish_ir_inst(Default::default());
+
+            if let Some(insn) = self.vcode.vcode.abi.take_args() {
                 self.emit(insn);
             }
         }

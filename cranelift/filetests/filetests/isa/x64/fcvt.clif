@@ -146,16 +146,16 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzbq  %dil, %rdi
-;   cvtsi2ss %rdi, %xmm0
-;   movzwq  %si, %rdi
-;   cvtsi2ss %rdi, %xmm5
-;   movl    %edx, %edi
-;   cvtsi2ss %rdi, %xmm6
-;   u64_to_f32_seq %rcx, %xmm2, %rdi, %rax
-;   addss   %xmm0, %xmm5, %xmm0
-;   addss   %xmm0, %xmm6, %xmm0
+;   movzbq  %dil, %r10
+;   cvtsi2ss %r10, %xmm0
+;   movzwq  %si, %r10
+;   cvtsi2ss %r10, %xmm2
+;   movl    %edx, %r10d
+;   cvtsi2ss %r10, %xmm3
+;   u64_to_f32_seq %rcx, %xmm15, %r10, %r11
 ;   addss   %xmm0, %xmm2, %xmm0
+;   addss   %xmm0, %xmm3, %xmm0
+;   addss   %xmm0, %xmm15, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

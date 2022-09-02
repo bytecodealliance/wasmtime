@@ -1015,6 +1015,11 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
+        &Inst::Args { ref args } => {
+            for (&def, &preg) in args.defs.iter().zip(args.pregs.iter()) {
+                collector.reg_fixed_def(def, preg);
+            }
+        }
         &Inst::Ret { ref rets } | &Inst::AuthenticatedRet { ref rets, .. } => {
             for &ret in rets {
                 collector.reg_use(ret);
@@ -1127,6 +1132,13 @@ impl MachInst for Inst {
             &Inst::Call { ref info } => info.caller_callconv != info.callee_callconv,
             &Inst::CallInd { ref info } => info.caller_callconv != info.callee_callconv,
             _ => true,
+        }
+    }
+
+    fn is_args(&self) -> bool {
+        match self {
+            Self::Args { .. } => true,
+            _ => false,
         }
     }
 
@@ -2617,6 +2629,16 @@ impl Inst {
             &Inst::CallInd { ref info, .. } => {
                 let rn = pretty_print_reg(info.rn, allocs);
                 format!("blr {}", rn)
+            }
+            &Inst::Args { ref args } => {
+                let mut s = "args".to_string();
+                for (&def, &preg) in args.defs.iter().zip(args.pregs.iter()) {
+                    use std::fmt::Write;
+                    let preg = pretty_print_reg(preg, &mut empty_allocs);
+                    let def = pretty_print_reg(def.to_reg(), allocs);
+                    write!(&mut s, " {}={}", def, preg).unwrap();
+                }
+                s
             }
             &Inst::Ret { .. } => "ret".to_string(),
             &Inst::AuthenticatedRet { key, is_hint, .. } => {

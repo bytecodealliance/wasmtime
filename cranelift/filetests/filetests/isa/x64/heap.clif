@@ -67,24 +67,21 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    %esi, %r11d
-;   cmpq    $4096, %r11
+;   movl    %esi, %r10d
+;   cmpq    $4096, %r10
 ;   jbe     label1; j label2
 ; block1:
-;   movq    %r11, %rax
+;   movq    %r10, %rax
 ;   addq    %rax, 0(%rdi), %rax
-;   xorq    %rsi, %rsi, %rsi
-;   cmpq    $4096, %r11
-;   cmovnbeq %rsi, %rax, %rax
+;   xorq    %r11, %r11, %r11
+;   cmpq    $4096, %r10
+;   cmovnbeq %r11, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
 ; block2:
 ;   ud2 heap_oob
 
-;; When a static memory is the "right" size (4GB memory, 2GB guard regions), the
-;; Spectre mitigation is not present. Cranelift relies on the memory permissions
-;; and emits no bounds checking, simply `add`--a single instruction.
 function %f(i64 vmctx, i32) -> i64 system_v {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+0

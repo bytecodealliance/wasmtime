@@ -19,16 +19,16 @@ block0(v0: i32, v1: r64, v2: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    8(%rdx), %eax
-;   cmpl    %eax, %edi
+;   movl    8(%rdx), %r11d
+;   cmpl    %r11d, %edi
 ;   jb      label1; j label2
 ; block1:
-;   movl    %edi, %r8d
-;   movq    0(%rdx), %rcx
-;   movq    %rcx, %rdx
-;   addq    %rdx, %r8, %rdx
-;   cmpl    %eax, %edi
-;   cmovnbq %rcx, %rdx, %rdx
+;   movl    %edi, %ecx
+;   movq    0(%rdx), %rax
+;   movq    %rax, %rdx
+;   addq    %rdx, %rcx, %rdx
+;   cmpl    %r11d, %edi
+;   cmovnbq %rax, %rdx, %rdx
 ;   movq    %rsi, 0(%rdx)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

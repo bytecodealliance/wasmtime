@@ -1406,6 +1406,8 @@ pub(crate) fn emit(
             }
         }
 
+        Inst::Args { .. } => {}
+
         Inst::Ret { .. } => sink.put1(0xC3),
 
         Inst::JmpKnown { dst } => {
