@@ -472,6 +472,9 @@ impl FromStr for Offset32 {
 /// An IEEE binary32 immediate floating point value, represented as a u32
 /// containing the bit pattern.
 ///
+/// We specifically avoid using a f32 here since some architectures may silently alter floats.
+/// See: https://github.com/bytecodealliance/wasmtime/pull/2251#discussion_r498508646
+///
 /// All bit patterns are allowed.
 #[derive(Copy, Clone, Debug, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
@@ -480,6 +483,9 @@ pub struct Ieee32(u32);
 
 /// An IEEE binary64 immediate floating point value, represented as a u64
 /// containing the bit pattern.
+///
+/// We specifically avoid using a f64 here since some architectures may silently alter floats.
+/// See: https://github.com/bytecodealliance/wasmtime/pull/2251#discussion_r498508646
 ///
 /// All bit patterns are allowed.
 #[derive(Copy, Clone, Debug, Eq, Hash)]
