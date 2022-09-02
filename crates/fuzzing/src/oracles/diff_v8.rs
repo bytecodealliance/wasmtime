@@ -1,4 +1,4 @@
-use crate::generators::{DiffValue, DiffValueType, ModuleConfig};
+use crate::generators::{Config, DiffValue, DiffValueType};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
 use anyhow::{bail, Error, Result};
 use std::cell::RefCell;
@@ -12,7 +12,7 @@ pub struct V8Engine {
 }
 
 impl V8Engine {
-    pub fn new(config: &ModuleConfig) -> Result<V8Engine> {
+    pub fn new(config: &mut Config) -> V8Engine {
         static INIT: Once = Once::new();
 
         INIT.call_once(|| {
@@ -21,27 +21,22 @@ impl V8Engine {
             v8::V8::initialize();
         });
 
+        let config = &mut config.module_config.config;
         // FIXME: reference types are disabled for now as we seemingly keep finding
         // a segfault in v8. This is found relatively quickly locally and keeps
         // getting found by oss-fuzz and currently we don't think that there's
         // really much we can do about it. For the time being disable reference
         // types entirely. An example bug is
         // https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=45662
-        if config.config.reference_types_enabled {
-            bail!("reference types are buggy in v8");
-        }
+        config.reference_types_enabled = false;
 
-        if config.config.memory64_enabled {
-            bail!("memory64 not enabled by default in v8");
-        }
+        config.min_memories = config.min_memories.min(1);
+        config.max_memories = config.max_memories.min(1);
+        config.memory64_enabled = false;
 
-        if config.config.max_memories > 1 {
-            bail!("multi-memory not enabled by default in v8");
-        }
-
-        Ok(Self {
+        Self {
             isolate: Rc::new(RefCell::new(v8::Isolate::new(Default::default()))),
-        })
+        }
     }
 }
 

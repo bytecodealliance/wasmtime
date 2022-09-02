@@ -1,9 +1,9 @@
 //! Evaluate an exported Wasm function using the WebAssembly specification
 //! reference interpreter.
 
-use crate::generators::{DiffValue, DiffValueType, ModuleConfig};
+use crate::generators::{Config, DiffValue, DiffValueType};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
-use anyhow::{anyhow, bail, Error, Result};
+use anyhow::{anyhow, Error, Result};
 use wasm_spec_interpreter::Value;
 use wasmtime::Trap;
 
@@ -11,20 +11,15 @@ use wasmtime::Trap;
 pub struct SpecInterpreter;
 
 impl SpecInterpreter {
-    /// Build a new [`SpecInterpreter`] but only if the configuration does not
-    /// rely on features that the current bindings (i.e.,
-    /// `wasm-spec-interpreter`) do not support.
-    pub fn new(config: &ModuleConfig) -> Result<Self> {
-        if config.config.reference_types_enabled {
-            bail!("the spec interpreter bindings do not support reference types")
-        }
+    pub(crate) fn new(config: &mut Config) -> Self {
+        let config = &mut config.module_config.config;
+
         // TODO: right now the interpreter bindings only execute the first
         // function in the module so if there's possibly more than one function
         // it's not possible to run the other function. This should be fixed
         // with improvements to the ocaml bindings to the interpreter.
-        if config.config.max_funcs > 1 {
-            bail!("the spec interpreter bindings can only support one function for now")
-        }
+        config.min_funcs = 1;
+        config.max_funcs = 1;
 
         // TODO: right now the instantiation step for the interpreter does
         // nothing and the evaluation step performs an instantiation followed by
@@ -32,18 +27,18 @@ impl SpecInterpreter {
         // engines will "succeed" in the interpreter because the error is
         // delayed to the execution. This should be fixed by making
         // instantiation a first-class primitive in our interpreter bindings.
-        if config.config.max_tables > 0 {
-            bail!("the spec interpreter bindings do not fail as they should with out-of-bounds table accesses")
-        }
+        config.min_tables = 0;
+        config.max_tables = 0;
 
-        if config.config.memory64_enabled {
-            bail!("memory64 not implemented in spec interpreter");
-        }
+        config.min_memories = config.min_memories.min(1);
+        config.max_memories = config.max_memories.min(1);
 
-        if config.config.threads_enabled {
-            bail!("spec interpreter does not support the threading proposal");
-        }
-        Ok(Self)
+        config.memory64_enabled = false;
+        config.threads_enabled = false;
+        config.bulk_memory_enabled = false;
+        config.reference_types_enabled = false;
+
+        Self
     }
 }
 

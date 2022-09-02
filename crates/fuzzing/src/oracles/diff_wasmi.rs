@@ -1,45 +1,30 @@
 //! Evaluate an exported Wasm function using the wasmi interpreter.
 
-use crate::generators::{DiffValue, DiffValueType, ModuleConfig};
+use crate::generators::{Config, DiffValue, DiffValueType};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
-use anyhow::{bail, Context, Error, Result};
+use anyhow::{Context, Error, Result};
 use wasmtime::{Trap, TrapCode};
 
 /// A wrapper for `wasmi` as a [`DiffEngine`].
 pub struct WasmiEngine;
 
 impl WasmiEngine {
-    /// Build a new [`WasmiEngine`] but only if the configuration does not rely
-    /// on features that `wasmi` does not support.
-    pub fn new(config: &ModuleConfig) -> Result<Self> {
-        if config.config.reference_types_enabled {
-            bail!("wasmi does not support reference types")
-        }
-        if config.config.simd_enabled {
-            bail!("wasmi does not support SIMD")
-        }
-        if config.config.multi_value_enabled {
-            bail!("wasmi does not support multi-value")
-        }
-        if config.config.saturating_float_to_int_enabled {
-            bail!("wasmi does not support saturating float-to-int conversions")
-        }
-        if config.config.sign_extension_enabled {
-            bail!("wasmi does not support sign-extension")
-        }
-        if config.config.memory64_enabled {
-            bail!("wasmi does not support memory64");
-        }
-        if config.config.bulk_memory_enabled {
-            bail!("wasmi does not support bulk memory");
-        }
-        if config.config.threads_enabled {
-            bail!("wasmi does not support threads");
-        }
-        if config.config.max_memories > 1 {
-            bail!("wasmi does not support multi-memory");
-        }
-        Ok(Self)
+    pub(crate) fn new(config: &mut Config) -> Self {
+        let config = &mut config.module_config.config;
+        config.reference_types_enabled = false;
+        config.simd_enabled = false;
+        config.multi_value_enabled = false;
+        config.saturating_float_to_int_enabled = false;
+        config.sign_extension_enabled = false;
+        config.memory64_enabled = false;
+        config.bulk_memory_enabled = false;
+        config.threads_enabled = false;
+        config.max_memories = config.max_memories.min(1);
+        config.min_memories = config.min_memories.min(1);
+        config.max_tables = config.max_tables.min(1);
+        config.min_tables = config.min_tables.min(1);
+
+        Self
     }
 }
 

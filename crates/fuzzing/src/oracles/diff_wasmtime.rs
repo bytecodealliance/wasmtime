@@ -1,15 +1,16 @@
 //! Evaluate an exported Wasm function using Wasmtime.
 
-use crate::generators::{self, DiffValue, DiffValueType};
+use crate::generators::{self, DiffValue, DiffValueType, WasmtimeConfig};
 use crate::oracles::dummy;
 use crate::oracles::engine::DiffInstance;
 use crate::oracles::{compile_module, engine::DiffEngine, StoreLimits};
 use anyhow::{Context, Error, Result};
+use arbitrary::Unstructured;
 use wasmtime::{Extern, FuncType, Instance, Module, Store, Trap, TrapCode, Val};
 
 /// A wrapper for using Wasmtime as a [`DiffEngine`].
 pub struct WasmtimeEngine {
-    pub(crate) config: generators::Config,
+    config: generators::Config,
 }
 
 impl WasmtimeEngine {
@@ -17,7 +18,13 @@ impl WasmtimeEngine {
     /// later. Ideally the store and engine could be built here but
     /// `compile_module` takes a [`generators::Config`]; TODO re-factor this if
     /// that ever changes.
-    pub fn new(config: generators::Config) -> Result<Self> {
+    pub fn new(u: &mut Unstructured<'_>, config: &generators::Config) -> arbitrary::Result<Self> {
+        let mut new_config = u.arbitrary::<WasmtimeConfig>()?;
+        new_config.make_compatible_with(&config.wasmtime);
+        let config = generators::Config {
+            wasmtime: new_config,
+            module_config: config.module_config.clone(),
+        };
         Ok(Self { config })
     }
 }

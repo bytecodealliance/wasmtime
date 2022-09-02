@@ -1,68 +1,37 @@
 //! Define the interface for differential evaluation of Wasm functions.
 
-use crate::generators::{Config, DiffValue, DiffValueType, WasmtimeConfig};
+use crate::generators::{Config, DiffValue, DiffValueType};
 use crate::oracles::{diff_wasmi::WasmiEngine, diff_wasmtime::WasmtimeEngine};
 use anyhow::Error;
 use arbitrary::Unstructured;
 use wasmtime::Trap;
 
-/// Pick one of the engines implemented in this module that is:
-/// - in the list of `allowed` engines
-/// - can evaluate Wasm modules compatible with `existing_config`.
-pub fn choose(
+/// Returns a function which can be used to build the engine name specified.
+///
+/// `None` is returned if the named engine does not have support compiled into
+/// this crate.
+pub fn build(
     u: &mut Unstructured<'_>,
-    existing_config: &Config,
-    allowed: &[&str],
+    name: &str,
+    config: &mut Config,
 ) -> arbitrary::Result<Option<Box<dyn DiffEngine>>> {
-    // Filter out any engines that cannot match the `existing_config` or are not
-    // `allowed`.
-    let mut engines: Vec<Box<dyn DiffEngine>> = vec![];
+    let engine: Box<dyn DiffEngine> = match name {
+        "wasmtime" => Box::new(WasmtimeEngine::new(u, config)?),
+        "wasmi" => Box::new(WasmiEngine::new(config)),
 
-    if allowed.contains(&"wasmtime") {
-        let mut new_wasmtime_config: WasmtimeConfig = u.arbitrary()?;
-        new_wasmtime_config.make_compatible_with(&existing_config.wasmtime);
-        let new_config = Config {
-            wasmtime: new_wasmtime_config,
-            module_config: existing_config.module_config.clone(),
-        };
-        if let Result::Ok(e) = WasmtimeEngine::new(new_config) {
-            engines.push(Box::new(e))
-        }
-    }
+        #[cfg(feature = "fuzz-spec-interpreter")]
+        "spec" => Box::new(crate::oracles::diff_spec::SpecInterpreter::new(config)),
+        #[cfg(not(feature = "fuzz-spec-interpreter"))]
+        "spec" => return Ok(None),
 
-    if allowed.contains(&"wasmi") {
-        if let Result::Ok(e) = WasmiEngine::new(&existing_config.module_config) {
-            engines.push(Box::new(e))
-        }
-    }
+        #[cfg(not(any(windows, target_arch = "s390x")))]
+        "v8" => Box::new(crate::oracles::diff_v8::V8Engine::new(config)),
+        #[cfg(any(windows, target_arch = "s390x"))]
+        "v8" => return Ok(None),
 
-    #[cfg(feature = "fuzz-spec-interpreter")]
-    if allowed.contains(&"spec") {
-        if let Result::Ok(e) =
-            crate::oracles::diff_spec::SpecInterpreter::new(&existing_config.module_config)
-        {
-            engines.push(Box::new(e))
-        }
-    }
+        _ => panic!("unknown engine {name}"),
+    };
 
-    #[cfg(not(any(windows, target_arch = "s390x")))]
-    if allowed.contains(&"v8") {
-        if let Result::Ok(e) =
-            crate::oracles::diff_v8::V8Engine::new(&existing_config.module_config)
-        {
-            engines.push(Box::new(e))
-        }
-    }
-
-    if engines.is_empty() {
-        return Ok(None);
-    }
-
-    // Use the input of the fuzzer to pick an engine that we'll be fuzzing
-    // Wasmtime against.
-    let index: usize = u.int_in_range(0..=engines.len() - 1)?;
-    let engine = engines.swap_remove(index);
-    log::debug!("selected engine: {}", engine.name());
     Ok(Some(engine))
 }
 
