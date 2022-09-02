@@ -106,7 +106,7 @@ fn run(data: &[u8]) -> Result<()> {
         (Ok(l), Ok(r)) => (l, r),
         (Err(l), Err(r)) => {
             let err = r.downcast::<Trap>().expect("not a trap");
-            lhs.assert_error_match(&err, l);
+            lhs.assert_error_match(&err, &l);
             return Ok(());
         }
         (l, r) => panic!(
@@ -117,7 +117,7 @@ fn run(data: &[u8]) -> Result<()> {
     };
 
     // Call each exported function with different sets of arguments.
-    for (name, signature) in rhs_instance.exported_functions() {
+    'outer: for (name, signature) in rhs_instance.exported_functions() {
         let mut invocations = 0;
         loop {
             let arguments = signature
@@ -128,8 +128,9 @@ fn run(data: &[u8]) -> Result<()> {
                 .results()
                 .map(|t| DiffValueType::try_from(t).unwrap())
                 .collect::<Vec<_>>();
-            differential(
+            let ok = differential(
                 lhs_instance.as_mut(),
+                lhs.as_ref(),
                 &mut rhs_instance,
                 &name,
                 &arguments,
@@ -137,12 +138,20 @@ fn run(data: &[u8]) -> Result<()> {
             )
             .expect("failed to run differential evaluation");
 
+            invocations += 1;
+            STATS.total_invocations.fetch_add(1, SeqCst);
+
+            // If this differential execution has resulted in the two instances
+            // diverging in state we can't keep executing so don't execute any
+            // more functions.
+            if !ok {
+                break 'outer;
+            }
+
             // We evaluate the same function with different arguments until we
             // hit a predetermined limit or we run out of unstructured data--it
             // does not make sense to re-evaluate the same arguments over and
             // over.
-            invocations += 1;
-            STATS.total_invocations.fetch_add(1, SeqCst);
             if invocations > NUM_INVOCATIONS || u.is_empty() {
                 break;
             }

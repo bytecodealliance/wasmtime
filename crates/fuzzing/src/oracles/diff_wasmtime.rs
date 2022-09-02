@@ -5,7 +5,7 @@ use crate::oracles::dummy;
 use crate::oracles::engine::DiffInstance;
 use crate::oracles::{compile_module, engine::DiffEngine, StoreLimits};
 use anyhow::{Context, Error, Result};
-use wasmtime::{Extern, FuncType, Instance, Module, Store, Trap, Val};
+use wasmtime::{Extern, FuncType, Instance, Module, Store, Trap, TrapCode, Val};
 
 /// A wrapper for using Wasmtime as a [`DiffEngine`].
 pub struct WasmtimeEngine {
@@ -34,8 +34,10 @@ impl DiffEngine for WasmtimeEngine {
         Ok(Box::new(instance))
     }
 
-    fn assert_error_match(&self, trap: &Trap, err: Error) {
-        let trap2 = err.downcast::<Trap>().unwrap();
+    fn assert_error_match(&self, trap: &Trap, err: &Error) {
+        let trap2 = err
+            .downcast_ref::<Trap>()
+            .expect(&format!("not a trap: {:?}", err));
         assert_eq!(
             trap.trap_code(),
             trap2.trap_code(),
@@ -43,6 +45,13 @@ impl DiffEngine for WasmtimeEngine {
             trap,
             trap2
         );
+    }
+
+    fn is_stack_overflow(&self, err: &Error) -> bool {
+        match err.downcast_ref::<Trap>() {
+            Some(trap) => trap.trap_code() == Some(TrapCode::StackOverflow),
+            None => false,
+        }
     }
 }
 

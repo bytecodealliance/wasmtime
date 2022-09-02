@@ -76,7 +76,11 @@ pub trait DiffEngine {
 
     /// Tests that the wasmtime-originating `trap` matches the error this engine
     /// generated.
-    fn assert_error_match(&self, trap: &Trap, err: Error);
+    fn assert_error_match(&self, trap: &Trap, err: &Error);
+
+    /// Returns whether the error specified from this engine might be stack
+    /// overflow.
+    fn is_stack_overflow(&self, err: &Error) -> bool;
 }
 
 /// Provide a way to evaluate Wasm functions--a Wasm instance implemented by a

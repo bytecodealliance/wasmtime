@@ -59,9 +59,15 @@ impl DiffEngine for SpecInterpreter {
         }))
     }
 
-    fn assert_error_match(&self, trap: &Trap, err: Error) {
+    fn assert_error_match(&self, trap: &Trap, err: &Error) {
         // TODO: implement this for the spec interpreter
         drop((trap, err));
+    }
+
+    fn is_stack_overflow(&self, err: &Error) -> bool {
+        // TODO: implement this for the spec interpreter
+        drop(err);
+        false
     }
 }
 
