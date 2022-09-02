@@ -154,6 +154,25 @@ impl DataValue {
             ty,
         )
     }
+
+    /// Performs a bitwise comparison over the contents of [DataValue].
+    ///
+    /// Returns true if all bits are equal.
+    ///
+    /// This behaviour is different from PartialEq for NaN floats.
+    pub fn bitwise_eq(&self, other: &DataValue) -> bool {
+        match (self, other) {
+            // We need to bit compare the floats to ensure that we produce the correct values
+            // on NaN's. The test suite expects to assert the precise bit pattern on NaN's or
+            // works around it in the tests themselves.
+            (DataValue::F32(a), DataValue::F32(b)) => a.bits() == b.bits(),
+            (DataValue::F64(a), DataValue::F64(b)) => a.bits() == b.bits(),
+
+            // We don't need to worry about F32x4 / F64x2 Since we compare V128 which is already the
+            // raw bytes anyway
+            (a, b) => a == b,
+        }
+    }
 }
 
 /// Record failures to cast [DataValue].

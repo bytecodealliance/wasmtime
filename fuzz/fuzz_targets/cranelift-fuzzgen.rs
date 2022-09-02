@@ -27,11 +27,12 @@ enum RunResult {
     Error(Box<dyn std::error::Error>),
 }
 
-impl RunResult {
-    pub fn unwrap(self) -> Vec<DataValue> {
-        match self {
-            RunResult::Success(d) => d,
-            _ => panic!("Expected RunResult::Success in unwrap but got: {:?}", self),
+impl PartialEq for RunResult {
+    fn eq(&self, other: &Self) -> bool {
+        if let (RunResult::Success(l), RunResult::Success(r)) = (self, other) {
+            l.len() == r.len() && l.iter().zip(r).all(|(l, r)| l.bitwise_eq(r))
+        } else {
+            false
         }
     }
 }
@@ -123,6 +124,6 @@ fuzz_target!(|testcase: TestCase| {
             _ => panic!("host failed: {:?}", host_res),
         }
 
-        assert_eq!(int_res.unwrap(), host_res.unwrap());
+        assert_eq!(int_res, host_res);
     }
 });

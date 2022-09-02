@@ -54,20 +54,11 @@ impl RunCommand {
         actual: &Vec<DataValue>,
         expected: &Vec<DataValue>,
     ) -> bool {
-        let are_equal = actual
-            .into_iter()
-            .zip(expected.into_iter())
-            .all(|(a, b)| match (a, b) {
-                // We need to bit compare the floats to ensure that we produce the correct values
-                // on NaN's. The test suite expects to assert the precise bit pattern on NaN's or
-                // works around it in the tests themselves.
-                (DataValue::F32(a), DataValue::F32(b)) => a.bits() == b.bits(),
-                (DataValue::F64(a), DataValue::F64(b)) => a.bits() == b.bits(),
-
-                // We don't need to worry about F32x4 / F64x2 Since we compare V128 which is already the
-                // raw bytes anyway
-                (a, b) => a == b,
-            });
+        let are_equal = actual.len() == expected.len()
+            && actual
+                .into_iter()
+                .zip(expected.into_iter())
+                .all(|(a, b)| a.bitwise_eq(b));
 
         match compare {
             Comparison::Equals => are_equal,
