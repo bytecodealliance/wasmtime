@@ -323,14 +323,20 @@ impl<'a> Arbitrary<'a> for Config {
             ..
         } = &mut config.wasmtime.strategy
         {
+            let cfg = &mut config.module_config.config;
             // If the pooling allocator is used, do not allow shared memory to
             // be created. FIXME: see
             // https://github.com/bytecodealliance/wasmtime/issues/4244.
-            config.module_config.config.threads_enabled = false;
+            cfg.threads_enabled = false;
 
             // Force the use of a normal memory config when using the pooling allocator and
             // limit the static memory maximum to be the same as the pooling allocator's memory
             // page limit.
+            if cfg.max_memory_pages < limits.memory_pages {
+                limits.memory_pages = cfg.max_memory_pages;
+            } else {
+                cfg.max_memory_pages = limits.memory_pages;
+            }
             config.wasmtime.memory_config = match config.wasmtime.memory_config {
                 MemoryConfig::Normal(mut config) => {
                     config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
@@ -343,12 +349,10 @@ impl<'a> Arbitrary<'a> for Config {
                 }
             };
 
-            // Force this pooling allocator to always be able to accomodate the
+            // Force this pooling allocator to always be able to accommodate the
             // module that may be generated.
-            let cfg = &mut config.module_config.config;
             limits.memories = cfg.max_memories as u32;
             limits.tables = cfg.max_tables as u32;
-            limits.memory_pages = cfg.max_memory_pages;
         }
 
         Ok(config)
