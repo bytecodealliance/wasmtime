@@ -1772,12 +1772,11 @@
 (rule (lower (has_type ty (splat (ireduce (iconst (u64_from_imm64 n))))))
       (splat_const n (vector_size ty)))
 
-(rule (lower (has_type ty (splat x @ (load flags addr offset))))
+(rule (lower (has_type ty (splat x @ (load flags _ _))))
       (if-let mem_op (is_sinkable_inst x))
-      (let ((_ Unit (sink_inst mem_op))
-            (addr AMode (amode (lane_type ty) addr offset))
-            (address Reg (load_addr addr)))
-           (ld1r address (vector_size ty) flags)))
+      (let ((addr AMode (sink_load_into_amode (lane_type ty) mem_op))
+             (address Reg (load_addr addr)))
+            (ld1r address (vector_size ty) flags)))
 
 ;;;; Rules for `AtomicLoad` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (valid_atomic_transaction ty) (atomic_load flags addr)))

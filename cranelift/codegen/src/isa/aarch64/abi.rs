@@ -34,9 +34,9 @@ static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
 impl Into<AMode> for StackAMode {
     fn into(self) -> AMode {
         match self {
-            StackAMode::FPOffset(off, ty) => AMode::FPOffset(off, ty),
-            StackAMode::NominalSPOffset(off, ty) => AMode::NominalSPOffset(off, ty),
-            StackAMode::SPOffset(off, ty) => AMode::SPOffset(off, ty),
+            StackAMode::FPOffset(off, ty) => AMode::FPOffset { off, ty },
+            StackAMode::NominalSPOffset(off, ty) => AMode::NominalSPOffset { off, ty },
+            StackAMode::SPOffset(off, ty) => AMode::SPOffset { off, ty },
         }
     }
 }
@@ -462,12 +462,20 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Inst {
-        let mem = AMode::RegOffset(base, offset as i64, ty);
+        let mem = AMode::RegOffset {
+            rn: base,
+            off: offset as i64,
+            ty,
+        };
         Inst::gen_load(into_reg, mem, ty, MemFlags::trusted())
     }
 
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Inst {
-        let mem = AMode::RegOffset(base, offset as i64, ty);
+        let mem = AMode::RegOffset {
+            rn: base,
+            off: offset as i64,
+            ty,
+        };
         Inst::gen_store(mem, from_reg, ty, MemFlags::trusted())
     }
 
@@ -674,7 +682,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // str rd, [sp, #-16]!
             insts.push(Inst::Store64 {
                 rd,
-                mem: AMode::SPPreIndexed(SImm9::maybe_from_i64(-clobber_offset_change).unwrap()),
+                mem: AMode::SPPreIndexed {
+                    simm9: SImm9::maybe_from_i64(-clobber_offset_change).unwrap(),
+                },
                 flags: MemFlags::trusted(),
             });
 
@@ -728,7 +738,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         let store_vec_reg = |rd| Inst::FpuStore64 {
             rd,
-            mem: AMode::SPPreIndexed(SImm9::maybe_from_i64(-clobber_offset_change).unwrap()),
+            mem: AMode::SPPreIndexed {
+                simm9: SImm9::maybe_from_i64(-clobber_offset_change).unwrap(),
+            },
             flags: MemFlags::trusted(),
         };
         let iter = clobbered_vec.chunks_exact(2);
@@ -821,7 +833,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         let load_vec_reg = |rd| Inst::FpuLoad64 {
             rd,
-            mem: AMode::SPPostIndexed(SImm9::maybe_from_i64(16).unwrap()),
+            mem: AMode::SPPostIndexed {
+                simm9: SImm9::maybe_from_i64(16).unwrap(),
+            },
             flags: MemFlags::trusted(),
         };
         let load_vec_reg_pair = |rt, rt2| Inst::FpuLoadP64 {
@@ -877,7 +891,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // ldr rd, [sp], #16
             insts.push(Inst::ULoad64 {
                 rd,
-                mem: AMode::SPPostIndexed(SImm9::maybe_from_i64(16).unwrap()),
+                mem: AMode::SPPostIndexed {
+                    simm9: SImm9::maybe_from_i64(16).unwrap(),
+                },
                 flags: MemFlags::trusted(),
             });
         }

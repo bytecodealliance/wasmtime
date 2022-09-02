@@ -6,12 +6,12 @@ use generated_code::Context;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
-    lower_constant_f128, lower_constant_f32, lower_constant_f64, lower_fp_condcode,
-    writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo,
-    CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift,
-    Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MoveWideConst, MoveWideOp, NarrowValueMode,
-    Opcode, OperandSize, PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VecMisc2, VectorSize,
-    NZCV,
+    fp_reg, lower_constant_f128, lower_constant_f32, lower_constant_f64, lower_fp_condcode,
+    stack_reg, writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget,
+    CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FPUOpRIMod, FloatCC, Imm12,
+    ImmLogic, ImmShift, Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MemLabel, MoveWideConst,
+    MoveWideOp, NarrowValueMode, Opcode, OperandSize, PairAMode, Reg, SImm9, ScalarSize,
+    ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize, NZCV,
 };
 use crate::ir::condcodes;
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm};
@@ -148,6 +148,22 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
             I8 | I16 | I32 | I64 | R64 => Some(ty),
             ty if ty.is_bool() => Some(ty),
             _ => None,
+        }
+    }
+
+    fn is_zero_simm9(&mut self, imm: &SImm9) -> Option<()> {
+        if imm.value() == 0 {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    fn is_zero_uimm12(&mut self, imm: &UImm12Scaled) -> Option<()> {
+        if imm.value() == 0 {
+            Some(())
+        } else {
+            None
         }
     }
 
@@ -291,6 +307,14 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
     fn zero_reg(&mut self) -> Reg {
         zero_reg()
+    }
+
+    fn stack_reg(&mut self) -> Reg {
+        stack_reg()
+    }
+
+    fn fp_reg(&mut self) -> Reg {
+        fp_reg()
     }
 
     fn extended_value_from_value(&mut self, val: Value) -> Option<ExtendedValue> {
@@ -479,10 +503,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
     fn pair_amode(&mut self, addr: Value, offset: u32) -> PairAMode {
         lower_pair_address(self.lower_ctx, addr, offset as i32)
-    }
-
-    fn amode_is_reg(&mut self, address: &AMode) -> Option<Reg> {
-        address.is_reg()
     }
 
     fn constant_f64(&mut self, value: u64) -> Reg {
