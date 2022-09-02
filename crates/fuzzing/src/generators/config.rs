@@ -48,7 +48,6 @@ impl Config {
         // Allow a memory to be generated, but don't let it get too large.
         // Additionally require the maximum size to guarantee that the growth
         // behavior is consistent across engines.
-        config.max_memories = 1;
         config.max_memory_pages = 10;
         config.memory_max_size_required = true;
 
@@ -59,7 +58,6 @@ impl Config {
         //
         // Note that while reference types are disabled below, only allow one
         // table.
-        config.max_tables = 1;
         config.max_table_elements = 1_000;
         config.table_max_size_required = true;
 
@@ -80,10 +78,10 @@ impl Config {
         } = &mut self.wasmtime.strategy
         {
             // One single-page memory
-            limits.memories = 1;
+            limits.memories = config.max_memories as u32;
             limits.memory_pages = 10;
 
-            limits.tables = 1;
+            limits.tables = config.max_tables as u32;
             limits.table_elements = 1_000;
 
             limits.size = 1_000_000;
@@ -323,7 +321,7 @@ impl<'a> Arbitrary<'a> for Config {
         if let InstanceAllocationStrategy::Pooling {
             instance_limits: limits,
             ..
-        } = &config.wasmtime.strategy
+        } = &mut config.wasmtime.strategy
         {
             // If the pooling allocator is used, do not allow shared memory to
             // be created. FIXME: see
@@ -345,14 +343,12 @@ impl<'a> Arbitrary<'a> for Config {
                 }
             };
 
+            // Force this pooling allocator to always be able to accomodate the
+            // module that may be generated.
             let cfg = &mut config.module_config.config;
-            cfg.max_memories = limits.memories as usize;
-            cfg.max_tables = limits.tables as usize;
-            cfg.max_memory_pages = limits.memory_pages;
-
-            // Force no aliases in any generated modules as they might count against the
-            // import limits above.
-            cfg.max_aliases = 0;
+            limits.memories = cfg.max_memories as u32;
+            limits.tables = cfg.max_tables as u32;
+            limits.memory_pages = cfg.max_memory_pages;
         }
 
         Ok(config)

@@ -35,6 +35,10 @@ impl V8Engine {
             bail!("memory64 not enabled by default in v8");
         }
 
+        if config.config.max_memories > 1 {
+            bail!("multi-memory not enabled by default in v8");
+        }
+
         Ok(Self {
             isolate: Rc::new(RefCell::new(v8::Isolate::new(Default::default()))),
         })
