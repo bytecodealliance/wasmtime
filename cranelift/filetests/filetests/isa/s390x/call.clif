@@ -14,7 +14,7 @@ block0(v0: i64):
 }
 
 ;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -160
+;   aghi %r15, %r15, -160
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
@@ -31,7 +31,7 @@ block0(v0: i32):
 }
 
 ;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -160
+;   aghi %r15, %r15, -160
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   llgfr %r2, %r2
@@ -58,7 +58,7 @@ block0(v0: i32):
 }
 
 ;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -160
+;   aghi %r15, %r15, -160
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   lgfr %r2, %r2
@@ -85,7 +85,7 @@ block0(v0: i64):
 }
 
 ;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -160
+;   aghi %r15, %r15, -160
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   brasl %r14, %g
@@ -101,7 +101,7 @@ block0(v0: i32):
 }
 
 ;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -160
+;   aghi %r15, %r15, -160
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   llgfr %r2, %r2
@@ -118,14 +118,12 @@ block0(v0: i64, v1: i64):
 }
 
 ;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -160
+;   aghi %r15, %r15, -160
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   basr %r14, %r3
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
-
-
 
 function %incoming_args(i64, i32, i32 uext, i32 sext, i16, i16 uext, i16 sext, i8, i8 uext, i8 sext) -> i64 {
 block0(v0: i64, v1: i32, v2: i32, v3: i32, v4: i16, v5: i16, v6: i16, v7: i8, v8: i8, v9: i8):
@@ -151,7 +149,7 @@ block0(v0: i64, v1: i32, v2: i32, v3: i32, v4: i16, v5: i16, v6: i16, v7: i8, v8
 }
 
 ;   stmg %r6, %r15, 48(%r15)
-;   aghi %r15, -16
+;   aghi %r15, %r15, -16
 ; block0:
 ;   stg %r2, 0(%r15)
 ;   lgr %r10, %r6
@@ -178,7 +176,7 @@ block0(v0: i64, v1: i32, v2: i32, v3: i32, v4: i16, v5: i16, v6: i16, v7: i8, v8
 ;   agrk %r5, %r8, %r5
 ;   agrk %r4, %r10, %r4
 ;   agrk %r3, %r13, %r3
-;   agr %r2, %r6
+;   agr %r2, %r2, %r6
 ;   agrk %r4, %r5, %r4
 ;   agrk %r5, %r3, %r2
 ;   agrk %r2, %r4, %r5

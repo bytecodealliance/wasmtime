@@ -55,6 +55,6 @@ block5(v5: i32):
 ; block8:
 ;   jg label9
 ; block9:
-;   ar %r2, %r5
+;   ar %r2, %r2, %r5
 ;   br %r14
 

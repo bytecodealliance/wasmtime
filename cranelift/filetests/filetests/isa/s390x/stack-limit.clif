@@ -38,7 +38,7 @@ block0(v0: i64):
 
 ;   clgrtle %r15, %r2
 ;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -160
+;   aghi %r15, %r15, -160
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   bras %r1, 12 ; data %foo + 0 ; lg %r4, 0(%r1)
@@ -61,7 +61,7 @@ block0(v0: i64):
 ;   lg %r1, 4(%r1)
 ;   clgrtle %r15, %r1
 ;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -160
+;   aghi %r15, %r15, -160
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   bras %r1, 12 ; data %foo + 0 ; lg %r4, 0(%r1)
@@ -77,9 +77,9 @@ block0(v0: i64):
 
 ;   la %r1, 168(%r2)
 ;   clgrtle %r15, %r1
-;   aghi %r15, -168
+;   aghi %r15, %r15, -168
 ; block0:
-;   aghi %r15, 168
+;   aghi %r15, %r15, 168
 ;   br %r14
 
 function %large_stack_limit(i64 stack_limit) {
@@ -91,9 +91,9 @@ block0(v0: i64):
 ;   clgrtle %r15, %r2
 ;   lay %r1, 400000(%r2)
 ;   clgrtle %r15, %r1
-;   agfi %r15, -400000
+;   agfi %r15, %r15, -400000
 ; block0:
-;   agfi %r15, 400000
+;   agfi %r15, %r15, 400000
 ;   br %r14
 
 function %huge_stack_limit(i64 stack_limit) {
@@ -104,11 +104,11 @@ block0(v0: i64):
 
 ;   clgrtle %r15, %r2
 ;   lgr %r1, %r2
-;   algfi %r1, 4000000
+;   algfi %r1, %r1, 4000000
 ;   clgrtle %r15, %r1
-;   agfi %r15, -4000000
+;   agfi %r15, %r15, -4000000
 ; block0:
-;   agfi %r15, 4000000
+;   agfi %r15, %r15, 4000000
 ;   br %r14
 
 function %limit_preamble(i64 vmctx) {
@@ -125,9 +125,9 @@ block0(v0: i64):
 ;   lg %r1, 4(%r1)
 ;   la %r1, 24(%r1)
 ;   clgrtle %r15, %r1
-;   aghi %r15, -24
+;   aghi %r15, %r15, -24
 ; block0:
-;   aghi %r15, 24
+;   aghi %r15, %r15, 24
 ;   br %r14
 
 function %limit_preamble_large(i64 vmctx) {
@@ -145,9 +145,9 @@ block0(v0: i64):
 ;   clgrtle %r15, %r1
 ;   lay %r1, 400000(%r1)
 ;   clgrtle %r15, %r1
-;   agfi %r15, -400000
+;   agfi %r15, %r15, -400000
 ; block0:
-;   agfi %r15, 400000
+;   agfi %r15, %r15, 400000
 ;   br %r14
 
 function %limit_preamble_huge(i64 vmctx) {
@@ -163,11 +163,11 @@ block0(v0: i64):
 ;   lg %r1, 0(%r2)
 ;   lg %r1, 4(%r1)
 ;   clgrtle %r15, %r1
-;   algfi %r1, 4000000
+;   algfi %r1, %r1, 4000000
 ;   clgrtle %r15, %r1
-;   agfi %r15, -4000000
+;   agfi %r15, %r15, -4000000
 ; block0:
-;   agfi %r15, 4000000
+;   agfi %r15, %r15, 4000000
 ;   br %r14
 
 function %limit_preamble_huge_offset(i64 vmctx) {
@@ -182,8 +182,8 @@ block0(v0: i64):
 ;   lgfi %r1, 1000000 ; lg %r1, 0(%r1,%r2)
 ;   la %r1, 24(%r1)
 ;   clgrtle %r15, %r1
-;   aghi %r15, -24
+;   aghi %r15, %r15, -24
 ; block0:
-;   aghi %r15, 24
+;   aghi %r15, %r15, 24
 ;   br %r14
 

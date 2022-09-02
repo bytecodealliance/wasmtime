@@ -984,7 +984,7 @@ block0(v0: b128):
 ; block0:
 ;   vl %v0, 0(%r2)
 ;   vlgvb %r2, %v0, 15
-;   nill %r2, 1
+;   nill %r2, %r2, 1
 ;   br %r14
 
 function %bint_b128_i32(b128) -> i32 {
@@ -996,7 +996,7 @@ block0(v0: b128):
 ; block0:
 ;   vl %v0, 0(%r2)
 ;   vlgvb %r2, %v0, 15
-;   nill %r2, 1
+;   nill %r2, %r2, 1
 ;   br %r14
 
 function %bint_b128_i16(b128) -> i16 {
@@ -1008,7 +1008,7 @@ block0(v0: b128):
 ; block0:
 ;   vl %v0, 0(%r2)
 ;   vlgvb %r2, %v0, 15
-;   nill %r2, 1
+;   nill %r2, %r2, 1
 ;   br %r14
 
 function %bint_b128_i8(b128) -> i8 {
@@ -1020,7 +1020,7 @@ block0(v0: b128):
 ; block0:
 ;   vl %v0, 0(%r2)
 ;   vlgvb %r2, %v0, 15
-;   nill %r2, 1
+;   nill %r2, %r2, 1
 ;   br %r14
 
 function %bint_b64_i128(b64) -> i128 {
@@ -1030,10 +1030,10 @@ block0(v0: b64):
 }
 
 ; block0:
-;   nill %r3, 1
-;   vgbm %v7, 0
-;   vlvgb %v7, %r3, 15
-;   vst %v7, 0(%r2)
+;   nill %r3, %r3, 1
+;   vgbm %v6, 0
+;   vlvgb %v6, %r3, 15
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bint_b64_i64(b64) -> i64 {
@@ -1044,7 +1044,7 @@ block0(v0: b64):
 
 ; block0:
 ;   lghi %r5, 1
-;   ngr %r2, %r5
+;   ngr %r2, %r2, %r5
 ;   br %r14
 
 function %bint_b64_i32(b64) -> i32 {
@@ -1054,7 +1054,7 @@ block0(v0: b64):
 }
 
 ; block0:
-;   nilf %r2, 1
+;   nilf %r2, %r2, 1
 ;   br %r14
 
 function %bint_b64_i16(b64) -> i16 {
@@ -1064,7 +1064,7 @@ block0(v0: b64):
 }
 
 ; block0:
-;   nill %r2, 1
+;   nill %r2, %r2, 1
 ;   br %r14
 
 function %bint_b64_i8(b64) -> i8 {
@@ -1074,7 +1074,7 @@ block0(v0: b64):
 }
 
 ; block0:
-;   nill %r2, 1
+;   nill %r2, %r2, 1
 ;   br %r14
 
 function %bint_b32_i128(b32) -> i128 {
@@ -1084,10 +1084,10 @@ block0(v0: b32):
 }
 
 ; block0:
-;   nill %r3, 1
-;   vgbm %v7, 0
-;   vlvgb %v7, %r3, 15
-;   vst %v7, 0(%r2)
+;   nill %r3, %r3, 1
+;   vgbm %v6, 0
+;   vlvgb %v6, %r3, 15
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bint_b32_i64(b32) -> i64 {
@@ -1098,7 +1098,7 @@ block0(v0: b32):
 
 ; block0:
 ;   lghi %r5, 1
-;   ngr %r2, %r5
+;   ngr %r2, %r2, %r5
 ;   br %r14
 
 function %bint_b32_i32(b32) -> i32 {
@@ -1108,7 +1108,7 @@ block0(v0: b32):
 }
 
 ; block0:
-;   nilf %r2, 1
+;   nilf %r2, %r2, 1
 ;   br %r14
 
 function %bint_b32_i16(b32) -> i16 {
@@ -1118,7 +1118,7 @@ block0(v0: b32):
 }
 
 ; block0:
-;   nill %r2, 1
+;   nill %r2, %r2, 1
 ;   br %r14
 
 function %bint_b32_i8(b32) -> i8 {
@@ -1128,7 +1128,7 @@ block0(v0: b32):
 }
 
 ; block0:
-;   nill %r2, 1
+;   nill %r2, %r2, 1
 ;   br %r14
 
 function %bint_b16_i128(b16) -> i128 {
@@ -1138,10 +1138,10 @@ block0(v0: b16):
 }
 
 ; block0:
-;   nill %r3, 1
-;   vgbm %v7, 0
-;   vlvgb %v7, %r3, 15
-;   vst %v7, 0(%r2)
+;   nill %r3, %r3, 1
+;   vgbm %v6, 0
+;   vlvgb %v6, %r3, 15
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bint_b16_i64(b16) -> i64 {
@@ -1152,7 +1152,7 @@ block0(v0: b16):
 
 ; block0:
 ;   lghi %r5, 1
-;   ngr %r2, %r5
+;   ngr %r2, %r2, %r5
 ;   br %r14
 
 function %bint_b16_i32(b16) -> i32 {
@@ -1162,7 +1162,7 @@ block0(v0: b16):
 }
 
 ; block0:
-;   nilf %r2, 1
+;   nilf %r2, %r2, 1
 ;   br %r14
 
 function %bint_b16_i16(b16) -> i16 {
@@ -1172,7 +1172,7 @@ block0(v0: b16):
 }
 
 ; block0:
-;   nill %r2, 1
+;   nill %r2, %r2, 1
 ;   br %r14
 
 function %bint_b16_i8(b16) -> i8 {
@@ -1182,7 +1182,7 @@ block0(v0: b16):
 }
 
 ; block0:
-;   nill %r2, 1
+;   nill %r2, %r2, 1
 ;   br %r14
 
 function %bint_b8_i128(b8) -> i128 {
@@ -1192,10 +1192,10 @@ block0(v0: b8):
 }
 
 ; block0:
-;   nill %r3, 1
-;   vgbm %v7, 0
-;   vlvgb %v7, %r3, 15
-;   vst %v7, 0(%r2)
+;   nill %r3, %r3, 1
+;   vgbm %v6, 0
+;   vlvgb %v6, %r3, 15
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bint_b8_i64(b8) -> i64 {
@@ -1206,7 +1206,7 @@ block0(v0: b8):
 
 ; block0:
 ;   lghi %r5, 1
-;   ngr %r2, %r5
+;   ngr %r2, %r2, %r5
 ;   br %r14
 
 function %bint_b8_i32(b8) -> i32 {
@@ -1216,7 +1216,7 @@ block0(v0: b8):
 }
 
 ; block0:
-;   nilf %r2, 1
+;   nilf %r2, %r2, 1
 ;   br %r14
 
 function %bint_b8_i16(b8) -> i16 {
@@ -1226,7 +1226,7 @@ block0(v0: b8):
 }
 
 ; block0:
-;   nill %r2, 1
+;   nill %r2, %r2, 1
 ;   br %r14
 
 function %bint_b8_i8(b8) -> i8 {
@@ -1236,7 +1236,7 @@ block0(v0: b8):
 }
 
 ; block0:
-;   nill %r2, 1
+;   nill %r2, %r2, 1
 ;   br %r14
 
 function %bint_b1_i128(b1) -> i128 {
@@ -1246,10 +1246,10 @@ block0(v0: b1):
 }
 
 ; block0:
-;   nill %r3, 1
-;   vgbm %v7, 0
-;   vlvgb %v7, %r3, 15
-;   vst %v7, 0(%r2)
+;   nill %r3, %r3, 1
+;   vgbm %v6, 0
+;   vlvgb %v6, %r3, 15
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bint_b1_i64(b1) -> i64 {
@@ -1260,7 +1260,7 @@ block0(v0: b1):
 
 ; block0:
 ;   lghi %r5, 1
-;   ngr %r2, %r5
+;   ngr %r2, %r2, %r5
 ;   br %r14
 
 function %bint_b1_i32(b1) -> i32 {
@@ -1270,7 +1270,7 @@ block0(v0: b1):
 }
 
 ; block0:
-;   nilf %r2, 1
+;   nilf %r2, %r2, 1
 ;   br %r14
 
 function %bint_b1_i16(b1) -> i16 {
@@ -1280,7 +1280,7 @@ block0(v0: b1):
 }
 
 ; block0:
-;   nill %r2, 1
+;   nill %r2, %r2, 1
 ;   br %r14
 
 function %bint_b1_i8(b1) -> i8 {
@@ -1290,6 +1290,6 @@ block0(v0: b1):
 }
 
 ; block0:
-;   nill %r2, 1
+;   nill %r2, %r2, 1
 ;   br %r14
 

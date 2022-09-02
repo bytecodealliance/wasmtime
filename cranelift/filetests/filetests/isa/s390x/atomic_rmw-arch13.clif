@@ -32,11 +32,12 @@ block0(v0: i64, v1: i64, v2: i16):
 }
 
 ; block0:
-;   sllk %r5, %r3, 3
-;   nill %r3, 65532
+;   lgr %r5, %r4
+;   sllk %r4, %r3, 3
+;   nill %r3, %r3, 65532
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r5) ; rnsbg %r1, %r4, 32, 48, 16 ; xilf %r1, 4294901760 ; rll %r1, %r1, 0(%r5) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
-;   rll %r2, %r0, 16(%r5)
+;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r5, 32, 48, 16 ; xilf %r1, %r1, 4294901760 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   rll %r2, %r0, 16(%r4)
 ;   br %r14
 
 function %atomic_rmw_nand_i8(i64, i64, i8) -> i8 {
@@ -46,12 +47,13 @@ block0(v0: i64, v1: i64, v2: i8):
 }
 
 ; block0:
-;   sllk %r5, %r3, 3
-;   nill %r3, 65532
-;   lcr %r2, %r5
+;   lgr %r2, %r4
+;   sllk %r4, %r3, 3
+;   nill %r3, %r3, 65532
+;   lcr %r5, %r4
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r5) ; rnsbg %r1, %r4, 32, 40, 24 ; xilf %r1, 4278190080 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
-;   rll %r2, %r0, 8(%r5)
+;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r2, 32, 40, 24 ; xilf %r1, %r1, 4278190080 ; rll %r1, %r1, 0(%r5) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   rll %r2, %r0, 8(%r4)
 ;   br %r14
 
 function %atomic_rmw_nand_i64(i64, i64, i64) -> i64 {
@@ -87,14 +89,14 @@ block0(v0: i64, v1: i64, v2: i16):
 }
 
 ; block0:
-;   lgr %r5, %r4
+;   lgr %r2, %r4
 ;   sllk %r4, %r3, 3
-;   nill %r3, 65532
-;   lrvr %r5, %r5
+;   nill %r3, %r3, 65532
+;   lrvr %r5, %r2
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 16(%r4) ; rnsbg %r1, %r5, 48, 64, 48 ; xilf %r1, 65535 ; rll %r1, %r1, 16(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
-;   rll %r4, %r0, 0(%r4)
-;   lrvr %r2, %r4
+;   0: rll %r1, %r0, 16(%r4) ; rnsbg %r1, %r5, 48, 64, 48 ; xilf %r1, %r1, 65535 ; rll %r1, %r1, 16(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   rll %r3, %r0, 0(%r4)
+;   lrvr %r2, %r3
 ;   br %r14
 
 function %atomic_rmw_nand_i8(i64, i64, i8) -> i8 {
@@ -104,11 +106,12 @@ block0(v0: i64, v1: i64, v2: i8):
 }
 
 ; block0:
-;   sllk %r5, %r3, 3
-;   nill %r3, 65532
-;   lcr %r2, %r5
+;   lgr %r2, %r4
+;   sllk %r4, %r3, 3
+;   nill %r3, %r3, 65532
+;   lcr %r5, %r4
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r5) ; rnsbg %r1, %r4, 32, 40, 24 ; xilf %r1, 4278190080 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
-;   rll %r2, %r0, 8(%r5)
+;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r2, 32, 40, 24 ; xilf %r1, %r1, 4278190080 ; rll %r1, %r1, 0(%r5) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   rll %r2, %r0, 8(%r4)
 ;   br %r14
 

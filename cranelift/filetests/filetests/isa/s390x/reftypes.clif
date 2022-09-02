@@ -66,7 +66,7 @@ block3(v7: r64, v8: r64):
 }
 
 ;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -184
+;   aghi %r15, %r15, -184
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   stg %r3, 176(%r15)

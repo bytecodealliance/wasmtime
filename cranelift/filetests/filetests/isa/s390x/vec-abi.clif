@@ -10,7 +10,7 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
 }
 
 ;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -160
+;   aghi %r15, %r15, -160
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   bras %r1, 12 ; data %callee_be + 0 ; lg %r4, 0(%r1)
@@ -27,7 +27,7 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
 }
 
 ;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -224
+;   aghi %r15, %r15, -224
 ;   virtual_sp_offset_adjust 160
 ;   std %f8, 160(%r15)
 ;   std %f9, 168(%r15)
@@ -72,7 +72,7 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
 }
 
 ;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -224
+;   aghi %r15, %r15, -224
 ;   virtual_sp_offset_adjust 160
 ;   std %f8, 160(%r15)
 ;   std %f9, 168(%r15)
@@ -117,7 +117,7 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
 }
 
 ;   stmg %r14, %r15, 112(%r15)
-;   aghi %r15, -160
+;   aghi %r15, %r15, -160
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   bras %r1, 12 ; data %callee_le + 0 ; lg %r4, 0(%r1)
