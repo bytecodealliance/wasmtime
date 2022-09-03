@@ -253,16 +253,20 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode),
-    // udiv.i128 not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/4756
-    #[cfg(not(target_arch = "x86_64"))]
+    // udiv.i128 not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4756
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4864
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Udiv, &[I128, I128], &[I128], insert_opcode),
     // Sdiv
     (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode),
-    // sdiv.i128 not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/4770
-    #[cfg(not(target_arch = "x86_64"))]
+    // sdiv.i128 not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4770
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4864
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
     // Rotr
     (Opcode::Rotr, &[I8, I8], &[I8], insert_opcode),
