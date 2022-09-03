@@ -475,8 +475,11 @@ impl FromStr for Offset32 {
 /// We specifically avoid using a f32 here since some architectures may silently alter floats.
 /// See: https://github.com/bytecodealliance/wasmtime/pull/2251#discussion_r498508646
 ///
+/// The [PartialEq] and [Hash] implementations are over the underlying bit pattern, but
+/// [PartialOrd] respects IEEE754 semantics.
+///
 /// All bit patterns are allowed.
-#[derive(Copy, Clone, Debug, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 #[repr(C)]
 pub struct Ieee32(u32);
@@ -487,8 +490,11 @@ pub struct Ieee32(u32);
 /// We specifically avoid using a f64 here since some architectures may silently alter floats.
 /// See: https://github.com/bytecodealliance/wasmtime/pull/2251#discussion_r498508646
 ///
+/// The [PartialEq] and [Hash] implementations are over the underlying bit pattern, but
+/// [PartialOrd] respects IEEE754 semantics.
+///
 /// All bit patterns are allowed.
-#[derive(Copy, Clone, Debug, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 #[repr(C)]
 pub struct Ieee64(u64);
@@ -845,12 +851,6 @@ impl PartialOrd for Ieee32 {
     }
 }
 
-impl PartialEq<Ieee32> for Ieee32 {
-    fn eq(&self, other: &Ieee32) -> bool {
-        self.as_f32().eq(&other.as_f32())
-    }
-}
-
 impl Display for Ieee32 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let bits: u32 = self.0;
@@ -1034,12 +1034,6 @@ impl Ieee64 {
 impl PartialOrd for Ieee64 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.as_f64().partial_cmp(&other.as_f64())
-    }
-}
-
-impl PartialEq<Ieee64> for Ieee64 {
-    fn eq(&self, other: &Ieee64) -> bool {
-        self.as_f64().eq(&other.as_f64())
     }
 }
 

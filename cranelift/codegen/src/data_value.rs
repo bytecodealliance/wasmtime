@@ -10,7 +10,7 @@ use core::fmt::{self, Display, Formatter};
 ///
 /// [Value]: crate::ir::Value
 #[allow(missing_docs)]
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialOrd)]
 pub enum DataValue {
     B(bool),
     I8(i8),
@@ -27,6 +27,44 @@ pub enum DataValue {
     F64(Ieee64),
     V128([u8; 16]),
     V64([u8; 8]),
+}
+
+impl PartialEq for DataValue {
+    fn eq(&self, other: &Self) -> bool {
+        use DataValue::*;
+        match (self, other) {
+            (B(l), B(r)) => l == r,
+            (B(_), _) => false,
+            (I8(l), I8(r)) => l == r,
+            (I8(_), _) => false,
+            (I16(l), I16(r)) => l == r,
+            (I16(_), _) => false,
+            (I32(l), I32(r)) => l == r,
+            (I32(_), _) => false,
+            (I64(l), I64(r)) => l == r,
+            (I64(_), _) => false,
+            (I128(l), I128(r)) => l == r,
+            (I128(_), _) => false,
+            (U8(l), U8(r)) => l == r,
+            (U8(_), _) => false,
+            (U16(l), U16(r)) => l == r,
+            (U16(_), _) => false,
+            (U32(l), U32(r)) => l == r,
+            (U32(_), _) => false,
+            (U64(l), U64(r)) => l == r,
+            (U64(_), _) => false,
+            (U128(l), U128(r)) => l == r,
+            (U128(_), _) => false,
+            (F32(l), F32(r)) => l.as_f32() == r.as_f32(),
+            (F32(_), _) => false,
+            (F64(l), F64(r)) => l.as_f64() == r.as_f64(),
+            (F64(_), _) => false,
+            (V128(l), V128(r)) => l == r,
+            (V128(_), _) => false,
+            (V64(l), V64(r)) => l == r,
+            (V64(_), _) => false,
+        }
+    }
 }
 
 impl DataValue {
