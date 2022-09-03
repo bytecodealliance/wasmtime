@@ -135,7 +135,24 @@ fn insert_cmp(
     let rhs = builder.use_var(rhs);
 
     let res = if opcode == Opcode::Fcmp {
-        let cc = *fgen.u.choose(FloatCC::all())?;
+        // Some FloatCC's are not implemented on AArch64, see:
+        // https://github.com/bytecodealliance/wasmtime/issues/4850
+        let float_cc = if cfg!(target_arch = "aarch64") {
+            &[
+                FloatCC::Ordered,
+                FloatCC::Unordered,
+                FloatCC::Equal,
+                FloatCC::NotEqual,
+                FloatCC::LessThan,
+                FloatCC::LessThanOrEqual,
+                FloatCC::GreaterThan,
+                FloatCC::GreaterThanOrEqual,
+            ]
+        } else {
+            FloatCC::all()
+        };
+
+        let cc = *fgen.u.choose(float_cc)?;
         builder.ins().fcmp(cc, lhs, rhs)
     } else {
         let cc = *fgen.u.choose(IntCC::all())?;
@@ -232,19 +249,21 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Imul, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Imul, &[I128, I128], &[I128], insert_opcode),
     // Udiv
-    // udiv.i128 not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/4756
     (Opcode::Udiv, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode),
-    // (Opcode::Udiv, &[I128, I128], &[I128], insert_opcode),
+    // udiv.i128 not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/4756
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Udiv, &[I128, I128], &[I128], insert_opcode),
     // Sdiv
-    // sdiv.i128 not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/4770
     (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode),
-    // (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
+    // sdiv.i128 not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/4770
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
     // Rotr
     (Opcode::Rotr, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Rotr, &[I8, I16], &[I8], insert_opcode),
@@ -809,11 +828,7 @@ where
         let (block, args) = self.generate_target_block(builder)?;
         let cond = *self.u.choose(IntCC::all())?;
 
-        let bricmp_types = [
-            I8, I16, I32,
-            I64,
-            // I128 - TODO: https://github.com/bytecodealliance/wasmtime/issues/4406
-        ];
+        let bricmp_types = [I8, I16, I32, I64, I128];
         let _type = *self.u.choose(&bricmp_types[..])?;
 
         let lhs_var = self.get_variable_of_type(_type)?;
