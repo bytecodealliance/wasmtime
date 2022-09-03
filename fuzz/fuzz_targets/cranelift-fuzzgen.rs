@@ -1,9 +1,14 @@
 #![no_main]
 
+use lazy_static::lazy_static;
+use libfuzzer_sys::arbitrary::{Arbitrary, Unstructured};
 use libfuzzer_sys::fuzz_target;
+use std::collections::HashMap;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::LibCall;
+use cranelift_codegen::ir::{LibCall, TrapCode};
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_filetests::function_runner::{TestFileCompiler, Trampoline};
@@ -18,6 +23,85 @@ use cranelift_interpreter::step::CraneliftTrap;
 use smallvec::smallvec;
 
 const INTERPRETER_FUEL: u64 = 4096;
+
+/// Gather statistics about the fuzzer executions
+struct Statistics {
+    /// All inputs that we tried
+    pub total_inputs: AtomicU64,
+    /// Inputs that fuzzgen can build a function with
+    pub well_formed_inputs: AtomicU64,
+
+    /// Total amount of runs that we tried in the interpreter
+    /// One fuzzer input can have many runs
+    pub total_runs: AtomicU64,
+    /// How many runs were successful?
+    /// This is also how many runs were run in the backend
+    pub run_result_success: AtomicU64,
+    /// How many runs resulted in a timeout?
+    pub run_result_timeout: AtomicU64,
+    /// How many runs ended with a trap?
+    pub run_result_trap: HashMap<TrapCode, AtomicU64>,
+}
+
+impl Statistics {
+    pub fn print(&self) {
+        let total_inputs = self.total_inputs.load(Ordering::SeqCst);
+        if total_inputs != 100000 {
+            return;
+        }
+
+        let well_formed_inputs = self.well_formed_inputs.load(Ordering::SeqCst);
+        let total_runs = self.total_runs.load(Ordering::SeqCst);
+        let run_result_success = self.run_result_success.load(Ordering::SeqCst);
+        let run_result_timeout = self.run_result_timeout.load(Ordering::SeqCst);
+
+        println!("== FuzzGen Statistics  ====================");
+        println!("Total Inputs: {}", total_inputs);
+        println!(
+            "Well Formed Inputs: {} ({:.1}%)",
+            well_formed_inputs,
+            (well_formed_inputs as f64 / total_inputs as f64) * 100.0
+        );
+        println!("Total Runs: {}", total_runs);
+        println!(
+            "Successful Runs: {} ({:.1}% of Total Runs)",
+            run_result_success,
+            (run_result_success as f64 / total_runs as f64) * 100.0
+        );
+        println!(
+            "Timed out Runs: {} ({:.1}% of Total Runs)",
+            run_result_timeout,
+            (run_result_timeout as f64 / total_runs as f64) * 100.0
+        );
+        println!("Traps:");
+        for (trap, count) in self.run_result_trap.iter() {
+            let count = count.load(Ordering::SeqCst);
+
+            println!(
+                "\t{}: {} ({:.1}% of Total Runs)",
+                trap,
+                count,
+                (count as f64 / total_runs as f64) * 100.0
+            );
+        }
+    }
+}
+
+impl Default for Statistics {
+    fn default() -> Self {
+        Self {
+            total_inputs: AtomicU64::new(0),
+            well_formed_inputs: AtomicU64::new(0),
+            total_runs: AtomicU64::new(0),
+            run_result_success: AtomicU64::new(0),
+            run_result_timeout: AtomicU64::new(0),
+            run_result_trap: TrapCode::non_user_traps()
+                .iter()
+                .map(|t| (*t, AtomicU64::new(0)))
+                .collect(),
+        }
+    }
+}
 
 #[derive(Debug)]
 enum RunResult {
@@ -79,7 +163,24 @@ fn build_interpreter(testcase: &TestCase) -> Interpreter {
     interpreter
 }
 
-fuzz_target!(|testcase: TestCase| {
+lazy_static! {
+    static ref STATISTICS: Statistics = Statistics::default();
+}
+
+fuzz_target!(|bytes: &[u8]| {
+    STATISTICS.print();
+    STATISTICS.total_inputs.fetch_add(1, Ordering::SeqCst);
+
+    let mut unstructured = Unstructured::new(bytes);
+    let testcase = match TestCase::arbitrary(&mut unstructured) {
+        Ok(t) => t,
+        Err(_) => {
+            return;
+        }
+    };
+
+    STATISTICS.well_formed_inputs.fetch_add(1, Ordering::SeqCst);
+
     // Native fn
     let flags = {
         let mut builder = settings::builder();
@@ -101,13 +202,19 @@ fuzz_target!(|testcase: TestCase| {
     let trampoline = compiled.get_trampoline(&testcase.func).unwrap();
 
     for args in &testcase.inputs {
+        STATISTICS.total_runs.fetch_add(1, Ordering::SeqCst);
+
         // We rebuild the interpreter every run so that we don't accidentally carry over any state
         // between runs, such as fuel remaining.
         let mut interpreter = build_interpreter(&testcase);
         let int_res = run_in_interpreter(&mut interpreter, args);
         match int_res {
-            RunResult::Success(_) => {}
-            RunResult::Trap(_) => {
+            RunResult::Success(_) => {
+                STATISTICS.run_result_success.fetch_add(1, Ordering::SeqCst);
+            }
+            RunResult::Trap(CraneliftTrap::User(tc)) => {
+                STATISTICS.run_result_trap[&tc].fetch_add(1, Ordering::SeqCst);
+
                 // If this input traps, skip it and continue trying other inputs
                 // for this function. We've already compiled it anyway.
                 //
@@ -117,9 +224,14 @@ fuzz_target!(|testcase: TestCase| {
                 // not justify implementing it again here.
                 continue;
             }
+            RunResult::Trap(_) => {
+                // We never trigger these traps, and I'm not too bothered about counting them
+                unreachable!()
+            }
             RunResult::Timeout => {
                 // We probably generated an infinite loop, we should drop this entire input.
                 // We could `continue` like we do on traps, but timeouts are *really* expensive.
+                STATISTICS.run_result_timeout.fetch_add(1, Ordering::SeqCst);
                 return;
             }
             RunResult::Error(_) => panic!("interpreter failed: {:?}", int_res),

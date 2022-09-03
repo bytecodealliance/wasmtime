@@ -55,7 +55,7 @@ pub enum TrapCode {
 
 impl TrapCode {
     /// Returns a slice of all traps except `TrapCode::User` traps
-    pub fn non_user_traps() -> &'static [TrapCode] {
+    pub const fn non_user_traps() -> &'static [TrapCode] {
         &[
             TrapCode::StackOverflow,
             TrapCode::HeapOutOfBounds,
