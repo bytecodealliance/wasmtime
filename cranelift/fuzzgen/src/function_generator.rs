@@ -830,10 +830,9 @@ where
 
     fn generate_bricmp(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         let (block, args) = self.generate_target_block(builder)?;
-        let cond = *self.u.choose(IntCC::all())?;
 
-        let bricmp_types = [I8, I16, I32, I64, I128];
-        let _type = *self.u.choose(&bricmp_types[..])?;
+        let cc = *self.u.choose(IntCC::all())?;
+        let _type = *self.u.choose(&[I8, I16, I32, I64, I128])?;
 
         let lhs_var = self.get_variable_of_type(_type)?;
         let lhs_val = builder.use_var(lhs_var);
@@ -843,7 +842,7 @@ where
 
         builder
             .ins()
-            .br_icmp(cond, lhs_val, rhs_val, block, &args[..]);
+            .br_icmp(cc, lhs_val, rhs_val, block, &args[..]);
 
         // After bricmp's we must generate a jump
         self.generate_jump(builder)?;
