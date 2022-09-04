@@ -1,8 +1,8 @@
 #![no_main]
 
-use lazy_static::lazy_static;
 use libfuzzer_sys::arbitrary::{Arbitrary, Unstructured};
 use libfuzzer_sys::fuzz_target;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -29,7 +29,8 @@ struct Statistics {
     /// All inputs that we tried
     pub total_inputs: AtomicU64,
     /// Inputs that fuzzgen can build a function with
-    pub well_formed_inputs: AtomicU64,
+    /// This is also how many compiles we executed
+    pub valid_inputs: AtomicU64,
 
     /// Total amount of runs that we tried in the interpreter
     /// One fuzzer input can have many runs
@@ -40,17 +41,17 @@ struct Statistics {
     /// How many runs resulted in a timeout?
     pub run_result_timeout: AtomicU64,
     /// How many runs ended with a trap?
-    pub run_result_trap: HashMap<TrapCode, AtomicU64>,
+    pub run_result_trap: HashMap<CraneliftTrap, AtomicU64>,
 }
 
 impl Statistics {
     pub fn print(&self) {
         let total_inputs = self.total_inputs.load(Ordering::SeqCst);
-        if total_inputs != 100000 {
+        if total_inputs != 50000 {
             return;
         }
 
-        let well_formed_inputs = self.well_formed_inputs.load(Ordering::SeqCst);
+        let valid_inputs = self.valid_inputs.load(Ordering::SeqCst);
         let total_runs = self.total_runs.load(Ordering::SeqCst);
         let run_result_success = self.run_result_success.load(Ordering::SeqCst);
         let run_result_timeout = self.run_result_timeout.load(Ordering::SeqCst);
@@ -58,9 +59,9 @@ impl Statistics {
         println!("== FuzzGen Statistics  ====================");
         println!("Total Inputs: {}", total_inputs);
         println!(
-            "Well Formed Inputs: {} ({:.1}%)",
-            well_formed_inputs,
-            (well_formed_inputs as f64 / total_inputs as f64) * 100.0
+            "Valid Inputs: {} ({:.1}%)",
+            valid_inputs,
+            (valid_inputs as f64 / total_inputs as f64) * 100.0
         );
         println!("Total Runs: {}", total_runs);
         println!(
@@ -89,16 +90,20 @@ impl Statistics {
 
 impl Default for Statistics {
     fn default() -> Self {
+        let mut run_result_trap = HashMap::new();
+        run_result_trap.insert(CraneliftTrap::Debug, AtomicU64::new(0));
+        run_result_trap.insert(CraneliftTrap::Resumable, AtomicU64::new(0));
+        for trapcode in TrapCode::non_user_traps() {
+            run_result_trap.insert(CraneliftTrap::User(*trapcode), AtomicU64::new(0));
+        }
+
         Self {
             total_inputs: AtomicU64::new(0),
-            well_formed_inputs: AtomicU64::new(0),
+            valid_inputs: AtomicU64::new(0),
             total_runs: AtomicU64::new(0),
             run_result_success: AtomicU64::new(0),
             run_result_timeout: AtomicU64::new(0),
-            run_result_trap: TrapCode::non_user_traps()
-                .iter()
-                .map(|t| (*t, AtomicU64::new(0)))
-                .collect(),
+            run_result_trap,
         }
     }
 }
@@ -163,9 +168,7 @@ fn build_interpreter(testcase: &TestCase) -> Interpreter {
     interpreter
 }
 
-lazy_static! {
-    static ref STATISTICS: Statistics = Statistics::default();
-}
+static STATISTICS: Lazy<Statistics> = Lazy::new(Statistics::default);
 
 fuzz_target!(|bytes: &[u8]| {
     STATISTICS.print();
@@ -179,7 +182,7 @@ fuzz_target!(|bytes: &[u8]| {
         }
     };
 
-    STATISTICS.well_formed_inputs.fetch_add(1, Ordering::SeqCst);
+    STATISTICS.valid_inputs.fetch_add(1, Ordering::SeqCst);
 
     // Native fn
     let flags = {
@@ -212,9 +215,8 @@ fuzz_target!(|bytes: &[u8]| {
             RunResult::Success(_) => {
                 STATISTICS.run_result_success.fetch_add(1, Ordering::SeqCst);
             }
-            RunResult::Trap(CraneliftTrap::User(tc)) => {
-                STATISTICS.run_result_trap[&tc].fetch_add(1, Ordering::SeqCst);
-
+            RunResult::Trap(trap) => {
+                STATISTICS.run_result_trap[&trap].fetch_add(1, Ordering::SeqCst);
                 // If this input traps, skip it and continue trying other inputs
                 // for this function. We've already compiled it anyway.
                 //
@@ -223,10 +225,6 @@ fuzz_target!(|bytes: &[u8]| {
                 // wasm tests and wasm-level fuzzing, the amount of effort does
                 // not justify implementing it again here.
                 continue;
-            }
-            RunResult::Trap(_) => {
-                // We never trigger these traps, and I'm not too bothered about counting them
-                unreachable!()
             }
             RunResult::Timeout => {
                 // We probably generated an infinite loop, we should drop this entire input.
