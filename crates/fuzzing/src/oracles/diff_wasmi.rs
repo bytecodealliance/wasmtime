@@ -208,5 +208,5 @@ impl Into<DiffValue> for wasmi::RuntimeValue {
 
 #[test]
 fn smoke() {
-    crate::oracles::engine::smoke_test_engine(|config| WasmiEngine::new(&config.module_config))
+    crate::oracles::engine::smoke_test_engine(|_, config| Ok(WasmiEngine::new(config)))
 }

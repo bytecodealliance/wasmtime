@@ -320,5 +320,5 @@ fn get_diff_value(
 
 #[test]
 fn smoke() {
-    crate::oracles::engine::smoke_test_engine(|config| V8Engine::new(&config.module_config))
+    crate::oracles::engine::smoke_test_engine(|_, config| Ok(V8Engine::new(config)))
 }

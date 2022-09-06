@@ -156,11 +156,11 @@ pub fn parse_env_list(env_variable: &str) -> Option<Vec<String>> {
 }
 
 #[cfg(test)]
-pub fn smoke_test_engine<T>(mk_engine: impl Fn(Config) -> anyhow::Result<T>)
-where
+pub fn smoke_test_engine<T>(
+    mk_engine: impl Fn(&mut arbitrary::Unstructured<'_>, &mut Config) -> arbitrary::Result<T>,
+) where
     T: DiffEngine,
 {
-    use arbitrary::Arbitrary;
     use rand::prelude::*;
 
     let mut rng = SmallRng::seed_from_u64(0);
@@ -168,8 +168,8 @@ where
     let n = 100;
     for _ in 0..n {
         rng.fill_bytes(&mut buf);
-        let u = Unstructured::new(&buf);
-        let mut config = match Config::arbitrary_take_rest(u) {
+        let mut u = Unstructured::new(&buf);
+        let mut config = match u.arbitrary::<Config>() {
             Ok(config) => config,
             Err(_) => continue,
         };
@@ -177,19 +177,7 @@ where
         // settings, can guaranteed instantiate a module.
         config.set_differential_config();
 
-        // Configure settings to ensure that any filters in engine constructors
-        // try not to filter out this `Config`.
-        config.module_config.config.reference_types_enabled = false;
-        config.module_config.config.bulk_memory_enabled = false;
-        config.module_config.config.memory64_enabled = false;
-        config.module_config.config.threads_enabled = false;
-        config.module_config.config.simd_enabled = false;
-        config.module_config.config.min_funcs = 1;
-        config.module_config.config.max_funcs = 1;
-        config.module_config.config.min_tables = 0;
-        config.module_config.config.max_tables = 0;
-
-        let mut engine = match mk_engine(config) {
+        let mut engine = match mk_engine(&mut u, &mut config) {
             Ok(engine) => engine,
             Err(e) => {
                 println!("skip {:?}", e);

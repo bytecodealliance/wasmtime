@@ -227,5 +227,5 @@ impl Into<DiffValue> for Val {
 
 #[test]
 fn smoke() {
-    crate::oracles::engine::smoke_test_engine(|config| WasmtimeEngine::new(config))
+    crate::oracles::engine::smoke_test_engine(|u, config| WasmtimeEngine::new(u, config))
 }

@@ -155,5 +155,5 @@ fn smoke() {
     if !wasm_spec_interpreter::support_compiled_in() {
         return;
     }
-    crate::oracles::engine::smoke_test_engine(|config| SpecInterpreter::new(&config.module_config))
+    crate::oracles::engine::smoke_test_engine(|_, config| Ok(SpecInterpreter::new(config)))
 }
