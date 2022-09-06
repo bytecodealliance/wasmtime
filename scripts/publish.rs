@@ -323,6 +323,9 @@ fn bump_version(krate: &Crate, crates: &[Crate], patch: bool) {
 /// releases. This may end up getting tweaked as we stabilize crates and start
 /// doing more minor/patch releases, but for now this should do the trick.
 fn bump(version: &str, patch_bump: bool) -> String {
+    if version == "0.41.0" {
+        return String::from("2.0.0");
+    }
     let mut iter = version.split('.').map(|s| s.parse::<u32>().unwrap());
     let major = iter.next().expect("major version");
     let minor = iter.next().expect("minor version");
