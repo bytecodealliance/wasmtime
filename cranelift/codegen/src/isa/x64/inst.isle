@@ -1095,8 +1095,8 @@
 (decl cc_invert (CC) CC)
 (extern constructor cc_invert cc_invert)
 
-(decl intcc_reverse (IntCC) IntCC)
-(extern constructor intcc_reverse intcc_reverse)
+(decl intcc_reversed (IntCC) IntCC)
+(extern extractor intcc_reversed intcc_reversed)
 
 (decl floatcc_inverse (FloatCC) FloatCC)
 (extern constructor floatcc_inverse floatcc_inverse)
@@ -3451,9 +3451,9 @@
 ;; As a special case, reverse the arguments to the comparison when the LHS is a
 ;; constant. This ensures that we avoid moving the constant into a register when
 ;; performing the comparison.
-(rule (emit_cmp cc (and (simm32_from_value a) (value_type ty)) b)
+(rule (emit_cmp (intcc_reversed cc) (and (simm32_from_value a) (value_type ty)) b)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (icmp_cond_result (x64_cmp size a b) (intcc_reverse cc))))
+        (icmp_cond_result (x64_cmp size a b) cc)))
 
 ;; For I128 values (held in two GPRs), the instruction sequences depend on what
 ;; kind of condition is tested.

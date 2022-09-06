@@ -663,7 +663,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
-    fn intcc_reverse(&mut self, cc: &IntCC) -> IntCC {
+    fn intcc_reversed(&mut self, cc: &IntCC) -> Option<IntCC> {
         cc.reverse()
     }
 

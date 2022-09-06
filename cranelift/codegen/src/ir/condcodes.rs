@@ -24,7 +24,7 @@ pub trait CondCode: Copy {
     /// The reversed condition code produces the same result as swapping `x` and `y` in the
     /// comparison. That is, `cmp CC, x, y` is the same as `cmp CC.reverse(), y, x`.
     #[must_use]
-    fn reverse(self) -> Self;
+    fn reverse(self) -> Option<Self>;
 }
 
 /// Condition code for comparing integers.
@@ -80,21 +80,22 @@ impl CondCode for IntCC {
         }
     }
 
-    fn reverse(self) -> Self {
+    /// Returns the reversed condition code when that operation is defined.
+    fn reverse(self) -> Option<Self> {
         use self::IntCC::*;
         match self {
-            Equal => Equal,
-            NotEqual => NotEqual,
-            SignedGreaterThan => SignedLessThan,
-            SignedGreaterThanOrEqual => SignedLessThanOrEqual,
-            SignedLessThan => SignedGreaterThan,
-            SignedLessThanOrEqual => SignedGreaterThanOrEqual,
-            UnsignedGreaterThan => UnsignedLessThan,
-            UnsignedGreaterThanOrEqual => UnsignedLessThanOrEqual,
-            UnsignedLessThan => UnsignedGreaterThan,
-            UnsignedLessThanOrEqual => UnsignedGreaterThanOrEqual,
-            Overflow => Overflow,
-            NotOverflow => NotOverflow,
+            Equal => Some(Equal),
+            NotEqual => Some(NotEqual),
+            SignedGreaterThan => Some(SignedLessThan),
+            SignedGreaterThanOrEqual => Some(SignedLessThanOrEqual),
+            SignedLessThan => Some(SignedGreaterThan),
+            SignedLessThanOrEqual => Some(SignedGreaterThanOrEqual),
+            UnsignedGreaterThan => Some(UnsignedLessThan),
+            UnsignedGreaterThanOrEqual => Some(UnsignedLessThanOrEqual),
+            UnsignedLessThan => Some(UnsignedGreaterThan),
+            UnsignedLessThanOrEqual => Some(UnsignedGreaterThanOrEqual),
+            Overflow => None,
+            NotOverflow => None,
         }
     }
 }
@@ -287,9 +288,9 @@ impl CondCode for FloatCC {
             UnorderedOrGreaterThanOrEqual => LessThan,
         }
     }
-    fn reverse(self) -> Self {
+    fn reverse(self) -> Option<Self> {
         use self::FloatCC::*;
-        match self {
+        Some(match self {
             Ordered => Ordered,
             Unordered => Unordered,
             Equal => Equal,
@@ -304,7 +305,7 @@ impl CondCode for FloatCC {
             UnorderedOrLessThanOrEqual => UnorderedOrGreaterThanOrEqual,
             UnorderedOrGreaterThan => UnorderedOrLessThan,
             UnorderedOrGreaterThanOrEqual => UnorderedOrLessThanOrEqual,
-        }
+        })
     }
 }
 
@@ -374,8 +375,9 @@ mod tests {
     fn int_reverse() {
         for r in IntCC::all() {
             let cc = *r;
-            let rev = cc.reverse();
-            assert_eq!(rev.reverse(), cc);
+            if let Some(rev) = cc.reverse() {
+                assert_eq!(rev.reverse(), Some(cc));
+            }
         }
     }
 
@@ -402,8 +404,9 @@ mod tests {
     fn float_reverse() {
         for r in FloatCC::all() {
             let cc = *r;
-            let rev = cc.reverse();
-            assert_eq!(rev.reverse(), cc);
+            if let Some(rev) = cc.reverse() {
+                assert_eq!(rev.reverse(), Some(cc));
+            }
         }
     }
 
