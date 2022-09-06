@@ -38,11 +38,11 @@ impl Config {
 
         // Make it more likely that there are types available to generate a
         // function with.
-        config.min_types = 1;
+        config.min_types = config.min_types.max(1);
         config.max_types = config.max_types.max(1);
 
         // Generate at least one function
-        config.min_funcs = 1;
+        config.min_funcs = config.min_funcs.max(1);
         config.max_funcs = config.max_funcs.max(1);
 
         // Allow a memory to be generated, but don't let it get too large.
@@ -102,7 +102,7 @@ impl Config {
     /// to ensure termination; as doing so will add an additional global to the module,
     /// the pooling allocator, if configured, will also have its globals limit updated.
     pub fn generate(
-        &mut self,
+        &self,
         input: &mut Unstructured<'_>,
         default_fuel: Option<u32>,
     ) -> arbitrary::Result<wasm_smith::Module> {

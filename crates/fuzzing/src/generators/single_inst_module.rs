@@ -24,17 +24,7 @@ pub struct SingleInstModule<'a> {
 
 impl<'a> SingleInstModule<'a> {
     /// Choose a single-instruction module that matches `config`.
-    pub fn new(u: &mut Unstructured<'a>, config: &mut ModuleConfig) -> arbitrary::Result<&'a Self> {
-        // To avoid skipping modules unnecessarily during fuzzing, fix up the
-        // `ModuleConfig` to match the inherent limits of a single-instruction
-        // module.
-        config.config.min_funcs = 1;
-        config.config.max_funcs = 1;
-        config.config.min_tables = 0;
-        config.config.max_tables = 0;
-        config.config.min_memories = 0;
-        config.config.max_memories = 0;
-
+    pub fn new(u: &mut Unstructured<'a>, config: &ModuleConfig) -> arbitrary::Result<&'a Self> {
         // Only select instructions that match the `ModuleConfig`.
         let instructions = &INSTRUCTIONS
             .iter()
