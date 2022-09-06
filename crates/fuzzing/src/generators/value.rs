@@ -91,7 +91,91 @@ impl DiffValue {
                 };
                 DiffValue::F64(bits)
             }
-            V128 => DiffValue::V128(biased_arbitrary_value(u, KNOWN_U128_VALUES)?),
+            V128 => {
+                // Generate known values for each sub-type of V128.
+                let ty: DiffSimdTy = u.arbitrary()?;
+                match ty {
+                    DiffSimdTy::I8x16 => {
+                        let mut i8 = || biased_arbitrary_value(u, KNOWN_I8_VALUES).map(|b| b as u8);
+                        let vector = u128::from_le_bytes([
+                            i8()?,
+                            i8()?,
+                            i8()?,
+                            i8()?,
+                            i8()?,
+                            i8()?,
+                            i8()?,
+                            i8()?,
+                            i8()?,
+                            i8()?,
+                            i8()?,
+                            i8()?,
+                            i8()?,
+                            i8()?,
+                            i8()?,
+                            i8()?,
+                        ]);
+                        DiffValue::V128(vector)
+                    }
+                    DiffSimdTy::I16x8 => {
+                        let mut i16 =
+                            || biased_arbitrary_value(u, KNOWN_I16_VALUES).map(i16::to_le_bytes);
+                        let vector: Vec<u8> = i16()?
+                            .into_iter()
+                            .chain(i16()?)
+                            .chain(i16()?)
+                            .chain(i16()?)
+                            .chain(i16()?)
+                            .chain(i16()?)
+                            .chain(i16()?)
+                            .chain(i16()?)
+                            .collect();
+                        DiffValue::V128(u128::from_le_bytes(vector.try_into().unwrap()))
+                    }
+                    DiffSimdTy::I32x4 => {
+                        let mut i32 =
+                            || biased_arbitrary_value(u, KNOWN_I32_VALUES).map(i32::to_le_bytes);
+                        let vector: Vec<u8> = i32()?
+                            .into_iter()
+                            .chain(i32()?)
+                            .chain(i32()?)
+                            .chain(i32()?)
+                            .collect();
+                        DiffValue::V128(u128::from_le_bytes(vector.try_into().unwrap()))
+                    }
+                    DiffSimdTy::I64x2 => {
+                        let mut i64 =
+                            || biased_arbitrary_value(u, KNOWN_I64_VALUES).map(i64::to_le_bytes);
+                        let vector: Vec<u8> = i64()?.into_iter().chain(i64()?).collect();
+                        DiffValue::V128(u128::from_le_bytes(vector.try_into().unwrap()))
+                    }
+                    DiffSimdTy::F32x4 => {
+                        let mut f32 = || {
+                            Self::arbitrary_of_type(u, DiffValueType::F32).map(|v| match v {
+                                DiffValue::F32(v) => v.to_le_bytes(),
+                                _ => unreachable!(),
+                            })
+                        };
+                        let vector: Vec<u8> = f32()?
+                            .into_iter()
+                            .chain(f32()?)
+                            .chain(f32()?)
+                            .chain(f32()?)
+                            .collect();
+                        DiffValue::V128(u128::from_le_bytes(vector.try_into().unwrap()))
+                    }
+                    DiffSimdTy::F64x2 => {
+                        let mut f64 = || {
+                            Self::arbitrary_of_type(u, DiffValueType::F64).map(|v| match v {
+                                DiffValue::F64(v) => v.to_le_bytes(),
+                                _ => unreachable!(),
+                            })
+                        };
+                        let vector: Vec<u8> = f64()?.into_iter().chain(f64()?).collect();
+                        DiffValue::V128(u128::from_le_bytes(vector.try_into().unwrap()))
+                    }
+                }
+            }
 
             // TODO: this isn't working in most engines so just always pass a
             // null in which if an engine supports this is should at least
@@ -103,9 +187,10 @@ impl DiffValue {
     }
 }
 
+const KNOWN_I8_VALUES: &[i8] = &[i8::MIN, -1, 0, 1, i8::MAX];
+const KNOWN_I16_VALUES: &[i16] = &[i16::MIN, -1, 0, 1, i16::MAX];
 const KNOWN_I32_VALUES: &[i32] = &[i32::MIN, -1, 0, 1, i32::MAX];
 const KNOWN_I64_VALUES: &[i64] = &[i64::MIN, -1, 0, 1, i64::MAX];
-const KNOWN_U128_VALUES: &[u128] = &[u128::MIN, 1, u128::MAX];
 
 /// Helper function to pick a known value from the list of `known_values` half
 /// the time.
@@ -209,4 +294,16 @@ impl TryFrom<wasmtime::ValType> for DiffValueType {
             ExternRef => Ok(Self::ExternRef),
         }
     }
+}
+
+/// Enumerate the types of v128.
+#[derive(Copy, Clone, Debug, Arbitrary, Hash)]
+#[allow(missing_docs)]
+pub enum DiffSimdTy {
+    I8x16,
+    I16x8,
+    I32x4,
+    I64x2,
+    F32x4,
+    F64x2,
 }
