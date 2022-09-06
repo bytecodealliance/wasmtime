@@ -16,3 +16,16 @@ block0(v0: i8):
 }
 ; run: %overflow_rhs_const(49) == true
 ; run: %overflow_rhs_const(-65) == false
+
+; This is a regression test for #4875, where we were considering the reverse of
+; `NotOverflow` to be `NotOverflow`. Both that operation and `Overflow` don't
+; appear to have reasonable reverse implementations, so the fix is to not
+; float constants right when they're involved in `icmp nof/of`.
+function %a() -> b1 {
+block0:
+    v0 = iconst.i8 193
+    v1 = iconst.i8 65
+    v2 = icmp.i8 nof v1, v0
+    return v2
+}
+; run: %a() == false
