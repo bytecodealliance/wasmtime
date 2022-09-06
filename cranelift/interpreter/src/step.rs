@@ -1293,8 +1293,6 @@ where
                     &left.clone().convert(ValueConversionKind::ToUnsigned)?,
                     &right.clone().convert(ValueConversionKind::ToUnsigned)?,
                 )?,
-                IntCC::Overflow => Value::overflow(left, right)?,
-                IntCC::NotOverflow => !Value::overflow(left, right)?,
             },
             bool_ty,
         )?)

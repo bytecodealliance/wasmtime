@@ -891,7 +891,5 @@ fn condcode_is_signed(cc: IntCC) -> bool {
         IntCC::UnsignedGreaterThan => false,
         IntCC::UnsignedLessThanOrEqual => false,
         IntCC::UnsignedLessThan => false,
-        IntCC::Overflow => true,
-        IntCC::NotOverflow => true,
     }
 }
