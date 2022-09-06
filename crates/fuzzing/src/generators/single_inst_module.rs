@@ -20,6 +20,23 @@ pub struct SingleInstModule<'a> {
     parameters: &'a [ValType],
     results: &'a [ValType],
     feature: fn(&ModuleConfig) -> bool,
+    canonicalize_nan: Option<NanType>,
+}
+
+/// Valid types for NaN canonicalization.
+///
+/// When fuzzing floating point values, a NaN result can have non-deterministic
+/// bits in the payload. In order to compare these results, [`SingleInstModule`]
+/// can convert any NaN values (or NaN lanes) to a canonical NaN value for any
+/// of these types.
+#[derive(Clone)]
+enum NanType {
+    #[allow(dead_code)]
+    F32,
+    #[allow(dead_code)]
+    F64,
+    F32x4,
+    F64x2,
 }
 
 impl<'a> SingleInstModule<'a> {
@@ -59,11 +76,77 @@ impl<'a> SingleInstModule<'a> {
 
         // Encode the code section.
         let mut codes = CodeSection::new();
-        let mut f = Function::new([]);
+
+        // Set up the single-instruction function. Note that if we have chosen
+        // to canonicalize NaNs, this function will contain more than one
+        // instruction and the function will need a scratch local.
+        let mut f = if let Some(ty) = &self.canonicalize_nan {
+            Function::new(match ty {
+                NanType::F32 => vec![(1, ValType::F32)],
+                NanType::F64 => vec![(1, ValType::F64)],
+                NanType::F32x4 | NanType::F64x2 => vec![(1, ValType::V128)],
+            })
+        } else {
+            Function::new([])
+        };
+
+        // Retrieve the input values and execute the chosen instruction.
         for (index, _) in self.parameters.iter().enumerate() {
             f.instruction(&Instruction::LocalGet(index as u32));
         }
         f.instruction(&self.instruction);
+
+        // If we have configured to canonicalize NaNs, we add a sequence that
+        // masks off the NaN payload bits to make them 0s (i.e., a canonical
+        // NaN). This sequence is adapted from wasm-smiths version; see
+        // https://github.com/bytecodealliance/wasm-tools/blob/6c127a6/crates/wasm-smith/src/core/code_builder.rs#L927.
+        if let Some(ty) = &self.canonicalize_nan {
+            // Save the previous instruction's result into the scratch local.
+            // This also leaves a value on the stack as for the `select`
+            // instruction.
+            let local = self.parameters.len() as u32;
+            f.instruction(&Instruction::LocalTee(local));
+
+            // The other input to the `select` below--a canonical NaN. Note how
+            // the payload bits of the NaN are cleared.
+            const CANON_32BIT_NAN: u32 = 0b01111111110000000000000000000000;
+            const CANON_64BIT_NAN: u64 =
+                0b0111111111111000000000000000000000000000000000000000000000000000;
+            let mask = match ty {
+                NanType::F32 => Instruction::F32Const(f32::from_bits(CANON_32BIT_NAN)),
+                NanType::F64 => Instruction::F64Const(f64::from_bits(CANON_64BIT_NAN)),
+                NanType::F32x4 => {
+                    let nan = CANON_32BIT_NAN as i128;
+                    Instruction::V128Const(nan | (nan << 32) | (nan << 64) | (nan << 96))
+                }
+                NanType::F64x2 => {
+                    let nan = CANON_64BIT_NAN as i128;
+                    Instruction::V128Const(nan | (nan << 64))
+                }
+            };
+            f.instruction(&mask);
+
+            // The `select` condition. NaNs never equal each other, so here the
+            // result value is compared against itself.
+            f.instruction(&Instruction::LocalGet(local));
+            f.instruction(&Instruction::LocalGet(local));
+            f.instruction(match ty {
+                NanType::F32 => &Instruction::F32Eq,
+                NanType::F64 => &Instruction::F64Eq,
+                NanType::F32x4 => &Instruction::F32x4Eq,
+                NanType::F64x2 => &Instruction::F64x2Eq,
+            });
+
+            // Select the result. If the condition is nonzero (i.e., the float
+            // is equal to itself) it picks the original value; otherwise, if
+            // zero (i.e., the float is a NaN) it picks the canonical NaN value.
+            f.instruction(match ty {
+                NanType::F32 | NanType::F64 => &Instruction::Select,
+                NanType::F32x4 | NanType::F64x2 => &Instruction::V128Bitselect,
+            });
+        }
+
+        // Wrap up the function and section.
         f.instruction(&Instruction::End);
         codes.function(&f);
         module.section(&codes);
@@ -103,11 +186,15 @@ macro_rules! inst {
         inst! { $inst, ($($arguments_ty),*) -> $result_ty, |_| true }
     };
     ($inst:ident, ($($arguments_ty:tt),*) -> $result_ty:tt, $feature:expr) => {
+        inst! { $inst, ($($arguments_ty),*) -> $result_ty, $feature, None }
+    };
+    ($inst:ident, ($($arguments_ty:tt),*) -> $result_ty:tt, $feature:expr, $nan:expr) => {
         SingleInstModule {
             instruction: Instruction::$inst,
             parameters: &[$(valtype!($arguments_ty)),*],
             results: &[valtype!($result_ty)],
             feature: $feature,
+            canonicalize_nan: $nan,
         }
     };
 }
@@ -441,34 +528,34 @@ static INSTRUCTIONS: &[SingleInstModule] = &[
     inst!(I64x2ExtMulHighI32x4S, (v128, v128) -> v128, |c| c.config.simd_enabled),
     inst!(I64x2ExtMulLowI32x4U, (v128, v128) -> v128, |c| c.config.simd_enabled),
     inst!(I64x2ExtMulHighI32x4U, (v128, v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F32x4Ceil, (v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F32x4Floor, (v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F32x4Trunc, (v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F32x4Nearest, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4Ceil, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Floor, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Trunc, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Nearest, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
     inst!(F32x4Abs, (v128) -> v128, |c| c.config.simd_enabled),
     inst!(F32x4Neg, (v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F32x4Sqrt, (v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F32x4Add, (v128, v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F32x4Sub, (v128, v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F32x4Mul, (v128, v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F32x4Div, (v128, v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F32x4Min, (v128, v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F32x4Max, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4Sqrt, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Add, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Sub, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Mul, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Div, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Min, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Max, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
     inst!(F32x4PMin, (v128, v128) -> v128, |c| c.config.simd_enabled),
     inst!(F32x4PMax, (v128, v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F64x2Ceil, (v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F64x2Floor, (v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F64x2Trunc, (v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F64x2Nearest, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2Ceil, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Floor, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Trunc, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Nearest, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
     inst!(F64x2Abs, (v128) -> v128, |c| c.config.simd_enabled),
     inst!(F64x2Neg, (v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F64x2Sqrt, (v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F64x2Add, (v128, v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F64x2Sub, (v128, v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F64x2Mul, (v128, v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F64x2Div, (v128, v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F64x2Min, (v128, v128) -> v128, |c| c.config.simd_enabled),
-    inst!(F64x2Max, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2Sqrt, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Add, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Sub, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Mul, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Div, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Min, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Max, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
     inst!(F64x2PMin, (v128, v128) -> v128, |c| c.config.simd_enabled),
     inst!(F64x2PMax, (v128, v128) -> v128, |c| c.config.simd_enabled),
     inst!(I32x4TruncSatF32x4S, (v128) -> v128, |c| c.config.simd_enabled),
@@ -494,6 +581,7 @@ mod test {
             parameters: &[ValType::I32, ValType::I32],
             results: &[ValType::I32],
             feature: |_| true,
+            canonicalize_nan: None,
         };
         let wasm = sut.to_bytes();
         let wat = wasmprinter::print_bytes(wasm).unwrap();
