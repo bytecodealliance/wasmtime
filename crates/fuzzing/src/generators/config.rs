@@ -131,7 +131,7 @@ impl Config {
             // required to actually run the spec tests. Fuzz-generated inputs
             // may have limits less than these thresholds which would cause the
             // spec tests to fail which isn't particularly interesting.
-            limits.memories = limits.memories.max(1);
+            limits.memories = 1;
             limits.tables = limits.memories.max(5);
             limits.table_elements = limits.memories.max(1_000);
             limits.memory_pages = limits.memory_pages.max(900);
