@@ -1282,7 +1282,8 @@
 
 ;; General 8/16-bit case.
 (rule (lower (has_type (fits_in_16 ty) (rotl x y)))
-      (let ((neg_shift Reg (sub $I32 (zero_reg) y)))
+      (let ((amt Reg (value_regs_get y 0))
+            (neg_shift Reg (sub $I32 (zero_reg) amt)))
         (small_rotr ty (put_in_reg_zext32 x) neg_shift)))
 
 ;; Specialization for the 8/16-bit case when the rotation amount is an immediate.
@@ -1300,12 +1301,14 @@
 
 ;; General 32-bit case.
 (rule (lower (has_type $I32 (rotl x y)))
-      (let ((neg_shift Reg (sub $I32 (zero_reg) y)))
+      (let ((amt Reg (value_regs_get y 0))
+            (neg_shift Reg (sub $I32 (zero_reg) amt)))
         (a64_rotr $I32 x neg_shift)))
 
 ;; General 64-bit case.
 (rule (lower (has_type $I64 (rotl x y)))
-      (let ((neg_shift Reg (sub $I64 (zero_reg) y)))
+      (let ((amt Reg (value_regs_get y 0))
+            (neg_shift Reg (sub $I64 (zero_reg) amt)))
         (a64_rotr $I64 x neg_shift)))
 
 ;; Specialization for the 32-bit case when the rotation amount is an immediate.
@@ -1338,15 +1341,15 @@
 
 ;; General 8/16-bit case.
 (rule (lower (has_type (fits_in_16 ty) (rotr x y)))
-      (small_rotr ty (put_in_reg_zext32 x) y))
+      (small_rotr ty (put_in_reg_zext32 x) (value_regs_get y 0)))
 
 ;; General 32-bit case.
 (rule (lower (has_type $I32 (rotr x y)))
-      (a64_rotr $I32 x y))
+      (a64_rotr $I32 x (value_regs_get y 0)))
 
 ;; General 64-bit case.
 (rule (lower (has_type $I64 (rotr x y)))
-      (a64_rotr $I64 x y))
+      (a64_rotr $I64 x (value_regs_get y 0)))
 
 ;; Specialization for the 8/16-bit case when the rotation amount is an immediate.
 (rule (lower (has_type (fits_in_16 ty) (rotr x (iconst k))))
