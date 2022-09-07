@@ -1386,35 +1386,35 @@
 
 ;;;; Helpers for Querying Enabled ISA Extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl avx512vl_enabled () Type)
-(extern extractor avx512vl_enabled avx512vl_enabled)
+(decl avx512vl_enabled (bool) Type)
+(extern extractor infallible avx512vl_enabled avx512vl_enabled)
 
-(decl avx512dq_enabled () Type)
-(extern extractor avx512dq_enabled avx512dq_enabled)
+(decl avx512dq_enabled (bool) Type)
+(extern extractor infallible avx512dq_enabled avx512dq_enabled)
 
-(decl avx512f_enabled () Type)
-(extern extractor avx512f_enabled avx512f_enabled)
+(decl avx512f_enabled (bool) Type)
+(extern extractor infallible avx512f_enabled avx512f_enabled)
 
-(decl avx512bitalg_enabled () Type)
-(extern extractor avx512bitalg_enabled avx512bitalg_enabled)
+(decl avx512bitalg_enabled (bool) Type)
+(extern extractor infallible avx512bitalg_enabled avx512bitalg_enabled)
 
-(decl avx512vbmi_enabled () Type)
-(extern extractor avx512vbmi_enabled avx512vbmi_enabled)
+(decl avx512vbmi_enabled (bool) Type)
+(extern extractor infallible avx512vbmi_enabled avx512vbmi_enabled)
 
-(decl use_lzcnt () Type)
-(extern extractor use_lzcnt use_lzcnt)
+(decl use_lzcnt (bool) Type)
+(extern extractor infallible use_lzcnt use_lzcnt)
 
-(decl use_bmi1 () Type)
-(extern extractor use_bmi1 use_bmi1)
+(decl use_bmi1 (bool) Type)
+(extern extractor infallible use_bmi1 use_bmi1)
 
-(decl use_popcnt () Type)
-(extern extractor use_popcnt use_popcnt)
+(decl use_popcnt (bool) Type)
+(extern extractor infallible use_popcnt use_popcnt)
 
-(decl use_fma () Type)
-(extern extractor use_fma use_fma)
+(decl use_fma (bool) Type)
+(extern extractor infallible use_fma use_fma)
 
-(decl use_sse41 () Type)
-(extern extractor use_sse41 use_sse41)
+(decl use_sse41 (bool) Type)
+(extern extractor infallible use_sse41 use_sse41)
 
 ;;;; Helpers for Merging and Sinking Immediates/Loads  ;;;;;;;;;;;;;;;;;;;;;;;;;
 

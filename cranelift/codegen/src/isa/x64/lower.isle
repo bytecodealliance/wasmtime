@@ -939,8 +939,8 @@
 
 ;; With AVX-512 we can implement `i64x2` multiplication with a single
 ;; instruction.
-(rule (lower (has_type (and (avx512vl_enabled)
-                            (avx512dq_enabled)
+(rule (lower (has_type (and (avx512vl_enabled $true)
+                            (avx512dq_enabled $true)
                             (multi_lane 64 2))
                        (imul x y)))
       (x64_vpmullq x y))
@@ -1167,8 +1167,8 @@
       (x64_pabsd x))
 
 ;; When AVX512 is available, we can use a single `vpabsq` instruction.
-(rule (lower (has_type (and (avx512vl_enabled)
-                            (avx512f_enabled)
+(rule (lower (has_type (and (avx512vl_enabled $true)
+                            (avx512f_enabled $true)
                             $I64X2)
                        (iabs x)))
       (x64_vpabsq x))
@@ -1733,7 +1733,7 @@
 (rule 1 (lower
          (has_type (and
                     (ty_32_or_64 ty)
-                    (use_lzcnt))
+                    (use_lzcnt $true))
                    (clz src)))
       (x64_lzcnt ty src))
 
@@ -1775,7 +1775,7 @@
 (rule 1 (lower
          (has_type (and
                     (ty_32_or_64 ty)
-                    (use_bmi1))
+                    (use_bmi1 $true))
                    (ctz src)))
       (x64_tzcnt ty src))
 
@@ -1811,21 +1811,21 @@
 (rule 1 (lower
          (has_type (and
                     (ty_32_or_64 ty)
-                    (use_popcnt))
+                    (use_popcnt $true))
                    (popcnt src)))
       (x64_popcnt ty src))
 
 (rule 1 (lower
          (has_type (and
                     (ty_8_or_16 ty)
-                    (use_popcnt))
+                    (use_popcnt $true))
                    (popcnt src)))
       (x64_popcnt $I32 (extend_to_gpr src $I32 (ExtendKind.Zero))))
 
 (rule 1 (lower
          (has_type (and
                     $I128
-                    (use_popcnt))
+                    (use_popcnt $true))
                    (popcnt src)))
       (let ((lo_count Gpr (x64_popcnt $I64 (value_regs_get_gpr src 0)))
             (hi_count Gpr (x64_popcnt $I64 (value_regs_get_gpr src 1))))
@@ -1916,8 +1916,8 @@
 
 (rule 1 (lower (has_type (and
                           $I8X16
-                          (avx512vl_enabled)
-                          (avx512bitalg_enabled))
+                          (avx512vl_enabled $true)
+                          (avx512bitalg_enabled $true))
                          (popcnt src)))
       (x64_vpopcntb src))
 
@@ -2480,13 +2480,13 @@
       (libcall_3 (LibCall.FmaF32) x y z))
 (rule (lower (has_type $F64 (fma x y z)))
       (libcall_3 (LibCall.FmaF64) x y z))
-(rule 1 (lower (has_type (and (use_fma) $F32) (fma x y z)))
+(rule 1 (lower (has_type (and (use_fma $true) $F32) (fma x y z)))
       (x64_vfmadd213ss x y z))
-(rule 1 (lower (has_type (and (use_fma) $F64) (fma x y z)))
+(rule 1 (lower (has_type (and (use_fma $true) $F64) (fma x y z)))
       (x64_vfmadd213sd x y z))
-(rule (lower (has_type (and (use_fma) $F32X4) (fma x y z)))
+(rule (lower (has_type (and (use_fma $true) $F32X4) (fma x y z)))
       (x64_vfmadd213ps x y z))
-(rule (lower (has_type (and (use_fma) $F64X2) (fma x y z)))
+(rule (lower (has_type (and (use_fma $true) $F64X2) (fma x y z)))
       (x64_vfmadd213pd x y z))
 
 ;; Rules for `load*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2993,7 +2993,7 @@
 ;;
 ;; NOTE: the priority of 1 here is to break ties with the next case for $F32X4,
 ;; as it doesn't require either of the avx512 extensions to be enabled.
-(rule 1 (lower (has_type (and (avx512vl_enabled) (avx512f_enabled) $F32X4)
+(rule 1 (lower (has_type (and (avx512vl_enabled $true) (avx512f_enabled $true) $F32X4)
                          (fcvt_from_uint src)))
       (x64_vcvtudq2ps src))
 
@@ -3332,82 +3332,82 @@
 
 ;; Rules for `ceil` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (use_sse41) (ceil a @ (value_type $F32))))
+(rule (lower (has_type (use_sse41 $true) (ceil a @ (value_type $F32))))
       (x64_roundss a (RoundImm.RoundUp)))
 
 (rule (lower (ceil a @ (value_type $F32)))
       (libcall_1 (LibCall.CeilF32) a))
 
-(rule (lower (has_type (use_sse41) (ceil a @ (value_type $F64))))
+(rule (lower (has_type (use_sse41 $true) (ceil a @ (value_type $F64))))
       (x64_roundsd a (RoundImm.RoundUp)))
 
 (rule (lower (ceil a @ (value_type $F64)))
       (libcall_1 (LibCall.CeilF64) a))
 
-(rule (lower (has_type (use_sse41) (ceil a @ (value_type $F32X4))))
+(rule (lower (has_type (use_sse41 $true) (ceil a @ (value_type $F32X4))))
       (x64_roundps a (RoundImm.RoundUp)))
 
-(rule (lower (has_type (use_sse41) (ceil a @ (value_type $F64X2))))
+(rule (lower (has_type (use_sse41 $true) (ceil a @ (value_type $F64X2))))
       (x64_roundpd a (RoundImm.RoundUp)))
 
 ;; Rules for `floor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (use_sse41) (floor a @ (value_type $F32))))
+(rule (lower (has_type (use_sse41 $true) (floor a @ (value_type $F32))))
       (x64_roundss a (RoundImm.RoundDown)))
 
 (rule (lower (floor a @ (value_type $F32)))
       (libcall_1 (LibCall.FloorF32) a))
 
-(rule (lower (has_type (use_sse41) (floor a @ (value_type $F64))))
+(rule (lower (has_type (use_sse41 $true) (floor a @ (value_type $F64))))
       (x64_roundsd a (RoundImm.RoundDown)))
 
 (rule (lower (floor a @ (value_type $F64)))
       (libcall_1 (LibCall.FloorF64) a))
 
-(rule (lower (has_type (use_sse41) (floor a @ (value_type $F32X4))))
+(rule (lower (has_type (use_sse41 $true) (floor a @ (value_type $F32X4))))
       (x64_roundps a (RoundImm.RoundDown)))
 
-(rule (lower (has_type (use_sse41) (floor a @ (value_type $F64X2))))
+(rule (lower (has_type (use_sse41 $true) (floor a @ (value_type $F64X2))))
       (x64_roundpd a (RoundImm.RoundDown)))
 
 ;; Rules for `nearest` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (use_sse41) (nearest a @ (value_type $F32))))
+(rule (lower (has_type (use_sse41 $true) (nearest a @ (value_type $F32))))
       (x64_roundss a (RoundImm.RoundNearest)))
 
 (rule (lower (nearest a @ (value_type $F32)))
       (libcall_1 (LibCall.NearestF32) a))
 
-(rule (lower (has_type (use_sse41) (nearest a @ (value_type $F64))))
+(rule (lower (has_type (use_sse41 $true) (nearest a @ (value_type $F64))))
       (x64_roundsd a (RoundImm.RoundNearest)))
 
 (rule (lower (nearest a @ (value_type $F64)))
       (libcall_1 (LibCall.NearestF64) a))
 
-(rule (lower (has_type (use_sse41) (nearest a @ (value_type $F32X4))))
+(rule (lower (has_type (use_sse41 $true) (nearest a @ (value_type $F32X4))))
       (x64_roundps a (RoundImm.RoundNearest)))
 
-(rule (lower (has_type (use_sse41) (nearest a @ (value_type $F64X2))))
+(rule (lower (has_type (use_sse41 $true) (nearest a @ (value_type $F64X2))))
       (x64_roundpd a (RoundImm.RoundNearest)))
 
 ;; Rules for `trunc` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F32))))
+(rule (lower (has_type (use_sse41 $true) (trunc a @ (value_type $F32))))
       (x64_roundss a (RoundImm.RoundZero)))
 
 (rule (lower (trunc a @ (value_type $F32)))
       (libcall_1 (LibCall.TruncF32) a))
 
-(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F64))))
+(rule (lower (has_type (use_sse41 $true) (trunc a @ (value_type $F64))))
       (x64_roundsd a (RoundImm.RoundZero)))
 
 (rule (lower (trunc a @ (value_type $F64)))
       (libcall_1 (LibCall.TruncF64) a))
 
-(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F32X4))))
+(rule (lower (has_type (use_sse41 $true) (trunc a @ (value_type $F32X4))))
       (x64_roundps a (RoundImm.RoundZero)))
 
-(rule (lower (has_type (use_sse41) (trunc a @ (value_type $F64X2))))
+(rule (lower (has_type (use_sse41 $true) (trunc a @ (value_type $F64X2))))
       (x64_roundpd a (RoundImm.RoundZero)))
 
 ;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3506,7 +3506,7 @@
 ;; For the case where the shuffle mask contains out-of-bounds values (values
 ;; greater than 31) we must mask off those resulting values in the result of
 ;; `vpermi2b`.
-(rule (lower (has_type (and (avx512vl_enabled) (avx512vbmi_enabled))
+(rule (lower (has_type (and (avx512vl_enabled $true) (avx512vbmi_enabled $true))
                        (shuffle a b (vec_mask_from_immediate
                                       (perm_from_mask_with_zeros mask zeros)))))
       (x64_andps
@@ -3515,7 +3515,7 @@
 
 ;; However, if the shuffle mask contains no out-of-bounds values, we can use
 ;; `vpermi2b` without any masking.
-(rule (lower (has_type (and (avx512vl_enabled) (avx512vbmi_enabled))
+(rule (lower (has_type (and (avx512vl_enabled $true) (avx512vbmi_enabled $true))
                        (shuffle a b (vec_mask_from_immediate mask))))
       (x64_vpermi2b b a (x64_xmm_load_const $I8X16 (perm_from_mask mask))))
 

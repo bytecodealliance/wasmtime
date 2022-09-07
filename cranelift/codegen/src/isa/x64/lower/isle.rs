@@ -209,93 +209,53 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
-    fn avx512vl_enabled(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_avx512vl_simd() {
-            Some(())
-        } else {
-            None
-        }
+    fn avx512vl_enabled(&mut self, _: Type) -> bool {
+        self.isa_flags.use_avx512vl_simd()
     }
 
     #[inline]
-    fn avx512dq_enabled(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_avx512dq_simd() {
-            Some(())
-        } else {
-            None
-        }
+    fn avx512dq_enabled(&mut self, _: Type) -> bool {
+        self.isa_flags.use_avx512dq_simd()
     }
 
     #[inline]
-    fn avx512f_enabled(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_avx512f_simd() {
-            Some(())
-        } else {
-            None
-        }
+    fn avx512f_enabled(&mut self, _: Type) -> bool {
+        self.isa_flags.use_avx512f_simd()
     }
 
     #[inline]
-    fn avx512bitalg_enabled(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_avx512bitalg_simd() {
-            Some(())
-        } else {
-            None
-        }
+    fn avx512bitalg_enabled(&mut self, _: Type) -> bool {
+        self.isa_flags.use_avx512bitalg_simd()
     }
 
     #[inline]
-    fn avx512vbmi_enabled(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_avx512vbmi_simd() {
-            Some(())
-        } else {
-            None
-        }
+    fn avx512vbmi_enabled(&mut self, _: Type) -> bool {
+        self.isa_flags.use_avx512vbmi_simd()
     }
 
     #[inline]
-    fn use_lzcnt(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_lzcnt() {
-            Some(())
-        } else {
-            None
-        }
+    fn use_lzcnt(&mut self, _: Type) -> bool {
+        self.isa_flags.use_lzcnt()
     }
 
     #[inline]
-    fn use_bmi1(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_bmi1() {
-            Some(())
-        } else {
-            None
-        }
+    fn use_bmi1(&mut self, _: Type) -> bool {
+        self.isa_flags.use_bmi1()
     }
 
     #[inline]
-    fn use_popcnt(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_popcnt() {
-            Some(())
-        } else {
-            None
-        }
+    fn use_popcnt(&mut self, _: Type) -> bool {
+        self.isa_flags.use_popcnt()
     }
 
     #[inline]
-    fn use_fma(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_fma() {
-            Some(())
-        } else {
-            None
-        }
+    fn use_fma(&mut self, _: Type) -> bool {
+        self.isa_flags.use_fma()
     }
 
     #[inline]
-    fn use_sse41(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_sse41() {
-            Some(())
-        } else {
-            None
-        }
+    fn use_sse41(&mut self, _: Type) -> bool {
+        self.isa_flags.use_sse41()
     }
 
     #[inline]
