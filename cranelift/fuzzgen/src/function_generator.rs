@@ -436,9 +436,7 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Icmp, &[I16, I16], &[B1], insert_cmp),
     (Opcode::Icmp, &[I32, I32], &[B1], insert_cmp),
     (Opcode::Icmp, &[I64, I64], &[B1], insert_cmp),
-    // TODO: icmp of/nof broken for i128 on x86_64
-    // See: https://github.com/bytecodealliance/wasmtime/issues/4406
-    // (Opcode::Icmp, &[I128, I128], &[B1], insert_cmp),
+    (Opcode::Icmp, &[I128, I128], &[B1], insert_cmp),
     // Stack Access
     (Opcode::StackStore, &[I8], &[], insert_stack_store),
     (Opcode::StackStore, &[I16], &[], insert_stack_store),

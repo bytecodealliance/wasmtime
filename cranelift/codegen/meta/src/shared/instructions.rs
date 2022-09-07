@@ -1759,12 +1759,6 @@ pub(crate) fn define(
         | sge    | uge      | Greater than or equal |
         | sgt    | ugt      | Greater than          |
         | sle    | ule      | Less than or equal    |
-        | of     | *        | Overflow              |
-        | nof    | *        | No Overflow           |
-
-        \* The unsigned version of overflow condition for add has ISA-specific semantics and thus
-        has been kept as a method on the TargetIsa trait as
-        [unsigned_add_overflow_condition][crate::isa::TargetIsa::unsigned_add_overflow_condition].
 
         When this instruction compares integer vectors, it returns a boolean
         vector of lane-wise comparisons.
