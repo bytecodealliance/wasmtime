@@ -106,8 +106,8 @@ pub struct BlockLoweringOrder {
     /// which is used by VCode emission to sink the blocks at the last
     /// moment (when we actually emit bytes into the MachBuffer).
     cold_blocks: FxHashSet<BlockIndex>,
-    /// CLIF BBs that are indirect branch targets.
-    indirect_branch_targets: FxHashSet<Block>,
+    /// Lowered blocks that are indirect branch targets.
+    indirect_branch_targets: FxHashSet<BlockIndex>,
 }
 
 /// The origin of a block in the lowered block-order: either an original CLIF
@@ -232,7 +232,7 @@ impl BlockLoweringOrder {
         // Cache the block successors to avoid re-examining branches below.
         let mut block_succs: SmallVec<[(Inst, usize, Block); 128]> = SmallVec::new();
         let mut block_succ_range = SecondaryMap::with_default((0, 0));
-        let mut indirect_branch_targets = FxHashSet::default();
+        let mut indirect_branch_target_clif_blocks = FxHashSet::default();
 
         for block in f.layout.blocks() {
             let block_succ_start = block_succs.len();
@@ -244,7 +244,7 @@ impl BlockLoweringOrder {
                 succ_idx += 1;
 
                 if from_table {
-                    indirect_branch_targets.insert(succ);
+                    indirect_branch_target_clif_blocks.insert(succ);
                 }
             });
             let block_succ_end = block_succs.len();
@@ -440,6 +440,7 @@ impl BlockLoweringOrder {
         let mut cold_blocks = FxHashSet::default();
         let mut lowered_succ_ranges = vec![];
         let mut lb_to_bindex = FxHashMap::default();
+        let mut indirect_branch_targets = FxHashSet::default();
         for (block, succ_range) in rpo.into_iter() {
             let index = BlockIndex::new(lowered_order.len());
             lb_to_bindex.insert(block, index);
@@ -453,10 +454,18 @@ impl BlockLoweringOrder {
                     if f.layout.is_cold(block) {
                         cold_blocks.insert(index);
                     }
+
+                    if indirect_branch_target_clif_blocks.contains(&block) {
+                        indirect_branch_targets.insert(index);
+                    }
                 }
                 LoweredBlock::Edge { pred, succ, .. } => {
                     if f.layout.is_cold(pred) || f.layout.is_cold(succ) {
                         cold_blocks.insert(index);
+                    }
+
+                    if indirect_branch_target_clif_blocks.contains(&succ) {
+                        indirect_branch_targets.insert(index);
                     }
                 }
             }
@@ -504,8 +513,9 @@ impl BlockLoweringOrder {
         self.cold_blocks.contains(&block)
     }
 
-    /// Determine whether the given CLIF BB is an indirect branch target.
-    pub fn is_indirect_branch_target(&self, block: Block) -> bool {
+    /// Determine whether the given lowered block index is an indirect branch
+    /// target.
+    pub fn is_indirect_branch_target(&self, block: BlockIndex) -> bool {
         self.indirect_branch_targets.contains(&block)
     }
 }

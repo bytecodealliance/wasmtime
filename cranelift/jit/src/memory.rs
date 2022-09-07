@@ -104,6 +104,15 @@ impl Drop for PtrLen {
 
 // TODO: add a `Drop` impl for `cfg(target_os = "windows")`
 
+/// Type of branch protection to apply to executable memory.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum BranchProtection {
+    /// No protection.
+    None,
+    /// Use the Branch Target Identification extension of the Arm architecture.
+    BTI,
+}
+
 /// JIT memory manager. This manages pages of suitably aligned and
 /// accessible memory. Memory will be leaked by default to have
 /// function pointers remain valid for the remainder of the
@@ -113,17 +122,17 @@ pub(crate) struct Memory {
     already_protected: usize,
     current: PtrLen,
     position: usize,
-    enable_branch_protection: bool,
+    branch_protection: BranchProtection,
 }
 
 impl Memory {
-    pub(crate) fn new(enable_branch_protection: bool) -> Self {
+    pub(crate) fn new(branch_protection: BranchProtection) -> Self {
         Self {
             allocations: Vec::new(),
             already_protected: 0,
             current: PtrLen::new(),
             position: 0,
-            enable_branch_protection,
+            branch_protection,
         }
     }
 
@@ -161,7 +170,7 @@ impl Memory {
 
         let set_region_readable_and_executable = |ptr, len| {
             if len != 0 {
-                if self.enable_branch_protection {
+                if self.branch_protection == BranchProtection::BTI {
                     #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
                     if std::arch::is_aarch64_feature_detected!("bti") {
                         let prot = libc::PROT_EXEC | libc::PROT_READ | /* PROT_BTI */ 0x10;

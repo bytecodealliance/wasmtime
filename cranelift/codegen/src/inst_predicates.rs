@@ -129,7 +129,10 @@ pub fn has_memory_fence_semantics(op: Opcode) -> bool {
     }
 }
 
-/// Visit all successors of a block with a given visitor closure.
+/// Visit all successors of a block with a given visitor closure. The closure
+/// arguments are the branch instruction that is used to reach the successor,
+/// the successor block itself, and a flag indicating whether the block is
+/// branched to via a table entry.
 pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
     f: &Function,
     block: Block,

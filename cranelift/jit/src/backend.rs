@@ -1,6 +1,6 @@
 //! Defines `JITModule`.
 
-use crate::{compiled_blob::CompiledBlob, memory::Memory};
+use crate::{compiled_blob::CompiledBlob, memory::BranchProtection, memory::Memory};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings, MachReloc};
@@ -476,8 +476,12 @@ impl JITModule {
             );
         }
 
-        let enable_branch_protection =
-            cfg!(target_arch = "aarch64") && use_bti(&builder.isa.isa_flags());
+        let branch_protection =
+            if cfg!(target_arch = "aarch64") && use_bti(&builder.isa.isa_flags()) {
+                BranchProtection::BTI
+            } else {
+                BranchProtection::None
+            };
         let mut module = Self {
             isa: builder.isa,
             hotswap_enabled: builder.hotswap_enabled,
@@ -485,9 +489,10 @@ impl JITModule {
             lookup_symbols: builder.lookup_symbols,
             libcall_names: builder.libcall_names,
             memory: MemoryHandle {
-                code: Memory::new(enable_branch_protection),
-                readonly: Memory::new(false),
-                writable: Memory::new(false),
+                code: Memory::new(branch_protection),
+                // Branch protection is not applicable to non-executable memory.
+                readonly: Memory::new(BranchProtection::None),
+                writable: Memory::new(BranchProtection::None),
             },
             declarations: ModuleDeclarations::default(),
             function_got_entries: SecondaryMap::new(),
