@@ -4,7 +4,7 @@
 use crate::generators::{Config, DiffValue, DiffValueType};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
 use anyhow::{anyhow, Error, Result};
-use wasm_spec_interpreter::Value;
+use wasm_spec_interpreter::SpecValue;
 use wasmtime::Trap;
 
 /// A wrapper for `wasm-spec-interpreter` as a [`DiffEngine`].
@@ -87,9 +87,9 @@ impl DiffInstance for SpecInstance {
         //    function to run
         //  - TODO adapt `wasm-spec-interpreter` to expose an "instance" with
         //    so we can hash memory, globals, etc.
-        let arguments = arguments.iter().map(Value::from).collect();
-        match wasm_spec_interpreter::interpret(&self.wasm, Some(arguments)) {
-            Ok(results) => Ok(Some(results.into_iter().map(Value::into).collect())),
+        let arguments = arguments.iter().map(SpecValue::from).collect();
+        match wasm_spec_interpreter::interpret_legacy(&self.wasm, Some(arguments)) {
+            Ok(results) => Ok(Some(results.into_iter().map(SpecValue::into).collect())),
             Err(err) => Err(anyhow!(err)),
         }
     }
@@ -105,27 +105,27 @@ impl DiffInstance for SpecInstance {
     }
 }
 
-impl From<&DiffValue> for Value {
+impl From<&DiffValue> for SpecValue {
     fn from(v: &DiffValue) -> Self {
         match *v {
-            DiffValue::I32(n) => Value::I32(n),
-            DiffValue::I64(n) => Value::I64(n),
-            DiffValue::F32(n) => Value::F32(n as i32),
-            DiffValue::F64(n) => Value::F64(n as i64),
-            DiffValue::V128(n) => Value::V128(n.to_le_bytes().to_vec()),
+            DiffValue::I32(n) => SpecValue::I32(n),
+            DiffValue::I64(n) => SpecValue::I64(n),
+            DiffValue::F32(n) => SpecValue::F32(n as i32),
+            DiffValue::F64(n) => SpecValue::F64(n as i64),
+            DiffValue::V128(n) => SpecValue::V128(n.to_le_bytes().to_vec()),
             DiffValue::FuncRef { .. } | DiffValue::ExternRef { .. } => unimplemented!(),
         }
     }
 }
 
-impl Into<DiffValue> for Value {
+impl Into<DiffValue> for SpecValue {
     fn into(self) -> DiffValue {
         match self {
-            Value::I32(n) => DiffValue::I32(n),
-            Value::I64(n) => DiffValue::I64(n),
-            Value::F32(n) => DiffValue::F32(n as u32),
-            Value::F64(n) => DiffValue::F64(n as u64),
-            Value::V128(n) => {
+            SpecValue::I32(n) => DiffValue::I32(n),
+            SpecValue::I64(n) => DiffValue::I64(n),
+            SpecValue::F32(n) => DiffValue::F32(n as u32),
+            SpecValue::F64(n) => DiffValue::F64(n as u64),
+            SpecValue::V128(n) => {
                 assert_eq!(n.len(), 16);
                 DiffValue::V128(u128::from_le_bytes(n.as_slice().try_into().unwrap()))
             }
