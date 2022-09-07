@@ -1714,6 +1714,9 @@
 (decl stack_reg () Reg)
 (extern constructor stack_reg stack_reg)
 
+(decl writable_link_reg () WritableReg)
+(extern constructor writable_link_reg writable_link_reg)
+
 (decl writable_zero_reg () WritableReg)
 (extern constructor writable_zero_reg writable_zero_reg)
 
@@ -2956,13 +2959,31 @@
 
 (decl aarch64_link () Reg)
 (rule (aarch64_link)
+      (if (preserve_frame_pointers))
       (if (sign_return_address_disabled))
-      (mov_preg (preg_link)))
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            ;; Even though LR is not an allocatable register, whether it
+            ;; contains the return address for the current function is
+            ;; unknown at this point. For example, this operation may come
+            ;; immediately after a call, in which case LR would not have a
+            ;; valid value. That's why we must obtain the return address from
+            ;; the frame record that corresponds to the current subroutine on
+            ;; the stack; the presence of the record is guaranteed by the
+            ;; `preserve_frame_pointers` setting.
+            (addr AMode (AMode.FPOffset 8 $I64))
+            (_ Unit (emit (MInst.ULoad64 dst addr (mem_flags_trusted)))))
+           dst))
 
 (rule (aarch64_link)
-      ;; This constructor is always used for non-leaf functions, so it is safe
-      ;; to clobber LR.
-      (let ((_ Unit (emit (MInst.Xpaclri))))
+      (if (preserve_frame_pointers))
+      ;; Similarly to the rule above, we must load the return address from the
+      ;; the frame record. Furthermore, we can use LR as a scratch register
+      ;; because the function will set it to the return address immediately
+      ;; before returning.
+      (let ((addr AMode (AMode.FPOffset 8 $I64))
+            (lr WritableReg (writable_link_reg))
+            (_ Unit (emit (MInst.ULoad64 lr addr (mem_flags_trusted))))
+            (_ Unit (emit (MInst.Xpaclri))))
            (mov_preg (preg_link))))
 
 ;; Helper for getting the maximum shift amount for a type.

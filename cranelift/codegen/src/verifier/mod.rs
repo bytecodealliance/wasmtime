@@ -726,6 +726,8 @@ impl<'a> Verifier<'a> {
                 opcode: Opcode::GetFramePointer | Opcode::GetReturnAddress,
             } => {
                 if let Some(isa) = &self.isa {
+                    // Backends may already rely on this check implicitly, so do
+                    // not relax it without verifying that it is safe to do so.
                     if !isa.flags().preserve_frame_pointers() {
                         return errors.fatal((
                             inst,

@@ -1,6 +1,6 @@
 test compile precise-output
 set preserve_frame_pointers=true
-target aarch64
+target aarch64 sign_return_address
 
 function %fp() -> i64 {
 block0:
@@ -8,12 +8,13 @@ block0:
     return v0
 }
 
+;   paciasp
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
 ;   mov x0, fp
 ;   ldp fp, lr, [sp], #16
-;   ret
+;   autiasp ; ret
 
 function %sp() -> i64 {
 block0:
@@ -21,12 +22,13 @@ block0:
     return v0
 }
 
+;   paciasp
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
 ;   mov x0, sp
 ;   ldp fp, lr, [sp], #16
-;   ret
+;   autiasp ; ret
 
 function %return_address() -> i64 {
 block0:
@@ -34,9 +36,12 @@ block0:
     return v0
 }
 
+;   paciasp
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x0, [fp, #8]
+;   ldr lr, [fp, #8]
+;   xpaclri
+;   mov x0, lr
 ;   ldp fp, lr, [sp], #16
-;   ret
+;   autiasp ; ret

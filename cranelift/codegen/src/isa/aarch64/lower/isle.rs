@@ -7,11 +7,12 @@ use generated_code::Context;
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
     fp_reg, lower_constant_f128, lower_constant_f32, lower_constant_f64, lower_fp_condcode,
-    stack_reg, writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget,
-    CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FPUOpRIMod, FloatCC, Imm12,
-    ImmLogic, ImmShift, Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MemLabel, MoveWideConst,
-    MoveWideOp, NarrowValueMode, Opcode, OperandSize, PairAMode, Reg, SImm9, ScalarSize,
-    ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize, NZCV,
+    stack_reg, writable_link_reg, writable_zero_reg, zero_reg, AMode, ASIMDFPModImm,
+    ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI,
+    FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, JTSequenceInfo,
+    MachLabel, MemLabel, MoveWideConst, MoveWideOp, NarrowValueMode, Opcode, OperandSize,
+    PairAMode, Reg, SImm9, ScalarSize, ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize,
+    NZCV,
 };
 use crate::ir::condcodes;
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm};
@@ -310,6 +311,10 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
     fn fp_reg(&mut self) -> Reg {
         fp_reg()
+    }
+
+    fn writable_link_reg(&mut self) -> WritableReg {
+        writable_link_reg()
     }
 
     fn extended_value_from_value(&mut self, val: Value) -> Option<ExtendedValue> {
