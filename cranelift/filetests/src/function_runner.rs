@@ -1,52 +1,106 @@
 //! Provides functionality for compiling and running CLIF IR for `run` tests.
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use core::mem;
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::{condcodes::IntCC, Function, InstBuilder, Signature};
+use cranelift_codegen::ir::{
+    condcodes::IntCC, ExternalName, Function, InstBuilder, Signature, UserExternalName,
+    UserFuncName,
+};
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::{ir, settings, CodegenError};
+use cranelift_codegen::{ir, settings, CodegenError, Context};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{FuncId, Linkage, Module, ModuleError};
 use cranelift_native::builder_with_options;
+use cranelift_reader::TestFile;
 use std::cmp::max;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use thiserror::Error;
 
-/// Compile a single function.
+const TESTFILE_NAMESPACE: u32 = 0;
+
+/// Holds information about a previously defined function.
+#[derive(Debug)]
+struct DefinedFunction {
+    /// This is the name that the function is internally known as.
+    ///
+    /// The JIT module does not support linking / calling [TestcaseName]'s, so
+    /// we rename every function into a [UserExternalName].
+    ///
+    /// By doing this we also have to rename functions that previously were using a
+    /// [UserFuncName], since they may now be in conflict after the renaming that
+    /// occurred.
+    new_name: UserExternalName,
+
+    /// The function signature
+    signature: ir::Signature,
+
+    /// JIT [FuncId]
+    func_id: FuncId,
+}
+
+/// Compile a test case.
 ///
 /// Several Cranelift functions need the ability to run Cranelift IR (e.g. `test_run`); this
-/// [SingleFunctionCompiler] provides a way for compiling Cranelift [Function]s to
+/// [TestFileCompiler] provides a way for compiling Cranelift [Function]s to
 /// `CompiledFunction`s and subsequently calling them through the use of a `Trampoline`. As its
 /// name indicates, this compiler is limited: any functionality that requires knowledge of things
 /// outside the [Function] will likely not work (e.g. global values, calls). For an example of this
 /// "outside-of-function" functionality, see `cranelift_jit::backend::JITBackend`.
 ///
 /// ```
-/// use cranelift_filetests::SingleFunctionCompiler;
+/// use cranelift_filetests::TestFileCompiler;
 /// use cranelift_reader::parse_functions;
 /// use cranelift_codegen::data_value::DataValue;
 ///
 /// let code = "test run \n function %add(i32, i32) -> i32 {  block0(v0:i32, v1:i32):  v2 = iadd v0, v1  return v2 }".into();
 /// let func = parse_functions(code).unwrap().into_iter().nth(0).unwrap();
-/// let compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
-/// let compiled_func = compiler.compile(func).unwrap();
+/// let mut compiler = TestFileCompiler::with_default_host_isa().unwrap();
+/// compiler.declare_function(&func).unwrap();
+/// compiler.define_function(func.clone()).unwrap();
+/// compiler.create_trampoline_for_function(&func).unwrap();
+/// let compiled = compiler.compile().unwrap();
+/// let trampoline = compiled.get_trampoline(&func).unwrap();
 ///
-/// let returned = compiled_func.call(&vec![DataValue::I32(2), DataValue::I32(40)]);
+/// let returned = trampoline.call(&vec![DataValue::I32(2), DataValue::I32(40)]);
 /// assert_eq!(vec![DataValue::I32(42)], returned);
 /// ```
-pub struct SingleFunctionCompiler {
-    isa: Box<dyn TargetIsa>,
+pub struct TestFileCompiler {
+    module: JITModule,
+    ctx: Context,
+
+    /// Holds info about the functions that have already been defined.
+    /// Use look them up by their original [UserFuncName] since that's how the caller
+    /// passes them to us.
+    defined_functions: HashMap<UserFuncName, DefinedFunction>,
+
+    /// We deduplicate trampolines by the signature of the function that they target.
+    /// This map holds as a key the [Signature] of the target function, and as a value
+    /// the [UserFuncName] of the trampoline for that [Signature].
+    ///
+    /// The trampoline is defined in `defined_functions` as any other regular function.
+    trampolines: HashMap<Signature, UserFuncName>,
 }
 
-impl SingleFunctionCompiler {
-    /// Build a [SingleFunctionCompiler] from a [TargetIsa]. For functions to be runnable on the
+impl TestFileCompiler {
+    /// Build a [TestFileCompiler] from a [TargetIsa]. For functions to be runnable on the
     /// host machine, this [TargetIsa] must match the host machine's ISA (see
-    /// [SingleFunctionCompiler::with_host_isa]).
+    /// [TestFileCompiler::with_host_isa]).
     pub fn new(isa: Box<dyn TargetIsa>) -> Self {
-        Self { isa }
+        let builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
+        let module = JITModule::new(builder);
+        let ctx = module.make_context();
+
+        Self {
+            module,
+            ctx,
+            defined_functions: HashMap::new(),
+            trampolines: HashMap::new(),
+        }
     }
 
-    /// Build a [SingleFunctionCompiler] using the host machine's ISA and the passed flags.
+    /// Build a [TestFileCompiler] using the host machine's ISA and the passed flags.
     pub fn with_host_isa(flags: settings::Flags) -> Result<Self> {
         let builder =
             builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
@@ -54,69 +108,224 @@ impl SingleFunctionCompiler {
         Ok(Self::new(isa))
     }
 
-    /// Build a [SingleFunctionCompiler] using the host machine's ISA and the default flags for this
+    /// Build a [TestFileCompiler] using the host machine's ISA and the default flags for this
     /// ISA.
     pub fn with_default_host_isa() -> Result<Self> {
         let flags = settings::Flags::new(settings::builder());
         Self::with_host_isa(flags)
     }
 
-    /// Compile the passed [Function] to a `CompiledFunction`. This function will:
-    ///  - check that the default ISA calling convention is used (to ensure it can be called)
-    ///  - compile the [Function]
-    ///  - compile a `Trampoline` for the [Function]'s signature (or used a cached `Trampoline`;
-    ///    this makes it possible to call functions when the signature is not known until runtime.
-    pub fn compile(self, function: Function) -> Result<CompiledFunction, CompilationError> {
-        let signature = function.signature.clone();
-        if signature.call_conv != self.isa.default_call_conv() {
-            return Err(CompilationError::InvalidTargetIsa);
+    /// Registers all functions in a [TestFile]. Additionally creates a trampoline for each one
+    /// of them.
+    pub fn add_testfile(&mut self, testfile: &TestFile) -> Result<()> {
+        // Declare all functions in the file, so that they may refer to each other.
+        for (func, _) in &testfile.functions {
+            self.declare_function(func)?;
         }
 
-        let trampoline = make_trampoline(&signature, self.isa.as_ref());
+        // Define all functions and trampolines
+        for (func, _) in &testfile.functions {
+            self.define_function(func.clone())?;
+            self.create_trampoline_for_function(func)?;
+        }
 
-        let builder = JITBuilder::with_isa(self.isa, cranelift_module::default_libcall_names());
-        let mut module = JITModule::new(builder);
-        let mut ctx = module.make_context();
+        Ok(())
+    }
 
-        let name = function.name.to_string();
-        let func_id = module.declare_function(&name, Linkage::Local, &function.signature)?;
+    /// Declares a function an registers it as a linkable and callable target internally
+    pub fn declare_function(&mut self, func: &Function) -> Result<()> {
+        let next_id = self.defined_functions.len() as u32;
+        match self.defined_functions.entry(func.name.clone()) {
+            Entry::Occupied(_) => {
+                anyhow::bail!("Duplicate function with name {} found!", &func.name)
+            }
+            Entry::Vacant(v) => {
+                let name = func.name.to_string();
+                let func_id =
+                    self.module
+                        .declare_function(&name, Linkage::Local, &func.signature)?;
 
-        // Build and declare the trampoline in the module
-        let trampoline_name = trampoline.name.to_string();
-        let trampoline_id =
-            module.declare_function(&trampoline_name, Linkage::Local, &trampoline.signature)?;
+                v.insert(DefinedFunction {
+                    new_name: UserExternalName::new(TESTFILE_NAMESPACE, next_id),
+                    signature: func.signature.clone(),
+                    func_id,
+                });
+            }
+        };
 
-        // Define both functions
-        let func_signature = function.signature.clone();
-        ctx.func = function;
-        module.define_function(func_id, &mut ctx)?;
-        module.clear_context(&mut ctx);
+        Ok(())
+    }
 
-        ctx.func = trampoline;
-        module.define_function(trampoline_id, &mut ctx)?;
-        module.clear_context(&mut ctx);
+    /// Renames the function to its new [UserExternalName], as well as any other function that
+    /// it may reference.
+    ///
+    /// We have to do this since the JIT cannot link Testcase functions.
+    fn apply_func_rename(
+        &self,
+        mut func: Function,
+        defined_func: &DefinedFunction,
+    ) -> Result<Function> {
+        // First, rename the function
+        let func_original_name = func.name;
+        func.name = UserFuncName::User(defined_func.new_name.clone());
 
+        // Rename any functions that it references
+        // Do this in stages to appease the borrow checker
+        let mut redefines = Vec::with_capacity(func.dfg.ext_funcs.len());
+        for (ext_ref, ext_func) in &func.dfg.ext_funcs {
+            let old_name = match &ext_func.name {
+                ExternalName::TestCase(tc) => UserFuncName::Testcase(tc.clone()),
+                ExternalName::User(username) => {
+                    UserFuncName::User(func.params.user_named_funcs()[*username].clone())
+                }
+                // The other cases don't need renaming, so lets just continue...
+                _ => continue,
+            };
+
+            let target_df = self.defined_functions.get(&old_name).ok_or(anyhow!(
+                "Undeclared function {} is referenced by {}!",
+                &old_name,
+                &func_original_name
+            ))?;
+
+            redefines.push((ext_ref, target_df.new_name.clone()));
+        }
+
+        // Now register the redefines
+        for (ext_ref, new_name) in redefines.into_iter() {
+            // Register the new name in the func, so that we can get a reference to it.
+            let new_name_ref = func.params.ensure_user_func_name(new_name);
+
+            // Finally rename the ExtFunc
+            func.dfg.ext_funcs[ext_ref].name = ExternalName::User(new_name_ref);
+        }
+
+        Ok(func)
+    }
+
+    /// Defines the body of a function
+    pub fn define_function(&mut self, func: Function) -> Result<()> {
+        let defined_func = self
+            .defined_functions
+            .get(&func.name)
+            .ok_or(anyhow!("Undeclared function {} found!", &func.name))?;
+
+        self.ctx.func = self.apply_func_rename(func, defined_func)?;
+        self.module
+            .define_function(defined_func.func_id, &mut self.ctx)?;
+        self.module.clear_context(&mut self.ctx);
+        Ok(())
+    }
+
+    /// Creates and registers a trampoline for a function if none exists.
+    pub fn create_trampoline_for_function(&mut self, func: &Function) -> Result<()> {
+        if !self.defined_functions.contains_key(&func.name) {
+            anyhow::bail!("Undeclared function {} found!", &func.name);
+        }
+
+        // Check if a trampoline for this function signature already exists
+        if self.trampolines.contains_key(&func.signature) {
+            return Ok(());
+        }
+
+        // Create a trampoline and register it
+        let name = UserFuncName::user(TESTFILE_NAMESPACE, self.defined_functions.len() as u32);
+        let trampoline = make_trampoline(name.clone(), &func.signature, self.module.isa());
+
+        self.declare_function(&trampoline)?;
+        self.define_function(trampoline)?;
+
+        self.trampolines.insert(func.signature.clone(), name);
+
+        Ok(())
+    }
+
+    /// Finalize this TestFile and link all functions.
+    pub fn compile(mut self) -> Result<CompiledTestFile, CompilationError> {
         // Finalize the functions which we just defined, which resolves any
         // outstanding relocations (patching in addresses, now that they're
         // available).
-        module.finalize_definitions();
+        self.module.finalize_definitions();
 
-        Ok(CompiledFunction::new(
-            module,
-            func_signature,
-            func_id,
+        Ok(CompiledTestFile {
+            module: Some(self.module),
+            defined_functions: self.defined_functions,
+            trampolines: self.trampolines,
+        })
+    }
+}
+
+/// A finalized Test File
+pub struct CompiledTestFile {
+    /// We need to store [JITModule] since it contains the underlying memory for the functions.
+    /// Store it in an [Option] so that we can later drop it.
+    module: Option<JITModule>,
+
+    /// Holds info about the functions that have been registered in `module`.
+    /// See [TestFileCompiler] for more info.
+    defined_functions: HashMap<UserFuncName, DefinedFunction>,
+
+    /// Trampolines available in this [JITModule].
+    /// See [TestFileCompiler] for more info.
+    trampolines: HashMap<Signature, UserFuncName>,
+}
+
+impl CompiledTestFile {
+    /// Return a trampoline for calling.
+    ///
+    /// Returns None if [TestFileCompiler::create_trampoline_for_function] wasn't called for this function.
+    pub fn get_trampoline(&self, func: &Function) -> Option<Trampoline> {
+        let defined_func = self.defined_functions.get(&func.name)?;
+        let trampoline_id = self
+            .trampolines
+            .get(&func.signature)
+            .and_then(|name| self.defined_functions.get(name))
+            .map(|df| df.func_id)?;
+        Some(Trampoline {
+            module: self.module.as_ref()?,
+            func_id: defined_func.func_id,
+            func_signature: &defined_func.signature,
             trampoline_id,
-        ))
+        })
+    }
+}
+
+impl Drop for CompiledTestFile {
+    fn drop(&mut self) {
+        // Freeing the module's memory erases the compiled functions.
+        // This should be safe since their pointers never leave this struct.
+        unsafe { self.module.take().unwrap().free_memory() }
+    }
+}
+
+/// A callable trampoline
+pub struct Trampoline<'a> {
+    module: &'a JITModule,
+    func_id: FuncId,
+    func_signature: &'a Signature,
+    trampoline_id: FuncId,
+}
+
+impl<'a> Trampoline<'a> {
+    /// Call the target function of this trampoline, passing in [DataValue]s using a compiled trampoline.
+    pub fn call(&self, arguments: &[DataValue]) -> Vec<DataValue> {
+        let mut values = UnboxedValues::make_arguments(arguments, &self.func_signature);
+        let arguments_address = values.as_mut_ptr();
+
+        let function_ptr = self.module.get_finalized_function(self.func_id);
+        let trampoline_ptr = self.module.get_finalized_function(self.trampoline_id);
+
+        let callable_trampoline: fn(*const u8, *mut u128) -> () =
+            unsafe { mem::transmute(trampoline_ptr) };
+        callable_trampoline(function_ptr, arguments_address);
+
+        values.collect_returns(&self.func_signature)
     }
 }
 
 /// Compilation Error when compiling a function.
 #[derive(Error, Debug)]
 pub enum CompilationError {
-    /// This Target ISA is invalid for the current host.
-    #[error("Cross-compilation not currently supported; use the host's default calling convention \
-    or remove the specified calling convention in the function signature to use the host's default.")]
-    InvalidTargetIsa,
     /// Cranelift codegen error.
     #[error("Cranelift codegen error")]
     CodegenError(#[from] CodegenError),
@@ -126,72 +335,6 @@ pub enum CompilationError {
     /// Memory mapping error.
     #[error("Memory mapping error")]
     IoError(#[from] std::io::Error),
-}
-
-/// Container for the compiled code of a [Function]. This wrapper allows users to call the compiled
-/// function through the use of a trampoline.
-///
-/// ```
-/// use cranelift_filetests::SingleFunctionCompiler;
-/// use cranelift_reader::parse_functions;
-/// use cranelift_codegen::data_value::DataValue;
-///
-/// let code = "test run \n function %add(i32, i32) -> i32 {  block0(v0:i32, v1:i32):  v2 = iadd v0, v1  return v2 }".into();
-/// let func = parse_functions(code).unwrap().into_iter().nth(0).unwrap();
-/// let compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
-/// let compiled_func = compiler.compile(func).unwrap();
-///
-/// let returned = compiled_func.call(&vec![DataValue::I32(2), DataValue::I32(40)]);
-/// assert_eq!(vec![DataValue::I32(42)], returned);
-/// ```
-pub struct CompiledFunction {
-    /// We need to store this since it contains the underlying memory for the functions
-    /// Store it in an [Option] so that we can later drop it.
-    module: Option<JITModule>,
-    signature: Signature,
-    func_id: FuncId,
-    trampoline_id: FuncId,
-}
-
-impl CompiledFunction {
-    /// Build a new [CompiledFunction].
-    pub fn new(
-        module: JITModule,
-        signature: Signature,
-        func_id: FuncId,
-        trampoline_id: FuncId,
-    ) -> Self {
-        Self {
-            module: Some(module),
-            signature,
-            func_id,
-            trampoline_id,
-        }
-    }
-
-    /// Call the [CompiledFunction], passing in [DataValue]s using a compiled trampoline.
-    pub fn call(&self, arguments: &[DataValue]) -> Vec<DataValue> {
-        let mut values = UnboxedValues::make_arguments(arguments, &self.signature);
-        let arguments_address = values.as_mut_ptr();
-
-        let module = self.module.as_ref().unwrap();
-        let function_ptr = module.get_finalized_function(self.func_id);
-        let trampoline_ptr = module.get_finalized_function(self.trampoline_id);
-
-        let callable_trampoline: fn(*const u8, *mut u128) -> () =
-            unsafe { mem::transmute(trampoline_ptr) };
-        callable_trampoline(function_ptr, arguments_address);
-
-        values.collect_returns(&self.signature)
-    }
-}
-
-impl Drop for CompiledFunction {
-    fn drop(&mut self) {
-        // Freeing the module's memory erases the compiled functions.
-        // This should be safe since their pointers never leave this struct.
-        unsafe { self.module.take().unwrap().free_memory() }
-    }
 }
 
 /// A container for laying out the [ValueData]s in memory in a way that the [Trampoline] can
@@ -252,15 +395,15 @@ impl UnboxedValues {
 /// (e.g. register, stack) prior to calling a [CompiledFunction]. The [Function] returned by
 /// [make_trampoline] is compiled to a [Trampoline]. Note that this uses the [TargetIsa]'s default
 /// calling convention so we must also check that the [CompiledFunction] has the same calling
-/// convention (see [SingleFunctionCompiler::compile]).
-fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
+/// convention (see [TestFileCompiler::compile]).
+fn make_trampoline(name: UserFuncName, signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
     // Create the trampoline signature: (callee_address: pointer, values_vec: pointer) -> ()
     let pointer_type = isa.pointer_type();
     let mut wrapper_sig = ir::Signature::new(isa.frontend_config().default_call_conv);
     wrapper_sig.params.push(ir::AbiParam::new(pointer_type)); // Add the `callee_address` parameter.
     wrapper_sig.params.push(ir::AbiParam::new(pointer_type)); // Add the `values_vec` parameter.
 
-    let mut func = ir::Function::with_name_signature(ir::UserFuncName::default(), wrapper_sig);
+    let mut func = ir::Function::with_name_signature(name, wrapper_sig);
 
     // The trampoline has a single block filled with loads, one call to callee_address, and some loads.
     let mut builder_context = FunctionBuilderContext::new();
@@ -385,9 +528,13 @@ mod test {
         let function = test_file.functions[0].0.clone();
 
         // execute function
-        let compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
-        let compiled_function = compiler.compile(function).unwrap();
-        let returned = compiled_function.call(&[]);
+        let mut compiler = TestFileCompiler::with_default_host_isa().unwrap();
+        compiler.declare_function(&function).unwrap();
+        compiler.define_function(function.clone()).unwrap();
+        compiler.create_trampoline_for_function(&function).unwrap();
+        let compiled = compiler.compile().unwrap();
+        let trampoline = compiled.get_trampoline(&function).unwrap();
+        let returned = trampoline.call(&[]);
         assert_eq!(returned, vec![DataValue::B(true)])
     }
 
@@ -403,8 +550,12 @@ mod test {
             }",
         );
 
-        let compiler = SingleFunctionCompiler::with_default_host_isa().unwrap();
-        let trampoline = make_trampoline(&function.signature, compiler.isa.as_ref());
+        let compiler = TestFileCompiler::with_default_host_isa().unwrap();
+        let trampoline = make_trampoline(
+            UserFuncName::user(0, 0),
+            &function.signature,
+            compiler.module.isa(),
+        );
         assert!(format!("{}", trampoline).ends_with(
             "sig0 = (f32, i8, i64x2, b1) -> f32x4, b64 fast
 

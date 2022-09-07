@@ -80,16 +80,16 @@ block2:
 
 ;   bti c
 ; block0:
-;   ldr x2, [x0]
+;   ldr x6, [x0]
 ;   emit_island 36
 ;   subs wzr, w0, #1
-;   b.hs label1 ; csel x9, xzr, x0, hs ; csdb ; adr x8, pc+16 ; ldrsw x9, [x8, x9, uxtw #2] ; add x8, x8, x9 ; br x8 ; jt_entries [Label(MachLabel(2))]
+;   b.hs label1 ; csel x8, xzr, x0, hs ; csdb ; adr x7, pc+16 ; ldrsw x8, [x7, x8, uxtw #2] ; add x7, x7, x8 ; br x7 ; jt_entries [Label(MachLabel(2))]
 ; block1:
-;   mov x0, x2
+;   mov x0, x6
 ;   ret
 ; block2:
 ;   bti j
-;   mov x0, x2
+;   mov x0, x6
 ;   add x0, x0, #42
 ;   ret
 
@@ -105,7 +105,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   ldr x5, 8 ; b 12 ; data TestCase(TestcaseName { length: 1, ascii: [103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }) + 0
-;   blr x5
+;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
+;   blr x4
 ;   ldp fp, lr, [sp], #16
 ;   ret

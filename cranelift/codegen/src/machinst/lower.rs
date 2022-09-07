@@ -5,25 +5,22 @@
 // TODO: separate the IR-query core of `Lower` from the lowering logic built on
 // top of it, e.g. the side-effect/coloring analysis and the scan support.
 
-use crate::data_value::DataValue;
 use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::{
     types::{FFLAGS, IFLAGS},
-    ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, Function, GlobalValue,
-    GlobalValueData, Immediate, Inst, InstructionData, MemFlags, Opcode, Signature, Type, Value,
-    ValueDef, ValueLabelAssignments, ValueLabelStart,
+    ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
+    GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, Opcode, RelSourceLoc,
+    Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
-use crate::ir::{ExternalName, RelSourceLoc};
 use crate::machinst::{
     non_writable_value_regs, writable_value_regs, BlockIndex, BlockLoweringOrder, Callee,
-    LoweredBlock, MachLabel, Reg, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
+    LoweredBlock, MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
     VCodeConstants, VCodeInst, ValueRegs, Writable,
 };
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
-use core::convert::TryInto;
 use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
@@ -347,9 +344,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         abi: Callee<I::ABIMachineSpec>,
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
+        sigs: SigSet,
     ) -> CodegenResult<Lower<'func, I>> {
         let constants = VCodeConstants::with_capacity(f.dfg.constants.len());
         let mut vcode = VCodeBuilder::new(
+            sigs,
             abi,
             emit_info,
             block_order,
@@ -445,6 +444,14 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             ir_insts: vec![],
             pinned_reg: None,
         })
+    }
+
+    pub fn sigs(&self) -> &SigSet {
+        self.vcode.sigs()
+    }
+
+    pub fn sigs_mut(&mut self) -> &mut SigSet {
+        self.vcode.sigs_mut()
     }
 
     /// Pre-analysis: compute `value_ir_uses`. See comment on
@@ -573,7 +580,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     continue;
                 }
                 let regs = writable_value_regs(self.value_regs[*param]);
-                for insn in self.vcode.abi().gen_copy_arg_to_regs(i, regs).into_iter() {
+                for insn in self
+                    .vcode
+                    .abi()
+                    .gen_copy_arg_to_regs(self.sigs(), i, regs)
+                    .into_iter()
+                {
                     self.emit(insn);
                 }
                 if self.abi().signature().params[i].purpose == ArgumentPurpose::StructReturn {
@@ -595,7 +607,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     ));
                 }
             }
-            if let Some(insn) = self.vcode.abi().gen_retval_area_setup() {
+            if let Some(insn) = self.vcode.abi().gen_retval_area_setup(self.sigs()) {
                 self.emit(insn);
             }
         }
@@ -608,13 +620,13 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for insn in self
                 .vcode
                 .abi()
-                .gen_copy_regs_to_retval(i, regs)
+                .gen_copy_regs_to_retval(self.sigs(), i, regs)
                 .into_iter()
             {
                 self.emit(insn);
             }
         }
-        let inst = self.vcode.abi().gen_ret();
+        let inst = self.vcode.abi().gen_ret(self.sigs());
         self.emit(inst);
 
         // Hack: generate a virtual instruction that uses vmctx in
@@ -908,11 +920,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let temps = self
             .vcode
             .abi()
-            .temps_needed()
+            .temps_needed(self.sigs())
             .into_iter()
             .map(|temp_ty| self.alloc_tmp(temp_ty).only_reg().unwrap())
             .collect::<Vec<_>>();
-        self.vcode.abi().init(temps);
+        self.vcode.init_abi(temps);
 
         // Get the pinned reg here (we only parameterize this function on `B`,
         // not the whole `Lower` impl).
@@ -1008,8 +1020,13 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     /// Get the `Callee`.
-    pub fn abi(&mut self) -> &mut Callee<I::ABIMachineSpec> {
+    pub fn abi(&self) -> &Callee<I::ABIMachineSpec> {
         self.vcode.abi()
+    }
+
+    /// Get the `Callee`.
+    pub fn abi_mut(&mut self) -> &mut Callee<I::ABIMachineSpec> {
+        self.vcode.abi_mut()
     }
 
     /// Get the (virtual) register that receives the return value. A return
@@ -1026,48 +1043,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get the instdata for a given IR instruction.
     pub fn data(&self, ir_inst: Inst) -> &InstructionData {
         &self.f.dfg[ir_inst]
-    }
-
-    /// Get the target for a call instruction, as an `ExternalName`. Returns a tuple
-    /// providing this name and the "relocation distance", i.e., whether the backend
-    /// can assume the target will be "nearby" (within some small offset) or an
-    /// arbitrary address. (This comes from the `colocated` bit in the CLIF.)
-    pub fn call_target<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance)> {
-        match &self.f.dfg[ir_inst] {
-            &InstructionData::Call { func_ref, .. }
-            | &InstructionData::FuncAddr { func_ref, .. } => {
-                let funcdata = &self.f.dfg.ext_funcs[func_ref];
-                let dist = funcdata.reloc_distance();
-                Some((&funcdata.name, dist))
-            }
-            _ => None,
-        }
-    }
-
-    /// Get the signature for a call or call-indirect instruction.
-    pub fn call_sig<'b>(&'b self, ir_inst: Inst) -> Option<&'b Signature> {
-        match &self.f.dfg[ir_inst] {
-            &InstructionData::Call { func_ref, .. } => {
-                let funcdata = &self.f.dfg.ext_funcs[func_ref];
-                Some(&self.f.dfg.signatures[funcdata.signature])
-            }
-            &InstructionData::CallIndirect { sig_ref, .. } => Some(&self.f.dfg.signatures[sig_ref]),
-            _ => None,
-        }
-    }
-
-    /// Get the symbol name, relocation distance estimate, and offset for a
-    /// symbol_value instruction.
-    pub fn symbol_value<'b>(
-        &'b self,
-        ir_inst: Inst,
-    ) -> Option<(&'b ExternalName, RelocDistance, i64)> {
-        match &self.f.dfg[ir_inst] {
-            &InstructionData::UnaryGlobalValue { global_value, .. } => {
-                self.symbol_value_data(global_value)
-            }
-            _ => None,
-        }
     }
 
     /// Likewise, but starting with a GlobalValue identifier.
@@ -1266,6 +1241,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let ty = self.f.dfg.value_type(val);
         assert!(ty != IFLAGS && ty != FFLAGS);
 
+        if let Some(inst) = self.f.dfg.value_def(val).inst() {
+            assert!(!self.inst_sunk.contains(&inst));
+        }
+
         // If the value is a constant, then (re)materialize it at each use. This
         // lowers register pressure.
         if let Some(c) = self
@@ -1347,6 +1326,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         assert!(has_lowering_side_effect(self.f, ir_inst));
         assert!(self.cur_scan_entry_color.is_some());
 
+        for result in self.dfg().inst_results(ir_inst) {
+            assert!(self.value_lowered_uses[*result] == 0);
+        }
+
         let sunk_inst_entry_color = self
             .side_effect_inst_entry_colors
             .get(&ir_inst)
@@ -1371,27 +1354,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Indicate that a constant should be emitted.
     pub fn use_constant(&mut self, constant: VCodeConstantData) -> VCodeConstant {
         self.vcode.constants().insert(constant)
-    }
-
-    /// Retrieve the value immediate from an instruction. This will perform necessary lookups on the
-    /// `DataFlowGraph` to retrieve even large immediates.
-    pub fn get_immediate(&self, ir_inst: Inst) -> Option<DataValue> {
-        let inst_data = self.data(ir_inst);
-        match inst_data {
-            InstructionData::Shuffle { imm, .. } => {
-                let buffer = self.f.dfg.immediates.get(imm.clone()).unwrap().as_slice();
-                let value = DataValue::V128(buffer.try_into().expect("a 16-byte data buffer"));
-                Some(value)
-            }
-            InstructionData::UnaryConst {
-                constant_handle, ..
-            } => {
-                let buffer = self.f.dfg.constants.get(constant_handle.clone()).as_slice();
-                let value = DataValue::V128(buffer.try_into().expect("a 16-byte data buffer"));
-                Some(value)
-            }
-            _ => inst_data.imm_value(),
-        }
     }
 
     /// Cause the value in `reg` to be in a virtual reg, by copying it into a new virtual reg

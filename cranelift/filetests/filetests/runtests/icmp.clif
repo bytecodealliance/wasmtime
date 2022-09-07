@@ -14,5 +14,5 @@ block0(v0: i8):
     v2 = icmp sge v0, v1
     return v2
 }
-; run: %overflow_rhs_con(49) == true
-; run: %overflow_rhs_con(-65) == false
+; run: %overflow_rhs_const(49) == true
+; run: %overflow_rhs_const(-65) == false

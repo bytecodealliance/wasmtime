@@ -354,6 +354,7 @@ impl Engine {
             "enable_llvm_abi_extensions" => *value == FlagValue::Bool(false),
             "enable_pinned_reg" => *value == FlagValue::Bool(false),
             "enable_probestack" => *value == FlagValue::Bool(false),
+            "probestack_strategy" => *value == FlagValue::Enum("outline".into()),
             "use_colocated_libcalls" => *value == FlagValue::Bool(false),
             "use_pinned_reg_as_heap_base" => *value == FlagValue::Bool(false),
 

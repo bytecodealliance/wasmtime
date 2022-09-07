@@ -4,7 +4,7 @@ use crate::ir::{self, types, LibCall, MemFlags, Opcode, Signature, TrapCode, Typ
 use crate::ir::{types::*, ExternalName};
 use crate::isa;
 use crate::isa::{unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings, CallConv};
-use crate::machinst::abi_impl::*;
+use crate::machinst::abi::*;
 use crate::machinst::*;
 use crate::settings;
 use crate::{CodegenError, CodegenResult};
@@ -28,6 +28,42 @@ pub(crate) type X64Caller = Caller<X64ABIMachineSpec>;
 
 /// Implementation of ABI primitives for x64.
 pub struct X64ABIMachineSpec;
+
+impl X64ABIMachineSpec {
+    fn gen_probestack_unroll(guard_size: u32, probe_count: u32) -> SmallInstVec<Inst> {
+        let mut insts = SmallVec::with_capacity(probe_count as usize);
+        for i in 0..probe_count {
+            let offset = (guard_size * (i + 1)) as i64;
+
+            // TODO: It would be nice if we could store the imm 0, but we don't have insts for those
+            // so store the stack pointer. Any register will do, since the stack is undefined at this point
+            insts.push(Self::gen_store_stack(
+                StackAMode::SPOffset(-offset, I8),
+                regs::rsp(),
+                I32,
+            ));
+        }
+        insts
+    }
+    fn gen_probestack_loop(frame_size: u32, guard_size: u32) -> SmallInstVec<Inst> {
+        // We have to use a caller saved register since clobbering only happens
+        // after stack probing.
+        //
+        // R11 is caller saved on both Fastcall and SystemV, and not used for argument
+        // passing, so it's pretty much free. It is also not used by the stacklimit mechanism.
+        let tmp = regs::r11();
+        debug_assert!({
+            let real_reg = tmp.to_real_reg().unwrap();
+            !is_callee_save_systemv(real_reg, false) && !is_callee_save_fastcall(real_reg, false)
+        });
+
+        smallvec![Inst::StackProbeLoop {
+            tmp: Writable::from_reg(tmp),
+            frame_size,
+            guard_size,
+        }]
+    }
+}
 
 impl IsaFlags for x64_settings::Flags {}
 
@@ -396,6 +432,23 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             }),
         });
         insts
+    }
+
+    fn gen_inline_probestack(frame_size: u32, guard_size: u32) -> SmallInstVec<Self::I> {
+        // Unroll at most n consecutive probes, before falling back to using a loop
+        //
+        // This was number was picked because the loop version is 38 bytes long. We can fit
+        // 5 inline probes in that space, so unroll if its beneficial in terms of code size.
+        const PROBE_MAX_UNROLL: u32 = 5;
+
+        // Number of probes that we need to perform
+        let probe_count = align_to(frame_size, guard_size) / guard_size;
+
+        if probe_count <= PROBE_MAX_UNROLL {
+            Self::gen_probestack_unroll(guard_size, probe_count)
+        } else {
+            Self::gen_probestack_loop(frame_size, guard_size)
+        }
     }
 
     fn gen_clobber_save(

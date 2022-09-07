@@ -1,6 +1,6 @@
 //! Implementation of a standard S390x ABI.
 //!
-//! This machine uses the "vanilla" ABI implementation from abi_impl.rs,
+//! This machine uses the "vanilla" ABI implementation from abi.rs,
 //! however a few details are different from the description there:
 //!
 //! - On s390x, the caller must provide a "register save area" of 160
@@ -574,8 +574,12 @@ impl ABIMachineSpec for S390xMachineDeps {
         smallvec![]
     }
 
+    fn gen_inline_probestack(_frame_size: u32, _guard_size: u32) -> SmallInstVec<Self::I> {
+        unimplemented!("Inline stack probing is unimplemented on S390x");
+    }
+
     // Returns stack bytes used as well as instructions. Does not adjust
-    // nominal SP offset; abi_impl generic code will do that.
+    // nominal SP offset; abi generic code will do that.
     fn gen_clobber_save(
         _call_conv: isa::CallConv,
         _setup_frame: bool,

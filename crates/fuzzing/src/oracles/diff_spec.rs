@@ -1,31 +1,44 @@
 //! Evaluate an exported Wasm function using the WebAssembly specification
 //! reference interpreter.
 
-use crate::generators::{DiffValue, ModuleConfig};
+use crate::generators::{Config, DiffValue, DiffValueType};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Error, Result};
 use wasm_spec_interpreter::Value;
+use wasmtime::Trap;
 
 /// A wrapper for `wasm-spec-interpreter` as a [`DiffEngine`].
 pub struct SpecInterpreter;
 
 impl SpecInterpreter {
-    /// Build a new [`SpecInterpreter`] but only if the configuration does not
-    /// rely on features that the current bindings (i.e.,
-    /// `wasm-spec-interpreter`) do not support.
-    pub fn new(config: &ModuleConfig) -> Result<Box<Self>> {
-        if config.config.reference_types_enabled {
-            bail!("the spec interpreter bindings do not support reference types")
-        }
-        if config.config.max_funcs > 1 {
-            // TODO
-            bail!("the spec interpreter bindings can only support one function for now")
-        }
-        if config.config.max_tables > 0 {
-            // TODO
-            bail!("the spec interpreter bindings do not fail as they should with out-of-bounds table accesses")
-        }
-        Ok(Box::new(Self))
+    pub(crate) fn new(config: &mut Config) -> Self {
+        let config = &mut config.module_config.config;
+
+        // TODO: right now the interpreter bindings only execute the first
+        // function in the module so if there's possibly more than one function
+        // it's not possible to run the other function. This should be fixed
+        // with improvements to the ocaml bindings to the interpreter.
+        config.min_funcs = 1;
+        config.max_funcs = 1;
+
+        // TODO: right now the instantiation step for the interpreter does
+        // nothing and the evaluation step performs an instantiation followed by
+        // an execution. This means that instantiations which fail in other
+        // engines will "succeed" in the interpreter because the error is
+        // delayed to the execution. This should be fixed by making
+        // instantiation a first-class primitive in our interpreter bindings.
+        config.min_tables = 0;
+        config.max_tables = 0;
+
+        config.min_memories = config.min_memories.min(1);
+        config.max_memories = config.max_memories.min(1);
+
+        config.memory64_enabled = false;
+        config.threads_enabled = false;
+        config.bulk_memory_enabled = false;
+        config.reference_types_enabled = false;
+
+        Self
     }
 }
 
@@ -34,11 +47,22 @@ impl DiffEngine for SpecInterpreter {
         "spec"
     }
 
-    fn instantiate(&self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
+    fn instantiate(&mut self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
         // TODO: ideally we would avoid copying the module bytes here.
         Ok(Box::new(SpecInstance {
             wasm: wasm.to_vec(),
         }))
+    }
+
+    fn assert_error_match(&self, trap: &Trap, err: &Error) {
+        // TODO: implement this for the spec interpreter
+        drop((trap, err));
+    }
+
+    fn is_stack_overflow(&self, err: &Error) -> bool {
+        // TODO: implement this for the spec interpreter
+        drop(err);
+        false
     }
 }
 
@@ -55,7 +79,8 @@ impl DiffInstance for SpecInstance {
         &mut self,
         _function_name: &str,
         arguments: &[DiffValue],
-    ) -> Result<Vec<DiffValue>> {
+        _results: &[DiffValueType],
+    ) -> Result<Option<Vec<DiffValue>>> {
         // The spec interpreter needs some work before it can fully support this
         // interface:
         //  - TODO adapt `wasm-spec-interpreter` to use function name to select
@@ -64,17 +89,19 @@ impl DiffInstance for SpecInstance {
         //    so we can hash memory, globals, etc.
         let arguments = arguments.iter().map(Value::from).collect();
         match wasm_spec_interpreter::interpret(&self.wasm, Some(arguments)) {
-            Ok(results) => Ok(results.into_iter().map(Value::into).collect()),
+            Ok(results) => Ok(Some(results.into_iter().map(Value::into).collect())),
             Err(err) => Err(anyhow!(err)),
         }
     }
 
-    fn is_hashable(&self) -> bool {
-        false
+    fn get_global(&mut self, _name: &str, _ty: DiffValueType) -> Option<DiffValue> {
+        // TODO: should implement this
+        None
     }
 
-    fn hash(&mut self, _state: &mut std::collections::hash_map::DefaultHasher) -> Result<()> {
-        unimplemented!()
+    fn get_memory(&mut self, _name: &str, _shared: bool) -> Option<Vec<u8>> {
+        // TODO: should implement this
+        None
     }
 }
 
@@ -86,6 +113,7 @@ impl From<&DiffValue> for Value {
             DiffValue::F32(n) => Value::F32(n as i32),
             DiffValue::F64(n) => Value::F64(n as i64),
             DiffValue::V128(n) => Value::V128(n.to_le_bytes().to_vec()),
+            DiffValue::FuncRef { .. } | DiffValue::ExternRef { .. } => unimplemented!(),
         }
     }
 }
@@ -120,4 +148,12 @@ impl Into<DiffValue> for Value {
 /// executed first, e.g., during global initialization, to avoid this issue.
 pub fn setup_ocaml_runtime() {
     wasm_spec_interpreter::setup_ocaml_runtime();
+}
+
+#[test]
+fn smoke() {
+    if !wasm_spec_interpreter::support_compiled_in() {
+        return;
+    }
+    crate::oracles::engine::smoke_test_engine(|_, config| Ok(SpecInterpreter::new(config)))
 }

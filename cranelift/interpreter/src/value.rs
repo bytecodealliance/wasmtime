@@ -208,14 +208,6 @@ macro_rules! binary_match {
         }
     };
 }
-macro_rules! comparison_match {
-    ( $op:path[$arg1:expr, $arg2:expr]; [ $( $data_value_ty:ident ),* ] ) => {
-        match ($arg1, $arg2) {
-            $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => { Ok($op(a, b)) } )*
-            _ => unimplemented!("comparison: {:?}, {:?}", $arg1, $arg2)
-        }
-    };
-}
 
 impl Value for DataValue {
     fn ty(&self) -> Type {
@@ -475,11 +467,11 @@ impl Value for DataValue {
     }
 
     fn eq(&self, other: &Self) -> ValueResult<bool> {
-        comparison_match!(PartialEq::eq[&self, &other]; [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128, F32, F64])
+        Ok(self == other)
     }
 
     fn gt(&self, other: &Self) -> ValueResult<bool> {
-        comparison_match!(PartialOrd::gt[&self, &other]; [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128, F32, F64])
+        Ok(self > other)
     }
 
     fn uno(&self, other: &Self) -> ValueResult<bool> {
@@ -679,7 +671,7 @@ impl Value for DataValue {
     }
 
     fn not(self) -> ValueResult<Self> {
-        unary_match!(!(&self); [I8, I16, I32, I64])
+        unary_match!(!(&self); [B, I8, I16, I32, I64])
     }
 
     fn count_ones(self) -> ValueResult<Self> {

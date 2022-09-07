@@ -1,0 +1,61 @@
+test compile precise-output
+set enable_simd
+target x86_64 has_avx512vl has_avx512vbmi
+
+function %shuffle_in_bounds(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    ;; pick the second lane of v1, the rest use the first lane of v0
+    v2 = shuffle v0, v1, 0x11000000000000000000000000000000
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm6
+;   load_const VCodeConstant(0), %xmm0
+;   movdqa  %xmm6, %xmm8
+;   vpermi2b %xmm1, %xmm8, %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %shuffle_out_of_bounds(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    ;; pick zero for the first lane, the rest use first lane of v0
+    ;; This should introduce two constants, one for the permutation and one to
+    ;; mask the non-zero values for lanes 1-15
+    v2 = shuffle v0, v1, 0x80000000000000000000000000000000
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm9
+;   load_const VCodeConstant(1), %xmm0
+;   load_const VCodeConstant(0), %xmm8
+;   movdqa  %xmm9, %xmm11
+;   vpermi2b %xmm1, %xmm11, %xmm8, %xmm8
+;   andps   %xmm0, %xmm8, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f3(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = shuffle v0, v1, [3 0 31 26 4 6 12 11 23 13 24 4 2 15 17 5]
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqa  %xmm0, %xmm6
+;   load_const VCodeConstant(0), %xmm0
+;   movdqa  %xmm6, %xmm8
+;   vpermi2b %xmm1, %xmm8, %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

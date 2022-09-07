@@ -1,0 +1,85 @@
+test compile precise-output
+target aarch64
+
+function %f1(i8x16) -> i8 {
+block0(v0: i8x16):
+  v1 = vhigh_bits.i8 v0
+  return v1
+}
+
+; block0:
+;   sshr v3.16b, v0.16b, #7
+;   movz x6, #513
+;   movk x6, x6, #2052, LSL #16
+;   movk x6, x6, #8208, LSL #32
+;   movk x6, x6, #32832, LSL #48
+;   dup v17.2d, x6
+;   and v20.16b, v3.16b, v17.16b
+;   ext v22.16b, v20.16b, v20.16b, #8
+;   zip1 v24.16b, v20.16b, v22.16b
+;   addv h26, v24.8h
+;   umov w0, v26.h[0]
+;   ret
+
+function %f2(i8x16) -> i16 {
+block0(v0: i8x16):
+  v1 = vhigh_bits.i16 v0
+  return v1
+}
+
+; block0:
+;   sshr v3.16b, v0.16b, #7
+;   movz x6, #513
+;   movk x6, x6, #2052, LSL #16
+;   movk x6, x6, #8208, LSL #32
+;   movk x6, x6, #32832, LSL #48
+;   dup v17.2d, x6
+;   and v20.16b, v3.16b, v17.16b
+;   ext v22.16b, v20.16b, v20.16b, #8
+;   zip1 v24.16b, v20.16b, v22.16b
+;   addv h26, v24.8h
+;   umov w0, v26.h[0]
+;   ret
+
+function %f3(i16x8) -> i8 {
+block0(v0: i16x8):
+  v1 = vhigh_bits.i8 v0
+  return v1
+}
+
+; block0:
+;   sshr v3.8h, v0.8h, #15
+;   ldr q5, pc+8 ; b 20 ; data.f128 0x00800040002000100008000400020001
+;   and v7.16b, v3.16b, v5.16b
+;   addv h17, v7.8h
+;   umov w0, v17.h[0]
+;   ret
+
+function %f4(i32x4) -> i8 {
+block0(v0: i32x4):
+  v1 = vhigh_bits.i8 v0
+  return v1
+}
+
+; block0:
+;   sshr v3.4s, v0.4s, #31
+;   ldr q5, pc+8 ; b 20 ; data.f128 0x00000008000000040000000200000001
+;   and v7.16b, v3.16b, v5.16b
+;   addv s17, v7.4s
+;   mov w0, v17.s[0]
+;   ret
+
+function %f5(i64x2) -> i8 {
+block0(v0: i64x2):
+  v1 = vhigh_bits.i8 v0
+  return v1
+}
+
+; block0:
+;   mov x3, v0.d[1]
+;   mov x5, v0.d[0]
+;   lsr x7, x3, #63
+;   lsr x9, x5, #63
+;   add x0, x9, x7, LSL 1
+;   ret
+

@@ -902,6 +902,9 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
             fmtln!(fmt, "data.sign_extend_immediates(ctrl_typevar);");
         }
 
+        // Assert that this opcode belongs to this format
+        fmtln!(fmt, "debug_assert_eq!(opcode.format(), InstructionFormat::from(&data), \"Wrong InstructionFormat for Opcode: {}\", opcode);");
+
         fmt.line("self.build(data, ctrl_typevar)");
     });
     fmtln!(fmt, "}");

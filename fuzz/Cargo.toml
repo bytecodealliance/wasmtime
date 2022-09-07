@@ -10,15 +10,15 @@ cargo-fuzz = true
 
 [dependencies]
 anyhow = { version = "1.0.19" }
-arbitrary = { version = "1.1.0", features = ["derive"] }
 cranelift-codegen = { path = "../cranelift/codegen", features = ["incremental-cache"] }
 cranelift-reader = { path = "../cranelift/reader" }
 cranelift-wasm = { path = "../cranelift/wasm" }
 cranelift-filetests = { path = "../cranelift/filetests" }
 cranelift-interpreter = { path = "../cranelift/interpreter" }
 cranelift-fuzzgen = { path = "../cranelift/fuzzgen" }
-libfuzzer-sys = "0.4.0"
+libfuzzer-sys = { version = "0.4.0", features = ["arbitrary-derive"] }
 target-lexicon = "0.12"
+smallvec = "1.6.1"
 wasmtime = { path = "../crates/wasmtime" }
 wasmtime-fuzzing = { path = "../crates/fuzzing" }
 component-test-util = { path = "../crates/misc/component-test-util" }
@@ -57,32 +57,6 @@ doc = false
 [[bin]]
 name = "differential"
 path = "fuzz_targets/differential.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "differential_meta"
-path = "fuzz_targets/differential_meta.rs"
-test = false
-doc = false
-
-
-[[bin]]
-name = "differential_spec"
-path = "fuzz_targets/differential_spec.rs"
-test = false
-doc = false
-required-features = ['fuzz-spec-interpreter']
-
-[[bin]]
-name = "differential_wasmi"
-path = "fuzz_targets/differential_wasmi.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "differential_v8"
-path = "fuzz_targets/differential_v8.rs"
 test = false
 doc = false
 

@@ -1782,7 +1782,19 @@ impl TermEnv {
                 let tid = match self.term_map.get(&name) {
                     Some(t) => t,
                     None => {
-                        tyenv.report_error(pos, format!("Unknown term in pattern: '{}'", sym.0));
+                        // Maybe this was actually a variable binding and the user has placed
+                        // parens around it by mistake? (See #4775.)
+                        if bindings.vars.iter().any(|b| b.name == name) {
+                            tyenv.report_error(
+                                pos,
+                                format!(
+                                    "Unknown term in expression: '{}'. Variable binding under this name exists; try removing the parens?", sym.0));
+                        } else {
+                            tyenv.report_error(
+                                pos,
+                                format!("Unknown term in expression: '{}'", sym.0),
+                            );
+                        }
                         return None;
                     }
                 };

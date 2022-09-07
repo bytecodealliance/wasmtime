@@ -146,16 +146,16 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzbq  %dil, %rax
-;   cvtsi2ss %rax, %xmm0
-;   movzwq  %si, %rax
-;   cvtsi2ss %rax, %xmm6
-;   movl    %edx, %eax
-;   cvtsi2ss %rax, %xmm7
-;   u64_to_f32_seq %rcx, %xmm4, %r8, %rdx
+;   movzbq  %dil, %rdi
+;   cvtsi2ss %rdi, %xmm0
+;   movzwq  %si, %rdi
+;   cvtsi2ss %rdi, %xmm5
+;   movl    %edx, %edi
+;   cvtsi2ss %rdi, %xmm6
+;   u64_to_f32_seq %rcx, %xmm2, %rdi, %rax
+;   addss   %xmm0, %xmm5, %xmm0
 ;   addss   %xmm0, %xmm6, %xmm0
-;   addss   %xmm0, %xmm7, %xmm0
-;   addss   %xmm0, %xmm4, %xmm0
+;   addss   %xmm0, %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -209,7 +209,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint32_seq %xmm0, %eax, %r10, %xmm6
+;   cvt_float32_to_uint32_seq %xmm0, %eax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -223,7 +223,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint64_seq %xmm0, %rax, %r10, %xmm6
+;   cvt_float32_to_uint64_seq %xmm0, %rax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -237,7 +237,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint32_seq %xmm0, %eax, %r10, %xmm6
+;   cvt_float64_to_uint32_seq %xmm0, %eax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -251,7 +251,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint64_seq %xmm0, %rax, %r10, %xmm6
+;   cvt_float64_to_uint64_seq %xmm0, %rax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -265,7 +265,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint32_sat_seq %xmm0, %eax, %r10, %xmm6
+;   cvt_float32_to_uint32_sat_seq %xmm0, %eax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -279,7 +279,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint64_sat_seq %xmm0, %rax, %r10, %xmm6
+;   cvt_float32_to_uint64_sat_seq %xmm0, %rax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -293,7 +293,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint32_sat_seq %xmm0, %eax, %r10, %xmm6
+;   cvt_float64_to_uint32_sat_seq %xmm0, %eax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -307,7 +307,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint64_sat_seq %xmm0, %rax, %r10, %xmm6
+;   cvt_float64_to_uint64_sat_seq %xmm0, %rax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -321,7 +321,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_sint32_seq %xmm0, %eax, %r10, %xmm6
+;   cvt_float32_to_sint32_seq %xmm0, %eax, %r8, %xmm4
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -335,7 +335,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_sint64_seq %xmm0, %rax, %r10, %xmm6
+;   cvt_float32_to_sint64_seq %xmm0, %rax, %r8, %xmm4
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -349,7 +349,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_sint32_seq %xmm0, %eax, %r10, %xmm6
+;   cvt_float64_to_sint32_seq %xmm0, %eax, %r8, %xmm4
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -363,7 +363,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_sint64_seq %xmm0, %rax, %r10, %xmm6
+;   cvt_float64_to_sint64_seq %xmm0, %rax, %r8, %xmm4
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -377,7 +377,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_sint32_sat_seq %xmm0, %eax, %r10, %xmm6
+;   cvt_float32_to_sint32_sat_seq %xmm0, %eax, %r8, %xmm4
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -391,7 +391,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_sint64_sat_seq %xmm0, %rax, %r10, %xmm6
+;   cvt_float32_to_sint64_sat_seq %xmm0, %rax, %r8, %xmm4
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -405,7 +405,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_sint32_sat_seq %xmm0, %eax, %r10, %xmm6
+;   cvt_float64_to_sint32_sat_seq %xmm0, %eax, %r8, %xmm4
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -419,7 +419,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_sint64_sat_seq %xmm0, %rax, %r10, %xmm6
+;   cvt_float64_to_sint64_sat_seq %xmm0, %rax, %r8, %xmm4
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

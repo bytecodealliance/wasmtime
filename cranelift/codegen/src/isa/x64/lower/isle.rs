@@ -24,7 +24,7 @@ use crate::{
         settings::Flags,
         unwind::UnwindInst,
         x64::{
-            abi::{X64ABIMachineSpec, X64Caller},
+            abi::X64Caller,
             inst::{args::*, regs, CallInfo},
             settings::Flags as IsaFlags,
         },
@@ -34,6 +34,7 @@ use crate::{
         VCodeConstantData,
     },
 };
+use alloc::vec::Vec;
 use regalloc2::PReg;
 use smallvec::SmallVec;
 use std::boxed::Box;
@@ -91,6 +92,7 @@ pub(crate) fn lower_branch(
 
 impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_methods!();
+    isle_prelude_caller_methods!(X64ABIMachineSpec, X64Caller);
 
     #[inline]
     fn operand_size_of_type_32_64(&mut self, ty: Type) -> OperandSize {
@@ -132,6 +134,48 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         RegMemImm::reg(self.put_in_reg(val))
     }
 
+    fn put_in_xmm_mem_imm(&mut self, val: Value) -> XmmMemImm {
+        let inputs = self.lower_ctx.get_value_as_source_or_const(val);
+
+        if let Some(c) = inputs.constant {
+            if let Some(imm) = to_simm32(c as i64) {
+                return XmmMemImm::new(imm.to_reg_mem_imm()).unwrap();
+            }
+        }
+
+        let res = match self.put_in_xmm_mem(val).to_reg_mem() {
+            RegMem::Reg { reg } => RegMemImm::Reg { reg },
+            RegMem::Mem { addr } => RegMemImm::Mem { addr },
+        };
+
+        XmmMemImm::new(res).unwrap()
+    }
+
+    fn put_in_xmm_mem(&mut self, val: Value) -> XmmMem {
+        let inputs = self.lower_ctx.get_value_as_source_or_const(val);
+
+        if let Some(c) = inputs.constant {
+            // A load from the constant pool is better than a rematerialization into a register,
+            // because it reduces register pressure.
+            //
+            // NOTE: this is where behavior differs from `put_in_reg_mem`, as we always force
+            // constants to be 16 bytes when a constant will be used in place of an xmm register.
+            let vcode_constant = self.emit_u128_le_const(c as u128);
+            return XmmMem::new(RegMem::mem(SyntheticAmode::ConstantOffset(vcode_constant)))
+                .unwrap();
+        }
+
+        if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
+            if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, src_insn) {
+                self.lower_ctx.sink_inst(src_insn);
+                let amode = lower_to_amode(self.lower_ctx, addr_input, offset);
+                return XmmMem::new(RegMem::mem(amode)).unwrap();
+            }
+        }
+
+        XmmMem::new(RegMem::reg(self.put_in_reg(val))).unwrap()
+    }
+
     fn put_in_reg_mem(&mut self, val: Value) -> RegMem {
         let inputs = self.lower_ctx.get_value_as_source_or_const(val);
 
@@ -154,25 +198,13 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         RegMem::reg(self.put_in_reg(val))
     }
 
-    fn put_masked_in_imm8_gpr(&mut self, val: Value, ty: Type) -> Imm8Gpr {
-        let inputs = self.lower_ctx.get_value_as_source_or_const(val);
-
-        if let Some(c) = inputs.constant {
-            let mask = 1_u64.checked_shl(ty.bits()).map_or(u64::MAX, |x| x - 1);
-            return Imm8Gpr::new(Imm8Reg::Imm8 {
-                imm: (c & mask) as u8,
-            })
-            .unwrap();
-        }
-
-        Imm8Gpr::new(Imm8Reg::Reg {
-            reg: self.put_in_regs(val).regs()[0],
-        })
-        .unwrap()
+    #[inline]
+    fn encode_fcmp_imm(&mut self, imm: &FcmpImm) -> u8 {
+        imm.encode()
     }
 
     #[inline]
-    fn encode_fcmp_imm(&mut self, imm: &FcmpImm) -> u8 {
+    fn encode_round_imm(&mut self, imm: &RoundImm) -> u8 {
         imm.encode()
     }
 
@@ -206,6 +238,15 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     #[inline]
     fn avx512bitalg_enabled(&mut self, _: Type) -> Option<()> {
         if self.isa_flags.use_avx512bitalg_simd() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn avx512vbmi_enabled(&mut self, _: Type) -> Option<()> {
+        if self.isa_flags.use_avx512vbmi_simd() {
             Some(())
         } else {
             None
@@ -249,6 +290,15 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
+    fn use_sse41(&mut self, _: Type) -> Option<()> {
+        if self.isa_flags.use_sse41() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
     fn imm8_from_value(&mut self, val: Value) -> Option<Imm8Reg> {
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant = self.lower_ctx.get_constant(inst)?;
@@ -258,7 +308,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
     #[inline]
     fn const_to_type_masked_imm8(&mut self, c: u64, ty: Type) -> Imm8Gpr {
-        let mask = 1_u64.checked_shl(ty.bits()).map_or(u64::MAX, |x| x - 1);
+        let mask = self.shift_mask(ty) as u64;
         Imm8Gpr::new(Imm8Reg::Imm8 {
             imm: (c & mask) as u8,
         })
@@ -267,6 +317,8 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
     #[inline]
     fn shift_mask(&mut self, ty: Type) -> u32 {
+        debug_assert!(ty.lane_bits().is_power_of_two());
+
         ty.lane_bits() - 1
     }
 
@@ -297,10 +349,10 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         None
     }
 
-    fn sink_load(&mut self, load: &SinkableLoad) -> RegMemImm {
+    fn sink_load(&mut self, load: &SinkableLoad) -> RegMem {
         self.lower_ctx.sink_inst(load.inst);
         let addr = lower_to_amode(self.lower_ctx, load.addr_input, load.offset);
-        RegMemImm::Mem {
+        RegMem::Mem {
             addr: SyntheticAmode::Real(addr),
         }
     }
@@ -658,54 +710,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
-    fn gen_move(&mut self, ty: Type, dst: WritableReg, src: Reg) -> MInst {
-        MInst::gen_move(dst, src, ty)
-    }
-
-    fn gen_call(
-        &mut self,
-        sig_ref: SigRef,
-        extname: ExternalName,
-        dist: RelocDistance,
-        args @ (inputs, off): ValueSlice,
-    ) -> InstOutput {
-        let caller_conv = self.lower_ctx.abi().call_conv();
-        let sig = &self.lower_ctx.dfg().signatures[sig_ref];
-        let num_rets = sig.returns.len();
-        let abi = ABISig::from_func_sig::<X64ABIMachineSpec>(sig, self.flags).unwrap();
-        let caller = X64Caller::from_func(sig, &extname, dist, caller_conv, self.flags).unwrap();
-
-        assert_eq!(
-            inputs.len(&self.lower_ctx.dfg().value_lists) - off,
-            sig.params.len()
-        );
-
-        self.gen_call_common(abi, num_rets, caller, args)
-    }
-
-    fn gen_call_indirect(
-        &mut self,
-        sig_ref: SigRef,
-        val: Value,
-        args @ (inputs, off): ValueSlice,
-    ) -> InstOutput {
-        let caller_conv = self.lower_ctx.abi().call_conv();
-        let ptr = self.put_in_reg(val);
-        let sig = &self.lower_ctx.dfg().signatures[sig_ref];
-        let num_rets = sig.returns.len();
-        let abi = ABISig::from_func_sig::<X64ABIMachineSpec>(sig, self.flags).unwrap();
-        let caller =
-            X64Caller::from_ptr(sig, ptr, Opcode::CallIndirect, caller_conv, self.flags).unwrap();
-
-        assert_eq!(
-            inputs.len(&self.lower_ctx.dfg().value_lists) - off,
-            sig.params.len()
-        );
-
-        self.gen_call_common(abi, num_rets, caller, args)
-    }
-
-    #[inline]
     fn preg_rbp(&mut self) -> PReg {
         regs::rbp().to_real_reg().unwrap().into()
     }
@@ -715,8 +719,26 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         regs::rsp().to_real_reg().unwrap().into()
     }
 
+    fn libcall_1(&mut self, libcall: &LibCall, a: Reg) -> Reg {
+        let call_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
+        let ret_ty = libcall.signature(call_conv).returns[0].value_type;
+        let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
+
+        emit_vm_call(
+            self.lower_ctx,
+            self.flags,
+            self.triple,
+            libcall.clone(),
+            &[a],
+            &[output_reg],
+        )
+        .expect("Failed to emit LibCall");
+
+        output_reg.to_reg()
+    }
+
     fn libcall_3(&mut self, libcall: &LibCall, a: Reg, b: Reg, c: Reg) -> Reg {
-        let call_conv = self.lower_ctx.abi().call_conv();
+        let call_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
         let ret_ty = libcall.signature(call_conv).returns[0].value_type;
         let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
 
@@ -816,66 +838,249 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         self.lower_ctx
             .use_constant(VCodeConstantData::WellKnown(&UMAX_MASK))
     }
+
+    #[inline]
+    fn pinned_writable_gpr(&mut self) -> WritableGpr {
+        Writable::from_reg(Gpr::new(regs::pinned_reg()).unwrap())
+    }
+
+    #[inline]
+    fn shuffle_0_31_mask(&mut self, mask: &VecMask) -> VCodeConstant {
+        let mask = mask
+            .iter()
+            .map(|&b| if b > 15 { b.wrapping_sub(15) } else { b })
+            .map(|b| if b > 15 { 0b10000000 } else { b })
+            .collect();
+        self.lower_ctx
+            .use_constant(VCodeConstantData::Generated(mask))
+    }
+
+    #[inline]
+    fn shuffle_0_15_mask(&mut self, mask: &VecMask) -> VCodeConstant {
+        let mask = mask
+            .iter()
+            .map(|&b| if b > 15 { 0b10000000 } else { b })
+            .collect();
+        self.lower_ctx
+            .use_constant(VCodeConstantData::Generated(mask))
+    }
+
+    #[inline]
+    fn shuffle_16_31_mask(&mut self, mask: &VecMask) -> VCodeConstant {
+        let mask = mask
+            .iter()
+            .map(|&b| b.wrapping_sub(16))
+            .map(|b| if b > 15 { 0b10000000 } else { b })
+            .collect();
+        self.lower_ctx
+            .use_constant(VCodeConstantData::Generated(mask))
+    }
+
+    #[inline]
+    fn perm_from_mask_with_zeros(
+        &mut self,
+        mask: &VecMask,
+    ) -> Option<(VCodeConstant, VCodeConstant)> {
+        if !mask.iter().any(|&b| b > 31) {
+            return None;
+        }
+
+        let zeros = mask
+            .iter()
+            .map(|&b| if b > 31 { 0x00 } else { 0xff })
+            .collect();
+
+        Some((
+            self.perm_from_mask(mask),
+            self.lower_ctx
+                .use_constant(VCodeConstantData::Generated(zeros)),
+        ))
+    }
+
+    #[inline]
+    fn perm_from_mask(&mut self, mask: &VecMask) -> VCodeConstant {
+        let mask = mask.iter().cloned().collect();
+        self.lower_ctx
+            .use_constant(VCodeConstantData::Generated(mask))
+    }
+
+    #[inline]
+    fn swizzle_zero_mask(&mut self) -> VCodeConstant {
+        static ZERO_MASK_VALUE: [u8; 16] = [0x70; 16];
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&ZERO_MASK_VALUE))
+    }
+
+    #[inline]
+    fn sqmul_round_sat_mask(&mut self) -> VCodeConstant {
+        static SAT_MASK: [u8; 16] = [
+            0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80,
+            0x00, 0x80,
+        ];
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&SAT_MASK))
+    }
+
+    #[inline]
+    fn uunarrow_umax_mask(&mut self) -> VCodeConstant {
+        // 4294967295.0 is equivalent to 0x41EFFFFFFFE00000
+        static UMAX_MASK: [u8; 16] = [
+            0x00, 0x00, 0xE0, 0xFF, 0xFF, 0xFF, 0xEF, 0x41, 0x00, 0x00, 0xE0, 0xFF, 0xFF, 0xFF,
+            0xEF, 0x41,
+        ];
+
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&UMAX_MASK))
+    }
+
+    #[inline]
+    fn uunarrow_uint_mask(&mut self) -> VCodeConstant {
+        static UINT_MASK: [u8; 16] = [
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x30, 0x43,
+        ];
+
+        self.lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&UINT_MASK))
+    }
+
+    fn emit_div_or_rem(
+        &mut self,
+        kind: &DivOrRemKind,
+        ty: Type,
+        dst: WritableGpr,
+        dividend: Gpr,
+        divisor: Gpr,
+    ) {
+        let is_div = kind.is_div();
+        let size = OperandSize::from_ty(ty);
+
+        let dst_quotient = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
+        let dst_remainder = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
+
+        // Always do explicit checks for `srem`: otherwise, INT_MIN % -1 is not handled properly.
+        if self.flags.avoid_div_traps() || *kind == DivOrRemKind::SignedRem {
+            // A vcode meta-instruction is used to lower the inline checks, since they embed
+            // pc-relative offsets that must not change, thus requiring regalloc to not
+            // interfere by introducing spills and reloads.
+            let tmp = if *kind == DivOrRemKind::SignedDiv && size == OperandSize::Size64 {
+                Some(self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap())
+            } else {
+                None
+            };
+            let dividend_hi = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
+            self.lower_ctx.emit(MInst::alu_rmi_r(
+                OperandSize::Size32,
+                AluRmiROpcode::Xor,
+                RegMemImm::reg(dividend_hi.to_reg()),
+                dividend_hi,
+            ));
+            self.lower_ctx.emit(MInst::checked_div_or_rem_seq(
+                kind.clone(),
+                size,
+                divisor.to_reg(),
+                Gpr::new(dividend.to_reg()).unwrap(),
+                Gpr::new(dividend_hi.to_reg()).unwrap(),
+                WritableGpr::from_reg(Gpr::new(dst_quotient.to_reg()).unwrap()),
+                WritableGpr::from_reg(Gpr::new(dst_remainder.to_reg()).unwrap()),
+                tmp,
+            ));
+        } else {
+            // We don't want more than one trap record for a single instruction,
+            // so let's not allow the "mem" case (load-op merging) here; force
+            // divisor into a register instead.
+            let divisor = RegMem::reg(divisor.to_reg());
+
+            let dividend_hi = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
+
+            // Fill in the high parts:
+            let dividend_lo = if kind.is_signed() && ty == types::I8 {
+                let dividend_lo = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                // 8-bit div takes its dividend in only the `lo` reg.
+                self.lower_ctx.emit(MInst::sign_extend_data(
+                    size,
+                    Gpr::new(dividend.to_reg()).unwrap(),
+                    WritableGpr::from_reg(Gpr::new(dividend_lo.to_reg()).unwrap()),
+                ));
+                // `dividend_hi` is not used by the Div below, so we
+                // don't def it here.
+
+                dividend_lo.to_reg()
+            } else if kind.is_signed() {
+                // 16-bit and higher div takes its operand in hi:lo
+                // with half in each (64:64, 32:32 or 16:16).
+                self.lower_ctx.emit(MInst::sign_extend_data(
+                    size,
+                    Gpr::new(dividend.to_reg()).unwrap(),
+                    WritableGpr::from_reg(Gpr::new(dividend_hi.to_reg()).unwrap()),
+                ));
+
+                dividend.to_reg()
+            } else if ty == types::I8 {
+                let dividend_lo = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                self.lower_ctx.emit(MInst::movzx_rm_r(
+                    ExtMode::BL,
+                    RegMem::reg(dividend.to_reg()),
+                    dividend_lo,
+                ));
+
+                dividend_lo.to_reg()
+            } else {
+                // zero for unsigned opcodes.
+                self.lower_ctx
+                    .emit(MInst::imm(OperandSize::Size64, 0, dividend_hi));
+
+                dividend.to_reg()
+            };
+
+            // Emit the actual idiv.
+            self.lower_ctx.emit(MInst::div(
+                size,
+                kind.is_signed(),
+                divisor,
+                Gpr::new(dividend_lo).unwrap(),
+                Gpr::new(dividend_hi.to_reg()).unwrap(),
+                WritableGpr::from_reg(Gpr::new(dst_quotient.to_reg()).unwrap()),
+                WritableGpr::from_reg(Gpr::new(dst_remainder.to_reg()).unwrap()),
+            ));
+        }
+
+        // Move the result back into the destination reg.
+        if is_div {
+            // The quotient is in rax.
+            self.lower_ctx.emit(MInst::gen_move(
+                dst.to_writable_reg(),
+                dst_quotient.to_reg(),
+                ty,
+            ));
+        } else {
+            if size == OperandSize::Size8 {
+                // The remainder is in AH. Right-shift by 8 bits then move from rax.
+                self.lower_ctx.emit(MInst::shift_r(
+                    OperandSize::Size64,
+                    ShiftKind::ShiftRightLogical,
+                    Imm8Gpr::new(Imm8Reg::Imm8 { imm: 8 }).unwrap(),
+                    dst_quotient,
+                ));
+                self.lower_ctx.emit(MInst::gen_move(
+                    dst.to_writable_reg(),
+                    dst_quotient.to_reg(),
+                    ty,
+                ));
+            } else {
+                // The remainder is in rdx.
+                self.lower_ctx.emit(MInst::gen_move(
+                    dst.to_writable_reg(),
+                    dst_remainder.to_reg(),
+                    ty,
+                ));
+            }
+        }
+    }
 }
 
 impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
-    fn abi_arg_slot_regs(&mut self, arg: &ABIArg) -> Option<WritableValueRegs> {
-        match arg {
-            &ABIArg::Slots { ref slots, .. } => match slots.len() {
-                1 => {
-                    let a = self.temp_writable_reg(slots[0].get_type());
-                    Some(WritableValueRegs::one(a))
-                }
-                2 => {
-                    let a = self.temp_writable_reg(slots[0].get_type());
-                    let b = self.temp_writable_reg(slots[1].get_type());
-                    Some(WritableValueRegs::two(a, b))
-                }
-                _ => panic!("Expected to see one or two slots only from {:?}", arg),
-            },
-            _ => None,
-        }
-    }
-
-    fn gen_call_common(
-        &mut self,
-        abi: ABISig,
-        num_rets: usize,
-        mut caller: X64Caller,
-        (inputs, off): ValueSlice,
-    ) -> InstOutput {
-        caller.emit_stack_pre_adjust(self.lower_ctx);
-
-        assert_eq!(
-            inputs.len(&self.lower_ctx.dfg().value_lists) - off,
-            abi.num_args()
-        );
-        let mut arg_regs = vec![];
-        for i in 0..abi.num_args() {
-            let input = inputs
-                .get(off + i, &self.lower_ctx.dfg().value_lists)
-                .unwrap();
-            arg_regs.push(self.lower_ctx.put_value_in_regs(input));
-        }
-        for (i, arg_regs) in arg_regs.iter().enumerate() {
-            caller.emit_copy_regs_to_buffer(self.lower_ctx, i, *arg_regs);
-        }
-        for (i, arg_regs) in arg_regs.iter().enumerate() {
-            caller.emit_copy_regs_to_arg(self.lower_ctx, i, *arg_regs);
-        }
-        caller.emit_call(self.lower_ctx);
-
-        let mut outputs = InstOutput::new();
-        for i in 0..num_rets {
-            let ret = abi.get_ret(i);
-            let retval_regs = self.abi_arg_slot_regs(&ret).unwrap();
-            caller.emit_copy_retval_to_regs(self.lower_ctx, i, retval_regs.clone());
-            outputs.push(valueregs::non_writable_value_regs(retval_regs));
-        }
-        caller.emit_stack_post_adjust(self.lower_ctx);
-
-        outputs
-    }
+    isle_prelude_method_helpers!(X64Caller);
 }
 
 // Since x64 doesn't have 8x16 shifts and we must use a 16x8 shift instead, we

@@ -28,6 +28,9 @@ pub struct FunctionInfo {
     pub start: u64,
     /// The size of the compiled function, in bytes.
     pub length: u32,
+
+    /// The alignment requirements of this function, in bytes.
+    pub alignment: u32,
 }
 
 /// Information about a compiled trampoline which the host can call to enter

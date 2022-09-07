@@ -482,6 +482,8 @@ async fn resume_separate_thread2() {
 
 #[tokio::test]
 async fn resume_separate_thread3() {
+    let _ = env_logger::try_init();
+
     // This test doesn't actually do anything with cross-thread polls, but
     // instead it deals with scheduling futures at "odd" times.
     //

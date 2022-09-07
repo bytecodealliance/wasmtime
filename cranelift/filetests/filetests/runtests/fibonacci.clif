@@ -1,4 +1,10 @@
 test interpret
+test run
+target x86_64
+target aarch64
+target aarch64 sign_return_address
+target aarch64 has_pauth sign_return_address
+target s390x
 
 ; A non-recursive fibonacci implementation.
 function %fibonacci(i32) -> i32 {
@@ -54,11 +60,11 @@ block2:
     v20 = iconst.i32 1
     return v20
 }
-; run: %fibonacci_recurs(0) == 1
-; run: %fibonacci_recurs(1) == 1
-; run: %fibonacci_recurs(2) == 1
-; run: %fibonacci_recurs(3) == 2
-; run: %fibonacci_recurs(4) == 3
-; run: %fibonacci_recurs(5) == 5
-; run: %fibonacci_recurs(6) == 8
-; run: %fibonacci_recurs(10) == 55
+; run: %fibonacci_recursive(0) == 1
+; run: %fibonacci_recursive(1) == 1
+; run: %fibonacci_recursive(2) == 1
+; run: %fibonacci_recursive(3) == 2
+; run: %fibonacci_recursive(4) == 3
+; run: %fibonacci_recursive(5) == 5
+; run: %fibonacci_recursive(6) == 8
+; run: %fibonacci_recursive(10) == 55

@@ -282,6 +282,9 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// will be "labeled" or might have calls between them, typically the number
     /// of defined functions in the object file.
     fn text_section_builder(&self, num_labeled_funcs: u32) -> Box<dyn TextSectionBuilder>;
+
+    /// The function alignment required by this ISA.
+    fn function_alignment(&self) -> u32;
 }
 
 /// Methods implemented for free for target ISA!

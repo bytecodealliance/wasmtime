@@ -1,16 +1,16 @@
 //! Evaluate an exported Wasm function using Wasmtime.
 
-use crate::generators::{self, DiffValue};
+use crate::generators::{self, DiffValue, DiffValueType, WasmtimeConfig};
+use crate::oracles::dummy;
 use crate::oracles::engine::DiffInstance;
-use crate::oracles::{compile_module, engine::DiffEngine, instantiate_with_dummy, StoreLimits};
-use anyhow::{Context, Result};
-use std::hash::Hash;
-use std::slice;
-use wasmtime::{AsContextMut, Extern, FuncType, Instance, Module, Store, Val};
+use crate::oracles::{compile_module, engine::DiffEngine, StoreLimits};
+use anyhow::{Context, Error, Result};
+use arbitrary::Unstructured;
+use wasmtime::{Extern, FuncType, Instance, Module, Store, Trap, TrapCode, Val};
 
 /// A wrapper for using Wasmtime as a [`DiffEngine`].
 pub struct WasmtimeEngine {
-    pub(crate) config: generators::Config,
+    config: generators::Config,
 }
 
 impl WasmtimeEngine {
@@ -18,10 +18,14 @@ impl WasmtimeEngine {
     /// later. Ideally the store and engine could be built here but
     /// `compile_module` takes a [`generators::Config`]; TODO re-factor this if
     /// that ever changes.
-    pub fn new(config: &generators::Config) -> Result<Box<Self>> {
-        Ok(Box::new(Self {
-            config: config.clone(),
-        }))
+    pub fn new(u: &mut Unstructured<'_>, config: &generators::Config) -> arbitrary::Result<Self> {
+        let mut new_config = u.arbitrary::<WasmtimeConfig>()?;
+        new_config.make_compatible_with(&config.wasmtime);
+        let config = generators::Config {
+            wasmtime: new_config,
+            module_config: config.module_config.clone(),
+        };
+        Ok(Self { config })
     }
 }
 
@@ -30,11 +34,31 @@ impl DiffEngine for WasmtimeEngine {
         "wasmtime"
     }
 
-    fn instantiate(&self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
+    fn instantiate(&mut self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
         let store = self.config.to_store();
         let module = compile_module(store.engine(), wasm, true, &self.config).unwrap();
         let instance = WasmtimeInstance::new(store, module)?;
         Ok(Box::new(instance))
+    }
+
+    fn assert_error_match(&self, trap: &Trap, err: &Error) {
+        let trap2 = err
+            .downcast_ref::<Trap>()
+            .expect(&format!("not a trap: {:?}", err));
+        assert_eq!(
+            trap.trap_code(),
+            trap2.trap_code(),
+            "{}\nis not equal to\n{}",
+            trap,
+            trap2
+        );
+    }
+
+    fn is_stack_overflow(&self, err: &Error) -> bool {
+        match err.downcast_ref::<Trap>() {
+            Some(trap) => trap.trap_code() == Some(TrapCode::StackOverflow),
+            None => false,
+        }
     }
 }
 
@@ -50,7 +74,8 @@ pub struct WasmtimeInstance {
 impl WasmtimeInstance {
     /// Instantiate a new Wasmtime instance.
     pub fn new(mut store: Store<StoreLimits>, module: Module) -> Result<Self> {
-        let instance = instantiate_with_dummy(&mut store, &module)
+        let instance = dummy::dummy_linker(&mut store, &module)
+            .and_then(|l| l.instantiate(&mut store, &module))
             .context("unable to instantiate module in wasmtime")?;
         Ok(Self { store, instance })
     }
@@ -73,6 +98,44 @@ impl WasmtimeInstance {
             .map(|(n, f)| (n, f.ty(&self.store)))
             .collect()
     }
+
+    /// Returns the list of globals and their types exported from this instance.
+    pub fn exported_globals(&mut self) -> Vec<(String, DiffValueType)> {
+        let globals = self
+            .instance
+            .exports(&mut self.store)
+            .filter_map(|e| {
+                let name = e.name();
+                e.into_global().map(|g| (name.to_string(), g))
+            })
+            .collect::<Vec<_>>();
+
+        globals
+            .into_iter()
+            .map(|(name, global)| {
+                (
+                    name,
+                    global.ty(&self.store).content().clone().try_into().unwrap(),
+                )
+            })
+            .collect()
+    }
+
+    /// Returns the list of exported memories and whether or not it's a shared
+    /// memory.
+    pub fn exported_memories(&mut self) -> Vec<(String, bool)> {
+        self.instance
+            .exports(&mut self.store)
+            .filter_map(|e| {
+                let name = e.name();
+                match e.into_extern() {
+                    Extern::Memory(_) => Some((name.to_string(), false)),
+                    Extern::SharedMemory(_) => Some((name.to_string(), true)),
+                    _ => None,
+                }
+            })
+            .collect()
+    }
 }
 
 impl DiffInstance for WasmtimeInstance {
@@ -80,7 +143,12 @@ impl DiffInstance for WasmtimeInstance {
         "wasmtime"
     }
 
-    fn evaluate(&mut self, function_name: &str, arguments: &[DiffValue]) -> Result<Vec<DiffValue>> {
+    fn evaluate(
+        &mut self,
+        function_name: &str,
+        arguments: &[DiffValue],
+        _results: &[DiffValueType],
+    ) -> Result<Option<Vec<DiffValue>>> {
         let arguments: Vec<_> = arguments.iter().map(Val::from).collect();
 
         let function = self
@@ -92,43 +160,34 @@ impl DiffInstance for WasmtimeInstance {
         function.call(&mut self.store, &arguments, &mut results)?;
 
         let results = results.into_iter().map(Val::into).collect();
-        Ok(results)
+        Ok(Some(results))
     }
 
-    fn is_hashable(&self) -> bool {
-        true
+    fn get_global(&mut self, name: &str, _ty: DiffValueType) -> Option<DiffValue> {
+        Some(
+            self.instance
+                .get_global(&mut self.store, name)
+                .unwrap()
+                .get(&mut self.store)
+                .into(),
+        )
     }
 
-    fn hash(&mut self, state: &mut std::collections::hash_map::DefaultHasher) -> Result<()> {
-        let exports: Vec<_> = self
-            .instance
-            .exports(self.store.as_context_mut())
-            .map(|e| e.into_extern())
-            .collect();
-        for e in exports {
-            match e {
-                Extern::Global(g) => {
-                    let val: DiffValue = g.get(&mut self.store).into();
-                    val.hash(state)
-                }
-                Extern::Memory(m) => {
-                    let data = m.data(&mut self.store);
-                    data.hash(state)
-                }
-                Extern::SharedMemory(m) => {
-                    let data = unsafe { slice::from_raw_parts(m.data() as *mut u8, m.data_size()) };
-                    data.hash(state)
-                }
-                Extern::Table(_) => {
-                    // TODO: it's unclear whether it is worth it to iterate
-                    // through the table and hash the values.
-                }
-                Extern::Func(_) => {
-                    // Note: no need to hash exported functions.
-                }
-            }
-        }
-        Ok(())
+    fn get_memory(&mut self, name: &str, shared: bool) -> Option<Vec<u8>> {
+        Some(if shared {
+            let data = self
+                .instance
+                .get_shared_memory(&mut self.store, name)
+                .unwrap()
+                .data();
+            unsafe { (*data).to_vec() }
+        } else {
+            self.instance
+                .get_memory(&mut self.store, name)
+                .unwrap()
+                .data(&self.store)
+                .to_vec()
+        })
     }
 }
 
@@ -140,6 +199,14 @@ impl From<&DiffValue> for Val {
             DiffValue::F32(n) => Val::F32(n),
             DiffValue::F64(n) => Val::F64(n),
             DiffValue::V128(n) => Val::V128(n),
+            DiffValue::FuncRef { null } => {
+                assert!(null);
+                Val::FuncRef(None)
+            }
+            DiffValue::ExternRef { null } => {
+                assert!(null);
+                Val::ExternRef(None)
+            }
         }
     }
 }
@@ -152,8 +219,13 @@ impl Into<DiffValue> for Val {
             Val::F32(n) => DiffValue::F32(n),
             Val::F64(n) => DiffValue::F64(n),
             Val::V128(n) => DiffValue::V128(n),
-            Val::FuncRef(_) => unimplemented!(),
-            Val::ExternRef(_) => unimplemented!(),
+            Val::FuncRef(f) => DiffValue::FuncRef { null: f.is_none() },
+            Val::ExternRef(e) => DiffValue::ExternRef { null: e.is_none() },
         }
     }
+}
+
+#[test]
+fn smoke() {
+    crate::oracles::engine::smoke_test_engine(|u, config| WasmtimeEngine::new(u, config))
 }

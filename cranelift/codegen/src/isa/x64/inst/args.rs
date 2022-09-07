@@ -1575,7 +1575,7 @@ impl fmt::Display for ShiftKind {
 }
 
 /// What kind of division or remainer instruction this is?
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum DivOrRemKind {
     SignedDiv,
     UnsignedDiv,
@@ -1770,7 +1770,8 @@ impl From<FloatCC> for FcmpImm {
 /// However the rounding immediate which this field helps make up, also includes
 /// bits 3 and 4 which define the rounding select and precision mask respectively.
 /// These two bits are not defined here and are implictly set to zero when encoded.
-pub(crate) enum RoundImm {
+#[derive(Clone, Copy)]
+pub enum RoundImm {
     RoundNearest = 0x00,
     RoundDown = 0x01,
     RoundUp = 0x02,

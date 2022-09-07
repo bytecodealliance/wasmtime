@@ -1,0 +1,124 @@
+test compile precise-output
+set enable_simd
+target aarch64
+
+;; shuffle
+
+function %shuffle_different_ssa_values() -> i8x16 {
+block0:
+    v0 = vconst.i8x16 0x00
+    v1 = vconst.i8x16 0x01
+    v2 = shuffle v0, v1, 0x11000000000000000000000000000000     ;; pick the second lane of v1, the rest use the first lane of v0
+    return v2
+}
+
+; block0:
+;   movi v30.16b, #0
+;   movz x5, #1
+;   fmov s31, w5
+;   ldr q4, pc+8 ; b 20 ; data.f128 0x11000000000000000000000000000000
+;   tbl v0.16b, { v30.16b, v31.16b }, v4.16b
+;   ret
+
+function %shuffle_same_ssa_value() -> i8x16 {
+block0:
+    v1 = vconst.i8x16 0x01
+    v2 = shuffle v1, v1, 0x13000000000000000000000000000000     ;; pick the fourth lane of v1 and the rest from the first lane of v1
+    return v2
+}
+
+; block0:
+;   movz x4, #1
+;   fmov s31, w4
+;   ldr q3, pc+8 ; b 20 ; data.f128 0x13000000000000000000000000000000
+;   mov v30.16b, v31.16b
+;   tbl v0.16b, { v30.16b, v31.16b }, v3.16b
+;   ret
+
+function %swizzle() -> i8x16 {
+block0:
+    v0 = vconst.i8x16 [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]
+    v1 = vconst.i8x16 [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]
+    v2 = swizzle.i8x16 v0, v1
+    return v2
+}
+
+; block0:
+;   ldr q3, pc+8 ; b 20 ; data.f128 0x0f0e0d0c0b0a09080706050403020100
+;   ldr q4, pc+8 ; b 20 ; data.f128 0x0f0e0d0c0b0a09080706050403020100
+;   tbl v0.16b, { v3.16b }, v4.16b
+;   ret
+
+function %splat_i8(i8) -> i8x16 {
+block0(v0: i8):
+    v1 = splat.i8x16 v0
+    return v1
+}
+
+; block0:
+;   dup v0.16b, w0
+;   ret
+
+function %splat_b16() -> b16x8 {
+block0:
+    v0 = bconst.b16 true
+    v1 = splat.b16x8 v0
+    return v1
+}
+
+; block0:
+;   movi v0.16b, #255
+;   ret
+
+function %splat_i32(i32) -> i32x4 {
+block0(v0: i32):
+    v1 = splat.i32x4 v0
+    return v1
+}
+
+; block0:
+;   dup v0.4s, w0
+;   ret
+
+function %splat_f64(f64) -> f64x2 {
+block0(v0: f64):
+    v1 = splat.f64x2 v0
+    return v1
+}
+
+; block0:
+;   dup v0.2d, v0.d[0]
+;   ret
+
+function %load32_zero_coalesced(i64) -> i32x4 {
+block0(v0: i64):
+    v1 = load.i32 v0
+    v2 = scalar_to_vector.i32x4 v1
+    return v2
+}
+
+; block0:
+;   ldr w4, [x0]
+;   fmov s0, w4
+;   ret
+
+function %load32_zero_int(i32) -> i32x4 {
+block0(v0: i32):
+    v1 = scalar_to_vector.i32x4 v0
+    return v1
+}
+
+; block0:
+;   fmov s0, w0
+;   ret
+
+function %load32_zero_float(f32) -> f32x4 {
+block0(v0: f32):
+    v1 = scalar_to_vector.f32x4 v0
+    return v1
+}
+
+; block0:
+;   fmov s0, s0
+;   ret
+

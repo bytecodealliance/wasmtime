@@ -41,9 +41,9 @@ block0(v0: i64x2):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pxor    %xmm4, %xmm4, %xmm4
-;   pcmpeqq %xmm4, %xmm0, %xmm4
-;   ptest   %xmm4, %xmm4
+;   pxor    %xmm3, %xmm3, %xmm3
+;   pcmpeqq %xmm0, %xmm3, %xmm0
+;   ptest   %xmm0, %xmm0
 ;   setz    %al
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

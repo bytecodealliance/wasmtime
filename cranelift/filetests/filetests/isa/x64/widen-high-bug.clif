@@ -1,0 +1,20 @@
+test compile precise-output
+target x86_64
+
+function u0:0(i64 vmctx, i8x16) -> i16x8 fast {
+block0(v0: i64, v2: i8x16):
+    v5 = load.i8x16 notrap aligned table v0+80
+    v6 = uwiden_high v5
+    return v6
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqu  80(%rdi), %xmm5
+;   palignr $8, %xmm5, %xmm5, %xmm5
+;   pmovzxbw %xmm5, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

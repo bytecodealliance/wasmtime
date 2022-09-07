@@ -1,0 +1,213 @@
+test compile precise-output
+set enable_simd
+target aarch64
+
+function %band_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+    v2 = band v0, v1
+    return v2
+}
+
+; block0:
+;   and v0.16b, v0.16b, v1.16b
+;   ret
+
+function %band_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+    v2 = band v0, v1
+    return v2
+}
+
+; block0:
+;   and v0.16b, v0.16b, v1.16b
+;   ret
+
+function %band_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = band v0, v1
+    return v2
+}
+
+; block0:
+;   and v0.16b, v0.16b, v1.16b
+;   ret
+
+function %bor_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+    v2 = bor v0, v1
+    return v2
+}
+
+; block0:
+;   orr v0.16b, v0.16b, v1.16b
+;   ret
+
+function %bor_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+    v2 = bor v0, v1
+    return v2
+}
+
+; block0:
+;   orr v0.16b, v0.16b, v1.16b
+;   ret
+
+function %bor_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bor v0, v1
+    return v2
+}
+
+; block0:
+;   orr v0.16b, v0.16b, v1.16b
+;   ret
+
+function %bxor_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+    v2 = bxor v0, v1
+    return v2
+}
+
+; block0:
+;   eor v0.16b, v0.16b, v1.16b
+;   ret
+
+function %bxor_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+    v2 = bxor v0, v1
+    return v2
+}
+
+; block0:
+;   eor v0.16b, v0.16b, v1.16b
+;   ret
+
+function %bxor_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bxor v0, v1
+    return v2
+}
+
+; block0:
+;   eor v0.16b, v0.16b, v1.16b
+;   ret
+
+function %bitselect_i16x8() -> i16x8 {
+block0:
+    v0 = vconst.i16x8 [0 0 0 0 0 0 0 0]
+    v1 = vconst.i16x8 [0 0 0 0 0 0 0 0]
+    v2 = vconst.i16x8 [0 0 0 0 0 0 0 0]
+    v3 = bitselect v0, v1, v2
+    return v3
+}
+
+; block0:
+;   movi v0.16b, #0
+;   movi v4.16b, #0
+;   movi v5.16b, #0
+;   bsl v0.16b, v0.16b, v4.16b, v5.16b
+;   ret
+
+function %vselect_i16x8(b16x8, i16x8, i16x8) -> i16x8 {
+block0(v0: b16x8, v1: i16x8, v2: i16x8):
+    v3 = vselect v0, v1, v2
+    return v3
+}
+
+; block0:
+;   bsl v0.16b, v0.16b, v1.16b, v2.16b
+;   ret
+
+function %vselect_f32x4(b32x4, f32x4, f32x4) -> f32x4 {
+block0(v0: b32x4, v1: f32x4, v2: f32x4):
+    v3 = vselect v0, v1, v2
+    return v3
+}
+
+; block0:
+;   bsl v0.16b, v0.16b, v1.16b, v2.16b
+;   ret
+
+function %vselect_f64x2(b64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: b64x2, v1: f64x2, v2: f64x2):
+    v3 = vselect v0, v1, v2
+    return v3
+}
+
+; block0:
+;   bsl v0.16b, v0.16b, v1.16b, v2.16b
+;   ret
+
+function %ishl_i8x16(i32) -> i8x16 {
+block0(v0: i32):
+    v1 = vconst.i8x16 [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]
+    v2 = ishl v1, v0
+    return v2
+}
+
+; block0:
+;   ldr q6, pc+8 ; b 20 ; data.f128 0x0f0e0d0c0b0a09080706050403020100
+;   and w4, w0, #7
+;   dup v7.16b, w4
+;   sshl v0.16b, v6.16b, v7.16b
+;   ret
+
+function %ushr_i8x16_imm() -> i8x16 {
+block0:
+    v0 = iconst.i32 1
+    v1 = vconst.i8x16 [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]
+    v2 = ushr v1, v0
+    return v2
+}
+
+; block0:
+;   ldr q6, pc+8 ; b 20 ; data.f128 0x0f0e0d0c0b0a09080706050403020100
+;   movz x2, #1
+;   and w4, w2, #7
+;   sub x6, xzr, x4
+;   dup v16.16b, w6
+;   ushl v0.16b, v6.16b, v16.16b
+;   ret
+
+function %sshr_i8x16(i32) -> i8x16 {
+block0(v0: i32):
+    v1 = vconst.i8x16 [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]
+    v2 = sshr v1, v0
+    return v2
+}
+
+; block0:
+;   ldr q7, pc+8 ; b 20 ; data.f128 0x0f0e0d0c0b0a09080706050403020100
+;   and w4, w0, #7
+;   sub x6, xzr, x4
+;   dup v16.16b, w6
+;   sshl v0.16b, v7.16b, v16.16b
+;   ret
+
+function %sshr_i8x16_imm(i8x16, i32) -> i8x16 {
+block0(v0: i8x16, v1: i32):
+    v2 = sshr_imm v0, 3
+    return v2
+}
+
+; block0:
+;   movz x5, #3
+;   and w7, w5, #7
+;   sub x9, xzr, x7
+;   dup v19.16b, w9
+;   sshl v0.16b, v0.16b, v19.16b
+;   ret
+
+function %sshr_i64x2(i64x2, i32) -> i64x2 {
+block0(v0: i64x2, v1: i32):
+    v2 = sshr v0, v1
+    return v2
+}
+
+; block0:
+;   and w5, w0, #63
+;   sub x7, xzr, x5
+;   dup v17.2d, x7
+;   sshl v0.2d, v0.2d, v17.2d
+;   ret
+

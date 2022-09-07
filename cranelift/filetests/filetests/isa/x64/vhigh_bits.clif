@@ -1,0 +1,75 @@
+test compile precise-output
+target x86_64
+
+function %f1(i8x16) -> i8 {
+block0(v0: i8x16):
+  v1 = vhigh_bits.i8 v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pmovmskb %xmm0, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f2(i8x16) -> i16 {
+block0(v0: i8x16):
+  v1 = vhigh_bits.i16 v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pmovmskb %xmm0, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f3(i16x8) -> i8 {
+block0(v0: i16x8):
+  v1 = vhigh_bits.i8 v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   packsswb %xmm0, %xmm0, %xmm0
+;   pmovmskb %xmm0, %eax
+;   shrq    $8, %rax, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f4(i32x4) -> i8 {
+block0(v0: i32x4):
+  v1 = vhigh_bits.i8 v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movmskps %xmm0, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %f5(i64x2) -> i8 {
+block0(v0: i64x2):
+  v1 = vhigh_bits.i8 v0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movmskpd %xmm0, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

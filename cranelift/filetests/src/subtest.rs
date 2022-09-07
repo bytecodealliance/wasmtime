@@ -5,8 +5,9 @@ use anyhow::Context as _;
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::{Flags, FlagsOrIsa};
-use cranelift_reader::{Comment, Details};
+use cranelift_reader::{Comment, Details, TestFile};
 use filecheck::{Checker, CheckerBuilder, NO_VARIABLES};
+use log::info;
 use std::borrow::Cow;
 
 /// Context for running a test on a single function.
@@ -15,10 +16,7 @@ pub struct Context<'a> {
     pub preamble_comments: &'a [Comment<'a>],
 
     /// Additional details about the function from the parser.
-    pub details: Details<'a>,
-
-    /// Was the function verified before running this test?
-    pub verified: bool,
+    pub details: &'a Details<'a>,
 
     /// ISA-independent flags for this test.
     pub flags: &'a Flags,
@@ -67,6 +65,40 @@ pub trait SubTest {
     /// Does this test need a `TargetIsa` trait object?
     fn needs_isa(&self) -> bool {
         false
+    }
+
+    /// Runs the entire subtest for a given target, invokes [Self::run] for running
+    /// individual tests.
+    fn run_target<'a>(
+        &self,
+        testfile: &TestFile,
+        file_update: &mut FileUpdate,
+        file_path: &'a str,
+        flags: &'a Flags,
+        isa: Option<&'a dyn TargetIsa>,
+    ) -> anyhow::Result<()> {
+        for (func, details) in &testfile.functions {
+            info!(
+                "Test: {}({}) {}",
+                self.name(),
+                func.name,
+                isa.map_or("-", TargetIsa::name)
+            );
+
+            let context = Context {
+                preamble_comments: &testfile.preamble_comments,
+                details,
+                flags,
+                isa,
+                file_path: file_path.as_ref(),
+                file_update,
+            };
+
+            self.run(Cow::Borrowed(&func), &context)
+                .context(self.name())?;
+        }
+
+        Ok(())
     }
 
     /// Run this test on `func`.
