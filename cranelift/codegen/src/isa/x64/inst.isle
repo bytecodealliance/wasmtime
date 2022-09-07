@@ -246,12 +246,6 @@
                  (src Reg)
                  (dst SyntheticAmode))
 
-       ;; XMM (vector) unary op (to move a constant value into an xmm register):
-       ;; movups
-       (XmmLoadConst (src VCodeConstant)
-                     (dst WritableReg)
-                     (ty Type))
-
        ;; XMM (scalar) unary op (from xmm to integer reg): movd, movq,
        ;; cvtts{s,d}2si
        (XmmToGpr (op SseOpcode)
@@ -1716,9 +1710,7 @@
 ;; Load a constant into an XMM register.
 (decl x64_xmm_load_const (Type VCodeConstant) Xmm)
 (rule (x64_xmm_load_const ty const)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmLoadConst const dst ty))))
-        dst))
+      (x64_load ty (const_to_synthetic_amode const) (ExtKind.None)))
 
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -3856,6 +3848,8 @@
 (decl synthetic_amode_to_xmm_mem (SyntheticAmode) XmmMem)
 (rule (synthetic_amode_to_xmm_mem amode)
       (synthetic_amode_to_reg_mem amode))
+(decl const_to_synthetic_amode (VCodeConstant) SyntheticAmode)
+(extern constructor const_to_synthetic_amode const_to_synthetic_amode)
 
 ;; Helper for creating `MovPReg` instructions.
 (decl mov_preg (PReg) Reg)

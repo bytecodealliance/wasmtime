@@ -13,7 +13,7 @@ block0(v0: i8x16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm5
-;   load_const VCodeConstant(0), %xmm0
+;   movdqu  const(0), %xmm0
 ;   movdqa  %xmm5, %xmm6
 ;   pmaddubsw %xmm0, %xmm6, %xmm0
 ;   movq    %rbp, %rsp
@@ -31,7 +31,7 @@ block0(v0: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_const VCodeConstant(0), %xmm3
+;   movdqu  const(0), %xmm3
 ;   pmaddwd %xmm0, %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -48,7 +48,7 @@ block0(v0: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_const VCodeConstant(0), %xmm3
+;   movdqu  const(0), %xmm3
 ;   pmaddubsw %xmm0, %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -65,11 +65,11 @@ block0(v0: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_const VCodeConstant(0), %xmm3
+;   movdqu  const(0), %xmm3
 ;   pxor    %xmm0, %xmm3, %xmm0
-;   load_const VCodeConstant(1), %xmm7
+;   movdqu  const(1), %xmm7
 ;   pmaddwd %xmm0, %xmm7, %xmm0
-;   load_const VCodeConstant(2), %xmm11
+;   movdqu  const(2), %xmm11
 ;   paddd   %xmm0, %xmm11, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

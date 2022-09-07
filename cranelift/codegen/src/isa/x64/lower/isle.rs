@@ -413,6 +413,11 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
+    fn const_to_synthetic_amode(&mut self, c: VCodeConstant) -> SyntheticAmode {
+        SyntheticAmode::ConstantOffset(c)
+    }
+
+    #[inline]
     fn writable_gpr_to_reg(&mut self, r: WritableGpr) -> WritableReg {
         r.to_writable_reg()
     }

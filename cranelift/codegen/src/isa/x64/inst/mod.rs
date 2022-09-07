@@ -112,7 +112,6 @@ impl Inst {
             | Inst::VirtualSPOffsetAdj { .. }
             | Inst::XmmCmove { .. }
             | Inst::XmmCmpRmR { .. }
-            | Inst::XmmLoadConst { .. }
             | Inst::XmmMinMaxSeq { .. }
             | Inst::XmmUninitializedValue { .. }
             | Inst::ElfTlsGetAddr { .. }
@@ -1081,11 +1080,6 @@ impl PrettyPrint for Inst {
                 format!("{} {}", ljustify("uninit".into()), dst)
             }
 
-            Inst::XmmLoadConst { src, dst, .. } => {
-                let dst = pretty_print_reg(dst.to_reg(), 8, allocs);
-                format!("load_const {:?}, {}", src, dst)
-            }
-
             Inst::XmmToGpr {
                 op,
                 src,
@@ -1830,7 +1824,6 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             }
         }
         Inst::XmmUninitializedValue { dst } => collector.reg_def(dst.to_writable_reg()),
-        Inst::XmmLoadConst { dst, .. } => collector.reg_def(*dst),
         Inst::XmmMinMaxSeq { lhs, rhs, dst, .. } => {
             collector.reg_use(rhs.to_reg());
             collector.reg_use(lhs.to_reg());
