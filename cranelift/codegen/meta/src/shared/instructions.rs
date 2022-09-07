@@ -2430,10 +2430,9 @@ pub(crate) fn define(
 
     let bits = &TypeVar::new(
         "bits",
-        "Any integer, float, or boolean scalar or vector type",
+        "Any integer or boolean scalar or vector type",
         TypeSetBuilder::new()
             .ints(Interval::All)
-            .floats(Interval::All)
             .bools(Interval::All)
             .simd_lanes(Interval::All)
             .includes_scalars(true)

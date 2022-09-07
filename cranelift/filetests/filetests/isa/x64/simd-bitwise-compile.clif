@@ -2,34 +2,6 @@ test compile precise-output
 set enable_simd
 target x86_64 skylake
 
-function %band_f32x4(f32x4, f32x4) -> f32x4 {
-block0(v0: f32x4, v1: f32x4):
-    v2 = band v0, v1
-    return v2
-}
-
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
-;   andps   %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-
-function %band_f64x2(f64x2, f64x2) -> f64x2 {
-block0(v0: f64x2, v1: f64x2):
-    v2 = band v0, v1
-    return v2
-}
-
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
-;   andpd   %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-
 function %band_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
     v2 = band v0, v1
@@ -44,34 +16,6 @@ block0(v0: i32x4, v1: i32x4):
 ;   popq    %rbp
 ;   ret
 
-function %bor_f32x4(f32x4, f32x4) -> f32x4 {
-block0(v0: f32x4, v1: f32x4):
-    v2 = bor v0, v1
-    return v2
-}
-
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
-;   orps    %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-
-function %bor_f64x2(f64x2, f64x2) -> f64x2 {
-block0(v0: f64x2, v1: f64x2):
-    v2 = bor v0, v1
-    return v2
-}
-
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
-;   orpd    %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-
 function %bor_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
     v2 = bor v0, v1
@@ -82,34 +26,6 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   por     %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-
-function %bxor_f32x4(f32x4, f32x4) -> f32x4 {
-block0(v0: f32x4, v1: f32x4):
-    v2 = bxor v0, v1
-    return v2
-}
-
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
-;   xorps   %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-
-function %bxor_f64x2(f64x2, f64x2) -> f64x2 {
-block0(v0: f64x2, v1: f64x2):
-    v2 = bxor v0, v1
-    return v2
-}
-
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
-;   xorpd   %xmm0, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
