@@ -48,10 +48,9 @@ impl DiffEngine for SpecInterpreter {
     }
 
     fn instantiate(&mut self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
-        // TODO: ideally we would avoid copying the module bytes here.
-        Ok(Box::new(SpecInstance {
-            wasm: wasm.to_vec(),
-        }))
+        let instance = wasm_spec_interpreter::instantiate(wasm)
+            .map_err(|e| anyhow!("failed to instantiate in spec interpreter: {}", e))?;
+        Ok(Box::new(SpecInstance { instance }))
     }
 
     fn assert_error_match(&self, trap: &Trap, err: &Error) {
@@ -67,7 +66,7 @@ impl DiffEngine for SpecInterpreter {
 }
 
 struct SpecInstance {
-    wasm: Vec<u8>,
+    instance: wasm_spec_interpreter::SpecInstance,
 }
 
 impl DiffInstance for SpecInstance {
@@ -77,31 +76,33 @@ impl DiffInstance for SpecInstance {
 
     fn evaluate(
         &mut self,
-        _function_name: &str,
+        function_name: &str,
         arguments: &[DiffValue],
         _results: &[DiffValueType],
     ) -> Result<Option<Vec<DiffValue>>> {
-        // The spec interpreter needs some work before it can fully support this
-        // interface:
-        //  - TODO adapt `wasm-spec-interpreter` to use function name to select
-        //    function to run
-        //  - TODO adapt `wasm-spec-interpreter` to expose an "instance" with
-        //    so we can hash memory, globals, etc.
         let arguments = arguments.iter().map(SpecValue::from).collect();
-        match wasm_spec_interpreter::interpret_legacy(&self.wasm, Some(arguments)) {
+        match wasm_spec_interpreter::interpret(&self.instance, function_name, Some(arguments)) {
             Ok(results) => Ok(Some(results.into_iter().map(SpecValue::into).collect())),
             Err(err) => Err(anyhow!(err)),
         }
     }
 
-    fn get_global(&mut self, _name: &str, _ty: DiffValueType) -> Option<DiffValue> {
-        // TODO: should implement this
-        None
+    fn get_global(&mut self, name: &str, _ty: DiffValueType) -> Option<DiffValue> {
+        use wasm_spec_interpreter::{export, SpecExport::Global};
+        if let Ok(Global(g)) = export(&self.instance, name) {
+            Some(g.into())
+        } else {
+            panic!("expected an exported global value at name `{}`", name)
+        }
     }
 
-    fn get_memory(&mut self, _name: &str, _shared: bool) -> Option<Vec<u8>> {
-        // TODO: should implement this
-        None
+    fn get_memory(&mut self, name: &str, _shared: bool) -> Option<Vec<u8>> {
+        use wasm_spec_interpreter::{export, SpecExport::Memory};
+        if let Ok(Memory(m)) = export(&self.instance, name) {
+            Some(m)
+        } else {
+            panic!("expected an exported memory at name `{}`", name)
+        }
     }
 }
 
