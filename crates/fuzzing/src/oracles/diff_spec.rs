@@ -14,22 +14,6 @@ impl SpecInterpreter {
     pub(crate) fn new(config: &mut Config) -> Self {
         let config = &mut config.module_config.config;
 
-        // TODO: right now the interpreter bindings only execute the first
-        // function in the module so if there's possibly more than one function
-        // it's not possible to run the other function. This should be fixed
-        // with improvements to the ocaml bindings to the interpreter.
-        config.min_funcs = 1;
-        config.max_funcs = 1;
-
-        // TODO: right now the instantiation step for the interpreter does
-        // nothing and the evaluation step performs an instantiation followed by
-        // an execution. This means that instantiations which fail in other
-        // engines will "succeed" in the interpreter because the error is
-        // delayed to the execution. This should be fixed by making
-        // instantiation a first-class primitive in our interpreter bindings.
-        config.min_tables = 0;
-        config.max_tables = 0;
-
         config.min_memories = config.min_memories.min(1);
         config.max_memories = config.max_memories.min(1);
 
