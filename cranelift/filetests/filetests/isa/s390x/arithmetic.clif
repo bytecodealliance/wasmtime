@@ -21,7 +21,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   agr %r2, %r2, %r3
+;   agr %r2, %r3
 ;   br %r14
 
 function %iadd_i64_ext32(i64, i32) -> i64 {
@@ -32,7 +32,7 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   agfr %r2, %r2, %r3
+;   agfr %r2, %r3
 ;   br %r14
 
 function %iadd_i64_imm16(i64) -> i64 {
@@ -43,7 +43,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   aghi %r2, %r2, 1
+;   aghi %r2, 1
 ;   br %r14
 
 function %iadd_i64_imm32(i64) -> i64 {
@@ -54,7 +54,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   agfi %r2, %r2, 32768
+;   agfi %r2, 32768
 ;   br %r14
 
 function %iadd_i64_mem(i64, i64) -> i64 {
@@ -65,7 +65,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   ag %r2, %r2, 0(%r3)
+;   ag %r2, 0(%r3)
 ;   br %r14
 
 function %iadd_i64_mem_ext16(i64, i64) -> i64 {
@@ -76,7 +76,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   agh %r2, %r2, 0(%r3)
+;   agh %r2, 0(%r3)
 ;   br %r14
 
 function %iadd_i64_mem_ext32(i64, i64) -> i64 {
@@ -87,7 +87,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   agf %r2, %r2, 0(%r3)
+;   agf %r2, 0(%r3)
 ;   br %r14
 
 function %iadd_i32(i32, i32) -> i32 {
@@ -97,7 +97,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   ar %r2, %r2, %r3
+;   ar %r2, %r3
 ;   br %r14
 
 function %iadd_i32_imm16(i32) -> i32 {
@@ -108,7 +108,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   ahi %r2, %r2, 1
+;   ahi %r2, 1
 ;   br %r14
 
 function %iadd_i32_imm(i32) -> i32 {
@@ -119,7 +119,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   afi %r2, %r2, 32768
+;   afi %r2, 32768
 ;   br %r14
 
 function %iadd_i32_mem(i32, i64) -> i32 {
@@ -130,7 +130,7 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   a %r2, %r2, 0(%r3)
+;   a %r2, 0(%r3)
 ;   br %r14
 
 function %iadd_i32_memoff(i32, i64) -> i32 {
@@ -141,7 +141,7 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   ay %r2, %r2, 4096(%r3)
+;   ay %r2, 4096(%r3)
 ;   br %r14
 
 function %iadd_i32_mem_ext16(i32, i64) -> i32 {
@@ -152,7 +152,7 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   ah %r2, %r2, 0(%r3)
+;   ah %r2, 0(%r3)
 ;   br %r14
 
 function %iadd_i32_memoff_ext16(i32, i64) -> i32 {
@@ -163,7 +163,7 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   ahy %r2, %r2, 4096(%r3)
+;   ahy %r2, 4096(%r3)
 ;   br %r14
 
 function %iadd_i16(i16, i16) -> i16 {
@@ -173,7 +173,7 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   ar %r2, %r2, %r3
+;   ar %r2, %r3
 ;   br %r14
 
 function %iadd_i16_imm(i16) -> i16 {
@@ -184,7 +184,7 @@ block0(v0: i16):
 }
 
 ; block0:
-;   ahi %r2, %r2, 1
+;   ahi %r2, 1
 ;   br %r14
 
 function %iadd_i16_mem(i16, i64) -> i16 {
@@ -195,7 +195,7 @@ block0(v0: i16, v1: i64):
 }
 
 ; block0:
-;   ah %r2, %r2, 0(%r3)
+;   ah %r2, 0(%r3)
 ;   br %r14
 
 function %iadd_i8(i8, i8) -> i8 {
@@ -205,7 +205,7 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   ar %r2, %r2, %r3
+;   ar %r2, %r3
 ;   br %r14
 
 function %iadd_i8_imm(i8) -> i8 {
@@ -216,7 +216,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   ahi %r2, %r2, 1
+;   ahi %r2, 1
 ;   br %r14
 
 function %iadd_i8_mem(i8, i64) -> i8 {
@@ -228,7 +228,7 @@ block0(v0: i8, v1: i64):
 
 ; block0:
 ;   llc %r3, 0(%r3)
-;   ar %r2, %r2, %r3
+;   ar %r2, %r3
 ;   br %r14
 
 function %iadd_i64(i64, i64) -> i64 {
@@ -238,7 +238,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   algr %r2, %r2, %r3
+;   algr %r2, %r3
 ;   br %r14
 
 function %iadd_i64_ext32(i64, i32) -> i64 {
@@ -249,7 +249,7 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   algfr %r2, %r2, %r3
+;   algfr %r2, %r3
 ;   br %r14
 
 function %iadd_i64_imm32(i64) -> i64 {
@@ -260,7 +260,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   algfi %r2, %r2, 32768
+;   algfi %r2, 32768
 ;   br %r14
 
 function %iadd_i64_mem(i64, i64) -> i64 {
@@ -272,7 +272,7 @@ block0(v0: i64, v1: i64):
 
 ; block0:
 ;   lg %r3, 0(%r3)
-;   algr %r2, %r2, %r3
+;   algr %r2, %r3
 ;   br %r14
 
 function %iadd_i64_mem_ext32(i64, i64) -> i64 {
@@ -284,7 +284,7 @@ block0(v0: i64, v1: i64):
 
 ; block0:
 ;   llgf %r3, 0(%r3)
-;   algr %r2, %r2, %r3
+;   algr %r2, %r3
 ;   br %r14
 
 function %iadd_i32(i32, i32) -> i32 {
@@ -294,7 +294,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   alr %r2, %r2, %r3
+;   alr %r2, %r3
 ;   br %r14
 
 function %iadd_i32_imm(i32) -> i32 {
@@ -305,7 +305,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   alfi %r2, %r2, 32768
+;   alfi %r2, 32768
 ;   br %r14
 
 function %iadd_i32_mem(i32, i64) -> i32 {
@@ -317,7 +317,7 @@ block0(v0: i32, v1: i64):
 
 ; block0:
 ;   l %r3, 0(%r3)
-;   alr %r2, %r2, %r3
+;   alr %r2, %r3
 ;   br %r14
 
 function %iadd_i32_memoff(i32, i64) -> i32 {
@@ -329,7 +329,7 @@ block0(v0: i32, v1: i64):
 
 ; block0:
 ;   ly %r3, 4096(%r3)
-;   alr %r2, %r2, %r3
+;   alr %r2, %r3
 ;   br %r14
 
 function %isub_i128(i128, i128) -> i128 {
@@ -352,7 +352,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   sgr %r2, %r2, %r3
+;   sgr %r2, %r3
 ;   br %r14
 
 function %isub_i64_ext32(i64, i32) -> i64 {
@@ -363,7 +363,7 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   sgfr %r2, %r2, %r3
+;   sgfr %r2, %r3
 ;   br %r14
 
 function %isub_i64_imm16(i64) -> i64 {
@@ -374,7 +374,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   aghi %r2, %r2, -1
+;   aghi %r2, -1
 ;   br %r14
 
 function %isub_i64_imm32(i64) -> i64 {
@@ -385,7 +385,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   agfi %r2, %r2, -32769
+;   agfi %r2, -32769
 ;   br %r14
 
 function %isub_i64_mem(i64, i64) -> i64 {
@@ -396,7 +396,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   sg %r2, %r2, 0(%r3)
+;   sg %r2, 0(%r3)
 ;   br %r14
 
 function %isub_i64_mem_ext16(i64, i64) -> i64 {
@@ -407,7 +407,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   sgh %r2, %r2, 0(%r3)
+;   sgh %r2, 0(%r3)
 ;   br %r14
 
 function %isub_i64_mem_ext32(i64, i64) -> i64 {
@@ -418,7 +418,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   sgf %r2, %r2, 0(%r3)
+;   sgf %r2, 0(%r3)
 ;   br %r14
 
 function %isub_i32(i32, i32) -> i32 {
@@ -428,7 +428,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   sr %r2, %r2, %r3
+;   sr %r2, %r3
 ;   br %r14
 
 function %isub_i32_imm16(i32) -> i32 {
@@ -439,7 +439,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   ahi %r2, %r2, -1
+;   ahi %r2, -1
 ;   br %r14
 
 function %isub_i32_imm(i32) -> i32 {
@@ -450,7 +450,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   afi %r2, %r2, -32769
+;   afi %r2, -32769
 ;   br %r14
 
 function %isub_i32_mem(i32, i64) -> i32 {
@@ -461,7 +461,7 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   s %r2, %r2, 0(%r3)
+;   s %r2, 0(%r3)
 ;   br %r14
 
 function %isub_i32_memoff(i32, i64) -> i32 {
@@ -472,7 +472,7 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   sy %r2, %r2, 4096(%r3)
+;   sy %r2, 4096(%r3)
 ;   br %r14
 
 function %isub_i32_mem_ext16(i32, i64) -> i32 {
@@ -483,7 +483,7 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   sh %r2, %r2, 0(%r3)
+;   sh %r2, 0(%r3)
 ;   br %r14
 
 function %isub_i32_memoff_ext16(i32, i64) -> i32 {
@@ -494,7 +494,7 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   shy %r2, %r2, 4096(%r3)
+;   shy %r2, 4096(%r3)
 ;   br %r14
 
 function %isub_i16(i16, i16) -> i16 {
@@ -504,7 +504,7 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   sr %r2, %r2, %r3
+;   sr %r2, %r3
 ;   br %r14
 
 function %isub_i16_imm(i16) -> i16 {
@@ -515,7 +515,7 @@ block0(v0: i16):
 }
 
 ; block0:
-;   ahi %r2, %r2, -1
+;   ahi %r2, -1
 ;   br %r14
 
 function %isub_i16_mem(i16, i64) -> i16 {
@@ -526,7 +526,7 @@ block0(v0: i16, v1: i64):
 }
 
 ; block0:
-;   sh %r2, %r2, 0(%r3)
+;   sh %r2, 0(%r3)
 ;   br %r14
 
 function %isub_i8(i8, i8) -> i8 {
@@ -536,7 +536,7 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   sr %r2, %r2, %r3
+;   sr %r2, %r3
 ;   br %r14
 
 function %isub_i8_imm(i8) -> i8 {
@@ -547,7 +547,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   ahi %r2, %r2, -1
+;   ahi %r2, -1
 ;   br %r14
 
 function %isub_i8_mem(i8, i64) -> i8 {
@@ -559,7 +559,7 @@ block0(v0: i8, v1: i64):
 
 ; block0:
 ;   llc %r3, 0(%r3)
-;   sr %r2, %r2, %r3
+;   sr %r2, %r3
 ;   br %r14
 
 function %iabs_i128(i128) -> i128 {
@@ -711,11 +711,11 @@ block0(v0: i128, v1: i128):
 ;   vlgvg %r1, %v1, 1
 ;   lgr %r13, %r1
 ;   mlgr %r0, %r3
-;   msgr %r3, %r3, %r4
+;   msgr %r3, %r4
 ;   lgr %r4, %r13
-;   msgr %r5, %r5, %r4
-;   agr %r3, %r3, %r0
-;   agr %r5, %r5, %r3
+;   msgr %r5, %r4
+;   agr %r3, %r0
+;   agr %r5, %r3
 ;   vlvgp %v5, %r5, %r1
 ;   vst %v5, 0(%r2)
 ;   lmg %r13, %r15, 104(%r15)
@@ -728,7 +728,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   msgr %r2, %r2, %r3
+;   msgr %r2, %r3
 ;   br %r14
 
 function %imul_i64_imm16(i64) -> i64 {
@@ -739,7 +739,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   mghi %r2, %r2, 3
+;   mghi %r2, 3
 ;   br %r14
 
 function %imul_i64_imm32(i64) -> i64 {
@@ -750,7 +750,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   msgfi %r2, %r2, 32769
+;   msgfi %r2, 32769
 ;   br %r14
 
 function %imul_i64_mem(i64, i64) -> i64 {
@@ -761,7 +761,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   msg %r2, %r2, 0(%r3)
+;   msg %r2, 0(%r3)
 ;   br %r14
 
 function %imul_i64_mem_ext16(i64, i64) -> i64 {
@@ -772,7 +772,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   mgh %r2, %r2, 0(%r3)
+;   mgh %r2, 0(%r3)
 ;   br %r14
 
 function %imul_i64_mem_ext32(i64, i64) -> i64 {
@@ -783,7 +783,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   msgf %r2, %r2, 0(%r3)
+;   msgf %r2, 0(%r3)
 ;   br %r14
 
 function %imul_i32(i32, i32) -> i32 {
@@ -793,7 +793,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   msr %r2, %r2, %r3
+;   msr %r2, %r3
 ;   br %r14
 
 function %imul_i32_imm16(i32) -> i32 {
@@ -804,7 +804,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   mhi %r2, %r2, 3
+;   mhi %r2, 3
 ;   br %r14
 
 function %imul_i32_imm32(i32) -> i32 {
@@ -815,7 +815,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   msfi %r2, %r2, 32769
+;   msfi %r2, 32769
 ;   br %r14
 
 function %imul_i32_mem(i32, i64) -> i32 {
@@ -826,7 +826,7 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   ms %r2, %r2, 0(%r3)
+;   ms %r2, 0(%r3)
 ;   br %r14
 
 function %imul_i32_memoff(i32, i64) -> i32 {
@@ -837,7 +837,7 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   msy %r2, %r2, 4096(%r3)
+;   msy %r2, 4096(%r3)
 ;   br %r14
 
 function %imul_i32_mem_ext16(i32, i64) -> i32 {
@@ -848,7 +848,7 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   mh %r2, %r2, 0(%r3)
+;   mh %r2, 0(%r3)
 ;   br %r14
 
 function %imul_i32_memoff_ext16(i32, i64) -> i32 {
@@ -859,7 +859,7 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   mhy %r2, %r2, 4096(%r3)
+;   mhy %r2, 4096(%r3)
 ;   br %r14
 
 function %imul_i16(i16, i16) -> i16 {
@@ -869,7 +869,7 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   msr %r2, %r2, %r3
+;   msr %r2, %r3
 ;   br %r14
 
 function %imul_i16_imm(i16) -> i16 {
@@ -880,7 +880,7 @@ block0(v0: i16):
 }
 
 ; block0:
-;   mhi %r2, %r2, 3
+;   mhi %r2, 3
 ;   br %r14
 
 function %imul_i16_mem(i16, i64) -> i16 {
@@ -891,7 +891,7 @@ block0(v0: i16, v1: i64):
 }
 
 ; block0:
-;   mh %r2, %r2, 0(%r3)
+;   mh %r2, 0(%r3)
 ;   br %r14
 
 function %imul_i8(i8, i8) -> i8 {
@@ -901,7 +901,7 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   msr %r2, %r2, %r3
+;   msr %r2, %r3
 ;   br %r14
 
 function %imul_i8_imm(i8) -> i8 {
@@ -912,7 +912,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   mhi %r2, %r2, 3
+;   mhi %r2, 3
 ;   br %r14
 
 function %imul_i8_mem(i8, i64) -> i8 {
@@ -924,7 +924,7 @@ block0(v0: i8, v1: i64):
 
 ; block0:
 ;   llc %r3, 0(%r3)
-;   msr %r2, %r2, %r3
+;   msr %r2, %r3
 ;   br %r14
 
 function %umulhi_i64(i64, i64) -> i64 {
@@ -948,7 +948,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   llgfr %r2, %r2
 ;   llgfr %r4, %r3
-;   msgr %r2, %r2, %r4
+;   msgr %r2, %r4
 ;   srlg %r2, %r2, 32
 ;   br %r14
 
@@ -961,7 +961,7 @@ block0(v0: i16, v1: i16):
 ; block0:
 ;   llhr %r2, %r2
 ;   llhr %r4, %r3
-;   msr %r2, %r2, %r4
+;   msr %r2, %r4
 ;   srlk %r2, %r2, 16
 ;   br %r14
 
@@ -974,7 +974,7 @@ block0(v0: i8, v1: i8):
 ; block0:
 ;   llcr %r2, %r2
 ;   llcr %r4, %r3
-;   msr %r2, %r2, %r4
+;   msr %r2, %r4
 ;   srlk %r2, %r2, 8
 ;   br %r14
 
@@ -998,7 +998,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   lgfr %r2, %r2
 ;   lgfr %r4, %r3
-;   msgr %r2, %r2, %r4
+;   msgr %r2, %r4
 ;   srag %r2, %r2, 32
 ;   br %r14
 
@@ -1011,7 +1011,7 @@ block0(v0: i16, v1: i16):
 ; block0:
 ;   lhr %r2, %r2
 ;   lhr %r4, %r3
-;   msr %r2, %r2, %r4
+;   msr %r2, %r4
 ;   srak %r2, %r2, 16
 ;   br %r14
 
@@ -1024,7 +1024,7 @@ block0(v0: i8, v1: i8):
 ; block0:
 ;   lbr %r2, %r2
 ;   lbr %r4, %r3
-;   msr %r2, %r2, %r4
+;   msr %r2, %r4
 ;   srak %r2, %r2, 8
 ;   br %r14
 

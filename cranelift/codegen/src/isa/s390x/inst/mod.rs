@@ -1322,10 +1322,9 @@ impl Inst {
                     ALUOp::Xor64 => "xgr",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let ri = pretty_print_reg(ri, allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let rm = pretty_print_reg(rm, allocs);
-                format!("{} {}, {}, {}", op, rd, ri, rm)
+                format!("{} {}, {}", op, rd, rm)
             }
             &Inst::AluRX {
                 alu_op,
@@ -1364,8 +1363,7 @@ impl Inst {
                     _ => unreachable!(),
                 };
 
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let ri = pretty_print_reg(ri, allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let mem = mem.with_allocs(allocs);
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
@@ -1385,7 +1383,7 @@ impl Inst {
                 };
                 let mem = mem.pretty_print_default();
 
-                format!("{}{} {}, {}, {}", mem_str, op.unwrap(), rd, ri, mem)
+                format!("{}{} {}, {}", mem_str, op.unwrap(), rd, mem)
             }
             &Inst::AluRSImm16 {
                 alu_op,
@@ -1400,9 +1398,8 @@ impl Inst {
                     ALUOp::Mul64 => "mghi",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let ri = pretty_print_reg(ri, allocs);
-                format!("{} {}, {}, {}", op, rd, ri, imm)
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
+                format!("{} {}, {}", op, rd, imm)
             }
             &Inst::AluRSImm32 {
                 alu_op,
@@ -1417,9 +1414,8 @@ impl Inst {
                     ALUOp::Mul64 => "msgfi",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let ri = pretty_print_reg(ri, allocs);
-                format!("{} {}, {}, {}", op, rd, ri, imm)
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
+                format!("{} {}, {}", op, rd, imm)
             }
             &Inst::AluRUImm32 {
                 alu_op,
@@ -1434,9 +1430,8 @@ impl Inst {
                     ALUOp::SubLogical64 => "slgfi",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let ri = pretty_print_reg(ri, allocs);
-                format!("{} {}, {}, {}", op, rd, ri, imm)
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
+                format!("{} {}, {}", op, rd, imm)
             }
             &Inst::AluRUImm16Shifted {
                 alu_op,
@@ -1459,9 +1454,8 @@ impl Inst {
                     (ALUOp::Orr64, 3) => "oihh",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let ri = pretty_print_reg(ri, allocs);
-                format!("{} {}, {}, {}", op, rd, ri, imm.bits)
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
+                format!("{} {}, {}", op, rd, imm.bits)
             }
             &Inst::AluRUImm32Shifted {
                 alu_op,
@@ -1481,9 +1475,8 @@ impl Inst {
                     (ALUOp::Xor64, 1) => "xihf",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let ri = pretty_print_reg(ri, allocs);
-                format!("{} {}, {}, {}", op, rd, ri, imm.bits)
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
+                format!("{} {}, {}", op, rd, imm.bits)
             }
             &Inst::SMulWide { rn, rm } => {
                 let op = "mgrk";

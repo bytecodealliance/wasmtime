@@ -42,29 +42,29 @@ block0(v0: i64):
 ;   lgr %r5, %r3
 ;   sllg %r4, %r5, 1
 ;   srlg %r3, %r5, 1
-;   ngr %r4, %r4, %r2
-;   xilf %r2, %r2, 4294967295
-;   xihf %r2, %r2, 4294967295
+;   ngr %r4, %r2
+;   xilf %r2, 4294967295
+;   xihf %r2, 4294967295
 ;   ngrk %r2, %r3, %r2
-;   ogr %r4, %r4, %r2
+;   ogr %r4, %r2
 ;   llihf %r3, 3435973836
 ;   iilf %r3, 3435973836
 ;   sllg %r5, %r4, 2
 ;   srlg %r4, %r4, 2
-;   ngr %r5, %r5, %r3
-;   xilf %r3, %r3, 4294967295
-;   xihf %r3, %r3, 4294967295
+;   ngr %r5, %r3
+;   xilf %r3, 4294967295
+;   xihf %r3, 4294967295
 ;   ngrk %r3, %r4, %r3
-;   ogr %r5, %r5, %r3
+;   ogr %r5, %r3
 ;   llihf %r4, 4042322160
 ;   iilf %r4, 4042322160
 ;   sllg %r2, %r5, 4
 ;   srlg %r5, %r5, 4
-;   ngr %r2, %r2, %r4
-;   xilf %r4, %r4, 4294967295
-;   xihf %r4, %r4, 4294967295
+;   ngr %r2, %r4
+;   xilf %r4, 4294967295
+;   xihf %r4, 4294967295
 ;   ngrk %r4, %r5, %r4
-;   ogr %r2, %r2, %r4
+;   ogr %r2, %r4
 ;   lrvgr %r2, %r2
 ;   br %r14
 
@@ -78,22 +78,22 @@ block0(v0: i32):
 ;   iilf %r5, 2863311530
 ;   sllk %r3, %r2, 1
 ;   srlk %r2, %r2, 1
-;   nr %r3, %r3, %r5
-;   xilf %r5, %r5, 4294967295
+;   nr %r3, %r5
+;   xilf %r5, 4294967295
 ;   nrk %r4, %r2, %r5
 ;   ork %r5, %r3, %r4
 ;   iilf %r3, 3435973836
 ;   sllk %r2, %r5, 2
 ;   srlk %r4, %r5, 2
 ;   nrk %r5, %r2, %r3
-;   xilf %r3, %r3, 4294967295
+;   xilf %r3, 4294967295
 ;   nrk %r2, %r4, %r3
 ;   ork %r3, %r5, %r2
 ;   iilf %r5, 4042322160
 ;   sllk %r4, %r3, 4
 ;   srlk %r2, %r3, 4
 ;   nrk %r3, %r4, %r5
-;   xilf %r5, %r5, 4294967295
+;   xilf %r5, 4294967295
 ;   nrk %r4, %r2, %r5
 ;   ork %r5, %r3, %r4
 ;   lrvr %r2, %r5
@@ -109,22 +109,22 @@ block0(v0: i16):
 ;   lhi %r5, -21846
 ;   sllk %r3, %r2, 1
 ;   srlk %r2, %r2, 1
-;   nr %r3, %r3, %r5
-;   xilf %r5, %r5, 4294967295
+;   nr %r3, %r5
+;   xilf %r5, 4294967295
 ;   nrk %r4, %r2, %r5
 ;   ork %r5, %r3, %r4
 ;   lhi %r3, -13108
 ;   sllk %r2, %r5, 2
 ;   srlk %r4, %r5, 2
 ;   nrk %r5, %r2, %r3
-;   xilf %r3, %r3, 4294967295
+;   xilf %r3, 4294967295
 ;   nrk %r2, %r4, %r3
 ;   ork %r3, %r5, %r2
 ;   lhi %r5, -3856
 ;   sllk %r4, %r3, 4
 ;   srlk %r2, %r3, 4
 ;   nrk %r3, %r4, %r5
-;   xilf %r5, %r5, 4294967295
+;   xilf %r5, 4294967295
 ;   nrk %r4, %r2, %r5
 ;   ork %r5, %r3, %r4
 ;   lrvr %r3, %r5
@@ -141,22 +141,22 @@ block0(v0: i8):
 ;   lhi %r5, -21846
 ;   sllk %r3, %r2, 1
 ;   srlk %r2, %r2, 1
-;   nr %r3, %r3, %r5
-;   xilf %r5, %r5, 4294967295
+;   nr %r3, %r5
+;   xilf %r5, 4294967295
 ;   nrk %r4, %r2, %r5
 ;   ork %r5, %r3, %r4
 ;   lhi %r3, -13108
 ;   sllk %r2, %r5, 2
 ;   srlk %r4, %r5, 2
 ;   nrk %r5, %r2, %r3
-;   xilf %r3, %r3, 4294967295
+;   xilf %r3, 4294967295
 ;   nrk %r2, %r4, %r3
 ;   ork %r3, %r5, %r2
 ;   lhi %r5, -3856
 ;   sllk %r4, %r3, 4
 ;   srlk %r2, %r3, 4
 ;   nrk %r3, %r4, %r5
-;   xilf %r5, %r5, 4294967295
+;   xilf %r5, 4294967295
 ;   nrk %r4, %r2, %r5
 ;   ork %r2, %r3, %r4
 ;   br %r14
@@ -273,7 +273,7 @@ block0(v0: i32):
 ; block0:
 ;   lgfr %r5, %r2
 ;   srag %r3, %r5, 63
-;   xgr %r5, %r5, %r3
+;   xgr %r5, %r3
 ;   flogr %r0, %r5
 ;   ahik %r2, %r0, -33
 ;   br %r14
@@ -287,7 +287,7 @@ block0(v0: i16):
 ; block0:
 ;   lghr %r5, %r2
 ;   srag %r3, %r5, 63
-;   xgr %r5, %r5, %r3
+;   xgr %r5, %r3
 ;   flogr %r0, %r5
 ;   ahik %r2, %r0, -49
 ;   br %r14
@@ -301,7 +301,7 @@ block0(v0: i8):
 ; block0:
 ;   lgbr %r5, %r2
 ;   srag %r3, %r5, 63
-;   xgr %r5, %r5, %r3
+;   xgr %r5, %r3
 ;   flogr %r0, %r5
 ;   ahik %r2, %r0, -57
 ;   br %r14
@@ -347,7 +347,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   oihl %r2, %r2, 1
+;   oihl %r2, 1
 ;   lcgr %r3, %r2
 ;   ngrk %r5, %r2, %r3
 ;   flogr %r0, %r5
@@ -362,7 +362,7 @@ block0(v0: i16):
 }
 
 ; block0:
-;   oilh %r2, %r2, 1
+;   oilh %r2, 1
 ;   lcgr %r3, %r2
 ;   ngrk %r5, %r2, %r3
 ;   flogr %r0, %r5
@@ -377,7 +377,7 @@ block0(v0: i8):
 }
 
 ; block0:
-;   oill %r2, %r2, 256
+;   oill %r2, 256
 ;   lcgr %r3, %r2
 ;   ngrk %r5, %r2, %r3
 ;   flogr %r0, %r5
@@ -410,11 +410,11 @@ block0(v0: i64):
 ; block0:
 ;   popcnt %r5, %r2
 ;   sllg %r3, %r5, 32
-;   agr %r5, %r5, %r3
+;   agr %r5, %r3
 ;   sllg %r3, %r5, 16
-;   agr %r5, %r5, %r3
+;   agr %r5, %r3
 ;   sllg %r3, %r5, 8
-;   agr %r5, %r5, %r3
+;   agr %r5, %r3
 ;   srlg %r2, %r5, 56
 ;   br %r14
 
@@ -427,9 +427,9 @@ block0(v0: i32):
 ; block0:
 ;   popcnt %r5, %r2
 ;   sllk %r3, %r5, 16
-;   ar %r5, %r5, %r3
+;   ar %r5, %r3
 ;   sllk %r3, %r5, 8
-;   ar %r5, %r5, %r3
+;   ar %r5, %r3
 ;   srlk %r2, %r5, 24
 ;   br %r14
 
@@ -443,7 +443,7 @@ block0(v0: i16):
 ;   popcnt %r5, %r2
 ;   srlk %r3, %r5, 8
 ;   ark %r2, %r5, %r3
-;   nill %r2, %r2, 255
+;   nill %r2, 255
 ;   br %r14
 
 function %popcnt_i8(i8) -> i8 {

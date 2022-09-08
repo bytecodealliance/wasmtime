@@ -326,7 +326,7 @@ fn test_s390x_binemit() {
             rm: gpr(2),
         },
         "1A12",
-        "ar %r1, %r1, %r2",
+        "ar %r1, %r2",
     ));
     insns.push((
         Inst::AluRR {
@@ -336,7 +336,7 @@ fn test_s390x_binemit() {
             rm: gpr(5),
         },
         "B9080045",
-        "agr %r4, %r4, %r5",
+        "agr %r4, %r5",
     ));
     insns.push((
         Inst::AluRR {
@@ -346,7 +346,7 @@ fn test_s390x_binemit() {
             rm: gpr(5),
         },
         "B9180045",
-        "agfr %r4, %r4, %r5",
+        "agfr %r4, %r5",
     ));
     insns.push((
         Inst::AluRR {
@@ -356,7 +356,7 @@ fn test_s390x_binemit() {
             rm: gpr(2),
         },
         "1E12",
-        "alr %r1, %r1, %r2",
+        "alr %r1, %r2",
     ));
     insns.push((
         Inst::AluRR {
@@ -366,7 +366,7 @@ fn test_s390x_binemit() {
             rm: gpr(5),
         },
         "B90A0045",
-        "algr %r4, %r4, %r5",
+        "algr %r4, %r5",
     ));
     insns.push((
         Inst::AluRR {
@@ -376,7 +376,7 @@ fn test_s390x_binemit() {
             rm: gpr(5),
         },
         "B91A0045",
-        "algfr %r4, %r4, %r5",
+        "algfr %r4, %r5",
     ));
     insns.push((
         Inst::AluRR {
@@ -386,7 +386,7 @@ fn test_s390x_binemit() {
             rm: gpr(2),
         },
         "1B12",
-        "sr %r1, %r1, %r2",
+        "sr %r1, %r2",
     ));
     insns.push((
         Inst::AluRR {
@@ -396,7 +396,7 @@ fn test_s390x_binemit() {
             rm: gpr(5),
         },
         "B9090045",
-        "sgr %r4, %r4, %r5",
+        "sgr %r4, %r5",
     ));
     insns.push((
         Inst::AluRR {
@@ -406,7 +406,7 @@ fn test_s390x_binemit() {
             rm: gpr(5),
         },
         "B9190045",
-        "sgfr %r4, %r4, %r5",
+        "sgfr %r4, %r5",
     ));
     insns.push((
         Inst::AluRR {
@@ -416,7 +416,7 @@ fn test_s390x_binemit() {
             rm: gpr(2),
         },
         "1F12",
-        "slr %r1, %r1, %r2",
+        "slr %r1, %r2",
     ));
     insns.push((
         Inst::AluRR {
@@ -426,7 +426,7 @@ fn test_s390x_binemit() {
             rm: gpr(5),
         },
         "B90B0045",
-        "slgr %r4, %r4, %r5",
+        "slgr %r4, %r5",
     ));
     insns.push((
         Inst::AluRR {
@@ -436,7 +436,7 @@ fn test_s390x_binemit() {
             rm: gpr(5),
         },
         "B91B0045",
-        "slgfr %r4, %r4, %r5",
+        "slgfr %r4, %r5",
     ));
     insns.push((
         Inst::AluRR {
@@ -446,7 +446,7 @@ fn test_s390x_binemit() {
             rm: gpr(2),
         },
         "B2520012",
-        "msr %r1, %r1, %r2",
+        "msr %r1, %r2",
     ));
     insns.push((
         Inst::AluRR {
@@ -456,7 +456,7 @@ fn test_s390x_binemit() {
             rm: gpr(5),
         },
         "B90C0045",
-        "msgr %r4, %r4, %r5",
+        "msgr %r4, %r5",
     ));
     insns.push((
         Inst::AluRR {
@@ -466,7 +466,7 @@ fn test_s390x_binemit() {
             rm: gpr(5),
         },
         "B91C0045",
-        "msgfr %r4, %r4, %r5",
+        "msgfr %r4, %r5",
     ));
     insns.push((
         Inst::AluRR {
@@ -476,7 +476,7 @@ fn test_s390x_binemit() {
             rm: gpr(2),
         },
         "1412",
-        "nr %r1, %r1, %r2",
+        "nr %r1, %r2",
     ));
     insns.push((
         Inst::AluRR {
@@ -486,7 +486,7 @@ fn test_s390x_binemit() {
             rm: gpr(5),
         },
         "B9800045",
-        "ngr %r4, %r4, %r5",
+        "ngr %r4, %r5",
     ));
     insns.push((
         Inst::AluRR {
@@ -496,7 +496,7 @@ fn test_s390x_binemit() {
             rm: gpr(2),
         },
         "1612",
-        "or %r1, %r1, %r2",
+        "or %r1, %r2",
     ));
     insns.push((
         Inst::AluRR {
@@ -506,7 +506,7 @@ fn test_s390x_binemit() {
             rm: gpr(5),
         },
         "B9810045",
-        "ogr %r4, %r4, %r5",
+        "ogr %r4, %r5",
     ));
     insns.push((
         Inst::AluRR {
@@ -516,7 +516,7 @@ fn test_s390x_binemit() {
             rm: gpr(2),
         },
         "1712",
-        "xr %r1, %r1, %r2",
+        "xr %r1, %r2",
     ));
     insns.push((
         Inst::AluRR {
@@ -526,7 +526,7 @@ fn test_s390x_binemit() {
             rm: gpr(5),
         },
         "B9820045",
-        "xgr %r4, %r4, %r5",
+        "xgr %r4, %r5",
     ));
 
     insns.push((
@@ -542,7 +542,7 @@ fn test_s390x_binemit() {
             },
         },
         "5A102000",
-        "a %r1, %r1, 0(%r2)",
+        "a %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -557,7 +557,7 @@ fn test_s390x_binemit() {
             },
         },
         "4A102000",
-        "ah %r1, %r1, 0(%r2)",
+        "ah %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -572,7 +572,7 @@ fn test_s390x_binemit() {
             },
         },
         "E3102000005A",
-        "ay %r1, %r1, 0(%r2)",
+        "ay %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -587,7 +587,7 @@ fn test_s390x_binemit() {
             },
         },
         "E3102000004A",
-        "ahy %r1, %r1, 0(%r2)",
+        "ahy %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -602,7 +602,7 @@ fn test_s390x_binemit() {
             },
         },
         "E31020000008",
-        "ag %r1, %r1, 0(%r2)",
+        "ag %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -617,7 +617,7 @@ fn test_s390x_binemit() {
             },
         },
         "E31020000038",
-        "agh %r1, %r1, 0(%r2)",
+        "agh %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -632,7 +632,7 @@ fn test_s390x_binemit() {
             },
         },
         "E31020000018",
-        "agf %r1, %r1, 0(%r2)",
+        "agf %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -647,7 +647,7 @@ fn test_s390x_binemit() {
             },
         },
         "5E102000",
-        "al %r1, %r1, 0(%r2)",
+        "al %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -662,7 +662,7 @@ fn test_s390x_binemit() {
             },
         },
         "E3102000005E",
-        "aly %r1, %r1, 0(%r2)",
+        "aly %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -677,7 +677,7 @@ fn test_s390x_binemit() {
             },
         },
         "E3102000000A",
-        "alg %r1, %r1, 0(%r2)",
+        "alg %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -692,7 +692,7 @@ fn test_s390x_binemit() {
             },
         },
         "E3102000001A",
-        "algf %r1, %r1, 0(%r2)",
+        "algf %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -707,7 +707,7 @@ fn test_s390x_binemit() {
             },
         },
         "5B102000",
-        "s %r1, %r1, 0(%r2)",
+        "s %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -722,7 +722,7 @@ fn test_s390x_binemit() {
             },
         },
         "4B102000",
-        "sh %r1, %r1, 0(%r2)",
+        "sh %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -737,7 +737,7 @@ fn test_s390x_binemit() {
             },
         },
         "E3102000005B",
-        "sy %r1, %r1, 0(%r2)",
+        "sy %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -752,7 +752,7 @@ fn test_s390x_binemit() {
             },
         },
         "E3102000007B",
-        "shy %r1, %r1, 0(%r2)",
+        "shy %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -767,7 +767,7 @@ fn test_s390x_binemit() {
             },
         },
         "E31020000009",
-        "sg %r1, %r1, 0(%r2)",
+        "sg %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -782,7 +782,7 @@ fn test_s390x_binemit() {
             },
         },
         "E31020000039",
-        "sgh %r1, %r1, 0(%r2)",
+        "sgh %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -797,7 +797,7 @@ fn test_s390x_binemit() {
             },
         },
         "E31020000019",
-        "sgf %r1, %r1, 0(%r2)",
+        "sgf %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -812,7 +812,7 @@ fn test_s390x_binemit() {
             },
         },
         "5F102000",
-        "sl %r1, %r1, 0(%r2)",
+        "sl %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -827,7 +827,7 @@ fn test_s390x_binemit() {
             },
         },
         "E3102000005F",
-        "sly %r1, %r1, 0(%r2)",
+        "sly %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -842,7 +842,7 @@ fn test_s390x_binemit() {
             },
         },
         "E3102000000B",
-        "slg %r1, %r1, 0(%r2)",
+        "slg %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -857,7 +857,7 @@ fn test_s390x_binemit() {
             },
         },
         "E3102000001B",
-        "slgf %r1, %r1, 0(%r2)",
+        "slgf %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -872,7 +872,7 @@ fn test_s390x_binemit() {
             },
         },
         "71102000",
-        "ms %r1, %r1, 0(%r2)",
+        "ms %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -887,7 +887,7 @@ fn test_s390x_binemit() {
             },
         },
         "4C102000",
-        "mh %r1, %r1, 0(%r2)",
+        "mh %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -902,7 +902,7 @@ fn test_s390x_binemit() {
             },
         },
         "E31020000051",
-        "msy %r1, %r1, 0(%r2)",
+        "msy %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -917,7 +917,7 @@ fn test_s390x_binemit() {
             },
         },
         "E3102000007C",
-        "mhy %r1, %r1, 0(%r2)",
+        "mhy %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -932,7 +932,7 @@ fn test_s390x_binemit() {
             },
         },
         "E3102000000C",
-        "msg %r1, %r1, 0(%r2)",
+        "msg %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -947,7 +947,7 @@ fn test_s390x_binemit() {
             },
         },
         "E3102000003C",
-        "mgh %r1, %r1, 0(%r2)",
+        "mgh %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -962,7 +962,7 @@ fn test_s390x_binemit() {
             },
         },
         "E3102000001C",
-        "msgf %r1, %r1, 0(%r2)",
+        "msgf %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -977,7 +977,7 @@ fn test_s390x_binemit() {
             },
         },
         "54102000",
-        "n %r1, %r1, 0(%r2)",
+        "n %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -992,7 +992,7 @@ fn test_s390x_binemit() {
             },
         },
         "E31020000054",
-        "ny %r1, %r1, 0(%r2)",
+        "ny %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -1007,7 +1007,7 @@ fn test_s390x_binemit() {
             },
         },
         "E31020000080",
-        "ng %r1, %r1, 0(%r2)",
+        "ng %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -1022,7 +1022,7 @@ fn test_s390x_binemit() {
             },
         },
         "56102000",
-        "o %r1, %r1, 0(%r2)",
+        "o %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -1037,7 +1037,7 @@ fn test_s390x_binemit() {
             },
         },
         "E31020000056",
-        "oy %r1, %r1, 0(%r2)",
+        "oy %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -1052,7 +1052,7 @@ fn test_s390x_binemit() {
             },
         },
         "E31020000081",
-        "og %r1, %r1, 0(%r2)",
+        "og %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -1067,7 +1067,7 @@ fn test_s390x_binemit() {
             },
         },
         "57102000",
-        "x %r1, %r1, 0(%r2)",
+        "x %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -1082,7 +1082,7 @@ fn test_s390x_binemit() {
             },
         },
         "E31020000057",
-        "xy %r1, %r1, 0(%r2)",
+        "xy %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -1097,7 +1097,7 @@ fn test_s390x_binemit() {
             },
         },
         "E31020000082",
-        "xg %r1, %r1, 0(%r2)",
+        "xg %r1, 0(%r2)",
     ));
 
     insns.push((
@@ -1108,7 +1108,7 @@ fn test_s390x_binemit() {
             imm: -32768,
         },
         "A77A8000",
-        "ahi %r7, %r7, -32768",
+        "ahi %r7, -32768",
     ));
     insns.push((
         Inst::AluRSImm16 {
@@ -1118,7 +1118,7 @@ fn test_s390x_binemit() {
             imm: 32767,
         },
         "A77A7FFF",
-        "ahi %r7, %r7, 32767",
+        "ahi %r7, 32767",
     ));
     insns.push((
         Inst::AluRSImm16 {
@@ -1128,7 +1128,7 @@ fn test_s390x_binemit() {
             imm: -32768,
         },
         "A77B8000",
-        "aghi %r7, %r7, -32768",
+        "aghi %r7, -32768",
     ));
     insns.push((
         Inst::AluRSImm16 {
@@ -1138,7 +1138,7 @@ fn test_s390x_binemit() {
             imm: 32767,
         },
         "A77B7FFF",
-        "aghi %r7, %r7, 32767",
+        "aghi %r7, 32767",
     ));
     insns.push((
         Inst::AluRSImm16 {
@@ -1148,7 +1148,7 @@ fn test_s390x_binemit() {
             imm: -32768,
         },
         "A77C8000",
-        "mhi %r7, %r7, -32768",
+        "mhi %r7, -32768",
     ));
     insns.push((
         Inst::AluRSImm16 {
@@ -1158,7 +1158,7 @@ fn test_s390x_binemit() {
             imm: 32767,
         },
         "A77C7FFF",
-        "mhi %r7, %r7, 32767",
+        "mhi %r7, 32767",
     ));
     insns.push((
         Inst::AluRSImm16 {
@@ -1168,7 +1168,7 @@ fn test_s390x_binemit() {
             imm: -32768,
         },
         "A77D8000",
-        "mghi %r7, %r7, -32768",
+        "mghi %r7, -32768",
     ));
     insns.push((
         Inst::AluRSImm16 {
@@ -1178,7 +1178,7 @@ fn test_s390x_binemit() {
             imm: 32767,
         },
         "A77D7FFF",
-        "mghi %r7, %r7, 32767",
+        "mghi %r7, 32767",
     ));
 
     insns.push((
@@ -1189,7 +1189,7 @@ fn test_s390x_binemit() {
             imm: -2147483648,
         },
         "C27980000000",
-        "afi %r7, %r7, -2147483648",
+        "afi %r7, -2147483648",
     ));
     insns.push((
         Inst::AluRSImm32 {
@@ -1199,7 +1199,7 @@ fn test_s390x_binemit() {
             imm: 2147483647,
         },
         "C2797FFFFFFF",
-        "afi %r7, %r7, 2147483647",
+        "afi %r7, 2147483647",
     ));
     insns.push((
         Inst::AluRSImm32 {
@@ -1209,7 +1209,7 @@ fn test_s390x_binemit() {
             imm: -2147483648,
         },
         "C27180000000",
-        "msfi %r7, %r7, -2147483648",
+        "msfi %r7, -2147483648",
     ));
     insns.push((
         Inst::AluRSImm32 {
@@ -1219,7 +1219,7 @@ fn test_s390x_binemit() {
             imm: 2147483647,
         },
         "C2717FFFFFFF",
-        "msfi %r7, %r7, 2147483647",
+        "msfi %r7, 2147483647",
     ));
     insns.push((
         Inst::AluRSImm32 {
@@ -1229,7 +1229,7 @@ fn test_s390x_binemit() {
             imm: -2147483648,
         },
         "C27880000000",
-        "agfi %r7, %r7, -2147483648",
+        "agfi %r7, -2147483648",
     ));
     insns.push((
         Inst::AluRSImm32 {
@@ -1239,7 +1239,7 @@ fn test_s390x_binemit() {
             imm: 2147483647,
         },
         "C2787FFFFFFF",
-        "agfi %r7, %r7, 2147483647",
+        "agfi %r7, 2147483647",
     ));
     insns.push((
         Inst::AluRSImm32 {
@@ -1249,7 +1249,7 @@ fn test_s390x_binemit() {
             imm: -2147483648,
         },
         "C27080000000",
-        "msgfi %r7, %r7, -2147483648",
+        "msgfi %r7, -2147483648",
     ));
     insns.push((
         Inst::AluRSImm32 {
@@ -1259,7 +1259,7 @@ fn test_s390x_binemit() {
             imm: 2147483647,
         },
         "C2707FFFFFFF",
-        "msgfi %r7, %r7, 2147483647",
+        "msgfi %r7, 2147483647",
     ));
 
     insns.push((
@@ -1270,7 +1270,7 @@ fn test_s390x_binemit() {
             imm: 0,
         },
         "C27B00000000",
-        "alfi %r7, %r7, 0",
+        "alfi %r7, 0",
     ));
     insns.push((
         Inst::AluRUImm32 {
@@ -1280,7 +1280,7 @@ fn test_s390x_binemit() {
             imm: 4294967295,
         },
         "C27BFFFFFFFF",
-        "alfi %r7, %r7, 4294967295",
+        "alfi %r7, 4294967295",
     ));
     insns.push((
         Inst::AluRUImm32 {
@@ -1290,7 +1290,7 @@ fn test_s390x_binemit() {
             imm: 0,
         },
         "C27500000000",
-        "slfi %r7, %r7, 0",
+        "slfi %r7, 0",
     ));
     insns.push((
         Inst::AluRUImm32 {
@@ -1300,7 +1300,7 @@ fn test_s390x_binemit() {
             imm: 4294967295,
         },
         "C275FFFFFFFF",
-        "slfi %r7, %r7, 4294967295",
+        "slfi %r7, 4294967295",
     ));
     insns.push((
         Inst::AluRUImm32 {
@@ -1310,7 +1310,7 @@ fn test_s390x_binemit() {
             imm: 0,
         },
         "C27A00000000",
-        "algfi %r7, %r7, 0",
+        "algfi %r7, 0",
     ));
     insns.push((
         Inst::AluRUImm32 {
@@ -1320,7 +1320,7 @@ fn test_s390x_binemit() {
             imm: 4294967295,
         },
         "C27AFFFFFFFF",
-        "algfi %r7, %r7, 4294967295",
+        "algfi %r7, 4294967295",
     ));
     insns.push((
         Inst::AluRUImm32 {
@@ -1330,7 +1330,7 @@ fn test_s390x_binemit() {
             imm: 0,
         },
         "C27400000000",
-        "slgfi %r7, %r7, 0",
+        "slgfi %r7, 0",
     ));
     insns.push((
         Inst::AluRUImm32 {
@@ -1340,7 +1340,7 @@ fn test_s390x_binemit() {
             imm: 4294967295,
         },
         "C274FFFFFFFF",
-        "slgfi %r7, %r7, 4294967295",
+        "slgfi %r7, 4294967295",
     ));
 
     insns.push((
@@ -1351,7 +1351,7 @@ fn test_s390x_binemit() {
             imm: UImm16Shifted::maybe_from_u64(0x0000_ffff).unwrap(),
         },
         "A587FFFF",
-        "nill %r8, %r8, 65535",
+        "nill %r8, 65535",
     ));
     insns.push((
         Inst::AluRUImm16Shifted {
@@ -1361,7 +1361,7 @@ fn test_s390x_binemit() {
             imm: UImm16Shifted::maybe_from_u64(0xffff_0000).unwrap(),
         },
         "A586FFFF",
-        "nilh %r8, %r8, 65535",
+        "nilh %r8, 65535",
     ));
     insns.push((
         Inst::AluRUImm16Shifted {
@@ -1371,7 +1371,7 @@ fn test_s390x_binemit() {
             imm: UImm16Shifted::maybe_from_u64(0x0000_0000_0000_ffff).unwrap(),
         },
         "A587FFFF",
-        "nill %r8, %r8, 65535",
+        "nill %r8, 65535",
     ));
     insns.push((
         Inst::AluRUImm16Shifted {
@@ -1381,7 +1381,7 @@ fn test_s390x_binemit() {
             imm: UImm16Shifted::maybe_from_u64(0x0000_0000_ffff_0000).unwrap(),
         },
         "A586FFFF",
-        "nilh %r8, %r8, 65535",
+        "nilh %r8, 65535",
     ));
     insns.push((
         Inst::AluRUImm16Shifted {
@@ -1391,7 +1391,7 @@ fn test_s390x_binemit() {
             imm: UImm16Shifted::maybe_from_u64(0x0000_ffff_0000_0000).unwrap(),
         },
         "A585FFFF",
-        "nihl %r8, %r8, 65535",
+        "nihl %r8, 65535",
     ));
     insns.push((
         Inst::AluRUImm16Shifted {
@@ -1401,7 +1401,7 @@ fn test_s390x_binemit() {
             imm: UImm16Shifted::maybe_from_u64(0xffff_0000_0000_0000).unwrap(),
         },
         "A584FFFF",
-        "nihh %r8, %r8, 65535",
+        "nihh %r8, 65535",
     ));
     insns.push((
         Inst::AluRUImm16Shifted {
@@ -1411,7 +1411,7 @@ fn test_s390x_binemit() {
             imm: UImm16Shifted::maybe_from_u64(0x0000_ffff).unwrap(),
         },
         "A58BFFFF",
-        "oill %r8, %r8, 65535",
+        "oill %r8, 65535",
     ));
     insns.push((
         Inst::AluRUImm16Shifted {
@@ -1421,7 +1421,7 @@ fn test_s390x_binemit() {
             imm: UImm16Shifted::maybe_from_u64(0xffff_0000).unwrap(),
         },
         "A58AFFFF",
-        "oilh %r8, %r8, 65535",
+        "oilh %r8, 65535",
     ));
     insns.push((
         Inst::AluRUImm16Shifted {
@@ -1431,7 +1431,7 @@ fn test_s390x_binemit() {
             imm: UImm16Shifted::maybe_from_u64(0x0000_0000_0000_ffff).unwrap(),
         },
         "A58BFFFF",
-        "oill %r8, %r8, 65535",
+        "oill %r8, 65535",
     ));
     insns.push((
         Inst::AluRUImm16Shifted {
@@ -1441,7 +1441,7 @@ fn test_s390x_binemit() {
             imm: UImm16Shifted::maybe_from_u64(0x0000_0000_ffff_0000).unwrap(),
         },
         "A58AFFFF",
-        "oilh %r8, %r8, 65535",
+        "oilh %r8, 65535",
     ));
     insns.push((
         Inst::AluRUImm16Shifted {
@@ -1451,7 +1451,7 @@ fn test_s390x_binemit() {
             imm: UImm16Shifted::maybe_from_u64(0x0000_ffff_0000_0000).unwrap(),
         },
         "A589FFFF",
-        "oihl %r8, %r8, 65535",
+        "oihl %r8, 65535",
     ));
     insns.push((
         Inst::AluRUImm16Shifted {
@@ -1461,7 +1461,7 @@ fn test_s390x_binemit() {
             imm: UImm16Shifted::maybe_from_u64(0xffff_0000_0000_0000).unwrap(),
         },
         "A588FFFF",
-        "oihh %r8, %r8, 65535",
+        "oihh %r8, 65535",
     ));
 
     insns.push((
@@ -1472,7 +1472,7 @@ fn test_s390x_binemit() {
             imm: UImm32Shifted::maybe_from_u64(0xffff_ffff).unwrap(),
         },
         "C08BFFFFFFFF",
-        "nilf %r8, %r8, 4294967295",
+        "nilf %r8, 4294967295",
     ));
     insns.push((
         Inst::AluRUImm32Shifted {
@@ -1482,7 +1482,7 @@ fn test_s390x_binemit() {
             imm: UImm32Shifted::maybe_from_u64(0x0000_0000_ffff_ffff).unwrap(),
         },
         "C08BFFFFFFFF",
-        "nilf %r8, %r8, 4294967295",
+        "nilf %r8, 4294967295",
     ));
     insns.push((
         Inst::AluRUImm32Shifted {
@@ -1492,7 +1492,7 @@ fn test_s390x_binemit() {
             imm: UImm32Shifted::maybe_from_u64(0xffff_ffff_0000_0000).unwrap(),
         },
         "C08AFFFFFFFF",
-        "nihf %r8, %r8, 4294967295",
+        "nihf %r8, 4294967295",
     ));
     insns.push((
         Inst::AluRUImm32Shifted {
@@ -1502,7 +1502,7 @@ fn test_s390x_binemit() {
             imm: UImm32Shifted::maybe_from_u64(0xffff_ffff).unwrap(),
         },
         "C08DFFFFFFFF",
-        "oilf %r8, %r8, 4294967295",
+        "oilf %r8, 4294967295",
     ));
     insns.push((
         Inst::AluRUImm32Shifted {
@@ -1512,7 +1512,7 @@ fn test_s390x_binemit() {
             imm: UImm32Shifted::maybe_from_u64(0x0000_0000_ffff_ffff).unwrap(),
         },
         "C08DFFFFFFFF",
-        "oilf %r8, %r8, 4294967295",
+        "oilf %r8, 4294967295",
     ));
     insns.push((
         Inst::AluRUImm32Shifted {
@@ -1522,7 +1522,7 @@ fn test_s390x_binemit() {
             imm: UImm32Shifted::maybe_from_u64(0xffff_ffff_0000_0000).unwrap(),
         },
         "C08CFFFFFFFF",
-        "oihf %r8, %r8, 4294967295",
+        "oihf %r8, 4294967295",
     ));
     insns.push((
         Inst::AluRUImm32Shifted {
@@ -1532,7 +1532,7 @@ fn test_s390x_binemit() {
             imm: UImm32Shifted::maybe_from_u64(0xffff_ffff).unwrap(),
         },
         "C087FFFFFFFF",
-        "xilf %r8, %r8, 4294967295",
+        "xilf %r8, 4294967295",
     ));
     insns.push((
         Inst::AluRUImm32Shifted {
@@ -1542,7 +1542,7 @@ fn test_s390x_binemit() {
             imm: UImm32Shifted::maybe_from_u64(0x0000_0000_ffff_ffff).unwrap(),
         },
         "C087FFFFFFFF",
-        "xilf %r8, %r8, 4294967295",
+        "xilf %r8, 4294967295",
     ));
     insns.push((
         Inst::AluRUImm32Shifted {
@@ -1552,7 +1552,7 @@ fn test_s390x_binemit() {
             imm: UImm32Shifted::maybe_from_u64(0xffff_ffff_0000_0000).unwrap(),
         },
         "C086FFFFFFFF",
-        "xihf %r8, %r8, 4294967295",
+        "xihf %r8, 4294967295",
     ));
 
     insns.push((

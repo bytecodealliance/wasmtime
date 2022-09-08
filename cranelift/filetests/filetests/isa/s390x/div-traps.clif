@@ -17,7 +17,7 @@ block0(v0: i64, v1: i64):
 ;   cgite %r3, 0
 ;   llihf %r4, 2147483647
 ;   iilf %r4, 4294967295
-;   xgr %r4, %r4, %r1
+;   xgr %r4, %r1
 ;   ngrk %r5, %r4, %r3
 ;   cgite %r5, -1
 ;   dsgr %r0, %r3

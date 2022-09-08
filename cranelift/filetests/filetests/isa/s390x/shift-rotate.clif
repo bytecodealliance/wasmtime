@@ -139,8 +139,8 @@ block0(v0: i16, v1: i128):
 ;   llhr %r3, %r2
 ;   vlgvg %r4, %v1, 1
 ;   lcr %r5, %r4
-;   nill %r4, %r4, 15
-;   nill %r5, %r5, 15
+;   nill %r4, 15
+;   nill %r5, 15
 ;   sllk %r5, %r3, 0(%r5)
 ;   srlk %r3, %r3, 0(%r4)
 ;   ork %r2, %r5, %r3
@@ -155,8 +155,8 @@ block0(v0: i16, v1: i16):
 ; block0:
 ;   llhr %r2, %r2
 ;   lcr %r4, %r3
-;   nill %r3, %r3, 15
-;   nill %r4, %r4, 15
+;   nill %r3, 15
+;   nill %r4, 15
 ;   sllk %r4, %r2, 0(%r4)
 ;   srlk %r5, %r2, 0(%r3)
 ;   ork %r2, %r4, %r5
@@ -187,8 +187,8 @@ block0(v0: i8, v1: i128):
 ;   llcr %r3, %r2
 ;   vlgvg %r4, %v1, 1
 ;   lcr %r5, %r4
-;   nill %r4, %r4, 7
-;   nill %r5, %r5, 7
+;   nill %r4, 7
+;   nill %r5, 7
 ;   sllk %r5, %r3, 0(%r5)
 ;   srlk %r3, %r3, 0(%r4)
 ;   ork %r2, %r5, %r3
@@ -203,8 +203,8 @@ block0(v0: i8, v1: i8):
 ; block0:
 ;   llcr %r2, %r2
 ;   lcr %r4, %r3
-;   nill %r3, %r3, 7
-;   nill %r4, %r4, 7
+;   nill %r3, 7
+;   nill %r4, 7
 ;   sllk %r4, %r2, 0(%r4)
 ;   srlk %r5, %r2, 0(%r3)
 ;   ork %r2, %r4, %r5
@@ -358,11 +358,11 @@ block0(v0: i16, v1: i128):
 ;   llhr %r3, %r2
 ;   vlgvg %r4, %v1, 1
 ;   lcr %r5, %r4
-;   nill %r4, %r4, 15
-;   nill %r5, %r5, 15
+;   nill %r4, 15
+;   nill %r5, 15
 ;   sllk %r2, %r3, 0(%r4)
 ;   srlk %r3, %r3, 0(%r5)
-;   or %r2, %r2, %r3
+;   or %r2, %r3
 ;   br %r14
 
 function %rotl_i16_reg(i16, i16) -> i16 {
@@ -374,8 +374,8 @@ block0(v0: i16, v1: i16):
 ; block0:
 ;   llhr %r2, %r2
 ;   lcr %r4, %r3
-;   nill %r3, %r3, 15
-;   nill %r4, %r4, 15
+;   nill %r3, 15
+;   nill %r4, 15
 ;   sllk %r3, %r2, 0(%r3)
 ;   srlk %r4, %r2, 0(%r4)
 ;   ork %r2, %r3, %r4
@@ -406,11 +406,11 @@ block0(v0: i8, v1: i128):
 ;   llcr %r3, %r2
 ;   vlgvg %r4, %v1, 1
 ;   lcr %r5, %r4
-;   nill %r4, %r4, 7
-;   nill %r5, %r5, 7
+;   nill %r4, 7
+;   nill %r5, 7
 ;   sllk %r2, %r3, 0(%r4)
 ;   srlk %r3, %r3, 0(%r5)
-;   or %r2, %r2, %r3
+;   or %r2, %r3
 ;   br %r14
 
 function %rotl_i8_reg(i8, i8) -> i8 {
@@ -422,8 +422,8 @@ block0(v0: i8, v1: i8):
 ; block0:
 ;   llcr %r2, %r2
 ;   lcr %r4, %r3
-;   nill %r3, %r3, 7
-;   nill %r4, %r4, 7
+;   nill %r3, 7
+;   nill %r4, 7
 ;   sllk %r3, %r2, 0(%r3)
 ;   srlk %r4, %r2, 0(%r4)
 ;   ork %r2, %r3, %r4
@@ -530,7 +530,7 @@ block0(v0: i32, v1: i128):
 ; block0:
 ;   vl %v1, 0(%r3)
 ;   vlgvg %r4, %v1, 1
-;   nill %r4, %r4, 31
+;   nill %r4, 31
 ;   srlk %r2, %r2, 0(%r4)
 ;   br %r14
 
@@ -541,7 +541,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   nill %r3, %r3, 31
+;   nill %r3, 31
 ;   srlk %r2, %r2, 0(%r3)
 ;   br %r14
 
@@ -566,7 +566,7 @@ block0(v0: i16, v1: i128):
 ;   vl %v1, 0(%r3)
 ;   llhr %r3, %r2
 ;   vlgvg %r2, %v1, 1
-;   nill %r2, %r2, 15
+;   nill %r2, 15
 ;   srlk %r2, %r3, 0(%r2)
 ;   br %r14
 
@@ -578,7 +578,7 @@ block0(v0: i16, v1: i16):
 
 ; block0:
 ;   llhr %r2, %r2
-;   nill %r3, %r3, 15
+;   nill %r3, 15
 ;   srlk %r2, %r2, 0(%r3)
 ;   br %r14
 
@@ -604,7 +604,7 @@ block0(v0: i8, v1: i128):
 ;   vl %v1, 0(%r3)
 ;   llcr %r3, %r2
 ;   vlgvg %r2, %v1, 1
-;   nill %r2, %r2, 7
+;   nill %r2, 7
 ;   srlk %r2, %r3, 0(%r2)
 ;   br %r14
 
@@ -616,7 +616,7 @@ block0(v0: i8, v1: i8):
 
 ; block0:
 ;   llcr %r2, %r2
-;   nill %r3, %r3, 7
+;   nill %r3, 7
 ;   srlk %r2, %r2, 0(%r3)
 ;   br %r14
 
@@ -719,7 +719,7 @@ block0(v0: i32, v1: i128):
 ; block0:
 ;   vl %v1, 0(%r3)
 ;   vlgvg %r4, %v1, 1
-;   nill %r4, %r4, 31
+;   nill %r4, 31
 ;   sllk %r2, %r2, 0(%r4)
 ;   br %r14
 
@@ -730,7 +730,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   nill %r3, %r3, 31
+;   nill %r3, 31
 ;   sllk %r2, %r2, 0(%r3)
 ;   br %r14
 
@@ -754,7 +754,7 @@ block0(v0: i16, v1: i128):
 ; block0:
 ;   vl %v1, 0(%r3)
 ;   vlgvg %r4, %v1, 1
-;   nill %r4, %r4, 15
+;   nill %r4, 15
 ;   sllk %r2, %r2, 0(%r4)
 ;   br %r14
 
@@ -765,7 +765,7 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   nill %r3, %r3, 15
+;   nill %r3, 15
 ;   sllk %r2, %r2, 0(%r3)
 ;   br %r14
 
@@ -789,7 +789,7 @@ block0(v0: i8, v1: i128):
 ; block0:
 ;   vl %v1, 0(%r3)
 ;   vlgvg %r4, %v1, 1
-;   nill %r4, %r4, 7
+;   nill %r4, 7
 ;   sllk %r2, %r2, 0(%r4)
 ;   br %r14
 
@@ -800,7 +800,7 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   nill %r3, %r3, 7
+;   nill %r3, 7
 ;   sllk %r2, %r2, 0(%r3)
 ;   br %r14
 
@@ -902,7 +902,7 @@ block0(v0: i32, v1: i128):
 ; block0:
 ;   vl %v1, 0(%r3)
 ;   vlgvg %r4, %v1, 1
-;   nill %r4, %r4, 31
+;   nill %r4, 31
 ;   srak %r2, %r2, 0(%r4)
 ;   br %r14
 
@@ -913,7 +913,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   nill %r3, %r3, 31
+;   nill %r3, 31
 ;   srak %r2, %r2, 0(%r3)
 ;   br %r14
 
@@ -938,7 +938,7 @@ block0(v0: i16, v1: i128):
 ;   vl %v1, 0(%r3)
 ;   lhr %r3, %r2
 ;   vlgvg %r2, %v1, 1
-;   nill %r2, %r2, 15
+;   nill %r2, 15
 ;   srak %r2, %r3, 0(%r2)
 ;   br %r14
 
@@ -950,7 +950,7 @@ block0(v0: i16, v1: i16):
 
 ; block0:
 ;   lhr %r2, %r2
-;   nill %r3, %r3, 15
+;   nill %r3, 15
 ;   srak %r2, %r2, 0(%r3)
 ;   br %r14
 
@@ -976,7 +976,7 @@ block0(v0: i8, v1: i128):
 ;   vl %v1, 0(%r3)
 ;   lbr %r3, %r2
 ;   vlgvg %r2, %v1, 1
-;   nill %r2, %r2, 7
+;   nill %r2, 7
 ;   srak %r2, %r3, 0(%r2)
 ;   br %r14
 
@@ -988,7 +988,7 @@ block0(v0: i8, v1: i8):
 
 ; block0:
 ;   lbr %r2, %r2
-;   nill %r3, %r3, 7
+;   nill %r3, 7
 ;   srak %r2, %r2, 0(%r3)
 ;   br %r14
 
