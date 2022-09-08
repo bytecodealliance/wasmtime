@@ -31,7 +31,7 @@ use crate::{
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::unwind::UnwindInst,
     machinst::{
-        abi::ArgInfo, ty_bits, InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData,
+        abi::ArgPair, ty_bits, InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData,
     },
 };
 use regalloc2::PReg;
@@ -45,7 +45,7 @@ type BoxCallIndInfo = Box<CallIndInfo>;
 type VecMachLabel = Vec<MachLabel>;
 type BoxJTSequenceInfo = Box<JTSequenceInfo>;
 type BoxExternalName = Box<ExternalName>;
-type BoxArgInfo = Box<ArgInfo>;
+type VecArgPair = Vec<ArgPair>;
 
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(

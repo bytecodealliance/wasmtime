@@ -297,12 +297,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
     }
 
-    fn gen_args(
-        _isa_flags: &x64_settings::Flags,
-        defs: Vec<Writable<Reg>>,
-        pregs: Vec<Reg>,
-    ) -> Inst {
-        let args = Box::new(ArgInfo { defs, pregs });
+    fn gen_args(_isa_flags: &x64_settings::Flags, args: Vec<ArgPair>) -> Inst {
         Inst::Args { args }
     }
 

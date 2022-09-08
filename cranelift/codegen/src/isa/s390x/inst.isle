@@ -863,7 +863,7 @@
     
     ;; A pseudo-instruction that captures register arguments in vregs.
     (Args
-      (args BoxArgInfo))
+      (args VecArgPair))
 
     ;; ---- branches (exactly one must appear at end of BB) ----
 

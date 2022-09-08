@@ -617,8 +617,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 self.emit(insn);
             }
 
-            // The below must come first. Finish the current "IR inst"
-            // and continue the scan backward.
+            // The `args` instruction below must come first. Finish the
+            // current "IR inst" and continue the scan backward.
             self.finish_ir_inst(Default::default());
 
             if let Some(insn) = self.vcode.vcode.abi.take_args() {

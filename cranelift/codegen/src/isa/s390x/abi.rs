@@ -82,7 +82,6 @@ use crate::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use regalloc2::{PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
-use std::boxed::Box;
 use std::convert::TryFrom;
 
 // We use a generic implementation that factors out ABI commonalities.
@@ -460,12 +459,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
     }
 
-    fn gen_args(
-        _isa_flags: &s390x_settings::Flags,
-        defs: Vec<Writable<Reg>>,
-        pregs: Vec<Reg>,
-    ) -> Inst {
-        let args = Box::new(ArgInfo { defs, pregs });
+    fn gen_args(_isa_flags: &s390x_settings::Flags, args: Vec<ArgPair>) -> Inst {
         Inst::Args { args }
     }
 

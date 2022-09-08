@@ -937,8 +937,8 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_clobbers(info.clobbers);
         }
         &Inst::Args { ref args } => {
-            for (&def, &preg) in args.defs.iter().zip(args.pregs.iter()) {
-                collector.reg_fixed_def(def, preg);
+            for arg in args {
+                collector.reg_fixed_def(arg.vreg, arg.preg);
             }
         }
         &Inst::Ret { link, ref rets } => {
@@ -3085,10 +3085,10 @@ impl Inst {
             }
             &Inst::Args { ref args } => {
                 let mut s = "args".to_string();
-                for (&def, &preg) in args.defs.iter().zip(args.pregs.iter()) {
+                for arg in args {
                     use std::fmt::Write;
-                    let preg = pretty_print_reg(preg, &mut empty_allocs);
-                    let def = pretty_print_reg(def.to_reg(), allocs);
+                    let preg = pretty_print_reg(arg.preg, &mut empty_allocs);
+                    let def = pretty_print_reg(arg.vreg.to_reg(), allocs);
                     write!(&mut s, " {}={}", def, preg).unwrap();
                 }
                 s

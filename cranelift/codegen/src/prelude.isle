@@ -212,7 +212,7 @@
 (type ExternalName (primitive ExternalName))
 (type BoxExternalName (primitive BoxExternalName))
 (type RelocDistance (primitive RelocDistance))
-(type BoxArgInfo extern (enum))
+(type VecArgPair extern (enum))
 
 ;;;; Primitive Type Conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -124,15 +124,15 @@ use std::mem;
 /// a small fixed sequence implementing one operation.
 pub type SmallInstVec<I> = SmallVec<[I; 4]>;
 
-/// A type used by backends to track argument-binding info in the
-/// "args" pseudoinst.
+/// A type used by backends to track argument-binding info in the "args"
+/// pseudoinst. The pseudoinst holds a vec of `ArgPair` structs.
 #[derive(Clone, Debug)]
-pub struct ArgInfo {
-    /// vregs that are defined at the top of the function with
-    /// register-argument values.
-    pub defs: Vec<Writable<Reg>>,
-    /// pregs that constrain these vregs to ABI-defined locations.
-    pub pregs: Vec<Reg>,
+pub struct ArgPair {
+    /// The vreg that is defined by this args pseudoinst.
+    pub vreg: Writable<Reg>,
+    /// The preg that the arg arrives in; this constrains the vreg's
+    /// placement at the pseudoinst.
+    pub preg: Reg,
 }
 
 /// A location for (part of) an argument or return value. These "storage slots"
@@ -372,7 +372,7 @@ pub trait ABIMachineSpec {
 
     /// Generate an "args" pseudo-instruction to capture input args in
     /// registers.
-    fn gen_args(isa_flags: &Self::F, defs: Vec<Writable<Reg>>, pregs: Vec<Reg>) -> Self::I;
+    fn gen_args(isa_flags: &Self::F, args: Vec<ArgPair>) -> Self::I;
 
     /// Generate a return instruction.
     fn gen_ret(setup_frame: bool, isa_flags: &Self::F, rets: Vec<Reg>) -> Self::I;
@@ -866,10 +866,9 @@ pub struct Callee<M: ABIMachineSpec> {
     stackslots_size: u32,
     /// Stack size to be reserved for outgoing arguments.
     outgoing_args_size: u32,
-    /// Register-argument defs, to be provided to the `args` pseudo-inst.
-    reg_arg_defs: Vec<Writable<Reg>>,
-    /// Register-argument pregs, to be used as constraints on the `args` pseudo-inst.
-    reg_arg_pregs: Vec<Reg>,
+    /// Register-argument defs, to be provided to the `args`
+    /// pseudo-inst, and pregs to constrain them to.
+    reg_args: Vec<ArgPair>,
     /// Clobbered registers, from regalloc.
     clobbered: Vec<Writable<RealReg>>,
     /// Total number of spillslots, including for 'dynamic' types, from regalloc.
@@ -1026,8 +1025,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             sized_stackslots,
             stackslots_size,
             outgoing_args_size: 0,
-            reg_arg_defs: vec![],
-            reg_arg_pregs: vec![],
+            reg_args: vec![],
             clobbered: vec![],
             spillslots: None,
             fixed_frame_storage_size: 0,
@@ -1308,8 +1306,11 @@ impl<M: ABIMachineSpec> Callee<M> {
                     // instruction.  Extension mode doesn't matter
                     // (we're copying out, not in; we ignore high bits
                     // by convention).
-                    self.reg_arg_defs.push(*into_reg);
-                    self.reg_arg_pregs.push(reg.into());
+                    let arg = ArgPair {
+                        vreg: *into_reg,
+                        preg: reg.into(),
+                    };
+                    self.reg_args.push(arg);
                 }
                 &ABIArgSlot::Stack {
                     offset,
@@ -1596,15 +1597,14 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// Get an `args` pseudo-inst, if any, that should appear at the
     /// very top of the function body prior to regalloc.
     pub fn take_args(&mut self) -> Option<M::I> {
-        if self.reg_arg_defs.len() > 0 {
+        if self.reg_args.len() > 0 {
             // Very first instruction is an `args` pseudo-inst that
             // establishes live-ranges for in-register arguments and
             // constrains them at the start of the function to the
             // locations defined by the ABI.
             Some(M::gen_args(
                 &self.isa_flags,
-                std::mem::take(&mut self.reg_arg_defs),
-                std::mem::take(&mut self.reg_arg_pregs),
+                std::mem::take(&mut self.reg_args),
             ))
         } else {
             None

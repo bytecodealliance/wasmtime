@@ -387,12 +387,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
     }
 
-    fn gen_args(
-        _isa_flags: &aarch64_settings::Flags,
-        defs: Vec<Writable<Reg>>,
-        pregs: Vec<Reg>,
-    ) -> Inst {
-        let args = Box::new(ArgInfo { defs, pregs });
+    fn gen_args(_isa_flags: &aarch64_settings::Flags, args: Vec<ArgPair>) -> Inst {
         Inst::Args { args }
     }
 
