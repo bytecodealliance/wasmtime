@@ -82,6 +82,9 @@ block0(v0: i64, v1: i32):
 ; block2:
 ;   ud2 heap_oob
 
+;; When a static memory is the "right" size (4GB memory, 2GB guard regions), the
+;; Spectre mitigation is not present. Cranelift relies on the memory permissions
+;; and emits no bounds checking, simply `add`--a single instruction.
 function %f(i64 vmctx, i32) -> i64 system_v {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+0

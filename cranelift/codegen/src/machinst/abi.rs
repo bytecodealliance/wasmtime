@@ -1501,17 +1501,14 @@ impl<M: ABIMachineSpec> Callee<M> {
         if let Some(i) = sigs[self.sig].stack_ret_arg {
             let insts =
                 self.gen_copy_arg_to_regs(sigs, i, ValueRegs::one(self.ret_area_ptr.unwrap()));
-            if insts.is_empty() {
-                None
-            } else {
-                let inst = insts.into_iter().next().unwrap();
+            insts.into_iter().next().map(|inst| {
                 trace!(
                     "gen_retval_area_setup: inst {:?}; ptr reg is {:?}",
                     inst,
                     self.ret_area_ptr.unwrap().to_reg()
                 );
-                Some(inst)
-            }
+                inst
+            })
         } else {
             trace!("gen_retval_area_setup: not needed");
             None

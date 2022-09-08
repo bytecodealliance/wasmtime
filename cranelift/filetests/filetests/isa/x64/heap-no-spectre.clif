@@ -34,6 +34,9 @@ block0(v0: i32, v1: i64):
 ; block2:
 ;   ud2 heap_oob
 
+;; For a static memory with no Spectre mitigations, we observe a smaller amount
+;; of bounds checking: the offset check (`cmp + jbe + j`) and the offset
+;; calculation (`add`)--4 instructions.
 function %f(i64 vmctx, i32) -> i64 system_v {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+0
