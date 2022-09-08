@@ -16,7 +16,7 @@ pub struct CodegenOptions {
     /// source. Useful if it must be include!()'d elsewhere.
     pub exclude_global_allow_pragmas: bool,
 
-    /// Include `log::trace!` calls at match failure sites.
+    /// Include `trace!` calls at match failure sites.
     pub match_failure_tracing: bool,
 }
 
@@ -94,6 +94,10 @@ impl<'a> Codegen<'a> {
         }
 
         writeln!(code, "\nuse super::*;  // Pulls in all external types.").unwrap();
+
+        if options.match_failure_tracing {
+            writeln!(code, "\nuse crate::trace;  // For logging match failures.").unwrap();
+        }
     }
 
     fn generate_trait_sig(&self, code: &mut String, indent: &str, sig: &ExternalSig) {
@@ -329,7 +333,7 @@ impl<'a> Codegen<'a> {
                 if options.match_failure_tracing {
                     writeln!(
                         code,
-                        "    log::trace!(\"Failed to match any rule for `{}`\");",
+                        "    trace!(\"Failed to match any rule for `{}`\");",
                         sig.func_name
                     )
                     .unwrap();
