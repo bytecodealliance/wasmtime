@@ -1408,7 +1408,33 @@ impl LowerBackend for AArch64Backend {
         branches: &[IRInst],
         targets: &[MachLabel],
     ) -> CodegenResult<()> {
-        lower_inst::lower_branch(ctx, branches, targets)
+        // A block should end with at most two branches. The first may be a
+        // conditional branch; a conditional branch can be followed only by an
+        // unconditional branch or fallthrough. Otherwise, if only one branch,
+        // it may be an unconditional branch, a fallthrough, a return, or a
+        // trap. These conditions are verified by `is_ebb_basic()` during the
+        // verifier pass.
+        assert!(branches.len() <= 2);
+        if branches.len() == 2 {
+            let op1 = ctx.data(branches[1]).opcode();
+            assert!(op1 == Opcode::Jump);
+        }
+
+        if let Ok(()) = super::lower::isle::lower_branch(
+            ctx,
+            &self.triple,
+            &self.flags,
+            &self.isa_flags,
+            branches[0],
+            targets,
+        ) {
+            return Ok(());
+        }
+
+        unreachable!(
+            "implemented in ISLE: branch = `{}`",
+            ctx.dfg().display_inst(branches[0]),
+        );
     }
 
     fn maybe_pinned_reg(&self) -> Option<Reg> {

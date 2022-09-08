@@ -1619,6 +1619,18 @@
 (decl u64_into_imm_logic (Type u64) ImmLogic)
 (extern constructor u64_into_imm_logic u64_into_imm_logic)
 
+(decl branch_target (VecMachLabel u8) BranchTarget)
+(extern constructor branch_target branch_target)
+
+(decl targets_jt_size (VecMachLabel) u32)
+(extern constructor targets_jt_size targets_jt_size)
+
+(decl targets_jt_space (VecMachLabel) CodeOffset)
+(extern constructor targets_jt_space targets_jt_space)
+
+(decl targets_jt_info (VecMachLabel) BoxJTSequenceInfo)
+(extern constructor targets_jt_info targets_jt_info)
+
 ;; Calculate the minimum floating-point bound for a conversion to floating
 ;; point from an integer type.
 ;; Accepts whether the output is signed, the size of the input
@@ -1697,6 +1709,9 @@
 
 (decl cond_br_zero (Reg) CondBrKind)
 (extern constructor cond_br_zero cond_br_zero)
+
+(decl cond_br_not_zero (Reg) CondBrKind)
+(extern constructor cond_br_not_zero cond_br_not_zero)
 
 (decl cond_br_cond (Cond) CondBrKind)
 (extern constructor cond_br_cond cond_br_cond)
@@ -2893,6 +2908,11 @@
 ;; TODO: Port lower_condcode() to ISLE.
 (extern constructor cond_code cond_code)
 
+;; Invert a condition code.
+(decl invert_cond (Cond) Cond)
+;; TODO: Port cond.invert() to ISLE.
+(extern constructor invert_cond invert_cond)
+
 ;; Generate comparison to zero operator from input condition code
 (decl float_cc_cmp_zero_to_vec_misc_op (FloatCC) VecMisc2)
 (extern constructor float_cc_cmp_zero_to_vec_misc_op float_cc_cmp_zero_to_vec_misc_op)
@@ -3530,3 +3550,65 @@
 (rule (lower_select flags cond ty rn rm)
       (if (ty_int_bool_ref_scalar_64 ty))
       (with_flags flags (csel cond rn rm)))
+
+;; Helper for emitting `MInst.Jump` instructions.
+(decl aarch64_jump (BranchTarget) SideEffectNoResult)
+(rule (aarch64_jump target)
+      (SideEffectNoResult.Inst (MInst.Jump target)))
+
+;; Helper for emitting `MInst.JTSequence` instructions.
+;; Emit the compound instruction that does:
+;;
+;; b.hs default
+;; csel rB, xzr, rIndex, hs
+;; csdb
+;; adr rA, jt
+;; ldrsw rB, [rA, rB, uxtw #2]
+;; add rA, rA, rB
+;; br rA
+;; [jt entries]
+;;
+;; This must be *one* instruction in the vcode because
+;; we cannot allow regalloc to insert any spills/fills
+;; in the middle of the sequence; otherwise, the ADR's
+;; PC-rel offset to the jumptable would be incorrect.
+;; (The alternative is to introduce a relocation pass
+;; for inlined jumptables, which is much worse, IMHO.)
+(decl jt_sequence (Reg BoxJTSequenceInfo) ConsumesFlags)
+(rule (jt_sequence ridx info)
+      (let ((rtmp1 WritableReg (temp_writable_reg $I64))
+            (rtmp2 WritableReg (temp_writable_reg $I64)))
+       (ConsumesFlags.ConsumesFlagsSideEffect
+        (MInst.JTSequence info ridx rtmp1 rtmp2))))
+
+;; Helper for emitting `MInst.CondBr` instructions.
+(decl cond_br (BranchTarget BranchTarget CondBrKind) ConsumesFlags)
+(rule (cond_br taken not_taken kind)
+      (ConsumesFlags.ConsumesFlagsSideEffect
+       (MInst.CondBr taken not_taken kind)))
+
+;; Helper for emitting `MInst.MovToNZCV` instructions.
+(decl mov_to_nzcv (Reg) ProducesFlags)
+(rule (mov_to_nzcv rn)
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.MovToNZCV rn)))
+
+;; Helper for emitting `MInst.EmitIsland` instructions.
+(decl emit_island (CodeOffset) SideEffectNoResult)
+(rule (emit_island needed_space)
+      (SideEffectNoResult.Inst
+       (MInst.EmitIsland needed_space)))
+
+;; Helper for emitting `br_table` sequences.
+(decl br_table_impl (u64 Reg VecMachLabel) InstOutput)
+(rule (br_table_impl (imm12_from_u64 jt_size) ridx targets)
+      (let ((jt_info BoxJTSequenceInfo (targets_jt_info targets)))
+       (side_effect (with_flags_side_effect
+            (cmp_imm (OperandSize.Size32) ridx jt_size)
+            (jt_sequence ridx jt_info)))))
+(rule -1 (br_table_impl jt_size ridx targets)
+      (let ((jt_size Reg (imm $I64 (ImmExtend.Zero) jt_size))
+            (jt_info BoxJTSequenceInfo (targets_jt_info targets)))
+       (side_effect (with_flags_side_effect
+            (cmp (OperandSize.Size32) ridx jt_size)
+            (jt_sequence ridx jt_info)))))
