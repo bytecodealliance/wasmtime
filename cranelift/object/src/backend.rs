@@ -32,7 +32,6 @@ pub struct ObjectBuilder {
     endian: object::Endianness,
     name: Vec<u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
-    function_alignment: u64,
     per_function_section: bool,
 }
 
@@ -92,15 +91,8 @@ impl ObjectBuilder {
             endian,
             name: name.into(),
             libcall_names,
-            function_alignment: 1,
             per_function_section: false,
         })
-    }
-
-    /// Set the alignment used for functions.
-    pub fn function_alignment(&mut self, alignment: u64) -> &mut Self {
-        self.function_alignment = alignment;
-        self
     }
 
     /// Set if every function should end up in their own section.
@@ -123,7 +115,6 @@ pub struct ObjectModule {
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     known_symbols: HashMap<ir::KnownSymbol, SymbolId>,
-    function_alignment: u64,
     per_function_section: bool,
     anon_func_number: u64,
     anon_data_number: u64,
@@ -144,7 +135,6 @@ impl ObjectModule {
             libcalls: HashMap::new(),
             libcall_names: builder.libcall_names,
             known_symbols: HashMap::new(),
-            function_alignment: builder.function_alignment,
             per_function_section: builder.per_function_section,
             anon_func_number: 0,
             anon_data_number: 0,
@@ -351,10 +341,7 @@ impl Module for ObjectModule {
         }
         *defined = true;
 
-        let align = self
-            .function_alignment
-            .max(self.isa.symbol_alignment())
-            .max(alignment);
+        let align = alignment.max(self.isa.symbol_alignment());
         let (section, offset) = if self.per_function_section {
             let symbol_name = self.object.symbol(symbol).name.clone();
             let (section, offset) =
