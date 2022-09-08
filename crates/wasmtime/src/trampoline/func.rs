@@ -118,7 +118,7 @@ where
     // Copy the results of JIT compilation into executable memory, and this will
     // also take care of unwind table registration.
     let mut code_memory = CodeMemory::new(obj);
-    let code = code_memory.publish()?;
+    let code = code_memory.publish(engine.compiler().is_branch_protection_enabled())?;
 
     register_trampolines(engine.profiler(), &code.obj);
 

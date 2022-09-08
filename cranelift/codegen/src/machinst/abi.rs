@@ -286,7 +286,12 @@ impl StackAMode {
 }
 
 /// Trait implemented by machine-specific backend to represent ISA flags.
-pub trait IsaFlags: Clone {}
+pub trait IsaFlags: Clone {
+    /// Get a flag indicating whether forward-edge CFI is enabled.
+    fn is_forward_edge_cfi_enabled(&self) -> bool {
+        false
+    }
+}
 
 /// Trait implemented by machine-specific backend to provide information about
 /// register assignments and to allow generating the specific instructions for
@@ -1254,6 +1259,10 @@ impl<M: ABIMachineSpec> Callee<M> {
         if size > self.outgoing_args_size {
             self.outgoing_args_size = size;
         }
+    }
+
+    pub fn is_forward_edge_cfi_enabled(&self) -> bool {
+        self.isa_flags.is_forward_edge_cfi_enabled()
     }
 
     /// Get the calling convention implemented by this ABI object.

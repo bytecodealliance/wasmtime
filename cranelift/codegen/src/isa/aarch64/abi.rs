@@ -67,7 +67,11 @@ fn saved_reg_stack_size(
 /// point for the trait; it is never actually instantiated.
 pub struct AArch64MachineDeps;
 
-impl IsaFlags for aarch64_settings::Flags {}
+impl IsaFlags for aarch64_settings::Flags {
+    fn is_forward_edge_cfi_enabled(&self) -> bool {
+        self.use_bti()
+    }
+}
 
 impl ABIMachineSpec for AArch64MachineDeps {
     type I = Inst;
@@ -549,13 +553,21 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     },
                 });
             }
-        } else if flags.unwind_info() && call_conv.extends_apple_aarch64() {
-            // The macOS unwinder seems to require this.
-            insts.push(Inst::Unwind {
-                inst: UnwindInst::Aarch64SetPointerAuth {
-                    return_addresses: false,
-                },
-            });
+        } else {
+            if isa_flags.use_bti() {
+                insts.push(Inst::Bti {
+                    targets: BranchTargetType::C,
+                });
+            }
+
+            if flags.unwind_info() && call_conv.extends_apple_aarch64() {
+                // The macOS unwinder seems to require this.
+                insts.push(Inst::Unwind {
+                    inst: UnwindInst::Aarch64SetPointerAuth {
+                        return_addresses: false,
+                    },
+                });
+            }
         }
 
         insts

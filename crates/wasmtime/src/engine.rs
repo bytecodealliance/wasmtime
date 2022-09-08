@@ -462,6 +462,9 @@ impl Engine {
                 "sign_return_address" => Some(true),
                 // No effect on its own.
                 "sign_return_address_with_bkey" => Some(true),
+                // The `BTI` instruction acts as a `NOP` when unsupported, so it
+                // is safe to enable it.
+                "use_bti" => Some(true),
                 // fall through to the very bottom to indicate that support is
                 // not enabled to test whether this feature is enabled on the
                 // host.

@@ -86,7 +86,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     fn use_lse(&mut self, _: Inst) -> Option<()> {
-        if self.isa_flags.use_lse() {
+        if self.isa_flags.has_lse() {
             Some(())
         } else {
             None
