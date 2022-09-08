@@ -20,9 +20,9 @@ October 20th. For more information see the [RFC on Wasmtime's 1.0
 release][rfc-1.0].
 
 [ba-blog]: https://bytecodealliance.org/articles/
-[ba-perf]: TODO
-[ba-security]: TODO
-[ba-1.0]: TODO
+[ba-perf]: https://bytecodealliance.org/articles/wasmtime-10-performance
+[ba-security]: https://bytecodealliance.org/articles/security-and-correctness-in-wasmtime
+[ba-1.0]: https://bytecodealliance.org/articles/wasmtime-1-0-fast-safe-and-now-production-ready.md
 [rfc-1.0]: https://github.com/bytecodealliance/rfcs/blob/main/accepted/wasmtime-one-dot-oh.md
 
 ### Added
@@ -65,7 +65,7 @@ release][rfc-1.0].
 * Back-edge CFI is now enabled by default on AArch64 macOS.
   [#4720](https://github.com/bytecodealliance/wasmtime/pull/4720)
 
-* WASI calls will no longer remove NOTCAPABLE in preparation for the removal of
+* WASI calls will no longer return NOTCAPABLE in preparation for the removal of
   the rights system from WASI.
   [#4666](https://github.com/bytecodealliance/wasmtime/pull/4666)
 
