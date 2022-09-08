@@ -26,7 +26,7 @@ in. *)
 open Wasm
 open Wasm.WasmRef_Isa_m.WasmRef_Isa
 
-let global_store : (unit s_m_ext) ref = ref (make_empty_store_m ());;
+type spec_instance = (unit module_export_ext list * ((unit s_m_ext) ref))
 
 (** Helper for converting the FFI values to their spec interpreter type. *)
 let convert_to_wasm (v: ffi_value) : v = match v with
@@ -53,17 +53,16 @@ let parse bytes =
 
 (** Construct an instance from a sequence of WebAssembly bytes. This clears the
 previous contents of the global store *)
-let instantiate_exn module_bytes =
+let instantiate_exn module_bytes : spec_instance =
   let s = (make_empty_store_m ()) in
   let module_ = parse module_bytes in
   let m_isa = Ast_convert.convert_module (module_.it) in
-  global_store := s;
   (match interp_instantiate_init_m s m_isa [] () with
-  | (s', (RI_res_m(inst,v_exps,_))) -> global_store := s'; v_exps
-  | (s', (RI_trap_m str)) -> global_store := s'; raise (Eval.Trap (Source.no_region, "(Isabelle) trap: " ^ str))
-  | (s', (RI_crash_m (Error_exhaustion str))) -> global_store := s'; raise (Eval.Exhaustion (Source.no_region, "(Isabelle) call stack exhausted"))
-  | (s', (RI_crash_m (Error_invalid str))) -> global_store := s'; raise (Eval.Crash (Source.no_region, "(Isabelle) error: " ^ str))
-  | (s', (RI_crash_m (Error_invariant str))) -> global_store := s'; raise (Eval.Crash (Source.no_region, "(Isabelle) error: " ^ str))
+  | (s', (RI_res_m(inst,v_exps,_))) -> (v_exps, ref s')
+  | (s', (RI_trap_m str)) -> raise (Eval.Trap (Source.no_region, "(Isabelle) trap: " ^ str))
+  | (s', (RI_crash_m (Error_exhaustion str))) -> raise (Eval.Exhaustion (Source.no_region, "(Isabelle) call stack exhausted"))
+  | (s', (RI_crash_m (Error_invalid str))) -> raise (Eval.Crash (Source.no_region, "(Isabelle) error: " ^ str))
+  | (s', (RI_crash_m (Error_invariant str))) -> raise (Eval.Crash (Source.no_region, "(Isabelle) error: " ^ str))
   )
 
 let instantiate module_bytes =
@@ -71,12 +70,13 @@ let instantiate module_bytes =
   | _ as e -> Error(Printexc.to_string e)
 
 (** Retrieve the value of an export by name from a WebAssembly instance. *)
-let export_exn (inst : unit module_export_ext list) (name : string) : ffi_export_value =
+let export_exn (inst_s : spec_instance) (name : string) : ffi_export_value =
+  let (inst, s_ref) = inst_s in
   match (e_desc (List.find (fun exp -> String.equal (e_name exp) name) inst)) with
     Ext_func _ -> raise Not_found
   | Ext_tab _ -> raise Not_found
-  | Ext_mem i -> Memory (fst (Array.get (mems (!global_store)) (Z.to_int (integer_of_nat i))))
-  | Ext_glob i -> Global (convert_from_wasm (g_val (Array.get (globs (!global_store)) (Z.to_int (integer_of_nat i)))))
+  | Ext_mem i -> Memory (fst (Array.get (mems (!s_ref)) (Z.to_int (integer_of_nat i))))
+  | Ext_glob i -> Global (convert_from_wasm (g_val (Array.get (globs (!s_ref)) (Z.to_int (integer_of_nat i)))))
 
 let export inst name =
   try Ok(export_exn inst name) with
@@ -104,21 +104,22 @@ let interpret_legacy module_bytes opt_params =
 
 (* process an optional list of params, generating default params if necessary *)
 (* TODO: this should be done in the Isabelle model *)
-let get_param_vs (vs_opt :(ffi_value list) option) i =
+let get_param_vs s_ref (vs_opt :(ffi_value list) option) i =
   (match vs_opt with
-   | None -> (match cl_m_type ((array_nth heap_cl_m (funcs !global_store) i) ()) with Tf (t1, _) -> map bitzero t1)
+   | None -> (match cl_m_type ((array_nth heap_cl_m (funcs !s_ref) i) ()) with Tf (t1, _) -> map bitzero t1)
    | Some vs -> List.map convert_to_wasm vs)
 
 (** Interpret the function exported at name. Use provided
 parameters if they exist, otherwise use default (zeroed) values. *)
-let interpret_exn (inst : unit module_export_ext list) (name : string) opt_params =
+let interpret_exn (inst_s : spec_instance) (name : string) opt_params =
   (let fuel = Z.of_string "4611686018427387904" in
    let max_call_depth = Z.of_string "300" in
+   let (inst, s_ref) = inst_s in
    match (e_desc (List.find (fun exp -> String.equal (e_name exp) name) inst)) with
    | Ext_func i ->
-       (let params = get_param_vs opt_params i in
-        let (s', res) = run_invoke_v_m (nat_of_integer fuel) (nat_of_integer max_call_depth) ((!global_store), (params, i)) () in
-        global_store := s';
+       (let params = get_param_vs s_ref opt_params i in
+        let (s', res) = run_invoke_v_m (nat_of_integer fuel) (nat_of_integer max_call_depth) ((!s_ref), (params, i)) () in
+        s_ref := s';
         (match res with
          | RValue vs_isa' -> List.rev_map convert_from_wasm vs_isa'
          | RTrap str -> raise (Eval.Trap (Source.no_region, "(Isabelle) trap: " ^ str))
