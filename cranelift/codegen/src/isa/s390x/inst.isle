@@ -2716,8 +2716,7 @@
 ;; Push a `MInst.AluRUImm32Shifted` instruction to a sequence.
 (decl push_alu_uimm32shifted (VecMInstBuilder ALUOp WritableReg Reg UImm32Shifted) Reg)
 (rule (push_alu_uimm32shifted ib op (real_reg dst) r imm)
-      (if (same_reg dst r))
-      (let ((_ Unit (inst_builder_push ib (MInst.AluRUImm32Shifted op dst dst imm))))
+      (let ((_ Unit (inst_builder_push ib (MInst.AluRUImm32Shifted op dst r imm))))
         dst))
 
 ;; Push a `MInst.ShiftRR` instruction to a sequence.

@@ -1429,7 +1429,7 @@ impl MachInstEmit for Inst {
                     let inst = Inst::AluRR {
                         alu_op,
                         rd,
-                        ri: rd.to_reg(),
+                        ri: rn,
                         rm,
                     };
                     inst.emit(&[], sink, emit_info, state);
@@ -1450,7 +1450,7 @@ impl MachInstEmit for Inst {
                     let inst = Inst::AluRSImm16 {
                         alu_op,
                         rd,
-                        ri: rd.to_reg(),
+                        ri: rn,
                         imm,
                     };
                     inst.emit(&[], sink, emit_info, state);
