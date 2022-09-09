@@ -1426,7 +1426,12 @@ impl MachInstEmit for Inst {
                     _ => unreachable!(),
                 };
                 if have_rr && rd.to_reg() == rn {
-                    let inst = Inst::AluRR { alu_op, rd, rm };
+                    let inst = Inst::AluRR {
+                        alu_op,
+                        rd,
+                        ri: rn,
+                        rm,
+                    };
                     inst.emit(&[], sink, emit_info, state);
                 } else {
                     put(sink, &enc_rrf_ab(opcode, rd.to_reg(), rn, rm, 0));
@@ -1442,7 +1447,12 @@ impl MachInstEmit for Inst {
                 let rn = allocs.next(rn);
 
                 if rd.to_reg() == rn {
-                    let inst = Inst::AluRSImm16 { alu_op, rd, imm };
+                    let inst = Inst::AluRSImm16 {
+                        alu_op,
+                        rd,
+                        ri: rn,
+                        imm,
+                    };
                     inst.emit(&[], sink, emit_info, state);
                 } else {
                     let opcode = match alu_op {
@@ -1453,8 +1463,10 @@ impl MachInstEmit for Inst {
                     put(sink, &enc_rie_d(opcode, rd.to_reg(), rn, imm as u16));
                 }
             }
-            &Inst::AluRR { alu_op, rd, rm } => {
+            &Inst::AluRR { alu_op, rd, ri, rm } => {
                 let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
                 let rm = allocs.next(rm);
 
                 let (opcode, is_rre) = match alu_op {
@@ -1490,9 +1502,12 @@ impl MachInstEmit for Inst {
             &Inst::AluRX {
                 alu_op,
                 rd,
+                ri,
                 ref mem,
             } => {
                 let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
                 let mem = mem.with_allocs(&mut allocs);
 
                 let (opcode_rx, opcode_rxy) = match alu_op {
@@ -1530,8 +1545,15 @@ impl MachInstEmit for Inst {
                     rd, &mem, opcode_rx, opcode_rxy, None, true, sink, emit_info, state,
                 );
             }
-            &Inst::AluRSImm16 { alu_op, rd, imm } => {
+            &Inst::AluRSImm16 {
+                alu_op,
+                rd,
+                ri,
+                imm,
+            } => {
                 let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
 
                 let opcode = match alu_op {
                     ALUOp::Add32 => 0xa7a, // AHI
@@ -1542,8 +1564,15 @@ impl MachInstEmit for Inst {
                 };
                 put(sink, &enc_ri_a(opcode, rd.to_reg(), imm as u16));
             }
-            &Inst::AluRSImm32 { alu_op, rd, imm } => {
+            &Inst::AluRSImm32 {
+                alu_op,
+                rd,
+                ri,
+                imm,
+            } => {
                 let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
 
                 let opcode = match alu_op {
                     ALUOp::Add32 => 0xc29, // AFI
@@ -1554,8 +1583,15 @@ impl MachInstEmit for Inst {
                 };
                 put(sink, &enc_ril_a(opcode, rd.to_reg(), imm as u32));
             }
-            &Inst::AluRUImm32 { alu_op, rd, imm } => {
+            &Inst::AluRUImm32 {
+                alu_op,
+                rd,
+                ri,
+                imm,
+            } => {
                 let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
 
                 let opcode = match alu_op {
                     ALUOp::AddLogical32 => 0xc2b, // ALFI
@@ -1566,8 +1602,15 @@ impl MachInstEmit for Inst {
                 };
                 put(sink, &enc_ril_a(opcode, rd.to_reg(), imm));
             }
-            &Inst::AluRUImm16Shifted { alu_op, rd, imm } => {
+            &Inst::AluRUImm16Shifted {
+                alu_op,
+                rd,
+                ri,
+                imm,
+            } => {
                 let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
 
                 let opcode = match (alu_op, imm.shift) {
                     (ALUOp::And32, 0) => 0xa57, // NILL
@@ -1586,8 +1629,15 @@ impl MachInstEmit for Inst {
                 };
                 put(sink, &enc_ri_a(opcode, rd.to_reg(), imm.bits));
             }
-            &Inst::AluRUImm32Shifted { alu_op, rd, imm } => {
+            &Inst::AluRUImm32Shifted {
+                alu_op,
+                rd,
+                ri,
+                imm,
+            } => {
                 let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
 
                 let opcode = match (alu_op, imm.shift) {
                     (ALUOp::And32, 0) => 0xc0b, // NILF
@@ -3412,6 +3462,7 @@ impl MachInstEmit for Inst {
                 let inst = Inst::AluRX {
                     alu_op: ALUOp::Add64Ext32,
                     rd: rtmp,
+                    ri: rtmp.to_reg(),
                     mem: MemArg::reg_plus_reg(rtmp.to_reg(), ridx, MemFlags::trusted()),
                 };
                 inst.emit(&[], sink, emit_info, state);

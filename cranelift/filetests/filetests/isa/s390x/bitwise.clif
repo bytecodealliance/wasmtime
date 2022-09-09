@@ -585,8 +585,8 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   ngr %r3, %r2
 ;   xilf %r2, 4294967295
 ;   xihf %r2, 4294967295
-;   ngr %r4, %r2
-;   ogrk %r2, %r4, %r3
+;   ngrk %r5, %r4, %r2
+;   ogrk %r2, %r5, %r3
 ;   br %r14
 
 function %bitselect_i32(i32, i32, i32) -> i32 {
