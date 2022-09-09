@@ -274,19 +274,19 @@ block0(v0: i8x16, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $3, %esi
-;   andq    %rsi, $7, %rsi
-;   movdqa  %xmm0, %xmm15
-;   punpcklbw %xmm15, %xmm0, %xmm15
-;   movdqa  %xmm15, %xmm13
+;   movl    $3, %r11d
+;   andq    %r11, $7, %r11
+;   movdqa  %xmm0, %xmm14
+;   punpcklbw %xmm14, %xmm0, %xmm14
+;   movdqa  %xmm14, %xmm13
 ;   punpckhbw %xmm0, %xmm0, %xmm0
-;   movdqa  %xmm0, %xmm7
-;   addl    %esi, $8, %esi
-;   movd    %esi, %xmm15
+;   movdqa  %xmm0, %xmm6
+;   addl    %r11d, $8, %r11d
+;   movd    %r11d, %xmm14
 ;   movdqa  %xmm13, %xmm0
-;   psraw   %xmm0, %xmm15, %xmm0
-;   psraw   %xmm7, %xmm15, %xmm7
-;   packsswb %xmm0, %xmm7, %xmm0
+;   psraw   %xmm0, %xmm14, %xmm0
+;   psraw   %xmm6, %xmm14, %xmm6
+;   packsswb %xmm0, %xmm6, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -300,15 +300,14 @@ block0(v0: i64x2, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
-;   pextrd.w $0, %xmm0, %r10
-;   pextrd.w $1, %xmm0, %rsi
-;   movq    %rax, %rcx
-;   sarq    %cl, %r10, %r10
-;   sarq    %cl, %rsi, %rsi
+;   pextrd.w $0, %xmm0, %r9
+;   pextrd.w $1, %xmm0, %r11
+;   movq    %rdi, %rcx
+;   sarq    %cl, %r9, %r9
+;   sarq    %cl, %r11, %r11
 ;   uninit  %xmm0
-;   pinsrd.w $0, %xmm0, %r10, %xmm0
-;   pinsrd.w $1, %xmm0, %rsi, %xmm0
+;   pinsrd.w $0, %xmm0, %r9, %xmm0
+;   pinsrd.w $1, %xmm0, %r11, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

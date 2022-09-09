@@ -158,7 +158,7 @@ pub struct VCode<I: VCodeInst> {
     block_order: BlockLoweringOrder,
 
     /// ABI object.
-    abi: Callee<I::ABIMachineSpec>,
+    pub(crate) abi: Callee<I::ABIMachineSpec>,
 
     /// Constant information used during code emission. This should be
     /// immutable across function compilations within the same module.
@@ -179,7 +179,7 @@ pub struct VCode<I: VCodeInst> {
     /// Value labels for debuginfo attached to vregs.
     debug_value_labels: Vec<(VReg, InsnIndex, InsnIndex, u32)>,
 
-    sigs: SigSet,
+    pub(crate) sigs: SigSet,
 }
 
 /// The result of `VCode::emit`. Contains all information computed
@@ -244,7 +244,7 @@ pub struct EmitResult<I: VCodeInst> {
 /// terminator instructions with successor blocks.)
 pub struct VCodeBuilder<I: VCodeInst> {
     /// In-progress VCode.
-    vcode: VCode<I>,
+    pub(crate) vcode: VCode<I>,
 
     /// In what direction is the build occuring?
     direction: VCodeBuildDirection,
@@ -862,7 +862,7 @@ impl<I: VCodeInst> VCode<I> {
                            disasm: &mut String,
                            buffer: &mut MachBuffer<I>,
                            state: &mut I::State| {
-                if want_disasm {
+                if want_disasm && !inst.is_args() {
                     let mut s = state.clone();
                     writeln!(disasm, "  {}", inst.pretty_print_inst(allocs, &mut s)).unwrap();
                 }

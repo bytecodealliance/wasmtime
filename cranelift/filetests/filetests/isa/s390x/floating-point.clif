@@ -395,8 +395,8 @@ block0(v0: f32, v1: f32):
 }
 
 ; block0:
-;   bras %r1, 8 ; data.f32 NaN ; le %f5, 0(%r1)
-;   vsel %v0, %v0, %v2, %v5
+;   bras %r1, 8 ; data.f32 NaN ; le %f4, 0(%r1)
+;   vsel %v0, %v0, %v2, %v4
 ;   br %r14
 
 function %fcopysign_f64(f64, f64) -> f64 {
@@ -406,8 +406,8 @@ block0(v0: f64, v1: f64):
 }
 
 ; block0:
-;   bras %r1, 12 ; data.f64 NaN ; ld %f5, 0(%r1)
-;   vsel %v0, %v0, %v2, %v5
+;   bras %r1, 12 ; data.f64 NaN ; ld %f4, 0(%r1)
+;   vsel %v0, %v0, %v2, %v4
 ;   br %r14
 
 function %fcvt_to_uint_f32_i8(f32) -> i8 {

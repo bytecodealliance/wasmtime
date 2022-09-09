@@ -101,6 +101,7 @@ impl Inst {
             | Inst::Pop64 { .. }
             | Inst::Push64 { .. }
             | Inst::StackProbeLoop { .. }
+            | Inst::Args { .. }
             | Inst::Ret { .. }
             | Inst::Setcc { .. }
             | Inst::ShiftR { .. }
@@ -1452,6 +1453,17 @@ impl PrettyPrint for Inst {
                 format!("{} *{}", ljustify("call".to_string()), dest)
             }
 
+            Inst::Args { args } => {
+                let mut s = "args".to_string();
+                for arg in args {
+                    use std::fmt::Write;
+                    let preg = regs::show_reg(arg.preg);
+                    let def = pretty_print_reg(arg.vreg.to_reg(), 8, allocs);
+                    write!(&mut s, " {}={}", def, preg).unwrap();
+                }
+                s
+            }
+
             Inst::Ret { .. } => "ret".to_string(),
 
             Inst::JmpKnown { dst } => {
@@ -2037,6 +2049,12 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             mem.get_operands_late(collector)
         }
 
+        Inst::Args { args } => {
+            for arg in args {
+                collector.reg_fixed_def(arg.vreg, arg.preg);
+            }
+        }
+
         Inst::Ret { rets } => {
             // The return value(s) are live-out; we represent this
             // with register uses on the return instruction.
@@ -2131,6 +2149,13 @@ impl MachInst for Inst {
                 }
             }
             _ => None,
+        }
+    }
+
+    fn is_args(&self) -> bool {
+        match self {
+            Self::Args { .. } => true,
+            _ => false,
         }
     }
 

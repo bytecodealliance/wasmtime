@@ -459,6 +459,10 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
     }
 
+    fn gen_args(_isa_flags: &s390x_settings::Flags, args: Vec<ArgPair>) -> Inst {
+        Inst::Args { args }
+    }
+
     fn gen_ret(_setup_frame: bool, _isa_flags: &s390x_settings::Flags, rets: Vec<Reg>) -> Inst {
         Inst::Ret {
             link: gpr(14),

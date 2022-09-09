@@ -323,6 +323,10 @@
        (CallUnknown (dest RegMem)
                     (info BoxCallInfo))
 
+       ;; A pseudo-instruction that captures register arguments in vregs.
+       (Args
+        (args VecArgPair))
+
        ;; Return.
        (Ret (rets VecReg))
 

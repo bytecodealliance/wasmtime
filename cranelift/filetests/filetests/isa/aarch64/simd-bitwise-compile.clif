@@ -191,11 +191,11 @@ block0(v0: i8x16, v1: i32):
 }
 
 ; block0:
-;   movz x5, #3
-;   and w7, w5, #7
-;   sub x9, xzr, x7
-;   dup v19.16b, w9
-;   sshl v0.16b, v0.16b, v19.16b
+;   movz x4, #3
+;   and w6, w4, #7
+;   sub x8, xzr, x6
+;   dup v18.16b, w8
+;   sshl v0.16b, v0.16b, v18.16b
 ;   ret
 
 function %sshr_i64x2(i64x2, i32) -> i64x2 {
@@ -205,9 +205,9 @@ block0(v0: i64x2, v1: i32):
 }
 
 ; block0:
-;   and w5, w0, #63
-;   sub x7, xzr, x5
-;   dup v17.2d, x7
-;   sshl v0.2d, v0.2d, v17.2d
+;   and w4, w0, #63
+;   sub x6, xzr, x4
+;   dup v16.2d, x6
+;   sshl v0.2d, v0.2d, v16.2d
 ;   ret
 
