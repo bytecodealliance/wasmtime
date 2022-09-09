@@ -9,4 +9,4 @@
   (export "f" (func 0))
 )
 
-(assert_return (invoke "f" (f32.const 0)) (f64.const 0))
+(assert_return (invoke "f" (i32.const 0)) (f32.const 0))
