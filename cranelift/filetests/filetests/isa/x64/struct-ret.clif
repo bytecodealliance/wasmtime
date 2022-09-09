@@ -32,7 +32,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   movq    %rsi, %rdi
 ;   load_ext_name %f2+0, %r8
-;   call    *%r8
+;   call    *%r8 # CallInfo { uses: [CallArgPair { vreg: v129, preg: p7i }], defs: [CallRetPair { vreg: Writable { reg: v132 }, preg: p0i }], clobbers: PRegSet { bits: 1208907372870555465158594 }, opcode: Call }
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -47,15 +47,10 @@ block0(v0: i64):
 
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
-;   movq    %r15, 0(%rsp)
 ; block0:
-;   movq    %rdi, %r15
-;   load_ext_name %f4+0, %r8
-;   call    *%r8
-;   movq    %r15, %rax
-;   movq    0(%rsp), %r15
-;   addq    %rsp, $16, %rsp
+;   movq    %rdi, %rax
+;   load_ext_name %f4+0, %rdx
+;   call    *%rdx # CallInfo { uses: [CallArgPair { vreg: v128, preg: p7i }], defs: [], clobbers: PRegSet { bits: 1208907372870555465158598 }, opcode: Call }
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

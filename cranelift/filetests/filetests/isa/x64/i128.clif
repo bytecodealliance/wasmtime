@@ -115,11 +115,11 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   movq    %rdi, %r8
 ;   imulq   %r8, %rcx, %r8
+;   movq    %rdi, %rax
 ;   imulq   %rsi, %rdx, %rsi
 ;   movq    %r8, %r9
 ;   addq    %r9, %rsi, %r9
 ;   movq    %r9, %r8
-;   movq    %rdi, %rax
 ;   mul     %rax, %rdx, %rax, %rdx
 ;   movq    %r8, %rdi
 ;   addq    %rdi, %rdx, %rdi
@@ -798,7 +798,7 @@ block0(v0: i128, v1: i128):
 ;   virtual_sp_offset_adjust 16
 ;   lea     0(%rsp), %r8
 ;   load_ext_name %g+0, %rax
-;   call    *%rax
+;   call    *%rax # CallInfo { uses: [CallArgPair { vreg: v128, preg: p7i }, CallArgPair { vreg: v129, preg: p6i }, CallArgPair { vreg: v130, preg: p2i }, CallArgPair { vreg: v131, preg: p1i }, CallArgPair { vreg: v145, preg: p8i }], defs: [CallRetPair { vreg: Writable { reg: v141 }, preg: p0i }, CallRetPair { vreg: Writable { reg: v142 }, preg: p2i }], clobbers: PRegSet { bits: 1208907372870555465158594 }, opcode: Call }
 ;   movq    0(%rsp), %r11
 ;   movq    8(%rsp), %rdi
 ;   addq    %rsp, $16, %rsp

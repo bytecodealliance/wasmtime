@@ -15,7 +15,7 @@ block0(v0: i64):
 ;   mov fp, sp
 ; block0:
 ;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x4
+;   blr x4 # CallIndInfo { rn: v132, uses: [CallArgPair { vreg: v128, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: v131 }, preg: p0i }], clobbers: PRegSet { bits: 79228162495817593519834660862 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -31,7 +31,7 @@ block0(v0: i32):
 ;   mov fp, sp
 ; block0:
 ;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x4
+;   blr x4 # CallIndInfo { rn: v133, uses: [CallArgPair { vreg: v128, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: v132 }, preg: p0i }], clobbers: PRegSet { bits: 79228162495817593519834660862 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -55,7 +55,7 @@ block0(v0: i32):
 ;   mov fp, sp
 ; block0:
 ;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x4
+;   blr x4 # CallIndInfo { rn: v133, uses: [CallArgPair { vreg: v128, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: v132 }, preg: p0i }], clobbers: PRegSet { bits: 79228162495817593519834660862 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -79,7 +79,7 @@ block0(v0: i8):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   mov x15, x0
+;   mov x8, x0
 ;   sub sp, sp, #16
 ;   virtual_sp_offset_adjust 16
 ;   movz x0, #42
@@ -90,9 +90,9 @@ block0(v0: i8):
 ;   movz x5, #42
 ;   movz x6, #42
 ;   movz x7, #42
-;   strb w15, [sp]
-;   ldr x14, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x14
+;   strb w8, [sp]
+;   ldr x8, 8 ; b 12 ; data TestCase(%g) + 0
+;   blr x8 # CallIndInfo { rn: v142, uses: [CallArgPair { vreg: v132, preg: p0i }, CallArgPair { vreg: v133, preg: p1i }, CallArgPair { vreg: v134, preg: p2i }, CallArgPair { vreg: v135, preg: p3i }, CallArgPair { vreg: v136, preg: p4i }, CallArgPair { vreg: v137, preg: p5i }, CallArgPair { vreg: v138, preg: p6i }, CallArgPair { vreg: v139, preg: p7i }], defs: [CallRetPair { vreg: Writable { reg: v141 }, preg: p0i }], clobbers: PRegSet { bits: 79228162495817593519834660862 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   add sp, sp, #16
 ;   virtual_sp_offset_adjust -16
 ;   ldp fp, lr, [sp], #16
@@ -140,26 +140,26 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #48
 ; block0:
-;   ldr x8, 8 ; b 12 ; data TestCase(%g0) + 0
-;   blr x8
+;   ldr x9, 8 ; b 12 ; data TestCase(%g0) + 0
+;   blr x9 # CallIndInfo { rn: v140, uses: [], defs: [CallRetPair { vreg: Writable { reg: v139 }, preg: p0f }], clobbers: PRegSet { bits: 79228162477370849446125109247 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   str q0, [sp, #32]
 ;   ldr x9, 8 ; b 12 ; data TestCase(%g1) + 0
-;   blr x9
+;   blr x9 # CallIndInfo { rn: v138, uses: [], defs: [CallRetPair { vreg: Writable { reg: v137 }, preg: p0f }], clobbers: PRegSet { bits: 79228162477370849446125109247 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   str q0, [sp, #16]
-;   ldr x10, 8 ; b 12 ; data TestCase(%g1) + 0
-;   blr x10
+;   ldr x9, 8 ; b 12 ; data TestCase(%g1) + 0
+;   blr x9 # CallIndInfo { rn: v136, uses: [], defs: [CallRetPair { vreg: Writable { reg: v135 }, preg: p0f }], clobbers: PRegSet { bits: 79228162477370849446125109247 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   str q0, [sp]
-;   ldr x12, 8 ; b 12 ; data TestCase(%g2) + 0
-;   blr x12
+;   ldr x9, 8 ; b 12 ; data TestCase(%g2) + 0
+;   blr x9 # CallIndInfo { rn: v134, uses: [], defs: [], clobbers: PRegSet { bits: 79228162495817593519834660863 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
+;   ldr x10, 8 ; b 12 ; data TestCase(%g3) + 0
 ;   ldr q0, [sp, #32]
-;   ldr x14, 8 ; b 12 ; data TestCase(%g3) + 0
-;   blr x14
+;   blr x10 # CallIndInfo { rn: v133, uses: [CallArgPair { vreg: v128, preg: p0f }], defs: [], clobbers: PRegSet { bits: 79228162495817593519834660863 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
+;   ldr x11, 8 ; b 12 ; data TestCase(%g4) + 0
 ;   ldr q0, [sp, #16]
-;   ldr x0, 8 ; b 12 ; data TestCase(%g4) + 0
-;   blr x0
+;   blr x11 # CallIndInfo { rn: v132, uses: [CallArgPair { vreg: v129, preg: p0f }], defs: [], clobbers: PRegSet { bits: 79228162495817593519834660863 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
+;   ldr x12, 8 ; b 12 ; data TestCase(%g4) + 0
 ;   ldr q0, [sp]
-;   ldr x2, 8 ; b 12 ; data TestCase(%g4) + 0
-;   blr x2
+;   blr x12 # CallIndInfo { rn: v131, uses: [CallArgPair { vreg: v130, preg: p0f }], defs: [], clobbers: PRegSet { bits: 79228162495817593519834660863 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   add sp, sp, #48
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -184,26 +184,26 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #48
 ; block0:
-;   ldr x8, 8 ; b 12 ; data TestCase(%g0) + 0
-;   blr x8
+;   ldr x9, 8 ; b 12 ; data TestCase(%g0) + 0
+;   blr x9 # CallIndInfo { rn: v140, uses: [], defs: [CallRetPair { vreg: Writable { reg: v139 }, preg: p0f }], clobbers: PRegSet { bits: 79228162477370849446125109247 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   str q0, [sp, #32]
 ;   ldr x9, 8 ; b 12 ; data TestCase(%g0) + 0
-;   blr x9
+;   blr x9 # CallIndInfo { rn: v138, uses: [], defs: [CallRetPair { vreg: Writable { reg: v137 }, preg: p0f }], clobbers: PRegSet { bits: 79228162477370849446125109247 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   str q0, [sp, #16]
-;   ldr x10, 8 ; b 12 ; data TestCase(%g0) + 0
-;   blr x10
+;   ldr x9, 8 ; b 12 ; data TestCase(%g0) + 0
+;   blr x9 # CallIndInfo { rn: v136, uses: [], defs: [CallRetPair { vreg: Writable { reg: v135 }, preg: p0f }], clobbers: PRegSet { bits: 79228162477370849446125109247 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   str q0, [sp]
-;   ldr x12, 8 ; b 12 ; data TestCase(%g1) + 0
-;   blr x12
+;   ldr x9, 8 ; b 12 ; data TestCase(%g1) + 0
+;   blr x9 # CallIndInfo { rn: v134, uses: [], defs: [], clobbers: PRegSet { bits: 79228162495817593519834660863 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
+;   ldr x10, 8 ; b 12 ; data TestCase(%g2) + 0
 ;   ldr q0, [sp, #32]
-;   ldr x14, 8 ; b 12 ; data TestCase(%g2) + 0
-;   blr x14
+;   blr x10 # CallIndInfo { rn: v133, uses: [CallArgPair { vreg: v128, preg: p0f }], defs: [], clobbers: PRegSet { bits: 79228162495817593519834660863 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
+;   ldr x11, 8 ; b 12 ; data TestCase(%g2) + 0
 ;   ldr q0, [sp, #16]
-;   ldr x0, 8 ; b 12 ; data TestCase(%g2) + 0
-;   blr x0
+;   blr x11 # CallIndInfo { rn: v132, uses: [CallArgPair { vreg: v129, preg: p0f }], defs: [], clobbers: PRegSet { bits: 79228162495817593519834660863 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
+;   ldr x12, 8 ; b 12 ; data TestCase(%g2) + 0
 ;   ldr q0, [sp]
-;   ldr x2, 8 ; b 12 ; data TestCase(%g2) + 0
-;   blr x2
+;   blr x12 # CallIndInfo { rn: v131, uses: [CallArgPair { vreg: v130, preg: p0f }], defs: [], clobbers: PRegSet { bits: 79228162495817593519834660863 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   add sp, sp, #48
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -232,26 +232,26 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #48
 ; block0:
-;   ldr x8, 8 ; b 12 ; data TestCase(%g0) + 0
-;   blr x8
+;   ldr x9, 8 ; b 12 ; data TestCase(%g0) + 0
+;   blr x9 # CallIndInfo { rn: v140, uses: [], defs: [CallRetPair { vreg: Writable { reg: v139 }, preg: p0f }], clobbers: PRegSet { bits: 79228162477370849446125109247 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   str q0, [sp, #32]
 ;   ldr x9, 8 ; b 12 ; data TestCase(%g1) + 0
-;   blr x9
+;   blr x9 # CallIndInfo { rn: v138, uses: [], defs: [CallRetPair { vreg: Writable { reg: v137 }, preg: p0f }], clobbers: PRegSet { bits: 79228162477370849446125109247 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   str q0, [sp, #16]
-;   ldr x10, 8 ; b 12 ; data TestCase(%g2) + 0
-;   blr x10
+;   ldr x9, 8 ; b 12 ; data TestCase(%g2) + 0
+;   blr x9 # CallIndInfo { rn: v136, uses: [], defs: [CallRetPair { vreg: Writable { reg: v135 }, preg: p0f }], clobbers: PRegSet { bits: 79228162477370849446125109247 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   str q0, [sp]
-;   ldr x12, 8 ; b 12 ; data TestCase(%g3) + 0
-;   blr x12
+;   ldr x9, 8 ; b 12 ; data TestCase(%g3) + 0
+;   blr x9 # CallIndInfo { rn: v134, uses: [], defs: [], clobbers: PRegSet { bits: 79228162495817593519834660863 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
+;   ldr x10, 8 ; b 12 ; data TestCase(%g4) + 0
 ;   ldr q0, [sp, #32]
-;   ldr x14, 8 ; b 12 ; data TestCase(%g4) + 0
-;   blr x14
+;   blr x10 # CallIndInfo { rn: v133, uses: [CallArgPair { vreg: v128, preg: p0f }], defs: [], clobbers: PRegSet { bits: 79228162495817593519834660863 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
+;   ldr x11, 8 ; b 12 ; data TestCase(%g5) + 0
 ;   ldr q0, [sp, #16]
-;   ldr x0, 8 ; b 12 ; data TestCase(%g5) + 0
-;   blr x0
+;   blr x11 # CallIndInfo { rn: v132, uses: [CallArgPair { vreg: v129, preg: p0f }], defs: [], clobbers: PRegSet { bits: 79228162495817593519834660863 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
+;   ldr x12, 8 ; b 12 ; data TestCase(%g6) + 0
 ;   ldr q0, [sp]
-;   ldr x2, 8 ; b 12 ; data TestCase(%g6) + 0
-;   blr x2
+;   blr x12 # CallIndInfo { rn: v131, uses: [CallArgPair { vreg: v130, preg: p0f }], defs: [], clobbers: PRegSet { bits: 79228162495817593519834660863 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   add sp, sp, #48
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -279,12 +279,11 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   mov x7, x0
+;   mov x1, x0
 ;   movz x0, #42
 ;   movz x2, #42
-;   mov x1, x7
-;   ldr x9, 8 ; b 12 ; data TestCase(%f11) + 0
-;   blr x9
+;   ldr x7, 8 ; b 12 ; data TestCase(%f11) + 0
+;   blr x7 # CallIndInfo { rn: v136, uses: [CallArgPair { vreg: v130, preg: p0i }, CallArgPair { vreg: v131, preg: p1i }, CallArgPair { vreg: v134, preg: p2i }], defs: [CallRetPair { vreg: Writable { reg: v135 }, preg: p0i }], clobbers: PRegSet { bits: 79228162495817593519834660862 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -311,12 +310,11 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   mov x7, x0
+;   mov x2, x0
 ;   movz x3, #42
 ;   movz x0, #42
-;   mov x2, x7
-;   ldr x9, 8 ; b 12 ; data TestCase(%f12) + 0
-;   blr x9
+;   ldr x7, 8 ; b 12 ; data TestCase(%f12) + 0
+;   blr x7 # CallIndInfo { rn: v136, uses: [CallArgPair { vreg: v134, preg: p0i }, CallArgPair { vreg: v130, preg: p2i }, CallArgPair { vreg: v131, preg: p3i }], defs: [CallRetPair { vreg: Writable { reg: v135 }, preg: p0i }], clobbers: PRegSet { bits: 79228162495817593519834660862 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -343,12 +341,11 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   mov x7, x0
+;   mov x1, x0
 ;   movz x2, #42
 ;   movz x0, #42
-;   mov x1, x7
-;   ldr x9, 8 ; b 12 ; data TestCase(%f13) + 0
-;   blr x9
+;   ldr x7, 8 ; b 12 ; data TestCase(%f13) + 0
+;   blr x7 # CallIndInfo { rn: v136, uses: [CallArgPair { vreg: v134, preg: p0i }, CallArgPair { vreg: v130, preg: p1i }, CallArgPair { vreg: v131, preg: p2i }], defs: [CallRetPair { vreg: Writable { reg: v135 }, preg: p0i }], clobbers: PRegSet { bits: 79228162495817593519834660862 }, opcode: Call, caller_callconv: AppleAarch64, callee_callconv: AppleAarch64 }
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -376,20 +373,19 @@ block0(v0: i128, v1: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   mov x11, x2
+;   mov x6, x2
 ;   sub sp, sp, #16
 ;   virtual_sp_offset_adjust 16
-;   mov x10, x0
-;   mov x12, x1
-;   mov x2, x10
-;   mov x3, x12
-;   mov x4, x10
-;   mov x5, x12
-;   mov x6, x11
-;   str x10, [sp]
-;   str x12, [sp, #8]
-;   ldr x7, 8 ; b 12 ; data TestCase(%f14) + 0
-;   blr x7
+;   str x0, [sp]
+;   mov x4, x0
+;   str x1, [sp, #8]
+;   mov x5, x1
+;   ldr x12, 8 ; b 12 ; data TestCase(%f14) + 0
+;   mov x0, x4
+;   mov x2, x4
+;   mov x1, x5
+;   mov x3, x5
+;   blr x12 # CallIndInfo { rn: v137, uses: [CallArgPair { vreg: v128, preg: p0i }, CallArgPair { vreg: v129, preg: p1i }, CallArgPair { vreg: v128, preg: p2i }, CallArgPair { vreg: v129, preg: p3i }, CallArgPair { vreg: v128, preg: p4i }, CallArgPair { vreg: v129, preg: p5i }, CallArgPair { vreg: v130, preg: p6i }], defs: [CallRetPair { vreg: Writable { reg: v135 }, preg: p0i }, CallRetPair { vreg: Writable { reg: v136 }, preg: p1i }], clobbers: PRegSet { bits: 79228162495817593519834660860 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   add sp, sp, #16
 ;   virtual_sp_offset_adjust -16
 ;   ldp fp, lr, [sp], #16
@@ -419,20 +415,19 @@ block0(v0: i128, v1: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   mov x11, x2
+;   mov x6, x2
 ;   sub sp, sp, #16
 ;   virtual_sp_offset_adjust 16
-;   mov x10, x0
-;   mov x12, x1
-;   mov x2, x10
-;   mov x3, x12
-;   mov x4, x10
-;   mov x5, x12
-;   mov x6, x11
-;   str x10, [sp]
-;   str x12, [sp, #8]
-;   ldr x7, 8 ; b 12 ; data TestCase(%f15) + 0
-;   blr x7
+;   str x0, [sp]
+;   mov x4, x0
+;   str x1, [sp, #8]
+;   mov x5, x1
+;   ldr x12, 8 ; b 12 ; data TestCase(%f15) + 0
+;   mov x0, x4
+;   mov x2, x4
+;   mov x1, x5
+;   mov x3, x5
+;   blr x12 # CallIndInfo { rn: v137, uses: [CallArgPair { vreg: v128, preg: p0i }, CallArgPair { vreg: v129, preg: p1i }, CallArgPair { vreg: v128, preg: p2i }, CallArgPair { vreg: v129, preg: p3i }, CallArgPair { vreg: v128, preg: p4i }, CallArgPair { vreg: v129, preg: p5i }, CallArgPair { vreg: v130, preg: p6i }], defs: [CallRetPair { vreg: Writable { reg: v135 }, preg: p0i }, CallRetPair { vreg: Writable { reg: v136 }, preg: p1i }], clobbers: PRegSet { bits: 79228162495817593519834660860 }, opcode: Call, caller_callconv: AppleAarch64, callee_callconv: AppleAarch64 }
 ;   add sp, sp, #16
 ;   virtual_sp_offset_adjust -16
 ;   ldp fp, lr, [sp], #16
@@ -478,7 +473,7 @@ block0(v0: i64):
 ; block0:
 ;   mov x8, x0
 ;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x4
+;   blr x4 # CallIndInfo { rn: v132, uses: [CallArgPair { vreg: v128, preg: p8i }], defs: [CallRetPair { vreg: Writable { reg: v131 }, preg: p8i }], clobbers: PRegSet { bits: 79228162495817593519834660606 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   mov x0, x8
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -496,8 +491,8 @@ block0(v0: i64):
 ;   str x24, [sp, #-16]!
 ; block0:
 ;   mov x24, x8
-;   ldr x5, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x5
+;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
+;   blr x4 # CallIndInfo { rn: v130, uses: [CallArgPair { vreg: v128, preg: p8i }], defs: [], clobbers: PRegSet { bits: 79228162495817593519834660607 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
 ;   mov x8, x24
 ;   ldr x24, [sp], #16
 ;   ldp fp, lr, [sp], #16

@@ -34,9 +34,9 @@ pub use super::lower::isle::generated_code::MInst as Inst;
 #[derive(Clone, Debug)]
 pub struct CallInfo {
     /// Register uses of this call.
-    pub uses: SmallVec<[Reg; 8]>,
+    pub uses: SmallVec<[CallArgPair; 8]>,
     /// Register defs of this call.
-    pub defs: SmallVec<[Writable<Reg>; 8]>,
+    pub defs: SmallVec<[CallRetPair; 8]>,
     /// Registers clobbered by this call, as per its calling convention.
     pub clobbers: PRegSet,
     /// The opcode of this call.
@@ -490,8 +490,8 @@ impl Inst {
 
     pub(crate) fn call_known(
         dest: ExternalName,
-        uses: SmallVec<[Reg; 8]>,
-        defs: SmallVec<[Writable<Reg>; 8]>,
+        uses: SmallVec<[CallArgPair; 8]>,
+        defs: SmallVec<[CallRetPair; 8]>,
         clobbers: PRegSet,
         opcode: Opcode,
     ) -> Inst {
@@ -508,8 +508,8 @@ impl Inst {
 
     pub(crate) fn call_unknown(
         dest: RegMem,
-        uses: SmallVec<[Reg; 8]>,
-        defs: SmallVec<[Writable<Reg>; 8]>,
+        uses: SmallVec<[CallArgPair; 8]>,
+        defs: SmallVec<[CallRetPair; 8]>,
         clobbers: PRegSet,
         opcode: Opcode,
     ) -> Inst {
@@ -1446,7 +1446,9 @@ impl PrettyPrint for Inst {
                 format!("{} {}", ljustify("popq".to_string()), dst)
             }
 
-            Inst::CallKnown { dest, .. } => format!("{} {:?}", ljustify("call".to_string()), dest),
+            Inst::CallKnown { dest, .. } => {
+                format!("{} {:?}", ljustify("call".to_string()), dest)
+            }
 
             Inst::CallUnknown { dest, .. } => {
                 let dest = dest.pretty_print(8, allocs);
@@ -1982,22 +1984,22 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
 
         Inst::CallKnown { ref info, .. } => {
-            for &u in &info.uses {
-                collector.reg_use(u);
+            for u in &info.uses {
+                collector.reg_fixed_use(u.vreg, u.preg);
             }
-            for &d in &info.defs {
-                collector.reg_def(d);
+            for d in &info.defs {
+                collector.reg_fixed_def(d.vreg, d.preg);
             }
             collector.reg_clobbers(info.clobbers);
         }
 
         Inst::CallUnknown { ref info, dest, .. } => {
             dest.get_operands(collector);
-            for &u in &info.uses {
-                collector.reg_use(u);
+            for u in &info.uses {
+                collector.reg_fixed_use(u.vreg, u.preg);
             }
-            for &d in &info.defs {
-                collector.reg_def(d);
+            for d in &info.defs {
+                collector.reg_fixed_def(d.vreg, d.preg);
             }
             collector.reg_clobbers(info.clobbers);
         }

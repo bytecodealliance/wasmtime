@@ -13,7 +13,7 @@ block0:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   movl    $100000, %eax
-;   call    LibCall(Probestack)
+;   call    LibCall(Probestack) # CallInfo { uses: [], defs: [], clobbers: PRegSet { bits: 0 }, opcode: Call }
 ;   subq    %rsp, $100000, %rsp
 ; block0:
 ;   lea     rsp(0 + virtual offset), %rax

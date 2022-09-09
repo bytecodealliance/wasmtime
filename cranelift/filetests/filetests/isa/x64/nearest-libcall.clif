@@ -10,8 +10,8 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %NearestF32+0, %r8
-;   call    *%r8
+;   load_ext_name %NearestF32+0, %rdx
+;   call    *%rdx # CallInfo { uses: [CallArgPair { vreg: v128, preg: p0f }], defs: [CallRetPair { vreg: Writable { reg: v131 }, preg: p0f }], clobbers: PRegSet { bits: 1208888926126481755606983 }, opcode: Call }
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -25,8 +25,8 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %NearestF64+0, %r8
-;   call    *%r8
+;   load_ext_name %NearestF64+0, %rdx
+;   call    *%rdx # CallInfo { uses: [CallArgPair { vreg: v128, preg: p0f }], defs: [CallRetPair { vreg: Writable { reg: v131 }, preg: p0f }], clobbers: PRegSet { bits: 1208888926126481755606983 }, opcode: Call }
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

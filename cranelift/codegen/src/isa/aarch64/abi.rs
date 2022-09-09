@@ -919,8 +919,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
     fn gen_call(
         dest: &CallDest,
-        uses: SmallVec<[Reg; 8]>,
-        defs: SmallVec<[Writable<Reg>; 8]>,
+        uses: SmallVec<[CallArgPair; 8]>,
+        defs: SmallVec<[CallRetPair; 8]>,
         clobbers: PRegSet,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
@@ -978,19 +978,32 @@ impl ABIMachineSpec for AArch64MachineDeps {
         call_conv: isa::CallConv,
         dst: Reg,
         src: Reg,
+        tmp: Writable<Reg>,
+        _tmp2: Writable<Reg>,
         size: usize,
     ) -> SmallVec<[Self::I; 8]> {
         let mut insts = SmallVec::new();
         let arg0 = writable_xreg(0);
         let arg1 = writable_xreg(1);
         let arg2 = writable_xreg(2);
-        insts.push(Inst::gen_move(arg0, dst, I64));
-        insts.push(Inst::gen_move(arg1, src, I64));
-        insts.extend(Inst::load_constant(arg2, size as u64).into_iter());
+        insts.extend(Inst::load_constant(tmp, size as u64).into_iter());
         insts.push(Inst::Call {
             info: Box::new(CallInfo {
                 dest: ExternalName::LibCall(LibCall::Memcpy),
-                uses: smallvec![arg0.to_reg(), arg1.to_reg(), arg2.to_reg()],
+                uses: smallvec![
+                    CallArgPair {
+                        vreg: dst,
+                        preg: arg0.to_reg()
+                    },
+                    CallArgPair {
+                        vreg: src,
+                        preg: arg1.to_reg()
+                    },
+                    CallArgPair {
+                        vreg: tmp.to_reg(),
+                        preg: arg2.to_reg()
+                    }
+                ],
                 defs: smallvec![],
                 clobbers: Self::get_regs_clobbered_by_call(call_conv),
                 opcode: Opcode::Call,

@@ -149,20 +149,25 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
-;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 16 }
+;   subq    %rsp, $16, %rsp
+;   movq    %rsi, 0(%rsp)
+;   unwind SaveReg { clobber_offset: 0, reg: p6i }
 ; block0:
-;   cvtsi2sd %rcx, %xmm2
+;   cvtsi2sd %rcx, %xmm3
 ;   subq    %rsp, $48, %rsp
 ;   virtual_sp_offset_adjust 48
+;   movq    %rcx, 32(%rsp)
+;   movq    %rcx, 40(%rsp)
 ;   movq    %rcx, %rdx
-;   movq    %rdx, %r8
-;   movdqa  %xmm2, %xmm3
-;   movq    %r8, 32(%rsp)
-;   movq    %r8, 40(%rsp)
-;   load_ext_name %g+0, %r8
-;   call    *%r8
+;   load_ext_name %g+0, %rsi
+;   movq    %rdx, %rcx
+;   movdqa  %xmm3, %xmm2
+;   call    *%rsi # CallInfo { uses: [CallArgPair { vreg: v128, preg: p1i }, CallArgPair { vreg: v128, preg: p2i }, CallArgPair { vreg: v129, preg: p2f }, CallArgPair { vreg: v129, preg: p3f }], defs: [CallRetPair { vreg: Writable { reg: v132 }, preg: p0i }], clobbers: PRegSet { bits: 1162144876643701755654 }, opcode: Call }
 ;   addq    %rsp, $48, %rsp
 ;   virtual_sp_offset_adjust -48
+;   movq    0(%rsp), %rsi
+;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
