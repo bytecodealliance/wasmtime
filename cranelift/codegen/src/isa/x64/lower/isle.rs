@@ -166,14 +166,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
                 .unwrap();
         }
 
-        if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
-            if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, src_insn) {
-                self.lower_ctx.sink_inst(src_insn);
-                let amode = lower_to_amode(self.lower_ctx, addr_input, offset);
-                return XmmMem::new(RegMem::mem(amode)).unwrap();
-            }
-        }
-
         XmmMem::new(RegMem::reg(self.put_in_reg(val))).unwrap()
     }
 
