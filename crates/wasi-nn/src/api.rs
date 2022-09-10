@@ -47,8 +47,10 @@ pub enum BackendError {
         "A mapped directory is required for this backend, but none was provided or it wasn't found"
     )]
     MissingMapDir(),
-    #[error("Invalid Tensor index {0}. This input was not found in the provided model")]
+    #[error("Invalid tensor index {0}; this input was not found in the provided model")]
     InvalidTensorIndex(usize),
+    #[error("Invalid tensor type for input at index {0}; expected {1}, provided {2}")]
+    InvalidTensorType(usize, String, String),
     #[error("Unsupported output precision")]
     UnsupportedOutputPrecision(),
 }
