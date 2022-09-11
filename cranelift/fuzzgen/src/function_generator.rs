@@ -1038,6 +1038,11 @@ where
     }
 
     fn generate_jumptables(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
+        // We shouldn't try to generate jumptables if we don't have any valid targets!
+        if self.resources.blocks_without_params.is_empty() {
+            return Ok(());
+        }
+
         for _ in 0..self.param(&self.config.jump_tables_per_function)? {
             let mut jt_data = JumpTableData::new();
 
