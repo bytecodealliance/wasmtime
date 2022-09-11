@@ -608,7 +608,8 @@ fn insert_br_table(
     let default_block = *fgen.u.choose(target_blocks)?;
 
     // We can still select a backwards branching jump table here!
-    let jt = *fgen.u.choose(&fgen.resources.jump_tables)?;
+    let tables = fgen.resources.forward_jump_tables(builder, source_block);
+    let jt = *fgen.u.choose(&tables[..])?;
     builder.ins().br_table(val, default_block, jt);
     Ok(())
 }
@@ -746,6 +747,20 @@ struct Resources {
 impl Resources {
     fn is_last_block(&self, block: Block) -> bool {
         self.blocks.last().map_or(false, |(b, _)| *b == block)
+    }
+
+    /// Returns [JumpTable]'s where all blocks are forward of `block`
+    fn forward_jump_tables(&self, builder: &FunctionBuilder, block: Block) -> Vec<JumpTable> {
+        // Unlike with the blocks below jump table targets are not ordered, thus we do need
+        // to allocate a Vec here.
+        self.jump_tables
+            .iter()
+            .filter(|jt| {
+                let blocks = builder.func.jump_tables[**jt].as_slice();
+                blocks.iter().all(|target| *target > block)
+            })
+            .copied()
+            .collect()
     }
 
     /// Partitions blocks at `block`
@@ -988,11 +1003,16 @@ where
             return Ok(());
         }
 
-        let has_jump_tables = !self.resources.jump_tables.is_empty();
+        let has_jump_tables = !self
+            .resources
+            .forward_jump_tables(builder, source_block)
+            .is_empty();
+
         let has_forward_blocks = {
             let (_, forward_blocks) = self.resources.partition_blocks(source_block);
             !forward_blocks.is_empty()
         };
+
         let has_forward_blocks_without_params = !self
             .resources
             .forward_blocks_without_params(source_block)
@@ -1014,9 +1034,6 @@ where
         }
 
         // We need both jump tables and a default block for br_table
-        //
-        // TODO: We can technically generate a backwards branch here, via the jumptables
-        // we should improve this.
         if has_jump_tables && has_forward_blocks_without_params {
             terminators.push(insert_br_table);
         }
