@@ -16,6 +16,8 @@ impl SpecInterpreter {
 
         config.min_memories = config.min_memories.min(1);
         config.max_memories = config.max_memories.min(1);
+        config.min_tables = config.min_tables.min(1);
+        config.max_tables = config.max_tables.min(1);
 
         config.memory64_enabled = false;
         config.threads_enabled = false;
@@ -43,9 +45,7 @@ impl DiffEngine for SpecInterpreter {
     }
 
     fn is_stack_overflow(&self, err: &Error) -> bool {
-        // TODO: implement this for the spec interpreter
-        drop(err);
-        false
+        err.to_string().contains("(Isabelle) call stack exhausted")
     }
 }
 
