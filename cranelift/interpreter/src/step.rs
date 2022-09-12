@@ -1121,15 +1121,21 @@ where
         }
         Opcode::FcvtToUint | Opcode::FcvtToSint => {
             // NaN check
-            if !(arg(0)?.eq(&arg(0)?)?) {
+            if arg(0)?.is_nan()? {
                 return Ok(ControlFlow::Trap(CraneliftTrap::User(
                     TrapCode::BadConversionToInteger,
                 )));
             }
             let x = arg(0)?.into_float()? as i128;
-            let (min, max) = ctrl_ty.bounds(inst.opcode() == Opcode::FcvtToSint);
+            let is_signed = inst.opcode() == Opcode::FcvtToSint;
+            let (min, max) = ctrl_ty.bounds(is_signed);
+            let overflow = if is_signed {
+                x < (min as i128) || x > (max as i128)
+            } else {
+                x < 0 || (x as u128) > (max as u128)
+            };
             // bounds check
-            if x < (min as i128) || x > (max as i128) {
+            if overflow {
                 return Ok(ControlFlow::Trap(CraneliftTrap::User(
                     TrapCode::IntegerOverflow,
                 )));
@@ -1141,13 +1147,21 @@ where
             let in_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
             let cvt = |x: V| -> ValueResult<V> {
                 // NaN check
-                if !(x.eq(&x)?) {
+                if x.is_nan()? {
                     V::int(0, ctrl_ty.lane_type())
                 } else {
-                    let (min, max) = ctrl_ty.bounds(inst.opcode() == Opcode::FcvtToSintSat);
+                    let is_signed = inst.opcode() == Opcode::FcvtToSintSat;
+                    let (min, max) = ctrl_ty.bounds(is_signed);
                     let x = x.into_float()? as i128;
-                    let x = i128::max(x, min as i128);
-                    let x = i128::min(x, max as i128);
+                    let x = if is_signed {
+                        let x = i128::max(x, min as i128);
+                        let x = i128::min(x, max as i128);
+                        x
+                    } else {
+                        let x = if x < 0 { 0 } else { x };
+                        let x = u128::min(x as u128, max as u128);
+                        x as i128
+                    };
                     V::int(x, ctrl_ty.lane_type())
                 }
             };
