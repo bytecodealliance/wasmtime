@@ -34,7 +34,7 @@ To grant the capability to read in a directory using the Wasmtime CLI, we need t
 wasmtime --dir . my-wasi-program.wasm
 ```
 
-For this example, we will be passing a markdown file to our program called: `example-markdown.md`, that will exist in whatever our current directory (`./`) is. Our markdown file, `example-markdown.md`, will contain:
+For this example, we will be passing a markdown file to our program called: `example_markdown.md`, that will exist in whatever our current directory (`./`) is. Our markdown file, `example_markdown.md`, will contain:
 
 ```md
 # Hello!
