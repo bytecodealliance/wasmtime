@@ -48,5 +48,5 @@ block0(v0: f32):
 ; run: %fcvt_to_sint_sat_i128(0x1.0) == 1
 ; run: %fcvt_to_sint_sat_i128(0x1.0p31) == 2147483648
 ; run: %fcvt_to_sint_sat_i128(0x1.fffffp31) == 4294965248
-; run: %fcvt_to_sint_sat_i128(-0x1.fffffp31) == 0
+; run: %fcvt_to_sint_sat_i128(-0x1.fffffp31) == -4294965248
 ; run: %fcvt_to_sint_sat_i128(0x1.fffffep127) == 170141183460469231731687303715884105727
