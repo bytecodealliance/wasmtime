@@ -2212,10 +2212,11 @@
          dst)))
 
 ;; Helper for generating `MInst.CCmp` instructions.
-(decl ccmp (OperandSize Reg Reg NZCV Cond) ConsumesFlags)
-(rule (ccmp size rn rm nzcv cond)
-      (ConsumesFlags.ConsumesFlagsSideEffect
-       (MInst.CCmp size rn rm nzcv cond)))
+;; Creates a new `ProducesFlags` from the supplied `ProducesFlags` followed
+;; immediately by the `MInst.CCmp` instruction.
+(decl ccmp (OperandSize Reg Reg NZCV Cond ProducesFlags) ProducesFlags)
+(rule (ccmp size rn rm nzcv cond inst_input)
+      (produces_flags_append inst_input (MInst.CCmp size rn rm nzcv cond)))
 
 ;; Helper for generating `MInst.CCmpImm` instructions.
 (decl ccmp_imm (OperandSize u8 Reg UImm5 NZCV Cond) ConsumesFlags)
@@ -3374,15 +3375,9 @@
             (lhs_hi Reg (value_regs_get lhs 1))
             (rhs_lo Reg (value_regs_get rhs 0))
             (rhs_hi Reg (value_regs_get rhs 1))
-            (_ InstOutput (side_effect
-                  (with_flags_side_effect
-                        (cmp (OperandSize.Size64) lhs_lo rhs_lo)
-                        (ccmp (OperandSize.Size64) lhs_hi rhs_hi
-                         (nzcv $false $false $false $false) (Cond.Eq))))))
-       ;; Expose a `ProducesFlags` to allow this rule to be chained
-       ;; with a flag consumer.
-       (ProducesFlags.ProducesFlagsSideEffect
-        (MInst.Nop0))))
+            (cmp_inst ProducesFlags (cmp (OperandSize.Size64) lhs_lo rhs_lo)))
+       (ccmp (OperandSize.Size64) lhs_hi rhs_hi
+        (nzcv $false $false $false $false) (Cond.Eq) cmp_inst)))
 
 (rule (lower_icmp (IntCC.Equal) lhs rhs $I128)
       (lower_icmp_i128_eq_ne lhs rhs))

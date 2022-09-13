@@ -667,10 +667,16 @@
                      ;; them.
                      (AlreadyExistingFlags)
                      (ProducesFlagsSideEffect (inst MInst))
+                     (ProducesFlagsTwiceSideEffect (inst1 MInst) (inst2 MInst))
                      ;; Not directly combinable with a ConsumesFlags;
                      ;; used in s390x and unwrapped directly by `trapif`.
                      (ProducesFlagsReturnsReg (inst MInst) (result Reg))
                      (ProducesFlagsReturnsResultWithConsumer (inst MInst) (result Reg))))
+
+;; Chain another producer to a `ProducesFlags`.
+(decl produces_flags_append (ProducesFlags MInst) ProducesFlags)
+(rule (produces_flags_append (ProducesFlags.ProducesFlagsSideEffect inst1) inst2)
+      (ProducesFlags.ProducesFlagsTwiceSideEffect inst1 inst2))
 
 ;; Newtype wrapper around `MInst` for instructions that consume flags.
 ;;
@@ -769,6 +775,43 @@
             (_z Unit (emit consumer_inst_2))
             (_w Unit (emit consumer_inst_3))
             (_v Unit (emit consumer_inst_4)))
+        consumer_result))
+
+(rule (with_flags (ProducesFlags.ProducesFlagsTwiceSideEffect producer_inst1 producer_inst2)
+                  (ConsumesFlags.ConsumesFlagsReturnsReg consumer_inst consumer_result))
+      (let ((_ Unit (emit producer_inst1))
+            (_ Unit (emit producer_inst2))
+            (_ Unit (emit consumer_inst)))
+        (value_reg consumer_result)))
+
+(rule (with_flags (ProducesFlags.ProducesFlagsTwiceSideEffect producer_inst1 producer_inst2)
+                  (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs consumer_inst_1
+                                                                    consumer_inst_2
+                                                                    consumer_result))
+      ;; We must emit these instructions in order as the creator of
+      ;; the ConsumesFlags may be relying on dataflow dependencies
+      ;; amongst them.
+      (let ((_ Unit (emit producer_inst1))
+            (_ Unit (emit producer_inst2))
+            (_ Unit (emit consumer_inst_1))
+            (_ Unit (emit consumer_inst_2)))
+        consumer_result))
+
+(rule (with_flags (ProducesFlags.ProducesFlagsTwiceSideEffect producer_inst1 producer_inst2)
+                  (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs consumer_inst_1
+                                                                        consumer_inst_2
+                                                                        consumer_inst_3
+                                                                        consumer_inst_4
+                                                                        consumer_result))
+      ;; We must emit these instructions in order as the creator of
+      ;; the ConsumesFlags may be relying on dataflow dependencies
+      ;; amongst them.
+      (let ((_ Unit (emit producer_inst1))
+            (_ Unit (emit producer_inst2))
+            (_ Unit (emit consumer_inst_1))
+            (_ Unit (emit consumer_inst_2))
+            (_ Unit (emit consumer_inst_3))
+            (_ Unit (emit consumer_inst_4)))
         consumer_result))
 
 (decl with_flags_reg (ProducesFlags ConsumesFlags) Reg)
