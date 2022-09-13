@@ -919,9 +919,9 @@
 ;; Any amode can absorb an `iadd` by absorbing first the LHS of the
 ;; add, then the RHS.
 ;;
-;; Priority 2 to take this above fallbacks and ensure we traverse the
+;; Priority 4 to take this above fallbacks and ensure we traverse the
 ;; `iadd` tree fully.
-(rule 2 (amode_add amode (iadd x y))
+(rule 4 (amode_add amode (iadd x y))
       (let ((amode1 Amode (amode_add amode x))
             (amode2 Amode (amode_add amode1 y)))
         amode2))
@@ -930,7 +930,7 @@
 ;;
 ;; An Amode.ImmReg with invalid_reg (initial state) can absorb a
 ;; register as the base register.
-(rule (amode_add (Amode.ImmReg off (invalid_reg) flags) value)
+(rule 1 (amode_add (Amode.ImmReg off (invalid_reg) flags) value)
       (Amode.ImmReg off value flags))
 
 ;; -- Case 2 (adding a register to an Amode with a register already).
