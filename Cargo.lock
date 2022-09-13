@@ -545,7 +545,7 @@ dependencies = [
  "hashbrown",
  "log",
  "miette",
- "regalloc2",
+ "regalloc2 0.4.1",
  "serde",
  "sha2 0.10.2",
  "smallvec",
@@ -2405,6 +2405,18 @@ dependencies = [
 
 [[package]]
 name = "regalloc2"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d43a209257d978ef079f3d446331d0f1794f5e0fc19b306a199983857833a779"
+dependencies = [
+ "fxhash",
+ "log",
+ "slice-group-by",
+ "smallvec",
+]
+
+[[package]]
+name = "regalloc2"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69025b4a161879ba90719837c06621c3d73cffa147a000aeacf458f6a9572485"
@@ -3904,6 +3916,19 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
+
+[[package]]
+name = "winch"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cranelift-codegen",
+ "regalloc2 0.3.2",
+ "smallvec",
+ "target-lexicon",
+ "wasmparser",
+ "wasmtime-environ",
+]
 
 [[package]]
 name = "windows-sys"
