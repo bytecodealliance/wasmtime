@@ -1,7 +1,5 @@
 //! Overlap detection for rules in ISLE.
 
-use std::collections::HashSet;
-
 use crate::error::{Error, Result, Source, Span};
 use crate::sema::{
     self, ConstructorKind, Rule, RuleId, Sym, Term, TermEnv, TermId, TermKind, Type, TypeEnv,
@@ -10,8 +8,6 @@ use crate::sema::{
 
 /// Check for overlap.
 pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
-
-
     let env = Env::new(tyenv, termenv);
     let mut errors = Errors::new(termenv.rules.len());
     for term in termenv.terms.iter() {
@@ -24,7 +20,6 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
         check_overlap_groups(&mut errors, &env, term);
     }
 
-
     if !errors.is_empty() {
         let mut errors = errors.report(&env);
         return match errors.len() {
@@ -36,18 +31,24 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
     Ok(())
 }
 
+/// A node in the error graph.
 struct Node {
+    /// The number of other rules this node overlaps with.
     degree: usize,
+
+    /// `true` entries where an edge exists to the node at that index.
     edges: Vec<bool>,
 }
 
 impl Node {
+    /// Make a new `Node` in the error graph with the given number of total nodes.
     fn new(len: usize) -> Self {
         let mut edges = Vec::with_capacity(len);
         edges.resize(len, false);
         Self { degree: 0, edges }
     }
 
+    /// Add an edge between this node and the other node.
     fn add_edge(&mut self, other: RuleId) {
         if self.edges[other.0] {
             return;
@@ -57,6 +58,7 @@ impl Node {
         self.edges[other.0] = true;
     }
 
+    /// Remove an edge between this node and another node.
     fn remove_edge(&mut self, other: RuleId) {
         if !self.edges[other.0] {
             return;
@@ -67,6 +69,8 @@ impl Node {
     }
 }
 
+/// A graph of all the rules in the isle source, with bi-directional edges between rules that are
+/// discovered to have overlap problems.
 struct Errors {
     /// Edges between rules indicating overlap. As the edges are not directed, the edges are
     /// normalized by ordering the rule ids.
@@ -74,28 +78,25 @@ struct Errors {
 }
 
 impl Errors {
+    /// Make a new `Errors` graph for collecting overlap information.
     fn new(len: usize) -> Self {
         let mut nodes = Vec::with_capacity(len);
         nodes.resize_with(len, || Node::new(len));
         Self { nodes }
     }
 
+    /// True when there are no edges in the graph.
     fn is_empty(&self) -> bool {
         self.nodes.iter().all(|node| node.degree == 0)
     }
 
+    /// Condense the overlap information down into individual errors.
     fn report(&mut self, env: &Env) -> Vec<Error> {
         let mut rules: Vec<usize> = self
             .nodes
             .iter()
             .enumerate()
-            .filter_map(|(id, node)| {
-                if node.degree == 0 {
-                    None
-                } else {
-                    Some(id)
-                }
-            })
+            .filter_map(|(id, node)| if node.degree == 0 { None } else { Some(id) })
             .collect();
 
         rules.sort_by_cached_key(|id| self.nodes[*id].degree);
@@ -112,7 +113,7 @@ impl Errors {
 
         // Work backwards through the ids to find the nodes with the largest conflict first.
         for id in rules.into_iter().rev() {
-            let node = self.remove_node(RuleId(id));
+            let node = self.remove_edges(RuleId(id));
             if node.degree == 0 {
                 continue;
             }
@@ -120,13 +121,18 @@ impl Errors {
             // build the real error
             let mut rules = vec![get_info(RuleId(id))];
 
-            rules.extend(node.edges.into_iter().enumerate().filter_map(|(ix, present)| {
-                if present {
-                    Some(get_info(RuleId(ix)))
-                } else {
-                    None
-                }
-            }));
+            rules.extend(
+                node.edges
+                    .into_iter()
+                    .enumerate()
+                    .filter_map(|(ix, present)| {
+                        if present {
+                            Some(get_info(RuleId(ix)))
+                        } else {
+                            None
+                        }
+                    }),
+            );
 
             errors.push(Error::OverlapError {
                 msg: String::from("rules are overlapping"),
@@ -137,7 +143,9 @@ impl Errors {
         errors
     }
 
-    fn remove_node(&mut self, id: RuleId) -> Node {
+    /// Remove all the edges for this rule in the graph, returning the original `Node` contents for
+    /// further processing.
+    fn remove_edges(&mut self, id: RuleId) -> Node {
         let mut node = Node::new(self.nodes.len());
         std::mem::swap(&mut self.nodes[id.0], &mut node);
 
@@ -150,27 +158,31 @@ impl Errors {
         node
     }
 
+    /// Add a bidirectional edge between two rules in the graph.
     fn add_edge(&mut self, a: RuleId, b: RuleId) {
         // edges are undirected
         self.nodes[a.0].add_edge(b);
         self.nodes[b.0].add_edge(a);
     }
-}
 
-fn overlap_error(errs: &mut Errors, matrix: Matrix) {
-    for (ix, rule) in matrix.rows.iter().enumerate() {
-        for other in &matrix.rows[ix + 1..] {
-            errs.add_edge(rule.rule, other.rule);
+    /// Register all of the rules in the matrix as overlapping.
+    fn overlap_error(&mut self, matrix: Matrix) {
+        for (ix, rule) in matrix.rows.iter().enumerate() {
+            for other in &matrix.rows[ix + 1..] {
+                self.add_edge(rule.rule, other.rule);
+            }
         }
     }
 }
 
+/// Check for overlapping rules within individual priority groups.
 fn check_overlap_groups(errs: &mut Errors, env: &Env, term: &Term) {
     for matrix in Matrix::from_priority_groups(env, term.id) {
         check_overlap(errs, env, matrix);
     }
 }
 
+/// Check for overlapping rules within a single prioirty group.
 fn check_overlap(errs: &mut Errors, env: &Env, mut matrix: Matrix) {
     if matrix.is_unique() {
         return;
@@ -178,7 +190,7 @@ fn check_overlap(errs: &mut Errors, env: &Env, mut matrix: Matrix) {
 
     matrix.normalize();
     if matrix.cols_empty() {
-        overlap_error(errs, matrix);
+        errs.overlap_error(matrix);
         return;
     }
 
@@ -191,7 +203,7 @@ fn check_overlap(errs: &mut Errors, env: &Env, mut matrix: Matrix) {
 
         if !remainder.is_empty() && !remainder.is_unique() {
             if remainder.cols_empty() {
-                overlap_error(errs, remainder);
+                errs.overlap_error(remainder);
             } else if !remainder.is_unique() {
                 work.push(remainder);
             }
@@ -199,7 +211,7 @@ fn check_overlap(errs: &mut Errors, env: &Env, mut matrix: Matrix) {
 
         if !matrix.is_empty() && !matrix.is_unique() {
             if matrix.cols_empty() {
-                overlap_error(errs, matrix);
+                errs.overlap_error(matrix);
             } else if !matrix.is_unique() {
                 work.push(matrix);
             }
@@ -207,6 +219,7 @@ fn check_overlap(errs: &mut Errors, env: &Env, mut matrix: Matrix) {
     }
 }
 
+/// A convenience wrapper around the `TypeEnv` and `TermEnv` environments.
 struct Env<'a> {
     tyenv: &'a TypeEnv,
     termenv: &'a TermEnv,
@@ -238,6 +251,7 @@ impl<'a> Env<'a> {
         &self.tyenv.types[id.0]
     }
 
+    /// Fetch source information for a file id.
     fn get_source(&self, file: usize) -> Source {
         Source::new(
             self.tyenv.filenames[file].clone(),
@@ -282,27 +296,31 @@ impl<'a> Env<'a> {
 }
 
 /// A version of [`sema::Pattern`] with some simplifications to make overlap checking easier.
-/// TODO: location information for reporting errors.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 enum Pattern {
+    /// Integer literal patterns.
     Int {
         value: i128,
     },
 
+    /// Constant literal patterns, such as `$F32`.
     Const {
         name: Sym,
     },
 
+    /// Enum variant constructors.
     Variant {
         id: TermId,
         single_case: bool,
         pats: Vec<Pattern>,
     },
 
+    /// And patterns, with their sub-patterns sorted.
     And {
         pats: Vec<Pattern>,
     },
 
+    /// Extractor uses (both fallible and infallible).
     Extractor {
         id: TermId,
         pats: Vec<Pattern>,
@@ -319,6 +337,8 @@ impl Pattern {
     ///    would have introduced equalities with
     /// 3. [`sema::Pattern::Term`] instances are turned into either [`Pattern::Variant`] or
     ///    [`Pattern::Extractor`] cases depending on their term kind.
+    /// 4. [`sema::Pattern::And`] instances are sorted to ensure that we can traverse them quickly
+    ///    when specializing the matrix.
     fn from_sema(env: &Env, binds: &mut Vec<(VarId, Pattern)>, pat: &sema::Pattern) -> Self {
         match pat {
             sema::Pattern::BindPattern(_, id, pat) => {
@@ -377,6 +397,7 @@ impl Pattern {
         }
     }
 
+    /// True when this pattern is a wildcard.
     fn is_wildcard(&self) -> bool {
         match self {
             Pattern::Wildcard => true,
@@ -384,6 +405,7 @@ impl Pattern {
         }
     }
 
+    /// True when this pattern is an extractor.
     fn is_extractor(&self) -> Option<TermId> {
         match self {
             Pattern::Extractor { id, .. } => Some(*id),
@@ -391,6 +413,7 @@ impl Pattern {
         }
     }
 
+    /// True when this pattern is an and-pattern.
     fn is_and(&self) -> bool {
         match self {
             Pattern::And { .. } => true,
@@ -398,7 +421,7 @@ impl Pattern {
         }
     }
 
-    /// For `Variant` and `Extractor`, the number of arguments.
+    /// For `Variant` and `Extractor` this is the number of arguments, otherwise it is `1`.
     fn arity(&self) -> usize {
         match self {
             Pattern::Variant { pats, .. } => pats.len(),
@@ -407,7 +430,8 @@ impl Pattern {
         }
     }
 
-    /// Returns `true` for `Variant` or `Extractor`.
+    /// Returns `true` for `Variant` or `Extractor`, as these are the two cases that can be
+    /// expanded into sub-patterns.
     fn can_expand(&self) -> bool {
         match self {
             Pattern::Variant { .. } => true,
@@ -417,7 +441,9 @@ impl Pattern {
     }
 
     /// Returns `true` if this pattern could match one of the concrete patterns specified by
-    /// `other`.
+    /// `other`. NOTE: this is intentionally a shallow match, and any sub-patterns of `other` are
+    /// intentionally ignored. We're only interested in the most top-level overlap between these
+    /// patterns here.
     fn match_concrete(&self, other: &Pattern) -> bool {
         match (self, other) {
             // these are the cases where we know enough to say definitively yes or no
@@ -437,8 +463,10 @@ impl Pattern {
         }
     }
 
-    /// Extracts the that matches the template from this pattern, assuming that it's an `And`.
-    /// Updates the `And` to no longer include the pattern.
+    /// Assuming that this is an and-pattern, extract the sub-pattern that matches the template and
+    /// remove it from `self`. This operation is used when specializing columns that contain
+    /// and-patterns to another pattern, leaning on the assumption that the and-pattern matches if
+    /// any of its sub-patterns also match.
     fn extract_matching(&mut self, template: &Pattern) -> Option<Pattern> {
         if let Pattern::And { pats } = self {
             for i in 0..pats.len() {
@@ -467,12 +495,13 @@ struct Row {
 }
 
 impl Row {
+    /// Construct a rule from this rule id.
     fn from_rule(env: &Env, rule: RuleId) -> Row {
         if let sema::Pattern::Term(_, _, vars) = &env.get_rule(rule).lhs {
             let mut binds = Vec::new();
             Self {
                 // NOTE: the patterns are reversed so that it's easier to manipulate the leading
-                // column of the row.
+                // column of the row by pushing/popping the pats vector.
                 pats: vars
                     .iter()
                     .rev()
@@ -514,8 +543,11 @@ impl Row {
     }
 }
 
+/// A matrix whose rows consist rules that rewrite the same terms, and whose columns are the
+/// positional arguments to those rules.
 #[derive(Debug, Clone)]
 struct Matrix {
+    /// The rows of the rule matrix.
     rows: Vec<Row>,
 
     /// The term that this matrix represents.
@@ -526,10 +558,12 @@ struct Matrix {
 }
 
 impl Matrix {
+    /// Construct a new matrix with the given rows.
     fn new(term: TermId, prio: i64, rows: Vec<Row>) -> Self {
         Self { rows, prio, term }
     }
 
+    /// Construct one matrix for each priority group defined for a given term.
     fn from_priority_groups(env: &Env, term: TermId) -> Vec<Self> {
         let mut matrices = Vec::new();
 
@@ -590,7 +624,7 @@ impl Matrix {
     }
 
     /// Specialize the matrix according to the pattern in the first column of the first row. This
-    /// assumes that the matrix has already been normalized.
+    /// assumes that the matrix has already been normalized, and will return normalized results.
     fn specialize(&mut self, env: &Env, pat: &Pattern) -> Self {
         assert!(!self.cols_empty());
 
@@ -681,7 +715,9 @@ impl Matrix {
         }
     }
 
-    /// Expand leading patterns.
+    /// Expand the patterns of the leading column according to the given template. This function
+    /// will only handle cases where the leading column is a variant, extractor, or wildcard, as
+    /// all other cases could not reasonably introduce sub-patterns.
     fn expand_leading(&mut self, env: &Env, template: &Pattern) {
         let arity = template.arity();
         for row in self.rows.iter_mut() {
@@ -714,16 +750,19 @@ impl Matrix {
     }
 }
 
+/// A convenience struct for pretty-printing values that need an environment.
 struct WithEnv<'env, T> {
     env: &'env Env<'env>,
     value: T,
 }
 
 impl<'env, T> WithEnv<'env, T> {
+    /// Construct a new `WithEnv` for the given environment and value.
     fn new(env: &'env Env, value: T) -> Self {
         Self { env, value }
     }
 
+    /// Construct a new `WithEnv` with the same environment, but a different value.
     fn with_value<U>(&self, value: U) -> WithEnv<'env, U> {
         WithEnv {
             env: self.env,
