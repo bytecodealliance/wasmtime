@@ -21,7 +21,6 @@ pub(crate) fn lower_insn_to_regs(
     isa_flags: &aarch64_settings::Flags,
 ) -> CodegenResult<()> {
     let op = ctx.data(insn).opcode();
-    let inputs = insn_inputs(ctx, insn);
     let outputs = insn_outputs(ctx, insn);
 
     let ty = if outputs.len() > 0 {

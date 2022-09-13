@@ -486,6 +486,11 @@ impl Engine {
             }
         }
 
+        #[cfg(target_arch = "riscv64")]
+        {
+            enabled = Some(false);
+        }
+
         #[cfg(target_arch = "x86_64")]
         {
             enabled = match flag {
