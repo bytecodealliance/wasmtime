@@ -22,7 +22,7 @@ use crate::{
         StackSlot, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
-    machinst::{InsnOutput, Lower, ArgPair},
+    machinst::{ArgPair, InsnOutput, Lower},
 };
 use regalloc2::PReg;
 
