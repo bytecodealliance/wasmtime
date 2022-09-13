@@ -350,7 +350,36 @@ impl Pattern {
             sema::Pattern::Var(_, id) => {
                 for (vid, pat) in binds.iter().rev() {
                     if vid == id {
-                        // TODO: explain why we inline equality constraint
+                        // We inline equality constraints for two reasons: we specialize on the
+                        // spine of related patterns only, so more specific information about
+                        // individual values isn't necessarily helpful; we consider overlap
+                        // checking to be an over-approximation of overlapping rules, so handling
+                        // equalies ends up being best-effort. As an approximation, we use whatever
+                        // pattern happened to be at the binding of the variable for all of the
+                        // cases where it's used for equality. For example, in the following rule:
+                        //
+                        // > (rule (example x @ (Enum.Variant y) x) ...)
+                        //
+                        // we will only specialize up to `(Enum.Variant _)`, so any more specific
+                        // runtime values of `y` won't end up helping to identify overlap. As a
+                        // result, we rewrite the patterns in the rule to look more like the
+                        // following, as it greatly simplifies overlap checking.
+                        //
+                        // > (rule (example (Enum.Variant _) (Enum.Variant _)) ...)
+                        //
+                        // Cases that this scheme won't handle look like the following:
+                        //
+                        // > (rule (example2 2 3) ...)
+                        // > (rule (example2 x x) ...)
+                        //
+                        // As in this case we'll not make use of the information that `2` and `3`
+                        // aren't equal to know that the rules don't overlap. One approach that we
+                        // could take here is delaying substitution to the point where a variable
+                        // binding has been specialized, turning the rules into the following once
+                        // specialization had occurred for `2`:
+                        //
+                        // > (rule (example2 2 3) ...)
+                        // > (rule (example2 2 2) ...)
                         return pat.clone();
                     }
                 }
