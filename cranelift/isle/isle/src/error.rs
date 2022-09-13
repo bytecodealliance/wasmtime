@@ -42,12 +42,14 @@ pub enum Error {
         span: Span,
     },
 
-    /// The rules mentioned by the two spans overlap in the inputs they accept.
+    /// The rules mentioned overlap in the input they accept.
     OverlapError {
         /// The error message.
         msg: String,
 
-        /// The locations of all the rules that overlap.
+        /// The locations of all the rules that overlap. When there are more than two rules
+        /// present, the first rule is the one with the most overlaps (likely a fall-through
+        /// wildcard case).
         rules: Vec<(Source, Span)>,
     },
 
