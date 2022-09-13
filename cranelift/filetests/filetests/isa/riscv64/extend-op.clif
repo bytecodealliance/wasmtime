@@ -23,8 +23,8 @@ block0(v0: i8, v1: i64):
 }
 
 ; block0:
-;   sext.b a3,a0
-;   add a0,a3,a1
+;   sext.b a2,a0
+;   add a0,a2,a1
 ;   ret
 
 function %i128_uextend_i64(i64) -> i128 {

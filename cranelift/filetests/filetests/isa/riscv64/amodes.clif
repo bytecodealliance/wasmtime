@@ -11,9 +11,9 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   sext.w a4,a1
-;   add a4,a0,a4
-;   lw a0,0(a4)
+;   sext.w a3,a1
+;   add a3,a0,a3
+;   lw a0,0(a3)
 ;   ret
 
 function %f6(i64, i32) -> i32 {
@@ -25,9 +25,9 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   sext.w a4,a1
-;   add a4,a4,a0
-;   lw a0,0(a4)
+;   sext.w a3,a1
+;   add a3,a3,a0
+;   lw a0,0(a3)
 ;   ret
 
 function %f7(i32, i32) -> i32 {
@@ -40,10 +40,10 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   uext.w a5,a0
-;   uext.w a6,a1
-;   add a5,a5,a6
-;   lw a0,0(a5)
+;   uext.w a4,a0
+;   uext.w a5,a1
+;   add a4,a4,a5
+;   lw a0,0(a4)
 ;   ret
 
 function %f8(i64, i32) -> i32 {
@@ -58,11 +58,11 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   sext.w a6,a1
-;   addi a6,a6,32
-;   add a6,a6,a0
-;   add a6,a6,a6
-;   lw a0,4(a6)
+;   sext.w a5,a1
+;   addi a5,a5,32
+;   add a5,a5,a0
+;   add a5,a5,a5
+;   lw a0,4(a5)
 ;   ret
 
 function %f9(i64, i64, i64) -> i32 {
@@ -76,10 +76,10 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   add a7,a0,a1
-;   add a7,a7,a2
-;   addi a7,a7,48
-;   lw a0,0(a7)
+;   add a5,a0,a1
+;   add a5,a5,a2
+;   addi a5,a5,48
+;   lw a0,0(a5)
 ;   ret
 
 function %f10(i64, i64, i64) -> i32 {
@@ -93,12 +93,12 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   add t3,a0,a1
-;   add t3,t3,a2
-;   lui a7,1
-;   addi a7,a7,4
-;   add t0,t3,a7
-;   lw a0,0(t0)
+;   add a6,a0,a1
+;   add a6,a6,a2
+;   lui a5,1
+;   addi a5,a5,4
+;   add t3,a6,a5
+;   lw a0,0(t3)
 ;   ret
 
 function %f10() -> i32 {
@@ -177,10 +177,10 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   sext.w a5,a0
-;   sext.w a6,a1
-;   add a5,a5,a6
-;   lw a0,0(a5)
+;   sext.w a4,a0
+;   sext.w a5,a1
+;   add a4,a4,a5
+;   lw a0,0(a4)
 ;   ret
 
 function %f18(i64, i64, i64) -> i32 {
@@ -192,10 +192,10 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   lui a5,1048575
-;   addi a5,a5,4094
-;   uext.w t3,a5
-;   lh a0,0(t3)
+;   lui a3,1048575
+;   addi a3,a3,4094
+;   uext.w a6,a3
+;   lh a0,0(a6)
 ;   ret
 
 function %f19(i64, i64, i64) -> i32 {
@@ -207,10 +207,10 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   lui a5,1
-;   addi a5,a5,2
-;   uext.w t3,a5
-;   lh a0,0(t3)
+;   lui a3,1
+;   addi a3,a3,2
+;   uext.w a6,a3
+;   lh a0,0(a6)
 ;   ret
 
 function %f20(i64, i64, i64) -> i32 {
@@ -222,10 +222,10 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   lui a5,1048575
-;   addi a5,a5,4094
-;   sext.w t3,a5
-;   lh a0,0(t3)
+;   lui a3,1048575
+;   addi a3,a3,4094
+;   sext.w a6,a3
+;   lh a0,0(a6)
 ;   ret
 
 function %f21(i64, i64, i64) -> i32 {
@@ -237,10 +237,10 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   lui a5,1
-;   addi a5,a5,2
-;   sext.w t3,a5
-;   lh a0,0(t3)
+;   lui a3,1
+;   addi a3,a3,2
+;   sext.w a6,a3
+;   lh a0,0(a6)
 ;   ret
 
 function %i128(i64) -> i128 {
@@ -354,12 +354,12 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   sext.w a7,a1
-;   add a7,a0,a7
-;   addi a7,a7,24
-;   ld a0,0(a7)
-;   ld a1,8(a7)
-;   sd a0,0(a7)
-;   sd a1,8(a7)
+;   sext.w a6,a1
+;   add a6,a0,a6
+;   addi a6,a6,24
+;   ld a0,0(a6)
+;   ld a1,8(a6)
+;   sd a0,0(a6)
+;   sd a1,8(a6)
 ;   ret
 
