@@ -6,8 +6,6 @@ name: "Performance Testing"
 # Controls when the action will run.
 # This workflow runs when manually triggered using the UI or API.
 on:
-  issue_comment:
-    types: [created, edited]
   pull_request_review_comment:
     types: [created, edited]
 #  push:
@@ -26,7 +24,7 @@ jobs:
 #    if: (github.event_name == 'push') && (github.repository != 'bytecodealliance/wasmtime-sightglass-benchmarking')
     if: |
       startsWith(github.event.comment.body, '/bench_x64') &&
-      (github.event.issue.pull_request) &&
+      (github.event.issue.pull_request_review_comment) &&
       (('abrown' == github.event.comment.user.login)
         || ('afonso360' == github.event.comment.user.login)
         || ('akirilov-arm' == github.event.comment.user.login)
