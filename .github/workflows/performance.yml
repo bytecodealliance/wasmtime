@@ -8,7 +8,7 @@ name: "Performance Testing"
 on:
   pull_request_review_comment:
     types: [created, edited]
-#  push:
+  push:
 
 # Env variables
 env:
@@ -67,7 +67,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     if: (github.event_name == 'push') && (github.repository == 'bytecodealliance/wasmtime-sightglass-benchmarking')
     steps:
-#      - run: echo "$GITHUB_CONTEXT"
+      - run: echo "$GITHUB_CONTEXT"
       - run: echo "${{ github.event.head_commit.message }}"
 #      - name: "Build sightglass commit '${{ env.SG_COMMIT }}'"
 #        run: |
