@@ -130,9 +130,9 @@ block0:
 
 ; block0:
 ;   movz x0, #58
-;   movk x0, #4626, LSL #16
-;   movk x0, #61603, LSL #32
-;   movk x0, #62283, LSL #48
+;   movk x0, x0, #4626, LSL #16
+;   movk x0, x0, #61603, LSL #32
+;   movk x0, x0, #62283, LSL #48
 ;   ret
 
 function %f() -> i64 {
@@ -143,7 +143,7 @@ block0:
 
 ; block0:
 ;   movz x0, #7924, LSL #16
-;   movk x0, #4841, LSL #48
+;   movk x0, x0, #4841, LSL #48
 ;   ret
 
 function %f() -> i64 {
@@ -154,7 +154,7 @@ block0:
 
 ; block0:
 ;   movn x0, #57611, LSL #16
-;   movk x0, #4841, LSL #48
+;   movk x0, x0, #4841, LSL #48
 ;   ret
 
 function %f() -> i32 {

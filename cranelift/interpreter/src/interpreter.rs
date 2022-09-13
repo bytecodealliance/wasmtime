@@ -740,7 +740,7 @@ mod tests {
     #[test]
     fn state_flags() {
         let mut state = InterpreterState::default();
-        let flag = IntCC::Overflow;
+        let flag = IntCC::UnsignedLessThan;
         assert!(!state.has_iflag(flag));
         state.set_iflag(flag);
         assert!(state.has_iflag(flag));

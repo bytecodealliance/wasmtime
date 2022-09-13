@@ -392,7 +392,6 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::Fvdemote => vec_not_implemented(),
 
-        Opcode::ConstAddr => vec_not_implemented(),
         Opcode::Vconcat | Opcode::Vsplit => vec_not_implemented(),
         Opcode::ExtractVector => vec_not_implemented(),
 

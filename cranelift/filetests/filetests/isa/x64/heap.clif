@@ -1,6 +1,23 @@
 test compile precise-output
 target x86_64
 
+;; Calculate a heap address on a dynamically-allocated memory. Because the
+;; Spectre mitigations are on by default (i.e.,
+;; `set enable_heap_access_spectre_mitigation=true`), this code not only does
+;; the dynamic bounds check (`add + jnb + cmp + jbe + j`) but also re-compares
+;; the address to the upper bound (`add + xor + cmp + cmov`)--Cranelift's
+;; Spectre mitigation. With loads and ignoring intermediate `mov`s, this amounts
+;; to a 10-instruction sequence.
+;;
+;; And it uses quite a few registers; see this breakdown of what each register
+;; generally contains:
+;; - %rax holds the passed-in heap offset (argument #1) and ends up holding the
+;;   final address
+;; - %rcx also holds the passed-in heap offset; checked for overflow when added
+;;   to the `0x8000` immediate
+;; - %rsi holds the VM context pointer (argument #2)
+;; - %rdi holds the heap limit (computed from argument #2)
+;; - %rdx holds the null pointer
 function %f(i32, i64 vmctx) -> i64 {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+0
@@ -8,7 +25,6 @@ function %f(i32, i64 vmctx) -> i64 {
     heap0 = dynamic gv1, bound gv2, offset_guard 0x1000, index_type i32
 
 block0(v0: i32, v1: i64):
-
     v2 = heap_addr.i64 heap0, v0, 0x8000
     return v2
 }
@@ -33,4 +49,58 @@ block0(v0: i32, v1: i64):
 ;   ret
 ; block2:
 ;   ud2 heap_oob
+
+;; The heap address calculation for this statically-allocated memory checks that
+;; the passed offset (%r11) is within bounds (`cmp + jbe + j`) and then includes
+;; the same Spectre mitigation as above. This results in a 7-instruction
+;; sequence (ignoring `mov`s).
+function %f(i64 vmctx, i32) -> i64 system_v {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    heap0 = static gv1, bound 0x1000, offset_guard 0x1000, index_type i32
+
+block0(v0: i64, v1: i32):
+    v10 = heap_addr.i64 heap0, v1, 0
+    return v10
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    %esi, %r10d
+;   cmpq    $4096, %r10
+;   jbe     label1; j label2
+; block1:
+;   movq    %r10, %rax
+;   addq    %rax, 0(%rdi), %rax
+;   xorq    %r11, %r11, %r11
+;   cmpq    $4096, %r10
+;   cmovnbeq %r11, %rax, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   ud2 heap_oob
+
+;; When a static memory is the "right" size (4GB memory, 2GB guard regions), the
+;; Spectre mitigation is not present. Cranelift relies on the memory permissions
+;; and emits no bounds checking, simply `add`--a single instruction.
+function %f(i64 vmctx, i32) -> i64 system_v {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    heap0 = static gv1, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
+
+block0(v0: i64, v1: i32):
+    v10 = heap_addr.i64 heap0, v1, 0
+    return v10
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    %esi, %eax
+;   addq    %rax, 0(%rdi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 

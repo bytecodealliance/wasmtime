@@ -200,8 +200,7 @@ impl LowerBackend for S390xBackend {
                 )
             }
 
-            Opcode::ConstAddr
-            | Opcode::GetPinnedReg
+            Opcode::GetPinnedReg
             | Opcode::SetPinnedReg
             | Opcode::Vsplit
             | Opcode::Vconcat

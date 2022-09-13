@@ -1,0 +1,85 @@
+test compile precise-output
+set enable_heap_access_spectre_mitigation=false
+target x86_64
+
+;; Calculate a heap address on a dynamically-allocated memory with Spectre
+;; mitigations disabled. This is a 7-instruction sequence with loads, ignoring
+;; intermediate `mov`s.
+function %f(i32, i64 vmctx) -> i64 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    gv2 = load.i64 notrap aligned gv0+8
+    heap0 = dynamic gv1, bound gv2, offset_guard 0x1000, index_type i32
+
+block0(v0: i32, v1: i64):
+    v2 = heap_addr.i64 heap0, v0, 0x8000
+    return v2
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    %edi, %eax
+;   movq    8(%rsi), %r10
+;   movq    %rax, %r11
+;   addq    %r11, $32768, %r11
+;   jnb ; ud2 heap_oob ;
+;   cmpq    %r10, %r11
+;   jbe     label1; j label2
+; block1:
+;   addq    %rax, 0(%rsi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   ud2 heap_oob
+
+;; For a static memory with no Spectre mitigations, we observe a smaller amount
+;; of bounds checking: the offset check (`cmp + jbe + j`) and the offset
+;; calculation (`add`)--4 instructions.
+function %f(i64 vmctx, i32) -> i64 system_v {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    heap0 = static gv1, bound 0x1000, offset_guard 0x1000, index_type i32
+
+block0(v0: i64, v1: i32):
+    v10 = heap_addr.i64 heap0, v1, 0
+    return v10
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    %esi, %eax
+;   cmpq    $4096, %rax
+;   jbe     label1; j label2
+; block1:
+;   addq    %rax, 0(%rdi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   ud2 heap_oob
+
+;; For a static memory with no Spectre mitigations and the "right" size (4GB
+;; memory, 2GB guard regions), Cranelift emits no bounds checking, simply
+;; `add`--a single instruction.
+function %f(i64 vmctx, i32) -> i64 system_v {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    heap0 = static gv1, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
+
+block0(v0: i64, v1: i32):
+    v10 = heap_addr.i64 heap0, v1, 0
+    return v10
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    %esi, %eax
+;   addq    %rax, 0(%rdi), %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

@@ -516,7 +516,6 @@ impl Inst {
                     kind: low(cc.unsigned()),
                 });
             }
-            IntCC::Overflow | IntCC::NotOverflow => overflow_already_lowerd(),
         }
         insts
     }
@@ -867,6 +866,10 @@ impl MachInstEmit for Inst {
                 insts
                     .into_iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
+            }
+            &Inst::Args { .. } => {
+                // Nothing: this is a pseudoinstruction that serves
+                // only to constrain registers at a certain point.
             }
             &Inst::Ret { .. } => {
                 //jalr x0, x1, 0

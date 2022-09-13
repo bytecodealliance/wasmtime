@@ -46,7 +46,6 @@ pub trait Value: Clone + From<DataValue> {
         Ok(other.eq(self)? || other.gt(self)?)
     }
     fn uno(&self, other: &Self) -> ValueResult<bool>;
-    fn overflow(&self, other: &Self) -> ValueResult<bool>;
 
     // Arithmetic.
     fn add(self, other: Self) -> ValueResult<Self>;
@@ -205,14 +204,6 @@ macro_rules! binary_match {
             (DataValue::I64(a), DataValue::I64(b)) => { Ok(DataValue::I64((u64::try_from(*a)?.$op(u64::try_from(*b)?) as i64))) }
             (DataValue::I128(a), DataValue::I128(b)) => { Ok(DataValue::I128((u128::try_from(*a)?.$op(u128::try_from(*b)?) as i64))) }
             _ => { Err(ValueError::InvalidType(ValueTypeClass::Integer, if !($arg1).ty().is_int() { ($arg1).ty() } else { ($arg2).ty() })) }
-        }
-    };
-}
-macro_rules! comparison_match {
-    ( $op:path[$arg1:expr, $arg2:expr]; [ $( $data_value_ty:ident ),* ] ) => {
-        match ($arg1, $arg2) {
-            $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => { Ok($op(a, b)) } )*
-            _ => unimplemented!("comparison: {:?}, {:?}", $arg1, $arg2)
         }
     };
 }
@@ -475,26 +466,15 @@ impl Value for DataValue {
     }
 
     fn eq(&self, other: &Self) -> ValueResult<bool> {
-        comparison_match!(PartialEq::eq[&self, &other]; [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128, F32, F64])
+        Ok(self == other)
     }
 
     fn gt(&self, other: &Self) -> ValueResult<bool> {
-        comparison_match!(PartialOrd::gt[&self, &other]; [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128, F32, F64])
+        Ok(self > other)
     }
 
     fn uno(&self, other: &Self) -> ValueResult<bool> {
         Ok(self.is_nan()? || other.is_nan()?)
-    }
-
-    fn overflow(&self, other: &Self) -> ValueResult<bool> {
-        Ok(match (self, other) {
-            (DataValue::I8(a), DataValue::I8(b)) => a.checked_sub(*b).is_none(),
-            (DataValue::I16(a), DataValue::I16(b)) => a.checked_sub(*b).is_none(),
-            (DataValue::I32(a), DataValue::I32(b)) => a.checked_sub(*b).is_none(),
-            (DataValue::I64(a), DataValue::I64(b)) => a.checked_sub(*b).is_none(),
-            (DataValue::I128(a), DataValue::I128(b)) => a.checked_sub(*b).is_none(),
-            _ => unimplemented!(),
-        })
     }
 
     fn add(self, other: Self) -> ValueResult<Self> {

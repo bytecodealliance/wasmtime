@@ -178,6 +178,20 @@ pub fn pretty_print_reg(reg: Reg, allocs: &mut AllocationConsumer<'_>) -> String
     show_reg(reg)
 }
 
+pub fn pretty_print_reg_mod(
+    rd: Writable<Reg>,
+    ri: Reg,
+    allocs: &mut AllocationConsumer<'_>,
+) -> String {
+    let output = allocs.next_writable(rd).to_reg();
+    let input = allocs.next(ri);
+    if output == input {
+        show_reg(output)
+    } else {
+        format!("{}<-{}", show_reg(output), show_reg(input))
+    }
+}
+
 pub fn pretty_print_fpr(reg: Reg, allocs: &mut AllocationConsumer<'_>) -> (String, Option<String>) {
     let reg = allocs.next(reg);
     (show_reg(reg), maybe_show_fpr(reg))

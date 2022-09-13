@@ -45,10 +45,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x11, lo
+;   cset x7, lo
 ;   subs xzr, x1, x3
-;   cset x14, lt
-;   csel x0, x11, x14, eq
+;   cset x10, lt
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %icmp_ult_i128(i128, i128) -> b1 {
@@ -59,10 +59,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x11, lo
+;   cset x7, lo
 ;   subs xzr, x1, x3
-;   cset x14, lo
-;   csel x0, x11, x14, eq
+;   cset x10, lo
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %icmp_sle_i128(i128, i128) -> b1 {
@@ -73,10 +73,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x11, ls
+;   cset x7, ls
 ;   subs xzr, x1, x3
-;   cset x14, le
-;   csel x0, x11, x14, eq
+;   cset x10, le
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %icmp_ule_i128(i128, i128) -> b1 {
@@ -87,10 +87,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x11, ls
+;   cset x7, ls
 ;   subs xzr, x1, x3
-;   cset x14, ls
-;   csel x0, x11, x14, eq
+;   cset x10, ls
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %icmp_sgt_i128(i128, i128) -> b1 {
@@ -101,10 +101,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x11, hi
+;   cset x7, hi
 ;   subs xzr, x1, x3
-;   cset x14, gt
-;   csel x0, x11, x14, eq
+;   cset x10, gt
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %icmp_ugt_i128(i128, i128) -> b1 {
@@ -115,10 +115,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x11, hi
+;   cset x7, hi
 ;   subs xzr, x1, x3
-;   cset x14, hi
-;   csel x0, x11, x14, eq
+;   cset x10, hi
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %icmp_sge_i128(i128, i128) -> b1 {
@@ -129,10 +129,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x11, hs
+;   cset x7, hs
 ;   subs xzr, x1, x3
-;   cset x14, ge
-;   csel x0, x11, x14, eq
+;   cset x10, ge
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %icmp_uge_i128(i128, i128) -> b1 {
@@ -143,40 +143,10 @@ block0(v0: i128, v1: i128):
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x11, hs
+;   cset x7, hs
 ;   subs xzr, x1, x3
-;   cset x14, hs
-;   csel x0, x11, x14, eq
-;   ret
-
-function %icmp_of_i128(i128, i128) -> b1 {
-block0(v0: i128, v1: i128):
-  v2 = icmp of v0, v1
-  return v2
-}
-
-; block0:
-;   subs xzr, x0, x2
-;   sbcs x11, x1, x3
-;   eor x13, x1, x3
-;   eor x11, x1, x11
-;   ands xzr, x13, x11
-;   cset x0, lt
-;   ret
-
-function %icmp_nof_i128(i128, i128) -> b1 {
-block0(v0: i128, v1: i128):
-  v2 = icmp nof v0, v1
-  return v2
-}
-
-; block0:
-;   subs xzr, x0, x2
-;   sbcs x11, x1, x3
-;   eor x13, x1, x3
-;   eor x11, x1, x11
-;   ands xzr, x13, x11
-;   cset x0, ge
+;   cset x10, hs
+;   csel x0, x7, x10, eq
 ;   ret
 
 function %f(i64, i64) -> i64 {
@@ -237,8 +207,8 @@ block1:
 }
 
 ; block0:
-;   orr x4, x0, x1
-;   cbz x4, label1 ; b label2
+;   orr x3, x0, x1
+;   cbz x3, label1 ; b label2
 ; block1:
 ;   b label3
 ; block2:
@@ -257,8 +227,8 @@ block1:
 }
 
 ; block0:
-;   orr x4, x0, x1
-;   cbnz x4, label1 ; b label2
+;   orr x3, x0, x1
+;   cbnz x3, label1 ; b label2
 ; block1:
 ;   b label3
 ; block2:
@@ -317,11 +287,11 @@ block1:
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x9, lo
+;   cset x6, lo
 ;   subs xzr, x1, x3
-;   cset x12, lt
-;   csel x9, x9, x12, eq
-;   subs xzr, xzr, x9
+;   cset x9, lt
+;   csel x6, x6, x9, eq
+;   subs xzr, xzr, x6
 ;   b.lt label1 ; b label2
 ; block1:
 ;   b label3
@@ -341,11 +311,11 @@ block1:
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x9, lo
+;   cset x6, lo
 ;   subs xzr, x1, x3
-;   cset x12, lo
-;   csel x9, x9, x12, eq
-;   subs xzr, xzr, x9
+;   cset x9, lo
+;   csel x6, x6, x9, eq
+;   subs xzr, xzr, x6
 ;   b.lo label1 ; b label2
 ; block1:
 ;   b label3
@@ -365,12 +335,12 @@ block1:
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x9, ls
+;   cset x6, ls
 ;   subs xzr, x1, x3
-;   cset x12, le
-;   csel x9, x9, x12, eq
-;   movz x12, #1
-;   subs xzr, x12, x9
+;   cset x9, le
+;   csel x6, x6, x9, eq
+;   movz x9, #1
+;   subs xzr, x9, x6
 ;   b.le label1 ; b label2
 ; block1:
 ;   b label3
@@ -390,12 +360,12 @@ block1:
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x9, ls
+;   cset x6, ls
 ;   subs xzr, x1, x3
-;   cset x12, ls
-;   csel x9, x9, x12, eq
-;   movz x12, #1
-;   subs xzr, x12, x9
+;   cset x9, ls
+;   csel x6, x6, x9, eq
+;   movz x9, #1
+;   subs xzr, x9, x6
 ;   b.ls label1 ; b label2
 ; block1:
 ;   b label3
@@ -415,11 +385,11 @@ block1:
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x9, hi
+;   cset x6, hi
 ;   subs xzr, x1, x3
-;   cset x12, gt
-;   csel x9, x9, x12, eq
-;   subs xzr, x9, xzr
+;   cset x9, gt
+;   csel x6, x6, x9, eq
+;   subs xzr, x6, xzr
 ;   b.gt label1 ; b label2
 ; block1:
 ;   b label3
@@ -439,11 +409,11 @@ block1:
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x9, hi
+;   cset x6, hi
 ;   subs xzr, x1, x3
-;   cset x12, hi
-;   csel x9, x9, x12, eq
-;   subs xzr, x9, xzr
+;   cset x9, hi
+;   csel x6, x6, x9, eq
+;   subs xzr, x6, xzr
 ;   b.hi label1 ; b label2
 ; block1:
 ;   b label3
@@ -463,12 +433,12 @@ block1:
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x9, hs
+;   cset x6, hs
 ;   subs xzr, x1, x3
-;   cset x12, ge
-;   csel x9, x9, x12, eq
-;   movz x12, #1
-;   subs xzr, x9, x12
+;   cset x9, ge
+;   csel x6, x6, x9, eq
+;   movz x9, #1
+;   subs xzr, x6, x9
 ;   b.ge label1 ; b label2
 ; block1:
 ;   b label3
@@ -488,12 +458,12 @@ block1:
 
 ; block0:
 ;   subs xzr, x0, x2
-;   cset x9, hs
+;   cset x6, hs
 ;   subs xzr, x1, x3
-;   cset x12, hs
-;   csel x9, x9, x12, eq
-;   movz x12, #1
-;   subs xzr, x9, x12
+;   cset x9, hs
+;   csel x6, x6, x9, eq
+;   movz x9, #1
+;   subs xzr, x6, x9
 ;   b.hs label1 ; b label2
 ; block1:
 ;   b label3
@@ -501,50 +471,3 @@ block1:
 ;   b label3
 ; block3:
 ;   ret
-
-function %i128_bricmp_of(i128, i128) {
-block0(v0: i128, v1: i128):
-  br_icmp of v0, v1, block1
-  jump block1
-
-block1:
-  return
-}
-
-; block0:
-;   subs xzr, x0, x2
-;   sbcs x9, x1, x3
-;   eor x11, x1, x3
-;   eor x9, x1, x9
-;   ands xzr, x11, x9
-;   b.lt label1 ; b label2
-; block1:
-;   b label3
-; block2:
-;   b label3
-; block3:
-;   ret
-
-function %i128_bricmp_nof(i128, i128) {
-block0(v0: i128, v1: i128):
-  br_icmp nof v0, v1, block1
-  jump block1
-
-block1:
-  return
-}
-
-; block0:
-;   subs xzr, x0, x2
-;   sbcs x9, x1, x3
-;   eor x11, x1, x3
-;   eor x9, x1, x9
-;   ands xzr, x11, x9
-;   b.ge label1 ; b label2
-; block1:
-;   b label3
-; block2:
-;   b label3
-; block3:
-;   ret
-

@@ -227,6 +227,10 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         specified
     }
 
+    fn gen_args(_isa_flags: &crate::isa::riscv64::settings::Flags, args: Vec<ArgPair>) -> Inst {
+        Inst::Args { args }
+    }
+
     fn gen_ret(_setup_frame: bool, _isa_flags: &Self::F, rets: Vec<Reg>) -> Inst {
         Inst::Ret { rets }
     }
@@ -367,6 +371,10 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             }),
         });
         insts
+    }
+
+    fn gen_inline_probestack(_frame_size: u32, _guard_size: u32) -> SmallInstVec<Self::I> {
+        unimplemented!("Inline stack probing is unimplemented on Riscv64");
     }
 
     // Returns stack bytes used as well as instructions. Does not adjust

@@ -100,6 +100,9 @@ pub trait MachInst: Clone + Debug {
     /// (ret/uncond/cond) and target if applicable.
     fn is_term(&self) -> MachTerminator;
 
+    /// Is this an "args" pseudoinst?
+    fn is_args(&self) -> bool;
+
     /// Should this instruction be included in the clobber-set?
     fn is_included_in_clobbers(&self) -> bool {
         true
@@ -167,6 +170,16 @@ pub trait MachInst: Clone + Debug {
 
     /// Is this a safepoint?
     fn is_safepoint(&self) -> bool;
+
+    /// Generate an instruction that must appear at the beginning of a basic
+    /// block, if any. Note that the return value must not be subject to
+    /// register allocation.
+    fn gen_block_start(
+        _is_indirect_branch_target: bool,
+        _is_forward_edge_cfi_enabled: bool,
+    ) -> Option<Self> {
+        None
+    }
 
     /// A label-use kind: a type that describes the types of label references that
     /// can occur in an instruction.
@@ -300,6 +313,9 @@ pub struct CompiledCodeBase<T: CompilePhase> {
     /// This info is generated only if the `machine_code_cfg_info`
     /// flag is set.
     pub bb_edges: Vec<(CodeOffset, CodeOffset)>,
+    /// Minimum alignment for the function, derived from the use of any
+    /// pc-relative loads.
+    pub alignment: u32,
 }
 
 impl CompiledCodeStencil {
@@ -314,6 +330,7 @@ impl CompiledCodeStencil {
             dynamic_stackslot_offsets: self.dynamic_stackslot_offsets,
             bb_starts: self.bb_starts,
             bb_edges: self.bb_edges,
+            alignment: self.alignment,
         }
     }
 }
@@ -355,7 +372,7 @@ pub trait TextSectionBuilder {
     ///
     /// This function returns the offset at which the data was placed in the
     /// text section.
-    fn append(&mut self, labeled: bool, data: &[u8], align: Option<u32>) -> u64;
+    fn append(&mut self, labeled: bool, data: &[u8], align: u32) -> u64;
 
     /// Attempts to resolve a relocation for this function.
     ///

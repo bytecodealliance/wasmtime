@@ -109,15 +109,15 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64):
 }
 
 ; block0:
-;   uxtb w0, w0
-;   ucvtf s26, w0
-;   uxth w0, w1
-;   ucvtf s27, w0
-;   ucvtf s25, w2
-;   ucvtf s28, x3
-;   fadd s26, s26, s27
-;   fadd s25, s26, s25
-;   fadd s0, s25, s28
+;   uxtb w13, w0
+;   ucvtf s23, w13
+;   uxth w13, w1
+;   ucvtf s24, w13
+;   ucvtf s22, w2
+;   ucvtf s25, x3
+;   fadd s23, s23, s24
+;   fadd s22, s23, s22
+;   fadd s0, s22, s25
 ;   ret
 
 function %f11(i32x4) -> f64x2 {

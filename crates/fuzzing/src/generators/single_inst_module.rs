@@ -20,21 +20,28 @@ pub struct SingleInstModule<'a> {
     parameters: &'a [ValType],
     results: &'a [ValType],
     feature: fn(&ModuleConfig) -> bool,
+    canonicalize_nan: Option<NanType>,
+}
+
+/// Valid types for NaN canonicalization.
+///
+/// When fuzzing floating point values, a NaN result can have non-deterministic
+/// bits in the payload. In order to compare these results, [`SingleInstModule`]
+/// can convert any NaN values (or NaN lanes) to a canonical NaN value for any
+/// of these types.
+#[derive(Clone)]
+enum NanType {
+    #[allow(dead_code)]
+    F32,
+    #[allow(dead_code)]
+    F64,
+    F32x4,
+    F64x2,
 }
 
 impl<'a> SingleInstModule<'a> {
     /// Choose a single-instruction module that matches `config`.
-    pub fn new(u: &mut Unstructured<'a>, config: &mut ModuleConfig) -> arbitrary::Result<&'a Self> {
-        // To avoid skipping modules unnecessarily during fuzzing, fix up the
-        // `ModuleConfig` to match the inherent limits of a single-instruction
-        // module.
-        config.config.min_funcs = 1;
-        config.config.max_funcs = 1;
-        config.config.min_tables = 0;
-        config.config.max_tables = 0;
-        config.config.min_memories = 0;
-        config.config.max_memories = 0;
-
+    pub fn new(u: &mut Unstructured<'a>, config: &ModuleConfig) -> arbitrary::Result<&'a Self> {
         // Only select instructions that match the `ModuleConfig`.
         let instructions = &INSTRUCTIONS
             .iter()
@@ -69,11 +76,77 @@ impl<'a> SingleInstModule<'a> {
 
         // Encode the code section.
         let mut codes = CodeSection::new();
-        let mut f = Function::new([]);
+
+        // Set up the single-instruction function. Note that if we have chosen
+        // to canonicalize NaNs, this function will contain more than one
+        // instruction and the function will need a scratch local.
+        let mut f = if let Some(ty) = &self.canonicalize_nan {
+            Function::new(match ty {
+                NanType::F32 => vec![(1, ValType::F32)],
+                NanType::F64 => vec![(1, ValType::F64)],
+                NanType::F32x4 | NanType::F64x2 => vec![(1, ValType::V128)],
+            })
+        } else {
+            Function::new([])
+        };
+
+        // Retrieve the input values and execute the chosen instruction.
         for (index, _) in self.parameters.iter().enumerate() {
             f.instruction(&Instruction::LocalGet(index as u32));
         }
         f.instruction(&self.instruction);
+
+        // If we have configured to canonicalize NaNs, we add a sequence that
+        // masks off the NaN payload bits to make them 0s (i.e., a canonical
+        // NaN). This sequence is adapted from wasm-smiths version; see
+        // https://github.com/bytecodealliance/wasm-tools/blob/6c127a6/crates/wasm-smith/src/core/code_builder.rs#L927.
+        if let Some(ty) = &self.canonicalize_nan {
+            // Save the previous instruction's result into the scratch local.
+            // This also leaves a value on the stack as for the `select`
+            // instruction.
+            let local = self.parameters.len() as u32;
+            f.instruction(&Instruction::LocalTee(local));
+
+            // The other input to the `select` below--a canonical NaN. Note how
+            // the payload bits of the NaN are cleared.
+            const CANON_32BIT_NAN: u32 = 0b01111111110000000000000000000000;
+            const CANON_64BIT_NAN: u64 =
+                0b0111111111111000000000000000000000000000000000000000000000000000;
+            let mask = match ty {
+                NanType::F32 => Instruction::F32Const(f32::from_bits(CANON_32BIT_NAN)),
+                NanType::F64 => Instruction::F64Const(f64::from_bits(CANON_64BIT_NAN)),
+                NanType::F32x4 => {
+                    let nan = CANON_32BIT_NAN as i128;
+                    Instruction::V128Const(nan | (nan << 32) | (nan << 64) | (nan << 96))
+                }
+                NanType::F64x2 => {
+                    let nan = CANON_64BIT_NAN as i128;
+                    Instruction::V128Const(nan | (nan << 64))
+                }
+            };
+            f.instruction(&mask);
+
+            // The `select` condition. NaNs never equal each other, so here the
+            // result value is compared against itself.
+            f.instruction(&Instruction::LocalGet(local));
+            f.instruction(&Instruction::LocalGet(local));
+            f.instruction(match ty {
+                NanType::F32 => &Instruction::F32Eq,
+                NanType::F64 => &Instruction::F64Eq,
+                NanType::F32x4 => &Instruction::F32x4Eq,
+                NanType::F64x2 => &Instruction::F64x2Eq,
+            });
+
+            // Select the result. If the condition is nonzero (i.e., the float
+            // is equal to itself) it picks the original value; otherwise, if
+            // zero (i.e., the float is a NaN) it picks the canonical NaN value.
+            f.instruction(match ty {
+                NanType::F32 | NanType::F64 => &Instruction::Select,
+                NanType::F32x4 | NanType::F64x2 => &Instruction::V128Bitselect,
+            });
+        }
+
+        // Wrap up the function and section.
         f.instruction(&Instruction::End);
         codes.function(&f);
         module.section(&codes);
@@ -103,6 +176,9 @@ macro_rules! valtype {
     (f64) => {
         ValType::F64
     };
+    (v128) => {
+        ValType::V128
+    };
 }
 
 macro_rules! inst {
@@ -110,15 +186,25 @@ macro_rules! inst {
         inst! { $inst, ($($arguments_ty),*) -> $result_ty, |_| true }
     };
     ($inst:ident, ($($arguments_ty:tt),*) -> $result_ty:tt, $feature:expr) => {
+        inst! { $inst, ($($arguments_ty),*) -> $result_ty, $feature, None }
+    };
+    ($inst:ident, ($($arguments_ty:tt),*) -> $result_ty:tt, $feature:expr, $nan:expr) => {
         SingleInstModule {
             instruction: Instruction::$inst,
             parameters: &[$(valtype!($arguments_ty)),*],
             results: &[valtype!($result_ty)],
             feature: $feature,
+            canonicalize_nan: $nan,
         }
     };
 }
 
+// INSTRUCTIONS
+//
+// This list of WebAssembly instructions attempts to roughly follow the
+// structure of the W3C specification:
+// https://webassembly.github.io/spec/core/appendix/index-instructions.html#index-instr.
+// Certain kinds of instructions (e.g., memory access) are skipped for now.
 static INSTRUCTIONS: &[SingleInstModule] = &[
     // Integer arithmetic.
     // I32Const
@@ -267,6 +353,221 @@ static INSTRUCTIONS: &[SingleInstModule] = &[
     inst!(F64ConvertI64U, (i64) -> f64),
     inst!(F32ReinterpretI32, (i32) -> f32),
     inst!(F64ReinterpretI64, (i64) -> f64),
+    // SIMD instructions.
+    // V128Const
+    // I8x16Shuffle
+    inst!(I8x16Swizzle, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16Splat, (i32) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8Splat, (i32) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4Splat, (i32) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2Splat, (i64) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4Splat, (f32) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2Splat, (f64) -> v128, |c| c.config.simd_enabled),
+    // I8x16ExtractLaneS
+    // I8x16ExtractLaneU
+    // I8x16ReplaceLane
+    // I16x8ExtractLaneS
+    // I16x8ExtractLaneU
+    // I16x8ReplaceLane
+    // I32x4ExtractLane
+    // I32x4ReplaceLane
+    // I64x2ExtractLane
+    // I64x2ReplaceLane
+    // F32x4ExtractLane
+    // F32x4ReplaceLane
+    // F64x2ExtractLane
+    // F64x2ReplaceLane
+    inst!(I8x16Eq, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16Ne, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16LtS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16LtU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16GtS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16GtU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16LeS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16LeU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16GeS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16GeU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8Eq, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8Ne, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8LtS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8LtU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8GtS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8GtU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8LeS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8LeU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8GeS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8GeU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4Eq, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4Ne, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4LtS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4LtU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4GtS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4GtU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4LeS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4LeU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4GeS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4GeU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2Eq, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2Ne, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2LtS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2GtS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2LeS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2GeS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4Eq, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4Ne, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4Lt, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4Gt, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4Le, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4Ge, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2Eq, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2Ne, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2Lt, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2Gt, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2Le, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2Ge, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(V128Not, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(V128And, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(V128AndNot, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(V128Or, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(V128Xor, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(V128Bitselect, (v128, v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(V128AnyTrue, (v128) -> i32, |c| c.config.simd_enabled),
+    inst!(I8x16Abs, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16Neg, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16Popcnt, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16AllTrue, (v128) -> i32, |c| c.config.simd_enabled),
+    inst!(I8x16Bitmask, (v128) -> i32, |c| c.config.simd_enabled),
+    inst!(I8x16NarrowI16x8S, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16NarrowI16x8U, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16Shl, (v128, i32) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16ShrS, (v128, i32) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16ShrU, (v128, i32) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16Add, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16AddSatS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16AddSatU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16Sub, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16SubSatS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16SubSatU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16MinS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16MinU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16MaxS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16MaxU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I8x16RoundingAverageU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8ExtAddPairwiseI8x16S, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8ExtAddPairwiseI8x16U, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8Abs, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8Neg, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8Q15MulrSatS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8AllTrue, (v128) -> i32, |c| c.config.simd_enabled),
+    inst!(I16x8Bitmask, (v128) -> i32, |c| c.config.simd_enabled),
+    inst!(I16x8NarrowI32x4S, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8NarrowI32x4U, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8ExtendLowI8x16S, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8ExtendHighI8x16S, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8ExtendLowI8x16U, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8ExtendHighI8x16U, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8Shl, (v128, i32) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8ShrS, (v128, i32) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8ShrU, (v128, i32) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8Add, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8AddSatS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8AddSatU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8Sub, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8SubSatS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8SubSatU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8Mul, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8MinS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8MinU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8MaxS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8MaxU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8RoundingAverageU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8ExtMulLowI8x16S, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8ExtMulHighI8x16S, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8ExtMulLowI8x16U, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I16x8ExtMulHighI8x16U, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4ExtAddPairwiseI16x8S, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4ExtAddPairwiseI16x8U, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4Abs, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4Neg, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4AllTrue, (v128) -> i32, |c| c.config.simd_enabled),
+    inst!(I32x4Bitmask, (v128) -> i32, |c| c.config.simd_enabled),
+    inst!(I32x4ExtendLowI16x8S, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4ExtendHighI16x8S, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4ExtendLowI16x8U, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4ExtendHighI16x8U, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4Shl, (v128, i32) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4ShrS, (v128, i32) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4ShrU, (v128, i32) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4Add, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4Sub, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4Mul, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4MinS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4MinU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4MaxS, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4MaxU, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4DotI16x8S, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4ExtMulLowI16x8S, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4ExtMulHighI16x8S, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4ExtMulLowI16x8U, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4ExtMulHighI16x8U, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2Abs, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2Neg, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2AllTrue, (v128) -> i32, |c| c.config.simd_enabled),
+    inst!(I64x2Bitmask, (v128) -> i32, |c| c.config.simd_enabled),
+    inst!(I64x2ExtendLowI32x4S, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2ExtendHighI32x4S, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2ExtendLowI32x4U, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2ExtendHighI32x4U, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2Shl, (v128, i32) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2ShrS, (v128, i32) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2ShrU, (v128, i32) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2Add, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2Sub, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2Mul, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2ExtMulLowI32x4S, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2ExtMulHighI32x4S, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2ExtMulLowI32x4U, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I64x2ExtMulHighI32x4U, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4Ceil, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Floor, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Trunc, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Nearest, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Abs, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4Neg, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4Sqrt, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Add, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Sub, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Mul, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Div, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Min, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4Max, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F32x4)),
+    inst!(F32x4PMin, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4PMax, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2Ceil, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Floor, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Trunc, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Nearest, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Abs, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2Neg, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2Sqrt, (v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Add, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Sub, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Mul, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Div, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Min, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2Max, (v128, v128) -> v128, |c| c.config.simd_enabled, Some(NanType::F64x2)),
+    inst!(F64x2PMin, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2PMax, (v128, v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4TruncSatF32x4S, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4TruncSatF32x4U, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4ConvertI32x4S, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4ConvertI32x4U, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4TruncSatF64x2SZero, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(I32x4TruncSatF64x2UZero, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2ConvertLowI32x4S, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2ConvertLowI32x4U, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F32x4DemoteF64x2Zero, (v128) -> v128, |c| c.config.simd_enabled),
+    inst!(F64x2PromoteLowF32x4, (v128) -> v128, |c| c.config.simd_enabled),
 ];
 
 #[cfg(test)]
@@ -280,6 +581,7 @@ mod test {
             parameters: &[ValType::I32, ValType::I32],
             results: &[ValType::I32],
             feature: |_| true,
+            canonicalize_nan: None,
         };
         let wasm = sut.to_bytes();
         let wat = wasmprinter::print_bytes(wasm).unwrap();

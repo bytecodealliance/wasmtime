@@ -137,11 +137,12 @@ where
         })
     }
 
-    fn generate_test_inputs(&mut self, signature: &Signature) -> Result<Vec<TestCaseInput>> {
-        let num_tests = self.u.int_in_range(self.config.test_case_inputs.clone())?;
-        let mut inputs = Vec::with_capacity(num_tests);
+    fn generate_test_inputs(mut self, signature: &Signature) -> Result<Vec<TestCaseInput>> {
+        let mut inputs = Vec::new();
 
-        for _ in 0..num_tests {
+        loop {
+            let last_len = self.u.len();
+
             let test_args = signature
                 .params
                 .iter()
@@ -149,12 +150,23 @@ where
                 .collect::<Result<TestCaseInput>>()?;
 
             inputs.push(test_args);
+
+            // Continue generating input as long as we just consumed some of self.u. Otherwise
+            // we'll generate the same test input again and again, forever. Note that once self.u
+            // becomes empty we obviously can't consume any more of it, so this check is more
+            // general. Also note that we need to generate at least one input or the fuzz target
+            // won't actually test anything, so checking at the end of the loop is good, even if
+            // self.u is empty from the start and we end up with all zeros in test_args.
+            assert!(self.u.len() <= last_len);
+            if self.u.len() == last_len {
+                break;
+            }
         }
 
         Ok(inputs)
     }
 
-    fn run_func_passes(&self, func: Function) -> Result<Function> {
+    fn run_func_passes(&self, func: Function) -> Function {
         // Do a NaN Canonicalization pass on the generated function.
         //
         // Both IEEE754 and the Wasm spec are somewhat loose about what is allowed
@@ -177,16 +189,18 @@ where
         let flags = settings::Flags::new(settings::builder());
         let isa = builder_with_options(false)
             .expect("Unable to build a TargetIsa for the current host")
-            .finish(flags)?;
+            .finish(flags)
+            .expect("Failed to build TargetISA");
 
-        ctx.canonicalize_nans(isa.as_ref())?;
+        ctx.canonicalize_nans(isa.as_ref())
+            .expect("Failed validation after NaN canonicalization");
 
-        Ok(ctx.func)
+        ctx.func
     }
 
     fn generate_func(&mut self) -> Result<Function> {
         let func = FunctionGenerator::new(&mut self.u, &self.config).generate()?;
-        self.run_func_passes(func)
+        Ok(self.run_func_passes(func))
     }
 
     pub fn generate_test(mut self) -> Result<TestCase> {

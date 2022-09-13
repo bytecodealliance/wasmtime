@@ -658,16 +658,24 @@ pub(crate) fn lower_address(
         if addends32.len() > 0 {
             let (reg32, extendop) = addends32.pop().unwrap();
             let reg64 = addends64.pop().unwrap();
-            AMode::RegExtended(reg64, reg32, extendop)
+            AMode::RegExtended {
+                rn: reg64,
+                rm: reg32,
+                extendop,
+            }
         } else if offset > 0 && offset < 0x1000 {
             let reg64 = addends64.pop().unwrap();
             let off = offset;
             offset = 0;
-            AMode::RegOffset(reg64, off, elem_ty)
+            AMode::RegOffset {
+                rn: reg64,
+                off,
+                ty: elem_ty,
+            }
         } else if addends64.len() >= 2 {
             let reg1 = addends64.pop().unwrap();
             let reg2 = addends64.pop().unwrap();
-            AMode::RegReg(reg1, reg2)
+            AMode::RegReg { rn: reg1, rm: reg2 }
         } else {
             let reg1 = addends64.pop().unwrap();
             AMode::reg(reg1)
@@ -691,7 +699,11 @@ pub(crate) fn lower_address(
                 to_bits: 64,
             });
             if let Some((reg2, extendop)) = addends32.pop() {
-                AMode::RegExtended(tmp.to_reg(), reg2, extendop)
+                AMode::RegExtended {
+                    rn: tmp.to_reg(),
+                    rm: reg2,
+                    extendop,
+                }
             } else {
                 AMode::reg(tmp.to_reg())
             }
@@ -716,12 +728,36 @@ pub(crate) fn lower_address(
     // Allocate the temp and shoehorn it into the AMode.
     let addr = ctx.alloc_tmp(I64).only_reg().unwrap();
     let (reg, memarg) = match memarg {
-        AMode::RegExtended(r1, r2, extendop) => {
-            (r1, AMode::RegExtended(addr.to_reg(), r2, extendop))
-        }
-        AMode::RegOffset(r, off, ty) => (r, AMode::RegOffset(addr.to_reg(), off, ty)),
-        AMode::RegReg(r1, r2) => (r2, AMode::RegReg(addr.to_reg(), r1)),
-        AMode::UnsignedOffset(r, imm) => (r, AMode::UnsignedOffset(addr.to_reg(), imm)),
+        AMode::RegExtended { rn, rm, extendop } => (
+            rn,
+            AMode::RegExtended {
+                rn: addr.to_reg(),
+                rm,
+                extendop,
+            },
+        ),
+        AMode::RegOffset { rn, off, ty } => (
+            rn,
+            AMode::RegOffset {
+                rn: addr.to_reg(),
+                off,
+                ty,
+            },
+        ),
+        AMode::RegReg { rn, rm } => (
+            rm,
+            AMode::RegReg {
+                rn: addr.to_reg(),
+                rm: rn,
+            },
+        ),
+        AMode::UnsignedOffset { rn, uimm12 } => (
+            rn,
+            AMode::UnsignedOffset {
+                rn: addr.to_reg(),
+                uimm12,
+            },
+        ),
         _ => unreachable!(),
     };
 
@@ -888,8 +924,6 @@ pub(crate) fn lower_condcode(cc: IntCC) -> Cond {
         IntCC::UnsignedGreaterThan => Cond::Hi,
         IntCC::UnsignedLessThanOrEqual => Cond::Ls,
         IntCC::UnsignedLessThan => Cond::Lo,
-        IntCC::Overflow => Cond::Vs,
-        IntCC::NotOverflow => Cond::Vc,
     }
 }
 
@@ -1052,9 +1086,7 @@ pub(crate) fn condcode_is_signed(cc: IntCC) -> bool {
         IntCC::SignedGreaterThanOrEqual
         | IntCC::SignedGreaterThan
         | IntCC::SignedLessThanOrEqual
-        | IntCC::SignedLessThan
-        | IntCC::Overflow
-        | IntCC::NotOverflow => true,
+        | IntCC::SignedLessThan => true,
     }
 }
 
@@ -1238,59 +1270,6 @@ pub(crate) fn lower_icmp(
                 });
                 cond
             }
-            IntCC::Overflow | IntCC::NotOverflow => {
-                // cmp     lhs_lo, rhs_lo
-                // sbcs    tmp1, lhs_hi, rhs_hi
-                // eor     tmp2, lhs_hi, rhs_hi
-                // eor     tmp1, lhs_hi, tmp1
-                // tst     tmp2, tmp1
-                // cset    dst, {lt, ge}
-
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::SubS,
-                    size: OperandSize::Size64,
-                    rd: writable_zero_reg(),
-                    rn: lhs.regs()[0],
-                    rm: rhs.regs()[0],
-                });
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::SbcS,
-                    size: OperandSize::Size64,
-                    rd: tmp1,
-                    rn: lhs.regs()[1],
-                    rm: rhs.regs()[1],
-                });
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::Eor,
-                    size: OperandSize::Size64,
-                    rd: tmp2,
-                    rn: lhs.regs()[1],
-                    rm: rhs.regs()[1],
-                });
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::Eor,
-                    size: OperandSize::Size64,
-                    rd: tmp1,
-                    rn: lhs.regs()[1],
-                    rm: tmp1.to_reg(),
-                });
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::AndS,
-                    size: OperandSize::Size64,
-                    rd: writable_zero_reg(),
-                    rn: tmp2.to_reg(),
-                    rm: tmp1.to_reg(),
-                });
-
-                // This instruction sequence sets the condition codes
-                // on the lt and ge flags instead of the vs/vc so we
-                // need to signal that
-                if condcode == IntCC::Overflow {
-                    Cond::Lt
-                } else {
-                    Cond::Ge
-                }
-            }
             _ => {
                 // cmp     lhs_lo, rhs_lo
                 // cset    tmp1, unsigned_cond
@@ -1373,45 +1352,6 @@ pub(crate) fn lower_icmp(
     } else {
         let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
         let rm = put_input_in_rse_imm12(ctx, inputs[1], narrow_mode);
-
-        let is_overflow = condcode == IntCC::Overflow || condcode == IntCC::NotOverflow;
-        let is_small_type = ty == I8 || ty == I16;
-        let (cond, rn, rm) = if is_overflow && is_small_type {
-            // Overflow checks for non native types require additional instructions, other than
-            // just the extend op.
-            //
-            // TODO: Codegen improvements: Merge the second sxt{h,b} into the following sub instruction.
-            //
-            // sxt{h,b}  w0, w0
-            // sxt{h,b}  w1, w1
-            // sub       w0, w0, w1
-            // cmp       w0, w0, sxt{h,b}
-            //
-            // The result of this comparison is either the EQ or NE condition code, so we need to
-            // signal that to the caller
-
-            let extend_op = if ty == I8 {
-                ExtendOp::SXTB
-            } else {
-                ExtendOp::SXTH
-            };
-            let tmp1 = ctx.alloc_tmp(I32).only_reg().unwrap();
-            ctx.emit(alu_inst_imm12(ALUOp::Sub, I32, tmp1, rn, rm));
-
-            let out_cond = match condcode {
-                IntCC::Overflow => Cond::Ne,
-                IntCC::NotOverflow => Cond::Eq,
-                _ => unreachable!(),
-            };
-            (
-                out_cond,
-                tmp1.to_reg(),
-                ResultRSEImm12::RegExtend(tmp1.to_reg(), extend_op),
-            )
-        } else {
-            (cond, rn, rm)
-        };
-
         ctx.emit(alu_inst_imm12(ALUOp::SubS, ty, writable_zero_reg(), rn, rm));
         cond
     };

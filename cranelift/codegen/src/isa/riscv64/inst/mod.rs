@@ -22,7 +22,7 @@ use alloc::vec::Vec;
 use regalloc2::{PRegSet, VReg};
 use smallvec::SmallVec;
 use std::boxed::Box;
-use std::string::String;
+use std::string::{String, ToString};
 
 pub mod regs;
 
@@ -356,6 +356,11 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(src);
         }
 
+        &Inst::Args { ref args } => {
+            for arg in args {
+                collector.reg_fixed_def(arg.vreg, arg.preg);
+            }
+        }
         &Inst::Ret { ref rets } => {
             collector.reg_uses(&rets[..]);
         }
@@ -647,6 +652,13 @@ impl MachInst for Inst {
 
     fn is_included_in_clobbers(&self) -> bool {
         true
+    }
+
+    fn is_args(&self) -> bool {
+        match self {
+            Self::Args { .. } => true,
+            _ => false,
+        }
     }
 
     fn is_term(&self) -> MachTerminator {
@@ -1362,6 +1374,17 @@ impl Inst {
                 let base = to.to_string_with_alloc(allocs);
                 let src = format_reg(src, allocs);
                 format!("{} {},{}", op.op_name(), src, base,)
+            }
+            &Inst::Args { ref args } => {
+                let mut s = "args".to_string();
+                let mut empty_allocs = AllocationConsumer::default();
+                for arg in args {
+                    use std::fmt::Write;
+                    let preg = format_reg(arg.preg, &mut empty_allocs);
+                    let def = format_reg(arg.vreg.to_reg(), allocs);
+                    write!(&mut s, " {}={}", def, preg).unwrap();
+                }
+                s
             }
             &Inst::Ret { .. } => {
                 format!("ret")

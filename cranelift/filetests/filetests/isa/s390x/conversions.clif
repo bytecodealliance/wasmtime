@@ -8,9 +8,9 @@ block0(v0: i64):
 }
 
 ; block0:
-;   vgbm %v5, 0
-;   vlvgg %v5, %r3, 1
-;   vst %v5, 0(%r2)
+;   vgbm %v4, 0
+;   vlvgg %v4, %r3, 1
+;   vst %v4, 0(%r2)
 ;   br %r14
 
 function %uextend_i32_i128(i32) -> i128 {
@@ -20,9 +20,9 @@ block0(v0: i32):
 }
 
 ; block0:
-;   vgbm %v5, 0
-;   vlvgf %v5, %r3, 3
-;   vst %v5, 0(%r2)
+;   vgbm %v4, 0
+;   vlvgf %v4, %r3, 3
+;   vst %v4, 0(%r2)
 ;   br %r14
 
 function %uextend_i32_i64(i32) -> i64 {
@@ -42,9 +42,9 @@ block0(v0: i16):
 }
 
 ; block0:
-;   vgbm %v5, 0
-;   vlvgh %v5, %r3, 7
-;   vst %v5, 0(%r2)
+;   vgbm %v4, 0
+;   vlvgh %v4, %r3, 7
+;   vst %v4, 0(%r2)
 ;   br %r14
 
 function %uextend_i16_i64(i16) -> i64 {
@@ -74,9 +74,9 @@ block0(v0: i8):
 }
 
 ; block0:
-;   vgbm %v5, 0
-;   vlvgb %v5, %r3, 15
-;   vst %v5, 0(%r2)
+;   vgbm %v4, 0
+;   vlvgb %v4, %r3, 15
+;   vst %v4, 0(%r2)
 ;   br %r14
 
 function %uextend_i8_i64(i8) -> i64 {
@@ -117,8 +117,8 @@ block0(v0: i64):
 
 ; block0:
 ;   srag %r4, %r3, 63
-;   vlvgp %v7, %r4, %r3
-;   vst %v7, 0(%r2)
+;   vlvgp %v6, %r4, %r3
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %sextend_i32_i128(i32) -> i128 {
@@ -129,9 +129,9 @@ block0(v0: i32):
 
 ; block0:
 ;   lgfr %r3, %r3
-;   srag %r5, %r3, 63
-;   vlvgp %v17, %r5, %r3
-;   vst %v17, 0(%r2)
+;   srag %r4, %r3, 63
+;   vlvgp %v16, %r4, %r3
+;   vst %v16, 0(%r2)
 ;   br %r14
 
 function %sextend_i32_i64(i32) -> i64 {
@@ -152,9 +152,9 @@ block0(v0: i16):
 
 ; block0:
 ;   lghr %r3, %r3
-;   srag %r5, %r3, 63
-;   vlvgp %v17, %r5, %r3
-;   vst %v17, 0(%r2)
+;   srag %r4, %r3, 63
+;   vlvgp %v16, %r4, %r3
+;   vst %v16, 0(%r2)
 ;   br %r14
 
 function %sextend_i16_i64(i16) -> i64 {
@@ -185,9 +185,9 @@ block0(v0: i8):
 
 ; block0:
 ;   lgbr %r3, %r3
-;   srag %r5, %r3, 63
-;   vlvgp %v17, %r5, %r3
-;   vst %v17, 0(%r2)
+;   srag %r4, %r3, 63
+;   vlvgp %v16, %r4, %r3
+;   vst %v16, 0(%r2)
 ;   br %r14
 
 function %sextend_i8_i64(i8) -> i64 {
@@ -331,8 +331,8 @@ block0(v0: b64):
 }
 
 ; block0:
-;   vlvgp %v5, %r3, %r3
-;   vst %v5, 0(%r2)
+;   vlvgp %v4, %r3, %r3
+;   vst %v4, 0(%r2)
 ;   br %r14
 
 function %bextend_b32_b128(b32) -> b128 {
@@ -343,8 +343,8 @@ block0(v0: b32):
 
 ; block0:
 ;   lgfr %r3, %r3
-;   vlvgp %v7, %r3, %r3
-;   vst %v7, 0(%r2)
+;   vlvgp %v6, %r3, %r3
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bextend_b32_b64(b32) -> b64 {
@@ -365,8 +365,8 @@ block0(v0: b16):
 
 ; block0:
 ;   lghr %r3, %r3
-;   vlvgp %v7, %r3, %r3
-;   vst %v7, 0(%r2)
+;   vlvgp %v6, %r3, %r3
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bextend_b16_b64(b16) -> b64 {
@@ -397,8 +397,8 @@ block0(v0: b8):
 
 ; block0:
 ;   lgbr %r3, %r3
-;   vlvgp %v7, %r3, %r3
-;   vst %v7, 0(%r2)
+;   vlvgp %v6, %r3, %r3
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bextend_b8_b64(b8) -> b64 {
@@ -439,9 +439,9 @@ block0(v0: b1):
 
 ; block0:
 ;   sllg %r3, %r3, 63
-;   srag %r5, %r3, 63
-;   vlvgp %v17, %r5, %r5
-;   vst %v17, 0(%r2)
+;   srag %r4, %r3, 63
+;   vlvgp %v16, %r4, %r4
+;   vst %v16, 0(%r2)
 ;   br %r14
 
 function %bextend_b1_b64(b1) -> b64 {
@@ -705,8 +705,8 @@ block0(v0: b64, v1: b64):
 }
 
 ; block0:
-;   vlvgp %v7, %r4, %r4
-;   vst %v7, 0(%r2)
+;   vlvgp %v5, %r4, %r4
+;   vst %v5, 0(%r2)
 ;   br %r14
 
 function %bmask_b64_i64(b64, b64) -> i64 {
@@ -756,9 +756,9 @@ block0(v0: b32, v1: b32):
 }
 
 ; block0:
-;   lgfr %r5, %r4
-;   vlvgp %v17, %r5, %r5
-;   vst %v17, 0(%r2)
+;   lgfr %r3, %r4
+;   vlvgp %v7, %r3, %r3
+;   vst %v7, 0(%r2)
 ;   br %r14
 
 function %bmask_b32_i64(b32, b32) -> i64 {
@@ -808,9 +808,9 @@ block0(v0: b16, v1: b16):
 }
 
 ; block0:
-;   lghr %r5, %r4
-;   vlvgp %v17, %r5, %r5
-;   vst %v17, 0(%r2)
+;   lghr %r3, %r4
+;   vlvgp %v7, %r3, %r3
+;   vst %v7, 0(%r2)
 ;   br %r14
 
 function %bmask_b16_i64(b16, b16) -> i64 {
@@ -860,9 +860,9 @@ block0(v0: b8, v1: b8):
 }
 
 ; block0:
-;   lgbr %r5, %r4
-;   vlvgp %v17, %r5, %r5
-;   vst %v17, 0(%r2)
+;   lgbr %r3, %r4
+;   vlvgp %v7, %r3, %r3
+;   vst %v7, 0(%r2)
 ;   br %r14
 
 function %bmask_b8_i64(b8, b8) -> i64 {
@@ -912,10 +912,10 @@ block0(v0: b1, v1: b1):
 }
 
 ; block0:
-;   sllg %r5, %r4, 63
-;   srag %r3, %r5, 63
-;   vlvgp %v19, %r3, %r3
-;   vst %v19, 0(%r2)
+;   sllg %r3, %r4, 63
+;   srag %r5, %r3, 63
+;   vlvgp %v17, %r5, %r5
+;   vst %v17, 0(%r2)
 ;   br %r14
 
 function %bmask_b1_i64(b1, b1) -> i64 {
@@ -925,8 +925,8 @@ block0(v0: b1, v1: b1):
 }
 
 ; block0:
-;   sllg %r3, %r3, 63
-;   srag %r2, %r3, 63
+;   sllg %r2, %r3, 63
+;   srag %r2, %r2, 63
 ;   br %r14
 
 function %bmask_b1_i32(b1, b1) -> i32 {
@@ -936,8 +936,8 @@ block0(v0: b1, v1: b1):
 }
 
 ; block0:
-;   sllk %r3, %r3, 31
-;   srak %r2, %r3, 31
+;   sllk %r2, %r3, 31
+;   srak %r2, %r2, 31
 ;   br %r14
 
 function %bmask_b1_i16(b1, b1) -> i16 {
@@ -947,8 +947,8 @@ block0(v0: b1, v1: b1):
 }
 
 ; block0:
-;   sllk %r3, %r3, 31
-;   srak %r2, %r3, 31
+;   sllk %r2, %r3, 31
+;   srak %r2, %r2, 31
 ;   br %r14
 
 function %bmask_b1_i8(b1, b1) -> i8 {
@@ -958,8 +958,8 @@ block0(v0: b1, v1: b1):
 }
 
 ; block0:
-;   sllk %r3, %r3, 31
-;   srak %r2, %r3, 31
+;   sllk %r2, %r3, 31
+;   srak %r2, %r2, 31
 ;   br %r14
 
 function %bint_b128_i128(b128) -> i128 {
@@ -1031,9 +1031,9 @@ block0(v0: b64):
 
 ; block0:
 ;   nill %r3, 1
-;   vgbm %v16, 0
-;   vlvgb %v16, %r3, 15
-;   vst %v16, 0(%r2)
+;   vgbm %v6, 0
+;   vlvgb %v6, %r3, 15
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bint_b64_i64(b64) -> i64 {
@@ -1085,9 +1085,9 @@ block0(v0: b32):
 
 ; block0:
 ;   nill %r3, 1
-;   vgbm %v16, 0
-;   vlvgb %v16, %r3, 15
-;   vst %v16, 0(%r2)
+;   vgbm %v6, 0
+;   vlvgb %v6, %r3, 15
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bint_b32_i64(b32) -> i64 {
@@ -1139,9 +1139,9 @@ block0(v0: b16):
 
 ; block0:
 ;   nill %r3, 1
-;   vgbm %v16, 0
-;   vlvgb %v16, %r3, 15
-;   vst %v16, 0(%r2)
+;   vgbm %v6, 0
+;   vlvgb %v6, %r3, 15
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bint_b16_i64(b16) -> i64 {
@@ -1193,9 +1193,9 @@ block0(v0: b8):
 
 ; block0:
 ;   nill %r3, 1
-;   vgbm %v16, 0
-;   vlvgb %v16, %r3, 15
-;   vst %v16, 0(%r2)
+;   vgbm %v6, 0
+;   vlvgb %v6, %r3, 15
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bint_b8_i64(b8) -> i64 {
@@ -1247,9 +1247,9 @@ block0(v0: b1):
 
 ; block0:
 ;   nill %r3, 1
-;   vgbm %v16, 0
-;   vlvgb %v16, %r3, 15
-;   vst %v16, 0(%r2)
+;   vgbm %v6, 0
+;   vlvgb %v6, %r3, 15
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %bint_b1_i64(b1) -> i64 {

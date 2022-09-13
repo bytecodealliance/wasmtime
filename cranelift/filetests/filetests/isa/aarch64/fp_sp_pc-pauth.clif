@@ -1,0 +1,47 @@
+test compile precise-output
+set preserve_frame_pointers=true
+target aarch64 sign_return_address
+
+function %fp() -> i64 {
+block0:
+    v0 = get_frame_pointer.i64
+    return v0
+}
+
+;   paciasp
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   mov x0, fp
+;   ldp fp, lr, [sp], #16
+;   autiasp ; ret
+
+function %sp() -> i64 {
+block0:
+    v0 = get_stack_pointer.i64
+    return v0
+}
+
+;   paciasp
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   mov x0, sp
+;   ldp fp, lr, [sp], #16
+;   autiasp ; ret
+
+function %return_address() -> i64 {
+block0:
+    v0 = get_return_address.i64
+    return v0
+}
+
+;   paciasp
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   ldr lr, [fp, #8]
+;   xpaclri
+;   mov x0, lr
+;   ldp fp, lr, [sp], #16
+;   autiasp ; ret

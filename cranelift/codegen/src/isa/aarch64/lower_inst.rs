@@ -293,11 +293,7 @@ pub(crate) fn lower_insn_to_regs(
             panic!("Should never reach ifcmp as isel root!");
         }
 
-        Opcode::Icmp => {
-            let condcode = ctx.data(insn).cond_code().unwrap();
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            lower_icmp(ctx, insn, condcode, IcmpOutput::Register(rd))?;
-        }
+        Opcode::Icmp => implemented_in_isle(ctx),
 
         Opcode::Fcmp => implemented_in_isle(ctx),
 
@@ -471,7 +467,7 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::ExtractVector => implemented_in_isle(ctx),
 
-        Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit => {
+        Opcode::Vconcat | Opcode::Vsplit => {
             return Err(CodegenError::Unsupported(format!(
                 "Unimplemented lowering: {}",
                 op
@@ -657,18 +653,20 @@ pub(crate) fn lower_branch(
                 //   emit_island  // this forces an island at this point
                 //                // if the jumptable would push us past
                 //                // the deadline
-                //   subs idx, #jt_size
+                //   cmp idx, #jt_size
                 //   b.hs default
+                //   csel vTmp2, xzr, idx, hs
+                //   csdb
                 //   adr vTmp1, PC+16
-                //   ldr vTmp2, [vTmp1, idx, lsl #2]
-                //   add vTmp2, vTmp2, vTmp1
-                //   br vTmp2
+                //   ldr vTmp2, [vTmp1, vTmp2, uxtw #2]
+                //   add vTmp1, vTmp1, vTmp2
+                //   br vTmp1
                 //   [jumptable offsets relative to JT base]
                 let jt_size = targets.len() - 1;
                 assert!(jt_size <= std::u32::MAX as usize);
 
                 ctx.emit(Inst::EmitIsland {
-                    needed_space: 4 * (6 + jt_size) as CodeOffset,
+                    needed_space: 4 * (8 + jt_size) as CodeOffset,
                 });
 
                 let ridx = put_input_in_reg(
@@ -707,8 +705,10 @@ pub(crate) fn lower_branch(
                 // Emit the compound instruction that does:
                 //
                 // b.hs default
+                // csel rB, xzr, rIndex, hs
+                // csdb
                 // adr rA, jt
-                // ldrsw rB, [rA, rIndex, UXTW 2]
+                // ldrsw rB, [rA, rB, uxtw #2]
                 // add rA, rA, rB
                 // br rA
                 // [jt entries]

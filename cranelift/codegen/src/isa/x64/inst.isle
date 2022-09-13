@@ -177,6 +177,11 @@
        ;; popq reg
        (Pop64 (dst WritableGpr))
 
+      ;; Emits a inline stack probe loop.
+      (StackProbeLoop (tmp WritableReg)
+                      (frame_size u32)
+                      (guard_size u32))
+
        ;; =========================================
        ;; Floating-point operations.
 
@@ -220,6 +225,16 @@
                     (src XmmMem)
                     (dst WritableXmm))
 
+       ;; XMM (scalar or vector) unary op with immediate: roundss, roundsd, etc.
+       ;;
+       ;; This differs from XMM_RM_R_IMM in that the dst register of
+       ;; XmmUnaryRmRImm is not used in the computation of the instruction dst
+       ;; value and so does not have to be a previously valid value.
+       (XmmUnaryRmRImm (op SseOpcode)
+                       (src XmmMem)
+                       (imm u8)
+                       (dst WritableXmm))
+
        ;; XMM (scalar or vector) unary op that relies on the EVEX prefix.
        (XmmUnaryRmREvex (op Avx512Opcode)
                         (src XmmMem)
@@ -230,12 +245,6 @@
        (XmmMovRM (op SseOpcode)
                  (src Reg)
                  (dst SyntheticAmode))
-
-       ;; XMM (vector) unary op (to move a constant value into an xmm register):
-       ;; movups
-       (XmmLoadConst (src VCodeConstant)
-                     (dst WritableReg)
-                     (ty Type))
 
        ;; XMM (scalar) unary op (from xmm to integer reg): movd, movq,
        ;; cvtts{s,d}2si
@@ -274,7 +283,8 @@
                           (src Xmm)
                           (dst WritableGpr)
                           (tmp_gpr WritableGpr)
-                          (tmp_xmm WritableXmm))
+                          (tmp_xmm WritableXmm)
+                          (tmp_xmm2 WritableXmm))
 
        ;; A sequence to compute min/max with the proper NaN semantics for xmm
        ;; registers.
@@ -312,6 +322,10 @@
        ;; Indirect call: callq (reg mem)
        (CallUnknown (dest RegMem)
                     (info BoxCallInfo))
+
+       ;; A pseudo-instruction that captures register arguments in vregs.
+       (Args
+        (args VecArgPair))
 
        ;; Return.
        (Ret (rets VecReg))
@@ -1348,12 +1362,6 @@
 (decl intcc_without_eq (IntCC) IntCC)
 (extern constructor intcc_without_eq intcc_without_eq)
 
-;; This is a direct import of `IntCC::unsigned`.
-;; Get the corresponding IntCC with the signed component removed.
-;; For conditions without a signed component, this is a no-op.
-(decl intcc_unsigned (IntCC) IntCC)
-(extern constructor intcc_unsigned intcc_unsigned)
-
 ;;;; Helpers for Getting Particular Physical Registers ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; These should only be used for legalization purposes, when we can't otherwise
@@ -1376,35 +1384,35 @@
 
 ;;;; Helpers for Querying Enabled ISA Extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl avx512vl_enabled () Type)
-(extern extractor avx512vl_enabled avx512vl_enabled)
+(decl avx512vl_enabled (bool) Type)
+(extern extractor infallible avx512vl_enabled avx512vl_enabled)
 
-(decl avx512dq_enabled () Type)
-(extern extractor avx512dq_enabled avx512dq_enabled)
+(decl avx512dq_enabled (bool) Type)
+(extern extractor infallible avx512dq_enabled avx512dq_enabled)
 
-(decl avx512f_enabled () Type)
-(extern extractor avx512f_enabled avx512f_enabled)
+(decl avx512f_enabled (bool) Type)
+(extern extractor infallible avx512f_enabled avx512f_enabled)
 
-(decl avx512bitalg_enabled () Type)
-(extern extractor avx512bitalg_enabled avx512bitalg_enabled)
+(decl avx512bitalg_enabled (bool) Type)
+(extern extractor infallible avx512bitalg_enabled avx512bitalg_enabled)
 
-(decl avx512vbmi_enabled () Type)
-(extern extractor avx512vbmi_enabled avx512vbmi_enabled)
+(decl avx512vbmi_enabled (bool) Type)
+(extern extractor infallible avx512vbmi_enabled avx512vbmi_enabled)
 
-(decl use_lzcnt () Type)
-(extern extractor use_lzcnt use_lzcnt)
+(decl use_lzcnt (bool) Type)
+(extern extractor infallible use_lzcnt use_lzcnt)
 
-(decl use_bmi1 () Type)
-(extern extractor use_bmi1 use_bmi1)
+(decl use_bmi1 (bool) Type)
+(extern extractor infallible use_bmi1 use_bmi1)
 
-(decl use_popcnt () Type)
-(extern extractor use_popcnt use_popcnt)
+(decl use_popcnt (bool) Type)
+(extern extractor infallible use_popcnt use_popcnt)
 
-(decl use_fma () Type)
-(extern extractor use_fma use_fma)
+(decl use_fma (bool) Type)
+(extern extractor infallible use_fma use_fma)
 
-(decl use_sse41 () Type)
-(extern extractor use_sse41 use_sse41)
+(decl use_sse41 (bool) Type)
+(extern extractor infallible use_sse41 use_sse41)
 
 ;;;; Helpers for Merging and Sinking Immediates/Loads  ;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1700,9 +1708,7 @@
 ;; Load a constant into an XMM register.
 (decl x64_xmm_load_const (Type VCodeConstant) Xmm)
 (rule (x64_xmm_load_const ty const)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmLoadConst const dst ty))))
-        dst))
+      (x64_load ty (const_to_synthetic_amode const) (ExtKind.None)))
 
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2590,41 +2596,32 @@
                     lane
                     size))
 
+;; Helper for constructing `XmmUnaryRmRImm` instructions.
+(decl xmm_unary_rm_r_imm (SseOpcode XmmMem u8) Xmm)
+(rule (xmm_unary_rm_r_imm op src1 imm)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmRImm op src1 imm dst))))
+        dst))
+
 ;; Helper for creating `roundss` instructions.
-(decl x64_roundss (Xmm RoundImm) Xmm)
+(decl x64_roundss (XmmMem RoundImm) Xmm)
 (rule (x64_roundss src1 round)
-      (xmm_rm_r_imm (SseOpcode.Roundss)
-                    src1
-                    src1
-                    (encode_round_imm round)
-                    (OperandSize.Size32)))
+      (xmm_unary_rm_r_imm (SseOpcode.Roundss) src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundsd` instructions.
-(decl x64_roundsd (Xmm RoundImm) Xmm)
+(decl x64_roundsd (XmmMem RoundImm) Xmm)
 (rule (x64_roundsd src1 round)
-      (xmm_rm_r_imm (SseOpcode.Roundsd)
-                    src1
-                    src1
-                    (encode_round_imm round)
-                    (OperandSize.Size32)))
+      (xmm_unary_rm_r_imm (SseOpcode.Roundsd) src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundps` instructions.
-(decl x64_roundps (Xmm RoundImm) Xmm)
+(decl x64_roundps (XmmMem RoundImm) Xmm)
 (rule (x64_roundps src1 round)
-      (xmm_rm_r_imm (SseOpcode.Roundps)
-                    src1
-                    src1
-                    (encode_round_imm round)
-                    (OperandSize.Size32)))
+      (xmm_unary_rm_r_imm (SseOpcode.Roundps) src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundpd` instructions.
-(decl x64_roundpd (Xmm RoundImm) Xmm)
+(decl x64_roundpd (XmmMem RoundImm) Xmm)
 (rule (x64_roundpd src1 round)
-      (xmm_rm_r_imm (SseOpcode.Roundpd)
-                    src1
-                    src1
-                    (encode_round_imm round)
-                    (OperandSize.Size32)))
+      (xmm_unary_rm_r_imm (SseOpcode.Roundpd) src1 (encode_round_imm round)))
 
 ;; Helper for creating `pmaddwd` instructions.
 (decl x64_pmaddwd (Xmm XmmMem) Xmm)
@@ -3207,8 +3204,9 @@
 
             (dst WritableGpr (temp_writable_gpr))
             (tmp_xmm WritableXmm (temp_writable_xmm))
+            (tmp_xmm2 WritableXmm (temp_writable_xmm))
             (tmp_gpr WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.CvtFloatToUintSeq out_size src_size is_saturating src dst tmp_gpr tmp_xmm))))
+            (_ Unit (emit (MInst.CvtFloatToUintSeq out_size src_size is_saturating src dst tmp_gpr tmp_xmm tmp_xmm2))))
         dst))
 
 (decl cvt_float_to_sint_seq (Type Value bool) Gpr)
@@ -3848,6 +3846,8 @@
 (decl synthetic_amode_to_xmm_mem (SyntheticAmode) XmmMem)
 (rule (synthetic_amode_to_xmm_mem amode)
       (synthetic_amode_to_reg_mem amode))
+(decl const_to_synthetic_amode (VCodeConstant) SyntheticAmode)
+(extern constructor const_to_synthetic_amode const_to_synthetic_amode)
 
 ;; Helper for creating `MovPReg` instructions.
 (decl mov_preg (PReg) Reg)

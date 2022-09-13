@@ -230,6 +230,11 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the ISA-dependent flag values that were used to make this trait object.
     fn isa_flags(&self) -> Vec<settings::Value>;
 
+    /// Get a flag indicating whether branch protection is enabled.
+    fn is_branch_protection_enabled(&self) -> bool {
+        false
+    }
+
     /// Get the ISA-dependent maximum vector register size, in bytes.
     fn dynamic_vector_bytes(&self, dynamic_ty: ir::Type) -> u32;
 
@@ -281,6 +286,9 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// will be "labeled" or might have calls between them, typically the number
     /// of defined functions in the object file.
     fn text_section_builder(&self, num_labeled_funcs: u32) -> Box<dyn TextSectionBuilder>;
+
+    /// The function alignment required by this ISA.
+    fn function_alignment(&self) -> u32;
 }
 
 /// Methods implemented for free for target ISA!

@@ -184,8 +184,6 @@ impl IntegerCompare {
 
             IntCC::UnsignedGreaterThan => (BranchFunct3::Ltu, true),
             IntCC::UnsignedLessThanOrEqual => (BranchFunct3::Geu, true),
-            IntCC::Overflow => overflow_already_lowerd(),
-            IntCC::NotOverflow => overflow_already_lowerd(),
         }
     }
 
@@ -202,8 +200,6 @@ impl IntegerCompare {
             IntCC::UnsignedGreaterThanOrEqual => "bgeu",
             IntCC::UnsignedGreaterThan => "bgtu",
             IntCC::UnsignedLessThanOrEqual => "bleu",
-            IntCC::Overflow => "bof",
-            IntCC::NotOverflow => "bnof",
         }
     }
 

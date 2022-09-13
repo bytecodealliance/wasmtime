@@ -17,21 +17,27 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<ModuleConfig> {
         let mut config = SwarmConfig::arbitrary(u)?;
 
-        // Allow multi-memory by default.
-        config.max_memories = config.max_memories.max(2);
+        // Allow multi-memory but make it unlikely
+        if u.ratio(1, 20)? {
+            config.max_memories = config.max_memories.max(2);
+        } else {
+            config.max_memories = 1;
+        }
 
         // Allow multi-table by default.
-        config.max_tables = config.max_tables.max(4);
+        if config.reference_types_enabled {
+            config.max_tables = config.max_tables.max(4);
+        }
 
         // Allow enabling some various wasm proposals by default. Note that
         // these are all unconditionally turned off even with
         // `SwarmConfig::arbitrary`.
-        config.memory64_enabled = u.arbitrary()?;
+        config.memory64_enabled = u.ratio(1, 20)?;
 
         // Allow the threads proposal if memory64 is not already enabled. FIXME:
         // to allow threads and memory64 to coexist, see
         // https://github.com/bytecodealliance/wasmtime/issues/4267.
-        config.threads_enabled = !config.memory64_enabled && u.arbitrary()?;
+        config.threads_enabled = !config.memory64_enabled && u.ratio(1, 20)?;
 
         Ok(ModuleConfig { config })
     }

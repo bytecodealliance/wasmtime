@@ -67,6 +67,10 @@
       (flags MemFlags)
       (src Reg))
 
+    ;; A pseudo-instruction that captures register arguments in vregs.
+    (Args
+      (args VecArgPair))
+
     (Ret (rets VecReg))
 
      (Extend
@@ -2057,9 +2061,6 @@
 (decl intcc_is_eq_or_ne (IntCC)IntCC)
 (extern extractor intcc_is_eq_or_ne intcc_is_eq_or_ne)
 
-(decl intcc_is_overflow_or_nof (IntCC)IntCC)
-(extern extractor intcc_is_overflow_or_nof intcc_is_overflow_or_nof)
-
 ;;; lower icmp 
 (decl lower_icmp(IntCC ValueRegs ValueRegs Type) Reg)
 ;;; eq or ne.
@@ -2076,16 +2077,6 @@
 (rule
   (lower_icmp (intcc_is_gt_etc cc $false) x y ty)
   (gen_icmp cc (uext_int_if_need x ty ) (uext_int_if_need y ty ) ty)
-)
-;;; overflow 
-(rule
-  (lower_icmp (intcc_is_overflow_or_nof (IntCC.Overflow) ) x y ty)
-  (lower_icmp_over_flow x y ty )
-)
-;;; not overflow 
-(rule
-  (lower_icmp (intcc_is_overflow_or_nof (IntCC.NotOverflow) ) x y ty)
-  (gen_bit_not (lower_icmp_over_flow x y ty))
 )
 
 (decl lower_icmp_over_flow(ValueRegs ValueRegs Type)Reg)

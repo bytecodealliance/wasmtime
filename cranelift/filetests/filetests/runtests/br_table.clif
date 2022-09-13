@@ -1,6 +1,7 @@
 test interpret
 test run
 target aarch64
+target aarch64 use_bti
 target x86_64
 target s390x
 target riscv64

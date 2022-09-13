@@ -1,12 +1,167 @@
 --------------------------------------------------------------------------------
 
-## 0.41.0
+## 1.0.0
 
-Unreleased.
+Released 2022-09-20
+
+This release marks the official 1.0 release of Wasmtime and represents the
+culmination of the work amongst over 300 contributors. Wasmtime has been
+battle-tested in production through multiple embeddings for quite some time now
+and we're confident in releasing a 1.0 version to signify the stability and
+quality of the Wasmtime engine.
+
+More information about Wasmtime's 1.0 release is on the [Bytecode Alliance's
+blog][ba-blog] with separate posts on [Wasmtime's performance
+features][ba-perf], [Wasmtime's security story][ba-security], and [the 1.0
+release announcement][ba-1.0].
+
+As a reminder the 2.0 release of Wasmtime is scheduled for one month from now on
+October 20th. For more information see the [RFC on Wasmtime's 1.0
+release][rfc-1.0].
+
+[ba-blog]: https://bytecodealliance.org/articles/
+[ba-perf]: https://bytecodealliance.org/articles/wasmtime-10-performance
+[ba-security]: https://bytecodealliance.org/articles/security-and-correctness-in-wasmtime
+[ba-1.0]: https://bytecodealliance.org/articles/wasmtime-1-0-fast-safe-and-now-production-ready.md
+[rfc-1.0]: https://github.com/bytecodealliance/rfcs/blob/main/accepted/wasmtime-one-dot-oh.md
 
 ### Added
 
+* An incremental compilation cache for Cranelift has been added which can be
+  enabled with `Config::enable_incremental_compilation`, and this option is
+  disabled by default for now. The incremental compilation cache has been
+  measured to improve compile times for cold uncached modules as well due to
+  some wasm modules having similar-enough functions internally.
+  [#4551](https://github.com/bytecodealliance/wasmtime/pull/4551)
+
+* Source tarballs are now available as part of Wasmtime's release artifacts.
+  [#4294](https://github.com/bytecodealliance/wasmtime/pull/4294)
+
+* WASI APIs that specify the REALTIME clock are now supported.
+  [#4777](https://github.com/bytecodealliance/wasmtime/pull/4777)
+
+* WASI's socket functions are now fully implemented.
+  [#4776](https://github.com/bytecodealliance/wasmtime/pull/4776)
+
+* The native call stack for async-executed wasm functions are no longer
+  automatically reset to zero after the stack is returned to the pool when using
+  the pooling allocator. A `Config::async_stack_zeroing` option has been added
+  to restore the old behavior of zero-on-return-to-pool.
+  [#4813](https://github.com/bytecodealliance/wasmtime/pull/4813)
+
+* Inline stack probing has been implemented for the Cranelift x64 backend.
+  [#4747](https://github.com/bytecodealliance/wasmtime/pull/4747)
+
 ### Changed
+
+* Generating of native unwind information has moved from a
+  `Config::wasm_backtrace` option to a new `Config::native_unwind_info` option
+  and is enabled by default.
+  [#4643](https://github.com/bytecodealliance/wasmtime/pull/4643)
+
+* The `memory-init-cow` feature is now enabled by default in the C API.
+  [#4690](https://github.com/bytecodealliance/wasmtime/pull/4690)
+
+* Back-edge CFI is now enabled by default on AArch64 macOS.
+  [#4720](https://github.com/bytecodealliance/wasmtime/pull/4720)
+
+* WASI calls will no longer return NOTCAPABLE in preparation for the removal of
+  the rights system from WASI.
+  [#4666](https://github.com/bytecodealliance/wasmtime/pull/4666)
+
+### Internal
+
+This section of the release notes shouldn't affect external users since no
+public-facing APIs are affected, but serves as a place to document larger
+changes internally within Wasmtime.
+
+* Differential fuzzing has been refactored and improved into one fuzzing target
+  which can execute against any of Wasmtime itself (configured differently),
+  wasmi, V8, or the spec interpreter. Fuzzing now executes each exported
+  function with fuzz-generated inputs and the contents of all of memory and each
+  exported global is compared after each execution. Additionally more
+  interesting shapes of modules are also possible to generate.
+  [#4515](https://github.com/bytecodealliance/wasmtime/pull/4515)
+  [#4735](https://github.com/bytecodealliance/wasmtime/pull/4735)
+  [#4737](https://github.com/bytecodealliance/wasmtime/pull/4737)
+  [#4739](https://github.com/bytecodealliance/wasmtime/pull/4739)
+  [#4774](https://github.com/bytecodealliance/wasmtime/pull/4774)
+  [#4773](https://github.com/bytecodealliance/wasmtime/pull/4773)
+  [#4845](https://github.com/bytecodealliance/wasmtime/pull/4845)
+  [#4672](https://github.com/bytecodealliance/wasmtime/pull/4672)
+  [#4674](https://github.com/bytecodealliance/wasmtime/pull/4674)
+
+* The x64 backend for Cranelift has been fully migrated to ISLE.
+  [#4619](https://github.com/bytecodealliance/wasmtime/pull/4619)
+  [#4625](https://github.com/bytecodealliance/wasmtime/pull/4625)
+  [#4645](https://github.com/bytecodealliance/wasmtime/pull/4645)
+  [#4650](https://github.com/bytecodealliance/wasmtime/pull/4650)
+  [#4684](https://github.com/bytecodealliance/wasmtime/pull/4684)
+  [#4704](https://github.com/bytecodealliance/wasmtime/pull/4704)
+  [#4718](https://github.com/bytecodealliance/wasmtime/pull/4718)
+  [#4726](https://github.com/bytecodealliance/wasmtime/pull/4726)
+  [#4722](https://github.com/bytecodealliance/wasmtime/pull/4722)
+  [#4729](https://github.com/bytecodealliance/wasmtime/pull/4729)
+  [#4730](https://github.com/bytecodealliance/wasmtime/pull/4730)
+  [#4741](https://github.com/bytecodealliance/wasmtime/pull/4741)
+  [#4763](https://github.com/bytecodealliance/wasmtime/pull/4763)
+  [#4772](https://github.com/bytecodealliance/wasmtime/pull/4772)
+  [#4780](https://github.com/bytecodealliance/wasmtime/pull/4780)
+  [#4787](https://github.com/bytecodealliance/wasmtime/pull/4787)
+  [#4793](https://github.com/bytecodealliance/wasmtime/pull/4793)
+  [#4809](https://github.com/bytecodealliance/wasmtime/pull/4809)
+
+* The AArch64 backend for Cranelift has seen significant progress in being
+  ported to ISLE.
+  [#4608](https://github.com/bytecodealliance/wasmtime/pull/4608)
+  [#4639](https://github.com/bytecodealliance/wasmtime/pull/4639)
+  [#4634](https://github.com/bytecodealliance/wasmtime/pull/4634)
+  [#4748](https://github.com/bytecodealliance/wasmtime/pull/4748)
+  [#4750](https://github.com/bytecodealliance/wasmtime/pull/4750)
+  [#4751](https://github.com/bytecodealliance/wasmtime/pull/4751)
+  [#4753](https://github.com/bytecodealliance/wasmtime/pull/4753)
+  [#4788](https://github.com/bytecodealliance/wasmtime/pull/4788)
+  [#4796](https://github.com/bytecodealliance/wasmtime/pull/4796)
+  [#4785](https://github.com/bytecodealliance/wasmtime/pull/4785)
+  [#4819](https://github.com/bytecodealliance/wasmtime/pull/4819)
+  [#4821](https://github.com/bytecodealliance/wasmtime/pull/4821)
+  [#4832](https://github.com/bytecodealliance/wasmtime/pull/4832)
+
+* The s390x backend has seen improvements and additions to fully support the
+  Cranelift backend for rustc.
+  [#4682](https://github.com/bytecodealliance/wasmtime/pull/4682)
+  [#4702](https://github.com/bytecodealliance/wasmtime/pull/4702)
+  [#4616](https://github.com/bytecodealliance/wasmtime/pull/4616)
+  [#4680](https://github.com/bytecodealliance/wasmtime/pull/4680)
+
+* Significant improvements have been made to Cranelift-based fuzzing with more
+  supported features and more instructions being fuzzed.
+  [#4589](https://github.com/bytecodealliance/wasmtime/pull/4589)
+  [#4591](https://github.com/bytecodealliance/wasmtime/pull/4591)
+  [#4665](https://github.com/bytecodealliance/wasmtime/pull/4665)
+  [#4670](https://github.com/bytecodealliance/wasmtime/pull/4670)
+  [#4590](https://github.com/bytecodealliance/wasmtime/pull/4590)
+  [#4375](https://github.com/bytecodealliance/wasmtime/pull/4375)
+  [#4519](https://github.com/bytecodealliance/wasmtime/pull/4519)
+  [#4696](https://github.com/bytecodealliance/wasmtime/pull/4696)
+  [#4700](https://github.com/bytecodealliance/wasmtime/pull/4700)
+  [#4703](https://github.com/bytecodealliance/wasmtime/pull/4703)
+  [#4602](https://github.com/bytecodealliance/wasmtime/pull/4602)
+  [#4713](https://github.com/bytecodealliance/wasmtime/pull/4713)
+  [#4738](https://github.com/bytecodealliance/wasmtime/pull/4738)
+  [#4667](https://github.com/bytecodealliance/wasmtime/pull/4667)
+  [#4782](https://github.com/bytecodealliance/wasmtime/pull/4782)
+  [#4783](https://github.com/bytecodealliance/wasmtime/pull/4783)
+  [#4800](https://github.com/bytecodealliance/wasmtime/pull/4800)
+
+* Optimization work on cranelift has continued across various dimensions for
+  some modest compile-time improvements.
+  [#4621](https://github.com/bytecodealliance/wasmtime/pull/4621)
+  [#4701](https://github.com/bytecodealliance/wasmtime/pull/4701)
+  [#4697](https://github.com/bytecodealliance/wasmtime/pull/4697)
+  [#4711](https://github.com/bytecodealliance/wasmtime/pull/4711)
+  [#4710](https://github.com/bytecodealliance/wasmtime/pull/4710)
+  [#4829](https://github.com/bytecodealliance/wasmtime/pull/4829)
 
 --------------------------------------------------------------------------------
 

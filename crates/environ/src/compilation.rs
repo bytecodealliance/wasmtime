@@ -28,6 +28,9 @@ pub struct FunctionInfo {
     pub start: u64,
     /// The size of the compiled function, in bytes.
     pub length: u32,
+
+    /// The alignment requirements of this function, in bytes.
+    pub alignment: u32,
 }
 
 /// Information about a compiled trampoline which the host can call to enter
@@ -263,6 +266,9 @@ pub trait Compiler: Send + Sync {
 
     /// Same as [`Compiler::flags`], but ISA-specific (a cranelift-ism)
     fn isa_flags(&self) -> BTreeMap<String, FlagValue>;
+
+    /// Get a flag indicating whether branch protection is enabled.
+    fn is_branch_protection_enabled(&self) -> bool;
 
     /// Returns a suitable compiler usable for component-related compliations.
     ///

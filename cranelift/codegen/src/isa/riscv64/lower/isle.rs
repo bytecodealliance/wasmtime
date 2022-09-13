@@ -22,7 +22,7 @@ use crate::{
         StackSlot, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
-    machinst::{InsnOutput, Lower},
+    machinst::{InsnOutput, Lower, ArgPair},
 };
 use regalloc2::PReg;
 
@@ -36,7 +36,7 @@ type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
 type BoxExternalName = Box<ExternalName>;
 type VecMachLabel = Vec<MachLabel>;
-use crate::isa::riscv64::abi::Riscv64MachineDeps;
+type VecArgPair = Vec<ArgPair>;
 use crate::machinst::valueregs;
 
 /// The main entry point for lowering with ISLE.
@@ -535,14 +535,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
             targets,
         });
         InstOutput::default()
-    }
-    fn intcc_is_overflow_or_nof(&mut self, cc: &IntCC) -> Option<IntCC> {
-        let cc = *cc;
-        if cc == IntCC::Overflow || cc == IntCC::NotOverflow {
-            Some(cc)
-        } else {
-            None
-        }
     }
     fn x_reg(&mut self, x: u8) -> Reg {
         x_reg(x as usize)

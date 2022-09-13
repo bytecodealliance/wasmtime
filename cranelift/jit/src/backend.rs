@@ -1,6 +1,6 @@
 //! Defines `JITModule`.
 
-use crate::{compiled_blob::CompiledBlob, memory::Memory};
+use crate::{compiled_blob::CompiledBlob, memory::BranchProtection, memory::Memory};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings, MachReloc};
@@ -21,7 +21,6 @@ use std::ptr::NonNull;
 use std::sync::atomic::{AtomicPtr, Ordering};
 use target_lexicon::PointerWidth;
 
-const EXECUTABLE_DATA_ALIGNMENT: u64 = 0x10;
 const WRITABLE_DATA_ALIGNMENT: u64 = 0x8;
 const READONLY_DATA_ALIGNMENT: u64 = 0x1;
 
@@ -234,7 +233,12 @@ impl JITModule {
         let plt_entry = self
             .memory
             .code
-            .allocate(std::mem::size_of::<[u8; 16]>(), EXECUTABLE_DATA_ALIGNMENT)
+            .allocate(
+                std::mem::size_of::<[u8; 16]>(),
+                self.isa
+                    .symbol_alignment()
+                    .max(self.isa.function_alignment() as u64),
+            )
             .unwrap()
             .cast::<[u8; 16]>();
         unsafe {
@@ -476,6 +480,12 @@ impl JITModule {
             );
         }
 
+        let branch_protection =
+            if cfg!(target_arch = "aarch64") && use_bti(&builder.isa.isa_flags()) {
+                BranchProtection::BTI
+            } else {
+                BranchProtection::None
+            };
         let mut module = Self {
             isa: builder.isa,
             hotswap_enabled: builder.hotswap_enabled,
@@ -483,9 +493,10 @@ impl JITModule {
             lookup_symbols: builder.lookup_symbols,
             libcall_names: builder.libcall_names,
             memory: MemoryHandle {
-                code: Memory::new(),
-                readonly: Memory::new(),
-                writable: Memory::new(),
+                code: Memory::new(branch_protection),
+                // Branch protection is not applicable to non-executable memory.
+                readonly: Memory::new(BranchProtection::None),
+                writable: Memory::new(BranchProtection::None),
             },
             declarations: ModuleDeclarations::default(),
             function_got_entries: SecondaryMap::new(),
@@ -680,16 +691,20 @@ impl Module for JITModule {
         }
 
         // work around borrow-checker to allow reuse of ctx below
-        let _ = ctx.compile(self.isa())?;
+        let res = ctx.compile(self.isa())?;
+        let alignment = res.alignment as u64;
         let compiled_code = ctx.compiled_code().unwrap();
 
         let code_size = compiled_code.code_info().total_size;
 
         let size = code_size as usize;
+        let align = alignment
+            .max(self.isa.function_alignment() as u64)
+            .max(self.isa.symbol_alignment());
         let ptr = self
             .memory
             .code
-            .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
+            .allocate(size, align)
             .expect("TODO: handle OOM etc.");
 
         {
@@ -745,6 +760,7 @@ impl Module for JITModule {
         &mut self,
         id: FuncId,
         func: &ir::Function,
+        alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction> {
@@ -764,10 +780,13 @@ impl Module for JITModule {
         }
 
         let size = bytes.len();
+        let align = alignment
+            .max(self.isa.function_alignment() as u64)
+            .max(self.isa.symbol_alignment());
         let ptr = self
             .memory
             .code
-            .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
+            .allocate(size, align)
             .expect("TODO: handle OOM etc.");
 
         unsafe {
@@ -946,4 +965,11 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
 
         None
     }
+}
+
+fn use_bti(isa_flags: &Vec<settings::Value>) -> bool {
+    isa_flags
+        .iter()
+        .find(|&f| f.name == "use_bti")
+        .map_or(false, |f| f.as_bool().unwrap_or(false))
 }
