@@ -143,8 +143,6 @@ pub type Prio = i64;
 /// An edge in our term trie.
 #[derive(Clone, Debug)]
 pub struct TrieEdge {
-    /// The priority for this edge's sub-trie.
-    pub prio: Prio,
     /// The match operation to perform for this edge.
     pub symbol: TrieSymbol,
     /// This edge's sub-trie.
@@ -162,6 +160,19 @@ pub enum TrieNode {
     Decision {
         /// The child sub-tries that we can match from this point on.
         edges: Vec<TrieEdge>,
+        /// The "frontier" used to maintain priority ordering: the
+        /// last priority at which a subtrie had a new leaf insertion,
+        /// and the latest edge which has had such an insertion.
+        ///
+        /// To maintain proper ordering of rule application, we need
+        /// to insert rules in descending priority order, and we need
+        /// to not insert prior to this point if the current rule's
+        /// priority is less than the priority stored here.
+        last_prio: Option<(Prio, usize)>,
+        /// The current priority's last insertion point. Becomes
+        /// `last_prio` if a rule is inserted with a priority less
+        /// than this one.
+        cur_prio: Option<(Prio, usize)>,
     },
 
     /// The successful match of an LHS pattern, and here is its RHS expression.
@@ -196,27 +207,77 @@ impl TrieNode {
 
         // If we are empty, turn into a decision node.
         if self.is_empty() {
-            *self = TrieNode::Decision { edges: vec![] };
+            *self = TrieNode::Decision {
+                edges: vec![],
+                last_prio: None,
+                cur_prio: None,
+            };
         }
 
         // We must be a decision node.
-        let edges = match self {
-            &mut TrieNode::Decision { ref mut edges } => edges,
+        let (edges, last_prio, cur_prio) = match self {
+            &mut TrieNode::Decision {
+                ref mut edges,
+                ref mut last_prio,
+                ref mut cur_prio,
+            } => (edges, last_prio, cur_prio),
             _ => panic!("insert on leaf node!"),
+        };
+
+        // If we are inserting at a lower prio than in `cur_prio`,
+        // `cur_prio` moves to `last_prio` (and controls our minimum
+        // insertion point) and we initialize `cur_prio` with our
+        // current priority and new max insertion index (of 0).
+        let first_in_cur = if cur_prio.is_none() || prio < cur_prio.unwrap().0 {
+            *last_prio = *cur_prio;
+            *cur_prio = Some((prio, 0));
+            true
+        } else {
+            false
+        };
+        let cur_prio = cur_prio.as_mut().unwrap();
+
+        // Determine the minimum edge index under which we can insert
+        // while respecting priorities.
+        let start = if let Some((last_prio, last_index)) = *last_prio {
+            assert!(last_prio > prio);
+            cur_prio.1 = last_index;
+            Some(last_index)
+        } else {
+            None
         };
 
         // Now find or insert the appropriate edge.
         let edge = edges
             .iter()
-            .position(|edge| edge.symbol == op && edge.prio == prio)
+            .enumerate()
+            .position(|(i, edge)| (start.is_none() || i >= start.unwrap()) && edge.symbol == op)
             .unwrap_or_else(|| {
-                edges.push(TrieEdge {
-                    prio,
-                    symbol: op,
-                    node: TrieNode::Empty,
-                });
-                edges.len() - 1
+                // Insert in a position among our allowed range
+                // (strictly after `start` now) that would be sorted
+                // according to the `op` symbol.
+                let first_after_prev_prio = start.map(|x| x + 1).unwrap_or(0);
+                assert!(first_after_prev_prio <= edges.len());
+                let insert_pos = edges[first_after_prev_prio..]
+                    .binary_search_by(|edge| edge.symbol.cmp(&op))
+                    .unwrap_err()
+                    + first_after_prev_prio;
+
+                if !first_in_cur && insert_pos <= cur_prio.1 {
+                    cur_prio.1 += 1;
+                }
+                edges.insert(
+                    insert_pos,
+                    TrieEdge {
+                        symbol: op,
+                        node: TrieNode::Empty,
+                    },
+                );
+                insert_pos
             });
+
+        cur_prio.1 = std::cmp::max(cur_prio.1, edge);
+        assert!(cur_prio.1 < edges.len());
 
         let edge = &mut edges[edge];
 
@@ -234,21 +295,6 @@ impl TrieNode {
         }
     }
 
-    /// Sort edges by priority.
-    pub fn sort(&mut self) {
-        match self {
-            TrieNode::Decision { edges } => {
-                // Sort by priority, highest integer value first; then
-                // by trie symbol.
-                edges.sort_by_cached_key(|edge| (-edge.prio, edge.symbol.clone()));
-                for child in edges {
-                    child.node.sort();
-                }
-            }
-            _ => {}
-        }
-    }
-
     /// Get a pretty-printed version of this trie, for debugging.
     pub fn pretty(&self) -> String {
         let mut s = String::new();
@@ -257,17 +303,14 @@ impl TrieNode {
 
         fn pretty_rec(s: &mut String, node: &TrieNode, indent: &str) {
             match node {
-                TrieNode::Decision { edges } => {
+                TrieNode::Decision { edges, .. } => {
                     s.push_str(indent);
                     s.push_str("TrieNode::Decision:\n");
 
                     let new_indent = indent.to_owned() + "    ";
                     for edge in edges {
                         s.push_str(indent);
-                        s.push_str(&format!(
-                            "  edge: prio = {:?}, symbol: {:?}\n",
-                            edge.prio, edge.symbol
-                        ));
+                        s.push_str(&format!("  edge: symbol: {:?}\n", edge.symbol));
                         pretty_rec(s, &edge.node, &new_indent);
                     }
                 }
@@ -310,10 +353,6 @@ impl TermFunctionBuilder {
             .chain(std::iter::once(TrieSymbol::EndOfMatch));
         self.trie.insert(prio, symbols, expr_seq);
     }
-
-    fn sort_trie(&mut self) {
-        self.trie.sort();
-    }
 }
 
 #[derive(Debug)]
@@ -335,7 +374,13 @@ impl<'a> TermFunctionsBuilder<'a> {
     }
 
     fn build(&mut self) {
-        for rule in 0..self.termenv.rules.len() {
+        // Sort rules by priority, descending, and insert in that order.
+        let mut rule_indices: Vec<usize> = (0..self.termenv.rules.len()).collect();
+        // Sort by *negative* priority so we get descending order
+        // (highest priority first).
+        rule_indices.sort_by_key(|&index| -self.termenv.rules[index].prio.unwrap_or(0));
+
+        for rule in rule_indices {
             let rule = RuleId(rule);
             let prio = self.termenv.rules[rule.index()].prio.unwrap_or(0);
 
@@ -352,10 +397,6 @@ impl<'a> TermFunctionsBuilder<'a> {
                 .entry(root_term)
                 .or_insert_with(|| TermFunctionBuilder::new())
                 .add_rule(prio, pattern.clone(), expr.clone());
-        }
-
-        for builder in self.builders_by_term.values_mut() {
-            builder.sort_trie();
         }
     }
 

@@ -717,7 +717,7 @@ impl<'a> Codegen<'a> {
                 returned = true;
             }
 
-            &TrieNode::Decision { ref edges } => {
+            &TrieNode::Decision { ref edges, .. } => {
                 let subindent = format!("{}    ", indent);
                 // If this is a decision node, generate each match op
                 // in turn (in priority order). Gather together
@@ -732,11 +732,7 @@ impl<'a> Codegen<'a> {
                     let mut last = i;
                     let mut adjacent_variants = StableSet::new();
                     let mut adjacent_variant_input = None;
-                    log!(
-                        "edge: prio = {:?}, symbol = {:?}",
-                        edges[i].prio,
-                        edges[i].symbol
-                    );
+                    log!("edge: symbol = {:?}", edges[i].symbol);
                     while last < edges.len() {
                         match &edges[last].symbol {
                             &TrieSymbol::Match {
