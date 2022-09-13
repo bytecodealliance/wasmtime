@@ -110,8 +110,8 @@ pub fn writable_fp_reg() -> Writable<Reg> {
     Writable::from_reg(fp_reg())
 }
 
-/// Get a reference to the first temporary, sometimes "spill temporary", register. This register used
-/// in various.
+/// Get a reference to the first temporary, sometimes "spill temporary",
+/// register. This register is used in various ways as a temporary.
 #[inline]
 pub fn spilltmp_reg() -> Reg {
     x_reg(31)

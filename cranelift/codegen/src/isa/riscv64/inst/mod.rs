@@ -25,21 +25,13 @@ use std::boxed::Box;
 use std::string::{String, ToString};
 
 pub mod regs;
-
 pub use self::regs::*;
-
 pub mod imms;
-
 pub use self::imms::*;
-
 pub mod args;
-
 pub use self::args::*;
-
 pub mod emit;
-
 pub use self::emit::*;
-
 pub mod unwind;
 
 use crate::isa::riscv64::abi::Riscv64MachineDeps;
@@ -210,7 +202,7 @@ impl Inst {
         }
     }
 
-    /// can be load using lui and addi instructions.
+    /// Immediates can be loaded using lui and addi instructions.
     fn load_const_imm(rd: Writable<Reg>, value: u64) -> Option<SmallInstVec<Inst>> {
         Inst::generate_imm(value, |imm20, imm12| {
             let mut insts = SmallVec::new();
@@ -1546,24 +1538,30 @@ impl Inst {
 /// Different forms of label references for different instruction formats.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LabelUse {
-    /// 20-bit branch offset (unconditional branches). PC-rel, offset is imm << 1. Immediate is 20
-    /// signed bits. use in Jal
+    /// 20-bit branch offset (unconditional branches). PC-rel, offset is
+    /// imm << 1. Immediate is 20 signed bits. Use in Jal instructions.
     Jal20,
 
-    /// The unconditional jump instructions all use PC-relative addressing to help support position independent code. The JALR instruction was defined to enable a two-instruction sequence to
-    /// jump anywhere in a 32-bit absolute address range. A LUI instruction can first load rs1 with the
-    /// upper 20 bits of a target address, then JALR can add in the lower bits. Similarly, AUIPC then
-    /// JALR can jump anywhere in a 32-bit pc-relative address range.
+    /// The unconditional jump instructions all use PC-relative
+    /// addressing to help support position independent code. The JALR
+    /// instruction was defined to enable a two-instruction sequence to
+    /// jump anywhere in a 32-bit absolute address range. A LUI
+    /// instruction can first load rs1 with the upper 20 bits of a
+    /// target address, then JALR can add in the lower bits. Similarly,
+    /// AUIPC then JALR can jump anywhere in a 32-bit pc-relative
+    /// address range.
     PCRel32,
 
-    /// All branch instructions use the B-type instruction format. The 12-bit B-immediate encodes signed
-    /// offsets in multiples of 2, and is added to the current pc to give the target address. The conditional
-    /// branch range is ±4 KiB.
+    /// All branch instructions use the B-type instruction format. The
+    /// 12-bit B-immediate encodes signed offsets in multiples of 2, and
+    /// is added to the current pc to give the target address. The
+    /// conditional branch range is ±4 KiB.
     B12,
 }
 
 impl MachInstLabelUse for LabelUse {
-    /// Alignment for veneer code. Every Riscv64 instruction must be 4-byte-aligned.
+    /// Alignment for veneer code. Every Riscv64 instruction must be
+    /// 4-byte-aligned.
     const ALIGN: CodeOffset = 4;
 
     /// Maximum PC-relative range (positive), inclusive.
@@ -1669,32 +1667,27 @@ impl LabelUse {
     }
 
     fn patch_raw_offset(self, buffer: &mut [u8], offset: i64) {
+        let insn = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
         match self {
             LabelUse::Jal20 => {
                 let offset = offset as u32;
-                let raw = { &mut buffer[0] as *mut u8 as *mut u32 };
                 let v = ((offset >> 12 & 0b1111_1111) << 12)
                     | ((offset >> 11 & 0b1) << 20)
                     | ((offset >> 1 & 0b11_1111_1111) << 21)
                     | ((offset >> 20 & 0b1) << 31);
-                unsafe {
-                    *raw |= v;
-                }
+                buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn | v));
             }
             LabelUse::PCRel32 => {
-                let auipc = { &mut buffer[0] as *mut u8 as *mut u32 };
-                let jalr = { &mut buffer[4] as *mut u8 as *mut u32 };
+                let insn2 = u32::from_le_bytes([buffer[4], buffer[5], buffer[6], buffer[7]]);
                 Inst::generate_imm(offset as u64, |imm20, imm12| {
                     let imm20 = imm20.unwrap_or_default();
                     let imm12 = imm12.unwrap_or_default();
-                    // zero_reg() is fine, the register parameter must have be in code stream.
-                    // because of "|=" zero_reg() would not change the old value.
-                    unsafe {
-                        *auipc |= enc_auipc(writable_zero_reg(), imm20);
-                    }
-                    unsafe {
-                        *jalr |= enc_jalr(writable_zero_reg(), zero_reg(), imm12);
-                    }
+                    // Encode the OR-ed-in value with zero_reg(). The
+                    // register parameter must be in the original
+                    // encoded instruction and or'ing in zeroes does not
+                    // change it.
+                    buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn | enc_auipc(writable_zero_reg(), imm20)));
+                    buffer[4..8].clone_from_slice(&u32::to_le_bytes(insn2 | enc_jalr(writable_zero_reg(), zero_reg(), imm12)));
                 })
                 // expect make sure we handled.
                 .expect("we have check the range before,this is a compiler error.");
@@ -1702,14 +1695,11 @@ impl LabelUse {
 
             LabelUse::B12 => {
                 let offset = offset as u32;
-                let raw = &mut buffer[0] as *mut u8 as *mut u32;
                 let v = ((offset >> 11 & 0b1) << 7)
                     | ((offset >> 1 & 0b1111) << 8)
                     | ((offset >> 5 & 0b11_1111) << 25)
                     | ((offset >> 12 & 0b1) << 31);
-                unsafe {
-                    *raw |= v;
-                }
+                buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn | v));
             }
         }
     }

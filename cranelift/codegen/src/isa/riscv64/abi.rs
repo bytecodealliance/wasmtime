@@ -62,8 +62,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
     ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)> {
-        // all registers can be used as parameters or rets.
-        // both start and all included.
+        // All registers that can be used as parameters or rets.
+        // both start and end are included.
         let (x_start, x_end, f_start, f_end) = if args_or_rets == ArgsOrRets::Args {
             (10, 17, 10, 17)
         } else {
@@ -72,7 +72,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         };
         let mut next_x_reg = x_start;
         let mut next_f_reg = f_start;
-        // stack space
+        // Stack space.
         let mut next_stack: u64 = 0;
         let mut ret = smallvec![];
         let mut return_one_register_used = false;
@@ -643,7 +643,7 @@ const CALLEE_SAVE_F_REG: [bool; 32] = [
     true, true, true, true, false, false, false, false, // 24-31
 ];
 
-/// this should be the registers must be save by callee
+/// This should be the registers that must be saved by callee.
 #[inline]
 fn is_reg_saved_in_prologue(_conv: CallConv, reg: RealReg) -> bool {
     if reg.class() == RegClass::Int {

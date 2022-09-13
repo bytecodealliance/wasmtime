@@ -1789,26 +1789,6 @@ impl Vcsr {
     }
 }
 
-static mut V_LEN: usize = 0;
-
-/// V_LEN is not contant accroding to riscv document.
-
-/// Each hart supporting a vector extension de nes two parameters: 1. The maximum size in bits of a vector element that any operation can produce or consume, ELEN ≥ 8, which must be a power of 2. 2. The number of bits in a single vector register, VLEN ≥ ELEN, which must be a power of 2, and must be no greater than 216. Standard vector extensions (Section Standard Vector Extensions) and architecture pro les may set further constraints on ELEN and VLEN.
-/// it is ugly, but I need this global var to pass the paramter.
-
-#[inline]
-pub(crate) fn set_x_len(l: usize) {
-    unsafe { V_LEN = l };
-}
-
-#[inline]
-pub(crate) fn get_x_len() -> usize {
-    if unsafe { V_LEN } == 0 {
-        panic!("V_LEN is not set.")
-    }
-    unsafe { V_LEN }
-}
-
 ///Atomic Memory ordering.
 #[derive(Copy, Clone, Debug)]
 pub enum AMO {
