@@ -1686,8 +1686,12 @@ impl LabelUse {
                     // register parameter must be in the original
                     // encoded instruction and or'ing in zeroes does not
                     // change it.
-                    buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn | enc_auipc(writable_zero_reg(), imm20)));
-                    buffer[4..8].clone_from_slice(&u32::to_le_bytes(insn2 | enc_jalr(writable_zero_reg(), zero_reg(), imm12)));
+                    buffer[0..4].clone_from_slice(&u32::to_le_bytes(
+                        insn | enc_auipc(writable_zero_reg(), imm20),
+                    ));
+                    buffer[4..8].clone_from_slice(&u32::to_le_bytes(
+                        insn2 | enc_jalr(writable_zero_reg(), zero_reg(), imm12),
+                    ));
                 })
                 // expect make sure we handled.
                 .expect("we have check the range before,this is a compiler error.");
