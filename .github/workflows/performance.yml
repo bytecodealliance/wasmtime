@@ -4,7 +4,8 @@
 name: "Performance Testing"
 
 # Controls when the action will run.
-# This workflow runs when manually triggered using the UI or API.
+# This workflow runs when manually triggered by keywords used in the start of a review comment
+# Currently that phrase is /bench_x64. /bench_aarch64 and /bench_both are TODOs.
 on:
   pull_request_review:
     types: [submitted, edited]
@@ -37,14 +38,7 @@ jobs:
         || ('sparker-arm' == github.event.review.user.login)
         || ('uweigand' == github.event.review.user.login))
     steps:
-      - run: echo "MESSAGE=Requested from pull request comment." >> $GITHUB_ENV
-      - run: echo "ACTOR=${{ github.event.review.user.login }}" >> $GITHUB_ENV
-      - run: echo "REPOSITORY=${{ github.repository }}" >> $GITHUB_ENV
-      - run: echo "REFS=${{ github.ref }}" >> $GITHUB_ENV
-      - run: echo "PR_NUMBER=${{ github.event.issue.number }}" >> $GITHUB_ENV
-      - run: echo "PUBLISH=true" >> $GITHUB_ENV
       - run: echo "$GITHUB_CONTEXT"
-      - run: echo "$GITHUB_ENV"
       - run: |
           # Create and Push Branch
           git clone https://jlb6740:${{env.TOKEN}}@github.com/bytecodealliance/wasmtime-sightglass-benchmarking.git
@@ -63,7 +57,6 @@ jobs:
           git config user.email $(curl -sSL $commit_url | jq -r '.[].commit.committer.email' | tail -n 1)
           git commit --allow-empty -m "${{ github.event.pull_request._links.comments.href }}"
           git push origin wasmtime/${{ github.ref }}/${{ github.sha }}
-          #curl -X POST -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ env.TOKEN }}" https://api.github.com/repos/bytecodealliance/wasmtime-sightglass-benchmarking/dispatches -d '{"event_type":"Performance Testing", "client_payload":{"message":"${{ env.MESSAGE }}", "actor":"${{ env.ACTOR }}", "repository":"${{ env.REPOSITORY }}", "ref":"${{ env.REFS }}", "pr_number":"${{ env.PR_NUMBER }}", "publish":"${{ env.PUBLISH }}" }'
 
   Performance_Repo_On_Push:
     name: Benchmark x64 on push Performance repo
@@ -150,8 +143,7 @@ jobs:
           sed -i -z 's/\n/|\n/g' /tmp/results_cycles_summarized_sorted2.csv
           sed -i '2 i\ |-|-|-|-|' /tmp/results_cycles_summarized_sorted2.csv
           sed -i '/main/d' /tmp/results_cycles_summarized_sorted2.csv
-          sed -i '1 i\ Patch improvement over main/HEAD (x64). Negative is better.\n' /tmp/results_cycles_summarized_sorted2.csv
-          sed -i '1 i\ ${{ env.MESSAGE }}\n' /tmp/results_cycles_summarized_sorted2.csv
+          sed -i '1 i\ Patch improvement over main HEAD (x64). Negative shows reduction pct (improvement).\n' /tmp/results_cycles_summarized_sorted2.csv
 
       - name: Print Results
         run: cat /tmp/results_cycles_summarized_sorted2.csv
