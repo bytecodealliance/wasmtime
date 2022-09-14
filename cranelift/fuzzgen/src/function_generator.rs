@@ -766,7 +766,9 @@ impl Resources {
         &self,
         block: Block,
     ) -> (&[(Block, BlockSignature)], &[(Block, BlockSignature)]) {
-        let partition_point = self.blocks.partition_point(|(b, _)| *b <= block);
+        // Blocks are stored in-order and have no gaps, this means that we can simply index them by
+        // their number
+        let partition_point = block.as_u32() as usize + 1;
         self.blocks.split_at(partition_point)
     }
 
@@ -1129,11 +1131,7 @@ where
     }
 
     /// Creates a random amount of blocks in this function
-    fn generate_blocks(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        sig: &Signature,
-    ) -> Result<Vec<(Block, BlockSignature)>> {
+    fn generate_blocks(&mut self, builder: &mut FunctionBuilder, sig: &Signature) -> Result<()> {
         let extra_block_count = self.param(&self.config.blocks_per_function)?;
 
         // We must always have at least one block, so we generate the "extra" blocks and add 1 for
@@ -1141,7 +1139,7 @@ where
         let block_count = 1 + extra_block_count;
 
         // Blocks need to be sorted in ascending order
-        (0..block_count)
+        self.resources.blocks = (0..block_count)
             .map(|i| {
                 let is_entry = i == 0;
                 let block = builder.create_block();
@@ -1166,7 +1164,17 @@ where
                     Ok((block, sig))
                 }
             })
-            .collect()
+            .collect::<Result<Vec<_>>>()?;
+
+        // Valid blocks for jump tables have to have no parameters in the signature, and must also
+        // not be the first block.
+        self.resources.blocks_without_params = self.resources.blocks[1..]
+            .iter()
+            .filter(|(_, sig)| sig.len() == 0)
+            .map(|(b, _)| *b)
+            .collect();
+
+        Ok(())
     }
 
     fn generate_block_signature(&mut self) -> Result<BlockSignature> {
@@ -1230,15 +1238,7 @@ where
 
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
 
-        self.resources.blocks = self.generate_blocks(&mut builder, &sig)?;
-
-        // Valid blocks for jump tables have to have no parameters in the signature, and must also
-        // not be the first block.
-        self.resources.blocks_without_params = self.resources.blocks[1..]
-            .iter()
-            .filter(|(_, sig)| sig.len() == 0)
-            .map(|(b, _)| *b)
-            .collect();
+        self.generate_blocks(&mut builder, &sig)?;
 
         // Function preamble
         self.generate_jumptables(&mut builder)?;
@@ -1246,9 +1246,9 @@ where
         self.generate_stack_slots(&mut builder)?;
 
         // Main instruction generation loop
-        for (i, (block, block_sig)) in self.resources.blocks.clone().iter().enumerate() {
-            let is_block0 = i == 0;
-            builder.switch_to_block(*block);
+        for (block, block_sig) in self.resources.blocks.clone().into_iter() {
+            let is_block0 = block.as_u32() == 0;
+            builder.switch_to_block(block);
 
             if is_block0 {
                 // The first block is special because we must create variables both for the
@@ -1263,7 +1263,7 @@ where
                 // Define variables for the block params
                 for (i, ty) in block_sig.iter().enumerate() {
                     let var = self.get_variable_of_type(*ty)?;
-                    let block_param = builder.block_params(*block)[i];
+                    let block_param = builder.block_params(block)[i];
                     builder.def_var(var, block_param);
                 }
             }
@@ -1271,7 +1271,7 @@ where
             // Generate block instructions
             self.generate_instructions(&mut builder)?;
 
-            self.finalize_block(&mut builder, *block)?;
+            self.finalize_block(&mut builder, block)?;
         }
 
         builder.seal_all_blocks();
