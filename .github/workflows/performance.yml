@@ -6,93 +6,168 @@ name: "Performance Testing"
 # Controls when the action will run.
 # This workflow runs when manually triggered using the UI or API.
 on:
-  issue_comment:
-    types: [created, edited]
+  pull_request_review:
+    types: [submitted, edited]
   pull_request_review_comment:
     types: [created, edited]
-  workflow_dispatch:
-      inputs:
-        actor:
-          description: 'User that requested the workflow'
-          type: string
-          required: false
-        pr_number:
-          description: 'Pull request number for where to post the results'
-          type: string
-          required: false
-          default: ''
-        post_results:
-          description: 'Check to post results to the given PR'
-          type: boolean
-          required: false
-          default: false
-        repository:
-          description: 'Repository for the commit'
-          type: string
-          default: 'bytecodealliance/wasmtime'
-          required: true
-        refs:
-          description: 'Ref for the commit'
-          type: string
-          default: 'refs/heads/main'
-          required: true
-        sg_commit:
-          description: 'Sightglass ref'
-          type: string
-          default: '81c425a'
-          required: false
-        message:
-          description: 'Message to print with posted PR comment'
-          type: string
-          default: 'Triggered by wasmtime workflow dispatch'
-          required: false
+  push:
 
 # Env variables
 env:
-  SG_COMMIT: 649509c
+  SG_COMMIT: b4971ae
   TOKEN: ${{ secrets.SIGHTGLASS_BENCHMARKING_TOKEN }}
   GITHUB_CONTEXT: ${{ toJson(github) }}
 
 jobs:
-  Sightglass_x86-64_from_pr_comment:
-    name: Sightglass x86-64_from_pr_comment
+  Wasmtime_Repo_On_PR_Comment:
+    name: Benchmark x64 on PR comment Wasmtime repo
     runs-on: ubuntu-latest
     if: |
-      startsWith(github.event.comment.body, '/bench_x64') &&
-      (github.event.issue.pull_request) &&
-      (('abrown' == github.event.comment.user.login)
-        || ('afonso360' == github.event.comment.user.login)
-        || ('akirilov-arm' == github.event.comment.user.login)
-        || ('alexcrichton' == github.event.comment.user.login)
-        || ('bbouvier' == github.event.comment.user.login)
-        || ('bjorn3' == github.event.comment.user.login)
-        || ('cfallin' == github.event.comment.user.login)
-        || ('fitzgen' == github.event.comment.user.login)
-        || ('jlb6740' == github.event.comment.user.login)
-        || ('sparker-arm' == github.event.comment.user.login)
-        || ('uweigand' == github.event.comment.user.login))
+      (github.event_name == 'pull_request_review') &&
+      (startsWith(github.event.review.body, '/bench_x64')) &&
+      (('abrown' == github.event.review.user.login)
+        || ('afonso360' == github.event.review.user.login)
+        || ('akirilov-arm' == github.event.review.user.login)
+        || ('alexcrichton' == github.event.review.user.login)
+        || ('bbouvier' == github.event.review.user.login)
+        || ('bjorn3' == github.event.review.user.login)
+        || ('cfallin' == github.event.review.user.login)
+        || ('fitzgen' == github.event.review.user.login)
+        || ('jlb6740' == github.event.review.user.login)
+        || ('sparker-arm' == github.event.review.user.login)
+        || ('uweigand' == github.event.review.user.login))
     steps:
       - run: echo "MESSAGE=Requested from pull request comment." >> $GITHUB_ENV
-      - run: echo "ACTOR=${{ github.event.comment.user.login }}" >> $GITHUB_ENV
+      - run: echo "ACTOR=${{ github.event.review.user.login }}" >> $GITHUB_ENV
       - run: echo "REPOSITORY=${{ github.repository }}" >> $GITHUB_ENV
       - run: echo "REFS=${{ github.ref }}" >> $GITHUB_ENV
       - run: echo "PR_NUMBER=${{ github.event.issue.number }}" >> $GITHUB_ENV
       - run: echo "PUBLISH=true" >> $GITHUB_ENV
       - run: echo "$GITHUB_CONTEXT"
+      - run: echo "$GITHUB_ENV"
       - run: |
-          curl -X POST -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ env.TOKEN }}" https://api.github.com/repos/bytecodealliance/wasmtime-sightglass-benchmarking/dispatches -d '{"event_type":"bench-sightglass", "client_payload":{"message":"${{ env.MESSAGE }}", "actor":"${{ env.ACTOR }}", "repository":"${{ env.REPOSITORY }}", "ref":"${{ env.REFS }}", "pr_number":"${{ env.PR_NUMBER }}", "publish":"${{ env.PUBLISH }}" }'
+          # Create and Push Branch
+          git clone https://jlb6740:${{env.TOKEN}}@github.com/bytecodealliance/wasmtime-sightglass-benchmarking.git
+          cd wasmtime-sightglass-benchmarking
+          git remote add wasmtime ${{ github.event.repository.clone_url }}
+          git fetch wasmtime refs/pull/*/merge:refs/remotes/wasmtime/pull/*/merge
+          git checkout wasmtime/pull/${{ github.ref_name }} -b ${{ github.ref_name }}
+          git submodule update --init --recursive
+          git checkout -b wasmtime/${{ github.ref }}/${{ github.sha }}
+          sudo apt install jq
+          export commit_url=${{ github.event.pull_request._links.commits.href }}
+          echo $commit_url
+          echo $(curl -sSL $commit_url | jq -r '.[].commit.committer.name' | tail -n 1)
+          echo $(curl -sSL $commit_url | jq -r '.[].commit.committer.email' | tail -n 1)
+          git config user.name $(curl -sSL $commit_url | jq -r '.[].commit.committer.name' | tail -n 1)
+          git config user.email $(curl -sSL $commit_url | jq -r '.[].commit.committer.email' | tail -n 1)
+          git commit --allow-empty -m "${{ github.event.pull_request._links.comments.href }}"
+          git push origin wasmtime/${{ github.ref }}/${{ github.sha }}
+          #curl -X POST -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ env.TOKEN }}" https://api.github.com/repos/bytecodealliance/wasmtime-sightglass-benchmarking/dispatches -d '{"event_type":"Performance Testing", "client_payload":{"message":"${{ env.MESSAGE }}", "actor":"${{ env.ACTOR }}", "repository":"${{ env.REPOSITORY }}", "ref":"${{ env.REFS }}", "pr_number":"${{ env.PR_NUMBER }}", "publish":"${{ env.PUBLISH }}" }'
 
-  Sightglass_x86-64_from_workflow_dispatch:
-    name: Performance x86-64_from_workflow_dispatch
-    runs-on: ubuntu-latest
-    if: (github.event_name == 'workflow_dispatch')
+  Performance_Repo_On_Push:
+    name: Benchmark x64 on push Performance repo
+    runs-on: [self-hosted, linux, x64]
+    if: (github.event_name == 'push') && (github.repository == 'bytecodealliance/wasmtime-sightglass-benchmarking')
     steps:
-      - run: echo "MESSAGE=${{ github.event.inputs.message }}" >> $GITHUB_ENV
-      - run: echo "ACTOR=${{ github.event.inputs.actor }}" >> $GITHUB_ENV
-      - run: echo "REPOSITORY=${{ github.event.inputs.repository }}" >> $GITHUB_ENV
-      - run: echo "REFS=${{ github.event.inputs.refs }}" >> $GITHUB_ENV
-      - run: echo "PR_NUMBER=${{ github.event.inputs.pr_number }}" >> $GITHUB_ENV
-      - run: echo "PUBLISH=${{ github.event.inputs.post_results }}"  >> $GITHUB_ENV
       - run: echo "$GITHUB_CONTEXT"
-      - run: |
-          curl -X POST -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ env.TOKEN }}" https://api.github.com/repos/bytecodealliance/wasmtime-sightglass-benchmarking/dispatches -d '{"event_type":"bench-sightglass", "client_payload":{"message":"${{ env.MESSAGE }}", "actor":"${{ env.ACTOR }}", "repository":"${{ env.REPOSITORY }}", "ref":"${{ env.REFS }}", "pr_number":"${{ env.PR_NUMBER }}", "publish":"${{ env.PUBLISH }}" }'
+      - run: echo "${{ github.event.head_commit.message }}"
+      - name: "Build sightglass commit '${{ env.SG_COMMIT }}'"
+        run: |
+          cd ../ && ls -l && rm -rf ./sightglass
+          git clone https://github.com/bytecodealliance/sightglass.git && cd ./sightglass
+          git checkout ${{env.SG_COMMIT}}
+          cargo build --release
+
+      - name: Checkout patch from bytecodealliance/wasmtime
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          repository: ${{ env.repository }}
+          ref: ${{ env.event.ref_name }}
+          path: wasmtime_commit
+
+      - name: Build patch from bytecodealliance/wasmtime
+        working-directory: ./wasmtime_commit
+        run: |
+          cargo build --release -p wasmtime-bench-api
+          cp target/release/libwasmtime_bench_api.so /tmp/wasmtime_commit.so
+
+      - name: Checkout main from bytecodealliance/wasmtime
+        uses: actions/checkout@v3
+        with:
+          ref: 'main'
+          repository: 'bytecodealliance/wasmtime'
+          submodules: true
+          path: wasmtime_main
+
+      - name: Build main from bytecodealliance/wasmtime
+        working-directory: ./wasmtime_main
+        run: |
+          cargo build --release -p wasmtime-bench-api
+          cp target/release/libwasmtime_bench_api.so /tmp/wasmtime_main.so
+
+      - name: Run performance tests
+        working-directory: ../sightglass
+        run: |
+          cargo run -- \
+          benchmark \
+          --processes 1 \
+          --iterations-per-process 2 \
+          --engine /tmp/wasmtime_main.so \
+          --engine /tmp/wasmtime_commit.so \
+          --output-format csv \
+          --output-file /tmp/results.csv \
+          --raw \
+          -- benchmarks/*/benchmark.wasm
+          ./target/release/sightglass-cli summarize --input-format csv  --output-format csv -f /tmp/results.csv > /tmp/results_summarized.csv
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Post Process Results
+        run: |
+          pip3 install pandas numpy
+          grep -v "nanoseconds" /tmp/results_summarized.csv > /tmp/results_cycles_summarized.csv
+          sed -i 's/\/tmp\/wasmtime_commit.so/patch/g' /tmp/results_cycles_summarized.csv
+          sed -i 's/\/tmp\/wasmtime_main.so/main/g' /tmp/results_cycles_summarized.csv
+          sed -i 's/benchmarks-next\///g'  /tmp/results_cycles_summarized.csv
+          sed -i 's/\/benchmark.wasm//g'  /tmp/results_cycles_summarized.csv
+          python3 -c "import pandas as pd; pp = pd.read_csv('/tmp/results_cycles_summarized.csv', \
+          usecols=['arch','engine','wasm', 'phase', 'mean'], header=0); \
+          pp_sorted = pp.sort_values(['wasm', 'phase', 'engine'], ascending=True); \
+          pp_pct_changed=pp_sorted.groupby(['wasm','phase'])['mean'].pct_change().reset_index().rename(columns = {'mean':'pct_change'}); \
+          pp_sorted.index.name = 'index'; \
+          pp_sorted_merged=pp_sorted.merge(pp_pct_changed, on='index'); \
+          pp_sorted_merged[pp_sorted_merged['engine'].str.contains('patch')]; \
+          pp_sorted_merged=pp_sorted_merged[pp_sorted_merged['engine'].str.contains('patch')]; \
+          pp_sorted_merged=pp_sorted_merged[['wasm','arch','phase','pct_change']]; \
+          print(pp_sorted_merged.to_string(index=False));" >  /tmp/results_cycles_summarized_sorted2.csv
+          sed -i 's/^/ /' /tmp/results_cycles_summarized_sorted2.csv
+          sed -i 's/ \+/|/g' /tmp/results_cycles_summarized_sorted2.csv
+          sed -i -z 's/\n/|\n/g' /tmp/results_cycles_summarized_sorted2.csv
+          sed -i '2 i\ |-|-|-|-|' /tmp/results_cycles_summarized_sorted2.csv
+          sed -i '/main/d' /tmp/results_cycles_summarized_sorted2.csv
+          sed -i '1 i\ Patch improvement over main/HEAD (x64). Negative is better.\n' /tmp/results_cycles_summarized_sorted2.csv
+          sed -i '1 i\ ${{ env.MESSAGE }}\n' /tmp/results_cycles_summarized_sorted2.csv
+
+      - name: Print Results
+        run: cat /tmp/results_cycles_summarized_sorted2.csv
+
+      - id: get-comment-body
+        name: Create Results Body
+        run: |
+            body="$(cat /tmp/results_cycles_summarized_sorted2.csv)"
+            body="${body//'%'/'%25'}"
+            body="${body//$'\n'/'%0A'}"
+            body="${body//$'\r'/'%0D'}"
+            echo "::set-output name=body::$body"
+
+      - name: Publish Results
+        run: |
+          curl -X POST -H "Accept: application/vnd.github.v3+json" \
+          -H "Authorization: token ${{ secrets.WASMTIME_PUBLISHING_TOKEN }}" \
+          ${{ github.event.head_commit.message }} \
+          -d '{"body": ${{ toJSON(steps.get-comment-body.outputs.body) }}}'
