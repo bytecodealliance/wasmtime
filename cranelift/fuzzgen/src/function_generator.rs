@@ -135,7 +135,24 @@ fn insert_cmp(
     let rhs = builder.use_var(rhs);
 
     let res = if opcode == Opcode::Fcmp {
-        let cc = *fgen.u.choose(FloatCC::all())?;
+        // Some FloatCC's are not implemented on AArch64, see:
+        // https://github.com/bytecodealliance/wasmtime/issues/4850
+        let float_cc = if cfg!(target_arch = "aarch64") {
+            &[
+                FloatCC::Ordered,
+                FloatCC::Unordered,
+                FloatCC::Equal,
+                FloatCC::NotEqual,
+                FloatCC::LessThan,
+                FloatCC::LessThanOrEqual,
+                FloatCC::GreaterThan,
+                FloatCC::GreaterThanOrEqual,
+            ]
+        } else {
+            FloatCC::all()
+        };
+
+        let cc = *fgen.u.choose(float_cc)?;
         builder.ins().fcmp(cc, lhs, rhs)
     } else {
         let cc = *fgen.u.choose(IntCC::all())?;
@@ -232,19 +249,25 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Imul, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Imul, &[I128, I128], &[I128], insert_opcode),
     // Udiv
-    // udiv.i128 not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/4756
     (Opcode::Udiv, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode),
-    // (Opcode::Udiv, &[I128, I128], &[I128], insert_opcode),
+    // udiv.i128 not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4756
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4864
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Udiv, &[I128, I128], &[I128], insert_opcode),
     // Sdiv
-    // sdiv.i128 not implemented on x64: https://github.com/bytecodealliance/wasmtime/issues/4770
     (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode),
-    // (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
+    // sdiv.i128 not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4770
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4864
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
     // Rotr
     (Opcode::Rotr, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Rotr, &[I8, I16], &[I8], insert_opcode),
@@ -298,17 +321,16 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Rotl, &[I128, I64], &[I128], insert_opcode),
     (Opcode::Rotl, &[I128, I128], &[I128], insert_opcode),
     // Ishl
-    // Some test cases disabled due to: https://github.com/bytecodealliance/wasmtime/issues/4699
     (Opcode::Ishl, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Ishl, &[I8, I16], &[I8], insert_opcode),
     (Opcode::Ishl, &[I8, I32], &[I8], insert_opcode),
     (Opcode::Ishl, &[I8, I64], &[I8], insert_opcode),
-    // (Opcode::Ishl, &[I8, I128], &[I8], insert_opcode),
+    (Opcode::Ishl, &[I8, I128], &[I8], insert_opcode),
     (Opcode::Ishl, &[I16, I8], &[I16], insert_opcode),
     (Opcode::Ishl, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Ishl, &[I16, I32], &[I16], insert_opcode),
     (Opcode::Ishl, &[I16, I64], &[I16], insert_opcode),
-    // (Opcode::Ishl, &[I16, I128], &[I16], insert_opcode),
+    (Opcode::Ishl, &[I16, I128], &[I16], insert_opcode),
     (Opcode::Ishl, &[I32, I8], &[I32], insert_opcode),
     (Opcode::Ishl, &[I32, I16], &[I32], insert_opcode),
     (Opcode::Ishl, &[I32, I32], &[I32], insert_opcode),
@@ -808,14 +830,9 @@ where
 
     fn generate_bricmp(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         let (block, args) = self.generate_target_block(builder)?;
-        let cond = *self.u.choose(IntCC::all())?;
 
-        let bricmp_types = [
-            I8, I16, I32,
-            I64,
-            // I128 - TODO: https://github.com/bytecodealliance/wasmtime/issues/4406
-        ];
-        let _type = *self.u.choose(&bricmp_types[..])?;
+        let cc = *self.u.choose(IntCC::all())?;
+        let _type = *self.u.choose(&[I8, I16, I32, I64, I128])?;
 
         let lhs_var = self.get_variable_of_type(_type)?;
         let lhs_val = builder.use_var(lhs_var);
@@ -825,7 +842,7 @@ where
 
         builder
             .ins()
-            .br_icmp(cond, lhs_val, rhs_val, block, &args[..]);
+            .br_icmp(cc, lhs_val, rhs_val, block, &args[..]);
 
         // After bricmp's we must generate a jump
         self.generate_jump(builder)?;
