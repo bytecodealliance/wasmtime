@@ -35,6 +35,10 @@ pub struct Config {
     pub static_stack_slots_per_function: RangeInclusive<usize>,
     /// Size in bytes
     pub static_stack_slot_size: RangeInclusive<usize>,
+
+    /// Determines how often we generate a backwards branch
+    /// Backwards branches are prone to infinite loops, and thus cause timeouts.
+    pub backwards_branch_ratio: (usize, usize),
 }
 
 impl Default for Config {
@@ -55,6 +59,9 @@ impl Default for Config {
             funcrefs_per_function: 0..=8,
             static_stack_slots_per_function: 0..=8,
             static_stack_slot_size: 0..=128,
+            // 0.1% allows us to explore this, while not causing enough timeouts to significantly
+            // impact execs/s
+            backwards_branch_ratio: (1, 1000),
         }
     }
 }

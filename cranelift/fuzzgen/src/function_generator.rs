@@ -673,6 +673,7 @@ fn insert_switch(
     let switch_var = fgen.get_variable_of_type(_type)?;
     let switch_val = builder.use_var(switch_var);
 
+    // TODO: We should also generate backwards branches in switches
     let default_block = {
         let target_blocks = fgen.resources.forward_blocks_without_params(source_block);
         *fgen.u.choose(target_blocks)?
@@ -745,21 +746,15 @@ struct Resources {
 }
 
 impl Resources {
-    fn is_last_block(&self, block: Block) -> bool {
-        self.blocks.last().map_or(false, |(b, _)| *b == block)
-    }
-
     /// Returns [JumpTable]'s where all blocks are forward of `block`
     fn forward_jump_tables(&self, builder: &FunctionBuilder, block: Block) -> Vec<JumpTable> {
         // Unlike with the blocks below jump table targets are not ordered, thus we do need
         // to allocate a Vec here.
+        let jump_tables = &builder.func.jump_tables;
         self.jump_tables
             .iter()
-            .filter(|jt| {
-                let blocks = builder.func.jump_tables[**jt].as_slice();
-                blocks.iter().all(|target| *target > block)
-            })
             .copied()
+            .filter(|jt| jump_tables[*jt].iter().all(|target| *target > block))
             .collect()
     }
 
@@ -771,27 +766,14 @@ impl Resources {
         &self,
         block: Block,
     ) -> (&[(Block, BlockSignature)], &[(Block, BlockSignature)]) {
-        let partition_point = self
-            .blocks
-            .iter()
-            .enumerate()
-            .find(|(_, (b, _))| *b > block)
-            .map_or(self.blocks.len(), |(i, _)| i);
-
+        let partition_point = self.blocks.partition_point(|(b, _)| *b <= block);
         self.blocks.split_at(partition_point)
     }
 
     /// Generates a slice of `blocks_without_params` ahead of `block`
     fn forward_blocks_without_params(&self, block: Block) -> &[Block] {
-        let partition_point = self
-            .blocks_without_params
-            .iter()
-            .enumerate()
-            .find(|(_, b)| **b > block)
-            .map_or(self.blocks_without_params.len(), |(i, _)| i);
-
-        let (_, forward_blocks) = self.blocks_without_params.split_at(partition_point);
-        forward_blocks
+        let partition_point = self.blocks_without_params.partition_point(|b| *b <= block);
+        &self.blocks_without_params[partition_point..]
     }
 }
 
@@ -963,10 +945,10 @@ where
         source_block: Block,
     ) -> Result<(Block, Vec<Value>)> {
         // We try to mostly generate forward branches to avoid generating an excessive amount of
-        // infinite loops. But they are still important, so give them a 0.1% chance of existing.
-        let generate_backwards = self.u.ratio(1, 1000)?;
+        // infinite loops. But they are still important, so give them a small chance of existing.
         let (backwards_blocks, forward_blocks) = self.resources.partition_blocks(source_block);
-        let block_targets = if generate_backwards && !backwards_blocks.is_empty() {
+        let ratio = self.config.backwards_branch_ratio;
+        let block_targets = if !backwards_blocks.is_empty() && self.u.ratio(ratio.0, ratio.1)? {
             backwards_blocks
         } else {
             forward_blocks
@@ -995,14 +977,6 @@ where
     /// We always need to exit safely out of a block.
     /// This either means a jump into another block or a return.
     fn finalize_block(&mut self, builder: &mut FunctionBuilder, source_block: Block) -> Result<()> {
-        // We do mostly forward branching, the last block has no further blocks to jump to
-        // so generate a return. We could technically give it a change to generate a backwards
-        // branch here, but its not worth it.
-        if self.resources.is_last_block(source_block) {
-            insert_return(self, builder, source_block)?;
-            return Ok(());
-        }
-
         let has_jump_tables = !self
             .resources
             .forward_jump_tables(builder, source_block)
@@ -1018,25 +992,27 @@ where
             .forward_blocks_without_params(source_block)
             .is_empty();
 
-        let mut terminators: Vec<BlockTerminator> = Vec::with_capacity(6);
+        let terminators: &[(BlockTerminator, bool)] = &[
+            // Return is always a valid option
+            (insert_return, true),
+            // If we have forward blocks, we can allow generating jumps and branches
+            (insert_jump, has_forward_blocks),
+            (insert_br, has_forward_blocks),
+            (insert_bricmp, has_forward_blocks),
+            // Switches can only use blocks without params
+            (insert_switch, has_forward_blocks_without_params),
+            // We need both jump tables and a default block for br_table
+            (
+                insert_br_table,
+                has_jump_tables && has_forward_blocks_without_params,
+            ),
+        ];
 
-        // Return is always a valid option
-        terminators.push(insert_return);
-
-        // If we have forward blocks, we can allow generating jumps and branches
-        if has_forward_blocks {
-            terminators.extend_from_slice(&[insert_jump, insert_br, insert_bricmp]);
-        }
-
-        // If we have forward blocks without any params, we can allow generating switches
-        if has_forward_blocks_without_params {
-            terminators.push(insert_switch);
-        }
-
-        // We need both jump tables and a default block for br_table
-        if has_jump_tables && has_forward_blocks_without_params {
-            terminators.push(insert_br_table);
-        }
+        let terminators: Vec<_> = terminators
+            .into_iter()
+            .filter(|(_, valid)| *valid)
+            .map(|(term, _)| term)
+            .collect();
 
         let inserter = self.u.choose(&terminators[..])?;
         inserter(self, builder, source_block)?;
