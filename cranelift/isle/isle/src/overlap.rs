@@ -1,6 +1,7 @@
 //! Overlap detection for rules in ISLE.
 
 use rayon::prelude::*;
+use std::collections::{HashMap, HashSet};
 
 use crate::error::{Error, Result, Source, Span};
 use crate::sema::{
@@ -11,7 +12,7 @@ use crate::sema::{
 /// Check for overlap.
 pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
     let env = Env::new(tyenv, termenv);
-    let mut errors = Errors::new(termenv.rules.len());
+    let mut errors = Errors::new();
     for term in termenv.terms.iter() {
         // The only isle declaration that currently produces overlap is constructors whose
         // definition is entirely in isle.
@@ -23,8 +24,9 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
     }
 
     if !errors.is_empty() {
+        errors.graphviz(&env);
+        panic!("");
         let mut errors = errors.report(&env);
-        return Ok(());
         return match errors.len() {
             1 => Err(errors.pop().unwrap()),
             _ => Err(Error::Errors(std::mem::take(&mut errors))),
@@ -36,39 +38,29 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
 
 /// A node in the error graph.
 struct Node {
-    /// The number of other rules this node overlaps with.
-    degree: usize,
+    component: Option<usize>,
 
     /// `true` entries where an edge exists to the node at that index.
-    edges: Vec<bool>,
+    edges: HashSet<RuleId>,
 }
 
 impl Node {
     /// Make a new `Node` in the error graph with the given number of total nodes.
-    fn new(len: usize) -> Self {
-        let mut edges = Vec::with_capacity(len);
-        edges.resize(len, false);
-        Self { degree: 0, edges }
+    fn new() -> Self {
+        Self {
+            component: None,
+            edges: HashSet::new(),
+        }
     }
 
     /// Add an edge between this node and the other node.
     fn add_edge(&mut self, other: RuleId) {
-        if self.edges[other.0] {
-            return;
-        }
-
-        self.degree += 1;
-        self.edges[other.0] = true;
+        self.edges.insert(other);
     }
 
     /// Remove an edge between this node and another node.
     fn remove_edge(&mut self, other: RuleId) {
-        if !self.edges[other.0] {
-            return;
-        }
-
-        self.degree -= 1;
-        self.edges[other.0] = false;
+        self.edges.remove(&other);
     }
 }
 
@@ -77,32 +69,102 @@ impl Node {
 struct Errors {
     /// Edges between rules indicating overlap. As the edges are not directed, the edges are
     /// normalized by ordering the rule ids.
-    nodes: Vec<Node>,
+    nodes: HashMap<RuleId, Node>,
 }
 
 impl Errors {
     /// Make a new `Errors` graph for collecting overlap information.
-    fn new(len: usize) -> Self {
-        let mut nodes = Vec::with_capacity(len);
-        nodes.resize_with(len, || Node::new(len));
-        Self { nodes }
+    fn new() -> Self {
+        Self {
+            nodes: HashMap::new(),
+        }
+    }
+
+    fn graphviz(&mut self, env: &Env) {
+        let mut comps = self.components(env);
+
+        comps.sort_by_key(|(_, comp)| std::cmp::Reverse(comp.len()));
+
+        for (_, comp) in comps.into_iter() {
+            println!("graph {{");
+            for a in comp {
+                let node = &self.nodes[&a];
+                for b in node.edges.iter() {
+                    if *b > a {
+                        println!(
+                            "{} -- {} // {} -- {}",
+                            env.get_rule(a).pos.line,
+                            env.get_rule(*b).pos.line,
+                            a.0,
+                            b.0
+                        );
+                    }
+                }
+            }
+            println!("}}");
+        }
+    }
+
+    /// Label components
+    fn components(&mut self, env: &Env) -> Vec<(usize, Vec<RuleId>)> {
+        let mut components = Vec::new();
+        let mut work = Vec::new();
+
+        let keys: Vec<_> = self.nodes.keys().copied().collect();
+
+        for id in keys {
+            if self.nodes[&id].component.is_some() {
+                continue;
+            }
+
+            if self.nodes[&id].edges.is_empty() {
+                continue;
+            }
+
+            let comp = components.len();
+            let mut component = Vec::new();
+
+            work.clear();
+            work.push(id);
+            while let Some(other) = work.pop() {
+                if let Some(other_comp) = self.nodes[&other].component {
+                    assert!(comp == other_comp);
+                    continue;
+                }
+
+                self.nodes.get_mut(&other).unwrap().component = Some(comp);
+                component.push(other);
+
+                work.extend(self.nodes[&other].edges.iter());
+            }
+
+            component.sort();
+            components.push((comp, component));
+        }
+
+        components
     }
 
     /// True when there are no edges in the graph.
     fn is_empty(&self) -> bool {
-        self.nodes.iter().all(|node| node.degree == 0)
+        self.nodes.is_empty()
     }
 
     /// Condense the overlap information down into individual errors.
     fn report(&mut self, env: &Env) -> Vec<Error> {
-        let mut rules: Vec<usize> = self
+        let mut rules: Vec<_> = self
             .nodes
             .iter()
-            .enumerate()
-            .filter_map(|(id, node)| if node.degree == 0 { None } else { Some(id) })
+            .filter_map(|(id, node)| {
+                if node.edges.is_empty() {
+                    None
+                } else {
+                    Some(*id)
+                }
+            })
             .collect();
 
-        rules.sort_by_cached_key(|id| self.nodes[*id].degree);
+        rules.sort_by_cached_key(|id| self.nodes[id].edges.len());
 
         let mut errors = Vec::new();
 
@@ -116,26 +178,15 @@ impl Errors {
 
         // Work backwards through the ids to find the nodes with the largest conflict first.
         for id in rules.into_iter().rev() {
-            let node = self.remove_edges(RuleId(id));
-            if node.degree == 0 {
+            let node = self.remove_edges(id);
+            if node.edges.is_empty() {
                 continue;
             }
 
             // build the real error
-            let mut rules = vec![get_info(RuleId(id))];
+            let mut rules = vec![get_info(id)];
 
-            rules.extend(
-                node.edges
-                    .into_iter()
-                    .enumerate()
-                    .filter_map(|(ix, present)| {
-                        if present {
-                            Some(get_info(RuleId(ix)))
-                        } else {
-                            None
-                        }
-                    }),
-            );
+            rules.extend(node.edges.into_iter().map(get_info));
 
             errors.push(Error::OverlapError {
                 msg: String::from("rules are overlapping"),
@@ -149,12 +200,11 @@ impl Errors {
     /// Remove all the edges for this rule in the graph, returning the original `Node` contents for
     /// further processing.
     fn remove_edges(&mut self, id: RuleId) -> Node {
-        let mut node = Node::new(self.nodes.len());
-        std::mem::swap(&mut self.nodes[id.0], &mut node);
+        let node = self.nodes.remove(&id).unwrap();
 
-        for (ix, other) in node.edges.iter().copied().enumerate() {
-            if other {
-                self.nodes[ix].remove_edge(id);
+        for other in node.edges.iter() {
+            if let Some(other) = self.nodes.get_mut(&other) {
+                other.remove_edge(id);
             }
         }
 
@@ -164,83 +214,82 @@ impl Errors {
     /// Add a bidirectional edge between two rules in the graph.
     fn add_edge(&mut self, a: RuleId, b: RuleId) {
         // edges are undirected
-        self.nodes[a.0].add_edge(b);
-        self.nodes[b.0].add_edge(a);
-    }
-
-    /// Register all of the rules in the matrix as overlapping.
-    fn overlap_error(&mut self, matrix: Matrix) {
-        for (ix, rule) in matrix.rows.iter().enumerate() {
-            for other in &matrix.rows[ix + 1..] {
-                self.add_edge(rule.rule, other.rule);
-            }
-        }
+        self.nodes.entry(a).or_insert_with(Node::new).add_edge(b);
+        self.nodes.entry(b).or_insert_with(Node::new).add_edge(a);
     }
 }
 
 /// Check for overlapping rules within individual priority groups.
 fn check_overlap_groups(errs: &mut Errors, env: &Env, term: &Term) {
-    let pairs = Matrix::rule_pairs(env, term.id);
+    let rows: Vec<Row> = env
+        .rules_for_term(term.id)
+        .into_iter()
+        .map(|id| Row::from_rule(env, id))
+        .collect();
+
+    let mut pairs = Vec::new();
+    let mut cursor = &rows[..];
+    while let Some((row, rest)) = cursor.split_first() {
+        cursor = rest;
+        pairs.extend(rest.iter().map(|other| (row, other)));
+    }
+
     if pairs.is_empty() {
         return;
     }
 
-    println!("checking {} ({} pairs)", env.get_sym(term.name), pairs.len());
+    // Process rule pairs in parallel
     let conflicts: Vec<_> = pairs
         .into_par_iter()
-        .filter_map(|(id, left, right)| {
+        .filter_map(|(left, right)| {
             let lid = left.rule;
             let rid = right.rule;
-            if check_overlap(env, id, left, right) {
+            if check_overlap(env, left.clone(), right.clone()) {
                 Some((lid, rid))
             } else {
                 None
             }
-        }).collect();
+        })
+        .collect();
 
     // Process conflicts sequentially.
-    if !conflicts.is_empty() {
-        println!("merging conflicts");
-        for (l, r) in conflicts {
-            errs.add_edge(l, r);
-        }
+    for (l, r) in conflicts {
+        errs.add_edge(l, r);
     }
 }
 
 /// Check for overlapping rules within a single prioirty group.
-fn check_overlap(env: &Env, id: TermId, left: Row, right: Row) -> bool {
-    let mut matrix = Matrix::new(id, vec![left, right]);
-
-    matrix.normalize();
-    if matrix.cols_empty() {
-        return true;
-    }
-
-    let mut work = Vec::new();
-    work.push(matrix);
-
-    while let Some(mut matrix) = work.pop() {
-        let pat = matrix.leading_pattern();
-        let remainder = matrix.specialize(env, &pat);
-
-        if !remainder.is_empty() && !remainder.is_unique() {
-            if remainder.cols_empty() {
-                return true;
-            } else if !remainder.is_unique() {
-                work.push(remainder);
-            }
+fn check_overlap(env: &Env, mut left: Row, mut right: Row) -> bool {
+    while !left.is_empty() {
+        // drop leading wildcards from both
+        while !left.is_empty() && left.front().is_wildcard() && right.front().is_wildcard() {
+            left.pop();
+            right.pop();
         }
 
-        if !matrix.is_empty() && !matrix.is_unique() {
-            if matrix.cols_empty() {
-                return true;
-            } else if !matrix.is_unique() {
-                work.push(matrix);
-            }
+        if left.is_empty() {
+            break;
+        }
+
+        // pick the best pattern from the leading column of the two rows
+        let lr = left.leading_pattern();
+        let rr = right.leading_pattern();
+
+        let pat = if lr < rr { lr.1.clone() } else { rr.1.clone() };
+
+        if lr.0 || rr.0 {
+            left.specialize_and_patterns(&pat);
+            right.specialize_and_patterns(&pat);
+        }
+
+        // specialize both rows on that pattern, and if specialization fails we know the two don't
+        // overlap.
+        if !left.specialize(env, &pat) || !right.specialize(env, &pat) {
+            return false;
         }
     }
 
-    return false;
+    return true;
 }
 
 /// A convenience wrapper around the `TypeEnv` and `TermEnv` environments.
@@ -594,197 +643,77 @@ impl Row {
         assert!(!self.pats.is_empty());
         self.pats.pop().unwrap()
     }
-}
 
-/// A matrix whose rows consist rules that rewrite the same terms, and whose columns are the
-/// positional arguments to those rules.
-#[derive(Debug, Clone)]
-struct Matrix {
-    /// The rows of the rule matrix.
-    rows: Vec<Row>,
+    fn leading_pattern(&self) -> (bool, &Pattern) {
+        assert!(!self.is_empty(), "leading_pattern called on an emtpy row");
 
-    /// The term that this matrix represents.
-    term: TermId,
-}
-
-impl Matrix {
-    /// Construct a new matrix with the given rows.
-    fn new(term: TermId, rows: Vec<Row>) -> Self {
-        Self { rows, term }
-    }
-
-    /// Construct a rule matrix for each pair of rules in a term, that have the same priority.
-    fn rule_pairs(env: &Env, term: TermId) -> Vec<(TermId, Row, Row)> {
-
-        let mut rows: Vec<Row> = env
-            .rules_for_term(term)
-            .into_iter()
-            .map(|id| Row::from_rule(env, id))
-            .collect();
-
-        let mut pairs = Vec::new();
-        let mut cursor = &rows[..];
-        while let Some((row, rest)) = cursor.split_first() {
-            cursor = rest;
-            pairs.extend(rest
-                         .iter()
-                         .map(|other| (term, row.clone(), other.clone())));
-        }
-
-        pairs
-    }
-
-    /// Normalizing the matrix by removing leading columns that consist of only wildcards, and then
-    /// sorting the remaining rows to put those with fallible leading patterns first.
-    fn normalize(&mut self) {
-        while !self.cols_empty() && self.rows.iter().all(|row| row.front().is_wildcard()) {
-            self.drop_leading();
-        }
-
-        if !self.cols_empty() {
-            self.rows.sort_unstable_by(|a, b| a.front().cmp(b.front()));
+        match self.front() {
+            Pattern::And { pats } => (true, pats.first().unwrap()),
+            pat => (false, pat),
         }
     }
 
-    /// Returns true if there are no rows in the matrix.
-    fn is_empty(&self) -> bool {
-        self.rows.first().is_none()
-    }
-
-    /// Returns true if there are no rows, or those that exist have no columns.
-    fn cols_empty(&self) -> bool {
-        self.rows.first().map_or(true, |row| row.is_empty())
-    }
-
-    /// Returns true if there is exactly one row.
-    fn is_unique(&self) -> bool {
-        self.rows.len() == 1
-    }
-
-    /// Specialize the matrix according to the pattern in the first column of the first row. This
-    /// assumes that the matrix has already been normalized, and will return normalized results.
-    fn specialize(&mut self, env: &Env, pat: &Pattern) -> Self {
-        assert!(!self.cols_empty());
-
-        let spec_extractor = pat.is_extractor();
-
-        // we start by specializing and patterns, so that we don't have to consider them when
-        // deciding which rows go to which matrix.
-        self.specialize_and_patterns(&pat);
-
-        // remove rows from self that we know couldn't possibly match this pattern
-        let mut other = Matrix::new(self.term, Vec::new());
-        let mut i = 0;
-        while i < self.rows.len() {
-            let row = &mut self.rows[i];
-            match row.front() {
-                Pattern::Wildcard => {
-                    // wildcards always match, and go into both matrices as a result
-                    other.rows.push(row.clone());
-                    i += 1;
-                }
-
-                Pattern::Extractor { id, .. } => {
-                    // if we're specializing on this extractor then it shouldn't be duplicated over
-                    // to the other matrix. otherwise, we copy the row over to the other matrix and
-                    // rewrite this one to a wildcard to model the fact that we can't determine if
-                    // the extractor will actually match.
-                    if spec_extractor != Some(*id) {
-                        other.rows.push(row.clone());
-                        *row.front_mut() = Pattern::Wildcard;
-                    }
-
-                    i += 1;
-                }
-
-                // rows that don't match this pattern get moved to the other matrix
-                col if !col.match_concrete(&pat) => {
-                    other.rows.push(self.rows.swap_remove(i));
-                    // note that we don't increment the index here
-                }
-
-                // and all other rows stay in this matrix
-                _ => i += 1,
-            }
-        }
-
-        if pat.can_expand() {
-            self.expand_leading(env, &pat);
-        } else {
-            self.drop_leading();
-        }
-
-        self.normalize();
-        other.normalize();
-        other
-    }
-
-    /// Returns a copy of the first pattern for the first row of the matrix, as a candidate for
-    /// specialization.
-    fn leading_pattern(&self) -> Pattern {
-        assert!(
-            !self.cols_empty(),
-            "leading_pattern called on a matrix with no patterns"
-        );
-
-        match self.rows[0].front() {
-            Pattern::And { pats } => pats.first().unwrap().clone(),
-            pat => pat.clone(),
-        }
-    }
-
-    /// If there are any `and` patterns in the leading column, extract out the sub-pattern that
-    /// matches `pat` and leave the rest in a fresh column. Insert wildcards for other columns
-    /// that have no `and` patterns.
+    /// Specialize any leading and-patterns to this template.
     fn specialize_and_patterns(&mut self, template: &Pattern) {
-        if !self.rows.iter().any(|row| row.front().is_and()) {
-            return;
-        }
-
-        for row in self.rows.iter_mut() {
-            let mut pat = row.pop();
-            if let Some(p) = pat.extract_matching(template) {
-                row.push(pat);
-                row.push(p);
-            } else {
-                row.push(Pattern::Wildcard);
-                row.push(pat);
-            }
+        let mut pat = self.pop();
+        if let Some(p) = pat.extract_matching(template) {
+            self.push(pat);
+            self.push(p);
+        } else {
+            self.push(Pattern::Wildcard);
+            self.push(pat);
         }
     }
 
-    /// Expand the patterns of the leading column according to the given template. This function
-    /// will only handle cases where the leading column is a variant, extractor, or wildcard, as
-    /// all other cases could not reasonably introduce sub-patterns.
+    /// Expand the leading pattern of this row according to the template.
     fn expand_leading(&mut self, env: &Env, template: &Pattern) {
+        assert!(!self.front().is_and());
+
         let arity = template.arity();
-        for row in self.rows.iter_mut() {
-            let pat = row.pop();
-            match pat {
-                Pattern::Variant { pats, .. } | Pattern::Extractor { pats, .. }
-                    if pat.match_concrete(template) =>
-                {
-                    row.pats.extend(pats.into_iter().rev())
-                }
-
-                Pattern::Wildcard => row
-                    .pats
-                    .extend(std::iter::repeat(Pattern::Wildcard).take(arity)),
-
-                _ => panic!(
-                    "incorrect leading expansion:\nfound: {}\n expected: {}",
-                    WithEnv::new(env, &pat),
-                    WithEnv::new(env, template)
-                ),
+        match self.pop() {
+            Pattern::Variant { pats, .. } | Pattern::Extractor { pats, .. } => {
+                self.pats.extend(pats.into_iter().rev());
             }
+
+            Pattern::Wildcard => self
+                .pats
+                .extend(std::iter::repeat(Pattern::Wildcard).take(arity)),
+
+            pat => panic!(
+                "incorrect leading expansion:\nfound: {}\n expected: {}",
+                WithEnv::new(env, &pat),
+                WithEnv::new(env, template)
+            ),
         }
     }
 
-    // Drop leading column from the matrix.
-    fn drop_leading(&mut self) {
-        for row in self.rows.iter_mut() {
-            row.pop();
+    /// Expand the leading pattern of this row according to the template.
+    fn expand(&mut self, env: &Env, template: &Pattern) {
+        if template.can_expand() {
+            self.expand_leading(env, template);
+        } else {
+            self.pop();
         }
+    }
+
+    /// Returns true if it was possible to specialize this row to the pattern template provided.
+    fn specialize(&mut self, env: &Env, template: &Pattern) -> bool {
+        assert!(!self.is_empty());
+
+        if self.front().is_wildcard() || self.front().match_concrete(template) {
+            self.expand(env, template);
+            return true;
+        }
+
+        // If this is an extractor, we already know that it doesn't match the template exactly, so
+        // we'll treat it like a wildcard.
+        if self.front().is_extractor().is_some() {
+            *self.front_mut() = Pattern::Wildcard;
+            self.expand(env, template);
+            return true;
+        }
+
+        return false;
     }
 }
 
@@ -845,41 +774,12 @@ impl std::fmt::Display for WithEnv<'_, &Pattern> {
     }
 }
 
-impl std::fmt::Display for WithEnv<'_, &Matrix> {
+impl std::fmt::Display for WithEnv<'_, &Row> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.value.rows.is_empty() {
-            return writeln!(f, "<empty>");
+        write!(f, "[")?;
+        for pat in self.value.pats.iter().rev() {
+            write!(f, " {}", self.with_value(pat))?;
         }
-
-        let mut lens = vec![0; self.value.rows.first().unwrap().pats.len()];
-        let mut rows: Vec<(RuleId, Vec<String>)> = Vec::with_capacity(self.value.rows.len());
-
-        for row in self.value.rows.iter() {
-            rows.push((
-                row.rule,
-                row.pats
-                    .iter()
-                    .rev()
-                    .enumerate()
-                    .map(|(col, pat)| {
-                        let str = format!("{}", self.with_value(pat));
-                        lens[col] = lens[col].max(str.len());
-                        str
-                    })
-                    .collect(),
-            ));
-        }
-
-        for (rule, row) in rows.into_iter() {
-            write!(f, "[")?;
-            let mut sep = "";
-            for (col, width) in row.into_iter().zip(lens.iter()) {
-                write!(f, "{} {:width$} ", sep, col)?;
-                sep = "|";
-            }
-            writeln!(f, "] = {}", rule.0)?
-        }
-
-        Ok(())
+        write!(f, " ] -> {}", self.value.rule.0)
     }
 }
