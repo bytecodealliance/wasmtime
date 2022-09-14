@@ -149,6 +149,17 @@ pub struct TrieEdge {
     pub node: TrieNode,
 }
 
+/// In a decision node, a "frontier": at a given priority, rules have
+/// been inserted up to the given edge index.
+#[derive(Clone, Copy, Debug)]
+pub struct PrioFrontier {
+    /// The priority level of this frontier.
+    prio: Prio,
+    /// The latest edge at which a rule of this priority appears. If
+    /// `None`, then no rules with this priority have been inserted.
+    edge_idx: Option<usize>,
+}
+
 /// A node in the term trie.
 #[derive(Clone, Debug)]
 pub enum TrieNode {
@@ -168,11 +179,11 @@ pub enum TrieNode {
         /// to insert rules in descending priority order, and we need
         /// to not insert prior to this point if the current rule's
         /// priority is less than the priority stored here.
-        last_prio: Option<(Prio, usize)>,
+        last_prio: Option<PrioFrontier>,
         /// The current priority's last insertion point. Becomes
         /// `last_prio` if a rule is inserted with a priority less
         /// than this one.
-        cur_prio: Option<(Prio, usize)>,
+        cur_prio: Option<PrioFrontier>,
     },
 
     /// The successful match of an LHS pattern, and here is its RHS expression.
@@ -228,24 +239,18 @@ impl TrieNode {
         // `cur_prio` moves to `last_prio` (and controls our minimum
         // insertion point) and we initialize `cur_prio` with our
         // current priority and new max insertion index (of 0).
-        let first_in_cur = if cur_prio.is_none() || prio < cur_prio.unwrap().0 {
+        if cur_prio.is_none() || prio < cur_prio.unwrap().prio {
             *last_prio = *cur_prio;
-            *cur_prio = Some((prio, 0));
-            true
-        } else {
-            false
-        };
+            *cur_prio = Some(PrioFrontier {
+                prio,
+                edge_idx: None,
+            });
+        }
         let cur_prio = cur_prio.as_mut().unwrap();
 
         // Determine the minimum edge index under which we can insert
         // while respecting priorities.
-        let start = if let Some((last_prio, last_index)) = *last_prio {
-            assert!(last_prio > prio);
-            cur_prio.1 = last_index;
-            Some(last_index)
-        } else {
-            None
-        };
+        let start = last_prio.and_then(|frontier| frontier.edge_idx);
 
         // Now find or insert the appropriate edge.
         let edge = edges
@@ -263,8 +268,8 @@ impl TrieNode {
                     .unwrap_err()
                     + first_after_prev_prio;
 
-                if !first_in_cur && insert_pos <= cur_prio.1 {
-                    cur_prio.1 += 1;
+                if cur_prio.edge_idx.is_some() && insert_pos <= cur_prio.edge_idx.unwrap() {
+                    *cur_prio.edge_idx.as_mut().unwrap() += 1;
                 }
                 edges.insert(
                     insert_pos,
@@ -276,8 +281,7 @@ impl TrieNode {
                 insert_pos
             });
 
-        cur_prio.1 = std::cmp::max(cur_prio.1, edge);
-        assert!(cur_prio.1 < edges.len());
+        cur_prio.edge_idx = Some(std::cmp::max(cur_prio.edge_idx.unwrap_or(0), edge));
 
         let edge = &mut edges[edge];
 
@@ -376,9 +380,10 @@ impl<'a> TermFunctionsBuilder<'a> {
     fn build(&mut self) {
         // Sort rules by priority, descending, and insert in that order.
         let mut rule_indices: Vec<usize> = (0..self.termenv.rules.len()).collect();
-        // Sort by *negative* priority so we get descending order
-        // (highest priority first).
-        rule_indices.sort_by_key(|&index| -self.termenv.rules[index].prio.unwrap_or(0));
+        // Sort in descending order (highest priority first).
+        rule_indices.sort_unstable_by_key(|&index| {
+            std::cmp::Reverse(self.termenv.rules[index].prio.unwrap_or(0))
+        });
 
         for rule in rule_indices {
             let rule = RuleId(rule);
