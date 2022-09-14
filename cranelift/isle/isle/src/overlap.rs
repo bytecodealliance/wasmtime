@@ -1,5 +1,7 @@
 //! Overlap detection for rules in ISLE.
 
+use rayon::prelude::*;
+
 use crate::error::{Error, Result, Source, Span};
 use crate::sema::{
     self, ConstructorKind, Rule, RuleId, Sym, Term, TermEnv, TermId, TermKind, Type, TypeEnv,
@@ -22,6 +24,7 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
 
     if !errors.is_empty() {
         let mut errors = errors.report(&env);
+        return Ok(());
         return match errors.len() {
             1 => Err(errors.pop().unwrap()),
             _ => Err(Error::Errors(std::mem::take(&mut errors))),
@@ -177,21 +180,40 @@ impl Errors {
 
 /// Check for overlapping rules within individual priority groups.
 fn check_overlap_groups(errs: &mut Errors, env: &Env, term: &Term) {
-    for matrix in Matrix::from_priority_groups(env, term.id) {
-        check_overlap(errs, env, matrix);
+    let pairs = Matrix::rule_pairs(env, term.id);
+    if pairs.is_empty() {
+        return;
+    }
+
+    println!("checking {} ({} pairs)", env.get_sym(term.name), pairs.len());
+    let conflicts: Vec<_> = pairs
+        .into_par_iter()
+        .filter_map(|(id, left, right)| {
+            let lid = left.rule;
+            let rid = right.rule;
+            if check_overlap(env, id, left, right) {
+                Some((lid, rid))
+            } else {
+                None
+            }
+        }).collect();
+
+    // Process conflicts sequentially.
+    if !conflicts.is_empty() {
+        println!("merging conflicts");
+        for (l, r) in conflicts {
+            errs.add_edge(l, r);
+        }
     }
 }
 
 /// Check for overlapping rules within a single prioirty group.
-fn check_overlap(errs: &mut Errors, env: &Env, mut matrix: Matrix) {
-    if matrix.is_unique() {
-        return;
-    }
+fn check_overlap(env: &Env, id: TermId, left: Row, right: Row) -> bool {
+    let mut matrix = Matrix::new(id, vec![left, right]);
 
     matrix.normalize();
     if matrix.cols_empty() {
-        errs.overlap_error(matrix);
-        return;
+        return true;
     }
 
     let mut work = Vec::new();
@@ -203,7 +225,7 @@ fn check_overlap(errs: &mut Errors, env: &Env, mut matrix: Matrix) {
 
         if !remainder.is_empty() && !remainder.is_unique() {
             if remainder.cols_empty() {
-                errs.overlap_error(remainder);
+                return true;
             } else if !remainder.is_unique() {
                 work.push(remainder);
             }
@@ -211,12 +233,14 @@ fn check_overlap(errs: &mut Errors, env: &Env, mut matrix: Matrix) {
 
         if !matrix.is_empty() && !matrix.is_unique() {
             if matrix.cols_empty() {
-                errs.overlap_error(matrix);
+                return true;
             } else if !matrix.is_unique() {
                 work.push(matrix);
             }
         }
     }
+
+    return false;
 }
 
 /// A convenience wrapper around the `TypeEnv` and `TermEnv` environments.
@@ -581,48 +605,33 @@ struct Matrix {
 
     /// The term that this matrix represents.
     term: TermId,
-
-    /// The priority of this group of rules matrix.
-    prio: i64,
 }
 
 impl Matrix {
     /// Construct a new matrix with the given rows.
-    fn new(term: TermId, prio: i64, rows: Vec<Row>) -> Self {
-        Self { rows, prio, term }
+    fn new(term: TermId, rows: Vec<Row>) -> Self {
+        Self { rows, term }
     }
 
-    /// Construct one matrix for each priority group defined for a given term.
-    fn from_priority_groups(env: &Env, term: TermId) -> Vec<Self> {
-        let mut matrices = Vec::new();
+    /// Construct a rule matrix for each pair of rules in a term, that have the same priority.
+    fn rule_pairs(env: &Env, term: TermId) -> Vec<(TermId, Row, Row)> {
 
-        let mut rules: Vec<(i64, RuleId)> = env
+        let mut rows: Vec<Row> = env
             .rules_for_term(term)
             .into_iter()
-            .map(|id| (env.get_rule(id).prio.unwrap_or(0), id))
+            .map(|id| Row::from_rule(env, id))
             .collect();
 
-        if rules.is_empty() {
-            return matrices;
+        let mut pairs = Vec::new();
+        let mut cursor = &rows[..];
+        while let Some((row, rest)) = cursor.split_first() {
+            cursor = rest;
+            pairs.extend(rest
+                         .iter()
+                         .map(|other| (term, row.clone(), other.clone())));
         }
 
-        rules.sort_by_key(|(prio, _)| *prio);
-
-        let mut current = {
-            let (prio, _) = rules.first().unwrap();
-            matrices.push(Matrix::new(term, *prio, Vec::new()));
-            matrices.last_mut().unwrap()
-        };
-
-        for (p, id) in rules {
-            if p != current.prio {
-                matrices.push(Matrix::new(term, p, Vec::new()));
-                current = matrices.last_mut().unwrap();
-            }
-            current.rows.push(Row::from_rule(env, id));
-        }
-
-        matrices
+        pairs
     }
 
     /// Normalizing the matrix by removing leading columns that consist of only wildcards, and then
@@ -664,7 +673,7 @@ impl Matrix {
         self.specialize_and_patterns(&pat);
 
         // remove rows from self that we know couldn't possibly match this pattern
-        let mut other = Matrix::new(self.term, self.prio, Vec::new());
+        let mut other = Matrix::new(self.term, Vec::new());
         let mut i = 0;
         while i < self.rows.len() {
             let row = &mut self.rows[i];
