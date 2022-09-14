@@ -30,8 +30,8 @@ use crate::{
         },
     },
     machinst::{
-        isle::*, valueregs, InsnInput, InsnOutput, Lower, MachAtomicRmwOp, MachInst, VCodeConstant,
-        VCodeConstantData,
+        isle::*, valueregs, ArgPair, InsnInput, InsnOutput, Lower, MachAtomicRmwOp, MachInst,
+        VCodeConstant, VCodeConstantData,
     },
 };
 use alloc::vec::Vec;
@@ -44,6 +44,7 @@ use target_lexicon::Triple;
 type BoxCallInfo = Box<CallInfo>;
 type BoxVecMachLabel = Box<SmallVec<[MachLabel; 4]>>;
 type MachLabelSlice = [MachLabel];
+type VecArgPair = Vec<ArgPair>;
 
 pub struct SinkableLoad {
     inst: Inst,
@@ -165,14 +166,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
                 .unwrap();
         }
 
-        if let InputSourceInst::UniqueUse(src_insn, 0) = inputs.inst {
-            if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, src_insn) {
-                self.lower_ctx.sink_inst(src_insn);
-                let amode = lower_to_amode(self.lower_ctx, addr_input, offset);
-                return XmmMem::new(RegMem::mem(amode)).unwrap();
-            }
-        }
-
         XmmMem::new(RegMem::reg(self.put_in_reg(val))).unwrap()
     }
 
@@ -209,93 +202,53 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
-    fn avx512vl_enabled(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_avx512vl_simd() {
-            Some(())
-        } else {
-            None
-        }
+    fn avx512vl_enabled(&mut self, _: Type) -> bool {
+        self.isa_flags.use_avx512vl_simd()
     }
 
     #[inline]
-    fn avx512dq_enabled(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_avx512dq_simd() {
-            Some(())
-        } else {
-            None
-        }
+    fn avx512dq_enabled(&mut self, _: Type) -> bool {
+        self.isa_flags.use_avx512dq_simd()
     }
 
     #[inline]
-    fn avx512f_enabled(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_avx512f_simd() {
-            Some(())
-        } else {
-            None
-        }
+    fn avx512f_enabled(&mut self, _: Type) -> bool {
+        self.isa_flags.use_avx512f_simd()
     }
 
     #[inline]
-    fn avx512bitalg_enabled(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_avx512bitalg_simd() {
-            Some(())
-        } else {
-            None
-        }
+    fn avx512bitalg_enabled(&mut self, _: Type) -> bool {
+        self.isa_flags.use_avx512bitalg_simd()
     }
 
     #[inline]
-    fn avx512vbmi_enabled(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_avx512vbmi_simd() {
-            Some(())
-        } else {
-            None
-        }
+    fn avx512vbmi_enabled(&mut self, _: Type) -> bool {
+        self.isa_flags.use_avx512vbmi_simd()
     }
 
     #[inline]
-    fn use_lzcnt(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_lzcnt() {
-            Some(())
-        } else {
-            None
-        }
+    fn use_lzcnt(&mut self, _: Type) -> bool {
+        self.isa_flags.use_lzcnt()
     }
 
     #[inline]
-    fn use_bmi1(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_bmi1() {
-            Some(())
-        } else {
-            None
-        }
+    fn use_bmi1(&mut self, _: Type) -> bool {
+        self.isa_flags.use_bmi1()
     }
 
     #[inline]
-    fn use_popcnt(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_popcnt() {
-            Some(())
-        } else {
-            None
-        }
+    fn use_popcnt(&mut self, _: Type) -> bool {
+        self.isa_flags.use_popcnt()
     }
 
     #[inline]
-    fn use_fma(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_fma() {
-            Some(())
-        } else {
-            None
-        }
+    fn use_fma(&mut self, _: Type) -> bool {
+        self.isa_flags.use_fma()
     }
 
     #[inline]
-    fn use_sse41(&mut self, _: Type) -> Option<()> {
-        if self.isa_flags.use_sse41() {
-            Some(())
-        } else {
-            None
-        }
+    fn use_sse41(&mut self, _: Type) -> bool {
+        self.isa_flags.use_sse41()
     }
 
     #[inline]
@@ -410,6 +363,11 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     #[inline]
     fn amode_to_synthetic_amode(&mut self, amode: &Amode) -> SyntheticAmode {
         amode.clone().into()
+    }
+
+    #[inline]
+    fn const_to_synthetic_amode(&mut self, c: VCodeConstant) -> SyntheticAmode {
+        SyntheticAmode::ConstantOffset(c)
     }
 
     #[inline]
@@ -636,11 +594,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     #[inline]
     fn intcc_without_eq(&mut self, x: &IntCC) -> IntCC {
         x.without_equal()
-    }
-
-    #[inline]
-    fn intcc_unsigned(&mut self, x: &IntCC) -> IntCC {
-        x.unsigned()
     }
 
     #[inline]

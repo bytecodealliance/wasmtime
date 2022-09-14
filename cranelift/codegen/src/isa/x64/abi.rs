@@ -297,6 +297,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
     }
 
+    fn gen_args(_isa_flags: &x64_settings::Flags, args: Vec<ArgPair>) -> Inst {
+        Inst::Args { args }
+    }
+
     fn gen_ret(_setup_frame: bool, _isa_flags: &x64_settings::Flags, rets: Vec<Reg>) -> Self::I {
         Inst::ret(rets)
     }

@@ -17,7 +17,6 @@ fn define_settings(_shared: &SettingGroup) -> SettingGroup {
 
     let _has_zicsr = setting.add_bool("has_zicsr", "has extension zicsr?", "", false);
     let _has_zifencei = setting.add_bool("has_zifencei", "has extension zifencei?", "", false);
-   
 
     setting.build()
 }

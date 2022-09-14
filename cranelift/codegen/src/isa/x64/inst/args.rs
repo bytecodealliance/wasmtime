@@ -519,6 +519,12 @@ impl Into<SyntheticAmode> for Amode {
     }
 }
 
+impl Into<SyntheticAmode> for VCodeConstant {
+    fn into(self) -> SyntheticAmode {
+        SyntheticAmode::ConstantOffset(self)
+    }
+}
+
 impl PrettyPrint for SyntheticAmode {
     fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
@@ -527,7 +533,7 @@ impl PrettyPrint for SyntheticAmode {
             SyntheticAmode::NominalSPOffset { simm32 } => {
                 format!("rsp({} + virtual offset)", *simm32 as i32)
             }
-            SyntheticAmode::ConstantOffset(c) => format!("const({:?})", c),
+            SyntheticAmode::ConstantOffset(c) => format!("const({})", c.as_u32()),
         }
     }
 }
@@ -1659,8 +1665,6 @@ impl CC {
             IntCC::UnsignedGreaterThan => CC::NBE,
             IntCC::UnsignedLessThanOrEqual => CC::BE,
             IntCC::UnsignedLessThan => CC::B,
-            IntCC::Overflow => CC::O,
-            IntCC::NotOverflow => CC::NO,
         }
     }
 

@@ -8,8 +8,8 @@ use target_lexicon::Triple;
 
 pub use super::MachLabel;
 pub use crate::ir::{
-    dynamic_to_fixed, ArgumentExtension, Constant, DynamicStackSlot, ExternalName, FuncRef,
-    GlobalValue, Immediate, SigRef, StackSlot,
+    condcodes, dynamic_to_fixed, ArgumentExtension, Constant, DynamicStackSlot, ExternalName,
+    FuncRef, GlobalValue, Immediate, SigRef, StackSlot,
 };
 pub use crate::isa::unwind::UnwindInst;
 pub use crate::machinst::{
@@ -744,6 +744,15 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn preserve_frame_pointers(&mut self) -> Option<()> {
+            if self.flags.preserve_frame_pointers() {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn func_ref_data(&mut self, func_ref: FuncRef) -> (SigRef, ExternalName, RelocDistance) {
             let funcdata = &self.lower_ctx.dfg().ext_funcs[func_ref];
             (
@@ -1077,6 +1086,27 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn gen_move(&mut self, ty: Type, dst: WritableReg, src: Reg) -> MInst {
             MInst::gen_move(dst, src, ty)
+        }
+
+        #[inline]
+        fn intcc_unsigned(&mut self, x: &IntCC) -> IntCC {
+            x.unsigned()
+        }
+
+        #[inline]
+        fn signed_cond_code(&mut self, cc: &condcodes::IntCC) -> Option<condcodes::IntCC> {
+            match cc {
+                IntCC::Equal
+                | IntCC::UnsignedGreaterThanOrEqual
+                | IntCC::UnsignedGreaterThan
+                | IntCC::UnsignedLessThanOrEqual
+                | IntCC::UnsignedLessThan
+                | IntCC::NotEqual => None,
+                IntCC::SignedGreaterThanOrEqual
+                | IntCC::SignedGreaterThan
+                | IntCC::SignedLessThanOrEqual
+                | IntCC::SignedLessThan => Some(*cc),
+            }
         }
     };
 }

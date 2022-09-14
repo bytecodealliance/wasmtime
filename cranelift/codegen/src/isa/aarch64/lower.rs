@@ -924,8 +924,6 @@ pub(crate) fn lower_condcode(cc: IntCC) -> Cond {
         IntCC::UnsignedGreaterThan => Cond::Hi,
         IntCC::UnsignedLessThanOrEqual => Cond::Ls,
         IntCC::UnsignedLessThan => Cond::Lo,
-        IntCC::Overflow => Cond::Vs,
-        IntCC::NotOverflow => Cond::Vc,
     }
 }
 
@@ -1088,9 +1086,7 @@ pub(crate) fn condcode_is_signed(cc: IntCC) -> bool {
         IntCC::SignedGreaterThanOrEqual
         | IntCC::SignedGreaterThan
         | IntCC::SignedLessThanOrEqual
-        | IntCC::SignedLessThan
-        | IntCC::Overflow
-        | IntCC::NotOverflow => true,
+        | IntCC::SignedLessThan => true,
     }
 }
 
@@ -1274,59 +1270,6 @@ pub(crate) fn lower_icmp(
                 });
                 cond
             }
-            IntCC::Overflow | IntCC::NotOverflow => {
-                // cmp     lhs_lo, rhs_lo
-                // sbcs    tmp1, lhs_hi, rhs_hi
-                // eor     tmp2, lhs_hi, rhs_hi
-                // eor     tmp1, lhs_hi, tmp1
-                // tst     tmp2, tmp1
-                // cset    dst, {lt, ge}
-
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::SubS,
-                    size: OperandSize::Size64,
-                    rd: writable_zero_reg(),
-                    rn: lhs.regs()[0],
-                    rm: rhs.regs()[0],
-                });
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::SbcS,
-                    size: OperandSize::Size64,
-                    rd: tmp1,
-                    rn: lhs.regs()[1],
-                    rm: rhs.regs()[1],
-                });
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::Eor,
-                    size: OperandSize::Size64,
-                    rd: tmp2,
-                    rn: lhs.regs()[1],
-                    rm: rhs.regs()[1],
-                });
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::Eor,
-                    size: OperandSize::Size64,
-                    rd: tmp1,
-                    rn: lhs.regs()[1],
-                    rm: tmp1.to_reg(),
-                });
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::AndS,
-                    size: OperandSize::Size64,
-                    rd: writable_zero_reg(),
-                    rn: tmp2.to_reg(),
-                    rm: tmp1.to_reg(),
-                });
-
-                // This instruction sequence sets the condition codes
-                // on the lt and ge flags instead of the vs/vc so we
-                // need to signal that
-                if condcode == IntCC::Overflow {
-                    Cond::Lt
-                } else {
-                    Cond::Ge
-                }
-            }
             _ => {
                 // cmp     lhs_lo, rhs_lo
                 // cset    tmp1, unsigned_cond
@@ -1409,45 +1352,6 @@ pub(crate) fn lower_icmp(
     } else {
         let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
         let rm = put_input_in_rse_imm12(ctx, inputs[1], narrow_mode);
-
-        let is_overflow = condcode == IntCC::Overflow || condcode == IntCC::NotOverflow;
-        let is_small_type = ty == I8 || ty == I16;
-        let (cond, rn, rm) = if is_overflow && is_small_type {
-            // Overflow checks for non native types require additional instructions, other than
-            // just the extend op.
-            //
-            // TODO: Codegen improvements: Merge the second sxt{h,b} into the following sub instruction.
-            //
-            // sxt{h,b}  w0, w0
-            // sxt{h,b}  w1, w1
-            // sub       w0, w0, w1
-            // cmp       w0, w0, sxt{h,b}
-            //
-            // The result of this comparison is either the EQ or NE condition code, so we need to
-            // signal that to the caller
-
-            let extend_op = if ty == I8 {
-                ExtendOp::SXTB
-            } else {
-                ExtendOp::SXTH
-            };
-            let tmp1 = ctx.alloc_tmp(I32).only_reg().unwrap();
-            ctx.emit(alu_inst_imm12(ALUOp::Sub, I32, tmp1, rn, rm));
-
-            let out_cond = match condcode {
-                IntCC::Overflow => Cond::Ne,
-                IntCC::NotOverflow => Cond::Eq,
-                _ => unreachable!(),
-            };
-            (
-                out_cond,
-                tmp1.to_reg(),
-                ResultRSEImm12::RegExtend(tmp1.to_reg(), extend_op),
-            )
-        } else {
-            (cond, rn, rm)
-        };
-
         ctx.emit(alu_inst_imm12(ALUOp::SubS, ty, writable_zero_reg(), rn, rm));
         cond
     };

@@ -3,7 +3,7 @@
 use crate::ir::Inst as IRInst;
 
 use crate::ir::Opcode;
-use crate::isa::riscv64::settings as aarch64_settings;
+use crate::isa::riscv64::settings as riscv64_settings;
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::settings::Flags;
@@ -18,10 +18,9 @@ pub(crate) fn lower_insn_to_regs(
     insn: IRInst,
     triple: &Triple,
     flags: &Flags,
-    isa_flags: &aarch64_settings::Flags,
+    isa_flags: &riscv64_settings::Flags,
 ) -> CodegenResult<()> {
     let op = ctx.data(insn).opcode();
-    let inputs = insn_inputs(ctx, insn);
     let outputs = insn_outputs(ctx, insn);
 
     let ty = if outputs.len() > 0 {
@@ -392,7 +391,6 @@ pub(crate) fn lower_insn_to_regs(
         Opcode::FvpromoteLow => vec_not_implemented(),
 
         Opcode::Fvdemote => vec_not_implemented(),
-
 
         Opcode::Vconcat | Opcode::Vsplit => vec_not_implemented(),
         Opcode::ExtractVector => vec_not_implemented(),

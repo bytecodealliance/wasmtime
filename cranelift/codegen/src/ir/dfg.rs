@@ -864,7 +864,12 @@ impl DataFlowGraph {
             self.value_type(
                 self[inst]
                     .typevar_operand(&self.value_lists)
-                    .expect("Instruction format doesn't have a designated operand, bad opcode."),
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Instruction format for {:?} doesn't have a designated operand",
+                            self[inst]
+                        )
+                    }),
             )
         } else {
             self.value_type(self.first_result(inst))

@@ -263,10 +263,9 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   lgr %r5, %r3
-;   lhr %r3, %r2
-;   lhr %r5, %r5
-;   cr %r3, %r5
+;   lhr %r2, %r2
+;   lhr %r4, %r3
+;   cr %r2, %r4
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -293,8 +292,8 @@ block0(v0: i16, v1: i64):
 }
 
 ; block0:
-;   lhr %r4, %r2
-;   ch %r4, 0(%r3)
+;   lhr %r2, %r2
+;   ch %r2, 0(%r3)
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -322,10 +321,9 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   lgr %r5, %r3
-;   lbr %r3, %r2
-;   lbr %r5, %r5
-;   cr %r3, %r5
+;   lbr %r2, %r2
+;   lbr %r4, %r3
+;   cr %r2, %r4
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -352,10 +350,9 @@ block0(v0: i8, v1: i64):
 }
 
 ; block0:
-;   lgr %r5, %r3
-;   lbr %r3, %r2
-;   lb %r5, 0(%r5)
-;   cr %r3, %r5
+;   lbr %r2, %r2
+;   lb %r4, 0(%r3)
+;   cr %r2, %r4
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -462,8 +459,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   llgh %r4, 0(%r3)
-;   clgr %r2, %r4
+;   llgh %r3, 0(%r3)
+;   clgr %r2, %r3
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -557,8 +554,8 @@ block0(v0: i32, v1: i64):
 }
 
 ; block0:
-;   llh %r4, 0(%r3)
-;   clr %r2, %r4
+;   llh %r3, 0(%r3)
+;   clr %r2, %r3
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -585,10 +582,9 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
-;   lgr %r5, %r3
-;   llhr %r3, %r2
-;   llhr %r5, %r5
-;   clr %r3, %r5
+;   llhr %r2, %r2
+;   llhr %r4, %r3
+;   clr %r2, %r4
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -615,10 +611,9 @@ block0(v0: i16, v1: i64):
 }
 
 ; block0:
-;   lgr %r5, %r3
-;   llhr %r3, %r2
-;   llh %r5, 0(%r5)
-;   clr %r3, %r5
+;   llhr %r2, %r2
+;   llh %r4, 0(%r3)
+;   clr %r2, %r4
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -646,10 +641,9 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
-;   lgr %r5, %r3
-;   llcr %r3, %r2
-;   llcr %r5, %r5
-;   clr %r3, %r5
+;   llcr %r2, %r2
+;   llcr %r4, %r3
+;   clr %r2, %r4
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
@@ -676,10 +670,9 @@ block0(v0: i8, v1: i64):
 }
 
 ; block0:
-;   lgr %r5, %r3
-;   llcr %r3, %r2
-;   llc %r5, 0(%r5)
-;   clr %r3, %r5
+;   llcr %r2, %r2
+;   llc %r4, 0(%r3)
+;   clr %r2, %r4
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14

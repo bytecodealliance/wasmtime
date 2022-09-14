@@ -164,7 +164,7 @@ impl Component {
         let static_modules = static_modules?;
         let (lowerings, always_trap, transcoders, trampolines, trampoline_obj) = trampolines?;
         let mut trampoline_obj = CodeMemory::new(trampoline_obj);
-        let code = trampoline_obj.publish()?;
+        let code = trampoline_obj.publish(engine.compiler().is_branch_protection_enabled())?;
         let text = wasmtime_jit::subslice_range(code.text, code.mmap);
 
         // This map is used to register all known tramplines in the

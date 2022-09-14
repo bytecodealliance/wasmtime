@@ -436,8 +436,8 @@ block0(v0: f32x4, v1: f32x4):
 }
 
 ; block0:
-;   vgmf %v5, 1, 31
-;   vsel %v24, %v24, %v25, %v5
+;   vgmf %v4, 1, 31
+;   vsel %v24, %v24, %v25, %v4
 ;   br %r14
 
 function %fcopysign_f64x2(f64x2, f64x2) -> f64x2 {
@@ -447,8 +447,8 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; block0:
-;   vgmg %v5, 1, 63
-;   vsel %v24, %v24, %v25, %v5
+;   vgmg %v4, 1, 63
+;   vsel %v24, %v24, %v25, %v4
 ;   br %r14
 
 function %fcvt_from_uint_i32x4_f32x4(i32x4) -> f32x4 {

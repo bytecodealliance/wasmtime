@@ -7,8 +7,8 @@ use crate::ir::Function;
 use crate::isa::riscv64::settings as riscv_settings;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, TextSectionBuilder,
-    VCode,
+    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
@@ -27,7 +27,6 @@ use crate::isa::unwind::systemv;
 use inst::crate_reg_eviroment;
 
 use self::inst::EmitInfo;
-use crate::machinst::SigSet;
 
 /// An riscv64 backend.
 pub struct Riscv64Backend {
@@ -62,8 +61,8 @@ impl Riscv64Backend {
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(flags.clone(), self.isa_flags.clone());
         let sigs = SigSet::new::<abi::Riscv64MachineDeps>(func, &self.flags)?;
-        let abi = abi::Riscv64Callee::new(func, self, &self.isa_flags , &sigs)?;
-        compile::compile::<Riscv64Backend>(func, self, abi, &self.mach_env, emit_info , sigs)
+        let abi = abi::Riscv64Callee::new(func, self, &self.isa_flags, &sigs)?;
+        compile::compile::<Riscv64Backend>(func, self, abi, &self.mach_env, emit_info, sigs)
     }
 }
 

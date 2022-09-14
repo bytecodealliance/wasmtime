@@ -459,6 +459,10 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
     }
 
+    fn gen_args(_isa_flags: &s390x_settings::Flags, args: Vec<ArgPair>) -> Inst {
+        Inst::Args { args }
+    }
+
     fn gen_ret(_setup_frame: bool, _isa_flags: &s390x_settings::Flags, rets: Vec<Reg>) -> Inst {
         Inst::Ret {
             link: gpr(14),
@@ -495,6 +499,7 @@ impl ABIMachineSpec for S390xMachineDeps {
             insts.push(Inst::AluRUImm32 {
                 alu_op: ALUOp::AddLogical64,
                 rd: into_reg,
+                ri: into_reg.to_reg(),
                 imm,
             });
         }
@@ -542,12 +547,14 @@ impl ABIMachineSpec for S390xMachineDeps {
             insts.push(Inst::AluRSImm16 {
                 alu_op: ALUOp::Add64,
                 rd: writable_stack_reg(),
+                ri: stack_reg(),
                 imm,
             });
         } else {
             insts.push(Inst::AluRSImm32 {
                 alu_op: ALUOp::Add64,
                 rd: writable_stack_reg(),
+                ri: stack_reg(),
                 imm,
             });
         }

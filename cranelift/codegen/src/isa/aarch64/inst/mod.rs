@@ -36,10 +36,10 @@ mod emit_tests;
 // Instructions (top level): definition
 
 pub use crate::isa::aarch64::lower::isle::generated_code::{
-    ALUOp, ALUOp3, AMode, APIKey, AtomicRMWLoopOp, AtomicRMWOp, BitOp, FPUOp1, FPUOp2, FPUOp3,
-    FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp, VecALUModOp, VecALUOp,
-    VecExtendOp, VecLanesOp, VecMisc2, VecPairOp, VecRRLongOp, VecRRNarrowOp, VecRRPairLongOp,
-    VecRRRLongModOp, VecRRRLongOp, VecShiftImmModOp, VecShiftImmOp,
+    ALUOp, ALUOp3, AMode, APIKey, AtomicRMWLoopOp, AtomicRMWOp, BitOp, BranchTargetType, FPUOp1,
+    FPUOp2, FPUOp3, FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp, VecALUModOp,
+    VecALUOp, VecExtendOp, VecLanesOp, VecMisc2, VecPairOp, VecRRLongOp, VecRRNarrowOp,
+    VecRRPairLongOp, VecRRRLongModOp, VecRRRLongOp, VecShiftImmModOp, VecShiftImmOp,
 };
 
 /// A floating-point unit (FPU) operation with two args, a register and an immediate.
@@ -1015,6 +1015,11 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
+        &Inst::Args { ref args } => {
+            for arg in args {
+                collector.reg_fixed_def(arg.vreg, arg.preg);
+            }
+        }
         &Inst::Ret { ref rets } | &Inst::AuthenticatedRet { ref rets, .. } => {
             for &ret in rets {
                 collector.reg_use(ret);
@@ -1072,6 +1077,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             // Neither LR nor SP is an allocatable register, so there is no need
             // to do anything.
         }
+        &Inst::Bti { .. } => {}
         &Inst::VirtualSPOffsetAdj { .. } => {}
 
         &Inst::ElfTlsGetAddr { rd, .. } => {
@@ -1127,6 +1133,13 @@ impl MachInst for Inst {
             &Inst::Call { ref info } => info.caller_callconv != info.callee_callconv,
             &Inst::CallInd { ref info } => info.caller_callconv != info.callee_callconv,
             _ => true,
+        }
+    }
+
+    fn is_args(&self) -> bool {
+        match self {
+            Self::Args { .. } => true,
+            _ => false,
         }
     }
 
@@ -1265,6 +1278,19 @@ impl MachInst for Inst {
 
     fn ref_type_regclass(_: &settings::Flags) -> RegClass {
         RegClass::Int
+    }
+
+    fn gen_block_start(
+        is_indirect_branch_target: bool,
+        is_forward_edge_cfi_enabled: bool,
+    ) -> Option<Self> {
+        if is_indirect_branch_target && is_forward_edge_cfi_enabled {
+            Some(Inst::Bti {
+                targets: BranchTargetType::J,
+            })
+        } else {
+            None
+        }
     }
 }
 
@@ -2618,6 +2644,16 @@ impl Inst {
                 let rn = pretty_print_reg(info.rn, allocs);
                 format!("blr {}", rn)
             }
+            &Inst::Args { ref args } => {
+                let mut s = "args".to_string();
+                for arg in args {
+                    use std::fmt::Write;
+                    let preg = pretty_print_reg(arg.preg, &mut empty_allocs);
+                    let def = pretty_print_reg(arg.vreg.to_reg(), allocs);
+                    write!(&mut s, " {}={}", def, preg).unwrap();
+                }
+                s
+            }
             &Inst::Ret { .. } => "ret".to_string(),
             &Inst::AuthenticatedRet { key, is_hint, .. } => {
                 let key = match key {
@@ -2700,7 +2736,7 @@ impl Inst {
                         "csel {}, xzr, {}, hs ; ",
                         "csdb ; ",
                         "adr {}, pc+16 ; ",
-                        "ldrsw {}, [{}, {}, LSL 2] ; ",
+                        "ldrsw {}, [{}, {}, uxtw #2] ; ",
                         "add {}, {}, {} ; ",
                         "br {} ; ",
                         "jt_entries {:?}"
@@ -2812,6 +2848,16 @@ impl Inst {
                 "paci".to_string() + key + "sp"
             }
             &Inst::Xpaclri => "xpaclri".to_string(),
+            &Inst::Bti { targets } => {
+                let targets = match targets {
+                    BranchTargetType::None => "",
+                    BranchTargetType::C => " c",
+                    BranchTargetType::J => " j",
+                    BranchTargetType::JC => " jc",
+                };
+
+                "bti".to_string() + targets
+            }
             &Inst::VirtualSPOffsetAdj { offset } => {
                 state.virtual_sp_offset += offset;
                 format!("virtual_sp_offset_adjust {}", offset)

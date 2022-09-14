@@ -1406,6 +1406,8 @@ pub(crate) fn emit(
             }
         }
 
+        Inst::Args { .. } => {}
+
         Inst::Ret { .. } => sink.put1(0xC3),
 
         Inst::JmpKnown { dst } => {
@@ -2136,13 +2138,6 @@ pub(crate) fn emit(
                 }
             }
             sink.put1(*imm);
-        }
-
-        Inst::XmmLoadConst { src, dst, ty } => {
-            let dst = allocs.next(dst.to_reg());
-            let load_offset = Amode::rip_relative(sink.get_label_for_constant(*src));
-            let load = Inst::load(*ty, load_offset, Writable::from_reg(dst), ExtKind::None);
-            load.emit(&[], sink, info, state);
         }
 
         Inst::XmmUninitializedValue { .. } => {

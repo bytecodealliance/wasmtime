@@ -36,8 +36,8 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   mov w5, w0
-;   ldr w0, [x5, w1, UXTW]
+;   mov w4, w0
+;   ldr w0, [x4, w1, UXTW]
 ;   ret
 
 function %f8(i64, i32) -> i32 {
@@ -52,10 +52,10 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   add x5, x0, #68
-;   add x5, x5, x0
-;   add x5, x5, x1, SXTW
-;   ldr w0, [x5, w1, SXTW]
+;   add x4, x0, #68
+;   add x4, x4, x0
+;   add x4, x4, x1, SXTW
+;   ldr w0, [x4, w1, SXTW]
 ;   ret
 
 function %f9(i64, i64, i64) -> i32 {
@@ -85,10 +85,10 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   movz x7, #4100
-;   add x7, x7, x1
-;   add x7, x7, x2
-;   ldr w0, [x7, x0]
+;   movz x5, #4100
+;   add x5, x5, x1
+;   add x5, x5, x2
+;   ldr w0, [x5, x0]
 ;   ret
 
 function %f10() -> i32 {
@@ -166,8 +166,8 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   sxtw x5, w0
-;   ldr w0, [x5, w1, SXTW]
+;   sxtw x4, w0
+;   ldr w0, [x4, w1, SXTW]
 ;   ret
 
 function %f18(i64, i64, i64) -> i32 {
@@ -179,8 +179,8 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   movn w7, #4097
-;   ldrsh x0, [x7]
+;   movn w5, #4097
+;   ldrsh x0, [x5]
 ;   ret
 
 function %f19(i64, i64, i64) -> i32 {
@@ -192,8 +192,8 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   movz x7, #4098
-;   ldrsh x0, [x7]
+;   movz x5, #4098
+;   ldrsh x0, [x5]
 ;   ret
 
 function %f20(i64, i64, i64) -> i32 {
@@ -205,9 +205,9 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   movn w7, #4097
-;   sxtw x9, w7
-;   ldrsh x0, [x9]
+;   movn w5, #4097
+;   sxtw x7, w5
+;   ldrsh x0, [x7]
 ;   ret
 
 function %f21(i64, i64, i64) -> i32 {
@@ -219,9 +219,9 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   movz x7, #4098
-;   sxtw x9, w7
-;   ldrsh x0, [x9]
+;   movz x5, #4098
+;   sxtw x7, w5
+;   ldrsh x0, [x7]
 ;   ret
 
 function %i128(i64) -> i128 {
@@ -327,13 +327,13 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   mov x8, x0
-;   add x8, x8, x1, SXTW
-;   ldp x10, x11, [x8, #24]
+;   mov x7, x0
+;   add x7, x7, x1, SXTW
+;   ldp x9, x10, [x7, #24]
 ;   add x0, x0, x1, SXTW
-;   mov x15, x10
-;   mov x1, x11
-;   stp x15, x1, [x0, #24]
-;   mov x0, x10
+;   mov x14, x9
+;   mov x1, x10
+;   stp x14, x1, [x0, #24]
+;   mov x0, x9
 ;   ret
 

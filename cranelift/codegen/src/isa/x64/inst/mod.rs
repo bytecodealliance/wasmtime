@@ -101,6 +101,7 @@ impl Inst {
             | Inst::Pop64 { .. }
             | Inst::Push64 { .. }
             | Inst::StackProbeLoop { .. }
+            | Inst::Args { .. }
             | Inst::Ret { .. }
             | Inst::Setcc { .. }
             | Inst::ShiftR { .. }
@@ -112,7 +113,6 @@ impl Inst {
             | Inst::VirtualSPOffsetAdj { .. }
             | Inst::XmmCmove { .. }
             | Inst::XmmCmpRmR { .. }
-            | Inst::XmmLoadConst { .. }
             | Inst::XmmMinMaxSeq { .. }
             | Inst::XmmUninitializedValue { .. }
             | Inst::ElfTlsGetAddr { .. }
@@ -1081,11 +1081,6 @@ impl PrettyPrint for Inst {
                 format!("{} {}", ljustify("uninit".into()), dst)
             }
 
-            Inst::XmmLoadConst { src, dst, .. } => {
-                let dst = pretty_print_reg(dst.to_reg(), 8, allocs);
-                format!("load_const {:?}, {}", src, dst)
-            }
-
             Inst::XmmToGpr {
                 op,
                 src,
@@ -1456,6 +1451,17 @@ impl PrettyPrint for Inst {
             Inst::CallUnknown { dest, .. } => {
                 let dest = dest.pretty_print(8, allocs);
                 format!("{} *{}", ljustify("call".to_string()), dest)
+            }
+
+            Inst::Args { args } => {
+                let mut s = "args".to_string();
+                for arg in args {
+                    use std::fmt::Write;
+                    let preg = regs::show_reg(arg.preg);
+                    let def = pretty_print_reg(arg.vreg.to_reg(), 8, allocs);
+                    write!(&mut s, " {}={}", def, preg).unwrap();
+                }
+                s
             }
 
             Inst::Ret { .. } => "ret".to_string(),
@@ -1830,7 +1836,6 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             }
         }
         Inst::XmmUninitializedValue { dst } => collector.reg_def(dst.to_writable_reg()),
-        Inst::XmmLoadConst { dst, .. } => collector.reg_def(*dst),
         Inst::XmmMinMaxSeq { lhs, rhs, dst, .. } => {
             collector.reg_use(rhs.to_reg());
             collector.reg_use(lhs.to_reg());
@@ -2044,6 +2049,12 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             mem.get_operands_late(collector)
         }
 
+        Inst::Args { args } => {
+            for arg in args {
+                collector.reg_fixed_def(arg.vreg, arg.preg);
+            }
+        }
+
         Inst::Ret { rets } => {
             // The return value(s) are live-out; we represent this
             // with register uses on the return instruction.
@@ -2138,6 +2149,13 @@ impl MachInst for Inst {
                 }
             }
             _ => None,
+        }
+    }
+
+    fn is_args(&self) -> bool {
+        match self {
+            Self::Args { .. } => true,
+            _ => false,
         }
     }
 

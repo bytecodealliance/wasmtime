@@ -46,7 +46,6 @@ pub trait Value: Clone + From<DataValue> {
         Ok(other.eq(self)? || other.gt(self)?)
     }
     fn uno(&self, other: &Self) -> ValueResult<bool>;
-    fn overflow(&self, other: &Self) -> ValueResult<bool>;
 
     // Arithmetic.
     fn add(self, other: Self) -> ValueResult<Self>;
@@ -476,17 +475,6 @@ impl Value for DataValue {
 
     fn uno(&self, other: &Self) -> ValueResult<bool> {
         Ok(self.is_nan()? || other.is_nan()?)
-    }
-
-    fn overflow(&self, other: &Self) -> ValueResult<bool> {
-        Ok(match (self, other) {
-            (DataValue::I8(a), DataValue::I8(b)) => a.checked_sub(*b).is_none(),
-            (DataValue::I16(a), DataValue::I16(b)) => a.checked_sub(*b).is_none(),
-            (DataValue::I32(a), DataValue::I32(b)) => a.checked_sub(*b).is_none(),
-            (DataValue::I64(a), DataValue::I64(b)) => a.checked_sub(*b).is_none(),
-            (DataValue::I128(a), DataValue::I128(b)) => a.checked_sub(*b).is_none(),
-            _ => unimplemented!(),
-        })
     }
 
     fn add(self, other: Self) -> ValueResult<Self> {

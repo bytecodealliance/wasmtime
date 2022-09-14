@@ -57,11 +57,11 @@ block0(v0: i128):
 }
 
 ; block0:
-;   rev8 a3,a0##step=a5 tmp=a4
-;   brev8 t0,a3##tmp=a7 tmp2=t3 step=t4 ty=i64
-;   rev8 t2,a1##step=a2 tmp=a0
-;   brev8 a0,t2##tmp=a3 tmp2=a4 step=a5 ty=i64
-;   mv a1,t0
+;   rev8 a2,a0##step=a4 tmp=a3
+;   brev8 t4,a2##tmp=a6 tmp2=a7 step=t3 ty=i64
+;   rev8 t1,a1##step=a0 tmp=t2
+;   brev8 a0,t1##tmp=a2 tmp2=a3 step=a4 ty=i64
+;   mv a1,t4
 ;   ret
 
 function %b(i8) -> i8 {
@@ -115,11 +115,11 @@ block0(v0: i128):
 }
 
 ; block0:
-;   clz a5,a1##ty=i64 tmp=a3 step=a4
-;   clz t4,a0##ty=i64 tmp=a7 step=t3
-;   li t1,64
-;   select_reg a0,t4,zero##condition=(t1 eq a5)
-;   add a0,a5,a0
+;   clz a4,a1##ty=i64 tmp=a2 step=a3
+;   clz t3,a0##ty=i64 tmp=a6 step=a7
+;   li t0,64
+;   select_reg t2,t3,zero##condition=(t0 eq a4)
+;   add a0,a4,t2
 ;   mv a1,zero
 ;   ret
 
@@ -185,16 +185,16 @@ block0(v0: i128):
 }
 
 ; block0:
-;   not a3,a0
-;   select_reg a5,a3,a0##condition=(a1 slt zero)
-;   not a7,a1
-;   select_reg t4,a7,a1##condition=(a1 slt zero)
-;   clz a0,t4##ty=i64 tmp=t1 step=t2
-;   clz a4,a5##ty=i64 tmp=a2 step=a3
-;   li a6,64
-;   select_reg t3,a4,zero##condition=(a6 eq a0)
-;   add t0,a0,t3
-;   addi a0,t0,-1
+;   not a2,a0
+;   select_reg a4,a2,a0##condition=(a1 slt zero)
+;   not a6,a1
+;   select_reg t3,a6,a1##condition=(a1 slt zero)
+;   clz t2,t3##ty=i64 tmp=t0 step=t1
+;   clz a3,a4##ty=i64 tmp=a1 step=a2
+;   li a5,64
+;   select_reg a7,a3,zero##condition=(a5 eq t2)
+;   add t4,t2,a7
+;   addi a0,t4,-1
 ;   mv a1,zero
 ;   ret
 
@@ -249,11 +249,11 @@ block0(v0: i128):
 }
 
 ; block0:
-;   ctz a5,a0##ty=i64 tmp=a3 step=a4
-;   ctz t4,a1##ty=i64 tmp=a7 step=t3
-;   li t1,64
-;   select_reg a0,t4,zero##condition=(t1 eq a5)
-;   add a0,a5,a0
+;   ctz a4,a0##ty=i64 tmp=a2 step=a3
+;   ctz t3,a1##ty=i64 tmp=a6 step=a7
+;   li t0,64
+;   select_reg t2,t3,zero##condition=(t0 eq a4)
+;   add a0,a4,t2
 ;   mv a1,zero
 ;   ret
 
@@ -264,9 +264,9 @@ block0(v0: i128):
 }
 
 ; block0:
-;   popcnt a5,a0##ty=i64 tmp=a3 step=a4
-;   popcnt t4,a1##ty=i64 tmp=a7 step=t3
-;   add a0,a5,t4
+;   popcnt a4,a0##ty=i64 tmp=a2 step=a3
+;   popcnt t3,a1##ty=i64 tmp=a6 step=a7
+;   add a0,a4,t3
 ;   mv a1,zero
 ;   ret
 
@@ -442,8 +442,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   slli a3,a1,3
-;   and a0,a0,a3
+;   slli a2,a1,3
+;   and a0,a0,a2
 ;   ret
 
 function %band_i64_constant_shift2(i64, i64) -> i64 {
@@ -455,8 +455,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   slli a3,a1,3
-;   and a0,a3,a0
+;   slli a2,a1,3
+;   and a0,a2,a0
 ;   ret
 
 function %bor_i32(i32, i32) -> i32 {
@@ -521,8 +521,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   slli a3,a1,3
-;   or a0,a0,a3
+;   slli a2,a1,3
+;   or a0,a0,a2
 ;   ret
 
 function %bor_i64_constant_shift2(i64, i64) -> i64 {
@@ -534,8 +534,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   slli a3,a1,3
-;   or a0,a3,a0
+;   slli a2,a1,3
+;   or a0,a2,a0
 ;   ret
 
 function %bxor_i32(i32, i32) -> i32 {
@@ -600,8 +600,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   slli a3,a1,3
-;   xor a0,a0,a3
+;   slli a2,a1,3
+;   xor a0,a0,a2
 ;   ret
 
 function %bxor_i64_constant_shift2(i64, i64) -> i64 {
@@ -613,8 +613,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   slli a3,a1,3
-;   xor a0,a3,a0
+;   slli a2,a1,3
+;   xor a0,a2,a0
 ;   ret
 
 function %band_not_i32(i32, i32) -> i32 {
@@ -624,8 +624,8 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   not a2,a1
-;   and a0,a0,a2
+;   not a1,a1
+;   and a0,a0,a1
 ;   ret
 
 function %band_not_i64(i64, i64) -> i64 {
@@ -635,8 +635,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   not a2,a1
-;   and a0,a0,a2
+;   not a1,a1
+;   and a0,a0,a1
 ;   ret
 
 function %band_not_i128(i128, i128) -> i128 {
@@ -646,10 +646,10 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   not a7,a2
-;   and a0,a0,a7
-;   not t1,a3
-;   and a1,a1,t1
+;   not a4,a2
+;   and a0,a0,a4
+;   not t3,a3
+;   and a1,a1,t3
 ;   ret
 
 function %band_not_i64_constant(i64) -> i64 {
@@ -674,9 +674,9 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   slli a4,a1,4
-;   not a3,a4
-;   and a0,a0,a3
+;   slli a3,a1,4
+;   not a2,a3
+;   and a0,a0,a2
 ;   ret
 
 function %bor_not_i32(i32, i32) -> i32 {
@@ -686,8 +686,8 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   not a2,a1
-;   or a0,a0,a2
+;   not a1,a1
+;   or a0,a0,a1
 ;   ret
 
 function %bor_not_i64(i64, i64) -> i64 {
@@ -697,8 +697,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   not a2,a1
-;   or a0,a0,a2
+;   not a1,a1
+;   or a0,a0,a1
 ;   ret
 
 function %bor_not_i128(i128, i128) -> i128 {
@@ -708,10 +708,10 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   not a7,a2
-;   or a0,a0,a7
-;   not t1,a3
-;   or a1,a1,t1
+;   not a4,a2
+;   or a0,a0,a4
+;   not t3,a3
+;   or a1,a1,t3
 ;   ret
 
 function %bor_not_i64_constant(i64) -> i64 {
@@ -736,9 +736,9 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   slli a4,a1,4
-;   not a3,a4
-;   or a0,a0,a3
+;   slli a3,a1,4
+;   not a2,a3
+;   or a0,a0,a2
 ;   ret
 
 function %bxor_not_i32(i32, i32) -> i32 {
@@ -748,8 +748,8 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   not a2,a1
-;   xor a0,a0,a2
+;   not a1,a1
+;   xor a0,a0,a1
 ;   ret
 
 function %bxor_not_i64(i64, i64) -> i64 {
@@ -759,8 +759,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   not a2,a1
-;   xor a0,a0,a2
+;   not a1,a1
+;   xor a0,a0,a1
 ;   ret
 
 function %bxor_not_i128(i128, i128) -> i128 {
@@ -770,10 +770,10 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   not a7,a2
-;   xor a0,a0,a7
-;   not t1,a3
-;   xor a1,a1,t1
+;   not a4,a2
+;   xor a0,a0,a4
+;   not t3,a3
+;   xor a1,a1,t3
 ;   ret
 
 function %bxor_not_i64_constant(i64) -> i64 {
@@ -798,9 +798,9 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   slli a4,a1,4
-;   not a3,a4
-;   xor a0,a0,a3
+;   slli a3,a1,4
+;   not a2,a3
+;   xor a0,a0,a2
 ;   ret
 
 function %ishl_i128_i8(i128, i8) -> i128 {
@@ -810,17 +810,17 @@ block0(v0: i128, v1: i8):
 }
 
 ; block0:
-;   andi a5,a2,127
-;   li a7,128
-;   sub a7,a7,a5
-;   sll t0,a0,a5
-;   srl t2,a0,a7
-;   select_reg a2,zero,t2##condition=(a5 eq zero)
-;   sll a3,a1,a5
-;   or a6,a2,a3
-;   li a7,64
-;   select_reg a0,zero,t0##condition=(a5 uge a7)
-;   select_reg a1,t0,a6##condition=(a5 uge a7)
+;   andi a3,a2,127
+;   li a5,128
+;   sub a5,a5,a3
+;   sll t3,a0,a3
+;   srl t0,a0,a5
+;   select_reg t2,zero,t0##condition=(a3 eq zero)
+;   sll a1,a1,a3
+;   or a4,t2,a1
+;   li a5,64
+;   select_reg a0,zero,t3##condition=(a3 uge a5)
+;   select_reg a1,t3,a4##condition=(a3 uge a5)
 ;   ret
 
 function %ishl_i128_i128(i128, i128) -> i128 {
@@ -830,17 +830,17 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   andi a7,a2,127
-;   li t4,128
-;   sub t4,t4,a7
-;   sll t2,a0,a7
-;   srl a2,a0,t4
-;   select_reg a3,zero,a2##condition=(a7 eq zero)
-;   sll a5,a1,a7
-;   or t3,a3,a5
-;   li t4,64
-;   select_reg a0,zero,t2##condition=(a7 uge t4)
-;   select_reg a1,t2,t3##condition=(a7 uge t4)
+;   andi a4,a2,127
+;   li a6,128
+;   sub a6,a6,a4
+;   sll t4,a0,a4
+;   srl t1,a0,a6
+;   select_reg a0,zero,t1##condition=(a4 eq zero)
+;   sll a2,a1,a4
+;   or a5,a0,a2
+;   li a6,64
+;   select_reg a0,zero,t4##condition=(a4 uge a6)
+;   select_reg a1,t4,a5##condition=(a4 uge a6)
 ;   ret
 
 function %ushr_i128_i8(i128, i8) -> i128 {
@@ -850,17 +850,17 @@ block0(v0: i128, v1: i8):
 }
 
 ; block0:
-;   andi a5,a2,127
-;   li a7,128
-;   sub a7,a7,a5
-;   sll t0,a1,a7
-;   select_reg t2,zero,t0##condition=(a5 eq zero)
-;   srl a2,a0,a5
-;   or a3,t2,a2
-;   li a6,64
-;   srl a7,a1,a5
-;   select_reg a0,a7,a3##condition=(a5 uge a6)
-;   select_reg a1,zero,a7##condition=(a5 uge a6)
+;   andi a3,a2,127
+;   li a5,128
+;   sub a5,a5,a3
+;   sll t3,a1,a5
+;   select_reg t0,zero,t3##condition=(a3 eq zero)
+;   srl t2,a0,a3
+;   or a2,t0,t2
+;   li a4,64
+;   srl a5,a1,a3
+;   select_reg a0,a5,a2##condition=(a3 uge a4)
+;   select_reg a1,zero,a5##condition=(a3 uge a4)
 ;   ret
 
 function %ushr_i128_i128(i128, i128) -> i128 {
@@ -870,17 +870,17 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   andi a7,a2,127
-;   li t4,128
-;   sub t4,t4,a7
-;   sll t2,a1,t4
-;   select_reg a2,zero,t2##condition=(a7 eq zero)
-;   srl a3,a0,a7
-;   or a5,a2,a3
-;   li t3,64
-;   srl t4,a1,a7
-;   select_reg a0,t4,a5##condition=(a7 uge t3)
-;   select_reg a1,zero,t4##condition=(a7 uge t3)
+;   andi a4,a2,127
+;   li a6,128
+;   sub a6,a6,a4
+;   sll t4,a1,a6
+;   select_reg t1,zero,t4##condition=(a4 eq zero)
+;   srl a0,a0,a4
+;   or a2,t1,a0
+;   li a5,64
+;   srl a6,a1,a4
+;   select_reg a0,a6,a2##condition=(a4 uge a5)
+;   select_reg a1,zero,a6##condition=(a4 uge a5)
 ;   ret
 
 function %sshr_i128_i8(i128, i8) -> i128 {
@@ -890,19 +890,19 @@ block0(v0: i128, v1: i8):
 }
 
 ; block0:
-;   andi a5,a2,127
-;   li a7,128
-;   sub a7,a7,a5
-;   sll t0,a1,a7
-;   select_reg t2,zero,t0##condition=(a5 eq zero)
-;   srl a2,a0,a5
-;   or a3,t2,a2
-;   li a6,64
-;   sra a7,a1,a5
-;   li t4,-1
-;   select_reg t1,t4,zero##condition=(a1 slt zero)
-;   select_reg a0,a7,a3##condition=(a5 uge a6)
-;   select_reg a1,t1,a7##condition=(a5 uge a6)
+;   andi a3,a2,127
+;   li a5,128
+;   sub a5,a5,a3
+;   sll t3,a1,a5
+;   select_reg t0,zero,t3##condition=(a3 eq zero)
+;   srl t2,a0,a3
+;   or a2,t0,t2
+;   li a4,64
+;   sra a5,a1,a3
+;   li a7,-1
+;   select_reg t4,a7,zero##condition=(a1 slt zero)
+;   select_reg a0,a5,a2##condition=(a3 uge a4)
+;   select_reg a1,t4,a5##condition=(a3 uge a4)
 ;   ret
 
 function %sshr_i128_i128(i128, i128) -> i128 {
@@ -912,18 +912,18 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   andi a7,a2,127
-;   li t4,128
-;   sub t4,t4,a7
-;   sll t2,a1,t4
-;   select_reg a2,zero,t2##condition=(a7 eq zero)
-;   srl a3,a0,a7
-;   or a5,a2,a3
-;   li t3,64
-;   sra t4,a1,a7
-;   li t1,-1
-;   select_reg a1,t1,zero##condition=(a1 slt zero)
-;   select_reg a0,t4,a5##condition=(a7 uge t3)
-;   select_reg a1,a1,t4##condition=(a7 uge t3)
+;   andi a4,a2,127
+;   li a6,128
+;   sub a6,a6,a4
+;   sll t4,a1,a6
+;   select_reg t1,zero,t4##condition=(a4 eq zero)
+;   srl a0,a0,a4
+;   or a2,t1,a0
+;   li a5,64
+;   sra a6,a1,a4
+;   li t3,-1
+;   select_reg t0,t3,zero##condition=(a1 slt zero)
+;   select_reg a0,a6,a2##condition=(a4 uge a5)
+;   select_reg a1,t0,a6##condition=(a4 uge a5)
 ;   ret
 

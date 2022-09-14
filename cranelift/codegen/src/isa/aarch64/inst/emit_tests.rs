@@ -58,6 +58,13 @@ fn test_aarch64_binemit() {
     ));
     insns.push((Inst::Pacisp { key: APIKey::B }, "7F2303D5", "pacibsp"));
     insns.push((Inst::Xpaclri, "FF2003D5", "xpaclri"));
+    insns.push((
+        Inst::Bti {
+            targets: BranchTargetType::J,
+        },
+        "9F2403D5",
+        "bti j",
+    ));
     insns.push((Inst::Nop0, "", "nop-zero-len"));
     insns.push((Inst::Nop4, "1F2003D5", "nop"));
     insns.push((Inst::Csdb, "9F2203D5", "csdb"));

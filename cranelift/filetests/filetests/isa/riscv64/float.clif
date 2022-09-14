@@ -89,8 +89,8 @@ block0(v0: f32, v1: f32):
 }
 
 ; block0:
-;   fmin.s ft5,fa0,fa1##tmp=a3 ty=f32
-;   fmv.d fa0,ft5
+;   fmin.s ft4,fa0,fa1##tmp=a2 ty=f32
+;   fmv.d fa0,ft4
 ;   ret
 
 function %f10(f64, f64) -> f64 {
@@ -100,8 +100,8 @@ block0(v0: f64, v1: f64):
 }
 
 ; block0:
-;   fmin.d ft5,fa0,fa1##tmp=a3 ty=f64
-;   fmv.d fa0,ft5
+;   fmin.d ft4,fa0,fa1##tmp=a2 ty=f64
+;   fmv.d fa0,ft4
 ;   ret
 
 function %f11(f32, f32) -> f32 {
@@ -111,8 +111,8 @@ block0(v0: f32, v1: f32):
 }
 
 ; block0:
-;   fmax.s ft5,fa0,fa1##tmp=a3 ty=f32
-;   fmv.d fa0,ft5
+;   fmax.s ft4,fa0,fa1##tmp=a2 ty=f32
+;   fmv.d fa0,ft4
 ;   ret
 
 function %f12(f64, f64) -> f64 {
@@ -122,8 +122,8 @@ block0(v0: f64, v1: f64):
 }
 
 ; block0:
-;   fmax.d ft5,fa0,fa1##tmp=a3 ty=f64
-;   fmv.d fa0,ft5
+;   fmax.d ft4,fa0,fa1##tmp=a2 ty=f64
+;   fmv.d fa0,ft4
 ;   ret
 
 function %f13(f32) -> f32 {

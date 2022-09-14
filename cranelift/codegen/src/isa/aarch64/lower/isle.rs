@@ -6,12 +6,13 @@ use generated_code::Context;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
-    fp_reg, lower_constant_f128, lower_constant_f32, lower_constant_f64, lower_fp_condcode,
-    stack_reg, writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget,
-    CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, FPUOpRIMod, FloatCC, Imm12,
-    ImmLogic, ImmShift, Inst as MInst, IntCC, JTSequenceInfo, MachLabel, MemLabel, MoveWideConst,
-    MoveWideOp, NarrowValueMode, Opcode, OperandSize, PairAMode, Reg, SImm9, ScalarSize,
-    ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize, NZCV,
+    fp_reg, lower_condcode, lower_constant_f128, lower_constant_f32, lower_constant_f64,
+    lower_fp_condcode, stack_reg, writable_link_reg, writable_zero_reg, zero_reg, AMode,
+    ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp,
+    FPUOpRI, FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, JTSequenceInfo,
+    MachLabel, MemLabel, MoveWideConst, MoveWideOp, NarrowValueMode, Opcode, OperandSize,
+    PairAMode, Reg, SImm9, ScalarSize, ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize,
+    NZCV,
 };
 use crate::ir::condcodes;
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm};
@@ -29,7 +30,9 @@ use crate::{
     isa::aarch64::abi::AArch64Caller,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::unwind::UnwindInst,
-    machinst::{ty_bits, InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData},
+    machinst::{
+        abi::ArgPair, ty_bits, InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData,
+    },
 };
 use regalloc2::PReg;
 use std::boxed::Box;
@@ -42,6 +45,7 @@ type BoxCallIndInfo = Box<CallIndInfo>;
 type VecMachLabel = Vec<MachLabel>;
 type BoxJTSequenceInfo = Box<JTSequenceInfo>;
 type BoxExternalName = Box<ExternalName>;
+type VecArgPair = Vec<ArgPair>;
 
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(
@@ -85,7 +89,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     fn use_lse(&mut self, _: Inst) -> Option<()> {
-        if self.isa_flags.use_lse() {
+        if self.isa_flags.has_lse() {
             Some(())
         } else {
             None
@@ -312,6 +316,10 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         fp_reg()
     }
 
+    fn writable_link_reg(&mut self) -> WritableReg {
+        writable_link_reg()
+    }
+
     fn extended_value_from_value(&mut self, val: Value) -> Option<ExtendedValue> {
         let (val, extend) =
             super::get_as_extended_value(self.lower_ctx, val, NarrowValueMode::None)?;
@@ -507,6 +515,10 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
     fn fp_cond_code(&mut self, cc: &condcodes::FloatCC) -> Cond {
         lower_fp_condcode(*cc)
+    }
+
+    fn cond_code(&mut self, cc: &condcodes::IntCC) -> Cond {
+        lower_condcode(*cc)
     }
 
     fn preg_sp(&mut self) -> PReg {

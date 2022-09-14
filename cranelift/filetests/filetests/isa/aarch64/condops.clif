@@ -11,8 +11,8 @@ block0(v0: i8, v1: i64, v2: i64):
 }
 
 ; block0:
-;   uxtb w8, w0
-;   subs wzr, w8, #42
+;   uxtb w6, w0
+;   subs wzr, w6, #42
 ;   csel x0, x1, x2, eq
 ;   ret
 
@@ -37,9 +37,9 @@ block0(v0: i8, v1: i8, v2: i8):
 }
 
 ; block0:
-;   and w7, w1, w0
-;   bic w9, w2, w0
-;   orr w0, w7, w9
+;   and w5, w1, w0
+;   bic w7, w2, w0
+;   orr w0, w5, w7
 ;   ret
 
 function %i(b1, i8, i8) -> i8 {
@@ -49,8 +49,8 @@ block0(v0: b1, v1: i8, v2: i8):
 }
 
 ; block0:
-;   and w8, w0, #1
-;   subs wzr, w8, wzr
+;   and w6, w0, #1
+;   subs wzr, w6, wzr
 ;   csel x0, x1, x2, ne
 ;   ret
 
@@ -74,8 +74,8 @@ block0(v0: b1, v1: i128, v2: i128):
 }
 
 ; block0:
-;   and w14, w0, #1
-;   subs wzr, w14, wzr
+;   and w10, w0, #1
+;   subs wzr, w10, wzr
 ;   csel x0, x2, x4, ne
 ;   csel x1, x3, x5, ne
 ;   ret

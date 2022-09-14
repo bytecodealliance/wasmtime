@@ -104,6 +104,15 @@ impl Drop for PtrLen {
 
 // TODO: add a `Drop` impl for `cfg(target_os = "windows")`
 
+/// Type of branch protection to apply to executable memory.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum BranchProtection {
+    /// No protection.
+    None,
+    /// Use the Branch Target Identification extension of the Arm architecture.
+    BTI,
+}
+
 /// JIT memory manager. This manages pages of suitably aligned and
 /// accessible memory. Memory will be leaked by default to have
 /// function pointers remain valid for the remainder of the
@@ -113,15 +122,17 @@ pub(crate) struct Memory {
     already_protected: usize,
     current: PtrLen,
     position: usize,
+    branch_protection: BranchProtection,
 }
 
 impl Memory {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(branch_protection: BranchProtection) -> Self {
         Self {
             allocations: Vec::new(),
             already_protected: 0,
             current: PtrLen::new(),
             position: 0,
+            branch_protection,
         }
     }
 
@@ -157,14 +168,35 @@ impl Memory {
     pub(crate) fn set_readable_and_executable(&mut self) {
         self.finish_current();
 
+        let set_region_readable_and_executable = |ptr, len| {
+            if len != 0 {
+                if self.branch_protection == BranchProtection::BTI {
+                    #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+                    if std::arch::is_aarch64_feature_detected!("bti") {
+                        let prot = libc::PROT_EXEC | libc::PROT_READ | /* PROT_BTI */ 0x10;
+
+                        unsafe {
+                            if libc::mprotect(ptr as *mut libc::c_void, len, prot) < 0 {
+                                panic!("unable to make memory readable+executable");
+                            }
+                        }
+
+                        return;
+                    }
+                }
+
+                unsafe {
+                    region::protect(ptr, len, region::Protection::READ_EXECUTE)
+                        .expect("unable to make memory readable+executable");
+                }
+            }
+        };
+
         #[cfg(feature = "selinux-fix")]
         {
             for &PtrLen { ref map, ptr, len } in &self.allocations[self.already_protected..] {
-                if len != 0 && map.is_some() {
-                    unsafe {
-                        region::protect(ptr, len, region::Protection::READ_EXECUTE)
-                            .expect("unable to make memory readable+executable");
-                    }
+                if map.is_some() {
+                    set_region_readable_and_executable(ptr, len);
                 }
             }
         }
@@ -172,12 +204,7 @@ impl Memory {
         #[cfg(not(feature = "selinux-fix"))]
         {
             for &PtrLen { ptr, len } in &self.allocations[self.already_protected..] {
-                if len != 0 {
-                    unsafe {
-                        region::protect(ptr, len, region::Protection::READ_EXECUTE)
-                            .expect("unable to make memory readable+executable");
-                    }
-                }
+                set_region_readable_and_executable(ptr, len);
             }
         }
 

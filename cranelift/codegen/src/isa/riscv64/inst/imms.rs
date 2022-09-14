@@ -14,14 +14,14 @@ impl Imm12 {
     pub(crate) const FALSE: Self = Self { bits: 0 };
     pub(crate) const TRUE: Self = Self { bits: -1 };
     pub fn maybe_from_u64(val: u64) -> Option<Imm12> {
-        let bit = 1 << 11;
+        let sign_bit = 1 << 11;
         if val == 0 {
             Some(Imm12 { bits: 0 })
-        } else if (val & bit) != 0 && (val >> 12) == 0xffff_ffff_ffff_f {
+        } else if (val & sign_bit) != 0 && (val >> 12) == 0xffff_ffff_ffff_f {
             Some(Imm12 {
                 bits: (val & 0xffff) as i16,
             })
-        } else if (val & bit) == 0 && (val >> 12) == 0 {
+        } else if (val & sign_bit) == 0 && (val >> 12) == 0 {
             Some(Imm12 {
                 bits: (val & 0xffff) as i16,
             })
@@ -129,8 +129,6 @@ impl Display for Uimm5 {
     }
 }
 
-/// an imm20 immediate and an Imm12 immediate can generate what immediate.
-/// imm20 + imm12
 impl Inst {
     pub(crate) fn imm_min() -> i64 {
         let imm20_max: i64 = (1 << 19) << 12;
@@ -142,6 +140,12 @@ impl Inst {
         let imm12_max = (1 << 11) - 1;
         imm20_max + imm12_max
     }
+
+    /// An imm20 immediate and an Imm12 immediate can generate a 32-bit immediate.
+    /// This helper produces an imm12, imm20, or both to generate the value.
+    ///
+    /// `value` must be between `imm_min()` and `imm_max()`, or else
+    /// this helper returns `None`.
     pub(crate) fn generate_imm<R>(
         value: u64,
         mut handle_imm: impl FnMut(Option<Imm20>, Option<Imm12>) -> R,

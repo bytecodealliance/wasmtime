@@ -155,8 +155,6 @@ impl Immediates {
                 intcc_values.insert("ugt", "UnsignedGreaterThan");
                 intcc_values.insert("ule", "UnsignedLessThanOrEqual");
                 intcc_values.insert("ult", "UnsignedLessThan");
-                intcc_values.insert("of", "Overflow");
-                intcc_values.insert("nof", "NotOverflow");
                 new_enum(
                     "cond",
                     "ir::condcodes::IntCC",

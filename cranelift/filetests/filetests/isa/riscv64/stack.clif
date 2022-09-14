@@ -491,9 +491,10 @@ block0(v0: i128):
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr a2,nsp+0
-;   sd a0,0(a2)
-;   sd a1,8(a2)
+;   mv a2,a0
+;   load_addr a0,nsp+0
+;   sd a2,0(a0)
+;   sd a1,8(a0)
 ;   add sp,+16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -515,9 +516,10 @@ block0(v0: i128):
 ;   mv fp,sp
 ;   add sp,-32
 ; block0:
-;   load_addr a2,nsp+32
-;   sd a0,0(a2)
-;   sd a1,8(a2)
+;   mv a2,a0
+;   load_addr a0,nsp+32
+;   sd a2,0(a0)
+;   sd a1,8(a0)
 ;   add sp,+32
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -542,9 +544,10 @@ block0(v0: i128):
 ;   call %Probestack
 ;   add sp,-100016
 ; block0:
-;   load_addr a2,nsp+0
-;   sd a0,0(a2)
-;   sd a1,8(a2)
+;   mv a2,a0
+;   load_addr a0,nsp+0
+;   sd a2,0(a0)
+;   sd a1,8(a0)
 ;   add sp,+100016
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)

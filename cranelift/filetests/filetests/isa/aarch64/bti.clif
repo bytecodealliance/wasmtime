@@ -1,0 +1,111 @@
+test compile precise-output
+set unwind_info=false
+target aarch64 use_bti
+
+function %f1(i32) -> i32 {
+    jt0 = jump_table [block1, block2, block3]
+
+block0(v0: i32):
+    br_table v0, block4, jt0
+
+block1:
+    v1 = iconst.i32 1
+    jump block5(v1)
+
+block2:
+    v2 = iconst.i32 2
+    jump block5(v2)
+
+block3:
+    v3 = iconst.i32 3
+    jump block5(v3)
+
+block4:
+    v4 = iconst.i32 4
+    jump block5(v4)
+
+block5(v5: i32):
+    v6 = iadd.i32 v0, v5
+    return v6
+}
+
+;   bti c
+; block0:
+;   emit_island 44
+;   subs wzr, w0, #3
+;   b.hs label1 ; csel x1, xzr, x0, hs ; csdb ; adr x15, pc+16 ; ldrsw x1, [x15, x1, uxtw #2] ; add x15, x15, x1 ; br x15 ; jt_entries [Label(MachLabel(3)), Label(MachLabel(5)), Label(MachLabel(7))]
+; block1:
+;   movz x5, #4
+;   b label2
+; block2:
+;   b label9
+; block3:
+;   bti j
+;   movz x5, #1
+;   b label4
+; block4:
+;   b label9
+; block5:
+;   bti j
+;   movz x5, #2
+;   b label6
+; block6:
+;   b label9
+; block7:
+;   bti j
+;   movz x5, #3
+;   b label8
+; block8:
+;   b label9
+; block9:
+;   add w0, w0, w5
+;   ret
+
+function %f2(i64) -> i64 {
+    jt0 = jump_table [block2]
+
+block0(v0: i64):
+    v1 = ireduce.i32 v0
+    v2 = load.i64 notrap aligned table v0
+    br_table v1, block1, jt0
+
+block1:
+    return v2
+
+block2:
+    v3 = iconst.i64 42
+    v4 = iadd.i64 v2, v3
+    return v4
+}
+
+;   bti c
+; block0:
+;   ldr x6, [x0]
+;   emit_island 36
+;   subs wzr, w0, #1
+;   b.hs label1 ; csel x8, xzr, x0, hs ; csdb ; adr x7, pc+16 ; ldrsw x8, [x7, x8, uxtw #2] ; add x7, x7, x8 ; br x7 ; jt_entries [Label(MachLabel(2))]
+; block1:
+;   mov x0, x6
+;   ret
+; block2:
+;   bti j
+;   mov x0, x6
+;   add x0, x0, #42
+;   ret
+
+function %f3(i64) -> i64 {
+    fn0 = %g(i64) -> i64
+
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return v1
+}
+
+;   bti c
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
+;   blr x4
+;   ldp fp, lr, [sp], #16
+;   ret

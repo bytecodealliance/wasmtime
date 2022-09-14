@@ -22,7 +22,7 @@ use crate::{
     isa::unwind::UnwindInst,
     isa::CallConv,
     machinst::abi::ABIMachineSpec,
-    machinst::{InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData},
+    machinst::{ArgPair, InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData},
 };
 use regalloc2::PReg;
 use smallvec::{smallvec, SmallVec};
@@ -45,6 +45,7 @@ type BoxExternalName = Box<ExternalName>;
 type BoxSymbolReloc = Box<SymbolReloc>;
 type VecMInst = Vec<MInst>;
 type VecMInstBuilder = Cell<Vec<MInst>>;
+type VecArgPair = Vec<ArgPair>;
 
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(
@@ -891,7 +892,5 @@ fn condcode_is_signed(cc: IntCC) -> bool {
         IntCC::UnsignedGreaterThan => false,
         IntCC::UnsignedLessThanOrEqual => false,
         IntCC::UnsignedLessThan => false,
-        IntCC::Overflow => true,
-        IntCC::NotOverflow => true,
     }
 }

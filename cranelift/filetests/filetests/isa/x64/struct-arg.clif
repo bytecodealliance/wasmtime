@@ -125,8 +125,8 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   movq    %rbx, 0(%rsp)
 ;   movq    %r14, 8(%rsp)
 ; block0:
-;   movq    %rdi, %r14
 ;   movq    %rdx, %rbx
+;   movq    %rdi, %r14
 ;   subq    %rsp, $192, %rsp
 ;   virtual_sp_offset_adjust 192
 ;   lea     0(%rsp), %rdi

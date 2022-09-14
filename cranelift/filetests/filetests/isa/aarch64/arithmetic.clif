@@ -109,8 +109,8 @@ block0(v0: i64, v1: i64):
 
 ; block0:
 ;   cbnz x1, 8 ; udf
-;   sdiv x6, x0, x1
-;   msub x0, x6, x1, x0
+;   sdiv x5, x0, x1
+;   msub x0, x5, x1, x0
 ;   ret
 
 function %f11(i64, i64) -> i64 {
@@ -121,8 +121,8 @@ block0(v0: i64, v1: i64):
 
 ; block0:
 ;   cbnz x1, 8 ; udf
-;   udiv x6, x0, x1
-;   msub x0, x6, x1, x0
+;   udiv x5, x0, x1
+;   msub x0, x5, x1, x0
 ;   ret
 
 function %f12(i32, i32) -> i32 {
@@ -132,13 +132,13 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   sxtw x5, w0
-;   sxtw x7, w1
-;   cbnz x7, 8 ; udf
-;   adds wzr, w7, #1
-;   ccmp w5, #1, #nzcv, eq
+;   sxtw x4, w0
+;   sxtw x6, w1
+;   cbnz x6, 8 ; udf
+;   adds wzr, w6, #1
+;   ccmp w4, #1, #nzcv, eq
 ;   b.vc 8 ; udf
-;   sdiv x0, x5, x7
+;   sdiv x0, x4, x6
 ;   ret
 
 function %f13(i32) -> i32 {
@@ -161,10 +161,10 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   mov w5, w0
-;   mov w7, w1
-;   cbnz x7, 8 ; udf
-;   udiv x0, x5, x7
+;   mov w4, w0
+;   mov w6, w1
+;   cbnz x6, 8 ; udf
+;   udiv x0, x4, x6
 ;   ret
 
 function %f15(i32) -> i32 {
@@ -187,11 +187,11 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   sxtw x5, w0
-;   sxtw x7, w1
-;   cbnz x7, 8 ; udf
-;   sdiv x10, x5, x7
-;   msub x0, x10, x7, x5
+;   sxtw x4, w0
+;   sxtw x6, w1
+;   cbnz x6, 8 ; udf
+;   sdiv x9, x4, x6
+;   msub x0, x9, x6, x4
 ;   ret
 
 function %f17(i32, i32) -> i32 {
@@ -201,11 +201,11 @@ block0(v0: i32, v1: i32):
 }
 
 ; block0:
-;   mov w5, w0
-;   mov w7, w1
-;   cbnz x7, 8 ; udf
-;   udiv x10, x5, x7
-;   msub x0, x10, x7, x5
+;   mov w4, w0
+;   mov w6, w1
+;   cbnz x6, 8 ; udf
+;   udiv x9, x4, x6
+;   msub x0, x9, x6, x4
 ;   ret
 
 function %f18(i64, i64) -> i64 {
@@ -379,9 +379,9 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   umulh x10, x0, x2
-;   madd x12, x0, x3, x10
-;   madd x1, x1, x2, x12
+;   umulh x7, x0, x2
+;   madd x9, x0, x3, x7
+;   madd x1, x1, x2, x9
 ;   madd x0, x0, x2, xzr
 ;   ret
 
@@ -437,8 +437,8 @@ block0(v0: i32, v1: i32, v2: i32):
 }
 
 ; block0:
-;   madd w8, w1, w2, wzr
-;   sub w0, w8, w0
+;   madd w6, w1, w2, wzr
+;   sub w0, w6, w0
 ;   ret
 
 function %imul_sub_i64(i64, i64, i64) -> i64 {
@@ -449,8 +449,8 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   madd x8, x1, x2, xzr
-;   sub x0, x8, x0
+;   madd x6, x1, x2, xzr
+;   sub x0, x6, x0
 ;   ret
 
 function %srem_const (i64) -> i64 {

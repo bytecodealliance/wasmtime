@@ -246,12 +246,6 @@
                  (src Reg)
                  (dst SyntheticAmode))
 
-       ;; XMM (vector) unary op (to move a constant value into an xmm register):
-       ;; movups
-       (XmmLoadConst (src VCodeConstant)
-                     (dst WritableReg)
-                     (ty Type))
-
        ;; XMM (scalar) unary op (from xmm to integer reg): movd, movq,
        ;; cvtts{s,d}2si
        (XmmToGpr (op SseOpcode)
@@ -328,6 +322,10 @@
        ;; Indirect call: callq (reg mem)
        (CallUnknown (dest RegMem)
                     (info BoxCallInfo))
+
+       ;; A pseudo-instruction that captures register arguments in vregs.
+       (Args
+        (args VecArgPair))
 
        ;; Return.
        (Ret (rets VecReg))
@@ -1364,12 +1362,6 @@
 (decl intcc_without_eq (IntCC) IntCC)
 (extern constructor intcc_without_eq intcc_without_eq)
 
-;; This is a direct import of `IntCC::unsigned`.
-;; Get the corresponding IntCC with the signed component removed.
-;; For conditions without a signed component, this is a no-op.
-(decl intcc_unsigned (IntCC) IntCC)
-(extern constructor intcc_unsigned intcc_unsigned)
-
 ;;;; Helpers for Getting Particular Physical Registers ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; These should only be used for legalization purposes, when we can't otherwise
@@ -1392,35 +1384,35 @@
 
 ;;;; Helpers for Querying Enabled ISA Extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl avx512vl_enabled () Type)
-(extern extractor avx512vl_enabled avx512vl_enabled)
+(decl avx512vl_enabled (bool) Type)
+(extern extractor infallible avx512vl_enabled avx512vl_enabled)
 
-(decl avx512dq_enabled () Type)
-(extern extractor avx512dq_enabled avx512dq_enabled)
+(decl avx512dq_enabled (bool) Type)
+(extern extractor infallible avx512dq_enabled avx512dq_enabled)
 
-(decl avx512f_enabled () Type)
-(extern extractor avx512f_enabled avx512f_enabled)
+(decl avx512f_enabled (bool) Type)
+(extern extractor infallible avx512f_enabled avx512f_enabled)
 
-(decl avx512bitalg_enabled () Type)
-(extern extractor avx512bitalg_enabled avx512bitalg_enabled)
+(decl avx512bitalg_enabled (bool) Type)
+(extern extractor infallible avx512bitalg_enabled avx512bitalg_enabled)
 
-(decl avx512vbmi_enabled () Type)
-(extern extractor avx512vbmi_enabled avx512vbmi_enabled)
+(decl avx512vbmi_enabled (bool) Type)
+(extern extractor infallible avx512vbmi_enabled avx512vbmi_enabled)
 
-(decl use_lzcnt () Type)
-(extern extractor use_lzcnt use_lzcnt)
+(decl use_lzcnt (bool) Type)
+(extern extractor infallible use_lzcnt use_lzcnt)
 
-(decl use_bmi1 () Type)
-(extern extractor use_bmi1 use_bmi1)
+(decl use_bmi1 (bool) Type)
+(extern extractor infallible use_bmi1 use_bmi1)
 
-(decl use_popcnt () Type)
-(extern extractor use_popcnt use_popcnt)
+(decl use_popcnt (bool) Type)
+(extern extractor infallible use_popcnt use_popcnt)
 
-(decl use_fma () Type)
-(extern extractor use_fma use_fma)
+(decl use_fma (bool) Type)
+(extern extractor infallible use_fma use_fma)
 
-(decl use_sse41 () Type)
-(extern extractor use_sse41 use_sse41)
+(decl use_sse41 (bool) Type)
+(extern extractor infallible use_sse41 use_sse41)
 
 ;;;; Helpers for Merging and Sinking Immediates/Loads  ;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1716,9 +1708,7 @@
 ;; Load a constant into an XMM register.
 (decl x64_xmm_load_const (Type VCodeConstant) Xmm)
 (rule (x64_xmm_load_const ty const)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmLoadConst const dst ty))))
-        dst))
+      (x64_load ty (const_to_synthetic_amode const) (ExtKind.None)))
 
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -3856,6 +3846,8 @@
 (decl synthetic_amode_to_xmm_mem (SyntheticAmode) XmmMem)
 (rule (synthetic_amode_to_xmm_mem amode)
       (synthetic_amode_to_reg_mem amode))
+(decl const_to_synthetic_amode (VCodeConstant) SyntheticAmode)
+(extern constructor const_to_synthetic_amode const_to_synthetic_amode)
 
 ;; Helper for creating `MovPReg` instructions.
 (decl mov_preg (PReg) Reg)

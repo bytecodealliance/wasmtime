@@ -417,14 +417,14 @@
 
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty)(rotl x y)))
+(rule (lower (has_type (fits_in_64 ty)(rotl x (valueregs_2_reg y))))
   (lower_rotl ty (ext_int_if_need $false x ty) y))
 
 (rule (lower (has_type $I128 (rotl x y)))
   (lower_i128_rotl x y))
 
 ;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty)(rotr x y)))
+(rule (lower (has_type (fits_in_64 ty)(rotr x (valueregs_2_reg y))))
   (lower_rotr ty (ext_int_if_need $false x ty) y))
 
 (rule (lower (has_type $I128 (rotr x y)))
@@ -798,7 +798,6 @@
 ;;;;;  Rules for `fence`;;;;;;;;;
 (rule
   (lower (fence))
-  ;; default is ????
   (side_effect (SideEffectNoResult.Inst(MInst.Fence 15 15)))
 )
 

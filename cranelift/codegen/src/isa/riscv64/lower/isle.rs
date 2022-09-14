@@ -22,7 +22,7 @@ use crate::{
         StackSlot, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
-    machinst::{InsnOutput, Lower},
+    machinst::{ArgPair, InsnOutput, Lower},
 };
 use regalloc2::PReg;
 
@@ -36,6 +36,7 @@ type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
 type BoxExternalName = Box<ExternalName>;
 type VecMachLabel = Vec<MachLabel>;
+type VecArgPair = Vec<ArgPair>;
 use crate::machinst::valueregs;
 
 /// The main entry point for lowering with ISLE.
@@ -144,7 +145,18 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         InstOutput::default()
     }
     fn load_ra(&mut self) -> Reg {
-        self.gen_move2(link_reg(), I64, I64)
+        if self.flags.preserve_frame_pointers() {
+            let tmp = self.temp_writable_reg(I64);
+            self.emit(&MInst::Load {
+                rd: tmp,
+                op: LoadOP::Ld,
+                flags: MemFlags::trusted(),
+                from: AMode::FPOffset(8, I64),
+            });
+            tmp.to_reg()
+        } else {
+            self.gen_move2(link_reg(), I64, I64)
+        }
     }
     fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
         assert!(ty.is_int() || ty.is_bool(), "{:?}", ty);
@@ -463,14 +475,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
             targets,
         });
         InstOutput::default()
-    }
-    fn intcc_is_overflow_or_nof(&mut self, cc: &IntCC) -> Option<IntCC> {
-        let cc = *cc;
-        if cc == IntCC::Overflow || cc == IntCC::NotOverflow {
-            Some(cc)
-        } else {
-            None
-        }
     }
     fn x_reg(&mut self, x: u8) -> Reg {
         x_reg(x as usize)

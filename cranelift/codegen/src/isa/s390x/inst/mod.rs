@@ -208,6 +208,7 @@ impl Inst {
             | Inst::VecReplicateLane { .. }
             | Inst::Call { .. }
             | Inst::CallInd { .. }
+            | Inst::Args { .. }
             | Inst::Ret { .. }
             | Inst::Jump { .. }
             | Inst::CondBr { .. }
@@ -475,28 +476,37 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::AluRR { rd, rm, .. } => {
-            collector.reg_mod(rd);
+        &Inst::AluRR { rd, ri, rm, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
             collector.reg_use(rm);
         }
-        &Inst::AluRX { rd, ref mem, .. } => {
-            collector.reg_mod(rd);
+        &Inst::AluRX {
+            rd, ri, ref mem, ..
+        } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
             memarg_operands(mem, collector);
         }
-        &Inst::AluRSImm16 { rd, .. } => {
-            collector.reg_mod(rd);
+        &Inst::AluRSImm16 { rd, ri, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
         }
-        &Inst::AluRSImm32 { rd, .. } => {
-            collector.reg_mod(rd);
+        &Inst::AluRSImm32 { rd, ri, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
         }
-        &Inst::AluRUImm32 { rd, .. } => {
-            collector.reg_mod(rd);
+        &Inst::AluRUImm32 { rd, ri, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
         }
-        &Inst::AluRUImm16Shifted { rd, .. } => {
-            collector.reg_mod(rd);
+        &Inst::AluRUImm16Shifted { rd, ri, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
         }
-        &Inst::AluRUImm32Shifted { rd, .. } => {
-            collector.reg_mod(rd);
+        &Inst::AluRUImm32Shifted { rd, ri, .. } => {
+            collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
         }
         &Inst::SMulWide { rn, rm, .. } => {
             collector.reg_use(rn);
@@ -935,6 +945,11 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_defs(&*info.defs);
             collector.reg_clobbers(info.clobbers);
         }
+        &Inst::Args { ref args } => {
+            for arg in args {
+                collector.reg_fixed_def(arg.vreg, arg.preg);
+            }
+        }
         &Inst::Ret { link, ref rets } => {
             collector.reg_use(link);
             collector.reg_uses(&rets[..]);
@@ -1008,6 +1023,13 @@ impl MachInst for Inst {
             &Inst::Call { ref info, .. } => info.caller_callconv != info.callee_callconv,
             &Inst::CallInd { ref info, .. } => info.caller_callconv != info.callee_callconv,
             _ => true,
+        }
+    }
+
+    fn is_args(&self) -> bool {
+        match self {
+            Self::Args { .. } => true,
+            _ => false,
         }
     }
 
@@ -1235,7 +1257,12 @@ impl Inst {
                     _ => unreachable!(),
                 };
                 if have_rr && rd.to_reg() == rn {
-                    let inst = Inst::AluRR { alu_op, rd, rm };
+                    let inst = Inst::AluRR {
+                        alu_op,
+                        rd,
+                        ri: rd.to_reg(),
+                        rm,
+                    };
                     return inst.print_with_state(state, &mut empty_allocs);
                 }
                 let rd = pretty_print_reg(rd.to_reg(), &mut empty_allocs);
@@ -1253,7 +1280,12 @@ impl Inst {
                 let rn = allocs.next(rn);
 
                 if rd.to_reg() == rn {
-                    let inst = Inst::AluRSImm16 { alu_op, rd, imm };
+                    let inst = Inst::AluRSImm16 {
+                        alu_op,
+                        rd,
+                        ri: rd.to_reg(),
+                        imm,
+                    };
                     return inst.print_with_state(state, &mut empty_allocs);
                 }
                 let op = match alu_op {
@@ -1265,7 +1297,7 @@ impl Inst {
                 let rn = pretty_print_reg(rn, &mut empty_allocs);
                 format!("{} {}, {}, {}", op, rd, rn, imm)
             }
-            &Inst::AluRR { alu_op, rd, rm } => {
+            &Inst::AluRR { alu_op, rd, ri, rm } => {
                 let op = match alu_op {
                     ALUOp::Add32 => "ar",
                     ALUOp::Add64 => "agr",
@@ -1290,13 +1322,14 @@ impl Inst {
                     ALUOp::Xor64 => "xgr",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let rm = pretty_print_reg(rm, allocs);
                 format!("{} {}, {}", op, rd, rm)
             }
             &Inst::AluRX {
                 alu_op,
                 rd,
+                ri,
                 ref mem,
             } => {
                 let (opcode_rx, opcode_rxy) = match alu_op {
@@ -1330,7 +1363,7 @@ impl Inst {
                     _ => unreachable!(),
                 };
 
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 let mem = mem.with_allocs(allocs);
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
@@ -1352,7 +1385,12 @@ impl Inst {
 
                 format!("{}{} {}, {}", mem_str, op.unwrap(), rd, mem)
             }
-            &Inst::AluRSImm16 { alu_op, rd, imm } => {
+            &Inst::AluRSImm16 {
+                alu_op,
+                rd,
+                ri,
+                imm,
+            } => {
                 let op = match alu_op {
                     ALUOp::Add32 => "ahi",
                     ALUOp::Add64 => "aghi",
@@ -1360,10 +1398,15 @@ impl Inst {
                     ALUOp::Mul64 => "mghi",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 format!("{} {}, {}", op, rd, imm)
             }
-            &Inst::AluRSImm32 { alu_op, rd, imm } => {
+            &Inst::AluRSImm32 {
+                alu_op,
+                rd,
+                ri,
+                imm,
+            } => {
                 let op = match alu_op {
                     ALUOp::Add32 => "afi",
                     ALUOp::Add64 => "agfi",
@@ -1371,10 +1414,15 @@ impl Inst {
                     ALUOp::Mul64 => "msgfi",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 format!("{} {}, {}", op, rd, imm)
             }
-            &Inst::AluRUImm32 { alu_op, rd, imm } => {
+            &Inst::AluRUImm32 {
+                alu_op,
+                rd,
+                ri,
+                imm,
+            } => {
                 let op = match alu_op {
                     ALUOp::AddLogical32 => "alfi",
                     ALUOp::AddLogical64 => "algfi",
@@ -1382,10 +1430,15 @@ impl Inst {
                     ALUOp::SubLogical64 => "slgfi",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 format!("{} {}, {}", op, rd, imm)
             }
-            &Inst::AluRUImm16Shifted { alu_op, rd, imm } => {
+            &Inst::AluRUImm16Shifted {
+                alu_op,
+                rd,
+                ri,
+                imm,
+            } => {
                 let op = match (alu_op, imm.shift) {
                     (ALUOp::And32, 0) => "nill",
                     (ALUOp::And32, 1) => "nilh",
@@ -1401,10 +1454,15 @@ impl Inst {
                     (ALUOp::Orr64, 3) => "oihh",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 format!("{} {}, {}", op, rd, imm.bits)
             }
-            &Inst::AluRUImm32Shifted { alu_op, rd, imm } => {
+            &Inst::AluRUImm32Shifted {
+                alu_op,
+                rd,
+                ri,
+                imm,
+            } => {
                 let op = match (alu_op, imm.shift) {
                     (ALUOp::And32, 0) => "nilf",
                     (ALUOp::And64, 0) => "nilf",
@@ -1417,7 +1475,7 @@ impl Inst {
                     (ALUOp::Xor64, 1) => "xihf",
                     _ => unreachable!(),
                 };
-                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let rd = pretty_print_reg_mod(rd, ri, allocs);
                 format!("{} {}, {}", op, rd, imm.bits)
             }
             &Inst::SMulWide { rn, rm } => {
@@ -3069,6 +3127,16 @@ impl Inst {
                 let link = pretty_print_reg(link.to_reg(), allocs);
                 let rn = pretty_print_reg(info.rn, allocs);
                 format!("basr {}, {}", link, rn)
+            }
+            &Inst::Args { ref args } => {
+                let mut s = "args".to_string();
+                for arg in args {
+                    use std::fmt::Write;
+                    let preg = pretty_print_reg(arg.preg, &mut empty_allocs);
+                    let def = pretty_print_reg(arg.vreg.to_reg(), allocs);
+                    write!(&mut s, " {}={}", def, preg).unwrap();
+                }
+                s
             }
             &Inst::Ret { link, .. } => {
                 let link = pretty_print_reg(link, allocs);

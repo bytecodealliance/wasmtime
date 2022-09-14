@@ -18,16 +18,16 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   movq    %rdi, %r9
+;   addq    %r9, const(0), %r9
+;   movq    %r9, 0(%rsi)
 ;   movq    %rdi, %r10
-;   addq    %r10, const(VCodeConstant(0)), %r10
+;   subq    %r10, const(0), %r10
 ;   movq    %r10, 0(%rsi)
 ;   movq    %rdi, %r11
-;   subq    %r11, const(VCodeConstant(0)), %r11
+;   andq    %r11, const(0), %r11
 ;   movq    %r11, 0(%rsi)
-;   movq    %rdi, %rax
-;   andq    %rax, const(VCodeConstant(0)), %rax
-;   movq    %rax, 0(%rsi)
-;   orq     %rdi, const(VCodeConstant(0)), %rdi
+;   orq     %rdi, const(0), %rdi
 ;   movq    %rdi, 0(%rsi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
