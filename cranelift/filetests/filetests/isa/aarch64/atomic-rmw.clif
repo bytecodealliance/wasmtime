@@ -14,9 +14,8 @@ block0(v0: i64, v1: i64):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr x27, [x25]; add x28, x27, x26; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_add_64 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -36,9 +35,8 @@ block0(v0: i64, v1: i32):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr w27, [x25]; add w28, w27, w26; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_add_32 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -58,9 +56,8 @@ block0(v0: i64, v1: i16):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrh w27, [x25]; add w28, w27, w26; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_add_16 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -80,9 +77,8 @@ block0(v0: i64, v1: i8):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrb w27, [x25]; add w28, w27, w26; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_add_8 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -102,9 +98,8 @@ block0(v0: i64, v1: i64):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr x27, [x25]; sub x28, x27, x26; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_sub_64 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -124,9 +119,8 @@ block0(v0: i64, v1: i32):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr w27, [x25]; sub w28, w27, w26; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_sub_32 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -146,9 +140,8 @@ block0(v0: i64, v1: i16):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrh w27, [x25]; sub w28, w27, w26; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_sub_16 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -168,9 +161,8 @@ block0(v0: i64, v1: i8):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrb w27, [x25]; sub w28, w27, w26; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_sub_8 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -190,9 +182,8 @@ block0(v0: i64, v1: i64):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr x27, [x25]; and x28, x27, x26; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_and_64 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -212,9 +203,8 @@ block0(v0: i64, v1: i32):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr w27, [x25]; and w28, w27, w26; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_and_32 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -234,9 +224,8 @@ block0(v0: i64, v1: i16):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrh w27, [x25]; and w28, w27, w26; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_and_16 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -256,9 +245,8 @@ block0(v0: i64, v1: i8):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrb w27, [x25]; and w28, w27, w26; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_and_8 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -278,9 +266,8 @@ block0(v0: i64, v1: i64):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr x27, [x25]; and x28, x27, x26; mvn x28, x28; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_nand_64 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -300,9 +287,8 @@ block0(v0: i64, v1: i32):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr w27, [x25]; and w28, w27, w26; mvn w28, w28; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_nand_32 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -322,9 +308,8 @@ block0(v0: i64, v1: i16):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrh w27, [x25]; and w28, w27, w26; mvn w28, w28; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_nand_16 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -344,9 +329,8 @@ block0(v0: i64, v1: i8):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrb w27, [x25]; and w28, w27, w26; mvn w28, w28; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_nand_8 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -366,9 +350,8 @@ block0(v0: i64, v1: i64):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr x27, [x25]; orr x28, x27, x26; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_orr_64 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -388,9 +371,8 @@ block0(v0: i64, v1: i32):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr w27, [x25]; orr w28, w27, w26; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_orr_32 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -410,9 +392,8 @@ block0(v0: i64, v1: i16):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrh w27, [x25]; orr w28, w27, w26; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_orr_16 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -432,9 +413,8 @@ block0(v0: i64, v1: i8):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrb w27, [x25]; orr w28, w27, w26; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_orr_8 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -454,9 +434,8 @@ block0(v0: i64, v1: i64):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr x27, [x25]; eor x28, x27, x26; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_eor_64 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -476,9 +455,8 @@ block0(v0: i64, v1: i32):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr w27, [x25]; eor w28, w27, w26; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_eor_32 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -498,9 +476,8 @@ block0(v0: i64, v1: i16):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrh w27, [x25]; eor w28, w27, w26; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_eor_16 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -520,9 +497,8 @@ block0(v0: i64, v1: i8):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrb w27, [x25]; eor w28, w27, w26; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_eor_8 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -542,9 +518,8 @@ block0(v0: i64, v1: i64):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr x27, [x25]; cmp x27, x26; csel x28, x27, x26, gt; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_smax_64 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -564,9 +539,8 @@ block0(v0: i64, v1: i32):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr w27, [x25]; cmp w27, w26; csel w28, w27, w26, gt; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_smax_32 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -586,9 +560,8 @@ block0(v0: i64, v1: i16):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrh w27, [x25]; sxth w27, w27; cmp w27, w26, sxth; csel w28, w27, w26, gt; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_smax_16 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -608,9 +581,8 @@ block0(v0: i64, v1: i8):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrb w27, [x25]; sxtb w27, w27; cmp w27, w26, sxtb; csel w28, w27, w26, gt; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_smax_8 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -630,9 +602,8 @@ block0(v0: i64, v1: i64):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr x27, [x25]; cmp x27, x26; csel x28, x27, x26, hi; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_umax_64 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -652,9 +623,8 @@ block0(v0: i64, v1: i32):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr w27, [x25]; cmp w27, w26; csel w28, w27, w26, hi; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_umax_32 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -674,9 +644,8 @@ block0(v0: i64, v1: i16):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrh w27, [x25]; cmp w27, w26; csel w28, w27, w26, hi; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_umax_16 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -696,9 +665,8 @@ block0(v0: i64, v1: i8):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrb w27, [x25]; cmp w27, w26; csel w28, w27, w26, hi; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_umax_8 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -718,9 +686,8 @@ block0(v0: i64, v1: i64):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr x27, [x25]; cmp x27, x26; csel x28, x27, x26, lt; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_smin_64 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -740,9 +707,8 @@ block0(v0: i64, v1: i32):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr w27, [x25]; cmp w27, w26; csel w28, w27, w26, lt; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_smin_32 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -762,9 +728,8 @@ block0(v0: i64, v1: i16):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrh w27, [x25]; sxth w27, w27; cmp w27, w26, sxth; csel w28, w27, w26, lt; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_smin_16 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -784,9 +749,8 @@ block0(v0: i64, v1: i8):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrb w27, [x25]; sxtb w27, w27; cmp w27, w26, sxtb; csel w28, w27, w26, lt; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_smin_8 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -806,9 +770,8 @@ block0(v0: i64, v1: i64):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr x27, [x25]; cmp x27, x26; csel x28, x27, x26, lo; stlxr w24, x28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_umin_64 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -828,9 +791,8 @@ block0(v0: i64, v1: i32):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxr w27, [x25]; cmp w27, w26; csel w28, w27, w26, lo; stlxr w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_umin_32 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -850,9 +812,8 @@ block0(v0: i64, v1: i16):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrh w27, [x25]; cmp w27, w26; csel w28, w27, w26, lo; stlxrh w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_umin_16 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16
@@ -872,9 +833,8 @@ block0(v0: i64, v1: i8):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x4, x1
-;   mov x26, x4
-;   1: ldaxrb w27, [x25]; cmp w27, w26; csel w28, w27, w26, lo; stlxrb w24, w28, [x25]; cbnz w24, 1b
+;   mov x26, x1
+;   atomic_rmw_loop_umin_8 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28
 ;   ldp x24, x25, [sp], #16
 ;   ldp x26, x27, [sp], #16
 ;   ldr x28, [sp], #16

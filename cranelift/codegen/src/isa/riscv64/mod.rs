@@ -27,6 +27,7 @@ use crate::isa::unwind::systemv;
 use inst::crate_reg_eviroment;
 
 use self::inst::EmitInfo;
+use crate::machinst::SigSet;
 
 /// An riscv64 backend.
 pub struct Riscv64Backend {
@@ -60,8 +61,9 @@ impl Riscv64Backend {
         flags: shared_settings::Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(flags.clone(), self.isa_flags.clone());
-        let abi = abi::Riscv64Callee::new(func, self, &self.isa_flags)?;
-        compile::compile::<Riscv64Backend>(func, self, abi, &self.mach_env, emit_info)
+        let sigs = SigSet::new::<abi::Riscv64MachineDeps>(func, &self.flags)?;
+        let abi = abi::Riscv64Callee::new(func, self, &self.isa_flags , &sigs)?;
+        compile::compile::<Riscv64Backend>(func, self, abi, &self.mach_env, emit_info , sigs)
     }
 }
 
@@ -95,6 +97,7 @@ impl TargetIsa for Riscv64Backend {
             dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
+            alignment: emit_result.alignment,
         })
     }
 
@@ -157,6 +160,10 @@ impl TargetIsa for Riscv64Backend {
     #[cfg(feature = "unwind")]
     fn map_regalloc_reg_to_dwarf(&self, reg: Reg) -> Result<u16, systemv::RegisterMappingError> {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
+    }
+
+    fn function_alignment(&self) -> u32 {
+        4
     }
 }
 

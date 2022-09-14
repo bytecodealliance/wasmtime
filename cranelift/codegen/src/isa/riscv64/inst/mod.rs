@@ -606,6 +606,12 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(tmp2);
             collector.reg_early_def(rd);
         }
+        &Inst::StackProbeLoop { .. } => {
+            // StackProbeLoop has a tmp register and StackProbeLoop used at gen_prologue.
+            // t3 will do the job. (t3 is caller-save register and not used directly by compiler like writable_spilltmp_reg)
+            // gen_prologue is called at emit stage.
+            // no need let reg alloc know.
+        }
     }
 }
 
@@ -853,13 +859,23 @@ impl Inst {
                 "".into()
             }
         }
-
         match self {
             &Inst::Nop0 => {
                 format!("##zero length nop")
             }
             &Inst::Nop4 => {
                 format!("##fixed 4-size nop")
+            }
+            &Inst::StackProbeLoop {
+                guard_size,
+                probe_count,
+                tmp,
+            } => {
+                let tmp = format_reg(tmp.to_reg(), allocs);
+                format!(
+                    "inline_stack_probe##guard_size={} probe_count={} tmp={}",
+                    guard_size, probe_count, tmp
+                )
             }
             &Inst::FloatRound {
                 op,
@@ -944,7 +960,6 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("atomic_load.{} {},({})", ty, rd, p)
             }
-
             &Inst::AtomicRmwLoop {
                 offset,
                 op,
@@ -1099,7 +1114,7 @@ impl Inst {
                 rd,
                 rs1,
                 rs2,
-                condition,
+                ref condition,
             } => {
                 let c_rs1 = format_reg(condition.rs1, allocs);
                 let c_rs2 = format_reg(condition.rs2, allocs);

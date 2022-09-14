@@ -36,7 +36,6 @@ type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
 type BoxExternalName = Box<ExternalName>;
 type VecMachLabel = Vec<MachLabel>;
-use crate::isa::riscv64::abi::Riscv64MachineDeps;
 use crate::machinst::valueregs;
 
 /// The main entry point for lowering with ISLE.
@@ -67,7 +66,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     isle_prelude_methods!();
     isle_prelude_caller_methods!(Riscv64MachineDeps, Riscv64ABICaller);
 
-    fn vec_regs_to_value_regs(&mut self, val: &VecWritableReg) -> ValueRegs {
+    fn vec_writable_to_regs(&mut self, val: &VecWritableReg) -> ValueRegs {
         match val.len() {
             1 => ValueRegs::one(val[0].to_reg()),
             2 => ValueRegs::two(val[0].to_reg(), val[1].to_reg()),
@@ -164,15 +163,8 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         BranchTarget::Label(label)
     }
 
-    fn output_2(&mut self, x: ValueRegs, y: ValueRegs) -> InstOutput {
-        InstOutput::from_iter([x, y].into_iter())
-    }
     fn vec_writable_clone(&mut self, v: &VecWritableReg) -> VecWritableReg {
         v.clone()
-    }
-    fn value_inst(&mut self, val: Value) -> Option<Inst> {
-        let may = self.lower_ctx.get_value_as_source_or_const(val);
-        may.inst.as_inst().map(|(insn, _index)| insn)
     }
 
     fn gen_moves(&mut self, rs: ValueRegs, in_ty: Type, out_ty: Type) -> ValueRegs {
@@ -342,51 +334,8 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         self.put_in_regs(val).regs()[0]
     }
 
-    fn ifcmp_parameters(&mut self, val: Value) -> Option<(Value, Value, Type)> {
-        let inst = self.value_inst(val)?;
-
-        let opcode = self.lower_ctx.data(inst).opcode();
-        if opcode == crate::ir::Opcode::Ifcmp {
-            let a = self.lower_ctx.input_as_value(inst, 0);
-            let b = self.lower_ctx.input_as_value(inst, 1);
-            let ty = self.lower_ctx.input_ty(inst, 0);
-            Some((a, b, ty))
-        } else {
-            None
-        }
-    }
-
     fn inst_output_get(&mut self, x: InstOutput, index: u8) -> ValueRegs {
         x[index as usize]
-    }
-    fn iadd_ifcout_parameters(&mut self, val: Value) -> Option<(Value, Value, Type)> {
-        let inst = self.value_inst(val)?;
-        let opcode = self.lower_ctx.data(inst).opcode();
-        if opcode == crate::ir::Opcode::IaddIfcout {
-            let a = self.lower_ctx.input_as_value(inst, 0);
-            let b = self.lower_ctx.input_as_value(inst, 1);
-            let ty = self.lower_ctx.input_ty(inst, 0);
-
-            Some((a, b, ty))
-        } else {
-            None
-        }
-    }
-
-    fn ffcmp_parameters(&mut self, val: Value) -> Option<(Value, Value, Type)> {
-        let inst = self.value_inst(val);
-        let inst = match inst {
-            Some(x) => x,
-            None => return None,
-        };
-        let opcode = self.lower_ctx.data(inst).opcode();
-        if opcode != crate::ir::Opcode::Ffcmp {
-            return None;
-        }
-        let a = self.lower_ctx.input_as_value(inst, 0);
-        let b = self.lower_ctx.input_as_value(inst, 1);
-        let ty = self.lower_ctx.input_ty(inst, 0);
-        Some((a, b, ty))
     }
 
     fn move_f_to_x(&mut self, r: Reg, ty: Type) -> Reg {
@@ -452,10 +401,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     fn offset32_add(&mut self, a: Offset32, adden: i64) -> Offset32 {
         a.try_add_i64(adden).expect("offset exceed range.")
     }
-    fn type_and_value(&mut self, val: Value) -> (Type, Value) {
-        let ty = self.lower_ctx.value_ty(val);
-        (ty, val)
-    }
+
     fn gen_stack_addr(&mut self, slot: StackSlot, offset: Offset32) -> Reg {
         let result = self.temp_writable_reg(I64);
         let i = self
@@ -473,24 +419,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         let tmp = self.temp_writable_reg(oty);
         self.emit(&gen_move(tmp, oty, r, ity));
         tmp.to_reg()
-    }
-
-    fn sext_int_if_need(&mut self, val: ValueRegs, ty: Type) -> ValueRegs {
-        assert!(ty.is_int());
-        match ty.bits() {
-            128 | 64 => val,
-            _ => {
-                let rd = self.temp_writable_reg(I64);
-                self.emit(&MInst::Extend {
-                    rd,
-                    rn: val.regs()[0],
-                    signed: true,
-                    from_bits: ty.bits() as u8,
-                    to_bits: 64,
-                });
-                ValueRegs::one(rd.to_reg())
-            }
-        }
     }
 
     fn intcc_is_gt_etc(&mut self, cc: &IntCC) -> Option<(IntCC, bool)> {

@@ -1,0 +1,66 @@
+test compile precise-output
+set enable_probestack=true
+set probestack_strategy=inline
+; This is the default and is equivalent to a page size of 4096
+set probestack_size_log2=12
+target x86_64
+
+
+; If the stack size is just one page, we can avoid the stack probe entirely
+function %single_page() -> i64 system_v {
+ss0 = explicit_slot 2048
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $2048, %rsp
+; block0:
+;   lea     rsp(0 + virtual offset), %rax
+;   addq    %rsp, $2048, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %unrolled() -> i64 system_v {
+ss0 = explicit_slot 12288
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   movl    %esp, -4096(%rsp)
+;   movl    %esp, -8192(%rsp)
+;   movl    %esp, -12288(%rsp)
+;   subq    %rsp, $12288, %rsp
+; block0:
+;   lea     rsp(0 + virtual offset), %rax
+;   addq    %rsp, $12288, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %large() -> i64 system_v {
+ss0 = explicit_slot 100000
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   stack_probe_loop %r11, frame_size=100000, guard_size=4096
+;   subq    %rsp, $100000, %rsp
+; block0:
+;   lea     rsp(0 + virtual offset), %rax
+;   addq    %rsp, $100000, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret

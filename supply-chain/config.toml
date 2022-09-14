@@ -46,16 +46,8 @@ criteria = "safe-to-deploy"
 version = "1.0.57"
 criteria = "safe-to-deploy"
 
-[[exemptions.arbitrary]]
-version = "1.1.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.async-trait]]
 version = "0.1.53"
-criteria = "safe-to-deploy"
-
-[[exemptions.atty]]
-version = "0.2.14"
 criteria = "safe-to-deploy"
 
 [[exemptions.autocfg]]
@@ -106,10 +98,6 @@ criteria = "safe-to-deploy"
 version = "0.25.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.cap-rand]]
-version = "0.25.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.cap-std]]
 version = "0.25.0"
 criteria = "safe-to-deploy"
@@ -117,10 +105,6 @@ criteria = "safe-to-deploy"
 [[exemptions.cap-tempfile]]
 version = "0.25.0"
 criteria = "safe-to-run"
-
-[[exemptions.cap-time-ext]]
-version = "0.25.0"
-criteria = "safe-to-deploy"
 
 [[exemptions.capstone]]
 version = "0.9.0"
@@ -242,10 +226,6 @@ criteria = "safe-to-deploy"
 version = "2.2.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.derive_arbitrary]]
-version = "1.1.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.digest]]
 version = "0.9.0"
 criteria = "safe-to-deploy"
@@ -326,10 +306,6 @@ criteria = "safe-to-deploy"
 version = "0.10.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.file-per-thread-logger]]
-version = "0.1.5"
-criteria = "safe-to-deploy"
-
 [[exemptions.filecheck]]
 version = "0.5.0"
 criteria = "safe-to-deploy"
@@ -382,10 +358,6 @@ criteria = "safe-to-run"
 version = "0.12.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.heck]]
-version = "0.4.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.hermit-abi]]
 version = "0.1.19"
 criteria = "safe-to-deploy"
@@ -410,10 +382,6 @@ criteria = "safe-to-deploy"
 version = "2.1.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.id-arena]]
-version = "2.2.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.indexmap]]
 version = "1.9.1"
 criteria = "safe-to-deploy"
@@ -436,10 +404,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.ipnet]]
 version = "2.5.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.is-terminal]]
-version = "0.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.is_ci]]
@@ -482,10 +446,6 @@ criteria = "safe-to-deploy"
 version = "1.4.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.leb128]]
-version = "0.2.5"
-criteria = "safe-to-deploy"
-
 [[exemptions.libc]]
 version = "0.2.126"
 criteria = "safe-to-deploy"
@@ -524,10 +484,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.memchr]]
 version = "2.5.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.memfd]]
-version = "0.6.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.memmap2]]

@@ -1114,7 +1114,7 @@ where
 
     fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
         match ty {
-            InterfaceType::List(t) => T::typecheck(&types[*t], types),
+            InterfaceType::List(t) => T::typecheck(&types[*t].element, types),
             other => bail!("expected `list` found `{}`", desc(other)),
         }
     }
@@ -1322,10 +1322,7 @@ unsafe impl<T: ComponentType> ComponentType for WasmList<T> {
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
     fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
-        match ty {
-            InterfaceType::List(t) => T::typecheck(&types[*t], types),
-            other => bail!("expected `list` found `{}`", desc(other)),
-        }
+        <[T] as ComponentType>::typecheck(ty, types)
     }
 }
 

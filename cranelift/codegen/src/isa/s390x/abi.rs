@@ -574,6 +574,10 @@ impl ABIMachineSpec for S390xMachineDeps {
         smallvec![]
     }
 
+    fn gen_inline_probestack(_frame_size: u32, _guard_size: u32) -> SmallInstVec<Self::I> {
+        unimplemented!("Inline stack probing is unimplemented on S390x");
+    }
+
     // Returns stack bytes used as well as instructions. Does not adjust
     // nominal SP offset; abi generic code will do that.
     fn gen_clobber_save(

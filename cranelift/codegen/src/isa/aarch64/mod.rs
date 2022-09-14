@@ -7,8 +7,8 @@ use crate::isa::aarch64::settings as aarch64_settings;
 use crate::isa::unwind::systemv;
 use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, TextSectionBuilder,
-    VCode,
+    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
@@ -60,8 +60,9 @@ impl AArch64Backend {
         flags: shared_settings::Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(flags.clone());
-        let abi = abi::AArch64Callee::new(func, self, &self.isa_flags)?;
-        compile::compile::<AArch64Backend>(func, self, abi, &self.machine_env, emit_info)
+        let sigs = SigSet::new::<abi::AArch64MachineDeps>(func, &self.flags)?;
+        let abi = abi::AArch64Callee::new(func, self, &self.isa_flags, &sigs)?;
+        compile::compile::<AArch64Backend>(func, self, abi, &self.machine_env, emit_info, sigs)
     }
 }
 
@@ -94,6 +95,7 @@ impl TargetIsa for AArch64Backend {
             dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
+            alignment: emit_result.alignment,
         })
     }
 
@@ -177,6 +179,12 @@ impl TargetIsa for AArch64Backend {
     #[cfg(feature = "unwind")]
     fn map_regalloc_reg_to_dwarf(&self, reg: Reg) -> Result<u16, systemv::RegisterMappingError> {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
+    }
+
+    fn function_alignment(&self) -> u32 {
+        // We use 32-byte alignment for performance reasons, but for correctness we would only need
+        // 4-byte alignment.
+        32
     }
 }
 

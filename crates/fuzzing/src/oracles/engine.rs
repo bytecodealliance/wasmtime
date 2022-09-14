@@ -13,7 +13,7 @@ pub fn choose(
     u: &mut Unstructured<'_>,
     existing_config: &Config,
     allowed: &[&str],
-) -> arbitrary::Result<Box<dyn DiffEngine>> {
+) -> arbitrary::Result<Option<Box<dyn DiffEngine>>> {
     // Filter out any engines that cannot match the `existing_config` or are not
     // `allowed`.
     let mut engines: Vec<Box<dyn DiffEngine>> = vec![];
@@ -54,13 +54,16 @@ pub fn choose(
         }
     }
 
+    if engines.is_empty() {
+        return Ok(None);
+    }
+
     // Use the input of the fuzzer to pick an engine that we'll be fuzzing
     // Wasmtime against.
-    assert!(!engines.is_empty());
     let index: usize = u.int_in_range(0..=engines.len() - 1)?;
     let engine = engines.swap_remove(index);
     log::debug!("selected engine: {}", engine.name());
-    Ok(engine)
+    Ok(Some(engine))
 }
 
 /// Provide a way to instantiate Wasm modules.
@@ -73,7 +76,11 @@ pub trait DiffEngine {
 
     /// Tests that the wasmtime-originating `trap` matches the error this engine
     /// generated.
-    fn assert_error_match(&self, trap: &Trap, err: Error);
+    fn assert_error_match(&self, trap: &Trap, err: &Error);
+
+    /// Returns whether the error specified from this engine might be stack
+    /// overflow.
+    fn is_stack_overflow(&self, err: &Error) -> bool;
 }
 
 /// Provide a way to evaluate Wasm functions--a Wasm instance implemented by a

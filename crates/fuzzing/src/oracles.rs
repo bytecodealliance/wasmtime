@@ -19,7 +19,7 @@ pub mod engine;
 mod stacks;
 
 use self::diff_wasmtime::WasmtimeInstance;
-use self::engine::DiffInstance;
+use self::engine::{DiffEngine, DiffInstance};
 use crate::generators::{self, DiffValue, DiffValueType};
 use arbitrary::Arbitrary;
 pub use stacks::check_stacks;
@@ -330,24 +330,28 @@ pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -
 /// Evaluate the function identified by `name` in two different engine
 /// instances--`lhs` and `rhs`.
 ///
+/// Returns `Ok(true)` if more evaluations can happen or `Ok(false)` if the
+/// instances may have drifted apart and no more evaluations can happen.
+///
 /// # Panics
 ///
 /// This will panic if the evaluation is different between engines (e.g.,
 /// results are different, hashed instance is different, one side traps, etc.).
 pub fn differential(
     lhs: &mut dyn DiffInstance,
+    lhs_engine: &dyn DiffEngine,
     rhs: &mut WasmtimeInstance,
     name: &str,
     args: &[DiffValue],
     result_tys: &[DiffValueType],
-) -> anyhow::Result<()> {
+) -> anyhow::Result<bool> {
     log::debug!("Evaluating: `{}` with {:?}", name, args);
     let lhs_results = match lhs.evaluate(name, args, result_tys) {
         Ok(Some(results)) => Ok(results),
         Err(e) => Err(e),
         // this engine couldn't execute this type signature, so discard this
         // execution by returning success.
-        Ok(None) => return Ok(()),
+        Ok(None) => return Ok(true),
     };
     log::debug!(" -> results on {}: {:?}", lhs.name(), &lhs_results);
 
@@ -360,11 +364,24 @@ pub fn differential(
     match (lhs_results, rhs_results) {
         // If the evaluation succeeds, we compare the results.
         (Ok(lhs_results), Ok(rhs_results)) => assert_eq!(lhs_results, rhs_results),
-        // Both sides failed--this is an acceptable result (e.g., both sides
-        // trap at a divide by zero). We could compare the error strings perhaps
-        // (since the `lhs` and `rhs` could be failing for different reasons)
-        // but this seems good enough for now.
-        (Err(_), Err(_)) => {}
+
+        // Both sides failed. If either one hits a stack overflow then that's an
+        // engine defined limit which means we can no longer compare the state
+        // of the two instances, so `false` is returned and nothing else is
+        // compared.
+        //
+        // Otherwise, though, the same error should have popped out and this
+        // falls through to checking the intermediate state otherwise.
+        (Err(lhs), Err(rhs)) => {
+            let err = rhs.downcast::<Trap>().expect("not a trap");
+            let poisoned = err.trap_code() == Some(TrapCode::StackOverflow)
+                || lhs_engine.is_stack_overflow(&lhs);
+
+            if poisoned {
+                return Ok(false);
+            }
+            lhs_engine.assert_error_match(&err, &lhs);
+        }
         // A real bug is found if only one side fails.
         (Ok(_), Err(_)) => panic!("only the `rhs` ({}) failed for this input", rhs.name()),
         (Err(_), Ok(_)) => panic!("only the `lhs` ({}) failed for this input", lhs.name()),
@@ -392,7 +409,7 @@ pub fn differential(
         panic!("memories have differing values");
     }
 
-    Ok(())
+    Ok(true)
 }
 
 /// Invoke the given API calls.

@@ -7,14 +7,13 @@ use std::cell::Cell;
 use target_lexicon::Triple;
 
 pub use super::MachLabel;
-pub use crate::data_value::DataValue;
 pub use crate::ir::{
     dynamic_to_fixed, ArgumentExtension, Constant, DynamicStackSlot, ExternalName, FuncRef,
     GlobalValue, Immediate, SigRef, StackSlot,
 };
 pub use crate::isa::unwind::UnwindInst;
 pub use crate::machinst::{
-    ABIArg, ABIArgSlot, ABISig, InputSourceInst, Lower, RealReg, Reg, RelocDistance, VCodeInst,
+    ABIArg, ABIArgSlot, InputSourceInst, Lower, RealReg, Reg, RelocDistance, Sig, VCodeInst,
     Writable,
 };
 pub use crate::settings::TlsModel;
@@ -938,40 +937,40 @@ macro_rules! isle_prelude_methods {
             regs.regs()[idx]
         }
 
-        fn abi_num_args(&mut self, abi: &ABISig) -> usize {
-            abi.num_args()
+        fn abi_num_args(&mut self, abi: &Sig) -> usize {
+            self.lower_ctx.sigs()[*abi].num_args()
         }
 
-        fn abi_get_arg(&mut self, abi: &ABISig, idx: usize) -> ABIArg {
-            abi.get_arg(idx)
+        fn abi_get_arg(&mut self, abi: &Sig, idx: usize) -> ABIArg {
+            self.lower_ctx.sigs()[*abi].get_arg(idx)
         }
 
-        fn abi_num_rets(&mut self, abi: &ABISig) -> usize {
-            abi.num_rets()
+        fn abi_num_rets(&mut self, abi: &Sig) -> usize {
+            self.lower_ctx.sigs()[*abi].num_rets()
         }
 
-        fn abi_get_ret(&mut self, abi: &ABISig, idx: usize) -> ABIArg {
-            abi.get_ret(idx)
+        fn abi_get_ret(&mut self, abi: &Sig, idx: usize) -> ABIArg {
+            self.lower_ctx.sigs()[*abi].get_ret(idx)
         }
 
-        fn abi_ret_arg(&mut self, abi: &ABISig) -> Option<ABIArg> {
-            abi.get_ret_arg()
+        fn abi_ret_arg(&mut self, abi: &Sig) -> Option<ABIArg> {
+            self.lower_ctx.sigs()[*abi].get_ret_arg()
         }
 
-        fn abi_no_ret_arg(&mut self, abi: &ABISig) -> Option<()> {
-            if let Some(_) = abi.get_ret_arg() {
+        fn abi_no_ret_arg(&mut self, abi: &Sig) -> Option<()> {
+            if let Some(_) = self.lower_ctx.sigs()[*abi].get_ret_arg() {
                 None
             } else {
                 Some(())
             }
         }
 
-        fn abi_sized_stack_arg_space(&mut self, abi: &ABISig) -> i64 {
-            abi.sized_stack_arg_space()
+        fn abi_sized_stack_arg_space(&mut self, abi: &Sig) -> i64 {
+            self.lower_ctx.sigs()[*abi].sized_stack_arg_space()
         }
 
-        fn abi_sized_stack_ret_space(&mut self, abi: &ABISig) -> i64 {
-            abi.sized_stack_ret_space()
+        fn abi_sized_stack_ret_space(&mut self, abi: &Sig) -> i64 {
+            self.lower_ctx.sigs()[*abi].sized_stack_ret_space()
         }
 
         fn abi_arg_only_slot(&mut self, arg: &ABIArg) -> Option<ABIArgSlot> {
@@ -1094,12 +1093,19 @@ macro_rules! isle_prelude_caller_methods {
             dist: RelocDistance,
             args @ (inputs, off): ValueSlice,
         ) -> InstOutput {
-            let caller_conv = self.lower_ctx.abi().call_conv();
+            let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
             let sig = &self.lower_ctx.dfg().signatures[sig_ref];
             let num_rets = sig.returns.len();
-            let abi = ABISig::from_func_sig::<$abispec>(sig, self.flags).unwrap();
-            let caller =
-                <$abicaller>::from_func(sig, &extname, dist, caller_conv, self.flags).unwrap();
+            let abi = self.lower_ctx.sigs().abi_sig_for_sig_ref(sig_ref);
+            let caller = <$abicaller>::from_func(
+                self.lower_ctx.sigs(),
+                sig_ref,
+                &extname,
+                dist,
+                caller_conv,
+                self.flags.clone(),
+            )
+            .unwrap();
 
             assert_eq!(
                 inputs.len(&self.lower_ctx.dfg().value_lists) - off,
@@ -1115,14 +1121,20 @@ macro_rules! isle_prelude_caller_methods {
             val: Value,
             args @ (inputs, off): ValueSlice,
         ) -> InstOutput {
-            let caller_conv = self.lower_ctx.abi().call_conv();
+            let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
             let ptr = self.put_in_reg(val);
             let sig = &self.lower_ctx.dfg().signatures[sig_ref];
             let num_rets = sig.returns.len();
-            let abi = ABISig::from_func_sig::<$abispec>(sig, self.flags).unwrap();
-            let caller =
-                <$abicaller>::from_ptr(sig, ptr, Opcode::CallIndirect, caller_conv, self.flags)
-                    .unwrap();
+            let abi = self.lower_ctx.sigs().abi_sig_for_sig_ref(sig_ref);
+            let caller = <$abicaller>::from_ptr(
+                self.lower_ctx.sigs(),
+                sig_ref,
+                ptr,
+                Opcode::CallIndirect,
+                caller_conv,
+                self.flags.clone(),
+            )
+            .unwrap();
 
             assert_eq!(
                 inputs.len(&self.lower_ctx.dfg().value_lists) - off,
@@ -1142,19 +1154,21 @@ macro_rules! isle_prelude_method_helpers {
     ($abicaller:ty) => {
         fn gen_call_common(
             &mut self,
-            abi: ABISig,
+            abi: Sig,
             num_rets: usize,
             mut caller: $abicaller,
             (inputs, off): ValueSlice,
         ) -> InstOutput {
             caller.emit_stack_pre_adjust(self.lower_ctx);
 
+            let num_args = self.lower_ctx.sigs()[abi].num_args();
+
             assert_eq!(
                 inputs.len(&self.lower_ctx.dfg().value_lists) - off,
-                abi.num_args()
+                num_args
             );
             let mut arg_regs = vec![];
-            for i in 0..abi.num_args() {
+            for i in 0..num_args {
                 let input = inputs
                     .get(off + i, &self.lower_ctx.dfg().value_lists)
                     .unwrap();
@@ -1164,15 +1178,19 @@ macro_rules! isle_prelude_method_helpers {
                 caller.emit_copy_regs_to_buffer(self.lower_ctx, i, *arg_regs);
             }
             for (i, arg_regs) in arg_regs.iter().enumerate() {
-                caller.emit_copy_regs_to_arg(self.lower_ctx, i, *arg_regs);
+                for inst in caller.gen_copy_regs_to_arg(self.lower_ctx, i, *arg_regs) {
+                    self.lower_ctx.emit(inst);
+                }
             }
             caller.emit_call(self.lower_ctx);
 
             let mut outputs = InstOutput::new();
             for i in 0..num_rets {
-                let ret = abi.get_ret(i);
+                let ret = self.lower_ctx.sigs()[abi].get_ret(i);
                 let retval_regs = self.abi_arg_slot_regs(&ret).unwrap();
-                caller.emit_copy_retval_to_regs(self.lower_ctx, i, retval_regs.clone());
+                for inst in caller.gen_copy_retval_to_regs(self.lower_ctx, i, retval_regs.clone()) {
+                    self.lower_ctx.emit(inst);
+                }
                 outputs.push(valueregs::non_writable_value_regs(retval_regs));
             }
             caller.emit_stack_post_adjust(self.lower_ctx);

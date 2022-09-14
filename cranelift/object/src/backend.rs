@@ -315,11 +315,13 @@ impl Module for ObjectModule {
         info!("defining function {}: {}", func_id, ctx.func.display());
         let mut code: Vec<u8> = Vec::new();
 
-        ctx.compile_and_emit(self.isa(), &mut code)?;
+        let res = ctx.compile_and_emit(self.isa(), &mut code)?;
+        let alignment = res.alignment as u64;
 
         self.define_function_bytes(
             func_id,
             &ctx.func,
+            alignment,
             &code,
             ctx.compiled_code().unwrap().buffer.relocs(),
         )
@@ -329,6 +331,7 @@ impl Module for ObjectModule {
         &mut self,
         func_id: FuncId,
         func: &ir::Function,
+        alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction> {
@@ -349,7 +352,10 @@ impl Module for ObjectModule {
         }
         *defined = true;
 
-        let align = std::cmp::max(self.function_alignment, self.isa.symbol_alignment());
+        let align = self
+            .function_alignment
+            .max(self.isa.symbol_alignment())
+            .max(alignment);
         let (section, offset) = if self.per_function_section {
             let symbol_name = self.object.symbol(symbol).name.clone();
             let (section, offset) =

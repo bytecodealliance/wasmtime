@@ -35,6 +35,10 @@ impl V8Engine {
             bail!("memory64 not enabled by default in v8");
         }
 
+        if config.config.max_memories > 1 {
+            bail!("multi-memory not enabled by default in v8");
+        }
+
         Ok(Self {
             isolate: Rc::new(RefCell::new(v8::Isolate::new(Default::default()))),
         })
@@ -78,7 +82,7 @@ impl DiffEngine for V8Engine {
         }))
     }
 
-    fn assert_error_match(&self, wasmtime: &Trap, err: Error) {
+    fn assert_error_match(&self, wasmtime: &Trap, err: &Error) {
         let v8 = err.to_string();
         let wasmtime_msg = wasmtime.to_string();
         let verify_wasmtime = |msg: &str| {
@@ -147,6 +151,10 @@ impl DiffEngine for V8Engine {
         }
 
         verify_wasmtime("not possibly present in an error, just panic please");
+    }
+
+    fn is_stack_overflow(&self, err: &Error) -> bool {
+        err.to_string().contains("Maximum call stack size exceeded")
     }
 }
 

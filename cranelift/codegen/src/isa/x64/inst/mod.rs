@@ -100,6 +100,7 @@ impl Inst {
             | Inst::Nop { .. }
             | Inst::Pop64 { .. }
             | Inst::Push64 { .. }
+            | Inst::StackProbeLoop { .. }
             | Inst::Ret { .. }
             | Inst::Setcc { .. }
             | Inst::ShiftR { .. }
@@ -129,6 +130,7 @@ impl Inst {
             | Inst::XmmRmR { op, .. }
             | Inst::XmmRmRImm { op, .. }
             | Inst::XmmToGpr { op, .. }
+            | Inst::XmmUnaryRmRImm { op, .. }
             | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
 
             Inst::XmmUnaryRmREvex { op, .. }
@@ -896,6 +898,14 @@ impl PrettyPrint for Inst {
                 format!("{} {}, {}", ljustify(op.to_string()), src, dst)
             }
 
+            Inst::XmmUnaryRmRImm {
+                op, src, dst, imm, ..
+            } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), op.src_size(), allocs);
+                let src = src.pretty_print(op.src_size(), allocs);
+                format!("{} ${}, {}, {}", ljustify(op.to_string()), imm, src, dst)
+            }
+
             Inst::XmmUnaryRmREvex { op, src, dst, .. } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src = src.pretty_print(8, allocs);
@@ -1169,14 +1179,16 @@ impl PrettyPrint for Inst {
                 dst_size,
                 tmp_gpr,
                 tmp_xmm,
+                tmp_xmm2,
                 is_saturating,
             } => {
                 let src = pretty_print_reg(src.to_reg(), src_size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size.to_bytes(), allocs);
                 let tmp_gpr = pretty_print_reg(tmp_gpr.to_reg().to_reg(), 8, allocs);
                 let tmp_xmm = pretty_print_reg(tmp_xmm.to_reg().to_reg(), 8, allocs);
+                let tmp_xmm2 = pretty_print_reg(tmp_xmm2.to_reg().to_reg(), 8, allocs);
                 format!(
-                    "{} {}, {}, {}, {}",
+                    "{} {}, {}, {}, {}, {}",
                     ljustify(format!(
                         "cvt_float{}_to_uint{}{}_seq",
                         src_size.to_bits(),
@@ -1187,6 +1199,7 @@ impl PrettyPrint for Inst {
                     dst,
                     tmp_gpr,
                     tmp_xmm,
+                    tmp_xmm2,
                 )
             }
 
@@ -1416,6 +1429,21 @@ impl PrettyPrint for Inst {
             Inst::Push64 { src } => {
                 let src = src.pretty_print(8, allocs);
                 format!("{} {}", ljustify("pushq".to_string()), src)
+            }
+
+            Inst::StackProbeLoop {
+                tmp,
+                frame_size,
+                guard_size,
+            } => {
+                let tmp = pretty_print_reg(tmp.to_reg(), 8, allocs);
+                format!(
+                    "{} {}, frame_size={}, guard_size={}",
+                    ljustify("stack_probe_loop".to_string()),
+                    tmp,
+                    frame_size,
+                    guard_size
+                )
             }
 
             Inst::Pop64 { dst } => {
@@ -1702,7 +1730,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_def(dst.to_writable_reg());
             src.get_operands(collector);
         }
-        Inst::XmmUnaryRmR { src, dst, .. } | Inst::XmmUnaryRmREvex { src, dst, .. } => {
+        Inst::XmmUnaryRmR { src, dst, .. }
+        | Inst::XmmUnaryRmREvex { src, dst, .. }
+        | Inst::XmmUnaryRmRImm { src, dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
             src.get_operands(collector);
         }
@@ -1849,7 +1879,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             ..
         } => {
             collector.reg_use(src.to_reg());
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_early_def(dst.to_writable_reg());
             collector.reg_early_def(tmp_gpr1.to_writable_reg());
             collector.reg_early_def(tmp_gpr2.to_writable_reg());
         }
@@ -1859,18 +1889,25 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             tmp_xmm,
             tmp_gpr,
             ..
+        } => {
+            collector.reg_use(src.to_reg());
+            collector.reg_early_def(dst.to_writable_reg());
+            collector.reg_early_def(tmp_gpr.to_writable_reg());
+            collector.reg_early_def(tmp_xmm.to_writable_reg());
         }
-        | Inst::CvtFloatToUintSeq {
+        Inst::CvtFloatToUintSeq {
             src,
             dst,
             tmp_gpr,
             tmp_xmm,
+            tmp_xmm2,
             ..
         } => {
             collector.reg_use(src.to_reg());
-            collector.reg_def(dst.to_writable_reg());
+            collector.reg_early_def(dst.to_writable_reg());
             collector.reg_early_def(tmp_gpr.to_writable_reg());
             collector.reg_early_def(tmp_xmm.to_writable_reg());
+            collector.reg_early_def(tmp_xmm2.to_writable_reg());
         }
         Inst::MovzxRmR { src, dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
@@ -1934,6 +1971,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
         Inst::Pop64 { dst } => {
             collector.reg_def(dst.to_writable_reg());
+        }
+        Inst::StackProbeLoop { tmp, .. } => {
+            collector.reg_early_def(*tmp);
         }
 
         Inst::CallKnown { ref info, .. } => {

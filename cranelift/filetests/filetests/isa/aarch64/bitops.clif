@@ -245,11 +245,11 @@ block0(v0: i128):
 }
 
 ; block0:
-;   fmov d6, x0
-;   mov v6.d[1], x1
-;   cnt v19.16b, v6.16b
-;   addv b21, v19.16b
-;   umov w0, v21.b[0]
+;   fmov d7, x0
+;   mov v7.d[1], v7.d[1], x1
+;   cnt v18.16b, v7.16b
+;   addv b20, v18.16b
+;   umov w0, v20.b[0]
 ;   movz w1, #0
 ;   ret
 

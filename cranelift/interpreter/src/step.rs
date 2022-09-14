@@ -114,7 +114,28 @@ where
                     length => panic!("unexpected Shuffle mask length {}", length),
                 }
             }
-            _ => inst.imm_value().unwrap(),
+            InstructionData::UnaryBool { imm, .. } => DataValue::from(imm),
+            // 8-bit.
+            InstructionData::BinaryImm8 { imm, .. } | InstructionData::TernaryImm8 { imm, .. } => {
+                DataValue::from(imm as i8) // Note the switch from unsigned to signed.
+            }
+            // 32-bit
+            InstructionData::UnaryIeee32 { imm, .. } => DataValue::from(imm),
+            InstructionData::HeapAddr { imm, .. } => {
+                let imm: u32 = imm.into();
+                DataValue::from(imm as i32) // Note the switch from unsigned to signed.
+            }
+            InstructionData::Load { offset, .. }
+            | InstructionData::Store { offset, .. }
+            | InstructionData::StackLoad { offset, .. }
+            | InstructionData::StackStore { offset, .. }
+            | InstructionData::TableAddr { offset, .. } => DataValue::from(offset),
+            // 64-bit.
+            InstructionData::UnaryImm { imm, .. }
+            | InstructionData::BinaryImm64 { imm, .. }
+            | InstructionData::IntCompareImm { imm, .. } => DataValue::from(imm.bits()),
+            InstructionData::UnaryIeee64 { imm, .. } => DataValue::from(imm),
+            _ => unreachable!(),
         })
     };
 
@@ -533,7 +554,6 @@ where
         Opcode::F64const => assign(imm()),
         Opcode::Bconst => assign(imm()),
         Opcode::Vconst => assign(imm()),
-        Opcode::ConstAddr => unimplemented!("ConstAddr"),
         Opcode::Null => unimplemented!("Null"),
         Opcode::Nop => ControlFlow::Continue,
         Opcode::Select => choose(arg(0)?.into_bool()?, arg(1)?, arg(2)?),
@@ -1310,16 +1330,14 @@ where
         FloatCC::OrderedNotEqual => Value::lt(left, right)? || Value::gt(left, right)?,
         FloatCC::UnorderedOrEqual => Value::eq(left, right)? || Value::uno(left, right)?,
         FloatCC::LessThan => Value::lt(left, right)?,
-        FloatCC::LessThanOrEqual => Value::lt(left, right)? || Value::eq(left, right)?,
+        FloatCC::LessThanOrEqual => Value::le(left, right)?,
         FloatCC::GreaterThan => Value::gt(left, right)?,
-        FloatCC::GreaterThanOrEqual => Value::gt(left, right)? || Value::eq(left, right)?,
+        FloatCC::GreaterThanOrEqual => Value::ge(left, right)?,
         FloatCC::UnorderedOrLessThan => Value::uno(left, right)? || Value::lt(left, right)?,
-        FloatCC::UnorderedOrLessThanOrEqual => {
-            Value::uno(left, right)? || Value::lt(left, right)? || Value::eq(left, right)?
-        }
+        FloatCC::UnorderedOrLessThanOrEqual => Value::uno(left, right)? || Value::le(left, right)?,
         FloatCC::UnorderedOrGreaterThan => Value::uno(left, right)? || Value::gt(left, right)?,
         FloatCC::UnorderedOrGreaterThanOrEqual => {
-            Value::uno(left, right)? || Value::gt(left, right)? || Value::eq(left, right)?
+            Value::uno(left, right)? || Value::ge(left, right)?
         }
     })
 }

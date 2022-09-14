@@ -11,6 +11,7 @@ use crate::isa::riscv64::{inst::EmitState, inst::*};
 use crate::isa::CallConv;
 use crate::machinst::*;
 
+use crate::ir::types::I8;
 use crate::ir::LibCall;
 use crate::ir::Signature;
 use crate::isa::riscv64::settings::Flags as RiscvFlags;
@@ -608,6 +609,19 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             || num_clobbered_callee_saves > 0
         || fixed_frame_storage_size > 0
     }
+
+    fn gen_inline_probestack(frame_size: u32, guard_size: u32) -> SmallInstVec<Self::I> {
+        // Unroll at most n consecutive probes, before falling back to using a loop
+        const PROBE_MAX_UNROLL: u32 = 3;
+        // Number of probes that we need to perform
+        let probe_count = align_to(frame_size, guard_size) / guard_size;
+
+        if probe_count <= PROBE_MAX_UNROLL {
+            Self::gen_probestack_unroll(guard_size, probe_count)
+        } else {
+            Self::gen_probestack_loop(guard_size, probe_count)
+        }
+    }
 }
 
 const CALLER_SAVE_X_REG: [bool; 32] = [
@@ -658,4 +672,26 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
         }
     }
     align_to(clobbered_size, 16)
+}
+
+impl Riscv64MachineDeps {
+    fn gen_probestack_unroll(guard_size: u32, probe_count: u32) -> SmallInstVec<Inst> {
+        let mut insts = SmallVec::with_capacity(probe_count as usize);
+        for i in 0..probe_count {
+            let offset = (guard_size * (i + 1)) as i64;
+            insts.push(Self::gen_store_stack(
+                StackAMode::SPOffset(-offset, I8),
+                zero_reg(),
+                I32,
+            ));
+        }
+        insts
+    }
+    fn gen_probestack_loop(guard_size: u32, probe_count: u32) -> SmallInstVec<Inst> {
+        smallvec![Inst::StackProbeLoop {
+            guard_size,
+            probe_count,
+            tmp: Writable::from_reg(x_reg(28)), // t3
+        }]
+    }
 }

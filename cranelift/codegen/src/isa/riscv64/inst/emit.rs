@@ -2835,6 +2835,61 @@ impl MachInstEmit for Inst {
                 }
                 sink.bind_label(label_done);
             }
+            &Inst::StackProbeLoop {
+                guard_size,
+                probe_count,
+                tmp: guard_size_tmp,
+            } => {
+                let step = writable_spilltmp_reg();
+                Inst::load_constant_u64(step, (guard_size as u64) * (probe_count as u64))
+                    .iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                Inst::load_constant_u64(guard_size_tmp, guard_size as u64)
+                    .iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+
+                let loop_start = sink.get_label();
+                let label_done = sink.get_label();
+                sink.bind_label(loop_start);
+                Inst::CondBr {
+                    taken: BranchTarget::Label(label_done),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::UnsignedLessThanOrEqual,
+                        rs1: step.to_reg(),
+                        rs2: guard_size_tmp.to_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+                // compute address.
+                Inst::AluRRR {
+                    alu_op: AluOPRRR::Sub,
+                    rd: writable_spilltmp_reg2(),
+                    rs1: stack_reg(),
+                    rs2: step.to_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::Store {
+                    to: AMode::RegOffset(spilltmp_reg2(), 0, I8),
+                    op: StoreOP::Sb,
+                    flags: MemFlags::new(),
+                    src: zero_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
+                // reset step.
+                Inst::AluRRR {
+                    alu_op: AluOPRRR::Sub,
+                    rd: step,
+                    rs1: step.to_reg(),
+                    rs2: guard_size_tmp.to_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::Jal {
+                    dest: BranchTarget::Label(loop_start),
+                }
+                .emit(&[], sink, emit_info, state);
+                sink.bind_label(label_done);
+            }
         };
         let end_off = sink.cur_offset();
         assert!(
