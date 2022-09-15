@@ -46,7 +46,6 @@ jobs:
           git checkout wasmtime/pull/${{ github.ref_name }} -b ${{ github.ref_name }}
           git submodule update --init --recursive
           git checkout -b wasmtime/${{ github.ref }}/${{ github.sha }}
-          sudo apt install jq
           export commit_url=${{ github.event.pull_request._links.commits.href }}
           echo $commit_url
           echo $(curl -sSL $commit_url | jq -r '.[].commit.committer.name' | tail -n 1)
