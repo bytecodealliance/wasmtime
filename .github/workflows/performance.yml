@@ -70,15 +70,13 @@ jobs:
           git checkout ${{env.SG_COMMIT}}
           cargo build --release
 
-      - name: Checkout patch from bytecodealliance/wasmtime
+      - name: Checkout patch from bytecodealliance/wasmtime (pushed and triggering on this perf repo)
         uses: actions/checkout@v3
         with:
           submodules: true
-          repository: ${{ env.repository }}
-          ref: ${{ env.event.ref_name }}
           path: wasmtime_commit
 
-      - name: Build patch from bytecodealliance/wasmtime
+      - name: Build patch from bytecodealliance/wasmtime (pushed and triggering on this perf repo)
         working-directory: ./wasmtime_commit
         run: |
           cargo build --release -p wasmtime-bench-api
