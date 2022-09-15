@@ -36,7 +36,6 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
         }
     }
 
-
     #[cfg(not(feature = "overlap-errors"))]
     {
         use crate::log;
