@@ -154,9 +154,7 @@ jobs:
 
       - name: Publish Results
         run: |
-          echo ${{ secrets.TOKEN }}
-          echo ${{ github.event.head_commit.message }}
           curl -X POST -H "Accept: application/vnd.github.v3+json" \
-          -H "Authorization: token ${{ secrets.TOKEN }}" \
+          -H "Authorization: token ${{ secrets.WASMTIME_PUBLISHING_TOKEN }}" \
           ${{ github.event.head_commit.message }} \
           -d '{"body": ${{ toJSON(steps.get-comment-body.outputs.body) }}}'
