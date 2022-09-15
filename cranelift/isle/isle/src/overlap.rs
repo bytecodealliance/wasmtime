@@ -131,7 +131,7 @@ impl Errors {
 
 /// Check for overlapping rules within individual priority groups.
 fn check_overlap_groups(errs: &mut Errors, env: &Env, term: &Term) {
-    let rows: Vec<Row> = env
+    let rows: Vec<_> = env
         .rules_for_term(term.id)
         .into_iter()
         .map(|id| Row::from_rule(env, id))
@@ -164,7 +164,9 @@ fn check_overlap_groups(errs: &mut Errors, env: &Env, term: &Term) {
 
     // Process conflicts sequentially.
     for (l, r) in conflicts {
-        errs.add_edge(l, r);
+        if env.get_rule(l).prio == env.get_rule(r).prio {
+            errs.add_edge(l, r);
+        }
     }
 }
 
