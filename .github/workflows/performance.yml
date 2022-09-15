@@ -9,8 +9,6 @@ name: "Performance Testing"
 on:
   pull_request_review:
     types: [submitted, edited]
-  pull_request_review_comment:
-    types: [created, edited]
   push:
 
 # Env variables
