@@ -564,6 +564,157 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Call, &[], &[], insert_call),
 ];
 
+type BlockTerminator = fn(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    source_block: Block,
+) -> Result<()>;
+
+fn insert_return(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    _source_block: Block,
+) -> Result<()> {
+    let types: Vec<Type> = {
+        let rets = &builder.func.signature.returns;
+        rets.iter().map(|p| p.value_type).collect()
+    };
+    let vals = fgen.generate_values_for_signature(builder, types.into_iter())?;
+
+    builder.ins().return_(&vals[..]);
+    Ok(())
+}
+
+fn insert_jump(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    source_block: Block,
+) -> Result<()> {
+    let (block, args) = fgen.generate_target_block(builder, source_block)?;
+    builder.ins().jump(block, &args[..]);
+    Ok(())
+}
+
+/// Generates a br_table into a random block
+fn insert_br_table(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    source_block: Block,
+) -> Result<()> {
+    let var = fgen.get_variable_of_type(I32)?; // br_table only supports I32
+    let val = builder.use_var(var);
+
+    let target_blocks = fgen.resources.forward_blocks_without_params(source_block);
+    let default_block = *fgen.u.choose(target_blocks)?;
+
+    // We can still select a backwards branching jump table here!
+    let tables = fgen.resources.forward_jump_tables(builder, source_block);
+    let jt = *fgen.u.choose(&tables[..])?;
+    builder.ins().br_table(val, default_block, jt);
+    Ok(())
+}
+
+/// Generates a brz/brnz into a random block
+fn insert_br(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    source_block: Block,
+) -> Result<()> {
+    let (block, args) = fgen.generate_target_block(builder, source_block)?;
+
+    let condbr_types = [I8, I16, I32, I64, I128, B1];
+    let _type = *fgen.u.choose(&condbr_types[..])?;
+    let var = fgen.get_variable_of_type(_type)?;
+    let val = builder.use_var(var);
+
+    if bool::arbitrary(fgen.u)? {
+        builder.ins().brz(val, block, &args[..]);
+    } else {
+        builder.ins().brnz(val, block, &args[..]);
+    }
+
+    // After brz/brnz we must generate a jump
+    insert_jump(fgen, builder, source_block)?;
+    Ok(())
+}
+
+fn insert_bricmp(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    source_block: Block,
+) -> Result<()> {
+    let (block, args) = fgen.generate_target_block(builder, source_block)?;
+
+    let cc = *fgen.u.choose(IntCC::all())?;
+    let _type = *fgen.u.choose(&[I8, I16, I32, I64, I128])?;
+
+    let lhs_var = fgen.get_variable_of_type(_type)?;
+    let lhs_val = builder.use_var(lhs_var);
+
+    let rhs_var = fgen.get_variable_of_type(_type)?;
+    let rhs_val = builder.use_var(rhs_var);
+
+    builder
+        .ins()
+        .br_icmp(cc, lhs_val, rhs_val, block, &args[..]);
+
+    // After bricmp's we must generate a jump
+    insert_jump(fgen, builder, source_block)?;
+    Ok(())
+}
+
+fn insert_switch(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    source_block: Block,
+) -> Result<()> {
+    let _type = *fgen.u.choose(&[I8, I16, I32, I64, I128][..])?;
+    let switch_var = fgen.get_variable_of_type(_type)?;
+    let switch_val = builder.use_var(switch_var);
+
+    // TODO: We should also generate backwards branches in switches
+    let default_block = {
+        let target_blocks = fgen.resources.forward_blocks_without_params(source_block);
+        *fgen.u.choose(target_blocks)?
+    };
+
+    // Build this into a HashMap since we cannot have duplicate entries.
+    let mut entries = HashMap::new();
+    for _ in 0..fgen.param(&fgen.config.switch_cases)? {
+        // The Switch API only allows for entries that are addressable by the index type
+        // so we need to limit the range of values that we generate.
+        let (ty_min, ty_max) = _type.bounds(false);
+        let range_start = fgen.u.int_in_range(ty_min..=ty_max)?;
+
+        // We can either insert a contiguous range of blocks or a individual block
+        // This is done because the Switch API specializes contiguous ranges.
+        let range_size = if bool::arbitrary(fgen.u)? {
+            1
+        } else {
+            fgen.param(&fgen.config.switch_max_range_size)?
+        } as u128;
+
+        // Build the switch entries
+        for i in 0..range_size {
+            let index = range_start.wrapping_add(i) % ty_max;
+            let block = {
+                let target_blocks = fgen.resources.forward_blocks_without_params(source_block);
+                *fgen.u.choose(target_blocks)?
+            };
+
+            entries.insert(index, block);
+        }
+    }
+
+    let mut switch = Switch::new();
+    for (entry, block) in entries.into_iter() {
+        switch.set_entry(entry, block);
+    }
+    switch.emit(builder, switch_val, default_block);
+
+    Ok(())
+}
+
 /// These libcalls need a interpreter implementation in `cranelift-fuzzgen.rs`
 const ALLOWED_LIBCALLS: &'static [LibCall] = &[
     LibCall::CeilF32,
@@ -591,6 +742,44 @@ struct Resources {
     jump_tables: Vec<JumpTable>,
     func_refs: Vec<(Signature, FuncRef)>,
     stack_slots: Vec<(StackSlot, StackSize)>,
+}
+
+impl Resources {
+    /// Returns [JumpTable]'s where all blocks are forward of `block`
+    fn forward_jump_tables(&self, builder: &FunctionBuilder, block: Block) -> Vec<JumpTable> {
+        // TODO: We can avoid allocating a Vec here by sorting self.jump_tables based
+        // on the minimum block and returning a slice based on that.
+        // See https://github.com/bytecodealliance/wasmtime/pull/4894#discussion_r971241430 for more details
+
+        // Unlike with the blocks below jump table targets are not ordered, thus we do need
+        // to allocate a Vec here.
+        let jump_tables = &builder.func.jump_tables;
+        self.jump_tables
+            .iter()
+            .copied()
+            .filter(|jt| jump_tables[*jt].iter().all(|target| *target > block))
+            .collect()
+    }
+
+    /// Partitions blocks at `block`. Only blocks that can be targeted by branches are considered.
+    ///
+    /// The first slice includes all blocks up to and including `block`.
+    /// The second slice includes all remaining blocks.
+    fn partition_target_blocks(
+        &self,
+        block: Block,
+    ) -> (&[(Block, BlockSignature)], &[(Block, BlockSignature)]) {
+        // Blocks are stored in-order and have no gaps, this means that we can simply index them by
+        // their number. We also need to exclude the entry block since it isn't a valid target.
+        let target_blocks = &self.blocks[1..];
+        target_blocks.split_at(block.as_u32() as usize)
+    }
+
+    /// Generates a slice of `blocks_without_params` ahead of `block`
+    fn forward_blocks_without_params(&self, block: Block) -> &[Block] {
+        let partition_point = self.blocks_without_params.partition_point(|b| *b <= block);
+        &self.blocks_without_params[partition_point..]
+    }
 }
 
 impl<'r, 'data> FunctionGenerator<'r, 'data>
@@ -758,8 +947,20 @@ where
     fn generate_target_block(
         &mut self,
         builder: &mut FunctionBuilder,
+        source_block: Block,
     ) -> Result<(Block, Vec<Value>)> {
-        let block_targets = &self.resources.blocks[1..];
+        // We try to mostly generate forward branches to avoid generating an excessive amount of
+        // infinite loops. But they are still important, so give them a small chance of existing.
+        let (backwards_blocks, forward_blocks) =
+            self.resources.partition_target_blocks(source_block);
+        let ratio = self.config.backwards_branch_ratio;
+        let block_targets = if !backwards_blocks.is_empty() && self.u.ratio(ratio.0, ratio.1)? {
+            backwards_blocks
+        } else {
+            forward_blocks
+        };
+        assert!(!block_targets.is_empty());
+
         let (block, signature) = self.u.choose(block_targets)?.clone();
         let args = self.generate_values_for_signature(builder, signature.into_iter())?;
         Ok((block, args))
@@ -779,131 +980,50 @@ where
             .collect()
     }
 
-    fn generate_return(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let types: Vec<Type> = {
-            let rets = &builder.func.signature.returns;
-            rets.iter().map(|p| p.value_type).collect()
-        };
-        let vals = self.generate_values_for_signature(builder, types.into_iter())?;
-
-        builder.ins().return_(&vals[..]);
-        Ok(())
-    }
-
-    fn generate_jump(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let (block, args) = self.generate_target_block(builder)?;
-        builder.ins().jump(block, &args[..]);
-        Ok(())
-    }
-
-    /// Generates a br_table into a random block
-    fn generate_br_table(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let var = self.get_variable_of_type(I32)?; // br_table only supports I32
-        let val = builder.use_var(var);
-
-        let default_block = *self.u.choose(&self.resources.blocks_without_params)?;
-
-        let jt = *self.u.choose(&self.resources.jump_tables)?;
-        builder.ins().br_table(val, default_block, jt);
-        Ok(())
-    }
-
-    /// Generates a brz/brnz into a random block
-    fn generate_br(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let (block, args) = self.generate_target_block(builder)?;
-
-        let condbr_types = [I8, I16, I32, I64, I128, B1];
-        let _type = *self.u.choose(&condbr_types[..])?;
-        let var = self.get_variable_of_type(_type)?;
-        let val = builder.use_var(var);
-
-        if bool::arbitrary(self.u)? {
-            builder.ins().brz(val, block, &args[..]);
-        } else {
-            builder.ins().brnz(val, block, &args[..]);
-        }
-
-        // After brz/brnz we must generate a jump
-        self.generate_jump(builder)?;
-        Ok(())
-    }
-
-    fn generate_bricmp(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let (block, args) = self.generate_target_block(builder)?;
-
-        let cc = *self.u.choose(IntCC::all())?;
-        let _type = *self.u.choose(&[I8, I16, I32, I64, I128])?;
-
-        let lhs_var = self.get_variable_of_type(_type)?;
-        let lhs_val = builder.use_var(lhs_var);
-
-        let rhs_var = self.get_variable_of_type(_type)?;
-        let rhs_val = builder.use_var(rhs_var);
-
-        builder
-            .ins()
-            .br_icmp(cc, lhs_val, rhs_val, block, &args[..]);
-
-        // After bricmp's we must generate a jump
-        self.generate_jump(builder)?;
-        Ok(())
-    }
-
-    fn generate_switch(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let _type = *self.u.choose(&[I8, I16, I32, I64, I128][..])?;
-        let switch_var = self.get_variable_of_type(_type)?;
-        let switch_val = builder.use_var(switch_var);
-
-        let default_block = *self.u.choose(&self.resources.blocks_without_params)?;
-
-        // Build this into a HashMap since we cannot have duplicate entries.
-        let mut entries = HashMap::new();
-        for _ in 0..self.param(&self.config.switch_cases)? {
-            // The Switch API only allows for entries that are addressable by the index type
-            // so we need to limit the range of values that we generate.
-            let (ty_min, ty_max) = _type.bounds(false);
-            let range_start = self.u.int_in_range(ty_min..=ty_max)?;
-
-            // We can either insert a contiguous range of blocks or a individual block
-            // This is done because the Switch API specializes contiguous ranges.
-            let range_size = if bool::arbitrary(self.u)? {
-                1
-            } else {
-                self.param(&self.config.switch_max_range_size)?
-            } as u128;
-
-            // Build the switch entries
-            for i in 0..range_size {
-                let index = range_start.wrapping_add(i) % ty_max;
-                let block = *self.u.choose(&self.resources.blocks_without_params)?;
-                entries.insert(index, block);
-            }
-        }
-
-        let mut switch = Switch::new();
-        for (entry, block) in entries.into_iter() {
-            switch.set_entry(entry, block);
-        }
-        switch.emit(builder, switch_val, default_block);
-
-        Ok(())
-    }
-
     /// We always need to exit safely out of a block.
     /// This either means a jump into another block or a return.
-    fn finalize_block(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let gen = self.u.choose(
-            &[
-                Self::generate_bricmp,
-                Self::generate_br,
-                Self::generate_br_table,
-                Self::generate_jump,
-                Self::generate_return,
-                Self::generate_switch,
-            ][..],
-        )?;
+    fn finalize_block(&mut self, builder: &mut FunctionBuilder, source_block: Block) -> Result<()> {
+        let has_jump_tables = !self
+            .resources
+            .forward_jump_tables(builder, source_block)
+            .is_empty();
 
-        gen(self, builder)
+        let has_forward_blocks = {
+            let (_, forward_blocks) = self.resources.partition_target_blocks(source_block);
+            !forward_blocks.is_empty()
+        };
+
+        let has_forward_blocks_without_params = !self
+            .resources
+            .forward_blocks_without_params(source_block)
+            .is_empty();
+
+        let terminators: &[(BlockTerminator, bool)] = &[
+            // Return is always a valid option
+            (insert_return, true),
+            // If we have forward blocks, we can allow generating jumps and branches
+            (insert_jump, has_forward_blocks),
+            (insert_br, has_forward_blocks),
+            (insert_bricmp, has_forward_blocks),
+            // Switches can only use blocks without params
+            (insert_switch, has_forward_blocks_without_params),
+            // We need both jump tables and a default block for br_table
+            (
+                insert_br_table,
+                has_jump_tables && has_forward_blocks_without_params,
+            ),
+        ];
+
+        let terminators: Vec<_> = terminators
+            .into_iter()
+            .filter(|(_, valid)| *valid)
+            .map(|(term, _)| term)
+            .collect();
+
+        let inserter = self.u.choose(&terminators[..])?;
+        inserter(self, builder, source_block)?;
+
+        Ok(())
     }
 
     /// Fills the current block with random instructions
@@ -917,6 +1037,11 @@ where
     }
 
     fn generate_jumptables(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
+        // We shouldn't try to generate jumptables if we don't have any valid targets!
+        if self.resources.blocks_without_params.is_empty() {
+            return Ok(());
+        }
+
         for _ in 0..self.param(&self.config.jump_tables_per_function)? {
             let mut jt_data = JumpTableData::new();
 
@@ -1010,18 +1135,15 @@ where
     }
 
     /// Creates a random amount of blocks in this function
-    fn generate_blocks(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        sig: &Signature,
-    ) -> Result<Vec<(Block, BlockSignature)>> {
+    fn generate_blocks(&mut self, builder: &mut FunctionBuilder, sig: &Signature) -> Result<()> {
         let extra_block_count = self.param(&self.config.blocks_per_function)?;
 
         // We must always have at least one block, so we generate the "extra" blocks and add 1 for
         // the entry block.
         let block_count = 1 + extra_block_count;
 
-        (0..block_count)
+        // Blocks need to be sorted in ascending order
+        self.resources.blocks = (0..block_count)
             .map(|i| {
                 let is_entry = i == 0;
                 let block = builder.create_block();
@@ -1046,7 +1168,17 @@ where
                     Ok((block, sig))
                 }
             })
-            .collect()
+            .collect::<Result<Vec<_>>>()?;
+
+        // Valid blocks for jump tables have to have no parameters in the signature, and must also
+        // not be the first block.
+        self.resources.blocks_without_params = self.resources.blocks[1..]
+            .iter()
+            .filter(|(_, sig)| sig.len() == 0)
+            .map(|(b, _)| *b)
+            .collect();
+
+        Ok(())
     }
 
     fn generate_block_signature(&mut self) -> Result<BlockSignature> {
@@ -1110,15 +1242,7 @@ where
 
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
 
-        self.resources.blocks = self.generate_blocks(&mut builder, &sig)?;
-
-        // Valid blocks for jump tables have to have no parameters in the signature, and must also
-        // not be the first block.
-        self.resources.blocks_without_params = self.resources.blocks[1..]
-            .iter()
-            .filter(|(_, sig)| sig.len() == 0)
-            .map(|(b, _)| *b)
-            .collect();
+        self.generate_blocks(&mut builder, &sig)?;
 
         // Function preamble
         self.generate_jumptables(&mut builder)?;
@@ -1126,9 +1250,9 @@ where
         self.generate_stack_slots(&mut builder)?;
 
         // Main instruction generation loop
-        for (i, (block, block_sig)) in self.resources.blocks.clone().iter().enumerate() {
-            let is_block0 = i == 0;
-            builder.switch_to_block(*block);
+        for (block, block_sig) in self.resources.blocks.clone().into_iter() {
+            let is_block0 = block.as_u32() == 0;
+            builder.switch_to_block(block);
 
             if is_block0 {
                 // The first block is special because we must create variables both for the
@@ -1143,7 +1267,7 @@ where
                 // Define variables for the block params
                 for (i, ty) in block_sig.iter().enumerate() {
                     let var = self.get_variable_of_type(*ty)?;
-                    let block_param = builder.block_params(*block)[i];
+                    let block_param = builder.block_params(block)[i];
                     builder.def_var(var, block_param);
                 }
             }
@@ -1151,7 +1275,7 @@ where
             // Generate block instructions
             self.generate_instructions(&mut builder)?;
 
-            self.finalize_block(&mut builder)?;
+            self.finalize_block(&mut builder, block)?;
         }
 
         builder.seal_all_blocks();
