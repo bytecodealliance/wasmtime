@@ -85,6 +85,10 @@ fuzz_target!(|testcase: TestCase| {
         let mut builder = settings::builder();
         // We need llvm ABI extensions for i128 values on x86
         builder.set("enable_llvm_abi_extensions", "true").unwrap();
+
+        // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
+        builder.set("enable_verifier", "true").unwrap();
+
         settings::Flags::new(builder)
     };
     let mut compiler = TestFileCompiler::with_host_isa(flags).unwrap();
