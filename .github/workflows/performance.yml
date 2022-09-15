@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       (github.event_name == 'pull_request_review') &&
-      (startsWith(github.event.review.body, '/bench_x64')) &&
+      (contains(github.event.review.body, '/bench_x64')) &&
       (('abrown' == github.event.review.user.login)
         || ('afonso360' == github.event.review.user.login)
         || ('akirilov-arm' == github.event.review.user.login)
