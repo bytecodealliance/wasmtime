@@ -1514,7 +1514,12 @@ impl TermEnv {
                         /* is_root = */ false,
                     ));
                     expected_ty = expected_ty.or(Some(ty));
-                    children.push(subpat);
+
+                    // Normalize nested `And` nodes to a single vector of conjuncts.
+                    match subpat {
+                        Pattern::And(_, subpat_children) => children.extend(subpat_children),
+                        _ => children.push(subpat),
+                    }
                 }
                 if expected_ty.is_none() {
                     tyenv.report_error(pos, "No type for (and ...) form.".to_string());
