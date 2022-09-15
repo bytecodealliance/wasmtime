@@ -141,5 +141,5 @@ impl WasiCtxBuilder {
 }
 
 pub fn random_ctx() -> Box<dyn RngCore + Send + Sync> {
-    Box::new(cap_rand::rngs::OsRng::default(ambient_authority()))
+    Box::new(cap_rand::std_rng_from_entropy(cap_rand::ambient_authority()))
 }

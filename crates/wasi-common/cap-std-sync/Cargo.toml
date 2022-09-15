@@ -18,7 +18,7 @@ anyhow = "1.0"
 cap-std = "0.25.0"
 cap-fs-ext = "0.25.0"
 cap-time-ext = "0.25.0"
-cap-rand = "0.25.0"
+cap-rand = "0.25.3"
 fs-set-times = "0.17.0"
 system-interface = { version = "0.22.0", features = ["cap_std_impls"] }
 tracing = "0.1.19"
