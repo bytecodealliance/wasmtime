@@ -1922,6 +1922,7 @@ pub(crate) fn f64_bits(f: f64) -> u64 {
     u64::from_le_bytes(f.to_le_bytes())
 }
 
+///
 pub(crate) fn f32_cvt_to_int_bounds(signed: bool, out_bits: u8) -> (f32, f32) {
     match (signed, out_bits) {
         (true, 8) => (i8::min_value() as f32 - 1., i8::max_value() as f32 + 1.),

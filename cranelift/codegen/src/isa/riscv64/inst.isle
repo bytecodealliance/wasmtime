@@ -2134,6 +2134,20 @@
   )
 )
 
+(rule
+  (lower_uadd_overflow x y (fits_in_32 ty))
+  (let
+    (
+      ;;
+      (tmp_x Reg (ext_int_if_need $false x ty))
+      (tmp_y Reg (ext_int_if_need $false y ty))
+      ;;;
+      (sum Reg (alu_add tmp_x tmp_y))
+    )
+    ;; 
+    (alu_srli sum (ty_bits ty))
+  )
+)
 
 (decl inst_output_get (InstOutput u8) ValueRegs)
 (extern constructor inst_output_get inst_output_get)
@@ -2377,3 +2391,18 @@
 
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
+
+;;; this is trying to imitate aarch64 `madd` instruction.
+(decl madd(Reg Reg Reg)Reg)
+(rule 
+  (madd n m a) 
+  (let
+    (
+      (t Reg (alu_rrr (AluOPRRR.Mul) n m))
+    )
+    (alu_add t a)
+  )
+)
+(decl umulh(Reg Reg)Reg)
+(rule (umulh a b)
+  (alu_rrr (AluOPRRR.Mulhu) a b))
