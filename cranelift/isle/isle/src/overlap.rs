@@ -19,7 +19,7 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
             // The only isle declaration that currently produces overlap is constructors whose
             // definition is entirely in isle.
             if env.is_internal_constructor(term.id) {
-                errs.union(check_overlap_groups(&env, term))
+                errs.union(check_overlap(&env, term))
             } else {
                 errs
             }
@@ -47,7 +47,7 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
 /// A node in the error graph.
 #[derive(Default)]
 struct Node {
-    /// `true` entries where an edge exists to the node at that index.
+    /// Other rules that this one overlaps with.
     edges: HashSet<RuleId>,
 }
 
@@ -63,16 +63,15 @@ impl Node {
     }
 }
 
-/// A graph of all the rules in the isle source, with bi-directional edges between rules that are
-/// discovered to have overlap problems.
+/// A graph of rules that overlap in the ISLE source. The edges are undirected.
 #[derive(Default)]
 struct Errors {
-    /// Edges between rules indicating overlap. As the edges are not directed, the edges are
-    /// normalized by ordering the rule ids.
+    /// Edges between rules indicating overlap.
     nodes: HashMap<RuleId, Node>,
 }
 
 impl Errors {
+    /// Merge together two Error graphs.
     fn union(mut self, other: Self) -> Self {
         for (id, node) in other.nodes {
             self.nodes.entry(id).or_default().edges.extend(node.edges);
@@ -80,7 +79,10 @@ impl Errors {
         self
     }
 
-    /// Condense the overlap information down into individual errors.
+    /// Condense the overlap information down into individual errors. We iteratively remove the
+    /// nodes from the graph with the highest degree, reporting errors for them and their direct
+    /// connections. The goal with reporting errors this way is to prefer reporting rules that
+    /// overlap with many others first, and then report other more targeted overlaps later.
     fn report(&mut self, env: &Env) -> Vec<Error> {
         let mut errors = Vec::new();
 
@@ -139,8 +141,10 @@ impl Errors {
     }
 }
 
-/// Check for overlapping rules within individual priority groups.
-fn check_overlap_groups(env: &Env, term: &Term) -> Errors {
+/// Determine if any rules that rewrite the given term overlap in the input that they accept. This
+/// checkes every unique pair of rules, as checking rules in aggregate tends to suffer from
+/// exponential explosion in the presence of wildcard patterns.
+fn check_overlap(env: &Env, term: &Term) -> Errors {
     let rows: Vec<_> = env
         .rules_for_term(term.id)
         .into_iter()
@@ -160,7 +164,7 @@ fn check_overlap_groups(env: &Env, term: &Term) -> Errors {
         .fold(Errors::default, |mut errs, (left, right)| {
             let lid = left.rule;
             let rid = right.rule;
-            if check_overlap(env, left.clone(), right.clone()) {
+            if check_overlap_pair(env, left.clone(), right.clone()) {
                 if env.get_rule(lid).prio == env.get_rule(rid).prio {
                     errs.add_edge(lid, rid);
                 }
@@ -170,8 +174,8 @@ fn check_overlap_groups(env: &Env, term: &Term) -> Errors {
         .reduce(Errors::default, Errors::union)
 }
 
-/// Check for overlapping rules within a single priority group.
-fn check_overlap(env: &Env, mut left: Row, mut right: Row) -> bool {
+/// Check if two rules overlap in the inputs they accept.
+fn check_overlap_pair(env: &Env, mut left: Row, mut right: Row) -> bool {
     while !left.is_empty() {
         // drop leading wildcards from both
         while !left.is_empty() && left.front().is_wildcard() && right.front().is_wildcard() {
@@ -323,7 +327,7 @@ impl Pattern {
     /// 3. [`sema::Pattern::Term`] instances are turned into either [`Pattern::Variant`] or
     ///    [`Pattern::Extractor`] cases depending on their term kind.
     /// 4. [`sema::Pattern::And`] instances are sorted to ensure that we can traverse them quickly
-    ///    when specializing the matrix.
+    ///    when specializing them.
     fn from_sema(env: &Env, binds: &mut Vec<(VarId, Pattern)>, pat: &sema::Pattern) -> Self {
         match pat {
             sema::Pattern::BindPattern(_, id, pat) => {
@@ -501,7 +505,7 @@ impl Pattern {
     }
 }
 
-/// A single row in the pattern matrix.
+/// The patterns of a rule turned into a work-queue for overlap checking.
 #[derive(Debug, Clone)]
 struct Row {
     pats: Vec<Pattern>,
