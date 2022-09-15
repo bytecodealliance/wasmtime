@@ -12,7 +12,7 @@ use crate::sema::{
 /// Check for overlap.
 pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
     let env = Env::new(tyenv, termenv);
-    let mut errors = termenv
+    let errors = termenv
         .terms
         .par_iter()
         .fold(Errors::default, |errs, term| {
@@ -26,20 +26,16 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
         })
         .reduce(Errors::default, Errors::union);
 
-    #[cfg(feature = "overlap-errors")]
-    {
-        let mut errors = errors.report(&env);
+    let mut errors = errors.report(&env);
+    if cfg!(feature = "overlap-errors") {
         match errors.len() {
             0 => Ok(()),
             1 => Err(errors.pop().unwrap()),
             _ => Err(Error::Errors(errors)),
         }
-    }
-
-    #[cfg(not(feature = "overlap-errors"))]
-    {
+    } else {
         use crate::log;
-        log!("found {} overlap errors", errors.report(&env).len());
+        log!("found {} overlap errors", errors.len());
         Ok(())
     }
 }
@@ -83,7 +79,7 @@ impl Errors {
     /// nodes from the graph with the highest degree, reporting errors for them and their direct
     /// connections. The goal with reporting errors this way is to prefer reporting rules that
     /// overlap with many others first, and then report other more targeted overlaps later.
-    fn report(&mut self, env: &Env) -> Vec<Error> {
+    fn report(mut self, env: &Env) -> Vec<Error> {
         let mut errors = Vec::new();
 
         let get_info = |id| {
