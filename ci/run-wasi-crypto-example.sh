@@ -4,6 +4,9 @@ set -e
 
 RUST_BINDINGS="crates/wasi-crypto/spec/implementations/bindings/rust"
 pushd "$RUST_BINDINGS"
+rustup toolchain install nightly
+rustup override set nightly
+rustup target add wasm32-wasi
 cargo build --release --target=wasm32-wasi
 popd
 
