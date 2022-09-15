@@ -171,7 +171,7 @@ fn check_overlap_groups(env: &Env, term: &Term) -> Errors {
         .reduce(Errors::default, Errors::union)
 }
 
-/// Check for overlapping rules within a single prioirty group.
+/// Check for overlapping rules within a single priority group.
 fn check_overlap(env: &Env, mut left: Row, mut right: Row) -> bool {
     while !left.is_empty() {
         // drop leading wildcards from both
@@ -478,7 +478,7 @@ impl Pattern {
         }
     }
 
-    /// Assuming that this is an and-pattern, extract the sub-pattern that matches the template and
+    /// If this pattern is an and-pattern, extract the sub-pattern that matches the template and
     /// remove it from `self`. This operation is used when specializing columns that contain
     /// and-patterns to another pattern, leaning on the assumption that the and-pattern matches if
     /// any of its sub-patterns also match.
