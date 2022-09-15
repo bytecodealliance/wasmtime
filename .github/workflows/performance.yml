@@ -135,7 +135,10 @@ jobs:
           sed -i -z 's/\n/|\n/g' /tmp/results_cycles_summarized_sorted2.csv
           sed -i '2 i\ |-|-|-|-|' /tmp/results_cycles_summarized_sorted2.csv
           sed -i '/main/d' /tmp/results_cycles_summarized_sorted2.csv
-          sed -i '1 i\ Patch improvement over main HEAD (x64). Negative shows reduction pct (improvement).\n' /tmp/results_cycles_summarized_sorted2.csv
+          sed -i '1 i\ Shows pct_change on x64 for patch if merged compared to head for main.\n \
+          Pct_change is based on clocktick event cycles where the benchmarks are run in Sightglass.\n \
+          A negative pct_change for example means clockticks would be expected to be reduced for the benchmark, \
+          for that phase, and by that factor, if the patch were merged (i.e. negative is good).\n' /tmp/results_cycles_summarized_sorted2.csv
 
       - name: Print Results
         run: cat /tmp/results_cycles_summarized_sorted2.csv
