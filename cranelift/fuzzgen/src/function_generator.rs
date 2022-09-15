@@ -747,6 +747,10 @@ struct Resources {
 impl Resources {
     /// Returns [JumpTable]'s where all blocks are forward of `block`
     fn forward_jump_tables(&self, builder: &FunctionBuilder, block: Block) -> Vec<JumpTable> {
+        // TODO: We can avoid allocating a Vec here by sorting self.jump_tables based
+        // on the minimum block and returning a slice based on that.
+        // See https://github.com/bytecodealliance/wasmtime/pull/4894#discussion_r971241430 for more details
+
         // Unlike with the blocks below jump table targets are not ordered, thus we do need
         // to allocate a Vec here.
         let jump_tables = &builder.func.jump_tables;
