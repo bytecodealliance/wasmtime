@@ -757,18 +757,18 @@ impl Resources {
             .collect()
     }
 
-    /// Partitions blocks at `block`
+    /// Partitions blocks at `block`. Only blocks that can be targeted by branches are considered.
     ///
     /// The first slice includes all blocks up to and including `block`.
     /// The second slice includes all remaining blocks.
-    fn partition_blocks(
+    fn partition_target_blocks(
         &self,
         block: Block,
     ) -> (&[(Block, BlockSignature)], &[(Block, BlockSignature)]) {
         // Blocks are stored in-order and have no gaps, this means that we can simply index them by
-        // their number
-        let partition_point = block.as_u32() as usize + 1;
-        self.blocks.split_at(partition_point)
+        // their number. We also need to exclude the entry block since it isn't a valid target.
+        let target_blocks = &self.blocks[1..];
+        target_blocks.split_at(block.as_u32() as usize)
     }
 
     /// Generates a slice of `blocks_without_params` ahead of `block`
@@ -947,7 +947,8 @@ where
     ) -> Result<(Block, Vec<Value>)> {
         // We try to mostly generate forward branches to avoid generating an excessive amount of
         // infinite loops. But they are still important, so give them a small chance of existing.
-        let (backwards_blocks, forward_blocks) = self.resources.partition_blocks(source_block);
+        let (backwards_blocks, forward_blocks) =
+            self.resources.partition_target_blocks(source_block);
         let ratio = self.config.backwards_branch_ratio;
         let block_targets = if !backwards_blocks.is_empty() && self.u.ratio(ratio.0, ratio.1)? {
             backwards_blocks
@@ -984,7 +985,7 @@ where
             .is_empty();
 
         let has_forward_blocks = {
-            let (_, forward_blocks) = self.resources.partition_blocks(source_block);
+            let (_, forward_blocks) = self.resources.partition_target_blocks(source_block);
             !forward_blocks.is_empty()
         };
 
