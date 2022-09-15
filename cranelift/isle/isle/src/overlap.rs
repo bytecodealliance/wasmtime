@@ -23,17 +23,13 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
         check_overlap_groups(&mut errors, &env, term);
     }
 
-    if !errors.is_empty() {
-        errors.graphviz(&env);
-        panic!("");
-        let mut errors = errors.report(&env);
-        return match errors.len() {
-            1 => Err(errors.pop().unwrap()),
-            _ => Err(Error::Errors(std::mem::take(&mut errors))),
-        };
+    errors.graphviz(&env);
+    let mut errors = errors.report(&env);
+    match errors.len() {
+        0 => Ok(()),
+        1 => Err(errors.pop().unwrap()),
+        _ => Err(Error::Errors(errors)),
     }
-
-    Ok(())
 }
 
 /// A node in the error graph.
@@ -143,11 +139,6 @@ impl Errors {
         }
 
         components
-    }
-
-    /// True when there are no edges in the graph.
-    fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
     }
 
     /// Condense the overlap information down into individual errors.
