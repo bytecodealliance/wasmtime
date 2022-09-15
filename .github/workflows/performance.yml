@@ -5,7 +5,7 @@ name: "Performance Testing"
 
 # Controls when the action will run.
 # This workflow runs when manually triggered by keywords used in the start of a review comment
-# Currently that phrase is /bench_x64. /bench_aarch64 and /bench_both are TODOs.
+# Currently that phrase is /bench_x64. /bench_aarch64 and /bench_all are TODOs.
 on:
   pull_request_review:
     types: [submitted, edited]
