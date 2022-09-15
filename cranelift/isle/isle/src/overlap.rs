@@ -100,9 +100,16 @@ impl Errors {
             .copied()
             .max_by_key(|id| self.nodes[id].edges.len())
         {
-            let node = self.remove_edges(id);
+            let node = self.nodes.remove(&id).unwrap();
+
             if node.edges.is_empty() {
                 break;
+            }
+
+            for other in node.edges.iter() {
+                if let Some(other) = self.nodes.get_mut(&other) {
+                    other.remove_edge(id);
+                }
             }
 
             // build the real error
@@ -117,20 +124,6 @@ impl Errors {
         }
 
         errors
-    }
-
-    /// Remove all the edges for this rule in the graph, returning the original `Node` contents for
-    /// further processing.
-    fn remove_edges(&mut self, id: RuleId) -> Node {
-        let node = self.nodes.remove(&id).unwrap();
-
-        for other in node.edges.iter() {
-            if let Some(other) = self.nodes.get_mut(&other) {
-                other.remove_edge(id);
-            }
-        }
-
-        node
     }
 
     /// Add a bidirectional edge between two rules in the graph.
