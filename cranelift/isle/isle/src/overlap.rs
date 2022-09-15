@@ -26,11 +26,22 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
         })
         .reduce(Errors::default, Errors::union);
 
-    let mut errors = errors.report(&env);
-    match errors.len() {
-        0 => Ok(()),
-        1 => Err(errors.pop().unwrap()),
-        _ => Err(Error::Errors(errors)),
+    #[cfg(feature = "overlap-errors")]
+    {
+        let mut errors = errors.report(&env);
+        match errors.len() {
+            0 => Ok(()),
+            1 => Err(errors.pop().unwrap()),
+            _ => Err(Error::Errors(errors)),
+        }
+    }
+
+
+    #[cfg(not(feature = "overlap-errors"))]
+    {
+        use crate::log;
+        log!("found {} overlap errors", errors.report(&env).len());
+        Ok(())
     }
 }
 
