@@ -12,18 +12,20 @@ use crate::sema::{
 /// Check for overlap.
 pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
     let env = Env::new(tyenv, termenv);
-    let mut errors = Errors::new();
-    for term in termenv.terms.iter() {
-        // The only isle declaration that currently produces overlap is constructors whose
-        // definition is entirely in isle.
-        if !env.is_internal_constructor(term.id) {
-            continue;
-        }
+    let mut errors = termenv
+        .terms
+        .par_iter()
+        .fold(Errors::default, |mut errs, term| {
+            // The only isle declaration that currently produces overlap is constructors whose
+            // definition is entirely in isle.
+            if env.is_internal_constructor(term.id) {
+                check_overlap_groups(&mut errs, &env, term);
+            }
 
-        check_overlap_groups(&mut errors, &env, term);
-    }
+            errs
+        })
+        .reduce(Errors::default, Errors::union);
 
-    errors.graphviz(&env);
     let mut errors = errors.report(&env);
     match errors.len() {
         0 => Ok(()),
@@ -33,22 +35,13 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
 }
 
 /// A node in the error graph.
+#[derive(Default)]
 struct Node {
-    component: Option<usize>,
-
     /// `true` entries where an edge exists to the node at that index.
     edges: HashSet<RuleId>,
 }
 
 impl Node {
-    /// Make a new `Node` in the error graph with the given number of total nodes.
-    fn new() -> Self {
-        Self {
-            component: None,
-            edges: HashSet::new(),
-        }
-    }
-
     /// Add an edge between this node and the other node.
     fn add_edge(&mut self, other: RuleId) {
         self.edges.insert(other);
@@ -62,6 +55,7 @@ impl Node {
 
 /// A graph of all the rules in the isle source, with bi-directional edges between rules that are
 /// discovered to have overlap problems.
+#[derive(Default)]
 struct Errors {
     /// Edges between rules indicating overlap. As the edges are not directed, the edges are
     /// normalized by ordering the rule ids.
@@ -69,94 +63,15 @@ struct Errors {
 }
 
 impl Errors {
-    /// Make a new `Errors` graph for collecting overlap information.
-    fn new() -> Self {
-        Self {
-            nodes: HashMap::new(),
+    fn union(mut self, other: Self) -> Self {
+        for (id, node) in other.nodes {
+            self.nodes.entry(id).or_default().edges.extend(node.edges);
         }
-    }
-
-    fn graphviz(&mut self, env: &Env) {
-        let mut comps = self.components(env);
-
-        comps.sort_by_key(|(_, comp)| std::cmp::Reverse(comp.len()));
-
-        for (_, comp) in comps.into_iter() {
-            println!("graph {{");
-            for a in comp {
-                let node = &self.nodes[&a];
-                for b in node.edges.iter() {
-                    if *b > a {
-                        println!(
-                            "{} -- {} // {} -- {}",
-                            env.get_rule(a).pos.line,
-                            env.get_rule(*b).pos.line,
-                            a.0,
-                            b.0
-                        );
-                    }
-                }
-            }
-            println!("}}");
-        }
-    }
-
-    /// Label components
-    fn components(&mut self, env: &Env) -> Vec<(usize, Vec<RuleId>)> {
-        let mut components = Vec::new();
-        let mut work = Vec::new();
-
-        let keys: Vec<_> = self.nodes.keys().copied().collect();
-
-        for id in keys {
-            if self.nodes[&id].component.is_some() {
-                continue;
-            }
-
-            if self.nodes[&id].edges.is_empty() {
-                continue;
-            }
-
-            let comp = components.len();
-            let mut component = Vec::new();
-
-            work.clear();
-            work.push(id);
-            while let Some(other) = work.pop() {
-                if let Some(other_comp) = self.nodes[&other].component {
-                    assert!(comp == other_comp);
-                    continue;
-                }
-
-                self.nodes.get_mut(&other).unwrap().component = Some(comp);
-                component.push(other);
-
-                work.extend(self.nodes[&other].edges.iter());
-            }
-
-            component.sort();
-            components.push((comp, component));
-        }
-
-        components
+        self
     }
 
     /// Condense the overlap information down into individual errors.
     fn report(&mut self, env: &Env) -> Vec<Error> {
-        let mut rules: Vec<_> = self
-            .nodes
-            .iter()
-            .filter_map(|(id, node)| {
-                if node.edges.is_empty() {
-                    None
-                } else {
-                    Some(*id)
-                }
-            })
-            .collect();
-
-        rules.sort_by_cached_key(|id| self.nodes[id].edges.len());
-
         let mut errors = Vec::new();
 
         let get_info = |id| {
@@ -167,11 +82,15 @@ impl Errors {
             (src, span)
         };
 
-        // Work backwards through the ids to find the nodes with the largest conflict first.
-        for id in rules.into_iter().rev() {
+        while let Some(id) = self
+            .nodes
+            .keys()
+            .copied()
+            .max_by_key(|id| self.nodes[id].edges.len())
+        {
             let node = self.remove_edges(id);
             if node.edges.is_empty() {
-                continue;
+                break;
             }
 
             // build the real error
@@ -205,8 +124,8 @@ impl Errors {
     /// Add a bidirectional edge between two rules in the graph.
     fn add_edge(&mut self, a: RuleId, b: RuleId) {
         // edges are undirected
-        self.nodes.entry(a).or_insert_with(Node::new).add_edge(b);
-        self.nodes.entry(b).or_insert_with(Node::new).add_edge(a);
+        self.nodes.entry(a).or_default().add_edge(b);
+        self.nodes.entry(b).or_default().add_edge(a);
     }
 }
 
