@@ -47,9 +47,6 @@ jobs:
           git submodule update --init --recursive
           git checkout -b wasmtime/${{ github.ref }}/${{ github.sha }}
           export commit_url=${{ github.event.pull_request._links.commits.href }}
-          echo $commit_url
-          echo $(curl -sSL $commit_url | jq -r '.[].commit.committer.name' | tail -n 1)
-          echo $(curl -sSL $commit_url | jq -r '.[].commit.committer.email' | tail -n 1)
           git config user.name $(curl -sSL $commit_url | jq -r '.[].commit.committer.name' | tail -n 1)
           git config user.email $(curl -sSL $commit_url | jq -r '.[].commit.committer.email' | tail -n 1)
           git commit --allow-empty -m "${{ github.event.pull_request._links.comments.href }}"
