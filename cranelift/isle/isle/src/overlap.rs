@@ -15,14 +15,14 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
     let mut errors = termenv
         .terms
         .par_iter()
-        .fold(Errors::default, |mut errs, term| {
+        .fold(Errors::default, |errs, term| {
             // The only isle declaration that currently produces overlap is constructors whose
             // definition is entirely in isle.
             if env.is_internal_constructor(term.id) {
-                check_overlap_groups(&mut errs, &env, term);
+                errs.union(check_overlap_groups(&env, term))
+            } else {
+                errs
             }
-
-            errs
         })
         .reduce(Errors::default, Errors::union);
 
@@ -130,7 +130,7 @@ impl Errors {
 }
 
 /// Check for overlapping rules within individual priority groups.
-fn check_overlap_groups(errs: &mut Errors, env: &Env, term: &Term) {
+fn check_overlap_groups(env: &Env, term: &Term) -> Errors {
     let rows: Vec<_> = env
         .rules_for_term(term.id)
         .into_iter()
@@ -144,30 +144,20 @@ fn check_overlap_groups(errs: &mut Errors, env: &Env, term: &Term) {
         pairs.extend(rest.iter().map(|other| (row, other)));
     }
 
-    if pairs.is_empty() {
-        return;
-    }
-
     // Process rule pairs in parallel
-    let conflicts: Vec<_> = pairs
+    pairs
         .into_par_iter()
-        .filter_map(|(left, right)| {
+        .fold(Errors::default, |mut errs, (left, right)| {
             let lid = left.rule;
             let rid = right.rule;
             if check_overlap(env, left.clone(), right.clone()) {
-                Some((lid, rid))
-            } else {
-                None
+                if env.get_rule(lid).prio == env.get_rule(rid).prio {
+                    errs.add_edge(lid, rid);
+                }
             }
+            errs
         })
-        .collect();
-
-    // Process conflicts sequentially.
-    for (l, r) in conflicts {
-        if env.get_rule(l).prio == env.get_rule(r).prio {
-            errs.add_edge(l, r);
-        }
-    }
+        .reduce(Errors::default, Errors::union)
 }
 
 /// Check for overlapping rules within a single prioirty group.
