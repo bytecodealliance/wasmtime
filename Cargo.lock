@@ -234,9 +234,9 @@ checksum = "c4872d67bab6358e59559027aa3b9157c53d9358c51423c17554809a8858e0f8"
 
 [[package]]
 name = "cap-fs-ext"
-version = "0.25.0"
+version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "337ddae0c23990d98099a34db274fda588a3ddf89e1961aa2d3ae08d4572b746"
+checksum = "438ca7f5bb15c799ea146429e4f8b7bfd25ff1eb05319024549a7728de45800c"
 dependencies = [
  "cap-primitives",
  "cap-std",
@@ -246,12 +246,11 @@ dependencies = [
 
 [[package]]
 name = "cap-primitives"
-version = "0.25.0"
+version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c13977868250c3102a1737c766c0fe0abea4c9d64b60566b55e3df084a46eb6"
+checksum = "ba063daa90ed40882bb288ac4ecaa942d655d15cf74393d41d2267b5d7daf120"
 dependencies = [
  "ambient-authority",
- "errno",
  "fs-set-times",
  "io-extras",
  "io-lifetimes",
@@ -265,9 +264,9 @@ dependencies = [
 
 [[package]]
 name = "cap-rand"
-version = "0.25.0"
+version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff1aa052bd5af24e9d1ad26db37c4bed43e45494366a03321f05beeafaf99bdb"
+checksum = "c720808e249f0ae846ec647fe48cef3cea67e4e5026cf869c041c278b7dcae45"
 dependencies = [
  "ambient-authority",
  "rand 0.8.5",
@@ -275,9 +274,9 @@ dependencies = [
 
 [[package]]
 name = "cap-std"
-version = "0.25.0"
+version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9dc3bec032b93533630adb5cd0e05f4eac5475bf3e9edafc562ccbc44fd5db06"
+checksum = "0e3a603c9f3bd2181ed128ab3cd32fbde7cff76afc64a3576662701c4aee7e2b"
 dependencies = [
  "cap-primitives",
  "io-extras",
@@ -288,9 +287,9 @@ dependencies = [
 
 [[package]]
 name = "cap-tempfile"
-version = "0.25.0"
+version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e19d4852b4185065d0744d225fb961a79165f5a6dedfee9175457fbfd1a9bbb"
+checksum = "86d435f791da84cb800b98a1de48d145a08e70d8172d335e87446c79b17bfbf3"
 dependencies = [
  "cap-std",
  "rand 0.8.5",
@@ -300,9 +299,9 @@ dependencies = [
 
 [[package]]
 name = "cap-time-ext"
-version = "0.25.0"
+version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0486425152c6e3e45528baa8edff1c37e82056cb2105a82836989679b6509326"
+checksum = "da76e64f3e46f8c8479e392a7fe3faa2e76b8c1cea4618bae445276fdec12082"
 dependencies = [
  "cap-primitives",
  "once_cell",
