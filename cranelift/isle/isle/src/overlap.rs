@@ -289,7 +289,6 @@ enum Pattern {
     /// Enum variant constructors.
     Variant {
         id: TermId,
-        single_case: bool,
         pats: Vec<Pattern>,
     },
 
@@ -369,19 +368,14 @@ impl Pattern {
             sema::Pattern::ConstInt(_, value) => Pattern::Int { value: *value },
             sema::Pattern::ConstPrim(_, name) => Pattern::Const { name: *name },
 
-            sema::Pattern::Term(ty, id, pats) => {
+            sema::Pattern::Term(_, id, pats) => {
                 let pats = pats
                     .iter()
                     .map(|pat| Pattern::from_sema(env, binds, pat))
                     .collect();
 
                 match &env.get_term(*id).kind {
-                    TermKind::EnumVariant { .. } => Pattern::Variant {
-                        id: *id,
-                        single_case: env.is_single_constructor_enum(*ty),
-                        pats,
-                    },
-
+                    TermKind::EnumVariant { .. } => Pattern::Variant { id: *id, pats },
                     TermKind::Decl { .. } => Pattern::Extractor { id: *id, pats },
                 }
             }
