@@ -183,17 +183,23 @@ where
         // the interpreter won't get that version, so call that pass manually here.
 
         let mut ctx = Context::for_function(func);
-        // Assume that we are generating this function for the current ISA
-        // this is only used for the verifier after `canonicalize_nans` so
-        // it's not too important.
-        let flags = settings::Flags::new(settings::builder());
+        // Assume that we are generating this function for the current ISA.
+        // We disable the verifier here, since if it fails it prevents a test case from
+        // being generated and formatted by `cargo fuzz fmt`.
+        // We run the verifier before compiling the code, so it always gets verified.
+        let flags = settings::Flags::new({
+            let mut builder = settings::builder();
+            builder.set("enable_verifier", "false").unwrap();
+            builder
+        });
+
         let isa = builder_with_options(false)
             .expect("Unable to build a TargetIsa for the current host")
             .finish(flags)
             .expect("Failed to build TargetISA");
 
         ctx.canonicalize_nans(isa.as_ref())
-            .expect("Failed validation after NaN canonicalization");
+            .expect("Failed NaN canonicalization pass");
 
         ctx.func
     }
