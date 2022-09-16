@@ -506,16 +506,16 @@ impl Row {
     fn from_rule(env: &Env, rule: RuleId) -> Row {
         if let sema::Pattern::Term(_, _, vars) = &env.get_rule(rule).lhs {
             let mut binds = Vec::new();
-            Self {
-                // NOTE: the patterns are reversed so that it's easier to manipulate the leading
-                // column of the row by pushing/popping the pats vector.
-                pats: vars
-                    .iter()
-                    .rev()
-                    .map(|pat| Pattern::from_sema(env, &mut binds, pat))
-                    .collect(),
-                rule,
-            }
+            let mut pats: Vec<_> = vars
+                .iter()
+                .map(|pat| Pattern::from_sema(env, &mut binds, pat))
+                .collect();
+
+            // NOTE: the patterns are reversed so that it's easier to manipulate the leading
+            // column of the row by pushing/popping the pats vector.
+            pats.reverse();
+
+            Self { pats, rule }
         } else {
             panic!("Constructing a Row from a malformed rule")
         }
