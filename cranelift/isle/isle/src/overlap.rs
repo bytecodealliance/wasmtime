@@ -5,8 +5,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::error::{Error, Result, Source, Span};
 use crate::sema::{
-    self, ConstructorKind, Rule, RuleId, Sym, Term, TermEnv, TermId, TermKind, Type, TypeEnv,
-    TypeId, VarId,
+    self, ConstructorKind, Rule, RuleId, Sym, Term, TermEnv, TermId, TermKind, TypeEnv, VarId,
 };
 
 /// Check for overlap.
@@ -15,15 +14,7 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
     let errors = termenv
         .terms
         .par_iter()
-        .fold(Errors::default, |errs, term| {
-            // The only isle declaration that currently produces overlap is constructors whose
-            // definition is entirely in isle.
-            if env.is_internal_constructor(term.id) {
-                errs.union(check_overlap(&env, term))
-            } else {
-                errs
-            }
-        })
+        .map(|term| check_overlap(&env, term))
         .reduce(Errors::default, Errors::union);
 
     let mut errors = errors.report(&env);
@@ -134,11 +125,19 @@ impl Errors {
 /// checkes every unique pair of rules, as checking rules in aggregate tends to suffer from
 /// exponential explosion in the presence of wildcard patterns.
 fn check_overlap(env: &Env, term: &Term) -> Errors {
-    let rows: Vec<_> = env
-        .rules_for_term(term.id)
-        .into_iter()
-        .map(|id| Row::from_rule(env, id))
-        .collect();
+    // The only isle declaration that currently produces overlap is constructors whose definition
+    // is entirely in isle.
+    if !matches!(
+        term.kind,
+        TermKind::Decl {
+            constructor_kind: Some(ConstructorKind::InternalConstructor),
+            ..
+        }
+    ) {
+        return Errors::default();
+    }
+
+    let rows = env.rules_for_term(term.id);
 
     let mut pairs = Vec::new();
     let mut cursor = &rows[..];
@@ -150,12 +149,10 @@ fn check_overlap(env: &Env, term: &Term) -> Errors {
     // Process rule pairs in parallel
     pairs
         .into_par_iter()
-        .fold(Errors::default, |mut errs, (left, right)| {
-            let lid = left.rule;
-            let rid = right.rule;
-            if check_overlap_pair(env, left.clone(), right.clone()) {
-                if env.get_rule(lid).prio == env.get_rule(rid).prio {
-                    errs.add_edge(lid, rid);
+        .fold(Errors::default, |mut errs, ((lid, left), (rid, right))| {
+            if env.get_rule(*lid).prio == env.get_rule(*rid).prio {
+                if check_overlap_pair(left, right) {
+                    errs.add_edge(*lid, *rid);
                 }
             }
             errs
@@ -164,37 +161,77 @@ fn check_overlap(env: &Env, term: &Term) -> Errors {
 }
 
 /// Check if two rules overlap in the inputs they accept.
-fn check_overlap_pair(env: &Env, mut left: Row, mut right: Row) -> bool {
-    while !left.is_empty() {
-        // drop leading wildcards from both
-        while !left.is_empty() && left.front().is_wildcard() && right.front().is_wildcard() {
-            left.pop();
-            right.pop();
-        }
+fn check_overlap_pair(a: &[Pattern], b: &[Pattern]) -> bool {
+    debug_assert_eq!(a.len(), b.len());
+    let mut worklist: Vec<_> = a.iter().zip(b.iter()).collect();
 
-        if left.is_empty() {
-            break;
-        }
+    while let Some((a, b)) = worklist.pop() {
+        // Checking the cross-product of two and-patterns is O(n*m). Merging sorted lists or
+        // hash-maps might be faster in practice, but:
+        // - The alternatives are not asymptotically faster, because in theory all the subpatterns
+        //   might have the same extractor or enum variant, and in that case any approach has to
+        //   check all of the cross-product combinations anyway.
+        // - It's easier to reason about this doubly-nested loop than about merging sorted lists or
+        //   picking the right hash keys.
+        // - These lists are always so small that performance doesn't matter.
+        for a in a.as_and_subpatterns() {
+            for b in b.as_and_subpatterns() {
+                let overlap = match (a, b) {
+                    (Pattern::Int { value: a }, Pattern::Int { value: b }) => a == b,
+                    (Pattern::Const { name: a }, Pattern::Const { name: b }) => a == b,
 
-        // pick the best pattern from the leading column of the two rows
-        let lr = left.leading_pattern();
-        let rr = right.leading_pattern();
+                    // if it's the same variant or same extractor, check all pairs of subterms
+                    (
+                        Pattern::Variant {
+                            id: a,
+                            pats: a_pats,
+                        },
+                        Pattern::Variant {
+                            id: b,
+                            pats: b_pats,
+                        },
+                    )
+                    | (
+                        Pattern::Extractor {
+                            id: a,
+                            pats: a_pats,
+                        },
+                        Pattern::Extractor {
+                            id: b,
+                            pats: b_pats,
+                        },
+                    ) if a == b => {
+                        debug_assert_eq!(a_pats.len(), b_pats.len());
+                        worklist.extend(a_pats.iter().zip(b_pats.iter()));
+                        true
+                    }
 
-        let pat = if lr < rr { lr.1.clone() } else { rr.1.clone() };
+                    // different variants of the same enum definitely do not overlap
+                    (Pattern::Variant { .. }, Pattern::Variant { .. }) => false,
 
-        if lr.0 || rr.0 {
-            left.specialize_and_patterns(&pat);
-            right.specialize_and_patterns(&pat);
-        }
+                    // an extractor which does not exactly match the other pattern might overlap
+                    (Pattern::Extractor { .. }, _) | (_, Pattern::Extractor { .. }) => true,
 
-        // specialize both rows on that pattern, and if specialization fails we know the two don't
-        // overlap.
-        if !left.specialize(env, &pat) || !right.specialize(env, &pat) {
-            return false;
+                    // a wildcard definitely overlaps
+                    (Pattern::Wildcard, _) | (_, Pattern::Wildcard) => true,
+
+                    // these patterns can only be paired with patterns of the same type, or
+                    // wildcards or extractors, and all those cases are covered above
+                    (Pattern::Int { .. } | Pattern::Const { .. } | Pattern::Variant { .. }, _) => {
+                        unreachable!()
+                    }
+
+                    // and-patterns don't reach here due to as_and_subpatterns
+                    (Pattern::And { .. }, _) => unreachable!(),
+                };
+
+                if !overlap {
+                    return false;
+                }
+            }
         }
     }
-
-    return true;
+    true
 }
 
 /// A convenience wrapper around the `TypeEnv` and `TermEnv` environments.
@@ -209,11 +246,6 @@ impl<'a> Env<'a> {
         Self { tyenv, termenv }
     }
 
-    /// Fetch the string associated with a symbol.
-    fn get_sym(&self, id: Sym) -> &str {
-        &self.tyenv.syms[id.0]
-    }
-
     /// Fetch the rule associated with this id.
     fn get_rule(&self, id: RuleId) -> &Rule {
         &self.termenv.rules[id.0]
@@ -224,11 +256,6 @@ impl<'a> Env<'a> {
         &self.termenv.terms[id.0]
     }
 
-    /// Fetch the tyep associated with this id.
-    fn get_type(&self, id: TypeId) -> &Type {
-        &self.tyenv.types[id.0]
-    }
-
     /// Fetch source information for a file id.
     fn get_source(&self, file: usize) -> Source {
         Source::new(
@@ -237,44 +264,31 @@ impl<'a> Env<'a> {
         )
     }
 
-    /// True when this term represents a constructor implemented in isle.
-    fn is_internal_constructor(&self, id: TermId) -> bool {
-        match self.get_term(id).kind {
-            TermKind::Decl {
-                constructor_kind: Some(ConstructorKind::InternalConstructor),
-                ..
-            } => true,
-            _ => false,
-        }
-    }
-
     /// The ids of all [`Rule`]s defined for this term.
-    fn rules_for_term(&self, id: TermId) -> Vec<RuleId> {
+    fn rules_for_term(&self, id: TermId) -> Vec<(RuleId, Vec<Pattern>)> {
         self.termenv
             .rules
             .iter()
             .filter_map(|rule| {
-                if let sema::Pattern::Term(_, tid, _) = rule.lhs {
-                    if tid == id {
-                        return Some(rule.id);
+                if let sema::Pattern::Term(_, tid, vars) = &rule.lhs {
+                    if *tid == id {
+                        let mut binds = Vec::new();
+                        return Some((
+                            rule.id,
+                            vars.iter()
+                                .map(|pat| Pattern::from_sema(self, &mut binds, pat))
+                                .collect(),
+                        ));
                     }
                 }
                 None
             })
             .collect()
     }
-
-    /// Returns true when this type is an enum with only a single constructor.
-    fn is_single_constructor_enum(&self, ty: TypeId) -> bool {
-        match self.get_type(ty) {
-            Type::Primitive(_, _, _) => false,
-            Type::Enum { variants, .. } => variants.len() == 1,
-        }
-    }
 }
 
 /// A version of [`sema::Pattern`] with some simplifications to make overlap checking easier.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Debug, Clone)]
 enum Pattern {
     /// Integer literal patterns.
     Int {
@@ -292,7 +306,7 @@ enum Pattern {
         pats: Vec<Pattern>,
     },
 
-    /// And patterns, with their sub-patterns sorted.
+    /// Conjunctions of patterns.
     And {
         pats: Vec<Pattern>,
     },
@@ -314,8 +328,6 @@ impl Pattern {
     ///    would have introduced equalities with
     /// 3. [`sema::Pattern::Term`] instances are turned into either [`Pattern::Variant`] or
     ///    [`Pattern::Extractor`] cases depending on their term kind.
-    /// 4. [`sema::Pattern::And`] instances are sorted to ensure that we can traverse them quickly
-    ///    when specializing them.
     fn from_sema(env: &Env, binds: &mut Vec<(VarId, Pattern)>, pat: &sema::Pattern) -> Self {
         match pat {
             sema::Pattern::BindPattern(_, id, pat) => {
@@ -331,9 +343,10 @@ impl Pattern {
                         // spine of related patterns only, so more specific information about
                         // individual values isn't necessarily helpful; we consider overlap
                         // checking to be an over-approximation of overlapping rules, so handling
-                        // equalies ends up being best-effort. As an approximation, we use whatever
-                        // pattern happened to be at the binding of the variable for all of the
-                        // cases where it's used for equality. For example, in the following rule:
+                        // equalities ends up being best-effort. As an approximation, we use
+                        // whatever pattern happened to be at the binding of the variable for all
+                        // of the cases where it's used for equality. For example, in the following
+                        // rule:
                         //
                         // > (rule (example x @ (Enum.Variant y) x) ...)
                         //
@@ -368,317 +381,38 @@ impl Pattern {
             sema::Pattern::ConstInt(_, value) => Pattern::Int { value: *value },
             sema::Pattern::ConstPrim(_, name) => Pattern::Const { name: *name },
 
-            sema::Pattern::Term(_, id, pats) => {
+            &sema::Pattern::Term(_, id, ref pats) => {
                 let pats = pats
                     .iter()
                     .map(|pat| Pattern::from_sema(env, binds, pat))
                     .collect();
 
-                match &env.get_term(*id).kind {
-                    TermKind::EnumVariant { .. } => Pattern::Variant { id: *id, pats },
-                    TermKind::Decl { .. } => Pattern::Extractor { id: *id, pats },
+                match &env.get_term(id).kind {
+                    TermKind::EnumVariant { .. } => Pattern::Variant { id, pats },
+                    TermKind::Decl { .. } => Pattern::Extractor { id, pats },
                 }
             }
 
             sema::Pattern::Wildcard(_) => Pattern::Wildcard,
 
             sema::Pattern::And(_, pats) => {
-                let mut pats: Vec<Pattern> = pats
+                let pats = pats
                     .iter()
                     .map(|pat| Pattern::from_sema(env, binds, pat))
                     .collect();
-
-                if pats.len() == 1 {
-                    pats.pop().unwrap()
-                } else {
-                    pats.sort_unstable();
-                    Pattern::And { pats }
-                }
+                Pattern::And { pats }
             }
         }
     }
 
-    /// True when this pattern is a wildcard.
-    fn is_wildcard(&self) -> bool {
-        match self {
-            Pattern::Wildcard => true,
-            _ => false,
-        }
-    }
-
-    /// True when this pattern is an extractor.
-    fn is_extractor(&self) -> Option<TermId> {
-        match self {
-            Pattern::Extractor { id, .. } => Some(*id),
-            _ => None,
-        }
-    }
-
-    /// True when this pattern is an and-pattern.
-    fn is_and(&self) -> bool {
-        match self {
-            Pattern::And { .. } => true,
-            _ => false,
-        }
-    }
-
-    /// For `Variant` and `Extractor` this is the number of arguments, otherwise it is `1`.
-    fn arity(&self) -> usize {
-        match self {
-            Pattern::Variant { pats, .. } => pats.len(),
-            Pattern::Extractor { pats, .. } => pats.len(),
-            _ => 1,
-        }
-    }
-
-    /// Returns `true` for `Variant` or `Extractor`, as these are the two cases that can be
-    /// expanded into sub-patterns.
-    fn can_expand(&self) -> bool {
-        match self {
-            Pattern::Variant { .. } => true,
-            Pattern::Extractor { .. } => true,
-            _ => false,
-        }
-    }
-
-    /// Returns `true` if this pattern could match one of the concrete patterns specified by
-    /// `other`. NOTE: this is intentionally a shallow match, and any sub-patterns of `other` are
-    /// intentionally ignored. We're only interested in the most top-level overlap between these
-    /// patterns here.
-    fn match_concrete(&self, other: &Pattern) -> bool {
-        match (self, other) {
-            // these are the cases where we know enough to say definitively yes or no
-            (Pattern::Int { value: left }, Pattern::Int { value: right }) => left == right,
-            (Pattern::Const { name: left }, Pattern::Const { name: right }) => left == right,
-            (Pattern::Variant { id: left, .. }, Pattern::Variant { id: right, .. }) => {
-                left == right
-            }
-
-            (Pattern::Extractor { id: left, .. }, Pattern::Extractor { id: right, .. }) => {
-                left == right
-            }
-
-            (Pattern::And { pats }, _) => pats.iter().rev().any(|pat| pat.match_concrete(other)),
-
-            _ => false,
-        }
-    }
-
-    /// If this pattern is an and-pattern, extract the sub-pattern that matches the template and
-    /// remove it from `self`. This operation is used when specializing columns that contain
-    /// and-patterns to another pattern, leaning on the assumption that the and-pattern matches if
-    /// any of its sub-patterns also match.
-    fn extract_matching(&mut self, template: &Pattern) -> Option<Pattern> {
+    /// If this is an and-pattern, return its subpatterns. Otherwise pretend like there's an
+    /// and-pattern which has this as its only subpattern, and return self as a single-element
+    /// slice.
+    fn as_and_subpatterns(&self) -> &[Pattern] {
         if let Pattern::And { pats } = self {
-            for i in 0..pats.len() {
-                if pats[i].match_concrete(template) {
-                    let res = pats.remove(i);
-
-                    // if the and has only a single element left, collapse it
-                    if pats.len() == 1 {
-                        *self = pats.remove(0);
-                    }
-
-                    return Some(res);
-                }
-            }
-        }
-
-        None
-    }
-}
-
-/// The patterns of a rule turned into a work-queue for overlap checking.
-#[derive(Debug, Clone)]
-struct Row {
-    pats: Vec<Pattern>,
-    rule: RuleId,
-}
-
-impl Row {
-    /// Construct a rule from this rule id.
-    fn from_rule(env: &Env, rule: RuleId) -> Row {
-        if let sema::Pattern::Term(_, _, vars) = &env.get_rule(rule).lhs {
-            let mut binds = Vec::new();
-            let mut pats: Vec<_> = vars
-                .iter()
-                .map(|pat| Pattern::from_sema(env, &mut binds, pat))
-                .collect();
-
-            // NOTE: the patterns are reversed so that it's easier to manipulate the leading
-            // column of the row by pushing/popping the pats vector.
-            pats.reverse();
-
-            Self { pats, rule }
+            pats
         } else {
-            panic!("Constructing a Row from a malformed rule")
+            std::slice::from_ref(self)
         }
-    }
-
-    /// A row is empty when its pattern vector is empty.
-    fn is_empty(&self) -> bool {
-        self.pats.is_empty()
-    }
-
-    /// The pattern from the first column of this row.
-    fn front(&self) -> &Pattern {
-        assert!(!self.pats.is_empty());
-        self.pats.last().unwrap()
-    }
-
-    /// A mutable reference to the pattern from the first column of this row.
-    fn front_mut(&mut self) -> &mut Pattern {
-        assert!(!self.pats.is_empty());
-        self.pats.last_mut().unwrap()
-    }
-
-    /// Push a new pattern on the front of this row.
-    fn push(&mut self, pat: Pattern) {
-        self.pats.push(pat);
-    }
-
-    /// Pop the pattern from the front of the row.
-    fn pop(&mut self) -> Pattern {
-        assert!(!self.pats.is_empty());
-        self.pats.pop().unwrap()
-    }
-
-    fn leading_pattern(&self) -> (bool, &Pattern) {
-        assert!(!self.is_empty(), "leading_pattern called on an emtpy row");
-
-        match self.front() {
-            Pattern::And { pats } => (true, pats.first().unwrap()),
-            pat => (false, pat),
-        }
-    }
-
-    /// Specialize any leading and-patterns to this template.
-    fn specialize_and_patterns(&mut self, template: &Pattern) {
-        let mut pat = self.pop();
-        if let Some(p) = pat.extract_matching(template) {
-            self.push(pat);
-            self.push(p);
-        } else {
-            self.push(Pattern::Wildcard);
-            self.push(pat);
-        }
-    }
-
-    /// Expand the leading pattern of this row according to the template.
-    fn expand_leading(&mut self, env: &Env, template: &Pattern) {
-        assert!(!self.front().is_and());
-
-        let arity = template.arity();
-        match self.pop() {
-            Pattern::Variant { pats, .. } | Pattern::Extractor { pats, .. } => {
-                self.pats.extend(pats.into_iter().rev());
-            }
-
-            Pattern::Wildcard => self
-                .pats
-                .extend(std::iter::repeat(Pattern::Wildcard).take(arity)),
-
-            pat => panic!(
-                "incorrect leading expansion:\nfound: {}\n expected: {}",
-                WithEnv::new(env, &pat),
-                WithEnv::new(env, template)
-            ),
-        }
-    }
-
-    /// Expand the leading pattern of this row according to the template.
-    fn expand(&mut self, env: &Env, template: &Pattern) {
-        if template.can_expand() {
-            self.expand_leading(env, template);
-        } else {
-            self.pop();
-        }
-    }
-
-    /// Returns true if it was possible to specialize this row to the pattern template provided.
-    fn specialize(&mut self, env: &Env, template: &Pattern) -> bool {
-        assert!(!self.is_empty());
-
-        if self.front().is_wildcard() || self.front().match_concrete(template) {
-            self.expand(env, template);
-            return true;
-        }
-
-        // If this is an extractor, we already know that it doesn't match the template exactly, so
-        // we'll treat it like a wildcard.
-        if self.front().is_extractor().is_some() {
-            *self.front_mut() = Pattern::Wildcard;
-            self.expand(env, template);
-            return true;
-        }
-
-        return false;
-    }
-}
-
-/// A convenience struct for pretty-printing values that need an environment.
-struct WithEnv<'env, T> {
-    env: &'env Env<'env>,
-    value: T,
-}
-
-impl<'env, T> WithEnv<'env, T> {
-    /// Construct a new `WithEnv` for the given environment and value.
-    fn new(env: &'env Env, value: T) -> Self {
-        Self { env, value }
-    }
-
-    /// Construct a new `WithEnv` with the same environment, but a different value.
-    fn with_value<U>(&self, value: U) -> WithEnv<'env, U> {
-        WithEnv {
-            env: self.env,
-            value,
-        }
-    }
-}
-
-impl std::fmt::Display for WithEnv<'_, &Pattern> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.value {
-            Pattern::Int { value } => write!(f, "{}", value),
-
-            Pattern::Const { name } => write!(f, "${}", self.env.get_sym(*name)),
-
-            Pattern::Variant { id, pats, .. } => {
-                write!(f, "({}", self.env.get_sym(self.env.get_term(*id).name))?;
-                for pat in pats {
-                    write!(f, " {}", self.with_value(pat))?;
-                }
-                write!(f, ")")
-            }
-
-            Pattern::And { pats } => {
-                write!(f, "(and")?;
-                for pat in pats {
-                    write!(f, " {}", self.with_value(pat))?;
-                }
-                write!(f, ")")
-            }
-
-            Pattern::Extractor { id, pats } => {
-                write!(f, "({}", self.env.get_sym(self.env.get_term(*id).name))?;
-                for pat in pats {
-                    write!(f, " {}", self.with_value(pat))?;
-                }
-                write!(f, ")")
-            }
-
-            Pattern::Wildcard => write!(f, "_"),
-        }
-    }
-}
-
-impl std::fmt::Display for WithEnv<'_, &Row> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[")?;
-        for pat in self.value.pats.iter().rev() {
-            write!(f, " {}", self.with_value(pat))?;
-        }
-        write!(f, " ] -> {}", self.value.rule.0)
     }
 }
