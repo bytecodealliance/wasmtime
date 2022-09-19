@@ -3,7 +3,7 @@
 use crate::ir::{ExprInst, InstId, PatternInst, Value};
 use crate::log;
 use crate::sema::ExternalSig;
-use crate::sema::{MultiMode, TermEnv, TermId, Type, TypeEnv, TypeId, Variant};
+use crate::sema::{TermEnv, TermId, Type, TypeEnv, TypeId, Variant};
 use crate::trie::{TrieEdge, TrieNode, TrieSymbol};
 use crate::{StableMap, StableSet};
 use std::collections::BTreeMap;
@@ -95,6 +95,7 @@ impl<'a> Codegen<'a> {
         }
 
         writeln!(code, "\nuse super::*;  // Pulls in all external types.").unwrap();
+        writeln!(code, "use std::marker::PhantomData;").unwrap();
     }
 
     fn generate_trait_sig(&self, code: &mut String, indent: &str, sig: &ExternalSig) {
@@ -111,10 +112,9 @@ impl<'a> Codegen<'a> {
         );
 
         let ret_ty = match (sig.multi, sig.infallible) {
-            (MultiMode::None, false) => format!("Option<{}>", ret_tuple),
-            (MultiMode::None, true) => format!("{}", ret_tuple),
-            (MultiMode::Vec, false) => format!("Option<ConstructorVec<{}>>", ret_tuple.clone()),
-            (MultiMode::Iter, false) => format!("Option<Self::{}_iter>", sig.func_name),
+            (false, false) => format!("Option<{}>", ret_tuple),
+            (false, true) => format!("{}", ret_tuple),
+            (true, false) => format!("Option<Self::{}_iter>", sig.func_name),
             _ => panic!(
                 "Unsupported multiplicity/infallible combo: {:?}, {}",
                 sig.multi, sig.infallible
@@ -137,7 +137,7 @@ impl<'a> Codegen<'a> {
         )
         .unwrap();
 
-        if sig.multi == MultiMode::Iter {
+        if sig.multi {
             writeln!(
                 code,
                 "{indent}type {name}_iter: ContextIter<Context = Self, Output = {output}>;",
@@ -178,15 +178,34 @@ impl<'a> Codegen<'a> {
             }
         }
         writeln!(code, "}}").unwrap();
-        writeln!(code, "pub trait ContextIter {{").unwrap();
-        writeln!(code, "    type Context;").unwrap();
-        writeln!(code, "    type Output;").unwrap();
         writeln!(
             code,
-            "    fn next(&mut self, ctx: &mut Self::Context) -> Option<Self::Output>;"
+            r#"
+           pub trait ContextIter {{
+               type Context;
+               type Output;
+               fn next(&mut self, ctx: &mut Self::Context) -> Option<Self::Output>;
+           }}
+
+           pub struct ContextIterWrapper<Item, I: Iterator < Item = Item>, C: Context> {{
+               iter: I,
+               _ctx: PhantomData<C>,
+           }}
+           impl<Item, I: Iterator<Item = Item>, C: Context> From<I> for ContextIterWrapper<Item, I, C> {{
+               fn from(iter: I) -> Self {{
+                   Self {{ iter, _ctx: PhantomData }}
+               }}
+           }}
+           impl<Item, I: Iterator<Item = Item>, C: Context> ContextIter for ContextIterWrapper<Item, I, C> {{
+               type Context = C;
+               type Output = Item;
+               fn next(&mut self, _ctx: &mut Self::Context) -> Option<Self::Output> {{
+                   self.iter.next()
+               }}
+           }}
+           "#,
         )
-        .unwrap();
-        writeln!(code, "}}").unwrap();
+            .unwrap();
     }
 
     fn generate_internal_types(&self, code: &mut String) {
@@ -339,10 +358,10 @@ impl<'a> Codegen<'a> {
                 .join(", ");
             assert_eq!(sig.ret_tys.len(), 1);
             let ret = self.type_name(sig.ret_tys[0], false);
-            let ret = match sig.multi {
-                MultiMode::Vec => format!("ConstructorVec<{}>", ret),
-                MultiMode::Iter => unimplemented!(),
-                MultiMode::None => ret,
+            let ret = if sig.multi {
+                format!("impl ContextIter<Context = C, Output = {}>", ret)
+            } else {
+                ret
             };
 
             writeln!(
@@ -358,13 +377,7 @@ impl<'a> Codegen<'a> {
             )
             .unwrap();
 
-            let is_multi = match sig.multi {
-                MultiMode::Vec => true,
-                MultiMode::None => false,
-                MultiMode::Iter => unimplemented!(),
-            };
-
-            if is_multi {
+            if sig.multi {
                 writeln!(code, "let mut returns = ConstructorVec::new();").unwrap();
             }
 
@@ -375,11 +388,15 @@ impl<'a> Codegen<'a> {
                 trie,
                 "    ",
                 &mut body_ctx,
-                is_multi,
+                sig.multi,
             );
             if !returned {
-                if is_multi {
-                    writeln!(code, "    return Some(returns);").unwrap();
+                if sig.multi {
+                    writeln!(
+                        code,
+                        "    return Some(ContextIterWrapper::from(returns.into_iter()));"
+                    )
+                    .unwrap();
                 } else {
                     writeln!(code, "    return None;").unwrap();
                 }
@@ -510,33 +527,34 @@ impl<'a> Codegen<'a> {
                 let sig = termdata.constructor_sig(self.typeenv).unwrap();
                 assert_eq!(input_exprs.len(), sig.param_tys.len());
 
-                match multi {
-                    MultiMode::None => {
-                        let fallible_try = if infallible { "" } else { "?" };
-                        writeln!(
-                            code,
-                            "{}let {} = {}(ctx, {}){};",
-                            indent,
-                            outputname,
-                            sig.full_name,
-                            input_exprs.join(", "),
-                            fallible_try,
-                        )
-                        .unwrap();
-                    }
-                    MultiMode::Vec => {
-                        writeln!(
-                            code,
-                            "{}for {} in {}(ctx, {})? {{",
-                            indent,
-                            outputname,
-                            sig.full_name,
-                            input_exprs.join(", "),
-                        )
-                        .unwrap();
-                        new_scope = true;
-                    }
-                    MultiMode::Iter => unimplemented!(),
+                if !multi {
+                    let fallible_try = if infallible { "" } else { "?" };
+                    writeln!(
+                        code,
+                        "{}let {} = {}(ctx, {}){};",
+                        indent,
+                        outputname,
+                        sig.full_name,
+                        input_exprs.join(", "),
+                        fallible_try,
+                    )
+                    .unwrap();
+                } else {
+                    writeln!(
+                        code,
+                        "{}let mut it = {}(ctx, {})?;",
+                        indent,
+                        sig.full_name,
+                        input_exprs.join(", "),
+                    )
+                    .unwrap();
+                    writeln!(
+                        code,
+                        "{}while let Some({}) = it.next(ctx) {{",
+                        indent, outputname,
+                    )
+                    .unwrap();
+                    new_scope = true;
                 }
                 self.define_val(&output, ctx, /* is_ref = */ false, termdata.ret_ty);
             }
@@ -700,8 +718,7 @@ impl<'a> Codegen<'a> {
                 );
 
                 match (infallible, multi) {
-                    (_, MultiMode::Vec) => unimplemented!(),
-                    (_, MultiMode::Iter) => {
+                    (_, true) => {
                         writeln!(
                             code,
                             "{indent}if let Some(mut iter) = {etor_call} {{",
@@ -719,7 +736,7 @@ impl<'a> Codegen<'a> {
 
                         (false, 2)
                     }
-                    (false, MultiMode::None) => {
+                    (false, false) => {
                         writeln!(
                             code,
                             "{indent}if let Some({bind_pattern}) = {etor_call} {{",
@@ -731,7 +748,7 @@ impl<'a> Codegen<'a> {
 
                         (false, 1)
                     }
-                    (true, MultiMode::None) => {
+                    (true, false) => {
                         writeln!(
                             code,
                             "{indent}let {bind_pattern} = {etor_call};",

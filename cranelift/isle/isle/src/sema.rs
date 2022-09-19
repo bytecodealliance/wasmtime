@@ -292,23 +292,9 @@ pub struct ExternalSig {
     pub ret_tys: Vec<TypeId>,
     /// Whether this signature is infallible or not.
     pub infallible: bool,
-    /// "Multiplicity" mode: iterator, vec-return, or none.
-    pub multi: MultiMode,
-}
-
-/// The mode by which a term (extractor or constructor) returns
-/// multiple values.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum MultiMode {
-    /// Function (constructor or extractor) logically returns only one
-    /// result (or none).
-    None,
-    /// Function logically returns multiple results, and returns these
-    /// as an iterator that implements a custom iterator trait.
-    Iter,
-    /// Function logically returns multiple results, and returns these
-    /// as a vector.
-    Vec,
+    /// "Multiplicity": does the function return multiple values (via
+    /// an iterator)?
+    pub multi: bool,
 }
 
 impl Term {
@@ -384,11 +370,7 @@ impl Term {
                 param_tys: vec![self.ret_ty],
                 ret_tys: self.arg_tys.clone(),
                 infallible: *infallible && !*multi,
-                multi: if *multi {
-                    MultiMode::Iter
-                } else {
-                    MultiMode::None
-                },
+                multi: *multi,
             }),
             _ => None,
         }
@@ -408,11 +390,7 @@ impl Term {
                 param_tys: self.arg_tys.clone(),
                 ret_tys: vec![self.ret_ty],
                 infallible: !pure && !*multi,
-                multi: if *multi {
-                    MultiMode::Vec
-                } else {
-                    MultiMode::None
-                },
+                multi: *multi,
             }),
             TermKind::Decl {
                 constructor_kind: Some(ConstructorKind::InternalConstructor { .. }),
@@ -430,11 +408,7 @@ impl Term {
                     // matching at the toplevel (an entry point can
                     // fail to rewrite).
                     infallible: false,
-                    multi: if *multi {
-                        MultiMode::Vec
-                    } else {
-                        MultiMode::None
-                    },
+                    multi: *multi,
                 })
             }
             _ => None,

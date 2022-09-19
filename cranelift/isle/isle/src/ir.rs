@@ -105,8 +105,8 @@ pub enum PatternInst {
         output_tys: Vec<TypeId>,
         /// This extractor's term.
         term: TermId,
-        /// The mode in which we handle multiplicity.
-        multi: MultiMode,
+        /// Is this a multi-extractor?
+        multi: bool,
     },
 
     // NB: This has to go last, since it is infallible, so that when we sort
@@ -164,8 +164,8 @@ pub enum ExprInst {
         term: TermId,
         /// Whether this constructor is infallible or not.
         infallible: bool,
-        /// The mode in which we handle multiplicity.
-        multi: MultiMode,
+        /// Is this a multi-constructor?
+        multi: bool,
     },
 
     /// Set the Nth return value. Produces no values.
@@ -309,7 +309,7 @@ impl PatternSequence {
         output_tys: Vec<TypeId>,
         term: TermId,
         infallible: bool,
-        multi: MultiMode,
+        multi: bool,
     ) -> Vec<Value> {
         let inst = InstId(self.insts.len());
         let mut outs = vec![];
@@ -529,7 +529,7 @@ impl ExprSequence {
         ty: TypeId,
         term: TermId,
         infallible: bool,
-        multi: MultiMode,
+        multi: bool,
     ) -> Value {
         let inst = InstId(self.insts.len());
         let inputs = inputs.iter().cloned().collect();
@@ -599,11 +599,7 @@ impl ExprSequence {
                             ty,
                             term,
                             /* infallible = */ false,
-                            if *multi {
-                                MultiMode::Vec
-                            } else {
-                                MultiMode::None
-                            },
+                            *multi,
                         )
                     }
                     TermKind::Decl {
@@ -617,11 +613,7 @@ impl ExprSequence {
                             ty,
                             term,
                             /* infallible = */ !pure,
-                            if *multi {
-                                MultiMode::Vec
-                            } else {
-                                MultiMode::None
-                            },
+                            *multi,
                         )
                     }
                     TermKind::Decl {
