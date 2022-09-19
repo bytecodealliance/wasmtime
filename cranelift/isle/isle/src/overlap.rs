@@ -4,20 +4,12 @@ use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 
 use crate::error::{Error, Result, Source, Span};
-use crate::sema::{
-    self, ConstructorKind, Rule, RuleId, Sym, Term, TermEnv, TermId, TermKind, TypeEnv, VarId,
-};
+use crate::sema::{self, Rule, RuleId, Sym, TermEnv, TermId, TermKind, TypeEnv, VarId};
 
 /// Check for overlap.
 pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
     let env = Env::new(tyenv, termenv);
-    let errors = termenv
-        .terms
-        .par_iter()
-        .map(|term| check_overlap(&env, term))
-        .reduce(Errors::default, Errors::union);
-
-    let mut errors = errors.report(&env);
+    let mut errors = check_overlaps(termenv).report(&env);
     if cfg!(feature = "overlap-errors") {
         match errors.len() {
             0 => Ok(()),
@@ -124,35 +116,42 @@ impl Errors {
 /// Determine if any rules that rewrite the given term overlap in the input that they accept. This
 /// checkes every unique pair of rules, as checking rules in aggregate tends to suffer from
 /// exponential explosion in the presence of wildcard patterns.
-fn check_overlap(env: &Env, term: &Term) -> Errors {
-    // The only isle declaration that currently produces overlap is constructors whose definition
-    // is entirely in isle.
-    if !matches!(
-        term.kind,
-        TermKind::Decl {
-            constructor_kind: Some(ConstructorKind::InternalConstructor),
-            ..
+fn check_overlaps(env: &TermEnv) -> Errors {
+    struct RulePatterns<'a> {
+        rule: &'a Rule,
+        pats: Box<[Pattern]>,
+    }
+    let mut by_term = HashMap::new();
+    for rule in env.rules.iter() {
+        if let sema::Pattern::Term(_, tid, ref vars) = rule.lhs {
+            let mut binds = Vec::new();
+            let rule = RulePatterns {
+                rule,
+                pats: vars
+                    .iter()
+                    .map(|pat| Pattern::from_sema(env, &mut binds, pat))
+                    .collect(),
+            };
+            by_term.entry(tid).or_insert_with(Vec::new).push(rule);
         }
-    ) {
-        return Errors::default();
     }
 
-    let rows = env.rules_for_term(term.id);
-
     let mut pairs = Vec::new();
-    let mut cursor = &rows[..];
-    while let Some((row, rest)) = cursor.split_first() {
-        cursor = rest;
-        pairs.extend(rest.iter().map(|other| (row, other)));
+    for rows in by_term.values() {
+        let mut cursor = &rows[..];
+        while let Some((row, rest)) = cursor.split_first() {
+            cursor = rest;
+            pairs.extend(rest.iter().map(|other| (row, other)));
+        }
     }
 
     // Process rule pairs in parallel
     pairs
         .into_par_iter()
-        .fold(Errors::default, |mut errs, ((lid, left), (rid, right))| {
-            if env.get_rule(*lid).prio == env.get_rule(*rid).prio {
-                if check_overlap_pair(left, right) {
-                    errs.add_edge(*lid, *rid);
+        .fold(Errors::default, |mut errs, (left, right)| {
+            if left.rule.prio == right.rule.prio {
+                if check_overlap_pair(&left.pats, &right.pats) {
+                    errs.add_edge(left.rule.id, right.rule.id);
                 }
             }
             errs
@@ -251,39 +250,12 @@ impl<'a> Env<'a> {
         &self.termenv.rules[id.0]
     }
 
-    /// Fetch the term associated with this id.
-    fn get_term(&self, id: TermId) -> &Term {
-        &self.termenv.terms[id.0]
-    }
-
     /// Fetch source information for a file id.
     fn get_source(&self, file: usize) -> Source {
         Source::new(
             self.tyenv.filenames[file].clone(),
             self.tyenv.file_texts[file].clone(),
         )
-    }
-
-    /// The ids of all [`Rule`]s defined for this term.
-    fn rules_for_term(&self, id: TermId) -> Vec<(RuleId, Vec<Pattern>)> {
-        self.termenv
-            .rules
-            .iter()
-            .filter_map(|rule| {
-                if let sema::Pattern::Term(_, tid, vars) = &rule.lhs {
-                    if *tid == id {
-                        let mut binds = Vec::new();
-                        return Some((
-                            rule.id,
-                            vars.iter()
-                                .map(|pat| Pattern::from_sema(self, &mut binds, pat))
-                                .collect(),
-                        ));
-                    }
-                }
-                None
-            })
-            .collect()
     }
 }
 
@@ -328,7 +300,7 @@ impl Pattern {
     ///    would have introduced equalities with
     /// 3. [`sema::Pattern::Term`] instances are turned into either [`Pattern::Variant`] or
     ///    [`Pattern::Extractor`] cases depending on their term kind.
-    fn from_sema(env: &Env, binds: &mut Vec<(VarId, Pattern)>, pat: &sema::Pattern) -> Self {
+    fn from_sema(env: &TermEnv, binds: &mut Vec<(VarId, Pattern)>, pat: &sema::Pattern) -> Self {
         match pat {
             sema::Pattern::BindPattern(_, id, pat) => {
                 let pat = Self::from_sema(env, binds, pat);
@@ -387,7 +359,7 @@ impl Pattern {
                     .map(|pat| Pattern::from_sema(env, binds, pat))
                     .collect();
 
-                match &env.get_term(id).kind {
+                match &env.terms[id.0].kind {
                     TermKind::EnumVariant { .. } => Pattern::Variant { id, pats },
                     TermKind::Decl { .. } => Pattern::Extractor { id, pats },
                 }
