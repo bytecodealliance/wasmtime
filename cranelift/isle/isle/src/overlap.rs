@@ -1,6 +1,7 @@
 //! Overlap detection for rules in ISLE.
 
 use rayon::prelude::*;
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
 use crate::error::{Error, Result, Source, Span};
@@ -80,14 +81,13 @@ impl Errors {
             .max_by_key(|id| self.nodes[id].edges.len())
         {
             let node = self.nodes.remove(&id).unwrap();
-
-            if node.edges.is_empty() {
-                break;
-            }
-
             for other in node.edges.iter() {
-                if let Some(other) = self.nodes.get_mut(&other) {
+                if let Entry::Occupied(mut entry) = self.nodes.entry(*other) {
+                    let other = entry.get_mut();
                     other.remove_edge(id);
+                    if other.edges.is_empty() {
+                        entry.remove();
+                    }
                 }
             }
 
