@@ -36,16 +36,14 @@ pub trait CtxHash<Value: ?Sized>: CtxEq<Value, Value> {
 /// A null-comparator context type for underlying value types that
 /// already have `Eq` and `Hash`.
 #[derive(Default)]
-pub struct NullCtx<V: Eq + Hash> {
-    _phantom: PhantomData<V>,
-}
+pub struct NullCtx;
 
-impl<V: Eq + Hash> CtxEq<V, V> for NullCtx<V> {
+impl<V: Eq + Hash> CtxEq<V, V> for NullCtx {
     fn ctx_eq(&self, a: &V, b: &V, _: &mut UnionFind) -> bool {
         a.eq(b)
     }
 }
-impl<V: Eq + Hash> CtxHash<V> for NullCtx<V> {
+impl<V: Eq + Hash> CtxHash<V> for NullCtx {
     fn ctx_hash(&self, value: &V, _: &mut UnionFind) -> u64 {
         let mut state = fxhash::FxHasher::default();
         value.hash(&mut state);
@@ -267,6 +265,10 @@ mod test {
                 v.insert(1);
             }
             _ => panic!(),
+        }
+        match map.entry(k1, &mut ctx, &mut uf) {
+            Entry::Vacant(_) => {}
+            Entry::Occupied(_) => panic!(),
         }
         match map.entry(k2, &mut ctx, &mut uf) {
             Entry::Occupied(o) => {

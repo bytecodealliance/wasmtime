@@ -15,3 +15,10 @@ smallvec = { version = "1.6.1" }
 indexmap = { version = "1.9.1" }
 hashbrown = { version = "0.12.2", features = ["raw"] }
 fxhash = "0.2.1"
+
+[features]
+default = []
+
+# Enable detailed trace-level debug logging. Excluded by default to
+# omit the dynamic overhead of checking the logging level.
+trace-log = []
