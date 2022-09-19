@@ -89,31 +89,32 @@ pub fn build_tries(typeenv: &TypeEnv, termenv: &TermEnv) -> BTreeMap<TermId, Tri
 /// terms, which become different compiled functions. This is likely
 /// to happen anyway as part of good software engineering practice.
 ///
-/// We prepare for codegen by building a "prioritized trie", where the
-/// trie associates input strings with priorities to output values.
-/// Each input string is a sequence of match operators followed by an
-/// "end of match" token, and each output is a sequence of ops that
-/// build the output expression. Each input-output mapping is
-/// associated with a priority. The goal of the trie is to generate a
-/// decision-tree procedure that lets us execute match ops in a
-/// deterministic way, eventually landing at a state that corresponds
-/// to the highest-priority matching rule and can produce the output.
+/// We prepare for codegen by building a trie, where the trie
+/// associates input strings to output values.  Each input string is a
+/// sequence of match operators followed by an "end of match" token,
+/// and each output is a sequence of ops that build the output
+/// expression. The goal of the trie is to generate a decision-tree
+/// procedure that lets us execute match ops in a deterministic way,
+/// eventually landing at a state that corresponds to the
+/// highest-priority matching rule and can produce the output.
 ///
-/// To build this trie, we construct nodes with edges to child nodes;
-/// each edge consists of (i) one input token (a `PatternInst` or
-/// EOM), and (ii) the priority of rules along this edge. We do not
-/// merge rules of different priorities, because the logic to do so is
-/// complex and error-prone, necessitating "splits" when we merge
-/// together a set of rules over a priority range but later introduce
-/// a new possible match op in the "middle" of the range. (E.g., match
-/// op A at prio 10, B at prio 5, A at prio 0.) In fact, a previous
-/// version of the ISLE compiler worked this way, but in practice the
-/// complexity was unneeded.
-///
-/// To add a rule to this trie, we perform the usual trie-insertion
-/// logic, creating edges and subnodes where necessary. A new edge is
-/// necessary whenever an edge does not exist for the (priority,
-/// symbol) tuple.
+/// To build this trie, we construct nodes with edges to child nodes.
+/// Each edge consists of one input token (a `PatternInst` or EOM).
+/// The trie is built in a way that respects rule priorities, but the
+/// trie itself does not encode priorities. Instead, we build the trie
+/// from the rules in highest-to-lowest priority order and ensure that
+/// priorities are respected during this build process.  To do so,
+/// each node has a "frontier" corresponding to the *latest* edge that
+/// had any rule in the sub-tree added in any higher priority. (We use
+/// the last priority's frontier and update the current one as we
+/// insert, moving "current" to "last" when we move to the next lower
+/// priority.) When we add a rule to the trie, we can insert into an
+/// existing subtree only if it is after this frontier. Within the
+/// acceptable range of insertion points, we reuse edges as much as
+/// possible, and we insert in sorted order so that match edges for
+/// the same value and enum are grouped as much as possible (to enable
+/// use of `match` rather than `if let` statements in the generated
+/// Rust code).
 ///
 /// Note that this means that multiple edges with a single match-op
 /// may exist, with different priorities.
