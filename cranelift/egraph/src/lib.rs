@@ -215,7 +215,7 @@
 //!
 //! [1]: M Willsey, C Nandi, Y R Wang, O Flatt, Z Tatlock, P
 //!      Panchekha. "egg: Fast and Flexible Equality Saturation." In
-//!      POPL 2021. https://dl.acm.org/doi/10.1145/3434304
+//!      POPL 2021. <https://dl.acm.org/doi/10.1145/3434304>
 
 use cranelift_entity::PrimaryMap;
 use cranelift_entity::{entity_impl, packed_option::ReservedValue};
