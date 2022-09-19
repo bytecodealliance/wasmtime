@@ -39,6 +39,14 @@ pub struct Config {
     /// Determines how often we generate a backwards branch
     /// Backwards branches are prone to infinite loops, and thus cause timeouts.
     pub backwards_branch_ratio: (usize, usize),
+
+    /// How often should we allow integer division by zero traps.
+    ///
+    /// Some instructions such as Srem and Udiv can cause a `int_divz` trap
+    /// under some inputs. We almost always insert a sequence of instructions
+    /// that avoids these issues. However we can allow some `int_divz` traps
+    /// by controlling this config.
+    pub allowed_int_divz_ratio: (usize, usize),
 }
 
 impl Default for Config {
@@ -62,6 +70,7 @@ impl Default for Config {
             // 0.1% allows us to explore this, while not causing enough timeouts to significantly
             // impact execs/s
             backwards_branch_ratio: (1, 1000),
+            allowed_int_divz_ratio: (1, 1_000_000),
         }
     }
 }

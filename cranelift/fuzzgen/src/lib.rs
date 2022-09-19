@@ -12,6 +12,7 @@ use std::fmt;
 
 mod config;
 mod function_generator;
+mod pass;
 
 pub type TestCaseInput = Vec<DataValue>;
 
@@ -166,7 +167,7 @@ where
         Ok(inputs)
     }
 
-    fn run_func_passes(&self, func: Function) -> Function {
+    fn run_func_passes(&mut self, func: Function) -> Result<Function> {
         // Do a NaN Canonicalization pass on the generated function.
         //
         // Both IEEE754 and the Wasm spec are somewhat loose about what is allowed
@@ -201,12 +202,17 @@ where
         ctx.canonicalize_nans(isa.as_ref())
             .expect("Failed NaN canonicalization pass");
 
-        ctx.func
+        // Run the int_divz pass
+        //
+        // This pass replaces divs and rems with sequences that do not trap
+        pass::do_int_divz_pass(self, &mut ctx.func)?;
+
+        Ok(ctx.func)
     }
 
     fn generate_func(&mut self) -> Result<Function> {
         let func = FunctionGenerator::new(&mut self.u, &self.config).generate()?;
-        Ok(self.run_func_passes(func))
+        self.run_func_passes(func)
     }
 
     pub fn generate_test(mut self) -> Result<TestCase> {
