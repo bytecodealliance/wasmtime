@@ -559,7 +559,7 @@ version = "0.89.0"
 
 [[package]]
 name = "cranelift-egraph"
-version = "0.88.0"
+version = "0.89.0"
 dependencies = [
  "cranelift-entity",
  "fxhash",
