@@ -9,8 +9,7 @@ use crate::sema::{self, Rule, RuleId, Sym, TermEnv, TermId, TermKind, TypeEnv, V
 
 /// Check for overlap.
 pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
-    let env = Env::new(tyenv, termenv);
-    let mut errors = check_overlaps(termenv).report(&env);
+    let mut errors = check_overlaps(termenv).report(tyenv, termenv);
     if cfg!(feature = "overlap-errors") {
         match errors.len() {
             0 => Ok(()),
@@ -63,13 +62,16 @@ impl Errors {
     /// nodes from the graph with the highest degree, reporting errors for them and their direct
     /// connections. The goal with reporting errors this way is to prefer reporting rules that
     /// overlap with many others first, and then report other more targeted overlaps later.
-    fn report(mut self, env: &Env) -> Vec<Error> {
+    fn report(mut self, tyenv: &TypeEnv, termenv: &TermEnv) -> Vec<Error> {
         let mut errors = Vec::new();
 
-        let get_info = |id| {
-            let rule = env.get_rule(id);
-
-            let src = env.get_source(rule.pos.file);
+        let get_info = |id: RuleId| {
+            let rule = &termenv.rules[id.0];
+            let file = rule.pos.file;
+            let src = Source::new(
+                tyenv.filenames[file].clone(),
+                tyenv.file_texts[file].clone(),
+            );
             let span = Span::new_single(rule.pos);
             (src, span)
         };
@@ -231,32 +233,6 @@ fn check_overlap_pair(a: &[Pattern], b: &[Pattern]) -> bool {
         }
     }
     true
-}
-
-/// A convenience wrapper around the `TypeEnv` and `TermEnv` environments.
-struct Env<'a> {
-    tyenv: &'a TypeEnv,
-    termenv: &'a TermEnv,
-}
-
-impl<'a> Env<'a> {
-    /// Construct a new [`Env`].
-    fn new(tyenv: &'a TypeEnv, termenv: &'a TermEnv) -> Self {
-        Self { tyenv, termenv }
-    }
-
-    /// Fetch the rule associated with this id.
-    fn get_rule(&self, id: RuleId) -> &Rule {
-        &self.termenv.rules[id.0]
-    }
-
-    /// Fetch source information for a file id.
-    fn get_source(&self, file: usize) -> Source {
-        Source::new(
-            self.tyenv.filenames[file].clone(),
-            self.tyenv.file_texts[file].clone(),
-        )
-    }
 }
 
 /// A version of [`sema::Pattern`] with some simplifications to make overlap checking easier.
