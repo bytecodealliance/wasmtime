@@ -108,9 +108,9 @@ impl Errors {
     }
 }
 
-/// Determine if any rules that rewrite the given term overlap in the input that they accept. This
-/// checkes every unique pair of rules, as checking rules in aggregate tends to suffer from
-/// exponential explosion in the presence of wildcard patterns.
+/// Determine if any rules overlap in the input that they accept. This checkes every unique pair of
+/// rules, as checking rules in aggregate tends to suffer from exponential explosion in the
+/// presence of wildcard patterns.
 fn check_overlaps(env: &TermEnv) -> Errors {
     struct RulePatterns<'a> {
         rule: &'a Rule,
@@ -131,6 +131,10 @@ fn check_overlaps(env: &TermEnv) -> Errors {
         }
     }
 
+    // Sequentially identify all rule pairs which are in the same term. We could make this a
+    // parallel iterator, but that's harder to read and this loop is fast. Also, Rayon can
+    // efficiently partition a vector across multiple CPUs, which it might have more trouble with
+    // if this were an iterator.
     let mut pairs = Vec::new();
     for rows in by_term.values() {
         let mut cursor = &rows[..];
@@ -140,7 +144,8 @@ fn check_overlaps(env: &TermEnv) -> Errors {
         }
     }
 
-    // Process rule pairs in parallel
+    // Process rule pairs in parallel. Rayon makes this easy and we have independent bite-sized
+    // chunks of work, so we might as well take advantage of multiple CPUs if they're available.
     pairs
         .into_par_iter()
         .fold(Errors::default, |mut errs, (left, right)| {
