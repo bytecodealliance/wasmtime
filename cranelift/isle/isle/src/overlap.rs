@@ -74,12 +74,7 @@ impl Errors {
             (src, span)
         };
 
-        while let Some(id) = self
-            .nodes
-            .keys()
-            .copied()
-            .max_by_key(|id| self.nodes[id].edges.len())
-        {
+        while let Some((&id, _)) = self.nodes.iter().max_by_key(|(_, node)| node.edges.len()) {
             let node = self.nodes.remove(&id).unwrap();
             for other in node.edges.iter() {
                 if let Entry::Occupied(mut entry) = self.nodes.entry(*other) {
