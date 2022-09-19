@@ -49,7 +49,7 @@ fn execute(backend: wasi_nn::GraphEncoding, dimensions: &[u32], mut output_buffe
 
     let tensor = wasi_nn::Tensor {
                     dimensions: dimensions,
-                    r#type: wasi_nn::TENSOR_TYPE_F32,
+                    type_: wasi_nn::TENSOR_TYPE_F32,
                     data: &tensor_data,
                 };
 
@@ -79,7 +79,7 @@ fn execute(backend: wasi_nn::GraphEncoding, dimensions: &[u32], mut output_buffe
     )
 }
 
-fn create_gba (backend: u8) ->Vec<Vec<u8>>  {
+fn create_gba (backend: wasi_nn::GraphEncoding) ->Vec<Vec<u8>>  {
     let result: Vec<Vec<u8>> = match backend {
         wasi_nn::GRAPH_ENCODING_OPENVINO => {
             let xml = fs::read_to_string("fixture/model.xml").unwrap();
@@ -105,7 +105,7 @@ fn create_gba (backend: u8) ->Vec<Vec<u8>>  {
 // Sort the buffer of probabilities. The graph places the match probability for each class at the
 // index for that class (e.g. the probability of class 42 is placed at buffer[42]). Here we convert
 // to a wrapping InferenceResult and sort the results.
-fn sort_results(buffer: &[f32], backend: u8) -> Vec<InferenceResult> {
+fn sort_results(buffer: &[f32], backend: wasi_nn::GraphEncoding) -> Vec<InferenceResult> {
     let skipval = match backend {
         wasi_nn::GRAPH_ENCODING_OPENVINO => { 1 },
         _ => { 0 }
@@ -125,7 +125,7 @@ fn sort_results(buffer: &[f32], backend: u8) -> Vec<InferenceResult> {
 #[derive(Debug, PartialEq)]
 struct InferenceResult(usize, f32);
 
-fn image_to_tensor(path: String, dimensions: &[u32], backend: u8) -> Vec<u8> {
+fn image_to_tensor(path: String, dimensions: &[u32], backend: wasi_nn::GraphEncoding) -> Vec<u8> {
     let result: Vec<u8> = match backend {
         wasi_nn::GRAPH_ENCODING_OPENVINO => {
             let pixels = Reader::open(path).unwrap().decode().unwrap();
