@@ -23,37 +23,21 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
     }
 }
 
-/// A node in the error graph.
-#[derive(Default)]
-struct Node {
-    /// Other rules that this one overlaps with.
-    edges: HashSet<RuleId>,
-}
-
-impl Node {
-    /// Add an edge between this node and the other node.
-    fn add_edge(&mut self, other: RuleId) {
-        self.edges.insert(other);
-    }
-
-    /// Remove an edge between this node and another node.
-    fn remove_edge(&mut self, other: RuleId) {
-        self.edges.remove(&other);
-    }
-}
-
 /// A graph of rules that overlap in the ISLE source. The edges are undirected.
 #[derive(Default)]
 struct Errors {
     /// Edges between rules indicating overlap.
-    nodes: HashMap<RuleId, Node>,
+    nodes: HashMap<RuleId, HashSet<RuleId>>,
 }
 
 impl Errors {
     /// Merge together two Error graphs.
     fn union(mut self, other: Self) -> Self {
-        for (id, node) in other.nodes {
-            self.nodes.entry(id).or_default().edges.extend(node.edges);
+        for (id, edges) in other.nodes {
+            match self.nodes.entry(id) {
+                Entry::Occupied(entry) => entry.into_mut().extend(edges),
+                Entry::Vacant(entry) => _ = entry.insert(edges),
+            }
         }
         self
     }
@@ -76,13 +60,13 @@ impl Errors {
             (src, span)
         };
 
-        while let Some((&id, _)) = self.nodes.iter().max_by_key(|(_, node)| node.edges.len()) {
+        while let Some((&id, _)) = self.nodes.iter().max_by_key(|(_, edges)| edges.len()) {
             let node = self.nodes.remove(&id).unwrap();
-            for other in node.edges.iter() {
+            for other in node.iter() {
                 if let Entry::Occupied(mut entry) = self.nodes.entry(*other) {
-                    let other = entry.get_mut();
-                    other.remove_edge(id);
-                    if other.edges.is_empty() {
+                    let back_edges = entry.get_mut();
+                    back_edges.remove(&id);
+                    if back_edges.is_empty() {
                         entry.remove();
                     }
                 }
@@ -91,7 +75,7 @@ impl Errors {
             // build the real error
             let mut rules = vec![get_info(id)];
 
-            rules.extend(node.edges.into_iter().map(get_info));
+            rules.extend(node.into_iter().map(get_info));
 
             errors.push(Error::OverlapError {
                 msg: String::from("rules are overlapping"),
@@ -105,8 +89,8 @@ impl Errors {
     /// Add a bidirectional edge between two rules in the graph.
     fn add_edge(&mut self, a: RuleId, b: RuleId) {
         // edges are undirected
-        self.nodes.entry(a).or_default().add_edge(b);
-        self.nodes.entry(b).or_default().add_edge(a);
+        self.nodes.entry(a).or_default().insert(b);
+        self.nodes.entry(b).or_default().insert(a);
     }
 }
 
