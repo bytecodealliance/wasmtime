@@ -21,7 +21,7 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::packed_option::PackedOption;
 use smallvec::SmallVec;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///
@@ -61,7 +61,7 @@ pub struct SSABuilder {
     /// If a block B has chain up single predecessors leading to a block B' in
     /// this map, then the value in the map indicates whether variable lookups
     /// can be optimized in block B.
-    successors_can_optimize_var_lookup: HashMap<Block, bool>,
+    successors_can_optimize_var_lookup: SecondaryMap<Block, Option<bool>>,
 }
 
 /// Side effects of a `use_var` or a `seal_block` method call.
@@ -308,13 +308,8 @@ impl SSABuilder {
         self.visited.clear();
         let mut current = block;
         loop {
-            if let Some(can_optimize) = self
-                .successors_can_optimize_var_lookup
-                .get(&current)
-                .copied()
-            {
-                self.successors_can_optimize_var_lookup
-                    .insert(block, can_optimize);
+            if let Some(can_optimize) = self.successors_can_optimize_var_lookup[current] {
+                self.successors_can_optimize_var_lookup[block] = Some(can_optimize);
                 return can_optimize;
             }
 
@@ -324,20 +319,20 @@ impl SSABuilder {
             // block, or we found the end of this line of dead blocks, either way we are
             // safe to optimize this line of lookups.
             if predecessors.len() == 0 {
-                self.successors_can_optimize_var_lookup.insert(block, true);
+                self.successors_can_optimize_var_lookup[block] = Some(true);
                 return true;
             }
 
             // We can stop the search here, the algorithm can handle these cases, even if they are
             // in an undefined island.
             if predecessors.len() > 1 {
-                self.successors_can_optimize_var_lookup.insert(block, true);
+                self.successors_can_optimize_var_lookup[block] = Some(true);
                 return true;
             }
 
             let next_current = predecessors[0].block;
             if !self.visited.insert(current) {
-                self.successors_can_optimize_var_lookup.insert(block, false);
+                self.successors_can_optimize_var_lookup[block] = Some(false);
                 return false;
             }
 
