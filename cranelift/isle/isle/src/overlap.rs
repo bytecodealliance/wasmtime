@@ -235,18 +235,18 @@ enum Pattern {
     /// Enum variant constructors.
     Variant {
         id: TermId,
-        pats: Vec<Pattern>,
+        pats: Box<[Pattern]>,
     },
 
     /// Conjunctions of patterns.
     And {
-        pats: Vec<Pattern>,
+        pats: Box<[Pattern]>,
     },
 
     /// Extractor uses (both fallible and infallible).
     Extractor {
         id: TermId,
-        pats: Vec<Pattern>,
+        pats: Box<[Pattern]>,
     },
 
     Wildcard,
