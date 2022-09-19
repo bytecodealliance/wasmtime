@@ -21,7 +21,6 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::packed_option::PackedOption;
 use smallvec::SmallVec;
-use std::collections::HashSet;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///
@@ -56,7 +55,7 @@ pub struct SSABuilder {
 
     /// Reused allocation for blocks we've already visited in the
     /// `can_optimize_var_lookup` method.
-    visited: HashSet<Block>,
+    visited: SecondaryMap<Block, bool>,
 
     /// If a block B has chain up single predecessors leading to a block B' in
     /// this map, then the value in the map indicates whether variable lookups
@@ -331,10 +330,11 @@ impl SSABuilder {
             }
 
             let next_current = predecessors[0].block;
-            if !self.visited.insert(current) {
+            if self.visited[current] {
                 self.successors_can_optimize_var_lookup[block] = Some(false);
                 return false;
             }
+            self.visited[current] = true;
 
             current = next_current;
         }
