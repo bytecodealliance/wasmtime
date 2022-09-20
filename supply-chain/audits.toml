@@ -146,6 +146,12 @@ criteria = "safe-to-deploy"
 delta = "0.3.1 -> 0.3.2"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.regalloc2]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "0.3.2 -> 0.3.3"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.rustc-demangle]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
