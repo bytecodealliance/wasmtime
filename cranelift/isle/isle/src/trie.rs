@@ -249,9 +249,8 @@ impl TrieNode {
                 // insert an edge and that edge is always >=
                 // `last_prio.edge_idx`, if not `None`. It also needs
                 // to be `None` to distinguish the no-edges case from
-                // the one-edge-at-index-0 case so that if a new edge
-                // is inserted at index 0, we can do the appropriate
-                // update.
+                // the one-edge-at-index-0 case: see comment on
+                // frontier increment below.
                 edge_idx: None,
             });
         }
@@ -278,6 +277,13 @@ impl TrieNode {
                     .unwrap_err()
                     + first_after_prev_prio;
 
+                // If we inserted prior to the frontier for this
+                // priority, update the frontier index. Note that this
+                // check relies on the frontier being initially `None`
+                // for any given priority so this update does not
+                // occur (as distinguished from a single edge that
+                // existed at index 0, in which case we increment if
+                // we inserted prior to it).
                 if cur_prio.edge_idx.is_some() && insert_pos <= cur_prio.edge_idx.unwrap() {
                     *cur_prio.edge_idx.as_mut().unwrap() += 1;
                 }
