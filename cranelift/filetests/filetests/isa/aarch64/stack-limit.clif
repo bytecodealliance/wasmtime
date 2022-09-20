@@ -43,7 +43,7 @@ block0(v0: i64):
 ;   b.hs 8 ; udf
 ; block0:
 ;   ldr x2, 8 ; b 12 ; data TestCase(%foo) + 0
-;   blr x2 # CallIndInfo { rn: v129, uses: [], defs: [], clobbers: PRegSet { bits: 79228162495817593519834660863 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
+;   blr x2
 ;   ldp fp, lr, [sp], #16
 ;   ret
 
@@ -66,7 +66,7 @@ block0(v0: i64):
 ;   b.hs 8 ; udf
 ; block0:
 ;   ldr x2, 8 ; b 12 ; data TestCase(%foo) + 0
-;   blr x2 # CallIndInfo { rn: v129, uses: [], defs: [], clobbers: PRegSet { bits: 79228162495817593519834660863 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
+;   blr x2
 ;   ldp fp, lr, [sp], #16
 ;   ret
 

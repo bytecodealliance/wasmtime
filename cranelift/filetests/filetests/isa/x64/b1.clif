@@ -11,8 +11,8 @@ block0(v0: b1, v1: i32, v2: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   testb   $1, %dil
-;   cmovnzl %esi, %edx, %edx
 ;   movq    %rdx, %rax
+;   cmovnzl %esi, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -147,8 +147,8 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   shrq    $63, %rdi, %rdi
 ;   movq    %rdi, %rax
+;   shrq    $63, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -163,8 +163,8 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   shrl    $31, %edi, %edi
 ;   movq    %rdi, %rax
+;   shrl    $31, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -179,8 +179,8 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   shrq    $63, %rdi, %rdi
 ;   movq    %rdi, %rax
+;   shrq    $63, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -195,8 +195,8 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   shrl    $31, %edi, %edi
 ;   movq    %rdi, %rax
+;   shrl    $31, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -211,9 +211,9 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   notq    %rdi, %rdi
-;   shrq    $63, %rdi, %rdi
 ;   movq    %rdi, %rax
+;   notq    %rax, %rax
+;   shrq    $63, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -228,9 +228,9 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   notq    %rdi, %rdi
-;   shrl    $31, %edi, %edi
 ;   movq    %rdi, %rax
+;   notq    %rax, %rax
+;   shrl    $31, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -245,9 +245,9 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   notq    %rdi, %rdi
-;   shrq    $63, %rdi, %rdi
 ;   movq    %rdi, %rax
+;   notq    %rax, %rax
+;   shrq    $63, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -262,9 +262,9 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   notq    %rdi, %rdi
-;   shrl    $31, %edi, %edi
 ;   movq    %rdi, %rax
+;   notq    %rax, %rax
+;   shrl    $31, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

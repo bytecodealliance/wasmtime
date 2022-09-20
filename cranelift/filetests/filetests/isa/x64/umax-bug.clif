@@ -13,8 +13,8 @@ block0(v1: i32, v2: i64):
 ; block0:
 ;   movl    0(%rsi), %r8d
 ;   cmpl    %edi, %r8d
-;   cmovnbl %r8d, %edi, %edi
 ;   movq    %rdi, %rax
+;   cmovnbl %r8d, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

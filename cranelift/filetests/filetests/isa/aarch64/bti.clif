@@ -106,7 +106,7 @@ block0(v0: i64):
 ;   mov fp, sp
 ; block0:
 ;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
-;   blr x4 # CallIndInfo { rn: v132, uses: [CallArgPair { vreg: v128, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: v131 }, preg: p0i }], clobbers: PRegSet { bits: 79228162495817593519834660862 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
+;   blr x4
 ;   ldp fp, lr, [sp], #16
 ;   ret
 

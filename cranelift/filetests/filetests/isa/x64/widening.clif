@@ -52,8 +52,9 @@ block0(v0: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   palignr $8, %xmm0, %xmm0, %xmm0
-;   pmovsxbw %xmm0, %xmm0
+;   movdqa  %xmm0, %xmm3
+;   palignr $8, %xmm3, %xmm0, %xmm3
+;   pmovsxbw %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -67,8 +68,9 @@ block0(v0: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   palignr $8, %xmm0, %xmm0, %xmm0
-;   pmovsxwd %xmm0, %xmm0
+;   movdqa  %xmm0, %xmm3
+;   palignr $8, %xmm3, %xmm0, %xmm3
+;   pmovsxwd %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -139,8 +141,9 @@ block0(v0: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   palignr $8, %xmm0, %xmm0, %xmm0
-;   pmovzxbw %xmm0, %xmm0
+;   movdqa  %xmm0, %xmm3
+;   palignr $8, %xmm3, %xmm0, %xmm3
+;   pmovzxbw %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -154,8 +157,9 @@ block0(v0: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   palignr $8, %xmm0, %xmm0, %xmm0
-;   pmovzxwd %xmm0, %xmm0
+;   movdqa  %xmm0, %xmm3
+;   palignr $8, %xmm3, %xmm0, %xmm3
+;   pmovzxwd %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

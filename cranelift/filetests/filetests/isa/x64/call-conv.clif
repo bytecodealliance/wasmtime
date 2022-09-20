@@ -15,7 +15,7 @@ block0(v0: i32):
 ;   movq    %rdi, %rcx
 ;   subq    %rsp, $32, %rsp
 ;   virtual_sp_offset_adjust 32
-;   call    *%rcx # CallInfo { uses: [CallArgPair { vreg: v128, preg: p1i }], defs: [], clobbers: PRegSet { bits: 1162144876643701755655 }, opcode: CallIndirect }
+;   call    *%rcx
 ;   addq    %rsp, $32, %rsp
 ;   virtual_sp_offset_adjust -32
 ;   movq    %rbp, %rsp
@@ -40,11 +40,11 @@ block0(v0: i32, v1: f32):
 ;   virtual_sp_offset_adjust 32
 ;   movq    %rdi, %rcx
 ;   movdqa  %xmm6, %xmm1
-;   call    *%rdi # CallInfo { uses: [CallArgPair { vreg: v128, preg: p1i }, CallArgPair { vreg: v129, preg: p1f }], defs: [], clobbers: PRegSet { bits: 1162144876643701755655 }, opcode: CallIndirect }
+;   call    *%rdi
 ;   addq    %rsp, $32, %rsp
 ;   virtual_sp_offset_adjust -32
 ;   movdqa  %xmm6, %xmm0
-;   call    *%rdi # CallInfo { uses: [CallArgPair { vreg: v128, preg: p7i }, CallArgPair { vreg: v129, preg: p0f }], defs: [], clobbers: PRegSet { bits: 1208907372870555465158599 }, opcode: CallIndirect }
+;   call    *%rdi
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -74,7 +74,7 @@ block0(v0: i32):
 ;   movdqu  %xmm14, 144(%rsp)
 ;   movdqu  %xmm15, 160(%rsp)
 ; block0:
-;   call    *%rcx # CallInfo { uses: [], defs: [], clobbers: PRegSet { bits: 1208907372870555465158599 }, opcode: CallIndirect }
+;   call    *%rcx
 ;   movq    0(%rsp), %rsi
 ;   movq    8(%rsp), %rdi
 ;   movdqu  16(%rsp), %xmm6
@@ -153,7 +153,7 @@ block0(
 ;   movq    %rdi, %r9
 ;   movq    %rcx, %r8
 ;   movq    %rsi, %rcx
-;   call    *%rcx # CallInfo { uses: [CallArgPair { vreg: v128, preg: p1i }, CallArgPair { vreg: v129, preg: p2i }, CallArgPair { vreg: v130, preg: p8i }, CallArgPair { vreg: v131, preg: p9i }], defs: [], clobbers: PRegSet { bits: 1162144876643701755655 }, opcode: CallIndirect }
+;   call    *%rcx
 ;   addq    %rsp, $144, %rsp
 ;   virtual_sp_offset_adjust -144
 ;   movq    %rbp, %rsp
@@ -183,7 +183,7 @@ block0(v0: i64, v1:i64, v2:i64, v3:i64, v4:i64):
 ;   virtual_sp_offset_adjust 48
 ;   movq    %r8, 32(%rsp)
 ;   movq    %r11, %r8
-;   call    *%rcx # CallInfo { uses: [CallArgPair { vreg: v128, preg: p1i }, CallArgPair { vreg: v129, preg: p2i }, CallArgPair { vreg: v130, preg: p8i }, CallArgPair { vreg: v131, preg: p9i }], defs: [], clobbers: PRegSet { bits: 1162144876643701755655 }, opcode: CallIndirect }
+;   call    *%rcx
 ;   addq    %rsp, $48, %rsp
 ;   virtual_sp_offset_adjust -48
 ;   movq    %rbp, %rsp
@@ -216,7 +216,7 @@ block0(v0: i32, v1: f32, v2: i64, v3: f64, v4: i32, v5: i32, v6: i32, v7: f32, v
 ;   movq    %rsi, %rcx
 ;   movq    %r9, %r8
 ;   movdqa  %xmm12, %xmm3
-;   call    *%rcx # CallInfo { uses: [CallArgPair { vreg: v128, preg: p1i }, CallArgPair { vreg: v129, preg: p1f }, CallArgPair { vreg: v130, preg: p8i }, CallArgPair { vreg: v131, preg: p3f }], defs: [], clobbers: PRegSet { bits: 1162144876643701755655 }, opcode: CallIndirect }
+;   call    *%rcx
 ;   addq    %rsp, $96, %rsp
 ;   virtual_sp_offset_adjust -96
 ;   movq    %rbp, %rsp
@@ -233,7 +233,7 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   call    *%rdi # CallInfo { uses: [CallArgPair { vreg: v128, preg: p7i }], defs: [], clobbers: PRegSet { bits: 1208907372870555465158599 }, opcode: CallIndirect }
+;   call    *%rdi
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -248,7 +248,7 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   call    *%rdi # CallInfo { uses: [CallArgPair { vreg: v128, preg: p7i }], defs: [], clobbers: PRegSet { bits: 1208907372870555465158599 }, opcode: CallIndirect }
+;   call    *%rdi
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -268,7 +268,7 @@ block0:
 ;   subq    %rsp, $16, %rsp
 ;   virtual_sp_offset_adjust 16
 ;   lea     0(%rsp), %rdi
-;   call    *%rax # CallInfo { uses: [CallArgPair { vreg: v136, preg: p7i }], defs: [CallRetPair { vreg: Writable { reg: v134 }, preg: p0i }], clobbers: PRegSet { bits: 1208907372870555465158598 }, opcode: CallIndirect }
+;   call    *%rax
 ;   movq    0(%rsp), %rdx
 ;   addq    %rsp, $16, %rsp
 ;   virtual_sp_offset_adjust -16
@@ -291,9 +291,10 @@ block0:
 ; block0:
 ;   movq    %rdi, %r13
 ;   movl    $1, %edx
-;   call    *%rdx # CallInfo { uses: [], defs: [CallRetPair { vreg: Writable { reg: v135 }, preg: p0i }, CallRetPair { vreg: Writable { reg: v136 }, preg: p2i }], clobbers: PRegSet { bits: 1208907372870555465158594 }, opcode: CallIndirect }
+;   call    *%rdx
+;   movq    %rdx, %r9
 ;   movq    %r13, %rdi
-;   movl    %edx, 0(%rdi)
+;   movl    %r9d, 0(%rdi)
 ;   movq    0(%rsp), %r13
 ;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
@@ -318,14 +319,13 @@ block0:
 ;   subq    %rsp, $16, %rsp
 ;   virtual_sp_offset_adjust 16
 ;   lea     0(%rsp), %rdi
-;   call    *%r8 # CallInfo { uses: [CallArgPair { vreg: v140, preg: p7i }], defs: [CallRetPair { vreg: Writable { reg: v137 }, preg: p0i }, CallRetPair { vreg: Writable { reg: v138 }, preg: p2i }], clobbers: PRegSet { bits: 1208907372870555465158594 }, opcode: CallIndirect }
+;   call    *%r8
 ;   movq    %rdx, %rcx
 ;   movq    0(%rsp), %rdx
 ;   addq    %rsp, $16, %rsp
 ;   virtual_sp_offset_adjust -16
-;   movq    %rcx, %r8
 ;   movq    %rbx, %rdi
-;   movq    %r8, 0(%rdi)
+;   movq    %rcx, 0(%rdi)
 ;   movl    %edx, 8(%rdi)
 ;   movq    0(%rsp), %rbx
 ;   addq    %rsp, $16, %rsp
@@ -348,11 +348,14 @@ block0:
 ; block0:
 ;   movq    %rdi, %r12
 ;   movl    $1, %r9d
-;   call    *%r9 # CallInfo { uses: [], defs: [CallRetPair { vreg: Writable { reg: v139 }, preg: p0f }, CallRetPair { vreg: Writable { reg: v140 }, preg: p0i }, CallRetPair { vreg: Writable { reg: v141 }, preg: p2i }, CallRetPair { vreg: Writable { reg: v142 }, preg: p1f }], clobbers: PRegSet { bits: 1208852032638334336503746 }, opcode: CallIndirect }
+;   call    *%r9
+;   movq    %rax, %r9
+;   movq    %rdx, %r11
+;   movdqa  %xmm1, %xmm10
 ;   movq    %r12, %rdi
-;   movq    %rax, 0(%rdi)
-;   movl    %edx, 8(%rdi)
-;   movss   %xmm1, 12(%rdi)
+;   movq    %r9, 0(%rdi)
+;   movl    %r11d, 8(%rdi)
+;   movss   %xmm10, 12(%rdi)
 ;   movq    0(%rsp), %r12
 ;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp
@@ -374,12 +377,14 @@ block0(v0: f32, v1: i64, v2: i32, v3: f32):
 ; block0:
 ;   movq    %rdx, %r13
 ;   movl    $1, %eax
-;   call    *%rax # CallInfo { uses: [CallArgPair { vreg: v128, preg: p0f }, CallArgPair { vreg: v129, preg: p7i }, CallArgPair { vreg: v130, preg: p6i }, CallArgPair { vreg: v131, preg: p1f }], defs: [CallRetPair { vreg: Writable { reg: v143 }, preg: p0f }, CallRetPair { vreg: Writable { reg: v144 }, preg: p0i }, CallRetPair { vreg: Writable { reg: v145 }, preg: p2i }, CallRetPair { vreg: Writable { reg: v146 }, preg: p1f }], clobbers: PRegSet { bits: 1208852032638334336503746 }, opcode: CallIndirect }
+;   call    *%rax
+;   movq    %rax, %rdi
 ;   movq    %rdx, %rcx
+;   movdqa  %xmm1, %xmm14
 ;   movq    %r13, %rdx
-;   movq    %rax, 0(%rdx)
+;   movq    %rdi, 0(%rdx)
 ;   movl    %ecx, 8(%rdx)
-;   movss   %xmm1, 12(%rdx)
+;   movss   %xmm14, 12(%rdx)
 ;   movq    0(%rsp), %r13
 ;   addq    %rsp, $16, %rsp
 ;   movq    %rbp, %rsp

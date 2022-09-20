@@ -37,19 +37,21 @@ block0(v0: i64, v1: i16, v2: i16, v3: i64):
   return v4
 }
 
-;   stmg %r9, %r15, 72(%r15)
+;   stmg %r11, %r15, 88(%r15)
 ; block0:
-;   lgr %r9, %r4
+;   lgr %r11, %r3
+;   lgr %r2, %r4
 ;   sllk %r4, %r5, 3
-;   nill %r5, 65532
-;   lrvr %r2, %r3
-;   lgr %r3, %r9
-;   lrvr %r3, %r3
-;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 16(%r4) ; rxsbg %r1, %r2, 176, 64, 48 ; jglh 1f ; risbgn %r1, %r3, 48, 64, 48 ; rll %r1, %r1, 16(%r4) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   lgr %r3, %r5
+;   nill %r3, 65532
+;   lgr %r5, %r11
+;   lrvr %r5, %r5
+;   lrvr %r2, %r2
+;   l %r0, 0(%r3)
+;   0: rll %r1, %r0, 16(%r4) ; rxsbg %r1, %r5, 176, 64, 48 ; jglh 1f ; risbgn %r1, %r2, 48, 64, 48 ; rll %r1, %r1, 16(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r3, %r0, 0(%r4)
 ;   lrvr %r2, %r3
-;   lmg %r9, %r15, 72(%r15)
+;   lmg %r11, %r15, 88(%r15)
 ;   br %r14
 
 function %atomic_cas_i8(i64, i8, i8, i64) -> i8 {

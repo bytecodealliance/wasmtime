@@ -52,8 +52,8 @@ block0(v0: i64):
 ;   lea     0(%rsp), %rdi
 ;   movl    $64, %edx
 ;   load_ext_name %Memcpy+0, %rax
-;   call    *%rax # CallInfo { uses: [CallArgPair { vreg: v131, preg: p7i }, CallArgPair { vreg: v128, preg: p6i }, CallArgPair { vreg: v132, preg: p2i }], defs: [], clobbers: PRegSet { bits: 1208907372870555465158599 }, opcode: Call }
-;   call    User(userextname0) # CallInfo { uses: [], defs: [CallRetPair { vreg: Writable { reg: v134 }, preg: p0i }], clobbers: PRegSet { bits: 1208907372870555465158598 }, opcode: Call }
+;   call    *%rax
+;   call    User(userextname0)
 ;   addq    %rsp, $64, %rsp
 ;   virtual_sp_offset_adjust -64
 ;   movq    %rbp, %rsp
@@ -79,9 +79,9 @@ block0(v0: i64, v1: i64):
 ;   lea     0(%rsp), %rdi
 ;   movl    $64, %edx
 ;   load_ext_name %Memcpy+0, %rcx
-;   call    *%rcx # CallInfo { uses: [CallArgPair { vreg: v132, preg: p7i }, CallArgPair { vreg: v129, preg: p6i }, CallArgPair { vreg: v133, preg: p2i }], defs: [], clobbers: PRegSet { bits: 1208907372870555465158599 }, opcode: Call }
+;   call    *%rcx
 ;   movq    %r14, %rdi
-;   call    User(userextname0) # CallInfo { uses: [CallArgPair { vreg: v128, preg: p7i }], defs: [CallRetPair { vreg: Writable { reg: v135 }, preg: p0i }], clobbers: PRegSet { bits: 1208907372870555465158598 }, opcode: Call }
+;   call    User(userextname0)
 ;   addq    %rsp, $64, %rsp
 ;   virtual_sp_offset_adjust -64
 ;   movq    0(%rsp), %r14
@@ -131,15 +131,15 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   lea     0(%rsp), %rdi
 ;   movl    $128, %edx
 ;   load_ext_name %Memcpy+0, %r8
-;   call    *%r8 # CallInfo { uses: [CallArgPair { vreg: v133, preg: p7i }, CallArgPair { vreg: v129, preg: p6i }, CallArgPair { vreg: v134, preg: p2i }], defs: [], clobbers: PRegSet { bits: 1208907372870555465158599 }, opcode: Call }
+;   call    *%r8
 ;   lea     128(%rsp), %rdi
 ;   movq    %r15, %rsi
 ;   movl    $64, %edx
 ;   load_ext_name %Memcpy+0, %r8
 ;   movq    %r15, %rsi
-;   call    *%r8 # CallInfo { uses: [CallArgPair { vreg: v136, preg: p7i }, CallArgPair { vreg: v130, preg: p6i }, CallArgPair { vreg: v137, preg: p2i }], defs: [], clobbers: PRegSet { bits: 1208907372870555465158599 }, opcode: Call }
+;   call    *%r8
 ;   movq    %r13, %rdi
-;   call    User(userextname0) # CallInfo { uses: [CallArgPair { vreg: v128, preg: p7i }], defs: [CallRetPair { vreg: Writable { reg: v139 }, preg: p0i }], clobbers: PRegSet { bits: 1208907372870555465158598 }, opcode: Call }
+;   call    User(userextname0)
 ;   addq    %rsp, $192, %rsp
 ;   virtual_sp_offset_adjust -192
 ;   movq    0(%rsp), %r13

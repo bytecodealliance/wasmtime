@@ -163,7 +163,7 @@ block0(v0: i64):
 ;   load_ext_name %g+0, %rsi
 ;   movq    %rdx, %rcx
 ;   movdqa  %xmm3, %xmm2
-;   call    *%rsi # CallInfo { uses: [CallArgPair { vreg: v128, preg: p1i }, CallArgPair { vreg: v128, preg: p2i }, CallArgPair { vreg: v129, preg: p2f }, CallArgPair { vreg: v129, preg: p3f }], defs: [CallRetPair { vreg: Writable { reg: v132 }, preg: p0i }], clobbers: PRegSet { bits: 1162144876643701755654 }, opcode: Call }
+;   call    *%rsi
 ;   addq    %rsp, $48, %rsp
 ;   virtual_sp_offset_adjust -48
 ;   movq    0(%rsp), %rsi

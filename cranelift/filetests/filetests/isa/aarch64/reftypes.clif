@@ -70,7 +70,7 @@ block3(v7: r64, v8: r64):
 ;   str x0, [sp, #8]
 ;   str x1, [sp, #16]
 ;   ldr x3, 8 ; b 12 ; data TestCase(%f) + 0
-;   blr x3 # CallIndInfo { rn: v149, uses: [CallArgPair { vreg: v147, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: v148 }, preg: p0i }], clobbers: PRegSet { bits: 79228162495817593519834660862 }, opcode: Call, caller_callconv: Fast, callee_callconv: Fast }
+;   blr x3
 ;   mov x2, sp
 ;   ldr x9, [sp, #8]
 ;   str x9, [x2]

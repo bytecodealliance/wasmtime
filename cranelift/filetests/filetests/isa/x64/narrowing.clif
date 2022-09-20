@@ -44,8 +44,9 @@ block0(v0: f64x2):
 ;   cmppd   $0, %xmm5, %xmm0, %xmm5
 ;   movupd  const(0), %xmm6
 ;   andps   %xmm5, %xmm6, %xmm5
-;   minpd   %xmm0, %xmm5, %xmm0
-;   cvttpd2dq %xmm0, %xmm0
+;   movdqa  %xmm0, %xmm9
+;   minpd   %xmm9, %xmm5, %xmm9
+;   cvttpd2dq %xmm9, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

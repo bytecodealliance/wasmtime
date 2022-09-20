@@ -12,7 +12,7 @@ block0(v0: i64, v1: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   blr x1 # CallIndInfo { rn: v129, uses: [CallArgPair { vreg: v128, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: v132 }, preg: p0i }], clobbers: PRegSet { bits: 79228162495817593519834660862 }, opcode: CallIndirect, caller_callconv: Fast, callee_callconv: Fast }
+;   blr x1
 ;   ldp fp, lr, [sp], #16
 ;   ret
 

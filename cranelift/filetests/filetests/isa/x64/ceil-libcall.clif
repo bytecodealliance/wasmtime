@@ -11,7 +11,7 @@ block0(v0: f32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   load_ext_name %CeilF32+0, %rdx
-;   call    *%rdx # CallInfo { uses: [CallArgPair { vreg: v128, preg: p0f }], defs: [CallRetPair { vreg: Writable { reg: v131 }, preg: p0f }], clobbers: PRegSet { bits: 1208888926126481755606983 }, opcode: Call }
+;   call    *%rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -26,7 +26,7 @@ block0(v0: f64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   load_ext_name %CeilF64+0, %rdx
-;   call    *%rdx # CallInfo { uses: [CallArgPair { vreg: v128, preg: p0f }], defs: [CallRetPair { vreg: Writable { reg: v131 }, preg: p0f }], clobbers: PRegSet { bits: 1208888926126481755606983 }, opcode: Call }
+;   call    *%rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
