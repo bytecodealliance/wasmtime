@@ -244,6 +244,10 @@ impl TrieNode {
             *last_prio = *cur_prio;
             *cur_prio = Some(PrioFrontier {
                 prio,
+                // This is `None` initially but will be updated below
+                // to at least the frontier, as we always reuse or
+                // insert an edge and that edge is always >=
+                // `last_prio.edge_idx`, if not `None`.
                 edge_idx: None,
             });
         }
