@@ -200,7 +200,7 @@
 //! "equality saturation" e-egraph system, in which it is usually best
 //! to apply rules in batches and then fix up the
 //! canonicalization. This approach was introduced in the `egg`
-//! e-graph engine [1]. We call our system FLAX (because flax is an
+//! e-graph engine [^1]. We call our system FLAX (because flax is an
 //! alternative to egg): Fast Localized Aegraph eXpansion.
 //!
 //! The reason that this is possible in an aegraph but not
@@ -213,9 +213,9 @@
 //! rewriting and the immutable data structure mutually allow each
 //! other to be practical; both work together.
 //!
-//! [1]: M Willsey, C Nandi, Y R Wang, O Flatt, Z Tatlock, P
-//!      Panchekha. "egg: Fast and Flexible Equality Saturation." In
-//!      POPL 2021. <https://dl.acm.org/doi/10.1145/3434304>
+//! [^1]: M Willsey, C Nandi, Y R Wang, O Flatt, Z Tatlock, P
+//!       Panchekha. "egg: Fast and Flexible Equality Saturation." In
+//!       POPL 2021. <https://dl.acm.org/doi/10.1145/3434304>
 
 use cranelift_entity::PrimaryMap;
 use cranelift_entity::{entity_impl, packed_option::ReservedValue};
