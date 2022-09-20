@@ -247,7 +247,11 @@ impl TrieNode {
                 // This is `None` initially but will be updated below
                 // to at least the frontier, as we always reuse or
                 // insert an edge and that edge is always >=
-                // `last_prio.edge_idx`, if not `None`.
+                // `last_prio.edge_idx`, if not `None`. It also needs
+                // to be `None` to distinguish the no-edges case from
+                // the one-edge-at-index-0 case so that if a new edge
+                // is inserted at index 0, we can do the appropriate
+                // update.
                 edge_idx: None,
             });
         }
