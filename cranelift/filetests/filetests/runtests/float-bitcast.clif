@@ -15,16 +15,16 @@ block0(v0: i32):
 ; run: %bcast_i32_f32_i32_convert(0x12345678) == 0x12345678
 ; run: %bcast_i32_f32_i32_convert(0x0) == 0x0
 
-function %bcast_i64_f64_f64_convert(i64) -> i64 {
+function %bcast_i64_f64_i64_convert(i64) -> i64 {
 block0(v0: i64):
     v1 = bitcast.f64 v0
     v2 = bitcast.i64 v1
     return v2
 }
 
-; run: %bcast_i64_f64_f64_convert(0xFFFFFFFFFFFFFFFF) == 0xFFFFFFFFFFFFFFFF
-; run: %bcast_i64_f64_f64_convert(0x1234567812345678) == 0x1234567812345678
-; run: %bcast_i64_f64_f64_convert(0x0) == 0x0
+; run: %bcast_i64_f64_i64_convert(0xFFFFFFFFFFFFFFFF) == 0xFFFFFFFFFFFFFFFF
+; run: %bcast_i64_f64_i64_convert(0x1234567812345678) == 0x1234567812345678
+; run: %bcast_i64_f64_i64_convert(0x0) == 0x0
 
 function %bcast_i32_to_f32(i32) -> f32 {
 block0(v0: i32):
