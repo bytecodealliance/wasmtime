@@ -4,24 +4,44 @@ target x86_64
 target aarch64
 target s390x
 
-function %bcast_i32_to_f32(i32) -> i32 {
+function %bcast_i32_f32_i32_convert(i32) -> i32 {
 block0(v0: i32):
     v1 = bitcast.f32 v0
     v2 = bitcast.i32 v1
     return v2
 }
 
-; run: %bcast_i32_to_f32(0xFFFFFFFF) == 0xFFFFFFFF
-; run: %bcast_i32_to_f32(0x12345678) == 0x12345678
-; run: %bcast_i32_to_f32(0x0) == 0x0
+; run: %bcast_i32_f32_i32_convert(0xFFFFFFFF) == 0xFFFFFFFF
+; run: %bcast_i32_f32_i32_convert(0x12345678) == 0x12345678
+; run: %bcast_i32_f32_i32_convert(0x0) == 0x0
 
-function %bcast_i64_to_f64(i64) -> i64 {
+function %bcast_i64_f64_f64_convert(i64) -> i64 {
 block0(v0: i64):
     v1 = bitcast.f64 v0
     v2 = bitcast.i64 v1
     return v2
 }
 
-; run: %bcast_i64_to_f64(0xFFFFFFFFFFFFFFFF) == 0xFFFFFFFFFFFFFFFF
-; run: %bcast_i64_to_f64(0x1234567812345678) == 0x1234567812345678
-; run: %bcast_i64_to_f64(0x0) == 0x0
+; run: %bcast_i64_f64_f64_convert(0xFFFFFFFFFFFFFFFF) == 0xFFFFFFFFFFFFFFFF
+; run: %bcast_i64_f64_f64_convert(0x1234567812345678) == 0x1234567812345678
+; run: %bcast_i64_f64_f64_convert(0x0) == 0x0
+
+function %bcast_i32_to_f32(i32) -> f32 {
+block0(v0: i32):
+    v1 = bitcast.f32 v0
+    return v1
+}
+
+; run: %bcast_i32_to_f32(0xFFFFFFFF) == -NaN:0x3fffff
+; run: %bcast_i32_to_f32(0x12345678) == 0x1.68acf0p-91
+; run: %bcast_i32_to_f32(0x0) == 0x0.0
+
+function %bcast_i64_to_f64(i64) -> f64 {
+block0(v0: i64):
+    v1 = bitcast.f64 v0
+    return v1
+}
+
+; run: %bcast_i64_to_f64(0xFFFFFFFFFFFFFFFF) == -NaN:0x7ffffffffffff
+; run: %bcast_i64_to_f64(0x1234567812345678) == 0x1.4567812345678p-732
+; run: %bcast_i64_to_f64(0x0) == 0x0.0
