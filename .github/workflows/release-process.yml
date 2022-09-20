@@ -117,7 +117,7 @@ jobs:
           rustc ci/update-release-date.rs -o /tmp/update-release-date
           /tmp/update-release-date $(date +'%Y-%m-%d')
 
-          git commit -a -F-<<EOF
+          git commit --allow-empty -a -F-<<EOF
           Update release date of Wasmtime $cur
           EOF
           git push origin HEAD:ci/release-date-for-$cur
@@ -152,7 +152,7 @@ jobs:
           # released
           git reset --hard origin/release-$cur
           sed -i "s/^Unreleased/Released $(date +'%Y-%m-%d')/" RELEASES.md
-          git commit -a -F-<<EOF
+          git commit --allow-empty -a -F-<<EOF
           Release Wasmtime $cur
 
           [automatically-tag-and-release-this-commit]
