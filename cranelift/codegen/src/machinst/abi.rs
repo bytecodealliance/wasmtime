@@ -506,8 +506,8 @@ pub trait ABIMachineSpec {
     /// temporary register to use to synthesize the called address, if needed.
     fn gen_call(
         dest: &CallDest,
-        uses: SmallVec<[CallArgPair; 8]>,
-        defs: SmallVec<[CallRetPair; 8]>,
+        uses: CallArgList,
+        defs: CallRetList,
         clobbers: PRegSet,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
@@ -515,9 +515,10 @@ pub trait ABIMachineSpec {
         callee_conv: isa::CallConv,
     ) -> SmallVec<[Self::I; 2]>;
 
-    /// Generate a memcpy invocation. Used to set up struct args. May clobber
-    /// caller-save registers; we only memcpy before we start to set up args for
-    /// a call.
+    /// Generate a memcpy invocation. Used to set up struct
+    /// args. Takes `src`, `dst` as read-only inputs and requires two
+    /// temporaries to generate the call (for the size immediate and
+    /// possibly for the address of `memcpy` itself).
     fn gen_memcpy(
         call_conv: isa::CallConv,
         dst: Reg,
@@ -1897,15 +1898,18 @@ pub struct CallRetPair {
     pub preg: Reg,
 }
 
+pub type CallArgList = SmallVec<[CallArgPair; 8]>;
+pub type CallRetList = SmallVec<[CallRetPair; 8]>;
+
 /// ABI object for a callsite.
 pub struct Caller<M: ABIMachineSpec> {
     /// The called function's signature.
     sig: Sig,
     /// All register uses for the callsite, i.e., function args, with
     /// VReg and the physical register it is constrained to.
-    uses: SmallVec<[CallArgPair; 8]>,
+    uses: CallArgList,
     /// All defs for the callsite, i.e., return values.
-    defs: SmallVec<[CallRetPair; 8]>,
+    defs: CallRetList,
     /// Caller-save clobbers.
     clobbers: PRegSet,
     /// Call destination.
@@ -2108,27 +2112,24 @@ impl<M: ABIMachineSpec> Caller<M> {
             &ABIArg::Slots { ref slots, .. } => slots
                 .iter()
                 .map(|slot| match slot {
-                    &ABIArgSlot::Reg { extension, ty, .. } => {
-                        if extension != ir::ArgumentExtension::None {
-                            1
-                        } else if ty.is_ref() {
-                            1
-                        } else {
-                            0
-                        }
+                    &ABIArgSlot::Reg { extension, .. }
+                        if extension != ir::ArgumentExtension::None =>
+                    {
+                        1
                     }
-                    &ABIArgSlot::Stack { extension, .. } => {
-                        if extension != ir::ArgumentExtension::None {
-                            1
-                        } else {
-                            0
-                        }
+                    &ABIArgSlot::Reg { ty, .. } if ty.is_ref() => 1,
+                    &ABIArgSlot::Reg { .. } => 0,
+                    &ABIArgSlot::Stack { extension, .. }
+                        if extension != ir::ArgumentExtension::None =>
+                    {
+                        1
                     }
+                    &ABIArgSlot::Stack { .. } => 0,
                 })
                 .sum(),
             _ => 0,
         };
-        let mut temps: SmallVec<[Writable<Reg>; 4]> = (0..needed_tmps)
+        let mut temps: SmallVec<[Writable<Reg>; 16]> = (0..needed_tmps)
             .map(|_| ctx.alloc_tmp(M::word_type()).only_reg().unwrap())
             .collect();
 

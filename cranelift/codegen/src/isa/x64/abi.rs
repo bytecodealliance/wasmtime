@@ -586,8 +586,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     /// Generate a call instruction/sequence.
     fn gen_call(
         dest: &CallDest,
-        uses: SmallVec<[CallArgPair; 8]>,
-        defs: SmallVec<[CallRetPair; 8]>,
+        uses: CallArgList,
+        defs: CallRetList,
         clobbers: PRegSet,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,

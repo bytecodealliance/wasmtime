@@ -740,8 +740,8 @@ impl ABIMachineSpec for S390xMachineDeps {
 
     fn gen_call(
         _dest: &CallDest,
-        _uses: SmallVec<[CallArgPair; 8]>,
-        _defs: SmallVec<[CallRetPair; 8]>,
+        _uses: CallArgList,
+        _defs: CallRetList,
         _clobbers: PRegSet,
         _opcode: ir::Opcode,
         _tmp: Writable<Reg>,

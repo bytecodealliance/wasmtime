@@ -1191,8 +1191,9 @@ macro_rules! isle_prelude_method_helpers {
                     self.lower_ctx.emit(inst);
                 }
             }
-            // Handle retvals prior to emitting call, so
-            // the constraints are on the call instruction; but buffer the instructions till after the call.
+            // Handle retvals prior to emitting call, so the
+            // constraints are on the call instruction; but buffer the
+            // instructions till after the call.
             let mut outputs = InstOutput::new();
             let mut retval_insts: crate::machinst::abi::SmallInstVec<_> = smallvec::smallvec![];
             for i in 0..num_rets {
