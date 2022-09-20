@@ -12,7 +12,7 @@ use std::fmt;
 
 mod config;
 mod function_generator;
-mod pass;
+mod passes;
 
 pub type TestCaseInput = Vec<DataValue>;
 
@@ -205,7 +205,10 @@ where
         // Run the int_divz pass
         //
         // This pass replaces divs and rems with sequences that do not trap
-        pass::do_int_divz_pass(self, &mut ctx.func)?;
+        passes::do_int_divz_pass(self, &mut ctx.func)?;
+
+        // This pass replaces fcvt* instructions with sequences that do not trap
+        passes::do_fcvt_trap_pass(self, &mut ctx.func)?;
 
         Ok(ctx.func)
     }

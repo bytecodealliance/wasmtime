@@ -47,6 +47,13 @@ pub struct Config {
     /// that avoids these issues. However we can allow some `int_divz` traps
     /// by controlling this config.
     pub allowed_int_divz_ratio: (usize, usize),
+
+    /// How often should we allow fcvt related traps.
+    ///
+    /// `Fcvt*` instructions fail under some inputs, most commonly NaN's.
+    /// We insert a checking sequence to guarantee that those inputs never make
+    /// it to the instruction, but sometimes we want to allow them.
+    pub allowed_fcvt_traps_ratio: (usize, usize),
 }
 
 impl Default for Config {
@@ -71,6 +78,7 @@ impl Default for Config {
             // impact execs/s
             backwards_branch_ratio: (1, 1000),
             allowed_int_divz_ratio: (1, 1_000_000),
+            allowed_fcvt_traps_ratio: (1, 1_000_000),
         }
     }
 }
