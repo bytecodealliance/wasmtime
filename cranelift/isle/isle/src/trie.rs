@@ -260,8 +260,9 @@ impl TrieNode {
         // Now find or insert the appropriate edge.
         let edge = edges
             .iter()
-            .enumerate()
-            .position(|(i, edge)| (start.is_none() || i >= start.unwrap()) && edge.symbol == op)
+            .skip(start.unwrap_or(0))
+            .position(|edge| edge.symbol == op)
+            .map(|pos| pos + start.unwrap_or(0))
             .unwrap_or_else(|| {
                 // Insert in a position among our allowed range
                 // (strictly after `start` now) that would be sorted
