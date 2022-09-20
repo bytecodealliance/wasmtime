@@ -125,13 +125,6 @@ fn run(data: &[u8]) -> Result<()> {
 
         // One side succeeded and one side failed, that means a bug happened!
         (l, r) => {
-            // FIXME(#4852): the spec interpreter doesn't instantiate as part of
-            // the instantiate step so if wasmtime failed and the spec succeeded
-            // that's ok. This clause should be removed once that issue is
-            // fixed.
-            if l.is_ok() && lhs.name() == "spec" {
-                return Ok(());
-            }
             panic!(
                 "failed to instantiate only one side: {:?} != {:?}",
                 l.err(),
@@ -172,15 +165,8 @@ fn run(data: &[u8]) -> Result<()> {
                 break 'outer;
             }
 
-            // FIXME(#4852): the spec interpreter only supports one execution
-            // right now because each execution re-instantiates the module in
-            // its bindings. This should be removed once that issue is fixed.
-            if lhs.name() == "spec" {
-                break 'outer;
-            }
-
             // We evaluate the same function with different arguments until we
-            // hit a predetermined limit or we run out of unstructured data--it
+            // Hit a predetermined limit or we run out of unstructured data--it
             // does not make sense to re-evaluate the same arguments over and
             // over.
             if invocations > NUM_INVOCATIONS || u.is_empty() {

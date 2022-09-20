@@ -1362,12 +1362,6 @@
 (decl intcc_without_eq (IntCC) IntCC)
 (extern constructor intcc_without_eq intcc_without_eq)
 
-;; This is a direct import of `IntCC::unsigned`.
-;; Get the corresponding IntCC with the signed component removed.
-;; For conditions without a signed component, this is a no-op.
-(decl intcc_unsigned (IntCC) IntCC)
-(extern constructor intcc_unsigned intcc_unsigned)
-
 ;;;; Helpers for Getting Particular Physical Registers ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; These should only be used for legalization purposes, when we can't otherwise

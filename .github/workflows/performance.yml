@@ -1,0 +1,159 @@
+# This is a workflow triggered by PR or triggered manually
+# Runs quick performance tests and reports the comparison against HEAD
+# Test should take less than 10 minutes to run on current self-hosted devices
+name: "Performance Testing"
+
+# Controls when the action will run.
+# This workflow runs when manually triggered by keywords used in the start of a review comment
+# Currently that phrase is /bench_x64. /bench_aarch64 and /bench_all are TODOs.
+on:
+  pull_request_review:
+    types: [submitted, edited]
+  push:
+
+# Env variables
+env:
+  SG_COMMIT: b4971ae
+  GITHUB_CONTEXT: ${{ toJson(github) }}
+
+jobs:
+  Wasmtime_Repo_On_PR_Comment:
+    name: Benchmark x64 on PR comment Wasmtime repo
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'pull_request_review') &&
+      (contains(github.event.review.body, '/bench_x64')) &&
+      (('abrown' == github.event.review.user.login)
+        || ('afonso360' == github.event.review.user.login)
+        || ('akirilov-arm' == github.event.review.user.login)
+        || ('alexcrichton' == github.event.review.user.login)
+        || ('bbouvier' == github.event.review.user.login)
+        || ('bjorn3' == github.event.review.user.login)
+        || ('cfallin' == github.event.review.user.login)
+        || ('fitzgen' == github.event.review.user.login)
+        || ('jlb6740' == github.event.review.user.login)
+        || ('sparker-arm' == github.event.review.user.login)
+        || ('uweigand' == github.event.review.user.login))
+    steps:
+      - run: echo "$GITHUB_CONTEXT"
+      - run: |
+          # Create and Push Branch
+          git clone https://wasmtime-publish:${{secrets.PERSONAL_ACCESS_TOKEN}}@github.com/bytecodealliance/wasmtime-sightglass-benchmarking.git
+          cd wasmtime-sightglass-benchmarking
+          git remote add wasmtime ${{ github.event.repository.clone_url }}
+          git fetch wasmtime refs/pull/*/merge:refs/remotes/wasmtime/pull/*/merge
+          git checkout wasmtime/pull/${{ github.ref_name }} -b ${{ github.ref_name }}
+          git submodule update --init --recursive
+          git checkout -b wasmtime/${{ github.ref }}/${{ github.sha }}
+          export commit_url=${{ github.event.pull_request._links.commits.href }}
+          git config user.name $(curl -sSL $commit_url | jq -r '.[].commit.committer.name' | tail -n 1)
+          git config user.email $(curl -sSL $commit_url | jq -r '.[].commit.committer.email' | tail -n 1)
+          git commit --allow-empty -m "${{ github.event.pull_request._links.comments.href }}"
+          git push origin wasmtime/${{ github.ref }}/${{ github.sha }}
+
+  Performance_Repo_On_Push:
+    name: Benchmark x64 on push Performance repo
+    runs-on: [self-hosted, linux, x64]
+    if: (github.event_name == 'push') && (github.repository == 'bytecodealliance/wasmtime-sightglass-benchmarking')
+    steps:
+      - run: echo "$GITHUB_CONTEXT"
+      - run: echo "${{ github.event.head_commit.message }}"
+      - name: "Build sightglass commit '${{ env.SG_COMMIT }}'"
+        run: |
+          cd ../ && ls -l && rm -rf ./sightglass
+          git clone https://github.com/bytecodealliance/sightglass.git && cd ./sightglass
+          git checkout ${{env.SG_COMMIT}}
+          cargo build --release
+
+      - name: Checkout patch from bytecodealliance/wasmtime (pushed and triggering on this perf repo)
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          path: wasmtime_commit
+
+      - name: Build patch from bytecodealliance/wasmtime (pushed and triggering on this perf repo)
+        working-directory: ./wasmtime_commit
+        run: |
+          cargo build --release -p wasmtime-bench-api
+          cp target/release/libwasmtime_bench_api.so /tmp/wasmtime_commit.so
+
+      - name: Checkout main from bytecodealliance/wasmtime
+        uses: actions/checkout@v3
+        with:
+          ref: 'main'
+          repository: 'bytecodealliance/wasmtime'
+          submodules: true
+          path: wasmtime_main
+
+      - name: Build main from bytecodealliance/wasmtime
+        working-directory: ./wasmtime_main
+        run: |
+          cargo build --release -p wasmtime-bench-api
+          cp target/release/libwasmtime_bench_api.so /tmp/wasmtime_main.so
+
+      - name: Run performance tests
+        working-directory: ../sightglass
+        run: |
+          cargo run -- \
+          benchmark \
+          --processes 1 \
+          --iterations-per-process 2 \
+          --engine /tmp/wasmtime_main.so \
+          --engine /tmp/wasmtime_commit.so \
+          --output-format csv \
+          --output-file /tmp/results.csv \
+          --raw \
+          -- benchmarks/*/benchmark.wasm
+          ./target/release/sightglass-cli summarize --input-format csv  --output-format csv -f /tmp/results.csv > /tmp/results_summarized.csv
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Post Process Results
+        run: |
+          pip3 install pandas numpy
+          grep -v "nanoseconds" /tmp/results_summarized.csv > /tmp/results_cycles_summarized.csv
+          sed -i 's/\/tmp\/wasmtime_commit.so/patch/g' /tmp/results_cycles_summarized.csv
+          sed -i 's/\/tmp\/wasmtime_main.so/main/g' /tmp/results_cycles_summarized.csv
+          sed -i 's/benchmarks-next\///g'  /tmp/results_cycles_summarized.csv
+          sed -i 's/\/benchmark.wasm//g'  /tmp/results_cycles_summarized.csv
+          python3 -c "import pandas as pd; pp = pd.read_csv('/tmp/results_cycles_summarized.csv', \
+          usecols=['arch','engine','wasm', 'phase', 'mean'], header=0); \
+          pp_sorted = pp.sort_values(['wasm', 'phase', 'engine'], ascending=True); \
+          pp_pct_changed=pp_sorted.groupby(['wasm','phase'])['mean'].pct_change().reset_index().rename(columns = {'mean':'pct_change'}); \
+          pp_sorted.index.name = 'index'; \
+          pp_sorted_merged=pp_sorted.merge(pp_pct_changed, on='index'); \
+          pp_sorted_merged[pp_sorted_merged['engine'].str.contains('patch')]; \
+          pp_sorted_merged=pp_sorted_merged[pp_sorted_merged['engine'].str.contains('patch')]; \
+          pp_sorted_merged=pp_sorted_merged[['wasm','arch','phase','pct_change']]; \
+          print(pp_sorted_merged.to_string(index=False));" >  /tmp/results_cycles_summarized_sorted2.csv
+          sed -i 's/^/ /' /tmp/results_cycles_summarized_sorted2.csv
+          sed -i 's/ \+/|/g' /tmp/results_cycles_summarized_sorted2.csv
+          sed -i -z 's/\n/|\n/g' /tmp/results_cycles_summarized_sorted2.csv
+          sed -i '2 i\ |-|-|-|-|' /tmp/results_cycles_summarized_sorted2.csv
+          sed -i '/main/d' /tmp/results_cycles_summarized_sorted2.csv
+          sed -i '1 i\Shows pct_change on x64 for the patch if merged compared to current head for main.\n\
+          Pct_change is based on clocktick event cycles where the benchmarks are run with Sightglass. \
+          A negative pct_change means clockticks are expected to be reduced for the benchmark, \
+          for that phase, and by that factor, if the patch were merged (i.e. negative is good).\n' /tmp/results_cycles_summarized_sorted2.csv
+
+      - name: Print Results
+        run: cat /tmp/results_cycles_summarized_sorted2.csv
+
+      - id: get-comment-body
+        name: Create Results Body
+        run: |
+            body="$(cat /tmp/results_cycles_summarized_sorted2.csv)"
+            body="${body//'%'/'%25'}"
+            body="${body//$'\n'/'%0A'}"
+            body="${body//$'\r'/'%0D'}"
+            echo "::set-output name=body::$body"
+
+      - name: Publish Results
+        run: |
+          curl -X POST -H "Accept: application/vnd.github.v3+json" \
+          -H "Authorization: token ${{ secrets.WASMTIME_PUBLISHING_TOKEN }}" \
+          ${{ github.event.head_commit.message }} \
+          -d '{"body": ${{ toJSON(steps.get-comment-body.outputs.body) }}}'

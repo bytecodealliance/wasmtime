@@ -36,34 +36,36 @@ block0(v0: i64):
 }
 
 ; block0:
-;   llihf %r5, 2863311530
-;   iilf %r5, 2863311530
-;   sllg %r4, %r2, 1
-;   srlg %r2, %r2, 1
-;   ngr %r4, %r5
-;   xilf %r5, 4294967295
-;   xihf %r5, 4294967295
-;   ngrk %r5, %r2, %r5
-;   ogrk %r2, %r4, %r5
-;   llihf %r4, 3435973836
-;   iilf %r4, 3435973836
-;   sllg %r3, %r2, 2
-;   srlg %r5, %r2, 2
-;   ngr %r3, %r4
-;   xilf %r4, 4294967295
-;   xihf %r4, 4294967295
-;   ngrk %r4, %r5, %r4
-;   ogrk %r5, %r3, %r4
-;   llihf %r3, 4042322160
-;   iilf %r3, 4042322160
-;   sllg %r2, %r5, 4
-;   srlg %r4, %r5, 4
-;   ngr %r2, %r3
+;   lgr %r3, %r2
+;   llihf %r2, 2863311530
+;   iilf %r2, 2863311530
+;   lgr %r5, %r3
+;   sllg %r4, %r5, 1
+;   srlg %r3, %r5, 1
+;   ngr %r4, %r2
+;   xilf %r2, 4294967295
+;   xihf %r2, 4294967295
+;   ngrk %r2, %r3, %r2
+;   ogr %r4, %r2
+;   llihf %r3, 3435973836
+;   iilf %r3, 3435973836
+;   sllg %r5, %r4, 2
+;   srlg %r4, %r4, 2
+;   ngr %r5, %r3
 ;   xilf %r3, 4294967295
 ;   xihf %r3, 4294967295
 ;   ngrk %r3, %r4, %r3
-;   ogrk %r4, %r2, %r3
-;   lrvgr %r2, %r4
+;   ogr %r5, %r3
+;   llihf %r4, 4042322160
+;   iilf %r4, 4042322160
+;   sllg %r2, %r5, 4
+;   srlg %r5, %r5, 4
+;   ngr %r2, %r4
+;   xilf %r4, 4294967295
+;   xihf %r4, 4294967295
+;   ngrk %r4, %r5, %r4
+;   ogr %r2, %r4
+;   lrvgr %r2, %r2
 ;   br %r14
 
 function %bitrev_i32(i32) -> i32 {
@@ -79,22 +81,22 @@ block0(v0: i32):
 ;   nr %r3, %r5
 ;   xilf %r5, 4294967295
 ;   nrk %r4, %r2, %r5
-;   ork %r2, %r3, %r4
-;   iilf %r4, 3435973836
-;   sllk %r3, %r2, 2
-;   srlk %r5, %r2, 2
-;   nrk %r2, %r3, %r4
-;   xilf %r4, 4294967295
-;   nrk %r3, %r5, %r4
-;   ork %r5, %r2, %r3
-;   iilf %r3, 4042322160
-;   sllk %r2, %r5, 4
-;   srlk %r4, %r5, 4
+;   ork %r5, %r3, %r4
+;   iilf %r3, 3435973836
+;   sllk %r2, %r5, 2
+;   srlk %r4, %r5, 2
 ;   nrk %r5, %r2, %r3
 ;   xilf %r3, 4294967295
 ;   nrk %r2, %r4, %r3
-;   ork %r4, %r5, %r2
-;   lrvr %r2, %r4
+;   ork %r3, %r5, %r2
+;   iilf %r5, 4042322160
+;   sllk %r4, %r3, 4
+;   srlk %r2, %r3, 4
+;   nrk %r3, %r4, %r5
+;   xilf %r5, 4294967295
+;   nrk %r4, %r2, %r5
+;   ork %r5, %r3, %r4
+;   lrvr %r2, %r5
 ;   br %r14
 
 function %bitrev_i16(i16) -> i16 {
@@ -110,23 +112,23 @@ block0(v0: i16):
 ;   nr %r3, %r5
 ;   xilf %r5, 4294967295
 ;   nrk %r4, %r2, %r5
-;   ork %r2, %r3, %r4
-;   lhi %r4, -13108
-;   sllk %r3, %r2, 2
-;   srlk %r5, %r2, 2
-;   nrk %r2, %r3, %r4
-;   xilf %r4, 4294967295
-;   nrk %r3, %r5, %r4
-;   ork %r5, %r2, %r3
-;   lhi %r3, -3856
-;   sllk %r2, %r5, 4
-;   srlk %r4, %r5, 4
+;   ork %r5, %r3, %r4
+;   lhi %r3, -13108
+;   sllk %r2, %r5, 2
+;   srlk %r4, %r5, 2
 ;   nrk %r5, %r2, %r3
 ;   xilf %r3, 4294967295
 ;   nrk %r2, %r4, %r3
-;   ork %r4, %r5, %r2
-;   lrvr %r2, %r4
-;   srlk %r2, %r2, 16
+;   ork %r3, %r5, %r2
+;   lhi %r5, -3856
+;   sllk %r4, %r3, 4
+;   srlk %r2, %r3, 4
+;   nrk %r3, %r4, %r5
+;   xilf %r5, 4294967295
+;   nrk %r4, %r2, %r5
+;   ork %r5, %r3, %r4
+;   lrvr %r3, %r5
+;   srlk %r2, %r3, 16
 ;   br %r14
 
 function %bitrev_i8(i8) -> i8 {
@@ -142,21 +144,21 @@ block0(v0: i8):
 ;   nr %r3, %r5
 ;   xilf %r5, 4294967295
 ;   nrk %r4, %r2, %r5
-;   ork %r2, %r3, %r4
-;   lhi %r4, -13108
-;   sllk %r3, %r2, 2
-;   srlk %r5, %r2, 2
-;   nrk %r2, %r3, %r4
-;   xilf %r4, 4294967295
-;   nrk %r3, %r5, %r4
-;   ork %r5, %r2, %r3
-;   lhi %r3, -3856
-;   sllk %r2, %r5, 4
-;   srlk %r4, %r5, 4
+;   ork %r5, %r3, %r4
+;   lhi %r3, -13108
+;   sllk %r2, %r5, 2
+;   srlk %r4, %r5, 2
 ;   nrk %r5, %r2, %r3
 ;   xilf %r3, 4294967295
 ;   nrk %r2, %r4, %r3
-;   ork %r2, %r5, %r2
+;   ork %r3, %r5, %r2
+;   lhi %r5, -3856
+;   sllk %r4, %r3, 4
+;   srlk %r2, %r3, 4
+;   nrk %r3, %r4, %r5
+;   xilf %r5, 4294967295
+;   nrk %r4, %r2, %r5
+;   ork %r2, %r3, %r4
 ;   br %r14
 
 function %clz_i128(i128) -> i128 {
@@ -345,12 +347,13 @@ block0(v0: i32):
 }
 
 ; block0:
-;   oihl %r2, 1
-;   lcgr %r4, %r2
-;   ngr %r2, %r4
-;   flogr %r0, %r2
-;   lhi %r5, 63
-;   srk %r2, %r5, %r0
+;   lgr %r5, %r2
+;   oihl %r5, 1
+;   lcgr %r3, %r5
+;   ngr %r5, %r3
+;   flogr %r0, %r5
+;   lhi %r4, 63
+;   srk %r2, %r4, %r0
 ;   br %r14
 
 function %ctz_i16(i16) -> i16 {
@@ -360,12 +363,13 @@ block0(v0: i16):
 }
 
 ; block0:
-;   oilh %r2, 1
-;   lcgr %r4, %r2
-;   ngr %r2, %r4
-;   flogr %r0, %r2
-;   lhi %r5, 63
-;   srk %r2, %r5, %r0
+;   lgr %r5, %r2
+;   oilh %r5, 1
+;   lcgr %r3, %r5
+;   ngr %r5, %r3
+;   flogr %r0, %r5
+;   lhi %r4, 63
+;   srk %r2, %r4, %r0
 ;   br %r14
 
 function %ctz_i8(i8) -> i8 {
@@ -375,12 +379,13 @@ block0(v0: i8):
 }
 
 ; block0:
-;   oill %r2, 256
-;   lcgr %r4, %r2
-;   ngr %r2, %r4
-;   flogr %r0, %r2
-;   lhi %r5, 63
-;   srk %r2, %r5, %r0
+;   lgr %r5, %r2
+;   oill %r5, 256
+;   lcgr %r3, %r5
+;   ngr %r5, %r3
+;   flogr %r0, %r5
+;   lhi %r4, 63
+;   srk %r2, %r4, %r0
 ;   br %r14
 
 function %popcnt_i128(i128) -> i128 {

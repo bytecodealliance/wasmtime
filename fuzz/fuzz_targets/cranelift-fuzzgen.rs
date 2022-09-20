@@ -85,6 +85,10 @@ fuzz_target!(|testcase: TestCase| {
         let mut builder = settings::builder();
         // We need llvm ABI extensions for i128 values on x86
         builder.set("enable_llvm_abi_extensions", "true").unwrap();
+
+        // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
+        builder.set("enable_verifier", "true").unwrap();
+
         settings::Flags::new(builder)
     };
     let mut compiler = TestFileCompiler::with_host_isa(flags).unwrap();
@@ -104,15 +108,18 @@ fuzz_target!(|testcase: TestCase| {
         match int_res {
             RunResult::Success(_) => {}
             RunResult::Trap(_) => {
-                // We currently ignore inputs that trap the interpreter
+                // If this input traps, skip it and continue trying other inputs
+                // for this function. We've already compiled it anyway.
+                //
                 // We could catch traps in the host run and compare them to the
                 // interpreter traps, but since we already test trap cases with
                 // wasm tests and wasm-level fuzzing, the amount of effort does
                 // not justify implementing it again here.
-                return;
+                continue;
             }
             RunResult::Timeout => {
-                // We probably generated an infinite loop, we can ignore this
+                // We probably generated an infinite loop, we should drop this entire input.
+                // We could `continue` like we do on traps, but timeouts are *really* expensive.
                 return;
             }
             RunResult::Error(_) => panic!("interpreter failed: {:?}", int_res),

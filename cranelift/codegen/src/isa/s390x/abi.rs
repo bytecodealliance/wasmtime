@@ -499,6 +499,7 @@ impl ABIMachineSpec for S390xMachineDeps {
             insts.push(Inst::AluRUImm32 {
                 alu_op: ALUOp::AddLogical64,
                 rd: into_reg,
+                ri: into_reg.to_reg(),
                 imm,
             });
         }
@@ -546,12 +547,14 @@ impl ABIMachineSpec for S390xMachineDeps {
             insts.push(Inst::AluRSImm16 {
                 alu_op: ALUOp::Add64,
                 rd: writable_stack_reg(),
+                ri: stack_reg(),
                 imm,
             });
         } else {
             insts.push(Inst::AluRSImm32 {
                 alu_op: ALUOp::Add64,
                 rd: writable_stack_reg(),
+                ri: stack_reg(),
                 imm,
             });
         }

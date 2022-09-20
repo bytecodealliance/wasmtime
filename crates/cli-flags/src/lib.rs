@@ -124,6 +124,10 @@ pub struct CommonOptions {
     #[clap(long)]
     pub disable_cache: bool,
 
+    /// Disable parallel compilation
+    #[clap(long)]
+    pub disable_parallel_compilation: bool,
+
     /// Enables or disables WebAssembly features
     #[clap(long, value_name = "FEATURE,FEATURE,...", parse(try_from_str = parse_wasm_features))]
     pub wasm_features: Option<WasmFeatures>,
@@ -290,6 +294,10 @@ impl CommonOptions {
                     config.cache_config_load_default()?;
                 }
             }
+        }
+
+        if self.disable_parallel_compilation {
+            config.parallel_compilation(false);
         }
 
         if let Some(max) = self.static_memory_maximum_size {

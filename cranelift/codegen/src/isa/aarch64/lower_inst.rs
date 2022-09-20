@@ -293,11 +293,7 @@ pub(crate) fn lower_insn_to_regs(
             panic!("Should never reach ifcmp as isel root!");
         }
 
-        Opcode::Icmp => {
-            let condcode = ctx.data(insn).cond_code().unwrap();
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            lower_icmp(ctx, insn, condcode, IcmpOutput::Register(rd))?;
-        }
+        Opcode::Icmp => implemented_in_isle(ctx),
 
         Opcode::Fcmp => implemented_in_isle(ctx),
 

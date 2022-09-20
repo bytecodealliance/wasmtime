@@ -127,8 +127,6 @@ block0(v0: i64, v1: i64):
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 
-
-
 function %incoming_args(i64, i32, i32 uext, i32 sext, i16, i16 uext, i16 sext, i8, i8 uext, i8 sext) -> i64 {
 block0(v0: i64, v1: i32, v2: i32, v3: i32, v4: i16, v5: i16, v6: i16, v7: i8, v8: i8, v9: i8):
     v10 = uextend.i64 v1

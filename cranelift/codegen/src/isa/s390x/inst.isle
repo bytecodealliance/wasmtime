@@ -27,6 +27,11 @@
     (AluRR
       (alu_op ALUOp)
       (rd WritableReg)
+      ;; Input side of `rd`. `rd` is constrained to reuse `ri`'s
+      ;; allocation during regalloc. Hence, we have SSA form here (ri
+      ;; is strictly a use, rd is strictly a def) and it becomes a
+      ;; modified-reg form when encoded.
+      (ri Reg)
       (rm Reg))
 
     ;; An ALU operation with a register in-/out operand and
@@ -34,6 +39,7 @@
     (AluRX
       (alu_op ALUOp)
       (rd WritableReg)
+      (ri Reg)
       (mem MemArg))
 
     ;; An ALU operation with a register in-/out operand and a signed 16-bit
@@ -41,6 +47,7 @@
     (AluRSImm16
       (alu_op ALUOp)
       (rd WritableReg)
+      (ri Reg)
       (imm i16))
 
     ;; An ALU operation with a register in-/out operand and a signed 32-bit
@@ -48,6 +55,7 @@
     (AluRSImm32
       (alu_op ALUOp)
       (rd WritableReg)
+      (ri Reg)
       (imm i32))
 
     ;; An ALU operation with a register in-/out operand and an unsigned 32-bit
@@ -55,6 +63,7 @@
     (AluRUImm32
       (alu_op ALUOp)
       (rd WritableReg)
+      (ri Reg)
       (imm u32))
 
     ;; An ALU operation with a register in-/out operand and a shifted 16-bit
@@ -62,6 +71,7 @@
     (AluRUImm16Shifted
       (alu_op ALUOp)
       (rd WritableReg)
+      (ri Reg)
       (imm UImm16Shifted))
 
     ;; An ALU operation with a register in-/out operand and a shifted 32-bit
@@ -69,6 +79,7 @@
     (AluRUImm32Shifted
       (alu_op ALUOp)
       (rd WritableReg)
+      (ri Reg)
       (imm UImm32Shifted))
 
     ;; A multiply operation with two register sources and a register pair destination.
@@ -1999,50 +2010,50 @@
 ;; Helper for emitting `MInst.AluRR` instructions.
 (decl alu_rr (Type ALUOp Reg Reg) Reg)
 (rule (alu_rr ty op src1 src2)
-      (let ((dst WritableReg (copy_writable_reg ty src1))
-            (_ Unit (emit (MInst.AluRR op dst src2))))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.AluRR op dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.AluRX` instructions.
 (decl alu_rx (Type ALUOp Reg MemArg) Reg)
 (rule (alu_rx ty op src mem)
-      (let ((dst WritableReg (copy_writable_reg ty src))
-            (_ Unit (emit (MInst.AluRX op dst mem))))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.AluRX op dst src mem))))
         dst))
 
 ;; Helper for emitting `MInst.AluRSImm16` instructions.
 (decl alu_rsimm16 (Type ALUOp Reg i16) Reg)
 (rule (alu_rsimm16 ty op src imm)
-      (let ((dst WritableReg (copy_writable_reg ty src))
-            (_ Unit (emit (MInst.AluRSImm16 op dst imm))))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.AluRSImm16 op dst src imm))))
         dst))
 
 ;; Helper for emitting `MInst.AluRSImm32` instructions.
 (decl alu_rsimm32 (Type ALUOp Reg i32) Reg)
 (rule (alu_rsimm32 ty op src imm)
-      (let ((dst WritableReg (copy_writable_reg ty src))
-            (_ Unit (emit (MInst.AluRSImm32 op dst imm))))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.AluRSImm32 op dst src imm))))
         dst))
 
 ;; Helper for emitting `MInst.AluRUImm32` instructions.
 (decl alu_ruimm32 (Type ALUOp Reg u32) Reg)
 (rule (alu_ruimm32 ty op src imm)
-      (let ((dst WritableReg (copy_writable_reg ty src))
-            (_ Unit (emit (MInst.AluRUImm32 op dst imm))))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.AluRUImm32 op dst src imm))))
         dst))
 
 ;; Helper for emitting `MInst.AluRUImm16Shifted` instructions.
 (decl alu_ruimm16shifted (Type ALUOp Reg UImm16Shifted) Reg)
 (rule (alu_ruimm16shifted ty op src imm)
-      (let ((dst WritableReg (copy_writable_reg ty src))
-            (_ Unit (emit (MInst.AluRUImm16Shifted op dst imm))))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.AluRUImm16Shifted op dst src imm))))
         dst))
 
 ;; Helper for emitting `MInst.AluRUImm32Shifted` instructions.
 (decl alu_ruimm32shifted (Type ALUOp Reg UImm32Shifted) Reg)
 (rule (alu_ruimm32shifted ty op src imm)
-      (let ((dst WritableReg (copy_writable_reg ty src))
-            (_ Unit (emit (MInst.AluRUImm32Shifted op dst imm))))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.AluRUImm32Shifted op dst src imm))))
         dst))
 
 ;; Helper for emitting `MInst.SMulWide` instructions.
@@ -2705,8 +2716,7 @@
 ;; Push a `MInst.AluRUImm32Shifted` instruction to a sequence.
 (decl push_alu_uimm32shifted (VecMInstBuilder ALUOp WritableReg Reg UImm32Shifted) Reg)
 (rule (push_alu_uimm32shifted ib op (real_reg dst) r imm)
-      (if (same_reg dst r))
-      (let ((_ Unit (inst_builder_push ib (MInst.AluRUImm32Shifted op dst imm))))
+      (let ((_ Unit (inst_builder_push ib (MInst.AluRUImm32Shifted op dst r imm))))
         dst))
 
 ;; Push a `MInst.ShiftRR` instruction to a sequence.
