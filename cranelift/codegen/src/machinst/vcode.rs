@@ -1027,7 +1027,6 @@ impl<I: VCodeInst> VCode<I> {
                                 // Spill from register to spillslot.
                                 let to = to.as_stack().unwrap();
                                 let from_rreg = RealReg::from(from);
-                                debug_assert_eq!(from.class(), to.class());
                                 let spill = self.abi.gen_spill(to, from_rreg);
                                 do_emit(&spill, &[], &mut disasm, &mut buffer, &mut state);
                             }
@@ -1035,7 +1034,6 @@ impl<I: VCodeInst> VCode<I> {
                                 // Load from spillslot to register.
                                 let from = from.as_stack().unwrap();
                                 let to_rreg = Writable::from_reg(RealReg::from(to));
-                                debug_assert_eq!(from.class(), to.class());
                                 let reload = self.abi.gen_reload(to_rreg, from);
                                 do_emit(&reload, &[], &mut disasm, &mut buffer, &mut state);
                             }
