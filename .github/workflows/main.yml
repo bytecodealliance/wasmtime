@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [main]
+    branches: '*'
     tags-ignore: [dev]
   pull_request:
     branches: ['main', 'release-*']
@@ -410,6 +410,9 @@ jobs:
         - build: s390x-linux
           os: ubuntu-latest
           target: s390x-unknown-linux-gnu
+        - build: riscv64gc-linux
+          os: ubuntu-latest
+          target: riscv64gc-unknown-linux-gnu
     steps:
     - uses: actions/checkout@v2
       with:

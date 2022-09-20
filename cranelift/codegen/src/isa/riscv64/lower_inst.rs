@@ -2,7 +2,6 @@
 
 use crate::ir::Inst as IRInst;
 
-use crate::ir::Opcode;
 use crate::isa::riscv64::settings as riscv64_settings;
 use crate::machinst::lower::*;
 use crate::machinst::*;
