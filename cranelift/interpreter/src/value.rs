@@ -309,6 +309,8 @@ impl Value for DataValue {
                 }
                 (DataValue::F32(n), types::I32) => DataValue::I32(n.bits() as i32),
                 (DataValue::F64(n), types::I64) => DataValue::I64(n.bits() as i64),
+                (DataValue::I32(n), types::F32) => DataValue::F32(Ieee32::with_bits(n as u32)),
+                (DataValue::I64(n), types::F64) => DataValue::F64(Ieee64::with_bits(n as u64)),
                 (DataValue::B(b), t) if t.is_bool() => DataValue::B(b),
                 (DataValue::B(b), t) if t.is_int() => {
                     // Bools are represented in memory as all 1's
