@@ -185,7 +185,7 @@ notes = "I am the author of this crate."
 [[audits.system-interface]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
-version = "0.22.0"
+version = "0.23.0"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.wasm-encoder]]
