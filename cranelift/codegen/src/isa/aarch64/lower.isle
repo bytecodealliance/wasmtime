@@ -2227,7 +2227,7 @@
 (rule (lower (has_type out_ty (bitcast x @ (value_type in_ty))))
       (if (ty_int_bool_ref_scalar_64 out_ty))
       (if (ty_int_bool_ref_scalar_64 in_ty))
-      (mov x in_ty))
+      x)
 (rule (lower (has_type $I128 (bitcast x @ (value_type $I128)))) x)
 
 ;;; Rules for `raw_bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
