@@ -21,7 +21,6 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::packed_option::PackedOption;
 use smallvec::SmallVec;
-use std::collections::HashSet;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///
@@ -53,10 +52,6 @@ pub struct SSABuilder {
 
     /// Side effects accumulated in the `use_var`/`predecessors_lookup` state machine.
     side_effects: SideEffects,
-
-    /// Reused allocation for blocks we've already visited in the
-    /// `can_optimize_var_lookup` method.
-    visited: HashSet<Block>,
 }
 
 /// Side effects of a `use_var` or a `seal_block` method call.
@@ -104,6 +99,9 @@ struct SSABlockData {
     predecessors: PredBlockSmallVec,
     // A block is sealed if all of its predecessors have been declared.
     sealed: bool,
+    // A predecessor-cycle occurs if this block is reachable by following only single-predecessor
+    // edges.
+    in_predecessor_cycle: bool,
     // List of current Block arguments for which an earlier def has not been found yet.
     undef_variables: Vec<(Variable, Value)>,
 }
@@ -133,7 +131,6 @@ impl SSABuilder {
             calls: Vec::new(),
             results: Vec::new(),
             side_effects: SideEffects::new(),
-            visited: Default::default(),
         }
     }
 
@@ -279,58 +276,16 @@ impl SSABuilder {
         (value, side_effects)
     }
 
-    /// There are two conditions for being able to optimize the lookup of a non local var:
-    ///  * The block must have a single predecessor
-    ///  * The block cannot be part of a predecessor loop
-    ///
-    /// To check for these conditions we perform a graph search over block predecessors
-    /// marking visited blocks and aborting if we find a previously seen block.
-    /// We stop the search if we find a block with multiple predecessors since the
-    /// original algorithm can handle these cases.
-    fn can_optimize_var_lookup(&mut self, block: Block) -> bool {
-        // Check that the initial block only has one predecessor. This is only a requirement
-        // for the first block.
-        if self.predecessors(block).len() != 1 {
-            return false;
-        }
-
-        self.visited.clear();
-        let mut current = block;
-        loop {
-            let predecessors = self.predecessors(current);
-
-            // We haven't found the original block and we have either reached the entry
-            // block, or we found the end of this line of dead blocks, either way we are
-            // safe to optimize this line of lookups.
-            if predecessors.len() == 0 {
-                return true;
-            }
-
-            // We can stop the search here, the algorithm can handle these cases, even if they are
-            // in an undefined island.
-            if predecessors.len() > 1 {
-                return true;
-            }
-
-            let next_current = predecessors[0].block;
-            if !self.visited.insert(current) {
-                return false;
-            }
-            current = next_current;
-        }
-    }
-
     /// Resolve the minimal SSA Value of `var` in `block` by traversing predecessors.
     ///
     /// This function sets up state for `run_state_machine()` but does not execute it.
     fn use_var_nonlocal(&mut self, func: &mut Function, var: Variable, ty: Type, block: Block) {
         // This function is split into two parts to appease the borrow checker.
         // Part 1: With a mutable borrow of self, update the DataFlowGraph if necessary.
-        let optimize_var_lookup = self.can_optimize_var_lookup(block);
         let data = &mut self.ssa_blocks[block];
         let case = if data.sealed {
             // Optimize the common case of one predecessor: no param needed.
-            if optimize_var_lookup {
+            if data.predecessors.len() == 1 && !data.in_predecessor_cycle {
                 UseVarCases::SealedOnePredecessor(data.predecessors[0].block)
             } else {
                 // Break potential cycles by eagerly adding an operandless param.
@@ -378,11 +333,7 @@ impl SSABuilder {
     /// No predecessors are declared here and the block is not sealed.
     /// Predecessors have to be added with `declare_block_predecessor`.
     pub fn declare_block(&mut self, block: Block) {
-        self.ssa_blocks[block] = SSABlockData {
-            predecessors: PredBlockSmallVec::new(),
-            sealed: false,
-            undef_variables: Vec::new(),
-        };
+        self.ssa_blocks[block] = SSABlockData::default();
     }
 
     /// Declares a new predecessor for a `Block` and record the branch instruction
@@ -396,6 +347,7 @@ impl SSABuilder {
     /// of a jump table.
     pub fn declare_block_predecessor(&mut self, block: Block, pred: Block, inst: Inst) {
         debug_assert!(!self.is_sealed(block));
+        self.update_predecessor_cycle(block, pred, true);
         self.ssa_blocks[block].add_predecessor(pred, inst)
     }
 
@@ -405,7 +357,69 @@ impl SSABuilder {
     /// Note: use only when you know what you are doing, this might break the SSA building problem
     pub fn remove_block_predecessor(&mut self, block: Block, inst: Inst) -> Block {
         debug_assert!(!self.is_sealed(block));
-        self.ssa_blocks[block].remove_predecessor(inst)
+        let pred = self.ssa_blocks[block].remove_predecessor(inst);
+        self.update_predecessor_cycle(block, pred, false);
+        pred
+    }
+
+    /// Call this when `pred` is not in the predecessors of `block`: before adding, or after
+    /// removing.
+    fn update_predecessor_cycle(&mut self, block: Block, mut pred: Block, add: bool) {
+        let block_ref = &self.ssa_blocks[block];
+
+        // Not counting `pred`, how many predecessors does `block` have? And will it have exactly
+        // one after the caller is done changing things?
+        let will_have_one_pred = match block_ref.predecessors.as_slice() {
+            // None: `pred` may reach `block` in a cycle. There'll be one if we're adding `pred`.
+            [] => add,
+            // One: the other predecessor may reach `block` in a cycle. There'll be one if we're
+            // removing `pred`.
+            [other] => {
+                pred = other.block;
+                !add
+            }
+            // Two or more: there is definitely no cycle through `block`, either before or after.
+            _ => return,
+        };
+
+        if will_have_one_pred {
+            debug_assert!(!block_ref.in_predecessor_cycle);
+
+            // This block is about to have exactly one predecessor. Is there a path from that block to
+            // this one, following only single-predecessor edges?
+            let mut pred = pred;
+            while pred != block {
+                let pred_ref = &self.ssa_blocks[pred];
+
+                // If pred is already in a predecessor cycle, it can't be in this one.
+                if pred_ref.in_predecessor_cycle {
+                    return;
+                }
+
+                // If there isn't exactly one predecessor, this isn't a predecessor cycle.
+                if pred_ref.predecessors.len() != 1 {
+                    return;
+                }
+
+                pred = pred_ref.predecessors[0].block;
+            }
+        } else if !block_ref.in_predecessor_cycle {
+            // This block was not in a predecessor cycle before, and doesn't have exactly one
+            // predecessor, so it still isn't in one. Nothing to update.
+            return;
+        }
+
+        // If block's only predecessor were `pred`, then they would be part
+        // of a predecessor cycle. Therefore we can safely follow the cycle all the way around,
+        // flipping it to its new state.
+        self.ssa_blocks[block].in_predecessor_cycle = will_have_one_pred;
+        while pred != block {
+            let pred_ref = &mut self.ssa_blocks[pred];
+            debug_assert_ne!(pred_ref.in_predecessor_cycle, will_have_one_pred);
+            pred_ref.in_predecessor_cycle = will_have_one_pred;
+            debug_assert_eq!(pred_ref.predecessors.len(), 1);
+            pred = pred_ref.predecessors[0].block;
+        }
     }
 
     /// Completes the global value numbering for a `Block`, all of its predecessors having been
