@@ -30,10 +30,10 @@ pub fn do_int_divz_pass(fuzz: &mut FuzzGen, func: &mut Function) -> Result<()> {
 fn can_int_divz(pos: &FuncCursor, inst: Inst) -> bool {
     let opcode = pos.func.dfg[inst].opcode();
 
-    opcode == Opcode::Sdiv
-        || opcode == Opcode::Udiv
-        || opcode == Opcode::Srem
-        || opcode == Opcode::Urem
+    matches!(
+        opcode,
+        Opcode::Sdiv | Opcode::Udiv | Opcode::Srem | Opcode::Urem
+    )
 }
 
 /// Prepend instructions to inst to avoid `int_divz` traps
@@ -49,7 +49,7 @@ fn insert_int_divz_sequence(pos: &mut FuncCursor, inst: Inst) {
     let one = pos.ins().iconst(ty, 1);
     let denominator_is_zero = pos.ins().icmp(IntCC::Equal, rhs, zero);
 
-    let replace_denominator = if opcode == Opcode::Srem || opcode == Opcode::Sdiv {
+    let replace_denominator = if matches!(opcode, Opcode::Srem | Opcode::Sdiv) {
         // Srem and Sdiv can also trap on INT_MIN / -1. So we need to check for the second one
 
         // 1 << (ty bits - 1) to get INT_MIN
