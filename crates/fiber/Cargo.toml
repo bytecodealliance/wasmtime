@@ -17,7 +17,7 @@ links = "wasmtime-fiber-shims"
 cfg-if = "1.0"
 
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "0.35.6", features = ["mm", "param"] }
+rustix = { version = "0.35.10", features = ["mm", "param"] }
 wasmtime-asm-macros = { version = "=2.0.0", path = "../asm-macros" }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
