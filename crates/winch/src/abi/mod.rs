@@ -5,6 +5,9 @@ use wasmtime_environ::{WasmFuncType, WasmType};
 
 pub(crate) mod local;
 
+/// Trait implemented by a specific ISA and used to provide
+/// information about alignment, parameter passing, usage of
+/// specific registers, etc
 pub(crate) trait ABI {
     /// The required stack alignment
     fn stack_align(&self) -> u8;
