@@ -349,6 +349,11 @@ impl<'a> Arbitrary<'a> for Config {
                 }
             };
 
+            // Don't allow too many linear memories per instance since massive
+            // virtual mappings can fail to get allocated.
+            cfg.min_memories = cfg.min_memories.min(10);
+            cfg.max_memories = cfg.max_memories.min(10);
+
             // Force this pooling allocator to always be able to accommodate the
             // module that may be generated.
             limits.memories = cfg.max_memories as u32;

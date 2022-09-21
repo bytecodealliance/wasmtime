@@ -90,22 +90,6 @@ criteria = "safe-to-deploy"
 version = "1.1.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.cap-fs-ext]]
-version = "0.25.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.cap-primitives]]
-version = "0.25.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.cap-std]]
-version = "0.25.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.cap-tempfile]]
-version = "0.25.0"
-criteria = "safe-to-run"
-
 [[exemptions.capstone]]
 version = "0.9.0"
 criteria = "safe-to-deploy"

@@ -21,7 +21,6 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::packed_option::PackedOption;
 use smallvec::SmallVec;
-use std::collections::HashSet;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///
@@ -56,7 +55,12 @@ pub struct SSABuilder {
 
     /// Reused allocation for blocks we've already visited in the
     /// `can_optimize_var_lookup` method.
-    visited: HashSet<Block>,
+    visited: SecondaryMap<Block, bool>,
+
+    /// If a block B has chain up single predecessors leading to a block B' in
+    /// this map, then the value in the map indicates whether variable lookups
+    /// can be optimized in block B.
+    successors_can_optimize_var_lookup: SecondaryMap<Block, Option<bool>>,
 }
 
 /// Side effects of a `use_var` or a `seal_block` method call.
@@ -134,6 +138,7 @@ impl SSABuilder {
             results: Vec::new(),
             side_effects: SideEffects::new(),
             visited: Default::default(),
+            successors_can_optimize_var_lookup: Default::default(),
         }
     }
 
@@ -142,9 +147,11 @@ impl SSABuilder {
     pub fn clear(&mut self) {
         self.variables.clear();
         self.ssa_blocks.clear();
+        self.successors_can_optimize_var_lookup.clear();
         debug_assert!(self.calls.is_empty());
         debug_assert!(self.results.is_empty());
         debug_assert!(self.side_effects.is_empty());
+        debug_assert!(self.successors_can_optimize_var_lookup.is_empty());
     }
 
     /// Tests whether an `SSABuilder` is in a cleared state.
@@ -154,6 +161,7 @@ impl SSABuilder {
             && self.calls.is_empty()
             && self.results.is_empty()
             && self.side_effects.is_empty()
+            && self.successors_can_optimize_var_lookup.is_empty()
     }
 }
 
@@ -291,31 +299,43 @@ impl SSABuilder {
         // Check that the initial block only has one predecessor. This is only a requirement
         // for the first block.
         if self.predecessors(block).len() != 1 {
+            // Skip insertion into `successors_can_optimize_var_lookup` because
+            // the condition is different for the first block.
             return false;
         }
 
         self.visited.clear();
         let mut current = block;
         loop {
+            if let Some(can_optimize) = self.successors_can_optimize_var_lookup[current] {
+                self.successors_can_optimize_var_lookup[block] = Some(can_optimize);
+                return can_optimize;
+            }
+
             let predecessors = self.predecessors(current);
 
             // We haven't found the original block and we have either reached the entry
             // block, or we found the end of this line of dead blocks, either way we are
             // safe to optimize this line of lookups.
             if predecessors.len() == 0 {
+                self.successors_can_optimize_var_lookup[block] = Some(true);
                 return true;
             }
 
             // We can stop the search here, the algorithm can handle these cases, even if they are
             // in an undefined island.
             if predecessors.len() > 1 {
+                self.successors_can_optimize_var_lookup[block] = Some(true);
                 return true;
             }
 
             let next_current = predecessors[0].block;
-            if !self.visited.insert(current) {
+            if self.visited[current] {
+                self.successors_can_optimize_var_lookup[block] = Some(false);
                 return false;
             }
+            self.visited[current] = true;
+
             current = next_current;
         }
     }

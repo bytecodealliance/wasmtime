@@ -22,6 +22,7 @@ default = [
     "wasmtime/cranelift",
     "wasmtime/jitdump",
     "wasmtime/vtune",
+    "wasmtime/parallel-compilation",
 ]
 pooling-allocator = []
 memory-init-cow = []

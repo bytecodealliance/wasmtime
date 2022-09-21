@@ -246,7 +246,11 @@ impl Value for DataValue {
     }
 
     fn into_float(self) -> ValueResult<f64> {
-        unimplemented!()
+        match self {
+            DataValue::F32(n) => Ok(n.as_f32() as f64),
+            DataValue::F64(n) => Ok(n.as_f64()),
+            _ => Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty())),
+        }
     }
 
     fn is_float(&self) -> bool {
@@ -307,8 +311,11 @@ impl Value for DataValue {
                 (val, ty) if val.ty().is_int() && ty.is_int() => {
                     DataValue::from_integer(val.into_int()?, ty)?
                 }
+                (DataValue::I32(n), types::F32) => DataValue::F32(f32::from_bits(n as u32).into()),
+                (DataValue::I64(n), types::F64) => DataValue::F64(f64::from_bits(n as u64).into()),
                 (DataValue::F32(n), types::I32) => DataValue::I32(n.bits() as i32),
                 (DataValue::F64(n), types::I64) => DataValue::I64(n.bits() as i64),
+                (DataValue::F32(n), types::F64) => DataValue::F64((n.as_f32() as f64).into()),
                 (DataValue::B(b), t) if t.is_bool() => DataValue::B(b),
                 (DataValue::B(b), t) if t.is_int() => {
                     // Bools are represented in memory as all 1's
@@ -412,9 +419,17 @@ impl Value for DataValue {
                 DataValue::U128(n) => DataValue::I128(n as i128),
                 _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
             },
-            ValueConversionKind::RoundNearestEven(ty) => match (self.ty(), ty) {
-                (types::F64, types::F32) => unimplemented!(),
-                _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
+            ValueConversionKind::RoundNearestEven(ty) => match (self, ty) {
+                (DataValue::F64(n), types::F32) => {
+                    let mut x = n.as_f64() as f32;
+                    // Rust rounds away from zero, so if we've rounded up we
+                    // should replace this with a proper rounding tied to even.
+                    if (x as f64) != n.as_f64() {
+                        x = n.round_ties_even().as_f64() as f32;
+                    }
+                    DataValue::F32(x.into())
+                }
+                (s, _) => unimplemented!("conversion: {} -> {:?}", s.ty(), kind),
             },
             ValueConversionKind::ToBoolean => match self.ty() {
                 ty if ty.is_bool() => DataValue::B(self.into_bool()?),
