@@ -284,7 +284,9 @@ impl SSABuilder {
         // Part 1: With a mutable borrow of self, update the DataFlowGraph if necessary.
         let data = &mut self.ssa_blocks[block];
         let case = if data.sealed {
-            // Optimize the common case of one predecessor: no param needed.
+            // Optimize the common case of one predecessor: no param needed. However, if following
+            // single-predecessor edges would go through a cycle ending up back here, then this
+            // optimization doesn't apply.
             if data.predecessors.len() == 1 && !data.in_predecessor_cycle {
                 UseVarCases::SealedOnePredecessor(data.predecessors[0].block)
             } else {
@@ -370,54 +372,55 @@ impl SSABuilder {
         // Not counting `pred`, how many predecessors does `block` have? And will it have exactly
         // one after the caller is done changing things?
         let will_have_one_pred = match block_ref.predecessors.as_slice() {
-            // None: `pred` may reach `block` in a cycle. There'll be one if we're adding `pred`.
+            // None: `pred` might reach `block` in a cycle. There'll be one predecessor afterward
+            // if we're adding `pred`.
             [] => add,
-            // One: the other predecessor may reach `block` in a cycle. There'll be one if we're
-            // removing `pred`.
+            // One: the other predecessor might reach `block` in a cycle. There'll be one
+            // predecessor afterward if we're removing `pred`.
             [other] => {
                 pred = other.block;
                 !add
             }
             // Two or more: there is definitely no cycle through `block`, either before or after.
-            _ => return,
+            _ => {
+                debug_assert!(!block_ref.in_predecessor_cycle);
+                return;
+            }
         };
 
         if will_have_one_pred {
             debug_assert!(!block_ref.in_predecessor_cycle);
 
-            // This block is about to have exactly one predecessor. Is there a path from that block to
-            // this one, following only single-predecessor edges?
+            // This block is about to have exactly one predecessor. Is there a path from that block
+            // to this one, following only single-predecessor edges?
             let mut pred = pred;
             while pred != block {
                 let pred_ref = &self.ssa_blocks[pred];
 
                 // If pred is already in a predecessor cycle, it can't be in this one.
-                if pred_ref.in_predecessor_cycle {
-                    return;
-                }
-
                 // If there isn't exactly one predecessor, this isn't a predecessor cycle.
-                if pred_ref.predecessors.len() != 1 {
+                if pred_ref.in_predecessor_cycle || pred_ref.predecessors.len() != 1 {
                     return;
                 }
 
                 pred = pred_ref.predecessors[0].block;
             }
         } else if !block_ref.in_predecessor_cycle {
-            // This block was not in a predecessor cycle before, and doesn't have exactly one
-            // predecessor, so it still isn't in one. Nothing to update.
+            // This block was not in a predecessor cycle before, and won't have exactly one
+            // predecessor afterward, so it still isn't in one. Nothing to update.
             return;
         }
 
-        // If block's only predecessor were `pred`, then they would be part
-        // of a predecessor cycle. Therefore we can safely follow the cycle all the way around,
-        // flipping it to its new state.
+        // At this point we know that if `block`'s only predecessor were `pred`, then both blocks
+        // would be part of a predecessor cycle. That means if we follow single-predecessor edges
+        // starting from `pred`, we'll eventually get to `block`. Therefore we can safely follow
+        // the cycle all the way around, flipping it to its new state.
         self.ssa_blocks[block].in_predecessor_cycle = will_have_one_pred;
         while pred != block {
             let pred_ref = &mut self.ssa_blocks[pred];
             debug_assert_ne!(pred_ref.in_predecessor_cycle, will_have_one_pred);
-            pred_ref.in_predecessor_cycle = will_have_one_pred;
             debug_assert_eq!(pred_ref.predecessors.len(), 1);
+            pred_ref.in_predecessor_cycle = will_have_one_pred;
             pred = pred_ref.predecessors[0].block;
         }
     }
