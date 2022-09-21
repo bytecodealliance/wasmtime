@@ -472,17 +472,17 @@
 (rule (lower (has_type ty @ (multi_lane 64 _) (fcvt_to_uint_sat x @ (value_type (multi_lane 64 _)))))
       (vec_misc (VecMisc2.Fcvtzu) x (vector_size ty)))
 
-(rule (lower (has_type $I32 (fcvt_to_uint_sat x @ (value_type $F32))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToU32) x $false $F32 $I32))
+(rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_uint_sat x @ (value_type $F32))))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToU32) x $false out_ty))
 
 (rule (lower (has_type $I64 (fcvt_to_uint_sat x @ (value_type $F32))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToU64) x $false $F32 $I64))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToU64) x $false $I64))
 
-(rule (lower (has_type $I32 (fcvt_to_uint_sat x @ (value_type $F64))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToU32) x $false $F64 $I32))
+(rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_uint_sat x @ (value_type $F64))))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToU32) x $false out_ty))
 
 (rule (lower (has_type $I64 (fcvt_to_uint_sat x @ (value_type $F64))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToU64) x $false $F64 $I64))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToU64) x $false $I64))
 
 ;;;; Rules for `fcvt_to_sint_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -492,17 +492,17 @@
 (rule (lower (has_type ty @ (multi_lane 64 _) (fcvt_to_sint_sat x @ (value_type (multi_lane 64 _)))))
       (vec_misc (VecMisc2.Fcvtzs) x (vector_size ty)))
 
-(rule (lower (has_type $I32 (fcvt_to_sint_sat x @ (value_type $F32))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToI32) x $true $F32 $I32))
+(rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_sint_sat x @ (value_type $F32))))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToI32) x $true out_ty))
 
 (rule (lower (has_type $I64 (fcvt_to_sint_sat x @ (value_type $F32))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToI64) x $true $F32 $I64))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToI64) x $true $I64))
 
-(rule (lower (has_type $I32 (fcvt_to_sint_sat x @ (value_type $F64))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToI32) x $true $F64 $I32))
+(rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_sint_sat x @ (value_type $F64))))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToI32) x $true out_ty))
 
 (rule (lower (has_type $I64 (fcvt_to_sint_sat x @ (value_type $F64))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToI64) x $true $F64 $I64))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToI64) x $true $I64))
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

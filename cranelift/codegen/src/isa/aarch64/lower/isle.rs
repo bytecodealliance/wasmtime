@@ -637,68 +637,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         tmp.to_reg()
     }
 
-    fn min_fp_value_sat(&mut self, signed: bool, in_bits: u8, out_bits: u8) -> Reg {
-        let tmp = self.lower_ctx.alloc_tmp(I8X16).only_reg().unwrap();
-
-        let min: f64 = match (out_bits, signed) {
-            (32, true) => i32::MIN as f64,
-            (32, false) => 0.0,
-            (64, true) => i64::MIN as f64,
-            (64, false) => 0.0,
-            _ => unimplemented!(
-                "unexpected {} output size of {} bits",
-                if signed { "signed" } else { "unsigned" },
-                out_bits
-            ),
-        };
-
-        if in_bits == 32 {
-            lower_constant_f32(self.lower_ctx, tmp, min as f32)
-        } else if in_bits == 64 {
-            lower_constant_f64(self.lower_ctx, tmp, min)
-        } else {
-            unimplemented!(
-                "unexpected input size for min_fp_value_sat: {} (signed: {}, output size: {})",
-                in_bits,
-                signed,
-                out_bits
-            );
-        }
-
-        tmp.to_reg()
-    }
-
-    fn max_fp_value_sat(&mut self, signed: bool, in_bits: u8, out_bits: u8) -> Reg {
-        let tmp = self.lower_ctx.alloc_tmp(I8X16).only_reg().unwrap();
-
-        let max = match (out_bits, signed) {
-            (32, true) => i32::MAX as f64,
-            (32, false) => u32::MAX as f64,
-            (64, true) => i64::MAX as f64,
-            (64, false) => u64::MAX as f64,
-            _ => unimplemented!(
-                "unexpected {} output size of {} bits",
-                if signed { "signed" } else { "unsigned" },
-                out_bits
-            ),
-        };
-
-        if in_bits == 32 {
-            lower_constant_f32(self.lower_ctx, tmp, max as f32)
-        } else if in_bits == 64 {
-            lower_constant_f64(self.lower_ctx, tmp, max)
-        } else {
-            unimplemented!(
-                "unexpected input size for max_fp_value_sat: {} (signed: {}, output size: {})",
-                in_bits,
-                signed,
-                out_bits
-            );
-        }
-
-        tmp.to_reg()
-    }
-
     fn fpu_op_ri_ushr(&mut self, ty_bits: u8, shift: u8) -> FPUOpRI {
         if ty_bits == 32 {
             FPUOpRI::UShr32(FPURightShiftImm::maybe_from_u8(shift, ty_bits).unwrap())

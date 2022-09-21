@@ -1635,22 +1635,6 @@
 (decl max_fp_value (bool u8 u8) Reg)
 (extern constructor max_fp_value max_fp_value)
 
-;; Calculate the minimum acceptable floating-point value for a conversion to
-;; floating point from an integer type.
-;; Accepts whether the output is signed, the size of the input
-;; floating point type in bits, and the size of the output integer type
-;; in bits.
-(decl min_fp_value_sat (bool u8 u8) Reg)
-(extern constructor min_fp_value_sat min_fp_value_sat)
-
-;; Calculate the maximum acceptable floating-point value for a conversion to
-;; floating point from an integer type.
-;; Accepts whether the output is signed, the size of the input
-;; floating point type in bits, and the size of the output integer type
-;; in bits.
-(decl max_fp_value_sat (bool u8 u8) Reg)
-(extern constructor max_fp_value_sat max_fp_value_sat)
-
 ;; Constructs an FPUOpRI.Ushr* given the size in bits of the value (or lane)
 ;; and the amount to shift by.
 (decl fpu_op_ri_ushr (u8 u8) FPUOpRI)
@@ -3147,32 +3131,37 @@
 ;; floating-point value to an integer, saturating if the value
 ;; does not fit in the target type.
 ;; Accepts the specific conversion op, the source register,
-;; whether the input is signed, and finally the input and output
-;; types.
-(decl fpu_to_int_cvt_sat (FpuToIntOp Reg bool Type Type) Reg)
-(rule (fpu_to_int_cvt_sat op src $true in_ty out_ty)
-      (let ((size ScalarSize (scalar_size in_ty))
-            (in_bits u8 (ty_bits in_ty))
-            (out_bits u8 (ty_bits out_ty))
-            (max Reg (max_fp_value_sat $true in_bits out_bits))
-            (tmp Reg (fpu_rrr (FPUOp2.Min) src max size))
-            (min Reg (min_fp_value_sat $true in_bits out_bits))
-            (tmp Reg (fpu_rrr (FPUOp2.Max) tmp min size))
-            (zero Reg (constant_f128 0))
-            (tmp ValueRegs (with_flags (fpu_cmp size src src)
-                    (fpu_csel in_ty (Cond.Ne) zero tmp))))
-       (fpu_to_int op (value_regs_get tmp 0))))
-(rule (fpu_to_int_cvt_sat op src $false in_ty out_ty)
-      (let ((size ScalarSize (scalar_size in_ty))
-            (in_bits u8 (ty_bits in_ty))
-            (out_bits u8 (ty_bits out_ty))
-            (max Reg (max_fp_value_sat $false in_bits out_bits))
-            (tmp Reg (fpu_rrr (FPUOp2.Min) src max size))
-            (min Reg (min_fp_value_sat $false in_bits out_bits))
-            (tmp Reg (fpu_rrr (FPUOp2.Max) tmp min size))
-            (tmp ValueRegs (with_flags (fpu_cmp size src src)
-                    (fpu_csel in_ty (Cond.Ne) min tmp))))
-       (fpu_to_int op (value_regs_get tmp 0))))
+;; whether the input is signed, and finally the output type.
+(decl fpu_to_int_cvt_sat (FpuToIntOp Reg bool Type) Reg)
+(rule (fpu_to_int_cvt_sat op src _ $I64)
+      (fpu_to_int op src))
+(rule (fpu_to_int_cvt_sat op src _ $I32)
+      (fpu_to_int op src))
+(rule (fpu_to_int_cvt_sat op src $false (fits_in_16 out_ty))
+      (let ((result Reg (fpu_to_int op src))
+            (max Reg (imm out_ty (ImmExtend.Zero) -1)))
+       (with_flags_reg
+        (cmp (OperandSize.Size32) result max)
+        (csel (Cond.Hi) max result))))
+(rule (fpu_to_int_cvt_sat op src $true (fits_in_16 out_ty))
+      (let ((result Reg (fpu_to_int op src))
+            (max Reg (imm $I32 (ImmExtend.Sign) (signed_max out_ty)))
+            (min Reg (imm $I32 (ImmExtend.Sign) (signed_min out_ty)))
+            (result Reg (with_flags_reg
+                         (cmp (operand_size out_ty) result max)
+                         (csel (Cond.Gt) max result)))
+            (result Reg (with_flags_reg
+                         (cmp (operand_size out_ty) result min)
+                         (csel (Cond.Lt) min result))))
+       result))
+
+(decl signed_min (Type) u64)
+(rule (signed_min $I8) -128)
+(rule (signed_min $I16) -32768)
+
+(decl signed_max (Type) u64)
+(rule (signed_max $I8) 127)
+(rule (signed_max $I16) 32767)
 
 (decl fpu_to_int (FpuToIntOp Reg) Reg)
 (rule (fpu_to_int op src)
