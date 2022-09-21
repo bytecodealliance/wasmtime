@@ -8,11 +8,12 @@ use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::isa::{x64::settings as x64_settings, x64::X64Backend, CallConv};
+use crate::machinst::abi::SmallInstVec;
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use target_lexicon::Triple;
 
 //=============================================================================
@@ -168,16 +169,18 @@ fn emit_vm_call(
     assert_eq!(inputs.len(), abi.num_args(ctx.sigs()));
 
     for (i, input) in inputs.iter().enumerate() {
-        for inst in abi.gen_copy_regs_to_arg(ctx, i, ValueRegs::one(*input)) {
+        for inst in abi.gen_arg(ctx, i, ValueRegs::one(*input)) {
             ctx.emit(inst);
         }
     }
 
-    abi.emit_call(ctx);
+    let mut retval_insts: SmallInstVec<_> = smallvec![];
     for (i, output) in outputs.iter().enumerate() {
-        for inst in abi.gen_copy_retval_to_regs(ctx, i, ValueRegs::one(*output)) {
-            ctx.emit(inst);
-        }
+        retval_insts.extend(abi.gen_retval(ctx, i, ValueRegs::one(*output)).into_iter());
+    }
+    abi.emit_call(ctx);
+    for inst in retval_insts {
+        ctx.emit(inst);
     }
     abi.emit_stack_post_adjust(ctx);
 

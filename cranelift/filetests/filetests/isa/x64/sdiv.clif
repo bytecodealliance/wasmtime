@@ -12,7 +12,6 @@ block0(v0: i8, v1: i8):
 ; block0:
 ;   movq    %rdi, %rax
 ;   cbw %al, %al
-;   movq    %rax, %r11
 ;   idiv    %al, (none), %sil, %al, (none)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -29,7 +28,6 @@ block0(v0: i16, v1: i16):
 ; block0:
 ;   movq    %rdi, %rax
 ;   cwd %ax, %dx
-;   movq    %rdx, %rcx
 ;   idiv    %ax, %dx, %si, %ax, %dx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -46,7 +44,6 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   movq    %rdi, %rax
 ;   cdq %eax, %edx
-;   movq    %rdx, %rcx
 ;   idiv    %eax, %edx, %esi, %eax, %edx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -63,7 +60,6 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   movq    %rdi, %rax
 ;   cqo %rax, %rdx
-;   movq    %rdx, %rcx
 ;   idiv    %rax, %rdx, %rsi, %rax, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

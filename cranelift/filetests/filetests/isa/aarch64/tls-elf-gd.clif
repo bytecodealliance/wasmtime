@@ -20,8 +20,9 @@ block0(v0: i32):
 ; block0:
 ;   mov x25, x0
 ;   elf_tls_get_addr x0, userextname0
+;   mov x7, x25
 ;   mov x1, x0
-;   mov x0, x25
+;   mov x0, x7
 ;   ldp d8, d9, [sp], #16
 ;   ldp d10, d11, [sp], #16
 ;   ldp d12, d13, [sp], #16

@@ -153,13 +153,14 @@ block0(v0: i16, v1: i16):
 }
 
 ; block0:
+;   lgr %r4, %r3
 ;   llhr %r2, %r2
-;   lcr %r4, %r3
-;   nill %r3, 15
+;   lcr %r3, %r4
 ;   nill %r4, 15
-;   sllk %r4, %r2, 0(%r4)
-;   srlk %r5, %r2, 0(%r3)
-;   ork %r2, %r4, %r5
+;   nill %r3, 15
+;   sllk %r3, %r2, 0(%r3)
+;   srlk %r4, %r2, 0(%r4)
+;   ork %r2, %r3, %r4
 ;   br %r14
 
 function %rotr_i16_imm(i16) -> i16 {
@@ -201,13 +202,14 @@ block0(v0: i8, v1: i8):
 }
 
 ; block0:
+;   lgr %r4, %r3
 ;   llcr %r2, %r2
-;   lcr %r4, %r3
-;   nill %r3, 7
+;   lcr %r3, %r4
 ;   nill %r4, 7
-;   sllk %r4, %r2, 0(%r4)
-;   srlk %r5, %r2, 0(%r3)
-;   ork %r2, %r4, %r5
+;   nill %r3, 7
+;   sllk %r3, %r2, 0(%r3)
+;   srlk %r4, %r2, 0(%r4)
+;   ork %r2, %r3, %r4
 ;   br %r14
 
 function %rotr_i8_imm(i8) -> i8 {
@@ -578,8 +580,9 @@ block0(v0: i16, v1: i16):
 
 ; block0:
 ;   llhr %r2, %r2
-;   nill %r3, 15
-;   srlk %r2, %r2, 0(%r3)
+;   lgr %r4, %r3
+;   nill %r4, 15
+;   srlk %r2, %r2, 0(%r4)
 ;   br %r14
 
 function %ushr_i16_imm(i16) -> i16 {
@@ -616,8 +619,9 @@ block0(v0: i8, v1: i8):
 
 ; block0:
 ;   llcr %r2, %r2
-;   nill %r3, 7
-;   srlk %r2, %r2, 0(%r3)
+;   lgr %r4, %r3
+;   nill %r4, 7
+;   srlk %r2, %r2, 0(%r4)
 ;   br %r14
 
 function %ushr_i8_imm(i8) -> i8 {
@@ -950,8 +954,9 @@ block0(v0: i16, v1: i16):
 
 ; block0:
 ;   lhr %r2, %r2
-;   nill %r3, 15
-;   srak %r2, %r2, 0(%r3)
+;   lgr %r4, %r3
+;   nill %r4, 15
+;   srak %r2, %r2, 0(%r4)
 ;   br %r14
 
 function %sshr_i16_imm(i16) -> i16 {
@@ -988,8 +993,9 @@ block0(v0: i8, v1: i8):
 
 ; block0:
 ;   lbr %r2, %r2
-;   nill %r3, 7
-;   srak %r2, %r2, 0(%r3)
+;   lgr %r4, %r3
+;   nill %r4, 7
+;   srak %r2, %r2, 0(%r4)
 ;   br %r14
 
 function %sshr_i8_imm(i8) -> i8 {

@@ -46,7 +46,8 @@ block0(v0: i32):
 }
 
 ; block0:
-;   llgfr %r2, %r2
+;   lgr %r5, %r2
+;   llgfr %r2, %r5
 ;   br %r14
 
 function %call_uext(i32) -> i64 {
@@ -73,7 +74,8 @@ block0(v0: i32):
 }
 
 ; block0:
-;   lgfr %r2, %r2
+;   lgr %r5, %r2
+;   lgfr %r2, %r5
 ;   br %r14
 
 function %call_colocated(i64) -> i64 {

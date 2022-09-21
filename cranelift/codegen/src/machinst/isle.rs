@@ -1208,21 +1208,32 @@ macro_rules! isle_prelude_method_helpers {
                 caller.emit_copy_regs_to_buffer(self.lower_ctx, i, *arg_regs);
             }
             for (i, arg_regs) in arg_regs.iter().enumerate() {
-                for inst in caller.gen_copy_regs_to_arg(self.lower_ctx, i, *arg_regs) {
+                for inst in caller.gen_arg(self.lower_ctx, i, *arg_regs) {
                     self.lower_ctx.emit(inst);
                 }
             }
-            caller.emit_call(self.lower_ctx);
-
+            // Handle retvals prior to emitting call, so the
+            // constraints are on the call instruction; but buffer the
+            // instructions till after the call.
             let mut outputs = InstOutput::new();
+            let mut retval_insts: crate::machinst::abi::SmallInstVec<_> = smallvec::smallvec![];
             for i in 0..num_rets {
                 let ret = self.lower_ctx.sigs()[abi].get_ret(i);
                 let retval_regs = self.abi_arg_slot_regs(&ret).unwrap();
-                for inst in caller.gen_copy_retval_to_regs(self.lower_ctx, i, retval_regs.clone()) {
-                    self.lower_ctx.emit(inst);
-                }
+                retval_insts.extend(
+                    caller
+                        .gen_retval(self.lower_ctx, i, retval_regs.clone())
+                        .into_iter(),
+                );
                 outputs.push(valueregs::non_writable_value_regs(retval_regs));
             }
+
+            caller.emit_call(self.lower_ctx);
+
+            for inst in retval_insts {
+                self.lower_ctx.emit(inst);
+            }
+
             caller.emit_stack_post_adjust(self.lower_ctx);
 
             outputs

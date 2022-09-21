@@ -109,3 +109,4 @@ block0(v0: i64):
 ;   blr x4
 ;   ldp fp, lr, [sp], #16
 ;   ret
+

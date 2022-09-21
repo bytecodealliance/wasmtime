@@ -1,7 +1,7 @@
 //! This module defines x86_64-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
-use crate::ir::{types, ExternalName, Opcode, RelSourceLoc, TrapCode, Type};
+use crate::ir::{types, ExternalName, LibCall, Opcode, RelSourceLoc, TrapCode, Type};
 use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::isa::x64::settings as x64_settings;
@@ -34,9 +34,9 @@ pub use super::lower::isle::generated_code::MInst as Inst;
 #[derive(Clone, Debug)]
 pub struct CallInfo {
     /// Register uses of this call.
-    pub uses: SmallVec<[Reg; 8]>,
+    pub uses: CallArgList,
     /// Register defs of this call.
-    pub defs: SmallVec<[Writable<Reg>; 8]>,
+    pub defs: CallRetList,
     /// Registers clobbered by this call, as per its calling convention.
     pub clobbers: PRegSet,
     /// The opcode of this call.
@@ -490,8 +490,8 @@ impl Inst {
 
     pub(crate) fn call_known(
         dest: ExternalName,
-        uses: SmallVec<[Reg; 8]>,
-        defs: SmallVec<[Writable<Reg>; 8]>,
+        uses: CallArgList,
+        defs: CallRetList,
         clobbers: PRegSet,
         opcode: Opcode,
     ) -> Inst {
@@ -508,8 +508,8 @@ impl Inst {
 
     pub(crate) fn call_unknown(
         dest: RegMem,
-        uses: SmallVec<[Reg; 8]>,
-        defs: SmallVec<[Writable<Reg>; 8]>,
+        uses: CallArgList,
+        defs: CallRetList,
         clobbers: PRegSet,
         opcode: Opcode,
     ) -> Inst {
@@ -1446,7 +1446,9 @@ impl PrettyPrint for Inst {
                 format!("{} {}", ljustify("popq".to_string()), dst)
             }
 
-            Inst::CallKnown { dest, .. } => format!("{} {:?}", ljustify("call".to_string()), dest),
+            Inst::CallKnown { dest, .. } => {
+                format!("{} {:?}", ljustify("call".to_string()), dest)
+            }
 
             Inst::CallUnknown { dest, .. } => {
                 let dest = dest.pretty_print(8, allocs);
@@ -1981,23 +1983,28 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_early_def(*tmp);
         }
 
-        Inst::CallKnown { ref info, .. } => {
-            for &u in &info.uses {
-                collector.reg_use(u);
+        Inst::CallKnown { dest, ref info, .. } => {
+            // Probestack is special and is only inserted after
+            // regalloc, so we do not need to represent its ABI to the
+            // register allocator. Assert that we don't alter that
+            // arrangement.
+            debug_assert_ne!(*dest, ExternalName::LibCall(LibCall::Probestack));
+            for u in &info.uses {
+                collector.reg_fixed_use(u.vreg, u.preg);
             }
-            for &d in &info.defs {
-                collector.reg_def(d);
+            for d in &info.defs {
+                collector.reg_fixed_def(d.vreg, d.preg);
             }
             collector.reg_clobbers(info.clobbers);
         }
 
         Inst::CallUnknown { ref info, dest, .. } => {
             dest.get_operands(collector);
-            for &u in &info.uses {
-                collector.reg_use(u);
+            for u in &info.uses {
+                collector.reg_fixed_use(u.vreg, u.preg);
             }
-            for &d in &info.defs {
-                collector.reg_def(d);
+            for d in &info.defs {
+                collector.reg_fixed_def(d.vreg, d.preg);
             }
             collector.reg_clobbers(info.clobbers);
         }

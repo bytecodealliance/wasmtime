@@ -506,8 +506,8 @@ pub trait ABIMachineSpec {
     /// temporary register to use to synthesize the called address, if needed.
     fn gen_call(
         dest: &CallDest,
-        uses: SmallVec<[Reg; 8]>,
-        defs: SmallVec<[Writable<Reg>; 8]>,
+        uses: CallArgList,
+        defs: CallRetList,
         clobbers: PRegSet,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
@@ -515,13 +515,16 @@ pub trait ABIMachineSpec {
         callee_conv: isa::CallConv,
     ) -> SmallVec<[Self::I; 2]>;
 
-    /// Generate a memcpy invocation. Used to set up struct args. May clobber
-    /// caller-save registers; we only memcpy before we start to set up args for
-    /// a call.
+    /// Generate a memcpy invocation. Used to set up struct
+    /// args. Takes `src`, `dst` as read-only inputs and requires two
+    /// temporaries to generate the call (for the size immediate and
+    /// possibly for the address of `memcpy` itself).
     fn gen_memcpy(
         call_conv: isa::CallConv,
         dst: Reg,
         src: Reg,
+        tmp1: Writable<Reg>,
+        tmp2: Writable<Reg>,
         size: usize,
     ) -> SmallVec<[Self::I; 8]>;
 
@@ -623,6 +626,9 @@ impl SigData {
 
     /// Return all uses (i.e, function args), defs (i.e., return values
     /// and caller-saved registers), and clobbers for the callsite.
+    ///
+    /// FIXME: used only by s390x; remove once that backend moves to
+    /// `call_clobbers` and constraint-based calls.
     pub fn call_uses_defs_clobbers<M: ABIMachineSpec>(
         &self,
     ) -> (SmallVec<[Reg; 8]>, SmallVec<[Writable<Reg>; 8]>, PRegSet) {
@@ -680,6 +686,30 @@ impl SigData {
         }
 
         (uses, defs, clobbers)
+    }
+
+    /// Return all clobbers for the callsite.
+    pub fn call_clobbers<M: ABIMachineSpec>(&self) -> PRegSet {
+        // Get clobbers: all caller-saves. These may include return value
+        // regs, which we will remove from the clobber set below.
+        let mut clobbers = M::get_regs_clobbered_by_call(self.call_conv);
+
+        // Remove retval regs from clobbers.
+        for ret in &self.rets {
+            if let &ABIArg::Slots { ref slots, .. } = ret {
+                for slot in slots {
+                    match slot {
+                        &ABIArgSlot::Reg { reg, .. } => {
+                            log::trace!("call_clobbers: retval reg {:?}", reg);
+                            clobbers.remove(PReg::from(reg));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        clobbers
     }
 
     /// Get the number of arguments expected.
@@ -1848,14 +1878,38 @@ impl<M: ABIMachineSpec> Callee<M> {
     }
 }
 
+/// An input argument to a call instruction: the vreg that is used,
+/// and the preg it is constrained to (per the ABI).
+#[derive(Clone, Debug)]
+pub struct CallArgPair {
+    /// The virtual register to use for the argument.
+    pub vreg: Reg,
+    /// The real register into which the arg goes.
+    pub preg: Reg,
+}
+
+/// An output return value from a call instruction: the vreg that is
+/// defined, and the preg it is constrained to (per the ABI).
+#[derive(Clone, Debug)]
+pub struct CallRetPair {
+    /// The virtual register to define from this return value.
+    pub vreg: Writable<Reg>,
+    /// The real register from which the return value is read.
+    pub preg: Reg,
+}
+
+pub type CallArgList = SmallVec<[CallArgPair; 8]>;
+pub type CallRetList = SmallVec<[CallRetPair; 8]>;
+
 /// ABI object for a callsite.
 pub struct Caller<M: ABIMachineSpec> {
     /// The called function's signature.
     sig: Sig,
-    /// All uses for the callsite, i.e., function args.
-    uses: SmallVec<[Reg; 8]>,
+    /// All register uses for the callsite, i.e., function args, with
+    /// VReg and the physical register it is constrained to.
+    uses: CallArgList,
     /// All defs for the callsite, i.e., return values.
-    defs: SmallVec<[Writable<Reg>; 8]>,
+    defs: CallRetList,
     /// Caller-save clobbers.
     clobbers: PRegSet,
     /// Call destination.
@@ -1890,11 +1944,11 @@ impl<M: ABIMachineSpec> Caller<M> {
         flags: settings::Flags,
     ) -> CodegenResult<Caller<M>> {
         let sig = sigs.abi_sig_for_sig_ref(sig_ref);
-        let (uses, defs, clobbers) = sigs[sig].call_uses_defs_clobbers::<M>();
+        let clobbers = sigs[sig].call_clobbers::<M>();
         Ok(Caller {
             sig,
-            uses,
-            defs,
+            uses: smallvec![],
+            defs: smallvec![],
             clobbers,
             dest: CallDest::ExtName(extname.clone(), dist),
             opcode: ir::Opcode::Call,
@@ -1915,11 +1969,11 @@ impl<M: ABIMachineSpec> Caller<M> {
         flags: settings::Flags,
     ) -> CodegenResult<Caller<M>> {
         let sig = sigs.abi_sig_for_signature(sig);
-        let (uses, defs, clobbers) = sigs[sig].call_uses_defs_clobbers::<M>();
+        let clobbers = sigs[sig].call_clobbers::<M>();
         Ok(Caller {
             sig,
-            uses,
-            defs,
+            uses: smallvec![],
+            defs: smallvec![],
             clobbers,
             dest: CallDest::ExtName(extname.clone(), dist),
             opcode: ir::Opcode::Call,
@@ -1940,11 +1994,11 @@ impl<M: ABIMachineSpec> Caller<M> {
         flags: settings::Flags,
     ) -> CodegenResult<Caller<M>> {
         let sig = sigs.abi_sig_for_sig_ref(sig_ref);
-        let (uses, defs, clobbers) = sigs[sig].call_uses_defs_clobbers::<M>();
+        let clobbers = sigs[sig].call_clobbers::<M>();
         Ok(Caller {
             sig,
-            uses,
-            defs,
+            uses: smallvec![],
+            defs: smallvec![],
             clobbers,
             dest: CallDest::Reg(ptr),
             opcode,
@@ -2018,9 +2072,17 @@ impl<M: ABIMachineSpec> Caller<M> {
                 // arg regs.
                 let memcpy_call_conv =
                     isa::CallConv::for_libcall(&self.flags, ctx.sigs()[self.sig].call_conv);
-                for insn in
-                    M::gen_memcpy(memcpy_call_conv, dst_ptr.to_reg(), src_ptr, size as usize)
-                        .into_iter()
+                let tmp1 = ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
+                let tmp2 = ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
+                for insn in M::gen_memcpy(
+                    memcpy_call_conv,
+                    dst_ptr.to_reg(),
+                    src_ptr,
+                    tmp1,
+                    tmp2,
+                    size as usize,
+                )
+                .into_iter()
                 {
                     ctx.emit(insn);
                 }
@@ -2029,19 +2091,48 @@ impl<M: ABIMachineSpec> Caller<M> {
         }
     }
 
-    /// Generate a copy of an argument value from a source register, prior to
-    /// the call.  For large arguments with associated stack buffer, this may
-    /// load the address of the buffer into the argument register, if required
-    /// by the ABI.
-    pub fn gen_copy_regs_to_arg(
-        &self,
-        ctx: &Lower<M::I>,
+    /// Add a constraint for an argument value from a source register.
+    /// For large arguments with associated stack buffer, this may
+    /// load the address of the buffer into the argument register, if
+    /// required by the ABI.
+    pub fn gen_arg(
+        &mut self,
+        ctx: &mut Lower<M::I>,
         idx: usize,
         from_regs: ValueRegs<Reg>,
     ) -> SmallInstVec<M::I> {
         let mut insts = smallvec![];
         let word_rc = M::word_reg_class();
         let word_bits = M::word_bits() as usize;
+
+        // How many temps do we need for extends? Allocate them ahead
+        // of time, since we can't do it while we're iterating over
+        // the sig and immutably borrowing `ctx`.
+        let needed_tmps = match &ctx.sigs()[self.sig].args[idx] {
+            &ABIArg::Slots { ref slots, .. } => slots
+                .iter()
+                .map(|slot| match slot {
+                    &ABIArgSlot::Reg { extension, .. }
+                        if extension != ir::ArgumentExtension::None =>
+                    {
+                        1
+                    }
+                    &ABIArgSlot::Reg { ty, .. } if ty.is_ref() => 1,
+                    &ABIArgSlot::Reg { .. } => 0,
+                    &ABIArgSlot::Stack { extension, .. }
+                        if extension != ir::ArgumentExtension::None =>
+                    {
+                        1
+                    }
+                    &ABIArgSlot::Stack { .. } => 0,
+                })
+                .sum(),
+            _ => 0,
+        };
+        let mut temps: SmallVec<[Writable<Reg>; 16]> = (0..needed_tmps)
+            .map(|_| ctx.alloc_tmp(M::word_type()).only_reg().unwrap())
+            .collect();
+
         match &ctx.sigs()[self.sig].args[idx] {
             &ABIArg::Slots { ref slots, .. } => {
                 assert_eq!(from_regs.len(), slots.len());
@@ -2058,19 +2149,36 @@ impl<M: ABIMachineSpec> Caller<M> {
                                     ir::ArgumentExtension::Sext => true,
                                     _ => unreachable!(),
                                 };
+                                let extend_result =
+                                    temps.pop().expect("Must have allocated enough temps");
                                 insts.push(M::gen_extend(
-                                    Writable::from_reg(Reg::from(reg)),
+                                    extend_result,
                                     *from_reg,
                                     signed,
                                     ty_bits(ty) as u8,
                                     word_bits as u8,
                                 ));
+                                self.uses.push(CallArgPair {
+                                    vreg: extend_result.to_reg(),
+                                    preg: reg.into(),
+                                });
+                            } else if ty.is_ref() {
+                                // Reference-typed args need to be
+                                // passed as a copy; the original vreg
+                                // is constrained to the stack and
+                                // this copy is in a reg.
+                                let ref_copy =
+                                    temps.pop().expect("Must have allocated enough temps");
+                                insts.push(M::gen_move(ref_copy, *from_reg, M::word_type()));
+                                self.uses.push(CallArgPair {
+                                    vreg: ref_copy.to_reg(),
+                                    preg: reg.into(),
+                                });
                             } else {
-                                insts.push(M::gen_move(
-                                    Writable::from_reg(Reg::from(reg)),
-                                    *from_reg,
-                                    ty,
-                                ));
+                                self.uses.push(CallArgPair {
+                                    vreg: *from_reg,
+                                    preg: reg.into(),
+                                });
                             }
                         }
                         &ABIArgSlot::Stack {
@@ -2079,31 +2187,32 @@ impl<M: ABIMachineSpec> Caller<M> {
                             extension,
                             ..
                         } => {
-                            let mut ty = ty;
                             let ext = M::get_ext_mode(ctx.sigs()[self.sig].call_conv, extension);
-                            if ext != ir::ArgumentExtension::None && ty_bits(ty) < word_bits {
-                                assert_eq!(word_rc, from_reg.class());
-                                let signed = match ext {
-                                    ir::ArgumentExtension::Uext => false,
-                                    ir::ArgumentExtension::Sext => true,
-                                    _ => unreachable!(),
+                            let (data, ty) =
+                                if ext != ir::ArgumentExtension::None && ty_bits(ty) < word_bits {
+                                    assert_eq!(word_rc, from_reg.class());
+                                    let signed = match ext {
+                                        ir::ArgumentExtension::Uext => false,
+                                        ir::ArgumentExtension::Sext => true,
+                                        _ => unreachable!(),
+                                    };
+                                    let extend_result =
+                                        temps.pop().expect("Must have allocated enough temps");
+                                    insts.push(M::gen_extend(
+                                        extend_result,
+                                        *from_reg,
+                                        signed,
+                                        ty_bits(ty) as u8,
+                                        word_bits as u8,
+                                    ));
+                                    // Store the extended version.
+                                    (extend_result.to_reg(), M::word_type())
+                                } else {
+                                    (*from_reg, ty)
                                 };
-                                // Extend in place in the source register. Our convention is to
-                                // treat high bits as undefined for values in registers, so this
-                                // is safe, even for an argument that is nominally read-only.
-                                insts.push(M::gen_extend(
-                                    Writable::from_reg(*from_reg),
-                                    *from_reg,
-                                    signed,
-                                    ty_bits(ty) as u8,
-                                    word_bits as u8,
-                                ));
-                                // Store the extended version.
-                                ty = M::word_type();
-                            }
                             insts.push(M::gen_store_stack(
                                 StackAMode::SPOffset(offset, ty),
-                                *from_reg,
+                                data,
                                 ty,
                             ));
                         }
@@ -2118,9 +2227,9 @@ impl<M: ABIMachineSpec> Caller<M> {
         insts
     }
 
-    /// Emit a copy a return value into a destination register, after the call returns.
-    pub fn gen_copy_retval_to_regs(
-        &self,
+    /// Define a return value after the call returns.
+    pub fn gen_retval(
+        &mut self,
         ctx: &Lower<M::I>,
         idx: usize,
         into_regs: ValueRegs<Writable<Reg>>,
@@ -2133,8 +2242,11 @@ impl<M: ABIMachineSpec> Caller<M> {
                     match slot {
                         // Extension mode doesn't matter because we're copying out, not in,
                         // and we ignore high bits in our own registers by convention.
-                        &ABIArgSlot::Reg { reg, ty, .. } => {
-                            insts.push(M::gen_move(*into_reg, Reg::from(reg), ty));
+                        &ABIArgSlot::Reg { reg, .. } => {
+                            self.defs.push(CallRetPair {
+                                vreg: *into_reg,
+                                preg: reg.into(),
+                            });
                         }
                         &ABIArgSlot::Stack { offset, ty, .. } => {
                             let ret_area_base = ctx.sigs()[self.sig].sized_stack_arg_space;
@@ -2171,10 +2283,6 @@ impl<M: ABIMachineSpec> Caller<M> {
     /// This function should only be called once, as it is allowed to re-use
     /// parts of the `Caller` object in emitting instructions.
     pub fn emit_call(&mut self, ctx: &mut Lower<M::I>) {
-        let (uses, defs) = (
-            mem::replace(&mut self.uses, Default::default()),
-            mem::replace(&mut self.defs, Default::default()),
-        );
         let word_type = M::word_type();
         if let Some(i) = ctx.sigs()[self.sig].stack_ret_arg {
             let rd = ctx.alloc_tmp(word_type).only_reg().unwrap();
@@ -2184,10 +2292,16 @@ impl<M: ABIMachineSpec> Caller<M> {
                 rd,
                 I8,
             ));
-            for inst in self.gen_copy_regs_to_arg(ctx, i, ValueRegs::one(rd.to_reg())) {
+            for inst in self.gen_arg(ctx, i, ValueRegs::one(rd.to_reg())) {
                 ctx.emit(inst);
             }
         }
+
+        let (uses, defs) = (
+            mem::replace(&mut self.uses, Default::default()),
+            mem::replace(&mut self.defs, Default::default()),
+        );
+
         let tmp = ctx.alloc_tmp(word_type).only_reg().unwrap();
         for inst in M::gen_call(
             &self.dest,

@@ -429,7 +429,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts.push(Inst::CallKnown {
             dest: ExternalName::LibCall(LibCall::Probestack),
             info: Box::new(CallInfo {
-                uses: smallvec![regs::rax()],
+                // No need to include arg here: we are post-regalloc
+                // so no constraints will be seen anyway.
+                uses: smallvec![],
                 defs: smallvec![],
                 clobbers: PRegSet::empty(),
                 opcode: Opcode::Call,
@@ -584,8 +586,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     /// Generate a call instruction/sequence.
     fn gen_call(
         dest: &CallDest,
-        uses: SmallVec<[Reg; 8]>,
-        defs: SmallVec<[Writable<Reg>; 8]>,
+        uses: CallArgList,
+        defs: CallRetList,
         clobbers: PRegSet,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
@@ -628,39 +630,47 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         call_conv: isa::CallConv,
         dst: Reg,
         src: Reg,
+        temp: Writable<Reg>,
+        temp2: Writable<Reg>,
         size: usize,
     ) -> SmallVec<[Self::I; 8]> {
         let mut insts = SmallVec::new();
         let arg0 = get_intreg_for_arg(&call_conv, 0, 0).unwrap();
         let arg1 = get_intreg_for_arg(&call_conv, 1, 1).unwrap();
         let arg2 = get_intreg_for_arg(&call_conv, 2, 2).unwrap();
-        // We need a register to load the address of `memcpy()` below and we
-        // don't have a lowering context to allocate a temp here; so just use a
-        // register we know we are free to mutate as part of this sequence
-        // (because it is clobbered by the call as per the ABI anyway).
-        let memcpy_addr = get_intreg_for_arg(&call_conv, 3, 3).unwrap();
         insts.push(Inst::gen_move(Writable::from_reg(arg0), dst, I64));
         insts.push(Inst::gen_move(Writable::from_reg(arg1), src, I64));
         insts.extend(
-            Inst::gen_constant(
-                ValueRegs::one(Writable::from_reg(arg2)),
-                size as u128,
-                I64,
-                |_| panic!("tmp should not be needed"),
-            )
+            Inst::gen_constant(ValueRegs::one(temp), size as u128, I64, |_| {
+                panic!("tmp should not be needed")
+            })
             .into_iter(),
         );
         // We use an indirect call and a full LoadExtName because we do not have
         // information about the libcall `RelocDistance` here, so we
         // conservatively use the more flexible calling sequence.
         insts.push(Inst::LoadExtName {
-            dst: Writable::from_reg(memcpy_addr),
+            dst: temp2,
             name: Box::new(ExternalName::LibCall(LibCall::Memcpy)),
             offset: 0,
         });
         insts.push(Inst::call_unknown(
-            RegMem::reg(memcpy_addr),
-            /* uses = */ smallvec![arg0, arg1, arg2],
+            RegMem::reg(temp2.to_reg()),
+            /* uses = */
+            smallvec![
+                CallArgPair {
+                    vreg: dst,
+                    preg: arg0
+                },
+                CallArgPair {
+                    vreg: src,
+                    preg: arg1
+                },
+                CallArgPair {
+                    vreg: temp.to_reg(),
+                    preg: arg2
+                },
+            ],
             /* defs = */ smallvec![],
             /* clobbers = */ Self::get_regs_clobbered_by_call(call_conv),
             Opcode::Call,

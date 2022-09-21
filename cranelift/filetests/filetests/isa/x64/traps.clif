@@ -22,7 +22,8 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addq    %rdi, %rsi, %rdi
+;   movq    %rdi, %rcx
+;   addq    %rcx, %rsi, %rcx
 ;   jnb ; ud2 user0 ;
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

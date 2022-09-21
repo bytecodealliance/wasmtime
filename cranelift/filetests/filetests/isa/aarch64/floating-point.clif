@@ -918,8 +918,9 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 }
 
 ; block0:
-;   fmla v2.4s, v2.4s, v0.4s, v1.4s
-;   mov v0.16b, v2.16b
+;   mov v5.16b, v2.16b
+;   fmla v5.4s, v5.4s, v0.4s, v1.4s
+;   mov v0.16b, v5.16b
 ;   ret
 
 function %f79(f32x2, f32x2, f32x2) -> f32x2 {
@@ -929,8 +930,9 @@ block0(v0: f32x2, v1: f32x2, v2: f32x2):
 }
 
 ; block0:
-;   fmla v2.2s, v2.2s, v0.2s, v1.2s
-;   mov v0.16b, v2.16b
+;   mov v5.16b, v2.16b
+;   fmla v5.2s, v5.2s, v0.2s, v1.2s
+;   mov v0.16b, v5.16b
 ;   ret
 
 function %f80(f64x2, f64x2, f64x2) -> f64x2 {
@@ -940,8 +942,9 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 }
 
 ; block0:
-;   fmla v2.2d, v2.2d, v0.2d, v1.2d
-;   mov v0.16b, v2.16b
+;   mov v5.16b, v2.16b
+;   fmla v5.2d, v5.2d, v0.2d, v1.2d
+;   mov v0.16b, v5.16b
 ;   ret
 
 function %f81(f32x2, f32x2) -> f32x2 {

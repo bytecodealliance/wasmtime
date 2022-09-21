@@ -18,8 +18,8 @@ block0(v0: i64, v1: i64):
 ;   setz    %al
 ;   andq    %rax, $1, %rax
 ;   cmpq    %r11, %rdi
-;   cmovzq  %rdi, %rsi, %rsi
 ;   movq    %rsi, %rdx
+;   cmovzq  %rdi, %rdx, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
