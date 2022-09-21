@@ -47,37 +47,37 @@ notes = "I am the author of this crate."
 [[audits.cap-fs-ext]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
-version = "0.25.3"
+version = "0.26.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.cap-primitives]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
-version = "0.25.3"
+version = "0.26.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.cap-rand]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-version = "0.25.3"
+version = "0.26.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.cap-std]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
-version = "0.25.3"
+version = "0.26.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.cap-tempfile]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-run"
-version = "0.25.3"
+version = "0.26.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.cap-time-ext]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-version = "0.25.3"
+version = "0.26.0"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.cc]]

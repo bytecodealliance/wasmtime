@@ -34,7 +34,7 @@ features = [
 ]
 
 [target.'cfg(target_os = "linux")'.dependencies]
-rustix = { version = "0.35.6", features = ["process"] }
+rustix = { version = "0.35.10", features = ["process"] }
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 ittapi = { version = "0.3.0", optional = true  }
