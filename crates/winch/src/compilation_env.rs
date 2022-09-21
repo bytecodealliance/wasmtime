@@ -12,7 +12,10 @@ use anyhow::Result;
 type Locals = SmallVec<[LocalSlot; 16]>;
 
 /// Per-function compilation environment
-pub(crate) struct CompilationEnv<A: ABI> {
+pub(crate) struct CompilationEnv<'x, 'a: 'x, A: ABI, C: Assembler> {
+    /// A reference to the function body
+    function: &'x mut FunctionBodyData<'a>,
+
     /// The stack frame handler for the current function
     frame: Frame,
     /// The local slots for the current function
@@ -28,22 +31,56 @@ pub(crate) struct CompilationEnv<A: ABI> {
     sig: ABISig,
 }
 
-impl<A: ABI> CompilationEnv<A> {
+impl<'x, 'a: 'x, A: ABI, C: Assembler> CompilationEnv<'x, 'a, A, C> {
     /// Allocate a new compilation environment
-    pub fn new(signature: &WasmFuncType, body_data: &mut FunctionBodyData, abi: A) -> Result<Self> {
+    pub fn new(
+        signature: &WasmFuncType,
+        function: &'x mut FunctionBodyData<'a>,
+        abi: A,
+        asm: C,
+    ) -> Result<Self> {
         let sig = abi.sig(&signature);
-        let (locals, locals_size) = compute_local_slots(&sig, body_data, &abi)?;
+        let (locals, locals_size) = compute_local_slots(&sig, function, &abi)?;
 
         Ok(Self {
             abi,
             sig,
             locals,
             frame: Frame::new(locals_size),
+            function,
+            asm,
         })
     }
 
+    // TODO Order
+    // 1. Emit prologue
+    //   1.1 Without any stack checks, the idea is to get to code emission and have an initial pass on the Assembler
+    //   1.2 Register input spilling
+    // 2. Function body
+    // 3. Epilogue
+    // 4. Stack checks
     /// Emit the function body to machine code
-    pub fn emit(&self, body_data: &mut FunctionBodyData) -> Result<()> {
+    pub fn emit(&mut self) -> Result<()> {
+        self.emit_start().and(self.emit_body()).and(self.emit_end())
+    }
+
+    // Emit the usual function start instruction sequence
+    // for the current function:
+    // 1. Prologue
+    // 2. Stack checks
+    // 3. Stack allocation
+    fn emit_start(&self) -> Result<()> {
+        Ok(())
+    }
+
+    // 1. Perform input register spilling
+    // 2. Emit machine code per instruction
+    fn emit_body(&self) -> Result<()> {
+        Ok(())
+    }
+
+    // Emit the usual function end instruction sequence
+    fn emit_end(&self) -> Result<()> {
         Ok(())
     }
 }
