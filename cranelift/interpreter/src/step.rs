@@ -956,10 +956,18 @@ where
         | Opcode::RawBitcast
         | Opcode::ScalarToVector
         | Opcode::Breduce
-        | Opcode::Bextend => assign(Value::convert(
-            arg(0)?,
-            ValueConversionKind::Exact(ctrl_ty),
-        )?),
+        | Opcode::Bextend => {
+            let input_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
+            let arg0 = extractlanes(&arg(0)?, input_ty)?;
+
+            assign(vectorizelanes(
+                &arg0
+                    .into_iter()
+                    .map(|x| V::convert(x, ValueConversionKind::Exact(ctrl_ty.lane_type())))
+                    .collect::<ValueResult<SimdVec<V>>>()?,
+                ctrl_ty,
+            )?)
+        }
         Opcode::Ireduce => assign(Value::convert(
             arg(0)?,
             ValueConversionKind::Truncate(ctrl_ty),

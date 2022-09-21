@@ -3280,6 +3280,9 @@ pub(crate) fn define(
         The input and output types must be storable to memory and of the same
         size. A bitcast is equivalent to storing one type and loading the other
         type from the same address.
+
+        For vector types, the lane types must also be the same size (see
+        `raw_bitcast` for changing the lane size).
         "#,
             &formats.unary,
         )

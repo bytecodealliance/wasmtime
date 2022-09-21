@@ -1,0 +1,40 @@
+test interpret
+test run
+target aarch64
+; x86_64 regards this as an unused opcode.
+; s390x does not support 64-bit vectors.
+
+function %copy_i8x8(i8x8) -> i8x8 {
+block0(v0: i8x8):
+  v1 = copy v0
+  return v1
+}
+; run: %copy_i8x8([0 0 255 255 -1 -1 127 128]) == [0 0 255 255 -1 -1 127 128]
+
+function %copy_i16x4(i16x4) -> i16x4 {
+block0(v0: i16x4):
+  v1 = copy v0
+  return v1
+}
+; run: %copy_i16x4([0 65535 -1 127]) == [0 65535 -1 127]
+
+function %copy_i32x2(i32x2) -> i32x2 {
+block0(v0: i32x2):
+  v1 = copy v0
+  return v1
+}
+; run: %copy_i32x2([0 4294967295]) == [0 4294967295]
+; run: %copy_i32x2([-1 127]) == [-1 127]
+
+function %copy_f32x2(f32x2) -> f32x2 {
+block0(v0: f32x2):
+  v1 = copy v0
+  return v1
+}
+; run: %copy_f32x2([0x1.0 0x1.0p10]) == [0x1.0 0x1.0p10]
+
+; run: %copy_f32x2([0x0.0 -0x0.0]) == [0x0.0 -0x0.0]
+; run: %copy_f32x2([+Inf -Inf]) == [+Inf -Inf]
+; run: %copy_f32x2([0x1.000002p-23 0x1.fffffep127]) == [0x1.000002p-23 0x1.fffffep127]
+; run: %copy_f32x2([0x1.000000p-126 0x0.800002p-126]) == [0x1.000000p-126 0x0.800002p-126]
+; run: %copy_f32x2([-0x0.800000p-126 -0x0.800000p-126]) == [-0x0.800000p-126 -0x0.800000p-126]
