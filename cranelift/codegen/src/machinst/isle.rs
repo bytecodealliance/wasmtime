@@ -32,6 +32,11 @@ pub type InstOutputBuilder = Cell<InstOutput>;
 pub type BoxExternalName = Box<ExternalName>;
 pub type Range = (usize, usize);
 
+pub enum RangeView {
+    Empty,
+    NonEmpty { index: usize, rest: Range },
+}
+
 /// Helper macro to define methods in `prelude.isle` within `impl Context for
 /// ...` for each backend. These methods are shared amongst all backends.
 #[macro_export]
@@ -123,29 +128,15 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn is_valid_reg(&mut self, reg: Reg) -> bool {
+            use crate::machinst::valueregs::InvalidSentinel;
+            !reg.is_invalid_sentinel()
+        }
+
+        #[inline]
         fn invalid_reg(&mut self) -> Reg {
             use crate::machinst::valueregs::InvalidSentinel;
             Reg::invalid_sentinel()
-        }
-
-        #[inline]
-        fn invalid_reg_etor(&mut self, reg: Reg) -> Option<()> {
-            use crate::machinst::valueregs::InvalidSentinel;
-            if reg.is_invalid_sentinel() {
-                Some(())
-            } else {
-                None
-            }
-        }
-
-        #[inline]
-        fn valid_reg(&mut self, reg: Reg) -> Option<()> {
-            use crate::machinst::valueregs::InvalidSentinel;
-            if !reg.is_invalid_sentinel() {
-                Some(())
-            } else {
-                None
-            }
         }
 
         #[inline]
@@ -216,6 +207,11 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn u64_and(&mut self, x: u64, y: u64) -> Option<u64> {
             Some(x & y)
+        }
+
+        #[inline]
+        fn u64_is_zero(&mut self, value: u64) -> bool {
+            0 == value
         }
 
         #[inline]
@@ -910,27 +906,14 @@ macro_rules! isle_prelude_methods {
             (start, end)
         }
 
-        fn range_empty(&mut self, r: Range) -> Option<()> {
-            if r.0 >= r.1 {
-                Some(())
+        fn range_view(&mut self, (start, end): Range) -> RangeView {
+            if start >= end {
+                RangeView::Empty
             } else {
-                None
-            }
-        }
-
-        fn range_singleton(&mut self, r: Range) -> Option<usize> {
-            if r.0 + 1 == r.1 {
-                Some(r.0)
-            } else {
-                None
-            }
-        }
-
-        fn range_unwrap(&mut self, r: Range) -> Option<(usize, Range)> {
-            if r.0 < r.1 {
-                Some((r.0, (r.0 + 1, r.1)))
-            } else {
-                None
+                RangeView::NonEmpty {
+                    index: start,
+                    rest: (start + 1, end),
+                }
             }
         }
 
