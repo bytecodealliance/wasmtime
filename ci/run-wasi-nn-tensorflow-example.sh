@@ -21,7 +21,7 @@ fi
 
 mkdir $TMP_DIR/TEST
 # Build Wasmtime with wasi-nn enabled; we attempt this first to avoid extra work if the build fails.
-OPENVINO_INSTALL_DIR=/opt/intel/openvino_2022 cargo build -p wasmtime-cli --features wasi-nn
+OPENVINO_INSTALL_DIR=/opt/intel/openvino_2022 cargo build -p wasmtime-cli
 
 # Download all necessary test fixtures to the temporary directory.
 wget --no-clobber https://tfhub.dev/google/imagenet/mobilenet_v2_140_224/classification/5?tf-hub-format=compressed --output-document=$TMP_DIR/mobilenet.tar.gz

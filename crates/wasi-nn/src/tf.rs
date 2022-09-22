@@ -198,8 +198,6 @@ impl<'a> BackendExecutionContext for TensorflowExecutionContext<'a> {
             TensorType::I32 => TensorTypes::TTI32(TFTensor::<i32>::new(&dims)),
         });
 
-        let data = tensor.data.as_slice()?;
-
         // Assign the tensor to the session arguments. The `add_feed`
         // documentation says that because most operations have only one output
         // (and presumably one input), so the input index is likely 0. Note that
@@ -215,7 +213,7 @@ impl<'a> BackendExecutionContext for TensorflowExecutionContext<'a> {
         //   the tensor data we copied to `Self`.
         let self_ = unsafe { std::mem::transmute::<&mut Self, &'a mut Self>(self) };
         let tensor_ref = self_.tensors.last_mut().unwrap();
-
+        let data = tensor.data.as_slice()?;
         use TensorTypes::*;
         match tensor_ref {
             TTU8(t) => {
@@ -235,7 +233,6 @@ impl<'a> BackendExecutionContext for TensorflowExecutionContext<'a> {
                 self_.args.add_feed(&operation, 0, t);
             }
         };
-
         Ok(())
     }
 
@@ -273,32 +270,29 @@ impl<'a> BackendExecutionContext for TensorflowExecutionContext<'a> {
 
     fn get_output(&mut self, index: u32, destination: &mut [u8]) -> Result<u32, BackendError> {
         let token_tuple = self.output_tokens[index as usize];
-        let mut results: Vec<u8> = vec![];
 
-        // Convert the output from T to u8
-        match token_tuple.1 {
+        let results = match token_tuple.1 {
             tensorflow::DataType::UInt8 => {
-                t_to_u8_copy(&self.args.fetch::<u8>(token_tuple.0)?, &mut results);
+                t_to_u8_copy(&self.args.fetch::<u8>(token_tuple.0)?, destination)
             }
             tensorflow::DataType::Half | tensorflow::DataType::Float => {
-                t_to_u8_copy(&self.args.fetch::<f32>(token_tuple.0)?, &mut results);
+                t_to_u8_copy(&self.args.fetch::<f32>(token_tuple.0)?, destination)
             }
             tensorflow::DataType::Int32 => {
-                t_to_u8_copy(&self.args.fetch::<i32>(token_tuple.0)?, &mut results);
+                t_to_u8_copy(&self.args.fetch::<i32>(token_tuple.0)?, destination)
             }
-            _ => {}
+            _ => Err(BackendError::UnsupportedOutputPrecision())
         };
 
         // The inference has been completed, reset the SessionRunArgs in preperation for the next one.
         self.args = SessionRunArgs::new();
 
-        if results.len() > destination.len() {
-            Err(BackendError::NotEnoughMemory(results.len()))
+        if results.is_ok() {
+            Ok(destination.len() as u32)
         } else {
-            destination.copy_from_slice(&results);
-            Ok(results.len() as u32)
+            Err(results.unwrap_err())
         }
-    }
+     }
 }
 
 /// Check that the data type of the user-provided tensor matches the one
@@ -340,14 +334,20 @@ impl From<Status> for BackendError {
 }
 
 // Convert type T to u8
-fn t_to_u8_copy<T>(data: &[T], results: &mut Vec<u8>) {
+fn t_to_u8_copy<T>(data: &[T], destination: &mut [u8]) -> Result<(), BackendError>  {
     unsafe {
         let tmpu8 = std::slice::from_raw_parts(
             data.as_ptr() as *const u8,
             data.len() * std::mem::size_of::<T>(),
         );
-        results.extend_from_slice(tmpu8);
-    }
+
+        if tmpu8.len() > destination.len() {
+            Err(BackendError::NotEnoughMemory(destination.len()))
+          } else {
+            destination.copy_from_slice(tmpu8);
+            Ok(())
+          }
+      }
 }
 
 fn copy_data<T: tensorflow::TensorType + std::convert::From<u8>>(
@@ -355,7 +355,7 @@ fn copy_data<T: tensorflow::TensorType + std::convert::From<u8>>(
     data: &GuestSlice<u8>,
 ) {
     for i in 0..data.len() {
-        tensor[i] = data[i].try_into().unwrap();
+        tensor[i] = T::from(data[i]);
     }
 }
 

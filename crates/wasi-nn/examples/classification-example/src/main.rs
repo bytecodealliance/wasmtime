@@ -4,9 +4,6 @@ use std::convert::TryInto;
 use std::fs;
 use wasi_nn;
 
-// TODO change this to wasi_nn::GRAPH_ENCODING_TENSORFLOW once wasi-nn is updated.
-// const GRAPH_ENCODING_TENSORFLOW: u8 = 1;
-
 pub fn main() {
     match env!("BACKEND") {
         "openvino" => {

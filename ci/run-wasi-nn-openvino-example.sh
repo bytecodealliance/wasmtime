@@ -23,7 +23,7 @@ fi
 source /opt/intel/openvino_2022/setupvars.sh
 
 # Build Wasmtime with wasi-nn enabled; we attempt this first to avoid extra work if the build fails.
-OPENVINO_INSTALL_DIR=/opt/intel/openvino_2022 cargo build -p wasmtime-cli --features wasi-nn
+OPENVINO_INSTALL_DIR=/opt/intel/openvino_2022 cargo build -p wasmtime-cli
 
 # Download all necessary test fixtures to the temporary directory.
 wget --no-clobber $FIXTURE/mobilenet.bin --output-document=$TMP_DIR/model.bin
