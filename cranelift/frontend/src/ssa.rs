@@ -100,7 +100,8 @@ struct SSABlockData {
     // A block is sealed if all of its predecessors have been declared.
     sealed: bool,
     // A predecessor-cycle occurs if this block is reachable by following only single-predecessor
-    // edges.
+    // edges. This is used in `use_var_nonlocal`, which can avoid adding block parameters as long
+    // as it can find a unique block to get a variable's definition from.
     in_predecessor_cycle: bool,
     // List of current Block arguments for which an earlier def has not been found yet.
     undef_variables: Vec<(Variable, Value)>,
@@ -120,6 +121,11 @@ impl SSABlockData {
             .expect("the predecessor you are trying to remove is not declared");
         self.predecessors.swap_remove(pred).block
     }
+}
+
+enum Action {
+    Add,
+    Remove,
 }
 
 impl SSABuilder {
@@ -286,7 +292,7 @@ impl SSABuilder {
         let case = if data.sealed {
             // Optimize the common case of one predecessor: no param needed. However, if following
             // single-predecessor edges would go through a cycle ending up back here, then this
-            // optimization doesn't apply.
+            // optimization is unsafe, so fall back to adding a param anyway.
             if data.predecessors.len() == 1 && !data.in_predecessor_cycle {
                 UseVarCases::SealedOnePredecessor(data.predecessors[0].block)
             } else {
@@ -349,7 +355,7 @@ impl SSABuilder {
     /// of a jump table.
     pub fn declare_block_predecessor(&mut self, block: Block, pred: Block, inst: Inst) {
         debug_assert!(!self.is_sealed(block));
-        self.update_predecessor_cycle(block, pred, true);
+        self.update_predecessor_cycle(block, pred, Action::Add);
         self.ssa_blocks[block].add_predecessor(pred, inst)
     }
 
@@ -360,13 +366,13 @@ impl SSABuilder {
     pub fn remove_block_predecessor(&mut self, block: Block, inst: Inst) -> Block {
         debug_assert!(!self.is_sealed(block));
         let pred = self.ssa_blocks[block].remove_predecessor(inst);
-        self.update_predecessor_cycle(block, pred, false);
+        self.update_predecessor_cycle(block, pred, Action::Remove);
         pred
     }
 
     /// Call this when `pred` is not in the predecessors of `block`: before adding, or after
     /// removing.
-    fn update_predecessor_cycle(&mut self, block: Block, mut pred: Block, add: bool) {
+    fn update_predecessor_cycle(&mut self, block: Block, mut pred: Block, action: Action) {
         let block_ref = &self.ssa_blocks[block];
 
         // Not counting `pred`, how many predecessors does `block` have? And will it have exactly
@@ -374,12 +380,12 @@ impl SSABuilder {
         let will_have_one_pred = match block_ref.predecessors.as_slice() {
             // None: `pred` might reach `block` in a cycle. There'll be one predecessor afterward
             // if we're adding `pred`.
-            [] => add,
+            [] => matches!(action, Action::Add),
             // One: the other predecessor might reach `block` in a cycle. There'll be one
             // predecessor afterward if we're removing `pred`.
             [other] => {
                 pred = other.block;
-                !add
+                matches!(action, Action::Remove)
             }
             // Two or more: there is definitely no cycle through `block`, either before or after.
             _ => {
@@ -389,16 +395,27 @@ impl SSABuilder {
         };
 
         if will_have_one_pred {
-            debug_assert!(!block_ref.in_predecessor_cycle);
-
             // This block is about to have exactly one predecessor. Is there a path from that block
             // to this one, following only single-predecessor edges?
+            debug_assert!(!block_ref.in_predecessor_cycle);
+
+            // Shadow `pred` so we can check for a cycle without forgetting where it started.
             let mut pred = pred;
+
+            // This loop terminates even if it encounters a cycle in the control-flow graph. Any
+            // path through blocks which have exactly one predecessor each must eventually reach
+            // one of three kinds of blocks:
+            // 1. The block that we started from, so it is part of a cycle; or
+            // 2. A block that does not have exactly one predecessor, so there's no cycle; or
+            // 3. A block which we've previously flagged as being part of a cycle.
+            // In case 3, the block we're currently updating is not part of that existing
+            // cycle and can't be part of any other cycle.
+
+            // Case 1 is the loop termination condition.
             while pred != block {
                 let pred_ref = &self.ssa_blocks[pred];
 
-                // If pred is already in a predecessor cycle, it can't be in this one.
-                // If there isn't exactly one predecessor, this isn't a predecessor cycle.
+                // In cases 2 and 3, we aren't forming a cycle so there's nothing to update.
                 if pred_ref.in_predecessor_cycle || pred_ref.predecessors.len() != 1 {
                     return;
                 }
@@ -412,9 +429,10 @@ impl SSABuilder {
         }
 
         // At this point we know that if `block`'s only predecessor were `pred`, then both blocks
-        // would be part of a predecessor cycle. That means if we follow single-predecessor edges
-        // starting from `pred`, we'll eventually get to `block`. Therefore we can safely follow
-        // the cycle all the way around, flipping it to its new state.
+        // would be part of a predecessor cycle. Either `will_have_one_pred` is true and we're
+        // forming a new cycle, or there was an existing cycle that we're now breaking. In either
+        // case, there's a path of single-predecessor edges going from `pred` to `block` and we
+        // just need to flip the `in_predecessor_cycle` flag on every block in that path.
         self.ssa_blocks[block].in_predecessor_cycle = will_have_one_pred;
         while pred != block {
             let pred_ref = &mut self.ssa_blocks[pred];
