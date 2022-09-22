@@ -1,7 +1,7 @@
-use crate::Engine;
 use crate::{
     signatures::SignatureCollection,
     types::{ExportType, ExternType, ImportType},
+    Engine,
 };
 use anyhow::{bail, Context, Result};
 use once_cell::sync::OnceCell;
@@ -328,18 +328,15 @@ impl Module {
     ///
     /// This is where compilation actually happens of WebAssembly modules and
     /// translation/parsing/validation of the binary input occurs. The actual
-    /// result here is a triple of:
+    /// result here is a combination of:
     ///
-    /// * The index into the second field of the "main module". The "main
-    ///   module" in this case is the outermost module described by the `wasm`
-    ///   input, and is here for the module linking proposal.
-    /// * A list of compilation artifacts for each module found within `wasm`.
-    ///   Note that if module linking is disabled then this list will always
-    ///   have a size of exactly 1. These pairs are returned by
-    ///   `wasmtime_jit::finish_compile`.
-    /// * Type information about all the modules returned. All returned modules
-    ///   have local type information with indices that refer to these returned
+    /// * The compilation artifacts for the module found within `wasm`, as
+    ///   returned by `wasmtime_jit::finish_compile`.
+    /// * Type information about the module returned. All returned modules have
+    ///   local type information with indices that refer to these returned
     ///   tables.
+    /// * A boolean value indicating whether forward-edge CFI has been applied
+    ///   to the compiled module.
     #[cfg(compiler)]
     pub(crate) fn build_artifacts(
         engine: &Engine,
@@ -431,8 +428,14 @@ impl Module {
         // table lazy init.
         translation.try_func_table_init();
 
-        let (mmap, info) =
-            wasmtime_jit::finish_compile(translation, obj, funcs, trampolines, tunables)?;
+        let (mmap, info) = wasmtime_jit::finish_compile(
+            translation,
+            obj,
+            funcs,
+            trampolines,
+            tunables,
+            engine.compiler().is_branch_protection_enabled(),
+        )?;
 
         Ok((mmap, Some(info)))
     }

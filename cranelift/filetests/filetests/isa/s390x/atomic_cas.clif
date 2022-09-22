@@ -31,12 +31,17 @@ block0(v0: i64, v1: i16, v2: i16, v3: i64):
   return v4
 }
 
+;   stmg %r6, %r15, 48(%r15)
 ; block0:
-;   sllk %r2, %r5, 3
-;   nill %r5, 65532
-;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 0(%r2) ; rxsbg %r1, %r3, 160, 48, 16 ; jglh 1f ; risbgn %r1, %r4, 32, 48, 16 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
-;   rll %r2, %r0, 16(%r2)
+;   lgr %r6, %r4
+;   sllk %r4, %r5, 3
+;   lgr %r2, %r5
+;   nill %r2, 65532
+;   l %r0, 0(%r2)
+;   lgr %r5, %r6
+;   0: rll %r1, %r0, 0(%r4) ; rxsbg %r1, %r3, 160, 48, 16 ; jglh 1f ; risbgn %r1, %r5, 32, 48, 16 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r2) ; jglh 0b ; 1:
+;   rll %r2, %r0, 16(%r4)
+;   lmg %r6, %r15, 48(%r15)
 ;   br %r14
 
 function %atomic_cas_i8(i64, i8, i8, i64) -> i8 {
@@ -47,12 +52,14 @@ block0(v0: i64, v1: i8, v2: i8, v3: i64):
 
 ;   stmg %r11, %r15, 88(%r15)
 ; block0:
-;   sllk %r2, %r5, 3
-;   nill %r5, 65532
-;   lcr %r11, %r2
-;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 0(%r2) ; rxsbg %r1, %r3, 160, 40, 24 ; jglh 1f ; risbgn %r1, %r4, 32, 40, 24 ; rll %r1, %r1, 0(%r11) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
-;   rll %r2, %r0, 8(%r2)
+;   lgr %r11, %r4
+;   sllk %r4, %r5, 3
+;   lgr %r2, %r5
+;   nill %r2, 65532
+;   lcr %r5, %r4
+;   l %r0, 0(%r2)
+;   0: rll %r1, %r0, 0(%r4) ; rxsbg %r1, %r3, 160, 40, 24 ; jglh 1f ; risbgn %r1, %r11, 32, 40, 24 ; rll %r1, %r1, 0(%r5) ; cs %r0, %r1, 0(%r2) ; jglh 0b ; 1:
+;   rll %r2, %r0, 8(%r4)
 ;   lmg %r11, %r15, 88(%r15)
 ;   br %r14
 

@@ -14,10 +14,11 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   cmpl    $42, %edi
-;   cmovzq  %rsi, %rcx, %rcx
-;   cmovzq  %rdx, %r8, %r8
 ;   movq    %rcx, %rax
-;   movq    %r8, %rdx
+;   cmovzq  %rsi, %rax, %rax
+;   movq    %r8, %rcx
+;   cmovzq  %rdx, %rcx, %rcx
+;   movq    %rcx, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -33,12 +34,12 @@ block0(v0: f32, v1: i128, v2: i128):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   ucomiss %xmm0, %xmm0
-;   cmovnzq %rdx, %rdi, %rdi
-;   cmovpq  %rdx, %rdi, %rdi
-;   cmovnzq %rcx, %rsi, %rsi
-;   cmovpq  %rcx, %rsi, %rsi
 ;   movq    %rdi, %rax
+;   cmovnzq %rdx, %rax, %rax
+;   cmovpq  %rdx, %rax, %rax
 ;   movq    %rsi, %rdx
+;   cmovnzq %rcx, %rdx, %rdx
+;   cmovpq  %rcx, %rdx, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

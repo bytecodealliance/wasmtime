@@ -37,7 +37,6 @@ block0:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   mov x0, lr
+;   ldr x0, [fp, #8]
 ;   ldp fp, lr, [sp], #16
 ;   ret
-

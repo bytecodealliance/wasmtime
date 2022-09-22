@@ -1,0 +1,50 @@
+test interpret
+test run
+target aarch64
+; x86_64 and s390x do not support vector bitcasts.
+
+function %bitcast_if32x2(i32x2) -> f32x2 {
+block0(v0: i32x2):
+  v1 = bitcast.f32x2 v0
+  return v1
+}
+; run: %bitcast_if32x2([0 4294967295]) == [0x0.0 -NaN:0x3fffff]
+; run: %bitcast_if32x2([-1 127]) == [-NaN:0x3fffff 0x0.0000fep-126]
+
+function %bitcast_fi32x2(f32x2) -> i32x2 {
+block0(v0: f32x2):
+  v1 = bitcast.i32x2 v0
+  return v1
+}
+; run: %bitcast_fi32x2([0x0.0 -NaN:0x3fffff]) == [0 4294967295]
+; run: %bitcast_fi32x2([-NaN:0x3fffff 0x0.0000fep-126]) == [-1 127]
+
+function %bitcast_if32x4(i32x4) -> f32x4 {
+block0(v0: i32x4):
+  v1 = bitcast.f32x4 v0
+  return v1
+}
+; run: %bitcast_if32x4([0 4294967295 -1 127]) == [0x0.0 -NaN:0x3fffff -NaN:0x3fffff 0x0.0000fep-126]
+
+function %bitcast_fi32x4(f32x4) -> i32x4 {
+block0(v0: f32x4):
+  v1 = bitcast.i32x4 v0
+  return v1
+}
+; run: %bitcast_fi32x4([0x0.0 -NaN:0x3fffff -NaN:0x3fffff 0x0.0000fep-126]) == [0 4294967295 -1 127]
+
+function %bitcast_if64x2(i64x2) -> f64x2 {
+block0(v0: i64x2):
+  v1 = bitcast.f64x2 v0
+  return v1
+}
+; run: %bitcast_if64x2([0 18446744073709551615]) == [0x0.0 -NaN:0x7ffffffffffff]
+; run: %bitcast_if64x2([-1 127]) == [-NaN:0x7ffffffffffff 0x0.000000000007fp-1022]
+
+function %bitcast_fi64x2(f64x2) -> i64x2 {
+block0(v0: f64x2):
+  v1 = bitcast.i64x2 v0
+  return v1
+}
+; run: %bitcast_fi64x2([0x0.0 -NaN:0x7ffffffffffff]) == [0 18446744073709551615]
+; run: %bitcast_fi64x2([-NaN:0x7ffffffffffff 0x0.000000000007fp-1022]) == [-1 127]

@@ -1,0 +1,37 @@
+test interpret
+test run
+set enable_probestack=true
+set probestack_strategy=inline
+
+; This is the default and is equivalent to a page size of 4096
+set probestack_size_log2=12
+target x86_64
+; Test also with 64k pages
+set probestack_size_log2=16
+target x86_64
+
+; Create a huge stack slot (1MB), way larger than PAGE_SIZE and touch the end of it.
+; This guarantees that we bypass the guard page, cause a page fault the OS isn't expecting
+; which turns into a segfault if we haven't correctly implemented stack probing.
+
+function %probe_loop(i64) -> i64 {
+    ss0 = explicit_slot 1048576
+
+block0(v0: i64):
+    stack_store.i64 v0, ss0
+    v1 = stack_load.i64 ss0
+    return v1
+}
+; run: %probe_loop(1) == 1
+
+
+; Tests the unrolled version of the stackprobe
+function %probe_unroll(i64) -> i64 {
+    ss0 = explicit_slot 9000
+
+block0(v0: i64):
+    stack_store.i64 v0, ss0
+    v1 = stack_load.i64 ss0
+    return v1
+}
+; run: %probe_unroll(1) == 1

@@ -36,25 +36,18 @@ impl Config {
     pub fn set_differential_config(&mut self) {
         let config = &mut self.module_config.config;
 
-        // Disable the start function for now.
-        //
-        // TODO: should probably allow this after testing it works with the new
-        // differential setup in all engines.
-        config.allow_start_export = false;
-
         // Make it more likely that there are types available to generate a
         // function with.
-        config.min_types = 1;
+        config.min_types = config.min_types.max(1);
         config.max_types = config.max_types.max(1);
 
         // Generate at least one function
-        config.min_funcs = 1;
+        config.min_funcs = config.min_funcs.max(1);
         config.max_funcs = config.max_funcs.max(1);
 
         // Allow a memory to be generated, but don't let it get too large.
         // Additionally require the maximum size to guarantee that the growth
         // behavior is consistent across engines.
-        config.max_memories = 1;
         config.max_memory_pages = 10;
         config.memory_max_size_required = true;
 
@@ -65,7 +58,6 @@ impl Config {
         //
         // Note that while reference types are disabled below, only allow one
         // table.
-        config.max_tables = 1;
         config.max_table_elements = 1_000;
         config.table_max_size_required = true;
 
@@ -86,10 +78,10 @@ impl Config {
         } = &mut self.wasmtime.strategy
         {
             // One single-page memory
-            limits.memories = 1;
+            limits.memories = config.max_memories as u32;
             limits.memory_pages = 10;
 
-            limits.tables = 1;
+            limits.tables = config.max_tables as u32;
             limits.table_elements = 1_000;
 
             limits.size = 1_000_000;
@@ -110,7 +102,7 @@ impl Config {
     /// to ensure termination; as doing so will add an additional global to the module,
     /// the pooling allocator, if configured, will also have its globals limit updated.
     pub fn generate(
-        &mut self,
+        &self,
         input: &mut Unstructured<'_>,
         default_fuel: Option<u32>,
     ) -> arbitrary::Result<wasm_smith::Module> {
@@ -139,7 +131,7 @@ impl Config {
             // required to actually run the spec tests. Fuzz-generated inputs
             // may have limits less than these thresholds which would cause the
             // spec tests to fail which isn't particularly interesting.
-            limits.memories = limits.memories.max(1);
+            limits.memories = 1;
             limits.tables = limits.memories.max(5);
             limits.table_elements = limits.memories.max(1_000);
             limits.memory_pages = limits.memory_pages.max(900);
@@ -329,16 +321,22 @@ impl<'a> Arbitrary<'a> for Config {
         if let InstanceAllocationStrategy::Pooling {
             instance_limits: limits,
             ..
-        } = &config.wasmtime.strategy
+        } = &mut config.wasmtime.strategy
         {
+            let cfg = &mut config.module_config.config;
             // If the pooling allocator is used, do not allow shared memory to
             // be created. FIXME: see
             // https://github.com/bytecodealliance/wasmtime/issues/4244.
-            config.module_config.config.threads_enabled = false;
+            cfg.threads_enabled = false;
 
             // Force the use of a normal memory config when using the pooling allocator and
             // limit the static memory maximum to be the same as the pooling allocator's memory
             // page limit.
+            if cfg.max_memory_pages < limits.memory_pages {
+                limits.memory_pages = cfg.max_memory_pages;
+            } else {
+                cfg.max_memory_pages = limits.memory_pages;
+            }
             config.wasmtime.memory_config = match config.wasmtime.memory_config {
                 MemoryConfig::Normal(mut config) => {
                     config.static_memory_maximum_size = Some(limits.memory_pages * 0x10000);
@@ -351,14 +349,15 @@ impl<'a> Arbitrary<'a> for Config {
                 }
             };
 
-            let cfg = &mut config.module_config.config;
-            cfg.max_memories = limits.memories as usize;
-            cfg.max_tables = limits.tables as usize;
-            cfg.max_memory_pages = limits.memory_pages;
+            // Don't allow too many linear memories per instance since massive
+            // virtual mappings can fail to get allocated.
+            cfg.min_memories = cfg.min_memories.min(10);
+            cfg.max_memories = cfg.max_memories.min(10);
 
-            // Force no aliases in any generated modules as they might count against the
-            // import limits above.
-            cfg.max_aliases = 0;
+            // Force this pooling allocator to always be able to accommodate the
+            // module that may be generated.
+            limits.memories = cfg.max_memories as u32;
+            limits.tables = cfg.max_tables as u32;
         }
 
         Ok(config)

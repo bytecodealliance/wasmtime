@@ -8,8 +8,8 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   vlvgp %v7, %r4, %r3
-;   vst %v7, 0(%r2)
+;   vlvgp %v5, %r4, %r3
+;   vst %v5, 0(%r2)
 ;   br %r14
 
 function %isplit_i128(i128) -> i64, i64 {

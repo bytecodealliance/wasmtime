@@ -34,9 +34,9 @@ static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
 impl Into<AMode> for StackAMode {
     fn into(self) -> AMode {
         match self {
-            StackAMode::FPOffset(off, ty) => AMode::FPOffset(off, ty),
-            StackAMode::NominalSPOffset(off, ty) => AMode::NominalSPOffset(off, ty),
-            StackAMode::SPOffset(off, ty) => AMode::SPOffset(off, ty),
+            StackAMode::FPOffset(off, ty) => AMode::FPOffset { off, ty },
+            StackAMode::NominalSPOffset(off, ty) => AMode::NominalSPOffset { off, ty },
+            StackAMode::SPOffset(off, ty) => AMode::SPOffset { off, ty },
         }
     }
 }
@@ -67,7 +67,11 @@ fn saved_reg_stack_size(
 /// point for the trait; it is never actually instantiated.
 pub struct AArch64MachineDeps;
 
-impl IsaFlags for aarch64_settings::Flags {}
+impl IsaFlags for aarch64_settings::Flags {
+    fn is_forward_edge_cfi_enabled(&self) -> bool {
+        self.use_bti()
+    }
+}
 
 impl ABIMachineSpec for AArch64MachineDeps {
     type I = Inst;
@@ -387,6 +391,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
     }
 
+    fn gen_args(_isa_flags: &aarch64_settings::Flags, args: Vec<ArgPair>) -> Inst {
+        Inst::Args { args }
+    }
+
     fn gen_ret(setup_frame: bool, isa_flags: &aarch64_settings::Flags, rets: Vec<Reg>) -> Inst {
         if isa_flags.sign_return_address() && (setup_frame || isa_flags.sign_return_address_all()) {
             let key = if isa_flags.sign_return_address_with_bkey() {
@@ -462,12 +470,20 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Inst {
-        let mem = AMode::RegOffset(base, offset as i64, ty);
+        let mem = AMode::RegOffset {
+            rn: base,
+            off: offset as i64,
+            ty,
+        };
         Inst::gen_load(into_reg, mem, ty, MemFlags::trusted())
     }
 
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Inst {
-        let mem = AMode::RegOffset(base, offset as i64, ty);
+        let mem = AMode::RegOffset {
+            rn: base,
+            off: offset as i64,
+            ty,
+        };
         Inst::gen_store(mem, from_reg, ty, MemFlags::trusted())
     }
 
@@ -541,13 +557,21 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     },
                 });
             }
-        } else if flags.unwind_info() && call_conv.extends_apple_aarch64() {
-            // The macOS unwinder seems to require this.
-            insts.push(Inst::Unwind {
-                inst: UnwindInst::Aarch64SetPointerAuth {
-                    return_addresses: false,
-                },
-            });
+        } else {
+            if isa_flags.use_bti() {
+                insts.push(Inst::Bti {
+                    targets: BranchTargetType::C,
+                });
+            }
+
+            if flags.unwind_info() && call_conv.extends_apple_aarch64() {
+                // The macOS unwinder seems to require this.
+                insts.push(Inst::Unwind {
+                    inst: UnwindInst::Aarch64SetPointerAuth {
+                        return_addresses: false,
+                    },
+                });
+            }
         }
 
         insts
@@ -560,10 +584,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts.push(Inst::StoreP64 {
             rt: fp_reg(),
             rt2: link_reg(),
-            mem: PairAMode::PreIndexed(
-                writable_stack_reg(),
-                SImm7Scaled::maybe_from_i64(-16, types::I64).unwrap(),
-            ),
+            mem: PairAMode::SPPreIndexed(SImm7Scaled::maybe_from_i64(-16, types::I64).unwrap()),
             flags: MemFlags::trusted(),
         });
 
@@ -601,10 +622,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts.push(Inst::LoadP64 {
             rt: writable_fp_reg(),
             rt2: writable_link_reg(),
-            mem: PairAMode::PostIndexed(
-                writable_stack_reg(),
-                SImm7Scaled::maybe_from_i64(16, types::I64).unwrap(),
-            ),
+            mem: PairAMode::SPPostIndexed(SImm7Scaled::maybe_from_i64(16, types::I64).unwrap()),
             flags: MemFlags::trusted(),
         });
         insts
@@ -614,6 +632,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
         // TODO: implement if we ever require stack probes on an AArch64 host
         // (unlikely unless Lucet is ported)
         smallvec![]
+    }
+
+    fn gen_inline_probestack(_frame_size: u32, _guard_size: u32) -> SmallInstVec<Self::I> {
+        unimplemented!("Inline stack probing is unimplemented on AArch64");
     }
 
     // Returns stack bytes used as well as instructions. Does not adjust
@@ -676,10 +698,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // str rd, [sp, #-16]!
             insts.push(Inst::Store64 {
                 rd,
-                mem: AMode::PreIndexed(
-                    writable_stack_reg(),
-                    SImm9::maybe_from_i64(-clobber_offset_change).unwrap(),
-                ),
+                mem: AMode::SPPreIndexed {
+                    simm9: SImm9::maybe_from_i64(-clobber_offset_change).unwrap(),
+                },
                 flags: MemFlags::trusted(),
             });
 
@@ -708,8 +729,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             insts.push(Inst::StoreP64 {
                 rt,
                 rt2,
-                mem: PairAMode::PreIndexed(
-                    writable_stack_reg(),
+                mem: PairAMode::SPPreIndexed(
                     SImm7Scaled::maybe_from_i64(-clobber_offset_change, types::I64).unwrap(),
                 ),
                 flags: MemFlags::trusted(),
@@ -734,10 +754,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         let store_vec_reg = |rd| Inst::FpuStore64 {
             rd,
-            mem: AMode::PreIndexed(
-                writable_stack_reg(),
-                SImm9::maybe_from_i64(-clobber_offset_change).unwrap(),
-            ),
+            mem: AMode::SPPreIndexed {
+                simm9: SImm9::maybe_from_i64(-clobber_offset_change).unwrap(),
+            },
             flags: MemFlags::trusted(),
         };
         let iter = clobbered_vec.chunks_exact(2);
@@ -766,8 +785,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 Inst::FpuStoreP64 {
                     rt,
                     rt2,
-                    mem: PairAMode::PreIndexed(
-                        writable_stack_reg(),
+                    mem: PairAMode::SPPreIndexed(
                         SImm7Scaled::maybe_from_i64(-clobber_offset_change, F64).unwrap(),
                     ),
                     flags: MemFlags::trusted(),
@@ -831,16 +849,15 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         let load_vec_reg = |rd| Inst::FpuLoad64 {
             rd,
-            mem: AMode::PostIndexed(writable_stack_reg(), SImm9::maybe_from_i64(16).unwrap()),
+            mem: AMode::SPPostIndexed {
+                simm9: SImm9::maybe_from_i64(16).unwrap(),
+            },
             flags: MemFlags::trusted(),
         };
         let load_vec_reg_pair = |rt, rt2| Inst::FpuLoadP64 {
             rt,
             rt2,
-            mem: PairAMode::PostIndexed(
-                writable_stack_reg(),
-                SImm7Scaled::maybe_from_i64(16, F64).unwrap(),
-            ),
+            mem: PairAMode::SPPostIndexed(SImm7Scaled::maybe_from_i64(16, F64).unwrap()),
             flags: MemFlags::trusted(),
         };
 
@@ -876,10 +893,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             insts.push(Inst::LoadP64 {
                 rt,
                 rt2,
-                mem: PairAMode::PostIndexed(
-                    writable_stack_reg(),
-                    SImm7Scaled::maybe_from_i64(16, I64).unwrap(),
-                ),
+                mem: PairAMode::SPPostIndexed(SImm7Scaled::maybe_from_i64(16, I64).unwrap()),
                 flags: MemFlags::trusted(),
             });
         }
@@ -893,7 +907,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // ldr rd, [sp], #16
             insts.push(Inst::ULoad64 {
                 rd,
-                mem: AMode::PostIndexed(writable_stack_reg(), SImm9::maybe_from_i64(16).unwrap()),
+                mem: AMode::SPPostIndexed {
+                    simm9: SImm9::maybe_from_i64(16).unwrap(),
+                },
                 flags: MemFlags::trusted(),
             });
         }
@@ -903,8 +919,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
     fn gen_call(
         dest: &CallDest,
-        uses: SmallVec<[Reg; 8]>,
-        defs: SmallVec<[Writable<Reg>; 8]>,
+        uses: CallArgList,
+        defs: CallRetList,
         clobbers: PRegSet,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
@@ -962,19 +978,32 @@ impl ABIMachineSpec for AArch64MachineDeps {
         call_conv: isa::CallConv,
         dst: Reg,
         src: Reg,
+        tmp: Writable<Reg>,
+        _tmp2: Writable<Reg>,
         size: usize,
     ) -> SmallVec<[Self::I; 8]> {
         let mut insts = SmallVec::new();
         let arg0 = writable_xreg(0);
         let arg1 = writable_xreg(1);
         let arg2 = writable_xreg(2);
-        insts.push(Inst::gen_move(arg0, dst, I64));
-        insts.push(Inst::gen_move(arg1, src, I64));
-        insts.extend(Inst::load_constant(arg2, size as u64).into_iter());
+        insts.extend(Inst::load_constant(tmp, size as u64).into_iter());
         insts.push(Inst::Call {
             info: Box::new(CallInfo {
                 dest: ExternalName::LibCall(LibCall::Memcpy),
-                uses: smallvec![arg0.to_reg(), arg1.to_reg(), arg2.to_reg()],
+                uses: smallvec![
+                    CallArgPair {
+                        vreg: dst,
+                        preg: arg0.to_reg()
+                    },
+                    CallArgPair {
+                        vreg: src,
+                        preg: arg1.to_reg()
+                    },
+                    CallArgPair {
+                        vreg: tmp.to_reg(),
+                        preg: arg2.to_reg()
+                    }
+                ],
                 defs: smallvec![],
                 clobbers: Self::get_regs_clobbered_by_call(call_conv),
                 opcode: Opcode::Call,

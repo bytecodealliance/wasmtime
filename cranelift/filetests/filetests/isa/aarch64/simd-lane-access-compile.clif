@@ -29,9 +29,9 @@ block0:
 
 ; block0:
 ;   movz x4, #1
-;   fmov s30, w4
+;   fmov s31, w4
 ;   ldr q3, pc+8 ; b 20 ; data.f128 0x13000000000000000000000000000000
-;   mov v31.16b, v30.16b
+;   mov v30.16b, v31.16b
 ;   tbl v0.16b, { v30.16b, v31.16b }, v3.16b
 ;   ret
 

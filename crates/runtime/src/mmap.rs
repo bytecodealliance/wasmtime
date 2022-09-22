@@ -412,7 +412,11 @@ impl Mmap {
     }
 
     /// Makes the specified `range` within this `Mmap` to be read/execute.
-    pub unsafe fn make_executable(&self, range: Range<usize>) -> Result<()> {
+    pub unsafe fn make_executable(
+        &self,
+        range: Range<usize>,
+        enable_branch_protection: bool,
+    ) -> Result<()> {
         assert!(range.start <= self.len());
         assert!(range.end <= self.len());
         assert!(range.start <= range.end);
@@ -428,8 +432,15 @@ impl Mmap {
             use std::io;
             use windows_sys::Win32::System::Memory::*;
 
+            let flags = if enable_branch_protection {
+                // TODO: We use this check to avoid an unused variable warning,
+                // but some of the CFG-related flags might be applicable
+                PAGE_EXECUTE_READ
+            } else {
+                PAGE_EXECUTE_READ
+            };
             let mut old = 0;
-            let result = VirtualProtect(base, len, PAGE_EXECUTE_READ, &mut old);
+            let result = VirtualProtect(base, len, flags, &mut old);
             if result == 0 {
                 return Err(io::Error::last_os_error().into());
             }
@@ -438,8 +449,25 @@ impl Mmap {
         #[cfg(not(windows))]
         {
             use rustix::mm::{mprotect, MprotectFlags};
-            mprotect(base, len, MprotectFlags::READ | MprotectFlags::EXEC)?;
+
+            let flags = MprotectFlags::READ | MprotectFlags::EXEC;
+            let flags = if enable_branch_protection {
+                #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+                if std::arch::is_aarch64_feature_detected!("bti") {
+                    MprotectFlags::from_bits_unchecked(flags.bits() | /* PROT_BTI */ 0x10)
+                } else {
+                    flags
+                }
+
+                #[cfg(not(all(target_arch = "aarch64", target_os = "linux")))]
+                flags
+            } else {
+                flags
+            };
+
+            mprotect(base, len, flags)?;
         }
+
         Ok(())
     }
 

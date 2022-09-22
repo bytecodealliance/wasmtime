@@ -1,0 +1,69 @@
+test interpret
+test run
+target aarch64
+; x86_64 and s390x do not support bitcasting to the same type as the input.
+
+function %bitcast_i8(i8) -> i8 {
+block0(v0: i8):
+  v1 = bitcast.i8 v0
+  return v1
+}
+; run: %bitcast_i8(0) == 0
+; run: %bitcast_i8(42) == 42
+; run: %bitcast_i8(255) == 255
+
+function %bitcast_i16(i16) -> i16 {
+block0(v0: i16):
+  v1 = bitcast.i16 v0
+  return v1
+}
+; run: %bitcast_i16(0) == 0
+; run: %bitcast_i16(42) == 42
+; run: %bitcast_i16(65535) == 65535
+
+function %bitcast_i32(i32) -> i32 {
+block0(v0: i32):
+  v1 = bitcast.i32 v0
+  return v1
+}
+; run: %bitcast_i32(0) == 0
+; run: %bitcast_i32(42) == 42
+; run: %bitcast_i32(4294967295) == 4294967295
+
+function %bitcast_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = bitcast.i64 v0
+  return v1
+}
+; run: %bitcast_i64(0) == 0
+; run: %bitcast_i64(42) == 42
+; run: %bitcast_i64(18446744073709551615) == 18446744073709551615
+
+function %bitcast_i128(i128) -> i128 {
+block0(v0: i128):
+  v1 = bitcast.i128 v0
+  return v1
+}
+; run: %bitcast_i128(0) == 0
+; run: %bitcast_i128(42) == 42
+; run: %bitcast_i128(200000000000000000000) == 200000000000000000000
+
+function %bitcast_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = bitcast.f32 v0
+  return v1
+}
+; run: %bitcast_f32(0x0.0) == 0x0.0
+; run: %bitcast_f32(0x1.0) == 0x1.0
+; run: %bitcast_f32(-0x1.0) == -0x1.0
+; run: %bitcast_f32(NaN) == NaN
+
+function %bitcast_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = bitcast.f64 v0
+  return v1
+}
+; run: %bitcast_f64(0x0.0) == 0x0.0
+; run: %bitcast_f64(0x1.0) == 0x1.0
+; run: %bitcast_f64(-0x1.0) == -0x1.0
+; run: %bitcast_f64(NaN) == NaN

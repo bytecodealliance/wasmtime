@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set avoid_div_traps=false
 target x86_64
 
@@ -10,47 +10,72 @@ target x86_64
 function %i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
   v2 = srem.i8 v0, v1
-; check:  xorl    %r11d, %r11d, %r11d
-; nextln: movq    %rdi, %rax
-; nextln: movq    %r11, %rdx
-; nextln: srem_seq %al, %dl, %sil, %al, %dl, tmp=(none)
-; nextln: shrq    $$8, %rax, %rax
 
   return v2
 }
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   xorl    %edx, %edx, %edx
+;   srem_seq %al, %dl, %sil, %al, %dl, tmp=(none)
+;   shrq    $8, %rax, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
   v2 = srem.i16 v0, v1
-; check:  xorl    %r11d, %r11d, %r11d
-; nextln: movq    %rdi, %rax
-; nextln: movq    %r11, %rdx
-; nextln: srem_seq %ax, %dx, %si, %ax, %dx, tmp=(none)
-; nextln: movq    %rdx, %rax
 
   return v2
 }
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   xorl    %edx, %edx, %edx
+;   srem_seq %ax, %dx, %si, %ax, %dx, tmp=(none)
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
   v2 = srem.i32 v0, v1
-; check:  xorl    %r11d, %r11d, %r11d
-; nextln: movq    %rdi, %rax
-; nextln: movq    %r11, %rdx
-; nextln: srem_seq %eax, %edx, %esi, %eax, %edx, tmp=(none)
-; nextln: movq    %rdx, %rax
 
   return v2
 }
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   xorl    %edx, %edx, %edx
+;   srem_seq %eax, %edx, %esi, %eax, %edx, tmp=(none)
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
 
 function %i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = srem.i64 v0, v1
-; check:  xorl    %r11d, %r11d, %r11d
-; nextln: movq    %rdi, %rax
-; nextln: movq    %r11, %rdx
-; nextln: srem_seq %rax, %rdx, %rsi, %rax, %rdx, tmp=(none)
-; nextln: movq    %rdx, %rax
 
   return v2
 }
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   xorl    %edx, %edx, %edx
+;   srem_seq %rax, %rdx, %rsi, %rax, %rdx, tmp=(none)
+;   movq    %rdx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

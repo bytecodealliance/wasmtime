@@ -1,6 +1,6 @@
 [package]
 name = "wasi-tokio"
-version = "0.41.0"
+version = "2.0.0"
 authors = ["The Wasmtime Project Developers"]
 description = "WASI implementation in Rust"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -11,16 +11,16 @@ edition = "2021"
 include = ["src/**/*", "LICENSE" ]
 
 [dependencies]
-wasi-common = { path = "../", version = "=0.41.0" }
-wasi-cap-std-sync = { path = "../cap-std-sync", version = "=0.41.0" }
-wiggle = { path = "../../wiggle", version = "=0.41.0" }
+wasi-common = { path = "../", version = "=2.0.0" }
+wasi-cap-std-sync = { path = "../cap-std-sync", version = "=2.0.0" }
+wiggle = { path = "../../wiggle", version = "=2.0.0" }
 tokio = { version = "1.8.0", features = [ "rt", "fs", "time", "io-util", "net", "io-std", "rt-multi-thread"] }
-cap-std = "0.25.0"
+cap-std = "0.26.0"
 anyhow = "1"
 io-lifetimes = { version = "0.7.0", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "0.35.6", features = ["fs"] }
+rustix = { version = "0.35.10", features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
 io-extras = "0.15.0"
@@ -29,4 +29,4 @@ io-extras = "0.15.0"
 tempfile = "3.1.0"
 tokio = { version = "1.8.0", features = [ "macros" ] }
 anyhow = "1"
-cap-tempfile = "0.25.0"
+cap-tempfile = "0.26.0"

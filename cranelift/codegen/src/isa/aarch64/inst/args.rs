@@ -3,7 +3,7 @@
 use crate::ir::types::*;
 use crate::ir::Type;
 use crate::isa::aarch64::inst::*;
-use crate::machinst::{ty_bits, MachLabel, PrettyPrint, Reg, Writable};
+use crate::machinst::{ty_bits, MachLabel, PrettyPrint, Reg};
 use core::convert::Into;
 use std::string::String;
 
@@ -115,118 +115,75 @@ pub enum MemLabel {
     PCRel(i32),
 }
 
-/// An addressing mode specified for a load/store operation.
-#[derive(Clone, Debug)]
-pub enum AMode {
-    //
-    // Real ARM64 addressing modes:
-    //
-    /// "post-indexed" mode as per AArch64 docs: postincrement reg after address computation.
-    PostIndexed(Writable<Reg>, SImm9),
-    /// "pre-indexed" mode as per AArch64 docs: preincrement reg before address computation.
-    PreIndexed(Writable<Reg>, SImm9),
-
-    // N.B.: RegReg, RegScaled, and RegScaledExtended all correspond to
-    // what the ISA calls the "register offset" addressing mode. We split out
-    // several options here for more ergonomic codegen.
-    /// Register plus register offset.
-    RegReg(Reg, Reg),
-
-    #[allow(dead_code)]
-    /// Register plus register offset, scaled by type's size.
-    RegScaled(Reg, Reg, Type),
-
-    /// Register plus register offset, scaled by type's size, with index sign- or zero-extended
-    /// first.
-    RegScaledExtended(Reg, Reg, Type, ExtendOp),
-
-    /// Register plus register offset, with index sign- or zero-extended first.
-    RegExtended(Reg, Reg, ExtendOp),
-
-    /// Unscaled signed 9-bit immediate offset from reg.
-    Unscaled(Reg, SImm9),
-
-    /// Scaled (by size of a type) unsigned 12-bit immediate offset from reg.
-    UnsignedOffset(Reg, UImm12Scaled),
-
-    //
-    // virtual addressing modes that are lowered at emission time:
-    //
-    /// Reference to a "label": e.g., a symbol.
-    Label(MemLabel),
-
-    /// Arbitrary offset from a register. Converted to generation of large
-    /// offsets with multiple instructions as necessary during code emission.
-    RegOffset(Reg, i64, Type),
-
-    /// Offset from the stack pointer.
-    SPOffset(i64, Type),
-
-    /// Offset from the frame pointer.
-    FPOffset(i64, Type),
-
-    /// Offset from the "nominal stack pointer", which is where the real SP is
-    /// just after stack and spill slots are allocated in the function prologue.
-    /// At emission time, this is converted to `SPOffset` with a fixup added to
-    /// the offset constant. The fixup is a running value that is tracked as
-    /// emission iterates through instructions in linear order, and can be
-    /// adjusted up and down with [Inst::VirtualSPOffsetAdj].
-    ///
-    /// The standard ABI is in charge of handling this (by emitting the
-    /// adjustment meta-instructions). It maintains the invariant that "nominal
-    /// SP" is where the actual SP is after the function prologue and before
-    /// clobber pushes. See the diagram in the documentation for
-    /// [crate::isa::aarch64::abi](the ABI module) for more details.
-    NominalSPOffset(i64, Type),
-}
-
 impl AMode {
     /// Memory reference using an address in a register.
     pub fn reg(reg: Reg) -> AMode {
         // Use UnsignedOffset rather than Unscaled to use ldr rather than ldur.
         // This also does not use PostIndexed / PreIndexed as they update the register.
-        AMode::UnsignedOffset(reg, UImm12Scaled::zero(I64))
+        AMode::UnsignedOffset {
+            rn: reg,
+            uimm12: UImm12Scaled::zero(I64),
+        }
     }
 
     /// Memory reference using `reg1 + sizeof(ty) * reg2` as an address, with `reg2` sign- or
     /// zero-extended as per `op`.
     pub fn reg_plus_reg_scaled_extended(reg1: Reg, reg2: Reg, ty: Type, op: ExtendOp) -> AMode {
-        AMode::RegScaledExtended(reg1, reg2, ty, op)
-    }
-
-    /// Does the address resolve to just a register value, with no offset or
-    /// other computation?
-    pub fn is_reg(&self) -> Option<Reg> {
-        match self {
-            &AMode::UnsignedOffset(r, uimm12) if uimm12.value() == 0 => Some(r),
-            &AMode::Unscaled(r, imm9) if imm9.value() == 0 => Some(r),
-            &AMode::RegOffset(r, off, _) if off == 0 => Some(r),
-            &AMode::FPOffset(off, _) if off == 0 => Some(fp_reg()),
-            &AMode::SPOffset(off, _) if off == 0 => Some(stack_reg()),
-            _ => None,
+        AMode::RegScaledExtended {
+            rn: reg1,
+            rm: reg2,
+            ty,
+            extendop: op,
         }
     }
 
     pub fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
         // This should match `memarg_operands()`.
         match self {
-            &AMode::Unscaled(reg, imm9) => AMode::Unscaled(allocs.next(reg), imm9),
-            &AMode::UnsignedOffset(r, uimm12) => AMode::UnsignedOffset(allocs.next(r), uimm12),
-            &AMode::RegReg(r1, r2) => AMode::RegReg(allocs.next(r1), allocs.next(r2)),
-            &AMode::RegScaled(r1, r2, ty) => AMode::RegScaled(allocs.next(r1), allocs.next(r2), ty),
-            &AMode::RegScaledExtended(r1, r2, ty, ext) => {
-                AMode::RegScaledExtended(allocs.next(r1), allocs.next(r2), ty, ext)
-            }
-            &AMode::RegExtended(r1, r2, ext) => {
-                AMode::RegExtended(allocs.next(r1), allocs.next(r2), ext)
-            }
-            &AMode::PreIndexed(reg, simm9) => AMode::PreIndexed(allocs.next_writable(reg), simm9),
-            &AMode::PostIndexed(reg, simm9) => AMode::PostIndexed(allocs.next_writable(reg), simm9),
-            &AMode::RegOffset(r, off, ty) => AMode::RegOffset(allocs.next(r), off, ty),
-            &AMode::FPOffset(..)
-            | &AMode::SPOffset(..)
-            | &AMode::NominalSPOffset(..)
-            | AMode::Label(..) => self.clone(),
+            &AMode::Unscaled { rn, simm9 } => AMode::Unscaled {
+                rn: allocs.next(rn),
+                simm9,
+            },
+            &AMode::UnsignedOffset { rn, uimm12 } => AMode::UnsignedOffset {
+                rn: allocs.next(rn),
+                uimm12,
+            },
+            &AMode::RegReg { rn, rm } => AMode::RegReg {
+                rn: allocs.next(rn),
+                rm: allocs.next(rm),
+            },
+            &AMode::RegScaled { rn, rm, ty } => AMode::RegScaled {
+                rn: allocs.next(rn),
+                rm: allocs.next(rm),
+                ty,
+            },
+            &AMode::RegScaledExtended {
+                rn,
+                rm,
+                ty,
+                extendop,
+            } => AMode::RegScaledExtended {
+                rn: allocs.next(rn),
+                rm: allocs.next(rm),
+                ty,
+                extendop,
+            },
+            &AMode::RegExtended { rn, rm, extendop } => AMode::RegExtended {
+                rn: allocs.next(rn),
+                rm: allocs.next(rm),
+                extendop,
+            },
+            &AMode::RegOffset { rn, off, ty } => AMode::RegOffset {
+                rn: allocs.next(rn),
+                off,
+                ty,
+            },
+            &AMode::SPPreIndexed { .. }
+            | &AMode::SPPostIndexed { .. }
+            | &AMode::FPOffset { .. }
+            | &AMode::SPOffset { .. }
+            | &AMode::NominalSPOffset { .. }
+            | AMode::Label { .. } => self.clone(),
         }
     }
 }
@@ -235,8 +192,8 @@ impl AMode {
 #[derive(Clone, Debug)]
 pub enum PairAMode {
     SignedOffset(Reg, SImm7Scaled),
-    PreIndexed(Writable<Reg>, SImm7Scaled),
-    PostIndexed(Writable<Reg>, SImm7Scaled),
+    SPPreIndexed(SImm7Scaled),
+    SPPostIndexed(SImm7Scaled),
 }
 
 impl PairAMode {
@@ -246,12 +203,7 @@ impl PairAMode {
             &PairAMode::SignedOffset(reg, simm7scaled) => {
                 PairAMode::SignedOffset(allocs.next(reg), simm7scaled)
             }
-            &PairAMode::PreIndexed(reg, simm7scaled) => {
-                PairAMode::PreIndexed(allocs.next_writable(reg), simm7scaled)
-            }
-            &PairAMode::PostIndexed(reg, simm7scaled) => {
-                PairAMode::PostIndexed(allocs.next_writable(reg), simm7scaled)
-            }
+            &PairAMode::SPPreIndexed(..) | &PairAMode::SPPostIndexed(..) => self.clone(),
         }
     }
 }
@@ -419,8 +371,8 @@ fn shift_for_type(ty: Type) -> usize {
 impl PrettyPrint for AMode {
     fn pretty_print(&self, _: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
-            &AMode::Unscaled(reg, simm9) => {
-                let reg = pretty_print_reg(reg, allocs);
+            &AMode::Unscaled { rn, simm9 } => {
+                let reg = pretty_print_reg(rn, allocs);
                 if simm9.value != 0 {
                     let simm9 = simm9.pretty_print(8, allocs);
                     format!("[{}, {}]", reg, simm9)
@@ -428,8 +380,8 @@ impl PrettyPrint for AMode {
                     format!("[{}]", reg)
                 }
             }
-            &AMode::UnsignedOffset(reg, uimm12) => {
-                let reg = pretty_print_reg(reg, allocs);
+            &AMode::UnsignedOffset { rn, uimm12 } => {
+                let reg = pretty_print_reg(rn, allocs);
                 if uimm12.value != 0 {
                     let uimm12 = uimm12.pretty_print(8, allocs);
                     format!("[{}, {}]", reg, uimm12)
@@ -437,55 +389,58 @@ impl PrettyPrint for AMode {
                     format!("[{}]", reg)
                 }
             }
-            &AMode::RegReg(r1, r2) => {
-                let r1 = pretty_print_reg(r1, allocs);
-                let r2 = pretty_print_reg(r2, allocs);
+            &AMode::RegReg { rn, rm } => {
+                let r1 = pretty_print_reg(rn, allocs);
+                let r2 = pretty_print_reg(rm, allocs);
                 format!("[{}, {}]", r1, r2)
             }
-            &AMode::RegScaled(r1, r2, ty) => {
-                let r1 = pretty_print_reg(r1, allocs);
-                let r2 = pretty_print_reg(r2, allocs);
+            &AMode::RegScaled { rn, rm, ty } => {
+                let r1 = pretty_print_reg(rn, allocs);
+                let r2 = pretty_print_reg(rm, allocs);
                 let shift = shift_for_type(ty);
                 format!("[{}, {}, LSL #{}]", r1, r2, shift)
             }
-            &AMode::RegScaledExtended(r1, r2, ty, op) => {
+            &AMode::RegScaledExtended {
+                rn,
+                rm,
+                ty,
+                extendop,
+            } => {
                 let shift = shift_for_type(ty);
-                let size = match op {
+                let size = match extendop {
                     ExtendOp::SXTW | ExtendOp::UXTW => OperandSize::Size32,
                     _ => OperandSize::Size64,
                 };
-                let r1 = pretty_print_reg(r1, allocs);
-                let r2 = pretty_print_ireg(r2, size, allocs);
-                let op = op.pretty_print(0, allocs);
+                let r1 = pretty_print_reg(rn, allocs);
+                let r2 = pretty_print_ireg(rm, size, allocs);
+                let op = extendop.pretty_print(0, allocs);
                 format!("[{}, {}, {} #{}]", r1, r2, op, shift)
             }
-            &AMode::RegExtended(r1, r2, op) => {
-                let size = match op {
+            &AMode::RegExtended { rn, rm, extendop } => {
+                let size = match extendop {
                     ExtendOp::SXTW | ExtendOp::UXTW => OperandSize::Size32,
                     _ => OperandSize::Size64,
                 };
-                let r1 = pretty_print_reg(r1, allocs);
-                let r2 = pretty_print_ireg(r2, size, allocs);
-                let op = op.pretty_print(0, allocs);
+                let r1 = pretty_print_reg(rn, allocs);
+                let r2 = pretty_print_ireg(rm, size, allocs);
+                let op = extendop.pretty_print(0, allocs);
                 format!("[{}, {}, {}]", r1, r2, op)
             }
-            &AMode::Label(ref label) => label.pretty_print(0, allocs),
-            &AMode::PreIndexed(r, simm9) => {
-                let r = pretty_print_reg(r.to_reg(), allocs);
+            &AMode::Label { ref label } => label.pretty_print(0, allocs),
+            &AMode::SPPreIndexed { simm9 } => {
                 let simm9 = simm9.pretty_print(8, allocs);
-                format!("[{}, {}]!", r, simm9)
+                format!("[sp, {}]!", simm9)
             }
-            &AMode::PostIndexed(r, simm9) => {
-                let r = pretty_print_reg(r.to_reg(), allocs);
+            &AMode::SPPostIndexed { simm9 } => {
                 let simm9 = simm9.pretty_print(8, allocs);
-                format!("[{}], {}", r, simm9)
+                format!("[sp], {}", simm9)
             }
             // Eliminated by `mem_finalize()`.
-            &AMode::SPOffset(..)
-            | &AMode::FPOffset(..)
-            | &AMode::NominalSPOffset(..)
-            | &AMode::RegOffset(..) => {
-                panic!("Unexpected pseudo mem-arg mode (stack-offset or generic reg-offset)!")
+            &AMode::SPOffset { .. }
+            | &AMode::FPOffset { .. }
+            | &AMode::NominalSPOffset { .. }
+            | &AMode::RegOffset { .. } => {
+                panic!("Unexpected pseudo mem-arg mode: {:?}", self)
             }
         }
     }
@@ -503,15 +458,13 @@ impl PrettyPrint for PairAMode {
                     format!("[{}]", reg)
                 }
             }
-            &PairAMode::PreIndexed(reg, simm7) => {
-                let reg = pretty_print_reg(reg.to_reg(), allocs);
+            &PairAMode::SPPreIndexed(simm7) => {
                 let simm7 = simm7.pretty_print(8, allocs);
-                format!("[{}, {}]!", reg, simm7)
+                format!("[sp, {}]!", simm7)
             }
-            &PairAMode::PostIndexed(reg, simm7) => {
-                let reg = pretty_print_reg(reg.to_reg(), allocs);
+            &PairAMode::SPPostIndexed(simm7) => {
                 let simm7 = simm7.pretty_print(8, allocs);
-                format!("[{}], {}", reg, simm7)
+                format!("[sp], {}", simm7)
             }
         }
     }

@@ -19,7 +19,7 @@ use crate::machinst::{
     LoweredBlock, MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
     VCodeConstants, VCodeInst, ValueRegs, Writable,
 };
-use crate::{trace, CodegenResult};
+use crate::{trace, CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use regalloc2::VReg;
 use smallvec::{smallvec, SmallVec};
@@ -323,6 +323,10 @@ fn alloc_vregs<I: VCodeInst>(
     let v = *next_vreg;
     let (regclasses, tys) = I::rc_for_type(ty)?;
     *next_vreg += regclasses.len();
+    if *next_vreg >= VReg::MAX {
+        return Err(CodegenError::CodeTooLarge);
+    }
+
     let regs: ValueRegs<Reg> = match regclasses {
         &[rc0] => ValueRegs::one(VReg::new(v, rc0).into()),
         &[rc0, rc1] => ValueRegs::two(VReg::new(v, rc0).into(), VReg::new(v + 1, rc1).into()),
@@ -582,8 +586,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 let regs = writable_value_regs(self.value_regs[*param]);
                 for insn in self
                     .vcode
-                    .abi()
-                    .gen_copy_arg_to_regs(self.sigs(), i, regs)
+                    .vcode
+                    .abi
+                    .gen_copy_arg_to_regs(&self.vcode.vcode.sigs, i, regs)
                     .into_iter()
                 {
                     self.emit(insn);
@@ -607,7 +612,22 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     ));
                 }
             }
-            if let Some(insn) = self.vcode.abi().gen_retval_area_setup(self.sigs()) {
+            if let Some(insn) = self
+                .vcode
+                .vcode
+                .abi
+                .gen_retval_area_setup(&self.vcode.vcode.sigs)
+            {
+                self.emit(insn);
+            }
+
+            // The `args` instruction below must come first. Finish
+            // the current "IR inst" (with a default source location,
+            // as for other special instructions inserted during
+            // lowering) and continue the scan backward.
+            self.finish_ir_inst(Default::default());
+
+            if let Some(insn) = self.vcode.vcode.abi.take_args() {
                 self.emit(insn);
             }
         }

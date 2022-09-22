@@ -237,7 +237,7 @@ impl<'a> AliasAnalysis<'a> {
                 trace!("after inst{}: state is {:?}", inst.index(), state);
             }
 
-            visit_block_succs(self.func, block, |_inst, succ| {
+            visit_block_succs(self.func, block, |_inst, succ, _from_table| {
                 let succ_first_inst = self
                     .func
                     .layout

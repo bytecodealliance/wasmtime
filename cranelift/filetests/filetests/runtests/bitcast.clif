@@ -1,0 +1,45 @@
+test interpret
+test run
+target aarch64
+target x86_64
+target s390x
+
+function %bitcast_if32(i32) -> f32 {
+block0(v0: i32):
+  v1 = bitcast.f32 v0
+  return v1
+}
+; run: %bitcast_if32(0) == 0x0.0
+; run: %bitcast_if32(4294967295) == -NaN:0x3fffff
+; run: %bitcast_if32(-1) == -NaN:0x3fffff
+; run: %bitcast_if32(127) == 0x0.0000fep-126
+
+function %bitcast_fi32(f32) -> i32 {
+block0(v0: f32):
+  v1 = bitcast.i32 v0
+  return v1
+}
+; run: %bitcast_fi32(0x0.0) == 0
+; run: %bitcast_fi32(-NaN:0x3fffff) == 4294967295
+; run: %bitcast_fi32(-NaN:0x3fffff) == -1
+; run: %bitcast_fi32(0x0.0000fep-126) == 127
+
+function %bitcast_if64(i64) -> f64 {
+block0(v0: i64):
+  v1 = bitcast.f64 v0
+  return v1
+}
+; run: %bitcast_if64(0) == 0x0.0
+; run: %bitcast_if64(18446744073709551615) == -NaN:0x7ffffffffffff
+; run: %bitcast_if64(-1) == -NaN:0x7ffffffffffff
+; run: %bitcast_if64(127) == 0x0.000000000007fp-1022
+
+function %bitcast_fi64(f64) -> i64 {
+block0(v0: f64):
+  v1 = bitcast.i64 v0
+  return v1
+}
+; run: %bitcast_fi64(0x0.0) == 0
+; run: %bitcast_fi64(-NaN:0x7ffffffffffff) == 18446744073709551615
+; run: %bitcast_fi64(-NaN:0x7ffffffffffff) == -1
+; run: %bitcast_fi64(0x0.000000000007fp-1022) == 127

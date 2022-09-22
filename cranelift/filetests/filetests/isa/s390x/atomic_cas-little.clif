@@ -12,10 +12,10 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   lrvgr %r5, %r2
-;   lrvgr %r3, %r3
-;   csg %r5, %r3, 0(%r4)
-;   lrvgr %r2, %r5
+;   lrvgr %r2, %r2
+;   lrvgr %r5, %r3
+;   csg %r2, %r5, 0(%r4)
+;   lrvgr %r2, %r2
 ;   br %r14
 
 function %atomic_cas_i32(i32, i32, i64) -> i32 {
@@ -25,10 +25,10 @@ block0(v0: i32, v1: i32, v2: i64):
 }
 
 ; block0:
-;   lrvr %r5, %r2
-;   lrvr %r3, %r3
-;   cs %r5, %r3, 0(%r4)
-;   lrvr %r2, %r5
+;   lrvr %r2, %r2
+;   lrvr %r5, %r3
+;   cs %r2, %r5, 0(%r4)
+;   lrvr %r2, %r2
 ;   br %r14
 
 function %atomic_cas_i16(i64, i16, i16, i64) -> i16 {
@@ -37,19 +37,20 @@ block0(v0: i64, v1: i16, v2: i16, v3: i64):
   return v4
 }
 
-;   stmg %r13, %r15, 104(%r15)
+;   stmg %r9, %r15, 72(%r15)
 ; block0:
-;   lgr %r13, %r3
-;   sllk %r3, %r5, 3
-;   nill %r5, 65532
-;   lgr %r2, %r13
+;   lgr %r9, %r4
+;   sllk %r4, %r5, 3
+;   lgr %r2, %r5
+;   nill %r2, 65532
+;   lrvr %r5, %r3
+;   lgr %r3, %r9
+;   lrvr %r3, %r3
+;   l %r0, 0(%r2)
+;   0: rll %r1, %r0, 16(%r4) ; rxsbg %r1, %r5, 176, 64, 48 ; jglh 1f ; risbgn %r1, %r3, 48, 64, 48 ; rll %r1, %r1, 16(%r4) ; cs %r0, %r1, 0(%r2) ; jglh 0b ; 1:
+;   rll %r2, %r0, 0(%r4)
 ;   lrvr %r2, %r2
-;   lrvr %r4, %r4
-;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 16(%r3) ; rxsbg %r1, %r2, 176, 64, 48 ; jglh 1f ; risbgn %r1, %r4, 48, 64, 48 ; rll %r1, %r1, 16(%r3) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
-;   rll %r2, %r0, 0(%r3)
-;   lrvr %r2, %r2
-;   lmg %r13, %r15, 104(%r15)
+;   lmg %r9, %r15, 72(%r15)
 ;   br %r14
 
 function %atomic_cas_i8(i64, i8, i8, i64) -> i8 {
@@ -60,12 +61,14 @@ block0(v0: i64, v1: i8, v2: i8, v3: i64):
 
 ;   stmg %r11, %r15, 88(%r15)
 ; block0:
-;   sllk %r2, %r5, 3
-;   nill %r5, 65532
-;   lcr %r11, %r2
-;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 0(%r2) ; rxsbg %r1, %r3, 160, 40, 24 ; jglh 1f ; risbgn %r1, %r4, 32, 40, 24 ; rll %r1, %r1, 0(%r11) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
-;   rll %r2, %r0, 8(%r2)
+;   lgr %r11, %r4
+;   sllk %r4, %r5, 3
+;   lgr %r2, %r5
+;   nill %r2, 65532
+;   lcr %r5, %r4
+;   l %r0, 0(%r2)
+;   0: rll %r1, %r0, 0(%r4) ; rxsbg %r1, %r3, 160, 40, 24 ; jglh 1f ; risbgn %r1, %r11, 32, 40, 24 ; rll %r1, %r1, 0(%r5) ; cs %r0, %r1, 0(%r2) ; jglh 0b ; 1:
+;   rll %r2, %r0, 8(%r4)
 ;   lmg %r11, %r15, 88(%r15)
 ;   br %r14
 

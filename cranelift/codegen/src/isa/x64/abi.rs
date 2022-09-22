@@ -29,6 +29,42 @@ pub(crate) type X64Caller = Caller<X64ABIMachineSpec>;
 /// Implementation of ABI primitives for x64.
 pub struct X64ABIMachineSpec;
 
+impl X64ABIMachineSpec {
+    fn gen_probestack_unroll(guard_size: u32, probe_count: u32) -> SmallInstVec<Inst> {
+        let mut insts = SmallVec::with_capacity(probe_count as usize);
+        for i in 0..probe_count {
+            let offset = (guard_size * (i + 1)) as i64;
+
+            // TODO: It would be nice if we could store the imm 0, but we don't have insts for those
+            // so store the stack pointer. Any register will do, since the stack is undefined at this point
+            insts.push(Self::gen_store_stack(
+                StackAMode::SPOffset(-offset, I8),
+                regs::rsp(),
+                I32,
+            ));
+        }
+        insts
+    }
+    fn gen_probestack_loop(frame_size: u32, guard_size: u32) -> SmallInstVec<Inst> {
+        // We have to use a caller saved register since clobbering only happens
+        // after stack probing.
+        //
+        // R11 is caller saved on both Fastcall and SystemV, and not used for argument
+        // passing, so it's pretty much free. It is also not used by the stacklimit mechanism.
+        let tmp = regs::r11();
+        debug_assert!({
+            let real_reg = tmp.to_real_reg().unwrap();
+            !is_callee_save_systemv(real_reg, false) && !is_callee_save_fastcall(real_reg, false)
+        });
+
+        smallvec![Inst::StackProbeLoop {
+            tmp: Writable::from_reg(tmp),
+            frame_size,
+            guard_size,
+        }]
+    }
+}
+
 impl IsaFlags for x64_settings::Flags {}
 
 impl ABIMachineSpec for X64ABIMachineSpec {
@@ -261,6 +297,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
     }
 
+    fn gen_args(_isa_flags: &x64_settings::Flags, args: Vec<ArgPair>) -> Inst {
+        Inst::Args { args }
+    }
+
     fn gen_ret(_setup_frame: bool, _isa_flags: &x64_settings::Flags, rets: Vec<Reg>) -> Self::I {
         Inst::ret(rets)
     }
@@ -389,13 +429,32 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts.push(Inst::CallKnown {
             dest: ExternalName::LibCall(LibCall::Probestack),
             info: Box::new(CallInfo {
-                uses: smallvec![regs::rax()],
+                // No need to include arg here: we are post-regalloc
+                // so no constraints will be seen anyway.
+                uses: smallvec![],
                 defs: smallvec![],
                 clobbers: PRegSet::empty(),
                 opcode: Opcode::Call,
             }),
         });
         insts
+    }
+
+    fn gen_inline_probestack(frame_size: u32, guard_size: u32) -> SmallInstVec<Self::I> {
+        // Unroll at most n consecutive probes, before falling back to using a loop
+        //
+        // This was number was picked because the loop version is 38 bytes long. We can fit
+        // 5 inline probes in that space, so unroll if its beneficial in terms of code size.
+        const PROBE_MAX_UNROLL: u32 = 5;
+
+        // Number of probes that we need to perform
+        let probe_count = align_to(frame_size, guard_size) / guard_size;
+
+        if probe_count <= PROBE_MAX_UNROLL {
+            Self::gen_probestack_unroll(guard_size, probe_count)
+        } else {
+            Self::gen_probestack_loop(frame_size, guard_size)
+        }
     }
 
     fn gen_clobber_save(
@@ -527,8 +586,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     /// Generate a call instruction/sequence.
     fn gen_call(
         dest: &CallDest,
-        uses: SmallVec<[Reg; 8]>,
-        defs: SmallVec<[Writable<Reg>; 8]>,
+        uses: CallArgList,
+        defs: CallRetList,
         clobbers: PRegSet,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
@@ -571,39 +630,47 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         call_conv: isa::CallConv,
         dst: Reg,
         src: Reg,
+        temp: Writable<Reg>,
+        temp2: Writable<Reg>,
         size: usize,
     ) -> SmallVec<[Self::I; 8]> {
         let mut insts = SmallVec::new();
         let arg0 = get_intreg_for_arg(&call_conv, 0, 0).unwrap();
         let arg1 = get_intreg_for_arg(&call_conv, 1, 1).unwrap();
         let arg2 = get_intreg_for_arg(&call_conv, 2, 2).unwrap();
-        // We need a register to load the address of `memcpy()` below and we
-        // don't have a lowering context to allocate a temp here; so just use a
-        // register we know we are free to mutate as part of this sequence
-        // (because it is clobbered by the call as per the ABI anyway).
-        let memcpy_addr = get_intreg_for_arg(&call_conv, 3, 3).unwrap();
         insts.push(Inst::gen_move(Writable::from_reg(arg0), dst, I64));
         insts.push(Inst::gen_move(Writable::from_reg(arg1), src, I64));
         insts.extend(
-            Inst::gen_constant(
-                ValueRegs::one(Writable::from_reg(arg2)),
-                size as u128,
-                I64,
-                |_| panic!("tmp should not be needed"),
-            )
+            Inst::gen_constant(ValueRegs::one(temp), size as u128, I64, |_| {
+                panic!("tmp should not be needed")
+            })
             .into_iter(),
         );
         // We use an indirect call and a full LoadExtName because we do not have
         // information about the libcall `RelocDistance` here, so we
         // conservatively use the more flexible calling sequence.
         insts.push(Inst::LoadExtName {
-            dst: Writable::from_reg(memcpy_addr),
+            dst: temp2,
             name: Box::new(ExternalName::LibCall(LibCall::Memcpy)),
             offset: 0,
         });
         insts.push(Inst::call_unknown(
-            RegMem::reg(memcpy_addr),
-            /* uses = */ smallvec![arg0, arg1, arg2],
+            RegMem::reg(temp2.to_reg()),
+            /* uses = */
+            smallvec![
+                CallArgPair {
+                    vreg: dst,
+                    preg: arg0
+                },
+                CallArgPair {
+                    vreg: src,
+                    preg: arg1
+                },
+                CallArgPair {
+                    vreg: temp.to_reg(),
+                    preg: arg2
+                },
+            ],
             /* defs = */ smallvec![],
             /* clobbers = */ Self::get_regs_clobbered_by_call(call_conv),
             Opcode::Call,

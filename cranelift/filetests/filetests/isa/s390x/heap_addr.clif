@@ -12,16 +12,16 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   llgfr %r4, %r3
-;   lg %r5, 0(%r2)
-;   aghi %r5, 0
-;   clgr %r4, %r5
+;   llgfr %r3, %r3
+;   lg %r4, 0(%r2)
+;   aghi %r4, 0
+;   clgr %r3, %r4
 ;   jgnh label1 ; jg label2
 ; block1:
-;   agr %r2, %r4
-;   lghi %r3, 0
-;   clgr %r4, %r5
-;   locgrh %r2, %r3
+;   agr %r2, %r3
+;   lghi %r5, 0
+;   clgr %r3, %r4
+;   locgrh %r2, %r5
 ;   br %r14
 ; block2:
 ;   trap
@@ -36,14 +36,14 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   llgfr %r3, %r3
-;   clgfi %r3, 65536
+;   llgfr %r5, %r3
+;   clgfi %r5, 65536
 ;   jgnh label1 ; jg label2
 ; block1:
-;   agr %r2, %r3
-;   lghi %r4, 0
-;   clgfi %r3, 65536
-;   locgrh %r2, %r4
+;   agr %r2, %r5
+;   lghi %r3, 0
+;   clgfi %r5, 65536
+;   locgrh %r2, %r3
 ;   br %r14
 ; block2:
 ;   trap
