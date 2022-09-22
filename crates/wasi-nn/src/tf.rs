@@ -281,7 +281,7 @@ impl<'a> BackendExecutionContext for TensorflowExecutionContext<'a> {
             tensorflow::DataType::Int32 => {
                 t_to_u8_copy(&self.args.fetch::<i32>(token_tuple.0)?, destination)
             }
-            _ => Err(BackendError::UnsupportedOutputPrecision())
+            _ => Err(BackendError::UnsupportedOutputPrecision()),
         };
 
         // The inference has been completed, reset the SessionRunArgs in preperation for the next one.
@@ -292,7 +292,7 @@ impl<'a> BackendExecutionContext for TensorflowExecutionContext<'a> {
         } else {
             Err(results.unwrap_err())
         }
-     }
+    }
 }
 
 /// Check that the data type of the user-provided tensor matches the one
@@ -334,7 +334,7 @@ impl From<Status> for BackendError {
 }
 
 // Convert type T to u8
-fn t_to_u8_copy<T>(data: &[T], destination: &mut [u8]) -> Result<(), BackendError>  {
+fn t_to_u8_copy<T>(data: &[T], destination: &mut [u8]) -> Result<(), BackendError> {
     unsafe {
         let tmpu8 = std::slice::from_raw_parts(
             data.as_ptr() as *const u8,
@@ -343,11 +343,11 @@ fn t_to_u8_copy<T>(data: &[T], destination: &mut [u8]) -> Result<(), BackendErro
 
         if tmpu8.len() > destination.len() {
             Err(BackendError::NotEnoughMemory(destination.len()))
-          } else {
+        } else {
             destination.copy_from_slice(tmpu8);
             Ok(())
-          }
-      }
+        }
+    }
 }
 
 fn copy_data<T: tensorflow::TensorType + std::convert::From<u8>>(
