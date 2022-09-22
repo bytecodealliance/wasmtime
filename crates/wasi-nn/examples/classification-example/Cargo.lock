@@ -195,7 +195,9 @@ dependencies = [
 
 [[package]]
 name = "wasi-nn"
-version = "0.1.0"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80715609d32850b55b000f7061a0b796d374bd37aa261db94eae0a6c2b35ccf8"
 
 [[package]]
 name = "wasi-nn-example"

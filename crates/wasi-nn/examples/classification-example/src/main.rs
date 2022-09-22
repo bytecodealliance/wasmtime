@@ -91,7 +91,7 @@ fn create_gba (backend: wasi_nn::GraphEncoding) ->Vec<Vec<u8>>  {
                         ])
         },
         _ => {
-            println!("Unknown backend {}", backend);
+            println!("Unknown backend {:?}", backend);
             vec![]
         }
 
@@ -161,7 +161,7 @@ fn image_to_tensor(path: String, dimensions: &[u32], backend: wasi_nn::GraphEnco
             u8_f32_arr
         },
         _ => {
-            println!("Unknown backend {}", backend);
+            println!("Unknown backend {:?}", backend);
             vec![]
         }
     };
