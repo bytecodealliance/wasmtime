@@ -114,7 +114,28 @@ where
                     length => panic!("unexpected Shuffle mask length {}", length),
                 }
             }
-            _ => inst.imm_value().unwrap(),
+            InstructionData::UnaryBool { imm, .. } => DataValue::from(imm),
+            // 8-bit.
+            InstructionData::BinaryImm8 { imm, .. } | InstructionData::TernaryImm8 { imm, .. } => {
+                DataValue::from(imm as i8) // Note the switch from unsigned to signed.
+            }
+            // 32-bit
+            InstructionData::UnaryIeee32 { imm, .. } => DataValue::from(imm),
+            InstructionData::HeapAddr { imm, .. } => {
+                let imm: u32 = imm.into();
+                DataValue::from(imm as i32) // Note the switch from unsigned to signed.
+            }
+            InstructionData::Load { offset, .. }
+            | InstructionData::Store { offset, .. }
+            | InstructionData::StackLoad { offset, .. }
+            | InstructionData::StackStore { offset, .. }
+            | InstructionData::TableAddr { offset, .. } => DataValue::from(offset),
+            // 64-bit.
+            InstructionData::UnaryImm { imm, .. }
+            | InstructionData::BinaryImm64 { imm, .. }
+            | InstructionData::IntCompareImm { imm, .. } => DataValue::from(imm.bits()),
+            InstructionData::UnaryIeee64 { imm, .. } => DataValue::from(imm),
+            _ => unreachable!(),
         })
     };
 
@@ -533,7 +554,6 @@ where
         Opcode::F64const => assign(imm()),
         Opcode::Bconst => assign(imm()),
         Opcode::Vconst => assign(imm()),
-        Opcode::ConstAddr => unimplemented!("ConstAddr"),
         Opcode::Null => unimplemented!("Null"),
         Opcode::Nop => ControlFlow::Continue,
         Opcode::Select => choose(arg(0)?.into_bool()?, arg(1)?, arg(2)?),
@@ -936,10 +956,18 @@ where
         | Opcode::RawBitcast
         | Opcode::ScalarToVector
         | Opcode::Breduce
-        | Opcode::Bextend => assign(Value::convert(
-            arg(0)?,
-            ValueConversionKind::Exact(ctrl_ty),
-        )?),
+        | Opcode::Bextend => {
+            let input_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
+            let arg0 = extractlanes(&arg(0)?, input_ty)?;
+
+            assign(vectorizelanes(
+                &arg0
+                    .into_iter()
+                    .map(|x| V::convert(x, ValueConversionKind::Exact(ctrl_ty.lane_type())))
+                    .collect::<ValueResult<SimdVec<V>>>()?,
+                ctrl_ty,
+            )?)
+        }
         Opcode::Ireduce => assign(Value::convert(
             arg(0)?,
             ValueConversionKind::Truncate(ctrl_ty),
@@ -1099,15 +1127,137 @@ where
             };
             assign(vectorizelanes(&new_vec, new_type)?)
         }
-        Opcode::FcvtToUint => unimplemented!("FcvtToUint"),
-        Opcode::FcvtToUintSat => unimplemented!("FcvtToUintSat"),
-        Opcode::FcvtToSint => unimplemented!("FcvtToSint"),
-        Opcode::FcvtToSintSat => unimplemented!("FcvtToSintSat"),
-        Opcode::FcvtFromUint => unimplemented!("FcvtFromUint"),
-        Opcode::FcvtFromSint => unimplemented!("FcvtFromSint"),
-        Opcode::FcvtLowFromSint => unimplemented!("FcvtLowFromSint"),
-        Opcode::FvpromoteLow => unimplemented!("FvpromoteLow"),
-        Opcode::Fvdemote => unimplemented!("Fvdemote"),
+        Opcode::FcvtToUint | Opcode::FcvtToSint => {
+            // NaN check
+            if arg(0)?.is_nan()? {
+                return Ok(ControlFlow::Trap(CraneliftTrap::User(
+                    TrapCode::BadConversionToInteger,
+                )));
+            }
+            let x = arg(0)?.into_float()? as i128;
+            let is_signed = inst.opcode() == Opcode::FcvtToSint;
+            let (min, max) = ctrl_ty.bounds(is_signed);
+            let overflow = if is_signed {
+                x < (min as i128) || x > (max as i128)
+            } else {
+                x < 0 || (x as u128) > (max as u128)
+            };
+            // bounds check
+            if overflow {
+                return Ok(ControlFlow::Trap(CraneliftTrap::User(
+                    TrapCode::IntegerOverflow,
+                )));
+            }
+            // perform the conversion.
+            assign(Value::int(x, ctrl_ty)?)
+        }
+        Opcode::FcvtToUintSat | Opcode::FcvtToSintSat => {
+            let in_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
+            let cvt = |x: V| -> ValueResult<V> {
+                // NaN check
+                if x.is_nan()? {
+                    V::int(0, ctrl_ty.lane_type())
+                } else {
+                    let is_signed = inst.opcode() == Opcode::FcvtToSintSat;
+                    let (min, max) = ctrl_ty.bounds(is_signed);
+                    let x = x.into_float()? as i128;
+                    let x = if is_signed {
+                        let x = i128::max(x, min as i128);
+                        let x = i128::min(x, max as i128);
+                        x
+                    } else {
+                        let x = if x < 0 { 0 } else { x };
+                        let x = u128::min(x as u128, max as u128);
+                        x as i128
+                    };
+                    V::int(x, ctrl_ty.lane_type())
+                }
+            };
+
+            let x = extractlanes(&arg(0)?, in_ty)?;
+
+            assign(vectorizelanes(
+                &x.into_iter()
+                    .map(cvt)
+                    .collect::<ValueResult<SimdVec<V>>>()?,
+                ctrl_ty,
+            )?)
+        }
+        Opcode::FcvtFromUint | Opcode::FcvtFromSint => {
+            let x = extractlanes(
+                &arg(0)?,
+                inst_context.type_of(inst_context.args()[0]).unwrap(),
+            )?;
+            let bits = |x: V| -> ValueResult<u64> {
+                let x = if inst.opcode() == Opcode::FcvtFromUint {
+                    x.convert(ValueConversionKind::ToUnsigned)?
+                } else {
+                    x
+                };
+                Ok(match ctrl_ty.lane_type() {
+                    types::F32 => (x.into_int()? as f32).to_bits() as u64,
+                    types::F64 => (x.into_int()? as f64).to_bits(),
+                    _ => unimplemented!("unexpected conversion to {:?}", ctrl_ty.lane_type()),
+                })
+            };
+            assign(vectorizelanes(
+                &x.into_iter()
+                    .map(|x| V::float(bits(x)?, ctrl_ty.lane_type()))
+                    .collect::<ValueResult<SimdVec<V>>>()?,
+                ctrl_ty,
+            )?)
+        }
+        Opcode::FcvtLowFromSint => {
+            let in_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
+            let x = extractlanes(&arg(0)?, in_ty)?;
+
+            assign(vectorizelanes(
+                &(x[..(ctrl_ty.lane_count() as usize)]
+                    .into_iter()
+                    .map(|x| {
+                        V::float(
+                            match ctrl_ty.lane_type() {
+                                types::F32 => (x.to_owned().into_int()? as f32).to_bits() as u64,
+                                types::F64 => (x.to_owned().into_int()? as f64).to_bits(),
+                                _ => unimplemented!("unexpected promotion to {:?}", ctrl_ty),
+                            },
+                            ctrl_ty.lane_type(),
+                        )
+                    })
+                    .collect::<ValueResult<SimdVec<V>>>()?),
+                ctrl_ty,
+            )?)
+        }
+        Opcode::FvpromoteLow => {
+            let in_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
+            assert_eq!(in_ty, types::F32X4);
+            let out_ty = types::F64X2;
+            let x = extractlanes(&arg(0)?, in_ty)?;
+            assign(vectorizelanes(
+                &x[..(out_ty.lane_count() as usize)]
+                    .into_iter()
+                    .map(|x| {
+                        V::convert(x.to_owned(), ValueConversionKind::Exact(out_ty.lane_type()))
+                    })
+                    .collect::<ValueResult<SimdVec<V>>>()?,
+                out_ty,
+            )?)
+        }
+        Opcode::Fvdemote => {
+            let in_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
+            assert_eq!(in_ty, types::F64X2);
+            let out_ty = types::F32X4;
+            let x = extractlanes(&arg(0)?, in_ty)?;
+            let x = &mut x
+                .into_iter()
+                .map(|x| V::convert(x, ValueConversionKind::RoundNearestEven(out_ty.lane_type())))
+                .collect::<ValueResult<SimdVec<V>>>()?;
+            // zero the high bits.
+            for _ in 0..(out_ty.lane_count() as usize - x.len()) {
+                x.push(V::float(0, out_ty.lane_type())?);
+            }
+            assign(vectorizelanes(x, out_ty)?)
+        }
         Opcode::Isplit => assign_multiple(&[
             Value::convert(arg(0)?, ValueConversionKind::Truncate(types::I64))?,
             Value::convert(arg(0)?, ValueConversionKind::ExtractUpper(types::I64))?,
@@ -1273,8 +1423,6 @@ where
                     &left.clone().convert(ValueConversionKind::ToUnsigned)?,
                     &right.clone().convert(ValueConversionKind::ToUnsigned)?,
                 )?,
-                IntCC::Overflow => Value::overflow(left, right)?,
-                IntCC::NotOverflow => !Value::overflow(left, right)?,
             },
             bool_ty,
         )?)
@@ -1310,16 +1458,14 @@ where
         FloatCC::OrderedNotEqual => Value::lt(left, right)? || Value::gt(left, right)?,
         FloatCC::UnorderedOrEqual => Value::eq(left, right)? || Value::uno(left, right)?,
         FloatCC::LessThan => Value::lt(left, right)?,
-        FloatCC::LessThanOrEqual => Value::lt(left, right)? || Value::eq(left, right)?,
+        FloatCC::LessThanOrEqual => Value::le(left, right)?,
         FloatCC::GreaterThan => Value::gt(left, right)?,
-        FloatCC::GreaterThanOrEqual => Value::gt(left, right)? || Value::eq(left, right)?,
+        FloatCC::GreaterThanOrEqual => Value::ge(left, right)?,
         FloatCC::UnorderedOrLessThan => Value::uno(left, right)? || Value::lt(left, right)?,
-        FloatCC::UnorderedOrLessThanOrEqual => {
-            Value::uno(left, right)? || Value::lt(left, right)? || Value::eq(left, right)?
-        }
+        FloatCC::UnorderedOrLessThanOrEqual => Value::uno(left, right)? || Value::le(left, right)?,
         FloatCC::UnorderedOrGreaterThan => Value::uno(left, right)? || Value::gt(left, right)?,
         FloatCC::UnorderedOrGreaterThanOrEqual => {
-            Value::uno(left, right)? || Value::gt(left, right)? || Value::eq(left, right)?
+            Value::uno(left, right)? || Value::ge(left, right)?
         }
     })
 }

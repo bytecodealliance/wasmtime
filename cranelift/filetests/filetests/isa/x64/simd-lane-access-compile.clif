@@ -15,11 +15,11 @@ block0:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_const VCodeConstant(3), %xmm0
-;   load_const VCodeConstant(2), %xmm5
-;   load_const VCodeConstant(0), %xmm3
+;   movdqu  const(3), %xmm0
+;   movdqu  const(2), %xmm5
+;   movdqu  const(0), %xmm3
 ;   pshufb  %xmm0, %xmm3, %xmm0
-;   load_const VCodeConstant(1), %xmm7
+;   movdqu  const(1), %xmm7
 ;   pshufb  %xmm5, %xmm7, %xmm5
 ;   por     %xmm0, %xmm5, %xmm0
 ;   movq    %rbp, %rsp
@@ -36,8 +36,8 @@ block0:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_const VCodeConstant(1), %xmm0
-;   load_const VCodeConstant(0), %xmm2
+;   movdqu  const(1), %xmm0
+;   movdqu  const(0), %xmm2
 ;   pshufb  %xmm0, %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -54,9 +54,9 @@ block0:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_const VCodeConstant(1), %xmm0
-;   load_const VCodeConstant(1), %xmm3
-;   load_const VCodeConstant(0), %xmm4
+;   movdqu  const(1), %xmm0
+;   movdqu  const(1), %xmm3
+;   movdqu  const(0), %xmm4
 ;   paddusb %xmm3, %xmm4, %xmm3
 ;   pshufb  %xmm0, %xmm3, %xmm0
 ;   movq    %rbp, %rsp

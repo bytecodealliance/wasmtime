@@ -100,6 +100,9 @@ pub trait MachInst: Clone + Debug {
     /// (ret/uncond/cond) and target if applicable.
     fn is_term(&self) -> MachTerminator;
 
+    /// Is this an "args" pseudoinst?
+    fn is_args(&self) -> bool;
+
     /// Should this instruction be included in the clobber-set?
     fn is_included_in_clobbers(&self) -> bool {
         true
@@ -167,6 +170,16 @@ pub trait MachInst: Clone + Debug {
 
     /// Is this a safepoint?
     fn is_safepoint(&self) -> bool;
+
+    /// Generate an instruction that must appear at the beginning of a basic
+    /// block, if any. Note that the return value must not be subject to
+    /// register allocation.
+    fn gen_block_start(
+        _is_indirect_branch_target: bool,
+        _is_forward_edge_cfi_enabled: bool,
+    ) -> Option<Self> {
+        None
+    }
 
     /// A label-use kind: a type that describes the types of label references that
     /// can occur in an instruction.

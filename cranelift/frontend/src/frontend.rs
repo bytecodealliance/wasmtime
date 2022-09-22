@@ -1005,7 +1005,7 @@ impl<'a> FunctionBuilder<'a> {
     /// misbehave as described in [`MemFlags::aligned`].
     ///
     /// Note that `memcmp` is a *big-endian* and *unsigned* comparison.
-    /// As such, this panics when called with `IntCC::Signed*` or `IntCC::*Overflow`.
+    /// As such, this panics when called with `IntCC::Signed*`.
     pub fn emit_small_memory_compare(
         &mut self,
         config: TargetFrontendConfig,
@@ -1033,9 +1033,6 @@ impl<'a> FunctionBuilder<'a> {
             | SignedGreaterThan
             | SignedLessThanOrEqual => {
                 panic!("Signed comparison {} not supported by memcmp", int_cc)
-            }
-            Overflow | NotOverflow => {
-                panic!("Overflow comparison {} not supported by memcmp", int_cc)
             }
         };
 

@@ -87,35 +87,66 @@ impl<'a> Codegen<'a> {
                 "#![allow(unused_imports, unused_variables, non_snake_case, unused_mut)]"
             )
             .unwrap();
-            writeln!(code, "#![allow(irrefutable_let_patterns)]").unwrap();
+            writeln!(
+                code,
+                "#![allow(irrefutable_let_patterns, unused_assignments, non_camel_case_types)]"
+            )
+            .unwrap();
         }
 
         writeln!(code, "\nuse super::*;  // Pulls in all external types.").unwrap();
+        writeln!(code, "use std::marker::PhantomData;").unwrap();
     }
 
     fn generate_trait_sig(&self, code: &mut String, indent: &str, sig: &ExternalSig) {
-        writeln!(
-            code,
-            "{indent}fn {name}(&mut self, {params}) -> {opt_start}{open_paren}{rets}{close_paren}{opt_end};",
-            indent = indent,
-            name = sig.func_name,
-            params = sig.param_tys
-                .iter()
-                .enumerate()
-                .map(|(i, &ty)| format!("arg{}: {}", i, self.type_name(ty, /* by_ref = */ true)))
-                .collect::<Vec<_>>()
-                .join(", "),
-            opt_start = if sig.infallible { "" } else { "Option<" },
+        let ret_tuple = format!(
+            "{open_paren}{rets}{close_paren}",
             open_paren = if sig.ret_tys.len() != 1 { "(" } else { "" },
-            rets = sig.ret_tys
+            rets = sig
+                .ret_tys
                 .iter()
                 .map(|&ty| self.type_name(ty, /* by_ref = */ false))
                 .collect::<Vec<_>>()
                 .join(", "),
             close_paren = if sig.ret_tys.len() != 1 { ")" } else { "" },
-            opt_end = if sig.infallible { "" } else { ">" },
+        );
+
+        let ret_ty = match (sig.multi, sig.infallible) {
+            (false, false) => format!("Option<{}>", ret_tuple),
+            (false, true) => format!("{}", ret_tuple),
+            (true, false) => format!("Option<Self::{}_iter>", sig.func_name),
+            _ => panic!(
+                "Unsupported multiplicity/infallible combo: {:?}, {}",
+                sig.multi, sig.infallible
+            ),
+        };
+
+        writeln!(
+            code,
+            "{indent}fn {name}(&mut self, {params}) -> {ret_ty};",
+            indent = indent,
+            name = sig.func_name,
+            params = sig
+                .param_tys
+                .iter()
+                .enumerate()
+                .map(|(i, &ty)| format!("arg{}: {}", i, self.type_name(ty, /* by_ref = */ true)))
+                .collect::<Vec<_>>()
+                .join(", "),
+            ret_ty = ret_ty,
         )
         .unwrap();
+
+        if sig.multi {
+            writeln!(
+                code,
+                "{indent}type {name}_iter: ContextIter<Context = Self, Output = {output}>;",
+                indent = indent,
+                name = sig.func_name,
+                output = ret_tuple,
+            )
+            .unwrap();
+        }
     }
 
     fn generate_ctx_trait(&self, code: &mut String) {
@@ -147,6 +178,34 @@ impl<'a> Codegen<'a> {
             }
         }
         writeln!(code, "}}").unwrap();
+        writeln!(
+            code,
+            r#"
+           pub trait ContextIter {{
+               type Context;
+               type Output;
+               fn next(&mut self, ctx: &mut Self::Context) -> Option<Self::Output>;
+           }}
+
+           pub struct ContextIterWrapper<Item, I: Iterator < Item = Item>, C: Context> {{
+               iter: I,
+               _ctx: PhantomData<C>,
+           }}
+           impl<Item, I: Iterator<Item = Item>, C: Context> From<I> for ContextIterWrapper<Item, I, C> {{
+               fn from(iter: I) -> Self {{
+                   Self {{ iter, _ctx: PhantomData }}
+               }}
+           }}
+           impl<Item, I: Iterator<Item = Item>, C: Context> ContextIter for ContextIterWrapper<Item, I, C> {{
+               type Context = C;
+               type Output = Item;
+               fn next(&mut self, _ctx: &mut Self::Context) -> Option<Self::Output> {{
+                   self.iter.next()
+               }}
+           }}
+           "#,
+        )
+            .unwrap();
     }
 
     fn generate_internal_types(&self, code: &mut String) {
@@ -299,6 +358,11 @@ impl<'a> Codegen<'a> {
                 .join(", ");
             assert_eq!(sig.ret_tys.len(), 1);
             let ret = self.type_name(sig.ret_tys[0], false);
+            let ret = if sig.multi {
+                format!("impl ContextIter<Context = C, Output = {}>", ret)
+            } else {
+                ret
+            };
 
             writeln!(
                 code,
@@ -313,11 +377,29 @@ impl<'a> Codegen<'a> {
             )
             .unwrap();
 
+            if sig.multi {
+                writeln!(code, "let mut returns = ConstructorVec::new();").unwrap();
+            }
+
             let mut body_ctx: BodyContext = Default::default();
-            let returned =
-                self.generate_body(code, /* depth = */ 0, trie, "    ", &mut body_ctx);
+            let returned = self.generate_body(
+                code,
+                /* depth = */ 0,
+                trie,
+                "    ",
+                &mut body_ctx,
+                sig.multi,
+            );
             if !returned {
-                writeln!(code, "    return None;").unwrap();
+                if sig.multi {
+                    writeln!(
+                        code,
+                        "    return Some(ContextIterWrapper::from(returns.into_iter()));"
+                    )
+                    .unwrap();
+                } else {
+                    writeln!(code, "    return None;").unwrap();
+                }
             }
 
             writeln!(code, "}}").unwrap();
@@ -332,8 +414,9 @@ impl<'a> Codegen<'a> {
         indent: &str,
         ctx: &mut BodyContext,
         returns: &mut Vec<(usize, String)>,
-    ) {
+    ) -> bool {
         log!("generate_expr_inst: {:?}", inst);
+        let mut new_scope = false;
         match inst {
             &ExprInst::ConstInt { ty, val } => {
                 let value = Value::Expr {
@@ -422,6 +505,7 @@ impl<'a> Codegen<'a> {
                 ref inputs,
                 term,
                 infallible,
+                multi,
                 ..
             } => {
                 let mut input_exprs = vec![];
@@ -442,17 +526,36 @@ impl<'a> Codegen<'a> {
                 let termdata = &self.termenv.terms[term.index()];
                 let sig = termdata.constructor_sig(self.typeenv).unwrap();
                 assert_eq!(input_exprs.len(), sig.param_tys.len());
-                let fallible_try = if infallible { "" } else { "?" };
-                writeln!(
-                    code,
-                    "{}let {} = {}(ctx, {}){};",
-                    indent,
-                    outputname,
-                    sig.full_name,
-                    input_exprs.join(", "),
-                    fallible_try,
-                )
-                .unwrap();
+
+                if !multi {
+                    let fallible_try = if infallible { "" } else { "?" };
+                    writeln!(
+                        code,
+                        "{}let {} = {}(ctx, {}){};",
+                        indent,
+                        outputname,
+                        sig.full_name,
+                        input_exprs.join(", "),
+                        fallible_try,
+                    )
+                    .unwrap();
+                } else {
+                    writeln!(
+                        code,
+                        "{}let mut it = {}(ctx, {})?;",
+                        indent,
+                        sig.full_name,
+                        input_exprs.join(", "),
+                    )
+                    .unwrap();
+                    writeln!(
+                        code,
+                        "{}while let Some({}) = it.next(ctx) {{",
+                        indent, outputname,
+                    )
+                    .unwrap();
+                    new_scope = true;
+                }
                 self.define_val(&output, ctx, /* is_ref = */ false, termdata.ret_ty);
             }
             &ExprInst::Return {
@@ -462,6 +565,8 @@ impl<'a> Codegen<'a> {
                 returns.push((index, value_expr));
             }
         }
+
+        new_scope
     }
 
     fn match_variant_binders(
@@ -489,7 +594,7 @@ impl<'a> Codegen<'a> {
     }
 
     /// Returns a `bool` indicating whether this pattern inst is
-    /// infallible.
+    /// infallible, and the number of scopes opened.
     fn generate_pattern_inst(
         &self,
         code: &mut String,
@@ -497,7 +602,7 @@ impl<'a> Codegen<'a> {
         inst: &PatternInst,
         indent: &str,
         ctx: &mut BodyContext,
-    ) -> bool {
+    ) -> (bool, usize) {
         match inst {
             &PatternInst::Arg { index, ty } => {
                 let output = Value::Pattern {
@@ -519,13 +624,13 @@ impl<'a> Codegen<'a> {
                     is_ref,
                     ty,
                 );
-                true
+                (true, 0)
             }
             &PatternInst::MatchEqual { ref a, ref b, .. } => {
                 let a = self.value_by_ref(a, ctx);
                 let b = self.value_by_ref(b, ctx);
                 writeln!(code, "{}if {} == {} {{", indent, a, b).unwrap();
-                false
+                (false, 1)
             }
             &PatternInst::MatchInt {
                 ref input,
@@ -536,13 +641,13 @@ impl<'a> Codegen<'a> {
                 let int_val = self.const_int(int_val, ty);
                 let input = self.value_by_val(input, ctx);
                 writeln!(code, "{}if {} == {}  {{", indent, input, int_val).unwrap();
-                false
+                (false, 1)
             }
             &PatternInst::MatchPrim { ref input, val, .. } => {
                 let input = self.value_by_val(input, ctx);
                 let sym = &self.typeenv.syms[val.index()];
                 writeln!(code, "{}if {} == {} {{", indent, input, sym).unwrap();
-                false
+                (false, 1)
             }
             &PatternInst::MatchVariant {
                 ref input,
@@ -570,13 +675,14 @@ impl<'a> Codegen<'a> {
                     indent, ty_name, variantname, args, input
                 )
                 .unwrap();
-                false
+                (false, 1)
             }
             &PatternInst::Extract {
                 ref inputs,
                 ref output_tys,
                 term,
                 infallible,
+                multi,
                 ..
             } => {
                 let termdata = &self.termenv.terms[term.index()];
@@ -599,32 +705,61 @@ impl<'a> Codegen<'a> {
                     })
                     .collect::<Vec<_>>();
 
-                if infallible {
-                    writeln!(
-                        code,
-                        "{indent}let {open_paren}{vars}{close_paren} = {name}(ctx, {args});",
-                        indent = indent,
-                        open_paren = if output_binders.len() == 1 { "" } else { "(" },
-                        vars = output_binders.join(", "),
-                        close_paren = if output_binders.len() == 1 { "" } else { ")" },
-                        name = sig.full_name,
-                        args = input_values.join(", "),
-                    )
-                    .unwrap();
-                    true
-                } else {
-                    writeln!(
-                        code,
-                        "{indent}if let Some({open_paren}{vars}{close_paren}) = {name}(ctx, {args}) {{",
-                        indent = indent,
-                        open_paren = if output_binders.len() == 1 { "" } else { "(" },
-                        vars = output_binders.join(", "),
-                        close_paren = if output_binders.len() == 1 { "" } else { ")" },
-                        name = sig.full_name,
-                        args = input_values.join(", "),
-                    )
-                    .unwrap();
-                    false
+                let bind_pattern = format!(
+                    "{open_paren}{vars}{close_paren}",
+                    open_paren = if output_binders.len() == 1 { "" } else { "(" },
+                    vars = output_binders.join(", "),
+                    close_paren = if output_binders.len() == 1 { "" } else { ")" }
+                );
+                let etor_call = format!(
+                    "{name}(ctx, {args})",
+                    name = sig.full_name,
+                    args = input_values.join(", ")
+                );
+
+                match (infallible, multi) {
+                    (_, true) => {
+                        writeln!(
+                            code,
+                            "{indent}if let Some(mut iter) = {etor_call} {{",
+                            indent = indent,
+                            etor_call = etor_call,
+                        )
+                        .unwrap();
+                        writeln!(
+                            code,
+                            "{indent}    while let Some({bind_pattern}) = iter.next(ctx) {{",
+                            indent = indent,
+                            bind_pattern = bind_pattern,
+                        )
+                        .unwrap();
+
+                        (false, 2)
+                    }
+                    (false, false) => {
+                        writeln!(
+                            code,
+                            "{indent}if let Some({bind_pattern}) = {etor_call} {{",
+                            indent = indent,
+                            bind_pattern = bind_pattern,
+                            etor_call = etor_call,
+                        )
+                        .unwrap();
+
+                        (false, 1)
+                    }
+                    (true, false) => {
+                        writeln!(
+                            code,
+                            "{indent}let {bind_pattern} = {etor_call};",
+                            indent = indent,
+                            bind_pattern = bind_pattern,
+                            etor_call = etor_call,
+                        )
+                        .unwrap();
+
+                        (true, 0)
+                    }
                 }
             }
             &PatternInst::Expr {
@@ -646,7 +781,7 @@ impl<'a> Codegen<'a> {
                 )
                 .unwrap();
                 self.define_val(&output, ctx, /* is_ref = */ false, ty);
-                true
+                (true, 0)
             }
             &PatternInst::Expr {
                 ref seq, output_ty, ..
@@ -658,7 +793,15 @@ impl<'a> Codegen<'a> {
                 let mut returns = vec![];
                 for (id, inst) in seq.insts.iter().enumerate() {
                     let id = InstId(id);
-                    self.generate_expr_inst(code, id, inst, &subindent, &mut subctx, &mut returns);
+                    let new_scope = self.generate_expr_inst(
+                        code,
+                        id,
+                        inst,
+                        &subindent,
+                        &mut subctx,
+                        &mut returns,
+                    );
+                    assert!(!new_scope);
                 }
                 assert_eq!(returns.len(), 1);
                 writeln!(code, "{}return Some({});", subindent, returns[0].1).unwrap();
@@ -678,7 +821,7 @@ impl<'a> Codegen<'a> {
                 .unwrap();
                 self.define_val(&output, ctx, /* is_ref = */ false, output_ty);
 
-                false
+                (false, 1)
             }
         }
     }
@@ -690,6 +833,7 @@ impl<'a> Codegen<'a> {
         trie: &TrieNode,
         indent: &str,
         ctx: &mut BodyContext,
+        is_multi: bool,
     ) -> bool {
         log!("generate_body:\n{}", trie.pretty());
         let mut returned = false;
@@ -704,21 +848,37 @@ impl<'a> Codegen<'a> {
                     output.pos.pretty_print_line(&self.typeenv.filenames[..])
                 )
                 .unwrap();
+
                 // If this is a leaf node, generate the ExprSequence and return.
                 let mut returns = vec![];
+                let mut scopes = 0;
+                let mut indent = indent.to_string();
+                let orig_indent = indent.clone();
                 for (id, inst) in output.insts.iter().enumerate() {
                     let id = InstId(id);
-                    self.generate_expr_inst(code, id, inst, indent, ctx, &mut returns);
+                    let new_scope =
+                        self.generate_expr_inst(code, id, inst, &indent[..], ctx, &mut returns);
+                    if new_scope {
+                        scopes += 1;
+                        indent.push_str("    ");
+                    }
                 }
 
                 assert_eq!(returns.len(), 1);
-                writeln!(code, "{}return Some({});", indent, returns[0].1).unwrap();
+                if is_multi {
+                    writeln!(code, "{}returns.push({});", indent, returns[0].1).unwrap();
+                } else {
+                    writeln!(code, "{}return Some({});", indent, returns[0].1).unwrap();
+                }
 
-                returned = true;
+                for _ in 0..scopes {
+                    writeln!(code, "{}}}", orig_indent).unwrap();
+                }
+
+                returned = !is_multi;
             }
 
             &TrieNode::Decision { ref edges } => {
-                let subindent = format!("{}    ", indent);
                 // If this is a decision node, generate each match op
                 // in turn (in priority order). Gather together
                 // adjacent MatchVariant ops with the same input and
@@ -764,7 +924,14 @@ impl<'a> Codegen<'a> {
                     // (possibly an empty one). Only use a `match` form if there
                     // are at least two adjacent options.
                     if last - i > 1 {
-                        self.generate_body_matches(code, depth, &edges[i..last], indent, ctx);
+                        self.generate_body_matches(
+                            code,
+                            depth,
+                            &edges[i..last],
+                            indent,
+                            ctx,
+                            is_multi,
+                        );
                         i = last;
                         continue;
                     } else {
@@ -777,16 +944,32 @@ impl<'a> Codegen<'a> {
 
                         match symbol {
                             &TrieSymbol::EndOfMatch => {
-                                returned = self.generate_body(code, depth + 1, node, indent, ctx);
+                                returned = self.generate_body(
+                                    code,
+                                    depth + 1,
+                                    node,
+                                    indent,
+                                    ctx,
+                                    is_multi,
+                                );
                             }
                             &TrieSymbol::Match { ref op } => {
                                 let id = InstId(depth);
-                                let infallible =
+                                let (infallible, new_scopes) =
                                     self.generate_pattern_inst(code, id, op, indent, ctx);
-                                let i = if infallible { indent } else { &subindent[..] };
-                                let sub_returned =
-                                    self.generate_body(code, depth + 1, node, i, ctx);
-                                if !infallible {
+                                let mut subindent = indent.to_string();
+                                for _ in 0..new_scopes {
+                                    subindent.push_str("    ");
+                                }
+                                let sub_returned = self.generate_body(
+                                    code,
+                                    depth + 1,
+                                    node,
+                                    &subindent[..],
+                                    ctx,
+                                    is_multi,
+                                );
+                                for _ in 0..new_scopes {
                                     writeln!(code, "{}}}", indent).unwrap();
                                 }
                                 if infallible && sub_returned {
@@ -810,6 +993,7 @@ impl<'a> Codegen<'a> {
         edges: &[TrieEdge],
         indent: &str,
         ctx: &mut BodyContext,
+        is_multi: bool,
     ) {
         let (input, input_ty) = match &edges[0].symbol {
             &TrieSymbol::Match {
@@ -874,12 +1058,12 @@ impl<'a> Codegen<'a> {
             )
             .unwrap();
             let subindent = format!("{}        ", indent);
-            self.generate_body(code, depth + 1, node, &subindent, ctx);
+            self.generate_body(code, depth + 1, node, &subindent, ctx, is_multi);
             writeln!(code, "{}    }}", indent).unwrap();
         }
 
         // Always add a catchall, because we don't do exhaustiveness
-        // checking on the MatcHVariants.
+        // checking on the MatchVariants.
         writeln!(code, "{}    _ => {{}}", indent).unwrap();
 
         writeln!(code, "{}}}", indent).unwrap();

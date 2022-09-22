@@ -1455,21 +1455,6 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let constant =
-        &Operand::new("constant", &imm.pool_constant).with_doc("A constant in the constant pool");
-    let address = &Operand::new("address", iAddr);
-    ig.push(
-        Inst::new(
-            "const_addr",
-            r#"
-        Calculate the base address of a value in the constant pool.
-        "#,
-            &formats.unary_const,
-        )
-        .operands_in(vec![constant])
-        .operands_out(vec![address]),
-    );
-
     let mask = &Operand::new("mask", &imm.uimm128)
         .with_doc("The 16 immediate bytes used for selecting the elements to shuffle");
     let Tx16 = &TypeVar::new(
@@ -1774,12 +1759,6 @@ pub(crate) fn define(
         | sge    | uge      | Greater than or equal |
         | sgt    | ugt      | Greater than          |
         | sle    | ule      | Less than or equal    |
-        | of     | *        | Overflow              |
-        | nof    | *        | No Overflow           |
-
-        \* The unsigned version of overflow condition for add has ISA-specific semantics and thus
-        has been kept as a method on the TargetIsa trait as
-        [unsigned_add_overflow_condition][crate::isa::TargetIsa::unsigned_add_overflow_condition].
 
         When this instruction compares integer vectors, it returns a boolean
         vector of lane-wise comparisons.
@@ -3301,6 +3280,9 @@ pub(crate) fn define(
         The input and output types must be storable to memory and of the same
         size. A bitcast is equivalent to storing one type and loading the other
         type from the same address.
+
+        For vector types, the lane types must also be the same size (see
+        `raw_bitcast` for changing the lane size).
         "#,
             &formats.unary,
         )

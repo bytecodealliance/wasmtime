@@ -354,6 +354,7 @@ impl Engine {
             "enable_llvm_abi_extensions" => *value == FlagValue::Bool(false),
             "enable_pinned_reg" => *value == FlagValue::Bool(false),
             "enable_probestack" => *value == FlagValue::Bool(false),
+            "probestack_strategy" => *value == FlagValue::Enum("outline".into()),
             "use_colocated_libcalls" => *value == FlagValue::Bool(false),
             "use_pinned_reg_as_heap_base" => *value == FlagValue::Bool(false),
 
@@ -461,6 +462,9 @@ impl Engine {
                 "sign_return_address" => Some(true),
                 // No effect on its own.
                 "sign_return_address_with_bkey" => Some(true),
+                // The `BTI` instruction acts as a `NOP` when unsupported, so it
+                // is safe to enable it.
+                "use_bti" => Some(true),
                 // fall through to the very bottom to indicate that support is
                 // not enabled to test whether this feature is enabled on the
                 // host.

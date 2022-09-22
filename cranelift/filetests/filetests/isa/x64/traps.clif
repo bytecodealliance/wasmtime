@@ -15,15 +15,16 @@ block0:
 function %trap_iadd_ifcout(i64, i64) {
 block0(v0: i64, v1: i64):
   v2, v3 = iadd_ifcout v0, v1
-  trapif of v3, user0
+  trapif ult v3, user0
   return
 }
 
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addq    %rdi, %rsi, %rdi
-;   jno ; ud2 user0 ;
+;   movq    %rdi, %rcx
+;   addq    %rcx, %rsi, %rcx
+;   jnb ; ud2 user0 ;
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

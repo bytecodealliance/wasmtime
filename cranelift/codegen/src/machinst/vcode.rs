@@ -158,7 +158,7 @@ pub struct VCode<I: VCodeInst> {
     block_order: BlockLoweringOrder,
 
     /// ABI object.
-    abi: Callee<I::ABIMachineSpec>,
+    pub(crate) abi: Callee<I::ABIMachineSpec>,
 
     /// Constant information used during code emission. This should be
     /// immutable across function compilations within the same module.
@@ -179,7 +179,7 @@ pub struct VCode<I: VCodeInst> {
     /// Value labels for debuginfo attached to vregs.
     debug_value_labels: Vec<(VReg, InsnIndex, InsnIndex, u32)>,
 
-    sigs: SigSet,
+    pub(crate) sigs: SigSet,
 }
 
 /// The result of `VCode::emit`. Contains all information computed
@@ -244,7 +244,7 @@ pub struct EmitResult<I: VCodeInst> {
 /// terminator instructions with successor blocks.)
 pub struct VCodeBuilder<I: VCodeInst> {
     /// In-progress VCode.
-    vcode: VCode<I>,
+    pub(crate) vcode: VCode<I>,
 
     /// In what direction is the build occuring?
     direction: VCodeBuildDirection,
@@ -845,6 +845,8 @@ impl<I: VCodeInst> VCode<I> {
             ra_edits_per_block.push((end_edit_idx - start_edit_idx) as u32);
         }
 
+        let is_forward_edge_cfi_enabled = self.abi.is_forward_edge_cfi_enabled();
+
         for (block_order_idx, &block) in final_order.iter().enumerate() {
             trace!("emitting block {:?}", block);
             let new_offset = I::align_basic_block(buffer.cur_offset());
@@ -860,7 +862,7 @@ impl<I: VCodeInst> VCode<I> {
                            disasm: &mut String,
                            buffer: &mut MachBuffer<I>,
                            state: &mut I::State| {
-                if want_disasm {
+                if want_disasm && !inst.is_args() {
                     let mut s = state.clone();
                     writeln!(disasm, "  {}", inst.pretty_print_inst(allocs, &mut s)).unwrap();
                 }
@@ -900,6 +902,13 @@ impl<I: VCodeInst> VCode<I> {
                 }
                 bb_starts.push(Some(cur_offset));
                 last_offset = Some(cur_offset);
+            }
+
+            if let Some(block_start) = I::gen_block_start(
+                self.block_order.is_indirect_branch_target(block),
+                is_forward_edge_cfi_enabled,
+            ) {
+                do_emit(&block_start, &[], &mut disasm, &mut buffer, &mut state);
             }
 
             for inst_or_edit in regalloc.block_insts_and_edits(&self, block) {
@@ -1018,7 +1027,6 @@ impl<I: VCodeInst> VCode<I> {
                                 // Spill from register to spillslot.
                                 let to = to.as_stack().unwrap();
                                 let from_rreg = RealReg::from(from);
-                                debug_assert_eq!(from.class(), to.class());
                                 let spill = self.abi.gen_spill(to, from_rreg);
                                 do_emit(&spill, &[], &mut disasm, &mut buffer, &mut state);
                             }
@@ -1026,7 +1034,6 @@ impl<I: VCodeInst> VCode<I> {
                                 // Load from spillslot to register.
                                 let from = from.as_stack().unwrap();
                                 let to_rreg = Writable::from_reg(RealReg::from(to));
-                                debug_assert_eq!(from.class(), to.class());
                                 let reload = self.abi.gen_reload(to_rreg, from);
                                 do_emit(&reload, &[], &mut disasm, &mut buffer, &mut state);
                             }

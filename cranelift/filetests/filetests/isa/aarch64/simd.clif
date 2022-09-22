@@ -11,7 +11,7 @@ block0:
 
 ; block0:
 ;   movz x2, #1
-;   movk x2, #1, LSL #48
+;   movk x2, x2, #1, LSL #48
 ;   dup v0.2d, x2
 ;   ret
 
@@ -86,9 +86,9 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   ldrb w8, [x0]
+;   ldrb w7, [x0]
 ;   ld1r { v0.16b }, [x1]
-;   dup v1.16b, w8
+;   dup v1.16b, w7
 ;   ret
 
 function %f8(i64, i64) -> i8x16, i8x16 {
@@ -100,9 +100,9 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   ldrb w8, [x0]
-;   dup v0.16b, w8
-;   dup v1.16b, w8
+;   ldrb w7, [x0]
+;   dup v0.16b, w7
+;   dup v1.16b, w7
 ;   ret
 
 function %f9() -> i32x2 {

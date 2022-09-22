@@ -90,22 +90,6 @@ criteria = "safe-to-deploy"
 version = "1.1.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.cap-fs-ext]]
-version = "0.25.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.cap-primitives]]
-version = "0.25.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.cap-std]]
-version = "0.25.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.cap-tempfile]]
-version = "0.25.0"
-criteria = "safe-to-run"
-
 [[exemptions.capstone]]
 version = "0.9.0"
 criteria = "safe-to-deploy"
@@ -447,7 +431,7 @@ version = "1.4.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.libc]]
-version = "0.2.126"
+version = "0.2.133"
 criteria = "safe-to-deploy"
 
 [[exemptions.libfuzzer-sys]]
@@ -803,7 +787,7 @@ version = "0.4.0"
 criteria = "safe-to-run"
 
 [[exemptions.rustix]]
-version = "0.35.6"
+version = "0.35.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.rusty-fork]]

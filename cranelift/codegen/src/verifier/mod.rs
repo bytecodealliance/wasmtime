@@ -726,6 +726,8 @@ impl<'a> Verifier<'a> {
                 opcode: Opcode::GetFramePointer | Opcode::GetReturnAddress,
             } => {
                 if let Some(isa) = &self.isa {
+                    // Backends may already rely on this check implicitly, so do
+                    // not relax it without verifying that it is safe to do so.
                     if !isa.flags().preserve_frame_pointers() {
                         return errors.fatal((
                             inst,
@@ -1094,13 +1096,24 @@ impl<'a> Verifier<'a> {
         let typ = self.func.dfg.ctrl_typevar(inst);
         let value_type = self.func.dfg.value_type(arg);
 
-        if typ.lane_bits() < value_type.lane_bits() {
+        if typ.lane_bits() != value_type.lane_bits() {
             errors.fatal((
                 inst,
                 format!(
-                    "The bitcast argument {} doesn't fit in a type of {} bits",
+                    "The bitcast argument {} has a lane type of {} bits, which doesn't match an expected type of {} bits",
                     arg,
+                    value_type.lane_bits(),
                     typ.lane_bits()
+                ),
+            ))
+        } else if typ.bits() != value_type.bits() {
+            errors.fatal((
+                inst,
+                format!(
+                    "The bitcast argument {} has a type of {} bits, which doesn't match an expected type of {} bits",
+                    arg,
+                    value_type.bits(),
+                    typ.bits()
                 ),
             ))
         } else {

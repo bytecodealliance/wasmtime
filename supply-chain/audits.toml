@@ -54,16 +54,40 @@ who = "Brian Jones <brian.j.jones@intel.com>"
 criteria = "safe-to-deploy"
 version = "0.1.11+1.0.8"
 
+[[audits.cap-fs-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.26.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.cap-primitives]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.26.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.cap-rand]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-version = "0.25.0"
+version = "0.26.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.cap-std]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.26.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.cap-tempfile]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-run"
+version = "0.26.0"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.cap-time-ext]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-version = "0.25.0"
+version = "0.26.0"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.cc]]
@@ -221,6 +245,12 @@ criteria = "safe-to-deploy"
 delta = "0.3.1 -> 0.3.2"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.regalloc2]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "0.3.2 -> 0.4.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.rustc-demangle]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -245,7 +275,7 @@ version = "1.0.9"
 [[audits.system-interface]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
-version = "0.22.0"
+version = "0.23.0"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.tar]]

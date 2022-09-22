@@ -60,59 +60,81 @@ fn run(data: &[u8]) -> Result<()> {
     STATS.bump_attempts();
 
     let mut u = Unstructured::new(data);
+
+    // Generate a Wasmtime and module configuration and update its settings
+    // initially to be suitable for differential execution where the generated
+    // wasm will behave the same in two different engines. This will get further
+    // refined below.
     let mut config: Config = u.arbitrary()?;
     config.set_differential_config();
 
-    // Generate the Wasm module; this is specified by either the ALLOWED_MODULES
-    // environment variable or a random selection between wasm-smith and
-    // single-inst.
-    let build_wasm_smith_module = |u: &mut Unstructured, config: &mut Config| -> Result<_> {
+    // Choose an engine that Wasmtime will be differentially executed against.
+    // The chosen engine is then created, which might update `config`, and
+    // returned as a trait object.
+    let lhs = u.choose(unsafe { &ALLOWED_ENGINES })?;
+    let mut lhs = match engine::build(&mut u, lhs, &mut config)? {
+        Some(engine) => engine,
+        // The chosen engine does not have support compiled into the fuzzer,
+        // discard this test case.
+        None => return Ok(()),
+    };
+
+    // Using the now-legalized module configuration generate the Wasm module;
+    // this is specified by either the ALLOWED_MODULES environment variable or a
+    // random selection between wasm-smith and single-inst.
+    let build_wasm_smith_module = |u: &mut Unstructured, config: &Config| -> Result<_> {
         STATS.wasm_smith_modules.fetch_add(1, SeqCst);
         let module = config.generate(u, Some(1000))?;
         Ok(module.to_bytes())
     };
-    let build_single_inst_module = |u: &mut Unstructured, config: &mut Config| -> Result<_> {
+    let build_single_inst_module = |u: &mut Unstructured, config: &Config| -> Result<_> {
         STATS.single_instruction_modules.fetch_add(1, SeqCst);
-        let module = SingleInstModule::new(u, &mut config.module_config)?;
+        let module = SingleInstModule::new(u, &config.module_config)?;
         Ok(module.to_bytes())
     };
     if unsafe { ALLOWED_MODULES.is_empty() } {
         panic!("unable to generate a module to fuzz against; check `ALLOWED_MODULES`")
     }
     let wasm = match *u.choose(unsafe { ALLOWED_MODULES.as_slice() })? {
-        "wasm-smith" => build_wasm_smith_module(&mut u, &mut config)?,
-        "single-inst" => build_single_inst_module(&mut u, &mut config)?,
+        "wasm-smith" => build_wasm_smith_module(&mut u, &config)?,
+        "single-inst" => build_single_inst_module(&mut u, &config)?,
         _ => unreachable!(),
     };
     log_wasm(&wasm);
 
-    // Choose a left-hand side Wasm engine.
-    let mut lhs = engine::choose(&mut u, &config, unsafe { &ALLOWED_ENGINES })?;
+    // Instantiate the generated wasm file in the chosen differential engine.
     let lhs_instance = lhs.instantiate(&wasm);
     STATS.bump_engine(lhs.name());
 
-    // Choose a right-hand side Wasm engine--this will always be Wasmtime.
+    // Always use Wasmtime as the second engine to instantiate within.
     let rhs_store = config.to_store();
     let rhs_module = wasmtime::Module::new(rhs_store.engine(), &wasm).unwrap();
     let rhs_instance = WasmtimeInstance::new(rhs_store, rhs_module);
 
-    // If we fail to instantiate, check that both sides do.
     let (mut lhs_instance, mut rhs_instance) = match (lhs_instance, rhs_instance) {
+        // Both sides successful, continue below to invoking exports.
         (Ok(l), Ok(r)) => (l, r),
+
+        // Both sides failed, make sure they failed for the same reason but then
+        // we're done with this fuzz test case.
         (Err(l), Err(r)) => {
             let err = r.downcast::<Trap>().expect("not a trap");
-            lhs.assert_error_match(&err, l);
+            lhs.assert_error_match(&err, &l);
             return Ok(());
         }
-        (l, r) => panic!(
-            "failed to instantiate only one side: {:?} != {:?}",
-            l.err(),
-            r.err()
-        ),
+
+        // One side succeeded and one side failed, that means a bug happened!
+        (l, r) => {
+            panic!(
+                "failed to instantiate only one side: {:?} != {:?}",
+                l.err(),
+                r.err()
+            )
+        }
     };
 
     // Call each exported function with different sets of arguments.
-    for (name, signature) in rhs_instance.exported_functions() {
+    'outer: for (name, signature) in rhs_instance.exported_functions() {
         let mut invocations = 0;
         loop {
             let arguments = signature
@@ -123,8 +145,9 @@ fn run(data: &[u8]) -> Result<()> {
                 .results()
                 .map(|t| DiffValueType::try_from(t).unwrap())
                 .collect::<Vec<_>>();
-            differential(
+            let ok = differential(
                 lhs_instance.as_mut(),
+                lhs.as_ref(),
                 &mut rhs_instance,
                 &name,
                 &arguments,
@@ -132,12 +155,20 @@ fn run(data: &[u8]) -> Result<()> {
             )
             .expect("failed to run differential evaluation");
 
-            // We evaluate the same function with different arguments until we
-            // hit a predetermined limit or we run out of unstructured data--it
-            // does not make sense to re-evaluate the same arguments over and
-            // over.
             invocations += 1;
             STATS.total_invocations.fetch_add(1, SeqCst);
+
+            // If this differential execution has resulted in the two instances
+            // diverging in state we can't keep executing so don't execute any
+            // more functions.
+            if !ok {
+                break 'outer;
+            }
+
+            // We evaluate the same function with different arguments until we
+            // Hit a predetermined limit or we run out of unstructured data--it
+            // does not make sense to re-evaluate the same arguments over and
+            // over.
             if invocations > NUM_INVOCATIONS || u.is_empty() {
                 break;
             }

@@ -51,9 +51,9 @@ block0(v0: i128):
 }
 
 ; block0:
-;   rbit x6, x0
+;   rbit x5, x0
 ;   rbit x0, x1
-;   mov x1, x6
+;   mov x1, x5
 ;   ret
 
 function %b(i8) -> i8 {
@@ -107,10 +107,10 @@ block0(v0: i128):
 }
 
 ; block0:
-;   clz x6, x1
-;   clz x8, x0
-;   lsr x10, x6, #6
-;   madd x0, x8, x10, x6
+;   clz x5, x1
+;   clz x7, x0
+;   lsr x9, x5, #6
+;   madd x0, x7, x9, x5
 ;   movz w1, #0
 ;   ret
 
@@ -165,14 +165,14 @@ block0(v0: i128):
 }
 
 ; block0:
-;   cls x6, x0
-;   cls x8, x1
-;   eon x10, x1, x0
-;   lsr x12, x10, #63
-;   madd x14, x6, x12, x12
-;   subs xzr, x8, #63
-;   csel x1, x14, xzr, eq
-;   add x0, x1, x8
+;   cls x5, x0
+;   cls x7, x1
+;   eon x9, x1, x0
+;   lsr x11, x9, #63
+;   madd x13, x5, x11, x11
+;   subs xzr, x7, #63
+;   csel x0, x13, xzr, eq
+;   add x0, x0, x7
 ;   movz w1, #0
 ;   ret
 
@@ -229,12 +229,12 @@ block0(v0: i128):
 }
 
 ; block0:
-;   rbit x6, x0
-;   rbit x8, x1
-;   clz x10, x6
-;   clz x12, x8
-;   lsr x14, x10, #6
-;   madd x0, x12, x14, x10
+;   rbit x5, x0
+;   rbit x7, x1
+;   clz x9, x5
+;   clz x11, x7
+;   lsr x13, x9, #6
+;   madd x0, x11, x13, x9
 ;   movz w1, #0
 ;   ret
 
@@ -246,10 +246,10 @@ block0(v0: i128):
 
 ; block0:
 ;   fmov d6, x0
-;   mov v6.d[1], x1
-;   cnt v19.16b, v6.16b
-;   addv b21, v19.16b
-;   umov w0, v21.b[0]
+;   mov v6.d[1], v6.d[1], x1
+;   cnt v17.16b, v6.16b
+;   addv b19, v17.16b
+;   umov w0, v19.b[0]
 ;   movz w1, #0
 ;   ret
 
@@ -821,15 +821,15 @@ block0(v0: i128, v1: i8):
 }
 
 ; block0:
-;   lsl x8, x0, x2
-;   lsl x10, x1, x2
-;   orn w12, wzr, w2
-;   lsr x14, x0, #1
-;   lsr x0, x14, x12
-;   orr x3, x10, x0
+;   lsl x6, x0, x2
+;   lsl x8, x1, x2
+;   orn w10, wzr, w2
+;   lsr x12, x0, #1
+;   lsr x14, x12, x10
+;   orr x1, x8, x14
 ;   ands xzr, x2, #64
-;   csel x0, xzr, x8, ne
-;   csel x1, x8, x3, ne
+;   csel x0, xzr, x6, ne
+;   csel x1, x6, x1, ne
 ;   ret
 
 function %ishl_i128_i128(i128, i128) -> i128 {
@@ -839,15 +839,15 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   lsl x10, x0, x2
-;   lsl x12, x1, x2
-;   orn w14, wzr, w2
-;   lsr x0, x0, #1
-;   lsr x3, x0, x14
-;   orr x4, x12, x3
+;   lsl x7, x0, x2
+;   lsl x9, x1, x2
+;   orn w11, wzr, w2
+;   lsr x13, x0, #1
+;   lsr x15, x13, x11
+;   orr x1, x9, x15
 ;   ands xzr, x2, #64
-;   csel x0, xzr, x10, ne
-;   csel x1, x10, x4, ne
+;   csel x0, xzr, x7, ne
+;   csel x1, x7, x1, ne
 ;   ret
 
 function %ushr_i128_i8(i128, i8) -> i128 {
@@ -857,15 +857,15 @@ block0(v0: i128, v1: i8):
 }
 
 ; block0:
-;   lsr x8, x0, x2
-;   lsr x10, x1, x2
-;   orn w12, wzr, w2
-;   lsl x14, x1, #1
-;   lsl x0, x14, x12
-;   orr x3, x8, x0
+;   lsr x6, x0, x2
+;   lsr x8, x1, x2
+;   orn w10, wzr, w2
+;   lsl x12, x1, #1
+;   lsl x14, x12, x10
+;   orr x0, x6, x14
 ;   ands xzr, x2, #64
-;   csel x0, x10, x3, ne
-;   csel x1, xzr, x10, ne
+;   csel x0, x8, x0, ne
+;   csel x1, xzr, x8, ne
 ;   ret
 
 function %ushr_i128_i128(i128, i128) -> i128 {
@@ -875,15 +875,15 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   lsr x10, x0, x2
-;   lsr x12, x1, x2
-;   orn w14, wzr, w2
-;   lsl x0, x1, #1
-;   lsl x3, x0, x14
-;   orr x4, x10, x3
+;   lsr x7, x0, x2
+;   lsr x9, x1, x2
+;   orn w11, wzr, w2
+;   lsl x13, x1, #1
+;   lsl x15, x13, x11
+;   orr x1, x7, x15
 ;   ands xzr, x2, #64
-;   csel x0, x12, x4, ne
-;   csel x1, xzr, x12, ne
+;   csel x0, x9, x1, ne
+;   csel x1, xzr, x9, ne
 ;   ret
 
 function %sshr_i128_i8(i128, i8) -> i128 {
@@ -893,16 +893,16 @@ block0(v0: i128, v1: i8):
 }
 
 ; block0:
-;   lsr x8, x0, x2
-;   asr x10, x1, x2
-;   orn w12, wzr, w2
-;   lsl x14, x1, #1
-;   lsl x0, x14, x12
-;   asr x3, x1, #63
-;   orr x4, x8, x0
+;   lsr x6, x0, x2
+;   asr x8, x1, x2
+;   orn w10, wzr, w2
+;   lsl x12, x1, #1
+;   lsl x14, x12, x10
+;   asr x1, x1, #63
+;   orr x3, x6, x14
 ;   ands xzr, x2, #64
-;   csel x0, x10, x4, ne
-;   csel x1, x3, x10, ne
+;   csel x0, x8, x3, ne
+;   csel x1, x1, x8, ne
 ;   ret
 
 function %sshr_i128_i128(i128, i128) -> i128 {
@@ -912,14 +912,15 @@ block0(v0: i128, v1: i128):
 }
 
 ; block0:
-;   lsr x10, x0, x2
-;   asr x12, x1, x2
-;   orn w14, wzr, w2
-;   lsl x0, x1, #1
-;   lsl x3, x0, x14
-;   asr x4, x1, #63
-;   orr x6, x10, x3
+;   lsr x7, x0, x2
+;   asr x9, x1, x2
+;   orn w11, wzr, w2
+;   lsl x13, x1, #1
+;   lsl x15, x13, x11
+;   asr x1, x1, #63
+;   orr x3, x7, x15
 ;   ands xzr, x2, #64
-;   csel x0, x12, x6, ne
-;   csel x1, x4, x12, ne
+;   csel x0, x9, x3, ne
+;   csel x1, x1, x9, ne
 ;   ret
+

@@ -459,6 +459,10 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
     }
 
+    fn gen_args(_isa_flags: &s390x_settings::Flags, args: Vec<ArgPair>) -> Inst {
+        Inst::Args { args }
+    }
+
     fn gen_ret(_setup_frame: bool, _isa_flags: &s390x_settings::Flags, rets: Vec<Reg>) -> Inst {
         Inst::Ret {
             link: gpr(14),
@@ -495,6 +499,7 @@ impl ABIMachineSpec for S390xMachineDeps {
             insts.push(Inst::AluRUImm32 {
                 alu_op: ALUOp::AddLogical64,
                 rd: into_reg,
+                ri: into_reg.to_reg(),
                 imm,
             });
         }
@@ -542,12 +547,14 @@ impl ABIMachineSpec for S390xMachineDeps {
             insts.push(Inst::AluRSImm16 {
                 alu_op: ALUOp::Add64,
                 rd: writable_stack_reg(),
+                ri: stack_reg(),
                 imm,
             });
         } else {
             insts.push(Inst::AluRSImm32 {
                 alu_op: ALUOp::Add64,
                 rd: writable_stack_reg(),
+                ri: stack_reg(),
                 imm,
             });
         }
@@ -572,6 +579,10 @@ impl ABIMachineSpec for S390xMachineDeps {
         // TODO: implement if we ever require stack probes on an s390x host
         // (unlikely unless Lucet is ported)
         smallvec![]
+    }
+
+    fn gen_inline_probestack(_frame_size: u32, _guard_size: u32) -> SmallInstVec<Self::I> {
+        unimplemented!("Inline stack probing is unimplemented on S390x");
     }
 
     // Returns stack bytes used as well as instructions. Does not adjust
@@ -732,8 +743,8 @@ impl ABIMachineSpec for S390xMachineDeps {
 
     fn gen_call(
         _dest: &CallDest,
-        _uses: SmallVec<[Reg; 8]>,
-        _defs: SmallVec<[Writable<Reg>; 8]>,
+        _uses: CallArgList,
+        _defs: CallRetList,
         _clobbers: PRegSet,
         _opcode: ir::Opcode,
         _tmp: Writable<Reg>,
@@ -747,6 +758,8 @@ impl ABIMachineSpec for S390xMachineDeps {
         _call_conv: isa::CallConv,
         _dst: Reg,
         _src: Reg,
+        _tmp1: Writable<Reg>,
+        _tmp2: Writable<Reg>,
         _size: usize,
     ) -> SmallVec<[Self::I; 8]> {
         unimplemented!("StructArgs not implemented for S390X yet");

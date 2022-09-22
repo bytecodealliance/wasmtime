@@ -146,16 +146,16 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzbq  %dil, %rdi
-;   cvtsi2ss %rdi, %xmm0
-;   movzwq  %si, %rdi
-;   cvtsi2ss %rdi, %xmm5
-;   movl    %edx, %edi
-;   cvtsi2ss %rdi, %xmm6
-;   u64_to_f32_seq %rcx, %xmm2, %rdi, %rax
-;   addss   %xmm0, %xmm5, %xmm0
-;   addss   %xmm0, %xmm6, %xmm0
+;   movzbq  %dil, %r10
+;   cvtsi2ss %r10, %xmm0
+;   movzwq  %si, %r10
+;   cvtsi2ss %r10, %xmm2
+;   movl    %edx, %r10d
+;   cvtsi2ss %r10, %xmm3
+;   u64_to_f32_seq %rcx, %xmm15, %r10, %r11
 ;   addss   %xmm0, %xmm2, %xmm0
+;   addss   %xmm0, %xmm3, %xmm0
+;   addss   %xmm0, %xmm15, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -170,9 +170,9 @@ block0(v0: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_const VCodeConstant(0), %xmm3
+;   movdqu  const(0), %xmm3
 ;   unpcklps %xmm0, %xmm3, %xmm0
-;   load_const VCodeConstant(1), %xmm7
+;   movdqu  const(1), %xmm7
 ;   subpd   %xmm0, %xmm7, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -190,10 +190,11 @@ block0(v0: i32x4):
 ;   movdqa  %xmm0, %xmm4
 ;   pslld   %xmm4, $16, %xmm4
 ;   psrld   %xmm4, $16, %xmm4
-;   psubd   %xmm0, %xmm4, %xmm0
+;   movdqa  %xmm0, %xmm10
+;   psubd   %xmm10, %xmm4, %xmm10
 ;   cvtdq2ps %xmm4, %xmm9
-;   psrld   %xmm0, $1, %xmm0
-;   cvtdq2ps %xmm0, %xmm0
+;   psrld   %xmm10, $1, %xmm10
+;   cvtdq2ps %xmm10, %xmm0
 ;   addps   %xmm0, %xmm0, %xmm0
 ;   addps   %xmm0, %xmm9, %xmm0
 ;   movq    %rbp, %rsp
@@ -209,7 +210,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint32_seq %xmm0, %eax, %r8, %xmm4
+;   cvt_float32_to_uint32_seq %xmm0, %eax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -223,7 +224,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint64_seq %xmm0, %rax, %r8, %xmm4
+;   cvt_float32_to_uint64_seq %xmm0, %rax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -237,7 +238,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint32_seq %xmm0, %eax, %r8, %xmm4
+;   cvt_float64_to_uint32_seq %xmm0, %eax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -251,7 +252,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint64_seq %xmm0, %rax, %r8, %xmm4
+;   cvt_float64_to_uint64_seq %xmm0, %rax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -265,7 +266,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint32_sat_seq %xmm0, %eax, %r8, %xmm4
+;   cvt_float32_to_uint32_sat_seq %xmm0, %eax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -279,7 +280,7 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float32_to_uint64_sat_seq %xmm0, %rax, %r8, %xmm4
+;   cvt_float32_to_uint64_sat_seq %xmm0, %rax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -293,7 +294,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint32_sat_seq %xmm0, %eax, %r8, %xmm4
+;   cvt_float64_to_uint32_sat_seq %xmm0, %eax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -307,7 +308,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   cvt_float64_to_uint64_sat_seq %xmm0, %rax, %r8, %xmm4
+;   cvt_float64_to_uint64_sat_seq %xmm0, %rax, %r9, %xmm4, %xmm5
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -434,14 +435,15 @@ block0(v0: f32x4):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   pxor    %xmm3, %xmm3, %xmm3
-;   maxps   %xmm0, %xmm3, %xmm0
+;   movdqa  %xmm0, %xmm10
+;   maxps   %xmm10, %xmm3, %xmm10
 ;   pcmpeqd %xmm8, %xmm8, %xmm8
 ;   psrld   %xmm8, $1, %xmm8
 ;   cvtdq2ps %xmm8, %xmm14
-;   cvttps2dq %xmm0, %xmm13
-;   subps   %xmm0, %xmm14, %xmm0
-;   cmpps   $2, %xmm14, %xmm0, %xmm14
-;   cvttps2dq %xmm0, %xmm0
+;   cvttps2dq %xmm10, %xmm13
+;   subps   %xmm10, %xmm14, %xmm10
+;   cmpps   $2, %xmm14, %xmm10, %xmm14
+;   cvttps2dq %xmm10, %xmm0
 ;   pxor    %xmm0, %xmm14, %xmm0
 ;   pxor    %xmm7, %xmm7, %xmm7
 ;   pmaxsd  %xmm0, %xmm7, %xmm0
@@ -461,9 +463,10 @@ block0(v0: f32x4):
 ; block0:
 ;   movdqa  %xmm0, %xmm5
 ;   cmpps   $0, %xmm5, %xmm0, %xmm5
-;   andps   %xmm0, %xmm5, %xmm0
-;   pxor    %xmm5, %xmm0, %xmm5
-;   cvttps2dq %xmm0, %xmm9
+;   movdqa  %xmm0, %xmm6
+;   andps   %xmm6, %xmm5, %xmm6
+;   pxor    %xmm5, %xmm6, %xmm5
+;   cvttps2dq %xmm6, %xmm9
 ;   movdqa  %xmm9, %xmm0
 ;   pand    %xmm0, %xmm5, %xmm0
 ;   psrad   %xmm0, $31, %xmm0

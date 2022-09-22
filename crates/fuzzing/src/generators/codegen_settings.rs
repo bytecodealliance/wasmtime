@@ -127,6 +127,7 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                 "aarch64" => {
                     test: is_aarch64_feature_detected,
 
+                    std: "bti" => clif: "use_bti",
                     std: "lse" => clif: "has_lse",
                     // even though the natural correspondence seems to be
                     // between "paca" and "has_pauth", the latter has no effect

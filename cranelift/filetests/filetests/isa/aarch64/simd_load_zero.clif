@@ -11,7 +11,7 @@ block0:
 
 ; block0:
 ;   movz x1, #1
-;   movk x1, #1, LSL #48
+;   movk x1, x1, #1, LSL #48
 ;   fmov d0, x1
 ;   ret
 

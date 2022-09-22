@@ -115,6 +115,10 @@ impl TargetIsa for AArch64Backend {
         self.isa_flags.iter().collect()
     }
 
+    fn is_branch_protection_enabled(&self) -> bool {
+        self.isa_flags.use_bti()
+    }
+
     fn dynamic_vector_bytes(&self, _dyn_ty: Type) -> u32 {
         16
     }

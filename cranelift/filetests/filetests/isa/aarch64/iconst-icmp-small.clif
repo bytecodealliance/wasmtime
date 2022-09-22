@@ -15,11 +15,11 @@ block0:
 }
 
 ; block0:
-;   movz x3, #56780
-;   uxth w5, w3
-;   movz x7, #56780
-;   subs wzr, w5, w7, UXTH
-;   cset x4, ne
-;   and w0, w4, #1
+;   movz x2, #56780
+;   uxth w4, w2
+;   movz x6, #56780
+;   subs wzr, w4, w6, UXTH
+;   cset x9, ne
+;   and w0, w9, #1
 ;   ret
 

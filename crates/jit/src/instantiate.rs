@@ -136,6 +136,9 @@ struct Metadata {
     /// Note that even if this flag is `true` sections may be missing if they
     /// weren't found in the original wasm module itself.
     has_wasm_debuginfo: bool,
+
+    /// Whether or not branch protection is enabled.
+    is_branch_protection_enabled: bool,
 }
 
 /// Finishes compilation of the `translation` specified, producing the final
@@ -160,6 +163,7 @@ pub fn finish_compile(
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
     trampolines: Vec<Trampoline>,
     tunables: &Tunables,
+    is_branch_protection_enabled: bool,
 ) -> Result<(MmapVec, CompiledModuleInfo)> {
     let ModuleTranslation {
         mut module,
@@ -265,6 +269,7 @@ pub fn finish_compile(
             has_unparsed_debuginfo,
             code_section_offset: debuginfo.wasm_file.code_section_offset,
             has_wasm_debuginfo: tunables.parse_wasm_debuginfo,
+            is_branch_protection_enabled,
         },
     };
     bincode::serialize_into(&mut bytes, &info)?;
@@ -398,19 +403,10 @@ impl CompiledModule {
         profiler: &dyn ProfilingAgent,
         id_allocator: &CompiledModuleIdAllocator,
     ) -> Result<Self> {
-        // Transfer ownership of `obj` to a `CodeMemory` object which will
-        // manage permissions, such as the executable bit. Once it's located
-        // there we also publish it for being able to execute. Note that this
-        // step will also resolve pending relocations in the compiled image.
-        let mut code_memory = CodeMemory::new(mmap);
-        let code = code_memory
-            .publish()
-            .context("failed to publish code memory")?;
-
+        let obj = File::parse(&mmap[..]).context("failed to parse internal elf file")?;
+        let opt_section = |name: &str| obj.section_by_name(name).and_then(|s| s.data().ok());
         let section = |name: &str| {
-            code.obj
-                .section_by_name(name)
-                .and_then(|s| s.data().ok())
+            opt_section(name)
                 .ok_or_else(|| anyhow!("missing section `{}` in compilation artifacts", name))
         };
 
@@ -422,35 +418,28 @@ impl CompiledModule {
                 .context("failed to deserialize wasmtime module info")?,
         };
 
-        let func_name_data = match code
-            .obj
-            .section_by_name(ELF_NAME_DATA)
-            .and_then(|s| s.data().ok())
-        {
-            Some(data) => subslice_range(data, code.mmap),
-            None => 0..0,
-        };
-
         let mut ret = Self {
             module: Arc::new(info.module),
             funcs: info.funcs,
             trampolines: info.trampolines,
-            wasm_data: subslice_range(section(ELF_WASM_DATA)?, code.mmap),
-            address_map_data: code
-                .obj
-                .section_by_name(ELF_WASMTIME_ADDRMAP)
-                .and_then(|s| s.data().ok())
-                .map(|slice| subslice_range(slice, code.mmap))
+            wasm_data: subslice_range(section(ELF_WASM_DATA)?, &mmap),
+            address_map_data: opt_section(ELF_WASMTIME_ADDRMAP)
+                .map(|slice| subslice_range(slice, &mmap))
                 .unwrap_or(0..0),
-            trap_data: subslice_range(section(ELF_WASMTIME_TRAPS)?, code.mmap),
-            code: subslice_range(code.text, code.mmap),
+            func_name_data: opt_section(ELF_NAME_DATA)
+                .map(|slice| subslice_range(slice, &mmap))
+                .unwrap_or(0..0),
+            trap_data: subslice_range(section(ELF_WASMTIME_TRAPS)?, &mmap),
+            code: subslice_range(section(".text")?, &mmap),
             dbg_jit_registration: None,
-            code_memory,
+            code_memory: CodeMemory::new(mmap),
             meta: info.meta,
             unique_id: id_allocator.alloc(),
             func_names: info.func_names,
-            func_name_data,
         };
+        ret.code_memory
+            .publish(ret.meta.is_branch_protection_enabled)
+            .context("failed to publish code memory")?;
         ret.register_debug_and_profiling(profiler)?;
 
         Ok(ret)

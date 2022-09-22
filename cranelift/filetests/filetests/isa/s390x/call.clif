@@ -46,7 +46,8 @@ block0(v0: i32):
 }
 
 ; block0:
-;   llgfr %r2, %r2
+;   lgr %r5, %r2
+;   llgfr %r2, %r5
 ;   br %r14
 
 function %call_uext(i32) -> i64 {
@@ -73,7 +74,8 @@ block0(v0: i32):
 }
 
 ; block0:
-;   lgfr %r2, %r2
+;   lgr %r5, %r2
+;   lgfr %r2, %r5
 ;   br %r14
 
 function %call_colocated(i64) -> i64 {
@@ -125,8 +127,6 @@ block0(v0: i64, v1: i64):
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 
-
-
 function %incoming_args(i64, i32, i32 uext, i32 sext, i16, i16 uext, i16 sext, i8, i8 uext, i8 sext) -> i64 {
 block0(v0: i64, v1: i32, v2: i32, v3: i32, v4: i16, v5: i16, v6: i16, v7: i8, v8: i8, v9: i8):
     v10 = uextend.i64 v1
@@ -150,37 +150,39 @@ block0(v0: i64, v1: i32, v2: i32, v3: i32, v4: i16, v5: i16, v6: i16, v7: i8, v8
     return v27
 }
 
-;   stmg %r7, %r15, 56(%r15)
+;   stmg %r6, %r15, 48(%r15)
 ;   aghi %r15, -16
 ; block0:
-;   stg %r4, 8(%r15)
-;   lgr %r10, %r5
+;   stg %r2, 0(%r15)
+;   lgr %r10, %r6
 ;   lg %r11, 176(%r15)
 ;   lg %r12, 184(%r15)
 ;   llgc %r13, 199(%r15)
-;   lg %r8, 200(%r15)
-;   lg %r7, 208(%r15)
-;   llgfr %r4, %r3
-;   lg %r5, 8(%r15)
-;   llgfr %r5, %r5
-;   lgr %r3, %r10
-;   llgfr %r3, %r3
-;   llghr %r9, %r6
-;   llghr %r10, %r11
-;   llghr %r11, %r12
-;   llgcr %r12, %r13
-;   llgcr %r8, %r8
-;   llgcr %r13, %r7
-;   agrk %r4, %r2, %r4
-;   agr %r5, %r3
-;   agrk %r2, %r9, %r10
-;   agrk %r3, %r11, %r12
-;   agr %r8, %r13
-;   agr %r4, %r5
-;   agrk %r5, %r2, %r3
-;   agrk %r4, %r8, %r4
-;   agrk %r2, %r5, %r4
-;   lmg %r7, %r15, 72(%r15)
+;   lg %r6, 200(%r15)
+;   lg %r2, 208(%r15)
+;   stg %r2, 8(%r15)
+;   llgfr %r2, %r3
+;   llgfr %r9, %r4
+;   llgfr %r7, %r5
+;   lgr %r4, %r10
+;   llghr %r8, %r4
+;   llghr %r5, %r11
+;   llghr %r10, %r12
+;   llgcr %r4, %r13
+;   llgcr %r13, %r6
+;   lg %r3, 8(%r15)
+;   llgcr %r3, %r3
+;   lg %r11, 0(%r15)
+;   agrk %r2, %r11, %r2
+;   agrk %r6, %r9, %r7
+;   agrk %r5, %r8, %r5
+;   agrk %r4, %r10, %r4
+;   agrk %r3, %r13, %r3
+;   agr %r2, %r6
+;   agrk %r4, %r5, %r4
+;   agrk %r5, %r3, %r2
+;   agrk %r2, %r4, %r5
+;   lmg %r6, %r15, 64(%r15)
 ;   br %r14
 
 function %incoming_args_i128(i128, i128, i128, i128, i128, i128, i128, i128) -> i128 {
@@ -200,14 +202,14 @@ block0(v0: i128, v1: i128, v2: i128, v3: i128, v4: i128, v5: i128, v6: i128, v7:
 ;   vl %v1, 0(%r4)
 ;   vl %v2, 0(%r5)
 ;   vl %v3, 0(%r6)
-;   lg %r3, 160(%r15)
-;   vl %v4, 0(%r3)
+;   lg %r4, 160(%r15)
+;   vl %v4, 0(%r4)
 ;   lg %r3, 168(%r15)
 ;   vl %v5, 0(%r3)
-;   lg %r5, 176(%r15)
-;   vl %v6, 0(%r5)
-;   lg %r4, 184(%r15)
-;   vl %v7, 0(%r4)
+;   lg %r3, 176(%r15)
+;   vl %v6, 0(%r3)
+;   lg %r5, 184(%r15)
+;   vl %v7, 0(%r5)
 ;   vaq %v17, %v0, %v1
 ;   vaq %v18, %v2, %v3
 ;   vaq %v19, %v4, %v5
