@@ -1,5 +1,4 @@
-//! Example of instantiating of instantiating a wasm module which uses WASI
-//! imports.
+//! Example of instantiating a wasm module which uses WASI imports.
 
 /*
 You can execute this example with:
