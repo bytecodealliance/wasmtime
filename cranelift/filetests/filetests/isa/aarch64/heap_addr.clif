@@ -21,8 +21,8 @@ block0(v0: i64, v1: i32):
 ;   b.ls label1 ; b label2
 ; block1:
 ;   add x11, x0, x1, UXTW
-;   subs xzr, x9, x10
 ;   movz x12, #0
+;   subs xzr, x9, x10
 ;   csel x0, x12, x11, hi
 ;   csdb
 ;   ret
@@ -44,9 +44,9 @@ block0(v0: i64, v1: i32):
 ;   b.ls label1 ; b label2
 ; block1:
 ;   add x9, x0, x1, UXTW
+;   movz x8, #0
 ;   subs xzr, x7, #65536
-;   movz x10, #0
-;   csel x0, x10, x9, hi
+;   csel x0, x8, x9, hi
 ;   csdb
 ;   ret
 ; block2:

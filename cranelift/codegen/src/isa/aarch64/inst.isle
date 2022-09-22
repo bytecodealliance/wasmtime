@@ -1635,22 +1635,6 @@
 (decl max_fp_value (bool u8 u8) Reg)
 (extern constructor max_fp_value max_fp_value)
 
-;; Calculate the minimum acceptable floating-point value for a conversion to
-;; floating point from an integer type.
-;; Accepts whether the output is signed, the size of the input
-;; floating point type in bits, and the size of the output integer type
-;; in bits.
-(decl min_fp_value_sat (bool u8 u8) Reg)
-(extern constructor min_fp_value_sat min_fp_value_sat)
-
-;; Calculate the maximum acceptable floating-point value for a conversion to
-;; floating point from an integer type.
-;; Accepts whether the output is signed, the size of the input
-;; floating point type in bits, and the size of the output integer type
-;; in bits.
-(decl max_fp_value_sat (bool u8 u8) Reg)
-(extern constructor max_fp_value_sat max_fp_value_sat)
-
 ;; Constructs an FPUOpRI.Ushr* given the size in bits of the value (or lane)
 ;; and the amount to shift by.
 (decl fpu_op_ri_ushr (u8 u8) FPUOpRI)
@@ -1737,6 +1721,13 @@
 
 (decl writable_zero_reg () WritableReg)
 (extern constructor writable_zero_reg writable_zero_reg)
+
+;; Helper for emitting `MInst.Mov` instructions.
+(decl mov (Reg Type) Reg)
+(rule (mov src ty)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.Mov (operand_size ty) dst src))))
+        dst))
 
 ;; Helper for emitting `MInst.MovZ` instructions.
 (decl movz (MoveWideConst OperandSize) Reg)
@@ -2086,11 +2077,30 @@
          (MInst.FpuCSel64 dst if_true if_false cond)
          dst)))
 
+;; Helper for emitting `MInst.VecCSel` instructions.
+(decl vec_csel (Cond Reg Reg) ConsumesFlags)
+(rule (vec_csel cond if_true if_false)
+      (let ((dst WritableReg (temp_writable_reg $I8X16)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg
+         (MInst.VecCSel dst if_true if_false cond)
+         dst)))
+
 ;; Helper for emitting `MInst.FpuRound` instructions.
 (decl fpu_round (FpuRoundMode Reg) Reg)
 (rule (fpu_round op rn)
       (let ((dst WritableReg (temp_writable_reg $F64))
             (_ Unit (emit (MInst.FpuRound op dst rn))))
+        dst))
+
+;; Helper for emitting `MInst.FpuMove64` and `MInst.FpuMove128` instructions.
+(decl fpu_move (Type Reg) Reg)
+(rule (fpu_move _ src)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.FpuMove128 dst src))))
+        dst))
+(rule (fpu_move (fits_in_64 _) src)
+      (let ((dst WritableReg (temp_writable_reg $F64))
+            (_ Unit (emit (MInst.FpuMove64 dst src))))
         dst))
 
 ;; Helper for emitting `MInst.MovToFpu` instructions.
@@ -2350,6 +2360,11 @@
 (decl aarch64_fence () SideEffectNoResult)
 (rule (aarch64_fence)
       (SideEffectNoResult.Inst (MInst.Fence)))
+
+;; Helper for generating `csdb` instructions.
+(decl csdb () SideEffectNoResult)
+(rule (csdb)
+      (SideEffectNoResult.Inst (MInst.Csdb)))
 
 ;; Helper for generating `brk` instructions.
 (decl brk () SideEffectNoResult)
@@ -2638,6 +2653,15 @@
 (decl aarch64_storep64 (PairAMode MemFlags Reg Reg) SideEffectNoResult)
 (rule (aarch64_storep64 amode flags val1 val2)
       (SideEffectNoResult.Inst (MInst.StoreP64 val1 val2 amode flags)))
+
+;; Helper for generating a `trapif` instruction.
+
+(decl trap_if (ProducesFlags TrapCode Cond) InstOutput)
+(rule (trap_if flags trap_code cond)
+      (side_effect
+       (with_flags_side_effect flags
+        (ConsumesFlags.ConsumesFlagsSideEffect
+         (MInst.TrapIf (cond_br_cond cond) trap_code)))))
 
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3129,32 +3153,37 @@
 ;; floating-point value to an integer, saturating if the value
 ;; does not fit in the target type.
 ;; Accepts the specific conversion op, the source register,
-;; whether the input is signed, and finally the input and output
-;; types.
-(decl fpu_to_int_cvt_sat (FpuToIntOp Reg bool Type Type) Reg)
-(rule (fpu_to_int_cvt_sat op src $true in_ty out_ty)
-      (let ((size ScalarSize (scalar_size in_ty))
-            (in_bits u8 (ty_bits in_ty))
-            (out_bits u8 (ty_bits out_ty))
-            (max Reg (max_fp_value_sat $true in_bits out_bits))
-            (tmp Reg (fpu_rrr (FPUOp2.Min) src max size))
-            (min Reg (min_fp_value_sat $true in_bits out_bits))
-            (tmp Reg (fpu_rrr (FPUOp2.Max) tmp min size))
-            (zero Reg (constant_f128 0))
-            (tmp ValueRegs (with_flags (fpu_cmp size src src)
-                    (fpu_csel in_ty (Cond.Ne) zero tmp))))
-       (fpu_to_int op (value_regs_get tmp 0))))
-(rule (fpu_to_int_cvt_sat op src $false in_ty out_ty)
-      (let ((size ScalarSize (scalar_size in_ty))
-            (in_bits u8 (ty_bits in_ty))
-            (out_bits u8 (ty_bits out_ty))
-            (max Reg (max_fp_value_sat $false in_bits out_bits))
-            (tmp Reg (fpu_rrr (FPUOp2.Min) src max size))
-            (min Reg (min_fp_value_sat $false in_bits out_bits))
-            (tmp Reg (fpu_rrr (FPUOp2.Max) tmp min size))
-            (tmp ValueRegs (with_flags (fpu_cmp size src src)
-                    (fpu_csel in_ty (Cond.Ne) min tmp))))
-       (fpu_to_int op (value_regs_get tmp 0))))
+;; whether the input is signed, and finally the output type.
+(decl fpu_to_int_cvt_sat (FpuToIntOp Reg bool Type) Reg)
+(rule (fpu_to_int_cvt_sat op src _ $I64)
+      (fpu_to_int op src))
+(rule (fpu_to_int_cvt_sat op src _ $I32)
+      (fpu_to_int op src))
+(rule (fpu_to_int_cvt_sat op src $false (fits_in_16 out_ty))
+      (let ((result Reg (fpu_to_int op src))
+            (max Reg (imm out_ty (ImmExtend.Zero) -1)))
+       (with_flags_reg
+        (cmp (OperandSize.Size32) result max)
+        (csel (Cond.Hi) max result))))
+(rule (fpu_to_int_cvt_sat op src $true (fits_in_16 out_ty))
+      (let ((result Reg (fpu_to_int op src))
+            (max Reg (imm $I32 (ImmExtend.Sign) (signed_max out_ty)))
+            (min Reg (imm $I32 (ImmExtend.Sign) (signed_min out_ty)))
+            (result Reg (with_flags_reg
+                         (cmp (operand_size out_ty) result max)
+                         (csel (Cond.Gt) max result)))
+            (result Reg (with_flags_reg
+                         (cmp (operand_size out_ty) result min)
+                         (csel (Cond.Lt) min result))))
+       result))
+
+(decl signed_min (Type) u64)
+(rule (signed_min $I8) -128)
+(rule (signed_min $I16) -32768)
+
+(decl signed_max (Type) u64)
+(rule (signed_max $I8) 127)
+(rule (signed_max $I16) 32767)
 
 (decl fpu_to_int (FpuToIntOp Reg) Reg)
 (rule (fpu_to_int op src)
@@ -3371,7 +3400,9 @@
 ;; ccmp lhs_hi, rhs_hi, #0, eq
 (decl lower_icmp_i128_eq_ne (Value Value) ProducesFlags)
 (rule (lower_icmp_i128_eq_ne lhs rhs)
-      (let ((lhs_lo Reg (value_regs_get lhs 0))
+      (let ((lhs ValueRegs (put_in_regs lhs))
+            (rhs ValueRegs (put_in_regs rhs))
+            (lhs_lo Reg (value_regs_get lhs 0))
             (lhs_hi Reg (value_regs_get lhs 1))
             (rhs_lo Reg (value_regs_get rhs 0))
             (rhs_hi Reg (value_regs_get rhs 1))
@@ -3392,6 +3423,8 @@
 (rule -1 (lower_icmp_into_reg cond lhs rhs $I128 out_ty)
       (let ((unsigned_cond Cond (cond_code (intcc_unsigned cond)))
             (cond Cond (cond_code cond))
+            (lhs ValueRegs (put_in_regs lhs))
+            (rhs ValueRegs (put_in_regs rhs))
             (lhs_lo Reg (value_regs_get lhs 0))
             (lhs_hi Reg (value_regs_get lhs 1))
             (rhs_lo Reg (value_regs_get rhs 0))
@@ -3470,3 +3503,30 @@
       (let ((dst ValueRegs (lower_icmp_into_reg cond lhs rhs $I128 $B1))
             (dst Reg (value_regs_get dst 0)))
        (cmp (OperandSize.Size64) (zero_reg) dst)))
+
+;; Helpers for generating select instruction sequences.
+(decl lower_select (ProducesFlags Cond Type Value Value) ValueRegs)
+(rule (lower_select flags cond (ty_scalar_float ty) rn rm)
+      (with_flags flags (fpu_csel ty cond rn rm)))
+(rule (lower_select flags cond (ty_vec128 ty) rn rm)
+      (with_flags flags (vec_csel cond rn rm)))
+(rule (lower_select flags cond ty rn rm)
+      (if (ty_vec64 ty))
+      (with_flags flags (fpu_csel $F64 cond rn rm)))
+(rule (lower_select flags cond $I128 rn rm)
+      (let ((dst_lo WritableReg (temp_writable_reg $I64))
+            (dst_hi WritableReg (temp_writable_reg $I64))
+            (rn ValueRegs (put_in_regs rn))
+            (rm ValueRegs (put_in_regs rm))
+            (rn_lo Reg (value_regs_get rn 0))
+            (rn_hi Reg (value_regs_get rn 1))
+            (rm_lo Reg (value_regs_get rm 0))
+            (rm_hi Reg (value_regs_get rm 1)))
+       (with_flags flags
+        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
+         (MInst.CSel dst_lo cond rn_lo rm_lo)
+         (MInst.CSel dst_hi cond rn_hi rm_hi)
+         (value_regs dst_lo dst_hi)))))
+(rule (lower_select flags cond ty rn rm)
+      (if (ty_int_bool_ref_scalar_64 ty))
+      (with_flags flags (csel cond rn rm)))

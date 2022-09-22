@@ -31,7 +31,7 @@ encoding_rs = { version = "0.8.31", optional = true }
 mach = "0.3.2"
 
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "0.35.6", features = ["mm"] }
+rustix = { version = "0.35.10", features = ["mm"] }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 version = "0.36.0"

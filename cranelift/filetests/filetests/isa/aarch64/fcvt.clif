@@ -225,14 +225,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   movz x4, #20352, LSL #16
-;   fmov s4, w4
-;   fmin s7, s0, s4
-;   movi v17.2s, #0
-;   fmax s19, s7, s17
-;   fcmp s0, s0
-;   fcsel s22, s17, s19, ne
-;   fcvtzu w0, s22
+;   fcvtzu w0, s0
 ;   ret
 
 function %f18(f32) -> i64 {
@@ -242,14 +235,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   movz x4, #24448, LSL #16
-;   fmov s4, w4
-;   fmin s7, s0, s4
-;   movi v17.2s, #0
-;   fmax s19, s7, s17
-;   fcmp s0, s0
-;   fcsel s22, s17, s19, ne
-;   fcvtzu x0, s22
+;   fcvtzu x0, s0
 ;   ret
 
 function %f19(f64) -> i32 {
@@ -259,13 +245,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   ldr d3, pc+8 ; b 12 ; data.f64 4294967295
-;   fmin d5, d0, d3
-;   movi v7.2s, #0
-;   fmax d17, d5, d7
-;   fcmp d0, d0
-;   fcsel d20, d7, d17, ne
-;   fcvtzu w0, d20
+;   fcvtzu w0, d0
 ;   ret
 
 function %f20(f64) -> i64 {
@@ -275,14 +255,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   movz x4, #17392, LSL #48
-;   fmov d4, x4
-;   fmin d7, d0, d4
-;   movi v17.2s, #0
-;   fmax d19, d7, d17
-;   fcmp d0, d0
-;   fcsel d22, d17, d19, ne
-;   fcvtzu x0, d22
+;   fcvtzu x0, d0
 ;   ret
 
 function %f21(f32) -> i32 {
@@ -371,16 +344,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   movz x4, #20224, LSL #16
-;   fmov s4, w4
-;   fmin s7, s0, s4
-;   movz x10, #52992, LSL #16
-;   fmov s18, w10
-;   fmax s21, s7, s18
-;   movi v23.16b, #0
-;   fcmp s0, s0
-;   fcsel s26, s23, s21, ne
-;   fcvtzs w0, s26
+;   fcvtzs w0, s0
 ;   ret
 
 function %f26(f32) -> i64 {
@@ -390,16 +354,7 @@ block0(v0: f32):
 }
 
 ; block0:
-;   movz x4, #24320, LSL #16
-;   fmov s4, w4
-;   fmin s7, s0, s4
-;   movz x10, #57088, LSL #16
-;   fmov s18, w10
-;   fmax s21, s7, s18
-;   movi v23.16b, #0
-;   fcmp s0, s0
-;   fcsel s26, s23, s21, ne
-;   fcvtzs x0, s26
+;   fcvtzs x0, s0
 ;   ret
 
 function %f27(f64) -> i32 {
@@ -409,15 +364,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   ldr d3, pc+8 ; b 12 ; data.f64 2147483647
-;   fmin d5, d0, d3
-;   movz x8, #49632, LSL #48
-;   fmov d16, x8
-;   fmax d19, d5, d16
-;   movi v21.16b, #0
-;   fcmp d0, d0
-;   fcsel d24, d21, d19, ne
-;   fcvtzs w0, d24
+;   fcvtzs w0, d0
 ;   ret
 
 function %f28(f64) -> i64 {
@@ -427,16 +374,7 @@ block0(v0: f64):
 }
 
 ; block0:
-;   movz x4, #17376, LSL #48
-;   fmov d4, x4
-;   fmin d7, d0, d4
-;   movz x10, #50144, LSL #48
-;   fmov d18, x10
-;   fmax d21, d7, d18
-;   movi v23.16b, #0
-;   fcmp d0, d0
-;   fcsel d26, d23, d21, ne
-;   fcvtzs x0, d26
+;   fcvtzs x0, d0
 ;   ret
 
 function %f29(f32x4) -> i32x4 {
@@ -457,5 +395,121 @@ block0(v0: f32x4):
 
 ; block0:
 ;   fcvtzs v0.4s, v0.4s
+;   ret
+
+function %f31(f32) -> i8 {
+block0(v0: f32):
+  v1 = fcvt_to_uint_sat.i8 v0
+  return v1
+}
+
+; block0:
+;   fcvtzu w3, s0
+;   movz w5, #255
+;   subs wzr, w3, w5
+;   csel x0, x5, x3, hi
+;   ret
+
+function %f32(f32) -> i8 {
+block0(v0: f32):
+  v1 = fcvt_to_sint_sat.i8 v0
+  return v1
+}
+
+; block0:
+;   fcvtzs w3, s0
+;   movz w5, #127
+;   movn x7, #127
+;   subs wzr, w3, w5
+;   csel x10, x5, x3, gt
+;   subs wzr, w10, w7
+;   csel x0, x7, x10, lt
+;   ret
+
+function %f33(f32) -> i16 {
+block0(v0: f32):
+  v1 = fcvt_to_uint_sat.i16 v0
+  return v1
+}
+
+; block0:
+;   fcvtzu w3, s0
+;   movz w5, #65535
+;   subs wzr, w3, w5
+;   csel x0, x5, x3, hi
+;   ret
+
+function %f34(f32) -> i16 {
+block0(v0: f32):
+  v1 = fcvt_to_sint_sat.i16 v0
+  return v1
+}
+
+; block0:
+;   fcvtzs w3, s0
+;   movz w5, #32767
+;   movn x7, #32767
+;   subs wzr, w3, w5
+;   csel x10, x5, x3, gt
+;   subs wzr, w10, w7
+;   csel x0, x7, x10, lt
+;   ret
+
+function %f35(f64) -> i8 {
+block0(v0: f64):
+  v1 = fcvt_to_uint_sat.i8 v0
+  return v1
+}
+
+; block0:
+;   fcvtzu w3, d0
+;   movz w5, #255
+;   subs wzr, w3, w5
+;   csel x0, x5, x3, hi
+;   ret
+
+function %f36(f64) -> i8 {
+block0(v0: f64):
+  v1 = fcvt_to_sint_sat.i8 v0
+  return v1
+}
+
+; block0:
+;   fcvtzs w3, d0
+;   movz w5, #127
+;   movn x7, #127
+;   subs wzr, w3, w5
+;   csel x10, x5, x3, gt
+;   subs wzr, w10, w7
+;   csel x0, x7, x10, lt
+;   ret
+
+function %f37(f64) -> i16 {
+block0(v0: f64):
+  v1 = fcvt_to_uint_sat.i16 v0
+  return v1
+}
+
+; block0:
+;   fcvtzu w3, d0
+;   movz w5, #65535
+;   subs wzr, w3, w5
+;   csel x0, x5, x3, hi
+;   ret
+
+function %f38(f64) -> i16 {
+block0(v0: f64):
+  v1 = fcvt_to_sint_sat.i16 v0
+  return v1
+}
+
+; block0:
+;   fcvtzs w3, d0
+;   movz w5, #32767
+;   movn x7, #32767
+;   subs wzr, w3, w5
+;   csel x10, x5, x3, gt
+;   subs wzr, w10, w7
+;   csel x0, x7, x10, lt
 ;   ret
 

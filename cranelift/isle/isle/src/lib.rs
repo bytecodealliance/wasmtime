@@ -98,6 +98,7 @@ pub mod error;
 pub mod ir;
 pub mod lexer;
 mod log;
+pub mod overlap;
 pub mod parser;
 pub mod sema;
 pub mod trie;

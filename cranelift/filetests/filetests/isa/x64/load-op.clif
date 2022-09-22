@@ -11,8 +11,8 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addl    %esi, 0(%rdi), %esi
 ;   movq    %rsi, %rax
+;   addl    %eax, 0(%rdi), %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -27,8 +27,8 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addl    %esi, 0(%rdi), %esi
 ;   movq    %rsi, %rax
+;   addl    %eax, 0(%rdi), %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -43,8 +43,8 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addq    %rsi, 0(%rdi), %rsi
 ;   movq    %rsi, %rax
+;   addq    %rax, 0(%rdi), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -56,14 +56,11 @@ block0(v0: i64, v1: i64):
   return v3
 }
 
-;; test narrow loads: 8-bit load should not merge because the `addl` is 32 bits
-;; and would load 32 bits from memory, which may go beyond the end of the heap.
-
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addq    %rsi, 0(%rdi), %rsi
 ;   movq    %rsi, %rax
+;   addq    %rax, 0(%rdi), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

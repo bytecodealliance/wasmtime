@@ -42,6 +42,17 @@ pub enum Error {
         span: Span,
     },
 
+    /// The rules mentioned overlap in the input they accept.
+    OverlapError {
+        /// The error message.
+        msg: String,
+
+        /// The locations of all the rules that overlap. When there are more than two rules
+        /// present, the first rule is the one with the most overlaps (likely a fall-through
+        /// wildcard case).
+        rules: Vec<(Source, Span)>,
+    },
+
     /// Multiple errors.
     Errors(Vec<Error>),
 }
@@ -108,6 +119,10 @@ impl std::fmt::Display for Error {
             #[cfg(feature = "miette-errors")]
             Error::TypeError { msg, .. } => write!(f, "type error: {}", msg),
 
+            Error::OverlapError { msg, rules, .. } => {
+                writeln!(f, "overlap error: {}\n{}", msg, OverlappingRules(&rules))
+            }
+
             Error::Errors(_) => write!(
                 f,
                 "found {} errors:\n\n{}",
@@ -123,6 +138,16 @@ impl std::fmt::Display for DisplayErrors<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for e in self.0 {
             writeln!(f, "{}", e)?;
+        }
+        Ok(())
+    }
+}
+
+struct OverlappingRules<'a>(&'a [(Source, Span)]);
+impl std::fmt::Display for OverlappingRules<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (src, span) in self.0 {
+            writeln!(f, "  {}", span.from.pretty_print_with_filename(&*src.name))?;
         }
         Ok(())
     }

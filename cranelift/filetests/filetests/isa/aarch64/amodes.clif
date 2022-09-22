@@ -69,9 +69,10 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   add x0, x0, x2
-;   add x0, x0, x1
-;   ldr w0, [x0, #48]
+;   mov x6, x0
+;   add x6, x6, x2
+;   add x6, x6, x1
+;   ldr w0, [x6, #48]
 ;   ret
 
 function %f10(i64, i64, i64) -> i32 {
@@ -232,11 +233,11 @@ block0(v0: i64):
 }
 
 ; block0:
-;   mov x6, x0
-;   ldp x7, x1, [x6]
-;   mov x11, x7
-;   stp x11, x1, [x0]
-;   mov x0, x7
+;   mov x8, x0
+;   mov x6, x8
+;   ldp x0, x1, [x6]
+;   mov x7, x8
+;   stp x0, x1, [x7]
 ;   ret
 
 function %i128_imm_offset(i64) -> i128 {
@@ -247,11 +248,11 @@ block0(v0: i64):
 }
 
 ; block0:
-;   mov x6, x0
-;   ldp x7, x1, [x6, #16]
-;   mov x11, x7
-;   stp x11, x1, [x0, #16]
-;   mov x0, x7
+;   mov x8, x0
+;   mov x6, x8
+;   ldp x0, x1, [x6, #16]
+;   mov x7, x8
+;   stp x0, x1, [x7, #16]
 ;   ret
 
 function %i128_imm_offset_large(i64) -> i128 {
@@ -262,11 +263,11 @@ block0(v0: i64):
 }
 
 ; block0:
-;   mov x6, x0
-;   ldp x7, x1, [x6, #504]
-;   mov x11, x7
-;   stp x11, x1, [x0, #504]
-;   mov x0, x7
+;   mov x8, x0
+;   mov x6, x8
+;   ldp x0, x1, [x6, #504]
+;   mov x7, x8
+;   stp x0, x1, [x7, #504]
 ;   ret
 
 function %i128_imm_offset_negative_large(i64) -> i128 {
@@ -277,11 +278,11 @@ block0(v0: i64):
 }
 
 ; block0:
-;   mov x6, x0
-;   ldp x7, x1, [x6, #-512]
-;   mov x11, x7
-;   stp x11, x1, [x0, #-512]
-;   mov x0, x7
+;   mov x8, x0
+;   mov x6, x8
+;   ldp x0, x1, [x6, #-512]
+;   mov x7, x8
+;   stp x0, x1, [x7, #-512]
 ;   ret
 
 function %i128_add_offset(i64) -> i128 {
@@ -293,11 +294,11 @@ block0(v0: i64):
 }
 
 ; block0:
-;   mov x6, x0
-;   ldp x7, x1, [x6, #32]
-;   mov x11, x7
-;   stp x11, x1, [x0, #32]
-;   mov x0, x7
+;   mov x8, x0
+;   mov x6, x8
+;   ldp x0, x1, [x6, #32]
+;   mov x7, x8
+;   stp x0, x1, [x7, #32]
 ;   ret
 
 function %i128_32bit_sextend_simple(i32) -> i128 {
@@ -327,13 +328,13 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   mov x7, x0
+;   mov x11, x0
+;   mov x7, x11
 ;   add x7, x7, x1, SXTW
-;   ldp x9, x10, [x7, #24]
-;   add x0, x0, x1, SXTW
-;   mov x14, x9
+;   ldp x0, x10, [x7, #24]
+;   mov x9, x11
+;   add x9, x9, x1, SXTW
 ;   mov x1, x10
-;   stp x14, x1, [x0, #24]
-;   mov x0, x9
+;   stp x0, x1, [x9, #24]
 ;   ret
 

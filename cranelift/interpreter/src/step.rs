@@ -942,24 +942,34 @@ where
         Opcode::Nearest => assign(Value::nearest(arg(0)?)?),
         Opcode::IsNull => unimplemented!("IsNull"),
         Opcode::IsInvalid => unimplemented!("IsInvalid"),
+        // `ctrl_ty` is `INVALID` for `Trueif` and `Trueff`, but both should
+        // return a 1-bit boolean value.
         Opcode::Trueif => choose(
             state.has_iflag(inst.cond_code().unwrap()),
-            Value::bool(true, ctrl_ty)?,
-            Value::bool(false, ctrl_ty)?,
+            Value::bool(true, types::B1)?,
+            Value::bool(false, types::B1)?,
         ),
         Opcode::Trueff => choose(
             state.has_fflag(inst.fp_cond_code().unwrap()),
-            Value::bool(true, ctrl_ty)?,
-            Value::bool(false, ctrl_ty)?,
+            Value::bool(true, types::B1)?,
+            Value::bool(false, types::B1)?,
         ),
         Opcode::Bitcast
         | Opcode::RawBitcast
         | Opcode::ScalarToVector
         | Opcode::Breduce
-        | Opcode::Bextend => assign(Value::convert(
-            arg(0)?,
-            ValueConversionKind::Exact(ctrl_ty),
-        )?),
+        | Opcode::Bextend => {
+            let input_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
+            let arg0 = extractlanes(&arg(0)?, input_ty)?;
+
+            assign(vectorizelanes(
+                &arg0
+                    .into_iter()
+                    .map(|x| V::convert(x, ValueConversionKind::Exact(ctrl_ty.lane_type())))
+                    .collect::<ValueResult<SimdVec<V>>>()?,
+                ctrl_ty,
+            )?)
+        }
         Opcode::Ireduce => assign(Value::convert(
             arg(0)?,
             ValueConversionKind::Truncate(ctrl_ty),

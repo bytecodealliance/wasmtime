@@ -72,6 +72,10 @@ pub struct Decl {
     pub ret_ty: Ident,
     /// Whether this term's constructor is pure.
     pub pure: bool,
+    /// Whether this term can exist with some multiplicity: an
+    /// extractor or a constructor that matches multiple times, or
+    /// produces multiple values.
+    pub multi: bool,
     pub pos: Pos,
 }
 

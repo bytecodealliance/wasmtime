@@ -27,7 +27,7 @@ features = [
 ]
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-rustix = { version = "0.35.6", features = ["process"] }
+rustix = { version = "0.35.10", features = ["process"] }
 
 [dev-dependencies]
 filetime = "0.2.7"

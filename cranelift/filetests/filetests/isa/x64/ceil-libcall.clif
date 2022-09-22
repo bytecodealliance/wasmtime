@@ -10,8 +10,8 @@ block0(v0: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %CeilF32+0, %r8
-;   call    *%r8
+;   load_ext_name %CeilF32+0, %rdx
+;   call    *%rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -25,8 +25,8 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_ext_name %CeilF64+0, %r8
-;   call    *%r8
+;   load_ext_name %CeilF64+0, %rdx
+;   call    *%rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

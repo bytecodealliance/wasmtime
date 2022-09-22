@@ -472,17 +472,17 @@
 (rule (lower (has_type ty @ (multi_lane 64 _) (fcvt_to_uint_sat x @ (value_type (multi_lane 64 _)))))
       (vec_misc (VecMisc2.Fcvtzu) x (vector_size ty)))
 
-(rule (lower (has_type $I32 (fcvt_to_uint_sat x @ (value_type $F32))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToU32) x $false $F32 $I32))
+(rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_uint_sat x @ (value_type $F32))))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToU32) x $false out_ty))
 
 (rule (lower (has_type $I64 (fcvt_to_uint_sat x @ (value_type $F32))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToU64) x $false $F32 $I64))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToU64) x $false $I64))
 
-(rule (lower (has_type $I32 (fcvt_to_uint_sat x @ (value_type $F64))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToU32) x $false $F64 $I32))
+(rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_uint_sat x @ (value_type $F64))))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToU32) x $false out_ty))
 
 (rule (lower (has_type $I64 (fcvt_to_uint_sat x @ (value_type $F64))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToU64) x $false $F64 $I64))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToU64) x $false $I64))
 
 ;;;; Rules for `fcvt_to_sint_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -492,17 +492,17 @@
 (rule (lower (has_type ty @ (multi_lane 64 _) (fcvt_to_sint_sat x @ (value_type (multi_lane 64 _)))))
       (vec_misc (VecMisc2.Fcvtzs) x (vector_size ty)))
 
-(rule (lower (has_type $I32 (fcvt_to_sint_sat x @ (value_type $F32))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToI32) x $true $F32 $I32))
+(rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_sint_sat x @ (value_type $F32))))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToI32) x $true out_ty))
 
 (rule (lower (has_type $I64 (fcvt_to_sint_sat x @ (value_type $F32))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToI64) x $true $F32 $I64))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToI64) x $true $I64))
 
-(rule (lower (has_type $I32 (fcvt_to_sint_sat x @ (value_type $F64))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToI32) x $true $F64 $I32))
+(rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_sint_sat x @ (value_type $F64))))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToI32) x $true out_ty))
 
 (rule (lower (has_type $I64 (fcvt_to_sint_sat x @ (value_type $F64))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToI64) x $true $F64 $I64))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToI64) x $true $I64))
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1738,10 +1738,110 @@
 (rule (lower (trap trap_code))
       (side_effect (udf trap_code)))
 
+;;;; Rules for `trapif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (trapif cc insn @ (iadd_ifcout x y) trap_code))
+      ;; The flags must not have been clobbered by any other instruction, as
+      ;; verified by the CLIF validator; so we can simply use the flags here.
+      (let ((insn ProducesFlags (flags_to_producesflags insn)))
+       (trap_if insn trap_code (cond_code cc))))
+
+;; Verification ensures the input is always a single-def ifcmp.
+(rule (lower (trapif cc insn @ (ifcmp x @ (value_type ty) y) trap_code))
+      (let ((cond Cond (cond_code cc)))
+       (trap_if (lower_icmp_into_flags cc x y ty) trap_code cond)))
+
+;;;; Rules for `trapff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Verification ensures the input is always a single-def ffcmp.
+(rule (lower (trapff cc insn @ (ffcmp x @ (value_type ty) y) trap_code))
+      (let ((cond Cond (fp_cond_code cc)))
+       (trap_if (fpu_cmp (scalar_size ty) x y) trap_code cond)))
+
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (resumable_trap trap_code))
       (side_effect (udf trap_code)))
+
+;;;; Rules for `trueif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Verification ensures the input is always a single-def ifcmp.
+(rule (lower (has_type out_ty
+       (trueif cc insn @ (ifcmp x @ (value_type in_ty) y))))
+      (lower_icmp_into_reg cc x y in_ty out_ty))
+
+;;;; Rules for `trueff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Verification ensures the input is always a single-def ffcmp.
+(rule (lower (has_type ty (trueff cc insn @ (ffcmp x @ (value_type in_ty) y))))
+      (with_flags_reg
+       (fpu_cmp (scalar_size in_ty) x y)
+       (materialize_bool_result (ty_bits ty) (fp_cond_code cc))))
+
+;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty
+       (select _flags @ (icmp cc x @ (value_type in_ty) y) rn rm)))
+      (let ((cond Cond (cond_code cc)))
+       (lower_select
+        (lower_icmp_into_flags cc x y in_ty)
+        cond ty rn rm)))
+
+(rule (lower (has_type ty
+       (select _flags @ (bint (icmp cc x @ (value_type in_ty) y)) rn rm)))
+      (let ((cond Cond (cond_code cc)))
+       (lower_select
+        (lower_icmp_into_flags cc x y in_ty)
+        cond ty rn rm)))
+
+(rule (lower (has_type ty
+       (select _flags @ (fcmp cc x @ (value_type in_ty) y) rn rm)))
+      (let ((cond Cond (fp_cond_code cc)))
+       (lower_select
+        (fpu_cmp (scalar_size in_ty) x y)
+        cond ty rn rm)))
+
+(rule (lower (has_type ty
+       (select _flags @ (bint (fcmp cc x @ (value_type in_ty) y)) rn rm)))
+      (let ((cond Cond (fp_cond_code cc)))
+       (lower_select
+        (fpu_cmp (scalar_size in_ty) x y)
+        cond ty rn rm)))
+
+(rule -1 (lower (has_type ty (select rcond @ (value_type (fits_in_32 _)) rn rm)))
+      (let ((rcond Reg (put_in_reg_zext32 rcond)))
+       (lower_select
+        (cmp (OperandSize.Size32) rcond (zero_reg))
+        (Cond.Ne) ty rn rm)))
+
+(rule -2 (lower (has_type ty (select rcond rn rm)))
+      (let ((rcond Reg (put_in_reg_zext64 rcond)))
+       (lower_select
+        (cmp (OperandSize.Size64) rcond (zero_reg))
+        (Cond.Ne) ty rn rm)))
+
+;;;; Rules for `selectif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Verification ensures that the input is always a single-def ifcmp.
+(rule (lower (has_type ty
+       (selectif cc flags @ (ifcmp x @ (value_type in_ty) y)
+        if_true if_false)))
+      (let ((cond Cond (cond_code cc)))
+       (lower_select
+        (lower_icmp_into_flags cc x y in_ty)
+        cond ty if_true if_false)))
+
+;;;; Rules for `selectif_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty
+       (selectif_spectre_guard cc
+        flags @ (ifcmp x @ (value_type in_ty) y) if_true if_false)))
+      (let ((cond Cond (cond_code cc))
+            (dst ValueRegs (lower_select
+                      (lower_icmp_into_flags cc x y in_ty)
+                      cond ty if_true if_false))
+            (_ InstOutput (side_effect (csdb))))
+       dst))
 
 ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2209,17 +2309,26 @@
 
 ;;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (bitcast src @ (value_type $F32))))
-      (mov_from_vec src 0 (ScalarSize.Size32)))
+; SIMD&FP <=> SIMD&FP
+(rule (lower (has_type (ty_float_or_vec out_ty) (bitcast x @ (value_type (ty_float_or_vec _)))))
+      (fpu_move out_ty x))
 
-(rule (lower (has_type $F32 (bitcast src @ (value_type $I32))))
-      (mov_to_fpu src (ScalarSize.Size32)))
+; GPR => SIMD&FP
+(rule (lower (has_type (ty_float_or_vec _) (bitcast x @ (value_type in_ty))))
+      (if (ty_int_bool_ref_scalar_64 in_ty))
+      (mov_to_fpu x (scalar_size in_ty)))
 
-(rule (lower (has_type $I64 (bitcast src @ (value_type $F64))))
-      (mov_from_vec src 0 (ScalarSize.Size64)))
+; SIMD&FP => GPR
+(rule (lower (has_type out_ty (bitcast x @ (value_type (fits_in_64 (ty_float_or_vec _))))))
+      (if (ty_int_bool_ref_scalar_64 out_ty))
+      (mov_from_vec x 0 (scalar_size out_ty)))
 
-(rule (lower (has_type $F64 (bitcast src @ (value_type $I64))))
-      (mov_to_fpu src (ScalarSize.Size64)))
+; GPR <=> GPR
+(rule (lower (has_type out_ty (bitcast x @ (value_type in_ty))))
+      (if (ty_int_bool_ref_scalar_64 out_ty))
+      (if (ty_int_bool_ref_scalar_64 in_ty))
+      x)
+(rule (lower (has_type $I128 (bitcast x @ (value_type $I128)))) x)
 
 ;;; Rules for `raw_bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2385,18 +2494,6 @@
 
 (rule (lower (fvpromote_low val))
       (vec_rr_long (VecRRLongOp.Fcvtl32) val $false))
-
-;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; TODO: requires icmp/fcmp first.
-
-;;; Rules for `selectif` / `selectif_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; TODO: requires icmp/fcmp first.
-
-;;; Rules for `trueif` / `trueff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; TODO: requires icmp/fcmp first.
 
 ;;; Rules for `brz`/`brnz`/`brif`/`brff`/`bricmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

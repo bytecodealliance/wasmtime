@@ -1,0 +1,316 @@
+;; the interpreter does not support `selectif_spectre_guard`.
+test run
+set enable_llvm_abi_extensions=true
+target aarch64
+target s390x
+target x86_64
+
+function %selectif_spectre_guard_i8_eq(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i8 eq v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i8_eq(0, 32, 255) == 255
+; run: %selectif_spectre_guard_i8_eq(255, 32, -1) == -1
+; run: %selectif_spectre_guard_i8_eq(42, 32, 255) == 32
+
+function %selectif_spectre_guard_i16_eq(i8, i16, i16) -> i16 {
+block0(v0: i8, v1: i16, v2: i16):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i16 eq v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i16_eq(0, 32, 65535) == 65535
+; run: %selectif_spectre_guard_i16_eq(255, 32, -1) == -1
+; run: %selectif_spectre_guard_i16_eq(42, 32, 65535) == 32
+
+function %selectif_spectre_guard_i32_eq(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i32 eq v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i32_eq(0, 32, 4294967295) == 4294967295
+; run: %selectif_spectre_guard_i32_eq(255, 32, -1) == -1
+; run: %selectif_spectre_guard_i32_eq(42, 32, 4294967295) == 32
+
+function %selectif_spectre_guard_i64_eq(i8, i64, i64) -> i64 {
+block0(v0: i8, v1: i64, v2: i64):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i64 eq v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i64_eq(0, 32, 18446744073709551615) == 18446744073709551615
+; run: %selectif_spectre_guard_i64_eq(255, 32, -1) == -1
+; run: %selectif_spectre_guard_i64_eq(42, 32, 18446744073709551615) == 32
+
+function %selectif_spectre_guard_i128_eq(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i128 eq v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i128_eq(0, 32, 19000000000000000000) == 19000000000000000000
+; run: %selectif_spectre_guard_i128_eq(255, 32, -1) == -1
+; run: %selectif_spectre_guard_i128_eq(42, 32, 19000000000000000000) == 32
+
+function %selectif_spectre_guard_i8_ult(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i8 ult v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i8_ult(0, 32, 255) == 32
+; run: %selectif_spectre_guard_i8_ult(255, 32, -1) == -1
+; run: %selectif_spectre_guard_i8_ult(42, 32, 255) == 255
+
+function %selectif_spectre_guard_i16_ult(i8, i16, i16) -> i16 {
+block0(v0: i8, v1: i16, v2: i16):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i16 ult v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i16_ult(0, 32, 65535) == 32
+; run: %selectif_spectre_guard_i16_ult(255, 32, -1) == -1
+; run: %selectif_spectre_guard_i16_ult(42, 32, 65535) == 65535
+
+function %selectif_spectre_guard_i32_ult(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i32 ult v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i32_ult(0, 32, 4294967295) == 32
+; run: %selectif_spectre_guard_i32_ult(255, 32, -1) == -1
+; run: %selectif_spectre_guard_i32_ult(42, 32, 4294967295) == 4294967295
+
+function %selectif_spectre_guard_i64_ult(i8, i64, i64) -> i64 {
+block0(v0: i8, v1: i64, v2: i64):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i64 ult v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i64_ult(0, 32, 18446744073709551615) == 32
+; run: %selectif_spectre_guard_i64_ult(255, 32, -1) == -1
+; run: %selectif_spectre_guard_i64_ult(42, 32, 18446744073709551615) == 18446744073709551615
+
+function %selectif_spectre_guard_i128_ult(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i128 ult v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i128_ult(0, 32, 19000000000000000000) == 32
+; run: %selectif_spectre_guard_i128_ult(255, 32, -1) == -1
+; run: %selectif_spectre_guard_i128_ult(42, 32, 19000000000000000000) == 19000000000000000000
+
+function %selectif_spectre_guard_i8_ule(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i8 ule v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i8_ule(0, 32, 255) == 32
+; run: %selectif_spectre_guard_i8_ule(255, 32, -1) == -1
+; run: %selectif_spectre_guard_i8_ule(42, 32, 255) == 32
+
+function %selectif_spectre_guard_i16_ule(i8, i16, i16) -> i16 {
+block0(v0: i8, v1: i16, v2: i16):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i16 ule v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i16_ule(0, 32, 65535) == 32
+; run: %selectif_spectre_guard_i16_ule(255, 32, -1) == -1
+; run: %selectif_spectre_guard_i16_ule(42, 32, 65535) == 32
+
+function %selectif_spectre_guard_i32_ule(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i32 ule v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i32_ule(0, 32, 4294967295) == 32
+; run: %selectif_spectre_guard_i32_ule(255, 32, -1) == -1
+; run: %selectif_spectre_guard_i32_ule(42, 32, 4294967295) == 32
+
+function %selectif_spectre_guard_i64_ule(i8, i64, i64) -> i64 {
+block0(v0: i8, v1: i64, v2: i64):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i64 ule v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i64_ule(0, 32, 18446744073709551615) == 32
+; run: %selectif_spectre_guard_i64_ule(255, 32, -1) == -1
+; run: %selectif_spectre_guard_i64_ule(42, 32, 18446744073709551615) == 32
+
+function %selectif_spectre_guard_i128_ule(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i128 ule v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i128_ule(0, 32, 19000000000000000000) == 32
+; run: %selectif_spectre_guard_i128_ule(255, 32, -1) == -1
+; run: %selectif_spectre_guard_i128_ule(42, 32, 19000000000000000000) == 32
+
+function %selectif_spectre_guard_i8_slt(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i8 slt v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i8_slt(0, 32, 255) == 32
+; run: %selectif_spectre_guard_i8_slt(-128, 32, -1) == 32
+; run: %selectif_spectre_guard_i8_slt(42, 32, 255) == 255
+
+function %selectif_spectre_guard_i16_slt(i8, i16, i16) -> i16 {
+block0(v0: i8, v1: i16, v2: i16):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i16 slt v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i16_slt(0, 32, 65535) == 32
+; run: %selectif_spectre_guard_i16_slt(-128, 32, -1) == 32
+; run: %selectif_spectre_guard_i16_slt(42, 32, 65535) == 65535
+
+function %selectif_spectre_guard_i32_slt(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i32 slt v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i32_slt(0, 32, 4294967295) == 32
+; run: %selectif_spectre_guard_i32_slt(-128, 32, -1) == 32
+; run: %selectif_spectre_guard_i32_slt(42, 32, 4294967295) == 4294967295
+
+function %selectif_spectre_guard_i64_slt(i8, i64, i64) -> i64 {
+block0(v0: i8, v1: i64, v2: i64):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i64 slt v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i64_slt(0, 32, 18446744073709551615) == 32
+; run: %selectif_spectre_guard_i64_slt(-128, 32, -1) == 32
+; run: %selectif_spectre_guard_i64_slt(42, 32, 18446744073709551615) == 18446744073709551615
+
+function %selectif_spectre_guard_i128_slt(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i128 slt v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i128_slt(0, 32, 19000000000000000000) == 32
+; run: %selectif_spectre_guard_i128_slt(-128, 32, -1) == 32
+; run: %selectif_spectre_guard_i128_slt(42, 32, 19000000000000000000) == 19000000000000000000
+
+function %selectif_spectre_guard_i8_sle(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i8 sle v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i8_sle(0, 32, 127) == 32
+; run: %selectif_spectre_guard_i8_sle(-128, 32, -1) == 32
+; run: %selectif_spectre_guard_i8_sle(127, 32, -1) == -1
+; run: %selectif_spectre_guard_i8_sle(127, 32, 127) == 127
+; run: %selectif_spectre_guard_i8_sle(42, 32, 127) == 32
+
+function %selectif_spectre_guard_i16_sle(i8, i16, i16) -> i16 {
+block0(v0: i8, v1: i16, v2: i16):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i16 sle v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i16_sle(0, 32, 65535) == 32
+; run: %selectif_spectre_guard_i16_sle(-128, 32, -1) == 32
+; run: %selectif_spectre_guard_i16_sle(127, 32, -1) == -1
+; run: %selectif_spectre_guard_i16_sle(127, 32, 65535) == 65535
+; run: %selectif_spectre_guard_i16_sle(42, 32, 65535) == 32
+
+function %selectif_spectre_guard_i32_sle(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i32 sle v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i32_sle(0, 32, 4294967295) == 32
+; run: %selectif_spectre_guard_i32_sle(-128, 32, -1) == 32
+; run: %selectif_spectre_guard_i32_sle(127, 32, -1) == -1
+; run: %selectif_spectre_guard_i32_sle(127, 32, 4294967295) == 4294967295
+; run: %selectif_spectre_guard_i32_sle(42, 32, 4294967295) == 32
+
+function %selectif_spectre_guard_i64_sle(i8, i64, i64) -> i64 {
+block0(v0: i8, v1: i64, v2: i64):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i64 sle v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i64_sle(0, 32, 18446744073709551615) == 32
+; run: %selectif_spectre_guard_i64_sle(-128, 32, -1) == 32
+; run: %selectif_spectre_guard_i64_sle(127, 32, -1) == -1
+; run: %selectif_spectre_guard_i64_sle(127, 32, 18446744073709551615) == 18446744073709551615
+; run: %selectif_spectre_guard_i64_sle(42, 32, 18446744073709551615) == 32
+
+function %selectif_spectre_guard_i128_sle(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif_spectre_guard.i128 sle v4, v1, v2
+  return v5
+}
+
+; run: %selectif_spectre_guard_i128_sle(0, 32, 19000000000000000000) == 32
+; run: %selectif_spectre_guard_i128_sle(-128, 32, -1) == 32
+; run: %selectif_spectre_guard_i128_sle(127, 32, -1) == -1
+; run: %selectif_spectre_guard_i128_sle(127, 32, 19000000000000000000) == 19000000000000000000
+; run: %selectif_spectre_guard_i128_sle(42, 32, 19000000000000000000) == 32

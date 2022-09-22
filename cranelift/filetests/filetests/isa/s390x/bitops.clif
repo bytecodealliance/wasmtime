@@ -347,9 +347,10 @@ block0(v0: i32):
 }
 
 ; block0:
-;   oihl %r2, 1
-;   lcgr %r3, %r2
-;   ngrk %r5, %r2, %r3
+;   lgr %r5, %r2
+;   oihl %r5, 1
+;   lcgr %r3, %r5
+;   ngr %r5, %r3
 ;   flogr %r0, %r5
 ;   lhi %r4, 63
 ;   srk %r2, %r4, %r0
@@ -362,9 +363,10 @@ block0(v0: i16):
 }
 
 ; block0:
-;   oilh %r2, 1
-;   lcgr %r3, %r2
-;   ngrk %r5, %r2, %r3
+;   lgr %r5, %r2
+;   oilh %r5, 1
+;   lcgr %r3, %r5
+;   ngr %r5, %r3
 ;   flogr %r0, %r5
 ;   lhi %r4, 63
 ;   srk %r2, %r4, %r0
@@ -377,9 +379,10 @@ block0(v0: i8):
 }
 
 ; block0:
-;   oill %r2, 256
-;   lcgr %r3, %r2
-;   ngrk %r5, %r2, %r3
+;   lgr %r5, %r2
+;   oill %r5, 256
+;   lcgr %r3, %r5
+;   ngr %r5, %r3
 ;   flogr %r0, %r5
 ;   lhi %r4, 63
 ;   srk %r2, %r4, %r0
