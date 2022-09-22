@@ -24,7 +24,6 @@ pub(crate) fn lower_insn_to_regs(
     isa_flags: &aarch64_settings::Flags,
 ) -> CodegenResult<()> {
     let op = ctx.data(insn).opcode();
-    let inputs = insn_inputs(ctx, insn);
     let outputs = insn_outputs(ctx, insn);
     let ty = if outputs.len() > 0 {
         Some(ctx.output_ty(insn, 0))
@@ -140,131 +139,15 @@ pub(crate) fn lower_insn_to_regs(
             // Nothing.
         }
 
-        Opcode::Select => {
-            let flag_input = inputs[0];
-            let cond = if let Some(icmp_insn) =
-                maybe_input_insn_via_conv(ctx, flag_input, Opcode::Icmp, Opcode::Bint)
-            {
-                let condcode = ctx.data(icmp_insn).cond_code().unwrap();
-                lower_icmp(ctx, icmp_insn, condcode, IcmpOutput::CondCode)?.unwrap_cond()
-            } else if let Some(fcmp_insn) =
-                maybe_input_insn_via_conv(ctx, flag_input, Opcode::Fcmp, Opcode::Bint)
-            {
-                let condcode = ctx.data(fcmp_insn).fp_cond_code().unwrap();
-                let cond = lower_fp_condcode(condcode);
-                lower_fcmp_or_ffcmp_to_flags(ctx, fcmp_insn);
-                cond
-            } else {
-                let (size, narrow_mode) = if ty_bits(ctx.input_ty(insn, 0)) > 32 {
-                    (OperandSize::Size64, NarrowValueMode::ZeroExtend64)
-                } else {
-                    (OperandSize::Size32, NarrowValueMode::ZeroExtend32)
-                };
+        Opcode::Select => implemented_in_isle(ctx),
 
-                let rcond = put_input_in_reg(ctx, inputs[0], narrow_mode);
-                // cmp rcond, #0
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::SubS,
-                    size,
-                    rd: writable_zero_reg(),
-                    rn: rcond,
-                    rm: zero_reg(),
-                });
-                Cond::Ne
-            };
-
-            // csel.cond rd, rn, rm
-            let ty = ctx.output_ty(insn, 0);
-            let bits = ty_bits(ty);
-            let is_float = ty_has_float_or_vec_representation(ty);
-
-            let dst = get_output_reg(ctx, outputs[0]);
-            let lhs = put_input_in_regs(ctx, inputs[1]);
-            let rhs = put_input_in_regs(ctx, inputs[2]);
-
-            let rd = dst.regs()[0];
-            let rn = lhs.regs()[0];
-            let rm = rhs.regs()[0];
-
-            match (is_float, bits) {
-                (true, 32) => ctx.emit(Inst::FpuCSel32 { cond, rd, rn, rm }),
-                (true, 64) => ctx.emit(Inst::FpuCSel64 { cond, rd, rn, rm }),
-                (true, 128) => ctx.emit(Inst::VecCSel { cond, rd, rn, rm }),
-                (false, 128) => {
-                    ctx.emit(Inst::CSel {
-                        cond,
-                        rd: dst.regs()[0],
-                        rn: lhs.regs()[0],
-                        rm: rhs.regs()[0],
-                    });
-                    ctx.emit(Inst::CSel {
-                        cond,
-                        rd: dst.regs()[1],
-                        rn: lhs.regs()[1],
-                        rm: rhs.regs()[1],
-                    });
-                }
-                (false, bits) if bits <= 64 => ctx.emit(Inst::CSel { cond, rd, rn, rm }),
-                _ => {
-                    return Err(CodegenError::Unsupported(format!(
-                        "Select: Unsupported type: {:?}",
-                        ty
-                    )));
-                }
-            }
-        }
-
-        Opcode::Selectif | Opcode::SelectifSpectreGuard => {
-            let condcode = ctx.data(insn).cond_code().unwrap();
-            // Verification ensures that the input is always a
-            // single-def ifcmp.
-            let ifcmp_insn = maybe_input_insn(ctx, inputs[0], Opcode::Ifcmp).unwrap();
-            let cond = lower_icmp(ctx, ifcmp_insn, condcode, IcmpOutput::CondCode)?.unwrap_cond();
-
-            // csel.COND rd, rn, rm
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let rm = put_input_in_reg(ctx, inputs[2], NarrowValueMode::None);
-            let ty = ctx.output_ty(insn, 0);
-            let bits = ty_bits(ty);
-            let is_float = ty_has_float_or_vec_representation(ty);
-            if is_float && bits == 32 {
-                ctx.emit(Inst::FpuCSel32 { cond, rd, rn, rm });
-            } else if is_float && bits == 64 {
-                ctx.emit(Inst::FpuCSel64 { cond, rd, rn, rm });
-            } else if !is_float && bits <= 64 {
-                ctx.emit(Inst::CSel { cond, rd, rn, rm });
-            } else {
-                return Err(CodegenError::Unsupported(format!(
-                    "{}: Unsupported type: {:?}",
-                    op, ty
-                )));
-            }
-
-            if op == Opcode::SelectifSpectreGuard {
-                ctx.emit(Inst::Csdb);
-            }
-        }
+        Opcode::Selectif | Opcode::SelectifSpectreGuard => implemented_in_isle(ctx),
 
         Opcode::Bitselect | Opcode::Vselect => implemented_in_isle(ctx),
 
-        Opcode::Trueif => {
-            let condcode = ctx.data(insn).cond_code().unwrap();
-            // Verification ensures that the input is always a
-            // single-def ifcmp.
-            let ifcmp_insn = maybe_input_insn(ctx, inputs[0], Opcode::Ifcmp).unwrap();
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            lower_icmp(ctx, ifcmp_insn, condcode, IcmpOutput::Register(rd))?;
-        }
+        Opcode::Trueif => implemented_in_isle(ctx),
 
-        Opcode::Trueff => {
-            let condcode = ctx.data(insn).fp_cond_code().unwrap();
-            let cond = lower_fp_condcode(condcode);
-            let ffcmp_insn = maybe_input_insn(ctx, inputs[0], Opcode::Ffcmp).unwrap();
-            lower_fcmp_or_ffcmp_to_flags(ctx, ffcmp_insn);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            materialize_bool_result(ctx, insn, rd, cond);
-        }
+        Opcode::Trueff => implemented_in_isle(ctx),
 
         Opcode::IsNull | Opcode::IsInvalid => implemented_in_isle(ctx),
 
@@ -296,39 +179,7 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::Trap | Opcode::ResumableTrap => implemented_in_isle(ctx),
 
-        Opcode::Trapif | Opcode::Trapff => {
-            let trap_code = ctx.data(insn).trap_code().unwrap();
-
-            let cond = if maybe_input_insn(ctx, inputs[0], Opcode::IaddIfcout).is_some() {
-                let condcode = ctx.data(insn).cond_code().unwrap();
-                let cond = lower_condcode(condcode);
-                // The flags must not have been clobbered by any other
-                // instruction between the iadd_ifcout and this instruction, as
-                // verified by the CLIF validator; so we can simply use the
-                // flags here.
-                cond
-            } else if op == Opcode::Trapif {
-                let condcode = ctx.data(insn).cond_code().unwrap();
-
-                // Verification ensures that the input is always a single-def ifcmp.
-                let ifcmp_insn = maybe_input_insn(ctx, inputs[0], Opcode::Ifcmp).unwrap();
-                lower_icmp(ctx, ifcmp_insn, condcode, IcmpOutput::CondCode)?.unwrap_cond()
-            } else {
-                let condcode = ctx.data(insn).fp_cond_code().unwrap();
-                let cond = lower_fp_condcode(condcode);
-
-                // Verification ensures that the input is always a
-                // single-def ffcmp.
-                let ffcmp_insn = maybe_input_insn(ctx, inputs[0], Opcode::Ffcmp).unwrap();
-                lower_fcmp_or_ffcmp_to_flags(ctx, ffcmp_insn);
-                cond
-            };
-
-            ctx.emit(Inst::TrapIf {
-                trap_code,
-                kind: CondBrKind::Cond(cond),
-            });
-        }
+        Opcode::Trapif | Opcode::Trapff => implemented_in_isle(ctx),
 
         Opcode::Trapz | Opcode::Trapnz | Opcode::ResumableTrapnz => {
             panic!("trapz / trapnz / resumable_trapnz should have been removed by legalization!");
