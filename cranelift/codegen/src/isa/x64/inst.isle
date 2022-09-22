@@ -1347,7 +1347,8 @@
 ;;;; Helpers for Working With Integer Comparison Codes ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 
-;; An extractor that returns `true` when
+;; An extractor that returns `$true` when the comparison given is an ordered
+;; comparison, and `$false` for == and !=.
 (decl intcc_is_ordered (bool) IntCC)
 (extern extractor infallible intcc_is_ordered intcc_is_ordered)
 
@@ -1847,7 +1848,7 @@
                  src2))
 
 ;; Helper for emitting immediates with an `i64` value. Note that
-;; integer constants in ISLE are always parsed as `i64`s; this enables
+;; integer constants in ISLE are always parsed as `i128`s; this enables
 ;; negative numbers to be used as immediates.
 (decl imm_i64 (Type i64) Reg)
 (rule (imm_i64 ty value)
