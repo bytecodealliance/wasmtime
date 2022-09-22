@@ -103,6 +103,9 @@ struct SSABlockData {
     // edges. This is used in `use_var_nonlocal`, which can avoid adding block parameters as long
     // as it can find a unique block to get a variable's definition from.
     in_predecessor_cycle: bool,
+    // A block is sealed with respect to predecessor cycles if its `in_predecessor_cycle` flag
+    // can't change.
+    sealed_predecessors: bool,
     // List of current Block arguments for which an earlier def has not been found yet.
     undef_variables: Vec<(Variable, Value)>,
 }
@@ -415,6 +418,12 @@ impl SSABuilder {
             while pred != block {
                 let pred_ref = &self.ssa_blocks[pred];
 
+                if pred_ref.sealed_predecessors {
+                    // We're changing `block`'s predecessors, and we've reached a block whose
+                    // single-predecessor path can't change, so `block` must not be on that path.
+                    return;
+                }
+
                 // In cases 2 and 3, we aren't forming a cycle so there's nothing to update.
                 if pred_ref.in_predecessor_cycle || pred_ref.predecessors.len() != 1 {
                     return;
@@ -498,11 +507,29 @@ impl SSABuilder {
 
     /// Set the `sealed` flag for `block`.
     fn mark_block_sealed(&mut self, block: Block) {
-        // Then we mark the block as sealed.
+        // This sealed block's `in_predecessor_cycle` flag can't change once either:
+        let sealed_predecessors = match &self.ssa_blocks[block].predecessors[..] {
+            // It has exactly one predecessor where the flag also can't change;
+            [pred] => pred.block == block || self.ssa_blocks[pred.block].sealed_predecessors,
+            // Or we can tell locally that it isn't part of a predecessor cycle.
+            _ => {
+                debug_assert!(!self.ssa_blocks[block].in_predecessor_cycle);
+                true
+            }
+        };
+        // Note that we only update `sealed_predecessors` at the time that this block is sealed,
+        // and using information from one predecessor at most. If this block is sealed before its
+        // predecessor, then we conservatively assume that `in_predecessor_cycle` could still
+        // change at any time. So `update_predecessor_cycle` will do more work than it would if we
+        // computed this precisely, but this function remains constant-time. Frontends which seal
+        // every block as soon as possible, like cranelift-wasm, shouldn't see much difference.
+
         let block_data = &mut self.ssa_blocks[block];
         debug_assert!(!block_data.sealed);
+        debug_assert!(!block_data.sealed_predecessors);
         debug_assert!(block_data.undef_variables.is_empty());
         block_data.sealed = true;
+        block_data.sealed_predecessors = sealed_predecessors;
 
         // We could call data.predecessors.shrink_to_fit() here, if
         // important, because no further predecessors will be added
