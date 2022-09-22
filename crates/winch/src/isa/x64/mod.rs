@@ -4,6 +4,7 @@ use target_lexicon::Triple;
 use wasmtime_environ::{FunctionBodyData, WasmFuncType};
 
 mod abi;
+mod masm;
 mod regs;
 
 /// Create an ISA from the given triple
@@ -43,7 +44,9 @@ impl TargetIsa for X64 {
         // 3. Check for usage of ref types
         //     * Panic if using ref types
         // 4. Create a compilation_env and call `emit`
-        let env = CompilationEnv::new(sig, body, abi::X64ABI::default())?;
+        let abi = abi::X64ABI::default();
+        let asm = masm::MacroAssembler::default();
+        let env = CompilationEnv::new(sig, body, abi, asm)?;
 
         todo!()
     }

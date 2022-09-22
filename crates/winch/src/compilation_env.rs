@@ -4,6 +4,7 @@ use wasmtime_environ::{FunctionBodyData, WasmFuncType, WasmType};
 
 use crate::abi::{align_to, ty_size};
 use crate::frame::Frame;
+use crate::masm::MacroAssembler;
 use anyhow::Result;
 
 // TODO:
@@ -12,7 +13,7 @@ use anyhow::Result;
 type Locals = SmallVec<[LocalSlot; 16]>;
 
 /// Per-function compilation environment
-pub(crate) struct CompilationEnv<'x, 'a: 'x, A: ABI, C: Assembler> {
+pub(crate) struct CompilationEnv<'x, 'a: 'x, A: ABI, C: MacroAssembler> {
     /// A reference to the function body
     function: &'x mut FunctionBodyData<'a>,
 
@@ -27,17 +28,20 @@ pub(crate) struct CompilationEnv<'x, 'a: 'x, A: ABI, C: Assembler> {
     /// The ABI used in this compilation environment
     abi: A,
 
+    /// The macro assembler used in this compilation environment
+    masm: C,
+
     /// The ABI-specific representation of the function signature
     sig: ABISig,
 }
 
-impl<'x, 'a: 'x, A: ABI, C: Assembler> CompilationEnv<'x, 'a, A, C> {
+impl<'x, 'a: 'x, A: ABI, C: MacroAssembler> CompilationEnv<'x, 'a, A, C> {
     /// Allocate a new compilation environment
     pub fn new(
         signature: &WasmFuncType,
         function: &'x mut FunctionBodyData<'a>,
         abi: A,
-        asm: C,
+        masm: C,
     ) -> Result<Self> {
         let sig = abi.sig(&signature);
         let (locals, locals_size) = compute_local_slots(&sig, function, &abi)?;
@@ -48,7 +52,7 @@ impl<'x, 'a: 'x, A: ABI, C: Assembler> CompilationEnv<'x, 'a, A, C> {
             locals,
             frame: Frame::new(locals_size),
             function,
-            asm,
+            masm,
         })
     }
 

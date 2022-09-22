@@ -4,6 +4,7 @@ use target_lexicon::Triple;
 use wasmtime_environ::{FunctionBodyData, WasmFuncType};
 
 mod abi;
+mod masm;
 mod regs;
 
 /// Create an ISA from the given triple
@@ -35,7 +36,10 @@ impl TargetIsa for Aarch64 {
         sig: &WasmFuncType,
         body: &mut FunctionBodyData,
     ) -> Result<&'static str> {
-        let env = CompilationEnv::new(sig, body, abi::Aarch64ABI::default())?;
+        let abi = abi::Aarch64ABI::default();
+        let asm = masm::MacroAssembler::default();
+        let env = CompilationEnv::new(sig, body, abi, asm)?;
+
         todo!()
     }
 }
