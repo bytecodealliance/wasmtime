@@ -86,8 +86,8 @@ fn create_gba (backend: wasi_nn::GraphEncoding) ->Vec<Vec<u8>>  {
         wasi_nn::GRAPH_ENCODING_TENSORFLOW => {
             let model_path: String = env!("MAPDIR").to_string();
             Vec::from([model_path.into_bytes(),
-                        "signature,serving_default".to_owned().into_bytes(),
-                        "tag,serve".to_owned().into_bytes(),
+                        "serving_default".to_owned().into_bytes(),
+                        "serve".to_owned().into_bytes(),
                         ])
         },
         _ => {

@@ -3,7 +3,6 @@
 use crate::api::{Backend, BackendError, BackendExecutionContext, BackendGraph};
 use crate::witx::types::{ExecutionTarget, GraphBuilderArray, Tensor, TensorType};
 use anyhow::anyhow;
-use std::convert::TryInto;
 use std::path::{Path, PathBuf};
 use std::str;
 use std::sync::Arc;
@@ -49,24 +48,25 @@ impl Backend for TensorflowBackend {
             let mapped_directory =
                 build_path(&guest_map, map_dirs).ok_or(BackendError::MissingMapDir())?;
             let mut tags: Vec<String> = vec![];
-            let mut itr: u32 = 1;
-            let mut signature = DEFAULT_SERVING_SIGNATURE_DEF_KEY.to_string();
+            let mut signature_str = DEFAULT_SERVING_SIGNATURE_DEF_KEY.to_string();
 
-            // Get all the user provided options.
-            while itr < builders_len {
-                let opt = builders.add(itr)?.read()?.as_slice()?.to_owned();
-                let mut opt_str = str::from_utf8(&opt).ok().unwrap().split(',');
+            if builders_len > 1 {
+                // Get the user provided signature.
+                signature_str = str::from_utf8(&builders.add(1)?.read()?.as_slice()?)
+                    .unwrap()
+                    .to_owned();
 
-                match opt_str.next().unwrap() {
-                    "signature" => {
-                        signature = opt_str.next().unwrap().to_owned();
-                    }
-                    "tag" => tags.push(opt_str.next().unwrap().to_owned()),
-                    o => {
-                        println!("** Unknown Tensorflow option {}, ignoring... **", o);
+                if builders_len > 2 {
+                    // Get all the user provided tags.
+                    let mut itr: u32 = 2;
+                    while itr < builders_len {
+                        let opt = str::from_utf8(&builders.add(itr)?.read()?.as_slice()?)
+                            .unwrap()
+                            .to_owned();
+                        tags.push(opt);
+                        itr += 1;
                     }
                 }
-                itr += 1;
             }
 
             // If no tags were provided, try using 'serve' as a default.
@@ -84,7 +84,10 @@ impl Backend for TensorflowBackend {
             )?;
 
             // Extract the model signature.
-            let signature = bundle.meta_graph_def().get_signature(&signature)?.clone();
+            let signature = bundle
+                .meta_graph_def()
+                .get_signature(&signature_str)?
+                .clone();
 
             return Ok(Box::new(TensorflowGraph {
                 graph: Arc::new(graph),
