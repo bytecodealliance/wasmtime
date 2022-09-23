@@ -25,7 +25,7 @@ use target_lexicon::{PointerWidth, Triple};
 /// Note that this is encoded in a `u16` currently for extensibility,
 /// but allows only 14 bits to be used due to some bitpacking tricks
 /// in the CLIF data structures.
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Type(u16);
 

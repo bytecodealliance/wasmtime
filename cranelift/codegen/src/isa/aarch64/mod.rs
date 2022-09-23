@@ -62,7 +62,15 @@ impl AArch64Backend {
         let emit_info = EmitInfo::new(flags.clone());
         let sigs = SigSet::new::<abi::AArch64MachineDeps>(func, &self.flags)?;
         let abi = abi::AArch64Callee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<AArch64Backend>(func, self, abi, &self.machine_env, emit_info, sigs)
+        compile::compile::<AArch64Backend>(
+            func,
+            flags,
+            self,
+            abi,
+            &self.machine_env,
+            emit_info,
+            sigs,
+        )
     }
 }
 

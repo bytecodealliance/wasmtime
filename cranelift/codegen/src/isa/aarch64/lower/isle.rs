@@ -34,6 +34,7 @@ use crate::{
         abi::ArgPair, ty_bits, InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData,
     },
 };
+use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use regalloc2::PReg;
 use std::boxed::Box;
 use std::convert::TryFrom;
@@ -77,7 +78,7 @@ impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 }
 
 impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
-    isle_prelude_methods!();
+    isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(crate::isa::aarch64::abi::AArch64MachineDeps, AArch64Caller);
 
     fn sign_return_address_disabled(&mut self) -> Option<()> {

@@ -7,6 +7,7 @@ use crate::{
     ir::AtomicRmwOp,
     machinst::{InputSourceInst, Reg, Writable},
 };
+use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use generated_code::{Context, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
@@ -92,7 +93,7 @@ pub(crate) fn lower_branch(
 }
 
 impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
-    isle_prelude_methods!();
+    isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(X64ABIMachineSpec, X64Caller);
 
     #[inline]

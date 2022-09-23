@@ -147,6 +147,9 @@ pub struct Lower<'func, I: VCodeInst> {
     /// The function to lower.
     f: &'func Function,
 
+    /// Machine-independent flags.
+    flags: crate::settings::Flags,
+
     /// Lowered machine instructions.
     vcode: VCodeBuilder<I>,
 
@@ -345,6 +348,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Prepare a new lowering context for the given IR function.
     pub fn new(
         f: &'func Function,
+        flags: crate::settings::Flags,
         abi: Callee<I::ABIMachineSpec>,
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
@@ -433,6 +437,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         Ok(Lower {
             f,
+            flags,
             vcode,
             value_regs,
             retval_regs,
@@ -1265,26 +1270,30 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             assert!(!self.inst_sunk.contains(&inst));
         }
 
-        // If the value is a constant, then (re)materialize it at each use. This
-        // lowers register pressure.
-        if let Some(c) = self
-            .f
-            .dfg
-            .value_def(val)
-            .inst()
-            .and_then(|inst| self.get_constant(inst))
-        {
-            let regs = self.alloc_tmp(ty);
-            trace!(" -> regs {:?}", regs);
-            assert!(regs.is_valid());
+        // If the value is a constant, then (re)materialize it at each
+        // use. This lowers register pressure. (Only do this if we are
+        // not using egraph-based compilation; the egraph framework
+        // more efficiently rematerializes constants where needed.)
+        if !self.flags.use_egraphs() {
+            if let Some(c) = self
+                .f
+                .dfg
+                .value_def(val)
+                .inst()
+                .and_then(|inst| self.get_constant(inst))
+            {
+                let regs = self.alloc_tmp(ty);
+                trace!(" -> regs {:?}", regs);
+                assert!(regs.is_valid());
 
-            let insts = I::gen_constant(regs, c.into(), ty, |ty| {
-                self.alloc_tmp(ty).only_reg().unwrap()
-            });
-            for inst in insts {
-                self.emit(inst);
+                let insts = I::gen_constant(regs, c.into(), ty, |ty| {
+                    self.alloc_tmp(ty).only_reg().unwrap()
+                });
+                for inst in insts {
+                    self.emit(inst);
+                }
+                return non_writable_value_regs(regs);
             }
-            return non_writable_value_regs(regs);
         }
 
         let mut regs = self.value_regs[val];

@@ -120,6 +120,23 @@ impl DataFlowGraph {
         self.immediates.clear();
     }
 
+    /// Clear all instructions, but keep blocks and other metadata
+    /// (signatures, constants, immediates). Everything to do with
+    /// `Value`s is cleared, including block params and debug info.
+    ///
+    /// Used during egraph-based optimization to clear out the pre-opt
+    /// body so that we can regenerate it from the egraph.
+    pub(crate) fn clear_insts(&mut self) {
+        self.insts.clear();
+        self.results.clear();
+        self.value_lists.clear();
+        self.values.clear();
+        self.values_labels = None;
+        for block in self.blocks.values_mut() {
+            block.params = ValueList::new();
+        }
+    }
+
     /// Get the total number of instructions created in this function, whether they are currently
     /// inserted in the layout or not.
     ///

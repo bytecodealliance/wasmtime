@@ -10,6 +10,7 @@ use crate::ir::{Block, Function, Layout};
 use crate::packed_option::PackedOption;
 use crate::timing;
 use alloc::vec::Vec;
+use smallvec::{smallvec, SmallVec};
 
 /// A opaque reference to a code loop.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -29,6 +30,39 @@ pub struct LoopAnalysis {
 struct LoopData {
     header: Block,
     parent: PackedOption<Loop>,
+    level: LoopLevel,
+}
+
+/// A level in a loop nest.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LoopLevel(u8);
+impl LoopLevel {
+    /// Get the root level (no loop).
+    pub fn root() -> Self {
+        Self(0)
+    }
+    /// Get the loop level.
+    pub fn level(self) -> usize {
+        self.0 as usize
+    }
+    /// Invalid loop level.
+    pub fn invalid() -> Self {
+        Self(0x80)
+    }
+    /// One loop level deeper.
+    pub fn inc(self) -> Self {
+        if self.0 == 0x7f {
+            Self(0x7f)
+        } else {
+            Self(self.0 + 1)
+        }
+    }
+}
+
+impl std::default::Default for LoopLevel {
+    fn default() -> Self {
+        LoopLevel::invalid()
+    }
 }
 
 impl LoopData {
@@ -37,6 +71,7 @@ impl LoopData {
         Self {
             header,
             parent: parent.into(),
+            level: LoopLevel::invalid(),
         }
     }
 }
@@ -71,6 +106,19 @@ impl LoopAnalysis {
         self.loops[lp].parent.expand()
     }
 
+    /// Return the innermost loop for a given block.
+    pub fn innermost_loop(&self, block: Block) -> Option<Loop> {
+        self.block_loop_map[block].expand()
+    }
+
+    /// Determine if a Block is a loop header. If so, return the loop.
+    pub fn is_loop_header(&self, block: Block) -> Option<Loop> {
+        self.innermost_loop(block)
+            .map(|lp| (self.loop_header(lp), lp))
+            .filter(|&(header, _)| header == block)
+            .map(|(_, lp)| lp)
+    }
+
     /// Determine if a Block belongs to a loop by running a finger along the loop tree.
     ///
     /// Returns `true` if `block` is in loop `lp`.
@@ -96,6 +144,14 @@ impl LoopAnalysis {
         }
         false
     }
+
+    /// Returns the loop-nest level of a given block.
+    pub fn loop_level(&self, block: Block) -> LoopLevel {
+        self.block_loop_map[block]
+            .expand()
+            .map(|lp| self.loops[lp].level)
+            .unwrap_or(LoopLevel(0))
+    }
 }
 
 impl LoopAnalysis {
@@ -107,6 +163,7 @@ impl LoopAnalysis {
         self.block_loop_map.resize(func.dfg.num_blocks());
         self.find_loop_headers(cfg, domtree, &func.layout);
         self.discover_loop_blocks(cfg, domtree, &func.layout);
+        self.assign_loop_levels();
         self.valid = true;
     }
 
@@ -223,6 +280,28 @@ impl LoopAnalysis {
                 if let Some(continue_dfs) = continue_dfs {
                     for BlockPredecessor { block: pred, .. } in cfg.pred_iter(continue_dfs) {
                         stack.push(pred)
+                    }
+                }
+            }
+        }
+    }
+
+    fn assign_loop_levels(&mut self) {
+        let mut stack: SmallVec<[Loop; 8]> = smallvec![];
+        for lp in self.loops.keys() {
+            if self.loops[lp].level == LoopLevel::invalid() {
+                stack.push(lp);
+                while let Some(&lp) = stack.last() {
+                    if let Some(parent) = self.loops[lp].parent.into() {
+                        if self.loops[parent].level != LoopLevel::invalid() {
+                            self.loops[lp].level = self.loops[parent].level.inc();
+                            stack.pop();
+                        } else {
+                            stack.push(parent);
+                        }
+                    } else {
+                        self.loops[lp].level = LoopLevel(1);
+                        stack.pop();
                     }
                 }
             }

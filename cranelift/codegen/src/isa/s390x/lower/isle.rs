@@ -24,6 +24,7 @@ use crate::{
     machinst::abi::ABIMachineSpec,
     machinst::{ArgPair, InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData},
 };
+use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use regalloc2::PReg;
 use smallvec::{smallvec, SmallVec};
 use std::boxed::Box;
@@ -88,7 +89,7 @@ pub(crate) fn lower_branch(
 }
 
 impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
-    isle_prelude_methods!();
+    isle_lower_prelude_methods!();
 
     fn abi_sig(&mut self, sig_ref: SigRef) -> Sig {
         self.lower_ctx.sigs().abi_sig_for_sig_ref(sig_ref)

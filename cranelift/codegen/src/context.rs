@@ -12,6 +12,7 @@
 use crate::alias_analysis::AliasAnalysis;
 use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
+use crate::egg::FuncEGraph;
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
@@ -49,6 +50,9 @@ pub struct Context {
     /// Loop analysis of `func`.
     pub loop_analysis: LoopAnalysis,
 
+    /// Has the function been optimized via `optimize()`?
+    pub optimized: bool,
+
     /// Result of MachBackend compilation, if computed.
     pub(crate) compiled_code: Option<CompiledCode>,
 
@@ -75,6 +79,7 @@ impl Context {
             cfg: ControlFlowGraph::new(),
             domtree: DominatorTree::new(),
             loop_analysis: LoopAnalysis::new(),
+            optimized: false,
             compiled_code: None,
             want_disasm: false,
         }
@@ -86,6 +91,7 @@ impl Context {
         self.cfg.clear();
         self.domtree.clear();
         self.loop_analysis.clear();
+        self.optimized = false;
         self.compiled_code = None;
         self.want_disasm = false;
     }
@@ -104,15 +110,20 @@ impl Context {
 
     /// Compile the function, and emit machine code into a `Vec<u8>`.
     ///
-    /// Run the function through all the passes necessary to generate code for the target ISA
-    /// represented by `isa`, as well as the final step of emitting machine code into a
-    /// `Vec<u8>`. The machine code is not relocated. Instead, any relocations can be obtained
-    /// from `compiled_code()`.
+    /// Run the function through all the passes necessary to generate
+    /// code for the target ISA represented by `isa`, as well as the
+    /// final step of emitting machine code into a `Vec<u8>`. The
+    /// machine code is not relocated. Instead, any relocations can be
+    /// obtained from `compiled_code()`.
+    ///
+    /// Performs any optimizations that are enabled, unless
+    /// `optimize()` was already invoked.
     ///
     /// This function calls `compile`, taking care to resize `mem` as
-    /// needed, so it provides a safe interface.
+    /// needed.
     ///
-    /// Returns information about the function's code and read-only data.
+    /// Returns information about the function's code and read-only
+    /// data.
     pub fn compile_and_emit(
         &mut self,
         isa: &dyn TargetIsa,
@@ -134,15 +145,26 @@ impl Context {
 
         self.verify_if(isa)?;
 
+        if !self.optimized {
+            self.optimize(isa)?;
+        }
+
+        isa.compile_function(&self.func, self.want_disasm)
+    }
+
+    /// Optimize the function, performing all compilation steps up to
+    /// but not including machine-code lowering and register
+    /// allocation.
+    pub fn optimize(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
         let opt_level = isa.flags().opt_level();
         log::trace!(
-            "Compiling (opt level {:?}):\n{}",
+            "Optimizing (opt level {:?}):\n{}",
             opt_level,
             self.func.display()
         );
 
         self.compute_cfg();
-        if opt_level != OptLevel::None {
+        if !isa.flags().use_egraphs() && opt_level != OptLevel::None {
             self.preopt(isa)?;
         }
         if isa.flags().enable_nan_canonicalization() {
@@ -150,7 +172,8 @@ impl Context {
         }
 
         self.legalize(isa)?;
-        if opt_level != OptLevel::None {
+
+        if !isa.flags().use_egraphs() && opt_level != OptLevel::None {
             self.compute_domtree();
             self.compute_loop_analysis();
             self.licm(isa)?;
@@ -159,18 +182,34 @@ impl Context {
 
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
-        if opt_level != OptLevel::None {
+
+        if !isa.flags().use_egraphs() && opt_level != OptLevel::None {
             self.dce(isa)?;
         }
 
         self.remove_constant_phis(isa)?;
 
-        if opt_level != OptLevel::None && isa.flags().enable_alias_analysis() {
+        if isa.flags().use_egraphs() {
+            log::debug!(
+                "About to optimize with egraph phase:\n{}",
+                self.func.display()
+            );
+            self.compute_domtree();
+            self.eliminate_unreachable_code(isa)?;
+            self.dce(isa)?;
+            self.remove_constant_phis(isa)?;
+            self.compute_loop_analysis();
+            let mut eg = FuncEGraph::new(&self.func, &self.domtree, &self.loop_analysis, &self.cfg);
+            eg.elaborate(&mut self.func);
+            log::debug!("After egraph optimization:\n{}", self.func.display());
+            log::info!("egraph stats: {:?}", eg.stats);
+        } else if opt_level != OptLevel::None && isa.flags().enable_alias_analysis() {
             self.replace_redundant_loads()?;
             self.simple_gvn(isa)?;
         }
 
-        isa.compile_function(&self.func, self.want_disasm)
+        self.optimized = true;
+        Ok(())
     }
 
     /// Compile the function.
