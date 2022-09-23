@@ -13,3 +13,6 @@
 [submodule "crates/wasi-crypto/spec"]
 	path = crates/wasi-crypto/spec
 	url = https://github.com/WebAssembly/wasi-crypto.git
+[submodule "crates/wasi-parallel/spec"]
+	path = crates/wasi-parallel/spec
+	url = https://github.com/WebAssembly/wasi-parallel

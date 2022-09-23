@@ -30,6 +30,7 @@ wasmtime-wast = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-crypto = { workspace = true, optional = true }
 wasmtime-wasi-nn = { workspace = true, optional = true }
+wasmtime-wasi-parallel = { workspace = true, optional = true }
 clap = { workspace = true, features = ["color", "suggestions", "derive"] }
 anyhow = { workspace = true }
 target-lexicon = { workspace = true }
@@ -114,6 +115,7 @@ wasmtime-wast = { path = "crates/wast", version = "=2.0.0" }
 wasmtime-wasi = { path = "crates/wasi", version = "2.0.0" }
 wasmtime-wasi-crypto = { path = "crates/wasi-crypto", version = "2.0.0" }
 wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "2.0.0" }
+wasmtime-wasi-parallel = { path = "crates/wasi-parallel", version = "2.0.0" }
 wasmtime-component-util = { path = "crates/component-util", version = "=2.0.0" }
 wasmtime-component-macro = { path = "crates/component-macro", version = "=2.0.0" }
 wasmtime-asm-macros = { path = "crates/asm-macros", version = "=2.0.0" }
@@ -178,6 +180,7 @@ jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
 wasi-crypto = ["dep:wasmtime-wasi-crypto"]
 wasi-nn = ["dep:wasmtime-wasi-nn"]
+wasi-parallel = ["wasmtime-wasi-parallel"]
 memory-init-cow = ["wasmtime/memory-init-cow", "wasmtime-cli-flags/memory-init-cow"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 all-arch = ["wasmtime/all-arch"]

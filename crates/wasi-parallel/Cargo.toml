@@ -1,0 +1,30 @@
+[package]
+name = "wasmtime-wasi-parallel"
+version.workspace = true
+authors.workspace = true
+description = "Wasmtime implementation of the wasi-parallel API"
+documentation = "https://docs.rs/wasmtime-wasi-parallel"
+license = "Apache-2.0 WITH LLVM-exception"
+categories = ["wasm", "parallel"]
+keywords = ["webassembly", "wasm", "parallel"]
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+# These dependencies are necessary for the witx-generation macros to work:
+anyhow = { workspace = true }
+wiggle = { workspace = true }
+
+# These dependencies are necessary for the wasi-parallel implementation:
+indexmap = "1.6"
+log = { workspace = true }
+num_cpus = "1.13"
+rand = "0.8"
+scoped_threadpool = "0.1"
+wasmtime = { workspace = true, default-features = false, features = ["cranelift", "wat"] }
+wasmtime-runtime = { workspace = true }
+wasmtime-wasi = { workspace = true }
+
+[build-dependencies]
+walkdir = "2.3"
