@@ -126,6 +126,7 @@ impl SSABlockData {
     }
 }
 
+#[derive(Eq, PartialEq)]
 enum Action {
     Add,
     Remove,
@@ -383,12 +384,12 @@ impl SSABuilder {
         let will_have_one_pred = match block_ref.predecessors.as_slice() {
             // None: `pred` might reach `block` in a cycle. There'll be one predecessor afterward
             // if we're adding `pred`.
-            [] => matches!(action, Action::Add),
+            [] => action == Action::Add,
             // One: the other predecessor might reach `block` in a cycle. There'll be one
             // predecessor afterward if we're removing `pred`.
             [other] => {
                 pred = other.block;
-                matches!(action, Action::Remove)
+                action == Action::Remove
             }
             // Two or more: there is definitely no cycle through `block`, either before or after.
             _ => {
