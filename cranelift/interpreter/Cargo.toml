@@ -14,7 +14,7 @@ edition = "2021"
 cranelift-codegen = { path = "../codegen", version = "0.89.0" }
 cranelift-entity = { path = "../entity", version = "0.89.0" }
 log = { version = "0.4.8", default-features = false }
-smallvec = "1.6.1"
+smallvec = { version = "1.6.1", features = ["union"] }
 thiserror = "1.0.15"
 
 [target.x86_64-pc-windows-gnu.dependencies]
