@@ -3743,6 +3743,7 @@ dependencies = [
  "indexmap",
  "log",
  "num_cpus",
+ "pretty_env_logger",
  "rand 0.8.5",
  "scoped_threadpool",
  "walkdir",

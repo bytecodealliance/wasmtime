@@ -26,5 +26,13 @@ wasmtime = { workspace = true, default-features = false, features = ["cranelift"
 wasmtime-runtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
 
+[dev-dependencies]
+pretty_env_logger = "0.4"
+
 [build-dependencies]
 walkdir = "2.3"
+
+[features]
+# Enable building Rust tests to Wasm. Not all environments will have a
+# `wasm32-wasi` target installed so this feature is not enabled by default.
+build-tests = []
