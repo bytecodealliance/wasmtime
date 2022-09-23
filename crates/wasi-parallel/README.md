@@ -32,3 +32,9 @@ cargo test
 ```
 
 Note: the Rust code in `tests/rust` is compiled by `build.rs` to `tests/wasm`.
+
+### Benchmark
+
+```
+cargo bench
+```
