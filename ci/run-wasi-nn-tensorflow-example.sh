@@ -6,7 +6,6 @@
 # in crates/wasi-nn/tests/example into a Wasm file that is subsequently executed with the Wasmtime CLI.
 # NOTE: This requires installing the TensorFlow C libraries. Instructions found here
 # https://www.tensorflow.org/install/lang_c
-
 set -e
 WASMTIME_DIR=$(dirname "$0" | xargs dirname)
 if [ -z "${1+x}" ]; then
@@ -18,10 +17,6 @@ else
     TMP_DIR=$(realpath $1)
     REMOVE_TMP_DIR=0
 fi
-
-mkdir $TMP_DIR/TEST
-# Build Wasmtime with wasi-nn enabled; we attempt this first to avoid extra work if the build fails.
-OPENVINO_INSTALL_DIR=/opt/intel/openvino_2022 cargo build -p wasmtime-cli
 
 # Download all necessary test fixtures to the temporary directory.
 wget --no-clobber https://tfhub.dev/google/imagenet/mobilenet_v2_140_224/classification/5?tf-hub-format=compressed --output-document=$TMP_DIR/mobilenet.tar.gz
