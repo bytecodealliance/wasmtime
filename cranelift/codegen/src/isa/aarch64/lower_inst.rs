@@ -1,6 +1,5 @@
 //! Lower a single Cranelift instruction into vcode.
 
-use super::lower::*;
 use crate::ir::Inst as IRInst;
 use crate::ir::Opcode;
 use crate::isa::aarch64::inst::*;
