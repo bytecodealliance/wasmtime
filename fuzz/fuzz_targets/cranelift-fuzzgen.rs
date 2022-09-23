@@ -1,6 +1,5 @@
 #![no_main]
 
-use libfuzzer_sys::arbitrary::{Arbitrary, Unstructured};
 use libfuzzer_sys::fuzz_target;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
@@ -26,8 +25,6 @@ const INTERPRETER_FUEL: u64 = 4096;
 
 /// Gather statistics about the fuzzer executions
 struct Statistics {
-    /// All inputs that we tried
-    pub total_inputs: AtomicU64,
     /// Inputs that fuzzgen can build a function with
     /// This is also how many compiles we executed
     pub valid_inputs: AtomicU64,
@@ -46,23 +43,13 @@ struct Statistics {
 
 impl Statistics {
     pub fn print(&self) {
-        let total_inputs = self.total_inputs.load(Ordering::SeqCst);
-        if total_inputs != 50000 {
-            return;
-        }
-
         let valid_inputs = self.valid_inputs.load(Ordering::SeqCst);
         let total_runs = self.total_runs.load(Ordering::SeqCst);
         let run_result_success = self.run_result_success.load(Ordering::SeqCst);
         let run_result_timeout = self.run_result_timeout.load(Ordering::SeqCst);
 
         println!("== FuzzGen Statistics  ====================");
-        println!("Total Inputs: {}", total_inputs);
-        println!(
-            "Valid Inputs: {} ({:.1}%)",
-            valid_inputs,
-            (valid_inputs as f64 / total_inputs as f64) * 100.0
-        );
+        println!("Valid Inputs: {}", valid_inputs);
         println!("Total Runs: {}", total_runs);
         println!(
             "Successful Runs: {} ({:.1}% of Total Runs)",
@@ -90,6 +77,7 @@ impl Statistics {
 
 impl Default for Statistics {
     fn default() -> Self {
+        // Pre-Register all trap codes since we can't modify this hashmap atomically.
         let mut run_result_trap = HashMap::new();
         run_result_trap.insert(CraneliftTrap::Debug, AtomicU64::new(0));
         run_result_trap.insert(CraneliftTrap::Resumable, AtomicU64::new(0));
@@ -98,7 +86,6 @@ impl Default for Statistics {
         }
 
         Self {
-            total_inputs: AtomicU64::new(0),
             valid_inputs: AtomicU64::new(0),
             total_runs: AtomicU64::new(0),
             run_result_success: AtomicU64::new(0),
@@ -170,19 +157,12 @@ fn build_interpreter(testcase: &TestCase) -> Interpreter {
 
 static STATISTICS: Lazy<Statistics> = Lazy::new(Statistics::default);
 
-fuzz_target!(|bytes: &[u8]| {
-    STATISTICS.print();
-    STATISTICS.total_inputs.fetch_add(1, Ordering::SeqCst);
-
-    let mut unstructured = Unstructured::new(bytes);
-    let testcase = match TestCase::arbitrary(&mut unstructured) {
-        Ok(t) => t,
-        Err(_) => {
-            return;
-        }
-    };
-
-    STATISTICS.valid_inputs.fetch_add(1, Ordering::SeqCst);
+fuzz_target!(|testcase: TestCase| {
+    // Periodically print statistics
+    let valid_inputs = STATISTICS.valid_inputs.fetch_add(1, Ordering::SeqCst);
+    if valid_inputs != 0 && valid_inputs % 10000 == 0 {
+        STATISTICS.print();
+    }
 
     // Native fn
     let flags = {
