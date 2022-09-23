@@ -38,3 +38,13 @@ Note: the Rust code in `tests/rust` is compiled by `build.rs` to `tests/wasm`.
 ```
 cargo bench
 ```
+
+### Use
+
+When compiled with the `wasi-parallel` feature, this crate is usable from the
+Wasmtime CLI:
+
+```console
+$ cargo build --features wasi-parallel
+$ .../wasmtime run --wasi-modules experimental-wasi-parallel <module>
+```
