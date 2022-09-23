@@ -1,4 +1,4 @@
-use regalloc2::PReg;
+use crate::isa::reg::Reg;
 use smallvec::SmallVec;
 use std::ops::{Add, BitAnd, Not, Sub};
 use wasmtime_environ::{WasmFuncType, WasmType};
@@ -36,7 +36,7 @@ pub(crate) enum ABIArg {
         /// Type of the argument
         ty: WasmType,
         /// Register holding the argument
-        reg: PReg,
+        reg: Reg,
     },
     /// A stack argument
     Stack {
@@ -50,7 +50,7 @@ pub(crate) enum ABIArg {
 }
 
 impl ABIArg {
-    pub(crate) fn reg(reg: PReg, ty: WasmType) -> Self {
+    pub(crate) fn reg(reg: Reg, ty: WasmType) -> Self {
         Self::Reg { reg, ty }
     }
 

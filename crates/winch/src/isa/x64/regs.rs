@@ -1,4 +1,5 @@
 /// X64 register definition
+use crate::isa::reg::Reg;
 use regalloc2::{PReg, RegClass};
 
 const ENC_RAX: u8 = 0;
@@ -18,124 +19,124 @@ const ENC_R13: u8 = 13;
 const ENC_R14: u8 = 14;
 const ENC_R15: u8 = 15;
 
-fn gpr(enc: u8) -> PReg {
-    PReg::new(enc as usize, RegClass::Int)
+fn gpr(enc: u8) -> Reg {
+    Reg::new(PReg::new(enc as usize, RegClass::Int))
 }
 
 /// Constructors for GPR
 
-pub(crate) fn rsi() -> PReg {
+pub(crate) fn rsi() -> Reg {
     gpr(ENC_RSI)
 }
-pub(crate) fn rdi() -> PReg {
+pub(crate) fn rdi() -> Reg {
     gpr(ENC_RDI)
 }
-pub(crate) fn rax() -> PReg {
+pub(crate) fn rax() -> Reg {
     gpr(ENC_RAX)
 }
-pub(crate) fn rcx() -> PReg {
+pub(crate) fn rcx() -> Reg {
     gpr(ENC_RCX)
 }
-pub(crate) fn rdx() -> PReg {
+pub(crate) fn rdx() -> Reg {
     gpr(ENC_RDX)
 }
-pub(crate) fn r8() -> PReg {
+pub(crate) fn r8() -> Reg {
     gpr(ENC_R8)
 }
-pub(crate) fn r9() -> PReg {
+pub(crate) fn r9() -> Reg {
     gpr(ENC_R9)
 }
-pub(crate) fn r10() -> PReg {
+pub(crate) fn r10() -> Reg {
     gpr(ENC_R10)
 }
-pub(crate) fn r11() -> PReg {
+pub(crate) fn r11() -> Reg {
     gpr(ENC_R11)
 }
-pub(crate) fn r12() -> PReg {
+pub(crate) fn r12() -> Reg {
     gpr(ENC_R12)
 }
-pub(crate) fn r13() -> PReg {
+pub(crate) fn r13() -> Reg {
     gpr(ENC_R13)
 }
-pub(crate) fn r14() -> PReg {
+pub(crate) fn r14() -> Reg {
     gpr(ENC_R14)
 }
-pub(crate) fn rbx() -> PReg {
+pub(crate) fn rbx() -> Reg {
     gpr(ENC_RBX)
 }
 
-pub(crate) fn r15() -> PReg {
+pub(crate) fn r15() -> Reg {
     gpr(ENC_R15)
 }
 
-pub(crate) fn rsp() -> PReg {
+pub(crate) fn rsp() -> Reg {
     gpr(ENC_RSP)
 }
-pub(crate) fn rbp() -> PReg {
+pub(crate) fn rbp() -> Reg {
     gpr(ENC_RBP)
 }
 
-fn fpr(enc: u8) -> PReg {
-    PReg::new(enc as usize, RegClass::Float)
+fn fpr(enc: u8) -> Reg {
+    Reg::new(PReg::new(enc as usize, RegClass::Float))
 }
 
 /// Constructors for FPR
 
-pub(crate) fn xmm0() -> PReg {
+pub(crate) fn xmm0() -> Reg {
     fpr(0)
 }
-pub(crate) fn xmm1() -> PReg {
+pub(crate) fn xmm1() -> Reg {
     fpr(1)
 }
-pub(crate) fn xmm2() -> PReg {
+pub(crate) fn xmm2() -> Reg {
     fpr(2)
 }
-pub(crate) fn xmm3() -> PReg {
+pub(crate) fn xmm3() -> Reg {
     fpr(3)
 }
-pub(crate) fn xmm4() -> PReg {
+pub(crate) fn xmm4() -> Reg {
     fpr(4)
 }
-pub(crate) fn xmm5() -> PReg {
+pub(crate) fn xmm5() -> Reg {
     fpr(5)
 }
-pub(crate) fn xmm6() -> PReg {
+pub(crate) fn xmm6() -> Reg {
     fpr(6)
 }
-pub(crate) fn xmm7() -> PReg {
+pub(crate) fn xmm7() -> Reg {
     fpr(7)
 }
-pub(crate) fn xmm8() -> PReg {
+pub(crate) fn xmm8() -> Reg {
     fpr(8)
 }
-pub(crate) fn xmm9() -> PReg {
+pub(crate) fn xmm9() -> Reg {
     fpr(9)
 }
-pub(crate) fn xmm10() -> PReg {
+pub(crate) fn xmm10() -> Reg {
     fpr(10)
 }
-pub(crate) fn xmm11() -> PReg {
+pub(crate) fn xmm11() -> Reg {
     fpr(11)
 }
-pub(crate) fn xmm12() -> PReg {
+pub(crate) fn xmm12() -> Reg {
     fpr(12)
 }
-pub(crate) fn xmm13() -> PReg {
+pub(crate) fn xmm13() -> Reg {
     fpr(13)
 }
-pub(crate) fn xmm14() -> PReg {
+pub(crate) fn xmm14() -> Reg {
     fpr(14)
 }
-pub(crate) fn xmm15() -> PReg {
+pub(crate) fn xmm15() -> Reg {
     fpr(15)
 }
 
 // Temporatily removing the % from the register name
 // for debugging purposes only until winch gets disasm
 // support
-pub(crate) fn reg_name(preg: PReg) -> &'static str {
-    match preg.class() {
-        RegClass::Int => match preg.hw_enc() as u8 {
+pub(crate) fn reg_name(reg: Reg) -> &'static str {
+    match reg.class() {
+        RegClass::Int => match reg.hw_enc() as u8 {
             ENC_RAX => "rax",
             ENC_RBX => "rbx",
             ENC_RCX => "rcx",
@@ -152,9 +153,9 @@ pub(crate) fn reg_name(preg: PReg) -> &'static str {
             ENC_R13 => "r13",
             ENC_R14 => "r14",
             ENC_R15 => "r15",
-            _ => panic!("Invalid PReg: {:?}", preg),
+            _ => panic!("Invalid Reg: {:?}", reg),
         },
-        RegClass::Float => match preg.hw_enc() {
+        RegClass::Float => match reg.hw_enc() {
             0 => "xmm0",
             1 => "xmm1",
             2 => "xmm2",
@@ -171,7 +172,7 @@ pub(crate) fn reg_name(preg: PReg) -> &'static str {
             13 => "xmm13",
             14 => "xmm14",
             15 => "xmm15",
-            _ => panic!("Invalid PReg: {:?}", preg),
+            _ => panic!("Invalid Reg: {:?}", reg),
         },
     }
 }

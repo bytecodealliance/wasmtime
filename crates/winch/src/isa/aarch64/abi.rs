@@ -99,8 +99,8 @@ mod tests {
     use crate::{
         abi::{ABIArg, ABI},
         isa::aarch64::regs,
+        isa::reg::Reg,
     };
-    use regalloc2::PReg;
     use wasmtime_environ::{
         WasmFuncType,
         WasmType::{self, *},
@@ -183,7 +183,7 @@ mod tests {
         match_reg_arg(params.get(8).unwrap(), F64, regs::vreg(5));
     }
 
-    fn match_reg_arg(abi_arg: &ABIArg, expected_ty: WasmType, expected_reg: PReg) {
+    fn match_reg_arg(abi_arg: &ABIArg, expected_ty: WasmType, expected_reg: Reg) {
         match abi_arg {
             &ABIArg::Reg { reg, ty } => {
                 assert_eq!(reg, expected_reg);

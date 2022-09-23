@@ -1,6 +1,8 @@
 use super::regs;
-use crate::abi::{ABIArg, ABISig, ABI};
-use regalloc2::PReg;
+use crate::{
+    abi::{ABIArg, ABISig, ABI},
+    isa::reg::Reg,
+};
 use smallvec::SmallVec;
 use wasmtime_environ::WasmType;
 
@@ -83,7 +85,7 @@ impl X64ABI {
         reg.map_or_else(default, |reg| ABIArg::reg(reg, *ty))
     }
 
-    fn int_reg_for(index: u8) -> Option<PReg> {
+    fn int_reg_for(index: u8) -> Option<Reg> {
         match index {
             0 => Some(regs::rdi()),
             1 => Some(regs::rsi()),
@@ -95,7 +97,7 @@ impl X64ABI {
         }
     }
 
-    fn float_reg_for(index: u8) -> Option<PReg> {
+    fn float_reg_for(index: u8) -> Option<Reg> {
         match index {
             0 => Some(regs::xmm0()),
             1 => Some(regs::xmm1()),
@@ -115,9 +117,9 @@ mod tests {
     use super::{RegIndexEnv, X64ABI};
     use crate::{
         abi::{ABIArg, ABI},
+        isa::reg::Reg,
         isa::x64::regs,
     };
-    use regalloc2::PReg;
     use wasmtime_environ::{
         WasmFuncType,
         WasmType::{self, *},
@@ -199,7 +201,7 @@ mod tests {
         match_reg_arg(params.get(8).unwrap(), F64, regs::xmm5());
     }
 
-    fn match_reg_arg(abi_arg: &ABIArg, expected_ty: WasmType, expected_reg: PReg) {
+    fn match_reg_arg(abi_arg: &ABIArg, expected_ty: WasmType, expected_reg: Reg) {
         match abi_arg {
             &ABIArg::Reg { reg, ty } => {
                 assert_eq!(reg, expected_reg);

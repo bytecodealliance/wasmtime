@@ -1,6 +1,6 @@
 use super::regs::{rbp, reg_name, rsp};
+use crate::isa::reg::Reg;
 use crate::masm::MacroAssembler as Masm;
-use regalloc2::PReg;
 
 #[derive(Default)]
 pub(crate) struct MacroAssembler {
@@ -36,17 +36,19 @@ struct Assembler {
 
 impl Assembler {
     /// Push register
-    pub fn pushr(&mut self, reg: PReg) {
+    pub fn pushr(&mut self, reg: Reg) {
         self.buffer.push(format!("push {}", reg_name(reg)));
     }
 
-    pub fn movrr(&mut self, dst: PReg, src: PReg) {
+    /// Register to register move
+    pub fn movrr(&mut self, dst: Reg, src: Reg) {
         let dst = reg_name(dst);
         let src = reg_name(src);
 
         self.buffer.push(format!("mov {} {}", dst, src));
     }
 
+    /// Return the emitted code
     pub fn finalize(self) -> Vec<String> {
         self.buffer.clone()
     }

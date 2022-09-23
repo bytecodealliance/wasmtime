@@ -14,6 +14,8 @@ pub(crate) mod x64;
 #[cfg(feature = "arm64")]
 pub(crate) mod aarch64;
 
+pub(crate) mod reg;
+
 macro_rules! isa {
     ($name: ident, $cfg_terms: tt, $triple: ident) => {{
         #[cfg $cfg_terms]

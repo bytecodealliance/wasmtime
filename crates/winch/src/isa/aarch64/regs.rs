@@ -1,14 +1,15 @@
 /// Aarch register definition
+use crate::isa::reg::Reg;
 use regalloc2::{PReg, RegClass};
 
 /// Construct a X-register from an index
-pub(crate) const fn xreg(num: u8) -> PReg {
+pub(crate) const fn xreg(num: u8) -> Reg {
     assert!(num < 31);
-    PReg::new(num as usize, RegClass::Int)
+    Reg::new(PReg::new(num as usize, RegClass::Int))
 }
 
 /// Construct a V-register from an index
-pub(crate) const fn vreg(num: u8) -> PReg {
+pub(crate) const fn vreg(num: u8) -> Reg {
     assert!(num < 32);
-    PReg::new(num as usize, RegClass::Float)
+    Reg::new(PReg::new(num as usize, RegClass::Float))
 }
