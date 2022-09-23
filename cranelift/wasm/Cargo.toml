@@ -21,7 +21,7 @@ hashbrown = { version = "0.12", optional = true }
 itertools = "0.10.0"
 log = { version = "0.4.6", default-features = false }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
-smallvec = "1.6.1"
+smallvec = { version = "1.6.1", features = ["union"] }
 
 [dev-dependencies]
 wat = "1.0.47"

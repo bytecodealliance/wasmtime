@@ -11,7 +11,7 @@ edition = "2021"
 [dependencies]
 cranelift-entity = { path = "../entity", version = "0.89.0" }
 log = { version = "0.4.6", default-features = false }
-smallvec = { version = "1.6.1" }
+smallvec = { version = "1.6.1", features = ["union"] }
 indexmap = { version = "1.9.1" }
 hashbrown = { version = "0.12.2", features = ["raw"] }
 fxhash = "0.2.1"
