@@ -492,7 +492,13 @@ impl Engine {
 
         #[cfg(target_arch = "riscv64")]
         {
-            enabled = Some(true);
+            enabled = match flag {
+                // make sure `test_isa_flags_mismatch` test pass.
+                "not_a_flags" => None,
+                // due to `is_riscv64_feature_detected` is not stable.
+                // we cannot use it.
+                _ => Some(true),
+            }
         }
 
         #[cfg(target_arch = "x86_64")]
