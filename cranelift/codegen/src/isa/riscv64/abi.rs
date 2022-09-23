@@ -363,7 +363,10 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts.push(Inst::Call {
             info: Box::new(CallInfo {
                 dest: ExternalName::LibCall(LibCall::Probestack),
-                uses: smallvec![a0()],
+                uses: smallvec![CallArgPair {
+                    vreg: a0(),
+                    preg: a0(),
+                }],
                 defs: smallvec![],
                 clobbers: PRegSet::empty(),
                 opcode: Opcode::Call,
@@ -467,8 +470,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn gen_call(
         dest: &CallDest,
-        uses: SmallVec<[Reg; 8]>,
-        defs: SmallVec<[Writable<Reg>; 8]>,
+        uses: CallArgList,
+        defs: CallRetList,
         clobbers: PRegSet,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
@@ -525,19 +528,32 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         call_conv: isa::CallConv,
         dst: Reg,
         src: Reg,
+        tmp: Writable<Reg>,
+        _tmp2: Writable<Reg>,
         size: usize,
     ) -> SmallVec<[Self::I; 8]> {
         let mut insts = SmallVec::new();
-        let arg0 = writable_a0();
-        let arg1 = writable_a1();
-        let arg2 = writable_a2();
-        insts.push(Inst::gen_move(arg0, dst, I64));
-        insts.push(Inst::gen_move(arg1, src, I64));
-        insts.extend(Inst::load_constant_u64(arg2, size as u64));
+        let arg0 = Writable::from_reg(x_reg(10));
+        let arg1 = Writable::from_reg(x_reg(11));
+        let arg2 = Writable::from_reg(x_reg(12));
+        insts.extend(Inst::load_constant_u64(tmp, size as u64).into_iter());
         insts.push(Inst::Call {
             info: Box::new(CallInfo {
                 dest: ExternalName::LibCall(LibCall::Memcpy),
-                uses: smallvec![arg0.to_reg(), arg1.to_reg(), arg2.to_reg()],
+                uses: smallvec![
+                    CallArgPair {
+                        vreg: dst,
+                        preg: arg0.to_reg()
+                    },
+                    CallArgPair {
+                        vreg: src,
+                        preg: arg1.to_reg()
+                    },
+                    CallArgPair {
+                        vreg: tmp.to_reg(),
+                        preg: arg2.to_reg()
+                    }
+                ],
                 defs: smallvec![],
                 clobbers: Self::get_regs_clobbered_by_call(call_conv),
                 opcode: Opcode::Call,

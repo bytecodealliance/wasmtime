@@ -492,7 +492,7 @@ impl Engine {
 
         #[cfg(target_arch = "riscv64")]
         {
-            enabled = Some(false);
+            enabled = Some(true);
         }
 
         #[cfg(target_arch = "x86_64")]
