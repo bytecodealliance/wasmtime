@@ -890,45 +890,67 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         }
         let dir_entry = table.get_dir(dirfd)?;
 
+        let oflags = OFlags::from(&oflags);
+
+        // OFlags that are not supported for directories
+        let non_dir_oflags = oflags.contains(OFlags::CREATE)
+            || oflags.contains(OFlags::EXCLUSIVE)
+            || oflags.contains(OFlags::TRUNCATE);
+
+        if oflags.contains(OFlags::DIRECTORY) && non_dir_oflags {
+            return Err(Error::invalid_argument().context("incompatible oflag combination"));
+        }
+
+        let mut required_caps = DirCaps::OPEN;
+        if oflags.contains(OFlags::CREATE) {
+            required_caps = required_caps | DirCaps::CREATE_FILE;
+        }
+        let dir = dir_entry.get_cap(required_caps)?;
+
         let symlink_follow = dirflags.contains(types::Lookupflags::SYMLINK_FOLLOW);
 
-        let oflags = OFlags::from(&oflags);
-        let fdflags = FdFlags::from(fdflags);
         let path = path.as_str()?;
-        if oflags.contains(OFlags::DIRECTORY) {
-            if oflags.contains(OFlags::CREATE)
-                || oflags.contains(OFlags::EXCLUSIVE)
-                || oflags.contains(OFlags::TRUNCATE)
-            {
-                return Err(Error::invalid_argument().context("directory oflags"));
-            }
-            let dir_caps = dir_entry.child_dir_caps(DirCaps::from(&fs_rights_base));
-            let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_inheriting));
-            let dir = dir_entry.get_cap(DirCaps::OPEN)?;
-            let child_dir = dir.open_dir(symlink_follow, path.deref()).await?;
-            drop(dir);
-            let fd = table.push(Box::new(DirEntry::new(
-                dir_caps, file_caps, None, child_dir,
-            )))?;
-            Ok(types::Fd::from(fd))
-        } else {
-            let mut required_caps = DirCaps::OPEN;
-            if oflags.contains(OFlags::CREATE) {
-                required_caps = required_caps | DirCaps::CREATE_FILE;
+        let path = path.deref();
+        match dir.get_path_filestat(path, symlink_follow).await {
+            Ok(Filestat {
+                filetype: FileType::Directory,
+                ..
+            }) if non_dir_oflags => {
+                Err(Error::invalid_argument().context("oflags not applicable to a directory"))
             }
 
-            let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_base));
-            let dir = dir_entry.get_cap(required_caps)?;
-            let read = file_caps.contains(FileCaps::READ);
-            let write = file_caps.contains(FileCaps::WRITE)
-                || file_caps.contains(FileCaps::ALLOCATE)
-                || file_caps.contains(FileCaps::FILESTAT_SET_SIZE);
-            let file = dir
-                .open_file(symlink_follow, path.deref(), oflags, read, write, fdflags)
-                .await?;
-            drop(dir);
-            let fd = table.push(Box::new(FileEntry::new(file_caps, file)))?;
-            Ok(types::Fd::from(fd))
+            Ok(Filestat {
+                filetype: FileType::Directory,
+                ..
+            }) => {
+                let dir_caps = dir_entry.child_dir_caps(DirCaps::from(&fs_rights_base));
+                let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_inheriting));
+                let child_dir = dir.open_dir(symlink_follow, path).await?;
+                drop(dir);
+                let fd = table.push(Box::new(DirEntry::new(
+                    dir_caps, file_caps, None, child_dir,
+                )))?;
+                Ok(types::Fd::from(fd))
+            }
+
+            Ok(_) if oflags.contains(OFlags::DIRECTORY) => {
+                Err(Error::not_dir().context("directory requested"))
+            }
+
+            _ => {
+                let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_base));
+                let read = file_caps.contains(FileCaps::READ);
+                let write = file_caps.contains(FileCaps::WRITE)
+                    || file_caps.contains(FileCaps::ALLOCATE)
+                    || file_caps.contains(FileCaps::FILESTAT_SET_SIZE);
+                let fdflags = FdFlags::from(fdflags);
+                let file = dir
+                    .open_file(symlink_follow, path, oflags, read, write, fdflags)
+                    .await?;
+                drop(dir);
+                let fd = table.push(Box::new(FileEntry::new(file_caps, file)))?;
+                Ok(types::Fd::from(fd))
+            }
         }
     }
 
