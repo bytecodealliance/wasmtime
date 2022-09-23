@@ -31,6 +31,6 @@ cap-std = "0.26.0"
 wat = "1.0.45"
 
 [features]
-default = ["shuffling-allocator"]
+default = ["shuffling-allocator", "wasi-nn"]
 wasi-crypto = ["wasmtime-wasi-crypto"]
 wasi-nn = ["wasmtime-wasi-nn"]
