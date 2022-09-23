@@ -42,6 +42,10 @@ criteria = "safe-to-deploy"
 version = "0.0.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.anes]]
+version = "0.1.6"
+criteria = "safe-to-run"
+
 [[exemptions.anyhow]]
 version = "1.0.57"
 criteria = "safe-to-deploy"
@@ -102,6 +106,10 @@ criteria = "safe-to-deploy"
 version = "0.2.7"
 criteria = "safe-to-run"
 
+[[exemptions.cast]]
+version = "0.3.0"
+criteria = "safe-to-run"
+
 [[exemptions.chacha20]]
 version = "0.8.1"
 criteria = "safe-to-deploy"
@@ -109,6 +117,18 @@ criteria = "safe-to-deploy"
 [[exemptions.chacha20poly1305]]
 version = "0.9.0"
 criteria = "safe-to-deploy"
+
+[[exemptions.ciborium]]
+version = "0.2.0"
+criteria = "safe-to-run"
+
+[[exemptions.ciborium-io]]
+version = "0.2.0"
+criteria = "safe-to-run"
+
+[[exemptions.ciborium-ll]]
+version = "0.2.0"
+criteria = "safe-to-run"
 
 [[exemptions.cipher]]
 version = "0.3.0"
@@ -154,8 +174,16 @@ criteria = "safe-to-deploy"
 version = "0.3.5"
 criteria = "safe-to-run"
 
+[[exemptions.criterion]]
+version = "0.4.0"
+criteria = "safe-to-run"
+
 [[exemptions.criterion-plot]]
 version = "0.4.4"
+criteria = "safe-to-run"
+
+[[exemptions.criterion-plot]]
+version = "0.5.0"
 criteria = "safe-to-run"
 
 [[exemptions.crossbeam-channel]]
@@ -800,6 +828,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.same-file]]
 version = "1.0.6"
+criteria = "safe-to-deploy"
+
+[[exemptions.scoped_threadpool]]
+version = "0.1.9"
 criteria = "safe-to-deploy"
 
 [[exemptions.scopeguard]]
