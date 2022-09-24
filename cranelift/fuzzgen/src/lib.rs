@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::function_generator::FunctionGenerator;
+use crate::settings::{Flags, OptLevel};
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::data_value::DataValue;
@@ -30,6 +31,9 @@ impl<'a> Arbitrary<'a> for SingleFunction {
 }
 
 pub struct TestCase {
+    /// [Flags] to use when compiling this test case
+    pub flags: Flags,
+    /// Function under test
     pub func: Function,
     /// Generate multiple test inputs for each test case.
     /// This allows us to get more coverage per compilation, which may be somewhat expensive.
@@ -38,19 +42,23 @@ pub struct TestCase {
 
 impl fmt::Debug for TestCase {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            r#";; Fuzzgen test case
+        writeln!(f, ";; Fuzzgen test case\n")?;
+        writeln!(f, "test interpret")?;
+        writeln!(f, "test run")?;
 
-test interpret
-test run
-set enable_llvm_abi_extensions
-target aarch64
-target s390x
-target x86_64
+        // Print only non default flags
+        let default_flags = Flags::new(settings::builder());
+        for (default, flag) in default_flags.iter().zip(self.flags.iter()) {
+            assert_eq!(default.name, flag.name);
 
-"#
-        )?;
+            if default.value_string() != flag.value_string() {
+                writeln!(f, "set {}={}", flag.name, flag.value_string())?;
+            }
+        }
+
+        writeln!(f, "target aarch64")?;
+        writeln!(f, "target s390x")?;
+        writeln!(f, "target x86_64\n")?;
 
         writeln!(f, "{}", self.func)?;
 
@@ -217,14 +225,69 @@ where
         self.run_func_passes(func)
     }
 
+    /// Generate a random set of cranelift flags.
+    /// Only semantics preserving flags are considered
+    fn generate_flags(&mut self) -> Result<Flags> {
+        let mut builder = settings::builder();
+
+        let opt_levels = [OptLevel::None, OptLevel::Speed, OptLevel::SpeedAndSize];
+        let opt = self.u.choose(&opt_levels)?;
+        builder.set("opt_level", &format!("{}", opt)[..])?;
+
+        // Boolean flags
+        // TODO: probestack is semantics preserving, but only works inline and on x64
+        // TODO: enable_pinned_reg does not work with our current trampolines. See: #4376
+        // TODO: is_pic has issues:
+        //   x86: https://github.com/bytecodealliance/wasmtime/issues/5005
+        //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/2735
+        let bool_settings = [
+            "enable_alias_analysis",
+            "enable_simd",
+            "enable_float",
+            "enable_atomics",
+            "enable_safepoints",
+            "unwind_info",
+            "preserve_frame_pointers",
+            "machine_code_cfg_info",
+            "enable_jump_tables",
+            "enable_heap_access_spectre_mitigation",
+            "enable_table_access_spectre_mitigation",
+            "enable_incremental_compilation_cache_checks",
+            "regalloc_checker",
+            "enable_llvm_abi_extensions",
+        ];
+        for flag_name in bool_settings {
+            let value = format!("{}", bool::arbitrary(self.u)?);
+            builder.set(flag_name, value.as_str())?;
+        }
+
+        // Fixed settings
+
+        // We need llvm ABI extensions for i128 values on x86, so enable it regardless of
+        // what we picked above.
+        if cfg!(target_arch = "x86_64") {
+            builder.enable("enable_llvm_abi_extensions")?;
+        }
+
+        // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
+        builder.enable("enable_verifier")?;
+
+        Ok(Flags::new(builder))
+    }
+
     pub fn generate_test(mut self) -> Result<TestCase> {
         // If we're generating test inputs as well as a function, then we're planning to execute
         // this function. That means that any function references in it need to exist. We don't yet
         // have infrastructure for generating multiple functions, so just don't generate funcrefs.
         self.config.funcrefs_per_function = 0..=0;
 
+        let flags = self.generate_flags()?;
         let func = self.generate_func()?;
         let inputs = self.generate_test_inputs(&func.signature)?;
-        Ok(TestCase { func, inputs })
+        Ok(TestCase {
+            flags,
+            func,
+            inputs,
+        })
     }
 }
