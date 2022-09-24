@@ -42,8 +42,8 @@ struct Statistics {
 }
 
 impl Statistics {
-    pub fn print(&self) {
-        let valid_inputs = self.valid_inputs.load(Ordering::SeqCst);
+    pub fn print(&self, valid_inputs: u64) {
+        // We get valid_inputs as a param since we already loaded it previously.
         let total_runs = self.total_runs.load(Ordering::SeqCst);
         let run_result_success = self.run_result_success.load(Ordering::SeqCst);
         let run_result_timeout = self.run_result_timeout.load(Ordering::SeqCst);
@@ -62,9 +62,18 @@ impl Statistics {
             (run_result_timeout as f64 / total_runs as f64) * 100.0
         );
         println!("Traps:");
-        for (trap, count) in self.run_result_trap.iter() {
-            let count = count.load(Ordering::SeqCst);
+        // Load and filter out empty trap codes.
+        let mut traps = self
+            .run_result_trap
+            .iter()
+            .map(|(trap, count)| (trap, count.load(Ordering::SeqCst)))
+            .filter(|(_, count)| *count != 0)
+            .collect::<Vec<_>>();
 
+        // Sort traps by count in a descending order
+        traps.sort_by_key(|(_, count)| -(*count as i64));
+
+        for (trap, count) in traps.into_iter() {
             println!(
                 "\t{}: {} ({:.1}% of Total Runs)",
                 trap,
@@ -161,7 +170,7 @@ fuzz_target!(|testcase: TestCase| {
     // Periodically print statistics
     let valid_inputs = STATISTICS.valid_inputs.fetch_add(1, Ordering::SeqCst);
     if valid_inputs != 0 && valid_inputs % 10000 == 0 {
-        STATISTICS.print();
+        STATISTICS.print(valid_inputs);
     }
 
     // Native fn
