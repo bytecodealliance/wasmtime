@@ -52,6 +52,9 @@ pub struct SSABuilder {
 
     /// Side effects accumulated in the `use_var`/`predecessors_lookup` state machine.
     side_effects: SideEffects,
+
+    /// A counter for amortizing the cost of resetting state for cycle detection.
+    epoch: Epoch,
 }
 
 /// Side effects of a `use_var` or a `seal_block` method call.
@@ -99,13 +102,8 @@ struct SSABlockData {
     predecessors: PredBlockSmallVec,
     // A block is sealed if all of its predecessors have been declared.
     sealed: bool,
-    // A predecessor-cycle occurs if this block is reachable by following only single-predecessor
-    // edges. This is used in `use_var_nonlocal`, which can avoid adding block parameters as long
-    // as it can find a unique block to get a variable's definition from.
-    in_predecessor_cycle: bool,
-    // A block is sealed with respect to predecessor cycles if its `in_predecessor_cycle` flag
-    // can't change.
-    sealed_predecessors: bool,
+    // Which SSABuilder::epoch was this block last visited in?
+    epoch: Epoch,
     // List of current Block arguments for which an earlier def has not been found yet.
     undef_variables: Vec<(Variable, Value)>,
 }
@@ -124,12 +122,27 @@ impl SSABlockData {
             .expect("the predecessor you are trying to remove is not declared");
         self.predecessors.swap_remove(pred).block
     }
+
+    fn visit(&mut self, epoch: Epoch) -> Option<Block> {
+        if self.sealed && self.predecessors.len() == 1 && self.epoch.set(epoch) {
+            Some(self.predecessors[0].block)
+        } else {
+            None
+        }
+    }
 }
 
-#[derive(Eq, PartialEq)]
-enum Action {
-    Add,
-    Remove,
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct Epoch(u32);
+
+impl Epoch {
+    fn initial() -> Epoch {
+        Epoch(1)
+    }
+
+    fn set(&mut self, new: Epoch) -> bool {
+        mem::replace(self, new) != new
+    }
 }
 
 impl SSABuilder {
@@ -141,6 +154,7 @@ impl SSABuilder {
             calls: Vec::new(),
             results: Vec::new(),
             side_effects: SideEffects::new(),
+            epoch: Epoch::initial(),
         }
     }
 
@@ -162,6 +176,20 @@ impl SSABuilder {
             && self.results.is_empty()
             && self.side_effects.is_empty()
     }
+
+    fn new_epoch(&mut self) -> Epoch {
+        if self.epoch == Epoch::default() {
+            // The epoch counter wrapped so we need to reset all blocks.
+            for block in self.ssa_blocks.values_mut() {
+                block.epoch = Epoch::default();
+            }
+            self.epoch = Epoch::initial();
+        }
+
+        let current = self.epoch;
+        self.epoch = Epoch(current.0.wrapping_add(1));
+        current
+    }
 }
 
 /// Small enum used for clarity in some functions.
@@ -172,18 +200,9 @@ enum ZeroOneOrMore<T> {
     More,
 }
 
-/// Cases used internally by `use_var_nonlocal()` for avoiding the borrow checker.
-#[derive(Debug)]
-enum UseVarCases {
-    Unsealed(Value),
-    SealedOnePredecessor(Block),
-    SealedMultiplePredecessors(Value, Block),
-}
-
 /// States for the `use_var`/`predecessors_lookup` state machine.
 enum Call {
     UseVar(Block),
-    FinishSealedOnePredecessor(Block),
     FinishPredecessorsLookup(Value, Block),
 }
 
@@ -289,56 +308,55 @@ impl SSABuilder {
     /// Resolve the minimal SSA Value of `var` in `block` by traversing predecessors.
     ///
     /// This function sets up state for `run_state_machine()` but does not execute it.
-    fn use_var_nonlocal(&mut self, func: &mut Function, var: Variable, ty: Type, block: Block) {
-        // This function is split into two parts to appease the borrow checker.
-        // Part 1: With a mutable borrow of self, update the DataFlowGraph if necessary.
-        let data = &mut self.ssa_blocks[block];
-        let case = if data.sealed {
-            // Optimize the common case of one predecessor: no param needed. However, if following
-            // single-predecessor edges would go through a cycle ending up back here, then this
-            // optimization is unsafe, so fall back to adding a param anyway.
-            if data.predecessors.len() == 1 && !data.in_predecessor_cycle {
-                UseVarCases::SealedOnePredecessor(data.predecessors[0].block)
-            } else {
-                // Break potential cycles by eagerly adding an operandless param.
-                let val = func.dfg.append_block_param(block, ty);
-                UseVarCases::SealedMultiplePredecessors(val, block)
-            }
-        } else {
-            let val = func.dfg.append_block_param(block, ty);
-            data.undef_variables.push((var, val));
-            UseVarCases::Unsealed(val)
-        };
+    fn use_var_nonlocal(&mut self, func: &mut Function, var: Variable, ty: Type, mut block: Block) {
+        let (val, from) = self.find_var(func, var, ty, block);
 
-        // Part 2: Prepare SSABuilder state for run_state_machine().
-        match case {
-            UseVarCases::SealedOnePredecessor(pred) => {
-                // Get the Value directly from the single predecessor.
-                self.calls.push(Call::FinishSealedOnePredecessor(block));
-                self.calls.push(Call::UseVar(pred));
-            }
-            UseVarCases::Unsealed(val) => {
-                // Define the operandless param added above to prevent lookup cycles.
-                self.def_var(var, val, block);
-
-                // Nothing more can be known at this point.
-                self.results.push(val);
-            }
-            UseVarCases::SealedMultiplePredecessors(val, block) => {
-                // Define the operandless param added above to prevent lookup cycles.
-                self.def_var(var, val, block);
-
-                // Look up a use_var for each precessor.
-                self.begin_predecessors_lookup(val, block);
-            }
+        // `find_var` guarantees that we can blindly follow predecessors until we find the `from`
+        // block, without encountering any cycles. We also know all the intervening blocks,
+        // including our starting point at `block`, don't yet have a definition for this variable
+        // and should get it from the same source.
+        while block != from {
+            self.def_var(var, val, block);
+            let data = &self.ssa_blocks[block];
+            debug_assert!(data.sealed);
+            debug_assert_eq!(data.predecessors.len(), 1);
+            block = data.predecessors[0].block;
         }
     }
 
-    /// For blocks with a single predecessor, once we've determined the value,
-    /// record a local def for it for future queries to find.
-    fn finish_sealed_one_predecessor(&mut self, var: Variable, block: Block) {
-        let val = *self.results.last().unwrap();
+    /// Find the last definition of this variable, returning both the definition and the block in
+    /// which it was found. If we run into a block that isn't sealed or doesn't have exactly one
+    /// predecessor, or we discover we've followed a cycle, then append a block parameter there and
+    /// use that as the definition.
+    fn find_var(
+        &mut self,
+        func: &mut Function,
+        var: Variable,
+        ty: Type,
+        mut block: Block,
+    ) -> (Value, Block) {
+        let epoch = self.new_epoch();
+        if let Some(var_defs) = self.variables.get(var) {
+            while let Some(pred) = self.ssa_blocks[block].visit(epoch) {
+                block = pred;
+                if let Some(val) = var_defs[block].expand() {
+                    self.results.push(val);
+                    return (val, block);
+                }
+            }
+        }
+
+        let val = func.dfg.append_block_param(block, ty);
+        if self.ssa_blocks[block].sealed {
+            // Call use_var for each predecessor.
+            self.begin_predecessors_lookup(val, block);
+        } else {
+            // Nothing more can be known at this point.
+            self.ssa_blocks[block].undef_variables.push((var, val));
+            self.results.push(val);
+        }
         self.def_var(var, val, block);
+        (val, block)
     }
 
     /// Declares a new basic block to construct corresponding data for SSA construction.
@@ -359,7 +377,6 @@ impl SSABuilder {
     /// of a jump table.
     pub fn declare_block_predecessor(&mut self, block: Block, pred: Block, inst: Inst) {
         debug_assert!(!self.is_sealed(block));
-        self.update_predecessor_cycle(block, pred, Action::Add);
         self.ssa_blocks[block].add_predecessor(pred, inst)
     }
 
@@ -369,88 +386,7 @@ impl SSABuilder {
     /// Note: use only when you know what you are doing, this might break the SSA building problem
     pub fn remove_block_predecessor(&mut self, block: Block, inst: Inst) -> Block {
         debug_assert!(!self.is_sealed(block));
-        let pred = self.ssa_blocks[block].remove_predecessor(inst);
-        self.update_predecessor_cycle(block, pred, Action::Remove);
-        pred
-    }
-
-    /// Call this when `pred` is not in the predecessors of `block`: before adding, or after
-    /// removing.
-    fn update_predecessor_cycle(&mut self, block: Block, mut pred: Block, action: Action) {
-        let block_ref = &self.ssa_blocks[block];
-
-        // Not counting `pred`, how many predecessors does `block` have? And will it have exactly
-        // one after the caller is done changing things?
-        let will_have_one_pred = match block_ref.predecessors.as_slice() {
-            // None: `pred` might reach `block` in a cycle. There'll be one predecessor afterward
-            // if we're adding `pred`.
-            [] => action == Action::Add,
-            // One: the other predecessor might reach `block` in a cycle. There'll be one
-            // predecessor afterward if we're removing `pred`.
-            [other] => {
-                pred = other.block;
-                action == Action::Remove
-            }
-            // Two or more: there is definitely no cycle through `block`, either before or after.
-            _ => {
-                debug_assert!(!block_ref.in_predecessor_cycle);
-                return;
-            }
-        };
-
-        if will_have_one_pred {
-            // This block is about to have exactly one predecessor. Is there a path from that block
-            // to this one, following only single-predecessor edges?
-            debug_assert!(!block_ref.in_predecessor_cycle);
-
-            // Shadow `pred` so we can check for a cycle without forgetting where it started.
-            let mut pred = pred;
-
-            // This loop terminates even if it encounters a cycle in the control-flow graph. Any
-            // path through blocks which have exactly one predecessor each must eventually reach
-            // one of three kinds of blocks:
-            // 1. The block that we started from, so it is part of a cycle; or
-            // 2. A block that does not have exactly one predecessor, so there's no cycle; or
-            // 3. A block which we've previously flagged as being part of a cycle.
-            // In case 3, the block we're currently updating is not part of that existing
-            // cycle and can't be part of any other cycle.
-
-            // Case 1 is the loop termination condition.
-            while pred != block {
-                let pred_ref = &self.ssa_blocks[pred];
-
-                if pred_ref.sealed_predecessors {
-                    // We're changing `block`'s predecessors, and we've reached a block whose
-                    // single-predecessor path can't change, so `block` must not be on that path.
-                    return;
-                }
-
-                // In cases 2 and 3, we aren't forming a cycle so there's nothing to update.
-                if pred_ref.in_predecessor_cycle || pred_ref.predecessors.len() != 1 {
-                    return;
-                }
-
-                pred = pred_ref.predecessors[0].block;
-            }
-        } else if !block_ref.in_predecessor_cycle {
-            // This block was not in a predecessor cycle before, and won't have exactly one
-            // predecessor afterward, so it still isn't in one. Nothing to update.
-            return;
-        }
-
-        // At this point we know that if `block`'s only predecessor were `pred`, then both blocks
-        // would be part of a predecessor cycle. Either `will_have_one_pred` is true and we're
-        // forming a new cycle, or there was an existing cycle that we're now breaking. In either
-        // case, there's a path of single-predecessor edges going from `pred` to `block` and we
-        // just need to flip the `in_predecessor_cycle` flag on every block in that path.
-        self.ssa_blocks[block].in_predecessor_cycle = will_have_one_pred;
-        while pred != block {
-            let pred_ref = &mut self.ssa_blocks[pred];
-            debug_assert_ne!(pred_ref.in_predecessor_cycle, will_have_one_pred);
-            debug_assert_eq!(pred_ref.predecessors.len(), 1);
-            pred_ref.in_predecessor_cycle = will_have_one_pred;
-            pred = pred_ref.predecessors[0].block;
-        }
+        self.ssa_blocks[block].remove_predecessor(inst)
     }
 
     /// Completes the global value numbering for a `Block`, all of its predecessors having been
@@ -508,29 +444,10 @@ impl SSABuilder {
 
     /// Set the `sealed` flag for `block`.
     fn mark_block_sealed(&mut self, block: Block) {
-        // This sealed block's `in_predecessor_cycle` flag can't change once either:
-        let sealed_predecessors = match &self.ssa_blocks[block].predecessors[..] {
-            // It has exactly one predecessor where the flag also can't change;
-            [pred] => pred.block == block || self.ssa_blocks[pred.block].sealed_predecessors,
-            // Or we can tell locally that it isn't part of a predecessor cycle.
-            _ => {
-                debug_assert!(!self.ssa_blocks[block].in_predecessor_cycle);
-                true
-            }
-        };
-        // Note that we only update `sealed_predecessors` at the time that this block is sealed,
-        // and using information from one predecessor at most. If this block is sealed before its
-        // predecessor, then we conservatively assume that `in_predecessor_cycle` could still
-        // change at any time. So `update_predecessor_cycle` will do more work than it would if we
-        // computed this precisely, but this function remains constant-time. Frontends which seal
-        // every block as soon as possible, like cranelift-wasm, shouldn't see much difference.
-
         let block_data = &mut self.ssa_blocks[block];
         debug_assert!(!block_data.sealed);
-        debug_assert!(!block_data.sealed_predecessors);
         debug_assert!(block_data.undef_variables.is_empty());
         block_data.sealed = true;
-        block_data.sealed_predecessors = sealed_predecessors;
 
         // We could call data.predecessors.shrink_to_fit() here, if
         // important, because no further predecessors will be added
@@ -808,9 +725,6 @@ impl SSABuilder {
                         }
                     }
                     self.use_var_nonlocal(func, var, ty, ssa_block);
-                }
-                Call::FinishSealedOnePredecessor(ssa_block) => {
-                    self.finish_sealed_one_predecessor(var, ssa_block);
                 }
                 Call::FinishPredecessorsLookup(sentinel, dest_block) => {
                     self.finish_predecessors_lookup(func, sentinel, var, dest_block);
