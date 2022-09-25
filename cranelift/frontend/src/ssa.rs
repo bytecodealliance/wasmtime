@@ -175,14 +175,6 @@ impl SSABuilder {
     }
 }
 
-/// Small enum used for clarity in some functions.
-#[derive(Debug)]
-enum ZeroOneOrMore<T> {
-    Zero,
-    One(T),
-    More,
-}
-
 /// States for the `use_var`/`predecessors_lookup` state machine.
 enum Call {
     UseVar(Block),
@@ -510,45 +502,28 @@ impl SSABuilder {
         var: Variable,
         dest_block: Block,
     ) {
-        let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero;
-
         // Determine how many predecessors are yielding unique, non-temporary Values. If a variable
         // is live and unmodified across several control-flow join points, earlier blocks will
         // introduce aliases for that variable's definition, so we resolve aliases eagerly here to
         // ensure that we can tell when the same definition has reached this block via multiple
         // paths. Doing so also detects cyclic references to the sentinel, which can occur in
         // unreachable code.
-        let num_predecessors = self.predecessors(dest_block).len();
-        for pred_val in self
-            .results
-            .iter()
-            .rev()
-            .take(num_predecessors)
-            .map(|&val| func.dfg.resolve_aliases(val))
-        {
-            match pred_values {
-                ZeroOneOrMore::Zero => {
-                    if pred_val != sentinel {
-                        pred_values = ZeroOneOrMore::One(pred_val);
-                    }
+        let pred_val = {
+            let num_predecessors = self.predecessors(dest_block).len();
+            let mut iter = self
+                .results
+                .drain(self.results.len() - num_predecessors..)
+                .map(|val| func.dfg.resolve_aliases(val))
+                .filter(|&val| val != sentinel);
+            if let Some(val) = iter.next() {
+                // This variable has at least one non-temporary definition. If they're all the same
+                // value, we can remove the block parameter and reference that value instead.
+                if iter.all(|other| other == val) {
+                    Some(val)
+                } else {
+                    None
                 }
-                ZeroOneOrMore::One(old_val) => {
-                    if pred_val != sentinel && pred_val != old_val {
-                        pred_values = ZeroOneOrMore::More;
-                        break;
-                    }
-                }
-                ZeroOneOrMore::More => {
-                    break;
-                }
-            }
-        }
-
-        // Those predecessors' Values have been examined: pop all their results.
-        self.results.truncate(self.results.len() - num_predecessors);
-
-        let result_val = match pred_values {
-            ZeroOneOrMore::Zero => {
+            } else {
                 // The variable is used but never defined before. This is an irregularity in the
                 // code, but rather than throwing an error we silently initialize the variable to
                 // 0. This will have no effect since this situation happens in unreachable code.
@@ -562,52 +537,44 @@ impl SSABuilder {
                     func.dfg.value_type(sentinel),
                     FuncCursor::new(func).at_first_insertion_point(dest_block),
                 );
-                func.dfg.remove_block_param(sentinel);
-                func.dfg.change_to_alias(sentinel, zero);
-                zero
+                Some(zero)
             }
-            ZeroOneOrMore::One(pred_val) => {
-                // Here all the predecessors use a single value to represent our variable
-                // so we don't need to have it as a block argument.
-                // We need to replace all the occurrences of val with pred_val but since
-                // we can't afford a re-writing pass right now we just declare an alias.
-                func.dfg.remove_block_param(sentinel);
-                func.dfg.change_to_alias(sentinel, pred_val);
-                pred_val
-            }
-            ZeroOneOrMore::More => {
-                // There is disagreement in the predecessors on which value to use so we have
-                // to keep the block argument. To avoid borrowing `self` for the whole loop,
-                // temporarily detach the predecessors list and replace it with an empty list.
-                let mut preds = mem::take(self.predecessors_mut(dest_block));
-                for &mut PredBlock {
-                    block: ref mut pred_block,
-                    branch: ref mut last_inst,
-                } in &mut preds
-                {
-                    // We already did a full `use_var` above, so we can do just the fast path.
-                    let ssa_block_map = self.variables.get(var).unwrap();
-                    let pred_val = ssa_block_map.get(*pred_block).unwrap().unwrap();
-                    let jump_arg = self.append_jump_argument(
-                        func,
-                        *last_inst,
-                        *pred_block,
-                        dest_block,
-                        pred_val,
-                        var,
-                    );
-                    if let Some((middle_block, middle_jump_inst)) = jump_arg {
-                        *pred_block = middle_block;
-                        *last_inst = middle_jump_inst;
-                        self.side_effects.split_blocks_created.push(middle_block);
-                    }
-                }
-                // Now that we're done, move the predecessors list back.
-                debug_assert!(self.predecessors(dest_block).is_empty());
-                *self.predecessors_mut(dest_block) = preds;
+        };
 
-                sentinel
+        let result_val = if let Some(pred_val) = pred_val {
+            // Here all the predecessors use a single value to represent our variable
+            // so we don't need to have it as a block argument.
+            // We need to replace all the occurrences of val with pred_val but since
+            // we can't afford a re-writing pass right now we just declare an alias.
+            func.dfg.remove_block_param(sentinel);
+            func.dfg.change_to_alias(sentinel, pred_val);
+            pred_val
+        } else {
+            // There is disagreement in the predecessors on which value to use so we have
+            // to keep the block argument. To avoid borrowing `self` for the whole loop,
+            // temporarily detach the predecessors list and replace it with an empty list.
+            let mut preds = mem::take(self.predecessors_mut(dest_block));
+            for pred in preds.iter_mut() {
+                // We already did a full `use_var` above, so we can do just the fast path.
+                let pred_val = self.variables[var][pred.block].unwrap();
+                let jump_arg = self.append_jump_argument(
+                    func,
+                    pred.branch,
+                    pred.block,
+                    dest_block,
+                    pred_val,
+                    var,
+                );
+                if let Some((middle_block, middle_jump_inst)) = jump_arg {
+                    pred.block = middle_block;
+                    pred.branch = middle_jump_inst;
+                    self.side_effects.split_blocks_created.push(middle_block);
+                }
             }
+            // Now that we're done, move the predecessors list back.
+            debug_assert!(self.predecessors(dest_block).is_empty());
+            *self.predecessors_mut(dest_block) = preds;
+            sentinel
         };
 
         self.results.push(result_val);
