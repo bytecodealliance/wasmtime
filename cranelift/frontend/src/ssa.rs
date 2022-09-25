@@ -21,7 +21,6 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::packed_option::PackedOption;
 use smallvec::SmallVec;
-use std::collections::HashSet;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///
@@ -53,10 +52,6 @@ pub struct SSABuilder {
 
     /// Side effects accumulated in the `use_var`/`predecessors_lookup` state machine.
     side_effects: SideEffects,
-
-    /// Reused allocation for blocks we've already visited in the
-    /// `can_optimize_var_lookup` method.
-    visited: HashSet<Block>,
 }
 
 /// Side effects of a `use_var` or a `seal_block` method call.
@@ -104,6 +99,13 @@ struct SSABlockData {
     predecessors: PredBlockSmallVec,
     // A block is sealed if all of its predecessors have been declared.
     sealed: bool,
+    // A predecessor-cycle occurs if this block is reachable by following only single-predecessor
+    // edges. This is used in `use_var_nonlocal`, which can avoid adding block parameters as long
+    // as it can find a unique block to get a variable's definition from.
+    in_predecessor_cycle: bool,
+    // A block is sealed with respect to predecessor cycles if its `in_predecessor_cycle` flag
+    // can't change.
+    sealed_predecessors: bool,
     // List of current Block arguments for which an earlier def has not been found yet.
     undef_variables: Vec<(Variable, Value)>,
 }
@@ -124,6 +126,12 @@ impl SSABlockData {
     }
 }
 
+#[derive(Eq, PartialEq)]
+enum Action {
+    Add,
+    Remove,
+}
+
 impl SSABuilder {
     /// Allocate a new blank SSA builder struct. Use the API function to interact with the struct.
     pub fn new() -> Self {
@@ -133,7 +141,6 @@ impl SSABuilder {
             calls: Vec::new(),
             results: Vec::new(),
             side_effects: SideEffects::new(),
-            visited: Default::default(),
         }
     }
 
@@ -279,58 +286,18 @@ impl SSABuilder {
         (value, side_effects)
     }
 
-    /// There are two conditions for being able to optimize the lookup of a non local var:
-    ///  * The block must have a single predecessor
-    ///  * The block cannot be part of a predecessor loop
-    ///
-    /// To check for these conditions we perform a graph search over block predecessors
-    /// marking visited blocks and aborting if we find a previously seen block.
-    /// We stop the search if we find a block with multiple predecessors since the
-    /// original algorithm can handle these cases.
-    fn can_optimize_var_lookup(&mut self, block: Block) -> bool {
-        // Check that the initial block only has one predecessor. This is only a requirement
-        // for the first block.
-        if self.predecessors(block).len() != 1 {
-            return false;
-        }
-
-        self.visited.clear();
-        let mut current = block;
-        loop {
-            let predecessors = self.predecessors(current);
-
-            // We haven't found the original block and we have either reached the entry
-            // block, or we found the end of this line of dead blocks, either way we are
-            // safe to optimize this line of lookups.
-            if predecessors.len() == 0 {
-                return true;
-            }
-
-            // We can stop the search here, the algorithm can handle these cases, even if they are
-            // in an undefined island.
-            if predecessors.len() > 1 {
-                return true;
-            }
-
-            let next_current = predecessors[0].block;
-            if !self.visited.insert(current) {
-                return false;
-            }
-            current = next_current;
-        }
-    }
-
     /// Resolve the minimal SSA Value of `var` in `block` by traversing predecessors.
     ///
     /// This function sets up state for `run_state_machine()` but does not execute it.
     fn use_var_nonlocal(&mut self, func: &mut Function, var: Variable, ty: Type, block: Block) {
         // This function is split into two parts to appease the borrow checker.
         // Part 1: With a mutable borrow of self, update the DataFlowGraph if necessary.
-        let optimize_var_lookup = self.can_optimize_var_lookup(block);
         let data = &mut self.ssa_blocks[block];
         let case = if data.sealed {
-            // Optimize the common case of one predecessor: no param needed.
-            if optimize_var_lookup {
+            // Optimize the common case of one predecessor: no param needed. However, if following
+            // single-predecessor edges would go through a cycle ending up back here, then this
+            // optimization is unsafe, so fall back to adding a param anyway.
+            if data.predecessors.len() == 1 && !data.in_predecessor_cycle {
                 UseVarCases::SealedOnePredecessor(data.predecessors[0].block)
             } else {
                 // Break potential cycles by eagerly adding an operandless param.
@@ -378,11 +345,7 @@ impl SSABuilder {
     /// No predecessors are declared here and the block is not sealed.
     /// Predecessors have to be added with `declare_block_predecessor`.
     pub fn declare_block(&mut self, block: Block) {
-        self.ssa_blocks[block] = SSABlockData {
-            predecessors: PredBlockSmallVec::new(),
-            sealed: false,
-            undef_variables: Vec::new(),
-        };
+        self.ssa_blocks[block] = SSABlockData::default();
     }
 
     /// Declares a new predecessor for a `Block` and record the branch instruction
@@ -396,6 +359,7 @@ impl SSABuilder {
     /// of a jump table.
     pub fn declare_block_predecessor(&mut self, block: Block, pred: Block, inst: Inst) {
         debug_assert!(!self.is_sealed(block));
+        self.update_predecessor_cycle(block, pred, Action::Add);
         self.ssa_blocks[block].add_predecessor(pred, inst)
     }
 
@@ -405,7 +369,88 @@ impl SSABuilder {
     /// Note: use only when you know what you are doing, this might break the SSA building problem
     pub fn remove_block_predecessor(&mut self, block: Block, inst: Inst) -> Block {
         debug_assert!(!self.is_sealed(block));
-        self.ssa_blocks[block].remove_predecessor(inst)
+        let pred = self.ssa_blocks[block].remove_predecessor(inst);
+        self.update_predecessor_cycle(block, pred, Action::Remove);
+        pred
+    }
+
+    /// Call this when `pred` is not in the predecessors of `block`: before adding, or after
+    /// removing.
+    fn update_predecessor_cycle(&mut self, block: Block, mut pred: Block, action: Action) {
+        let block_ref = &self.ssa_blocks[block];
+
+        // Not counting `pred`, how many predecessors does `block` have? And will it have exactly
+        // one after the caller is done changing things?
+        let will_have_one_pred = match block_ref.predecessors.as_slice() {
+            // None: `pred` might reach `block` in a cycle. There'll be one predecessor afterward
+            // if we're adding `pred`.
+            [] => action == Action::Add,
+            // One: the other predecessor might reach `block` in a cycle. There'll be one
+            // predecessor afterward if we're removing `pred`.
+            [other] => {
+                pred = other.block;
+                action == Action::Remove
+            }
+            // Two or more: there is definitely no cycle through `block`, either before or after.
+            _ => {
+                debug_assert!(!block_ref.in_predecessor_cycle);
+                return;
+            }
+        };
+
+        if will_have_one_pred {
+            // This block is about to have exactly one predecessor. Is there a path from that block
+            // to this one, following only single-predecessor edges?
+            debug_assert!(!block_ref.in_predecessor_cycle);
+
+            // Shadow `pred` so we can check for a cycle without forgetting where it started.
+            let mut pred = pred;
+
+            // This loop terminates even if it encounters a cycle in the control-flow graph. Any
+            // path through blocks which have exactly one predecessor each must eventually reach
+            // one of three kinds of blocks:
+            // 1. The block that we started from, so it is part of a cycle; or
+            // 2. A block that does not have exactly one predecessor, so there's no cycle; or
+            // 3. A block which we've previously flagged as being part of a cycle.
+            // In case 3, the block we're currently updating is not part of that existing
+            // cycle and can't be part of any other cycle.
+
+            // Case 1 is the loop termination condition.
+            while pred != block {
+                let pred_ref = &self.ssa_blocks[pred];
+
+                if pred_ref.sealed_predecessors {
+                    // We're changing `block`'s predecessors, and we've reached a block whose
+                    // single-predecessor path can't change, so `block` must not be on that path.
+                    return;
+                }
+
+                // In cases 2 and 3, we aren't forming a cycle so there's nothing to update.
+                if pred_ref.in_predecessor_cycle || pred_ref.predecessors.len() != 1 {
+                    return;
+                }
+
+                pred = pred_ref.predecessors[0].block;
+            }
+        } else if !block_ref.in_predecessor_cycle {
+            // This block was not in a predecessor cycle before, and won't have exactly one
+            // predecessor afterward, so it still isn't in one. Nothing to update.
+            return;
+        }
+
+        // At this point we know that if `block`'s only predecessor were `pred`, then both blocks
+        // would be part of a predecessor cycle. Either `will_have_one_pred` is true and we're
+        // forming a new cycle, or there was an existing cycle that we're now breaking. In either
+        // case, there's a path of single-predecessor edges going from `pred` to `block` and we
+        // just need to flip the `in_predecessor_cycle` flag on every block in that path.
+        self.ssa_blocks[block].in_predecessor_cycle = will_have_one_pred;
+        while pred != block {
+            let pred_ref = &mut self.ssa_blocks[pred];
+            debug_assert_ne!(pred_ref.in_predecessor_cycle, will_have_one_pred);
+            debug_assert_eq!(pred_ref.predecessors.len(), 1);
+            pred_ref.in_predecessor_cycle = will_have_one_pred;
+            pred = pred_ref.predecessors[0].block;
+        }
     }
 
     /// Completes the global value numbering for a `Block`, all of its predecessors having been
@@ -463,11 +508,29 @@ impl SSABuilder {
 
     /// Set the `sealed` flag for `block`.
     fn mark_block_sealed(&mut self, block: Block) {
-        // Then we mark the block as sealed.
+        // This sealed block's `in_predecessor_cycle` flag can't change once either:
+        let sealed_predecessors = match &self.ssa_blocks[block].predecessors[..] {
+            // It has exactly one predecessor where the flag also can't change;
+            [pred] => pred.block == block || self.ssa_blocks[pred.block].sealed_predecessors,
+            // Or we can tell locally that it isn't part of a predecessor cycle.
+            _ => {
+                debug_assert!(!self.ssa_blocks[block].in_predecessor_cycle);
+                true
+            }
+        };
+        // Note that we only update `sealed_predecessors` at the time that this block is sealed,
+        // and using information from one predecessor at most. If this block is sealed before its
+        // predecessor, then we conservatively assume that `in_predecessor_cycle` could still
+        // change at any time. So `update_predecessor_cycle` will do more work than it would if we
+        // computed this precisely, but this function remains constant-time. Frontends which seal
+        // every block as soon as possible, like cranelift-wasm, shouldn't see much difference.
+
         let block_data = &mut self.ssa_blocks[block];
         debug_assert!(!block_data.sealed);
+        debug_assert!(!block_data.sealed_predecessors);
         debug_assert!(block_data.undef_variables.is_empty());
         block_data.sealed = true;
+        block_data.sealed_predecessors = sealed_predecessors;
 
         // We could call data.predecessors.shrink_to_fit() here, if
         // important, because no further predecessors will be added

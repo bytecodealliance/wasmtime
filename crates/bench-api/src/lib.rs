@@ -142,7 +142,7 @@ use std::slice;
 use std::{env, path::PathBuf};
 use target_lexicon::Triple;
 use wasmtime::{Config, Engine, Instance, Linker, Module, Store};
-use wasmtime_cli_flags::CommonOptions;
+use wasmtime_cli_flags::{CommonOptions, WasiModules};
 use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
 
 pub type ExitCode = c_int;
@@ -238,7 +238,7 @@ impl WasmBenchConfig {
         Ok(Some(stdin_path.into()))
     }
 
-    fn execution_flags(&self) -> Result<Option<Config>> {
+    fn execution_flags(&self) -> Result<Option<CommonOptions>> {
         if self.execution_flags_ptr.is_null() {
             return Ok(None);
         }
@@ -250,8 +250,7 @@ impl WasmBenchConfig {
             .context("given execution flags string is not valid UTF-8")?;
 
         let options = CommonOptions::parse_from_str(execution_flags)?;
-        let config = options.config(Some(&Triple::host().to_string()))?;
-        Ok(Some(config))
+        Ok(Some(options))
     }
 }
 
@@ -281,10 +280,10 @@ pub extern "C" fn wasm_bench_create(
         let stdout_path = config.stdout_path()?;
         let stderr_path = config.stderr_path()?;
         let stdin_path = config.stdin_path()?;
-        let engine_config = config.execution_flags()?;
+        let options = config.execution_flags()?;
 
         let state = Box::new(BenchState::new(
-            engine_config,
+            options,
             config.compilation_timer,
             config.compilation_start,
             config.compilation_end,
@@ -413,14 +412,13 @@ struct HostState {
     wasi: WasiCtx,
     #[cfg(feature = "wasi-nn")]
     wasi_nn: wasmtime_wasi_nn::WasiNnCtx,
-
     #[cfg(feature = "wasi-crypto")]
     wasi_crypto: wasmtime_wasi_crypto::WasiCryptoCtx,
 }
 
 impl BenchState {
     fn new(
-        engine_config: Option<Config>,
+        options: Option<CommonOptions>,
         compilation_timer: *mut u8,
         compilation_start: extern "C" fn(*mut u8),
         compilation_end: extern "C" fn(*mut u8),
@@ -432,8 +430,11 @@ impl BenchState {
         execution_end: extern "C" fn(*mut u8),
         make_wasi_cx: impl FnMut() -> Result<WasiCtx> + 'static,
     ) -> Result<Self> {
+        let config = options
+            .map(|o| o.config(Some(&Triple::host().to_string()))?)
+            .unwrap_or(Config::new());
         // NB: do not configure a code cache.
-        let engine = Engine::new(&engine_config.unwrap_or(Config::new()))?;
+        let engine = Engine::new(&config)?;
         let mut linker = Linker::<HostState>::new(&engine);
 
         // Define the benchmarking start/end functions.
@@ -451,13 +452,24 @@ impl BenchState {
             Ok(())
         })?;
 
-        wasmtime_wasi::add_to_linker(&mut linker, |cx| &mut cx.wasi)?;
+        let wasi_modules = options
+            .map(|o| o.wasi_modules)
+            .flatten()
+            .unwrap_or(WasiModules::default());
+
+        if wasi_modules.wasi_common {
+            wasmtime_wasi::add_to_linker(&mut linker, |cx| &mut cx.wasi)?;
+        }
 
         #[cfg(feature = "wasi-nn")]
-        wasmtime_wasi_nn::add_to_linker(&mut linker, |cx| &mut cx.wasi_nn)?;
+        if wasi_modules.wasi_nn {
+            wasmtime_wasi_nn::add_to_linker(&mut linker, |cx| &mut cx.wasi_nn)?;
+        }
 
         #[cfg(feature = "wasi-crypto")]
-        wasmtime_wasi_crypto::add_to_linker(&mut linker, |cx| &mut cx.wasi_crypto)?;
+        if wasi_modules.wasi_crypto {
+            wasmtime_wasi_crypto::add_to_linker(&mut linker, |cx| &mut cx.wasi_crypto)?;
+        }
 
         Ok(Self {
             linker,
