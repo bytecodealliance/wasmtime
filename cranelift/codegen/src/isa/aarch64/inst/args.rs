@@ -558,18 +558,6 @@ pub enum ScalarSize {
 }
 
 impl ScalarSize {
-    /// Convert from a needed width to the smallest size that fits.
-    pub fn from_bits<I: Into<usize>>(bits: I) -> ScalarSize {
-        match bits.into().next_power_of_two() {
-            8 => ScalarSize::Size8,
-            16 => ScalarSize::Size16,
-            32 => ScalarSize::Size32,
-            64 => ScalarSize::Size64,
-            128 => ScalarSize::Size128,
-            w => panic!("Unexpected type width: {}", w),
-        }
-    }
-
     /// Convert to an integer operand size.
     pub fn operand_size(&self) -> OperandSize {
         match self {
@@ -577,13 +565,6 @@ impl ScalarSize {
             ScalarSize::Size64 => OperandSize::Size64,
             _ => panic!("Unexpected operand_size request for: {:?}", self),
         }
-    }
-
-    /// Convert from a type into the smallest size that fits.
-    pub fn from_ty(ty: Type) -> ScalarSize {
-        debug_assert!(!ty.is_vector());
-
-        Self::from_bits(ty_bits(ty))
     }
 
     /// Return the encoding bits that are used by some scalar FP instructions
@@ -642,32 +623,6 @@ impl VectorSize {
             (ScalarSize::Size32, true) => VectorSize::Size32x4,
             (ScalarSize::Size64, true) => VectorSize::Size64x2,
             _ => panic!("Unexpected scalar FP operand size: {:?}", size),
-        }
-    }
-
-    /// Convert from a type into a vector operand size.
-    pub fn from_ty(ty: Type) -> VectorSize {
-        debug_assert!(ty.is_vector());
-
-        match ty {
-            B8X8 => VectorSize::Size8x8,
-            B8X16 => VectorSize::Size8x16,
-            B16X4 => VectorSize::Size16x4,
-            B16X8 => VectorSize::Size16x8,
-            B32X2 => VectorSize::Size32x2,
-            B32X4 => VectorSize::Size32x4,
-            B64X2 => VectorSize::Size64x2,
-            F32X2 => VectorSize::Size32x2,
-            F32X4 => VectorSize::Size32x4,
-            F64X2 => VectorSize::Size64x2,
-            I8X8 => VectorSize::Size8x8,
-            I8X16 => VectorSize::Size8x16,
-            I16X4 => VectorSize::Size16x4,
-            I16X8 => VectorSize::Size16x8,
-            I32X2 => VectorSize::Size32x2,
-            I32X4 => VectorSize::Size32x4,
-            I64X2 => VectorSize::Size64x2,
-            _ => unimplemented!("Unsupported type: {}", ty),
         }
     }
 

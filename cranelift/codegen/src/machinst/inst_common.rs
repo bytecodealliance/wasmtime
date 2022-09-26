@@ -24,12 +24,6 @@ pub(crate) struct InsnOutput {
     pub(crate) output: usize,
 }
 
-pub(crate) fn insn_inputs<I: VCodeInst>(ctx: &Lower<I>, insn: IRInst) -> SmallVec<[InsnInput; 4]> {
-    (0..ctx.num_inputs(insn))
-        .map(|i| InsnInput { insn, input: i })
-        .collect()
-}
-
 pub(crate) fn insn_outputs<I: VCodeInst>(
     ctx: &Lower<I>,
     insn: IRInst,
