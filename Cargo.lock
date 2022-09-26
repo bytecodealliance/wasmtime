@@ -439,7 +439,7 @@ dependencies = [
 
 [[package]]
 name = "component-fuzz-util"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "arbitrary",
@@ -459,7 +459,7 @@ dependencies = [
 
 [[package]]
 name = "component-test-util"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "arbitrary",
@@ -578,7 +578,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-filetests"
-version = "0.73.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -612,7 +612,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-fuzzgen"
-version = "0.75.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "arbitrary",
@@ -3380,7 +3380,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-bench-api"
-version = "0.19.0"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "cap-std",
@@ -3397,7 +3397,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-c-api"
-version = "0.19.0"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "cap-std",
@@ -3602,7 +3602,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-fuzzing"
-version = "0.19.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "arbitrary",

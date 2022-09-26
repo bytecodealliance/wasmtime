@@ -2,13 +2,13 @@
 name = "component-fuzz-util"
 authors = ["The Wasmtime Project Developers"]
 license = "Apache-2.0 WITH LLVM-exception"
-version = "0.1.0"
-edition = "2021"
+version = "0.0.0"
+edition.workspace = true
 publish = false
 
 [dependencies]
-anyhow = { version = "1.0.19" }
+anyhow = { workspace = true }
 arbitrary = { version = "1.1.0", features = ["derive"] }
 proc-macro2 = "1.0"
 quote = "1.0"
-wasmtime-component-util = { path = "../../component-util" }
+wasmtime-component-util = { workspace = true }
