@@ -1347,11 +1347,6 @@
 ;;;; Helpers for Working With Integer Comparison Codes ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 
-;; An extractor that returns `$true` when the comparison given is an ordered
-;; comparison, and `$false` for == and !=.
-(decl intcc_is_ordered (bool) IntCC)
-(extern extractor infallible intcc_is_ordered intcc_is_ordered)
-
 ;; This is a direct import of `IntCC::without_equal`.
 ;; Get the corresponding IntCC with the equal component removed.
 ;; For conditions without a zero component, this is a no-op.
@@ -3476,7 +3471,7 @@
 
 ;; For I128 values (held in two GPRs), the instruction sequences depend on what
 ;; kind of condition is tested.
-(rule 2 (emit_cmp (and (intcc_is_ordered $false) (IntCC.Equal)) a @ (value_type $I128) b)
+(rule 3 (emit_cmp (IntCC.Equal) a @ (value_type $I128) b)
       (let ((a_lo Gpr (value_regs_get_gpr a 0))
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
@@ -3497,7 +3492,7 @@
           (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp)
           (CC.NZ))))
 
-(rule 2 (emit_cmp (and (intcc_is_ordered $false) (IntCC.NotEqual)) a @ (value_type $I128) b)
+(rule 3 (emit_cmp (IntCC.NotEqual) a @ (value_type $I128) b)
       (let ((a_lo Gpr (value_regs_get_gpr a 0))
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
@@ -3512,7 +3507,7 @@
 
 ;; Result = (a_hi <> b_hi) ||
 ;;          (a_hi == b_hi && a_lo <> b_lo)
-(rule 2 (emit_cmp (and (intcc_is_ordered $true) cc) a @ (value_type $I128) b)
+(rule 2 (emit_cmp cc a @ (value_type $I128) b)
       (let ((a_lo Gpr (value_regs_get_gpr a 0))
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))

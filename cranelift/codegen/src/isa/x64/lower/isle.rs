@@ -570,15 +570,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
-    fn intcc_is_ordered(&mut self, x: &IntCC) -> bool {
-        match x {
-            IntCC::Equal => false,
-            IntCC::NotEqual => false,
-            _ => true,
-        }
-    }
-
-    #[inline]
     fn intcc_without_eq(&mut self, x: &IntCC) -> IntCC {
         x.without_equal()
     }
