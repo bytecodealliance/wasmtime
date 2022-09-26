@@ -43,7 +43,6 @@ pub enum RangeView {
 #[doc(hidden)]
 macro_rules! isle_prelude_methods {
     () => {
-
         /// We don't have a way of making a `()` value in isle directly.
         #[inline]
         fn unit(&mut self) -> Unit {
