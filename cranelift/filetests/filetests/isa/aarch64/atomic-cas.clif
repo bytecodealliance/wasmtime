@@ -18,8 +18,9 @@ block0(v0: i64, v1: i32, v2: i32):
 ;   stp x24, x25, [sp, #-16]!
 ; block0:
 ;   mov x25, x0
-;   mov x26, x1
+;   mov x9, x1
 ;   mov x28, x2
+;   mov x26, x9
 ;   atomic_cas_loop_32 addr=x25, expect=x26, replacement=x28, oldval=x27, scratch=x24
 ;   subs wzr, w27, w26
 ;   cset x8, eq
