@@ -726,8 +726,8 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_fixed_use(addr, xreg(25));
             collector.reg_fixed_use(expected, xreg(26));
             collector.reg_fixed_use(replacement, xreg(28));
-            collector.reg_fixed_def(oldval, xreg(24));
-            collector.reg_fixed_def(scratch, xreg(27));
+            collector.reg_fixed_def(oldval, xreg(27));
+            collector.reg_fixed_def(scratch, xreg(24));
         }
         &Inst::LoadAcquire { rt, rn, .. } => {
             collector.reg_use(rn);
