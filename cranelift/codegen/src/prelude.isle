@@ -9,6 +9,9 @@
 ;; `()`
 (type Unit (primitive Unit))
 
+(decl unit () Unit)
+(extern constructor unit unit)
+
 ;; `bool` is declared in `clif.isle`.
 (extern const $true bool)
 (extern const $false bool)
@@ -956,10 +959,6 @@
 (decl range_empty () Range)
 (extractor (range_empty) (range_view (RangeView.Empty)))
 
-;; Extractor to test whether a range has a single element in it
-(decl range_singleton (usize) Range)
-(extractor (range_singleton x) (range_unwrap x (range_empty)))
-
 ;; Extractor to return the first value in the range, and a sub-range
 ;; containing the remaining values.
 (decl range_unwrap (usize Range) Range)
@@ -1094,12 +1093,10 @@
 ;; vectors. Fails for the empty range.
 (decl copy_to_regs_range (Type Range WritableValueRegs ValueRegs) Unit)
 
-(rule (copy_to_regs_range ty (range_singleton idx) dsts srcs)
-      (let ((dst WritableReg (writable_regs_get dsts idx))
-            (src Reg (value_regs_get srcs idx)))
-        (emit (gen_move ty dst src))))
+(rule (copy_to_regs_range ty (range_empty) dsts srcs)
+      (unit))
 
-(rule (copy_to_regs_range ty (range_unwrap head tail @ (range_nonempty)) dsts srcs)
+(rule (copy_to_regs_range ty (range_unwrap head tail) dsts srcs)
       (let ((dst WritableReg (writable_regs_get dsts head))
             (src Reg (value_regs_get srcs head))
             (_ Unit (emit (gen_move ty dst src))))
