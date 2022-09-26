@@ -12,7 +12,7 @@
 use crate::alias_analysis::AliasAnalysis;
 use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
-use crate::egg::FuncEGraph;
+use crate::egraph::FuncEGraph;
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::Function;
 use crate::isa::TargetIsa;

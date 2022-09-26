@@ -1,8 +1,8 @@
 //! Optimization driver using ISLE rewrite rules on an egraph.
 
-use crate::egg::FuncEGraph;
-use crate::egg::MemoryState;
-pub use crate::egg::{Node, NodeCtx};
+use crate::egraph::FuncEGraph;
+use crate::egraph::MemoryState;
+pub use crate::egraph::{Node, NodeCtx};
 use crate::ir::condcodes;
 pub use crate::ir::condcodes::{FloatCC, IntCC};
 pub use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64, Uimm8};
