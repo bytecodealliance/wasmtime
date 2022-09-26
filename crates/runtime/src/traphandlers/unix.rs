@@ -87,7 +87,7 @@ unsafe extern "C" fn trap_handler(
         // handling, and reset our trap handling flag. Then we figure
         // out what to do based on the result of the trap handling.
         let (pc, fp) = get_pc_and_fp(context, signum);
-        let jmp_buf = info.jmp_buf_if_trap(pc, |handler| handler(signum, siginfo, context));
+        let jmp_buf = info.take_jmp_buf_if_trap(pc, |handler| handler(signum, siginfo, context));
 
         // Figure out what to do based on the result of this handling of
         // the trap. Note that our sentinel value of 1 means that the
