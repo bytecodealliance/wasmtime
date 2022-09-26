@@ -1607,35 +1607,32 @@
 ;; Load a value into a register.
 (decl x64_load (Type SyntheticAmode ExtKind) Reg)
 
-(rule 0 (x64_load (fits_in_32 ty) addr (ExtKind.SignExtend))
+(rule 1 (x64_load (fits_in_32 ty) addr (ExtKind.SignExtend))
       (x64_movsx (ext_mode (ty_bytes ty) 8)
              addr))
 
-(rule 1 (x64_load $I64 addr _ext_kind)
+(rule 2 (x64_load $I64 addr _ext_kind)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.Mov64MR addr dst))))
         dst))
 
-(rule 1 (x64_load $F32 addr _ext_kind)
+(rule 2 (x64_load $F32 addr _ext_kind)
       (xmm_unary_rm_r (SseOpcode.Movss)
                       addr))
 
-(rule 1 (x64_load $F64 addr _ext_kind)
+(rule 2 (x64_load $F64 addr _ext_kind)
       (xmm_unary_rm_r (SseOpcode.Movsd)
                       addr))
 
-(rule 1 (x64_load $F32X4 addr _ext_kind)
+(rule 2 (x64_load $F32X4 addr _ext_kind)
       (xmm_unary_rm_r (SseOpcode.Movups)
                       addr))
 
-(rule 1 (x64_load $F64X2 addr _ext_kind)
+(rule 2 (x64_load $F64X2 addr _ext_kind)
       (xmm_unary_rm_r (SseOpcode.Movupd)
                       addr))
 
-(rule 0 (x64_load (multi_lane _bits _lanes) addr (ExtKind.None))
-      (xmm_unary_rm_r (SseOpcode.Movdqu) addr))
-
-(rule 0 (x64_load (multi_lane _bits _lanes) addr (ExtKind.ZeroExtend))
+(rule 0 (x64_load (multi_lane _bits _lanes) addr _ext_kind)
       (xmm_unary_rm_r (SseOpcode.Movdqu) addr))
 
 (decl x64_mov (Amode) Reg)
@@ -3443,14 +3440,11 @@
 ;; Ensure that we put the `x` argument into a register for single-register
 ;; gpr-typed arguments, as we rely on this for the legalization of heap_addr and
 ;; loading easily computed constants (like 0) from memory is too expensive.
-(rule (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type (is_single_register_gpr_type ty)) y)
+(rule 1 (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type (is_single_register_gpr_type ty)) y)
       (with_flags producer (cmove ty cc (put_in_gpr x) y)))
 
 ;; Otherwise, fall back on the behavior of `cmove_from_values`.
-(rule (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type (is_multi_register_gpr_type ty)) y)
-      (with_flags producer (cmove_from_values ty cc x y)))
-
-(rule (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type (is_xmm_type ty)) y)
+(rule 0 (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type ty) y)
       (with_flags producer (cmove_from_values ty cc x y)))
 
 (decl emit_cmp (IntCC Value Value) IcmpCondResult)
