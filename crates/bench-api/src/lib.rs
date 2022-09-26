@@ -430,9 +430,11 @@ impl BenchState {
         execution_end: extern "C" fn(*mut u8),
         make_wasi_cx: impl FnMut() -> Result<WasiCtx> + 'static,
     ) -> Result<Self> {
-        let config = options
-            .map(|o| o.config(Some(&Triple::host().to_string()))?)
-            .unwrap_or(Config::new());
+        let config = if let Some(o) = &options {
+            o.config(Some(&Triple::host().to_string()))?
+        } else {
+            Config::new()
+        };
         // NB: do not configure a code cache.
         let engine = Engine::new(&config)?;
         let mut linker = Linker::<HostState>::new(&engine);
