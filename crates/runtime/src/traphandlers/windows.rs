@@ -62,7 +62,7 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
                 compile_error!("unsupported platform");
             }
         }
-        let jmp_buf = info.jmp_buf_if_trap(ip, |handler| handler(exception_info));
+        let jmp_buf = info.take_jmp_buf_if_trap(ip, |handler| handler(exception_info));
         if jmp_buf.is_null() {
             ExceptionContinueSearch
         } else if jmp_buf as usize == 1 {
