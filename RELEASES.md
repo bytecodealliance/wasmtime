@@ -1,5 +1,24 @@
 --------------------------------------------------------------------------------
 
+## 1.0.1
+
+Released 2022-09-26
+
+This is a patch release that incorporates a fix for a miscompilation of an
+atomic-CAS operator on aarch64. The instruction is not usable from Wasmtime
+with default settings, but may be used if the Wasm atomics extension is
+enabled. The bug may also be reachable via other uses of Cranelift. Thanks to
+@bjorn3 for reporting and debugging this issue!
+
+### Fixed
+
+* Fixed a miscompilation of `atomic_cas` on aarch64. The output register was
+  swapped with a temporary register in the register-allocator constraints.
+  [#4959](https://github.com/bytecodealliance/wasmtime/pull/4959)
+  [#4960](https://github.com/bytecodealliance/wasmtime/pull/4960)
+
+--------------------------------------------------------------------------------
+
 ## 1.0.0
 
 Released 2022-09-20
