@@ -12,8 +12,8 @@ keywords = ["compile", "compiler", "jit"]
 edition.workspace = true
 
 [dependencies]
-cranelift-codegen = { path = "../codegen", version = "0.89.0", default-features = false }
-cranelift-frontend = { path = "../frontend", version = "0.89.0", default-features = false }
+cranelift-codegen = { workspace = true }
+cranelift-frontend = { workspace = true }
 
 [features]
 default = ["std"]
