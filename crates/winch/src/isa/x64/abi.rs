@@ -64,7 +64,7 @@ impl ABI for X64ABI {
 impl X64ABI {
     fn to_abi_arg(
         wasm_arg: &WasmType,
-        stack_offset: &mut u64,
+        stack_offset: &mut u32,
         index_env: &mut RegIndexEnv,
     ) -> ABIArg {
         let (reg, ty) = match wasm_arg {
@@ -78,7 +78,7 @@ impl X64ABI {
         let default = || {
             let arg = ABIArg::stack_offset(*stack_offset, *ty);
             let size = Self::word_bytes();
-            *stack_offset += size as u64;
+            *stack_offset += size;
             arg
         };
 
@@ -153,8 +153,8 @@ mod tests {
         match_reg_arg(params.get(3).unwrap(), I64, regs::rcx());
         match_reg_arg(params.get(4).unwrap(), I32, regs::r8());
         match_reg_arg(params.get(5).unwrap(), I32, regs::r9());
-        match_stack_arg(params.get(6).unwrap(), I64, 0u64);
-        match_stack_arg(params.get(7).unwrap(), I32, 8u64);
+        match_stack_arg(params.get(6).unwrap(), I64, 0);
+        match_stack_arg(params.get(7).unwrap(), I32, 8);
     }
 
     #[test]
@@ -176,7 +176,7 @@ mod tests {
         match_reg_arg(params.get(5).unwrap(), F32, regs::xmm5());
         match_reg_arg(params.get(6).unwrap(), F64, regs::xmm6());
         match_reg_arg(params.get(7).unwrap(), F32, regs::xmm7());
-        match_stack_arg(params.get(8).unwrap(), F64, 0u64);
+        match_stack_arg(params.get(8).unwrap(), F64, 0);
     }
 
     #[test]
@@ -211,7 +211,7 @@ mod tests {
         }
     }
 
-    fn match_stack_arg(abi_arg: &ABIArg, expected_ty: WasmType, expected_offset: u64) {
+    fn match_stack_arg(abi_arg: &ABIArg, expected_ty: WasmType, expected_offset: u32) {
         match abi_arg {
             &ABIArg::Stack { offset, ty } => {
                 assert_eq!(offset, expected_offset);

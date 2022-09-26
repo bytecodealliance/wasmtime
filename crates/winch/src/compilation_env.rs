@@ -93,7 +93,7 @@ fn compute_local_slots<A: ABI>(
     sig: &ABISig,
     body_data: &mut FunctionBodyData,
     abi: &A,
-) -> Result<(Locals, u64)> {
+) -> Result<(Locals, u32)> {
     // Go over the function ABI-signature and
     // calculate the stack slots
     //
@@ -108,7 +108,7 @@ fn compute_local_slots<A: ABI>(
     //     The slot is calculated by accumulating into the `next_frame_size`
     //     the size + alignment of the type that the register is holding
     //
-    //  Internal notes:
+    //  NOTE
     //      SpiderMonkey's implementation doesn't append any sort of
     //      metadata to the locals regarding stack addressing mode
     //      (stack pointer or frame pointer), the offset is
@@ -118,9 +118,9 @@ fn compute_local_slots<A: ABI>(
     //      Winch appends an addressing mode to each slot, in the end
     //      we want positive addressing for both locals and stack arguments
 
-    let arg_base_offset: u64 = abi.arg_base_offset().into();
-    let stack_align: u64 = abi.stack_align().into();
-    let mut next_stack: u64 = 0;
+    let arg_base_offset = abi.arg_base_offset().into();
+    let stack_align = abi.stack_align().into();
+    let mut next_stack = 0u32;
     let mut slots: Locals = sig
         .params
         .iter()
@@ -137,12 +137,12 @@ fn compute_local_slots<A: ABI>(
     Ok((slots, locals_size))
 }
 
-fn abi_arg_to_slot(arg: &ABIArg, next_stack: &mut u64, arg_base_offset: u64) -> LocalSlot {
+fn abi_arg_to_slot(arg: &ABIArg, next_stack: &mut u32, arg_base_offset: u32) -> LocalSlot {
     match arg {
         // Create a local slot, for input register spilling,
         // with type-size aligned access
         ABIArg::Reg { ty, reg: _ } => {
-            let ty_size = ty_size(&ty) as u64;
+            let ty_size = ty_size(&ty);
             *next_stack = align_to(*next_stack, ty_size) + ty_size;
             LocalSlot::new(*ty, *next_stack)
         }
@@ -155,7 +155,7 @@ fn abi_arg_to_slot(arg: &ABIArg, next_stack: &mut u64, arg_base_offset: u64) -> 
 fn append_local_slots(
     slots: &mut Locals,
     body_data: &mut FunctionBodyData,
-    next_stack: &mut u64,
+    next_stack: &mut u32,
 ) -> Result<()> {
     let mut reader = body_data.body.get_binary_reader();
     let validator = &mut body_data.validator;
@@ -169,7 +169,7 @@ fn append_local_slots(
 
         let ty: WasmType = ty.try_into()?;
         for _ in 0..count {
-            let ty_size = ty_size(&ty) as u64;
+            let ty_size = ty_size(&ty);
             *next_stack = align_to(*next_stack, ty_size);
             slots.push(LocalSlot::new(ty, *next_stack));
         }

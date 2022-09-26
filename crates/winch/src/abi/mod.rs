@@ -3,6 +3,7 @@ use smallvec::SmallVec;
 use std::ops::{Add, BitAnd, Not, Sub};
 use wasmtime_environ::{WasmFuncType, WasmType};
 
+pub(crate) mod addressing_mode;
 pub(crate) mod local;
 
 /// Trait implemented by a specific ISA and used to provide
@@ -45,7 +46,7 @@ pub(crate) enum ABIArg {
         /// Offset of the argument relative to the frame pointer
         // SpiderMonkey's baseline compiler references arguments relative
         // to the frame pointer and locals relative to the stack pointer
-        offset: u64,
+        offset: u32,
     },
 }
 
@@ -54,7 +55,7 @@ impl ABIArg {
         Self::Reg { reg, ty }
     }
 
-    pub(crate) fn stack_offset(offset: u64, ty: WasmType) -> Self {
+    pub(crate) fn stack_offset(offset: u32, ty: WasmType) -> Self {
         Self::Stack { ty, offset }
     }
 }
