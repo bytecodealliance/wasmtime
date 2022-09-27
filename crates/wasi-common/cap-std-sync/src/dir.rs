@@ -27,6 +27,9 @@ impl Dir {
     ) -> Result<File, Error> {
         use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt};
 
+        // The current code assumes that directories are opened with `open_dir_`.
+        assert!(!oflags.contains(OFlags::DIRECTORY));
+
         let mut opts = cap_std::fs::OpenOptions::new();
 
         if oflags.contains(OFlags::CREATE | OFlags::EXCLUSIVE) {

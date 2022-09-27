@@ -17,7 +17,7 @@ use std::ops::Deref;
 use wiggle::GuestPtr;
 
 pub mod error;
-use error::{Error, ErrorExt};
+use error::{Errno, Error, ErrorExt};
 
 // Limit the size of intermediate buffers when copying to WebAssembly shared
 // memory.
@@ -36,6 +36,28 @@ wiggle::from_witx!({
 impl wiggle::GuestErrorType for types::Errno {
     fn success() -> Self {
         Self::Success
+    }
+}
+
+fn is_error_notdir(e: &Error) -> bool {
+    if let Some(e) = e.downcast_ref() {
+        match e {
+            Errno::Notdir => true,
+            _ => false,
+        }
+    } else {
+        false
+    }
+}
+
+fn is_error_noent(e: &Error) -> bool {
+    if let Some(e) = e.downcast_ref() {
+        match e {
+            Errno::Noent => true,
+            _ => false,
+        }
+    } else {
+        false
     }
 }
 
@@ -757,41 +779,77 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let oflags = OFlags::from(&oflags);
         let fdflags = FdFlags::from(fdflags);
         let path = path.as_cow()?;
-        if oflags.contains(OFlags::DIRECTORY) {
-            if oflags.contains(OFlags::CREATE)
-                || oflags.contains(OFlags::EXCLUSIVE)
-                || oflags.contains(OFlags::TRUNCATE)
-            {
-                return Err(Error::invalid_argument().context("directory oflags"));
-            }
-            let dir_caps = dir_entry.child_dir_caps(DirCaps::from(&fs_rights_base));
-            let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_inheriting));
-            let dir = dir_entry.get_cap(DirCaps::OPEN)?;
-            let child_dir = dir.open_dir(symlink_follow, path.deref()).await?;
-            drop(dir);
-            let fd = table.push(Box::new(DirEntry::new(
-                dir_caps, file_caps, None, child_dir,
-            )))?;
-            Ok(types::Fd::from(fd))
-        } else {
-            let mut required_caps = DirCaps::OPEN;
-            if oflags.contains(OFlags::CREATE) {
-                required_caps = required_caps | DirCaps::CREATE_FILE;
-            }
 
-            let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_base));
-            let dir = dir_entry.get_cap(required_caps)?;
-            let read = file_caps.contains(FileCaps::READ);
-            let write = file_caps.contains(FileCaps::WRITE)
-                || file_caps.contains(FileCaps::ALLOCATE)
-                || file_caps.contains(FileCaps::FILESTAT_SET_SIZE);
-            let file = dir
-                .open_file(symlink_follow, path.deref(), oflags, read, write, fdflags)
-                .await?;
-            drop(dir);
-            let fd = table.push(Box::new(FileEntry::new(file_caps, file)))?;
-            Ok(types::Fd::from(fd))
+        let mut required_caps = DirCaps::OPEN;
+        if oflags.contains(OFlags::CREATE) {
+            required_caps = required_caps | DirCaps::CREATE_FILE;
         }
+        let dir = dir_entry.get_cap(required_caps)?;
+
+        // OFlags that are not supported for directories
+        let non_dir_oflags =
+            oflags.intersects(OFlags::CREATE | OFlags::EXCLUSIVE | OFlags::TRUNCATE);
+
+        // Check for `O_DIRECTORY` being used with OFlags not supported for directories.
+        if oflags.contains(OFlags::DIRECTORY) && non_dir_oflags {
+            return Err(Error::invalid_argument().context("directory oflags"));
+        }
+
+        // Determine whether we think we're not meant to open a directory: If
+        // we have any non-dir OFlags, or if we have `FD_WRITE` among the
+        // requested rights.
+        let non_dir = non_dir_oflags || fs_rights_base.contains(types::Rights::FD_WRITE);
+
+        // If the user requested a directory, or a directory-specific right, or
+        // if even they didn't make a request that's obviously not intending to
+        // open a directory, try to open it as a directory.
+        //
+        // On Unix, this kind of dance isn't necessary, because we could use
+        // a single open for either a file or a directory. On Windows, opening
+        // a directory requires special flags. In the future, we should specialize
+        // this code to use Unix-specific APIs instead of portable APIs so that
+        // it can avoid doing two opens.
+        if oflags.contains(OFlags::DIRECTORY)
+            || fs_rights_base.contains(types::Rights::FD_READDIR)
+            || !non_dir
+        {
+            match dir.open_dir(symlink_follow, path.deref()).await {
+                Ok(child_dir) => {
+                    let dir_caps = dir_entry.child_dir_caps(DirCaps::from(&fs_rights_base));
+                    let file_caps =
+                        dir_entry.child_file_caps(FileCaps::from(&fs_rights_inheriting));
+                    drop(dir);
+                    let fd = table.push(Box::new(DirEntry::new(
+                        dir_caps, file_caps, None, child_dir,
+                    )))?;
+                    return Ok(types::Fd::from(fd));
+                }
+                Err(e) => {
+                    // If we required a directory and didn't get one, fail.
+                    if oflags.contains(OFlags::DIRECTORY) {
+                        return Err(e);
+                    }
+                    // If the name didn't exist, or existed but isn't a
+                    // directory, proceed to try to open it as a file.
+                    // Otherwise fail.
+                    if !is_error_noent(&e) && !is_error_notdir(&e) {
+                        return Err(e);
+                    }
+                }
+            }
+        }
+
+        let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_base));
+        let dir = dir_entry.get_cap(required_caps)?;
+        let read = file_caps.contains(FileCaps::READ);
+        let write = file_caps
+            .intersects(FileCaps::WRITE | FileCaps::ALLOCATE | FileCaps::FILESTAT_SET_SIZE);
+        let file = dir
+            .open_file(symlink_follow, path.deref(), oflags, read, write, fdflags)
+            .await?;
+        drop(dir);
+        let fd = table.push(Box::new(FileEntry::new(file_caps, file)))?;
+        Ok(types::Fd::from(fd))
     }
 
     async fn path_readlink<'a>(
