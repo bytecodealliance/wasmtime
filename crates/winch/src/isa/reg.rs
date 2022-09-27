@@ -1,6 +1,7 @@
 use regalloc2::{PReg, RegClass};
 
 /// A newtype abstraction on top of a physical register
+// NOTE
 // This is temporary; the intention behind this newtype
 // is to keep the usage of PReg contained to this module
 // so that the rest of Winch should only need to operate

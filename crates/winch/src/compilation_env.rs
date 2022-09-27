@@ -4,7 +4,7 @@ use wasmtime_environ::{FunctionBodyData, WasmFuncType, WasmType};
 
 use crate::abi::{align_to, ty_size};
 use crate::frame::Frame;
-use crate::masm::MacroAssembler;
+use crate::masm::{MacroAssembler, OperandSize};
 use anyhow::Result;
 
 // TODO:
@@ -73,19 +73,51 @@ impl<'x, 'a: 'x, A: ABI, C: MacroAssembler> CompilationEnv<'x, 'a, A, C> {
     // 1. Prologue
     // 2. Stack checks
     // 3. Stack allocation
-    fn emit_start(&self) -> Result<()> {
+    fn emit_start(&mut self) -> Result<()> {
+        self.masm.prologue();
+        self.masm.reserve_stack(self.frame.locals_size);
         Ok(())
     }
 
     // 1. Perform input register spilling
     // 2. Emit machine code per instruction
-    fn emit_body(&self) -> Result<()> {
+    fn emit_body(&mut self) -> Result<()> {
+        self.spill_register_arguments();
         Ok(())
     }
 
     // Emit the usual function end instruction sequence
-    fn emit_end(&self) -> Result<()> {
+    fn emit_end(&mut self) -> Result<()> {
         Ok(())
+    }
+
+    fn spill_register_arguments(&mut self) {
+        // TODO
+        // Revisit this once the implicit VMContext argument is introduced;
+        // when that happens the mapping between local slots and abi args
+        // is not going to be symmetric
+        self.sig
+            .params
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| a.is_reg())
+            .for_each(|(index, arg)| {
+                let ty = arg.ty();
+                let local = self
+                    .locals
+                    .get(index)
+                    .expect("valid local slot at location");
+                let addr = self.masm.local_address(local);
+                let src = arg
+                    .get_reg()
+                    .expect("arg should be associated to a register");
+
+                match &ty {
+                    WasmType::I32 => self.masm.store(src, addr, OperandSize::S32),
+                    WasmType::I64 => self.masm.store(src, addr, OperandSize::S64),
+                    _ => panic!("Unsupported type {}", ty),
+                }
+            });
     }
 }
 
