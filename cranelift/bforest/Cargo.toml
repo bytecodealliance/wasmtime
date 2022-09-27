@@ -12,7 +12,7 @@ keywords = ["btree", "forest", "set", "map"]
 edition.workspace = true
 
 [dependencies]
-cranelift-entity = { path = "../entity", version = "0.89.0", default-features = false }
+cranelift-entity = { workspace = true }
 
 [badges]
 maintenance = { status = "experimental" }
