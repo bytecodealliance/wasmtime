@@ -21,7 +21,6 @@ libc = "0.2.95"
 default = ["std"]
 std = ["cranelift-codegen/std"]
 core = ["cranelift-codegen/core"]
-riscv64=[]
 
 [badges]
 maintenance = { status = "experimental" }

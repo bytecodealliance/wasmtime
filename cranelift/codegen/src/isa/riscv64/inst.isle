@@ -674,12 +674,10 @@
 ;;;; lowest four bit are used.
 (type FenceReq (primitive u8))
 
-(type
-  FenceFm (enum 
+(type FenceFm (enum 
     (None)
     (Tso)
-  )
-)
+))
 
 
 (type VecBranchTarget (primitive VecBranchTarget))
