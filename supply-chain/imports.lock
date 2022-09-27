@@ -32,6 +32,12 @@ who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.1.56 -> 0.1.57"
 
+[[audits.mozilla.audits.autocfg]]
+who = "Josh Stone <jistone@redhat.com>"
+criteria = "safe-to-deploy"
+version = "1.1.0"
+notes = "All code written or reviewed by Josh Stone."
+
 [[audits.mozilla.audits.bit-set]]
 who = "Aria Beingessner <a.beingessner@gmail.com>"
 criteria = "safe-to-deploy"
@@ -189,6 +195,42 @@ who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.5.4 -> 0.5.7"
 
+[[audits.mozilla.audits.num-bigint]]
+who = "Josh Stone <jistone@redhat.com>"
+criteria = "safe-to-deploy"
+version = "0.2.6"
+notes = "All code written or reviewed by Josh Stone."
+
+[[audits.mozilla.audits.num-bigint]]
+who = "Josh Stone <jistone@redhat.com>"
+criteria = "safe-to-deploy"
+version = "0.4.3"
+notes = "All code written or reviewed by Josh Stone."
+
+[[audits.mozilla.audits.num-integer]]
+who = "Josh Stone <jistone@redhat.com>"
+criteria = "safe-to-deploy"
+version = "0.1.45"
+notes = "All code written or reviewed by Josh Stone."
+
+[[audits.mozilla.audits.num-iter]]
+who = "Josh Stone <jistone@redhat.com>"
+criteria = "safe-to-deploy"
+version = "0.1.43"
+notes = "All code written or reviewed by Josh Stone."
+
+[[audits.mozilla.audits.num-rational]]
+who = "Josh Stone <jistone@redhat.com>"
+criteria = "safe-to-deploy"
+version = "0.4.1"
+notes = "All code written or reviewed by Josh Stone."
+
+[[audits.mozilla.audits.num-traits]]
+who = "Josh Stone <jistone@redhat.com>"
+criteria = "safe-to-deploy"
+version = "0.2.15"
+notes = "All code written or reviewed by Josh Stone."
+
 [[audits.mozilla.audits.once_cell]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
@@ -210,6 +252,21 @@ criteria = "safe-to-deploy"
 delta = "1.0.39 -> 1.0.43"
 
 [[audits.mozilla.audits.quote]]
+who = "Nika Layzell <nika@thelayzells.com>"
+criteria = "safe-to-deploy"
+version = "1.0.18"
+notes = """
+`quote` is a utility crate used by proc-macros to generate TokenStreams
+conveniently from source code. The bulk of the logic is some complex
+interlocking `macro_rules!` macros which are used to parse and build the
+`TokenStream` within the proc-macro.
+
+This crate contains no unsafe code, and the internal logic, while difficult to
+read, is generally straightforward. I have audited the the quote macros, ident
+formatter, and runtime logic.
+"""
+
+[[audits.mozilla.audits.quote]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "1.0.18 -> 1.0.21"
@@ -228,6 +285,15 @@ delta = "1.5.6 -> 1.6.0"
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.6.26 -> 0.6.27"
+
+[[audits.mozilla.audits.rustc_version]]
+who = "Nika Layzell <nika@thelayzells.com>"
+criteria = "safe-to-run"
+version = "0.4.0"
+notes = """
+Straightforward crate which runs `$RUSTC -vV` and parses the output into a
+machine-interpretable form for build scripts.
+"""
 
 [[audits.mozilla.audits.ryu]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
@@ -283,6 +349,16 @@ delta = "1.8.0 -> 1.9.0"
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "1.0.96 -> 1.0.99"
+
+[[audits.mozilla.audits.synstructure]]
+who = "Nika Layzell <nika@thelayzells.com>"
+criteria = "safe-to-deploy"
+version = "0.12.6"
+notes = """
+I am the primary author of the `synstructure` crate, and its current
+maintainer. The one use of `unsafe` is unnecessary, but documented and
+harmless. It will be removed in the next version.
+"""
 
 [[audits.mozilla.audits.thiserror]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"

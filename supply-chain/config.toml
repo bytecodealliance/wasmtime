@@ -54,10 +54,6 @@ criteria = "safe-to-deploy"
 version = "0.1.8"
 criteria = "safe-to-deploy"
 
-[[exemptions.autocfg]]
-version = "1.1.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.base64]]
 version = "0.13.0"
 criteria = "safe-to-deploy"
@@ -338,10 +334,6 @@ criteria = "safe-to-deploy"
 version = "1.8.2"
 criteria = "safe-to-run"
 
-[[exemptions.hashbrown]]
-version = "0.12.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.hermit-abi]]
 version = "0.1.19"
 criteria = "safe-to-deploy"
@@ -506,28 +498,8 @@ criteria = "safe-to-deploy"
 version = "0.3.7"
 criteria = "safe-to-deploy"
 
-[[exemptions.num-bigint]]
-version = "0.4.3"
-criteria = "safe-to-deploy"
-
 [[exemptions.num-bigint-dig]]
 version = "0.7.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.num-integer]]
-version = "0.1.45"
-criteria = "safe-to-deploy"
-
-[[exemptions.num-iter]]
-version = "0.1.43"
-criteria = "safe-to-deploy"
-
-[[exemptions.num-rational]]
-version = "0.4.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.num-traits]]
-version = "0.2.15"
 criteria = "safe-to-deploy"
 
 [[exemptions.num_cpus]]
@@ -698,10 +670,6 @@ criteria = "safe-to-deploy"
 version = "2.0.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.quote]]
-version = "1.0.18"
-criteria = "safe-to-deploy"
-
 [[exemptions.rand]]
 version = "0.7.3"
 criteria = "safe-to-deploy"
@@ -781,10 +749,6 @@ criteria = "safe-to-deploy"
 [[exemptions.rsa]]
 version = "0.5.0"
 criteria = "safe-to-deploy"
-
-[[exemptions.rustc_version]]
-version = "0.4.0"
-criteria = "safe-to-run"
 
 [[exemptions.rustix]]
 version = "0.35.10"
@@ -912,10 +876,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.syn]]
 version = "1.0.92"
-criteria = "safe-to-deploy"
-
-[[exemptions.synstructure]]
-version = "0.12.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.target-lexicon]]
