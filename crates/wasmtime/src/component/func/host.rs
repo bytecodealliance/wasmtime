@@ -89,16 +89,8 @@ impl HostFunc {
             func: Box::new(DynamicContext {
                 func,
                 types: Types {
-                    params: ty
-                        .params
-                        .iter()
-                        .map(|(_, ty)| Type::from(ty, types))
-                        .collect(),
-                    results: ty
-                        .results
-                        .iter()
-                        .map(|(_, ty)| Type::from(ty, types))
-                        .collect(),
+                    params: ty.params.iter().map(|ty| Type::from(ty, types)).collect(),
+                    results: ty.results.iter().map(|ty| Type::from(ty, types)).collect(),
                 },
             }),
         })
@@ -123,8 +115,8 @@ where
     R: ComponentNamedList + Lower,
 {
     let ty = &types[ty];
-    P::typecheck_named_list(&ty.params, types).context("type mismatch with parameters")?;
-    R::typecheck_named_list(&ty.results, types).context("type mismatch with results")?;
+    P::typecheck_list(&ty.params, types).context("type mismatch with parameters")?;
+    R::typecheck_list(&ty.results, types).context("type mismatch with results")?;
     Ok(())
 }
 

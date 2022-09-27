@@ -509,19 +509,14 @@ impl ComponentTypesBuilder {
                     );
                     assert!(prev.is_none());
                 }
-                wasmparser::ModuleTypeDeclaration::Alias(alias) => match alias {
-                    wasmparser::Alias::Outer {
-                        kind: wasmparser::OuterAliasKind::Type,
-                        count,
-                        index,
-                    } => {
-                        let ty = self.core_outer_type(*count, TypeIndex::from_u32(*index));
-                        self.push_core_typedef(ty);
-                    }
-                    wasmparser::Alias::InstanceExport { .. } => {
-                        unreachable!("invalid alias {alias:?}")
-                    }
-                },
+                wasmparser::ModuleTypeDeclaration::OuterAlias {
+                    kind: wasmparser::OuterAliasKind::Type,
+                    count,
+                    index,
+                } => {
+                    let ty = self.core_outer_type(*count, TypeIndex::from_u32(*index));
+                    self.push_core_typedef(ty);
+                }
             }
         }
 
@@ -640,12 +635,12 @@ impl ComponentTypesBuilder {
             params: ty
                 .params
                 .iter()
-                .map(|(name, ty)| (name.map(|s| s.to_string()), self.valtype(ty)))
+                .map(|(_name, ty)| self.valtype(ty))
                 .collect(),
             results: ty
                 .results
                 .iter()
-                .map(|(name, ty)| (name.map(|s| s.to_string()), self.valtype(ty)))
+                .map(|(_name, ty)| self.valtype(ty))
                 .collect(),
         };
         self.add_func_type(ty)
@@ -998,9 +993,9 @@ pub struct TypeComponentInstance {
 pub struct TypeFunc {
     /// The list of optionally named parameters for this function, and their
     /// types.
-    pub params: Box<[(Option<String>, InterfaceType)]>,
+    pub params: Box<[InterfaceType]>,
     /// The return values of this function.
-    pub results: Box<[(Option<String>, InterfaceType)]>,
+    pub results: Box<[InterfaceType]>,
 }
 
 /// All possible interface types that values can have.

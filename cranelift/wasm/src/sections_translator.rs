@@ -75,9 +75,10 @@ pub fn parse_type_section<'a>(
         match entry? {
             Type::Func(wasm_func_ty) => {
                 environ.declare_type_func(wasm_func_ty.clone().try_into()?)?;
-                module_translation_state
-                    .wasm_types
-                    .push((wasm_func_ty.params, wasm_func_ty.returns));
+                module_translation_state.wasm_types.push((
+                    wasm_func_ty.params().to_vec().into(),
+                    wasm_func_ty.results().to_vec().into(),
+                ));
             }
         }
     }
