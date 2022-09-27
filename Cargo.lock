@@ -3591,6 +3591,7 @@ dependencies = [
  "cranelift-reader",
  "cranelift-wasm",
  "libfuzzer-sys",
+ "once_cell",
  "proc-macro2",
  "quote",
  "rand 0.8.5",
