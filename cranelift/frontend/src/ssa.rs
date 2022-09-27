@@ -58,6 +58,7 @@ pub struct SSABuilder {
 }
 
 /// Side effects of a `use_var` or a `seal_block` method call.
+#[derive(Default)]
 pub struct SideEffects {
     /// When we want to append jump arguments to a `br_table` instruction, the critical edge is
     /// splitted and the newly created `Block`s are signaled here.
@@ -70,13 +71,6 @@ pub struct SideEffects {
 }
 
 impl SideEffects {
-    fn new() -> Self {
-        Self {
-            split_blocks_created: Vec::new(),
-            instructions_added_to_blocks: Vec::new(),
-        }
-    }
-
     fn is_empty(&self) -> bool {
         self.split_blocks_created.is_empty() && self.instructions_added_to_blocks.is_empty()
     }
@@ -134,7 +128,7 @@ impl SSABuilder {
             ssa_blocks: SecondaryMap::new(),
             calls: Vec::new(),
             results: Vec::new(),
-            side_effects: SideEffects::new(),
+            side_effects: SideEffects::default(),
             visited: EntitySet::new(),
         }
     }
@@ -249,26 +243,15 @@ impl SSABuilder {
         ty: Type,
         block: Block,
     ) -> (Value, SideEffects) {
-        // First, try Local Value Numbering (Algorithm 1 in the paper).
-        // If the variable already has a known Value in this block, use that.
-        if let Some(var_defs) = self.variables.get(var) {
-            if let Some(val) = var_defs[block].expand() {
-                return (val, SideEffects::new());
-            }
-        }
-
-        // Otherwise, use Global Value Numbering (Algorithm 2 in the paper).
-        // This resolves the Value with respect to its predecessors.
         debug_assert!(self.calls.is_empty());
         debug_assert!(self.results.is_empty());
         debug_assert!(self.side_effects.is_empty());
 
         // Prepare the 'calls' and 'results' stacks for the state machine.
         self.use_var_nonlocal(func, var, ty, block);
-
         let value = self.run_state_machine(func, var, ty);
-        let side_effects = mem::replace(&mut self.side_effects, SideEffects::new());
 
+        let side_effects = mem::take(&mut self.side_effects);
         (value, side_effects)
     }
 
@@ -276,6 +259,15 @@ impl SSABuilder {
     ///
     /// This function sets up state for `run_state_machine()` but does not execute it.
     fn use_var_nonlocal(&mut self, func: &mut Function, var: Variable, ty: Type, mut block: Block) {
+        // First, try Local Value Numbering (Algorithm 1 in the paper).
+        // If the variable already has a known Value in this block, use that.
+        if let Some(val) = self.variables[var][block].expand() {
+            self.results.push(val);
+            return;
+        }
+
+        // Otherwise, use Global Value Numbering (Algorithm 2 in the paper).
+        // This resolves the Value with respect to its predecessors.
         // Find the most recent definition of `var`, and the block the definition comes from.
         let (val, from) = self.find_var(func, var, ty, block);
 
@@ -408,8 +400,13 @@ impl SSABuilder {
     ///
     /// Returns the list of newly created blocks for critical edge splitting.
     pub fn seal_block(&mut self, block: Block, func: &mut Function) -> SideEffects {
+        debug_assert!(
+            !self.ssa_blocks[block].sealed,
+            "Attempting to seal {} which is already sealed.",
+            block
+        );
         self.seal_one_block(block, func);
-        mem::replace(&mut self.side_effects, SideEffects::new())
+        mem::take(&mut self.side_effects)
     }
 
     /// Completes the global value numbering for all unsealed `Block`s in `func`.
@@ -423,46 +420,34 @@ impl SSABuilder {
         // and creation of new blocks, however such new blocks are sealed on
         // the fly, so we don't need to account for them here.
         for block in self.ssa_blocks.keys() {
-            if !self.is_sealed(block) {
-                self.seal_one_block(block, func);
-            }
+            self.seal_one_block(block, func);
         }
-        mem::replace(&mut self.side_effects, SideEffects::new())
+        mem::take(&mut self.side_effects)
     }
 
-    /// Helper function for `seal_block` and
-    /// `seal_all_blocks`.
+    /// Helper function for `seal_block` and `seal_all_blocks`.
     fn seal_one_block(&mut self, block: Block, func: &mut Function) {
-        let block_data = &mut self.ssa_blocks[block];
-        debug_assert!(
-            !block_data.sealed,
-            "Attempting to seal {} which is already sealed.",
-            block
-        );
-
-        // Extract the undef_variables data from the block so that we
-        // can iterate over it without borrowing the whole builder.
-        let undef_vars = mem::replace(&mut block_data.undef_variables, Vec::new());
-
         // For each undef var we look up values in the predecessors and create a block parameter
         // only if necessary.
-        for (var, val) in undef_vars {
-            let ty = func.dfg.value_type(val);
-            self.predecessors_lookup(func, val, var, ty, block);
+        for (var, val) in self.mark_block_sealed(block) {
+            debug_assert!(self.calls.is_empty());
+            debug_assert!(self.results.is_empty());
+            // self.side_effects may be non-empty here so that callers can
+            // accumulate side effects over multiple calls.
+            self.begin_predecessors_lookup(val, block);
+            self.run_state_machine(func, var, func.dfg.value_type(val));
         }
-        self.mark_block_sealed(block);
     }
 
-    /// Set the `sealed` flag for `block`.
-    fn mark_block_sealed(&mut self, block: Block) {
-        let block_data = &mut self.ssa_blocks[block];
-        debug_assert!(!block_data.sealed);
-        debug_assert!(block_data.undef_variables.is_empty());
-        block_data.sealed = true;
-
+    /// Set the `sealed` flag for `block`. Returns any variables that still need definitions.
+    fn mark_block_sealed(&mut self, block: Block) -> Vec<(Variable, Value)> {
         // We could call data.predecessors.shrink_to_fit() here, if
         // important, because no further predecessors will be added
         // to this block.
+
+        let block_data = &mut self.ssa_blocks[block];
+        block_data.sealed = true;
+        mem::take(&mut block_data.undef_variables)
     }
 
     /// Given the local SSA Value of a Variable in a Block, perform a recursive lookup on
@@ -475,46 +460,21 @@ impl SSABuilder {
     ///
     /// Doing this lookup for each Value in each Block preserves SSA form during construction.
     ///
-    /// Returns the chosen Value.
-    ///
     /// ## Arguments
     ///
     /// `sentinel` is a dummy Block parameter inserted by `use_var_nonlocal()`.
     /// Its purpose is to allow detection of CFG cycles while traversing predecessors.
-    ///
-    /// The `sentinel: Value` and the `ty: Type` are describing the `var: Variable`
-    /// that is being looked up.
-    fn predecessors_lookup(
-        &mut self,
-        func: &mut Function,
-        sentinel: Value,
-        var: Variable,
-        ty: Type,
-        block: Block,
-    ) -> Value {
-        debug_assert!(self.calls.is_empty());
-        debug_assert!(self.results.is_empty());
-        // self.side_effects may be non-empty here so that callers can
-        // accumulate side effects over multiple calls.
-        self.begin_predecessors_lookup(sentinel, block);
-        self.run_state_machine(func, var, ty)
-    }
-
-    /// Set up state for `run_state_machine()` to initiate non-local use lookups
-    /// in all predecessors of `dest_block`, and arrange for a call to
-    /// `finish_predecessors_lookup` once they complete.
     fn begin_predecessors_lookup(&mut self, sentinel: Value, dest_block: Block) {
         self.calls
             .push(Call::FinishPredecessorsLookup(sentinel, dest_block));
         // Iterate over the predecessors.
-        let mut calls = mem::replace(&mut self.calls, Vec::new());
-        calls.extend(
-            self.predecessors(dest_block)
+        self.calls.extend(
+            self.ssa_blocks[dest_block]
+                .predecessors
                 .iter()
                 .rev()
-                .map(|&PredBlock { block: pred, .. }| Call::UseVar(pred)),
+                .map(|pred| Call::UseVar(pred.block)),
         );
-        self.calls = calls;
     }
 
     /// Examine the values from the predecessors and compute a result value, creating
@@ -595,8 +555,7 @@ impl SSABuilder {
                 // There is disagreement in the predecessors on which value to use so we have
                 // to keep the block argument. To avoid borrowing `self` for the whole loop,
                 // temporarily detach the predecessors list and replace it with an empty list.
-                let mut preds =
-                    mem::replace(self.predecessors_mut(dest_block), PredBlockSmallVec::new());
+                let mut preds = mem::take(self.predecessors_mut(dest_block));
                 for &mut PredBlock {
                     block: ref mut pred_block,
                     branch: ref mut last_inst,
@@ -653,8 +612,7 @@ impl SSABuilder {
             }
             BranchInfo::Table(mut jt, _default_block) => {
                 // In the case of a jump table, the situation is tricky because br_table doesn't
-                // support arguments.
-                // We have to split the critical edge
+                // support arguments. We have to split the critical edge.
                 let middle_block = func.dfg.make_block();
                 func.layout.append_block(middle_block);
                 self.declare_block(middle_block);
@@ -727,16 +685,7 @@ impl SSABuilder {
         // Process the calls scheduled in `self.calls` until it is empty.
         while let Some(call) = self.calls.pop() {
             match call {
-                Call::UseVar(ssa_block) => {
-                    // First we lookup for the current definition of the variable in this block
-                    if let Some(var_defs) = self.variables.get(var) {
-                        if let Some(val) = var_defs[ssa_block].expand() {
-                            self.results.push(val);
-                            continue;
-                        }
-                    }
-                    self.use_var_nonlocal(func, var, ty, ssa_block);
-                }
+                Call::UseVar(block) => self.use_var_nonlocal(func, var, ty, block),
                 Call::FinishPredecessorsLookup(sentinel, dest_block) => {
                     self.finish_predecessors_lookup(func, sentinel, var, dest_block);
                 }
