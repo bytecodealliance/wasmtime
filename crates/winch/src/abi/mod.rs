@@ -51,12 +51,37 @@ pub(crate) enum ABIArg {
 }
 
 impl ABIArg {
-    pub(crate) fn reg(reg: Reg, ty: WasmType) -> Self {
+    /// Allocate a new register abi arg
+    pub fn reg(reg: Reg, ty: WasmType) -> Self {
         Self::Reg { reg, ty }
     }
 
-    pub(crate) fn stack_offset(offset: u32, ty: WasmType) -> Self {
+    /// Allocate a new stack abi arg
+    pub fn stack_offset(offset: u32, ty: WasmType) -> Self {
         Self::Stack { ty, offset }
+    }
+
+    /// Is this abi arg in a register
+    pub fn is_reg(&self) -> bool {
+        match *self {
+            ABIArg::Reg { .. } => true,
+            _ => false,
+        }
+    }
+
+    /// Get the register associated to this arg
+    pub fn get_reg(&self) -> Option<Reg> {
+        match *self {
+            ABIArg::Reg { reg, .. } => Some(reg),
+            _ => None,
+        }
+    }
+
+    /// Get the type associated to this arg
+    pub fn ty(&self) -> WasmType {
+        match *self {
+            ABIArg::Reg { ty, .. } | ABIArg::Stack { ty, .. } => ty,
+        }
     }
 }
 
