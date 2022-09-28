@@ -14,9 +14,9 @@ use std::convert::{TryFrom, TryInto};
 use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::{
-    CustomSectionReader, DataKind, ElementItem, ElementKind, Encoding, ExternalKind, FuncValidator,
-    FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, Type, TypeRef, Validator,
-    ValidatorResources,
+    CustomSectionReader, DataKind, ElementItem, ElementKind, Encoding, ExternalKind,
+    FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, Type,
+    TypeRef, Validator, ValidatorResources,
 };
 
 /// Object containing the standalone environment information.
@@ -90,7 +90,7 @@ pub struct FunctionBodyData<'a> {
     /// The body of the function, containing code and locals.
     pub body: FunctionBody<'a>,
     /// Validator for the function body
-    pub validator: FuncValidator<ValidatorResources>,
+    pub validator: FuncToValidate<ValidatorResources>,
 }
 
 #[derive(Debug, Default)]

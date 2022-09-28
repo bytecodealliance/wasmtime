@@ -9,10 +9,10 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 categories = ["no-std"]
 readme = "README.md"
 keywords = ["btree", "forest", "set", "map"]
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
-cranelift-entity = { path = "../entity", version = "0.89.0", default-features = false }
+cranelift-entity = { workspace = true }
 
 [badges]
 maintenance = { status = "experimental" }

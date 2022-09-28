@@ -8,13 +8,13 @@
         (memory (export "memory") 1)
       )
       (core instance $m (instantiate $m))
-      (func (export "") (param string)
+      (func (export "") (param "a" string)
         (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory"))
       )
     )
 
     (component $c2
-      (import "" (func $f (param string)))
+      (import "" (func $f (param "a" string)))
       (core module $libc
         (memory (export "memory") 1)
       )
@@ -44,13 +44,13 @@
         (memory (export "memory") 1)
       )
       (core instance $m (instantiate $m))
-      (func (export "") (param string)
+      (func (export "") (param "a" string)
         (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory"))
       )
     )
 
     (component $c2
-      (import "" (func $f (param string)))
+      (import "" (func $f (param "a" string)))
       (core module $libc
         (memory (export "memory") 1)
       )
@@ -80,14 +80,14 @@
         (memory (export "memory") 1)
       )
       (core instance $m (instantiate $m))
-      (func (export "") (param string)
+      (func (export "") (param "a" string)
         (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory")
           string-encoding=utf8)
       )
     )
 
     (component $c2
-      (import "" (func $f (param string)))
+      (import "" (func $f (param "a" string)))
       (core module $libc
         (memory (export "memory") 1)
       )

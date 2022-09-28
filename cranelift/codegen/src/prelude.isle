@@ -853,6 +853,11 @@
         (ConsumesFlags.ConsumesFlagsSideEffect2 c1 c2))
       (SideEffectNoResult.Inst3 p c1 c2))
 
+(rule (with_flags_side_effect
+        (ProducesFlags.ProducesFlagsTwiceSideEffect p1 p2)
+        (ConsumesFlags.ConsumesFlagsSideEffect c))
+      (SideEffectNoResult.Inst3 p1 p2 c))
+
 ;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl trap_code_division_by_zero () TrapCode)

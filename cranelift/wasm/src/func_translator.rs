@@ -406,7 +406,10 @@ mod tests {
         let mut validator = Validator::new();
         for payload in Parser::new(0).parse_all(wat) {
             match validator.payload(&payload.unwrap()).unwrap() {
-                ValidPayload::Func(validator, body) => return (body, validator),
+                ValidPayload::Func(validator, body) => {
+                    let validator = validator.into_validator(Default::default());
+                    return (body, validator);
+                }
                 _ => {}
             }
         }

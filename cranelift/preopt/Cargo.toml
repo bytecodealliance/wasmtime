@@ -9,10 +9,10 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 categories = ["no-std"]
 readme = "README.md"
 keywords = ["optimize", "compile", "compiler", "jit"]
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
-cranelift-codegen = { path = "../codegen", version = "0.89.0", default-features = false }
+cranelift-codegen = { workspace = true }
 # This is commented out because it doesn't build on Rust 1.25.0, which
 # cranelift currently supports.
 # rustc_apfloat = { version = "0.1.2", default-features = false }

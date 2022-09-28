@@ -32,6 +32,7 @@ impl ComponentCompiler for Compiler {
             mut func_translator,
             codegen_context: mut context,
             mut incremental_cache_ctx,
+            validator_allocations,
         } = self.take_context();
 
         context.func = ir::Function::with_name_signature(
@@ -156,6 +157,7 @@ impl ComponentCompiler for Compiler {
             func_translator,
             codegen_context: context,
             incremental_cache_ctx,
+            validator_allocations,
         });
         Ok(Box::new(func))
     }
@@ -166,6 +168,7 @@ impl ComponentCompiler for Compiler {
             mut func_translator,
             codegen_context: mut context,
             mut incremental_cache_ctx,
+            validator_allocations,
         } = self.take_context();
         context.func = ir::Function::with_name_signature(
             ir::UserFuncName::user(0, 0),
@@ -187,6 +190,7 @@ impl ComponentCompiler for Compiler {
             func_translator,
             codegen_context: context,
             incremental_cache_ctx,
+            validator_allocations,
         });
         Ok(Box::new(func))
     }
@@ -205,6 +209,7 @@ impl ComponentCompiler for Compiler {
             mut func_translator,
             codegen_context: mut context,
             mut incremental_cache_ctx,
+            validator_allocations,
         } = self.take_context();
 
         context.func = ir::Function::with_name_signature(
@@ -226,6 +231,7 @@ impl ComponentCompiler for Compiler {
             func_translator,
             codegen_context: context,
             incremental_cache_ctx,
+            validator_allocations,
         });
         Ok(Box::new(func))
     }

@@ -1,21 +1,21 @@
 [package]
 name = "wasi-cap-std-sync"
-version = "2.0.0"
-authors = ["The Wasmtime Project Developers"]
+version.workspace = true
+authors.workspace = true
 description = "WASI implementation in Rust"
 license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
-edition = "2021"
+edition.workspace = true
 include = ["src/**/*", "README.md", "LICENSE" ]
 
 [dependencies]
-wasi-common = { path = "../", version = "=2.0.0" }
+wasi-common = { workspace = true }
 async-trait = "0.1"
-anyhow = "1.0"
-cap-std = "0.26.0"
+anyhow = { workspace = true }
+cap-std = { workspace = true }
 cap-fs-ext = "0.26.0"
 cap-time-ext = "0.26.0"
 cap-rand = "0.26.0"
@@ -26,15 +26,15 @@ io-lifetimes = { version = "0.7.0", default-features = false }
 is-terminal = "0.3.0"
 
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "0.35.10", features = ["fs"] }
+rustix = { workspace = true, features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
-once_cell = "1.12.0"
+once_cell = { workspace = true }
 io-extras = "0.15.0"
-rustix = { version = "0.35.10", features = ["net"] }
+rustix = { workspace = true, features = ["net"] }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
-version = "0.36.0"
+workspace = true
 features = [
     "Win32_Foundation",
 ]

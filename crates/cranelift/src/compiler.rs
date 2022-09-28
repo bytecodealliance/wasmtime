@@ -30,6 +30,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::mem;
 use std::sync::{Arc, Mutex};
+use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::{
     AddressMapSection, CacheStore, CompileError, FilePos, FlagValue, FunctionBodyData,
     FunctionInfo, InstructionAddressMap, Module, ModuleTranslation, ModuleTypes, PtrSize,
@@ -51,6 +52,7 @@ struct CompilerContext {
     func_translator: FuncTranslator,
     codegen_context: Context,
     incremental_cache_ctx: Option<IncrementalCacheContext>,
+    validator_allocations: FuncValidatorAllocations,
 }
 
 impl Default for CompilerContext {
@@ -59,6 +61,7 @@ impl Default for CompilerContext {
             func_translator: FuncTranslator::new(),
             codegen_context: Context::new(),
             incremental_cache_ctx: None,
+            validator_allocations: Default::default(),
         }
     }
 }
@@ -141,13 +144,13 @@ impl Compiler {
     fn get_function_address_map(
         &self,
         context: &Context,
-        data: &FunctionBodyData<'_>,
+        body: &FunctionBody<'_>,
         body_len: u32,
         tunables: &Tunables,
     ) -> FunctionAddressMap {
         // Generate artificial srcloc for function start/end to identify boundary
         // within module.
-        let data = data.body.get_binary_reader();
+        let data = body.get_binary_reader();
         let offset = data.original_position();
         let len = data.bytes_remaining();
         assert!((offset + len) <= u32::max_value() as usize);
@@ -186,7 +189,7 @@ impl wasmtime_environ::Compiler for Compiler {
         &self,
         translation: &ModuleTranslation<'_>,
         func_index: DefinedFuncIndex,
-        mut input: FunctionBodyData<'_>,
+        input: FunctionBodyData<'_>,
         tunables: &Tunables,
         types: &ModuleTypes,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
@@ -198,6 +201,7 @@ impl wasmtime_environ::Compiler for Compiler {
             mut func_translator,
             codegen_context: mut context,
             incremental_cache_ctx: mut cache_ctx,
+            validator_allocations,
         } = self.take_context();
 
         context.func.signature = func_signature(isa, translation, types, func_index);
@@ -264,9 +268,11 @@ impl wasmtime_environ::Compiler for Compiler {
             readonly: false,
         });
         context.func.stack_limit = Some(stack_limit);
+        let FunctionBodyData { validator, body } = input;
+        let mut validator = validator.into_validator(validator_allocations);
         func_translator.translate_body(
-            &mut input.validator,
-            input.body.clone(),
+            &mut validator,
+            body.clone(),
             &mut context.func,
             &mut func_env,
         )?;
@@ -300,7 +306,7 @@ impl wasmtime_environ::Compiler for Compiler {
         };
 
         let address_transform =
-            self.get_function_address_map(&context, &input, code_buf.len() as u32, tunables);
+            self.get_function_address_map(&context, &body, code_buf.len() as u32, tunables);
 
         let ranges = if tunables.generate_native_debuginfo {
             Some(context.compiled_code().unwrap().value_labels_ranges.clone())
@@ -320,6 +326,7 @@ impl wasmtime_environ::Compiler for Compiler {
             func_translator,
             codegen_context: context,
             incremental_cache_ctx: cache_ctx,
+            validator_allocations: validator.into_allocations(),
         });
 
         Ok(Box::new(CompiledFunction {
@@ -566,6 +573,7 @@ impl Compiler {
             mut func_translator,
             codegen_context: mut context,
             incremental_cache_ctx: mut cache_ctx,
+            validator_allocations,
         } = self.take_context();
 
         // The name doesn't matter here.
@@ -634,6 +642,7 @@ impl Compiler {
             func_translator,
             codegen_context: context,
             incremental_cache_ctx: cache_ctx,
+            validator_allocations,
         });
         Ok(func)
     }
@@ -679,6 +688,7 @@ impl Compiler {
             mut func_translator,
             codegen_context: mut context,
             incremental_cache_ctx: mut cache_ctx,
+            validator_allocations,
         } = self.take_context();
 
         // The name doesn't matter here.
@@ -713,6 +723,7 @@ impl Compiler {
             func_translator,
             codegen_context: context,
             incremental_cache_ctx: cache_ctx,
+            validator_allocations,
         });
         Ok(func)
     }

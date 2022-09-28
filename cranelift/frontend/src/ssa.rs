@@ -600,9 +600,20 @@ impl SSABuilder {
     ) {
         let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero;
 
-        // Determine how many predecessors are yielding unique, non-temporary Values.
+        // Determine how many predecessors are yielding unique, non-temporary Values. If a variable
+        // is live and unmodified across several control-flow join points, earlier blocks will
+        // introduce aliases for that variable's definition, so we resolve aliases eagerly here to
+        // ensure that we can tell when the same definition has reached this block via multiple
+        // paths. Doing so also detects cyclic references to the sentinel, which can occur in
+        // unreachable code.
         let num_predecessors = self.predecessors(dest_block).len();
-        for &pred_val in self.results.iter().rev().take(num_predecessors) {
+        for pred_val in self
+            .results
+            .iter()
+            .rev()
+            .take(num_predecessors)
+            .map(|&val| func.dfg.resolve_aliases(val))
+        {
             match pred_values {
                 ZeroOneOrMore::Zero => {
                     if pred_val != sentinel {
@@ -648,19 +659,9 @@ impl SSABuilder {
                 // so we don't need to have it as a block argument.
                 // We need to replace all the occurrences of val with pred_val but since
                 // we can't afford a re-writing pass right now we just declare an alias.
-                // Resolve aliases eagerly so that we can check for cyclic aliasing,
-                // which can occur in unreachable code.
-                let mut resolved = func.dfg.resolve_aliases(pred_val);
-                if sentinel == resolved {
-                    // Cycle detected. Break it by creating a zero value.
-                    resolved = emit_zero(
-                        func.dfg.value_type(sentinel),
-                        FuncCursor::new(func).at_first_insertion_point(dest_block),
-                    );
-                }
                 func.dfg.remove_block_param(sentinel);
-                func.dfg.change_to_alias(sentinel, resolved);
-                resolved
+                func.dfg.change_to_alias(sentinel, pred_val);
+                pred_val
             }
             ZeroOneOrMore::More => {
                 // There is disagreement in the predecessors on which value to use so we have

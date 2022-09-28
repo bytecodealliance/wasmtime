@@ -105,6 +105,10 @@ const PUBLIC_CRATES: &[&str] = &[
     "wasmtime-types",
 ];
 
+struct Workspace {
+    version: String,
+}
+
 struct Crate {
     manifest: PathBuf,
     name: String,
@@ -114,9 +118,13 @@ struct Crate {
 
 fn main() {
     let mut crates = Vec::new();
-    crates.push(read_crate("./Cargo.toml".as_ref()));
-    find_crates("crates".as_ref(), &mut crates);
-    find_crates("cranelift".as_ref(), &mut crates);
+    let root = read_crate(None, "./Cargo.toml".as_ref());
+    let ws = Workspace {
+        version: root.version.clone(),
+    };
+    crates.push(root);
+    find_crates("crates".as_ref(), &ws, &mut crates);
+    find_crates("cranelift".as_ref(), &ws, &mut crates);
 
     let pos = CRATES_TO_PUBLISH
         .iter()
@@ -179,9 +187,9 @@ fn main() {
     }
 }
 
-fn find_crates(dir: &Path, dst: &mut Vec<Crate>) {
+fn find_crates(dir: &Path, ws: &Workspace, dst: &mut Vec<Crate>) {
     if dir.join("Cargo.toml").exists() {
-        let krate = read_crate(&dir.join("Cargo.toml"));
+        let krate = read_crate(Some(ws), &dir.join("Cargo.toml"));
         if !krate.publish || CRATES_TO_PUBLISH.iter().any(|c| krate.name == *c) {
             dst.push(krate);
         } else {
@@ -192,12 +200,12 @@ fn find_crates(dir: &Path, dst: &mut Vec<Crate>) {
     for entry in dir.read_dir().unwrap() {
         let entry = entry.unwrap();
         if entry.file_type().unwrap().is_dir() {
-            find_crates(&entry.path(), dst);
+            find_crates(&entry.path(), ws, dst);
         }
     }
 }
 
-fn read_crate(manifest: &Path) -> Crate {
+fn read_crate(ws: Option<&Workspace>, manifest: &Path) -> Crate {
     let mut name = None;
     let mut version = None;
     let mut publish = true;
@@ -217,6 +225,11 @@ fn read_crate(manifest: &Path) -> Crate {
                     .trim()
                     .to_string(),
             );
+        }
+        if let Some(ws) = ws {
+            if version.is_none() && line.starts_with("version.workspace = true") {
+                version = Some(ws.version.clone());
+            }
         }
         if line.starts_with("publish = false") {
             publish = false;

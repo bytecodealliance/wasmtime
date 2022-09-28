@@ -246,10 +246,8 @@ impl Func {
         let data = &store[self.0];
         let ty = &data.types[data.ty];
 
-        Params::typecheck_named_list(&ty.params, &data.types)
-            .context("type mismatch with parameters")?;
-        Return::typecheck_named_list(&ty.results, &data.types)
-            .context("type mismatch with results")?;
+        Params::typecheck_list(&ty.params, &data.types).context("type mismatch with parameters")?;
+        Return::typecheck_list(&ty.results, &data.types).context("type mismatch with results")?;
 
         Ok(())
     }
@@ -260,7 +258,7 @@ impl Func {
         data.types[data.ty]
             .params
             .iter()
-            .map(|(_, ty)| Type::from(ty, &data.types))
+            .map(|ty| Type::from(ty, &data.types))
             .collect()
     }
 
@@ -270,7 +268,7 @@ impl Func {
         data.types[data.ty]
             .results
             .iter()
-            .map(|(_, ty)| Type::from(ty, &data.types))
+            .map(|ty| Type::from(ty, &data.types))
             .collect()
     }
 
