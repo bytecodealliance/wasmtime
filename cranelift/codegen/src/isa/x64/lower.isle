@@ -36,12 +36,12 @@
 
 ;; `b128`
 
-(rule (lower (has_type $B128
+(rule 1 (lower (has_type $B128
                        (bconst $false)))
       (value_regs (imm $B64 0)
                   (imm $B64 0)))
 
-(rule (lower (has_type $B128
+(rule 1 (lower (has_type $B128
                        (bconst $true)))
       (value_regs (imm $B64 1)
                   (imm $B64 0)))
