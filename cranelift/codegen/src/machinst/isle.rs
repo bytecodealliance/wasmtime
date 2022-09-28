@@ -719,6 +719,11 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn tls_model(&mut self, _: Type) -> TlsModel {
+            self.flags.tls_model()
+        }
+
+        #[inline]
         fn tls_model_is_elf_gd(&mut self) -> Option<()> {
             if self.flags.tls_model() == TlsModel::ElfGd {
                 Some(())
