@@ -3057,7 +3057,7 @@
       (cvt_float_to_sint_seq out_ty val $true))
 
 ;; The x64 backend currently only supports these two type combinations.
-(rule (lower (has_type $I32X4 (fcvt_to_sint_sat val @ (value_type $F32X4))))
+(rule 1 (lower (has_type $I32X4 (fcvt_to_sint_sat val @ (value_type $F32X4))))
       (let ((src Xmm val)
 
             ;; Sets tmp to zero if float is NaN
@@ -3128,7 +3128,7 @@
 ;;
 ;; |                       Step 6                        |                 Step 7                 |
 ;; | (0-(INT_MAX+1))..(UINT_MAX-(INT_MAX+1))(w/overflow) | ((INT_MAX+1)-(INT_MAX+1))..(INT_MAX+1) |
-(rule (lower (has_type $I32X4 (fcvt_to_uint_sat val @ (value_type $F32X4))))
+(rule 1 (lower (has_type $I32X4 (fcvt_to_uint_sat val @ (value_type $F32X4))))
       (let ((src Xmm val)
 
             ;; Converting to unsigned int so if float src is negative or NaN
