@@ -3355,13 +3355,13 @@
 (rule (lower (has_type (use_sse41 $true) (floor a @ (value_type $F32))))
       (x64_roundss a (RoundImm.RoundDown)))
 
-(rule (lower (floor a @ (value_type $F32)))
+(rule (lower (has_type (use_sse41 $false) (floor a @ (value_type $F32))))
       (libcall_1 (LibCall.FloorF32) a))
 
 (rule (lower (has_type (use_sse41 $true) (floor a @ (value_type $F64))))
       (x64_roundsd a (RoundImm.RoundDown)))
 
-(rule (lower (floor a @ (value_type $F64)))
+(rule (lower (has_type (use_sse41 $false) (floor a @ (value_type $F64))))
       (libcall_1 (LibCall.FloorF64) a))
 
 (rule (lower (has_type (use_sse41 $true) (floor a @ (value_type $F32X4))))
