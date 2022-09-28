@@ -397,39 +397,39 @@
 ;; `{i,b}64` and smaller.
 
 ;; Xor two registers.
-(rule (lower (has_type (fits_in_64 ty) (bxor x y)))
+(rule 0 (lower (has_type (fits_in_64 ty) (bxor x y)))
       (x64_xor ty x y))
 
 ;; Xor with a memory operand.
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule 1 (lower (has_type (fits_in_64 ty)
                        (bxor x (sinkable_load y))))
       (x64_xor ty x
            (sink_load_to_gpr_mem_imm y)))
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule 2 (lower (has_type (fits_in_64 ty)
                        (bxor (sinkable_load x) y)))
       (x64_xor ty y
            (sink_load_to_gpr_mem_imm x)))
 
 ;; Xor with an immediate.
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule 3 (lower (has_type (fits_in_64 ty)
                        (bxor x (simm32_from_value y))))
       (x64_xor ty x y))
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule 4 (lower (has_type (fits_in_64 ty)
                        (bxor (simm32_from_value x) y)))
       (x64_xor ty y x))
 
 ;; SSE.
 
-(rule (lower (has_type ty @ (multi_lane _bits _lanes) (bxor x y)))
+(rule 5 (lower (has_type ty @ (multi_lane _bits _lanes) (bxor x y)))
       (sse_xor ty x y))
 
 ;; `{i,b}128`.
 
-(rule (lower (has_type $I128 (bxor x y)))
+(rule 6 (lower (has_type $I128 (bxor x y)))
       (let ((x_regs ValueRegs x)
             (x_lo Gpr (value_regs_get_gpr x_regs 0))
             (x_hi Gpr (value_regs_get_gpr x_regs 1))
@@ -439,7 +439,7 @@
         (value_gprs (x64_xor $I64 x_lo y_lo)
                     (x64_xor $I64 x_hi y_hi))))
 
-(rule (lower (has_type $B128 (bxor x y)))
+(rule 6 (lower (has_type $B128 (bxor x y)))
       ;; Booleans are always `0` or `1`, so we only need to do the `xor` on the
       ;; low half. The high half is always zero but, rather than generate a new
       ;; zero, we just reuse `x`'s high half which is already zero.
