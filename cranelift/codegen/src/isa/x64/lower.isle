@@ -2863,34 +2863,34 @@
 
 ;; Rules for `brz` and `brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower_branch (brz (icmp cc a b) _ _) (two_targets taken not_taken))
+(rule 2 (lower_branch (brz (icmp cc a b) _ _) (two_targets taken not_taken))
       (let ((cmp IcmpCondResult (invert_icmp_cond_result (emit_cmp cc a b))))
         (side_effect (jmp_cond_icmp cmp taken not_taken))))
 
-(rule (lower_branch (brz (fcmp cc a b) _ _) (two_targets taken not_taken))
+(rule 2 (lower_branch (brz (fcmp cc a b) _ _) (two_targets taken not_taken))
       (let ((cmp FcmpCondResult (emit_fcmp (floatcc_inverse cc) a b)))
         (side_effect (jmp_cond_fcmp cmp taken not_taken))))
 
-(rule (lower_branch (brz val @ (value_type $I128) _ _) (two_targets taken not_taken))
+(rule 1 (lower_branch (brz val @ (value_type $I128) _ _) (two_targets taken not_taken))
       (side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.NZ) val) taken not_taken)))
 
-(rule (lower_branch (brz val @ (value_type (ty_int_bool_or_ref)) _ _) (two_targets taken not_taken))
+(rule 0 (lower_branch (brz val @ (value_type (ty_int_bool_or_ref)) _ _) (two_targets taken not_taken))
       (side_effect
         (with_flags_side_effect (cmp_zero_int_bool_ref val)
                                 (jmp_cond (CC.Z) taken not_taken))))
 
 
-(rule (lower_branch (brnz (icmp cc a b) _ _) (two_targets taken not_taken))
+(rule 2 (lower_branch (brnz (icmp cc a b) _ _) (two_targets taken not_taken))
       (side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
 
-(rule (lower_branch (brnz (fcmp cc a b) _ _) (two_targets taken not_taken))
+(rule 2 (lower_branch (brnz (fcmp cc a b) _ _) (two_targets taken not_taken))
       (let ((cmp FcmpCondResult (emit_fcmp cc a b)))
         (side_effect (jmp_cond_fcmp cmp taken not_taken))))
 
-(rule (lower_branch (brnz val @ (value_type $I128) _ _) (two_targets taken not_taken))
+(rule 1 (lower_branch (brnz val @ (value_type $I128) _ _) (two_targets taken not_taken))
       (side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.Z) val) taken not_taken)))
 
-(rule (lower_branch (brnz val @ (value_type (ty_int_bool_or_ref)) _ _) (two_targets taken not_taken))
+(rule 0 (lower_branch (brnz val @ (value_type (ty_int_bool_or_ref)) _ _) (two_targets taken not_taken))
       (side_effect
         (with_flags_side_effect (cmp_zero_int_bool_ref val)
                                 (jmp_cond (CC.NZ) taken not_taken))))
@@ -2914,7 +2914,7 @@
 
 
 (decl cmp_zero_int_bool_ref (Value) ProducesFlags)
-(rule (cmp_zero_int_bool_ref val @ (value_type $B1))
+(rule 1 (cmp_zero_int_bool_ref val @ (value_type $B1))
       (x64_test (OperandSize.Size8) (RegMemImm.Imm 1) val))
 (rule (cmp_zero_int_bool_ref val @ (value_type ty))
       (let ((size OperandSize (raw_operand_size_of_type ty))
