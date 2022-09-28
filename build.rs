@@ -38,6 +38,11 @@ fn main() -> anyhow::Result<()> {
             // out.
             if spec_tests > 0 {
                 test_directory_module(out, "tests/spec_testsuite/proposals/memory64", strategy)?;
+                test_directory_module(
+                    out,
+                    "tests/spec_testsuite/proposals/multi-memory",
+                    strategy,
+                )?;
             } else {
                 println!(
                     "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
@@ -167,26 +172,14 @@ fn write_testsuite_tests(
 
 /// Ignore tests that aren't supported yet.
 fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
-    match strategy {
-        "Cranelift" => match (testsuite, testname) {
+    assert_eq!(strategy, "Cranelift");
+    drop(testsuite);
+    match env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
+        "s390x" => {
             // FIXME: These tests fail under qemu due to a qemu bug.
-            (_, "simd_f32x4_pmin_pmax") if platform_is_s390x() => return true,
-            (_, "simd_f64x2_pmin_pmax") if platform_is_s390x() => return true,
-            // riscv64 backend does not yet have a fully complete SIMD backend.
-            ("simd", _) if platform_is_riscv64() => return true,
-            ("memory64", "simd") if platform_is_riscv64() => return true,
-            _ => {}
-        },
-        _ => panic!("unrecognized strategy"),
+            testname == "simd_f32x4_pmin_pmax" || testname == "simd_f64x2_pmin_pmax"
+        }
+        "riscv64" => testname.contains("simd"),
+        _ => false,
     }
-
-    false
-}
-
-fn platform_is_s390x() -> bool {
-    env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "s390x"
-}
-
-fn platform_is_riscv64() -> bool {
-    env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "riscv64"
 }
