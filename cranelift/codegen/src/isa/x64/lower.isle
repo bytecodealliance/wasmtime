@@ -565,7 +565,7 @@
 
 ;; `i64` and smaller.
 
-(rule (lower (has_type (fits_in_64 ty) (ushr src amt)))
+(rule -1 (lower (has_type (fits_in_64 ty) (ushr src amt)))
       (let ((src_ Gpr (extend_to_gpr src ty (ExtendKind.Zero))))
         (x64_shr ty src_ (put_masked_in_imm8_gpr amt ty))))
 
