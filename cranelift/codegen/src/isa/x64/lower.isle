@@ -3611,7 +3611,7 @@
         ;; Shuffle the lowest two lanes to all other lanes.
         (x64_pshufd vec 0 (OperandSize.Size32))))
 
-(rule (lower (has_type (multi_lane 32 4) (splat src @ (value_type (ty_scalar_float _)))))
+(rule 1 (lower (has_type (multi_lane 32 4) (splat src @ (value_type (ty_scalar_float _)))))
       (lower_splat_32x4 $F32X4 src))
 
 (rule (lower (has_type (multi_lane 32 4) (splat src)))
@@ -3624,7 +3624,7 @@
         ;; Shuffle the lowest lane to all other lanes.
         (x64_pshufd vec 0 (OperandSize.Size32))))
 
-(rule (lower (has_type (multi_lane 64 2) (splat src @ (value_type (ty_scalar_float _)))))
+(rule 1 (lower (has_type (multi_lane 64 2) (splat src @ (value_type (ty_scalar_float _)))))
       (lower_splat_64x2 $F64X2 src))
 
 (rule (lower (has_type (multi_lane 64 2) (splat src)))
