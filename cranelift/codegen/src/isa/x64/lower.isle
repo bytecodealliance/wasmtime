@@ -17,7 +17,7 @@
       (imm ty x))
 
 ;; `i128`
-(rule (lower (has_type $I128
+(rule 1 (lower (has_type $I128
                        (iconst (u64_from_imm64 x))))
       (value_regs (imm $I64 x)
                   (imm $I64 0)))
