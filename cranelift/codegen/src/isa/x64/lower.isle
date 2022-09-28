@@ -1167,7 +1167,7 @@
       (x64_pabsd x))
 
 ;; When AVX512 is available, we can use a single `vpabsq` instruction.
-(rule (lower (has_type (and (avx512vl_enabled $true)
+(rule 1 (lower (has_type (and (avx512vl_enabled $true)
                             (avx512f_enabled $true)
                             $I64X2)
                        (iabs x)))
