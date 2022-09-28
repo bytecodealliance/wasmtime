@@ -2786,7 +2786,7 @@
 ;; As described in the `atomic_load` documentation, this lowering is only valid
 ;; for I8, I16, I32, and I64. The sub-64-bit types are zero extended, as with a
 ;; normal load.
-(rule (lower (has_type $I64 (atomic_load flags address)))
+(rule 1 (lower (has_type $I64 (atomic_load flags address)))
       (x64_mov (to_amode flags address (zero_offset))))
 (rule (lower (has_type (and (fits_in_32 ty) (ty_int _)) (atomic_load flags address)))
       (x64_movzx (ext_mode (ty_bits_u16 ty) 64) (to_amode flags address (zero_offset))))
