@@ -863,28 +863,28 @@
 ;; `i64` and smaller.
 
 ;; Multiply two registers.
-(rule (lower (has_type (fits_in_64 ty) (imul x y)))
+(rule -4 (lower (has_type (fits_in_64 ty) (imul x y)))
       (x64_mul ty x y))
 
 ;; Multiply a register and an immediate.
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule -2 (lower (has_type (fits_in_64 ty)
                        (imul x (simm32_from_value y))))
       (x64_mul ty x y))
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule -3 (lower (has_type (fits_in_64 ty)
                        (imul (simm32_from_value x) y)))
       (x64_mul ty y x))
 
 ;; Multiply a register and a memory load.
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule -1 (lower (has_type (fits_in_64 ty)
                        (imul x (sinkable_load y))))
       (x64_mul ty
            x
            (sink_load_to_gpr_mem_imm y)))
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule 0 (lower (has_type (fits_in_64 ty)
                        (imul (sinkable_load x) y)))
       (x64_mul ty y
            (sink_load_to_gpr_mem_imm x)))
@@ -904,7 +904,7 @@
 ;;   dst_lo:hi_lolo = mulhi_u x_lo, y_lo
 ;;   dst_hi = add hilo_hilo, hi_lolo
 ;;   return (dst_lo, dst_hi)
-(rule (lower (has_type $I128 (imul x y)))
+(rule 2 (lower (has_type $I128 (imul x y)))
       ;; Put `x` into registers and unpack its hi/lo halves.
       (let ((x_regs ValueRegs x)
             (x_lo Gpr (value_regs_get_gpr x_regs 0))
@@ -931,15 +931,15 @@
 
 ;; (No i8x16 multiply.)
 
-(rule (lower (has_type (multi_lane 16 8) (imul x y)))
+(rule 1 (lower (has_type (multi_lane 16 8) (imul x y)))
       (x64_pmullw x y))
 
-(rule (lower (has_type (multi_lane 32 4) (imul x y)))
+(rule 1 (lower (has_type (multi_lane 32 4) (imul x y)))
       (x64_pmulld x y))
 
 ;; With AVX-512 we can implement `i64x2` multiplication with a single
 ;; instruction.
-(rule (lower (has_type (and (avx512vl_enabled $true)
+(rule 3 (lower (has_type (and (avx512vl_enabled $true)
                             (avx512dq_enabled $true)
                             (multi_lane 64 2))
                        (imul x y)))
@@ -965,7 +965,7 @@
 ;; the lane of the destination. For this reason we don't need shifts to isolate
 ;; the lower 32-bits, however, we will need to use shifts to isolate the high
 ;; 32-bits when doing calculations, i.e., `Ah == A >> 32`.
-(rule (lower (has_type (multi_lane 64 2)
+(rule 1 (lower (has_type (multi_lane 64 2)
                        (imul a b)))
       (let ((a0 Xmm a)
             (b0 Xmm b)
