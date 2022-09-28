@@ -3335,13 +3335,13 @@
 (rule (lower (has_type (use_sse41 $true) (ceil a @ (value_type $F32))))
       (x64_roundss a (RoundImm.RoundUp)))
 
-(rule (lower (ceil a @ (value_type $F32)))
+(rule (lower (has_type (use_sse41 $false) (ceil a @ (value_type $F32))))
       (libcall_1 (LibCall.CeilF32) a))
 
 (rule (lower (has_type (use_sse41 $true) (ceil a @ (value_type $F64))))
       (x64_roundsd a (RoundImm.RoundUp)))
 
-(rule (lower (ceil a @ (value_type $F64)))
+(rule (lower (has_type (use_sse41 $false) (ceil a @ (value_type $F64))))
       (libcall_1 (LibCall.CeilF64) a))
 
 (rule (lower (has_type (use_sse41 $true) (ceil a @ (value_type $F32X4))))
