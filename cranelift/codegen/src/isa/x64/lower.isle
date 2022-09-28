@@ -1808,14 +1808,14 @@
 
 ;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 1 (lower
+(rule 3 (lower
          (has_type (and
                     (ty_32_or_64 ty)
                     (use_popcnt $true))
                    (popcnt src)))
       (x64_popcnt ty src))
 
-(rule 1 (lower
+(rule 2 (lower
          (has_type (and
                     (ty_8_or_16 ty)
                     (use_popcnt $true))
@@ -1831,12 +1831,12 @@
             (hi_count Gpr (x64_popcnt $I64 (value_regs_get_gpr src 1))))
         (value_regs (x64_add $I64 lo_count hi_count) (imm $I64 0))))
 
-(rule (lower
+(rule -1 (lower
        (has_type (ty_32_or_64 ty)
                  (popcnt src)))
       (do_popcnt ty src))
 
-(rule (lower
+(rule -2 (lower
        (has_type (ty_8_or_16 ty)
                  (popcnt src)))
       (do_popcnt $I32 (extend_to_gpr src $I32 (ExtendKind.Zero))))
