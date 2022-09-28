@@ -790,7 +790,7 @@
 ;; `i64` and smaller: we can rely on x86's rotate-amount masking since
 ;;  we operate on the whole register. For const's we mask the constant.
 
-(rule (lower (has_type (fits_in_64 ty) (rotl src amt)))
+(rule -1 (lower (has_type (fits_in_64 ty) (rotl src amt)))
         (x64_rotl ty src (put_masked_in_imm8_gpr amt ty)))
 
 
