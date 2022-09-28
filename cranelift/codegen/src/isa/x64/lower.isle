@@ -831,7 +831,7 @@
 
 ;; `i64` and smaller.
 
-(rule (lower (has_type (fits_in_64 ty) (ineg x)))
+(rule -1 (lower (has_type (fits_in_64 ty) (ineg x)))
       (x64_neg ty x))
 
 ;; SSE.
