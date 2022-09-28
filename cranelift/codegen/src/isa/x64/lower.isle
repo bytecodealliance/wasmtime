@@ -2126,7 +2126,7 @@
 (decl generic_sextend (Value Type Type) InstOutput)
 
 ;; T -> T is a no-op.
-(rule (generic_sextend src ty ty)
+(rule 4 (generic_sextend src ty ty)
       src)
 
 ;; Produce upper 64 bits sign-extended from lower 64: shift right by
@@ -2136,21 +2136,21 @@
       (x64_sar $I64 src (Imm8Reg.Imm8 63)))
 
 ;; I64 -> I128.
-(rule (generic_sextend src (ty_int_bool_64 _) (ty_int_bool_128 _))
+(rule 3 (generic_sextend src (ty_int_bool_64 _) (ty_int_bool_128 _))
       (value_regs src (spread_sign_bit src)))
 
 ;; I{8,16,32} -> I128.
-(rule (generic_sextend src (fits_in_32 src_ty) (ty_int_bool_128 _))
+(rule 2 (generic_sextend src (fits_in_32 src_ty) (ty_int_bool_128 _))
       (let ((lo Gpr (extend_to_gpr src $I64 (ExtendKind.Sign)))
             (hi Gpr (spread_sign_bit lo)))
       (value_regs lo hi)))
 
 ;; I{8,16,32} -> I64.
-(rule (generic_sextend src (fits_in_32 src_ty) (ty_int_bool_64 _))
+(rule 1 (generic_sextend src (fits_in_32 src_ty) (ty_int_bool_64 _))
       (extend_to_gpr src $I64 (ExtendKind.Sign)))
 
 ;; I8 -> I{16,32}, I16 -> I32.
-(rule (generic_sextend src (fits_in_32 src_ty) (fits_in_32 dst_ty))
+(rule 0 (generic_sextend src (fits_in_32 src_ty) (fits_in_32 dst_ty))
       (extend_to_gpr src $I32 (ExtendKind.Sign)))
 
 (rule (lower
