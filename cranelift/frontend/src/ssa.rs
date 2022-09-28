@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 use core::convert::TryInto;
 use core::mem;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
-use cranelift_codegen::entity::SecondaryMap;
+use cranelift_codegen::entity::{EntitySet, SecondaryMap};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::instructions::BranchInfo;
 use cranelift_codegen::ir::types::{F32, F64};
@@ -53,8 +53,8 @@ pub struct SSABuilder {
     /// Side effects accumulated in the `use_var`/`predecessors_lookup` state machine.
     side_effects: SideEffects,
 
-    /// A counter for amortizing the cost of resetting state for cycle detection.
-    epoch: Epoch,
+    /// Reused storage for cycle-detection.
+    visited: EntitySet<Block>,
 }
 
 /// Side effects of a `use_var` or a `seal_block` method call.
@@ -102,8 +102,6 @@ struct SSABlockData {
     predecessors: PredBlockSmallVec,
     // A block is sealed if all of its predecessors have been declared.
     sealed: bool,
-    // Which SSABuilder::epoch was this block last visited in?
-    epoch: Epoch,
     // List of current Block arguments for which an earlier def has not been found yet.
     undef_variables: Vec<(Variable, Value)>,
 }
@@ -123,25 +121,8 @@ impl SSABlockData {
         self.predecessors.swap_remove(pred).block
     }
 
-    fn visit(&mut self, epoch: Epoch) -> Option<Block> {
-        if self.sealed && self.predecessors.len() == 1 && self.epoch.set(epoch) {
-            Some(self.predecessors[0].block)
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct Epoch(u32);
-
-impl Epoch {
-    fn initial() -> Epoch {
-        Epoch(1)
-    }
-
-    fn set(&mut self, new: Epoch) -> bool {
-        mem::replace(self, new) != new
+    fn has_one_predecessor(&self) -> bool {
+        self.sealed && self.predecessors.len() == 1
     }
 }
 
@@ -154,7 +135,7 @@ impl SSABuilder {
             calls: Vec::new(),
             results: Vec::new(),
             side_effects: SideEffects::new(),
-            epoch: Epoch::initial(),
+            visited: EntitySet::new(),
         }
     }
 
@@ -175,20 +156,6 @@ impl SSABuilder {
             && self.calls.is_empty()
             && self.results.is_empty()
             && self.side_effects.is_empty()
-    }
-
-    fn new_epoch(&mut self) -> Epoch {
-        if self.epoch == Epoch::default() {
-            // The epoch counter wrapped so we need to reset all blocks.
-            for block in self.ssa_blocks.values_mut() {
-                block.epoch = Epoch::default();
-            }
-            self.epoch = Epoch::initial();
-        }
-
-        let current = self.epoch;
-        self.epoch = Epoch(current.0.wrapping_add(1));
-        current
     }
 }
 
@@ -335,10 +302,10 @@ impl SSABuilder {
         ty: Type,
         mut block: Block,
     ) -> (Value, Block) {
-        let epoch = self.new_epoch();
         if let Some(var_defs) = self.variables.get(var) {
-            while let Some(pred) = self.ssa_blocks[block].visit(epoch) {
-                block = pred;
+            self.visited.clear();
+            while self.ssa_blocks[block].has_one_predecessor() && self.visited.insert(block) {
+                block = self.ssa_blocks[block].predecessors[0].block;
                 if let Some(val) = var_defs[block].expand() {
                     self.results.push(val);
                     return (val, block);
