@@ -194,17 +194,17 @@
 ;; `i64` and smaller.
 
 ;; Sub two registers.
-(rule (lower (has_type (fits_in_64 ty)
+(rule -3 (lower (has_type (fits_in_64 ty)
                        (isub x y)))
       (x64_sub ty x y))
 
 ;; Sub a register and an immediate.
-(rule (lower (has_type (fits_in_64 ty)
+(rule -2 (lower (has_type (fits_in_64 ty)
                        (isub x (simm32_from_value y))))
       (x64_sub ty x y))
 
 ;; Sub a register and memory.
-(rule (lower (has_type (fits_in_64 ty)
+(rule -1 (lower (has_type (fits_in_64 ty)
                        (isub x (sinkable_load y))))
       (x64_sub ty x
            (sink_load_to_gpr_mem_imm y)))
@@ -228,7 +228,7 @@
       (x64_psubq x y))
 
 ;; `i128`
-(rule (lower (has_type $I128 (isub x y)))
+(rule 1 (lower (has_type $I128 (isub x y)))
       ;; Get the high/low registers for `x`.
       (let ((x_regs ValueRegs x)
             (x_lo Gpr (value_regs_get_gpr x_regs 0))
