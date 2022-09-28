@@ -672,7 +672,7 @@
 
 ;; `i64` and smaller.
 
-(rule (lower (has_type (fits_in_64 ty) (sshr src amt)))
+(rule -1 (lower (has_type (fits_in_64 ty) (sshr src amt)))
       (let ((src_ Gpr (extend_to_gpr src ty (ExtendKind.Sign))))
         (x64_sar ty src_ (put_masked_in_imm8_gpr amt ty))))
 
