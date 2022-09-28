@@ -2941,25 +2941,25 @@
 
 ;; Rules for `fcvt_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $F32 (fcvt_from_sint a @ (value_type $I8))))
+(rule 2 (lower (has_type $F32 (fcvt_from_sint a @ (value_type $I8))))
       (x64_cvtsi2ss $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
-(rule (lower (has_type $F32 (fcvt_from_sint a @ (value_type $I16))))
+(rule 2 (lower (has_type $F32 (fcvt_from_sint a @ (value_type $I16))))
       (x64_cvtsi2ss $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
-(rule (lower (has_type $F32 (fcvt_from_sint a @ (value_type (ty_int (fits_in_64 ty))))))
+(rule 1 (lower (has_type $F32 (fcvt_from_sint a @ (value_type (ty_int (fits_in_64 ty))))))
       (x64_cvtsi2ss ty a))
 
-(rule (lower (has_type $F64 (fcvt_from_sint a @ (value_type $I8))))
+(rule 2 (lower (has_type $F64 (fcvt_from_sint a @ (value_type $I8))))
       (x64_cvtsi2sd $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
-(rule (lower (has_type $F64 (fcvt_from_sint a @ (value_type $I16))))
+(rule 2 (lower (has_type $F64 (fcvt_from_sint a @ (value_type $I16))))
       (x64_cvtsi2sd $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
-(rule (lower (has_type $F64 (fcvt_from_sint a @ (value_type (ty_int (fits_in_64 ty))))))
+(rule 1 (lower (has_type $F64 (fcvt_from_sint a @ (value_type (ty_int (fits_in_64 ty))))))
       (x64_cvtsi2sd ty a))
 
-(rule (lower (fcvt_from_sint a @ (value_type $I32X4)))
+(rule 0 (lower (fcvt_from_sint a @ (value_type $I32X4)))
       (x64_cvtdq2ps a))
 
 ;; Rules for `fcvt_low_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
