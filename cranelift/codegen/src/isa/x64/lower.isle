@@ -331,28 +331,28 @@
 ;; `{i,b}64` and smaller.
 
 ;; Or two registers.
-(rule (lower (has_type (fits_in_64 ty) (bor x y)))
+(rule 0 (lower (has_type (fits_in_64 ty) (bor x y)))
       (x64_or ty x y))
 
 ;; Or with a memory operand.
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule 1 (lower (has_type (fits_in_64 ty)
                        (bor x (sinkable_load y))))
       (x64_or ty x
           (sink_load_to_gpr_mem_imm y)))
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule 2 (lower (has_type (fits_in_64 ty)
                        (bor (sinkable_load x) y)))
       (x64_or ty y
           (sink_load_to_gpr_mem_imm x)))
 
 ;; Or with an immediate.
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule 3 (lower (has_type (fits_in_64 ty)
                        (bor x (simm32_from_value y))))
       (x64_or ty x y))
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule 4 (lower (has_type (fits_in_64 ty)
                        (bor (simm32_from_value x) y)))
       (x64_or ty y x))
 
@@ -361,9 +361,9 @@
 (decl sse_or (Type Xmm XmmMem) Xmm)
 (rule (sse_or $F32X4 x y) (x64_orps x y))
 (rule (sse_or $F64X2 x y) (x64_orpd x y))
-(rule (sse_or (multi_lane _bits _lanes) x y) (x64_por x y))
+(rule -1 (sse_or (multi_lane _bits _lanes) x y) (x64_por x y))
 
-(rule (lower (has_type ty @ (multi_lane _bits _lanes)
+(rule 5 (lower (has_type ty @ (multi_lane _bits _lanes)
                        (bor x y)))
       (sse_or ty x y))
 
@@ -378,10 +378,10 @@
         (value_gprs (x64_or $I64 x_lo y_lo)
                     (x64_or $I64 x_hi y_hi))))
 
-(rule (lower (has_type $I128 (bor x y)))
+(rule 6 (lower (has_type $I128 (bor x y)))
       (or_i128 x y))
 
-(rule (lower (has_type $B128 (bor x y)))
+(rule 6 (lower (has_type $B128 (bor x y)))
       ;; Booleans are always `0` or `1`, so we only need to do the `or` on the
       ;; low half. The high half is always zero but, rather than generate a new
       ;; zero, we just reuse `x`'s high half which is already zero.
