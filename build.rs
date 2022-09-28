@@ -179,7 +179,11 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             // FIXME: These tests fail under qemu due to a qemu bug.
             testname == "simd_f32x4_pmin_pmax" || testname == "simd_f64x2_pmin_pmax"
         }
-        "riscv64" => testname.contains("simd"),
+
+        // Currently the simd wasm proposal is not implemented in the riscv64
+        // backend so skip all tests which could use simd.
+        "riscv64" => testname.contains("simd") || testname.contains("memory_multi"),
+
         _ => false,
     }
 }
