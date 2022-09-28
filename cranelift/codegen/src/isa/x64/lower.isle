@@ -2969,10 +2969,10 @@
 
 ;; Rules for `fcvt_from_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $F32 (fcvt_from_uint val @ (value_type (fits_in_32 (ty_int ty))))))
+(rule 1 (lower (has_type $F32 (fcvt_from_uint val @ (value_type (fits_in_32 (ty_int ty))))))
       (x64_cvtsi2ss $I64 (extend_to_gpr val $I64 (ExtendKind.Zero))))
 
-(rule (lower (has_type $F64 (fcvt_from_uint val @ (value_type (fits_in_32 (ty_int ty))))))
+(rule 1 (lower (has_type $F64 (fcvt_from_uint val @ (value_type (fits_in_32 (ty_int ty))))))
       (x64_cvtsi2sd $I64 (extend_to_gpr val $I64 (ExtendKind.Zero))))
 
 (rule (lower (has_type ty (fcvt_from_uint val @ (value_type $I64))))
@@ -2982,7 +2982,7 @@
 ;; 0x1.0p52 + double(src). 0x1.0p52 is unique because at this exponent
 ;; every value of the mantissa represents a corresponding uint32 number.
 ;; When we subtract 0x1.0p52 we are left with double(src).
-(rule (lower (has_type $F64X2 (fcvt_from_uint (uwiden_low val @ (value_type $I32X4)))))
+(rule 1 (lower (has_type $F64X2 (fcvt_from_uint (uwiden_low val @ (value_type $I32X4)))))
       (let ((uint_mask Xmm (x64_xmm_load_const $I32X4 (fcvt_uint_mask_const)))
             (res Xmm (x64_unpcklps val uint_mask))
             (uint_mask_high Xmm (x64_xmm_load_const $I32X4 (fcvt_uint_mask_high_const))))
@@ -2990,10 +2990,7 @@
 
 ;; When AVX512VL and AVX512F are available,
 ;; `fcvt_from_uint` can be lowered to a single instruction.
-;;
-;; NOTE: the priority of 1 here is to break ties with the next case for $F32X4,
-;; as it doesn't require either of the avx512 extensions to be enabled.
-(rule 1 (lower (has_type (and (avx512vl_enabled $true) (avx512f_enabled $true) $F32X4)
+(rule 2 (lower (has_type (and (avx512vl_enabled $true) (avx512f_enabled $true) $F32X4)
                          (fcvt_from_uint src)))
       (x64_vcvtudq2ps src))
 
@@ -3020,7 +3017,7 @@
 ;; -> Convert(Ah) // Convert .. with no loss of significant digits from previous shift
 ;; -> Ah = Ah + Ah // Double Ah to account for shift right before the conversion.
 ;; -> dst = Ah + Al // Add the two floats together
-(rule (lower (has_type $F32X4 (fcvt_from_uint val)))
+(rule 1 (lower (has_type $F32X4 (fcvt_from_uint val)))
       (let ((a Xmm val)
 
             ;;  get the low 16 bits
