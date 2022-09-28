@@ -1322,7 +1322,7 @@
 ;; load from memory into a temp register and then the second `movsd` (modeled
 ;; internally as `xmm_rm_r` will merge the temp register into our `vec`
 ;; register.
-(rule (vec_insert_lane $F64X2 vec (RegMem.Reg val) 0)
+(rule 1 (vec_insert_lane $F64X2 vec (RegMem.Reg val) 0)
       (x64_movsd_regmove vec val))
 (rule (vec_insert_lane $F64X2 vec mem 0)
       (x64_movsd_regmove vec (x64_movsd_load mem)))
