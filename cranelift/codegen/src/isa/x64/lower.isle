@@ -3375,13 +3375,13 @@
 (rule (lower (has_type (use_sse41 $true) (nearest a @ (value_type $F32))))
       (x64_roundss a (RoundImm.RoundNearest)))
 
-(rule (lower (nearest a @ (value_type $F32)))
+(rule (lower (has_type (use_sse41 $false) (nearest a @ (value_type $F32))))
       (libcall_1 (LibCall.NearestF32) a))
 
 (rule (lower (has_type (use_sse41 $true) (nearest a @ (value_type $F64))))
       (x64_roundsd a (RoundImm.RoundNearest)))
 
-(rule (lower (nearest a @ (value_type $F64)))
+(rule (lower (has_type (use_sse41 $false) (nearest a @ (value_type $F64))))
       (libcall_1 (LibCall.NearestF64) a))
 
 (rule (lower (has_type (use_sse41 $true) (nearest a @ (value_type $F32X4))))
