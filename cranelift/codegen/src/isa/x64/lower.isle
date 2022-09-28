@@ -2192,7 +2192,7 @@
 (rule (lower (has_type (fits_in_64 ty)
                        (bint src)))
       (x64_and ty src (RegMemImm.Imm 1)))
-(rule (lower (has_type $I128
+(rule 1 (lower (has_type $I128
                        (bint src)))
       (value_regs
        (x64_and $I64 src (RegMemImm.Imm 1))
