@@ -1571,7 +1571,7 @@
 ;;  - less than assigns    Z = 0, P = 0, C = 1
 ;;  - equal assigns        Z = 1, P = 0, C = 0
 
-(rule (lower (fcmp cc a @ (value_type (ty_scalar_float ty)) b))
+(rule -1 (lower (fcmp cc a @ (value_type (ty_scalar_float ty)) b))
       (lower_fcmp_bool (emit_fcmp cc a b)))
 
 ;; For vector lowerings, we use `CMPP*` instructions with a 3-bit operand that
@@ -1710,14 +1710,14 @@
 ;; Finally, we lower `select` from a condition value `c`. These rules are meant
 ;; to be the final, default lowerings if no other patterns matched above.
 
-(rule (lower (has_type ty (select c @ (value_type $B1) x y)))
+(rule -1 (lower (has_type ty (select c @ (value_type $B1) x y)))
       (let ((size OperandSize (raw_operand_size_of_type $B1))
             ;; N.B.: disallow load-op fusion, see above. TODO:
             ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
             (gpr_c Gpr (put_in_gpr c)))
            (with_flags (x64_test size (RegMemImm.Imm 1) gpr_c) (cmove_from_values ty (CC.NZ) x y))))
 
-(rule (lower (has_type ty (select c @ (value_type (fits_in_64 a_ty)) x y)))
+(rule -2 (lower (has_type ty (select c @ (value_type (fits_in_64 a_ty)) x y)))
       (let ((size OperandSize (raw_operand_size_of_type a_ty))
             ;; N.B.: disallow load-op fusion, see above. TODO:
             ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
