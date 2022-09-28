@@ -1351,16 +1351,16 @@
         (with_flags_reg (x64_cmp size x_reg y_reg)
                         (cmove ty cc y_reg x_reg))))
 
-(rule (lower (has_type (fits_in_64 ty) (umin x y)))
+(rule -1 (lower (has_type (fits_in_64 ty) (umin x y)))
       (cmp_and_choose ty (CC.B) x y))
 
-(rule (lower (has_type (fits_in_64 ty) (umax x y)))
+(rule -1 (lower (has_type (fits_in_64 ty) (umax x y)))
       (cmp_and_choose ty (CC.NB) x y))
 
-(rule (lower (has_type (fits_in_64 ty) (imin x y)))
+(rule -1 (lower (has_type (fits_in_64 ty) (imin x y)))
       (cmp_and_choose ty (CC.L) x y))
 
-(rule (lower (has_type (fits_in_64 ty) (imax x y)))
+(rule -1 (lower (has_type (fits_in_64 ty) (imax x y)))
       (cmp_and_choose ty (CC.NL) x y))
 
 ;; SSE `imax`.
