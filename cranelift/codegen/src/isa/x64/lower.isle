@@ -454,7 +454,7 @@
 
 ;; `i64` and smaller.
 
-(rule (lower (has_type (fits_in_64 ty) (ishl src amt)))
+(rule -1 (lower (has_type (fits_in_64 ty) (ishl src amt)))
       (x64_shl ty src (put_masked_in_imm8_gpr amt ty)))
 
 ;; `i128`.
