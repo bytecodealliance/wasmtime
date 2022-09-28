@@ -1224,7 +1224,7 @@
 
 ;; `i64` and smaller.
 
-(rule (lower (has_type (fits_in_64 ty) (bnot x)))
+(rule -2 (lower (has_type (fits_in_64 ty) (bnot x)))
       (x64_not ty x))
 
 ;; `i128`.
@@ -1245,7 +1245,7 @@
 
 ;; Special case for vector-types where bit-negation is an xor against an
 ;; all-one value
-(rule (lower (has_type ty @ (multi_lane _bits _lanes) (bnot x)))
+(rule -1 (lower (has_type ty @ (multi_lane _bits _lanes) (bnot x)))
       (sse_xor ty x (vector_all_ones)))
 
 ;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
