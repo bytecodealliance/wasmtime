@@ -1,0 +1,576 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %f1(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fadd v0, v1
+  return v2
+}
+
+; block0:
+;   fadd.s fa0,fa0,fa1
+;   ret
+
+function %f2(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fadd v0, v1
+  return v2
+}
+
+; block0:
+;   fadd.d fa0,fa0,fa1
+;   ret
+
+function %f3(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fsub v0, v1
+  return v2
+}
+
+; block0:
+;   fsub.s fa0,fa0,fa1
+;   ret
+
+function %f4(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fsub v0, v1
+  return v2
+}
+
+; block0:
+;   fsub.d fa0,fa0,fa1
+;   ret
+
+function %f5(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fmul v0, v1
+  return v2
+}
+
+; block0:
+;   fmul.s fa0,fa0,fa1
+;   ret
+
+function %f6(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fmul v0, v1
+  return v2
+}
+
+; block0:
+;   fmul.d fa0,fa0,fa1
+;   ret
+
+function %f7(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fdiv v0, v1
+  return v2
+}
+
+; block0:
+;   fdiv.s fa0,fa0,fa1
+;   ret
+
+function %f8(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fdiv v0, v1
+  return v2
+}
+
+; block0:
+;   fdiv.d fa0,fa0,fa1
+;   ret
+
+function %f9(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fmin v0, v1
+  return v2
+}
+
+; block0:
+;   fmin.s ft4,fa0,fa1##tmp=a2 ty=f32
+;   fmv.d fa0,ft4
+;   ret
+
+function %f10(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fmin v0, v1
+  return v2
+}
+
+; block0:
+;   fmin.d ft4,fa0,fa1##tmp=a2 ty=f64
+;   fmv.d fa0,ft4
+;   ret
+
+function %f11(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fmax v0, v1
+  return v2
+}
+
+; block0:
+;   fmax.s ft4,fa0,fa1##tmp=a2 ty=f32
+;   fmv.d fa0,ft4
+;   ret
+
+function %f12(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fmax v0, v1
+  return v2
+}
+
+; block0:
+;   fmax.d ft4,fa0,fa1##tmp=a2 ty=f64
+;   fmv.d fa0,ft4
+;   ret
+
+function %f13(f32) -> f32 {
+block0(v0: f32):
+  v1 = sqrt v0
+  return v1
+}
+
+; block0:
+;   fsqrt.s fa0,fa0
+;   ret
+
+function %f15(f64) -> f64 {
+block0(v0: f64):
+  v1 = sqrt v0
+  return v1
+}
+
+; block0:
+;   fsqrt.d fa0,fa0
+;   ret
+
+function %f16(f32) -> f32 {
+block0(v0: f32):
+  v1 = fabs v0
+  return v1
+}
+
+; block0:
+;   fabs.s fa0,fa0
+;   ret
+
+function %f17(f64) -> f64 {
+block0(v0: f64):
+  v1 = fabs v0
+  return v1
+}
+
+; block0:
+;   fabs.d fa0,fa0
+;   ret
+
+function %f18(f32) -> f32 {
+block0(v0: f32):
+  v1 = fneg v0
+  return v1
+}
+
+; block0:
+;   fneg.s fa0,fa0
+;   ret
+
+function %f19(f64) -> f64 {
+block0(v0: f64):
+  v1 = fneg v0
+  return v1
+}
+
+; block0:
+;   fneg.d fa0,fa0
+;   ret
+
+function %f20(f32) -> f64 {
+block0(v0: f32):
+  v1 = fpromote.f64 v0
+  return v1
+}
+
+; block0:
+;   fcvt.d.s fa0,fa0
+;   ret
+
+function %f21(f64) -> f32 {
+block0(v0: f64):
+  v1 = fdemote.f32 v0
+  return v1
+}
+
+; block0:
+;   fcvt.s.d fa0,fa0
+;   ret
+
+function %f22(f32) -> f32 {
+block0(v0: f32):
+  v1 = ceil v0
+  return v1
+}
+
+; block0:
+;   ceil ft3,fa0##int_tmp=a1 f_tmp=ft5 ty=f32
+;   fmv.d fa0,ft3
+;   ret
+
+function %f22(f64) -> f64 {
+block0(v0: f64):
+  v1 = ceil v0
+  return v1
+}
+
+; block0:
+;   ceil ft3,fa0##int_tmp=a1 f_tmp=ft5 ty=f64
+;   fmv.d fa0,ft3
+;   ret
+
+function %f23(f32) -> f32 {
+block0(v0: f32):
+  v1 = floor v0
+  return v1
+}
+
+; block0:
+;   floor ft3,fa0##int_tmp=a1 f_tmp=ft5 ty=f32
+;   fmv.d fa0,ft3
+;   ret
+
+function %f24(f64) -> f64 {
+block0(v0: f64):
+  v1 = floor v0
+  return v1
+}
+
+; block0:
+;   floor ft3,fa0##int_tmp=a1 f_tmp=ft5 ty=f64
+;   fmv.d fa0,ft3
+;   ret
+
+function %f25(f32) -> f32 {
+block0(v0: f32):
+  v1 = trunc v0
+  return v1
+}
+
+; block0:
+;   trunc ft3,fa0##int_tmp=a1 f_tmp=ft5 ty=f32
+;   fmv.d fa0,ft3
+;   ret
+
+function %f26(f64) -> f64 {
+block0(v0: f64):
+  v1 = trunc v0
+  return v1
+}
+
+; block0:
+;   trunc ft3,fa0##int_tmp=a1 f_tmp=ft5 ty=f64
+;   fmv.d fa0,ft3
+;   ret
+
+function %f27(f32) -> f32 {
+block0(v0: f32):
+  v1 = nearest v0
+  return v1
+}
+
+; block0:
+;   nearest ft3,fa0##int_tmp=a1 f_tmp=ft5 ty=f32
+;   fmv.d fa0,ft3
+;   ret
+
+function %f28(f64) -> f64 {
+block0(v0: f64):
+  v1 = nearest v0
+  return v1
+}
+
+; block0:
+;   nearest ft3,fa0##int_tmp=a1 f_tmp=ft5 ty=f64
+;   fmv.d fa0,ft3
+;   ret
+
+function %f29(f32, f32, f32) -> f32 {
+block0(v0: f32, v1: f32, v2: f32):
+  v3 = fma v0, v1, v2
+  return v3
+}
+
+; block0:
+;   fmadd.s fa0,fa0,fa1,fa2
+;   ret
+
+function %f30(f64, f64, f64) -> f64 {
+block0(v0: f64, v1: f64, v2: f64):
+  v3 = fma v0, v1, v2
+  return v3
+}
+
+; block0:
+;   fmadd.d fa0,fa0,fa1,fa2
+;   ret
+
+function %f31(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fcopysign v0, v1
+  return v2
+}
+
+; block0:
+;   fsgnj.s fa0,fa0,fa1
+;   ret
+
+function %f32(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fcopysign v0, v1
+  return v2
+}
+
+; block0:
+;   fsgnj.d fa0,fa0,fa1
+;   ret
+
+function %f33(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_uint.i32 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_uint.i32 a0,fa0##in_ty=f32 tmp=ft4
+;   ret
+
+function %f34(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_sint.i32 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_sint.i32 a0,fa0##in_ty=f32 tmp=ft4
+;   ret
+
+function %f35(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_uint.i64 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_uint.i64 a0,fa0##in_ty=f32 tmp=ft4
+;   ret
+
+function %f36(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_sint.i64 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_sint.i64 a0,fa0##in_ty=f32 tmp=ft4
+;   ret
+
+function %f37(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_uint.i32 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_uint.i32 a0,fa0##in_ty=f64 tmp=ft4
+;   ret
+
+function %f38(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_sint.i32 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_sint.i32 a0,fa0##in_ty=f64 tmp=ft4
+;   ret
+
+function %f39(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_uint.i64 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_uint.i64 a0,fa0##in_ty=f64 tmp=ft4
+;   ret
+
+function %f40(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_sint.i64 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_sint.i64 a0,fa0##in_ty=f64 tmp=ft4
+;   ret
+
+function %f41(i32) -> f32 {
+block0(v0: i32):
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+}
+
+; block0:
+;   fcvt.s.wu fa0,a0
+;   ret
+
+function %f42(i32) -> f32 {
+block0(v0: i32):
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+}
+
+; block0:
+;   fcvt.s.w fa0,a0
+;   ret
+
+function %f43(i64) -> f32 {
+block0(v0: i64):
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+}
+
+; block0:
+;   fcvt.s.lu fa0,a0
+;   ret
+
+function %f44(i64) -> f32 {
+block0(v0: i64):
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+}
+
+; block0:
+;   fcvt.s.l fa0,a0
+;   ret
+
+function %f45(i32) -> f64 {
+block0(v0: i32):
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+}
+
+; block0:
+;   fcvt.d.wu fa0,a0
+;   ret
+
+function %f46(i32) -> f64 {
+block0(v0: i32):
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+}
+
+; block0:
+;   fcvt.d.w fa0,a0
+;   ret
+
+function %f47(i64) -> f64 {
+block0(v0: i64):
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+}
+
+; block0:
+;   fcvt.d.lu fa0,a0
+;   ret
+
+function %f48(i64) -> f64 {
+block0(v0: i64):
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+}
+
+; block0:
+;   fcvt.d.l fa0,a0
+;   ret
+
+function %f49(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_uint_sat.i32 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_uint_sat.i32 a0,fa0##in_ty=f32 tmp=ft4
+;   ret
+
+function %f50(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_sint_sat.i32 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_sint_sat.i32 a0,fa0##in_ty=f32 tmp=ft4
+;   ret
+
+function %f51(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_uint_sat.i64 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_uint_sat.i64 a0,fa0##in_ty=f32 tmp=ft4
+;   ret
+
+function %f52(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_sint_sat.i64 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_sint_sat.i64 a0,fa0##in_ty=f32 tmp=ft4
+;   ret
+
+function %f53(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_uint_sat.i32 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_uint_sat.i32 a0,fa0##in_ty=f64 tmp=ft4
+;   ret
+
+function %f54(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_sint_sat.i32 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_sint_sat.i32 a0,fa0##in_ty=f64 tmp=ft4
+;   ret
+
+function %f55(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_uint_sat.i64 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_uint_sat.i64 a0,fa0##in_ty=f64 tmp=ft4
+;   ret
+
+function %f56(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_sint_sat.i64 v0
+  return v1
+}
+
+; block0:
+;   fcvt_to_sint_sat.i64 a0,fa0##in_ty=f64 tmp=ft4
+;   ret
+

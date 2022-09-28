@@ -1,0 +1,84 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function u0:0(i8) -> f32 {
+block0(v0: i8):
+    v1 = fcvt_from_uint.f32 v0
+    return v1
+}
+
+; block0:
+;   fcvt.s.lu fa0,a0
+;   ret
+
+function u0:0(i8) -> f64 {
+block0(v0: i8):
+    v1 = fcvt_from_uint.f64 v0
+    return v1
+}
+
+; block0:
+;   fcvt.d.lu fa0,a0
+;   ret
+
+function u0:0(i16) -> f32 {
+block0(v0: i16):
+    v1 = fcvt_from_uint.f32 v0
+    return v1
+}
+
+; block0:
+;   fcvt.s.lu fa0,a0
+;   ret
+
+function u0:0(i16) -> f64 {
+block0(v0: i16):
+    v1 = fcvt_from_uint.f64 v0
+    return v1
+}
+
+; block0:
+;   fcvt.d.lu fa0,a0
+;   ret
+
+function u0:0(f32) -> i8 {
+block0(v0: f32):
+    v1 = fcvt_to_uint.i8 v0
+    return v1
+}
+
+; block0:
+;   fcvt_to_uint.i8 a0,fa0##in_ty=f32 tmp=ft4
+;   ret
+
+function u0:0(f64) -> i8 {
+block0(v0: f64):
+    v1 = fcvt_to_uint.i8 v0
+    return v1
+}
+
+; block0:
+;   fcvt_to_uint.i8 a0,fa0##in_ty=f64 tmp=ft4
+;   ret
+
+function u0:0(f32) -> i16 {
+block0(v0: f32):
+    v1 = fcvt_to_uint.i16 v0
+    return v1
+}
+
+; block0:
+;   fcvt_to_uint.i16 a0,fa0##in_ty=f32 tmp=ft4
+;   ret
+
+function u0:0(f64) -> i16 {
+block0(v0: f64):
+    v1 = fcvt_to_uint.i16 v0
+    return v1
+}
+
+; block0:
+;   fcvt_to_uint.i16 a0,fa0##in_ty=f64 tmp=ft4
+;   ret
+

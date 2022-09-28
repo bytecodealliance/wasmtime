@@ -3,7 +3,7 @@ set enable_llvm_abi_extensions=true
 target aarch64
 target s390x
 target x86_64
-
+target riscv64
 
 function %i128_brz(i128) -> b1 {
 block0(v0: i128):

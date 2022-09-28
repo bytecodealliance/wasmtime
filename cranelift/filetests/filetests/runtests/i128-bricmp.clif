@@ -1,5 +1,6 @@
 test run
 target aarch64
+target riscv64
 target s390x
 
 function %i128_bricmp_eq(i128, i128) -> b1 {

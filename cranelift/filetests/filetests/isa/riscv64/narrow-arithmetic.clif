@@ -1,0 +1,58 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %add8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = iadd.i8 v0, v1
+  return v2
+}
+
+; block0:
+;   addw a0,a0,a1
+;   ret
+
+function %add16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = iadd.i16 v0, v1
+  return v2
+}
+
+; block0:
+;   addw a0,a0,a1
+;   ret
+
+function %add32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = iadd.i32 v0, v1
+  return v2
+}
+
+; block0:
+;   addw a0,a0,a1
+;   ret
+
+function %add32_8(i32, i8) -> i32 {
+block0(v0: i32, v1: i8):
+  v2 = sextend.i32 v1
+  v3 = iadd.i32 v0, v2
+  return v3
+}
+
+; block0:
+;   sext.b a2,a1
+;   addw a0,a0,a2
+;   ret
+
+function %add64_32(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+  v2 = sextend.i64 v1
+  v3 = iadd.i64 v0, v2
+  return v3
+}
+
+; block0:
+;   sext.w a2,a1
+;   add a0,a0,a2
+;   ret
+

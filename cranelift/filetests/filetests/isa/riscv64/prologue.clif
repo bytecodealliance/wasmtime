@@ -1,0 +1,279 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %f(f64) -> f64 {
+block0(v0: f64):
+    v1 = fadd.f64 v0, v0
+    v2 = fadd.f64 v0, v0
+    v3 = fadd.f64 v0, v0
+    v4 = fadd.f64 v0, v0
+    v5 = fadd.f64 v0, v0
+    v6 = fadd.f64 v0, v0
+    v7 = fadd.f64 v0, v0
+    v8 = fadd.f64 v0, v0
+    v9 = fadd.f64 v0, v0
+    v10 = fadd.f64 v0, v0
+    v11 = fadd.f64 v0, v0
+    v12 = fadd.f64 v0, v0
+    v13 = fadd.f64 v0, v0
+    v14 = fadd.f64 v0, v0
+    v15 = fadd.f64 v0, v0
+    v16 = fadd.f64 v0, v0
+    v17 = fadd.f64 v0, v0
+    v18 = fadd.f64 v0, v0
+    v19 = fadd.f64 v0, v0
+    v20 = fadd.f64 v0, v0
+    v21 = fadd.f64 v0, v0
+    v22 = fadd.f64 v0, v0
+    v23 = fadd.f64 v0, v0
+    v24 = fadd.f64 v0, v0
+    v25 = fadd.f64 v0, v0
+    v26 = fadd.f64 v0, v0
+    v27 = fadd.f64 v0, v0
+    v28 = fadd.f64 v0, v0
+    v29 = fadd.f64 v0, v0
+    v30 = fadd.f64 v0, v0
+    v31 = fadd.f64 v0, v0
+
+    v32 = fadd.f64 v0, v1
+    v33 = fadd.f64 v2, v3
+    v34 = fadd.f64 v4, v5
+    v35 = fadd.f64 v6, v7
+    v36 = fadd.f64 v8, v9
+    v37 = fadd.f64 v10, v11
+    v38 = fadd.f64 v12, v13
+    v39 = fadd.f64 v14, v15
+    v40 = fadd.f64 v16, v17
+    v41 = fadd.f64 v18, v19
+    v42 = fadd.f64 v20, v21
+    v43 = fadd.f64 v22, v23
+    v44 = fadd.f64 v24, v25
+    v45 = fadd.f64 v26, v27
+    v46 = fadd.f64 v28, v29
+    v47 = fadd.f64 v30, v31
+
+    v48 = fadd.f64 v32, v33
+    v49 = fadd.f64 v34, v35
+    v50 = fadd.f64 v36, v37
+    v51 = fadd.f64 v38, v39
+    v52 = fadd.f64 v40, v41
+    v53 = fadd.f64 v42, v43
+    v54 = fadd.f64 v44, v45
+    v55 = fadd.f64 v46, v47
+
+    v56 = fadd.f64 v48, v49
+    v57 = fadd.f64 v50, v51
+    v58 = fadd.f64 v52, v53
+    v59 = fadd.f64 v54, v55
+
+    v60 = fadd.f64 v56, v57
+    v61 = fadd.f64 v58, v59
+
+    v62 = fadd.f64 v60, v61
+
+    return v62
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   fsd fs0,-8(sp)
+;   fsd fs2,-16(sp)
+;   fsd fs3,-24(sp)
+;   fsd fs4,-32(sp)
+;   fsd fs5,-40(sp)
+;   fsd fs6,-48(sp)
+;   fsd fs7,-56(sp)
+;   fsd fs8,-64(sp)
+;   fsd fs9,-72(sp)
+;   fsd fs10,-80(sp)
+;   fsd fs11,-88(sp)
+;   add sp,-96
+; block0:
+;   fadd.d ft4,fa0,fa0
+;   fadd.d ft5,fa0,fa0
+;   fadd.d ft6,fa0,fa0
+;   fadd.d ft7,fa0,fa0
+;   fadd.d fa1,fa0,fa0
+;   fadd.d fa2,fa0,fa0
+;   fadd.d fa3,fa0,fa0
+;   fadd.d fa4,fa0,fa0
+;   fadd.d fa5,fa0,fa0
+;   fadd.d fa6,fa0,fa0
+;   fadd.d fa7,fa0,fa0
+;   fadd.d ft8,fa0,fa0
+;   fadd.d ft9,fa0,fa0
+;   fadd.d ft10,fa0,fa0
+;   fadd.d ft11,fa0,fa0
+;   fadd.d ft0,fa0,fa0
+;   fadd.d ft1,fa0,fa0
+;   fadd.d ft2,fa0,fa0
+;   fadd.d ft3,fa0,fa0
+;   fadd.d fs4,fa0,fa0
+;   fadd.d fs5,fa0,fa0
+;   fadd.d fs6,fa0,fa0
+;   fadd.d fs7,fa0,fa0
+;   fadd.d fs8,fa0,fa0
+;   fadd.d fs9,fa0,fa0
+;   fadd.d fs10,fa0,fa0
+;   fadd.d fs11,fa0,fa0
+;   fadd.d fs0,fa0,fa0
+;   fadd.d fs1,fa0,fa0
+;   fadd.d fs2,fa0,fa0
+;   fadd.d fs3,fa0,fa0
+;   fadd.d ft4,fa0,ft4
+;   fadd.d ft5,ft5,ft6
+;   fadd.d ft6,ft7,fa1
+;   fadd.d ft7,fa2,fa3
+;   fadd.d fa0,fa4,fa5
+;   fadd.d fa1,fa6,fa7
+;   fadd.d fa2,ft8,ft9
+;   fadd.d fa3,ft10,ft11
+;   fadd.d fa4,ft0,ft1
+;   fadd.d fa5,ft2,ft3
+;   fadd.d fa6,fs4,fs5
+;   fadd.d fa7,fs6,fs7
+;   fadd.d ft8,fs8,fs9
+;   fadd.d ft9,fs10,fs11
+;   fadd.d ft10,fs0,fs1
+;   fadd.d ft11,fs2,fs3
+;   fadd.d ft4,ft4,ft5
+;   fadd.d ft5,ft6,ft7
+;   fadd.d ft6,fa0,fa1
+;   fadd.d ft7,fa2,fa3
+;   fadd.d fa0,fa4,fa5
+;   fadd.d fa1,fa6,fa7
+;   fadd.d fa2,ft8,ft9
+;   fadd.d fa3,ft10,ft11
+;   fadd.d ft4,ft4,ft5
+;   fadd.d ft5,ft6,ft7
+;   fadd.d ft6,fa0,fa1
+;   fadd.d ft7,fa2,fa3
+;   fadd.d ft4,ft4,ft5
+;   fadd.d ft5,ft6,ft7
+;   fadd.d fa0,ft4,ft5
+;   add sp,+96
+;   fld fs0,-8(sp)
+;   fld fs2,-16(sp)
+;   fld fs3,-24(sp)
+;   fld fs4,-32(sp)
+;   fld fs5,-40(sp)
+;   fld fs6,-48(sp)
+;   fld fs7,-56(sp)
+;   fld fs8,-64(sp)
+;   fld fs9,-72(sp)
+;   fld fs10,-80(sp)
+;   fld fs11,-88(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+function %f2(i64) -> i64 {
+block0(v0: i64):
+    v1 = iadd.i64 v0, v0
+    v2 = iadd.i64 v0, v1
+    v3 = iadd.i64 v0, v2
+    v4 = iadd.i64 v0, v3
+    v5 = iadd.i64 v0, v4
+    v6 = iadd.i64 v0, v5
+    v7 = iadd.i64 v0, v6
+    v8 = iadd.i64 v0, v7
+    v9 = iadd.i64 v0, v8
+    v10 = iadd.i64 v0, v9
+    v11 = iadd.i64 v0, v10
+    v12 = iadd.i64 v0, v11
+    v13 = iadd.i64 v0, v12
+    v14 = iadd.i64 v0, v13
+    v15 = iadd.i64 v0, v14
+    v16 = iadd.i64 v0, v15
+    v17 = iadd.i64 v0, v16
+    v18 = iadd.i64 v0, v17
+
+    v19 = iadd.i64 v0, v1
+    v20 = iadd.i64 v2, v3
+    v21 = iadd.i64 v4, v5
+    v22 = iadd.i64 v6, v7
+    v23 = iadd.i64 v8, v9
+    v24 = iadd.i64 v10, v11
+    v25 = iadd.i64 v12, v13
+    v26 = iadd.i64 v14, v15
+    v27 = iadd.i64 v16, v17
+
+    v28 = iadd.i64 v18, v19
+    v29 = iadd.i64 v20, v21
+    v30 = iadd.i64 v22, v23
+    v31 = iadd.i64 v24, v25
+    v32 = iadd.i64 v26, v27
+
+    v33 = iadd.i64 v28, v29
+    v34 = iadd.i64 v30, v31
+
+    v35 = iadd.i64 v32, v33
+    v36 = iadd.i64 v34, v35
+
+    return v36
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s6,-8(sp)
+;   sd s7,-16(sp)
+;   sd s8,-24(sp)
+;   sd s9,-32(sp)
+;   sd s10,-40(sp)
+;   sd s11,-48(sp)
+;   add sp,-48
+; block0:
+;   add t4,a0,a0
+;   add t0,a0,t4
+;   add t1,a0,t0
+;   add t2,a0,t1
+;   add a1,a0,t2
+;   add a2,a0,a1
+;   add a3,a0,a2
+;   add a4,a0,a3
+;   add a5,a0,a4
+;   add a6,a0,a5
+;   add a7,a0,a6
+;   add t3,a0,a7
+;   add s6,a0,t3
+;   add s7,a0,s6
+;   add s8,a0,s7
+;   add s9,a0,s8
+;   add s10,a0,s9
+;   add s11,a0,s10
+;   add t4,a0,t4
+;   add t0,t0,t1
+;   add t1,t2,a1
+;   add t2,a2,a3
+;   add a0,a4,a5
+;   add a1,a6,a7
+;   add a2,t3,s6
+;   add a3,s7,s8
+;   add a4,s9,s10
+;   add t4,s11,t4
+;   add t0,t0,t1
+;   add t1,t2,a0
+;   add t2,a1,a2
+;   add a0,a3,a4
+;   add t4,t4,t0
+;   add t0,t1,t2
+;   add t4,a0,t4
+;   add a0,t0,t4
+;   add sp,+48
+;   ld s6,-8(sp)
+;   ld s7,-16(sp)
+;   ld s8,-24(sp)
+;   ld s9,-32(sp)
+;   ld s10,-40(sp)
+;   ld s11,-48(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+

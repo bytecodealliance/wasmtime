@@ -3,6 +3,7 @@ test run
 target aarch64
 target s390x
 target x86_64
+target riscv64
 
 function %fcvt_to_sint(f32) -> i32 {
 block0(v0: f32):

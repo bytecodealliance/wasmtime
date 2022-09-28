@@ -233,6 +233,12 @@ jobs:
             gcc: s390x-linux-gnu-gcc
             qemu: qemu-s390x -L /usr/s390x-linux-gnu
             qemu_target: s390x-linux-user
+          - os: ubuntu-latest
+            target: riscv64gc-unknown-linux-gnu
+            gcc_package: gcc-riscv64-linux-gnu
+            gcc: riscv64-linux-gnu-gcc
+            qemu: qemu-riscv64 -L /usr/riscv64-linux-gnu
+            qemu_target: riscv64-linux-user
     steps:
     - uses: actions/checkout@v2
       with:
@@ -401,6 +407,9 @@ jobs:
         - build: s390x-linux
           os: ubuntu-latest
           target: s390x-unknown-linux-gnu
+        - build: riscv64gc-linux
+          os: ubuntu-latest
+          target: riscv64gc-unknown-linux-gnu
     steps:
     - uses: actions/checkout@v2
       with:

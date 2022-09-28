@@ -16,6 +16,7 @@ use cranelift_reader::TestCommand;
 use cranelift_reader::{parse_run_command, TestFile};
 use log::{info, trace};
 use std::borrow::Cow;
+use target_lexicon::Architecture;
 
 struct TestRun;
 
@@ -46,6 +47,30 @@ fn build_host_isa(
     builder.finish(flags).unwrap()
 }
 
+fn is_riscv64_compatible(
+    host: target_lexicon::Riscv64Architecture,
+    req: target_lexicon::Riscv64Architecture,
+) -> bool {
+    match host {
+        // Riscv64gc is short for RV64IMAFDCZicsr_Zifencei.
+        // So can run them all.
+        target_lexicon::Riscv64Architecture::Riscv64gc => true,
+        // Riscv64imac can run when req is not Riscv64gc.
+        target_lexicon::Riscv64Architecture::Riscv64imac
+            if req != target_lexicon::Riscv64Architecture::Riscv64gc =>
+        {
+            true
+        }
+        // Riscv64 is just basic extension.
+        target_lexicon::Riscv64Architecture::Riscv64
+            if req == target_lexicon::Riscv64Architecture::Riscv64 =>
+        {
+            true
+        }
+        _ => false,
+    }
+}
+
 /// Checks if the host's ISA is compatible with the one requested by the test.
 fn is_isa_compatible(
     file_path: &str,
@@ -57,11 +82,17 @@ fn is_isa_compatible(
     // since we won't be able to natively execute machine code.
     let host_arch = host.triple().architecture;
     let requested_arch = requested.triple().architecture;
-    if host_arch != requested_arch {
-        return Err(format!(
-            "skipped {}: host can't run {:?} programs",
-            file_path, requested_arch
-        ));
+
+    match (host_arch, requested_arch) {
+        (host, requested) if host == requested => {}
+        (Architecture::Riscv64(host), Architecture::Riscv64(req))
+            if is_riscv64_compatible(host, req) => {}
+        _ => {
+            return Err(format!(
+                "skipped {}: host can't run {:?} programs",
+                file_path, requested_arch
+            ))
+        }
     }
 
     // We need to check that the requested ISA does not have any flags that

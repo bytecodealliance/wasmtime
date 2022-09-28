@@ -187,6 +187,8 @@ fn get_isle_compilations(
     let src_isa_s390x =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("s390x"));
 
+    let src_isa_risc_v =
+        make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("riscv64"));
     // This is a set of ISLE compilation units.
     //
     // The format of each entry is:
@@ -231,6 +233,16 @@ fn get_isle_compilations(
                     prelude_isle.clone(),
                     src_isa_s390x.join("inst.isle"),
                     src_isa_s390x.join("lower.isle"),
+                ],
+                untracked_inputs: vec![clif_isle.clone()],
+            },
+            // The risc-v instruction selector.
+            IsleCompilation {
+                output: out_dir.join("isle_riscv64.rs"),
+                inputs: vec![
+                    prelude_isle.clone(),
+                    src_isa_risc_v.join("inst.isle"),
+                    src_isa_risc_v.join("lower.isle"),
                 ],
                 untracked_inputs: vec![clif_isle.clone()],
             },

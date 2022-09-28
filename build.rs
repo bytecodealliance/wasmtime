@@ -172,6 +172,9 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             // FIXME: These tests fail under qemu due to a qemu bug.
             (_, "simd_f32x4_pmin_pmax") if platform_is_s390x() => return true,
             (_, "simd_f64x2_pmin_pmax") if platform_is_s390x() => return true,
+            // riscv64 backend does not yet have a fully complete SIMD backend.
+            ("simd", _) if platform_is_riscv64() => return true,
+            ("memory64", "simd") if platform_is_riscv64() => return true,
             _ => {}
         },
         _ => panic!("unrecognized strategy"),
@@ -182,4 +185,8 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
 
 fn platform_is_s390x() -> bool {
     env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "s390x"
+}
+
+fn platform_is_riscv64() -> bool {
+    env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "riscv64"
 }
