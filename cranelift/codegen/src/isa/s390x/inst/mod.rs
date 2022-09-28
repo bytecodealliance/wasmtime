@@ -539,7 +539,9 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
-            collector.reg_use(shift_reg);
+            if shift_reg != zero_reg() {
+                collector.reg_use(shift_reg);
+            }
         }
         &Inst::RxSBG { rd, rn, .. } => {
             collector.reg_mod(rd);
@@ -744,7 +746,9 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
-            collector.reg_use(shift_reg);
+            if shift_reg != zero_reg() {
+                collector.reg_use(shift_reg);
+            }
         }
         &Inst::VecSelect { rd, rn, rm, ra, .. } => {
             collector.reg_def(rd);
