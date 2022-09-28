@@ -2497,11 +2497,11 @@
 ;; 8-bit loads.
 ;;
 ;; By default, we zero-extend all sub-64-bit loads to a GPR.
-(rule (lower (has_type (and (fits_in_32 ty) (is_gpr_type _)) (load flags address offset)))
+(rule -4 (lower (has_type (and (fits_in_32 ty) (is_gpr_type _)) (load flags address offset)))
       (x64_movzx (ext_mode (ty_bits_u16 ty) 64) (to_amode flags address offset)))
 ;; But if we know that both the `from` and `to` are 64 bits, we simply load with
 ;; no extension.
-(rule (lower (has_type (ty_int_bool_ref_64 ty) (load flags address offset)))
+(rule -1 (lower (has_type (ty_int_bool_ref_64 ty) (load flags address offset)))
       (x64_mov (to_amode flags address offset)))
 ;; Also, certain scalar loads have a specific `from` width and extension kind
 ;; (signed -> `sx`, zeroed -> `zx`). We overwrite the high bits of the 64-bit
@@ -2531,11 +2531,11 @@
       (x64_movups (to_amode flags address offset)))
 (rule (lower (has_type $F64X2 (load flags address offset)))
       (x64_movupd (to_amode flags address offset)))
-(rule (lower (has_type (ty_vec128 ty) (load flags address offset)))
+(rule -2 (lower (has_type (ty_vec128 ty) (load flags address offset)))
       (x64_movdqu (to_amode flags address offset)))
 
 ;; We can load an I128/B128 by doing two 64-bit loads.
-(rule (lower (has_type (ty_int_bool_128 _)
+(rule -3 (lower (has_type (ty_int_bool_128 _)
                        (load flags address offset)))
       (let ((addr_lo Amode (to_amode flags address offset))
             (addr_hi Amode (amode_offset addr_lo 8))
