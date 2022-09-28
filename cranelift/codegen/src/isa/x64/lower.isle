@@ -1730,24 +1730,26 @@
 ;; special handling is required for zero inputs, because the machine
 ;; instruction does what the CLIF expects for zero, i.e. it returns
 ;; zero.
-(rule 1 (lower
+(rule 2 (lower
          (has_type (and
                     (ty_32_or_64 ty)
                     (use_lzcnt $true))
                    (clz src)))
       (x64_lzcnt ty src))
 
-(rule (lower
-       (has_type (ty_32_or_64 ty)
+(rule 2 (lower
+         (has_type (and
+                    (ty_32_or_64 ty)
+                    (use_lzcnt $false))
                  (clz src)))
       (do_clz ty ty src))
 
-(rule (lower
+(rule 1 (lower
        (has_type (ty_8_or_16 ty)
                  (clz src)))
       (do_clz $I32 ty (extend_to_gpr src $I32 (ExtendKind.Zero))))
 
-(rule (lower
+(rule 0 (lower
        (has_type $I128
                  (clz src)))
       (let ((upper Gpr (do_clz $I64 $I64 (value_regs_get_gpr src 1)))
