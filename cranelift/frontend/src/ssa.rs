@@ -276,25 +276,61 @@ impl SSABuilder {
     ///
     /// This function sets up state for `run_state_machine()` but does not execute it.
     fn use_var_nonlocal(&mut self, func: &mut Function, var: Variable, ty: Type, mut block: Block) {
+        // Find the most recent definition of `var`, and the block the definition comes from.
         let (val, from) = self.find_var(func, var, ty, block);
 
-        // `find_var` guarantees that we can blindly follow predecessors until we find the `from`
-        // block, without encountering any cycles. We also know all the intervening blocks,
-        // including our starting point at `block`, don't yet have a definition for this variable
-        // and should get it from the same source.
+        // The `from` block returned from `find_var` is guaranteed to be on the path we follow by
+        // traversing only single-predecessor edges. It might be equal to `block` if there is no
+        // such path, but in that case `find_var` ensures that the variable is defined in this block
+        // by a new block parameter. It also might be somewhere in a cycle, but even then this loop
+        // will terminate the first time it encounters that block, rather than continuing around the
+        // cycle forever.
+        //
+        // Why is it okay to copy the definition to all intervening blocks? For the initial block,
+        // this may not be the final definition of this variable within this block, but if we've
+        // gotten here then we know there is no earlier definition in the block already.
+        //
+        // For the remaining blocks: Recall that a block is only allowed to be set as a predecessor
+        // after all its instructions have already been filled in, so when we follow a predecessor
+        // edge to a block, we know there will never be any more local variable definitions added to
+        // that block. We also know that `find_var` didn't find a definition for this variable in
+        // any of the blocks before `from`.
+        //
+        // So in either case there is no definition in these blocks yet and we can blindly set one.
+        let var_defs = &mut self.variables[var];
         while block != from {
-            self.def_var(var, val, block);
             let data = &self.ssa_blocks[block];
             debug_assert!(data.sealed);
             debug_assert_eq!(data.predecessors.len(), 1);
+            debug_assert!(var_defs[block].is_none());
+            var_defs[block] = PackedOption::from(val);
             block = data.predecessors[0].block;
         }
     }
 
-    /// Find the last definition of this variable, returning both the definition and the block in
-    /// which it was found. If we run into a block that isn't sealed or doesn't have exactly one
-    /// predecessor, or we discover we've followed a cycle, then append a block parameter there and
-    /// use that as the definition.
+    /// Find the most recent definition of this variable, returning both the definition and the
+    /// block in which it was found. If we can't find a definition that's provably the right one for
+    /// all paths to the current block, then append a block parameter to some block and use that as
+    /// the definition. Either way, also arrange that the definition will be on the `results` stack
+    /// when `run_state_machine` is done processing the current step.
+    ///
+    /// If a block has exactly one predecessor, and the block is sealed so we know its predecessors
+    /// will never change, then its definition for this variable is the same as the definition from
+    /// that one predecessor. In this case it's easy to see that no block parameter is necessary,
+    /// but we need to look at the predecessor to see if a block parameter might be needed there.
+    /// That holds transitively across any chain of sealed blocks with exactly one predecessor each.
+    ///
+    /// This runs into a problem, though, if such a chain has a cycle: Blindly following a cyclic
+    /// chain that never defines this variable would lead to an infinite loop in the compiler. It
+    /// doesn't really matter what code we generate in that case. Since each block in the cycle has
+    /// exactly one predecessor, there's no way to enter the cycle from the function's entry block;
+    /// and since all blocks in the cycle are sealed, the entire cycle is permanently dead code. But
+    /// we still have to prevent the possibility of an infinite loop.
+    ///
+    /// To break cycles, we can pick any block within the cycle as the one where we'll add a block
+    /// parameter. It's convenient to pick the block at which we entered the cycle, because that's
+    /// the first place where we can detect that we just followed a cycle. Adding a block parameter
+    /// gives us a definition we can reuse throughout the rest of the cycle.
     fn find_var(
         &mut self,
         func: &mut Function,
@@ -302,27 +338,35 @@ impl SSABuilder {
         ty: Type,
         mut block: Block,
     ) -> (Value, Block) {
-        if let Some(var_defs) = self.variables.get(var) {
-            self.visited.clear();
-            while self.ssa_blocks[block].has_one_predecessor() && self.visited.insert(block) {
-                block = self.ssa_blocks[block].predecessors[0].block;
-                if let Some(val) = var_defs[block].expand() {
-                    self.results.push(val);
-                    return (val, block);
-                }
+        // Try to find an existing definition along single-predecessor edges first.
+        let var_defs = &mut self.variables[var];
+        self.visited.clear();
+        while self.ssa_blocks[block].has_one_predecessor() && self.visited.insert(block) {
+            block = self.ssa_blocks[block].predecessors[0].block;
+            if let Some(val) = var_defs[block].expand() {
+                self.results.push(val);
+                return (val, block);
             }
         }
 
+        // We've promised to return the most recent block where `var` was defined, but we didn't
+        // find a usable definition. So create one.
         let val = func.dfg.append_block_param(block, ty);
+        var_defs[block] = PackedOption::from(val);
+
+        // Now every predecessor needs to pass its definition of this variable to the newly added
+        // block parameter. To do that we have to "recursively" call `use_var`, but there are two
+        // problems with doing that. First, we need to keep a fixed bound on stack depth, so we
+        // can't actually recurse; instead we defer to `run_state_machine`. Second, if we don't
+        // know all our predecessors yet, we have to defer this work until the block gets sealed.
         if self.ssa_blocks[block].sealed {
-            // Call use_var for each predecessor.
+            // Once all the `calls` added here complete, this leaves either `val` or an equivalent
+            // definition on the `results` stack.
             self.begin_predecessors_lookup(val, block);
         } else {
-            // Nothing more can be known at this point.
             self.ssa_blocks[block].undef_variables.push((var, val));
             self.results.push(val);
         }
-        self.def_var(var, val, block);
         (val, block)
     }
 
