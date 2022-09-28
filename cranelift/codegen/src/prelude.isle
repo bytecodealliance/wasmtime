@@ -964,10 +964,6 @@
 (decl range_unwrap (usize Range) Range)
 (extractor (range_unwrap index rest) (range_view (RangeView.NonEmpty index rest)))
 
-;; Extractor to guard that a range is not empty.
-(decl range_nonempty () Range)
-(extractor (range_nonempty) (range_view (RangeView.NonEmpty _ _)))
-
 ;;;; Helpers for generating returns ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The (writable) register(s) that will contain the n'th return value.
