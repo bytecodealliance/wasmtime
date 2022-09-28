@@ -2060,11 +2060,11 @@
 ;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; T -> T is a no-op.
-(rule (lower (has_type ty (uextend src @ (value_type ty))))
+(rule 1 (lower (has_type ty (uextend src @ (value_type ty))))
       src)
 
 ;; I64 -> I128.
-(rule (lower (has_type $I128 (uextend src @ (value_type $I64))))
+(rule -1 (lower (has_type $I128 (uextend src @ (value_type $I64))))
       (value_regs src (imm $I64 0)))
 
 ;; I{8,16,32} -> I128.
@@ -2072,11 +2072,11 @@
       (value_regs (extend_to_gpr src $I64 (ExtendKind.Zero)) (imm $I64 0)))
 
 ;; I{8,16,32} -> I64.
-(rule (lower (has_type $I64 (uextend src @ (value_type (fits_in_32 src_ty)))))
+(rule -1 (lower (has_type $I64 (uextend src @ (value_type (fits_in_32 src_ty)))))
       (extend_to_gpr src $I64 (ExtendKind.Zero)))
 
 ;; I8 -> I{16,32}, I16 -> I32.
-(rule (lower (has_type (fits_in_32 dst_ty) (uextend src @ (value_type (fits_in_32 src_ty)))))
+(rule -2 (lower (has_type (fits_in_32 dst_ty) (uextend src @ (value_type (fits_in_32 src_ty)))))
       (extend_to_gpr src $I32 (ExtendKind.Zero)))
 
 ;; I32 -> I64 with op that produces a zero-extended value in a register.
