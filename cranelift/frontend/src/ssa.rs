@@ -88,6 +88,23 @@ impl PredBlock {
     }
 }
 
+#[derive(Clone)]
+enum Sealed {
+    No {
+        // List of current Block arguments for which an earlier def has not been found yet.
+        undef_variables: Vec<(Variable, Value)>,
+    },
+    Yes,
+}
+
+impl Default for Sealed {
+    fn default() -> Self {
+        Sealed::No {
+            undef_variables: Vec::new(),
+        }
+    }
+}
+
 type PredBlockSmallVec = SmallVec<[PredBlock; 4]>;
 
 #[derive(Clone, Default)]
@@ -95,14 +112,15 @@ struct SSABlockData {
     // The predecessors of the Block with the block and branch instruction.
     predecessors: PredBlockSmallVec,
     // A block is sealed if all of its predecessors have been declared.
-    sealed: bool,
-    // List of current Block arguments for which an earlier def has not been found yet.
-    undef_variables: Vec<(Variable, Value)>,
+    sealed: Sealed,
 }
 
 impl SSABlockData {
     fn add_predecessor(&mut self, pred: Block, inst: Inst) {
-        debug_assert!(!self.sealed, "sealed blocks cannot accept new predecessors");
+        debug_assert!(
+            !self.sealed(),
+            "sealed blocks cannot accept new predecessors"
+        );
         self.predecessors.push(PredBlock::new(pred, inst));
     }
 
@@ -115,8 +133,12 @@ impl SSABlockData {
         self.predecessors.swap_remove(pred).block
     }
 
+    fn sealed(&self) -> bool {
+        matches!(self.sealed, Sealed::Yes)
+    }
+
     fn has_one_predecessor(&self) -> bool {
-        self.sealed && self.predecessors.len() == 1
+        self.sealed() && self.predecessors.len() == 1
     }
 }
 
@@ -292,7 +314,7 @@ impl SSABuilder {
         let var_defs = &mut self.variables[var];
         while block != from {
             let data = &self.ssa_blocks[block];
-            debug_assert!(data.sealed);
+            debug_assert!(data.sealed());
             debug_assert_eq!(data.predecessors.len(), 1);
             debug_assert!(var_defs[block].is_none());
             var_defs[block] = PackedOption::from(val);
@@ -351,13 +373,14 @@ impl SSABuilder {
         // problems with doing that. First, we need to keep a fixed bound on stack depth, so we
         // can't actually recurse; instead we defer to `run_state_machine`. Second, if we don't
         // know all our predecessors yet, we have to defer this work until the block gets sealed.
-        if self.ssa_blocks[block].sealed {
+        match &mut self.ssa_blocks[block].sealed {
             // Once all the `calls` added here complete, this leaves either `val` or an equivalent
             // definition on the `results` stack.
-            self.begin_predecessors_lookup(val, block);
-        } else {
-            self.ssa_blocks[block].undef_variables.push((var, val));
-            self.results.push(val);
+            Sealed::Yes => self.begin_predecessors_lookup(val, block),
+            Sealed::No { undef_variables } => {
+                undef_variables.push((var, val));
+                self.results.push(val);
+            }
         }
         (val, block)
     }
@@ -401,7 +424,7 @@ impl SSABuilder {
     /// Returns the list of newly created blocks for critical edge splitting.
     pub fn seal_block(&mut self, block: Block, func: &mut Function) -> SideEffects {
         debug_assert!(
-            !self.ssa_blocks[block].sealed,
+            !self.ssa_blocks[block].sealed(),
             "Attempting to seal {} which is already sealed.",
             block
         );
@@ -445,9 +468,10 @@ impl SSABuilder {
         // important, because no further predecessors will be added
         // to this block.
 
-        let block_data = &mut self.ssa_blocks[block];
-        block_data.sealed = true;
-        mem::take(&mut block_data.undef_variables)
+        match mem::replace(&mut self.ssa_blocks[block].sealed, Sealed::Yes) {
+            Sealed::No { undef_variables } => undef_variables,
+            Sealed::Yes => Vec::new(),
+        }
     }
 
     /// Given the local SSA Value of a Variable in a Block, perform a recursive lookup on
@@ -673,7 +697,7 @@ impl SSABuilder {
 
     /// Returns `true` if and only if `seal_block` has been called on the argument.
     pub fn is_sealed(&self, block: Block) -> bool {
-        self.ssa_blocks[block].sealed
+        self.ssa_blocks[block].sealed()
     }
 
     /// The main algorithm is naturally recursive: when there's a `use_var` in a
