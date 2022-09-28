@@ -82,8 +82,8 @@ pub(crate) struct Stats {
     pub(crate) elaborate_find_best_node_memoize_hit: u64,
     pub(crate) elaborate_find_best_node_memoize_miss: u64,
     pub(crate) elaborate_find_best_node_arg_recurse: u64,
-    pub(crate) elaborate_find_best_node_parent_recurse: u64,
-    pub(crate) elaborate_find_best_node_parent_better: u64,
+    pub(crate) elaborate_find_best_node_child_recurse: u64,
+    pub(crate) elaborate_find_best_node_child_better: u64,
     pub(crate) elaborate_visit_node: u64,
     pub(crate) elaborate_visit_node_recurse: u64,
     pub(crate) elaborate_memoize_hit: u64,
@@ -138,7 +138,8 @@ impl<'a> FuncEGraph<'a> {
         // each block param, and for each instruction.
         for &block in self.domtree.cfg_postorder().iter().rev() {
             let loop_level = self.loop_analysis.loop_level(block);
-            let blockparam_start = self.blockparam_ids_tys.len() as u32;
+            let blockparam_start =
+                u32::try_from(self.blockparam_ids_tys.len()).expect("Overflow in blockparam count");
             for (i, &value) in func.dfg.block_params(block).iter().enumerate() {
                 let ty = func.dfg.value_type(value);
                 let param = self
@@ -146,7 +147,7 @@ impl<'a> FuncEGraph<'a> {
                     .add(
                         Node::Param {
                             block,
-                            index: i as u32,
+                            index: u32::try_from(i).expect("More than 2^32 blockparams"),
                             ty,
                         },
                         &mut self.node_ctx,
@@ -158,10 +159,12 @@ impl<'a> FuncEGraph<'a> {
                 self.stats.node_created += 1;
                 self.stats.node_param += 1;
             }
-            let blockparam_end = self.blockparam_ids_tys.len() as u32;
+            let blockparam_end =
+                u32::try_from(self.blockparam_ids_tys.len()).expect("Overflow in blockparam count");
             self.blockparams[block] = blockparam_start..blockparam_end;
 
-            let side_effect_start = self.side_effect_ids.len() as u32;
+            let side_effect_start =
+                u32::try_from(self.side_effect_ids.len()).expect("Overflow in side-effect count");
             for inst in func.layout.block_insts(block) {
                 let side_effect = has_side_effect(func, inst)
                     || (func.dfg[inst].opcode().can_load()
@@ -320,7 +323,8 @@ impl<'a> FuncEGraph<'a> {
                 }
             }
 
-            let side_effect_end = self.side_effect_ids.len() as u32;
+            let side_effect_end =
+                u32::try_from(self.side_effect_ids.len()).expect("Overflow in side-effect count");
             let side_effect_range = side_effect_start..side_effect_end;
             self.side_effects[block] = side_effect_range;
         }
@@ -394,13 +398,13 @@ impl<'a> FuncEGraph<'a> {
                     _ => panic!("Should have already assigned levels to all Inst and Param nodes"),
                 });
 
-            let parent1_loop_level = eclass_data.parent1().map(|p1| self.loop_levels[p1]);
-            let parent2_loop_level = eclass_data.parent2().map(|p2| self.loop_levels[p2]);
+            let child1_loop_level = eclass_data.child1().map(|p1| self.loop_levels[p1]);
+            let child2_loop_level = eclass_data.child2().map(|p2| self.loop_levels[p2]);
 
             let loop_level = node_loop_level
                 .into_iter()
-                .chain(parent1_loop_level.into_iter())
-                .chain(parent2_loop_level.into_iter())
+                .chain(child1_loop_level.into_iter())
+                .chain(child2_loop_level.into_iter())
                 .max()
                 .unwrap_or(LoopLevel::root());
             self.loop_levels[id] = loop_level;

@@ -2,16 +2,15 @@
 
 use crate::dominator_tree::DominatorTree;
 use crate::ir::{Block, Function};
-use alloc::vec::Vec;
-use cranelift_entity::{packed_option::PackedOption, EntityRef};
+use cranelift_entity::{packed_option::PackedOption, SecondaryMap};
 
 #[derive(Clone, Debug)]
 pub(crate) struct DomTreeWithChildren {
-    nodes: Vec<DomTreeNode>,
+    nodes: SecondaryMap<Block, DomTreeNode>,
     root: Block,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 struct DomTreeNode {
     children: PackedOption<Block>,
     next: PackedOption<Block>,
@@ -19,13 +18,9 @@ struct DomTreeNode {
 
 impl DomTreeWithChildren {
     pub(crate) fn new(func: &Function, domtree: &DominatorTree) -> DomTreeWithChildren {
-        let mut nodes = vec![
-            DomTreeNode {
-                children: None.into(),
-                next: None.into(),
-            };
-            func.dfg.num_blocks()
-        ];
+        let mut nodes: SecondaryMap<Block, DomTreeNode> =
+            SecondaryMap::with_capacity(func.dfg.num_blocks());
+
         for block in func.layout.blocks() {
             let idom_inst = match domtree.idom(block) {
                 Some(idom_inst) => idom_inst,
@@ -36,8 +31,8 @@ impl DomTreeWithChildren {
                 None => continue,
             };
 
-            nodes[block.index()].next = nodes[idom.index()].children;
-            nodes[idom.index()].children = block.into();
+            nodes[block].next = nodes[idom].children;
+            nodes[idom].children = block.into();
         }
 
         let root = func.layout.entry_block().unwrap();
@@ -50,7 +45,7 @@ impl DomTreeWithChildren {
     }
 
     pub(crate) fn children<'a>(&'a self, block: Block) -> DomTreeChildIter<'a> {
-        let block = self.nodes[block.index()].children;
+        let block = self.nodes[block].children;
         DomTreeChildIter {
             domtree: self,
             block,
@@ -70,7 +65,7 @@ impl<'a> Iterator for DomTreeChildIter<'a> {
             None
         } else {
             let block = self.block.unwrap();
-            self.block = self.domtree.nodes[block.index()].next;
+            self.block = self.domtree.nodes[block].next;
             Some(block)
         }
     }

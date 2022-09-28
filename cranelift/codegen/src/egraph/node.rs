@@ -2,6 +2,7 @@
 
 use super::MemoryState;
 use crate::ir::{Block, Inst, InstructionImms, Opcode, RelSourceLoc, Type};
+use crate::loop_analysis::LoopLevel;
 use cranelift_egraph::{BumpArena, BumpSlice, CtxEq, CtxHash, Id, Language, UnionFind};
 use cranelift_entity::{EntityList, ListPool};
 use std::hash::{Hash, Hasher};
@@ -278,10 +279,47 @@ impl CtxHash<Node> for NodeCtx {
     }
 }
 
-pub(crate) fn op_cost(op: &InstructionImms) -> usize {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct Cost(u32);
+impl Cost {
+    pub(crate) fn at_level(&self, loop_level: LoopLevel) -> Cost {
+        let loop_level = std::cmp::min(3, loop_level.level());
+        let multiplier = 1u32 << ((10 * loop_level) as u32);
+        Cost(self.0.saturating_mul(multiplier))
+    }
+
+    pub(crate) fn infinity() -> Cost {
+        // 2^32 - 1 is, uh, pretty close to infinite... (we use `Cost`
+        // only for heuristics and always saturate so this suffices!)
+        Cost(u32::MAX)
+    }
+
+    pub(crate) fn zero() -> Cost {
+        Cost(0)
+    }
+
+    pub(crate) fn checked_sub(&self, other: Cost) -> Option<Cost> {
+        Some(Cost(self.0.checked_sub(other.0)?))
+    }
+}
+
+impl std::default::Default for Cost {
+    fn default() -> Cost {
+        Cost::zero()
+    }
+}
+
+impl std::ops::Add<Cost> for Cost {
+    type Output = Cost;
+    fn add(self, other: Cost) -> Cost {
+        Cost(self.0.saturating_add(other.0))
+    }
+}
+
+pub(crate) fn op_cost(op: &InstructionImms) -> Cost {
     match op.opcode() {
         // Constants.
-        Opcode::Iconst | Opcode::F32const | Opcode::F64const | Opcode::Bconst => 0,
+        Opcode::Iconst | Opcode::F32const | Opcode::F64const | Opcode::Bconst => Cost(0),
         // Extends/reduces.
         Opcode::Bextend
         | Opcode::Breduce
@@ -289,7 +327,7 @@ pub(crate) fn op_cost(op: &InstructionImms) -> usize {
         | Opcode::Sextend
         | Opcode::Ireduce
         | Opcode::Iconcat
-        | Opcode::Isplit => 1,
+        | Opcode::Isplit => Cost(1),
         // "Simple" arithmetic.
         Opcode::Iadd
         | Opcode::Isub
@@ -299,9 +337,9 @@ pub(crate) fn op_cost(op: &InstructionImms) -> usize {
         | Opcode::BorNot
         | Opcode::Bxor
         | Opcode::BxorNot
-        | Opcode::Bnot => 2,
+        | Opcode::Bnot => Cost(2),
         // Everything else.
-        _ => 3,
+        _ => Cost(3),
     }
 }
 

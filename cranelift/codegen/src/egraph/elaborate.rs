@@ -2,7 +2,7 @@
 //! in CFG nodes.
 
 use super::domtree::DomTreeWithChildren;
-use super::node::{op_cost, Node, NodeCtx};
+use super::node::{op_cost, Cost, Node, NodeCtx};
 use super::Stats;
 use crate::dominator_tree::DominatorTree;
 use crate::fx::FxHashSet;
@@ -23,7 +23,7 @@ pub(crate) struct Elaborator<'a> {
     egraph: &'a EGraph<NodeCtx>,
     loop_levels: &'a SecondaryMap<Id, LoopLevel>,
     id_to_value: ScopedHashMap<Id, IdValue>,
-    id_to_best_cost_and_node: SecondaryMap<Id, (usize, Id)>,
+    id_to_best_cost_and_node: SecondaryMap<Id, (Cost, Id)>,
     /// Stack of blocks and loops in current elaboration path.
     loop_stack: SmallVec<[LoopStackEntry; 8]>,
     cur_block: Option<Block>,
@@ -80,7 +80,8 @@ impl<'a> Elaborator<'a> {
         stats: &'a mut Stats,
     ) -> Self {
         let num_blocks = func.dfg.num_blocks();
-        let mut id_to_best_cost_and_node = SecondaryMap::with_default((0, Id::invalid()));
+        let mut id_to_best_cost_and_node =
+            SecondaryMap::with_default((Cost::infinity(), Id::invalid()));
         id_to_best_cost_and_node.resize(egraph.classes.len());
         Self {
             func,
@@ -112,6 +113,12 @@ impl<'a> Elaborator<'a> {
             self.id_to_value.depth()
         );
 
+        // Note that if the *entry* block is a loop header, we will
+        // not make note of the loop here because it will not have an
+        // immediate dominator. We must disallow this case because we
+        // will skip adding the `LoopStackEntry` here but our
+        // `LoopAnalysis` will otherwise still make note of this loop
+        // and loop depths will not match.
         if let Some(idom) = idom {
             if self.loop_analysis.is_loop_header(block).is_some() {
                 self.loop_stack.push(LoopStackEntry {
@@ -127,6 +134,11 @@ impl<'a> Elaborator<'a> {
                     self.loop_stack.len()
                 );
             }
+        } else {
+            debug_assert!(
+                self.loop_analysis.is_loop_header(block).is_none(),
+                "Entry block (domtree root) cannot be a loop header!"
+            );
         }
 
         self.cur_block = Some(block);
@@ -187,15 +199,15 @@ impl<'a> Elaborator<'a> {
         self.func.dfg.inst_results_list(inst)
     }
 
-    fn find_best_node(&mut self, id: Id, mut upper_bound: Option<usize>) -> Option<(usize, Id)> {
+    fn find_best_node(&mut self, id: Id, mut upper_bound: Cost) -> Option<(Cost, Id)> {
         self.stats.elaborate_find_best_node += 1;
         log::trace!("find_best_node: {} upper_bound {:?}", id, upper_bound);
 
         let (cost, node) = self.id_to_best_cost_and_node[id];
         if node != Id::invalid() {
             self.stats.elaborate_find_best_node_memoize_hit += 1;
-            log::trace!(" -> memoized to cost {} node {}", cost, node);
-            if upper_bound.is_none() || cost <= upper_bound.unwrap() {
+            log::trace!(" -> memoized to cost {:?} node {}", cost, node);
+            if cost <= upper_bound {
                 return Some((cost, node));
             } else {
                 return None;
@@ -205,52 +217,55 @@ impl<'a> Elaborator<'a> {
 
         let eclass = self.egraph.classes[id];
         let node = eclass.get_node();
-        let parent1 = eclass.parent1();
-        let parent2 = eclass.parent2();
+        let child1 = eclass.child1();
+        let child2 = eclass.child2();
 
         log::trace!(
-            " -> id {} node expands to: node {:?} parent1 {:?} parent2 {:?}",
+            " -> id {} node expands to: node {:?} child1 {:?} child2 {:?}",
             id,
             node,
-            parent1,
-            parent2
+            child1,
+            child2
         );
 
         let (mut best_cost, mut best_id) = if let Some(node) = node {
             let cost = match node.node::<NodeCtx>(&self.egraph.nodes) {
                 Node::Param { .. } | Node::Inst { .. } | Node::Load { .. } => {
-                    return Some((0, id));
+                    return Some((Cost::zero(), id));
                 }
                 Node::Result { value, .. } => {
                     return self.find_best_node(*value, upper_bound);
                 }
                 Node::Pure { op, .. } => op_cost(op),
             };
-            let level = self.loop_levels[id].level() as u32;
-            let cost = cost * (1 << (10 * level));
-            log::trace!("  -> id {} has operand cost {}", id, cost);
+            let level = self.loop_levels[id];
+            let cost = cost.at_level(level);
+            log::trace!("  -> id {} has operand cost {:?}", id, cost);
 
-            let mut children_cost = 0;
+            let mut children_cost = Cost::zero();
             let child_count = self
                 .node_ctx
                 .children(node.node::<NodeCtx>(&self.egraph.nodes))
                 .len();
             let mut exceeded = false;
             for child_idx in 0..child_count {
-                if upper_bound.is_some() && cost + children_cost > upper_bound.unwrap() {
-                    exceeded = true;
-                    break;
-                }
+                let child_upper_bound = match upper_bound.checked_sub(cost + children_cost) {
+                    Some(bound) => bound,
+                    None => {
+                        exceeded = true;
+                        break;
+                    }
+                };
                 let child = self
                     .node_ctx
                     .children(node.node::<NodeCtx>(&self.egraph.nodes))[child_idx];
                 assert!(child < id);
                 log::trace!("  -> id {} child {}", id, child);
                 self.stats.elaborate_find_best_node_arg_recurse += 1;
-                let child_upper_bound = upper_bound.map(|u| u - (cost + children_cost));
+
                 if let Some((child_cost, _)) = self.find_best_node(child, child_upper_bound) {
-                    children_cost += child_cost;
-                    log::trace!("  -> id {} child {} child cost {}", id, child, child_cost);
+                    children_cost = children_cost + child_cost;
+                    log::trace!("  -> id {} child {} child cost {:?}", id, child, child_cost);
                 } else {
                     exceeded = true;
                     break;
@@ -258,68 +273,66 @@ impl<'a> Elaborator<'a> {
             }
 
             if exceeded {
-                (None, None)
+                (Cost::infinity(), None)
             } else {
                 let node_cost = cost + children_cost;
 
                 log::trace!(
-                    "  -> id {} total cost of operand plus args: {}",
+                    "  -> id {} total cost of operand plus args: {:?}",
                     id,
                     node_cost
                 );
-                (Some(node_cost), Some(id))
+                (node_cost, Some(id))
             }
         } else {
-            (None, None)
+            (Cost::infinity(), None)
         };
 
-        if best_cost.is_some()
-            && (upper_bound.is_none() || best_cost.unwrap() < upper_bound.unwrap())
-        {
+        if best_cost < upper_bound {
             upper_bound = best_cost;
         }
 
-        // Evaluate parents as options now, but only if we haven't
+        // Evaluate children as options now, but only if we haven't
         // already found a "perfect" (zero-cost) option here. This
         // conditional lets us short-circuit cases where e.g. a
         // rewrite to a constant value occurs.
-        if best_cost != Some(0) {
-            for parent in parent1.into_iter().chain(parent2.into_iter()) {
-                log::trace!(" -> id {} parent {}", id, parent);
-                assert!(parent < id);
-                self.stats.elaborate_find_best_node_parent_recurse += 1;
-                if let Some((parent_best_cost, parent_best_id)) =
-                    self.find_best_node(parent, upper_bound)
+        if best_cost != Cost::zero() {
+            for child in child1.into_iter().chain(child2.into_iter()) {
+                log::trace!(" -> id {} child {}", id, child);
+                assert!(child < id);
+                self.stats.elaborate_find_best_node_child_recurse += 1;
+                if let Some((child_best_cost, child_best_id)) =
+                    self.find_best_node(child, upper_bound)
                 {
                     log::trace!(
-                        " -> id {} parent {} has cost {} with best id {}",
+                        " -> id {} child {} has cost {:?} with best id {}",
                         id,
-                        parent,
-                        parent_best_cost,
-                        parent_best_id
+                        child,
+                        child_best_cost,
+                        child_best_id
                     );
-                    if best_cost.is_none() || parent_best_cost < best_cost.unwrap() {
-                        self.stats.elaborate_find_best_node_parent_better += 1;
-                        best_cost = Some(parent_best_cost);
-                        best_id = Some(parent_best_id);
+                    if child_best_cost < best_cost {
+                        self.stats.elaborate_find_best_node_child_better += 1;
+                        best_cost = child_best_cost;
+                        best_id = Some(child_best_id);
                     }
-                    if upper_bound.is_none() || parent_best_cost < upper_bound.unwrap() {
-                        upper_bound = Some(parent_best_cost);
+                    if child_best_cost < upper_bound {
+                        upper_bound = child_best_cost;
                     }
                 } else {
                     log::trace!(
-                        " -> id {} parent {} nothing below upper bound {:?}",
+                        " -> id {} child {} nothing below upper bound {:?}",
                         id,
-                        parent,
+                        child,
                         upper_bound
                     );
                 }
             }
         }
 
-        if let (Some(best_id), Some(best_cost)) = (best_id, best_cost) {
+        if let Some(best_id) = best_id {
             log::trace!(
-                "-> for eclass {}, best node is in id {} with cost {}",
+                "-> for eclass {}, best node is in id {} with cost {:?}",
                 id,
                 best_id,
                 best_cost
@@ -357,6 +370,8 @@ impl<'a> Elaborator<'a> {
             }
             log::trace!("elaborate: id {} -> remat", id);
             self.stats.elaborate_memoize_miss_remat += 1;
+            // The op is pure at this point, so it is always valid to
+            // remove from this map.
             self.id_to_value.remove(&canonical);
             true
         } else {
@@ -364,8 +379,10 @@ impl<'a> Elaborator<'a> {
         };
         self.stats.elaborate_memoize_miss += 1;
 
+        // Get the best option; we use `id` (latest id) here so we
+        // have a full view of the eclass.
         let (_, best_node_eclass) = self
-            .find_best_node(id, None)
+            .find_best_node(id, Cost::infinity())
             .expect("Must have some option with unlimited upper bound");
 
         log::trace!(
@@ -387,6 +404,9 @@ impl<'a> Elaborator<'a> {
         // have everything we need; no need to allocate a new Value
         // for the result.
         if let Node::Result { value, result, .. } = node {
+            // Recurse here: this recursion is safe because we only
+            // ever have one level of `Result` node (we don't have
+            // nested tuples).
             let value = self.elaborate_eclass_use(*value);
             let (depth, block, values) = match value {
                 IdValue::Values {
@@ -440,18 +460,22 @@ impl<'a> Elaborator<'a> {
                 self.cur_block.unwrap(),
             )
         } else if max_loop_depth == self.cur_loop_depth() || remat {
-            // Pure op, but depends on some value at the current loop depth, or remat forces it here: as above.
+            // Pure op, but depends on some value at the current loop
+            // depth, or remat forces it here: as above.
             (
                 self.cur_loop_depth(),
                 self.id_to_value.depth(),
                 self.cur_block.unwrap(),
             )
         } else {
-            // Pure op, and does not depend on any args at current loop depth: hoist out of loop.
+            // Pure op, and does not depend on any args at current
+            // loop depth: hoist out of loop.
             self.stats.elaborate_licm_hoist += 1;
             let data = &self.loop_stack[max_loop_depth as usize];
             (max_loop_depth, data.scope_depth as usize, data.hoist_block)
         };
+        // Loop scopes are a subset of all scopes.
+        debug_assert!(scope_depth >= loop_depth as usize);
 
         // This is an actual operation; emit the node in sequence now.
         let results = self.add_node(node, &args[..], block);
@@ -477,25 +501,31 @@ impl<'a> Elaborator<'a> {
         result
     }
 
-    fn elaborate_block<'b, PF: Fn(Block) -> &'b [(Id, Type)], RF: Fn(Block) -> &'b [Id]>(
+    fn elaborate_block<'b, PF: Fn(Block) -> &'b [(Id, Type)], SEF: Fn(Block) -> &'b [Id]>(
         &mut self,
         idom: Option<Block>,
         block: Block,
         block_params_fn: &PF,
-        block_roots_fn: &RF,
+        block_side_effects_fn: &SEF,
         domtree: &DomTreeWithChildren,
     ) {
         self.id_to_value.increment_depth();
 
         let blockparam_ids_tys = (block_params_fn)(block);
         self.start_block(idom, block, blockparam_ids_tys);
-        for &id in (block_roots_fn)(block) {
-            self.id_to_best_cost_and_node[id] = (0, id);
+        for &id in (block_side_effects_fn)(block) {
+            self.id_to_best_cost_and_node[id] = (Cost::zero(), id);
             self.elaborate_eclass_use(id);
         }
 
         for child in domtree.children(block) {
-            self.elaborate_block(Some(block), child, block_params_fn, block_roots_fn, domtree);
+            self.elaborate_block(
+                Some(block),
+                child,
+                block_params_fn,
+                block_side_effects_fn,
+                domtree,
+            );
         }
 
         self.id_to_value.decrement_depth();
@@ -517,17 +547,23 @@ impl<'a> Elaborator<'a> {
         self.func.srclocs.clear();
     }
 
-    pub(crate) fn elaborate<'b, PF: Fn(Block) -> &'b [(Id, Type)], RF: Fn(Block) -> &'b [Id]>(
+    pub(crate) fn elaborate<'b, PF: Fn(Block) -> &'b [(Id, Type)], SEF: Fn(Block) -> &'b [Id]>(
         &mut self,
         block_params_fn: PF,
-        block_roots_fn: RF,
+        block_side_effects_fn: SEF,
     ) {
         let domtree = DomTreeWithChildren::new(self.func, self.domtree);
         let root = domtree.root();
         self.stats.elaborate_func += 1;
         self.stats.elaborate_func_pre_insts += self.func.dfg.num_insts() as u64;
         self.clear_func_body();
-        self.elaborate_block(None, root, &block_params_fn, &block_roots_fn, &domtree);
+        self.elaborate_block(
+            None,
+            root,
+            &block_params_fn,
+            &block_side_effects_fn,
+            &domtree,
+        );
         self.stats.elaborate_func_post_insts += self.func.dfg.num_insts() as u64;
     }
 }
