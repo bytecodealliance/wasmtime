@@ -173,7 +173,6 @@ fn write_testsuite_tests(
 /// Ignore tests that aren't supported yet.
 fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     assert_eq!(strategy, "Cranelift");
-    drop(testsuite);
     match env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
         "s390x" => {
             // FIXME: These tests fail under qemu due to a qemu bug.
@@ -182,7 +181,9 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
 
         // Currently the simd wasm proposal is not implemented in the riscv64
         // backend so skip all tests which could use simd.
-        "riscv64" => testname.contains("simd") || testname.contains("memory_multi"),
+        "riscv64" => {
+            testsuite == "simd" || testname.contains("simd") || testname.contains("memory_multi")
+        }
 
         _ => false,
     }
