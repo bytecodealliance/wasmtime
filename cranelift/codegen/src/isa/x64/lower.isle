@@ -1143,7 +1143,7 @@
 (decl sse_and_not (Type Xmm XmmMem) Xmm)
 (rule (sse_and_not $F32X4 x y) (x64_andnps x y))
 (rule (sse_and_not $F64X2 x y) (x64_andnpd x y))
-(rule (sse_and_not (multi_lane _bits _lanes) x y) (x64_pandn x y))
+(rule -1 (sse_and_not (multi_lane _bits _lanes) x y) (x64_pandn x y))
 
 ;; Note the flipping of operands below. CLIF specifies
 ;;
