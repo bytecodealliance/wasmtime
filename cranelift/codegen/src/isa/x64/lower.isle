@@ -266,17 +266,17 @@
 ;; `{i,b}64` and smaller.
 
 ;; And two registers.
-(rule (lower (has_type (fits_in_64 ty) (band x y)))
+(rule 0 (lower (has_type (fits_in_64 ty) (band x y)))
       (x64_and ty x y))
 
 ;; And with a memory operand.
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule 1 (lower (has_type (fits_in_64 ty)
                        (band x (sinkable_load y))))
       (x64_and ty x
                (sink_load_to_gpr_mem_imm y)))
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule 2 (lower (has_type (fits_in_64 ty)
                        (band (sinkable_load x) y)))
       (x64_and ty
                y
@@ -284,11 +284,11 @@
 
 ;; And with an immediate.
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule 3 (lower (has_type (fits_in_64 ty)
                        (band x (simm32_from_value y))))
       (x64_and ty x y))
 
-(rule (lower (has_type (fits_in_64 ty)
+(rule 4 (lower (has_type (fits_in_64 ty)
                        (band (simm32_from_value x) y)))
       (x64_and ty y x))
 
@@ -297,15 +297,15 @@
 (decl sse_and (Type Xmm XmmMem) Xmm)
 (rule (sse_and $F32X4 x y) (x64_andps x y))
 (rule (sse_and $F64X2 x y) (x64_andpd x y))
-(rule (sse_and (multi_lane _bits _lanes) x y) (x64_pand x y))
+(rule -1 (sse_and (multi_lane _bits _lanes) x y) (x64_pand x y))
 
-(rule (lower (has_type ty @ (multi_lane _bits _lanes)
+(rule 5 (lower (has_type ty @ (multi_lane _bits _lanes)
                        (band x y)))
       (sse_and ty x y))
 
 ;; `{i,b}128`.
 
-(rule (lower (has_type $I128 (band x y)))
+(rule 6 (lower (has_type $I128 (band x y)))
       (let ((x_regs ValueRegs x)
             (x_lo Gpr (value_regs_get_gpr x_regs 0))
             (x_hi Gpr (value_regs_get_gpr x_regs 1))
@@ -315,7 +315,7 @@
         (value_gprs (x64_and $I64 x_lo y_lo)
                     (x64_and $I64 x_hi y_hi))))
 
-(rule (lower (has_type $B128 (band x y)))
+(rule 6 (lower (has_type $B128 (band x y)))
       ;; Booleans are always `0` or `1`, so we only need to do the `and` on the
       ;; low half. The high half is always zero but, rather than generate a new
       ;; zero, we just reuse `x`'s high half which is already zero.
