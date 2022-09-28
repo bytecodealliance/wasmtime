@@ -2181,7 +2181,7 @@
 (rule (lower (has_type ty (breduce src @ (value_type ty))))
       src)
 
-(rule (lower (has_type (fits_in_64 ty) (breduce src)))
+(rule 1 (lower (has_type (fits_in_64 ty) (breduce src)))
       (value_regs_get_gpr src 0))
 
 ;; Rules for `bint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
