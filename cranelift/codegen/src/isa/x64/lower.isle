@@ -2561,7 +2561,7 @@
 ;; Rules for `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 8-, 16-, 32- and 64-bit GPR stores.
-(rule (lower (store flags
+(rule -2 (lower (store flags
                     value @ (value_type (is_gpr_type ty))
                     address
                     offset))
@@ -2580,7 +2580,7 @@
        (x64_movrm $I32 (to_amode flags address offset) value)))
 
 ;; F32 stores of values in XMM registers.
-(rule (lower (store flags
+(rule 1 (lower (store flags
                     value @ (value_type $F32)
                     address
                     offset))
@@ -2588,7 +2588,7 @@
        (x64_xmm_movrm (SseOpcode.Movss) (to_amode flags address offset) value)))
 
 ;; F64 stores of values in XMM registers.
-(rule (lower (store flags
+(rule 1 (lower (store flags
                     value @ (value_type $F64)
                     address
                     offset))
@@ -2596,7 +2596,7 @@
        (x64_xmm_movrm (SseOpcode.Movsd) (to_amode flags address offset) value)))
 
 ;; Stores of F32X4 vectors.
-(rule (lower (store flags
+(rule 1 (lower (store flags
                     value @ (value_type $F32X4)
                     address
                     offset))
@@ -2604,7 +2604,7 @@
        (x64_xmm_movrm (SseOpcode.Movups) (to_amode flags address offset) value)))
 
 ;; Stores of F64X2 vectors.
-(rule (lower (store flags
+(rule 1 (lower (store flags
                     value @ (value_type $F64X2)
                     address
                     offset))
@@ -2612,7 +2612,7 @@
        (x64_xmm_movrm (SseOpcode.Movupd) (to_amode flags address offset) value)))
 
 ;; Stores of all other 128-bit vector types with integer lanes.
-(rule (lower (store flags
+(rule -1 (lower (store flags
                     value @ (value_type (ty_vec128_int _))
                     address
                     offset))
@@ -2620,7 +2620,7 @@
        (x64_xmm_movrm (SseOpcode.Movdqu) (to_amode flags address offset) value)))
 
 ;; Stores of I128/B128 values: store the two 64-bit halves separately.
-(rule (lower (store flags
+(rule 0 (lower (store flags
                     value @ (value_type (ty_int_bool_128 _))
                     address
                     offset))
@@ -2637,7 +2637,7 @@
 ;; Rules for `load*` + ALU op + `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Add mem, reg
-(rule (lower
+(rule 3 (lower
        (store flags
               (has_type (ty_32_or_64 ty)
                         (iadd (and
@@ -2651,7 +2651,7 @@
          (x64_add_mem ty (to_amode flags addr offset) src2))))
 
 ;; Add mem, reg with args swapped
-(rule (lower
+(rule 2 (lower
        (store flags
               (has_type (ty_32_or_64 ty)
                         (iadd src2
@@ -2665,7 +2665,7 @@
          (x64_add_mem ty (to_amode flags addr offset) src2))))
 
 ;; Sub mem, reg
-(rule (lower
+(rule 2 (lower
        (store flags
               (has_type (ty_32_or_64 ty)
                         (isub (and
@@ -2679,7 +2679,7 @@
          (x64_sub_mem ty (to_amode flags addr offset) src2))))
 
 ;; And mem, reg
-(rule (lower
+(rule 3 (lower
        (store flags
               (has_type (ty_32_or_64 ty)
                         (band (and
@@ -2693,7 +2693,7 @@
          (x64_and_mem ty (to_amode flags addr offset) src2))))
 
 ;; And mem, reg with args swapped
-(rule (lower
+(rule 2 (lower
        (store flags
               (has_type (ty_32_or_64 ty)
                         (band src2
@@ -2707,7 +2707,7 @@
          (x64_and_mem ty (to_amode flags addr offset) src2))))
 
 ;; Or mem, reg
-(rule (lower
+(rule 3 (lower
        (store flags
               (has_type (ty_32_or_64 ty)
                         (bor (and
@@ -2721,7 +2721,7 @@
          (x64_or_mem ty (to_amode flags addr offset) src2))))
 
 ;; Or mem, reg with args swapped
-(rule (lower
+(rule 2 (lower
        (store flags
               (has_type (ty_32_or_64 ty)
                         (bor src2
@@ -2735,7 +2735,7 @@
          (x64_or_mem ty (to_amode flags addr offset) src2))))
 
 ;; Xor mem, reg
-(rule (lower
+(rule 3 (lower
        (store flags
               (has_type (ty_32_or_64 ty)
                         (bxor (and
@@ -2749,7 +2749,7 @@
          (x64_xor_mem ty (to_amode flags addr offset) src2))))
 
 ;; Xor mem, reg with args swapped
-(rule (lower
+(rule 2 (lower
        (store flags
               (has_type (ty_32_or_64 ty)
                         (bxor src2
