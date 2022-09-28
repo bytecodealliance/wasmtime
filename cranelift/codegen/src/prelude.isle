@@ -9,6 +9,9 @@
 ;; `()`
 (type Unit (primitive Unit))
 
+(decl unit () Unit)
+(extern constructor unit unit)
+
 ;; `bool` is declared in `clif.isle`.
 (extern const $true bool)
 (extern const $false bool)
@@ -142,14 +145,17 @@
 (rule (temp_reg ty)
       (writable_reg_to_reg (temp_writable_reg ty)))
 
+(decl is_valid_reg (bool) Reg)
+(extern extractor infallible is_valid_reg is_valid_reg)
+
 ;; Get or match the invalid register.
 (decl invalid_reg () Reg)
 (extern constructor invalid_reg invalid_reg)
-(extern extractor invalid_reg invalid_reg_etor)
+(extractor (invalid_reg) (is_valid_reg $false))
 
 ;; Match any register but the invalid register.
-(decl valid_reg () Reg)
-(extern extractor valid_reg valid_reg)
+(decl valid_reg (Reg) Reg)
+(extractor (valid_reg reg) (and (is_valid_reg $true) reg))
 
 ;; Mark this value as used, to ensure that it gets lowered.
 (decl mark_value_used (Value) Unit)
@@ -241,6 +247,15 @@
 
 (decl pure u64_and (u64 u64) u64)
 (extern constructor u64_and u64_and)
+
+(decl u64_is_zero (bool) u64)
+(extern extractor infallible u64_is_zero u64_is_zero)
+
+(decl u64_zero () u64)
+(extractor (u64_zero) (u64_is_zero $true))
+
+(decl u64_nonzero (u64) u64)
+(extractor (u64_nonzero x) (and (u64_is_zero $false) x))
 
 ;;;; `cranelift_codegen::ir::Type` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -706,9 +721,9 @@
 ;; its result.
 (decl produces_flags_ignore (ProducesFlags) ProducesFlags)
 (rule (produces_flags_ignore (ProducesFlags.ProducesFlagsReturnsReg inst _))
-                             (ProducesFlags.ProducesFlagsSideEffect inst))
+      (ProducesFlags.ProducesFlagsSideEffect inst))
 (rule (produces_flags_ignore (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst _))
-                             (ProducesFlags.ProducesFlagsSideEffect inst))
+      (ProducesFlags.ProducesFlagsSideEffect inst))
 
 ;; Helper for combining two flags-consumer instructions that return a
 ;; single Reg, giving a ConsumesFlags that returns both values in a
@@ -935,18 +950,24 @@
 (decl range (usize usize) Range)
 (extern constructor range range)
 
+;; A view on the current state of the range.
+(type RangeView extern
+      (enum
+        (Empty)
+        (NonEmpty (index usize) (rest Range))))
+
+;; View the current state of the range.
+(decl range_view (RangeView) Range)
+(extern extractor infallible range_view range_view)
+
 ;; Extractor to test whether a range is empty.
 (decl range_empty () Range)
-(extern extractor range_empty range_empty)
-
-;; Extractor to test whether a range has a single element in it
-(decl range_singleton (usize) Range)
-(extern extractor range_singleton range_singleton)
+(extractor (range_empty) (range_view (RangeView.Empty)))
 
 ;; Extractor to return the first value in the range, and a sub-range
 ;; containing the remaining values.
 (decl range_unwrap (usize Range) Range)
-(extern extractor range_unwrap range_unwrap)
+(extractor (range_unwrap index rest) (range_view (RangeView.NonEmpty index rest)))
 
 ;;;; Helpers for generating returns ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -981,8 +1002,8 @@
     (Stack
       (offset i64)
       (ty Type)
-      (extension ArgumentExtension))
-))
+      (extension ArgumentExtension))))
+
 
 ;; Physical register that may hold an argument or return value.
 (type RealReg (primitive RealReg))
@@ -992,8 +1013,8 @@
   (enum
     (None)
     (Uext)
-    (Sext)
-))
+    (Sext)))
+
 
 ;; Get the number of arguments expected.
 (decl abi_num_args (Sig) usize)
@@ -1073,10 +1094,8 @@
 ;; vectors. Fails for the empty range.
 (decl copy_to_regs_range (Type Range WritableValueRegs ValueRegs) Unit)
 
-(rule (copy_to_regs_range ty (range_singleton idx) dsts srcs)
-      (let ((dst WritableReg (writable_regs_get dsts idx))
-            (src Reg (value_regs_get srcs idx)))
-        (emit (gen_move ty dst src))))
+(rule (copy_to_regs_range ty (range_empty) dsts srcs)
+      (unit))
 
 (rule (copy_to_regs_range ty (range_unwrap head tail) dsts srcs)
       (let ((dst WritableReg (writable_regs_get dsts head))

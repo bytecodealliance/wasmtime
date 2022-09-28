@@ -125,9 +125,9 @@ impl std::fmt::Display for Error {
 
             Error::Errors(_) => write!(
                 f,
-                "found {} errors:\n\n{}",
+                "{}found {} errors",
+                DisplayErrors(self.unwrap_errors()),
                 self.unwrap_errors().len(),
-                DisplayErrors(self.unwrap_errors())
             ),
         }
     }

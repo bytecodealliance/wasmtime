@@ -7,7 +7,7 @@ use crate::{
     ir::AtomicRmwOp,
     machinst::{InputSourceInst, Reg, Writable},
 };
-use generated_code::{Context, MInst};
+use generated_code::{Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode};
@@ -546,27 +546,14 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
         Imm8Gpr::new(Imm8Reg::Imm8 { imm }).unwrap()
     }
 
-    fn is_gpr_type(&mut self, ty: Type) -> Option<Type> {
+    #[inline]
+    fn type_register_class(&mut self, ty: Type) -> Option<RegisterClass> {
         if is_int_or_ref_ty(ty) || ty == I128 || ty == B128 {
-            Some(ty)
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    fn is_xmm_type(&mut self, ty: Type) -> Option<Type> {
-        if ty == F32 || ty == F64 || (ty.is_vector() && ty.bits() == 128) {
-            Some(ty)
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    fn is_single_register_type(&mut self, ty: Type) -> Option<Type> {
-        if ty != I128 {
-            Some(ty)
+            Some(RegisterClass::Gpr {
+                single_register: ty != I128,
+            })
+        } else if ty == F32 || ty == F64 || (ty.is_vector() && ty.bits() == 128) {
+            Some(RegisterClass::Xmm)
         } else {
             None
         }
@@ -579,15 +566,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
             types::B1 | types::B8 | types::B16 | types::B32 | types::B64 => Some(()),
             types::R32 => panic!("shouldn't have 32-bits refs on x64"),
             _ => None,
-        }
-    }
-
-    #[inline]
-    fn intcc_neq(&mut self, x: &IntCC, y: &IntCC) -> Option<IntCC> {
-        if x != y {
-            Some(*x)
-        } else {
-            None
         }
     }
 
