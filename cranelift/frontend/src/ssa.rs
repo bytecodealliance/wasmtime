@@ -35,6 +35,7 @@ use smallvec::SmallVec;
 /// A basic block is said _filled_ if all the instruction that it contains have been translated,
 /// and it is said _sealed_ if all of its predecessors have been declared. Only filled predecessors
 /// can be declared.
+#[derive(Default)]
 pub struct SSABuilder {
     // TODO: Consider a sparse representation rather than SecondaryMap-of-SecondaryMap.
     /// Records for every variable and for every relevant block, the last definition of
@@ -143,18 +144,6 @@ impl SSABlockData {
 }
 
 impl SSABuilder {
-    /// Allocate a new blank SSA builder struct. Use the API function to interact with the struct.
-    pub fn new() -> Self {
-        Self {
-            variables: SecondaryMap::with_default(SecondaryMap::new()),
-            ssa_blocks: SecondaryMap::new(),
-            calls: Vec::new(),
-            results: Vec::new(),
-            side_effects: SideEffects::default(),
-            visited: EntitySet::new(),
-        }
-    }
-
     /// Clears a `SSABuilder` from all its data, letting it in a pristine state without
     /// deallocating memory.
     pub fn clear(&mut self) {
