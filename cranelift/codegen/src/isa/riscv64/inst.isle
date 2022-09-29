@@ -832,7 +832,7 @@
 ;; extend int if need.
 (decl ext_int_if_need(bool ValueRegs Type) ValueRegs)
 ;;; for I8 and I16 ...
-(rule
+(rule -1
   (ext_int_if_need signed val (fits_in_32 ty))
   (gen_extend val signed (ty_bits ty) 64))
 ;;; otherwise this is a I64 or I128 
@@ -857,7 +857,7 @@
   (def_inst (iconst (u64_from_imm64 (imm12_from_u64 n)))))
 
 (decl select_addi (Type) AluOPRRI)
-(rule (select_addi (fits_in_32 ty)) (AluOPRRI.Addiw))
+(rule 1 (select_addi (fits_in_32 ty)) (AluOPRRI.Addiw))
 (rule (select_addi (fits_in_64 ty)) (AluOPRRI.Addi))
 
 
@@ -911,17 +911,17 @@
   (if-let $false(has_b))
   (gen_cltz $false x ty))
 
-(rule
+(rule 2
   (lower_ctz $I64 x)
   (if-let $true(has_b))
   (alu_rr_funct12 (AluOPRRI.Ctz) x))
 
-(rule
+(rule 2
   (lower_ctz $I32 x)
   (if-let $true(has_b))
   (alu_rr_funct12 (AluOPRRI.Ctzw) x))
 ;;;; for I8 and I16
-(rule
+(rule 1
   (lower_ctz ty x)
   (if-let $true(has_b))
   (let
@@ -956,17 +956,17 @@
   (lower_clz ty rs)
   (if-let $false (has_b))
   (gen_cltz $true rs ty))
-(rule 
+(rule 2
   (lower_clz $I64 r)
   (if-let $true (has_b))
   (alu_rr_funct12 (AluOPRRI.Clz) r))
-(rule 
+(rule 2
   (lower_clz $I32 r)
   (if-let $true (has_b))
   (alu_rr_funct12 (AluOPRRI.Clzw) r))
 
 ;;; for I8 and I16
-(rule 
+(rule 1
   (lower_clz ty r)
   (if-let $true (has_b))
   (let
@@ -1011,12 +1011,12 @@
 
 ;; val is_signed from_bits to_bits
 (decl lower_extend(Reg bool u8 u8)ValueRegs)
-(rule
+(rule -1
   (lower_extend r is_signed from_bits to_bits)
   (gen_extend r is_signed from_bits to_bits))
 
 ;;;; for I128 signed extend.
-(rule
+(rule 1
   (lower_extend r $true 64 128)
   (let
     ((tmp Reg (alu_rrr (AluOPRRR.Slt) r (zero_reg)))
@@ -1033,7 +1033,7 @@
 
 
 ;;;; for I128 unsigned extend.
-(rule
+(rule 1
   (lower_extend r $false 64 128)
   (value_regs (gen_move2 r $I64 $I64) (zero_reg)))
 
@@ -1056,7 +1056,7 @@
     (value_regs low high)))
 
 (decl lower_umlhi (Type Reg Reg)Reg)
-(rule
+(rule 1
   (lower_umlhi $I64 rs1 rs2)
   (alu_rrr (AluOPRRR.Mulhu) rs1 rs2))
 
@@ -1067,7 +1067,7 @@
     (alu_rr_imm12 (AluOPRRI.Srli) tmp (imm12_const (ty_bits ty)))))
 
 (decl lower_smlhi (Type Reg Reg)Reg)
-(rule
+(rule 1
   (lower_smlhi $I64 rs1 rs2)
   (alu_rrr (AluOPRRR.Mulh) rs1 rs2))
 
@@ -1084,7 +1084,7 @@
 
 (decl lower_rotl(Type Reg Reg) Reg)
 
-(rule
+(rule 1
   (lower_rotl $I64 rs amount)
   (if-let $true (has_b))
   (alu_rrr (AluOPRRR.Rol) rs amount))
@@ -1094,7 +1094,7 @@
   (if-let $false (has_b))
   (lower_rotl_shift $I64 rs amount))
 
-(rule
+(rule 1
   (lower_rotl $I32 rs amount)
   (if-let $true (has_b))
   (alu_rrr (AluOPRRR.Rolw) rs amount))
@@ -1104,7 +1104,7 @@
   (if-let $false (has_b))
   (lower_rotl_shift $I32 rs amount))
 
-(rule
+(rule -1
   (lower_rotl ty rs amount)
   (lower_rotl_shift ty rs amount))
 
@@ -1133,7 +1133,7 @@
 
 (decl lower_rotr(Type Reg Reg) Reg)
 
-(rule
+(rule 1
   (lower_rotr $I64 rs amount)
   (if-let $true (has_b))
   (alu_rrr (AluOPRRR.Ror) rs amount))
@@ -1142,7 +1142,7 @@
   (if-let $false (has_b))
   (lower_rotr_shift $I64 rs amount))
 
-(rule
+(rule 1
   (lower_rotr $I32 rs amount)
   (if-let $true (has_b))
   (alu_rrr (AluOPRRR.Rorw) rs amount))
@@ -1152,7 +1152,7 @@
   (if-let $false (has_b))
   (lower_rotr_shift $I32 rs amount))
 
-(rule
+(rule -1
   (lower_rotr ty rs amount)
   (lower_rotr_shift ty rs amount))
 
@@ -1206,7 +1206,7 @@
     (writable_reg_to_reg sum)))
 
 (decl lower_popcnt (Reg Type) Reg)
-(rule (lower_popcnt rs ty )
+(rule 1 (lower_popcnt rs ty )
   (if-let $true (has_b))
   (alu_rr_funct12 (AluOPRRI.Cpop) (ext_int_if_need $false rs ty)))
 (rule (lower_popcnt rs ty)
@@ -1781,7 +1781,7 @@
 ;;; lower icmp 
 (decl lower_icmp(IntCC ValueRegs ValueRegs Type) Reg)
 ;;; eq or ne.
-(rule
+(rule -1
   (lower_icmp (intcc_is_eq_or_ne cc) x y ty)
   (gen_icmp cc (ext_int_if_need $false x ty) (ext_int_if_need $false y ty) ty))
 ;;;; singed >= ... 
@@ -1861,7 +1861,7 @@
 ;;; right now only return if overflow.
 (decl lower_uadd_overflow (Reg Reg Type) Reg)
 
-(rule
+(rule 1
   (lower_uadd_overflow x y $I64)
   (let
     ((tmp Reg (alu_add x y)))
@@ -1944,7 +1944,7 @@
 
 ;;; 
 (decl gen_andn(Reg Reg) Reg)
-(rule
+(rule 1
   (gen_andn rs1 rs2)
   (if-let $true (has_b))
   (alu_rrr (AluOPRRR.Andn) rs1 rs2))
@@ -1958,7 +1958,7 @@
 
 ;;; 
 (decl gen_orn (Reg Reg)Reg)
-(rule
+(rule 1
   (gen_orn rs1 rs2 )
   (if-let $true (has_b))
   (alu_rrr (AluOPRRR.Orn) rs1 rs2))
@@ -1971,7 +1971,7 @@
     (alu_rrr (AluOPRRR.Or) rs1 tmp)))
 
 (decl gen_rev8(Reg)Reg)
-(rule
+(rule 1
   (gen_rev8 rs)
   (if-let $true (has_b))
   (alu_rr_funct12 (AluOPRRI.Rev8) rs))
@@ -1989,7 +1989,7 @@
 (extern constructor has_zbkb has_zbkb)
 
 (decl gen_brev8 (Reg Type) Reg)
-(rule
+(rule 1
   (gen_brev8 rs _)
   (if-let $true (has_zbkb))
   (alu_rr_funct12 (AluOPRRI.Brev8) rs))
