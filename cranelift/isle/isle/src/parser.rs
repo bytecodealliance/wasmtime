@@ -137,6 +137,7 @@ impl<'a> Parser<'a> {
         self.lparen()?;
         let pos = self.pos();
         let def = match &self.symbol()?[..] {
+            "pragma" => Def::Pragma(self.parse_pragma()?),
             "type" => Def::Type(self.parse_type()?),
             "decl" => Def::Decl(self.parse_decl()?),
             "rule" => Def::Rule(self.parse_rule()?),
@@ -194,6 +195,14 @@ impl<'a> Parser<'a> {
                 pos,
                 "Not a constant identifier; must start with a '$'".to_string(),
             ))
+        }
+    }
+
+    fn parse_pragma(&mut self) -> Result<Pragma> {
+        let ident = self.parse_ident()?;
+        match ident.0.as_ref() {
+            "overlap_errors" => Ok(Pragma::OverlapErrors),
+            _ => Err(self.error(ident.1, format!("Unknown pragma '{}'", ident.0))),
         }
     }
 
