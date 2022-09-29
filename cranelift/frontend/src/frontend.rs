@@ -15,13 +15,13 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_codegen::packed_option::PackedOption;
-use std::convert::TryInto; // FIXME: Remove in edition2021
 
 /// Structure used for translating a series of functions into Cranelift IR.
 ///
 /// In order to reduce memory reallocations when compiling multiple functions,
 /// `FunctionBuilderContext` holds various data structures which are cleared between
 /// functions, rather than dropped, preserving the underlying allocations.
+#[derive(Default)]
 pub struct FunctionBuilderContext {
     ssa: SSABuilder,
     blocks: SecondaryMap<Block, BlockData>,
@@ -61,11 +61,7 @@ impl FunctionBuilderContext {
     /// Creates a FunctionBuilderContext structure. The structure is automatically cleared after
     /// each [`FunctionBuilder`](struct.FunctionBuilder.html) completes translating a function.
     pub fn new() -> Self {
-        Self {
-            ssa: SSABuilder::new(),
-            blocks: SecondaryMap::new(),
-            types: SecondaryMap::new(),
-        }
+        Self::default()
     }
 
     fn clear(&mut self) {
