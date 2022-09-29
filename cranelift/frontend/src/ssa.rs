@@ -381,7 +381,10 @@ impl SSABuilder {
     /// No predecessors are declared here and the block is not sealed.
     /// Predecessors have to be added with `declare_block_predecessor`.
     pub fn declare_block(&mut self, block: Block) {
-        self.ssa_blocks[block] = SSABlockData::default();
+        // Ensure the block exists so seal_all_blocks will see it even if no predecessors or
+        // variables get declared for this block. But don't assign anything to it:
+        // SecondaryMap automatically sets all blocks to `default()`.
+        let _ = &mut self.ssa_blocks[block];
     }
 
     /// Declares a new predecessor for a `Block` and record the branch instruction
