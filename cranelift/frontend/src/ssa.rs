@@ -679,7 +679,7 @@ mod tests {
     #[test]
     fn simple_block() {
         let mut func = Function::new();
-        let mut ssa = SSABuilder::new();
+        let mut ssa = SSABuilder::default();
         let block0 = func.dfg.make_block();
         // Here is the pseudo-program we want to translate:
         // block0:
@@ -728,7 +728,7 @@ mod tests {
     #[test]
     fn sequence_of_blocks() {
         let mut func = Function::new();
-        let mut ssa = SSABuilder::new();
+        let mut ssa = SSABuilder::default();
         let block0 = func.dfg.make_block();
         let block1 = func.dfg.make_block();
         let block2 = func.dfg.make_block();
@@ -850,7 +850,7 @@ mod tests {
     #[test]
     fn program_with_loop() {
         let mut func = Function::new();
-        let mut ssa = SSABuilder::new();
+        let mut ssa = SSABuilder::default();
         let block0 = func.dfg.make_block();
         let block1 = func.dfg.make_block();
         let block2 = func.dfg.make_block();
@@ -997,7 +997,7 @@ mod tests {
         // }
 
         let mut func = Function::new();
-        let mut ssa = SSABuilder::new();
+        let mut ssa = SSABuilder::default();
         let block0 = func.dfg.make_block();
         let block1 = func.dfg.make_block();
         let block2 = func.dfg.make_block();
@@ -1083,7 +1083,7 @@ mod tests {
         //    jump block1;
         //
         let mut func = Function::new();
-        let mut ssa = SSABuilder::new();
+        let mut ssa = SSABuilder::default();
         let block0 = func.dfg.make_block();
         let block1 = func.dfg.make_block();
         {
@@ -1154,7 +1154,7 @@ mod tests {
     fn undef() {
         // Use vars of various types which have not been defined.
         let mut func = Function::new();
-        let mut ssa = SSABuilder::new();
+        let mut ssa = SSABuilder::default();
         let block0 = func.dfg.make_block();
         ssa.declare_block(block0);
         ssa.seal_block(block0, &mut func);
@@ -1176,7 +1176,7 @@ mod tests {
         // Use a var which has not been defined. The search should hit the
         // top of the entry block, and then fall back to inserting an iconst.
         let mut func = Function::new();
-        let mut ssa = SSABuilder::new();
+        let mut ssa = SSABuilder::default();
         let block0 = func.dfg.make_block();
         ssa.declare_block(block0);
         ssa.seal_block(block0, &mut func);
@@ -1196,7 +1196,7 @@ mod tests {
         // until afterward. Before sealing, the SSA builder should insert an
         // block param; after sealing, it should be removed.
         let mut func = Function::new();
-        let mut ssa = SSABuilder::new();
+        let mut ssa = SSABuilder::default();
         let block0 = func.dfg.make_block();
         ssa.declare_block(block0);
         let x_var = Variable::new(0);
@@ -1220,7 +1220,7 @@ mod tests {
         //    brz x, block1;
         //    jump block1;
         let mut func = Function::new();
-        let mut ssa = SSABuilder::new();
+        let mut ssa = SSABuilder::default();
         let block0 = func.dfg.make_block();
         let block1 = func.dfg.make_block();
         {
@@ -1273,7 +1273,7 @@ mod tests {
         // block2:
         //    jump block1;
         let mut func = Function::new();
-        let mut ssa = SSABuilder::new();
+        let mut ssa = SSABuilder::default();
         let block0 = func.dfg.make_block();
         let block1 = func.dfg.make_block();
         let block2 = func.dfg.make_block();
@@ -1342,7 +1342,7 @@ mod tests {
         //    jump block1;
 
         let mut func = Function::new();
-        let mut ssa = SSABuilder::new();
+        let mut ssa = SSABuilder::default();
         let block0 = func.dfg.make_block();
         let block1 = func.dfg.make_block();
         let block2 = func.dfg.make_block();
