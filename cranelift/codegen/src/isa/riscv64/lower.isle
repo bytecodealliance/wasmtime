@@ -465,7 +465,7 @@
 
 
 ;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 
+(rule -1
   ;; 
   (lower 
     (has_type (valid_atomic_transaction ty) (atomic_rmw flags op addr x)))
@@ -493,7 +493,7 @@
   (gen_atomic_rmw_loop op ty addr (ext_int_if_need $false x ty)))
 
 ;;;;;  Rules for `AtomicRmwOp.Sub`
-(rule 3
+(rule
   (lower 
     (has_type (valid_atomic_transaction ty) (atomic_rmw flags (AtomicRmwOp.Sub) addr x)))
   (let
@@ -511,7 +511,7 @@
     (writable_reg_to_reg dst)))
 
 ;;;;;  Rules for `AtomicRmwOp.Nand`
-(rule 3
+(rule
   (lower 
     (has_type (valid_atomic_transaction ty) (atomic_rmw flags (AtomicRmwOp.Nand) addr x)))
     (gen_atomic_rmw_loop (AtomicRmwOp.Nand) ty addr x))
