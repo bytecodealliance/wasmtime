@@ -11,7 +11,7 @@ use crate::sema::{self, Rule, RuleId, Sym, TermEnv, TermId, TermKind, TypeEnv, V
 /// Check for overlap.
 pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
     let mut errors = check_overlaps(termenv).report(tyenv, termenv);
-    if cfg!(feature = "overlap-errors") {
+    if termenv.overlap_errors {
         errors.sort_by_key(|err| match err {
             Error::OverlapError { rules, .. } => rules.first().unwrap().1.from,
             _ => Pos::default(),
