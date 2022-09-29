@@ -889,6 +889,13 @@
 (decl avoid_div_traps () Type)
 (extern extractor avoid_div_traps avoid_div_traps)
 
+;; This definition should be kept up to date with the values defined in
+;; cranelift/codegen/meta/src/shared/settings.rs
+(type TlsModel extern (enum (None) (ElfGd) (Macho) (Coff)))
+
+(decl tls_model (TlsModel) Type)
+(extern extractor infallible tls_model tls_model)
+
 (decl pure tls_model_is_elf_gd () Unit)
 (extern constructor tls_model_is_elf_gd tls_model_is_elf_gd)
 
