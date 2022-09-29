@@ -431,8 +431,8 @@ pub struct Rule {
     /// The right-hand side expression that this rule evaluates upon successful
     /// match.
     pub rhs: Expr,
-    /// The priority of this rule, if any.
-    pub prio: Option<i64>,
+    /// The priority of this rule, defaulted to 0 if it was missing in the source.
+    pub prio: i64,
     /// The source position where this rule is defined.
     pub pos: Pos,
 }
@@ -1394,7 +1394,7 @@ impl TermEnv {
                         lhs,
                         iflets,
                         rhs,
-                        prio: rule.prio,
+                        prio: rule.prio.unwrap_or(0),
                         pos,
                     });
                 }
