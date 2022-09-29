@@ -555,21 +555,7 @@ impl SSABuilder {
             // temporarily detach the predecessors list and replace it with an empty list.
             let mut preds = mem::take(self.predecessors_mut(dest_block));
             for pred in preds.iter_mut() {
-                // We already did a full `use_var` above, so we can do just the fast path.
-                let pred_val = self.variables[var][pred.block].unwrap();
-                let jump_arg = self.append_jump_argument(
-                    func,
-                    pred.branch,
-                    pred.block,
-                    dest_block,
-                    pred_val,
-                    var,
-                );
-                if let Some((middle_block, middle_jump_inst)) = jump_arg {
-                    pred.block = middle_block;
-                    pred.branch = middle_jump_inst;
-                    self.side_effects.split_blocks_created.push(middle_block);
-                }
+                self.append_jump_argument(func, pred, dest_block, var);
             }
             // Now that we're done, move the predecessors list back.
             debug_assert!(self.predecessors(dest_block).is_empty());
@@ -585,29 +571,26 @@ impl SSABuilder {
     fn append_jump_argument(
         &mut self,
         func: &mut Function,
-        jump_inst: Inst,
-        jump_inst_block: Block,
+        pred: &mut PredBlock,
         dest_block: Block,
-        val: Value,
         var: Variable,
-    ) -> Option<(Block, Inst)> {
-        match func.dfg.analyze_branch(jump_inst) {
+    ) {
+        // We already did a full `use_var` above, so we can do just the fast path.
+        let val = self.variables[var][pred.block].unwrap();
+        match func.dfg.analyze_branch(pred.branch) {
             BranchInfo::NotABranch => {
                 panic!("you have declared a non-branch instruction as a predecessor to a block");
             }
             // For a single destination appending a jump argument to the instruction
             // is sufficient.
-            BranchInfo::SingleDest(_, _) => {
-                func.dfg.append_inst_arg(jump_inst, val);
-                None
-            }
+            BranchInfo::SingleDest(_, _) => func.dfg.append_inst_arg(pred.branch, val),
             BranchInfo::Table(mut jt, _default_block) => {
                 // In the case of a jump table, the situation is tricky because br_table doesn't
                 // support arguments. We have to split the critical edge.
                 let middle_block = func.dfg.make_block();
                 func.layout.append_block(middle_block);
                 self.declare_block(middle_block);
-                self.ssa_blocks[middle_block].add_predecessor(jump_inst_block, jump_inst);
+                self.ssa_blocks[middle_block].add_predecessor(pred.block, pred.branch);
                 self.mark_block_sealed(middle_block);
 
                 let table = &func.jump_tables[jt];
@@ -627,7 +610,7 @@ impl SSABuilder {
                 }
 
                 // Redo the match from `analyze_branch` but this time capture mutable references
-                match &mut func.dfg[jump_inst] {
+                match &mut func.dfg[pred.branch] {
                     InstructionData::BranchTable {
                         destination, table, ..
                     } => {
@@ -642,7 +625,9 @@ impl SSABuilder {
                 let mut cur = FuncCursor::new(func).at_bottom(middle_block);
                 let middle_jump_inst = cur.ins().jump(dest_block, &[val]);
                 self.def_var(var, val, middle_block);
-                Some((middle_block, middle_jump_inst))
+                pred.block = middle_block;
+                pred.branch = middle_jump_inst;
+                self.side_effects.split_blocks_created.push(middle_block);
             }
         }
     }
