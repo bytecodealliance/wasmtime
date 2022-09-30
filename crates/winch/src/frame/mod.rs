@@ -1,17 +1,132 @@
-// TODO
-// I don't think we need this level of indirection;
-// flagging it as a candidate for deletion and moving
-// the locals_size to the compilation environment
+use crate::abi::{align_to, local::LocalSlot, ty_size, ABIArg, ABISig, ABI};
+use anyhow::Result;
+use smallvec::SmallVec;
+use wasmtime_environ::FunctionBodyData;
+use wasmtime_environ::WasmType;
+
+// TODO:
+// SpiderMonkey's implementation uses 16; but we should measure if this is
+// a good default.
+type Locals = SmallVec<[LocalSlot; 16]>;
+
 /// Frame handler abstraction
 #[derive(Default)]
 pub(crate) struct Frame {
-    /// The local area size
+    /// The size of the entire local area; the arguments plus the function defined locals
     pub locals_size: u32,
+    /// Range representing the function defined locals
+    pub defined_locals_range: (u32, u32),
+
+    /// The local slots for the current function
+    ///
+    /// Locals get calculated when allocating a frame and are readonly
+    /// through the function compilation lifetime
+    pub locals: Locals,
 }
 
 impl Frame {
     /// Allocate a new Frame
-    pub fn new(locals_size: u32) -> Self {
-        Self { locals_size }
+    pub fn new<A: ABI>(sig: &ABISig, function: &mut FunctionBodyData, abi: &A) -> Result<Self> {
+        let (mut locals, defined_locals_start) = Self::compute_arg_slots(sig, function, abi)?;
+        let (defined_slots, defined_locals_end) =
+            Self::compute_defined_slots(function, defined_locals_start)?;
+        locals.extend(defined_slots);
+        let locals_size = align_to(defined_locals_end, abi.stack_align().into());
+
+        Ok(Self {
+            locals,
+            locals_size,
+            defined_locals_range: (defined_locals_start, defined_locals_end),
+        })
+    }
+
+    fn compute_arg_slots<A: ABI>(
+        sig: &ABISig,
+        body_data: &mut FunctionBodyData,
+        abi: &A,
+    ) -> Result<(Locals, u32)> {
+        // Go over the function ABI-signature and
+        // calculate the stack slots
+        //
+        //  for each parameter p; when p
+        //
+        //  Stack =>
+        //      The slot offset is calculated from the ABIArg offset
+        //      relative the to the frame pointer (and its inclusions, e.g.
+        //      return address)
+        //
+        //  Register =>
+        //     The slot is calculated by accumulating into the `next_frame_size`
+        //     the size + alignment of the type that the register is holding
+        //
+        //  NOTE
+        //      SpiderMonkey's implementation doesn't append any sort of
+        //      metadata to the locals regarding stack addressing mode
+        //      (stack pointer or frame pointer), the offset is
+        //      declared negative if the local belongs to a stack argument;
+        //      that's enough to later calculate address of the local
+        //
+        //      Winch appends an addressing mode to each slot, in the end
+        //      we want positive addressing for both locals and stack arguments
+
+        let arg_base_offset = abi.arg_base_offset().into();
+        let stack_align: u32 = abi.stack_align().into();
+        let mut next_stack = 0u32;
+        let mut slots: Locals = sig
+            .params
+            .iter()
+            .map(|arg| Self::abi_arg_slot(&arg, &mut next_stack, arg_base_offset))
+            .collect();
+
+        // Validate function-defined locals and calculate their stack slots
+        // append_local_slots(&mut slots, body_data, &mut next_stack)?;
+
+        // // Align the stack to the stack alignment specified by each
+        // // ISA ABI
+        // let locals_size = align_to(next_stack, stack_align);
+
+        Ok((slots, next_stack))
+    }
+
+    fn abi_arg_slot(arg: &ABIArg, next_stack: &mut u32, arg_base_offset: u32) -> LocalSlot {
+        match arg {
+            // Create a local slot, for input register spilling,
+            // with type-size aligned access
+            ABIArg::Reg { ty, reg: _ } => {
+                let ty_size = ty_size(&ty);
+                *next_stack = align_to(*next_stack, ty_size) + ty_size;
+                LocalSlot::new(*ty, *next_stack)
+            }
+            // Create a local slot, with an offset from the arguments base in
+            // the stack; which is the frame pointer + return address
+            ABIArg::Stack { ty, offset } => LocalSlot::stack_arg(*ty, offset + arg_base_offset),
+        }
+    }
+
+    fn compute_defined_slots(
+        body_data: &mut FunctionBodyData,
+        next_stack: u32,
+    ) -> Result<(Locals, u32)> {
+        let mut next_stack = next_stack;
+        let mut reader = body_data.body.get_binary_reader();
+        let validator = &mut body_data.validator;
+        let local_count = reader.read_var_u32()?;
+        let mut slots: Locals = Default::default();
+
+        for _ in 0..local_count {
+            let position = reader.original_position();
+            let count = reader.read_var_u32()?;
+            let ty = reader.read_val_type()?;
+            validator.define_locals(position, count, ty)?;
+
+            let ty: WasmType = ty.try_into()?;
+            for _ in 0..count {
+                let ty_size = ty_size(&ty);
+                next_stack = align_to(next_stack, ty_size) + ty_size;
+                slots.push(LocalSlot::new(ty, next_stack));
+            }
+        }
+
+        Ok((slots, next_stack))
     }
 }
