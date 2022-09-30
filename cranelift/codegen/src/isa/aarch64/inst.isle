@@ -1137,7 +1137,7 @@
 
 ;; Helper for calculating the `OperandSize` corresponding to a type
 (decl operand_size (Type) OperandSize)
-(rule (operand_size (fits_in_32 _ty)) (OperandSize.Size32))
+(rule 1 (operand_size (fits_in_32 _ty)) (OperandSize.Size32))
 (rule (operand_size (fits_in_64 _ty)) (OperandSize.Size64))
 
 (type ScalarSize extern
@@ -1167,10 +1167,10 @@
 
 ;; Helper for calculating the `ScalarSize` lane type from vector type
 (decl lane_size (Type) ScalarSize)
-(rule (lane_size (multi_lane 8 _)) (ScalarSize.Size8))
-(rule (lane_size (multi_lane 16 _)) (ScalarSize.Size16))
-(rule (lane_size (multi_lane 32 _)) (ScalarSize.Size32))
-(rule (lane_size (multi_lane 64 _)) (ScalarSize.Size64))
+(rule 1 (lane_size (multi_lane 8 _)) (ScalarSize.Size8))
+(rule 1 (lane_size (multi_lane 16 _)) (ScalarSize.Size16))
+(rule 1 (lane_size (multi_lane 32 _)) (ScalarSize.Size32))
+(rule 1 (lane_size (multi_lane 64 _)) (ScalarSize.Size64))
 (rule (lane_size (dynamic_lane 8 _)) (ScalarSize.Size8))
 (rule (lane_size (dynamic_lane 16 _)) (ScalarSize.Size16))
 (rule (lane_size (dynamic_lane 32 _)) (ScalarSize.Size32))
@@ -1209,13 +1209,13 @@
 
 ;; Helper for calculating the `VectorSize` corresponding to a type
 (decl vector_size (Type) VectorSize)
-(rule (vector_size (multi_lane 8 8)) (VectorSize.Size8x8))
-(rule (vector_size (multi_lane 8 16)) (VectorSize.Size8x16))
-(rule (vector_size (multi_lane 16 4)) (VectorSize.Size16x4))
-(rule (vector_size (multi_lane 16 8)) (VectorSize.Size16x8))
-(rule (vector_size (multi_lane 32 2)) (VectorSize.Size32x2))
-(rule (vector_size (multi_lane 32 4)) (VectorSize.Size32x4))
-(rule (vector_size (multi_lane 64 2)) (VectorSize.Size64x2))
+(rule 1 (vector_size (multi_lane 8 8)) (VectorSize.Size8x8))
+(rule 1 (vector_size (multi_lane 8 16)) (VectorSize.Size8x16))
+(rule 1 (vector_size (multi_lane 16 4)) (VectorSize.Size16x4))
+(rule 1 (vector_size (multi_lane 16 8)) (VectorSize.Size16x8))
+(rule 1 (vector_size (multi_lane 32 2)) (VectorSize.Size32x2))
+(rule 1 (vector_size (multi_lane 32 4)) (VectorSize.Size32x4))
+(rule 1 (vector_size (multi_lane 64 2)) (VectorSize.Size64x2))
 (rule (vector_size (dynamic_lane 8 8)) (VectorSize.Size8x8))
 (rule (vector_size (dynamic_lane 8 16)) (VectorSize.Size8x16))
 (rule (vector_size (dynamic_lane 16 4)) (VectorSize.Size16x4))
@@ -2113,7 +2113,7 @@
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.FpuMove128 dst src))))
         dst))
-(rule (fpu_move (fits_in_64 _) src)
+(rule 1 (fpu_move (fits_in_64 _) src)
       (let ((dst WritableReg (temp_writable_reg $F64))
             (_ Unit (emit (MInst.FpuMove64 dst src))))
         dst))
@@ -2245,7 +2245,7 @@
 
 ;; Helper for generating `MInst.CCmpImm` instructions.
 (decl ccmp_imm (OperandSize u8 Reg UImm5 NZCV Cond) ConsumesFlags)
-(rule (ccmp_imm size 1 rn imm nzcv cond)
+(rule 1 (ccmp_imm size 1 rn imm nzcv cond)
       (let ((dst WritableReg (temp_writable_reg $I64)))
         (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
          (MInst.CCmpImm size rn imm nzcv cond)
@@ -2700,7 +2700,7 @@
 
 ;; Weird logical-instruction immediate in ORI using zero register; to simplify,
 ;; we only match when we are zero-extending the value.
-(rule (imm (integral_ty ty) (ImmExtend.Zero) k)
+(rule 1 (imm (integral_ty ty) (ImmExtend.Zero) k)
       (if-let n (imm_logic_from_u64 ty k))
       (orr_imm ty (zero_reg) n))
 
@@ -2715,7 +2715,7 @@
 
 ;; Place a `Value` into a register, sign extending it to 32-bits
 (decl put_in_reg_sext32 (Value) Reg)
-(rule (put_in_reg_sext32 val @ (value_type (fits_in_32 ty)))
+(rule -1 (put_in_reg_sext32 val @ (value_type (fits_in_32 ty)))
       (extend val $true (ty_bits ty) 32))
 
 ;; 32/64-bit passthrough.
@@ -2724,7 +2724,7 @@
 
 ;; Place a `Value` into a register, zero extending it to 32-bits
 (decl put_in_reg_zext32 (Value) Reg)
-(rule (put_in_reg_zext32 val @ (value_type (fits_in_32 ty)))
+(rule -1 (put_in_reg_zext32 val @ (value_type (fits_in_32 ty)))
       (extend val $false (ty_bits ty) 32))
 
 ;; 32/64-bit passthrough.
@@ -2733,7 +2733,7 @@
 
 ;; Place a `Value` into a register, sign extending it to 64-bits
 (decl put_in_reg_sext64 (Value) Reg)
-(rule (put_in_reg_sext64 val @ (value_type (fits_in_32 ty)))
+(rule 1 (put_in_reg_sext64 val @ (value_type (fits_in_32 ty)))
       (extend val $true (ty_bits ty) 64))
 
 ;; 64-bit passthrough.
@@ -2741,7 +2741,7 @@
 
 ;; Place a `Value` into a register, zero extending it to 64-bits
 (decl put_in_reg_zext64 (Value) Reg)
-(rule (put_in_reg_zext64 val @ (value_type (fits_in_32 ty)))
+(rule 1 (put_in_reg_zext64 val @ (value_type (fits_in_32 ty)))
       (extend val $false (ty_bits ty) 64))
 
 ;; 64-bit passthrough.
@@ -2755,7 +2755,7 @@
         reg))
 
 (decl size_from_ty (Type) OperandSize)
-(rule (size_from_ty (fits_in_32 _ty)) (OperandSize.Size32))
+(rule 1 (size_from_ty (fits_in_32 _ty)) (OperandSize.Size32))
 (rule (size_from_ty $I64) (OperandSize.Size64))
 
 ;; Check for signed overflow. The only case is min_value / -1.
@@ -2790,14 +2790,14 @@
 (decl alu_rs_imm_logic_commutative (ALUOp Type Value Value) Reg)
 
 ;; Base case of operating on registers.
-(rule (alu_rs_imm_logic_commutative op ty x y)
+(rule -1 (alu_rs_imm_logic_commutative op ty x y)
       (alu_rrr op ty x y))
 
 ;; Special cases for when one operand is a constant.
 (rule (alu_rs_imm_logic_commutative op ty x (iconst k))
       (if-let imm (imm_logic_from_imm64 ty k))
       (alu_rr_imm_logic op ty x imm))
-(rule (alu_rs_imm_logic_commutative op ty (iconst k) x)
+(rule 1 (alu_rs_imm_logic_commutative op ty (iconst k) x)
       (if-let imm (imm_logic_from_imm64 ty k))
       (alu_rr_imm_logic op ty x imm))
 
@@ -2805,14 +2805,14 @@
 (rule (alu_rs_imm_logic_commutative op ty x (ishl y (iconst k)))
       (if-let amt (lshl_from_imm64 ty k))
       (alu_rrr_shift op ty x y amt))
-(rule (alu_rs_imm_logic_commutative op ty (ishl x (iconst k)) y)
+(rule 1 (alu_rs_imm_logic_commutative op ty (ishl x (iconst k)) y)
       (if-let amt (lshl_from_imm64 ty k))
       (alu_rrr_shift op ty y x amt))
 
 ;; Same as `alu_rs_imm_logic_commutative` above, except that it doesn't require
 ;; that the operation is commutative.
 (decl alu_rs_imm_logic (ALUOp Type Value Value) Reg)
-(rule (alu_rs_imm_logic op ty x y)
+(rule -1 (alu_rs_imm_logic op ty x y)
       (alu_rrr op ty x y))
 (rule (alu_rs_imm_logic op ty x (iconst k))
       (if-let imm (imm_logic_from_imm64 ty k))
@@ -2868,7 +2868,7 @@
 (rule (load_addr (AMode.FPOffset 0 _)) (fp_reg))
 (rule (load_addr (AMode.SPOffset 0 _)) (stack_reg))
 
-(rule (load_addr addr)
+(rule -1 (load_addr addr)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.LoadAddr dst addr))))
         dst))
@@ -3044,7 +3044,7 @@
       (mov_preg (preg_fp)))
 
 (decl aarch64_link () Reg)
-(rule (aarch64_link)
+(rule 1 (aarch64_link)
       (if (preserve_frame_pointers))
       (if (sign_return_address_disabled))
       (let ((dst WritableReg (temp_writable_reg $I64))
@@ -3081,7 +3081,7 @@
 ;; Helper for generating `fcopysign` instruction sequences.
 
 (decl fcopy_sign (Reg Reg Type) Reg)
-(rule (fcopy_sign x y (ty_scalar_float ty))
+(rule 1 (fcopy_sign x y (ty_scalar_float ty))
       (let ((dst WritableReg (temp_writable_reg $F64))
             (tmp Reg (fpu_rri (fpu_op_ri_ushr (ty_bits ty) (max_shift ty)) y))
             (_ Unit (emit (MInst.FpuRRIMod (fpu_op_ri_sli (ty_bits ty) (max_shift ty)) dst x tmp))))
@@ -3175,9 +3175,9 @@
 ;; Accepts the specific conversion op, the source register,
 ;; whether the input is signed, and finally the output type.
 (decl fpu_to_int_cvt_sat (FpuToIntOp Reg bool Type) Reg)
-(rule (fpu_to_int_cvt_sat op src _ $I64)
+(rule 1 (fpu_to_int_cvt_sat op src _ $I64)
       (fpu_to_int op src))
-(rule (fpu_to_int_cvt_sat op src _ $I32)
+(rule 1 (fpu_to_int_cvt_sat op src _ $I32)
       (fpu_to_int op src))
 (rule (fpu_to_int_cvt_sat op src $false (fits_in_16 out_ty))
       (let ((result Reg (fpu_to_int op src))
@@ -3295,17 +3295,17 @@
       (vec_rrr (VecALUOp.Fcmge) rm rn (vector_size ty)))
 
 ;; Integer
-(rule (vec_cmp rn rm ty (Cond.Eq))
+(rule 1 (vec_cmp rn rm ty (Cond.Eq))
       (if (ty_vector_not_float ty))
       (vec_rrr (VecALUOp.Cmeq) rn rm (vector_size ty)))
-(rule (vec_cmp rn rm ty (Cond.Ne))
+(rule 1 (vec_cmp rn rm ty (Cond.Ne))
       (if (ty_vector_not_float ty))
       (let ((tmp Reg (vec_rrr (VecALUOp.Cmeq) rn rm (vector_size ty))))
        (vec_misc (VecMisc2.Not) tmp (vector_size ty))))
-(rule (vec_cmp rn rm ty (Cond.Ge))
+(rule 1 (vec_cmp rn rm ty (Cond.Ge))
       (if (ty_vector_not_float ty))
       (vec_rrr (VecALUOp.Cmge) rn rm (vector_size ty)))
-(rule (vec_cmp rn rm ty (Cond.Gt))
+(rule 1 (vec_cmp rn rm ty (Cond.Gt))
       (if (ty_vector_not_float ty))
       (vec_rrr (VecALUOp.Cmgt) rn rm (vector_size ty)))
 (rule (vec_cmp rn rm ty (Cond.Hs))
@@ -3321,7 +3321,7 @@
 (rule (vec_cmp rn rm ty (Cond.Lt))
       (if (ty_vector_not_float ty))
       (vec_rrr (VecALUOp.Cmgt) rm rn (vector_size ty)))
-(rule (vec_cmp rn rm ty (Cond.Ls))
+(rule 1 (vec_cmp rn rm ty (Cond.Ls))
       (if (ty_vector_not_float ty))
       (vec_rrr (VecALUOp.Cmhs) rm rn (vector_size ty)))
 (rule (vec_cmp rn rm ty (Cond.Lo))
@@ -3336,7 +3336,7 @@
 ;; mov xm, vn.d[0]
 ;; cmp xm, #0
 (decl vanytrue (Reg Type) ProducesFlags)
-(rule (vanytrue src (ty_vec128 ty))
+(rule 1 (vanytrue src (ty_vec128 ty))
       (let ((src Reg (vec_rrr (VecALUOp.Umaxp) src src (VectorSize.Size32x4)))
             (src Reg (mov_from_vec src 0 (ScalarSize.Size64))))
        (cmp_imm (OperandSize.Size64) src (u8_into_imm12 0))))
@@ -3366,7 +3366,7 @@
 
 ;; Vectors.
 ;; `icmp` into flags for vectors is invalid.
-(rule (lower_icmp_into_reg cond x y in_ty @ (multi_lane _ _) _out_ty)
+(rule 1 (lower_icmp_into_reg cond x y in_ty @ (multi_lane _ _) _out_ty)
       (let ((cond Cond (cond_code cond))
             (rn Reg (put_in_reg x))
             (rm Reg (put_in_reg y)))
@@ -3380,7 +3380,7 @@
 (rule (lower_icmp_extend $I16 $false) (ExtendOp.UXTH))
 
 ;; Integers <= 64-bits.
-(rule (lower_icmp_into_reg cond rn rm in_ty out_ty)
+(rule -2 (lower_icmp_into_reg cond rn rm in_ty out_ty)
       (if (ty_int_bool_ref_scalar_64 in_ty))
       (let ((cc Cond (cond_code cond)))
        (with_flags
@@ -3391,16 +3391,16 @@
       (if (signed_cond_code cond))
       (let ((rn Reg (put_in_reg_sext32 rn)))
       (cmp_extend (operand_size ty) rn rm (lower_icmp_extend ty $true))))
-(rule (lower_icmp cond rn (imm12_from_value rm) (fits_in_16 ty))
+(rule -1 (lower_icmp cond rn (imm12_from_value rm) (fits_in_16 ty))
       (let ((rn Reg (put_in_reg_zext32 rn)))
       (cmp_imm (operand_size ty) rn rm)))
-(rule -1 (lower_icmp cond rn rm (fits_in_16 ty))
+(rule -2 (lower_icmp cond rn rm (fits_in_16 ty))
       (let ((rn Reg (put_in_reg_zext32 rn)))
       (cmp_extend (operand_size ty) rn rm (lower_icmp_extend ty $false))))
-(rule -2 (lower_icmp cond rn (imm12_from_value rm) ty)
+(rule -3 (lower_icmp cond rn (imm12_from_value rm) ty)
       (if (ty_int_bool_ref_scalar_64 ty))
       (cmp_imm (operand_size ty) rn rm))
-(rule -3 (lower_icmp cond rn rm ty)
+(rule -4 (lower_icmp cond rn rm ty)
       (if (ty_int_bool_ref_scalar_64 ty))
       (cmp (operand_size ty) rn rm))
 
@@ -3526,14 +3526,14 @@
 
 ;; Helpers for generating select instruction sequences.
 (decl lower_select (ProducesFlags Cond Type Value Value) ValueRegs)
-(rule (lower_select flags cond (ty_scalar_float ty) rn rm)
+(rule 2 (lower_select flags cond (ty_scalar_float ty) rn rm)
       (with_flags flags (fpu_csel ty cond rn rm)))
-(rule (lower_select flags cond (ty_vec128 ty) rn rm)
+(rule 3 (lower_select flags cond (ty_vec128 ty) rn rm)
       (with_flags flags (vec_csel cond rn rm)))
 (rule (lower_select flags cond ty rn rm)
       (if (ty_vec64 ty))
       (with_flags flags (fpu_csel $F64 cond rn rm)))
-(rule (lower_select flags cond $I128 rn rm)
+(rule 4 (lower_select flags cond $I128 rn rm)
       (let ((dst_lo WritableReg (temp_writable_reg $I64))
             (dst_hi WritableReg (temp_writable_reg $I64))
             (rn ValueRegs (put_in_regs rn))
@@ -3547,7 +3547,7 @@
          (MInst.CSel dst_lo cond rn_lo rm_lo)
          (MInst.CSel dst_hi cond rn_hi rm_hi)
          (value_regs dst_lo dst_hi)))))
-(rule (lower_select flags cond ty rn rm)
+(rule 1 (lower_select flags cond ty rn rm)
       (if (ty_int_bool_ref_scalar_64 ty))
       (with_flags flags (csel cond rn rm)))
 
