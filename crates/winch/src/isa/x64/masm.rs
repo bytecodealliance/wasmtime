@@ -135,7 +135,7 @@ impl Assembler {
     }
 
     pub fn mov_rm(&mut self, src: Reg, base: Reg, imm: u32) {
-        let src = reg_name(src, 4);
+        let src = reg_name(src, 8);
         let dst = reg_name(base, 8);
 
         let addr = if imm == 0 {
