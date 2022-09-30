@@ -79,7 +79,6 @@ pub(crate) struct Stats {
     pub(crate) rewrite_rule_invoked: u64,
     pub(crate) store_to_load_forward: u64,
     pub(crate) elaborate_visit_node: u64,
-    pub(crate) elaborate_visit_node_recurse: u64,
     pub(crate) elaborate_memoize_hit: u64,
     pub(crate) elaborate_memoize_miss: u64,
     pub(crate) elaborate_memoize_miss_remat: u64,

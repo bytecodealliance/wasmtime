@@ -9,7 +9,8 @@ use crate::fx::FxHashSet;
 use crate::ir::{Block, Function, Inst, RelSourceLoc, Type, Value, ValueList};
 use crate::loop_analysis::{LoopAnalysis, LoopLevel};
 use crate::scoped_hash_map::ScopedHashMap;
-use cranelift_egraph::{EGraph, Id, Language};
+use alloc::vec::Vec;
+use cranelift_egraph::{EGraph, Id, Language, NodeKey};
 use cranelift_entity::{packed_option::PackedOption, SecondaryMap};
 use smallvec::{smallvec, SmallVec};
 
@@ -29,6 +30,9 @@ pub(crate) struct Elaborator<'a> {
     cur_block: Option<Block>,
     first_branch: SecondaryMap<Block, PackedOption<Inst>>,
     remat_ids: &'a FxHashSet<Id>,
+    /// Explicitly-unrolled elaboration stack.
+    elab_stack: Vec<ElabStackEntry>,
+    elab_result_stack: Vec<IdValue>,
     stats: &'a mut Stats,
 }
 
@@ -42,6 +46,23 @@ struct LoopStackEntry {
     hoist_block: Block,
     /// The depth in the scope map.
     scope_depth: u32,
+}
+
+#[derive(Clone, Debug)]
+enum ElabStackEntry {
+    /// Next action is to resolve this id into a node and elaborate
+    /// args.
+    Start { id: Id },
+    /// Args have been pushed; waiting for results.
+    PendingNode {
+        canonical: Id,
+        node_key: NodeKey,
+        remat: bool,
+        num_args: usize,
+    },
+    /// Waiting for a result to return one projected value of a
+    /// multi-value result.
+    PendingProjection { canonical: Id, index: usize },
 }
 
 #[derive(Clone, Debug)]
@@ -96,6 +117,8 @@ impl<'a> Elaborator<'a> {
             cur_block: None,
             first_branch: SecondaryMap::with_capacity(num_blocks),
             remat_ids,
+            elab_stack: vec![],
+            elab_result_stack: vec![],
             stats,
         }
     }
@@ -251,152 +274,221 @@ impl<'a> Elaborator<'a> {
     }
 
     fn elaborate_eclass_use(&mut self, id: Id) -> IdValue {
-        self.stats.elaborate_visit_node += 1;
-        let canonical = self.egraph.canonical_id(id);
-        log::trace!("elaborate: id {}", id);
+        self.elab_stack.push(ElabStackEntry::Start { id });
+        self.process_elab_stack();
+        debug_assert_eq!(self.elab_result_stack.len(), 1);
+        self.elab_result_stack.pop().expect("Must have one result")
+    }
 
-        let remat = if let Some(val) = self.id_to_value.get(&canonical) {
-            // Look at the defined block, and determine whether this
-            // node kind allows rematerialization if the value comes
-            // from another block. If so, ignore the hit and recompute
-            // below.
-            let remat =
-                val.block() != self.cur_block.unwrap() && self.remat_ids.contains(&canonical);
-            if !remat {
-                log::trace!("elaborate: id {} -> {:?}", id, val);
-                self.stats.elaborate_memoize_hit += 1;
-                return val.clone();
-            }
-            log::trace!("elaborate: id {} -> remat", id);
-            self.stats.elaborate_memoize_miss_remat += 1;
-            // The op is pure at this point, so it is always valid to
-            // remove from this map.
-            self.id_to_value.remove(&canonical);
-            true
-        } else {
-            self.remat_ids.contains(&canonical)
-        };
-        self.stats.elaborate_memoize_miss += 1;
+    fn process_elab_stack(&mut self) {
+        while let Some(entry) = self.elab_stack.last() {
+            match entry {
+                &ElabStackEntry::Start { id } => {
+                    // We always replace the Start entry, so pop it now.
+                    self.elab_stack.pop();
 
-        // Get the best option; we use `id` (latest id) here so we
-        // have a full view of the eclass.
-        let (_, best_node_eclass) = self.id_to_best_cost_and_node[id];
-        debug_assert_ne!(best_node_eclass, Id::invalid());
+                    self.stats.elaborate_visit_node += 1;
+                    let canonical = self.egraph.canonical_id(id);
+                    log::trace!("elaborate: id {}", id);
 
-        log::trace!(
-            "elaborate: id {} -> best {} -> eclass node {:?}",
-            id,
-            best_node_eclass,
-            self.egraph.classes[best_node_eclass]
-        );
-        let node_key = self.egraph.classes[best_node_eclass].get_node().unwrap();
-        let node = node_key.node::<NodeCtx>(&self.egraph.nodes);
+                    let remat = if let Some(val) = self.id_to_value.get(&canonical) {
+                        // Look at the defined block, and determine whether this
+                        // node kind allows rematerialization if the value comes
+                        // from another block. If so, ignore the hit and recompute
+                        // below.
+                        let remat = val.block() != self.cur_block.unwrap()
+                            && self.remat_ids.contains(&canonical);
+                        if !remat {
+                            log::trace!("elaborate: id {} -> {:?}", id, val);
+                            self.stats.elaborate_memoize_hit += 1;
+                            self.elab_result_stack.push(val.clone());
+                            continue;
+                        }
+                        log::trace!("elaborate: id {} -> remat", id);
+                        self.stats.elaborate_memoize_miss_remat += 1;
+                        // The op is pure at this point, so it is always valid to
+                        // remove from this map.
+                        self.id_to_value.remove(&canonical);
+                        true
+                    } else {
+                        self.remat_ids.contains(&canonical)
+                    };
+                    self.stats.elaborate_memoize_miss += 1;
 
-        // Is the node a block param? We should never get here if so
-        // (they are inserted when first visiting the block).
-        if matches!(node, Node::Param { .. }) {
-            unreachable!("Param nodes should already be inserted");
-        }
+                    // Get the best option; we use `id` (latest id) here so we
+                    // have a full view of the eclass.
+                    let (_, best_node_eclass) = self.id_to_best_cost_and_node[id];
+                    debug_assert_ne!(best_node_eclass, Id::invalid());
 
-        // Is the node a result projection? If so, at this point we
-        // have everything we need; no need to allocate a new Value
-        // for the result.
-        if let Node::Result { value, result, .. } = node {
-            // Recurse here: this recursion is safe because we only
-            // ever have one level of `Result` node (we don't have
-            // nested tuples).
-            let value = self.elaborate_eclass_use(*value);
-            let (depth, block, values) = match value {
-                IdValue::Values {
-                    depth,
-                    block,
-                    values,
-                    ..
-                } => (depth, block, values),
-                IdValue::Value { .. } => {
-                    unreachable!("Projection nodes should not be used on single results");
+                    log::trace!(
+                        "elaborate: id {} -> best {} -> eclass node {:?}",
+                        id,
+                        best_node_eclass,
+                        self.egraph.classes[best_node_eclass]
+                    );
+                    let node_key = self.egraph.classes[best_node_eclass].get_node().unwrap();
+                    let node = node_key.node::<NodeCtx>(&self.egraph.nodes);
+
+                    // Is the node a block param? We should never get here if so
+                    // (they are inserted when first visiting the block).
+                    if matches!(node, Node::Param { .. }) {
+                        unreachable!("Param nodes should already be inserted");
+                    }
+
+                    // Is the node a result projection? If so, resolve
+                    // the value we are projecting a part of, then
+                    // eventually return here (saving state with a
+                    // PendingProjection).
+                    if let Node::Result { value, result, .. } = node {
+                        self.elab_stack.push(ElabStackEntry::PendingProjection {
+                            index: *result,
+                            canonical,
+                        });
+                        self.elab_stack.push(ElabStackEntry::Start { id: *value });
+                        continue;
+                    }
+
+                    // We're going to need to emit this
+                    // operator. First, enqueue all args to be
+                    // elaborated. Push state to receive the results
+                    // and later elab this node.
+                    let num_args = self.node_ctx.children(&node).len();
+                    self.elab_stack.push(ElabStackEntry::PendingNode {
+                        canonical,
+                        node_key,
+                        remat,
+                        num_args,
+                    });
+                    // Push args in reverse order so we process the
+                    // first arg first.
+                    for &arg_id in self.node_ctx.children(&node).iter().rev() {
+                        self.elab_stack.push(ElabStackEntry::Start { id: arg_id });
+                    }
                 }
-            };
-            let values = values.as_slice(&self.func.dfg.value_lists);
-            let value = IdValue::Value {
-                depth,
-                block,
-                value: values[*result],
-            };
-            self.id_to_value.insert_if_absent(canonical, value.clone());
-            return value;
-        }
 
-        // We're going to need to emit this operator. First, elaborate
-        // all args, recursively. Also track maximum loop depth while we're here.
-        let mut max_loop_depth = 0;
-        let args: SmallVec<[Value; 8]> = self
-            .node_ctx
-            .children(&node)
-            .iter()
-            .map(|&id| {
-                self.stats.elaborate_visit_node_recurse += 1;
-                self.elaborate_eclass_use(id)
-            })
-            .map(|idvalue| match idvalue {
-                IdValue::Value { depth, value, .. } => {
-                    max_loop_depth = std::cmp::max(max_loop_depth, depth);
-                    value
+                &ElabStackEntry::PendingNode {
+                    canonical,
+                    node_key,
+                    remat,
+                    num_args,
+                } => {
+                    self.elab_stack.pop();
+
+                    let node = node_key.node::<NodeCtx>(&self.egraph.nodes);
+
+                    // We should have all args resolved at this point.
+                    let arg_idx = self.elab_result_stack.len() - num_args;
+                    let args = &self.elab_result_stack[arg_idx..];
+
+                    // Gather the individual output-CLIF `Value`s.
+                    let arg_values: SmallVec<[Value; 8]> = args
+                        .iter()
+                        .map(|idvalue| match idvalue {
+                            IdValue::Value { value, .. } => *value,
+                            IdValue::Values { .. } => {
+                                panic!("enode depends directly on multi-value result")
+                            }
+                        })
+                        .collect();
+
+                    // Compute max loop depth.
+                    let max_loop_depth = args
+                        .iter()
+                        .map(|idvalue| match idvalue {
+                            IdValue::Value { depth, .. } => *depth,
+                            IdValue::Values { .. } => unreachable!(),
+                        })
+                        .max()
+                        .unwrap_or(0);
+
+                    // Remove args from result stack.
+                    self.elab_result_stack.truncate(arg_idx);
+
+                    // Determine the location at which we emit it. This is the
+                    // current block *unless* we hoist above a loop when all args
+                    // are loop-invariant (and this op is pure).
+                    let (loop_depth, scope_depth, block) = if node.is_non_pure() {
+                        // Non-pure op: always at the current location.
+                        (
+                            self.cur_loop_depth(),
+                            self.id_to_value.depth(),
+                            self.cur_block.unwrap(),
+                        )
+                    } else if max_loop_depth == self.cur_loop_depth() || remat {
+                        // Pure op, but depends on some value at the current loop
+                        // depth, or remat forces it here: as above.
+                        (
+                            self.cur_loop_depth(),
+                            self.id_to_value.depth(),
+                            self.cur_block.unwrap(),
+                        )
+                    } else {
+                        // Pure op, and does not depend on any args at current
+                        // loop depth: hoist out of loop.
+                        self.stats.elaborate_licm_hoist += 1;
+                        let data = &self.loop_stack[max_loop_depth as usize];
+                        (max_loop_depth, data.scope_depth as usize, data.hoist_block)
+                    };
+                    // Loop scopes are a subset of all scopes.
+                    debug_assert!(scope_depth >= loop_depth as usize);
+
+                    // This is an actual operation; emit the node in sequence now.
+                    let results = self.add_node(node, &arg_values[..], block);
+                    let results_slice = results.as_slice(&self.func.dfg.value_lists);
+
+                    // Build the result and memoize in the id-to-value map.
+                    let result = if results_slice.len() == 1 {
+                        IdValue::Value {
+                            depth: loop_depth,
+                            block,
+                            value: results_slice[0],
+                        }
+                    } else {
+                        IdValue::Values {
+                            depth: loop_depth,
+                            block,
+                            values: results,
+                        }
+                    };
+
+                    self.id_to_value.insert_if_absent_with_depth(
+                        canonical,
+                        result.clone(),
+                        scope_depth,
+                    );
+
+                    // Push onto the elab-results stack.
+                    self.elab_result_stack.push(result)
                 }
-                IdValue::Values { .. } => panic!("enode depends directly on multi-value result"),
-            })
-            .collect();
+                &ElabStackEntry::PendingProjection { index, canonical } => {
+                    self.elab_stack.pop();
 
-        // Determine the location at which we emit it. This is the
-        // current block *unless* we hoist above a loop when all args
-        // are loop-invariant (and this op is pure).
-        let (loop_depth, scope_depth, block) = if node.is_non_pure() {
-            // Non-pure op: always at the current location.
-            (
-                self.cur_loop_depth(),
-                self.id_to_value.depth(),
-                self.cur_block.unwrap(),
-            )
-        } else if max_loop_depth == self.cur_loop_depth() || remat {
-            // Pure op, but depends on some value at the current loop
-            // depth, or remat forces it here: as above.
-            (
-                self.cur_loop_depth(),
-                self.id_to_value.depth(),
-                self.cur_block.unwrap(),
-            )
-        } else {
-            // Pure op, and does not depend on any args at current
-            // loop depth: hoist out of loop.
-            self.stats.elaborate_licm_hoist += 1;
-            let data = &self.loop_stack[max_loop_depth as usize];
-            (max_loop_depth, data.scope_depth as usize, data.hoist_block)
-        };
-        // Loop scopes are a subset of all scopes.
-        debug_assert!(scope_depth >= loop_depth as usize);
+                    // Grab the input from the elab-result stack.
+                    let value = self.elab_result_stack.pop().expect("Should have result");
 
-        // This is an actual operation; emit the node in sequence now.
-        let results = self.add_node(node, &args[..], block);
-        let results_slice = results.as_slice(&self.func.dfg.value_lists);
+                    let (depth, block, values) = match value {
+                        IdValue::Values {
+                            depth,
+                            block,
+                            values,
+                            ..
+                        } => (depth, block, values),
+                        IdValue::Value { .. } => {
+                            unreachable!("Projection nodes should not be used on single results");
+                        }
+                    };
+                    let values = values.as_slice(&self.func.dfg.value_lists);
+                    let value = IdValue::Value {
+                        depth,
+                        block,
+                        value: values[index],
+                    };
+                    self.id_to_value.insert_if_absent(canonical, value.clone());
 
-        // Build the result and memoize in the id-to-value map.
-        let result = if results_slice.len() == 1 {
-            IdValue::Value {
-                depth: loop_depth,
-                block,
-                value: results_slice[0],
+                    self.elab_result_stack.push(value);
+                }
             }
-        } else {
-            IdValue::Values {
-                depth: loop_depth,
-                block,
-                values: results,
-            }
-        };
-
-        self.id_to_value
-            .insert_if_absent_with_depth(canonical, result.clone(), scope_depth);
-        result
+        }
     }
 
     fn elaborate_block<'b, PF: Fn(Block) -> &'b [(Id, Type)], SEF: Fn(Block) -> &'b [Id]>(
