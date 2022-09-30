@@ -46,6 +46,7 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     if let Some(mut ids) = optimized_ids {
         while let Some(new_id) = ids.next(&mut ctx) {
             if ctx.egraph.subsume_ids.contains(&new_id) {
+                log::trace!(" -> eclass {} subsumes {}", new_id, id);
                 ctx.egraph.stats.node_subsume += 1;
                 // Merge in the unionfind so canonicalization still
                 // works, but take *only* the subsuming ID, and break
@@ -55,11 +56,19 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
                 break;
             }
             ctx.egraph.stats.node_union += 1;
+            let old_union_id = union_id;
             union_id = ctx.egraph.egraph.union(union_id, new_id);
+            log::trace!(
+                " -> union eclass {} with {} to get {}",
+                new_id,
+                old_union_id,
+                union_id
+            );
             ctx.egraph.compute_analyses(union_id);
         }
     }
     ctx.egraph.subsume_ids.clear();
+    log::trace!(" -> optimize {} got {}", id, union_id);
     union_id
 }
 

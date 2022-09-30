@@ -283,7 +283,7 @@ impl CtxHash<Node> for NodeCtx {
 pub(crate) struct Cost(u32);
 impl Cost {
     pub(crate) fn at_level(&self, loop_level: LoopLevel) -> Cost {
-        let loop_level = std::cmp::min(3, loop_level.level());
+        let loop_level = std::cmp::min(2, loop_level.level());
         let multiplier = 1u32 << ((10 * loop_level) as u32);
         Cost(self.0.saturating_mul(multiplier))
     }
@@ -297,10 +297,6 @@ impl Cost {
     pub(crate) fn zero() -> Cost {
         Cost(0)
     }
-
-    pub(crate) fn checked_sub(&self, other: Cost) -> Option<Cost> {
-        Some(Cost(self.0.checked_sub(other.0)?))
-    }
 }
 
 impl std::default::Default for Cost {
@@ -312,7 +308,9 @@ impl std::default::Default for Cost {
 impl std::ops::Add<Cost> for Cost {
     type Output = Cost;
     fn add(self, other: Cost) -> Cost {
-        Cost(self.0.saturating_add(other.0))
+        // We saturate at one *less* than "infinity".
+        let sum = std::cmp::min(u32::MAX - 1, self.0.saturating_add(other.0));
+        Cost(sum)
     }
 }
 

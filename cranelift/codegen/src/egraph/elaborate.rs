@@ -199,155 +199,54 @@ impl<'a> Elaborator<'a> {
         self.func.dfg.inst_results_list(inst)
     }
 
-    fn find_best_node(&mut self, id: Id, mut upper_bound: Cost) -> Option<(Cost, Id)> {
-        self.stats.elaborate_find_best_node += 1;
-        log::trace!("find_best_node: {} upper_bound {:?}", id, upper_bound);
-
-        let (cost, node) = self.id_to_best_cost_and_node[id];
-        if node != Id::invalid() {
-            self.stats.elaborate_find_best_node_memoize_hit += 1;
-            log::trace!(" -> memoized to cost {:?} node {}", cost, node);
-            if cost <= upper_bound {
-                return Some((cost, node));
-            } else {
-                return None;
+    fn compute_best_nodes(&mut self) {
+        let best = &mut self.id_to_best_cost_and_node;
+        for (eclass_id, eclass) in &self.egraph.classes {
+            log::trace!("computing best for eclass {:?}", eclass_id);
+            if let Some(child1) = eclass.child1() {
+                log::trace!(" -> child {:?}", child1);
+                best[eclass_id] = best[child1];
             }
-        }
-        self.stats.elaborate_find_best_node_memoize_miss += 1;
-
-        let eclass = self.egraph.classes[id];
-        let node = eclass.get_node();
-        let child1 = eclass.child1();
-        let child2 = eclass.child2();
-
-        log::trace!(
-            " -> id {} node expands to: node {:?} child1 {:?} child2 {:?}",
-            id,
-            node,
-            child1,
-            child2
-        );
-
-        let (mut best_cost, mut best_id) = if let Some(node) = node {
-            let cost = match node.node::<NodeCtx>(&self.egraph.nodes) {
-                Node::Param { .. } | Node::Inst { .. } | Node::Load { .. } => {
-                    return Some((Cost::zero(), id));
+            if let Some(child2) = eclass.child2() {
+                log::trace!(" -> child {:?}", child2);
+                if best[child2].0 < best[eclass_id].0 {
+                    best[eclass_id] = best[child2];
                 }
-                Node::Result { value, .. } => {
-                    return self.find_best_node(*value, upper_bound);
-                }
-                Node::Pure { op, .. } => op_cost(op),
-            };
-            let level = self.loop_levels[id];
-            let cost = cost.at_level(level);
-            log::trace!("  -> id {} has operand cost {:?}", id, cost);
-
-            let mut children_cost = Cost::zero();
-            let child_count = self
-                .node_ctx
-                .children(node.node::<NodeCtx>(&self.egraph.nodes))
-                .len();
-            let mut exceeded = false;
-            for child_idx in 0..child_count {
-                let child_upper_bound = match upper_bound.checked_sub(cost + children_cost) {
-                    Some(bound) => bound,
-                    None => {
-                        exceeded = true;
-                        break;
+            }
+            if let Some(node_key) = eclass.get_node() {
+                let node = node_key.node::<NodeCtx>(&self.egraph.nodes);
+                log::trace!(" -> eclass {:?}: node {:?}", eclass_id, node);
+                let (cost, id) = match node {
+                    Node::Param { .. } | Node::Inst { .. } | Node::Load { .. } => {
+                        (Cost::zero(), eclass_id)
+                    }
+                    Node::Result { value, .. } => best[*value],
+                    Node::Pure { op, .. } => {
+                        let args_cost = self
+                            .node_ctx
+                            .children(node)
+                            .iter()
+                            .map(|&arg_id| {
+                                log::trace!("  -> arg {:?}", arg_id);
+                                best[arg_id].0
+                            })
+                            // Can't use `.sum()` for `Cost` types; do
+                            // an explicit reduce instead.
+                            .reduce(|a, b| a + b)
+                            .unwrap_or(Cost::zero());
+                        let level = self.loop_levels[eclass_id];
+                        let cost = op_cost(op).at_level(level) + args_cost;
+                        (cost, eclass_id)
                     }
                 };
-                let child = self
-                    .node_ctx
-                    .children(node.node::<NodeCtx>(&self.egraph.nodes))[child_idx];
-                assert!(child < id);
-                log::trace!("  -> id {} child {}", id, child);
-                self.stats.elaborate_find_best_node_arg_recurse += 1;
 
-                if let Some((child_cost, _)) = self.find_best_node(child, child_upper_bound) {
-                    children_cost = children_cost + child_cost;
-                    log::trace!("  -> id {} child {} child cost {:?}", id, child, child_cost);
-                } else {
-                    exceeded = true;
-                    break;
+                if cost < best[eclass_id].0 {
+                    best[eclass_id] = (cost, id);
                 }
             }
-
-            if exceeded {
-                (Cost::infinity(), None)
-            } else {
-                let node_cost = cost + children_cost;
-
-                log::trace!(
-                    "  -> id {} total cost of operand plus args: {:?}",
-                    id,
-                    node_cost
-                );
-                (node_cost, Some(id))
-            }
-        } else {
-            (Cost::infinity(), None)
-        };
-
-        if best_cost < upper_bound {
-            upper_bound = best_cost;
-        }
-
-        // Evaluate children as options now, but only if we haven't
-        // already found a "perfect" (zero-cost) option here. This
-        // conditional lets us short-circuit cases where e.g. a
-        // rewrite to a constant value occurs.
-        if best_cost != Cost::zero() {
-            for child in child1.into_iter().chain(child2.into_iter()) {
-                log::trace!(" -> id {} child {}", id, child);
-                assert!(child < id);
-                self.stats.elaborate_find_best_node_child_recurse += 1;
-                if let Some((child_best_cost, child_best_id)) =
-                    self.find_best_node(child, upper_bound)
-                {
-                    log::trace!(
-                        " -> id {} child {} has cost {:?} with best id {}",
-                        id,
-                        child,
-                        child_best_cost,
-                        child_best_id
-                    );
-                    if child_best_cost < best_cost {
-                        self.stats.elaborate_find_best_node_child_better += 1;
-                        best_cost = child_best_cost;
-                        best_id = Some(child_best_id);
-                    }
-                    if child_best_cost < upper_bound {
-                        upper_bound = child_best_cost;
-                    }
-                } else {
-                    log::trace!(
-                        " -> id {} child {} nothing below upper bound {:?}",
-                        id,
-                        child,
-                        upper_bound
-                    );
-                }
-            }
-        }
-
-        if let Some(best_id) = best_id {
-            log::trace!(
-                "-> for eclass {}, best node is in id {} with cost {:?}",
-                id,
-                best_id,
-                best_cost
-            );
-
-            self.id_to_best_cost_and_node[id] = (best_cost, best_id);
-
-            Some((best_cost, best_id))
-        } else {
-            log::trace!(
-                "-> for eclass {}, nothing below upper bound {:?}",
-                id,
-                upper_bound
-            );
-            None
+            debug_assert_ne!(best[eclass_id].0, Cost::infinity());
+            debug_assert_ne!(best[eclass_id].1, Id::invalid());
+            log::trace!("best for eclass {:?}: {:?}", eclass_id, best[eclass_id]);
         }
     }
 
@@ -381,9 +280,8 @@ impl<'a> Elaborator<'a> {
 
         // Get the best option; we use `id` (latest id) here so we
         // have a full view of the eclass.
-        let (_, best_node_eclass) = self
-            .find_best_node(id, Cost::infinity())
-            .expect("Must have some option with unlimited upper bound");
+        let (_, best_node_eclass) = self.id_to_best_cost_and_node[id];
+        debug_assert_ne!(best_node_eclass, Id::invalid());
 
         log::trace!(
             "elaborate: id {} -> best {} -> eclass node {:?}",
@@ -514,7 +412,6 @@ impl<'a> Elaborator<'a> {
         let blockparam_ids_tys = (block_params_fn)(block);
         self.start_block(idom, block, blockparam_ids_tys);
         for &id in (block_side_effects_fn)(block) {
-            self.id_to_best_cost_and_node[id] = (Cost::zero(), id);
             self.elaborate_eclass_use(id);
         }
 
@@ -557,6 +454,7 @@ impl<'a> Elaborator<'a> {
         self.stats.elaborate_func += 1;
         self.stats.elaborate_func_pre_insts += self.func.dfg.num_insts() as u64;
         self.clear_func_body();
+        self.compute_best_nodes();
         self.elaborate_block(
             None,
             root,
