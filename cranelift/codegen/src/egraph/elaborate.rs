@@ -30,9 +30,11 @@ pub(crate) struct Elaborator<'a> {
     cur_block: Option<Block>,
     first_branch: SecondaryMap<Block, PackedOption<Inst>>,
     remat_ids: &'a FxHashSet<Id>,
-    /// Explicitly-unrolled elaboration stack.
+    /// Explicitly-unrolled value elaboration stack.
     elab_stack: Vec<ElabStackEntry>,
     elab_result_stack: Vec<IdValue>,
+    /// Explicitly-unrolled block elaboration stack.
+    block_stack: Vec<BlockStackEntry>,
     stats: &'a mut Stats,
 }
 
@@ -63,6 +65,12 @@ enum ElabStackEntry {
     /// Waiting for a result to return one projected value of a
     /// multi-value result.
     PendingProjection { canonical: Id, index: usize },
+}
+
+#[derive(Clone, Debug)]
+enum BlockStackEntry {
+    Elaborate { block: Block, idom: Option<Block> },
+    Pop,
 }
 
 #[derive(Clone, Debug)]
@@ -119,6 +127,7 @@ impl<'a> Elaborator<'a> {
             remat_ids,
             elab_stack: vec![],
             elab_result_stack: vec![],
+            block_stack: vec![],
             stats,
         }
     }
@@ -497,30 +506,57 @@ impl<'a> Elaborator<'a> {
         block: Block,
         block_params_fn: &PF,
         block_side_effects_fn: &SEF,
-        domtree: &DomTreeWithChildren,
     ) {
-        self.id_to_value.increment_depth();
-
         let blockparam_ids_tys = (block_params_fn)(block);
         self.start_block(idom, block, blockparam_ids_tys);
         for &id in (block_side_effects_fn)(block) {
             self.elaborate_eclass_use(id);
         }
+    }
 
-        for child in domtree.children(block) {
-            self.elaborate_block(
-                Some(block),
-                child,
-                block_params_fn,
-                block_side_effects_fn,
-                domtree,
-            );
-        }
+    fn elaborate_domtree<'b, PF: Fn(Block) -> &'b [(Id, Type)], SEF: Fn(Block) -> &'b [Id]>(
+        &mut self,
+        block_params_fn: &PF,
+        block_side_effects_fn: &SEF,
+        domtree: &DomTreeWithChildren,
+    ) {
+        let root = domtree.root();
+        self.block_stack.push(BlockStackEntry::Elaborate {
+            block: root,
+            idom: None,
+        });
+        while let Some(top) = self.block_stack.pop() {
+            match top {
+                BlockStackEntry::Elaborate { block, idom } => {
+                    self.block_stack.push(BlockStackEntry::Pop);
+                    self.id_to_value.increment_depth();
 
-        self.id_to_value.decrement_depth();
-        if let Some(innermost_loop) = self.loop_stack.last() {
-            if innermost_loop.scope_depth as usize == self.id_to_value.depth() {
-                self.loop_stack.pop();
+                    self.elaborate_block(idom, block, block_params_fn, block_side_effects_fn);
+
+                    // Push children. We are doing a preorder
+                    // traversal so we do this after processing this
+                    // block above.
+                    let block_stack_end = self.block_stack.len();
+                    for child in domtree.children(block) {
+                        self.block_stack.push(BlockStackEntry::Elaborate {
+                            block: child,
+                            idom: Some(block),
+                        });
+                    }
+                    // Reverse what we just pushed so we elaborate in
+                    // original block order. (The domtree iter is a
+                    // single-ended iter over a singly-linked list so
+                    // we can't `.rev()` above.)
+                    self.block_stack[block_stack_end..].reverse();
+                }
+                BlockStackEntry::Pop => {
+                    self.id_to_value.decrement_depth();
+                    if let Some(innermost_loop) = self.loop_stack.last() {
+                        if innermost_loop.scope_depth as usize == self.id_to_value.depth() {
+                            self.loop_stack.pop();
+                        }
+                    }
+                }
             }
         }
     }
@@ -542,18 +578,11 @@ impl<'a> Elaborator<'a> {
         block_side_effects_fn: SEF,
     ) {
         let domtree = DomTreeWithChildren::new(self.func, self.domtree);
-        let root = domtree.root();
         self.stats.elaborate_func += 1;
         self.stats.elaborate_func_pre_insts += self.func.dfg.num_insts() as u64;
         self.clear_func_body();
         self.compute_best_nodes();
-        self.elaborate_block(
-            None,
-            root,
-            &block_params_fn,
-            &block_side_effects_fn,
-            &domtree,
-        );
+        self.elaborate_domtree(&block_params_fn, &block_side_effects_fn, &domtree);
         self.stats.elaborate_func_post_insts += self.func.dfg.num_insts() as u64;
     }
 }
