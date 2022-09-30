@@ -67,7 +67,7 @@ impl<'x, 'a: 'x, A: ABI, C: MacroAssembler> CompilationEnv<'x, 'a, A, C> {
     pub fn emit(&mut self) -> Result<Vec<String>> {
         self.emit_start().and(self.emit_body()).and(self.emit_end());
         let buf = self.masm.finalize();
-	let code = Vec::from(buf);
+        let code = Vec::from(buf);
         Ok(code)
     }
 
@@ -91,7 +91,7 @@ impl<'x, 'a: 'x, A: ABI, C: MacroAssembler> CompilationEnv<'x, 'a, A, C> {
 
     // Emit the usual function end instruction sequence
     fn emit_end(&mut self) -> Result<()> {
-	Ok(())
+        Ok(())
     }
 
     fn spill_register_arguments(&mut self) {
