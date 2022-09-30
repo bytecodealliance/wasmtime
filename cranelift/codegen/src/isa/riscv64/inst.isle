@@ -357,7 +357,7 @@
   (Trunc)
 ))
 
-(type CsrOP(enum 
+(type CsrOP (enum 
   (Csrrw)
   (Csrrs)
   (Csrrc)
@@ -373,7 +373,7 @@
   (Umin)
 ))
 
-(type ReferenceCheckOP(enum
+(type ReferenceCheckOP (enum
   (IsNull)
   (IsInvalid)
 ))
@@ -403,7 +403,7 @@
   (AmomaxuD)
 ))
 
-(type FpuOPRRRR(enum 
+(type FpuOPRRRR (enum 
   ;; float32
   (FmaddS)
   (FmsubS)
@@ -416,7 +416,7 @@
   (FnmaddD)
 ))
 
-(type FClassResult(enum 
+(type FClassResult (enum 
   ;;0 rs1 is −∞.
   (NegInfinite)
   ;; 1 rs1 is a negative normal number.
@@ -491,7 +491,7 @@
   (Fld)
 ))
 
-(type StoreOP(enum
+(type StoreOP (enum
   (Sb)
   (Sh)
   (Sw)
@@ -703,7 +703,7 @@
 (decl zero_reg () Reg)
 (extern constructor zero_reg zero_reg)
 
-(decl gen_float_round(FloatRoundOP Reg Type) Reg)
+(decl gen_float_round (FloatRoundOP Reg Type) Reg)
 (rule
   (gen_float_round op rs ty)
   (let
@@ -748,7 +748,7 @@
 (decl writable_zero_reg () WritableReg)
 (extern constructor writable_zero_reg writable_zero_reg)
 
-(decl gen_default_frm() OptionFloatRoundingMode)
+(decl gen_default_frm () OptionFloatRoundingMode)
 (extern constructor gen_default_frm gen_default_frm)
 
 ;; Helper for emitting `MInst.FpuRR` instructions.
@@ -766,24 +766,24 @@
         dst))
 
 ;; Helper for emit rd = rs1 + rs2 for Interger.
-(decl alu_add(Reg Reg)Reg)
+(decl alu_add (Reg Reg) Reg)
 (rule
   (alu_add rs1 rs2)
   (alu_rrr (AluOPRRR.Add) rs1 rs2))
 
-(decl alu_and(Reg Reg)Reg)
+(decl alu_and (Reg Reg) Reg)
 (rule
   (alu_and rs1 rs2)
   (alu_rrr (AluOPRRR.And) rs1 rs2))
 
 
 ;; Helper for emit rd = rs1 - rs2 for Interger.
-(decl alu_sub(Reg Reg)Reg)
+(decl alu_sub (Reg Reg) Reg)
 (rule
   (alu_sub rs1 rs2)
   (alu_rrr (AluOPRRR.Sub) rs1 rs2))
 
-(decl pack_float_rounding_mode(FRM)OptionFloatRoundingMode)
+(decl pack_float_rounding_mode (FRM) OptionFloatRoundingMode)
 (extern constructor pack_float_rounding_mode pack_float_rounding_mode)
 
 ;; Helper for emitting `MInst.AluRRR` instructions.
@@ -809,15 +809,15 @@
             (_ Unit (emit (MInst.AluRRImm12 op dst src imm))))
         dst))
 
-(decl alu_andi (Reg i32)Reg)
+(decl alu_andi (Reg i32) Reg)
 (rule (alu_andi r i) 
   (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const i)))
 
 
-(decl alu_slli (Reg i32)Reg)
+(decl alu_slli (Reg i32) Reg)
 (rule (alu_slli r i) 
   (alu_rr_imm12 (AluOPRRI.Slli) r (imm12_const i)))
-(decl alu_srli (Reg i32)Reg)
+(decl alu_srli (Reg i32) Reg)
 (rule (alu_srli r i) 
   (alu_rr_imm12 (AluOPRRI.Srli) r (imm12_const i)))
 
@@ -830,9 +830,9 @@
         dst))
 
 ;; extend int if need.
-(decl ext_int_if_need(bool ValueRegs Type) ValueRegs)
+(decl ext_int_if_need (bool ValueRegs Type) ValueRegs)
 ;;; for I8 and I16 ...
-(rule
+(rule -1
   (ext_int_if_need signed val (fits_in_32 ty))
   (gen_extend val signed (ty_bits ty) 64))
 ;;; otherwise this is a I64 or I128 
@@ -857,7 +857,7 @@
   (def_inst (iconst (u64_from_imm64 (imm12_from_u64 n)))))
 
 (decl select_addi (Type) AluOPRRI)
-(rule (select_addi (fits_in_32 ty)) (AluOPRRI.Addiw))
+(rule 1 (select_addi (fits_in_32 ty)) (AluOPRRI.Addiw))
 (rule (select_addi (fits_in_64 ty)) (AluOPRRI.Addi))
 
 
@@ -871,7 +871,7 @@
       (high Reg (gen_bit_not (value_regs_get val 1))))
     (value_regs low high)))
 
-(decl lower_bit_reverse (Reg Type)Reg)
+(decl lower_bit_reverse (Reg Type) Reg)
 
 (rule
   (lower_bit_reverse r $I8)
@@ -900,36 +900,36 @@
     (gen_brev8 tmp $I64)))
 
 
-(decl imm12_zero()Imm12)
+(decl imm12_zero () Imm12)
 (rule 
   (imm12_zero)
   (imm12_const 0))
 
-(decl lower_ctz (Type Reg)Reg)
+(decl lower_ctz (Type Reg) Reg)
 (rule
   (lower_ctz ty x)
-  (if-let $false(has_b))
+  (if-let $false (has_b))
   (gen_cltz $false x ty))
 
-(rule
+(rule 2
   (lower_ctz $I64 x)
-  (if-let $true(has_b))
+  (if-let $true (has_b))
   (alu_rr_funct12 (AluOPRRI.Ctz) x))
 
-(rule
+(rule 2
   (lower_ctz $I32 x)
-  (if-let $true(has_b))
+  (if-let $true (has_b))
   (alu_rr_funct12 (AluOPRRI.Ctzw) x))
 ;;;; for I8 and I16
-(rule
+(rule 1
   (lower_ctz ty x)
-  (if-let $true(has_b))
+  (if-let $true (has_b))
   (let
     ((tmp Reg (alu_rr_imm12 (AluOPRRI.Bseti) x (imm12_const (ty_bits ty)))))
     (alu_rr_funct12 (AluOPRRI.Ctzw) x)))
 
 ;;;; 
-(decl lower_ctz_128(ValueRegs)ValueRegs)
+(decl lower_ctz_128 (ValueRegs) ValueRegs)
 (rule
   (lower_ctz_128 x)
   (let
@@ -940,33 +940,33 @@
       ;;;
       (constant_64 Reg (load_u64_constant 64))
       ;;; 
-      (high Reg(gen_select_reg (IntCC.Equal) constant_64 low high_part (zero_reg)))
+      (high Reg (gen_select_reg (IntCC.Equal) constant_64 low high_part (zero_reg)))
 
       ;; add low and high together.
       (result Reg (alu_add low high)))
     (value_regs result (zero_reg))))
 
 (convert u8 i32 u8_as_i32)
-(decl u8_as_i32(u8) i32)
+(decl u8_as_i32 (u8) i32)
 (extern constructor u8_as_i32 u8_as_i32)
 
 (convert u8 u64 u8_as_u64)
-(decl lower_clz (Type Reg)Reg)
+(decl lower_clz (Type Reg) Reg)
 (rule
   (lower_clz ty rs)
   (if-let $false (has_b))
   (gen_cltz $true rs ty))
-(rule 
+(rule 2
   (lower_clz $I64 r)
   (if-let $true (has_b))
   (alu_rr_funct12 (AluOPRRI.Clz) r))
-(rule 
+(rule 2
   (lower_clz $I32 r)
   (if-let $true (has_b))
   (alu_rr_funct12 (AluOPRRI.Clzw) r))
 
 ;;; for I8 and I16
-(rule 
+(rule 1
   (lower_clz ty r)
   (if-let $true (has_b))
   (let
@@ -979,14 +979,14 @@
     result))
 
 ;; paramter is "intcc compare_a compare_b rs1 rs2". 
-(decl gen_select_reg (IntCC Reg Reg Reg Reg)Reg)
+(decl gen_select_reg (IntCC Reg Reg Reg Reg) Reg)
 (extern constructor gen_select_reg gen_select_reg)
 
 ;; load a constant into reg.
-(decl load_u64_constant (u64)Reg)
+(decl load_u64_constant (u64) Reg)
 (extern constructor load_u64_constant load_u64_constant)
 
-(decl lower_clz_i128 (ValueRegs)ValueRegs)
+(decl lower_clz_i128 (ValueRegs) ValueRegs)
 (rule
   (lower_clz_i128 x)
   (let
@@ -1010,13 +1010,13 @@
     tmp))
 
 ;; val is_signed from_bits to_bits
-(decl lower_extend(Reg bool u8 u8)ValueRegs)
-(rule
+(decl lower_extend (Reg bool u8 u8) ValueRegs)
+(rule -1
   (lower_extend r is_signed from_bits to_bits)
   (gen_extend r is_signed from_bits to_bits))
 
 ;;;; for I128 signed extend.
-(rule
+(rule 1
   (lower_extend r $true 64 128)
   (let
     ((tmp Reg (alu_rrr (AluOPRRR.Slt) r (zero_reg)))
@@ -1033,7 +1033,7 @@
 
 
 ;;;; for I128 unsigned extend.
-(rule
+(rule 1
   (lower_extend r $false 64 128)
   (value_regs (gen_move2 r $I64 $I64) (zero_reg)))
 
@@ -1042,10 +1042,10 @@
   (value_regs (gen_extend r $false from_bits 64) (zero_reg)))
 
 ;; extract the sign bit of integer.
-(decl ext_sign_bit(Type Reg) Reg)
+(decl ext_sign_bit (Type Reg) Reg)
 (extern constructor ext_sign_bit ext_sign_bit)
 
-(decl lower_b128_binary(AluOPRRR ValueRegs ValueRegs) ValueRegs)
+(decl lower_b128_binary (AluOPRRR ValueRegs ValueRegs) ValueRegs)
 (rule 
   (lower_b128_binary op a b)
   (let
@@ -1055,8 +1055,8 @@
       (high Reg (alu_rrr op (value_regs_get a 1) (value_regs_get b 1))))
     (value_regs low high)))
 
-(decl lower_umlhi (Type Reg Reg)Reg)
-(rule
+(decl lower_umlhi (Type Reg Reg) Reg)
+(rule 1
   (lower_umlhi $I64 rs1 rs2)
   (alu_rrr (AluOPRRR.Mulhu) rs1 rs2))
 
@@ -1066,8 +1066,8 @@
     ((tmp Reg (alu_rrr (AluOPRRR.Mul) (ext_int_if_need $false rs1 ty) (ext_int_if_need $false rs2 ty))))
     (alu_rr_imm12 (AluOPRRI.Srli) tmp (imm12_const (ty_bits ty)))))
 
-(decl lower_smlhi (Type Reg Reg)Reg)
-(rule
+(decl lower_smlhi (Type Reg Reg) Reg)
+(rule 1
   (lower_smlhi $I64 rs1 rs2)
   (alu_rrr (AluOPRRR.Mulh) rs1 rs2))
 
@@ -1079,12 +1079,12 @@
 
 
 ;;; has extension B??
-(decl pure has_b() bool)
+(decl pure has_b () bool)
 (extern constructor has_b has_b)
 
-(decl lower_rotl(Type Reg Reg) Reg)
+(decl lower_rotl (Type Reg Reg) Reg)
 
-(rule
+(rule 1
   (lower_rotl $I64 rs amount)
   (if-let $true (has_b))
   (alu_rrr (AluOPRRR.Rol) rs amount))
@@ -1094,7 +1094,7 @@
   (if-let $false (has_b))
   (lower_rotl_shift $I64 rs amount))
 
-(rule
+(rule 1
   (lower_rotl $I32 rs amount)
   (if-let $true (has_b))
   (alu_rrr (AluOPRRR.Rolw) rs amount))
@@ -1104,12 +1104,12 @@
   (if-let $false (has_b))
   (lower_rotl_shift $I32 rs amount))
 
-(rule
+(rule -1
   (lower_rotl ty rs amount)
   (lower_rotl_shift ty rs amount))
 
 ;;; using shift to implement rotl.
-(decl lower_rotl_shift(Type Reg Reg) Reg)
+(decl lower_rotl_shift (Type Reg Reg) Reg)
 
 ;;; for I8 and I16 ... 
 (rule
@@ -1119,21 +1119,21 @@
       (shamt Reg (value_regs_get x 0))
       (len_sub_shamt Reg (value_regs_get x 1))
       ;;
-      (part1 Reg(alu_rrr (AluOPRRR.Sll) rs shamt))
+      (part1 Reg (alu_rrr (AluOPRRR.Sll) rs shamt))
       ;;
-      (part2 Reg(alu_rrr (AluOPRRR.Srl) rs len_sub_shamt))
+      (part2 Reg (alu_rrr (AluOPRRR.Srl) rs len_sub_shamt))
       (part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) part2)))
     (alu_rrr (AluOPRRR.Or) part1 part3)))
 
 
 ;;;; construct shift amount
 ;;;; this will return shift amount and (ty_bits - "shift amount")
-(decl gen_shamt(Type Reg) ValueRegs)
+(decl gen_shamt (Type Reg) ValueRegs)
 (extern constructor gen_shamt gen_shamt)
 
-(decl lower_rotr(Type Reg Reg) Reg)
+(decl lower_rotr (Type Reg Reg) Reg)
 
-(rule
+(rule 1
   (lower_rotr $I64 rs amount)
   (if-let $true (has_b))
   (alu_rrr (AluOPRRR.Ror) rs amount))
@@ -1142,7 +1142,7 @@
   (if-let $false (has_b))
   (lower_rotr_shift $I64 rs amount))
 
-(rule
+(rule 1
   (lower_rotr $I32 rs amount)
   (if-let $true (has_b))
   (alu_rrr (AluOPRRR.Rorw) rs amount))
@@ -1152,7 +1152,7 @@
   (if-let $false (has_b))
   (lower_rotr_shift $I32 rs amount))
 
-(rule
+(rule -1
   (lower_rotr ty rs amount)
   (lower_rotr_shift ty rs amount))
 
@@ -1166,14 +1166,14 @@
       (shamt Reg (value_regs_get x 0))
       (len_sub_shamt Reg (value_regs_get x 1))
       ;;
-      (part1 Reg(alu_rrr (AluOPRRR.Srl) rs shamt))
+      (part1 Reg (alu_rrr (AluOPRRR.Srl) rs shamt))
       ;;
-      (part2 Reg(alu_rrr (AluOPRRR.Sll) rs len_sub_shamt))
+      (part2 Reg (alu_rrr (AluOPRRR.Sll) rs len_sub_shamt))
       ;;
       (part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) part2)))
     (alu_rrr (AluOPRRR.Or) part1 part3)))
 
-(decl lower_cls(Reg Type) Reg)
+(decl lower_cls (Reg Type) Reg)
 (rule
   (lower_cls r ty)
   (let
@@ -1185,7 +1185,7 @@
       (tmp3 Reg (lower_clz ty tmp2)))
     (alu_rr_imm12 (AluOPRRI.Addi) tmp3 (imm12_const -1))))
 
-(decl gen_cltz(bool Reg Type) Reg)
+(decl gen_cltz (bool Reg Type) Reg)
 (rule
   (gen_cltz leading rs ty)
   (let
@@ -1195,7 +1195,7 @@
       (_ Unit (emit (MInst.Cltz leading sum step tmp rs ty))))
     (writable_reg_to_reg sum)))
 
-(decl gen_popcnt(Reg Type) Reg)
+(decl gen_popcnt (Reg Type) Reg)
 (rule
   (gen_popcnt rs ty)
   (let
@@ -1206,14 +1206,14 @@
     (writable_reg_to_reg sum)))
 
 (decl lower_popcnt (Reg Type) Reg)
-(rule (lower_popcnt rs ty )
+(rule 1 (lower_popcnt rs ty )
   (if-let $true (has_b))
   (alu_rr_funct12 (AluOPRRI.Cpop) (ext_int_if_need $false rs ty)))
 (rule (lower_popcnt rs ty)
   (if-let $false (has_b))
   (gen_popcnt rs ty))
 
-(decl lower_popcnt_i128(ValueRegs) ValueRegs)
+(decl lower_popcnt_i128 (ValueRegs) ValueRegs)
 (rule 
   (lower_popcnt_i128 a)
   (let
@@ -1225,7 +1225,7 @@
       (result Reg (alu_add low high)))
     (value_regs result (zero_reg))))
 
-(decl lower_i128_rotl(ValueRegs ValueRegs) ValueRegs)
+(decl lower_i128_rotl (ValueRegs ValueRegs) ValueRegs)
 (rule
   (lower_i128_rotl x y)
   (let
@@ -1253,7 +1253,7 @@
     )))
 
 
-(decl lower_i128_rotr(ValueRegs ValueRegs) ValueRegs)
+(decl lower_i128_rotr (ValueRegs ValueRegs) ValueRegs)
 (rule
   (lower_i128_rotr x y)
   (let
@@ -1282,7 +1282,7 @@
     )))
 
 
-(decl lower_i128_ishl(ValueRegs ValueRegs)ValueRegs)
+(decl lower_i128_ishl (ValueRegs ValueRegs) ValueRegs)
 (rule
   (lower_i128_ishl x y)
   (let
@@ -1303,7 +1303,7 @@
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 (zero_reg) low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 low high))))
 
-(decl lower_i128_ushr(ValueRegs ValueRegs)ValueRegs)
+(decl lower_i128_ushr (ValueRegs ValueRegs) ValueRegs)
 (rule
   (lower_i128_ushr x y)
   (let
@@ -1327,7 +1327,7 @@
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 (zero_reg) high))))
 
 
-(decl lower_i128_sshr(ValueRegs ValueRegs)ValueRegs)
+(decl lower_i128_sshr (ValueRegs ValueRegs) ValueRegs)
 (rule
   (lower_i128_sshr x y)
   (let
@@ -1346,21 +1346,21 @@
       ;;
       (high Reg (alu_rrr (AluOPRRR.Sra) (value_regs_get x 1) shamt))
       ;;
-      (const_neg_1 Reg(load_imm12 -1))
+      (const_neg_1 Reg (load_imm12 -1))
       ;;
-      (high_replacement Reg(gen_select_reg (IntCC.SignedLessThan) (value_regs_get x 1) (zero_reg) const_neg_1 (zero_reg))))
+      (high_replacement Reg (gen_select_reg (IntCC.SignedLessThan) (value_regs_get x 1) (zero_reg) const_neg_1 (zero_reg))))
     (value_regs 
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 high low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt const64 high_replacement high))))
 
-(decl load_imm12(i32) Reg)
+(decl load_imm12 (i32) Reg)
 (rule
   (load_imm12 x)
   (alu_rr_imm12 (AluOPRRI.Addi) (zero_reg) (imm12_const x)))
 
 ;; Let me always get low part of ValueRegs.
 ;; Sometimes I only need lowest bits, like `I8 << I128`.
-(decl valueregs_2_reg(Reg) Value)
+(decl valueregs_2_reg (Reg) Value)
 (extern extractor infallible valueregs_2_reg valueregs_2_reg)
 
 (decl lower_cls_i128 (ValueRegs) ValueRegs)
@@ -1391,14 +1391,14 @@
 (extern constructor imm12_and imm12_and)
 
 
-(decl gen_amode(Reg Offset32 Type)AMode)
+(decl gen_amode (Reg Offset32 Type) AMode)
 (extern constructor gen_amode gen_amode)
 
-(decl offset32_imm (i32)Offset32)
+(decl offset32_imm (i32) Offset32)
 (extern constructor offset32_imm offset32_imm)
 
 ;; helper function to load from memory.
-(decl gen_load(Reg Offset32 LoadOP MemFlags Type)Reg)
+(decl gen_load (Reg Offset32 LoadOP MemFlags Type) Reg)
 (rule 
   (gen_load p offset op flags ty) 
   (let
@@ -1406,7 +1406,7 @@
       (_ Unit (emit (MInst.Load tmp op flags (gen_amode p offset $I64)))))
     tmp))
 
-(decl gen_load_128(Reg Offset32 MemFlags)ValueRegs)
+(decl gen_load_128 (Reg Offset32 MemFlags) ValueRegs)
 (rule 
   (gen_load_128 p offset flags)
   (let
@@ -1414,20 +1414,20 @@
       (high Reg (gen_load p (offset32_add offset 8) (LoadOP.Ld) flags $I64)))
     (value_regs low high)))
 
-(decl default_memflags ()MemFlags)
+(decl default_memflags () MemFlags)
 (extern constructor default_memflags default_memflags)
 
-(decl offset32_add(Offset32 i64)Offset32)
+(decl offset32_add (Offset32 i64) Offset32)
 (extern constructor offset32_add offset32_add)
 
 ;; helper function to store to memory.
-(decl gen_store(Reg Offset32 StoreOP MemFlags Reg)InstOutput)
+(decl gen_store (Reg Offset32 StoreOP MemFlags Reg) InstOutput)
 (rule 
   (gen_store base offset op flags src)
   (side_effect (SideEffectNoResult.Inst (MInst.Store (gen_amode base offset $I64) op flags src)))
 )
 
-(decl gen_store_128(Reg Offset32 MemFlags ValueRegs)InstOutput)
+(decl gen_store_128 (Reg Offset32 MemFlags ValueRegs) InstOutput)
 (rule 
   (gen_store_128 p offset flags src)
   (side_effect 
@@ -1440,7 +1440,7 @@
 
 ;;helper function.
 ;;construct an atomic instruction.
-(decl gen_atomic (AtomicOP Reg Reg AMO)Reg)
+(decl gen_atomic (AtomicOP Reg Reg AMO) Reg)
 (rule 
   (gen_atomic op addr src amo)
   (let
@@ -1449,7 +1449,7 @@
     tmp))
 
 ;; helper function 
-(decl get_atomic_rmw_op(Type AtomicRmwOp)AtomicOP)
+(decl get_atomic_rmw_op (Type AtomicRmwOp) AtomicOP)
 (rule 
   (get_atomic_rmw_op $I32 (AtomicRmwOp.Add))
   (AtomicOP.AmoaddW))
@@ -1522,11 +1522,11 @@
   (get_atomic_rmw_op $I64 (AtomicRmwOp.Xor))
   (AtomicOP.AmoxorD))
 
-(decl atomic_amo()AMO)
+(decl atomic_amo () AMO)
 (extern constructor atomic_amo atomic_amo)
 
 
-(decl gen_atomic_load(Reg Type)Reg)
+(decl gen_atomic_load (Reg Type) Reg)
 (rule
   (gen_atomic_load p ty)
   (let
@@ -1535,7 +1535,7 @@
     (writable_reg_to_reg tmp)))
 
 ;;; 
-(decl gen_atomic_store(Reg Type Reg)InstOutput)
+(decl gen_atomic_store (Reg Type Reg) InstOutput)
 (rule
   (gen_atomic_store p ty src)
   (side_effect (SideEffectNoResult.Inst (MInst.AtomicStore src ty p)))
@@ -1581,24 +1581,24 @@
   (FpuOPRRR.FdivD))
 
 
-(decl move_f_to_x(Reg Type) Reg)
+(decl move_f_to_x (Reg Type) Reg)
 (extern constructor move_f_to_x move_f_to_x)
 
-(decl move_x_to_f(Reg Type) Reg)
+(decl move_x_to_f (Reg Type) Reg)
 (extern constructor move_x_to_f move_x_to_f)
 
 
 ;;float copy sign bit op.
-(decl f_copysign_op (Type)FpuOPRRR)
+(decl f_copysign_op (Type) FpuOPRRR)
 (rule (f_copysign_op $F32) (FpuOPRRR.FsgnjS))
 (rule (f_copysign_op $F64) (FpuOPRRR.FsgnjD))
 
 ;;float copy neg sign bit op.
-(decl f_copy_neg_sign_op (Type)FpuOPRRR)
+(decl f_copy_neg_sign_op (Type) FpuOPRRR)
 (rule (f_copy_neg_sign_op $F32) (FpuOPRRR.FsgnjnS))
 (rule (f_copy_neg_sign_op $F64) (FpuOPRRR.FsgnjnD))
 
-(decl fabs_copy_sign(Type)FpuOPRRR)
+(decl fabs_copy_sign (Type) FpuOPRRR)
 (rule (fabs_copy_sign $F32) (FpuOPRRR.FsgnjxS))
 (rule (fabs_copy_sign $F64) (FpuOPRRR.FsgnjxD))
 
@@ -1607,16 +1607,16 @@
 
 
 ;; parameter are 'source register' 'in_ty' 'out_ty'
-(decl gen_move2(Reg Type Type) Reg)
+(decl gen_move2 (Reg Type Type) Reg)
 (extern constructor gen_move2 gen_move2)
 
 ;;; generate a move and reinterprete the data
 ;; parameter is "rs" "in_type" "out_type"
-(decl gen_moves(ValueRegs Type Type) ValueRegs)
+(decl gen_moves (ValueRegs Type Type) ValueRegs)
 (extern constructor gen_moves gen_moves)
 
 ;;
-(decl gen_reference_check(ReferenceCheckOP Reg)Reg)
+(decl gen_reference_check (ReferenceCheckOP Reg) Reg)
 (rule
   (gen_reference_check op r)
   (let
@@ -1625,7 +1625,7 @@
     tmp))
 
 ;; 
-(decl gen_select(Type Reg ValueRegs ValueRegs)ValueRegs)
+(decl gen_select (Type Reg ValueRegs ValueRegs) ValueRegs)
 (rule 
   (gen_select ty c x y)
   (let 
@@ -1637,16 +1637,16 @@
 
 ;;; clone WritableReg 
 ;;; if not rust compiler will complain about use moved value.
-(decl vec_writable_clone(VecWritableReg)VecWritableReg)
+(decl vec_writable_clone (VecWritableReg) VecWritableReg)
 (extern constructor vec_writable_clone vec_writable_clone)
 
-(decl vec_writable_to_regs(VecWritableReg)ValueRegs)
+(decl vec_writable_to_regs (VecWritableReg) ValueRegs)
 (extern constructor vec_writable_to_regs vec_writable_to_regs)
 
-(decl alloc_vec_writable(Type)VecWritableReg)
+(decl alloc_vec_writable (Type) VecWritableReg)
 (extern constructor alloc_vec_writable alloc_vec_writable)
 
-(decl gen_bitselect(Type Reg Reg Reg)Reg)
+(decl gen_bitselect (Type Reg Reg Reg) Reg)
 (rule
   (gen_bitselect ty c x y)
   (let
@@ -1659,12 +1659,12 @@
       (result Reg (alu_rrr (AluOPRRR.Or) tmp_x tmp_y)))
     result))
 
-(decl gen_bint(Reg)Reg)
+(decl gen_bint (Reg) Reg)
 (rule 
   (gen_bint r)
   (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const 1)))
 
-(decl gen_int_select(Type IntSelectOP ValueRegs ValueRegs)ValueRegs)
+(decl gen_int_select (Type IntSelectOP ValueRegs ValueRegs) ValueRegs)
 (rule
   (gen_int_select ty op x y)
   (let 
@@ -1674,19 +1674,19 @@
       (_ Unit (emit (MInst.IntSelect op (vec_writable_clone dst) x y ty))))
     (vec_writable_to_regs dst)))
 
-(decl udf (TrapCode)InstOutput)
+(decl udf (TrapCode) InstOutput)
 (rule
   (udf code)
   (side_effect (SideEffectNoResult.Inst (MInst.Udf code))))
 
-(decl load_op (Type)LoadOP)
+(decl load_op (Type) LoadOP)
 (extern constructor load_op load_op)
 
 (decl store_op (Type) StoreOP)
 (extern constructor store_op store_op)
 
 ;; bool is "is_signed"
-(decl int_load_op(bool u8)LoadOP)
+(decl int_load_op (bool u8) LoadOP)
 (rule 
   (int_load_op $false 8)
   (LoadOP.Lbu))
@@ -1713,25 +1713,25 @@
   (LoadOP.Ld))
 
 ;;;; load extern name 
-(decl load_ext_name(ExternalName i64) Reg)
+(decl load_ext_name (ExternalName i64) Reg)
 (extern constructor load_ext_name load_ext_name)
 
-(decl int_convert_2_float_op(Type bool Type)FpuOPRR)
+(decl int_convert_2_float_op (Type bool Type) FpuOPRR)
 (extern constructor int_convert_2_float_op int_convert_2_float_op)
 
 ;;;; 
-(decl gen_fcvt_int(bool Reg bool Type Type)Reg)
+(decl gen_fcvt_int (bool Reg bool Type Type) Reg)
 (rule
   (gen_fcvt_int is_sat rs is_signed in_type out_type)
   (let
     ((result WritableReg (temp_writable_reg out_type))
       (tmp WritableReg (temp_writable_reg $F64))
-      (_ Unit(emit (MInst.FcvtToInt is_sat result tmp rs is_signed in_type out_type))))
+      (_ Unit (emit (MInst.FcvtToInt is_sat result tmp rs is_signed in_type out_type))))
     result))
 
 ;;;; in_type out_type
 ;;;; out_type is returned.
-(decl pure valid_bextend_ty(Type Type) Type)
+(decl pure valid_bextend_ty (Type Type) Type)
 (extern constructor valid_bextend_ty valid_bextend_ty)
 
 
@@ -1739,7 +1739,7 @@
 ;;; 1. need move into x reister.
 ;;; 2. do the operation.
 ;;; 3. move back.
-(decl lower_float_binary(AluOPRRR Reg Reg Type)Reg)
+(decl lower_float_binary (AluOPRRR Reg Reg Type) Reg)
 (rule
   (lower_float_binary op rs1 rs2 ty)
   (let
@@ -1751,7 +1751,7 @@
     (move_x_to_f tmp ty)))
 
 ;;;;
-(decl lower_float_bnot(Reg Type)Reg)
+(decl lower_float_bnot (Reg Type) Reg)
 (rule 
   (lower_float_bnot x ty)
   (let 
@@ -1763,7 +1763,7 @@
     (move_x_to_f tmp2 ty)))
 
 
-(decl convert_valueregs_reg(ValueRegs)Reg)
+(decl convert_valueregs_reg (ValueRegs) Reg)
 (rule
   (convert_valueregs_reg x)
   (value_regs_get x 0))
@@ -1772,16 +1772,16 @@
 ;;; intcc is not equal nor ne.
 ;;; intcc is >= <= ... 
 ;;; return alongside with if signed.
-(decl intcc_is_gt_etc (IntCC bool)IntCC)
+(decl intcc_is_gt_etc (IntCC bool) IntCC)
 (extern extractor intcc_is_gt_etc intcc_is_gt_etc)
 
-(decl intcc_is_eq_or_ne (IntCC)IntCC)
+(decl intcc_is_eq_or_ne (IntCC) IntCC)
 (extern extractor intcc_is_eq_or_ne intcc_is_eq_or_ne)
 
 ;;; lower icmp 
-(decl lower_icmp(IntCC ValueRegs ValueRegs Type) Reg)
+(decl lower_icmp (IntCC ValueRegs ValueRegs Type) Reg)
 ;;; eq or ne.
-(rule
+(rule -1
   (lower_icmp (intcc_is_eq_or_ne cc) x y ty)
   (gen_icmp cc (ext_int_if_need $false x ty) (ext_int_if_need $false y ty) ty))
 ;;;; singed >= ... 
@@ -1793,7 +1793,7 @@
   (lower_icmp (intcc_is_gt_etc cc $false) x y ty)
   (gen_icmp cc (ext_int_if_need $false x ty ) (ext_int_if_need $false y ty) ty))
 
-(decl lower_icmp_over_flow(ValueRegs ValueRegs Type)Reg)
+(decl lower_icmp_over_flow (ValueRegs ValueRegs Type) Reg)
 
 ;;; for I8 I16 I32
 (rule 1
@@ -1838,12 +1838,12 @@
       (tmp3 Reg (alu_rrr (AluOPRRR.Or) tmp1 tmp2)))
     (gen_extend tmp3 $true 1 64)))
 
-(decl i128_sub (ValueRegs ValueRegs)ValueRegs)
+(decl i128_sub (ValueRegs ValueRegs) ValueRegs)
 (rule
   (i128_sub x y )
   (let
     (;; low part.
-      (low Reg(alu_rrr (AluOPRRR.Sub) (value_regs_get x 0) (value_regs_get y 0)))
+      (low Reg (alu_rrr (AluOPRRR.Sub) (value_regs_get x 0) (value_regs_get y 0)))
       ;; compute borrow.
       (borrow Reg (alu_rrr (AluOPRRR.SltU) (value_regs_get x 0) low))
       ;; 
@@ -1853,7 +1853,7 @@
     (value_regs low high)))
 
 
-(decl gen_fabs(Reg Type)Reg)
+(decl gen_fabs (Reg Type) Reg)
 (rule
   (gen_fabs x ty)
   (fpu_rrr (fabs_copy_sign ty) ty x x))
@@ -1861,7 +1861,7 @@
 ;;; right now only return if overflow.
 (decl lower_uadd_overflow (Reg Reg Type) Reg)
 
-(rule
+(rule 1
   (lower_uadd_overflow x y $I64)
   (let
     ((tmp Reg (alu_add x y)))
@@ -1878,10 +1878,10 @@
 (decl inst_output_get (InstOutput u8) ValueRegs)
 (extern constructor inst_output_get inst_output_get)
 
-(decl label_to_br_target (MachLabel)BranchTarget)
+(decl label_to_br_target (MachLabel) BranchTarget)
 (extern constructor label_to_br_target label_to_br_target)
 
-(decl gen_jump (MachLabel)MInst)
+(decl gen_jump (MachLabel) MInst)
 (rule
   (gen_jump v)
   (MInst.Jal (label_to_br_target v)))
@@ -1936,15 +1936,15 @@
   (lower_branch (br_table index _ _) targets)
   (lower_br_table index targets))
 
-(decl x_reg(u8) Reg)
+(decl x_reg (u8) Reg)
 (extern constructor x_reg x_reg)
 
-(decl load_ra ()Reg)
+(decl load_ra () Reg)
 (extern constructor load_ra load_ra)
 
 ;;; 
-(decl gen_andn(Reg Reg) Reg)
-(rule
+(decl gen_andn (Reg Reg) Reg)
+(rule 1
   (gen_andn rs1 rs2)
   (if-let $true (has_b))
   (alu_rrr (AluOPRRR.Andn) rs1 rs2))
@@ -1957,8 +1957,8 @@
     (alu_and rs1 tmp)))
 
 ;;; 
-(decl gen_orn (Reg Reg)Reg)
-(rule
+(decl gen_orn (Reg Reg) Reg)
+(rule 1
   (gen_orn rs1 rs2 )
   (if-let $true (has_b))
   (alu_rrr (AluOPRRR.Orn) rs1 rs2))
@@ -1970,8 +1970,8 @@
     ((tmp Reg (gen_bit_not rs2)))
     (alu_rrr (AluOPRRR.Or) rs1 tmp)))
 
-(decl gen_rev8(Reg)Reg)
-(rule
+(decl gen_rev8 (Reg) Reg)
+(rule 1
   (gen_rev8 rs)
   (if-let $true (has_b))
   (alu_rr_funct12 (AluOPRRI.Rev8) rs))
@@ -1985,11 +1985,11 @@
       (step WritableReg (temp_writable_reg $I64))
       (_ Unit (emit (MInst.Rev8 rs step tmp rd))))
     (writable_reg_to_reg rd)))
-(decl pure has_zbkb()bool)
+(decl pure has_zbkb () bool)
 (extern constructor has_zbkb has_zbkb)
 
 (decl gen_brev8 (Reg Type) Reg)
-(rule
+(rule 1
   (gen_brev8 rs _)
   (if-let $true (has_zbkb))
   (alu_rr_funct12 (AluOPRRI.Brev8) rs))
@@ -2005,14 +2005,14 @@
     (writable_reg_to_reg rd)))
 
 ;;; x ^ ~y
-(decl gen_xor_not(Reg Reg) Reg)
+(decl gen_xor_not (Reg Reg) Reg)
 (rule
   (gen_xor_not x y)
   (let
     ((tmp Reg (gen_bit_not y)))
     (alu_rrr (AluOPRRR.Xor) x tmp)))
 
-(decl lower_iabs(Reg Type)Reg)
+(decl lower_iabs (Reg Type) Reg)
 (rule
   (lower_iabs r ty)
   (let
@@ -2025,22 +2025,22 @@
 (rule (output_ifcout reg)
       (output_pair reg (value_regs_invalid)))
 
-(decl gen_trapff (FloatCC Reg Reg Type TrapCode)InstOutput)
+(decl gen_trapff (FloatCC Reg Reg Type TrapCode) InstOutput)
 (rule
   (gen_trapff cc a b ty trap_code)
   (let
     ((tmp WritableReg (temp_writable_reg $I64)))
-    (side_effect (SideEffectNoResult.Inst(MInst.TrapFf cc a b ty tmp trap_code)))))
+    (side_effect (SideEffectNoResult.Inst (MInst.TrapFf cc a b ty tmp trap_code)))))
 
-(decl gen_trapif (Reg TrapCode)InstOutput)
+(decl gen_trapif (Reg TrapCode) InstOutput)
 (rule
   (gen_trapif test trap_code)
-  (side_effect (SideEffectNoResult.Inst(MInst.TrapIf test trap_code))))
+  (side_effect (SideEffectNoResult.Inst (MInst.TrapIf test trap_code))))
 
-(decl gen_trapifc (IntCC Reg Reg TrapCode)InstOutput)
+(decl gen_trapifc (IntCC Reg Reg TrapCode) InstOutput)
 (rule
   (gen_trapifc cc a b trap_code)
-  (side_effect (SideEffectNoResult.Inst(MInst.TrapIfC a b cc trap_code))))
+  (side_effect (SideEffectNoResult.Inst (MInst.TrapIfC a b cc trap_code))))
 
 (decl shift_int_to_most_significant (Reg Type) Reg)
 (extern constructor shift_int_to_most_significant shift_int_to_most_significant)
@@ -2058,7 +2058,7 @@
       (test Reg (alu_and t1 t2)))
     (gen_trapif test (TrapCode.IntegerOverflow))))
 
-(decl gen_div_by_zero(Reg)InstOutput)
+(decl gen_div_by_zero (Reg) InstOutput)
 (rule
   (gen_div_by_zero r)
   (gen_trapifc (IntCC.Equal) (zero_reg) r (TrapCode.IntegerDivisionByZero)))
@@ -2072,13 +2072,13 @@
 (extern constructor gen_call_indirect gen_call_indirect)
 
 ;;; this is trying to imitate aarch64 `madd` instruction.
-(decl madd(Reg Reg Reg)Reg)
+(decl madd (Reg Reg Reg) Reg)
 (rule 
   (madd n m a) 
   (let
     ((t Reg (alu_rrr (AluOPRRR.Mul) n m)))
     (alu_add t a)))
 
-(decl umulh(Reg Reg)Reg)
+(decl umulh (Reg Reg) Reg)
 (rule (umulh a b)
   (alu_rrr (AluOPRRR.Mulhu) a b))
