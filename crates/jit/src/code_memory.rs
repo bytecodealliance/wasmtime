@@ -60,6 +60,8 @@ impl CodeMemory {
             rustix::process::membarrier(
                 rustix::process::MembarrierCommand::RegisterPrivateExpeditedSyncCore,
             )
+            // Fallback for older kernels that don't support the above command.
+            .or_else(|_| rustix::process::membarrier(rustix::process::MembarrierCommand::Global))
             .unwrap();
         }
 
