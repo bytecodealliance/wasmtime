@@ -64,8 +64,11 @@ impl<'x, 'a: 'x, A: ABI, C: MacroAssembler> CompilationEnv<'x, 'a, A, C> {
     // 3. Epilogue
     // 4. Stack checks
     /// Emit the function body to machine code
-    pub fn emit(&mut self) -> Result<()> {
-        self.emit_start().and(self.emit_body()).and(self.emit_end())
+    pub fn emit(&mut self) -> Result<Vec<String>> {
+        self.emit_start().and(self.emit_body()).and(self.emit_end());
+        let buf = self.masm.finalize();
+	let code = Vec::from(buf);
+        Ok(code)
     }
 
     // Emit the usual function start instruction sequence
@@ -88,7 +91,7 @@ impl<'x, 'a: 'x, A: ABI, C: MacroAssembler> CompilationEnv<'x, 'a, A, C> {
 
     // Emit the usual function end instruction sequence
     fn emit_end(&mut self) -> Result<()> {
-        Ok(())
+	Ok(())
     }
 
     fn spill_register_arguments(&mut self) {

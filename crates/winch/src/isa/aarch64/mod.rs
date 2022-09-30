@@ -35,7 +35,7 @@ impl TargetIsa for Aarch64 {
         &self,
         sig: &WasmFuncType,
         body: &mut FunctionBodyData,
-    ) -> Result<&'static str> {
+    ) -> Result<Vec<String>> {
         let abi = abi::Aarch64ABI::default();
         let asm = masm::MacroAssembler::default();
         let env = CompilationEnv::new(sig, body, abi, asm)?;

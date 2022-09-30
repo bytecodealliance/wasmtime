@@ -81,7 +81,7 @@ pub trait TargetIsa: Send + Sync {
         &self,
         sig: &WasmFuncType,
         body: &mut FunctionBodyData,
-    ) -> Result<&'static str>;
+    ) -> Result<Vec<String>>;
 
     // TODO: Rename this function default_call_conv?
     /// Get the default calling convention of the underlying target triple

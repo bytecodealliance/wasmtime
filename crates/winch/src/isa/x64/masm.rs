@@ -59,7 +59,7 @@ impl Masm for MacroAssembler {
 
     fn epilogue(&mut self) {}
 
-    fn finalize(self) -> Vec<String> {
+    fn finalize(&mut self) -> &[String] {
         self.asm.finalize()
     }
 }

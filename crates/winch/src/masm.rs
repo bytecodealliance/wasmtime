@@ -36,5 +36,5 @@ pub(crate) trait MacroAssembler {
 
     /// Finalize the assembly and return the result
     // NOTE Interim, debug approach
-    fn finalize(self) -> Vec<String>;
+    fn finalize(&mut self) -> &[String];
 }

@@ -35,7 +35,7 @@ impl TargetIsa for X64 {
         &self,
         sig: &WasmFuncType,
         body: &mut FunctionBodyData,
-    ) -> Result<&'static str> {
+    ) -> Result<Vec<String>> {
         // Temporarily returns a '&static str
         // TODO
         // 1. Derive calling convention (panic if unsupported)
@@ -46,8 +46,8 @@ impl TargetIsa for X64 {
         // 4. Create a compilation_env and call `emit`
         let abi = abi::X64ABI::default();
         let asm = masm::MacroAssembler::default();
-        let env = CompilationEnv::new(sig, body, abi, asm)?;
+        let mut env = CompilationEnv::new(sig, body, abi, asm)?;
 
-        todo!()
+        env.emit()
     }
 }

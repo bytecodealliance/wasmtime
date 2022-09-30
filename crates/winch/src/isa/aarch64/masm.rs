@@ -32,7 +32,7 @@ impl Masm for MacroAssembler {
         0u32
     }
 
-    fn finalize(self) -> Vec<String> {
+    fn finalize(&mut self) -> &[String] {
         todo!()
     }
 }
