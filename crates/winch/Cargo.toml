@@ -16,7 +16,9 @@ cranelift-codegen = { workspace = true, features = ["x86", "arm64"] }
 # In the long term, we'll factor out the register
 # abstractions from regalloc2 for them to be consumed
 # from Winch and Cranelift
-regalloc2 = { version = "0.4.1" }
+regalloc2 = "0.4.1"
+structopt = "0.3"
+wat = "1.0.47"
 
 [features]
 default = ["all-arch"]
