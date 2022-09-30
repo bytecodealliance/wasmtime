@@ -299,7 +299,6 @@ impl<'a> FunctionBuilder<'a> {
     pub fn create_block(&mut self) -> Block {
         let block = self.func.dfg.make_block();
         self.func_ctx.ssa.declare_block(block);
-        self.func_ctx.status[block] = BlockStatus::default();
         block
     }
 
