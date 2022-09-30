@@ -39,7 +39,7 @@ macro_rules! isa {
 //
 // Once features like SIMD are supported, returning a builder
 // will make more sense.
-pub(crate) fn lookup(triple: Triple) -> Result<Box<dyn TargetIsa>> {
+pub fn lookup(triple: Triple) -> Result<Box<dyn TargetIsa>> {
     match triple.architecture {
         Architecture::X86_64 => {
             isa!(x64, (feature = "x64"), triple)
@@ -70,7 +70,7 @@ pub(crate) enum LookupError {
 
 /// A trait representing commonalities between the supported
 /// instruction set architectures
-pub(crate) trait TargetIsa: Send + Sync {
+pub trait TargetIsa: Send + Sync {
     /// Get the name of the ISA.
     fn name(&self) -> &'static str;
 
