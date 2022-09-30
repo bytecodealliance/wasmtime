@@ -41,17 +41,21 @@ pub struct FunctionBuilder<'a> {
     position: PackedOption<Block>,
 }
 
+#[derive(Clone, Default, Eq, PartialEq)]
+enum BlockStatus {
+    /// No instructions have been added.
+    #[default]
+    Empty,
+    /// Some instructions have been added, but no terminator.
+    Partial,
+    /// A terminator has been added; no further instructions may be added.
+    Filled,
+}
+
 #[derive(Clone, Default)]
 struct BlockData {
-    /// A Block is "pristine" iff no instructions have been added since the last
-    /// call to `switch_to_block()`.
-    pristine: bool,
-
-    /// A Block is "filled" iff a terminator instruction has been inserted since
-    /// the last call to `switch_to_block()`.
-    ///
-    /// A filled block cannot be pristine.
-    filled: bool,
+    /// What instructions have been added to this block?
+    status: BlockStatus,
 
     /// Count of parameters not supplied implicitly by the SSABuilder.
     user_param_count: usize,
@@ -304,11 +308,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn create_block(&mut self) -> Block {
         let block = self.func.dfg.make_block();
         self.func_ctx.ssa.declare_block(block);
-        self.func_ctx.blocks[block] = BlockData {
-            filled: false,
-            pristine: true,
-            user_param_count: 0,
-        };
+        self.func_ctx.blocks[block] = BlockData::default();
         block
     }
 
@@ -337,13 +337,13 @@ impl<'a> FunctionBuilder<'a> {
         debug_assert!(
             self.position.is_none()
                 || self.is_unreachable()
-                || self.is_pristine()
-                || self.is_filled(),
+                || self.is_pristine(self.position.unwrap())
+                || self.is_filled(self.position.unwrap()),
             "you have to fill your block before switching"
         );
         // We cannot switch to a filled block
         debug_assert!(
-            !self.func_ctx.blocks[block].filled,
+            !self.is_filled(block),
             "you cannot switch to a block which is already filled"
         );
 
@@ -534,14 +534,14 @@ impl<'a> FunctionBuilder<'a> {
     /// Make sure that the current block is inserted in the layout.
     pub fn ensure_inserted_block(&mut self) {
         let block = self.position.unwrap();
-        if self.func_ctx.blocks[block].pristine {
+        if self.is_pristine(block) {
             if !self.func.layout.is_block_inserted(block) {
                 self.func.layout.append_block(block);
             }
-            self.func_ctx.blocks[block].pristine = false;
+            self.func_ctx.blocks[block].status = BlockStatus::Partial;
         } else {
             debug_assert!(
-                !self.func_ctx.blocks[block].filled,
+                !self.is_filled(block),
                 "you cannot add an instruction to a block already filled"
             );
         }
@@ -602,17 +602,19 @@ impl<'a> FunctionBuilder<'a> {
         // Check that all the `Block`s are filled and sealed.
         #[cfg(debug_assertions)]
         {
-            for (block, block_data) in self.func_ctx.blocks.iter() {
-                assert!(
-                    block_data.pristine || self.func_ctx.ssa.is_sealed(block),
-                    "FunctionBuilder finalized, but block {} is not sealed",
-                    block,
-                );
-                assert!(
-                    block_data.pristine || block_data.filled,
-                    "FunctionBuilder finalized, but block {} is not filled",
-                    block,
-                );
+            for block in self.func_ctx.blocks.keys() {
+                if !self.is_pristine(block) {
+                    assert!(
+                        self.func_ctx.ssa.is_sealed(block),
+                        "FunctionBuilder finalized, but block {} is not sealed",
+                        block,
+                    );
+                    assert!(
+                        self.is_filled(block),
+                        "FunctionBuilder finalized, but block {} is not filled",
+                        block,
+                    );
+                }
             }
         }
 
@@ -665,7 +667,7 @@ impl<'a> FunctionBuilder<'a> {
     /// instructions to it, otherwise this could interfere with SSA construction.
     pub fn append_block_param(&mut self, block: Block, ty: Type) -> Value {
         debug_assert!(
-            self.func_ctx.blocks[block].pristine,
+            self.is_pristine(block),
             "You can't add block parameters after adding any instruction"
         );
         debug_assert_eq!(
@@ -714,14 +716,14 @@ impl<'a> FunctionBuilder<'a> {
 
     /// Returns `true` if and only if no instructions have been added since the last call to
     /// `switch_to_block`.
-    fn is_pristine(&self) -> bool {
-        self.func_ctx.blocks[self.position.unwrap()].pristine
+    fn is_pristine(&self, block: Block) -> bool {
+        self.func_ctx.blocks[block].status == BlockStatus::Empty
     }
 
     /// Returns `true` if and only if a terminator instruction has been inserted since the
     /// last call to `switch_to_block`.
-    fn is_filled(&self) -> bool {
-        self.func_ctx.blocks[self.position.unwrap()].filled
+    fn is_filled(&self, block: Block) -> bool {
+        self.func_ctx.blocks[block].status == BlockStatus::Filled
     }
 }
 
@@ -1078,7 +1080,7 @@ fn greatest_divisible_power_of_two(size: u64) -> u64 {
 impl<'a> FunctionBuilder<'a> {
     /// A Block is 'filled' when a terminator instruction is present.
     fn fill_current_block(&mut self) {
-        self.func_ctx.blocks[self.position.unwrap()].filled = true;
+        self.func_ctx.blocks[self.position.unwrap()].status = BlockStatus::Filled;
     }
 
     fn declare_successor(&mut self, dest_block: Block, jump_inst: Inst) {
@@ -1089,10 +1091,12 @@ impl<'a> FunctionBuilder<'a> {
 
     fn handle_ssa_side_effects(&mut self, side_effects: SideEffects) {
         for split_block in side_effects.split_blocks_created {
-            self.func_ctx.blocks[split_block].filled = true
+            self.func_ctx.blocks[split_block].status = BlockStatus::Filled;
         }
         for modified_block in side_effects.instructions_added_to_blocks {
-            self.func_ctx.blocks[modified_block].pristine = false
+            if self.is_pristine(modified_block) {
+                self.func_ctx.blocks[modified_block].status = BlockStatus::Partial;
+            }
         }
     }
 }
