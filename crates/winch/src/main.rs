@@ -6,7 +6,6 @@ use anyhow::{Context, Result};
 use std::{fs, path::PathBuf, str::FromStr};
 use structopt::StructOpt;
 use target_lexicon::Triple;
-use wasmparser::WasmFuncTypeInputs;
 use wasmtime_environ::{
     wasmparser::{Parser, Validator},
     DefinedFuncIndex, FunctionBodyData, Module, ModuleEnvironment, ModuleTypes, Tunables,
