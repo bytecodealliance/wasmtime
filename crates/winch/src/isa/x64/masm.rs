@@ -131,7 +131,7 @@ impl Assembler {
         let dst = reg_name(dst, 8);
         let src = reg_name(src, 8);
 
-        self.buffer.push(format!("mov {} {}", dst, src));
+        self.buffer.push(format!("mov {}, {}", dst, src));
     }
 
     pub fn mov_rm(&mut self, src: Reg, base: Reg, imm: u32) {
@@ -144,7 +144,7 @@ impl Assembler {
             format!("[{} + {}]", dst, imm)
         };
 
-        self.buffer.push(format!("mov {} {}", addr, src));
+        self.buffer.push(format!("mov {}, {}", addr, src));
     }
 
     pub fn movl(&mut self, src: Operand, dst: Operand) {
@@ -171,7 +171,7 @@ impl Assembler {
         let dst = reg_name(dst, 4);
         let src = reg_name(src, 4);
 
-        self.buffer.push(format!("mov {} {}", dst, src));
+        self.buffer.push(format!("mov {}, {}", dst, src));
     }
 
     pub fn movl_rm(&mut self, src: Reg, base: Reg, imm: u32) {
@@ -184,17 +184,17 @@ impl Assembler {
             format!("[{} + {}]", dst, imm)
         };
 
-        self.buffer.push(format!("movl {} {}", addr, src));
+        self.buffer.push(format!("movl {}, {}", addr, src));
     }
 
     pub fn sub_ir(&mut self, imm: u32, dst: Reg) {
         let dst = reg_name(dst, 8);
-        self.buffer.push(format!("sub {} {}", dst, imm));
+        self.buffer.push(format!("sub {}, {}", dst, imm));
     }
 
     /// Return the emitted code
-    pub fn finalize(self) -> Vec<String> {
-        self.buffer.clone()
+    pub fn finalize(&mut self) -> &[String] {
+        &self.buffer
     }
 }
 
