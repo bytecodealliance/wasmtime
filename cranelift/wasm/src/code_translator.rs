@@ -115,6 +115,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         return Ok(());
     }
 
+    // Given that we believe the current block is reachable, the FunctionBuilder ought to agree.
+    debug_assert!(!builder.is_unreachable());
+
     // This big match treats all Wasm code operators.
     match op {
         /********************************** Locals ****************************************
@@ -380,18 +383,16 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::End => {
             let frame = state.control_stack.pop().unwrap();
             let next_block = frame.following_code();
+            let return_count = frame.num_return_values();
+            let return_args = state.peekn_mut(return_count);
 
-            if !builder.is_unreachable() || !builder.is_pristine() {
-                let return_count = frame.num_return_values();
-                let return_args = state.peekn_mut(return_count);
-                canonicalise_then_jump(builder, frame.following_code(), return_args);
-                // You might expect that if we just finished an `if` block that
-                // didn't have a corresponding `else` block, then we would clean
-                // up our duplicate set of parameters that we pushed earlier
-                // right here. However, we don't have to explicitly do that,
-                // since we truncate the stack back to the original height
-                // below.
-            }
+            canonicalise_then_jump(builder, next_block, return_args);
+            // You might expect that if we just finished an `if` block that
+            // didn't have a corresponding `else` block, then we would clean
+            // up our duplicate set of parameters that we pushed earlier
+            // right here. However, we don't have to explicitly do that,
+            // since we truncate the stack back to the original height
+            // below.
 
             builder.switch_to_block(next_block);
             builder.seal_block(next_block);
