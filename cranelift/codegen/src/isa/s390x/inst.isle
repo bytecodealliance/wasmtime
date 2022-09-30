@@ -1667,11 +1667,11 @@
 (rule (mask_amt_reg (gpr32_ty ty) reg)
       (let ((mask u8 (mask_amt_imm ty -1)))
         (and_uimm16shifted ty reg (uimm16shifted (u8_as_u16 mask) 0))))
-(rule (mask_amt_reg (gpr64_ty ty) reg) reg)
+(rule 1 (mask_amt_reg (gpr64_ty ty) reg) reg)
 
 ;; Load a shift amount into a GPR.
 (decl amt_reg (Value) Reg)
-(rule (amt_reg amt @ (value_type (fits_in_64 _))) amt)
+(rule 1 (amt_reg amt @ (value_type (fits_in_64 _))) amt)
 (rule (amt_reg amt @ (value_type (vr128_ty _)))
       (vec_extract_lane $I64X2 amt 1 (zero_reg)))
 
@@ -1680,9 +1680,9 @@
 (rule (amt_vr amt @ (value_type (fits_in_64 _)))
       (vec_replicate_lane $I8X16
         (vec_insert_lane_undef $I8X16 amt 0 (zero_reg)) 0))
-(rule (amt_vr amt @ (value_type (vr128_ty _)))
+(rule 1 (amt_vr amt @ (value_type (vr128_ty _)))
       (vec_replicate_lane $I8X16 amt 15))
-(rule (amt_vr (u64_from_value amt))
+(rule 2 (amt_vr (u64_from_value amt))
       (vec_imm_splat $I8X16 amt))
 
 
@@ -1784,10 +1784,10 @@
 (rule (lower_address flags addr (i64_from_offset offset))
       (memarg_reg_plus_off addr offset 0 flags))
 
-(rule (lower_address flags (iadd x y) (i64_from_offset 0))
+(rule 1 (lower_address flags (iadd x y) (i64_from_offset 0))
       (memarg_reg_plus_reg x y 0 flags))
 
-(rule (lower_address flags
+(rule 1 (lower_address flags
                      (symbol_value (symbol_value_data name (reloc_distance_near) sym_offset))
                      (i64_from_offset offset))
       (if-let final_offset (memarg_symbol_offset_sum offset sym_offset))
@@ -1801,7 +1801,7 @@
 (rule (lower_address_bias flags addr (i64_from_offset offset) bias)
       (memarg_reg_plus_off addr offset bias flags))
 
-(rule (lower_address_bias flags (iadd x y) (i64_from_offset 0) bias)
+(rule 1 (lower_address_bias flags (iadd x y) (i64_from_offset 0) bias)
       (memarg_reg_plus_reg x y bias flags))
 
 
@@ -1830,7 +1830,7 @@
 
 ;; Convert a MemArg to a MemArgPair, reloading the address if necessary.
 (decl memarg_pair (MemArg) MemArgPair)
-(rule (memarg_pair (memarg_pair_from_memarg mem)) mem)
+(rule 1 (memarg_pair (memarg_pair_from_memarg mem)) mem)
 (rule (memarg_pair mem) (memarg_pair_from_reg
                           (load_addr mem) (memarg_flags mem)))
 
@@ -2770,19 +2770,19 @@
 ;; Move source register into destination.  (Non-SSA form.)
 (decl emit_mov (Type WritableReg Reg) Unit)
 
-(rule (emit_mov (gpr32_ty _ty) dst src)
+(rule 1 (emit_mov (gpr32_ty _ty) dst src)
       (emit (MInst.Mov32 dst src)))
 
-(rule (emit_mov (gpr64_ty _ty) dst src)
+(rule 2 (emit_mov (gpr64_ty _ty) dst src)
       (emit (MInst.Mov64 dst src)))
 
-(rule (emit_mov $F32 dst src)
+(rule 3 (emit_mov $F32 dst src)
       (emit (MInst.FpuMove32 dst src)))
 
-(rule (emit_mov $F64 dst src)
+(rule 3 (emit_mov $F64 dst src)
       (emit (MInst.FpuMove64 dst src)))
 
-(rule (emit_mov (vr128_ty ty) dst src)
+(rule 0 (emit_mov (vr128_ty ty) dst src)
       (emit (MInst.VecMov dst src)))
 
 ;; Allocate a temporary (writable) register, initialized as a copy of the input.
@@ -2833,7 +2833,7 @@
       (emit_side_effect (vec_store_lane $F32X4 reg mem 0)))
 (rule (emit_arg_store $F64 reg mem)
       (emit_side_effect (vec_store_lane $F64X2 reg mem 0)))
-(rule (emit_arg_store (vr128_ty ty) reg mem)
+(rule -1 (emit_arg_store (vr128_ty ty) reg mem)
       (emit_side_effect (vec_store reg mem)))
 
 (decl emit_arg_load (Type MemArg) Reg)
@@ -2844,7 +2844,7 @@
 (rule (emit_arg_load $R64 mem) (load64 mem))
 (rule (emit_arg_load $F32 mem) (vec_load_lane_undef $F32X4 mem 0))
 (rule (emit_arg_load $F64 mem) (vec_load_lane_undef $F64X2 mem 0))
-(rule (emit_arg_load (vr128_ty ty) mem) (vec_load ty mem))
+(rule -1 (emit_arg_load (vr128_ty ty) mem) (vec_load ty mem))
 
 ;; Helper to perform a lane swap in register.
 (decl vec_elt_rev (Type Reg) Reg)
@@ -2864,19 +2864,19 @@
 ;; a different lane order than the current function, we need to swap lanes.
 ;; The first operand is the lane order used by the callee.
 (decl abi_vec_elt_rev (LaneOrder Type Reg) Reg)
-(rule (abi_vec_elt_rev _ (gpr32_ty ty) reg) reg)
-(rule (abi_vec_elt_rev _ (gpr64_ty ty) reg) reg)
-(rule (abi_vec_elt_rev _ (ty_scalar_float ty) reg) reg)
-(rule (abi_vec_elt_rev callee_lane_order _ reg)
+(rule 4 (abi_vec_elt_rev _ (gpr32_ty ty) reg) reg)
+(rule 3 (abi_vec_elt_rev _ (gpr64_ty ty) reg) reg)
+(rule 2 (abi_vec_elt_rev _ (ty_scalar_float ty) reg) reg)
+(rule 0 (abi_vec_elt_rev callee_lane_order _ reg)
       (if-let $true (lane_order_equal callee_lane_order (lane_order)))
       reg)
-(rule (abi_vec_elt_rev callee_lane_order (vr128_ty ty) reg)
+(rule 1 (abi_vec_elt_rev callee_lane_order (vr128_ty ty) reg)
       (if-let $false (lane_order_equal callee_lane_order (lane_order)))
       (vec_elt_rev ty reg))
 
 ;; Helpers to emit a memory copy (MVC or memcpy libcall).
 (decl emit_memcpy (MemArg MemArg u64) Unit)
-(rule (emit_memcpy dst src (len_minus_one len))
+(rule 1 (emit_memcpy dst src (len_minus_one len))
       (emit_side_effect (mvc (memarg_pair dst) (memarg_pair src) len)))
 (rule (emit_memcpy dst src len)
       (let ((libcall LibCallInfo (lib_call_info_memcpy))
@@ -2888,13 +2888,13 @@
 
 ;; Prepare a stack copy of a single (oversized) argument.
 (decl copy_to_buffer (i64 ABIArg Value) InstOutput)
-(rule (copy_to_buffer base (abi_arg_only_slot slot) _) (output_none))
-(rule (copy_to_buffer base (abi_arg_struct_pointer _ offset size) val)
+(rule 2 (copy_to_buffer base (abi_arg_only_slot slot) _) (output_none))
+(rule 1 (copy_to_buffer base (abi_arg_struct_pointer _ offset size) val)
       (let ((dst MemArg (memarg_stack_off base offset))
             (src MemArg (memarg_reg_plus_off val 0 0 (memflags_trusted)))
             (_ Unit (emit_memcpy dst src size)))
         (output_none)))
-(rule (copy_to_buffer base (abi_arg_implicit_pointer _ offset ty)
+(rule 0 (copy_to_buffer base (abi_arg_implicit_pointer _ offset ty)
                       val @ (value_type ty))
       (let ((mem MemArg (memarg_stack_off base offset))
             (_ Unit (emit_arg_store ty val mem)))
@@ -2903,12 +2903,12 @@
 ;; Copy a single argument/return value to its slots.
 ;; For oversized arguments, set the slot to the buffer address.
 (decl copy_to_arg (LaneOrder i64 ABIArg Value) Unit)
-(rule (copy_to_arg lo base (abi_arg_only_slot slot) val)
+(rule 2 (copy_to_arg lo base (abi_arg_only_slot slot) val)
       (copy_val_to_arg_slot lo base slot val))
-(rule (copy_to_arg _ base (abi_arg_struct_pointer slot offset _) _)
+(rule 1 (copy_to_arg _ base (abi_arg_struct_pointer slot offset _) _)
       (let ((ptr Reg (load_addr (memarg_stack_off base offset))))
         (copy_reg_to_arg_slot base slot ptr)))
-(rule (copy_to_arg _ base (abi_arg_implicit_pointer slot offset _) _)
+(rule 0 (copy_to_arg _ base (abi_arg_implicit_pointer slot offset _) _)
       (let ((ptr Reg (load_addr (memarg_stack_off base offset))))
         (copy_reg_to_arg_slot base slot ptr)))
 
@@ -2965,35 +2965,35 @@
 (decl emit_imm (Type WritableReg u64) Unit)
 
 ;; 16-bit (or smaller) result type, any value
-(rule (emit_imm (fits_in_16 _ty) dst n)
+(rule 5 (emit_imm (fits_in_16 _ty) dst n)
       (emit (MInst.Mov32SImm16 dst (u64_as_i16 n))))
 
 ;; 32-bit result type, value fits in i16
-(rule (emit_imm (gpr32_ty _ty) dst (i16_from_u64 n))
+(rule 4 (emit_imm (gpr32_ty _ty) dst (i16_from_u64 n))
       (emit (MInst.Mov32SImm16 dst n)))
 
 ;; 32-bit result type, any value
-(rule (emit_imm (gpr32_ty _ty) dst n)
+(rule 3 (emit_imm (gpr32_ty _ty) dst n)
       (emit (MInst.Mov32Imm dst (u64_as_u32 n))))
 
 ;; 64-bit result type, value fits in i16
-(rule (emit_imm (gpr64_ty _ty) dst (i16_from_u64 n))
+(rule 6 (emit_imm (gpr64_ty _ty) dst (i16_from_u64 n))
       (emit (MInst.Mov64SImm16 dst n)))
 
 ;; 64-bit result type, value fits in i32
-(rule (emit_imm (gpr64_ty _ty) dst (i32_from_u64 n))
+(rule 2 (emit_imm (gpr64_ty _ty) dst (i32_from_u64 n))
       (emit (MInst.Mov64SImm32 dst n)))
 
 ;; 64-bit result type, value fits in UImm16Shifted
-(rule (emit_imm (gpr64_ty _ty) dst (uimm16shifted_from_u64 n))
+(rule 1 (emit_imm (gpr64_ty _ty) dst (uimm16shifted_from_u64 n))
       (emit (MInst.Mov64UImm16Shifted dst n)))
 
 ;; 64-bit result type, value fits in UImm32Shifted
-(rule (emit_imm (gpr64_ty _ty) dst (uimm32shifted_from_u64 n))
+(rule 0 (emit_imm (gpr64_ty _ty) dst (uimm32shifted_from_u64 n))
       (emit (MInst.Mov64UImm32Shifted dst n)))
 
 ;; 64-bit result type, value with non-zero low-/high-parts.
-(rule (emit_imm (gpr64_ty ty) dst (and (u64_nonzero_hipart hi)
+(rule 7 (emit_imm (gpr64_ty ty) dst (and (u64_nonzero_hipart hi)
                                        (u64_nonzero_lopart lo)))
       (let ((_ Unit (emit_imm ty dst hi)))
         (emit_insert_imm dst lo)))
@@ -3002,7 +3002,7 @@
 (decl emit_insert_imm (WritableReg u64) Unit)
 
 ;; Insertion, value fits in UImm16Shifted
-(rule (emit_insert_imm dst (uimm16shifted_from_u64 n))
+(rule 1 (emit_insert_imm dst (uimm16shifted_from_u64 n))
       (emit (MInst.Insert64UImm16Shifted dst n)))
 
 ;; Insertion, value fits in UImm32Shifted
@@ -3011,12 +3011,12 @@
 
 ;; 32-bit floating-point type, any value.  Loaded from literal pool.
 ;; TODO: use LZER to load 0.0
-(rule (emit_imm $F32 dst n)
+(rule 8 (emit_imm $F32 dst n)
       (emit (MInst.LoadFpuConst32 dst (u64_as_u32 n))))
 
 ;; 64-bit floating-point type, any value.  Loaded from literal pool.
 ;; TODO: use LZDR to load 0.0
-(rule (emit_imm $F64 dst n)
+(rule 8 (emit_imm $F64 dst n)
       (emit (MInst.LoadFpuConst64 dst n)))
 
 ;; Allocate a temporary register, initialized with an immediate.
@@ -3035,32 +3035,32 @@
 
 ;; Allocate a temporary register, initialized with a vector immediate.
 (decl vec_imm (Type u128) Reg)
-(rule (vec_imm (vr128_ty ty) 0)
+(rule 2 (vec_imm (vr128_ty ty) 0)
       (vec_imm_byte_mask ty 0))
-(rule (vec_imm (vr128_ty ty) (u64_pair n n))
+(rule 1 (vec_imm (vr128_ty ty) (u64_pair n n))
       (vec_imm_splat $I64X2 n))
 (rule (vec_imm (vr128_ty ty) n)
       (vec_load_const ty n))
 
 ;; Variant with replicated immediate.
 (decl vec_imm_splat (Type u64) Reg)
-(rule (vec_imm_splat (ty_vec128 ty) 0)
+(rule 1 (vec_imm_splat (ty_vec128 ty) 0)
       (vec_imm_byte_mask ty 0))
-(rule (vec_imm_splat ty @ (multi_lane 8 _) n)
+(rule 2 (vec_imm_splat ty @ (multi_lane 8 _) n)
       (vec_imm_replicate ty (u64_as_i16 n)))
-(rule (vec_imm_splat ty @ (multi_lane 16 _) n)
+(rule 2 (vec_imm_splat ty @ (multi_lane 16 _) n)
       (vec_imm_replicate ty (u64_as_i16 n)))
-(rule (vec_imm_splat ty @ (multi_lane 32 _) (u32_pair _ (i16_from_u32 n)))
+(rule 2 (vec_imm_splat ty @ (multi_lane 32 _) (u32_pair _ (i16_from_u32 n)))
       (vec_imm_replicate ty n))
-(rule (vec_imm_splat ty @ (multi_lane 64 _) (i16_from_u64 n))
+(rule 2 (vec_imm_splat ty @ (multi_lane 64 _) (i16_from_u64 n))
       (vec_imm_replicate ty n))
-(rule (vec_imm_splat (multi_lane 16 _) (u32_pair _ (u16_pair _ (u8_pair n n))))
+(rule 3 (vec_imm_splat (multi_lane 16 _) (u32_pair _ (u16_pair _ (u8_pair n n))))
       (vec_imm_splat $I8X16 (u8_as_u64 n)))
-(rule (vec_imm_splat (multi_lane 32 _) (u32_pair _ (u16_pair n n)))
+(rule 3 (vec_imm_splat (multi_lane 32 _) (u32_pair _ (u16_pair n n)))
       (vec_imm_splat $I16X8 (u16_as_u64 n)))
-(rule (vec_imm_splat (multi_lane 64 _) (u32_pair n n))
+(rule 3 (vec_imm_splat (multi_lane 64 _) (u32_pair n n))
       (vec_imm_splat $I32X4 (u32_as_u64 n)))
-(rule (vec_imm_splat (ty_vec128 ty) n)
+(rule 0 (vec_imm_splat (ty_vec128 ty) n)
       (vec_load_const_replicate ty n))
 
 ;; Place an immediate into the low half of a register pair.
@@ -3206,90 +3206,90 @@
 
 ;; Place `Value` into destination, zero-extending to 32 bits if smaller.  (Non-SSA form.)
 (decl emit_put_in_reg_zext32 (WritableReg Value) Unit)
-(rule (emit_put_in_reg_zext32 dst (and (value_type ty) (u64_from_value val)))
+(rule 3 (emit_put_in_reg_zext32 dst (and (value_type ty) (u64_from_value val)))
       (emit_imm (ty_ext32 ty) dst val))
-(rule (emit_put_in_reg_zext32 dst (and (value_type (fits_in_16 ty)) (sinkable_load load)))
+(rule 1 (emit_put_in_reg_zext32 dst (and (value_type (fits_in_16 ty)) (sinkable_load load)))
       (emit_zext32_mem dst ty (sink_load load)))
-(rule (emit_put_in_reg_zext32 dst val @ (value_type (fits_in_16 ty)))
+(rule 0 (emit_put_in_reg_zext32 dst val @ (value_type (fits_in_16 ty)))
       (emit_zext32_reg dst ty val))
-(rule (emit_put_in_reg_zext32 dst val @ (value_type (ty_32_or_64 ty)))
+(rule 2 (emit_put_in_reg_zext32 dst val @ (value_type (ty_32_or_64 ty)))
       (emit_mov ty dst val))
 
 ;; Place `Value` into destination, sign-extending to 32 bits if smaller.  (Non-SSA form.)
 (decl emit_put_in_reg_sext32 (WritableReg Value) Unit)
-(rule (emit_put_in_reg_sext32 dst (and (value_type ty) (u64_from_signed_value val)))
+(rule 3 (emit_put_in_reg_sext32 dst (and (value_type ty) (u64_from_signed_value val)))
       (emit_imm (ty_ext32 ty) dst val))
-(rule (emit_put_in_reg_sext32 dst (and (value_type (fits_in_16 ty)) (sinkable_load load)))
+(rule 1 (emit_put_in_reg_sext32 dst (and (value_type (fits_in_16 ty)) (sinkable_load load)))
       (emit_sext32_mem dst ty (sink_load load)))
-(rule (emit_put_in_reg_sext32 dst val @ (value_type (fits_in_16 ty)))
+(rule 0 (emit_put_in_reg_sext32 dst val @ (value_type (fits_in_16 ty)))
       (emit_sext32_reg dst ty val))
-(rule (emit_put_in_reg_sext32 dst val @ (value_type (ty_32_or_64 ty)))
+(rule 2 (emit_put_in_reg_sext32 dst val @ (value_type (ty_32_or_64 ty)))
       (emit_mov ty dst val))
 
 ;; Place `Value` into destination, zero-extending to 64 bits if smaller.  (Non-SSA form.)
 (decl emit_put_in_reg_zext64 (WritableReg Value) Unit)
-(rule (emit_put_in_reg_zext64 dst (and (value_type ty) (u64_from_value val)))
+(rule 3 (emit_put_in_reg_zext64 dst (and (value_type ty) (u64_from_value val)))
       (emit_imm (ty_ext64 ty) dst val))
-(rule (emit_put_in_reg_zext64 dst (and (value_type (gpr32_ty ty)) (sinkable_load load)))
+(rule 1 (emit_put_in_reg_zext64 dst (and (value_type (gpr32_ty ty)) (sinkable_load load)))
       (emit_zext64_mem dst ty (sink_load load)))
-(rule (emit_put_in_reg_zext64 dst val @ (value_type (gpr32_ty ty)))
+(rule 0 (emit_put_in_reg_zext64 dst val @ (value_type (gpr32_ty ty)))
       (emit_zext64_reg dst ty val))
-(rule (emit_put_in_reg_zext64 dst val @ (value_type (gpr64_ty ty)))
+(rule 2 (emit_put_in_reg_zext64 dst val @ (value_type (gpr64_ty ty)))
       (emit_mov ty dst val))
 
 ;; Place `Value` into destination, sign-extending to 64 bits if smaller.  (Non-SSA form.)
 (decl emit_put_in_reg_sext64 (WritableReg Value) Unit)
-(rule (emit_put_in_reg_sext64 dst (and (value_type ty) (u64_from_signed_value val)))
+(rule 3 (emit_put_in_reg_sext64 dst (and (value_type ty) (u64_from_signed_value val)))
       (emit_imm (ty_ext64 ty) dst val))
-(rule (emit_put_in_reg_sext64 dst (and (value_type (gpr32_ty ty)) (sinkable_load load)))
+(rule 1 (emit_put_in_reg_sext64 dst (and (value_type (gpr32_ty ty)) (sinkable_load load)))
       (emit_sext64_mem dst ty (sink_load load)))
-(rule (emit_put_in_reg_sext64 dst val @ (value_type (gpr32_ty ty)))
+(rule 0 (emit_put_in_reg_sext64 dst val @ (value_type (gpr32_ty ty)))
       (emit_sext64_reg dst ty val))
-(rule (emit_put_in_reg_sext64 dst val @ (value_type (gpr64_ty ty)))
+(rule 2 (emit_put_in_reg_sext64 dst val @ (value_type (gpr64_ty ty)))
       (emit_mov ty dst val))
 
 ;; Place `Value` into a register, zero-extending to 32 bits if smaller.
 (decl put_in_reg_zext32 (Value) Reg)
-(rule (put_in_reg_zext32 (and (value_type ty) (u64_from_value val)))
+(rule 3 (put_in_reg_zext32 (and (value_type ty) (u64_from_value val)))
       (imm (ty_ext32 ty) val))
-(rule (put_in_reg_zext32 (and (value_type (fits_in_16 ty)) (sinkable_load load)))
+(rule 1 (put_in_reg_zext32 (and (value_type (fits_in_16 ty)) (sinkable_load load)))
       (zext32_mem ty (sink_load load)))
-(rule (put_in_reg_zext32 val @ (value_type (fits_in_16 ty)))
+(rule 0 (put_in_reg_zext32 val @ (value_type (fits_in_16 ty)))
       (zext32_reg ty val))
-(rule (put_in_reg_zext32 val @ (value_type (ty_32_or_64 _ty)))
+(rule 2 (put_in_reg_zext32 val @ (value_type (ty_32_or_64 _ty)))
       val)
 
 ;; Place `Value` into a register, sign-extending to 32 bits if smaller.
 (decl put_in_reg_sext32 (Value) Reg)
-(rule (put_in_reg_sext32 (and (value_type ty) (u64_from_signed_value val)))
+(rule 3 (put_in_reg_sext32 (and (value_type ty) (u64_from_signed_value val)))
       (imm (ty_ext32 ty) val))
-(rule (put_in_reg_sext32 (and (value_type (fits_in_16 ty)) (sinkable_load load)))
+(rule 1 (put_in_reg_sext32 (and (value_type (fits_in_16 ty)) (sinkable_load load)))
       (sext32_mem ty (sink_load load)))
-(rule (put_in_reg_sext32 val @ (value_type (fits_in_16 ty)))
+(rule 0 (put_in_reg_sext32 val @ (value_type (fits_in_16 ty)))
       (sext32_reg ty val))
-(rule (put_in_reg_sext32 val @ (value_type (ty_32_or_64 _ty)))
+(rule 2 (put_in_reg_sext32 val @ (value_type (ty_32_or_64 _ty)))
       val)
 
 ;; Place `Value` into a register, zero-extending to 64 bits if smaller.
 (decl put_in_reg_zext64 (Value) Reg)
-(rule (put_in_reg_zext64 (and (value_type ty) (u64_from_value val)))
+(rule 3 (put_in_reg_zext64 (and (value_type ty) (u64_from_value val)))
       (imm (ty_ext64 ty) val))
-(rule (put_in_reg_zext64 (and (value_type (gpr32_ty ty)) (sinkable_load load)))
+(rule 1 (put_in_reg_zext64 (and (value_type (gpr32_ty ty)) (sinkable_load load)))
       (zext64_mem ty (sink_load load)))
-(rule (put_in_reg_zext64 val @ (value_type (gpr32_ty ty)))
+(rule 0 (put_in_reg_zext64 val @ (value_type (gpr32_ty ty)))
       (zext64_reg ty val))
-(rule (put_in_reg_zext64 val @ (value_type (gpr64_ty ty)))
+(rule 2 (put_in_reg_zext64 val @ (value_type (gpr64_ty ty)))
       val)
 
 ;; Place `Value` into a register, sign-extending to 64 bits if smaller.
 (decl put_in_reg_sext64 (Value) Reg)
-(rule (put_in_reg_sext64 (and (value_type ty) (u64_from_signed_value val)))
+(rule 3 (put_in_reg_sext64 (and (value_type ty) (u64_from_signed_value val)))
       (imm (ty_ext64 ty) val))
-(rule (put_in_reg_sext64 (and (value_type (gpr32_ty ty)) (sinkable_load load)))
+(rule 1 (put_in_reg_sext64 (and (value_type (gpr32_ty ty)) (sinkable_load load)))
       (sext64_mem ty (sink_load load)))
-(rule (put_in_reg_sext64 val @ (value_type (gpr32_ty ty)))
+(rule 0 (put_in_reg_sext64 val @ (value_type (gpr32_ty ty)))
       (sext64_reg ty val))
-(rule (put_in_reg_sext64 val @ (value_type (gpr64_ty ty)))
+(rule 2 (put_in_reg_sext64 val @ (value_type (gpr64_ty ty)))
       val)
 
 ;; Place `Value` into the low half of a register pair, zero-extending
@@ -3332,7 +3332,7 @@
 (rule (emit_cmov_imm (gpr32_ty _ty) dst cond imm)
       (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.CMov32SImm16 dst cond imm)
                                              dst))
-(rule (emit_cmov_imm (gpr64_ty _ty) dst cond imm)
+(rule 1 (emit_cmov_imm (gpr64_ty _ty) dst cond imm)
       (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.CMov64SImm16 dst cond imm)
                                              dst))
 
@@ -3362,19 +3362,19 @@
 
 ;; Conditionally select between two source registers.  (Non-SSA form.)
 (decl emit_cmov_reg (Type WritableReg Cond Reg) ConsumesFlags)
-(rule (emit_cmov_reg (gpr32_ty _ty) dst cond src)
+(rule 1 (emit_cmov_reg (gpr32_ty _ty) dst cond src)
       (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.CMov32 dst cond src)
                                              dst))
-(rule (emit_cmov_reg (gpr64_ty _ty) dst cond src)
+(rule 2 (emit_cmov_reg (gpr64_ty _ty) dst cond src)
       (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.CMov64 dst cond src)
                                              dst))
-(rule (emit_cmov_reg $F32 dst cond src)
+(rule 3 (emit_cmov_reg $F32 dst cond src)
       (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.FpuCMov32 dst cond src)
                                              dst))
-(rule (emit_cmov_reg $F64 dst cond src)
+(rule 3 (emit_cmov_reg $F64 dst cond src)
       (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.FpuCMov64 dst cond src)
                                              dst))
-(rule (emit_cmov_reg (vr128_ty ty) dst cond src)
+(rule 0 (emit_cmov_reg (vr128_ty ty) dst cond src)
       (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.VecCMov dst cond src)
                                              dst))
 
@@ -3543,7 +3543,7 @@
 ;; copied out of the hard register.  In the little-endian case, we need to
 ;; byte-swap since the compare-and-swap instruction is always big-endian.
 (decl casloop_result (Type MemFlags Reg) Reg)
-(rule (casloop_result (ty_32_or_64 ty) (bigendian) result)
+(rule 1 (casloop_result (ty_32_or_64 ty) (bigendian) result)
       (copy_reg ty result))
 (rule (casloop_result (ty_32_or_64 ty) (littleendian) result)
       (bswap_reg ty result))
@@ -3582,7 +3582,7 @@
 (decl casloop_rotate_in (VecMInstBuilder Type MemFlags Reg Reg) Reg)
 (rule (casloop_rotate_in ib $I8 _ bitshift val)
       (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 0 bitshift))
-(rule (casloop_rotate_in ib $I16 (bigendian) bitshift val)
+(rule 1 (casloop_rotate_in ib $I16 (bigendian) bitshift val)
       (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 0 bitshift))
 (rule (casloop_rotate_in ib $I16 (littleendian) bitshift val)
       (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 16 bitshift))
@@ -3595,7 +3595,7 @@
 (decl casloop_rotate_out (VecMInstBuilder Type MemFlags Reg Reg) Reg)
 (rule (casloop_rotate_out ib $I8 _ bitshift val)
       (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 0 (neg_reg $I32 bitshift)))
-(rule (casloop_rotate_out ib $I16 (bigendian) bitshift val)
+(rule 1 (casloop_rotate_out ib $I16 (bigendian) bitshift val)
       (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 0 bitshift))
 (rule (casloop_rotate_out ib $I16 (littleendian) bitshift val)
       (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 16 bitshift))
@@ -3610,7 +3610,7 @@
 (decl casloop_rotate_result (Type MemFlags Reg Reg) Reg)
 (rule (casloop_rotate_result $I8 _ bitshift result)
       (rot_imm_reg $I32 result 8 bitshift))
-(rule (casloop_rotate_result $I16 (bigendian) bitshift result)
+(rule 1 (casloop_rotate_result $I16 (bigendian) bitshift result)
       (rot_imm_reg $I32 result 16 bitshift))
 (rule (casloop_rotate_result $I16 (littleendian) bitshift result)
       (bswap_reg $I32 (rot_reg $I32 result bitshift)))
@@ -3741,7 +3741,7 @@
 ;; values that will end up in the higher-numbered lanes.
 
 (decl vec_pack_lane_order (Type Reg Reg) Reg)
-(rule (vec_pack_lane_order ty x y)
+(rule 1 (vec_pack_lane_order ty x y)
       (if-let (LaneOrder.BigEndian) (lane_order))
       (vec_pack ty x y))
 (rule (vec_pack_lane_order ty x y)
@@ -3749,7 +3749,7 @@
       (vec_pack ty y x))
 
 (decl vec_pack_ssat_lane_order (Type Reg Reg) Reg)
-(rule (vec_pack_ssat_lane_order ty x y)
+(rule 1 (vec_pack_ssat_lane_order ty x y)
       (if-let (LaneOrder.BigEndian) (lane_order))
       (vec_pack_ssat ty x y))
 (rule (vec_pack_ssat_lane_order ty x y)
@@ -3757,7 +3757,7 @@
       (vec_pack_ssat ty y x))
 
 (decl vec_pack_usat_lane_order (Type Reg Reg) Reg)
-(rule (vec_pack_usat_lane_order ty x y)
+(rule 1 (vec_pack_usat_lane_order ty x y)
       (if-let (LaneOrder.BigEndian) (lane_order))
       (vec_pack_usat ty x y))
 (rule (vec_pack_usat_lane_order ty x y)
@@ -3770,7 +3770,7 @@
 ;; from higher-numbered lanes.
 
 (decl vec_unpacks_low_lane_order (Type Reg) Reg)
-(rule (vec_unpacks_low_lane_order ty x)
+(rule 1 (vec_unpacks_low_lane_order ty x)
       (if-let (LaneOrder.BigEndian) (lane_order))
       (vec_unpacks_high ty x))
 (rule (vec_unpacks_low_lane_order ty x)
@@ -3778,7 +3778,7 @@
       (vec_unpacks_low ty x))
 
 (decl vec_unpacks_high_lane_order (Type Reg) Reg)
-(rule (vec_unpacks_high_lane_order ty x)
+(rule 1 (vec_unpacks_high_lane_order ty x)
       (if-let (LaneOrder.BigEndian) (lane_order))
       (vec_unpacks_low ty x))
 (rule (vec_unpacks_high_lane_order ty x)
@@ -3786,7 +3786,7 @@
       (vec_unpacks_high ty x))
 
 (decl vec_unpacku_low_lane_order (Type Reg) Reg)
-(rule (vec_unpacku_low_lane_order ty x)
+(rule 1 (vec_unpacku_low_lane_order ty x)
       (if-let (LaneOrder.BigEndian) (lane_order))
       (vec_unpacku_high ty x))
 (rule (vec_unpacku_low_lane_order ty x)
@@ -3794,7 +3794,7 @@
       (vec_unpacku_low ty x))
 
 (decl vec_unpacku_high_lane_order (Type Reg) Reg)
-(rule (vec_unpacku_high_lane_order ty x)
+(rule 1 (vec_unpacku_high_lane_order ty x)
       (if-let (LaneOrder.BigEndian) (lane_order))
       (vec_unpacku_low ty x))
 (rule (vec_unpacku_high_lane_order ty x)
@@ -3831,7 +3831,7 @@
 ;; lanes of the output.
 
 (decl vec_merge_low_lane_order (Type Reg Reg) Reg)
-(rule (vec_merge_low_lane_order ty x y)
+(rule 1 (vec_merge_low_lane_order ty x y)
       (if-let (LaneOrder.BigEndian) (lane_order))
       (vec_merge_high ty x y))
 (rule (vec_merge_low_lane_order ty x y)
@@ -3839,7 +3839,7 @@
       (vec_merge_low ty y x))
 
 (decl vec_merge_high_lane_order (Type Reg Reg) Reg)
-(rule (vec_merge_high_lane_order ty x y)
+(rule 1 (vec_merge_high_lane_order ty x y)
       (if-let (LaneOrder.BigEndian) (lane_order))
       (vec_merge_low ty x y))
 (rule (vec_merge_high_lane_order ty x y)
@@ -3862,7 +3862,7 @@
 ;; result.  This cannot use any of the normal flags mechanisms because we need
 ;; to use both result and condition code output of flogr as input to the
 ;; conditional move, and because flogr returns a register pair.
-(rule (clz_reg zeroval x)
+(rule -1 (clz_reg zeroval x)
       (let ((dst WritableRegPair (temp_writable_regpair))
             (_ Unit (emit (MInst.Flogr x)))
             (_ Unit (emit (MInst.CMov64SImm16 (writable_regpair_hi dst)
@@ -3893,7 +3893,7 @@
 ;; Helpers for generating saturating integer instructions ;;;;;;;;;;;;;;;;;;;;;;
 
 (decl uint_sat_reg (Type Type Reg) Reg)
-(rule (uint_sat_reg ty ty reg) reg)
+(rule 1 (uint_sat_reg ty ty reg) reg)
 (rule (uint_sat_reg $I8 (ty_32_or_64 ty) reg)
       (with_flags_reg (icmpu_uimm32 ty reg 256)
         (cmov_imm ty (intcc_as_cond (IntCC.UnsignedGreaterThan)) 255 reg)))
@@ -3908,7 +3908,7 @@
         (select_bool_reg $I64 cond bound reg)))
 
 (decl sint_sat_reg (Type Type Reg) Reg)
-(rule (sint_sat_reg ty ty reg) reg)
+(rule 1 (sint_sat_reg ty ty reg) reg)
 (rule (sint_sat_reg $I8 (ty_32_or_64 ty) reg)
       (let ((ub Reg (with_flags_reg (icmps_simm16 ty reg 127)
                       (cmov_imm ty
@@ -4253,7 +4253,7 @@
 
 (decl aluop_and (Type) ALUOp)
 (rule (aluop_and (gpr32_ty _ty)) (ALUOp.And32))
-(rule (aluop_and (gpr64_ty _ty)) (ALUOp.And64))
+(rule 1 (aluop_and (gpr64_ty _ty)) (ALUOp.And64))
 
 (decl and_reg (Type Reg Reg) Reg)
 (rule (and_reg ty x y) (alu_rrr ty (aluop_and ty) x y))
@@ -4275,7 +4275,7 @@
 
 (decl aluop_or (Type) ALUOp)
 (rule (aluop_or (gpr32_ty _ty)) (ALUOp.Orr32))
-(rule (aluop_or (gpr64_ty _ty)) (ALUOp.Orr64))
+(rule 1 (aluop_or (gpr64_ty _ty)) (ALUOp.Orr64))
 
 (decl or_reg (Type Reg Reg) Reg)
 (rule (or_reg ty x y) (alu_rrr ty (aluop_or ty) x y))
@@ -4297,7 +4297,7 @@
 
 (decl aluop_xor (Type) ALUOp)
 (rule (aluop_xor (gpr32_ty _ty)) (ALUOp.Xor32))
-(rule (aluop_xor (gpr64_ty _ty)) (ALUOp.Xor64))
+(rule 1 (aluop_xor (gpr64_ty _ty)) (ALUOp.Xor64))
 
 (decl xor_reg (Type Reg Reg) Reg)
 (rule (xor_reg ty x y) (alu_rrr ty (aluop_xor ty) x y))
@@ -4321,7 +4321,7 @@
 (decl not_reg (Type Reg) Reg)
 (rule (not_reg (gpr32_ty ty) x)
       (xor_uimm32shifted ty x (uimm32shifted 0xffffffff 0)))
-(rule (not_reg (gpr64_ty ty) x)
+(rule 1 (not_reg (gpr64_ty ty) x)
       (xor_uimm32shifted ty
         (xor_uimm32shifted ty x (uimm32shifted 0xffffffff 0))
         (uimm32shifted 0xffffffff 32)))
@@ -4329,7 +4329,7 @@
 (decl push_not_reg (VecMInstBuilder Type WritableReg Reg) Reg)
 (rule (push_not_reg ib (gpr32_ty ty) dst src)
       (push_xor_uimm32shifted ib ty dst src (uimm32shifted 0xffffffff 0)))
-(rule (push_not_reg ib (gpr64_ty ty) dst src)
+(rule 1 (push_not_reg ib (gpr64_ty ty) dst src)
       (let ((val Reg (push_xor_uimm32shifted ib ty dst src (uimm32shifted 0xffffffff 0))))
         (push_xor_uimm32shifted ib ty dst val (uimm32shifted 0xffffffff 32))))
 
@@ -4341,7 +4341,7 @@
 
 (decl aluop_not_and (Type) ALUOp)
 (rule (aluop_not_and (gpr32_ty _ty)) (ALUOp.NotAnd32))
-(rule (aluop_not_and (gpr64_ty _ty)) (ALUOp.NotAnd64))
+(rule 1 (aluop_not_and (gpr64_ty _ty)) (ALUOp.NotAnd64))
 
 (decl not_and_reg (Type Reg Reg) Reg)
 (rule (not_and_reg ty x y) (alu_rrr ty (aluop_not_and ty) x y))
@@ -4354,7 +4354,7 @@
 
 (decl aluop_not_or (Type) ALUOp)
 (rule (aluop_not_or (gpr32_ty _ty)) (ALUOp.NotOrr32))
-(rule (aluop_not_or (gpr64_ty _ty)) (ALUOp.NotOrr64))
+(rule 1 (aluop_not_or (gpr64_ty _ty)) (ALUOp.NotOrr64))
 
 (decl not_or_reg (Type Reg Reg) Reg)
 (rule (not_or_reg ty x y) (alu_rrr ty (aluop_not_or ty) x y))
@@ -4367,7 +4367,7 @@
 
 (decl aluop_not_xor (Type) ALUOp)
 (rule (aluop_not_xor (gpr32_ty _ty)) (ALUOp.NotXor32))
-(rule (aluop_not_xor (gpr64_ty _ty)) (ALUOp.NotXor64))
+(rule 1 (aluop_not_xor (gpr64_ty _ty)) (ALUOp.NotXor64))
 
 (decl not_xor_reg (Type Reg Reg) Reg)
 (rule (not_xor_reg ty x y) (alu_rrr ty (aluop_not_xor ty) x y))
@@ -4380,7 +4380,7 @@
 
 (decl aluop_and_not (Type) ALUOp)
 (rule (aluop_and_not (gpr32_ty _ty)) (ALUOp.AndNot32))
-(rule (aluop_and_not (gpr64_ty _ty)) (ALUOp.AndNot64))
+(rule 1 (aluop_and_not (gpr64_ty _ty)) (ALUOp.AndNot64))
 
 (decl and_not_reg (Type Reg Reg) Reg)
 (rule (and_not_reg ty x y) (alu_rrr ty (aluop_and_not ty) x y))
@@ -4393,7 +4393,7 @@
 
 (decl aluop_or_not (Type) ALUOp)
 (rule (aluop_or_not (gpr32_ty _ty)) (ALUOp.OrrNot32))
-(rule (aluop_or_not (gpr64_ty _ty)) (ALUOp.OrrNot64))
+(rule 1 (aluop_or_not (gpr64_ty _ty)) (ALUOp.OrrNot64))
 
 (decl or_not_reg (Type Reg Reg) Reg)
 (rule (or_not_reg ty x y) (alu_rrr ty (aluop_or_not ty) x y))
@@ -4837,7 +4837,7 @@
 ;; Helpers for generating `fpromote` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl fpromote_reg (Type Type Reg) Reg)
-(rule (fpromote_reg ty ty x) x)
+(rule 1 (fpromote_reg ty ty x) x)
 (rule (fpromote_reg $F64 $F32 x)
       (fpu_rr $F64 (FPUOp1.Cvt32To64) x))
 (rule (fpromote_reg $F64X2 $F32X4 x)
@@ -4847,7 +4847,7 @@
 ;; Helpers for generating `fdemote` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl fdemote_reg (Type Type FpuRoundMode Reg) Reg)
-(rule (fdemote_reg ty ty mode x) x)
+(rule 1 (fdemote_reg ty ty mode x) x)
 (rule (fdemote_reg $F32 $F64 mode x)
       (fpu_round $F32 (FpuRoundOp.Cvt64To32) mode x))
 (rule (fdemote_reg $F32X4 $F64X2 mode x)
@@ -4883,12 +4883,12 @@
 ;; Helpers for generating `fcvt_to_[us]int` instructions ;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl fcvt_flt_ty (Type Type) Type)
-(rule (fcvt_flt_ty (fits_in_32 ty) (and (vxrs_ext2_enabled) $F32)) $F32)
+(rule 1 (fcvt_flt_ty (fits_in_32 ty) (and (vxrs_ext2_enabled) $F32)) $F32)
 (rule (fcvt_flt_ty (fits_in_64 ty) $F32) $F64)
 (rule (fcvt_flt_ty (fits_in_64 ty) $F64) $F64)
 
 (decl fcvt_int_ty (Type Type) Type)
-(rule (fcvt_int_ty (fits_in_32 ty) (and (vxrs_ext2_enabled) $F32)) $I32)
+(rule 1 (fcvt_int_ty (fits_in_32 ty) (and (vxrs_ext2_enabled) $F32)) $I32)
 (rule (fcvt_int_ty (fits_in_64 ty) $F32) $I64)
 (rule (fcvt_int_ty (fits_in_64 ty) $F64) $I64)
 
