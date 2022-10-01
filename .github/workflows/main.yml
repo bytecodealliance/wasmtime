@@ -192,8 +192,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-
-    # Check some feature combinations of the `wasmtime` crate
+    - run: rustup target add aarch64-pc-windows-msvc
     - run: cargo check -p wasmtime --target aarch64-pc-windows-msvc
 
   fuzz_targets:
