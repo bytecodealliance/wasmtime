@@ -1822,24 +1822,24 @@ block0:
             builder.switch_to_block(block0);
 
             assert_eq!(
-                builder.try_use_var(Variable::with_u32(0)),
-                Err(UseVariableError::UsedBeforeDeclared(Variable::with_u32(0)))
+                builder.try_use_var(Variable::from_u32(0)),
+                Err(UseVariableError::UsedBeforeDeclared(Variable::from_u32(0)))
             );
 
             let value = builder.ins().iconst(cranelift_codegen::ir::types::I32, 0);
 
             assert_eq!(
-                builder.try_def_var(Variable::with_u32(0), value),
-                Err(DefVariableError::DefinedBeforeDeclared(Variable::with_u32(
+                builder.try_def_var(Variable::from_u32(0), value),
+                Err(DefVariableError::DefinedBeforeDeclared(Variable::from_u32(
                     0
                 )))
             );
 
-            builder.declare_var(Variable::with_u32(0), cranelift_codegen::ir::types::I32);
+            builder.declare_var(Variable::from_u32(0), cranelift_codegen::ir::types::I32);
             assert_eq!(
-                builder.try_declare_var(Variable::with_u32(0), cranelift_codegen::ir::types::I32),
+                builder.try_declare_var(Variable::from_u32(0), cranelift_codegen::ir::types::I32),
                 Err(DeclareVariableError::DeclaredMultipleTimes(
-                    Variable::with_u32(0)
+                    Variable::from_u32(0)
                 ))
             );
         }
