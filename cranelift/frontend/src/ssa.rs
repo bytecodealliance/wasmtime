@@ -93,7 +93,7 @@ impl PredBlock {
 enum Sealed {
     No {
         // List of current Block arguments for which an earlier def has not been found yet.
-        undef_variables: Vec<(Variable, Value)>,
+        undef_variables: Vec<Variable>,
     },
     Yes,
 }
@@ -359,7 +359,7 @@ impl SSABuilder {
             // definition on the `results` stack.
             Sealed::Yes => self.begin_predecessors_lookup(val, block),
             Sealed::No { undef_variables } => {
-                undef_variables.push((var, val));
+                undef_variables.push(var);
                 self.results.push(val);
             }
         }
@@ -436,7 +436,25 @@ impl SSABuilder {
     fn seal_one_block(&mut self, block: Block, func: &mut Function) {
         // For each undef var we look up values in the predecessors and create a block parameter
         // only if necessary.
-        for (var, val) in self.mark_block_sealed(block) {
+        let undef_variables = self.mark_block_sealed(block);
+        let ssa_params = undef_variables.len();
+
+        // Note that begin_predecessors_lookup requires visiting these variables in the same order
+        // that they were defined by find_var, because it appends arguments to the jump instructions
+        // in all the predecessor blocks one variable at a time.
+        for (idx, var) in undef_variables.into_iter().enumerate() {
+            // We need the temporary Value that was assigned to this Variable. If that Value shows
+            // up as a result from any of our predecessors, then it never got assigned on the loop
+            // through that block. We get the value from the next block param, where it was first
+            // allocated in find_var.
+            let block_params = func.dfg.block_params(block);
+
+            // On each iteration through this loop, there are (ssa_params - idx) undefined variables
+            // left to process. Previous iterations through the loop may have removed earlier block
+            // parameters, but the last (ssa_params - idx) block parameters always correspond to the
+            // remaining undefined variables. So index from the end of the current block params.
+            let val = block_params[block_params.len() - (ssa_params - idx)];
+
             debug_assert!(self.calls.is_empty());
             debug_assert!(self.results.is_empty());
             // self.side_effects may be non-empty here so that callers can
@@ -447,7 +465,7 @@ impl SSABuilder {
     }
 
     /// Set the `sealed` flag for `block`. Returns any variables that still need definitions.
-    fn mark_block_sealed(&mut self, block: Block) -> Vec<(Variable, Value)> {
+    fn mark_block_sealed(&mut self, block: Block) -> Vec<Variable> {
         // We could call data.predecessors.shrink_to_fit() here, if
         // important, because no further predecessors will be added
         // to this block.
