@@ -482,6 +482,16 @@ impl Layout {
     pub fn is_cold(&self, block: Block) -> bool {
         self.blocks[block].cold
     }
+
+    /// This block is the start of a loop.
+    pub fn set_loop_header(&mut self, block: Block) {
+        self.blocks[block].loop_header = true;
+    }
+
+    /// Is the given block known to be a loop header?
+    pub fn is_loop_header(&self, block: Block) -> bool {
+        self.blocks[block].loop_header
+    }
 }
 
 /// A single node in the linked-list of blocks.
@@ -494,6 +504,7 @@ struct BlockNode {
     last_inst: PackedOption<Inst>,
     seq: SequenceNumber,
     cold: bool,
+    loop_header: bool,
 }
 
 /// Iterate over blocks in layout order. See [crate::ir::layout::Layout::blocks].

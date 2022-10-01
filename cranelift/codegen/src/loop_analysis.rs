@@ -100,12 +100,17 @@ impl LoopAnalysis {
 
 impl LoopAnalysis {
     /// Detects the loops in a function. Needs the control flow graph and the dominator tree.
-    pub fn compute(&mut self, func: &Function, cfg: &ControlFlowGraph, domtree: &DominatorTree) {
+    pub fn compute(
+        &mut self,
+        func: &mut Function,
+        cfg: &ControlFlowGraph,
+        domtree: &DominatorTree,
+    ) {
         let _tt = timing::loop_analysis();
         self.loops.clear();
         self.block_loop_map.clear();
         self.block_loop_map.resize(func.dfg.num_blocks());
-        self.find_loop_headers(cfg, domtree, &func.layout);
+        self.find_loop_headers(cfg, domtree, &mut func.layout);
         self.discover_loop_blocks(cfg, domtree, &func.layout);
         self.valid = true;
     }
@@ -134,7 +139,7 @@ impl LoopAnalysis {
         &mut self,
         cfg: &ControlFlowGraph,
         domtree: &DominatorTree,
-        layout: &Layout,
+        layout: &mut Layout,
     ) {
         // We traverse the CFG in reverse postorder
         for &block in domtree.cfg_postorder().iter().rev() {
@@ -147,6 +152,8 @@ impl LoopAnalysis {
                     // This block is a loop header, so we create its associated loop
                     let lp = self.loops.push(LoopData::new(block, None));
                     self.block_loop_map[block] = lp.into();
+                    // We also need to mark this block as a loop header in the layout.
+                    layout.set_loop_header(block);
                     break;
                     // We break because we only need one back edge to identify a loop header.
                 }
@@ -270,7 +277,7 @@ mod tests {
         let mut domtree = DominatorTree::new();
         cfg.compute(&func);
         domtree.compute(&func, &cfg);
-        loop_analysis.compute(&func, &cfg, &domtree);
+        loop_analysis.compute(&mut func, &cfg, &domtree);
 
         let loops = loop_analysis.loops().collect::<Vec<Loop>>();
         assert_eq!(loops.len(), 2);
@@ -329,7 +336,7 @@ mod tests {
         let mut domtree = DominatorTree::new();
         cfg.compute(&func);
         domtree.compute(&func, &cfg);
-        loop_analysis.compute(&func, &cfg, &domtree);
+        loop_analysis.compute(&mut func, &cfg, &domtree);
 
         let loops = loop_analysis.loops().collect::<Vec<Loop>>();
         assert_eq!(loops.len(), 3);

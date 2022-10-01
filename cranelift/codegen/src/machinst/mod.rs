@@ -157,7 +157,7 @@ pub trait MachInst: Clone + Debug {
 
     /// Align a basic block offset (from start of function).  By default, no
     /// alignment occurs.
-    fn align_basic_block(offset: CodeOffset) -> CodeOffset {
+    fn align_basic_block(offset: CodeOffset, _loop_header: bool) -> CodeOffset {
         offset
     }
 

@@ -300,7 +300,7 @@ impl Context {
     /// Compute the loop analysis.
     pub fn compute_loop_analysis(&mut self) {
         self.loop_analysis
-            .compute(&self.func, &self.cfg, &self.domtree)
+            .compute(&mut self.func, &self.cfg, &self.domtree)
     }
 
     /// Compute the control flow graph and dominator tree.

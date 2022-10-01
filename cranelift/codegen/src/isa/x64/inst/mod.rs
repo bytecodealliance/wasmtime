@@ -2211,6 +2211,17 @@ impl MachInst for Inst {
         Inst::nop(std::cmp::min(preferred_size, 15) as u8)
     }
 
+    fn align_basic_block(offset: CodeOffset, loop_header: bool) -> CodeOffset {
+        if loop_header {
+            // Unaligned loop headers can cause severe performance problems.
+            // See https://github.com/bytecodealliance/wasmtime/issues/4883.
+            // Here we use conservative 64 bytes alignment.
+            align_to(offset, 64)
+        } else {
+            offset
+        }
+    }
+
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
         match ty {
             types::I8 => Ok((&[RegClass::Int], &[types::I8])),

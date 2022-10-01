@@ -106,6 +106,8 @@ pub struct BlockLoweringOrder {
     /// which is used by VCode emission to sink the blocks at the last
     /// moment (when we actually emit bytes into the MachBuffer).
     cold_blocks: FxHashSet<BlockIndex>,
+    /// These are loop headers. Used for alignment.
+    loop_headers: FxHashSet<BlockIndex>,
     /// Lowered blocks that are indirect branch targets.
     indirect_branch_targets: FxHashSet<BlockIndex>,
 }
@@ -438,6 +440,7 @@ impl BlockLoweringOrder {
         // Step 3: now that we have RPO, build the BlockIndex/BB fwd/rev maps.
         let mut lowered_order = vec![];
         let mut cold_blocks = FxHashSet::default();
+        let mut loop_headers = FxHashSet::default();
         let mut lowered_succ_ranges = vec![];
         let mut lb_to_bindex = FxHashMap::default();
         let mut indirect_branch_targets = FxHashSet::default();
@@ -455,6 +458,10 @@ impl BlockLoweringOrder {
                         cold_blocks.insert(index);
                     }
 
+                    if f.layout.is_loop_header(block) {
+                        loop_headers.insert(index);
+                    }
+
                     if indirect_branch_target_clif_blocks.contains(&block) {
                         indirect_branch_targets.insert(index);
                     }
@@ -462,6 +469,10 @@ impl BlockLoweringOrder {
                 LoweredBlock::Edge { pred, succ, .. } => {
                     if f.layout.is_cold(pred) || f.layout.is_cold(succ) {
                         cold_blocks.insert(index);
+                    }
+
+                    if f.layout.is_loop_header(pred) || f.layout.is_loop_header(succ) {
+                        loop_headers.insert(index);
                     }
 
                     if indirect_branch_target_clif_blocks.contains(&succ) {
@@ -491,6 +502,7 @@ impl BlockLoweringOrder {
             lowered_succ_ranges,
             orig_map,
             cold_blocks,
+            loop_headers,
             indirect_branch_targets,
         };
         trace!("BlockLoweringOrder: {:?}", result);
@@ -511,6 +523,11 @@ impl BlockLoweringOrder {
     /// Determine whether the given lowered-block index is cold.
     pub fn is_cold(&self, block: BlockIndex) -> bool {
         self.cold_blocks.contains(&block)
+    }
+
+    /// Determine whether the given lowered-block index is a loop header.
+    pub fn is_loop_header(&self, block: BlockIndex) -> bool {
+        self.loop_headers.contains(&block)
     }
 
     /// Determine whether the given lowered block index is an indirect branch

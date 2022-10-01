@@ -849,7 +849,8 @@ impl<I: VCodeInst> VCode<I> {
 
         for (block_order_idx, &block) in final_order.iter().enumerate() {
             trace!("emitting block {:?}", block);
-            let new_offset = I::align_basic_block(buffer.cur_offset());
+            let new_offset =
+                I::align_basic_block(buffer.cur_offset(), self.block_order.is_loop_header(block));
             while new_offset > buffer.cur_offset() {
                 // Pad with NOPs up to the aligned block offset.
                 let nop = I::gen_nop((new_offset - buffer.cur_offset()) as usize);
