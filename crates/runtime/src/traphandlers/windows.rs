@@ -58,6 +58,9 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
             } else if #[cfg(target_arch = "x86")] {
                 let ip = (*(*exception_info).ContextRecord).Eip as *const u8;
                 let fp = (*(*exception_info).ContextRecord).Ebp as usize;
+            } else if #[cfg(target_arch = "aarch64")] {
+                let ip = (*(*exception_info).ContextRecord).Pc as *const u8;
+                let fp = (*(*exception_info).ContextRecord).Anonymous.Anonymous.Fp as usize;
             } else {
                 compile_error!("unsupported platform");
             }

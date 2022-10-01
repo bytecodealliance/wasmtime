@@ -21,7 +21,7 @@ impl UnwindRegistration {
         if RtlAddFunctionTable(
             unwind_info as *mut _,
             (unwind_len / unit_len) as u32,
-            base_address as u64,
+            base_address as _,
         ) == 0
         {
             bail!("failed to register function table");
