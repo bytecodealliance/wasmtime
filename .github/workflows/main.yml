@@ -184,6 +184,8 @@ jobs:
     - run: cargo check --target armv7-unknown-linux-gnueabihf -p wasi-common
 
   # Check whether `wasmtime` cross-compiles to aarch64-pc-windows-msvc
+  # We don't build nor test it because it lacks trap handling.
+  # Tracking issue: https://github.com/bytecodealliance/wasmtime/issues/4992
   checks_winarm64:
     name: Check Windows ARM64
     runs-on: windows-latest
