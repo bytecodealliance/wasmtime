@@ -135,11 +135,10 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                         {
                             // Call `declare_block_predecessor` instead of `declare_successor` for
                             // avoiding the borrow checker.
-                            self.builder.func_ctx.ssa.declare_block_predecessor(
-                                *dest_block,
-                                self.builder.position.unwrap(),
-                                inst,
-                            );
+                            self.builder
+                                .func_ctx
+                                .ssa
+                                .declare_block_predecessor(*dest_block, inst);
                         }
                         self.builder.declare_successor(destination, inst);
                     }
@@ -688,11 +687,9 @@ impl<'a> FunctionBuilder<'a> {
         let old_dest = self.func.dfg[inst]
             .branch_destination_mut()
             .expect("you want to change the jump destination of a non-jump instruction");
-        let pred = self.func_ctx.ssa.remove_block_predecessor(*old_dest, inst);
+        self.func_ctx.ssa.remove_block_predecessor(*old_dest, inst);
         *old_dest = new_dest;
-        self.func_ctx
-            .ssa
-            .declare_block_predecessor(new_dest, pred, inst);
+        self.func_ctx.ssa.declare_block_predecessor(new_dest, inst);
     }
 
     /// Returns `true` if and only if the current `Block` is sealed and has no predecessors declared.
@@ -1083,7 +1080,7 @@ impl<'a> FunctionBuilder<'a> {
     fn declare_successor(&mut self, dest_block: Block, jump_inst: Inst) {
         self.func_ctx
             .ssa
-            .declare_block_predecessor(dest_block, self.position.unwrap(), jump_inst);
+            .declare_block_predecessor(dest_block, jump_inst);
     }
 
     fn handle_ssa_side_effects(&mut self, side_effects: SideEffects) {
