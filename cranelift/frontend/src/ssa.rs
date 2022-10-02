@@ -411,7 +411,11 @@ impl SSABuilder {
     fn seal_one_block(&mut self, block: Block, func: &mut Function) {
         // For each undef var we look up values in the predecessors and create a block parameter
         // only if necessary.
-        let mut undef_variables = self.mark_block_sealed(block);
+        let mut undef_variables =
+            match mem::replace(&mut self.ssa_blocks[block].sealed, Sealed::Yes) {
+                Sealed::No { undef_variables } => undef_variables,
+                Sealed::Yes => return,
+            };
         let ssa_params = undef_variables.len(&self.variable_pool);
 
         // Note that begin_predecessors_lookup requires visiting these variables in the same order
@@ -441,14 +445,6 @@ impl SSABuilder {
         }
 
         undef_variables.clear(&mut self.variable_pool);
-    }
-
-    /// Set the `sealed` flag for `block`. Returns any variables that still need definitions.
-    fn mark_block_sealed(&mut self, block: Block) -> EntityList<Variable> {
-        match mem::replace(&mut self.ssa_blocks[block].sealed, Sealed::Yes) {
-            Sealed::No { undef_variables } => undef_variables,
-            Sealed::Yes => EntityList::new(),
-        }
     }
 
     /// Given the local SSA Value of a Variable in a Block, perform a recursive lookup on
@@ -541,9 +537,20 @@ impl SSABuilder {
             // to keep the block argument.
             let mut preds = self.ssa_blocks[dest_block].predecessors;
             for idx in 0.. {
-                if let Some(mut pred) = preds.get(idx, &self.inst_pool) {
-                    self.append_jump_argument(func, &mut pred, dest_block, var);
-                    *preds.get_mut(idx, &mut self.inst_pool).unwrap() = pred;
+                if let Some(pred) = preds.get(idx, &self.inst_pool) {
+                    // We already did a full `use_var` above, so we can do just the fast path.
+                    let block = func.layout.inst_block(pred).unwrap();
+                    let val = self.variables[var][block].unwrap();
+                    if let Some((new_block, new_branch)) =
+                        Self::append_jump_argument(func, pred, dest_block, val)
+                    {
+                        let data = &mut self.ssa_blocks[new_block];
+                        data.predecessors.push(pred, &mut self.inst_pool);
+                        data.sealed = Sealed::Yes;
+                        self.variables[var][new_block] = PackedOption::from(val);
+                        *preds.get_mut(idx, &mut self.inst_pool).unwrap() = new_branch;
+                        self.side_effects.split_blocks_created.push(new_block);
+                    }
                 } else {
                     break;
                 }
@@ -557,32 +564,26 @@ impl SSABuilder {
     /// Appends a jump argument to a jump instruction, returns block created in case of
     /// critical edge splitting.
     fn append_jump_argument(
-        &mut self,
         func: &mut Function,
-        pred: &mut Inst,
+        branch: Inst,
         dest_block: Block,
-        var: Variable,
-    ) {
-        // We already did a full `use_var` above, so we can do just the fast path.
-        let block = func.layout.inst_block(*pred).unwrap();
-        let val = self.variables[var][block].unwrap();
-        match func.dfg.analyze_branch(*pred) {
+        val: Value,
+    ) -> Option<(Block, Inst)> {
+        match func.dfg.analyze_branch(branch) {
             BranchInfo::NotABranch => {
                 panic!("you have declared a non-branch instruction as a predecessor to a block");
             }
             // For a single destination appending a jump argument to the instruction
             // is sufficient.
-            BranchInfo::SingleDest(_, _) => func.dfg.append_inst_arg(*pred, val),
+            BranchInfo::SingleDest(_, _) => {
+                func.dfg.append_inst_arg(branch, val);
+                None
+            }
             BranchInfo::Table(mut jt, _default_block) => {
                 // In the case of a jump table, the situation is tricky because br_table doesn't
                 // support arguments. We have to split the critical edge.
                 let middle_block = func.dfg.make_block();
                 func.layout.append_block(middle_block);
-                self.declare_block(middle_block);
-                self.ssa_blocks[middle_block]
-                    .predecessors
-                    .push(*pred, &mut self.inst_pool);
-                self.mark_block_sealed(middle_block);
 
                 let table = &func.jump_tables[jt];
                 let mut copied = JumpTableData::with_capacity(table.len());
@@ -601,7 +602,7 @@ impl SSABuilder {
                 }
 
                 // Redo the match from `analyze_branch` but this time capture mutable references
-                match &mut func.dfg[*pred] {
+                match &mut func.dfg[branch] {
                     InstructionData::BranchTable {
                         destination, table, ..
                     } => {
@@ -615,9 +616,7 @@ impl SSABuilder {
 
                 let mut cur = FuncCursor::new(func).at_bottom(middle_block);
                 let middle_jump_inst = cur.ins().jump(dest_block, &[val]);
-                self.def_var(var, val, middle_block);
-                *pred = middle_jump_inst;
-                self.side_effects.split_blocks_created.push(middle_block);
+                Some((middle_block, middle_jump_inst))
             }
         }
     }
