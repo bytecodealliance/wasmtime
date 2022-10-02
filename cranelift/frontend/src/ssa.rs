@@ -484,19 +484,22 @@ impl SSABuilder {
         sentinel: Value,
         var: Variable,
         dest_block: Block,
-    ) {
+    ) -> Value {
         // Determine how many predecessors are yielding unique, non-temporary Values. If a variable
         // is live and unmodified across several control-flow join points, earlier blocks will
         // introduce aliases for that variable's definition, so we resolve aliases eagerly here to
         // ensure that we can tell when the same definition has reached this block via multiple
         // paths. Doing so also detects cyclic references to the sentinel, which can occur in
         // unreachable code.
+        let num_predecessors = self.predecessors(dest_block).len();
+        // When this `Drain` is dropped, these elements will get truncated.
+        let results = self.results.drain(self.results.len() - num_predecessors..);
+
         let pred_val = {
-            let num_predecessors = self.predecessors(dest_block).len();
-            let mut iter = self
-                .results
-                .drain(self.results.len() - num_predecessors..)
-                .map(|val| func.dfg.resolve_aliases(val))
+            let mut iter = results
+                .as_slice()
+                .iter()
+                .map(|&val| func.dfg.resolve_aliases(val))
                 .filter(|&val| val != sentinel);
             if let Some(val) = iter.next() {
                 // This variable has at least one non-temporary definition. If they're all the same
@@ -524,7 +527,7 @@ impl SSABuilder {
             }
         };
 
-        let result_val = if let Some(pred_val) = pred_val {
+        if let Some(pred_val) = pred_val {
             // Here all the predecessors use a single value to represent our variable
             // so we don't need to have it as a block argument.
             // We need to replace all the occurrences of val with pred_val but since
@@ -536,29 +539,22 @@ impl SSABuilder {
             // There is disagreement in the predecessors on which value to use so we have
             // to keep the block argument.
             let mut preds = self.ssa_blocks[dest_block].predecessors;
-            for idx in 0.. {
-                if let Some(pred) = preds.get(idx, &self.inst_pool) {
-                    // We already did a full `use_var` above, so we can do just the fast path.
-                    let block = func.layout.inst_block(pred).unwrap();
-                    let val = self.variables[var][block].unwrap();
-                    if let Some((new_block, new_branch)) =
-                        Self::append_jump_argument(func, pred, dest_block, val)
-                    {
-                        let data = &mut self.ssa_blocks[new_block];
-                        data.predecessors.push(pred, &mut self.inst_pool);
-                        data.sealed = Sealed::Yes;
-                        self.variables[var][new_block] = PackedOption::from(val);
-                        *preds.get_mut(idx, &mut self.inst_pool).unwrap() = new_branch;
-                        self.side_effects.split_blocks_created.push(new_block);
-                    }
-                } else {
-                    break;
+            for (idx, &val) in results.as_slice().iter().enumerate() {
+                let pred = preds.get_mut(idx, &mut self.inst_pool).unwrap();
+                let branch = *pred;
+                if let Some((new_block, new_branch)) =
+                    Self::append_jump_argument(func, branch, dest_block, val)
+                {
+                    *pred = new_branch;
+                    let data = &mut self.ssa_blocks[new_block];
+                    data.predecessors.push(branch, &mut self.inst_pool);
+                    data.sealed = Sealed::Yes;
+                    self.variables[var][new_block] = PackedOption::from(val);
+                    self.side_effects.split_blocks_created.push(new_block);
                 }
             }
             sentinel
-        };
-
-        self.results.push(result_val);
+        }
     }
 
     /// Appends a jump argument to a jump instruction, returns block created in case of
@@ -656,7 +652,8 @@ impl SSABuilder {
                     self.use_var_nonlocal(func, var, ty, block);
                 }
                 Call::FinishPredecessorsLookup(sentinel, dest_block) => {
-                    self.finish_predecessors_lookup(func, sentinel, var, dest_block);
+                    let val = self.finish_predecessors_lookup(func, sentinel, var, dest_block);
+                    self.results.push(val);
                 }
             }
         }
