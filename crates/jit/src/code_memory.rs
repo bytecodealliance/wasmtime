@@ -171,6 +171,24 @@ impl CodeMemory {
                 .unwrap();
             }
 
+            #[cfg(all(target_arch = "aarch64", target_os = "windows"))]
+            {
+                use std::ffi::c_void;
+                use windows_sys::Win32::System::Diagnostics::Debug::FlushInstructionCache;
+                use windows_sys::Win32::System::Threading::GetCurrentProcess;
+
+                let process_handle = GetCurrentProcess();
+                let res = FlushInstructionCache(
+                    process_handle,
+                    ret.text.as_ptr() as *const c_void,
+                    ret.text.len(),
+                );
+
+                if res == 0 {
+                    panic!("Failed to flush icache");
+                }
+            }
+
             // With all our memory set up use the platform-specific
             // `UnwindRegistration` implementation to inform the general
             // runtime that there's unwinding information available for all
