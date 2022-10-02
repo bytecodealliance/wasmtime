@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 use core::convert::TryInto;
 use core::mem;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
-use cranelift_codegen::entity::{EntitySet, SecondaryMap};
+use cranelift_codegen::entity::{EntityList, EntitySet, ListPool, SecondaryMap};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::instructions::BranchInfo;
 use cranelift_codegen::ir::types::{F32, F64};
@@ -56,6 +56,9 @@ pub struct SSABuilder {
 
     /// Reused storage for cycle-detection.
     visited: EntitySet<Block>,
+
+    /// Storage for pending variable definitions.
+    variable_pool: ListPool<Variable>,
 }
 
 /// Side effects of a `use_var` or a `seal_block` method call.
@@ -93,7 +96,7 @@ impl PredBlock {
 enum Sealed {
     No {
         // List of current Block arguments for which an earlier def has not been found yet.
-        undef_variables: Vec<Variable>,
+        undef_variables: EntityList<Variable>,
     },
     Yes,
 }
@@ -101,7 +104,7 @@ enum Sealed {
 impl Default for Sealed {
     fn default() -> Self {
         Sealed::No {
-            undef_variables: Vec::new(),
+            undef_variables: EntityList::new(),
         }
     }
 }
@@ -149,6 +152,7 @@ impl SSABuilder {
     pub fn clear(&mut self) {
         self.variables.clear();
         self.ssa_blocks.clear();
+        self.variable_pool.clear();
         debug_assert!(self.calls.is_empty());
         debug_assert!(self.results.is_empty());
         debug_assert!(self.side_effects.is_empty());
@@ -359,7 +363,7 @@ impl SSABuilder {
             // definition on the `results` stack.
             Sealed::Yes => self.begin_predecessors_lookup(val, block),
             Sealed::No { undef_variables } => {
-                undef_variables.push(var);
+                undef_variables.push(var, &mut self.variable_pool);
                 self.results.push(val);
             }
         }
@@ -436,13 +440,15 @@ impl SSABuilder {
     fn seal_one_block(&mut self, block: Block, func: &mut Function) {
         // For each undef var we look up values in the predecessors and create a block parameter
         // only if necessary.
-        let undef_variables = self.mark_block_sealed(block);
-        let ssa_params = undef_variables.len();
+        let mut undef_variables = self.mark_block_sealed(block);
+        let ssa_params = undef_variables.len(&self.variable_pool);
 
         // Note that begin_predecessors_lookup requires visiting these variables in the same order
         // that they were defined by find_var, because it appends arguments to the jump instructions
         // in all the predecessor blocks one variable at a time.
-        for (idx, var) in undef_variables.into_iter().enumerate() {
+        for idx in 0..ssa_params {
+            let var = undef_variables.get(idx, &self.variable_pool).unwrap();
+
             // We need the temporary Value that was assigned to this Variable. If that Value shows
             // up as a result from any of our predecessors, then it never got assigned on the loop
             // through that block. We get the value from the next block param, where it was first
@@ -462,17 +468,19 @@ impl SSABuilder {
             self.begin_predecessors_lookup(val, block);
             self.run_state_machine(func, var, func.dfg.value_type(val));
         }
+
+        undef_variables.clear(&mut self.variable_pool);
     }
 
     /// Set the `sealed` flag for `block`. Returns any variables that still need definitions.
-    fn mark_block_sealed(&mut self, block: Block) -> Vec<Variable> {
+    fn mark_block_sealed(&mut self, block: Block) -> EntityList<Variable> {
         // We could call data.predecessors.shrink_to_fit() here, if
         // important, because no further predecessors will be added
         // to this block.
 
         match mem::replace(&mut self.ssa_blocks[block].sealed, Sealed::Yes) {
             Sealed::No { undef_variables } => undef_variables,
-            Sealed::Yes => Vec::new(),
+            Sealed::Yes => EntityList::new(),
         }
     }
 
