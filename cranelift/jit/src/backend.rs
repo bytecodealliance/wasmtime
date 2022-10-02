@@ -457,14 +457,7 @@ impl JITModule {
         // Now that we're done patching, prepare the memory for execution!
         self.memory.readonly.set_readonly();
         self.memory.code.set_readable_and_executable();
-
-        #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-        {
-            let cmd: libc::c_int = 32; // MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE
-
-            // Ensure that no processor has fetched a stale instruction stream.
-            unsafe { libc::syscall(libc::SYS_membarrier, cmd) };
-        }
+        self.memory.code.icache_flush();
 
         for update in self.pending_got_updates.drain(..) {
             unsafe { update.entry.as_ref() }.store(update.ptr as *mut _, Ordering::SeqCst);
@@ -530,14 +523,8 @@ impl JITModule {
             module.libcall_plt_entries.insert(libcall, plt_entry);
         }
 
-        #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-        {
-            let cmd: libc::c_int = 64; // MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE
-
-            // This is a requirement of the membarrier() call executed by
-            // the finalize_definitions() method.
-            unsafe { libc::syscall(libc::SYS_membarrier, cmd) };
-        }
+        // Prepare for the icache flush that happens in finalize_definitions()
+        module.memory.code.prepare_icache_flush();
 
         module
     }

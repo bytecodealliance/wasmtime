@@ -242,6 +242,51 @@ impl Memory {
         self.already_protected = self.allocations.len();
     }
 
+    /// Prepares an icache flush.
+    ///
+    /// [Memory::icache_flush] *must* be called after this.
+    pub(crate) fn prepare_icache_flush(&self) {
+        #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+        {
+            let cmd: libc::c_int = 64; // MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE
+
+            // This is a requirement of the membarrier() call executed by
+            // the finalize_definitions() method.
+            unsafe { libc::syscall(libc::SYS_membarrier, cmd) };
+        }
+    }
+
+    /// Flushes the icache to ensure that no processor has a stale view of this memory.
+    ///
+    /// In order to call this function [Memory::prepare_icache_flush] must have been called previously.
+    pub(crate) fn icache_flush(&self) {
+        #[cfg(all(target_arch = "aarch64", target_os = "windows"))]
+        unsafe {
+            use std::ffi::c_void;
+            use windows_sys::Win32::System::Diagnostics::Debug::FlushInstructionCache;
+            use windows_sys::Win32::System::Threading::GetCurrentProcess;
+
+            let process_handle = GetCurrentProcess();
+
+            for &PtrLen { ptr, len } in &self.allocations[..] {
+                if len != 0 {
+                    let res = FlushInstructionCache(process_handle, ptr as *const c_void, len);
+                    if res == 0 {
+                        panic!("Failed to flush icache");
+                    }
+                }
+            }
+        }
+
+        #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+        {
+            let cmd: libc::c_int = 32; // MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE
+
+            // Ensure that no processor has fetched a stale instruction stream.
+            unsafe { libc::syscall(libc::SYS_membarrier, cmd) };
+        }
+    }
+
     /// Frees all allocated memory regions that would be leaked otherwise.
     /// Likely to invalidate existing function pointers, causing unsafety.
     pub(crate) unsafe fn free_memory(&mut self) {
