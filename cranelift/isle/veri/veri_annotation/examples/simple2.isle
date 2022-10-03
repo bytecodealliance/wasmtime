@@ -1,0 +1,25 @@
+;; TYPES
+
+(type Inst (primitive Inst))
+(type Type (primitive Type))
+(type Value (primitive Value))
+
+
+(type Reg (primitive Reg))
+(type ValueRegs (primitive ValueRegs))
+
+;; Imm12 bv12
+(type Imm12 (primitive Imm12))
+;; NEW: IMPLICIT CONVERTERS
+(convert Reg ValueRegs value_reg)
+(convert Value Reg put_in_reg)
+
+;; EXTRACTORS
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
+(decl lower (Inst) ValueRegs)
+
+;;@ (spec (sig (args ty, arg) (ret))
+;;@ (assertions (= (ty) (widthof (arg))), (= (arg) (ret))))
+(decl has_type (Type Inst) Inst)
+(extern extractor has_type has_type)

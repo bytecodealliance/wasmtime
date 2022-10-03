@@ -1003,6 +1003,7 @@
 (type UImm5 (primitive UImm5))
 (type Imm12 (primitive Imm12))
 (type ImmLogic (primitive ImmLogic))
+;; @(spec bv(8))
 (type ImmShift (primitive ImmShift))
 (type ShiftOpAndAmt (primitive ShiftOpAndAmt))
 (type MoveWideConst (primitive MoveWideConst))
@@ -1631,6 +1632,8 @@
 (decl u8_into_uimm5 (u8) UImm5)
 (extern constructor u8_into_uimm5 u8_into_uimm5)
 
+;;@ (spec (sig (args x) (ret))
+;;@     (assertions (= (zero_ext 4 (x)) (ret))))
 (decl u8_into_imm12 (u8) Imm12)
 (extern constructor u8_into_imm12 u8_into_imm12)
 
@@ -1740,6 +1743,8 @@
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Helper for creating the zero register.
+;;@ (spec (sig (args) (r))
+;;@     (assertions (= (conv_to (regwidth) (0i1:bv)) (r))))
 (decl zero_reg () Reg)
 (extern constructor zero_reg zero_reg)
 
@@ -2304,9 +2309,13 @@
 
 ;; Helpers for generating `sub` instructions.
 
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (- (a) (b)) (r))))
 (decl sub (Type Reg Reg) Reg)
 (rule (sub ty x y) (alu_rrr (ALUOp.Sub) ty x y))
 
+;;@ (spec (sig (args ty, reg, imm_arg) (ret))
+;;@     (assertions (= (- (reg) (conv_to (widthof (ret)) (imm_arg))) (ret))))
 (decl sub_imm (Type Reg Imm12) Reg)
 (rule (sub_imm ty x y) (alu_rr_imm12 (ALUOp.Sub) ty x y))
 
@@ -2507,6 +2516,8 @@
 (rule (asr_imm ty x imm) (alu_rr_imm_shift (ALUOp.Asr) ty x imm))
 
 ;; Helper for generating `lsr` instructions.
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (shr (a) (b)) (r))))
 (decl lsr (Type Reg Reg) Reg)
 (rule (lsr ty x y) (alu_rrr (ALUOp.Lsr) ty x y))
 
@@ -2514,6 +2525,8 @@
 (rule (lsr_imm ty x imm) (alu_rr_imm_shift (ALUOp.Lsr) ty x imm))
 
 ;; Helper for generating `lsl` instructions.
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (shl (a) (b)) (r))))
 (decl lsl (Type Reg Reg) Reg)
 (rule (lsl ty x y) (alu_rrr (ALUOp.Lsl) ty x y))
 
@@ -2541,7 +2554,8 @@
 (rule (orr_not_shift ty x y shift) (alu_rrr_shift (ALUOp.OrrNot) ty x y shift))
 
 ;; Helpers for generating `orr` instructions.
-
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (| (a) (b)) (r))))
 (decl orr (Type Reg Reg) Reg)
 (rule (orr ty x y) (alu_rrr (ALUOp.Orr) ty x y))
 
@@ -2625,12 +2639,6 @@
 
 (decl vec_cnt (Reg VectorSize) Reg)
 (rule (vec_cnt x size) (vec_misc (VecMisc2.Cnt) x size))
-
-;; Helpers for generating a `bsl` instruction.
-
-(decl bsl (Type Reg Reg Reg) Reg)
-(rule (bsl ty c x y)
-      (vec_rrr_mod (VecALUModOp.Bsl) c x y (vector_size ty)))
 
 ;; Helper for generating a `udf` instruction.
 
@@ -2787,6 +2795,8 @@
 (rule (put_in_reg_sext32 val @ (value_type $I64)) val)
 
 ;; Place a `Value` into a register, zero extending it to 32-bits
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
 (decl put_in_reg_zext32 (Value) Reg)
 (rule -1 (put_in_reg_zext32 val @ (value_type (fits_in_32 ty)))
       (extend val $false (ty_bits ty) 32))

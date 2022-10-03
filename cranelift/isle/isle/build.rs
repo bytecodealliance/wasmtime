@@ -14,6 +14,11 @@ fn main() {
     emit_tests(&mut out, "isle_examples/fail", "run_fail");
     emit_tests(&mut out, "isle_examples/link", "run_link");
     emit_tests(&mut out, "isle_examples/run", "run_run");
+    emit_tests(
+        &mut out,
+        "isle_examples/envs_for_analysis",
+        "run_envs_for_analysis",
+    );
 
     let output = out_dir.join("isle_tests.rs");
     std::fs::write(output, out).unwrap();

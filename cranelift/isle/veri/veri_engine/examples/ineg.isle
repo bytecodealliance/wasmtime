@@ -1,0 +1,28 @@
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
+(decl lower (Inst) InstOutput)
+
+(type MInst
+  (enum
+))
+
+(type ALUOp
+  (enum
+    (Sub)
+))
+
+(decl alu_rrr (ALUOp Type Reg Reg) Reg)
+(extern constructor alu_rrr alu_rrr)
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (- (a) (b)) (r))))
+(decl sub (Type Reg Reg) Reg)
+(rule (sub ty x y) (alu_rrr (ALUOp.Sub) ty x y))
+
+;;@ (spec (sig (args) (r))
+;;@     (assertions (= (conv_to (regwidth) (0i1:bv)) (r))))
+(decl zero_reg () Reg)
+(extern constructor zero_reg zero_reg)
+
+(rule (lower (has_type (fits_in_64 ty) (ineg x)))
+      (sub ty (zero_reg) (put_in_reg x)))

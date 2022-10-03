@@ -1,0 +1,2 @@
+(rule (lower (has_type (fits_in_64 ty) (iadd x y)))
+            (add ty x y))	   

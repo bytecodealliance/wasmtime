@@ -1,0 +1,147 @@
+;; This is an exploratory, totally manual atttempy to verify a relatively simple
+;; ISLE rule for the aarch64 backend, via SMTLIB modeling. Right now, the file is 
+;; structured as 2 simple, commented-out models, then finally a model that uses
+;; `define-fun` to specify the semantics individual ISLE terms to verify something
+;; very close to the actual syntax of the rule. 
+
+;; At the moment, this file treats register read/writes as no-ops (returning just
+;; the bitvector) and mostly hard-codes BV64, with some WIP for actual type logic.
+
+;; Note: LISP syntax highlighting works well.
+
+;; This is the rule we want to model, currently (2021-01-07) found at:
+;; wasmtime/cranelift/codegen/src/isa/aarch64/lower.isle lines 42-43
+
+;; (rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_negated_value y))))
+;;       (value_reg (sub_imm ty (put_in_reg x) y)))
+
+;; Run this file with:
+;;     z3 cranelift/codegen/src/isa/aarch64/veri/manual_imm12_add_sub.smtlib
+
+(set-option :produce-assignments true)
+
+(define-sort BV64 () (_ BitVec 64))
+(define-sort BV12 () (_ BitVec 12))
+
+;; Types: up to 2^7
+;; (extern const $B1 Type)
+;; (extern const $B8 Type)
+;; (extern const $B16 Type)
+;; (extern const $B32 Type)
+;; (extern const $B64 Type)
+;; (extern const $B128 Type)
+(define-sort Type () Int)
+
+(declare-const ty Type)
+(assert (or (= ty 1)
+            (= ty 8)
+            (= ty 16)
+            (= ty 32)
+            (= ty 64)
+            (= ty 128)))
+
+(declare-const x BV64)
+
+;; For now, without inverting extractors, this needs to be 12
+;; (declare-const y BV64)
+(declare-const y BV12)
+
+;; The dumbest encoding, no function definitions or modeling immediate
+;; (assert (let ((lhs (bvadd x y))
+;;               (rhs (bvsub x (bvneg y))))
+;;     (not (=  lhs rhs))))
+
+;; Medium encoding, use SAIL sub semantics but no ISLE term definitions
+;; (assert 
+;;     (let ((lhs (! (bvadd x y) :named LHS))
+;;           (rhs (! (bvadd (bvadd ((_ extract 63 0) ((_ zero_extend 64) x)) 
+;;                                 ((_ extract 63 0) ((_ zero_extend 64) (bvnot (bvneg y)))))
+;;                          #x0000000000000001) :named RHS)))
+
+;;     (not 
+;;     (implies 
+;;         ;; Preconditions/assumptions
+;;         (and
+;;             ;; Close to (??)  "fits in 12 bits"
+;;             (bvule (bvand y #xfffffffffffffe00) #x0000000000000000)
+;;             ;; Uncomment if no assumptions
+;;             ;; true 
+;;         )
+;;         ;; Semantic equality of left and ride hand sides of rule
+;;         (=  lhs rhs)))))
+
+;; (rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_negated_value y))))
+;;       (value_reg (sub_imm ty (put_in_reg x) y)))
+
+;; Define ISLE functions as terms we can later refine
+
+;; Identity for now (eventually return type should be multiple/list of BV)
+(define-fun lower ((v BV64)) BV64 v)
+
+;; TODO: this needs to check that the value has this type and return the instruction
+(define-fun has_type ((ty Type) (i BV64)) BV64 i)
+
+;; For now, return sentinel -1 if doesn't fit
+(define-fun fits_in_64 ((ty Type)) Type 
+    (ite (> ty 64) -1 ty))
+
+;; CLIF function is straightforward
+(define-fun iadd ((a BV64) (b BV64)) BV64 (bvadd a b))
+
+;; TODO: Not sure if we want to invert return and params for extractors?
+;; Right now this function _consumes_ a BV12 and produces a BV64 - should we flip this?
+(define-fun imm12_from_negated_value ((v BV12)) BV64 (bvneg ((_ zero_extend 52) v)))
+
+;; Identity for now
+(define-fun value_reg ((v BV64)) BV64 v)
+(define-fun put_in_reg ((v BV64)) BV64 v)
+
+;; Should be "closer to" ISA
+;; This encoding is roughly taken from the SAIL ISLA result for `sub v0 v1 v2`, minus
+;; some `zero_extend` and `extract` calls
+(define-fun sub_imm ((ty Type) (a BV64) (i BV12)) BV64 
+    (bvadd (bvadd x 
+                ;;           52 = 64-12
+                ;;  This should actually be expanded out for possible types: b1, b8, b16, b32, b64, b128
+                  (bvnot ((_ zero_extend 52) i)))
+           #x0000000000000001))
+
+(assert 
+    ;; Exciting: LHS and RHS terms are now exact string matches for the ISLE!
+    (let ((lhs (! (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_negated_value y)))) :named LHS))
+          (rhs (! (value_reg (sub_imm ty (put_in_reg x) y)) :named RHS)))
+
+    (not 
+    (implies 
+        ;; Preconditions/assumptions
+        (and
+            ;; Uncomment if no assumptions
+            true 
+        )
+        ;; Semantic equality of left and ride hand sides of rule
+        (=  lhs rhs)))))
+
+
+(check-sat)
+(get-model)
+(get-value (LHS))
+(get-value (RHS))
+
+;; Broken implementation: not instead of neg
+;; (define-fun imm12_from_negated_value ((v BV12)) BV64 (bvnot ((_ zero_extend 52) v)))
+;; Results in:
+;; sat
+;; (
+;;   (define-fun y () (_ BitVec 12)
+;;     #x000)
+;;   (define-fun ty () (_ BitVec 64)
+;;     #x0000000000000000)
+;;   (define-fun x () (_ BitVec 64)
+;;     #x0000000000000000)
+;;   (define-fun LHS () (_ BitVec 64)
+;;     (bvadd x (bvnot ((_ zero_extend 52) y))))
+;;   (define-fun RHS () (_ BitVec 64)
+;;     (bvadd x (bvnot ((_ zero_extend 52) y)) #x0000000000000001))
+;; )
+;; ((LHS #xffffffffffffffff))
+;; ((RHS #x0000000000000000))

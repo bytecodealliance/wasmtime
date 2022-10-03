@@ -1,0 +1,26 @@
+[package]
+name = "veri_engine"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "veri_engine_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "veri_engine_bin"
+path = "src/main.rs"
+
+[dependencies]
+cranelift-isle = { path = "../../isle" }
+veri_ir = { path = "../veri_ir" }
+veri_annotation = { path = "../veri_annotation" }
+rsmt2 = "0.14.1"
+clap = "3.1.2"
+itertools = "0.10.3"
+
+[dev-dependencies]
+strum = "0.24.0"
+strum_macros = "0.24.0"

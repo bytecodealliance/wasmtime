@@ -1,0 +1,121 @@
+use std::str::FromStr;
+
+use veri_ir as ast;
+use ast::annotation_ir::*;
+
+// DO NOT FORGET TO CHANGE THE EXTENSION!!!
+
+grammar;
+
+UNum: usize = <s:r"[0-9]+">  => usize::from_str(s).unwrap();
+Num: i128 = <s:r"-?[0-9]+i">  => i128::from_str(&s[..s.len() - 1]).unwrap();
+
+Ident: String = {
+    <s:r"[A-Za-z]"> => s.to_string(),
+    <s:r"[A-Zac-z][\.\w]+"> => s.to_string(),
+    <s:r"b[\w&&[^v]][\.\w]*"> => s.to_string(),
+};
+
+pub Type: Type = {
+    "bv" => Type::BitVector,
+    "bv" <n:UNum> => Type::BitVectorWithWidth(n),
+    "isleType" => Type::Int,
+    "bool" => Type::Bool,
+};
+
+pub BoundVar: BoundVar = {
+    <i:Ident> => BoundVar{name: i, ty: None},
+    <i:Ident> ":" <t:Type> => BoundVar{name: i, ty: Some(t)},
+};
+
+Comma<T>: Vec<T> = {
+    <mut v:(<T> ",")*> <e:T?> => match e {
+        None => v,
+        Some(e) => {
+            v.push(e);
+            v
+        }
+    }
+};
+
+ArgList = Comma<BoundVar>;
+Args: Vec<BoundVar> = {
+    "(args" <a:ArgList> ")" => a,
+};
+
+TypeList = Comma<Type>;
+
+ExprList = Comma<Expr>;
+
+pub TermSignature: TermSignature = {
+    "(" "sig" <a:Args> "(" <r:BoundVar> ")" ")" => 
+        TermSignature{args: a, ret: r},
+};
+
+pub FunctionType: FunctionType = {
+    "func" "(" <a:TypeList> ")" "(" <r:Type> ")" =>
+        FunctionType{args: a, ret: Box::new(r)},
+};
+
+pub Const: Const = {
+    <v:Num> <n:UNum> ":" <t:Type> => Const{ty: t, value: v, width: n},
+};
+
+pub Function: Function = {
+    <n:Ident> "(" <a:ArgList> ")" "(" <t:Type> ")" "{" <b:Expr> "}" =>
+        Function{name: n, ty: t, args: a, body: b},
+};
+
+pub FunctionApplication: FunctionApplication = {
+    <f:Expr> "(" <x:ExprList> ")" => FunctionApplication{func: f, args: x},
+};
+
+pub Width: Box<Width> = {
+    "(" "regwidth" ")" => Box::new(Width::RegWidth),
+}
+
+pub Expr: Box<Expr> = {
+    "(" <n:Ident> ")" => Box::new(Expr::Var(n, 0)), 
+    "(" <c:Const> ")" => Box::new(Expr::Const(c, 0)),
+    "(" "true" ")" => Box::new(Expr::True(0)),
+    "(" "false" ")" => Box::new(Expr::False(0)),
+
+    "(" "!" <u:Expr> ")" => Box::new(Expr::Not(u, 0)),
+    "(" "&&" <u:Expr> <v:Expr> ")" => Box::new(Expr::And(u, v, 0)),
+    "(" "||" <u:Expr> <v:Expr> ")" => Box::new(Expr::Or(u, v, 0)),
+    "(" "=>" <u:Expr> <v:Expr> ")" => Box::new(Expr::Imp(u, v, 0)),
+    "(" "=" <u:Expr> <v:Expr> ")" => Box::new(Expr::Eq(u, v, 0)),
+    "(" "<=" <u:Expr> <v:Expr> ")" => Box::new(Expr::Lte(u, v, 0)),
+
+    "(" "-" <u:Expr> ")" => Box::new(Expr::BVNeg(u, 0)),
+    "(" "~" <u:Expr> ")" => Box::new(Expr::BVNot(u, 0)),
+
+    "(" "+" <u:Expr> <v:Expr> ")" => Box::new(Expr::BVAdd(u, v, 0)),
+    "(" "-" <u:Expr> <v:Expr> ")" => Box::new(Expr::BVSub(u, v, 0)),
+    "(" "&" <u:Expr> <v:Expr> ")" => Box::new(Expr::BVAnd(u, v, 0)),
+    "(" "|" <u:Expr> <v:Expr> ")" => Box::new(Expr::BVOr(u, v, 0)),
+    "(" "rotl" <u:Expr> <v:Expr> ")" => Box::new(Expr::BVRotl(u, v, 0)),
+    "(" "shl" <u:Expr> <v:Expr> ")" => Box::new(Expr::BVShl(u, v, 0)),
+    "(" "shr" <u:Expr> <v:Expr> ")" => Box::new(Expr::BVShr(u, v, 0)),
+
+    "(" "zero_ext" <n:Width> <v:Expr> ")" => Box::new(Expr::BVZeroExtTo(n, v, 0)),
+    "(" "zero_ext" <n:Expr> <v:Expr> ")" => Box::new(Expr::BVZeroExtToVarWidth(n, v, 0)),
+    "(" "sign_ext" <n:Width> <v:Expr> ")" => Box::new(Expr::BVSignExt(n, v, 0)),
+    "(" "sign_ext" <n:Expr> <v:Expr> ")" => Box::new(Expr::BVSignExtToVarWidth(n, v, 0)),
+    "(" "extract" <s:UNum> <t:UNum> <v:Expr> ")" => 
+        Box::new(Expr::BVExtract(s, t, v, 0)),
+    "(" "conv_to" <n:Width> <v:Expr> ")" => Box::new(Expr::BVConvTo(n, v, 0)),
+    "(" "conv_to" <n:Expr> <v:Expr> ")" => 
+        Box::new(Expr::BVConvToVarWidth(n, v, 0)),
+
+    "(" "if" <c:Expr> "{" <e1:Expr> "}" "else" "{" <e2:Expr> "}" ")" =>
+        Box::new(Expr::Conditional(c, e1, e2, 0)),
+
+    "(" "int2bv" <n:UNum> <v:Expr> ")" => Box::new(Expr::BVIntToBv(n, v, 0)),
+    "(" "widthof" <v:Expr> ")" => Box::new(Expr::WidthOf(v, 0)),
+};
+
+pub TermAnnotation: TermAnnotation = {
+    "(" "spec" <s:TermSignature> "(" "assertions" <a:ExprList> ")" ")" =>
+        TermAnnotation {sig: s, assertions: a},
+};

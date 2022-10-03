@@ -1,0 +1,68 @@
+        ;; TYPES
+    
+        (type Inst (primitive Inst))
+        (type Type (primitive Type))
+        (type Value (primitive Value))
+    
+        (type Reg (primitive Reg))
+        (type ValueRegs (primitive ValueRegs))
+    
+        ;; Imm12 bv12
+        (type Imm12 (primitive Imm12))
+    
+        ;; EXTRACTORS
+        ;;@ (spec (sig (args arg) (ret))
+        ;;@     (assertions (= (conv_to (regwidth) (arg)) (ret))))
+        (decl lower (Inst) ValueRegs)
+
+        ;;@ (spec (sig (args ty, arg) (ret))
+        ;;@ (assertions (= (ty) (widthof (arg))), (= (arg) (ret))))
+        (decl has_type (Type Inst) Inst)
+        (extern extractor has_type has_type)
+    
+        ;;@ (spec (sig (args arg) (ret))
+        ;;@     (assertions (= (arg) (ret)), (<= (arg) (64i128: isleType))))
+        (decl fits_in_64 (Type) Type)
+        (extern extractor fits_in_64 fits_in_64)
+    
+        (decl fits_in_32 (Type) Type)
+        (extern extractor fits_in_32 fits_in_32)
+    
+        ;;@ (spec (sig (args a, b) (r))
+        ;;@     (assertions (= (+ (a) (b)) (r))))
+        (decl iadd (Value Value) Inst)
+        (extern extractor iadd iadd)
+    
+        ;;@ (spec (sig (args imm_arg) (ret))
+        ;;@ (assertions (= (- (conv_to (widthof (ret)) (imm_arg))) (ret))))
+        (decl imm12_from_negated_value (Imm12) Value)
+        (extern extractor imm12_from_negated_value imm12_from_negated_value)
+
+        ;; IMPLICIT CONVERTERS
+        (convert Reg ValueRegs value_reg)
+        (convert Value Reg put_in_reg)
+    
+        ;; CONSTRUCTORS
+        ;;@ (spec (sig (args arg) (ret))
+        ;;@     (assertions (= (arg) (ret))))
+        (decl value_reg (Reg) ValueRegs)
+        (extern constructor value_reg value_reg)
+    
+        ;;@ (spec (sig (args ty, a, b) (r))
+        ;;@     (assertions (= (+ (a) (b)) (r))))
+        (decl add (Type Reg Reg) Reg)
+        (extern constructor add add)
+    
+        ;;@ (spec (sig (args arg) (ret))
+        ;;@     (assertions (= (conv_to (regwidth) (arg)) (ret))))
+        (decl put_in_reg (Value) Reg)
+        (extern constructor put_in_reg put_in_reg)
+    
+        ;;@ (spec (sig (args ty, reg, imm_arg) (ret))
+        ;;@     (assertions (= (- (reg) (conv_to (widthof (ret)) (imm_arg))) (ret))))
+        (decl sub_imm (Type Reg Imm12) Reg)
+        (extern constructor sub_imm sub_imm)
+
+        (rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_negated_value y))))
+        (let ((x_plus_0 Reg (add ty x 0)))
+        (sub_imm ty x_plus_0 y)))

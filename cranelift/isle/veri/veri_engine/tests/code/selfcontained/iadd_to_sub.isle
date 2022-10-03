@@ -1,0 +1,2 @@
+(rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_negated_value y))))
+         (value_reg (sub_imm ty (put_in_reg x) y)))

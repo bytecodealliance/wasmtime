@@ -1357,7 +1357,7 @@
 (extern constructor negate_imm_shift negate_imm_shift)
 
 ;; General 128-bit case.
-;;
+
 ;; TODO: much better codegen is possible with a constant amount.
 (rule (lower (has_type $I128 (rotl x y)))
       (let ((val ValueRegs x)
@@ -1419,6 +1419,10 @@
             (val_lshift Reg (lsl $I32 val neg_amt)))
         (orr $I32 val_lshift val_rshift)))
 
+;; TODO AVH
+;;    (assertions (= (int2bv (widthof (ret)) (x)) (ret))))
+;;@ (spec (sig (args x) (ret))
+;;@   (assertions (= (7i12:bv) (ret))))
 (decl rotr_mask (Type) ImmLogic)
 (extern constructor rotr_mask rotr_mask)
 

@@ -1,0 +1,34 @@
+;; (spec (sig (args (x: bvX) (ret: bvX)))
+;;       (assumptions (= x ret)))
+(decl put_in_reg (Value) Reg)
+
+;; (spec (sig (args x) (ret r)))
+;;       (assumptions (= r (zext 52 x))))
+(decl imm12_from_negated_u64 (Imm12) u64)
+
+;; (spec (sig (args ty) (ret r)))
+;;       (assumptions (= r ty) (<= ty 64)))
+(decl fits_in_64 (Type) Type)
+
+(type Opcode extern
+    (enum
+    ;; ...
+
+        ;; (spec (sig (args) (ret r)))
+        ;;       (assumptions (= r (func (x : ValueArray2) (bvadd x[0] x[1]))))))
+        Iadd
+
+;; Open questions:
+;; 1. Overall impressions, verbosity of how return value is specified.
+;; 2. Type declarations: allows inference on Isle type strings, or require explicit Verification IR types?
+;;      - inference good
+;;      - don't build into the lowering, there should be a declaration somewhere
+;; 3. Syntax for extracting from ValueArrays? For declaring a functions-as-value, re: Iadd?
+;;     - preferable to have the ISLE parser: could be a general framework for taking annotations (see wasm annotations - arbitrary sexpr)
+;; I would prefer if the annotations had a special syntax, so invalid annotations can't be confused with regular comments.
+;;     - sexpr for ValueArray unwrapping better
+;;     - note: Call uses dynamic value array indexing - might be out of scope for now
+;;          - also: brz/brnz/jump
+
+;; Future thing: coverage: are all terms in the input lang rewritten?
+;; 

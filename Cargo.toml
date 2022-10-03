@@ -84,6 +84,8 @@ members = [
   "cranelift/isle/fuzz",
   "cranelift/isle/islec",
   "cranelift/serde",
+  "cranelift/isle/veri/veri_engine",
+  "cranelift/isle/veri/veri_ir",
   "crates/bench-api",
   "crates/c-api",
   "crates/cli-flags",

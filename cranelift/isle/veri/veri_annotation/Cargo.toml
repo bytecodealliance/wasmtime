@@ -1,0 +1,13 @@
+[package]
+name = "veri_annotation"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[build-dependencies]
+lalrpop = "0.19.7"
+
+[dependencies]
+lalrpop-util = { version = "0.19.7", features = ["lexer"] }
+regex = "1"
+veri_ir = {path = "../veri_ir"}
