@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::convert::TryFrom;
 use core::fmt::{self, Display, Formatter};
-use core::ops::{Add, Div, Mul, Neg, Sub};
+use core::ops::{Add, Div, Mul, Neg, Sub, BitOr, BitAnd, BitXor, Not};
 use core::str::FromStr;
 use core::{i32, u32};
 #[cfg(feature = "enable-serde")]
@@ -921,6 +921,38 @@ impl Div for Ieee32 {
     }
 }
 
+impl BitAnd for Ieee32 {
+    type Output = Ieee32;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self::with_bits(self.bits() & rhs.bits())
+    }
+}
+
+impl BitOr for Ieee32 {
+    type Output = Ieee32;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self::with_bits(self.bits() | rhs.bits())
+    }
+}
+
+impl BitXor for Ieee32 {
+    type Output = Ieee32;
+
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        Self::with_bits(self.bits() ^ rhs.bits())
+    }
+}
+
+impl Not for Ieee32 {
+    type Output = Ieee32;
+
+    fn not(self) -> Self::Output {
+        Self::with_bits(!self.bits())
+    }
+}
+
 impl Ieee64 {
     /// Create a new `Ieee64` containing the bits of `x`.
     pub fn with_bits(x: u64) -> Self {
@@ -1110,6 +1142,38 @@ impl Div for Ieee64 {
 
     fn div(self, rhs: Self) -> Self::Output {
         Self::with_float(self.as_f64() / rhs.as_f64())
+    }
+}
+
+impl BitAnd for Ieee64 {
+    type Output = Ieee64;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self::with_bits(self.bits() & rhs.bits())
+    }
+}
+
+impl BitOr for Ieee64 {
+    type Output = Ieee64;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self::with_bits(self.bits() | rhs.bits())
+    }
+}
+
+impl BitXor for Ieee64 {
+    type Output = Ieee64;
+
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        Self::with_bits(self.bits() ^ rhs.bits())
+    }
+}
+
+impl Not for Ieee64 {
+    type Output = Ieee64;
+
+    fn not(self) -> Self::Output {
+        Self::with_bits(!self.bits())
     }
 }
 

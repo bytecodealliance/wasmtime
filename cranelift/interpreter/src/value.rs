@@ -662,19 +662,19 @@ impl Value for DataValue {
     }
 
     fn and(self, other: Self) -> ValueResult<Self> {
-        binary_match!(&(&self, &other); [B, I8, I16, I32, I64])
+        binary_match!(&(self, other); [B, I8, I16, I32, I64, F32, F64])
     }
 
     fn or(self, other: Self) -> ValueResult<Self> {
-        binary_match!(|(&self, &other); [B, I8, I16, I32, I64])
+        binary_match!(|(self, other); [B, I8, I16, I32, I64, F32, F64])
     }
 
     fn xor(self, other: Self) -> ValueResult<Self> {
-        binary_match!(^(&self, &other); [I8, I16, I32, I64])
+        binary_match!(^(self, other); [I8, I16, I32, I64, F32, F64])
     }
 
     fn not(self) -> ValueResult<Self> {
-        unary_match!(!(&self); [B, I8, I16, I32, I64])
+        unary_match!(!(self); [B, I8, I16, I32, I64, F32, F64])
     }
 
     fn count_ones(self) -> ValueResult<Self> {
