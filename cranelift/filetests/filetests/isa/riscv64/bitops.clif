@@ -120,7 +120,7 @@ block0(v0: i128):
 ;   li t0,64
 ;   select_reg t2,t3,zero##condition=(t0 eq a4)
 ;   add a0,a4,t2
-;   mv a1,zero
+;   li a1,0
 ;   ret
 
 function %c(i8) -> i8 {
@@ -194,8 +194,9 @@ block0(v0: i128):
 ;   li a5,64
 ;   select_reg a7,a3,zero##condition=(a5 eq t2)
 ;   add t4,t2,a7
+;   li t1,0
 ;   addi a0,t4,-1
-;   mv a1,zero
+;   li a1,0
 ;   ret
 
 function %d(i8) -> i8 {
@@ -254,7 +255,7 @@ block0(v0: i128):
 ;   li t0,64
 ;   select_reg t2,t3,zero##condition=(t0 eq a4)
 ;   add a0,a4,t2
-;   mv a1,zero
+;   li a1,0
 ;   ret
 
 function %d(i128) -> i128 {
@@ -267,7 +268,7 @@ block0(v0: i128):
 ;   popcnt a4,a0##ty=i64 tmp=a2 step=a3
 ;   popcnt t3,a1##ty=i64 tmp=a6 step=a7
 ;   add a0,a4,t3
-;   mv a1,zero
+;   li a1,0
 ;   ret
 
 function %d(i64) -> i64 {

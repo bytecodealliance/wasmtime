@@ -34,7 +34,7 @@ block0(v0: i64):
 }
 
 ; block0:
-;   mv a1,zero
+;   li a1,0
 ;   ret
 
 function %i128_sextend_i64(i64) -> i128 {
@@ -56,7 +56,7 @@ block0(v0: i32):
 
 ; block0:
 ;   uext.w a0,a0
-;   mv a1,zero
+;   li a1,0
 ;   ret
 
 function %i128_sextend_i32(i32) -> i128 {
@@ -79,7 +79,7 @@ block0(v0: i16):
 
 ; block0:
 ;   uext.h a0,a0
-;   mv a1,zero
+;   li a1,0
 ;   ret
 
 function %i128_sextend_i16(i16) -> i128 {
@@ -102,7 +102,7 @@ block0(v0: i8):
 
 ; block0:
 ;   uext.b a0,a0
-;   mv a1,zero
+;   li a1,0
 ;   ret
 
 function %i128_sextend_i8(i8) -> i128 {
