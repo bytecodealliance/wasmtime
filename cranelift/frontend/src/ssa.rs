@@ -105,6 +105,8 @@ struct SSABlockData {
     predecessors: EntityList<Inst>,
     // A block is sealed if all of its predecessors have been declared.
     sealed: Sealed,
+    // If this block is sealed and it has exactly one predecessor, this is that predecessor.
+    single_predecessor: PackedOption<Block>,
 }
 
 impl SSABuilder {
@@ -258,14 +260,11 @@ impl SSABuilder {
         // any of the blocks before `from`.
         //
         // So in either case there is no definition in these blocks yet and we can blindly set one.
+        let var_defs = &mut self.variables[var];
         while block != from {
-            debug_assert!(self.is_sealed(block));
-            let var_defs = &mut self.variables[var];
             debug_assert!(var_defs[block].is_none());
             var_defs[block] = PackedOption::from(val);
-            let predecessors = self.predecessors(block);
-            debug_assert_eq!(predecessors.len(), 1);
-            block = func.layout.inst_block(predecessors[0]).unwrap();
+            block = self.ssa_blocks[block].single_predecessor.unwrap();
         }
     }
 
@@ -301,10 +300,13 @@ impl SSABuilder {
     ) -> (Value, Block) {
         // Try to find an existing definition along single-predecessor edges first.
         self.visited.clear();
-        while self.has_one_predecessor(block) && self.visited.insert(block) {
-            let branch = self.predecessors(block)[0];
-            block = func.layout.inst_block(branch).unwrap();
-            if let Some(val) = self.variables[var][block].expand() {
+        let var_defs = &mut self.variables[var];
+        while let Some(pred) = self.ssa_blocks[block].single_predecessor.expand() {
+            if !self.visited.insert(block) {
+                break;
+            }
+            block = pred;
+            if let Some(val) = var_defs[block].expand() {
                 self.results.push(val);
                 return (val, block);
             }
@@ -313,7 +315,7 @@ impl SSABuilder {
         // We've promised to return the most recent block where `var` was defined, but we didn't
         // find a usable definition. So create one.
         let val = func.dfg.append_block_param(block, ty);
-        self.def_var(var, val, block);
+        var_defs[block] = PackedOption::from(val);
 
         // Now every predecessor needs to pass its definition of this variable to the newly added
         // block parameter. To do that we have to "recursively" call `use_var`, but there are two
@@ -417,6 +419,12 @@ impl SSABuilder {
                 Sealed::Yes => return,
             };
         let ssa_params = undef_variables.len(&self.variable_pool);
+
+        let predecessors = self.predecessors(block);
+        if predecessors.len() == 1 {
+            let pred = func.layout.inst_block(predecessors[0]).unwrap();
+            self.ssa_blocks[block].single_predecessor = PackedOption::from(pred);
+        }
 
         // Note that begin_predecessors_lookup requires visiting these variables in the same order
         // that they were defined by find_var, because it appends arguments to the jump instructions
@@ -539,6 +547,7 @@ impl SSABuilder {
             // There is disagreement in the predecessors on which value to use so we have
             // to keep the block argument.
             let mut preds = self.ssa_blocks[dest_block].predecessors;
+            let var_defs = &mut self.variables[var];
             for (idx, &val) in results.as_slice().iter().enumerate() {
                 let pred = preds.get_mut(idx, &mut self.inst_pool).unwrap();
                 let branch = *pred;
@@ -546,10 +555,13 @@ impl SSABuilder {
                     Self::append_jump_argument(func, branch, dest_block, val)
                 {
                     *pred = new_branch;
-                    let data = &mut self.ssa_blocks[new_block];
-                    data.predecessors.push(branch, &mut self.inst_pool);
-                    data.sealed = Sealed::Yes;
-                    self.variables[var][new_block] = PackedOption::from(val);
+                    let old_block = func.layout.inst_block(branch).unwrap();
+                    self.ssa_blocks[new_block] = SSABlockData {
+                        predecessors: EntityList::from_slice(&[branch], &mut self.inst_pool),
+                        sealed: Sealed::Yes,
+                        single_predecessor: PackedOption::from(old_block),
+                    };
+                    var_defs[new_block] = PackedOption::from(val);
                     self.side_effects.split_blocks_created.push(new_block);
                 }
             }
@@ -627,10 +639,6 @@ impl SSABuilder {
     /// Returns whether the given Block has any predecessor or not.
     pub fn has_any_predecessors(&self, block: Block) -> bool {
         !self.predecessors(block).is_empty()
-    }
-
-    fn has_one_predecessor(&self, block: Block) -> bool {
-        self.is_sealed(block) && self.predecessors(block).len() == 1
     }
 
     /// Returns `true` if and only if `seal_block` has been called on the argument.
