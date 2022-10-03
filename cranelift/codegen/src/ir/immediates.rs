@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::convert::TryFrom;
 use core::fmt::{self, Display, Formatter};
-use core::ops::{Add, Div, Mul, Neg, Sub, BitOr, BitAnd, BitXor, Not};
+use core::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Sub};
 use core::str::FromStr;
 use core::{i32, u32};
 #[cfg(feature = "enable-serde")]
