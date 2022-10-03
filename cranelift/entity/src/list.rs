@@ -104,6 +104,12 @@ impl<T: core::hash::Hash + EntityRef + ReservedValue> core::hash::Hash for ListP
     }
 }
 
+impl<T: EntityRef + ReservedValue> Default for ListPool<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Lists are allocated in sizes that are powers of two, starting from 4.
 /// Each power of two is assigned a size class number, so the size is `4 << SizeClass`.
 type SizeClass = u8;
