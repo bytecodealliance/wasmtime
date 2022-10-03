@@ -183,6 +183,20 @@ jobs:
     - run: cargo check --target wasm32-unknown-emscripten -p wasi-common
     - run: cargo check --target armv7-unknown-linux-gnueabihf -p wasi-common
 
+  # Check whether `wasmtime` cross-compiles to aarch64-pc-windows-msvc
+  # We don't build nor test it because it lacks trap handling.
+  # Tracking issue: https://github.com/bytecodealliance/wasmtime/issues/4992
+  checks_winarm64:
+    name: Check Windows ARM64
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - run: rustup target add aarch64-pc-windows-msvc
+    - run: cargo check -p wasmtime --target aarch64-pc-windows-msvc
+
   fuzz_targets:
     name: Fuzz Targets
     runs-on: ubuntu-latest

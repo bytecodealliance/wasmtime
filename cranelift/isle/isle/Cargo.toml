@@ -19,6 +19,5 @@ tempfile = "3"
 [features]
 default = []
 
-overlap-errors = []
 logging = ["log"]
 miette-errors = ["miette"]
