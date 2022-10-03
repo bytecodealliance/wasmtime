@@ -1,5 +1,6 @@
 //! Defines `JITModule`.
 
+use crate::memory::MemoryUse;
 use crate::{compiled_blob::CompiledBlob, memory::BranchProtection, memory::Memory};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
@@ -457,7 +458,6 @@ impl JITModule {
         // Now that we're done patching, prepare the memory for execution!
         self.memory.readonly.set_readonly();
         self.memory.code.set_readable_and_executable();
-        self.memory.code.icache_flush();
 
         for update in self.pending_got_updates.drain(..) {
             unsafe { update.entry.as_ref() }.store(update.ptr as *mut _, Ordering::SeqCst);
@@ -486,10 +486,10 @@ impl JITModule {
             lookup_symbols: builder.lookup_symbols,
             libcall_names: builder.libcall_names,
             memory: MemoryHandle {
-                code: Memory::new(branch_protection),
+                code: Memory::new(branch_protection, MemoryUse::Code),
                 // Branch protection is not applicable to non-executable memory.
-                readonly: Memory::new(BranchProtection::None),
-                writable: Memory::new(BranchProtection::None),
+                readonly: Memory::new(BranchProtection::None, MemoryUse::Data),
+                writable: Memory::new(BranchProtection::None, MemoryUse::Data),
             },
             declarations: ModuleDeclarations::default(),
             function_got_entries: SecondaryMap::new(),
@@ -522,9 +522,6 @@ impl JITModule {
             let plt_entry = module.new_plt_entry(got_entry);
             module.libcall_plt_entries.insert(libcall, plt_entry);
         }
-
-        // Prepare for the icache flush that happens in finalize_definitions()
-        module.memory.code.prepare_icache_flush();
 
         module
     }

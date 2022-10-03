@@ -113,6 +113,15 @@ pub(crate) enum BranchProtection {
     BTI,
 }
 
+/// What is the intended use of this memory.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum MemoryUse {
+    /// Used to hold data. Data memory cannot be marked as executable.
+    Data,
+    /// Used to hold executable code.
+    Code,
+}
+
 /// JIT memory manager. This manages pages of suitably aligned and
 /// accessible memory. Memory will be leaked by default to have
 /// function pointers remain valid for the remainder of the
@@ -123,16 +132,18 @@ pub(crate) struct Memory {
     current: PtrLen,
     position: usize,
     branch_protection: BranchProtection,
+    memory_use: MemoryUse,
 }
 
 impl Memory {
-    pub(crate) fn new(branch_protection: BranchProtection) -> Self {
+    pub(crate) fn new(branch_protection: BranchProtection, memory_use: MemoryUse) -> Self {
         Self {
             allocations: Vec::new(),
             already_protected: 0,
             current: PtrLen::new(),
             position: 0,
             branch_protection,
+            memory_use,
         }
     }
 
@@ -161,11 +172,24 @@ impl Memory {
         // TODO: Allocate more at a time.
         self.current = PtrLen::with_size(size)?;
         self.position = size;
+
+        // If this memory is going to be executable, we need to prepare for the icache flush
+        // that happens in set_readable_and_executable()
+        if self.memory_use == MemoryUse::Code {
+            self.prepare_icache_flush();
+        }
+
         Ok(self.current.ptr)
     }
 
     /// Set all memory allocated in this `Memory` up to now as readable and executable.
     pub(crate) fn set_readable_and_executable(&mut self) {
+        debug_assert_eq!(
+            self.memory_use,
+            MemoryUse::Code,
+            "Tried to mark non Code memory as executable!"
+        );
+
         self.finish_current();
 
         let set_region_readable_and_executable = |ptr, len| {
@@ -208,6 +232,8 @@ impl Memory {
             }
         }
 
+        self.icache_flush();
+
         self.already_protected = self.allocations.len();
     }
 
@@ -245,7 +271,7 @@ impl Memory {
     /// Prepares an icache flush.
     ///
     /// [Memory::icache_flush] *must* be called after this.
-    pub(crate) fn prepare_icache_flush(&self) {
+    fn prepare_icache_flush(&self) {
         #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
         {
             let cmd: libc::c_int = 64; // MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE
@@ -259,7 +285,7 @@ impl Memory {
     /// Flushes the icache to ensure that no processor has a stale view of this memory.
     ///
     /// In order to call this function [Memory::prepare_icache_flush] must have been called previously.
-    pub(crate) fn icache_flush(&self) {
+    fn icache_flush(&self) {
         #[cfg(all(target_arch = "aarch64", target_os = "windows"))]
         unsafe {
             use std::ffi::c_void;
@@ -268,7 +294,7 @@ impl Memory {
 
             let process_handle = GetCurrentProcess();
 
-            for &PtrLen { ptr, len } in &self.allocations[..] {
+            for &PtrLen { ptr, len } in &self.allocations[self.already_protected..] {
                 if len != 0 {
                     let res = FlushInstructionCache(process_handle, ptr as *const c_void, len);
                     if res == 0 {
