@@ -1,6 +1,5 @@
 //! Defines `JITModule`.
 
-use crate::memory::MemoryUse;
 use crate::{compiled_blob::CompiledBlob, memory::BranchProtection, memory::Memory};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
@@ -486,10 +485,10 @@ impl JITModule {
             lookup_symbols: builder.lookup_symbols,
             libcall_names: builder.libcall_names,
             memory: MemoryHandle {
-                code: Memory::new(branch_protection, MemoryUse::Code),
+                code: Memory::new(branch_protection),
                 // Branch protection is not applicable to non-executable memory.
-                readonly: Memory::new(BranchProtection::None, MemoryUse::Data),
-                writable: Memory::new(BranchProtection::None, MemoryUse::Data),
+                readonly: Memory::new(BranchProtection::None),
+                writable: Memory::new(BranchProtection::None),
             },
             declarations: ModuleDeclarations::default(),
             function_got_entries: SecondaryMap::new(),

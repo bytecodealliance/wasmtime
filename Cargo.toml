@@ -127,6 +127,7 @@ wasi-common = { path = "crates/wasi-common", version = "=2.0.0" }
 wasi-tokio = { path = "crates/wasi-common/tokio", version = "=2.0.0" }
 wasi-cap-std-sync = { path = "crates/wasi-common/cap-std-sync", version = "=2.0.0" }
 wasmtime-fuzzing = { path = "crates/fuzzing" }
+jit-icache-coherence = { path = "crates/jit-icache-coherence", version = "0.1.0" }
 
 cranelift-wasm = { path = "cranelift/wasm", version = "0.89.0" }
 cranelift-codegen = { path = "cranelift/codegen", version = "0.89.0" }
@@ -143,8 +144,6 @@ cranelift-preopt = { path = "cranelift/preopt", version = "0.89.0" }
 cranelift-fuzzgen = { path = "cranelift/fuzzgen" }
 cranelift-bforest = { path = "cranelift/bforest", version = "0.89.0" }
 cranelift = { path = "cranelift/umbrella", version = "0.89.0" }
-
-#  jit-icache-coherence = { path = "crates/jit-icache-coherence", version = "0.1.0" }
 
 target-lexicon = { version = "0.12.3", default-features = false }
 anyhow = "1.0.22"

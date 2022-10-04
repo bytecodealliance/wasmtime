@@ -4,6 +4,7 @@ use memmap2::MmapMut;
 #[cfg(not(any(feature = "selinux-fix", windows)))]
 use std::alloc;
 use std::convert::TryFrom;
+use std::ffi::c_void;
 use std::io;
 use std::mem;
 use std::ptr;
@@ -113,15 +114,6 @@ pub(crate) enum BranchProtection {
     BTI,
 }
 
-/// What is the intended use of this memory.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) enum MemoryUse {
-    /// Used to hold data. Data memory cannot be marked as executable.
-    Data,
-    /// Used to hold executable code.
-    Code,
-}
-
 /// JIT memory manager. This manages pages of suitably aligned and
 /// accessible memory. Memory will be leaked by default to have
 /// function pointers remain valid for the remainder of the
@@ -132,18 +124,16 @@ pub(crate) struct Memory {
     current: PtrLen,
     position: usize,
     branch_protection: BranchProtection,
-    memory_use: MemoryUse,
 }
 
 impl Memory {
-    pub(crate) fn new(branch_protection: BranchProtection, memory_use: MemoryUse) -> Self {
+    pub(crate) fn new(branch_protection: BranchProtection) -> Self {
         Self {
             allocations: Vec::new(),
             already_protected: 0,
             current: PtrLen::new(),
             position: 0,
             branch_protection,
-            memory_use,
         }
     }
 
@@ -173,24 +163,22 @@ impl Memory {
         self.current = PtrLen::with_size(size)?;
         self.position = size;
 
-        // If this memory is going to be executable, we need to prepare for the icache flush
-        // that happens in set_readable_and_executable()
-        if self.memory_use == MemoryUse::Code {
-            self.prepare_icache_flush();
-        }
-
         Ok(self.current.ptr)
     }
 
     /// Set all memory allocated in this `Memory` up to now as readable and executable.
     pub(crate) fn set_readable_and_executable(&mut self) {
-        debug_assert_eq!(
-            self.memory_use,
-            MemoryUse::Code,
-            "Tried to mark non Code memory as executable!"
-        );
-
         self.finish_current();
+
+        // Clear all the newly allocated code from cache if the processor requires it
+        for &PtrLen { ptr, len, .. } in self.non_protected_allocations_iter() {
+            jit_icache_coherence::clear_cache(ptr as *const c_void, len)
+                .expect("Failed cache clear");
+        }
+
+        // Do this before marking the memory as R+X, technically we should be able to do it after
+        // but there are some CPU's that have had errata about doing this with read only memory.
+        jit_icache_coherence::pipeline_flush().expect("Failed pipeline flush");
 
         let set_region_readable_and_executable = |ptr, len| {
             if len != 0 {
@@ -216,23 +204,9 @@ impl Memory {
             }
         };
 
-        #[cfg(feature = "selinux-fix")]
-        {
-            for &PtrLen { ref map, ptr, len } in &self.allocations[self.already_protected..] {
-                if map.is_some() {
-                    set_region_readable_and_executable(ptr, len);
-                }
-            }
+        for &PtrLen { ptr, len, .. } in self.non_protected_allocations_iter() {
+            set_region_readable_and_executable(ptr, len);
         }
-
-        #[cfg(not(feature = "selinux-fix"))]
-        {
-            for &PtrLen { ptr, len } in &self.allocations[self.already_protected..] {
-                set_region_readable_and_executable(ptr, len);
-            }
-        }
-
-        self.icache_flush();
 
         self.already_protected = self.allocations.len();
     }
@@ -241,70 +215,25 @@ impl Memory {
     pub(crate) fn set_readonly(&mut self) {
         self.finish_current();
 
-        #[cfg(feature = "selinux-fix")]
-        {
-            for &PtrLen { ref map, ptr, len } in &self.allocations[self.already_protected..] {
-                if len != 0 && map.is_some() {
-                    unsafe {
-                        region::protect(ptr, len, region::Protection::READ)
-                            .expect("unable to make memory readonly");
-                    }
-                }
-            }
-        }
-
-        #[cfg(not(feature = "selinux-fix"))]
-        {
-            for &PtrLen { ptr, len } in &self.allocations[self.already_protected..] {
-                if len != 0 {
-                    unsafe {
-                        region::protect(ptr, len, region::Protection::READ)
-                            .expect("unable to make memory readonly");
-                    }
-                }
+        for &PtrLen { ptr, len, .. } in self.non_protected_allocations_iter() {
+            unsafe {
+                region::protect(ptr, len, region::Protection::READ)
+                    .expect("unable to make memory readonly");
             }
         }
 
         self.already_protected = self.allocations.len();
     }
 
-    /// Prepares an icache flush.
-    ///
-    /// [Memory::icache_flush] *must* be called after this.
-    fn prepare_icache_flush(&self) {
-        #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-        {
-            let cmd: libc::c_int = 64; // MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE
+    /// Iterates non protected memory allocations that are of not zero bytes in size.
+    fn non_protected_allocations_iter(&self) -> impl Iterator<Item = &PtrLen> {
+        let iter = self.allocations[self.already_protected..].iter();
 
-            // This is a requirement of the membarrier() call executed by
-            // the finalize_definitions() method.
-            unsafe { libc::syscall(libc::SYS_membarrier, cmd) };
-        }
-    }
+        #[cfg(feature = "selinux-fix")]
+        return iter.filter(|&PtrLen { ref map, len, .. }| len != 0 && map.is_some());
 
-    /// Flushes the icache to ensure that no processor has a stale view of this memory.
-    ///
-    /// In order to call this function [Memory::prepare_icache_flush] must have been called previously.
-    fn icache_flush(&self) {
-        #[cfg(all(target_arch = "aarch64", target_os = "windows"))]
-        unsafe {
-            use std::ffi::c_void;
-            use windows_sys::Win32::System::Diagnostics::Debug::FlushInstructionCache;
-            use windows_sys::Win32::System::Threading::GetCurrentProcess;
-
-            let process_handle = GetCurrentProcess();
-
-            for &PtrLen { ptr, len } in &self.allocations[self.already_protected..] {
-                if len != 0 {
-                    let res = FlushInstructionCache(process_handle, ptr as *const c_void, len);
-                    if res == 0 {
-                        panic!("Failed to flush icache");
-                    }
-                }
-            }
-        }
-
-        // TODO: pipeline_flush()
+        #[cfg(not(feature = "selinux-fix"))]
+        return iter.filter(|&PtrLen { len, .. }| *len != 0);
     }
 
     /// Frees all allocated memory regions that would be leaked otherwise.

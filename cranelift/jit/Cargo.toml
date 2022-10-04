@@ -20,6 +20,7 @@ libc = { version = "0.2.42" }
 target-lexicon = { workspace = true }
 memmap2 = { version = "0.2.1", optional = true }
 log = { workspace = true }
+jit-icache-coherence = { workspace = true, features = ["libc"] }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 workspace = true
@@ -27,8 +28,6 @@ features = [
     "Win32_Foundation",
     "Win32_System_LibraryLoader",
     "Win32_System_Memory",
-    "Win32_System_Threading",
-    "Win32_System_Diagnostics_Debug",
 ]
 
 [features]

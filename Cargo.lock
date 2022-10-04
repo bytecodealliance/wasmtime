@@ -655,6 +655,7 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-module",
  "cranelift-native",
+ "jit-icache-coherence",
  "libc",
  "log",
  "memmap2",
