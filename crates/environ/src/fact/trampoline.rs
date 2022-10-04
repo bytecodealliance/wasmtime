@@ -2718,22 +2718,22 @@ impl Compiler<'_, '_> {
 
     fn i32_load8u(&mut self, mem: &Memory) {
         self.instruction(LocalGet(mem.addr.idx));
-        self.instruction(I32Load8_U(mem.memarg(0)));
+        self.instruction(I32Load8U(mem.memarg(0)));
     }
 
     fn i32_load8s(&mut self, mem: &Memory) {
         self.instruction(LocalGet(mem.addr.idx));
-        self.instruction(I32Load8_S(mem.memarg(0)));
+        self.instruction(I32Load8S(mem.memarg(0)));
     }
 
     fn i32_load16u(&mut self, mem: &Memory) {
         self.instruction(LocalGet(mem.addr.idx));
-        self.instruction(I32Load16_U(mem.memarg(1)));
+        self.instruction(I32Load16U(mem.memarg(1)));
     }
 
     fn i32_load16s(&mut self, mem: &Memory) {
         self.instruction(LocalGet(mem.addr.idx));
-        self.instruction(I32Load16_S(mem.memarg(1)));
+        self.instruction(I32Load16S(mem.memarg(1)));
     }
 
     fn i32_load(&mut self, mem: &Memory) {
