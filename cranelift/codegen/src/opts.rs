@@ -14,6 +14,7 @@ pub use crate::ir::{
     Value,
 };
 use crate::isle_common_prelude_methods;
+use crate::machinst::isle::*;
 pub use cranelift_egraph::{Id, NewOrExisting, NodeIter};
 use cranelift_entity::{EntityList, EntityRef};
 use smallvec::SmallVec;

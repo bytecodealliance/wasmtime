@@ -216,7 +216,6 @@ mod call_thread_state {
     pub struct CallThreadState {
         pub(super) unwind: UnsafeCell<MaybeUninit<(UnwindReason, Option<Backtrace>)>>,
         pub(super) jmp_buf: Cell<*const u8>,
-        pub(super) handling_trap: Cell<bool>,
         pub(super) signal_handler: Option<*const SignalHandler<'static>>,
         pub(super) capture_backtrace: bool,
 
@@ -246,7 +245,6 @@ mod call_thread_state {
             CallThreadState {
                 unwind: UnsafeCell::new(MaybeUninit::uninit()),
                 jmp_buf: Cell::new(ptr::null()),
-                handling_trap: Cell::new(false),
                 signal_handler,
                 capture_backtrace,
                 limits,
@@ -406,21 +404,11 @@ impl CallThreadState {
     /// * a different pointer - a jmp_buf buffer to longjmp to, meaning that
     ///   the wasm trap was succesfully handled.
     #[cfg_attr(target_os = "macos", allow(dead_code))] // macOS is more raw and doesn't use this
-    fn jmp_buf_if_trap(
+    fn take_jmp_buf_if_trap(
         &self,
         pc: *const u8,
         call_handler: impl Fn(&SignalHandler) -> bool,
     ) -> *const u8 {
-        // If we hit a fault while handling a previous trap, that's quite bad,
-        // so bail out and let the system handle this recursive segfault.
-        //
-        // Otherwise flag ourselves as handling a trap, do the trap handling,
-        // and reset our trap handling flag.
-        if self.handling_trap.replace(true) {
-            return ptr::null();
-        }
-        let _reset = ResetCell(&self.handling_trap, false);
-
         // If we haven't even started to handle traps yet, bail out.
         if self.jmp_buf.get().is_null() {
             return ptr::null();
@@ -442,7 +430,7 @@ impl CallThreadState {
 
         // If all that passed then this is indeed a wasm trap, so return the
         // `jmp_buf` passed to `wasmtime_longjmp` to resume.
-        self.jmp_buf.get()
+        self.jmp_buf.replace(ptr::null())
     }
 
     fn set_jit_trap(&self, pc: *const u8, fp: usize) {

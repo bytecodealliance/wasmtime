@@ -3,6 +3,8 @@ test run
 ; target aarch64
 ; target s390x
 target x86_64
+target riscv64
+
 
 ; sort three signed i8s with imin and imax only
 function %isort3(i8, i8, i8) -> i8, i8, i8 {

@@ -3,6 +3,7 @@ test run
 target x86_64
 target s390x
 target aarch64
+target riscv64
 
 function %set_get_i64(i64 vmctx, i64, i64) -> i64 {
     gv0 = vmctx

@@ -103,7 +103,7 @@ fn test_roundtrip(engine: &Engine, src: &str, dst: &str) -> Result<()> {
         format!(
             r#"
 (component {name}
-    (import "echo" (func $echo (param string) (result string)))
+    (import "echo" (func $echo (param "a" string) (result string)))
     (core instance $libc (instantiate $libc))
     (core func $echo (canon lower (func $echo)
         (memory $libc "memory")
@@ -114,7 +114,7 @@ fn test_roundtrip(engine: &Engine, src: &str, dst: &str) -> Result<()> {
         (with "libc" (instance $libc))
         (with "" (instance (export "echo" (func $echo))))
     ))
-    (func (export "echo") (param string) (result string)
+    (func (export "echo") (param "a" string) (result string)
         (canon lift
             (core func $echo "echo")
             (memory $libc "memory")
@@ -132,7 +132,7 @@ fn test_roundtrip(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     let component = format!(
         r#"
 (component
-    (import "host" (func $host (param string) (result string)))
+    (import "host" (func $host (param "a" string) (result string)))
 
     (core module $libc
         (memory (export "memory") 1)
@@ -213,14 +213,14 @@ fn test_ptr_out_of_bounds(engine: &Engine, src: &str, dst: &str) -> Result<()> {
       (memory (export "memory") 1)
     )
     (core instance $m (instantiate $m))
-    (func (export "") (param string)
+    (func (export "") (param "a" string)
       (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory")
         string-encoding={dst})
     )
   )
 
   (component $c2
-    (import "" (func $f (param string)))
+    (import "" (func $f (param "a" string)))
     (core module $libc
       (memory (export "memory") 1)
     )
@@ -281,14 +281,14 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
       (memory (export "memory") 1)
     )
     (core instance $m (instantiate $m))
-    (func (export "") (param string)
+    (func (export "") (param "a" string)
       (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory")
         string-encoding={dst})
     )
   )
 
   (component $c2
-    (import "" (func $f (param string)))
+    (import "" (func $f (param "a" string)))
     (core module $libc
       (memory (export "memory") 1)
     )
@@ -300,7 +300,7 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
       (func (export "f") (param i32) (call $f (i32.const 1000) (local.get 0)))
     )
     (core instance $m (instantiate $m (with "" (instance (export "" (func $f))))))
-    (func (export "f") (param u32) (canon lift (core func $m "f")))
+    (func (export "f") (param "a" u32) (canon lift (core func $m "f")))
   )
 
   (instance $c (instantiate $c))
@@ -386,14 +386,14 @@ fn test_realloc_oob(engine: &Engine, src: &str, dst: &str) -> Result<()> {
       (memory (export "memory") 1)
     )
     (core instance $m (instantiate $m))
-    (func (export "") (param string)
+    (func (export "") (param "a" string)
       (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory")
         string-encoding={dst})
     )
   )
 
   (component $c2
-    (import "" (func $f (param string)))
+    (import "" (func $f (param "a" string)))
     (core module $libc
       (memory (export "memory") 1)
     )
@@ -534,14 +534,14 @@ fn test_raw_when_encoded(
       (memory (export "memory") 1)
     )
     (core instance $m (instantiate $m))
-    (func (export "") (param string)
+    (func (export "") (param "a" string)
       (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory")
         string-encoding={dst})
     )
   )
 
   (component $c2
-    (import "" (func $f (param string)))
+    (import "" (func $f (param "a" string)))
     (core module $libc
       (memory (export "memory") 1)
       (func (export "realloc") (param i32 i32 i32 i32) (result i32) i32.const 0)

@@ -1,0 +1,508 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %f1(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iadd.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   add a0,a0,a1
+;   ret
+
+function %f2(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = isub.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   sub a0,a0,a1
+;   ret
+
+function %f3(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = imul.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   mul a0,a0,a1
+;   ret
+
+function %f4(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = umulhi.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   mulhu a0,a0,a1
+;   ret
+
+function %f5(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = smulhi.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   mulh a0,a0,a1
+;   ret
+
+function %f6(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = sdiv.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   li a2,-1
+;   li a3,1
+;   slli a5,a3,63
+;   eq a7,a2,a1##ty=i64
+;   eq t4,a5,a0##ty=i64
+;   and t1,a7,t4
+;   trap_if t1,int_ovf
+;   trap_ifc int_divz##(zero eq a1)
+;   div a0,a0,a1
+;   ret
+
+function %f7(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 2
+  v2 = sdiv.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   li a1,2
+;   li a2,-1
+;   li a4,1
+;   slli a6,a4,63
+;   eq t3,a2,a1##ty=i64
+;   eq t0,a6,a0##ty=i64
+;   and t2,t3,t0
+;   trap_if t2,int_ovf
+;   li a2,2
+;   trap_ifc int_divz##(zero eq a2)
+;   li a5,2
+;   div a0,a0,a5
+;   ret
+
+function %f8(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = udiv.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   trap_ifc int_divz##(zero eq a1)
+;   divu a0,a0,a1
+;   ret
+
+function %f9(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 2
+  v2 = udiv.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   li a1,2
+;   trap_ifc int_divz##(zero eq a1)
+;   li a3,2
+;   divu a0,a0,a3
+;   ret
+
+function %f10(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = srem.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   trap_ifc int_divz##(zero eq a1)
+;   rem a0,a0,a1
+;   ret
+
+function %f11(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = urem.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   trap_ifc int_divz##(zero eq a1)
+;   remu a0,a0,a1
+;   ret
+
+function %f12(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = sdiv.i32 v0, v1
+  return v2
+}
+
+; block0:
+;   sext.w a2,a0
+;   sext.w a3,a1
+;   li a5,-1
+;   li a7,1
+;   slli t4,a7,63
+;   slli t1,a2,32
+;   eq a0,a5,a3##ty=i32
+;   eq a4,t4,t1##ty=i32
+;   and a4,a0,a4
+;   trap_if a4,int_ovf
+;   trap_ifc int_divz##(zero eq a3)
+;   divw a0,a2,a3
+;   ret
+
+function %f13(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 2
+  v2 = sdiv.i32 v0, v1
+  return v2
+}
+
+; block0:
+;   sext.w a0,a0
+;   li a2,2
+;   sext.w a4,a2
+;   li a6,-1
+;   li t3,1
+;   slli t0,t3,63
+;   slli t2,a0,32
+;   eq a1,a6,a4##ty=i32
+;   eq a3,t0,t2##ty=i32
+;   and a5,a1,a3
+;   trap_if a5,int_ovf
+;   trap_ifc int_divz##(zero eq a4)
+;   divw a0,a0,a4
+;   ret
+
+function %f14(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = udiv.i32 v0, v1
+  return v2
+}
+
+; block0:
+;   uext.w a1,a1
+;   trap_ifc int_divz##(zero eq a1)
+;   uext.w a4,a0
+;   divuw a0,a4,a1
+;   ret
+
+function %f15(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 2
+  v2 = udiv.i32 v0, v1
+  return v2
+}
+
+; block0:
+;   li a1,2
+;   uext.w a2,a1
+;   trap_ifc int_divz##(zero eq a2)
+;   uext.w a5,a0
+;   divuw a0,a5,a2
+;   ret
+
+function %f16(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = srem.i32 v0, v1
+  return v2
+}
+
+; block0:
+;   sext.w a1,a1
+;   trap_ifc int_divz##(zero eq a1)
+;   remw a0,a0,a1
+;   ret
+
+function %f17(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = urem.i32 v0, v1
+  return v2
+}
+
+; block0:
+;   uext.w a1,a1
+;   trap_ifc int_divz##(zero eq a1)
+;   remuw a0,a0,a1
+;   ret
+
+function %f18(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = band.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   and a0,a0,a1
+;   ret
+
+function %f19(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = bor.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   or a0,a0,a1
+;   ret
+
+function %f20(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = bxor.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   xor a0,a0,a1
+;   ret
+
+function %f21(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = band_not.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   not a1,a1
+;   and a0,a0,a1
+;   ret
+
+function %f22(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = bor_not.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   not a1,a1
+;   or a0,a0,a1
+;   ret
+
+function %f23(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = bxor_not.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   not a1,a1
+;   xor a0,a0,a1
+;   ret
+
+function %f24(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = bnot.i64 v0
+  return v2
+}
+
+; block0:
+;   not a0,a0
+;   ret
+
+function %f25(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = iconst.i32 53
+  v3 = ishl.i32 v0, v2
+  v4 = isub.i32 v1, v3
+  return v4
+}
+
+; block0:
+;   slliw a2,a0,53
+;   subw a0,a1,a2
+;   ret
+
+function %f26(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 -1
+  v2 = iadd.i32 v0, v1
+  return v2
+}
+
+; block0:
+;   addiw a0,a0,-1
+;   ret
+
+function %f27(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 -1
+  v2 = isub.i32 v0, v1
+  return v2
+}
+
+; block0:
+;   li a1,-1
+;   subw a0,a0,a1
+;   ret
+
+function %f28(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 -1
+  v2 = isub.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   li a1,-1
+;   sub a0,a0,a1
+;   ret
+
+function %f29(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 1
+  v2 = ineg v1
+  return v2
+}
+
+; block0:
+;   li a0,1
+;   sub a0,zero,a0
+;   ret
+
+function %add_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = iadd v0, v1
+    return v2
+}
+
+; block0:
+;   add a0,a0,a2
+;   sltu a6,a0,a2
+;   add t3,a1,a3
+;   add a1,t3,a6
+;   ret
+
+function %sub_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = isub v0, v1
+    return v2
+}
+
+; block0:
+;   sub a4,a0,a2
+;   mv t4,a4
+;   sltu a6,a0,t4
+;   sub t3,a1,a3
+;   sub a1,t3,a6
+;   mv a0,a4
+;   ret
+
+function %add_mul_2(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = imul v1, v2
+    v4 = iadd v3, v0
+    return v4
+}
+
+; block0:
+;   mulw a3,a1,a2
+;   addw a0,a3,a0
+;   ret
+
+function %msub_i32(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = imul v1, v2
+    v4 = isub v0, v3
+    return v4
+}
+
+; block0:
+;   mulw a3,a1,a2
+;   subw a0,a0,a3
+;   ret
+
+function %msub_i64(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = imul v1, v2
+    v4 = isub v0, v3
+    return v4
+}
+
+; block0:
+;   mul a3,a1,a2
+;   sub a0,a0,a3
+;   ret
+
+function %imul_sub_i32(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = imul v1, v2
+    v4 = isub v3, v0
+    return v4
+}
+
+; block0:
+;   mulw a3,a1,a2
+;   subw a0,a3,a0
+;   ret
+
+function %imul_sub_i64(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = imul v1, v2
+    v4 = isub v3, v0
+    return v4
+}
+
+; block0:
+;   mul a3,a1,a2
+;   sub a0,a3,a0
+;   ret
+
+function %srem_const (i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 2
+  v2 = srem.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   li a1,2
+;   trap_ifc int_divz##(zero eq a1)
+;   li a3,2
+;   rem a0,a0,a3
+;   ret
+
+function %urem_const (i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 2
+  v2 = urem.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   li a1,2
+;   trap_ifc int_divz##(zero eq a1)
+;   li a3,2
+;   remu a0,a0,a3
+;   ret
+
+function %sdiv_minus_one(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 -1
+  v2 = sdiv.i64 v0, v1
+  return v2
+}
+
+; block0:
+;   li a1,-1
+;   li a2,-1
+;   li a4,1
+;   slli a6,a4,63
+;   eq t3,a2,a1##ty=i64
+;   eq t0,a6,a0##ty=i64
+;   and t2,t3,t0
+;   trap_if t2,int_ovf
+;   li a2,-1
+;   trap_ifc int_divz##(zero eq a2)
+;   li a5,-1
+;   div a0,a0,a5
+;   ret
+

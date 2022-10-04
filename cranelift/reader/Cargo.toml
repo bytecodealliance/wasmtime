@@ -7,12 +7,12 @@ license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-reader"
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
-cranelift-codegen = { path = "../codegen", version = "0.89.0" }
-smallvec = "1.6.1"
-target-lexicon = "0.12"
+cranelift-codegen = { workspace = true }
+smallvec = { workspace = true }
+target-lexicon = { workspace = true }
 
 [badges]
 maintenance = { status = "experimental" }

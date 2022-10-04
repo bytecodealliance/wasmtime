@@ -337,7 +337,7 @@ impl<'a> TermFunctionsBuilder<'a> {
     fn build(&mut self) {
         for rule in 0..self.termenv.rules.len() {
             let rule = RuleId(rule);
-            let prio = self.termenv.rules[rule.index()].prio.unwrap_or(0);
+            let prio = self.termenv.rules[rule.index()].prio;
 
             let (pattern, expr) = lower_rule(self.typeenv, self.termenv, rule);
             let root_term = self.termenv.rules[rule.index()].lhs.root_term().unwrap();

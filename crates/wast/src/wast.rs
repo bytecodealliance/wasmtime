@@ -476,9 +476,6 @@ impl<T> WastContext<T> {
 
 fn is_matching_assert_invalid_error_message(expected: &str, actual: &str) -> bool {
     actual.contains(expected)
-        // `elem.wast` and `proposals/bulk-memory-operations/elem.wast` disagree
-        // on the expected error message for the same error.
-        || (expected.contains("out of bounds") && actual.contains("does not fit"))
         // slight difference in error messages
         || (expected.contains("unknown elem segment") && actual.contains("unknown element segment"))
         // The same test here is asserted to have one error message in
@@ -486,4 +483,7 @@ fn is_matching_assert_invalid_error_message(expected: &str, actual: &str) -> boo
         // `memory64/memory.wast`, so we equate these two error messages to get
         // the memory64 tests to pass.
         || (expected.contains("memory size must be at most 65536 pages") && actual.contains("invalid u32 number"))
+        // the spec test suite asserts a different error message than we print
+        // for this scenario
+        || (expected == "unknown global" && actual.contains("global.get of locally defined global"))
 }

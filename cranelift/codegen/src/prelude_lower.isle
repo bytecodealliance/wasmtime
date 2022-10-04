@@ -84,14 +84,17 @@
 (rule (temp_reg ty)
       (writable_reg_to_reg (temp_writable_reg ty)))
 
+(decl is_valid_reg (bool) Reg)
+(extern extractor infallible is_valid_reg is_valid_reg)
+
 ;; Get or match the invalid register.
 (decl invalid_reg () Reg)
 (extern constructor invalid_reg invalid_reg)
-(extern extractor invalid_reg invalid_reg_etor)
+(extractor (invalid_reg) (is_valid_reg $false))
 
 ;; Match any register but the invalid register.
-(decl valid_reg () Reg)
-(extern extractor valid_reg valid_reg)
+(decl valid_reg (Reg) Reg)
+(extractor (valid_reg reg) (and (is_valid_reg $true) reg))
 
 ;; Mark this value as used, to ensure that it gets lowered.
 (decl mark_value_used (Value) Unit)
@@ -516,6 +519,11 @@
         (ConsumesFlags.ConsumesFlagsSideEffect2 c1 c2))
       (SideEffectNoResult.Inst3 p c1 c2))
 
+(rule (with_flags_side_effect
+        (ProducesFlags.ProducesFlagsTwiceSideEffect p1 p2)
+        (ConsumesFlags.ConsumesFlagsSideEffect c))
+      (SideEffectNoResult.Inst3 p1 p2 c))
+
 ;;;; Helpers for generating returns ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The (writable) register(s) that will contain the n'th return value.
@@ -641,16 +649,15 @@
 ;; vectors. Fails for the empty range.
 (decl copy_to_regs_range (Type Range WritableValueRegs ValueRegs) Unit)
 
-(rule (copy_to_regs_range ty (range_singleton idx) dsts srcs)
-      (let ((dst WritableReg (writable_regs_get dsts idx))
-            (src Reg (value_regs_get srcs idx)))
-        (emit (gen_move ty dst src))))
+(rule (copy_to_regs_range ty (range_empty) dsts srcs)
+      (unit))
 
 (rule (copy_to_regs_range ty (range_unwrap head tail) dsts srcs)
       (let ((dst WritableReg (writable_regs_get dsts head))
             (src Reg (value_regs_get srcs head))
             (_ Unit (emit (gen_move ty dst src))))
         (copy_to_regs_range ty tail dsts srcs)))
+
 
 (decl lower_return (Range ValueSlice) InstOutput)
 (rule (lower_return (range_empty) _) (output_none))
@@ -702,6 +709,13 @@
 
 (decl avoid_div_traps () Type)
 (extern extractor avoid_div_traps avoid_div_traps)
+
+;; This definition should be kept up to date with the values defined in
+;; cranelift/codegen/meta/src/shared/settings.rs
+(type TlsModel extern (enum (None) (ElfGd) (Macho) (Coff)))
+
+(decl tls_model (TlsModel) Type)
+(extern extractor infallible tls_model tls_model)
 
 (decl pure tls_model_is_elf_gd () Unit)
 (extern constructor tls_model_is_elf_gd tls_model_is_elf_gd)

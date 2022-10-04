@@ -1,28 +1,28 @@
 [package]
 name = "wasmtime-cranelift"
-version = "2.0.0"
-authors = ["The Wasmtime Project Developers"]
+version.workspace = true
+authors.workspace = true
 description = "Integration between Cranelift and Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/wasmtime-cranelift/"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
-anyhow = "1.0"
-log = "0.4"
-wasmtime-environ = { path = "../environ", version = "=2.0.0" }
-cranelift-wasm = { path = "../../cranelift/wasm", version = "0.89.0" }
-cranelift-codegen = { path = "../../cranelift/codegen", version = "0.89.0" }
-cranelift-frontend = { path = "../../cranelift/frontend", version = "0.89.0" }
-cranelift-entity = { path = "../../cranelift/entity", version = "0.89.0" }
-cranelift-native = { path = "../../cranelift/native", version = "0.89.0" }
-wasmparser = "0.89.0"
-target-lexicon = "0.12"
-gimli = { version = "0.26.0", default-features = false, features = ['read', 'std'] }
-object = { version = "0.29.0", default-features = false, features = ['write'] }
+anyhow = { workspace = true }
+log = { workspace = true }
+wasmtime-environ = { workspace = true }
+cranelift-wasm = { workspace = true }
+cranelift-codegen = { workspace = true }
+cranelift-frontend = { workspace = true }
+cranelift-entity = { workspace = true }
+cranelift-native = { workspace = true }
+wasmparser = { workspace = true }
+target-lexicon = { workspace = true }
+gimli = { workspace = true }
+object = { workspace = true, features = ['write'] }
 thiserror = "1.0.4"
 
 [features]

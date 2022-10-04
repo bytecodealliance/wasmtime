@@ -626,32 +626,6 @@ impl<'a, 'data> Translator<'a, 'data> {
             // Aliases of instance exports (either core or component) will be
             // recorded as an initializer of the appropriate type with outer
             // aliases handled specially via upvars and type processing.
-            Payload::AliasSection(s) => {
-                self.validator.alias_section(&s)?;
-                for alias in s {
-                    let init = match alias? {
-                        wasmparser::Alias::InstanceExport {
-                            kind,
-                            instance_index,
-                            name,
-                        } => {
-                            let instance = ModuleInstanceIndex::from_u32(instance_index);
-                            self.alias_module_instance_export(kind, instance, name)
-                        }
-                        wasmparser::Alias::Outer {
-                            kind: wasmparser::OuterAliasKind::Type,
-                            count,
-                            index,
-                        } => {
-                            let index = TypeIndex::from_u32(index);
-                            let ty = self.types.core_outer_type(count, index);
-                            self.types.push_core_typedef(ty);
-                            continue;
-                        }
-                    };
-                    self.result.initializers.push(init);
-                }
-            }
             Payload::ComponentAliasSection(s) => {
                 self.validator.component_alias_section(&s)?;
                 for alias in s {
@@ -669,6 +643,14 @@ impl<'a, 'data> Translator<'a, 'data> {
                         wasmparser::ComponentAlias::Outer { kind, count, index } => {
                             self.alias_component_outer(kind, count, index);
                             continue;
+                        }
+                        wasmparser::ComponentAlias::CoreInstanceExport {
+                            kind,
+                            instance_index,
+                            name,
+                        } => {
+                            let instance = ModuleInstanceIndex::from_u32(instance_index);
+                            self.alias_module_instance_export(kind, instance, name)
                         }
                     };
                     self.result.initializers.push(init);

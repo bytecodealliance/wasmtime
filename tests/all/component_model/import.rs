@@ -26,7 +26,7 @@ fn can_compile() -> Result<()> {
         &engine,
         format!(
             r#"(component
-                (import "" (func $f (param string)))
+                (import "" (func $f (param "a" string)))
                 {libc}
                 (core func (canon lower (func $f) (memory $libc "memory") (realloc (func $libc "realloc"))))
             )"#
@@ -36,11 +36,11 @@ fn can_compile() -> Result<()> {
         &engine,
         format!(
             r#"(component
-                (import "f1" (func $f1 (param string) (result string)))
+                (import "f1" (func $f1 (param "a" string) (result string)))
                 {libc}
                 (core func (canon lower (func $f1) (memory $libc "memory") (realloc (func $libc "realloc"))))
 
-                (import "f2" (func $f2 (param u32) (result (list u8))))
+                (import "f2" (func $f2 (param "a" u32) (result (list u8))))
                 (core instance $libc2 (instantiate $libc))
                 (core func (canon lower (func $f2) (memory $libc2 "memory") (realloc (func $libc2 "realloc"))))
 
@@ -53,7 +53,7 @@ fn can_compile() -> Result<()> {
         &engine,
         format!(
             r#"(component
-                (import "log" (func $log (param string)))
+                (import "log" (func $log (param "a" string)))
                 {libc}
                 (core func $log_lower (canon lower (func $log) (memory $libc "memory") (realloc (func $libc "realloc"))))
 
@@ -84,7 +84,7 @@ fn can_compile() -> Result<()> {
 fn simple() -> Result<()> {
     let component = r#"
         (component
-            (import "" (func $log (param string)))
+            (import "" (func $log (param "a" string)))
 
             (core module $libc
                 (memory (export "memory") 1)
@@ -231,7 +231,7 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
   (func (export "run")
     (canon lift (core func $m "run"))
   )
-  (func (export "take-string") (param string)
+  (func (export "take-string") (param "a" string)
     (canon lift (core func $m "take-string") (memory $m "memory") (realloc (func $m "realloc")))
   )
 )
@@ -395,10 +395,10 @@ fn stack_and_heap_args_and_rets() -> Result<()> {
                       string string string string
                       string string string string
                       string))
-  (import "f1" (func $f1 (param u32) (result u32)))
-  (import "f2" (func $f2 (param $many_params) (result u32)))
-  (import "f3" (func $f3 (param u32) (result string)))
-  (import "f4" (func $f4 (param $many_params) (result string)))
+  (import "f1" (func $f1 (param "a" u32) (result u32)))
+  (import "f2" (func $f2 (param "a" $many_params) (result u32)))
+  (import "f3" (func $f3 (param "a" u32) (result string)))
+  (import "f4" (func $f4 (param "a" $many_params) (result string)))
 
   (core module $libc
     {REALLOC_AND_FREE}
@@ -658,7 +658,7 @@ fn bad_import_alignment() -> Result<()> {
     string string string string
     string
   ))
-  (import "unaligned-argptr" (func $unaligned_argptr (param $many_arg)))
+  (import "unaligned-argptr" (func $unaligned_argptr (param "a" $many_arg)))
   (core module $libc_panic
     (memory (export "memory") 1)
     (func (export "realloc") (param i32 i32 i32 i32) (result i32)

@@ -66,6 +66,9 @@ pub mod x64;
 #[cfg(feature = "arm64")]
 pub(crate) mod aarch64;
 
+#[cfg(feature = "riscv64")]
+pub mod riscv64;
+
 #[cfg(feature = "s390x")]
 mod s390x;
 
@@ -97,6 +100,7 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
         }
         Architecture::Aarch64 { .. } => isa_builder!(aarch64, (feature = "arm64"), triple),
         Architecture::S390x { .. } => isa_builder!(s390x, (feature = "s390x"), triple),
+        Architecture::Riscv64 { .. } => isa_builder!(riscv64, (feature = "riscv64"), triple),
         _ => Err(LookupError::Unsupported),
     }
 }

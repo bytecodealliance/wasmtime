@@ -4,6 +4,7 @@ target aarch64
 target s390x
 target x86_64
 target x86_64 has_popcnt
+target riscv64
 
 function %popcnt_i8(i8) -> i8 {
 block0(v0: i8):
@@ -93,9 +94,3 @@ block0(v0: i64):
 ; run: %inv_popcnt_i64(-1) == 0
 ; run: %inv_popcnt_i64(0) == 64
 
-function %popcnt_i8x16(i8x16) -> i8x16 {
-block0(v0: i8x16):
-    v1 = popcnt v0
-    return v1
-}
-; run: %popcnt_i8x16([1 1 1 1 0x40 0x40 0x40 0x40 0xff 0xff 0xff 0xff 0 0 0 0]) == [1 1 1 1 1 1 1 1 8 8 8 8 0 0 0 0]

@@ -2,6 +2,7 @@ test interpret
 test run
 target aarch64
 target s390x
+target riscv64
 ; x86_64 only supports vector iabs
 
 function %iabs_i8(i8) -> i8 {

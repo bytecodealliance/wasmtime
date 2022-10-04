@@ -308,10 +308,7 @@ pub unsafe trait ComponentNamedList: ComponentType {
     /// Performs a typecheck to ensure that this `ComponentNamedList`
     /// implementor matches the types of the types in `params`.
     #[doc(hidden)]
-    fn typecheck_named_list(
-        params: &[(Option<String>, InterfaceType)],
-        types: &ComponentTypes,
-    ) -> Result<()>;
+    fn typecheck_list(params: &[InterfaceType], types: &ComponentTypes) -> Result<()>;
 }
 
 /// A trait representing types which can be passed to and read from components
@@ -1965,14 +1962,14 @@ macro_rules! impl_component_ty_for_tuples {
         unsafe impl<$($t,)*> ComponentNamedList for ($($t,)*)
             where $($t: ComponentType),*
         {
-            fn typecheck_named_list(
-                names: &[(Option<String>, InterfaceType)],
+            fn typecheck_list(
+                names: &[InterfaceType],
                 _types: &ComponentTypes,
             ) -> Result<()> {
                 if names.len() != $n {
                     bail!("expected {} types, found {}", $n, names.len());
                 }
-                let mut names = names.iter().map(|i| &i.1);
+                let mut names = names.iter();
                 $($t::typecheck(names.next().unwrap(), _types)?;)*
                 debug_assert!(names.next().is_none());
                 Ok(())

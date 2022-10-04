@@ -9,6 +9,9 @@
 ;; `()`
 (type Unit (primitive Unit))
 
+(decl unit () Unit)
+(extern constructor unit unit)
+
 ;; `bool` is declared in `clif.isle`.
 (extern const $true bool)
 (extern const $false bool)
@@ -121,6 +124,15 @@
 
 (decl pure u64_sextend_u32 (u64) u64)
 (extern constructor u64_sextend_u32 u64_sextend_u32)
+
+(decl u64_is_zero (bool) u64)
+(extern extractor infallible u64_is_zero u64_is_zero)
+
+(decl u64_zero () u64)
+(extractor (u64_zero) (u64_is_zero $true))
+
+(decl u64_nonzero (u64) u64)
+(extractor (u64_nonzero x) (and (u64_is_zero $false) x))
 
 ;;;; `cranelift_codegen::ir::Type` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -400,18 +412,24 @@
 (decl range (usize usize) Range)
 (extern constructor range range)
 
+;; A view on the current state of the range.
+(type RangeView extern
+      (enum
+        (Empty)
+        (NonEmpty (index usize) (rest Range))))
+
+;; View the current state of the range.
+(decl range_view (RangeView) Range)
+(extern extractor infallible range_view range_view)
+
 ;; Extractor to test whether a range is empty.
 (decl range_empty () Range)
-(extern extractor range_empty range_empty)
-
-;; Extractor to test whether a range has a single element in it
-(decl range_singleton (usize) Range)
-(extern extractor range_singleton range_singleton)
+(extractor (range_empty) (range_view (RangeView.Empty)))
 
 ;; Extractor to return the first value in the range, and a sub-range
 ;; containing the remaining values.
 (decl range_unwrap (usize Range) Range)
-(extern extractor range_unwrap range_unwrap)
+(extractor (range_unwrap index rest) (range_view (RangeView.NonEmpty index rest)))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

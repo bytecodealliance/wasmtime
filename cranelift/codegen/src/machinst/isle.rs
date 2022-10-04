@@ -32,6 +32,11 @@ pub type InstOutputBuilder = Cell<InstOutput>;
 pub type BoxExternalName = Box<ExternalName>;
 pub type Range = (usize, usize);
 
+pub enum RangeView {
+    Empty,
+    NonEmpty { index: usize, rest: Range },
+}
+
 /// Helper macro to define methods in `prelude.isle` within `impl Context for
 /// ...` for each backend. These methods are shared amongst all backends.
 #[macro_export]
@@ -133,29 +138,15 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
+        fn is_valid_reg(&mut self, reg: Reg) -> bool {
+            use crate::machinst::valueregs::InvalidSentinel;
+            !reg.is_invalid_sentinel()
+        }
+
+        #[inline]
         fn invalid_reg(&mut self) -> Reg {
             use crate::machinst::valueregs::InvalidSentinel;
             Reg::invalid_sentinel()
-        }
-
-        #[inline]
-        fn invalid_reg_etor(&mut self, reg: Reg) -> Option<()> {
-            use crate::machinst::valueregs::InvalidSentinel;
-            if reg.is_invalid_sentinel() {
-                Some(())
-            } else {
-                None
-            }
-        }
-
-        #[inline]
-        fn valid_reg(&mut self, reg: Reg) -> Option<()> {
-            use crate::machinst::valueregs::InvalidSentinel;
-            if !reg.is_invalid_sentinel() {
-                Some(())
-            } else {
-                None
-            }
         }
 
         #[inline]
@@ -254,6 +245,11 @@ macro_rules! isle_lower_prelude_methods {
         #[inline]
         fn def_inst(&mut self, val: Value) -> Option<Inst> {
             self.lower_ctx.dfg().value_def(val).inst()
+        }
+
+        #[inline]
+        fn tls_model(&mut self, _: Type) -> TlsModel {
+            self.flags.tls_model()
         }
 
         #[inline]

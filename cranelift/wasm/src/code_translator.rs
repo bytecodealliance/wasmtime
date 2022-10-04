@@ -94,7 +94,7 @@ use smallvec::SmallVec;
 use std::cmp;
 use std::convert::TryFrom;
 use std::vec::Vec;
-use wasmparser::{FuncValidator, MemoryImmediate, Operator, WasmModuleResources};
+use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
 
 // Clippy warns about "align: _" but its important to document that the flags field is ignored
 #[cfg_attr(
@@ -115,6 +115,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         return Ok(());
     }
 
+    // Given that we believe the current block is reachable, the FunctionBuilder ought to agree.
+    debug_assert!(!builder.is_unreachable());
+
     // This big match treats all Wasm code operators.
     match op {
         /********************************** Locals ****************************************
@@ -122,7 +125,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          *  disappear in the Cranelift Code
          ***********************************************************************************/
         Operator::LocalGet { local_index } => {
-            let val = builder.use_var(Variable::with_u32(*local_index));
+            let val = builder.use_var(Variable::from_u32(*local_index));
             state.push1(val);
             let label = ValueLabel::from_u32(*local_index);
             builder.set_val_label(val, label);
@@ -136,7 +139,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 val = optionally_bitcast_vector(val, I8X16, builder);
             }
 
-            builder.def_var(Variable::with_u32(*local_index), val);
+            builder.def_var(Variable::from_u32(*local_index), val);
             let label = ValueLabel::from_u32(*local_index);
             builder.set_val_label(val, label);
         }
@@ -149,7 +152,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 val = optionally_bitcast_vector(val, I8X16, builder);
             }
 
-            builder.def_var(Variable::with_u32(*local_index), val);
+            builder.def_var(Variable::from_u32(*local_index), val);
             let label = ValueLabel::from_u32(*local_index);
             builder.set_val_label(val, label);
         }
@@ -380,18 +383,16 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::End => {
             let frame = state.control_stack.pop().unwrap();
             let next_block = frame.following_code();
+            let return_count = frame.num_return_values();
+            let return_args = state.peekn_mut(return_count);
 
-            if !builder.is_unreachable() || !builder.is_pristine() {
-                let return_count = frame.num_return_values();
-                let return_args = state.peekn_mut(return_count);
-                canonicalise_then_jump(builder, frame.following_code(), return_args);
-                // You might expect that if we just finished an `if` block that
-                // didn't have a corresponding `else` block, then we would clean
-                // up our duplicate set of parameters that we pushed earlier
-                // right here. However, we don't have to explicitly do that,
-                // since we truncate the stack back to the original height
-                // below.
-            }
+            canonicalise_then_jump(builder, next_block, return_args);
+            // You might expect that if we just finished an `if` block that
+            // didn't have a corresponding `else` block, then we would clean
+            // up our duplicate set of parameters that we pushed earlier
+            // right here. However, we don't have to explicitly do that,
+            // since we truncate the stack back to the original height
+            // below.
 
             builder.switch_to_block(next_block);
             builder.seal_block(next_block);
@@ -590,13 +591,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.pushn(inst_results);
         }
         Operator::CallIndirect {
-            index,
+            type_index,
             table_index,
             table_byte: _,
         } => {
-            // `index` is the index of the function's signature and `table_index` is the index of
-            // the table to search the function in.
-            let (sigref, num_args) = state.get_indirect_sig(builder.func, *index, environ)?;
+            // `type_index` is the index of the function's signature and
+            // `table_index` is the index of the table to search the function
+            // in.
+            let (sigref, num_args) = state.get_indirect_sig(builder.func, *type_index, environ)?;
             let table = state.get_or_create_table(builder.func, *table_index, environ)?;
             let callee = state.pop1();
 
@@ -608,7 +610,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 builder,
                 TableIndex::from_u32(*table_index),
                 table,
-                TypeIndex::from_u32(*index),
+                TypeIndex::from_u32(*type_index),
                 sigref,
                 callee,
                 state.peekn(num_args),
@@ -2005,18 +2007,22 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I32x4RelaxedTruncSatF32x4U
         | Operator::I32x4RelaxedTruncSatF64x2SZero
         | Operator::I32x4RelaxedTruncSatF64x2UZero
-        | Operator::F32x4Fma
-        | Operator::F32x4Fms
-        | Operator::F64x2Fma
-        | Operator::F64x2Fms
-        | Operator::I8x16LaneSelect
-        | Operator::I16x8LaneSelect
-        | Operator::I32x4LaneSelect
-        | Operator::I64x2LaneSelect
+        | Operator::F32x4RelaxedFma
+        | Operator::F32x4RelaxedFnma
+        | Operator::F64x2RelaxedFma
+        | Operator::F64x2RelaxedFnma
+        | Operator::I8x16RelaxedLaneselect
+        | Operator::I16x8RelaxedLaneselect
+        | Operator::I32x4RelaxedLaneselect
+        | Operator::I64x2RelaxedLaneselect
         | Operator::F32x4RelaxedMin
         | Operator::F32x4RelaxedMax
         | Operator::F64x2RelaxedMin
-        | Operator::F64x2RelaxedMax => {
+        | Operator::F64x2RelaxedMax
+        | Operator::I16x8RelaxedQ15mulrS
+        | Operator::I16x8DotI8x16I7x16S
+        | Operator::I32x4DotI8x16I7x16AddS
+        | Operator::F32x4RelaxedDotBf16x8AddF32x4 => {
             return Err(wasm_unsupported!("proposed relaxed-simd operator {:?}", op));
         }
     };
@@ -2165,7 +2171,7 @@ fn translate_unreachable_operator<FE: FuncEnvironment + ?Sized>(
 /// various parameters are returned describing the valid heap address if
 /// execution reaches that point.
 fn prepare_addr<FE: FuncEnvironment + ?Sized>(
-    memarg: &MemoryImmediate,
+    memarg: &MemArg,
     access_size: u32,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
@@ -2342,7 +2348,7 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
 }
 
 fn prepare_atomic_addr<FE: FuncEnvironment + ?Sized>(
-    memarg: &MemoryImmediate,
+    memarg: &MemArg,
     loaded_bytes: u32,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
@@ -2394,7 +2400,7 @@ fn prepare_atomic_addr<FE: FuncEnvironment + ?Sized>(
 
 /// Translate a load instruction.
 fn translate_load<FE: FuncEnvironment + ?Sized>(
-    memarg: &MemoryImmediate,
+    memarg: &MemArg,
     opcode: ir::Opcode,
     result_ty: Type,
     builder: &mut FunctionBuilder,
@@ -2415,7 +2421,7 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
 
 /// Translate a store instruction.
 fn translate_store<FE: FuncEnvironment + ?Sized>(
-    memarg: &MemoryImmediate,
+    memarg: &MemArg,
     opcode: ir::Opcode,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
@@ -2460,7 +2466,7 @@ fn translate_atomic_rmw<FE: FuncEnvironment + ?Sized>(
     widened_ty: Type,
     access_ty: Type,
     op: AtomicRmwOp,
-    memarg: &MemoryImmediate,
+    memarg: &MemArg,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FE,
@@ -2503,7 +2509,7 @@ fn translate_atomic_rmw<FE: FuncEnvironment + ?Sized>(
 fn translate_atomic_cas<FE: FuncEnvironment + ?Sized>(
     widened_ty: Type,
     access_ty: Type,
-    memarg: &MemoryImmediate,
+    memarg: &MemArg,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FE,
@@ -2550,7 +2556,7 @@ fn translate_atomic_cas<FE: FuncEnvironment + ?Sized>(
 fn translate_atomic_load<FE: FuncEnvironment + ?Sized>(
     widened_ty: Type,
     access_ty: Type,
-    memarg: &MemoryImmediate,
+    memarg: &MemArg,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FE,
@@ -2583,7 +2589,7 @@ fn translate_atomic_load<FE: FuncEnvironment + ?Sized>(
 
 fn translate_atomic_store<FE: FuncEnvironment + ?Sized>(
     access_ty: Type,
-    memarg: &MemoryImmediate,
+    memarg: &MemArg,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FE,

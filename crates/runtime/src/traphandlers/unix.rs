@@ -87,7 +87,7 @@ unsafe extern "C" fn trap_handler(
         // handling, and reset our trap handling flag. Then we figure
         // out what to do based on the result of the trap handling.
         let (pc, fp) = get_pc_and_fp(context, signum);
-        let jmp_buf = info.jmp_buf_if_trap(pc, |handler| handler(signum, siginfo, context));
+        let jmp_buf = info.take_jmp_buf_if_trap(pc, |handler| handler(signum, siginfo, context));
 
         // Figure out what to do based on the result of this handling of
         // the trap. Note that our sentinel value of 1 means that the
@@ -228,7 +228,14 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
                 cx.uc_mcontext.mc_rip as *const u8,
                 cx.uc_mcontext.mc_rbp as usize,
             )
-        } else {
+        } else if #[cfg(all(target_os = "linux", target_arch = "riscv64"))] {
+            let cx = &*(cx as *const libc::ucontext_t);
+            (
+                cx.uc_mcontext.__gregs[libc::REG_PC] as *const u8,
+                cx.uc_mcontext.__gregs[libc::REG_S0] as usize,
+            )
+        }
+        else {
             compile_error!("unsupported platform");
         }
     }
@@ -286,7 +293,14 @@ pub fn lazy_per_thread_init() {
 
     /// The size of the sigaltstack (not including the guard, which will be
     /// added). Make this large enough to run our signal handlers.
-    const MIN_STACK_SIZE: usize = 16 * 4096;
+    ///
+    /// The main current requirement of the signal handler in terms of stack
+    /// space is that `malloc`/`realloc` are called to create a `Backtrace` of
+    /// wasm frames.
+    ///
+    /// Historically this was 16k. Turns out jemalloc requires more than 16k of
+    /// stack space in debug mode, so this was bumped to 64k.
+    const MIN_STACK_SIZE: usize = 64 * 4096;
 
     struct Stack {
         mmap_ptr: *mut libc::c_void,

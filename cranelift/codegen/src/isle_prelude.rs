@@ -7,6 +7,12 @@
 #[doc(hidden)]
 macro_rules! isle_common_prelude_methods {
     () => {
+        /// We don't have a way of making a `()` value in isle directly.
+        #[inline]
+        fn unit(&mut self) -> Unit {
+            ()
+        }
+
         #[inline]
         fn u8_as_u32(&mut self, x: u8) -> Option<u32> {
             Some(x.into())
@@ -77,6 +83,11 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn u64_not(&mut self, x: u64) -> Option<u64> {
             Some(!x)
+        }
+
+        #[inline]
+        fn u64_is_zero(&mut self, value: u64) -> bool {
+            0 == value
         }
 
         #[inline]
@@ -381,27 +392,14 @@ macro_rules! isle_common_prelude_methods {
             (start, end)
         }
 
-        fn range_empty(&mut self, r: Range) -> Option<()> {
-            if r.0 >= r.1 {
-                Some(())
+        fn range_view(&mut self, (start, end): Range) -> RangeView {
+            if start >= end {
+                RangeView::Empty
             } else {
-                None
-            }
-        }
-
-        fn range_singleton(&mut self, r: Range) -> Option<usize> {
-            if r.0 + 1 == r.1 {
-                Some(r.0)
-            } else {
-                None
-            }
-        }
-
-        fn range_unwrap(&mut self, r: Range) -> Option<(usize, Range)> {
-            if r.0 < r.1 {
-                Some((r.0, (r.0 + 1, r.1)))
-            } else {
-                None
+                RangeView::NonEmpty {
+                    index: start,
+                    rest: (start + 1, end),
+                }
             }
         }
 

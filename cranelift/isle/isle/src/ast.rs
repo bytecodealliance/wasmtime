@@ -17,6 +17,7 @@ pub struct Defs {
 /// One toplevel form in an ISLE file.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Def {
+    Pragma(Pragma),
     Type(Type),
     Rule(Rule),
     Extractor(Extractor),
@@ -28,6 +29,13 @@ pub enum Def {
 /// An identifier -- a variable, term symbol, or type.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Ident(pub String, pub Pos);
+
+/// Pragmas parsed with the `(pragma <ident>)` syntax.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Pragma {
+    /// Enable overlap errors in the source.
+    OverlapErrors,
+}
 
 /// A declaration of a type.
 #[derive(Clone, PartialEq, Eq, Debug)]

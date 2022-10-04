@@ -3,6 +3,7 @@ test run
 target aarch64
 target x86_64
 target s390x
+target riscv64
 
 function %bextend_b1_b8(b1) -> b8 {
 block0(v0: b1):

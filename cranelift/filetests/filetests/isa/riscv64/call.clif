@@ -1,0 +1,424 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %f1(i64) -> i64 {
+    fn0 = %g(i64) -> i64
+
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return v1
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   load_sym a1,%g+0
+;   callind a1
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+function %f2(i32) -> i64 {
+    fn0 = %g(i32 uext) -> i64 
+
+block0(v0: i32):
+    v1 = call fn0(v0)
+    return v1
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   uext.w a0,a0
+;   load_sym a3,%g+0
+;   callind a3
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+function %f3(i32) -> i32 uext  {
+block0(v0: i32):
+    return v0
+}
+
+; block0:
+;   uext.w a0,a0
+;   ret
+
+function %f4(i32) -> i64 {
+    fn0 = %g(i32 sext) -> i64 
+
+block0(v0: i32):
+    v1 = call fn0(v0)
+    return v1
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   sext.w a0,a0
+;   load_sym a3,%g+0
+;   callind a3
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+function %f5(i32) -> i32 sext  {
+block0(v0: i32):
+    return v0
+}
+
+; block0:
+;   sext.w a0,a0
+;   ret
+
+function %f6(i8) -> i64 {
+    fn0 = %g(i32, i32, i32, i32, i32, i32, i32, i32, i8 sext) -> i64
+
+block0(v0: i8):
+    v1 = iconst.i32 42
+    v2 = call fn0(v1, v1, v1, v1, v1, v1, v1, v1, v0)
+    return v2
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   mv t3,a0
+;   add sp,-16
+;   virtual_sp_offset_adj +16
+;   li a0,42
+;   li a1,42
+;   li a2,42
+;   li a3,42
+;   li a4,42
+;   li a5,42
+;   li a6,42
+;   li a7,42
+;   sext.b t3,t3
+;   sd t3,0(sp)
+;   load_sym t4,%g+0
+;   callind t4
+;   add sp,+16
+;   virtual_sp_offset_adj -16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+function %f7(i8) -> i32, i32, i32, i32, i32, i32, i32, i32, i8 sext {
+block0(v0: i8):
+    v1 = iconst.i32 42
+    return v1, v1, v1, v1, v1, v1, v1, v1, v0
+}
+
+; block0:
+;   mv a7,a0
+;   mv a6,a1
+;   li a0,42
+;   li a1,42
+;   li a2,42
+;   li a5,42
+;   li t3,42
+;   li t1,42
+;   li a3,42
+;   li a4,42
+;   mv t2,a7
+;   mv t0,a6
+;   sw a2,0(t0)
+;   sw a5,8(t0)
+;   sw t3,16(t0)
+;   sw t1,24(t0)
+;   sw a3,32(t0)
+;   sw a4,40(t0)
+;   sext.b t2,t2
+;   sd t2,48(t0)
+;   ret
+
+function %f8() {
+    fn0 = %g0() -> f32
+    fn1 = %g1() -> f64
+    fn2 = %g2()
+    fn3 = %g3(f32)
+    fn4 = %g4(f64)
+
+block0:
+    v0 = call fn0()
+    v1 = call fn1()
+    v2 = call fn1()
+    call fn2()
+    call fn3(v0)
+    call fn4(v1)
+    call fn4(v2)
+    return
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   fsd fs2,-8(sp)
+;   fsd fs3,-16(sp)
+;   fsd fs11,-24(sp)
+;   add sp,-32
+; block0:
+;   load_sym a6,%g0+0
+;   callind a6
+;   fmv.d fs11,fa0
+;   load_sym a6,%g1+0
+;   callind a6
+;   fmv.d fs2,fa0
+;   load_sym a6,%g1+0
+;   callind a6
+;   fmv.d fs3,fa0
+;   load_sym a6,%g2+0
+;   callind a6
+;   load_sym a7,%g3+0
+;   fmv.d fa0,fs11
+;   callind a7
+;   load_sym t3,%g4+0
+;   fmv.d fa0,fs2
+;   callind t3
+;   load_sym t4,%g4+0
+;   fmv.d fa0,fs3
+;   callind t4
+;   add sp,+32
+;   fld fs2,-8(sp)
+;   fld fs3,-16(sp)
+;   fld fs11,-24(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+function %f11(i128, i64) -> i64 {
+block0(v0: i128, v1: i64):
+    v2, v3 = isplit v0
+    return v3
+}
+
+; block0:
+;   mv a2,a0
+;   mv a0,a1
+;   ret
+
+function %f11_call(i64) -> i64 {
+    fn0 = %f11(i128, i64) -> i64
+
+block0(v0: i64):
+    v1 = iconst.i64 42
+    v2 = iconcat v1, v0
+    v3 = call fn0(v2, v1)
+    return v3
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   mv a6,a0
+;   li a0,42
+;   mv a1,a6
+;   li a2,42
+;   load_sym a6,%f11+0
+;   callind a6
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+function %f12(i64, i128) -> i64 {
+block0(v0: i64, v1: i128):
+    v2, v3 = isplit v1
+    return v2
+}
+
+; block0:
+;   mv a0,a1
+;   ret
+
+function %f12_call(i64) -> i64 {
+    fn0 = %f12(i64, i128) -> i64
+
+block0(v0: i64):
+    v1 = iconst.i64 42
+    v2 = iconcat v0, v1
+    v3 = call fn0(v1, v2)
+    return v3
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   mv a1,a0
+;   li a2,42
+;   li a0,42
+;   load_sym a6,%f12+0
+;   callind a6
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+function %f13(i64, i128) -> i64 {
+block0(v0: i64, v1: i128):
+    v2, v3 = isplit v1
+    return v2
+}
+
+; block0:
+;   mv a0,a1
+;   ret
+
+function %f13_call(i64) -> i64 {
+    fn0 = %f13(i64, i128) -> i64
+
+block0(v0: i64):
+    v1 = iconst.i64 42
+    v2 = iconcat v0, v1
+    v3 = call fn0(v1, v2)
+    return v3
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   mv a1,a0
+;   li a2,42
+;   li a0,42
+;   load_sym a6,%f13+0
+;   callind a6
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+function %f14(i128, i128, i128, i64, i128) -> i128 {
+block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
+    return v4
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   ld a1,16(fp)
+;   mv a0,a7
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+function %f14_call(i128, i64) -> i128 {
+    fn0 = %f14(i128, i128, i128, i64, i128) -> i128
+
+block0(v0: i128, v1: i64):
+    v2 = call fn0(v0, v0, v0, v1, v0)
+    return v2
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   mv a7,a0
+;   mv a6,a2
+;   add sp,-16
+;   virtual_sp_offset_adj +16
+;   sd a1,0(sp)
+;   mv a5,a1
+;   load_sym t3,%f14+0
+;   mv a1,a5
+;   mv a3,a5
+;   mv a0,a7
+;   mv a2,a7
+;   mv a4,a7
+;   callind t3
+;   add sp,+16
+;   virtual_sp_offset_adj -16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+function %f15(i128, i128, i128, i64, i128) -> i128{
+block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
+    return v4
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   ld a1,16(fp)
+;   mv a0,a7
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+function %f15_call(i128, i64) -> i128 {
+    fn0 = %f15(i128, i128, i128, i64, i128) -> i128
+
+block0(v0: i128, v1: i64):
+    v2 = call fn0(v0, v0, v0, v1, v0)
+    return v2
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   mv a7,a0
+;   mv a6,a2
+;   add sp,-16
+;   virtual_sp_offset_adj +16
+;   sd a1,0(sp)
+;   mv a5,a1
+;   load_sym t3,%f15+0
+;   mv a1,a5
+;   mv a3,a5
+;   mv a0,a7
+;   mv a2,a7
+;   mv a4,a7
+;   callind t3
+;   add sp,+16
+;   virtual_sp_offset_adj -16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+function %f16() -> i32, i32 {
+block0:
+    v0 = iconst.i32 0
+    v1 = iconst.i32 1
+    return v0, v1
+}
+
+; block0:
+;   li a0,0
+;   li a1,1
+;   ret
+

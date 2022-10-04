@@ -5,12 +5,17 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
 use crate::error::{Error, Result, Source, Span};
+use crate::lexer::Pos;
 use crate::sema::{self, Rule, RuleId, Sym, TermEnv, TermId, TermKind, TypeEnv, VarId};
 
 /// Check for overlap.
 pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
     let mut errors = check_overlaps(termenv).report(tyenv, termenv);
-    if cfg!(feature = "overlap-errors") {
+    if termenv.overlap_errors {
+        errors.sort_by_key(|err| match err {
+            Error::OverlapError { rules, .. } => rules.first().unwrap().1.from,
+            _ => Pos::default(),
+        });
         match errors.len() {
             0 => Ok(()),
             1 => Err(errors.pop().unwrap()),
@@ -60,7 +65,11 @@ impl Errors {
             (src, span)
         };
 
-        while let Some((&id, _)) = self.nodes.iter().max_by_key(|(_, edges)| edges.len()) {
+        while let Some((&id, _)) = self
+            .nodes
+            .iter()
+            .max_by_key(|(id, edges)| (edges.len(), *id))
+        {
             let node = self.nodes.remove(&id).unwrap();
             for other in node.iter() {
                 if let Entry::Occupied(mut entry) = self.nodes.entry(*other) {

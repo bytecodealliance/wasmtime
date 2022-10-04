@@ -486,6 +486,122 @@ const OPCODE_SIGNATURES: &'static [(
     // Nearest
     (Opcode::Nearest, &[F32], &[F32], insert_opcode),
     (Opcode::Nearest, &[F64], &[F64], insert_opcode),
+    // FcvtToUint
+    // TODO: Some ops disabled:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4897
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4899
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4934
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUint, &[F32], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUint, &[F32], &[I16], insert_opcode),
+    (Opcode::FcvtToUint, &[F32], &[I32], insert_opcode),
+    (Opcode::FcvtToUint, &[F32], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToUint, &[F32], &[I128], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUint, &[F64], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUint, &[F64], &[I16], insert_opcode),
+    (Opcode::FcvtToUint, &[F64], &[I32], insert_opcode),
+    (Opcode::FcvtToUint, &[F64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToUint, &[F64], &[I128], insert_opcode),
+    // FcvtToUintSat
+    // TODO: Some ops disabled:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4897
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4899
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4934
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUintSat, &[F32], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUintSat, &[F32], &[I16], insert_opcode),
+    (Opcode::FcvtToUintSat, &[F32], &[I32], insert_opcode),
+    (Opcode::FcvtToUintSat, &[F32], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToUintSat, &[F32], &[I128], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUintSat, &[F64], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToUintSat, &[F64], &[I16], insert_opcode),
+    (Opcode::FcvtToUintSat, &[F64], &[I32], insert_opcode),
+    (Opcode::FcvtToUintSat, &[F64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToUintSat, &[F64], &[I128], insert_opcode),
+    // FcvtToSint
+    // TODO: Some ops disabled:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4897
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4899
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4934
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSint, &[F32], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSint, &[F32], &[I16], insert_opcode),
+    (Opcode::FcvtToSint, &[F32], &[I32], insert_opcode),
+    (Opcode::FcvtToSint, &[F32], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToSint, &[F32], &[I128], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSint, &[F64], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSint, &[F64], &[I16], insert_opcode),
+    (Opcode::FcvtToSint, &[F64], &[I32], insert_opcode),
+    (Opcode::FcvtToSint, &[F64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToSint, &[F64], &[I128], insert_opcode),
+    // FcvtToSintSat
+    // TODO: Some ops disabled:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4897
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4899
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4934
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSintSat, &[F32], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSintSat, &[F32], &[I16], insert_opcode),
+    (Opcode::FcvtToSintSat, &[F32], &[I32], insert_opcode),
+    (Opcode::FcvtToSintSat, &[F32], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToSintSat, &[F32], &[I128], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSintSat, &[F64], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::FcvtToSintSat, &[F64], &[I16], insert_opcode),
+    (Opcode::FcvtToSintSat, &[F64], &[I32], insert_opcode),
+    (Opcode::FcvtToSintSat, &[F64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtToSintSat, &[F64], &[I128], insert_opcode),
+    // FcvtFromUint
+    // TODO: Some ops disabled:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4900
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4933
+    (Opcode::FcvtFromUint, &[I8], &[F32], insert_opcode),
+    (Opcode::FcvtFromUint, &[I16], &[F32], insert_opcode),
+    (Opcode::FcvtFromUint, &[I32], &[F32], insert_opcode),
+    (Opcode::FcvtFromUint, &[I64], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtFromUint, &[I128], &[F32], insert_opcode),
+    (Opcode::FcvtFromUint, &[I8], &[F64], insert_opcode),
+    (Opcode::FcvtFromUint, &[I16], &[F64], insert_opcode),
+    (Opcode::FcvtFromUint, &[I32], &[F64], insert_opcode),
+    (Opcode::FcvtFromUint, &[I64], &[F64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtFromUint, &[I128], &[F64], insert_opcode),
+    // FcvtFromSint
+    // TODO: Some ops disabled:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/4900
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4933
+    (Opcode::FcvtFromSint, &[I8], &[F32], insert_opcode),
+    (Opcode::FcvtFromSint, &[I16], &[F32], insert_opcode),
+    (Opcode::FcvtFromSint, &[I32], &[F32], insert_opcode),
+    (Opcode::FcvtFromSint, &[I64], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtFromSint, &[I128], &[F32], insert_opcode),
+    (Opcode::FcvtFromSint, &[I8], &[F64], insert_opcode),
+    (Opcode::FcvtFromSint, &[I16], &[F64], insert_opcode),
+    (Opcode::FcvtFromSint, &[I32], &[F64], insert_opcode),
+    (Opcode::FcvtFromSint, &[I64], &[F64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::FcvtFromSint, &[I128], &[F64], insert_opcode),
     // Fcmp
     (Opcode::Fcmp, &[F32, F32], &[B1], insert_cmp),
     (Opcode::Fcmp, &[F64, F64], &[B1], insert_cmp),

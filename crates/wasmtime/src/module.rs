@@ -590,7 +590,13 @@ impl Module {
             }
         }
 
-        engine.run_maybe_parallel(functions, |(mut validator, body)| validator.validate(&body))?;
+        engine.run_maybe_parallel(functions, |(validator, body)| {
+            // FIXME: it would be best here to use a rayon-specific parallel
+            // iterator that maintains state-per-thread to share the function
+            // validator allocations (`Default::default` here) across multiple
+            // functions.
+            validator.into_validator(Default::default()).validate(&body)
+        })?;
         Ok(())
     }
 
