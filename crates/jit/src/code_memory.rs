@@ -3,6 +3,7 @@
 use crate::unwind::UnwindRegistration;
 use anyhow::{bail, Context, Result};
 use object::read::{File, Object, ObjectSection};
+use std::ffi::c_void;
 use std::mem::ManuallyDrop;
 use wasmtime_runtime::MmapVec;
 
@@ -54,15 +55,6 @@ impl CodeMemory {
     /// The returned `CodeMemory` manages the internal `MmapVec` and the
     /// `publish` method is used to actually make the memory executable.
     pub fn new(mmap: MmapVec) -> Self {
-        #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-        {
-            // This is a requirement of the `membarrier` call executed by the `publish` method.
-            rustix::process::membarrier(
-                rustix::process::MembarrierCommand::RegisterPrivateExpeditedSyncCore,
-            )
-            .unwrap();
-        }
-
         Self {
             mmap: ManuallyDrop::new(mmap),
             unwind_registration: ManuallyDrop::new(None),
@@ -155,39 +147,20 @@ impl CodeMemory {
             // must be added here, though, if relocations pop up.
             assert!(text.relocations().count() == 0);
 
+            // Clear the newly allocated code from cache if the processor requires it
+            jit_icache_coherence::clear_cache(ret.text.as_ptr() as *const c_void, ret.text.len())
+                .expect("Failed cache clear");
+
+            // Do this before marking the memory as R+X, technically we should be able to do it after
+            // but there are some CPU's that have had errata about doing this with read only memory.
+            jit_icache_coherence::pipeline_flush().expect("Failed pipeline flush");
+
             // Switch the executable portion from read/write to
             // read/execute, notably not using read/write/execute to prevent
             // modifications.
             self.mmap
                 .make_executable(text_range.clone(), enable_branch_protection)
                 .expect("unable to make memory executable");
-
-            #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-            {
-                // Ensure that no processor has fetched a stale instruction stream.
-                rustix::process::membarrier(
-                    rustix::process::MembarrierCommand::PrivateExpeditedSyncCore,
-                )
-                .unwrap();
-            }
-
-            #[cfg(all(target_arch = "aarch64", target_os = "windows"))]
-            {
-                use std::ffi::c_void;
-                use windows_sys::Win32::System::Diagnostics::Debug::FlushInstructionCache;
-                use windows_sys::Win32::System::Threading::GetCurrentProcess;
-
-                let process_handle = GetCurrentProcess();
-                let res = FlushInstructionCache(
-                    process_handle,
-                    ret.text.as_ptr() as *const c_void,
-                    ret.text.len(),
-                );
-
-                if res == 0 {
-                    panic!("Failed to flush icache");
-                }
-            }
 
             // With all our memory set up use the platform-specific
             // `UnwindRegistration` implementation to inform the general

@@ -3649,6 +3649,7 @@ dependencies = [
  "cpp_demangle",
  "gimli",
  "ittapi",
+ "jit-icache-coherence",
  "log",
  "object",
  "rustc-demangle",

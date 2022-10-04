@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use rustix::io::Errno;
 use rustix::process::{membarrier, MembarrierCommand};
 use std::ffi::c_void;
@@ -32,7 +34,7 @@ pub(crate) fn pipeline_flush() -> Result<()> {
     // guarantee that, so we may need to do something similar for it. However as noted in the above
     // kernel patch the SYNC_CORE membarrier has different guarantees on each architecture
     // so we need follow up and check what it provides us.
-    #[cfg(target_arch = "aarch64", target_os = "linux")]
+    #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
     match membarrier(MembarrierCommand::PrivateExpeditedSyncCore) {
         Ok(_) => {}
 
