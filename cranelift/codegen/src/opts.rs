@@ -1,5 +1,6 @@
 //! Optimization driver using ISLE rewrite rules on an egraph.
 
+use crate::egraph::Analysis;
 use crate::egraph::FuncEGraph;
 use crate::egraph::MemoryState;
 pub use crate::egraph::{Node, NodeCtx};
@@ -36,8 +37,6 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     log::trace!("running rules on eclass {}", id.index());
     egraph.stats.rewrite_rule_invoked += 1;
 
-    egraph.compute_analyses(id);
-
     // Find all possible rewrites and union them in, returning the
     // union.
     let mut ctx = IsleContext { egraph };
@@ -57,14 +56,16 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
             }
             ctx.egraph.stats.node_union += 1;
             let old_union_id = union_id;
-            union_id = ctx.egraph.egraph.union(union_id, new_id);
+            union_id = ctx
+                .egraph
+                .egraph
+                .union(&ctx.egraph.node_ctx, union_id, new_id);
             log::trace!(
                 " -> union eclass {} with {} to get {}",
                 new_id,
                 old_union_id,
                 union_id
             );
-            ctx.egraph.compute_analyses(union_id);
         }
     }
     ctx.egraph.subsume_ids.clear();
@@ -142,7 +143,7 @@ where
     'b: 'a,
 {
     root: Id,
-    iter: NodeIter<NodeCtx>,
+    iter: NodeIter<NodeCtx, Analysis>,
     _phantom1: PhantomData<&'a ()>,
     _phantom2: PhantomData<&'b ()>,
 }
@@ -190,7 +191,10 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
     }
 
     fn at_loop_level(&mut self, eclass: Id) -> Option<(u8, Id)> {
-        Some((self.egraph.loop_levels[eclass].level() as u8, eclass))
+        Some((
+            self.egraph.egraph.analysis_value(eclass).loop_level.level() as u8,
+            eclass,
+        ))
     }
 
     type enodes_etor_iter = NodesEtorIter<'a, 'b>;
@@ -217,7 +221,6 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
                 self.egraph.stats.node_created += 1;
                 self.egraph.stats.node_pure += 1;
                 self.egraph.stats.node_ctor_created += 1;
-                self.egraph.compute_analyses(id);
                 optimize_eclass(id, self.egraph)
             }
             NewOrExisting::Existing(id) => {

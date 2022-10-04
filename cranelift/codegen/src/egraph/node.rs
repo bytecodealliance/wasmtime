@@ -19,6 +19,8 @@ pub enum Node {
         index: u32,
         /// Type of the value.
         ty: Type,
+        /// The loop level of this Param.
+        loop_level: LoopLevel,
     },
     /// A CLIF instruction that is pure (has no side-effects). Not
     /// tied to any location; we will compute a set of locations at
@@ -50,6 +52,8 @@ pub enum Node {
         inst: Inst,
         /// The source location to preserve.
         srcloc: RelSourceLoc,
+        /// The loop level of this Inst.
+        loop_level: LoopLevel,
     },
     /// A projection of one result of an `Inst` or `Pure`.
     Result {
@@ -155,11 +159,17 @@ impl CtxEq<Node, Node> for NodeCtx {
     fn ctx_eq(&self, a: &Node, b: &Node, uf: &mut UnionFind) -> bool {
         match (a, b) {
             (
-                &Node::Param { block, index, ty },
+                &Node::Param {
+                    block,
+                    index,
+                    ty,
+                    loop_level: _,
+                },
                 &Node::Param {
                     block: other_block,
                     index: other_index,
                     ty: other_ty,
+                    loop_level: _,
                 },
             ) => block == other_block && index == other_index && ty == other_ty,
             (
@@ -234,6 +244,7 @@ impl CtxHash<Node> for NodeCtx {
                 block,
                 index,
                 ty: _,
+                loop_level: _,
             } => {
                 block.hash(&mut state);
                 index.hash(&mut state);

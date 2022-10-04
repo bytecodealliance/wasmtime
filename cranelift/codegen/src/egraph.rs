@@ -31,7 +31,7 @@ pub struct FuncEGraph<'a> {
     /// Last-store tracker for integrated alias analysis during egraph build.
     alias_analysis: AliasAnalysis,
     /// The egraph itself.
-    pub(crate) egraph: EGraph<NodeCtx>,
+    pub(crate) egraph: EGraph<NodeCtx, Analysis>,
     /// "node context", containing arenas for node data.
     pub(crate) node_ctx: NodeCtx,
     /// Ranges in `side_effect_ids` for sequences of side-effecting
@@ -40,10 +40,6 @@ pub struct FuncEGraph<'a> {
     side_effect_ids: Vec<Id>,
     /// Map from store instructions to their nodes; used for store-to-load forwarding.
     pub(crate) store_nodes: FxHashMap<Inst, (Type, Id)>,
-    /// Minimum loop level for each eclass ID. Initially known for non-pure nodes by
-    /// location in input program's loop nest, and pure nodes by the
-    /// min of their args' levels.
-    pub(crate) loop_levels: SecondaryMap<Id, LoopLevel>,
     /// Ranges in `blockparam_ids_tys` for sequences of blockparam
     /// eclass IDs and types per block.
     blockparams: SecondaryMap<Block, Range<u32>>,
@@ -104,7 +100,7 @@ impl<'a> FuncEGraph<'a> {
             domtree,
             loop_analysis,
             alias_analysis,
-            egraph: EGraph::with_capacity(node_count_estimate),
+            egraph: EGraph::with_capacity(node_count_estimate, Some(Analysis)),
             node_ctx: NodeCtx::with_capacity(
                 func.dfg.num_values(),
                 func.dfg.value_lists.capacity(),
@@ -112,7 +108,6 @@ impl<'a> FuncEGraph<'a> {
             side_effects: SecondaryMap::with_default(0..0),
             side_effect_ids: vec![],
             store_nodes: FxHashMap::default(),
-            loop_levels: SecondaryMap::with_default(LoopLevel::invalid()),
             blockparams: SecondaryMap::with_default(0..0),
             blockparam_ids_tys: vec![],
             remat_ids: FxHashSet::default(),
@@ -142,11 +137,11 @@ impl<'a> FuncEGraph<'a> {
                             block,
                             index: u32::try_from(i).expect("More than 2^32 blockparams"),
                             ty,
+                            loop_level,
                         },
                         &mut self.node_ctx,
                     )
                     .get();
-                self.loop_levels[param] = loop_level;
                 value_to_id.insert(value, param);
                 self.blockparam_ids_tys.push((param, ty));
                 self.stats.node_created += 1;
@@ -221,6 +216,7 @@ impl<'a> FuncEGraph<'a> {
                         args,
                         types,
                         srcloc,
+                        loop_level,
                     }
                 } else {
                     self.stats.node_created += 1;
@@ -230,14 +226,6 @@ impl<'a> FuncEGraph<'a> {
                 let dedup_needed = self.node_ctx.needs_dedup(&node);
 
                 let id = self.egraph.add(node, &mut self.node_ctx);
-
-                if !dedup_needed {
-                    self.loop_levels[id.get()] = loop_level;
-                }
-
-                if let NewOrExisting::New(id) = id {
-                    self.compute_analyses(id);
-                }
 
                 if dedup_needed {
                     self.stats.node_dedup_query += 1;
@@ -349,7 +337,6 @@ impl<'a> FuncEGraph<'a> {
             self.loop_analysis,
             &self.egraph,
             &self.node_ctx,
-            &self.loop_levels,
             &self.remat_ids,
             &mut self.stats,
         );
@@ -366,41 +353,53 @@ impl<'a> FuncEGraph<'a> {
             },
         );
     }
+}
 
-    pub(crate) fn compute_analyses(&mut self, id: Id) {
-        // For a new eclass node, compute all analyses. These are:
-        //
-        // - Minimum loop depth.
-        // - (and that's it, for now!)
+/// State for egraph analysis that computes all needed properties.
+pub(crate) struct Analysis;
 
-        let eclass_data = self.egraph.classes[id];
+/// Analysis results for each eclass id.
+#[derive(Clone, Debug)]
+pub(crate) struct AnalysisValue {
+    pub(crate) loop_level: LoopLevel,
+}
 
-        if self.loop_levels[id] == LoopLevel::invalid() {
-            let node_loop_level = eclass_data
-                .get_node()
-                .map(|node_key| node_key.node::<NodeCtx>(&self.egraph.nodes))
-                .map(|node| match node {
-                    &Node::Pure { ref args, .. } => args
-                        .as_slice(&self.node_ctx.args)
-                        .iter()
-                        .map(|&arg| self.loop_levels[arg])
-                        .max()
-                        .unwrap_or(LoopLevel::root()),
-                    &Node::Load { addr, .. } => self.loop_levels[addr],
-                    &Node::Result { value, .. } => self.loop_levels[value],
-                    _ => panic!("Should have already assigned levels to all Inst and Param nodes"),
-                });
+impl std::default::Default for AnalysisValue {
+    fn default() -> Self {
+        Self {
+            loop_level: LoopLevel::root(),
+        }
+    }
+}
 
-            let child1_loop_level = eclass_data.child1().map(|p1| self.loop_levels[p1]);
-            let child2_loop_level = eclass_data.child2().map(|p2| self.loop_levels[p2]);
+impl cranelift_egraph::Analysis for Analysis {
+    type L = NodeCtx;
+    type Value = AnalysisValue;
 
-            let loop_level = node_loop_level
-                .into_iter()
-                .chain(child1_loop_level.into_iter())
-                .chain(child2_loop_level.into_iter())
+    fn for_node(
+        &self,
+        ctx: &NodeCtx,
+        n: &Node,
+        values: &SecondaryMap<Id, AnalysisValue>,
+    ) -> AnalysisValue {
+        let loop_level = match n {
+            &Node::Pure { ref args, .. } => args
+                .as_slice(&ctx.args)
+                .iter()
+                .map(|&arg| values[arg].loop_level)
                 .max()
-                .unwrap_or(LoopLevel::root());
-            self.loop_levels[id] = loop_level;
+                .unwrap_or(LoopLevel::root()),
+            &Node::Load { addr, .. } => values[addr].loop_level,
+            &Node::Result { value, .. } => values[value].loop_level,
+            &Node::Inst { loop_level, .. } | &Node::Param { loop_level, .. } => loop_level,
+        };
+
+        AnalysisValue { loop_level }
+    }
+
+    fn meet(&self, _ctx: &NodeCtx, v1: &AnalysisValue, v2: &AnalysisValue) -> AnalysisValue {
+        AnalysisValue {
+            loop_level: std::cmp::max(v1.loop_level, v2.loop_level),
         }
     }
 }

@@ -3,11 +3,12 @@
 
 use super::domtree::DomTreeWithChildren;
 use super::node::{op_cost, Cost, Node, NodeCtx};
+use super::Analysis;
 use super::Stats;
 use crate::dominator_tree::DominatorTree;
 use crate::fx::FxHashSet;
 use crate::ir::{Block, Function, Inst, RelSourceLoc, Type, Value, ValueList};
-use crate::loop_analysis::{LoopAnalysis, LoopLevel};
+use crate::loop_analysis::LoopAnalysis;
 use crate::scoped_hash_map::ScopedHashMap;
 use alloc::vec::Vec;
 use cranelift_egraph::{EGraph, Id, Language, NodeKey};
@@ -21,8 +22,7 @@ pub(crate) struct Elaborator<'a> {
     domtree: &'a DominatorTree,
     loop_analysis: &'a LoopAnalysis,
     node_ctx: &'a NodeCtx,
-    egraph: &'a EGraph<NodeCtx>,
-    loop_levels: &'a SecondaryMap<Id, LoopLevel>,
+    egraph: &'a EGraph<NodeCtx, Analysis>,
     id_to_value: ScopedHashMap<Id, IdValue>,
     id_to_best_cost_and_node: SecondaryMap<Id, (Cost, Id)>,
     /// Stack of blocks and loops in current elaboration path.
@@ -102,9 +102,8 @@ impl<'a> Elaborator<'a> {
         func: &'a mut Function,
         domtree: &'a DominatorTree,
         loop_analysis: &'a LoopAnalysis,
-        egraph: &'a EGraph<NodeCtx>,
+        egraph: &'a EGraph<NodeCtx, Analysis>,
         node_ctx: &'a NodeCtx,
-        loop_levels: &'a SecondaryMap<Id, LoopLevel>,
         remat_ids: &'a FxHashSet<Id>,
         stats: &'a mut Stats,
     ) -> Self {
@@ -118,7 +117,6 @@ impl<'a> Elaborator<'a> {
             loop_analysis,
             egraph,
             node_ctx,
-            loop_levels,
             id_to_value: ScopedHashMap::with_capacity(egraph.classes.len()),
             id_to_best_cost_and_node,
             loop_stack: smallvec![],
@@ -266,7 +264,7 @@ impl<'a> Elaborator<'a> {
                             // an explicit reduce instead.
                             .reduce(|a, b| a + b)
                             .unwrap_or(Cost::zero());
-                        let level = self.loop_levels[eclass_id];
+                        let level = self.egraph.analysis_value(eclass_id).loop_level;
                         let cost = op_cost(op).at_level(level) + args_cost;
                         (cost, eclass_id)
                     }

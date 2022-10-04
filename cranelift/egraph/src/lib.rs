@@ -220,7 +220,7 @@
 //!       POPL 2021. <https://dl.acm.org/doi/10.1145/3434304>
 
 use cranelift_entity::PrimaryMap;
-use cranelift_entity::{entity_impl, packed_option::ReservedValue};
+use cranelift_entity::{entity_impl, packed_option::ReservedValue, SecondaryMap};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -258,6 +258,20 @@ pub trait Language: CtxEq<Self::Node, Self::Node> + CtxHash<Self::Node> {
     fn needs_dedup(&self, node: &Self::Node) -> bool;
 }
 
+/// A trait that allows the aegraph to compute a property of each
+/// node as it is created.
+pub trait Analysis {
+    type L: Language;
+    type Value: Debug + Clone + Default;
+    fn for_node(
+        &self,
+        ctx: &Self::L,
+        n: &<Self::L as Language>::Node,
+        values: &SecondaryMap<Id, Self::Value>,
+    ) -> Self::Value;
+    fn meet(&self, ctx: &Self::L, v1: &Self::Value, v2: &Self::Value) -> Self::Value;
+}
+
 /// Conditionally-compiled trace-log macro. (Borrowed from
 /// `cranelift-codegen`; it's not worth factoring out a common
 /// subcrate for this.)
@@ -271,7 +285,7 @@ macro_rules! trace {
 }
 
 /// An egraph.
-pub struct EGraph<L: Language> {
+pub struct EGraph<L: Language, A: Analysis<L = L>> {
     /// Node-allocation arena.
     pub nodes: Vec<L::Node>,
     /// Hash-consing map from Nodes to eclass IDs.
@@ -283,6 +297,8 @@ pub struct EGraph<L: Language> {
     /// eclass with a canonical ID that is the same for all
     /// generations of the class.
     pub unionfind: UnionFind,
+    /// Analysis and per-node state.
+    pub analysis: Option<(A, SecondaryMap<Id, A::Value>)>,
 }
 
 /// A reference to a node.
@@ -313,12 +329,12 @@ impl NodeKey {
     }
 }
 
-struct NodeKeyCtx<'a, L: Language> {
+struct NodeKeyCtx<'a, 'b, L: Language> {
     nodes: &'a [L::Node],
-    node_ctx: &'a L,
+    node_ctx: &'b L,
 }
 
-impl<'ctx, L: Language> CtxEq<NodeKey, NodeKey> for NodeKeyCtx<'ctx, L> {
+impl<'a, 'b, L: Language> CtxEq<NodeKey, NodeKey> for NodeKeyCtx<'a, 'b, L> {
     fn ctx_eq(&self, a: &NodeKey, b: &NodeKey, uf: &mut UnionFind) -> bool {
         let a = a.node::<L>(self.nodes);
         let b = b.node::<L>(self.nodes);
@@ -326,7 +342,7 @@ impl<'ctx, L: Language> CtxEq<NodeKey, NodeKey> for NodeKeyCtx<'ctx, L> {
     }
 }
 
-impl<'ctx, L: Language> CtxHash<NodeKey> for NodeKeyCtx<'ctx, L> {
+impl<'a, 'b, L: Language> CtxHash<NodeKey> for NodeKeyCtx<'a, 'b, L> {
     fn ctx_hash(&self, value: &NodeKey, uf: &mut UnionFind) -> u64 {
         self.node_ctx.ctx_hash(value.node::<L>(self.nodes), uf)
     }
@@ -451,27 +467,31 @@ impl<T> NewOrExisting<T> {
     }
 }
 
-impl<L: Language> EGraph<L>
+impl<L: Language, A: Analysis<L = L>> EGraph<L, A>
 where
     L::Node: 'static,
 {
     /// Create a new aegraph.
-    pub fn new() -> Self {
+    pub fn new(analysis: Option<A>) -> Self {
+        let analysis = analysis.map(|a| (a, SecondaryMap::new()));
         Self {
             nodes: vec![],
             node_map: CtxHashMap::new(),
             classes: PrimaryMap::new(),
             unionfind: UnionFind::new(),
+            analysis,
         }
     }
 
     /// Create a new aegraph with the given capacity.
-    pub fn with_capacity(nodes: usize) -> Self {
+    pub fn with_capacity(nodes: usize, analysis: Option<A>) -> Self {
+        let analysis = analysis.map(|a| (a, SecondaryMap::with_capacity(nodes)));
         Self {
             nodes: Vec::with_capacity(nodes),
             node_map: CtxHashMap::with_capacity(nodes),
             classes: PrimaryMap::with_capacity(nodes),
             unionfind: UnionFind::with_capacity(nodes),
+            analysis,
         }
     }
 
@@ -508,6 +528,10 @@ where
                     // Add to interning map with a NodeKey referring to the eclass.
                     v.insert(eclass_id);
 
+                    // Update analysis.
+                    let node_ctx = ctx.node_ctx;
+                    self.update_analysis(node_ctx, eclass_id);
+
                     NewOrExisting::New(eclass_id)
                 }
             }
@@ -522,7 +546,7 @@ where
     /// property (args must have lower eclass Ids than the eclass
     /// containing the node with those args). Returns the Id of the
     /// merged eclass.
-    pub fn union(&mut self, a: Id, b: Id) -> Id {
+    pub fn union(&mut self, ctx: &L, a: Id, b: Id) -> Id {
         assert_ne!(a, Id::invalid());
         assert_ne!(b, Id::invalid());
         let (a, b) = (std::cmp::max(a, b), std::cmp::min(a, b));
@@ -544,6 +568,7 @@ where
                 b
             );
             self.classes[a] = EClass::node_and_child(node, b);
+            self.update_analysis(ctx, a);
             return a;
         }
 
@@ -551,6 +576,7 @@ where
         self.unionfind.add(u);
         self.unionfind.union(u, b);
         trace!(" -> union id {} and id {} into id {}", a, b, u);
+        self.update_analysis(ctx, u);
         u
     }
 
@@ -571,11 +597,40 @@ where
     }
 
     /// Get the enodes for a given eclass.
-    pub fn enodes(&self, eclass: Id) -> NodeIter<L> {
+    pub fn enodes(&self, eclass: Id) -> NodeIter<L, A> {
         NodeIter {
             stack: smallvec![eclass],
-            _phantom: PhantomData,
+            _phantom1: PhantomData,
+            _phantom2: PhantomData,
         }
+    }
+
+    /// Update analysis for a given eclass node.
+    fn update_analysis(&mut self, ctx: &L, eclass: Id) {
+        if let Some((analysis, state)) = self.analysis.as_mut() {
+            let eclass_data = self.classes[eclass];
+            let value = if let Some(node_key) = eclass_data.as_node() {
+                let node = node_key.node::<L>(&self.nodes);
+                analysis.for_node(ctx, node, state)
+            } else if let Some((node_key, child)) = eclass_data.as_node_and_child() {
+                let node = node_key.node::<L>(&self.nodes);
+                let value = analysis.for_node(ctx, node, state);
+                let child_value = &state[child];
+                analysis.meet(ctx, &value, child_value)
+            } else if let Some((c1, c2)) = eclass_data.as_union() {
+                let c1 = &state[c1];
+                let c2 = &state[c2];
+                analysis.meet(ctx, c1, c2)
+            } else {
+                panic!("Invalid eclass node: {:?}", eclass_data);
+            };
+            state[eclass] = value;
+        }
+    }
+
+    /// Get the analysis value for a given eclass. Panics if no analysis is present.
+    pub fn analysis_value(&self, eclass: Id) -> &A::Value {
+        &self.analysis.as_ref().unwrap().1[eclass]
     }
 }
 
@@ -584,13 +639,14 @@ where
 /// Because eclasses are immutable once created, this does *not* need
 /// to hold an open borrow on the egraph; it is free to add new nodes,
 /// while our existing Ids will remain valid.
-pub struct NodeIter<L: Language> {
+pub struct NodeIter<L: Language, A: Analysis<L = L>> {
     stack: SmallVec<[Id; 8]>,
-    _phantom: PhantomData<L>,
+    _phantom1: PhantomData<L>,
+    _phantom2: PhantomData<A>,
 }
 
-impl<L: Language> NodeIter<L> {
-    pub fn next<'a>(&mut self, egraph: &'a EGraph<L>) -> Option<&'a L::Node> {
+impl<L: Language, A: Analysis<L = L>> NodeIter<L, A> {
+    pub fn next<'a>(&mut self, egraph: &'a EGraph<L, A>) -> Option<&'a L::Node> {
         while let Some(next) = self.stack.pop() {
             let eclass = egraph.classes[next];
             if let Some(node) = eclass.as_node() {
