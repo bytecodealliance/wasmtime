@@ -7,7 +7,7 @@
 
 (decl Rule (u32) u32)
 
-(rule (Rule (E1 a idx))
+(rule 1 (Rule (E1 a idx))
       (if-let (A.B) a)
       idx)
 (rule (Rule _)

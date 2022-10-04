@@ -1,8 +1,5 @@
 ;; x86-64 instruction selection and CLIF-to-MachInst lowering.
 
-;; Enable overlap checking for the x64 backend
-(pragma overlap_errors)
-
 ;; The main lowering constructor term: takes a clif `Inst` and returns the
 ;; register(s) within which the lowered instruction's result values live.
 (decl lower (Inst) InstOutput)
