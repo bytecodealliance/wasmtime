@@ -298,7 +298,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let stack_maps = mach_stack_maps_to_stack_maps(compiled_code.buffer.stack_maps());
 
         let unwind_info = if isa.flags().unwind_info() {
-            context
+            compiled_code
                 .create_unwind_info(isa)
                 .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?
         } else {
@@ -835,7 +835,7 @@ impl Compiler {
             .collect::<Vec<_>>();
 
         let unwind_info = if isa.flags().unwind_info() {
-            context
+            compiled_code
                 .create_unwind_info(isa)
                 .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?
         } else {

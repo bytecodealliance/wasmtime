@@ -56,7 +56,7 @@ use crate::CodegenResult;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use core::fmt::{Debug, Formatter};
-use target_lexicon::{triple, Architecture, OperatingSystem, PointerWidth, Triple};
+use target_lexicon::{triple, Architecture, PointerWidth, Triple};
 
 // This module is made public here for benchmarking purposes. No guarantees are
 // made regarding API stability.
@@ -358,18 +358,6 @@ impl<'a> dyn TargetIsa + 'a {
         TargetFrontendConfig {
             default_call_conv: self.default_call_conv(),
             pointer_width: self.pointer_width(),
-        }
-    }
-
-    /// Returns the flavor of unwind information emitted for this target.
-    pub(crate) fn unwind_info_kind(&self) -> UnwindInfoKind {
-        match self.triple().operating_system {
-            #[cfg(feature = "unwind")]
-            OperatingSystem::Windows => UnwindInfoKind::Windows,
-            #[cfg(feature = "unwind")]
-            _ => UnwindInfoKind::SystemV,
-            #[cfg(not(feature = "unwind"))]
-            _ => UnwindInfoKind::None,
         }
     }
 }

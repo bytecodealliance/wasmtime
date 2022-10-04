@@ -191,32 +191,21 @@ impl Context {
     /// If available, return information about the code layout in the
     /// final machine code: the offsets (in bytes) of each basic-block
     /// start, and all basic-block edges.
+    #[deprecated = "use CompiledCode::get_code_bb_layout"]
     pub fn get_code_bb_layout(&self) -> Option<(Vec<usize>, Vec<(usize, usize)>)> {
-        if let Some(result) = self.compiled_code.as_ref() {
-            Some((
-                result.bb_starts.iter().map(|&off| off as usize).collect(),
-                result
-                    .bb_edges
-                    .iter()
-                    .map(|&(from, to)| (from as usize, to as usize))
-                    .collect(),
-            ))
-        } else {
-            None
-        }
+        self.compiled_code().map(CompiledCode::get_code_bb_layout)
     }
 
     /// Creates unwind information for the function.
     ///
     /// Returns `None` if the function has no unwind information.
     #[cfg(feature = "unwind")]
+    #[deprecated = "use CompiledCode::create_unwind_info"]
     pub fn create_unwind_info(
         &self,
         isa: &dyn TargetIsa,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
-        let unwind_info_kind = isa.unwind_info_kind();
-        let result = self.compiled_code.as_ref().unwrap();
-        isa.emit_unwind_info(result, unwind_info_kind)
+        self.compiled_code().unwrap().create_unwind_info(isa)
     }
 
     /// Run the verifier on the function.
