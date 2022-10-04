@@ -8,6 +8,7 @@
 
 (type Block (primitive Block))
 (type Constant (primitive Constant))
+(type DynamicStackSlot (primitive DynamicStackSlot))
 (type FuncRef (primitive FuncRef))
 (type GlobalValue (primitive GlobalValue))
 (type Heap (primitive Heap))
@@ -20,7 +21,6 @@
 (type Offset32 (primitive Offset32))
 (type SigRef (primitive SigRef))
 (type StackSlot (primitive StackSlot))
-(type DynamicStackSlot (primitive DynamicStackSlot))
 (type Table (primitive Table))
 (type Uimm32 (primitive Uimm32))
 (type Uimm8 (primitive Uimm8))
@@ -71,8 +71,6 @@
     (enum
         Equal
         NotEqual
-        NotOverflow
-        Overflow
         SignedGreaterThan
         SignedGreaterThanOrEqual
         SignedLessThan
@@ -131,7 +129,6 @@
         Trapif
         Trapff
         Return
-        FallthroughReturn
         Call
         CallIndirect
         FuncAddr
@@ -168,19 +165,24 @@
         StackLoad
         StackStore
         StackAddr
+        DynamicStackLoad
+        DynamicStackStore
+        DynamicStackAddr
         GlobalValue
         SymbolValue
         TlsValue
         HeapAddr
         GetPinnedReg
         SetPinnedReg
+        GetFramePointer
+        GetStackPointer
+        GetReturnAddress
         TableAddr
         Iconst
         F32const
         F64const
         Bconst
         Vconst
-        ConstAddr
         Shuffle
         Null
         Nop
@@ -189,7 +191,6 @@
         SelectifSpectreGuard
         Bitselect
         Copy
-        IfcmpSp
         Vsplit
         Vconcat
         Vselect
@@ -303,8 +304,8 @@
         Fvdemote
         FvpromoteLow
         FcvtToUint
-        FcvtToUintSat
         FcvtToSint
+        FcvtToUintSat
         FcvtToSintSat
         FcvtFromUint
         FcvtFromSint
@@ -316,6 +317,7 @@
         AtomicLoad
         AtomicStore
         Fence
+        ExtractVector
     )
 )
 
@@ -336,6 +338,8 @@
         (Call (opcode Opcode) (args ValueList) (func_ref FuncRef))
         (CallIndirect (opcode Opcode) (args ValueList) (sig_ref SigRef))
         (CondTrap (opcode Opcode) (arg Value) (code TrapCode))
+        (DynamicStackLoad (opcode Opcode) (dynamic_stack_slot DynamicStackSlot))
+        (DynamicStackStore (opcode Opcode) (arg Value) (dynamic_stack_slot DynamicStackSlot))
         (FloatCompare (opcode Opcode) (args ValueArray2) (cond FloatCC))
         (FloatCond (opcode Opcode) (arg Value) (cond FloatCC))
         (FloatCondTrap (opcode Opcode) (arg Value) (cond FloatCC) (code TrapCode))
@@ -466,12 +470,6 @@
 (extractor
     (return rvals)
     (inst_data (InstructionData.MultiAry (Opcode.Return) (value_list_slice rvals)))
-)
-
-(decl fallthrough_return (ValueSlice) Inst)
-(extractor
-    (fallthrough_return rvals)
-    (inst_data (InstructionData.MultiAry (Opcode.FallthroughReturn) (value_list_slice rvals)))
 )
 
 (decl call (FuncRef ValueSlice) Inst)
@@ -690,6 +688,24 @@
     (inst_data (InstructionData.StackLoad (Opcode.StackAddr) SS Offset))
 )
 
+(decl dynamic_stack_load (DynamicStackSlot) Inst)
+(extractor
+    (dynamic_stack_load DSS)
+    (inst_data (InstructionData.DynamicStackLoad (Opcode.DynamicStackLoad) DSS))
+)
+
+(decl dynamic_stack_store (Value DynamicStackSlot) Inst)
+(extractor
+    (dynamic_stack_store x DSS)
+    (inst_data (InstructionData.DynamicStackStore (Opcode.DynamicStackStore) x DSS))
+)
+
+(decl dynamic_stack_addr (DynamicStackSlot) Inst)
+(extractor
+    (dynamic_stack_addr DSS)
+    (inst_data (InstructionData.DynamicStackLoad (Opcode.DynamicStackAddr) DSS))
+)
+
 (decl global_value (GlobalValue) Inst)
 (extractor
     (global_value GV)
@@ -726,6 +742,24 @@
     (inst_data (InstructionData.Unary (Opcode.SetPinnedReg) addr))
 )
 
+(decl get_frame_pointer () Inst)
+(extractor
+    (get_frame_pointer )
+    (inst_data (InstructionData.NullAry (Opcode.GetFramePointer)))
+)
+
+(decl get_stack_pointer () Inst)
+(extractor
+    (get_stack_pointer )
+    (inst_data (InstructionData.NullAry (Opcode.GetStackPointer)))
+)
+
+(decl get_return_address () Inst)
+(extractor
+    (get_return_address )
+    (inst_data (InstructionData.NullAry (Opcode.GetReturnAddress)))
+)
+
 (decl table_addr (Table Value Offset32) Inst)
 (extractor
     (table_addr T p Offset)
@@ -760,12 +794,6 @@
 (extractor
     (vconst N)
     (inst_data (InstructionData.UnaryConst (Opcode.Vconst) N))
-)
-
-(decl const_addr (Constant) Inst)
-(extractor
-    (const_addr constant)
-    (inst_data (InstructionData.UnaryConst (Opcode.ConstAddr) constant))
 )
 
 (decl shuffle (Value Value Immediate) Inst)
@@ -814,12 +842,6 @@
 (extractor
     (copy x)
     (inst_data (InstructionData.Unary (Opcode.Copy) x))
-)
-
-(decl ifcmp_sp (Value) Inst)
-(extractor
-    (ifcmp_sp addr)
-    (inst_data (InstructionData.Unary (Opcode.IfcmpSp) addr))
 )
 
 (decl vsplit (Value) Inst)
@@ -882,7 +904,6 @@
     (inst_data (InstructionData.BinaryImm64 (Opcode.IfcmpImm) x Y))
 )
 
-;; x, y [1, 8, 16...64] AVH todo look at the DSL. Also true for non-width types.
 ;;@ (spec (sig (args x, y) (ret))
 ;;@       (assertions (= (+ (x) (y)) (ret))))
 (decl iadd (Value Value) Inst)
@@ -1511,16 +1532,16 @@
     (inst_data (InstructionData.Unary (Opcode.FcvtToUint) x))
 )
 
-(decl fcvt_to_uint_sat (Value) Inst)
-(extractor
-    (fcvt_to_uint_sat x)
-    (inst_data (InstructionData.Unary (Opcode.FcvtToUintSat) x))
-)
-
 (decl fcvt_to_sint (Value) Inst)
 (extractor
     (fcvt_to_sint x)
     (inst_data (InstructionData.Unary (Opcode.FcvtToSint) x))
+)
+
+(decl fcvt_to_uint_sat (Value) Inst)
+(extractor
+    (fcvt_to_uint_sat x)
+    (inst_data (InstructionData.Unary (Opcode.FcvtToUintSat) x))
 )
 
 (decl fcvt_to_sint_sat (Value) Inst)
@@ -1587,5 +1608,11 @@
 (extractor
     (fence )
     (inst_data (InstructionData.NullAry (Opcode.Fence)))
+)
+
+(decl extract_vector (Value Uimm8) Inst)
+(extractor
+    (extract_vector x y)
+    (inst_data (InstructionData.BinaryImm8 (Opcode.ExtractVector) x y))
 )
 
