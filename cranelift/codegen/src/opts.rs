@@ -33,9 +33,16 @@ struct IsleContext<'a, 'b> {
     egraph: &'a mut FuncEGraph<'b>,
 }
 
+const REWRITE_LIMIT: usize = 5;
+
 pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     log::trace!("running rules on eclass {}", id.index());
     egraph.stats.rewrite_rule_invoked += 1;
+
+    if egraph.rewrite_depth > REWRITE_LIMIT {
+        return id;
+    }
+    egraph.rewrite_depth += 1;
 
     // Find all possible rewrites and union them in, returning the
     // union.
@@ -70,6 +77,7 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     }
     ctx.egraph.subsume_ids.clear();
     log::trace!(" -> optimize {} got {}", id, union_id);
+    ctx.egraph.rewrite_depth -= 1;
     union_id
 }
 

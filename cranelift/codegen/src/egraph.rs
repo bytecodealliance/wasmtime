@@ -53,6 +53,10 @@ pub struct FuncEGraph<'a> {
     /// Statistics recorded during the process of building,
     /// optimizing, and lowering out of this egraph.
     pub(crate) stats: Stats,
+    /// Current rewrite-recursion depth. Used to enforce a finite
+    /// limit on rewrite rule application so that we don't get stuck
+    /// in an infinite chain.
+    pub(crate) rewrite_depth: usize,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -113,6 +117,7 @@ impl<'a> FuncEGraph<'a> {
             remat_ids: FxHashSet::default(),
             subsume_ids: FxHashSet::default(),
             stats: Default::default(),
+            rewrite_depth: 0,
         };
         this.build(func);
         this
