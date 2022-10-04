@@ -770,10 +770,6 @@ criteria = "safe-to-deploy"
 version = "1.1.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.semver]]
-version = "1.0.9"
-criteria = "safe-to-run"
-
 [[exemptions.serde]]
 version = "1.0.137"
 criteria = "safe-to-deploy"
