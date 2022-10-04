@@ -642,8 +642,7 @@
 (rule 1
   (lower (has_type $I128 (bint (valueregs_2_reg x))))
   (let ((tmp Reg (gen_bint x)))
-   (value_regs tmp (zero_reg))) 
-)
+   (value_regs tmp (load_u64_constant 0))))
 
 ;;;;;  Rules for `isplit`;;;;;;;;;
 (rule 
