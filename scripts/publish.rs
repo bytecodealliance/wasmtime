@@ -88,6 +88,7 @@ const PUBLIC_CRATES: &[&str] = &[
     "cranelift-bforest",
     "cranelift-codegen-shared",
     "cranelift-codegen-meta",
+    "cranelift-egraph",
     "cranelift-codegen",
     "cranelift-reader",
     "cranelift-serde",
