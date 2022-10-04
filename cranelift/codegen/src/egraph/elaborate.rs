@@ -247,10 +247,10 @@ impl<'a> Elaborator<'a> {
                 let node = node_key.node::<NodeCtx>(&self.egraph.nodes);
                 log::trace!(" -> eclass {:?}: node {:?}", eclass_id, node);
                 let (cost, id) = match node {
-                    Node::Param { .. } | Node::Inst { .. } | Node::Load { .. } => {
-                        (Cost::zero(), eclass_id)
-                    }
-                    Node::Result { value, .. } => best[*value],
+                    Node::Param { .. }
+                    | Node::Inst { .. }
+                    | Node::Load { .. }
+                    | Node::Result { .. } => (Cost::zero(), eclass_id),
                     Node::Pure { op, .. } => {
                         let args_cost = self
                             .node_ctx
@@ -335,6 +335,7 @@ impl<'a> Elaborator<'a> {
                     );
                     let node_key = self.egraph.classes[best_node_eclass].get_node().unwrap();
                     let node = node_key.node::<NodeCtx>(&self.egraph.nodes);
+                    log::trace!(" -> enode {:?}", node);
 
                     // Is the node a block param? We should never get here if so
                     // (they are inserted when first visiting the block).
@@ -347,6 +348,7 @@ impl<'a> Elaborator<'a> {
                     // eventually return here (saving state with a
                     // PendingProjection).
                     if let Node::Result { value, result, .. } = node {
+                        log::trace!(" -> result; pushing arg value {}", value);
                         self.elab_stack.push(ElabStackEntry::PendingProjection {
                             index: *result,
                             canonical,
