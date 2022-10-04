@@ -11,20 +11,14 @@ use crate::sema::{self, Rule, RuleId, Sym, TermEnv, TermId, TermKind, TypeEnv, V
 /// Check for overlap.
 pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
     let mut errors = check_overlaps(termenv).report(tyenv, termenv);
-    if termenv.overlap_errors {
-        errors.sort_by_key(|err| match err {
-            Error::OverlapError { rules, .. } => rules.first().unwrap().1.from,
-            _ => Pos::default(),
-        });
-        match errors.len() {
-            0 => Ok(()),
-            1 => Err(errors.pop().unwrap()),
-            _ => Err(Error::Errors(errors)),
-        }
-    } else {
-        use crate::log;
-        log!("found {} overlap errors", errors.len());
-        Ok(())
+    errors.sort_by_key(|err| match err {
+        Error::OverlapError { rules, .. } => rules.first().unwrap().1.from,
+        _ => Pos::default(),
+    });
+    match errors.len() {
+        0 => Ok(()),
+        1 => Err(errors.pop().unwrap()),
+        _ => Err(Error::Errors(errors)),
     }
 }
 

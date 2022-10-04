@@ -32,10 +32,7 @@ pub struct Ident(pub String, pub Pos);
 
 /// Pragmas parsed with the `(pragma <ident>)` syntax.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum Pragma {
-    /// Enable overlap errors in the source.
-    OverlapErrors,
-}
+pub enum Pragma {}
 
 /// A declaration of a type.
 #[derive(Clone, PartialEq, Eq, Debug)]
