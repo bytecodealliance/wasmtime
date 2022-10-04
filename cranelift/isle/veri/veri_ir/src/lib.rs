@@ -211,8 +211,7 @@ pub enum Expr {
 }
 
 pub fn all_starting_bitvectors() -> Vec<usize> {
-    // vec![1, 8, 16, 32, 64]
-    vec![1]
+    vec![1, 8, 16, 32, 64]
 }
 
 impl BoundVar {
