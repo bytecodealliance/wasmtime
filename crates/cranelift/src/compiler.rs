@@ -142,8 +142,7 @@ impl Compiler {
     }
 
     fn get_function_address_map(
-        &self,
-        context: &Context,
+        compiled_code: &CompiledCode,
         body: &FunctionBody<'_>,
         body_len: u32,
         tunables: &Tunables,
@@ -162,9 +161,7 @@ impl Compiler {
         let instructions = if tunables.generate_address_map {
             collect_address_maps(
                 body_len,
-                context
-                    .compiled_code()
-                    .unwrap()
+                compiled_code
                     .buffer
                     .get_srclocs_sorted()
                     .into_iter()
@@ -270,30 +267,28 @@ impl wasmtime_environ::Compiler for Compiler {
         context.func.stack_limit = Some(stack_limit);
         let FunctionBodyData { validator, body } = input;
         let mut validator = validator.into_validator(validator_allocations);
-        func_translator.translate_body(
-            &mut validator,
-            body.clone(),
-            &mut context.func,
-            &mut func_env,
-        )?;
+        func_translator.translate_body(&mut validator, body, &mut context.func, &mut func_env)?;
 
-        let (code, code_buf) = compile_maybe_cached(&mut context, isa, cache_ctx.as_mut())?;
-        let alignment = code.alignment;
-
+        let (_, code_buf) = compile_maybe_cached(&mut context, isa, cache_ctx.as_mut())?;
+        // compile_maybe_cached returns the compiled_code but that borrow has the same lifetime as
+        // the mutable borrow of `context`, so the borrow checker prohibits other borrows from
+        // `context` while it's alive. Borrow it again to make the borrow checker happy.
         let compiled_code = context.compiled_code().unwrap();
+        let alignment = compiled_code.alignment;
+
         let func_relocs = compiled_code
             .buffer
             .relocs()
             .into_iter()
             .map(|item| mach_reloc_to_reloc(&context.func, item))
-            .collect::<Vec<_>>();
+            .collect();
 
         let traps = compiled_code
             .buffer
             .traps()
             .into_iter()
             .map(mach_trap_to_trap)
-            .collect::<Vec<_>>();
+            .collect();
 
         let stack_maps = mach_stack_maps_to_stack_maps(compiled_code.buffer.stack_maps());
 
@@ -305,11 +300,13 @@ impl wasmtime_environ::Compiler for Compiler {
             None
         };
 
+        let length = u32::try_from(code_buf.len()).unwrap();
+
         let address_transform =
-            self.get_function_address_map(&context, &body, code_buf.len() as u32, tunables);
+            Self::get_function_address_map(compiled_code, &body, length, tunables);
 
         let ranges = if tunables.generate_native_debuginfo {
-            Some(context.compiled_code().unwrap().value_labels_ranges.clone())
+            Some(compiled_code.value_labels_ranges.clone())
         } else {
             None
         };
@@ -317,8 +314,6 @@ impl wasmtime_environ::Compiler for Compiler {
         let timing = cranelift_codegen::timing::take_current();
         log::debug!("{:?} translated in {:?}", func_index, timing.total());
         log::trace!("{:?} timing info\n{}", func_index, timing);
-
-        let length = u32::try_from(code_buf.len()).unwrap();
 
         let sized_stack_slots = std::mem::take(&mut context.func.sized_stack_slots);
 
@@ -832,7 +827,7 @@ impl Compiler {
             .traps()
             .into_iter()
             .map(mach_trap_to_trap)
-            .collect::<Vec<_>>();
+            .collect();
 
         let unwind_info = if isa.flags().unwind_info() {
             compiled_code
@@ -845,7 +840,7 @@ impl Compiler {
         Ok(CompiledFunction {
             body: code_buf,
             unwind_info,
-            relocations: Vec::new(),
+            relocations: Default::default(),
             sized_stack_slots: Default::default(),
             value_labels_ranges: Default::default(),
             info: Default::default(),
