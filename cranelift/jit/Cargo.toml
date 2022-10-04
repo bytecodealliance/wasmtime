@@ -20,7 +20,7 @@ libc = { version = "0.2.42" }
 target-lexicon = { workspace = true }
 memmap2 = { version = "0.2.1", optional = true }
 log = { workspace = true }
-jit-icache-coherence = { workspace = true, features = ["libc"] }
+jit-icache-coherence = { workspace = true }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 workspace = true

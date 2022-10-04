@@ -19,10 +19,10 @@ features = [
 ]
 
 [target.'cfg(target_os = "linux")'.dependencies]
-libc = { optional = true, version = "0.2.42" }
+libc = { version = "0.2.42" }
 rustix = { optional = true, workspace = true, features = ["process"] }
 
 [features]
 default = []
+# Uses rustix instead of libc
 rustix = ["dep:rustix"]
-libc = ["dep:libc"]

@@ -65,16 +65,7 @@
 //!
 //! [ARM Community - Caches and Self-Modifying Code]: https://community.arm.com/arm-community-blogs/b/architectures-and-processors-blog/posts/caches-and-self-modifying-code
 
-#[cfg(all(
-    not(target_os = "windows"),
-    not(any(feature = "libc", feature = "rustix"))
-))]
-compile_error!("Either feature = \"libc\" or feature = \"rustix\" must be enabled!");
-
-#[cfg(all(feature = "libc", feature = "rustix"))]
-compile_error!("feature = \"libc\" and feature = \"rustix\" are mutually exclusive!");
-
-#[cfg(all(not(target_os = "windows"), feature = "libc"))]
+#[cfg(all(not(target_os = "windows"), not(feature = "rustix")))]
 mod libc;
 #[cfg(all(not(target_os = "windows"), feature = "rustix"))]
 mod rustix;
@@ -92,7 +83,7 @@ use std::io::Result;
 pub fn pipeline_flush() -> Result<()> {
     #[cfg(target_os = "windows")]
     win::pipeline_flush()?;
-    #[cfg(all(not(target_os = "windows"), feature = "libc"))]
+    #[cfg(all(not(target_os = "windows"), not(feature = "rustix")))]
     libc::pipeline_flush()?;
     #[cfg(all(not(target_os = "windows"), feature = "rustix"))]
     rustix::pipeline_flush()?;
@@ -106,7 +97,7 @@ pub fn pipeline_flush() -> Result<()> {
 pub fn clear_cache(ptr: *const c_void, len: usize) -> Result<()> {
     #[cfg(target_os = "windows")]
     win::clear_cache(ptr, len)?;
-    #[cfg(all(not(target_os = "windows"), feature = "libc"))]
+    #[cfg(all(not(target_os = "windows"), not(feature = "rustix")))]
     libc::clear_cache(ptr, len)?;
     #[cfg(all(not(target_os = "windows"), feature = "rustix"))]
     rustix::clear_cache(ptr, len)?;
