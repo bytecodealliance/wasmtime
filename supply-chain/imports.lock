@@ -286,29 +286,10 @@ who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.6.26 -> 0.6.27"
 
-[[audits.mozilla.audits.rustc_version]]
-who = "Nika Layzell <nika@thelayzells.com>"
-criteria = "safe-to-run"
-version = "0.4.0"
-notes = """
-Straightforward crate which runs `$RUSTC -vV` and parses the output into a
-machine-interpretable form for build scripts.
-"""
-
 [[audits.mozilla.audits.ryu]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "1.0.10 -> 1.0.11"
-
-[[audits.mozilla.audits.semver]]
-who = "Mike Hommey <mh+mozilla@glandium.org>"
-criteria = "safe-to-deploy"
-delta = "1.0.9 -> 1.0.10"
-
-[[audits.mozilla.audits.semver]]
-who = "Mike Hommey <mh+mozilla@glandium.org>"
-criteria = "safe-to-deploy"
-delta = "1.0.10 -> 1.0.13"
 
 [[audits.mozilla.audits.serde]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
