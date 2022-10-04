@@ -1550,6 +1550,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "jit-icache-coherence"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "rustix",
+ "windows-sys",
+]
+
+[[package]]
 name = "jobserver"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1,0 +1,28 @@
+[package]
+name = "jit-icache-coherence"
+version = "0.1.0"
+authors.workspace = true
+description = "Utilities for JIT icache maintenance"
+documentation = "https://docs.rs/jit-icache-coherence"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+edition.workspace = true
+
+[dependencies]
+
+[target.'cfg(target_os = "windows")'.dependencies.windows-sys]
+workspace = true
+features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_System_Diagnostics_Debug",
+]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = { optional = true, version = "0.2.42" }
+rustix = { optional = true, workspace = true, features = ["process"] }
+
+[features]
+default = []
+rustix = ["dep:rustix"]
+libc = ["dep:libc"]

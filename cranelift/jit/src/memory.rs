@@ -304,13 +304,7 @@ impl Memory {
             }
         }
 
-        #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-        {
-            let cmd: libc::c_int = 32; // MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE
-
-            // Ensure that no processor has fetched a stale instruction stream.
-            unsafe { libc::syscall(libc::SYS_membarrier, cmd) };
-        }
+        // TODO: pipeline_flush()
     }
 
     /// Frees all allocated memory regions that would be leaked otherwise.

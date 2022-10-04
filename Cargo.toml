@@ -84,6 +84,7 @@ members = [
   "crates/c-api",
   "crates/cli-flags",
   "crates/environ/fuzz",
+  "crates/jit-icache-coherence",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
   "examples/tokio/wasm",
@@ -142,6 +143,8 @@ cranelift-preopt = { path = "cranelift/preopt", version = "0.89.0" }
 cranelift-fuzzgen = { path = "cranelift/fuzzgen" }
 cranelift-bforest = { path = "cranelift/bforest", version = "0.89.0" }
 cranelift = { path = "cranelift/umbrella", version = "0.89.0" }
+
+#  jit-icache-coherence = { path = "crates/jit-icache-coherence", version = "0.1.0" }
 
 target-lexicon = { version = "0.12.3", default-features = false }
 anyhow = "1.0.22"
