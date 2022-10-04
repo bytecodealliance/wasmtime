@@ -28,7 +28,8 @@ pub use anyhow::{Context, Error};
 /// Internal error type for the `wasi-common` crate.
 /// Contains variants of the WASI `$errno` type are added according to what is actually used internally by
 /// the crate. Not all values are represented presently.
-#[derive(Debug, thiserror::Error)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum ErrorKind {
     /// Errno::WouldBlk: Would block
     #[error("WouldBlk: Would block")]
