@@ -496,10 +496,10 @@ mod incremental_cache {
         isa: &dyn TargetIsa,
         cache_ctx: Option<&mut IncrementalCacheContext>,
     ) -> Result<(&'a CompiledCode, Vec<u8>), CompileError> {
-        let mut code_buf = Vec::new();
         let cache_ctx = match cache_ctx {
             Some(ctx) => ctx,
             None => {
+                let mut code_buf = Vec::new();
                 let compiled_code =
                     context
                         .compile_and_emit(isa, &mut code_buf)
@@ -521,10 +521,7 @@ mod incremental_cache {
             cache_ctx.num_cached += 1;
         }
 
-        code_buf.resize(compiled_code.code_info().total_size as _, 0);
-        code_buf.copy_from_slice(compiled_code.code_buffer());
-
-        Ok((compiled_code, code_buf))
+        Ok((compiled_code, compiled_code.code_buffer().to_vec()))
     }
 }
 

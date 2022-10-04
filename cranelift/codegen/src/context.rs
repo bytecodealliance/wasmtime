@@ -119,10 +119,7 @@ impl Context {
         mem: &mut Vec<u8>,
     ) -> CompileResult<&CompiledCode> {
         let compiled_code = self.compile(isa)?;
-        let code_info = compiled_code.code_info();
-        let old_len = mem.len();
-        mem.resize(old_len + code_info.total_size as usize, 0);
-        mem[old_len..].copy_from_slice(compiled_code.code_buffer());
+        mem.extend_from_slice(compiled_code.code_buffer());
         Ok(compiled_code)
     }
 
