@@ -7,8 +7,8 @@ name: "Performance Testing"
 # This workflow runs when manually triggered by keywords used in the start of a review comment
 # Currently that phrase is /bench_x64. /bench_aarch64 and /bench_all are TODOs.
 on:
-  pull_request_review:
-    types: [submitted, edited]
+  issue_comment:
+    types: [created]
   push:
 
 # Env variables
@@ -21,19 +21,20 @@ jobs:
     name: Benchmark x64 on PR comment Wasmtime repo
     runs-on: ubuntu-latest
     if: |
-      (github.event_name == 'pull_request_review') &&
-      (contains(github.event.review.body, '/bench_x64')) &&
-      (('abrown' == github.event.review.user.login)
-        || ('afonso360' == github.event.review.user.login)
-        || ('akirilov-arm' == github.event.review.user.login)
-        || ('alexcrichton' == github.event.review.user.login)
-        || ('bbouvier' == github.event.review.user.login)
-        || ('bjorn3' == github.event.review.user.login)
-        || ('cfallin' == github.event.review.user.login)
-        || ('fitzgen' == github.event.review.user.login)
-        || ('jlb6740' == github.event.review.user.login)
-        || ('sparker-arm' == github.event.review.user.login)
-        || ('uweigand' == github.event.review.user.login))
+      (github.event_name == 'issue_comment') &&
+      (github.event.issue.pull_request.url) &&
+      (contains(github.event.comment.body, '/bench_x64')) &&
+      (('abrown' == github.event.comment.user.login)
+        || ('afonso360' == github.event.comment.user.login)
+        || ('akirilov-arm' == github.event.comment.user.login)
+        || ('alexcrichton' == github.event.comment.user.login)
+        || ('bbouvier' == github.event.comment.user.login)
+        || ('bjorn3' == github.event.comment.user.login)
+        || ('cfallin' == github.event.comment.user.login)
+        || ('fitzgen' == github.event.comment.user.login)
+        || ('jlb6740' == github.event.comment.user.login)
+        || ('sparker-arm' == github.event.comment.user.login)
+        || ('uweigand' == github.event.comment.user.login))
     steps:
       - run: echo "$GITHUB_CONTEXT"
       - run: |
@@ -42,14 +43,19 @@ jobs:
           cd wasmtime-sightglass-benchmarking
           git remote add wasmtime ${{ github.event.repository.clone_url }}
           git fetch wasmtime refs/pull/*/merge:refs/remotes/wasmtime/pull/*/merge
-          git checkout wasmtime/pull/${{ github.ref_name }} -b ${{ github.ref_name }}
+          export issue_pr_url=${{ github.event.issue.pull_request.url }}
+          export issue_commits_url=${{ github.event.issue.comments_url }}
+          export issue_ref_name=$(curl -sSL $issue_pr_url | jq -r '.head.ref' | head -n 1)
+          export issue_number=$(curl -sSL $issue_pr_url | jq -r '.number' | head -n 1)
+          export issue_merge_commit_sha=$(curl -sSL $issue_pr_url | jq -r '.merge_commit_sha' | head -n 1)
           git submodule update --init --recursive
-          git checkout -b wasmtime/${{ github.ref }}/${{ github.sha }}
-          export commit_url=${{ github.event.pull_request._links.commits.href }}
-          git config user.name $(curl -sSL $commit_url | jq -r '.[].commit.committer.name' | tail -n 1)
-          git config user.email $(curl -sSL $commit_url | jq -r '.[].commit.committer.email' | tail -n 1)
-          git commit --allow-empty -m "${{ github.event.pull_request._links.comments.href }}"
-          git push origin wasmtime/${{ github.ref }}/${{ github.sha }}
+          git checkout wasmtime/pull/${issue_number}/merge -b pull/${issue_number}/merge/${issue_merge_commit_sha}
+          git config user.name $(curl -sSL $issue_commits_url | jq -r '.[].commit.committer.name' | tail -n 1)
+          git config user.email $(curl -sSL $issue_commits_url | jq -r '.[].commit.committer.email' | tail -n 1)
+          git log -n 1
+          git commit --allow-empty -m "${issue_commits_url}"
+          git push origin --force pull/${issue_number}/merge/${issue_merge_commit_sha}
+          git log -n 1
 
   Performance_Repo_On_Push:
     name: Benchmark x64 on push Performance repo
@@ -71,9 +77,16 @@ jobs:
           submodules: true
           path: wasmtime_commit
 
+      - name: Get latest rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+
       - name: Build patch from bytecodealliance/wasmtime (pushed and triggering on this perf repo)
         working-directory: ./wasmtime_commit
         run: |
+          cargo --version
           cargo build --release -p wasmtime-bench-api
           cp target/release/libwasmtime_bench_api.so /tmp/wasmtime_commit.so
 
