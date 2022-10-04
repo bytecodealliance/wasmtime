@@ -64,7 +64,7 @@
 use crate::flowgraph::ControlFlowGraph;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::has_memory_fence_semantics;
-use crate::ir::{Block, Function, Inst};
+use crate::ir::{Block, Function, Inst, Opcode};
 use cranelift_entity::EntityRef;
 use cranelift_entity::SecondaryMap;
 use smallvec::{smallvec, SmallVec};
@@ -247,7 +247,7 @@ impl AliasAnalysis {
                 );
 
                 let opcode = func.dfg[inst].opcode();
-                if opcode.can_load() {
+                if opcode == Opcode::Load {
                     let mem_state = state.get_load_input_state(func, inst);
                     log::trace!(
                         "alias analysis: at inst{}: load with mem_state {:?}",
