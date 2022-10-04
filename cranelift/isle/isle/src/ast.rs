@@ -32,7 +32,9 @@ pub struct Ident(pub String, pub Pos);
 
 /// Pragmas parsed with the `(pragma <ident>)` syntax.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum Pragma {}
+pub enum Pragma {
+    // currently, no pragmas are defined, but the infrastructure is useful to keep around
+}
 
 /// A declaration of a type.
 #[derive(Clone, PartialEq, Eq, Debug)]
