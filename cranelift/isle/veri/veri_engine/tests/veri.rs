@@ -1,9 +1,10 @@
 mod utils;
-use utils::{all_failure_result, all_success_result, just_8_result, lte_64_success_result};
+use utils::{all_failure_result, all_success_result, just_8_result, lte_64_success_result, custom_result};
 use utils::{
     test_from_file, test_from_file_custom_prelude, test_from_file_self_contained,
-    test_from_files_with_lhs_termname,
+    test_from_files_with_lhs_termname, 
 };
+use veri_ir::{VerificationResult, Counterexample};
 
 #[test]
 fn test_iadds() {
@@ -41,7 +42,7 @@ fn test_iadd_from_file() {
 }
 
 #[test]
-fn test_iadd_from_file_broken() {
+fn test_broken_iadd_from_file() {
     test_from_file("./examples/broken_iadd.isle", all_failure_result())
 }
 
@@ -62,6 +63,23 @@ fn test_ineg() {
 #[test]
 fn test_uextend() {
     test_from_file("./examples/uextend.isle", all_success_result())
+}
+
+#[test]
+fn test_broken_uextend() {
+    // In the spec for extend, zero_extend and sign_extend are swapped. 
+    // However, this should still work in the case where the query with
+    // is the same as the register width (64).
+    test_from_file("./examples/broken_uextend.isle", custom_result(&|w| {
+        (
+            w,
+            if (w as usize) < 64 {
+                VerificationResult::Failure(Counterexample{})
+            } else {
+                VerificationResult::Success
+            },
+        )
+    }))
 }
 
 // #[test]

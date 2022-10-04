@@ -33,6 +33,7 @@ struct RuleParseTree<'a> {
 #[derive(Clone, Debug)]
 pub enum TypeVarConstruct {
     Var,
+    BindPattern,
     Term(String),
     Const(i128),
     Let(Vec<String>),
@@ -107,7 +108,6 @@ fn build_decl_map(defs: Defs) -> HashMap<String, Decl> {
     for def in defs.defs {
         match def {
             isle::ast::Def::Decl(d) => {
-                dbg!(&d);
                 decls.insert(d.term.0.clone(), d);
             }
             _ => continue,
@@ -609,6 +609,21 @@ fn add_rule_constraints(
                 curr.ident.clone(),
             )))
         }
+        TypeVarConstruct::BindPattern => {
+            assert_eq!(children.len(), 1);
+            tree.quantified_vars
+                .insert((curr.ident.clone(), curr.type_var));
+            tree.free_vars.insert((curr.ident.clone(), curr.type_var));
+            let var = veri_ir::Expr::Terminal(veri_ir::Terminal::Var(
+                curr.ident.clone(),
+            ));
+            tree.assumptions.push(veri_ir::Expr::Binary(
+                veri_ir::BinaryOp::Eq,
+                Box::new(var),
+                Box::new(children[0].clone()),
+            ));
+            Some(children[0].clone())
+        }
         TypeVarConstruct::Const(i) => Some(veri_ir::Expr::Terminal(veri_ir::Terminal::Const(*i))),
         TypeVarConstruct::And => {
             tree.quantified_vars
@@ -972,12 +987,10 @@ fn create_parse_tree_pattern(
     typeenv: &TypeEnv,
     termenv: &TermEnv,
 ) -> TypeVarNode {
-    dbg!(&pattern);
     match pattern {
         isle::sema::Pattern::Term(_, term_id, args) => {
             let sym = termenv.terms[term_id.index()].name;
             let name = typeenv.syms[sym.index()].clone();
-            dbg!(&name);
 
             // process children first
             let mut children = vec![];
@@ -987,8 +1000,6 @@ fn create_parse_tree_pattern(
             }
             let type_var = tree.next_type_var;
             tree.next_type_var += 1;
-
-            dbg!("done w children");
 
             TypeVarNode {
                 ident: format!("{}__{}", name, type_var),
@@ -1019,18 +1030,25 @@ fn create_parse_tree_pattern(
                 assertions: vec![],
             }
         }
-        isle::sema::Pattern::BindPattern(_, var_id, subpat) => {
-            match **subpat {
-                isle::sema::Pattern::Wildcard(..) => {
-                    dbg!("wildcard")
-                }
-                _ => panic!("other"),
-            };
+        isle::sema::Pattern::BindPattern(_, var_id, subpat, _) => {
             let sym = var_map[var_id];
             let var = typeenv.syms[sym.index()].clone();
             let subpat_node = create_parse_tree_pattern(subpat, tree, var_map, typeenv, termenv);
-            tree.var_to_type_var_map.insert(var, subpat_node.type_var);
-            subpat_node
+            let type_var = tree.next_type_var;
+            tree.next_type_var += 1;
+            tree.var_to_type_var_map.insert(var.clone(), type_var);
+
+            tree.var_constraints
+                .insert(TypeExpr::Variable(type_var, subpat_node.type_var));
+
+            let ident = format!("{}__{}", var, type_var);
+            TypeVarNode {
+                ident,
+                construct: TypeVarConstruct::BindPattern,
+                type_var,
+                children: vec![subpat_node],
+                assertions: vec![],
+            }
         }
         isle::sema::Pattern::Wildcard(_, s) => {
             let mut name = String::from("wildcard");

@@ -324,7 +324,6 @@ impl SolverCtx {
             }
             Expr::BVConvTo(y) => {
                 // For static convto, width constraints are handling during inference
-                dbg!("static");
                 self.vir_expr_to_rsmt2_str(*y)
             }
             Expr::BVZeroExtTo(i, x) => {
@@ -346,7 +345,6 @@ impl SolverCtx {
                 self.extend_symbolic(&is, &xs, &arg_width, &"zero_extend")
             }
             Expr::BVConvToVarWidth(x, y) => {
-                dbg!("var width");
                 let expr_width = width.unwrap().clone();
                 let dyn_width = self.vir_expr_to_rsmt2_str(*x);
                 self.width_assumptions
@@ -505,9 +503,6 @@ pub fn run_solver_rule_path(
     }
 
     for (_e, t) in &ctx.tyctx.tyvars {
-        if *t == 46 {
-            dbg!(_e);
-        }
         let ty = &ctx.tyctx.tymap[&t];
         match ty {
             Type::BitVector(w) => {
@@ -630,8 +625,8 @@ pub fn run_solver_rule_path(
     println!("LHS and RHS equality condition:\n\t{}\n", side_equality);
 
     let query = format!("(not (=> {} {}))", assumption_str, side_equality);
-    // println!("Running query");
-    println!("Running query:\n\t{}\n", query);
+    println!("Running query");
+    // println!("Running query:\n\t{}\n", query);
     solver.assert(query).unwrap();
 
     match solver.check_sat() {
