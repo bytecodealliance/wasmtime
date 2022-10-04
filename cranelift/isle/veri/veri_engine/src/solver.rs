@@ -353,7 +353,7 @@ impl SolverCtx {
             }
             Expr::UndefinedTerm(term) => term.ret.name,
             Expr::WidthOf(x) => self.get_expr_width_var(&*x).unwrap().clone(),
-            Expr::BVSignExt(i, x) => {
+            Expr::BVSignExtTo(i, x) => {
                 let arg_width = self.get_expr_width_var(&*x).unwrap().clone();
                 let expr_width = width.unwrap().clone();
                 self.width_assumptions

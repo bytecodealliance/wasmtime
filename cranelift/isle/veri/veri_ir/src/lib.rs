@@ -197,7 +197,7 @@ pub enum Expr {
     BVZeroExtToVarWidth(Box<Expr>, Box<Expr>),
 
     // Sign extend, with static or dynamic width
-    BVSignExt(usize, Box<Expr>),
+    BVSignExtTo(usize, Box<Expr>),
     BVSignExtToVarWidth(Box<Expr>, Box<Expr>),
 
     // Conversion to wider/narrower bits, without an explicit extend

@@ -66,6 +66,11 @@ fn test_uextend() {
 }
 
 #[test]
+fn test_sextend() {
+    test_from_file("./examples/sextend.isle", all_success_result())
+}
+
+#[test]
 fn test_broken_uextend() {
     // In the spec for extend, zero_extend and sign_extend are swapped. 
     // However, this should still work in the case where the query with

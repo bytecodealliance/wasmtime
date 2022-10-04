@@ -1496,6 +1496,8 @@
     (inst_data (InstructionData.Unary (Opcode.Uextend) x))
 )
 
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (ret) (sign_ext (regwidth) (arg)))))
 (decl sextend (Value) Inst)
 (extractor
     (sextend x)

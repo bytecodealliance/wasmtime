@@ -1,0 +1,33 @@
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
+(decl lower (Inst) InstOutput)
+
+;; Instruction formats.
+(type MInst
+  (enum
+    ;; A sign- or zero-extend operation.
+    (Extend
+      (rd WritableReg)
+      (rn Reg)
+      (signed bool)
+      (from_bits u8)
+      (to_bits u8))
+))
+
+;; Helper for emitting `MInst.Extend` instructions.
+ ;;@ (spec (sig (args a, b, c, d) (ret))
+ ;;@     (assertions (if (b) {
+ ;;@                     (= (ret) (sign_ext (d) (conv_to (c) (a))))
+ ;;@                  } else { 
+ ;;@                      (= (ret) (zero_ext (d) (conv_to (c) (a))))
+ ;;@                  })
+ ;;@     ))
+(decl extend (Reg bool u8 u8) Reg)
+(rule (extend rn signed from_bits to_bits)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.Extend dst rn signed from_bits to_bits))))
+        dst))
+
+
+(rule -4 (lower (has_type (fits_in_64 out) (sextend x @ (value_type in))))
+      (extend x $true (ty_bits in) (ty_bits out)))

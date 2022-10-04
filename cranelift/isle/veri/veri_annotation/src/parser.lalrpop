@@ -100,7 +100,7 @@ pub Expr: Box<Expr> = {
 
     "(" "zero_ext" <n:Width> <v:Expr> ")" => Box::new(Expr::BVZeroExtTo(n, v, 0)),
     "(" "zero_ext" <n:Expr> <v:Expr> ")" => Box::new(Expr::BVZeroExtToVarWidth(n, v, 0)),
-    "(" "sign_ext" <n:Width> <v:Expr> ")" => Box::new(Expr::BVSignExt(n, v, 0)),
+    "(" "sign_ext" <n:Width> <v:Expr> ")" => Box::new(Expr::BVSignExtTo(n, v, 0)),
     "(" "sign_ext" <n:Expr> <v:Expr> ")" => Box::new(Expr::BVSignExtToVarWidth(n, v, 0)),
     "(" "extract" <s:UNum> <t:UNum> <v:Expr> ")" => 
         Box::new(Expr::BVExtract(s, t, v, 0)),

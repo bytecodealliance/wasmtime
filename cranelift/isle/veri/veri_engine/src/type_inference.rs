@@ -90,13 +90,14 @@ pub fn type_all_rules(
     let mut solutions = HashMap::new();
     for r in &termenv.rules {
         if let Some(s) = type_annotations_using_rule(r, annotation_env, &decls, typeenv, termenv) {
-            for a in &s.annotation_infos {
-                println!("{}", a.term);
-                for (var, type_var) in &a.var_to_type_var {
-                    println!("{}: {:#?}", var, s.type_var_to_type[type_var]);
-                }
-                println!();
-            }
+            // Uncomment for debugging
+            // for a in &s.annotation_infos {
+            //     println!("{}", a.term);
+            //     for (var, type_var) in &a.var_to_type_var {
+            //         println!("{}: {:#?}", var, s.type_var_to_type[type_var]);
+            //     }
+            //     println!();
+            // }
             solutions.insert(r.id, s);
         }
     }
@@ -457,6 +458,27 @@ fn add_annotation_constraints(
                 veri_ir::Expr::BVZeroExtToVarWidth(Box::new(we), Box::new(e1)),
                 t,
             )
+        }
+        annotation_ir::Expr::BVSignExtTo(w, x, _) => {
+            let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
+            let t = tree.next_type_var;
+
+            let width = match *w {
+                veri_ir::annotation_ir::Width::Const(c) => c,
+                veri_ir::annotation_ir::Width::RegWidth => REG_WIDTH,
+            };
+
+            // In the dynamic case, we don't know the width at this point
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t1, annotation_ir::Type::BitVector));
+            tree.concrete_constraints.insert(TypeExpr::Concrete(
+                t,
+                annotation_ir::Type::BitVectorWithWidth(width),
+            ));
+
+            tree.next_type_var += 1;
+
+            (veri_ir::Expr::BVSignExtTo(width, Box::new(e1)), t)
         }
         annotation_ir::Expr::BVIntToBv(w, x, _) => {
             let (ex, tx) = add_annotation_constraints(*x.clone(), tree, annotation_info);

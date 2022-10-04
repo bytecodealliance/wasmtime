@@ -190,7 +190,7 @@ pub enum Expr {
     BVZeroExtToVarWidth(Box<Expr>, Box<Expr>, u32),
 
     // Sign extend, static and dynamic width
-    BVSignExt(Box<Width>, Box<Expr>, u32),
+    BVSignExtTo(Box<Width>, Box<Expr>, u32),
     BVSignExtToVarWidth(Box<Expr>, Box<Expr>, u32),
 
     // Extract specified bits
@@ -246,7 +246,7 @@ impl Expr {
             | Expr::BVShr(_, _, t)
             | Expr::BVZeroExtTo(_, _, t)
             | Expr::BVZeroExtToVarWidth(_, _, t)
-            | Expr::BVSignExt(_, _, t)
+            | Expr::BVSignExtTo(_, _, t)
             | Expr::BVSignExtToVarWidth(_, _, t)
             | Expr::BVIntToBv(_, _, t)
             | Expr::BVConvTo(_, _, t)
