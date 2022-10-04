@@ -21,9 +21,4 @@ function %issue4996() -> i128, i64 system_v {
         v29 = iconst.i64 0
         return v23, v29  ; v29 = 0
 }
-
 ; run: %issue4996() == [0,0]
-
-
-
-
