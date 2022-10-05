@@ -65,11 +65,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)> {
         // All registers that can be used as parameters or rets.
         // both start and end are included.
-        let max_float_bits = match call_conv {
-            CallConv::SystemVRiscv(x) => x.max_bits(),
-            // Just use the `Quad`,even f128 not supported right now.
-            _ => RiscvFloatCallConv::Quad.max_bits(),
-        };
+
         let (x_start, x_end, f_start, f_end) = if args_or_rets == ArgsOrRets::Args {
             (10, 17, 10, 17)
         } else {
@@ -82,6 +78,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let mut next_stack: u64 = 0;
         let mut ret = smallvec![];
         let mut return_one_register_used = false;
+        // Max float bits allowed by call_conv.
+        let max_float_bits = match call_conv {
+            CallConv::SystemVRiscv(x) => x.max_bits(),
+            // Just use the `Quad`,even f128 not supported right now.
+            _ => RiscvFloatCallConv::Quad.max_bits(),
+        };
 
         for param in params {
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
