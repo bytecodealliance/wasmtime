@@ -186,26 +186,24 @@ impl Memory {
         icache_coherence::pipeline_flush().expect("Failed pipeline flush");
 
         let set_region_readable_and_executable = |ptr, len| {
-            if len != 0 {
-                if self.branch_protection == BranchProtection::BTI {
-                    #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-                    if std::arch::is_aarch64_feature_detected!("bti") {
-                        let prot = libc::PROT_EXEC | libc::PROT_READ | /* PROT_BTI */ 0x10;
+            if self.branch_protection == BranchProtection::BTI {
+                #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+                if std::arch::is_aarch64_feature_detected!("bti") {
+                    let prot = libc::PROT_EXEC | libc::PROT_READ | /* PROT_BTI */ 0x10;
 
-                        unsafe {
-                            if libc::mprotect(ptr as *mut libc::c_void, len, prot) < 0 {
-                                panic!("unable to make memory readable+executable");
-                            }
+                    unsafe {
+                        if libc::mprotect(ptr as *mut libc::c_void, len, prot) < 0 {
+                            panic!("unable to make memory readable+executable");
                         }
-
-                        return;
                     }
-                }
 
-                unsafe {
-                    region::protect(ptr, len, region::Protection::READ_EXECUTE)
-                        .expect("unable to make memory readable+executable");
+                    return;
                 }
+            }
+
+            unsafe {
+                region::protect(ptr, len, region::Protection::READ_EXECUTE)
+                    .expect("unable to make memory readable+executable");
             }
         };
 
