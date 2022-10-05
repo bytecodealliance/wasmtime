@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use libc::{syscall, SYS_membarrier, EINVAL, EPERM};
+use libc::{syscall, EINVAL, EPERM};
 use std::ffi::c_void;
 use std::io::{Error, Result};
 
@@ -31,8 +31,9 @@ pub(crate) fn pipeline_flush() -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 fn membarrier(barrier: libc::c_int) -> Result<()> {
-    let res = unsafe { syscall(SYS_membarrier, barrier) };
+    let res = unsafe { syscall(libc::SYS_membarrier, barrier) };
     if res == 0 {
         Ok(())
     } else {

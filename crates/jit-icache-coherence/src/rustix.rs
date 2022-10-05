@@ -1,7 +1,3 @@
-#![allow(unused)]
-
-use rustix::io::Errno;
-use rustix::process::{membarrier, MembarrierCommand};
 use std::ffi::c_void;
 use std::io::Result;
 
@@ -35,28 +31,33 @@ pub(crate) fn pipeline_flush() -> Result<()> {
     // kernel patch the SYNC_CORE membarrier has different guarantees on each architecture
     // so we need follow up and check what it provides us.
     #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-    match membarrier(MembarrierCommand::PrivateExpeditedSyncCore) {
-        Ok(_) => {}
+    {
+        use rustix::io::Errno;
+        use rustix::process::{membarrier, MembarrierCommand};
 
-        // EPERM happens if the calling process hasn't yet called the register membarrier.
-        // We can call the register membarrier now, and then retry the actual membarrier,
-        //
-        // This does have some over overhead since on the first time we call this function we
-        // actually execute three membarriers, but this only happens once per process and only
-        // one slow membarrier is actually executed (The last one, which actually generates an IPI).
-        Err(Errno::PERM) => {
-            membarrier(MembarrierCommand::RegisterPrivateExpeditedSyncCore)?;
-            membarrier(MembarrierCommand::PrivateExpeditedSyncCore)?;
+        match membarrier(MembarrierCommand::PrivateExpeditedSyncCore) {
+            Ok(_) => {}
+
+            // EPERM happens if the calling process hasn't yet called the register membarrier.
+            // We can call the register membarrier now, and then retry the actual membarrier,
+            //
+            // This does have some over overhead since on the first time we call this function we
+            // actually execute three membarriers, but this only happens once per process and only
+            // one slow membarrier is actually executed (The last one, which actually generates an IPI).
+            Err(Errno::PERM) => {
+                membarrier(MembarrierCommand::RegisterPrivateExpeditedSyncCore)?;
+                membarrier(MembarrierCommand::PrivateExpeditedSyncCore)?;
+            }
+
+            // On kernels older than 4.16 the above syscall does not exist, so we can
+            // fallback to MEMBARRIER_CMD_GLOBAL which is an alias for MEMBARRIER_CMD_SHARED
+            // that has existed since 4.3. GLOBAL is a lot slower, but allows us to have
+            // compatibility with older kernels.
+            Err(Errno::INVAL) => membarrier(MembarrierCommand::Global)?,
+
+            // In any other case we got an actual error, so lets propagate that up
+            e => e?,
         }
-
-        // On kernels older than 4.16 the above syscall does not exist, so we can
-        // fallback to MEMBARRIER_CMD_GLOBAL which is an alias for MEMBARRIER_CMD_SHARED
-        // that has existed since 4.3. GLOBAL is a lot slower, but allows us to have
-        // compatibility with older kernels.
-        Err(Errno::INVAL) => membarrier(MembarrierCommand::Global)?,
-
-        // In any other case we got an actual error, so lets propagate that up
-        e => e?,
     }
 
     Ok(())
