@@ -460,8 +460,9 @@ pub unsafe extern "C" fn path_readlink(
     return_value
 }
 
-// Slow-path for `path_readlink` that allocates a buffer on the stack to
-// ensure that it has a big enough buffer.
+/// Slow-path for `path_readlink` that allocates a buffer on the stack to
+/// ensure that it has a big enough buffer.
+#[inline(never)] // Disable inlining as this has a large stack buffer.
 unsafe fn path_readlink_slow(
     fd: wasi_filesystem::Descriptor,
     path: &[u8],
