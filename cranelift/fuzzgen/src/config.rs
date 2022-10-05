@@ -3,7 +3,11 @@ use std::ops::RangeInclusive;
 
 /// Holds the range of acceptable values to use during the generation of testcases
 pub struct Config {
-    pub test_case_inputs: RangeInclusive<usize>,
+    /// Maximum allowed test case inputs.
+    /// We build test case inputs from the rest of the bytes that the fuzzer provides us
+    /// so we allow the fuzzer to control this by feeding us more or less bytes.
+    /// The upper bound here is to prevent too many inputs that cause long test times
+    pub max_test_case_inputs: usize,
     pub signature_params: RangeInclusive<usize>,
     pub signature_rets: RangeInclusive<usize>,
     pub instructions_per_block: RangeInclusive<usize>,
@@ -62,7 +66,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            test_case_inputs: 1..=10,
+            max_test_case_inputs: 100,
             signature_params: 0..=16,
             signature_rets: 0..=16,
             instructions_per_block: 0..=64,

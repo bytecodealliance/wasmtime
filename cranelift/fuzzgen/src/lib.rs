@@ -148,7 +148,10 @@ where
     fn generate_test_inputs(mut self, signature: &Signature) -> Result<Vec<TestCaseInput>> {
         let mut inputs = Vec::new();
 
-        loop {
+        // Generate up to "max_test_case_inputs" inputs, we need an upper bound here since
+        // the fuzzer at some point starts trying to feed us way too many inputs. (I found one
+        // test case with 130k inputs!)
+        for _ in 0..self.config.max_test_case_inputs {
             let last_len = self.u.len();
 
             let test_args = signature
