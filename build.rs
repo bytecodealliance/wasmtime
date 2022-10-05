@@ -34,7 +34,6 @@ fn main() {
 ///         std::arch::asm!(
 ///             "
 ///                 global.get internal_realloc_global
-///                 local.set {}
 ///                 local.get {}
 ///                 global.set internal_realloc_global
 ///             ",
