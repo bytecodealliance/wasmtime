@@ -9,7 +9,7 @@ const MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE: libc::c_int = 32;
 const MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE: libc::c_int = 64;
 
 /// See docs on [crate::pipeline_flush] for a description of what this function is trying to do.
-#[inline(always)]
+#[inline]
 pub(crate) fn pipeline_flush() -> Result<()> {
     // This implementation is not very well commented, but see [rustix::pipeline_flush].
     // We should keep these two implementations in sync, since they are trying to do the
@@ -41,7 +41,7 @@ fn membarrier(barrier: libc::c_int) -> Result<()> {
 }
 
 /// See docs on [crate::clear_cache] for a description of what this function is trying to do.
-#[inline(always)]
+#[inline]
 pub(crate) fn clear_cache(_ptr: *const c_void, _len: usize) -> Result<()> {
     // TODO: On AArch64 we currently rely on the [pipeline_flush] membarrier to do this
     // See [rustix::clear_cache] for more info.

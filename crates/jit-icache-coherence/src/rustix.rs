@@ -6,7 +6,7 @@ use std::ffi::c_void;
 use std::io::Result;
 
 /// See docs on [crate::pipeline_flush] for a description of what this function is trying to do.
-#[inline(always)]
+#[inline]
 pub(crate) fn pipeline_flush() -> Result<()> {
     // Note: If you are changing anything in this function, please make sure to update
     // [libc::pipeline_flush] as well. These two functions are trying to do the same thing
@@ -63,7 +63,7 @@ pub(crate) fn pipeline_flush() -> Result<()> {
 }
 
 /// See docs on [crate::clear_cache] for a description of what this function is trying to do.
-#[inline(always)]
+#[inline]
 pub(crate) fn clear_cache(_ptr: *const c_void, _len: usize) -> Result<()> {
     // TODO: On AArch64 we currently rely on the [pipeline_flush] membarrier to do this
     // however that is an implementation detail and should not be relied upon
