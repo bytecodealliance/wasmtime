@@ -658,7 +658,7 @@ fn errno_from_wasi_filesystem(err: wasi_filesystem::Errno) -> Errno {
 
 // A black box to prevent the optimizer from generating a lookup table
 // from the match above, which would require a static initializer.
-#[inline(never)]
 fn black_box(x: Errno) -> Errno {
-    unsafe { core::ptr::read_volatile(&x) }
+    core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+    x
 }
