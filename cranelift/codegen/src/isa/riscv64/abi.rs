@@ -65,7 +65,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)> {
         // All registers that can be used as parameters or rets.
         // both start and end are included.
-
         let (x_start, x_end, f_start, f_end) = if args_or_rets == ArgsOrRets::Args {
             (10, 17, 10, 17)
         } else {
