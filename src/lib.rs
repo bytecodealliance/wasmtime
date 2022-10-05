@@ -24,10 +24,8 @@ use wasi::*;
 /// polyfill.
 const PATH_MAX: usize = 4096;
 
-extern crate alloc;
-
 // We're avoiding static initializers, so replace the standard assert macros
-// with simpler implementation.
+// with simpler implementations.
 macro_rules! assert {
     ($cond:expr $(,)?) => {
         if !$cond {
