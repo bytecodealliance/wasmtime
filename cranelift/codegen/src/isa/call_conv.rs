@@ -41,6 +41,7 @@ pub enum CallConv {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum RiscvFloatCallConv {
     Soft,
     Single,
