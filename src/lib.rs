@@ -7,32 +7,54 @@ wit_bindgen_guest_rust::import!("wit/wasi-logging.wit.md");
 wit_bindgen_guest_rust::import!("wit/wasi-poll.wit.md");
 wit_bindgen_guest_rust::import!("wit/wasi-random.wit.md");
 
+use std::arch::wasm32::unreachable;
 use wasi::*;
+
+extern "C" {
+    fn replace_realloc_global(val: usize) -> usize;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cabi_realloc(
+    old_ptr: *mut u8,
+    old_size: usize,
+    _align: usize,
+    _new_size: usize,
+) -> *mut u8 {
+    if !old_ptr.is_null() || old_size != 0 {
+        unreachable();
+    }
+    let base = replace_realloc_global(0);
+    if base == 0 {
+        unreachable();
+    }
+    base as *mut u8
+}
 
 /// Read command-line argument data.
 /// The size of the array should match that returned by `args_sizes_get`
 #[no_mangle]
 pub extern "C" fn args_get(argv: *mut *mut u8, argv_buf: *mut u8) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Return command-line argument data sizes.
 #[no_mangle]
 pub extern "C" fn args_sizes_get(argc: *mut Size, argv_buf_size: *mut Size) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Read environment variable data.
 /// The sizes of the buffers should match that returned by `environ_sizes_get`.
 #[no_mangle]
 pub extern "C" fn environ_get(environ: *mut *mut u8, environ_buf: *mut u8) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Return environment variable data sizes.
 #[no_mangle]
 pub extern "C" fn environ_sizes_get(environc: *mut Size, environ_buf_size: *mut Size) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Return the resolution of a clock.
@@ -41,56 +63,56 @@ pub extern "C" fn environ_sizes_get(environc: *mut Size, environ_buf_size: *mut 
 /// Note: This is similar to `clock_getres` in POSIX.
 #[no_mangle]
 pub extern "C" fn clock_res_get(id: Clockid, resolution: *mut Timestamp) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Return the time value of a clock.
 /// Note: This is similar to `clock_gettime` in POSIX.
 #[no_mangle]
 pub extern "C" fn clock_time_get(id: Clockid, precision: Timestamp, time: *mut Timestamp) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Provide file advisory information on a file descriptor.
 /// Note: This is similar to `posix_fadvise` in POSIX.
 #[no_mangle]
 pub extern "C" fn fd_advise(fd: Fd, offset: Filesize, len: Filesize, advice: Advice) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Force the allocation of space in a file.
 /// Note: This is similar to `posix_fallocate` in POSIX.
 #[no_mangle]
 pub extern "C" fn fd_allocate(fd: Fd, offset: Filesize, len: Filesize) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Close a file descriptor.
 /// Note: This is similar to `close` in POSIX.
 #[no_mangle]
 pub extern "C" fn fd_close(fd: Fd) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Synchronize the data of a file to disk.
 /// Note: This is similar to `fdatasync` in POSIX.
 #[no_mangle]
 pub extern "C" fn fd_datasync(fd: Fd) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Get the attributes of a file descriptor.
 /// Note: This returns similar flags to `fsync(fd, F_GETFL)` in POSIX, as well as additional fields.
 #[no_mangle]
 pub extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Adjust the flags associated with a file descriptor.
 /// Note: This is similar to `fcntl(fd, F_SETFL, flags)` in POSIX.
 #[no_mangle]
 pub extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Adjust the rights associated with a file descriptor.
@@ -101,20 +123,20 @@ pub extern "C" fn fd_fdstat_set_rights(
     fs_rights_base: Rights,
     fs_rights_inheriting: Rights,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Return the attributes of an open file.
 #[no_mangle]
 pub extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Adjust the size of an open file. If this increases the file's size, the extra bytes are filled with zeros.
 /// Note: This is similar to `ftruncate` in POSIX.
 #[no_mangle]
 pub extern "C" fn fd_filestat_set_size(fd: Fd, size: Filesize) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Adjust the timestamps of an open file or directory.
@@ -126,7 +148,7 @@ pub extern "C" fn fd_filestat_set_times(
     mtim: Timestamp,
     fst_flags: Fstflags,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Read from a file descriptor, without using and updating the file descriptor's offset.
@@ -139,19 +161,19 @@ pub extern "C" fn fd_pread(
     offset: Filesize,
     nread: *mut Size,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Return a description of the given preopened file descriptor.
 #[no_mangle]
 pub extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Return a description of the given preopened file descriptor.
 #[no_mangle]
 pub extern "C" fn fd_prestat_dir_name(fd: Fd, path: *mut u8, path_len: Size) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Write to a file descriptor, without using and updating the file descriptor's offset.
@@ -164,7 +186,7 @@ pub extern "C" fn fd_pwrite(
     offset: Filesize,
     nwritten: *mut Size,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Read from a file descriptor.
@@ -176,7 +198,7 @@ pub extern "C" fn fd_read(
     iovs_len: usize,
     nread: *mut Size,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Read directory entries from a directory.
@@ -196,7 +218,7 @@ pub extern "C" fn fd_readdir(
     cookie: Dircookie,
     bufused: *mut Size,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Atomically replace a file descriptor by renumbering another file descriptor.
@@ -209,7 +231,7 @@ pub extern "C" fn fd_readdir(
 /// would disappear if `dup2()` were to be removed entirely.
 #[no_mangle]
 pub extern "C" fn fd_renumber(fd: Fd, to: Fd) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Move the offset of a file descriptor.
@@ -221,21 +243,21 @@ pub extern "C" fn fd_seek(
     whence: Whence,
     newoffset: *mut Filesize,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Synchronize the data and metadata of a file to disk.
 /// Note: This is similar to `fsync` in POSIX.
 #[no_mangle]
 pub extern "C" fn fd_sync(fd: Fd) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Return the current offset of a file descriptor.
 /// Note: This is similar to `lseek(fd, 0, SEEK_CUR)` in POSIX.
 #[no_mangle]
 pub extern "C" fn fd_tell(fd: Fd, offset: *mut Filesize) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Write to a file descriptor.
@@ -247,14 +269,14 @@ pub extern "C" fn fd_write(
     iovs_len: usize,
     nwritten: *mut Size,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Create a directory.
 /// Note: This is similar to `mkdirat` in POSIX.
 #[no_mangle]
 pub extern "C" fn path_create_directory(fd: Fd, path_ptr: *const u8, path_len: usize) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Return the attributes of a file or directory.
@@ -267,7 +289,7 @@ pub extern "C" fn path_filestat_get(
     path_len: usize,
     buf: *mut Filestat,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Adjust the timestamps of a file or directory.
@@ -282,7 +304,7 @@ pub extern "C" fn path_filestat_set_times(
     mtim: Timestamp,
     fst_flags: Fstflags,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Create a hard link.
@@ -297,7 +319,7 @@ pub extern "C" fn path_link(
     new_path_ptr: *const u8,
     new_path_len: usize,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Open a file or directory.
@@ -319,7 +341,7 @@ pub extern "C" fn path_open(
     fdflags: Fdflags,
     opened_fd: *mut Fd,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Read the contents of a symbolic link.
@@ -333,7 +355,7 @@ pub extern "C" fn path_readlink(
     buf_len: Size,
     bufused: *mut Size,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Remove a directory.
@@ -341,7 +363,7 @@ pub extern "C" fn path_readlink(
 /// Note: This is similar to `unlinkat(fd, path, AT_REMOVEDIR)` in POSIX.
 #[no_mangle]
 pub extern "C" fn path_remove_directory(fd: Fd, path_ptr: *const u8, path_len: usize) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Rename a file or directory.
@@ -355,7 +377,7 @@ pub extern "C" fn path_rename(
     new_path_ptr: *const u8,
     new_path_len: usize,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Create a symbolic link.
@@ -368,7 +390,7 @@ pub extern "C" fn path_symlink(
     new_path_ptr: *const u8,
     new_path_len: usize,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Unlink a file.
@@ -376,7 +398,7 @@ pub extern "C" fn path_symlink(
 /// Note: This is similar to `unlinkat(fd, path, 0)` in POSIX.
 #[no_mangle]
 pub extern "C" fn path_unlink_file(fd: Fd, path_ptr: *const u8, path_len: usize) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Concurrently poll for the occurrence of a set of events.
@@ -387,7 +409,7 @@ pub extern "C" fn poll_oneoff(
     nsubscriptions: Size,
     nevents: *mut Size,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Terminate the process normally. An exit code of 0 indicates successful
@@ -395,21 +417,21 @@ pub extern "C" fn poll_oneoff(
 /// the environment.
 #[no_mangle]
 pub extern "C" fn proc_exit(rval: Exitcode) -> ! {
-    todo!()
+    unreachable()
 }
 
 /// Send a signal to the process of the calling thread.
 /// Note: This is similar to `raise` in POSIX.
 #[no_mangle]
 pub extern "C" fn proc_raise(sig: Signal) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Temporarily yield execution of the calling thread.
 /// Note: This is similar to `sched_yield` in POSIX.
 #[no_mangle]
 pub extern "C" fn sched_yield() -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Write high-quality random data into a buffer.
@@ -420,7 +442,7 @@ pub extern "C" fn sched_yield() -> Errno {
 /// number generator, rather than to provide the random data directly.
 #[no_mangle]
 pub extern "C" fn random_get(buf: *mut u8, buf_len: Size) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Receive a message from a socket.
@@ -435,7 +457,7 @@ pub extern "C" fn sock_recv(
     ro_datalen: *mut Size,
     ro_flags: *mut Roflags,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Send a message on a socket.
@@ -449,12 +471,12 @@ pub extern "C" fn sock_send(
     si_flags: Siflags,
     so_datalen: *mut Size,
 ) -> Errno {
-    todo!()
+    unreachable()
 }
 
 /// Shut down socket send and receive channels.
 /// Note: This is similar to `shutdown` in POSIX.
 #[no_mangle]
 pub extern "C" fn sock_shutdown(fd: Fd, how: Sdflags) -> Errno {
-    todo!()
+    unreachable()
 }
