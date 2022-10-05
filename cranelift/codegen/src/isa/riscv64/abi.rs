@@ -8,7 +8,7 @@ use crate::ir::MemFlags;
 use crate::isa;
 
 use crate::isa::riscv64::{inst::EmitState, inst::*};
-use crate::isa::{call_conv::RiscvFloatCallConv, CallConv};
+use crate::isa::{call_conv::RiscvFloatAbi, CallConv};
 use crate::machinst::*;
 
 use crate::ir::types::I8;
@@ -81,7 +81,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let max_float_bits = match call_conv {
             CallConv::SystemVRiscv(x) => x.max_bits(),
             // Just use the `Quad`,even f128 not supported right now.
-            _ => RiscvFloatCallConv::Quad.max_bits(),
+            _ => RiscvFloatAbi::Quad.max_bits(),
         };
 
         for param in params {
