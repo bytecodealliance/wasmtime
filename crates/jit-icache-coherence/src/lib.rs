@@ -65,15 +65,21 @@
 //!
 //! [ARM Community - Caches and Self-Modifying Code]: https://community.arm.com/arm-community-blogs/b/architectures-and-processors-blog/posts/caches-and-self-modifying-code
 
-#[cfg(all(not(target_os = "windows"), not(feature = "rustix")))]
-mod libc;
-#[cfg(all(not(target_os = "windows"), feature = "rustix"))]
-mod rustix;
-#[cfg(target_os = "windows")]
-mod win;
-
 use std::ffi::c_void;
 use std::io::Result;
+
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "windows")] {
+        mod win;
+        use win as imp;
+    } else if #[cfg(all(not(target_os = "windows"), feature = "rustix"))] {
+        mod rustix;
+        use crate::rustix as imp;
+    } else {
+        mod libc;
+        use crate::libc as imp;
+    }
+}
 
 /// Flushes instructions in the processor pipeline
 ///
@@ -81,26 +87,12 @@ use std::io::Result;
 ///
 /// If the architecture does not require a pipeline flush, this function does nothing.
 pub fn pipeline_flush() -> Result<()> {
-    #[cfg(target_os = "windows")]
-    win::pipeline_flush()?;
-    #[cfg(all(not(target_os = "windows"), not(feature = "rustix")))]
-    libc::pipeline_flush()?;
-    #[cfg(all(not(target_os = "windows"), feature = "rustix"))]
-    rustix::pipeline_flush()?;
-
-    Ok(())
+    imp::pipeline_flush()
 }
 
 /// Flushes the instruction cache for a region of memory.
 ///
 /// If the architecture does not require an instruction cash flush, this function does nothing.
 pub fn clear_cache(ptr: *const c_void, len: usize) -> Result<()> {
-    #[cfg(target_os = "windows")]
-    win::clear_cache(ptr, len)?;
-    #[cfg(all(not(target_os = "windows"), not(feature = "rustix")))]
-    libc::clear_cache(ptr, len)?;
-    #[cfg(all(not(target_os = "windows"), feature = "rustix"))]
-    rustix::clear_cache(ptr, len)?;
-
-    Ok(())
+    imp::clear_cache(ptr, len)
 }
