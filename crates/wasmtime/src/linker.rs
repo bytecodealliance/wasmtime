@@ -572,7 +572,7 @@ impl<T> Linker<T> {
     /// Ordinary modules which don't declare themselves to be either Commands
     /// or Reactors are treated as Reactors without any initialization calls.
     ///
-    /// [Commands and Reactors]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
+    /// [Commands and Reactors]: https://github.com/WebAssembly/WASI/blob/main/legacy/application-abi.md#current-unstable-abi
     ///
     /// # Errors
     ///
