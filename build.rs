@@ -28,7 +28,7 @@ fn main() {
 /// );
 ///
 /// #[no_mangle]
-/// fn replace_realloc_global(val: usize) -> usize {
+/// extern "C" fn replace_realloc_global(val: usize) -> usize {
 ///     unsafe {
 ///         let ret: usize;
 ///         std::arch::asm!(
