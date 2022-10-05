@@ -155,15 +155,15 @@ impl CodeMemory {
             icache_coherence::clear_cache(ret.text.as_ptr() as *const c_void, ret.text.len())
                 .expect("Failed cache clear");
 
-            // Flush any in-flight instructions from the pipeline
-            icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
-
             // Switch the executable portion from read/write to
             // read/execute, notably not using read/write/execute to prevent
             // modifications.
             self.mmap
                 .make_executable(text_range.clone(), enable_branch_protection)
                 .expect("unable to make memory executable");
+
+            // Flush any in-flight instructions from the pipeline
+            icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
 
             // With all our memory set up use the platform-specific
             // `UnwindRegistration` implementation to inform the general

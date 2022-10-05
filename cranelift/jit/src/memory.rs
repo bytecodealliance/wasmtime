@@ -182,9 +182,6 @@ impl Memory {
             };
         }
 
-        // Flush any in-flight instructions from the pipeline
-        icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
-
         let set_region_readable_and_executable = |ptr, len| {
             if self.branch_protection == BranchProtection::BTI {
                 #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
@@ -210,6 +207,9 @@ impl Memory {
         for &PtrLen { ptr, len, .. } in self.non_protected_allocations_iter() {
             set_region_readable_and_executable(ptr, len);
         }
+
+        // Flush any in-flight instructions from the pipeline
+        icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
 
         self.already_protected = self.allocations.len();
     }
