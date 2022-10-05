@@ -617,6 +617,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             // gen_prologue is called at emit stage.
             // no need let reg alloc know.
         }
+        &Inst::ElfTlsGetAddr { rd, .. } => {
+            collector.reg_fixed_def(rd, a0());
+        }
     }
 }
 
@@ -932,6 +935,13 @@ impl Inst {
                     rs2,
                     tmp,
                     ty
+                )
+            }
+            &Inst::ElfTlsGetAddr { ref symbol, rd } => {
+                format!(
+                    "elf_tls_get_addr {},{:?}",
+                    format_reg(rd.to_reg(), allocs),
+                    symbol
                 )
             }
             &Inst::FloatSelect {

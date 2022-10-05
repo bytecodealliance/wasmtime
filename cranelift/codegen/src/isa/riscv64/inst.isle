@@ -342,6 +342,9 @@
       (guard_size u32)
       (probe_count u32)
       (tmp WritableReg))
+    (ElfTlsGetAddr
+      (symbol ExternalName)
+      (rd WritableReg))
 ))
 
 
@@ -2082,3 +2085,10 @@
 (decl umulh (Reg Reg) Reg)
 (rule (umulh a b)
   (alu_rrr (AluOPRRR.Mulhu) a b))
+
+;; Helper for emitting ElfTlsGetAddr.
+(decl elf_tls_get_addr (ExternalName) Reg)
+(rule (elf_tls_get_addr name)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.ElfTlsGetAddr name dst))))
+        dst))
