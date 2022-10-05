@@ -14,7 +14,6 @@ wit_bindgen_guest_rust::import!({
 });
 
 use core::arch::wasm32::unreachable;
-use core::mem::forget;
 use core::ptr::null_mut;
 use core::slice;
 use wasi::*;
@@ -461,7 +460,6 @@ pub unsafe extern "C" fn path_readlink(
             assert!(path.len() <= buf_len);
 
             *bufused = path.len();
-            forget(path);
             ERRNO_SUCCESS
         }
         Err(err) => errno_from_wasi_filesystem(err),
@@ -495,7 +493,6 @@ unsafe fn path_readlink_slow(
             let len = core::cmp::min(path.len(), buf_len);
             core::ptr::copy_nonoverlapping(buffer.as_ptr().cast(), buf, len);
             *bufused = len;
-            forget(path);
             ERRNO_SUCCESS
         }
         Err(err) => errno_from_wasi_filesystem(err),
