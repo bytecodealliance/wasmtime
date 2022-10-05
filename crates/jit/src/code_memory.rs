@@ -156,7 +156,7 @@ impl CodeMemory {
                 .expect("Failed cache clear");
 
             // Flush any in-flight instructions from the pipeline
-            icache_coherence::pipeline_flush().expect("Failed pipeline flush");
+            icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
 
             // Switch the executable portion from read/write to
             // read/execute, notably not using read/write/execute to prevent

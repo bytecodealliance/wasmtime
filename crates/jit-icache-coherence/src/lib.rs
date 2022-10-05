@@ -17,11 +17,11 @@
 //! to execute. You can do this at any point in the code from the moment that you write the page up to
 //! the moment where the code is executed.
 //!
-//! You also need to call [pipeline_flush] to ensure that there isn't any invalid instruction currently
+//! You also need to call [pipeline_flush_mt] to ensure that there isn't any invalid instruction currently
 //! in the pipeline if you are running in a multi threaded environment.
 //!
-//! For single threaded programs you are free to omit [pipeline_flush], otherwise you need to
-//! call both [clear_cache] and [pipeline_flush] in that order.
+//! For single threaded programs you are free to omit [pipeline_flush_mt], otherwise you need to
+//! call both [clear_cache] and [pipeline_flush_mt] in that order.
 //!
 //! ### Example:
 //! ```
@@ -48,7 +48,7 @@
 //! }
 //!
 //! // Once those are invalidated we also need to flush the pipeline
-//! pipeline_flush()?;
+//! pipeline_flush_mt()?;
 //!
 //! // We can now safely execute our new code.
 //! run_code();
@@ -59,7 +59,7 @@
 //! <div class="example-wrap" style="display:inline-block"><pre class="compile_fail" style="white-space:normal;font:inherit;">
 //!
 //!  **Warning**: In order to correctly use this interface you should always call [clear_cache].
-//!  A followup call to [pipeline_flush] is required if you are running in a multi-threaded environment.
+//!  A followup call to [pipeline_flush_mt] is required if you are running in a multi-threaded environment.
 //!
 //! </pre></div>
 //!
@@ -85,12 +85,12 @@ cfg_if::cfg_if! {
 ///
 /// This pipeline flush is broadcast to all processors that are executing threads in the current process.
 ///
-/// Calling [pipeline_flush] is only required for multi-threaded programs and it *must* be called
-/// after the calls to [clear_cache].
+/// Calling [pipeline_flush_mt] is only required for multi-threaded programs and it *must* be called
+/// after all calls to [clear_cache].
 ///
 /// If the architecture does not require a pipeline flush, this function does nothing.
-pub fn pipeline_flush() -> Result<()> {
-    imp::pipeline_flush()
+pub fn pipeline_flush_mt() -> Result<()> {
+    imp::pipeline_flush_mt()
 }
 
 /// Flushes the instruction cache for a region of memory.

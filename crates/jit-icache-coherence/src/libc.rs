@@ -8,10 +8,10 @@ const MEMBARRIER_CMD_GLOBAL: libc::c_int = 1;
 const MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE: libc::c_int = 32;
 const MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE: libc::c_int = 64;
 
-/// See docs on [crate::pipeline_flush] for a description of what this function is trying to do.
+/// See docs on [crate::pipeline_flush_mt] for a description of what this function is trying to do.
 #[inline]
-pub(crate) fn pipeline_flush() -> Result<()> {
-    // This implementation is not very well commented, but see [rustix::pipeline_flush].
+pub(crate) fn pipeline_flush_mt() -> Result<()> {
+    // This implementation is not very well commented, but see [rustix::pipeline_flush_mt].
     // We should keep these two implementations in sync, since they are trying to do the
     // exact same thing.
 

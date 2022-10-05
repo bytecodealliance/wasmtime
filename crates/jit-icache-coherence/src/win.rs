@@ -4,9 +4,9 @@ use windows_sys::Win32::System::Diagnostics::Debug::FlushInstructionCache;
 use windows_sys::Win32::System::Threading::FlushProcessWriteBuffers;
 use windows_sys::Win32::System::Threading::GetCurrentProcess;
 
-/// See docs on [crate::pipeline_flush] for a description of what this function is trying to do.
+/// See docs on [crate::pipeline_flush_mt] for a description of what this function is trying to do.
 #[inline]
-pub(crate) fn pipeline_flush() -> Result<()> {
+pub(crate) fn pipeline_flush_mt() -> Result<()> {
     // See: https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-flushprocesswritebuffers
     if cfg!(target_arch = "aarch64") {
         unsafe {

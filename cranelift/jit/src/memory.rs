@@ -180,7 +180,7 @@ impl Memory {
         }
 
         // Flush any in-flight instructions from the pipeline
-        icache_coherence::pipeline_flush().expect("Failed pipeline flush");
+        icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
 
         let set_region_readable_and_executable = |ptr, len| {
             if self.branch_protection == BranchProtection::BTI {

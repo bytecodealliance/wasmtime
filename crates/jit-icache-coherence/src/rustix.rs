@@ -1,11 +1,11 @@
 use std::ffi::c_void;
 use std::io::Result;
 
-/// See docs on [crate::pipeline_flush] for a description of what this function is trying to do.
+/// See docs on [crate::pipeline_flush_mt] for a description of what this function is trying to do.
 #[inline]
-pub(crate) fn pipeline_flush() -> Result<()> {
+pub(crate) fn pipeline_flush_mt() -> Result<()> {
     // Note: If you are changing anything in this function, please make sure to update
-    // [libc::pipeline_flush] as well. These two functions are trying to do the same thing
+    // [libc::pipeline_flush_mt] as well. These two functions are trying to do the same thing
     // and should be kept in sync.
 
     // Ensure that no processor has fetched a stale instruction stream.
