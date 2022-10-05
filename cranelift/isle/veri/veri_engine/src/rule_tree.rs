@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::interp::Context;
-use crate::solver::run_solver_rule_path;
+use crate::{interp::Context, termname::pattern_contains_termname};
+use crate::solver::run_solver;
 use crate::type_inference::Solution;
 use cranelift_isle as isle;
 use isle::sema::{Pattern, Rule, RuleId, TermEnv, TypeEnv};
@@ -249,17 +249,30 @@ pub fn verify_rules_for_type_wih_rule_filter(
 ) -> VerificationResult {
     for rule in &termenv.rules {
         if !filter(&rule, termenv, typeenv) {
+            println!("skipping rule that doesn't meet filter");
             continue;
         }
-        let rule_tree =
-            build_rule_tree_from_root(&rule, termenv, typeenv, annotationenv, typesols, width);
-        let paths = enumerate_paths_to_leaves(&rule_tree);
-        for rule_path in paths {
-            let tyctx = rule_path.rules[0].tyctx.clone();
-            let result = run_solver_rule_path(rule_path, tyctx, width);
-            if result != VerificationResult::Success {
-                return result;
-            }
+        let ctx = Context::new(termenv, typeenv, annotationenv, typesols, width);
+        if ctx.typesols.get(&rule.id).is_none() {
+            continue;
+        }
+        // if !pattern_contains_termname(&rule.lhs, "small_rotr", termenv, typeenv) {
+        //     continue;
+        // }
+        let sol = &ctx.typesols[&rule.id];
+        let rule_sem = RuleSemantics {
+            lhs: sol.lhs.clone(),
+            rhs: sol.rhs.clone(),
+            assumptions: sol.assumptions.clone(),
+            quantified_vars: sol.quantified_vars.clone(),
+            free_vars: sol.free_vars.clone(),
+            tyctx: sol.tyctx.to_owned(),
+            lhs_undefined_terms: vec![],
+            rhs_undefined_terms: vec![],
+        };
+        let result = run_solver(rule_sem, width);
+        if result != VerificationResult::Success {
+            return result;
         }
     }
     VerificationResult::Success

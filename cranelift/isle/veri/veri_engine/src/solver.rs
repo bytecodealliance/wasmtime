@@ -6,7 +6,7 @@ use itertools::Itertools;
 use rsmt2::Solver;
 use std::collections::{HashMap, HashSet};
 use veri_ir::{
-    BinaryOp, Counterexample, Expr, RulePath, Terminal, Type, TypeContext, UnaryOp,
+    BinaryOp, Counterexample, Expr, RulePath, RuleSemantics, Terminal, Type, TypeContext, UnaryOp,
     VerificationResult,
 };
 
@@ -60,9 +60,9 @@ impl SolverCtx {
     // For safety, we add an assertion that some arm of this ITE must match.
     fn extend_symbolic(
         &mut self,
-        dest_width: &String, // 2
+        dest_width: &String, 
         source: &String,
-        source_width: &String, // 2
+        source_width: &String,
         op: &str,
     ) -> String {
         // Symbolic expression for amount to shift
@@ -273,7 +273,12 @@ impl SolverCtx {
                 format!("({} {})", op, self.vir_expr_to_rsmt2_str(*arg))
             }
             Expr::Binary(op, x, y) => {
-                self.assume_comparable_types(&*x, &*y);
+                match op {
+                    BinaryOp::BVAdd
+                    | BinaryOp::BVSub
+                    | BinaryOp::BVAnd => self.assume_comparable_types(&*x, &*y),
+                    _ => (),
+                };
                 match op {
                     BinaryOp::BVAdd
                     | BinaryOp::BVSub
@@ -310,7 +315,7 @@ impl SolverCtx {
                     BinaryOp::BVOr => "bvor",
                     BinaryOp::BVShl => "bvshl",
                     BinaryOp::BVShr => "bvlshr",
-                    _ => unreachable!(),
+                    _ => unreachable!("{:?}", op),
                 };
                 format!(
                     "({} {} {})",
@@ -447,19 +452,14 @@ impl SolverCtx {
 ///             <between rule assumptions>
 ///             <all but first rule's <LHS> = <RHS>>)
 ///          (= <first rule LHS> <first rule RHS>))))))
-pub fn run_solver_rule_path(
-    rule_path: RulePath,
-    tyctx: TypeContext,
-    query_width: usize,
-) -> VerificationResult {
+pub fn run_solver(rule_sem: RuleSemantics, query_width: usize) -> VerificationResult {
     println!("Verifying with query width: {}", query_width);
     let mut solver = Solver::default_z3(()).unwrap();
 
     let mut assumptions: Vec<String> = vec![];
-    let mut between_rule_assumptions: Vec<String> = vec![];
 
     let mut ctx = SolverCtx {
-        tyctx,
+        tyctx: rule_sem.tyctx,
         bitwidth: REG_WIDTH,
         var_map: HashMap::new(),
         width_vars: HashMap::new(),
@@ -468,21 +468,6 @@ pub fn run_solver_rule_path(
         additional_assumptions: vec![],
         fresh_bits_idx: 0,
     };
-
-    for (v1, v2) in rule_path.undefined_term_pairs {
-        let equality = format!("(= {} {})", v1.ret.name, v2.ret.name);
-        between_rule_assumptions.push(equality);
-        assert_eq!(v1.args.len(), v2.args.len());
-        for (a1, a2) in v1.args.iter().zip(&v2.args) {
-            let a1_s = ctx.vir_expr_to_rsmt2_str(a1.clone());
-            let a2_s = ctx.vir_expr_to_rsmt2_str(a2.clone());
-            let equality = format!("(= {} {})", a1_s, a2_s);
-            between_rule_assumptions.push(equality)
-        }
-    }
-
-    assert_eq!(rule_path.rules.len(), 1);
-    let rule_sem = rule_path.rules[0].to_owned();
 
     // Use the query width for any free variables with unspecified bitwidths
     let mut query_width_used = false;
@@ -580,27 +565,12 @@ pub fn run_solver_rule_path(
         return VerificationResult::InapplicableRule;
     }
 
-    // println!("Adding assumptions on relationship between rules");
-    // assumptions.append(&mut between_rule_assumptions);
-
-    let mut rules = rule_path.rules;
-    let first = rules.remove(0);
-
-    // for other_rule in rules {
-    //     let lhs = ctx.vir_expr_to_rsmt2_str(other_rule.lhs.clone());
-    //     let rhs = ctx.vir_expr_to_rsmt2_str(other_rule.rhs.clone());
-    //     assumptions.push(format!("(= {} {})", lhs, rhs));
-    // }
-
-    // let assumption_str = format!("(and {})", assumptions.join(" "));
-    // if !ctx.check_assumptions_feasibility(&mut solver, assumption_str.clone()) {
-    //     println!("Rule not applicable as written for PATH assumptions, skipping full query");
-    //     return VerificationResult::InapplicableRule;
-    // }
-
     // Correctness query
     // Verification condition: first rule's LHS and RHS are equal
-    let width = match (ctx.static_width(&first.lhs), ctx.static_width(&first.rhs)) {
+    let width = match (
+        ctx.static_width(&rule_sem.lhs),
+        ctx.static_width(&rule_sem.rhs),
+    ) {
         (Some(w), None) | (None, Some(w)) => w,
         (Some(w1), Some(w2)) => {
             assert_eq!(w1, w2);
@@ -615,11 +585,11 @@ pub fn run_solver_rule_path(
         }
     };
 
-    let first_lhs = ctx.vir_expr_to_rsmt2_str(first.lhs);
-    let first_rhs = ctx.vir_expr_to_rsmt2_str(first.rhs);
+    let lhs = ctx.vir_expr_to_rsmt2_str(rule_sem.lhs);
+    let rhs = ctx.vir_expr_to_rsmt2_str(rule_sem.rhs);
 
-    let lhs_care_bits = format!("((_ extract {} {}) {})", width - 1, 0, &first_lhs);
-    let rhs_care_bits = format!("((_ extract {} {}) {})", width - 1, 0, &first_rhs);
+    let lhs_care_bits = format!("((_ extract {} {}) {})", width - 1, 0, &lhs);
+    let rhs_care_bits = format!("((_ extract {} {}) {})", width - 1, 0, &rhs);
 
     let side_equality = format!("(= {} {})", lhs_care_bits, rhs_care_bits);
     println!("LHS and RHS equality condition:\n\t{}\n", side_equality);
