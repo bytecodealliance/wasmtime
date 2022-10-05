@@ -36,6 +36,38 @@ pub enum CallConv {
     ///
     /// Differs from apple-aarch64 in the same way as `WasmtimeSystemV`.
     WasmtimeAppleAarch64,
+    /// SystemV riscv have different ABI variants.
+    SystemVRiscv(RiscvFloatCallConv),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum RiscvFloatCallConv {
+    Soft,
+    Single,
+    Double,
+    Quad,
+}
+
+impl RiscvFloatCallConv {
+    /// Save me from rust ownership compile error.
+    /// So the `system_v_riscv_` comes.
+    pub fn system_v_riscv_v_abi_name(self) -> &'static str {
+        match self {
+            Self::Soft => "system_v_riscv_soft",
+            Self::Single => "system_v_riscv_single",
+            Self::Double => "system_v_riscv_double",
+            Self::Quad => "system_v_riscv_quad",
+        }
+    }
+    pub fn max_bits(self) -> u32 {
+        match self {
+            // 0 means don't use float register.
+            Self::Soft => 0,
+            Self::Single => 32,
+            Self::Double => 64,
+            Self::Quad => 128,
+        }
+    }
 }
 
 impl CallConv {
@@ -101,6 +133,7 @@ impl fmt::Display for CallConv {
             Self::WasmtimeSystemV => "wasmtime_system_v",
             Self::WasmtimeFastcall => "wasmtime_fastcall",
             Self::WasmtimeAppleAarch64 => "wasmtime_apple_aarch64",
+            Self::SystemVRiscv(f) => f.system_v_riscv_v_abi_name(),
         })
     }
 }
@@ -118,6 +151,10 @@ impl str::FromStr for CallConv {
             "wasmtime_system_v" => Ok(Self::WasmtimeSystemV),
             "wasmtime_fastcall" => Ok(Self::WasmtimeFastcall),
             "wasmtime_apple_aarch64" => Ok(Self::WasmtimeAppleAarch64),
+            "system_v_riscv_soft" => Ok(Self::SystemVRiscv(RiscvFloatCallConv::Soft)),
+            "system_v_riscv_single" => Ok(Self::SystemVRiscv(RiscvFloatCallConv::Single)),
+            "system_v_riscv_double" => Ok(Self::SystemVRiscv(RiscvFloatCallConv::Double)),
+            "system_v_riscv_quad" => Ok(Self::SystemVRiscv(RiscvFloatCallConv::Quad)),
             _ => Err(()),
         }
     }

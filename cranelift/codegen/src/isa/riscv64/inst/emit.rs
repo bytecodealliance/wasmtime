@@ -6,7 +6,6 @@ use crate::ir::{LibCall, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::inst::{zero_reg, AluOPRRR};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
-use crate::machinst::{CallArgPair, CallRetPair};
 use regalloc2::Allocation;
 use smallvec::smallvec;
 
@@ -2913,14 +2912,8 @@ impl MachInstEmit for Inst {
                 Inst::Call {
                     info: Box::new(CallInfo {
                         dest: ExternalName::LibCall(LibCall::ElfTlsGetAddr),
-                        uses: smallvec![CallArgPair {
-                            preg: a0(),
-                            vreg: a0()
-                        }],
-                        defs: smallvec![CallRetPair {
-                            vreg: Writable::from_reg(a0()),
-                            preg: a0(),
-                        }],
+                        uses: smallvec![],
+                        defs: smallvec![],
                         opcode: crate::ir::Opcode::TlsValue,
                         caller_callconv: CallConv::SystemV,
                         callee_callconv: CallConv::SystemV,

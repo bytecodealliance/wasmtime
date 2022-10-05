@@ -8,7 +8,7 @@ use crate::ir::MemFlags;
 use crate::isa;
 
 use crate::isa::riscv64::{inst::EmitState, inst::*};
-use crate::isa::CallConv;
+use crate::isa::{call_conv::RiscvFloatCallConv, CallConv};
 use crate::machinst::*;
 
 use crate::ir::types::I8;
@@ -65,6 +65,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)> {
         // All registers that can be used as parameters or rets.
         // both start and end are included.
+        let max_float_bits = match call_conv {
+            CallConv::SystemVRiscv(x) => x.max_bits(),
+            // Just use the `Quad`,even f128 not supported right now.
+            _ => RiscvFloatCallConv::Quad.max_bits(),
+        };
         let (x_start, x_end, f_start, f_end) = if args_or_rets == ArgsOrRets::Args {
             (10, 17, 10, 17)
         } else {
@@ -107,6 +112,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     } else if (next_f_reg <= f_end)
                         && *rc == RegClass::Float
                         && !return_one_register_used
+                    // If float fits in.
+                     && reg_ty.bits() <= max_float_bits
                     {
                         let x = Some(f_reg(next_f_reg));
                         if args_or_rets == ArgsOrRets::Rets && call_conv.extends_wasmtime() {
