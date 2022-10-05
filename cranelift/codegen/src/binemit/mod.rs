@@ -73,8 +73,7 @@ pub enum Reloc {
     /// jalr ra, ra, 0
     RiscvCall,
 
-    /// Riscv64 TLS GD
-    /// https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#global-dynamic
+    /// Riscv64 TLS GD (https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#global-dynamic)
     RiscvTlsGd,
 
     /// s390x TLS GD64 - 64-bit offset of tls_index for GD symbol in GOT

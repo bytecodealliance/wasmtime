@@ -2912,6 +2912,9 @@ impl MachInstEmit for Inst {
                 Inst::Call {
                     info: Box::new(CallInfo {
                         dest: ExternalName::LibCall(LibCall::ElfTlsGetAddr),
+                        // We have already done with register alloc.
+                        // This call is just help us to emit call to ElfTlsGetAddr.
+                        // So uses clobbers ... are all empty.
                         uses: smallvec![],
                         defs: smallvec![],
                         opcode: crate::ir::Opcode::TlsValue,
