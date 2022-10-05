@@ -8,10 +8,11 @@ wit_bindgen_guest_rust::import!("wit/wasi-poll.wit.md");
 wit_bindgen_guest_rust::import!("wit/wasi-random.wit.md");
 
 use std::arch::wasm32::unreachable;
+use std::ptr::null_mut;
 use wasi::*;
 
 extern "C" {
-    fn replace_realloc_global(val: usize) -> usize;
+    fn replace_realloc_global(val: *mut u8) -> *mut u8;
 }
 
 #[no_mangle]
@@ -24,8 +25,8 @@ pub unsafe extern "C" fn cabi_realloc(
     if !old_ptr.is_null() || old_size != 0 {
         unreachable();
     }
-    let base = replace_realloc_global(0);
-    if base == 0 {
+    let base = replace_realloc_global(null_mut());
+    if base.is_null() {
         unreachable();
     }
     base as *mut u8
