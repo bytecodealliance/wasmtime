@@ -15,7 +15,8 @@ pub(crate) fn pipeline_flush_mt() -> Result<()> {
     // the current process affinity. It guarantees the visibility of write operations performed on
     // one processor to the other processors."
     //
-    // This all-core IPI acts as a core serializing operation, which is what we really want.
+    // This all-core IPI acts as a core serializing operation, equivalent to a "broadcast" `ISB`
+    // instruction that the architecture does not provide and which is what we really want.
     //
     // See: https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-flushprocesswritebuffers
     if cfg!(target_arch = "aarch64") {
