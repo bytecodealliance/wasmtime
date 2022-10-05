@@ -114,7 +114,14 @@ fn is_isa_compatible(
                 ));
             }
         } else {
-            unimplemented!("ISA flag {} of kind {:?}", req_value.name, req_value.kind());
+            match requested_arch {
+                target_lexicon::Architecture::Riscv64(_) if req_value.name == "float_abi" => {
+                    // float abi are always available on Riscv64.
+                }
+                _ => {
+                    unimplemented!("ISA flag {} of kind {:?}", req_value.name, req_value.kind());
+                }
+            }
         }
     }
 
