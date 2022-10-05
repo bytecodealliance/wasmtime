@@ -176,10 +176,7 @@ impl Memory {
         // Do this before marking the memory as R+X, technically we should be able to do it after
         // but there are some CPU's that have had errata about doing this with read only memory.
         for &PtrLen { ptr, len, .. } in self.non_protected_allocations_iter() {
-            unsafe {
-                icache_coherence::clear_cache(ptr as *const c_void, len)
-                    .expect("Failed cache clear")
-            };
+            icache_coherence::clear_cache(ptr as *const c_void, len).expect("Failed cache clear")
         }
 
         // Flush any in-flight instructions from the pipeline

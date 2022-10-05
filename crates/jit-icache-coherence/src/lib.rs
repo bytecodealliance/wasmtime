@@ -42,7 +42,6 @@
 //! #    addr: &code[0] as *const u8 as *const c_void,
 //! #    len: code.len(),
 //! # }];
-//! # unsafe {
 //! // Invalidate the cache for all the newly written pages where we wrote our new code.
 //! for page in newly_written_pages {
 //!     clear_cache(page.addr, page.len)?;
@@ -53,7 +52,6 @@
 //!
 //! // We can now safely execute our new code.
 //! run_code();
-//! # }
 //! # Ok(())
 //! # }
 //! ```
@@ -98,11 +96,6 @@ pub fn pipeline_flush() -> Result<()> {
 /// Flushes the instruction cache for a region of memory.
 ///
 /// If the architecture does not require an instruction cache flush, this function does nothing.
-///
-/// # Unsafe
-///
-/// You must always call [pipeline_flush] calling just [clear_cache]
-/// is not sufficient.
-pub unsafe fn clear_cache(ptr: *const c_void, len: usize) -> Result<()> {
+pub fn clear_cache(ptr: *const c_void, len: usize) -> Result<()> {
     imp::clear_cache(ptr, len)
 }
