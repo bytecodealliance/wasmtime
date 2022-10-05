@@ -41,19 +41,6 @@ macro_rules! assert_eq {
     };
 }
 
-// We're avoiding static initializers, so don't link in the default allocator.
-struct Alloc {}
-unsafe impl alloc::alloc::GlobalAlloc for Alloc {
-    unsafe fn alloc(&self, _: alloc::alloc::Layout) -> *mut u8 {
-        unreachable()
-    }
-    unsafe fn dealloc(&self, _: *mut u8, _: alloc::alloc::Layout) {
-        unreachable()
-    }
-}
-#[global_allocator]
-static ALLOC: Alloc = Alloc {};
-
 // These functions are defined by the object that the build.rs script produces.
 extern "C" {
     fn replace_realloc_global_ptr(val: *mut u8) -> *mut u8;
