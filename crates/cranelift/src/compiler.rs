@@ -493,16 +493,7 @@ mod incremental_cache {
     ) -> Result<(&'a CompiledCode, Vec<u8>), CompileError> {
         let cache_ctx = match cache_ctx {
             Some(ctx) => ctx,
-            None => {
-                let mut code_buf = Vec::new();
-                let compiled_code =
-                    context
-                        .compile_and_emit(isa, &mut code_buf)
-                        .map_err(|error| {
-                            CompileError::Codegen(pretty_error(&error.func, error.inner))
-                        })?;
-                return Ok((compiled_code, code_buf));
-            }
+            None => return compile_uncached(context, isa),
         };
 
         let mut cache_store = CraneliftCacheStore(cache_ctx.cache_store.clone());
@@ -529,11 +520,18 @@ fn compile_maybe_cached<'a>(
     isa: &dyn TargetIsa,
     _cache_ctx: Option<&mut IncrementalCacheContext>,
 ) -> Result<(&'a CompiledCode, Vec<u8>), CompileError> {
+    compile_uncached(context, isa)
+}
+
+fn compile_uncached<'a>(
+    context: &'a mut Context,
+    isa: &dyn TargetIsa,
+) -> Result<(&'a CompiledCode, Vec<u8>), CompileError> {
     let mut code_buf = Vec::new();
     let compiled_code = context
         .compile_and_emit(isa, &mut code_buf)
         .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
-    return Ok((compiled_code, code_buf));
+    Ok((compiled_code, code_buf))
 }
 
 fn to_flag_value(v: &settings::Value) -> FlagValue {
