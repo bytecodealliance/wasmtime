@@ -1,18 +1,55 @@
 #![allow(unused_variables)] // TODO: remove this when more things are implemented
 
-wit_bindgen_guest_rust::import!("wit/wasi-clocks.wit.md");
-wit_bindgen_guest_rust::import!("wit/wasi-default-clocks.wit.md");
-wit_bindgen_guest_rust::import!("wit/wasi-filesystem.wit.md");
-wit_bindgen_guest_rust::import!("wit/wasi-logging.wit.md");
-wit_bindgen_guest_rust::import!("wit/wasi-poll.wit.md");
-wit_bindgen_guest_rust::import!("wit/wasi-random.wit.md");
+wit_bindgen_guest_rust::import!({
+    paths: [
+        "wit/wasi-clocks.wit.md",
+        "wit/wasi-default-clocks.wit.md",
+        "wit/wasi-filesystem.wit.md",
+        "wit/wasi-logging.wit.md",
+        "wit/wasi-poll.wit.md",
+        "wit/wasi-random.wit.md"
+    ],
+    raw_strings,
+    unchecked
+});
 
 use core::arch::wasm32::unreachable;
 use core::mem::forget;
 use core::ptr::null_mut;
-use core::{slice, str};
+use core::slice;
 use wasi::*;
 
+extern crate alloc;
+
+// We're avoiding static initializers, so replace the standard assert macros
+// with simpler implementation.
+macro_rules! assert {
+    ($cond:expr $(,)?) => {
+        if !$cond {
+            unreachable()
+        }
+    };
+}
+macro_rules! assert_eq {
+    ($left:expr, $right:expr $(,)?) => {
+        assert!($left == $right);
+    };
+}
+
+// We're avoiding static initializers, so don't link in the default allocator.
+struct Alloc {}
+unsafe impl alloc::alloc::GlobalAlloc for Alloc {
+    unsafe fn alloc(&self, _: alloc::alloc::Layout) -> *mut u8 {
+        unreachable()
+    }
+    unsafe fn dealloc(&self, _: *mut u8, _: alloc::alloc::Layout) {
+        unreachable()
+    }
+}
+#[global_allocator]
+static ALLOC: Alloc = Alloc {};
+
+// These functions are defined by the object that the build.rs script produces.
 extern "C" {
     fn replace_realloc_global_ptr(val: *mut u8) -> *mut u8;
     fn replace_realloc_global_len(val: usize) -> usize;
@@ -398,10 +435,7 @@ pub unsafe extern "C" fn path_readlink(
 ) -> Errno {
     let fd = wasi_filesystem::Descriptor::from_raw(fd as _);
 
-    let path = match str::from_utf8(slice::from_raw_parts(path_ptr, path_len)) {
-        Ok(path) => path,
-        Err(_utf8_error) => return ERRNO_ILSEQ,
-    };
+    let path = slice::from_raw_parts(path_ptr, path_len);
 
     register_buffer(buf, buf_len);
 
@@ -548,9 +582,10 @@ pub unsafe extern "C" fn sock_shutdown(fd: Fd, how: Sdflags) -> Errno {
     unreachable()
 }
 
+#[inline(never)] // Disable inlining as this is bulky and relatively cold.
 fn errno_from_wasi_filesystem(err: wasi_filesystem::Errno) -> Errno {
     match err {
-        wasi_filesystem::Errno::Toobig => ERRNO_2BIG,
+        wasi_filesystem::Errno::Toobig => black_box(ERRNO_2BIG),
         wasi_filesystem::Errno::Access => ERRNO_ACCES,
         wasi_filesystem::Errno::Addrinuse => ERRNO_ADDRINUSE,
         wasi_filesystem::Errno::Addrnotavail => ERRNO_ADDRNOTAVAIL,
@@ -619,4 +654,11 @@ fn errno_from_wasi_filesystem(err: wasi_filesystem::Errno) -> Errno {
         wasi_filesystem::Errno::Txtbsy => ERRNO_TXTBSY,
         wasi_filesystem::Errno::Xdev => ERRNO_XDEV,
     }
+}
+
+// A black box to prevent the optimizer from generating a lookup table
+// from the match above, which would require a static initializer.
+#[inline(never)]
+fn black_box(x: Errno) -> Errno {
+    unsafe { core::ptr::read_volatile(&x) }
 }
