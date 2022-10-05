@@ -7,12 +7,32 @@ wit_bindgen_guest_rust::import!("wit/wasi-logging.wit.md");
 wit_bindgen_guest_rust::import!("wit/wasi-poll.wit.md");
 wit_bindgen_guest_rust::import!("wit/wasi-random.wit.md");
 
-use std::arch::wasm32::unreachable;
-use std::ptr::null_mut;
+use core::arch::wasm32::unreachable;
+use core::mem::forget;
+use core::ptr::null_mut;
+use core::{slice, str};
 use wasi::*;
 
 extern "C" {
-    fn replace_realloc_global(val: *mut u8) -> *mut u8;
+    fn replace_realloc_global_ptr(val: *mut u8) -> *mut u8;
+    fn replace_realloc_global_len(val: usize) -> usize;
+}
+
+/// Register `buf` and `buf_len` to be used by `cabi_realloc` to satisfy the
+/// next request.
+unsafe fn register_buffer(buf: *mut u8, buf_len: usize) {
+    let old_ptr = replace_realloc_global_ptr(buf);
+    assert!(old_ptr.is_null());
+    let old_len = replace_realloc_global_len(buf_len);
+    assert_eq!(old_len, 0);
+}
+
+/// Unregister `buf` and `buf_len`, which should have been used exactly once.
+unsafe fn unregister_buffer(buf: *mut u8, buf_len: usize) {
+    let old_ptr = replace_realloc_global_ptr(null_mut());
+    assert_eq!(old_ptr, buf);
+    let old_len = replace_realloc_global_len(0);
+    assert_eq!(old_len, buf_len);
 }
 
 #[no_mangle]
@@ -20,16 +40,20 @@ pub unsafe extern "C" fn cabi_realloc(
     old_ptr: *mut u8,
     old_size: usize,
     _align: usize,
-    _new_size: usize,
+    new_size: usize,
 ) -> *mut u8 {
     if !old_ptr.is_null() || old_size != 0 {
         unreachable();
     }
-    let base = replace_realloc_global(null_mut());
-    if base.is_null() {
+    let ptr = replace_realloc_global_ptr(null_mut());
+    if ptr.is_null() {
         unreachable();
     }
-    base as *mut u8
+    let len = replace_realloc_global_len(0);
+    if len < new_size {
+        unreachable();
+    }
+    ptr
 }
 
 /// Read command-line argument data.
@@ -369,10 +393,32 @@ pub unsafe extern "C" fn path_readlink(
     path_ptr: *const u8,
     path_len: usize,
     buf: *mut u8,
-    _buf_len: Size,
+    buf_len: Size,
     bufused: *mut Size,
 ) -> Errno {
-    unreachable()
+    let fd = wasi_filesystem::Descriptor::from_raw(fd as _);
+
+    let path = match str::from_utf8(slice::from_raw_parts(path_ptr, path_len)) {
+        Ok(path) => path,
+        Err(_utf8_error) => return ERRNO_ILSEQ,
+    };
+
+    register_buffer(buf, buf_len);
+
+    let result = fd.readlink_at(path);
+
+    unregister_buffer(buf, buf_len);
+
+    match result {
+        Ok(ref path) => {
+            assert_eq!(path.as_ptr(), buf);
+            assert!(path.len() <= buf_len);
+            *bufused = path.len();
+            forget(path);
+            ERRNO_SUCCESS
+        }
+        Err(err) => errno_from_wasi_filesystem(err),
+    }
 }
 
 /// Remove a directory.
@@ -500,4 +546,77 @@ pub unsafe extern "C" fn sock_send(
 #[no_mangle]
 pub unsafe extern "C" fn sock_shutdown(fd: Fd, how: Sdflags) -> Errno {
     unreachable()
+}
+
+fn errno_from_wasi_filesystem(err: wasi_filesystem::Errno) -> Errno {
+    match err {
+        wasi_filesystem::Errno::Toobig => ERRNO_2BIG,
+        wasi_filesystem::Errno::Access => ERRNO_ACCES,
+        wasi_filesystem::Errno::Addrinuse => ERRNO_ADDRINUSE,
+        wasi_filesystem::Errno::Addrnotavail => ERRNO_ADDRNOTAVAIL,
+        wasi_filesystem::Errno::Afnosupport => ERRNO_AFNOSUPPORT,
+        wasi_filesystem::Errno::Again => ERRNO_AGAIN,
+        wasi_filesystem::Errno::Already => ERRNO_ALREADY,
+        wasi_filesystem::Errno::Badmsg => ERRNO_BADMSG,
+        wasi_filesystem::Errno::Busy => ERRNO_BUSY,
+        wasi_filesystem::Errno::Canceled => ERRNO_CANCELED,
+        wasi_filesystem::Errno::Child => ERRNO_CHILD,
+        wasi_filesystem::Errno::Connaborted => ERRNO_CONNABORTED,
+        wasi_filesystem::Errno::Connrefused => ERRNO_CONNREFUSED,
+        wasi_filesystem::Errno::Connreset => ERRNO_CONNRESET,
+        wasi_filesystem::Errno::Deadlk => ERRNO_DEADLK,
+        wasi_filesystem::Errno::Destaddrreq => ERRNO_DESTADDRREQ,
+        wasi_filesystem::Errno::Dquot => ERRNO_DQUOT,
+        wasi_filesystem::Errno::Exist => ERRNO_EXIST,
+        wasi_filesystem::Errno::Fault => ERRNO_FAULT,
+        wasi_filesystem::Errno::Fbig => ERRNO_FBIG,
+        wasi_filesystem::Errno::Hostunreach => ERRNO_HOSTUNREACH,
+        wasi_filesystem::Errno::Idrm => ERRNO_IDRM,
+        wasi_filesystem::Errno::Ilseq => ERRNO_ILSEQ,
+        wasi_filesystem::Errno::Inprogress => ERRNO_INPROGRESS,
+        wasi_filesystem::Errno::Intr => ERRNO_INTR,
+        wasi_filesystem::Errno::Inval => ERRNO_INVAL,
+        wasi_filesystem::Errno::Io => ERRNO_IO,
+        wasi_filesystem::Errno::Isconn => ERRNO_ISCONN,
+        wasi_filesystem::Errno::Isdir => ERRNO_ISDIR,
+        wasi_filesystem::Errno::Loop => ERRNO_LOOP,
+        wasi_filesystem::Errno::Mfile => ERRNO_MFILE,
+        wasi_filesystem::Errno::Mlink => ERRNO_MLINK,
+        wasi_filesystem::Errno::Msgsize => ERRNO_MSGSIZE,
+        wasi_filesystem::Errno::Multihop => ERRNO_MULTIHOP,
+        wasi_filesystem::Errno::Nametoolong => ERRNO_NAMETOOLONG,
+        wasi_filesystem::Errno::Netdown => ERRNO_NETDOWN,
+        wasi_filesystem::Errno::Netreset => ERRNO_NETRESET,
+        wasi_filesystem::Errno::Netunreach => ERRNO_NETUNREACH,
+        wasi_filesystem::Errno::Nfile => ERRNO_NFILE,
+        wasi_filesystem::Errno::Nobufs => ERRNO_NOBUFS,
+        wasi_filesystem::Errno::Nodev => ERRNO_NODEV,
+        wasi_filesystem::Errno::Noent => ERRNO_NOENT,
+        wasi_filesystem::Errno::Noexec => ERRNO_NOEXEC,
+        wasi_filesystem::Errno::Nolck => ERRNO_NOLCK,
+        wasi_filesystem::Errno::Nolink => ERRNO_NOLINK,
+        wasi_filesystem::Errno::Nomem => ERRNO_NOMEM,
+        wasi_filesystem::Errno::Nomsg => ERRNO_NOMSG,
+        wasi_filesystem::Errno::Noprotoopt => ERRNO_NOPROTOOPT,
+        wasi_filesystem::Errno::Nospc => ERRNO_NOSPC,
+        wasi_filesystem::Errno::Nosys => ERRNO_NOSYS,
+        wasi_filesystem::Errno::Notdir => ERRNO_NOTDIR,
+        wasi_filesystem::Errno::Notempty => ERRNO_NOTEMPTY,
+        wasi_filesystem::Errno::Notrecoverable => ERRNO_NOTRECOVERABLE,
+        wasi_filesystem::Errno::Notsup => ERRNO_NOTSUP,
+        wasi_filesystem::Errno::Notty => ERRNO_NOTTY,
+        wasi_filesystem::Errno::Nxio => ERRNO_NXIO,
+        wasi_filesystem::Errno::Overflow => ERRNO_OVERFLOW,
+        wasi_filesystem::Errno::Ownerdead => ERRNO_OWNERDEAD,
+        wasi_filesystem::Errno::Perm => ERRNO_PERM,
+        wasi_filesystem::Errno::Pipe => ERRNO_PIPE,
+        wasi_filesystem::Errno::Range => ERRNO_RANGE,
+        wasi_filesystem::Errno::Rofs => ERRNO_ROFS,
+        wasi_filesystem::Errno::Spipe => ERRNO_SPIPE,
+        wasi_filesystem::Errno::Srch => ERRNO_SRCH,
+        wasi_filesystem::Errno::Stale => ERRNO_STALE,
+        wasi_filesystem::Errno::Timedout => ERRNO_TIMEDOUT,
+        wasi_filesystem::Errno::Txtbsy => ERRNO_TXTBSY,
+        wasi_filesystem::Errno::Xdev => ERRNO_XDEV,
+    }
 }

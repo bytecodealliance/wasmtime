@@ -1,7 +1,8 @@
 use std::env;
 use std::path::PathBuf;
 
-const SYMBOL: &str = "replace_realloc_global";
+const REPLACE_REALLOC_GLOBAL_PTR: &str = "replace_realloc_global_ptr";
+const REPLACE_REALLOC_GLOBAL_LEN: &str = "replace_realloc_global_len";
 
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -22,24 +23,44 @@ fn main() {
 /// ```rust
 /// std::arch::global_asm!(
 ///     "
-///         .globaltype internal_realloc_global, i32
-///         internal_realloc_global:
+///         .globaltype internal_realloc_global_ptr, i32
+///         internal_realloc_global_ptr:
+///         .globaltype internal_realloc_global_len, i32
+///         internal_realloc_global_len:
 ///     "
 /// );
 ///
 /// #[no_mangle]
-/// extern "C" fn replace_realloc_global(val: *mut u8) -> *mut u8 {
+/// extern "C" fn replace_realloc_global_ptr(val: *mut u8) -> *mut u8 {
 ///     unsafe {
 ///         let ret: *mut u8;
 ///         std::arch::asm!(
 ///             "
-///                 global.get internal_realloc_global
+///                 global.get internal_realloc_global_ptr
 ///                 local.get {}
-///                 global.set internal_realloc_global
+///                 global.set internal_realloc_global_ptr
 ///             ",
 ///             out(local) ret,
 ///             in(local) val,
-///             options(nostack)
+///             options(nostack, readonly)
+///         );
+///         ret
+///     }
+/// }
+///
+/// #[no_mangle]
+/// extern "C" fn replace_realloc_global_len(val: usize) -> usize {
+///     unsafe {
+///         let ret: usize;
+///         std::arch::asm!(
+///             "
+///                 global.get internal_realloc_global_len
+///                 local.get {}
+///                 global.set internal_realloc_global_len
+///             ",
+///             out(local) ret,
+///             in(local) val,
+///             options(nostack, readonly)
 ///         );
 ///         ret
 ///     }
@@ -59,13 +80,22 @@ fn build_raw_intrinsics() -> Vec<u8> {
     types.function([ValType::I32], [ValType::I32]);
     module.section(&types);
 
-    // One function, using the type we just added
+    // Two functions, using the type we just added
     let mut funcs = FunctionSection::new();
+    funcs.function(0);
     funcs.function(0);
     module.section(&funcs);
 
-    // This is the `internal_realloc_global` definition
     let mut globals = GlobalSection::new();
+    // This is the `internal_realloc_global_ptr` definition
+    globals.global(
+        GlobalType {
+            val_type: ValType::I32,
+            mutable: true,
+        },
+        &ConstExpr::i32_const(0),
+    );
+    // This is the `internal_realloc_global_len` definition
     globals.global(
         GlobalType {
             val_type: ValType::I32,
@@ -84,19 +114,22 @@ fn build_raw_intrinsics() -> Vec<u8> {
     // section.
     let mut body = Vec::new();
     0u32.encode(&mut body); // no locals
-    let global_offset1 = body.len() + 1;
+    let global_offset0 = body.len() + 1;
     // global.get 0 ;; but with maximal encoding of the 0
     body.extend_from_slice(&[0x23, 0x80, 0x80, 0x80, 0x80, 0x00]);
     LocalGet(0).encode(&mut body);
-    let global_offset2 = body.len() + 1;
+    let global_offset1 = body.len() + 1;
     // global.set 0 ;; but with maximal encoding of the 0
     body.extend_from_slice(&[0x24, 0x81, 0x80, 0x80, 0x80, 0x00]);
     End.encode(&mut body);
 
     let mut code = Vec::new();
-    1u32.encode(&mut code); // one function
+    2u32.encode(&mut code); // two functions
     body.len().encode(&mut code); // length of the function
-    let body_offset = code.len();
+    let body_offset0 = code.len();
+    code.extend_from_slice(&body); // the function itself
+    body.len().encode(&mut code); // length of the function
+    let body_offset1 = code.len();
     code.extend_from_slice(&body); // the function itself
     module.section(&RawSection {
         id: SectionId::Code as u8,
@@ -106,8 +139,10 @@ fn build_raw_intrinsics() -> Vec<u8> {
     // Calculate the relocation offsets within the `code` section itself by
     // adding the start of where the body was placed to the offset within the
     // body.
-    let global_offset1 = global_offset1 + body_offset;
-    let global_offset2 = global_offset2 + body_offset;
+    let global_offset0_0 = body_offset0 + global_offset0;
+    let global_offset0_1 = body_offset0 + global_offset1;
+    let global_offset1_0 = body_offset1 + global_offset0;
+    let global_offset1_1 = body_offset1 + global_offset1;
 
     // Here the linking section is constructed. There are two symbols described
     // here, one for the function that we injected and one for the global
@@ -122,17 +157,27 @@ fn build_raw_intrinsics() -> Vec<u8> {
 
         linking.push(0x08); // `WASM_SYMBOL_TABLE`
         let mut subsection = Vec::new();
-        2u32.encode(&mut subsection); // 2 symbols
+        4u32.encode(&mut subsection); // 4 symbols
 
         subsection.push(0x00); // SYMTAB_FUNCTION
         0x00.encode(&mut subsection); // flags
         0x00u32.encode(&mut subsection); // function index
-        SYMBOL.encode(&mut subsection); // symbol name
+        REPLACE_REALLOC_GLOBAL_PTR.encode(&mut subsection); // symbol name
+
+        subsection.push(0x00); // SYMTAB_FUNCTION
+        0x00.encode(&mut subsection); // flags
+        0x01u32.encode(&mut subsection); // function index
+        REPLACE_REALLOC_GLOBAL_LEN.encode(&mut subsection); // symbol name
 
         subsection.push(0x02); // SYMTAB_GLOBAL
         0x02.encode(&mut subsection); // flags
         0x00u32.encode(&mut subsection); // global index
-        "internal_realloc_global".encode(&mut subsection); // symbol name
+        "internal_realloc_global_ptr".encode(&mut subsection); // symbol name
+
+        subsection.push(0x02); // SYMTAB_GLOBAL
+        0x02.encode(&mut subsection); // flags
+        0x00u32.encode(&mut subsection); // global index
+        "internal_realloc_global_len".encode(&mut subsection); // symbol name
 
         subsection.encode(&mut linking);
         module.section(&CustomSection {
@@ -146,13 +191,19 @@ fn build_raw_intrinsics() -> Vec<u8> {
     {
         let mut reloc = Vec::new();
         3u32.encode(&mut reloc); // target section (code is the 4th section, 3 when 0-indexed)
-        2u32.encode(&mut reloc); // 2 relocations
+        4u32.encode(&mut reloc); // 4 relocations
         reloc.push(0x07); // R_WASM_GLOBAL_INDEX_LEB
-        global_offset1.encode(&mut reloc); // offset
-        0x01u32.encode(&mut reloc); // symbol index
+        global_offset0_0.encode(&mut reloc); // offset
+        0x02u32.encode(&mut reloc); // symbol index
         reloc.push(0x07); // R_WASM_GLOBAL_INDEX_LEB
-        global_offset2.encode(&mut reloc); // offset
-        0x01u32.encode(&mut reloc); // symbol index
+        global_offset0_1.encode(&mut reloc); // offset
+        0x02u32.encode(&mut reloc); // symbol index
+        reloc.push(0x07); // R_WASM_GLOBAL_INDEX_LEB
+        global_offset1_0.encode(&mut reloc); // offset
+        0x03u32.encode(&mut reloc); // symbol index
+        reloc.push(0x07); // R_WASM_GLOBAL_INDEX_LEB
+        global_offset1_1.encode(&mut reloc); // offset
+        0x03u32.encode(&mut reloc); // symbol index
 
         module.section(&CustomSection {
             name: "reloc.CODE",
@@ -187,9 +238,12 @@ fn build_archive(wasm: &[u8]) -> Vec<u8> {
     // easier. Note though we don't know the offset of our `intrinsics.o` up
     // front so it's left as 0 for now and filled in later.
     let mut symbol_table = Vec::new();
-    symbol_table.extend_from_slice(bytes_of(&U32Bytes::new(BigEndian, 1)));
+    symbol_table.extend_from_slice(bytes_of(&U32Bytes::new(BigEndian, 2)));
     symbol_table.extend_from_slice(bytes_of(&U32Bytes::new(BigEndian, 0)));
-    symbol_table.extend_from_slice(SYMBOL.as_bytes());
+    symbol_table.extend_from_slice(bytes_of(&U32Bytes::new(BigEndian, 0)));
+    symbol_table.extend_from_slice(REPLACE_REALLOC_GLOBAL_PTR.as_bytes());
+    symbol_table.push(0x00);
+    symbol_table.extend_from_slice(REPLACE_REALLOC_GLOBAL_LEN.as_bytes());
     symbol_table.push(0x00);
 
     archive.extend_from_slice(bytes_of(&object::archive::Header {
