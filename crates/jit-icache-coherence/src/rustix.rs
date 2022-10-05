@@ -41,7 +41,7 @@ pub(crate) fn pipeline_flush() -> Result<()> {
             // EPERM happens if the calling process hasn't yet called the register membarrier.
             // We can call the register membarrier now, and then retry the actual membarrier,
             //
-            // This does have some over overhead since on the first time we call this function we
+            // This does have some overhead since on the first time we call this function we
             // actually execute three membarriers, but this only happens once per process and only
             // one slow membarrier is actually executed (The last one, which actually generates an IPI).
             Err(Errno::PERM) => {
@@ -66,8 +66,8 @@ pub(crate) fn pipeline_flush() -> Result<()> {
 /// See docs on [crate::clear_cache] for a description of what this function is trying to do.
 #[inline]
 pub(crate) fn clear_cache(_ptr: *const c_void, _len: usize) -> Result<()> {
-    // TODO: On AArch64 we currently rely on the [pipeline_flush] membarrier to do this
-    // however that is an implementation detail and should not be relied upon
+    // TODO: On AArch64 we currently rely on the `mprotect` call that switches the memory from W+R to R+X
+    // to do this for us, however that is an implementation detail and should not be relied upon
     // We should call some implementation of `clear_cache` here
     //
     // See: https://github.com/bytecodealliance/wasmtime/issues/3310

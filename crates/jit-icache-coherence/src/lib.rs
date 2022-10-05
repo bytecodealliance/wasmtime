@@ -8,7 +8,8 @@
 //! When writing new code there may be a I-cache entry for that same address which causes the
 //! processor to execute whatever was in the cache instead of the new code.
 //!
-//! See the [ARM Community - Caches and Self-Modifying Code] blog post that contains a great explanation of the above.
+//! See the [ARM Community - Caches and Self-Modifying Code] blog post that contains a great
+//! explanation of the above. (It references AArch32 but it has a high level overview of this problem).
 //!
 //! ## Usage
 //!
@@ -17,9 +18,10 @@
 //! the moment where the code is executed.
 //!
 //! You also need to call [pipeline_flush] to ensure that there isn't any invalid instruction currently
-//! in the pipeline.
+//! in the pipeline if you are running in a multi threaded environment.
 //!
-//! You can call this in a different order but you should only execute the new code after calling both.
+//! For single threaded programs you are free to omit [pipeline_flush], otherwise you need to
+//! call both [clear_cache] and [pipeline_flush] in that order.
 //!
 //! ### Example:
 //! ```
@@ -58,8 +60,8 @@
 //!
 //! <div class="example-wrap" style="display:inline-block"><pre class="compile_fail" style="white-space:normal;font:inherit;">
 //!
-//!  **Warning**: In order to correctly use this interface you *must* always call both
-//! [clear_cache] and [pipeline_flush].
+//!  **Warning**: In order to correctly use this interface you should always call [clear_cache].
+//!  A followup call to [pipeline_flush] is required if you are running in a multi-threaded environment.
 //!
 //! </pre></div>
 //!
@@ -83,7 +85,10 @@ cfg_if::cfg_if! {
 
 /// Flushes instructions in the processor pipeline
 ///
-/// This pipeline flush is broadcast to all processors in the same coherence domain.
+/// This pipeline flush is broadcast to all processors that are executing threads in the current process.
+///
+/// Calling [pipeline_flush] is only required for multi-threaded programs and it *must* be called
+/// after the calls to [clear_cache].
 ///
 /// If the architecture does not require a pipeline flush, this function does nothing.
 pub fn pipeline_flush() -> Result<()> {
@@ -92,11 +97,11 @@ pub fn pipeline_flush() -> Result<()> {
 
 /// Flushes the instruction cache for a region of memory.
 ///
-/// If the architecture does not require an instruction cash flush, this function does nothing.
+/// If the architecture does not require an instruction cache flush, this function does nothing.
 ///
 /// # Unsafe
 ///
-/// You must always call [pipeline_flush] before starting to execute code, calling just [clear_cache]
+/// You must always call [pipeline_flush] calling just [clear_cache]
 /// is not sufficient.
 pub unsafe fn clear_cache(ptr: *const c_void, len: usize) -> Result<()> {
     imp::clear_cache(ptr, len)
