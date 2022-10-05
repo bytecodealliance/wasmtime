@@ -1212,7 +1212,11 @@ macro_rules! isle_prelude_method_helpers {
             let mut outputs = InstOutput::new();
             let mut retval_insts: crate::machinst::abi::SmallInstVec<_> = smallvec::smallvec![];
             for i in 0..num_rets {
-                let ret = self.lower_ctx.sigs()[abi].get_ret(i);
+                // We take the *last* `num_rets` returns of the sig:
+                // this skips a StructReturn, if any, that is present.
+                let sigdata = &self.lower_ctx.sigs()[abi];
+                let idx = (sigdata.num_rets() - num_rets) + i;
+                let ret = sigdata.get_ret(idx);
                 let retval_regs = self.abi_arg_slot_regs(&ret).unwrap();
                 retval_insts.extend(
                     caller
