@@ -8,6 +8,7 @@ use std::ffi::c_void;
 use std::io;
 use std::mem;
 use std::ptr;
+use wasmtime_jit_icache_coherence as icache_coherence;
 
 /// A simple struct consisting of a pointer and length.
 struct PtrLen {
@@ -172,13 +173,12 @@ impl Memory {
 
         // Clear all the newly allocated code from cache if the processor requires it
         for &PtrLen { ptr, len, .. } in self.non_protected_allocations_iter() {
-            jit_icache_coherence::clear_cache(ptr as *const c_void, len)
-                .expect("Failed cache clear");
+            icache_coherence::clear_cache(ptr as *const c_void, len).expect("Failed cache clear");
         }
 
         // Do this before marking the memory as R+X, technically we should be able to do it after
         // but there are some CPU's that have had errata about doing this with read only memory.
-        jit_icache_coherence::pipeline_flush().expect("Failed pipeline flush");
+        icache_coherence::pipeline_flush().expect("Failed pipeline flush");
 
         let set_region_readable_and_executable = |ptr, len| {
             if len != 0 {

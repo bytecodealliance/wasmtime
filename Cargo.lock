@@ -655,12 +655,12 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-module",
  "cranelift-native",
- "jit-icache-coherence",
  "libc",
  "log",
  "memmap2",
  "region",
  "target-lexicon",
+ "wasmtime-jit-icache-coherence",
  "windows-sys",
 ]
 
@@ -1548,15 +1548,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e21911b7183f38c71d75ab478a527f314e28db51027037ece2e5511ed9410703"
 dependencies = [
  "cc",
-]
-
-[[package]]
-name = "jit-icache-coherence"
-version = "0.1.0"
-dependencies = [
- "libc",
- "rustix",
- "windows-sys",
 ]
 
 [[package]]
@@ -3649,7 +3640,6 @@ dependencies = [
  "cpp_demangle",
  "gimli",
  "ittapi",
- "jit-icache-coherence",
  "log",
  "object",
  "rustc-demangle",
@@ -3658,6 +3648,7 @@ dependencies = [
  "thiserror",
  "wasmtime-environ",
  "wasmtime-jit-debug",
+ "wasmtime-jit-icache-coherence",
  "wasmtime-runtime",
  "windows-sys",
 ]
@@ -3669,6 +3660,15 @@ dependencies = [
  "object",
  "once_cell",
  "rustix",
+]
+
+[[package]]
+name = "wasmtime-jit-icache-coherence"
+version = "2.0.0"
+dependencies = [
+ "libc",
+ "rustix",
+ "windows-sys",
 ]
 
 [[package]]

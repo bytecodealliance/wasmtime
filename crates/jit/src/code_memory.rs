@@ -5,6 +5,7 @@ use anyhow::{bail, Context, Result};
 use object::read::{File, Object, ObjectSection};
 use std::ffi::c_void;
 use std::mem::ManuallyDrop;
+use wasmtime_jit_icache_coherence as icache_coherence;
 use wasmtime_runtime::MmapVec;
 
 /// Management of executable memory within a `MmapVec`
@@ -148,12 +149,12 @@ impl CodeMemory {
             assert!(text.relocations().count() == 0);
 
             // Clear the newly allocated code from cache if the processor requires it
-            jit_icache_coherence::clear_cache(ret.text.as_ptr() as *const c_void, ret.text.len())
+            icache_coherence::clear_cache(ret.text.as_ptr() as *const c_void, ret.text.len())
                 .expect("Failed cache clear");
 
             // Do this before marking the memory as R+X, technically we should be able to do it after
             // but there are some CPU's that have had errata about doing this with read only memory.
-            jit_icache_coherence::pipeline_flush().expect("Failed pipeline flush");
+            icache_coherence::pipeline_flush().expect("Failed pipeline flush");
 
             // Switch the executable portion from read/write to
             // read/execute, notably not using read/write/execute to prevent

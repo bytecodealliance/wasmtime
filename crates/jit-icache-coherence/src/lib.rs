@@ -25,7 +25,7 @@
 //! ```
 //! # use std::ffi::c_void;
 //! # use std::io;
-//! # use jit_icache_coherence::*;
+//! # use wasmtime_jit_icache_coherence::*;
 //! #
 //! # struct Page {
 //! #   addr: *const c_void,
