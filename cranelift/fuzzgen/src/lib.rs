@@ -230,8 +230,7 @@ where
     fn generate_flags(&mut self) -> Result<Flags> {
         let mut builder = settings::builder();
 
-        let opt_levels = [OptLevel::None, OptLevel::Speed, OptLevel::SpeedAndSize];
-        let opt = self.u.choose(&opt_levels)?;
+        let opt = self.u.choose(OptLevel::all())?;
         builder.set("opt_level", &format!("{}", opt)[..])?;
 
         // Boolean flags
