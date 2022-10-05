@@ -1,4 +1,4 @@
-#![allow(unused_variables)]
+#![allow(unused_variables)] // TODO: remove this when more things are implemented
 
 wit_bindgen_guest_rust::import!("wit/wasi-clocks.wit.md");
 wit_bindgen_guest_rust::import!("wit/wasi-default-clocks.wit.md");
