@@ -149,11 +149,13 @@ impl CodeMemory {
             assert!(text.relocations().count() == 0);
 
             // Clear the newly allocated code from cache if the processor requires it
+            //
+            // Do this before marking the memory as R+X, technically we should be able to do it after
+            // but there are some CPU's that have had errata about doing this with read only memory.
             icache_coherence::clear_cache(ret.text.as_ptr() as *const c_void, ret.text.len())
                 .expect("Failed cache clear");
 
-            // Do this before marking the memory as R+X, technically we should be able to do it after
-            // but there are some CPU's that have had errata about doing this with read only memory.
+            // Flush any in-flight instructions from the pipeline
             icache_coherence::pipeline_flush().expect("Failed pipeline flush");
 
             // Switch the executable portion from read/write to
