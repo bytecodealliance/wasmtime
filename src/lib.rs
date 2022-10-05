@@ -14,6 +14,7 @@ wit_bindgen_guest_rust::import!({
 });
 
 use core::arch::wasm32::unreachable;
+use core::mem::forget;
 use core::ptr::null_mut;
 use core::slice;
 use wasi::*;
@@ -454,16 +455,22 @@ pub unsafe extern "C" fn path_readlink(
 
     unregister_buffer(buf, buf_len);
 
-    match result {
-        Ok(ref path) => {
+    let return_value = match &result {
+        Ok(path) => {
             assert_eq!(path.as_ptr(), buf);
             assert!(path.len() <= buf_len);
 
             *bufused = path.len();
             ERRNO_SUCCESS
         }
-        Err(err) => errno_from_wasi_filesystem(err),
-    }
+        Err(err) => errno_from_wasi_filesystem(*err),
+    };
+
+    // The returned string's memory was allocated in `buf`, so don't separately
+    // free it.
+    forget(result);
+
+    return_value
 }
 
 // Slow-path for `path_readlink` that allocates a buffer on the stack to
@@ -483,8 +490,8 @@ unsafe fn path_readlink_slow(
 
     unregister_buffer(buffer.as_mut_ptr().cast(), PATH_MAX);
 
-    match result {
-        Ok(ref path) => {
+    let return_value = match &result {
+        Ok(path) => {
             assert_eq!(path.as_ptr(), buffer.as_ptr().cast());
             assert!(path.len() <= PATH_MAX);
 
@@ -495,8 +502,14 @@ unsafe fn path_readlink_slow(
             *bufused = len;
             ERRNO_SUCCESS
         }
-        Err(err) => errno_from_wasi_filesystem(err),
-    }
+        Err(err) => errno_from_wasi_filesystem(*err),
+    };
+
+    // The returned string's memory was allocated in `buf`, so don't separately
+    // free it.
+    forget(result);
+
+    return_value
 }
 
 /// Remove a directory.
