@@ -942,9 +942,9 @@ impl Inst {
             }
             &Inst::ElfTlsGetAddr { ref symbol, rd } => {
                 format!(
-                    "elf_tls_get_addr {},{:?}",
+                    "elf_tls_get_addr {},{}",
                     format_reg(rd.to_reg(), allocs),
-                    symbol
+                    symbol.display(None)
                 )
             }
             &Inst::FloatSelect {
