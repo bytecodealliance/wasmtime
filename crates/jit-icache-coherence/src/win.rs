@@ -7,6 +7,16 @@ use windows_sys::Win32::System::Threading::GetCurrentProcess;
 /// See docs on [crate::pipeline_flush_mt] for a description of what this function is trying to do.
 #[inline]
 pub(crate) fn pipeline_flush_mt() -> Result<()> {
+    // If we are here, it means that the user has already called [cache_clear] for all buffers that
+    // are going to be holding code. We don't really care about flushing the write buffers, but
+    // the other guarantee that microsoft provides on this API. As documented:
+    //
+    // "The function generates an interprocessor interrupt (IPI) to all processors that are part of
+    // the current process affinity. It guarantees the visibility of write operations performed on
+    // one processor to the other processors."
+    //
+    // This all-core IPI acts as a core serializing operation, which is what we really want.
+    //
     // See: https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-flushprocesswritebuffers
     if cfg!(target_arch = "aarch64") {
         unsafe {
