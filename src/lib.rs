@@ -19,6 +19,11 @@ use core::ptr::null_mut;
 use core::slice;
 use wasi::*;
 
+/// The maximum path length. WASI doesn't explicitly guarantee this, but all
+/// popular OS's have a `PATH_MAX` of at most 4096, so that's enough for this
+/// polyfill.
+const PATH_MAX: usize = 4096;
+
 extern crate alloc;
 
 // We're avoiding static initializers, so replace the standard assert macros
@@ -437,6 +442,13 @@ pub unsafe extern "C" fn path_readlink(
 
     let path = slice::from_raw_parts(path_ptr, path_len);
 
+    // If the user gave us a buffer shorter than `PATH_MAX`, it may not be
+    // long enough to accept the actual path. `cabi_realloc` can't fail,
+    // so instead we handle this case specially.
+    if buf_len < PATH_MAX {
+        return path_readlink_slow(fd, path, buf, buf_len, bufused);
+    }
+
     register_buffer(buf, buf_len);
 
     let result = fd.readlink_at(path);
@@ -447,7 +459,42 @@ pub unsafe extern "C" fn path_readlink(
         Ok(ref path) => {
             assert_eq!(path.as_ptr(), buf);
             assert!(path.len() <= buf_len);
+
             *bufused = path.len();
+            forget(path);
+            ERRNO_SUCCESS
+        }
+        Err(err) => errno_from_wasi_filesystem(err),
+    }
+}
+
+// Slow-path for `path_readlink` that allocates a buffer on the stack to
+// ensure that it has a big enough buffer.
+unsafe fn path_readlink_slow(
+    fd: wasi_filesystem::Descriptor,
+    path: &[u8],
+    buf: *mut u8,
+    buf_len: Size,
+    bufused: *mut Size,
+) -> Errno {
+    let mut buffer = core::mem::MaybeUninit::<[u8; PATH_MAX]>::uninit();
+
+    register_buffer(buffer.as_mut_ptr().cast(), PATH_MAX);
+
+    let result = fd.readlink_at(path);
+
+    unregister_buffer(buffer.as_mut_ptr().cast(), PATH_MAX);
+
+    match result {
+        Ok(ref path) => {
+            assert_eq!(path.as_ptr(), buffer.as_ptr().cast());
+            assert!(path.len() <= PATH_MAX);
+
+            // Preview1 follows POSIX in truncating the returned path if
+            // it doesn't fit.
+            let len = core::cmp::min(path.len(), buf_len);
+            core::ptr::copy_nonoverlapping(buffer.as_ptr().cast(), buf, len);
+            *bufused = len;
             forget(path);
             ERRNO_SUCCESS
         }
