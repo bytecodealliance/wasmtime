@@ -73,9 +73,10 @@ fn gen_instruction_data(formats: &[&InstructionFormat], fmt: &mut Formatter) {
     for (name, include_args) in &[("InstructionData", true), ("InstructionImms", false)] {
         fmt.line("#[derive(Clone, Debug, PartialEq, Hash)]");
         if !include_args {
-            // `InstructionImms` gets some extra derives: it acts like a sort of extended opcode
-            // and we want to allow for hashconsing, sorting, and the like.
-            fmt.line("#[derive(Copy, Eq, PartialOrd, Ord)]");
+            // `InstructionImms` gets some extra derives: it acts like
+            // a sort of extended opcode and we want to allow for
+            // hashconsing via Eq. `Copy` also turns out to be useful.
+            fmt.line("#[derive(Copy, Eq)]");
         }
         fmt.line(r#"#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]"#);
         fmt.line("#[allow(missing_docs)]");
@@ -537,7 +538,7 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
     "#,
     );
     fmt.line("#[repr(u16)]");
-    fmt.line("#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]");
+    fmt.line("#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]");
     fmt.line(
         r#"#[cfg_attr(
             feature = "enable-serde",
