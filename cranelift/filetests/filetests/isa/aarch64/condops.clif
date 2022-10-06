@@ -737,7 +737,7 @@ block0(v0: i128, v1: i128, v2: i128):
 ;   csdb
 ;   ret
 
-function %g(i8) -> b1 {
+function %g(i8) -> i8 {
 block0(v0: i8):
   v3 = iconst.i8 42
   v4 = ifcmp v0, v3
@@ -763,14 +763,14 @@ block0(v0: i8, v1: i8, v2: i8):
 ;   orr w0, w5, w7
 ;   ret
 
-function %i(b1, i8, i8) -> i8 {
-block0(v0: b1, v1: i8, v2: i8):
+function %i(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
   v3 = select.i8 v0, v1, v2
   return v3
 }
 
 ; block0:
-;   and w5, w0, #1
+;   uxtb w5, w0
 ;   subs wzr, w5, wzr
 ;   csel x0, x1, x2, ne
 ;   ret
@@ -788,14 +788,14 @@ block0(v0: i32, v1: i8, v2: i8):
 ;   csel x0, x1, x2, eq
 ;   ret
 
-function %i128_select(b1, i128, i128) -> i128 {
-block0(v0: b1, v1: i128, v2: i128):
+function %i128_select(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
   v3 = select.i128 v0, v1, v2
   return v3
 }
 
 ; block0:
-;   and w8, w0, #1
+;   uxtb w8, w0
 ;   subs wzr, w8, wzr
 ;   csel x0, x2, x4, ne
 ;   csel x1, x3, x5, ne

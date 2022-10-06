@@ -4,7 +4,7 @@ target x86_64
 
 ;; Tests for sign-extending immediates.
 
-function %sign_extend_signed_icmp(i8) -> b1 {
+function %sign_extend_signed_icmp(i8) -> i8 {
 block0(v0: i8):
     ; 255 = -1 as u8
     v1 = iconst.i8 255
@@ -13,7 +13,7 @@ block0(v0: i8):
     return v2
 }
 
-function %do_not_sign_extend_unsigned_icmp(i8) -> b1 {
+function %do_not_sign_extend_unsigned_icmp(i8) -> i8 {
 block0(v0: i8):
     v1 = iconst.i8 255
     v2 = icmp uge v0, v1

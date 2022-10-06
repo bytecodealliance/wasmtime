@@ -2,7 +2,7 @@ test compile precise-output
 set unwind_info=false
 target riscv64
 
-function %f(i64, i64) -> b1 {
+function %f(i64, i64) -> i8 {
 block0(v0: i64, v1: i64):
   v2 = icmp eq v0, v1
   return v2
@@ -12,7 +12,7 @@ block0(v0: i64, v1: i64):
 ;   eq a0,a0,a1##ty=i64
 ;   ret
 
-function %icmp_eq_i128(i128, i128) -> b1 {
+function %icmp_eq_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp eq v0, v1
   return v2
@@ -22,7 +22,7 @@ block0(v0: i128, v1: i128):
 ;   eq a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
-function %icmp_ne_i128(i128, i128) -> b1 {
+function %icmp_ne_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp ne v0, v1
   return v2
@@ -32,7 +32,7 @@ block0(v0: i128, v1: i128):
 ;   ne a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
-function %icmp_slt_i128(i128, i128) -> b1 {
+function %icmp_slt_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp slt v0, v1
   return v2
@@ -42,7 +42,7 @@ block0(v0: i128, v1: i128):
 ;   slt a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
-function %icmp_ult_i128(i128, i128) -> b1 {
+function %icmp_ult_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp ult v0, v1
   return v2
@@ -52,7 +52,7 @@ block0(v0: i128, v1: i128):
 ;   ult a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
-function %icmp_sle_i128(i128, i128) -> b1 {
+function %icmp_sle_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp sle v0, v1
   return v2
@@ -62,7 +62,7 @@ block0(v0: i128, v1: i128):
 ;   sle a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
-function %icmp_ule_i128(i128, i128) -> b1 {
+function %icmp_ule_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp ule v0, v1
   return v2
@@ -72,7 +72,7 @@ block0(v0: i128, v1: i128):
 ;   ule a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
-function %icmp_sgt_i128(i128, i128) -> b1 {
+function %icmp_sgt_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp sgt v0, v1
   return v2
@@ -82,7 +82,7 @@ block0(v0: i128, v1: i128):
 ;   sgt a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
-function %icmp_ugt_i128(i128, i128) -> b1 {
+function %icmp_ugt_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp ugt v0, v1
   return v2
@@ -92,7 +92,7 @@ block0(v0: i128, v1: i128):
 ;   ugt a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
-function %icmp_sge_i128(i128, i128) -> b1 {
+function %icmp_sge_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp sge v0, v1
   return v2
@@ -102,7 +102,7 @@ block0(v0: i128, v1: i128):
 ;   sge a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
 
-function %icmp_uge_i128(i128, i128) -> b1 {
+function %icmp_uge_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp uge v0, v1
   return v2

@@ -34,14 +34,14 @@ function %icmp_imm(i32) -> i32 {
 block0(v0: i32):
     v1 = iconst.i32 2
     v2 = icmp slt v0, v1
-    v3 = bint.i32 v2
+    v3 = uextend.i32 v2
     return v3
 }
 ; sameln: function %icmp_imm
 ; nextln: block0(v0: i32):
 ; nextln:     v1 = iconst.i32 2
 ; nextln:     v2 = icmp_imm slt v0, 2
-; nextln:     v3 = bint.i32 v2
+; nextln:     v3 = uextend.i32 v2
 ; nextln:     return v3
 ; nextln: }
 

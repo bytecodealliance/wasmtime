@@ -29,36 +29,36 @@ block0:
 ; Polymorphic instructions with type suffix.
 function %bvalues() {
 block0:
-    v0 = bconst.b32 true
-    v1 = bconst.b8 false
-    v2 = bextend.b32 v1
+    v0 = iconst.i32 -1
+    v1 = iconst.i8 0
+    v2 = sextend.i32 v1
     v3 = bxor v0, v2
 }
 ; sameln: function %bvalues() fast {
 ; nextln: block0:
-; nextln:     v0 = bconst.b32 true
-; nextln:     v1 = bconst.b8 false
-; nextln:     v2 = bextend.b32 v1
+; nextln:     v0 = iconst.i32 -1
+; nextln:     v1 = iconst.i8 0
+; nextln:     v2 = sextend.i32 v1
 ; nextln:     v3 = bxor v0, v2
 ; nextln: }
 
 ; Polymorphic instruction controlled by second operand.
 function %select() {
-block0(v90: i32, v91: i32, v92: b1):
+block0(v90: i32, v91: i32, v92: i8):
     v0 = select v92, v90, v91
 }
 ; sameln: function %select() fast {
-; nextln: block0(v90: i32, v91: i32, v92: b1):
+; nextln: block0(v90: i32, v91: i32, v92: i8):
 ; nextln:     v0 = select v92, v90, v91
 ; nextln: }
 
 ; Polymorphic instruction controlled by third operand.
 function %selectif() system_v {
-block0(v95: i32, v96: i32, v97: b1):
+block0(v95: i32, v96: i32, v97: i8):
     v98 = selectif.i32 eq v97, v95, v96
 }
 ; sameln: function %selectif() system_v {
-; nextln: block0(v95: i32, v96: i32, v97: b1):
+; nextln: block0(v95: i32, v96: i32, v97: i8):
 ; nextln: v98 = selectif.i32 eq v97, v95, v96
 ; nextln: }
 

@@ -1,7 +1,7 @@
 test compile precise-output
 target s390x
 
-function %icmp_eq_i128(i128, i128) -> b1 {
+function %icmp_eq_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp.i128 eq v0, v1
   return v2
@@ -15,7 +15,7 @@ block0(v0: i128, v1: i128):
 ;   lochie %r2, 1
 ;   br %r14
 
-function %icmp_ne_i128(i128, i128) -> b1 {
+function %icmp_ne_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp.i128 ne v0, v1
   return v2
@@ -29,7 +29,7 @@ block0(v0: i128, v1: i128):
 ;   lochine %r2, 1
 ;   br %r14
 
-function %icmp_slt_i128(i128, i128) -> b1 {
+function %icmp_slt_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp.i128 slt v0, v1
   return v2
@@ -43,7 +43,7 @@ block0(v0: i128, v1: i128):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_sgt_i128(i128, i128) -> b1 {
+function %icmp_sgt_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp.i128 sgt v0, v1
   return v2
@@ -57,7 +57,7 @@ block0(v0: i128, v1: i128):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_sle_i128(i128, i128) -> b1 {
+function %icmp_sle_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp.i128 sle v0, v1
   return v2
@@ -71,7 +71,7 @@ block0(v0: i128, v1: i128):
 ;   lochinl %r2, 1
 ;   br %r14
 
-function %icmp_sge_i128(i128, i128) -> b1 {
+function %icmp_sge_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp.i128 sge v0, v1
   return v2
@@ -85,7 +85,7 @@ block0(v0: i128, v1: i128):
 ;   lochinl %r2, 1
 ;   br %r14
 
-function %icmp_ult_i128(i128, i128) -> b1 {
+function %icmp_ult_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp.i128 ult v0, v1
   return v2
@@ -99,7 +99,7 @@ block0(v0: i128, v1: i128):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ugt_i128(i128, i128) -> b1 {
+function %icmp_ugt_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp.i128 ugt v0, v1
   return v2
@@ -113,7 +113,7 @@ block0(v0: i128, v1: i128):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ule_i128(i128, i128) -> b1 {
+function %icmp_ule_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp.i128 ule v0, v1
   return v2
@@ -127,7 +127,7 @@ block0(v0: i128, v1: i128):
 ;   lochinl %r2, 1
 ;   br %r14
 
-function %icmp_uge_i128(i128, i128) -> b1 {
+function %icmp_uge_i128(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = icmp.i128 uge v0, v1
   return v2

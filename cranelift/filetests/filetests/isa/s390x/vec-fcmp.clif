@@ -1,7 +1,7 @@
 test compile precise-output
 target s390x
 
-function %fcmp_eq_f64x2(f64x2, f64x2) -> b64x2 {
+function %fcmp_eq_f64x2(f64x2, f64x2) -> i64x2 {
 block0(v0: f64x2, v1: f64x2):
   v2 = fcmp.f64x2 eq v0, v1
   return v2
@@ -11,7 +11,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   vfcedb %v24, %v24, %v25
 ;   br %r14
 
-function %fcmp_ne_f64x2(f64x2, f64x2) -> b64x2 {
+function %fcmp_ne_f64x2(f64x2, f64x2) -> i64x2 {
 block0(v0: f64x2, v1: f64x2):
   v2 = fcmp.f64x2 ne v0, v1
   return v2
@@ -22,7 +22,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   vno %v24, %v4, %v4
 ;   br %r14
 
-function %fcmp_gt_f64x2(f64x2, f64x2) -> b64x2 {
+function %fcmp_gt_f64x2(f64x2, f64x2) -> i64x2 {
 block0(v0: f64x2, v1: f64x2):
   v2 = fcmp.f64x2 gt v0, v1
   return v2
@@ -32,7 +32,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   vfchdb %v24, %v24, %v25
 ;   br %r14
 
-function %fcmp_lt_f64x2(f64x2, f64x2) -> b64x2 {
+function %fcmp_lt_f64x2(f64x2, f64x2) -> i64x2 {
 block0(v0: f64x2, v1: f64x2):
   v2 = fcmp.f64x2 lt v0, v1
   return v2
@@ -42,7 +42,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   vfchdb %v24, %v25, %v24
 ;   br %r14
 
-function %fcmp_ge_f64x2(f64x2, f64x2) -> b64x2 {
+function %fcmp_ge_f64x2(f64x2, f64x2) -> i64x2 {
 block0(v0: f64x2, v1: f64x2):
   v2 = fcmp.f64x2 ge v0, v1
   return v2
@@ -52,7 +52,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   vfchedb %v24, %v24, %v25
 ;   br %r14
 
-function %fcmp_le_f64x2(f64x2, f64x2) -> b64x2 {
+function %fcmp_le_f64x2(f64x2, f64x2) -> i64x2 {
 block0(v0: f64x2, v1: f64x2):
   v2 = fcmp.f64x2 le v0, v1
   return v2
@@ -62,7 +62,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   vfchedb %v24, %v25, %v24
 ;   br %r14
 
-function %fcmp_ueq_f64x2(f64x2, f64x2) -> b64x2 {
+function %fcmp_ueq_f64x2(f64x2, f64x2) -> i64x2 {
 block0(v0: f64x2, v1: f64x2):
   v2 = fcmp.f64x2 ueq v0, v1
   return v2
@@ -74,7 +74,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   vno %v24, %v4, %v6
 ;   br %r14
 
-function %fcmp_one_f64x2(f64x2, f64x2) -> b64x2 {
+function %fcmp_one_f64x2(f64x2, f64x2) -> i64x2 {
 block0(v0: f64x2, v1: f64x2):
   v2 = fcmp.f64x2 one v0, v1
   return v2
@@ -86,7 +86,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   vo %v24, %v4, %v6
 ;   br %r14
 
-function %fcmp_ugt_f64x2(f64x2, f64x2) -> b64x2 {
+function %fcmp_ugt_f64x2(f64x2, f64x2) -> i64x2 {
 block0(v0: f64x2, v1: f64x2):
   v2 = fcmp.f64x2 ugt v0, v1
   return v2
@@ -97,7 +97,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   vno %v24, %v4, %v4
 ;   br %r14
 
-function %fcmp_ult_f64x2(f64x2, f64x2) -> b64x2 {
+function %fcmp_ult_f64x2(f64x2, f64x2) -> i64x2 {
 block0(v0: f64x2, v1: f64x2):
   v2 = fcmp.f64x2 ult v0, v1
   return v2
@@ -108,7 +108,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   vno %v24, %v4, %v4
 ;   br %r14
 
-function %fcmp_uge_f64x2(f64x2, f64x2) -> b64x2 {
+function %fcmp_uge_f64x2(f64x2, f64x2) -> i64x2 {
 block0(v0: f64x2, v1: f64x2):
   v2 = fcmp.f64x2 uge v0, v1
   return v2
@@ -119,7 +119,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   vno %v24, %v4, %v4
 ;   br %r14
 
-function %fcmp_ule_f64x2(f64x2, f64x2) -> b64x2 {
+function %fcmp_ule_f64x2(f64x2, f64x2) -> i64x2 {
 block0(v0: f64x2, v1: f64x2):
   v2 = fcmp.f64x2 ule v0, v1
   return v2
@@ -130,7 +130,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   vno %v24, %v4, %v4
 ;   br %r14
 
-function %fcmp_ord_f64x2(f64x2, f64x2) -> b64x2 {
+function %fcmp_ord_f64x2(f64x2, f64x2) -> i64x2 {
 block0(v0: f64x2, v1: f64x2):
   v2 = fcmp.f64x2 ord v0, v1
   return v2
@@ -142,7 +142,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   vo %v24, %v4, %v6
 ;   br %r14
 
-function %fcmp_uno_f64x2(f64x2, f64x2) -> b64x2 {
+function %fcmp_uno_f64x2(f64x2, f64x2) -> i64x2 {
 block0(v0: f64x2, v1: f64x2):
   v2 = fcmp.f64x2 uno v0, v1
   return v2
@@ -154,7 +154,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   vno %v24, %v4, %v6
 ;   br %r14
 
-function %fcmp_eq_f32x4(f32x4, f32x4) -> b32x4 {
+function %fcmp_eq_f32x4(f32x4, f32x4) -> i32x4 {
 block0(v0: f32x4, v1: f32x4):
   v2 = fcmp.f32x4 eq v0, v1
   return v2
@@ -164,7 +164,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   vfcesb %v24, %v24, %v25
 ;   br %r14
 
-function %fcmp_ne_f32x4(f32x4, f32x4) -> b32x4 {
+function %fcmp_ne_f32x4(f32x4, f32x4) -> i32x4 {
 block0(v0: f32x4, v1: f32x4):
   v2 = fcmp.f32x4 ne v0, v1
   return v2
@@ -175,7 +175,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   vno %v24, %v4, %v4
 ;   br %r14
 
-function %fcmp_gt_f32x4(f32x4, f32x4) -> b32x4 {
+function %fcmp_gt_f32x4(f32x4, f32x4) -> i32x4 {
 block0(v0: f32x4, v1: f32x4):
   v2 = fcmp.f32x4 gt v0, v1
   return v2
@@ -185,7 +185,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   vfchsb %v24, %v24, %v25
 ;   br %r14
 
-function %fcmp_lt_f32x4(f32x4, f32x4) -> b32x4 {
+function %fcmp_lt_f32x4(f32x4, f32x4) -> i32x4 {
 block0(v0: f32x4, v1: f32x4):
   v2 = fcmp.f32x4 lt v0, v1
   return v2
@@ -195,7 +195,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   vfchsb %v24, %v25, %v24
 ;   br %r14
 
-function %fcmp_ge_f32x4(f32x4, f32x4) -> b32x4 {
+function %fcmp_ge_f32x4(f32x4, f32x4) -> i32x4 {
 block0(v0: f32x4, v1: f32x4):
   v2 = fcmp.f32x4 ge v0, v1
   return v2
@@ -205,7 +205,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   vfchesb %v24, %v24, %v25
 ;   br %r14
 
-function %fcmp_le_f32x4(f32x4, f32x4) -> b32x4 {
+function %fcmp_le_f32x4(f32x4, f32x4) -> i32x4 {
 block0(v0: f32x4, v1: f32x4):
   v2 = fcmp.f32x4 le v0, v1
   return v2
@@ -215,7 +215,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   vfchesb %v24, %v25, %v24
 ;   br %r14
 
-function %fcmp_ueq_f32x4(f32x4, f32x4) -> b32x4 {
+function %fcmp_ueq_f32x4(f32x4, f32x4) -> i32x4 {
 block0(v0: f32x4, v1: f32x4):
   v2 = fcmp.f32x4 ueq v0, v1
   return v2
@@ -227,7 +227,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   vno %v24, %v4, %v6
 ;   br %r14
 
-function %fcmp_one_f32x4(f32x4, f32x4) -> b32x4 {
+function %fcmp_one_f32x4(f32x4, f32x4) -> i32x4 {
 block0(v0: f32x4, v1: f32x4):
   v2 = fcmp.f32x4 one v0, v1
   return v2
@@ -239,7 +239,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   vo %v24, %v4, %v6
 ;   br %r14
 
-function %fcmp_ugt_f32x4(f32x4, f32x4) -> b32x4 {
+function %fcmp_ugt_f32x4(f32x4, f32x4) -> i32x4 {
 block0(v0: f32x4, v1: f32x4):
   v2 = fcmp.f32x4 ugt v0, v1
   return v2
@@ -250,7 +250,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   vno %v24, %v4, %v4
 ;   br %r14
 
-function %fcmp_ult_f32x4(f32x4, f32x4) -> b32x4 {
+function %fcmp_ult_f32x4(f32x4, f32x4) -> i32x4 {
 block0(v0: f32x4, v1: f32x4):
   v2 = fcmp.f32x4 ult v0, v1
   return v2
@@ -261,7 +261,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   vno %v24, %v4, %v4
 ;   br %r14
 
-function %fcmp_uge_f32x4(f32x4, f32x4) -> b32x4 {
+function %fcmp_uge_f32x4(f32x4, f32x4) -> i32x4 {
 block0(v0: f32x4, v1: f32x4):
   v2 = fcmp.f32x4 uge v0, v1
   return v2
@@ -272,7 +272,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   vno %v24, %v4, %v4
 ;   br %r14
 
-function %fcmp_ule_f32x4(f32x4, f32x4) -> b32x4 {
+function %fcmp_ule_f32x4(f32x4, f32x4) -> i32x4 {
 block0(v0: f32x4, v1: f32x4):
   v2 = fcmp.f32x4 ule v0, v1
   return v2
@@ -283,7 +283,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   vno %v24, %v4, %v4
 ;   br %r14
 
-function %fcmp_ord_f32x4(f32x4, f32x4) -> b32x4 {
+function %fcmp_ord_f32x4(f32x4, f32x4) -> i32x4 {
 block0(v0: f32x4, v1: f32x4):
   v2 = fcmp.f32x4 ord v0, v1
   return v2
@@ -295,7 +295,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   vo %v24, %v4, %v6
 ;   br %r14
 
-function %fcmp_uno_f32x4(f32x4, f32x4) -> b32x4 {
+function %fcmp_uno_f32x4(f32x4, f32x4) -> i32x4 {
 block0(v0: f32x4, v1: f32x4):
   v2 = fcmp.f32x4 uno v0, v1
   return v2

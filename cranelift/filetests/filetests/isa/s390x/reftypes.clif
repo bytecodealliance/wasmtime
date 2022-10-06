@@ -10,7 +10,7 @@ block0(v0: r64, v1: r64):
 ;   lgr %r2, %r3
 ;   br %r14
 
-function %f1(r64) -> b1 {
+function %f1(r64) -> i8 {
 block0(v0: r64):
   v1 = is_null v0
   return v1
@@ -22,7 +22,7 @@ block0(v0: r64):
 ;   lochie %r2, 1
 ;   br %r14
 
-function %f2(r64) -> b1 {
+function %f2(r64) -> i8 {
 block0(v0: r64):
   v1 = is_invalid v0
   return v1
@@ -45,7 +45,7 @@ block0:
 ;   br %r14
 
 function %f4(r64, r64) -> r64, r64, r64 {
-    fn0 = %f(r64) -> b1
+    fn0 = %f(r64) -> i8
     ss0 = explicit_slot 8
 
 block0(v0: r64, v1: r64):
@@ -76,7 +76,7 @@ block3(v7: r64, v8: r64):
 ;   la %r5, 160(%r15)
 ;   lg %r3, 168(%r15)
 ;   stg %r3, 0(%r5)
-;   llcr %r2, %r2
+;   lbr %r2, %r2
 ;   chi %r2, 0
 ;   jgnlh label1 ; jg label3
 ; block1:

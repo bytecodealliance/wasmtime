@@ -126,7 +126,7 @@ function %cmp_mem(i64) -> i64 {
 block0(v0: i64):
   v1 = load.i64 v0
   v2 = icmp eq v0, v1
-  v3 = bint.i64 v2
+  v3 = uextend.i64 v2
   return v3
 }
 
@@ -134,8 +134,8 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   cmpq    0(%rdi), %rdi
-;   setz    %al
-;   andq    %rax, $1, %rax
+;   setz    %r8b
+;   movzbq  %r8b, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

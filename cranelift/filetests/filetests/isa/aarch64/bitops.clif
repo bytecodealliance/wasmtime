@@ -304,28 +304,28 @@ block0(v0: i8):
 ;   umov w0, v5.b[0]
 ;   ret
 
-function %bextend_b8() -> b32 {
+function %sextend_i8() -> i32 {
 block0:
-    v1 = bconst.b8 true
-    v2 = bextend.b32 v1
+    v1 = iconst.i8 -1
+    v2 = sextend.i32 v1
     return v2
 }
 
 ; block0:
-;   movz x1, #255
+;   movn x1, #0
 ;   sxtb w0, w1
 ;   ret
 
-function %bextend_b1() -> b32 {
+function %sextend_i8() -> i32 {
 block0:
-    v1 = bconst.b1 true
-    v2 = bextend.b32 v1
+    v1 = iconst.i8 -1
+    v2 = sextend.i32 v1
     return v2
 }
 
 ; block0:
-;   movz x1, #1
-;   sbfx w0, w1, #0, #1
+;   movn x1, #0
+;   sxtb w0, w1
 ;   ret
 
 function %bnot_i32(i32) -> i32 {

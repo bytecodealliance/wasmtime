@@ -80,17 +80,17 @@ block0(v0: i8):
 ;   popq    %rbp
 ;   ret
 
-function %splat_b16() -> b16x8 {
+function %splat_i16() -> i16x8 {
 block0:
-    v0 = bconst.b16 true
-    v1 = splat.b16x8 v0
+    v0 = iconst.i16 -1
+    v1 = splat.i16x8 v0
     return v1
 }
 
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $65535, %edi
+;   movl    $-1, %edi
 ;   uninit  %xmm5
 ;   pinsrw  $0, %xmm5, %rdi, %xmm5
 ;   pinsrw  $1, %xmm5, %rdi, %xmm5

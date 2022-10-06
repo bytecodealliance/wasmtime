@@ -18,7 +18,7 @@ block0(v0: i8, v1: i64, v2: i64):
 ;   selectif a0,a1,a2##test=t4
 ;   ret
 
-function %g(i8) -> b1 {
+function %g(i8) -> i8 {
 block0(v0: i8):
   v3 = iconst.i8 42
   v4 = ifcmp v0, v3
@@ -48,8 +48,8 @@ block0(v0: i8, v1: i8, v2: i8):
 ;   or a0,a2,a6
 ;   ret
 
-function %i(b1, i8, i8) -> i8 {
-block0(v0: b1, v1: i8, v2: i8):
+function %i(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
   v3 = select.i8 v0, v1, v2
   return v3
 }
@@ -74,8 +74,8 @@ block0(v0: i32, v1: i8, v2: i8):
 ;   select_i8 a0,a1,a2##condition=t4
 ;   ret
 
-function %i128_select(b1, i128, i128) -> i128 {
-block0(v0: b1, v1: i128, v2: i128):
+function %i128_select(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
   v3 = select.i128 v0, v1, v2
   return v3
 }

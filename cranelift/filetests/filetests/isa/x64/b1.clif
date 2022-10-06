@@ -1,8 +1,8 @@
 test compile precise-output
 target x86_64
 
-function %f0(b1, i32, i32) -> i32 {
-block0(v0: b1, v1: i32, v2: i32):
+function %f0(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
     v3 = select.i32 v0, v1, v2
     return v3
 }
@@ -17,8 +17,8 @@ block0(v0: b1, v1: i32, v2: i32):
 ;   popq    %rbp
 ;   ret
 
-function %f1(b1) -> i32 {
-block0(v0: b1):
+function %f1(i8) -> i32 {
+block0(v0: i8):
     brnz v0, block1
     jump block2
 block1:
@@ -45,8 +45,8 @@ block2:
 ;   popq    %rbp
 ;   ret
 
-function %f2(b1) -> i32 {
-block0(v0: b1):
+function %f2(i8) -> i32 {
+block0(v0: i8):
     brz v0, block1
     jump block2
 block1:
@@ -137,7 +137,7 @@ block2:
 ;   popq    %rbp
 ;   ret
 
-function %test_x_slt_0_i64(i64) -> b1 {
+function %test_x_slt_0_i64(i64) -> i8 {
 block0(v0: i64):
     v1 = iconst.i64 0
     v2 = icmp slt v0, v1
@@ -153,7 +153,7 @@ block0(v0: i64):
 ;   popq    %rbp
 ;   ret
 
-function %test_x_slt_0_i32f4(i32) -> b1 {
+function %test_x_slt_0_i32f4(i32) -> i8 {
 block0(v0: i32):
     v1 = iconst.i32 0
     v2 = icmp slt v0, v1
@@ -169,7 +169,7 @@ block0(v0: i32):
 ;   popq    %rbp
 ;   ret
 
-function %test_0_sgt_x_i64(i64) -> b1 {
+function %test_0_sgt_x_i64(i64) -> i8 {
 block0(v0: i64):
     v1 = iconst.i64 0
     v2 = icmp sgt v1, v0
@@ -185,7 +185,7 @@ block0(v0: i64):
 ;   popq    %rbp
 ;   ret
 
-function %test_0_sgt_x_i32f4(i32) -> b1 {
+function %test_0_sgt_x_i32f4(i32) -> i8 {
 block0(v0: i32):
     v1 = iconst.i32 0
     v2 = icmp sgt v1, v0
@@ -201,7 +201,7 @@ block0(v0: i32):
 ;   popq    %rbp
 ;   ret
 
-function %test_0_sle_x_i64(i64) -> b1 {
+function %test_0_sle_x_i64(i64) -> i8 {
 block0(v0: i64):
     v1 = iconst.i64 0
     v2 = icmp sle v1, v0
@@ -218,7 +218,7 @@ block0(v0: i64):
 ;   popq    %rbp
 ;   ret
 
-function %test_0_sle_x_i32f4(i32) -> b1 {
+function %test_0_sle_x_i32f4(i32) -> i8 {
 block0(v0: i32):
     v1 = iconst.i32 0
     v2 = icmp sle v1, v0
@@ -235,7 +235,7 @@ block0(v0: i32):
 ;   popq    %rbp
 ;   ret
 
-function %test_x_sge_x_i64(i64) -> b1 {
+function %test_x_sge_x_i64(i64) -> i8 {
 block0(v0: i64):
     v1 = iconst.i64 0
     v2 = icmp sge v0, v1
@@ -252,7 +252,7 @@ block0(v0: i64):
 ;   popq    %rbp
 ;   ret
 
-function %test_x_sge_x_i32f4(i32) -> b1 {
+function %test_x_sge_x_i32f4(i32) -> i8 {
 block0(v0: i32):
     v1 = iconst.i32 0
     v2 = icmp sge v0, v1

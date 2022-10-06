@@ -3,56 +3,56 @@ test run
 target aarch64
 ; s390x and x86_64 do not support 64-bit vectors.
 
-function %vanytrue_b8x8_f() -> b1 {
+function %vanytrue_i8x8_f() -> i8 {
 block0:
-    v0 = bconst.b8 false
-    v1 = splat.b8x8 v0
+    v0 = iconst.i8 0
+    v1 = splat.i8x8 v0
     v2 = vany_true v1
     return v2
 }
-; run: %vanytrue_b8x8_f() == false
+; run: %vanytrue_i8x8_f() == 0
 
-function %vanytrue_b8x8_t() -> b1 {
+function %vanytrue_i8x8_t() -> i8 {
 block0:
-    v0 = bconst.b8 true
-    v1 = splat.b8x8 v0
+    v0 = iconst.i8 -1
+    v1 = splat.i8x8 v0
     v2 = vany_true v1
     return v2
 }
-; run: %vanytrue_b8x8_t() == true
+; run: %vanytrue_i8x8_t() == 1
 
-function %vanytrue_b16x4_f() -> b1 {
+function %vanytrue_i16x4_f() -> i8 {
 block0:
-    v0 = bconst.b16 false
-    v1 = splat.b16x4 v0
+    v0 = iconst.i16 0
+    v1 = splat.i16x4 v0
     v2 = vany_true v1
     return v2
 }
-; run: %vanytrue_b16x4_f() == false
+; run: %vanytrue_i16x4_f() == 0
 
-function %vanytrue_b16x4_t() -> b1 {
+function %vanytrue_i16x4_t() -> i8 {
 block0:
-    v0 = bconst.b16 true
-    v1 = splat.b16x4 v0
+    v0 = iconst.i16 -1
+    v1 = splat.i16x4 v0
     v2 = vany_true v1
     return v2
 }
-; run: %vanytrue_b16x4_t() == true
+; run: %vanytrue_i16x4_t() == 1
 
-function %vanytrue_b32x2_f() -> b1 {
+function %vanytrue_i32x2_f() -> i8 {
 block0:
-    v0 = bconst.b32 false
-    v1 = splat.b32x2 v0
+    v0 = iconst.i32 0
+    v1 = splat.i32x2 v0
     v2 = vany_true v1
     return v2
 }
-; run: %vanytrue_b32x2_f() == false
+; run: %vanytrue_i32x2_f() == 0
 
-function %vanytrue_b32x2_t() -> b1 {
+function %vanytrue_i32x2_t() -> i8 {
 block0:
-    v0 = bconst.b32 true
-    v1 = splat.b32x2 v0
+    v0 = iconst.i32 -1
+    v1 = splat.i32x2 v0
     v2 = vany_true v1
     return v2
 }
-; run: %vanytrue_b32x2_t() == true
+; run: %vanytrue_i32x2_t() == 1

@@ -158,83 +158,74 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
                                 block9:
 @000d                               v37 = atomic_cas.i32 v34, v35, v36
 @000d                               v38 = icmp eq v37, v35
-@000d                               v39 = bint.i8 v38
 @000d                               jump block10
 
                                 block10:
-@000e                               jump block32(v37, v39)
+@000e                               jump block32(v37, v38)
 
                                 block11:
 @0012                               v43 = atomic_cas.i32 v40, v41, v42
 @0012                               v44 = icmp eq v43, v41
-@0012                               v45 = bint.i8 v44
 @0012                               jump block12
 
                                 block12:
-@0013                               jump block32(v43, v45)
+@0013                               jump block32(v43, v44)
 
                                 block13:
 @0017                               v49 = atomic_cas.i32 v46, v47, v48
 @0017                               v50 = icmp eq v49, v47
-@0017                               v51 = bint.i8 v50
 @0017                               jump block14
 
                                 block14:
-@0018                               jump block32(v49, v51)
+@0018                               jump block32(v49, v50)
 
                                 block15:
 @001c                               v55 = atomic_cas.i32 v52, v53, v54
 @001c                               v56 = icmp eq v55, v53
-@001c                               v57 = bint.i8 v56
 @001c                               jump block16
 
                                 block16:
-@001d                               jump block32(v55, v57)
+@001d                               jump block32(v55, v56)
 
                                 block17:
 @0021                               v61 = atomic_cas.i32 v58, v59, v60
 @0021                               v62 = icmp eq v61, v59
-@0021                               v63 = bint.i8 v62
 @0021                               jump block18
 
                                 block18:
-@0022                               jump block32(v61, v63)
+@0022                               jump block32(v61, v62)
 
                                 block19:
 @0026                               v67 = atomic_cas.i32 v64, v65, v66
 @0026                               v68 = icmp eq v67, v65
-@0026                               v69 = bint.i8 v68
 @0026                               jump block20
 
                                 block20:
-@0027                               jump block32(v67, v69)
+@0027                               jump block32(v67, v68)
 
                                 block21:
 @002b                               v73 = atomic_cas.i32 v70, v71, v72
 @002b                               v74 = icmp eq v73, v71
-@002b                               v75 = bint.i8 v74
 @002b                               jump block22
 
                                 block22:
-@002c                               jump block32(v73, v75)
+@002c                               jump block32(v73, v74)
 
                                 block23:
 @0030                               v79 = atomic_cas.i32 v76, v77, v78
 @0030                               v80 = icmp eq v79, v77
-@0030                               v81 = bint.i8 v80
 @0030                               jump block24
 
                                 block24:
-@0031                               jump block32(v79, v81)
+@0031                               jump block32(v79, v80)
 
                                 block25:
 @0035                               v85 = atomic_cas.i32 v82, v83, v84
 @0035                               v86 = icmp eq v85, v83
-@0035                               v87 = bint.i8 v86
 @0035                               jump block26
 
                                 block26:
-@0036                               jump block32(v85, v87)
+@0036                               jump block32(v85, v86)
 
                                 block27:
 @0038                               v88 = global_value.i64 gv2

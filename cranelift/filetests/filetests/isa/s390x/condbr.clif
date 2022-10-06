@@ -1,7 +1,7 @@
 test compile precise-output
 target s390x
 
-function %f(i64, i64) -> b1 {
+function %f(i64, i64) -> i8 {
 block0(v0: i64, v1: i64):
   v2 = icmp eq v0, v1
   return v2

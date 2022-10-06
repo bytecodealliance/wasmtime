@@ -159,7 +159,7 @@ block0(v0: i128):
 ;   popq    %rbp
 ;   ret
 
-function %f9(i128, i128) -> b1 {
+function %f9(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
     v2 = icmp eq v0, v1
     v3 = icmp ne v0, v1
@@ -457,17 +457,16 @@ block0(v0: i128):
 ;   popq    %rbp
 ;   ret
 
-function %f18(b1) -> i128 {
-block0(v0: b1):
-    v1 = bint.i128 v0
+function %f18(i8) -> i128 {
+block0(v0: i8):
+    v1 = uextend.i128 v0
     return v1
 }
 
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
-;   andq    %rax, $1, %rax
+;   movzbq  %dil, %rax
 ;   xorq    %rdx, %rdx, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -655,8 +654,8 @@ block0(v0: i64):
 ;   popq    %rbp
 ;   ret
 
-function %f23(i128, b1) -> i128 {
-block0(v0: i128, v1: b1):
+function %f23(i128, i8) -> i128 {
+block0(v0: i128, v1: i8):
     v2 = iconst.i128 0
     brnz v1, block1(v2)
     jump block2(v2)

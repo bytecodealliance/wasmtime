@@ -10,7 +10,7 @@ block0(v0: r64):
 ; block0:
 ;   ret
 
-function %f1(r64) -> b1 {
+function %f1(r64) -> i8 {
 block0(v0: r64):
   v1 = is_null v0
   return v1
@@ -20,7 +20,7 @@ block0(v0: r64):
 ;   is_null a0,a0
 ;   ret
 
-function %f2(r64) -> b1 {
+function %f2(r64) -> i8 {
 block0(v0: r64):
   v1 = is_invalid v0
   return v1
@@ -41,7 +41,7 @@ block0:
 ;   ret
 
 function %f4(r64, r64) -> r64, r64, r64 {
-    fn0 = %f(r64) -> b1
+    fn0 = %f(r64) -> i8
     ss0 = explicit_slot 8
 
 block0(v0: r64, v1: r64):
