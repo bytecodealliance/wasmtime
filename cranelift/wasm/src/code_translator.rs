@@ -249,13 +249,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          *  block and have already been translated) and modify the value stack to use the
          *  possible `Block`'s arguments values.
          ***********************************************************************************/
-        Operator::Block { ty } => {
-            let (params, results) = blocktype_params_results(validator, *ty)?;
+        Operator::Block { blockty } => {
+            let (params, results) = blocktype_params_results(validator, *blockty)?;
             let next = block_with_params(builder, results.clone(), environ)?;
             state.push_block(next, params.len(), results.len());
         }
-        Operator::Loop { ty } => {
-            let (params, results) = blocktype_params_results(validator, *ty)?;
+        Operator::Loop { blockty } => {
+            let (params, results) = blocktype_params_results(validator, *blockty)?;
             let loop_body = block_with_params(builder, params.clone(), environ)?;
             let next = block_with_params(builder, results.clone(), environ)?;
             canonicalise_then_jump(builder, loop_body, state.peekn(params.len()));
@@ -271,10 +271,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             builder.switch_to_block(loop_body);
             environ.translate_loop_header(builder)?;
         }
-        Operator::If { ty } => {
+        Operator::If { blockty } => {
             let val = state.pop1();
 
-            let (params, results) = blocktype_params_results(validator, *ty)?;
+            let (params, results) = blocktype_params_results(validator, *blockty)?;
             let (destination, else_data) = if params.clone().eq(results.clone()) {
                 // It is possible there is no `else` block, so we will only
                 // allocate a block for it if/when we find the `else`. For now,
@@ -307,7 +307,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             //   and we add nothing;
             // - either the If have an Else clause, in that case the destination of this jump
             //   instruction will be changed later when we translate the Else operator.
-            state.push_if(destination, else_data, params.len(), results.len(), *ty);
+            state.push_if(
+                destination,
+                else_data,
+                params.len(),
+                results.len(),
+                *blockty,
+            );
         }
         Operator::Else => {
             let i = state.control_stack.len() - 1;
@@ -447,10 +453,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.reachable = false;
         }
         Operator::BrIf { relative_depth } => translate_br_if(*relative_depth, builder, state),
-        Operator::BrTable { table } => {
-            let default = table.default();
+        Operator::BrTable { targets } => {
+            let default = targets.default();
             let mut min_depth = default;
-            for depth in table.targets() {
+            for depth in targets.targets() {
                 let depth = depth?;
                 if depth < min_depth {
                     min_depth = depth;
@@ -466,10 +472,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 }
             };
             let val = state.pop1();
-            let mut data = JumpTableData::with_capacity(table.len() as usize);
+            let mut data = JumpTableData::with_capacity(targets.len() as usize);
             if jump_args_count == 0 {
                 // No jump arguments
-                for depth in table.targets() {
+                for depth in targets.targets() {
                     let depth = depth?;
                     let block = {
                         let i = state.control_stack.len() - 1 - (depth as usize);
@@ -493,7 +499,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 let return_count = jump_args_count;
                 let mut dest_block_sequence = vec![];
                 let mut dest_block_map = HashMap::new();
-                for depth in table.targets() {
+                for depth in targets.targets() {
                     let depth = depth?;
                     let branch_block = match dest_block_map.entry(depth as usize) {
                         hash_map::Entry::Occupied(entry) => *entry.get(),
@@ -1289,11 +1295,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::AtomicFence { .. } => {
             builder.ins().fence();
         }
-        Operator::MemoryCopy { src, dst } => {
-            let src_index = MemoryIndex::from_u32(*src);
-            let dst_index = MemoryIndex::from_u32(*dst);
-            let src_heap = state.get_heap(builder.func, *src, environ)?;
-            let dst_heap = state.get_heap(builder.func, *dst, environ)?;
+        Operator::MemoryCopy { src_mem, dst_mem } => {
+            let src_index = MemoryIndex::from_u32(*src_mem);
+            let dst_index = MemoryIndex::from_u32(*dst_mem);
+            let src_heap = state.get_heap(builder.func, *src_mem, environ)?;
+            let dst_heap = state.get_heap(builder.func, *dst_mem, environ)?;
             let len = state.pop1();
             let src_pos = state.pop1();
             let dst_pos = state.pop1();
@@ -1316,7 +1322,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let dest = state.pop1();
             environ.translate_memory_fill(builder.cursor(), heap_index, heap, dest, val, len)?;
         }
-        Operator::MemoryInit { segment, mem } => {
+        Operator::MemoryInit { data_index, mem } => {
             let heap_index = MemoryIndex::from_u32(*mem);
             let heap = state.get_heap(builder.func, *mem, environ)?;
             let len = state.pop1();
@@ -1326,14 +1332,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 builder.cursor(),
                 heap_index,
                 heap,
-                *segment,
+                *data_index,
                 dest,
                 src,
                 len,
             )?;
         }
-        Operator::DataDrop { segment } => {
-            environ.translate_data_drop(builder.cursor(), *segment)?;
+        Operator::DataDrop { data_index } => {
+            environ.translate_data_drop(builder.cursor(), *data_index)?;
         }
         Operator::TableSize { table: index } => {
             let table = state.get_or_create_table(builder.func, *index, environ)?;
@@ -1397,7 +1403,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             environ.translate_table_fill(builder.cursor(), table_index, dest, val, len)?;
         }
         Operator::TableInit {
-            segment,
+            elem_index,
             table: table_index,
         } => {
             let table = state.get_or_create_table(builder.func, *table_index, environ)?;
@@ -1406,7 +1412,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let dest = state.pop1();
             environ.translate_table_init(
                 builder.cursor(),
-                *segment,
+                *elem_index,
                 TableIndex::from_u32(*table_index),
                 table,
                 dest,
@@ -1414,8 +1420,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 len,
             )?;
         }
-        Operator::ElemDrop { segment } => {
-            environ.translate_elem_drop(builder.cursor(), *segment)?;
+        Operator::ElemDrop { elem_index } => {
+            environ.translate_elem_drop(builder.cursor(), *elem_index)?;
         }
         Operator::V128Const { value } => {
             let data = value.bytes().to_vec().into();
@@ -2043,7 +2049,7 @@ fn translate_unreachable_operator<FE: FuncEnvironment + ?Sized>(
 ) -> WasmResult<()> {
     debug_assert!(!state.reachable);
     match *op {
-        Operator::If { ty } => {
+        Operator::If { blockty } => {
             // Push a placeholder control stack entry. The if isn't reachable,
             // so we don't have any branches anywhere.
             state.push_if(
@@ -2053,10 +2059,10 @@ fn translate_unreachable_operator<FE: FuncEnvironment + ?Sized>(
                 },
                 0,
                 0,
-                ty,
+                blockty,
             );
         }
-        Operator::Loop { ty: _ } | Operator::Block { ty: _ } => {
+        Operator::Loop { blockty: _ } | Operator::Block { blockty: _ } => {
             state.push_block(ir::Block::reserved_value(), 0, 0);
         }
         Operator::Else => {

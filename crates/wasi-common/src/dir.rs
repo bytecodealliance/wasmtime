@@ -7,48 +7,94 @@ use std::path::PathBuf;
 #[wiggle::async_trait]
 pub trait WasiDir: Send + Sync {
     fn as_any(&self) -> &dyn Any;
+
     async fn open_file(
         &self,
-        symlink_follow: bool,
-        path: &str,
-        oflags: OFlags,
-        read: bool,
-        write: bool,
-        fdflags: FdFlags,
-    ) -> Result<Box<dyn WasiFile>, Error>;
-    async fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error>;
-    async fn create_dir(&self, path: &str) -> Result<(), Error>;
+        _symlink_follow: bool,
+        _path: &str,
+        _oflags: OFlags,
+        _read: bool,
+        _write: bool,
+        _fdflags: FdFlags,
+    ) -> Result<Box<dyn WasiFile>, Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn open_dir(
+        &self,
+        _symlink_follow: bool,
+        _path: &str,
+    ) -> Result<Box<dyn WasiDir>, Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn create_dir(&self, _path: &str) -> Result<(), Error> {
+        Err(Error::not_supported())
+    }
+
     // XXX the iterator here needs to be asyncified as well!
     async fn readdir(
         &self,
-        cursor: ReaddirCursor,
-    ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>> + Send>, Error>;
-    async fn symlink(&self, old_path: &str, new_path: &str) -> Result<(), Error>;
-    async fn remove_dir(&self, path: &str) -> Result<(), Error>;
-    async fn unlink_file(&self, path: &str) -> Result<(), Error>;
-    async fn read_link(&self, path: &str) -> Result<PathBuf, Error>;
-    async fn get_filestat(&self) -> Result<Filestat, Error>;
-    async fn get_path_filestat(&self, path: &str, follow_symlinks: bool)
-        -> Result<Filestat, Error>;
+        _cursor: ReaddirCursor,
+    ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>> + Send>, Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn symlink(&self, _old_path: &str, _new_path: &str) -> Result<(), Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn remove_dir(&self, _path: &str) -> Result<(), Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn unlink_file(&self, _path: &str) -> Result<(), Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn read_link(&self, _path: &str) -> Result<PathBuf, Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn get_filestat(&self) -> Result<Filestat, Error> {
+        Err(Error::not_supported())
+    }
+
+    async fn get_path_filestat(
+        &self,
+        _path: &str,
+        _follow_symlinks: bool,
+    ) -> Result<Filestat, Error> {
+        Err(Error::not_supported())
+    }
+
     async fn rename(
         &self,
-        path: &str,
-        dest_dir: &dyn WasiDir,
-        dest_path: &str,
-    ) -> Result<(), Error>;
+        _path: &str,
+        _dest_dir: &dyn WasiDir,
+        _dest_path: &str,
+    ) -> Result<(), Error> {
+        Err(Error::not_supported())
+    }
+
     async fn hard_link(
         &self,
-        path: &str,
-        target_dir: &dyn WasiDir,
-        target_path: &str,
-    ) -> Result<(), Error>;
+        _path: &str,
+        _target_dir: &dyn WasiDir,
+        _target_path: &str,
+    ) -> Result<(), Error> {
+        Err(Error::not_supported())
+    }
+
     async fn set_times(
         &self,
-        path: &str,
-        atime: Option<SystemTimeSpec>,
-        mtime: Option<SystemTimeSpec>,
-        follow_symlinks: bool,
-    ) -> Result<(), Error>;
+        _path: &str,
+        _atime: Option<SystemTimeSpec>,
+        _mtime: Option<SystemTimeSpec>,
+        _follow_symlinks: bool,
+    ) -> Result<(), Error> {
+        Err(Error::not_supported())
+    }
 }
 
 pub(crate) struct DirEntry {

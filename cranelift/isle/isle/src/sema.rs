@@ -200,9 +200,6 @@ pub struct TermEnv {
     /// defined implicit type-converter terms we can try to use to fit
     /// types together.
     pub converters: StableMap<(TypeId, TypeId), TermId>,
-
-    /// A flag indicating whether or not overlap between rules should be considered an error.
-    pub overlap_errors: bool,
 }
 
 /// A term.
@@ -789,7 +786,6 @@ impl TermEnv {
             term_map: StableMap::new(),
             rules: vec![],
             converters: StableMap::new(),
-            overlap_errors: false,
         };
 
         env.collect_pragmas(defs);
@@ -811,13 +807,9 @@ impl TermEnv {
         Ok(env)
     }
 
-    fn collect_pragmas(&mut self, defs: &ast::Defs) {
-        for def in &defs.defs {
-            match def {
-                ast::Def::Pragma(ast::Pragma::OverlapErrors) => self.overlap_errors = true,
-                _ => (),
-            }
-        }
+    fn collect_pragmas(&mut self, _: &ast::Defs) {
+        // currently, no pragmas are defined, but the infrastructure is useful to keep around
+        return;
     }
 
     fn collect_term_sigs(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {

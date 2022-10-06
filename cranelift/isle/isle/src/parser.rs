@@ -200,9 +200,9 @@ impl<'a> Parser<'a> {
 
     fn parse_pragma(&mut self) -> Result<Pragma> {
         let ident = self.parse_ident()?;
-        match ident.0.as_ref() {
-            "overlap_errors" => Ok(Pragma::OverlapErrors),
-            _ => Err(self.error(ident.1, format!("Unknown pragma '{}'", ident.0))),
+        // currently, no pragmas are defined, but the infrastructure is useful to keep around
+        match ident.0.as_str() {
+            pragma => Err(self.error(ident.1, format!("Unknown pragma '{}'", pragma))),
         }
     }
 

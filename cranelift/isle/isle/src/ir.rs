@@ -262,8 +262,7 @@ impl PatternSequence {
     }
 
     fn add_arg(&mut self, index: usize, ty: TypeId) -> Value {
-        let inst = InstId(self.insts.len());
-        self.add_inst(PatternInst::Arg { index, ty });
+        let inst = self.add_inst(PatternInst::Arg { index, ty });
         Value::Pattern { inst, output: 0 }
     }
 
@@ -496,14 +495,12 @@ impl ExprSequence {
     }
 
     fn add_const_int(&mut self, ty: TypeId, val: i128) -> Value {
-        let inst = InstId(self.insts.len());
-        self.add_inst(ExprInst::ConstInt { ty, val });
+        let inst = self.add_inst(ExprInst::ConstInt { ty, val });
         Value::Expr { inst, output: 0 }
     }
 
     fn add_const_prim(&mut self, ty: TypeId, val: Sym) -> Value {
-        let inst = InstId(self.insts.len());
-        self.add_inst(ExprInst::ConstPrim { ty, val });
+        let inst = self.add_inst(ExprInst::ConstPrim { ty, val });
         Value::Expr { inst, output: 0 }
     }
 
@@ -513,9 +510,8 @@ impl ExprSequence {
         ty: TypeId,
         variant: VariantId,
     ) -> Value {
-        let inst = InstId(self.insts.len());
         let inputs = inputs.iter().cloned().collect();
-        self.add_inst(ExprInst::CreateVariant {
+        let inst = self.add_inst(ExprInst::CreateVariant {
             inputs,
             ty,
             variant,
@@ -531,9 +527,8 @@ impl ExprSequence {
         infallible: bool,
         multi: bool,
     ) -> Value {
-        let inst = InstId(self.insts.len());
         let inputs = inputs.iter().cloned().collect();
-        self.add_inst(ExprInst::Construct {
+        let inst = self.add_inst(ExprInst::Construct {
             inputs,
             ty,
             term,

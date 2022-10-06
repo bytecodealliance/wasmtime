@@ -11,7 +11,7 @@
 (decl pure predicate () u32)
 (rule (predicate) 1)
 
-(rule (C a b c (B d e))
+(rule 2 (C a b c (B d e))
       (if-let (B f g) d)
       (if-let h (A a b))
       (A h a))
@@ -20,10 +20,10 @@
       (if (predicate))
       42)
 
-(rule (C a b a b)
+(rule 1 (C a b a b)
       (if-let x (D a b))
       x)
 
 (decl pure D (u32 u32) u32)
 (rule (D x 0) x)
-(rule (D 0 x) x)
+(rule 1 (D 0 x) x)

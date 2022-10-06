@@ -787,7 +787,8 @@ impl Drop for SignalOnDrop {
     }
 }
 
-fn set_fuel<T>(store: &mut Store<T>, fuel: u64) {
+/// Set the amount of fuel in a store to a given value
+pub fn set_fuel<T>(store: &mut Store<T>, fuel: u64) {
     // Determine the amount of fuel already within the store, if any, and
     // add/consume as appropriate to set the remaining amount to` fuel`.
     let remaining = store.consume_fuel(0).unwrap();

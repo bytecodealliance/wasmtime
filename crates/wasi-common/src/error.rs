@@ -26,31 +26,27 @@
 pub use anyhow::{Context, Error};
 
 /// Internal error type for the `wasi-common` crate.
-/// Contains variants of the WASI `$errno` type are added according to what is actually used internally by
-/// the crate. Not all values are represented presently.
-#[derive(Debug, thiserror::Error)]
+///
+/// This Contains variants of the WASI `$errno` type that are used internally
+/// by the crate, and which aren't one-to-one with a `std::io::ErrorKind`
+/// error.
+///
+/// When the Rust [io_error_more] feature is stabilized, that will enable
+/// us to replace several more of these codes with `std::io::ErrorKind` codes.
+///
+/// [io_error_more]: https://doc.rust-lang.org/beta/unstable-book/library-features/io-error-more.html
+#[derive(Copy, Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum ErrorKind {
-    /// Errno::WouldBlk: Would block
-    #[error("WouldBlk: Would block")]
-    WouldBlk,
-    /// Errno::Noent: No such file or directory
-    #[error("Noent: No such file or directory")]
-    Noent,
     /// Errno::TooBig: Argument list too long
     #[error("TooBig: Argument list too long")]
     TooBig,
     /// Errno::Badf: Bad file descriptor
     #[error("Badf: Bad file descriptor")]
     Badf,
-    /// Errno::Exist: File exists
-    #[error("Exist: File exists")]
-    Exist,
     /// Errno::Ilseq: Illegal byte sequence
     #[error("Ilseq: Illegal byte sequence")]
     Ilseq,
-    /// Errno::Inval: Invalid argument
-    #[error("Inval: Invalid argument")]
-    Inval,
     /// Errno::Io: I/O error
     #[error("Io: I/O error")]
     Io,
@@ -75,9 +71,6 @@ pub enum ErrorKind {
     /// Errno::Perm: Permission denied
     #[error("Permission denied")]
     Perm,
-    /// Errno::NotCapable: Not capable
-    #[error("Not capable")]
-    NotCapable,
 }
 
 pub trait ErrorExt {
@@ -103,7 +96,7 @@ impl ErrorExt for Error {
         anyhow::anyhow!(msg.into())
     }
     fn not_found() -> Self {
-        ErrorKind::Noent.into()
+        std::io::Error::from(std::io::ErrorKind::NotFound).into()
     }
     fn too_big() -> Self {
         ErrorKind::TooBig.into()
@@ -112,13 +105,13 @@ impl ErrorExt for Error {
         ErrorKind::Badf.into()
     }
     fn exist() -> Self {
-        ErrorKind::Exist.into()
+        std::io::Error::from(std::io::ErrorKind::AlreadyExists).into()
     }
     fn illegal_byte_sequence() -> Self {
         ErrorKind::Ilseq.into()
     }
     fn invalid_argument() -> Self {
-        ErrorKind::Inval.into()
+        std::io::Error::from(std::io::ErrorKind::InvalidInput).into()
     }
     fn io() -> Self {
         ErrorKind::Io.into()
