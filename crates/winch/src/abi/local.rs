@@ -35,6 +35,24 @@ impl LocalSlot {
         }
     }
 
+    /// Int32 shortcut for `new`
+    pub fn i32(offset: u32) -> Self {
+        Self {
+            ty: WasmType::I32,
+            offset,
+            base: Base::SP,
+        }
+    }
+
+    /// Int64 shortcut for `new`
+    pub fn i64(offset: u32) -> Self {
+        Self {
+            ty: WasmType::I64,
+            offset,
+            base: Base::SP,
+        }
+    }
+
     /// Creates a local slot for a stack function argument
     pub fn stack_arg(ty: WasmType, offset: u32) -> Self {
         Self {
