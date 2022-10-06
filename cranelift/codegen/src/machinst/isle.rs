@@ -1217,6 +1217,9 @@ macro_rules! isle_prelude_method_helpers {
             let sigdata = &self.lower_ctx.sigs()[abi];
             debug_assert!(num_rets <= sigdata.num_rets());
             for i in (sigdata.num_rets() - num_rets)..sigdata.num_rets() {
+                // Borrow `sigdata` again so we don't hold a `self`
+                // borrow across the `&mut self` arg to
+                // `abi_arg_slot_regs()` below.
                 let sigdata = &self.lower_ctx.sigs()[abi];
                 let ret = sigdata.get_ret(i);
                 let retval_regs = self.abi_arg_slot_regs(&ret).unwrap();
