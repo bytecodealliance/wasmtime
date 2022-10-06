@@ -54,14 +54,6 @@ unsafe fn register_buffer(buf: *mut u8, buf_len: usize) {
     assert_eq!(old_len, 0);
 }
 
-/// Unregister `buf` and `buf_len`, which should have been used exactly once.
-unsafe fn unregister_buffer(buf: *mut u8, buf_len: usize) {
-    let old_ptr = replace_realloc_global_ptr(null_mut());
-    assert_eq!(old_ptr, buf);
-    let old_len = replace_realloc_global_len(0);
-    assert_eq!(old_len, buf_len);
-}
-
 #[no_mangle]
 pub unsafe extern "C" fn cabi_realloc(
     old_ptr: *mut u8,
@@ -438,8 +430,6 @@ pub unsafe extern "C" fn path_readlink(
 
     let result = fd.readlink_at(path);
 
-    unregister_buffer(buf, buf_len);
-
     let return_value = match &result {
         Ok(path) => {
             assert_eq!(path.as_ptr(), buf);
@@ -473,8 +463,6 @@ unsafe fn path_readlink_slow(
     register_buffer(buffer.as_mut_ptr().cast(), PATH_MAX);
 
     let result = fd.readlink_at(path);
-
-    unregister_buffer(buffer.as_mut_ptr().cast(), PATH_MAX);
 
     let return_value = match &result {
         Ok(path) => {
