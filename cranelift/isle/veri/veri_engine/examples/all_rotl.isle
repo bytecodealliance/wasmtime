@@ -1,0 +1,44 @@
+
+;; General 8/16-bit case.
+(rule -2 (lower (has_type (fits_in_16 ty) (rotl x y)))
+      (let ((amt Reg (value_regs_get y 0))
+            (neg_shift Reg (sub $I32 (zero_reg) amt)))
+        (small_rotr ty (put_in_reg_zext32 x) neg_shift)))
+
+;; Specialization for the 8/16-bit case when the rotation amount is an immediate.
+(rule -1 (lower (has_type (fits_in_16 ty) (rotl x (iconst k))))
+      (if-let n (imm_shift_from_imm64 ty k))
+      (small_rotr_imm ty (put_in_reg_zext32 x) (negate_imm_shift ty n)))
+
+;; aarch64 doesn't have a left-rotate instruction, but a left rotation of K
+;; places is effectively a right rotation of N - K places, if N is the integer's
+;; bit size. We implement left rotations with this trick.
+;;
+;; Note that when negating the shift amount here the upper bits are ignored
+;; by the rotr instruction, meaning that we'll still left-shift by the desired
+;; amount.
+
+;; General 32-bit case.
+(rule (lower (has_type $I32 (rotl x y)))
+      (let ((amt Reg (value_regs_get y 0))
+            (neg_shift Reg (sub $I32 (zero_reg) amt)))
+        (a64_rotr $I32 x neg_shift)))
+
+;; General 64-bit case.
+(rule (lower (has_type $I64 (rotl x y)))
+      (let ((amt Reg (value_regs_get y 0))
+            (neg_shift Reg (sub $I64 (zero_reg) amt)))
+        (a64_rotr $I64 x neg_shift)))
+
+;; Specialization for the 32-bit case when the rotation amount is an immediate.
+(rule 1 (lower (has_type $I32 (rotl x (iconst k))))
+      (if-let n (imm_shift_from_imm64 $I32 k))
+      (a64_rotr_imm $I32 x (negate_imm_shift $I32 n)))
+
+;; Specialization for the 64-bit case when the rotation amount is an immediate.
+(rule 1 (lower (has_type $I64 (rotl x (iconst k))))
+      (if-let n (imm_shift_from_imm64 $I64 k))
+      (a64_rotr_imm $I64 x (negate_imm_shift $I64 n)))
+
+(decl negate_imm_shift (Type ImmShift) ImmShift)
+(extern constructor negate_imm_shift negate_imm_shift)
