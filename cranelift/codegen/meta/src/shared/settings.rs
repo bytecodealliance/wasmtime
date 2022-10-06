@@ -59,7 +59,7 @@ pub(crate) fn define() -> SettingGroup {
         r#"
             This enables an optimization phase that converts CLIF to an egraph (equivalence graph)
             representation, performs various rewrites, and then converts it back. This can result in
-            better optimization, but at the cost of a longer compile time.
+            better optimization, but is currently considered experimental.
         "#,
         false,
     );
