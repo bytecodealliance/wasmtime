@@ -7,6 +7,28 @@ pub(crate) enum OperandSize {
     S64,
 }
 
+/// An abstraction over a register or immediate
+pub(crate) enum RegImm {
+    Reg(Reg),
+    Imm(i32),
+}
+
+impl RegImm {
+    pub fn reg(r: Reg) -> Self {
+        RegImm::Reg(r)
+    }
+
+    pub fn imm(imm: i32) -> Self {
+        RegImm::Imm(imm)
+    }
+}
+
+impl From<Reg> for RegImm {
+    fn from(r: Reg) -> Self {
+        Self::Reg(r)
+    }
+}
+
 /// Generic MacroAssembler interface used by the compilation environment
 ///
 /// The MacroAssembler trait aims to expose a high-level enough interface so that
