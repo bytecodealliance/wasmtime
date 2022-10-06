@@ -131,6 +131,13 @@ pub(crate) fn xmm15() -> Reg {
     fpr(15)
 }
 
+const GPR: u32 = 16;
+const ALLOCATABLE_GPR: u32 = (1 << GPR) - 1;
+const NON_ALLOCATABLE_GPR: u32 = (1 << ENC_RBP) | (1 << ENC_RSP);
+
+/// Bitmask to represent the available general purpose registers
+pub(crate) const ALL_GPR: u32 = ALLOCATABLE_GPR & !NON_ALLOCATABLE_GPR;
+
 // Temporarily removing the % from the register name
 // for debugging purposes only until winch gets disasm
 // support
@@ -166,7 +173,7 @@ pub(crate) fn reg_name(reg: Reg, size: u8) -> &'static str {
             (ENC_RBP, 2) => "bp",
             (ENC_RBP, 1) => "bpl",
             (ENC_RSP, 8) => "rsp",
-            (ENC_RSP, 4) => "es0",
+            (ENC_RSP, 4) => "esp",
             (ENC_RSP, 2) => "sp",
             (ENC_RSP, 1) => "spl",
             (ENC_R8, 8) => "r8",

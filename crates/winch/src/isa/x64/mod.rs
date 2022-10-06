@@ -1,7 +1,11 @@
-use crate::{compilation_env::CompilationEnv, isa::TargetIsa};
+use crate::isa::x64::masm::MacroAssembler;
+use crate::stack::Stack;
+use crate::{compilation_env::CompilationEnv, isa::TargetIsa, regset::RegSet};
 use anyhow::Result;
 use target_lexicon::Triple;
 use wasmtime_environ::{FunctionBodyData, WasmFuncType};
+
+use self::regs::ALL_GPR;
 
 mod abi;
 mod masm;
@@ -44,9 +48,10 @@ impl TargetIsa for X64 {
         // 3. Check for usage of ref types
         //     * Panic if using ref types
         // 4. Create a compilation_env and call `emit`
+        let regset = RegSet::new(ALL_GPR, 0);
         let abi = abi::X64ABI::default();
-        let asm = masm::MacroAssembler::default();
-        let mut env = CompilationEnv::new(sig, body, abi, asm)?;
+        let masm = MacroAssembler::new(regset, Stack::new());
+        let mut env = CompilationEnv::new(sig, body, abi, masm)?;
 
         env.emit()
     }

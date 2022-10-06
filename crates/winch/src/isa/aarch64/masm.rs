@@ -1,7 +1,7 @@
 use crate::{
-    abi::{addressing_mode::Address, local::LocalSlot},
-    isa::reg::Reg,
-    masm::{MacroAssembler as Masm, OperandSize},
+    abi::{addressing_mode::Address, local::LocalSlot, ABI},
+    frame::DefinedLocalsRange,
+    masm::{MacroAssembler as Masm, OperandSize, RegImm},
 };
 
 #[derive(Default)]
@@ -24,12 +24,16 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn store(&mut self, src: Reg, dst: Address, size: OperandSize) {
+    fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) {
         todo!()
     }
 
     fn sp_offset(&mut self) -> u32 {
         0u32
+    }
+
+    fn zero_local_slots<A: ABI>(&mut self, range: &DefinedLocalsRange, a: &A) {
+        todo!()
     }
 
     fn finalize(&mut self) -> &[String] {

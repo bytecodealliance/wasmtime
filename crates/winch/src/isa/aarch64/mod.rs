@@ -1,4 +1,4 @@
-use crate::{compilation_env::CompilationEnv, isa::TargetIsa};
+use crate::isa::TargetIsa;
 use anyhow::Result;
 use target_lexicon::Triple;
 use wasmtime_environ::{FunctionBodyData, WasmFuncType};
@@ -36,10 +36,6 @@ impl TargetIsa for Aarch64 {
         sig: &WasmFuncType,
         body: &mut FunctionBodyData,
     ) -> Result<Vec<String>> {
-        let abi = abi::Aarch64ABI::default();
-        let asm = masm::MacroAssembler::default();
-        let env = CompilationEnv::new(sig, body, abi, asm)?;
-
         todo!()
     }
 }

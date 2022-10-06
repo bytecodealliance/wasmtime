@@ -1,4 +1,5 @@
-use crate::abi::{addressing_mode::Address, local::LocalSlot};
+use crate::abi::{addressing_mode::Address, local::LocalSlot, ABI};
+use crate::frame::DefinedLocalsRange;
 use crate::isa::reg::Reg;
 
 /// Operand size, in bits
@@ -51,12 +52,20 @@ pub(crate) trait MacroAssembler {
     /// Get stack pointer offset
     fn sp_offset(&mut self) -> u32;
 
-    /// Perform a sized register stack store
-    // TODO augent the src argument to be an enum;
-    //      in this case the src can also be an immediate
-    fn store(&mut self, src: Reg, dst: Address, size: OperandSize);
+    /// Zero the function defined local slots
+    fn zero_local_slots<A: ABI>(&mut self, range: &DefinedLocalsRange, abi: &A);
+
+    /// Perform a stack store
+    // TODO is RegImm the best name for the src?
+    //      I'd like to think a bit more if there's a better abstraction for this
+    fn store(&mut self, src: RegImm, dst: Address, size: OperandSize);
 
     /// Finalize the assembly and return the result
     // NOTE Interim, debug approach
     fn finalize(&mut self) -> &[String];
+
+    /// Spill registers and locals to memory
+    // TODO not sure if this should be exposed
+    //      at the masm interface level
+    fn spill(&mut self) {}
 }

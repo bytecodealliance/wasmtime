@@ -16,11 +16,11 @@ impl RegSet {
 
     /// Request a general purpose register
     pub fn any_gpr(&mut self) -> Option<Reg> {
-	self.gpr_available().then(|| {
-	    let index = self.gpr.trailing_zeros();
-	    self.allocate(index);
-	    Reg::int(index as usize)
-	})
+        self.gpr_available().then(|| {
+            let index = self.gpr.trailing_zeros();
+            self.allocate(index);
+            Reg::int(index as usize)
+        })
     }
 
     pub fn free_gpr(&mut self, reg: Reg) {

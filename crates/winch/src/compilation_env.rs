@@ -74,6 +74,8 @@ impl<'x, 'a: 'x, A: ABI, C: MacroAssembler> CompilationEnv<'x, 'a, A, C> {
     // 2. Emit machine code per instruction
     fn emit_body(&mut self) -> Result<()> {
         self.spill_register_arguments();
+        self.masm
+            .zero_local_slots(&self.frame.defined_locals_range, &self.abi);
         Ok(())
     }
 
@@ -94,6 +96,9 @@ impl<'x, 'a: 'x, A: ABI, C: MacroAssembler> CompilationEnv<'x, 'a, A, C> {
             .filter(|(_, a)| a.is_reg())
             .for_each(|(index, arg)| {
                 let ty = arg.ty();
+                // TODO
+                // Move the calculation of the local from slot
+                // to the frame
                 let local = self
                     .frame
                     .locals
@@ -105,8 +110,8 @@ impl<'x, 'a: 'x, A: ABI, C: MacroAssembler> CompilationEnv<'x, 'a, A, C> {
                     .expect("arg should be associated to a register");
 
                 match &ty {
-                    WasmType::I32 => self.masm.store(src, addr, OperandSize::S32),
-                    WasmType::I64 => self.masm.store(src, addr, OperandSize::S64),
+                    WasmType::I32 => self.masm.store(src.into(), addr, OperandSize::S32),
+                    WasmType::I64 => self.masm.store(src.into(), addr, OperandSize::S64),
                     _ => panic!("Unsupported type {}", ty),
                 }
             });
