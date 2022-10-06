@@ -24,7 +24,9 @@ fn define_settings(_shared: &SettingGroup) -> SettingGroup {
         "float_abi",
         "The default float ABI.",
         "",
-        vec!["soft", "single", "double", "quad"],
+        // looks first one is the default value.
+        // make `double` the default.
+        vec!["double", "soft", "single", "quad"],
     );
     setting.build()
 }

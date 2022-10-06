@@ -424,6 +424,22 @@ impl Engine {
         flag: &str,
         value: &FlagValue,
     ) -> Result<(), String> {
+        // Check if float_abi matches on riscv64.
+        #[cfg(target_arch = "riscv64")]
+        if flag == "float_abi" {
+            return match value {
+                FlagValue::Enum(x)
+                    if x == "double" || x == "soft" || x == "single" || x == "quad" =>
+                {
+                    // this is ok.
+                    Ok(())
+                }
+                _ => Err(format!(
+                    "isa-specific feature {:?} configured to unknown value {:?}",
+                    flag, value
+                )),
+            };
+        }
         match value {
             // ISA flags are used for things like CPU features, so if they're
             // disabled then it's compatible with the native host.

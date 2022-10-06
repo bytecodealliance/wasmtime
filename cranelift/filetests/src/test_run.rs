@@ -115,9 +115,12 @@ fn is_isa_compatible(
             }
         } else {
             match requested_arch {
-                target_lexicon::Architecture::Riscv64(_) if req_value.name == "float_abi" => {
-                    // float abi are always available on Riscv64.
-                }
+                target_lexicon::Architecture::Riscv64(_)
+                    if req_value.name == "float_abi"
+                        && match req_value.as_enum() {
+                            Some(x) => x == "single" || x == "soft" || x == "double" || x == "quad",
+                            _ => false,
+                        } => {}
                 _ => {
                     unimplemented!("ISA flag {} of kind {:?}", req_value.name, req_value.kind());
                 }
