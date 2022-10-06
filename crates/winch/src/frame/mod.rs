@@ -1,21 +1,25 @@
 use crate::abi::{align_to, local::LocalSlot, ty_size, ABIArg, ABISig, ABI};
 use anyhow::Result;
 use smallvec::SmallVec;
+use std::ops::RangeInclusive;
 use wasmtime_environ::FunctionBodyData;
 use wasmtime_environ::WasmType;
 
 // TODO:
 // SpiderMonkey's implementation uses 16; but we should measure if this is
 // a good default.
-type Locals = SmallVec<[LocalSlot; 16]>;
+pub(crate) type Locals = SmallVec<[LocalSlot; 16]>;
+
+/// Function defined locals start and end in the frame
+pub(crate) struct DefinedLocalsRange(pub RangeInclusive<u32>);
 
 /// Frame handler abstraction
-#[derive(Default)]
 pub(crate) struct Frame {
     /// The size of the entire local area; the arguments plus the function defined locals
     pub locals_size: u32,
-    /// Range representing the function defined locals
-    pub defined_locals_range: (u32, u32),
+
+    /// The range in the frame corresponding to the defined locals range
+    pub defined_locals_range: DefinedLocalsRange,
 
     /// The local slots for the current function
     ///
@@ -36,7 +40,7 @@ impl Frame {
         Ok(Self {
             locals,
             locals_size,
-            defined_locals_range: (defined_locals_start, defined_locals_end),
+            defined_locals_range: DefinedLocalsRange(defined_locals_start..=defined_locals_end),
         })
     }
 
@@ -72,18 +76,11 @@ impl Frame {
         let arg_base_offset = abi.arg_base_offset().into();
         let stack_align: u32 = abi.stack_align().into();
         let mut next_stack = 0u32;
-        let mut slots: Locals = sig
+        let slots: Locals = sig
             .params
             .iter()
             .map(|arg| Self::abi_arg_slot(&arg, &mut next_stack, arg_base_offset))
             .collect();
-
-        // Validate function-defined locals and calculate their stack slots
-        // append_local_slots(&mut slots, body_data, &mut next_stack)?;
-
-        // // Align the stack to the stack alignment specified by each
-        // // ISA ABI
-        // let locals_size = align_to(next_stack, stack_align);
 
         Ok((slots, next_stack))
     }
