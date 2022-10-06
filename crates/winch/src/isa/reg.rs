@@ -15,6 +15,16 @@ impl Reg {
         Reg(raw)
     }
 
+    /// Create a new general purpose register from encoding
+    pub fn int(enc: usize) -> Self {
+        Self::new(PReg::new(enc, RegClass::Int))
+    }
+
+    /// Create a new floating point register from encoding
+    pub fn float(enc: usize) -> Self {
+        Self::new(PReg::new(enc, RegClass::Float))
+    }
+
     /// Get the class of the underlying register
     pub fn class(self) -> RegClass {
         self.0.class()
