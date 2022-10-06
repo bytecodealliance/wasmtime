@@ -1206,17 +1206,19 @@ macro_rules! isle_prelude_method_helpers {
                     self.lower_ctx.emit(inst);
                 }
             }
+
             // Handle retvals prior to emitting call, so the
             // constraints are on the call instruction; but buffer the
             // instructions till after the call.
             let mut outputs = InstOutput::new();
             let mut retval_insts: crate::machinst::abi::SmallInstVec<_> = smallvec::smallvec![];
-            for i in 0..num_rets {
-                // We take the *last* `num_rets` returns of the sig:
-                // this skips a StructReturn, if any, that is present.
+            // We take the *last* `num_rets` returns of the sig:
+            // this skips a StructReturn, if any, that is present.
+            let sigdata = &self.lower_ctx.sigs()[abi];
+            debug_assert!(num_rets <= sigdata.num_rets());
+            for i in (sigdata.num_rets() - num_rets)..sigdata.num_rets() {
                 let sigdata = &self.lower_ctx.sigs()[abi];
-                let idx = (sigdata.num_rets() - num_rets) + i;
-                let ret = sigdata.get_ret(idx);
+                let ret = sigdata.get_ret(i);
                 let retval_regs = self.abi_arg_slot_regs(&ret).unwrap();
                 retval_insts.extend(
                     caller
