@@ -81,7 +81,12 @@ pub unsafe extern "C" fn cabi_realloc(
 #[no_mangle]
 pub unsafe extern "C" fn args_get(argv: *mut *mut u8, argv_buf: *mut u8) -> Errno {
     // TODO: Use real arguments.
-    copy_nonoverlapping("wasm\0".as_ptr(), argv_buf, 5);
+    // Store bytes one at a time to avoid needing a static init.
+    argv_buf.add(0).write(b'w');
+    argv_buf.add(1).write(b'a');
+    argv_buf.add(2).write(b's');
+    argv_buf.add(3).write(b'm');
+    argv_buf.add(4).write(b'\0');
     argv.add(0).write(argv_buf);
     argv.add(1).write(null_mut());
     ERRNO_SUCCESS
@@ -357,16 +362,18 @@ pub unsafe extern "C" fn fd_read(
 
             register_buffer(ptr, len);
 
-            let result = file
-                .fd
-                .pread(len.try_into().unwrap_or(u32::MAX), file.position);
-
+            let read_len: u32 = match len.try_into() {
+                Ok(len) => len,
+                Err(_) => u32::MAX,
+            };
+            let result = file.fd.pread(read_len, file.position);
             match result {
                 Ok(data) => {
                     assert_eq!(data.as_ptr(), ptr);
                     assert!(data.len() <= len);
                     *nread = data.len();
                     file.position += data.len() as u64;
+                    forget(data);
                     ERRNO_SUCCESS
                 }
                 Err(err) => errno_from_wasi_filesystem(err),
@@ -523,7 +530,8 @@ pub unsafe extern "C" fn fd_write(
         }
         Descriptor::Log => {
             let bytes = slice::from_raw_parts(ptr, len);
-            wasi_logging::log(wasi_logging::Level::Info, "I/O".as_bytes(), bytes);
+            let context: [u8; 3] = [b'I', b'/', b'O'];
+            wasi_logging::log(wasi_logging::Level::Info, &context, bytes);
             *nwritten = len;
             ERRNO_SUCCESS
         }
@@ -675,7 +683,7 @@ unsafe fn path_readlink_slow(
             // Preview1 follows POSIX in truncating the returned path if
             // it doesn't fit.
             let len = core::cmp::min(path.len(), buf_len);
-            core::ptr::copy_nonoverlapping(buffer.as_ptr().cast(), buf, len);
+            copy_nonoverlapping(buffer.as_ptr().cast(), buf, len);
             *bufused = len;
             ERRNO_SUCCESS
         }
