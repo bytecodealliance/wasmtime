@@ -475,7 +475,6 @@ block0(v0: i64):
 ;   mov x8, x0
 ;   ldr x4, 8 ; b 12 ; data TestCase(%g) + 0
 ;   blr x4
-;   mov x0, x8
 ;   ldp fp, lr, [sp], #16
 ;   ret
 

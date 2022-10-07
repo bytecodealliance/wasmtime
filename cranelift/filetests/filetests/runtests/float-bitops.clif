@@ -1,0 +1,61 @@
+test interpret
+
+function %bnot_f32(f32) -> f32 {
+block0(v0: f32):
+    v1 = bnot v0
+    return v1
+}
+
+; run: %bnot_f32(0x0.0) == -NaN:0x3fffff
+; run: %bnot_f32(-0x0.0) == +NaN:0x3fffff
+; run: %bnot_f32(-NaN:0x3fffff) == 0x0.0
+; run: %bnot_f32(0x1.666666p-25) == -0x1.999998p26
+; run: %bnot_f32(0x1.aaaaaap43) == -0x1.555554p-42
+
+
+function %band_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = band v0, v1
+    return v2
+}
+
+; run: %band_f32(0x0.0, 0x0.0) == 0x0.0
+; run: %band_f32(-0x0.0, -0x0.0) == -0x0.0
+; run: %band_f32(-0x0.0, 0x0.0) == 0x0.0
+; run: %band_f32(-NaN:0x3f0000, 0x0.01fffep-126) == 0x0.0
+; run: %band_f32(-NaN:0x3fffff, -NaN:0x3fffff) == -NaN:0x3fffff
+; run: %band_f32(-NaN:0x3fffff, 0x1.aaaaaap43) == 0x1.aaaaaap43
+; run: %band_f32(-NaN:0x3fffff, -0x1.555554p-42) == -0x1.555554p-42
+; run: %band_f32(0x1.aaaaaap43, -0x1.555554p-42) == 0x0.0
+
+
+function %bor_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = bor v0, v1
+    return v2
+}
+
+; run: %bor_f32(0x0.0, 0x0.0) == 0x0.0
+; run: %bor_f32(-0x0.0, -0x0.0) == -0x0.0
+; run: %bor_f32(-0x0.0, 0x0.0) == -0x0.0
+; run: %bor_f32(-NaN:0x3f0000, 0x0.01fffep-126) == -NaN:0x3fffff
+; run: %bor_f32(-NaN:0x3fffff, -NaN:0x3fffff) == -NaN:0x3fffff
+; run: %bor_f32(-NaN:0x3fffff, 0x1.aaaaaap43) == -NaN:0x3fffff
+; run: %bor_f32(-NaN:0x3fffff, 0x1.666666p-25) == -NaN:0x3fffff
+; run: %bor_f32(0x1.aaaaaap43, -0x1.555554p-42) == -NaN:0x3fffff
+
+
+function %bxor_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = bxor v0, v1
+    return v2
+}
+
+; run: %bxor_f32(0x0.0, 0x0.0) == 0x0.0
+; run: %bxor_f32(-0x0.0, -0x0.0) == 0x0.0
+; run: %bxor_f32(-0x0.0, 0x0.0) == -0x0.0
+; run: %bxor_f32(-NaN:0x3f0000, 0x0.01fffep-126) == -NaN:0x3fffff
+; run: %bxor_f32(-NaN:0x3fffff, -NaN:0x3fffff) == 0x0.0
+; run: %bxor_f32(-NaN:0x3fffff, 0x1.aaaaaap43) == -0x1.555554p-42
+; run: %bxor_f32(-NaN:0x3fffff, 0x1.666666p-25) == -0x1.999998p26
+; run: %bxor_f32(0x1.aaaaaap43, -0x1.555554p-42) == -NaN:0x3fffff

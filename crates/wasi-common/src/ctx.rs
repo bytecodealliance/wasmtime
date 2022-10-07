@@ -43,6 +43,10 @@ impl WasiCtx {
             .insert_at(fd, Box::new(FileEntry::new(caps, file)));
     }
 
+    pub fn push_file(&mut self, file: Box<dyn WasiFile>, caps: FileCaps) -> Result<u32, Error> {
+        self.table().push(Box::new(FileEntry::new(caps, file)))
+    }
+
     pub fn insert_dir(
         &mut self,
         fd: u32,
@@ -55,6 +59,17 @@ impl WasiCtx {
             fd,
             Box::new(DirEntry::new(caps, file_caps, Some(path), dir)),
         );
+    }
+
+    pub fn push_dir(
+        &mut self,
+        dir: Box<dyn WasiDir>,
+        caps: DirCaps,
+        file_caps: FileCaps,
+        path: PathBuf,
+    ) -> Result<u32, Error> {
+        self.table()
+            .push(Box::new(DirEntry::new(caps, file_caps, Some(path), dir)))
     }
 
     pub fn table(&mut self) -> &mut Table {
