@@ -21,7 +21,7 @@ impl wasmtime_environ::Compiler for Compiler {
         &self,
         translation: &ModuleTranslation<'_>,
         index: DefinedFuncIndex,
-        mut data: FunctionBodyData<'_>,
+        data: FunctionBodyData<'_>,
         _tunables: &Tunables,
         types: &ModuleTypes,
     ) -> Result<Box<dyn std::any::Any + Send>, CompileError> {
@@ -31,7 +31,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let sig = &types[func.signature];
         let isa = &self.isa;
 
-        isa.compile_function(sig, &mut data);
+        isa.compile_function(sig, data);
 
         todo!()
     }

@@ -77,11 +77,7 @@ pub trait TargetIsa: Send + Sync {
     /// Get the target triple of the ISA.
     fn triple(&self) -> &Triple;
 
-    fn compile_function(
-        &self,
-        sig: &WasmFuncType,
-        body: &mut FunctionBodyData,
-    ) -> Result<Vec<String>>;
+    fn compile_function(&self, sig: &WasmFuncType, body: FunctionBodyData) -> Result<Vec<String>>;
 
     // TODO: Rename this function default_call_conv?
     /// Get the default calling convention of the underlying target triple

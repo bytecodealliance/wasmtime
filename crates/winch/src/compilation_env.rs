@@ -2,12 +2,13 @@ use crate::abi::{ABISig, ABI};
 use crate::frame::Frame;
 use crate::masm::{MacroAssembler, OperandSize};
 use anyhow::Result;
+use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
 use wasmtime_environ::{FunctionBodyData, WasmFuncType, WasmType};
 
 /// Per-function compilation environment
 pub(crate) struct CompilationEnv<'x, 'a: 'x, A: ABI, C: MacroAssembler> {
     /// A reference to the function body
-    function: &'x mut FunctionBodyData<'a>,
+    function: &'x mut FunctionBody<'a>,
 
     /// The stack frame handler for the current function
     frame: Frame,
@@ -20,18 +21,22 @@ pub(crate) struct CompilationEnv<'x, 'a: 'x, A: ABI, C: MacroAssembler> {
 
     /// The ABI-specific representation of the function signature
     sig: ABISig,
+
+    /// Wasm validator
+    validator: &'x mut FuncValidator<ValidatorResources>,
 }
 
-impl<'x, 'a: 'x, A: ABI, C: MacroAssembler> CompilationEnv<'x, 'a, A, C> {
+impl<'x, 'a: 'x, A: ABI, C: MacroAssembler> CompilationEnv<'a, 'x, A, C> {
     /// Allocate a new compilation environment
     pub fn new(
         signature: &WasmFuncType,
-        function: &'x mut FunctionBodyData<'a>,
+        function: &'x mut FunctionBody<'a>,
+        validator: &'x mut FuncValidator<ValidatorResources>,
         abi: A,
         masm: C,
     ) -> Result<Self> {
         let sig = abi.sig(&signature);
-        let frame = Frame::new(&sig, function, &abi)?;
+        let frame = Frame::new(&sig, function, validator, &abi)?;
 
         Ok(Self {
             abi,
@@ -39,6 +44,7 @@ impl<'x, 'a: 'x, A: ABI, C: MacroAssembler> CompilationEnv<'x, 'a, A, C> {
             frame,
             function,
             masm,
+            validator,
         })
     }
 

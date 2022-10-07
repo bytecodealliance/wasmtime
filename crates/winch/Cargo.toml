@@ -10,7 +10,7 @@ wasmparser = "0.92.0"
 smallvec = { version = "1.6.1" }
 anyhow = "1.0"
 wasmtime-environ = { workspace = true }
-target-lexicon = "0.12"
+target-lexicon = { version = "0.12", features = ["std"] }
 cranelift-codegen = { workspace = true, features = ["x86", "arm64"] }
 # Interim dependency; mostly to have access to `PReg`s
 # In the long term, we'll factor out the register

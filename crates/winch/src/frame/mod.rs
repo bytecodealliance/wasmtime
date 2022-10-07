@@ -2,7 +2,7 @@ use crate::abi::{align_to, local::LocalSlot, ty_size, ABIArg, ABISig, ABI};
 use anyhow::Result;
 use smallvec::SmallVec;
 use std::ops::RangeInclusive;
-use wasmtime_environ::FunctionBodyData;
+use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
 use wasmtime_environ::WasmType;
 
 // TODO:
@@ -30,10 +30,15 @@ pub(crate) struct Frame {
 
 impl Frame {
     /// Allocate a new Frame
-    pub fn new<A: ABI>(sig: &ABISig, function: &mut FunctionBodyData, abi: &A) -> Result<Self> {
-        let (mut locals, defined_locals_start) = Self::compute_arg_slots(sig, function, abi)?;
+    pub fn new<A: ABI>(
+        sig: &ABISig,
+        function: &mut FunctionBody,
+        validator: &mut FuncValidator<ValidatorResources>,
+        abi: &A,
+    ) -> Result<Self> {
+        let (mut locals, defined_locals_start) = Self::compute_arg_slots(sig, abi)?;
         let (defined_slots, defined_locals_end) =
-            Self::compute_defined_slots(function, defined_locals_start)?;
+            Self::compute_defined_slots(function, validator, defined_locals_start)?;
         locals.extend(defined_slots);
         let locals_size = align_to(defined_locals_end, abi.stack_align().into());
 
@@ -44,11 +49,7 @@ impl Frame {
         })
     }
 
-    fn compute_arg_slots<A: ABI>(
-        sig: &ABISig,
-        body_data: &mut FunctionBodyData,
-        abi: &A,
-    ) -> Result<(Locals, u32)> {
+    fn compute_arg_slots<A: ABI>(sig: &ABISig, abi: &A) -> Result<(Locals, u32)> {
         // Go over the function ABI-signature and
         // calculate the stack slots
         //
@@ -101,12 +102,12 @@ impl Frame {
     }
 
     fn compute_defined_slots(
-        body_data: &mut FunctionBodyData,
+        body_data: &mut FunctionBody,
+        validator: &mut FuncValidator<ValidatorResources>,
         next_stack: u32,
     ) -> Result<(Locals, u32)> {
         let mut next_stack = next_stack;
-        let mut reader = body_data.body.get_binary_reader();
-        let validator = &mut body_data.validator;
+        let mut reader = body_data.get_binary_reader();
         let local_count = reader.read_var_u32()?;
         let mut slots: Locals = Default::default();
 

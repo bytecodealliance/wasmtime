@@ -35,7 +35,7 @@ fn main() -> Result<()> {
     let parser = Parser::new(0);
     let mut types = Default::default();
     let tunables = Tunables::default();
-    let mut translation = ModuleEnvironment::new(&tunables, &mut validator, &mut types)
+    let translation = ModuleEnvironment::new(&tunables, &mut validator, &mut types)
         .translate(parser, &bytes)
         .context("Failed to translate WebAssembly module")?;
     let types = types.finish();
@@ -43,7 +43,7 @@ fn main() -> Result<()> {
 
     translation
         .function_body_inputs
-        .iter_mut()
+        .into_iter()
         .for_each(|func| compile(&*isa, &module, &types, func));
 
     Ok(())
@@ -53,7 +53,7 @@ fn compile(
     isa: &dyn TargetIsa,
     module: &Module,
     types: &ModuleTypes,
-    f: (DefinedFuncIndex, &mut FunctionBodyData<'_>),
+    f: (DefinedFuncIndex, FunctionBodyData<'_>),
 ) {
     let index = module.func_index(f.0);
     let func = &module.functions[index];

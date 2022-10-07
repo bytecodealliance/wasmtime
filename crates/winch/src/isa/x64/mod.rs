@@ -35,11 +35,7 @@ impl TargetIsa for X64 {
         &self.triple
     }
 
-    fn compile_function(
-        &self,
-        sig: &WasmFuncType,
-        body: &mut FunctionBodyData,
-    ) -> Result<Vec<String>> {
+    fn compile_function(&self, sig: &WasmFuncType, body: FunctionBodyData) -> Result<Vec<String>> {
         // Temporarily returns a '&static str
         // TODO
         // 1. Derive calling convention (panic if unsupported)
@@ -48,10 +44,15 @@ impl TargetIsa for X64 {
         // 3. Check for usage of ref types
         //     * Panic if using ref types
         // 4. Create a compilation_env and call `emit`
+        let FunctionBodyData {
+            validator,
+            mut body,
+        } = body;
+        let mut validator = validator.into_validator(Default::default());
         let regset = RegSet::new(ALL_GPR, 0);
         let abi = abi::X64ABI::default();
         let masm = MacroAssembler::new(regset, Stack::new());
-        let mut env = CompilationEnv::new(sig, body, abi, masm)?;
+        let mut env = CompilationEnv::new(sig, &mut body, &mut validator, abi, masm)?;
 
         env.emit()
     }

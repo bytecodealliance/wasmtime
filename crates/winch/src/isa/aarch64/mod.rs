@@ -31,11 +31,7 @@ impl TargetIsa for Aarch64 {
         &self.triple
     }
 
-    fn compile_function(
-        &self,
-        sig: &WasmFuncType,
-        body: &mut FunctionBodyData,
-    ) -> Result<Vec<String>> {
+    fn compile_function(&self, sig: &WasmFuncType, body: FunctionBodyData) -> Result<Vec<String>> {
         todo!()
     }
 }
