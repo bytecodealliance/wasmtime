@@ -43,6 +43,7 @@ macro_rules! assert_eq {
 extern "C" {
     fn replace_realloc_global_ptr(val: *mut u8) -> *mut u8;
     fn replace_realloc_global_len(val: usize) -> usize;
+    fn replace_fds(val: *mut u8) -> *mut u8;
 }
 
 /// Register `buf` and `buf_len` to be used by `cabi_realloc` to satisfy the
@@ -250,11 +251,44 @@ pub unsafe extern "C" fn fd_pwrite(
 #[no_mangle]
 pub unsafe extern "C" fn fd_read(
     fd: Fd,
-    iovs_ptr: *const Iovec,
-    iovs_len: usize,
+    mut iovs_ptr: *const Iovec,
+    mut iovs_len: usize,
     nread: *mut Size,
 ) -> Errno {
-    unreachable()
+    // Advance to the first non-empty buffer.
+    while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
+        iovs_ptr = iovs_ptr.add(1);
+        iovs_len -= 1;
+    }
+    if iovs_len == 0 {
+        *nread = 0;
+        return ERRNO_SUCCESS;
+    }
+
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => {
+            let ptr = (*iovs_ptr).buf;
+            let len = (*iovs_ptr).buf_len;
+
+            register_buffer(ptr, len);
+
+            let result = file
+                .fd
+                .pread(len.try_into().unwrap_or(u32::MAX), file.position);
+
+            match result {
+                Ok(data) => {
+                    assert_eq!(data.as_ptr(), ptr);
+                    assert!(data.len() <= len);
+                    *nread = data.len();
+                    file.position += data.len() as u64;
+                    ERRNO_SUCCESS
+                }
+                Err(err) => errno_from_wasi_filesystem(err),
+            }
+        }
+        Descriptor::Closed | Descriptor::Log => ERRNO_BADF,
+    }
 }
 
 /// Read directory entries from a directory.
@@ -321,11 +355,48 @@ pub unsafe extern "C" fn fd_tell(fd: Fd, offset: *mut Filesize) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_write(
     fd: Fd,
-    iovs_ptr: *const Ciovec,
-    iovs_len: usize,
+    mut iovs_ptr: *const Ciovec,
+    mut iovs_len: usize,
     nwritten: *mut Size,
 ) -> Errno {
-    unreachable()
+    // Advance to the first non-empty buffer.
+    while iovs_len != 0 && (*iovs_ptr).buf_len == 0 {
+        iovs_ptr = iovs_ptr.add(1);
+        iovs_len -= 1;
+    }
+    if iovs_len == 0 {
+        *nwritten = 0;
+        return ERRNO_SUCCESS;
+    }
+
+    let ptr = (*iovs_ptr).buf;
+    let len = (*iovs_ptr).buf_len;
+
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => {
+            register_buffer(ptr as *mut _, len);
+
+            let result = file
+                .fd
+                .pwrite(slice::from_raw_parts(ptr, len), file.position);
+
+            match result {
+                Ok(bytes) => {
+                    *nwritten = bytes as usize;
+                    file.position += bytes as u64;
+                    ERRNO_SUCCESS
+                }
+                Err(err) => errno_from_wasi_filesystem(err),
+            }
+        }
+        Descriptor::Log => {
+            let bytes = slice::from_raw_parts(ptr, len);
+            wasi_logging::log(wasi_logging::Level::Info, "I/O".as_bytes(), bytes);
+            *nwritten = len;
+            ERRNO_SUCCESS
+        }
+        Descriptor::Closed => ERRNO_BADF,
+    }
 }
 
 /// Create a directory.
@@ -692,4 +763,32 @@ fn errno_from_wasi_filesystem(err: wasi_filesystem::Errno) -> Errno {
 fn black_box(x: Errno) -> Errno {
     core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
     x
+}
+
+#[repr(C)]
+pub enum Descriptor {
+    Closed,
+    File(File),
+    Log,
+}
+
+#[repr(C)]
+pub struct File {
+    fd: wasi_filesystem::Descriptor,
+    position: u64,
+}
+
+impl Descriptor {
+    fn get(fd: Fd) -> &'static mut Descriptor {
+        unsafe {
+            let mut fds = replace_fds(null_mut());
+            if fds.is_null() {
+                fds = core::arch::wasm32::memory_grow(0, 1) as *mut u8;
+            }
+            let result = &mut *fds.cast::<Descriptor>().add(fd as usize);
+            let fds = replace_fds(fds);
+            assert!(fds.is_null());
+            result
+        }
+    }
 }
