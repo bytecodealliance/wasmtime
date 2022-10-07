@@ -14,7 +14,7 @@ wit_bindgen_guest_rust::import!({
 });
 
 use core::arch::wasm32::unreachable;
-use core::mem::forget;
+use core::mem::{forget, size_of};
 use core::ptr::{copy_nonoverlapping, null_mut};
 use core::slice;
 use wasi::*;
@@ -936,6 +936,10 @@ impl Descriptor {
             let mut fds = replace_fds(null_mut());
             if fds.is_null() {
                 fds = core::arch::wasm32::memory_grow(0, 1) as *mut u8;
+            }
+            // We allocated a page; abort if that's not enough.
+            if fd as usize * size_of::<Descriptor>() >= 65536 {
+                unreachable()
             }
             let result = &mut *fds.cast::<Descriptor>().add(fd as usize);
             let fds = replace_fds(fds);
