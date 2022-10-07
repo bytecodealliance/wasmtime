@@ -15,7 +15,7 @@ wit_bindgen_guest_rust::import!({
 
 use core::arch::wasm32::unreachable;
 use core::mem::forget;
-use core::ptr::null_mut;
+use core::ptr::{copy_nonoverlapping, null_mut};
 use core::slice;
 use wasi::*;
 
@@ -80,20 +80,30 @@ pub unsafe extern "C" fn cabi_realloc(
 /// The size of the array should match that returned by `args_sizes_get`
 #[no_mangle]
 pub unsafe extern "C" fn args_get(argv: *mut *mut u8, argv_buf: *mut u8) -> Errno {
-    unreachable()
+    // TODO: Use real arguments.
+    copy_nonoverlapping("wasm\0".as_ptr(), argv_buf, 5);
+    argv.add(0).write(argv_buf);
+    argv.add(1).write(null_mut());
+    ERRNO_SUCCESS
 }
 
 /// Return command-line argument data sizes.
 #[no_mangle]
 pub unsafe extern "C" fn args_sizes_get(argc: *mut Size, argv_buf_size: *mut Size) -> Errno {
-    unreachable()
+    // TODO: Use real arguments.
+    *argc = 1;
+    *argv_buf_size = 5;
+    ERRNO_SUCCESS
 }
 
 /// Read environment variable data.
 /// The sizes of the buffers should match that returned by `environ_sizes_get`.
 #[no_mangle]
 pub unsafe extern "C" fn environ_get(environ: *mut *mut u8, environ_buf: *mut u8) -> Errno {
-    unreachable()
+    // TODO: Use real env vars.
+    *environ = null_mut();
+    let _ = environ_buf;
+    ERRNO_SUCCESS
 }
 
 /// Return environment variable data sizes.
@@ -102,7 +112,10 @@ pub unsafe extern "C" fn environ_sizes_get(
     environc: *mut Size,
     environ_buf_size: *mut Size,
 ) -> Errno {
-    unreachable()
+    // TODO: Use real env vars.
+    *environc = 0;
+    *environ_buf_size = 0;
+    ERRNO_SUCCESS
 }
 
 /// Return the resolution of a clock.
@@ -634,7 +647,9 @@ pub unsafe extern "C" fn proc_raise(sig: Signal) -> Errno {
 /// Note: This is similar to `sched_yield` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn sched_yield() -> Errno {
-    unreachable()
+    // TODO: This is not yet covered in Preview2.
+
+    ERRNO_SUCCESS
 }
 
 /// Write high-quality random data into a buffer.
@@ -645,7 +660,17 @@ pub unsafe extern "C" fn sched_yield() -> Errno {
 /// number generator, rather than to provide the random data directly.
 #[no_mangle]
 pub unsafe extern "C" fn random_get(buf: *mut u8, buf_len: Size) -> Errno {
-    unreachable()
+    register_buffer(buf, buf_len);
+
+    assert_eq!(buf_len as u32 as Size, buf_len);
+    let result = wasi_random::getrandom(buf_len as u32);
+    assert_eq!(result.as_ptr(), buf);
+
+    // The returned buffer's memory was allocated in `buf`, so don't separately
+    // free it.
+    forget(result);
+
+    ERRNO_SUCCESS
 }
 
 /// Receive a message from a socket.
