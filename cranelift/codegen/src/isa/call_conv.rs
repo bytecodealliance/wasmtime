@@ -120,6 +120,13 @@ impl CallConv {
             _ => false,
         }
     }
+    /// If this is riscv call convention.
+    pub fn is_riscv(self) -> bool {
+        match self {
+            Self::SystemVRiscv(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for CallConv {

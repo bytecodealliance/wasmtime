@@ -1,0 +1,119 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+;;;; soft 
+function %f32_add_soft(f32 , f32) -> f32 system_v_riscv_soft {
+block0(v0: f32,v1 : f32):
+  v2 = fadd.f32 v0,v1 
+  return v2
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   flw ft0,16(fp)
+;   flw ft1,24(fp)
+;   fadd.s ft7,ft0,ft1
+;   fsw ft7,0(a0)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+function %f64_add_soft(f64 , f64) -> f64 system_v_riscv_soft {
+block0(v0: f64,v1 : f64):
+  v2 = fadd.f64 v0 ,v1
+  return v2
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   fld ft0,16(fp)
+;   fld ft1,24(fp)
+;   fadd.d ft7,ft0,ft1
+;   fsd ft7,0(a0)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+;;;; single
+function %f32_add_single(f32 , f32) -> f32 system_v_riscv_single {
+block0(v0: f32,v1 : f32):
+  v2 = fadd.f32 v0,v1 
+  return v2
+}
+
+; block0:
+;   fadd.s fa0,fa0,fa1
+;   ret
+
+function %f64_add_single(f64 , f64) -> f64 system_v_riscv_single {
+block0(v0: f64,v1 : f64):
+  v2 = fadd.f64 v0 ,v1
+  return v2
+}
+
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   fld ft0,16(fp)
+;   fld ft1,24(fp)
+;   fadd.d ft7,ft0,ft1
+;   fsd ft7,0(a0)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+
+;;;; double
+function %f32_add_double(f32 , f32) -> f32 system_v_riscv_double {
+block0(v0: f32,v1 : f32):
+  v2 = fadd.f32 v0,v1 
+  return v2
+}
+
+; block0:
+;   fadd.s fa0,fa0,fa1
+;   ret
+
+function %f64_add_double(f64 , f64) -> f64 system_v_riscv_double {
+block0(v0: f64,v1 : f64):
+  v2 = fadd.f64 v0 ,v1
+  return v2
+}
+
+; block0:
+;   fadd.d fa0,fa0,fa1
+;   ret
+
+
+;;;; quad
+function %f32_add_quad(f32 , f32) -> f32 system_v_riscv_quad {
+block0(v0: f32,v1 : f32):
+  v2 = fadd.f32 v0,v1 
+  return v2
+}
+
+; block0:
+;   fadd.s fa0,fa0,fa1
+;   ret
+
+function %f64_add_quad(f64 , f64) -> f64 system_v_riscv_quad {
+block0(v0: f64,v1 : f64):
+  v2 = fadd.f64 v0 ,v1
+  return v2
+}
+
+; block0:
+;   fadd.d fa0,fa0,fa1
+;   ret
+

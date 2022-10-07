@@ -121,11 +121,7 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
         }
     }
     #[cfg(target_arch = "riscv64")]
-    {
-        use cranelift_codegen::settings::Configurable;
-        // This is the default.
-        isa_builder.set("float_abi", "double").unwrap();
-    }
+    {}
     #[cfg(target_arch = "aarch64")]
     {
         use cranelift_codegen::settings::Configurable;
