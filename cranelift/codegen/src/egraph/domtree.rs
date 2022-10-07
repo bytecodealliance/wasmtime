@@ -26,10 +26,10 @@ impl DomTreeWithChildren {
                 Some(idom_inst) => idom_inst,
                 None => continue,
             };
-            let idom = match func.layout.inst_block(idom_inst) {
-                Some(idom) => idom,
-                None => continue,
-            };
+            let idom = func
+                .layout
+                .inst_block(idom_inst)
+                .expect("Dominating instruction should be part of a block");
 
             nodes[block].next = nodes[idom].children;
             nodes[idom].children = block.into();
@@ -61,12 +61,9 @@ pub(crate) struct DomTreeChildIter<'a> {
 impl<'a> Iterator for DomTreeChildIter<'a> {
     type Item = Block;
     fn next(&mut self) -> Option<Block> {
-        if self.block.is_none() {
-            None
-        } else {
-            let block = self.block.unwrap();
+        self.block.expand().map(|block| {
             self.block = self.domtree.nodes[block].next;
-            Some(block)
-        }
+            block
+        })
     }
 }

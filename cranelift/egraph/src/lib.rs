@@ -262,7 +262,7 @@ pub trait Language: CtxEq<Self::Node, Self::Node> + CtxHash<Self::Node> {
 /// node as it is created.
 pub trait Analysis {
     type L: Language;
-    type Value: Debug + Clone + Default;
+    type Value: Clone + Default;
     fn for_node(
         &self,
         ctx: &Self::L,

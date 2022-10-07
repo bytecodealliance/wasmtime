@@ -494,41 +494,6 @@ impl<T: EntityRef + ReservedValue> EntityList<T> {
         }
     }
 
-    /// Sorts the list.
-    pub fn sort(&mut self, pool: &mut ListPool<T>)
-    where
-        T: Ord,
-    {
-        self.as_mut_slice(pool).sort_unstable();
-    }
-
-    /// Removes duplicates from the list. Assumes the list has already
-    /// been sorted.
-    pub fn remove_dups(&mut self, pool: &mut ListPool<T>) {
-        let mut last = None;
-        let mut out = 0;
-        let data = self.as_mut_slice(pool);
-        for i in 0..data.len() {
-            if last == Some(data[i]) {
-                continue;
-            }
-            last = Some(data[i]);
-
-            if out < i {
-                data[out] = data[i];
-            }
-            out += 1;
-        }
-
-        // If we had dups, shrink list length.
-        if out < data.len() {
-            debug_assert!(data.len() > 0); // Empty list will not reach here.
-            debug_assert!(out > 0); // Non-empty list cannot become empty.
-            debug_assert!(self.index > 0);
-            pool.data[(self.index - 1) as usize] = T::new(out);
-        }
-    }
-
     /// Inserts an element as position `index` in the list, shifting all elements after it to the
     /// right.
     pub fn insert(&mut self, index: usize, element: T, pool: &mut ListPool<T>) {

@@ -2,7 +2,7 @@
 //!
 //! We partition memory state into several *disjoint pieces* of
 //! "abstract state". There are a finite number of such pieces:
-//! currently, we call them "heap", "table", "vmctx", and "other".Any
+//! currently, we call them "heap", "table", "vmctx", and "other". Any
 //! given address in memory belongs to exactly one disjoint piece.
 //!
 //! One never tracks which piece a concrete address belongs to at
