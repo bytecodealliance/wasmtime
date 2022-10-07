@@ -28,7 +28,7 @@ impl RegSet {
     }
 
     fn gpr_available(&self) -> bool {
-        !self.gpr == 0
+        self.gpr != 0
     }
 
     fn allocate(&mut self, index: u32) {

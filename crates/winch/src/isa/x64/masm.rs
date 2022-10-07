@@ -104,7 +104,7 @@ impl Masm for MacroAssembler {
             n => {
                 // Request a gpr and zero it
                 let zero = self.any_gpr();
-                self.asm.movl_rr(zero, zero);
+                self.asm.xorl_rr(zero, zero);
                 // store zero in each of the slots in the range
                 for step in (range_start..range_end)
                     .into_iter()

@@ -3,7 +3,7 @@ use crate::frame::Frame;
 use crate::masm::{MacroAssembler, OperandSize};
 use anyhow::Result;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::{FunctionBodyData, WasmFuncType, WasmType};
+use wasmtime_environ::{WasmFuncType, WasmType};
 
 /// Per-function compilation environment
 pub(crate) struct CompilationEnv<'x, 'a: 'x, A: ABI, C: MacroAssembler> {
