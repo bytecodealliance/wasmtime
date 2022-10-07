@@ -1133,8 +1133,17 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
         impl #name {
             #constants
 
-            fn as_array(&self) -> [u32; #count] {
+            pub fn as_array(&self) -> [u32; #count] {
                 #as_array
+            }
+
+            pub fn empty() -> Self {
+                Self::default()
+            }
+
+            pub fn all() -> Self {
+                use std::ops::Not;
+                Self::default().not()
             }
         }
 
