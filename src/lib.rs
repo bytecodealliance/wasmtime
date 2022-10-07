@@ -168,14 +168,86 @@ pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
 /// Note: This is similar to `fdatasync` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
-    unreachable()
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => match file.fd.datasync() {
+            Ok(()) => ERRNO_SUCCESS,
+            Err(err) => errno_from_wasi_filesystem(err),
+        },
+        Descriptor::Log => ERRNO_INVAL,
+        Descriptor::Closed => ERRNO_BADF,
+    }
 }
 
 /// Get the attributes of a file descriptor.
 /// Note: This returns similar flags to `fsync(fd, F_GETFL)` in POSIX, as well as additional fields.
 #[no_mangle]
 pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
-    unreachable()
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => {
+            let info = match file.fd.info() {
+                Ok(info) => info,
+                Err(err) => return errno_from_wasi_filesystem(err),
+            };
+
+            let fs_filetype = match info.type_ {
+                wasi_filesystem::Type::RegularFile => FILETYPE_REGULAR_FILE,
+                wasi_filesystem::Type::Directory => FILETYPE_DIRECTORY,
+                wasi_filesystem::Type::BlockDevice => FILETYPE_BLOCK_DEVICE,
+                wasi_filesystem::Type::CharacterDevice => FILETYPE_CHARACTER_DEVICE,
+                wasi_filesystem::Type::Fifo => FILETYPE_UNKNOWN,
+                wasi_filesystem::Type::Socket => FILETYPE_SOCKET_STREAM,
+                wasi_filesystem::Type::SymbolicLink => FILETYPE_SYMBOLIC_LINK,
+                wasi_filesystem::Type::Unknown => FILETYPE_UNKNOWN,
+            };
+
+            let mut fs_flags = 0;
+            let mut fs_rights_base = !0;
+            if !info.flags.contains(wasi_filesystem::Flags::READ) {
+                fs_rights_base &= !RIGHTS_FD_READ;
+            }
+            if !info.flags.contains(wasi_filesystem::Flags::WRITE) {
+                fs_rights_base &= !RIGHTS_FD_WRITE;
+            }
+            if info.flags.contains(wasi_filesystem::Flags::APPEND) {
+                fs_flags |= FDFLAGS_APPEND;
+            }
+            if info.flags.contains(wasi_filesystem::Flags::DSYNC) {
+                fs_flags |= FDFLAGS_DSYNC;
+            }
+            if info.flags.contains(wasi_filesystem::Flags::NONBLOCK) {
+                fs_flags |= FDFLAGS_NONBLOCK;
+            }
+            if info.flags.contains(wasi_filesystem::Flags::RSYNC) {
+                fs_flags |= FDFLAGS_RSYNC;
+            }
+            if info.flags.contains(wasi_filesystem::Flags::SYNC) {
+                fs_flags |= FDFLAGS_SYNC;
+            }
+            let fs_rights_inheriting = fs_rights_base;
+
+            stat.write(Fdstat {
+                fs_filetype,
+                fs_flags,
+                fs_rights_base,
+                fs_rights_inheriting,
+            });
+            ERRNO_SUCCESS
+        }
+        Descriptor::Log => {
+            let fs_filetype = FILETYPE_UNKNOWN;
+            let fs_flags = 0;
+            let fs_rights_base = !RIGHTS_FD_READ;
+            let fs_rights_inheriting = fs_rights_base;
+            stat.write(Fdstat {
+                fs_filetype,
+                fs_flags,
+                fs_rights_base,
+                fs_rights_inheriting,
+            });
+            ERRNO_SUCCESS
+        }
+        Descriptor::Closed => ERRNO_BADF,
+    }
 }
 
 /// Adjust the flags associated with a file descriptor.
@@ -346,21 +418,68 @@ pub unsafe extern "C" fn fd_seek(
     whence: Whence,
     newoffset: *mut Filesize,
 ) -> Errno {
-    unreachable()
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => {
+            let from = match whence {
+                WHENCE_SET => {
+                    let offset = match offset.try_into() {
+                        Ok(offset) => offset,
+                        Err(_) => return ERRNO_INVAL,
+                    };
+                    wasi_filesystem::SeekFrom::Set(offset)
+                }
+                WHENCE_CUR => wasi_filesystem::SeekFrom::Cur(offset),
+                WHENCE_END => {
+                    let offset = match offset.try_into() {
+                        Ok(offset) => offset,
+                        Err(_) => return ERRNO_INVAL,
+                    };
+                    wasi_filesystem::SeekFrom::End(offset)
+                }
+                _ => return ERRNO_INVAL,
+            };
+            match file.fd.seek(from) {
+                Ok(result) => {
+                    *newoffset = result;
+                    ERRNO_SUCCESS
+                }
+                Err(err) => errno_from_wasi_filesystem(err),
+            }
+        }
+        Descriptor::Log => ERRNO_SPIPE,
+        Descriptor::Closed => ERRNO_BADF,
+    }
 }
 
 /// Synchronize the data and metadata of a file to disk.
 /// Note: This is similar to `fsync` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
-    unreachable()
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => match file.fd.sync() {
+            Ok(()) => ERRNO_SUCCESS,
+            Err(err) => errno_from_wasi_filesystem(err),
+        },
+        Descriptor::Log => ERRNO_INVAL,
+        Descriptor::Closed => ERRNO_BADF,
+    }
 }
 
 /// Return the current offset of a file descriptor.
 /// Note: This is similar to `lseek(fd, 0, SEEK_CUR)` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_tell(fd: Fd, offset: *mut Filesize) -> Errno {
-    unreachable()
+    match Descriptor::get(fd) {
+        Descriptor::File(file) => match file.fd.tell() {
+            Ok(result) => {
+                *offset = result;
+                ERRNO_SUCCESS
+            }
+            Err(err) => errno_from_wasi_filesystem(err),
+        },
+        Descriptor::Log => ERRNO_SPIPE,
+        Descriptor::Closed => ERRNO_BADF,
+    }
 }
 
 /// Write to a file descriptor.
