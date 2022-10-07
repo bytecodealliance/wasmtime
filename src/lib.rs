@@ -362,10 +362,8 @@ pub unsafe extern "C" fn fd_read(
 
             register_buffer(ptr, len);
 
-            let read_len: u32 = match len.try_into() {
-                Ok(len) => len,
-                Err(_) => u32::MAX,
-            };
+            // We can cast between a `usize`-sized value and `usize`.
+            let read_len = len as _;
             let result = file.fd.pread(read_len, file.position);
             match result {
                 Ok(data) => {
@@ -427,22 +425,12 @@ pub unsafe extern "C" fn fd_seek(
 ) -> Errno {
     match Descriptor::get(fd) {
         Descriptor::File(file) => {
+            // It's ok to cast these indices; the WASI API will fail if
+            // the resulting values are out of range.
             let from = match whence {
-                WHENCE_SET => {
-                    let offset = match offset.try_into() {
-                        Ok(offset) => offset,
-                        Err(_) => return ERRNO_INVAL,
-                    };
-                    wasi_filesystem::SeekFrom::Set(offset)
-                }
+                WHENCE_SET => wasi_filesystem::SeekFrom::Set(offset as _),
                 WHENCE_CUR => wasi_filesystem::SeekFrom::Cur(offset),
-                WHENCE_END => {
-                    let offset = match offset.try_into() {
-                        Ok(offset) => offset,
-                        Err(_) => return ERRNO_INVAL,
-                    };
-                    wasi_filesystem::SeekFrom::End(offset)
-                }
+                WHENCE_END => wasi_filesystem::SeekFrom::End(offset as _),
                 _ => return ERRNO_INVAL,
             };
             match file.fd.seek(from) {
