@@ -1081,7 +1081,7 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
 
         let name = format_ident!("{}", name);
 
-        constants.extend(quote!(const #name: Self = Self { #fields };));
+        constants.extend(quote!(pub const #name: Self = Self { #fields };));
     }
 
     let generics = syn::Generics {
@@ -1128,13 +1128,22 @@ fn expand_flags(flags: &Flags) -> Result<TokenStream> {
 
     let expanded = quote! {
         #[derive(Copy, Clone, Default)]
-        struct #name { #fields }
+        pub struct #name { #fields }
 
         impl #name {
             #constants
 
-            fn as_array(&self) -> [u32; #count] {
+            pub fn as_array(&self) -> [u32; #count] {
                 #as_array
+            }
+
+            pub fn empty() -> Self {
+                Self::default()
+            }
+
+            pub fn all() -> Self {
+                use std::ops::Not;
+                Self::default().not()
             }
         }
 
