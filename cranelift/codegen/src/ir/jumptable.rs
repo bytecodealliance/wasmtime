@@ -33,6 +33,10 @@ impl JumpTableData {
             table: Vec::with_capacity(capacity),
         }
     }
+    /// Create a new jump table with the provided blocks
+    pub fn with_blocks(table: Vec<Block>) -> Self {
+        Self { table }
+    }
 
     /// Get the number of table entries.
     pub fn len(&self) -> usize {

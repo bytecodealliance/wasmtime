@@ -7,7 +7,7 @@ use cranelift::codegen::ir::instructions::InstructionFormat;
 use cranelift::codegen::ir::stackslot::StackSize;
 use cranelift::codegen::ir::{types::*, FuncRef, LibCall, UserExternalName, UserFuncName};
 use cranelift::codegen::ir::{
-    AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, StackSlot, Type, Value,
+    AbiParam, Block, ExternalName, Function, Opcode, Signature, StackSlot, Type, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
@@ -17,6 +17,17 @@ use cranelift::prelude::{
 };
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
+
+/// Generates a Vec with `len` elements comprised of `options`
+fn arbitrary_vec<T: Clone>(
+    u: &mut Unstructured,
+    len: usize,
+    options: &[T],
+) -> arbitrary::Result<Vec<T>> {
+    (0..len)
+        .map(|_| u.choose(options).map(Clone::clone))
+        .collect()
+}
 
 type BlockSignature = Vec<Type>;
 
@@ -680,157 +691,6 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Call, &[], &[], insert_call),
 ];
 
-type BlockTerminator = fn(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    source_block: Block,
-) -> Result<()>;
-
-fn insert_return(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    _source_block: Block,
-) -> Result<()> {
-    let types: Vec<Type> = {
-        let rets = &builder.func.signature.returns;
-        rets.iter().map(|p| p.value_type).collect()
-    };
-    let vals = fgen.generate_values_for_signature(builder, types.into_iter())?;
-
-    builder.ins().return_(&vals[..]);
-    Ok(())
-}
-
-fn insert_jump(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    source_block: Block,
-) -> Result<()> {
-    let (block, args) = fgen.generate_target_block(builder, source_block)?;
-    builder.ins().jump(block, &args[..]);
-    Ok(())
-}
-
-/// Generates a br_table into a random block
-fn insert_br_table(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    source_block: Block,
-) -> Result<()> {
-    let var = fgen.get_variable_of_type(I32)?; // br_table only supports I32
-    let val = builder.use_var(var);
-
-    let target_blocks = fgen.resources.forward_blocks_without_params(source_block);
-    let default_block = *fgen.u.choose(target_blocks)?;
-
-    // We can still select a backwards branching jump table here!
-    let tables = fgen.resources.forward_jump_tables(builder, source_block);
-    let jt = *fgen.u.choose(&tables[..])?;
-    builder.ins().br_table(val, default_block, jt);
-    Ok(())
-}
-
-/// Generates a brz/brnz into a random block
-fn insert_br(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    source_block: Block,
-) -> Result<()> {
-    let (block, args) = fgen.generate_target_block(builder, source_block)?;
-
-    let condbr_types = [I8, I16, I32, I64, I128, B1];
-    let _type = *fgen.u.choose(&condbr_types[..])?;
-    let var = fgen.get_variable_of_type(_type)?;
-    let val = builder.use_var(var);
-
-    if bool::arbitrary(fgen.u)? {
-        builder.ins().brz(val, block, &args[..]);
-    } else {
-        builder.ins().brnz(val, block, &args[..]);
-    }
-
-    // After brz/brnz we must generate a jump
-    insert_jump(fgen, builder, source_block)?;
-    Ok(())
-}
-
-fn insert_bricmp(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    source_block: Block,
-) -> Result<()> {
-    let (block, args) = fgen.generate_target_block(builder, source_block)?;
-
-    let cc = *fgen.u.choose(IntCC::all())?;
-    let _type = *fgen.u.choose(&[I8, I16, I32, I64, I128])?;
-
-    let lhs_var = fgen.get_variable_of_type(_type)?;
-    let lhs_val = builder.use_var(lhs_var);
-
-    let rhs_var = fgen.get_variable_of_type(_type)?;
-    let rhs_val = builder.use_var(rhs_var);
-
-    builder
-        .ins()
-        .br_icmp(cc, lhs_val, rhs_val, block, &args[..]);
-
-    // After bricmp's we must generate a jump
-    insert_jump(fgen, builder, source_block)?;
-    Ok(())
-}
-
-fn insert_switch(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    source_block: Block,
-) -> Result<()> {
-    let _type = *fgen.u.choose(&[I8, I16, I32, I64, I128][..])?;
-    let switch_var = fgen.get_variable_of_type(_type)?;
-    let switch_val = builder.use_var(switch_var);
-
-    // TODO: We should also generate backwards branches in switches
-    let default_block = {
-        let target_blocks = fgen.resources.forward_blocks_without_params(source_block);
-        *fgen.u.choose(target_blocks)?
-    };
-
-    // Build this into a HashMap since we cannot have duplicate entries.
-    let mut entries = HashMap::new();
-    for _ in 0..fgen.param(&fgen.config.switch_cases)? {
-        // The Switch API only allows for entries that are addressable by the index type
-        // so we need to limit the range of values that we generate.
-        let (ty_min, ty_max) = _type.bounds(false);
-        let range_start = fgen.u.int_in_range(ty_min..=ty_max)?;
-
-        // We can either insert a contiguous range of blocks or a individual block
-        // This is done because the Switch API specializes contiguous ranges.
-        let range_size = if bool::arbitrary(fgen.u)? {
-            1
-        } else {
-            fgen.param(&fgen.config.switch_max_range_size)?
-        } as u128;
-
-        // Build the switch entries
-        for i in 0..range_size {
-            let index = range_start.wrapping_add(i) % ty_max;
-            let block = {
-                let target_blocks = fgen.resources.forward_blocks_without_params(source_block);
-                *fgen.u.choose(target_blocks)?
-            };
-
-            entries.insert(index, block);
-        }
-    }
-
-    let mut switch = Switch::new();
-    for (entry, block) in entries.into_iter() {
-        switch.set_entry(entry, block);
-    }
-    switch.emit(builder, switch_val, default_block);
-
-    Ok(())
-}
-
 /// These libcalls need a interpreter implementation in `cranelift-fuzzgen.rs`
 const ALLOWED_LIBCALLS: &'static [LibCall] = &[
     LibCall::CeilF32,
@@ -850,33 +710,27 @@ where
     resources: Resources,
 }
 
+#[derive(Debug, Clone)]
+enum BranchKind {
+    Return,
+    Jump(Block),
+    Br(Block, Block),
+    BrIcmp(Block, Block),
+    BrTable(Block, Vec<Block>),
+    Switch(Type, Block, HashMap<u128, Block>),
+}
+
 #[derive(Default)]
 struct Resources {
     vars: HashMap<Type, Vec<Variable>>,
     blocks: Vec<(Block, BlockSignature)>,
     blocks_without_params: Vec<Block>,
-    jump_tables: Vec<JumpTable>,
+    block_terminators: Vec<BranchKind>,
     func_refs: Vec<(Signature, FuncRef)>,
     stack_slots: Vec<(StackSlot, StackSize)>,
 }
 
 impl Resources {
-    /// Returns [JumpTable]'s where all blocks are forward of `block`
-    fn forward_jump_tables(&self, builder: &FunctionBuilder, block: Block) -> Vec<JumpTable> {
-        // TODO: We can avoid allocating a Vec here by sorting self.jump_tables based
-        // on the minimum block and returning a slice based on that.
-        // See https://github.com/bytecodealliance/wasmtime/pull/4894#discussion_r971241430 for more details
-
-        // Unlike with the blocks below jump table targets are not ordered, thus we do need
-        // to allocate a Vec here.
-        let jump_tables = &builder.func.jump_tables;
-        self.jump_tables
-            .iter()
-            .copied()
-            .filter(|jt| jump_tables[*jt].iter().all(|target| *target > block))
-            .collect()
-    }
-
     /// Partitions blocks at `block`. Only blocks that can be targeted by branches are considered.
     ///
     /// The first slice includes all blocks up to and including `block`.
@@ -1058,13 +912,7 @@ where
 
     /// Chooses a random block which can be targeted by a jump / branch.
     /// This means any block that is not the first block.
-    ///
-    /// For convenience we also generate values that match the block's signature
-    fn generate_target_block(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        source_block: Block,
-    ) -> Result<(Block, Vec<Value>)> {
+    fn generate_target_block(&mut self, source_block: Block) -> Result<Block> {
         // We try to mostly generate forward branches to avoid generating an excessive amount of
         // infinite loops. But they are still important, so give them a small chance of existing.
         let (backwards_blocks, forward_blocks) =
@@ -1077,9 +925,17 @@ where
         };
         assert!(!block_targets.is_empty());
 
-        let (block, signature) = self.u.choose(block_targets)?.clone();
-        let args = self.generate_values_for_signature(builder, signature.into_iter())?;
-        Ok((block, args))
+        let (block, _) = self.u.choose(block_targets)?.clone();
+        Ok(block)
+    }
+
+    fn generate_values_for_block(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        block: Block,
+    ) -> Result<Vec<Value>> {
+        let (_, sig) = self.resources.blocks[block.as_u32() as usize].clone();
+        self.generate_values_for_signature(builder, sig.iter().copied())
     }
 
     fn generate_values_for_signature<I: Iterator<Item = Type>>(
@@ -1096,48 +952,73 @@ where
             .collect()
     }
 
-    /// We always need to exit safely out of a block.
-    /// This either means a jump into another block or a return.
+    /// The terminator that we need to insert has already been picked ahead of time
+    /// we just need to build the instructions for it
     fn finalize_block(&mut self, builder: &mut FunctionBuilder, source_block: Block) -> Result<()> {
-        let has_jump_tables = !self
-            .resources
-            .forward_jump_tables(builder, source_block)
-            .is_empty();
+        let terminator = self.resources.block_terminators[source_block.as_u32() as usize].clone();
 
-        let has_forward_blocks = {
-            let (_, forward_blocks) = self.resources.partition_target_blocks(source_block);
-            !forward_blocks.is_empty()
-        };
+        match terminator {
+            BranchKind::Return => {
+                let types: Vec<Type> = {
+                    let rets = &builder.func.signature.returns;
+                    rets.iter().map(|p| p.value_type).collect()
+                };
+                let vals = self.generate_values_for_signature(builder, types.into_iter())?;
 
-        let has_forward_blocks_without_params = !self
-            .resources
-            .forward_blocks_without_params(source_block)
-            .is_empty();
+                builder.ins().return_(&vals[..]);
+            }
+            BranchKind::Jump(target) => {
+                let args = self.generate_values_for_block(builder, target)?;
+                builder.ins().jump(target, &args[..]);
+            }
+            BranchKind::Br(left, right) => {
+                let left_args = self.generate_values_for_block(builder, left)?;
+                let right_args = self.generate_values_for_block(builder, right)?;
 
-        let terminators: &[(BlockTerminator, bool)] = &[
-            // Return is always a valid option
-            (insert_return, true),
-            // If we have forward blocks, we can allow generating jumps and branches
-            (insert_jump, has_forward_blocks),
-            (insert_br, has_forward_blocks),
-            (insert_bricmp, has_forward_blocks),
-            // Switches can only use blocks without params
-            (insert_switch, has_forward_blocks_without_params),
-            // We need both jump tables and a default block for br_table
-            (
-                insert_br_table,
-                has_jump_tables && has_forward_blocks_without_params,
-            ),
-        ];
+                let condbr_types = [I8, I16, I32, I64, I128, B1];
+                let _type = *self.u.choose(&condbr_types[..])?;
+                let val = builder.use_var(self.get_variable_of_type(_type)?);
 
-        let terminators: Vec<_> = terminators
-            .into_iter()
-            .filter(|(_, valid)| *valid)
-            .map(|(term, _)| term)
-            .collect();
+                if bool::arbitrary(self.u)? {
+                    builder.ins().brz(val, left, &left_args[..]);
+                } else {
+                    builder.ins().brnz(val, left, &left_args[..]);
+                }
+                builder.ins().jump(right, &right_args[..]);
+            }
+            BranchKind::BrIcmp(left, right) => {
+                let cc = *self.u.choose(IntCC::all())?;
+                let _type = *self.u.choose(&[I8, I16, I32, I64, I128])?;
 
-        let inserter = self.u.choose(&terminators[..])?;
-        inserter(self, builder, source_block)?;
+                let lhs = builder.use_var(self.get_variable_of_type(_type)?);
+                let rhs = builder.use_var(self.get_variable_of_type(_type)?);
+
+                let left_args = self.generate_values_for_block(builder, left)?;
+                let right_args = self.generate_values_for_block(builder, right)?;
+
+                builder.ins().br_icmp(cc, lhs, rhs, left, &left_args[..]);
+                builder.ins().jump(right, &right_args[..]);
+            }
+            BranchKind::BrTable(default, targets) => {
+                // Create jump tables on demand
+                let jt = builder.create_jump_table(JumpTableData::with_blocks(targets.clone()));
+
+                // br_table only supports I32
+                let val = builder.use_var(self.get_variable_of_type(I32)?);
+
+                builder.ins().br_table(val, default, jt);
+            }
+            BranchKind::Switch(_type, default, entries) => {
+                let mut switch = Switch::new();
+                for (&entry, &block) in entries.iter() {
+                    switch.set_entry(entry, block);
+                }
+
+                let switch_val = builder.use_var(self.get_variable_of_type(_type)?);
+
+                switch.emit(builder, switch_val, default);
+            }
+        }
 
         Ok(())
     }
@@ -1149,27 +1030,6 @@ where
             inserter(self, builder, op, args, rets)?;
         }
 
-        Ok(())
-    }
-
-    fn generate_jumptables(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        // We shouldn't try to generate jumptables if we don't have any valid targets!
-        if self.resources.blocks_without_params.is_empty() {
-            return Ok(());
-        }
-
-        for _ in 0..self.param(&self.config.jump_tables_per_function)? {
-            let mut jt_data = JumpTableData::new();
-
-            for _ in 0..self.param(&self.config.jump_table_entries)? {
-                let block = *self.u.choose(&self.resources.blocks_without_params)?;
-                jt_data.push_entry(block);
-            }
-
-            self.resources
-                .jump_tables
-                .push(builder.create_jump_table(jt_data));
-        }
         Ok(())
     }
 
@@ -1294,6 +1154,123 @@ where
             .map(|(b, _)| *b)
             .collect();
 
+        // Compute the block CFG
+        //
+        // cranelift-frontend requires us to never generate unreachable blocks
+        // To ensure this property we start by constructing a main "spine" of blocks. So block1 can
+        // always jump to block2, and block2 can always jump to block3, etc...
+        //
+        // That is not a very interesting CFG, so we introduce variations on that, but always
+        // ensuring that the property of pointing to the next block is maintained whatever the
+        // branching mechanism we use.
+        let blocks = self.resources.blocks.clone();
+        self.resources.block_terminators = blocks
+            .iter()
+            .map(|&(block, _)| {
+                // On the last block we always return
+                if block == self.resources.blocks.last().unwrap().0 {
+                    return Ok(BranchKind::Return);
+                }
+                let next_block = Block::with_number(block.as_u32() + 1).unwrap();
+
+                // Start with the basic terminators, these can always be inserted, since we
+                // always have at least one forward block
+                let mut terminators: Vec<Box<dyn Fn(&mut Self) -> Result<BranchKind>>> = vec![
+                    // Jump
+                    // We can only jump to the next block
+                    Box::new(|_| Ok(BranchKind::Jump(next_block))),
+                    // Br
+                    // One of the branches must be the next block
+                    Box::new(|fgen| {
+                        Ok(BranchKind::Br(
+                            next_block,
+                            fgen.generate_target_block(block)?,
+                        ))
+                    }),
+                    // BrIcmp
+                    // One of the branches must be the next block
+                    Box::new(|fgen| {
+                        Ok(BranchKind::BrIcmp(
+                            next_block,
+                            fgen.generate_target_block(block)?,
+                        ))
+                    }),
+                ];
+
+                let has_paramless_targets = !self
+                    .resources
+                    .forward_blocks_without_params(block)
+                    .is_empty();
+
+                let next_block_is_paramless = self
+                    .resources
+                    .forward_blocks_without_params(block)
+                    .contains(&next_block);
+
+                if has_paramless_targets && next_block_is_paramless {
+                    // BrTable
+                    // At least one of the options must be the next block
+                    // TODO: Allow generating backwards branches here
+                    terminators.push(Box::new(|fgen| {
+                        // Make the default the next block, and then we don't have to worry
+                        // that we can reach it via the targets
+                        let default = next_block;
+
+                        let target_count = fgen.param(&fgen.config.jump_table_entries)?;
+                        let targets = arbitrary_vec(
+                            fgen.u,
+                            target_count,
+                            fgen.resources.forward_blocks_without_params(block),
+                        )?;
+
+                        Ok(BranchKind::BrTable(default, targets))
+                    }));
+
+                    // Switch
+                    // At least one of the options must be the next block
+                    // TODO: Allow generating backwards branches here
+                    terminators.push(Box::new(|fgen| {
+                        // Make the default the next block, and then we don't have to worry
+                        // that we can reach it via the entries below
+                        let default_block = next_block;
+
+                        let _type = *fgen.u.choose(&[I8, I16, I32, I64, I128][..])?;
+
+                        // Build this into a HashMap since we cannot have duplicate entries.
+                        let mut entries = HashMap::new();
+                        for _ in 0..fgen.param(&fgen.config.switch_cases)? {
+                            // The Switch API only allows for entries that are addressable by the index type
+                            // so we need to limit the range of values that we generate.
+                            let (ty_min, ty_max) = _type.bounds(false);
+                            let range_start = fgen.u.int_in_range(ty_min..=ty_max)?;
+
+                            // We can either insert a contiguous range of blocks or a individual block
+                            // This is done because the Switch API specializes contiguous ranges.
+                            let range_size = if bool::arbitrary(fgen.u)? {
+                                1
+                            } else {
+                                fgen.param(&fgen.config.switch_max_range_size)?
+                            } as u128;
+
+                            // Build the switch entries
+                            for i in 0..range_size {
+                                let index = range_start.wrapping_add(i) % ty_max;
+                                let block = *fgen
+                                    .u
+                                    .choose(fgen.resources.forward_blocks_without_params(block))?;
+
+                                entries.insert(index, block);
+                            }
+                        }
+
+                        Ok(BranchKind::Switch(_type, default_block, entries))
+                    }));
+                }
+
+                Ok(self.u.choose(&terminators[..])?(self)?)
+            })
+            .collect::<Result<_>>()?;
+
         Ok(())
     }
 
@@ -1361,7 +1338,6 @@ where
         self.generate_blocks(&mut builder, &sig)?;
 
         // Function preamble
-        self.generate_jumptables(&mut builder)?;
         self.generate_funcrefs(&mut builder)?;
         self.generate_stack_slots(&mut builder)?;
 
