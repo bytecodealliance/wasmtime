@@ -954,7 +954,11 @@ where
 
     /// The terminator that we need to insert has already been picked ahead of time
     /// we just need to build the instructions for it
-    fn finalize_block(&mut self, builder: &mut FunctionBuilder, source_block: Block) -> Result<()> {
+    fn insert_terminator(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        source_block: Block,
+    ) -> Result<()> {
         let terminator = self.resources.block_terminators[source_block.as_u32() as usize].clone();
 
         match terminator {
@@ -1001,7 +1005,7 @@ where
             }
             BlockTerminator::BrTable(default, targets) => {
                 // Create jump tables on demand
-                let jt = builder.create_jump_table(JumpTableData::with_blocks(targets.clone()));
+                let jt = builder.create_jump_table(JumpTableData::with_blocks(targets));
 
                 // br_table only supports I32
                 let val = builder.use_var(self.get_variable_of_type(I32)?);
@@ -1367,7 +1371,8 @@ where
             // Generate block instructions
             self.generate_instructions(&mut builder)?;
 
-            self.finalize_block(&mut builder, block)?;
+            // Insert a terminator to safely exit the block
+            self.insert_terminator(&mut builder, block)?;
         }
 
         builder.seal_all_blocks();
