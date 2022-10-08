@@ -256,7 +256,14 @@ where
             "enable_llvm_abi_extensions",
         ];
         for flag_name in bool_settings {
-            let value = format!("{}", bool::arbitrary(self.u)?);
+            let enabled = self
+                .config
+                .compile_flag_ratio
+                .get(&flag_name)
+                .map(|&(num, denum)| self.u.ratio(num, denum))
+                .unwrap_or_else(|| bool::arbitrary(self.u))?;
+
+            let value = format!("{}", enabled);
             builder.set(flag_name, value.as_str())?;
         }
 
