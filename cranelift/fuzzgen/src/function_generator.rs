@@ -711,7 +711,7 @@ where
 }
 
 #[derive(Debug, Clone)]
-enum BranchKind {
+enum BlockTerminator {
     Return,
     Jump(Block),
     Br(Block, Block),
@@ -725,7 +725,7 @@ struct Resources {
     vars: HashMap<Type, Vec<Variable>>,
     blocks: Vec<(Block, BlockSignature)>,
     blocks_without_params: Vec<Block>,
-    block_terminators: Vec<BranchKind>,
+    block_terminators: Vec<BlockTerminator>,
     func_refs: Vec<(Signature, FuncRef)>,
     stack_slots: Vec<(StackSlot, StackSize)>,
 }
@@ -958,7 +958,7 @@ where
         let terminator = self.resources.block_terminators[source_block.as_u32() as usize].clone();
 
         match terminator {
-            BranchKind::Return => {
+            BlockTerminator::Return => {
                 let types: Vec<Type> = {
                     let rets = &builder.func.signature.returns;
                     rets.iter().map(|p| p.value_type).collect()
@@ -967,11 +967,11 @@ where
 
                 builder.ins().return_(&vals[..]);
             }
-            BranchKind::Jump(target) => {
+            BlockTerminator::Jump(target) => {
                 let args = self.generate_values_for_block(builder, target)?;
                 builder.ins().jump(target, &args[..]);
             }
-            BranchKind::Br(left, right) => {
+            BlockTerminator::Br(left, right) => {
                 let left_args = self.generate_values_for_block(builder, left)?;
                 let right_args = self.generate_values_for_block(builder, right)?;
 
@@ -986,7 +986,7 @@ where
                 }
                 builder.ins().jump(right, &right_args[..]);
             }
-            BranchKind::BrIcmp(left, right) => {
+            BlockTerminator::BrIcmp(left, right) => {
                 let cc = *self.u.choose(IntCC::all())?;
                 let _type = *self.u.choose(&[I8, I16, I32, I64, I128])?;
 
@@ -999,7 +999,7 @@ where
                 builder.ins().br_icmp(cc, lhs, rhs, left, &left_args[..]);
                 builder.ins().jump(right, &right_args[..]);
             }
-            BranchKind::BrTable(default, targets) => {
+            BlockTerminator::BrTable(default, targets) => {
                 // Create jump tables on demand
                 let jt = builder.create_jump_table(JumpTableData::with_blocks(targets.clone()));
 
@@ -1008,7 +1008,7 @@ where
 
                 builder.ins().br_table(val, default, jt);
             }
-            BranchKind::Switch(_type, default, entries) => {
+            BlockTerminator::Switch(_type, default, entries) => {
                 let mut switch = Switch::new();
                 for (&entry, &block) in entries.iter() {
                     switch.set_entry(entry, block);
@@ -1169,20 +1169,20 @@ where
             .map(|&(block, _)| {
                 // On the last block we always return
                 if block == self.resources.blocks.last().unwrap().0 {
-                    return Ok(BranchKind::Return);
+                    return Ok(BlockTerminator::Return);
                 }
                 let next_block = Block::with_number(block.as_u32() + 1).unwrap();
 
                 // Start with the basic terminators, these can always be inserted, since we
                 // always have at least one forward block
-                let mut terminators: Vec<Box<dyn Fn(&mut Self) -> Result<BranchKind>>> = vec![
+                let mut terminators: Vec<Box<dyn Fn(&mut Self) -> Result<BlockTerminator>>> = vec![
                     // Jump
                     // We can only jump to the next block
-                    Box::new(|_| Ok(BranchKind::Jump(next_block))),
+                    Box::new(|_| Ok(BlockTerminator::Jump(next_block))),
                     // Br
                     // One of the branches must be the next block
                     Box::new(|fgen| {
-                        Ok(BranchKind::Br(
+                        Ok(BlockTerminator::Br(
                             next_block,
                             fgen.generate_target_block(block)?,
                         ))
@@ -1190,7 +1190,7 @@ where
                     // BrIcmp
                     // One of the branches must be the next block
                     Box::new(|fgen| {
-                        Ok(BranchKind::BrIcmp(
+                        Ok(BlockTerminator::BrIcmp(
                             next_block,
                             fgen.generate_target_block(block)?,
                         ))
@@ -1223,7 +1223,7 @@ where
                             fgen.resources.forward_blocks_without_params(block),
                         )?;
 
-                        Ok(BranchKind::BrTable(default, targets))
+                        Ok(BlockTerminator::BrTable(default, targets))
                     }));
 
                     // Switch
@@ -1263,7 +1263,7 @@ where
                             }
                         }
 
-                        Ok(BranchKind::Switch(_type, default_block, entries))
+                        Ok(BlockTerminator::Switch(_type, default_block, entries))
                     }));
                 }
 
