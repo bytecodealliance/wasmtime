@@ -561,7 +561,7 @@ pub struct Sig(u32);
 cranelift_entity::entity_impl!(Sig);
 
 /// ABI information shared between body (callee) and caller.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SigData {
     /// Argument locations (regs or stack slots). Stack offsets are relative to
     /// SP on entry to function.
@@ -669,10 +669,17 @@ impl SigData {
         // regs, which we will remove from the clobber set below.
         let mut clobbers = M::get_regs_clobbered_by_call(self.call_conv);
 
-        // Compute defs: all retval regs, and all caller-save (clobbered) regs.
+        // Compute defs: all retval regs, and all caller-save
+        // (clobbered) regs, except for StructRet args.
         let mut defs = smallvec![];
         for ret in &self.rets {
-            if let &ABIArg::Slots { ref slots, .. } = ret {
+            if let &ABIArg::Slots {
+                ref slots, purpose, ..
+            } = ret
+            {
+                if purpose == ir::ArgumentPurpose::StructReturn {
+                    continue;
+                }
                 for slot in slots {
                     match slot {
                         &ABIArgSlot::Reg { reg, .. } => {
@@ -694,9 +701,17 @@ impl SigData {
         // regs, which we will remove from the clobber set below.
         let mut clobbers = M::get_regs_clobbered_by_call(self.call_conv);
 
-        // Remove retval regs from clobbers.
+        // Remove retval regs from clobbers. Skip StructRets: these
+        // are not, semantically, returns at the CLIF level, so we
+        // treat such a value as a clobber instead.
         for ret in &self.rets {
-            if let &ABIArg::Slots { ref slots, .. } = ret {
+            if let &ABIArg::Slots {
+                ref slots, purpose, ..
+            } = ret
+            {
+                if purpose == ir::ArgumentPurpose::StructReturn {
+                    continue;
+                }
                 for slot in slots {
                     match slot {
                         &ABIArgSlot::Reg { reg, .. } => {

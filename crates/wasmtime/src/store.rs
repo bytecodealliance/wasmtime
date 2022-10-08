@@ -1434,7 +1434,7 @@ impl StoreOpaque {
             .ok()
             .and_then(|fuel| consumed_ptr.checked_add(fuel))
         {
-            Some(consumed) if consumed < 0 => {
+            Some(consumed) if consumed <= 0 => {
                 *consumed_ptr = consumed;
                 Ok(u64::try_from(-consumed).unwrap())
             }

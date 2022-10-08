@@ -69,13 +69,9 @@ impl From<ErrorKind> for types::Errno {
     fn from(e: ErrorKind) -> types::Errno {
         use types::Errno;
         match e {
-            ErrorKind::WouldBlk => Errno::Again,
-            ErrorKind::Noent => Errno::Noent,
             ErrorKind::TooBig => Errno::TooBig,
             ErrorKind::Badf => Errno::Badf,
-            ErrorKind::Exist => Errno::Exist,
             ErrorKind::Ilseq => Errno::Ilseq,
-            ErrorKind::Inval => Errno::Inval,
             ErrorKind::Io => Errno::Io,
             ErrorKind::Nametoolong => Errno::Nametoolong,
             ErrorKind::Notdir => Errno::Notdir,
@@ -83,7 +79,6 @@ impl From<ErrorKind> for types::Errno {
             ErrorKind::Overflow => Errno::Overflow,
             ErrorKind::Range => Errno::Range,
             ErrorKind::Spipe => Errno::Spipe,
-            ErrorKind::NotCapable => Errno::Notcapable,
             ErrorKind::Perm => Errno::Perm,
         }
     }
@@ -261,7 +256,7 @@ impl TryFrom<std::io::Error> for types::Errno {
                 std::io::ErrorKind::NotFound => Ok(types::Errno::Noent),
                 std::io::ErrorKind::PermissionDenied => Ok(types::Errno::Perm),
                 std::io::ErrorKind::AlreadyExists => Ok(types::Errno::Exist),
-                std::io::ErrorKind::InvalidInput => Ok(types::Errno::Ilseq),
+                std::io::ErrorKind::InvalidInput => Ok(types::Errno::Inval),
                 _ => Err(anyhow::anyhow!(err).context(format!("Unknown OS error"))),
             },
         }

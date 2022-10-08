@@ -358,6 +358,36 @@ pub type CompiledCodeStencil = CompiledCodeBase<Stencil>;
 /// consumption.
 pub type CompiledCode = CompiledCodeBase<Final>;
 
+impl CompiledCode {
+    /// If available, return information about the code layout in the
+    /// final machine code: the offsets (in bytes) of each basic-block
+    /// start, and all basic-block edges.
+    pub fn get_code_bb_layout(&self) -> (Vec<usize>, Vec<(usize, usize)>) {
+        (
+            self.bb_starts.iter().map(|&off| off as usize).collect(),
+            self.bb_edges
+                .iter()
+                .map(|&(from, to)| (from as usize, to as usize))
+                .collect(),
+        )
+    }
+
+    /// Creates unwind information for the function.
+    ///
+    /// Returns `None` if the function has no unwind information.
+    #[cfg(feature = "unwind")]
+    pub fn create_unwind_info(
+        &self,
+        isa: &dyn crate::isa::TargetIsa,
+    ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
+        let unwind_info_kind = match isa.triple().operating_system {
+            target_lexicon::OperatingSystem::Windows => UnwindInfoKind::Windows,
+            _ => UnwindInfoKind::SystemV,
+        };
+        isa.emit_unwind_info(self, unwind_info_kind)
+    }
+}
+
 /// An object that can be used to create the text section of an executable.
 ///
 /// This primarily handles resolving relative relocations at
