@@ -2023,9 +2023,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 
         // TODO(dhil) fixme: merge into the above list.
         // Function references instructions
-        Operator::BrOnNonNull { .. } | Operator::ReturnCallRef => {
-            todo!("Implement Operator::[BrOnNull,BrOnNonNull,CallRef] for translate_operator")
-        } // TODO(dhil) fixme
+        Operator::ReturnCallRef => {
+            return Err(wasm_unsupported!(
+                "proposed tail-call operator for function references {:?}",
+                op
+            ));
+        }
         Operator::BrOnNull { relative_depth } => {
             let r = state.pop1();
             let (br_destination, inputs) = translate_br_if_args(*relative_depth, state);
@@ -2037,6 +2040,28 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             builder.seal_block(next_block); // The only predecessor is the current block.
             builder.switch_to_block(next_block);
             state.push1(r);
+        }
+        Operator::BrOnNonNull { relative_depth } => {
+            // We write this a bit differently from the spec to avoid an extra
+            // block/branch and the typed accounting thereof. Instead of the
+            // spec's approach, it's described as such:
+            // Peek the value val from the stack.
+            // If val is ref.null ht, then: pop the value val from the stack.
+            // Else: Execute the instruction (br relative_depth).
+            let is_null = environ.translate_ref_is_null(builder.cursor(), state.peek1())?;
+            let (br_destination, inputs) = translate_br_if_args(*relative_depth, state);
+            canonicalise_then_brz(builder, is_null, br_destination, inputs);
+            // In the null case, pop the ref
+            state.pop1();
+            // It seems that we're required to create an unconditional jump for
+            // the non-br case, based on the example of BrIf, but i'm not sure why
+            let next_block = builder.create_block();
+            canonicalise_then_jump(builder, next_block, &[]);
+            builder.seal_block(next_block); // The only predecessor is the current block.
+
+            // The rest of the translation operates on our is null case, which is
+            // currently an empty block
+            builder.switch_to_block(next_block);
         }
         Operator::CallRef => {
             // Get function signature
