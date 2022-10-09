@@ -2896,12 +2896,14 @@ impl MachInstEmit for Inst {
             &Inst::ElfTlsGetAddr { ref symbol, rd } => {
                 let rd = allocs.next_writable(rd);
                 assert_eq!(a0(), rd.to_reg());
-                sink.add_reloc(Reloc::RiscvTlsGd, symbol, 0);
+                sink.add_reloc(Reloc::RiscvTlsGdHi20, symbol, 0);
                 Inst::Auipc {
                     rd: rd,
                     imm: Imm20::from_bits(0),
                 }
                 .emit(&[], sink, emit_info, state);
+
+                sink.add_reloc(Reloc::RiscvPCRelLo12I, symbol, 0);
                 Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Addi,
                     rd: rd,
@@ -2912,7 +2914,7 @@ impl MachInstEmit for Inst {
                 Inst::Call {
                     info: Box::new(CallInfo {
                         dest: ExternalName::LibCall(LibCall::ElfTlsGetAddr),
-                        // We have already done with register alloc.
+                        // We are already done with register alloc.
                         // This call is just help us to emit call to ElfTlsGetAddr.
                         // So uses clobbers ... are all empty.
                         uses: smallvec![],
