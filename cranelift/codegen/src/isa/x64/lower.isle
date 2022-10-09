@@ -242,17 +242,17 @@
 ;; `{i,b}64` and smaller.
 
 ;; And two registers.
-(rule 0 (lower (has_type (fits_in_64 ty) (band x y)))
+(rule 0 (lower (has_type (ty_int ty) (band x y)))
       (x64_and ty x y))
 
 ;; And with a memory operand.
 
-(rule 1 (lower (has_type (fits_in_64 ty)
+(rule 1 (lower (has_type (ty_int ty)
                        (band x (sinkable_load y))))
       (x64_and ty x
                (sink_load_to_gpr_mem_imm y)))
 
-(rule 2 (lower (has_type (fits_in_64 ty)
+(rule 2 (lower (has_type (ty_int ty)
                        (band (sinkable_load x) y)))
       (x64_and ty
                y
@@ -260,28 +260,35 @@
 
 ;; And with an immediate.
 
-(rule 3 (lower (has_type (fits_in_64 ty)
+(rule 3 (lower (has_type (ty_int ty)
                        (band x (simm32_from_value y))))
       (x64_and ty x y))
 
-(rule 4 (lower (has_type (fits_in_64 ty)
+(rule 4 (lower (has_type (ty_int ty)
                        (band (simm32_from_value x) y)))
       (x64_and ty y x))
+
+;; f32 and f64
+
+(rule 5 (lower (has_type (ty_scalar_float ty) (band x y)))
+      (sse_and ty x y))
 
 ;; SSE.
 
 (decl sse_and (Type Xmm XmmMem) Xmm)
 (rule (sse_and $F32X4 x y) (x64_andps x y))
 (rule (sse_and $F64X2 x y) (x64_andpd x y))
+(rule (sse_and $F32 x y) (x64_andps x y))
+(rule (sse_and $F64 x y) (x64_andpd x y))
 (rule -1 (sse_and (multi_lane _bits _lanes) x y) (x64_pand x y))
 
-(rule 5 (lower (has_type ty @ (multi_lane _bits _lanes)
+(rule 6 (lower (has_type ty @ (multi_lane _bits _lanes)
                        (band x y)))
       (sse_and ty x y))
 
 ;; `i128`.
 
-(rule 6 (lower (has_type $I128 (band x y)))
+(rule 7 (lower (has_type $I128 (band x y)))
       (let ((x_regs ValueRegs x)
             (x_lo Gpr (value_regs_get_gpr x_regs 0))
             (x_hi Gpr (value_regs_get_gpr x_regs 1))
@@ -296,39 +303,46 @@
 ;; `{i,b}64` and smaller.
 
 ;; Or two registers.
-(rule 0 (lower (has_type (fits_in_64 ty) (bor x y)))
+(rule 0 (lower (has_type (ty_int ty) (bor x y)))
       (x64_or ty x y))
 
 ;; Or with a memory operand.
 
-(rule 1 (lower (has_type (fits_in_64 ty)
+(rule 1 (lower (has_type (ty_int ty)
                        (bor x (sinkable_load y))))
       (x64_or ty x
           (sink_load_to_gpr_mem_imm y)))
 
-(rule 2 (lower (has_type (fits_in_64 ty)
+(rule 2 (lower (has_type (ty_int ty)
                        (bor (sinkable_load x) y)))
       (x64_or ty y
           (sink_load_to_gpr_mem_imm x)))
 
 ;; Or with an immediate.
 
-(rule 3 (lower (has_type (fits_in_64 ty)
+(rule 3 (lower (has_type (ty_int ty)
                        (bor x (simm32_from_value y))))
       (x64_or ty x y))
 
-(rule 4 (lower (has_type (fits_in_64 ty)
+(rule 4 (lower (has_type (ty_int ty)
                        (bor (simm32_from_value x) y)))
       (x64_or ty y x))
+
+;; f32 and f64
+
+(rule 5 (lower (has_type (ty_scalar_float ty) (bor x y)))
+      (sse_or ty x y))
 
 ;; SSE.
 
 (decl sse_or (Type Xmm XmmMem) Xmm)
 (rule (sse_or $F32X4 x y) (x64_orps x y))
 (rule (sse_or $F64X2 x y) (x64_orpd x y))
+(rule (sse_or $F32 x y) (x64_orps x y))
+(rule (sse_or $F64 x y) (x64_orpd x y))
 (rule -1 (sse_or (multi_lane _bits _lanes) x y) (x64_por x y))
 
-(rule 5 (lower (has_type ty @ (multi_lane _bits _lanes)
+(rule 6 (lower (has_type ty @ (multi_lane _bits _lanes)
                        (bor x y)))
       (sse_or ty x y))
 
@@ -343,7 +357,7 @@
         (value_gprs (x64_or $I64 x_lo y_lo)
                     (x64_or $I64 x_hi y_hi))))
 
-(rule 6 (lower (has_type $I128 (bor x y)))
+(rule 7 (lower (has_type $I128 (bor x y)))
       (or_i128 x y))
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -351,39 +365,44 @@
 ;; `{i,b}64` and smaller.
 
 ;; Xor two registers.
-(rule 0 (lower (has_type (fits_in_64 ty) (bxor x y)))
+(rule 0 (lower (has_type (ty_int ty) (bxor x y)))
       (x64_xor ty x y))
 
 ;; Xor with a memory operand.
 
-(rule 1 (lower (has_type (fits_in_64 ty)
+(rule 1 (lower (has_type (ty_int ty)
                        (bxor x (sinkable_load y))))
       (x64_xor ty x
            (sink_load_to_gpr_mem_imm y)))
 
-(rule 2 (lower (has_type (fits_in_64 ty)
+(rule 2 (lower (has_type (ty_int ty)
                        (bxor (sinkable_load x) y)))
       (x64_xor ty y
            (sink_load_to_gpr_mem_imm x)))
 
 ;; Xor with an immediate.
 
-(rule 3 (lower (has_type (fits_in_64 ty)
+(rule 3 (lower (has_type (ty_int ty)
                        (bxor x (simm32_from_value y))))
       (x64_xor ty x y))
 
-(rule 4 (lower (has_type (fits_in_64 ty)
+(rule 4 (lower (has_type (ty_int ty)
                        (bxor (simm32_from_value x) y)))
       (x64_xor ty y x))
 
+;; f32 and f64
+
+(rule 5 (lower (has_type (ty_scalar_float ty) (bxor x y)))
+      (sse_xor ty x y))
+
 ;; SSE.
 
-(rule 5 (lower (has_type ty @ (multi_lane _bits _lanes) (bxor x y)))
+(rule 6 (lower (has_type ty @ (multi_lane _bits _lanes) (bxor x y)))
       (sse_xor ty x y))
 
 ;; `{i,b}128`.
 
-(rule 6 (lower (has_type $I128 (bxor x y)))
+(rule 7 (lower (has_type $I128 (bxor x y)))
       (let ((x_regs ValueRegs x)
             (x_lo Gpr (value_regs_get_gpr x_regs 0))
             (x_hi Gpr (value_regs_get_gpr x_regs 1))
@@ -1220,8 +1239,9 @@
 
 ;; `i64` and smaller.
 
-(rule -2 (lower (has_type (fits_in_64 ty) (bnot x)))
+(rule -2 (lower (has_type (ty_int ty) (bnot x)))
       (x64_not ty x))
+
 
 ;; `i128`.
 

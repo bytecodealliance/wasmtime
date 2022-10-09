@@ -1531,6 +1531,8 @@
 (decl sse_xor_op (Type) SseOpcode)
 (rule 1 (sse_xor_op $F32X4) (SseOpcode.Xorps))
 (rule 1 (sse_xor_op $F64X2) (SseOpcode.Xorpd))
+(rule 1 (sse_xor_op $F32) (SseOpcode.Xorps))
+(rule 1 (sse_xor_op $F64) (SseOpcode.Xorpd))
 
 ;; Priority 0 because multi_lane overlaps with the previous two explicit type
 ;; patterns.
