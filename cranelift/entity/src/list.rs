@@ -482,18 +482,6 @@ impl<T: EntityRef + ReservedValue> EntityList<T> {
         }
     }
 
-    /// Appends another list from the same ListPool onto this list.
-    pub fn append_list(&mut self, other: &EntityList<T>, pool: &mut ListPool<T>) {
-        let offset = self.len(pool);
-        let new_count = other.len(pool);
-        debug_assert!(new_count <= usize::MAX - offset);
-        self.grow(new_count, pool);
-        for i in 0..new_count {
-            let elt = other.get(i, pool).unwrap();
-            *self.get_mut(offset + i, pool).unwrap() = elt;
-        }
-    }
-
     /// Inserts an element as position `index` in the list, shifting all elements after it to the
     /// right.
     pub fn insert(&mut self, index: usize, element: T, pool: &mut ListPool<T>) {

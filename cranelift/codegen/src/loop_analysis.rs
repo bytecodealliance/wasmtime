@@ -37,6 +37,8 @@ struct LoopData {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LoopLevel(u8);
 impl LoopLevel {
+    const INVALID: u8 = 0xff;
+
     /// Get the root level (no loop).
     pub fn root() -> Self {
         Self(0)
@@ -47,12 +49,12 @@ impl LoopLevel {
     }
     /// Invalid loop level.
     pub fn invalid() -> Self {
-        Self(0x80)
+        Self(Self::INVALID)
     }
     /// One loop level deeper.
     pub fn inc(self) -> Self {
-        if self.0 == 0x7f {
-            Self(0x7f)
+        if self.0 == (Self::INVALID - 1) {
+            self
         } else {
             Self(self.0 + 1)
         }
@@ -114,9 +116,7 @@ impl LoopAnalysis {
     /// Determine if a Block is a loop header. If so, return the loop.
     pub fn is_loop_header(&self, block: Block) -> Option<Loop> {
         self.innermost_loop(block)
-            .map(|lp| (self.loop_header(lp), lp))
-            .filter(|&(header, _)| header == block)
-            .map(|(_, lp)| lp)
+            .filter(|&lp| self.loop_header(lp) == block)
     }
 
     /// Determine if a Block belongs to a loop by running a finger along the loop tree.
@@ -147,10 +147,8 @@ impl LoopAnalysis {
 
     /// Returns the loop-nest level of a given block.
     pub fn loop_level(&self, block: Block) -> LoopLevel {
-        self.block_loop_map[block]
-            .expand()
-            .map(|lp| self.loops[lp].level)
-            .unwrap_or(LoopLevel(0))
+        self.innermost_loop(block)
+            .map_or(LoopLevel(0), |lp| self.loops[lp].level)
     }
 }
 
@@ -300,7 +298,7 @@ impl LoopAnalysis {
                             stack.push(parent);
                         }
                     } else {
-                        self.loops[lp].level = LoopLevel(1);
+                        self.loops[lp].level = LoopLevel::root().inc();
                         stack.pop();
                     }
                 }

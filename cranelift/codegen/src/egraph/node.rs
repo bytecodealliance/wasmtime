@@ -43,8 +43,8 @@ pub enum Node {
         args: EntityList<Id>,
         /// Types of results.
         types: BumpSlice<Type>,
-        /// The original instruction. We include this so that the
-        /// `Inst`s are not deduplicated: every instance is a
+        /// The index of the original instruction. We include this so
+        /// that the `Inst`s are not deduplicated: every instance is a
         /// logically separate and unique side-effect. However,
         /// because we clear the DataFlowGraph before elaboration,
         /// this `Inst` is *not* valid to fetch any details from the
@@ -132,25 +132,16 @@ impl NodeCtx {
 }
 
 impl NodeCtx {
-    fn id_eq(&self, a: Id, b: Id, uf: &mut UnionFind) -> bool {
-        uf.find_and_update(a) == uf.find_and_update(b)
-    }
-
     fn ids_eq(&self, a: &EntityList<Id>, b: &EntityList<Id>, uf: &mut UnionFind) -> bool {
         let a = a.as_slice(&self.args);
         let b = b.as_slice(&self.args);
-        a.len() == b.len() && a.iter().zip(b.iter()).all(|(&a, &b)| self.id_eq(a, b, uf))
-    }
-
-    fn hash_id<H: Hasher>(&self, a: Id, hash: &mut H, uf: &mut UnionFind) {
-        let id = uf.find_and_update(a);
-        id.hash(hash);
+        a.len() == b.len() && a.iter().zip(b.iter()).all(|(&a, &b)| uf.equiv_id_mut(a, b))
     }
 
     fn hash_ids<H: Hasher>(&self, a: &EntityList<Id>, hash: &mut H, uf: &mut UnionFind) {
         let a = a.as_slice(&self.args);
         for &id in a {
-            self.hash_id(id, hash, uf);
+            uf.hash_id_mut(hash, id);
         }
     }
 }
@@ -179,7 +170,7 @@ impl CtxEq<Node, Node> for NodeCtx {
                     result: other_result,
                     ty: other_ty,
                 },
-            ) => self.id_eq(value, other_value, uf) && result == other_result && ty == other_ty,
+            ) => uf.equiv_id_mut(value, other_value) && result == other_result && ty == other_ty,
             (
                 &Node::Pure {
                     ref op,
@@ -222,12 +213,17 @@ impl CtxEq<Node, Node> for NodeCtx {
                     // opcode/offset, address expression, and last
                     // store (this does implicit
                     // redundant-load-elimination.)
+                    //
+                    // Note however that we *do* include `ty` (the
+                    // type) and match on that: we otherwise would
+                    // have no way of disambiguating loads of
+                    // different widths to the same address.
                     ..
                 },
             ) => {
                 op == other_op
                     && ty == other_ty
-                    && self.id_eq(addr, other_addr, uf)
+                    && uf.equiv_id_mut(addr, other_addr)
                     && mem_state == other_mem_state
             }
             _ => false,
@@ -254,7 +250,7 @@ impl CtxHash<Node> for NodeCtx {
                 result,
                 ty: _,
             } => {
-                self.hash_id(value, &mut state, uf);
+                uf.hash_id_mut(&mut state, value);
                 result.hash(&mut state);
             }
             &Node::Pure {
@@ -281,7 +277,7 @@ impl CtxHash<Node> for NodeCtx {
             } => {
                 op.hash(&mut state);
                 ty.hash(&mut state);
-                self.hash_id(addr, &mut state, uf);
+                uf.hash_id_mut(&mut state, addr);
                 mem_state.hash(&mut state);
             }
         }
@@ -296,7 +292,7 @@ impl Cost {
     pub(crate) fn at_level(&self, loop_level: LoopLevel) -> Cost {
         let loop_level = std::cmp::min(2, loop_level.level());
         let multiplier = 1u32 << ((10 * loop_level) as u32);
-        Cost(self.0.saturating_mul(multiplier))
+        Cost(self.0.saturating_mul(multiplier)).finite()
     }
 
     pub(crate) fn infinity() -> Cost {
@@ -307,6 +303,13 @@ impl Cost {
 
     pub(crate) fn zero() -> Cost {
         Cost(0)
+    }
+
+    /// Clamp this cost at a "finite" value. Can be used in
+    /// conjunction with saturating ops to avoid saturating into
+    /// `infinity()`.
+    fn finite(self) -> Cost {
+        Cost(std::cmp::min(u32::MAX - 1, self.0))
     }
 }
 
@@ -319,9 +322,7 @@ impl std::default::Default for Cost {
 impl std::ops::Add<Cost> for Cost {
     type Output = Cost;
     fn add(self, other: Cost) -> Cost {
-        // We saturate at one *less* than "infinity".
-        let sum = std::cmp::min(u32::MAX - 1, self.0.saturating_add(other.0));
-        Cost(sum)
+        Cost(self.0.saturating_add(other.0)).finite()
     }
 }
 
