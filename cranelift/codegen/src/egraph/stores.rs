@@ -173,7 +173,7 @@ impl AliasAnalysis {
 
         while let Some(block) = worklist.pop() {
             worklist_set.remove(&block);
-            let mut state = block_input[block].clone().unwrap();
+            let state = block_input[block].clone().unwrap();
 
             trace!("alias analysis: input to {} is {:?}", block, state);
 
