@@ -35,14 +35,14 @@
 ;;@     (assertions (= (arg) (ret))))
 (decl put_in_reg_zext32 (Value) Reg)
 (extern constructor put_in_reg_zext32 put_in_reg_zext32)
-;; (rule -1 (put_in_reg_zext32 val @ (value_type (fits_in_32 ty)))
-;;       (extend val $false (ty_bits ty) 32))
 
-
-;; TODO AVH
-;;    (assertions (= (int2bv (widthof (ret)) (x)) (ret))))
+;; Corresponding rust:
+;; fn rotr_mask(&mut self, ty: Type) -> ImmLogic {
+;;     ImmLogic::maybe_from_u64((ty.bits() - 1) as u64, I32).unwrap()
+;; }
+;;
 ;;@ (spec (sig (args x) (ret))
-;;@   (assertions (= (7i12:bv) (ret))))
+;;@   (assertions (= (- (int2bv 12 (x)) (1i12:bv)) (ret))))
 (decl rotr_mask (Type) ImmLogic)
 (extern constructor rotr_mask rotr_mask)
 
@@ -85,10 +85,10 @@
 
 ;;@ (spec (sig (args t, x, y) (ret))
 ;;@       (assertions 
-;;@          (<= (t) (16i128: isleType)), 
 ;;@          (= (rotr (x) (y)) (ret)),
-;;@          (= (t) (widthof (x))),
-;;@          (= (t) (widthof (y))),
+;;@          (= (widthof (x)) (t)), 
+;;@          (<= (widthof (x)) (16i128: isleType)), 
+;;@          (<= (widthof (y)) (16i128: isleType)), 
 ;;@       )
 ;;@ )
 (decl small_rotr (Type Reg Reg) Reg)

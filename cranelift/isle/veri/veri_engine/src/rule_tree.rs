@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
-use crate::{interp::Context, termname::pattern_contains_termname};
 use crate::solver::run_solver;
 use crate::type_inference::Solution;
+use crate::{interp::Context, termname::pattern_contains_termname};
 use cranelift_isle as isle;
 use isle::sema::{Pattern, Rule, RuleId, TermEnv, TypeEnv};
 use itertools::Itertools;
 use veri_annotation::parser_wrapper::AnnotationEnv;
 use veri_ir::{
-    all_starting_bitvectors, BoundVar, RulePath, RuleSemantics, RuleTree, Type, UndefinedTerm,
+    all_query_widths, BoundVar, RulePath, RuleSemantics, RuleTree, Type, UndefinedTerm,
     VerificationResult,
 };
 
@@ -205,7 +205,7 @@ pub fn verify_rules_with_lhs_root(
     typesols: &HashMap<RuleId, Solution>,
 ) -> VerificationResult {
     let mut total_result = VerificationResult::Success;
-    for width in all_starting_bitvectors() {
+    for width in all_query_widths() {
         let result = verify_rules_for_type_with_lhs_root(
             root,
             termenv,
@@ -247,6 +247,7 @@ pub fn verify_rules_for_type_wih_rule_filter(
     width: usize,
     filter: impl Fn(&Rule, &TermEnv, &TypeEnv) -> bool,
 ) -> VerificationResult {
+    let mut rules_checked = 0;
     for rule in &termenv.rules {
         if !filter(&rule, termenv, typeenv) {
             println!("skipping rule that doesn't meet filter");
@@ -271,11 +272,16 @@ pub fn verify_rules_for_type_wih_rule_filter(
             rhs_undefined_terms: vec![],
         };
         let result = run_solver(rule_sem, width);
+        rules_checked += 1;
         if result != VerificationResult::Success {
             return result;
         }
     }
-    VerificationResult::Success
+    if rules_checked > 0 {
+        VerificationResult::Success
+    } else {
+        panic!("No rules checked!")
+    }
 }
 
 fn pattern_term_name(pattern: Pattern, termenv: &TermEnv, typeenv: &TypeEnv) -> String {

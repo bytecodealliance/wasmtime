@@ -1632,8 +1632,6 @@
 (decl u8_into_uimm5 (u8) UImm5)
 (extern constructor u8_into_uimm5 u8_into_uimm5)
 
-;;@ (spec (sig (args x) (ret))
-;;@     (assertions (= (zero_ext 4 (x)) (ret))))
 (decl u8_into_imm12 (u8) Imm12)
 (extern constructor u8_into_imm12 u8_into_imm12)
 

@@ -211,7 +211,7 @@ pub enum Expr {
     UndefinedTerm(UndefinedTerm),
 }
 
-pub fn all_starting_bitvectors() -> Vec<usize> {
+pub fn all_query_widths() -> Vec<usize> {
     vec![1, 8, 16, 32, 64]
 }
 

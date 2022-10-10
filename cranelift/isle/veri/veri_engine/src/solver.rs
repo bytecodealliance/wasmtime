@@ -24,27 +24,6 @@ struct SolverCtx {
 }
 
 impl SolverCtx {
-    fn extract_symbolic(&mut self, source: &String, width: &String) -> String {
-        let possible_widths = 0..self.bitwidth;
-        let some_width_matches = format!(
-            "(or {})",
-            possible_widths
-                .clone()
-                .map(|s| format!("(= {} {})", s, width))
-                .join(" ")
-        );
-        self.width_assumptions.push(some_width_matches);
-        let mut ite_str = source.clone();
-        for possible_width in possible_widths {
-            let extract = format!("((_ extract {} 0) {})", possible_width - 1, source);
-            ite_str = format!(
-                "(ite (= {} {}) {} {})",
-                possible_width, width, extract, ite_str
-            );
-        }
-        ite_str
-    }
-
     fn new_fresh_bits(&mut self, width: usize) -> String {
         let name = format!("fresh{}", self.fresh_bits_idx);
         self.fresh_bits_idx += 1;
@@ -60,7 +39,7 @@ impl SolverCtx {
     // For safety, we add an assertion that some arm of this ITE must match.
     fn extend_symbolic(
         &mut self,
-        dest_width: &String, 
+        dest_width: &String,
         source: &String,
         source_width: &String,
         op: &str,
@@ -91,10 +70,10 @@ impl SolverCtx {
                     "(and (= {} {}) (= {} {}))",
                     possible_delta, shift, possible_source, source_width
                 );
+                some_match.push(matching.clone());
 
                 // Extract the relevant bits of the source (which is modeled with a wider,
                 // register-width bitvector).
-                some_match.push(matching.clone());
                 let extract = format!(
                     "((_ extract {} 0) {})",
                     possible_source.wrapping_sub(1),
@@ -131,6 +110,81 @@ impl SolverCtx {
                         source
                     );
                     format!("(concat {} {})", padding, extend)
+                };
+                ite_str = format!("(ite {} {} {})", matching, after_padding, ite_str);
+            }
+        }
+        let some_shift_matches = format!("(or {})", some_match.join(" "));
+        self.width_assumptions.push(some_shift_matches);
+        ite_str
+    }
+
+    // SMTLIB only supports rotates by concrete amounts, but we
+    // need symbolic ones. This method essentially does if-conversion over possible
+    // concrete forms, outputting nested ITE blocks. We consider both the starting
+    // width and the rotate amount to be potentially symbolic.
+    // For safety, we add an assertion that some arm of this ITE must match.
+    fn rotate_symbolic(
+        &mut self,
+        source: &String,
+        source_width: &String,
+        amount: &String,
+        op: &str,
+    ) -> String {
+        let mut some_match = vec![];
+        let mut ite_str = source.clone();
+
+        // Special case: if we are asked to rotate by 0, just return the source
+        let matching = format!("(and (= (_ bv0 {}) {}))", self.bitwidth, amount);
+        some_match.push(matching.clone());
+        ite_str = format!("(ite {} {} {})", matching, source, ite_str);
+
+        // Possible starting widths
+        for possible_source in 1..self.bitwidth + 1 {
+            // For now, ignore rotates beyond the source width. This is safe because
+            // we will fail the rule feasibility check if this is violated.
+            // Possible amounts to rotate by
+            for possible_rotate in 1..possible_source {
+                // Statement meaning the symbolic case matches this concrete case
+                let matching = format!(
+                    "(and (= (_ bv{} {}) {}) (= {} {}))",
+                    possible_rotate, self.bitwidth, amount, possible_source, source_width
+                );
+                some_match.push(matching.clone());
+
+                // Extract the relevant bits of the source (which is modeled with a wider,
+                // register-width bitvector).
+                let extract = format!(
+                    "((_ extract {} 0) {})",
+                    possible_source.wrapping_sub(1),
+                    source
+                );
+
+                // Do the rotate itself.
+                let rotate = format!("((_ {} {}) {})", op, possible_rotate, extract);
+
+                // Pad the extended result back to the full register bitwidth. Use the bits
+                // that were already in the source register. That is, given:
+                //                       reg - source width              source width
+                //                                |                           |
+                // SOURCE: [               don't care bits           |   care bits    ]
+                //
+                //                             dest width
+                //                                |
+                // OUT:    [ same don't care bits                   |   care bits     ]
+                let unconstrained_bits = self.bitwidth.checked_sub(possible_source).unwrap();
+
+                // If we are extending to the full register width, no padding needed
+                let after_padding = if unconstrained_bits == 0 {
+                    rotate
+                } else {
+                    let padding = format!(
+                        "((_ extract {} {}) {})",
+                        self.bitwidth.checked_sub(1).unwrap(),
+                        self.bitwidth.checked_sub(unconstrained_bits).unwrap(),
+                        source
+                    );
+                    format!("(concat {} {})", padding, rotate)
                 };
                 ite_str = format!("(ite {} {} {})", matching, after_padding, ite_str);
             }
@@ -274,9 +328,9 @@ impl SolverCtx {
             }
             Expr::Binary(op, x, y) => {
                 match op {
-                    BinaryOp::BVAdd
-                    | BinaryOp::BVSub
-                    | BinaryOp::BVAnd => self.assume_comparable_types(&*x, &*y),
+                    BinaryOp::BVAdd | BinaryOp::BVSub | BinaryOp::BVAnd => {
+                        self.assume_comparable_types(&*x, &*y)
+                    }
                     _ => (),
                 };
                 match op {
@@ -291,15 +345,45 @@ impl SolverCtx {
                 };
                 match op {
                     BinaryOp::BVRotl => {
-                        // SMT bitvector rotate_left requires that the rotate amount be
-                        // statically specified. Instead, to use a dynamic amount, desugar
-                        // to shifts and bit arithmetic.
-                        return format!(
-                            "(bvor (bvshl {x} {y}) (bvlshr {x} (bvsub {width} {y})))",
-                            x = self.vir_expr_to_rsmt2_str(*x),
-                            y = self.vir_expr_to_rsmt2_str(*y),
-                            width = format!("(_ bv{} {})", self.bitwidth, self.bitwidth)
-                        );
+                        let arg_width = self.get_expr_width_var(&*x).unwrap().clone();
+                        let xs = self.vir_expr_to_rsmt2_str(*x);
+                        let ys = self.vir_expr_to_rsmt2_str(*y);
+                        return self.rotate_symbolic(&xs, &arg_width, &ys, "rotate_left");
+                        // // SMT bitvector rotate_left requires that the rotate amount be
+                        // // statically specified. Instead, to use a dynamic amount, desugar
+                        // // to shifts and bit arithmetic.
+                        // return format!(
+                        //     "(bvor (bvshl {x} {y}) (bvlshr {x} (bvsub {width} {y})))",
+                        //     x = self.vir_expr_to_rsmt2_str(*x),
+                        //     y = self.vir_expr_to_rsmt2_str(*y),
+                        //     width = format!("(_ bv{} {})", self.bitwidth, self.bitwidth)
+                        // );
+                    }
+                    BinaryOp::BVRotr => {
+                        let arg_width = self.get_expr_width_var(&*x).unwrap().clone();
+                        let xs = self.vir_expr_to_rsmt2_str(*x);
+                        let ys = self.vir_expr_to_rsmt2_str(*y);
+                        return self.rotate_symbolic(&xs, &arg_width, &ys, "rotate_right");
+                    }
+                    // To shift right, we need to make sure the bits to the right get zeroed. Shift left first.
+                    BinaryOp::BVShr => {
+                        let arg_width = self.get_expr_width_var(&*x).unwrap().clone();
+                        let xs = self.vir_expr_to_rsmt2_str(*x);
+                        let ys = self.vir_expr_to_rsmt2_str(*y);
+
+                        // Strategy: shift right by (bitwidth - arg width) to zero bits to the right
+                        // of the bits in the argument size. Then shift right by (amt + (bitwidth - arg width))
+
+                        // Width math
+                        let arg_width_as_bv =
+                            format!("((_ int2bv {}) {})", self.bitwidth, arg_width);
+                        let bitwidth_as_bv = format!("(_ bv{} {})", self.bitwidth, self.bitwidth);
+                        let extra_shift =
+                            format!(" (bvsub {} {})", bitwidth_as_bv, arg_width_as_bv);
+                        let shl_to_zero = format!("(bvshl {} {})", xs, extra_shift);
+
+                        let amt_plus_extra = format!("(bvadd {} {})", ys, extra_shift);
+                        return format!("(bvlshr {} {})", shl_to_zero, amt_plus_extra);
                     }
                     _ => (),
                 };
@@ -314,7 +398,6 @@ impl SolverCtx {
                     BinaryOp::BVAnd => "bvand",
                     BinaryOp::BVOr => "bvor",
                     BinaryOp::BVShl => "bvshl",
-                    BinaryOp::BVShr => "bvlshr",
                     _ => unreachable!("{:?}", op),
                 };
                 format!(
@@ -325,7 +408,13 @@ impl SolverCtx {
                 )
             }
             Expr::BVIntToBV(w, x) => {
-                format!("((_ int2bv {}) {})", w, self.vir_expr_to_rsmt2_str(*x))
+                let padded_width = self.bitwidth - w;
+                format!(
+                    "((_ zero_extend {}) ((_ int2bv {}) {}))",
+                    padded_width,
+                    w,
+                    self.vir_expr_to_rsmt2_str(*x)
+                )
             }
             Expr::BVConvTo(y) => {
                 // For static convto, width constraints are handling during inference
@@ -402,6 +491,7 @@ impl SolverCtx {
         solver: &mut Solver<Parser>,
         assumptions: Vec<String>,
     ) -> bool {
+        println!("Checking assumption feasibility");
         solver.push(1).unwrap();
         for a in assumptions {
             // println!("{}", &a);
@@ -416,6 +506,7 @@ impl SolverCtx {
             //     }
             //     Ok(false) => {
             //         println!("Assertion list is infeasible!");
+            //         panic!();
             //         false
             //     }
             //     Err(err) => {
@@ -488,6 +579,8 @@ pub fn run_solver(rule_sem: RuleSemantics, query_width: usize) -> VerificationRe
     }
 
     for (_e, t) in &ctx.tyctx.tyvars {
+        // dbg!(t);
+        // dbg!(&_e);
         let ty = &ctx.tyctx.tymap[&t];
         match ty {
             Type::BitVector(w) => {

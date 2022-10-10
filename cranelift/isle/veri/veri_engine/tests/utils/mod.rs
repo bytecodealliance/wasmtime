@@ -84,19 +84,23 @@ pub fn custom_result(f: &TestResultBuilder) -> TestResult {
     Bitwidth::iter().map(|w| f(w)).collect()
 }
 
-// TODO: waiting on output thoughts. re do previous?
 fn test(inputs: Vec<PathBuf>, tr: TestResult) -> () {
+    test_with_filter(inputs, None, tr)
+}
+// TODO: waiting on output thoughts. re do previous?
+fn test_with_filter(inputs: Vec<PathBuf>, name_filter: Option<String>, tr: TestResult) -> () {
     let lexer = cranelift_isle::lexer::Lexer::from_files(&inputs).unwrap();
     let defs = cranelift_isle::parser::parse(lexer).expect("should parse");
     let (typeenv, termenv) = create_envs(&defs).unwrap();
     let annotation_env = parse_annotations(&inputs);
     let type_sols = type_all_rules(defs, &termenv, &typeenv, &annotation_env);
     let annotation_env = parse_annotations(&inputs);
+    let filter = name_filter.unwrap_or("lower".to_string());
 
     // For now, verify rules rooted in `lower`
     for (bw, expected_result) in tr {
         let result = verify_rules_for_type_with_lhs_root(
-            "lower",
+            &filter,
             &termenv,
             &typeenv,
             &annotation_env,
@@ -129,6 +133,15 @@ fn test_with_rule_filter(
         );
         assert_eq!(result, expected_result);
     }
+}
+
+pub fn test_from_file_with_filter(s: &str, filter: String, tr: TestResult) -> () {
+    // TODO: clean up path logic
+    let cur_dir = env::current_dir().expect("Can't access current working directory");
+    let clif_isle = cur_dir.join("../../../codegen/src").join("clif.isle");
+    let prelude_isle = cur_dir.join("../../../codegen/src").join("prelude.isle");
+    let input = PathBuf::from(s);
+    test_with_filter(vec![clif_isle, prelude_isle, input], Some(filter), tr);
 }
 
 pub fn test_from_file(s: &str, tr: TestResult) -> () {

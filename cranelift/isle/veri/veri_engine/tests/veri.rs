@@ -3,8 +3,9 @@ use utils::{
     all_failure_result, all_success_result, custom_result, just_8_result, lte_64_success_result,
 };
 use utils::{
+    Bitwidth,
     test_from_file, test_from_file_custom_prelude, test_from_file_self_contained,
-    test_from_files_with_lhs_termname,
+    test_from_file_with_filter, test_from_files_with_lhs_termname,
 };
 use veri_ir::{Counterexample, VerificationResult};
 
@@ -92,15 +93,61 @@ fn test_broken_uextend() {
     )
 }
 
-// #[test]
-// fn test_rotl_from_file() {
-//     let files = vec![
-//         "../../../codegen/src/isa/aarch64/inst.isle",
-//         "../../../codegen/src/isa/aarch64/lower.isle",
-//     ];
-//     // TODO: enable once this works
-//     test_from_files_with_lhs_termname(files, "rotl", just_8_result());
-// }
+#[test]
+fn test_small_rotr() {
+    test_from_file_with_filter(
+        "./examples/small_rotr.isle",
+        "small_rotr".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::Success),
+            (Bitwidth::I8, VerificationResult::Success),
+            (Bitwidth::I16, VerificationResult::Success),
+            (Bitwidth::I32, VerificationResult::InapplicableRule),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+    )
+}
+
+#[test]
+fn test_small_rotr_broken() {
+    test_from_file_with_filter(
+        "./examples/broken_mask_small_rotr.isle",
+        "small_rotr".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::Success),
+            (Bitwidth::I8, VerificationResult::Failure(Counterexample {})),
+            (Bitwidth::I16, VerificationResult::Failure(Counterexample {})),
+            (Bitwidth::I32, VerificationResult::InapplicableRule),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+    );
+    test_from_file_with_filter(
+        "./examples/broken_rule_or_small_rotr.isle",
+        "small_rotr".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::Failure(Counterexample {})),
+            (Bitwidth::I8, VerificationResult::Failure(Counterexample {})),
+            (Bitwidth::I16, VerificationResult::Failure(Counterexample {})),
+            (Bitwidth::I32, VerificationResult::InapplicableRule),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+    )
+}
+
+#[test]
+fn test_8_16_rotl() {
+    test_from_file_with_filter(
+        "./examples/small_rotr.isle",
+        "rotl".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::Success),
+            (Bitwidth::I8, VerificationResult::Success),
+            (Bitwidth::I16, VerificationResult::Success),
+            (Bitwidth::I32, VerificationResult::InapplicableRule),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+    )
+}
 
 #[test]
 fn test_let() {
