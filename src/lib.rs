@@ -501,8 +501,6 @@ pub unsafe extern "C" fn fd_write(
 
     match Descriptor::get(fd) {
         Descriptor::File(file) => {
-            register_buffer(ptr as *mut _, len);
-
             let result = file
                 .fd
                 .pwrite(slice::from_raw_parts(ptr, len), file.position);
