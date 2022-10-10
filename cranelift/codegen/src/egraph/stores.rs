@@ -163,7 +163,7 @@ impl AliasAnalysis {
         func: &Function,
         cfg: &ControlFlowGraph,
     ) -> SecondaryMap<Block, Option<LastStores>> {
-        let mut block_input = SecondaryMap::with_capacity_and_default(func.dfg.num_blocks(), None);
+        let mut block_input = SecondaryMap::with_capacity(func.dfg.num_blocks());
         let mut worklist: SmallVec<[Block; 8]> = smallvec![];
         let mut worklist_set = FxHashSet::default();
         let entry = func.layout.entry_block().unwrap();
