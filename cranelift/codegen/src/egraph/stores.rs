@@ -19,14 +19,10 @@
 //! may-alias another load or store if both access the same category
 //! of abstract state.
 //!
-//! The "last store" pass helps to compute this aliasing: as we scan
-//! the input CLIF to produce the egraph, we track the last
-//! instruction that *might have* written to a given part of abstract
-//! state. We also track the block containing this store. When we
-//! enter a block no longer dominated by that block, we clear the info
-//! to "unknown". (We could do a fixpoint analysis instead and resolve
-//! merges this way, but in practice when iterating over a
-//! structured-code CFG in RPO, our approach will do just as well.)
+//! The "last store" pass helps to compute this aliasing: we perform a
+//! fixpoint analysis to track the last instruction that *might have*
+//! written to a given part of abstract state. We also track the block
+//! containing this store.
 //!
 //! We can't say for sure that the "last store" *did* actually write
 //! that state, but we know for sure that no instruction *later* than
@@ -168,23 +164,27 @@ impl AliasAnalysis {
         cfg: &ControlFlowGraph,
     ) -> SecondaryMap<Block, Option<LastStores>> {
         let mut block_input = SecondaryMap::with_capacity_and_default(func.dfg.num_blocks(), None);
-        let mut queue: SmallVec<[Block; 8]> = smallvec![];
-        let mut queue_set = FxHashSet::default();
+        let mut worklist: SmallVec<[Block; 8]> = smallvec![];
+        let mut worklist_set = FxHashSet::default();
         let entry = func.layout.entry_block().unwrap();
-        queue.push(entry);
-        queue_set.insert(entry);
+        worklist.push(entry);
+        worklist_set.insert(entry);
         block_input[entry] = Some(LastStores::default());
 
-        while let Some(block) = queue.pop() {
-            queue_set.remove(&block);
+        while let Some(block) = worklist.pop() {
+            worklist_set.remove(&block);
             let mut state = block_input[block].clone().unwrap();
 
             trace!("alias analysis: input to {} is {:?}", block, state);
 
-            for inst in func.layout.block_insts(block) {
-                state.update(func, inst);
-                trace!("after {}: state is {:?}", inst, state);
-            }
+            let state = func
+                .layout
+                .block_insts(block)
+                .fold(state, |mut state, inst| {
+                    state.update(func, inst);
+                    trace!("after {}: state is {:?}", inst, state);
+                    state
+                });
 
             for succ in cfg.succ_iter(block) {
                 let succ_first_inst = func.layout.first_inst(succ).unwrap();
@@ -195,8 +195,8 @@ impl AliasAnalysis {
                     .meet_from(&state, succ_first_inst);
                 let updated = *succ_state != old;
 
-                if updated && queue_set.insert(succ) {
-                    queue.push(succ);
+                if updated && worklist_set.insert(succ) {
+                    worklist.push(succ);
                 }
             }
         }
