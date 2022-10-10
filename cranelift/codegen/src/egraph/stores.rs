@@ -80,31 +80,28 @@ struct LastStores {
 }
 
 /// State of memory seen by a load.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum MemoryState {
+    /// State at function entry: nothing is known (but it is one
+    /// consistent value, so two loads from "entry" state at the same
+    /// address will still provide the same result).
+    #[default]
     Entry,
+    /// State just after a store by the given instruction. The
+    /// instruction is a store from which we can forward.
     Store(Inst),
+    /// State just before the given instruction. Used for abstract
+    /// value merges at merge-points when we cannot name a single
+    /// producing site.
     BeforeInst(Inst),
+    /// State just after the given instruction. Used when the
+    /// instruction may update the associated state, but is not a
+    /// store whose value we can cleanly forward. (E.g., perhaps a
+    /// barrier of some sort.)
     AfterInst(Inst),
-    Top,
-}
-
-impl std::default::Default for MemoryState {
-    fn default() -> Self {
-        MemoryState::Top
-    }
 }
 
 impl LastStores {
-    fn entry() -> Self {
-        Self {
-            heap: MemoryState::Entry,
-            table: MemoryState::Entry,
-            vmctx: MemoryState::Entry,
-            other: MemoryState::Entry,
-        }
-    }
-
     fn update(&mut self, func: &Function, inst: Inst) {
         let opcode = func.dfg[inst].opcode();
         if has_memory_fence_semantics(opcode) {
@@ -152,7 +149,6 @@ impl LastStores {
         let meet = |a: MemoryState, b: MemoryState| -> MemoryState {
             match (a, b) {
                 (a, b) if a == b => a,
-                (MemoryState::Top, a) | (a, MemoryState::Top) => a,
                 _ => MemoryState::BeforeInst(loc),
             }
         };
@@ -188,19 +184,19 @@ impl AliasAnalysis {
         &mut self,
         func: &Function,
         cfg: &ControlFlowGraph,
-    ) -> SecondaryMap<Block, LastStores> {
-        let mut block_input = SecondaryMap::with_default(LastStores::default());
+    ) -> SecondaryMap<Block, Option<LastStores>> {
+        let mut block_input = SecondaryMap::with_default(None);
         block_input.resize(func.dfg.num_blocks());
         let mut queue: SmallVec<[Block; 8]> = smallvec![];
         let mut queue_set = FxHashSet::default();
         let entry = func.layout.entry_block().unwrap();
         queue.push(entry);
         queue_set.insert(entry);
-        block_input[entry] = LastStores::entry();
+        block_input[entry] = Some(LastStores::default());
 
         while let Some(block) = queue.pop() {
             queue_set.remove(&block);
-            let mut state = block_input[block].clone();
+            let mut state = block_input[block].clone().unwrap();
 
             log::trace!(
                 "alias analysis: input to block{} is {:?}",
@@ -217,7 +213,9 @@ impl AliasAnalysis {
                 let succ_first_inst = func.layout.block_insts(succ).into_iter().next().unwrap();
                 let succ_state = &mut block_input[succ];
                 let old = succ_state.clone();
-                succ_state.meet_from(&state, succ_first_inst);
+                succ_state
+                    .get_or_insert_with(|| LastStores::default())
+                    .meet_from(&state, succ_first_inst);
                 let updated = *succ_state != old;
 
                 if updated && queue_set.insert(succ) {
@@ -233,10 +231,10 @@ impl AliasAnalysis {
     fn compute_load_last_stores(
         &mut self,
         func: &Function,
-        block_input: SecondaryMap<Block, LastStores>,
+        block_input: SecondaryMap<Block, Option<LastStores>>,
     ) {
         for block in func.layout.blocks() {
-            let mut state = block_input[block].clone();
+            let mut state = block_input[block].clone().unwrap();
 
             for inst in func.layout.block_insts(block) {
                 log::trace!(
