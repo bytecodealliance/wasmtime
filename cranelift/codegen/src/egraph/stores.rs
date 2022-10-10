@@ -64,7 +64,7 @@
 use crate::flowgraph::ControlFlowGraph;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::has_memory_fence_semantics;
-use crate::ir::{Block, Function, Inst, Opcode};
+use crate::ir::{Block, Function, Inst, InstructionData, MemFlags, Opcode};
 use cranelift_entity::EntityRef;
 use cranelift_entity::SecondaryMap;
 use smallvec::{smallvec, SmallVec};
@@ -111,15 +111,7 @@ impl LastStores {
             self.other = MemoryState::AfterInst(inst);
         } else if opcode.can_store() {
             if let Some(memflags) = func.dfg[inst].memflags() {
-                if memflags.heap() {
-                    self.heap = MemoryState::Store(inst);
-                } else if memflags.table() {
-                    self.table = MemoryState::Store(inst);
-                } else if memflags.vmctx() {
-                    self.vmctx = MemoryState::Store(inst);
-                } else {
-                    self.other = MemoryState::Store(inst);
-                }
+                *self.for_flags(memflags) = MemoryState::Store(inst);
             } else {
                 self.heap = MemoryState::AfterInst(inst);
                 self.table = MemoryState::AfterInst(inst);
@@ -129,19 +121,15 @@ impl LastStores {
         }
     }
 
-    fn get_load_input_state(&self, func: &Function, inst: Inst) -> MemoryState {
-        if let Some(memflags) = func.dfg[inst].memflags() {
-            if memflags.heap() {
-                self.heap
-            } else if memflags.table() {
-                self.table
-            } else if memflags.vmctx() {
-                self.vmctx
-            } else {
-                self.other
-            }
+    fn for_flags(&mut self, memflags: MemFlags) -> &mut MemoryState {
+        if memflags.heap() {
+            &mut self.heap
+        } else if memflags.table() {
+            &mut self.table
+        } else if memflags.vmctx() {
+            &mut self.vmctx
         } else {
-            MemoryState::AfterInst(inst)
+            &mut self.other
         }
     }
 
@@ -245,8 +233,25 @@ impl AliasAnalysis {
                 );
 
                 let opcode = func.dfg[inst].opcode();
-                if opcode == Opcode::Load {
-                    let mem_state = state.get_load_input_state(func, inst);
+                // N.B.: we match `Load` specifically, and not any
+                // other kinds of loads (or any opcode such that
+                // `opcode.can_load()` returns true), because some
+                // "can load" instructions actually have very
+                // different semantics (are not just a load of a
+                // particularly-typed value). For example, atomic
+                // (load/store, RMW, CAS) instructions "can load" but
+                // definitely should not participate in store-to-load
+                // forwarding or redundant-load elimination. Our goal
+                // here is to provide a `MemoryState` just for plain
+                // old loads whose semantics we can completely reason
+                // about.
+                if let InstructionData::Load {
+                    opcode: Opcode::Load,
+                    flags,
+                    ..
+                } = func.dfg[inst]
+                {
+                    let mem_state = *state.for_flags(flags);
                     log::trace!(
                         "alias analysis: at inst{}: load with mem_state {:?}",
                         inst.index(),
