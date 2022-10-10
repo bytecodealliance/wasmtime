@@ -3,6 +3,7 @@
 use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
 use crate::loop_analysis::{LoopAnalysis, LoopLevel};
+use crate::trace;
 use crate::{
     fx::{FxHashMap, FxHashSet},
     inst_predicates::has_side_effect,
@@ -201,7 +202,7 @@ impl<'a> FuncEGraph<'a> {
                 } else if let Some(mem_state) = mem_state {
                     let addr = args.as_slice(&self.node_ctx.args)[0];
                     let ty = types.as_slice(&self.node_ctx.types)[0];
-                    log::trace!("load at inst {} has mem state {:?}", inst, mem_state);
+                    trace!("load at inst {} has mem state {:?}", inst, mem_state);
                     self.stats.node_created += 1;
                     self.stats.node_load += 1;
                     Node::Load {
@@ -255,7 +256,7 @@ impl<'a> FuncEGraph<'a> {
                         // Loads: do store-to-load forwarding, and
                         // otherwise add to side-effecting roots.
                         let opt_id = crate::opts::store_to_load(id, self);
-                        log::trace!("store_to_load: {} -> {}", id, opt_id);
+                        trace!("store_to_load: {} -> {}", id, opt_id);
                         if opt_id == id {
                             self.side_effect_ids.push(id);
                             self.stats.side_effect_nodes += 1;
@@ -282,7 +283,7 @@ impl<'a> FuncEGraph<'a> {
                 match results {
                     &[] => {}
                     &[one_result] => {
-                        log::trace!("build: value {} -> id {}", one_result, id);
+                        trace!("build: value {} -> id {}", one_result, id);
                         value_to_id.insert(one_result, id);
                     }
                     many_results => {
@@ -302,7 +303,7 @@ impl<'a> FuncEGraph<'a> {
                                 .get();
                             self.stats.node_created += 1;
                             self.stats.node_result += 1;
-                            log::trace!("build: value {} -> id {}", result, projection);
+                            trace!("build: value {} -> id {}", result, projection);
                             value_to_id.insert(result, projection);
                         }
                     }

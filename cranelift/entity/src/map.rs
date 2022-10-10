@@ -77,6 +77,18 @@ where
         }
     }
 
+    /// Create a new empty map with a specified default value and the
+    /// specified capacity.
+    ///
+    /// Works exactly like a combination of `with_capacity()` and `with_default()`.
+    pub fn with_capacity_and_default(capacity: usize, default: V) -> Self {
+        Self {
+            elems: Vec::with_capacity(capacity),
+            default,
+            unused: PhantomData,
+        }
+    }
+
     /// Returns the number of elements the map can hold without reallocating.
     pub fn capacity(&self) -> usize {
         self.elems.capacity()

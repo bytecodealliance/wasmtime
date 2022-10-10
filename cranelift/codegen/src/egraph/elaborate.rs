@@ -10,6 +10,7 @@ use crate::fx::FxHashSet;
 use crate::ir::{Block, Function, Inst, RelSourceLoc, Type, Value, ValueList};
 use crate::loop_analysis::LoopAnalysis;
 use crate::scoped_hash_map::ScopedHashMap;
+use crate::trace;
 use alloc::vec::Vec;
 use cranelift_egraph::{EGraph, Id, Language, NodeKey};
 use cranelift_entity::{packed_option::PackedOption, SecondaryMap};
@@ -135,7 +136,7 @@ impl<'a> Elaborator<'a> {
     }
 
     fn start_block(&mut self, idom: Option<Block>, block: Block, block_params: &[(Id, Type)]) {
-        log::trace!(
+        trace!(
             "start_block: block {:?} with idom {:?} at loop depth {} scope depth {}",
             block,
             idom,
@@ -159,7 +160,7 @@ impl<'a> Elaborator<'a> {
                     hoist_block: idom,
                     scope_depth: (self.id_to_value.depth() - 1) as u32,
                 });
-                log::trace!(
+                trace!(
                     " -> loop header, pushing; depth now {}",
                     self.loop_stack.len()
                 );
@@ -174,7 +175,7 @@ impl<'a> Elaborator<'a> {
         self.cur_block = Some(block);
         for &(id, ty) in block_params {
             let value = self.func.dfg.append_block_param(block, ty);
-            log::trace!(" -> block param id {:?} value {:?}", id, value);
+            trace!(" -> block param id {:?} value {:?}", id, value);
             self.id_to_value.insert_if_absent(
                 id,
                 IdValue::Value {
@@ -232,20 +233,20 @@ impl<'a> Elaborator<'a> {
     fn compute_best_nodes(&mut self) {
         let best = &mut self.id_to_best_cost_and_node;
         for (eclass_id, eclass) in &self.egraph.classes {
-            log::trace!("computing best for eclass {:?}", eclass_id);
+            trace!("computing best for eclass {:?}", eclass_id);
             if let Some(child1) = eclass.child1() {
-                log::trace!(" -> child {:?}", child1);
+                trace!(" -> child {:?}", child1);
                 best[eclass_id] = best[child1];
             }
             if let Some(child2) = eclass.child2() {
-                log::trace!(" -> child {:?}", child2);
+                trace!(" -> child {:?}", child2);
                 if best[child2].0 < best[eclass_id].0 {
                     best[eclass_id] = best[child2];
                 }
             }
             if let Some(node_key) = eclass.get_node() {
                 let node = node_key.node::<NodeCtx>(&self.egraph.nodes);
-                log::trace!(" -> eclass {:?}: node {:?}", eclass_id, node);
+                trace!(" -> eclass {:?}: node {:?}", eclass_id, node);
                 let (cost, id) = match node {
                     Node::Param { .. }
                     | Node::Inst { .. }
@@ -257,7 +258,7 @@ impl<'a> Elaborator<'a> {
                             .children(node)
                             .iter()
                             .map(|&arg_id| {
-                                log::trace!("  -> arg {:?}", arg_id);
+                                trace!("  -> arg {:?}", arg_id);
                                 best[arg_id].0
                             })
                             // Can't use `.sum()` for `Cost` types; do
@@ -276,7 +277,7 @@ impl<'a> Elaborator<'a> {
             }
             debug_assert_ne!(best[eclass_id].0, Cost::infinity());
             debug_assert_ne!(best[eclass_id].1, Id::invalid());
-            log::trace!("best for eclass {:?}: {:?}", eclass_id, best[eclass_id]);
+            trace!("best for eclass {:?}: {:?}", eclass_id, best[eclass_id]);
         }
     }
 
@@ -296,7 +297,7 @@ impl<'a> Elaborator<'a> {
 
                     self.stats.elaborate_visit_node += 1;
                     let canonical = self.egraph.canonical_id(id);
-                    log::trace!("elaborate: id {}", id);
+                    trace!("elaborate: id {}", id);
 
                     let remat = if let Some(val) = self.id_to_value.get(&canonical) {
                         // Look at the defined block, and determine whether this
@@ -306,12 +307,12 @@ impl<'a> Elaborator<'a> {
                         let remat = val.block() != self.cur_block.unwrap()
                             && self.remat_ids.contains(&canonical);
                         if !remat {
-                            log::trace!("elaborate: id {} -> {:?}", id, val);
+                            trace!("elaborate: id {} -> {:?}", id, val);
                             self.stats.elaborate_memoize_hit += 1;
                             self.elab_result_stack.push(val.clone());
                             continue;
                         }
-                        log::trace!("elaborate: id {} -> remat", id);
+                        trace!("elaborate: id {} -> remat", id);
                         self.stats.elaborate_memoize_miss_remat += 1;
                         // The op is pure at this point, so it is always valid to
                         // remove from this map.
@@ -327,7 +328,7 @@ impl<'a> Elaborator<'a> {
                     let (_, best_node_eclass) = self.id_to_best_cost_and_node[id];
                     debug_assert_ne!(best_node_eclass, Id::invalid());
 
-                    log::trace!(
+                    trace!(
                         "elaborate: id {} -> best {} -> eclass node {:?}",
                         id,
                         best_node_eclass,
@@ -335,7 +336,7 @@ impl<'a> Elaborator<'a> {
                     );
                     let node_key = self.egraph.classes[best_node_eclass].get_node().unwrap();
                     let node = node_key.node::<NodeCtx>(&self.egraph.nodes);
-                    log::trace!(" -> enode {:?}", node);
+                    trace!(" -> enode {:?}", node);
 
                     // Is the node a block param? We should never get here if so
                     // (they are inserted when first visiting the block).
@@ -348,7 +349,7 @@ impl<'a> Elaborator<'a> {
                     // eventually return here (saving state with a
                     // PendingProjection).
                     if let Node::Result { value, result, .. } = node {
-                        log::trace!(" -> result; pushing arg value {}", value);
+                        trace!(" -> result; pushing arg value {}", value);
                         self.elab_stack.push(ElabStackEntry::PendingProjection {
                             index: *result,
                             canonical,

@@ -65,7 +65,7 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::has_memory_fence_semantics;
 use crate::ir::{Block, Function, Inst, InstructionData, MemFlags, Opcode};
-use cranelift_entity::EntityRef;
+use crate::trace;
 use cranelift_entity::SecondaryMap;
 use smallvec::{smallvec, SmallVec};
 
@@ -158,23 +158,16 @@ impl AliasAnalysis {
     /// Perform an alias analysis pass.
     pub fn new(func: &Function, cfg: &ControlFlowGraph) -> AliasAnalysis {
         log::trace!("alias analysis: input is:\n{:?}", func);
-        let mut analysis = AliasAnalysis {
-            load_mem_state: FxHashMap::default(),
-        };
-
-        let block_input = analysis.compute_block_input_states(func, cfg);
-        analysis.compute_load_last_stores(func, block_input);
-        analysis
+        let block_input = Self::compute_block_input_states(func, cfg);
+        let load_mem_state = Self::compute_load_last_stores(func, block_input);
+        AliasAnalysis { load_mem_state }
     }
 
-    #[inline(never)]
     fn compute_block_input_states(
-        &mut self,
         func: &Function,
         cfg: &ControlFlowGraph,
     ) -> SecondaryMap<Block, Option<LastStores>> {
-        let mut block_input = SecondaryMap::with_default(None);
-        block_input.resize(func.dfg.num_blocks());
+        let mut block_input = SecondaryMap::with_capacity_and_default(func.dfg.num_blocks(), None);
         let mut queue: SmallVec<[Block; 8]> = smallvec![];
         let mut queue_set = FxHashSet::default();
         let entry = func.layout.entry_block().unwrap();
@@ -186,19 +179,15 @@ impl AliasAnalysis {
             queue_set.remove(&block);
             let mut state = block_input[block].clone().unwrap();
 
-            log::trace!(
-                "alias analysis: input to block{} is {:?}",
-                block.index(),
-                state
-            );
+            trace!("alias analysis: input to {} is {:?}", block, state);
 
             for inst in func.layout.block_insts(block) {
                 state.update(func, inst);
-                log::trace!("after inst{}: state is {:?}", inst.index(), state);
+                trace!("after {}: state is {:?}", inst, state);
             }
 
             for succ in cfg.succ_iter(block) {
-                let succ_first_inst = func.layout.block_insts(succ).into_iter().next().unwrap();
+                let succ_first_inst = func.layout.first_inst(succ).unwrap();
                 let succ_state = &mut block_input[succ];
                 let old = succ_state.clone();
                 succ_state
@@ -215,24 +204,23 @@ impl AliasAnalysis {
         block_input
     }
 
-    #[inline(never)]
     fn compute_load_last_stores(
-        &mut self,
         func: &Function,
         block_input: SecondaryMap<Block, Option<LastStores>>,
-    ) {
+    ) -> FxHashMap<Inst, MemoryState> {
+        let mut load_mem_state = FxHashMap::default();
+
         for block in func.layout.blocks() {
             let mut state = block_input[block].clone().unwrap();
 
             for inst in func.layout.block_insts(block) {
-                log::trace!(
-                    "alias analysis: scanning at inst{} with state {:?} ({:?})",
-                    inst.index(),
+                trace!(
+                    "alias analysis: scanning at {} with state {:?} ({:?})",
+                    inst,
                     state,
                     func.dfg[inst],
                 );
 
-                let opcode = func.dfg[inst].opcode();
                 // N.B.: we match `Load` specifically, and not any
                 // other kinds of loads (or any opcode such that
                 // `opcode.can_load()` returns true), because some
@@ -252,22 +240,24 @@ impl AliasAnalysis {
                 } = func.dfg[inst]
                 {
                     let mem_state = *state.for_flags(flags);
-                    log::trace!(
-                        "alias analysis: at inst{}: load with mem_state {:?}",
-                        inst.index(),
+                    trace!(
+                        "alias analysis: at {}: load with mem_state {:?}",
+                        inst,
                         mem_state,
                     );
 
-                    self.load_mem_state.insert(inst, mem_state);
+                    load_mem_state.insert(inst, mem_state);
                 }
 
                 state.update(func, inst);
             }
         }
+
+        load_mem_state
     }
 
     /// Get the state seen by a load, if any.
     pub fn get_state_for_load(&self, inst: Inst) -> Option<MemoryState> {
-        self.load_mem_state.get(&inst).cloned()
+        self.load_mem_state.get(&inst).copied()
     }
 }

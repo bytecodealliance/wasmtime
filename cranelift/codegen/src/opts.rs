@@ -15,6 +15,7 @@ pub use crate::ir::{
 };
 use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;
+use crate::trace;
 pub use cranelift_egraph::{Id, NewOrExisting, NodeIter};
 use cranelift_entity::{EntityList, EntityRef};
 use smallvec::SmallVec;
@@ -37,7 +38,7 @@ struct IsleContext<'a, 'b> {
 const REWRITE_LIMIT: usize = 5;
 
 pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
-    log::trace!("running rules on eclass {}", id.index());
+    trace!("running rules on eclass {}", id.index());
     egraph.stats.rewrite_rule_invoked += 1;
 
     if egraph.rewrite_depth > REWRITE_LIMIT {
@@ -53,7 +54,7 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     if let Some(mut ids) = optimized_ids {
         while let Some(new_id) = ids.next(&mut ctx) {
             if ctx.egraph.subsume_ids.contains(&new_id) {
-                log::trace!(" -> eclass {} subsumes {}", new_id, id);
+                trace!(" -> eclass {} subsumes {}", new_id, id);
                 ctx.egraph.stats.node_subsume += 1;
                 // Merge in the unionfind so canonicalization still
                 // works, but take *only* the subsuming ID, and break
@@ -68,7 +69,7 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
                 .egraph
                 .egraph
                 .union(&ctx.egraph.node_ctx, union_id, new_id);
-            log::trace!(
+            trace!(
                 " -> union eclass {} with {} to get {}",
                 new_id,
                 old_union_id,
@@ -77,7 +78,7 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
         }
     }
     ctx.egraph.subsume_ids.clear();
-    log::trace!(" -> optimize {} got {}", id, union_id);
+    trace!(" -> optimize {} got {}", id, union_id);
     ctx.egraph.rewrite_depth -= 1;
     union_id
 }
@@ -92,9 +93,9 @@ pub(crate) fn store_to_load<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
             ..
         } = load_key.node::<NodeCtx>(&egraph.egraph.nodes)
         {
-            log::trace!(" -> got load op for id {}: {:?}", id, load_op);
+            trace!(" -> got load op for id {}: {:?}", id, load_op);
             if let Some((store_ty, store_id)) = egraph.store_nodes.get(&store_inst) {
-                log::trace!(" -> got store id: {} ty: {}", store_id, store_ty);
+                trace!(" -> got store id: {} ty: {}", store_id, store_ty);
                 if *store_ty == *load_ty {
                     if let Some(store_key) = egraph.egraph.classes[*store_id].get_node() {
                         if let Node::Inst {
@@ -103,7 +104,7 @@ pub(crate) fn store_to_load<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
                             ..
                         } = store_key.node::<NodeCtx>(&egraph.egraph.nodes)
                         {
-                            log::trace!(
+                            trace!(
                                 "load id {} from store id {}: {:?}, {:?}",
                                 id,
                                 store_id,
@@ -123,14 +124,14 @@ pub(crate) fn store_to_load<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
                                         ..
                                     },
                                 ) if *load_offset == *store_offset => {
-                                    log::trace!(" -> same offset");
+                                    trace!(" -> same offset");
                                     let store_args = store_args.as_slice(&egraph.node_ctx.args);
                                     let store_data = store_args[0];
                                     let store_addr = store_args[1];
                                     let store_addr = egraph.egraph.canonical_id(store_addr);
                                     let load_addr = egraph.egraph.canonical_id(*load_addr);
                                     if store_addr == load_addr {
-                                        log::trace!(" -> same address; forwarding");
+                                        trace!(" -> same address; forwarding");
                                         egraph.stats.store_to_load_forward += 1;
                                         return store_data;
                                     }
@@ -166,7 +167,7 @@ where
 
     fn next(&mut self, ctx: &mut IsleContext<'a, 'b>) -> Option<Self::Output> {
         while let Some(node) = self.iter.next(&ctx.egraph.egraph) {
-            log::trace!("iter from root {}: node {:?}", self.root, node);
+            trace!("iter from root {}: node {:?}", self.root, node);
             match node {
                 Node::Pure { op, args, types }
                 | Node::Inst {
@@ -295,13 +296,13 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
     }
 
     fn remat(&mut self, id: Id) -> Id {
-        log::trace!("remat: {}", id);
+        trace!("remat: {}", id);
         self.egraph.remat_ids.insert(id);
         id
     }
 
     fn subsume(&mut self, id: Id) -> Id {
-        log::trace!("subsume: {}", id);
+        trace!("subsume: {}", id);
         self.egraph.subsume_ids.insert(id);
         id
     }
