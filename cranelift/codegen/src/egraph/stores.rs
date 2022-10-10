@@ -29,8 +29,8 @@
 //! it (up to the current instruction) did. However, we can get a
 //! must-alias property from this: if at a given load or store, we
 //! look backward to the "last store", *AND* we find that it has
-//! exactly the same address expression and type, then we know that
-//! the current instruction's access *must* be to the same memory
+//! exactly the same address expression and value type, then we know
+//! that the current instruction's access *must* be to the same memory
 //! location.
 //!
 //! To get this must-alias property, we leverage the node
