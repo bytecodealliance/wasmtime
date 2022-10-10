@@ -918,15 +918,21 @@ pub struct File {
     position: u64,
 }
 
+const PAGE_SIZE: usize = 65536;
+
 impl Descriptor {
     fn get(fd: Fd) -> &'static mut Descriptor {
         unsafe {
             let mut fds = replace_fds(null_mut());
             if fds.is_null() {
-                fds = core::arch::wasm32::memory_grow(0, 1) as *mut u8;
+                let grew = core::arch::wasm32::memory_grow(0, 1);
+                if grew == usize::MAX {
+                    unreachable();
+                }
+                fds = (grew * PAGE_SIZE) as *mut u8;
             }
             // We allocated a page; abort if that's not enough.
-            if fd as usize * size_of::<Descriptor>() >= 65536 {
+            if fd as usize * size_of::<Descriptor>() >= PAGE_SIZE {
                 unreachable()
             }
             let result = &mut *fds.cast::<Descriptor>().add(fd as usize);
