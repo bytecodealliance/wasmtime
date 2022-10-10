@@ -119,7 +119,7 @@ fn check_overlaps(env: &TermEnv) -> Errors {
                 // not actually affect the results.
                 continue;
             }
-                
+
             let mut binds = Vec::new();
             let rule = RulePatterns {
                 rule,
