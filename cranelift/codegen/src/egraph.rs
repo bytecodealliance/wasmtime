@@ -160,11 +160,6 @@ impl<'a> FuncEGraph<'a> {
             let side_effect_start =
                 u32::try_from(self.side_effect_ids.len()).expect("Overflow in side-effect count");
             for inst in func.layout.block_insts(block) {
-                let side_effect = has_side_effect(func, inst)
-                    || (func.dfg[inst].opcode().can_load()
-                        && func.dfg[inst].memflags().is_some()
-                        && !func.dfg[inst].memflags().unwrap().readonly());
-
                 // Build args from SSA values.
                 let args = EntityList::from_iter(
                     func.dfg.inst_args(inst).iter().map(|&arg| {
