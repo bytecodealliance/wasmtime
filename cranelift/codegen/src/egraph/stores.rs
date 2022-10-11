@@ -190,9 +190,11 @@ impl AliasAnalysis {
                 let succ_first_inst = func.layout.first_inst(succ).unwrap();
                 let succ_state = &mut block_input[succ];
                 let old = succ_state.clone();
-                succ_state
-                    .get_or_insert_with(|| LastStores::default())
-                    .meet_from(&state, succ_first_inst);
+                if let Some(succ_state) = succ_state.as_mut() {
+                    succ_state.meet_from(&state, succ_first_inst);
+                } else {
+                    *succ_state = Some(state);
+                };
                 let updated = *succ_state != old;
 
                 if updated && worklist_set.insert(succ) {
