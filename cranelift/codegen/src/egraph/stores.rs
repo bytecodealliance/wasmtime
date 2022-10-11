@@ -39,9 +39,9 @@
 //! same "last store", and (ii) the same address expression, and (iii)
 //! the same opcode-and-offset, will deduplicate (the first will be
 //! computed, and the later ones will use the same value). Furthermore
-//! we have a rewrite rule (in opts/store_to_load.isle) that rewrites
-//! a load into the stored value of the last store *if* the last store
-//! has the same address expression and constant offset.
+//! we have an optimization that rewrites a load into the stored value
+//! of the last store *if* the last store has the same address
+//! expression and constant offset.
 //!
 //! This gives us two optimizations, "redundant load elimination" and
 //! "store-to-load forwarding".

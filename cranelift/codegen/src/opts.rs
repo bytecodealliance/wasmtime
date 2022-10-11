@@ -77,13 +77,15 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
             );
         }
     }
-    ctx.egraph.subsume_ids.clear();
     trace!(" -> optimize {} got {}", id, union_id);
     ctx.egraph.rewrite_depth -= 1;
     union_id
 }
 
 pub(crate) fn store_to_load<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
+    // Note that we only examine the latest enode in the eclass: opts
+    // are invoked for every new enode added to an eclass, so
+    // traversing the whole eclass would be redundant.
     if let Some(load_key) = egraph.egraph.classes[id].get_node() {
         if let Node::Load {
             op: load_op,
@@ -128,9 +130,8 @@ pub(crate) fn store_to_load<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
                                     let store_args = store_args.as_slice(&egraph.node_ctx.args);
                                     let store_data = store_args[0];
                                     let store_addr = store_args[1];
-                                    let store_addr = egraph.egraph.canonical_id(store_addr);
-                                    let load_addr = egraph.egraph.canonical_id(*load_addr);
-                                    if store_addr == load_addr {
+                                    if egraph.egraph.unionfind.equiv_id_mut(*load_addr, store_addr)
+                                    {
                                         trace!(" -> same address; forwarding");
                                         egraph.stats.store_to_load_forward += 1;
                                         return store_data;
@@ -194,17 +195,19 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
                     return Some(types.as_slice(&self.egraph.node_ctx.types)[0]);
                 }
                 &Node::Load { ty, .. } => return Some(ty),
+                &Node::Result { ty, .. } => return Some(ty),
+                &Node::Param { ty, .. } => return Some(ty),
                 _ => {}
             }
         }
         None
     }
 
-    fn at_loop_level(&mut self, eclass: Id) -> Option<(u8, Id)> {
-        Some((
+    fn at_loop_level(&mut self, eclass: Id) -> (u8, Id) {
+        (
             self.egraph.egraph.analysis_value(eclass).loop_level.level() as u8,
             eclass,
-        ))
+        )
     }
 
     type enodes_etor_iter = NodesEtorIter<'a, 'b>;

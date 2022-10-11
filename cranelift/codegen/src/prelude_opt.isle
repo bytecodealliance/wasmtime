@@ -42,7 +42,7 @@
 
 ;; Extractor to get the min loop-level of an eclass.
 (decl at_loop_level (u8 Id) Id)
-(extern extractor at_loop_level at_loop_level)
+(extern extractor infallible at_loop_level at_loop_level)
 
 ;;;;; optimization toplevel ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
