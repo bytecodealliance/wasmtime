@@ -664,6 +664,8 @@ fn add_isle_constraints(
             annotation_ir::Type::BitVectorWithWidth(64),
         ),
         ("u8".to_owned(), annotation_ir::Type::Int),
+        // AVH TODO: needed for lower from rolt to small_rotr, but should rework.
+        ("usize".to_owned(), annotation_ir::Type::BitVector),
         ("bool".to_owned(), annotation_ir::Type::Bool),
         (
             "MoveWideConst".to_owned(),
@@ -706,16 +708,17 @@ fn add_isle_constraints(
                         .insert(annotation_var.clone(), type_var);
                 }
 
-                let ir_type = &clif_to_ir_types[isle_type];
-                let type_var = annotation_info.var_to_type_var[&annotation_var];
-                match ir_type {
-                    annotation_ir::Type::BitVector => tree
-                        .bv_constraints
-                        .insert(TypeExpr::Concrete(type_var, ir_type.clone())),
-                    _ => tree
-                        .concrete_constraints
-                        .insert(TypeExpr::Concrete(type_var, ir_type.clone())),
-                };
+                if let Some(ir_type) = clif_to_ir_types.get(isle_type) {
+                    let type_var = annotation_info.var_to_type_var[&annotation_var];
+                    match ir_type {
+                        annotation_ir::Type::BitVector => tree
+                            .bv_constraints
+                            .insert(TypeExpr::Concrete(type_var, ir_type.clone())),
+                        _ => tree
+                            .concrete_constraints
+                            .insert(TypeExpr::Concrete(type_var, ir_type.clone())),
+                    };
+                }
             }
         }
         _ => panic!("def must be decl, got: {:#?}", def),

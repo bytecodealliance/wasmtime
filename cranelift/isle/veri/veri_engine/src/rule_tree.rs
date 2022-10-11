@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
+use crate::{interp::Context, termname::pattern_contains_termname};
 use crate::solver::run_solver;
 use crate::type_inference::Solution;
-use crate::{interp::Context, termname::pattern_contains_termname};
 use cranelift_isle as isle;
 use isle::sema::{Pattern, Rule, RuleId, TermEnv, TypeEnv};
 use itertools::Itertools;
@@ -197,6 +197,30 @@ pub fn rules_with_lhs_root(name: &str, termenv: &TermEnv, typeenv: &TypeEnv) -> 
         .collect()
 }
 
+pub fn verify_rules_with_lhs_contains(
+    root: &str,
+    termenv: &TermEnv,
+    typeenv: &TypeEnv,
+    annotationenv: &AnnotationEnv,
+    typesols: &HashMap<RuleId, Solution>,
+) -> VerificationResult {
+    let mut total_result = VerificationResult::Success;
+    for width in all_query_widths() {
+        let result = verify_rules_for_type_with_lhs_contains(
+            root,
+            termenv,
+            typeenv,
+            annotationenv,
+            typesols,
+            width,
+        );
+        if result != VerificationResult::Success {
+            total_result = result;
+        }
+    }
+    return total_result;
+}
+
 pub fn verify_rules_with_lhs_root(
     root: &str,
     termenv: &TermEnv,
@@ -219,6 +243,24 @@ pub fn verify_rules_with_lhs_root(
         }
     }
     return total_result;
+}
+
+pub fn verify_rules_for_type_with_lhs_contains(
+    name: &str,
+    termenv: &TermEnv,
+    typeenv: &TypeEnv,
+    annotationenv: &AnnotationEnv,
+    typesols: &HashMap<RuleId, Solution>,
+    width: usize,
+) -> VerificationResult {
+    verify_rules_for_type_wih_rule_filter(
+        termenv,
+        typeenv,
+        annotationenv,
+        typesols,
+        width,
+        |rule, termenv, typeenv| pattern_contains_termname(&rule.lhs, name, termenv, typeenv),
+    )
 }
 
 pub fn verify_rules_for_type_with_lhs_root(
@@ -257,9 +299,6 @@ pub fn verify_rules_for_type_wih_rule_filter(
         if ctx.typesols.get(&rule.id).is_none() {
             continue;
         }
-        // if !pattern_contains_termname(&rule.lhs, "small_rotr", termenv, typeenv) {
-        //     continue;
-        // }
         let sol = &ctx.typesols[&rule.id];
         let rule_sem = RuleSemantics {
             lhs: sol.lhs.clone(),

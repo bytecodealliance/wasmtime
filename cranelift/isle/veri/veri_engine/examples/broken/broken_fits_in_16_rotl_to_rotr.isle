@@ -3,7 +3,7 @@
 
 ;;@ (spec (sig (args arg) (ret))
 ;;@     (assertions (= (arg) (ret))))
-;; (decl lower (Inst) InstOutput)
+(decl lower (Inst) InstOutput)
 
 ;;@ (spec (sig (args ty, a, b) (r))
 ;;@     (assertions (= (- (a) (b)) (r))))
@@ -77,10 +77,10 @@
 ))
 
 ;; General 8/16-bit case.
-;; (rule -2 (lower (has_type (fits_in_16 ty) (rotl x y)))
-;;       (let ((amt Reg (value_regs_get y 0))
-;;             (neg_shift Reg (sub $I32 (zero_reg) amt)))
-;;         (small_rotr ty (put_in_reg_zext32 x) neg_shift)))
+;; Broken: no negation
+(rule -2 (lower (has_type (fits_in_16 ty) (rotl x y)))
+      (let ((amt Reg (value_regs_get y 0)))
+        (small_rotr ty (put_in_reg_zext32 x) amt)))
 
 
 ;;@ (spec (sig (args t, x, y) (ret))
@@ -92,24 +92,4 @@
 ;;@       )
 ;;@ )
 (decl small_rotr (Type Reg Reg) Reg)
-
-
-;; For a < 32-bit rotate-right, we synthesize this as:
-;;
-;;    rotr rd, val, amt
-;;
-;;       =>
-;;
-;;    and masked_amt, amt, <bitwidth - 1>
-;;    sub tmp_sub, masked_amt, <bitwidth>
-;;    sub neg_amt, zero, tmp_sub  ; neg
-;;    lsr val_rshift, val, masked_amt
-;;    lsl val_lshift, val, neg_amt
-;;    orr rd, val_lshift val_rshift
-(rule (small_rotr ty val amt)
-      (let ((masked_amt Reg (and_imm $I32 amt (rotr_mask ty)))
-            (tmp_sub Reg (sub_imm $I32 masked_amt (u8_into_imm12 (ty_bits ty))))
-            (neg_amt Reg (sub $I32 (zero_reg) tmp_sub))
-            (val_rshift Reg (lsr $I32 val masked_amt))
-            (val_lshift Reg (lsl $I32 val neg_amt)))
-        (orr $I32 val_lshift val_rshift)))
+(extern constructor small_rotr small_rotr)

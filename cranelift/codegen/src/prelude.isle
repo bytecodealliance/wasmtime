@@ -196,6 +196,8 @@
 (extern constructor ensure_in_vreg ensure_in_vreg)
 
 ;; Get the `n`th register inside a `ValueRegs`.
+;;@ (spec (sig (args arg, i) (ret))
+;;@     (assertions (= (arg) (ret))))
 (decl value_regs_get (ValueRegs usize) Reg)
 (extern constructor value_regs_get value_regs_get)
 

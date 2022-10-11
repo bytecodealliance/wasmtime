@@ -1,0 +1,104 @@
+(type ImmLogic (primitive ImmLogic))
+(type Imm12 (primitive Imm12))
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (- (a) (b)) (r))))
+(decl sub (Type Reg Reg) Reg)
+(extern constructor sub sub)
+
+;;@ (spec (sig (args) (r))
+;;@     (assertions (= (conv_to (regwidth) (0i1:bv)) (r))))
+(decl zero_reg () Reg)
+(extern constructor zero_reg zero_reg)
+
+ ;;@ (spec (sig (args a, b, c, d) (ret))
+ ;;@     (assertions (if (b) {
+ ;;@                     (= (ret) (sign_ext (d) (conv_to (c) (a))))
+ ;;@                  } else { 
+ ;;@                      (= (ret) (zero_ext (d) (conv_to (c) (a))))
+ ;;@                  })
+ ;;@     ))
+(decl extend (Reg bool u8 u8) Reg)
+(extern constructor extend extend)
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (& (a) (b)) (r))))
+(decl and_imm (Type Reg ImmLogic) Reg)
+(extern constructor and_imm and_imm)
+
+;; Place a `Value` into a register, zero extending it to 32-bits
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
+(decl put_in_reg_zext32 (Value) Reg)
+(extern constructor put_in_reg_zext32 put_in_reg_zext32)
+
+;; Corresponding rust:
+;; fn rotr_mask(&mut self, ty: Type) -> ImmLogic {
+;;     ImmLogic::maybe_from_u64((ty.bits() - 1) as u64, I32).unwrap()
+;; }
+;;
+;;@ (spec (sig (args x) (ret))
+;;@   (assertions (= (- (int2bv 12 (x)) (1i12:bv)) (ret))))
+(decl rotr_mask (Type) ImmLogic)
+(extern constructor rotr_mask rotr_mask)
+
+;;@ (spec (sig (args ty, reg, imm_arg) (ret))
+;;@     (assertions (= (- (reg) (conv_to (widthof (ret)) (imm_arg))) (ret))))
+(decl sub_imm (Type Reg Imm12) Reg)
+(extern constructor sub_imm sub_imm)
+
+;;@ (spec (sig (args x) (ret))
+;;@     (assertions (= (int2bv 12 (x)) (ret))))
+(decl u8_into_imm12 (u8) Imm12)
+(extern constructor u8_into_imm12 u8_into_imm12)
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (shr (a) (b)) (r))))
+(decl lsr (Type Reg Reg) Reg)
+(extern constructor lsr lsr)
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (shl (a) (b)) (r))))
+(decl lsl (Type Reg Reg) Reg)
+(extern constructor lsl lsl)
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (| (a) (b)) (r))))
+(decl orr (Type Reg Reg) Reg)
+(extern constructor orr orr)
+
+;; Instruction formats.
+(type MInst
+  (enum
+))
+
+
+;;@ (spec (sig (args t, x, y) (ret))
+;;@       (assertions 
+;;@          (= (rotr (x) (y)) (ret)),
+;;@          (= (widthof (x)) (t)), 
+;;@          (<= (widthof (x)) (16i128: isleType)), 
+;;@          (<= (widthof (y)) (16i128: isleType)), 
+;;@       )
+;;@ )
+(decl small_rotr (Type Reg Reg) Reg)
+
+;; For a < 32-bit rotate-right, we synthesize this as:
+;;
+;;    rotr rd, val, amt
+;;
+;;       =>
+;;
+;;    and masked_amt, amt, <bitwidth - 1>
+;;    sub tmp_sub, masked_amt, <bitwidth>
+;;    sub neg_amt, zero, tmp_sub  ; neg
+;;    lsr val_rshift, val, masked_amt
+;;    lsl val_lshift, val, neg_amt
+;;    orr rd, val_lshift val_rshift
+(rule (small_rotr ty val amt)
+      (let ((masked_amt Reg (and_imm $I32 amt (rotr_mask ty)))
+            (tmp_sub Reg (sub_imm $I32 masked_amt (u8_into_imm12 (ty_bits ty))))
+            (neg_amt Reg (sub $I32 (zero_reg) tmp_sub))
+            (val_rshift Reg (lsr $I32 val masked_amt))
+            (val_lshift Reg (lsl $I32 val neg_amt)))
+        (orr $I32 val_lshift val_rshift)))

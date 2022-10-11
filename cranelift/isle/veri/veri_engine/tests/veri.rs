@@ -46,7 +46,7 @@ fn test_iadd_from_file() {
 
 #[test]
 fn test_broken_iadd_from_file() {
-    test_from_file("./examples/broken_iadd.isle", all_failure_result())
+    test_from_file("./examples/broken/broken_iadd.isle", all_failure_result())
 }
 
 // DISABLED for now while ruin chaining is on hold
@@ -79,7 +79,7 @@ fn test_broken_uextend() {
     // However, this should still work in the case where the query with
     // is the same as the register width (64).
     test_from_file(
-        "./examples/broken_uextend.isle",
+        "./examples/broken/broken_uextend.isle",
         custom_result(&|w| {
             (
                 w,
@@ -94,9 +94,9 @@ fn test_broken_uextend() {
 }
 
 #[test]
-fn test_small_rotr() {
+fn test_small_rotr_to_shifts() {
     test_from_file_with_filter(
-        "./examples/small_rotr.isle",
+        "./examples/small_rotr_to_shifts.isle",
         "small_rotr".to_string(),
         vec![
             (Bitwidth::I1, VerificationResult::Success),
@@ -109,9 +109,9 @@ fn test_small_rotr() {
 }
 
 #[test]
-fn test_small_rotr_broken() {
+fn test_small_rotr_to_shifts_broken() {
     test_from_file_with_filter(
-        "./examples/broken_mask_small_rotr.isle",
+        "./examples/broken/broken_mask_small_rotr.isle",
         "small_rotr".to_string(),
         vec![
             (Bitwidth::I1, VerificationResult::Success),
@@ -122,7 +122,7 @@ fn test_small_rotr_broken() {
             ],
     );
     test_from_file_with_filter(
-        "./examples/broken_rule_or_small_rotr.isle",
+        "./examples/broken/broken_rule_or_small_rotr.isle",
         "small_rotr".to_string(),
         vec![
             (Bitwidth::I1, VerificationResult::Failure(Counterexample {})),
@@ -135,14 +135,29 @@ fn test_small_rotr_broken() {
 }
 
 #[test]
-fn test_8_16_rotl() {
+fn test_fits_in_16_rotl_to_rotr() {
     test_from_file_with_filter(
-        "./examples/small_rotr.isle",
+        "./examples/fits_in_16_rotl_to_rotr.isle",
         "rotl".to_string(),
         vec![
             (Bitwidth::I1, VerificationResult::Success),
             (Bitwidth::I8, VerificationResult::Success),
             (Bitwidth::I16, VerificationResult::Success),
+            (Bitwidth::I32, VerificationResult::InapplicableRule),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+            ],
+    )
+}
+
+#[test]
+fn test_broken_fits_in_16_rotl_to_rotr() {
+    test_from_file_with_filter(
+        "./examples/broken/broken_fits_in_16_rotl_to_rotr.isle",
+        "rotl".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::Success),
+            (Bitwidth::I8, VerificationResult::Failure(Counterexample {})),
+            (Bitwidth::I16, VerificationResult::Failure(Counterexample {})),
             (Bitwidth::I32, VerificationResult::InapplicableRule),
             (Bitwidth::I64, VerificationResult::InapplicableRule),
             ],
