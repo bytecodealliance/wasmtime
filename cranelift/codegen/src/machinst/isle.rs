@@ -226,7 +226,7 @@ macro_rules! isle_lower_prelude_methods {
 
         #[inline]
         fn inst_data(&mut self, inst: Inst) -> InstructionData {
-            self.lower_ctx.dfg()[inst].clone()
+            self.lower_ctx.dfg()[inst]
         }
 
         #[inline]

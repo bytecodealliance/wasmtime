@@ -756,6 +756,12 @@ mod tests {
     use alloc::string::ToString;
 
     #[test]
+    fn inst_data_is_copy() {
+        fn is_copy<T: Copy>() {}
+        is_copy::<InstructionData>();
+    }
+
+    #[test]
     fn opcodes() {
         use core::mem;
 
