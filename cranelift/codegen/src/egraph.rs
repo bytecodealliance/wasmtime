@@ -186,9 +186,13 @@ impl<'a> FuncEGraph<'a> {
                 let types = types.freeze(&mut self.node_ctx.types);
 
                 let mem_state = self.alias_analysis.get_state_for_load(inst);
-                let is_readonly_load = func.dfg[inst].opcode() == Opcode::Load && {
-                    let memflags = func.dfg[inst].memflags().unwrap();
-                    memflags.readonly() && memflags.notrap()
+                let is_readonly_load = match func.dfg[inst] {
+                    InstructionData::Load {
+                        opcode: Opcode::Load,
+                        flags,
+                        ..
+                    } => flags.readonly() && flags.notrap(),
+                    _ => false,
                 };
 
                 // Create the egraph node.
