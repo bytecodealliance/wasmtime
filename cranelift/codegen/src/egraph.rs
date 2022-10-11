@@ -255,32 +255,28 @@ impl<'a> FuncEGraph<'a> {
                     self.stats.store_map_insert += 1;
                 }
 
-                let id = match (side_effect, mem_state, id) {
-                    (_, Some(..), NewOrExisting::New(id)) => {
-                        // Loads: do store-to-load forwarding, and
-                        // otherwise add to side-effecting roots.
-                        let opt_id = crate::opts::store_to_load(id, self);
-                        trace!("store_to_load: {} -> {}", id, opt_id);
-                        if opt_id == id {
-                            self.side_effect_ids.push(id);
-                            self.stats.side_effect_nodes += 1;
-                        }
-                        opt_id
+                if let NewOrExisting::New(new_id) = id {
+                    // Loads: do store-to-load forwarding.
+                    let opt_id = crate::opts::store_to_load(new_id, self);
+                    trace!("store_to_load: {} -> {}", new_id, opt_id);
+                    if opt_id != new_id {
+                        id = NewOrExisting::Existing(opt_id);
                     }
-                    (true, _, id) => {
-                        let id = id.get();
-                        self.side_effect_ids.push(id);
-                        self.stats.side_effect_nodes += 1;
-                        id
-                    }
-                    (false, _, NewOrExisting::New(id)) => {
+                }
+                let id = match id {
+                    NewOrExisting::Existing(id) => id,
+                    NewOrExisting::New(id) if is_pure => {
                         // Apply all optimization rules immediately; the
                         // aegraph (acyclic egraph) works best when we do
                         // this so all uses pick up the eclass with all
                         // possible enodes.
                         crate::opts::optimize_eclass(id, self)
                     }
-                    (false, _, NewOrExisting::Existing(id)) => id,
+                    NewOrExisting::New(id) => {
+                        self.side_effect_ids.push(id);
+                        self.stats.side_effect_nodes += 1;
+                        id
+                    }
                 };
 
                 // Create results and save in Value->Id map.
