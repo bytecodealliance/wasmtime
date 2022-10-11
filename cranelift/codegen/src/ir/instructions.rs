@@ -82,7 +82,7 @@ impl TryFrom<NonZeroU32> for Opcode {
 
     #[inline]
     fn try_from(x: NonZeroU32) -> Result<Self, ()> {
-        let x: u16 = x.get().try_into().map_err(|_| ())?;
+        let x: u8 = x.get().try_into().map_err(|_| ())?;
         Self::try_from(x)
     }
 }
