@@ -99,7 +99,7 @@ pub(crate) fn store_to_load<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
         addr: load_addr,
         mem_state: MemoryState::Store(store_inst),
         ..
-    } = load_key.node::<NodeCtx>(&egraph.egraph.nodes)
+    } = load_key.node(&egraph.egraph.nodes)
     {
         trace!(" -> got load op for id {}", id);
         if let Some((store_ty, store_id)) = egraph.store_nodes.get(&store_inst) {
@@ -114,7 +114,7 @@ pub(crate) fn store_to_load<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
                     },
                 args: store_args,
                 ..
-            } = store_key.node::<NodeCtx>(&egraph.egraph.nodes)
+            } = store_key.node(&egraph.egraph.nodes)
             {
                 let store_args = store_args.as_slice(&egraph.node_ctx.args);
                 let store_data = store_args[0];

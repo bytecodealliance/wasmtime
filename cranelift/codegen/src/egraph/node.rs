@@ -1,7 +1,7 @@
 //! Node definition for EGraph representation.
 
 use super::MemoryState;
-use crate::ir::{Block, Inst, InstructionImms, Opcode, RelSourceLoc, Type};
+use crate::ir::{Block, DataFlowGraph, Inst, InstructionImms, Opcode, RelSourceLoc, Type};
 use crate::loop_analysis::LoopLevel;
 use cranelift_egraph::{BumpArena, BumpSlice, CtxEq, CtxHash, Id, Language, UnionFind};
 use cranelift_entity::{EntityList, ListPool};
@@ -113,20 +113,13 @@ pub struct NodeCtx {
     pub args: ListPool<Id>,
 }
 
-impl std::default::Default for NodeCtx {
-    fn default() -> Self {
-        Self {
-            types: BumpArena::default(),
-            args: ListPool::new(),
-        }
-    }
-}
-
 impl NodeCtx {
-    pub(crate) fn with_capacity(types: usize, args: usize) -> Self {
+    pub(crate) fn with_capacity_for_dfg(dfg: &DataFlowGraph) -> Self {
+        let n_types = dfg.num_values();
+        let n_args = dfg.value_lists.capacity();
         Self {
-            types: BumpArena::arena_with_capacity(types),
-            args: ListPool::with_capacity(args),
+            types: BumpArena::arena_with_capacity(n_types),
+            args: ListPool::with_capacity(n_args),
         }
     }
 }

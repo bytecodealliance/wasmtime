@@ -245,7 +245,7 @@ impl<'a> Elaborator<'a> {
                 }
             }
             if let Some(node_key) = eclass.get_node() {
-                let node = node_key.node::<NodeCtx>(&self.egraph.nodes);
+                let node = node_key.node(&self.egraph.nodes);
                 trace!(" -> eclass {:?}: node {:?}", eclass_id, node);
                 let (cost, id) = match node {
                     Node::Param { .. }
@@ -335,7 +335,7 @@ impl<'a> Elaborator<'a> {
                         self.egraph.classes[best_node_eclass]
                     );
                     let node_key = self.egraph.classes[best_node_eclass].get_node().unwrap();
-                    let node = node_key.node::<NodeCtx>(&self.egraph.nodes);
+                    let node = node_key.node(&self.egraph.nodes);
                     trace!(" -> enode {:?}", node);
 
                     // Is the node a block param? We should never get here if so
@@ -384,7 +384,7 @@ impl<'a> Elaborator<'a> {
                 } => {
                     self.elab_stack.pop();
 
-                    let node = node_key.node::<NodeCtx>(&self.egraph.nodes);
+                    let node = node_key.node(&self.egraph.nodes);
 
                     // We should have all args resolved at this point.
                     let arg_idx = self.elab_result_stack.len() - num_args;

@@ -316,7 +316,7 @@ impl NodeKey {
 
     /// Get the node for this NodeKey, given the `nodes` from the
     /// appropriate `EGraph`.
-    pub fn node<'a, L: Language>(&self, nodes: &'a [L::Node]) -> &'a L::Node {
+    pub fn node<'a, N>(&self, nodes: &'a [N]) -> &'a N {
         &nodes[self.index as usize]
     }
 
@@ -336,15 +336,15 @@ struct NodeKeyCtx<'a, 'b, L: Language> {
 
 impl<'a, 'b, L: Language> CtxEq<NodeKey, NodeKey> for NodeKeyCtx<'a, 'b, L> {
     fn ctx_eq(&self, a: &NodeKey, b: &NodeKey, uf: &mut UnionFind) -> bool {
-        let a = a.node::<L>(self.nodes);
-        let b = b.node::<L>(self.nodes);
+        let a = a.node(self.nodes);
+        let b = b.node(self.nodes);
         self.node_ctx.ctx_eq(a, b, uf)
     }
 }
 
 impl<'a, 'b, L: Language> CtxHash<NodeKey> for NodeKeyCtx<'a, 'b, L> {
     fn ctx_hash(&self, value: &NodeKey, uf: &mut UnionFind) -> u64 {
-        self.node_ctx.ctx_hash(value.node::<L>(self.nodes), uf)
+        self.node_ctx.ctx_hash(value.node(self.nodes), uf)
     }
 }
 
@@ -610,10 +610,10 @@ where
         if let Some((analysis, state)) = self.analysis.as_mut() {
             let eclass_data = self.classes[eclass];
             let value = if let Some(node_key) = eclass_data.as_node() {
-                let node = node_key.node::<L>(&self.nodes);
+                let node = node_key.node(&self.nodes);
                 analysis.for_node(ctx, node, state)
             } else if let Some((node_key, child)) = eclass_data.as_node_and_child() {
-                let node = node_key.node::<L>(&self.nodes);
+                let node = node_key.node(&self.nodes);
                 let value = analysis.for_node(ctx, node, state);
                 let child_value = &state[child];
                 analysis.meet(ctx, &value, child_value)
