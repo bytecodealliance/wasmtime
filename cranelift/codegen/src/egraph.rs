@@ -163,8 +163,7 @@ impl<'a> FuncEGraph<'a> {
                 let side_effect = has_side_effect(func, inst)
                     || (func.dfg[inst].opcode().can_load()
                         && func.dfg[inst].memflags().is_some()
-                        && !func.dfg[inst].memflags().unwrap().readonly())
-                    || func.dfg[inst].opcode().can_store();
+                        && !func.dfg[inst].memflags().unwrap().readonly());
 
                 // Build args from SSA values.
                 let args = EntityList::from_iter(
