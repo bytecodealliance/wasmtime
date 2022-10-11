@@ -10,6 +10,7 @@ use crate::ir::{Block, Function, Layout};
 use crate::packed_option::PackedOption;
 use crate::timing;
 use alloc::vec::Vec;
+use smallvec::{smallvec, SmallVec};
 
 /// A opaque reference to a code loop.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -291,23 +292,22 @@ impl LoopAnalysis {
     }
 
     fn assign_loop_levels(&mut self) {
+        let mut stack: SmallVec<[Loop; 8]> = smallvec![];
         for lp in self.loops.keys() {
             if self.loops[lp].level == LoopLevel::invalid() {
-                let mut assigned = self.loops[lp].parent;
-                let mut level: usize = 1; // A loop with no parent is level 1.
-                while let Some(parent) = assigned.expand() {
-                    level += 1;
-                    if self.loops[parent].level != LoopLevel::invalid() {
-                        level += self.loops[parent].level.0 as usize;
-                        break;
+                stack.push(lp);
+                while let Some(&lp) = stack.last() {
+                    if let Some(parent) = self.loops[lp].parent.into() {
+                        if self.loops[parent].level != LoopLevel::invalid() {
+                            self.loops[lp].level = self.loops[parent].level.inc();
+                            stack.pop();
+                        } else {
+                            stack.push(parent);
+                        }
+                    } else {
+                        self.loops[lp].level = LoopLevel::root().inc();
+                        stack.pop();
                     }
-                    assigned = self.loops[parent].parent;
-                }
-                let mut cur = PackedOption::from(lp);
-                while cur != assigned {
-                    self.loops[cur.unwrap()].level = LoopLevel::clamped(level);
-                    cur = self.loops[cur.unwrap()].parent;
-                    level -= 1;
                 }
             }
         }
@@ -436,8 +436,8 @@ mod tests {
         assert_eq!(loop_analysis.loop_level(block0).level(), 1);
         assert_eq!(loop_analysis.loop_level(block1).level(), 2);
         assert_eq!(loop_analysis.loop_level(block2).level(), 2);
-        assert_eq!(loop_analysis.loop_level(block3).level(), 3);
-        assert_eq!(loop_analysis.loop_level(block4).level(), 3);
+        assert_eq!(loop_analysis.loop_level(block3).level(), 2);
+        assert_eq!(loop_analysis.loop_level(block4).level(), 2);
         assert_eq!(loop_analysis.loop_level(block5).level(), 1);
     }
 }
