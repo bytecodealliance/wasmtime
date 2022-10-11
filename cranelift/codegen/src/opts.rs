@@ -86,61 +86,45 @@ pub(crate) fn store_to_load<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     // Note that we only examine the latest enode in the eclass: opts
     // are invoked for every new enode added to an eclass, so
     // traversing the whole eclass would be redundant.
-    if let Some(load_key) = egraph.egraph.classes[id].get_node() {
-        if let Node::Load {
-            op: load_op,
-            ty: load_ty,
-            addr: load_addr,
-            mem_state: MemoryState::Store(store_inst),
-            ..
-        } = load_key.node::<NodeCtx>(&egraph.egraph.nodes)
-        {
-            trace!(" -> got load op for id {}: {:?}", id, load_op);
-            if let Some((store_ty, store_id)) = egraph.store_nodes.get(&store_inst) {
-                trace!(" -> got store id: {} ty: {}", store_id, store_ty);
-                if *store_ty == *load_ty {
-                    if let Some(store_key) = egraph.egraph.classes[*store_id].get_node() {
-                        if let Node::Inst {
-                            op: store_op,
-                            args: store_args,
-                            ..
-                        } = store_key.node::<NodeCtx>(&egraph.egraph.nodes)
-                        {
-                            trace!(
-                                "load id {} from store id {}: {:?}, {:?}",
-                                id,
-                                store_id,
-                                load_op,
-                                store_op
-                            );
-                            match (load_op, store_op) {
-                                (
-                                    InstructionImms::Load {
-                                        opcode: Opcode::Load,
-                                        offset: load_offset,
-                                        ..
-                                    },
-                                    InstructionImms::Store {
-                                        opcode: Opcode::Store,
-                                        offset: store_offset,
-                                        ..
-                                    },
-                                ) if *load_offset == *store_offset => {
-                                    trace!(" -> same offset");
-                                    let store_args = store_args.as_slice(&egraph.node_ctx.args);
-                                    let store_data = store_args[0];
-                                    let store_addr = store_args[1];
-                                    if egraph.egraph.unionfind.equiv_id_mut(*load_addr, store_addr)
-                                    {
-                                        trace!(" -> same address; forwarding");
-                                        egraph.stats.store_to_load_forward += 1;
-                                        return store_data;
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
+    let load_key = egraph.egraph.classes[id].get_node().unwrap();
+    if let Node::Load {
+        op:
+            InstructionImms::Load {
+                opcode: Opcode::Load,
+                offset: load_offset,
+                ..
+            },
+        ty: load_ty,
+        addr: load_addr,
+        mem_state: MemoryState::Store(store_inst),
+        ..
+    } = load_key.node::<NodeCtx>(&egraph.egraph.nodes)
+    {
+        trace!(" -> got load op for id {}", id);
+        if let Some((store_ty, store_id)) = egraph.store_nodes.get(&store_inst) {
+            trace!(" -> got store id: {} ty: {}", store_id, store_ty);
+            let store_key = egraph.egraph.classes[*store_id].get_node().unwrap();
+            if let Node::Inst {
+                op:
+                    InstructionImms::Store {
+                        opcode: Opcode::Store,
+                        offset: store_offset,
+                        ..
+                    },
+                args: store_args,
+                ..
+            } = store_key.node::<NodeCtx>(&egraph.egraph.nodes)
+            {
+                let store_args = store_args.as_slice(&egraph.node_ctx.args);
+                let store_data = store_args[0];
+                let store_addr = store_args[1];
+                if *load_offset == *store_offset
+                    && *load_ty == *store_ty
+                    && egraph.egraph.unionfind.equiv_id_mut(*load_addr, store_addr)
+                {
+                    trace!(" -> same offset, type, address; forwarding");
+                    egraph.stats.store_to_load_forward += 1;
+                    return store_data;
                 }
             }
         }
