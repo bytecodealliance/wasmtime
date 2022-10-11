@@ -287,7 +287,7 @@ impl LoopAnalysis {
         for lp in self.loops.keys() {
             if self.loops[lp].level == LoopLevel::invalid() {
                 let mut assigned = self.loops[lp].parent;
-                let mut level = 0;
+                let mut level = 1;  // A loop with no parent is level 1.
                 while let Some(parent) = assigned.expand() {
                     level += 1;
                     if self.loops[parent].level != LoopLevel::invalid() {
