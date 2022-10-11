@@ -199,7 +199,7 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
         if (v & HWCAP_RISCV_EXT_F) != 0 {
             isa_builder.enable("has_f").unwrap();
 
-            // TODO: There doesen't seem to be a bit associated with this extension
+            // TODO: There doesn't seem to be a bit associated with this extension
             // rust enables it with the `f` extension:
             // https://github.com/rust-lang/stdarch/blob/790411f93c4b5eada3c23abb4c9a063fb0b24d99/crates/std_detect/src/detect/os/linux/riscv.rs#L43
             isa_builder.enable("has_zicsr").unwrap();
