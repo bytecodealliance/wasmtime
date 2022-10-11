@@ -217,7 +217,7 @@ impl<'a> FuncEGraph<'a> {
                         mem_state: load_mem_state,
                         srcloc,
                     }
-                } else if side_effect {
+                } else if has_side_effect(func, inst) || opcode.can_load() {
                     self.stats.node_created += 1;
                     self.stats.node_inst += 1;
                     Node::Inst {
