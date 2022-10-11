@@ -66,7 +66,8 @@ pub(crate) fn pipeline_flush_mt() -> Result<()> {
 
 #[cfg(target_os = "linux")]
 fn membarrier(barrier: libc::c_int) -> Result<()> {
-    let res = unsafe { syscall(libc::SYS_membarrier, barrier) };
+    let flags: libc::c_int = 0;
+    let res = unsafe { syscall(libc::SYS_membarrier, barrier, flags) };
     if res == 0 {
         Ok(())
     } else {
