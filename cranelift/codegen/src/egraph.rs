@@ -142,7 +142,7 @@ impl<'a> FuncEGraph<'a> {
                     .add(
                         Node::Param {
                             block,
-                            index: u32::try_from(i).expect("More than 2^32 blockparams"),
+                            index: i.try_into().expect("blockparam index should fit in Node::Param"),
                             ty,
                             loop_level,
                         },
