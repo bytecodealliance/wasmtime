@@ -368,42 +368,6 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn intcc_unsigned(&mut self, x: &IntCC) -> IntCC {
-            x.unsigned()
-        }
-
-        #[inline]
-        fn signed_cond_code(&mut self, cc: &condcodes::IntCC) -> Option<condcodes::IntCC> {
-            match cc {
-                IntCC::Equal
-                | IntCC::UnsignedGreaterThanOrEqual
-                | IntCC::UnsignedGreaterThan
-                | IntCC::UnsignedLessThanOrEqual
-                | IntCC::UnsignedLessThan
-                | IntCC::NotEqual => None,
-                IntCC::SignedGreaterThanOrEqual
-                | IntCC::SignedGreaterThan
-                | IntCC::SignedLessThanOrEqual
-                | IntCC::SignedLessThan => Some(*cc),
-            }
-        }
-
-        fn range(&mut self, start: usize, end: usize) -> Range {
-            (start, end)
-        }
-
-        fn range_view(&mut self, (start, end): Range) -> RangeView {
-            if start >= end {
-                RangeView::Empty
-            } else {
-                RangeView::NonEmpty {
-                    index: start,
-                    rest: (start + 1, end),
-                }
-            }
-        }
-
-        #[inline]
         fn multi_lane(&mut self, ty: Type) -> Option<(u32, u32)> {
             if ty.lane_count() > 1 {
                 Some((ty.lane_bits(), ty.lane_count()))
@@ -596,9 +560,45 @@ macro_rules! isle_common_prelude_methods {
             offset as u32
         }
 
+        fn range(&mut self, start: usize, end: usize) -> Range {
+            (start, end)
+        }
+
+        fn range_view(&mut self, (start, end): Range) -> RangeView {
+            if start >= end {
+                RangeView::Empty
+            } else {
+                RangeView::NonEmpty {
+                    index: start,
+                    rest: (start + 1, end),
+                }
+            }
+        }
+
         #[inline]
         fn mem_flags_trusted(&mut self) -> MemFlags {
             MemFlags::trusted()
+        }
+
+        #[inline]
+        fn intcc_unsigned(&mut self, x: &IntCC) -> IntCC {
+            x.unsigned()
+        }
+
+        #[inline]
+        fn signed_cond_code(&mut self, cc: &condcodes::IntCC) -> Option<condcodes::IntCC> {
+            match cc {
+                IntCC::Equal
+                | IntCC::UnsignedGreaterThanOrEqual
+                | IntCC::UnsignedGreaterThan
+                | IntCC::UnsignedLessThanOrEqual
+                | IntCC::UnsignedLessThan
+                | IntCC::NotEqual => None,
+                IntCC::SignedGreaterThanOrEqual
+                | IntCC::SignedGreaterThan
+                | IntCC::SignedLessThanOrEqual
+                | IntCC::SignedLessThan => Some(*cc),
+            }
         }
     };
 }

@@ -45,14 +45,6 @@ macro_rules! isle_lower_prelude_methods {
     () => {
         isle_common_prelude_methods!();
 
-        fn avoid_div_traps(&mut self, _: Type) -> Option<()> {
-            if self.flags.avoid_div_traps() {
-                Some(())
-            } else {
-                None
-            }
-        }
-
         #[inline]
         fn same_value(&mut self, a: Value, b: Value) -> Option<Value> {
             if a == b {
@@ -247,6 +239,67 @@ macro_rules! isle_lower_prelude_methods {
             self.lower_ctx.dfg().value_def(val).inst()
         }
 
+        fn zero_value(&mut self, value: Value) -> Option<Value> {
+            let insn = self.def_inst(value);
+            if insn.is_some() {
+                let insn = insn.unwrap();
+                let inst_data = self.lower_ctx.data(insn);
+                match inst_data {
+                    InstructionData::Unary {
+                        opcode: Opcode::Splat,
+                        arg,
+                    } => {
+                        let arg = arg.clone();
+                        return self.zero_value(arg);
+                    }
+                    InstructionData::UnaryConst {
+                        opcode: Opcode::Vconst,
+                        constant_handle,
+                    } => {
+                        let constant_data =
+                            self.lower_ctx.get_constant_data(*constant_handle).clone();
+                        if constant_data.into_vec().iter().any(|&x| x != 0) {
+                            return None;
+                        } else {
+                            return Some(value);
+                        }
+                    }
+                    InstructionData::UnaryImm { imm, .. } => {
+                        if imm.bits() == 0 {
+                            return Some(value);
+                        } else {
+                            return None;
+                        }
+                    }
+                    InstructionData::UnaryIeee32 { imm, .. } => {
+                        if imm.bits() == 0 {
+                            return Some(value);
+                        } else {
+                            return None;
+                        }
+                    }
+                    InstructionData::UnaryIeee64 { imm, .. } => {
+                        if imm.bits() == 0 {
+                            return Some(value);
+                        } else {
+                            return None;
+                        }
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        }
+
+        fn avoid_div_traps(&mut self, _: Type) -> Option<()> {
+            if self.flags.avoid_div_traps() {
+                Some(())
+            } else {
+                None
+            }
+        }
+
         #[inline]
         fn tls_model(&mut self, _: Type) -> TlsModel {
             self.flags.tls_model()
@@ -322,6 +375,12 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
+        fn u128_from_immediate(&mut self, imm: Immediate) -> Option<u128> {
+            let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
+            Some(u128::from_le_bytes(bytes.try_into().ok()?))
+        }
+
+        #[inline]
         fn vec_mask_from_immediate(&mut self, imm: Immediate) -> Option<VecMask> {
             let data = self.lower_ctx.get_immediate_data(imm);
             if data.len() == 16 {
@@ -329,12 +388,6 @@ macro_rules! isle_lower_prelude_methods {
             } else {
                 None
             }
-        }
-
-        #[inline]
-        fn u128_from_immediate(&mut self, imm: Immediate) -> Option<u128> {
-            let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
-            Some(u128::from_le_bytes(bytes.try_into().ok()?))
         }
 
         #[inline]
@@ -516,59 +569,6 @@ macro_rules! isle_lower_prelude_methods {
         #[inline]
         fn gen_move(&mut self, ty: Type, dst: WritableReg, src: Reg) -> MInst {
             MInst::gen_move(dst, src, ty)
-        }
-
-        fn zero_value(&mut self, value: Value) -> Option<Value> {
-            let insn = self.def_inst(value);
-            if insn.is_some() {
-                let insn = insn.unwrap();
-                let inst_data = self.lower_ctx.data(insn);
-                match inst_data {
-                    InstructionData::Unary {
-                        opcode: Opcode::Splat,
-                        arg,
-                    } => {
-                        let arg = arg.clone();
-                        return self.zero_value(arg);
-                    }
-                    InstructionData::UnaryConst {
-                        opcode: Opcode::Vconst,
-                        constant_handle,
-                    } => {
-                        let constant_data =
-                            self.lower_ctx.get_constant_data(*constant_handle).clone();
-                        if constant_data.into_vec().iter().any(|&x| x != 0) {
-                            return None;
-                        } else {
-                            return Some(value);
-                        }
-                    }
-                    InstructionData::UnaryImm { imm, .. } => {
-                        if imm.bits() == 0 {
-                            return Some(value);
-                        } else {
-                            return None;
-                        }
-                    }
-                    InstructionData::UnaryIeee32 { imm, .. } => {
-                        if imm.bits() == 0 {
-                            return Some(value);
-                        } else {
-                            return None;
-                        }
-                    }
-                    InstructionData::UnaryIeee64 { imm, .. } => {
-                        if imm.bits() == 0 {
-                            return Some(value);
-                        } else {
-                            return None;
-                        }
-                    }
-                    _ => None,
-                }
-            } else {
-                None
-            }
         }
     };
 }

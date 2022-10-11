@@ -233,7 +233,6 @@
 (decl def_inst (Inst) Value)
 (extern extractor def_inst def_inst)
 
-
 ;; Extract a constant `u64` from a value defined by an `iconst`.
 (decl u64_from_iconst (u64) Value)
 (extractor (u64_from_iconst x)
@@ -372,9 +371,9 @@
 ;; its result.
 (decl produces_flags_ignore (ProducesFlags) ProducesFlags)
 (rule (produces_flags_ignore (ProducesFlags.ProducesFlagsReturnsReg inst _))
-                             (ProducesFlags.ProducesFlagsSideEffect inst))
+      (ProducesFlags.ProducesFlagsSideEffect inst))
 (rule (produces_flags_ignore (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst _))
-                             (ProducesFlags.ProducesFlagsSideEffect inst))
+      (ProducesFlags.ProducesFlagsSideEffect inst))
 
 ;; Helper for combining two flags-consumer instructions that return a
 ;; single Reg, giving a ConsumesFlags that returns both values in a
@@ -524,6 +523,70 @@
         (ConsumesFlags.ConsumesFlagsSideEffect c))
       (SideEffectNoResult.Inst3 p1 p2 c))
 
+;;;; Helpers for accessing compilation flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl avoid_div_traps () Type)
+(extern extractor avoid_div_traps avoid_div_traps)
+
+;; This definition should be kept up to date with the values defined in
+;; cranelift/codegen/meta/src/shared/settings.rs
+(type TlsModel extern (enum (None) (ElfGd) (Macho) (Coff)))
+
+(decl tls_model (TlsModel) Type)
+(extern extractor infallible tls_model tls_model)
+
+(decl pure tls_model_is_elf_gd () Unit)
+(extern constructor tls_model_is_elf_gd tls_model_is_elf_gd)
+
+(decl pure tls_model_is_macho () Unit)
+(extern constructor tls_model_is_macho tls_model_is_macho)
+
+(decl pure tls_model_is_coff () Unit)
+(extern constructor tls_model_is_coff tls_model_is_coff)
+
+(decl pure preserve_frame_pointers () Unit)
+(extern constructor preserve_frame_pointers preserve_frame_pointers)
+
+;;;; Helpers for accessing instruction data ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl box_external_name (ExternalName) BoxExternalName)
+(extern constructor box_external_name box_external_name)
+
+;; Accessor for `FuncRef`.
+
+(decl func_ref_data (SigRef ExternalName RelocDistance) FuncRef)
+(extern extractor infallible func_ref_data func_ref_data)
+
+;; Accessor for `GlobalValue`.
+
+(decl symbol_value_data (ExternalName RelocDistance i64) GlobalValue)
+(extern extractor symbol_value_data symbol_value_data)
+
+;; Accessor for `RelocDistance`.
+
+(decl reloc_distance_near () RelocDistance)
+(extern extractor reloc_distance_near reloc_distance_near)
+
+;; Accessor for `Immediate` as a vector of u8 values.
+
+(decl vec_mask_from_immediate (VecMask) Immediate)
+(extern extractor vec_mask_from_immediate vec_mask_from_immediate)
+
+;; Accessor for `Immediate` as u128.
+
+(decl u128_from_immediate (u128) Immediate)
+(extern extractor u128_from_immediate u128_from_immediate)
+
+;; Accessor for `Constant` as u128.
+
+(decl u128_from_constant (u128) Constant)
+(extern extractor u128_from_constant u128_from_constant)
+
+;; Accessor for `Constant` as u64.
+
+(decl u64_from_constant (u64) Constant)
+(extern extractor u64_from_constant u64_from_constant)
+
 ;;;; Helpers for generating returns ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The (writable) register(s) that will contain the n'th return value.
@@ -557,8 +620,7 @@
     (Stack
       (offset i64)
       (ty Type)
-      (extension ArgumentExtension))
-))
+      (extension ArgumentExtension))))
 
 ;; Physical register that may hold an argument or return value.
 (type RealReg (primitive RealReg))
@@ -568,8 +630,7 @@
   (enum
     (None)
     (Uext)
-    (Sext)
-))
+    (Sext)))
 
 ;; Get the number of arguments expected.
 (decl abi_num_args (Sig) usize)
@@ -664,70 +725,6 @@
 (rule (lower_return (range_unwrap head tail) args)
       (let ((_ Unit (copy_to_regs (retval head) (value_slice_get args head))))
         (lower_return tail args)))
-
-;;;; Helpers for accessing instruction data ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl box_external_name (ExternalName) BoxExternalName)
-(extern constructor box_external_name box_external_name)
-
-;; Accessor for `FuncRef`.
-
-(decl func_ref_data (SigRef ExternalName RelocDistance) FuncRef)
-(extern extractor infallible func_ref_data func_ref_data)
-
-;; Accessor for `GlobalValue`.
-
-(decl symbol_value_data (ExternalName RelocDistance i64) GlobalValue)
-(extern extractor symbol_value_data symbol_value_data)
-
-;; Accessor for `RelocDistance`.
-
-(decl reloc_distance_near () RelocDistance)
-(extern extractor reloc_distance_near reloc_distance_near)
-
-;; Accessor for `Immediate` as a vector of u8 values.
-
-(decl vec_mask_from_immediate (VecMask) Immediate)
-(extern extractor vec_mask_from_immediate vec_mask_from_immediate)
-
-;; Accessor for `Immediate` as u128.
-
-(decl u128_from_immediate (u128) Immediate)
-(extern extractor u128_from_immediate u128_from_immediate)
-
-;; Accessor for `Constant` as u128.
-
-(decl u128_from_constant (u128) Constant)
-(extern extractor u128_from_constant u128_from_constant)
-
-;; Accessor for `Constant` as u64.
-
-(decl u64_from_constant (u64) Constant)
-(extern extractor u64_from_constant u64_from_constant)
-
-;;;; Helpers for accessing compilation flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl avoid_div_traps () Type)
-(extern extractor avoid_div_traps avoid_div_traps)
-
-;; This definition should be kept up to date with the values defined in
-;; cranelift/codegen/meta/src/shared/settings.rs
-(type TlsModel extern (enum (None) (ElfGd) (Macho) (Coff)))
-
-(decl tls_model (TlsModel) Type)
-(extern extractor infallible tls_model tls_model)
-
-(decl pure tls_model_is_elf_gd () Unit)
-(extern constructor tls_model_is_elf_gd tls_model_is_elf_gd)
-
-(decl pure tls_model_is_macho () Unit)
-(extern constructor tls_model_is_macho tls_model_is_macho)
-
-(decl pure tls_model_is_coff () Unit)
-(extern constructor tls_model_is_coff tls_model_is_coff)
-
-(decl pure preserve_frame_pointers () Unit)
-(extern constructor preserve_frame_pointers preserve_frame_pointers)
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
