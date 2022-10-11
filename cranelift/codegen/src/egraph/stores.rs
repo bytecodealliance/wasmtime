@@ -146,7 +146,8 @@ impl LastStores {
 
 /// An alias-analysis pass.
 pub struct AliasAnalysis {
-    /// Last-store instruction (or none) for a given load.
+    /// Last-store instruction (or none) for a given load. Use a hash map
+    /// instead of a `SecondaryMap` because this is sparse.
     load_mem_state: FxHashMap<Inst, MemoryState>,
 }
 
