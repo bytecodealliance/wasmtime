@@ -285,22 +285,23 @@ impl LoopAnalysis {
     }
 
     fn assign_loop_levels(&mut self) {
-        let mut stack: SmallVec<[Loop; 8]> = smallvec![];
         for lp in self.loops.keys() {
             if self.loops[lp].level == LoopLevel::invalid() {
-                stack.push(lp);
-                while let Some(&lp) = stack.last() {
-                    if let Some(parent) = self.loops[lp].parent.into() {
-                        if self.loops[parent].level != LoopLevel::invalid() {
-                            self.loops[lp].level = self.loops[parent].level.inc();
-                            stack.pop();
-                        } else {
-                            stack.push(parent);
-                        }
-                    } else {
-                        self.loops[lp].level = LoopLevel::root().inc();
-                        stack.pop();
+                let mut assigned = self.loops[lp].parent;
+                let mut level = 0usize;
+                while let Some(parent) = assigned.expand() {
+                    level += 1;
+                    if self.loops[parent].level != LoopLevel::invalid() {
+                        level += self.loops[parent].level.0.into();
+                        break;
                     }
+                    assigned = self.loops[parent].parent;
+                }
+                let mut cur = PackedOption::from(lp);
+                while cur != assigned {
+                    self.loops[cur.unwrap()].level = level.into();
+                    cur = self.loops[cur.unwrap()].parent;
+                    level -= 1;
                 }
             }
         }
