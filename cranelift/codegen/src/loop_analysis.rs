@@ -10,7 +10,6 @@ use crate::ir::{Block, Function, Layout};
 use crate::packed_option::PackedOption;
 use crate::timing;
 use alloc::vec::Vec;
-use smallvec::{smallvec, SmallVec};
 
 /// A opaque reference to a code loop.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -288,18 +287,18 @@ impl LoopAnalysis {
         for lp in self.loops.keys() {
             if self.loops[lp].level == LoopLevel::invalid() {
                 let mut assigned = self.loops[lp].parent;
-                let mut level = 0usize;
+                let mut level = 0;
                 while let Some(parent) = assigned.expand() {
                     level += 1;
                     if self.loops[parent].level != LoopLevel::invalid() {
-                        level += self.loops[parent].level.0.into();
+                        level += self.loops[parent].level.0;
                         break;
                     }
                     assigned = self.loops[parent].parent;
                 }
                 let mut cur = PackedOption::from(lp);
                 while cur != assigned {
-                    self.loops[cur.unwrap()].level = level.into();
+                    self.loops[cur.unwrap()].level = LoopLevel(level);
                     cur = self.loops[cur.unwrap()].parent;
                     level -= 1;
                 }
