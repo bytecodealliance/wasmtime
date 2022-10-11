@@ -34,12 +34,10 @@ pub(crate) fn clear_cache(ptr: *const c_void, len: usize) -> Result<()> {
     // See:
     //   * https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-flushinstructioncache
     //   * https://devblogs.microsoft.com/oldnewthing/20190902-00/?p=102828
-    if cfg!(target_arch = "aarch64") {
-        unsafe {
-            let res = FlushInstructionCache(GetCurrentProcess(), ptr, len);
-            if res == 0 {
-                return Err(Error::last_os_error());
-            }
+    unsafe {
+        let res = FlushInstructionCache(GetCurrentProcess(), ptr, len);
+        if res == 0 {
+            return Err(Error::last_os_error());
         }
     }
 
