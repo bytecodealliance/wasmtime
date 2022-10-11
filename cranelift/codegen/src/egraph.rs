@@ -7,7 +7,7 @@ use crate::trace;
 use crate::{
     fx::{FxHashMap, FxHashSet},
     inst_predicates::has_side_effect,
-    ir::{Block, Function, Inst, InstructionImms, Opcode, Type},
+    ir::{Block, Function, Inst, InstructionData, InstructionImms, Opcode, Type},
 };
 use alloc::vec::Vec;
 use core::ops::Range;
@@ -142,7 +142,9 @@ impl<'a> FuncEGraph<'a> {
                     .add(
                         Node::Param {
                             block,
-                            index: i.try_into().expect("blockparam index should fit in Node::Param"),
+                            index: i
+                                .try_into()
+                                .expect("blockparam index should fit in Node::Param"),
                             ty,
                             loop_level,
                         },
