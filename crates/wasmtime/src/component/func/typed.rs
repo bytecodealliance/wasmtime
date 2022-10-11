@@ -738,7 +738,8 @@ unsafe impl Lift for bool {
     fn lift(_store: &StoreOpaque, _options: &Options, src: &Self::Lower) -> Result<Self> {
         match src.get_i32() {
             0 => Ok(false),
-            _ => Ok(true),
+            1 => Ok(true),
+            _ => bail!("out-of-bounds value for bool"),
         }
     }
 
@@ -746,7 +747,8 @@ unsafe impl Lift for bool {
     fn load(_mem: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
         match bytes[0] {
             0 => Ok(false),
-            _ => Ok(true),
+            1 => Ok(true),
+            _ => bail!("out-of-bounds value for bool"),
         }
     }
 }
