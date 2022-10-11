@@ -58,6 +58,13 @@ impl LoopLevel {
             Self(self.0 + 1)
         }
     }
+    /// A clamped loop level from a larger-width (usize) depth.
+    pub fn clamped(level: usize) -> Self {
+        Self(
+            u8::try_from(std::cmp::min(level, (Self::INVALID as usize) - 1))
+                .expect("Clamped value must always convert"),
+        )
+    }
 }
 
 impl std::default::Default for LoopLevel {
@@ -287,22 +294,19 @@ impl LoopAnalysis {
         for lp in self.loops.keys() {
             if self.loops[lp].level == LoopLevel::invalid() {
                 let mut assigned = self.loops[lp].parent;
-                let mut level = 1;  // A loop with no parent is level 1.
+                let mut level: usize = 1; // A loop with no parent is level 1.
                 while let Some(parent) = assigned.expand() {
                     level += 1;
                     if self.loops[parent].level != LoopLevel::invalid() {
-                        level += self.loops[parent].level.0;
+                        level += self.loops[parent].level.0 as usize;
                         break;
                     }
                     assigned = self.loops[parent].parent;
                 }
                 let mut cur = PackedOption::from(lp);
-                loop {
-                    self.loops[cur.unwrap()].level = LoopLevel(level);
+                while cur != assigned {
+                    self.loops[cur.unwrap()].level = LoopLevel::clamped(level);
                     cur = self.loops[cur.unwrap()].parent;
-                    if cur == assigned {
-                        break;
-                    }
                     level -= 1;
                 }
             }
@@ -366,6 +370,10 @@ mod tests {
         assert_eq!(loop_analysis.is_in_loop(block2, loops[0]), true);
         assert_eq!(loop_analysis.is_in_loop(block3, loops[0]), true);
         assert_eq!(loop_analysis.is_in_loop(block0, loops[1]), false);
+        assert_eq!(loop_analysis.loop_level(block0).level(), 1);
+        assert_eq!(loop_analysis.loop_level(block1).level(), 2);
+        assert_eq!(loop_analysis.loop_level(block2).level(), 2);
+        assert_eq!(loop_analysis.loop_level(block3).level(), 1);
     }
 
     #[test]
@@ -425,5 +433,11 @@ mod tests {
         assert_eq!(loop_analysis.is_in_loop(block3, loops[2]), true);
         assert_eq!(loop_analysis.is_in_loop(block4, loops[2]), true);
         assert_eq!(loop_analysis.is_in_loop(block5, loops[0]), true);
+        assert_eq!(loop_analysis.loop_level(block0).level(), 1);
+        assert_eq!(loop_analysis.loop_level(block1).level(), 2);
+        assert_eq!(loop_analysis.loop_level(block2).level(), 2);
+        assert_eq!(loop_analysis.loop_level(block3).level(), 3);
+        assert_eq!(loop_analysis.loop_level(block4).level(), 3);
+        assert_eq!(loop_analysis.loop_level(block5).level(), 1);
     }
 }
