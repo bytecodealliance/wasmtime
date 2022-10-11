@@ -162,6 +162,7 @@ impl<'a> FuncEGraph<'a> {
             for inst in func.layout.block_insts(block) {
                 let side_effect = has_side_effect(func, inst)
                     || (func.dfg[inst].opcode().can_load()
+                        && func.dfg[inst].memflags().is_some()
                         && !func.dfg[inst].memflags().unwrap().readonly())
                     || func.dfg[inst].opcode().can_store();
 
