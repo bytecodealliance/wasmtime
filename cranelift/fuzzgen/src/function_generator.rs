@@ -435,6 +435,108 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Isplit, &[I128], &[I64, I64], insert_opcode),
     // Iconcat
     (Opcode::Iconcat, &[I64, I64], &[I128], insert_opcode),
+    // Band
+    (Opcode::Band, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Band, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Band, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Band, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Band, &[I128, I128], &[I128], insert_opcode),
+    // Float bitops are currently not supported:
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Band, &[F32, F32], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Band, &[F64, F64], &[F64], insert_opcode),
+    // Bor
+    (Opcode::Bor, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Bor, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Bor, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Bor, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Bor, &[I128, I128], &[I128], insert_opcode),
+    // Float bitops are currently not supported:
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Bor, &[F32, F32], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Bor, &[F64, F64], &[F64], insert_opcode),
+    // Bxor
+    (Opcode::Bxor, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Bxor, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Bxor, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Bxor, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Bxor, &[I128, I128], &[I128], insert_opcode),
+    // Float bitops are currently not supported:
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Bxor, &[F32, F32], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Bxor, &[F64, F64], &[F64], insert_opcode),
+    // Bnot
+    (Opcode::Bnot, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Bnot, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Bnot, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Bnot, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Bnot, &[I128, I128], &[I128], insert_opcode),
+    // Float bitops are currently not supported:
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Bnot, &[F32, F32], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Bnot, &[F64, F64], &[F64], insert_opcode),
+    // BandNot
+    // Some Integer ops not supported on x86: https://github.com/bytecodealliance/wasmtime/issues/5041
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BandNot, &[I8, I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BandNot, &[I16, I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BandNot, &[I32, I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BandNot, &[I64, I64], &[I64], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BandNot, &[I128, I128], &[I128], insert_opcode),
+    // Float bitops are currently not supported:
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::BandNot, &[F32, F32], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::BandNot, &[F64, F64], &[F64], insert_opcode),
+    // BorNot
+    // Some Integer ops not supported on x86: https://github.com/bytecodealliance/wasmtime/issues/5041
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BorNot, &[I8, I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BorNot, &[I16, I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BorNot, &[I32, I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BorNot, &[I64, I64], &[I64], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BorNot, &[I128, I128], &[I128], insert_opcode),
+    // Float bitops are currently not supported:
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::BorNot, &[F32, F32], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::BorNot, &[F64, F64], &[F64], insert_opcode),
+    // BxorNot
+    // Some Integer ops not supported on x86: https://github.com/bytecodealliance/wasmtime/issues/5041
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BxorNot, &[I8, I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BxorNot, &[I16, I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BxorNot, &[I32, I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BxorNot, &[I64, I64], &[I64], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::BxorNot, &[I128, I128], &[I128], insert_opcode),
+    // Float bitops are currently not supported:
+    // See: https://github.com/bytecodealliance/wasmtime/issues/4870
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::BxorNot, &[F32, F32], &[F32], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::BxorNot, &[F64, F64], &[F64], insert_opcode),
     // Fadd
     (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),
     (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode),
