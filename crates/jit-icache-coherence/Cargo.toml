@@ -10,8 +10,6 @@ edition.workspace = true
 
 [dependencies]
 cfg-if = "1.0"
-libc = { version = "0.2.42" }
-rustix = { optional = true, workspace = true, features = ["process"] }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
@@ -21,7 +19,5 @@ features = [
     "Win32_System_Diagnostics_Debug",
 ]
 
-[features]
-default = []
-# Uses rustix instead of libc
-rustix = ["dep:rustix"]
+[target.'cfg(target_os = "linux")'.dependencies.libc]
+version = "0.2.42"

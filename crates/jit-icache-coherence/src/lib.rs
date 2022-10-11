@@ -74,9 +74,6 @@ cfg_if::cfg_if! {
     if #[cfg(target_os = "windows")] {
         mod win;
         use win as imp;
-    } else if #[cfg(feature = "rustix")] {
-        mod rustix;
-        use crate::rustix as imp;
     } else {
         mod libc;
         use crate::libc as imp;
