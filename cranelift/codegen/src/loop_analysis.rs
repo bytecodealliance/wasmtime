@@ -297,9 +297,12 @@ impl LoopAnalysis {
                     assigned = self.loops[parent].parent;
                 }
                 let mut cur = PackedOption::from(lp);
-                while cur != assigned {
+                loop {
                     self.loops[cur.unwrap()].level = LoopLevel(level);
                     cur = self.loops[cur.unwrap()].parent;
+                    if cur == assigned {
+                        break;
+                    }
                     level -= 1;
                 }
             }
