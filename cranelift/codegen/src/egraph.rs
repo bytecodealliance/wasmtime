@@ -370,7 +370,7 @@ pub(crate) struct AnalysisValue {
     pub(crate) loop_level: LoopLevel,
 }
 
-impl std::default::Default for AnalysisValue {
+impl Default for AnalysisValue {
     fn default() -> Self {
         Self {
             loop_level: LoopLevel::root(),
