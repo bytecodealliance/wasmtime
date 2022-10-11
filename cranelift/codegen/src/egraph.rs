@@ -184,7 +184,7 @@ impl<'a> FuncEGraph<'a> {
                     .from_iter(results.iter().map(|&val| func.dfg.value_type(val)));
                 let types = types.freeze(&mut self.node_ctx.types);
 
-                let mem_state = self.alias_analysis.get_state_for_load(inst);
+                let load_mem_state = self.alias_analysis.get_state_for_load(inst);
                 let is_readonly_load = match func.dfg[inst] {
                     InstructionData::Load {
                         opcode: Opcode::Load,
@@ -203,10 +203,10 @@ impl<'a> FuncEGraph<'a> {
                     self.stats.node_created += 1;
                     self.stats.node_pure += 1;
                     Node::Pure { op, args, types }
-                } else if let Some(mem_state) = mem_state {
+                } else if let Some(load_mem_state) = load_mem_state {
                     let addr = args.as_slice(&self.node_ctx.args)[0];
                     let ty = types.as_slice(&self.node_ctx.types)[0];
-                    trace!("load at inst {} has mem state {:?}", inst, mem_state);
+                    trace!("load at inst {} has mem state {:?}", inst, load_mem_state);
                     self.stats.node_created += 1;
                     self.stats.node_load += 1;
                     Node::Load {
@@ -214,7 +214,7 @@ impl<'a> FuncEGraph<'a> {
                         ty,
                         inst,
                         addr,
-                        mem_state,
+                        mem_state: load_mem_state,
                         srcloc,
                     }
                 } else if side_effect {
@@ -234,8 +234,9 @@ impl<'a> FuncEGraph<'a> {
                     Node::Pure { op, args, types }
                 };
                 let dedup_needed = self.node_ctx.needs_dedup(&node);
+                let is_pure = matches!(node, Node::Pure { .. });
 
-                let id = self.egraph.add(node, &mut self.node_ctx);
+                let mut id = self.egraph.add(node, &mut self.node_ctx);
 
                 if dedup_needed {
                     self.stats.node_dedup_query += 1;
@@ -255,14 +256,21 @@ impl<'a> FuncEGraph<'a> {
                     self.stats.store_map_insert += 1;
                 }
 
+                // Loads that did not already merge into an existing
+                // load: try to forward from a store (store-to-load
+                // forwarding).
                 if let NewOrExisting::New(new_id) = id {
-                    // Loads: do store-to-load forwarding.
-                    let opt_id = crate::opts::store_to_load(new_id, self);
-                    trace!("store_to_load: {} -> {}", new_id, opt_id);
-                    if opt_id != new_id {
-                        id = NewOrExisting::Existing(opt_id);
+                    if load_mem_state.is_some() {
+                        let opt_id = crate::opts::store_to_load(new_id, self);
+                        trace!("store_to_load: {} -> {}", new_id, opt_id);
+                        if opt_id != new_id {
+                            id = NewOrExisting::Existing(opt_id);
+                        }
                     }
                 }
+
+                // Now either optimize (for new pure nodes), or add to
+                // the side-effecting list (for all other new nodes).
                 let id = match id {
                     NewOrExisting::Existing(id) => id,
                     NewOrExisting::New(id) if is_pure => {
