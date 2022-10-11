@@ -79,9 +79,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let mut return_one_register_used = false;
         // Max float bits allowed by call_conv.
         let max_float_bits = match call_conv {
-            CallConv::SystemVRiscv(x) => x.max_bits(),
+            CallConv::SystemVRiscv(x) => x.fclass_len(),
             // Just use the `Quad`,even f128 not supported right now.
-            _ => RiscvFloatAbi::Quad.max_bits(),
+            _ => RiscvFloatAbi::Quad.fclass_len(),
         };
 
         for param in params {

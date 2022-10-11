@@ -60,9 +60,8 @@ impl RiscvFloatAbi {
             Self::Quad => "system_v_riscv_quad",
         }
     }
-    pub fn max_bits(self) -> u32 {
+    pub fn fclass_len(self) -> u32 {
         match self {
-            // 0 means don't use float register.
             Self::Soft => 0,
             Self::Single => 32,
             Self::Double => 64,
