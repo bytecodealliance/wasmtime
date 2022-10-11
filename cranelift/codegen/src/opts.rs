@@ -42,6 +42,7 @@ pub fn optimize_eclass<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
     egraph.stats.rewrite_rule_invoked += 1;
 
     if egraph.rewrite_depth > REWRITE_LIMIT {
+        egraph.stats.rewrite_depth_limit += 1;
         return id;
     }
     egraph.rewrite_depth += 1;

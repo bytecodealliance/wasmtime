@@ -78,6 +78,7 @@ pub(crate) struct Stats {
     pub(crate) store_map_insert: u64,
     pub(crate) side_effect_nodes: u64,
     pub(crate) rewrite_rule_invoked: u64,
+    pub(crate) rewrite_depth_limit: u64,
     pub(crate) store_to_load_forward: u64,
     pub(crate) elaborate_visit_node: u64,
     pub(crate) elaborate_memoize_hit: u64,
