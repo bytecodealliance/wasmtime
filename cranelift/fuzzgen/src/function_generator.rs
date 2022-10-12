@@ -24,9 +24,7 @@ fn arbitrary_vec<T: Clone>(
     len: usize,
     options: &[T],
 ) -> arbitrary::Result<Vec<T>> {
-    (0..len)
-        .map(|_| u.choose(options).cloned())
-        .collect()
+    (0..len).map(|_| u.choose(options).cloned()).collect()
 }
 
 type BlockSignature = Vec<Type>;
