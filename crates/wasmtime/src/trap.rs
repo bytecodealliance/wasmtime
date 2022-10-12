@@ -266,10 +266,12 @@ impl Trap {
         match reason {
             wasmtime_runtime::TrapReason::User {
                 error,
-                needs_backtrace: _,
+                needs_backtrace,
             } => {
                 let trap = Trap::from(error);
                 if let Some(backtrace) = backtrace {
+                    debug_assert!(needs_backtrace);
+                    debug_assert!(trap.inner.backtrace.get().is_none());
                     trap.record_backtrace(TrapBacktrace::new(store, backtrace, None));
                 }
                 trap
