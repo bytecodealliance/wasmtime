@@ -84,6 +84,7 @@ members = [
   "crates/c-api",
   "crates/cli-flags",
   "crates/environ/fuzz",
+  "crates/jit-icache-coherence",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
   "examples/tokio/wasm",
@@ -126,6 +127,7 @@ wasi-common = { path = "crates/wasi-common", version = "=3.0.0" }
 wasi-tokio = { path = "crates/wasi-common/tokio", version = "=3.0.0" }
 wasi-cap-std-sync = { path = "crates/wasi-common/cap-std-sync", version = "=3.0.0" }
 wasmtime-fuzzing = { path = "crates/fuzzing" }
+wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version = "=2.0.0" }
 
 cranelift-wasm = { path = "cranelift/wasm", version = "0.90.0" }
 cranelift-codegen = { path = "cranelift/codegen", version = "0.90.0" }

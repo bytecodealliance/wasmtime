@@ -667,6 +667,7 @@ dependencies = [
  "memmap2",
  "region",
  "target-lexicon",
+ "wasmtime-jit-icache-coherence",
  "windows-sys",
 ]
 
@@ -3665,12 +3666,12 @@ dependencies = [
  "log",
  "object",
  "rustc-demangle",
- "rustix",
  "serde",
  "target-lexicon",
  "thiserror",
  "wasmtime-environ",
  "wasmtime-jit-debug",
+ "wasmtime-jit-icache-coherence",
  "wasmtime-runtime",
  "windows-sys",
 ]
@@ -3682,6 +3683,15 @@ dependencies = [
  "object",
  "once_cell",
  "rustix",
+]
+
+[[package]]
+name = "wasmtime-jit-icache-coherence"
+version = "2.0.0"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "windows-sys",
 ]
 
 [[package]]

@@ -26,15 +26,13 @@ bincode = "1.2.1"
 rustc-demangle = "0.1.16"
 cpp_demangle = "0.3.2"
 log = { workspace = true }
+wasmtime-jit-icache-coherence = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
 features = [
   "Win32_System_Diagnostics_Debug",
 ]
-
-[target.'cfg(target_os = "linux")'.dependencies]
-rustix = { workspace = true, features = ["process"] }
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 ittapi = { version = "0.3.0", optional = true  }
