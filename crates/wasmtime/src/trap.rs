@@ -264,7 +264,10 @@ impl Trap {
     pub(crate) fn from_runtime(store: &StoreOpaque, runtime_trap: wasmtime_runtime::Trap) -> Self {
         let wasmtime_runtime::Trap { reason, backtrace } = runtime_trap;
         match reason {
-            wasmtime_runtime::TrapReason::User(error) => {
+            wasmtime_runtime::TrapReason::User {
+                error,
+                needs_backtrace: _,
+            } => {
                 let trap = Trap::from(error);
                 if let Some(backtrace) = backtrace {
                     trap.record_backtrace(TrapBacktrace::new(store, backtrace, None));

@@ -1887,7 +1887,12 @@ macro_rules! impl_into_func {
 
                     match result {
                         CallResult::Ok(val) => val,
-                        CallResult::Trap(trap) => raise_user_trap(trap),
+                        CallResult::Trap(err) => {
+                            let needs_backtrace = err
+                                .downcast_ref::<Trap>()
+                                .map_or(true, |trap| trap.trace().is_none());
+                            raise_user_trap(err, needs_backtrace)
+                        },
                         CallResult::Panic(panic) => wasmtime_runtime::resume_panic(panic),
                     }
                 }

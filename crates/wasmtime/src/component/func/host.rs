@@ -1,7 +1,7 @@
 use crate::component::func::{Memory, MemoryMut, Options};
 use crate::component::storage::slice_to_storage_mut;
 use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Type, Val};
-use crate::{AsContextMut, StoreContextMut, ValRaw};
+use crate::{AsContextMut, StoreContextMut, Trap, ValRaw};
 use anyhow::{anyhow, bail, Context, Result};
 use std::any::Any;
 use std::mem::{self, MaybeUninit};
@@ -265,7 +265,12 @@ fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<us
 unsafe fn handle_result(func: impl FnOnce() -> Result<()>) {
     match panic::catch_unwind(AssertUnwindSafe(func)) {
         Ok(Ok(())) => {}
-        Ok(Err(e)) => wasmtime_runtime::raise_user_trap(e),
+        Ok(Err(err)) => {
+            let needs_backtrace = err
+                .downcast_ref::<Trap>()
+                .map_or(true, |trap| trap.trace().is_none());
+            wasmtime_runtime::raise_user_trap(err, needs_backtrace)
+        }
         Err(e) => wasmtime_runtime::resume_panic(e),
     }
 }
