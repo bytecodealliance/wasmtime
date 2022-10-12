@@ -1,6 +1,6 @@
 use crate::{
-    abi::{addressing_mode::Address, local::LocalSlot, ABI},
-    frame::DefinedLocalsRange,
+    abi::{addressing_mode::Address, local::LocalSlot},
+    isa::reg::Reg,
     masm::{MacroAssembler as Masm, OperandSize, RegImm},
 };
 
@@ -12,7 +12,7 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn epilogue(&mut self) {
+    fn epilogue(&mut self, locals_size: u32) {
         todo!()
     }
 
@@ -32,11 +32,19 @@ impl Masm for MacroAssembler {
         0u32
     }
 
-    fn zero_local_slots<A: ABI>(&mut self, range: &DefinedLocalsRange, a: &A) {
+    fn finalize(&mut self) -> &[String] {
         todo!()
     }
 
-    fn finalize(&mut self) -> &[String] {
+    fn mov(&mut self, src: RegImm, dst: RegImm, size: OperandSize) {
+        todo!()
+    }
+
+    fn add(&mut self, src: RegImm, dst: RegImm, size: OperandSize) {
+        todo!()
+    }
+
+    fn zero(&mut self, reg: Reg) {
         todo!()
     }
 }

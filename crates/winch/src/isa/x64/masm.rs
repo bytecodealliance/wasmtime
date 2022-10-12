@@ -1,16 +1,11 @@
 use super::regs::{rbp, reg_name, rsp};
+use crate::abi::addressing_mode::Address;
 use crate::abi::local::LocalSlot;
-use crate::abi::{addressing_mode::Address, align_to, ABI};
-use crate::frame::DefinedLocalsRange;
 use crate::isa::reg::Reg;
 use crate::masm::{MacroAssembler as Masm, OperandSize, RegImm};
-use crate::regset::RegSet;
-use crate::stack::Stack;
 
 pub(crate) struct MacroAssembler {
     sp_offset: u32,
-    regset: RegSet,
-    stack: Stack,
     asm: Assembler,
 }
 
@@ -24,6 +19,10 @@ impl Masm for MacroAssembler {
     }
 
     fn reserve_stack(&mut self, bytes: u32) {
+        if bytes == 0 {
+            return;
+        }
+
         self.asm.sub_ir(bytes, rsp());
         self.increment_sp(bytes);
     }
@@ -61,65 +60,46 @@ impl Masm for MacroAssembler {
         self.sp_offset
     }
 
-    fn zero_local_slots<A: ABI>(&mut self, range: &DefinedLocalsRange, abi: &A) {
-        if range.0.is_empty() {
-            return;
-        }
+    fn zero(&mut self, reg: Reg) {
+        self.asm.xorl_rr(reg, reg);
+    }
 
-        // Divide the locals range into word-size slots; first ensure that the range limits
-        // are word size aligned; there's no guarantee about their alignment. The aligned "upper"
-        // limit should always be less than or equal to the size of the local area, which gets
-        // validated when getting the address of a local
+    fn mov(&mut self, src: RegImm, dst: RegImm, size: OperandSize) {
+        let src: Operand = src.into();
+        let dst: Operand = dst.into();
 
-        let word_size = <A as ABI>::word_bytes();
-        // If the locals range start is not aligned to the word size, zero the last four bytes
-        let range_start = range
-            .0
-            .start()
-            .checked_rem(word_size)
-            .map_or(*range.0.start(), |_| {
-                // TODO use `align_to` instead?
-                let start = range.0.start() + 4;
-                let addr = self.local_address(&LocalSlot::i32(start));
-                // rsp, rbp
-                self.store(RegImm::imm(0), addr, OperandSize::S64);
-                start
-            });
-
-        // Ensure that the range end is also word-size aligned
-        let range_end = align_to(*range.0.end(), word_size);
-        // Divide the range into word-size slots
-        let slots = (range_end - range_start) / word_size;
-
-        match slots {
-            1 => {
-                let slot = LocalSlot::i64(range_start + word_size);
-                let addr = self.local_address(&slot);
-                self.store(RegImm::imm(0), addr, OperandSize::S64);
+        match size {
+            OperandSize::S32 => {
+                self.asm.movl(src, dst);
             }
-            // TODO
-            // Add an upper bound to this generation;
-            // given a considerably large amount of slots
-            // this will be inefficient
-            n => {
-                // Request a gpr and zero it
-                let zero = self.any_gpr();
-                self.asm.xorl_rr(zero, zero);
-                // store zero in each of the slots in the range
-                for step in (range_start..range_end)
-                    .into_iter()
-                    .step_by(word_size as usize)
-                {
-                    let slot = LocalSlot::i64(step + word_size);
-                    let addr = self.local_address(&slot);
-                    self.store(RegImm::reg(zero), addr, OperandSize::S64);
-                }
-                self.regset.free_gpr(zero);
+            OperandSize::S64 => {
+                self.asm.mov(src, dst);
             }
         }
     }
 
-    fn epilogue(&mut self) {}
+    fn add(&mut self, src: RegImm, dst: RegImm, size: OperandSize) {
+        let src: Operand = src.into();
+        let dst: Operand = dst.into();
+
+        match size {
+            OperandSize::S32 => {
+                self.asm.addl(src, dst);
+            }
+            OperandSize::S64 => {
+                self.asm.add(src, dst);
+            }
+        }
+    }
+
+    fn epilogue(&mut self, locals_size: u32) {
+        let rsp = rsp();
+        if locals_size > 0 {
+            self.asm.add_ir(locals_size as i32, rsp);
+        }
+        self.asm.pop_r(rbp());
+        self.asm.ret();
+    }
 
     fn finalize(&mut self) -> &[String] {
         self.asm.finalize()
@@ -128,26 +108,10 @@ impl Masm for MacroAssembler {
 
 impl MacroAssembler {
     /// Crate a x64 MacroAssembler
-    pub fn new(regset: RegSet, stack: Stack) -> Self {
+    pub fn new() -> Self {
         Self {
             sp_offset: 0,
             asm: Default::default(),
-            regset,
-            stack,
-        }
-    }
-
-    /// Allocate the next available general purpose register,
-    /// spilling if none available
-    fn any_gpr(&mut self) -> Reg {
-        match self.regset.any_gpr() {
-            None => {
-                self.spill();
-                self.regset
-                    .any_gpr()
-                    .expect("any allocatable general purpose register to be available")
-            }
-            Some(r) => r,
         }
     }
 
@@ -182,7 +146,10 @@ enum Operand {
 // NOTE
 // This is an interim, debug approach; the long term idea
 // is to make each ISA assembler available through
-// `cranelift_asm`
+// `cranelift_asm`. The literal representation of the
+// instructions use intel syntax for easier manual verification.
+// This shouldn't be an issue, once we plug in Cranelift's backend
+// we are going to be able to properly disassemble
 #[derive(Default)]
 struct Assembler {
     buffer: Vec<String>,
@@ -191,6 +158,14 @@ struct Assembler {
 impl Assembler {
     pub fn push_r(&mut self, reg: Reg) {
         self.buffer.push(format!("push {}", reg_name(reg, 8)));
+    }
+
+    pub fn pop_r(&mut self, reg: Reg) {
+        self.buffer.push(format!("pop {}", reg_name(reg, 8)));
+    }
+
+    pub fn ret(&mut self) {
+        self.buffer.push("ret".into());
     }
 
     pub fn mov(&mut self, src: Operand, dst: Operand) {
@@ -209,8 +184,9 @@ impl Assembler {
             (Operand::Imm(op), Operand::Mem(addr)) => match addr {
                 Address::Base { base, imm } => self.mov_im(*op, *base, *imm),
             },
+            (Operand::Imm(imm), Operand::Reg(reg)) => self.mov_ir(*imm, *reg),
             _ => panic!(
-                "Invalid operand combination for movl; src = {:?}; dst = {:?}",
+                "Invalid operand combination for mov; src = {:?}; dst = {:?}",
                 src, dst
             ),
         }
@@ -248,6 +224,12 @@ impl Assembler {
         self.buffer.push(format!("mov {} {}", addr, imm));
     }
 
+    pub fn mov_ir(&mut self, imm: i32, dst: Reg) {
+        let reg = reg_name(dst, 8);
+
+        self.buffer.push(format!("mov {} {}", reg, imm));
+    }
+
     pub fn movl(&mut self, src: Operand, dst: Operand) {
         // r, r
         // r, m (displacement)
@@ -264,6 +246,8 @@ impl Assembler {
             (Operand::Imm(op), Operand::Mem(addr)) => match addr {
                 Address::Base { base, imm } => self.movl_im(*op, *base, *imm),
             },
+            (Operand::Imm(imm), Operand::Reg(reg)) => self.movl_ir(*imm, *reg),
+
             _ => panic!(
                 "Invalid operand combination for movl; src = {:?}; dst = {:?}",
                 src, dst
@@ -288,7 +272,7 @@ impl Assembler {
             format!("[{} + {}]", dst, disp)
         };
 
-        self.buffer.push(format!("movl {}, {}", addr, src));
+        self.buffer.push(format!("mov {}, {}", addr, src));
     }
 
     pub fn movl_im(&mut self, imm: i32, base: Reg, disp: u32) {
@@ -303,16 +287,54 @@ impl Assembler {
         self.buffer.push(format!("mov {}, {}", addr, imm));
     }
 
+    pub fn movl_ir(&mut self, imm: i32, dst: Reg) {
+        let reg = reg_name(dst, 4);
+
+        self.buffer.push(format!("mov {}, {}", reg, imm));
+    }
+
     pub fn sub_ir(&mut self, imm: u32, dst: Reg) {
         let dst = reg_name(dst, 8);
         self.buffer.push(format!("sub {}, {}", dst, imm));
+    }
+
+    pub fn add(&mut self, src: Operand, dst: Operand) {
+        match &(src, dst) {
+            (Operand::Imm(imm), Operand::Reg(dst)) => self.add_ir(*imm, *dst),
+            _ => panic!(
+                "Invalid operand combination for add; src = {:?} dst = {:?}",
+                src, dst
+            ),
+        }
+    }
+
+    pub fn add_ir(&mut self, imm: i32, dst: Reg) {
+        let dst = reg_name(dst, 8);
+
+        self.buffer.push(format!("add {}, {}", dst, imm));
+    }
+
+    pub fn addl(&mut self, src: Operand, dst: Operand) {
+        match &(src, dst) {
+            (Operand::Imm(imm), Operand::Reg(dst)) => self.addl_ir(*imm, *dst),
+            _ => panic!(
+                "Invalid operand combination for add; src = {:?} dst = {:?}",
+                src, dst
+            ),
+        }
+    }
+
+    pub fn addl_ir(&mut self, imm: i32, dst: Reg) {
+        let dst = reg_name(dst, 4);
+
+        self.buffer.push(format!("add {}, {}", dst, imm));
     }
 
     pub fn xorl_rr(&mut self, src: Reg, dst: Reg) {
         let src = reg_name(src, 4);
         let dst = reg_name(dst, 4);
 
-        self.buffer.push(format!("xorl {} {}", dst, src));
+        self.buffer.push(format!("xor {} {}", dst, src));
     }
 
     /// Return the emitted code
