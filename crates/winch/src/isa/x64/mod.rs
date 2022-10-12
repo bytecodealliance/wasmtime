@@ -1,5 +1,4 @@
 use crate::isa::x64::masm::MacroAssembler;
-use crate::stack::Stack;
 use crate::{compilation_env::CompilationEnv, isa::TargetIsa, regset::RegSet};
 use anyhow::Result;
 use target_lexicon::Triple;
@@ -48,11 +47,12 @@ impl TargetIsa for X64 {
             validator,
             mut body,
         } = body;
+
+        let abi = abi::X64ABI::default();
         let mut validator = validator.into_validator(Default::default());
         let regset = RegSet::new(ALL_GPR, 0);
-        let abi = abi::X64ABI::default();
-        let masm = MacroAssembler::new(regset, Stack::new());
-        let mut env = CompilationEnv::new(sig, &mut body, &mut validator, abi, masm)?;
+        let masm = MacroAssembler::new();
+        let mut env = CompilationEnv::new(sig, &mut body, &mut validator, abi, masm, regset)?;
 
         env.emit()
     }

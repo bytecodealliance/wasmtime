@@ -23,8 +23,23 @@ impl RegSet {
         })
     }
 
+    /// Request a specific general purpose register
+    pub fn gpr(&mut self, reg: Reg) -> Option<Reg> {
+        let index = reg.hw_enc();
+        self.named_gpr_available(reg).then(|| {
+            self.allocate(index as u32);
+            Reg::int(index as usize)
+        })
+    }
+
+    /// Free the given general purpose register
     pub fn free_gpr(&mut self, reg: Reg) {
         self.gpr |= reg.hw_enc() as u32;
+    }
+
+    fn named_gpr_available(&self, reg: Reg) -> bool {
+        let index = 1 << reg.hw_enc();
+        !(!self.gpr & index) != 0
     }
 
     fn gpr_available(&self) -> bool {

@@ -6,5 +6,5 @@ pub mod isa;
 mod masm;
 mod regset;
 mod stack;
-
+mod visitor;
 pub use compiler::builder::builder;
