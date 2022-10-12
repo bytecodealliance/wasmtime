@@ -46,6 +46,8 @@ For explanations of what each tier means see below.
 | Category             | Description                       | Missing Tier 2 Requirements |
 |----------------------|-----------------------------------|-----------------------------|
 | Target               | `aarch64-apple-darwin`            | CI testing                  |
+| Target               | `aarch64-pc-windows-msvc`         | CI testing, unwinding, full-time maintainer |
+| Target               | `riscv64gc-unknown-linux-gnu`     | full-time maintainer        |
 | WASI Proposal        | `wasi-nn`                         | More expansive CI testing   |
 | WASI Proposal        | `wasi-crypto`                     | CI testing, clear owner     |
 | WebAssembly Proposal | `threads`                         | Complete implementation     |
