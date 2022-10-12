@@ -257,8 +257,7 @@ impl<'a> Elaborator<'a> {
                             })
                             // Can't use `.sum()` for `Cost` types; do
                             // an explicit reduce instead.
-                            .reduce(|a, b| a + b)
-                            .unwrap_or(Cost::zero());
+                            .fold(Cost::zero(), Cost::add);
                         let level = self.egraph.analysis_value(eclass_id).loop_level;
                         let cost = op_cost(op).at_level(level) + args_cost;
                         (cost, eclass_id)
