@@ -1157,40 +1157,8 @@
 
 ;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Use a common helper to type cast bools to either bool or integer types.
-(decl cast_bool (Type Value) Reg)
-(rule (lower (has_type ty (bmask x)))
-      (cast_bool ty x))
-
-;; If the target has the same or a smaller size than the source, it's a no-op.
-(rule 7 (cast_bool (fits_in_16 _ty) x @ (value_type $I16)) x)
-(rule 6 (cast_bool (fits_in_32 _ty) x @ (value_type $I32)) x)
-(rule 5 (cast_bool (fits_in_64 _ty) x @ (value_type $I64)) x)
-(rule 4 (cast_bool (vr128_ty _ty) x @ (value_type $I128)) x)
-(rule 5 (cast_bool (fits_in_64 _ty) x @ (value_type $I128))
-      (vec_extract_lane $I64X2 x 1 (zero_reg)))
-
-;; Single-bit values are sign-extended via a pair of shifts.
-(rule 0 (cast_bool (gpr32_ty ty) x @ (value_type $I8))
-      (ashr_imm $I32 (lshl_imm $I32 x 31) 31))
-(rule 1 (cast_bool (gpr64_ty ty) x @ (value_type $I8))
-      (ashr_imm $I64 (lshl_imm $I64 x 63) 63))
-(rule 4 (cast_bool (vr128_ty ty) x @ (value_type $I8))
-      (let ((gpr Reg (ashr_imm $I64 (lshl_imm $I64 x 63) 63)))
-        (mov_to_vec128 ty gpr gpr)))
-
-;; Other values are just sign-extended normally.
-(rule 0 (cast_bool (gpr32_ty _ty) x @ (value_type $I16))
-      (sext32_reg $I16 x))
-(rule 1(cast_bool (gpr64_ty _ty) x @ (value_type $I16))
-      (sext64_reg $I16 x))
-(rule 1(cast_bool (gpr64_ty _ty) x @ (value_type $I32))
-      (sext64_reg $I32 x))
-(rule 3 (cast_bool (vr128_ty ty) x @ (value_type (gpr32_ty src_ty)))
-      (let ((x_ext Reg (sext64_reg src_ty x)))
-        (mov_to_vec128 ty x_ext x_ext)))
-(rule 2 (cast_bool (vr128_ty ty) x @ (value_type (gpr64_ty src_ty)))
-      (mov_to_vec128 ty x x))
+(rule (lower (has_type oty (bmask x @ (value_type ity))))
+      (lower_bmask oty ity x))
 
 
 ;;;; Rules for `bitrev` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
