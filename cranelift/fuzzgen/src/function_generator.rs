@@ -25,7 +25,7 @@ fn arbitrary_vec<T: Clone>(
     options: &[T],
 ) -> arbitrary::Result<Vec<T>> {
     (0..len)
-        .map(|_| u.choose(options).map(Clone::clone))
+        .map(|_| u.choose(options).cloned())
         .collect()
 }
 
