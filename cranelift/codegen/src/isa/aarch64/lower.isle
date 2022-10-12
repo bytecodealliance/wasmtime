@@ -16,8 +16,13 @@
 
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty (iconst (u64_from_imm64 n))))
+(rule (lower (has_type (fits_in_64 ty) (iconst (u64_from_imm64 n))))
       (imm ty (ImmExtend.Zero) n))
+
+(rule 1 (lower (has_type $I128 (iconst (u64_from_imm64 n))))
+      (value_regs
+            (imm $I64 (ImmExtend.Zero) n)
+            (imm $I64 (ImmExtend.Zero) 0)))
 
 ;;;; Rules for `bconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
