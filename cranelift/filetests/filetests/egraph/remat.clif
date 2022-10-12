@@ -1,0 +1,35 @@
+test optimize
+set opt_level=none
+set use_egraphs=true
+target x86_64
+
+function %f(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 42
+    v2 = iadd.i32 v0, v1
+    brnz v2, block1
+    jump block2
+
+block1:
+    v3 = iconst.i32 84
+    v4 = iadd.i32 v2, v3
+    return v4
+
+block2:
+    return v2
+}
+
+; check:  block0(v0: i32):
+; nextln:     v1 = iconst.i32 42
+; nextln:     v2 = iadd v0, v1
+; nextln:     brnz v2, block1
+; nextln:     jump block2
+; check:   block1:
+; nextln:     v5 = iconst.i32 126
+; nextln:     v6 = iadd.i32 v0, v5
+; nextln:     return v6
+; check:   block2:
+; nextln:     v3 = iconst.i32 42
+; nextln:     v4 = iadd.i32 v0, v3
+; nextln:     return v4
+

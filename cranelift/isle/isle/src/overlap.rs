@@ -108,6 +108,18 @@ fn check_overlaps(env: &TermEnv) -> Errors {
     let mut by_term = HashMap::new();
     for rule in env.rules.iter() {
         if let sema::Pattern::Term(_, tid, ref vars) = rule.lhs {
+            let is_multi_ctor = match &env.terms[tid.index()].kind {
+                &TermKind::Decl { multi, .. } => multi,
+                _ => false,
+            };
+            if is_multi_ctor {
+                // Rules for multi-constructors are not checked for
+                // overlap: the ctor returns *every* match, not just
+                // the first or highest-priority one, so overlap does
+                // not actually affect the results.
+                continue;
+            }
+
             let mut binds = Vec::new();
             let rule = RulePatterns {
                 rule,

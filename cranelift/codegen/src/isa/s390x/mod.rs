@@ -60,7 +60,15 @@ impl S390xBackend {
         let emit_info = EmitInfo::new(self.isa_flags.clone());
         let sigs = SigSet::new::<abi::S390xMachineDeps>(func, &self.flags)?;
         let abi = abi::S390xCallee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<S390xBackend>(func, self, abi, &self.machine_env, emit_info, sigs)
+        compile::compile::<S390xBackend>(
+            func,
+            self.flags.clone(),
+            self,
+            abi,
+            &self.machine_env,
+            emit_info,
+            sigs,
+        )
     }
 }
 

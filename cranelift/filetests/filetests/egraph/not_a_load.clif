@@ -1,0 +1,23 @@
+test compile precise-output
+set use_egraphs=true
+target x86_64
+
+;; `atomic_rmw` is not a load, but it reports `true` to `.can_load()`. We want
+;; to make sure the alias analysis machinery doesn't break when we have these odd
+;; memory ops in the IR.
+
+function u0:1302(i64) -> i64 system_v {
+  block0(v0: i64):
+    v9 = atomic_rmw.i64 add v0, v0
+    return v0
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   atomically { 64_bits_at_[%r9]) Add= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+

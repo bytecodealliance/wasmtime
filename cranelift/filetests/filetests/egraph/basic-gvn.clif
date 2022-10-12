@@ -1,0 +1,29 @@
+test optimize
+set opt_level=none
+set use_egraphs=true
+target x86_64
+
+function %f(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    brnz v2, block1(v0)
+    jump block2(v1)
+
+block1(v3: i32):
+    v4 = iadd v0, v1
+    v5 = iadd v4, v3
+    return v5
+
+block2(v6: i32):
+    return v6
+}
+
+;; Check that the `iadd` for `v4` is subsumed by `v2`:
+
+; check: block0(v0: i32, v1: i32):
+; nextln:     v2 = iadd v0, v1
+; check:  block1:
+; nextln:     v3 = iadd.i32 v2, v0
+; nextln:     return v3
+; check: block2:
+; nextln:    return v1

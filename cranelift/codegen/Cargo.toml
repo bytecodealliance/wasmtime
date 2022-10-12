@@ -18,6 +18,7 @@ bumpalo = "3"
 cranelift-codegen-shared = { path = "./shared", version = "0.90.0" }
 cranelift-entity = { workspace = true }
 cranelift-bforest = { workspace = true }
+cranelift-egraph = { workspace = true }
 hashbrown = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
 log = { workspace = true }

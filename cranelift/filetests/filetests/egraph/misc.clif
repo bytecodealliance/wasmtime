@@ -1,0 +1,21 @@
+test optimize
+set opt_level=none
+set use_egraphs=true
+target x86_64
+
+function %stack_load(i64) -> i64 {
+  ss0 = explicit_slot 8
+
+block0(v0: i64):
+  stack_store.i64 v0, ss0
+  v1 = stack_load.i64 ss0
+  return v1
+}
+
+; check: function %stack_load(i64) -> i64 fast {
+; nextln:    ss0 = explicit_slot 8
+; check:  block0(v0: i64):
+; nextln:     v1 = stack_addr.i64 ss0
+; nextln:     store notrap aligned v0, v1
+; nextln:     return v0
+; nextln: }
