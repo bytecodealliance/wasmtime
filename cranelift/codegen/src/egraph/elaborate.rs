@@ -15,6 +15,7 @@ use alloc::vec::Vec;
 use cranelift_egraph::{EGraph, Id, Language, NodeKey};
 use cranelift_entity::{packed_option::PackedOption, SecondaryMap};
 use smallvec::{smallvec, SmallVec};
+use std::ops::Add;
 
 type LoopDepth = u32;
 
