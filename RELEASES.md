@@ -22,11 +22,12 @@ Unreleased.
 * A `--disable-parallel-compilation` CLI flag is now implemented for `wasmtime`.
   [#4911](https://github.com/bytecodealliance/wasmtime/pull/4911)
 
-* A backend for RISC-V 64 has ben added to Cranelift and Wasmtime.
+* [Tier 3] support has been added for for RISC-V 64 with a new backend in
+  Cranelift for this architecture.
   [#4271](https://github.com/bytecodealliance/wasmtime/pull/4271)
 
-* Basic support for Windows ARM64 has been added but features such as traps
-  don't work at this time.
+* Basic [tier 3] support for Windows ARM64 has been added but features such as
+  traps don't work at this time.
   [#4990](https://github.com/bytecodealliance/wasmtime/pull/4990)
 
 ### Changed
@@ -49,6 +50,8 @@ Unreleased.
   been increased from 16k to 64k.
   [#4964](https://github.com/bytecodealliance/wasmtime/pull/4964)
 
+
+[Tier 3]: https://docs.wasmtime.dev/stability-tiers.html
 
 --------------------------------------------------------------------------------
 
