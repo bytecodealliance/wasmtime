@@ -275,11 +275,11 @@ impl<'a> Elaborator<'a> {
         }
     }
 
-    fn elaborate_eclass_use(&mut self, id: Id) -> IdValue {
+    fn elaborate_eclass_use(&mut self, id: Id) {
         self.elab_stack.push(ElabStackEntry::Start { id });
         self.process_elab_stack();
         debug_assert_eq!(self.elab_result_stack.len(), 1);
-        self.elab_result_stack.pop().expect("Must have one result")
+        self.elab_result_stack.clear();
     }
 
     fn process_elab_stack(&mut self) {
