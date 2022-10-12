@@ -756,6 +756,19 @@ mod tests {
     use alloc::string::ToString;
 
     #[test]
+    fn inst_data_is_copy() {
+        fn is_copy<T: Copy>() {}
+        is_copy::<InstructionData>();
+    }
+
+    #[test]
+    fn inst_data_size() {
+        // The size of `InstructionData` is performance sensitive, so make sure
+        // we don't regress it unintentionally.
+        assert_eq!(std::mem::size_of::<InstructionData>(), 16);
+    }
+
+    #[test]
     fn opcodes() {
         use core::mem;
 

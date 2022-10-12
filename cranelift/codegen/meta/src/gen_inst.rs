@@ -71,17 +71,16 @@ fn gen_formats(formats: &[&InstructionFormat], fmt: &mut Formatter) {
 /// the SSA `Value` arguments.
 fn gen_instruction_data(formats: &[&InstructionFormat], fmt: &mut Formatter) {
     for (name, include_args) in &[("InstructionData", true), ("InstructionImms", false)] {
-        fmt.line("#[derive(Clone, Debug, PartialEq, Hash)]");
+        fmt.line("#[derive(Copy, Clone, Debug, PartialEq, Hash)]");
         if !include_args {
-            // `InstructionImms` gets some extra derives: it acts like
-            // a sort of extended opcode and we want to allow for
-            // hashconsing via Eq. `Copy` also turns out to be useful.
-            fmt.line("#[derive(Copy, Eq)]");
+            // `InstructionImms` gets some extra derives: it acts like a sort of
+            // extended opcode and we want to allow for hashconsing via `Eq`.
+            fmt.line("#[derive(Eq)]");
         }
         fmt.line(r#"#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]"#);
         fmt.line("#[allow(missing_docs)]");
-        // generate `enum InstructionData` or `enum InstructionImms`.
-        // (This comment exists so one can grep for `enum InstructionData`!)
+        // Generate `enum InstructionData` or `enum InstructionImms`. (This
+        // comment exists so one can grep for `enum InstructionData`!)
         fmtln!(fmt, "pub enum {} {{", name);
         fmt.indent(|fmt| {
             for format in formats {

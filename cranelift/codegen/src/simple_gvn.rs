@@ -115,7 +115,7 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
 
             let ctrl_typevar = func.dfg.ctrl_typevar(inst);
             let key = HashKey {
-                inst: func.dfg[inst].clone(),
+                inst: func.dfg[inst],
                 ty: ctrl_typevar,
                 pos: &pos,
             };

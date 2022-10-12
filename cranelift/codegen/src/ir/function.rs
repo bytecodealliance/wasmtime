@@ -386,7 +386,7 @@ impl FunctionStencil {
             .zip(self.dfg.inst_results(src))
             .all(|(a, b)| self.dfg.value_type(*a) == self.dfg.value_type(*b)));
 
-        self.dfg[dst] = self.dfg[src].clone();
+        self.dfg[dst] = self.dfg[src];
         self.layout.remove_inst(src);
     }
 
