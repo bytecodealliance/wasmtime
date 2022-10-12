@@ -362,12 +362,15 @@ impl Trap {
     fn record_backtrace(&self, backtrace: TrapBacktrace) {
         // When a trap is created on top of the wasm stack, the trampoline will
         // re-raise it via
-        // `wasmtime_runtime::raise_user_trap(trap.into::<Box<dyn Error>>())`
-        // after panic::catch_unwind. We don't want to overwrite the first
-        // backtrace recorded, as it is most precise.
-        // FIXME: make sure backtraces are only created once per trap! they are
-        // actually kinda expensive to create.
-        let _ = self.inner.backtrace.try_insert(backtrace);
+        // `wasmtime_runtime::raise_user_trap(trap.into::<Box<dyn Error>>(),
+        // ..)` after `panic::catch_unwind`. We don't want to overwrite the
+        // first backtrace recorded, as it is most precise. However, this should
+        // never happen in the first place because we thread `needs_backtrace`
+        // booleans throuch all calls to `raise_user_trap` to avoid capturing
+        // unnecessary backtraces! So debug assert that we don't ever capture
+        // unnecessary backtraces.
+        let result = self.inner.backtrace.try_insert(backtrace);
+        debug_assert!(result.is_ok());
     }
 }
 
