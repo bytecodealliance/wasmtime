@@ -2542,7 +2542,7 @@ impl<'a> Parser<'a> {
                 {
                     // To match the existing run behavior that does not require an explicit
                     // invocation, we create an invocation from a function like `() -> i*` and
-                    // compare it to not `false`.
+                    // require the result to be non-zero.
                     let invocation = Invocation::new("default", vec![]);
                     let expected = vec![DataValue::I8(0)];
                     let comparison = Comparison::NotEquals;
