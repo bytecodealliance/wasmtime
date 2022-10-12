@@ -207,11 +207,7 @@ impl<'a> Elaborator<'a> {
         let inst = self.func.dfg.make_inst(instdata);
         self.func.srclocs[inst] = srcloc;
 
-        if let Some(result_tys) = result_tys {
-            for &ty in result_tys.as_slice(&self.node_ctx.types) {
-                self.func.dfg.append_result(inst, ty);
-            }
-        } else if let Some(ty) = single_ty {
+        for &ty in result_tys {
             self.func.dfg.append_result(inst, ty);
         }
 
