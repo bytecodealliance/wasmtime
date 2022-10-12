@@ -252,6 +252,15 @@ impl Trap {
         Trap::new_with_trace(TrapReason::I32Exit(status), None)
     }
 
+    // Same safety requirements and caveats as
+    // `wasmtime_runtime::raise_user_trap`.
+    pub(crate) unsafe fn raise(error: anyhow::Error) -> ! {
+        let needs_backtrace = error
+            .downcast_ref::<Trap>()
+            .map_or(true, |trap| trap.trace().is_none());
+        wasmtime_runtime::raise_user_trap(error, needs_backtrace)
+    }
+
     #[cold] // see Trap::new
     pub(crate) fn from_runtime_box(
         store: &StoreOpaque,

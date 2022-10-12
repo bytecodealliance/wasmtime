@@ -56,10 +56,7 @@ unsafe extern "C" fn stub_fn<F>(
         // call-site, which gets unwrapped in `Trap::from_runtime` later on as we
         // convert from the internal `Trap` type to our own `Trap` type in this
         // crate.
-        Ok(Err(trap)) => {
-            let needs_backtrace = trap.trace().is_none();
-            wasmtime_runtime::raise_user_trap(trap.into(), needs_backtrace)
-        }
+        Ok(Err(trap)) => Trap::raise(trap.into()),
 
         // And finally if the imported function panicked, then we trigger the
         // form of unwinding that's safe to jump over wasm code on all

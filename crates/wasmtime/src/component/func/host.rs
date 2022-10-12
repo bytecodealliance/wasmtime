@@ -265,12 +265,7 @@ fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<us
 unsafe fn handle_result(func: impl FnOnce() -> Result<()>) {
     match panic::catch_unwind(AssertUnwindSafe(func)) {
         Ok(Ok(())) => {}
-        Ok(Err(err)) => {
-            let needs_backtrace = err
-                .downcast_ref::<Trap>()
-                .map_or(true, |trap| trap.trace().is_none());
-            wasmtime_runtime::raise_user_trap(err, needs_backtrace)
-        }
+        Ok(Err(e)) => Trap::raise(e),
         Err(e) => wasmtime_runtime::resume_panic(e),
     }
 }
