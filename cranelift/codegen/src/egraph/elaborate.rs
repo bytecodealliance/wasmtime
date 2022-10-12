@@ -7,7 +7,7 @@ use super::Analysis;
 use super::Stats;
 use crate::dominator_tree::DominatorTree;
 use crate::fx::FxHashSet;
-use crate::ir::{Block, Function, Inst, RelSourceLoc, Type, Value, ValueList};
+use crate::ir::{Block, Function, Inst, Opcode, RelSourceLoc, Type, Value, ValueList};
 use crate::loop_analysis::LoopAnalysis;
 use crate::scoped_hash_map::ScopedHashMap;
 use crate::trace;
@@ -204,7 +204,36 @@ impl<'a> Elaborator<'a> {
             Node::Inst { srcloc, .. } | Node::Load { srcloc, .. } => *srcloc,
             _ => RelSourceLoc::default(),
         };
-        let is_term = instdata.opcode().is_branch() || instdata.opcode().is_return();
+        let opcode = instdata.opcode();
+        // Is this instruction either an actual terminator (an
+        // instruction that must end the block), or at least in the
+        // group of branches at the end (including conditional
+        // branches that may be followed by an actual terminator)? We
+        // call this the "terminator group", and we record the first
+        // inst in this group (`first_branch` below) so that we do not
+        // insert instructions needed only by args of later
+        // instructions in the terminator group in the middle of the
+        // terminator group.
+        //
+        // E.g., for the original sequence
+        //   v1 = op ...
+        //   brnz vCond, block1
+        //   jump block2(v1)
+        //
+        // elaboration would naively produce
+        //
+        //   brnz vCond, block1
+        //   v1 = op ...
+        //   jump block2(v1)
+        //
+        // but we use the `first_branch` mechanism below to ensure
+        // that once we've emitted at least one branch, all other
+        // elaborated insts have to go before that. So we emit brnz
+        // first, then as we elaborate the jump, we find we need the
+        // `op`; we `insert_inst` it *before* the brnz (which is the
+        // `first_branch`).
+        let is_terminator_group_inst =
+            opcode.is_branch() || opcode.is_return() || opcode == Opcode::Trap;
         let inst = self.func.dfg.make_inst(instdata);
         self.func.srclocs[inst] = srcloc;
 
@@ -212,7 +241,7 @@ impl<'a> Elaborator<'a> {
             self.func.dfg.append_result(inst, ty);
         }
 
-        if is_term {
+        if is_terminator_group_inst {
             self.func.layout.append_inst(inst, to_block);
             if self.first_branch[to_block].is_none() {
                 self.first_branch[to_block] = Some(inst).into();
