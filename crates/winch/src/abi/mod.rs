@@ -85,10 +85,42 @@ impl ABIArg {
     }
 }
 
+/// ABI-specific representation of the function result
+pub(crate) enum ABIResult {
+    Reg {
+        /// Type of the result
+        ty: Option<WasmType>,
+        /// Register to hold the result
+        reg: Reg,
+    },
+}
+
+impl ABIResult {
+    /// Create a register ABI result
+    pub fn reg(ty: Option<WasmType>, reg: Reg) -> Self {
+        Self::Reg { ty, reg }
+    }
+
+    /// Get the result reg
+    pub fn result_reg(&self) -> Reg {
+        match self {
+            Self::Reg { reg, .. } => *reg,
+        }
+    }
+
+    /// Checks if the result is void
+    pub fn is_void(&self) -> bool {
+        match self {
+            Self::Reg { ty, .. } => ty.is_none(),
+        }
+    }
+}
+
 /// An ABI-specific representation of a function signature
 pub(crate) struct ABISig {
     /// Function parameters
     pub params: SmallVec<[ABIArg; 6]>,
+    pub result: ABIResult,
 }
 
 /// Returns the size in bytes of a given WebAssembly type

@@ -1,5 +1,5 @@
 use super::regs;
-use crate::abi::{ABIArg, ABISig, ABI};
+use crate::abi::{ABIArg, ABIResult, ABISig, ABI};
 use smallvec::SmallVec;
 use wasmtime_environ::{WasmFuncType, WasmType};
 
@@ -64,7 +64,12 @@ impl ABI for Aarch64ABI {
             .map(|arg| Self::to_abi_arg(arg, &mut stack_offset, &mut index_env))
             .collect();
 
-        ABISig { params }
+        let ty = wasm_sig.returns().get(0).map(|e| e.clone());
+        // TODO temporarily defaulting to x0;
+        let reg = regs::xreg(0);
+        let result = ABIResult::reg(ty, reg);
+
+        ABISig { params, result }
     }
 }
 

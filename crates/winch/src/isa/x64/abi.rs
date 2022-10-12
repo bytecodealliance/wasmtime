@@ -1,6 +1,6 @@
 use super::regs;
 use crate::{
-    abi::{ABIArg, ABISig, ABI},
+    abi::{ABIArg, ABIResult, ABISig, ABI},
     isa::reg::Reg,
 };
 use smallvec::SmallVec;
@@ -48,6 +48,10 @@ impl ABI for X64ABI {
     }
 
     fn sig(&self, wasm_sig: &wasmtime_environ::WasmFuncType) -> ABISig {
+        if wasm_sig.returns().len() > 1 {
+            panic!("multi-value not supported");
+        }
+
         let mut stack_offset = 0;
         let mut index_env = RegIndexEnv::default();
 
@@ -57,7 +61,12 @@ impl ABI for X64ABI {
             .map(|arg| Self::to_abi_arg(arg, &mut stack_offset, &mut index_env))
             .collect();
 
-        ABISig { params }
+        let ty = wasm_sig.returns().get(0).map(|e| e.clone());
+        // TODO temporarily defaulting to rax.
+        let reg = regs::rax();
+        let result = ABIResult::reg(ty, reg);
+
+        ABISig { params, result }
     }
 }
 
