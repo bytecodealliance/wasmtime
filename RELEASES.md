@@ -10,6 +10,48 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 2.0.0
+
+Unreleased.
+
+### Added
+
+* Cranelift has gained support for forward-edge CFI on the AArch64 backend.
+  [#3693](https://github.com/bytecodealliance/wasmtime/pull/3693)
+
+* A `--disable-parallel-compilation` CLI flag is now implemented for `wasmtime`.
+  [#4911](https://github.com/bytecodealliance/wasmtime/pull/4911)
+
+* A backend for RISC-V 64 has ben added to Cranelift and Wasmtime.
+  [#4271](https://github.com/bytecodealliance/wasmtime/pull/4271)
+
+* Basic support for Windows ARM64 has been added but features such as traps
+  don't work at this time.
+  [#4990](https://github.com/bytecodealliance/wasmtime/pull/4990)
+
+### Changed
+
+* The implementation of the `random_get` function in `wasi-common` is now faster
+  by using a userspace CSPRNG rather than the OS for randomness.
+  [#4917](https://github.com/bytecodealliance/wasmtime/pull/4917)
+
+* The AArch64 backend has completed its transition to ISLE.
+  [#4851](https://github.com/bytecodealliance/wasmtime/pull/4851)
+  [#4866](https://github.com/bytecodealliance/wasmtime/pull/4866)
+  [#4898](https://github.com/bytecodealliance/wasmtime/pull/4898)
+  [#4884](https://github.com/bytecodealliance/wasmtime/pull/4884)
+  [#4820](https://github.com/bytecodealliance/wasmtime/pull/4820)
+  [#4913](https://github.com/bytecodealliance/wasmtime/pull/4913)
+  [#4942](https://github.com/bytecodealliance/wasmtime/pull/4942)
+  [#4943](https://github.com/bytecodealliance/wasmtime/pull/4943)
+
+* The size of the `sigaltstack` allocated per-thread for signal handling has
+  been increased from 16k to 64k.
+  [#4964](https://github.com/bytecodealliance/wasmtime/pull/4964)
+
+
+--------------------------------------------------------------------------------
+
 ## 1.0.0
 
 Released 2022-09-20
