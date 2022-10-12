@@ -188,16 +188,14 @@ impl<'a> Elaborator<'a> {
     }
 
     fn add_node(&mut self, node: &Node, args: &[Value], to_block: Block) -> ValueList {
-        let (instdata, result_tys, single_ty) = match node {
+        let (instdata, result_tys) = match node {
             Node::Pure { op, types, .. } | Node::Inst { op, types, .. } => (
                 op.with_args(args, &mut self.func.dfg.value_lists),
-                Some(types),
-                None,
+                types.as_slice(&self.node_ctx.types),
             ),
             Node::Load { op, ty, .. } => (
                 op.with_args(args, &mut self.func.dfg.value_lists),
-                None,
-                Some(*ty),
+                std::slice::from_ref(ty),
             ),
             _ => panic!("Cannot `add_node()` on block param or projection"),
         };
