@@ -44,11 +44,6 @@ pub(crate) struct Immediates {
     /// IEEE 754-2008 binary64 interchange format.
     pub ieee64: OperandKind,
 
-    /// An immediate boolean operand.
-    ///
-    /// This type of immediate boolean can interact with SSA values with any BoolType type.
-    pub boolean: OperandKind,
-
     /// A condition code for comparing integer values.
     ///
     /// This enumerated operand kind is used for the `icmp` instruction and corresponds to the
@@ -142,7 +137,6 @@ impl Immediates {
                 "ir::immediates::Ieee64",
                 "A 64-bit immediate floating point number.",
             ),
-            boolean: new_imm("imm", "bool", "An immediate boolean."),
             intcc: {
                 let mut intcc_values = HashMap::new();
                 intcc_values.insert("eq", "Equal");

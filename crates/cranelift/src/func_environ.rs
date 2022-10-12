@@ -1290,7 +1290,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             _ => unreachable!(),
         };
 
-        Ok(pos.ins().bint(ir::types::I32, bool_is_null))
+        Ok(pos.ins().uextend(ir::types::I32, bool_is_null))
     }
 
     fn translate_ref_func(

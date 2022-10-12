@@ -1385,13 +1385,13 @@ impl MachInstEmit for Inst {
                 .for_each(|i| i.emit(&[], sink, emit_info, state));
 
                 sink.bind_label(label_true);
-                Inst::load_imm12(rd, Imm12::from_bits(-1)).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(rd, Imm12::TRUE).emit(&[], sink, emit_info, state);
                 Inst::Jal {
                     dest: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 2),
                 }
                 .emit(&[], sink, emit_info, state);
                 sink.bind_label(label_false);
-                Inst::load_imm12(rd, Imm12::from_bits(0)).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(rd, Imm12::FALSE).emit(&[], sink, emit_info, state);
             }
             &Inst::AtomicCas {
                 offset,

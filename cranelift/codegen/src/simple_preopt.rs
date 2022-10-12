@@ -614,7 +614,7 @@ mod simplify {
         dfg::ValueDef,
         immediates,
         instructions::{Opcode, ValueList},
-        types::{B8, I16, I32, I8},
+        types::{I16, I32, I8},
     };
     use std::marker::PhantomData;
 
@@ -861,29 +861,6 @@ mod simplify {
                 }
             }
 
-            InstructionData::CondTrap { .. }
-            | InstructionData::Branch { .. }
-            | InstructionData::Ternary {
-                opcode: Opcode::Select,
-                ..
-            } => {
-                // Fold away a redundant `bint`.
-                let condition_def = {
-                    let args = pos.func.dfg.inst_args(inst);
-                    pos.func.dfg.value_def(args[0])
-                };
-                if let ValueDef::Result(def_inst, _) = condition_def {
-                    if let InstructionData::Unary {
-                        opcode: Opcode::Bint,
-                        arg: bool_val,
-                    } = pos.func.dfg[def_inst]
-                    {
-                        let args = pos.func.dfg.inst_args_mut(inst);
-                        args[0] = bool_val;
-                    }
-                }
-            }
-
             InstructionData::Ternary {
                 opcode: Opcode::Bitselect,
                 args,
@@ -898,15 +875,13 @@ mod simplify {
                 // while vselect can be encoded using single BLEND instruction.
                 if let ValueDef::Result(def_inst, _) = pos.func.dfg.value_def(args[0]) {
                     let (cond_val, cond_type) = match pos.func.dfg[def_inst] {
-                        InstructionData::Unary {
-                            opcode: Opcode::RawBitcast,
-                            arg,
-                        } => {
-                            // If controlling mask is raw-bitcasted boolean vector then
-                            // we know each lane is either all zeroes or ones,
-                            // so we can use vselect instruction instead.
+                        InstructionData::IntCompare { .. }
+                        | InstructionData::FloatCompare { .. } => {
+                            // If the controlled mask is from a comparison, the value will be all
+                            // zeros or ones in each output lane.
+                            let arg = args[0];
                             let arg_type = pos.func.dfg.value_type(arg);
-                            if !arg_type.is_vector() || !arg_type.lane_type().is_bool() {
+                            if !arg_type.is_vector() {
                                 return;
                             }
                             (arg, arg_type)
@@ -916,13 +891,13 @@ mod simplify {
                             constant_handle,
                         } => {
                             // If each byte of controlling mask is 0x00 or 0xFF then
-                            // we will always bitcast our way to vselect(B8x16, I8x16, I8x16).
+                            // we will always bitcast our way to vselect(I8x16, I8x16).
                             // Bitselect operates at bit level, so the lane types don't matter.
                             let const_data = pos.func.dfg.constants.get(constant_handle);
                             if !const_data.iter().all(|&b| b == 0 || b == 0xFF) {
                                 return;
                             }
-                            let new_type = B8.by(old_cond_type.bytes()).unwrap();
+                            let new_type = I8.by(old_cond_type.bytes()).unwrap();
                             (pos.ins().raw_bitcast(new_type, args[0]), new_type)
                         }
                         _ => return,

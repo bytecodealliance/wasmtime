@@ -170,10 +170,6 @@
       (if (u8_lt lz lx))
       (iadd ty (iadd ty y z) x))
 
-;; Select's selector input doesn't need bint; remove the redundant op.
-(rule (simplify (select ty (bint _ b) x y))
-      (subsume (select ty b x y)))
-
 ;; Rematerialize ALU-op-with-imm and iconsts in each block where they're
 ;; used. This is neutral (add-with-imm) or positive (iconst) for
 ;; register pressure, and these ops are very cheap.

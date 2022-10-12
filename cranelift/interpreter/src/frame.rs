@@ -194,7 +194,7 @@ mod tests {
             ValueRef::from_u32(6),
         ];
         let values = vec![
-            DataValue::B(true),
+            DataValue::I8(1),
             DataValue::I8(42),
             DataValue::F32(Ieee32::from(0.42)),
         ];
@@ -214,7 +214,7 @@ mod tests {
         let func = function("function %test(i32) -> i32 { block0(v10:i32): return v10 }");
         let mut frame = Frame::new(&func);
         let old_ssa_value_refs = [ValueRef::from_u32(9), ValueRef::from_u32(10)];
-        let values = vec![DataValue::B(true), DataValue::F64(Ieee64::from(0.0))];
+        let values = vec![DataValue::I8(1), DataValue::F64(Ieee64::from(0.0))];
         frame.set_all(&old_ssa_value_refs, values.clone());
 
         // Rename the old SSA values to the new values.
@@ -232,7 +232,7 @@ mod tests {
         let func = function("function %test(i32) -> i32 { block0(v10:i32): return v10 }");
         let mut frame = Frame::new(&func);
         let old_ssa_value_refs = [ValueRef::from_u32(1), ValueRef::from_u32(9)];
-        let values = vec![DataValue::B(true), DataValue::F64(Ieee64::from(f64::NAN))];
+        let values = vec![DataValue::I8(1), DataValue::F64(Ieee64::from(f64::NAN))];
         frame.set_all(&old_ssa_value_refs, values.clone());
 
         // Rename the old SSA values to the new values.

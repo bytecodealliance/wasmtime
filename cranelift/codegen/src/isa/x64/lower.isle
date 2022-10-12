@@ -22,30 +22,6 @@
       (value_regs (imm $I64 x)
                   (imm $I64 0)))
 
-;;;; Rules for `bconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; `b64` and smaller.
-
-(rule (lower (has_type (fits_in_64 ty)
-                       (bconst $false)))
-      (imm ty 0))
-
-(rule (lower (has_type (fits_in_64 ty)
-                       (bconst $true)))
-      (imm ty 1))
-
-;; `b128`
-
-(rule 1 (lower (has_type $B128
-                       (bconst $false)))
-      (value_regs (imm $B64 0)
-                  (imm $B64 0)))
-
-(rule 1 (lower (has_type $B128
-                       (bconst $true)))
-      (value_regs (imm $B64 1)
-                  (imm $B64 0)))
-
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (f32const (u64_from_ieee32 x)))
@@ -303,7 +279,7 @@
                        (band x y)))
       (sse_and ty x y))
 
-;; `{i,b}128`.
+;; `i128`.
 
 (rule 6 (lower (has_type $I128 (band x y)))
       (let ((x_regs ValueRegs x)
@@ -314,17 +290,6 @@
             (y_hi Gpr (value_regs_get_gpr y_regs 1)))
         (value_gprs (x64_and $I64 x_lo y_lo)
                     (x64_and $I64 x_hi y_hi))))
-
-(rule 6 (lower (has_type $B128 (band x y)))
-      ;; Booleans are always `0` or `1`, so we only need to do the `and` on the
-      ;; low half. The high half is always zero but, rather than generate a new
-      ;; zero, we just reuse `x`'s high half which is already zero.
-      (let ((x_regs ValueRegs x)
-            (x_lo Gpr (value_regs_get_gpr x_regs 0))
-            (x_hi Gpr (value_regs_get_gpr x_regs 1))
-            (y_lo Gpr (lo_gpr y)))
-        (value_gprs (x64_and $I64 x_lo y_lo)
-                    x_hi)))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -381,17 +346,6 @@
 (rule 6 (lower (has_type $I128 (bor x y)))
       (or_i128 x y))
 
-(rule 6 (lower (has_type $B128 (bor x y)))
-      ;; Booleans are always `0` or `1`, so we only need to do the `or` on the
-      ;; low half. The high half is always zero but, rather than generate a new
-      ;; zero, we just reuse `x`'s high half which is already zero.
-      (let ((x_regs ValueRegs x)
-            (x_lo Gpr (value_regs_get_gpr x_regs 0))
-            (x_hi Gpr (value_regs_get_gpr x_regs 1))
-            (y_lo Gpr (lo_gpr y)))
-        (value_gprs (x64_or $I64 x_lo y_lo)
-                    x_hi)))
-
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `{i,b}64` and smaller.
@@ -438,17 +392,6 @@
             (y_hi Gpr (value_regs_get_gpr y_regs 1)))
         (value_gprs (x64_xor $I64 x_lo y_lo)
                     (x64_xor $I64 x_hi y_hi))))
-
-(rule 6 (lower (has_type $B128 (bxor x y)))
-      ;; Booleans are always `0` or `1`, so we only need to do the `xor` on the
-      ;; low half. The high half is always zero but, rather than generate a new
-      ;; zero, we just reuse `x`'s high half which is already zero.
-      (let ((x_regs ValueRegs x)
-            (x_lo Gpr (value_regs_get_gpr x_regs 0))
-            (x_hi Gpr (value_regs_get_gpr x_regs 1))
-            (y_lo Gpr (lo_gpr y)))
-        (value_gprs (x64_xor $I64 x_lo y_lo)
-                    x_hi)))
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1240,9 +1183,6 @@
 (rule (lower (has_type $I128 (bnot x)))
       (i128_not x))
 
-(rule (lower (has_type $B128 (bnot x)))
-      (i128_not x))
-
 ;; Special case for vector-types where bit-negation is an xor against an
 ;; all-one value
 (rule -1 (lower (has_type ty @ (multi_lane _bits _lanes) (bnot x)))
@@ -1450,35 +1390,35 @@
       (lower_icmp_bool (emit_cmp cc a b)))
 
 ;; Peephole optimization for `x < 0`, when x is a signed 64 bit value
-(rule 2 (lower (has_type $B1 (icmp (IntCC.SignedLessThan) x @ (value_type $I64) (u64_from_iconst 0))))
+(rule 2 (lower (has_type $I8 (icmp (IntCC.SignedLessThan) x @ (value_type $I64) (u64_from_iconst 0))))
       (x64_shr $I64 x (Imm8Reg.Imm8 63)))
 
 ;; Peephole optimization for `0 > x`, when x is a signed 64 bit value
-(rule 2 (lower (has_type $B1 (icmp (IntCC.SignedGreaterThan) (u64_from_iconst 0) x @ (value_type $I64))))
+(rule 2 (lower (has_type $I8 (icmp (IntCC.SignedGreaterThan) (u64_from_iconst 0) x @ (value_type $I64))))
       (x64_shr $I64 x (Imm8Reg.Imm8 63)))
 
 ;; Peephole optimization for `0 <= x`, when x is a signed 64 bit value
-(rule 2 (lower (has_type $B1 (icmp (IntCC.SignedLessThanOrEqual) (u64_from_iconst 0) x @ (value_type $I64))))
+(rule 2 (lower (has_type $I8 (icmp (IntCC.SignedLessThanOrEqual) (u64_from_iconst 0) x @ (value_type $I64))))
       (x64_shr $I64 (x64_not $I64 x) (Imm8Reg.Imm8 63)))
 
 ;; Peephole optimization for `x >= 0`, when x is a signed 64 bit value
-(rule 2 (lower (has_type $B1 (icmp (IntCC.SignedGreaterThanOrEqual) x @ (value_type $I64) (u64_from_iconst 0))))
+(rule 2 (lower (has_type $I8 (icmp (IntCC.SignedGreaterThanOrEqual) x @ (value_type $I64) (u64_from_iconst 0))))
       (x64_shr $I64 (x64_not $I64 x) (Imm8Reg.Imm8 63)))
 
 ;; Peephole optimization for `x < 0`, when x is a signed 32 bit value
-(rule 2 (lower (has_type $B1 (icmp (IntCC.SignedLessThan) x @ (value_type $I32) (u64_from_iconst 0))))
+(rule 2 (lower (has_type $I8 (icmp (IntCC.SignedLessThan) x @ (value_type $I32) (u64_from_iconst 0))))
       (x64_shr $I32 x (Imm8Reg.Imm8 31)))
 
 ;; Peephole optimization for `0 > x`, when x is a signed 32 bit value
-(rule 2 (lower (has_type $B1 (icmp (IntCC.SignedGreaterThan) (u64_from_iconst 0) x @ (value_type $I32))))
+(rule 2 (lower (has_type $I8 (icmp (IntCC.SignedGreaterThan) (u64_from_iconst 0) x @ (value_type $I32))))
       (x64_shr $I32 x (Imm8Reg.Imm8 31)))
 
 ;; Peephole optimization for `0 <= x`, when x is a signed 32 bit value
-(rule 2 (lower (has_type $B1 (icmp (IntCC.SignedLessThanOrEqual) (u64_from_iconst 0) x @ (value_type $I32))))
+(rule 2 (lower (has_type $I8 (icmp (IntCC.SignedLessThanOrEqual) (u64_from_iconst 0) x @ (value_type $I32))))
       (x64_shr $I32 (x64_not $I64 x) (Imm8Reg.Imm8 31)))
 
 ;; Peephole optimization for `x >= 0`, when x is a signed 32 bit value
-(rule 2 (lower (has_type $B1 (icmp (IntCC.SignedGreaterThanOrEqual) x @ (value_type $I32) (u64_from_iconst 0))))
+(rule 2 (lower (has_type $I8 (icmp (IntCC.SignedGreaterThanOrEqual) x @ (value_type $I32) (u64_from_iconst 0))))
       (x64_shr $I32 (x64_not $I64 x) (Imm8Reg.Imm8 31)))
 
 ;; For XMM-held values, we lower to `PCMP*` instructions, sometimes more than
@@ -1710,8 +1650,8 @@
 ;; Finally, we lower `select` from a condition value `c`. These rules are meant
 ;; to be the final, default lowerings if no other patterns matched above.
 
-(rule -1 (lower (has_type ty (select c @ (value_type $B1) x y)))
-      (let ((size OperandSize (raw_operand_size_of_type $B1))
+(rule -1 (lower (has_type ty (select c @ (value_type $I8) x y)))
+      (let ((size OperandSize (raw_operand_size_of_type $I8))
             ;; N.B.: disallow load-op fusion, see above. TODO:
             ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
             (gpr_c Gpr (put_in_gpr c)))
@@ -2125,7 +2065,7 @@
                        (uextend src @ (has_type $I32 (uload32 _ _ _)))))
       src)
 
-;; Rules for `sextend` / `bextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl generic_sextend (Value Type Type) InstOutput)
 
@@ -2140,17 +2080,17 @@
       (x64_sar $I64 src (Imm8Reg.Imm8 63)))
 
 ;; I64 -> I128.
-(rule 3 (generic_sextend src (ty_int_bool_64 _) (ty_int_bool_128 _))
+(rule 3 (generic_sextend src $I64 $I128)
       (value_regs src (spread_sign_bit src)))
 
 ;; I{8,16,32} -> I128.
-(rule 2 (generic_sextend src (fits_in_32 src_ty) (ty_int_bool_128 _))
+(rule 2 (generic_sextend src (fits_in_32 src_ty) $I128)
       (let ((lo Gpr (extend_to_gpr src $I64 (ExtendKind.Sign)))
             (hi Gpr (spread_sign_bit lo)))
       (value_regs lo hi)))
 
 ;; I{8,16,32} -> I64.
-(rule 1 (generic_sextend src (fits_in_32 src_ty) (ty_int_bool_64 _))
+(rule 1 (generic_sextend src (fits_in_32 src_ty) $I64)
       (extend_to_gpr src $I64 (ExtendKind.Sign)))
 
 ;; I8 -> I{16,32}, I16 -> I32.
@@ -2162,13 +2102,7 @@
                  (sextend src @ (value_type src_ty))))
       (generic_sextend src src_ty dst_ty))
 
-;; Bools are stored as 0/-1 so extends must sign-extend as well.
-(rule (lower
-       (has_type dst_ty
-                 (bextend src @ (value_type src_ty))))
-      (generic_sextend src src_ty dst_ty))
-
-;; Rules for `ireduce` / `breduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Rules for `ireduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; T -> T is always a no-op, even I128 -> I128.
 (rule (lower (has_type ty (ireduce src @ (value_type ty))))
@@ -2179,28 +2113,6 @@
 ;; them be.
 (rule 1 (lower (has_type (fits_in_64 ty) (ireduce src)))
       (value_regs_get_gpr src 0))
-
-;; Likewise for breduce.
-
-(rule (lower (has_type ty (breduce src @ (value_type ty))))
-      src)
-
-(rule 1 (lower (has_type (fits_in_64 ty) (breduce src)))
-      (value_regs_get_gpr src 0))
-
-;; Rules for `bint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Booleans are stored as all-zeroes (0) or all-ones (-1). We AND out
-;; the LSB to give a 0 / 1-valued integer result.
-
-(rule (lower (has_type (fits_in_64 ty)
-                       (bint src)))
-      (x64_and ty src (RegMemImm.Imm 1)))
-(rule 1 (lower (has_type $I128
-                       (bint src)))
-      (value_regs
-       (x64_and $I64 src (RegMemImm.Imm 1))
-       (imm $I64 0)))
 
 ;; Rules for `debugtrap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2505,7 +2417,7 @@
       (x64_movzx (ext_mode (ty_bits_u16 ty) 64) (to_amode flags address offset)))
 ;; But if we know that both the `from` and `to` are 64 bits, we simply load with
 ;; no extension.
-(rule -1 (lower (has_type (ty_int_bool_ref_64 ty) (load flags address offset)))
+(rule -1 (lower (has_type (ty_int_ref_64 ty) (load flags address offset)))
       (x64_mov (to_amode flags address offset)))
 ;; Also, certain scalar loads have a specific `from` width and extension kind
 ;; (signed -> `sx`, zeroed -> `zx`). We overwrite the high bits of the 64-bit
@@ -2538,8 +2450,8 @@
 (rule -2 (lower (has_type (ty_vec128 ty) (load flags address offset)))
       (x64_movdqu (to_amode flags address offset)))
 
-;; We can load an I128/B128 by doing two 64-bit loads.
-(rule -3 (lower (has_type (ty_int_bool_128 _)
+;; We can load an I128 by doing two 64-bit loads.
+(rule -3 (lower (has_type $I128
                        (load flags address offset)))
       (let ((addr_lo Amode (to_amode flags address offset))
             (addr_hi Amode (amode_offset addr_lo 8))
@@ -2623,9 +2535,9 @@
       (side_effect
        (x64_xmm_movrm (SseOpcode.Movdqu) (to_amode flags address offset) value)))
 
-;; Stores of I128/B128 values: store the two 64-bit halves separately.
+;; Stores of I128 values: store the two 64-bit halves separately.
 (rule 0 (lower (store flags
-                    value @ (value_type (ty_int_bool_128 _))
+                    value @ (value_type $I128)
                     address
                     offset))
       (let ((value_reg ValueRegs value)
@@ -2918,7 +2830,7 @@
 
 
 (decl cmp_zero_int_bool_ref (Value) ProducesFlags)
-(rule 1 (cmp_zero_int_bool_ref val @ (value_type $B1))
+(rule 1 (cmp_zero_int_bool_ref val @ (value_type $I8))
       (x64_test (OperandSize.Size8) (RegMemImm.Imm 1) val))
 (rule (cmp_zero_int_bool_ref val @ (value_type ty))
       (let ((size OperandSize (raw_operand_size_of_type ty))

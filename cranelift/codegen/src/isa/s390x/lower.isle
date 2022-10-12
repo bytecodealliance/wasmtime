@@ -16,14 +16,6 @@
       (imm ty n))
 
 
-;;;; Rules for `bconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (has_type ty (bconst $false)))
-      (imm ty 0))
-(rule (lower (has_type ty (bconst $true)))
-      (imm ty 1))
-
-
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (f32const (u64_from_ieee32 x)))
@@ -1163,92 +1155,42 @@
       (vec_select ty y z x))
 
 
-;;;; Rules for `breduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Up to 64-bit source type: Always a no-op.
-(rule 1 (lower (breduce x @ (value_type (fits_in_64 _ty))))
-      x)
-
-;; 128-bit source type: Extract the low half.
-(rule (lower (breduce x @ (value_type (vr128_ty _ty))))
-      (vec_extract_lane $I64X2 x 1 (zero_reg)))
-
-
-;;;; Rules for `bextend` and `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Use a common helper to type cast bools to either bool or integer types.
 (decl cast_bool (Type Value) Reg)
-(rule (lower (has_type ty (bextend x)))
-      (cast_bool ty x))
 (rule (lower (has_type ty (bmask x)))
       (cast_bool ty x))
 
 ;; If the target has the same or a smaller size than the source, it's a no-op.
-(rule 8 (cast_bool $B1 x @ (value_type $B1)) x)
-(rule 8 (cast_bool $B1 x @ (value_type $B8)) x)
-(rule 8 (cast_bool $B8 x @ (value_type $B8)) x)
-(rule 8 (cast_bool $I8 x @ (value_type $B8)) x)
-(rule 7 (cast_bool (fits_in_16 _ty) x @ (value_type $B16)) x)
-(rule 6 (cast_bool (fits_in_32 _ty) x @ (value_type $B32)) x)
-(rule 5 (cast_bool (fits_in_64 _ty) x @ (value_type $B64)) x)
-(rule 4 (cast_bool (vr128_ty _ty) x @ (value_type $B128)) x)
-(rule 5 (cast_bool (fits_in_64 _ty) x @ (value_type $B128))
+(rule 7 (cast_bool (fits_in_16 _ty) x @ (value_type $I16)) x)
+(rule 6 (cast_bool (fits_in_32 _ty) x @ (value_type $I32)) x)
+(rule 5 (cast_bool (fits_in_64 _ty) x @ (value_type $I64)) x)
+(rule 4 (cast_bool (vr128_ty _ty) x @ (value_type $I128)) x)
+(rule 5 (cast_bool (fits_in_64 _ty) x @ (value_type $I128))
       (vec_extract_lane $I64X2 x 1 (zero_reg)))
 
 ;; Single-bit values are sign-extended via a pair of shifts.
-(rule 0 (cast_bool (gpr32_ty ty) x @ (value_type $B1))
+(rule 0 (cast_bool (gpr32_ty ty) x @ (value_type $I8))
       (ashr_imm $I32 (lshl_imm $I32 x 31) 31))
-(rule 1 (cast_bool (gpr64_ty ty) x @ (value_type $B1))
+(rule 1 (cast_bool (gpr64_ty ty) x @ (value_type $I8))
       (ashr_imm $I64 (lshl_imm $I64 x 63) 63))
-(rule 4 (cast_bool (vr128_ty ty) x @ (value_type $B1))
+(rule 4 (cast_bool (vr128_ty ty) x @ (value_type $I8))
       (let ((gpr Reg (ashr_imm $I64 (lshl_imm $I64 x 63) 63)))
         (mov_to_vec128 ty gpr gpr)))
 
 ;; Other values are just sign-extended normally.
-(rule 0 (cast_bool (gpr32_ty _ty) x @ (value_type $B8))
-      (sext32_reg $I8 x))
-(rule 0 (cast_bool (gpr32_ty _ty) x @ (value_type $B16))
+(rule 0 (cast_bool (gpr32_ty _ty) x @ (value_type $I16))
       (sext32_reg $I16 x))
-(rule 1(cast_bool (gpr64_ty _ty) x @ (value_type $B8))
-      (sext64_reg $I8 x))
-(rule 1(cast_bool (gpr64_ty _ty) x @ (value_type $B16))
+(rule 1(cast_bool (gpr64_ty _ty) x @ (value_type $I16))
       (sext64_reg $I16 x))
-(rule 1(cast_bool (gpr64_ty _ty) x @ (value_type $B32))
+(rule 1(cast_bool (gpr64_ty _ty) x @ (value_type $I32))
       (sext64_reg $I32 x))
 (rule 3 (cast_bool (vr128_ty ty) x @ (value_type (gpr32_ty src_ty)))
       (let ((x_ext Reg (sext64_reg src_ty x)))
         (mov_to_vec128 ty x_ext x_ext)))
 (rule 2 (cast_bool (vr128_ty ty) x @ (value_type (gpr64_ty src_ty)))
       (mov_to_vec128 ty x x))
-
-
-;;;; Rules for `bint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Mask with 1 to get a 0/1 result (8- or 16-bit result types).
-(rule 5 (lower (has_type (fits_in_16 ty) (bint x @ (value_type (fits_in_64 _)))))
-      (and_uimm16shifted ty x (uimm16shifted 1 0)))
-
-;; Mask with 1 to get a 0/1 result (32-bit result types).
-(rule 4 (lower (has_type (fits_in_32 ty) (bint x @ (value_type (fits_in_64 _)))))
-      (and_uimm32shifted ty x (uimm32shifted 1 0)))
-
-;; Mask with 1 to get a 0/1 result (64-bit result types).
-(rule 3 (lower (has_type (fits_in_64 ty) (bint x @ (value_type (fits_in_64 _)))))
-      (and_reg ty x (imm ty 1)))
-
-;; Mask with 1 to get a 0/1 result (128-bit result types).
-(rule 1 (lower (has_type (vr128_ty ty) (bint x @ (value_type (fits_in_64 _)))))
-      (let ((x_ext Reg (and_uimm16shifted $I8 x (uimm16shifted 1 0))))
-        (vec_insert_lane $I8X16 (vec_imm ty 0) x_ext 15 (zero_reg))))
-
-;; Mask with 1 to get a 0/1 result (128-bit source types).
-(rule 2 (lower (has_type (fits_in_64 ty) (bint x @ (value_type (vr128_ty _)))))
-      (let ((x_gpr Reg (vec_extract_lane $I8X16 x 15 (zero_reg))))
-        (and_uimm16shifted ty x_gpr (uimm16shifted 1 0))))
-
-;; Mask with 1 to get a 0/1 result (128-bit source and result types).
-(rule 0 (lower (has_type (vr128_ty ty) (bint x @ (value_type (vr128_ty _)))))
-      (vec_and ty x (vec_imm ty 1)))
 
 
 ;;;; Rules for `bitrev` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1864,7 +1806,7 @@
 (rule 1 (lower (insertlane x @ (value_type ty)
                          y @ (value_type in_ty)
                          (u8_from_uimm8 idx)))
-      (if (ty_int_bool_ref_scalar_64 in_ty))
+      (if (ty_int_ref_scalar_64 in_ty))
       (vec_insert_lane ty x y (be_lane_idx ty idx) (zero_reg)))
 
 ;; Insert vector lane from floating-point register.
@@ -1980,7 +1922,7 @@
 ;; Extract vector lane to general-purpose register.
 (rule 1 (lower (has_type out_ty
                        (extractlane x @ (value_type ty) (u8_from_uimm8 idx))))
-      (if (ty_int_bool_ref_scalar_64 out_ty))
+      (if (ty_int_ref_scalar_64 out_ty))
       (vec_extract_lane ty x (be_lane_idx ty idx) (zero_reg)))
 
 ;; Extract vector lane to floating-point register.
@@ -2037,7 +1979,7 @@
 
 ;; Load replicated value from general-purpose register.
 (rule 1 (lower (has_type ty (splat x @ (value_type in_ty))))
-      (if (ty_int_bool_ref_scalar_64 in_ty))
+      (if (ty_int_ref_scalar_64 in_ty))
       (vec_replicate_lane ty (vec_insert_lane_undef ty x 0 (zero_reg)) 0))
 
 ;; Load replicated value from floating-point register.
@@ -2097,7 +2039,7 @@
 ;; Load scalar value from general-purpose register.
 (rule 1 (lower (has_type ty (scalar_to_vector
                              x @ (value_type in_ty))))
-      (if (ty_int_bool_ref_scalar_64 in_ty))
+      (if (ty_int_ref_scalar_64 in_ty))
       (vec_insert_lane ty (vec_imm ty 0) x (be_lane_idx ty 0) (zero_reg)))
 
 ;; Load scalar value from floating-point register.
@@ -3783,14 +3725,14 @@
 ;;;; Rules for `is_null` and `is_invalid`  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Null references are represented by the constant value 0.
-(rule (lower (has_type $B1 (is_null x @ (value_type $R64))))
-      (lower_bool $B1 (bool (icmps_simm16 $I64 x 0)
+(rule (lower (has_type $I8 (is_null x @ (value_type $R64))))
+      (lower_bool $I8 (bool (icmps_simm16 $I64 x 0)
                             (intcc_as_cond (IntCC.Equal)))))
 
 
 ;; Invalid references are represented by the constant value -1.
-(rule (lower (has_type $B1 (is_invalid x @ (value_type $R64))))
-      (lower_bool $B1 (bool (icmps_simm16 $I64 x -1)
+(rule (lower (has_type $I8 (is_invalid x @ (value_type $R64))))
+      (lower_bool $I8 (bool (icmps_simm16 $I64 x -1)
                             (intcc_as_cond (IntCC.Equal)))))
 
 
@@ -3798,10 +3740,9 @@
 
 ;; Return a `ProducesBool` to capture the fact that the input value is nonzero.
 ;; In the common case where that input is the result of an `icmp` or `fcmp`
-;; instruction (possibly via an intermediate `bint`), directly use that compare.
-;; Note that it is not safe to sink memory loads here, see the `icmp` comment.
+;; instruction, directly use that compare. Note that it is not safe to sink
+;; memory loads here, see the `icmp` comment.
 (decl value_nonzero (Value) ProducesBool)
-(rule (value_nonzero (bint val)) (value_nonzero val))
 (rule (value_nonzero (icmp int_cc x y)) (icmp_val $false int_cc x y))
 (rule (value_nonzero (fcmp float_cc x y)) (fcmp_val float_cc x y))
 (rule -1 (value_nonzero val @ (value_type (gpr32_ty ty)))

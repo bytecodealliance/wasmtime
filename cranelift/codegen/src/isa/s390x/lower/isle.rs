@@ -252,7 +252,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     #[inline]
     fn gpr32_ty(&mut self, ty: Type) -> Option<Type> {
         match ty {
-            I8 | I16 | I32 | B1 | B8 | B16 | B32 => Some(ty),
+            I8 | I16 | I32 => Some(ty),
             _ => None,
         }
     }
@@ -260,7 +260,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     #[inline]
     fn gpr64_ty(&mut self, ty: Type) -> Option<Type> {
         match ty {
-            I64 | B64 | R64 => Some(ty),
+            I64 | R64 => Some(ty),
             _ => None,
         }
     }
@@ -268,7 +268,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     #[inline]
     fn vr128_ty(&mut self, ty: Type) -> Option<Type> {
         match ty {
-            I128 | B128 => Some(ty),
+            I128 => Some(ty),
             _ if ty.is_vector() && ty.bits() == 128 => Some(ty),
             _ => None,
         }

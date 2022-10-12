@@ -393,7 +393,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         UnaryImm { imm, .. } => write!(w, " {}", imm),
         UnaryIeee32 { imm, .. } => write!(w, " {}", imm),
         UnaryIeee64 { imm, .. } => write!(w, " {}", imm),
-        UnaryBool { imm, .. } => write!(w, " {}", imm),
         UnaryGlobalValue { global_value, .. } => write!(w, " {}", global_value),
         UnaryConst {
             constant_handle, ..
@@ -539,7 +538,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
                 UnaryImm { imm, .. } => imm.to_string(),
                 UnaryIeee32 { imm, .. } => imm.to_string(),
                 UnaryIeee64 { imm, .. } => imm.to_string(),
-                UnaryBool { imm, .. } => imm.to_string(),
                 UnaryConst {
                     constant_handle, ..
                 } => constant_handle.to_string(),

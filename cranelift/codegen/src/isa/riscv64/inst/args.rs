@@ -1189,10 +1189,8 @@ impl LoadOP {
             return if t == F32 { Self::Flw } else { Self::Fld };
         }
         match t {
-            B1 | B8 => Self::Lbu,
-            B16 => Self::Lhu,
-            B32 | R32 => Self::Lwu,
-            B64 | R64 | I64 => Self::Ld,
+            R32 => Self::Lwu,
+            R64 | I64 => Self::Ld,
 
             I8 => Self::Lb,
             I16 => Self::Lh,

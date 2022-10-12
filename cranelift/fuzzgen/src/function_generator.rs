@@ -714,14 +714,14 @@ const OPCODE_SIGNATURES: &'static [(
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::FcvtFromSint, &[I128], &[F64], insert_opcode),
     // Fcmp
-    (Opcode::Fcmp, &[F32, F32], &[B1], insert_cmp),
-    (Opcode::Fcmp, &[F64, F64], &[B1], insert_cmp),
+    (Opcode::Fcmp, &[F32, F32], &[I8], insert_cmp),
+    (Opcode::Fcmp, &[F64, F64], &[I8], insert_cmp),
     // Icmp
-    (Opcode::Icmp, &[I8, I8], &[B1], insert_cmp),
-    (Opcode::Icmp, &[I16, I16], &[B1], insert_cmp),
-    (Opcode::Icmp, &[I32, I32], &[B1], insert_cmp),
-    (Opcode::Icmp, &[I64, I64], &[B1], insert_cmp),
-    (Opcode::Icmp, &[I128, I128], &[B1], insert_cmp),
+    (Opcode::Icmp, &[I8, I8], &[I8], insert_cmp),
+    (Opcode::Icmp, &[I16, I16], &[I8], insert_cmp),
+    (Opcode::Icmp, &[I32, I32], &[I8], insert_cmp),
+    (Opcode::Icmp, &[I64, I64], &[I8], insert_cmp),
+    (Opcode::Icmp, &[I128, I128], &[I8], insert_cmp),
     // Stack Access
     (Opcode::StackStore, &[I8], &[], insert_stack_store),
     (Opcode::StackStore, &[I16], &[], insert_stack_store),
@@ -785,8 +785,6 @@ const OPCODE_SIGNATURES: &'static [(
     // Float Consts
     (Opcode::F32const, &[], &[F32], insert_const),
     (Opcode::F64const, &[], &[F64], insert_const),
-    // Bool Consts
-    (Opcode::Bconst, &[], &[B1], insert_const),
     // Call
     (Opcode::Call, &[], &[], insert_call),
 ];
@@ -900,7 +898,6 @@ where
         // TODO: It would be nice if we could get these directly from cranelift
         let scalars = [
             // IFLAGS, FFLAGS,
-            B1, // B8, B16, B32, B64, B128,
             I8, I16, I32, I64, I128, F32, F64,
             // R32, R64,
         ];
@@ -1013,7 +1010,6 @@ where
                 };
                 builder.ins().iconst(ty, imm64)
             }
-            ty if ty.is_bool() => builder.ins().bconst(ty, bool::arbitrary(self.u)?),
             // f{32,64}::arbitrary does not generate a bunch of important values
             // such as Signaling NaN's / NaN's with payload, so generate floats from integers.
             F32 => builder
@@ -1095,7 +1091,7 @@ where
                 let left_args = self.generate_values_for_block(builder, left)?;
                 let right_args = self.generate_values_for_block(builder, right)?;
 
-                let condbr_types = [I8, I16, I32, I64, I128, B1];
+                let condbr_types = [I8, I16, I32, I64, I128];
                 let _type = *self.u.choose(&condbr_types[..])?;
                 let val = builder.use_var(self.get_variable_of_type(_type)?);
 

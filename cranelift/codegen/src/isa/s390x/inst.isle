@@ -3129,7 +3129,6 @@
         dst))
 
 ;; Sign-extend a register from a smaller `Type` into a 32-bit register.
-;; This handles both integer and boolean input types (except $B1).
 (decl sext32_reg (Type Reg) Reg)
 (rule (sext32_reg ty src)
       (let ((dst WritableReg (temp_writable_reg $I32))
@@ -3137,7 +3136,6 @@
         dst))
 
 ;; Zero-extend a register from a smaller `Type` into a 64-bit register.
-;; This handles both integer and boolean input types (except $B1).
 (decl zext64_reg (Type Reg) Reg)
 (rule (zext64_reg ty src)
       (let ((dst WritableReg (temp_writable_reg $I64))
@@ -3145,7 +3143,6 @@
         dst))
 
 ;; Sign-extend a register from a smaller `Type` into a 64-bit register.
-;; This handles both integer and boolean input types (except $B1).
 (decl sext64_reg (Type Reg) Reg)
 (rule (sext64_reg ty src)
       (let ((dst WritableReg (temp_writable_reg $I64))
@@ -3478,13 +3475,14 @@
         dst))
 
 ;; Lower a boolean condition to a boolean type.  The value used to represent
-;; "true" is -1 for all result types except for $B1, which uses 1.
+;; "true" is -1 for all result types except for $I8, which uses 1.
 (decl lower_bool (Type ProducesBool) Reg)
-(rule (lower_bool $B1 cond) (select_bool_imm $B1 cond 1 0))
-(rule (lower_bool $B8 cond) (select_bool_imm $B8 cond -1 0))
-(rule (lower_bool $B16 cond) (select_bool_imm $B16 cond -1 0))
-(rule (lower_bool $B32 cond) (select_bool_imm $B32 cond -1 0))
-(rule (lower_bool $B64 cond) (select_bool_imm $B64 cond -1 0))
+(rule (lower_bool $I8 cond) (select_bool_imm $I8 cond 1 0))
+
+;; TODO: do we need these cases anymore if B8..B128 are missing?
+(rule (lower_bool $I16 cond) (select_bool_imm $I16 cond -1 0))
+(rule (lower_bool $I32 cond) (select_bool_imm $I32 cond -1 0))
+(rule (lower_bool $I64 cond) (select_bool_imm $I64 cond -1 0))
 
 ;; Emit a conditional branch based on a boolean condition.
 (decl cond_br_bool (ProducesBool MachLabel MachLabel) SideEffectNoResult)

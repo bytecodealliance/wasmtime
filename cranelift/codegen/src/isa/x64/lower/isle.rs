@@ -549,7 +549,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 
     #[inline]
     fn type_register_class(&mut self, ty: Type) -> Option<RegisterClass> {
-        if is_int_or_ref_ty(ty) || ty == I128 || ty == B128 {
+        if is_int_or_ref_ty(ty) || ty == I128 {
             Some(RegisterClass::Gpr {
                 single_register: ty != I128,
             })
@@ -564,7 +564,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     fn ty_int_bool_or_ref(&mut self, ty: Type) -> Option<()> {
         match ty {
             types::I8 | types::I16 | types::I32 | types::I64 | types::R64 => Some(()),
-            types::B1 | types::B8 | types::B16 | types::B32 | types::B64 => Some(()),
             types::R32 => panic!("shouldn't have 32-bits refs on x64"),
             _ => None,
         }
