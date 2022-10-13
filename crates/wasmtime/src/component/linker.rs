@@ -1,11 +1,15 @@
 use crate::component::func::HostFunc;
 use crate::component::instance::RuntimeImport;
 use crate::component::matching::TypeChecker;
-use crate::component::{Component, Instance, InstancePre, IntoComponentFunc, Val};
+use crate::component::{
+    Component, ComponentNamedList, Instance, InstancePre, IntoComponentFunc, Lift, Lower, Val,
+};
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use anyhow::{anyhow, bail, Context, Result};
 use std::collections::hash_map::{Entry, HashMap};
+use std::future::Future;
 use std::marker;
+use std::pin::Pin;
 use std::sync::Arc;
 use wasmtime_environ::component::TypeDef;
 use wasmtime_environ::PrimaryMap;
@@ -36,6 +40,7 @@ pub struct Strings {
 /// a "bag of named items", so each [`LinkerInstance`] can further define items
 /// internally.
 pub struct LinkerInstance<'a, T> {
+    engine: Engine,
     strings: &'a mut Strings,
     map: &'a mut NameMap,
     allow_shadowing: bool,
@@ -82,6 +87,7 @@ impl<T> Linker<T> {
     /// the root namespace.
     pub fn root(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
+            engine: self.engine.clone(),
             strings: &mut self.strings,
             map: &mut self.map,
             allow_shadowing: self.allow_shadowing,
@@ -194,6 +200,7 @@ impl<T> Linker<T> {
 impl<T> LinkerInstance<'_, T> {
     fn as_mut(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
+            engine: self.engine.clone(),
             strings: self.strings,
             map: self.map,
             allow_shadowing: self.allow_shadowing,
@@ -229,6 +236,36 @@ impl<T> LinkerInstance<'_, T> {
     ) -> Result<()> {
         let name = self.strings.intern(name);
         self.insert(name, Definition::Func(func.into_host_func()))
+    }
+
+    /// Defines a new host-provided async function into this [`Linker`].
+    ///
+    /// This is exactly like [`Self::func_wrap`] except it takes an async
+    /// host function.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub fn func_wrap_async<Params, Return, F, FF>(&mut self, name: &str, f: F) -> Result<()>
+    where
+        F: for<'a> Fn(
+                StoreContextMut<'a, T>,
+                Params,
+            ) -> Box<dyn Future<Output = Return> + Send + 'a>
+            + Send
+            + Sync
+            + 'static,
+        Params: ComponentNamedList + Lift + 'static,
+        Return: ComponentNamedList + Lower + 'static,
+    {
+        assert!(
+            self.engine.config().async_support,
+            "cannot use `func_wrap_async` without enabling async support in the config"
+        );
+        let ff = move |mut store: StoreContextMut<'_, T>, params: Params| -> Result<Return> {
+            let async_cx = store.as_context_mut().0.async_cx().expect("async cx");
+            let mut future = Pin::from(f(store.as_context_mut(), params));
+            Ok(unsafe { async_cx.block_on(future.as_mut()) }?)
+        };
+        self.func_wrap(name, ff)
     }
 
     /// Define a new host-provided function using dynamic types.
