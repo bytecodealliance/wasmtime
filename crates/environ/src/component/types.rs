@@ -469,7 +469,7 @@ impl ComponentTypesBuilder {
                 self.core_outer_type(0, TypeIndex::from_u32(*ty))
             }
             wasmparser::ComponentTypeRef::Func(ty)
-            | wasmparser::ComponentTypeRef::Type(_, ty)
+            | wasmparser::ComponentTypeRef::Type(wasmparser::TypeBounds::Eq, ty)
             | wasmparser::ComponentTypeRef::Instance(ty)
             | wasmparser::ComponentTypeRef::Component(ty) => {
                 self.component_outer_type(0, ComponentTypeIndex::from_u32(*ty))
