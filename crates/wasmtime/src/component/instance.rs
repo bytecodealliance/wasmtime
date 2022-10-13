@@ -578,7 +578,7 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
                 func,
                 options,
             )),
-            Export::Module(_) | Export::Instance(_) => None,
+            Export::Module(_) | Export::Instance(_) | Export::Type(_) => None,
         }
     }
 
