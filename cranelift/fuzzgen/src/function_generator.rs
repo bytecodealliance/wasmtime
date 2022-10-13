@@ -1209,6 +1209,9 @@ where
                     .forward_blocks_without_params(block)
                     .contains(&next_block);
 
+                // BrTable and the Switch interface only allow targeting blocks without params
+                // thus we can only target them if we have some blocks that were generated without
+                // params.
                 if has_paramless_targets && next_block_is_paramless {
                     // BrTable
                     // At least one of the options must be the next block
