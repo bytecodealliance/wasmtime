@@ -1650,14 +1650,7 @@
 ;; Finally, we lower `select` from a condition value `c`. These rules are meant
 ;; to be the final, default lowerings if no other patterns matched above.
 
-(rule -1 (lower (has_type ty (select c @ (value_type $I8) x y)))
-      (let ((size OperandSize (raw_operand_size_of_type $I8))
-            ;; N.B.: disallow load-op fusion, see above. TODO:
-            ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
-            (gpr_c Gpr (put_in_gpr c)))
-           (with_flags (x64_test size (RegMemImm.Imm 1) gpr_c) (cmove_from_values ty (CC.NZ) x y))))
-
-(rule -2 (lower (has_type ty (select c @ (value_type (fits_in_64 a_ty)) x y)))
+(rule -1 (lower (has_type ty (select c @ (value_type (fits_in_64 a_ty)) x y)))
       (let ((size OperandSize (raw_operand_size_of_type a_ty))
             ;; N.B.: disallow load-op fusion, see above. TODO:
             ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
