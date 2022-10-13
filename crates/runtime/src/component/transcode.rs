@@ -86,7 +86,12 @@ mod trampolines {
                     });
                     match result {
                         Ok(Ok(ret)) => transcoders!(@convert_ret ret _retptr $($result)?),
-                        Ok(Err(err)) => crate::traphandlers::raise_trap(err.into()),
+                        Ok(Err(err)) => crate::traphandlers::raise_trap(
+                            crate::traphandlers::TrapReason::User {
+                                error: err,
+                                needs_backtrace: true,
+                            },
+                        ),
                         Err(panic) => crate::traphandlers::resume_panic(panic),
                     }
                 }

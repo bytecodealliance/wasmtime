@@ -70,6 +70,72 @@ fn test_trap_trace() -> Result<()> {
 }
 
 #[test]
+fn test_trap_through_host() -> Result<()> {
+    let wat = r#"
+        (module $hello_mod
+            (import "" "" (func $host_func_a))
+            (import "" "" (func $host_func_b))
+            (func $a (export "a")
+                call $host_func_a
+            )
+            (func $b (export "b")
+                call $host_func_b
+            )
+            (func $c (export "c")
+                unreachable
+            )
+        )
+    "#;
+
+    let engine = Engine::default();
+    let module = Module::new(&engine, wat)?;
+    let mut store = Store::<()>::new(&engine, ());
+
+    let host_func_a = Func::new(
+        &mut store,
+        FuncType::new(vec![], vec![]),
+        |mut caller, _args, _results| {
+            caller
+                .get_export("b")
+                .unwrap()
+                .into_func()
+                .unwrap()
+                .call(caller, &[], &mut [])?;
+            Ok(())
+        },
+    );
+    let host_func_b = Func::new(
+        &mut store,
+        FuncType::new(vec![], vec![]),
+        |mut caller, _args, _results| {
+            caller
+                .get_export("c")
+                .unwrap()
+                .into_func()
+                .unwrap()
+                .call(caller, &[], &mut [])?;
+            Ok(())
+        },
+    );
+
+    let instance = Instance::new(
+        &mut store,
+        &module,
+        &[host_func_a.into(), host_func_b.into()],
+    )?;
+    let a = instance
+        .get_typed_func::<(), (), _>(&mut store, "a")
+        .unwrap();
+    let err = a.call(&mut store, ()).unwrap_err();
+    let trace = err.trace().expect("backtrace is available");
+    assert_eq!(trace.len(), 3);
+    assert_eq!(trace[0].func_name(), Some("c"));
+    assert_eq!(trace[1].func_name(), Some("b"));
+    assert_eq!(trace[2].func_name(), Some("a"));
+    Ok(())
+}
+
+#[test]
 #[allow(deprecated)]
 fn test_trap_backtrace_disabled() -> Result<()> {
     let mut config = Config::default();
