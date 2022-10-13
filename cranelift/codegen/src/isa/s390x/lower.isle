@@ -1157,8 +1157,8 @@
 
 ;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type oty (bmask x @ (value_type ity))))
-      (lower_bmask oty ity x))
+(rule (lower (has_type ty (bmask x)))
+      (lower_bool_to_mask ty (value_nonzero x)))
 
 
 ;;;; Rules for `bitrev` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

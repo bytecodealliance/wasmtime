@@ -3474,15 +3474,19 @@
             (_ Unit (emit_consumer (emit_cmov_imm ty dst cond imm_true))))
         dst))
 
-;; Lower a boolean condition to a boolean type.  The value used to represent
-;; "true" is -1 for all result types except for $I8, which uses 1.
+;; Lower a boolean condition to the values 1/0. This rule is only used in the
+;; context of instructions that return $I8 results.
 (decl lower_bool (Type ProducesBool) Reg)
 (rule (lower_bool $I8 cond) (select_bool_imm $I8 cond 1 0))
 
-;; TODO: do we need these cases anymore if B8..B128 are missing?
-(rule (lower_bool $I16 cond) (select_bool_imm $I16 cond -1 0))
-(rule (lower_bool $I32 cond) (select_bool_imm $I32 cond -1 0))
-(rule (lower_bool $I64 cond) (select_bool_imm $I64 cond -1 0))
+;; Lower a boolean condition to the values -1/0.
+(decl lower_bool_to_mask (Type ProducesBool) Reg)
+(rule 0 (lower_bool_to_mask (fits_in_64 ty) producer)
+      (select_bool_imm ty producer -1 0))
+
+(rule 1 (lower_bool_to_mask $I128 producer)
+      (let ((res Reg (lower_bool_to_mask $I64 producer)))
+        (mov_to_vec128 $I128 res res)))
 
 ;; Emit a conditional branch based on a boolean condition.
 (decl cond_br_bool (ProducesBool MachLabel MachLabel) SideEffectNoResult)
@@ -5096,42 +5100,6 @@
 (decl vec_fcmphes (Type Reg Reg) ProducesFlags)
 (rule (vec_fcmphes (ty_vec128 ty) x y) (vec_float_cmps ty (vecop_float_cmphe ty) x y))
 
-;; Helpers for bmask lowering ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl lower_bmask_type (Type) Type)
-
-(rule 1 (lower_bmask_type (fits_in_32 ty)) $I32)
-(rule 0 (lower_bmask_type _) $I64)
-
-;; Lower a bmask call, given the output and input types.
-(decl lower_bmask (Type Type Reg) Reg)
-
-(rule
-  0
-  (lower_bmask (fits_in_64 oty) (fits_in_64 ity) input)
-  (let ((cmp ProducesFlags (icmps_simm16 (lower_bmask_type ity) input 0))
-        (op Cond (intcc_as_cond (IntCC.NotEqual))))
-    (select_bool_imm oty (bool cmp op) -1 0)))
-
-(rule
-  1
-  (lower_bmask $I128 (fits_in_64 ity) input)
-  (let ((res Reg (lower_bmask $I64 ity input)))
-    (mov_to_vec128 $I128 res res)))
-
-(rule
-  2
-  (lower_bmask (fits_in_64 oty) $I128 input)
-  (let ((lo Reg (vec_extract_lane $I64X2 input 0 (zero_reg)))
-        (hi Reg (vec_extract_lane $I64X2 input 1 (zero_reg)))
-        (combined Reg (or_reg $I64 lo hi)))
-    (lower_bmask oty $I64 combined)))
-
-(rule
-  3
-  (lower_bmask $I128 $I128 input)
-  (let ((res Reg (lower_bmask $I64 $I128 input)))
-    (mov_to_vec128 $I128 res res)))
 
 ;; Implicit conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
