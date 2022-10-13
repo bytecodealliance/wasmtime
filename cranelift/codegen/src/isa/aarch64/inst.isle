@@ -3458,7 +3458,7 @@
 
 (decl lower_bmask (Type Type ValueRegs) ValueRegs)
 
-;; For conversions that fit in a regsiter, we can use csetm.
+;; For conversions that fit in a register, we can use csetm.
 ;;
 ;; cmp   val, #0
 ;; csetm res, ne
