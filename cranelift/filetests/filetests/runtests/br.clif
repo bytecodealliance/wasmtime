@@ -36,6 +36,7 @@ block2:
 ; run: %brz_i64(0) == 1
 ; run: %brz_i64(1) == 0
 ; run: %brz_i64(-1) == 0
+; run: %brz_i64(97) == 0
 
 function %brz_i32(i32) -> i8 {
 block0(v0: i32):
@@ -156,3 +157,4 @@ block2:
 ; run: %brnz_i8(0) == 0
 ; run: %brnz_i8(1) == 1
 ; run: %brnz_i8(-1) == 1
+; run: %brnz_i8(97) == 1

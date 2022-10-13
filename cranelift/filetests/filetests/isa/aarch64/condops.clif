@@ -770,8 +770,7 @@ block0(v0: i8, v1: i8, v2: i8):
 }
 
 ; block0:
-;   uxtb w5, w0
-;   subs wzr, w5, wzr
+;   ands wzr, w0, #255
 ;   csel x0, x1, x2, ne
 ;   ret
 
@@ -795,8 +794,7 @@ block0(v0: i8, v1: i128, v2: i128):
 }
 
 ; block0:
-;   uxtb w8, w0
-;   subs wzr, w8, wzr
+;   ands wzr, w0, #255
 ;   csel x0, x2, x4, ne
 ;   csel x1, x3, x5, ne
 ;   ret

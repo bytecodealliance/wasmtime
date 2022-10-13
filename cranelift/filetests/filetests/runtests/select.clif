@@ -17,6 +17,18 @@ block0(v0: f32, v1: f32):
 ; run: %select_eq_f32(0x42.42, 0.0) == 0
 ; run: %select_eq_f32(0x42.42, NaN) == 0
 
+function %select_i8(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 42
+    v2 = iconst.i32 97
+    v3 = select v0, v1, v2
+    return v3
+}
+; run: %select_i8(0) == 97
+; run: %select_i8(1) == 42
+; run: %select_i8(2) == 42
+; run: %select_i8(-1) == 42
+
 function %select_ne_f64(f64, f64) -> i32 {
 block0(v0: f64, v1: f64):
     v2 = fcmp ne v0, v1
