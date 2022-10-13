@@ -38,6 +38,28 @@ block2:
 ; run: %brz_i64(-1) == 0
 ; run: %brz_i64(97) == 0
 
+function %brz_i8_overflow(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 255
+    v2 = iadd.i8 v0, v1
+    brz v2, block2
+    jump block1
+
+block1:
+    v3 = iconst.i8 1
+    return v3
+
+block2:
+    v4 = iconst.i8 0
+    return v4
+}
+
+; run: %brz_i8_overflow(0) == 1
+; run: %brz_i8_overflow(1) == 0
+; run: %brz_i8_overflow(2) == 1
+; run: %brz_i8_overflow(98) == 1
+; run: %brz_i8_overflow(97) == 1
+
 function %brz_i32(i32) -> i8 {
 block0(v0: i32):
     brz v0, block1

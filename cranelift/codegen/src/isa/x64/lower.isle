@@ -2823,8 +2823,6 @@
 
 
 (decl cmp_zero_int_bool_ref (Value) ProducesFlags)
-(rule 1 (cmp_zero_int_bool_ref val @ (value_type $I8))
-      (x64_test (OperandSize.Size8) (RegMemImm.Imm 1) val))
 (rule (cmp_zero_int_bool_ref val @ (value_type ty))
       (let ((size OperandSize (raw_operand_size_of_type ty))
             (src Gpr val))

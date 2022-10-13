@@ -32,7 +32,7 @@ block2:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   testb   $1, %dil
+;   testb   %dil, %dil
 ;   jnz     label1; j label2
 ; block1:
 ;   movl    $1, %eax
@@ -60,7 +60,7 @@ block2:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   testb   $1, %dil
+;   testb   %dil, %dil
 ;   jz      label1; j label2
 ; block1:
 ;   movl    $1, %eax

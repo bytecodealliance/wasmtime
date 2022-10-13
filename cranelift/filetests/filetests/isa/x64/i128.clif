@@ -674,7 +674,7 @@ block2(v6: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   testb   $1, %dl
+;   testb   %dl, %dl
 ;   jnz     label1; j label2
 ; block1:
 ;   xorq    %rax, %rax, %rax
