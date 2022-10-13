@@ -1896,14 +1896,29 @@
 (decl lower_brz_or_nz (IntCC ValueRegs VecMachLabel Type) InstOutput)
 (extern constructor lower_brz_or_nz lower_brz_or_nz)
 
+;; Normalize a value by masking to its bit-size.
+(decl normalize_value (Type ValueRegs) ValueRegs)
+
+(rule (normalize_value $I8 r)
+      (value_reg (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const 255))))
+(rule (normalize_value $I16 r)
+      (value_reg (alu_rrr (AluOPRRR.And) r (imm $I16 65535))))
+(rule (normalize_value $I32 r)
+      (value_reg (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const -1))))
+
+(rule (normalize_value $I64  r) r)
+(rule (normalize_value $I128 r) r)
+(rule (normalize_value $F32  r) r)
+(rule (normalize_value $F64  r) r)
+
 ;;;;; 
 (rule 
   (lower_branch (brz v @ (value_type ty) _ _) targets)
-  (lower_brz_or_nz (IntCC.Equal) v targets ty))
+  (lower_brz_or_nz (IntCC.Equal) (normalize_value ty v) targets ty))
 ;;;; 
 (rule 
   (lower_branch (brnz v @ (value_type ty) _ _) targets)
-  (lower_brz_or_nz (IntCC.NotEqual) v targets ty))
+  (lower_brz_or_nz (IntCC.NotEqual) (normalize_value ty v) targets ty))
 
 ;;; 
 (rule 

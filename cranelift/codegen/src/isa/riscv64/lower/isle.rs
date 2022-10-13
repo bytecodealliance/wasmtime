@@ -270,7 +270,11 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         rd.to_reg()
     }
     fn imm12_const(&mut self, val: i32) -> Imm12 {
-        Imm12::maybe_from_u64(val as u64).unwrap()
+        if let Some(res) = Imm12::maybe_from_u64(val as u64) {
+            res
+        } else {
+            panic!("Unable to make an Imm12 value from {}", val)
+        }
     }
     fn imm12_const_add(&mut self, val: i32, add: i32) -> Imm12 {
         Imm12::maybe_from_u64((val + add) as u64).unwrap()

@@ -1039,9 +1039,8 @@ impl MachInstEmit for Inst {
             &Inst::CondBr {
                 taken,
                 not_taken,
-                kind,
+                mut kind,
             } => {
-                let mut kind = kind;
                 kind.rs1 = allocs.next(kind.rs1);
                 kind.rs2 = allocs.next(kind.rs2);
                 match taken {

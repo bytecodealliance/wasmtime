@@ -93,3 +93,18 @@ block0(v0: f32, v1: f32):
 ; run: %select_uno_f32(0x0.0, 0x42.42) == 0
 ; run: %select_uno_f32(0x0.0, NaN) == 1
 ; run: %select_uno_f32(-NaN, 0x42.42) == 1
+
+function %select_overflow(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 255
+    v2 = iadd v0, v1
+    v3 = iconst.i8 1
+    v4 = iconst.i8 0
+    v5 = select v2, v3, v4
+    return v5
+}
+
+; run: %select_overflow(0) == 1
+; run: %select_overflow(2) == 1
+; run: %select_overflow(1) == 0
+; run: %select_overflow(98) == 1

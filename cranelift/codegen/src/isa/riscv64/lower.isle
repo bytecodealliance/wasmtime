@@ -601,8 +601,8 @@
 
 ;;;;;  Rules for `select`;;;;;;;;;
 (rule
-  (lower (has_type ty (select c x y)))
-  (gen_select ty c x y)
+  (lower (has_type ty (select c @ (value_type cty) x y)))
+  (gen_select ty (normalize_value cty c) x y)
 )
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
