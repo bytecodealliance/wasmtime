@@ -277,7 +277,55 @@ impl Func {
     /// The `params` here must match the type signature of this `Func`, or this will return an error. If a trap
     /// occurs while executing this function, then an error will also be returned.
     // TODO: say more -- most of the docs for `TypedFunc::call` apply here, too
+    //
+    // # Panics
+    //
+    // Panics if this is called on a function in an asyncronous store. This only works
+    // with functions defined within a synchronous store. Also panics if `store`
+    // does not own this function.
     pub fn call(
+        &self,
+        mut store: impl AsContextMut,
+        params: &[Val],
+        results: &mut [Val],
+    ) -> Result<()> {
+        let mut store = store.as_context_mut();
+        assert!(
+            !store.0.async_support(),
+            "must use `call_async` when async support is enabled on the config"
+        );
+        self.call_impl(&mut store.as_context_mut(), params, results)
+    }
+
+    /// Exactly like [`Self::call`] except for use on async stores.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is called on a function in a synchronous store. This only works
+    /// with functions defined within an asynchronous store. Also panics if `store`
+    /// does not own this function.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub async fn call_async<T>(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+        params: &[Val],
+        results: &mut [Val],
+    ) -> Result<()>
+    where
+        T: Send,
+    {
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `call_async` without enabling async support in the config"
+        );
+        store
+            .on_fiber(|store| self.call_impl(store, params, results))
+            .await?
+    }
+
+    fn call_impl(
         &self,
         mut store: impl AsContextMut,
         params: &[Val],
