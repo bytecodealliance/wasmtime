@@ -486,10 +486,15 @@ impl<T> InstancePre<T> {
     //
     // TODO: needs more docs
     pub fn instantiate(&self, store: impl AsContextMut<Data = T>) -> Result<Instance> {
-        assert!(!store.as_context().async_support(), "TKTK");
+        assert!(
+            !store.as_context().async_support(),
+            "must use async instantiation when async support is enabled"
+        );
         self.instantiate_impl(store)
     }
     /// Performs the instantiation process into the store specified.
+    ///
+    /// Exactly like [`Self::instantiate`] except for use on async stores.
     //
     // TODO: needs more docs
     #[cfg(feature = "async")]
@@ -502,7 +507,10 @@ impl<T> InstancePre<T> {
         T: Send,
     {
         let mut store = store.as_context_mut();
-        assert!(store.0.async_support(), "TKTK");
+        assert!(
+            store.0.async_support(),
+            "must use sync instantiation when async support is disabled"
+        );
         store.on_fiber(|store| self.instantiate_impl(store)).await?
     }
 

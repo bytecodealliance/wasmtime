@@ -244,7 +244,7 @@ impl<T> LinkerInstance<'_, T> {
     /// host function.
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
-    pub fn func_wrap_async<Params, Return, F, FF>(&mut self, name: &str, f: F) -> Result<()>
+    pub fn func_wrap_async<Params, Return, F>(&mut self, name: &str, f: F) -> Result<()>
     where
         F: for<'a> Fn(
                 StoreContextMut<'a, T>,
