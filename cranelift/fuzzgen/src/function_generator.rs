@@ -1209,8 +1209,8 @@ where
                 }
 
                 // BrTable and the Switch interface only allow targeting blocks without params
-                // thus we can only target them if we have some blocks that were generated without
-                // params.
+                // we also need to ensure that the next block has no params, since that one is
+                // guaranteed to be picked in either case.
                 if has_paramless_targets && next_block_is_paramless {
                     valid_terminators.extend_from_slice(&[
                         BlockTerminatorKind::BrTable,
