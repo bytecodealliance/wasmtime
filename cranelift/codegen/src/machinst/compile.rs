@@ -13,6 +13,7 @@ use regalloc2::{self, MachineEnv};
 /// for binary emission.
 pub fn compile<B: LowerBackend + TargetIsa>(
     f: &Function,
+    flags: crate::settings::Flags,
     b: &B,
     abi: Callee<<<B as LowerBackend>::MInst as MachInst>::ABIMachineSpec>,
     machine_env: &MachineEnv,
@@ -23,7 +24,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     let block_order = BlockLoweringOrder::new(f);
 
     // Build the lowering context.
-    let lower = crate::machinst::Lower::new(f, abi, emit_info, block_order, sigs)?;
+    let lower = crate::machinst::Lower::new(f, flags, abi, emit_info, block_order, sigs)?;
 
     // Lower the IR.
     let vcode = {

@@ -11,9 +11,8 @@ use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_runtime::{
-    raise_user_trap, ExportFunction, InstanceHandle, VMCallerCheckedAnyfunc, VMContext,
-    VMFunctionBody, VMFunctionImport, VMHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex,
-    VMTrampoline,
+    ExportFunction, InstanceHandle, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody,
+    VMFunctionImport, VMHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex, VMTrampoline,
 };
 
 /// A WebAssembly function which can be called.
@@ -1887,7 +1886,7 @@ macro_rules! impl_into_func {
 
                     match result {
                         CallResult::Ok(val) => val,
-                        CallResult::Trap(trap) => raise_user_trap(trap),
+                        CallResult::Trap(err) => Trap::raise(err),
                         CallResult::Panic(panic) => wasmtime_runtime::resume_panic(panic),
                     }
                 }

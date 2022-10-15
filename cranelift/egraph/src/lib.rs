@@ -87,15 +87,17 @@
 //!
 //! ## Data Structure and Example
 //!
-//! Each eclass id refers to a table entry that can be one of:
+//! Each eclass id refers to a table entry ("eclass node", which is
+//! different than an "enode") that can be one of:
 //!
 //! - A single enode;
-//! - An enode and an earlier eclass id it is appended to;
+//! - An enode and an earlier eclass id it is appended to (a "child"
+//!   eclass node);
 //! - A "union node" with two earlier eclass ids.
 //!
 //! Building the aegraph consists solely of adding new entries to the
-//! end of this table. An enode in any given entry can only refer to
-//! earlier eclass ids.
+//! end of this table of eclass nodes. An enode referenced from any
+//! given eclass node can only refer to earlier eclass ids.
 //!
 //! For example, consider the following eclass table:
 //!
@@ -218,7 +220,7 @@
 //!       POPL 2021. <https://dl.acm.org/doi/10.1145/3434304>
 
 use cranelift_entity::PrimaryMap;
-use cranelift_entity::{entity_impl, packed_option::ReservedValue};
+use cranelift_entity::{entity_impl, packed_option::ReservedValue, SecondaryMap};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -256,6 +258,20 @@ pub trait Language: CtxEq<Self::Node, Self::Node> + CtxHash<Self::Node> {
     fn needs_dedup(&self, node: &Self::Node) -> bool;
 }
 
+/// A trait that allows the aegraph to compute a property of each
+/// node as it is created.
+pub trait Analysis {
+    type L: Language;
+    type Value: Clone + Default;
+    fn for_node(
+        &self,
+        ctx: &Self::L,
+        n: &<Self::L as Language>::Node,
+        values: &SecondaryMap<Id, Self::Value>,
+    ) -> Self::Value;
+    fn meet(&self, ctx: &Self::L, v1: &Self::Value, v2: &Self::Value) -> Self::Value;
+}
+
 /// Conditionally-compiled trace-log macro. (Borrowed from
 /// `cranelift-codegen`; it's not worth factoring out a common
 /// subcrate for this.)
@@ -269,18 +285,20 @@ macro_rules! trace {
 }
 
 /// An egraph.
-pub struct EGraph<L: Language> {
+pub struct EGraph<L: Language, A: Analysis<L = L>> {
     /// Node-allocation arena.
     pub nodes: Vec<L::Node>,
     /// Hash-consing map from Nodes to eclass IDs.
     node_map: CtxHashMap<NodeKey, Id>,
     /// Eclass definitions. Each eclass consists of an enode, and
-    /// parent pointer to the rest of the eclass.
+    /// child pointer to the rest of the eclass.
     pub classes: PrimaryMap<Id, EClass>,
     /// Union-find for canonical ID generation. This lets us name an
     /// eclass with a canonical ID that is the same for all
     /// generations of the class.
     pub unionfind: UnionFind,
+    /// Analysis and per-node state.
+    pub analysis: Option<(A, SecondaryMap<Id, A::Value>)>,
 }
 
 /// A reference to a node.
@@ -298,7 +316,7 @@ impl NodeKey {
 
     /// Get the node for this NodeKey, given the `nodes` from the
     /// appropriate `EGraph`.
-    pub fn node<'a, L: Language>(&self, nodes: &'a [L::Node]) -> &'a L::Node {
+    pub fn node<'a, N>(&self, nodes: &'a [N]) -> &'a N {
         &nodes[self.index as usize]
     }
 
@@ -311,35 +329,35 @@ impl NodeKey {
     }
 }
 
-struct NodeKeyCtx<'a, L: Language> {
+struct NodeKeyCtx<'a, 'b, L: Language> {
     nodes: &'a [L::Node],
-    node_ctx: &'a L,
+    node_ctx: &'b L,
 }
 
-impl<'ctx, L: Language> CtxEq<NodeKey, NodeKey> for NodeKeyCtx<'ctx, L> {
+impl<'a, 'b, L: Language> CtxEq<NodeKey, NodeKey> for NodeKeyCtx<'a, 'b, L> {
     fn ctx_eq(&self, a: &NodeKey, b: &NodeKey, uf: &mut UnionFind) -> bool {
-        let a = a.node::<L>(self.nodes);
-        let b = b.node::<L>(self.nodes);
+        let a = a.node(self.nodes);
+        let b = b.node(self.nodes);
         self.node_ctx.ctx_eq(a, b, uf)
     }
 }
 
-impl<'ctx, L: Language> CtxHash<NodeKey> for NodeKeyCtx<'ctx, L> {
+impl<'a, 'b, L: Language> CtxHash<NodeKey> for NodeKeyCtx<'a, 'b, L> {
     fn ctx_hash(&self, value: &NodeKey, uf: &mut UnionFind) -> u64 {
-        self.node_ctx.ctx_hash(value.node::<L>(self.nodes), uf)
+        self.node_ctx.ctx_hash(value.node(self.nodes), uf)
     }
 }
 
-/// An EClass entry. Contains either a single new enode and a parent
-/// eclass (i.e., adds one new enode), or unions two parent eclasses
+/// An EClass entry. Contains either a single new enode and a child
+/// eclass (i.e., adds one new enode), or unions two child eclasses
 /// together.
 #[derive(Debug, Clone, Copy)]
 pub struct EClass {
     // formats:
     //
-    // 00 | unused  (31 bits)         | NodeKey (31 bits)
-    // 01 | eclass_parent   (31 bits) | NodeKey (31 bits)
-    // 10 | eclass_parent_1 (31 bits) | eclass_parent_id_2 (31 bits)
+    // 00 | unused  (31 bits)        | NodeKey (31 bits)
+    // 01 | eclass_child   (31 bits) | NodeKey (31 bits)
+    // 10 | eclass_child_1 (31 bits) | eclass_child_id_2 (31 bits)
     bits: u64,
 }
 
@@ -352,47 +370,47 @@ impl EClass {
         }
     }
 
-    fn node_and_parent(node: NodeKey, eclass_parent: Id) -> EClass {
+    fn node_and_child(node: NodeKey, eclass_child: Id) -> EClass {
         let node_idx = node.bits() as u64;
         debug_assert!(node_idx < (1 << 31));
-        debug_assert!(eclass_parent != Id::invalid());
-        let parent = eclass_parent.0 as u64;
-        debug_assert!(parent < (1 << 31));
+        debug_assert!(eclass_child != Id::invalid());
+        let child = eclass_child.0 as u64;
+        debug_assert!(child < (1 << 31));
         EClass {
-            bits: (0b01 << 62) | (parent << 31) | node_idx,
+            bits: (0b01 << 62) | (child << 31) | node_idx,
         }
     }
 
-    fn union(parent1: Id, parent2: Id) -> EClass {
-        debug_assert!(parent1 != Id::invalid());
-        let parent1 = parent1.0 as u64;
-        debug_assert!(parent1 < (1 << 31));
+    fn union(child1: Id, child2: Id) -> EClass {
+        debug_assert!(child1 != Id::invalid());
+        let child1 = child1.0 as u64;
+        debug_assert!(child1 < (1 << 31));
 
-        debug_assert!(parent2 != Id::invalid());
-        let parent2 = parent2.0 as u64;
-        debug_assert!(parent2 < (1 << 31));
+        debug_assert!(child2 != Id::invalid());
+        let child2 = child2.0 as u64;
+        debug_assert!(child2 < (1 << 31));
 
         EClass {
-            bits: (0b10 << 62) | (parent1 << 31) | parent2,
+            bits: (0b10 << 62) | (child1 << 31) | child2,
         }
     }
 
-    /// Get the node, if any, from a node-only or node-and-parent
+    /// Get the node, if any, from a node-only or node-and-child
     /// eclass.
     pub fn get_node(&self) -> Option<NodeKey> {
         self.as_node()
-            .or_else(|| self.as_node_and_parent().map(|(node, _)| node))
+            .or_else(|| self.as_node_and_child().map(|(node, _)| node))
     }
 
-    /// Get the first parent, if any.
-    pub fn parent1(&self) -> Option<Id> {
-        self.as_node_and_parent()
+    /// Get the first child, if any.
+    pub fn child1(&self) -> Option<Id> {
+        self.as_node_and_child()
             .map(|(_, p1)| p1)
             .or(self.as_union().map(|(p1, _)| p1))
     }
 
-    /// Get the second parent, if any.
-    pub fn parent2(&self) -> Option<Id> {
+    /// Get the second child, if any.
+    pub fn child2(&self) -> Option<Id> {
         self.as_union().map(|(_, p2)| p2)
     }
 
@@ -406,25 +424,25 @@ impl EClass {
         }
     }
 
-    /// If this EClass is one new enode and a parent, return the node
-    /// and parent ID.
-    pub fn as_node_and_parent(&self) -> Option<(NodeKey, Id)> {
+    /// If this EClass is one new enode and a child, return the node
+    /// and child ID.
+    pub fn as_node_and_child(&self) -> Option<(NodeKey, Id)> {
         if (self.bits >> 62) == 0b01 {
             let node_idx = (self.bits & ((1 << 31) - 1)) as u32;
-            let parent = ((self.bits >> 31) & ((1 << 31) - 1)) as u32;
-            Some((NodeKey::from_bits(node_idx), Id::from_bits(parent)))
+            let child = ((self.bits >> 31) & ((1 << 31) - 1)) as u32;
+            Some((NodeKey::from_bits(node_idx), Id::from_bits(child)))
         } else {
             None
         }
     }
 
-    /// If this EClass is the union variety, return the two parent
+    /// If this EClass is the union variety, return the two child
     /// EClasses. Both are guaranteed not to be `Id::invalid()`.
     pub fn as_union(&self) -> Option<(Id, Id)> {
         if (self.bits >> 62) == 0b10 {
-            let parent1 = ((self.bits >> 31) & ((1 << 31) - 1)) as u32;
-            let parent2 = (self.bits & ((1 << 31) - 1)) as u32;
-            Some((Id::from_bits(parent1), Id::from_bits(parent2)))
+            let child1 = ((self.bits >> 31) & ((1 << 31) - 1)) as u32;
+            let child2 = (self.bits & ((1 << 31) - 1)) as u32;
+            Some((Id::from_bits(child1), Id::from_bits(child2)))
         } else {
             None
         }
@@ -449,27 +467,31 @@ impl<T> NewOrExisting<T> {
     }
 }
 
-impl<L: Language> EGraph<L>
+impl<L: Language, A: Analysis<L = L>> EGraph<L, A>
 where
     L::Node: 'static,
 {
     /// Create a new aegraph.
-    pub fn new() -> Self {
+    pub fn new(analysis: Option<A>) -> Self {
+        let analysis = analysis.map(|a| (a, SecondaryMap::new()));
         Self {
             nodes: vec![],
             node_map: CtxHashMap::new(),
             classes: PrimaryMap::new(),
             unionfind: UnionFind::new(),
+            analysis,
         }
     }
 
     /// Create a new aegraph with the given capacity.
-    pub fn with_capacity(nodes: usize) -> Self {
+    pub fn with_capacity(nodes: usize, analysis: Option<A>) -> Self {
+        let analysis = analysis.map(|a| (a, SecondaryMap::with_capacity(nodes)));
         Self {
             nodes: Vec::with_capacity(nodes),
             node_map: CtxHashMap::with_capacity(nodes),
             classes: PrimaryMap::with_capacity(nodes),
             unionfind: UnionFind::with_capacity(nodes),
+            analysis,
         }
     }
 
@@ -506,6 +528,10 @@ where
                     // Add to interning map with a NodeKey referring to the eclass.
                     v.insert(eclass_id);
 
+                    // Update analysis.
+                    let node_ctx = ctx.node_ctx;
+                    self.update_analysis(node_ctx, eclass_id);
+
                     NewOrExisting::New(eclass_id)
                 }
             }
@@ -520,7 +546,7 @@ where
     /// property (args must have lower eclass Ids than the eclass
     /// containing the node with those args). Returns the Id of the
     /// merged eclass.
-    pub fn union(&mut self, a: Id, b: Id) -> Id {
+    pub fn union(&mut self, ctx: &L, a: Id, b: Id) -> Id {
         assert_ne!(a, Id::invalid());
         assert_ne!(b, Id::invalid());
         let (a, b) = (std::cmp::max(a, b), std::cmp::min(a, b));
@@ -532,16 +558,17 @@ where
 
         self.unionfind.union(a, b);
 
-        // If the younger eclass has no parent, we can link it
+        // If the younger eclass has no child, we can link it
         // directly and return that eclass. Otherwise, we create a new
         // union eclass.
         if let Some(node) = self.classes[a].as_node() {
             trace!(
-                " -> id {} is one-node eclass; making into node-and-parent with id {}",
+                " -> id {} is one-node eclass; making into node-and-child with id {}",
                 a,
                 b
             );
-            self.classes[a] = EClass::node_and_parent(node, b);
+            self.classes[a] = EClass::node_and_child(node, b);
+            self.update_analysis(ctx, a);
             return a;
         }
 
@@ -549,6 +576,7 @@ where
         self.unionfind.add(u);
         self.unionfind.union(u, b);
         trace!(" -> union id {} and id {} into id {}", a, b, u);
+        self.update_analysis(ctx, u);
         u
     }
 
@@ -569,11 +597,40 @@ where
     }
 
     /// Get the enodes for a given eclass.
-    pub fn enodes(&self, eclass: Id) -> NodeIter<L> {
+    pub fn enodes(&self, eclass: Id) -> NodeIter<L, A> {
         NodeIter {
             stack: smallvec![eclass],
-            _phantom: PhantomData,
+            _phantom1: PhantomData,
+            _phantom2: PhantomData,
         }
+    }
+
+    /// Update analysis for a given eclass node.
+    fn update_analysis(&mut self, ctx: &L, eclass: Id) {
+        if let Some((analysis, state)) = self.analysis.as_mut() {
+            let eclass_data = self.classes[eclass];
+            let value = if let Some(node_key) = eclass_data.as_node() {
+                let node = node_key.node(&self.nodes);
+                analysis.for_node(ctx, node, state)
+            } else if let Some((node_key, child)) = eclass_data.as_node_and_child() {
+                let node = node_key.node(&self.nodes);
+                let value = analysis.for_node(ctx, node, state);
+                let child_value = &state[child];
+                analysis.meet(ctx, &value, child_value)
+            } else if let Some((c1, c2)) = eclass_data.as_union() {
+                let c1 = &state[c1];
+                let c2 = &state[c2];
+                analysis.meet(ctx, c1, c2)
+            } else {
+                panic!("Invalid eclass node: {:?}", eclass_data);
+            };
+            state[eclass] = value;
+        }
+    }
+
+    /// Get the analysis value for a given eclass. Panics if no analysis is present.
+    pub fn analysis_value(&self, eclass: Id) -> &A::Value {
+        &self.analysis.as_ref().unwrap().1[eclass]
     }
 }
 
@@ -582,27 +639,28 @@ where
 /// Because eclasses are immutable once created, this does *not* need
 /// to hold an open borrow on the egraph; it is free to add new nodes,
 /// while our existing Ids will remain valid.
-pub struct NodeIter<L: Language> {
+pub struct NodeIter<L: Language, A: Analysis<L = L>> {
     stack: SmallVec<[Id; 8]>,
-    _phantom: PhantomData<L>,
+    _phantom1: PhantomData<L>,
+    _phantom2: PhantomData<A>,
 }
 
-impl<L: Language> NodeIter<L> {
-    pub fn next<'a>(&mut self, egraph: &'a EGraph<L>) -> Option<&'a L::Node> {
+impl<L: Language, A: Analysis<L = L>> NodeIter<L, A> {
+    pub fn next<'a>(&mut self, egraph: &'a EGraph<L, A>) -> Option<&'a L::Node> {
         while let Some(next) = self.stack.pop() {
             let eclass = egraph.classes[next];
             if let Some(node) = eclass.as_node() {
                 return Some(&egraph.nodes[node.index as usize]);
-            } else if let Some((node, parent)) = eclass.as_node_and_parent() {
-                if parent != Id::invalid() {
-                    self.stack.push(parent);
+            } else if let Some((node, child)) = eclass.as_node_and_child() {
+                if child != Id::invalid() {
+                    self.stack.push(child);
                 }
                 return Some(&egraph.nodes[node.index as usize]);
-            } else if let Some((parent1, parent2)) = eclass.as_union() {
-                debug_assert!(parent1 != Id::invalid());
-                debug_assert!(parent2 != Id::invalid());
-                self.stack.push(parent2);
-                self.stack.push(parent1);
+            } else if let Some((child1, child2)) = eclass.as_union() {
+                debug_assert!(child1 != Id::invalid());
+                debug_assert!(child2 != Id::invalid());
+                self.stack.push(child2);
+                self.stack.push(child1);
                 continue;
             } else {
                 unreachable!("Invalid eclass format");

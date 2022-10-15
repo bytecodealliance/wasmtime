@@ -152,6 +152,7 @@ pub enum Export {
     ModuleStatic(StaticModuleIndex),
     ModuleImport(RuntimeImportIndex),
     Instance(IndexMap<String, Export>),
+    Type(TypeDef),
 }
 
 /// Same as `info::CoreDef`, except has an extra `Adapter` variant.
@@ -430,6 +431,7 @@ impl LinearizeDfg<'_> {
                     .map(|(name, export)| (name.clone(), self.export(export)))
                     .collect(),
             ),
+            Export::Type(def) => info::Export::Type(*def),
         }
     }
 

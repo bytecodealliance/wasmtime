@@ -40,6 +40,13 @@ pub struct ModuleTranslation<'data> {
     /// Module information.
     pub module: Module,
 
+    /// The input wasm binary.
+    ///
+    /// This can be useful, for example, when modules are parsed from a
+    /// component and the embedder wants access to the raw wasm modules
+    /// themselves.
+    pub wasm: &'data [u8],
+
     /// References to the function bodies.
     pub function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
 
@@ -162,6 +169,8 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
         parser: Parser,
         data: &'data [u8],
     ) -> WasmResult<ModuleTranslation<'data>> {
+        self.result.wasm = data;
+
         for payload in parser.parse_all(data) {
             self.translate_payload(payload?)?;
         }

@@ -67,7 +67,7 @@ impl Riscv64Backend {
         let emit_info = EmitInfo::new(flags.clone(), self.isa_flags.clone());
         let sigs = SigSet::new::<abi::Riscv64MachineDeps>(func, &self.flags)?;
         let abi = abi::Riscv64Callee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<Riscv64Backend>(func, self, abi, &self.mach_env, emit_info, sigs)
+        compile::compile::<Riscv64Backend>(func, flags, self, abi, &self.mach_env, emit_info, sigs)
     }
 
     /// Get the information needed by frontends producing Cranelift IR.

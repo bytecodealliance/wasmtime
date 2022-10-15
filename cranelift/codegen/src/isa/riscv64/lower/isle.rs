@@ -5,17 +5,14 @@
 pub mod generated_code;
 use generated_code::{Context, MInst};
 
-use target_lexicon::Triple;
-
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg};
-use std::vec::Vec;
-
+use crate::isa::riscv64::abi::Riscv64ABICaller;
 use crate::isa::riscv64::settings::Flags as IsaFlags;
+use crate::machinst::Reg;
 use crate::machinst::{isle::*, MachInst, SmallInstVec};
-use crate::settings::Flags;
-
 use crate::machinst::{VCodeConstant, VCodeConstantData};
+use crate::settings::Flags;
 use crate::{
     ir::{
         immediates::*, types::*, AtomicRmwOp, ExternalName, Inst, InstructionData, MemFlags,
@@ -24,13 +21,12 @@ use crate::{
     isa::riscv64::inst::*,
     machinst::{ArgPair, InsnOutput, Lower},
 };
+use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use regalloc2::PReg;
-
-use crate::isa::riscv64::abi::Riscv64ABICaller;
 use std::boxed::Box;
 use std::convert::TryFrom;
-
-use crate::machinst::Reg;
+use std::vec::Vec;
+use target_lexicon::Triple;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
@@ -64,7 +60,7 @@ impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
 }
 
 impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
-    isle_prelude_methods!();
+    isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(Riscv64MachineDeps, Riscv64ABICaller);
 
     fn vec_writable_to_regs(&mut self, val: &VecWritableReg) -> ValueRegs {

@@ -2,6 +2,7 @@
 
 use crate::{trace, Id};
 use cranelift_entity::SecondaryMap;
+use std::hash::{Hash, Hasher};
 
 /// A union-find data structure. The data structure can allocate
 /// `Id`s, indicating eclasses, and can merge eclasses together.
@@ -66,5 +67,19 @@ impl UnionFind {
             self.parent[b] = a;
             trace!("union: {}, {}", a, b);
         }
+    }
+
+    /// Determine if two `Id`s are equivalent, after
+    /// canonicalizing. Update union-find data structure during our
+    /// canonicalization to make future lookups faster.
+    pub fn equiv_id_mut(&mut self, a: Id, b: Id) -> bool {
+        self.find_and_update(a) == self.find_and_update(b)
+    }
+
+    /// Hash an `Id` after canonicalizing it. Update union-find data
+    /// structure to make future lookups/hashing faster.
+    pub fn hash_id_mut<H: Hasher>(&mut self, hash: &mut H, id: Id) {
+        let id = self.find_and_update(id);
+        id.hash(hash);
     }
 }

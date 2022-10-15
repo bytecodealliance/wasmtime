@@ -14,7 +14,7 @@ edition.workspace = true
 cranelift-codegen = { workspace = true, default-features = false }
 target-lexicon = { workspace = true }
 
-[target.'cfg(target_arch = "s390x")'.dependencies]
+[target.'cfg(any(target_arch = "s390x", target_arch = "riscv64"))'.dependencies]
 libc = "0.2.95"
 
 [features]

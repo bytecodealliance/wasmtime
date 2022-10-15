@@ -181,6 +181,12 @@
 
 (component
   (import "host" (instance $i
+    (type $rec (record (field "x" (record)) (field "y" string)))
+    (export "some-record" (type (eq $rec)))))
+)
+
+(component
+  (import "host" (instance $i
     (export "nested" (instance
       (export "return-four" (func (result u32)))
     ))

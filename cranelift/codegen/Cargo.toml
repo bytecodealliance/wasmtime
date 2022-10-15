@@ -18,6 +18,7 @@ bumpalo = "3"
 cranelift-codegen-shared = { path = "./shared", version = "0.90.0" }
 cranelift-entity = { workspace = true }
 cranelift-bforest = { workspace = true }
+cranelift-egraph = { workspace = true }
 hashbrown = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
 log = { workspace = true }
@@ -27,7 +28,7 @@ gimli = { workspace = true, features = ["write"], optional = true }
 smallvec = { workspace = true }
 regalloc2 = { version = "0.4.1", features = ["checker"] }
 souper-ir = { version = "2.1.0", optional = true }
-sha2 = { version = "0.9.0", optional = true }
+sha2 = { version = "0.10.2", optional = true }
 # It is a goal of the cranelift-codegen crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary
 # machine code. Integration tests that need external dependencies can be

@@ -72,6 +72,12 @@ impl TypeChecker<'_> {
         // the actual type. It's ok, though, to have extra exports in the actual
         // type.
         for (name, expected) in expected.exports.iter() {
+            // Interface types may be exported from a component in order to give them a name, but
+            // they don't have a definition in the sense that this search is interested in, so
+            // ignore them.
+            if let TypeDef::Interface(_) = expected {
+                continue;
+            }
             let actual = self
                 .strings
                 .lookup(name)

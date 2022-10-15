@@ -224,10 +224,7 @@ enum ComponentItemDef<'a> {
     Instance(ComponentInstanceDef<'a>),
     Func(ComponentFuncDef<'a>),
     Module(ModuleDef<'a>),
-    // TODO: https://github.com/bytecodealliance/wasmtime/issues/4494
-    // The entity is a type; currently unsupported but represented here
-    // so that type exports can be ignored for now.
-    Type,
+    Type(TypeDef),
 }
 
 #[derive(Clone)]
@@ -381,7 +378,12 @@ impl<'a> Inliner<'a> {
                 ComponentItemDef::Func(i) => {
                     frame.component_funcs.push(i.clone());
                 }
-                ComponentItemDef::Type => {}
+
+                // The type structure of a component does not change depending
+                // on how it is instantiated at this time so importing a type
+                // does not affect the component being instantiated so it's
+                // ignored.
+                ComponentItemDef::Type(_ty) => {}
             },
 
             // Lowering a component function to a core wasm function is
@@ -708,9 +710,13 @@ impl<'a> Inliner<'a> {
                             let instance = i.clone();
                             frame.component_instances.push(instance);
                         }
-                        ComponentItemDef::Type => {
-                            // Ignore type aliases for now
-                        }
+
+                        // Like imports creation of types from an `alias`-ed
+                        // export does not, at this time, modify what the type
+                        // is or anything like that. The type structure of the
+                        // component being instantiated is unchanged so types
+                        // are ignored here.
+                        ComponentItemDef::Type(_ty) => {}
                     },
                 }
             }
@@ -929,10 +935,7 @@ impl<'a> Inliner<'a> {
                 bail!("exporting a component from the root component is not supported")
             }
 
-            ComponentItemDef::Type => {
-                // Ignore type exports for now
-                return Ok(());
-            }
+            ComponentItemDef::Type(def) => dfg::Export::Type(def),
         };
 
         map.insert(name.to_string(), export);
@@ -979,7 +982,7 @@ impl<'a> InlinerFrame<'a> {
                 ComponentItemDef::Instance(self.component_instances[i].clone())
             }
             ComponentItem::Module(i) => ComponentItemDef::Module(self.modules[i].clone()),
-            ComponentItem::Type(_) => ComponentItemDef::Type,
+            ComponentItem::Type(t) => ComponentItemDef::Type(t),
         }
     }
 

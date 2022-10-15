@@ -252,6 +252,15 @@ impl Trap {
         Trap::new_with_trace(TrapReason::I32Exit(status), None)
     }
 
+    // Same safety requirements and caveats as
+    // `wasmtime_runtime::raise_user_trap`.
+    pub(crate) unsafe fn raise(error: anyhow::Error) -> ! {
+        let needs_backtrace = error
+            .downcast_ref::<Trap>()
+            .map_or(true, |trap| trap.trace().is_none());
+        wasmtime_runtime::raise_user_trap(error, needs_backtrace)
+    }
+
     #[cold] // see Trap::new
     pub(crate) fn from_runtime_box(
         store: &StoreOpaque,
@@ -264,9 +273,14 @@ impl Trap {
     pub(crate) fn from_runtime(store: &StoreOpaque, runtime_trap: wasmtime_runtime::Trap) -> Self {
         let wasmtime_runtime::Trap { reason, backtrace } = runtime_trap;
         match reason {
-            wasmtime_runtime::TrapReason::User(error) => {
+            wasmtime_runtime::TrapReason::User {
+                error,
+                needs_backtrace,
+            } => {
                 let trap = Trap::from(error);
                 if let Some(backtrace) = backtrace {
+                    debug_assert!(needs_backtrace);
+                    debug_assert!(trap.inner.backtrace.get().is_none());
                     trap.record_backtrace(TrapBacktrace::new(store, backtrace, None));
                 }
                 trap
@@ -359,12 +373,15 @@ impl Trap {
     fn record_backtrace(&self, backtrace: TrapBacktrace) {
         // When a trap is created on top of the wasm stack, the trampoline will
         // re-raise it via
-        // `wasmtime_runtime::raise_user_trap(trap.into::<Box<dyn Error>>())`
-        // after panic::catch_unwind. We don't want to overwrite the first
-        // backtrace recorded, as it is most precise.
-        // FIXME: make sure backtraces are only created once per trap! they are
-        // actually kinda expensive to create.
-        let _ = self.inner.backtrace.try_insert(backtrace);
+        // `wasmtime_runtime::raise_user_trap(trap.into::<Box<dyn Error>>(),
+        // ..)` after `panic::catch_unwind`. We don't want to overwrite the
+        // first backtrace recorded, as it is most precise. However, this should
+        // never happen in the first place because we thread `needs_backtrace`
+        // booleans throuch all calls to `raise_user_trap` to avoid capturing
+        // unnecessary backtraces! So debug assert that we don't ever capture
+        // unnecessary backtraces.
+        let result = self.inner.backtrace.try_insert(backtrace);
+        debug_assert!(result.is_ok());
     }
 }
 

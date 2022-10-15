@@ -165,13 +165,23 @@ pub mod trampolines {
     }
 }
 
-unsafe fn memory32_grow(vmctx: *mut VMContext, delta: u64, memory_index: u32) -> Result<*mut u8> {
+unsafe fn memory32_grow(
+    vmctx: *mut VMContext,
+    delta: u64,
+    memory_index: u32,
+) -> Result<*mut u8, TrapReason> {
     let instance = (*vmctx).instance_mut();
     let memory_index = MemoryIndex::from_u32(memory_index);
-    let result = match instance.memory_grow(memory_index, delta)? {
-        Some(size_in_bytes) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
-        None => usize::max_value(),
-    };
+    let result =
+        match instance
+            .memory_grow(memory_index, delta)
+            .map_err(|error| TrapReason::User {
+                error,
+                needs_backtrace: true,
+            })? {
+            Some(size_in_bytes) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
+            None => usize::max_value(),
+        };
     Ok(result as *mut _)
 }
 

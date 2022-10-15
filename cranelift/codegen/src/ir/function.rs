@@ -189,7 +189,7 @@ pub struct FunctionStencil {
     ///
     /// Track the original source location for each instruction. The source locations are not
     /// interpreted by Cranelift, only preserved.
-    srclocs: SourceLocs,
+    pub srclocs: SourceLocs,
 
     /// An optional global value which represents an expression evaluating to
     /// the stack limit for this function. This `GlobalValue` will be
@@ -386,7 +386,7 @@ impl FunctionStencil {
             .zip(self.dfg.inst_results(src))
             .all(|(a, b)| self.dfg.value_type(*a) == self.dfg.value_type(*b)));
 
-        self.dfg[dst] = self.dfg[src].clone();
+        self.dfg[dst] = self.dfg[src];
         self.layout.remove_inst(src);
     }
 
