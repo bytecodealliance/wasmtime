@@ -718,6 +718,16 @@ enum BlockTerminator {
     Switch(Type, Block, HashMap<u128, Block>),
 }
 
+#[derive(Debug, Clone)]
+enum BlockTerminatorKind {
+    Return,
+    Jump,
+    Br,
+    BrIcmp,
+    BrTable,
+    Switch,
+}
+
 #[derive(Default)]
 struct Resources {
     vars: HashMap<Type, Vec<Variable>>,
@@ -741,6 +751,12 @@ impl Resources {
         // their number. We also need to exclude the entry block since it isn't a valid target.
         let target_blocks = &self.blocks[1..];
         target_blocks.split_at(block.as_u32() as usize)
+    }
+
+    /// Returns blocks forward of `block`. Only blocks that can be targeted by branches are considered.
+    fn forward_blocks(&self, block: Block) -> &[(Block, BlockSignature)] {
+        let (_, forward_blocks) = self.partition_target_blocks(block);
+        forward_blocks
     }
 
     /// Generates a slice of `blocks_without_params` ahead of `block`
@@ -1169,110 +1185,103 @@ where
         self.resources.block_terminators = blocks
             .iter()
             .map(|&(block, _)| {
-                // On the last block we always return
-                if block == self.resources.blocks.last().unwrap().0 {
-                    return Ok(BlockTerminator::Return);
-                }
                 let next_block = Block::with_number(block.as_u32() + 1).unwrap();
+                let forward_blocks = self.resources.forward_blocks(block);
+                let forward_blocks_without_params =
+                    self.resources.forward_blocks_without_params(block);
+                let has_paramless_targets = !forward_blocks_without_params.is_empty();
+                let next_block_is_paramless = forward_blocks_without_params.contains(&next_block);
 
-                // Start with the basic terminators, these can always be inserted, since we
-                // always have at least one forward block
-                let mut terminators: Vec<Box<dyn Fn(&mut Self) -> Result<BlockTerminator>>> = vec![
-                    // Jump
-                    // We can only jump to the next block
-                    Box::new(|_| Ok(BlockTerminator::Jump(next_block))),
-                    // Br
-                    // One of the branches must be the next block
-                    Box::new(|fgen| {
-                        Ok(BlockTerminator::Br(
-                            next_block,
-                            fgen.generate_target_block(block)?,
-                        ))
-                    }),
-                    // BrIcmp
-                    // One of the branches must be the next block
-                    Box::new(|fgen| {
-                        Ok(BlockTerminator::BrIcmp(
-                            next_block,
-                            fgen.generate_target_block(block)?,
-                        ))
-                    }),
-                ];
+                let mut valid_terminators = vec![];
 
-                let has_paramless_targets = !self
-                    .resources
-                    .forward_blocks_without_params(block)
-                    .is_empty();
-
-                let next_block_is_paramless = self
-                    .resources
-                    .forward_blocks_without_params(block)
-                    .contains(&next_block);
+                if forward_blocks.is_empty() {
+                    // Return is only valid on the last block.
+                    valid_terminators.push(BlockTerminatorKind::Return);
+                } else {
+                    // If we have more than one block we can allow terminators that target blocks.
+                    // TODO: We could add some kind of BrReturn/BrIcmpReturn here, to explore edges where we exit
+                    // in the middle of the function
+                    valid_terminators.extend_from_slice(&[
+                        BlockTerminatorKind::Jump,
+                        BlockTerminatorKind::Br,
+                        BlockTerminatorKind::BrIcmp,
+                    ]);
+                }
 
                 // BrTable and the Switch interface only allow targeting blocks without params
                 // thus we can only target them if we have some blocks that were generated without
                 // params.
                 if has_paramless_targets && next_block_is_paramless {
-                    // BrTable
-                    // At least one of the options must be the next block
+                    valid_terminators.extend_from_slice(&[
+                        BlockTerminatorKind::BrTable,
+                        BlockTerminatorKind::Switch,
+                    ]);
+                }
+
+                let terminator = self.u.choose(&valid_terminators[..])?;
+
+                // Choose block targets for the terminators that we picked above
+                Ok(match terminator {
+                    BlockTerminatorKind::Return => BlockTerminator::Return,
+                    BlockTerminatorKind::Jump => BlockTerminator::Jump(next_block),
+                    BlockTerminatorKind::Br => {
+                        BlockTerminator::Br(next_block, self.generate_target_block(block)?)
+                    }
+                    BlockTerminatorKind::BrIcmp => {
+                        BlockTerminator::BrIcmp(next_block, self.generate_target_block(block)?)
+                    }
                     // TODO: Allow generating backwards branches here
-                    terminators.push(Box::new(|fgen| {
+                    BlockTerminatorKind::BrTable => {
                         // Make the default the next block, and then we don't have to worry
                         // that we can reach it via the targets
                         let default = next_block;
 
-                        let target_count = fgen.param(&fgen.config.jump_table_entries)?;
+                        let target_count = self.param(&self.config.jump_table_entries)?;
                         let targets = arbitrary_vec(
-                            fgen.u,
+                            self.u,
                             target_count,
-                            fgen.resources.forward_blocks_without_params(block),
+                            self.resources.forward_blocks_without_params(block),
                         )?;
 
-                        Ok(BlockTerminator::BrTable(default, targets))
-                    }));
-
-                    // Switch
-                    // At least one of the options must be the next block
-                    // TODO: Allow generating backwards branches here
-                    terminators.push(Box::new(|fgen| {
+                        BlockTerminator::BrTable(default, targets)
+                    }
+                    BlockTerminatorKind::Switch => {
                         // Make the default the next block, and then we don't have to worry
                         // that we can reach it via the entries below
                         let default_block = next_block;
 
-                        let _type = *fgen.u.choose(&[I8, I16, I32, I64, I128][..])?;
+                        let _type = *self.u.choose(&[I8, I16, I32, I64, I128][..])?;
 
                         // Build this into a HashMap since we cannot have duplicate entries.
                         let mut entries = HashMap::new();
-                        for _ in 0..fgen.param(&fgen.config.switch_cases)? {
+                        for _ in 0..self.param(&self.config.switch_cases)? {
                             // The Switch API only allows for entries that are addressable by the index type
                             // so we need to limit the range of values that we generate.
                             let (ty_min, ty_max) = _type.bounds(false);
-                            let range_start = fgen.u.int_in_range(ty_min..=ty_max)?;
+                            let range_start = self.u.int_in_range(ty_min..=ty_max)?;
 
                             // We can either insert a contiguous range of blocks or a individual block
                             // This is done because the Switch API specializes contiguous ranges.
-                            let range_size = if bool::arbitrary(fgen.u)? {
+                            let range_size = if bool::arbitrary(self.u)? {
                                 1
                             } else {
-                                fgen.param(&fgen.config.switch_max_range_size)?
+                                self.param(&self.config.switch_max_range_size)?
                             } as u128;
 
                             // Build the switch entries
                             for i in 0..range_size {
                                 let index = range_start.wrapping_add(i) % ty_max;
-                                let block = *fgen
+                                let block = *self
                                     .u
-                                    .choose(fgen.resources.forward_blocks_without_params(block))?;
+                                    .choose(self.resources.forward_blocks_without_params(block))?;
 
                                 entries.insert(index, block);
                             }
                         }
 
-                        Ok(BlockTerminator::Switch(_type, default_block, entries))
-                    }));
-                }
-
-                Ok(self.u.choose(&terminators[..])?(self)?)
+                        BlockTerminator::Switch(_type, default_block, entries)
+                    }
+                })
             })
             .collect::<Result<_>>()?;
 
