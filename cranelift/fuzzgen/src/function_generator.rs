@@ -1187,10 +1187,9 @@ where
             .map(|&(block, _)| {
                 let next_block = Block::with_number(block.as_u32() + 1).unwrap();
                 let forward_blocks = self.resources.forward_blocks(block);
-                let forward_blocks_without_params =
-                    self.resources.forward_blocks_without_params(block);
-                let has_paramless_targets = !forward_blocks_without_params.is_empty();
-                let next_block_is_paramless = forward_blocks_without_params.contains(&next_block);
+                let paramless_targets = self.resources.forward_blocks_without_params(block);
+                let has_paramless_targets = !paramless_targets.is_empty();
+                let next_block_is_paramless = paramless_targets.contains(&next_block);
 
                 let mut valid_terminators = vec![];
 
