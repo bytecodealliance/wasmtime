@@ -1,9 +1,10 @@
 mod abi;
-mod compilation_env;
+mod codegen;
 mod compiler;
 mod frame;
 pub mod isa;
 mod masm;
+mod regalloc;
 mod regset;
 mod stack;
 mod visitor;

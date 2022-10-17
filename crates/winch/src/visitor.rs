@@ -1,9 +1,10 @@
 use crate::abi::ABI;
-use crate::compilation_env::CompilationEnv;
+use crate::codegen::CodeGen;
 use crate::masm::{MacroAssembler, OperandSize, RegImm};
 use crate::stack::Val;
 use anyhow::Result;
 use wasmparser::{FuncValidator, Result as ValidationResult, ValidatorResources, VisitOperator};
+use wasmtime_environ::WasmType;
 
 /// A macro iterator, inspired by wasmparsers `for_each_operator`,
 /// containing the definition of supported operators
@@ -12,6 +13,8 @@ macro_rules! for_each_supported_op {
         $def! {
             @mvp I32Const { value: i32 } => (visit_i32_const emit_i32_const)
             @mvp I32Add => (visit_i32_add emit_i32_add)
+        @mvp LocalGet { local_index: u32 } => (visit_local_get emit_local_get)
+        @mvp LocalSet { local_index: u32 } => (visit_local_set emit_local_set)
         }
     };
 }
@@ -45,8 +48,6 @@ macro_rules! for_each_unsupported_op {
 	    @mvp Drop => visit_drop
 	    @mvp Select => visit_select
 	    @reference_types TypedSelect { ty: wasmparser::ValType } => visit_typed_select
-	    @mvp LocalGet { local_index: u32 } => visit_local_get
-	    @mvp LocalSet { local_index: u32 } => visit_local_set
 	    @mvp LocalTee { local_index: u32 } => visit_local_tee
 	    @mvp GlobalGet { global_index: u32 } => visit_global_get
 	    @mvp GlobalSet { global_index: u32 } => visit_global_set
@@ -592,7 +593,11 @@ macro_rules! define {
     };
 }
 
-impl<'x, 'a: 'x, A: ABI, C: MacroAssembler> CompilationEnv<'a, 'x, A, C> {
+impl<'c, 'a: 'c, A, M> CodeGen<'a, 'c, A, M>
+where
+    A: ABI,
+    M: MacroAssembler,
+{
     fn emitop<V, E>(&mut self, validate: V, emitter: E) -> Result<()>
     where
         V: FnOnce(&mut FuncValidator<ValidatorResources>) -> ValidationResult<()>,
@@ -604,32 +609,107 @@ impl<'x, 'a: 'x, A: ABI, C: MacroAssembler> CompilationEnv<'a, 'x, A, C> {
     }
 
     fn emit_i32_add(&mut self) -> Result<()> {
-        // TODO This check is temporary; while we only support generating code for
-        //      addtion with constants;
-        let val = self
+        let is_const = self
+            .context
             .stack
-            .pop_i32_const()
-            .expect("at least one const value expected at stack top");
+            .peek()
+            .expect("value at stack top")
+            .is_i32_const();
 
-        let reg = self.pop_i32();
-        self.masm
-            .add(RegImm::imm(val), RegImm::reg(reg), OperandSize::S32);
-        self.stack.push(Val::reg(reg));
+        if is_const {
+            self.add_imm_i32();
+        } else {
+            self.add_i32();
+        }
+
         Ok(())
     }
 
+    fn add_imm_i32(&mut self) {
+        let val = self
+            .context
+            .stack
+            .pop_i32_const()
+            .expect("i32 constant at stack top");
+        let reg = self
+            .regalloc
+            .pop_to_reg(&mut self.context, OperandSize::S32);
+        self.context
+            .masm
+            .add(RegImm::imm(val), RegImm::reg(reg), OperandSize::S32);
+        self.context.stack.push(Val::reg(reg));
+    }
+
+    fn add_i32(&mut self) {
+        let src = self
+            .regalloc
+            .pop_to_reg(&mut self.context, OperandSize::S32);
+        let dst = self
+            .regalloc
+            .pop_to_reg(&mut self.context, OperandSize::S32);
+
+        self.context
+            .masm
+            .add(RegImm::reg(src), RegImm::reg(dst), OperandSize::S32);
+        self.context.stack.push(Val::reg(dst));
+    }
+
     fn emit_i32_const(&mut self, val: i32) -> Result<()> {
-        self.stack.push(Val::i32(val));
+        self.context.stack.push(Val::i32(val));
+        Ok(())
+    }
+
+    fn emit_local_get(&mut self, index: u32) -> Result<()> {
+        let context = &mut self.context;
+        let slot = context
+            .frame
+            .get_local(index)
+            .expect(&format!("valid local at slot = {}", index));
+        match slot.ty {
+            WasmType::I32 | WasmType::I64 => context.stack.push(Val::local(index)),
+            _ => panic!("Unsupported type {} for local", slot.ty),
+        }
+
+        Ok(())
+    }
+
+    // TODO verify the case where the target local is on the stack
+    fn emit_local_set(&mut self, index: u32) -> Result<()> {
+        let context = &mut self.context;
+        let frame = context.frame;
+        let slot = frame
+            .get_local(index)
+            .expect(&format!("vald local at slot = {}", index));
+        let size: OperandSize = slot.ty.into();
+        let src = self.regalloc.pop_to_reg(context, size);
+        let addr = context.masm.local_address(&slot);
+        context.masm.store(RegImm::reg(src), addr, size);
+        self.regalloc.free_gpr(src);
+
         Ok(())
     }
 }
 
-impl<'x, 'a: 'x, A: ABI, C: MacroAssembler> VisitOperator<'a> for CompilationEnv<'a, 'x, A, C> {
+impl<'c, 'a: 'c, A, M> VisitOperator<'a> for CodeGen<'a, 'c, A, M>
+where
+    A: ABI,
+    M: MacroAssembler,
+{
     type Output = Result<()>;
     for_each_supported_op!(define);
     for_each_unsupported_op!(define);
 
     fn visit_end(&mut self, offset: usize) -> Result<()> {
         self.validator.visit_end(offset).map_err(|e| e.into())
+    }
+}
+
+impl From<WasmType> for OperandSize {
+    fn from(ty: WasmType) -> OperandSize {
+        match ty {
+            WasmType::I32 => OperandSize::S32,
+            WasmType::I64 => OperandSize::S64,
+            ty => todo!("unsupported type {}", ty),
+        }
     }
 }

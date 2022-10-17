@@ -1,5 +1,10 @@
+use crate::abi::ABI;
+use crate::codegen::{CodeGen, CodeGenContext};
+use crate::frame::Frame;
 use crate::isa::x64::masm::MacroAssembler;
-use crate::{compilation_env::CompilationEnv, isa::TargetIsa, regset::RegSet};
+use crate::regalloc::RegAlloc;
+use crate::stack::Stack;
+use crate::{isa::TargetIsa, regset::RegSet};
 use anyhow::Result;
 use target_lexicon::Triple;
 use wasmtime_environ::{FunctionBodyData, WasmFuncType};
@@ -34,26 +39,31 @@ impl TargetIsa for X64 {
         &self.triple
     }
 
+    // Temporarily returns a Vec<String>
     fn compile_function(&self, sig: &WasmFuncType, body: FunctionBodyData) -> Result<Vec<String>> {
-        // Temporarily returns a '&static str
-        // TODO
-        // 1. Derive calling convention (panic if unsupported)
-        // 2. Check for multi-value returns
-        //     * Panic if using multi-value (support for multi-value will be added in a follow-up)
-        // 3. Check for usage of ref types
-        //     * Panic if using ref types
-        // 4. Create a compilation_env and call `emit`
         let FunctionBodyData {
             validator,
             mut body,
         } = body;
 
-        let abi = abi::X64ABI::default();
-        let mut validator = validator.into_validator(Default::default());
-        let regset = RegSet::new(ALL_GPR, 0);
         let masm = MacroAssembler::new();
-        let mut env = CompilationEnv::new(sig, &mut body, &mut validator, abi, masm, regset)?;
+        let stack = Stack::new();
+        let abi = abi::X64ABI::default();
+        let abi_sig = abi.sig(sig);
+        let mut validator = validator.into_validator(Default::default());
+        let frame = Frame::new(&abi_sig, &mut body, &mut validator, &abi)?;
+        // TODO FPR
+        let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
+        let codegen_context = CodeGenContext::new(masm, stack, &frame);
+        let mut codegen = CodeGen::new(
+            codegen_context,
+            abi,
+            abi_sig,
+            &mut body,
+            &mut validator,
+            regalloc,
+        );
 
-        env.emit()
+        codegen.emit()
     }
 }
