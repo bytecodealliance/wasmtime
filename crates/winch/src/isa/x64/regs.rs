@@ -76,6 +76,10 @@ pub(crate) fn rbp() -> Reg {
     gpr(ENC_RBP)
 }
 
+pub(crate) fn scratch() -> Reg {
+    r11()
+}
+
 fn fpr(enc: u8) -> Reg {
     Reg::new(PReg::new(enc as usize, RegClass::Float))
 }
@@ -133,7 +137,7 @@ pub(crate) fn xmm15() -> Reg {
 
 const GPR: u32 = 16;
 const ALLOCATABLE_GPR: u32 = (1 << GPR) - 1;
-const NON_ALLOCATABLE_GPR: u32 = (1 << ENC_RBP) | (1 << ENC_RSP);
+const NON_ALLOCATABLE_GPR: u32 = (1 << ENC_RBP) | (1 << ENC_RSP) | (1 << ENC_R11);
 
 /// Bitmask to represent the available general purpose registers
 pub(crate) const ALL_GPR: u32 = ALLOCATABLE_GPR & !NON_ALLOCATABLE_GPR;

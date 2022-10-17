@@ -27,6 +27,9 @@ pub(crate) trait ABI {
     fn word_bytes() -> u32 {
         Self::word_bits() / 8
     }
+
+    /// Returns the designated scratch register
+    fn scratch_reg() -> Reg;
 }
 
 /// ABI-specific representation of a function argument

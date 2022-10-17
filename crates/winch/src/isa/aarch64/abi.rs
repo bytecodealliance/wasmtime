@@ -1,5 +1,6 @@
 use super::regs;
 use crate::abi::{ABIArg, ABIResult, ABISig, ABI};
+use crate::isa::reg::Reg;
 use smallvec::SmallVec;
 use wasmtime_environ::{WasmFuncType, WasmType};
 
@@ -70,6 +71,10 @@ impl ABI for Aarch64ABI {
         let result = ABIResult::reg(ty, reg);
 
         ABISig { params, result }
+    }
+
+    fn scratch_reg() -> Reg {
+        todo!()
     }
 }
 

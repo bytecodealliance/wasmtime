@@ -68,6 +68,10 @@ impl ABI for X64ABI {
 
         ABISig { params, result }
     }
+
+    fn scratch_reg() -> Reg {
+        regs::scratch()
+    }
 }
 
 impl X64ABI {
