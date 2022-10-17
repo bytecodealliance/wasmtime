@@ -1,7 +1,8 @@
-use crate::abi::{addressing_mode::Address, local::LocalSlot, ABI};
+use crate::abi::{addressing_mode::Address, local::LocalSlot};
 use crate::isa::reg::Reg;
 
 /// Operand size, in bits
+#[derive(Copy, Clone)]
 pub(crate) enum OperandSize {
     S32,
     S64,
@@ -35,6 +36,19 @@ impl From<Reg> for RegImm {
 /// each ISA can define and use their own low-level Assembler implementation
 /// to fulfill the interface
 
+// TODO
+//
+// Modify the interface in the next iteration once
+// there's more support for aarch64;
+//
+// One of the ideas that I discussed with @cfallin is to
+// modify certain sigantures (e.g. add) to take three arguments instead of
+// two; assuming params named dst, lhs, rhs, in the case of x64 dst and lhs
+// will be always the same
+
+// The other idea, is to have a superset of signatures; which in some cases
+// some signatures won't be implemented by all supported ISA's.
+
 pub(crate) trait MacroAssembler {
     /// Emit the function prologue
     fn prologue(&mut self);
@@ -56,11 +70,17 @@ pub(crate) trait MacroAssembler {
     //      I'd like to think a bit more if there's a better abstraction for this
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize);
 
+    /// Perform a stack load
+    fn load(&mut self, src: Address, dst: Reg, size: OperandSize);
+
     /// Perform a move
     fn mov(&mut self, src: RegImm, dst: RegImm, size: OperandSize);
 
     /// Perform add operation
     fn add(&mut self, src: RegImm, dst: RegImm, size: OperandSize);
+
+    /// Push the register to the stack, returning the offset
+    fn push(&mut self, src: Reg) -> u32;
 
     /// Finalize the assembly and return the result
     // NOTE Interim, debug approach

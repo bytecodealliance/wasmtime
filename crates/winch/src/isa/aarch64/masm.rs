@@ -28,6 +28,8 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
+    fn load(&mut self, src: Address, dst: Reg, size: OperandSize) {}
+
     fn sp_offset(&mut self) -> u32 {
         0u32
     }
@@ -45,6 +47,10 @@ impl Masm for MacroAssembler {
     }
 
     fn zero(&mut self, reg: Reg) {
+        todo!()
+    }
+
+    fn push(&mut self, reg: Reg) -> u32 {
         todo!()
     }
 }

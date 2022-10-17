@@ -18,6 +18,16 @@ impl Masm for MacroAssembler {
         self.asm.mov_rr(stack_pointer, frame_pointer);
     }
 
+    fn push(&mut self, reg: Reg) -> u32 {
+        self.asm.push_r(reg);
+        // In x64 the push instruction takes either
+        // 2 or 8 byets; in our case we're always
+        // assuming 8 bytes per push
+        self.increment_sp(8);
+
+        self.sp_offset
+    }
+
     fn reserve_stack(&mut self, bytes: u32) {
         if bytes == 0 {
             return;
@@ -53,6 +63,16 @@ impl Masm for MacroAssembler {
             OperandSize::S64 => {
                 self.asm.mov(src, dst);
             }
+        }
+    }
+
+    fn load(&mut self, src: Address, dst: Reg, size: OperandSize) {
+        let src = src.into();
+        let dst = dst.into();
+
+        match size {
+            OperandSize::S32 => self.asm.movl(src, dst),
+            OperandSize::S64 => self.asm.mov(src, dst),
         }
     }
 
@@ -185,6 +205,9 @@ impl Assembler {
                 Address::Base { base, imm } => self.mov_im(*op, *base, *imm),
             },
             (Operand::Imm(imm), Operand::Reg(reg)) => self.mov_ir(*imm, *reg),
+            (Operand::Mem(addr), Operand::Reg(reg)) => match addr {
+                Address::Base { base, imm } => self.mov_mr(*base, *imm, *reg),
+            },
             _ => panic!(
                 "Invalid operand combination for mov; src = {:?}; dst = {:?}",
                 src, dst
@@ -221,13 +244,26 @@ impl Assembler {
             format!("[{} + {}]", reg, disp)
         };
 
-        self.buffer.push(format!("mov {} {}", addr, imm));
+        self.buffer.push(format!("mov qword {}, {}", addr, imm));
     }
 
     pub fn mov_ir(&mut self, imm: i32, dst: Reg) {
         let reg = reg_name(dst, 8);
 
-        self.buffer.push(format!("mov {} {}", reg, imm));
+        self.buffer.push(format!("mov {}, {}", reg, imm));
+    }
+
+    pub fn mov_mr(&mut self, base: Reg, disp: u32, dst: Reg) {
+        let base = reg_name(base, 8);
+        let dst = reg_name(dst, 8);
+
+        let addr = if disp == 0 {
+            format!("[{}]", base)
+        } else {
+            format!("[{} + {}]", base, disp)
+        };
+
+        self.buffer.push(format!("mov {}, {}", dst, addr));
     }
 
     pub fn movl(&mut self, src: Operand, dst: Operand) {
@@ -247,6 +283,9 @@ impl Assembler {
                 Address::Base { base, imm } => self.movl_im(*op, *base, *imm),
             },
             (Operand::Imm(imm), Operand::Reg(reg)) => self.movl_ir(*imm, *reg),
+            (Operand::Mem(addr), Operand::Reg(reg)) => match addr {
+                Address::Base { base, imm } => self.movl_mr(*base, *imm, *reg),
+            },
 
             _ => panic!(
                 "Invalid operand combination for movl; src = {:?}; dst = {:?}",
@@ -276,7 +315,7 @@ impl Assembler {
     }
 
     pub fn movl_im(&mut self, imm: i32, base: Reg, disp: u32) {
-        let reg = reg_name(base, 4);
+        let reg = reg_name(base, 8);
 
         let addr = if disp == 0 {
             format!("[{}]", reg)
@@ -284,13 +323,26 @@ impl Assembler {
             format!("[{} + {}]", reg, disp)
         };
 
-        self.buffer.push(format!("mov {}, {}", addr, imm));
+        self.buffer.push(format!("mov dword {}, {}", addr, imm));
     }
 
     pub fn movl_ir(&mut self, imm: i32, dst: Reg) {
         let reg = reg_name(dst, 4);
 
         self.buffer.push(format!("mov {}, {}", reg, imm));
+    }
+
+    pub fn movl_mr(&mut self, base: Reg, disp: u32, dst: Reg) {
+        let base = reg_name(base, 8);
+        let dst = reg_name(dst, 4);
+
+        let addr = if disp == 0 {
+            format!("[{}]", base)
+        } else {
+            format!("[{} + {}]", base, disp)
+        };
+
+        self.buffer.push(format!("mov {}, {}", dst, addr));
     }
 
     pub fn sub_ir(&mut self, imm: u32, dst: Reg) {
@@ -301,6 +353,7 @@ impl Assembler {
     pub fn add(&mut self, src: Operand, dst: Operand) {
         match &(src, dst) {
             (Operand::Imm(imm), Operand::Reg(dst)) => self.add_ir(*imm, *dst),
+            (Operand::Reg(src), Operand::Reg(dst)) => self.add_rr(*src, *dst),
             _ => panic!(
                 "Invalid operand combination for add; src = {:?} dst = {:?}",
                 src, dst
@@ -314,9 +367,17 @@ impl Assembler {
         self.buffer.push(format!("add {}, {}", dst, imm));
     }
 
+    pub fn add_rr(&mut self, src: Reg, dst: Reg) {
+        let src = reg_name(src, 8);
+        let dst = reg_name(dst, 8);
+
+        self.buffer.push(format!("add {}, {}", dst, src));
+    }
+
     pub fn addl(&mut self, src: Operand, dst: Operand) {
         match &(src, dst) {
             (Operand::Imm(imm), Operand::Reg(dst)) => self.addl_ir(*imm, *dst),
+            (Operand::Reg(src), Operand::Reg(dst)) => self.addl_rr(*src, *dst),
             _ => panic!(
                 "Invalid operand combination for add; src = {:?} dst = {:?}",
                 src, dst
@@ -330,11 +391,18 @@ impl Assembler {
         self.buffer.push(format!("add {}, {}", dst, imm));
     }
 
+    pub fn addl_rr(&mut self, src: Reg, dst: Reg) {
+        let src = reg_name(src, 4);
+        let dst = reg_name(dst, 4);
+
+        self.buffer.push(format!("add {}, {}", dst, src));
+    }
+
     pub fn xorl_rr(&mut self, src: Reg, dst: Reg) {
         let src = reg_name(src, 4);
         let dst = reg_name(dst, 4);
 
-        self.buffer.push(format!("xor {} {}", dst, src));
+        self.buffer.push(format!("xor {}, {}", dst, src));
     }
 
     /// Return the emitted code

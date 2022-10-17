@@ -1,4 +1,5 @@
-use crate::isa::reg::Reg;
+use crate::{isa::reg::Reg, masm::MacroAssembler};
+use std::collections::VecDeque;
 
 /// Value definition to be used within the shadow stack
 #[derive(Debug)]
@@ -7,6 +8,10 @@ pub(crate) enum Val {
     I32(i32),
     /// A register
     Reg(Reg),
+    /// A local slot
+    Local(u32),
+    /// Offset to a memory location
+    Memory(u32),
 }
 
 impl Val {
@@ -18,6 +23,11 @@ impl Val {
     /// Create a new Reg value
     pub fn reg(r: Reg) -> Self {
         Self::Reg(r)
+    }
+
+    /// Create a new Local value
+    pub fn local(index: u32) -> Self {
+        Self::Local(index)
     }
 
     /// Check whether the value is a register
@@ -42,7 +52,7 @@ impl Val {
         }
     }
 
-    /// Check whether the value is a constant
+    /// Check whether the value is an i32 constant
     pub fn is_i32_const(&self) -> bool {
         match *self {
             Self::I32(_) => true,
@@ -52,9 +62,9 @@ impl Val {
 }
 
 /// The shadow stack used for compilation
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct Stack {
-    inner: std::collections::VecDeque<Val>,
+    inner: VecDeque<Val>,
 }
 
 impl Stack {
@@ -102,5 +112,10 @@ impl Stack {
             Some(v) => (v.is_reg() && v.get_reg() == reg).then(|| self.pop().unwrap().get_reg()),
             _ => None,
         }
+    }
+
+    /// Get a mutable reference to the inner stack representation
+    pub fn inner_mut(&mut self) -> &mut VecDeque<Val> {
+        &mut self.inner
     }
 }
