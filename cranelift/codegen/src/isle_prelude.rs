@@ -96,6 +96,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u64_uextend_u32(&mut self, x: u64) -> Option<u64> {
+            Some(x & 0xffff_ffff)
+        }
+
+        #[inline]
         fn ty_bits(&mut self, ty: Type) -> Option<u8> {
             use std::convert::TryInto;
             Some(ty.bits().try_into().unwrap())
