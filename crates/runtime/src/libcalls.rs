@@ -437,14 +437,9 @@ unsafe fn memory_atomic_notify(
     addr: *mut u8,
     _count: u32,
 ) -> Result<u32, TrapReason> {
-    let addr = addr as usize;
     let memory = MemoryIndex::from_u32(memory_index);
     let instance = (*vmctx).instance();
-    // this should never overflow since addr + 4 either hits a guard page
-    // or it's been validated to be in-bounds already. Double-check for now
-    // just to be sure.
-    let addr_to_check = addr.checked_add(4).unwrap();
-    validate_atomic_addr(instance, memory, addr_to_check)?;
+    validate_atomic_addr(instance, memory, addr, 4)?;
     Err(
         anyhow::anyhow!("unimplemented: wasm atomics (fn memory_atomic_notify) unsupported",)
             .into(),
@@ -459,13 +454,9 @@ unsafe fn memory_atomic_wait32(
     _expected: u32,
     _timeout: u64,
 ) -> Result<u32, TrapReason> {
-    let addr = addr as usize;
     let memory = MemoryIndex::from_u32(memory_index);
     let instance = (*vmctx).instance();
-    // see wasmtime_memory_atomic_notify for why this shouldn't overflow
-    // but we still double-check
-    let addr_to_check = addr.checked_add(4).unwrap();
-    validate_atomic_addr(instance, memory, addr_to_check)?;
+    validate_atomic_addr(instance, memory, addr, 4)?;
     Err(
         anyhow::anyhow!("unimplemented: wasm atomics (fn memory_atomic_wait32) unsupported",)
             .into(),
@@ -480,13 +471,9 @@ unsafe fn memory_atomic_wait64(
     _expected: u64,
     _timeout: u64,
 ) -> Result<u32, TrapReason> {
-    let addr = addr as usize;
     let memory = MemoryIndex::from_u32(memory_index);
     let instance = (*vmctx).instance();
-    // see wasmtime_memory_atomic_notify for why this shouldn't overflow
-    // but we still double-check
-    let addr_to_check = addr.checked_add(8).unwrap();
-    validate_atomic_addr(instance, memory, addr_to_check)?;
+    validate_atomic_addr(instance, memory, addr, 8)?;
     Err(
         anyhow::anyhow!("unimplemented: wasm atomics (fn memory_atomic_wait64) unsupported",)
             .into(),
@@ -505,9 +492,22 @@ unsafe fn memory_atomic_wait64(
 unsafe fn validate_atomic_addr(
     instance: &Instance,
     memory: MemoryIndex,
-    addr: usize,
+    addr: *const u8,
+    size: usize,
 ) -> Result<(), TrapCode> {
-    if addr > instance.get_memory(memory).current_length() {
+    let mem = instance.get_memory(memory);
+
+    let end_addr = (addr as usize).checked_add(size).unwrap();
+
+    if addr < mem.base {
+        return Err(TrapCode::HeapOutOfBounds);
+    }
+
+    if end_addr
+        >= (mem.base as usize)
+            .checked_add(mem.current_length())
+            .unwrap()
+    {
         return Err(TrapCode::HeapOutOfBounds);
     }
     Ok(())
