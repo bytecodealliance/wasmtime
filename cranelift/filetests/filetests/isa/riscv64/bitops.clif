@@ -315,28 +315,6 @@ block0(v0: i8):
 ;   mv a0,a3
 ;   ret
 
-function %bextend_b8() -> b32 {
-block0:
-    v1 = bconst.b8 true
-    v2 = bextend.b32 v1
-    return v2
-}
-
-; block0:
-;   li a0,-1
-;   ret
-
-function %bextend_b1() -> b32 {
-block0:
-    v1 = bconst.b1 true
-    v2 = bextend.b32 v1
-    return v2
-}
-
-; block0:
-;   li a0,-1
-;   ret
-
 function %bnot_i32(i32) -> i32 {
 block0(v0: i32):
     v1 = bnot v0

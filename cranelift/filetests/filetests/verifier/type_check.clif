@@ -10,9 +10,9 @@ function %entry_block_arg_type(i32) {
         return
 }
 
-function %incorrect_arg_type(i32, b1) -> i32 {
-    block0(v0: i32, v1: b1):
-        v2 = iadd v0, v1 ; error: arg 1 (v1) has type b1, expected i32
+function %incorrect_arg_type(i32, i8) -> i32 {
+    block0(v0: i32, v1: i8):
+        v2 = iadd v0, v1 ; error: arg 1 (v1) has type i8, expected i32
         return v2
 }
 

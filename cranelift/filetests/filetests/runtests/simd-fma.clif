@@ -29,16 +29,16 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 
 ;; The IEEE754 Standard does not make a lot of guarantees about what
 ;; comes out of NaN producing operations, we just check if its a NaN
-function %fma_is_nan_f32x4(f32x4, f32x4, f32x4) -> b1 {
+function %fma_is_nan_f32x4(f32x4, f32x4, f32x4) -> i8 {
 block0(v0: f32x4, v1: f32x4, v2: f32x4):
     v3 = fma v0, v1, v2
     v4 = fcmp ne v3, v3
     v5 = vall_true v4
     return v5
 }
-; run: %fma_is_nan_f32x4([Inf -Inf -Inf +NaN], [-Inf Inf -Inf 0x0.0], [Inf Inf -Inf 0x0.0]) == true
-; run: %fma_is_nan_f32x4([0x0.0 0x0.0 -NaN 0x0.0], [+NaN 0x0.0 0x0.0 -NaN], [0x0.0 +NaN 0x0.0 0x0.0]) == true
-; run: %fma_is_nan_f32x4([0x0.0 NaN NaN NaN], [0x0.0 NaN NaN NaN], [-NaN NaN NaN NaN]) == true
+; run: %fma_is_nan_f32x4([Inf -Inf -Inf +NaN], [-Inf Inf -Inf 0x0.0], [Inf Inf -Inf 0x0.0]) == 1
+; run: %fma_is_nan_f32x4([0x0.0 0x0.0 -NaN 0x0.0], [+NaN 0x0.0 0x0.0 -NaN], [0x0.0 +NaN 0x0.0 0x0.0]) == 1
+; run: %fma_is_nan_f32x4([0x0.0 NaN NaN NaN], [0x0.0 NaN NaN NaN], [-NaN NaN NaN NaN]) == 1
 
 
 
@@ -73,15 +73,15 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 
 ;; The IEEE754 Standard does not make a lot of guarantees about what
 ;; comes out of NaN producing operations, we just check if its a NaN
-function %fma_is_nan_f64x2(f64x2, f64x2, f64x2) -> b1 {
+function %fma_is_nan_f64x2(f64x2, f64x2, f64x2) -> i8 {
 block0(v0: f64x2, v1: f64x2, v2: f64x2):
     v3 = fma v0, v1, v2
     v4 = fcmp ne v3, v3
     v5 = vall_true v4
     return v5
 }
-; run: %fma_is_nan_f64x2([Inf -Inf], [-Inf Inf], [Inf Inf]) == true
-; run: %fma_is_nan_f64x2([-Inf +NaN], [-Inf 0x0.0], [-Inf 0x0.0]) == true
-; run: %fma_is_nan_f64x2([0x0.0 0x0.0], [+NaN 0x0.0], [0x0.0 +NaN]) == true
-; run: %fma_is_nan_f64x2([-NaN 0x0.0], [0x0.0 -NaN], [0x0.0 0x0.0]) == true
-; run: %fma_is_nan_f64x2([0x0.0 NaN], [0x0.0 NaN], [-NaN NaN]) == true
+; run: %fma_is_nan_f64x2([Inf -Inf], [-Inf Inf], [Inf Inf]) == 1
+; run: %fma_is_nan_f64x2([-Inf +NaN], [-Inf 0x0.0], [-Inf 0x0.0]) == 1
+; run: %fma_is_nan_f64x2([0x0.0 0x0.0], [+NaN 0x0.0], [0x0.0 +NaN]) == 1
+; run: %fma_is_nan_f64x2([-NaN 0x0.0], [0x0.0 -NaN], [0x0.0 0x0.0]) == 1
+; run: %fma_is_nan_f64x2([0x0.0 NaN], [0x0.0 NaN], [-NaN NaN]) == 1

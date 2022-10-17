@@ -90,10 +90,6 @@ impl TypeVar {
                 let bits = float_type as RangeBound;
                 builder.floats(bits..bits)
             }
-            LaneType::Bool(bool_type) => {
-                let bits = bool_type as RangeBound;
-                builder.bools(bits..bits)
-            }
         };
         TypeVar::new(name, doc, builder.build())
     }
@@ -171,10 +167,6 @@ impl TypeVar {
                     ts.floats.is_empty() || *ts.floats.iter().min().unwrap() > 32,
                     "can't halve all float types"
                 );
-                assert!(
-                    ts.bools.is_empty() || *ts.bools.iter().min().unwrap() > 8,
-                    "can't halve all boolean types"
-                );
             }
             DerivedFunc::DoubleWidth => {
                 assert!(
@@ -184,10 +176,6 @@ impl TypeVar {
                 assert!(
                     ts.floats.is_empty() || *ts.floats.iter().max().unwrap() < MAX_FLOAT_BITS,
                     "can't double all float types"
-                );
-                assert!(
-                    ts.bools.is_empty() || *ts.bools.iter().max().unwrap() < MAX_BITS,
-                    "can't double all boolean types"
                 );
             }
             DerivedFunc::HalfVector => {
@@ -212,10 +200,6 @@ impl TypeVar {
                     "can't halve all float types"
                 );
                 assert!(
-                    ts.bools.is_empty() || *ts.bools.iter().min().unwrap() > 8,
-                    "can't halve all boolean types"
-                );
-                assert!(
                     *ts.lanes.iter().max().unwrap() < MAX_LANES,
                     "can't double 256 lanes"
                 );
@@ -228,10 +212,6 @@ impl TypeVar {
                 assert!(
                     ts.floats.is_empty() || *ts.floats.iter().max().unwrap() < MAX_FLOAT_BITS,
                     "can't double all float types"
-                );
-                assert!(
-                    ts.bools.is_empty() || *ts.bools.iter().max().unwrap() < MAX_BITS,
-                    "can't double all boolean types"
                 );
                 assert!(
                     *ts.lanes.iter().min().unwrap() > 1,
@@ -404,7 +384,6 @@ pub(crate) struct TypeSet {
     pub dynamic_lanes: NumSet,
     pub ints: NumSet,
     pub floats: NumSet,
-    pub bools: NumSet,
     pub refs: NumSet,
     pub specials: Vec<SpecialType>,
 }
@@ -415,7 +394,6 @@ impl TypeSet {
         dynamic_lanes: NumSet,
         ints: NumSet,
         floats: NumSet,
-        bools: NumSet,
         refs: NumSet,
         specials: Vec<SpecialType>,
     ) -> Self {
@@ -424,7 +402,6 @@ impl TypeSet {
             dynamic_lanes,
             ints,
             floats,
-            bools,
             refs,
             specials,
         }
@@ -432,10 +409,8 @@ impl TypeSet {
 
     /// Return the number of concrete types represented by this typeset.
     pub fn size(&self) -> usize {
-        self.lanes.len()
-            * (self.ints.len() + self.floats.len() + self.bools.len() + self.refs.len())
-            + self.dynamic_lanes.len()
-                * (self.ints.len() + self.floats.len() + self.bools.len() + self.refs.len())
+        self.lanes.len() * (self.ints.len() + self.floats.len() + self.refs.len())
+            + self.dynamic_lanes.len() * (self.ints.len() + self.floats.len() + self.refs.len())
             + self.specials.len()
     }
 
@@ -467,13 +442,6 @@ impl TypeSet {
         copy.ints = NumSet::new();
         copy.floats = NumSet::new();
         copy.refs = NumSet::new();
-        if !(&self.lanes - &num_set![1]).is_empty() {
-            copy.bools = &self.ints | &self.floats;
-            copy.bools = &copy.bools | &self.bools;
-        }
-        if self.lanes.contains(&1) {
-            copy.bools.insert(1);
-        }
         copy
     }
 
@@ -482,7 +450,6 @@ impl TypeSet {
         let mut copy = self.clone();
         copy.ints = NumSet::from_iter(self.ints.iter().filter(|&&x| x > 8).map(|&x| x / 2));
         copy.floats = NumSet::from_iter(self.floats.iter().filter(|&&x| x > 32).map(|&x| x / 2));
-        copy.bools = NumSet::from_iter(self.bools.iter().filter(|&&x| x > 8).map(|&x| x / 2));
         copy.specials = Vec::new();
         copy
     }
@@ -496,13 +463,6 @@ impl TypeSet {
                 .iter()
                 .filter(|&&x| x < MAX_FLOAT_BITS)
                 .map(|&x| x * 2),
-        );
-        copy.bools = NumSet::from_iter(
-            self.bools
-                .iter()
-                .filter(|&&x| x < MAX_BITS)
-                .map(|&x| x * 2)
-                .filter(|x| legal_bool(*x)),
         );
         copy.specials = Vec::new();
         copy
@@ -551,9 +511,6 @@ impl TypeSet {
             for &bits in &self.floats {
                 ret.push(LaneType::float_from_bits(bits).by(num_lanes));
             }
-            for &bits in &self.bools {
-                ret.push(LaneType::bool_from_bits(bits).by(num_lanes));
-            }
             for &bits in &self.refs {
                 ret.push(ReferenceType::ref_from_bits(bits).into());
             }
@@ -564,9 +521,6 @@ impl TypeSet {
             }
             for &bits in &self.floats {
                 ret.push(LaneType::float_from_bits(bits).to_dynamic(num_lanes));
-            }
-            for &bits in &self.bools {
-                ret.push(LaneType::bool_from_bits(bits).to_dynamic(num_lanes));
             }
         }
         for &special in &self.specials {
@@ -612,12 +566,6 @@ impl fmt::Debug for TypeSet {
                 Vec::from_iter(self.floats.iter().map(|x| x.to_string())).join(", ")
             ));
         }
-        if !self.bools.is_empty() {
-            subsets.push(format!(
-                "bools={{{}}}",
-                Vec::from_iter(self.bools.iter().map(|x| x.to_string())).join(", ")
-            ));
-        }
         if !self.refs.is_empty() {
             subsets.push(format!(
                 "refs={{{}}}",
@@ -639,7 +587,6 @@ impl fmt::Debug for TypeSet {
 pub(crate) struct TypeSetBuilder {
     ints: Interval,
     floats: Interval,
-    bools: Interval,
     refs: Interval,
     includes_scalars: bool,
     simd_lanes: Interval,
@@ -652,7 +599,6 @@ impl TypeSetBuilder {
         Self {
             ints: Interval::None,
             floats: Interval::None,
-            bools: Interval::None,
             refs: Interval::None,
             includes_scalars: true,
             simd_lanes: Interval::None,
@@ -669,11 +615,6 @@ impl TypeSetBuilder {
     pub fn floats(mut self, interval: impl Into<Interval>) -> Self {
         assert!(self.floats == Interval::None);
         self.floats = interval.into();
-        self
-    }
-    pub fn bools(mut self, interval: impl Into<Interval>) -> Self {
-        assert!(self.bools == Interval::None);
-        self.bools = interval.into();
         self
     }
     pub fn refs(mut self, interval: impl Into<Interval>) -> Self {
@@ -704,17 +645,11 @@ impl TypeSetBuilder {
     pub fn build(self) -> TypeSet {
         let min_lanes = if self.includes_scalars { 1 } else { 2 };
 
-        let bools = range_to_set(self.bools.to_range(1..MAX_BITS, None))
-            .into_iter()
-            .filter(|x| legal_bool(*x))
-            .collect();
-
         TypeSet::new(
             range_to_set(self.simd_lanes.to_range(min_lanes..MAX_LANES, Some(1))),
             range_to_set(self.dynamic_simd_lanes.to_range(2..MAX_LANES, None)),
             range_to_set(self.ints.to_range(8..MAX_BITS, None)),
             range_to_set(self.floats.to_range(32..64, None)),
-            bools,
             range_to_set(self.refs.to_range(32..64, None)),
             self.specials,
         )
@@ -760,11 +695,6 @@ impl Into<Interval> for Range {
     }
 }
 
-fn legal_bool(bits: RangeBound) -> bool {
-    // Only allow legal bit widths for bool types.
-    bits == 1 || (bits >= 8 && bits <= MAX_BITS && bits.is_power_of_two())
-}
-
 /// Generates a set with all the powers of two included in the range.
 fn range_to_set(range: Option<Range>) -> NumSet {
     let mut set = NumSet::new();
@@ -791,21 +721,12 @@ fn test_typevar_builder() {
     assert_eq!(type_set.lanes, num_set![1]);
     assert!(type_set.floats.is_empty());
     assert_eq!(type_set.ints, num_set![8, 16, 32, 64, 128]);
-    assert!(type_set.bools.is_empty());
-    assert!(type_set.specials.is_empty());
-
-    let type_set = TypeSetBuilder::new().bools(Interval::All).build();
-    assert_eq!(type_set.lanes, num_set![1]);
-    assert!(type_set.floats.is_empty());
-    assert!(type_set.ints.is_empty());
-    assert_eq!(type_set.bools, num_set![1, 8, 16, 32, 64, 128]);
     assert!(type_set.specials.is_empty());
 
     let type_set = TypeSetBuilder::new().floats(Interval::All).build();
     assert_eq!(type_set.lanes, num_set![1]);
     assert_eq!(type_set.floats, num_set![32, 64]);
     assert!(type_set.ints.is_empty());
-    assert!(type_set.bools.is_empty());
     assert!(type_set.specials.is_empty());
 
     let type_set = TypeSetBuilder::new()
@@ -816,7 +737,6 @@ fn test_typevar_builder() {
     assert_eq!(type_set.lanes, num_set![2, 4, 8, 16, 32, 64, 128, 256]);
     assert_eq!(type_set.floats, num_set![32, 64]);
     assert!(type_set.ints.is_empty());
-    assert!(type_set.bools.is_empty());
     assert!(type_set.specials.is_empty());
 
     let type_set = TypeSetBuilder::new()
@@ -827,7 +747,6 @@ fn test_typevar_builder() {
     assert_eq!(type_set.lanes, num_set![1, 2, 4, 8, 16, 32, 64, 128, 256]);
     assert_eq!(type_set.floats, num_set![32, 64]);
     assert!(type_set.ints.is_empty());
-    assert!(type_set.bools.is_empty());
     assert!(type_set.specials.is_empty());
 
     let type_set = TypeSetBuilder::new()
@@ -839,12 +758,10 @@ fn test_typevar_builder() {
     assert_eq!(type_set.floats, num_set![32, 64]);
     assert!(type_set.dynamic_lanes.is_empty());
     assert!(type_set.ints.is_empty());
-    assert!(type_set.bools.is_empty());
     assert!(type_set.specials.is_empty());
 
     let type_set = TypeSetBuilder::new()
         .ints(Interval::All)
-        .bools(Interval::All)
         .floats(Interval::All)
         .dynamic_simd_lanes(Interval::All)
         .includes_scalars(false)
@@ -854,7 +771,6 @@ fn test_typevar_builder() {
         num_set![2, 4, 8, 16, 32, 64, 128, 256]
     );
     assert_eq!(type_set.ints, num_set![8, 16, 32, 64, 128]);
-    assert_eq!(type_set.bools, num_set![1, 8, 16, 32, 64, 128]);
     assert_eq!(type_set.floats, num_set![32, 64]);
     assert_eq!(type_set.lanes, num_set![1]);
     assert!(type_set.specials.is_empty());
@@ -871,14 +787,12 @@ fn test_typevar_builder() {
     assert_eq!(type_set.floats, num_set![32, 64]);
     assert_eq!(type_set.lanes, num_set![1]);
     assert!(type_set.ints.is_empty());
-    assert!(type_set.bools.is_empty());
     assert!(type_set.specials.is_empty());
 
     let type_set = TypeSetBuilder::new().ints(16..64).build();
     assert_eq!(type_set.lanes, num_set![1]);
     assert_eq!(type_set.ints, num_set![16, 32, 64]);
     assert!(type_set.floats.is_empty());
-    assert!(type_set.bools.is_empty());
     assert!(type_set.specials.is_empty());
 }
 
@@ -895,17 +809,6 @@ fn test_dynamic_to_vector() {
         TypeSetBuilder::new()
             .simd_lanes(2..128)
             .ints(Interval::All)
-            .build()
-    );
-    assert_eq!(
-        TypeSetBuilder::new()
-            .dynamic_simd_lanes(Interval::All)
-            .bools(Interval::All)
-            .build()
-            .dynamic_to_vector(),
-        TypeSetBuilder::new()
-            .simd_lanes(2..128)
-            .bools(Interval::All)
             .build()
     );
     assert_eq!(
@@ -944,20 +847,6 @@ fn test_as_bool() {
         a.lane_of(),
         TypeSetBuilder::new().ints(8..8).floats(32..32).build()
     );
-
-    // Test as_bool with disjoint intervals.
-    let mut a_as_bool = TypeSetBuilder::new().simd_lanes(2..8).build();
-    a_as_bool.bools = num_set![8, 32];
-    assert_eq!(a.as_bool(), a_as_bool);
-
-    let b = TypeSetBuilder::new()
-        .simd_lanes(1..8)
-        .ints(8..8)
-        .floats(32..32)
-        .build();
-    let mut b_as_bool = TypeSetBuilder::new().simd_lanes(1..8).build();
-    b_as_bool.bools = num_set![1, 8, 32];
-    assert_eq!(b.as_bool(), b_as_bool);
 }
 
 #[test]
@@ -1002,14 +891,6 @@ fn test_forward_images() {
         TypeSetBuilder::new().floats(32..64).build().half_width(),
         TypeSetBuilder::new().floats(32..32).build()
     );
-    assert_eq!(
-        TypeSetBuilder::new().bools(1..8).build().half_width(),
-        empty_set
-    );
-    assert_eq!(
-        TypeSetBuilder::new().bools(1..32).build().half_width(),
-        TypeSetBuilder::new().bools(8..16).build()
-    );
 
     // Double width.
     assert_eq!(
@@ -1027,14 +908,6 @@ fn test_forward_images() {
     assert_eq!(
         TypeSetBuilder::new().floats(32..64).build().double_width(),
         TypeSetBuilder::new().floats(64..64).build()
-    );
-    assert_eq!(
-        TypeSetBuilder::new().bools(1..16).build().double_width(),
-        TypeSetBuilder::new().bools(16..32).build()
-    );
-    assert_eq!(
-        TypeSetBuilder::new().bools(32..64).build().double_width(),
-        TypeSetBuilder::new().bools(64..128).build()
     );
 }
 
@@ -1068,10 +941,6 @@ fn test_typeset_singleton() {
     assert_eq!(
         TypeSetBuilder::new().floats(64..64).build().get_singleton(),
         ValueType::Lane(shared_types::Float::F64.into())
-    );
-    assert_eq!(
-        TypeSetBuilder::new().bools(1..1).build().get_singleton(),
-        ValueType::Lane(shared_types::Bool::B1.into())
     );
     assert_eq!(
         TypeSetBuilder::new()
@@ -1110,7 +979,6 @@ fn test_typevar_singleton() {
     assert_eq!(typevar.name, "i32");
     assert_eq!(typevar.type_set.ints, num_set![32]);
     assert!(typevar.type_set.floats.is_empty());
-    assert!(typevar.type_set.bools.is_empty());
     assert!(typevar.type_set.specials.is_empty());
     assert_eq!(typevar.type_set.lanes, num_set![1]);
 
@@ -1123,6 +991,5 @@ fn test_typevar_singleton() {
     assert!(typevar.type_set.ints.is_empty());
     assert_eq!(typevar.type_set.floats, num_set![32]);
     assert_eq!(typevar.type_set.lanes, num_set![4]);
-    assert!(typevar.type_set.bools.is_empty());
     assert!(typevar.type_set.specials.is_empty());
 }

@@ -762,9 +762,6 @@ fn const_for_type<'f, T: InstBuilder<'f>>(mut builder: T, ty: ir::Type) -> &'sta
     } else if ty == F64 {
         builder.f64const(0.0);
         "f64const"
-    } else if ty.is_bool() {
-        builder.bconst(ty, false);
-        "bconst"
     } else if ty.is_ref() {
         builder.null(ty);
         "null"

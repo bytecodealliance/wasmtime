@@ -34,16 +34,16 @@ block0:
 }
 ; run: %shuffle_in_same_place() == [0 1 2 3]
 
-function %shuffle_b32x4_to_all_true() -> i32x4 {
+function %shuffle_i32x4_to_all_true() -> i32x4 {
 block0:
-    v1 = vconst.b32x4 [true false true false]
-    v2 = raw_bitcast.b8x16 v1 ; we have to cast because shuffle is type-limited to Tx16
+    v1 = vconst.i32x4 [-1 0 -1 0]
+    v2 = raw_bitcast.i8x16 v1 ; we have to cast because shuffle is type-limited to Tx16
     ; pair up the true values to make the entire vector true
     v3 = shuffle v2, v2, [0 1 2 3 0 1 2 3 8 9 10 11 8 9 10 11]
-    v4 = raw_bitcast.i32x4 v3 ; TODO store.b32x4 is unavailable; see https://github.com/bytecodealliance/wasmtime/issues/2237
+    v4 = raw_bitcast.i32x4 v3 ; TODO store.i32x4 is unavailable; see https://github.com/bytecodealliance/wasmtime/issues/2237
     return v4
 }
-; run: %shuffle_b32x4_to_all_true() == [0xffffffff 0xffffffff 0xffffffff 0xffffffff]
+; run: %shuffle_i32x4_to_all_true() == [0xffffffff 0xffffffff 0xffffffff 0xffffffff]
 
 
 
@@ -95,15 +95,15 @@ block0(v1: f64x2, v2: f64):
 
 ;; extractlane
 
-function %extractlane_b8x16() -> i8 {
+function %extractlane_i8x16() -> i8 {
 block0:
-    v1 = vconst.b8x16 [false false false false false false false false false false true false false
-    false false false]
+    v1 = vconst.i8x16 [0 0 0 0 0 0 0 0 0 0 -1 0 0
+    0 0 0]
     v2 = extractlane v1, 10
     v3 = raw_bitcast.i8 v2
     return v3
 }
-; run: %extractlane_b8x16_last() == 0xff
+; run: %extractlane_i8x16_last() == 0xff
 
 function %extractlane_i16x8_second(i16x8) -> i16 {
 block0(v0: i16x8):
@@ -119,7 +119,7 @@ block0(v0: f32x4):
 }
 ; run: %extractlane_f32x4_last([0x00.00 0x00.00 0x00.00 0x42.42]) == 0x42.42
 
-function %extractlane_i32_with_vector_reuse() -> b1 {
+function %extractlane_i32_with_vector_reuse() -> i8 {
 block0:
     v0 = iconst.i32 42
     v1 = iconst.i32 99
@@ -138,7 +138,7 @@ block0:
 }
 ; run
 
-function %extractlane_f32_with_vector_reuse() -> b1 {
+function %extractlane_f32_with_vector_reuse() -> i8 {
 block0:
     v0 = f32const 0x42.42
     v1 = f32const 0x99.99
@@ -161,7 +161,7 @@ block0:
 
 ;; splat
 
-function %splat_i64x2() -> b1 {
+function %splat_i64x2() -> i8 {
 block0:
     v0 = iconst.i64 -1
     v1 = splat.i64x2 v0

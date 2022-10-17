@@ -260,13 +260,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // For integer-typed values, we always load a full 64 bits (and we always spill a full 64
         // bits as well -- see `Inst::store()`).
         let ty = match ty {
-            types::B1
-            | types::B8
-            | types::I8
-            | types::B16
-            | types::I16
-            | types::B32
-            | types::I32 => types::I64,
+            types::I8 | types::I16 | types::I32 => types::I64,
             _ => ty,
         };
         Inst::load(ty, mem, into_reg, ExtKind::None)

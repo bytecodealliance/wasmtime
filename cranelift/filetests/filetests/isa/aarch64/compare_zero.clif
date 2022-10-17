@@ -2,7 +2,7 @@ test compile precise-output
 set unwind_info=false
 target aarch64
 
-function %f0(i8x16) -> b8x16 {
+function %f0(i8x16) -> i8x16 {
 block0(v0: i8x16):
   v1 = iconst.i8 0
   v2 = splat.i8x16 v1
@@ -14,7 +14,7 @@ block0(v0: i8x16):
 ;   cmeq v0.16b, v0.16b, #0
 ;   ret
 
-function %f0_vconst(i8x16) -> b8x16 {
+function %f0_vconst(i8x16) -> i8x16 {
 block0(v0: i8x16):
   v1 = vconst.i8x16 0x00
   v2 = icmp eq v0, v1
@@ -25,7 +25,7 @@ block0(v0: i8x16):
 ;   cmeq v0.16b, v0.16b, #0
 ;   ret
 
-function %f1(i16x8) -> b16x8 {
+function %f1(i16x8) -> i16x8 {
 block0(v0: i16x8):
   v1 = iconst.i16 0
   v2 = splat.i16x8 v1
@@ -37,7 +37,7 @@ block0(v0: i16x8):
 ;   cmeq v0.8h, v0.8h, #0
 ;   ret
 
-function %f1_vconst(i16x8) -> b16x8 {
+function %f1_vconst(i16x8) -> i16x8 {
 block0(v0: i16x8):
   v1 = vconst.i16x8 0x00
   v2 = icmp eq v1, v0
@@ -48,7 +48,7 @@ block0(v0: i16x8):
 ;   cmeq v0.8h, v0.8h, #0
 ;   ret
 
-function %f2(i32x4) -> b32x4 {
+function %f2(i32x4) -> i32x4 {
 block0(v0: i32x4):
   v1 = iconst.i32 0
   v2 = splat.i32x4 v1
@@ -61,7 +61,7 @@ block0(v0: i32x4):
 ;   mvn v0.16b, v3.16b
 ;   ret
 
-function %f2_vconst(i32x4) -> b32x4 {
+function %f2_vconst(i32x4) -> i32x4 {
 block0(v0: i32x4):
   v1 = vconst.i32x4 0x00
   v2 = icmp ne v0, v1
@@ -73,7 +73,7 @@ block0(v0: i32x4):
 ;   mvn v0.16b, v3.16b
 ;   ret
 
-function %f3(i64x2) -> b64x2 {
+function %f3(i64x2) -> i64x2 {
 block0(v0: i64x2):
   v1 = iconst.i64 0
   v2 = splat.i64x2 v1
@@ -86,7 +86,7 @@ block0(v0: i64x2):
 ;   mvn v0.16b, v3.16b
 ;   ret
 
-function %f3_vconst(i64x2) -> b64x2 {
+function %f3_vconst(i64x2) -> i64x2 {
 block0(v0: i64x2):
   v1 = vconst.i64x2 0x00
   v2 = icmp ne v1, v0
@@ -98,7 +98,7 @@ block0(v0: i64x2):
 ;   mvn v0.16b, v3.16b
 ;   ret
 
-function %f4(i8x16) -> b8x16 {
+function %f4(i8x16) -> i8x16 {
 block0(v0: i8x16):
   v1 = iconst.i8 0
   v2 = splat.i8x16 v1
@@ -110,7 +110,7 @@ block0(v0: i8x16):
 ;   cmle v0.16b, v0.16b, #0
 ;   ret
 
-function %f4_vconst(i8x16) -> b8x16 {
+function %f4_vconst(i8x16) -> i8x16 {
 block0(v0: i8x16):
   v1 = vconst.i8x16 0x00
   v2 = icmp sle v0, v1
@@ -121,7 +121,7 @@ block0(v0: i8x16):
 ;   cmle v0.16b, v0.16b, #0
 ;   ret
 
-function %f5(i16x8) -> b16x8 {
+function %f5(i16x8) -> i16x8 {
 block0(v0: i16x8):
   v1 = iconst.i16 0
   v2 = splat.i16x8 v1
@@ -133,7 +133,7 @@ block0(v0: i16x8):
 ;   cmge v0.8h, v0.8h, #0
 ;   ret
 
-function %f5_vconst(i16x8) -> b16x8 {
+function %f5_vconst(i16x8) -> i16x8 {
 block0(v0: i16x8):
   v1 = vconst.i16x8 0x00
   v2 = icmp sle v1, v0
@@ -144,7 +144,7 @@ block0(v0: i16x8):
 ;   cmge v0.8h, v0.8h, #0
 ;   ret
 
-function %f6(i32x4) -> b32x4 {
+function %f6(i32x4) -> i32x4 {
 block0(v0: i32x4):
   v1 = iconst.i32 0
   v2 = splat.i32x4 v1
@@ -156,7 +156,7 @@ block0(v0: i32x4):
 ;   cmge v0.4s, v0.4s, #0
 ;   ret
 
-function %f6_vconst(i32x4) -> b32x4 {
+function %f6_vconst(i32x4) -> i32x4 {
 block0(v0: i32x4):
   v1 = vconst.i32x4 0x00
   v2 = icmp sge v0, v1
@@ -167,7 +167,7 @@ block0(v0: i32x4):
 ;   cmge v0.4s, v0.4s, #0
 ;   ret
 
-function %f7(i64x2) -> b64x2 {
+function %f7(i64x2) -> i64x2 {
 block0(v0: i64x2):
   v1 = iconst.i64 0
   v2 = splat.i64x2 v1
@@ -179,7 +179,7 @@ block0(v0: i64x2):
 ;   cmle v0.2d, v0.2d, #0
 ;   ret
 
-function %f7_vconst(i64x2) -> b64x2 {
+function %f7_vconst(i64x2) -> i64x2 {
 block0(v0: i64x2):
   v1 = vconst.i64x2 0x00
   v2 = icmp sge v1, v0
@@ -190,7 +190,7 @@ block0(v0: i64x2):
 ;   cmle v0.2d, v0.2d, #0
 ;   ret
 
-function %f8(i8x16) -> b8x16 {
+function %f8(i8x16) -> i8x16 {
 block0(v0: i8x16):
   v1 = iconst.i8 0
   v2 = splat.i8x16 v1
@@ -202,7 +202,7 @@ block0(v0: i8x16):
 ;   cmlt v0.16b, v0.16b, #0
 ;   ret
 
-function %f8_vconst(i8x16) -> b8x16 {
+function %f8_vconst(i8x16) -> i8x16 {
 block0(v0: i8x16):
   v1 = vconst.i8x16 0x00
   v2 = icmp slt v0, v1
@@ -213,7 +213,7 @@ block0(v0: i8x16):
 ;   cmlt v0.16b, v0.16b, #0
 ;   ret
 
-function %f9(i16x8) -> b16x8 {
+function %f9(i16x8) -> i16x8 {
 block0(v0: i16x8):
   v1 = iconst.i16 0
   v2 = splat.i16x8 v1
@@ -225,7 +225,7 @@ block0(v0: i16x8):
 ;   cmgt v0.8h, v0.8h, #0
 ;   ret
 
-function %f9_vconst(i16x8) -> b16x8 {
+function %f9_vconst(i16x8) -> i16x8 {
 block0(v0: i16x8):
   v1 = vconst.i16x8 0x00
   v2 = icmp slt v1, v0
@@ -236,7 +236,7 @@ block0(v0: i16x8):
 ;   cmgt v0.8h, v0.8h, #0
 ;   ret
 
-function %f10(i32x4) -> b32x4 {
+function %f10(i32x4) -> i32x4 {
 block0(v0: i32x4):
   v1 = iconst.i32 0
   v2 = splat.i32x4 v1
@@ -248,7 +248,7 @@ block0(v0: i32x4):
 ;   cmgt v0.4s, v0.4s, #0
 ;   ret
 
-function %f10_vconst(i32x4) -> b32x4 {
+function %f10_vconst(i32x4) -> i32x4 {
 block0(v0: i32x4):
   v1 = vconst.i32x4 0x00
   v2 = icmp sgt v0, v1
@@ -259,7 +259,7 @@ block0(v0: i32x4):
 ;   cmgt v0.4s, v0.4s, #0
 ;   ret
 
-function %f11(i64x2) -> b64x2 {
+function %f11(i64x2) -> i64x2 {
 block0(v0: i64x2):
   v1 = iconst.i64 0
   v2 = splat.i64x2 v1
@@ -271,7 +271,7 @@ block0(v0: i64x2):
 ;   cmlt v0.2d, v0.2d, #0
 ;   ret
 
-function %f11_vconst(i64x2) -> b64x2 {
+function %f11_vconst(i64x2) -> i64x2 {
 block0(v0: i64x2):
   v1 = vconst.i64x2 0x00
   v2 = icmp sgt v1, v0
@@ -282,7 +282,7 @@ block0(v0: i64x2):
 ;   cmlt v0.2d, v0.2d, #0
 ;   ret
 
-function %f12(f32x4) -> b32x4 {
+function %f12(f32x4) -> i32x4 {
 block0(v0: f32x4):
   v1 = f32const 0.0
   v2 = splat.f32x4 v1
@@ -294,7 +294,7 @@ block0(v0: f32x4):
 ;   fcmeq v0.4s, v0.4s, #0.0
 ;   ret
 
-function %f12_vconst(f32x4) -> b32x4 {
+function %f12_vconst(f32x4) -> i32x4 {
 block0(v0: f32x4):
   v1 = vconst.f32x4 [0.0 0.0 0.0 0.0]
   v2 = fcmp eq v0, v1
@@ -305,7 +305,7 @@ block0(v0: f32x4):
 ;   fcmeq v0.4s, v0.4s, #0.0
 ;   ret
 
-function %f13(f64x2) -> b64x2 {
+function %f13(f64x2) -> i64x2 {
 block0(v0: f64x2):
   v1 = f64const 0.0
   v2 = splat.f64x2 v1
@@ -317,7 +317,7 @@ block0(v0: f64x2):
 ;   fcmeq v0.2d, v0.2d, #0.0
 ;   ret
 
-function %f13_vconst(f64x2) -> b64x2 {
+function %f13_vconst(f64x2) -> i64x2 {
 block0(v0: f64x2):
   v1 = vconst.f64x2 [0.0 0.0]
   v2 = fcmp eq v1, v0
@@ -328,7 +328,7 @@ block0(v0: f64x2):
 ;   fcmeq v0.2d, v0.2d, #0.0
 ;   ret
 
-function %f14(f64x2) -> b64x2 {
+function %f14(f64x2) -> i64x2 {
 block0(v0: f64x2):
   v1 = f64const 0.0
   v2 = splat.f64x2 v1
@@ -341,7 +341,7 @@ block0(v0: f64x2):
 ;   mvn v0.16b, v3.16b
 ;   ret
 
-function %f14_vconst(f64x2) -> b64x2 {
+function %f14_vconst(f64x2) -> i64x2 {
 block0(v0: f64x2):
   v1 = vconst.f64x2 [0.0 0.0]
   v2 = fcmp ne v0, v1
@@ -353,7 +353,7 @@ block0(v0: f64x2):
 ;   mvn v0.16b, v3.16b
 ;   ret
 
-function %f15(f32x4) -> b32x4 {
+function %f15(f32x4) -> i32x4 {
 block0(v0: f32x4):
   v1 = f32const 0.0
   v2 = splat.f32x4 v1
@@ -366,7 +366,7 @@ block0(v0: f32x4):
 ;   mvn v0.16b, v3.16b
 ;   ret
 
-function %f15_vconst(f32x4) -> b32x4 {
+function %f15_vconst(f32x4) -> i32x4 {
 block0(v0: f32x4):
   v1 = vconst.f32x4 [0.0 0.0 0.0 0.0]
   v2 = fcmp ne v1, v0
@@ -378,7 +378,7 @@ block0(v0: f32x4):
 ;   mvn v0.16b, v3.16b
 ;   ret
 
-function %f16(f32x4) -> b32x4 {
+function %f16(f32x4) -> i32x4 {
 block0(v0: f32x4):
   v1 = f32const 0.0
   v2 = splat.f32x4 v1
@@ -390,7 +390,7 @@ block0(v0: f32x4):
 ;   fcmle v0.4s, v0.4s, #0.0
 ;   ret
 
-function %f16_vconst(f32x4) -> b32x4 {
+function %f16_vconst(f32x4) -> i32x4 {
 block0(v0: f32x4):
   v1 = vconst.f32x4 [0.0 0.0 0.0 0.0]
   v2 = fcmp le v0, v1
@@ -401,7 +401,7 @@ block0(v0: f32x4):
 ;   fcmle v0.4s, v0.4s, #0.0
 ;   ret
 
-function %f17(f64x2) -> b64x2 {
+function %f17(f64x2) -> i64x2 {
 block0(v0: f64x2):
   v1 = f64const 0.0
   v2 = splat.f64x2 v1
@@ -413,7 +413,7 @@ block0(v0: f64x2):
 ;   fcmge v0.2d, v0.2d, #0.0
 ;   ret
 
-function %f17_vconst(f64x2) -> b64x2 {
+function %f17_vconst(f64x2) -> i64x2 {
 block0(v0: f64x2):
   v1 = vconst.f64x2 [0.0 0.0]
   v2 = fcmp le v1, v0
@@ -424,7 +424,7 @@ block0(v0: f64x2):
 ;   fcmge v0.2d, v0.2d, #0.0
 ;   ret
 
-function %f18(f64x2) -> b64x2 {
+function %f18(f64x2) -> i64x2 {
 block0(v0: f64x2):
   v1 = f64const 0.0
   v2 = splat.f64x2 v1
@@ -436,7 +436,7 @@ block0(v0: f64x2):
 ;   fcmge v0.2d, v0.2d, #0.0
 ;   ret
 
-function %f18_vconst(f64x2) -> b64x2 {
+function %f18_vconst(f64x2) -> i64x2 {
 block0(v0: f64x2):
   v1 = vconst.f64x2 [0.0 0.0]
   v2 = fcmp ge v0, v1
@@ -447,7 +447,7 @@ block0(v0: f64x2):
 ;   fcmge v0.2d, v0.2d, #0.0
 ;   ret
 
-function %f19(f32x4) -> b32x4 {
+function %f19(f32x4) -> i32x4 {
 block0(v0: f32x4):
   v1 = f32const 0.0
   v2 = splat.f32x4 v1
@@ -459,7 +459,7 @@ block0(v0: f32x4):
 ;   fcmle v0.4s, v0.4s, #0.0
 ;   ret
 
-function %f19_vconst(f32x4) -> b32x4 {
+function %f19_vconst(f32x4) -> i32x4 {
 block0(v0: f32x4):
   v1 = vconst.f32x4 [0.0 0.0 0.0 0.0]
   v2 = fcmp ge v1, v0
@@ -470,7 +470,7 @@ block0(v0: f32x4):
 ;   fcmle v0.4s, v0.4s, #0.0
 ;   ret
 
-function %f20(f32x4) -> b32x4 {
+function %f20(f32x4) -> i32x4 {
 block0(v0: f32x4):
   v1 = f32const 0.0
   v2 = splat.f32x4 v1
@@ -482,7 +482,7 @@ block0(v0: f32x4):
 ;   fcmlt v0.4s, v0.4s, #0.0
 ;   ret
 
-function %f20_vconst(f32x4) -> b32x4 {
+function %f20_vconst(f32x4) -> i32x4 {
 block0(v0: f32x4):
   v1 = vconst.f32x4 [0.0 0.0 0.0 0.0]
   v2 = fcmp lt v0, v1
@@ -493,7 +493,7 @@ block0(v0: f32x4):
 ;   fcmlt v0.4s, v0.4s, #0.0
 ;   ret
 
-function %f21(f64x2) -> b64x2 {
+function %f21(f64x2) -> i64x2 {
 block0(v0: f64x2):
   v1 = f64const 0.0
   v2 = splat.f64x2 v1
@@ -505,7 +505,7 @@ block0(v0: f64x2):
 ;   fcmgt v0.2d, v0.2d, #0.0
 ;   ret
 
-function %f21_vconst(f64x2) -> b64x2 {
+function %f21_vconst(f64x2) -> i64x2 {
 block0(v0: f64x2):
   v1 = vconst.f64x2 [0.0 0.0]
   v2 = fcmp lt v1, v0
@@ -516,7 +516,7 @@ block0(v0: f64x2):
 ;   fcmgt v0.2d, v0.2d, #0.0
 ;   ret
 
-function %f22(f64x2) -> b64x2 {
+function %f22(f64x2) -> i64x2 {
 block0(v0: f64x2):
   v1 = f64const 0.0
   v2 = splat.f64x2 v1
@@ -528,7 +528,7 @@ block0(v0: f64x2):
 ;   fcmgt v0.2d, v0.2d, #0.0
 ;   ret
 
-function %f22_vconst(f64x2) -> b64x2 {
+function %f22_vconst(f64x2) -> i64x2 {
 block0(v0: f64x2):
   v1 = vconst.f64x2 [0.0 0.0]
   v2 = fcmp gt v0, v1
@@ -539,7 +539,7 @@ block0(v0: f64x2):
 ;   fcmgt v0.2d, v0.2d, #0.0
 ;   ret
 
-function %f23(f32x4) -> b32x4 {
+function %f23(f32x4) -> i32x4 {
 block0(v0: f32x4):
   v1 = f32const 0.0
   v2 = splat.f32x4 v1
@@ -551,7 +551,7 @@ block0(v0: f32x4):
 ;   fcmlt v0.4s, v0.4s, #0.0
 ;   ret
 
-function %f23_vconst(f32x4) -> b32x4 {
+function %f23_vconst(f32x4) -> i32x4 {
 block0(v0: f32x4):
   v1 = vconst.f32x4 [0.0 0.0 0.0 0.0]
   v2 = fcmp gt v1, v0

@@ -1029,7 +1029,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I32Eqz | Operator::I64Eqz => {
             let arg = state.pop1();
             let val = builder.ins().icmp_imm(IntCC::Equal, arg, 0);
-            state.push1(builder.ins().bint(I32, val));
+            state.push1(builder.ins().uextend(I32, val));
         }
         Operator::I32Eq | Operator::I64Eq => translate_icmp(IntCC::Equal, builder, state),
         Operator::F32Eq | Operator::F64Eq => translate_fcmp(FloatCC::Equal, builder, state),
@@ -1653,7 +1653,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::V128AnyTrue => {
             let a = pop1_with_bitcast(state, type_of(op), builder);
             let bool_result = builder.ins().vany_true(a);
-            state.push1(builder.ins().bint(I32, bool_result))
+            state.push1(builder.ins().uextend(I32, bool_result))
         }
         Operator::I8x16AllTrue
         | Operator::I16x8AllTrue
@@ -1661,7 +1661,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64x2AllTrue => {
             let a = pop1_with_bitcast(state, type_of(op), builder);
             let bool_result = builder.ins().vall_true(a);
-            state.push1(builder.ins().bint(I32, bool_result))
+            state.push1(builder.ins().uextend(I32, bool_result))
         }
         Operator::I8x16Bitmask
         | Operator::I16x8Bitmask
@@ -2433,16 +2433,8 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
-    let mut val = state.pop1();
-    let mut val_ty = builder.func.dfg.value_type(val);
-
-    // Boolean-vector types don't validate with a `store` instruction, so
-    // bitcast them to a vector type which is compatible with the store
-    // instruction.
-    if val_ty.is_vector() && val_ty.lane_type().is_bool() {
-        val = builder.ins().raw_bitcast(I8X16, val);
-        val_ty = I8X16;
-    }
+    let val = state.pop1();
+    let val_ty = builder.func.dfg.value_type(val);
 
     let (flags, base, offset) =
         prepare_addr(memarg, mem_op_size(opcode, val_ty), builder, state, environ)?;
@@ -2465,7 +2457,7 @@ fn mem_op_size(opcode: ir::Opcode, ty: Type) -> u32 {
 fn translate_icmp(cc: IntCC, builder: &mut FunctionBuilder, state: &mut FuncTranslationState) {
     let (arg0, arg1) = state.pop2();
     let val = builder.ins().icmp(cc, arg0, arg1);
-    state.push1(builder.ins().bint(I32, val));
+    state.push1(builder.ins().uextend(I32, val));
 }
 
 fn translate_atomic_rmw<FE: FuncEnvironment + ?Sized>(
@@ -2644,7 +2636,7 @@ fn translate_vector_icmp(
 fn translate_fcmp(cc: FloatCC, builder: &mut FunctionBuilder, state: &mut FuncTranslationState) {
     let (arg0, arg1) = state.pop2();
     let val = builder.ins().fcmp(cc, arg0, arg1);
-    state.push1(builder.ins().bint(I32, val));
+    state.push1(builder.ins().uextend(I32, val));
 }
 
 fn translate_vector_fcmp(
@@ -2919,7 +2911,7 @@ fn optionally_bitcast_vector(
 #[inline(always)]
 fn is_non_canonical_v128(ty: ir::Type) -> bool {
     match ty {
-        B8X16 | B16X8 | B32X4 | B64X2 | I64X2 | I32X4 | I16X8 | F32X4 | F64X2 => true,
+        I64X2 | I32X4 | I16X8 | F32X4 | F64X2 => true,
         _ => false,
     }
 }

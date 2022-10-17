@@ -6,8 +6,8 @@ target riscv64
 ; This is a regression test for https://github.com/bytecodealliance/wasmtime/issues/4996.
 function %issue4996() -> i128, i64 system_v {
     block0:
-        v5 = bconst.b1 false
-        brz v5, block3  ; v5 = false
+        v5 = iconst.i8 0
+        brz v5, block3  ; v5 = 0
         jump block1
     block1:
         v12 = iconst.i64 0

@@ -3,108 +3,108 @@ test run
 target aarch64
 ; `true{if,ff}` not implemented on x86_64, and panics on s390x.
 
-function %trueif_i8_eq(i8, i8) -> b1 {
+function %trueif_i8_eq(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
   v2 = ifcmp v0, v1
   v3 = trueif eq v2
   return v3
 }
 
-; run: %trueif_i8_eq(42, 42) == true
-; run: %trueif_i8_eq(-1, 255) == true
-; run: %trueif_i8_eq(255, 0) == false
-; run: %trueif_i8_eq(32, 64) == false
+; run: %trueif_i8_eq(42, 42) == 1
+; run: %trueif_i8_eq(-1, 255) == 1
+; run: %trueif_i8_eq(255, 0) == 0
+; run: %trueif_i8_eq(32, 64) == 0
 
-function %trueif_i16_eq(i16, i16) -> b1 {
+function %trueif_i16_eq(i16, i16) -> i8 {
 block0(v0: i16, v1: i16):
   v2 = ifcmp v0, v1
   v3 = trueif eq v2
   return v3
 }
 
-; run: %trueif_i16_eq(42, 42) == true
-; run: %trueif_i16_eq(-1, 65535) == true
-; run: %trueif_i16_eq(65535, 0) == false
-; run: %trueif_i16_eq(32, 64) == false
+; run: %trueif_i16_eq(42, 42) == 1
+; run: %trueif_i16_eq(-1, 65535) == 1
+; run: %trueif_i16_eq(65535, 0) == 0
+; run: %trueif_i16_eq(32, 64) == 0
 
-function %trueif_i32_eq(i32, i32) -> b1 {
+function %trueif_i32_eq(i32, i32) -> i8 {
 block0(v0: i32, v1: i32):
   v2 = ifcmp v0, v1
   v3 = trueif eq v2
   return v3
 }
 
-; run: %trueif_i32_eq(42, 42) == true
-; run: %trueif_i32_eq(-1, 4294967295) == true
-; run: %trueif_i32_eq(4294967295, 0) == false
-; run: %trueif_i32_eq(32, 64) == false
+; run: %trueif_i32_eq(42, 42) == 1
+; run: %trueif_i32_eq(-1, 4294967295) == 1
+; run: %trueif_i32_eq(4294967295, 0) == 0
+; run: %trueif_i32_eq(32, 64) == 0
 
-function %trueif_i64_eq(i64, i64) -> b1 {
+function %trueif_i64_eq(i64, i64) -> i8 {
 block0(v0: i64, v1: i64):
   v2 = ifcmp v0, v1
   v3 = trueif eq v2
   return v3
 }
 
-; run: %trueif_i64_eq(42, 42) == true
-; run: %trueif_i64_eq(-1, 18446744073709551615) == true
-; run: %trueif_i64_eq(18446744073709551615, 0) == false
-; run: %trueif_i64_eq(32, 64) == false
+; run: %trueif_i64_eq(42, 42) == 1
+; run: %trueif_i64_eq(-1, 18446744073709551615) == 1
+; run: %trueif_i64_eq(18446744073709551615, 0) == 0
+; run: %trueif_i64_eq(32, 64) == 0
 
-function %trueif_i128_eq(i128, i128) -> b1 {
+function %trueif_i128_eq(i128, i128) -> i8 {
 block0(v0: i128, v1: i128):
   v2 = ifcmp v0, v1
   v3 = trueif eq v2
   return v3
 }
 
-; run: %trueif_i128_eq(42, 42) == true
-; run: %trueif_i128_eq(-1, 18446744073709551615) == false
-; run: %trueif_i128_eq(19000000000000000000, 0) == false
-; run: %trueif_i128_eq(32, 64) == false
+; run: %trueif_i128_eq(42, 42) == 1
+; run: %trueif_i128_eq(-1, 18446744073709551615) == 0
+; run: %trueif_i128_eq(19000000000000000000, 0) == 0
+; run: %trueif_i128_eq(32, 64) == 0
 
-function %trueff_f32_eq(f32, f32) -> b1 {
+function %trueff_f32_eq(f32, f32) -> i8 {
 block0(v0: f32, v1: f32):
   v2 = ffcmp v0, v1
   v3 = trueff eq v2
   return v3
 }
 
-; run: %trueff_f32_eq(0x42.0, 0x42.0) == true
-; run: %trueff_f32_eq(-0x1.0, -0x1.0) == true
-; run: %trueff_f32_eq(0x1.0, 0x0.0) == false
+; run: %trueff_f32_eq(0x42.0, 0x42.0) == 1
+; run: %trueff_f32_eq(-0x1.0, -0x1.0) == 1
+; run: %trueff_f32_eq(0x1.0, 0x0.0) == 0
 
-function %trueff_f64_eq(f64, f64) -> b1 {
+function %trueff_f64_eq(f64, f64) -> i8 {
 block0(v0: f64, v1: f64):
   v2 = ffcmp v0, v1
   v3 = trueff eq v2
   return v3
 }
 
-; run: %trueff_f64_eq(0x42.0, 0x42.0) == true
-; run: %trueff_f64_eq(-0x1.0, -0x1.0) == true
-; run: %trueff_f64_eq(0x1.0, 0x0.0) == false
+; run: %trueff_f64_eq(0x42.0, 0x42.0) == 1
+; run: %trueff_f64_eq(-0x1.0, -0x1.0) == 1
+; run: %trueff_f64_eq(0x1.0, 0x0.0) == 0
 
-function %trueff_f32_ne(f32, f32) -> b1 {
+function %trueff_f32_ne(f32, f32) -> i8 {
 block0(v0: f32, v1: f32):
   v2 = ffcmp v0, v1
   v3 = trueff ne v2
   return v3
 }
 
-; run: %trueff_f32_ne(0x42.0, 0x42.0) == false
-; run: %trueff_f32_ne(-0x1.0, -0x1.0) == false
-; run: %trueff_f32_ne(0x1.0, 0x0.0) == true
-; run: %trueff_f32_ne(NaN, NaN) == true
+; run: %trueff_f32_ne(0x42.0, 0x42.0) == 0
+; run: %trueff_f32_ne(-0x1.0, -0x1.0) == 0
+; run: %trueff_f32_ne(0x1.0, 0x0.0) == 1
+; run: %trueff_f32_ne(NaN, NaN) == 1
 
-function %trueff_f64_ne(f64, f64) -> b1 {
+function %trueff_f64_ne(f64, f64) -> i8 {
 block0(v0: f64, v1: f64):
   v2 = ffcmp v0, v1
   v3 = trueff ne v2
   return v3
 }
 
-; run: %trueff_f64_ne(0x42.0, 0x42.0) == false
-; run: %trueff_f64_ne(-0x1.0, -0x1.0) == false
-; run: %trueff_f64_ne(0x1.0, 0x0.0) == true
-; run: %trueff_f64_ne(NaN, NaN) == true
+; run: %trueff_f64_ne(0x42.0, 0x42.0) == 0
+; run: %trueff_f64_ne(-0x1.0, -0x1.0) == 0
+; run: %trueff_f64_ne(0x1.0, 0x0.0) == 1
+; run: %trueff_f64_ne(NaN, NaN) == 1

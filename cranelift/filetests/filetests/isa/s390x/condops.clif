@@ -16,14 +16,14 @@ block0(v0: i8, v1: i64, v2: i64):
 ;   locgre %r2, %r3
 ;   br %r14
 
-function %g(b1, i8, i8) -> i8 {
-block0(v0: b1, v1: i8, v2: i8):
+function %g(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
   v3 = select.i8 v0, v1, v2
   return v3
 }
 
 ; block0:
-;   llcr %r5, %r2
+;   lbr %r5, %r2
 ;   chi %r5, 0
 ;   lgr %r2, %r4
 ;   locrlh %r2, %r3

@@ -34,21 +34,21 @@ function %icmp_imm(i32) -> i32 {
 block0(v0: i32):
     v1 = iconst.i32 2
     v2 = icmp slt v0, v1
-    v3 = bint.i32 v2
+    v3 = uextend.i32 v2
     return v3
 }
 ; sameln: function %icmp_imm
 ; nextln: block0(v0: i32):
 ; nextln:     v1 = iconst.i32 2
 ; nextln:     v2 = icmp_imm slt v0, 2
-; nextln:     v3 = bint.i32 v2
+; nextln:     v3 = uextend.i32 v2
 ; nextln:     return v3
 ; nextln: }
 
-function %brz_bint(i32) {
+function %brz_uextend(i32) {
 block0(v0: i32):
     v3 = icmp_imm slt v0, 0
-    v1 = bint.i32 v3
+    v1 = uextend.i32 v3
     v2 = select v1, v1, v1
     trapz v1, user0
     brz v1, block1
@@ -60,13 +60,13 @@ block1:
 block2:
     return
 }
-; sameln: function %brz_bint
+; sameln: function %brz_uextend
 ; nextln: (v0: i32):
 ; nextln:    v3 = icmp_imm slt v0, 0
-; nextln:    v1 = bint.i32 v3
-; nextln:    v2 = select v3, v1, v1
-; nextln:    trapz v3, user0
-; nextln:    brnz v3, block2
+; nextln:    v1 = uextend.i32 v3
+; nextln:    v2 = select v1, v1, v1
+; nextln:    trapz v1, user0
+; nextln:    brnz v1, block2
 ; nextln:    jump block1
 
 function %irsub_imm(i32) -> i32 {

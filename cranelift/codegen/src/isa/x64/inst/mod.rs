@@ -2217,17 +2217,11 @@ impl MachInst for Inst {
             types::I16 => Ok((&[RegClass::Int], &[types::I16])),
             types::I32 => Ok((&[RegClass::Int], &[types::I32])),
             types::I64 => Ok((&[RegClass::Int], &[types::I64])),
-            types::B1 => Ok((&[RegClass::Int], &[types::B1])),
-            types::B8 => Ok((&[RegClass::Int], &[types::B8])),
-            types::B16 => Ok((&[RegClass::Int], &[types::B16])),
-            types::B32 => Ok((&[RegClass::Int], &[types::B32])),
-            types::B64 => Ok((&[RegClass::Int], &[types::B64])),
             types::R32 => panic!("32-bit reftype pointer should never be seen on x86-64"),
             types::R64 => Ok((&[RegClass::Int], &[types::R64])),
             types::F32 => Ok((&[RegClass::Float], &[types::F32])),
             types::F64 => Ok((&[RegClass::Float], &[types::F64])),
             types::I128 => Ok((&[RegClass::Int, RegClass::Int], &[types::I64, types::I64])),
-            types::B128 => Ok((&[RegClass::Int, RegClass::Int], &[types::B64, types::B64])),
             _ if ty.is_vector() => {
                 assert!(ty.bits() <= 128);
                 Ok((&[RegClass::Float], &[types::I8X16]))
@@ -2326,15 +2320,10 @@ impl MachInst for Inst {
             } else {
                 // Must be an integer type.
                 debug_assert!(
-                    ty == types::B1
-                        || ty == types::I8
-                        || ty == types::B8
+                    ty == types::I8
                         || ty == types::I16
-                        || ty == types::B16
                         || ty == types::I32
-                        || ty == types::B32
                         || ty == types::I64
-                        || ty == types::B64
                         || ty == types::R32
                         || ty == types::R64
                 );
