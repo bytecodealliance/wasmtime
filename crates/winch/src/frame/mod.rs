@@ -49,6 +49,11 @@ impl Frame {
         })
     }
 
+    /// Get a local slot
+    pub fn get_local(&self, index: u32) -> Option<&LocalSlot> {
+        self.locals.get(index as usize)
+    }
+
     fn compute_arg_slots<A: ABI>(sig: &ABISig, abi: &A) -> Result<(Locals, u32)> {
         // Go over the function ABI-signature and
         // calculate the stack slots
