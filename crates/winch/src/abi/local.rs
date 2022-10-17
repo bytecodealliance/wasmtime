@@ -19,7 +19,7 @@ pub(crate) struct LocalSlot {
     /// The offset of the local slot
     pub offset: u32,
     /// The type contained by this local slot
-    ty: WasmType,
+    pub ty: WasmType,
     /// Base register associated to this local slot
     base: Base,
 }
