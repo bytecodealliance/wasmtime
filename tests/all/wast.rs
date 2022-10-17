@@ -12,7 +12,7 @@ include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
 // Each of the tests included from `wast_testsuite_tests` will call this
 // function which actually executes the `wast` test suite given the `strategy`
 // to compile it.
-fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()> {
+fn run_wast(wast: &str, strategy: Strategy, pooling: bool, egraphs: bool) -> anyhow::Result<()> {
     drop(env_logger::try_init());
 
     match strategy {
@@ -30,6 +30,11 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         .wasm_threads(threads)
         .wasm_memory64(memory64)
         .cranelift_debug_verifier(true);
+    if egraphs {
+        unsafe {
+            cfg.cranelift_flag_enable("use_egraphs");
+        }
+    }
 
     cfg.wasm_component_model(feature_found(wast, "component-model"));
 

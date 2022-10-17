@@ -102,8 +102,9 @@ fn test_directory(
 
     let testsuite = &extract_name(path);
     for entry in dir_entries.iter() {
-        write_testsuite_tests(out, entry, testsuite, strategy, false)?;
-        write_testsuite_tests(out, entry, testsuite, strategy, true)?;
+        write_testsuite_tests(out, entry, testsuite, strategy, false, false)?;
+        write_testsuite_tests(out, entry, testsuite, strategy, true, false)?;
+        write_testsuite_tests(out, entry, testsuite, strategy, false, true)?;
     }
 
     Ok(dir_entries.len())
@@ -141,6 +142,7 @@ fn write_testsuite_tests(
     testsuite: &str,
     strategy: &str,
     pooling: bool,
+    egraphs: bool,
 ) -> anyhow::Result<()> {
     let path = path.as_ref();
     let testname = extract_name(path);
@@ -155,15 +157,22 @@ fn write_testsuite_tests(
         out,
         "fn r#{}{}() {{",
         &testname,
-        if pooling { "_pooling" } else { "" }
+        if pooling {
+            "_pooling"
+        } else if egraphs {
+            "_egraphs"
+        } else {
+            ""
+        }
     )?;
     writeln!(out, "    let _ = env_logger::try_init();")?;
     writeln!(
         out,
-        "    crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{}, {}).unwrap();",
+        "    crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{}, {}, {}).unwrap();",
         path.display(),
         strategy,
-        pooling
+        pooling,
+        egraphs,
     )?;
     writeln!(out, "}}")?;
     writeln!(out)?;
