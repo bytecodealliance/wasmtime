@@ -16,10 +16,7 @@ pub struct Config {
     /// This value does not apply to block0 which takes the function params
     /// and is thus governed by `signature_params`
     pub block_signature_params: RangeInclusive<usize>,
-    /// Max number of jump tables generated per function
-    /// Note, the actual number of jump tables may be larger if the Switch interface
-    /// decides to insert more.
-    pub jump_tables_per_function: RangeInclusive<usize>,
+    /// Max number of jump tables entries to generate
     pub jump_table_entries: RangeInclusive<usize>,
 
     /// The Switch API specializes either individual blocks or contiguous ranges.
@@ -66,7 +63,6 @@ impl Default for Config {
             vars_per_function: 0..=16,
             blocks_per_function: 0..=16,
             block_signature_params: 0..=16,
-            jump_tables_per_function: 0..=4,
             jump_table_entries: 0..=16,
             switch_cases: 0..=64,
             // Ranges smaller than 2 don't make sense.
