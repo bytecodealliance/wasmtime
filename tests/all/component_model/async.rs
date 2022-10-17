@@ -1,4 +1,3 @@
-use super::TypedFuncExt;
 use anyhow::Result;
 use wasmtime::component::*;
 use wasmtime::{Store, StoreContextMut, Trap, TrapCode};
@@ -33,6 +32,7 @@ async fn thunks() -> Result<()> {
     let thunk = instance.get_typed_func::<(), (), _>(&mut store, "thunk")?;
 
     thunk.call_async(&mut store, ()).await?;
+    // TODO post_return_async required as well
     thunk.post_return(&mut store)?;
 
     let err = instance
@@ -79,7 +79,7 @@ async fn thunks_2() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
     let mut imports = linker.instance("imports")?;
-    imports.func_wrap_async("i", |_, ()| Box::new(async { () }))?;
+    imports.func_wrap_async("i", |_: StoreContextMut<()>, _: ()| Box::new(async { () }))?;
 
     // TODO fold instantiate_async into Linker as well
     let instance = linker
@@ -91,13 +91,6 @@ async fn thunks_2() -> Result<()> {
 
     thunk.call_async(&mut store, ()).await?;
     thunk.post_return(&mut store)?;
-
-    let err = instance
-        .get_typed_func::<(), (), _>(&mut store, "thunk-trap")?
-        .call_async(&mut store, ())
-        .await
-        .unwrap_err();
-    assert!(err.downcast::<Trap>()?.trap_code() == Some(TrapCode::UnreachableCodeReached));
 
     Ok(())
 }
