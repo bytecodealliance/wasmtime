@@ -14,8 +14,7 @@ pub mod types;
 mod values;
 pub use self::component::Component;
 pub use self::func::{
-    ComponentNamedList, ComponentType, Func, IntoComponentFunc, Lift, Lower, TypedFunc, WasmList,
-    WasmStr,
+    ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
 pub use self::instance::{ExportInstance, Exports, Instance, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
