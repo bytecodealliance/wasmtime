@@ -171,12 +171,13 @@ fn test_roundtrip(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     let component = Component::new(engine, &component)?;
     let mut store = Store::new(engine, String::new());
     let mut linker = Linker::new(engine);
-    linker
-        .root()
-        .func_wrap("host", |store: StoreContextMut<String>, arg: String| {
+    linker.root().func_wrap(
+        "host",
+        |store: StoreContextMut<String>, (arg,): (String,)| {
             assert_eq!(*store.data(), arg);
             Ok((arg,))
-        })?;
+        },
+    )?;
     let instance = linker.instantiate(&mut store, &component)?;
     let func = instance.get_typed_func::<(String,), (String,), _>(&mut store, "echo")?;
 
