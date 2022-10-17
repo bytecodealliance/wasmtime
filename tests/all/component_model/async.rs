@@ -2,8 +2,9 @@ use anyhow::Result;
 use wasmtime::component::*;
 use wasmtime::{Store, StoreContextMut, Trap, TrapCode};
 
+/// This is super::func::thunks, except with an async store.
 #[tokio::test]
-async fn thunks() -> Result<()> {
+async fn smoke() -> Result<()> {
     let component = r#"
         (component
             (core module $m
@@ -45,8 +46,9 @@ async fn thunks() -> Result<()> {
     Ok(())
 }
 
+/// Handle an import function, created using component::Linker::func_wrap_async.
 #[tokio::test]
-async fn thunks_2() -> Result<()> {
+async fn smoke_func_wrap() -> Result<()> {
     let component = r#"
         (component
             (type $f (func))
@@ -79,7 +81,9 @@ async fn thunks_2() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
     let mut imports = linker.instance("imports")?;
-    imports.func_wrap_async("i", |_: StoreContextMut<()>, _: ()| Box::new(async { () }))?;
+    imports.func_wrap_async("i", |_: StoreContextMut<()>, _: ()| {
+        Box::new(async { Ok(()) })
+    })?;
 
     // TODO fold instantiate_async into Linker as well
     let instance = linker

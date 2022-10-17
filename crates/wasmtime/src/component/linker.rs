@@ -245,7 +245,7 @@ impl<T> LinkerInstance<'_, T> {
         F: for<'a> Fn(
                 StoreContextMut<'a, T>,
                 Params,
-            ) -> Box<dyn Future<Output = Return> + Send + 'a>
+            ) -> Box<dyn Future<Output = Result<Return>> + Send + 'a>
             + Send
             + Sync
             + 'static,
@@ -259,7 +259,7 @@ impl<T> LinkerInstance<'_, T> {
         let ff = move |mut store: StoreContextMut<'_, T>, params: Params| -> Result<Return> {
             let async_cx = store.as_context_mut().0.async_cx().expect("async cx");
             let mut future = Pin::from(f(store.as_context_mut(), params));
-            Ok(unsafe { async_cx.block_on(future.as_mut()) }?)
+            unsafe { async_cx.block_on(future.as_mut()) }?
         };
         self.func_wrap(name, ff)
     }
