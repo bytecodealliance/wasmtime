@@ -52,8 +52,7 @@ fn define_control_flow(
                 r#"
         Branch when zero.
 
-        If ``c`` is a `b1` value, take the branch when ``c`` is false. If
-        ``c`` is an integer value, take the branch when ``c = 0``.
+        Take the branch when ``c = 0``.
         "#,
                 &formats.branch,
             )
@@ -67,8 +66,7 @@ fn define_control_flow(
                 r#"
         Branch when non-zero.
 
-        If ``c`` is a `b1` value, take the branch when ``c`` is true. If
-        ``c`` is an integer value, take the branch when ``c != 0``.
+        Take the branch when ``c != 0``.
         "#,
                 &formats.branch,
             )
