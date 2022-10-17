@@ -109,8 +109,8 @@ jobs:
         run: |
           cargo run -- \
           benchmark \
-          --processes 1 \
-          --iterations-per-process 2 \
+          --processes 5 \
+          --iterations-per-process 5 \
           --engine /tmp/wasmtime_main.so \
           --engine /tmp/wasmtime_commit.so \
           --output-format csv \
