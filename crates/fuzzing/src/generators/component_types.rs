@@ -158,7 +158,7 @@ macro_rules! define_static_api_test {
                 .func_wrap(
                     IMPORT_FUNCTION,
                     |cx: StoreContextMut<'_, Box<dyn Any>>,
-                    $($param_name: $param,)*|
+                    ($($param_name,)*): ($($param,)*)|
                     {
                         log::trace!("received parameters {:?}", ($(&$param_name,)*));
                         let data: &($($param,)* R,) =
