@@ -299,6 +299,8 @@ impl<T> LinkerInstance<'_, T> {
         Err(anyhow!("import `{name}` not found"))
     }
 
+    // TODO: define func_new_async
+
     /// Defines a [`Module`] within this instance.
     ///
     /// This can be used to provide a core wasm [`Module`] as an import to a

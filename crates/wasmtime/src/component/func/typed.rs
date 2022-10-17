@@ -177,8 +177,8 @@ where
     {
         let mut store = store.as_context_mut();
         assert!(
-            !store.0.async_support(),
-            "must use `call_async` when async support is enabled on the config"
+            store.0.async_support(),
+            "cannot use `call_async` when async support is not enabled on the config"
         );
         store
             .on_fiber(|store| self.call_impl(store, params))
