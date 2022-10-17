@@ -191,7 +191,40 @@ impl<T> Linker<T> {
         store: impl AsContextMut<Data = T>,
         component: &Component,
     ) -> Result<Instance> {
+        assert!(
+            !store.as_context().async_support(),
+            "must use async instantiation when async support is enabled"
+        );
         self.instantiate_pre(component)?.instantiate(store)
+    }
+
+    /// Instantiates the [`Component`] provided into the `store` specified.
+    ///
+    /// This is exactly like [`Linker::instantiate`] except for async stores.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this [`Linker`] doesn't define an import that
+    /// `component` requires or if it is of the wrong type. Additionally this
+    /// can return an error if something goes wrong during instantiation such as
+    /// a runtime trap or a runtime limit being exceeded.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub async fn instantiate_async(
+        &self,
+        store: impl AsContextMut<Data = T>,
+        component: &Component,
+    ) -> Result<Instance>
+    where
+        T: Send,
+    {
+        assert!(
+            store.as_context().async_support(),
+            "must use sync instantiation when async support is disabled"
+        );
+        self.instantiate_pre(component)?
+            .instantiate_async(store)
+            .await
     }
 }
 

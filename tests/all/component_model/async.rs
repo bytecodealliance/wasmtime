@@ -24,17 +24,14 @@ async fn smoke() -> Result<()> {
     let engine = super::async_engine();
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    // TODO fold instantiate_async into Linker as well
     let instance = Linker::new(&engine)
-        .instantiate_pre(&component)?
-        .instantiate_async(&mut store)
+        .instantiate_async(&mut store, &component)
         .await?;
 
     let thunk = instance.get_typed_func::<(), (), _>(&mut store, "thunk")?;
 
     thunk.call_async(&mut store, ()).await?;
-    // TODO post_return_async required as well
-    thunk.post_return(&mut store)?;
+    thunk.post_return_async(&mut store).await?;
 
     let err = instance
         .get_typed_func::<(), (), _>(&mut store, "thunk-trap")?
@@ -85,16 +82,12 @@ async fn smoke_func_wrap() -> Result<()> {
         Box::new(async { Ok(()) })
     })?;
 
-    // TODO fold instantiate_async into Linker as well
-    let instance = linker
-        .instantiate_pre(&component)?
-        .instantiate_async(&mut store)
-        .await?;
+    let instance = linker.instantiate_async(&mut store, &component).await?;
 
     let thunk = instance.get_typed_func::<(), (), _>(&mut store, "thunk")?;
 
     thunk.call_async(&mut store, ()).await?;
-    thunk.post_return(&mut store)?;
+    thunk.post_return_async(&mut store).await?;
 
     Ok(())
 }

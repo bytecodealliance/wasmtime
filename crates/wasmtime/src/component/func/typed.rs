@@ -325,6 +325,16 @@ where
     pub fn post_return(&self, store: impl AsContextMut) -> Result<()> {
         self.func.post_return(store)
     }
+
+    /// See [`Func::post_return_async`]
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub async fn post_return_async<T: Send>(
+        &self,
+        store: impl AsContextMut<Data = T>,
+    ) -> Result<()> {
+        self.func.post_return_async(store).await
+    }
 }
 
 /// A trait representing a static list of named types that can be passed to or

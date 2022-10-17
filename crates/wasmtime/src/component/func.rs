@@ -538,7 +538,39 @@ impl Func {
     /// called, then it will panic. If a different [`Func`] for the same
     /// component instance was invoked then this function will also panic
     /// because the `post-return` needs to happen for the other function.
+    ///
+    /// Panics if this is called on a function in an asynchronous store.
+    /// This only works with functions defined within a synchronous store.
     pub fn post_return(&self, mut store: impl AsContextMut) -> Result<()> {
+        let store = store.as_context_mut();
+        assert!(
+            !store.0.async_support(),
+            "must use `post_return_async` when async support is enabled on the config"
+        );
+        self.post_return_impl(store)
+    }
+
+    /// Exactly like [`Self::post_return`] except for use on async stores.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is called on a function in a synchronous store. This
+    /// only works with functions defined within an asynchronous store.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub async fn post_return_async<T: Send>(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+    ) -> Result<()> {
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `call_async` without enabling async support in the config"
+        );
+        store.on_fiber(|store| self.post_return_impl(store)).await?
+    }
+
+    fn post_return_impl(&self, mut store: impl AsContextMut) -> Result<()> {
         let mut store = store.as_context_mut();
         let data = &mut store.0[self.0];
         let instance = data.instance;
