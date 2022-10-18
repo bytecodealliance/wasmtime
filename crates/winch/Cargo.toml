@@ -11,7 +11,7 @@ smallvec = { version = "1.6.1" }
 anyhow = "1.0"
 wasmtime-environ = { workspace = true }
 target-lexicon = { version = "0.12", features = ["std"] }
-cranelift-codegen = { workspace = true, features = ["x86", "arm64"] }
+cranelift-codegen = { workspace = true }
 # Interim dependency; mostly to have access to `PReg`s
 # In the long term, we'll factor out the register
 # abstractions from regalloc2 for them to be consumed
@@ -22,8 +22,8 @@ wat = "1.0.47"
 
 [features]
 default = ["all-arch"]
-x64 = []
-arm64 = []
+x64 = ["cranelift-codegen/x86"]
+arm64 = ["cranelift-codegen/arm64"]
 all-arch = [
     "x64",
     "arm64",
