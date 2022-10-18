@@ -304,9 +304,10 @@ impl Config {
         // Don't propagate these errors to prevent them from accidentally being
         // interpreted as invalid wasm, these should never fail on a
         // well-behaved host system.
-        let file = tempfile::NamedTempFile::new().unwrap();
-        std::fs::write(file.path(), module.serialize().unwrap()).unwrap();
-        unsafe { Ok(Module::deserialize_file(engine, file.path()).unwrap()) }
+        let dir = tempfile::TempDir::new().unwrap();
+        let file = dir.path().join("module.wasm");
+        std::fs::write(&file, module.serialize().unwrap()).unwrap();
+        unsafe { Ok(Module::deserialize_file(engine, &file).unwrap()) }
     }
 }
 
