@@ -49,6 +49,12 @@ criteria = "safe-to-deploy"
 version = "3.9.1"
 notes = "I am the author of this crate."
 
+[[audits.bumpalo]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+version = "3.11.1"
+notes = "I am the author of this crate."
+
 [[audits.cap-fs-ext]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
