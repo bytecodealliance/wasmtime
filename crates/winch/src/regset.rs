@@ -61,7 +61,7 @@ mod tests {
     #[test]
     fn test_any_gpr() {
         let mut set = RegSet::new(UNIVERSE, 0);
-        for i in 0..16 {
+        for _ in 0..16 {
             let gpr = set.any_gpr();
             assert!(gpr.is_some())
         }
@@ -75,7 +75,7 @@ mod tests {
         let all = UNIVERSE & !(1 << 5);
         let target = Reg::int(5);
         let mut set = RegSet::new(all, 0);
-        assert!(set.gpr(Reg::int(5)).is_none());
+        assert!(set.gpr(target).is_none());
     }
 
     #[test]
