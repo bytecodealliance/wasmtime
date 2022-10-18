@@ -99,7 +99,7 @@ block0:
 
 ; block0:
 ;   llihf %r2, 4081840291
-;   iilf %r2, 303169594
+;   iilf %r2, %r2, 303169594
 ;   br %r14
 
 function %f() -> i64 {
@@ -110,7 +110,7 @@ block0:
 
 ; block0:
 ;   llihh %r2, 4841
-;   iilh %r2, 7924
+;   iilh %r2, %r2, 7924
 ;   br %r14
 
 function %f() -> i32 {

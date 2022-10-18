@@ -14,7 +14,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0:
 ;   lrvgr %r4, %r4
 ;   lg %r0, 0(%r3)
-;   0: csg %r0, %r4, 0(%r3) ; jglh 0b ; 1:
+;   0: csg %r0, %r0, %r4, 0(%r3) ; jglh 0b ; 1:
 ;   lrvgr %r2, %r0
 ;   br %r14
 
@@ -27,7 +27,7 @@ block0(v0: i64, v1: i64, v2: i32):
 ; block0:
 ;   lrvr %r4, %r4
 ;   l %r0, 0(%r3)
-;   0: cs %r0, %r4, 0(%r3) ; jglh 0b ; 1:
+;   0: cs %r0, %r0, %r4, 0(%r3) ; jglh 0b ; 1:
 ;   lrvr %r2, %r0
 ;   br %r14
 
@@ -43,7 +43,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r5, 65532
 ;   lrvr %r4, %r4
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 16(%r2) ; risbgn %r1, %r4, 48, 64, 48 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 16(%r2) ; risbgn %r1, %r1, %r4, 48, 64, 48 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r3, %r0, 0(%r2)
 ;   lrvr %r2, %r3
 ;   br %r14
@@ -61,7 +61,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r5, 65532
 ;   lcr %r2, %r11
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 0(%r11) ; risbgn %r1, %r4, 32, 40, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r11) ; risbgn %r1, %r1, %r4, 32, 40, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r11)
 ;   lmg %r11, %r15, 88(%r15)
 ;   br %r14
@@ -74,7 +74,7 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; block0:
 ;   lg %r0, 0(%r3)
-;   0: lrvgr %r1, %r0 ; agr %r1, %r4 ; lrvgr %r1, %r1 ; csg %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: lrvgr %r1, %r0 ; agr %r1, %r4 ; lrvgr %r1, %r1 ; csg %r0, %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   lrvgr %r2, %r0
 ;   br %r14
 
@@ -86,7 +86,7 @@ block0(v0: i64, v1: i64, v2: i32):
 
 ; block0:
 ;   l %r0, 0(%r3)
-;   0: lrvr %r1, %r0 ; ar %r1, %r4 ; lrvr %r1, %r1 ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: lrvr %r1, %r0 ; ar %r1, %r4 ; lrvr %r1, %r1 ; cs %r0, %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   lrvr %r2, %r0
 ;   br %r14
 
@@ -102,7 +102,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r5, 65532
 ;   sllk %r4, %r4, 16
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 16(%r2) ; lrvr %r1, %r1 ; ar %r1, %r4 ; lrvr %r1, %r1 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 16(%r2) ; lrvr %r1, %r1 ; ar %r1, %r4 ; lrvr %r1, %r1 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r3, %r0, 0(%r2)
 ;   lrvr %r2, %r3
 ;   br %r14
@@ -121,7 +121,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   sllk %r4, %r4, 24
 ;   lcr %r2, %r11
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 0(%r11) ; ar %r1, %r4 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r11) ; ar %r1, %r4 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r11)
 ;   lmg %r11, %r15, 88(%r15)
 ;   br %r14
@@ -134,7 +134,7 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; block0:
 ;   lg %r0, 0(%r3)
-;   0: lrvgr %r1, %r0 ; sgr %r1, %r4 ; lrvgr %r1, %r1 ; csg %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: lrvgr %r1, %r0 ; sgr %r1, %r4 ; lrvgr %r1, %r1 ; csg %r0, %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   lrvgr %r2, %r0
 ;   br %r14
 
@@ -146,7 +146,7 @@ block0(v0: i64, v1: i64, v2: i32):
 
 ; block0:
 ;   l %r0, 0(%r3)
-;   0: lrvr %r1, %r0 ; sr %r1, %r4 ; lrvr %r1, %r1 ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: lrvr %r1, %r0 ; sr %r1, %r4 ; lrvr %r1, %r1 ; cs %r0, %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   lrvr %r2, %r0
 ;   br %r14
 
@@ -162,7 +162,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r5, 65532
 ;   sllk %r4, %r4, 16
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 16(%r2) ; lrvr %r1, %r1 ; sr %r1, %r4 ; lrvr %r1, %r1 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 16(%r2) ; lrvr %r1, %r1 ; sr %r1, %r4 ; lrvr %r1, %r1 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r3, %r0, 0(%r2)
 ;   lrvr %r2, %r3
 ;   br %r14
@@ -181,7 +181,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   sllk %r4, %r4, 24
 ;   lcr %r2, %r11
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 0(%r11) ; sr %r1, %r4 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r11) ; sr %r1, %r4 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r11)
 ;   lmg %r11, %r15, 88(%r15)
 ;   br %r14
@@ -222,7 +222,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r5, 65532
 ;   lrvr %r4, %r4
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 16(%r2) ; rnsbg %r1, %r4, 48, 64, 48 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 16(%r2) ; rnsbg %r1, %r1, %r4, 48, 64, 48 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r3, %r0, 0(%r2)
 ;   lrvr %r2, %r3
 ;   br %r14
@@ -240,7 +240,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r5, 65532
 ;   lcr %r2, %r11
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 0(%r11) ; rnsbg %r1, %r4, 32, 40, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r11) ; rnsbg %r1, %r1, %r4, 32, 40, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r11)
 ;   lmg %r11, %r15, 88(%r15)
 ;   br %r14
@@ -281,7 +281,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r5, 65532
 ;   lrvr %r4, %r4
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 16(%r2) ; rosbg %r1, %r4, 48, 64, 48 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 16(%r2) ; rosbg %r1, %r1, %r4, 48, 64, 48 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r3, %r0, 0(%r2)
 ;   lrvr %r2, %r3
 ;   br %r14
@@ -299,7 +299,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r5, 65532
 ;   lcr %r2, %r11
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 0(%r11) ; rosbg %r1, %r4, 32, 40, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r11) ; rosbg %r1, %r1, %r4, 32, 40, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r11)
 ;   lmg %r11, %r15, 88(%r15)
 ;   br %r14
@@ -340,7 +340,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r5, 65532
 ;   lrvr %r4, %r4
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 16(%r2) ; rxsbg %r1, %r4, 48, 64, 48 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 16(%r2) ; rxsbg %r1, %r1, %r4, 48, 64, 48 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r3, %r0, 0(%r2)
 ;   lrvr %r2, %r3
 ;   br %r14
@@ -358,7 +358,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r5, 65532
 ;   lcr %r2, %r11
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 0(%r11) ; rxsbg %r1, %r4, 32, 40, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r11) ; rxsbg %r1, %r1, %r4, 32, 40, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r11)
 ;   lmg %r11, %r15, 88(%r15)
 ;   br %r14
@@ -372,7 +372,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0:
 ;   lrvgr %r4, %r4
 ;   lg %r0, 0(%r3)
-;   0: ngrk %r1, %r0, %r4 ; xilf %r1, 4294967295 ; xihf %r1, 4294967295 ; csg %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: ngrk %r1, %r0, %r4 ; xilf %r1, 4294967295 ; xihf %r1, 4294967295 ; csg %r0, %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   lrvgr %r2, %r0
 ;   br %r14
 
@@ -385,7 +385,7 @@ block0(v0: i64, v1: i64, v2: i32):
 ; block0:
 ;   lrvr %r4, %r4
 ;   l %r0, 0(%r3)
-;   0: nrk %r1, %r0, %r4 ; xilf %r1, 4294967295 ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: nrk %r1, %r0, %r4 ; xilf %r1, 4294967295 ; cs %r0, %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   lrvr %r2, %r0
 ;   br %r14
 
@@ -401,7 +401,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r5, 65532
 ;   lrvr %r4, %r4
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 16(%r2) ; rnsbg %r1, %r4, 48, 64, 48 ; xilf %r1, 65535 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 16(%r2) ; rnsbg %r1, %r1, %r4, 48, 64, 48 ; xilf %r1, 65535 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r3, %r0, 0(%r2)
 ;   lrvr %r2, %r3
 ;   br %r14
@@ -419,7 +419,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r5, 65532
 ;   lcr %r2, %r11
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 0(%r11) ; rnsbg %r1, %r4, 32, 40, 24 ; xilf %r1, 4278190080 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r11) ; rnsbg %r1, %r1, %r4, 32, 40, 24 ; xilf %r1, 4278190080 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r11)
 ;   lmg %r11, %r15, 88(%r15)
 ;   br %r14
@@ -432,7 +432,7 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; block0:
 ;   lg %r0, 0(%r3)
-;   0: lrvgr %r1, %r0 ; cgr %r4, %r1 ; jgnl 1f ; lrvgr %r1, %r4 ; csg %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: lrvgr %r1, %r0 ; cgr %r4, %r1 ; jgnl 1f ; lrvgr %r1, %r4 ; csg %r0, %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   lrvgr %r2, %r0
 ;   br %r14
 
@@ -444,7 +444,7 @@ block0(v0: i64, v1: i64, v2: i32):
 
 ; block0:
 ;   l %r0, 0(%r3)
-;   0: lrvr %r1, %r0 ; cr %r4, %r1 ; jgnl 1f ; lrvr %r1, %r4 ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: lrvr %r1, %r0 ; cr %r4, %r1 ; jgnl 1f ; lrvr %r1, %r4 ; cs %r0, %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   lrvr %r2, %r0
 ;   br %r14
 
@@ -460,7 +460,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r5, 65532
 ;   sllk %r4, %r4, 16
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 16(%r2) ; lrvr %r1, %r1 ; cr %r4, %r1 ; jgnl 1f ; risbgn %r1, %r4, 32, 48, 0 ; lrvr %r1, %r1 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 16(%r2) ; lrvr %r1, %r1 ; cr %r4, %r1 ; jgnl 1f ; risbgn %r1, %r1, %r4, 32, 48, 0 ; lrvr %r1, %r1 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r3, %r0, 0(%r2)
 ;   lrvr %r2, %r3
 ;   br %r14
@@ -479,7 +479,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   sllk %r4, %r4, 24
 ;   lcr %r2, %r11
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 0(%r11) ; cr %r4, %r1 ; jgnl 1f ; risbgn %r1, %r4, 32, 40, 0 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r11) ; cr %r4, %r1 ; jgnl 1f ; risbgn %r1, %r1, %r4, 32, 40, 0 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r11)
 ;   lmg %r11, %r15, 88(%r15)
 ;   br %r14
@@ -492,7 +492,7 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; block0:
 ;   lg %r0, 0(%r3)
-;   0: lrvgr %r1, %r0 ; cgr %r4, %r1 ; jgnh 1f ; lrvgr %r1, %r4 ; csg %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: lrvgr %r1, %r0 ; cgr %r4, %r1 ; jgnh 1f ; lrvgr %r1, %r4 ; csg %r0, %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   lrvgr %r2, %r0
 ;   br %r14
 
@@ -504,7 +504,7 @@ block0(v0: i64, v1: i64, v2: i32):
 
 ; block0:
 ;   l %r0, 0(%r3)
-;   0: lrvr %r1, %r0 ; cr %r4, %r1 ; jgnh 1f ; lrvr %r1, %r4 ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: lrvr %r1, %r0 ; cr %r4, %r1 ; jgnh 1f ; lrvr %r1, %r4 ; cs %r0, %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   lrvr %r2, %r0
 ;   br %r14
 
@@ -520,7 +520,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r5, 65532
 ;   sllk %r4, %r4, 16
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 16(%r2) ; lrvr %r1, %r1 ; cr %r4, %r1 ; jgnh 1f ; risbgn %r1, %r4, 32, 48, 0 ; lrvr %r1, %r1 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 16(%r2) ; lrvr %r1, %r1 ; cr %r4, %r1 ; jgnh 1f ; risbgn %r1, %r1, %r4, 32, 48, 0 ; lrvr %r1, %r1 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r3, %r0, 0(%r2)
 ;   lrvr %r2, %r3
 ;   br %r14
@@ -539,7 +539,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   sllk %r4, %r4, 24
 ;   lcr %r2, %r11
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 0(%r11) ; cr %r4, %r1 ; jgnh 1f ; risbgn %r1, %r4, 32, 40, 0 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r11) ; cr %r4, %r1 ; jgnh 1f ; risbgn %r1, %r1, %r4, 32, 40, 0 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r11)
 ;   lmg %r11, %r15, 88(%r15)
 ;   br %r14
@@ -552,7 +552,7 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; block0:
 ;   lg %r0, 0(%r3)
-;   0: lrvgr %r1, %r0 ; clgr %r4, %r1 ; jgnl 1f ; lrvgr %r1, %r4 ; csg %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: lrvgr %r1, %r0 ; clgr %r4, %r1 ; jgnl 1f ; lrvgr %r1, %r4 ; csg %r0, %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   lrvgr %r2, %r0
 ;   br %r14
 
@@ -564,7 +564,7 @@ block0(v0: i64, v1: i64, v2: i32):
 
 ; block0:
 ;   l %r0, 0(%r3)
-;   0: lrvr %r1, %r0 ; clr %r4, %r1 ; jgnl 1f ; lrvr %r1, %r4 ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: lrvr %r1, %r0 ; clr %r4, %r1 ; jgnl 1f ; lrvr %r1, %r4 ; cs %r0, %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   lrvr %r2, %r0
 ;   br %r14
 
@@ -580,7 +580,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r5, 65532
 ;   sllk %r4, %r4, 16
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 16(%r2) ; lrvr %r1, %r1 ; clr %r4, %r1 ; jgnl 1f ; risbgn %r1, %r4, 32, 48, 0 ; lrvr %r1, %r1 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 16(%r2) ; lrvr %r1, %r1 ; clr %r4, %r1 ; jgnl 1f ; risbgn %r1, %r1, %r4, 32, 48, 0 ; lrvr %r1, %r1 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r3, %r0, 0(%r2)
 ;   lrvr %r2, %r3
 ;   br %r14
@@ -599,7 +599,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   sllk %r4, %r4, 24
 ;   lcr %r2, %r11
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 0(%r11) ; clr %r4, %r1 ; jgnl 1f ; risbgn %r1, %r4, 32, 40, 0 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r11) ; clr %r4, %r1 ; jgnl 1f ; risbgn %r1, %r1, %r4, 32, 40, 0 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r11)
 ;   lmg %r11, %r15, 88(%r15)
 ;   br %r14
@@ -612,7 +612,7 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; block0:
 ;   lg %r0, 0(%r3)
-;   0: lrvgr %r1, %r0 ; clgr %r4, %r1 ; jgnh 1f ; lrvgr %r1, %r4 ; csg %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: lrvgr %r1, %r0 ; clgr %r4, %r1 ; jgnh 1f ; lrvgr %r1, %r4 ; csg %r0, %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   lrvgr %r2, %r0
 ;   br %r14
 
@@ -624,7 +624,7 @@ block0(v0: i64, v1: i64, v2: i32):
 
 ; block0:
 ;   l %r0, 0(%r3)
-;   0: lrvr %r1, %r0 ; clr %r4, %r1 ; jgnh 1f ; lrvr %r1, %r4 ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: lrvr %r1, %r0 ; clr %r4, %r1 ; jgnh 1f ; lrvr %r1, %r4 ; cs %r0, %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   lrvr %r2, %r0
 ;   br %r14
 
@@ -640,7 +640,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r5, 65532
 ;   sllk %r4, %r4, 16
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 16(%r2) ; lrvr %r1, %r1 ; clr %r4, %r1 ; jgnh 1f ; risbgn %r1, %r4, 32, 48, 0 ; lrvr %r1, %r1 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 16(%r2) ; lrvr %r1, %r1 ; clr %r4, %r1 ; jgnh 1f ; risbgn %r1, %r1, %r4, 32, 48, 0 ; lrvr %r1, %r1 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r3, %r0, 0(%r2)
 ;   lrvr %r2, %r3
 ;   br %r14
@@ -659,7 +659,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   sllk %r4, %r4, 24
 ;   lcr %r2, %r11
 ;   l %r0, 0(%r5)
-;   0: rll %r1, %r0, 0(%r11) ; clr %r4, %r1 ; jgnh 1f ; risbgn %r1, %r4, 32, 40, 0 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r11) ; clr %r4, %r1 ; jgnh 1f ; risbgn %r1, %r1, %r4, 32, 40, 0 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r0, %r1, 0(%r5) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r11)
 ;   lmg %r11, %r15, 88(%r15)
 ;   br %r14

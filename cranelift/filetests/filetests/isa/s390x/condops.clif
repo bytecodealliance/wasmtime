@@ -13,7 +13,7 @@ block0(v0: i8, v1: i64, v2: i64):
 ;   llcr %r5, %r2
 ;   clfi %r5, 42
 ;   lgr %r2, %r4
-;   locgre %r2, %r3
+;   locgre %r2, %r2, %r3
 ;   br %r14
 
 function %g(i8, i8, i8) -> i8 {
@@ -26,7 +26,7 @@ block0(v0: i8, v1: i8, v2: i8):
 ;   lbr %r5, %r2
 ;   chi %r5, 0
 ;   lgr %r2, %r4
-;   locrlh %r2, %r3
+;   locrlh %r2, %r2, %r3
 ;   br %r14
 
 function %i(i32, i8, i8) -> i8 {
@@ -40,7 +40,7 @@ block0(v0: i32, v1: i8, v2: i8):
 ; block0:
 ;   clfi %r2, 42
 ;   lgr %r2, %r4
-;   locre %r2, %r3
+;   locre %r2, %r2, %r3
 ;   br %r14
 
 function %i(i32, i8x16, i8x16) -> i8x16 {
@@ -52,9 +52,9 @@ block0(v0: i32, v1: i8x16, v2: i8x16):
 }
 
 ; block0:
-;   vlr %v16, %v24
 ;   clfi %r2, 42
-;   vlr %v24, %v25
-;   jne 10 ; vlr %v24, %v16
+;   vlr %v6, %v25
+;   jne 10 ; vlr %v6, %v6, %v24
+;   vlr %v24, %v6
 ;   br %r14
 

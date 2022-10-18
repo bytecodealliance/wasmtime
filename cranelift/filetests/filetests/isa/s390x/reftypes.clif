@@ -19,7 +19,7 @@ block0(v0: r64):
 ; block0:
 ;   cghi %r2, 0
 ;   lhi %r2, 0
-;   lochie %r2, 1
+;   lochie %r2, %r2, 1
 ;   br %r14
 
 function %f2(r64) -> i8 {
@@ -31,7 +31,7 @@ block0(v0: r64):
 ; block0:
 ;   cghi %r2, -1
 ;   lhi %r2, 0
-;   lochie %r2, 1
+;   lochie %r2, %r2, 1
 ;   br %r14
 
 function %f3() -> r64 {
