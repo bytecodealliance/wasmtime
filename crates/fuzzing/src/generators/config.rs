@@ -163,6 +163,7 @@ impl Config {
             .native_unwind_info(self.wasmtime.native_unwind_info)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
+            .cranelift_use_egraphs(self.wasmtime.use_egraphs)
             .consume_fuel(self.wasmtime.consume_fuel)
             .epoch_interruption(self.wasmtime.epoch_interruption)
             .memory_init_cow(self.wasmtime.memory_init_cow)
@@ -303,9 +304,10 @@ impl Config {
         // Don't propagate these errors to prevent them from accidentally being
         // interpreted as invalid wasm, these should never fail on a
         // well-behaved host system.
-        let file = tempfile::NamedTempFile::new().unwrap();
-        std::fs::write(file.path(), module.serialize().unwrap()).unwrap();
-        unsafe { Ok(Module::deserialize_file(engine, file.path()).unwrap()) }
+        let dir = tempfile::TempDir::new().unwrap();
+        let file = dir.path().join("module.wasm");
+        std::fs::write(&file, module.serialize().unwrap()).unwrap();
+        unsafe { Ok(Module::deserialize_file(engine, &file).unwrap()) }
     }
 }
 
@@ -369,6 +371,7 @@ impl<'a> Arbitrary<'a> for Config {
 #[derive(Arbitrary, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct WasmtimeConfig {
     opt_level: OptLevel,
+    use_egraphs: bool,
     debug_info: bool,
     canonicalize_nans: bool,
     interruptable: bool,
