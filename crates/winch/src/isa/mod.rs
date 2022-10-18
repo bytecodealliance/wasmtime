@@ -56,7 +56,6 @@ impl error::Error for LookupError {}
 impl Display for LookupError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            LookupError::SupportDisabled => write!(f, "Support for this target is disabled"),
             LookupError::Unsupported => write!(f, "This target is not supported yet"),
         }
     }
@@ -64,7 +63,6 @@ impl Display for LookupError {
 
 #[derive(Debug)]
 pub(crate) enum LookupError {
-    SupportDisabled,
     Unsupported,
 }
 
