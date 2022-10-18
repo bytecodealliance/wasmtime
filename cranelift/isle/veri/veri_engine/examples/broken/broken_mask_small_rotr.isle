@@ -39,6 +39,7 @@
 ;;       (extend val $false (ty_bits ty) 32))
 
 
+;; BROKEN: mask amount has 0 subtracted instead of 1
 ;; fn rotr_mask(&mut self, ty: Type) -> ImmLogic {
 ;;     ImmLogic::maybe_from_u64((ty.bits() - 1) as u64, I32).unwrap()
 ;; }

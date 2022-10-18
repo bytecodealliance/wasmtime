@@ -155,6 +155,52 @@ fn test_fits_in_16_rotl_to_rotr() {
 }
 
 #[test]
+fn test_32_general_rotl_to_rotr() {
+    test_from_file_with_filter(
+        "./examples/32_general_rotl_to_rotr.isle",
+        "rotl".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::InapplicableRule),
+            (Bitwidth::I8, VerificationResult::InapplicableRule),
+            (Bitwidth::I16, VerificationResult::InapplicableRule),
+            (Bitwidth::I32, VerificationResult::Success),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+        ],
+    )
+}
+
+#[test]
+fn test_broken_32_general_rotl_to_rotr() {
+    test_from_file_with_filter(
+        "./examples/broken/broken_32_general_rotl_to_rotr.isle",
+        "rotl".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::InapplicableRule),
+            (Bitwidth::I8, VerificationResult::InapplicableRule),
+            (Bitwidth::I16, VerificationResult::InapplicableRule),
+            (Bitwidth::I32, VerificationResult::Failure(Counterexample{})),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+        ],
+    )
+}
+
+
+#[test]
+fn test_64_general_rotl_to_rotr() {
+    test_from_file_with_filter(
+        "./examples/64_general_rotl_to_rotr.isle",
+        "rotl".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::InapplicableRule),
+            (Bitwidth::I8, VerificationResult::InapplicableRule),
+            (Bitwidth::I16, VerificationResult::InapplicableRule),
+            (Bitwidth::I32, VerificationResult::InapplicableRule),
+            (Bitwidth::I64, VerificationResult::Success),
+        ],
+    )
+}
+
+#[test]
 fn test_broken_fits_in_16_rotl_to_rotr() {
     test_from_file_with_filter(
         "./examples/broken/broken_fits_in_16_rotl_to_rotr.isle",

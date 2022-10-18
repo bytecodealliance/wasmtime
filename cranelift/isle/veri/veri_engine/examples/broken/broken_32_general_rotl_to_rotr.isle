@@ -1,0 +1,34 @@
+
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
+(decl lower (Inst) InstOutput)
+
+;; Instruction formats.
+(type MInst
+  (enum
+))
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (- (a) (b)) (r))))
+(decl sub (Type Reg Reg) Reg)
+(extern constructor sub sub)
+
+;;@ (spec (sig (args) (r))
+;;@     (assertions (= (conv_to (regwidth) (0i1:bv)) (r))))
+(decl zero_reg () Reg)
+(extern constructor zero_reg zero_reg)
+
+;;@ (spec (sig (args t, x, y) (ret))
+;;@       (assertions 
+;;@          (= (rotr (x) (y)) (ret)),
+;;@       )
+;;@ )
+(decl a64_rotr (Type Reg Reg) Reg)
+(extern constructor a64_rotr a64_rotr)
+
+;; BROKEN: order of arguments to sub flipped
+;; General 32-bit case.
+(rule (lower (has_type $I32 (rotl x y)))
+      (let ((amt Reg (value_regs_get y 0))
+            (neg_shift Reg (sub $I32 amt (zero_reg))))
+        (a64_rotr $I32 x neg_shift)))

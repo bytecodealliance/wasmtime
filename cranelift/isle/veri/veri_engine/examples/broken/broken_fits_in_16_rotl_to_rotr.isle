@@ -77,7 +77,7 @@
 ))
 
 ;; General 8/16-bit case.
-;; Broken: no negation
+;; BROKEN: no negation
 (rule -2 (lower (has_type (fits_in_16 ty) (rotl x y)))
       (let ((amt Reg (value_regs_get y 0)))
         (small_rotr ty (put_in_reg_zext32 x) amt)))

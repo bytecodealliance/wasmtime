@@ -701,7 +701,7 @@ fn add_isle_constraints(
         ),
         (
             "ImmShift".to_owned(),
-            annotation_ir::Type::BitVectorWithWidth(8),
+            annotation_ir::Type::BitVectorWithWidth(6),
         ),
         (
             "ImmLogic".to_owned(),

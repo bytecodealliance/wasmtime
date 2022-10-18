@@ -39,6 +39,7 @@
 (rule (operand_size (fits_in_32 _ty)) (OperandSize.Size32))
 (rule (operand_size (fits_in_64 _ty)) (OperandSize.Size64))
 
+;; BROKEN: add on x, x instead of x, y
 (rule (lower (has_type (fits_in_64 ty) (iadd x y)))
       (add ty x x))
 
