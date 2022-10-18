@@ -11,7 +11,7 @@ function u0:2(i64 , i64) {
         v18 = load.i32 v17
         v19 = iconst.i32 4
         v20 = icmp ne v18, v19
-        v21 = bint.i32 v20
+        v21 = uextend.i32 v20
         brnz v21, block2
         jump block4
     block4:

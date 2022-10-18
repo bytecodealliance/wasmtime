@@ -39,7 +39,7 @@ pub(crate) fn lower_insn_to_regs(
     };
 
     match op {
-        Opcode::Iconst | Opcode::Bconst | Opcode::Null => implemented_in_isle(ctx),
+        Opcode::Iconst | Opcode::Null => implemented_in_isle(ctx),
 
         Opcode::F32const => {
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
@@ -163,11 +163,9 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::Copy => implemented_in_isle(ctx),
 
-        Opcode::Breduce | Opcode::Ireduce => implemented_in_isle(ctx),
+        Opcode::Ireduce => implemented_in_isle(ctx),
 
-        Opcode::Bextend | Opcode::Bmask => implemented_in_isle(ctx),
-
-        Opcode::Bint => implemented_in_isle(ctx),
+        Opcode::Bmask => implemented_in_isle(ctx),
 
         Opcode::Bitcast => implemented_in_isle(ctx),
 

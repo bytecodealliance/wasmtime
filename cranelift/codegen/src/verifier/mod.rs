@@ -768,7 +768,6 @@ impl<'a> Verifier<'a> {
             | UnaryImm { .. }
             | UnaryIeee32 { .. }
             | UnaryIeee64 { .. }
-            | UnaryBool { .. }
             | Binary { .. }
             | BinaryImm8 { .. }
             | BinaryImm64 { .. }
@@ -1514,7 +1513,7 @@ impl<'a> Verifier<'a> {
             ir::InstructionData::Unary { opcode, arg } => {
                 let arg_type = self.func.dfg.value_type(arg);
                 match opcode {
-                    Opcode::Bextend | Opcode::Uextend | Opcode::Sextend | Opcode::Fpromote => {
+                    Opcode::Uextend | Opcode::Sextend | Opcode::Fpromote => {
                         if arg_type.lane_count() != ctrl_type.lane_count() {
                             return errors.nonfatal((
                                 inst,
@@ -1536,7 +1535,7 @@ impl<'a> Verifier<'a> {
                             ));
                         }
                     }
-                    Opcode::Breduce | Opcode::Ireduce | Opcode::Fdemote => {
+                    Opcode::Ireduce | Opcode::Fdemote => {
                         if arg_type.lane_count() != ctrl_type.lane_count() {
                             return errors.nonfatal((
                                 inst,

@@ -20,7 +20,7 @@ pub trait Value: Clone + From<DataValue> {
     fn into_float(self) -> ValueResult<f64>;
     fn is_float(&self) -> bool;
     fn is_nan(&self) -> ValueResult<bool>;
-    fn bool(b: bool, ty: Type) -> ValueResult<Self>;
+    fn bool(b: bool, vec_elem: bool, ty: Type) -> ValueResult<Self>;
     fn into_bool(self) -> ValueResult<bool>;
     fn vector(v: [u8; 16], ty: Type) -> ValueResult<Self>;
     fn into_array(&self) -> ValueResult<[u8; 16]>;
@@ -152,6 +152,8 @@ pub enum ValueConversionKind {
     /// Converts an integer into a boolean, zero integers are converted into a
     /// `false`, while other integers are converted into `true`. Booleans are passed through.
     ToBoolean,
+    /// Converts an integer into either -1 or zero.
+    Mask(Type),
 }
 
 /// Helper for creating match expressions over [DataValue].
@@ -268,14 +270,39 @@ impl Value for DataValue {
         }
     }
 
-    fn bool(b: bool, ty: Type) -> ValueResult<Self> {
-        assert!(ty.is_bool());
-        Ok(DataValue::B(b))
+    fn bool(b: bool, vec_elem: bool, ty: Type) -> ValueResult<Self> {
+        assert!(ty.is_int());
+        macro_rules! make_bool {
+            ($ty:ident) => {
+                Ok(DataValue::$ty(if b {
+                    if vec_elem {
+                        -1
+                    } else {
+                        1
+                    }
+                } else {
+                    0
+                }))
+            };
+        }
+
+        match ty {
+            types::I8 => make_bool!(I8),
+            types::I16 => make_bool!(I16),
+            types::I32 => make_bool!(I32),
+            types::I64 => make_bool!(I64),
+            types::I128 => make_bool!(I128),
+            _ => Err(ValueError::InvalidType(ValueTypeClass::Integer, ty)),
+        }
     }
 
     fn into_bool(self) -> ValueResult<bool> {
         match self {
-            DataValue::B(b) => Ok(b),
+            DataValue::I8(b) => Ok(b != 0),
+            DataValue::I16(b) => Ok(b != 0),
+            DataValue::I32(b) => Ok(b != 0),
+            DataValue::I64(b) => Ok(b != 0),
+            DataValue::I128(b) => Ok(b != 0),
             _ => Err(ValueError::InvalidType(ValueTypeClass::Boolean, self.ty())),
         }
     }
@@ -316,16 +343,6 @@ impl Value for DataValue {
                 (DataValue::F32(n), types::I32) => DataValue::I32(n.bits() as i32),
                 (DataValue::F64(n), types::I64) => DataValue::I64(n.bits() as i64),
                 (DataValue::F32(n), types::F64) => DataValue::F64((n.as_f32() as f64).into()),
-                (DataValue::B(b), t) if t.is_bool() => DataValue::B(b),
-                (DataValue::B(b), t) if t.is_int() => {
-                    // Bools are represented in memory as all 1's
-                    let val = match (b, t) {
-                        (true, types::I128) => -1,
-                        (true, t) => (1i128 << t.bits()) - 1,
-                        _ => 0,
-                    };
-                    DataValue::int(val, t)?
-                }
                 (dv, t) if (t.is_int() || t.is_float()) && dv.ty() == t => dv,
                 (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
             },
@@ -432,10 +449,13 @@ impl Value for DataValue {
                 (s, _) => unimplemented!("conversion: {} -> {:?}", s.ty(), kind),
             },
             ValueConversionKind::ToBoolean => match self.ty() {
-                ty if ty.is_bool() => DataValue::B(self.into_bool()?),
-                ty if ty.is_int() => DataValue::B(self.into_int()? != 0),
+                ty if ty.is_int() => DataValue::I8(if self.into_int()? != 0 { 1 } else { 0 }),
                 ty => unimplemented!("conversion: {} -> {:?}", ty, kind),
             },
+            ValueConversionKind::Mask(ty) => {
+                let b = self.into_bool()?;
+                Self::bool(b, true, ty).unwrap()
+            }
         })
     }
 
@@ -662,11 +682,11 @@ impl Value for DataValue {
     }
 
     fn and(self, other: Self) -> ValueResult<Self> {
-        binary_match!(&(self, other); [B, I8, I16, I32, I64, I128, F32, F64])
+        binary_match!(&(self, other); [I8, I16, I32, I64, I128, F32, F64])
     }
 
     fn or(self, other: Self) -> ValueResult<Self> {
-        binary_match!(|(self, other); [B, I8, I16, I32, I64, I128, F32, F64])
+        binary_match!(|(self, other); [I8, I16, I32, I64, I128, F32, F64])
     }
 
     fn xor(self, other: Self) -> ValueResult<Self> {
@@ -674,7 +694,7 @@ impl Value for DataValue {
     }
 
     fn not(self) -> ValueResult<Self> {
-        unary_match!(!(self); [B, I8, I16, I32, I64, I128, F32, F64])
+        unary_match!(!(self); [I8, I16, I32, I64, I128, F32, F64])
     }
 
     fn count_ones(self) -> ValueResult<Self> {

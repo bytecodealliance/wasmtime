@@ -14,7 +14,7 @@ block0:
     return v5
 }
 
-function %cpu_flags() -> b1 {
+function %cpu_flags() -> i8 {
 block0:
     v0 = iconst.i32 7
     v1 = iconst.i32 8

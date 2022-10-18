@@ -397,10 +397,10 @@ impl Inst {
     /// Generic constructor for a load (zero-extending where appropriate).
     pub fn gen_load(into_reg: Writable<Reg>, mem: MemArg, ty: Type) -> Inst {
         match ty {
-            types::B1 | types::B8 | types::I8 => Inst::Load64ZExt8 { rd: into_reg, mem },
-            types::B16 | types::I16 => Inst::Load64ZExt16 { rd: into_reg, mem },
-            types::B32 | types::I32 => Inst::Load64ZExt32 { rd: into_reg, mem },
-            types::B64 | types::I64 | types::R64 => Inst::Load64 { rd: into_reg, mem },
+            types::I8 => Inst::Load64ZExt8 { rd: into_reg, mem },
+            types::I16 => Inst::Load64ZExt16 { rd: into_reg, mem },
+            types::I32 => Inst::Load64ZExt32 { rd: into_reg, mem },
+            types::I64 | types::R64 => Inst::Load64 { rd: into_reg, mem },
             types::F32 => Inst::VecLoadLaneUndef {
                 size: 32,
                 rd: into_reg,
@@ -414,7 +414,7 @@ impl Inst {
                 lane_imm: 0,
             },
             _ if ty.is_vector() && ty.bits() == 128 => Inst::VecLoad { rd: into_reg, mem },
-            types::B128 | types::I128 => Inst::VecLoad { rd: into_reg, mem },
+            types::I128 => Inst::VecLoad { rd: into_reg, mem },
             _ => unimplemented!("gen_load({})", ty),
         }
     }
@@ -422,10 +422,10 @@ impl Inst {
     /// Generic constructor for a store.
     pub fn gen_store(mem: MemArg, from_reg: Reg, ty: Type) -> Inst {
         match ty {
-            types::B1 | types::B8 | types::I8 => Inst::Store8 { rd: from_reg, mem },
-            types::B16 | types::I16 => Inst::Store16 { rd: from_reg, mem },
-            types::B32 | types::I32 => Inst::Store32 { rd: from_reg, mem },
-            types::B64 | types::I64 | types::R64 => Inst::Store64 { rd: from_reg, mem },
+            types::I8 => Inst::Store8 { rd: from_reg, mem },
+            types::I16 => Inst::Store16 { rd: from_reg, mem },
+            types::I32 => Inst::Store32 { rd: from_reg, mem },
+            types::I64 | types::R64 => Inst::Store64 { rd: from_reg, mem },
             types::F32 => Inst::VecStoreLane {
                 size: 32,
                 rd: from_reg,
@@ -439,7 +439,7 @@ impl Inst {
                 lane_imm: 0,
             },
             _ if ty.is_vector() && ty.bits() == 128 => Inst::VecStore { rd: from_reg, mem },
-            types::B128 | types::I128 => Inst::VecStore { rd: from_reg, mem },
+            types::I128 => Inst::VecStore { rd: from_reg, mem },
             _ => unimplemented!("gen_store({})", ty),
         }
     }
@@ -1086,7 +1086,7 @@ impl MachInst for Inst {
             .only_reg()
             .expect("multi-reg values not supported yet");
         match ty {
-            types::I128 | types::B128 => {
+            types::I128 => {
                 let mut ret = SmallVec::new();
                 ret.push(Inst::load_vec_constant(to_reg, value));
                 ret
@@ -1112,14 +1112,8 @@ impl MachInst for Inst {
                 ));
                 ret
             }
-            types::I64 | types::B64 | types::R64 => Inst::load_constant64(to_reg, value as u64),
-            types::B1
-            | types::I8
-            | types::B8
-            | types::I16
-            | types::B16
-            | types::I32
-            | types::B32 => Inst::load_constant32(to_reg, value as u32),
+            types::I64 | types::R64 => Inst::load_constant64(to_reg, value as u64),
+            types::I8 | types::I16 | types::I32 => Inst::load_constant32(to_reg, value as u32),
             _ => unreachable!(),
         }
     }
@@ -1140,17 +1134,11 @@ impl MachInst for Inst {
             types::I16 => Ok((&[RegClass::Int], &[types::I16])),
             types::I32 => Ok((&[RegClass::Int], &[types::I32])),
             types::I64 => Ok((&[RegClass::Int], &[types::I64])),
-            types::B1 => Ok((&[RegClass::Int], &[types::B1])),
-            types::B8 => Ok((&[RegClass::Int], &[types::B8])),
-            types::B16 => Ok((&[RegClass::Int], &[types::B16])),
-            types::B32 => Ok((&[RegClass::Int], &[types::B32])),
-            types::B64 => Ok((&[RegClass::Int], &[types::B64])),
             types::R32 => panic!("32-bit reftype pointer should never be seen on s390x"),
             types::R64 => Ok((&[RegClass::Int], &[types::R64])),
             types::F32 => Ok((&[RegClass::Float], &[types::F32])),
             types::F64 => Ok((&[RegClass::Float], &[types::F64])),
             types::I128 => Ok((&[RegClass::Float], &[types::I128])),
-            types::B128 => Ok((&[RegClass::Float], &[types::B128])),
             _ if ty.is_vector() && ty.bits() == 128 => Ok((&[RegClass::Float], &[types::I8X16])),
             // FIXME: We don't really have IFLAGS, but need to allow it here
             // for now to support the SelectifSpectreGuard instruction.

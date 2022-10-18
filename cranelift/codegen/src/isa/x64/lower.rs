@@ -22,7 +22,6 @@ use target_lexicon::Triple;
 fn is_int_or_ref_ty(ty: Type) -> bool {
     match ty {
         types::I8 | types::I16 | types::I32 | types::I64 | types::R64 => true,
-        types::B1 | types::B8 | types::B16 | types::B32 | types::B64 => true,
         types::R32 => panic!("shouldn't have 32-bits refs on x64"),
         _ => false,
     }
@@ -328,7 +327,6 @@ fn lower_insn_to_regs(
     let op = ctx.data(insn).opcode();
     match op {
         Opcode::Iconst
-        | Opcode::Bconst
         | Opcode::F32const
         | Opcode::F64const
         | Opcode::Null
@@ -369,10 +367,7 @@ fn lower_insn_to_regs(
         | Opcode::IsInvalid
         | Opcode::Uextend
         | Opcode::Sextend
-        | Opcode::Breduce
-        | Opcode::Bextend
         | Opcode::Ireduce
-        | Opcode::Bint
         | Opcode::Debugtrap
         | Opcode::WideningPairwiseDotProductS
         | Opcode::Fadd

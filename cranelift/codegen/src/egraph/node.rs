@@ -322,15 +322,11 @@ impl std::ops::Add<Cost> for Cost {
 pub(crate) fn op_cost(op: &InstructionImms) -> Cost {
     match op.opcode() {
         // Constants.
-        Opcode::Iconst | Opcode::F32const | Opcode::F64const | Opcode::Bconst => Cost(0),
+        Opcode::Iconst | Opcode::F32const | Opcode::F64const => Cost(0),
         // Extends/reduces.
-        Opcode::Bextend
-        | Opcode::Breduce
-        | Opcode::Uextend
-        | Opcode::Sextend
-        | Opcode::Ireduce
-        | Opcode::Iconcat
-        | Opcode::Isplit => Cost(1),
+        Opcode::Uextend | Opcode::Sextend | Opcode::Ireduce | Opcode::Iconcat | Opcode::Isplit => {
+            Cost(1)
+        }
         // "Simple" arithmetic.
         Opcode::Iadd
         | Opcode::Isub

@@ -4,7 +4,7 @@ target s390x
 set enable_simd
 target x86_64 has_sse3 has_ssse3 has_sse41
 
-function %icmp_eq_i8x16() -> b8 {
+function %icmp_eq_i8x16() -> i8 {
 block0:
     v0 = vconst.i8x16 0x00
     v1 = vconst.i8x16 0x00
@@ -14,7 +14,7 @@ block0:
 }
 ; run
 
-function %icmp_eq_i64x2() -> b64 {
+function %icmp_eq_i64x2() -> i64 {
 block0:
     v0 = vconst.i64x2 0xffffffffffffffffffffffffffffffff
     v1 = vconst.i64x2 0xffffffffffffffffffffffffffffffff
@@ -24,7 +24,7 @@ block0:
 }
 ; run
 
-function %icmp_ne_i32x4() -> b1 {
+function %icmp_ne_i32x4() -> i8 {
 block0:
     v0 = vconst.i32x4 [0 1 2 3]
     v1 = vconst.i32x4 [7 7 7 7]
@@ -34,19 +34,19 @@ block0:
 }
 ; run
 
-function %icmp_ne_i16x8() -> b1 {
+function %icmp_ne_i16x8() -> i8 {
 block0:
     v0 = vconst.i16x8 [0 1 2 3 4 5 6 7]
     v1 = vconst.i16x8 [0 1 2 3 4 5 6 7]
     v2 = icmp ne v0, v1
     v3 = vall_true v2
-    v4 = bint.i32 v3
+    v4 = uextend.i32 v3
     v5 = icmp_imm eq v4, 0
     return v5
 }
 ; run
 
-function %icmp_sgt_i8x16() -> b1 {
+function %icmp_sgt_i8x16() -> i8 {
 block0:
     v0 = vconst.i8x16 [0 1 2 0 0 0 0 0 0 0 0 0 0 0 0 0]
     v1 = vconst.i8x16 [1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0xff]
@@ -59,7 +59,7 @@ block0:
 }
 ; run
 
-function %icmp_sgt_i64x2() -> b1 {
+function %icmp_sgt_i64x2() -> i8 {
 block0:
     v0 = vconst.i64x2 [0 -42]
     v1 = vconst.i64x2 [-1 -43]
@@ -69,7 +69,7 @@ block0:
 }
 ; run
 
-function %icmp_ugt_i8x16() -> b1 {
+function %icmp_ugt_i8x16() -> i8 {
 block0:
     v0 = vconst.i8x16 [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]
     v1 = vconst.i8x16 [0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
@@ -79,7 +79,7 @@ block0:
 }
 ; run
 
-function %icmp_sge_i16x8() -> b1 {
+function %icmp_sge_i16x8() -> i8 {
 block0:
     v0 = vconst.i16x8 [-1 1 2 3 4 5 6 7]
     v1 = vconst.i16x8 [-1 1 1 1 1 1 1 1]
@@ -89,7 +89,7 @@ block0:
 }
 ; run
 
-function %icmp_uge_i32x4() -> b1 {
+function %icmp_uge_i32x4() -> i8 {
 block0:
     v0 = vconst.i32x4 [1 2 3 4]
     v1 = vconst.i32x4 [1 1 1 1]
@@ -99,7 +99,7 @@ block0:
 }
 ; run
 
-function %icmp_slt_i32x4() -> b1 {
+function %icmp_slt_i32x4() -> i8 {
 block0:
     v0 = vconst.i32x4 [-1 1 1 1]
     v1 = vconst.i32x4 [1 2 3 4]
@@ -109,7 +109,7 @@ block0:
 }
 ; run
 
-function %icmp_ult_i32x4() -> b1 {
+function %icmp_ult_i32x4() -> i8 {
 block0:
     v0 = vconst.i32x4 [1 1 1 1]
     v1 = vconst.i32x4 [-1 2 3 4] ; -1 = 0xffff... will be greater than 1 when unsigned
@@ -120,7 +120,7 @@ block0:
 ; run
 
 
-function %icmp_ult_i16x8() -> b1 {
+function %icmp_ult_i16x8() -> i8 {
 block0:
     v0 = vconst.i16x8 [-1 -1 -1 -1 -1 -1 -1 -1]
     v1 = vconst.i16x8 [-1 -1 -1 -1 -1 -1 -1 -1]
@@ -133,7 +133,7 @@ block0:
 }
 ; run
 
-function %icmp_sle_i16x8() -> b1 {
+function %icmp_sle_i16x8() -> i8 {
 block0:
     v0 = vconst.i16x8 [-1 -1 0 0 0 0 0 0]
     v1 = vconst.i16x8 [-1  0 0 0 0 0 0 0]
@@ -143,7 +143,7 @@ block0:
 }
 ; run
 
-function %icmp_ule_i16x8() -> b1 {
+function %icmp_ule_i16x8() -> i8 {
 block0:
     v0 = vconst.i16x8 [-1  0 0 0 0 0 0 0]
     v1 = vconst.i16x8 [-1 -1 0 0 0 0 0 0]
@@ -153,7 +153,7 @@ block0:
 }
 ; run
 
-function %fcmp_eq_f32x4() -> b1 {
+function %fcmp_eq_f32x4() -> i8 {
 block0:
     v0 = vconst.f32x4 [0.0 -0x4.2 0x0.33333 -0.0]
     v1 = vconst.f32x4 [0.0 -0x4.2 0x0.33333 -0.0]
@@ -163,7 +163,7 @@ block0:
 }
 ; run
 
-function %fcmp_lt_f32x4() -> b1 {
+function %fcmp_lt_f32x4() -> i8 {
 block0:
     v0 = vconst.f32x4 [0.0      -0x4.2  0x0.0       -0.0]
     v1 = vconst.f32x4 [0x0.001  0x4.2   0x0.33333   0x1.0]
@@ -173,7 +173,7 @@ block0:
 }
 ; run
 
-function %fcmp_ge_f64x2() -> b1 {
+function %fcmp_ge_f64x2() -> i8 {
 block0:
     v0 = vconst.f64x2 [0x0.0  0x4.2]
     v1 = vconst.f64x2 [0.0    0x4.1]
@@ -183,7 +183,7 @@ block0:
 }
 ; run
 
-function %fcmp_uno_f64x2() -> b1 {
+function %fcmp_uno_f64x2() -> i8 {
 block0:
     v0 = vconst.f64x2 [0.0  NaN]
     v1 = vconst.f64x2 [NaN  0x4.1]
@@ -193,7 +193,7 @@ block0:
 }
 ; run
 
-function %fcmp_gt_nans_f32x4() -> b1 {
+function %fcmp_gt_nans_f32x4() -> i8 {
 block0:
     v0 = vconst.f32x4 [NaN 0x42.0 -NaN NaN]
     v1 = vconst.f32x4 [NaN NaN 0x42.0 Inf]

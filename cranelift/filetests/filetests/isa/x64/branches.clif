@@ -126,16 +126,16 @@ block2:
 ;   popq    %rbp
 ;   ret
 
-function %f4(f32, f32) -> b1 {
+function %f4(f32, f32) -> i8 {
 block0(v0: f32, v1: f32):
   v2 = fcmp eq v0, v1
   brz v2, block1
   jump block2
 block1:
-  v3 = bconst.b1 true
+  v3 = iconst.i8 1
   return v3
 block2:
-  v4 = bconst.b1 false
+  v4 = iconst.i8 0
   return v4
 }
 
@@ -156,16 +156,16 @@ block2:
 ;   popq    %rbp
 ;   ret
 
-function %f4(f32, f32) -> b1 {
+function %f4(f32, f32) -> i8 {
 block0(v0: f32, v1: f32):
   v2 = fcmp ne v0, v1
   brz v2, block1
   jump block2
 block1:
-  v3 = bconst.b1 true
+  v3 = iconst.i8 1
   return v3
 block2:
-  v4 = bconst.b1 false
+  v4 = iconst.i8 0
   return v4
 }
 
@@ -187,18 +187,18 @@ block2:
 ;   ret
 
 
-function %f5(i32) -> b1 {
+function %f5(i32) -> i8 {
   jt0 = jump_table [block1, block2]
 
 block0(v0: i32):
   br_table v0, block1, jt0
 
 block1:
-  v1 = bconst.b1 true
+  v1 = iconst.i8 1
   return v1
 
 block2:
-  v2 = bconst.b1 false
+  v2 = iconst.i8 0
   return v2
 }
 
@@ -222,17 +222,17 @@ block2:
 ;   popq    %rbp
 ;   ret
 
-function %f6(i64) -> b1 {
+function %f6(i64) -> i8 {
 block0(v0: i64):
   v1 = iconst.i64 0
   v2 = icmp slt v0, v1
   brnz v2, block1
   jump block2
 block1:
-  v3 = bconst.b1 true
+  v3 = iconst.i8 1
   return v3
 block2:
-  v4 = bconst.b1 false
+  v4 = iconst.i8 0
   return v4
 }
 
@@ -252,17 +252,17 @@ block2:
 ;   popq    %rbp
 ;   ret
 
-function %f7(i32) -> b1 {
+function %f7(i32) -> i8 {
 block0(v0: i32):
   v1 = iconst.i32 0
   v2 = icmp slt v0, v1
   brnz v2, block1
   jump block2
 block1:
-  v3 = bconst.b1 true
+  v3 = iconst.i8 1
   return v3
 block2:
-  v4 = bconst.b1 false
+  v4 = iconst.i8 0
   return v4
 }
 

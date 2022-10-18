@@ -59,10 +59,10 @@ block0(v0: i8):
 ;   dup v0.16b, w0
 ;   ret
 
-function %splat_b16() -> b16x8 {
+function %splat_i16() -> i16x8 {
 block0:
-    v0 = bconst.b16 true
-    v1 = splat.b16x8 v0
+    v0 = iconst.i16 -1
+    v1 = splat.i16x8 v0
     return v1
 }
 

@@ -1,7 +1,7 @@
 test compile precise-output
 target s390x
 
-function %icmp_slt_i64(i64, i64) -> b1 {
+function %icmp_slt_i64(i64, i64) -> i8 {
 block0(v0: i64, v1: i64):
   v2 = icmp.i64 slt v0, v1
   return v2
@@ -13,7 +13,7 @@ block0(v0: i64, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i64_ext32(i64, i32) -> b1 {
+function %icmp_slt_i64_ext32(i64, i32) -> i8 {
 block0(v0: i64, v1: i32):
   v2 = sextend.i64 v1
   v3 = icmp.i64 slt v0, v2
@@ -26,7 +26,7 @@ block0(v0: i64, v1: i32):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i64_imm16(i64) -> b1 {
+function %icmp_slt_i64_imm16(i64) -> i8 {
 block0(v0: i64):
   v1 = iconst.i64 1
   v2 = icmp.i64 slt v0, v1
@@ -39,7 +39,7 @@ block0(v0: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i64_imm32(i64) -> b1 {
+function %icmp_slt_i64_imm32(i64) -> i8 {
 block0(v0: i64):
   v1 = iconst.i64 32768
   v2 = icmp.i64 slt v0, v1
@@ -52,7 +52,7 @@ block0(v0: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i64_mem(i64, i64) -> b1 {
+function %icmp_slt_i64_mem(i64, i64) -> i8 {
 block0(v0: i64, v1: i64):
   v2 = load.i64 v1
   v3 = icmp.i64 slt v0, v2
@@ -65,7 +65,7 @@ block0(v0: i64, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i64_sym(i64) -> b1 {
+function %icmp_slt_i64_sym(i64) -> i8 {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
@@ -80,7 +80,7 @@ block0(v0: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i64_mem_ext16(i64, i64) -> b1 {
+function %icmp_slt_i64_mem_ext16(i64, i64) -> i8 {
 block0(v0: i64, v1: i64):
   v2 = sload16.i64 v1
   v3 = icmp.i64 slt v0, v2
@@ -93,7 +93,7 @@ block0(v0: i64, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i64_sym_ext16(i64) -> b1 {
+function %icmp_slt_i64_sym_ext16(i64) -> i8 {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
@@ -108,7 +108,7 @@ block0(v0: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i64_mem_ext32(i64, i64) -> b1 {
+function %icmp_slt_i64_mem_ext32(i64, i64) -> i8 {
 block0(v0: i64, v1: i64):
   v2 = sload32.i64 v1
   v3 = icmp.i64 slt v0, v2
@@ -121,7 +121,7 @@ block0(v0: i64, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i64_sym_ext32(i64) -> b1 {
+function %icmp_slt_i64_sym_ext32(i64) -> i8 {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
@@ -136,7 +136,7 @@ block0(v0: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i32(i32, i32) -> b1 {
+function %icmp_slt_i32(i32, i32) -> i8 {
 block0(v0: i32, v1: i32):
   v2 = icmp.i32 slt v0, v1
   return v2
@@ -148,7 +148,7 @@ block0(v0: i32, v1: i32):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i32_imm16(i32) -> b1 {
+function %icmp_slt_i32_imm16(i32) -> i8 {
 block0(v0: i32):
   v1 = iconst.i32 1
   v2 = icmp.i32 slt v0, v1
@@ -161,7 +161,7 @@ block0(v0: i32):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i32_imm(i32) -> b1 {
+function %icmp_slt_i32_imm(i32) -> i8 {
 block0(v0: i32):
   v1 = iconst.i32 32768
   v2 = icmp.i32 slt v0, v1
@@ -174,7 +174,7 @@ block0(v0: i32):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i32_mem(i32, i64) -> b1 {
+function %icmp_slt_i32_mem(i32, i64) -> i8 {
 block0(v0: i32, v1: i64):
   v2 = load.i32 v1
   v3 = icmp.i32 slt v0, v2
@@ -187,7 +187,7 @@ block0(v0: i32, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i32_memoff(i32, i64) -> b1 {
+function %icmp_slt_i32_memoff(i32, i64) -> i8 {
 block0(v0: i32, v1: i64):
   v2 = load.i32 v1+4096
   v3 = icmp.i32 slt v0, v2
@@ -200,7 +200,7 @@ block0(v0: i32, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i32_sym(i32) -> b1 {
+function %icmp_slt_i32_sym(i32) -> i8 {
   gv0 = symbol colocated %sym
 block0(v0: i32):
   v1 = symbol_value.i64 gv0
@@ -215,7 +215,7 @@ block0(v0: i32):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i32_mem_ext16(i32, i64) -> b1 {
+function %icmp_slt_i32_mem_ext16(i32, i64) -> i8 {
 block0(v0: i32, v1: i64):
   v2 = sload16.i32 v1
   v3 = icmp.i32 slt v0, v2
@@ -228,7 +228,7 @@ block0(v0: i32, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i32_memoff_ext16(i32, i64) -> b1 {
+function %icmp_slt_i32_memoff_ext16(i32, i64) -> i8 {
 block0(v0: i32, v1: i64):
   v2 = sload16.i32 v1+4096
   v3 = icmp.i32 slt v0, v2
@@ -241,7 +241,7 @@ block0(v0: i32, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i32_sym_ext16(i32) -> b1 {
+function %icmp_slt_i32_sym_ext16(i32) -> i8 {
   gv0 = symbol colocated %sym
 block0(v0: i32):
   v1 = symbol_value.i64 gv0
@@ -256,7 +256,7 @@ block0(v0: i32):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i16(i16, i16) -> b1 {
+function %icmp_slt_i16(i16, i16) -> i8 {
 block0(v0: i16, v1: i16):
   v2 = icmp.i16 slt v0, v1
   return v2
@@ -270,7 +270,7 @@ block0(v0: i16, v1: i16):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i16_imm(i16) -> b1 {
+function %icmp_slt_i16_imm(i16) -> i8 {
 block0(v0: i16):
   v1 = iconst.i16 1
   v2 = icmp.i16 slt v0, v1
@@ -284,7 +284,7 @@ block0(v0: i16):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i16_mem(i16, i64) -> b1 {
+function %icmp_slt_i16_mem(i16, i64) -> i8 {
 block0(v0: i16, v1: i64):
   v2 = load.i16 v1
   v3 = icmp.i16 slt v0, v2
@@ -298,7 +298,7 @@ block0(v0: i16, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i16_sym(i16) -> b1 {
+function %icmp_slt_i16_sym(i16) -> i8 {
   gv0 = symbol colocated %sym
 block0(v0: i16):
   v1 = symbol_value.i64 gv0
@@ -314,7 +314,7 @@ block0(v0: i16):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i8(i8, i8) -> b1 {
+function %icmp_slt_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
   v2 = icmp.i8 slt v0, v1
   return v2
@@ -328,7 +328,7 @@ block0(v0: i8, v1: i8):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i8_imm(i8) -> b1 {
+function %icmp_slt_i8_imm(i8) -> i8 {
 block0(v0: i8):
   v1 = iconst.i8 1
   v2 = icmp.i8 slt v0, v1
@@ -342,7 +342,7 @@ block0(v0: i8):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_slt_i8_mem(i8, i64) -> b1 {
+function %icmp_slt_i8_mem(i8, i64) -> i8 {
 block0(v0: i8, v1: i64):
   v2 = load.i8 v1
   v3 = icmp.i8 slt v0, v2
@@ -357,7 +357,7 @@ block0(v0: i8, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i64(i64, i64) -> b1 {
+function %icmp_ult_i64(i64, i64) -> i8 {
 block0(v0: i64, v1: i64):
   v2 = icmp.i64 ult v0, v1
   return v2
@@ -369,7 +369,7 @@ block0(v0: i64, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i64_ext32(i64, i32) -> b1 {
+function %icmp_ult_i64_ext32(i64, i32) -> i8 {
 block0(v0: i64, v1: i32):
   v2 = uextend.i64 v1
   v3 = icmp.i64 ult v0, v2
@@ -382,7 +382,7 @@ block0(v0: i64, v1: i32):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i64_imm(i64) -> b1 {
+function %icmp_ult_i64_imm(i64) -> i8 {
 block0(v0: i64):
   v1 = iconst.i64 1
   v2 = icmp.i64 ult v0, v1
@@ -395,7 +395,7 @@ block0(v0: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i64_mem(i64, i64) -> b1 {
+function %icmp_ult_i64_mem(i64, i64) -> i8 {
 block0(v0: i64, v1: i64):
   v2 = load.i64 v1
   v3 = icmp.i64 ult v0, v2
@@ -408,7 +408,7 @@ block0(v0: i64, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i64_sym(i64) -> b1 {
+function %icmp_ult_i64_sym(i64) -> i8 {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
@@ -423,7 +423,7 @@ block0(v0: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i64_mem_ext32(i64, i64) -> b1 {
+function %icmp_ult_i64_mem_ext32(i64, i64) -> i8 {
 block0(v0: i64, v1: i64):
   v2 = uload32.i64 v1
   v3 = icmp.i64 ult v0, v2
@@ -436,7 +436,7 @@ block0(v0: i64, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i64_sym_ext32(i64) -> b1 {
+function %icmp_ult_i64_sym_ext32(i64) -> i8 {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
@@ -451,7 +451,7 @@ block0(v0: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i64_mem_ext16(i64, i64) -> b1 {
+function %icmp_ult_i64_mem_ext16(i64, i64) -> i8 {
 block0(v0: i64, v1: i64):
   v2 = uload16.i64 v1
   v3 = icmp.i64 ult v0, v2
@@ -465,7 +465,7 @@ block0(v0: i64, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i64_sym_ext16(i64) -> b1 {
+function %icmp_ult_i64_sym_ext16(i64) -> i8 {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
@@ -480,7 +480,7 @@ block0(v0: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i32(i32, i32) -> b1 {
+function %icmp_ult_i32(i32, i32) -> i8 {
 block0(v0: i32, v1: i32):
   v2 = icmp.i32 ult v0, v1
   return v2
@@ -492,7 +492,7 @@ block0(v0: i32, v1: i32):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i32_imm(i32) -> b1 {
+function %icmp_ult_i32_imm(i32) -> i8 {
 block0(v0: i32):
   v1 = iconst.i32 1
   v2 = icmp.i32 ult v0, v1
@@ -505,7 +505,7 @@ block0(v0: i32):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i32_mem(i32, i64) -> b1 {
+function %icmp_ult_i32_mem(i32, i64) -> i8 {
 block0(v0: i32, v1: i64):
   v2 = load.i32 v1
   v3 = icmp.i32 ult v0, v2
@@ -518,7 +518,7 @@ block0(v0: i32, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i32_memoff(i32, i64) -> b1 {
+function %icmp_ult_i32_memoff(i32, i64) -> i8 {
 block0(v0: i32, v1: i64):
   v2 = load.i32 v1+4096
   v3 = icmp.i32 ult v0, v2
@@ -531,7 +531,7 @@ block0(v0: i32, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i32_sym(i32) -> b1 {
+function %icmp_ult_i32_sym(i32) -> i8 {
   gv0 = symbol colocated %sym
 block0(v0: i32):
   v1 = symbol_value.i64 gv0
@@ -546,7 +546,7 @@ block0(v0: i32):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i32_mem_ext16(i32, i64) -> b1 {
+function %icmp_ult_i32_mem_ext16(i32, i64) -> i8 {
 block0(v0: i32, v1: i64):
   v2 = uload16.i32 v1
   v3 = icmp.i32 ult v0, v2
@@ -560,7 +560,7 @@ block0(v0: i32, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i32_sym_ext16(i32) -> b1 {
+function %icmp_ult_i32_sym_ext16(i32) -> i8 {
   gv0 = symbol colocated %sym
 block0(v0: i32):
   v1 = symbol_value.i64 gv0
@@ -575,7 +575,7 @@ block0(v0: i32):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i16(i16, i16) -> b1 {
+function %icmp_ult_i16(i16, i16) -> i8 {
 block0(v0: i16, v1: i16):
   v2 = icmp.i16 ult v0, v1
   return v2
@@ -589,7 +589,7 @@ block0(v0: i16, v1: i16):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i16_imm(i16) -> b1 {
+function %icmp_ult_i16_imm(i16) -> i8 {
 block0(v0: i16):
   v1 = iconst.i16 1
   v2 = icmp.i16 ult v0, v1
@@ -603,7 +603,7 @@ block0(v0: i16):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i16_mem(i16, i64) -> b1 {
+function %icmp_ult_i16_mem(i16, i64) -> i8 {
 block0(v0: i16, v1: i64):
   v2 = load.i16 v1
   v3 = icmp.i16 ult v0, v2
@@ -618,7 +618,7 @@ block0(v0: i16, v1: i64):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i16_mem(i16) -> b1 {
+function %icmp_ult_i16_mem(i16) -> i8 {
   gv0 = symbol colocated %sym
 block0(v0: i16):
   v1 = symbol_value.i64 gv0
@@ -634,7 +634,7 @@ block0(v0: i16):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i8(i8, i8) -> b1 {
+function %icmp_ult_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
   v2 = icmp.i8 ult v0, v1
   return v2
@@ -648,7 +648,7 @@ block0(v0: i8, v1: i8):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i8_imm(i8) -> b1 {
+function %icmp_ult_i8_imm(i8) -> i8 {
 block0(v0: i8):
   v1 = iconst.i8 1
   v2 = icmp.i8 ult v0, v1
@@ -662,7 +662,7 @@ block0(v0: i8):
 ;   lochil %r2, 1
 ;   br %r14
 
-function %icmp_ult_i8_mem(i8, i64) -> b1 {
+function %icmp_ult_i8_mem(i8, i64) -> i8 {
 block0(v0: i8, v1: i64):
   v2 = load.i8 v1
   v3 = icmp.i8 ult v0, v2

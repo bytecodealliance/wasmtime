@@ -5,7 +5,7 @@ function %f0(i64, i64) -> i64, i64 {
 block0(v0: i64, v1: i64):
     v2 = load.i64 v1
     v3 = icmp eq v0, v2
-    v4 = bint.i64 v3
+    v4 = uextend.i64 v3
     v5 = select.i64 v3, v0, v1
     return v4, v5
 }
@@ -16,7 +16,7 @@ block0(v0: i64, v1: i64):
 ;   movq    0(%rsi), %r11
 ;   cmpq    %r11, %rdi
 ;   setz    %al
-;   andq    %rax, $1, %rax
+;   movzbq  %al, %rax
 ;   cmpq    %r11, %rdi
 ;   movq    %rsi, %rdx
 ;   cmovzq  %rdi, %rdx, %rdx
@@ -28,7 +28,7 @@ function %f1(f64, i64) -> i64, f64 {
 block0(v0: f64, v1: i64):
     v2 = load.f64 v1
     v3 = fcmp eq v0, v2
-    v4 = bint.i64 v3
+    v4 = uextend.i64 v3
     v5 = select.f64 v3, v0, v0
     return v4, v5
 }
@@ -38,10 +38,10 @@ block0(v0: f64, v1: i64):
 ; block0:
 ;   movsd   0(%rdi), %xmm11
 ;   ucomisd %xmm11, %xmm0
-;   setnp   %al
-;   setz    %cl
-;   andl    %eax, %ecx, %eax
-;   andq    %rax, $1, %rax
+;   setnp   %cl
+;   setz    %dl
+;   andl    %ecx, %edx, %ecx
+;   movzbq  %cl, %rax
 ;   ucomisd %xmm0, %xmm11
 ;   movdqa  %xmm0, %xmm12
 ;   mov z, sd; j%xmm0 $next; mov%xmm12 %xmm12, %xmm12; $next: 

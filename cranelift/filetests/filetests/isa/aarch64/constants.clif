@@ -2,19 +2,19 @@ test compile precise-output
 set unwind_info=false
 target aarch64
 
-function %f() -> b8 {
+function %f() -> i8 {
 block0:
-  v0 = bconst.b8 true
+  v0 = iconst.i8 -1
   return v0
 }
 
 ; block0:
-;   movz x0, #255
+;   movn x0, #0
 ;   ret
 
-function %f() -> b16 {
+function %f() -> i16 {
 block0:
-  v0 = bconst.b16 false
+  v0 = iconst.i16 0
   return v0
 }
 

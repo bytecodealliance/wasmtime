@@ -4,16 +4,16 @@ target s390x
 set enable_simd
 target x86_64 has_sse3 has_ssse3 has_sse41
 
-function %bnot() -> b32 {
+function %bnot() -> i32 {
 block0:
-    v0 = vconst.b32x4 [true true true false]
+    v0 = vconst.i32x4 [-1 -1 -1 0]
     v1 = bnot v0
     v2 = extractlane v1, 3
     return v2
 }
 ; run
 
-function %band_not() -> b1 {
+function %band_not() -> i8 {
 block0:
     v0 = vconst.i16x8 [1 0 0 0 0 0 0 0]
     v1 = vconst.i16x8 [0 0 0 0 0 0 0 0]
@@ -24,7 +24,7 @@ block0:
 }
 ; run
 
-function %vany_true_i8x16() -> b1, b1 {
+function %vany_true_i8x16() -> i8, i8 {
 block0:
     v0 = vconst.i8x16 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
     v1 = vany_true v0
@@ -34,9 +34,9 @@ block0:
 
     return v1, v3
 }
-; run: %vany_true_i8x16() == [false, true]
+; run: %vany_true_i8x16() == [0, 1]
 
-function %vany_true_i16x8() -> b1, b1 {
+function %vany_true_i16x8() -> i8, i8 {
 block0:
     v0 = vconst.i16x8 [0 0 0 0 0 0 0 0]
     v1 = vany_true v0
@@ -46,9 +46,9 @@ block0:
 
     return v1, v3
 }
-; run: %vany_true_i16x8() == [false, true]
+; run: %vany_true_i16x8() == [0, 1]
 
-function %vany_true_i32x4() -> b1, b1 {
+function %vany_true_i32x4() -> i8, i8 {
 block0:
     v0 = vconst.i32x4 [0 0 0 0]
     v1 = vany_true v0
@@ -58,9 +58,9 @@ block0:
 
     return v1, v3
 }
-; run: %vany_true_i32x4() == [false, true]
+; run: %vany_true_i32x4() == [0, 1]
 
-function %vany_true_i64x2() -> b1, b1 {
+function %vany_true_i64x2() -> i8, i8 {
 block0:
     v0 = vconst.i64x2 [0 0]
     v1 = vany_true v0
@@ -70,9 +70,9 @@ block0:
 
     return v1, v3
 }
-; run: %vany_true_i64x2() == [false, true]
+; run: %vany_true_i64x2() == [0, 1]
 
-function %vany_true_f32x4() -> b1, b1 {
+function %vany_true_f32x4() -> i8, i8 {
 block0:
     v0 = vconst.f32x4 [0.0 0.0 0.0 0.0]
     v1 = vany_true v0
@@ -82,9 +82,9 @@ block0:
 
     return v1, v3
 }
-; run: %vany_true_f32x4() == [false, true]
+; run: %vany_true_f32x4() == [0, 1]
 
-function %vany_true_f64x2() -> b1, b1 {
+function %vany_true_f64x2() -> i8, i8 {
 block0:
     v0 = vconst.f64x2 [0.0 0.0]
     v1 = vany_true v0
@@ -94,31 +94,31 @@ block0:
 
     return v1, v3
 }
-; run: %vany_true_f64x2() == [false, true]
+; run: %vany_true_f64x2() == [0, 1]
 
-function %vany_true_b32x4() -> b1 {
+function %vany_true_i32x4_imm() -> i8 {
 block0:
-    v0 = vconst.b32x4 [false false false false]
+    v0 = vconst.i32x4 [0 0 0 0]
     v1 = vany_true v0
-    v2 = bint.i32 v1
+    v2 = uextend.i32 v1
     v3 = icmp_imm eq v2, 0
     return v3
 }
 ; run
 
-function %vall_true_i16x8() -> b1 {
+function %vall_true_i16x8() -> i8 {
 block0:
     v0 = vconst.i16x8 [1 0 0 0 0 0 0 0]
     v1 = vall_true v0
-    v2 = bint.i32 v1
+    v2 = uextend.i32 v1
     v3 = icmp_imm eq v2, 0
     return v3
 }
 ; run
 
-function %vall_true_b32x4() -> b1 {
+function %vall_true_i32x4() -> i8 {
 block0:
-    v0 = vconst.b32x4 [true true true true]
+    v0 = vconst.i32x4 [-1 -1 -1 -1]
     v1 = vall_true v0
     return v1
 }

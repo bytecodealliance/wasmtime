@@ -1012,13 +1012,13 @@ impl<'a> FunctionBuilder<'a> {
         use IntCC::*;
         let (zero_cc, empty_imm) = match int_cc {
             //
-            Equal => (Equal, true),
-            NotEqual => (NotEqual, false),
+            Equal => (Equal, 1),
+            NotEqual => (NotEqual, 0),
 
-            UnsignedLessThan => (SignedLessThan, false),
-            UnsignedGreaterThanOrEqual => (SignedGreaterThanOrEqual, true),
-            UnsignedGreaterThan => (SignedGreaterThan, false),
-            UnsignedLessThanOrEqual => (SignedLessThanOrEqual, true),
+            UnsignedLessThan => (SignedLessThan, 0),
+            UnsignedGreaterThanOrEqual => (SignedGreaterThanOrEqual, 1),
+            UnsignedGreaterThan => (SignedGreaterThan, 0),
+            UnsignedLessThanOrEqual => (SignedLessThanOrEqual, 1),
 
             SignedLessThan
             | SignedGreaterThanOrEqual
@@ -1029,7 +1029,7 @@ impl<'a> FunctionBuilder<'a> {
         };
 
         if size == 0 {
-            return self.ins().bconst(types::B1, empty_imm);
+            return self.ins().iconst(types::I8, empty_imm);
         }
 
         // Future work could consider expanding this to handle more-complex scenarios.
@@ -1562,8 +1562,8 @@ block0:
     v1 -> v4
     v3 = iconst.i64 0
     v0 -> v3
-    v2 = bconst.b1 true
-    return v2  ; v2 = true",
+    v2 = iconst.i8 1
+    return v2  ; v2 = 1",
             |builder, target, x, y| {
                 builder.emit_small_memory_compare(
                     target.frontend_config(),
@@ -1718,7 +1718,7 @@ block0:
             .expect("Should be able to create backend with default flags");
 
         let mut sig = Signature::new(target.default_call_conv());
-        sig.returns.push(AbiParam::new(B1));
+        sig.returns.push(AbiParam::new(I8));
 
         let mut fn_ctx = FunctionBuilderContext::new();
         let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
@@ -1744,7 +1744,7 @@ block0:
 
         check(
             &func,
-            &format!("function %sample() -> b1 system_v {{{}\n}}\n", expected),
+            &format!("function %sample() -> i8 system_v {{{}\n}}\n", expected),
         );
     }
 
@@ -1752,7 +1752,7 @@ block0:
     fn undef_vector_vars() {
         let mut sig = Signature::new(CallConv::SystemV);
         sig.returns.push(AbiParam::new(I8X16));
-        sig.returns.push(AbiParam::new(B8X16));
+        sig.returns.push(AbiParam::new(I8X16));
         sig.returns.push(AbiParam::new(F32X4));
 
         let mut fn_ctx = FunctionBuilderContext::new();
@@ -1765,7 +1765,7 @@ block0:
             let b = Variable::new(1);
             let c = Variable::new(2);
             builder.declare_var(a, I8X16);
-            builder.declare_var(b, B8X16);
+            builder.declare_var(b, I8X16);
             builder.declare_var(c, F32X4);
             builder.switch_to_block(block0);
 
@@ -1780,14 +1780,14 @@ block0:
 
         check(
             &func,
-            "function %sample() -> i8x16, b8x16, f32x4 system_v {
+            "function %sample() -> i8x16, i8x16, f32x4 system_v {
     const0 = 0x00000000000000000000000000000000
 
 block0:
     v5 = f32const 0.0
     v6 = splat.f32x4 v5  ; v5 = 0.0
     v2 -> v6
-    v4 = vconst.b8x16 const0
+    v4 = vconst.i8x16 const0
     v1 -> v4
     v3 = vconst.i8x16 const0
     v0 -> v3

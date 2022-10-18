@@ -10,16 +10,14 @@ function u0:0() -> i8 system_v {
 block0:
     v0 = iconst.i16 0xddcc
     v1 = icmp.i16 ne v0, v0
-    v2 = bint.i8 v1
-    return v2
+    return v1
 }
 
 ; block0:
-;   movz x2, #56780
-;   uxth w4, w2
-;   movz x6, #56780
-;   subs wzr, w4, w6, UXTH
-;   cset x9, ne
-;   and w0, w9, #1
+;   movz x1, #56780
+;   uxth w3, w1
+;   movz x5, #56780
+;   subs wzr, w3, w5, UXTH
+;   cset x0, ne
 ;   ret
 

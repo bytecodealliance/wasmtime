@@ -2,8 +2,8 @@ test compile precise-output
 set unwind_info=false
 target aarch64
 
-function %fn0(b8x8) -> b1 {
-block0(v0: b8x8):
+function %fn0(i8x8) -> i8 {
+block0(v0: i8x8):
     v1 = vall_true v0
     return v1
 }
@@ -15,8 +15,8 @@ block0(v0: b8x8):
 ;   cset x0, ne
 ;   ret
 
-function %fn1(b8x16) -> b1 {
-block0(v0: b8x16):
+function %fn1(i8x16) -> i8 {
+block0(v0: i8x16):
     v1 = vall_true v0
     return v1
 }
@@ -28,8 +28,8 @@ block0(v0: b8x16):
 ;   cset x0, ne
 ;   ret
 
-function %fn2(b16x4) -> b1 {
-block0(v0: b16x4):
+function %fn2(i16x4) -> i8 {
+block0(v0: i16x4):
     v1 = vall_true v0
     return v1
 }
@@ -41,8 +41,8 @@ block0(v0: b16x4):
 ;   cset x0, ne
 ;   ret
 
-function %fn3(b16x8) -> b1 {
-block0(v0: b16x8):
+function %fn3(i16x8) -> i8 {
+block0(v0: i16x8):
     v1 = vall_true v0
     return v1
 }
@@ -54,8 +54,8 @@ block0(v0: b16x8):
 ;   cset x0, ne
 ;   ret
 
-function %fn4(b32x2) -> b1 {
-block0(v0: b32x2):
+function %fn4(i32x2) -> i8 {
+block0(v0: i32x2):
     v1 = vall_true v0
     return v1
 }
@@ -67,8 +67,8 @@ block0(v0: b32x2):
 ;   cset x0, ne
 ;   ret
 
-function %fn5(b32x4) -> b1 {
-block0(v0: b32x4):
+function %fn5(i32x4) -> i8 {
+block0(v0: i32x4):
     v1 = vall_true v0
     return v1
 }
@@ -80,8 +80,8 @@ block0(v0: b32x4):
 ;   cset x0, ne
 ;   ret
 
-function %fn6(b64x2) -> b1 {
-block0(v0: b64x2):
+function %fn6(i64x2) -> i8 {
+block0(v0: i64x2):
     v1 = vall_true v0
     return v1
 }
@@ -92,3 +92,4 @@ block0(v0: b64x2):
 ;   fcmp d5, d5
 ;   cset x0, eq
 ;   ret
+

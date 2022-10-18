@@ -12,7 +12,7 @@ pub struct Imm12 {
 
 impl Imm12 {
     pub(crate) const FALSE: Self = Self { bits: 0 };
-    pub(crate) const TRUE: Self = Self { bits: -1 };
+    pub(crate) const TRUE: Self = Self { bits: 1 };
     pub fn maybe_from_u64(val: u64) -> Option<Imm12> {
         let sign_bit = 1 << 11;
         if val == 0 {

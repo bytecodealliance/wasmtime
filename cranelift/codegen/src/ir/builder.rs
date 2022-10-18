@@ -238,7 +238,7 @@ mod tests {
 
         // Formula.
         let cmp = pos.ins().icmp(IntCC::Equal, arg0, v0);
-        assert_eq!(pos.func.dfg.value_type(cmp), B1);
+        assert_eq!(pos.func.dfg.value_type(cmp), I8);
     }
 
     #[test]

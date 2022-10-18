@@ -29,7 +29,6 @@ fn validate_signature_params(sig: &[AbiParam], args: &[impl Value]) -> bool {
             // but we don't have enough information there either.
             //
             // Ideally the user has run the verifier and caught this properly...
-            (a, b) if a.is_bool() && b.is_bool() => true,
             (a, b) if a.is_vector() && b.is_vector() => true,
             (a, b) => a == b,
         })
@@ -108,13 +107,12 @@ where
                     .get(imm)
                     .unwrap()
                     .as_slice();
-                match ctrl_ty.bytes() {
+                match mask.len() {
                     16 => DataValue::V128(mask.try_into().expect("a 16-byte vector mask")),
                     8 => DataValue::V64(mask.try_into().expect("an 8-byte vector mask")),
-                    length => panic!("unexpected Shuffle mask length {}", length),
+                    length => panic!("unexpected Shuffle mask length {}", mask.len()),
                 }
             }
-            InstructionData::UnaryBool { imm, .. } => DataValue::from(imm),
             // 8-bit.
             InstructionData::BinaryImm8 { imm, .. } | InstructionData::TernaryImm8 { imm, .. } => {
                 DataValue::from(imm as i8) // Note the switch from unsigned to signed.
@@ -552,7 +550,6 @@ where
         Opcode::Iconst => assign(Value::int(imm().into_int()?, ctrl_ty)?),
         Opcode::F32const => assign(imm()),
         Opcode::F64const => assign(imm()),
-        Opcode::Bconst => assign(imm()),
         Opcode::Vconst => assign(imm()),
         Opcode::Null => unimplemented!("Null"),
         Opcode::Nop => ControlFlow::Continue,
@@ -754,7 +751,7 @@ where
         Opcode::IaddCout => {
             let sum = Value::add(arg(0)?, arg(1)?)?;
             let carry = Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)?;
-            assign_multiple(&[sum, Value::bool(carry, types::B1)?])
+            assign_multiple(&[sum, Value::bool(carry, false, types::I8)?])
         }
         Opcode::IaddIfcout => unimplemented!("IaddIfcout"),
         Opcode::IaddCarry => {
@@ -763,7 +760,7 @@ where
                 sum = Value::add(sum, Value::int(1, ctrl_ty)?)?
             }
             let carry = Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)?;
-            assign_multiple(&[sum, Value::bool(carry, types::B1)?])
+            assign_multiple(&[sum, Value::bool(carry, false, types::I8)?])
         }
         Opcode::IaddIfcarry => unimplemented!("IaddIfcarry"),
         Opcode::IsubBin => choose(
@@ -775,7 +772,7 @@ where
         Opcode::IsubBout => {
             let sum = Value::sub(arg(0)?, arg(1)?)?;
             let borrow = Value::lt(&arg(0)?, &arg(1)?)?;
-            assign_multiple(&[sum, Value::bool(borrow, types::B1)?])
+            assign_multiple(&[sum, Value::bool(borrow, false, types::I8)?])
         }
         Opcode::IsubIfbout => unimplemented!("IsubIfbout"),
         Opcode::IsubBorrow => {
@@ -786,7 +783,7 @@ where
             };
             let borrow = Value::lt(&arg(0)?, &rhs)?;
             let sum = Value::sub(arg(0)?, rhs)?;
-            assign_multiple(&[sum, Value::bool(borrow, types::B1)?])
+            assign_multiple(&[sum, Value::bool(borrow, false, types::I8)?])
         }
         Opcode::IsubIfborrow => unimplemented!("IsubIfborrow"),
         Opcode::Band => binary(Value::and, arg(0)?, arg(1)?)?,
@@ -844,6 +841,7 @@ where
                     .map(|(x, y)| {
                         V::bool(
                             fcmp(inst.fp_cond_code().unwrap(), &x, &y).unwrap(),
+                            ctrl_ty.is_vector(),
                             ctrl_ty.lane_type().as_bool(),
                         )
                     })
@@ -946,19 +944,15 @@ where
         // return a 1-bit boolean value.
         Opcode::Trueif => choose(
             state.has_iflag(inst.cond_code().unwrap()),
-            Value::bool(true, types::B1)?,
-            Value::bool(false, types::B1)?,
+            Value::bool(true, false, types::I8)?,
+            Value::bool(false, false, types::I8)?,
         ),
         Opcode::Trueff => choose(
             state.has_fflag(inst.fp_cond_code().unwrap()),
-            Value::bool(true, types::B1)?,
-            Value::bool(false, types::B1)?,
+            Value::bool(true, false, types::I8)?,
+            Value::bool(false, false, types::I8)?,
         ),
-        Opcode::Bitcast
-        | Opcode::RawBitcast
-        | Opcode::ScalarToVector
-        | Opcode::Breduce
-        | Opcode::Bextend => {
+        Opcode::Bitcast | Opcode::RawBitcast | Opcode::ScalarToVector => {
             let input_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
             let arg0 = extractlanes(&arg(0)?, input_ty)?;
 
@@ -974,11 +968,6 @@ where
             arg(0)?,
             ValueConversionKind::Truncate(ctrl_ty),
         )?),
-        Opcode::Bint => {
-            let bool = arg(0)?.into_bool()?;
-            let int = if bool { 1 } else { 0 };
-            assign(Value::int(int, ctrl_ty)?)
-        }
         Opcode::Snarrow | Opcode::Unarrow | Opcode::Uunarrow => {
             let arg0 = extractlanes(&arg(0)?, ctrl_ty)?;
             let arg1 = extractlanes(&arg(1)?, ctrl_ty)?;
@@ -1014,7 +1003,7 @@ where
             let bool_ty = ctrl_ty.as_bool_pedantic();
             let lanes = extractlanes(&bool, bool_ty)?
                 .into_iter()
-                .map(|lane| lane.convert(ValueConversionKind::Exact(ctrl_ty.lane_type())))
+                .map(|lane| lane.convert(ValueConversionKind::Mask(ctrl_ty.lane_type())))
                 .collect::<ValueResult<SimdVec<V>>>()?;
             vectorizelanes(&lanes, ctrl_ty)?
         }),
@@ -1046,7 +1035,7 @@ where
                     new[i] = b[mask[i] as usize - a.len()];
                 } // else leave as 0.
             }
-            assign(Value::vector(new, ctrl_ty)?)
+            assign(Value::vector(new, types::I8X16)?)
         }
         Opcode::Swizzle => {
             let x = Value::into_array(&arg(0)?)?;
@@ -1092,18 +1081,18 @@ where
         Opcode::Vsplit => unimplemented!("Vsplit"),
         Opcode::Vconcat => unimplemented!("Vconcat"),
         Opcode::Vselect => assign(vselect(&arg(0)?, &arg(1)?, &arg(2)?, ctrl_ty)?),
-        Opcode::VanyTrue => assign(fold_vector(
-            arg(0)?,
-            ctrl_ty,
-            V::bool(false, types::B1)?,
-            |acc, lane| acc.or(lane),
-        )?),
-        Opcode::VallTrue => assign(fold_vector(
-            arg(0)?,
-            ctrl_ty,
-            V::bool(true, types::B1)?,
-            |acc, lane| acc.and(lane),
-        )?),
+        Opcode::VanyTrue => {
+            let lane_ty = ctrl_ty.lane_type();
+            let init = V::bool(false, true, lane_ty)?;
+            let any = fold_vector(arg(0)?, ctrl_ty, init.clone(), |acc, lane| acc.or(lane))?;
+            assign(V::bool(!V::eq(&any, &init)?, false, types::I8)?)
+        }
+        Opcode::VallTrue => {
+            let lane_ty = ctrl_ty.lane_type();
+            let init = V::bool(true, true, lane_ty)?;
+            let all = fold_vector(arg(0)?, ctrl_ty, init.clone(), |acc, lane| acc.and(lane))?;
+            assign(V::bool(V::eq(&all, &init)?, false, types::I8)?)
+        }
         Opcode::SwidenLow | Opcode::SwidenHigh | Opcode::UwidenLow | Opcode::UwidenHigh => {
             let new_type = ctrl_ty.merge_lanes().unwrap();
             let conv_type = match inst.opcode() {
@@ -1426,6 +1415,7 @@ where
                     &right.clone().convert(ValueConversionKind::ToUnsigned)?,
                 )?,
             },
+            ctrl_ty.is_vector(),
             bool_ty,
         )?)
     };
@@ -1489,10 +1479,10 @@ where
     }
 
     let iterations = match lane_type {
-        types::I8 | types::B1 | types::B8 => 1,
-        types::I16 | types::B16 => 2,
-        types::I32 | types::B32 | types::F32 => 4,
-        types::I64 | types::B64 | types::F64 => 8,
+        types::I8 => 1,
+        types::I16 => 2,
+        types::I32 | types::F32 => 4,
+        types::I64 | types::F64 => 8,
         _ => unimplemented!("vectors with lanes wider than 64-bits are currently unsupported."),
     };
 
@@ -1503,9 +1493,7 @@ where
             lane += (x[((i * iterations) + j) as usize] as i128) << (8 * j);
         }
 
-        let lane_val: V = if lane_type.is_bool() {
-            Value::bool(lane != 0, lane_type)?
-        } else if lane_type.is_float() {
+        let lane_val: V = if lane_type.is_float() {
             Value::float(lane as u64, lane_type)?
         } else {
             Value::int(lane, lane_type)?
@@ -1528,10 +1516,10 @@ where
 
     let lane_type = vector_type.lane_type();
     let iterations = match lane_type {
-        types::I8 | types::B1 | types::B8 => 1,
-        types::I16 | types::B16 => 2,
-        types::I32 | types::B32 | types::F32 => 4,
-        types::I64 | types::B64 | types::F64 => 8,
+        types::I8 => 1,
+        types::I16 => 2,
+        types::I32 | types::F32 => 4,
+        types::I64 | types::F64 => 8,
         _ => unimplemented!("vectors with lanes wider than 64-bits are currently unsupported."),
     };
     let mut result: [u8; 16] = [0; 16];

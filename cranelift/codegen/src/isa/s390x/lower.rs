@@ -45,7 +45,6 @@ impl LowerBackend for S390xBackend {
             Opcode::Nop
             | Opcode::Copy
             | Opcode::Iconst
-            | Opcode::Bconst
             | Opcode::F32const
             | Opcode::F64const
             | Opcode::Vconst
@@ -100,10 +99,7 @@ impl LowerBackend for S390xBackend {
             | Opcode::BxorNot
             | Opcode::Bitselect
             | Opcode::Vselect
-            | Opcode::Breduce
-            | Opcode::Bextend
             | Opcode::Bmask
-            | Opcode::Bint
             | Opcode::Bitrev
             | Opcode::Clz
             | Opcode::Cls
