@@ -66,8 +66,6 @@ pub(crate) trait MacroAssembler {
     fn sp_offset(&mut self) -> u32;
 
     /// Perform a stack store
-    // TODO is RegImm the best name for the src?
-    //      I'd like to think a bit more if there's a better abstraction for this
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize);
 
     /// Perform a stack load
@@ -85,11 +83,6 @@ pub(crate) trait MacroAssembler {
     /// Finalize the assembly and return the result
     // NOTE Interim, debug approach
     fn finalize(&mut self) -> &[String];
-
-    /// Spill registers and locals to memory
-    // TODO not sure if this should be exposed
-    //      at the masm interface level
-    fn spill(&mut self) {}
 
     /// Zero a particular register
     fn zero(&mut self, reg: Reg);

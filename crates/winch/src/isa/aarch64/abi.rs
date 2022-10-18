@@ -66,7 +66,7 @@ impl ABI for Aarch64ABI {
             .collect();
 
         let ty = wasm_sig.returns().get(0).map(|e| e.clone());
-        // TODO temporarily defaulting to x0;
+        // NOTE temporarily defaulting to x0;
         let reg = regs::xreg(0);
         let result = ABIResult::reg(ty, reg);
 

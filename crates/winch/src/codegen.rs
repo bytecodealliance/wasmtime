@@ -86,7 +86,6 @@ where
         Ok(code)
     }
 
-    /// Emit the usual function instruction sequence
     // TODO stack checks
     fn emit_start(&mut self) -> Result<()> {
         self.context.masm.prologue();
@@ -96,8 +95,6 @@ where
         Ok(())
     }
 
-    // 1. Perform input register spilling
-    // 2. Emit machine code per instruction
     fn emit_body(&mut self) -> Result<()> {
         self.spill_register_arguments();
         self.zero_local_slots();
@@ -138,7 +135,6 @@ where
                     return v;
                 }
 
-                // TODO use `align_to` instead?
                 let start = range.0.start() + 4;
                 let addr = self.context.masm.local_address(&LocalSlot::i32(start));
                 self.context

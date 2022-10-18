@@ -62,7 +62,7 @@ impl ABI for X64ABI {
             .collect();
 
         let ty = wasm_sig.returns().get(0).map(|e| e.clone());
-        // TODO temporarily defaulting to rax.
+        // NOTE temporarily defaulting to rax.
         let reg = regs::rax();
         let result = ABIResult::reg(ty, reg);
 

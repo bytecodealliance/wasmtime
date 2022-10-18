@@ -6,8 +6,8 @@ use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
 use wasmtime_environ::WasmType;
 
 // TODO:
-// SpiderMonkey's implementation uses 16; but we should measure if this is
-// a good default.
+// SpiderMonkey's implementation uses 16; during instrumentation
+// we should measure to verify if this is a good default.
 pub(crate) type Locals = SmallVec<[LocalSlot; 16]>;
 
 /// Function defined locals start and end in the frame

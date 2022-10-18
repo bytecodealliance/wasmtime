@@ -79,7 +79,6 @@ pub trait TargetIsa: Send + Sync {
 
     fn compile_function(&self, sig: &WasmFuncType, body: FunctionBodyData) -> Result<Vec<String>>;
 
-    // TODO: Rename this function default_call_conv?
     /// Get the default calling convention of the underlying target triple
     fn call_conv(&self) -> CallConv {
         CallConv::triple_default(&self.triple())
