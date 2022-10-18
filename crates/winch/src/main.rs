@@ -3,8 +3,8 @@
 //! Reads Wasm in binary/text format and compiles them using Winch
 
 use anyhow::{Context, Result};
-use std::{fs, path::PathBuf, str::FromStr};
 use clap::Parser;
+use std::{fs, path::PathBuf, str::FromStr};
 use target_lexicon::Triple;
 use wasmtime_environ::{
     wasmparser::{Parser as WasmParser, Validator},

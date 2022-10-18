@@ -88,6 +88,6 @@ impl wasmtime_environ::Compiler for Compiler {
 
     #[cfg(feature = "component-model")]
     fn component_compiler(&self) -> &dyn wasmtime_environ::component::ComponentCompiler {
-	todo!()
+        todo!()
     }
 }
