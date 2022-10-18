@@ -2,7 +2,7 @@ use crate::isa::reg::Reg;
 use std::collections::VecDeque;
 
 /// Value definition to be used within the shadow stack
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub(crate) enum Val {
     /// I32 Constant
     I32(i32),
@@ -117,5 +117,45 @@ impl Stack {
     /// Get a mutable reference to the inner stack representation
     pub fn inner_mut(&mut self) -> &mut VecDeque<Val> {
         &mut self.inner
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Stack, Val};
+    use crate::isa::reg::Reg;
+
+    #[test]
+    fn test_pop_i32_const() {
+        let mut stack = Stack::new();
+        stack.push(Val::i32(33i32));
+        assert_eq!(33, stack.pop_i32_const().unwrap());
+
+        stack.push(Val::local(10));
+        assert!(stack.pop_i32_const().is_none());
+    }
+
+    #[test]
+    fn test_pop_reg() {
+        let mut stack = Stack::new();
+        let reg = Reg::int(2usize);
+        stack.push(Val::reg(reg));
+        stack.push(Val::i32(4));
+
+        assert_eq!(None, stack.pop_reg());
+        let _ = stack.pop().unwrap();
+        assert_eq!(reg, stack.pop_reg().unwrap());
+    }
+
+    #[test]
+    fn test_pop_named_reg() {
+        let mut stack = Stack::new();
+        let reg = Reg::int(2usize);
+        stack.push(Val::reg(reg));
+        stack.push(Val::reg(Reg::int(4)));
+
+        assert_eq!(None, stack.pop_named_reg(reg));
+        let _ = stack.pop().unwrap();
+        assert_eq!(reg, stack.pop_named_reg(reg).unwrap());
     }
 }
