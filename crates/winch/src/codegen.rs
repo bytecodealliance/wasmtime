@@ -164,7 +164,7 @@ where
             // Add an upper bound to this generation;
             // given a considerably large amount of slots
             // this will be inefficient
-            n => {
+            _ => {
                 // Request a gpr and zero it
                 let zero = self.regalloc.any_gpr(&mut self.context);
                 self.context.masm.zero(zero);

@@ -80,7 +80,6 @@ impl Frame {
         //      we want positive addressing for both locals and stack arguments
 
         let arg_base_offset = abi.arg_base_offset().into();
-        let stack_align: u32 = abi.stack_align().into();
         let mut next_stack = 0u32;
         let slots: Locals = sig
             .params

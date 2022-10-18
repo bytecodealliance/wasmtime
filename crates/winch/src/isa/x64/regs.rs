@@ -167,7 +167,7 @@ pub(crate) fn reg_name(reg: Reg, size: u8) -> &'static str {
             (ENC_RSI, 8) => "rsi",
             (ENC_RSI, 4) => "esi",
             (ENC_RSI, 2) => "si",
-            (ENC_RSI, 8) => "sil",
+            (ENC_RSI, 1) => "sil",
             (ENC_RDI, 8) => "rdi",
             (ENC_RDI, 4) => "edi",
             (ENC_RDI, 2) => "di",

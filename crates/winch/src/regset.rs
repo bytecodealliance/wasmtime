@@ -5,13 +5,13 @@ pub(crate) struct RegSet {
     /// Bitset to track general purpose register availability
     gpr: u32,
     /// Bitset to track floating-point register availability
-    fpr: u32,
+    _fpr: u32,
 }
 
 impl RegSet {
     /// Create a new register allocator
     pub fn new(gpr: u32, fpr: u32) -> Self {
-        Self { gpr, fpr }
+        Self { gpr, _fpr: fpr }
     }
 
     /// Request a general purpose register

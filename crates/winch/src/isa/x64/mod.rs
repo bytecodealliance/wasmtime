@@ -13,6 +13,9 @@ use self::regs::ALL_GPR;
 
 mod abi;
 mod masm;
+// Temporarily disable dead code warnings
+// for unused registers
+#[allow(dead_code)]
 mod regs;
 
 /// Create an ISA from the given triple

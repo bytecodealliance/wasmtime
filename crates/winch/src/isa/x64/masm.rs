@@ -139,6 +139,7 @@ impl MacroAssembler {
         self.sp_offset += bytes;
     }
 
+    #[allow(dead_code)]
     fn decrement_sp(&mut self, bytes: u32) {
         assert!(
             self.sp_offset >= bytes,

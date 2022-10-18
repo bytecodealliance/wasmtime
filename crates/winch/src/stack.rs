@@ -1,4 +1,4 @@
-use crate::{isa::reg::Reg, masm::MacroAssembler};
+use crate::isa::reg::Reg;
 use std::collections::VecDeque;
 
 /// Value definition to be used within the shadow stack
