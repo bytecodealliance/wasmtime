@@ -2004,12 +2004,13 @@ fn drop_component_still_works() -> Result<()> {
         let component = Component::new(&engine, component)?;
         let mut store = Store::new(&engine, 0);
         let mut linker = Linker::new(&engine);
-        linker
-            .root()
-            .func_wrap("f", |mut store: StoreContextMut<'_, u32>| -> Result<()> {
+        linker.root().func_wrap(
+            "f",
+            |mut store: StoreContextMut<'_, u32>, _: ()| -> Result<()> {
                 *store.data_mut() += 1;
                 Ok(())
-            })?;
+            },
+        )?;
         let instance = linker.instantiate(&mut store, &component)?;
         (store, instance)
     };
@@ -2216,7 +2217,7 @@ fn lower_then_lift() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().func_wrap("f", || Ok((2u32,)))?;
+    linker.root().func_wrap("f", |_, _: ()| Ok((2u32,)))?;
     let instance = linker.instantiate(&mut store, &component)?;
 
     let f = instance.get_typed_func::<(), (i32,), _>(&mut store, "f")?;
@@ -2252,7 +2253,7 @@ fn lower_then_lift() -> Result<()> {
     let mut store = Store::new(&engine, ());
     linker
         .root()
-        .func_wrap("s", |store: StoreContextMut<'_, ()>, x: WasmStr| {
+        .func_wrap("s", |store: StoreContextMut<'_, ()>, (x,): (WasmStr,)| {
             assert_eq!(x.to_str(&store)?, "hello");
             Ok(())
         })?;
@@ -2292,7 +2293,7 @@ fn lower_then_lift() -> Result<()> {
     let mut store = Store::new(&engine, ());
     linker
         .root()
-        .func_wrap("s2", |store: StoreContextMut<'_, ()>, x: WasmStr| {
+        .func_wrap("s2", |store: StoreContextMut<'_, ()>, (x,): (WasmStr,)| {
             assert_eq!(x.to_str(&store)?, "hello");
             Ok((u32::MAX,))
         })?;

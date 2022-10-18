@@ -1,7 +1,7 @@
 use crate::component::func::HostFunc;
 use crate::component::instance::RuntimeImport;
 use crate::component::matching::TypeChecker;
-use crate::component::{Component, Instance, InstancePre, IntoComponentFunc, Val};
+use crate::component::{Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, Val};
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use anyhow::{anyhow, bail, Context, Result};
 use std::collections::hash_map::{Entry, HashMap};
@@ -209,11 +209,8 @@ impl<T> LinkerInstance<'_, T> {
     /// types that will come from wasm and `Return` is a value coming from the
     /// host going back to wasm.
     ///
-    /// The [`IntoComponentFunc`] trait is implemented for functions whose
-    /// arguments and return values implement the
-    /// [`ComponentType`](crate::component::ComponentType) trait. Additionally
-    /// the `func` may take a [`StoreContextMut`](crate::StoreContextMut) as its
-    /// first parameter.
+    /// Additionally the `func` takes a
+    /// [`StoreContextMut`](crate::StoreContextMut) as its first parameter.
     ///
     /// Note that `func` must be an `Fn` and must also be `Send + Sync +
     /// 'static`. Shared state within a func is typically accessed with the `T`
@@ -222,13 +219,14 @@ impl<T> LinkerInstance<'_, T> {
     /// argument which can be provided to the `func` given here.
     //
     // TODO: needs more words and examples
-    pub fn func_wrap<Params, Return>(
-        &mut self,
-        name: &str,
-        func: impl IntoComponentFunc<T, Params, Return>,
-    ) -> Result<()> {
+    pub fn func_wrap<F, Params, Return>(&mut self, name: &str, func: F) -> Result<()>
+    where
+        F: Fn(StoreContextMut<T>, Params) -> Result<Return> + Send + Sync + 'static,
+        Params: ComponentNamedList + Lift + 'static,
+        Return: ComponentNamedList + Lower + 'static,
+    {
         let name = self.strings.intern(name);
-        self.insert(name, Definition::Func(func.into_host_func()))
+        self.insert(name, Definition::Func(HostFunc::from_closure(func)))
     }
 
     /// Define a new host-provided function using dynamic types.

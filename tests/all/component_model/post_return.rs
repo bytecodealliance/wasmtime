@@ -120,13 +120,14 @@ fn invoke_post_return() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, false);
     let mut linker = Linker::new(&engine);
-    linker
-        .root()
-        .func_wrap("f", |mut store: StoreContextMut<'_, bool>| -> Result<()> {
+    linker.root().func_wrap(
+        "f",
+        |mut store: StoreContextMut<'_, bool>, _: ()| -> Result<()> {
             assert!(!*store.data());
             *store.data_mut() = true;
             Ok(())
-        })?;
+        },
+    )?;
 
     let instance = linker.instantiate(&mut store, &component)?;
     let thunk = instance.get_typed_func::<(), (), _>(&mut store, "thunk")?;
