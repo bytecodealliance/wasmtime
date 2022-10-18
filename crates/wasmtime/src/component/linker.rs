@@ -5,7 +5,9 @@ use crate::component::{Component, ComponentNamedList, Instance, InstancePre, Lif
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use anyhow::{anyhow, bail, Context, Result};
 use std::collections::hash_map::{Entry, HashMap};
+use std::future::Future;
 use std::marker;
+use std::pin::Pin;
 use std::sync::Arc;
 use wasmtime_environ::component::TypeDef;
 use wasmtime_environ::PrimaryMap;
@@ -36,6 +38,7 @@ pub struct Strings {
 /// a "bag of named items", so each [`LinkerInstance`] can further define items
 /// internally.
 pub struct LinkerInstance<'a, T> {
+    engine: Engine,
     strings: &'a mut Strings,
     map: &'a mut NameMap,
     allow_shadowing: bool,
@@ -82,6 +85,7 @@ impl<T> Linker<T> {
     /// the root namespace.
     pub fn root(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
+            engine: self.engine.clone(),
             strings: &mut self.strings,
             map: &mut self.map,
             allow_shadowing: self.allow_shadowing,
@@ -187,13 +191,47 @@ impl<T> Linker<T> {
         store: impl AsContextMut<Data = T>,
         component: &Component,
     ) -> Result<Instance> {
+        assert!(
+            !store.as_context().async_support(),
+            "must use async instantiation when async support is enabled"
+        );
         self.instantiate_pre(component)?.instantiate(store)
+    }
+
+    /// Instantiates the [`Component`] provided into the `store` specified.
+    ///
+    /// This is exactly like [`Linker::instantiate`] except for async stores.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this [`Linker`] doesn't define an import that
+    /// `component` requires or if it is of the wrong type. Additionally this
+    /// can return an error if something goes wrong during instantiation such as
+    /// a runtime trap or a runtime limit being exceeded.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub async fn instantiate_async(
+        &self,
+        store: impl AsContextMut<Data = T>,
+        component: &Component,
+    ) -> Result<Instance>
+    where
+        T: Send,
+    {
+        assert!(
+            store.as_context().async_support(),
+            "must use sync instantiation when async support is disabled"
+        );
+        self.instantiate_pre(component)?
+            .instantiate_async(store)
+            .await
     }
 }
 
 impl<T> LinkerInstance<'_, T> {
     fn as_mut(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
+            engine: self.engine.clone(),
             strings: self.strings,
             map: self.map,
             allow_shadowing: self.allow_shadowing,
@@ -229,6 +267,36 @@ impl<T> LinkerInstance<'_, T> {
         self.insert(name, Definition::Func(HostFunc::from_closure(func)))
     }
 
+    /// Defines a new host-provided async function into this [`Linker`].
+    ///
+    /// This is exactly like [`Self::func_wrap`] except it takes an async
+    /// host function.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub fn func_wrap_async<Params, Return, F>(&mut self, name: &str, f: F) -> Result<()>
+    where
+        F: for<'a> Fn(
+                StoreContextMut<'a, T>,
+                Params,
+            ) -> Box<dyn Future<Output = Result<Return>> + Send + 'a>
+            + Send
+            + Sync
+            + 'static,
+        Params: ComponentNamedList + Lift + 'static,
+        Return: ComponentNamedList + Lower + 'static,
+    {
+        assert!(
+            self.engine.config().async_support,
+            "cannot use `func_wrap_async` without enabling async support in the config"
+        );
+        let ff = move |mut store: StoreContextMut<'_, T>, params: Params| -> Result<Return> {
+            let async_cx = store.as_context_mut().0.async_cx().expect("async cx");
+            let mut future = Pin::from(f(store.as_context_mut(), params));
+            unsafe { async_cx.block_on(future.as_mut()) }?
+        };
+        self.func_wrap(name, ff)
+    }
+
     /// Define a new host-provided function using dynamic types.
     ///
     /// `name` must refer to a function type import in `component`.  If and when
@@ -259,6 +327,8 @@ impl<T> LinkerInstance<'_, T> {
 
         Err(anyhow!("import `{name}` not found"))
     }
+
+    // TODO: define func_new_async
 
     /// Defines a [`Module`] within this instance.
     ///

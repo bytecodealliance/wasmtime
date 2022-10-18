@@ -174,7 +174,18 @@ impl Instance {
             !store.0.async_support(),
             "must use async instantiation when async support is enabled",
         );
+        Self::new_started_impl(store, module, imports)
+    }
 
+    /// Internal function to create an instance and run the start function.
+    ///
+    /// ONLY CALL THIS IF YOU HAVE ALREADY CHECKED FOR ASYNCNESS AND HANDLED
+    /// THE FIBER NONSENSE
+    pub(crate) unsafe fn new_started_impl<T>(
+        store: &mut StoreContextMut<'_, T>,
+        module: &Module,
+        imports: Imports<'_>,
+    ) -> Result<Instance> {
         let (instance, start) = Instance::new_raw(store.0, module, imports)?;
         if let Some(start) = start {
             instance.start_raw(store, start)?;
@@ -194,22 +205,13 @@ impl Instance {
     where
         T: Send,
     {
-        // Note that the body of this function is intentionally quite similar
-        // to the `new_started` function, and it's intended that the two bodies
-        // here are small enough to be ok duplicating.
         assert!(
             store.0.async_support(),
             "must use sync instantiation when async support is disabled",
         );
 
         store
-            .on_fiber(|store| {
-                let (instance, start) = Instance::new_raw(store.0, module, imports)?;
-                if let Some(start) = start {
-                    instance.start_raw(store, start)?;
-                }
-                Ok(instance)
-            })
+            .on_fiber(|store| Self::new_started_impl(store, module, imports))
             .await?
     }
 

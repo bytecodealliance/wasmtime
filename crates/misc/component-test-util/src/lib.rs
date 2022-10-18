@@ -65,6 +65,12 @@ pub fn engine() -> Engine {
     Engine::new(&config()).unwrap()
 }
 
+pub fn async_engine() -> Engine {
+    let mut config = config();
+    config.async_support(true);
+    Engine::new(&config).unwrap()
+}
+
 /// Newtype wrapper for `f32` whose `PartialEq` impl considers NaNs equal to each other.
 #[derive(Copy, Clone, Debug, Arbitrary)]
 pub struct Float32(pub f32);

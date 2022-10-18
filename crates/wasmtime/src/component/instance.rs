@@ -259,10 +259,16 @@ impl<'a> Instantiator<'a> {
 
                     // Note that the unsafety here should be ok because the
                     // validity of the component means that type-checks have
-                    // already been performed. This maens that the unsafety due
+                    // already been performed. This means that the unsafety due
                     // to imports having the wrong type should not happen here.
-                    let i =
-                        unsafe { crate::Instance::new_started(store, module, imports.as_ref())? };
+                    //
+                    // Also note we are calling new_started_impl because we have
+                    // already checked for asyncness and are running on a fiber
+                    // if required.
+
+                    let i = unsafe {
+                        crate::Instance::new_started_impl(store, module, imports.as_ref())?
+                    };
                     self.data.instances.push(i);
                 }
 
@@ -484,7 +490,36 @@ impl<T> InstancePre<T> {
     /// Performs the instantiation process into the store specified.
     //
     // TODO: needs more docs
-    pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
+    pub fn instantiate(&self, store: impl AsContextMut<Data = T>) -> Result<Instance> {
+        assert!(
+            !store.as_context().async_support(),
+            "must use async instantiation when async support is enabled"
+        );
+        self.instantiate_impl(store)
+    }
+    /// Performs the instantiation process into the store specified.
+    ///
+    /// Exactly like [`Self::instantiate`] except for use on async stores.
+    //
+    // TODO: needs more docs
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+    ) -> Result<Instance>
+    where
+        T: Send,
+    {
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "must use sync instantiation when async support is disabled"
+        );
+        store.on_fiber(|store| self.instantiate_impl(store)).await?
+    }
+
+    fn instantiate_impl(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
         let mut store = store.as_context_mut();
         let mut i = Instantiator::new(&self.component, store.0, &self.imports);
         i.run(&mut store)?;
