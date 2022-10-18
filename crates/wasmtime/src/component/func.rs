@@ -567,6 +567,9 @@ impl Func {
             store.0.async_support(),
             "cannot use `call_async` without enabling async support in the config"
         );
+        // Future optimization opportunity: conditionally use a fiber here since
+        // some func's post_return will not need the async context (i.e. end up
+        // calling async host functionality)
         store.on_fiber(|store| self.post_return_impl(store)).await?
     }
 
