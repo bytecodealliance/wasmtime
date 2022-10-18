@@ -84,12 +84,8 @@ members = [
   "crates/c-api",
   "crates/cli-flags",
   "crates/environ/fuzz",
-<<<<<<< HEAD
   "crates/jit-icache-coherence",
-||||||| parent of 7ce23c345 (Initial skeleton for Winch)
-=======
   "crates/winch",
->>>>>>> 7ce23c345 (Initial skeleton for Winch)
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
   "examples/tokio/wasm",
