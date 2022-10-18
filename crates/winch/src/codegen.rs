@@ -1,5 +1,5 @@
 use crate::{
-    abi::{align_to, local::LocalSlot, ABISig, ABI},
+    abi::{align_to, local::LocalSlot, ABISig},
     frame::Frame,
     masm::{MacroAssembler, OperandSize, RegImm},
     regalloc::RegAlloc,
@@ -29,16 +29,15 @@ where
 }
 
 /// The code generation abstraction
-pub(crate) struct CodeGen<'c, 'a: 'c, A, M>
+pub(crate) struct CodeGen<'c, 'a: 'c, M>
 where
-    A: ABI,
     M: MacroAssembler,
 {
     /// A reference to the function body
     function: &'c mut FunctionBody<'a>,
 
-    /// The ABI used in this compilation environment
-    abi: A,
+    /// The word size information, extracted from the current ABI
+    word_size: u32,
 
     /// The ABI-specific representation of the function signature, excluding results
     sig: ABISig,
@@ -53,14 +52,13 @@ where
     pub validator: &'a mut FuncValidator<ValidatorResources>,
 }
 
-impl<'c, 'a: 'c, A, M> CodeGen<'a, 'c, A, M>
+impl<'c, 'a: 'c, M> CodeGen<'a, 'c, M>
 where
-    A: ABI,
     M: MacroAssembler,
 {
     pub fn new(
         context: CodeGenContext<'c, M>,
-        abi: A,
+        word_size: u32,
         sig: ABISig,
         function: &'c mut FunctionBody<'a>,
         validator: &'c mut FuncValidator<ValidatorResources>,
@@ -68,7 +66,7 @@ where
     ) -> Self {
         Self {
             function,
-            abi,
+            word_size,
             sig,
             context,
             regalloc,
@@ -124,7 +122,7 @@ where
         // limit should always be less than or equal to the size of the local area, which gets
         // validated when getting the address of a local
 
-        let word_size = <A as ABI>::word_bytes();
+        let word_size = self.word_size;
         // If the locals range start is not aligned to the word size, zero the last four bytes
         let range_start = range
             .0

@@ -52,6 +52,7 @@ impl TargetIsa for X64 {
         let masm = MacroAssembler::new();
         let stack = Stack::new();
         let abi = abi::X64ABI::default();
+        let word_size = <abi::X64ABI as ABI>::word_bytes();
         let abi_sig = abi.sig(sig);
         let mut validator = validator.into_validator(Default::default());
         let frame = Frame::new(&abi_sig, &mut body, &mut validator, &abi)?;
@@ -60,7 +61,7 @@ impl TargetIsa for X64 {
         let codegen_context = CodeGenContext::new(masm, stack, &frame);
         let mut codegen = CodeGen::new(
             codegen_context,
-            abi,
+            word_size,
             abi_sig,
             &mut body,
             &mut validator,

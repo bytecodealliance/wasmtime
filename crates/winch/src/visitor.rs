@@ -1,4 +1,3 @@
-use crate::abi::ABI;
 use crate::codegen::CodeGen;
 use crate::masm::{MacroAssembler, OperandSize, RegImm};
 use crate::stack::Val;
@@ -593,9 +592,8 @@ macro_rules! define {
     };
 }
 
-impl<'c, 'a: 'c, A, M> CodeGen<'a, 'c, A, M>
+impl<'c, 'a: 'c, M> CodeGen<'a, 'c, M>
 where
-    A: ABI,
     M: MacroAssembler,
 {
     fn emitop<V, E>(&mut self, validate: V, emitter: E) -> Result<()>
@@ -691,9 +689,8 @@ where
     }
 }
 
-impl<'c, 'a: 'c, A, M> VisitOperator<'a> for CodeGen<'a, 'c, A, M>
+impl<'c, 'a: 'c, M> VisitOperator<'a> for CodeGen<'a, 'c, M>
 where
-    A: ABI,
     M: MacroAssembler,
 {
     type Output = Result<()>;
