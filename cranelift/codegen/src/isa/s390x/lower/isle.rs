@@ -8,7 +8,8 @@ use crate::ir::ExternalName;
 use crate::isa::s390x::abi::{S390xMachineDeps, REG_SAVE_AREA_SIZE};
 use crate::isa::s390x::inst::{
     gpr, stack_reg, writable_gpr, zero_reg, CallIndInfo, CallInfo, Cond, Inst as MInst, LaneOrder,
-    MemArg, MemArgPair, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted,
+    MemArg, MemArgPair, RegPair, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted,
+    WritableRegPair,
 };
 use crate::isa::s390x::settings::Flags as IsaFlags;
 use crate::machinst::isle::*;

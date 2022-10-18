@@ -528,8 +528,8 @@
             ;; Load up the dividend, by loading the input (possibly zero-
             ;; extended) input into the low half of the register pair,
             ;; and setting the high half to zero.
-            (ext_x RegPair (put_in_regpair_lo_zext32 x
-                             (imm_regpair_hi (ty_ext32 ty) 0 (uninitialized_regpair))))
+            (ext_x RegPair (regpair (imm (ty_ext32 ty) 0)
+                                    (put_in_reg_zext32 x)))
             ;; Load up the divisor, zero-extended if necessary.
             (ext_y Reg (put_in_reg_zext32 y))
             (ext_ty Type (ty_ext32 ty))
@@ -546,8 +546,8 @@
 ;; the high half of the result register pair instead.
 (rule (lower (has_type (fits_in_64 ty) (urem x y)))
       (let ((DZcheck bool (zero_divisor_check_needed y))
-            (ext_x RegPair (put_in_regpair_lo_zext32 x
-                             (imm_regpair_hi ty 0 (uninitialized_regpair))))
+            (ext_x RegPair (regpair (imm (ty_ext32 ty) 0)
+                                    (put_in_reg_zext32 x)))
             (ext_y Reg (put_in_reg_zext32 y))
             (ext_ty Type (ty_ext32 ty))
             (_ Reg (maybe_trap_if_zero_divisor DZcheck ext_ty ext_y))
@@ -600,9 +600,8 @@
             ;; explicit division-by-zero and/or integer-overflow checks.
             (DZcheck bool (zero_divisor_check_needed y))
             (OFcheck bool (div_overflow_check_needed y))
-            ;; Load up the dividend (sign-extended to 64-bit) into the low
-            ;; half of a register pair (the high half remains uninitialized).
-            (ext_x RegPair (put_in_regpair_lo_sext64 x (uninitialized_regpair)))
+            ;; Load up the dividend (sign-extended to 64-bit)
+            (ext_x Reg (put_in_reg_sext64 x))
             ;; Load up the divisor (sign-extended if necessary).
             (ext_y Reg (put_in_reg_sext32 y))
             (ext_ty Type (ty_ext32 ty))
@@ -621,11 +620,11 @@
 (rule (lower (has_type (fits_in_64 ty) (srem x y)))
       (let ((DZcheck bool (zero_divisor_check_needed y))
             (OFcheck bool (div_overflow_check_needed y))
-            (ext_x RegPair (put_in_regpair_lo_sext64 x (uninitialized_regpair)))
+            (ext_x Reg (put_in_reg_sext64 x))
             (ext_y Reg (put_in_reg_sext32 y))
             (ext_ty Type (ty_ext32 ty))
             (_ Reg (maybe_trap_if_zero_divisor DZcheck ext_ty ext_y))
-            (checked_x RegPair (maybe_avoid_srem_overflow OFcheck ext_ty ext_x ext_y))
+            (checked_x Reg (maybe_avoid_srem_overflow OFcheck ext_ty ext_x ext_y))
             (pair RegPair (sdivmod ext_ty checked_x ext_y)))
         (copy_reg ty (regpair_hi pair))))
 
@@ -659,12 +658,11 @@
 ;;    if ((divisor ^ INT_MAX) & dividend) == -1 { trap }
 ;;
 ;; instead, using a single conditional trap instruction.
-(decl maybe_trap_if_sdiv_overflow (bool Type Type RegPair Reg) Reg)
+(decl maybe_trap_if_sdiv_overflow (bool Type Type Reg Reg) Reg)
 (rule (maybe_trap_if_sdiv_overflow $false ext_ty _ _ _) (invalid_reg))
 (rule (maybe_trap_if_sdiv_overflow $true ext_ty ty x y)
       (let ((int_max Reg (imm ext_ty (int_max ty)))
-            (reg Reg (and_reg ext_ty (xor_reg ext_ty int_max
-                                              (regpair_lo x)) y)))
+            (reg Reg (and_reg ext_ty (xor_reg ext_ty int_max x) y)))
         (icmps_simm16_and_trap ext_ty reg -1
                                (intcc_as_cond (IntCC.Equal))
                                (trap_code_integer_overflow))))
@@ -688,12 +686,12 @@
 ;; (We could in fact avoid executing the divide instruction
 ;; at all in this case, but that would require introducing
 ;; control flow.)
-(decl maybe_avoid_srem_overflow (bool Type RegPair Reg) RegPair)
+(decl maybe_avoid_srem_overflow (bool Type Reg Reg) Reg)
 (rule (maybe_avoid_srem_overflow $false _ x _) x)
 (rule (maybe_avoid_srem_overflow $true $I32 x _) x)
 (rule (maybe_avoid_srem_overflow $true $I64 x y)
-      (cmov_imm_regpair_lo $I64 (icmps_simm16 $I64 y -1)
-                           (intcc_as_cond (IntCC.Equal)) 0 x))
+      (with_flags_reg (icmps_simm16 $I64 y -1)
+                      (cmov_imm $I64 (intcc_as_cond (IntCC.Equal)) 0 x)))
 
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

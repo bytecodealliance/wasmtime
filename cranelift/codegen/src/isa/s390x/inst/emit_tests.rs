@@ -2208,21 +2208,78 @@ fn test_s390x_binemit() {
         "clgite %r7, 65535",
     ));
 
+    let w_regpair = WritableRegPair::WritableRegPair {
+        hi: writable_gpr(2),
+        lo: writable_gpr(3),
+    };
+    let regpair = RegPair::RegPair {
+        hi: gpr(2),
+        lo: gpr(3),
+    };
+
     insns.push((
         Inst::SMulWide {
+            rd: w_regpair,
             rn: gpr(5),
             rm: gpr(6),
         },
-        "B9EC6005",
-        "mgrk %r0, %r5, %r6",
+        "B9EC6025",
+        "mgrk %r2, %r3, %r5, %r6",
     ));
-    insns.push((Inst::UMulWide { rn: gpr(5) }, "B9860005", "mlgr %r0, %r5"));
-    insns.push((Inst::SDivMod32 { rn: gpr(5) }, "B91D0005", "dsgfr %r0, %r5"));
-    insns.push((Inst::SDivMod64 { rn: gpr(5) }, "B90D0005", "dsgr %r0, %r5"));
-    insns.push((Inst::UDivMod32 { rn: gpr(5) }, "B9970005", "dlr %r0, %r5"));
-    insns.push((Inst::UDivMod64 { rn: gpr(5) }, "B9870005", "dlgr %r0, %r5"));
+    insns.push((
+        Inst::UMulWide {
+            rd: w_regpair,
+            rn: gpr(3),
+            rm: gpr(5),
+        },
+        "B9860025",
+        "mlgr %r2, %r3, %r3, %r5",
+    ));
+    insns.push((
+        Inst::SDivMod32 {
+            rd: w_regpair,
+            rn: gpr(3),
+            rm: gpr(5),
+        },
+        "B91D0025",
+        "dsgfr %r2, %r3, %r3, %r5",
+    ));
+    insns.push((
+        Inst::SDivMod64 {
+            rd: w_regpair,
+            rn: gpr(3),
+            rm: gpr(5),
+        },
+        "B90D0025",
+        "dsgr %r2, %r3, %r3, %r5",
+    ));
+    insns.push((
+        Inst::UDivMod32 {
+            rd: w_regpair,
+            rn: regpair,
+            rm: gpr(5),
+        },
+        "B9970025",
+        "dlr %r2, %r3, %r2, %r3, %r5",
+    ));
+    insns.push((
+        Inst::UDivMod64 {
+            rd: w_regpair,
+            rn: regpair,
+            rm: gpr(5),
+        },
+        "B9870025",
+        "dlgr %r2, %r3, %r2, %r3, %r5",
+    ));
 
-    insns.push((Inst::Flogr { rn: gpr(5) }, "B9830005", "flogr %r0, %r5"));
+    insns.push((
+        Inst::Flogr {
+            rd: w_regpair,
+            rn: gpr(5),
+        },
+        "B9830025",
+        "flogr %r2, %r3, %r5",
+    ));
 
     insns.push((
         Inst::ShiftRR {
@@ -2581,49 +2638,53 @@ fn test_s390x_binemit() {
         Inst::RxSBG {
             op: RxSBGOp::Insert,
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             start_bit: 8,
             end_bit: 32,
             rotate_amt: -16,
         },
         "EC4508203059",
-        "risbgn %r4, %r5, 8, 32, 48",
+        "risbgn %r4, %r4, %r5, 8, 32, 48",
     ));
     insns.push((
         Inst::RxSBG {
             op: RxSBGOp::And,
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             start_bit: 8,
             end_bit: 32,
             rotate_amt: 63,
         },
         "EC4508203F54",
-        "rnsbg %r4, %r5, 8, 32, 63",
+        "rnsbg %r4, %r4, %r5, 8, 32, 63",
     ));
     insns.push((
         Inst::RxSBG {
             op: RxSBGOp::Or,
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             start_bit: 8,
             end_bit: 32,
             rotate_amt: 63,
         },
         "EC4508203F56",
-        "rosbg %r4, %r5, 8, 32, 63",
+        "rosbg %r4, %r4, %r5, 8, 32, 63",
     ));
     insns.push((
         Inst::RxSBG {
             op: RxSBGOp::Xor,
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             start_bit: 8,
             end_bit: 32,
             rotate_amt: 63,
         },
         "EC4508203F57",
-        "rxsbg %r4, %r5, 8, 32, 63",
+        "rxsbg %r4, %r4, %r5, 8, 32, 63",
     ));
     insns.push((
         Inst::RxSBGTest {
@@ -3265,7 +3326,8 @@ fn test_s390x_binemit() {
     insns.push((
         Inst::AtomicCas32 {
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             mem: MemArg::BXD12 {
                 base: zero_reg(),
                 index: zero_reg(),
@@ -3274,12 +3336,13 @@ fn test_s390x_binemit() {
             },
         },
         "BA450000",
-        "cs %r4, %r5, 0",
+        "cs %r4, %r4, %r5, 0",
     ));
     insns.push((
         Inst::AtomicCas32 {
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             mem: MemArg::BXD12 {
                 base: zero_reg(),
                 index: zero_reg(),
@@ -3288,12 +3351,13 @@ fn test_s390x_binemit() {
             },
         },
         "BA450FFF",
-        "cs %r4, %r5, 4095",
+        "cs %r4, %r4, %r5, 4095",
     ));
     insns.push((
         Inst::AtomicCas32 {
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             mem: MemArg::BXD20 {
                 base: zero_reg(),
                 index: zero_reg(),
@@ -3302,12 +3366,13 @@ fn test_s390x_binemit() {
             },
         },
         "EB4500008014",
-        "csy %r4, %r5, -524288",
+        "csy %r4, %r4, %r5, -524288",
     ));
     insns.push((
         Inst::AtomicCas32 {
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             mem: MemArg::BXD20 {
                 base: zero_reg(),
                 index: zero_reg(),
@@ -3316,12 +3381,13 @@ fn test_s390x_binemit() {
             },
         },
         "EB450FFF7F14",
-        "csy %r4, %r5, 524287",
+        "csy %r4, %r4, %r5, 524287",
     ));
     insns.push((
         Inst::AtomicCas32 {
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             mem: MemArg::BXD12 {
                 base: gpr(6),
                 index: zero_reg(),
@@ -3330,12 +3396,13 @@ fn test_s390x_binemit() {
             },
         },
         "BA456000",
-        "cs %r4, %r5, 0(%r6)",
+        "cs %r4, %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::AtomicCas32 {
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             mem: MemArg::BXD12 {
                 base: gpr(6),
                 index: zero_reg(),
@@ -3344,12 +3411,13 @@ fn test_s390x_binemit() {
             },
         },
         "BA456FFF",
-        "cs %r4, %r5, 4095(%r6)",
+        "cs %r4, %r4, %r5, 4095(%r6)",
     ));
     insns.push((
         Inst::AtomicCas32 {
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             mem: MemArg::BXD20 {
                 base: gpr(6),
                 index: zero_reg(),
@@ -3358,12 +3426,13 @@ fn test_s390x_binemit() {
             },
         },
         "EB4560008014",
-        "csy %r4, %r5, -524288(%r6)",
+        "csy %r4, %r4, %r5, -524288(%r6)",
     ));
     insns.push((
         Inst::AtomicCas32 {
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             mem: MemArg::BXD20 {
                 base: gpr(6),
                 index: zero_reg(),
@@ -3372,12 +3441,13 @@ fn test_s390x_binemit() {
             },
         },
         "EB456FFF7F14",
-        "csy %r4, %r5, 524287(%r6)",
+        "csy %r4, %r4, %r5, 524287(%r6)",
     ));
     insns.push((
         Inst::AtomicCas64 {
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             mem: MemArg::BXD20 {
                 base: zero_reg(),
                 index: zero_reg(),
@@ -3386,12 +3456,13 @@ fn test_s390x_binemit() {
             },
         },
         "EB4500008030",
-        "csg %r4, %r5, -524288",
+        "csg %r4, %r4, %r5, -524288",
     ));
     insns.push((
         Inst::AtomicCas64 {
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             mem: MemArg::BXD20 {
                 base: zero_reg(),
                 index: zero_reg(),
@@ -3400,12 +3471,13 @@ fn test_s390x_binemit() {
             },
         },
         "EB450FFF7F30",
-        "csg %r4, %r5, 524287",
+        "csg %r4, %r4, %r5, 524287",
     ));
     insns.push((
         Inst::AtomicCas64 {
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             mem: MemArg::BXD20 {
                 base: gpr(6),
                 index: zero_reg(),
@@ -3414,12 +3486,13 @@ fn test_s390x_binemit() {
             },
         },
         "EB4560008030",
-        "csg %r4, %r5, -524288(%r6)",
+        "csg %r4, %r4, %r5, -524288(%r6)",
     ));
     insns.push((
         Inst::AtomicCas64 {
             rd: writable_gpr(4),
-            rn: gpr(5),
+            rn: gpr(4),
+            rm: gpr(5),
             mem: MemArg::BXD20 {
                 base: gpr(6),
                 index: zero_reg(),
@@ -3428,7 +3501,7 @@ fn test_s390x_binemit() {
             },
         },
         "EB456FFF7F30",
-        "csg %r4, %r5, 524287(%r6)",
+        "csg %r4, %r4, %r5, 524287(%r6)",
     ));
     insns.push((Inst::Fence, "07E0", "bcr 14, 0"));
 
@@ -6315,7 +6388,7 @@ fn test_s390x_binemit() {
             },
         },
         "C01E7FFFFFFFC019FFFFFFFF41112000",
-        "llihf %r1, 2147483647 ; iilf %r1, 4294967295 ; la %r1, 0(%r1,%r2)",
+        "llihf %r1, 2147483647 ; iilf %r1, %r1, 4294967295 ; la %r1, 0(%r1,%r2)",
     ));
 
     insns.push((
@@ -6451,69 +6524,77 @@ fn test_s390x_binemit() {
     insns.push((
         Inst::Insert64UImm16Shifted {
             rd: writable_gpr(8),
+            rn: gpr(8),
             imm: UImm16Shifted::maybe_from_u64(0x0000_0000_0000_ffff).unwrap(),
         },
         "A583FFFF",
-        "iill %r8, 65535",
+        "iill %r8, %r8, 65535",
     ));
     insns.push((
         Inst::Insert64UImm16Shifted {
             rd: writable_gpr(8),
+            rn: gpr(8),
             imm: UImm16Shifted::maybe_from_u64(0x0000_0000_ffff_0000).unwrap(),
         },
         "A582FFFF",
-        "iilh %r8, 65535",
+        "iilh %r8, %r8, 65535",
     ));
     insns.push((
         Inst::Insert64UImm16Shifted {
             rd: writable_gpr(8),
+            rn: gpr(8),
             imm: UImm16Shifted::maybe_from_u64(0x0000_ffff_0000_0000).unwrap(),
         },
         "A581FFFF",
-        "iihl %r8, 65535",
+        "iihl %r8, %r8, 65535",
     ));
     insns.push((
         Inst::Insert64UImm16Shifted {
             rd: writable_gpr(8),
+            rn: gpr(8),
             imm: UImm16Shifted::maybe_from_u64(0xffff_0000_0000_0000).unwrap(),
         },
         "A580FFFF",
-        "iihh %r8, 65535",
+        "iihh %r8, %r8, 65535",
     ));
     insns.push((
         Inst::Insert64UImm32Shifted {
             rd: writable_gpr(8),
+            rn: gpr(8),
             imm: UImm32Shifted::maybe_from_u64(0x0000_0000_ffff_ffff).unwrap(),
         },
         "C089FFFFFFFF",
-        "iilf %r8, 4294967295",
+        "iilf %r8, %r8, 4294967295",
     ));
     insns.push((
         Inst::Insert64UImm32Shifted {
             rd: writable_gpr(8),
+            rn: gpr(8),
             imm: UImm32Shifted::maybe_from_u64(0xffff_ffff_0000_0000).unwrap(),
         },
         "C088FFFFFFFF",
-        "iihf %r8, 4294967295",
+        "iihf %r8, %r8, 4294967295",
     ));
 
     insns.push((
         Inst::CMov32 {
             rd: writable_gpr(8),
             cond: Cond::from_mask(1),
+            rn: gpr(8),
             rm: gpr(9),
         },
         "B9F21089",
-        "locro %r8, %r9",
+        "locro %r8, %r8, %r9",
     ));
     insns.push((
         Inst::CMov64 {
             rd: writable_gpr(8),
             cond: Cond::from_mask(1),
+            rn: gpr(8),
             rm: gpr(9),
         },
         "B9E21089",
-        "locgro %r8, %r9",
+        "locgro %r8, %r8, %r9",
     ));
 
     insns.push((
@@ -6521,36 +6602,40 @@ fn test_s390x_binemit() {
             rd: writable_gpr(8),
             cond: Cond::from_mask(1),
             imm: -32768,
+            rf: gpr(8),
         },
         "EC8180000042",
-        "lochio %r8, -32768",
+        "lochio %r8, %r8, -32768",
     ));
     insns.push((
         Inst::CMov32SImm16 {
             rd: writable_gpr(8),
             cond: Cond::from_mask(1),
             imm: 32767,
+            rf: gpr(8),
         },
         "EC817FFF0042",
-        "lochio %r8, 32767",
+        "lochio %r8, %r8, 32767",
     ));
     insns.push((
         Inst::CMov64SImm16 {
             rd: writable_gpr(8),
             cond: Cond::from_mask(1),
             imm: -32768,
+            rf: gpr(8),
         },
         "EC8180000046",
-        "locghio %r8, -32768",
+        "locghio %r8, %r8, -32768",
     ));
     insns.push((
         Inst::CMov64SImm16 {
             rd: writable_gpr(8),
             cond: Cond::from_mask(1),
             imm: 32767,
+            rf: gpr(8),
         },
         "EC817FFF0046",
-        "locghio %r8, 32767",
+        "locghio %r8, %r8, 32767",
     ));
 
     insns.push((
@@ -6996,7 +7081,8 @@ fn test_s390x_binemit() {
                 },
                 Inst::AtomicCas32 {
                     rd: writable_gpr(4),
-                    rn: gpr(5),
+                    rn: gpr(4),
+                    rm: gpr(5),
                     mem: MemArg::BXD12 {
                         base: gpr(6),
                         index: zero_reg(),
@@ -7008,7 +7094,7 @@ fn test_s390x_binemit() {
             cond: Cond::from_mask(6),
         },
         "1923C0D400000008BA456000C064FFFFFFFA",
-        "0: cr %r2, %r3 ; jgnh 1f ; cs %r4, %r5, 0(%r6) ; jglh 0b ; 1:",
+        "0: cr %r2, %r3 ; jgnh 1f ; cs %r4, %r4, %r5, 0(%r6) ; jglh 0b ; 1:",
     ));
 
     insns.push((
@@ -7046,6 +7132,7 @@ fn test_s390x_binemit() {
     insns.push((
         Inst::FpuCMov32 {
             rd: writable_vr(8),
+            rn: vr(8),
             rm: vr(4),
             cond: Cond::from_mask(1),
         },
@@ -7055,6 +7142,7 @@ fn test_s390x_binemit() {
     insns.push((
         Inst::FpuCMov32 {
             rd: writable_vr(8),
+            rn: vr(8),
             rm: vr(20),
             cond: Cond::from_mask(1),
         },
@@ -7064,6 +7152,7 @@ fn test_s390x_binemit() {
     insns.push((
         Inst::FpuCMov64 {
             rd: writable_vr(8),
+            rn: vr(8),
             rm: vr(4),
             cond: Cond::from_mask(1),
         },
@@ -7073,6 +7162,7 @@ fn test_s390x_binemit() {
     insns.push((
         Inst::FpuCMov64 {
             rd: writable_vr(8),
+            rn: vr(8),
             rm: vr(20),
             cond: Cond::from_mask(1),
         },
@@ -10851,11 +10941,12 @@ fn test_s390x_binemit() {
     insns.push((
         Inst::VecCMov {
             rd: writable_vr(8),
+            rn: vr(8),
             rm: vr(20),
             cond: Cond::from_mask(1),
         },
         "A7E40005E78400000456",
-        "jno 10 ; vlr %v8, %v20",
+        "jno 10 ; vlr %v8, %v8, %v20",
     ));
     insns.push((
         Inst::MovToVec128 {
@@ -10982,6 +11073,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 8,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -10997,6 +11089,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 8,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -11012,6 +11105,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 8,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -11027,6 +11121,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 8,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -11042,6 +11137,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 16,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -11057,6 +11153,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 16,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -11072,6 +11169,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 16,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -11087,6 +11185,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 16,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -11102,6 +11201,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 32,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -11117,6 +11217,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 32,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -11132,6 +11233,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 32,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -11147,6 +11249,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 32,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -11162,6 +11265,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 64,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -11177,6 +11281,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 64,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -11192,6 +11297,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 64,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -11207,6 +11313,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLane {
             size: 64,
             rd: writable_vr(17),
+            ri: vr(17),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -12062,6 +12169,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLaneRev {
             size: 16,
             rd: writable_vr(1),
+            ri: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -12077,6 +12185,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLaneRev {
             size: 16,
             rd: writable_vr(1),
+            ri: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -12092,6 +12201,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLaneRev {
             size: 16,
             rd: writable_vr(1),
+            ri: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -12107,6 +12217,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLaneRev {
             size: 16,
             rd: writable_vr(1),
+            ri: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -12122,6 +12233,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLaneRev {
             size: 32,
             rd: writable_vr(1),
+            ri: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -12137,6 +12249,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLaneRev {
             size: 32,
             rd: writable_vr(1),
+            ri: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -12152,6 +12265,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLaneRev {
             size: 32,
             rd: writable_vr(1),
+            ri: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -12167,6 +12281,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLaneRev {
             size: 32,
             rd: writable_vr(1),
+            ri: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -12182,6 +12297,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLaneRev {
             size: 64,
             rd: writable_vr(1),
+            ri: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -12197,6 +12313,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLaneRev {
             size: 64,
             rd: writable_vr(1),
+            ri: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(2),
                 index: zero_reg(),
@@ -12212,6 +12329,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLaneRev {
             size: 64,
             rd: writable_vr(1),
+            ri: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -12227,6 +12345,7 @@ fn test_s390x_binemit() {
         Inst::VecLoadLaneRev {
             size: 64,
             rd: writable_vr(1),
+            ri: vr(1),
             mem: MemArg::BXD12 {
                 base: gpr(3),
                 index: gpr(2),
@@ -12783,133 +12902,145 @@ fn test_s390x_binemit() {
         Inst::VecInsertLane {
             size: 8,
             rd: writable_vr(8),
+            ri: vr(8),
             rn: gpr(4),
             lane_imm: 0,
             lane_reg: zero_reg(),
         },
         "E78400000022",
-        "vlvgb %v8, %r4, 0",
+        "vlvgb %v8, %v8, %r4, 0",
     ));
     insns.push((
         Inst::VecInsertLane {
             size: 8,
             rd: writable_vr(8),
+            ri: vr(8),
             rn: gpr(4),
             lane_imm: 255,
             lane_reg: zero_reg(),
         },
         "E78400FF0022",
-        "vlvgb %v8, %r4, 255",
+        "vlvgb %v8, %v8, %r4, 255",
     ));
     insns.push((
         Inst::VecInsertLane {
             size: 8,
             rd: writable_vr(24),
+            ri: vr(24),
             rn: gpr(4),
             lane_imm: 0,
             lane_reg: gpr(3),
         },
         "E78430000822",
-        "vlvgb %v24, %r4, 0(%r3)",
+        "vlvgb %v24, %v24, %r4, 0(%r3)",
     ));
     insns.push((
         Inst::VecInsertLane {
             size: 16,
             rd: writable_vr(8),
+            ri: vr(8),
             rn: gpr(4),
             lane_imm: 0,
             lane_reg: zero_reg(),
         },
         "E78400001022",
-        "vlvgh %v8, %r4, 0",
+        "vlvgh %v8, %v8, %r4, 0",
     ));
     insns.push((
         Inst::VecInsertLane {
             size: 16,
             rd: writable_vr(8),
+            ri: vr(8),
             rn: gpr(4),
             lane_imm: 255,
             lane_reg: zero_reg(),
         },
         "E78400FF1022",
-        "vlvgh %v8, %r4, 255",
+        "vlvgh %v8, %v8, %r4, 255",
     ));
     insns.push((
         Inst::VecInsertLane {
             size: 16,
             rd: writable_vr(24),
+            ri: vr(24),
             rn: gpr(4),
             lane_imm: 0,
             lane_reg: gpr(3),
         },
         "E78430001822",
-        "vlvgh %v24, %r4, 0(%r3)",
+        "vlvgh %v24, %v24, %r4, 0(%r3)",
     ));
     insns.push((
         Inst::VecInsertLane {
             size: 32,
             rd: writable_vr(8),
+            ri: vr(8),
             rn: gpr(4),
             lane_imm: 0,
             lane_reg: zero_reg(),
         },
         "E78400002022",
-        "vlvgf %v8, %r4, 0",
+        "vlvgf %v8, %v8, %r4, 0",
     ));
     insns.push((
         Inst::VecInsertLane {
             size: 32,
             rd: writable_vr(8),
+            ri: vr(8),
             rn: gpr(4),
             lane_imm: 255,
             lane_reg: zero_reg(),
         },
         "E78400FF2022",
-        "vlvgf %v8, %r4, 255",
+        "vlvgf %v8, %v8, %r4, 255",
     ));
     insns.push((
         Inst::VecInsertLane {
             size: 32,
             rd: writable_vr(24),
+            ri: vr(24),
             rn: gpr(4),
             lane_imm: 0,
             lane_reg: gpr(3),
         },
         "E78430002822",
-        "vlvgf %v24, %r4, 0(%r3)",
+        "vlvgf %v24, %v24, %r4, 0(%r3)",
     ));
     insns.push((
         Inst::VecInsertLane {
             size: 64,
             rd: writable_vr(8),
+            ri: vr(8),
             rn: gpr(4),
             lane_imm: 0,
             lane_reg: zero_reg(),
         },
         "E78400003022",
-        "vlvgg %v8, %r4, 0",
+        "vlvgg %v8, %v8, %r4, 0",
     ));
     insns.push((
         Inst::VecInsertLane {
             size: 64,
             rd: writable_vr(8),
+            ri: vr(8),
             rn: gpr(4),
             lane_imm: 255,
             lane_reg: zero_reg(),
         },
         "E78400FF3022",
-        "vlvgg %v8, %r4, 255",
+        "vlvgg %v8, %v8, %r4, 255",
     ));
     insns.push((
         Inst::VecInsertLane {
             size: 64,
             rd: writable_vr(24),
+            ri: vr(24),
             rn: gpr(4),
             lane_imm: 0,
             lane_reg: gpr(3),
         },
         "E78430003822",
-        "vlvgg %v24, %r4, 0(%r3)",
+        "vlvgg %v24, %v24, %r4, 0(%r3)",
     ));
     insns.push((
         Inst::VecInsertLaneUndef {
@@ -13168,41 +13299,45 @@ fn test_s390x_binemit() {
         Inst::VecInsertLaneImm {
             size: 8,
             rd: writable_vr(20),
+            ri: vr(20),
             imm: 0x1234,
             lane_imm: 15,
         },
         "E7401234F840",
-        "vleib %v20, 4660, 15",
+        "vleib %v20, %v20, 4660, 15",
     ));
     insns.push((
         Inst::VecInsertLaneImm {
             size: 16,
             rd: writable_vr(20),
+            ri: vr(20),
             imm: 0x1234,
             lane_imm: 7,
         },
         "E74012347841",
-        "vleih %v20, 4660, 7",
+        "vleih %v20, %v20, 4660, 7",
     ));
     insns.push((
         Inst::VecInsertLaneImm {
             size: 32,
             rd: writable_vr(20),
+            ri: vr(20),
             imm: 0x1234,
             lane_imm: 3,
         },
         "E74012343843",
-        "vleif %v20, 4660, 3",
+        "vleif %v20, %v20, 4660, 3",
     ));
     insns.push((
         Inst::VecInsertLaneImm {
             size: 64,
             rd: writable_vr(20),
+            ri: vr(20),
             imm: 0x1234,
             lane_imm: 1,
         },
         "E74012341842",
-        "vleig %v20, 4660, 1",
+        "vleig %v20, %v20, 4660, 1",
     ));
     insns.push((
         Inst::VecReplicateLane {
