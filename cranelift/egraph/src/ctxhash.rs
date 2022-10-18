@@ -134,6 +134,7 @@ impl<K, V> CtxHashMap<K, V> {
 
     /// Return an Entry cursor on a given bucket for a key, allowing
     /// for fetching the current value or inserting a new one.
+    #[inline(always)]
     pub fn entry<'a, Ctx: CtxEq<K, K> + CtxHash<K>>(
         &'a mut self,
         k: K,

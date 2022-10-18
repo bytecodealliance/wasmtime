@@ -2,7 +2,6 @@
 
 use crate::egraph::Analysis;
 use crate::egraph::FuncEGraph;
-use crate::egraph::MemoryState;
 pub use crate::egraph::{Node, NodeCtx};
 use crate::ir::condcodes;
 pub use crate::ir::condcodes::{FloatCC, IntCC};
@@ -97,35 +96,37 @@ pub(crate) fn store_to_load<'a>(id: Id, egraph: &mut FuncEGraph<'a>) -> Id {
             },
         ty: load_ty,
         addr: load_addr,
-        mem_state: MemoryState::Store(store_inst),
+        mem_state,
         ..
     } = load_key.node(&egraph.egraph.nodes)
     {
-        trace!(" -> got load op for id {}", id);
-        if let Some((store_ty, store_id)) = egraph.store_nodes.get(&store_inst) {
-            trace!(" -> got store id: {} ty: {}", store_id, store_ty);
-            let store_key = egraph.egraph.classes[*store_id].get_node().unwrap();
-            if let Node::Inst {
-                op:
-                    InstructionImms::Store {
-                        opcode: Opcode::Store,
-                        offset: store_offset,
-                        ..
-                    },
-                args: store_args,
-                ..
-            } = store_key.node(&egraph.egraph.nodes)
-            {
-                let store_args = store_args.as_slice(&egraph.node_ctx.args);
-                let store_data = store_args[0];
-                let store_addr = store_args[1];
-                if *load_offset == *store_offset
-                    && *load_ty == *store_ty
-                    && egraph.egraph.unionfind.equiv_id_mut(*load_addr, store_addr)
+        if let Some(store_inst) = mem_state.as_store() {
+            trace!(" -> got load op for id {}", id);
+            if let Some((store_ty, store_id)) = egraph.store_nodes.get(&store_inst) {
+                trace!(" -> got store id: {} ty: {}", store_id, store_ty);
+                let store_key = egraph.egraph.classes[*store_id].get_node().unwrap();
+                if let Node::Inst {
+                    op:
+                        InstructionImms::Store {
+                            opcode: Opcode::Store,
+                            offset: store_offset,
+                            ..
+                        },
+                    args: store_args,
+                    ..
+                } = store_key.node(&egraph.egraph.nodes)
                 {
-                    trace!(" -> same offset, type, address; forwarding");
-                    egraph.stats.store_to_load_forward += 1;
-                    return store_data;
+                    let store_args = store_args.as_slice(&egraph.node_ctx.args);
+                    let store_data = store_args[0];
+                    let store_addr = store_args[1];
+                    if *load_offset == *store_offset
+                        && *load_ty == *store_ty
+                        && egraph.egraph.unionfind.equiv_id_mut(*load_addr, store_addr)
+                    {
+                        trace!(" -> same offset, type, address; forwarding");
+                        egraph.stats.store_to_load_forward += 1;
+                        return store_data;
+                    }
                 }
             }
         }
@@ -155,12 +156,20 @@ where
         while let Some(node) = self.iter.next(&ctx.egraph.egraph) {
             trace!("iter from root {}: node {:?}", self.root, node);
             match node {
-                Node::Pure { op, args, types }
+                Node::Pure {
+                    op,
+                    args,
+                    ty,
+                    arity,
+                }
                 | Node::Inst {
-                    op, args, types, ..
-                } if types.len() == 1 => {
-                    let ty = types.as_slice(&ctx.egraph.node_ctx.types)[0];
-                    return Some((ty, op.clone(), args.clone()));
+                    op,
+                    args,
+                    ty,
+                    arity,
+                    ..
+                } if *arity == 1 => {
+                    return Some((*ty, op.clone(), args.clone()));
                 }
                 _ => {}
             }
@@ -176,8 +185,8 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
         let mut iter = self.egraph.egraph.enodes(eclass);
         while let Some(node) = iter.next(&self.egraph.egraph) {
             match node {
-                &Node::Pure { types, .. } | &Node::Inst { types, .. } if types.len() == 1 => {
-                    return Some(types.as_slice(&self.egraph.node_ctx.types)[0]);
+                &Node::Pure { ty, arity, .. } | &Node::Inst { ty, arity, .. } if arity == 1 => {
+                    return Some(ty);
                 }
                 &Node::Load { ty, .. } => return Some(ty),
                 &Node::Result { ty, .. } => return Some(ty),
@@ -207,14 +216,16 @@ impl<'a, 'b> generated_code::Context for IsleContext<'a, 'b> {
     }
 
     fn pure_enode_ctor(&mut self, ty: Type, op: &InstructionImms, args: IdArray) -> Id {
-        let types = self.egraph.node_ctx.types.single(ty);
-        let types = types.freeze(&mut self.egraph.node_ctx.types);
         let op = op.clone();
-        match self
-            .egraph
-            .egraph
-            .add(Node::Pure { op, args, types }, &mut self.egraph.node_ctx)
-        {
+        match self.egraph.egraph.add(
+            Node::Pure {
+                op,
+                args,
+                ty,
+                arity: 1,
+            },
+            &mut self.egraph.node_ctx,
+        ) {
             NewOrExisting::New(id) => {
                 self.egraph.stats.node_created += 1;
                 self.egraph.stats.node_pure += 1;
