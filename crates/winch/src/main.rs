@@ -4,22 +4,21 @@
 
 use anyhow::{Context, Result};
 use std::{fs, path::PathBuf, str::FromStr};
-use structopt::StructOpt;
+use clap::Parser;
 use target_lexicon::Triple;
 use wasmtime_environ::{
-    wasmparser::{Parser, Validator},
+    wasmparser::{Parser as WasmParser, Validator},
     DefinedFuncIndex, FunctionBodyData, Module, ModuleEnvironment, ModuleTypes, Tunables,
 };
 use winch::isa::{self, TargetIsa};
 
-#[derive(StructOpt, Debug)]
+#[derive(Parser, Debug)]
 struct Options {
     /// The input file
-    #[structopt(parse(from_os_str))]
     input: PathBuf,
 
     /// The target architecture
-    #[structopt(long = "target")]
+    #[clap(long = "target")]
     target: String,
 }
 
@@ -32,7 +31,7 @@ fn main() -> Result<()> {
     let isa = isa::lookup(triple)?;
 
     let mut validator = Validator::new();
-    let parser = Parser::new(0);
+    let parser = WasmParser::new(0);
     let mut types = Default::default();
     let tunables = Tunables::default();
     let translation = ModuleEnvironment::new(&tunables, &mut validator, &mut types)
