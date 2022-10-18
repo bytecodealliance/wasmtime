@@ -107,6 +107,13 @@ impl Inst {
         Inst::Setcc { cc, dst }
     }
 
+    fn bswap(size: OperandSize, dst: Writable<Reg>) -> Inst {
+        debug_assert!(dst.to_reg().class() == RegClass::Int);
+        let src = Gpr::new(dst.to_reg()).unwrap();
+        let dst = WritableGpr::from_writable_reg(dst).unwrap();
+        Inst::Bswap { size, src, dst }
+    }
+
     fn xmm_rm_r_imm(
         op: SseOpcode,
         src: RegMem,
@@ -3505,6 +3512,55 @@ fn test_x64_emit() {
     insns.push((Inst::setcc(CC::LE, w_r14), "410F9EC6", "setle   %r14b"));
     insns.push((Inst::setcc(CC::P, w_r9), "410F9AC1", "setp    %r9b"));
     insns.push((Inst::setcc(CC::NP, w_r8), "410F9BC0", "setnp   %r8b"));
+
+    // ========================================================
+    // Bswap
+    insns.push((
+        Inst::bswap(OperandSize::Size64, w_rax),
+        "480FC8",
+        "bswapq  %rax, %rax",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size64, w_r8),
+        "490FC8",
+        "bswapq  %r8, %r8",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size32, w_rax),
+        "0FC8",
+        "bswapl  %eax, %eax",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size64, w_rcx),
+        "480FC9",
+        "bswapq  %rcx, %rcx",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size32, w_rcx),
+        "0FC9",
+        "bswapl  %ecx, %ecx",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size64, w_r11),
+        "490FCB",
+        "bswapq  %r11, %r11",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size32, w_r11),
+        "410FCB",
+        "bswapl  %r11d, %r11d",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size64, w_r14),
+        "490FCE",
+        "bswapq  %r14, %r14",
+    ));
+    insns.push((
+        Inst::bswap(OperandSize::Size32, w_r14),
+        "410FCE",
+        "bswapl  %r14d, %r14d",
+    ));
+
     // ========================================================
     // Cmove
     insns.push((

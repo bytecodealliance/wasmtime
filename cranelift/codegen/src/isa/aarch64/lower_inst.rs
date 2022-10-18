@@ -96,6 +96,8 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::Bitrev | Opcode::Clz | Opcode::Cls | Opcode::Ctz => implemented_in_isle(ctx),
 
+        Opcode::Bswap => implemented_in_isle(ctx),
+
         Opcode::Popcnt => implemented_in_isle(ctx),
 
         Opcode::Load

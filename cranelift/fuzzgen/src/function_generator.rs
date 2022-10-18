@@ -671,6 +671,13 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Bmask, &[I32], &[I128], insert_opcode),
     (Opcode::Bmask, &[I64], &[I128], insert_opcode),
     (Opcode::Bmask, &[I128], &[I128], insert_opcode),
+    // Bswap
+    (Opcode::Bswap, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Bswap, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Bswap, &[I64, I64], &[I64], insert_opcode),
+    // I128 version not yet implemented.
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Bswap, &[I128, I128], &[I128], insert_opcode),
     // Fadd
     (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),
     (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode),

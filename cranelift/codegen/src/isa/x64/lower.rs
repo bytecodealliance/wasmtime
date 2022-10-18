@@ -363,6 +363,7 @@ fn lower_insn_to_regs(
         | Opcode::Ctz
         | Opcode::Popcnt
         | Opcode::Bitrev
+        | Opcode::Bswap
         | Opcode::IsNull
         | Opcode::IsInvalid
         | Opcode::Uextend

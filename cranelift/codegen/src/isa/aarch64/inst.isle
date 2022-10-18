@@ -1023,6 +1023,10 @@
     (RBit)
     (Clz)
     (Cls)
+    ;; Byte reverse
+    (Rev16)
+    (Rev32)
+    (Rev64)
 ))
 
 (type MemLabel extern (enum))
@@ -2578,6 +2582,17 @@
 
 (decl a64_cls (Type Reg) Reg)
 (rule (a64_cls ty x) (bit_rr (BitOp.Cls) ty x))
+
+;; Helpers for generating `rev` instructions
+
+(decl a64_rev16 (Type Reg) Reg)
+(rule (a64_rev16 ty x) (bit_rr (BitOp.Rev16) ty x))
+
+(decl a64_rev32 (Type Reg) Reg)
+(rule (a64_rev32 ty x) (bit_rr (BitOp.Rev32) ty x))
+
+(decl a64_rev64 (Type Reg) Reg)
+(rule (a64_rev64 ty x) (bit_rr (BitOp.Rev64) ty x))
 
 ;; Helpers for generating `eon` instructions.
 

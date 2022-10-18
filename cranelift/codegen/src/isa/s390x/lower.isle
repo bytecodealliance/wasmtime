@@ -1188,6 +1188,18 @@
                                             7 6 5 4 3 2 1 0))))
 
 
+;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16 (bswap x)))
+      (lshr_imm $I32 (bswap_reg $I32 x) 16))
+
+(rule (lower (has_type $I32 (bswap x)))
+      (bswap_reg $I32 x))
+
+(rule (lower (has_type $I64 (bswap x)))
+      (bswap_reg $I64 x))
+
+
 ;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The FLOGR hardware instruction always operates on the full 64-bit register.

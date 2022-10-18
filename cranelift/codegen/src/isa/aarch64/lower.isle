@@ -1517,6 +1517,17 @@
 (rule -1 (lower (has_type ty (cls x)))
       (a64_cls ty x))
 
+;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16 (bswap x)))
+      (a64_rev16 $I16 x))
+
+(rule (lower (has_type $I32 (bswap x)))
+      (a64_rev32 $I32 x))
+
+(rule (lower (has_type $I64 (bswap x)))
+      (a64_rev64 $I64 x))
+
 ;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Bmask tests the value against zero, and uses `csetm` to assert the result.

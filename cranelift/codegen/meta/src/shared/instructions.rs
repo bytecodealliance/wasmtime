@@ -643,6 +643,12 @@ pub(crate) fn define(
         TypeSetBuilder::new().ints(Interval::All).build(),
     );
 
+    let iSwappable = &TypeVar::new(
+        "iSwappable",
+        "A multi byte scalar integer type",
+        TypeSetBuilder::new().ints(16..128).build(),
+    );
+
     let iAddr = &TypeVar::new(
         "iAddr",
         "An integer address type",
@@ -2692,6 +2698,23 @@ pub(crate) fn define(
         Starting from the LSB in ``x``, count the number of zero bits before
         reaching the first one bit. When ``x`` is zero, returns the size of x
         in bits.
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
+    let x = &Operand::new("x", iSwappable);
+    let a = &Operand::new("a", iSwappable);
+
+    ig.push(
+        Inst::new(
+            "bswap",
+            r#"
+        Reverse the byte order of an integer.
+
+        Reverses the bytes in ``x``.
         "#,
             &formats.unary,
         )
