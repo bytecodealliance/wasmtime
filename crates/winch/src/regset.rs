@@ -26,7 +26,7 @@ impl RegSet {
     /// Request a specific general purpose register
     pub fn gpr(&mut self, reg: Reg) -> Option<Reg> {
         let index = reg.hw_enc();
-        self.named_gpr_available(reg).then(|| {
+        self.named_gpr_available(index as u32).then(|| {
             self.allocate(index as u32);
             Reg::int(index as usize)
         })
@@ -34,12 +34,13 @@ impl RegSet {
 
     /// Free the given general purpose register
     pub fn free_gpr(&mut self, reg: Reg) {
-        self.gpr |= reg.hw_enc() as u32;
+        let index = reg.hw_enc() as u32;
+        self.gpr |= 1 << index;
     }
 
-    fn named_gpr_available(&self, reg: Reg) -> bool {
-        let index = 1 << reg.hw_enc();
-        !(!self.gpr & index) != 0
+    fn named_gpr_available(&self, index: u32) -> bool {
+        let index = 1 << index;
+        (!self.gpr & index) == 0
     }
 
     fn gpr_available(&self) -> bool {
@@ -48,5 +49,40 @@ impl RegSet {
 
     fn allocate(&mut self, index: u32) {
         self.gpr &= !(1 << index);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Reg, RegSet};
+
+    const UNIVERSE: u32 = (1 << 16) - 1;
+
+    #[test]
+    fn test_any_gpr() {
+        let mut set = RegSet::new(UNIVERSE, 0);
+        for i in 0..16 {
+            let gpr = set.any_gpr();
+            assert!(gpr.is_some())
+        }
+
+        assert!(!set.gpr_available());
+        assert!(set.any_gpr().is_none())
+    }
+
+    #[test]
+    fn test_gpr() {
+        let all = UNIVERSE & !(1 << 5);
+        let target = Reg::int(5);
+        let mut set = RegSet::new(all, 0);
+        assert!(set.gpr(Reg::int(5)).is_none());
+    }
+
+    #[test]
+    fn test_free_gpr() {
+        let mut set = RegSet::new(UNIVERSE, 0);
+        let gpr = set.any_gpr().unwrap();
+        set.free_gpr(gpr);
+        assert!(set.gpr(gpr).is_some());
     }
 }
