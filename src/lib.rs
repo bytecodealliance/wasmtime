@@ -174,7 +174,7 @@ pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
     match Descriptor::get(fd) {
-        Descriptor::File(file) => match file.fd.datasync() {
+        Descriptor::File(file) => match wasi_filesystem::datasync(file.fd) {
             Ok(()) => ERRNO_SUCCESS,
             Err(err) => errno_from_wasi_filesystem(err),
         },
@@ -189,7 +189,7 @@ pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
 pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
     match Descriptor::get(fd) {
         Descriptor::File(file) => {
-            let info = match file.fd.info() {
+            let info = match wasi_filesystem::info(file.fd) {
                 Ok(info) => info,
                 Err(err) => return errno_from_wasi_filesystem(err),
             };
@@ -364,7 +364,7 @@ pub unsafe extern "C" fn fd_read(
 
             // We can cast between a `usize`-sized value and `usize`.
             let read_len = len as _;
-            let result = file.fd.pread(read_len, file.position);
+            let result = wasi_filesystem::pread(file.fd, read_len, file.position);
             match result {
                 Ok(data) => {
                     assert_eq!(data.as_ptr(), ptr);
@@ -433,7 +433,7 @@ pub unsafe extern "C" fn fd_seek(
                 WHENCE_END => wasi_filesystem::SeekFrom::End(offset as _),
                 _ => return ERRNO_INVAL,
             };
-            match file.fd.seek(from) {
+            match wasi_filesystem::seek(file.fd, from) {
                 Ok(result) => {
                     *newoffset = result;
                     ERRNO_SUCCESS
@@ -451,7 +451,7 @@ pub unsafe extern "C" fn fd_seek(
 #[no_mangle]
 pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
     match Descriptor::get(fd) {
-        Descriptor::File(file) => match file.fd.sync() {
+        Descriptor::File(file) => match wasi_filesystem::sync(file.fd) {
             Ok(()) => ERRNO_SUCCESS,
             Err(err) => errno_from_wasi_filesystem(err),
         },
@@ -465,7 +465,7 @@ pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_tell(fd: Fd, offset: *mut Filesize) -> Errno {
     match Descriptor::get(fd) {
-        Descriptor::File(file) => match file.fd.tell() {
+        Descriptor::File(file) => match wasi_filesystem::tell(file.fd) {
             Ok(result) => {
                 *offset = result;
                 ERRNO_SUCCESS
@@ -501,9 +501,7 @@ pub unsafe extern "C" fn fd_write(
 
     match Descriptor::get(fd) {
         Descriptor::File(file) => {
-            let result = file
-                .fd
-                .pwrite(slice::from_raw_parts(ptr, len), file.position);
+            let result = wasi_filesystem::pwrite(file.fd, slice::from_raw_parts(ptr, len), file.position);
 
             match result {
                 Ok(bytes) => {
@@ -612,8 +610,6 @@ pub unsafe extern "C" fn path_readlink(
     buf_len: Size,
     bufused: *mut Size,
 ) -> Errno {
-    let fd = wasi_filesystem::Descriptor::from_raw(fd as _);
-
     let path = slice::from_raw_parts(path_ptr, path_len);
 
     // If the user gave us a buffer shorter than `PATH_MAX`, it may not be
@@ -625,7 +621,7 @@ pub unsafe extern "C" fn path_readlink(
 
     register_buffer(buf, buf_len);
 
-    let result = fd.readlink_at(path);
+    let result = wasi_filesystem::readlink_at(fd, path);
 
     let return_value = match &result {
         Ok(path) => {
@@ -659,7 +655,7 @@ unsafe fn path_readlink_slow(
 
     register_buffer(buffer.as_mut_ptr().cast(), PATH_MAX);
 
-    let result = fd.readlink_at(path);
+    let result = wasi_filesystem::readlink_at(fd, path);
 
     let return_value = match &result {
         Ok(path) => {
