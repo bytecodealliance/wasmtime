@@ -49,24 +49,19 @@ async fn smoke_func_wrap() -> Result<()> {
     let component = r#"
         (component
             (type $f (func))
-            (type $imports_type
-              (instance
-                (alias outer 1 0 (type $f))
-                (export "i" (func $f))
-              )
-            )
-            (import "imports" (instance $imports (type $imports_type)))
+            (import "i" (func $f))
 
             (core module $m
                 (import "imports" "i" (func $i))
                 (func (export "thunk") call $i)
             )
 
-            (alias export 0 "i" (func $f))
-            (core func $f_lowered (canon lower (func 0)))
-            (core instance $imports_core (export "i" (func $f_lowered)))
+            (core func $f (canon lower (func $f)))
             (core instance $i (instantiate $m
-                (with "imports" (instance $imports_core))))
+                (with "imports" (instance
+                    (export "i" (func $f))
+                ))
+             ))
             (func (export "thunk")
                 (canon lift (core func $i "thunk"))
             )
@@ -77,8 +72,8 @@ async fn smoke_func_wrap() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    let mut imports = linker.instance("imports")?;
-    imports.func_wrap_async("i", |_: StoreContextMut<()>, _: ()| {
+    let mut root = linker.root();
+    root.func_wrap_async("i", |_: StoreContextMut<()>, _: ()| {
         Box::new(async { Ok(()) })
     })?;
 
