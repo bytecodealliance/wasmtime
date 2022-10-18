@@ -19,20 +19,12 @@ impl Compiler {
 impl wasmtime_environ::Compiler for Compiler {
     fn compile_function(
         &self,
-        translation: &ModuleTranslation<'_>,
-        index: DefinedFuncIndex,
-        data: FunctionBodyData<'_>,
+        _translation: &ModuleTranslation<'_>,
+        _index: DefinedFuncIndex,
+        _data: FunctionBodyData<'_>,
         _tunables: &Tunables,
-        types: &ModuleTypes,
+        _types: &ModuleTypes,
     ) -> Result<Box<dyn std::any::Any + Send>, CompileError> {
-        let module = &translation.module;
-        let index = module.func_index(index);
-        let func = &module.functions[index];
-        let sig = &types[func.signature];
-        let isa = &self.isa;
-
-        isa.compile_function(sig, data);
-
         todo!()
     }
 
