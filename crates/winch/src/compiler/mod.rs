@@ -85,4 +85,9 @@ impl wasmtime_environ::Compiler for Compiler {
     fn is_branch_protection_enabled(&self) -> bool {
         todo!()
     }
+
+    #[cfg(feature = "component-model")]
+    fn component_compiler(&self) -> &dyn wasmtime_environ::component::ComponentCompiler {
+	todo!()
+    }
 }
