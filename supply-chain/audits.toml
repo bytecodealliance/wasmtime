@@ -182,6 +182,18 @@ criteria = "safe-to-deploy"
 version = "0.2.5"
 notes = "I am the author of this crate."
 
+[[audits.libfuzzer-sys]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-run"
+delta = "0.4.3 -> 0.4.4"
+notes = "I am the author of this crate."
+
+[[audits.libfuzzer-sys]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-run"
+delta = "0.4.4 -> 0.4.5"
+notes = "I am the author of this crate."
+
 [[audits.libm]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -459,4 +471,3 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.48 -> 1.0.49"
 notes = "The Bytecode Alliance is the author of this crate."
-
