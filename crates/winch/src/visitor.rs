@@ -651,6 +651,7 @@ where
         self.context
             .masm
             .add(RegImm::reg(src), RegImm::reg(dst), OperandSize::S32);
+        self.regalloc.free_gpr(src);
         self.context.stack.push(Val::reg(dst));
     }
 
