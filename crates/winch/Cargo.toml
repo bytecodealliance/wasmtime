@@ -21,7 +21,7 @@ regalloc2 = "0.4.1"
 wat = "1.0.47"
 
 [features]
-default = ["all-arch"]
+default = ["all-arch", "component-model"]
 x64 = ["cranelift-codegen/x86"]
 arm64 = ["cranelift-codegen/arm64"]
 component-model = ["wasmtime-environ/component-model"]
