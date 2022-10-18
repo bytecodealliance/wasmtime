@@ -150,10 +150,54 @@ fn type_annotations_using_rule<'a>(
 
     let var_map = &mut BTreeMap::new();
     rule.lhs.build_var_map(var_map);
+
+    let mut annotation_infos = vec![];
+    if !rule.iflets.is_empty() {
+        for i in &rule.iflets {
+            i.lhs.build_var_map(var_map);
+        }
+        print!("\n\tif-lets:");
+        for iflet in &rule.iflets {
+            let iflet_lhs = &mut create_parse_tree_pattern(
+                &iflet.lhs,
+                &mut parse_tree,
+                var_map,
+                typeenv,
+                termenv,
+            );
+            let iflet_rhs =
+                &mut create_parse_tree_expr(&iflet.rhs, &mut parse_tree, var_map, typeenv, termenv);
+            let iflet_lhs_expr = add_rule_constraints(
+                &mut parse_tree,
+                iflet_lhs,
+                annotation_env,
+                &mut annotation_infos,
+            );
+            if iflet_lhs_expr.is_none() {
+                return None;
+            }
+            let iflet_rhs_expr = add_rule_constraints(
+                &mut parse_tree,
+                iflet_rhs,
+                annotation_env,
+                &mut annotation_infos,
+            );
+            if iflet_rhs_expr.is_none() {
+                return None;
+            }
+            parse_tree
+                .var_constraints
+                .insert(TypeExpr::Variable(iflet_lhs.type_var, iflet_rhs.type_var));
+            parse_tree.assumptions.push(veri_ir::Expr::Binary(
+                veri_ir::BinaryOp::Eq,
+                Box::new(dbg!(iflet_lhs_expr.unwrap())),
+                Box::new(dbg!(iflet_rhs_expr.unwrap())),
+            ));
+        }
+    }
     let lhs = &mut create_parse_tree_pattern(&rule.lhs, &mut parse_tree, var_map, typeenv, termenv);
     let rhs = &mut create_parse_tree_expr(&rule.rhs, &mut parse_tree, var_map, typeenv, termenv);
 
-    let mut annotation_infos = vec![];
     println!("Typing rule:");
     print!("\tLHS:");
     let lhs_expr =
@@ -164,7 +208,11 @@ fn type_annotations_using_rule<'a>(
     print!("\n\tRHS:");
     let rhs_expr =
         add_rule_constraints(&mut parse_tree, rhs, annotation_env, &mut annotation_infos);
+    if rhs_expr.is_none() {
+        return None;
+    }
     println!();
+
     match (lhs_expr, rhs_expr) {
         (Some(lhs_expr), Some(rhs_expr)) => {
             parse_tree
@@ -249,7 +297,7 @@ fn add_annotation_constraints(
         }
         annotation_ir::Expr::Const(c, ..) => {
             let t = tree.next_type_var;
-            let e = veri_ir::Expr::Terminal(veri_ir::Terminal::Const(c.value));
+            let e = veri_ir::Expr::Terminal(veri_ir::Terminal::Const(c.value, t));
             match c.ty {
                 annotation_ir::Type::BitVector => {
                     tree.bv_constraints
@@ -653,7 +701,7 @@ fn add_isle_constraints(
         ),
         (
             "ImmShift".to_owned(),
-            annotation_ir::Type::BitVectorWithWidth(6),
+            annotation_ir::Type::BitVectorWithWidth(8),
         ),
         (
             "ImmLogic".to_owned(),
@@ -763,7 +811,10 @@ fn add_rule_constraints(
             ));
             Some(children[0].clone())
         }
-        TypeVarConstruct::Const(i) => Some(veri_ir::Expr::Terminal(veri_ir::Terminal::Const(*i))),
+        TypeVarConstruct::Const(i) => Some(veri_ir::Expr::Terminal(veri_ir::Terminal::Const(
+            *i,
+            curr.type_var,
+        ))),
         TypeVarConstruct::And => {
             tree.quantified_vars
                 .insert((curr.ident.clone(), curr.type_var));

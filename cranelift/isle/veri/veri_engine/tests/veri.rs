@@ -3,9 +3,8 @@ use utils::{
     all_failure_result, all_success_result, custom_result, just_8_result, lte_64_success_result,
 };
 use utils::{
-    Bitwidth,
     test_from_file, test_from_file_custom_prelude, test_from_file_self_contained,
-    test_from_file_with_filter, test_from_files_with_lhs_termname,
+    test_from_file_with_filter, test_from_files_with_lhs_termname, Bitwidth,
 };
 use veri_ir::{Counterexample, VerificationResult};
 
@@ -104,7 +103,7 @@ fn test_small_rotr_to_shifts() {
             (Bitwidth::I16, VerificationResult::Success),
             (Bitwidth::I32, VerificationResult::InapplicableRule),
             (Bitwidth::I64, VerificationResult::InapplicableRule),
-            ],
+        ],
     )
 }
 
@@ -116,10 +115,13 @@ fn test_small_rotr_to_shifts_broken() {
         vec![
             (Bitwidth::I1, VerificationResult::Success),
             (Bitwidth::I8, VerificationResult::Failure(Counterexample {})),
-            (Bitwidth::I16, VerificationResult::Failure(Counterexample {})),
+            (
+                Bitwidth::I16,
+                VerificationResult::Failure(Counterexample {}),
+            ),
             (Bitwidth::I32, VerificationResult::InapplicableRule),
             (Bitwidth::I64, VerificationResult::InapplicableRule),
-            ],
+        ],
     );
     test_from_file_with_filter(
         "./examples/broken/broken_rule_or_small_rotr.isle",
@@ -127,10 +129,13 @@ fn test_small_rotr_to_shifts_broken() {
         vec![
             (Bitwidth::I1, VerificationResult::Failure(Counterexample {})),
             (Bitwidth::I8, VerificationResult::Failure(Counterexample {})),
-            (Bitwidth::I16, VerificationResult::Failure(Counterexample {})),
+            (
+                Bitwidth::I16,
+                VerificationResult::Failure(Counterexample {}),
+            ),
             (Bitwidth::I32, VerificationResult::InapplicableRule),
             (Bitwidth::I64, VerificationResult::InapplicableRule),
-            ],
+        ],
     )
 }
 
@@ -145,7 +150,7 @@ fn test_fits_in_16_rotl_to_rotr() {
             (Bitwidth::I16, VerificationResult::Success),
             (Bitwidth::I32, VerificationResult::InapplicableRule),
             (Bitwidth::I64, VerificationResult::InapplicableRule),
-            ],
+        ],
     )
 }
 
@@ -157,12 +162,31 @@ fn test_broken_fits_in_16_rotl_to_rotr() {
         vec![
             (Bitwidth::I1, VerificationResult::Success),
             (Bitwidth::I8, VerificationResult::Failure(Counterexample {})),
-            (Bitwidth::I16, VerificationResult::Failure(Counterexample {})),
+            (
+                Bitwidth::I16,
+                VerificationResult::Failure(Counterexample {}),
+            ),
             (Bitwidth::I32, VerificationResult::InapplicableRule),
             (Bitwidth::I64, VerificationResult::InapplicableRule),
-            ],
+        ],
     )
 }
+
+// AVH TODO: disabled because never terminates
+// #[test]
+// fn test_fits_in_16_with_imm_rotl_to_rotr() {
+//     test_from_file_with_filter(
+//         "./examples/fits_in_16_with_imm_rotl_to_rotr.isle",
+//         "rotl".to_string(),
+//         vec![
+//             (Bitwidth::I1, VerificationResult::Success),
+//             (Bitwidth::I8, VerificationResult::Success),
+//             (Bitwidth::I16, VerificationResult::Success),
+//             (Bitwidth::I32, VerificationResult::InapplicableRule),
+//             (Bitwidth::I64, VerificationResult::InapplicableRule),
+//         ],
+//     )
+// }
 
 #[test]
 fn test_let() {

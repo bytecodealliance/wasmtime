@@ -766,6 +766,8 @@
     (inst_data (InstructionData.TableAddr (Opcode.TableAddr) p T Offset))
 )
 
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
 (decl iconst (Imm64) Inst)
 (extractor
     (iconst N)

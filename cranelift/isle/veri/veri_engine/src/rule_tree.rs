@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{interp::Context, termname::pattern_contains_termname};
 use crate::solver::run_solver;
 use crate::type_inference::Solution;
+use crate::{interp::Context, termname::pattern_contains_termname};
 use cranelift_isle as isle;
 use isle::sema::{Pattern, Rule, RuleId, TermEnv, TypeEnv};
 use itertools::Itertools;

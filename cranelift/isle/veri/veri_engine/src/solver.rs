@@ -32,6 +32,56 @@ impl SolverCtx {
         name
     }
 
+    // Extend with concrete source and destination sizes. Includes extracting relevant bits.
+    fn extend_concrete(
+        &mut self,
+        dest_width: usize,
+        source: &String,
+        source_width: usize,
+        op: &str,
+    ) -> String {
+        let delta = dest_width - source_width;
+        // Extract the relevant bits of the source (which is modeled with a wider,
+        // register-width bitvector).
+        let extract = format!(
+            "((_ extract {} 0) {})",
+            source_width.wrapping_sub(1),
+            source
+        );
+
+        // Do the extend itself.
+        let extend = format!("((_ {} {}) {})", op, delta, extract);
+
+        // Pad the extended result back to the full register bitwidth. Use the bits
+        // that were already in the source register. That is, given:
+        //                       reg - source width              source width
+        //                                |                           |
+        // SOURCE: [               don't care bits           |   care bits    ]
+        //
+        //                             dest width
+        //                                |
+        // OUT:    [ same don't care bits |  defined extend  |   care bits     ]
+        let unconstrained_bits = self
+            .bitwidth
+            .checked_sub(delta)
+            .unwrap()
+            .checked_sub(source_width)
+            .unwrap();
+
+        // If we are extending to the full register width, no padding needed
+        if unconstrained_bits == 0 {
+            extend
+        } else {
+            let padding = format!(
+                "((_ extract {} {}) {})",
+                self.bitwidth.checked_sub(1).unwrap(),
+                self.bitwidth.checked_sub(unconstrained_bits).unwrap(),
+                source
+            );
+            format!("(concat {} {})", padding, extend)
+        }
+    }
+
     // SMTLIB only supports extends (zero or sign) by concrete amounts, but we
     // need symbolic ones. This method essentially does if-conversion over possible
     // concrete forms, outputting nested ITE blocks. We consider both the starting
@@ -71,47 +121,13 @@ impl SolverCtx {
                     possible_delta, shift, possible_source, source_width
                 );
                 some_match.push(matching.clone());
-
-                // Extract the relevant bits of the source (which is modeled with a wider,
-                // register-width bitvector).
-                let extract = format!(
-                    "((_ extract {} 0) {})",
-                    possible_source.wrapping_sub(1),
-                    source
+                let extend = self.extend_concrete(
+                    possible_source + possible_delta,
+                    source,
+                    possible_source,
+                    op,
                 );
-
-                // Do the extend itself.
-                let extend = format!("((_ {} {}) {})", op, possible_delta, extract);
-
-                // Pad the extended result back to the full register bitwidth. Use the bits
-                // that were already in the source register. That is, given:
-                //                       reg - source width              source width
-                //                                |                           |
-                // SOURCE: [               don't care bits           |   care bits    ]
-                //
-                //                             dest width
-                //                                |
-                // OUT:    [ same don't care bits |  defined extend  |   care bits     ]
-                let unconstrained_bits = self
-                    .bitwidth
-                    .checked_sub(possible_delta)
-                    .unwrap()
-                    .checked_sub(possible_source)
-                    .unwrap();
-
-                // If we are extending to the full register width, no padding needed
-                let after_padding = if unconstrained_bits == 0 {
-                    extend
-                } else {
-                    let padding = format!(
-                        "((_ extract {} {}) {})",
-                        self.bitwidth.checked_sub(1).unwrap(),
-                        self.bitwidth.checked_sub(unconstrained_bits).unwrap(),
-                        source
-                    );
-                    format!("(concat {} {})", padding, extend)
-                };
-                ite_str = format!("(ite {} {} {})", matching, after_padding, ite_str);
+                ite_str = format!("(ite {} {} {})", matching, extend, ite_str);
             }
         }
         let some_shift_matches = format!("(or {})", some_match.join(" "));
@@ -156,7 +172,7 @@ impl SolverCtx {
                 // register-width bitvector).
                 let extract = format!(
                     "((_ extract {} 0) {})",
-                    possible_source.wrapping_sub(1),
+                    possible_source.checked_sub(1).unwrap(),
                     source
                 );
 
@@ -255,9 +271,9 @@ impl SolverCtx {
     }
 
     pub fn static_width(&self, x: &Expr) -> Option<usize> {
-        match self.get_type(x).unwrap() {
-            Type::BitVector(w) => *w,
-            _ => unreachable!("static width error"),
+        match self.get_type(x) {
+            Some(Type::BitVector(w)) => *w,
+            _ => None,
         }
     }
 
@@ -287,13 +303,14 @@ impl SolverCtx {
         let tyvar = self.tyctx.tyvars.get(&e);
         let ty = &self.get_type(&e);
         let width = self.get_expr_width_var(&e).map(|s| s.clone());
+        let static_expr_width = self.static_width(&e);
         match e {
             Expr::Terminal(t) => match t {
                 Terminal::Var(v) => match self.var_map.get(&v) {
                     Some(o) => o.clone(),
                     None => v,
                 },
-                Terminal::Const(i) => match ty.unwrap() {
+                Terminal::Const(i, _) => match ty.unwrap() {
                     Type::BitVector(w) => {
                         let var = *tyvar.unwrap();
                         let width = w.unwrap_or(self.bitwidth);
@@ -422,21 +439,59 @@ impl SolverCtx {
             }
             Expr::BVZeroExtTo(i, x) => {
                 let arg_width = self.get_expr_width_var(&*x).unwrap().clone();
+                let static_width = self.static_width(&*x);
                 let expr_width = width.unwrap().clone();
                 self.width_assumptions
                     .push(format!("(= {} {})", expr_width, i));
                 let xs = self.vir_expr_to_rsmt2_str(*x);
-                let is = i.to_string();
-                self.extend_symbolic(&is, &xs, &arg_width, &"zero_extend")
+                if let Some(size) = static_width {
+                    self.extend_concrete(i, &xs, size, &"zero_extend")
+                } else {
+                    let is = i.to_string();
+                    self.extend_symbolic(&is, &xs, &arg_width, &"zero_extend")
+                }
             }
             Expr::BVZeroExtToVarWidth(i, x) => {
                 let arg_width = self.get_expr_width_var(&*x).unwrap().clone();
+                let static_arg_width = self.static_width(&*x);
                 let expr_width = width.unwrap().clone();
                 let is = self.vir_expr_to_rsmt2_str(*i);
                 let xs = self.vir_expr_to_rsmt2_str(*x);
                 self.width_assumptions
                     .push(format!("(= {} {})", expr_width, is));
-                self.extend_symbolic(&is, &xs, &arg_width, &"zero_extend")
+                if let (Some(arg_size), Some(e_size)) = (static_arg_width, static_expr_width) {
+                    self.extend_concrete(e_size, &xs, arg_size, &"zero_extend")
+                } else {
+                    self.extend_symbolic(&is, &xs, &arg_width, &"zero_extend")
+                }
+            }
+            Expr::BVSignExtTo(i, x) => {
+                let arg_width = self.get_expr_width_var(&*x).unwrap().clone();
+                let static_width = self.static_width(&*x);
+                let expr_width = width.unwrap().clone();
+                self.width_assumptions
+                    .push(format!("(= {} {})", expr_width, i));
+                let xs = self.vir_expr_to_rsmt2_str(*x);
+                if let Some(size) = static_width {
+                    self.extend_concrete(i, &xs, size, &"sign_extend")
+                } else {
+                    let is = i.to_string();
+                    self.extend_symbolic(&is, &xs, &arg_width, &"sign_extend")
+                }
+            }
+            Expr::BVSignExtToVarWidth(i, x) => {
+                let arg_width = self.get_expr_width_var(&*x).unwrap().clone();
+                let static_arg_width = self.static_width(&*x);
+                let expr_width = width.unwrap().clone();
+                let is = self.vir_expr_to_rsmt2_str(*i);
+                let xs = self.vir_expr_to_rsmt2_str(*x);
+                self.width_assumptions
+                    .push(format!("(= {} {})", expr_width, is));
+                if let (Some(arg_size), Some(e_size)) = (static_arg_width, static_expr_width) {
+                    self.extend_concrete(e_size, &xs, arg_size, &"sign_extend")
+                } else {
+                    self.extend_symbolic(&is, &xs, &arg_width, &"sign_extend")
+                }
             }
             Expr::BVConvToVarWidth(x, y) => {
                 let expr_width = width.unwrap().clone();
@@ -447,24 +502,6 @@ impl SolverCtx {
             }
             Expr::UndefinedTerm(term) => term.ret.name,
             Expr::WidthOf(x) => self.get_expr_width_var(&*x).unwrap().clone(),
-            Expr::BVSignExtTo(i, x) => {
-                let arg_width = self.get_expr_width_var(&*x).unwrap().clone();
-                let expr_width = width.unwrap().clone();
-                self.width_assumptions
-                    .push(format!("(= {} {})", expr_width, i));
-                let xs = self.vir_expr_to_rsmt2_str(*x);
-                let is = i.to_string();
-                self.extend_symbolic(&is, &xs, &arg_width, &"sign_extend")
-            }
-            Expr::BVSignExtToVarWidth(i, x) => {
-                let arg_width = self.get_expr_width_var(&*x).unwrap().clone();
-                let expr_width = width.unwrap().clone();
-                let is = self.vir_expr_to_rsmt2_str(*i);
-                let xs = self.vir_expr_to_rsmt2_str(*x);
-                self.width_assumptions
-                    .push(format!("(= {} {})", expr_width, is));
-                self.extend_symbolic(&is, &xs, &arg_width, &"sign_extend")
-            }
             Expr::BVExtract(i, j, x) => {
                 assert!(i > j);
                 assert!(i < self.bitwidth);

@@ -1,0 +1,154 @@
+(type ImmLogic (primitive ImmLogic))
+(type ImmShift (primitive ImmShift))
+(type Imm12 (primitive Imm12))
+
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
+(decl lower (Inst) InstOutput)
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (- (a) (b)) (r))))
+(decl sub (Type Reg Reg) Reg)
+(extern constructor sub sub)
+
+;;@ (spec (sig (args) (r))
+;;@     (assertions (= (conv_to (regwidth) (0i1:bv)) (r))))
+(decl zero_reg () Reg)
+(extern constructor zero_reg zero_reg)
+
+ ;;@ (spec (sig (args a, b, c, d) (ret))
+ ;;@     (assertions (if (b) {
+ ;;@                     (= (ret) (sign_ext (d) (conv_to (c) (a))))
+ ;;@                  } else { 
+ ;;@                      (= (ret) (zero_ext (d) (conv_to (c) (a))))
+ ;;@                  })
+ ;;@     ))
+(decl extend (Reg bool u8 u8) Reg)
+(extern constructor extend extend)
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (& (a) (b)) (r))))
+(decl and_imm (Type Reg ImmLogic) Reg)
+(extern constructor and_imm and_imm)
+
+;; Place a `Value` into a register, zero extending it to 32-bits
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
+(decl put_in_reg_zext32 (Value) Reg)
+(extern constructor put_in_reg_zext32 put_in_reg_zext32)
+
+;;@ (spec (sig (args ty, reg, imm_arg) (ret))
+;;@     (assertions (= (- (reg) (conv_to (widthof (ret)) (imm_arg))) (ret))))
+(decl sub_imm (Type Reg Imm12) Reg)
+(extern constructor sub_imm sub_imm)
+
+;;@ (spec (sig (args x) (ret))
+;;@     (assertions (= (int2bv 12 (x)) (ret))))
+(decl u8_into_imm12 (u8) Imm12)
+(extern constructor u8_into_imm12 u8_into_imm12)
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (shr (a) (b)) (r))))
+(decl lsr (Type Reg Reg) Reg)
+(extern constructor lsr lsr)
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (shl (a) (b)) (r))))
+(decl lsl (Type Reg Reg) Reg)
+(extern constructor lsl lsl)
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (| (a) (b)) (r))))
+(decl orr (Type Reg Reg) Reg)
+(extern constructor orr orr)
+
+
+;; fn imm_shift_from_imm64(&mut self, ty: Type, val: Imm64) -> Option<ImmShift> {
+;;     let imm_value = (val.bits() as u64) & ((ty.bits() - 1) as u64);
+;;     ImmShift::maybe_from_u64(imm_value)
+;; }
+
+;; Add an assertion that the value fits, using: FFFFFFFFFFFFFF00
+;;@ (spec (sig (args ty, x) (r))
+;;@   (assertions 
+;;@     (= (conv_to (widthof (r)) (& (x) (- (int2bv 64 (ty)) (1i64:bv)))) (r)),
+;;@     (= (0i65:bv) (& (& (x) (- (int2bv 64 (ty)) (1i64:bv))) (18446744073709551360i64:bv)))
+;;@   )
+;;@ )
+(decl pure imm_shift_from_imm64 (Type Imm64) ImmShift)
+(extern constructor imm_shift_from_imm64 imm_shift_from_imm64)
+
+;; fn negate_imm_shift(&mut self, ty: Type, mut imm: ImmShift) -> ImmShift {
+;;     let size = u8::try_from(ty.bits()).unwrap();
+;;     imm.imm = size.wrapping_sub(imm.value());
+;;     imm.imm &= size - 1;
+;;     imm
+;; }
+
+;;@ (spec (sig (args ty, x) (r))
+;;@   (assertions 
+;;@     (= (& (- (int2bv 8 (ty)) (x)) (- (int2bv 8 (ty)) (1i8:bv 8))) (r))
+;;@   )
+;;@ )
+(decl negate_imm_shift (Type ImmShift) ImmShift)
+(extern constructor negate_imm_shift negate_imm_shift)
+
+;; Helper for generating `lsr` instructions.
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (shr (a) (b)) (r))))
+(decl lsr_imm (Type Reg ImmShift) Reg)
+(extern constructor lsr_imm lsr_imm)
+(extern extractor lsr_imm lsr_imm)
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (shl (a) (b)) (r))))
+(decl lsl_imm (Type Reg ImmShift) Reg)
+(extern constructor lsl_imm lsl_imm)
+(extern extractor lsl_imm lsl_imm)
+
+;; fn rotr_opposite_amount(&mut self, ty: Type, val: ImmShift) -> ImmShift {
+;;     let amount = val.value() & u8::try_from(ty.bits() - 1).unwrap();
+;;     ImmShift::maybe_from_u64(u64::from(ty.bits()) - u64::from(amount)).unwrap()
+;; }
+
+;;@ (spec (sig (args ty, x) (ret))
+;;@   (assertions (= (- (int2bv 8 (ty)) (& (x) (- (int2bv 8 (ty)) (1i8:bv)))) (ret))))
+(decl rotr_opposite_amount (Type ImmShift) ImmShift)
+(extern constructor rotr_opposite_amount rotr_opposite_amount)
+
+;; Instruction formats.
+(type MInst
+  (enum
+))
+
+;; Specialization for the 8/16-bit case when the rotation amount is an immediate.
+(rule -1 (lower (has_type (fits_in_16 ty) (rotl x (iconst k))))
+      (if-let n (imm_shift_from_imm64 ty k))
+      (small_rotr_imm ty (put_in_reg_zext32 x) (negate_imm_shift ty n)))
+
+	;; LHS: fits_in_16 iconst def_inst rotl has_type lower
+	;; RHS: put_in_reg_zext32 negate_imm_shift small_rotr_imm output_reg
+
+;;@ (spec (sig (args t, x, y) (ret))
+;;@       (assertions 
+;;@          (= (rotr (x) (y)) (ret)),
+;;@          (= (widthof (x)) (t)), 
+;;@          (<= (widthof (x)) (16i128: isleType)), 
+;;@          (<= (widthof (y)) (16i128: isleType)), 
+;;@       )
+;;@ )
+(decl small_rotr_imm (Type Reg ImmShift) Reg)
+
+;; For a constant amount, we can instead do:
+;;
+;;    rotr rd, val, #amt
+;;
+;;       =>
+;;
+;;    lsr val_rshift, val, #<amt>
+;;    lsl val_lshift, val, <bitwidth - amt>
+;;    orr rd, val_lshift, val_rshift
+(rule (small_rotr_imm ty val amt)
+      (let ((val_rshift Reg (lsr_imm $I32 val amt))
+            (val_lshift Reg (lsl_imm $I32 val (rotr_opposite_amount ty amt))))
+        (orr $I32 val_lshift val_rshift)))
