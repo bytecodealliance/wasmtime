@@ -356,11 +356,10 @@ impl Language for NodeCtx {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-
     #[test]
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(target_pointer_width = "64")]
     fn node_size() {
+        use super::*;
         assert_eq!(std::mem::size_of::<InstructionImms>(), 16);
         assert_eq!(std::mem::size_of::<Node>(), 32);
     }
