@@ -694,6 +694,16 @@ pub(crate) fn define(
             .build(),
     );
 
+    let NarrowInt = &TypeVar::new(
+        "NarrowInt",
+        "An integer type with lanes type to `i64`",
+        TypeSetBuilder::new()
+            .ints(8..64)
+            .simd_lanes(Interval::All)
+            .dynamic_simd_lanes(Interval::All)
+            .build(),
+    );
+
     let ScalarTruthy = &TypeVar::new(
         "ScalarTruthy",
         "A scalar truthy type",
@@ -1342,7 +1352,7 @@ pub(crate) fn define(
     );
 
     let N = &Operand::new("N", &imm.imm64);
-    let a = &Operand::new("a", Int).with_doc("A constant integer scalar or vector value");
+    let a = &Operand::new("a", NarrowInt).with_doc("A constant integer scalar or vector value");
 
     ig.push(
         Inst::new(
@@ -3878,15 +3888,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![x])
         .operands_out(vec![lo, hi]),
-    );
-
-    let NarrowInt = &TypeVar::new(
-        "NarrowInt",
-        "An integer type with lanes type to `i64`",
-        TypeSetBuilder::new()
-            .ints(8..64)
-            .simd_lanes(Interval::All)
-            .build(),
     );
 
     let lo = &Operand::new("lo", NarrowInt);

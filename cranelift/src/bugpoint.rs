@@ -3,9 +3,10 @@
 use crate::utils::{parse_sets_and_triple, read_to_string};
 use anyhow::{Context as _, Result};
 use clap::Parser;
+use cranelift::prelude::Value;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::flowgraph::ControlFlowGraph;
-use cranelift_codegen::ir::types::{F32, F64};
+use cranelift_codegen::ir::types::{F32, F64, I128, I64};
 use cranelift_codegen::ir::{
     self, Block, FuncRef, Function, GlobalValueData, Inst, InstBuilder, InstructionData,
     StackSlots, TrapCode,
@@ -182,14 +183,22 @@ impl Mutator for ReplaceInstWithConst {
                     return (func, format!(""), ProgressStatus::Skip);
                 }
 
-                if num_results == 1 {
-                    let ty = func.dfg.value_type(func.dfg.first_result(prev_inst));
-                    let new_inst_name = const_for_type(func.dfg.replace(prev_inst), ty);
-                    return (
-                        func,
-                        format!("Replace inst {} with {}.", prev_inst, new_inst_name),
-                        ProgressStatus::Changed,
-                    );
+                // We replace a i128 const with a uextend+iconst, so we need to match that here
+                // to avoid processing those multiple times
+                if opcode == ir::Opcode::Uextend {
+                    let ret_ty = func.dfg.value_type(func.dfg.first_result(prev_inst));
+                    let is_uextend_i128 = ret_ty == I128;
+
+                    let arg = func.dfg.inst_args(prev_inst)[0];
+                    let arg_def = func.dfg.value_def(arg);
+                    let arg_is_iconst = arg_def
+                        .inst()
+                        .map(|inst| func.dfg[inst].opcode() == ir::Opcode::Iconst)
+                        .unwrap_or(false);
+
+                    if is_uextend_i128 && arg_is_iconst {
+                        return (func, format!(""), ProgressStatus::Skip);
+                    }
                 }
 
                 // At least 2 results. Replace each instruction with as many const instructions as
@@ -205,9 +214,7 @@ impl Mutator for ReplaceInstWithConst {
 
                 let mut inst_names = Vec::new();
                 for r in results {
-                    let ty = pos.func.dfg.value_type(r);
-                    let builder = pos.ins().with_results([Some(r)]);
-                    let new_inst_name = const_for_type(builder, ty);
+                    let new_inst_name = replace_with_const(&mut pos, r);
                     inst_names.push(new_inst_name);
                 }
 
@@ -397,13 +404,11 @@ impl Mutator for ReplaceBlockParamWithConst {
         let param_index = self.params_remaining;
 
         let param = func.dfg.block_params(self.block)[param_index];
-        let param_type = func.dfg.value_type(param);
         func.dfg.remove_block_param(param);
 
         let first_inst = func.layout.first_inst(self.block).unwrap();
         let mut pos = FuncCursor::new(&mut func).at_inst(first_inst);
-        let builder = pos.ins().with_results([Some(param)]);
-        let new_inst_name = const_for_type(builder, param_type);
+        let new_inst_name = replace_with_const(&mut pos, param);
 
         let mut cfg = ControlFlowGraph::new();
         cfg.compute(&func);
@@ -755,24 +760,29 @@ impl Mutator for MergeBlocks {
     }
 }
 
-fn const_for_type<'f, T: InstBuilder<'f>>(mut builder: T, ty: ir::Type) -> &'static str {
+fn replace_with_const(pos: &mut FuncCursor, param: Value) -> &'static str {
+    let ty = pos.func.dfg.value_type(param);
     if ty == F32 {
-        builder.f32const(0.0);
+        pos.ins().with_result(param).f32const(0.0);
         "f32const"
     } else if ty == F64 {
-        builder.f64const(0.0);
+        pos.ins().with_result(param).f64const(0.0);
         "f64const"
     } else if ty.is_ref() {
-        builder.null(ty);
+        pos.ins().with_result(param).null(ty);
         "null"
     } else if ty.is_vector() {
         let zero_data = vec![0; ty.bytes() as usize].into();
-        let zero_handle = builder.data_flow_graph_mut().constants.insert(zero_data);
-        builder.vconst(ty, zero_handle);
+        let zero_handle = pos.func.dfg.constants.insert(zero_data);
+        pos.ins().with_result(param).vconst(ty, zero_handle);
         "vconst"
+    } else if ty == I128 {
+        let res = pos.ins().iconst(I64, 0);
+        pos.ins().with_result(param).uextend(I128, res);
+        "iconst+uextend"
     } else {
         // Default to an integer type and possibly create verifier error
-        builder.iconst(ty, 0);
+        pos.ins().with_result(param).iconst(ty, 0);
         "iconst"
     }
 }
