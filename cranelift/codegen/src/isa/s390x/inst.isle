@@ -3345,13 +3345,6 @@
                                              dst))
 
 
-;; Conditionally select between two source registers.
-(decl cmov_reg (Type Cond Reg Reg) ConsumesFlags)
-(rule (cmov_reg ty cond src1 src2)
-      (let ((dst WritableReg (temp_writable_reg ty)))
-        (emit_cmov_reg ty dst cond src1 src2)))
-
-
 ;; Helpers for generating conditional traps ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl trap_if (ProducesFlags Cond TrapCode) Reg)
