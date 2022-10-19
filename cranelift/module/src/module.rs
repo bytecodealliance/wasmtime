@@ -185,8 +185,11 @@ impl From<FuncOrDataId> for ModuleExtName {
 /// Information about a function which can be called.
 #[derive(Debug)]
 pub struct FunctionDeclaration {
+    #[allow(missing_docs)]
     pub name: String,
+    #[allow(missing_docs)]
     pub linkage: Linkage,
+    #[allow(missing_docs)]
     pub signature: ir::Signature,
 }
 
@@ -298,9 +301,13 @@ pub type ModuleResult<T> = Result<T, ModuleError>;
 /// Information about a data object which can be accessed.
 #[derive(Debug)]
 pub struct DataDeclaration {
+    #[allow(missing_docs)]
     pub name: String,
+    #[allow(missing_docs)]
     pub linkage: Linkage,
+    #[allow(missing_docs)]
     pub writable: bool,
+    #[allow(missing_docs)]
     pub tls: bool,
 }
 
