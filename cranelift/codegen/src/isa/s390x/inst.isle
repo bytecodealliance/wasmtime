@@ -3415,26 +3415,22 @@
 ;; if that unrelated instruction does not modify the condition code.)
 (decl emit_producer (ProducesFlags) Unit)
 (rule (emit_producer (ProducesFlags.ProducesFlagsSideEffect insn)) (emit insn))
-(decl emit_consumer (ConsumesFlags) Unit)
-(rule (emit_consumer (ConsumesFlags.ConsumesFlagsReturnsReg insn _)) (emit insn))
 
 ;; Use a boolean condition to select between two registers.
 (decl select_bool_reg (Type ProducesBool Reg Reg) Reg)
 (rule (select_bool_reg ty (ProducesBool.ProducesBool producer cond) reg_true reg_false)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit_producer producer))
-            (_ Unit (emit_consumer (emit_cmov_reg ty dst cond reg_false reg_true))))
-        dst))
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (with_flags_reg
+          producer
+          (emit_cmov_reg ty dst cond reg_false reg_true))))
 
 ;; Use a boolean condition to select between two immediate values.
 (decl select_bool_imm (Type ProducesBool i16 u64) Reg)
 (rule (select_bool_imm ty (ProducesBool.ProducesBool producer cond) imm_true imm_false)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (reg_false WritableReg (temp_writable_reg ty))
-            (_ Unit (emit_producer producer))
-            (_ Unit (emit_imm ty reg_false imm_false))
-            (_ Unit (emit_consumer (emit_cmov_imm ty dst cond imm_true reg_false))))
-        dst))
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (with_flags_reg
+          producer
+          (emit_cmov_imm ty dst cond imm_true (imm ty imm_false)))))
 
 ;; Lower a boolean condition to the values 1/0. This rule is only used in the
 ;; context of instructions that return $I8 results.

@@ -8,8 +8,9 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
+;   lhi %r4, 0
 ;   clgr %r2, %r3
-;   lhi %r2, 0
+;   lgr %r2, %r4
 ;   lochie %r2, 1
 ;   br %r14
 

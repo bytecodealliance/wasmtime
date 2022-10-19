@@ -10,8 +10,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r2)
 ;   vl %v1, 0(%r3)
-;   vceqgs %v5, %v0, %v1
 ;   lhi %r2, 0
+;   vceqgs %v6, %v0, %v1
 ;   lochie %r2, 1
 ;   br %r14
 
@@ -24,8 +24,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r2)
 ;   vl %v1, 0(%r3)
-;   vceqgs %v5, %v0, %v1
 ;   lhi %r2, 0
+;   vceqgs %v6, %v0, %v1
 ;   lochine %r2, 1
 ;   br %r14
 
@@ -38,8 +38,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r2)
 ;   vl %v1, 0(%r3)
-;   vecg %v0, %v1 ; jne 10 ; vchlgs %v5, %v1, %v0
 ;   lhi %r2, 0
+;   vecg %v0, %v1 ; jne 10 ; vchlgs %v6, %v1, %v0
 ;   lochil %r2, 1
 ;   br %r14
 
@@ -52,8 +52,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r2)
 ;   vl %v1, 0(%r3)
-;   vecg %v1, %v0 ; jne 10 ; vchlgs %v5, %v0, %v1
 ;   lhi %r2, 0
+;   vecg %v1, %v0 ; jne 10 ; vchlgs %v6, %v0, %v1
 ;   lochil %r2, 1
 ;   br %r14
 
@@ -66,8 +66,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r2)
 ;   vl %v1, 0(%r3)
-;   vecg %v1, %v0 ; jne 10 ; vchlgs %v5, %v0, %v1
 ;   lhi %r2, 0
+;   vecg %v1, %v0 ; jne 10 ; vchlgs %v6, %v0, %v1
 ;   lochinl %r2, 1
 ;   br %r14
 
@@ -80,8 +80,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r2)
 ;   vl %v1, 0(%r3)
-;   vecg %v0, %v1 ; jne 10 ; vchlgs %v5, %v1, %v0
 ;   lhi %r2, 0
+;   vecg %v0, %v1 ; jne 10 ; vchlgs %v6, %v1, %v0
 ;   lochinl %r2, 1
 ;   br %r14
 
@@ -94,8 +94,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r2)
 ;   vl %v1, 0(%r3)
-;   veclg %v0, %v1 ; jne 10 ; vchlgs %v5, %v1, %v0
 ;   lhi %r2, 0
+;   veclg %v0, %v1 ; jne 10 ; vchlgs %v6, %v1, %v0
 ;   lochil %r2, 1
 ;   br %r14
 
@@ -108,8 +108,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r2)
 ;   vl %v1, 0(%r3)
-;   veclg %v1, %v0 ; jne 10 ; vchlgs %v5, %v0, %v1
 ;   lhi %r2, 0
+;   veclg %v1, %v0 ; jne 10 ; vchlgs %v6, %v0, %v1
 ;   lochil %r2, 1
 ;   br %r14
 
@@ -122,8 +122,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r2)
 ;   vl %v1, 0(%r3)
-;   veclg %v1, %v0 ; jne 10 ; vchlgs %v5, %v0, %v1
 ;   lhi %r2, 0
+;   veclg %v1, %v0 ; jne 10 ; vchlgs %v6, %v0, %v1
 ;   lochinl %r2, 1
 ;   br %r14
 
@@ -136,8 +136,8 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   vl %v0, 0(%r2)
 ;   vl %v1, 0(%r3)
-;   veclg %v0, %v1 ; jne 10 ; vchlgs %v5, %v1, %v0
 ;   lhi %r2, 0
+;   veclg %v0, %v1 ; jne 10 ; vchlgs %v6, %v1, %v0
 ;   lochinl %r2, 1
 ;   br %r14
 
