@@ -560,6 +560,8 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         &Inst::SMulWide { rd, rn, rm } => {
             collector.reg_use(rn);
             collector.reg_use(rm);
+            // FIXME: The pair is hard-coded as %r2/%r3 because regalloc cannot handle pairs. If
+            // that changes, all the hard-coded uses of %r2/%r3 can be changed.
             collector.reg_fixed_def(w_regpair_hi(rd), gpr(2));
             collector.reg_fixed_def(w_regpair_lo(rd), gpr(3));
         }
