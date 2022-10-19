@@ -1980,14 +1980,6 @@
 (rule (temp_writable_regpair)
       (WritableRegPair.WritableRegPair (temp_writable_reg $I64) (temp_writable_reg $I64)))
 
-;; Allocate a writable register pair and initialize it as a copy of the input.
-(decl copy_writable_regpair (RegPair) WritableRegPair)
-(rule (copy_writable_regpair src)
-      (let ((dst WritableRegPair (temp_writable_regpair))
-            (_ Unit (emit_mov $I64 (writable_regpair_lo dst) (regpair_lo src)))
-            (_ Unit (emit_mov $I64 (writable_regpair_hi dst) (regpair_hi src))))
-        dst))
-
 ;; Retrieve the high word of the writable register pair.
 (decl writable_regpair_hi (WritableRegPair) WritableReg)
 (rule (writable_regpair_hi (WritableRegPair.WritableRegPair hi _)) hi)
@@ -3088,22 +3080,6 @@
 (rule 0 (vec_imm_splat (ty_vec128 ty) n)
       (vec_load_const_replicate ty n))
 
-;; Place an immediate into the low half of a register pair.
-;; The high half is taken from the input.
-(decl imm_regpair_lo (Type u64 RegPair) RegPair)
-(rule (imm_regpair_lo ty n regpair)
-      (let ((dst WritableRegPair (copy_writable_regpair regpair))
-            (_ Unit (emit_imm ty (writable_regpair_lo dst) n)))
-        dst))
-
-;; Place an immediate into the high half of a register pair.
-;; The low half is taken from the input.
-(decl imm_regpair_hi (Type u64 RegPair) RegPair)
-(rule (imm_regpair_hi ty n regpair)
-      (let ((dst WritableRegPair (copy_writable_regpair regpair))
-            (_ Unit (emit_imm ty (writable_regpair_hi dst) n)))
-        dst))
-
 
 ;; Helpers for generating extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3313,38 +3289,6 @@
       (sext64_reg ty val))
 (rule 2 (put_in_reg_sext64 val @ (value_type (gpr64_ty ty)))
       val)
-
-;; Place `Value` into the low half of a register pair, zero-extending
-;; to 32 bits if smaller.  The high half is taken from the input.
-(decl put_in_regpair_lo_zext32 (Value RegPair) RegPair)
-(rule (put_in_regpair_lo_zext32 val regpair)
-      (let ((dst WritableRegPair (copy_writable_regpair regpair))
-            (_ Unit (emit_put_in_reg_zext32 (writable_regpair_lo dst) val)))
-        dst))
-
-;; Place `Value` into the low half of a register pair, sign-extending
-;; to 32 bits if smaller.  The high half is taken from the input.
-(decl put_in_regpair_lo_sext32 (Value RegPair) RegPair)
-(rule (put_in_regpair_lo_sext32 val regpair)
-      (let ((dst WritableRegPair (copy_writable_regpair regpair))
-            (_ Unit (emit_put_in_reg_sext32 (writable_regpair_lo dst) val)))
-        dst))
-
-;; Place `Value` into the low half of a register pair, zero-extending
-;; to 64 bits if smaller.  The high half is taken from the input.
-(decl put_in_regpair_lo_zext64 (Value RegPair) RegPair)
-(rule (put_in_regpair_lo_zext64 val regpair)
-      (let ((dst WritableRegPair (copy_writable_regpair regpair))
-            (_ Unit (emit_put_in_reg_zext64 (writable_regpair_lo dst) val)))
-        dst))
-
-;; Place `Value` into the low half of a register pair, sign-extending
-;; to 64 bits if smaller.  The high half is taken from the input.
-(decl put_in_regpair_lo_sext64 (Value RegPair) RegPair)
-(rule (put_in_regpair_lo_sext64 val regpair)
-      (let ((dst WritableRegPair (copy_writable_regpair regpair))
-            (_ Unit (emit_put_in_reg_sext64 (writable_regpair_lo dst) val)))
-        dst))
 
 
 ;; Helpers for generating conditional moves ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
