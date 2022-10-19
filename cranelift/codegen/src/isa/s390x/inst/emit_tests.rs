@@ -2208,11 +2208,11 @@ fn test_s390x_binemit() {
         "clgite %r7, 65535",
     ));
 
-    let w_regpair = WritableRegPair::WritableRegPair {
+    let w_regpair = WritableRegPair {
         hi: writable_gpr(2),
         lo: writable_gpr(3),
     };
-    let regpair = RegPair::RegPair {
+    let regpair = RegPair {
         hi: gpr(2),
         lo: gpr(3),
     };

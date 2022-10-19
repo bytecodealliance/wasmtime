@@ -1973,40 +1973,44 @@
 ;; Helpers for register pairs ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; A writable register pair.
-(type WritableRegPair extern (enum (WritableRegPair (hi WritableReg) (lo WritableReg))))
+(type WritableRegPair (primitive WritableRegPair))
+
+;; Construct a WritableRegPair from two registers.
+(decl writable_regpair (WritableReg WritableReg) WritableRegPair)
+(extern constructor writable_regpair writable_regpair)
 
 ;; Allocate a writable register pair.
 (decl temp_writable_regpair () WritableRegPair)
 (rule (temp_writable_regpair)
-      (WritableRegPair.WritableRegPair (temp_writable_reg $I64) (temp_writable_reg $I64)))
+      (writable_regpair (temp_writable_reg $I64) (temp_writable_reg $I64)))
 
 ;; Retrieve the high word of the writable register pair.
 (decl writable_regpair_hi (WritableRegPair) WritableReg)
-(rule (writable_regpair_hi (WritableRegPair.WritableRegPair hi _)) hi)
+(extern constructor writable_regpair_hi writable_regpair_hi)
 
 ;; Retrieve the low word of the writable register pair.
 (decl writable_regpair_lo (WritableRegPair) WritableReg)
-(rule (writable_regpair_lo (WritableRegPair.WritableRegPair _ lo)) lo)
+(extern constructor writable_regpair_lo writable_regpair_lo)
 
 ;; A (read-only) register pair.
-(type RegPair extern (enum (RegPair (hi Reg) (lo Reg))))
+(type RegPair (primitive RegPair))
 
 ;; Construct a register pair from a writable register pair.
 (decl writable_regpair_to_regpair (WritableRegPair) RegPair)
-(rule (writable_regpair_to_regpair (WritableRegPair.WritableRegPair hi lo))
-      (RegPair.RegPair hi lo))
+(rule (writable_regpair_to_regpair w)
+      (regpair (writable_regpair_hi w) (writable_regpair_lo w)))
 
 ;; Construct a regpair from two registers.
 (decl regpair (Reg Reg) RegPair)
-(rule (regpair hi lo) (RegPair.RegPair hi lo))
+(extern constructor regpair regpair)
 
 ;; Retrieve the high word of the register pair.
 (decl regpair_hi (RegPair) Reg)
-(rule (regpair_hi (RegPair.RegPair hi _)) hi)
+(extern constructor regpair_hi regpair_hi)
 
 ;; Retrieve the low word of the register pair.
 (decl regpair_lo (RegPair) Reg)
-(rule (regpair_lo (RegPair.RegPair _ lo)) lo)
+(extern constructor regpair_lo regpair_lo)
 
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3827,7 +3831,7 @@
             (_ Unit (emit (MInst.Flogr dst x)))
             (hi WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.CMov64SImm16 hi (intcc_as_cond (IntCC.Equal)) (regpair_hi dst) zeroval))))
-        (RegPair.RegPair hi (regpair_lo dst))))
+        (regpair hi (regpair_lo dst))))
 
 ;; Vector count leading zeros.
 (decl vecop_clz (Type) VecUnaryOp)

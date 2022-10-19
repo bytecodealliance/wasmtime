@@ -5,6 +5,7 @@ use regalloc2::MachineEnv;
 use regalloc2::PReg;
 use regalloc2::VReg;
 
+use crate::isa::s390x::inst::{RegPair, WritableRegPair};
 use crate::machinst::*;
 use crate::settings;
 
@@ -178,6 +179,16 @@ pub fn pretty_print_reg(reg: Reg, allocs: &mut AllocationConsumer<'_>) -> String
     show_reg(reg)
 }
 
+pub fn pretty_print_regpair(pair: RegPair, allocs: &mut AllocationConsumer<'_>) -> String {
+    let hi = allocs.next(pair.hi);
+    let lo = allocs.next(pair.lo);
+    if hi.is_real() {
+        show_reg(hi)
+    } else {
+        format!("{}/{}", show_reg(hi), show_reg(lo))
+    }
+}
+
 pub fn pretty_print_reg_mod(
     rd: Writable<Reg>,
     ri: Reg,
@@ -189,6 +200,48 @@ pub fn pretty_print_reg_mod(
         show_reg(output)
     } else {
         format!("{}<-{}", show_reg(output), show_reg(input))
+    }
+}
+
+pub fn pretty_print_regpair_mod(
+    rd: WritableRegPair,
+    ri: RegPair,
+    allocs: &mut AllocationConsumer<'_>,
+) -> String {
+    let rd_hi = allocs.next(rd.hi.to_reg());
+    let rd_lo = allocs.next(rd.lo.to_reg());
+    let ri_hi = allocs.next(ri.hi);
+    let ri_lo = allocs.next(ri.lo);
+    if rd_hi == ri_hi {
+        show_reg(rd_hi)
+    } else {
+        format!(
+            "{}/{}<-{}/{}",
+            show_reg(rd_hi),
+            show_reg(rd_lo),
+            show_reg(ri_hi),
+            show_reg(ri_lo)
+        )
+    }
+}
+
+pub fn pretty_print_regpair_mod_lo(
+    rd: WritableRegPair,
+    ri: Reg,
+    allocs: &mut AllocationConsumer<'_>,
+) -> String {
+    let rd_hi = allocs.next(rd.hi.to_reg());
+    let rd_lo = allocs.next(rd.lo.to_reg());
+    let ri = allocs.next(ri);
+    if rd_lo == ri {
+        show_reg(rd_hi)
+    } else {
+        format!(
+            "{}/{}<-_/{}",
+            show_reg(rd_hi),
+            show_reg(rd_lo),
+            show_reg(ri),
+        )
     }
 }
 

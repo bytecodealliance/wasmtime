@@ -1657,8 +1657,8 @@ impl MachInstEmit for Inst {
             &Inst::SMulWide { rd, rn, rm } => {
                 let rn = allocs.next(rn);
                 let rm = allocs.next(rm);
-                let rd1 = allocs.next_writable(w_regpair_hi(rd));
-                let rd2 = allocs.next_writable(w_regpair_lo(rd));
+                let rd1 = allocs.next_writable(rd.hi);
+                let rd2 = allocs.next_writable(rd.lo);
                 debug_assert_eq!(rd1, writable_gpr(2));
                 debug_assert_eq!(rd2, writable_gpr(3));
 
@@ -1666,68 +1666,68 @@ impl MachInstEmit for Inst {
                 put(sink, &enc_rrf_ab(opcode, rd1.to_reg(), rn, rm, 0));
             }
             &Inst::UMulWide { rd, ri, rn } => {
-                let ri = allocs.next(ri);
-                debug_assert_eq!(ri, gpr(3));
                 let rn = allocs.next(rn);
-                let rd1 = allocs.next_writable(w_regpair_hi(rd));
-                let rd2 = allocs.next_writable(w_regpair_lo(rd));
+                let rd1 = allocs.next_writable(rd.hi);
+                let rd2 = allocs.next_writable(rd.lo);
                 debug_assert_eq!(rd1, writable_gpr(2));
                 debug_assert_eq!(rd2, writable_gpr(3));
+                let ri = allocs.next(ri);
+                debug_assert_eq!(ri, gpr(3));
 
                 let opcode = 0xb986; // MLGR
                 put(sink, &enc_rre(opcode, rd1.to_reg(), rn));
             }
             &Inst::SDivMod32 { rd, ri, rn } => {
-                let ri = allocs.next(ri);
-                debug_assert_eq!(ri, gpr(3));
                 let rn = allocs.next(rn);
-                let rd1 = allocs.next_writable(w_regpair_hi(rd));
-                let rd2 = allocs.next_writable(w_regpair_lo(rd));
+                let rd1 = allocs.next_writable(rd.hi);
+                let rd2 = allocs.next_writable(rd.lo);
                 debug_assert_eq!(rd1, writable_gpr(2));
                 debug_assert_eq!(rd2, writable_gpr(3));
+                let ri = allocs.next(ri);
+                debug_assert_eq!(ri, gpr(3));
 
                 let opcode = 0xb91d; // DSGFR
                 let trap_code = TrapCode::IntegerDivisionByZero;
                 put_with_trap(sink, &enc_rre(opcode, rd1.to_reg(), rn), trap_code);
             }
             &Inst::SDivMod64 { rd, ri, rn } => {
-                let ri = allocs.next(ri);
-                debug_assert_eq!(ri, gpr(3));
                 let rn = allocs.next(rn);
-                let rd1 = allocs.next_writable(w_regpair_hi(rd));
-                let rd2 = allocs.next_writable(w_regpair_lo(rd));
+                let rd1 = allocs.next_writable(rd.hi);
+                let rd2 = allocs.next_writable(rd.lo);
                 debug_assert_eq!(rd1, writable_gpr(2));
                 debug_assert_eq!(rd2, writable_gpr(3));
+                let ri = allocs.next(ri);
+                debug_assert_eq!(ri, gpr(3));
 
                 let opcode = 0xb90d; // DSGR
                 let trap_code = TrapCode::IntegerDivisionByZero;
                 put_with_trap(sink, &enc_rre(opcode, rd1.to_reg(), rn), trap_code);
             }
             &Inst::UDivMod32 { rd, ri, rn } => {
-                let ri1 = allocs.next(regpair_hi(ri));
-                let ri2 = allocs.next(regpair_lo(ri));
-                debug_assert_eq!(ri1, gpr(2));
-                debug_assert_eq!(ri2, gpr(3));
                 let rn = allocs.next(rn);
-                let rd1 = allocs.next_writable(w_regpair_hi(rd));
-                let rd2 = allocs.next_writable(w_regpair_lo(rd));
+                let rd1 = allocs.next_writable(rd.hi);
+                let rd2 = allocs.next_writable(rd.lo);
                 debug_assert_eq!(rd1, writable_gpr(2));
                 debug_assert_eq!(rd2, writable_gpr(3));
+                let ri1 = allocs.next(ri.hi);
+                let ri2 = allocs.next(ri.lo);
+                debug_assert_eq!(ri1, gpr(2));
+                debug_assert_eq!(ri2, gpr(3));
 
                 let opcode = 0xb997; // DLR
                 let trap_code = TrapCode::IntegerDivisionByZero;
                 put_with_trap(sink, &enc_rre(opcode, rd1.to_reg(), rn), trap_code);
             }
             &Inst::UDivMod64 { rd, ri, rn } => {
-                let ri1 = allocs.next(regpair_hi(ri));
-                let ri2 = allocs.next(regpair_lo(ri));
-                debug_assert_eq!(ri1, gpr(2));
-                debug_assert_eq!(ri2, gpr(3));
                 let rn = allocs.next(rn);
-                let rd1 = allocs.next_writable(w_regpair_hi(rd));
-                let rd2 = allocs.next_writable(w_regpair_lo(rd));
+                let rd1 = allocs.next_writable(rd.hi);
+                let rd2 = allocs.next_writable(rd.lo);
                 debug_assert_eq!(rd1, writable_gpr(2));
                 debug_assert_eq!(rd2, writable_gpr(3));
+                let ri1 = allocs.next(ri.hi);
+                let ri2 = allocs.next(ri.lo);
+                debug_assert_eq!(ri1, gpr(2));
+                debug_assert_eq!(ri2, gpr(3));
 
                 let opcode = 0xb987; // DLGR
                 let trap_code = TrapCode::IntegerDivisionByZero;
@@ -1735,8 +1735,8 @@ impl MachInstEmit for Inst {
             }
             &Inst::Flogr { rd, rn } => {
                 let rn = allocs.next(rn);
-                let rd1 = allocs.next_writable(w_regpair_hi(rd));
-                let rd2 = allocs.next_writable(w_regpair_lo(rd));
+                let rd1 = allocs.next_writable(rd.hi);
+                let rd2 = allocs.next_writable(rd.lo);
                 debug_assert_eq!(rd1, writable_gpr(2));
                 debug_assert_eq!(rd2, writable_gpr(3));
 
