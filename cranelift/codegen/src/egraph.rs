@@ -198,6 +198,8 @@ impl<'a> FuncEGraph<'a> {
                 let op = InstructionImms::from(&func.dfg[inst]);
                 let opcode = op.opcode();
                 let srcloc = func.srclocs[inst];
+                let arity = u16::try_from(results.len())
+                    .expect("More than 2^16 results from an instruction");
 
                 let node = if is_readonly_load {
                     self.stats.node_created += 1;
@@ -206,7 +208,7 @@ impl<'a> FuncEGraph<'a> {
                         op,
                         args,
                         ty,
-                        arity: results.len() as u16,
+                        arity,
                     }
                 } else if let Some(load_mem_state) = load_mem_state {
                     let addr = args.as_slice(&self.node_ctx.args)[0];
@@ -227,7 +229,7 @@ impl<'a> FuncEGraph<'a> {
                         op,
                         args,
                         ty,
-                        arity: results.len() as u16,
+                        arity,
                         srcloc,
                         loop_level,
                     }
@@ -238,7 +240,7 @@ impl<'a> FuncEGraph<'a> {
                         op,
                         args,
                         ty,
-                        arity: results.len() as u16,
+                        arity,
                     }
                 };
                 let dedup_needed = self.node_ctx.needs_dedup(&node);
