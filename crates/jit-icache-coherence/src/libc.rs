@@ -61,30 +61,38 @@ pub(crate) fn pipeline_flush_mt() -> Result<()> {
         e => e?,
     }
     #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
-    match unsafe {
-        libc::syscall(
-            {
-                // libc don't define the special syscall,So define it by My own.
-                // https://github.com/torvalds/linux/search?q=__NR_arch_specific_syscall
-                #[allow(non_snake_case)]
-                let __NR_arch_specific_syscall = 244;
-                __NR_arch_specific_syscall + 15
-            },
-            // Current the parament is not used,But defined. https://github.com/torvalds/linux/blob/4d1044fcb996e8de9b9ab392f4a767890e45202d/arch/riscv/kernel/sys_riscv.c#L64-L66
-            0, // start
-            0, // end
-            {
-                #[allow(non_snake_case)]
-                let SYS_RISCV_FLUSH_ICACHE_LOCAL = 1;
-                #[allow(non_snake_case)]
-                let SYS_RISCV_FLUSH_ICACHE_ALL = SYS_RISCV_FLUSH_ICACHE_LOCAL;
-                SYS_RISCV_FLUSH_ICACHE_ALL
-            }, // flags
-        )
-    } {
-        0 => {}
-        _ => return Err(Error::last_os_error()),
+    if num_cpus::get() == 1 {
+        use std::arch::asm;
+        unsafe {
+            asm!("fence.i");
+        }
+    } else {
+        match unsafe {
+            libc::syscall(
+                {
+                    // libc don't define the special syscall,So define it by My own.
+                    // https://github.com/torvalds/linux/search?q=__NR_arch_specific_syscall
+                    #[allow(non_snake_case)]
+                    let __NR_arch_specific_syscall = 244;
+                    __NR_arch_specific_syscall + 15
+                },
+                // Current the parament is not used,But defined. https://github.com/torvalds/linux/blob/4d1044fcb996e8de9b9ab392f4a767890e45202d/arch/riscv/kernel/sys_riscv.c#L64-L66
+                0, // start
+                0, // end
+                {
+                    #[allow(non_snake_case)]
+                    let SYS_RISCV_FLUSH_ICACHE_LOCAL = 1;
+                    #[allow(non_snake_case)]
+                    let SYS_RISCV_FLUSH_ICACHE_ALL = SYS_RISCV_FLUSH_ICACHE_LOCAL;
+                    SYS_RISCV_FLUSH_ICACHE_ALL
+                }, // flags
+            )
+        } {
+            0 => {}
+            _ => return Err(Error::last_os_error()),
+        }
     }
+
     Ok(())
 }
 

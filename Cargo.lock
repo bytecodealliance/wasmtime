@@ -3691,6 +3691,7 @@ version = "2.0.0"
 dependencies = [
  "cfg-if",
  "libc",
+ "num_cpus",
  "windows-sys",
 ]
 
