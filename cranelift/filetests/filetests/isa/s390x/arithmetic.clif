@@ -711,7 +711,7 @@ block0(v0: i128, v1: i128):
 ;   lgdr %r8, %f1
 ;   vlgvg %r10, %v1, 1
 ;   lgr %r3, %r4
-;   mlgr %r2, %r3, %r3, %r10
+;   mlgr %r2, %r10
 ;   lgr %r9, %r2
 ;   msgr %r4, %r8
 ;   msgrkc %r2, %r5, %r10
@@ -939,7 +939,7 @@ block0(v0: i64, v1: i64):
 ;   lgr %r4, %r2
 ;   lgr %r2, %r3
 ;   lgr %r3, %r4
-;   mlgr %r2, %r3, %r3, %r2
+;   mlgr %r2, %r2
 ;   br %r14
 
 function %umulhi_i32(i32, i32) -> i32 {
@@ -988,7 +988,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; block0:
-;   mgrk %r2, %r3, %r2, %r3
+;   mgrk %r2, %r2, %r3
 ;   br %r14
 
 function %smulhi_i32(i32, i32) -> i32 {
@@ -1038,13 +1038,13 @@ block0(v0: i64, v1: i64):
 
 ; block0:
 ;   llihf %r4, 2147483647
-;   iilf %r4, %r4, 4294967295
+;   iilf %r4, 4294967295
 ;   xgrk %r5, %r4, %r2
 ;   ngrk %r4, %r5, %r3
 ;   cgite %r4, -1
 ;   lgr %r4, %r3
 ;   lgr %r3, %r2
-;   dsgr %r2, %r3, %r3, %r4
+;   dsgr %r2, %r4
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1058,7 +1058,7 @@ block0(v0: i64):
 ; block0:
 ;   lgr %r3, %r2
 ;   lghi %r5, 2
-;   dsgr %r2, %r3, %r3, %r5
+;   dsgr %r2, %r5
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1076,7 +1076,7 @@ block0(v0: i32, v1: i32):
 ;   lgr %r4, %r5
 ;   nrk %r5, %r2, %r4
 ;   cite %r5, -1
-;   dsgfr %r2, %r3, %r3, %r4
+;   dsgfr %r2, %r4
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1090,7 +1090,7 @@ block0(v0: i32):
 ; block0:
 ;   lgfr %r3, %r2
 ;   lhi %r4, 2
-;   dsgfr %r2, %r3, %r3, %r4
+;   dsgfr %r2, %r4
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1109,7 +1109,7 @@ block0(v0: i16, v1: i16):
 ;   xrk %r5, %r2, %r3
 ;   nrk %r2, %r5, %r4
 ;   cite %r2, -1
-;   dsgfr %r2, %r3, %r3, %r4
+;   dsgfr %r2, %r4
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1123,7 +1123,7 @@ block0(v0: i16):
 ; block0:
 ;   lghr %r3, %r2
 ;   lhi %r4, 2
-;   dsgfr %r2, %r3, %r3, %r4
+;   dsgfr %r2, %r4
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1142,7 +1142,7 @@ block0(v0: i8, v1: i8):
 ;   xrk %r5, %r2, %r3
 ;   nrk %r2, %r5, %r4
 ;   cite %r2, -1
-;   dsgfr %r2, %r3, %r3, %r4
+;   dsgfr %r2, %r4
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1156,7 +1156,7 @@ block0(v0: i8):
 ; block0:
 ;   lgbr %r3, %r2
 ;   lhi %r4, 2
-;   dsgfr %r2, %r3, %r3, %r4
+;   dsgfr %r2, %r4
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1170,7 +1170,7 @@ block0(v0: i64, v1: i64):
 ;   lgr %r5, %r3
 ;   lgr %r3, %r2
 ;   lghi %r2, 0
-;   dlgr %r2, %r3, %r2, %r3, %r5
+;   dlgr %r2, %r5
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1185,7 +1185,7 @@ block0(v0: i64):
 ;   lgr %r3, %r2
 ;   lghi %r2, 0
 ;   lghi %r4, 2
-;   dlgr %r2, %r3, %r2, %r3, %r4
+;   dlgr %r2, %r4
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1199,7 +1199,7 @@ block0(v0: i32, v1: i32):
 ;   lgr %r5, %r3
 ;   lgr %r3, %r2
 ;   lhi %r2, 0
-;   dlr %r2, %r3, %r2, %r3, %r5
+;   dlr %r2, %r5
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1214,7 +1214,7 @@ block0(v0: i32):
 ;   lgr %r3, %r2
 ;   lhi %r2, 0
 ;   lhi %r4, 2
-;   dlr %r2, %r3, %r2, %r3, %r4
+;   dlr %r2, %r4
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1232,7 +1232,7 @@ block0(v0: i16, v1: i16):
 ;   lgr %r2, %r4
 ;   llhr %r4, %r2
 ;   lgr %r2, %r5
-;   dlr %r2, %r3, %r2, %r3, %r4
+;   dlr %r2, %r4
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1249,7 +1249,7 @@ block0(v0: i16):
 ;   llhr %r3, %r2
 ;   lhi %r5, 2
 ;   lgr %r2, %r4
-;   dlr %r2, %r3, %r2, %r3, %r5
+;   dlr %r2, %r5
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1267,7 +1267,7 @@ block0(v0: i8, v1: i8):
 ;   lgr %r2, %r4
 ;   llcr %r4, %r2
 ;   lgr %r2, %r5
-;   dlr %r2, %r3, %r2, %r3, %r4
+;   dlr %r2, %r4
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1284,7 +1284,7 @@ block0(v0: i8):
 ;   llcr %r3, %r2
 ;   lhi %r5, 2
 ;   lgr %r2, %r4
-;   dlr %r2, %r3, %r2, %r3, %r5
+;   dlr %r2, %r5
 ;   lgr %r2, %r3
 ;   br %r14
 
@@ -1298,8 +1298,8 @@ block0(v0: i64, v1: i64):
 ;   cghi %r3, -1
 ;   lgr %r4, %r3
 ;   lgr %r3, %r2
-;   locghie %r3, %r3, 0
-;   dsgr %r2, %r3, %r3, %r4
+;   locghie %r3, 0
+;   dsgr %r2, %r4
 ;   br %r14
 
 function %srem_i32(i32, i32) -> i32 {
@@ -1311,7 +1311,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   lgr %r4, %r3
 ;   lgfr %r3, %r2
-;   dsgfr %r2, %r3, %r3, %r4
+;   dsgfr %r2, %r4
 ;   br %r14
 
 function %srem_i16(i16, i16) -> i16 {
@@ -1324,7 +1324,7 @@ block0(v0: i16, v1: i16):
 ;   lgr %r4, %r3
 ;   lghr %r3, %r2
 ;   lhr %r4, %r4
-;   dsgfr %r2, %r3, %r3, %r4
+;   dsgfr %r2, %r4
 ;   br %r14
 
 function %srem_i8(i8, i8) -> i8 {
@@ -1337,7 +1337,7 @@ block0(v0: i8, v1: i8):
 ;   lgr %r4, %r3
 ;   lgbr %r3, %r2
 ;   lbr %r4, %r4
-;   dsgfr %r2, %r3, %r3, %r4
+;   dsgfr %r2, %r4
 ;   br %r14
 
 function %urem_i64(i64, i64) -> i64 {
@@ -1350,7 +1350,7 @@ block0(v0: i64, v1: i64):
 ;   lgr %r5, %r3
 ;   lgr %r3, %r2
 ;   lghi %r2, 0
-;   dlgr %r2, %r3, %r2, %r3, %r5
+;   dlgr %r2, %r5
 ;   br %r14
 
 function %urem_i32(i32, i32) -> i32 {
@@ -1363,7 +1363,7 @@ block0(v0: i32, v1: i32):
 ;   lgr %r5, %r3
 ;   lgr %r3, %r2
 ;   lhi %r2, 0
-;   dlr %r2, %r3, %r2, %r3, %r5
+;   dlr %r2, %r5
 ;   br %r14
 
 function %urem_i16(i16, i16) -> i16 {
@@ -1380,7 +1380,7 @@ block0(v0: i16, v1: i16):
 ;   lgr %r2, %r4
 ;   llhr %r4, %r2
 ;   lgr %r2, %r5
-;   dlr %r2, %r3, %r2, %r3, %r4
+;   dlr %r2, %r4
 ;   br %r14
 
 function %urem_i8(i8, i8) -> i8 {
@@ -1397,6 +1397,6 @@ block0(v0: i8, v1: i8):
 ;   lgr %r2, %r4
 ;   llcr %r4, %r2
 ;   lgr %r2, %r5
-;   dlr %r2, %r3, %r2, %r3, %r4
+;   dlr %r2, %r4
 ;   br %r14
 

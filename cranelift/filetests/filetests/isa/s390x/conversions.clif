@@ -9,7 +9,7 @@ block0(v0: i64):
 
 ; block0:
 ;   vgbm %v5, 0
-;   vlvgg %v5, %v5, %r3, 1
+;   vlvgg %v5, %r3, 1
 ;   vst %v5, 0(%r2)
 ;   br %r14
 
@@ -21,7 +21,7 @@ block0(v0: i32):
 
 ; block0:
 ;   vgbm %v5, 0
-;   vlvgf %v5, %v5, %r3, 3
+;   vlvgf %v5, %r3, 3
 ;   vst %v5, 0(%r2)
 ;   br %r14
 
@@ -43,7 +43,7 @@ block0(v0: i16):
 
 ; block0:
 ;   vgbm %v5, 0
-;   vlvgh %v5, %v5, %r3, 7
+;   vlvgh %v5, %r3, 7
 ;   vst %v5, 0(%r2)
 ;   br %r14
 
@@ -75,7 +75,7 @@ block0(v0: i8):
 
 ; block0:
 ;   vgbm %v5, 0
-;   vlvgb %v5, %v5, %r3, 15
+;   vlvgb %v5, %r3, 15
 ;   vst %v5, 0(%r2)
 ;   br %r14
 
@@ -335,7 +335,7 @@ block0(v0: i128):
 ;   vgbm %v5, 0
 ;   vceqgs %v7, %v0, %v5
 ;   lghi %r3, 0
-;   locghine %r3, %r3, -1
+;   locghine %r3, -1
 ;   vlvgp %v21, %r3, %r3
 ;   vst %v21, 0(%r2)
 ;   br %r14
@@ -351,7 +351,7 @@ block0(v0: i128):
 ;   vgbm %v3, 0
 ;   vceqgs %v5, %v0, %v3
 ;   lghi %r2, 0
-;   locghine %r2, %r2, -1
+;   locghine %r2, -1
 ;   br %r14
 
 function %bmask_i128_i32(i128) -> i32 {
@@ -365,7 +365,7 @@ block0(v0: i128):
 ;   vgbm %v3, 0
 ;   vceqgs %v5, %v0, %v3
 ;   lhi %r2, 0
-;   lochine %r2, %r2, -1
+;   lochine %r2, -1
 ;   br %r14
 
 function %bmask_i128_i16(i128) -> i16 {
@@ -379,7 +379,7 @@ block0(v0: i128):
 ;   vgbm %v3, 0
 ;   vceqgs %v5, %v0, %v3
 ;   lhi %r2, 0
-;   lochine %r2, %r2, -1
+;   lochine %r2, -1
 ;   br %r14
 
 function %bmask_i128_i8(i128) -> i8 {
@@ -393,7 +393,7 @@ block0(v0: i128):
 ;   vgbm %v3, 0
 ;   vceqgs %v5, %v0, %v3
 ;   lhi %r2, 0
-;   lochine %r2, %r2, -1
+;   lochine %r2, -1
 ;   br %r14
 
 function %bmask_i64_i128(i64, i64) -> i128 {
@@ -405,7 +405,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   cghi %r4, 0
 ;   lghi %r4, 0
-;   locghilh %r4, %r4, -1
+;   locghilh %r4, -1
 ;   vlvgp %v18, %r4, %r4
 ;   vst %v18, 0(%r2)
 ;   br %r14
@@ -419,7 +419,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   cghi %r3, 0
 ;   lghi %r2, 0
-;   locghilh %r2, %r2, -1
+;   locghilh %r2, -1
 ;   br %r14
 
 function %bmask_i64_i32(i64, i64) -> i32 {
@@ -431,7 +431,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   cghi %r3, 0
 ;   lhi %r2, 0
-;   lochilh %r2, %r2, -1
+;   lochilh %r2, -1
 ;   br %r14
 
 function %bmask_i64_i16(i64, i64) -> i16 {
@@ -443,7 +443,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   cghi %r3, 0
 ;   lhi %r2, 0
-;   lochilh %r2, %r2, -1
+;   lochilh %r2, -1
 ;   br %r14
 
 function %bmask_i64_i8(i64, i64) -> i8 {
@@ -455,7 +455,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   cghi %r3, 0
 ;   lhi %r2, 0
-;   lochilh %r2, %r2, -1
+;   lochilh %r2, -1
 ;   br %r14
 
 function %bmask_i32_i128(i32, i32) -> i128 {
@@ -467,7 +467,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   chi %r4, 0
 ;   lghi %r4, 0
-;   locghilh %r4, %r4, -1
+;   locghilh %r4, -1
 ;   vlvgp %v18, %r4, %r4
 ;   vst %v18, 0(%r2)
 ;   br %r14
@@ -481,7 +481,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   chi %r3, 0
 ;   lghi %r2, 0
-;   locghilh %r2, %r2, -1
+;   locghilh %r2, -1
 ;   br %r14
 
 function %bmask_i32_i32(i32, i32) -> i32 {
@@ -493,7 +493,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   chi %r3, 0
 ;   lhi %r2, 0
-;   lochilh %r2, %r2, -1
+;   lochilh %r2, -1
 ;   br %r14
 
 function %bmask_i32_i16(i32, i32) -> i16 {
@@ -505,7 +505,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   chi %r3, 0
 ;   lhi %r2, 0
-;   lochilh %r2, %r2, -1
+;   lochilh %r2, -1
 ;   br %r14
 
 function %bmask_i32_i8(i32, i32) -> i8 {
@@ -517,7 +517,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   chi %r3, 0
 ;   lhi %r2, 0
-;   lochilh %r2, %r2, -1
+;   lochilh %r2, -1
 ;   br %r14
 
 function %bmask_i16_i128(i16, i16) -> i128 {
@@ -530,7 +530,7 @@ block0(v0: i16, v1: i16):
 ;   lhr %r3, %r4
 ;   chi %r3, 0
 ;   lghi %r3, 0
-;   locghilh %r3, %r3, -1
+;   locghilh %r3, -1
 ;   vlvgp %v20, %r3, %r3
 ;   vst %v20, 0(%r2)
 ;   br %r14
@@ -545,7 +545,7 @@ block0(v0: i16, v1: i16):
 ;   lhr %r2, %r3
 ;   chi %r2, 0
 ;   lghi %r2, 0
-;   locghilh %r2, %r2, -1
+;   locghilh %r2, -1
 ;   br %r14
 
 function %bmask_i16_i32(i16, i16) -> i32 {
@@ -558,7 +558,7 @@ block0(v0: i16, v1: i16):
 ;   lhr %r2, %r3
 ;   chi %r2, 0
 ;   lhi %r2, 0
-;   lochilh %r2, %r2, -1
+;   lochilh %r2, -1
 ;   br %r14
 
 function %bmask_i16_i16(i16, i16) -> i16 {
@@ -571,7 +571,7 @@ block0(v0: i16, v1: i16):
 ;   lhr %r2, %r3
 ;   chi %r2, 0
 ;   lhi %r2, 0
-;   lochilh %r2, %r2, -1
+;   lochilh %r2, -1
 ;   br %r14
 
 function %bmask_i16_i8(i16, i16) -> i8 {
@@ -584,7 +584,7 @@ block0(v0: i16, v1: i16):
 ;   lhr %r2, %r3
 ;   chi %r2, 0
 ;   lhi %r2, 0
-;   lochilh %r2, %r2, -1
+;   lochilh %r2, -1
 ;   br %r14
 
 function %bmask_i8_i128(i8, i8) -> i128 {
@@ -597,7 +597,7 @@ block0(v0: i8, v1: i8):
 ;   lbr %r3, %r4
 ;   chi %r3, 0
 ;   lghi %r3, 0
-;   locghilh %r3, %r3, -1
+;   locghilh %r3, -1
 ;   vlvgp %v20, %r3, %r3
 ;   vst %v20, 0(%r2)
 ;   br %r14
@@ -612,7 +612,7 @@ block0(v0: i8, v1: i8):
 ;   lbr %r2, %r3
 ;   chi %r2, 0
 ;   lghi %r2, 0
-;   locghilh %r2, %r2, -1
+;   locghilh %r2, -1
 ;   br %r14
 
 function %bmask_i8_i32(i8, i8) -> i32 {
@@ -625,7 +625,7 @@ block0(v0: i8, v1: i8):
 ;   lbr %r2, %r3
 ;   chi %r2, 0
 ;   lhi %r2, 0
-;   lochilh %r2, %r2, -1
+;   lochilh %r2, -1
 ;   br %r14
 
 function %bmask_i8_i16(i8, i8) -> i16 {
@@ -638,7 +638,7 @@ block0(v0: i8, v1: i8):
 ;   lbr %r2, %r3
 ;   chi %r2, 0
 ;   lhi %r2, 0
-;   lochilh %r2, %r2, -1
+;   lochilh %r2, -1
 ;   br %r14
 
 function %bmask_i8_i8(i8, i8) -> i8 {
@@ -651,7 +651,7 @@ block0(v0: i8, v1: i8):
 ;   lbr %r2, %r3
 ;   chi %r2, 0
 ;   lhi %r2, 0
-;   lochilh %r2, %r2, -1
+;   lochilh %r2, -1
 ;   br %r14
 
 function %bmask_i8_i128(i8, i8) -> i128 {
@@ -664,7 +664,7 @@ block0(v0: i8, v1: i8):
 ;   lbr %r3, %r4
 ;   chi %r3, 0
 ;   lghi %r3, 0
-;   locghilh %r3, %r3, -1
+;   locghilh %r3, -1
 ;   vlvgp %v20, %r3, %r3
 ;   vst %v20, 0(%r2)
 ;   br %r14
@@ -679,7 +679,7 @@ block0(v0: i8, v1: i8):
 ;   lbr %r2, %r3
 ;   chi %r2, 0
 ;   lghi %r2, 0
-;   locghilh %r2, %r2, -1
+;   locghilh %r2, -1
 ;   br %r14
 
 function %bmask_i8_i32(i8, i8) -> i32 {
@@ -692,7 +692,7 @@ block0(v0: i8, v1: i8):
 ;   lbr %r2, %r3
 ;   chi %r2, 0
 ;   lhi %r2, 0
-;   lochilh %r2, %r2, -1
+;   lochilh %r2, -1
 ;   br %r14
 
 function %bmask_i8_i16(i8, i8) -> i16 {
@@ -705,7 +705,7 @@ block0(v0: i8, v1: i8):
 ;   lbr %r2, %r3
 ;   chi %r2, 0
 ;   lhi %r2, 0
-;   lochilh %r2, %r2, -1
+;   lochilh %r2, -1
 ;   br %r14
 
 function %bmask_i8_i8(i8, i8) -> i8 {
@@ -718,6 +718,6 @@ block0(v0: i8, v1: i8):
 ;   lbr %r2, %r3
 ;   chi %r2, 0
 ;   lhi %r2, 0
-;   lochilh %r2, %r2, -1
+;   lochilh %r2, -1
 ;   br %r14
 

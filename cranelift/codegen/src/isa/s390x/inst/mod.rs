@@ -361,14 +361,14 @@ impl Inst {
                 // 16-bit shifted immediate
                 insts.push(Inst::Insert64UImm16Shifted {
                     rd,
-                    rn: rd.to_reg(),
+                    ri: rd.to_reg(),
                     imm,
                 });
             } else if let Some(imm) = UImm32Shifted::maybe_from_u64(lo) {
                 // 32-bit shifted immediate
                 insts.push(Inst::Insert64UImm32Shifted {
                     rd,
-                    rn: rd.to_reg(),
+                    ri: rd.to_reg(),
                     imm,
                 });
             } else {
@@ -563,22 +563,22 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_fixed_def(w_regpair_hi(rd), gpr(2));
             collector.reg_fixed_def(w_regpair_lo(rd), gpr(3));
         }
-        &Inst::UMulWide { rd, rn, rm } => {
-            collector.reg_fixed_use(rn, gpr(3));
-            collector.reg_use(rm);
+        &Inst::UMulWide { rd, ri, rn } => {
+            collector.reg_fixed_use(ri, gpr(3));
+            collector.reg_use(rn);
             collector.reg_fixed_def(w_regpair_hi(rd), gpr(2));
             collector.reg_fixed_def(w_regpair_lo(rd), gpr(3));
         }
-        &Inst::SDivMod32 { rd, rn, rm } | &Inst::SDivMod64 { rd, rn, rm } => {
-            collector.reg_fixed_use(rn, gpr(3));
-            collector.reg_use(rm);
+        &Inst::SDivMod32 { rd, ri, rn } | &Inst::SDivMod64 { rd, ri, rn } => {
+            collector.reg_fixed_use(ri, gpr(3));
+            collector.reg_use(rn);
             collector.reg_fixed_def(w_regpair_hi(rd), gpr(2));
             collector.reg_fixed_def(w_regpair_lo(rd), gpr(3));
         }
-        &Inst::UDivMod32 { rd, rn, rm } | &Inst::UDivMod64 { rd, rn, rm } => {
-            collector.reg_fixed_use(regpair_hi(rn), gpr(2));
-            collector.reg_fixed_use(regpair_lo(rn), gpr(3));
-            collector.reg_use(rm);
+        &Inst::UDivMod32 { rd, ri, rn } | &Inst::UDivMod64 { rd, ri, rn } => {
+            collector.reg_fixed_use(regpair_hi(ri), gpr(2));
+            collector.reg_fixed_use(regpair_lo(ri), gpr(3));
+            collector.reg_use(rn);
             collector.reg_fixed_def(w_regpair_hi(rd), gpr(2));
             collector.reg_fixed_def(w_regpair_lo(rd), gpr(3));
         }
@@ -596,10 +596,10 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
                 collector.reg_use(shift_reg);
             }
         }
-        &Inst::RxSBG { rd, rn, rm, .. } => {
+        &Inst::RxSBG { rd, ri, rn, .. } => {
             collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
             collector.reg_use(rn);
-            collector.reg_use(rm);
         }
         &Inst::RxSBGTest { rd, rn, .. } => {
             collector.reg_use(rd);
@@ -645,21 +645,21 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         }
         &Inst::AtomicCas32 {
             rd,
+            ri,
             rn,
-            rm,
             ref mem,
             ..
         }
         | &Inst::AtomicCas64 {
             rd,
+            ri,
             rn,
-            rm,
             ref mem,
             ..
         } => {
             collector.reg_reuse_def(rd, 1);
+            collector.reg_use(ri);
             collector.reg_use(rn);
-            collector.reg_use(rm);
             memarg_operands(mem, collector);
         }
         &Inst::Fence => {}
@@ -744,34 +744,34 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         | &Inst::Mov64UImm32Shifted { rd, .. } => {
             collector.reg_def(rd);
         }
-        &Inst::CMov32 { rd, rn, rm, .. } | &Inst::CMov64 { rd, rn, rm, .. } => {
+        &Inst::CMov32 { rd, ri, rm, .. } | &Inst::CMov64 { rd, ri, rm, .. } => {
             collector.reg_reuse_def(rd, 1);
-            collector.reg_use(rn);
+            collector.reg_use(ri);
             collector.reg_use(rm);
         }
-        &Inst::CMov32SImm16 { rd, rf, .. } | &Inst::CMov64SImm16 { rd, rf, .. } => {
+        &Inst::CMov32SImm16 { rd, ri, .. } | &Inst::CMov64SImm16 { rd, ri, .. } => {
             collector.reg_reuse_def(rd, 1);
-            collector.reg_use(rf);
+            collector.reg_use(ri);
         }
-        &Inst::Insert64UImm16Shifted { rd, rn, .. }
-        | &Inst::Insert64UImm32Shifted { rd, rn, .. } => {
+        &Inst::Insert64UImm16Shifted { rd, ri, .. }
+        | &Inst::Insert64UImm32Shifted { rd, ri, .. } => {
             collector.reg_reuse_def(rd, 1);
-            collector.reg_use(rn);
+            collector.reg_use(ri);
         }
         &Inst::LoadAR { rd, .. } => {
             collector.reg_def(rd);
         }
-        &Inst::InsertAR { rd, rn, .. } => {
+        &Inst::InsertAR { rd, ri, .. } => {
             collector.reg_reuse_def(rd, 1);
-            collector.reg_use(rn);
+            collector.reg_use(ri);
         }
         &Inst::FpuMove32 { rd, rn } | &Inst::FpuMove64 { rd, rn } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::FpuCMov32 { rd, rn, rm, .. } | &Inst::FpuCMov64 { rd, rn, rm, .. } => {
+        &Inst::FpuCMov32 { rd, ri, rm, .. } | &Inst::FpuCMov64 { rd, ri, rm, .. } => {
             collector.reg_reuse_def(rd, 1);
-            collector.reg_use(rn);
+            collector.reg_use(ri);
             collector.reg_use(rm);
         }
         &Inst::FpuRR { rd, rn, .. } => {
@@ -927,9 +927,9 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
-        &Inst::VecCMov { rd, rn, rm, .. } => {
+        &Inst::VecCMov { rd, ri, rm, .. } => {
             collector.reg_reuse_def(rd, 1);
-            collector.reg_use(rn);
+            collector.reg_use(ri);
             collector.reg_use(rm);
         }
         &Inst::MovToVec128 { rd, rn, rm } => {
@@ -1557,57 +1557,57 @@ impl Inst {
                 let rn = pretty_print_reg(rn, allocs);
                 let rm = pretty_print_reg(rm, allocs);
                 let rd1 = pretty_print_reg(w_regpair_hi(rd).to_reg(), allocs);
-                let rd2 = pretty_print_reg(w_regpair_lo(rd).to_reg(), allocs);
-                format!("{} {}, {}, {}, {}", op, rd1, rd2, rn, rm)
+                let _rd1 = allocs.next_writable(w_regpair_lo(rd));
+                format!("{} {}, {}, {}", op, rd1, rn, rm)
             }
-            &Inst::UMulWide { rd, rn, rm } => {
+            &Inst::UMulWide { rd, ri, rn } => {
                 let op = "mlgr";
+                let _ri = allocs.next(ri);
                 let rn = pretty_print_reg(rn, allocs);
-                let rm = pretty_print_reg(rm, allocs);
                 let rd1 = pretty_print_reg(w_regpair_hi(rd).to_reg(), allocs);
-                let rd2 = pretty_print_reg(w_regpair_lo(rd).to_reg(), allocs);
-                format!("{} {}, {}, {}, {}", op, rd1, rd2, rn, rm)
+                let _rd2 = allocs.next_writable(w_regpair_lo(rd));
+                format!("{} {}, {}", op, rd1, rn)
             }
-            &Inst::SDivMod32 { rd, rn, rm } => {
+            &Inst::SDivMod32 { rd, ri, rn } => {
                 let op = "dsgfr";
+                let _ri = allocs.next(ri);
                 let rn = pretty_print_reg(rn, allocs);
-                let rm = pretty_print_reg(rm, allocs);
                 let rd1 = pretty_print_reg(w_regpair_hi(rd).to_reg(), allocs);
-                let rd2 = pretty_print_reg(w_regpair_lo(rd).to_reg(), allocs);
-                format!("{} {}, {}, {}, {}", op, rd1, rd2, rn, rm)
+                let _rd2 = allocs.next_writable(w_regpair_lo(rd));
+                format!("{} {}, {}", op, rd1, rn)
             }
-            &Inst::SDivMod64 { rd, rn, rm } => {
+            &Inst::SDivMod64 { rd, ri, rn } => {
                 let op = "dsgr";
+                let _ri = allocs.next(ri);
                 let rn = pretty_print_reg(rn, allocs);
-                let rm = pretty_print_reg(rm, allocs);
                 let rd1 = pretty_print_reg(w_regpair_hi(rd).to_reg(), allocs);
-                let rd2 = pretty_print_reg(w_regpair_lo(rd).to_reg(), allocs);
-                format!("{} {}, {}, {}, {}", op, rd1, rd2, rn, rm)
+                let _rd2 = allocs.next_writable(w_regpair_lo(rd));
+                format!("{} {}, {}", op, rd1, rn)
             }
-            &Inst::UDivMod32 { rd, rn, rm } => {
+            &Inst::UDivMod32 { rd, ri, rn } => {
                 let op = "dlr";
-                let rn1 = pretty_print_reg(regpair_hi(rn), allocs);
-                let rn2 = pretty_print_reg(regpair_lo(rn), allocs);
-                let rm = pretty_print_reg(rm, allocs);
+                let _ri1 = allocs.next(regpair_hi(ri));
+                let _ri2 = allocs.next(regpair_lo(ri));
+                let rn = pretty_print_reg(rn, allocs);
                 let rd1 = pretty_print_reg(w_regpair_hi(rd).to_reg(), allocs);
-                let rd2 = pretty_print_reg(w_regpair_lo(rd).to_reg(), allocs);
-                format!("{} {}, {}, {}, {}, {}", op, rd1, rd2, rn1, rn2, rm)
+                let _rd2 = allocs.next_writable(w_regpair_lo(rd));
+                format!("{} {}, {}", op, rd1, rn)
             }
-            &Inst::UDivMod64 { rd, rn, rm } => {
+            &Inst::UDivMod64 { rd, ri, rn } => {
                 let op = "dlgr";
-                let rn1 = pretty_print_reg(regpair_hi(rn), allocs);
-                let rn2 = pretty_print_reg(regpair_lo(rn), allocs);
-                let rm = pretty_print_reg(rm, allocs);
+                let _ri1 = allocs.next(regpair_hi(ri));
+                let _ri2 = allocs.next(regpair_lo(ri));
+                let rn = pretty_print_reg(rn, allocs);
                 let rd1 = pretty_print_reg(w_regpair_hi(rd).to_reg(), allocs);
-                let rd2 = pretty_print_reg(w_regpair_lo(rd).to_reg(), allocs);
-                format!("{} {}, {}, {}, {}, {}", op, rd1, rd2, rn1, rn2, rm)
+                let _rd2 = allocs.next_writable(w_regpair_lo(rd));
+                format!("{} {}, {}", op, rd1, rn)
             }
             &Inst::Flogr { rd, rn } => {
                 let op = "flogr";
                 let rn = pretty_print_reg(rn, allocs);
                 let rd1 = pretty_print_reg(w_regpair_hi(rd).to_reg(), allocs);
-                let rd2 = pretty_print_reg(w_regpair_lo(rd).to_reg(), allocs);
-                format!("{} {}, {}, {}", op, rd1, rd2, rn)
+                let _rd2 = allocs.next_writable(w_regpair_lo(rd));
+                format!("{} {}, {}", op, rd1, rn)
             }
             &Inst::ShiftRR {
                 shift_op,
@@ -1638,8 +1638,8 @@ impl Inst {
             &Inst::RxSBG {
                 op,
                 rd,
+                ri,
                 rn,
-                rm,
                 start_bit,
                 end_bit,
                 rotate_amt,
@@ -1651,14 +1651,13 @@ impl Inst {
                     RxSBGOp::Xor => "rxsbg",
                 };
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let _ri = allocs.next(ri);
                 let rn = pretty_print_reg(rn, allocs);
-                let rm = pretty_print_reg(rm, allocs);
                 format!(
-                    "{} {}, {}, {}, {}, {}, {}",
+                    "{} {}, {}, {}, {}, {}",
                     op,
                     rd,
                     rn,
-                    rm,
                     start_bit,
                     end_bit,
                     (rotate_amt as u8) & 63
@@ -1863,14 +1862,14 @@ impl Inst {
             }
             &Inst::AtomicCas32 {
                 rd,
+                ri,
                 rn,
-                rm,
                 ref mem,
             }
             | &Inst::AtomicCas64 {
                 rd,
+                ri,
                 rn,
-                rm,
                 ref mem,
             } => {
                 let (opcode_rs, opcode_rsy) = match self {
@@ -1880,8 +1879,8 @@ impl Inst {
                 };
 
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
+                let _ri = allocs.next(ri);
                 let rn = pretty_print_reg(rn, allocs);
-                let rm = pretty_print_reg(rm, allocs);
                 let mem = mem.with_allocs(allocs);
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
@@ -1901,7 +1900,7 @@ impl Inst {
                 };
                 let mem = mem.pretty_print_default();
 
-                format!("{}{} {}, {}, {}, {}", mem_str, op.unwrap(), rd, rn, rm, mem)
+                format!("{}{} {}, {}, {}", mem_str, op.unwrap(), rd, rn, mem)
             }
             &Inst::Fence => "bcr 14, 0".to_string(),
             &Inst::Load32 { rd, ref mem }
@@ -2151,9 +2150,9 @@ impl Inst {
                 };
                 format!("{} {}, {}", op, rd, imm.bits)
             }
-            &Inst::Insert64UImm16Shifted { rd, rn, ref imm } => {
+            &Inst::Insert64UImm16Shifted { rd, ri, ref imm } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
+                let _ri = allocs.next(ri);
                 let op = match imm.shift {
                     0 => "iill",
                     1 => "iilh",
@@ -2161,62 +2160,62 @@ impl Inst {
                     3 => "iihh",
                     _ => unreachable!(),
                 };
-                format!("{} {}, {}, {}", op, rd, rn, imm.bits)
+                format!("{} {}, {}", op, rd, imm.bits)
             }
-            &Inst::Insert64UImm32Shifted { rd, rn, ref imm } => {
+            &Inst::Insert64UImm32Shifted { rd, ri, ref imm } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
+                let _ri = allocs.next(ri);
                 let op = match imm.shift {
                     0 => "iilf",
                     1 => "iihf",
                     _ => unreachable!(),
                 };
-                format!("{} {}, {}, {}", op, rd, rn, imm.bits)
+                format!("{} {}, {}", op, rd, imm.bits)
             }
             &Inst::LoadAR { rd, ar } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 format!("ear {}, %a{}", rd, ar)
             }
-            &Inst::InsertAR { rd, rn, ar } => {
+            &Inst::InsertAR { rd, ri, ar } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
-                format!("ear {}, {}, %a{}", rd, rn, ar)
+                let _ri = allocs.next(ri);
+                format!("ear {}, %a{}", rd, ar)
             }
-            &Inst::CMov32 { rd, cond, rn, rm } => {
+            &Inst::CMov32 { rd, cond, ri, rm } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
+                let _ri = allocs.next(ri);
                 let rm = pretty_print_reg(rm, allocs);
                 let cond = cond.pretty_print_default();
-                format!("locr{} {}, {}, {}", cond, rd, rn, rm)
+                format!("locr{} {}, {}", cond, rd, rm)
             }
-            &Inst::CMov64 { rd, cond, rn, rm } => {
+            &Inst::CMov64 { rd, cond, ri, rm } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
+                let _ri = allocs.next(ri);
                 let rm = pretty_print_reg(rm, allocs);
                 let cond = cond.pretty_print_default();
-                format!("locgr{} {}, {}, {}", cond, rd, rn, rm)
+                format!("locgr{} {}, {}", cond, rd, rm)
             }
             &Inst::CMov32SImm16 {
                 rd,
                 cond,
-                rf,
+                ri,
                 ref imm,
             } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rf = pretty_print_reg(rf, allocs);
+                let _ri = allocs.next(ri);
                 let cond = cond.pretty_print_default();
-                format!("lochi{} {}, {}, {}", cond, rd, rf, imm)
+                format!("lochi{} {}, {}", cond, rd, imm)
             }
             &Inst::CMov64SImm16 {
                 rd,
                 cond,
-                rf,
+                ri,
                 ref imm,
             } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rf = pretty_print_reg(rf, allocs);
+                let _ri = allocs.next(ri);
                 let cond = cond.pretty_print_default();
-                format!("locghi{} {}, {}, {}", cond, rd, rf, imm)
+                format!("locghi{} {}, {}", cond, rd, imm)
             }
             &Inst::FpuMove32 { rd, rn } => {
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
@@ -2236,9 +2235,9 @@ impl Inst {
                     format!("vlr {}, {}", rd, rn)
                 }
             }
-            &Inst::FpuCMov32 { rd, cond, rn, rm } => {
+            &Inst::FpuCMov32 { rd, cond, ri, rm } => {
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
-                let _ = pretty_print_fpr(rn, allocs);
+                let _ri = allocs.next(ri);
                 let (rm, rm_fpr) = pretty_print_fpr(rm, allocs);
                 if rd_fpr.is_some() && rm_fpr.is_some() {
                     let cond = cond.invert().pretty_print_default();
@@ -2248,9 +2247,9 @@ impl Inst {
                     format!("j{} 10 ; vlr {}, {}", cond, rd, rm)
                 }
             }
-            &Inst::FpuCMov64 { rd, cond, rn, rm } => {
+            &Inst::FpuCMov64 { rd, cond, ri, rm } => {
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg(), allocs);
-                let _ = pretty_print_fpr(rn, allocs);
+                let _ri = allocs.next(ri);
                 let (rm, rm_fpr) = pretty_print_fpr(rm, allocs);
                 if rd_fpr.is_some() && rm_fpr.is_some() {
                     let cond = cond.invert().pretty_print_default();
@@ -2880,12 +2879,12 @@ impl Inst {
                 let rn = pretty_print_reg(rn, allocs);
                 format!("vlr {}, {}", rd, rn)
             }
-            &Inst::VecCMov { rd, cond, rn, rm } => {
+            &Inst::VecCMov { rd, cond, ri, rm } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let rn = pretty_print_reg(rn, allocs);
+                let _ri = allocs.next(ri);
                 let rm = pretty_print_reg(rm, allocs);
                 let cond = cond.invert().pretty_print_default();
-                format!("j{} 10 ; vlr {}, {}, {}", cond, rd, rn, rm)
+                format!("j{} 10 ; vlr {}, {}", cond, rd, rm)
             }
             &Inst::MovToVec128 { rd, rn, rm } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
@@ -2981,7 +2980,7 @@ impl Inst {
                 };
 
                 let (rd, _) = pretty_print_fpr(rd.to_reg(), allocs);
-                let _ = pretty_print_fpr(ri, allocs);
+                let _ri = allocs.next(ri);
                 let mem = mem.with_allocs(allocs);
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
@@ -3133,14 +3132,14 @@ impl Inst {
                     _ => unreachable!(),
                 };
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let ri = pretty_print_reg(ri, allocs);
+                let _ri = allocs.next(ri);
                 let rn = pretty_print_reg(rn, allocs);
                 let lane_reg = if lane_reg != zero_reg() {
                     format!("({})", pretty_print_reg(lane_reg, allocs))
                 } else {
                     "".to_string()
                 };
-                format!("{} {}, {}, {}, {}{}", op, rd, ri, rn, lane_imm, lane_reg)
+                format!("{} {}, {}, {}{}", op, rd, rn, lane_imm, lane_reg)
             }
             &Inst::VecInsertLaneUndef {
                 size,
@@ -3213,8 +3212,8 @@ impl Inst {
                     _ => unreachable!(),
                 };
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                let ri = pretty_print_reg(ri, allocs);
-                format!("{} {}, {}, {}, {}", op, rd, ri, imm, lane_imm)
+                let _ri = allocs.next(ri);
+                format!("{} {}, {}, {}", op, rd, imm, lane_imm)
             }
             &Inst::VecReplicateLane {
                 size,

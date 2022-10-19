@@ -92,29 +92,29 @@
     ;; Only the lower half of the register pair is used as input.
     (UMulWide
       (rd WritableRegPair)
-      (rn Reg)
-      (rm Reg))
+      (ri Reg)
+      (rn Reg))
 
     ;; A divide operation with an in/out register pair, and an extra register source.
     ;; Only the lower half of the register pair is used as input.
     (SDivMod32
       (rd WritableRegPair)
-      (rn Reg)
-      (rm Reg))
+      (ri Reg)
+      (rn Reg))
     (SDivMod64
       (rd WritableRegPair)
-      (rn Reg)
-      (rm Reg))
+      (ri Reg)
+      (rn Reg))
 
     ;; A divide operation with an in/out register pair, and an extra register source.
     (UDivMod32
       (rd WritableRegPair)
-      (rn RegPair)
-      (rm Reg))
+      (ri RegPair)
+      (rn Reg))
     (UDivMod64
       (rd WritableRegPair)
-      (rn RegPair)
-      (rm Reg))
+      (ri RegPair)
+      (rn Reg))
 
     ;; A FLOGR operation with a register source and a register pair destination.
     (Flogr
@@ -135,8 +135,8 @@
     (RxSBG
         (op RxSBGOp)
         (rd WritableReg)
+        (ri Reg)
         (rn Reg)
-        (rm Reg)
         (start_bit u8)
         (end_bit u8)
         (rotate_amt i8))
@@ -228,15 +228,15 @@
     ;; A 32-bit atomic compare-and-swap operation.
     (AtomicCas32
       (rd WritableReg)
+      (ri Reg)
       (rn Reg)
-      (rm Reg)
       (mem MemArg))
 
     ;; A 64-bit atomic compare-and-swap operation.
     (AtomicCas64
       (rd WritableReg)
+      (ri Reg)
       (rn Reg)
-      (rm Reg)
       (mem MemArg))
 
     ;; A memory fence operation.
@@ -438,13 +438,13 @@
     ;; A 64-bit insert instruction with a shifted 16-bit immediate.
     (Insert64UImm16Shifted
       (rd WritableReg)
-      (rn Reg)
+      (ri Reg)
       (imm UImm16Shifted))
 
     ;; A 64-bit insert instruction with a shifted 32-bit immediate.
     (Insert64UImm32Shifted
       (rd WritableReg)
-      (rn Reg)
+      (ri Reg)
       (imm UImm32Shifted))
 
     ;; Load 32-bit access register into GPR.
@@ -456,7 +456,7 @@
     ;; (Identical operation to LoadAR, but considers rd to be use/def.)
     (InsertAR
       (rd WritableReg)
-      (rn Reg)
+      (ri Reg)
       (ar u8))
 
     ;; A sign- or zero-extend operation.
@@ -472,28 +472,28 @@
     (CMov32
       (rd WritableReg)
       (cond Cond)
-      (rn Reg)
+      (ri Reg)
       (rm Reg))
 
     ;; A 64-bit conditional move instruction.
     (CMov64
       (rd WritableReg)
       (cond Cond)
-      (rn Reg)
+      (ri Reg)
       (rm Reg))
 
     ;; A 32-bit conditional move instruction with a 16-bit signed immediate.
     (CMov32SImm16
       (rd WritableReg)
       (cond Cond)
-      (rf Reg)
+      (ri Reg)
       (imm i16))
 
     ;; A 64-bit conditional move instruction with a 16-bit signed immediate.
     (CMov64SImm16
       (rd WritableReg)
       (cond Cond)
-      (rf Reg)
+      (ri Reg)
       (imm i16))
 
     ;; A 32-bit FPU move possibly implemented as vector instruction.
@@ -510,14 +510,14 @@
     (FpuCMov32
       (rd WritableReg)
       (cond Cond)
-      (rn Reg)
+      (ri Reg)
       (rm Reg))
 
     ;; A 64-bit conditional move FPU instruction, possibly as vector instruction.
     (FpuCMov64
       (rd WritableReg)
       (cond Cond)
-      (rn Reg)
+      (ri Reg)
       (rm Reg))
 
     ;; 1-op FPU instruction implemented as vector instruction with the W bit.
@@ -757,7 +757,7 @@
     (VecCMov
       (rd WritableReg)
       (cond Cond)
-      (rn Reg)
+      (ri Reg)
       (rm Reg))
 
     ;; A 128-bit move instruction from two GPRs to a VR.
