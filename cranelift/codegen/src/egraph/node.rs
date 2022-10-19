@@ -1,9 +1,9 @@
 //! Node definition for EGraph representation.
 
-use super::MemoryState;
-use crate::ir::{Block, DataFlowGraph, Inst, InstructionImms, Opcode, RelSourceLoc, Type};
+use super::PackedMemoryState;
+use crate::ir::{Block, DataFlowGraph, InstructionImms, Opcode, RelSourceLoc, Type};
 use crate::loop_analysis::LoopLevel;
-use cranelift_egraph::{BumpArena, BumpSlice, CtxEq, CtxHash, Id, Language, UnionFind};
+use cranelift_egraph::{CtxEq, CtxHash, Id, Language, UnionFind};
 use cranelift_entity::{EntityList, ListPool};
 use std::hash::{Hash, Hasher};
 
@@ -31,8 +31,10 @@ pub enum Node {
         op: InstructionImms,
         /// eclass arguments to the operator.
         args: EntityList<Id>,
-        /// Types of results.
-        types: BumpSlice<Type>,
+        /// Type of result, if one.
+        ty: Type,
+        /// Number of results.
+        arity: u16,
     },
     /// A CLIF instruction that has side-effects or is otherwise not
     /// representable by `Pure`.
@@ -41,15 +43,10 @@ pub enum Node {
         op: InstructionImms,
         /// eclass arguments to the operator.
         args: EntityList<Id>,
-        /// Types of results.
-        types: BumpSlice<Type>,
-        /// The index of the original instruction. We include this so
-        /// that the `Inst`s are not deduplicated: every instance is a
-        /// logically separate and unique side-effect. However,
-        /// because we clear the DataFlowGraph before elaboration,
-        /// this `Inst` is *not* valid to fetch any details from the
-        /// original instruction.
-        inst: Inst,
+        /// Type of result, if one.
+        ty: Type,
+        /// Number of results.
+        arity: u16,
         /// The source location to preserve.
         srcloc: RelSourceLoc,
         /// The loop level of this Inst.
@@ -83,14 +80,9 @@ pub enum Node {
         /// the key).
         addr: Id,
         /// The abstract memory state that this load accesses.
-        mem_state: MemoryState,
+        mem_state: PackedMemoryState,
 
         // -- not included in dedup key:
-        /// The `Inst` we will use for a trap location for this
-        /// load. Excluded from Eq/Hash so that loads that are
-        /// identical except for the specific instance will dedup on
-        /// top of each other.
-        inst: Inst,
         /// Source location, for traps. Not included in Eq/Hash.
         srcloc: RelSourceLoc,
     },
@@ -107,18 +99,14 @@ impl Node {
 
 /// Shared pools for type and id lists in nodes.
 pub struct NodeCtx {
-    /// Arena for result-type arrays.
-    pub types: BumpArena<Type>,
     /// Arena for arg eclass-ID lists.
     pub args: ListPool<Id>,
 }
 
 impl NodeCtx {
     pub(crate) fn with_capacity_for_dfg(dfg: &DataFlowGraph) -> Self {
-        let n_types = dfg.num_values();
         let n_args = dfg.value_lists.capacity();
         Self {
-            types: BumpArena::arena_with_capacity(n_types),
             args: ListPool::with_capacity(n_args),
         }
     }
@@ -168,26 +156,23 @@ impl CtxEq<Node, Node> for NodeCtx {
                 &Node::Pure {
                     ref op,
                     ref args,
-                    ref types,
+                    ty,
+                    arity: _,
                 },
                 &Node::Pure {
                     op: ref other_op,
                     args: ref other_args,
-                    types: ref other_types,
+                    ty: other_ty,
+                    arity: _,
                 },
-            ) => {
-                *op == *other_op
-                    && self.ids_eq(args, other_args, uf)
-                    && types.as_slice(&self.types) == other_types.as_slice(&self.types)
-            }
+            ) => *op == *other_op && self.ids_eq(args, other_args, uf) && ty == other_ty,
             (
-                &Node::Inst { inst, ref args, .. },
+                &Node::Inst { ref args, .. },
                 &Node::Inst {
-                    inst: other_inst,
                     args: ref other_args,
                     ..
                 },
-            ) => inst == other_inst && self.ids_eq(args, other_args, uf),
+            ) => self.ids_eq(args, other_args, uf),
             (
                 &Node::Load {
                     ref op,
@@ -249,16 +234,14 @@ impl CtxHash<Node> for NodeCtx {
             &Node::Pure {
                 ref op,
                 ref args,
-                types: _,
+                ty,
+                arity: _,
             } => {
                 op.hash(&mut state);
                 self.hash_ids(args, &mut state, uf);
-                // Don't hash `types`: it requires an indirection
-                // (hence cache misses), and result type *should* be
-                // fully determined by op and args.
+                ty.hash(&mut state);
             }
-            &Node::Inst { inst, ref args, .. } => {
-                inst.hash(&mut state);
+            &Node::Inst { ref args, .. } => {
                 self.hash_ids(args, &mut state, uf);
             }
             &Node::Load {
@@ -368,5 +351,16 @@ impl Language for NodeCtx {
             Node::Pure { .. } | Node::Load { .. } => true,
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn node_size() {
+        use super::*;
+        assert_eq!(std::mem::size_of::<InstructionImms>(), 16);
+        assert_eq!(std::mem::size_of::<Node>(), 32);
     }
 }

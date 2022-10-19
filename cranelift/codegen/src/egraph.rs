@@ -1,6 +1,7 @@
 //! Egraph-based mid-end optimization framework.
 
 use crate::dominator_tree::DominatorTree;
+use crate::egraph::stores::PackedMemoryState;
 use crate::flowgraph::ControlFlowGraph;
 use crate::loop_analysis::{LoopAnalysis, LoopLevel};
 use crate::trace;
@@ -100,7 +101,9 @@ impl<'a> FuncEGraph<'a> {
         loop_analysis: &'a LoopAnalysis,
         cfg: &ControlFlowGraph,
     ) -> FuncEGraph<'a> {
-        let node_count_estimate = func.dfg.num_values() * 2;
+        let num_values = func.dfg.num_values();
+        let num_blocks = func.dfg.num_blocks();
+        let node_count_estimate = num_values * 2;
         let alias_analysis = AliasAnalysis::new(func, cfg);
         let mut this = Self {
             domtree,
@@ -108,16 +111,19 @@ impl<'a> FuncEGraph<'a> {
             alias_analysis,
             egraph: EGraph::with_capacity(node_count_estimate, Some(Analysis)),
             node_ctx: NodeCtx::with_capacity_for_dfg(&func.dfg),
-            side_effects: SecondaryMap::default(),
-            side_effect_ids: vec![],
+            side_effects: SecondaryMap::with_capacity(num_blocks),
+            side_effect_ids: Vec::with_capacity(node_count_estimate),
             store_nodes: FxHashMap::default(),
-            blockparams: SecondaryMap::default(),
-            blockparam_ids_tys: vec![],
+            blockparams: SecondaryMap::with_capacity(num_blocks),
+            blockparam_ids_tys: Vec::with_capacity(num_blocks * 10),
             remat_ids: FxHashSet::default(),
             subsume_ids: FxHashSet::default(),
             stats: Default::default(),
             rewrite_depth: 0,
         };
+        this.store_nodes.reserve(func.dfg.num_values() / 8);
+        this.remat_ids.reserve(func.dfg.num_values() / 4);
+        this.subsume_ids.reserve(func.dfg.num_values() / 4);
         this.build(func);
         this
     }
@@ -172,12 +178,11 @@ impl<'a> FuncEGraph<'a> {
                 );
 
                 let results = func.dfg.inst_results(inst);
-
-                let types = self
-                    .node_ctx
-                    .types
-                    .from_iter(results.iter().map(|&val| func.dfg.value_type(val)));
-                let types = types.freeze(&mut self.node_ctx.types);
+                let ty = if results.len() == 1 {
+                    func.dfg.value_type(results[0])
+                } else {
+                    crate::ir::types::INVALID
+                };
 
                 let load_mem_state = self.alias_analysis.get_state_for_load(inst);
                 let is_readonly_load = match func.dfg[inst] {
@@ -193,21 +198,26 @@ impl<'a> FuncEGraph<'a> {
                 let op = InstructionImms::from(&func.dfg[inst]);
                 let opcode = op.opcode();
                 let srcloc = func.srclocs[inst];
+                let arity = u16::try_from(results.len())
+                    .expect("More than 2^16 results from an instruction");
 
                 let node = if is_readonly_load {
                     self.stats.node_created += 1;
                     self.stats.node_pure += 1;
-                    Node::Pure { op, args, types }
+                    Node::Pure {
+                        op,
+                        args,
+                        ty,
+                        arity,
+                    }
                 } else if let Some(load_mem_state) = load_mem_state {
                     let addr = args.as_slice(&self.node_ctx.args)[0];
-                    let ty = types.as_slice(&self.node_ctx.types)[0];
                     trace!("load at inst {} has mem state {:?}", inst, load_mem_state);
                     self.stats.node_created += 1;
                     self.stats.node_load += 1;
                     Node::Load {
                         op,
                         ty,
-                        inst,
                         addr,
                         mem_state: load_mem_state,
                         srcloc,
@@ -217,16 +227,21 @@ impl<'a> FuncEGraph<'a> {
                     self.stats.node_inst += 1;
                     Node::Inst {
                         op,
-                        inst,
                         args,
-                        types,
+                        ty,
+                        arity,
                         srcloc,
                         loop_level,
                     }
                 } else {
                     self.stats.node_created += 1;
                     self.stats.node_pure += 1;
-                    Node::Pure { op, args, types }
+                    Node::Pure {
+                        op,
+                        args,
+                        ty,
+                        arity,
+                    }
                 };
                 let dedup_needed = self.node_ctx.needs_dedup(&node);
                 let is_pure = matches!(node, Node::Pure { .. });

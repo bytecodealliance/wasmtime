@@ -274,6 +274,12 @@ impl DataFlowGraph {
         self.values[v].ty()
     }
 
+    /// Fill in the type of a value, only if currently invalid (as a placeholder).
+    pub(crate) fn fill_in_value_type(&mut self, v: Value, ty: Type) {
+        debug_assert!(self.values[v].ty().is_invalid());
+        self.values[v].set_type(ty);
+    }
+
     /// Get the definition of a value.
     ///
     /// This is either the instruction that defined it or the Block that has the value as an

@@ -530,7 +530,7 @@ where
 
                     // Update analysis.
                     let node_ctx = ctx.node_ctx;
-                    self.update_analysis(node_ctx, eclass_id);
+                    self.update_analysis_new(node_ctx, eclass_id, key);
 
                     NewOrExisting::New(eclass_id)
                 }
@@ -568,7 +568,7 @@ where
                 b
             );
             self.classes[a] = EClass::node_and_child(node, b);
-            self.update_analysis(ctx, a);
+            self.update_analysis_union(ctx, a, a, b);
             return a;
         }
 
@@ -576,7 +576,7 @@ where
         self.unionfind.add(u);
         self.unionfind.union(u, b);
         trace!(" -> union id {} and id {} into id {}", a, b, u);
-        self.update_analysis(ctx, u);
+        self.update_analysis_union(ctx, u, a, b);
         u
     }
 
@@ -605,26 +605,20 @@ where
         }
     }
 
-    /// Update analysis for a given eclass node.
-    fn update_analysis(&mut self, ctx: &L, eclass: Id) {
+    /// Update analysis for a given eclass node (new-enode case).
+    fn update_analysis_new(&mut self, ctx: &L, eclass: Id, node: NodeKey) {
         if let Some((analysis, state)) = self.analysis.as_mut() {
-            let eclass_data = self.classes[eclass];
-            let value = if let Some(node_key) = eclass_data.as_node() {
-                let node = node_key.node(&self.nodes);
-                analysis.for_node(ctx, node, state)
-            } else if let Some((node_key, child)) = eclass_data.as_node_and_child() {
-                let node = node_key.node(&self.nodes);
-                let value = analysis.for_node(ctx, node, state);
-                let child_value = &state[child];
-                analysis.meet(ctx, &value, child_value)
-            } else if let Some((c1, c2)) = eclass_data.as_union() {
-                let c1 = &state[c1];
-                let c2 = &state[c2];
-                analysis.meet(ctx, c1, c2)
-            } else {
-                panic!("Invalid eclass node: {:?}", eclass_data);
-            };
-            state[eclass] = value;
+            let node = node.node(&self.nodes);
+            state[eclass] = analysis.for_node(ctx, node, state);
+        }
+    }
+
+    /// Update analysis for a given eclass node (union case).
+    fn update_analysis_union(&mut self, ctx: &L, eclass: Id, a: Id, b: Id) {
+        if let Some((analysis, state)) = self.analysis.as_mut() {
+            let a = &state[a];
+            let b = &state[b];
+            state[eclass] = analysis.meet(ctx, a, b);
         }
     }
 
@@ -646,6 +640,7 @@ pub struct NodeIter<L: Language, A: Analysis<L = L>> {
 }
 
 impl<L: Language, A: Analysis<L = L>> NodeIter<L, A> {
+    #[inline(always)]
     pub fn next<'a>(&mut self, egraph: &'a EGraph<L, A>) -> Option<&'a L::Node> {
         while let Some(next) = self.stack.pop() {
             let eclass = egraph.classes[next];
