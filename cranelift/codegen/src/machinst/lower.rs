@@ -381,7 +381,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for inst in f.layout.block_insts(bb) {
                 for &result in f.dfg.inst_results(inst) {
                     let ty = f.dfg.value_type(result);
-                    if value_regs[result].is_invalid() {
+                    if value_regs[result].is_invalid() && !ty.is_invalid() {
                         let regs = alloc_vregs(ty, &mut next_vreg, &mut vcode)?;
                         value_regs[result] = regs;
                         trace!(
