@@ -213,18 +213,24 @@ impl Mutator for ReplaceInstWithConst {
                 pos.func.dfg.clear_results(prev_inst);
 
                 let mut inst_names = Vec::new();
-                for r in results {
-                    let new_inst_name = replace_with_const(&mut pos, r);
+                for r in &results {
+                    let new_inst_name = replace_with_const(&mut pos, *r);
                     inst_names.push(new_inst_name);
                 }
 
                 // Remove the instruction.
                 assert_eq!(pos.remove_inst(), prev_inst);
 
+                let progress = if results.len() == 1 {
+                    ProgressStatus::Changed
+                } else {
+                    ProgressStatus::ExpandedOrShrinked
+                };
+
                 (
                     func,
                     format!("Replace inst {} with {}", prev_inst, inst_names.join(" / ")),
-                    ProgressStatus::ExpandedOrShrinked,
+                    progress,
                 )
             },
         )
