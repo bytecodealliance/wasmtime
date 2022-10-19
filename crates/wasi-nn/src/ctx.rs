@@ -4,20 +4,19 @@ use crate::api::{Backend, BackendError, BackendExecutionContext, BackendGraph};
 use crate::openvino::OpenvinoBackend;
 use crate::r#impl::UsageError;
 use crate::witx::types::{Graph, GraphEncoding, GraphExecutionContext};
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::Hash;
 use thiserror::Error;
 use wiggle::GuestError;
 
 /// Capture the state necessary for calling into the backend ML libraries.
-pub struct Ctx {
+pub struct WasiNnCtx {
     pub(crate) backends: HashMap<u8, Box<dyn Backend>>,
     pub(crate) graphs: Table<Graph, Box<dyn BackendGraph>>,
     pub(crate) executions: Table<GraphExecutionContext, Box<dyn BackendExecutionContext>>,
 }
 
-impl Ctx {
+impl WasiNnCtx {
     /// Make a new context from the default state.
     pub fn new() -> WasiNnResult<Self> {
         let mut backends = HashMap::new();
@@ -31,20 +30,6 @@ impl Ctx {
             backends,
             graphs: Table::default(),
             executions: Table::default(),
-        })
-    }
-}
-
-/// This struct solely wraps [Ctx] in a `RefCell`.
-pub struct WasiNnCtx {
-    pub(crate) ctx: RefCell<Ctx>,
-}
-
-impl WasiNnCtx {
-    /// Make a new `WasiNnCtx` with the default settings.
-    pub fn new() -> WasiNnResult<Self> {
-        Ok(Self {
-            ctx: RefCell::new(Ctx::new()?),
         })
     }
 }
