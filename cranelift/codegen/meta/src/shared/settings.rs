@@ -364,5 +364,7 @@ pub(crate) fn define() -> SettingGroup {
         false,
     );
 
+    // When adding new settings please check if they can also be added
+    // in cranelift/fuzzgen/src/lib.rs for fuzzing.
     settings.build()
 }
