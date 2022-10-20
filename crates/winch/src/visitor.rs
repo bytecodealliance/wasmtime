@@ -1,37 +1,20 @@
 //! This module is the central place for machine code emission.
-//! It is essentially an implementation of `CodeGen`, with `visit` as
-//! its single entry point, exclusively responsible for matching each WebAssembly
-//! operator to its corresponding machine instruction sequence.
-//!
-//! The definitions in this file are expected to grow as more
-//! WebAssembly operators are supported, so the intention
-//! behind having a separate implementation is to avoid bloating
-//! the main codegen module.
+//! It defines an implementation of wasmparsers Visitor trait
+//! for `CodeGen`; which defines a visitor per op-code,
+//! which validates and dispatches to the corresponding
+//! machine code emitter.
 
 use crate::codegen::CodeGen;
 use crate::masm::{MacroAssembler, OperandSize, RegImm};
 use crate::stack::Val;
 use anyhow::Result;
-use wasmparser::Operator;
+use wasmparser::VisitOperator;
 use wasmtime_environ::WasmType;
 
 impl<'c, 'a: 'c, M> CodeGen<'a, 'c, M>
 where
     M: MacroAssembler,
 {
-    /// Match each supported WebAssembly operator and dispatch to
-    /// the corresponding machine code emitter.
-    pub fn visit(&mut self, operator: Operator) -> Result<()> {
-        match operator {
-            Operator::I32Add => self.emit_i32_add(),
-            Operator::I32Const { value } => self.emit_i32_const(value),
-            Operator::LocalSet { local_index } => self.emit_local_set(local_index),
-            Operator::LocalGet { local_index } => self.emit_local_get(local_index),
-            Operator::End => Ok(()),
-            op => todo!("Unsupported operator {:?}", op),
-        }
-    }
-
     fn emit_i32_add(&mut self) -> Result<()> {
         let is_const = self
             .context
@@ -113,6 +96,69 @@ where
 
         Ok(())
     }
+}
+
+/// A macro to define unsupported WebAssembly operators.
+///
+/// This macro calls itself recursively;
+/// 1. It no-ops when matching a supported operator.
+/// 2. Defines the visitor function and panics when
+/// matching an unsupported operator.
+macro_rules! def_unsupported {
+    ($( @$proposal:ident $op:ident $({ $($arg:ident: $argty:ty),* })? => $visit:ident)*) => {
+        $(
+	    def_unsupported!(
+		emit
+		$op
+
+		fn $visit(&mut self, _offset: usize $($(,$arg: $argty)*)?) -> Self::Output {
+		    $($(drop($arg);)*)?
+		    todo!(stringify!($op))
+		}
+	    );
+        )*
+    };
+
+    (emit I32Const $($rest:tt)*) => {};
+    (emit I32Add $($rest:tt)*) => {};
+    (emit LocalGet $($rest:tt)*) => {};
+    (emit LocalSet $($rest:tt)*) => {};
+    (emit End $($rest:tt)*) => {};
+
+    (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
+}
+
+impl<'c, 'a: 'c, M> VisitOperator<'a> for CodeGen<'a, 'c, M>
+where
+    M: MacroAssembler,
+{
+    type Output = Result<()>;
+
+    fn visit_i32_const(&mut self, offset: usize, value: i32) -> Result<()> {
+        self.validator.visit_i32_const(offset, value)?;
+        self.emit_i32_const(value)
+    }
+
+    fn visit_i32_add(&mut self, offset: usize) -> Result<()> {
+        self.validator.visit_i32_add(offset)?;
+        self.emit_i32_add()
+    }
+
+    fn visit_end(&mut self, offset: usize) -> Result<()> {
+        self.validator.visit_end(offset).map_err(|e| e.into())
+    }
+
+    fn visit_local_get(&mut self, offset: usize, local_index: u32) -> Result<()> {
+        self.validator.visit_local_get(offset, local_index)?;
+        self.emit_local_get(local_index)
+    }
+
+    fn visit_local_set(&mut self, offset: usize, local_index: u32) -> Result<()> {
+        self.validator.visit_local_set(offset, local_index)?;
+        self.emit_local_set(local_index)
+    }
+
+    wasmparser::for_each_operator!(def_unsupported);
 }
 
 impl From<WasmType> for OperandSize {
