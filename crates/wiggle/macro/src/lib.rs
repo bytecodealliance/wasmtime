@@ -153,6 +153,7 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
         &config.async_,
         &doc,
         config.wasmtime,
+        config.tracing,
     )
     .expect("validating codegen settings");
 
@@ -189,9 +190,14 @@ pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
     let doc = config.c.load_document();
     let names = wiggle_generate::Names::new(quote!(wiggle));
 
-    let settings =
-        wiggle_generate::CodegenSettings::new(&config.c.errors, &config.c.async_, &doc, true)
-            .expect("validating codegen settings");
+    let settings = wiggle_generate::CodegenSettings::new(
+        &config.c.errors,
+        &config.c.async_,
+        &doc,
+        true,
+        config.c.tracing,
+    )
+    .expect("validating codegen settings");
 
     let modules = doc.modules().map(|module| {
         wiggle_generate::wasmtime::link_module(&module, &names, Some(&config.target), &settings)
