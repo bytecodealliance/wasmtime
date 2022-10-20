@@ -6,7 +6,7 @@ use crate::{
     stack::Stack,
 };
 use anyhow::Result;
-use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
+use wasmparser::{FuncValidator, FunctionBody, Operator, ValidatorResources};
 use wasmtime_environ::WasmType;
 
 /// The code generation context
@@ -97,11 +97,14 @@ where
         self.spill_register_arguments();
         self.zero_local_slots();
 
-        let mut ops_reader = self.function.get_operators_reader()?;
-        while !ops_reader.eof() {
-            ops_reader.visit_with_offset(self)??;
+        let mut reader = self.function.get_operators_reader()?;
+        while !reader.eof() {
+            let (operator, offset): (Operator<'_>, usize) = reader.read_with_offset()?;
+            self.validator.op(offset, &operator)?;
+            self.visit(operator)?;
         }
-        ops_reader.ensure_end().map_err(|e| e.into())
+        let position = reader.original_position();
+        self.validator.finish(position).map_err(|e| e.into())
     }
 
     // Emit the usual function end instruction sequence
