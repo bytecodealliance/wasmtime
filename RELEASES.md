@@ -2,7 +2,7 @@
 
 ## 2.0.0
 
-Unreleased.
+Released 2022-10-20.
 
 ### Added
 
