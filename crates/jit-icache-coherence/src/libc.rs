@@ -76,7 +76,7 @@ pub(crate) fn pipeline_flush_mt() -> Result<()> {
                     let __NR_arch_specific_syscall = 244;
                     __NR_arch_specific_syscall + 15
                 },
-                // Current the parament is not used,But defined. https://github.com/torvalds/linux/blob/4d1044fcb996e8de9b9ab392f4a767890e45202d/arch/riscv/kernel/sys_riscv.c#L64-L66
+                // Current the parameter is not used,But defined. https://github.com/torvalds/linux/blob/4d1044fcb996e8de9b9ab392f4a767890e45202d/arch/riscv/kernel/sys_riscv.c#L64-L66
                 0, // start
                 0, // end
                 {
