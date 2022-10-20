@@ -3312,24 +3312,6 @@
       (let ((dst WritableReg (temp_writable_reg ty)))
         (emit_cmov_imm ty dst cond imm src)))
 
-;; Conditionally modify the low word of a register pair.
-;; This cannot be ConsumesFlags since the return value is not a register.
-(decl cmov_imm_regpair_lo (Type ProducesFlags Cond i16 RegPair) RegPair)
-(rule (cmov_imm_regpair_lo ty producer cond imm src)
-      (let ((dst WritableRegPair (temp_writable_regpair))
-            (consumer ConsumesFlags (emit_cmov_imm ty (writable_regpair_lo dst) cond imm (regpair_lo src)))
-            (_ Reg (with_flags_reg producer consumer)))
-        dst))
-
-;; Conditionally modify the high word of a register pair.
-;; This cannot be ConsumesFlags since the return value is not a register.
-(decl cmov_imm_regpair_hi (Type ProducesFlags Cond i16 RegPair) RegPair)
-(rule (cmov_imm_regpair_hi ty producer cond imm src)
-      (let ((dst WritableRegPair (temp_writable_regpair))
-            (consumer ConsumesFlags (emit_cmov_imm ty (writable_regpair_hi dst) cond imm (regpair_hi src)))
-            (_ Reg (with_flags_reg producer consumer)))
-        dst))
-
 ;; Conditionally select between two source registers.  (Non-SSA form.)
 (decl emit_cmov_reg (Type WritableReg Cond Reg Reg) ConsumesFlags)
 (rule 1 (emit_cmov_reg (gpr32_ty _ty) dst cond else src)
