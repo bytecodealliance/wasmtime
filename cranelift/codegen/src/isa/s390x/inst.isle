@@ -467,8 +467,8 @@
       (from_bits u8)
       (to_bits u8))
 
-    ;; A 32-bit conditional move instruction. `rm` is the value that's used if
-    ;; the conditional is true, `rn` is used otherwise.
+    ;; A 32-bit conditional move instruction. `ri` is the value that's used if
+    ;; the conditional is true, `rm` is used otherwise.
     (CMov32
       (rd WritableReg)
       (cond Cond)
