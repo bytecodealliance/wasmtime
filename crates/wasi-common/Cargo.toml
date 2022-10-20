@@ -43,9 +43,7 @@ features = [
 maintenance = { status = "actively-developed" }
 
 [features]
-default = ["tracing", "trace_log"]
-# This feature enables tracing of Wiggle calls.
-tracing = ["wiggle/tracing"]
+default = ["trace_log"]
 # This feature enables the `tracing` logs in the calls to target the `log`
 # ecosystem of backends (e.g. `env_logger`. Disable this if you want to use
 # `tracing-subscriber`.

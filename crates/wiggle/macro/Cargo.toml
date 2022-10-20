@@ -30,8 +30,5 @@ proc-macro2 = "1.0"
 wiggle = { path = ".." }
 
 [features]
-default = ["tracing"]
-# Turn on tracing in the Wiggle-generated code.
-tracing = []
 wasmtime = []
 wiggle_metadata = []

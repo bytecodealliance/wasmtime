@@ -25,7 +25,7 @@ wiggle::from_witx!({
     // keeping that set the same in this macro and the wasmtime_wiggle / lucet_wiggle macros is
     // tedious, and there is no cost to having a sync function be async in this case.
     async: *,
-    wasmtime: false
+    wasmtime: false,
 });
 
 impl wiggle::GuestErrorType for types::Errno {
