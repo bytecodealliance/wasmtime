@@ -116,7 +116,7 @@ jobs:
           ./target/release/sightglass-cli summarize --input-format csv  --output-format csv -f /tmp/results.csv > /tmp/results_summarized.csv
 
       - name: Setup Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
