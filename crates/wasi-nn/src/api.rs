@@ -24,7 +24,7 @@ pub(crate) trait BackendGraph : Send {
 
 /// A [BackendExecutionContext] performs the actual inference; this is the
 /// backing implementation for a [crate::witx::types::GraphExecutionContext].
-pub(crate) trait BackendExecutionContext : Send {
+pub(crate) trait BackendExecutionContext : Send + Sync {
     fn set_input(&mut self, index: u32, tensor: &Tensor<'_>) -> Result<(), BackendError>;
     fn compute(&mut self) -> Result<(), BackendError>;
     fn get_output(&mut self, index: u32, destination: &mut [u8]) -> Result<u32, BackendError>;
