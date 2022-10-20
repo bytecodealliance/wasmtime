@@ -58,6 +58,7 @@ impl fmt::Debug for TestCase {
 
         writeln!(f, "target aarch64")?;
         writeln!(f, "target s390x")?;
+        writeln!(f, "target riscv64")?;
         writeln!(f, "target x86_64\n")?;
 
         writeln!(f, "{}", self.func)?;
