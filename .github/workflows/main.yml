@@ -56,7 +56,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         path: ${{ runner.tool_cache }}/cargo-vet
         key: cargo-vet-bin-${{ env.CARGO_VET_VERSION }}
@@ -86,7 +86,7 @@ jobs:
     - run: cd crates/c-api && doxygen doxygen.conf
 
     # install mdbook, build the docs, and test the docs
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         path: ${{ runner.tool_cache }}/mdbook
         key: cargo-mdbook-bin-${{ env.CARGO_MDBOOK_VERSION }}
@@ -271,7 +271,7 @@ jobs:
     - run: cargo fetch --locked
     - run: cargo fetch --locked --manifest-path crates/test-programs/wasi-tests/Cargo.toml
 
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         path: ${{ runner.tool_cache }}/qemu
         key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchmadvise2
