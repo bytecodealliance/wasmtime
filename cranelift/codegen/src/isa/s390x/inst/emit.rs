@@ -11,6 +11,39 @@ use crate::trace;
 use core::convert::TryFrom;
 use regalloc2::Allocation;
 
+/// Debug macro for testing that a regpair is valid: that the high register is even, and the low
+/// register is one higher than the high register.
+macro_rules! debug_assert_valid_regpair {
+    ($hi:expr, $lo:expr) => {
+        if cfg!(debug_assertions) {
+            match ($hi.to_real_reg(), $lo.to_real_reg()) {
+                (Some(hi), Some(lo)) => {
+                    assert!(
+                        hi.hw_enc() % 2 == 0,
+                        "High register is not even: {}",
+                        show_reg($hi)
+                    );
+                    assert_eq!(
+                        hi.hw_enc() + 1,
+                        lo.hw_enc(),
+                        "Low register is not valid: {}, {}",
+                        show_reg($hi),
+                        show_reg($lo)
+                    );
+                }
+
+                _ => {
+                    panic!(
+                        "Expected real registers for {} {}",
+                        show_reg($hi),
+                        show_reg($lo)
+                    );
+                }
+            }
+        }
+    };
+}
+
 /// Type(s) of memory instructions available for mem_finalize.
 pub struct MemInstType {
     /// True if 12-bit unsigned displacement is supported.
@@ -1659,8 +1692,7 @@ impl MachInstEmit for Inst {
                 let rm = allocs.next(rm);
                 let rd1 = allocs.next_writable(rd.hi);
                 let rd2 = allocs.next_writable(rd.lo);
-                debug_assert_eq!(rd1, writable_gpr(2));
-                debug_assert_eq!(rd2, writable_gpr(3));
+                debug_assert_valid_regpair!(rd1.to_reg(), rd2.to_reg());
 
                 let opcode = 0xb9ec; // MGRK
                 put(sink, &enc_rrf_ab(opcode, rd1.to_reg(), rn, rm, 0));
@@ -1669,10 +1701,9 @@ impl MachInstEmit for Inst {
                 let rn = allocs.next(rn);
                 let rd1 = allocs.next_writable(rd.hi);
                 let rd2 = allocs.next_writable(rd.lo);
-                debug_assert_eq!(rd1, writable_gpr(2));
-                debug_assert_eq!(rd2, writable_gpr(3));
+                debug_assert_valid_regpair!(rd1.to_reg(), rd2.to_reg());
                 let ri = allocs.next(ri);
-                debug_assert_eq!(ri, gpr(3));
+                debug_assert_eq!(rd2.to_reg(), ri);
 
                 let opcode = 0xb986; // MLGR
                 put(sink, &enc_rre(opcode, rd1.to_reg(), rn));
@@ -1681,10 +1712,9 @@ impl MachInstEmit for Inst {
                 let rn = allocs.next(rn);
                 let rd1 = allocs.next_writable(rd.hi);
                 let rd2 = allocs.next_writable(rd.lo);
-                debug_assert_eq!(rd1, writable_gpr(2));
-                debug_assert_eq!(rd2, writable_gpr(3));
+                debug_assert_valid_regpair!(rd1.to_reg(), rd2.to_reg());
                 let ri = allocs.next(ri);
-                debug_assert_eq!(ri, gpr(3));
+                debug_assert_eq!(rd2.to_reg(), ri);
 
                 let opcode = 0xb91d; // DSGFR
                 let trap_code = TrapCode::IntegerDivisionByZero;
@@ -1694,10 +1724,9 @@ impl MachInstEmit for Inst {
                 let rn = allocs.next(rn);
                 let rd1 = allocs.next_writable(rd.hi);
                 let rd2 = allocs.next_writable(rd.lo);
-                debug_assert_eq!(rd1, writable_gpr(2));
-                debug_assert_eq!(rd2, writable_gpr(3));
+                debug_assert_valid_regpair!(rd1.to_reg(), rd2.to_reg());
                 let ri = allocs.next(ri);
-                debug_assert_eq!(ri, gpr(3));
+                debug_assert_eq!(rd2.to_reg(), ri);
 
                 let opcode = 0xb90d; // DSGR
                 let trap_code = TrapCode::IntegerDivisionByZero;
@@ -1707,12 +1736,11 @@ impl MachInstEmit for Inst {
                 let rn = allocs.next(rn);
                 let rd1 = allocs.next_writable(rd.hi);
                 let rd2 = allocs.next_writable(rd.lo);
-                debug_assert_eq!(rd1, writable_gpr(2));
-                debug_assert_eq!(rd2, writable_gpr(3));
+                debug_assert_valid_regpair!(rd1.to_reg(), rd2.to_reg());
                 let ri1 = allocs.next(ri.hi);
                 let ri2 = allocs.next(ri.lo);
-                debug_assert_eq!(ri1, gpr(2));
-                debug_assert_eq!(ri2, gpr(3));
+                debug_assert_eq!(rd1.to_reg(), ri1);
+                debug_assert_eq!(rd2.to_reg(), ri2);
 
                 let opcode = 0xb997; // DLR
                 let trap_code = TrapCode::IntegerDivisionByZero;
@@ -1722,12 +1750,11 @@ impl MachInstEmit for Inst {
                 let rn = allocs.next(rn);
                 let rd1 = allocs.next_writable(rd.hi);
                 let rd2 = allocs.next_writable(rd.lo);
-                debug_assert_eq!(rd1, writable_gpr(2));
-                debug_assert_eq!(rd2, writable_gpr(3));
+                debug_assert_valid_regpair!(rd1.to_reg(), rd2.to_reg());
                 let ri1 = allocs.next(ri.hi);
                 let ri2 = allocs.next(ri.lo);
-                debug_assert_eq!(ri1, gpr(2));
-                debug_assert_eq!(ri2, gpr(3));
+                debug_assert_eq!(rd1.to_reg(), ri1);
+                debug_assert_eq!(rd2.to_reg(), ri2);
 
                 let opcode = 0xb987; // DLGR
                 let trap_code = TrapCode::IntegerDivisionByZero;
@@ -1737,8 +1764,7 @@ impl MachInstEmit for Inst {
                 let rn = allocs.next(rn);
                 let rd1 = allocs.next_writable(rd.hi);
                 let rd2 = allocs.next_writable(rd.lo);
-                debug_assert_eq!(rd1, writable_gpr(2));
-                debug_assert_eq!(rd2, writable_gpr(3));
+                debug_assert_valid_regpair!(rd1.to_reg(), rd2.to_reg());
 
                 let opcode = 0xb983; // FLOGR
                 put(sink, &enc_rre(opcode, rd1.to_reg(), rn));

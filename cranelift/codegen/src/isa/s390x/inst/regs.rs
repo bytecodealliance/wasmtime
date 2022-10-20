@@ -182,11 +182,19 @@ pub fn pretty_print_reg(reg: Reg, allocs: &mut AllocationConsumer<'_>) -> String
 pub fn pretty_print_regpair(pair: RegPair, allocs: &mut AllocationConsumer<'_>) -> String {
     let hi = allocs.next(pair.hi);
     let lo = allocs.next(pair.lo);
-    if hi.is_real() {
-        show_reg(hi)
-    } else {
-        format!("{}/{}", show_reg(hi), show_reg(lo))
+    if let Some(hi_reg) = hi.to_real_reg() {
+        if let Some(lo_reg) = lo.to_real_reg() {
+            assert!(
+                hi_reg.hw_enc() + 1 == lo_reg.hw_enc(),
+                "Invalid regpair: {} {}",
+                show_reg(hi),
+                show_reg(lo)
+            );
+            return show_reg(hi);
+        }
     }
+
+    format!("{}/{}", show_reg(hi), show_reg(lo))
 }
 
 pub fn pretty_print_reg_mod(
