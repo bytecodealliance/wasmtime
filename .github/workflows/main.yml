@@ -21,7 +21,7 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -34,7 +34,7 @@ jobs:
     name: Cargo deny
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -52,7 +52,7 @@ jobs:
     env:
       CARGO_VET_VERSION: 0.3.0
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -72,7 +72,7 @@ jobs:
       RUSTDOCFLAGS: -Dbroken_intra_doc_links --cfg nightlydoc
       OPENVINO_SKIP_LINKING: 1
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -137,7 +137,7 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -190,7 +190,7 @@ jobs:
     name: Check Windows ARM64
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -201,7 +201,7 @@ jobs:
     name: Fuzz Targets
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     # Note that building with fuzzers requires nightly since it uses unstable
@@ -254,7 +254,7 @@ jobs:
             qemu: qemu-riscv64 -L /usr/riscv64-linux-gnu
             qemu_target: riscv64-linux-user
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -347,7 +347,7 @@ jobs:
     name: Test wasi-nn module
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: true
       - uses: ./.github/actions/install-rust
@@ -362,7 +362,7 @@ jobs:
     name: Test wasi-crypto module
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - run: rustup update stable && rustup default stable
@@ -375,7 +375,7 @@ jobs:
     name: Run benchmarks
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -387,7 +387,7 @@ jobs:
     name: Meta deterministic check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -425,7 +425,7 @@ jobs:
           os: ubuntu-latest
           target: riscv64gc-unknown-linux-gnu
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -472,7 +472,7 @@ jobs:
     if: github.repository == 'bytecodealliance/wasmtime'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - run: rustup update stable && rustup default stable
