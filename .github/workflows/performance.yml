@@ -77,11 +77,7 @@ jobs:
           submodules: true
           path: wasmtime_commit
 
-      - name: Get latest rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
+      - run: rustup update nightly && rustup default nightly
 
       - name: Build patch from bytecodealliance/wasmtime (pushed and triggering on this perf repo)
         working-directory: ./wasmtime_commit
