@@ -17,9 +17,8 @@ block0(v0: r64):
 }
 
 ; block0:
-;   lhi %r5, 0
 ;   cghi %r2, 0
-;   lgr %r2, %r5
+;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
 
@@ -30,9 +29,8 @@ block0(v0: r64):
 }
 
 ; block0:
-;   lhi %r5, 0
 ;   cghi %r2, -1
-;   lgr %r2, %r5
+;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
 
