@@ -345,13 +345,15 @@ pub trait ABIMachineSpec {
     /// Returns the list of argument locations, the stack-space used (rounded up
     /// to as alignment requires), and if `add_ret_area_ptr` was passed, the
     /// index of the extra synthetic arg that was added.
-    fn compute_arg_locs(
+    fn compute_arg_locs<'a, I>(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
-        params: &[ir::AbiParam],
+        params: I,
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)>;
+    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)>
+    where
+        I: IntoIterator<Item = &'a ir::AbiParam>;
 
     /// Returns the offset from FP to the argument area, i.e., jumping over the saved FP, return
     /// address, and maybe other standard elements depending on ABI (e.g. Wasm TLS reg).
