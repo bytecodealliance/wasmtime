@@ -206,8 +206,7 @@ impl InstructionData {
     /// Multi-destination branches like `br_table` return `None`.
     pub fn branch_destination(&self) -> Option<Block> {
         match *self {
-            Self::Jump { destination, .. }
-            | Self::Branch { destination, .. } => Some(destination),
+            Self::Jump { destination, .. } | Self::Branch { destination, .. } => Some(destination),
             Self::BranchTable { .. } => None,
             _ => {
                 debug_assert!(!self.opcode().is_branch());

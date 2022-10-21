@@ -567,10 +567,7 @@ fn lower_insn_to_regs(
             panic!("trapz / trapnz / resumable_trapnz should have been removed by legalization!");
         }
 
-        Opcode::Jump
-        | Opcode::Brz
-        | Opcode::Brnz
-        | Opcode::BrTable => {
+        Opcode::Jump | Opcode::Brz | Opcode::Brnz | Opcode::BrTable => {
             panic!("Branch opcode reached non-branch lowering logic!");
         }
     }

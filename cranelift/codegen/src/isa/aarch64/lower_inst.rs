@@ -201,10 +201,7 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::GetPinnedReg | Opcode::SetPinnedReg => implemented_in_isle(ctx),
 
-        Opcode::Jump
-        | Opcode::Brz
-        | Opcode::Brnz
-        | Opcode::BrTable => {
+        Opcode::Jump | Opcode::Brz | Opcode::Brnz | Opcode::BrTable => {
             panic!("Branch opcode reached non-branch lowering logic!");
         }
 

@@ -1282,10 +1282,8 @@ where
                     // If we have more than one block we can allow terminators that target blocks.
                     // TODO: We could add some kind of BrReturn here, to explore edges where we
                     // exit in the middle of the function
-                    valid_terminators.extend_from_slice(&[
-                        BlockTerminatorKind::Jump,
-                        BlockTerminatorKind::Br,
-                    ]);
+                    valid_terminators
+                        .extend_from_slice(&[BlockTerminatorKind::Jump, BlockTerminatorKind::Br]);
                 }
 
                 // BrTable and the Switch interface only allow targeting blocks without params
