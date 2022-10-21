@@ -245,9 +245,7 @@ impl ABIMachineSpec for S390xMachineDeps {
             next_gpr += 1;
         }
 
-        for i in 0..params.len() {
-            let mut param = params[i];
-
+        for (i, mut param) in params.iter().copied().enumerate() {
             let intreg = in_int_reg(param.value_type);
             let fltreg = in_flt_reg(param.value_type);
             let vecreg = in_vec_reg(param.value_type);
