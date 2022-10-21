@@ -1,31 +1,16 @@
 [package]
-name = "winch"
-version = "0.1.0"
+name = "wasmtime-winch"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Integration between Wasmtime and Winch"
+version.workspace = true
 
 [dependencies]
-wasmparser = "0.92.0"
-smallvec = { version = "1.6.1" }
-anyhow = "1.0"
+winch-codegen = { workspace = true }
+target-lexicon = { workspace = true }
 wasmtime-environ = { workspace = true }
-target-lexicon = { version = "0.12", features = ["std"] }
-cranelift-codegen = { workspace = true }
-clap = { workspace = true }
-# Interim dependency; mostly to have access to `PReg`s
-# In the long term, we'll factor out the register
-# abstractions from regalloc2 for them to be consumed
-# from Winch and Cranelift
-regalloc2 = "0.4.1"
-wat = "1.0.47"
+anyhow = { workspace = true }
 
 [features]
 default = ["all-arch", "component-model"]
-x64 = ["cranelift-codegen/x86"]
-arm64 = ["cranelift-codegen/arm64"]
 component-model = ["wasmtime-environ/component-model"]
-all-arch = [
-    "x64",
-    "arm64",
-]
+all-arch = ["winch-codegen/all-arch"]

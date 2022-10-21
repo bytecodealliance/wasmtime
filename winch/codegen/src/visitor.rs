@@ -8,10 +8,10 @@ use crate::codegen::CodeGen;
 use crate::masm::{MacroAssembler, OperandSize, RegImm};
 use crate::stack::Val;
 use anyhow::Result;
+use wasmparser::ValType;
 use wasmparser::VisitOperator;
-use wasmtime_environ::WasmType;
 
-impl<'c, 'a: 'c, M> CodeGen<'a, 'c, M>
+impl<'a, M> CodeGen<'a, M>
 where
     M: MacroAssembler,
 {
@@ -74,8 +74,8 @@ where
             .get_local(index)
             .expect(&format!("valid local at slot = {}", index));
         match slot.ty {
-            WasmType::I32 | WasmType::I64 => context.stack.push(Val::local(index)),
-            _ => panic!("Unsupported type {} for local", slot.ty),
+            ValType::I32 | ValType::I64 => context.stack.push(Val::local(index)),
+            _ => panic!("Unsupported type {:?} for local", slot.ty),
         }
 
         Ok(())
@@ -128,7 +128,7 @@ macro_rules! def_unsupported {
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
 
-impl<'c, 'a: 'c, M> VisitOperator<'a> for CodeGen<'a, 'c, M>
+impl<'a, M> VisitOperator<'a> for CodeGen<'a, M>
 where
     M: MacroAssembler,
 {
@@ -161,12 +161,12 @@ where
     wasmparser::for_each_operator!(def_unsupported);
 }
 
-impl From<WasmType> for OperandSize {
-    fn from(ty: WasmType) -> OperandSize {
+impl From<ValType> for OperandSize {
+    fn from(ty: ValType) -> OperandSize {
         match ty {
-            WasmType::I32 => OperandSize::S32,
-            WasmType::I64 => OperandSize::S64,
-            ty => todo!("unsupported type {}", ty),
+            ValType::I32 => OperandSize::S32,
+            ValType::I64 => OperandSize::S64,
+            ty => todo!("unsupported type {:?}", ty),
         }
     }
 }

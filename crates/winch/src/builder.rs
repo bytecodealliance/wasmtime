@@ -1,8 +1,9 @@
-use crate::{compiler::Compiler, isa};
+use crate::compiler::Compiler;
 use anyhow::Result;
 use std::sync::Arc;
 use target_lexicon::Triple;
 use wasmtime_environ::{CompilerBuilder, Setting};
+use winch_codegen::isa;
 
 struct Builder {
     triple: Triple,

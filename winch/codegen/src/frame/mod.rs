@@ -2,8 +2,7 @@ use crate::abi::{align_to, local::LocalSlot, ty_size, ABIArg, ABISig, ABI};
 use anyhow::Result;
 use smallvec::SmallVec;
 use std::ops::RangeInclusive;
-use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::WasmType;
+use wasmparser::{FuncValidator, FunctionBody, ValType, ValidatorResources};
 
 // TODO:
 // SpiderMonkey's implementation uses 16; during instrumentation
@@ -121,7 +120,7 @@ impl Frame {
             let ty = reader.read_val_type()?;
             validator.define_locals(position, count, ty)?;
 
-            let ty: WasmType = ty.try_into()?;
+            let ty: ValType = ty.try_into()?;
             for _ in 0..count {
                 let ty_size = ty_size(&ty);
                 next_stack = align_to(next_stack, ty_size) + ty_size;

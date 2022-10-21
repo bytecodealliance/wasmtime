@@ -3771,6 +3771,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmtime-winch"
+version = "3.0.0"
+dependencies = [
+ "anyhow",
+ "target-lexicon",
+ "wasmtime-environ",
+ "winch-codegen",
+]
+
+[[package]]
 name = "wast"
 version = "35.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3906,18 +3916,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
-name = "winch"
+name = "winch-codegen"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 3.2.8",
  "cranelift-codegen",
  "regalloc2",
  "smallvec",
  "target-lexicon",
  "wasmparser",
+]
+
+[[package]]
+name = "winch-tools"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.2.8",
+ "target-lexicon",
+ "wasmparser",
  "wasmtime-environ",
  "wat",
+ "winch-codegen",
 ]
 
 [[package]]

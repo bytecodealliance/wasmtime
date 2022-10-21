@@ -4,7 +4,7 @@ use crate::{
     isa::reg::Reg,
 };
 use smallvec::SmallVec;
-use wasmtime_environ::WasmType;
+use wasmparser::{FuncType, ValType};
 
 /// Helper environment to track argument-register
 /// assignment in x64
@@ -47,8 +47,8 @@ impl ABI for X64ABI {
         64
     }
 
-    fn sig(&self, wasm_sig: &wasmtime_environ::WasmFuncType) -> ABISig {
-        if wasm_sig.returns().len() > 1 {
+    fn sig(&self, wasm_sig: &FuncType) -> ABISig {
+        if wasm_sig.results().len() > 1 {
             panic!("multi-value not supported");
         }
 
@@ -61,7 +61,7 @@ impl ABI for X64ABI {
             .map(|arg| Self::to_abi_arg(arg, &mut stack_offset, &mut index_env))
             .collect();
 
-        let ty = wasm_sig.returns().get(0).map(|e| e.clone());
+        let ty = wasm_sig.results().get(0).map(|e| e.clone());
         // NOTE temporarily defaulting to rax.
         let reg = regs::rax();
         let result = ABIResult::reg(ty, reg);
@@ -76,14 +76,14 @@ impl ABI for X64ABI {
 
 impl X64ABI {
     fn to_abi_arg(
-        wasm_arg: &WasmType,
+        wasm_arg: &ValType,
         stack_offset: &mut u32,
         index_env: &mut RegIndexEnv,
     ) -> ABIArg {
         let (reg, ty) = match wasm_arg {
-            ty @ (WasmType::I32 | WasmType::I64) => (Self::int_reg_for(index_env.next_gpr()), ty),
+            ty @ (ValType::I32 | ValType::I64) => (Self::int_reg_for(index_env.next_gpr()), ty),
 
-            ty @ (WasmType::F32 | WasmType::F64) => (Self::float_reg_for(index_env.next_fpr()), ty),
+            ty @ (ValType::F32 | ValType::F64) => (Self::float_reg_for(index_env.next_fpr()), ty),
 
             ty => unreachable!("Unsupported argument type {:?}", ty),
         };
@@ -133,9 +133,9 @@ mod tests {
         isa::reg::Reg,
         isa::x64::regs,
     };
-    use wasmtime_environ::{
-        WasmFuncType,
-        WasmType::{self, *},
+    use wasmparser::{
+        FuncType,
+        ValType::{self, *},
     };
 
     #[test]
@@ -151,10 +151,7 @@ mod tests {
 
     #[test]
     fn int_abi_sig() {
-        let wasm_sig = WasmFuncType::new(
-            Box::new([I32, I64, I32, I64, I32, I32, I64, I32]),
-            Box::new([]),
-        );
+        let wasm_sig = FuncType::new([I32, I64, I32, I64, I32, I32, I64, I32], []);
 
         let abi = X64ABI::default();
         let sig = abi.sig(&wasm_sig);
@@ -172,10 +169,7 @@ mod tests {
 
     #[test]
     fn float_abi_sig() {
-        let wasm_sig = WasmFuncType::new(
-            Box::new([F32, F64, F32, F64, F32, F32, F64, F32, F64]),
-            Box::new([]),
-        );
+        let wasm_sig = FuncType::new([F32, F64, F32, F64, F32, F32, F64, F32, F64], []);
 
         let abi = X64ABI::default();
         let sig = abi.sig(&wasm_sig);
@@ -194,10 +188,7 @@ mod tests {
 
     #[test]
     fn mixed_abi_sig() {
-        let wasm_sig = WasmFuncType::new(
-            Box::new([F32, I32, I64, F64, I32, F32, F64, F32, F64]),
-            Box::new([]),
-        );
+        let wasm_sig = FuncType::new([F32, I32, I64, F64, I32, F32, F64, F32, F64], []);
 
         let abi = X64ABI::default();
         let sig = abi.sig(&wasm_sig);
@@ -214,7 +205,7 @@ mod tests {
         match_reg_arg(params.get(8).unwrap(), F64, regs::xmm5());
     }
 
-    fn match_reg_arg(abi_arg: &ABIArg, expected_ty: WasmType, expected_reg: Reg) {
+    fn match_reg_arg(abi_arg: &ABIArg, expected_ty: ValType, expected_reg: Reg) {
         match abi_arg {
             &ABIArg::Reg { reg, ty } => {
                 assert_eq!(reg, expected_reg);
@@ -224,7 +215,7 @@ mod tests {
         }
     }
 
-    fn match_stack_arg(abi_arg: &ABIArg, expected_ty: WasmType, expected_offset: u32) {
+    fn match_stack_arg(abi_arg: &ABIArg, expected_ty: ValType, expected_offset: u32) {
         match abi_arg {
             &ABIArg::Stack { offset, ty } => {
                 assert_eq!(offset, expected_offset);

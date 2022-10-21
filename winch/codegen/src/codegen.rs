@@ -6,8 +6,7 @@ use crate::{
     stack::Stack,
 };
 use anyhow::Result;
-use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::WasmType;
+use wasmparser::{FuncValidator, FunctionBody, ValType, ValidatorResources};
 
 /// The code generation context
 pub(crate) struct CodeGenContext<'a, M>
@@ -29,12 +28,12 @@ where
 }
 
 /// The code generation abstraction
-pub(crate) struct CodeGen<'c, 'a: 'c, M>
+pub(crate) struct CodeGen<'a, M>
 where
     M: MacroAssembler,
 {
     /// A reference to the function body
-    function: &'c mut FunctionBody<'a>,
+    function: FunctionBody<'a>,
 
     /// The word size information, extracted from the current ABI
     word_size: u32,
@@ -43,25 +42,25 @@ where
     sig: ABISig,
 
     /// The code generation context
-    pub context: CodeGenContext<'c, M>,
+    pub context: CodeGenContext<'a, M>,
 
     /// The register allocator
     pub regalloc: RegAlloc,
 
     /// Function body validator
-    pub validator: &'a mut FuncValidator<ValidatorResources>,
+    pub validator: FuncValidator<ValidatorResources>,
 }
 
-impl<'c, 'a: 'c, M> CodeGen<'a, 'c, M>
+impl<'a, M> CodeGen<'a, M>
 where
     M: MacroAssembler,
 {
     pub fn new(
-        context: CodeGenContext<'c, M>,
+        context: CodeGenContext<'a, M>,
         word_size: u32,
         sig: ABISig,
-        function: &'c mut FunctionBody<'a>,
-        validator: &'c mut FuncValidator<ValidatorResources>,
+        function: FunctionBody<'a>,
+        validator: FuncValidator<ValidatorResources>,
         regalloc: RegAlloc,
     ) -> Self {
         Self {
@@ -202,9 +201,9 @@ where
                     .expect("arg should be associated to a register");
 
                 match &ty {
-                    WasmType::I32 => self.context.masm.store(src.into(), addr, OperandSize::S32),
-                    WasmType::I64 => self.context.masm.store(src.into(), addr, OperandSize::S64),
-                    _ => panic!("Unsupported type {}", ty),
+                    ValType::I32 => self.context.masm.store(src.into(), addr, OperandSize::S32),
+                    ValType::I64 => self.context.masm.store(src.into(), addr, OperandSize::S64),
+                    _ => panic!("Unsupported type {:?}", ty),
                 }
             });
     }

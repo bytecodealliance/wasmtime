@@ -1,7 +1,7 @@
 use crate::isa::TargetIsa;
 use anyhow::Result;
 use target_lexicon::Triple;
-use wasmtime_environ::{FunctionBodyData, WasmFuncType};
+use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
 
 mod abi;
 mod masm;
@@ -33,8 +33,9 @@ impl TargetIsa for Aarch64 {
 
     fn compile_function(
         &self,
-        _sig: &WasmFuncType,
-        _body: FunctionBodyData,
+        _sig: &FuncType,
+        mut _body: FunctionBody,
+        mut _validator: FuncValidator<ValidatorResources>,
     ) -> Result<Vec<String>> {
         todo!()
     }

@@ -1,7 +1,7 @@
 use crate::isa::reg::Reg;
 use smallvec::SmallVec;
 use std::ops::{Add, BitAnd, Not, Sub};
-use wasmtime_environ::{WasmFuncType, WasmType};
+use wasmparser::{FuncType, ValType};
 
 pub(crate) mod addressing_mode;
 pub(crate) mod local;
@@ -18,7 +18,7 @@ pub(crate) trait ABI {
 
     /// Construct the ABI-specific signature from a WebAssembly
     /// function type
-    fn sig(&self, wasm_sig: &WasmFuncType) -> ABISig;
+    fn sig(&self, wasm_sig: &FuncType) -> ABISig;
 
     /// Returns the number of bits in a word
     fn word_bits() -> u32;
@@ -38,14 +38,14 @@ pub(crate) enum ABIArg {
     /// A register argument
     Reg {
         /// Type of the argument
-        ty: WasmType,
+        ty: ValType,
         /// Register holding the argument
         reg: Reg,
     },
     /// A stack argument
     Stack {
         /// The type of the argument
-        ty: WasmType,
+        ty: ValType,
         /// Offset of the argument relative to the frame pointer
         // SpiderMonkey's baseline compiler references arguments relative
         // to the frame pointer and locals relative to the stack pointer
@@ -55,12 +55,12 @@ pub(crate) enum ABIArg {
 
 impl ABIArg {
     /// Allocate a new register abi arg
-    pub fn reg(reg: Reg, ty: WasmType) -> Self {
+    pub fn reg(reg: Reg, ty: ValType) -> Self {
         Self::Reg { reg, ty }
     }
 
     /// Allocate a new stack abi arg
-    pub fn stack_offset(offset: u32, ty: WasmType) -> Self {
+    pub fn stack_offset(offset: u32, ty: ValType) -> Self {
         Self::Stack { ty, offset }
     }
 
@@ -81,7 +81,7 @@ impl ABIArg {
     }
 
     /// Get the type associated to this arg
-    pub fn ty(&self) -> WasmType {
+    pub fn ty(&self) -> ValType {
         match *self {
             ABIArg::Reg { ty, .. } | ABIArg::Stack { ty, .. } => ty,
         }
@@ -92,7 +92,7 @@ impl ABIArg {
 pub(crate) enum ABIResult {
     Reg {
         /// Type of the result
-        ty: Option<WasmType>,
+        ty: Option<ValType>,
         /// Register to hold the result
         reg: Reg,
     },
@@ -100,7 +100,7 @@ pub(crate) enum ABIResult {
 
 impl ABIResult {
     /// Create a register ABI result
-    pub fn reg(ty: Option<WasmType>, reg: Reg) -> Self {
+    pub fn reg(ty: Option<ValType>, reg: Reg) -> Self {
         Self::Reg { ty, reg }
     }
 
@@ -127,10 +127,10 @@ pub(crate) struct ABISig {
 }
 
 /// Returns the size in bytes of a given WebAssembly type
-pub(crate) fn ty_size(ty: &WasmType) -> u32 {
+pub(crate) fn ty_size(ty: &ValType) -> u32 {
     match *ty {
-        WasmType::I32 | WasmType::F32 => 4,
-        WasmType::I64 | WasmType::F64 => 8,
+        ValType::I32 | ValType::F32 => 4,
+        ValType::I64 | ValType::F64 => 8,
         _ => panic!(),
     }
 }

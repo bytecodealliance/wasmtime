@@ -6,7 +6,7 @@ use std::{
     fmt::{self, Debug, Display},
 };
 use target_lexicon::{Architecture, Triple};
-use wasmtime_environ::{FunctionBodyData, WasmFuncType};
+use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
 
 #[cfg(feature = "x64")]
 pub(crate) mod x64;
@@ -57,6 +57,7 @@ impl Display for LookupError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             LookupError::Unsupported => write!(f, "This target is not supported yet"),
+            LookupError::SupportDisabled => write!(f, "Support for this target was disabled"),
         }
     }
 }
@@ -64,6 +65,12 @@ impl Display for LookupError {
 #[derive(Debug)]
 pub(crate) enum LookupError {
     Unsupported,
+    // This directive covers the case in which the consumer
+    // enables the `all-arch- feature; in such case, this variant
+    // will never be used. This is most likely going to change
+    // in the future; this is one of the simplest options for now.
+    #[allow(dead_code)]
+    SupportDisabled,
 }
 
 /// A trait representing commonalities between the supported
@@ -75,7 +82,12 @@ pub trait TargetIsa: Send + Sync {
     /// Get the target triple of the ISA.
     fn triple(&self) -> &Triple;
 
-    fn compile_function(&self, sig: &WasmFuncType, body: FunctionBodyData) -> Result<Vec<String>>;
+    fn compile_function(
+        &self,
+        sig: &FuncType,
+        body: FunctionBody,
+        validator: FuncValidator<ValidatorResources>,
+    ) -> Result<Vec<String>>;
 
     /// Get the default calling convention of the underlying target triple
     fn call_conv(&self) -> CallConv {

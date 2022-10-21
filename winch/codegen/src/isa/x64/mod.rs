@@ -7,7 +7,7 @@ use crate::stack::Stack;
 use crate::{isa::TargetIsa, regset::RegSet};
 use anyhow::Result;
 use target_lexicon::Triple;
-use wasmtime_environ::{FunctionBodyData, WasmFuncType};
+use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
 
 use self::regs::ALL_GPR;
 
@@ -43,18 +43,17 @@ impl TargetIsa for X64 {
     }
 
     // Temporarily returns a Vec<String>
-    fn compile_function(&self, sig: &WasmFuncType, body: FunctionBodyData) -> Result<Vec<String>> {
-        let FunctionBodyData {
-            validator,
-            mut body,
-        } = body;
-
+    fn compile_function(
+        &self,
+        sig: &FuncType,
+        mut body: FunctionBody, // '1
+        mut validator: FuncValidator<ValidatorResources>,
+    ) -> Result<Vec<String>> {
         let masm = MacroAssembler::new();
         let stack = Stack::new();
         let abi = abi::X64ABI::default();
         let word_size = <abi::X64ABI as ABI>::word_bytes();
         let abi_sig = abi.sig(sig);
-        let mut validator = validator.into_validator(Default::default());
         let frame = Frame::new(&abi_sig, &mut body, &mut validator, &abi)?;
         // TODO Add in floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
@@ -63,8 +62,8 @@ impl TargetIsa for X64 {
             codegen_context,
             word_size,
             abi_sig,
-            &mut body,
-            &mut validator,
+            body,
+            validator,
             regalloc,
         );
 

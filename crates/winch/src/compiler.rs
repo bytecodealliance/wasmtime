@@ -1,10 +1,8 @@
-use crate::isa::TargetIsa;
 use anyhow::Result;
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FunctionBodyData, ModuleTranslation, ModuleTypes, Tunables,
 };
-
-pub mod builder;
+use winch_codegen::isa::TargetIsa;
 
 pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,

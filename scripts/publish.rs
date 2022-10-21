@@ -41,6 +41,8 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     // wiggle
     "wiggle-generate",
     "wiggle-macro",
+    // winch
+    "winch-codegen",
     // wasmtime
     "wasmtime-asm-macros",
     "wasmtime-component-util",
@@ -52,9 +54,8 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-cranelift",
     "wasmtime-jit",
     "wasmtime-cache",
+    "wasmtime-winch",
     "wasmtime",
-    // winch
-    "winch",
     // wasi-common/wiggle
     "wiggle",
     "wasi-common",

@@ -208,8 +208,15 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             }
 
             Payload::End(offset) => {
+<<<<<<< HEAD
                 self.result.types = Some(self.validator.end(offset)?);
 
+||||||| parent of cc0482d0e (Restructure Winch)
+                self.validator.end(offset)?;
+
+=======
+                self.validator.end(offset)?;
+>>>>>>> cc0482d0e (Restructure Winch)
                 // With the `escaped_funcs` set of functions finished
                 // we can calculate the set of signatures that are exported as
                 // the set of exported functions' signatures.

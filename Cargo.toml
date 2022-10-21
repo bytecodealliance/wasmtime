@@ -90,6 +90,8 @@ members = [
   "examples/wasi/wasm",
   "examples/tokio/wasm",
   "fuzz",
+  "winch", 
+  "winch/codegen"
 ]
 exclude = [
   'crates/wasi-common/WASI/tools/witx-cli',
@@ -146,6 +148,8 @@ cranelift-preopt = { path = "cranelift/preopt", version = "0.90.0" }
 cranelift-fuzzgen = { path = "cranelift/fuzzgen" }
 cranelift-bforest = { path = "cranelift/bforest", version = "0.90.0" }
 cranelift = { path = "cranelift/umbrella", version = "0.90.0" }
+
+winch-codegen = { path = "winch/codegen", version = "0.1.0" }
 
 target-lexicon = { version = "0.12.3", default-features = false }
 anyhow = "1.0.22"
