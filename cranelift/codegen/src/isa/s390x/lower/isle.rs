@@ -8,7 +8,8 @@ use crate::ir::ExternalName;
 use crate::isa::s390x::abi::{S390xMachineDeps, REG_SAVE_AREA_SIZE};
 use crate::isa::s390x::inst::{
     gpr, stack_reg, writable_gpr, zero_reg, CallIndInfo, CallInfo, Cond, Inst as MInst, LaneOrder,
-    MemArg, MemArgPair, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted,
+    MemArg, MemArgPair, RegPair, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted,
+    WritableRegPair,
 };
 use crate::isa::s390x::settings::Flags as IsaFlags;
 use crate::machinst::isle::*;
@@ -841,6 +842,36 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     #[inline]
     fn preg_stack(&mut self) -> PReg {
         stack_reg().to_real_reg().unwrap().into()
+    }
+
+    #[inline]
+    fn writable_regpair(&mut self, hi: WritableReg, lo: WritableReg) -> WritableRegPair {
+        WritableRegPair { hi, lo }
+    }
+
+    #[inline]
+    fn writable_regpair_hi(&mut self, w: WritableRegPair) -> WritableReg {
+        w.hi
+    }
+
+    #[inline]
+    fn writable_regpair_lo(&mut self, w: WritableRegPair) -> WritableReg {
+        w.lo
+    }
+
+    #[inline]
+    fn regpair(&mut self, hi: Reg, lo: Reg) -> RegPair {
+        RegPair { hi, lo }
+    }
+
+    #[inline]
+    fn regpair_hi(&mut self, w: RegPair) -> Reg {
+        w.hi
+    }
+
+    #[inline]
+    fn regpair_lo(&mut self, w: RegPair) -> Reg {
+        w.lo
     }
 }
 

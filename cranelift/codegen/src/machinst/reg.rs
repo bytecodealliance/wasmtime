@@ -391,18 +391,6 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
         }
     }
 
-    /// Add a register use+def, or "modify", where the reg must stay
-    /// in the same register on the input and output side of the
-    /// instruction.
-    pub fn reg_mod(&mut self, reg: Writable<Reg>) {
-        self.add_operand(Operand::new(
-            reg.to_reg().into(),
-            regalloc2::OperandConstraint::Reg,
-            regalloc2::OperandKind::Mod,
-            regalloc2::OperandPos::Early,
-        ));
-    }
-
     /// Add a register clobber set. This is a set of registers that
     /// are written by the instruction, so must be reserved (not used)
     /// for the whole instruction, but are not used afterward.
