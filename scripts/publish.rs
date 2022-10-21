@@ -156,7 +156,7 @@ fn main() {
             // publish in a loop and we remove crates once they're successfully
             // published. Failed-to-publish crates get enqueued for another try
             // later on.
-            for _ in 0..5 {
+            for _ in 0..10 {
                 crates.retain(|krate| !publish(krate));
 
                 if crates.is_empty() {
@@ -167,7 +167,7 @@ fn main() {
                     "{} crates failed to publish, waiting for a bit to retry",
                     crates.len(),
                 );
-                thread::sleep(Duration::from_secs(20));
+                thread::sleep(Duration::from_secs(40));
             }
 
             assert!(crates.is_empty(), "failed to publish all crates");
