@@ -2886,19 +2886,6 @@ impl<'a> Parser<'a> {
                     args: [lhs, rhs],
                 }
             }
-            InstructionFormat::IntSelect => {
-                let cond = self.match_enum("expected intcc condition code")?;
-                let guard = self.match_value("expected SSA value first operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let v_true = self.match_value("expected SSA value second operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let v_false = self.match_value("expected SSA value third operand")?;
-                InstructionData::IntSelect {
-                    opcode,
-                    cond,
-                    args: [guard, v_true, v_false],
-                }
-            }
             InstructionFormat::Call => {
                 let func_ref = self.match_fn("expected function reference")?;
                 ctx.check_fn(func_ref, self.loc)?;

@@ -3726,15 +3726,15 @@
                        (put_in_reg val_true) (put_in_reg val_false)))
 
 
-;;;; Rules for `selectif_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; We do not support the `iflags` mechanism on our platform.  However, common
 ;; code will unconditionally emit certain patterns using `iflags` which we
 ;; need to handle somehow.  Note that only those specific patterns are
 ;; recognized by the code below, other uses will fail to lower.
 
-(rule (lower (has_type ty (selectif_spectre_guard int_cc
-                             (ifcmp x y) val_true val_false)))
+(rule (lower (has_type ty (select_spectre_guard
+                             (icmp int_cc x y) val_true val_false)))
       (select_bool_reg ty (icmp_val $false int_cc x y)
                        (put_in_reg val_true) (put_in_reg val_false)))
 

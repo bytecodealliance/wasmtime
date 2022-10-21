@@ -256,7 +256,6 @@ impl InstructionData {
         match self {
             &InstructionData::IntCompare { cond, .. }
             | &InstructionData::IntCondTrap { cond, .. }
-            | &InstructionData::IntSelect { cond, .. }
             | &InstructionData::IntCompareImm { cond, .. } => Some(cond),
             _ => None,
         }

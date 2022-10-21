@@ -1425,16 +1425,13 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let cc = &Operand::new("cc", &imm.intcc).with_doc("Controlling condition code");
-    let flags = &Operand::new("flags", iflags).with_doc("The machine's flag register");
-
     ig.push(
         Inst::new(
-            "selectif_spectre_guard",
+            "select_spectre_guard",
             r#"
             Conditional select intended for Spectre guards.
 
-            This operation is semantically equivalent to a selectif instruction.
+            This operation is semantically equivalent to a select instruction.
             However, it is guaranteed to not be removed or otherwise altered by any
             optimization pass, and is guaranteed to result in a conditional-move
             instruction, not a branch-based lowering.  As such, it is suitable
@@ -1449,9 +1446,9 @@ pub(crate) fn define(
             speculative path, this ensures that no Spectre vulnerability will
             exist.
             "#,
-            &formats.int_select,
+            &formats.ternary,
         )
-        .operands_in(vec![cc, flags, x, y])
+        .operands_in(vec![c, x, y])
         .operands_out(vec![a])
         .other_side_effects(true),
     );

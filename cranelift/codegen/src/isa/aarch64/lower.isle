@@ -1740,11 +1740,11 @@
         (cmp (OperandSize.Size64) rcond (zero_reg))
         (Cond.Ne) ty rn rm)))
 
-;;;; Rules for `selectif_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty
-       (selectif_spectre_guard cc
-        flags @ (ifcmp x @ (value_type in_ty) y) if_true if_false)))
+       (select_spectre_guard
+        (icmp cc x @ (value_type in_ty) y) if_true if_false)))
       (let ((cond Cond (cond_code cc))
             (dst ValueRegs (lower_select
                       (lower_icmp_into_flags cc x y in_ty)

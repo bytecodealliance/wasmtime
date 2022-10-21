@@ -832,9 +832,9 @@
   (gen_float_round (FloatRoundOP.Nearest) x ty))
 
 
-;;;;;  Rules for `selectif_spectre_guard`;;;;;;;;;
+;;;;;  Rules for `select_spectre_guard`;;;;;;;;;
 (rule
-  (lower (has_type r_ty (selectif_spectre_guard cc (ifcmp ca @ (value_type cty) cb) a b)))
+  (lower (has_type r_ty (select_spectre_guard (icmp cc ca @ (value_type cty) cb) a b)))
   (let
     ((dst VecWritableReg (alloc_vec_writable r_ty))
       (r Reg (lower_icmp cc ca cb cty))

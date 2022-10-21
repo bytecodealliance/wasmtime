@@ -151,7 +151,7 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::Select => implemented_in_isle(ctx),
 
-        Opcode::SelectifSpectreGuard => implemented_in_isle(ctx),
+        Opcode::SelectSpectreGuard => implemented_in_isle(ctx),
 
         Opcode::Bitselect | Opcode::Vselect => implemented_in_isle(ctx),
 

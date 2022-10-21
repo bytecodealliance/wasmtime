@@ -171,7 +171,7 @@ impl LowerBackend for S390xBackend {
             | Opcode::IsNull
             | Opcode::IsInvalid
             | Opcode::Select
-            | Opcode::SelectifSpectreGuard
+            | Opcode::SelectSpectreGuard
             | Opcode::Trap
             | Opcode::ResumableTrap
             | Opcode::Trapz
