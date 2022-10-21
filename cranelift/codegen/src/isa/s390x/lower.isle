@@ -60,7 +60,7 @@
 
 ;;;; Rules for `isplit` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (gpr64_ty ty) (isplit x)))
+(rule (lower (isplit x @ (value_type $I128)))
       (let ((x_reg Reg x)
             (x_hi Reg (vec_extract_lane $I64X2 x_reg 0 (zero_reg)))
             (x_lo Reg (vec_extract_lane $I64X2 x_reg 1 (zero_reg))))

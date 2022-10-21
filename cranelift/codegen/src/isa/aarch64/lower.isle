@@ -114,7 +114,7 @@
 
 ;;;; Rules for `isplit` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I64 (isplit x)))
+(rule (lower (isplit x @ (value_type $I128)))
       (let
           ((x_regs ValueRegs x)
            (x_lo ValueRegs (value_regs_get x_regs 0))

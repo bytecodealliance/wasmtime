@@ -523,7 +523,7 @@ impl ValueDataPacked {
 
     #[inline(always)]
     fn set_type(&mut self, ty: Type) {
-        self.0 &= !((1 << Self::TYPE_BITS) - 1) << Self::TYPE_SHIFT;
+        self.0 &= !(((1 << Self::TYPE_BITS) - 1) << Self::TYPE_SHIFT);
         self.0 |= (ty.repr() as u64) << Self::TYPE_SHIFT;
     }
 }
