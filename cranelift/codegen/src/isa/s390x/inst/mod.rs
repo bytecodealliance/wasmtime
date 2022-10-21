@@ -39,8 +39,8 @@ pub use crate::isa::s390x::lower::isle::generated_code::{
 #[derive(Clone, Debug)]
 pub struct CallInfo {
     pub dest: ExternalName,
-    pub uses: SmallVec<[Reg; 8]>,
-    pub defs: SmallVec<[Writable<Reg>; 8]>,
+    pub uses: CallArgList,
+    pub defs: CallRetList,
     pub clobbers: PRegSet,
     pub opcode: Opcode,
     pub caller_callconv: CallConv,
@@ -53,8 +53,8 @@ pub struct CallInfo {
 #[derive(Clone, Debug)]
 pub struct CallIndInfo {
     pub rn: Reg,
-    pub uses: SmallVec<[Reg; 8]>,
-    pub defs: SmallVec<[Writable<Reg>; 8]>,
+    pub uses: CallArgList,
+    pub defs: CallRetList,
     pub clobbers: PRegSet,
     pub opcode: Opcode,
     pub caller_callconv: CallConv,
@@ -1004,15 +1004,23 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         }
         &Inst::Call { link, ref info } => {
             collector.reg_def(link);
-            collector.reg_uses(&*info.uses);
-            collector.reg_defs(&*info.defs);
+            for u in &info.uses {
+                collector.reg_fixed_use(u.vreg, u.preg);
+            }
+            for d in &info.defs {
+                collector.reg_fixed_def(d.vreg, d.preg);
+            }
             collector.reg_clobbers(info.clobbers);
         }
         &Inst::CallInd { link, ref info } => {
             collector.reg_def(link);
             collector.reg_use(info.rn);
-            collector.reg_uses(&*info.uses);
-            collector.reg_defs(&*info.defs);
+            for u in &info.uses {
+                collector.reg_fixed_use(u.vreg, u.preg);
+            }
+            for d in &info.defs {
+                collector.reg_fixed_def(d.vreg, d.preg);
+            }
             collector.reg_clobbers(info.clobbers);
         }
         &Inst::Args { ref args } => {

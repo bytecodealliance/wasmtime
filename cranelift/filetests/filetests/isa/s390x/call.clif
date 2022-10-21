@@ -35,8 +35,8 @@ block0(v0: i32):
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   llgfr %r2, %r2
-;   bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
-;   basr %r14, %r3
+;   bras %r1, 12 ; data %g + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 
@@ -63,8 +63,8 @@ block0(v0: i32):
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   lgfr %r2, %r2
-;   bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
-;   basr %r14, %r3
+;   bras %r1, 12 ; data %g + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 
@@ -107,8 +107,8 @@ block0(v0: i32):
 ;   virtual_sp_offset_adjust 160
 ; block0:
 ;   llgfr %r2, %r2
-;   bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
-;   basr %r14, %r3
+;   bras %r1, 12 ; data %g + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 

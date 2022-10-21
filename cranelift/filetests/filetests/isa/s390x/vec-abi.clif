@@ -13,8 +13,8 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
 ;   aghi %r15, -160
 ;   virtual_sp_offset_adjust 160
 ; block0:
-;   bras %r1, 12 ; data %callee_be + 0 ; lg %r4, 0(%r1)
-;   basr %r14, %r4
+;   bras %r1, 12 ; data %callee_be + 0 ; lg %r5, 0(%r1)
+;   basr %r14, %r5
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 
@@ -39,19 +39,19 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
 ;   std %f15, 216(%r15)
 ; block0:
 ;   vpdi %v24, %v24, %v24, 4
-;   vpdi %v17, %v25, %v25, 4
-;   verllg %v25, %v17, 32
-;   vpdi %v22, %v26, %v26, 4
-;   verllg %v26, %v22, 32
-;   verllf %v26, %v26, 16
-;   vpdi %v29, %v27, %v27, 4
-;   verllg %v31, %v29, 32
-;   verllf %v1, %v31, 16
-;   verllh %v27, %v1, 8
-;   bras %r1, 12 ; data %callee_le + 0 ; lg %r4, 0(%r1)
-;   basr %r14, %r4
-;   vpdi %v19, %v24, %v24, 4
-;   verllg %v24, %v19, 32
+;   vpdi %v16, %v25, %v25, 4
+;   verllg %v25, %v16, 32
+;   vpdi %v20, %v26, %v26, 4
+;   verllg %v22, %v20, 32
+;   verllf %v26, %v22, 16
+;   vpdi %v27, %v27, %v27, 4
+;   verllg %v28, %v27, 32
+;   verllf %v30, %v28, 16
+;   verllh %v27, %v30, 8
+;   bras %r1, 12 ; data %callee_le + 0 ; lg %r5, 0(%r1)
+;   basr %r14, %r5
+;   vpdi %v6, %v24, %v24, 4
+;   verllg %v24, %v6, 32
 ;   ld %f8, 160(%r15)
 ;   ld %f9, 168(%r15)
 ;   ld %f10, 176(%r15)
@@ -84,19 +84,19 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
 ;   std %f15, 216(%r15)
 ; block0:
 ;   vpdi %v24, %v24, %v24, 4
-;   vpdi %v17, %v25, %v25, 4
-;   verllg %v25, %v17, 32
-;   vpdi %v22, %v26, %v26, 4
-;   verllg %v26, %v22, 32
-;   verllf %v26, %v26, 16
-;   vpdi %v29, %v27, %v27, 4
-;   verllg %v31, %v29, 32
-;   verllf %v1, %v31, 16
-;   verllh %v27, %v1, 8
-;   bras %r1, 12 ; data %callee_be + 0 ; lg %r4, 0(%r1)
-;   basr %r14, %r4
-;   vpdi %v19, %v24, %v24, 4
-;   verllg %v24, %v19, 32
+;   vpdi %v16, %v25, %v25, 4
+;   verllg %v25, %v16, 32
+;   vpdi %v20, %v26, %v26, 4
+;   verllg %v22, %v20, 32
+;   verllf %v26, %v22, 16
+;   vpdi %v27, %v27, %v27, 4
+;   verllg %v28, %v27, 32
+;   verllf %v30, %v28, 16
+;   verllh %v27, %v30, 8
+;   bras %r1, 12 ; data %callee_be + 0 ; lg %r5, 0(%r1)
+;   basr %r14, %r5
+;   vpdi %v6, %v24, %v24, 4
+;   verllg %v24, %v6, 32
 ;   ld %f8, 160(%r15)
 ;   ld %f9, 168(%r15)
 ;   ld %f10, 176(%r15)
@@ -120,8 +120,8 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16):
 ;   aghi %r15, -160
 ;   virtual_sp_offset_adjust 160
 ; block0:
-;   bras %r1, 12 ; data %callee_le + 0 ; lg %r4, 0(%r1)
-;   basr %r14, %r4
+;   bras %r1, 12 ; data %callee_le + 0 ; lg %r5, 0(%r1)
+;   basr %r14, %r5
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 
