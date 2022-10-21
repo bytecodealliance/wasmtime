@@ -461,16 +461,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             write!(w, " {} {}, {}", cond, args[0], destination)?;
             write_block_args(w, &args[1..])
         }
-        BranchIcmp {
-            cond,
-            destination,
-            ref args,
-            ..
-        } => {
-            let args = args.as_slice(pool);
-            write!(w, " {} {}, {}, {}", cond, args[0], args[1], destination)?;
-            write_block_args(w, &args[2..])
-        }
         BranchTable {
             arg,
             destination,

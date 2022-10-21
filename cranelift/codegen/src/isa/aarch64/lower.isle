@@ -2505,16 +2505,6 @@
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_not_zero rt))))))
 
-;; `br_icmp`
-(rule (lower_branch (br_icmp cc x @ (value_type ty) y _ _) targets)
-      (let ((cond Cond (cond_code cc))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (lower_icmp_into_flags cc x y ty)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-
 ;; `brif`
 (rule (lower_branch (brif cc (ifcmp x @ (value_type ty) y) _ _) targets)
       (let ((cond Cond (cond_code cc))

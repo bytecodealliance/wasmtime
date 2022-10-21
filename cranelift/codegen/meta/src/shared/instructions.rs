@@ -75,49 +75,11 @@ fn define_control_flow(
         );
     }
 
-    let iB = &TypeVar::new(
-        "iB",
-        "A scalar integer type",
-        TypeSetBuilder::new().ints(Interval::All).build(),
-    );
     let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
     let fflags: &TypeVar = &ValueType::Special(types::Flag::FFlags.into()).into();
 
     {
         let Cond = &Operand::new("Cond", &imm.intcc);
-        let x = &Operand::new("x", iB);
-        let y = &Operand::new("y", iB);
-
-        ig.push(
-            Inst::new(
-                "br_icmp",
-                r#"
-        Compare scalar integers and branch.
-
-        Compare ``x`` and ``y`` in the same way as the `icmp` instruction
-        and take the branch if the condition is true:
-
-        ```text
-            br_icmp ugt v1, v2, block4(v5, v6)
-        ```
-
-        is semantically equivalent to:
-
-        ```text
-            v10 = icmp ugt, v1, v2
-            brnz v10, block4(v5, v6)
-        ```
-
-        Some RISC architectures like MIPS and RISC-V provide instructions that
-        implement all or some of the condition codes. The instruction can also
-        be used to represent *macro-op fusion* on architectures like Intel's.
-        "#,
-                &formats.branch_icmp,
-            )
-            .operands_in(vec![Cond, x, y, block, args])
-            .is_branch(true),
-        );
-
         let f = &Operand::new("f", iflags);
 
         ig.push(

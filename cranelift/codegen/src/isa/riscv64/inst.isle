@@ -1922,10 +1922,6 @@
 
 ;;; 
 (rule 
-  (lower_branch (br_icmp cc a @ (value_type ty) b _ _) targets)
-  (lower_br_icmp cc a b targets ty))
-
-(rule 
   (lower_branch (brif cc (ifcmp a @ (value_type ty) b) _ _) targets)
   (lower_br_icmp cc a b targets ty))
 

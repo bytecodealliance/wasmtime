@@ -1183,9 +1183,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 builder.switch_to_block(dec_ref_count_block);
                 let prev_ref_count = self.mutate_externref_ref_count(builder, current_elem, -1);
                 let one = builder.ins().iconst(pointer_type, 1);
-                builder
-                    .ins()
-                    .br_icmp(IntCC::Equal, one, prev_ref_count, drop_block, &[]);
+                let cond = builder.ins().icmp(IntCC::Equal, one, prev_ref_count);
+                builder.ins().brnz(cond, drop_block, &[]);
                 builder.ins().jump(continue_block, &[]);
 
                 // Call the `drop_externref` builtin to (you guessed it) drop

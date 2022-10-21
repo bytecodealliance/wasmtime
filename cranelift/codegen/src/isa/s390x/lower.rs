@@ -234,7 +234,6 @@ impl LowerBackend for S390xBackend {
             Opcode::Jump
             | Opcode::Brz
             | Opcode::Brnz
-            | Opcode::BrIcmp
             | Opcode::Brif
             | Opcode::Brff
             | Opcode::BrTable => {

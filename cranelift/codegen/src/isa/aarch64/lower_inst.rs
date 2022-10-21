@@ -208,7 +208,6 @@ pub(crate) fn lower_insn_to_regs(
         Opcode::Jump
         | Opcode::Brz
         | Opcode::Brnz
-        | Opcode::BrIcmp
         | Opcode::Brif
         | Opcode::Brff
         | Opcode::BrTable => {

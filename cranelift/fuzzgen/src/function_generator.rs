@@ -812,7 +812,6 @@ enum BlockTerminator {
     Return,
     Jump(Block),
     Br(Block, Block),
-    BrIcmp(Block, Block),
     BrTable(Block, Vec<Block>),
     Switch(Type, Block, HashMap<u128, Block>),
 }
@@ -822,7 +821,6 @@ enum BlockTerminatorKind {
     Return,
     Jump,
     Br,
-    BrIcmp,
     BrTable,
     Switch,
 }
@@ -1101,19 +1099,6 @@ where
                 }
                 builder.ins().jump(right, &right_args[..]);
             }
-            BlockTerminator::BrIcmp(left, right) => {
-                let cc = *self.u.choose(IntCC::all())?;
-                let _type = *self.u.choose(&[I8, I16, I32, I64, I128])?;
-
-                let lhs = builder.use_var(self.get_variable_of_type(_type)?);
-                let rhs = builder.use_var(self.get_variable_of_type(_type)?);
-
-                let left_args = self.generate_values_for_block(builder, left)?;
-                let right_args = self.generate_values_for_block(builder, right)?;
-
-                builder.ins().br_icmp(cc, lhs, rhs, left, &left_args[..]);
-                builder.ins().jump(right, &right_args[..]);
-            }
             BlockTerminator::BrTable(default, targets) => {
                 // Create jump tables on demand
                 let jt = builder.create_jump_table(JumpTableData::with_blocks(targets));
@@ -1295,12 +1280,11 @@ where
                     valid_terminators.push(BlockTerminatorKind::Return);
                 } else {
                     // If we have more than one block we can allow terminators that target blocks.
-                    // TODO: We could add some kind of BrReturn/BrIcmpReturn here, to explore edges where we exit
-                    // in the middle of the function
+                    // TODO: We could add some kind of BrReturn here, to explore edges where we
+                    // exit in the middle of the function
                     valid_terminators.extend_from_slice(&[
                         BlockTerminatorKind::Jump,
                         BlockTerminatorKind::Br,
-                        BlockTerminatorKind::BrIcmp,
                     ]);
                 }
 
@@ -1322,9 +1306,6 @@ where
                     BlockTerminatorKind::Jump => BlockTerminator::Jump(next_block),
                     BlockTerminatorKind::Br => {
                         BlockTerminator::Br(next_block, self.generate_target_block(block)?)
-                    }
-                    BlockTerminatorKind::BrIcmp => {
-                        BlockTerminator::BrIcmp(next_block, self.generate_target_block(block)?)
                     }
                     // TODO: Allow generating backwards branches here
                     BlockTerminatorKind::BrTable => {

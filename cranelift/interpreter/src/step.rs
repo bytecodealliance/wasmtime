@@ -248,7 +248,6 @@ where
             InstructionData::BranchInt { .. }
             | InstructionData::BranchFloat { .. }
             | InstructionData::Branch { .. } => args_range(1..),
-            InstructionData::BranchIcmp { .. } => args_range(2..),
             _ => panic!("Unrecognized branch inst: {:?}", inst),
         }?;
 
@@ -293,9 +292,6 @@ where
                 .convert(ValueConversionKind::ToBoolean)?
                 .into_bool()?,
         )?,
-        Opcode::BrIcmp => {
-            branch_when(icmp(ctrl_ty, inst.cond_code().unwrap(), &arg(0)?, &arg(1)?)?.into_bool()?)?
-        }
         Opcode::Brif => branch_when(state.has_iflag(inst.cond_code().unwrap()))?,
         Opcode::Brff => branch_when(state.has_fflag(inst.fp_cond_code().unwrap()))?,
         Opcode::BrTable => {

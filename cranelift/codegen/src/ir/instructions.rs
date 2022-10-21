@@ -200,11 +200,6 @@ impl InstructionData {
                 ref args,
                 ..
             } => BranchInfo::SingleDest(destination, &args.as_slice(pool)[1..]),
-            Self::BranchIcmp {
-                destination,
-                ref args,
-                ..
-            } => BranchInfo::SingleDest(destination, &args.as_slice(pool)[2..]),
             Self::BranchTable {
                 table, destination, ..
             } => BranchInfo::Table(table, Some(destination)),
@@ -224,8 +219,7 @@ impl InstructionData {
             Self::Jump { destination, .. }
             | Self::Branch { destination, .. }
             | Self::BranchInt { destination, .. }
-            | Self::BranchFloat { destination, .. }
-            | Self::BranchIcmp { destination, .. } => Some(destination),
+            | Self::BranchFloat { destination, .. } => Some(destination),
             Self::BranchTable { .. } => None,
             _ => {
                 debug_assert!(!self.opcode().is_branch());
@@ -255,10 +249,6 @@ impl InstructionData {
             | Self::BranchFloat {
                 ref mut destination,
                 ..
-            }
-            | Self::BranchIcmp {
-                ref mut destination,
-                ..
             } => Some(destination),
             Self::BranchTable { .. } => None,
             _ => {
@@ -285,7 +275,6 @@ impl InstructionData {
     pub fn cond_code(&self) -> Option<IntCC> {
         match self {
             &InstructionData::IntCond { cond, .. }
-            | &InstructionData::BranchIcmp { cond, .. }
             | &InstructionData::IntCompare { cond, .. }
             | &InstructionData::IntCondTrap { cond, .. }
             | &InstructionData::BranchInt { cond, .. }

@@ -10,7 +10,6 @@ pub(crate) struct Formats {
     pub(crate) binary_imm64: Rc<InstructionFormat>,
     pub(crate) branch: Rc<InstructionFormat>,
     pub(crate) branch_float: Rc<InstructionFormat>,
-    pub(crate) branch_icmp: Rc<InstructionFormat>,
     pub(crate) branch_int: Rc<InstructionFormat>,
     pub(crate) branch_table: Rc<InstructionFormat>,
     pub(crate) call: Rc<InstructionFormat>,
@@ -147,14 +146,6 @@ impl Formats {
 
             branch_float: Builder::new("BranchFloat")
                 .imm(&imm.floatcc)
-                .value()
-                .imm(&entities.block)
-                .varargs()
-                .build(),
-
-            branch_icmp: Builder::new("BranchIcmp")
-                .imm(&imm.intcc)
-                .value()
                 .value()
                 .imm(&entities.block)
                 .varargs()
