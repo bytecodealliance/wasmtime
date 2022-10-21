@@ -2813,19 +2813,6 @@ impl<'a> Parser<'a> {
                     args: args.into_value_list(&[ctrl_arg], &mut ctx.function.dfg.value_lists),
                 }
             }
-            InstructionFormat::BranchInt => {
-                let cond = self.match_enum("expected intcc condition code")?;
-                let arg = self.match_value("expected SSA value first operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let block_num = self.match_block("expected branch destination block")?;
-                let args = self.parse_opt_value_list()?;
-                InstructionData::BranchInt {
-                    opcode,
-                    cond,
-                    destination: block_num,
-                    args: args.into_value_list(&[arg], &mut ctx.function.dfg.value_lists),
-                }
-            }
             InstructionFormat::BranchFloat => {
                 let cond = self.match_enum("expected floatcc condition code")?;
                 let arg = self.match_value("expected SSA value first operand")?;

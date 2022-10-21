@@ -573,7 +573,6 @@ fn lower_insn_to_regs(
         Opcode::Jump
         | Opcode::Brz
         | Opcode::Brnz
-        | Opcode::Brif
         | Opcode::Brff
         | Opcode::BrTable => {
             panic!("Branch opcode reached non-branch lowering logic!");

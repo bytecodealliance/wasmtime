@@ -2505,27 +2505,6 @@
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_not_zero rt))))))
 
-;; `brif`
-(rule (lower_branch (brif cc (ifcmp x @ (value_type ty) y) _ _) targets)
-      (let ((cond Cond (cond_code cc))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (lower_icmp_into_flags cc x y ty)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-;; If the `ifcmp` result is actually placed in a register, we need to move it
-;; back into the flags.
-(rule -1 (lower_branch (brif cc f _ _) targets)
-      (let ((cond Cond (cond_code cc))
-            (rn Reg (put_in_reg f))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (mov_to_nzcv rn)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-
 ;; `brff`
 (rule (lower_branch (brff cc (ffcmp x @ (value_type ty) y) _ _) targets)
       (let ((cond Cond (fp_cond_code cc))

@@ -245,8 +245,7 @@ where
     let branch_when = |condition: bool| -> Result<ControlFlow<V>, StepError> {
         let branch_args = match inst {
             InstructionData::Jump { .. } => args_range(0..),
-            InstructionData::BranchInt { .. }
-            | InstructionData::BranchFloat { .. }
+            InstructionData::BranchFloat { .. }
             | InstructionData::Branch { .. } => args_range(1..),
             _ => panic!("Unrecognized branch inst: {:?}", inst),
         }?;
@@ -292,7 +291,6 @@ where
                 .convert(ValueConversionKind::ToBoolean)?
                 .into_bool()?,
         )?,
-        Opcode::Brif => branch_when(state.has_iflag(inst.cond_code().unwrap()))?,
         Opcode::Brff => branch_when(state.has_fflag(inst.fp_cond_code().unwrap()))?,
         Opcode::BrTable => {
             if let InstructionData::BranchTable {

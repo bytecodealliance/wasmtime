@@ -640,11 +640,6 @@ impl<'a> Verifier<'a> {
                 ref args,
                 ..
             }
-            | BranchInt {
-                destination,
-                ref args,
-                ..
-            }
             | BranchFloat {
                 destination,
                 ref args,
