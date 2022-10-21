@@ -14,13 +14,11 @@ pub(crate) struct Formats {
     pub(crate) call_indirect: Rc<InstructionFormat>,
     pub(crate) cond_trap: Rc<InstructionFormat>,
     pub(crate) float_compare: Rc<InstructionFormat>,
-    pub(crate) float_cond: Rc<InstructionFormat>,
     pub(crate) float_cond_trap: Rc<InstructionFormat>,
     pub(crate) func_addr: Rc<InstructionFormat>,
     pub(crate) heap_addr: Rc<InstructionFormat>,
     pub(crate) int_compare: Rc<InstructionFormat>,
     pub(crate) int_compare_imm: Rc<InstructionFormat>,
-    pub(crate) int_cond: Rc<InstructionFormat>,
     pub(crate) int_cond_trap: Rc<InstructionFormat>,
     pub(crate) int_select: Rc<InstructionFormat>,
     pub(crate) jump: Rc<InstructionFormat>,
@@ -110,15 +108,11 @@ impl Formats {
                 .imm(&imm.imm64)
                 .build(),
 
-            int_cond: Builder::new("IntCond").imm(&imm.intcc).value().build(),
-
             float_compare: Builder::new("FloatCompare")
                 .imm(&imm.floatcc)
                 .value()
                 .value()
                 .build(),
-
-            float_cond: Builder::new("FloatCond").imm(&imm.floatcc).value().build(),
 
             int_select: Builder::new("IntSelect")
                 .imm(&imm.intcc)

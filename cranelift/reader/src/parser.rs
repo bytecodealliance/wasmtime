@@ -2875,11 +2875,6 @@ impl<'a> Parser<'a> {
                     imm: rhs,
                 }
             }
-            InstructionFormat::IntCond => {
-                let cond = self.match_enum("expected intcc condition code")?;
-                let arg = self.match_value("expected SSA value")?;
-                InstructionData::IntCond { opcode, cond, arg }
-            }
             InstructionFormat::FloatCompare => {
                 let cond = self.match_enum("expected floatcc condition code")?;
                 let lhs = self.match_value("expected SSA value first operand")?;
@@ -2890,11 +2885,6 @@ impl<'a> Parser<'a> {
                     cond,
                     args: [lhs, rhs],
                 }
-            }
-            InstructionFormat::FloatCond => {
-                let cond = self.match_enum("expected floatcc condition code")?;
-                let arg = self.match_value("expected SSA value")?;
-                InstructionData::FloatCond { opcode, cond, arg }
             }
             InstructionFormat::IntSelect => {
                 let cond = self.match_enum("expected intcc condition code")?;

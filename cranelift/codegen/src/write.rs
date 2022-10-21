@@ -418,9 +418,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         }
         IntCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
         IntCompareImm { cond, arg, imm, .. } => write!(w, " {} {}, {}", cond, arg, imm),
-        IntCond { cond, arg, .. } => write!(w, " {} {}", cond, arg),
         FloatCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
-        FloatCond { cond, arg, .. } => write!(w, " {} {}", cond, arg),
         IntSelect { cond, args, .. } => {
             write!(w, " {} {}, {}, {}", cond, args[0], args[1], args[2])
         }

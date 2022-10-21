@@ -254,8 +254,7 @@ impl InstructionData {
     /// condition.  Otherwise, return `None`.
     pub fn cond_code(&self) -> Option<IntCC> {
         match self {
-            &InstructionData::IntCond { cond, .. }
-            | &InstructionData::IntCompare { cond, .. }
+            &InstructionData::IntCompare { cond, .. }
             | &InstructionData::IntCondTrap { cond, .. }
             | &InstructionData::IntSelect { cond, .. }
             | &InstructionData::IntCompareImm { cond, .. } => Some(cond),
@@ -268,7 +267,6 @@ impl InstructionData {
     pub fn fp_cond_code(&self) -> Option<FloatCC> {
         match self {
             &InstructionData::FloatCompare { cond, .. }
-            | &InstructionData::FloatCond { cond, .. }
             | &InstructionData::FloatCondTrap { cond, .. } => Some(cond),
             _ => None,
         }

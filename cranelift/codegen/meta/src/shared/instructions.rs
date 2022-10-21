@@ -3121,43 +3121,6 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let Cond = &Operand::new("Cond", &imm.intcc);
-    let f = &Operand::new("f", iflags);
-    let a = &Operand::new("a", i8);
-
-    ig.push(
-        Inst::new(
-            "trueif",
-            r#"
-        Test integer CPU flags for a specific condition.
-
-        Check the CPU flags in ``f`` against the ``Cond`` condition code and
-        return true when the condition code is satisfied.
-        "#,
-            &formats.int_cond,
-        )
-        .operands_in(vec![Cond, f])
-        .operands_out(vec![a]),
-    );
-
-    let Cond = &Operand::new("Cond", &imm.floatcc);
-    let f = &Operand::new("f", fflags);
-
-    ig.push(
-        Inst::new(
-            "trueff",
-            r#"
-        Test floating point CPU flags for a specific condition.
-
-        Check the CPU flags in ``f`` against the ``Cond`` condition code and
-        return true when the condition code is satisfied.
-        "#,
-            &formats.float_cond,
-        )
-        .operands_in(vec![Cond, f])
-        .operands_out(vec![a]),
-    );
-
     let x = &Operand::new("x", Mem);
     let a = &Operand::new("a", MemTo).with_doc("Bits of `x` reinterpreted");
 

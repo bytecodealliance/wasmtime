@@ -761,9 +761,7 @@ impl<'a> Verifier<'a> {
             | Shuffle { .. }
             | IntCompare { .. }
             | IntCompareImm { .. }
-            | IntCond { .. }
             | FloatCompare { .. }
-            | FloatCond { .. }
             | IntSelect { .. }
             | Load { .. }
             | Store { .. }

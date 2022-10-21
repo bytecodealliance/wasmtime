@@ -850,17 +850,6 @@
       (_ Unit (emit (MInst.SelectIf $true (vec_writable_clone dst) r a b))))
     (vec_writable_to_regs dst)))
 
-;;;;;  Rules for `trueif`;;;;;;;;;
-
-(rule
-  (lower (has_type ty (trueif cc (ifcmp ca @ (value_type cty) cb))))
-  (lower_icmp cc ca cb cty))
-
-;;;;;  Rules for `trueff`;;;;;;;;;
-(rule
-  (lower (has_type ty  (trueff cc (ffcmp ca @ (value_type cty) cb))))
-  (gen_fcmp cc ca cb cty))
-
 
 ;;;;;  Rules for `trapif`;;;;;;;;;
 (rule

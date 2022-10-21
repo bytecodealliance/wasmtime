@@ -155,10 +155,6 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::Bitselect | Opcode::Vselect => implemented_in_isle(ctx),
 
-        Opcode::Trueif => implemented_in_isle(ctx),
-
-        Opcode::Trueff => implemented_in_isle(ctx),
-
         Opcode::IsNull | Opcode::IsInvalid => implemented_in_isle(ctx),
 
         Opcode::Copy => implemented_in_isle(ctx),

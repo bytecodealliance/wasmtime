@@ -499,8 +499,6 @@ fn lower_insn_to_regs(
 
         Opcode::Bmask => unimplemented!("Bmask not implemented"),
 
-        Opcode::Trueif | Opcode::Trueff => unimplemented!("trueif / trueff not implemented"),
-
         Opcode::Vsplit | Opcode::Vconcat => {
             unimplemented!("Vector split/concat ops not implemented.");
         }

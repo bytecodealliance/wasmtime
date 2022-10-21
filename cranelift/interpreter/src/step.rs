@@ -932,18 +932,6 @@ where
         Opcode::Nearest => assign(Value::nearest(arg(0)?)?),
         Opcode::IsNull => unimplemented!("IsNull"),
         Opcode::IsInvalid => unimplemented!("IsInvalid"),
-        // `ctrl_ty` is `INVALID` for `Trueif` and `Trueff`, but both should
-        // return a 1-bit boolean value.
-        Opcode::Trueif => choose(
-            state.has_iflag(inst.cond_code().unwrap()),
-            Value::bool(true, false, types::I8)?,
-            Value::bool(false, false, types::I8)?,
-        ),
-        Opcode::Trueff => choose(
-            state.has_fflag(inst.fp_cond_code().unwrap()),
-            Value::bool(true, false, types::I8)?,
-            Value::bool(false, false, types::I8)?,
-        ),
         Opcode::Bitcast | Opcode::RawBitcast | Opcode::ScalarToVector => {
             let input_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
             let arg0 = extractlanes(&arg(0)?, input_ty)?;
