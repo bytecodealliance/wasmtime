@@ -773,8 +773,7 @@ impl SigSet {
         // `ir::Signature`.
         debug_assert!(!self.have_abi_sig_for_signature(&signature));
 
-        let legalized_signature = crate::machinst::ensure_struct_return_ptr_is_returned(&signature);
-        let sig_data = SigData::from_func_sig::<M>(&legalized_signature, flags)?;
+        let sig_data = SigData::from_func_sig::<M>(&signature, flags)?;
         let sig = self.sigs.push(sig_data);
         self.ir_signature_to_abi_sig.insert(signature, sig);
         Ok(sig)
@@ -793,8 +792,7 @@ impl SigSet {
             return Ok(sig);
         }
         let signature = &dfg.signatures[sig_ref];
-        let legalized_signature = crate::machinst::ensure_struct_return_ptr_is_returned(&signature);
-        let sig_data = SigData::from_func_sig::<M>(&legalized_signature, flags)?;
+        let sig_data = SigData::from_func_sig::<M>(signature, flags)?;
         let sig = self.sigs.push(sig_data);
         self.ir_sig_ref_to_abi_sig[sig_ref] = Some(sig);
         Ok(sig)
