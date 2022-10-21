@@ -225,8 +225,7 @@ impl LowerBackend for S390xBackend {
             }
             Opcode::Ifcmp
             | Opcode::Ffcmp
-            | Opcode::Trapff
-            | Opcode::Selectif => {
+            | Opcode::Trapff => {
                 panic!("Flags opcode should not be encountered.");
             }
             Opcode::Jump

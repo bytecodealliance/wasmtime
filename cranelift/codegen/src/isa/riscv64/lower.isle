@@ -832,15 +832,6 @@
   (gen_float_round (FloatRoundOP.Nearest) x ty))
 
 
-;;;;;  Rules for `selectif`;;;;;;;;;
-(rule
-  (lower (has_type r_ty (selectif cc (ifcmp ca @ (value_type cty) cb) a b)))
-  (let
-    ((dst VecWritableReg (alloc_vec_writable r_ty))
-      (r Reg (lower_icmp cc ca cb cty))
-      (_ Unit (emit (MInst.SelectIf $false (vec_writable_clone dst) r a b))))
-    (vec_writable_to_regs dst)))
-
 ;;;;;  Rules for `selectif_spectre_guard`;;;;;;;;;
 (rule
   (lower (has_type r_ty (selectif_spectre_guard cc (ifcmp ca @ (value_type cty) cb) a b)))

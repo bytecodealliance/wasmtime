@@ -546,7 +546,6 @@ where
         Opcode::Null => unimplemented!("Null"),
         Opcode::Nop => ControlFlow::Continue,
         Opcode::Select => choose(arg(0)?.into_bool()?, arg(1)?, arg(2)?),
-        Opcode::Selectif => choose(state.has_iflag(inst.cond_code().unwrap()), arg(1)?, arg(2)?),
         Opcode::SelectifSpectreGuard => unimplemented!("SelectifSpectreGuard"),
         Opcode::Bitselect => {
             let mask_a = Value::and(arg(0)?, arg(1)?)?;

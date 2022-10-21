@@ -419,7 +419,6 @@ fn lower_insn_to_regs(
         | Opcode::GetStackPointer
         | Opcode::GetReturnAddress
         | Opcode::Select
-        | Opcode::Selectif
         | Opcode::SelectifSpectreGuard
         | Opcode::FcvtFromSint
         | Opcode::FcvtLowFromSint

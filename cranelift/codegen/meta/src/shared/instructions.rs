@@ -1430,18 +1430,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "selectif",
-            r#"
-        Conditional select, dependent on integer condition codes.
-        "#,
-            &formats.int_select,
-        )
-        .operands_in(vec![cc, flags, x, y])
-        .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
             "selectif_spectre_guard",
             r#"
             Conditional select intended for Spectre guards.
