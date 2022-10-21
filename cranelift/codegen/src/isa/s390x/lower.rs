@@ -234,7 +234,6 @@ impl LowerBackend for S390xBackend {
             Opcode::Jump
             | Opcode::Brz
             | Opcode::Brnz
-            | Opcode::Brff
             | Opcode::BrTable => {
                 panic!("Branch opcode reached non-branch lowering logic!");
             }

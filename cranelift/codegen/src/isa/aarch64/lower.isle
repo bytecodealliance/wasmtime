@@ -2422,7 +2422,7 @@
 (rule (lower (fvpromote_low val))
       (vec_rr_long (VecRRLongOp.Fcvtl32) val $false))
 
-;;; Rules for `brz`/`brnz`/`brif`/`brff`/`bricmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Rules for `brz`/`brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `brz` following `icmp`
 (rule (lower_branch (brz (icmp cc x @ (value_type ty) y) _ _) targets)
@@ -2504,27 +2504,6 @@
        (side_effect
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_not_zero rt))))))
-
-;; `brff`
-(rule (lower_branch (brff cc (ffcmp x @ (value_type ty) y) _ _) targets)
-      (let ((cond Cond (fp_cond_code cc))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (fpu_cmp (scalar_size ty) x y)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-;; If the `ffcmp` result is actually placed in a register, we need to move it
-;; back into the flags.
-(rule -1 (lower_branch (brff cc f _ _) targets)
-      (let ((cond Cond (fp_cond_code cc))
-            (rn Reg (put_in_reg f))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (mov_to_nzcv rn)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
 
 ;;; Rules for `jump` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

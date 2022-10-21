@@ -185,12 +185,7 @@ impl InstructionData {
                 ref args,
                 ..
             } => BranchInfo::SingleDest(destination, args.as_slice(pool)),
-            Self::BranchFloat {
-                destination,
-                ref args,
-                ..
-            }
-            | Self::Branch {
+            Self::Branch {
                 destination,
                 ref args,
                 ..
@@ -212,8 +207,7 @@ impl InstructionData {
     pub fn branch_destination(&self) -> Option<Block> {
         match *self {
             Self::Jump { destination, .. }
-            | Self::Branch { destination, .. }
-            | Self::BranchFloat { destination, .. } => Some(destination),
+            | Self::Branch { destination, .. } => Some(destination),
             Self::BranchTable { .. } => None,
             _ => {
                 debug_assert!(!self.opcode().is_branch());
@@ -233,10 +227,6 @@ impl InstructionData {
                 ..
             }
             | Self::Branch {
-                ref mut destination,
-                ..
-            }
-            | Self::BranchFloat {
                 ref mut destination,
                 ..
             } => Some(destination),
@@ -277,8 +267,7 @@ impl InstructionData {
     /// condition.  Otherwise, return `None`.
     pub fn fp_cond_code(&self) -> Option<FloatCC> {
         match self {
-            &InstructionData::BranchFloat { cond, .. }
-            | &InstructionData::FloatCompare { cond, .. }
+            &InstructionData::FloatCompare { cond, .. }
             | &InstructionData::FloatCond { cond, .. }
             | &InstructionData::FloatCondTrap { cond, .. } => Some(cond),
             _ => None,

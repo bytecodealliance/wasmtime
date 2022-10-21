@@ -2760,11 +2760,6 @@
 (rule (lower_branch (jump _ _) (single_target target))
       (side_effect (jmp_known target)))
 
-;; Rules for `brff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower_branch (brff cc (ffcmp a b) _ _) (two_targets taken not_taken))
-      (side_effect (jmp_cond_fcmp (emit_fcmp cc a b) taken not_taken)))
-
 ;; Rules for `brz` and `brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 2 (lower_branch (brz (icmp cc a b) _ _) (two_targets taken not_taken))

@@ -1921,10 +1921,6 @@
   (lower_brz_or_nz (IntCC.NotEqual) (normalize_value ty v) targets ty))
 
 ;;; 
-(rule 
-  (lower_branch (brff cc (ffcmp a @ (value_type ty) b) _ _) targets)
-  (lower_br_fcmp cc a b targets ty))
-
 (decl lower_br_table (Reg VecMachLabel) InstOutput)
 (extern constructor lower_br_table lower_br_table)
 

@@ -639,11 +639,6 @@ impl<'a> Verifier<'a> {
                 destination,
                 ref args,
                 ..
-            }
-            | BranchFloat {
-                destination,
-                ref args,
-                ..
             } => {
                 self.verify_block(inst, destination, errors)?;
                 self.verify_value_list(inst, args, errors)?;

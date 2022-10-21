@@ -441,16 +441,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             write!(w, " {}, {}", args[0], destination)?;
             write_block_args(w, &args[1..])
         }
-        BranchFloat {
-            cond,
-            destination,
-            ref args,
-            ..
-        } => {
-            let args = args.as_slice(pool);
-            write!(w, " {} {}, {}", cond, args[0], destination)?;
-            write_block_args(w, &args[1..])
-        }
         BranchTable {
             arg,
             destination,

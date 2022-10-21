@@ -79,24 +79,6 @@ fn define_control_flow(
     let fflags: &TypeVar = &ValueType::Special(types::Flag::FFlags.into()).into();
 
     {
-        let Cond = &Operand::new("Cond", &imm.floatcc);
-
-        let f = &Operand::new("f", fflags);
-
-        ig.push(
-            Inst::new(
-                "brff",
-                r#"
-        Branch when condition is true in floating point CPU flags.
-        "#,
-                &formats.branch_float,
-            )
-            .operands_in(vec![Cond, f, block, args])
-            .is_branch(true),
-        );
-    }
-
-    {
         let _i32 = &TypeVar::new(
             "i32",
             "A 32 bit scalar integer type",
