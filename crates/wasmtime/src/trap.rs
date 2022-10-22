@@ -469,7 +469,7 @@ impl fmt::Display for Trap {
 impl std::error::Error for Trap {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match &self.inner.reason {
-            TrapReason::Error(e) => e.source(),
+            TrapReason::Error(e) => Some(std::ops::Deref::deref(e)),
             TrapReason::I32Exit(_) | TrapReason::Message(_) | TrapReason::InstructionTrap(_) => {
                 None
             }
