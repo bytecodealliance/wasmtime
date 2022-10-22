@@ -243,18 +243,18 @@
 
 ;; And two registers.
 (rule 0 (lower (has_type ty (band x y)))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_and ty x y))
 
 ;; And with a memory operand.
 
 (rule 1 (lower (has_type ty (band x (sinkable_load y))))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_and ty x
                (sink_load_to_gpr_mem_imm y)))
 
 (rule 2 (lower (has_type ty (band (sinkable_load x) y)))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_and ty
                y
                (sink_load_to_gpr_mem_imm x)))
@@ -262,11 +262,11 @@
 ;; And with an immediate.
 
 (rule 3 (lower (has_type ty (band x (simm32_from_value y))))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_and ty x y))
 
 (rule 4 (lower (has_type ty (band (simm32_from_value x) y)))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_and ty y x))
 
 ;; f32 and f64
@@ -305,29 +305,29 @@
 
 ;; Or two registers.
 (rule 0 (lower (has_type ty (bor x y)))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_or ty x y))
 
 ;; Or with a memory operand.
 
 (rule 1 (lower (has_type ty (bor x (sinkable_load y))))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_or ty x
           (sink_load_to_gpr_mem_imm y)))
 
 (rule 2 (lower (has_type ty (bor (sinkable_load x) y)))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_or ty y
           (sink_load_to_gpr_mem_imm x)))
 
 ;; Or with an immediate.
 
 (rule 3 (lower (has_type ty (bor x (simm32_from_value y))))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_or ty x y))
 
 (rule 4 (lower (has_type ty (bor (simm32_from_value x) y)))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_or ty y x))
 
 ;; f32 and f64
@@ -368,29 +368,29 @@
 
 ;; Xor two registers.
 (rule 0 (lower (has_type ty (bxor x y)))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_xor ty x y))
 
 ;; Xor with a memory operand.
 
 (rule 1 (lower (has_type ty (bxor x (sinkable_load y))))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_xor ty x
            (sink_load_to_gpr_mem_imm y)))
 
 (rule 2 (lower (has_type ty (bxor (sinkable_load x) y)))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_xor ty y
            (sink_load_to_gpr_mem_imm x)))
 
 ;; Xor with an immediate.
 
 (rule 3 (lower (has_type ty (bxor x (simm32_from_value y))))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_xor ty x y))
 
 (rule 4 (lower (has_type ty (bxor (simm32_from_value x) y)))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_xor ty y x))
 
 ;; f32 and f64
@@ -1243,7 +1243,7 @@
 ;; `i64` and smaller.
 
 (rule -2 (lower (has_type ty (bnot x)))
-      (if (ty_int_bool_ref_scalar_64 ty))
+      (if (ty_int_ref_scalar_64 ty))
       (x64_not ty x))
 
 
@@ -1259,6 +1259,11 @@
 
 (rule (lower (has_type $I128 (bnot x)))
       (i128_not x))
+
+;; f32 and f64
+
+(rule -3 (lower (has_type (ty_scalar_float ty) (bnot x)))
+      (sse_xor ty x (vector_all_ones)))
 
 ;; Special case for vector-types where bit-negation is an xor against an
 ;; all-one value
