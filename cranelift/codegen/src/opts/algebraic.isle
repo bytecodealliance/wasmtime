@@ -107,7 +107,7 @@
       (subsume x))
 
 ;; x ^ x == 0.
-(rule (simplify (bxor ty x x))
+(rule (simplify (bxor (fits_in_64 ty) x x))
       (subsume (iconst ty (imm64 0))))
 
 ;; x ^ not(x) == not(x) ^ x == -1.
