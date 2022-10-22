@@ -23,7 +23,7 @@ enum TrapReason {
     I32Exit(i32),
 
     /// A structured error describing a trap.
-    Error(Box<dyn std::error::Error + Send + Sync>),
+    Error(anyhow::Error),
 
     /// A specific code for a trap triggered while executing WASM.
     InstructionTrap(TrapCode),
@@ -481,19 +481,7 @@ impl From<anyhow::Error> for Trap {
     fn from(e: anyhow::Error) -> Trap {
         match e.downcast::<Trap>() {
             Ok(trap) => trap,
-            Err(e) => Box::<dyn std::error::Error + Send + Sync>::from(e).into(),
-        }
-    }
-}
-
-impl From<Box<dyn std::error::Error + Send + Sync>> for Trap {
-    fn from(e: Box<dyn std::error::Error + Send + Sync>) -> Trap {
-        // If the top-level error is already a trap, don't be redundant and just return it.
-        if let Some(trap) = e.downcast_ref::<Trap>() {
-            trap.clone()
-        } else {
-            let reason = TrapReason::Error(e.into());
-            Trap::new_with_trace(reason, None)
+            Err(e) => Trap::new_with_trace(TrapReason::Error(e), None),
         }
     }
 }
