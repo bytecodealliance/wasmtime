@@ -30,6 +30,50 @@ fn test_trap_return() -> Result<()> {
 }
 
 #[test]
+fn test_trap_return_downcast() -> Result<()> {
+    let mut store = Store::<()>::default();
+    let wat = r#"
+        (module
+        (func $hello (import "" "hello"))
+        (func (export "run") (call $hello))
+        )
+    "#;
+
+    #[derive(Debug)]
+    struct MyTrap;
+    impl std::fmt::Display for MyTrap {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "my trap")
+        }
+    }
+    impl std::error::Error for MyTrap {}
+
+    let module = Module::new(store.engine(), wat)?;
+    let hello_type = FuncType::new(None, None);
+    let hello_func = Func::new(&mut store, hello_type, |_, _, _| {
+        Err(Trap::from(anyhow::Error::from(MyTrap)))
+    });
+
+    let instance = Instance::new(&mut store, &module, &[hello_func.into()])?;
+    let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+
+    let e = run_func
+        .call(&mut store, ())
+        .err()
+        .expect("error calling function");
+    assert!(e.to_string().contains("my trap"));
+
+    let source = std::error::Error::source(&e).expect("trap has a source");
+    assert_eq!(source.to_string(), "my trap");
+
+    source
+        .downcast_ref::<MyTrap>()
+        .expect("source downcasts to MyTrap");
+
+    Ok(())
+}
+
+#[test]
 fn test_trap_trace() -> Result<()> {
     let mut store = Store::<()>::default();
     let wat = r#"
