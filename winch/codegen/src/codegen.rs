@@ -1,7 +1,7 @@
 use crate::{
-    abi::{align_to, local::LocalSlot, ABISig},
+    abi::ABISig,
     frame::Frame,
-    masm::{MacroAssembler, OperandSize, RegImm},
+    masm::{MacroAssembler, OperandSize},
     regalloc::RegAlloc,
     stack::Stack,
 };
@@ -94,7 +94,12 @@ where
 
     fn emit_body(&mut self) -> Result<()> {
         self.spill_register_arguments();
-        self.zero_local_slots();
+        let defined_locals_range = &self.context.frame.defined_locals_range;
+        self.context.masm.zero_mem_range(
+            defined_locals_range.as_range(),
+            self.word_size,
+            &mut self.regalloc,
+        );
 
         let mut reader = self.function.get_operators_reader()?;
         while !reader.eof() {
@@ -109,73 +114,6 @@ where
         self.handle_abi_result();
         self.context.masm.epilogue(self.context.frame.locals_size);
         Ok(())
-    }
-
-    fn zero_local_slots(&mut self) {
-        let range = &self.context.frame.defined_locals_range;
-        if range.0.start() == range.0.end() {
-            return;
-        }
-
-        // Divide the locals range into word-size slots; first ensure that the range limits
-        // are word size aligned; since there's no guarantee about their alignment. The aligned "upper"
-        // limit should always be less than or equal to the size of the local area, which gets
-        // validated when getting the address of a local
-
-        let word_size = self.word_size;
-        // If the locals range start is not aligned to the word size, zero the last four bytes
-        let range_start = range
-            .0
-            .start()
-            .checked_rem(word_size)
-            .map_or(*range.0.start(), |v| {
-                if v == 0 {
-                    return v;
-                }
-
-                let start = range.0.start() + 4;
-                let addr = self.context.masm.local_address(&LocalSlot::i32(start));
-                self.context
-                    .masm
-                    .store(RegImm::imm(0), addr, OperandSize::S32);
-                start
-            });
-
-        // Ensure that the range end is also word-size aligned
-        let range_end = align_to(*range.0.end(), word_size);
-        // Divide the range into word-size slots
-        let slots = (range_end - range_start) / word_size;
-
-        match slots {
-            1 => {
-                let slot = LocalSlot::i64(range_start + word_size);
-                let addr = self.context.masm.local_address(&slot);
-                self.context
-                    .masm
-                    .store(RegImm::imm(0), addr, OperandSize::S64);
-            }
-            // TODO
-            // Add an upper bound to this generation;
-            // given a considerably large amount of slots
-            // this will be inefficient
-            _ => {
-                // Request a gpr and zero it
-                let zero = self.regalloc.any_gpr(&mut self.context);
-                self.context.masm.zero(zero);
-                // store zero in each of the slots in the range
-                for step in (range_start..range_end)
-                    .into_iter()
-                    .step_by(word_size as usize)
-                {
-                    let slot = LocalSlot::i64(step + word_size);
-                    let addr = self.context.masm.local_address(&slot);
-                    self.context
-                        .masm
-                        .store(RegImm::reg(zero), addr, OperandSize::S64);
-                }
-                self.regalloc.free_gpr(zero);
-            }
-        }
     }
 
     fn spill_register_arguments(&mut self) {

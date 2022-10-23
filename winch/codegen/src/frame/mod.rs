@@ -1,7 +1,7 @@
 use crate::abi::{align_to, local::LocalSlot, ty_size, ABIArg, ABISig, ABI};
 use anyhow::Result;
 use smallvec::SmallVec;
-use std::ops::RangeInclusive;
+use std::ops::Range;
 use wasmparser::{FuncValidator, FunctionBody, ValType, ValidatorResources};
 
 // TODO:
@@ -9,8 +9,15 @@ use wasmparser::{FuncValidator, FunctionBody, ValType, ValidatorResources};
 // we should measure to verify if this is a good default.
 pub(crate) type Locals = SmallVec<[LocalSlot; 16]>;
 
-/// Function defined locals start and end in the frame
-pub(crate) struct DefinedLocalsRange(pub RangeInclusive<u32>);
+/// Function defined locals start and end in the frame.
+pub(crate) struct DefinedLocalsRange(Range<u32>);
+
+impl DefinedLocalsRange {
+    /// Get a reference to the inner range.
+    pub fn as_range(&self) -> &Range<u32> {
+        &self.0
+    }
+}
 
 /// Frame handler abstraction
 pub(crate) struct Frame {
@@ -44,7 +51,7 @@ impl Frame {
         Ok(Self {
             locals,
             locals_size,
-            defined_locals_range: DefinedLocalsRange(defined_locals_start..=defined_locals_end),
+            defined_locals_range: DefinedLocalsRange(defined_locals_start..defined_locals_end),
         })
     }
 

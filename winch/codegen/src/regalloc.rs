@@ -9,7 +9,7 @@ use crate::{
 
 /// The register allocator
 pub(crate) struct RegAlloc {
-    scratch: Reg,
+    pub scratch: Reg,
     regset: RegSet,
 }
 

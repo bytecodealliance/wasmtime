@@ -1,5 +1,8 @@
+use crate::abi::align_to;
 use crate::abi::{addressing_mode::Address, local::LocalSlot};
 use crate::isa::reg::Reg;
+use crate::regalloc::RegAlloc;
+use std::ops::Range;
 
 /// Operand size, in bits
 #[derive(Copy, Clone)]
@@ -9,6 +12,7 @@ pub(crate) enum OperandSize {
 }
 
 /// An abstraction over a register or immediate
+#[derive(Copy, Clone)]
 pub(crate) enum RegImm {
     Reg(Reg),
     Imm(i32),
@@ -86,4 +90,49 @@ pub(crate) trait MacroAssembler {
 
     /// Zero a particular register
     fn zero(&mut self, reg: Reg);
+
+    /// Zero a given memory range.
+    ///
+    /// The default implementation divides the given memory range
+    /// into word-sized slots. Then it unrolls a series of store
+    /// instructions, effectively assigning zero to each slot.
+    fn zero_mem_range(&mut self, mem: &Range<u32>, word_size: u32, regalloc: &mut RegAlloc) {
+        if mem.is_empty() {
+            return;
+        }
+
+        let start = if mem.start % word_size == 0 {
+            mem.start
+        } else {
+            // Ensure that the start of the range is at least 4-byte aligned.
+            assert!(mem.start % 4 == 0);
+            let start = align_to(mem.start, word_size);
+            let addr = self.local_address(&LocalSlot::i32(start));
+            self.store(RegImm::imm(0), addr, OperandSize::S32);
+            start
+        };
+
+        let end = align_to(mem.end, word_size);
+        let slots = (end - start) / word_size;
+
+        if slots == 1 {
+            let slot = LocalSlot::i64(start + word_size);
+            let addr = self.local_address(&slot);
+            self.store(RegImm::imm(0), addr, OperandSize::S64);
+        } else {
+            // TODO
+            // Add an upper bound to this generation;
+            // given a considerably large amount of slots
+            // this will be inefficient.
+            let zero = regalloc.scratch;
+            self.zero(zero);
+            let zero = RegImm::reg(zero);
+
+            for step in (start..end).into_iter().step_by(word_size as usize) {
+                let slot = LocalSlot::i64(step + word_size);
+                let addr = self.local_address(&slot);
+                self.store(zero, addr, OperandSize::S64);
+            }
+        }
+    }
 }
