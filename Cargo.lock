@@ -647,7 +647,6 @@ version = "0.90.0"
 dependencies = [
  "log",
  "miette",
- "rayon",
  "tempfile",
 ]
 
