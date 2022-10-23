@@ -22,5 +22,7 @@ features = [
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies.libc]
 version = "0.2.42"
 
-[target.'cfg(target_arch="riscv64")'.dependencies.num_cpus]
-version = "1.13.1"
+[features]
+# Most modern cpu are smp,when This is enable some certain optimization can perform.
+# like riscv can use `fence.i` instead of linux syscall `sys_riscv_flush_icache`.
+one-core = []

@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use libc::{syscall, EINVAL, EPERM};
+use libc::{syscall, EINVAL, EPERM, RLIM_SAVED_CUR};
 use std::ffi::c_void;
 use std::io::{Error, Result};
 
@@ -61,39 +61,48 @@ pub(crate) fn pipeline_flush_mt() -> Result<()> {
         e => e?,
     }
     #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
-    if num_cpus::get() == 1 {
-        use std::arch::asm;
-        unsafe {
-            asm!("fence.i");
-        }
-    } else {
-        match unsafe {
-            libc::syscall(
-                {
-                    // libc don't define the special syscall,So define it by My own.
-                    // https://github.com/torvalds/linux/search?q=__NR_arch_specific_syscall
-                    #[allow(non_snake_case)]
-                    let __NR_arch_specific_syscall = 244;
-                    __NR_arch_specific_syscall + 15
-                },
-                // Current the parameter is not used,But defined. https://github.com/torvalds/linux/blob/4d1044fcb996e8de9b9ab392f4a767890e45202d/arch/riscv/kernel/sys_riscv.c#L64-L66
-                0, // start
-                0, // end
-                {
-                    #[allow(non_snake_case)]
-                    let SYS_RISCV_FLUSH_ICACHE_LOCAL = 1;
-                    #[allow(non_snake_case)]
-                    let SYS_RISCV_FLUSH_ICACHE_ALL = SYS_RISCV_FLUSH_ICACHE_LOCAL;
-                    SYS_RISCV_FLUSH_ICACHE_ALL
-                }, // flags
-            )
-        } {
-            0 => {}
-            _ => return Err(Error::last_os_error()),
-        }
-    }
+    return riscv_flush_icache(0, 0);
 
     Ok(())
+}
+
+#[cfg(all(target_arch = "riscv64", target_os = "linux"))]
+fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "one-core")] {
+            unsafe {
+                asm!("fence.i");
+            }
+        }else {
+            match unsafe {
+                libc::syscall(
+                    {
+                        // libc don't define the special syscall,So define it by My own.
+                        // https://github.com/torvalds/linux/search?q=__NR_arch_specific_syscall
+                        #[allow(non_upper_case_globals)]
+                        const  __NR_arch_specific_syscall :i64 = 244;
+                        // https://github.com/torvalds/linux/blob/5bfc75d92efd494db37f5c4c173d3639d4772966/tools/arch/riscv/include/uapi/asm/unistd.h#L40
+                        #[allow(non_upper_case_globals)]
+                        const sys_riscv_flush_icache :i64 =  __NR_arch_specific_syscall + 15;
+                        sys_riscv_flush_icache
+                    },
+                    // Current the parameter is not used,But defined. https://github.com/torvalds/linux/blob/4d1044fcb996e8de9b9ab392f4a767890e45202d/arch/riscv/kernel/sys_riscv.c#L64-L66
+                    start, // start
+                    end, // end
+                    {
+                        #[allow(non_snake_case)]
+                        const SYS_RISCV_FLUSH_ICACHE_LOCAL :i64 = 1;
+                        #[allow(non_snake_case)]
+                        const SYS_RISCV_FLUSH_ICACHE_ALL :i64 = SYS_RISCV_FLUSH_ICACHE_LOCAL;
+                        SYS_RISCV_FLUSH_ICACHE_ALL
+                    }, // flags
+                )
+            } {
+                0 => {return Ok(()) }
+                _ => return Err(Error::last_os_error()),
+            }
+        }
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -109,12 +118,14 @@ fn membarrier(barrier: libc::c_int) -> Result<()> {
 
 /// See docs on [crate::clear_cache] for a description of what this function is trying to do.
 #[inline]
-pub(crate) fn clear_cache(_ptr: *const c_void, _len: usize) -> Result<()> {
+pub(crate) fn clear_cache(ptr: *const c_void, len: usize) -> Result<()> {
     // TODO: On AArch64 we currently rely on the `mprotect` call that switches the memory from W+R to R+X
     // to do this for us, however that is an implementation detail and should not be relied upon
     // We should call some implementation of `clear_cache` here
     //
     // See: https://github.com/bytecodealliance/wasmtime/issues/3310
 
+    #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
+    riscv_flush_icache(ptr as u64, (ptr as u64) + (len as u64));
     Ok(())
 }
