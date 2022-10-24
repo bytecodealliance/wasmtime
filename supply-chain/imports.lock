@@ -200,18 +200,6 @@ who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.5.4 -> 0.5.7"
 
-[[audits.mozilla.audits.num-bigint]]
-who = "Josh Stone <jistone@redhat.com>"
-criteria = "safe-to-deploy"
-version = "0.2.6"
-notes = "All code written or reviewed by Josh Stone."
-
-[[audits.mozilla.audits.num-bigint]]
-who = "Josh Stone <jistone@redhat.com>"
-criteria = "safe-to-deploy"
-version = "0.4.3"
-notes = "All code written or reviewed by Josh Stone."
-
 [[audits.mozilla.audits.num-integer]]
 who = "Josh Stone <jistone@redhat.com>"
 criteria = "safe-to-deploy"
@@ -222,12 +210,6 @@ notes = "All code written or reviewed by Josh Stone."
 who = "Josh Stone <jistone@redhat.com>"
 criteria = "safe-to-deploy"
 version = "0.1.43"
-notes = "All code written or reviewed by Josh Stone."
-
-[[audits.mozilla.audits.num-rational]]
-who = "Josh Stone <jistone@redhat.com>"
-criteria = "safe-to-deploy"
-version = "0.4.1"
 notes = "All code written or reviewed by Josh Stone."
 
 [[audits.mozilla.audits.num-traits]]
