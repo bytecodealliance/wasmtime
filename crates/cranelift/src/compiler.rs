@@ -32,7 +32,7 @@ use std::mem;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::{
-    AddressMapSection, CacheStore, CompileError, FilePos, FlagValue, FunctionBodyData,
+    AddressMapSection, CacheStore, CompileError, FilePos, FlagValue, FuelCost, FunctionBodyData,
     FunctionInfo, InstructionAddressMap, Module, ModuleTranslation, ModuleTypes, PtrSize,
     StackMapInformation, Trampoline, TrapCode, TrapEncodingBuilder, TrapInformation, Tunables,
     VMOffsets,
@@ -188,6 +188,7 @@ impl wasmtime_environ::Compiler for Compiler {
         func_index: DefinedFuncIndex,
         input: FunctionBodyData<'_>,
         tunables: &Tunables,
+        fuel_cost: &FuelCost,
         types: &ModuleTypes,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
         let isa = &*self.isa;
@@ -211,7 +212,7 @@ impl wasmtime_environ::Compiler for Compiler {
             context.func.collect_debug_info();
         }
 
-        let mut func_env = FuncEnvironment::new(isa, translation, types, tunables);
+        let mut func_env = FuncEnvironment::new(isa, translation, types, tunables, fuel_cost);
 
         // The `stack_limit` global value below is the implementation of stack
         // overflow checks in Wasmtime.

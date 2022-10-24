@@ -91,6 +91,9 @@ pub trait CacheStore: Send + Sync + std::fmt::Debug {
     fn insert(&self, key: &[u8], value: Vec<u8>) -> bool;
 }
 
+///
+pub type FuelCost = dyn Fn(&wasmparser::Operator<'_>) -> i64 + Send + Sync;
+
 /// Abstract trait representing the ability to create a `Compiler` below.
 ///
 /// This is used in Wasmtime to separate compiler implementations, currently
@@ -169,6 +172,7 @@ pub trait Compiler: Send + Sync {
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
         tunables: &Tunables,
+        fuel_cost: &FuelCost,
         types: &ModuleTypes,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
 

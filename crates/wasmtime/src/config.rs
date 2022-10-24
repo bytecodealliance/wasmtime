@@ -10,7 +10,7 @@ use std::sync::Arc;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
-use wasmtime_environ::Tunables;
+use wasmtime_environ::{FuelCost, Tunables};
 use wasmtime_jit::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator};
 
@@ -92,6 +92,7 @@ pub struct Config {
     profiling_strategy: ProfilingStrategy,
 
     pub(crate) tunables: Tunables,
+    pub(crate) fuel_cost: Option<Arc<FuelCost>>,
     #[cfg(feature = "cache")]
     pub(crate) cache_config: CacheConfig,
     pub(crate) mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
@@ -169,6 +170,7 @@ impl Config {
     pub fn new() -> Self {
         let mut ret = Self {
             tunables: Tunables::default(),
+            fuel_cost: None,
             #[cfg(compiler)]
             compiler_config: CompilerConfig::default(),
             #[cfg(feature = "cache")]
@@ -458,6 +460,21 @@ impl Config {
     /// [`Store`]: crate::Store
     pub fn consume_fuel(&mut self, enable: bool) -> &mut Self {
         self.tunables.consume_fuel = enable;
+        self
+    }
+
+    /// Customizes the cost function used to calculate fuel usage.
+    ///
+    /// The passed function takes a [`WasmOpcode`] and returns a value denoting
+    /// how much fuel is used when that opcode is present in a wasm module.
+    /// Note that there is no inherent meaning behind this integer; other than
+    /// triggering the out-of-fuel behavior when fuel reaches zero, what "one
+    /// fuel point" means is determined by the user.
+    pub fn fuel_cost(
+        &mut self,
+        f: impl Fn(WasmOpcode) -> u64 + Send + Sync + 'static,
+    ) -> &mut Self {
+        self.fuel_cost = Some(Arc::new(move |op| f(WasmOpcode::from_operator(op)) as i64));
         self
     }
 
@@ -1440,6 +1457,27 @@ impl Config {
         self
     }
 
+    pub(crate) fn get_fuel_cost(&self) -> &FuelCost {
+        use wasmparser::Operator;
+        self.fuel_cost.as_deref().unwrap_or(&|op| match op {
+            // Nop and drop generate no code, so don't consume fuel for them.
+            Operator::Nop | Operator::Drop => 0,
+
+            // Control flow may create branches, but is generally cheap and
+            // free, so don't consume fuel. Note the lack of `if` since some
+            // cost is incurred with the conditional check.
+            Operator::Block { .. }
+            | Operator::Loop { .. }
+            | Operator::Unreachable
+            | Operator::Return
+            | Operator::Else
+            | Operator::End => 0,
+
+            // everything else, just call it one operation.
+            _ => 1,
+        })
+    }
+
     pub(crate) fn validate(&self) -> Result<()> {
         if self.features.reference_types && !self.features.bulk_memory {
             bail!("feature 'reference_types' requires 'bulk_memory' to be enabled");
@@ -1689,3 +1727,26 @@ pub enum WasmBacktraceDetails {
     /// `WASMTIME_BACKTRACE_DETAILS` environment variable.
     Environment,
 }
+
+macro_rules! define_opcode_enum {
+    ($( @$proposal:ident $op:ident $({ $($arg:ident: $argty:ty),* })? => $visit:ident)*) => {
+        /// The different operations the [WASM specification] defines. Note that this enum is not
+        /// stable and is subject to gain more variants as the WASM spec evolves.
+        ///
+        /// [WASM specification]: https://webassembly.github.io/spec/core/binary/instructions.html
+        #[derive(Copy, Clone)]
+        #[allow(missing_docs)]
+        pub enum WasmOpcode {
+            $( $op, )*
+        }
+        impl WasmOpcode {
+            fn from_operator(op: &wasmparser::Operator<'_>) -> Self {
+                use wasmparser::Operator::*;
+                match op {
+                    $( $op { .. } => Self::$op, )*
+                }
+            }
+        }
+    };
+}
+wasmparser::for_each_operator!(define_opcode_enum);

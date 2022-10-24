@@ -16,8 +16,8 @@ use std::convert::TryFrom;
 use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleTypes, PtrSize,
-    TableStyle, Tunables, VMOffsets, WASM_PAGE_SIZE,
+    BuiltinFunctionIndex, FuelCost, MemoryPlan, MemoryStyle, Module, ModuleTranslation,
+    ModuleTypes, PtrSize, TableStyle, Tunables, VMOffsets, WASM_PAGE_SIZE,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -147,6 +147,8 @@ pub struct FuncEnvironment<'module_environment> {
     epoch_ptr_var: cranelift_frontend::Variable,
 
     fuel_consumed: i64,
+
+    fuel_cost: &'module_environment FuelCost,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -155,6 +157,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         translation: &'module_environment ModuleTranslation<'module_environment>,
         types: &'module_environment ModuleTypes,
         tunables: &'module_environment Tunables,
+        fuel_cost: &'module_environment FuelCost,
     ) -> Self {
         let builtin_function_signatures = BuiltinFunctionSignatures::new(
             isa.pointer_type(),
@@ -182,6 +185,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
             fuel_consumed: 1,
+            fuel_cost,
         }
     }
 
@@ -385,23 +389,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             return;
         }
 
-        self.fuel_consumed += match op {
-            // Nop and drop generate no code, so don't consume fuel for them.
-            Operator::Nop | Operator::Drop => 0,
-
-            // Control flow may create branches, but is generally cheap and
-            // free, so don't consume fuel. Note the lack of `if` since some
-            // cost is incurred with the conditional check.
-            Operator::Block { .. }
-            | Operator::Loop { .. }
-            | Operator::Unreachable
-            | Operator::Return
-            | Operator::Else
-            | Operator::End => 0,
-
-            // everything else, just call it one operation.
-            _ => 1,
-        };
+        self.fuel_consumed += (self.fuel_cost)(op);
 
         match op {
             // Exiting a function (via a return or unreachable) or otherwise

@@ -367,6 +367,7 @@ impl Module {
         types: &ModuleTypes,
     ) -> Result<(MmapVec, Option<CompiledModuleInfo>)> {
         let tunables = &engine.config().tunables;
+        let fuel_cost = engine.config().get_fuel_cost();
         let functions = mem::take(&mut translation.function_body_inputs);
         let functions = functions.into_iter().collect::<Vec<_>>();
         let compiler = engine.compiler();
@@ -377,8 +378,14 @@ impl Module {
             || -> Result<_> {
                 let funcs = engine.run_maybe_parallel(functions, |(index, func)| {
                     let offset = func.body.range().start;
-                    let result =
-                        compiler.compile_function(&translation, index, func, tunables, types);
+                    let result = compiler.compile_function(
+                        &translation,
+                        index,
+                        func,
+                        tunables,
+                        fuel_cost,
+                        types,
+                    );
                     result.with_context(|| {
                         let index = translation.module.func_index(index);
                         let name = match translation.debuginfo.name_section.func_names.get(&index) {
