@@ -1,14 +1,13 @@
 #![allow(unused_variables)] // TODO: remove this when more things are implemented
 
-wit_bindgen_guest_rust::import!({
-    paths: [
-        "wit/wasi-clocks.wit.md",
-        "wit/wasi-default-clocks.wit.md",
-        "wit/wasi-filesystem.wit.md",
-        "wit/wasi-logging.wit.md",
-        "wit/wasi-poll.wit.md",
-        "wit/wasi-random.wit.md"
-    ],
+wit_bindgen_guest_rust::generate!({
+    import: "wit/wasi-clocks.wit.md",
+    import: "wit/wasi-default-clocks.wit.md",
+    import: "wit/wasi-filesystem.wit.md",
+    import: "wit/wasi-logging.wit.md",
+    import: "wit/wasi-poll.wit.md",
+    import: "wit/wasi-random.wit.md",
+    name: "wasi",
     raw_strings,
     unchecked
 });
