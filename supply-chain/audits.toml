@@ -176,6 +176,16 @@ criteria = "safe-to-deploy"
 version = "2.2.1"
 notes = "I am the author of this crate."
 
+[[audits.indexmap-nostd]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.4.0"
+notes = """
+I've verified that this is a sliced-down version of the `indexmap` crate which
+is otherwise certified. This doesn't contain unnecessary `unsafe` and
+additionally doesn't reach for ambient capabilities.
+"""
+
 [[audits.is-terminal]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -220,6 +230,15 @@ Contains unsafe blocks but are encapsulated and required for the operation at
 hand.
 """
 
+[[audits.memory_units]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "0.3.0 -> 0.4.0"
+notes = """
+This bump only changed from a function to an associated `const` and trivially
+contains no significant changes.
+"""
+
 [[audits.peeking_take_while]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -255,6 +274,18 @@ who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
 delta = "0.9.9 -> 0.10.2"
 notes = "This upgrade is mostly a code refactor, as far as I can tell. No new uses of unsafe nor any new ambient capabilities usage."
+
+[[audits.spin]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.9.4"
+notes = """
+I've verified the contents of this crate and that while they contain `unsafe`
+it's exclusively around implementing atomic primitive where some `unsafe` is to
+be expected. Otherwise this crate does not unduly access ambient capabilities
+and does what it says on the tin, providing spin-based synchronization
+primitives.
+"""
 
 [[audits.system-interface]]
 who = "Dan Gohman <dev@sunfishcode.online>"
@@ -352,6 +383,27 @@ criteria = "safe-to-deploy"
 version = "0.11.6"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.wasmi_arena]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.1.0"
+notes = """
+This crate contains no `unsafe` code and doesn't reach in unnecessarily to the
+standard library or anything like that. This only contains a few data structures
+used by `wasmi` and various idiomatic Rust trait implementations.
+"""
+
+[[audits.wasmi_core]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.4.0"
+notes = """
+This crate contains no `unsafe` code and otherwise is only the bits and bobs for
+the internals of a wasm implementation. Reading over this crate there is no
+unexpected usage of the filesystem or things like that and otherwise is mostly
+plumbing for all the integer operations in core wasm.
+"""
+
 [[audits.wasmparser]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -387,6 +439,17 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.92.0"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.wasmparser-nostd]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+version = "0.91.0"
+notes = """
+I have certified that this crate is a one-to-one fork of `wasmparser` with
+updates exclusively for the usage on targets without the standard library.
+This crate is otherwise primarily authored by the Bytecode Alliance and
+otherwise certified.
+"""
 
 [[audits.wasmprinter]]
 who = "Alex Crichton <alex@alexcrichton.com>"
