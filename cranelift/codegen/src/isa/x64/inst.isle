@@ -1089,12 +1089,6 @@
 (decl cc_invert (CC) CC)
 (extern constructor cc_invert cc_invert)
 
-(decl intcc_reverse (IntCC) IntCC)
-(extern constructor intcc_reverse intcc_reverse)
-
-(decl floatcc_inverse (FloatCC) FloatCC)
-(extern constructor floatcc_inverse floatcc_inverse)
-
 ;; Fails if the argument is not either CC.NZ or CC.Z.
 (decl cc_nz_or_z (CC) CC)
 (extern extractor cc_nz_or_z cc_nz_or_z)
