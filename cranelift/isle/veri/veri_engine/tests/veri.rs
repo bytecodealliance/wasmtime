@@ -218,21 +218,26 @@ fn test_broken_fits_in_16_rotl_to_rotr() {
     )
 }
 
-// AVH TODO: disabled because never terminates
-// #[test]
-// fn test_fits_in_16_with_imm_rotl_to_rotr() {
-//     test_from_file_with_filter(
-//         "./examples/fits_in_16_with_imm_rotl_to_rotr.isle",
-//         "rotl".to_string(),
-//         vec![
-//             (Bitwidth::I1, VerificationResult::Success),
-//             (Bitwidth::I8, VerificationResult::Success),
-//             (Bitwidth::I16, VerificationResult::Success),
-//             (Bitwidth::I32, VerificationResult::InapplicableRule),
-//             (Bitwidth::I64, VerificationResult::InapplicableRule),
-//         ],
-//     )
-// }
+#[test]
+fn test_fits_in_16_with_imm_rotl_to_rotr() {
+    test_from_file_with_filter(
+        "./examples/fits_in_16_with_imm_rotl_to_rotr.isle",
+        "rotl".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::Success),
+            (Bitwidth::I8, VerificationResult::Success),
+            (Bitwidth::I16, VerificationResult::Success),
+            (Bitwidth::I32, VerificationResult::InapplicableRule),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+        ],
+    )
+}
+
+#[test]
+fn test_if_let() {
+    test_from_file("./examples/constructs/if-let.isle", all_success_result());
+}
+
 
 #[test]
 fn test_let() {

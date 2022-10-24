@@ -167,6 +167,7 @@ fn type_annotations_using_rule<'a>(
             );
             let iflet_rhs =
                 &mut create_parse_tree_expr(&iflet.rhs, &mut parse_tree, var_map, typeenv, termenv);
+            
             let iflet_lhs_expr = add_rule_constraints(
                 &mut parse_tree,
                 iflet_lhs,
@@ -176,6 +177,7 @@ fn type_annotations_using_rule<'a>(
             if iflet_lhs_expr.is_none() {
                 return None;
             }
+
             let iflet_rhs_expr = add_rule_constraints(
                 &mut parse_tree,
                 iflet_rhs,
@@ -190,8 +192,8 @@ fn type_annotations_using_rule<'a>(
                 .insert(TypeExpr::Variable(iflet_lhs.type_var, iflet_rhs.type_var));
             parse_tree.assumptions.push(veri_ir::Expr::Binary(
                 veri_ir::BinaryOp::Eq,
-                Box::new(dbg!(iflet_lhs_expr.unwrap())),
-                Box::new(dbg!(iflet_rhs_expr.unwrap())),
+                Box::new(iflet_lhs_expr.unwrap()),
+                Box::new(iflet_rhs_expr.unwrap()),
             ));
         }
     }
@@ -367,6 +369,23 @@ fn add_annotation_constraints(
             tree.next_type_var += 1;
             (
                 veri_ir::Expr::Unary(veri_ir::UnaryOp::BVNeg, Box::new(e1)),
+                t,
+            )
+        }
+
+        annotation_ir::Expr::BVNot(x, _) => {
+            let (e1, t1) = add_annotation_constraints(*x, tree, annotation_info);
+
+            let t = tree.next_type_var;
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t, annotation_ir::Type::BitVector));
+            tree.bv_constraints
+                .insert(TypeExpr::Concrete(t1, annotation_ir::Type::BitVector));
+            tree.var_constraints.insert(TypeExpr::Variable(t, t1));
+
+            tree.next_type_var += 1;
+            (
+                veri_ir::Expr::Unary(veri_ir::UnaryOp::BVNot, Box::new(e1)),
                 t,
             )
         }
@@ -1205,19 +1224,18 @@ fn create_parse_tree_pattern(
             let sym = var_map[var_id];
             let ident = typeenv.syms[sym.index()].clone();
 
-            tree.var_to_type_var_map
+            let type_var = tree.var_to_type_var_map
                 .entry(ident.clone())
                 .or_insert(tree.next_type_var);
-            let type_var = tree.var_to_type_var_map[&ident];
-            if type_var == tree.next_type_var {
+            if *type_var == tree.next_type_var {
                 tree.next_type_var += 1;
             }
-            let ident = format!("{}__{}", ident, type_var);
+            let ident = format!("{}__{}", ident, *type_var);
             // this is a base case so there are no children
             TypeVarNode {
                 ident,
                 construct: TypeVarConstruct::Var,
-                type_var,
+                type_var: *type_var,
                 children: vec![],
                 assertions: vec![],
             }
@@ -1247,13 +1265,17 @@ fn create_parse_tree_pattern(
             if let Some(sym) = s {
                 name = typeenv.syms[sym.index()].clone();
             }
-            let type_var = tree.next_type_var;
-            tree.next_type_var += 1;
-            let name = format!("{}__{}", name, type_var);
+            let type_var = tree.var_to_type_var_map
+                .entry(name.clone())
+                .or_insert(tree.next_type_var);
+            if *type_var == tree.next_type_var {
+                tree.next_type_var += 1;
+            }
+            let name = format!("{}__{}", name, *type_var);
             TypeVarNode {
                 ident: name,
                 construct: TypeVarConstruct::Var,
-                type_var,
+                type_var: *type_var,
                 children: vec![],
                 assertions: vec![],
             }
@@ -1356,20 +1378,18 @@ fn create_parse_tree_expr(
                 let sym = var_map[var_id];
                 ident = typeenv.syms[sym.index()].clone();
             }
-
-            tree.var_to_type_var_map
+            let type_var = tree.var_to_type_var_map
                 .entry(ident.clone())
                 .or_insert(tree.next_type_var);
-            let type_var = tree.var_to_type_var_map[&ident];
-            if type_var == tree.next_type_var {
+            if *type_var == tree.next_type_var {
                 tree.next_type_var += 1;
             }
-            let ident = format!("{}__{}", ident, type_var);
+            let ident = format!("{}__{}", ident, *type_var);
             // this is a base case so there are no children
             TypeVarNode {
                 ident,
                 construct: TypeVarConstruct::Var,
-                type_var,
+                type_var: *type_var,
                 children: vec![],
                 assertions: vec![],
             }

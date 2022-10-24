@@ -20,7 +20,7 @@
 (rule (sub ty x y) (alu_rrr (ALUOp.Sub) ty x y))
 
 ;;@ (spec (sig (args) (r))
-;;@     (assertions (= (conv_to (regwidth) (0i1:bv)) (r))))
+;;@     (assertions (= (zero_ext (regwidth) (0i1:bv)) (r))))
 (decl zero_reg () Reg)
 (extern constructor zero_reg zero_reg)
 

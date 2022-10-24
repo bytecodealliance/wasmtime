@@ -1742,7 +1742,7 @@
 
 ;; Helper for creating the zero register.
 ;;@ (spec (sig (args) (r))
-;;@     (assertions (= (conv_to (regwidth) (0i1:bv)) (r))))
+;;@     (assertions (= (zero_ext (regwidth) (0i1:bv)) (r))))
 (decl zero_reg () Reg)
 (extern constructor zero_reg zero_reg)
 
@@ -2313,7 +2313,7 @@
 (rule (sub ty x y) (alu_rrr (ALUOp.Sub) ty x y))
 
 ;;@ (spec (sig (args ty, reg, imm_arg) (ret))
-;;@     (assertions (= (- (reg) (conv_to (widthof (ret)) (imm_arg))) (ret))))
+;;@     (assertions (= (- (reg) (sign_ext (widthof (ret)) (imm_arg))) (ret))))
 (decl sub_imm (Type Reg Imm12) Reg)
 (rule (sub_imm ty x y) (alu_rr_imm12 (ALUOp.Sub) ty x y))
 

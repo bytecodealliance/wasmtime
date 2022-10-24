@@ -12,7 +12,7 @@
 (extern constructor sub sub)
 
 ;;@ (spec (sig (args) (r))
-;;@     (assertions (= (conv_to (regwidth) (0i1:bv)) (r))))
+;;@     (assertions (= (zero_ext (regwidth) (0i1:bv)) (r))))
 (decl zero_reg () Reg)
 (extern constructor zero_reg zero_reg)
 
@@ -87,7 +87,7 @@
 
 ;;@ (spec (sig (args ty, x) (r))
 ;;@   (assertions 
-;;@     (= (& (- (int2bv 8 (ty)) (x)) (- (int2bv 8 (ty)) (1i8:bv 8))) (r))
+;;@     (= (& (- (int2bv 6 (ty)) (x)) (- (int2bv 6 (ty)) (1i6:bv 6))) (r))
 ;;@   )
 ;;@ )
 (decl negate_imm_shift (Type ImmShift) ImmShift)
@@ -112,7 +112,7 @@
 ;; }
 
 ;;@ (spec (sig (args ty, x) (ret))
-;;@   (assertions (= (- (int2bv 8 (ty)) (& (x) (- (int2bv 8 (ty)) (1i8:bv)))) (ret))))
+;;@   (assertions (= (- (int2bv 6 (ty)) (& (x) (- (int2bv 6 (ty)) (1i6:bv)))) (ret))))
 (decl rotr_opposite_amount (Type ImmShift) ImmShift)
 (extern constructor rotr_opposite_amount rotr_opposite_amount)
 
