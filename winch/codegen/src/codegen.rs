@@ -1,5 +1,5 @@
 use crate::{
-    abi::ABISig,
+    abi::{ABISig, ABI},
     frame::Frame,
     masm::{MacroAssembler, OperandSize},
     regalloc::RegAlloc,
@@ -31,11 +31,12 @@ where
 pub(crate) struct CodeGen<'a, M>
 where
     M: MacroAssembler,
+    // A: ABI,
 {
     /// A reference to the function body
     function: FunctionBody<'a>,
 
-    /// The word size information, extracted from the current ABI
+    /// The word size in bytes, extracted from the current ABI
     word_size: u32,
 
     /// The ABI-specific representation of the function signature, excluding results
@@ -55,9 +56,8 @@ impl<'a, M> CodeGen<'a, M>
 where
     M: MacroAssembler,
 {
-    pub fn new(
+    pub fn new<A: ABI>(
         context: CodeGenContext<'a, M>,
-        word_size: u32,
         sig: ABISig,
         function: FunctionBody<'a>,
         validator: FuncValidator<ValidatorResources>,
@@ -65,7 +65,7 @@ where
     ) -> Self {
         Self {
             function,
-            word_size,
+            word_size: <A as ABI>::word_bytes(),
             sig,
             context,
             regalloc,
