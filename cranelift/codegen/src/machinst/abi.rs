@@ -1180,7 +1180,7 @@ fn gen_store_stack_multi<M: ABIMachineSpec>(
 /// parameter that should be prepended to its returns. Otherwise, return `None`.
 fn missing_struct_return(sig: &ir::Signature) -> Option<ir::AbiParam> {
     let struct_ret_index = sig.special_param_index(ArgumentPurpose::StructReturn)?;
-    if !(sig.returns.len() > 0 && sig.uses_special_return(ArgumentPurpose::StructReturn)) {
+    if !sig.uses_special_return(ArgumentPurpose::StructReturn) {
         return Some(sig.params[struct_ret_index]);
     }
 
