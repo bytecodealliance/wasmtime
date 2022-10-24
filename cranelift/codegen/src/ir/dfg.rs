@@ -276,7 +276,7 @@ impl DataFlowGraph {
 
     /// Fill in the type of a value, only if currently invalid (as a placeholder).
     pub(crate) fn fill_in_value_type(&mut self, v: Value, ty: Type) {
-        debug_assert!(self.values[v].ty().is_invalid());
+        debug_assert!(self.values[v].ty().is_invalid() || self.values[v].ty() == ty);
         self.values[v].set_type(ty);
     }
 
