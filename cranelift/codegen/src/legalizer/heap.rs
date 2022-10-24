@@ -74,12 +74,9 @@ fn dynamic_addr(
     } else {
         // We need an overflow check for the adjusted offset.
         let access_size_val = pos.ins().iconst(addr_ty, access_size as i64);
-        let (adj_offset, overflow) = pos.ins().iadd_ifcout(offset, access_size_val);
-        pos.ins().trapif(
-            isa.unsigned_add_overflow_condition(),
-            overflow,
-            ir::TrapCode::HeapOutOfBounds,
-        );
+        let adj_offset =
+            pos.ins()
+                .iadd_overflow_trap(offset, access_size_val, ir::TrapCode::HeapOutOfBounds);
         (IntCC::UnsignedGreaterThan, adj_offset, bound)
     };
     let oob = pos.ins().icmp(cc, lhs, bound);
