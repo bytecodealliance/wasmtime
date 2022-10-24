@@ -12,10 +12,10 @@ const MAX_MODULES: usize = 5;
 fuzz_target!(|data: &[u8]| {
     // errors in `run` have to do with not enough input in `data`, which we
     // ignore here since it doesn't affect how we'd like to fuzz.
-    drop(run(data));
+    drop(execute_one(data));
 });
 
-fn run(data: &[u8]) -> Result<()> {
+fn execute_one(data: &[u8]) -> Result<()> {
     let mut u = Unstructured::new(data);
     let mut config: generators::Config = u.arbitrary()?;
 

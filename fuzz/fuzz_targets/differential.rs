@@ -53,10 +53,10 @@ fuzz_target!(|data: &[u8]| {
 
     // Errors in `run` have to do with not enough input in `data`, which we
     // ignore here since it doesn't affect how we'd like to fuzz.
-    drop(run(&data));
+    drop(execute_one(&data));
 });
 
-fn run(data: &[u8]) -> Result<()> {
+fn execute_one(data: &[u8]) -> Result<()> {
     STATS.bump_attempts();
 
     let mut u = Unstructured::new(data);
