@@ -3091,6 +3091,18 @@ impl<'a> Parser<'a> {
                     args: [arg, addr],
                 }
             }
+            InstructionFormat::IntAddTrap => {
+                let a = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let b = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let code = self.match_enum("expected trap code")?;
+                InstructionData::IntAddTrap {
+                    opcode,
+                    args: [a, b],
+                    code,
+                }
+            }
         };
         Ok(idata)
     }

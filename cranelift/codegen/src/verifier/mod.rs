@@ -759,6 +759,7 @@ impl<'a> Verifier<'a> {
             | Ternary { .. }
             | TernaryImm8 { .. }
             | Shuffle { .. }
+            | IntAddTrap { .. }
             | IntCompare { .. }
             | IntCompareImm { .. }
             | FloatCompare { .. }

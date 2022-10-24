@@ -2174,6 +2174,37 @@ pub(crate) fn define(
         .operands_out(vec![a, c_if_out]),
     );
 
+    {
+        let code = &Operand::new("code", &imm.trapcode);
+
+        let i32_64 = &TypeVar::new(
+            "i32_64",
+            "A 32 or 64-bit scalar integer type",
+            TypeSetBuilder::new().ints(32..64).build(),
+        );
+
+        let a = &Operand::new("a", i32_64);
+        let x = &Operand::new("x", i32_64);
+        let y = &Operand::new("y", i32_64);
+        ig.push(
+            Inst::new(
+                "iadd_overflow_trap",
+                r#"
+            Add 32 or 64-bit integers, and trap if overflow occurs.
+
+            This is the same as `iadd_cout` but traps instead of returning a carry flag.
+
+            Polymorphic over all scalar integer types, but does not support vector
+            types.
+            "#,
+                &formats.int_add_trap,
+            )
+            .operands_in(vec![x, y, code])
+            .operands_out(vec![a])
+            .can_trap(true),
+        );
+    }
+
     ig.push(
         Inst::new(
             "isub_bin",
