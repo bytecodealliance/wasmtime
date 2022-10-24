@@ -1176,7 +1176,7 @@ fn gen_store_stack_multi<M: ABIMachineSpec>(
     ret
 }
 
-/// If the signature needs to be legalized, the return the struct-return
+/// If the signature needs to be legalized, then return the struct-return
 /// parameter that should be prepended to its returns. Otherwise, return `None`.
 fn missing_struct_return(sig: &ir::Signature) -> Option<ir::AbiParam> {
     let struct_ret_index = sig.special_param_index(ArgumentPurpose::StructReturn)?;
