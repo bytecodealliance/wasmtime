@@ -1039,11 +1039,12 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   llihf %r4, 2147483647
 ;   iilf %r4, 4294967295
-;   xgrk %r5, %r4, %r2
-;   ngrk %r4, %r5, %r3
+;   xgr %r4, %r2
+;   lgr %r5, %r2
+;   ngr %r4, %r3
 ;   cgite %r4, -1
 ;   lgr %r4, %r3
-;   lgr %r3, %r2
+;   lgr %r3, %r5
 ;   dsgr %r2, %r4
 ;   lgr %r2, %r3
 ;   br %r14

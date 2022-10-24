@@ -36,36 +36,34 @@ block0(v0: i64):
 }
 
 ; block0:
-;   lgr %r3, %r2
-;   llihf %r2, 2863311530
-;   iilf %r2, 2863311530
-;   lgr %r5, %r3
-;   sllg %r4, %r5, 1
-;   srlg %r3, %r5, 1
-;   ngr %r4, %r2
-;   xilf %r2, 4294967295
-;   xihf %r2, 4294967295
-;   ngrk %r2, %r3, %r2
-;   ogr %r4, %r2
-;   llihf %r3, 3435973836
-;   iilf %r3, 3435973836
-;   sllg %r5, %r4, 2
-;   srlg %r4, %r4, 2
+;   llihf %r3, 2863311530
+;   iilf %r3, 2863311530
+;   sllg %r5, %r2, 1
+;   srlg %r4, %r2, 1
+;   ngr %r5, %r3
+;   xilf %r3, 4294967295
+;   xihf %r3, 4294967295
+;   ngrk %r3, %r4, %r3
+;   ogrk %r2, %r5, %r3
+;   llihf %r5, 3435973836
+;   iilf %r5, 3435973836
+;   sllg %r3, %r2, 2
+;   srlg %r2, %r2, 2
+;   ngr %r3, %r5
+;   xilf %r5, 4294967295
+;   xihf %r5, 4294967295
+;   ngrk %r5, %r2, %r5
+;   ogrk %r4, %r3, %r5
+;   llihf %r3, 4042322160
+;   iilf %r3, 4042322160
+;   sllg %r5, %r4, 4
+;   srlg %r4, %r4, 4
 ;   ngr %r5, %r3
 ;   xilf %r3, 4294967295
 ;   xihf %r3, 4294967295
 ;   ngrk %r3, %r4, %r3
 ;   ogr %r5, %r3
-;   llihf %r4, 4042322160
-;   iilf %r4, 4042322160
-;   sllg %r2, %r5, 4
-;   srlg %r5, %r5, 4
-;   ngr %r2, %r4
-;   xilf %r4, 4294967295
-;   xihf %r4, 4294967295
-;   ngrk %r4, %r5, %r4
-;   ogr %r2, %r4
-;   lrvgr %r2, %r2
+;   lrvgr %r2, %r5
 ;   br %r14
 
 function %bitrev_i32(i32) -> i32 {
