@@ -250,11 +250,11 @@ fn compute_addr(
     if let Some((cc, a, b)) = spectre_oob_comparison {
         let final_addr = pos.ins().iadd(base, offset);
         let zero = pos.ins().iconst(addr_ty, 0);
-        let flags = pos.ins().ifcmp(a, b);
+        let cmp = pos.ins().icmp(cc, a, b);
         pos.func
             .dfg
             .replace(inst)
-            .selectif_spectre_guard(addr_ty, cc, flags, zero, final_addr);
+            .select_spectre_guard(cmp, zero, final_addr);
     } else {
         pos.func.dfg.replace(inst).iadd(base, offset);
     }

@@ -469,7 +469,6 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
 enum BranchOrderKind {
     BrzToBrnz(Value),
     BrnzToBrz(Value),
-    InvertIcmpCond(IntCC, Value, Value),
 }
 
 /// Reorder branches to encourage fallthroughs.
@@ -538,27 +537,6 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, 
                             kind,
                         )
                     }
-                    InstructionData::BranchIcmp {
-                        opcode: Opcode::BrIcmp,
-                        cond,
-                        destination: cond_dest,
-                        args: ref prev_args,
-                    } => {
-                        let (x_arg, y_arg) = {
-                            let args = pos.func.dfg.inst_args(prev_inst);
-                            (args[0], args[1])
-                        };
-
-                        (
-                            inst,
-                            args.clone(),
-                            destination,
-                            prev_inst,
-                            prev_args.clone(),
-                            *cond_dest,
-                            BranchOrderKind::InvertIcmpCond(*cond, x_arg, y_arg),
-                        )
-                    }
                     _ => return,
                 }
             }
@@ -589,19 +567,6 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, 
                 .dfg
                 .replace(cond_inst)
                 .brnz(cond_arg, term_dest, &term_args);
-        }
-        BranchOrderKind::InvertIcmpCond(cond, x_arg, y_arg) => {
-            pos.func
-                .dfg
-                .replace(term_inst)
-                .jump(cond_dest, &cond_args[2..]);
-            pos.func.dfg.replace(cond_inst).br_icmp(
-                cond.inverse(),
-                x_arg,
-                y_arg,
-                term_dest,
-                &term_args,
-            );
         }
     }
 

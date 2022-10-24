@@ -171,7 +171,7 @@ impl LowerBackend for S390xBackend {
             | Opcode::IsNull
             | Opcode::IsInvalid
             | Opcode::Select
-            | Opcode::SelectifSpectreGuard
+            | Opcode::SelectSpectreGuard
             | Opcode::Trap
             | Opcode::ResumableTrap
             | Opcode::Trapz
@@ -223,21 +223,10 @@ impl LowerBackend for S390xBackend {
             Opcode::GlobalValue => {
                 panic!("global_value should have been removed by legalization!");
             }
-            Opcode::Ifcmp
-            | Opcode::Ffcmp
-            | Opcode::Trapff
-            | Opcode::Trueif
-            | Opcode::Trueff
-            | Opcode::Selectif => {
+            Opcode::Ifcmp | Opcode::Ffcmp | Opcode::Trapff => {
                 panic!("Flags opcode should not be encountered.");
             }
-            Opcode::Jump
-            | Opcode::Brz
-            | Opcode::Brnz
-            | Opcode::BrIcmp
-            | Opcode::Brif
-            | Opcode::Brff
-            | Opcode::BrTable => {
+            Opcode::Jump | Opcode::Brz | Opcode::Brnz | Opcode::BrTable => {
                 panic!("Branch opcode reached non-branch lowering logic!");
             }
             Opcode::IaddImm

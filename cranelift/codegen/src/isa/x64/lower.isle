@@ -2760,16 +2760,6 @@
 (rule (lower_branch (jump _ _) (single_target target))
       (side_effect (jmp_known target)))
 
-;; Rules for `brif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower_branch (brif cc (ifcmp a b) _ _) (two_targets taken not_taken))
-      (side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
-
-;; Rules for `brff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower_branch (brff cc (ffcmp a b) _ _) (two_targets taken not_taken))
-      (side_effect (jmp_cond_fcmp (emit_fcmp cc a b) taken not_taken)))
-
 ;; Rules for `brz` and `brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 2 (lower_branch (brz (icmp cc a b) _ _) (two_targets taken not_taken))
@@ -2828,22 +2818,14 @@
             (src Gpr val))
         (x64_test size src src)))
 
-;; Rules for `bricmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower_branch (br_icmp cc a b _ _) (two_targets taken not_taken))
-      (side_effect (jmp_cond_icmp (emit_cmp cc a b) taken not_taken)))
-
 ;; Rules for `br_table` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower_branch (br_table idx @ (value_type ty) _ _) (jump_table_targets default_target jt_targets))
       (side_effect (jmp_table_seq ty idx default_target jt_targets)))
 
-;; Rules for `selectif` and `selectif_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (selectif cc (ifcmp a b) x y))
-      (select_icmp (emit_cmp cc a b) x y))
-
-(rule (lower (selectif_spectre_guard cc (ifcmp a b) x y))
+(rule (lower (select_spectre_guard (icmp cc a b) x y))
       (select_icmp (emit_cmp cc a b) x y))
 
 ;; Rules for `fcvt_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

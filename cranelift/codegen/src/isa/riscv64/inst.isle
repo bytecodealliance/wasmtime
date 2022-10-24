@@ -1915,24 +1915,29 @@
 (rule 
   (lower_branch (brz v @ (value_type ty) _ _) targets)
   (lower_brz_or_nz (IntCC.Equal) (normalize_value ty v) targets ty))
+
+(rule 1
+  (lower_branch (brz (icmp cc a @ (value_type ty) b) _ _) targets)
+  (lower_br_icmp (intcc_inverse cc) a b targets ty))
+
+(rule 1
+  (lower_branch (brz (fcmp cc a @ (value_type ty) b) _ _) targets)
+  (lower_br_fcmp (floatcc_inverse cc) a b targets ty))
+
 ;;;; 
 (rule 
   (lower_branch (brnz v @ (value_type ty) _ _) targets)
   (lower_brz_or_nz (IntCC.NotEqual) (normalize_value ty v) targets ty))
 
-;;; 
-(rule 
-  (lower_branch (br_icmp cc a @ (value_type ty) b _ _) targets)
+(rule 1
+  (lower_branch (brnz (icmp cc a @ (value_type ty) b) _ _) targets)
   (lower_br_icmp cc a b targets ty))
 
-(rule 
-  (lower_branch (brif cc (ifcmp a @ (value_type ty) b) _ _) targets)
-  (lower_br_icmp cc a b targets ty))
-
-(rule 
-  (lower_branch (brff cc (ffcmp a @ (value_type ty) b) _ _) targets)
+(rule 1
+  (lower_branch (brnz (fcmp cc a @ (value_type ty) b) _ _) targets)
   (lower_br_fcmp cc a b targets ty))
 
+;;; 
 (decl lower_br_table (Reg VecMachLabel) InstOutput)
 (extern constructor lower_br_table lower_br_table)
 

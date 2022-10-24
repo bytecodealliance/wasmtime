@@ -65,8 +65,8 @@ block2:
 
 function %f2(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
-  v2 = ifcmp v0, v1
-  brif eq v2, block1
+  v2 = icmp eq v0, v1
+  brnz v2, block1
   jump block2
 
 block1:
@@ -96,8 +96,8 @@ block2:
 
 function %f3(f32, f32) -> i32 {
 block0(v0: f32, v1: f32):
-  v2 = ffcmp v0, v1
-  brff eq v2, block1
+  v2 = fcmp eq v0, v1
+  brnz v2, block1
   jump block2
 
 block1:
@@ -278,6 +278,52 @@ block2:
 ;   ret
 ; block2:
 ;   xorl    %eax, %eax, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+
+function %fflags(f32) {
+block200(v0: f32):
+    v1 = f32const 0x34.0p0
+    v2 = fcmp eq v0, v1
+    brnz v2, block201
+    jump block400
+
+block400:
+    v3 = fcmp ord v0, v1
+    brnz v3, block202
+    jump block201
+
+block401:
+    return
+
+block201:
+    return
+
+block202:
+    trap heap_oob
+}
+
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $1112539136, %r8d
+;   movd    %r8d, %xmm5
+;   ucomiss %xmm5, %xmm0
+;   jp      label2
+;   jnz     label2; j label1
+; block1:
+;   jmp     label5
+; block2:
+;   movl    $1112539136, %esi
+;   movd    %esi, %xmm9
+;   ucomiss %xmm9, %xmm0
+;   jnp     label3; j label4
+; block3:
+;   ud2 heap_oob
+; block4:
+;   jmp     label5
+; block5:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

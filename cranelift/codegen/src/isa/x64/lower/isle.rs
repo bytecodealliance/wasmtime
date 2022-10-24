@@ -594,16 +594,6 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
-    fn intcc_reverse(&mut self, cc: &IntCC) -> IntCC {
-        cc.reverse()
-    }
-
-    #[inline]
-    fn floatcc_inverse(&mut self, cc: &FloatCC) -> FloatCC {
-        cc.inverse()
-    }
-
-    #[inline]
     fn sum_extend_fits_in_32_bits(
         &mut self,
         extend_from_ty: Type,

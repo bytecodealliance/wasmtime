@@ -605,6 +605,11 @@
   (gen_select ty (normalize_value cty c) x y)
 )
 
+(rule 1
+  (lower (has_type ty (select (icmp cc a b) x y)))
+  (gen_select_reg cc a b x y)
+)
+
 ;;;;;  Rules for `bitselect`;;;;;;;;;
 
 (rule
@@ -832,34 +837,14 @@
   (gen_float_round (FloatRoundOP.Nearest) x ty))
 
 
-;;;;;  Rules for `selectif`;;;;;;;;;
+;;;;;  Rules for `select_spectre_guard`;;;;;;;;;
 (rule
-  (lower (has_type r_ty (selectif cc (ifcmp ca @ (value_type cty) cb) a b)))
-  (let
-    ((dst VecWritableReg (alloc_vec_writable r_ty))
-      (r Reg (lower_icmp cc ca cb cty))
-      (_ Unit (emit (MInst.SelectIf $false (vec_writable_clone dst) r a b))))
-    (vec_writable_to_regs dst)))
-
-;;;;;  Rules for `selectif_spectre_guard`;;;;;;;;;
-(rule
-  (lower (has_type r_ty (selectif_spectre_guard cc (ifcmp ca @ (value_type cty) cb) a b)))
+  (lower (has_type r_ty (select_spectre_guard (icmp cc ca @ (value_type cty) cb) a b)))
   (let
     ((dst VecWritableReg (alloc_vec_writable r_ty))
       (r Reg (lower_icmp cc ca cb cty))
       (_ Unit (emit (MInst.SelectIf $true (vec_writable_clone dst) r a b))))
     (vec_writable_to_regs dst)))
-
-;;;;;  Rules for `trueif`;;;;;;;;;
-
-(rule
-  (lower (has_type ty (trueif cc (ifcmp ca @ (value_type cty) cb))))
-  (lower_icmp cc ca cb cty))
-
-;;;;;  Rules for `trueff`;;;;;;;;;
-(rule
-  (lower (has_type ty  (trueff cc (ffcmp ca @ (value_type cty) cb))))
-  (gen_fcmp cc ca cb cty))
 
 
 ;;;;;  Rules for `trapif`;;;;;;;;;
