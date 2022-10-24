@@ -189,7 +189,7 @@ pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
 pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
     match Descriptor::get(fd) {
         Descriptor::File(file) => {
-            let info = match wasi_filesystem::info(file.fd) {
+            let info = match wasi_filesystem::fd_info(file.fd) {
                 Ok(info) => info,
                 Err(err) => return errno_from_wasi_filesystem(err),
             };
@@ -501,7 +501,8 @@ pub unsafe extern "C" fn fd_write(
 
     match Descriptor::get(fd) {
         Descriptor::File(file) => {
-            let result = wasi_filesystem::pwrite(file.fd, slice::from_raw_parts(ptr, len), file.position);
+            let result =
+                wasi_filesystem::pwrite(file.fd, slice::from_raw_parts(ptr, len), file.position);
 
             match result {
                 Ok(bytes) => {
