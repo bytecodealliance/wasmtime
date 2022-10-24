@@ -781,7 +781,6 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Iconst, &[], &[I16], insert_const),
     (Opcode::Iconst, &[], &[I32], insert_const),
     (Opcode::Iconst, &[], &[I64], insert_const),
-    (Opcode::Iconst, &[], &[I128], insert_const),
     // Float Consts
     (Opcode::F32const, &[], &[F32], insert_const),
     (Opcode::F64const, &[], &[F64], insert_const),
@@ -1200,11 +1199,11 @@ where
 
     /// Zero initializes the stack slot by inserting `stack_store`'s.
     fn initialize_stack_slots(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let i128_zero = builder.ins().iconst(I128, 0);
-        let i64_zero = builder.ins().iconst(I64, 0);
-        let i32_zero = builder.ins().iconst(I32, 0);
-        let i16_zero = builder.ins().iconst(I16, 0);
         let i8_zero = builder.ins().iconst(I8, 0);
+        let i16_zero = builder.ins().iconst(I16, 0);
+        let i32_zero = builder.ins().iconst(I32, 0);
+        let i64_zero = builder.ins().iconst(I64, 0);
+        let i128_zero = builder.ins().uextend(I128, i64_zero);
 
         for &(slot, init_size) in self.resources.stack_slots.iter() {
             let mut size = init_size;

@@ -644,7 +644,8 @@ block5:
             let mut bx = FunctionBuilder::new(&mut func, &mut func_ctx);
             let block0 = bx.create_block();
             bx.switch_to_block(block0);
-            let val = bx.ins().iconst(types::I128, 0);
+            let val = bx.ins().iconst(types::I64, 0);
+            let val = bx.ins().uextend(types::I128, val);
             let mut switch = Switch::new();
             let block1 = bx.create_block();
             switch.set_entry(1, block1);
@@ -663,17 +664,18 @@ block5:
             "    jt0 = jump_table [block2, block1]
 
 block0:
-    v0 = iconst.i128 0
+    v0 = iconst.i64 0
+    v1 = uextend.i128 v0  ; v0 = 0
     jump block4
 
 block4:
-    v1 = icmp_imm.i128 ugt v0, 0xffff_ffff  ; v0 = 0
-    brnz v1, block3
+    v2 = icmp_imm.i128 ugt v1, 0xffff_ffff
+    brnz v2, block3
     jump block5
 
 block5:
-    v2 = ireduce.i32 v0  ; v0 = 0
-    br_table v2, block3, jt0"
+    v3 = ireduce.i32 v1
+    br_table v3, block3, jt0"
         );
     }
 }

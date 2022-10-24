@@ -656,43 +656,46 @@ block0(v0: i64):
 
 function %f23(i128, i8) -> i128 {
 block0(v0: i128, v1: i8):
-    v2 = iconst.i128 0
-    brnz v1, block1(v2)
-    jump block2(v2)
+    v2 = iconst.i64 0
+    v3 = uextend.i128 v2
+    brnz v1, block1(v3)
+    jump block2(v3)
 
-block1(v3: i128):
-    v4 = iconst.i128 1
-    v5 = iadd.i128 v3, v4
-    return v5
+block1(v4: i128):
+    v5 = iconst.i64 1
+    v6 = uextend.i128 v5
+    v7 = iadd.i128 v4, v6
+    return v7
 
-block2(v6: i128):
-    v7 = iconst.i128 2
-    v8 = iadd.i128 v6, v7
-    return v8
+block2(v8: i128):
+    v9 = iconst.i64 2
+    v10 = uextend.i128 v9
+    v11 = iadd.i128 v8, v10
+    return v11
 }
 
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   xorq    %rax, %rax, %rax
+;   xorq    %r11, %r11, %r11
 ;   testb   %dl, %dl
 ;   jnz     label1; j label2
 ; block1:
-;   xorq    %rax, %rax, %rax
-;   xorq    %rdx, %rdx, %rdx
-;   movl    $1, %esi
-;   xorq    %rcx, %rcx, %rcx
-;   addq    %rax, %rsi, %rax
-;   adcq    %rdx, %rcx, %rdx
+;   movl    $1, %r10d
+;   xorq    %rsi, %rsi, %rsi
+;   addq    %rax, %r10, %rax
+;   movq    %r11, %rdx
+;   adcq    %rdx, %rsi, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
 ; block2:
-;   xorq    %rax, %rax, %rax
-;   xorq    %rdx, %rdx, %rdx
-;   movl    $2, %r8d
-;   xorq    %r10, %r10, %r10
-;   addq    %rax, %r8, %rax
-;   adcq    %rdx, %r10, %rdx
+;   movq    %r11, %rdx
+;   movl    $2, %ecx
+;   xorq    %r8, %r8, %r8
+;   addq    %rax, %rcx, %rax
+;   adcq    %rdx, %r8, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

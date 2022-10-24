@@ -15,8 +15,10 @@ function %issue4996() -> i128, i64 system_v {
         jump block5(v13)
 
     block3:
-        v21 = iconst.i128 0
-        jump block5(v21)  ; v21 = 0
+        v20 = iconst.i64 0
+        v21 = uextend.i128 v20  ; v20 = 0
+        jump block5(v21)
+
     block5(v23: i128):
         v29 = iconst.i64 0
         return v23, v29  ; v29 = 0
