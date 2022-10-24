@@ -65,8 +65,8 @@ block2:
 
 function %f2(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
-  v2 = ifcmp v0, v1
-  brif eq v2, block1
+  v2 = icmp eq v0, v1
+  brnz v2, block1
   jump block2
 
 block1:
@@ -96,8 +96,8 @@ block2:
 
 function %f3(f32, f32) -> i32 {
 block0(v0: f32, v1: f32):
-  v2 = ffcmp v0, v1
-  brff eq v2, block1
+  v2 = fcmp eq v0, v1
+  brnz v2, block1
   jump block2
 
 block1:
