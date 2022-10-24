@@ -131,3 +131,17 @@ block0(v0: i8):
 }
 ; run: %bmask_i8_i8(1) == -1
 ; run: %bmask_i8_i8(0) == 0
+
+
+; This is a regression test for AArch64, where the high bits weren't
+; correctly being masked off for smaller types
+function %bmask_masks_small_types() -> i8 {
+block0:
+    v0 = iconst.i8 120
+    v1 = iconst.i8 7
+    v2 = ishl.i8 v0, v1
+    v3 = bmask.i8 v2
+    return v3
+}
+
+; run: %bmask_masks_small_types() == 0
