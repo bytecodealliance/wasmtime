@@ -3511,6 +3511,9 @@
 (decl abi_sig (SigRef) Sig)
 (extern constructor abi_sig abi_sig)
 
+(decl abi_first_ret (SigRef Sig) usize)
+(extern constructor abi_first_ret abi_first_ret)
+
 (decl abi_call_info (Sig ExternalName CallArgList CallRetList Opcode) BoxCallInfo)
 (extern constructor abi_call_info abi_call_info)
 

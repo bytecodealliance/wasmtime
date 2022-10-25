@@ -165,6 +165,13 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         self.lower_ctx.sigs().abi_sig_for_sig_ref(sig_ref)
     }
 
+    fn abi_first_ret(&mut self, sig_ref: SigRef, abi: &Sig) -> usize {
+        // Return the index of the first actual return value, excluding
+        // any StructReturn that might have been added to Sig.
+        let sig = &self.lower_ctx.dfg().signatures[sig_ref];
+        self.lower_ctx.sigs()[*abi].num_rets() - sig.returns.len()
+    }
+
     fn abi_lane_order(&mut self, abi: &Sig) -> LaneOrder {
         lane_order_for_call_conv(self.lower_ctx.sigs()[*abi].call_conv())
     }
