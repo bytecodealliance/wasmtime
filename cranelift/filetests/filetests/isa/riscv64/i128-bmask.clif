@@ -82,13 +82,10 @@ block0(v0: i32):
 }
 
 ; block0:
-;   auipc a1,0
-;   ld a1,12(a1)
-;   j 12
-;   .8byte 0xffffffff
-;   and a6,a0,a1
-;   li t3,-1
-;   select_reg a1,zero,t3##condition=(zero eq a6)
+;   slli a1,a0,32
+;   srli a3,a1,32
+;   li a5,-1
+;   select_reg a1,zero,a5##condition=(zero eq a3)
 ;   mv a0,a1
 ;   ret
 

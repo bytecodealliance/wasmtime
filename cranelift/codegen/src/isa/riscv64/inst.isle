@@ -1904,7 +1904,9 @@
 (rule (normalize_value $I16 r)
       (value_reg (alu_rrr (AluOPRRR.And) r (imm $I16 65535))))
 (rule (normalize_value $I32 r)
-      (value_reg (alu_rrr (AluOPRRR.And) r (imm $I32 0xffffffff))))
+      (let ((high Reg (alu_slli r 32))
+            (masked Reg (alu_srli high 32)))
+        (value_reg masked)))
 
 (rule (normalize_value $I64  r) r)
 (rule (normalize_value $I128 r) r)

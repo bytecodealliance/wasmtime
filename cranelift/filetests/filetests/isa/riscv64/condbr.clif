@@ -496,12 +496,9 @@ block1:
 }
 
 ; block0:
-;   auipc t2,0
-;   ld t2,12(t2)
-;   j 12
-;   .8byte 0xffffffff
-;   and a4,a0,t2
-;   beq a4,zero,taken(label1),not_taken(label2)
+;   slli t2,a0,32
+;   srli a1,t2,32
+;   beq a1,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -520,19 +517,15 @@ block1:
 }
 
 ; block0:
-;   auipc t2,0
-;   ld t2,12(t2)
-;   j 12
-;   .8byte 0xffffffff
-;   and a4,a0,t2
-;   bne a4,zero,taken(label1),not_taken(label2)
+;   slli t2,a0,32
+;   srli a1,t2,32
+;   bne a1,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
 ;   j label3
 ; block3:
 ;   ret
-
 
 function %i64_brz(i64){
 block0(v0: i64):
