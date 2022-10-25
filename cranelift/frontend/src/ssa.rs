@@ -15,7 +15,7 @@ use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntityList, EntitySet, ListPool, SecondaryMap};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::instructions::BranchInfo;
-use cranelift_codegen::ir::types::{F32, F64};
+use cranelift_codegen::ir::types::{F32, F64, I128, I64};
 use cranelift_codegen::ir::{
     Block, Function, Inst, InstBuilder, InstructionData, JumpTableData, Type, Value,
 };
@@ -140,7 +140,10 @@ enum Call {
 
 /// Emit instructions to produce a zero value in the given type.
 fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
-    if ty.is_int() {
+    if ty == I128 {
+        let zero = cur.ins().iconst(I64, 0);
+        cur.ins().uextend(I128, zero)
+    } else if ty.is_int() {
         cur.ins().iconst(ty, 0)
     } else if ty == F32 {
         cur.ins().f32const(Ieee32::with_bits(0))
