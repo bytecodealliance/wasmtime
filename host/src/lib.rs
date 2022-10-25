@@ -9,6 +9,15 @@ wit_bindgen_host_wasmtime_rust::generate!({
     name: "wasi",
 });
 
+pub fn add_to_linker<T>(
+    l: &mut wasmtime::component::Linker<T>,
+    f: impl (Fn(&mut T) -> &mut WasiCtx) + Copy + Send + Sync + 'static,
+) -> anyhow::Result<()> {
+    wasi_clocks::add_to_linker(l, f.clone())?;
+    wasi_default_clocks::add_to_linker(l, f)?;
+    Ok(())
+}
+
 pub struct WasiCtx {
     table: Table,
     default_monotonic: wasi_clocks::MonotonicClock,
