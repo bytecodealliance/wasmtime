@@ -2190,12 +2190,9 @@ pub(crate) fn define(
             Inst::new(
                 "iadd_overflow_trap",
                 r#"
-            Add 32 or 64-bit integers, and trap if overflow occurs.
+            Behaves like `iadd` but traps on overflow instead of wrapping.
 
-            This is the same as `iadd_cout` but traps instead of returning a carry flag.
-
-            Polymorphic over all scalar integer types, but does not support vector
-            types.
+            Accepts 32 or 64-bit integers, and does not support vector types.
             "#,
                 &formats.int_add_trap,
             )
