@@ -43,7 +43,6 @@ impl LowerBackend for S390xBackend {
 
         match op {
             Opcode::Nop
-            | Opcode::Copy
             | Opcode::Iconst
             | Opcode::F32const
             | Opcode::F64const

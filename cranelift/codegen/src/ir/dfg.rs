@@ -1467,10 +1467,5 @@ mod tests {
 
         assert_eq!(pos.func.dfg.resolve_aliases(c2), c2);
         assert_eq!(pos.func.dfg.resolve_aliases(c), c2);
-
-        // Make a copy of the alias.
-        let c3 = pos.ins().copy(c);
-        // This does not see through copies.
-        assert_eq!(pos.func.dfg.resolve_aliases(c3), c3);
     }
 }

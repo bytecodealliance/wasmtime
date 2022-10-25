@@ -552,7 +552,6 @@ where
             let mask_b = Value::and(Value::not(arg(0)?)?, arg(2)?)?;
             assign(Value::or(mask_a, mask_b)?)
         }
-        Opcode::Copy => assign(arg(0)?),
         Opcode::Icmp => assign(icmp(
             ctrl_ty,
             inst.cond_code().unwrap(),

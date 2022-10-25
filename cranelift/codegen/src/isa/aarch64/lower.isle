@@ -2265,11 +2265,6 @@
                          (u8_from_uimm8 lane)))
       (mov_vec_elem vec val lane 0 (vector_size vty)))
 
-;;; Rules for `copy` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (copy x))
-      x)
-
 ;;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (stack_addr stack_slot offset))

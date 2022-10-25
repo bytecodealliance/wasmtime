@@ -559,10 +559,6 @@ fn lower_insn_to_regs(
             panic!("table_addr should have been removed by legalization!");
         }
 
-        Opcode::Copy => {
-            panic!("Unused opcode should not be encountered.");
-        }
-
         Opcode::Trapz | Opcode::Trapnz | Opcode::ResumableTrapnz => {
             panic!("trapz / trapnz / resumable_trapnz should have been removed by legalization!");
         }
