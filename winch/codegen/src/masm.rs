@@ -7,22 +7,28 @@ use std::ops::Range;
 /// Operand size, in bits.
 #[derive(Copy, Clone)]
 pub(crate) enum OperandSize {
+    /// 32 bits.
     S32,
+    /// 64 bits.
     S64,
 }
 
 /// An abstraction over a register or immediate.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum RegImm {
+    /// A register.
     Reg(Reg),
+    /// An immediate.
     Imm(i32),
 }
 
 impl RegImm {
+    /// Register constructor.
     pub fn reg(r: Reg) -> Self {
         RegImm::Reg(r)
     }
 
+    /// Immediate constructor.
     pub fn imm(imm: i32) -> Self {
         RegImm::Imm(imm)
     }
@@ -36,20 +42,20 @@ impl From<Reg> for RegImm {
 
 /// Generic MacroAssembler interface used by the code generation.
 ///
-/// The MacroAssembler trait aims to expose a high-level enough interface
-/// so that each ISA can provide its own low level implementation.
-// TODO
-//
-// Modify the interface in the next iteration once
-// there's more support for aarch64.
-//
-// One of the ideas that I discussed with @cfallin is to
-// modify certain sigantures (e.g. add) to take three arguments instead of
-// two; assuming params named dst, lhs, rhs, in the case of x64 dst and lhs
-// will be always the same.
-
-// The other idea, is to have a superset of signatures; which in some cases
-// some signatures won't be implemented by all supported ISA's.
+/// The MacroAssembler trait aims to expose an interface, high-level enough,
+/// so that each ISA can provide its own lowering to machine code. For example,
+/// for WebAssembly operators that don't have a direct mapping to a machine
+/// a instruction, the interface defines a signature matching the WebAssembly
+/// operator, allowing each implementation to lower such operator entirely.
+/// This approach attributes more responsibility to the MacroAssembler, but frees
+/// the caller from concerning about assembling the right sequence of
+/// instructions at the operator callsite.
+///
+/// The interface defaults to a three-argument form for binary operations;
+/// this allows a natural mapping to instructions for RISC architectures,
+/// that use three-argument form.
+/// This approach allows for a more general interface that can be restricted
+/// where needed, in the case of architectures that use a two-argument form.
 
 pub(crate) trait MacroAssembler {
     /// Emit the function prologue.
