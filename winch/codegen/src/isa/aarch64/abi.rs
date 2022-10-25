@@ -56,6 +56,10 @@ impl ABI for Aarch64ABI {
     }
 
     fn sig(&self, wasm_sig: &FuncType) -> ABISig {
+        if wasm_sig.results().len() > 1 {
+            panic!("multi-value not supported");
+        }
+
         let mut stack_offset = 0;
         let mut index_env = RegIndexEnv::default();
 
