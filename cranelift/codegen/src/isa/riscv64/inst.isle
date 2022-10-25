@@ -1904,7 +1904,7 @@
 (rule (normalize_value $I16 r)
       (value_reg (alu_rrr (AluOPRRR.And) r (imm $I16 65535))))
 (rule (normalize_value $I32 r)
-      (value_reg (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const -1))))
+      (value_reg (alu_rrr (AluOPRRR.And) r (imm $I32 0xffffffff))))
 
 (rule (normalize_value $I64  r) r)
 (rule (normalize_value $I128 r) r)
@@ -2097,10 +2097,12 @@
 (decl lower_bmask (Type Type ValueRegs) ValueRegs)
 
 ;; Produces -1 if the 64-bit value is non-zero, and 0 otherwise.
+;; If the type is smaller than 64 bits, we need to mask off the
+;; high bits.
 (rule
   0
-  (lower_bmask (fits_in_64 _) (fits_in_64 _) val)
-  (let ((input Reg val)
+  (lower_bmask (fits_in_64 _) (fits_in_64 in_ty) val)
+  (let ((input Reg (normalize_value in_ty val))
         (zero Reg (zero_reg))
         (ones Reg (load_imm12 -1)))
   (value_reg (gen_select_reg (IntCC.Equal) zero input zero ones))))
@@ -2119,8 +2121,8 @@
 ;; bmask of the 64-bit value into both result registers of the i128.
 (rule
   2
-  (lower_bmask $I128 (fits_in_64 _) val)
-  (let ((res ValueRegs (lower_bmask $I64 $I64 val)))
+  (lower_bmask $I128 (fits_in_64 in_ty) val)
+  (let ((res ValueRegs (lower_bmask $I64 in_ty val)))
     (value_regs (value_regs_get res 0) (value_regs_get res 0))))
 
 ;; Conversion of one 64-bit value to a 128-bit one. Duplicate the result of
