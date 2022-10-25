@@ -1,10 +1,18 @@
 mod clocks;
+mod filesystem;
+mod logging;
+mod poll;
+mod random;
 mod table;
 pub use table::Table;
 
 wit_bindgen_host_wasmtime_rust::generate!({
     import: "../wit/wasi-clocks.wit.md",
     import: "../wit/wasi-default-clocks.wit.md",
+    import: "../wit/wasi-filesystem.wit.md",
+    import: "../wit/wasi-logging.wit.md",
+    import: "../wit/wasi-poll.wit.md",
+    import: "../wit/wasi-random.wit.md",
     default: "../wit/command.wit.md",
     name: "wasi",
 });
@@ -15,6 +23,10 @@ pub fn add_to_linker<T>(
 ) -> anyhow::Result<()> {
     wasi_clocks::add_to_linker(l, f.clone())?;
     wasi_default_clocks::add_to_linker(l, f)?;
+    wasi_filesystem::add_to_linker(l, f)?;
+    wasi_logging::add_to_linker(l, f)?;
+    wasi_poll::add_to_linker(l, f)?;
+    wasi_random::add_to_linker(l, f)?;
     Ok(())
 }
 
