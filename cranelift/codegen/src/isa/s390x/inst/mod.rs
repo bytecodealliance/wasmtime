@@ -974,21 +974,27 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_reuse_def(rd, 1);
             collector.reg_use(ri);
             collector.reg_use(rn);
-            collector.reg_use(lane_reg);
+            if lane_reg != zero_reg() {
+                collector.reg_use(lane_reg);
+            }
         }
         &Inst::VecInsertLaneUndef {
             rd, rn, lane_reg, ..
         } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
-            collector.reg_use(lane_reg);
+            if lane_reg != zero_reg() {
+                collector.reg_use(lane_reg);
+            }
         }
         &Inst::VecExtractLane {
             rd, rn, lane_reg, ..
         } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
-            collector.reg_use(lane_reg);
+            if lane_reg != zero_reg() {
+                collector.reg_use(lane_reg);
+            }
         }
         &Inst::VecInsertLaneImm { rd, ri, .. } => {
             collector.reg_reuse_def(rd, 1);
