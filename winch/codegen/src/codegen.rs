@@ -8,7 +8,7 @@ use crate::{
 use anyhow::Result;
 use wasmparser::{FuncValidator, FunctionBody, ValType, ValidatorResources};
 
-/// The code generation context
+/// The code generation context.
 pub(crate) struct CodeGenContext<'a, M>
 where
     M: MacroAssembler,
@@ -27,28 +27,27 @@ where
     }
 }
 
-/// The code generation abstraction
+/// The code generation abstraction.
 pub(crate) struct CodeGen<'a, M>
 where
     M: MacroAssembler,
-    // A: ABI,
 {
-    /// A reference to the function body
+    /// A reference to the function body.
     function: FunctionBody<'a>,
 
-    /// The word size in bytes, extracted from the current ABI
+    /// The word size in bytes, extracted from the current ABI.
     word_size: u32,
 
-    /// The ABI-specific representation of the function signature, excluding results
+    /// The ABI-specific representation of the function signature, excluding results.
     sig: ABISig,
 
-    /// The code generation context
+    /// The code generation context.
     pub context: CodeGenContext<'a, M>,
 
-    /// The register allocator
+    /// The register allocator.
     pub regalloc: RegAlloc,
 
-    /// Function body validator
+    /// Function body validator.
     pub validator: FuncValidator<ValidatorResources>,
 }
 
@@ -73,7 +72,7 @@ where
         }
     }
 
-    /// Emit the function body to machine code
+    /// Emit the function body to machine code.
     pub fn emit(&mut self) -> Result<Vec<String>> {
         self.emit_start()
             .and(self.emit_body())
@@ -109,7 +108,7 @@ where
         reader.ensure_end().map_err(|e| e.into())
     }
 
-    // Emit the usual function end instruction sequence
+    // Emit the usual function end instruction sequence.
     pub fn emit_end(&mut self) -> Result<()> {
         self.handle_abi_result();
         self.context.masm.epilogue(self.context.frame.locals_size);
@@ -120,7 +119,7 @@ where
         // TODO
         // Revisit this once the implicit VMContext argument is introduced;
         // when that happens the mapping between local slots and abi args
-        // is not going to be symmetric
+        // is not going to be symmetric.
         self.sig
             .params
             .iter()

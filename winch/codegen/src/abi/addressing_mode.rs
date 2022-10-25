@@ -1,4 +1,4 @@
-//! A generic representation for addressing memory
+//! A generic representation for addressing memory.
 use crate::isa::reg::Reg;
 
 // TODO

@@ -5,8 +5,9 @@ use std::ops::Range;
 use wasmparser::{FuncValidator, FunctionBody, ValType, ValidatorResources};
 
 // TODO:
-// SpiderMonkey's implementation uses 16; during instrumentation
-// we should measure to verify if this is a good default.
+// SpiderMonkey's implementation uses 16;
+// (ref: https://searchfox.org/mozilla-central/source/js/src/wasm/WasmBCFrame.h#585)
+// during instrumentation we should measure to verify if this is a good default.
 pub(crate) type Locals = SmallVec<[LocalSlot; 16]>;
 
 /// Function defined locals start and end in the frame.
@@ -19,23 +20,23 @@ impl DefinedLocalsRange {
     }
 }
 
-/// Frame handler abstraction
+/// Frame handler abstraction.
 pub(crate) struct Frame {
-    /// The size of the entire local area; the arguments plus the function defined locals
+    /// The size of the entire local area; the arguments plus the function defined locals.
     pub locals_size: u32,
 
-    /// The range in the frame corresponding to the defined locals range
+    /// The range in the frame corresponding to the defined locals range.
     pub defined_locals_range: DefinedLocalsRange,
 
-    /// The local slots for the current function
+    /// The local slots for the current function.
     ///
     /// Locals get calculated when allocating a frame and are readonly
-    /// through the function compilation lifetime
+    /// through the function compilation lifetime.
     pub locals: Locals,
 }
 
 impl Frame {
-    /// Allocate a new Frame
+    /// Allocate a new Frame.
     pub fn new<A: ABI>(
         sig: &ABISig,
         function: &mut FunctionBody,
@@ -55,7 +56,7 @@ impl Frame {
         })
     }
 
-    /// Get a local slot
+    /// Get a local slot.
     pub fn get_local(&self, index: u32) -> Option<&LocalSlot> {
         self.locals.get(index as usize)
     }
@@ -103,14 +104,14 @@ impl Frame {
     fn abi_arg_slot(arg: &ABIArg, next_stack: &mut u32, arg_base_offset: u32) -> LocalSlot {
         match arg {
             // Create a local slot, for input register spilling,
-            // with type-size aligned access
+            // with type-size aligned access.
             ABIArg::Reg { ty, reg: _ } => {
                 let ty_size = ty_size(&ty);
                 *next_stack = align_to(*next_stack, ty_size) + ty_size;
                 LocalSlot::new(*ty, *next_stack)
             }
             // Create a local slot, with an offset from the arguments base in
-            // the stack; which is the frame pointer + return address
+            // the stack; which is the frame pointer + return address.
             ABIArg::Stack { ty, offset } => LocalSlot::stack_arg(*ty, offset + arg_base_offset),
         }
     }
