@@ -19,30 +19,50 @@ block0(v0: i32):
 ; run: %f0(0) == 0x7f
 ; run: %f0(0x80) == 0xff
 
-function %f1(i32, i32) -> i32 {
+function %f1(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0x7f
+    v2 = iadd_overflow_trap v1, v0, user0
+    return v2
+}
+
+; run: %f0(0) == 0x7f
+; run: %f0(0x80) == 0xff
+
+function %f2(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
     v2 = iadd_overflow_trap v0, v1, user0
     return v2
 }
 
-; run: %f1(0, 0) == 0x0
-; run: %f1(0x80, 0x7f) == 0xff
+; run: %f2(0, 0) == 0x0
+; run: %f2(0x80, 0x7f) == 0xff
 
-function %f2(i64) -> i64 {
+function %f3(i64) -> i64 {
 block0(v0: i64):
     v1 = iconst.i64 0x7f
     v2 = iadd_overflow_trap v0, v1, user0
     return v2
 }
 
-; run: %f2(0) == 0x7f
-; run: %f2(0x80) == 0xff
+; run: %f3(0) == 0x7f
+; run: %f3(0x80) == 0xff
 
-function %f3(i64, i64) -> i64 {
+function %f4(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0x7f
+    v2 = iadd_overflow_trap v1, v0, user0
+    return v2
+}
+
+; run: %f4(0) == 0x7f
+; run: %f4(0x80) == 0xff
+
+function %f5(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
     v2 = iadd_overflow_trap v0, v1, user0
     return v2
 }
 
-; run: %f3(0, 0) == 0x0
-; run: %f3(0x80, 0x7f) == 0xff
+; run: %f5(0, 0) == 0x0
+; run: %f5(0x80, 0x7f) == 0xff
