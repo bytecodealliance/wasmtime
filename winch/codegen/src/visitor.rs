@@ -41,9 +41,11 @@ where
         let reg = self
             .regalloc
             .pop_to_reg(&mut self.context, OperandSize::S32);
+
+        let dst = RegImm::reg(reg);
         self.context
             .masm
-            .add(RegImm::imm(val), RegImm::reg(reg), OperandSize::S32);
+            .add(dst, dst, RegImm::imm(val), OperandSize::S32);
         self.context.stack.push(Val::reg(reg));
     }
 
@@ -55,9 +57,11 @@ where
             .regalloc
             .pop_to_reg(&mut self.context, OperandSize::S32);
 
+        let lhs = RegImm::reg(dst);
         self.context
             .masm
-            .add(RegImm::reg(src), RegImm::reg(dst), OperandSize::S32);
+            .add(lhs, lhs, RegImm::reg(src), OperandSize::S32);
+
         self.regalloc.free_gpr(src);
         self.context.stack.push(Val::reg(dst));
     }

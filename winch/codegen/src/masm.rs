@@ -12,7 +12,7 @@ pub(crate) enum OperandSize {
 }
 
 /// An abstraction over a register or immediate.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum RegImm {
     Reg(Reg),
     Imm(i32),
@@ -77,7 +77,7 @@ pub(crate) trait MacroAssembler {
     fn mov(&mut self, src: RegImm, dst: RegImm, size: OperandSize);
 
     /// Perform add operation.
-    fn add(&mut self, src: RegImm, dst: RegImm, size: OperandSize);
+    fn add(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
 
     /// Push the register to the stack, returning the offset.
     fn push(&mut self, src: Reg) -> u32;

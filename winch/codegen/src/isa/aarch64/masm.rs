@@ -42,7 +42,7 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn add(&mut self, _src: RegImm, _dst: RegImm, _size: OperandSize) {
+    fn add(&mut self, _dst: RegImm, __lhs: RegImm, __rhs: RegImm, _size: OperandSize) {
         todo!()
     }
 

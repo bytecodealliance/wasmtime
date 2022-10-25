@@ -98,9 +98,15 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn add(&mut self, src: RegImm, dst: RegImm, size: OperandSize) {
-        let src: Operand = src.into();
-        let dst: Operand = dst.into();
+    fn add(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+        let (src, dst): (Operand, Operand) = if dst == lhs {
+            (rhs.into(), dst.into())
+        } else {
+            panic!(
+                "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
+                dst, lhs
+            );
+        };
 
         match size {
             OperandSize::S32 => {
