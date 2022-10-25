@@ -1,19 +1,12 @@
-use crate::config::Asyncness;
+use crate::config::{AsyncConf, CodegenConf};
 use crate::funcs::func_bounds;
 use crate::names;
-use crate::CodegenSettings;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
 use std::collections::HashSet;
 
-pub fn link_module(
-    module: &witx::Module,
-    target_path: Option<&syn::Path>,
-    settings: &CodegenSettings,
-) -> TokenStream {
-    let module_ident = names::module(&module.name);
-
-    let send_bound = if settings.async_.contains_async(module) {
+pub fn link_module(module: &witx::Module, config: &CodegenConf) -> TokenStream {
+    let send_bound = if !config.async_.is_sync() {
         quote! { + Send, T: Send }
     } else {
         quote! {}
@@ -22,33 +15,30 @@ pub fn link_module(
     let mut bodies = Vec::new();
     let mut bounds = HashSet::new();
     for f in module.funcs() {
-        let asyncness = settings.async_.get(module.name.as_str(), f.name.as_str());
-        bodies.push(generate_func(&module, &f, target_path, asyncness));
-        let bound = func_bounds(module, &f, settings);
+        bodies.push(generate_func(&module, &f, &config.async_));
+        let bound = func_bounds(module, &f, config);
         for b in bound {
             bounds.insert(b);
         }
     }
 
-    let ctx_bound = if let Some(target_path) = target_path {
-        let bounds = bounds
-            .into_iter()
-            .map(|b| quote!(#target_path::#module_ident::#b));
-        quote!( #(#bounds)+* #send_bound )
-    } else {
+    let ctx_bound = {
         let bounds = bounds.into_iter();
         quote!( #(#bounds)+* #send_bound )
     };
 
-    let func_name = if target_path.is_none() {
-        format_ident!("add_to_linker")
-    } else {
-        format_ident!("add_{}_to_linker", module_ident)
-    };
+    let add_to_linker = format_ident!(
+        "add_to_linker{}",
+        match config.async_ {
+            AsyncConf::Sync => "",
+            AsyncConf::Blocking => "_blocking",
+            AsyncConf::Async => "_async",
+        }
+    );
 
     quote! {
         /// Adds all instance items to the specified `Linker`.
-        pub fn #func_name<T, U>(
+        pub fn #add_to_linker<T, U>(
             linker: &mut wasmtime::Linker<T>,
             get_cx: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> anyhow::Result<()>
@@ -64,11 +54,9 @@ pub fn link_module(
 fn generate_func(
     module: &witx::Module,
     func: &witx::InterfaceFunc,
-    target_path: Option<&syn::Path>,
-    asyncness: Asyncness,
+    asyncness: &AsyncConf,
 ) -> TokenStream {
     let module_str = module.name.as_str();
-    let module_ident = names::module(&module.name);
 
     let field_str = func.name.as_str();
     let field_ident = names::func(&func.name);
@@ -100,12 +88,6 @@ fn generate_func(
         quote!(.await)
     };
 
-    let abi_func = if let Some(target_path) = target_path {
-        quote!( #target_path::#module_ident::#field_ident )
-    } else {
-        quote!( #field_ident )
-    };
-
     let body = quote! {
         let mem = match caller.get_export("memory") {
             Some(wasmtime::Extern::Memory(m)) => m,
@@ -116,11 +98,11 @@ fn generate_func(
         let (mem , ctx) = mem.data_and_store_mut(&mut caller);
         let ctx = get_cx(ctx);
         let mem = wiggle::memory::WasmtimeGuestMemory::new(mem);
-        #abi_func(ctx, &mem #(, #arg_names)*) #await_
+        #field_ident(ctx, &mem #(, #arg_names)*) #await_
     };
 
     match asyncness {
-        Asyncness::Async => {
+        AsyncConf::Async => {
             let wrapper = format_ident!("func_wrap{}_async", params.len());
             quote! {
                 linker.#wrapper(
@@ -133,7 +115,7 @@ fn generate_func(
             }
         }
 
-        Asyncness::Blocking => {
+        AsyncConf::Blocking => {
             quote! {
                 linker.func_wrap(
                     #module_str,
@@ -146,7 +128,7 @@ fn generate_func(
             }
         }
 
-        Asyncness::Sync => {
+        AsyncConf::Sync => {
             quote! {
                 linker.func_wrap(
                     #module_str,

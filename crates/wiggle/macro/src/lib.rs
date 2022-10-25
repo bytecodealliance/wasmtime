@@ -143,11 +143,9 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
     let config = parse_macro_input!(args as wiggle_generate::Config);
 
     let doc = config.load_document();
+    let config = config.codegen_conf().expect("codegen conf");
 
-    let settings = wiggle_generate::CodegenSettings::new(&config.errors, &config.async_, &doc)
-        .expect("validating codegen settings");
-
-    let code = wiggle_generate::generate(&doc, &settings);
+    let code = wiggle_generate::generate(&doc, &config);
 
     TokenStream::from(code)
 }

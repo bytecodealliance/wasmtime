@@ -1,4 +1,4 @@
-use crate::codegen_settings::CodegenSettings;
+use crate::config::CodegenConf;
 use crate::lifetimes::anon_lifetime;
 use crate::module_trait::passed_by_reference;
 use crate::names;
@@ -11,25 +11,25 @@ use witx::Instruction;
 pub fn define_func(
     module: &witx::Module,
     func: &witx::InterfaceFunc,
-    settings: &CodegenSettings,
+    conf: &CodegenConf,
 ) -> TokenStream {
-    let (ts, _bounds) = _define_func(module, func, settings);
+    let (ts, _bounds) = _define_func(module, func, conf);
     ts
 }
 
 pub fn func_bounds(
     module: &witx::Module,
     func: &witx::InterfaceFunc,
-    settings: &CodegenSettings,
+    conf: &CodegenConf,
 ) -> Vec<Ident> {
-    let (_ts, bounds) = _define_func(module, func, settings);
+    let (_ts, bounds) = _define_func(module, func, conf);
     bounds
 }
 
 fn _define_func(
     module: &witx::Module,
     func: &witx::InterfaceFunc,
-    settings: &CodegenSettings,
+    conf: &CodegenConf,
 ) -> (TokenStream, Vec<Ident>) {
     let ident = names::func(&func.name);
 
@@ -62,7 +62,7 @@ fn _define_func(
             blocks: Vec::new(),
             module,
             funcname: func.name.as_str(),
-            settings,
+            conf,
             bounds: &mut bounds,
         },
     );
@@ -77,7 +77,7 @@ fn _define_func(
             function = #func_name
         );
     );
-    if settings.get_async(&module, &func).is_sync() {
+    if conf.async_.is_sync() {
         (
             quote!(
                 #[allow(unreachable_code)] // deals with warnings in noreturn functions
@@ -124,7 +124,7 @@ struct Rust<'a> {
     blocks: Vec<TokenStream>,
     module: &'a witx::Module,
     funcname: &'a str,
-    settings: &'a CodegenSettings,
+    conf: &'a CodegenConf,
     bounds: &'a mut Vec<Ident>,
 }
 
@@ -254,7 +254,7 @@ impl witx::Bindgen for Rust<'_> {
 
                 let trait_name = names::trait_name(&self.module.name);
                 let ident = names::func(&func.name);
-                if self.settings.get_async(&self.module, &func).is_sync() {
+                if self.conf.async_.is_sync() {
                     self.src.extend(quote! {
                         let ret = #trait_name::#ident(ctx, #(#args),*);
                     })
@@ -283,7 +283,7 @@ impl witx::Bindgen for Rust<'_> {
             // enum, and *then* we lower to an i32.
             Instruction::EnumLower { ty } => {
                 let val = operands.pop().unwrap();
-                let val = match self.settings.errors.for_name(ty) {
+                let val = match self.conf.errors.for_name(ty) {
                     Some(custom) => {
                         let method = names::user_error_conversion_method(&custom);
                         self.bound(quote::format_ident!("UserErrorConversion"));

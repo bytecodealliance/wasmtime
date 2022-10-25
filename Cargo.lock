@@ -3149,6 +3149,7 @@ dependencies = [
  "rustix",
  "thiserror",
  "tracing",
+ "wasmtime",
  "wiggle",
  "windows-sys",
 ]
@@ -3756,6 +3757,7 @@ dependencies = [
  "openvino",
  "thiserror",
  "walkdir",
+ "wasmtime",
  "wiggle",
 ]
 

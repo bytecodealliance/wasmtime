@@ -17,8 +17,7 @@ use wiggle::GuestPtr;
 wiggle::from_witx!({
     witx: ["$WASI_ROOT/phases/old/snapshot_0/witx/wasi_unstable.witx"],
     errors: { errno => Error },
-    async: *,
-    wasmtime: false,
+    async,
 });
 
 impl wiggle::GuestErrorType for types::Errno {
@@ -28,10 +27,10 @@ impl wiggle::GuestErrorType for types::Errno {
 }
 
 impl types::UserErrorConversion for WasiCtx {
-    fn errno_from_error(&mut self, e: Error) -> Result<types::Errno, wiggle::Trap> {
+    fn errno_from_error(&mut self, e: Error) -> Result<types::Errno, wasmtime::Trap> {
         debug!("Error: {:?}", e);
         e.try_into()
-            .map_err(|e| wiggle::Trap::String(format!("{:?}", e)))
+            .map_err(|e| wasmtime::Trap::new(format!("{:?}", e)))
     }
 }
 
@@ -932,7 +931,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         Ok(num_results.try_into().expect("results fit into memory"))
     }
 
-    async fn proc_exit(&mut self, status: types::Exitcode) -> wiggle::Trap {
+    async fn proc_exit(&mut self, status: types::Exitcode) -> wasmtime::Trap {
         Snapshot1::proc_exit(self, status).await
     }
 

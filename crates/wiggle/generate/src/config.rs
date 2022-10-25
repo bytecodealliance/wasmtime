@@ -1,5 +1,8 @@
 use {
-    proc_macro2::Span,
+    anyhow::anyhow,
+    proc_macro2::{Span, TokenStream},
+    quote::quote,
+    std::rc::Rc,
     std::{collections::HashMap, iter::FromIterator, path::PathBuf},
     syn::{
         braced, bracketed,
@@ -7,6 +10,7 @@ use {
         punctuated::Punctuated,
         Error, Ident, LitStr, Result, Token,
     },
+    witx::{Document, Id, NamedType, TypeRef},
 };
 
 #[derive(Debug, Clone)]
@@ -48,18 +52,11 @@ impl Parse for ConfigField {
             Ok(ConfigField::Error(input.parse()?))
         } else if lookahead.peek(Token![async]) {
             input.parse::<Token![async]>()?;
-            input.parse::<Token![:]>()?;
-            Ok(ConfigField::Async(AsyncConf {
-                blocking: false,
-                functions: input.parse()?,
-            }))
+            Ok(ConfigField::Async(AsyncConf::Async))
         } else if lookahead.peek(kw::block_on) {
             input.parse::<kw::block_on>()?;
             input.parse::<Token![:]>()?;
-            Ok(ConfigField::Async(AsyncConf {
-                blocking: true,
-                functions: input.parse()?,
-            }))
+            Ok(ConfigField::Async(AsyncConf::Blocking))
         } else {
             Err(lookahead.error())
         }
@@ -107,8 +104,12 @@ impl Config {
     /// # Panics
     ///
     /// This method will panic if the paths given in the `witx` field were not valid documents.
-    pub fn load_document(&self) -> witx::Document {
+    pub fn load_document(&self) -> Document {
         self.witx.load_document()
+    }
+
+    pub fn codegen_conf(&self) -> anyhow::Result<CodegenConf> {
+        CodegenConf::new(&self.errors, &self.async_, &self.witx.load_document())
     }
 }
 
@@ -119,6 +120,95 @@ impl Parse for Config {
         let fields: Punctuated<ConfigField, Token![,]> =
             contents.parse_terminated(ConfigField::parse)?;
         Ok(Config::build(fields.into_iter(), input.span())?)
+    }
+}
+
+pub struct CodegenConf {
+    pub errors: ErrorTransform,
+    pub async_: AsyncConf,
+}
+
+impl CodegenConf {
+    pub fn new(error_conf: &ErrorConf, async_: &AsyncConf, doc: &Document) -> anyhow::Result<Self> {
+        let errors = ErrorTransform::new(error_conf, doc)?;
+        Ok(Self {
+            errors,
+            async_: async_.clone(),
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ErrorTransform {
+    m: Vec<UserErrorType>,
+}
+
+impl ErrorTransform {
+    pub fn empty() -> Self {
+        Self { m: Vec::new() }
+    }
+    pub fn new(conf: &ErrorConf, doc: &Document) -> anyhow::Result<Self> {
+        let mut richtype_identifiers = HashMap::new();
+        let m = conf.iter().map(|(ident, field)|
+            if let Some(abi_type) = doc.typename(&Id::new(ident.to_string())) {
+                    if let Some(ident) = field.rich_error.get_ident() {
+                        if let Some(prior_def) = richtype_identifiers.insert(ident.clone(), field.err_loc.clone())
+                         {
+                            return Err(anyhow!(
+                                    "duplicate rich type identifier of {:?} not allowed. prior definition at {:?}",
+                                    ident, prior_def
+                                ));
+                        }
+                        Ok(UserErrorType {
+                            abi_type,
+                            rich_type: field.rich_error.clone(),
+                            method_fragment: ident.to_string()
+                        })
+                    } else {
+                        return Err(anyhow!(
+                            "rich error type must be identifier for now - TODO add ability to provide a corresponding identifier: {:?}",
+                            field.err_loc
+                        ))
+                    }
+                }
+                else { Err(anyhow!("No witx typename \"{}\" found", ident.to_string())) }
+        ).collect::<anyhow::Result<Vec<_>>>()?;
+        Ok(Self { m })
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &UserErrorType> {
+        self.m.iter()
+    }
+
+    pub fn for_abi_error(&self, tref: &TypeRef) -> Option<&UserErrorType> {
+        match tref {
+            TypeRef::Name(nt) => self.for_name(nt),
+            TypeRef::Value { .. } => None,
+        }
+    }
+
+    pub fn for_name(&self, nt: &NamedType) -> Option<&UserErrorType> {
+        self.m.iter().find(|u| u.abi_type.name == nt.name)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UserErrorType {
+    abi_type: Rc<NamedType>,
+    rich_type: syn::Path,
+    method_fragment: String,
+}
+
+impl UserErrorType {
+    pub fn abi_type(&self) -> TypeRef {
+        TypeRef::Name(self.abi_type.clone())
+    }
+    pub fn typename(&self) -> TokenStream {
+        let t = &self.rich_type;
+        quote!(#t)
+    }
+    pub fn method_fragment(&self) -> &str {
+        &self.method_fragment
     }
 }
 
@@ -142,7 +232,7 @@ impl WitxConf {
     ///
     /// This method will panic if the paths given in the `witx` field were not valid documents, or
     /// if any of the given documents were not syntactically valid.
-    pub fn load_document(&self) -> witx::Document {
+    pub fn load_document(&self) -> Document {
         match self {
             Self::Paths(paths) => witx::load(paths.as_ref()).expect("loading witx"),
             Self::Literal(doc) => witx::parse(doc.as_ref()).expect("parsing witx"),
@@ -291,16 +381,10 @@ impl Parse for ErrorConfField {
     }
 }
 
-#[derive(Clone, Default, Debug)]
-/// Modules and funcs that have async signatures
-pub struct AsyncConf {
-    blocking: bool,
-    functions: AsyncFunctions,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Asyncness {
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+pub enum AsyncConf {
     /// Wiggle function is synchronous, wasmtime Func is synchronous
+    #[default]
     Sync,
     /// Wiggle function is asynchronous, but wasmtime Func is synchronous
     Blocking,
@@ -308,7 +392,7 @@ pub enum Asyncness {
     Async,
 }
 
-impl Asyncness {
+impl AsyncConf {
     pub fn is_async(&self) -> bool {
         match self {
             Self::Async => true,
@@ -325,119 +409,6 @@ impl Asyncness {
         match self {
             Self::Sync => true,
             _ => false,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum AsyncFunctions {
-    Some(HashMap<String, Vec<String>>),
-    All,
-}
-impl Default for AsyncFunctions {
-    fn default() -> Self {
-        AsyncFunctions::Some(HashMap::default())
-    }
-}
-
-impl AsyncConf {
-    pub fn get(&self, module: &str, function: &str) -> Asyncness {
-        let a = if self.blocking {
-            Asyncness::Blocking
-        } else {
-            Asyncness::Async
-        };
-        match &self.functions {
-            AsyncFunctions::Some(fs) => {
-                if fs
-                    .get(module)
-                    .and_then(|fs| fs.iter().find(|f| *f == function))
-                    .is_some()
-                {
-                    a
-                } else {
-                    Asyncness::Sync
-                }
-            }
-            AsyncFunctions::All => a,
-        }
-    }
-
-    pub fn contains_async(&self, module: &witx::Module) -> bool {
-        for f in module.funcs() {
-            if self.get(module.name.as_str(), f.name.as_str()).is_async() {
-                return true;
-            }
-        }
-        false
-    }
-}
-
-impl Parse for AsyncFunctions {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let content;
-        let lookahead = input.lookahead1();
-        if lookahead.peek(syn::token::Brace) {
-            let _ = braced!(content in input);
-            let items: Punctuated<AsyncConfField, Token![,]> =
-                content.parse_terminated(Parse::parse)?;
-            let mut functions: HashMap<String, Vec<String>> = HashMap::new();
-            use std::collections::hash_map::Entry;
-            for i in items {
-                let function_names = i
-                    .function_names
-                    .iter()
-                    .map(|i| i.to_string())
-                    .collect::<Vec<String>>();
-                match functions.entry(i.module_name.to_string()) {
-                    Entry::Occupied(o) => o.into_mut().extend(function_names),
-                    Entry::Vacant(v) => {
-                        v.insert(function_names);
-                    }
-                }
-            }
-            Ok(AsyncFunctions::Some(functions))
-        } else if lookahead.peek(Token![*]) {
-            let _: Token![*] = input.parse().unwrap();
-            Ok(AsyncFunctions::All)
-        } else {
-            Err(lookahead.error())
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct AsyncConfField {
-    pub module_name: Ident,
-    pub function_names: Vec<Ident>,
-    pub err_loc: Span,
-}
-
-impl Parse for AsyncConfField {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let err_loc = input.span();
-        let module_name = input.parse::<Ident>()?;
-        let _doublecolon: Token![::] = input.parse()?;
-        let lookahead = input.lookahead1();
-        if lookahead.peek(syn::token::Brace) {
-            let content;
-            let _ = braced!(content in input);
-            let function_names: Punctuated<Ident, Token![,]> =
-                content.parse_terminated(Parse::parse)?;
-            Ok(AsyncConfField {
-                module_name,
-                function_names: function_names.iter().cloned().collect(),
-                err_loc,
-            })
-        } else if lookahead.peek(Ident) {
-            let name = input.parse()?;
-            Ok(AsyncConfField {
-                module_name,
-                function_names: vec![name],
-                err_loc,
-            })
-        } else {
-            Err(lookahead.error())
         }
     }
 }

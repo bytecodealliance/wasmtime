@@ -1,4 +1,3 @@
-mod codegen_settings;
 pub mod config;
 mod funcs;
 mod lifetimes;
@@ -12,13 +11,12 @@ use lifetimes::anon_lifetime;
 use proc_macro2::{Literal, TokenStream};
 use quote::quote;
 
-pub use codegen_settings::{CodegenSettings, UserErrorType};
-pub use config::Config;
+pub use config::{AsyncConf, CodegenConf, Config, UserErrorType};
 pub use funcs::define_func;
 pub use module_trait::define_module_trait;
 pub use types::define_datatype;
 
-pub fn generate(doc: &witx::Document, settings: &CodegenSettings) -> TokenStream {
+pub fn generate(doc: &witx::Document, conf: &CodegenConf) -> TokenStream {
     // TODO at some point config should grow more ability to configure name
     // overrides.
 
@@ -37,7 +35,7 @@ pub fn generate(doc: &witx::Document, settings: &CodegenSettings) -> TokenStream
         }
     });
 
-    let user_error_methods = settings.errors.iter().map(|errtype| {
+    let user_error_methods = conf.errors.iter().map(|errtype| {
         let abi_typename = names::type_ref(&errtype.abi_type(), anon_lifetime());
         let user_typename = errtype.typename();
         let methodname = names::user_error_conversion_method(&errtype);
@@ -50,9 +48,24 @@ pub fn generate(doc: &witx::Document, settings: &CodegenSettings) -> TokenStream
     };
     let modules = doc.modules().map(|module| {
         let modname = names::module(&module.name);
-        let fs = module.funcs().map(|f| define_func(&module, &f, &settings));
-        let modtrait = define_module_trait(&module, &settings);
-        let wasmtime = crate::wasmtime::link_module(&module, None, &settings);
+        let fs = module.funcs().map(|f| define_func(&module, &f, &conf));
+        let modtrait = define_module_trait(&module, &conf);
+
+        let add_to_linker = if conf.async_.is_sync() {
+            crate::wasmtime::link_module(&module, &conf)
+        } else {
+            let conf = CodegenConf {
+                errors: conf.errors.clone(),
+                async_: AsyncConf::Blocking,
+            };
+            let blocking = crate::wasmtime::link_module(&module, &conf);
+            let conf = CodegenConf {
+                errors: conf.errors,
+                async_: AsyncConf::Async,
+            };
+            let async_ = crate::wasmtime::link_module(&module, &conf);
+            quote!( #blocking #async_ )
+        };
         quote!(
             pub mod #modname {
                 use super::types::*;
@@ -61,7 +74,7 @@ pub fn generate(doc: &witx::Document, settings: &CodegenSettings) -> TokenStream
 
                 #modtrait
 
-                #wasmtime
+                #add_to_linker
             }
         )
     });

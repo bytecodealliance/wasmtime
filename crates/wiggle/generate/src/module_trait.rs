@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::codegen_settings::CodegenSettings;
+use crate::config::CodegenConf;
 use crate::lifetimes::{anon_lifetime, LifetimeExt};
 use crate::names;
 use witx::Module;
@@ -15,7 +15,7 @@ pub fn passed_by_reference(ty: &witx::Type) -> bool {
     }
 }
 
-pub fn define_module_trait(m: &Module, settings: &CodegenSettings) -> TokenStream {
+pub fn define_module_trait(m: &Module, conf: &CodegenConf) -> TokenStream {
     let traitname = names::trait_name(&m.name);
     let traitmethods = m.funcs().map(|f| {
         // Check if we're returning an entity anotated with a lifetime,
@@ -60,7 +60,7 @@ pub fn define_module_trait(m: &Module, settings: &CodegenSettings) -> TokenStrea
                     None => quote!(()),
                 };
                 let err = match err {
-                    Some(ty) => match settings.errors.for_abi_error(ty) {
+                    Some(ty) => match conf.errors.for_abi_error(ty) {
                         Some(custom) => {
                             let tn = custom.typename();
                             quote!(super::#tn)
@@ -74,7 +74,7 @@ pub fn define_module_trait(m: &Module, settings: &CodegenSettings) -> TokenStrea
             _ => unimplemented!(),
         };
 
-        let asyncness = if settings.get_async(&m, &f).is_sync() {
+        let asyncness = if conf.async_.is_sync() {
             quote!()
         } else {
             quote!(async)
