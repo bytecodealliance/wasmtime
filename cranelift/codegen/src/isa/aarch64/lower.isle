@@ -2378,6 +2378,9 @@
        (add_with_flags ty a b)
        (invalid_reg)))
 
+(rule (lower (has_type (fits_in_64 ty) (iadd_overflow_trap a b tc)))
+      (trap_if_overflow (add_with_flags_paired ty a b) tc))
+
 ;;; Rules for `tls_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (tls_value (symbol_value_data name _ _)))
