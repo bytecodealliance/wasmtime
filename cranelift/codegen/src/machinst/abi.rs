@@ -586,14 +586,15 @@ impl SigData {
         sig: &ir::Signature,
         flags: &settings::Flags,
     ) -> CodegenResult<SigData> {
-        let sig = ensure_struct_return_ptr_is_returned(sig);
+        let sret = missing_struct_return(sig);
+        let returns = sret.as_ref().into_iter().chain(&sig.returns);
 
         // Compute args and retvals from signature. Handle retvals first,
         // because we may need to add a return-area arg to the args.
         let (rets, sized_stack_ret_space, _) = M::compute_arg_locs(
             sig.call_conv,
             flags,
-            &sig.returns,
+            returns,
             ArgsOrRets::Rets,
             /* extra ret-area ptr = */ false,
         )?;
@@ -1175,19 +1176,21 @@ fn gen_store_stack_multi<M: ABIMachineSpec>(
     ret
 }
 
-pub(crate) fn ensure_struct_return_ptr_is_returned(sig: &ir::Signature) -> ir::Signature {
-    let params_structret = sig
-        .params
-        .iter()
-        .find(|p| p.purpose == ArgumentPurpose::StructReturn);
-    let rets_have_structret = sig.returns.len() > 0
-        && sig
-            .returns
-            .iter()
-            .any(|arg| arg.purpose == ArgumentPurpose::StructReturn);
+/// If the signature needs to be legalized, then return the struct-return
+/// parameter that should be prepended to its returns. Otherwise, return `None`.
+fn missing_struct_return(sig: &ir::Signature) -> Option<ir::AbiParam> {
+    let struct_ret_index = sig.special_param_index(ArgumentPurpose::StructReturn)?;
+    if !sig.uses_special_return(ArgumentPurpose::StructReturn) {
+        return Some(sig.params[struct_ret_index]);
+    }
+
+    None
+}
+
+fn ensure_struct_return_ptr_is_returned(sig: &ir::Signature) -> ir::Signature {
     let mut sig = sig.clone();
-    if params_structret.is_some() && !rets_have_structret {
-        sig.returns.insert(0, params_structret.unwrap().clone());
+    if let Some(sret) = missing_struct_return(&sig) {
+        sig.returns.insert(0, sret);
     }
     sig
 }
@@ -1198,6 +1201,10 @@ pub(crate) fn ensure_struct_return_ptr_is_returned(sig: &ir::Signature) -> ir::S
 impl<M: ABIMachineSpec> Callee<M> {
     /// Access the (possibly legalized) signature.
     pub fn signature(&self) -> &ir::Signature {
+        debug_assert!(
+            missing_struct_return(&self.ir_sig).is_none(),
+            "`Callee::ir_sig` is always legalized"
+        );
         &self.ir_sig
     }
 
