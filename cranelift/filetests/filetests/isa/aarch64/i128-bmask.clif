@@ -81,7 +81,7 @@ block0(v0: i32):
 }
 
 ; block0:
-;   subs xzr, x0, #0
+;   subs wzr, w0, #0
 ;   csetm x1, ne
 ;   mov x0, x1
 ;   ret
@@ -93,7 +93,8 @@ block0(v0: i16):
 }
 
 ; block0:
-;   subs xzr, x0, #0
+;   and w4, w0, #65535
+;   subs wzr, w4, #0
 ;   csetm x1, ne
 ;   mov x0, x1
 ;   ret
@@ -105,7 +106,8 @@ block0(v0: i8):
 }
 
 ; block0:
-;   subs xzr, x0, #0
+;   and w4, w0, #255
+;   subs wzr, w4, #0
 ;   csetm x1, ne
 ;   mov x0, x1
 ;   ret

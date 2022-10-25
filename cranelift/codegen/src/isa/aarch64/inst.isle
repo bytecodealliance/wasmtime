@@ -3475,9 +3475,9 @@
 ;; cmp   val, #0
 ;; csetm res, ne
 (rule 1
-      (lower_bmask (fits_in_64 _) (ty_32_or_64 _) val)
+      (lower_bmask (fits_in_64 _) (ty_32_or_64 in_ty) val)
       (with_flags_reg
-        (cmp64_imm (value_regs_get val 0) (u8_into_imm12 0))
+        (cmp_imm (operand_size in_ty) (value_regs_get val 0) (u8_into_imm12 0))
         (csetm (Cond.Ne))))
 
 ;; For conversions from a 128-bit value into a 64-bit or smaller one, we or the
