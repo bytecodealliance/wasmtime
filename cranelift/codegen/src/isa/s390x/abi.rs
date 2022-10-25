@@ -227,7 +227,8 @@ impl ABIMachineSpec for S390xMachineDeps {
         params: I,
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)>
+        mut args: ArgsAccumulator<'_>,
+    ) -> CodegenResult<(i64, Option<usize>)>
     where
         I: IntoIterator<Item = &'a ir::AbiParam>,
     {
@@ -235,7 +236,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         let mut next_fpr = 0;
         let mut next_vr = 0;
         let mut next_stack: u64 = 0;
-        let mut ret = ABIArgVec::new();
 
         if args_or_rets == ArgsOrRets::Args {
             next_stack = REG_SAVE_AREA_SIZE as u64;
@@ -338,7 +338,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
-                ret.push(ABIArg::StructArg {
+                args.push(ABIArg::StructArg {
                     pointer: Some(slot),
                     offset: 0,
                     size: size as u64,
@@ -349,14 +349,14 @@ impl ABIMachineSpec for S390xMachineDeps {
                     (ty_bits(ty) / 8) % 8 == 0,
                     "implicit argument size is not properly aligned"
                 );
-                ret.push(ABIArg::ImplicitPtrArg {
+                args.push(ABIArg::ImplicitPtrArg {
                     pointer: slot,
                     offset: 0,
                     ty,
                     purpose: param.purpose,
                 });
             } else {
-                ret.push(ABIArg::Slots {
+                args.push(ABIArg::Slots {
                     slots: smallvec![slot],
                     purpose: param.purpose,
                 });
@@ -375,14 +375,14 @@ impl ABIMachineSpec for S390xMachineDeps {
                 0
             };
             if let Some(reg) = get_intreg_for_arg(next_gpr) {
-                ret.push(ABIArg::reg(
+                args.push(ABIArg::reg(
                     reg.to_real_reg().unwrap(),
                     types::I64,
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
                 ));
             } else {
-                ret.push(ABIArg::stack(
+                args.push(ABIArg::stack(
                     next_stack as i64,
                     types::I64,
                     ir::ArgumentExtension::None,
@@ -390,15 +390,15 @@ impl ABIMachineSpec for S390xMachineDeps {
                 ));
                 next_stack += 8;
             }
-            Some(ret.len() - 1)
+            Some(args.len() - 1)
         } else {
             None
         };
 
         // After all arguments are in their well-defined location,
         // allocate buffers for all StructArg or ImplicitPtrArg arguments.
-        for i in 0..ret.len() {
-            match &mut ret[i] {
+        for i in 0..args.len() {
+            match &mut args[i] {
                 &mut ABIArg::StructArg {
                     ref mut offset,
                     size,
@@ -423,7 +423,7 @@ impl ABIMachineSpec for S390xMachineDeps {
             return Err(CodegenError::ImplLimitExceeded);
         }
 
-        Ok((ret, next_stack as i64, extra_arg))
+        Ok((next_stack as i64, extra_arg))
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {

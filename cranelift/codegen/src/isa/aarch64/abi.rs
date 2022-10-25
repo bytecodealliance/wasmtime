@@ -93,7 +93,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
         params: I,
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)>
+        mut args: ArgsAccumulator<'_>,
+    ) -> CodegenResult<(i64, Option<usize>)>
     where
         I: IntoIterator<Item = &'a ir::AbiParam>,
     {
@@ -116,7 +117,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let mut next_xreg = 0;
         let mut next_vreg = 0;
         let mut next_stack: u64 = 0;
-        let mut ret = ABIArgVec::new();
 
         let (max_per_class_reg_vals, mut remaining_reg_vals) = match args_or_rets {
             ArgsOrRets::Args => (8, 16), // x0-x7 and v0-v7
@@ -155,7 +155,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 let size = size as u64;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
                 next_stack += size;
-                ret.push(ABIArg::StructArg {
+                args.push(ABIArg::StructArg {
                     pointer: None,
                     offset,
                     size,
@@ -171,7 +171,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     param.value_type == types::I64,
                     "StructReturn must be a pointer sized integer"
                 );
-                ret.push(ABIArg::Slots {
+                args.push(ABIArg::Slots {
                     slots: smallvec![ABIArgSlot::Reg {
                         reg: xreg(8).to_real_reg().unwrap(),
                         ty: types::I64,
@@ -228,7 +228,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     let lower_reg = xreg(next_xreg);
                     let upper_reg = xreg(next_xreg + 1);
 
-                    ret.push(ABIArg::Slots {
+                    args.push(ABIArg::Slots {
                         slots: smallvec![
                             ABIArgSlot::Reg {
                                 reg: lower_reg.to_real_reg().unwrap(),
@@ -267,7 +267,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     } else {
                         param.value_type
                     };
-                    ret.push(ABIArg::reg(
+                    args.push(ABIArg::reg(
                         reg.to_real_reg().unwrap(),
                         ty,
                         param.extension,
@@ -319,7 +319,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 })
                 .collect();
 
-            ret.push(ABIArg::Slots {
+            args.push(ABIArg::Slots {
                 slots,
                 purpose: param.purpose,
             });
@@ -330,14 +330,14 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
             if next_xreg < max_per_class_reg_vals && remaining_reg_vals > 0 {
-                ret.push(ABIArg::reg(
+                args.push(ABIArg::reg(
                     xreg(next_xreg).to_real_reg().unwrap(),
                     I64,
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
                 ));
             } else {
-                ret.push(ABIArg::stack(
+                args.push(ABIArg::stack(
                     next_stack as i64,
                     I64,
                     ir::ArgumentExtension::None,
@@ -345,7 +345,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 ));
                 next_stack += 8;
             }
-            Some(ret.len() - 1)
+            Some(args.len() - 1)
         } else {
             None
         };
@@ -358,7 +358,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             return Err(CodegenError::ImplLimitExceeded);
         }
 
-        Ok((ret, next_stack as i64, extra_arg))
+        Ok((next_stack as i64, extra_arg))
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
