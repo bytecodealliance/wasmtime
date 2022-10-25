@@ -13,6 +13,10 @@ use self::regs::ALL_GPR;
 
 mod abi;
 mod masm;
+// Not all the fpr and gpr constructors are used at the moment;
+// in that sense, this directive is a temporary measure to avoid
+// dead code warnings.
+#[allow(dead_code)]
 mod regs;
 
 /// Create an ISA from the given triple.

@@ -34,7 +34,7 @@ impl RegIndexEnv {
 pub(crate) struct X64ABI;
 
 impl ABI for X64ABI {
-    // TODO: change to 16 once SIMD is supported.
+    // TODO: change to 16 once SIMD is supported
     fn stack_align(&self) -> u8 {
         8
     }
