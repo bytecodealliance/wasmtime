@@ -7,7 +7,7 @@ mod abi;
 mod masm;
 mod regs;
 
-/// Create an ISA from the given triple
+/// Create an ISA from the given triple.
 pub(crate) fn isa_from(triple: Triple) -> Aarch64 {
     Aarch64::new(triple)
 }
@@ -24,7 +24,7 @@ impl Aarch64 {
 
 impl TargetIsa for Aarch64 {
     fn name(&self) -> &'static str {
-        "x64"
+        "aarch64"
     }
 
     fn triple(&self) -> &Triple {

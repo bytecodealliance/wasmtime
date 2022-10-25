@@ -1,4 +1,5 @@
-/// X64 register definition
+//! X64 register definition.
+
 use crate::isa::reg::Reg;
 use regalloc2::{PReg, RegClass};
 
@@ -23,7 +24,7 @@ fn gpr(enc: u8) -> Reg {
     Reg::new(PReg::new(enc as usize, RegClass::Int))
 }
 
-/// Constructors for GPR
+/// Constructors for GPR.
 
 pub(crate) fn rsi() -> Reg {
     gpr(ENC_RSI)
@@ -84,7 +85,7 @@ fn fpr(enc: u8) -> Reg {
     Reg::new(PReg::new(enc as usize, RegClass::Float))
 }
 
-/// Constructors for FPR
+/// Constructors for FPR.
 
 pub(crate) fn xmm0() -> Reg {
     fpr(0)
@@ -139,12 +140,12 @@ const GPR: u32 = 16;
 const ALLOCATABLE_GPR: u32 = (1 << GPR) - 1;
 const NON_ALLOCATABLE_GPR: u32 = (1 << ENC_RBP) | (1 << ENC_RSP) | (1 << ENC_R11);
 
-/// Bitmask to represent the available general purpose registers
+/// Bitmask to represent the available general purpose registers.
 pub(crate) const ALL_GPR: u32 = ALLOCATABLE_GPR & !NON_ALLOCATABLE_GPR;
 
 // Temporarily removing the % from the register name
 // for debugging purposes only until winch gets disasm
-// support
+// support.
 pub(crate) fn reg_name(reg: Reg, size: u8) -> &'static str {
     match reg.class() {
         RegClass::Int => match (reg.hw_enc() as u8, size) {

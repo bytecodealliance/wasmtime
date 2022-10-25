@@ -7,7 +7,17 @@ use crate::{
     stack::Val,
 };
 
-/// The register allocator
+/// The register allocator.
+///
+/// The register allocator uses a single-pass algorithm;
+/// its implementation uses a bitset as a freelist
+/// to track per-class register availability.
+///
+/// If a particular register is not available upon request
+/// the register allocation will perform a "spill", essentially
+/// moving Local and Register values in the stack to memory.
+/// This processs ensures that whenever a register is requested,
+/// it is going to be available.
 pub(crate) struct RegAlloc {
     pub scratch: Reg,
     regset: RegSet,
@@ -15,13 +25,13 @@ pub(crate) struct RegAlloc {
 
 impl RegAlloc {
     /// Create a new register allocator
-    /// from a register set
+    /// from a register set.
     pub fn new(regset: RegSet, scratch: Reg) -> Self {
         Self { regset, scratch }
     }
 
-    /// Loads the stack top value into a register, if it isn't already one
-    /// spilling if there are no registers available
+    /// Loads the stack top value into a register, if it isn't already one;
+    /// spilling if there are no registers available.
     pub fn pop_to_reg<M: MacroAssembler>(
         &mut self,
         context: &mut CodeGenContext<M>,
@@ -40,7 +50,7 @@ impl RegAlloc {
     /// Checks if the stack top contains the given register. The register
     /// gets allocated otherwise, potentially causing a spill.
     /// Once the requested register is allocated, the value at the top of the stack
-    /// gets loaded into the register
+    /// gets loaded into the register.
     pub fn pop_to_named_reg<M: MacroAssembler>(
         &mut self,
         context: &mut CodeGenContext<M>,
@@ -79,7 +89,7 @@ impl RegAlloc {
     }
 
     /// Allocate the next available general purpose register,
-    /// spilling if none available
+    /// spilling if none available.
     pub fn any_gpr<M: MacroAssembler>(&mut self, context: &mut CodeGenContext<M>) -> Reg {
         self.regset.any_gpr().unwrap_or_else(|| {
             self.spill(context);
@@ -88,7 +98,7 @@ impl RegAlloc {
     }
 
     /// Request a specific general purpose register,
-    /// spilling if not available
+    /// spilling if not available.
     pub fn gpr<M: MacroAssembler>(&mut self, context: &mut CodeGenContext<M>, named: Reg) -> Reg {
         self.regset.gpr(named).unwrap_or_else(|| {
             self.spill(context);
@@ -98,19 +108,19 @@ impl RegAlloc {
         })
     }
 
-    /// Mark a particular general purpose register as available
+    /// Mark a particular general purpose register as available.
     pub fn free_gpr(&mut self, reg: Reg) {
         self.regset.free_gpr(reg);
     }
 
-    /// Spill locals and registers to memory
+    /// Spill locals and registers to memory.
     // TODO optimize the spill range;
     //
     // At any point in the program, the stack
     // might already contain Memory entries;
     // we could effectively ignore that range;
     // only focusing on the range that contains
-    // spillable values
+    // spillable values.
     fn spill<M: MacroAssembler>(&mut self, context: &mut CodeGenContext<M>) {
         context.stack.inner_mut().iter_mut().for_each(|v| match v {
             Val::Reg(r) => {

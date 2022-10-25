@@ -1,5 +1,5 @@
 //! This module is the central place for machine code emission.
-//! It defines an implementation of wasmparsers Visitor trait
+//! It defines an implementation of wasmparser's Visitor trait
 //! for `CodeGen`; which defines a visitor per op-code,
 //! which validates and dispatches to the corresponding
 //! machine code emitter.
@@ -81,7 +81,7 @@ where
         Ok(())
     }
 
-    // TODO verify the case where the target local is on the stack
+    // TODO verify the case where the target local is on the stack.
     fn emit_local_set(&mut self, index: u32) -> Result<()> {
         let context = &mut self.context;
         let frame = context.frame;

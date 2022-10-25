@@ -62,28 +62,32 @@ impl Frame {
 
     fn compute_arg_slots<A: ABI>(sig: &ABISig, abi: &A) -> Result<(Locals, u32)> {
         // Go over the function ABI-signature and
-        // calculate the stack slots
+        // calculate the stack slots.
         //
         //  for each parameter p; when p
         //
         //  Stack =>
         //      The slot offset is calculated from the ABIArg offset
         //      relative the to the frame pointer (and its inclusions, e.g.
-        //      return address)
+        //      return address).
         //
         //  Register =>
         //     The slot is calculated by accumulating into the `next_frame_size`
-        //     the size + alignment of the type that the register is holding
+        //     the size + alignment of the type that the register is holding.
         //
         //  NOTE
-        //      SpiderMonkey's implementation doesn't append any sort of
-        //      metadata to the locals regarding stack addressing mode
-        //      (stack pointer or frame pointer), the offset is
+        //      This implementation takes inspiration from SpiderMonkey's implementation
+        //      to calculate local slots for function arguments
+        //      (https://searchfox.org/mozilla-central/source/js/src/wasm/WasmBCFrame.cpp#83).
+        //      The main difference is that SpiderMonkey's implementation
+        //      doesn't append any sort of metadata to the locals regarding stack
+        //      addressing mode (stack pointer or frame pointer), the offset is
         //      declared negative if the local belongs to a stack argument;
-        //      that's enough to later calculate address of the local
+        //      that's enough to later calculate address of the local later on.
         //
         //      Winch appends an addressing mode to each slot, in the end
-        //      we want positive addressing for both locals and stack arguments
+        //      we want positive addressing from the stack pointer
+        //      for both locals and stack arguments.
 
         let arg_base_offset = abi.arg_base_offset().into();
         let mut next_stack = 0u32;

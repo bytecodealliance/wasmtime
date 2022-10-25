@@ -8,10 +8,10 @@ use wasmparser::{FuncType, ValType};
 pub(crate) struct Aarch64ABI;
 
 /// Helper environment to track argument-register
-/// assignment in aarch64
+/// assignment in aarch64.
 ///
-/// The first element tracks the general purpose register index, capped at 7 (x0-x7)
-/// The second element tracks the floating point register index, capped at 7 (v0-v7)
+/// The first element tracks the general purpose register index, capped at 7 (x0-x7).
+/// The second element tracks the floating point register index, capped at 7 (v0-v7).
 // Follows
 // https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#64parameter-passing
 #[derive(Default)]

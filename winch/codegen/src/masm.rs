@@ -4,14 +4,14 @@ use crate::isa::reg::Reg;
 use crate::regalloc::RegAlloc;
 use std::ops::Range;
 
-/// Operand size, in bits
+/// Operand size, in bits.
 #[derive(Copy, Clone)]
 pub(crate) enum OperandSize {
     S32,
     S64,
 }
 
-/// An abstraction over a register or immediate
+/// An abstraction over a register or immediate.
 #[derive(Copy, Clone)]
 pub(crate) enum RegImm {
     Reg(Reg),
@@ -34,61 +34,59 @@ impl From<Reg> for RegImm {
     }
 }
 
-/// Generic MacroAssembler interface used by the compilation environment
+/// Generic MacroAssembler interface used by the code generation.
 ///
-/// The MacroAssembler trait aims to expose a high-level enough interface so that
-/// each ISA can define and use their own low-level Assembler implementation
-/// to fulfill the interface
-
+/// The MacroAssembler trait aims to expose a high-level enough interface
+/// so that each ISA can provide its own low level implementation.
 // TODO
 //
 // Modify the interface in the next iteration once
-// there's more support for aarch64;
+// there's more support for aarch64.
 //
 // One of the ideas that I discussed with @cfallin is to
 // modify certain sigantures (e.g. add) to take three arguments instead of
 // two; assuming params named dst, lhs, rhs, in the case of x64 dst and lhs
-// will be always the same
+// will be always the same.
 
 // The other idea, is to have a superset of signatures; which in some cases
 // some signatures won't be implemented by all supported ISA's.
 
 pub(crate) trait MacroAssembler {
-    /// Emit the function prologue
+    /// Emit the function prologue.
     fn prologue(&mut self);
 
-    /// Emit the function epilogue
+    /// Emit the function epilogue.
     fn epilogue(&mut self, locals_size: u32);
 
-    /// Reserve stack space
+    /// Reserve stack space.
     fn reserve_stack(&mut self, bytes: u32);
 
-    /// Get the address of a local slot
+    /// Get the address of a local slot.
     fn local_address(&mut self, local: &LocalSlot) -> Address;
 
-    /// Get stack pointer offset
+    /// Get stack pointer offset.
     fn sp_offset(&mut self) -> u32;
 
-    /// Perform a stack store
+    /// Perform a stack store.
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize);
 
-    /// Perform a stack load
+    /// Perform a stack load.
     fn load(&mut self, src: Address, dst: Reg, size: OperandSize);
 
-    /// Perform a move
+    /// Perform a move.
     fn mov(&mut self, src: RegImm, dst: RegImm, size: OperandSize);
 
-    /// Perform add operation
+    /// Perform add operation.
     fn add(&mut self, src: RegImm, dst: RegImm, size: OperandSize);
 
-    /// Push the register to the stack, returning the offset
+    /// Push the register to the stack, returning the offset.
     fn push(&mut self, src: Reg) -> u32;
 
-    /// Finalize the assembly and return the result
+    /// Finalize the assembly and return the result.
     // NOTE Interim, debug approach
     fn finalize(&mut self) -> &[String];
 
-    /// Zero a particular register
+    /// Zero a particular register.
     fn zero(&mut self, reg: Reg);
 
     /// Zero a given memory range.

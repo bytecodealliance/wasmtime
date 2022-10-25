@@ -13,12 +13,9 @@ use self::regs::ALL_GPR;
 
 mod abi;
 mod masm;
-// Temporarily disable dead code warnings
-// for unused registers
-#[allow(dead_code)]
 mod regs;
 
-/// Create an ISA from the given triple
+/// Create an ISA from the given triple.
 pub(crate) fn isa_from(triple: Triple) -> X64 {
     X64::new(triple)
 }
@@ -46,7 +43,7 @@ impl TargetIsa for X64 {
     fn compile_function(
         &self,
         sig: &FuncType,
-        mut body: FunctionBody, // '1
+        mut body: FunctionBody,
         mut validator: FuncValidator<ValidatorResources>,
     ) -> Result<Vec<String>> {
         let masm = MacroAssembler::new();

@@ -1,20 +1,20 @@
 use crate::isa::reg::Reg;
 
-/// A bit set to track regiter availability
+/// A bit set to track regiter availability.
 pub(crate) struct RegSet {
-    /// Bitset to track general purpose register availability
+    /// Bitset to track general purpose register availability.
     gpr: u32,
-    /// Bitset to track floating-point register availability
+    /// Bitset to track floating-point register availability.
     _fpr: u32,
 }
 
 impl RegSet {
-    /// Create a new register allocator
+    /// Create a new register set.
     pub fn new(gpr: u32, fpr: u32) -> Self {
         Self { gpr, _fpr: fpr }
     }
 
-    /// Request a general purpose register
+    /// Request a general purpose register.
     pub fn any_gpr(&mut self) -> Option<Reg> {
         self.gpr_available().then(|| {
             let index = self.gpr.trailing_zeros();
@@ -23,7 +23,7 @@ impl RegSet {
         })
     }
 
-    /// Request a specific general purpose register
+    /// Request a specific general purpose register.
     pub fn gpr(&mut self, reg: Reg) -> Option<Reg> {
         let index = reg.hw_enc();
         self.named_gpr_available(index as u32).then(|| {
@@ -32,7 +32,7 @@ impl RegSet {
         })
     }
 
-    /// Free the given general purpose register
+    /// Free the given general purpose register.
     pub fn free_gpr(&mut self, reg: Reg) {
         let index = reg.hw_enc() as u32;
         self.gpr |= 1 << index;

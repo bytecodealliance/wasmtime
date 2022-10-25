@@ -21,8 +21,8 @@ impl Masm for MacroAssembler {
     fn push(&mut self, reg: Reg) -> u32 {
         self.asm.push_r(reg);
         // In x64 the push instruction takes either
-        // 2 or 8 byets; in our case we're always
-        // assuming 8 bytes per push
+        // 2 or 8 bytes; in our case we're always
+        // assuming 8 bytes per push.
         self.increment_sp(8);
 
         self.sp_offset
@@ -151,7 +151,7 @@ impl MacroAssembler {
     }
 }
 
-/// A x64 instruction operand
+/// A x64 instruction operand.
 #[derive(Debug, Copy, Clone)]
 enum Operand {
     Reg(Reg),
@@ -162,7 +162,7 @@ enum Operand {
 /// Low level assembler implementation for x64
 /// All instructions denote a 64 bit size, unless
 /// otherwise specified by the corresponding function
-/// name suffix
+/// name suffix.
 
 // NOTE
 // This is an interim, debug approach; the long term idea
@@ -170,7 +170,7 @@ enum Operand {
 // `cranelift_asm`. The literal representation of the
 // instructions use intel syntax for easier manual verification.
 // This shouldn't be an issue, once we plug in Cranelift's backend
-// we are going to be able to properly disassemble
+// we are going to be able to properly disassemble.
 #[derive(Default)]
 struct Assembler {
     buffer: Vec<String>,

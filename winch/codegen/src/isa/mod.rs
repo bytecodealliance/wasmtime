@@ -66,7 +66,7 @@ impl Display for LookupError {
 pub(crate) enum LookupError {
     Unsupported,
     // This directive covers the case in which the consumer
-    // enables the `all-arch- feature; in such case, this variant
+    // enables the `all-arch` feature; in such case, this variant
     // will never be used. This is most likely going to change
     // in the future; this is one of the simplest options for now.
     #[allow(dead_code)]
@@ -74,7 +74,7 @@ pub(crate) enum LookupError {
 }
 
 /// A trait representing commonalities between the supported
-/// instruction set architectures
+/// instruction set architectures.
 pub trait TargetIsa: Send + Sync {
     /// Get the name of the ISA.
     fn name(&self) -> &'static str;
@@ -89,12 +89,12 @@ pub trait TargetIsa: Send + Sync {
         validator: FuncValidator<ValidatorResources>,
     ) -> Result<Vec<String>>;
 
-    /// Get the default calling convention of the underlying target triple
+    /// Get the default calling convention of the underlying target triple.
     fn call_conv(&self) -> CallConv {
         CallConv::triple_default(&self.triple())
     }
 
-    /// Get the endianess of the underlying target triple
+    /// Get the endianess of the underlying target triple.
     fn endianess(&self) -> target_lexicon::Endianness {
         self.triple().endianness().unwrap()
     }

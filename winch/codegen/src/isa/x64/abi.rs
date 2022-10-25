@@ -7,10 +7,10 @@ use smallvec::SmallVec;
 use wasmparser::{FuncType, ValType};
 
 /// Helper environment to track argument-register
-/// assignment in x64
+/// assignment in x64.
 ///
-/// The first element tracks the general purpose register index
-/// The second element tracks the floating point register index
+/// The first element tracks the general purpose register index.
+/// The second element tracks the floating point register index.
 #[derive(Default)]
 struct RegIndexEnv(u8, u8);
 
@@ -34,7 +34,7 @@ impl RegIndexEnv {
 pub(crate) struct X64ABI;
 
 impl ABI for X64ABI {
-    // TODO: change to 16 once SIMD is supported
+    // TODO: change to 16 once SIMD is supported.
     fn stack_align(&self) -> u8 {
         8
     }

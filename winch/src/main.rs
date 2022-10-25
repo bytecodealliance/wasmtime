@@ -15,10 +15,10 @@ use winch_codegen::isa::{self, TargetIsa};
 
 #[derive(Parser, Debug)]
 struct Options {
-    /// The input file
+    /// The input file.
     input: PathBuf,
 
-    /// The target architecture
+    /// The target architecture.
     #[clap(long = "target")]
     target: String,
 }
@@ -63,7 +63,7 @@ fn compile(
     // `wasmparser::types::Types::function_at` which will give us
     // an equivalent functionality.
     // There's a change that is needed in wasmparser and wasmtime_environ to
-    // enable this. Once I've landed such change, this will be replaced.
+    // enable this. Once this change lands, this piece of code will be updated.
     let params: Vec<ValType> = sig
         .params()
         .iter()

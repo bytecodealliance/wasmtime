@@ -8,11 +8,11 @@ wasmparser = { workspace = true }
 smallvec = { workspace = true }
 anyhow = { workspace = true }
 target-lexicon = { workspace = true, features = ["std"] }
+# The following two dependencies (cranelift-codegen, regalloc2) are temporary;
+# mostly to have access to `PReg`s and the calling convention.
+# In the next iteration we'll factor out the common bits so that they can be consumed
+# by Cranelift and Winch.
 cranelift-codegen = { workspace = true }
-# Interim dependency; mostly to have access to `PReg`s.
-# In the long term, we'll factor out the register
-# abstractions from regalloc2 for them to be consumed
-# from Winch and Cranelift.
 regalloc2 = "0.4.1"
 
 [features]
