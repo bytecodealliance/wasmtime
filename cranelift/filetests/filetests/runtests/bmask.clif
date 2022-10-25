@@ -154,4 +154,4 @@ block0(v0: i64):
     v2 = bmask.i8 v1
     return v2
 }
-; run: %bmask_uses_32bit_cmp(2675339290501709824) == 0
+; run: %bmask_uses_32bit_cmp(0x2520B6E9_00000000) == 0
