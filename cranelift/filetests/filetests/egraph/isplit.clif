@@ -16,3 +16,14 @@ block0(v0: i128):
 }
 
 ; run: %a(871558149430564685057836279141) == 2147483647
+
+function %b(i128, i16) -> i16 {
+block0(v0: i128, v1: i16):
+    v2, v3 = isplit v0
+    v4 = rotr v1, v3
+    v5, v6 = isplit v0
+    v7 = rotr v4, v6
+    return v7
+}
+
+; run: %b(1234, 56) == 56
