@@ -10,19 +10,6 @@ wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/wasi.witx"],
 });
 
-// The only test in this file is to verify that the witx document provided by the
-// proc macro in the `metadata` module is equal to the document on the disk.
-#[test]
-fn document_equivalent() {
-    let macro_doc = metadata::document();
-    let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("tests");
-    path.push("wasi.witx");
-    let disk_doc = witx::load(&[path]).expect("load wasi.witx from disk");
-
-    assert_eq!(macro_doc, disk_doc);
-}
-
 type Result<T> = std::result::Result<T, types::Errno>;
 
 impl GuestErrorType for types::Errno {
@@ -314,7 +301,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
         unimplemented!("poll_oneoff")
     }
 
-    fn proc_exit(&mut self, _rval: types::Exitcode) -> wiggle::Trap {
+    fn proc_exit(&mut self, _rval: types::Exitcode) -> wasmtime::Trap {
         unimplemented!("proc_exit")
     }
 

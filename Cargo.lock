@@ -3834,7 +3834,6 @@ dependencies = [
  "wasmtime",
  "wiggle-macro",
  "wiggle-test",
- "witx",
 ]
 
 [[package]]

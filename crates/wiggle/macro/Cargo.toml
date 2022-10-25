@@ -28,7 +28,3 @@ proc-macro2 = "1.0"
 
 [dev-dependencies]
 wiggle = { path = ".." }
-
-[features]
-wasmtime = []
-wiggle_metadata = []

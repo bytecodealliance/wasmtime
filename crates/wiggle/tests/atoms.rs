@@ -34,9 +34,10 @@ impl IntFloatExercise {
         let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
-        let e = atoms::int_float_args(&mut ctx, &host_memory, self.an_int as i32, self.an_float);
+        let e = atoms::int_float_args(&mut ctx, &host_memory, self.an_int as i32, self.an_float)
+            .unwrap();
 
-        assert_eq!(e, Ok(types::Errno::Ok as i32), "int_float_args error");
+        assert_eq!(e, types::Errno::Ok as i32, "int_float_args error");
     }
 
     pub fn strat() -> BoxedStrategy<Self> {
@@ -68,13 +69,14 @@ impl DoubleIntExercise {
             &host_memory,
             self.input as i32,
             self.return_loc.ptr as i32,
-        );
+        )
+        .unwrap();
 
         let return_val = host_memory
             .ptr::<types::AliasToFloat>(self.return_loc.ptr)
             .read()
             .expect("failed to read return");
-        assert_eq!(e, Ok(types::Errno::Ok as i32), "errno");
+        assert_eq!(e, types::Errno::Ok as i32, "errno");
         assert_eq!(return_val, (self.input as f32) * 2.0, "return val");
     }
 

@@ -11,20 +11,13 @@ pub use crate::config::Asyncness;
 pub struct CodegenSettings {
     pub errors: ErrorTransform,
     pub async_: AsyncConf,
-    pub wasmtime: bool,
 }
 impl CodegenSettings {
-    pub fn new(
-        error_conf: &ErrorConf,
-        async_: &AsyncConf,
-        doc: &Document,
-        wasmtime: bool,
-    ) -> Result<Self, Error> {
+    pub fn new(error_conf: &ErrorConf, async_: &AsyncConf, doc: &Document) -> Result<Self, Error> {
         let errors = ErrorTransform::new(error_conf, doc)?;
         Ok(Self {
             errors,
             async_: async_.clone(),
-            wasmtime,
         })
     }
     pub fn get_async(&self, module: &Module, func: &InterfaceFunc) -> Asyncness {

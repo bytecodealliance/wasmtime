@@ -14,7 +14,6 @@ pub struct Config {
     pub witx: WitxConf,
     pub errors: ErrorConf,
     pub async_: AsyncConf,
-    pub wasmtime: bool,
 }
 
 mod kw {
@@ -23,7 +22,6 @@ mod kw {
     syn::custom_keyword!(block_on);
     syn::custom_keyword!(errors);
     syn::custom_keyword!(target);
-    syn::custom_keyword!(wasmtime);
 }
 
 #[derive(Debug, Clone)]
@@ -31,7 +29,6 @@ pub enum ConfigField {
     Witx(WitxConf),
     Error(ErrorConf),
     Async(AsyncConf),
-    Wasmtime(bool),
 }
 
 impl Parse for ConfigField {
@@ -63,10 +60,6 @@ impl Parse for ConfigField {
                 blocking: true,
                 functions: input.parse()?,
             }))
-        } else if lookahead.peek(kw::wasmtime) {
-            input.parse::<kw::wasmtime>()?;
-            input.parse::<Token![:]>()?;
-            Ok(ConfigField::Wasmtime(input.parse::<syn::LitBool>()?.value))
         } else {
             Err(lookahead.error())
         }
@@ -78,7 +71,6 @@ impl Config {
         let mut witx = None;
         let mut errors = None;
         let mut async_ = None;
-        let mut wasmtime = None;
         for f in fields {
             match f {
                 ConfigField::Witx(c) => {
@@ -99,12 +91,6 @@ impl Config {
                     }
                     async_ = Some(c);
                 }
-                ConfigField::Wasmtime(c) => {
-                    if wasmtime.is_some() {
-                        return Err(Error::new(err_loc, "duplicate `wasmtime` field"));
-                    }
-                    wasmtime = Some(c);
-                }
             }
         }
         Ok(Config {
@@ -113,7 +99,6 @@ impl Config {
                 .ok_or_else(|| Error::new(err_loc, "`witx` field required"))?,
             errors: errors.take().unwrap_or_default(),
             async_: async_.take().unwrap_or_default(),
-            wasmtime: wasmtime.unwrap_or(true),
         })
     }
 
@@ -451,100 +436,6 @@ impl Parse for AsyncConfField {
                 function_names: vec![name],
                 err_loc,
             })
-        } else {
-            Err(lookahead.error())
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct WasmtimeConfig {
-    pub c: Config,
-    pub target: syn::Path,
-}
-
-#[derive(Clone)]
-pub enum WasmtimeConfigField {
-    Core(ConfigField),
-    Target(syn::Path),
-}
-impl WasmtimeConfig {
-    pub fn build(fields: impl Iterator<Item = WasmtimeConfigField>, err_loc: Span) -> Result<Self> {
-        let mut target = None;
-        let mut cs = Vec::new();
-        for f in fields {
-            match f {
-                WasmtimeConfigField::Target(c) => {
-                    if target.is_some() {
-                        return Err(Error::new(err_loc, "duplicate `target` field"));
-                    }
-                    target = Some(c);
-                }
-                WasmtimeConfigField::Core(c) => cs.push(c),
-            }
-        }
-        let c = Config::build(cs.into_iter(), err_loc)?;
-        Ok(WasmtimeConfig {
-            c,
-            target: target
-                .take()
-                .ok_or_else(|| Error::new(err_loc, "`target` field required"))?,
-        })
-    }
-}
-
-impl Parse for WasmtimeConfig {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let contents;
-        let _lbrace = braced!(contents in input);
-        let fields: Punctuated<WasmtimeConfigField, Token![,]> =
-            contents.parse_terminated(WasmtimeConfigField::parse)?;
-        Ok(WasmtimeConfig::build(fields.into_iter(), input.span())?)
-    }
-}
-
-impl Parse for WasmtimeConfigField {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(kw::target) {
-            input.parse::<kw::target>()?;
-            input.parse::<Token![:]>()?;
-            Ok(WasmtimeConfigField::Target(input.parse()?))
-
-            // The remainder of this function is the ConfigField impl, wrapped in
-            // WasmtimeConfigField::Core. This is required to get the correct lookahead error.
-        } else if lookahead.peek(kw::witx) {
-            input.parse::<kw::witx>()?;
-            input.parse::<Token![:]>()?;
-            Ok(WasmtimeConfigField::Core(ConfigField::Witx(
-                WitxConf::Paths(input.parse()?),
-            )))
-        } else if lookahead.peek(kw::witx_literal) {
-            input.parse::<kw::witx_literal>()?;
-            input.parse::<Token![:]>()?;
-            Ok(WasmtimeConfigField::Core(ConfigField::Witx(
-                WitxConf::Literal(input.parse()?),
-            )))
-        } else if lookahead.peek(kw::errors) {
-            input.parse::<kw::errors>()?;
-            input.parse::<Token![:]>()?;
-            Ok(WasmtimeConfigField::Core(ConfigField::Error(
-                input.parse()?,
-            )))
-        } else if lookahead.peek(Token![async]) {
-            input.parse::<Token![async]>()?;
-            input.parse::<Token![:]>()?;
-            Ok(WasmtimeConfigField::Core(ConfigField::Async(AsyncConf {
-                blocking: false,
-                functions: input.parse()?,
-            })))
-        } else if lookahead.peek(kw::block_on) {
-            input.parse::<kw::block_on>()?;
-            input.parse::<Token![:]>()?;
-            Ok(WasmtimeConfigField::Core(ConfigField::Async(AsyncConf {
-                blocking: true,
-                functions: input.parse()?,
-            })))
         } else {
             Err(lookahead.error())
         }

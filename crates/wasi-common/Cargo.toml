@@ -48,6 +48,3 @@ default = ["trace_log"]
 # ecosystem of backends (e.g. `env_logger`. Disable this if you want to use
 # `tracing-subscriber`.
 trace_log = [ "wiggle/tracing_log", "tracing/log" ]
-# Need to make the wiggle_metadata feature available to consumers of this
-# crate if they want the snapshots to have metadata available.
-wiggle_metadata = ["wiggle/wiggle_metadata"]
