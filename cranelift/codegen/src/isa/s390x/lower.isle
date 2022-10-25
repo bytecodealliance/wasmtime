@@ -3892,7 +3892,8 @@
             (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args))
             (defs CallRetList (defs_init abi))
             (_ InstOutput (side_effect (abi_call abi name uses defs (Opcode.Call)))))
-        (lower_call_rets abi defs (range 0 (abi_num_rets abi)) (output_builder_new))))
+        (lower_call_rets abi defs (range (abi_first_ret sig_ref abi)
+                                         (abi_num_rets abi)) (output_builder_new))))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
 (rule (lower (call (func_ref_data sig_ref name _) args))
@@ -3902,7 +3903,8 @@
             (defs CallRetList (defs_init abi))
             (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0)))
             (_ InstOutput (side_effect (abi_call_ind abi target uses defs (Opcode.Call)))))
-        (lower_call_rets abi defs (range 0 (abi_num_rets abi)) (output_builder_new))))
+        (lower_call_rets abi defs (range (abi_first_ret sig_ref abi)
+                                         (abi_num_rets abi)) (output_builder_new))))
 
 ;; Indirect call.
 (rule (lower (call_indirect sig_ref ptr args))
@@ -3912,7 +3914,8 @@
             (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args))
             (defs CallRetList (defs_init abi))
             (_ InstOutput (side_effect (abi_call_ind abi target uses defs (Opcode.CallIndirect)))))
-        (lower_call_rets abi defs (range 0 (abi_num_rets abi)) (output_builder_new))))
+        (lower_call_rets abi defs (range (abi_first_ret sig_ref abi)
+                                         (abi_num_rets abi)) (output_builder_new))))
 
 ;; Lower function arguments.
 (decl lower_call_args (Sig Range ValueSlice) CallArgList)
