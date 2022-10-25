@@ -1847,22 +1847,22 @@
   (gen_fabs x ty)
   (fpu_rrr (fabs_copy_sign ty) ty x x))
 
-;;; right now only return if overflow.
-(decl lower_uadd_overflow (Reg Reg Type) Reg)
+;;; Returns the sum in the first register, and the overflow test in the second.
+(decl lower_uadd_overflow (Reg Reg Type) ValueRegs)
 
 (rule 1
   (lower_uadd_overflow x y $I64)
-  (let
-    ((tmp Reg (alu_add x y)))
-    (gen_icmp (IntCC.UnsignedLessThan) tmp x $I64)))
+  (let ((tmp Reg (alu_add x y))
+        (test Reg (gen_icmp (IntCC.UnsignedLessThan) tmp x $I64)))
+    (value_regs tmp test)))
 
 (rule
   (lower_uadd_overflow x y (fits_in_32 ty))
-  (let
-    ((tmp_x Reg (ext_int_if_need $false x ty))
-      (tmp_y Reg (ext_int_if_need $false y ty))
-      (sum Reg (alu_add tmp_x tmp_y)))
-    (alu_srli sum (ty_bits ty))))
+  (let ((tmp_x Reg (ext_int_if_need $false x ty))
+        (tmp_y Reg (ext_int_if_need $false y ty))
+        (sum Reg (alu_add tmp_x tmp_y))
+        (test Reg (alu_srli sum (ty_bits ty))))
+    (value_regs sum test)))
 
 (decl inst_output_get (InstOutput u8) ValueRegs)
 (extern constructor inst_output_get inst_output_get)

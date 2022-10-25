@@ -2,6 +2,7 @@ test run
 test interpret
 target x86_64
 target aarch64
+target riscv64
 
 ; NOTE: we don't currently have infrastructure for testing for traps, so these
 ; tests can only test the happy path. Once we eventually have annotations for
