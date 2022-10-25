@@ -82,10 +82,9 @@ block0(v0: i32):
 }
 
 ; block0:
-;   slli a1,a0,32
-;   srli a3,a1,32
-;   li a5,-1
-;   select_reg a1,zero,a5##condition=(zero eq a3)
+;   addiw a1,a0,0
+;   li a3,-1
+;   select_reg a1,zero,a3##condition=(zero eq a1)
 ;   mv a0,a1
 ;   ret
 

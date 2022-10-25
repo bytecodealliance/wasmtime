@@ -496,9 +496,8 @@ block1:
 }
 
 ; block0:
-;   slli t2,a0,32
-;   srli a1,t2,32
-;   beq a1,zero,taken(label1),not_taken(label2)
+;   addiw t2,a0,0
+;   beq t2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -517,9 +516,8 @@ block1:
 }
 
 ; block0:
-;   slli t2,a0,32
-;   srli a1,t2,32
-;   bne a1,zero,taken(label1),not_taken(label2)
+;   addiw t2,a0,0
+;   bne t2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
