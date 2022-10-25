@@ -3874,11 +3874,23 @@
 (decl add_logical_reg (Type Reg Reg) Reg)
 (rule (add_logical_reg ty x y) (alu_rrr ty (aluop_add_logical ty) x y))
 
+(decl add_logical_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (add_logical_reg_with_flags_paired ty x y)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+          (MInst.AluRRR (aluop_add_logical ty) dst x y) dst)))
+
 (decl add_logical_reg_zext32 (Type Reg Reg) Reg)
 (rule (add_logical_reg_zext32 ty x y) (alu_rr ty (aluop_add_logical_zext32 ty) x y))
 
 (decl add_logical_zimm32 (Type Reg u32) Reg)
 (rule (add_logical_zimm32 ty x y) (alu_ruimm32 ty (aluop_add_logical ty) x y))
+
+(decl add_logical_zimm32_with_flags_paired (Type Reg u32) ProducesFlags)
+(rule (add_logical_zimm32_with_flags_paired ty x y)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+          (MInst.AluRUImm32 (aluop_add_logical ty) dst x y) dst)))
 
 (decl add_logical_mem (Type Reg MemArg) Reg)
 (rule (add_logical_mem ty x y) (alu_rx ty (aluop_add_logical ty) x y))

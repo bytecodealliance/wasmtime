@@ -3876,6 +3876,24 @@
         (trap_if_bool (bool (flags_to_producesflags flags) (mask_as_cond 3))
                       trap_code)))
 
+;;;; Rules for `iadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (fits_in_64 ty) (iadd_overflow_trap x y tc)))
+      (with_flags
+        (add_logical_reg_with_flags_paired ty x y)
+        (trap_if_impl (mask_as_cond 3) tc)))
+
+(rule 1 (lower (has_type (fits_in_64 ty)
+                         (iadd_overflow_trap x (u32_from_value y) tc)))
+      (with_flags
+        (add_logical_zimm32_with_flags_paired ty x y)
+        (trap_if_impl (mask_as_cond 3) tc)))
+
+(rule 2 (lower (has_type (fits_in_64 ty)
+                         (iadd_overflow_trap (u32_from_value x) y tc)))
+      (with_flags
+        (add_logical_zimm32_with_flags_paired ty y x)
+        (trap_if_impl (mask_as_cond 3) tc)))
 
 ;;;; Rules for `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
