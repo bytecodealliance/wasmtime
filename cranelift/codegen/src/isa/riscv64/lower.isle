@@ -71,9 +71,11 @@
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.
-(rule (lower (has_type (fits_in_64 ty) (ineg x)))
+(rule 1 (lower (has_type (fits_in_64 ty) (ineg x)))
   (alu_rrr (AluOPRRR.Sub) (zero_reg) x))
 
+(rule 2 (lower (has_type $I128 (ineg x)))
+  (i128_sub (value_regs_zero) x))
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
