@@ -1470,27 +1470,6 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let x = &Operand::new("x", Any);
-
-    ig.push(
-        Inst::new(
-            "copy",
-            r#"
-        Register-register copy.
-
-        This instruction copies its input, preserving the value type.
-
-        A pure SSA-form program does not need to copy values, but this
-        instruction is useful for representing intermediate stages during
-        instruction transformations, and the register allocator needs a way of
-        representing register copies.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
-    );
-
     let x = &Operand::new("x", TxN).with_doc("Vector to split");
     let lo = &Operand::new("lo", &TxN.half_vector()).with_doc("Low-numbered lanes of `x`");
     let hi = &Operand::new("hi", &TxN.half_vector()).with_doc("High-numbered lanes of `x`");

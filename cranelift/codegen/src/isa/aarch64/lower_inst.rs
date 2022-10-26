@@ -157,8 +157,6 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::IsNull | Opcode::IsInvalid => implemented_in_isle(ctx),
 
-        Opcode::Copy => implemented_in_isle(ctx),
-
         Opcode::Ireduce => implemented_in_isle(ctx),
 
         Opcode::Bmask => implemented_in_isle(ctx),

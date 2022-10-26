@@ -46,12 +46,6 @@
       (invalid_reg))
 
 
-;;;; Rules for `copy` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (copy x))
-      x)
-
-
 ;;;; Rules for `iconcat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (vr128_ty ty) (iconcat x y)))

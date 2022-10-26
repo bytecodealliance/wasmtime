@@ -535,10 +535,6 @@
       (_ Unit (emit (MInst.AtomicCas (gen_atomic_offset p ty) t0 dst (ext_int_if_need $false e ty) (gen_atomic_p p ty) x ty))))
     (writable_reg_to_reg dst)))
 
-;;;;;  Rules for `copy`;;;;;;;;;;;;;;;;;
-(rule (lower (has_type ty (copy x)))
-  (gen_move2 x ty ty))
-
 ;;;;;  Rules for `ireduce`;;;;;;;;;;;;;;;;;
 (rule
   (lower (has_type ty (ireduce x)))
