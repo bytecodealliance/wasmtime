@@ -102,9 +102,10 @@ impl ReduceExcusesExcercise {
             self.array_ptr_loc.ptr as i32,
             self.excuse_ptr_locs.len() as i32,
             self.return_ptr_loc.ptr as i32,
-        );
+        )
+        .unwrap();
 
-        assert_eq!(res, Ok(types::Errno::Ok as i32), "reduce excuses errno");
+        assert_eq!(res, types::Errno::Ok as i32, "reduce excuses errno");
 
         let expected = *self
             .excuse_values
@@ -181,8 +182,9 @@ impl PopulateExcusesExcercise {
             &host_memory,
             self.array_ptr_loc.ptr as i32,
             self.elements.len() as i32,
-        );
-        assert_eq!(res, Ok(types::Errno::Ok as i32), "populate excuses errno");
+        )
+        .unwrap();
+        assert_eq!(res, types::Errno::Ok as i32, "populate excuses errno");
 
         let arr: GuestPtr<'_, [GuestPtr<'_, types::Excuse>]> =
             host_memory.ptr((self.array_ptr_loc.ptr, self.elements.len() as u32));
@@ -307,8 +309,9 @@ impl SumElementsExercise {
             self.elements.len() as i32,
             self.start_ix as i32,
             self.return_loc.ptr as i32,
-        );
-        assert_eq!(res, Ok(types::Errno::Ok as i32), "sum_of_element errno");
+        )
+        .unwrap();
+        assert_eq!(res, types::Errno::Ok as i32, "sum_of_element errno");
         let result_ptr = host_memory.ptr::<i32>(self.return_loc.ptr);
         let result = result_ptr.read().expect("read result");
 
@@ -326,10 +329,11 @@ impl SumElementsExercise {
             self.elements.len() as i32,
             self.elements.len() as i32,
             self.return_loc.ptr as i32,
-        );
+        )
+        .unwrap();
         assert_eq!(
             res,
-            Ok(types::Errno::InvalidArg as i32),
+            types::Errno::InvalidArg as i32,
             "out of bounds sum_of_element errno"
         );
 
@@ -341,11 +345,12 @@ impl SumElementsExercise {
             self.start_ix as i32,
             self.end_ix as i32,
             self.return_loc.ptr as i32,
-        );
+        )
+        .unwrap();
         if self.start_ix <= self.end_ix {
             assert_eq!(
                 res,
-                Ok(types::Errno::Ok as i32),
+                types::Errno::Ok as i32,
                 "expected ok sum_of_elements errno"
             );
             let result_ptr = host_memory.ptr::<i32>(self.return_loc.ptr);
@@ -366,7 +371,7 @@ impl SumElementsExercise {
         } else {
             assert_eq!(
                 res,
-                Ok(types::Errno::InvalidArg as i32),
+                types::Errno::InvalidArg as i32,
                 "expected error out-of-bounds sum_of_elements"
             );
         }
@@ -380,10 +385,11 @@ impl SumElementsExercise {
             self.start_ix as i32,
             self.elements.len() as i32 + 1,
             self.return_loc.ptr as i32,
-        );
+        )
+        .unwrap();
         assert_eq!(
             res,
-            Ok(types::Errno::InvalidArg as i32),
+            types::Errno::InvalidArg as i32,
             "out of bounds sum_of_elements errno"
         );
     }

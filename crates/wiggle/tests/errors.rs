@@ -65,19 +65,19 @@ mod convert_just_errno {
 
         // Exercise each of the branches in `foo`.
         // Start with the success case:
-        let r0 = one_error_conversion::foo(&mut ctx, &host_memory, 0);
+        let r0 = one_error_conversion::foo(&mut ctx, &host_memory, 0).unwrap();
         assert_eq!(
             r0,
-            Ok(types::Errno::Ok as i32),
+            types::Errno::Ok as i32,
             "Expected return value for strike=0"
         );
         assert!(ctx.log.borrow().is_empty(), "No error log for strike=0");
 
         // First error case:
-        let r1 = one_error_conversion::foo(&mut ctx, &host_memory, 1);
+        let r1 = one_error_conversion::foo(&mut ctx, &host_memory, 1).unwrap();
         assert_eq!(
             r1,
-            Ok(types::Errno::PicketLine as i32),
+            types::Errno::PicketLine as i32,
             "Expected return value for strike=1"
         );
         assert_eq!(
@@ -87,10 +87,10 @@ mod convert_just_errno {
         );
 
         // Second error case:
-        let r2 = one_error_conversion::foo(&mut ctx, &host_memory, 2);
+        let r2 = one_error_conversion::foo(&mut ctx, &host_memory, 2).unwrap();
         assert_eq!(
             r2,
-            Ok(types::Errno::InvalidArg as i32),
+            types::Errno::InvalidArg as i32,
             "Expected return value for strike=2"
         );
         assert_eq!(
