@@ -1352,9 +1352,9 @@
 (rule (lower (trap code))
       (side_effect (x64_ud2 code)))
 
-;;;; Rules for `iadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (fits_in_64 ty) (iadd_overflow_trap a b tc)))
+(rule (lower (has_type (fits_in_64 ty) (uadd_overflow_trap a b tc)))
       (with_flags
         (x64_add_with_flags_paired ty a b)
         (trap_if (CC.B) tc)))
@@ -1362,13 +1362,13 @@
 ;; Add a register and an immediate.
 
 (rule 1 (lower (has_type (fits_in_64 ty)
-                         (iadd_overflow_trap a (simm32_from_value b) tc)))
+                         (uadd_overflow_trap a (simm32_from_value b) tc)))
       (with_flags
         (x64_add_with_flags_paired ty a b)
         (trap_if (CC.B) tc)))
 
 (rule 2 (lower (has_type (fits_in_64 ty)
-                         (iadd_overflow_trap (simm32_from_value a) b tc)))
+                         (uadd_overflow_trap (simm32_from_value a) b tc)))
       (with_flags
         (x64_add_with_flags_paired ty b a)
         (trap_if (CC.B) tc)))
@@ -1376,13 +1376,13 @@
 ;; Add a register and memory.
 
 (rule 3 (lower (has_type (fits_in_64 ty)
-                         (iadd_overflow_trap a (sinkable_load b) tc)))
+                         (uadd_overflow_trap a (sinkable_load b) tc)))
       (with_flags
         (x64_add_with_flags_paired ty a (sink_load_to_gpr_mem_imm b))
         (trap_if (CC.B) tc)))
 
 (rule 4 (lower (has_type (fits_in_64 ty)
-                         (iadd_overflow_trap (sinkable_load a) b tc)))
+                         (uadd_overflow_trap (sinkable_load a) b tc)))
       (with_flags
         (x64_add_with_flags_paired ty b (sink_load_to_gpr_mem_imm a))
         (trap_if (CC.B) tc)))

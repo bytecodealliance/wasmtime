@@ -754,7 +754,7 @@ where
             assign_multiple(&[sum, Value::bool(carry, false, types::I8)?])
         }
         Opcode::IaddIfcarry => unimplemented!("IaddIfcarry"),
-        Opcode::IaddOverflowTrap => {
+        Opcode::UaddOverflowTrap => {
             let sum = Value::add(arg(0)?, arg(1)?)?;
             let carry = Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)?;
             if carry {

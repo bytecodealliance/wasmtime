@@ -3876,57 +3876,57 @@
         (trap_if_bool (bool (flags_to_producesflags flags) (mask_as_cond 3))
                       trap_code)))
 
-;;;; Rules for `iadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 0 (lower (has_type (fits_in_64 ty) (iadd_overflow_trap x y tc)))
+(rule 0 (lower (has_type (fits_in_64 ty) (uadd_overflow_trap x y tc)))
       (with_flags
         (add_logical_reg_with_flags_paired ty x y)
         (trap_if_impl (mask_as_cond 3) tc)))
 
 ;; Add a register an a zero-extended register.
 (rule 4 (lower (has_type (fits_in_64 ty)
-                         (iadd_overflow_trap x (zext32_value y) tc)))
+                         (uadd_overflow_trap x (zext32_value y) tc)))
       (with_flags
         (add_logical_reg_zext32_with_flags_paired ty x y)
         (trap_if_impl (mask_as_cond 3) tc)))
 (rule 8 (lower (has_type (fits_in_64 ty)
-                         (iadd_overflow_trap (zext32_value x) y tc)))
+                         (uadd_overflow_trap (zext32_value x) y tc)))
       (with_flags
         (add_logical_reg_zext32_with_flags_paired ty y x)
         (trap_if_impl (mask_as_cond 3) tc)))
 
 ;; Add a register and an immediate
 (rule 3 (lower (has_type (fits_in_64 ty)
-                         (iadd_overflow_trap x (u32_from_value y) tc)))
+                         (uadd_overflow_trap x (u32_from_value y) tc)))
       (with_flags
         (add_logical_zimm32_with_flags_paired ty x y)
         (trap_if_impl (mask_as_cond 3) tc)))
 (rule 7 (lower (has_type (fits_in_64 ty)
-                         (iadd_overflow_trap (u32_from_value x) y tc)))
+                         (uadd_overflow_trap (u32_from_value x) y tc)))
       (with_flags
         (add_logical_zimm32_with_flags_paired ty y x)
         (trap_if_impl (mask_as_cond 3) tc)))
 
 ;; Add a register and memory (32/64-bit types).
 (rule 2 (lower (has_type (fits_in_64 ty)
-                         (iadd_overflow_trap x (sinkable_load_32_64 y) tc)))
+                         (uadd_overflow_trap x (sinkable_load_32_64 y) tc)))
       (with_flags
         (add_logical_mem_with_flags_paired ty x (sink_load y))
         (trap_if_impl (mask_as_cond 3) tc)))
 (rule 6 (lower (has_type (fits_in_64 ty)
-                         (iadd_overflow_trap (sinkable_load_32_64 x) y tc)))
+                         (uadd_overflow_trap (sinkable_load_32_64 x) y tc)))
       (with_flags
         (add_logical_mem_with_flags_paired ty y (sink_load x))
         (trap_if_impl (mask_as_cond 3) tc)))
 
 ;; Add a register and zero-extended memory.
 (rule 1 (lower (has_type (fits_in_64 ty)
-                         (iadd_overflow_trap x (sinkable_uload32 y) tc)))
+                         (uadd_overflow_trap x (sinkable_uload32 y) tc)))
       (with_flags
         (add_logical_mem_zext32_with_flags_paired ty x (sink_uload32 y))
         (trap_if_impl (mask_as_cond 3) tc)))
 (rule 5 (lower (has_type (fits_in_64 ty)
-                         (iadd_overflow_trap (sinkable_uload32 x) y tc)))
+                         (uadd_overflow_trap (sinkable_uload32 x) y tc)))
       (with_flags
         (add_logical_mem_zext32_with_flags_paired ty y (sink_uload32 x))
         (trap_if_impl (mask_as_cond 3) tc)))

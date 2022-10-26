@@ -521,13 +521,13 @@ fn lower_insn_to_regs(
         | Opcode::IaddCout
         | Opcode::IaddCarry
         | Opcode::IaddIfcarry
-        | Opcode::IaddOverflowTrap
         | Opcode::IsubBin
         | Opcode::IsubIfbin
         | Opcode::IsubBout
         | Opcode::IsubIfbout
         | Opcode::IsubBorrow
         | Opcode::IsubIfborrow
+        | Opcode::UaddOverflowTrap
         | Opcode::BandImm
         | Opcode::BorImm
         | Opcode::BxorImm

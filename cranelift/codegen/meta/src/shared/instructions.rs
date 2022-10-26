@@ -2188,9 +2188,9 @@ pub(crate) fn define(
         let y = &Operand::new("y", i32_64);
         ig.push(
             Inst::new(
-                "iadd_overflow_trap",
+                "uadd_overflow_trap",
                 r#"
-            Behaves like `iadd` but traps on overflow instead of wrapping.
+            Unsigned addition of x and y, trapping if the result overflows.
 
             Accepts 32 or 64-bit integers, and does not support vector types.
             "#,

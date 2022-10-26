@@ -76,7 +76,7 @@ fn dynamic_addr(
         let access_size_val = pos.ins().iconst(addr_ty, access_size as i64);
         let adj_offset =
             pos.ins()
-                .iadd_overflow_trap(offset, access_size_val, ir::TrapCode::HeapOutOfBounds);
+                .uadd_overflow_trap(offset, access_size_val, ir::TrapCode::HeapOutOfBounds);
         (IntCC::UnsignedGreaterThan, adj_offset, bound)
     };
     let oob = pos.ins().icmp(cc, lhs, bound);

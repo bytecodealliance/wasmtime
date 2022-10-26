@@ -241,7 +241,7 @@ impl LowerBackend for S390xBackend {
             | Opcode::IaddCout
             | Opcode::IaddCarry
             | Opcode::IaddIfcarry
-            | Opcode::IaddOverflowTrap
+            | Opcode::UaddOverflowTrap
             | Opcode::IsubBin
             | Opcode::IsubIfbin
             | Opcode::IsubBout
