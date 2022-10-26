@@ -1731,6 +1731,13 @@
 (decl writable_zero_reg () WritableReg)
 (extern constructor writable_zero_reg writable_zero_reg)
 
+(decl value_regs_zero () ValueRegs)
+(rule (value_regs_zero)
+      (value_regs
+            (imm $I64 (ImmExtend.Zero) 0)
+            (imm $I64 (ImmExtend.Zero) 0)))
+
+
 ;; Helper for emitting `MInst.Mov` instructions.
 (decl mov (Reg Type) Reg)
 (rule (mov src ty)
@@ -2285,6 +2292,24 @@
 
 (decl sub_vec (Reg Reg VectorSize) Reg)
 (rule (sub_vec x y size) (vec_rrr (VecALUOp.Sub) x y size))
+
+(decl sub_i128 (ValueRegs ValueRegs) ValueRegs)
+(rule (sub_i128 x y)
+      (let
+          ;; Get the high/low registers for `x`.
+          ((x_regs ValueRegs x)
+           (x_lo Reg (value_regs_get x_regs 0))
+           (x_hi Reg (value_regs_get x_regs 1))
+
+           ;; Get the high/low registers for `y`.
+           (y_regs ValueRegs y)
+           (y_lo Reg (value_regs_get y_regs 0))
+           (y_hi Reg (value_regs_get y_regs 1)))
+        ;; the actual subtraction is `subs` followed by `sbc` which comprises
+        ;; the low/high bits of the result
+        (with_flags
+          (sub_with_flags_paired $I64 x_lo y_lo)
+          (sbc_paired $I64 x_hi y_hi))))
 
 ;; Helpers for generating `madd` instructions.
 
