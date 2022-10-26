@@ -10,6 +10,12 @@ Released 2022-10-27.
   only the default features enabled has been fixed.
   [#5134](https://github.com/bytecodealliance/wasmtime/pull/5134)
 
+### Changed
+
+* The `rayon` dependency added to `cranelift-isle` in 2.0.0 has been removed to
+  improve the compile time of the `cranelift-codegen` crate.
+  [#5101](https://github.com/bytecodealliance/wasmtime/pull/5101)
+
 --------------------------------------------------------------------------------
 
 ## 2.0.0
