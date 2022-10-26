@@ -474,7 +474,11 @@ impl Config {
         &mut self,
         f: impl Fn(WasmOpcode) -> u64 + Send + Sync + 'static,
     ) -> &mut Self {
-        self.fuel_cost = Some(Arc::new(move |op| f(WasmOpcode::from_operator(op)) as i64));
+        self.fuel_cost = Some(Arc::new(move |op| {
+            f(WasmOpcode::from_operator(op))
+                .try_into()
+                .unwrap_or(i64::MAX)
+        }));
         self
     }
 

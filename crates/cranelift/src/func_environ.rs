@@ -389,7 +389,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             return;
         }
 
-        self.fuel_consumed += (self.fuel_cost)(op);
+        self.fuel_consumed = self.fuel_consumed.saturating_add((self.fuel_cost)(op));
 
         match op {
             // Exiting a function (via a return or unreachable) or otherwise
