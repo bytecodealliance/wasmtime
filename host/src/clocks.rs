@@ -41,15 +41,15 @@ impl MonotonicTimer {
 pub struct WallClock;
 
 impl WallClock {
-    fn now(&self) -> chrono::DateTime<chrono::Utc> {
-        chrono::Utc::now()
+    fn now(&self) -> std::time::SystemTime {
+        std::time::SystemTime::now()
     }
-    fn resolution(&self) -> chrono::DateTime<chrono::Utc> {
+    fn resolution(&self) -> std::time::SystemTime {
         todo!()
     }
 }
 
-impl TryInto<wasi_clocks::Datetime> for chrono::DateTime<chrono::Utc> {
+impl TryInto<wasi_clocks::Datetime> for std::time::SystemTime {
     type Error = anyhow::Error;
     fn try_into(self) -> anyhow::Result<wasi_clocks::Datetime> {
         todo!()
