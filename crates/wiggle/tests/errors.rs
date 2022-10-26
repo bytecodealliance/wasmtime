@@ -31,7 +31,10 @@ mod convert_just_errno {
     /// When the `errors` mapping in witx is non-empty, we need to impl the
     /// types::UserErrorConversion trait that wiggle generates from that mapping.
     impl<'a> types::UserErrorConversion for WasiCtx<'a> {
-        fn errno_from_rich_error(&mut self, e: RichError) -> Result<types::Errno, wiggle::Trap> {
+        fn errno_from_rich_error(
+            &mut self,
+            e: RichError,
+        ) -> Result<types::Errno, wiggle::wasmtime_crate::Trap> {
             // WasiCtx can collect a Vec<String> log so we can test this. We're
             // logging the Display impl that `thiserror::Error` provides us.
             self.log.borrow_mut().push(e.to_string());
@@ -114,7 +117,7 @@ mod convert_multiple_error_types {
 
     // Just like the prior test, except that we have a second errno type. This should mean there
     // are two functions in UserErrorConversion.
-    // Additionally, test that the function "baz" marked noreturn always returns a wiggle::Trap.
+    // Additionally, test that the function "baz" marked noreturn always returns a wasmtime::Trap.
     wiggle::from_witx!({
         witx_literal: "
 (typename $errno (enum (@witx tag u8) $ok $invalid_arg $picket_line))
@@ -140,13 +143,16 @@ mod convert_multiple_error_types {
     // each member of the `errors` mapping.
     // Bodies elided.
     impl<'a> types::UserErrorConversion for WasiCtx<'a> {
-        fn errno_from_rich_error(&mut self, _e: RichError) -> Result<types::Errno, wiggle::Trap> {
+        fn errno_from_rich_error(
+            &mut self,
+            _e: RichError,
+        ) -> Result<types::Errno, wiggle::wasmtime_crate::Trap> {
             unimplemented!()
         }
         fn errno2_from_another_rich_error(
             &mut self,
             _e: AnotherRichError,
-        ) -> Result<types::Errno2, wiggle::Trap> {
+        ) -> Result<types::Errno2, wiggle::wasmtime_crate::Trap> {
             unimplemented!()
         }
     }
@@ -159,7 +165,7 @@ mod convert_multiple_error_types {
         fn bar(&mut self, _: u32) -> Result<(), AnotherRichError> {
             unimplemented!()
         }
-        fn baz(&mut self, _: u32) -> wiggle::Trap {
+        fn baz(&mut self, _: u32) -> wiggle::wasmtime_crate::Trap {
             unimplemented!()
         }
     }

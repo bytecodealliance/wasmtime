@@ -45,7 +45,7 @@ pub fn define_module_trait(names: &Names, m: &Module, settings: &CodegenSettings
         });
 
         let result = match f.results.len() {
-            0 if f.noreturn => quote!(#rt::Trap),
+            0 if f.noreturn => quote!(#rt::wasmtime_crate::Trap),
             0 => quote!(()),
             1 => {
                 let (ok, err) = match &**f.results[0].tref.type_() {

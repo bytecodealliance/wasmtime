@@ -91,7 +91,7 @@ fn _define_func(
                     ctx: &mut (impl #(#bounds)+*),
                     memory: &dyn #rt::GuestMemory,
                     #(#abi_params),*
-                ) -> Result<#abi_ret, #rt::Trap> {
+                ) -> Result<#abi_ret, #rt::wasmtime_crate::Trap> {
                     use std::convert::TryFrom as _;
                     #mk_span
                     _span.in_scope(|| {
@@ -109,7 +109,7 @@ fn _define_func(
                     ctx: &'a mut (impl #(#bounds)+*),
                     memory: &'a dyn #rt::GuestMemory,
                     #(#abi_params),*
-                ) -> impl std::future::Future<Output = Result<#abi_ret, #rt::Trap>> + 'a {
+                ) -> impl std::future::Future<Output = Result<#abi_ret, #rt::wasmtime_crate::Trap>> + 'a {
                     use std::convert::TryFrom as _;
                     use #rt::tracing::Instrument as _;
                     #mk_span
