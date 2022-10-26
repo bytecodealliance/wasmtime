@@ -1,6 +1,5 @@
 //! Overlap detection for rules in ISLE.
 
-use rayon::prelude::*;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
@@ -30,17 +29,6 @@ struct Errors {
 }
 
 impl Errors {
-    /// Merge together two Error graphs.
-    fn union(mut self, other: Self) -> Self {
-        for (id, edges) in other.nodes {
-            match self.nodes.entry(id) {
-                Entry::Occupied(entry) => entry.into_mut().extend(edges),
-                Entry::Vacant(entry) => _ = entry.insert(edges),
-            }
-        }
-        self
-    }
-
     /// Condense the overlap information down into individual errors. We iteratively remove the
     /// nodes from the graph with the highest degree, reporting errors for them and their direct
     /// connections. The goal with reporting errors this way is to prefer reporting rules that
@@ -133,11 +121,9 @@ fn check_overlaps(env: &TermEnv) -> Errors {
         }
     }
 
-    // Process rule pairs in parallel. Rayon makes this easy and we have independent bite-sized
-    // chunks of work, so we might as well take advantage of multiple CPUs if they're available.
     pairs
-        .into_par_iter()
-        .fold(Errors::default, |mut errs, (left, right)| {
+        .into_iter()
+        .fold(Errors::default(), |mut errs, (left, right)| {
             if left.rule.prio == right.rule.prio {
                 if check_overlap_pair(&left.pats, &right.pats) {
                     errs.add_edge(left.rule.id, right.rule.id);
@@ -145,7 +131,6 @@ fn check_overlaps(env: &TermEnv) -> Errors {
             }
             errs
         })
-        .reduce(Errors::default, Errors::union)
 }
 
 /// Check if two rules overlap in the inputs they accept.
