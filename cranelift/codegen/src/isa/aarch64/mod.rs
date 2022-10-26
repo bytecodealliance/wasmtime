@@ -57,20 +57,11 @@ impl AArch64Backend {
     fn compile_vcode(
         &self,
         func: &Function,
-        flags: shared_settings::Flags,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
-        let emit_info = EmitInfo::new(flags.clone());
+        let emit_info = EmitInfo::new(self.flags.clone());
         let sigs = SigSet::new::<abi::AArch64MachineDeps>(func, &self.flags)?;
         let abi = abi::AArch64Callee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<AArch64Backend>(
-            func,
-            flags,
-            self,
-            abi,
-            &self.machine_env,
-            emit_info,
-            sigs,
-        )
+        compile::compile::<AArch64Backend>(func, self, abi, emit_info, sigs)
     }
 }
 
@@ -80,10 +71,13 @@ impl TargetIsa for AArch64Backend {
         func: &Function,
         want_disasm: bool,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let flags = self.flags();
-        let (vcode, regalloc_result) = self.compile_vcode(func, flags.clone())?;
+        let (vcode, regalloc_result) = self.compile_vcode(func)?;
 
-        let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
+        let emit_result = vcode.emit(
+            &regalloc_result,
+            want_disasm,
+            self.flags.machine_code_cfg_info(),
+        );
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer.finish();
@@ -117,6 +111,10 @@ impl TargetIsa for AArch64Backend {
 
     fn flags(&self) -> &shared_settings::Flags {
         &self.flags
+    }
+
+    fn machine_env(&self) -> &MachineEnv {
+        &self.machine_env
     }
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {

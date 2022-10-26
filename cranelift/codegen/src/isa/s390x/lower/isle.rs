@@ -95,7 +95,7 @@ pub(crate) fn lower_branch(
     )
 }
 
-impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+impl generated_code::Context for IsleContext<'_, '_, '_, MInst, Flags, IsaFlags, 6> {
     isle_lower_prelude_methods!();
 
     #[inline]

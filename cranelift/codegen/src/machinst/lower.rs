@@ -21,6 +21,7 @@ use crate::machinst::{
 };
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
+use regalloc2::MachineEnv;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 
@@ -142,12 +143,15 @@ pub trait LowerBackend {
 
 /// Machine-independent lowering driver / machine-instruction container. Maintains a correspondence
 /// from original Inst to MachInsts.
-pub struct Lower<'func, I: VCodeInst> {
+pub struct Lower<'func, 'env, I: VCodeInst> {
     /// The function to lower.
     f: &'func Function,
 
     /// Machine-independent flags.
     flags: crate::settings::Flags,
+
+    /// The MachineEnv used when allocating registers.
+    machine_env: &'env MachineEnv,
 
     /// Lowered machine instructions.
     vcode: VCodeBuilder<I>,
@@ -317,16 +321,17 @@ pub enum RelocDistance {
     Far,
 }
 
-impl<'func, I: VCodeInst> Lower<'func, I> {
+impl<'func, 'env, I: VCodeInst> Lower<'func, 'env, I> {
     /// Prepare a new lowering context for the given IR function.
     pub fn new(
         f: &'func Function,
         flags: crate::settings::Flags,
+        machine_env: &'env MachineEnv,
         abi: Callee<I::ABIMachineSpec>,
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         sigs: SigSet,
-    ) -> CodegenResult<Lower<'func, I>> {
+    ) -> CodegenResult<Self> {
         let constants = VCodeConstants::with_capacity(f.dfg.constants.len());
         let vcode = VCodeBuilder::new(
             sigs,
@@ -412,6 +417,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         Ok(Lower {
             f,
             flags,
+            machine_env,
             vcode,
             vregs,
             value_regs,
@@ -1019,7 +1025,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         // Now that we've emitted all instructions into the
         // VCodeBuilder, let's build the VCode.
-        let vcode = self.vcode.build(self.vregs);
+        let vcode = self.vcode.build(self.machine_env, self.vregs);
         trace!("built vcode: {:?}", vcode);
 
         Ok(vcode)
@@ -1027,7 +1033,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 }
 
 /// Function-level queries.
-impl<'func, I: VCodeInst> Lower<'func, I> {
+impl<'func, 'env, I: VCodeInst> Lower<'func, 'env, I> {
     pub fn dfg(&self) -> &DataFlowGraph {
         &self.f.dfg
     }
@@ -1044,7 +1050,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 }
 
 /// Instruction input/output queries.
-impl<'func, I: VCodeInst> Lower<'func, I> {
+impl<'func, 'env, I: VCodeInst> Lower<'func, 'env, I> {
     /// Get the instdata for a given IR instruction.
     pub fn data(&self, ir_inst: Inst) -> &InstructionData {
         &self.f.dfg[ir_inst]
@@ -1301,7 +1307,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
 /// Codegen primitives: allocate temps, emit instructions, set result registers,
 /// ask for an input to be gen'd into a register.
-impl<'func, I: VCodeInst> Lower<'func, I> {
+impl<'func, 'env, I: VCodeInst> Lower<'func, 'env, I> {
     /// Get a new temp.
     pub fn alloc_tmp(&mut self, ty: Type) -> ValueRegs<Writable<Reg>> {
         writable_value_regs(self.vregs.alloc(ty).unwrap())

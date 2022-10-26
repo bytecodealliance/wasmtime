@@ -92,7 +92,7 @@ pub(crate) fn lower_branch(
     )
 }
 
-impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+impl Context for IsleContext<'_, '_, '_, MInst, Flags, IsaFlags, 6> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(X64ABIMachineSpec, X64Caller);
 
@@ -1009,7 +1009,7 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 }
 
-impl IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
+impl IsleContext<'_, '_, '_, MInst, Flags, IsaFlags, 6> {
     isle_prelude_method_helpers!(X64Caller);
 }
 
