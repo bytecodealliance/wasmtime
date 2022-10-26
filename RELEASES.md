@@ -1,5 +1,17 @@
 --------------------------------------------------------------------------------
 
+## 2.0.1
+
+Released 2022-10-27.
+
+### Fixed
+
+* A compilation error when building only the `wasmtime` crate on Windows with
+  only the default features enabled has been fixed.
+  [#5134](https://github.com/bytecodealliance/wasmtime/pull/5134)
+
+--------------------------------------------------------------------------------
+
 ## 2.0.0
 
 Released 2022-10-20.
