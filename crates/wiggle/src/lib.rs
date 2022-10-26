@@ -5,9 +5,7 @@ use std::sync::Arc;
 
 pub use wiggle_macro::{async_trait, from_witx};
 
-#[cfg(feature = "wasmtime")]
 pub use anyhow;
-#[cfg(feature = "wasmtime")]
 pub use wiggle_macro::wasmtime_integration;
 
 pub use bitflags;
@@ -30,10 +28,7 @@ pub mod async_trait_crate {
     pub use async_trait::*;
 }
 
-#[cfg(feature = "wasmtime")]
 pub mod wasmtime;
-
-#[cfg(feature = "wasmtime")]
 pub mod wasmtime_crate {
     pub use wasmtime::*;
 }
@@ -933,7 +928,6 @@ impl From<GuestError> for Trap {
     }
 }
 
-#[cfg(feature = "wasmtime")]
 pub fn run_in_dummy_executor<F: std::future::Future>(
     future: F,
 ) -> Result<F::Output, wasmtime_crate::Trap> {
