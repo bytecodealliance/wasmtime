@@ -21,7 +21,7 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -34,7 +34,7 @@ jobs:
     name: Cargo deny
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -52,11 +52,11 @@ jobs:
     env:
       CARGO_VET_VERSION: 0.3.0
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         path: ${{ runner.tool_cache }}/cargo-vet
         key: cargo-vet-bin-${{ env.CARGO_VET_VERSION }}
@@ -68,11 +68,11 @@ jobs:
     name: Doc build
     runs-on: ubuntu-latest
     env:
-      CARGO_MDBOOK_VERSION: 0.4.8
+      CARGO_MDBOOK_VERSION: 0.4.21
       RUSTDOCFLAGS: -Dbroken_intra_doc_links --cfg nightlydoc
       OPENVINO_SKIP_LINKING: 1
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -86,7 +86,7 @@ jobs:
     - run: cd crates/c-api && doxygen doxygen.conf
 
     # install mdbook, build the docs, and test the docs
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         path: ${{ runner.tool_cache }}/mdbook
         key: cargo-mdbook-bin-${{ env.CARGO_MDBOOK_VERSION }}
@@ -113,7 +113,7 @@ jobs:
         mv crates/c-api/html gh-pages/c-api
         mv target/doc gh-pages/api
         tar czf gh-pages.tar.gz gh-pages
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: gh-pages
         path: gh-pages.tar.gz
@@ -137,7 +137,7 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -187,7 +187,7 @@ jobs:
     name: Fuzz Targets
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     # Note that building with fuzzers requires nightly since it uses unstable
@@ -234,7 +234,7 @@ jobs:
             qemu: qemu-s390x -L /usr/s390x-linux-gnu
             qemu_target: s390x-linux-user
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -251,7 +251,7 @@ jobs:
     - run: cargo fetch --locked
     - run: cargo fetch --locked --manifest-path crates/test-programs/wasi-tests/Cargo.toml
 
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         path: ${{ runner.tool_cache }}/qemu
         key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchmadvise2
@@ -342,7 +342,7 @@ jobs:
     name: Test wasi-crypto module
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - run: rustup target add wasm32-wasi
@@ -356,7 +356,7 @@ jobs:
     name: Run benchmarks
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - run: rustup target add wasm32-wasi
@@ -369,7 +369,7 @@ jobs:
     name: Meta deterministic check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - name: Install Rust
@@ -405,7 +405,7 @@ jobs:
           os: ubuntu-latest
           target: s390x-unknown-linux-gnu
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     # On one builder produce the source tarball since there's no need to produce
@@ -430,7 +430,7 @@ jobs:
     # Assemble release artifats appropriate for this platform, then upload them
     # unconditionally to this workflow's files so we have a copy of them.
     - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
-    - uses: actions/upload-artifact@v1
+    - uses: actions/upload-artifact@v3
       with:
         name: bins-${{ matrix.build }}
         path: dist
@@ -452,7 +452,7 @@ jobs:
     if: github.repository == 'bytecodealliance/wasmtime'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - run: rustup update stable && rustup default stable
