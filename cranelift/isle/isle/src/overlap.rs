@@ -108,6 +108,11 @@ fn check_overlaps(env: &TermEnv) -> Errors {
                 continue;
             }
 
+            // Group rules by term and priority. Only rules within the same group are checked to
+            // see if they overlap each other. If you want to change the scope of overlap checking,
+            // change this key.
+            let key = (tid, rule.prio);
+
             let mut binds = Vec::new();
             let rule = RulePatterns {
                 rule,
@@ -116,33 +121,22 @@ fn check_overlaps(env: &TermEnv) -> Errors {
                     .map(|pat| Pattern::from_sema(env, &mut binds, pat))
                     .collect(),
             };
-            by_term.entry(tid).or_insert_with(Vec::new).push(rule);
+            by_term.entry(key).or_insert_with(Vec::new).push(rule);
         }
     }
 
-    // Sequentially identify all rule pairs which are in the same term. We could make this a
-    // parallel iterator, but that's harder to read and this loop is fast. Also, Rayon can
-    // efficiently partition a vector across multiple CPUs, which it might have more trouble with
-    // if this were an iterator.
-    let mut pairs = Vec::new();
-    for rows in by_term.values() {
-        let mut cursor = &rows[..];
-        while let Some((row, rest)) = cursor.split_first() {
-            cursor = rest;
-            pairs.extend(rest.iter().map(|other| (row, other)));
-        }
-    }
-
-    pairs
-        .into_iter()
-        .fold(Errors::default(), |mut errs, (left, right)| {
-            if left.rule.prio == right.rule.prio {
+    let mut errs = Errors::default();
+    for (_, rows) in by_term {
+        let mut cursor = rows.into_iter();
+        while let Some(left) = cursor.next() {
+            for right in cursor.as_slice() {
                 if check_overlap_pair(&left.pats, &right.pats) {
                     errs.add_edge(left.rule.id, right.rule.id);
                 }
             }
-            errs
-        })
+        }
+    }
+    errs
 }
 
 /// Check if two rules overlap in the inputs they accept.
