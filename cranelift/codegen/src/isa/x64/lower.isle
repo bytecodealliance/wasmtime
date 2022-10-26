@@ -1359,7 +1359,7 @@
         (x64_add_with_flags_paired ty a b)
         (trap_if (CC.B) tc)))
 
-;; Add a register and constant.
+;; Add a register and an immediate.
 
 (rule 1 (lower (has_type (fits_in_64 ty)
                          (iadd_overflow_trap a (simm32_from_value b) tc)))

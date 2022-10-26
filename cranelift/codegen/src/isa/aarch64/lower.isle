@@ -2378,6 +2378,8 @@
        (add_with_flags ty a b)
        (invalid_reg)))
 
+;;; Rules for `iadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (rule (lower (has_type (fits_in_64 ty) (iadd_overflow_trap a b tc)))
       (trap_if_overflow (add_with_flags_paired ty a b) tc))
 
