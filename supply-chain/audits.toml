@@ -241,6 +241,30 @@ Contains unsafe blocks but are encapsulated and required for the operation at
 hand.
 """
 
+[[audits.openvino]]
+who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
+criteria = "safe-to-deploy"
+version = "0.4.2"
+notes = """
+I am the author of most of these changes.
+"""
+
+[[audits.openvino-finder]]
+who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.1 -> 0.4.2"
+notes = """
+Only updates to Cargo file for versioning.
+"""
+
+[[audits.openvino-sys]]
+who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.1 -> 0.4.2"
+notes = """
+Only updates to tests to use new rust functions for mut pointers.
+"""
+
 [[audits.memory_units]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"

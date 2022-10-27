@@ -550,10 +550,6 @@ criteria = "safe-to-run"
 version = "0.3.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.openvino]]
-version = "0.4.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.openvino-finder]]
 version = "0.4.1"
 criteria = "safe-to-deploy"
