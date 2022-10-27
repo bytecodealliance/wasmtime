@@ -531,7 +531,7 @@ impl SolverCtx {
         println!("Checking assumption feasibility");
         solver.push(1).unwrap();
         for a in assumptions {
-            println!("{}", &a);
+            // println!("{}", &a);
             solver.assert(a).unwrap();
 
             // Uncomment to debug specific asserts

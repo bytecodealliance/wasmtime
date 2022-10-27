@@ -107,7 +107,7 @@ fn test_with_filter(inputs: Vec<PathBuf>, name_filter: Option<String>, tr: TestR
             &type_sols,
             bw as usize,
         );
-        assert_eq!(result, expected_result);
+        assert_eq!(result, expected_result, "bitwidth: {:?}", bw);
     }
 }
 
