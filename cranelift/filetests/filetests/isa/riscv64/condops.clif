@@ -5,25 +5,21 @@ target riscv64
 function %f(i8, i64, i64) -> i64 {
 block0(v0: i8, v1: i64, v2: i64):
   v3 = iconst.i8 42
-  v4 = ifcmp v0, v3
-  v5 = selectif.i64 eq v4, v1, v2
+  v4 = icmp eq v0, v3
+  v5 = select.i64 v4, v1, v2
   return v5
 }
 
 ; block0:
 ;   li a3,42
-;   uext.b a5,a0
-;   uext.b a7,a3
-;   eq t4,a5,a7##ty=i8
-;   selectif a0,a1,a2##test=t4
+;   select_reg a0,a1,a2##condition=(a0 eq a3)
 ;   ret
 
 function %g(i8) -> i8 {
 block0(v0: i8):
   v3 = iconst.i8 42
-  v4 = ifcmp v0, v3
-  v5 = trueif eq v4
-  return v5
+  v4 = icmp eq v0, v3
+  return v4
 }
 
 ; block0:
@@ -68,12 +64,8 @@ block0(v0: i32, v1: i8, v2: i8):
 }
 
 ; block0:
-;   li a4,42
-;   uext.w a6,a0
-;   uext.w t3,a4
-;   eq t0,a6,t3##ty=i32
-;   andi a6,t0,255
-;   select_i8 a0,a1,a2##condition=a6
+;   li a3,42
+;   select_reg a0,a1,a2##condition=(a0 eq a3)
 ;   ret
 
 function %i128_select(i8, i128, i128) -> i128 {

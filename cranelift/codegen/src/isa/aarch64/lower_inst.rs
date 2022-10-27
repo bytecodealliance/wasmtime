@@ -151,17 +151,11 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::Select => implemented_in_isle(ctx),
 
-        Opcode::Selectif | Opcode::SelectifSpectreGuard => implemented_in_isle(ctx),
+        Opcode::SelectSpectreGuard => implemented_in_isle(ctx),
 
         Opcode::Bitselect | Opcode::Vselect => implemented_in_isle(ctx),
 
-        Opcode::Trueif => implemented_in_isle(ctx),
-
-        Opcode::Trueff => implemented_in_isle(ctx),
-
         Opcode::IsNull | Opcode::IsInvalid => implemented_in_isle(ctx),
-
-        Opcode::Copy => implemented_in_isle(ctx),
 
         Opcode::Ireduce => implemented_in_isle(ctx),
 
@@ -205,13 +199,7 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::GetPinnedReg | Opcode::SetPinnedReg => implemented_in_isle(ctx),
 
-        Opcode::Jump
-        | Opcode::Brz
-        | Opcode::Brnz
-        | Opcode::BrIcmp
-        | Opcode::Brif
-        | Opcode::Brff
-        | Opcode::BrTable => {
+        Opcode::Jump | Opcode::Brz | Opcode::Brnz | Opcode::BrTable => {
             panic!("Branch opcode reached non-branch lowering logic!");
         }
 
@@ -268,6 +256,8 @@ pub(crate) fn lower_insn_to_regs(
         Opcode::FcvtToUintSat | Opcode::FcvtToSintSat => implemented_in_isle(ctx),
 
         Opcode::IaddIfcout => implemented_in_isle(ctx),
+
+        Opcode::UaddOverflowTrap => implemented_in_isle(ctx),
 
         Opcode::IaddImm
         | Opcode::ImulImm

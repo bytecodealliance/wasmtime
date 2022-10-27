@@ -114,7 +114,7 @@
 
 ;;;; Rules for `isplit` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I64 (isplit x)))
+(rule (lower (isplit x @ (value_type $I128)))
       (let
           ((x_regs ValueRegs x)
            (x_lo ValueRegs (value_regs_get x_regs 0))
@@ -1706,21 +1706,6 @@
 (rule (lower (resumable_trap trap_code))
       (side_effect (udf trap_code)))
 
-;;;; Rules for `trueif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Verification ensures the input is always a single-def ifcmp.
-(rule (lower (has_type out_ty
-       (trueif cc insn @ (ifcmp x @ (value_type in_ty) y))))
-      (lower_icmp_into_reg cc x y in_ty out_ty))
-
-;;;; Rules for `trueff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Verification ensures the input is always a single-def ffcmp.
-(rule (lower (trueff cc insn @ (ffcmp x @ (value_type in_ty) y)))
-      (with_flags_reg
-       (fpu_cmp (scalar_size in_ty) x y)
-       (materialize_bool_result (fp_cond_code cc))))
-
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty
@@ -1755,22 +1740,11 @@
         (cmp (OperandSize.Size64) rcond (zero_reg))
         (Cond.Ne) ty rn rm)))
 
-;;;; Rules for `selectif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Verification ensures that the input is always a single-def ifcmp.
-(rule (lower (has_type ty
-       (selectif cc flags @ (ifcmp x @ (value_type in_ty) y)
-        if_true if_false)))
-      (let ((cond Cond (cond_code cc)))
-       (lower_select
-        (lower_icmp_into_flags cc x y in_ty)
-        cond ty if_true if_false)))
-
-;;;; Rules for `selectif_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty
-       (selectif_spectre_guard cc
-        flags @ (ifcmp x @ (value_type in_ty) y) if_true if_false)))
+       (select_spectre_guard
+        (icmp cc x @ (value_type in_ty) y) if_true if_false)))
       (let ((cond Cond (cond_code cc))
             (dst ValueRegs (lower_select
                       (lower_icmp_into_flags cc x y in_ty)
@@ -2291,11 +2265,6 @@
                          (u8_from_uimm8 lane)))
       (mov_vec_elem vec val lane 0 (vector_size vty)))
 
-;;; Rules for `copy` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (copy x))
-      x)
-
 ;;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (stack_addr stack_slot offset))
@@ -2404,6 +2373,11 @@
        (add_with_flags ty a b)
        (invalid_reg)))
 
+;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (fits_in_64 ty) (uadd_overflow_trap a b tc)))
+      (trap_if_overflow (add_with_flags_paired ty a b) tc))
+
 ;;; Rules for `tls_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (tls_value (symbol_value_data name _ _)))
@@ -2422,7 +2396,7 @@
 (rule (lower (fvpromote_low val))
       (vec_rr_long (VecRRLongOp.Fcvtl32) val $false))
 
-;;; Rules for `brz`/`brnz`/`brif`/`brff`/`bricmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Rules for `brz`/`brnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `brz` following `icmp`
 (rule (lower_branch (brz (icmp cc x @ (value_type ty) y) _ _) targets)
@@ -2504,58 +2478,6 @@
        (side_effect
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_not_zero rt))))))
-
-;; `br_icmp`
-(rule (lower_branch (br_icmp cc x @ (value_type ty) y _ _) targets)
-      (let ((cond Cond (cond_code cc))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (lower_icmp_into_flags cc x y ty)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-
-;; `brif`
-(rule (lower_branch (brif cc (ifcmp x @ (value_type ty) y) _ _) targets)
-      (let ((cond Cond (cond_code cc))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (lower_icmp_into_flags cc x y ty)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-;; If the `ifcmp` result is actually placed in a register, we need to move it
-;; back into the flags.
-(rule -1 (lower_branch (brif cc f _ _) targets)
-      (let ((cond Cond (cond_code cc))
-            (rn Reg (put_in_reg f))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (mov_to_nzcv rn)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-
-;; `brff`
-(rule (lower_branch (brff cc (ffcmp x @ (value_type ty) y) _ _) targets)
-      (let ((cond Cond (fp_cond_code cc))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (fpu_cmp (scalar_size ty) x y)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-;; If the `ffcmp` result is actually placed in a register, we need to move it
-;; back into the flags.
-(rule -1 (lower_branch (brff cc f _ _) targets)
-      (let ((cond Cond (fp_cond_code cc))
-            (rn Reg (put_in_reg f))
-            (taken BranchTarget (branch_target targets 0))
-            (not_taken BranchTarget (branch_target targets 1)))
-       (side_effect
-        (with_flags_side_effect (mov_to_nzcv rn)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
 
 ;;; Rules for `jump` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

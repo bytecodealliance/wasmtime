@@ -927,9 +927,8 @@ block0(v0: f32):
 ; block0:
 ;   ldebr %f3, %f0
 ;   wclgdb %f5, %f3, 0, 5
-;   lgdr %r5, %f5
-;   lgr %r2, %r5
-;   clgfi %r5, 256
+;   lgdr %r2, %f5
+;   clgfi %r2, 256
 ;   locghih %r2, 255
 ;   br %r14
 
@@ -942,14 +941,12 @@ block0(v0: f32):
 ; block0:
 ;   ldebr %f3, %f0
 ;   wcgdb %f5, %f3, 0, 5
-;   lgdr %r5, %f5
+;   lgdr %r2, %f5
 ;   cebr %f0, %f0
-;   locghio %r5, 0
-;   lgr %r4, %r5
-;   cghi %r5, 127
-;   locghih %r4, 127
-;   lgr %r2, %r4
-;   cghi %r4, -128
+;   locghio %r2, 0
+;   cghi %r2, 127
+;   locghih %r2, 127
+;   cghi %r2, -128
 ;   locghil %r2, -128
 ;   br %r14
 
@@ -962,9 +959,8 @@ block0(v0: f32):
 ; block0:
 ;   ldebr %f3, %f0
 ;   wclgdb %f5, %f3, 0, 5
-;   lgdr %r5, %f5
-;   lgr %r2, %r5
-;   clgfi %r5, 65535
+;   lgdr %r2, %f5
+;   clgfi %r2, 65535
 ;   locghih %r2, -1
 ;   br %r14
 
@@ -977,14 +973,12 @@ block0(v0: f32):
 ; block0:
 ;   ldebr %f3, %f0
 ;   wcgdb %f5, %f3, 0, 5
-;   lgdr %r5, %f5
+;   lgdr %r2, %f5
 ;   cebr %f0, %f0
-;   locghio %r5, 0
-;   lgr %r4, %r5
-;   cghi %r5, 32767
-;   locghih %r4, 32767
-;   lgr %r2, %r4
-;   cghi %r4, -32768
+;   locghio %r2, 0
+;   cghi %r2, 32767
+;   locghih %r2, 32767
+;   cghi %r2, -32768
 ;   locghil %r2, -32768
 ;   br %r14
 
@@ -1018,9 +1012,9 @@ block0(v0: f32):
 ;   lgfi %r3, 2147483647
 ;   cgr %r2, %r3
 ;   locgrh %r2, %r3
-;   lgfi %r5, -2147483648
-;   cgr %r2, %r5
-;   locgrl %r2, %r5
+;   lgfi %r3, -2147483648
+;   cgr %r2, %r3
+;   locgrl %r2, %r3
 ;   br %r14
 
 function %fcvt_to_uint_sat_f32_i64(f32) -> i64 {
@@ -1057,9 +1051,8 @@ block0(v0: f64):
 
 ; block0:
 ;   wclgdb %f3, %f0, 0, 5
-;   lgdr %r3, %f3
-;   lgr %r2, %r3
-;   clgfi %r3, 256
+;   lgdr %r2, %f3
+;   clgfi %r2, 256
 ;   locghih %r2, 255
 ;   br %r14
 
@@ -1071,14 +1064,12 @@ block0(v0: f64):
 
 ; block0:
 ;   wcgdb %f3, %f0, 0, 5
-;   lgdr %r3, %f3
+;   lgdr %r2, %f3
 ;   cdbr %f0, %f0
-;   locghio %r3, 0
-;   lgr %r4, %r3
-;   cghi %r3, 127
-;   locghih %r4, 127
-;   lgr %r2, %r4
-;   cghi %r4, -128
+;   locghio %r2, 0
+;   cghi %r2, 127
+;   locghih %r2, 127
+;   cghi %r2, -128
 ;   locghil %r2, -128
 ;   br %r14
 
@@ -1090,9 +1081,8 @@ block0(v0: f64):
 
 ; block0:
 ;   wclgdb %f3, %f0, 0, 5
-;   lgdr %r3, %f3
-;   lgr %r2, %r3
-;   clgfi %r3, 65535
+;   lgdr %r2, %f3
+;   clgfi %r2, 65535
 ;   locghih %r2, -1
 ;   br %r14
 
@@ -1104,14 +1094,12 @@ block0(v0: f64):
 
 ; block0:
 ;   wcgdb %f3, %f0, 0, 5
-;   lgdr %r3, %f3
+;   lgdr %r2, %f3
 ;   cdbr %f0, %f0
-;   locghio %r3, 0
-;   lgr %r4, %r3
-;   cghi %r3, 32767
-;   locghih %r4, 32767
-;   lgr %r2, %r4
-;   cghi %r4, -32768
+;   locghio %r2, 0
+;   cghi %r2, 32767
+;   locghih %r2, 32767
+;   cghi %r2, -32768
 ;   locghil %r2, -32768
 ;   br %r14
 
@@ -1140,12 +1128,12 @@ block0(v0: f64):
 ;   lgdr %r2, %f3
 ;   cdbr %f0, %f0
 ;   locghio %r2, 0
-;   lgfi %r5, 2147483647
+;   lgfi %r4, 2147483647
+;   cgr %r2, %r4
+;   locgrh %r2, %r4
+;   lgfi %r5, -2147483648
 ;   cgr %r2, %r5
-;   locgrh %r2, %r5
-;   lgfi %r3, -2147483648
-;   cgr %r2, %r3
-;   locgrl %r2, %r3
+;   locgrl %r2, %r5
 ;   br %r14
 
 function %fcvt_to_uint_sat_f64_i64(f64) -> i64 {

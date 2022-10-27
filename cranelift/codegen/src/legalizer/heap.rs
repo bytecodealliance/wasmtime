@@ -74,12 +74,9 @@ fn dynamic_addr(
     } else {
         // We need an overflow check for the adjusted offset.
         let access_size_val = pos.ins().iconst(addr_ty, access_size as i64);
-        let (adj_offset, overflow) = pos.ins().iadd_ifcout(offset, access_size_val);
-        pos.ins().trapif(
-            isa.unsigned_add_overflow_condition(),
-            overflow,
-            ir::TrapCode::HeapOutOfBounds,
-        );
+        let adj_offset =
+            pos.ins()
+                .uadd_overflow_trap(offset, access_size_val, ir::TrapCode::HeapOutOfBounds);
         (IntCC::UnsignedGreaterThan, adj_offset, bound)
     };
     let oob = pos.ins().icmp(cc, lhs, bound);
@@ -250,11 +247,11 @@ fn compute_addr(
     if let Some((cc, a, b)) = spectre_oob_comparison {
         let final_addr = pos.ins().iadd(base, offset);
         let zero = pos.ins().iconst(addr_ty, 0);
-        let flags = pos.ins().ifcmp(a, b);
+        let cmp = pos.ins().icmp(cc, a, b);
         pos.func
             .dfg
             .replace(inst)
-            .selectif_spectre_guard(addr_ty, cc, flags, zero, final_addr);
+            .select_spectre_guard(cmp, zero, final_addr);
     } else {
         pos.func.dfg.replace(inst).iadd(base, offset);
     }

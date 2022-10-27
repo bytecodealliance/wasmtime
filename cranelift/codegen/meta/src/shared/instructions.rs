@@ -75,81 +75,8 @@ fn define_control_flow(
         );
     }
 
-    let iB = &TypeVar::new(
-        "iB",
-        "A scalar integer type",
-        TypeSetBuilder::new().ints(Interval::All).build(),
-    );
     let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
     let fflags: &TypeVar = &ValueType::Special(types::Flag::FFlags.into()).into();
-
-    {
-        let Cond = &Operand::new("Cond", &imm.intcc);
-        let x = &Operand::new("x", iB);
-        let y = &Operand::new("y", iB);
-
-        ig.push(
-            Inst::new(
-                "br_icmp",
-                r#"
-        Compare scalar integers and branch.
-
-        Compare ``x`` and ``y`` in the same way as the `icmp` instruction
-        and take the branch if the condition is true:
-
-        ```text
-            br_icmp ugt v1, v2, block4(v5, v6)
-        ```
-
-        is semantically equivalent to:
-
-        ```text
-            v10 = icmp ugt, v1, v2
-            brnz v10, block4(v5, v6)
-        ```
-
-        Some RISC architectures like MIPS and RISC-V provide instructions that
-        implement all or some of the condition codes. The instruction can also
-        be used to represent *macro-op fusion* on architectures like Intel's.
-        "#,
-                &formats.branch_icmp,
-            )
-            .operands_in(vec![Cond, x, y, block, args])
-            .is_branch(true),
-        );
-
-        let f = &Operand::new("f", iflags);
-
-        ig.push(
-            Inst::new(
-                "brif",
-                r#"
-        Branch when condition is true in integer CPU flags.
-        "#,
-                &formats.branch_int,
-            )
-            .operands_in(vec![Cond, f, block, args])
-            .is_branch(true),
-        );
-    }
-
-    {
-        let Cond = &Operand::new("Cond", &imm.floatcc);
-
-        let f = &Operand::new("f", fflags);
-
-        ig.push(
-            Inst::new(
-                "brff",
-                r#"
-        Branch when condition is true in floating point CPU flags.
-        "#,
-                &formats.branch_float,
-            )
-            .operands_in(vec![Cond, f, block, args])
-            .is_branch(true),
-        );
-    }
 
     {
         let _i32 = &TypeVar::new(
@@ -689,6 +616,16 @@ pub(crate) fn define(
         "A scalar or vector integer type",
         TypeSetBuilder::new()
             .ints(Interval::All)
+            .simd_lanes(Interval::All)
+            .dynamic_simd_lanes(Interval::All)
+            .build(),
+    );
+
+    let NarrowInt = &TypeVar::new(
+        "NarrowInt",
+        "An integer type with lanes type to `i64`",
+        TypeSetBuilder::new()
+            .ints(8..64)
             .simd_lanes(Interval::All)
             .dynamic_simd_lanes(Interval::All)
             .build(),
@@ -1342,7 +1279,7 @@ pub(crate) fn define(
     );
 
     let N = &Operand::new("N", &imm.imm64);
-    let a = &Operand::new("a", Int).with_doc("A constant integer scalar or vector value");
+    let a = &Operand::new("a", NarrowInt).with_doc("A constant integer scalar or vector value");
 
     ig.push(
         Inst::new(
@@ -1488,28 +1425,13 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let cc = &Operand::new("cc", &imm.intcc).with_doc("Controlling condition code");
-    let flags = &Operand::new("flags", iflags).with_doc("The machine's flag register");
-
     ig.push(
         Inst::new(
-            "selectif",
-            r#"
-        Conditional select, dependent on integer condition codes.
-        "#,
-            &formats.int_select,
-        )
-        .operands_in(vec![cc, flags, x, y])
-        .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
-            "selectif_spectre_guard",
+            "select_spectre_guard",
             r#"
             Conditional select intended for Spectre guards.
 
-            This operation is semantically equivalent to a selectif instruction.
+            This operation is semantically equivalent to a select instruction.
             However, it is guaranteed to not be removed or otherwise altered by any
             optimization pass, and is guaranteed to result in a conditional-move
             instruction, not a branch-based lowering.  As such, it is suitable
@@ -1524,9 +1446,9 @@ pub(crate) fn define(
             speculative path, this ensures that no Spectre vulnerability will
             exist.
             "#,
-            &formats.int_select,
+            &formats.ternary,
         )
-        .operands_in(vec![cc, flags, x, y])
+        .operands_in(vec![c, x, y])
         .operands_out(vec![a])
         .other_side_effects(true),
     );
@@ -1545,27 +1467,6 @@ pub(crate) fn define(
             &formats.ternary,
         )
         .operands_in(vec![c, x, y])
-        .operands_out(vec![a]),
-    );
-
-    let x = &Operand::new("x", Any);
-
-    ig.push(
-        Inst::new(
-            "copy",
-            r#"
-        Register-register copy.
-
-        This instruction copies its input, preserving the value type.
-
-        A pure SSA-form program does not need to copy values, but this
-        instruction is useful for representing intermediate stages during
-        instruction transformations, and the register allocator needs a way of
-        representing register copies.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
         .operands_out(vec![a]),
     );
 
@@ -2251,6 +2152,34 @@ pub(crate) fn define(
         .operands_in(vec![x, y, c_if_in])
         .operands_out(vec![a, c_if_out]),
     );
+
+    {
+        let code = &Operand::new("code", &imm.trapcode);
+
+        let i32_64 = &TypeVar::new(
+            "i32_64",
+            "A 32 or 64-bit scalar integer type",
+            TypeSetBuilder::new().ints(32..64).build(),
+        );
+
+        let a = &Operand::new("a", i32_64);
+        let x = &Operand::new("x", i32_64);
+        let y = &Operand::new("y", i32_64);
+        ig.push(
+            Inst::new(
+                "uadd_overflow_trap",
+                r#"
+            Unsigned addition of x and y, trapping if the result overflows.
+
+            Accepts 32 or 64-bit integers, and does not support vector types.
+            "#,
+                &formats.int_add_trap,
+            )
+            .operands_in(vec![x, y, code])
+            .operands_out(vec![a])
+            .can_trap(true),
+        );
+    }
 
     ig.push(
         Inst::new(
@@ -3184,43 +3113,6 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let Cond = &Operand::new("Cond", &imm.intcc);
-    let f = &Operand::new("f", iflags);
-    let a = &Operand::new("a", i8);
-
-    ig.push(
-        Inst::new(
-            "trueif",
-            r#"
-        Test integer CPU flags for a specific condition.
-
-        Check the CPU flags in ``f`` against the ``Cond`` condition code and
-        return true when the condition code is satisfied.
-        "#,
-            &formats.int_cond,
-        )
-        .operands_in(vec![Cond, f])
-        .operands_out(vec![a]),
-    );
-
-    let Cond = &Operand::new("Cond", &imm.floatcc);
-    let f = &Operand::new("f", fflags);
-
-    ig.push(
-        Inst::new(
-            "trueff",
-            r#"
-        Test floating point CPU flags for a specific condition.
-
-        Check the CPU flags in ``f`` against the ``Cond`` condition code and
-        return true when the condition code is satisfied.
-        "#,
-            &formats.float_cond,
-        )
-        .operands_in(vec![Cond, f])
-        .operands_out(vec![a]),
-    );
-
     let x = &Operand::new("x", Mem);
     let a = &Operand::new("a", MemTo).with_doc("Bits of `x` reinterpreted");
 
@@ -3878,15 +3770,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![x])
         .operands_out(vec![lo, hi]),
-    );
-
-    let NarrowInt = &TypeVar::new(
-        "NarrowInt",
-        "An integer type with lanes type to `i64`",
-        TypeSetBuilder::new()
-            .ints(8..64)
-            .simd_lanes(Interval::All)
-            .build(),
     );
 
     let lo = &Operand::new("lo", NarrowInt);

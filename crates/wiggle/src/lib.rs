@@ -5,9 +5,7 @@ use std::sync::Arc;
 
 pub use wiggle_macro::{async_trait, from_witx};
 
-#[cfg(feature = "wasmtime")]
 pub use anyhow;
-#[cfg(feature = "wasmtime")]
 pub use wiggle_macro::wasmtime_integration;
 
 pub use bitflags;
@@ -30,10 +28,7 @@ pub mod async_trait_crate {
     pub use async_trait::*;
 }
 
-#[cfg(feature = "wasmtime")]
 pub mod wasmtime;
-
-#[cfg(feature = "wasmtime")]
 pub mod wasmtime_crate {
     pub use wasmtime::*;
 }
@@ -914,26 +909,14 @@ impl Pointee for str {
     }
 }
 
-/// A runtime-independent way for Wiggle to terminate WebAssembly execution.
-/// Functions that are marked `(@witx noreturn)` will always return a Trap.
-/// Other functions that want to Trap can do so via their `UserErrorConversion`
-/// trait, which transforms the user's own error type into a `Result<abierror, Trap>`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Trap {
-    /// A Trap which indicates an i32 (posix-style) exit code. Runtimes may have a
-    /// special way of dealing with this for WASI embeddings and otherwise.
-    I32Exit(i32),
-    /// Any other Trap is just an unstructured String, for reporting and debugging.
-    String(String),
-}
-
-impl From<GuestError> for Trap {
-    fn from(err: GuestError) -> Trap {
-        Trap::String(err.to_string())
+impl From<GuestError> for wasmtime_crate::Trap {
+    fn from(err: GuestError) -> wasmtime_crate::Trap {
+        wasmtime_crate::Trap::from(
+            Box::new(err) as Box<dyn std::error::Error + Send + Sync + 'static>
+        )
     }
 }
 
-#[cfg(feature = "wasmtime")]
 pub fn run_in_dummy_executor<F: std::future::Future>(
     future: F,
 ) -> Result<F::Output, wasmtime_crate::Trap> {

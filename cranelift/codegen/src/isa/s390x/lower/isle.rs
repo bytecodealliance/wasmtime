@@ -8,7 +8,8 @@ use crate::ir::ExternalName;
 use crate::isa::s390x::abi::{S390xMachineDeps, REG_SAVE_AREA_SIZE};
 use crate::isa::s390x::inst::{
     gpr, stack_reg, writable_gpr, zero_reg, CallIndInfo, CallInfo, Cond, Inst as MInst, LaneOrder,
-    MemArg, MemArgPair, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted,
+    MemArg, MemArgPair, RegPair, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted,
+    WritableRegPair,
 };
 use crate::isa::s390x::settings::Flags as IsaFlags;
 use crate::machinst::isle::*;
@@ -16,17 +17,20 @@ use crate::machinst::{MachLabel, Reg};
 use crate::settings::Flags;
 use crate::{
     ir::{
-        condcodes::*, immediates::*, types::*, AtomicRmwOp, Endianness, Inst, InstructionData,
-        KnownSymbol, LibCall, MemFlags, Opcode, TrapCode, Value, ValueList,
+        condcodes::*, immediates::*, types::*, ArgumentPurpose, AtomicRmwOp, Endianness, Inst,
+        InstructionData, KnownSymbol, LibCall, MemFlags, Opcode, TrapCode, Value, ValueList,
     },
     isa::unwind::UnwindInst,
     isa::CallConv,
     machinst::abi::ABIMachineSpec,
-    machinst::{ArgPair, InsnOutput, Lower, MachInst, VCodeConstant, VCodeConstantData},
+    machinst::{
+        ArgPair, CallArgList, CallArgPair, CallRetList, CallRetPair, InsnOutput, Lower, MachInst,
+        VCodeConstant, VCodeConstantData,
+    },
 };
 use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use regalloc2::PReg;
-use smallvec::{smallvec, SmallVec};
+use smallvec::smallvec;
 use std::boxed::Box;
 use std::cell::Cell;
 use std::convert::TryFrom;
@@ -36,6 +40,8 @@ use target_lexicon::Triple;
 /// Information describing a library call to be emitted.
 pub struct LibCallInfo {
     libcall: LibCall,
+    uses: CallArgList,
+    defs: CallRetList,
     tls_symbol: Option<SymbolReloc>,
 }
 
@@ -47,6 +53,7 @@ type BoxSymbolReloc = Box<SymbolReloc>;
 type VecMInst = Vec<MInst>;
 type VecMInstBuilder = Cell<Vec<MInst>>;
 type VecArgPair = Vec<ArgPair>;
+type CallArgListBuilder = Cell<CallArgList>;
 
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(
@@ -91,8 +98,78 @@ pub(crate) fn lower_branch(
 impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     isle_lower_prelude_methods!();
 
+    #[inline]
+    fn args_builder_new(&mut self) -> CallArgListBuilder {
+        Cell::new(CallArgList::new())
+    }
+
+    #[inline]
+    fn args_builder_push(
+        &mut self,
+        builder: &CallArgListBuilder,
+        vreg: Reg,
+        preg: RealReg,
+    ) -> Unit {
+        let mut args = builder.take();
+        args.push(CallArgPair {
+            vreg,
+            preg: preg.into(),
+        });
+        builder.set(args);
+    }
+
+    #[inline]
+    fn args_builder_finish(&mut self, builder: &CallArgListBuilder) -> CallArgList {
+        builder.take()
+    }
+
+    fn defs_init(&mut self, abi: &Sig) -> CallRetList {
+        // Allocate writable registers for all retval regs, except for StructRet args.
+        let mut defs = smallvec![];
+        for i in 0..self.lower_ctx.sigs()[*abi].num_rets() {
+            if let &ABIArg::Slots {
+                ref slots, purpose, ..
+            } = &self.lower_ctx.sigs()[*abi].get_ret(i)
+            {
+                if purpose == ArgumentPurpose::StructReturn {
+                    continue;
+                }
+                for slot in slots {
+                    match slot {
+                        &ABIArgSlot::Reg { reg, ty, .. } => {
+                            let value_regs = self.lower_ctx.alloc_tmp(ty);
+                            defs.push(CallRetPair {
+                                vreg: value_regs.only_reg().unwrap(),
+                                preg: reg.into(),
+                            });
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        defs
+    }
+
+    fn defs_lookup(&mut self, defs: &CallRetList, reg: RealReg) -> Reg {
+        let reg = Reg::from(reg);
+        for def in defs {
+            if def.preg == reg {
+                return def.vreg.to_reg();
+            }
+        }
+        unreachable!()
+    }
+
     fn abi_sig(&mut self, sig_ref: SigRef) -> Sig {
         self.lower_ctx.sigs().abi_sig_for_sig_ref(sig_ref)
+    }
+
+    fn abi_first_ret(&mut self, sig_ref: SigRef, abi: &Sig) -> usize {
+        // Return the index of the first actual return value, excluding
+        // any StructReturn that might have been added to Sig.
+        let sig = &self.lower_ctx.dfg().signatures[sig_ref];
+        self.lower_ctx.sigs()[*abi].num_rets() - sig.returns.len()
     }
 
     fn abi_lane_order(&mut self, abi: &Sig) -> LaneOrder {
@@ -107,13 +184,19 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
             .accumulate_outgoing_args_size(off as u32);
     }
 
-    fn abi_call_info(&mut self, abi: &Sig, name: ExternalName, opcode: &Opcode) -> BoxCallInfo {
-        let (uses, defs, clobbers) =
-            self.lower_ctx.sigs()[*abi].call_uses_defs_clobbers::<S390xMachineDeps>();
+    fn abi_call_info(
+        &mut self,
+        abi: &Sig,
+        name: ExternalName,
+        uses: &CallArgList,
+        defs: &CallRetList,
+        opcode: &Opcode,
+    ) -> BoxCallInfo {
+        let clobbers = self.lower_ctx.sigs()[*abi].call_clobbers::<S390xMachineDeps>();
         Box::new(CallInfo {
             dest: name.clone(),
-            uses,
-            defs,
+            uses: uses.clone(),
+            defs: defs.clone(),
             clobbers,
             opcode: *opcode,
             caller_callconv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
@@ -122,13 +205,19 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         })
     }
 
-    fn abi_call_ind_info(&mut self, abi: &Sig, target: Reg, opcode: &Opcode) -> BoxCallIndInfo {
-        let (uses, defs, clobbers) =
-            self.lower_ctx.sigs()[*abi].call_uses_defs_clobbers::<S390xMachineDeps>();
+    fn abi_call_ind_info(
+        &mut self,
+        abi: &Sig,
+        target: Reg,
+        uses: &CallArgList,
+        defs: &CallRetList,
+        opcode: &Opcode,
+    ) -> BoxCallIndInfo {
+        let clobbers = self.lower_ctx.sigs()[*abi].call_clobbers::<S390xMachineDeps>();
         Box::new(CallIndInfo {
             rn: target,
-            uses,
-            defs,
+            uses: uses.clone(),
+            defs: defs.clone(),
             clobbers,
             opcode: *opcode,
             caller_callconv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
@@ -136,16 +225,51 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         })
     }
 
-    fn lib_call_info_memcpy(&mut self) -> LibCallInfo {
+    fn lib_call_info_memcpy(&mut self, dst: Reg, src: Reg, len: Reg) -> LibCallInfo {
         LibCallInfo {
             libcall: LibCall::Memcpy,
+            uses: smallvec![
+                CallArgPair {
+                    vreg: dst,
+                    preg: gpr(2),
+                },
+                CallArgPair {
+                    vreg: src,
+                    preg: gpr(3),
+                },
+                CallArgPair {
+                    vreg: len,
+                    preg: gpr(4),
+                },
+            ],
+            defs: smallvec![],
             tls_symbol: None,
         }
     }
 
-    fn lib_call_info_tls_get_offset(&mut self, tls_symbol: &SymbolReloc) -> LibCallInfo {
+    fn lib_call_info_tls_get_offset(
+        &mut self,
+        tls_offset: WritableReg,
+        got: Reg,
+        got_offset: Reg,
+        tls_symbol: &SymbolReloc,
+    ) -> LibCallInfo {
         LibCallInfo {
             libcall: LibCall::ElfTlsGetOffset,
+            uses: smallvec![
+                CallArgPair {
+                    vreg: got,
+                    preg: gpr(12),
+                },
+                CallArgPair {
+                    vreg: got_offset,
+                    preg: gpr(2),
+                },
+            ],
+            defs: smallvec![CallRetPair {
+                vreg: tls_offset,
+                preg: gpr(2),
+            },],
             tls_symbol: Some(tls_symbol.clone()),
         }
     }
@@ -161,26 +285,16 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         let caller_callconv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
         let callee_callconv = CallConv::for_libcall(&self.flags, caller_callconv);
 
-        // Uses and defs are defined by the particular libcall.
-        let (uses, defs): (SmallVec<[Reg; 8]>, SmallVec<[WritableReg; 8]>) = match info.libcall {
-            LibCall::Memcpy => (
-                smallvec![gpr(2), gpr(3), gpr(4)],
-                smallvec![writable_gpr(2)],
-            ),
-            LibCall::ElfTlsGetOffset => (smallvec![gpr(2), gpr(12)], smallvec![writable_gpr(2)]),
-            _ => unreachable!(),
-        };
-
-        // Clobbers are defined by the calling convention.  Remove deps from clobbers.
+        // Clobbers are defined by the calling convention.  Remove defs from clobbers.
         let mut clobbers = S390xMachineDeps::get_regs_clobbered_by_call(callee_callconv);
-        for reg in &defs {
-            clobbers.remove(PReg::from(reg.to_reg().to_real_reg().unwrap()));
+        for reg in &info.defs {
+            clobbers.remove(PReg::from(reg.preg.to_real_reg().unwrap()));
         }
 
         Box::new(CallInfo {
             dest: ExternalName::LibCall(info.libcall),
-            uses,
-            defs,
+            uses: info.uses.clone(),
+            defs: info.defs.clone(),
             clobbers,
             opcode: Opcode::Call,
             caller_callconv,
@@ -841,6 +955,36 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
     #[inline]
     fn preg_stack(&mut self) -> PReg {
         stack_reg().to_real_reg().unwrap().into()
+    }
+
+    #[inline]
+    fn writable_regpair(&mut self, hi: WritableReg, lo: WritableReg) -> WritableRegPair {
+        WritableRegPair { hi, lo }
+    }
+
+    #[inline]
+    fn writable_regpair_hi(&mut self, w: WritableRegPair) -> WritableReg {
+        w.hi
+    }
+
+    #[inline]
+    fn writable_regpair_lo(&mut self, w: WritableRegPair) -> WritableReg {
+        w.lo
+    }
+
+    #[inline]
+    fn regpair(&mut self, hi: Reg, lo: Reg) -> RegPair {
+        RegPair { hi, lo }
+    }
+
+    #[inline]
+    fn regpair_hi(&mut self, w: RegPair) -> Reg {
+        w.hi
+    }
+
+    #[inline]
+    fn regpair_lo(&mut self, w: RegPair) -> Reg {
+        w.lo
     }
 }
 

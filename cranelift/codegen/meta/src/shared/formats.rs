@@ -9,23 +9,18 @@ pub(crate) struct Formats {
     pub(crate) binary_imm8: Rc<InstructionFormat>,
     pub(crate) binary_imm64: Rc<InstructionFormat>,
     pub(crate) branch: Rc<InstructionFormat>,
-    pub(crate) branch_float: Rc<InstructionFormat>,
-    pub(crate) branch_icmp: Rc<InstructionFormat>,
-    pub(crate) branch_int: Rc<InstructionFormat>,
     pub(crate) branch_table: Rc<InstructionFormat>,
     pub(crate) call: Rc<InstructionFormat>,
     pub(crate) call_indirect: Rc<InstructionFormat>,
     pub(crate) cond_trap: Rc<InstructionFormat>,
     pub(crate) float_compare: Rc<InstructionFormat>,
-    pub(crate) float_cond: Rc<InstructionFormat>,
     pub(crate) float_cond_trap: Rc<InstructionFormat>,
     pub(crate) func_addr: Rc<InstructionFormat>,
     pub(crate) heap_addr: Rc<InstructionFormat>,
     pub(crate) int_compare: Rc<InstructionFormat>,
     pub(crate) int_compare_imm: Rc<InstructionFormat>,
-    pub(crate) int_cond: Rc<InstructionFormat>,
     pub(crate) int_cond_trap: Rc<InstructionFormat>,
-    pub(crate) int_select: Rc<InstructionFormat>,
+    pub(crate) int_add_trap: Rc<InstructionFormat>,
     pub(crate) jump: Rc<InstructionFormat>,
     pub(crate) load: Rc<InstructionFormat>,
     pub(crate) load_no_offset: Rc<InstructionFormat>,
@@ -113,19 +108,8 @@ impl Formats {
                 .imm(&imm.imm64)
                 .build(),
 
-            int_cond: Builder::new("IntCond").imm(&imm.intcc).value().build(),
-
             float_compare: Builder::new("FloatCompare")
                 .imm(&imm.floatcc)
-                .value()
-                .value()
-                .build(),
-
-            float_cond: Builder::new("FloatCond").imm(&imm.floatcc).value().build(),
-
-            int_select: Builder::new("IntSelect")
-                .imm(&imm.intcc)
-                .value()
                 .value()
                 .value()
                 .build(),
@@ -133,28 +117,6 @@ impl Formats {
             jump: Builder::new("Jump").imm(&entities.block).varargs().build(),
 
             branch: Builder::new("Branch")
-                .value()
-                .imm(&entities.block)
-                .varargs()
-                .build(),
-
-            branch_int: Builder::new("BranchInt")
-                .imm(&imm.intcc)
-                .value()
-                .imm(&entities.block)
-                .varargs()
-                .build(),
-
-            branch_float: Builder::new("BranchFloat")
-                .imm(&imm.floatcc)
-                .value()
-                .imm(&entities.block)
-                .varargs()
-                .build(),
-
-            branch_icmp: Builder::new("BranchIcmp")
-                .imm(&imm.intcc)
-                .value()
                 .value()
                 .imm(&entities.block)
                 .varargs()
@@ -258,6 +220,12 @@ impl Formats {
 
             int_cond_trap: Builder::new("IntCondTrap")
                 .imm(&imm.intcc)
+                .value()
+                .imm(&imm.trapcode)
+                .build(),
+
+            int_add_trap: Builder::new("IntAddTrap")
+                .value()
                 .value()
                 .imm(&imm.trapcode)
                 .build(),

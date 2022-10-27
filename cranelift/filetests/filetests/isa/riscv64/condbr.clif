@@ -114,8 +114,8 @@ block0(v0: i128, v1: i128):
 
 function %f(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = ifcmp v0, v1
-  brif eq v2, block1
+  v2 = icmp eq v0, v1
+  brnz v2, block1
   jump block2
 
 block1:
@@ -139,8 +139,8 @@ block2:
 
 function %f(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = ifcmp v0, v1
-  brif eq v2, block1
+  v2 = icmp eq v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -201,7 +201,8 @@ block1:
 
 function %i128_bricmp_eq(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp eq v0, v1, block1
+  v2 = icmp eq v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -209,9 +210,8 @@ block1:
 }
 
 ; block0:
-;   eq a3,[a0,a1],[a2,a3]##ty=i128
-;   andi a3,a3,255
-;   bne a3,zero,taken(label1),not_taken(label2)
+;   eq a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -221,7 +221,8 @@ block1:
 
 function %i128_bricmp_ne(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp ne v0, v1, block1
+  v2 = icmp ne v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -229,9 +230,8 @@ block1:
 }
 
 ; block0:
-;   ne a3,[a0,a1],[a2,a3]##ty=i128
-;   andi a3,a3,255
-;   bne a3,zero,taken(label1),not_taken(label2)
+;   ne a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -241,7 +241,8 @@ block1:
 
 function %i128_bricmp_slt(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp slt v0, v1, block1
+  v2 = icmp slt v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -249,9 +250,8 @@ block1:
 }
 
 ; block0:
-;   slt a3,[a0,a1],[a2,a3]##ty=i128
-;   andi a3,a3,255
-;   bne a3,zero,taken(label1),not_taken(label2)
+;   slt a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -261,7 +261,8 @@ block1:
 
 function %i128_bricmp_ult(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp ult v0, v1, block1
+  v2 = icmp ult v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -269,9 +270,8 @@ block1:
 }
 
 ; block0:
-;   ult a3,[a0,a1],[a2,a3]##ty=i128
-;   andi a3,a3,255
-;   bne a3,zero,taken(label1),not_taken(label2)
+;   ult a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -281,7 +281,8 @@ block1:
 
 function %i128_bricmp_sle(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp sle v0, v1, block1
+  v2 = icmp sle v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -289,9 +290,8 @@ block1:
 }
 
 ; block0:
-;   sle a3,[a0,a1],[a2,a3]##ty=i128
-;   andi a3,a3,255
-;   bne a3,zero,taken(label1),not_taken(label2)
+;   sle a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -301,7 +301,8 @@ block1:
 
 function %i128_bricmp_ule(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp ule v0, v1, block1
+  v2 = icmp ule v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -309,9 +310,8 @@ block1:
 }
 
 ; block0:
-;   ule a3,[a0,a1],[a2,a3]##ty=i128
-;   andi a3,a3,255
-;   bne a3,zero,taken(label1),not_taken(label2)
+;   ule a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -321,7 +321,8 @@ block1:
 
 function %i128_bricmp_sgt(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp sgt v0, v1, block1
+  v2 = icmp sgt v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -329,9 +330,8 @@ block1:
 }
 
 ; block0:
-;   sgt a3,[a0,a1],[a2,a3]##ty=i128
-;   andi a3,a3,255
-;   bne a3,zero,taken(label1),not_taken(label2)
+;   sgt a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -341,7 +341,8 @@ block1:
 
 function %i128_bricmp_ugt(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp ugt v0, v1, block1
+  v2 = icmp ugt v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -349,9 +350,8 @@ block1:
 }
 
 ; block0:
-;   ugt a3,[a0,a1],[a2,a3]##ty=i128
-;   andi a3,a3,255
-;   bne a3,zero,taken(label1),not_taken(label2)
+;   ugt a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -361,7 +361,8 @@ block1:
 
 function %i128_bricmp_sge(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp sge v0, v1, block1
+  v2 = icmp sge v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -369,9 +370,8 @@ block1:
 }
 
 ; block0:
-;   sge a3,[a0,a1],[a2,a3]##ty=i128
-;   andi a3,a3,255
-;   bne a3,zero,taken(label1),not_taken(label2)
+;   sge a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -381,7 +381,8 @@ block1:
 
 function %i128_bricmp_uge(i128, i128) {
 block0(v0: i128, v1: i128):
-  br_icmp uge v0, v1, block1
+  v2 = icmp uge v0, v1
+  brnz v2, block1
   jump block1
 
 block1:
@@ -389,9 +390,172 @@ block1:
 }
 
 ; block0:
-;   uge a3,[a0,a1],[a2,a3]##ty=i128
-;   andi a3,a3,255
-;   bne a3,zero,taken(label1),not_taken(label2)
+;   uge a2,[a0,a1],[a2,a3]##ty=i128
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+
+
+function %i8_brz(i8){
+block0(v0: i8):
+    brz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   andi t2,a0,255
+;   beq t2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i8_brnz(i8){
+block0(v0: i8):
+    brnz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   andi t2,a0,255
+;   bne t2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i16_brz(i16){
+block0(v0: i16):
+    brz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   lui t2,16
+;   addi t2,t2,4095
+;   and a2,a0,t2
+;   beq a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i16_brnz(i16){
+block0(v0: i16):
+    brnz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   lui t2,16
+;   addi t2,t2,4095
+;   and a2,a0,t2
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i32_brz(i32){
+block0(v0: i32):
+    brz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   addiw t2,a0,0
+;   beq t2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i32_brnz(i32){
+block0(v0: i32):
+    brnz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   addiw t2,a0,0
+;   bne t2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i64_brz(i64){
+block0(v0: i64):
+    brz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   beq a0,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i64_brnz(i64){
+block0(v0: i64):
+    brnz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   bne a0,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:

@@ -25,7 +25,7 @@ async function runOnce() {
   core.info(`name: ${name}`);
   core.info(`token: ${token}`);
 
-  const octokit = new github.GitHub(token);
+  const octokit = github.getOctokit(token);
 
   // For the `dev` release we may need to update the tag to point to the new
   // commit on this branch. All other names should already have tags associated
@@ -43,20 +43,10 @@ async function runOnce() {
 
     if (tag === null || tag.data.object.sha !== sha) {
       core.info(`updating existing tag or creating new one`);
-      // Delete the previous release for this tag, if any
-      try {
-        core.info(`fetching release for ${name}`);
-        const release = await octokit.repos.getReleaseByTag({ owner, repo, tag: name });
-        core.info(`deleting release ${release.data.id}`);
-        await octokit.repos.deleteRelease({ owner, repo, release_id: release.data.id });
-      } catch (e) {
-        // ignore, there may not have been a release
-        console.log("ERROR: ", JSON.stringify(e, null, 2));
-      }
 
       try {
         core.info(`updating dev tag`);
-        await octokit.git.updateRef({
+        await octokit.rest.git.updateRef({
             owner,
             repo,
             ref: 'tags/dev',
@@ -80,6 +70,13 @@ async function runOnce() {
           // tag by this point.
         }
       }
+
+      console.log("double-checking tag is correct");
+      tag = await octokit.request("GET /repos/:owner/:repo/git/refs/tags/:name", { owner, repo, name });
+      if (tag.data.object.sha !== sha) {
+        console.log("tag: ", JSON.stringify(tag.data, null, 2));
+        throw new Error("tag didn't work");
+      }
     } else {
       core.info(`existing tag works`);
     }
@@ -91,12 +88,12 @@ async function runOnce() {
   let release = null;
   try {
     core.info(`fetching release`);
-    release = await octokit.repos.getReleaseByTag({ owner, repo, tag: name });
+    release = await octokit.rest.repos.getReleaseByTag({ owner, repo, tag: name });
   } catch (e) {
     console.log("ERROR: ", JSON.stringify(e, null, 2));
     core.info(`creating a release`);
     try {
-      release = await octokit.repos.createRelease({
+      release = await octokit.rest.repos.createRelease({
         owner,
         repo,
         tag_name: name,
@@ -105,7 +102,7 @@ async function runOnce() {
     } catch(e) {
       console.log("ERROR: ", JSON.stringify(e, null, 2));
       core.info(`fetching one more time`);
-      release = await octokit.repos.getReleaseByTag({ owner, repo, tag: name });
+      release = await octokit.rest.repos.getReleaseByTag({ owner, repo, tag: name });
     }
   }
   console.log("found release: ", JSON.stringify(release.data, null, 2));
@@ -113,11 +110,22 @@ async function runOnce() {
   // Upload all the relevant assets for this release as just general blobs.
   for (const file of glob.sync(files)) {
     const size = fs.statSync(file).size;
+    const name = path.basename(file);
+    for (const asset of release.data.assets) {
+      if (asset.name !== name)
+        continue;
+      console.log(`deleting prior asset ${asset.id}`);
+      await octokit.rest.repos.deleteReleaseAsset({
+        owner,
+        repo,
+        asset_id: asset.id,
+      });
+    }
     core.info(`upload ${file}`);
-    await octokit.repos.uploadReleaseAsset({
+    await octokit.rest.repos.uploadReleaseAsset({
       data: fs.createReadStream(file),
       headers: { 'content-length': size, 'content-type': 'application/octet-stream' },
-      name: path.basename(file),
+      name,
       url: release.data.upload_url,
     });
   }

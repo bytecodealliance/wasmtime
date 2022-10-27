@@ -15,6 +15,7 @@ pub struct Config {
     pub errors: ErrorConf,
     pub async_: AsyncConf,
     pub wasmtime: bool,
+    pub tracing: bool,
 }
 
 mod kw {
@@ -24,6 +25,7 @@ mod kw {
     syn::custom_keyword!(errors);
     syn::custom_keyword!(target);
     syn::custom_keyword!(wasmtime);
+    syn::custom_keyword!(tracing);
 }
 
 #[derive(Debug, Clone)]
@@ -32,6 +34,7 @@ pub enum ConfigField {
     Error(ErrorConf),
     Async(AsyncConf),
     Wasmtime(bool),
+    Tracing(bool),
 }
 
 impl Parse for ConfigField {
@@ -67,6 +70,10 @@ impl Parse for ConfigField {
             input.parse::<kw::wasmtime>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Wasmtime(input.parse::<syn::LitBool>()?.value))
+        } else if lookahead.peek(kw::tracing) {
+            input.parse::<kw::tracing>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::Tracing(input.parse::<syn::LitBool>()?.value))
         } else {
             Err(lookahead.error())
         }
@@ -79,6 +86,7 @@ impl Config {
         let mut errors = None;
         let mut async_ = None;
         let mut wasmtime = None;
+        let mut tracing = None;
         for f in fields {
             match f {
                 ConfigField::Witx(c) => {
@@ -105,6 +113,12 @@ impl Config {
                     }
                     wasmtime = Some(c);
                 }
+                ConfigField::Tracing(c) => {
+                    if tracing.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `tracing` field"));
+                    }
+                    tracing = Some(c);
+                }
             }
         }
         Ok(Config {
@@ -114,6 +128,7 @@ impl Config {
             errors: errors.take().unwrap_or_default(),
             async_: async_.take().unwrap_or_default(),
             wasmtime: wasmtime.unwrap_or(true),
+            tracing: tracing.unwrap_or(true),
         })
     }
 

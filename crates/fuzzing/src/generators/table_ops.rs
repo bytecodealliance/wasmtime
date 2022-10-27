@@ -325,7 +325,7 @@ mod tests {
   (import "" "make_refs" (func (;2;) (type 3)))
   (func (;3;) (type 1) (param externref externref externref externref externref externref externref externref externref externref)
     (local externref)
-    loop  ;; label = @1
+    loop ;; label = @1
       call 0
       call 2
       call 1

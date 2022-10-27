@@ -639,21 +639,6 @@ impl<'a> Verifier<'a> {
                 destination,
                 ref args,
                 ..
-            }
-            | BranchInt {
-                destination,
-                ref args,
-                ..
-            }
-            | BranchFloat {
-                destination,
-                ref args,
-                ..
-            }
-            | BranchIcmp {
-                destination,
-                ref args,
-                ..
             } => {
                 self.verify_block(inst, destination, errors)?;
                 self.verify_value_list(inst, args, errors)?;
@@ -774,12 +759,10 @@ impl<'a> Verifier<'a> {
             | Ternary { .. }
             | TernaryImm8 { .. }
             | Shuffle { .. }
+            | IntAddTrap { .. }
             | IntCompare { .. }
             | IntCompareImm { .. }
-            | IntCond { .. }
             | FloatCompare { .. }
-            | FloatCond { .. }
-            | IntSelect { .. }
             | Load { .. }
             | Store { .. }
             | Trap { .. }

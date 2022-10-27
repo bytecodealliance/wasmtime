@@ -1,6 +1,5 @@
 //! Overlap detection for rules in ISLE.
 
-use rayon::prelude::*;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
@@ -30,17 +29,6 @@ struct Errors {
 }
 
 impl Errors {
-    /// Merge together two Error graphs.
-    fn union(mut self, other: Self) -> Self {
-        for (id, edges) in other.nodes {
-            match self.nodes.entry(id) {
-                Entry::Occupied(entry) => entry.into_mut().extend(edges),
-                Entry::Vacant(entry) => _ = entry.insert(edges),
-            }
-        }
-        self
-    }
-
     /// Condense the overlap information down into individual errors. We iteratively remove the
     /// nodes from the graph with the highest degree, reporting errors for them and their direct
     /// connections. The goal with reporting errors this way is to prefer reporting rules that
@@ -120,6 +108,11 @@ fn check_overlaps(env: &TermEnv) -> Errors {
                 continue;
             }
 
+            // Group rules by term and priority. Only rules within the same group are checked to
+            // see if they overlap each other. If you want to change the scope of overlap checking,
+            // change this key.
+            let key = (tid, rule.prio);
+
             let mut binds = Vec::new();
             let rule = RulePatterns {
                 rule,
@@ -128,36 +121,22 @@ fn check_overlaps(env: &TermEnv) -> Errors {
                     .map(|pat| Pattern::from_sema(env, &mut binds, pat))
                     .collect(),
             };
-            by_term.entry(tid).or_insert_with(Vec::new).push(rule);
+            by_term.entry(key).or_insert_with(Vec::new).push(rule);
         }
     }
 
-    // Sequentially identify all rule pairs which are in the same term. We could make this a
-    // parallel iterator, but that's harder to read and this loop is fast. Also, Rayon can
-    // efficiently partition a vector across multiple CPUs, which it might have more trouble with
-    // if this were an iterator.
-    let mut pairs = Vec::new();
-    for rows in by_term.values() {
-        let mut cursor = &rows[..];
-        while let Some((row, rest)) = cursor.split_first() {
-            cursor = rest;
-            pairs.extend(rest.iter().map(|other| (row, other)));
-        }
-    }
-
-    // Process rule pairs in parallel. Rayon makes this easy and we have independent bite-sized
-    // chunks of work, so we might as well take advantage of multiple CPUs if they're available.
-    pairs
-        .into_par_iter()
-        .fold(Errors::default, |mut errs, (left, right)| {
-            if left.rule.prio == right.rule.prio {
+    let mut errs = Errors::default();
+    for (_, rows) in by_term {
+        let mut cursor = rows.into_iter();
+        while let Some(left) = cursor.next() {
+            for right in cursor.as_slice() {
                 if check_overlap_pair(&left.pats, &right.pats) {
                     errs.add_edge(left.rule.id, right.rule.id);
                 }
             }
-            errs
-        })
-        .reduce(Errors::default, Errors::union)
+        }
+    }
+    errs
 }
 
 /// Check if two rules overlap in the inputs they accept.

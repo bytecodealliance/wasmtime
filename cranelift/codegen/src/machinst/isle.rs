@@ -8,8 +8,8 @@ use target_lexicon::Triple;
 
 pub use super::MachLabel;
 pub use crate::ir::{
-    condcodes, dynamic_to_fixed, ArgumentExtension, Constant, DynamicStackSlot, ExternalName,
-    FuncRef, GlobalValue, Immediate, SigRef, StackSlot,
+    condcodes, condcodes::CondCode, dynamic_to_fixed, ArgumentExtension, Constant,
+    DynamicStackSlot, ExternalName, FuncRef, GlobalValue, Immediate, SigRef, StackSlot,
 };
 pub use crate::isa::unwind::UnwindInst;
 pub use crate::machinst::{
@@ -569,6 +569,26 @@ macro_rules! isle_lower_prelude_methods {
         #[inline]
         fn gen_move(&mut self, ty: Type, dst: WritableReg, src: Reg) -> MInst {
             MInst::gen_move(dst, src, ty)
+        }
+
+        #[inline]
+        fn intcc_reverse(&mut self, cc: &IntCC) -> IntCC {
+            cc.reverse()
+        }
+
+        #[inline]
+        fn intcc_inverse(&mut self, cc: &IntCC) -> IntCC {
+            cc.inverse()
+        }
+
+        #[inline]
+        fn floatcc_reverse(&mut self, cc: &FloatCC) -> FloatCC {
+            cc.reverse()
+        }
+
+        #[inline]
+        fn floatcc_inverse(&mut self, cc: &FloatCC) -> FloatCC {
+            cc.inverse()
         }
     };
 }

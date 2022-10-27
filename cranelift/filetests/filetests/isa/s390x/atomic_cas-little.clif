@@ -12,10 +12,10 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; block0:
-;   lrvgr %r2, %r2
-;   lrvgr %r5, %r3
-;   csg %r2, %r5, 0(%r4)
-;   lrvgr %r2, %r2
+;   lrvgr %r5, %r2
+;   lrvgr %r2, %r3
+;   csg %r5, %r2, 0(%r4)
+;   lrvgr %r2, %r5
 ;   br %r14
 
 function %atomic_cas_i32(i32, i32, i64) -> i32 {
@@ -25,10 +25,10 @@ block0(v0: i32, v1: i32, v2: i64):
 }
 
 ; block0:
-;   lrvr %r2, %r2
-;   lrvr %r5, %r3
-;   cs %r2, %r5, 0(%r4)
-;   lrvr %r2, %r2
+;   lrvr %r5, %r2
+;   lrvr %r2, %r3
+;   cs %r5, %r2, 0(%r4)
+;   lrvr %r2, %r5
 ;   br %r14
 
 function %atomic_cas_i16(i64, i16, i16, i64) -> i16 {

@@ -11,7 +11,7 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::ir::{
     condcodes::{CondCode, IntCC},
     instructions::Opcode,
-    types::{I32, I64},
+    types::{I128, I32, I64},
     Block, DataFlowGraph, Function, Inst, InstBuilder, InstructionData, Type, Value,
 };
 use crate::isa::TargetIsa;
@@ -469,7 +469,6 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
 enum BranchOrderKind {
     BrzToBrnz(Value),
     BrnzToBrz(Value),
-    InvertIcmpCond(IntCC, Value, Value),
 }
 
 /// Reorder branches to encourage fallthroughs.
@@ -538,27 +537,6 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, 
                             kind,
                         )
                     }
-                    InstructionData::BranchIcmp {
-                        opcode: Opcode::BrIcmp,
-                        cond,
-                        destination: cond_dest,
-                        args: ref prev_args,
-                    } => {
-                        let (x_arg, y_arg) = {
-                            let args = pos.func.dfg.inst_args(prev_inst);
-                            (args[0], args[1])
-                        };
-
-                        (
-                            inst,
-                            args.clone(),
-                            destination,
-                            prev_inst,
-                            prev_args.clone(),
-                            *cond_dest,
-                            BranchOrderKind::InvertIcmpCond(*cond, x_arg, y_arg),
-                        )
-                    }
                     _ => return,
                 }
             }
@@ -589,19 +567,6 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, 
                 .dfg
                 .replace(cond_inst)
                 .brnz(cond_arg, term_dest, &term_args);
-        }
-        BranchOrderKind::InvertIcmpCond(cond, x_arg, y_arg) => {
-            pos.func
-                .dfg
-                .replace(term_inst)
-                .jump(cond_dest, &cond_args[2..]);
-            pos.func.dfg.replace(cond_inst).br_icmp(
-                cond.inverse(),
-                x_arg,
-                y_arg,
-                term_dest,
-                &term_args,
-            );
         }
     }
 
@@ -824,27 +789,27 @@ mod simplify {
                 };
 
                 // Replace operations that are no-ops.
-                match (opcode, imm.into()) {
-                    (Opcode::IaddImm, 0)
-                    | (Opcode::ImulImm, 1)
-                    | (Opcode::SdivImm, 1)
-                    | (Opcode::UdivImm, 1)
-                    | (Opcode::BorImm, 0)
-                    | (Opcode::BandImm, -1)
-                    | (Opcode::BxorImm, 0)
-                    | (Opcode::RotlImm, 0)
-                    | (Opcode::RotrImm, 0)
-                    | (Opcode::IshlImm, 0)
-                    | (Opcode::UshrImm, 0)
-                    | (Opcode::SshrImm, 0) => {
+                match (opcode, imm.into(), ty) {
+                    (Opcode::IaddImm, 0, _)
+                    | (Opcode::ImulImm, 1, _)
+                    | (Opcode::SdivImm, 1, _)
+                    | (Opcode::UdivImm, 1, _)
+                    | (Opcode::BorImm, 0, _)
+                    | (Opcode::BandImm, -1, _)
+                    | (Opcode::BxorImm, 0, _)
+                    | (Opcode::RotlImm, 0, _)
+                    | (Opcode::RotrImm, 0, _)
+                    | (Opcode::IshlImm, 0, _)
+                    | (Opcode::UshrImm, 0, _)
+                    | (Opcode::SshrImm, 0, _) => {
                         // Alias the result value with the original argument.
                         replace_single_result_with_alias(&mut pos.func.dfg, inst, arg);
                     }
-                    (Opcode::ImulImm, 0) | (Opcode::BandImm, 0) => {
+                    (Opcode::ImulImm, 0, ty) | (Opcode::BandImm, 0, ty) if ty != I128 => {
                         // Replace by zero.
                         pos.func.dfg.replace(inst).iconst(ty, 0);
                     }
-                    (Opcode::BorImm, -1) => {
+                    (Opcode::BorImm, -1, ty) if ty != I128 => {
                         // Replace by minus one.
                         pos.func.dfg.replace(inst).iconst(ty, -1);
                     }

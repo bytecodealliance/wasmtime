@@ -52,9 +52,9 @@ block0(v0: i32, v1: i8x16, v2: i8x16):
 }
 
 ; block0:
-;   vlr %v16, %v24
 ;   clfi %r2, 42
-;   vlr %v24, %v25
-;   jne 10 ; vlr %v24, %v16
+;   vlr %v6, %v25
+;   jne 10 ; vlr %v6, %v24
+;   vlr %v24, %v6
 ;   br %r14
 

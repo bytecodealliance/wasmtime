@@ -345,13 +345,15 @@ pub trait ABIMachineSpec {
     /// Returns the list of argument locations, the stack-space used (rounded up
     /// to as alignment requires), and if `add_ret_area_ptr` was passed, the
     /// index of the extra synthetic arg that was added.
-    fn compute_arg_locs(
+    fn compute_arg_locs<'a, I>(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
-        params: &[ir::AbiParam],
+        params: I,
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)>;
+    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)>
+    where
+        I: IntoIterator<Item = &'a ir::AbiParam>;
 
     /// Returns the offset from FP to the argument area, i.e., jumping over the saved FP, return
     /// address, and maybe other standard elements depending on ABI (e.g. Wasm TLS reg).
@@ -584,14 +586,15 @@ impl SigData {
         sig: &ir::Signature,
         flags: &settings::Flags,
     ) -> CodegenResult<SigData> {
-        let sig = ensure_struct_return_ptr_is_returned(sig);
+        let sret = missing_struct_return(sig);
+        let returns = sret.as_ref().into_iter().chain(&sig.returns);
 
         // Compute args and retvals from signature. Handle retvals first,
         // because we may need to add a return-area arg to the args.
         let (rets, sized_stack_ret_space, _) = M::compute_arg_locs(
             sig.call_conv,
             flags,
-            &sig.returns,
+            returns,
             ArgsOrRets::Rets,
             /* extra ret-area ptr = */ false,
         )?;
@@ -622,77 +625,6 @@ impl SigData {
             stack_ret_arg,
             call_conv: sig.call_conv,
         })
-    }
-
-    /// Return all uses (i.e, function args), defs (i.e., return values
-    /// and caller-saved registers), and clobbers for the callsite.
-    ///
-    /// FIXME: used only by s390x; remove once that backend moves to
-    /// `call_clobbers` and constraint-based calls.
-    pub fn call_uses_defs_clobbers<M: ABIMachineSpec>(
-        &self,
-    ) -> (SmallVec<[Reg; 8]>, SmallVec<[Writable<Reg>; 8]>, PRegSet) {
-        // Compute uses: all arg regs.
-        let mut uses = smallvec![];
-        for arg in &self.args {
-            match arg {
-                &ABIArg::Slots { ref slots, .. } => {
-                    for slot in slots {
-                        match slot {
-                            &ABIArgSlot::Reg { reg, .. } => {
-                                uses.push(Reg::from(reg));
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                &ABIArg::StructArg { ref pointer, .. } => {
-                    if let Some(slot) = pointer {
-                        match slot {
-                            &ABIArgSlot::Reg { reg, .. } => {
-                                uses.push(Reg::from(reg));
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                &ABIArg::ImplicitPtrArg { ref pointer, .. } => match pointer {
-                    &ABIArgSlot::Reg { reg, .. } => {
-                        uses.push(Reg::from(reg));
-                    }
-                    _ => {}
-                },
-            }
-        }
-
-        // Get clobbers: all caller-saves. These may include return value
-        // regs, which we will remove from the clobber set below.
-        let mut clobbers = M::get_regs_clobbered_by_call(self.call_conv);
-
-        // Compute defs: all retval regs, and all caller-save
-        // (clobbered) regs, except for StructRet args.
-        let mut defs = smallvec![];
-        for ret in &self.rets {
-            if let &ABIArg::Slots {
-                ref slots, purpose, ..
-            } = ret
-            {
-                if purpose == ir::ArgumentPurpose::StructReturn {
-                    continue;
-                }
-                for slot in slots {
-                    match slot {
-                        &ABIArgSlot::Reg { reg, .. } => {
-                            defs.push(Writable::from_reg(Reg::from(reg)));
-                            clobbers.remove(PReg::from(reg));
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-
-        (uses, defs, clobbers)
     }
 
     /// Return all clobbers for the callsite.
@@ -844,8 +776,7 @@ impl SigSet {
         // `ir::Signature`.
         debug_assert!(!self.have_abi_sig_for_signature(&signature));
 
-        let legalized_signature = crate::machinst::ensure_struct_return_ptr_is_returned(&signature);
-        let sig_data = SigData::from_func_sig::<M>(&legalized_signature, flags)?;
+        let sig_data = SigData::from_func_sig::<M>(&signature, flags)?;
         let sig = self.sigs.push(sig_data);
         self.ir_signature_to_abi_sig.insert(signature, sig);
         Ok(sig)
@@ -864,8 +795,7 @@ impl SigSet {
             return Ok(sig);
         }
         let signature = &dfg.signatures[sig_ref];
-        let legalized_signature = crate::machinst::ensure_struct_return_ptr_is_returned(&signature);
-        let sig_data = SigData::from_func_sig::<M>(&legalized_signature, flags)?;
+        let sig_data = SigData::from_func_sig::<M>(signature, flags)?;
         let sig = self.sigs.push(sig_data);
         self.ir_sig_ref_to_abi_sig[sig_ref] = Some(sig);
         Ok(sig)
@@ -1246,19 +1176,21 @@ fn gen_store_stack_multi<M: ABIMachineSpec>(
     ret
 }
 
-pub(crate) fn ensure_struct_return_ptr_is_returned(sig: &ir::Signature) -> ir::Signature {
-    let params_structret = sig
-        .params
-        .iter()
-        .find(|p| p.purpose == ArgumentPurpose::StructReturn);
-    let rets_have_structret = sig.returns.len() > 0
-        && sig
-            .returns
-            .iter()
-            .any(|arg| arg.purpose == ArgumentPurpose::StructReturn);
+/// If the signature needs to be legalized, then return the struct-return
+/// parameter that should be prepended to its returns. Otherwise, return `None`.
+fn missing_struct_return(sig: &ir::Signature) -> Option<ir::AbiParam> {
+    let struct_ret_index = sig.special_param_index(ArgumentPurpose::StructReturn)?;
+    if !sig.uses_special_return(ArgumentPurpose::StructReturn) {
+        return Some(sig.params[struct_ret_index]);
+    }
+
+    None
+}
+
+fn ensure_struct_return_ptr_is_returned(sig: &ir::Signature) -> ir::Signature {
     let mut sig = sig.clone();
-    if params_structret.is_some() && !rets_have_structret {
-        sig.returns.insert(0, params_structret.unwrap().clone());
+    if let Some(sret) = missing_struct_return(&sig) {
+        sig.returns.insert(0, sret);
     }
     sig
 }
@@ -1269,6 +1201,10 @@ pub(crate) fn ensure_struct_return_ptr_is_returned(sig: &ir::Signature) -> ir::S
 impl<M: ABIMachineSpec> Callee<M> {
     /// Access the (possibly legalized) signature.
     pub fn signature(&self) -> &ir::Signature {
+        debug_assert!(
+            missing_struct_return(&self.ir_sig).is_none(),
+            "`Callee::ir_sig` is always legalized"
+        );
         &self.ir_sig
     }
 

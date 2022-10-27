@@ -1584,7 +1584,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().umax(a, b))
         }
-        Operator::I8x16RoundingAverageU | Operator::I16x8RoundingAverageU => {
+        Operator::I8x16AvgrU | Operator::I16x8AvgrU => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().avg_round(a, b))
         }
@@ -2735,7 +2735,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I8x16MinU
         | Operator::I8x16MaxS
         | Operator::I8x16MaxU
-        | Operator::I8x16RoundingAverageU
+        | Operator::I8x16AvgrU
         | Operator::I8x16Bitmask
         | Operator::I8x16Popcnt => I8X16,
 
@@ -2772,7 +2772,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I16x8MinU
         | Operator::I16x8MaxS
         | Operator::I16x8MaxU
-        | Operator::I16x8RoundingAverageU
+        | Operator::I16x8AvgrU
         | Operator::I16x8Mul
         | Operator::I16x8Bitmask => I16X8,
 

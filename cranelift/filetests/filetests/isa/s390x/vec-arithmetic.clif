@@ -696,14 +696,15 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; block0:
-;   vlgvg %r2, %v24, 0
-;   vlgvg %r1, %v25, 0
-;   mlgr %r0, %r2
-;   lgr %r3, %r0
-;   vlgvg %r2, %v24, 1
-;   vlgvg %r1, %v25, 1
-;   mlgr %r0, %r2
-;   vlvgp %v24, %r3, %r0
+;   vlgvg %r3, %v24, 0
+;   vlgvg %r4, %v25, 0
+;   mlgr %r2, %r4
+;   lgr %r4, %r2
+;   vlgvg %r3, %v24, 1
+;   vlgvg %r5, %v25, 1
+;   mlgr %r2, %r5
+;   lgr %r3, %r2
+;   vlvgp %v24, %r4, %r3
 ;   br %r14
 
 function %umulhi_i32x4(i32x4, i32x4) -> i32x4 {
@@ -745,13 +746,13 @@ block0(v0: i64x2, v1: i64x2):
 ; block0:
 ;   vlgvg %r2, %v24, 0
 ;   vlgvg %r4, %v25, 0
-;   mgrk %r0, %r2, %r4
-;   lgr %r2, %r0
-;   vlgvg %r5, %v24, 1
-;   vlgvg %r3, %v25, 1
-;   mgrk %r0, %r5, %r3
+;   mgrk %r2, %r2, %r4
 ;   lgr %r5, %r2
-;   vlvgp %v24, %r5, %r0
+;   vlgvg %r4, %v24, 1
+;   vlgvg %r2, %v25, 1
+;   mgrk %r2, %r4, %r2
+;   lgr %r3, %r2
+;   vlvgp %v24, %r5, %r3
 ;   br %r14
 
 function %smulhi_i32x4(i32x4, i32x4) -> i32x4 {

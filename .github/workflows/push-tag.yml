@@ -17,23 +17,23 @@ jobs:
     if: github.repository == 'bytecodealliance/wasmtime'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: true
           fetch-depth: 0
       - name: Test if tag is needed
         run: |
           git log ${{ github.event.before }}...${{ github.event.after }} | tee main.log
-          version=$(grep 'version =' Cargo.toml | head -n 1 | sed 's/.*"\(.*\)"/\1/')
+          version=$(grep '^version =' Cargo.toml | head -n 1 | sed 's/.*"\(.*\)"/\1/')
           echo "version: $version"
-          echo "::set-output name=version::$version"
-          echo "::set-output name=sha::$(git rev-parse HEAD)"
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
           if grep -q "automatically-tag-and-release-this-commit" main.log; then
             echo push-tag
-            echo "::set-output name=push_tag::yes"
+            echo "push_tag=yes" >> $GITHUB_OUTPUT
           else
             echo no-push-tag
-            echo "::set-output name=push_tag::no"
+            echo "push_tag=no" >> $GITHUB_OUTPUT
           fi
         id: tag
       - name: Push the tag

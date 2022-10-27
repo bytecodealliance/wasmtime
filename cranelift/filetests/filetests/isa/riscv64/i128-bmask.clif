@@ -82,8 +82,9 @@ block0(v0: i32):
 }
 
 ; block0:
-;   li a1,-1
-;   select_reg a1,zero,a1##condition=(zero eq a0)
+;   addiw a1,a0,0
+;   li a3,-1
+;   select_reg a1,zero,a3##condition=(zero eq a1)
 ;   mv a0,a1
 ;   ret
 
@@ -94,8 +95,11 @@ block0(v0: i16):
 }
 
 ; block0:
-;   li a1,-1
-;   select_reg a1,zero,a1##condition=(zero eq a0)
+;   lui a1,16
+;   addi a1,a1,4095
+;   and a4,a0,a1
+;   li a6,-1
+;   select_reg a1,zero,a6##condition=(zero eq a4)
 ;   mv a0,a1
 ;   ret
 
@@ -106,8 +110,9 @@ block0(v0: i8):
 }
 
 ; block0:
-;   li a1,-1
-;   select_reg a1,zero,a1##condition=(zero eq a0)
+;   andi a1,a0,255
+;   li a3,-1
+;   select_reg a1,zero,a3##condition=(zero eq a1)
 ;   mv a0,a1
 ;   ret
 

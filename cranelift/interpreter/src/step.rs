@@ -245,10 +245,7 @@ where
     let branch_when = |condition: bool| -> Result<ControlFlow<V>, StepError> {
         let branch_args = match inst {
             InstructionData::Jump { .. } => args_range(0..),
-            InstructionData::BranchInt { .. }
-            | InstructionData::BranchFloat { .. }
-            | InstructionData::Branch { .. } => args_range(1..),
-            InstructionData::BranchIcmp { .. } => args_range(2..),
+            InstructionData::Branch { .. } => args_range(1..),
             _ => panic!("Unrecognized branch inst: {:?}", inst),
         }?;
 
@@ -293,11 +290,6 @@ where
                 .convert(ValueConversionKind::ToBoolean)?
                 .into_bool()?,
         )?,
-        Opcode::BrIcmp => {
-            branch_when(icmp(ctrl_ty, inst.cond_code().unwrap(), &arg(0)?, &arg(1)?)?.into_bool()?)?
-        }
-        Opcode::Brif => branch_when(state.has_iflag(inst.cond_code().unwrap()))?,
-        Opcode::Brff => branch_when(state.has_fflag(inst.fp_cond_code().unwrap()))?,
         Opcode::BrTable => {
             if let InstructionData::BranchTable {
                 table, destination, ..
@@ -554,14 +546,12 @@ where
         Opcode::Null => unimplemented!("Null"),
         Opcode::Nop => ControlFlow::Continue,
         Opcode::Select => choose(arg(0)?.into_bool()?, arg(1)?, arg(2)?),
-        Opcode::Selectif => choose(state.has_iflag(inst.cond_code().unwrap()), arg(1)?, arg(2)?),
-        Opcode::SelectifSpectreGuard => unimplemented!("SelectifSpectreGuard"),
+        Opcode::SelectSpectreGuard => unimplemented!("SelectSpectreGuard"),
         Opcode::Bitselect => {
             let mask_a = Value::and(arg(0)?, arg(1)?)?;
             let mask_b = Value::and(Value::not(arg(0)?)?, arg(2)?)?;
             assign(Value::or(mask_a, mask_b)?)
         }
-        Opcode::Copy => assign(arg(0)?),
         Opcode::Icmp => assign(icmp(
             ctrl_ty,
             inst.cond_code().unwrap(),
@@ -763,6 +753,15 @@ where
             assign_multiple(&[sum, Value::bool(carry, false, types::I8)?])
         }
         Opcode::IaddIfcarry => unimplemented!("IaddIfcarry"),
+        Opcode::UaddOverflowTrap => {
+            let sum = Value::add(arg(0)?, arg(1)?)?;
+            let carry = Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)?;
+            if carry {
+                ControlFlow::Trap(CraneliftTrap::User(trap_code()))
+            } else {
+                assign(sum)
+            }
+        }
         Opcode::IsubBin => choose(
             Value::into_bool(arg(2)?)?,
             Value::sub(arg(0)?, Value::add(arg(1)?, Value::int(1, ctrl_ty)?)?)?,
@@ -940,18 +939,6 @@ where
         Opcode::Nearest => assign(Value::nearest(arg(0)?)?),
         Opcode::IsNull => unimplemented!("IsNull"),
         Opcode::IsInvalid => unimplemented!("IsInvalid"),
-        // `ctrl_ty` is `INVALID` for `Trueif` and `Trueff`, but both should
-        // return a 1-bit boolean value.
-        Opcode::Trueif => choose(
-            state.has_iflag(inst.cond_code().unwrap()),
-            Value::bool(true, false, types::I8)?,
-            Value::bool(false, false, types::I8)?,
-        ),
-        Opcode::Trueff => choose(
-            state.has_fflag(inst.fp_cond_code().unwrap()),
-            Value::bool(true, false, types::I8)?,
-            Value::bool(false, false, types::I8)?,
-        ),
         Opcode::Bitcast | Opcode::RawBitcast | Opcode::ScalarToVector => {
             let input_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
             let arg0 = extractlanes(&arg(0)?, input_ty)?;

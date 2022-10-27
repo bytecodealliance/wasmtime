@@ -2772,6 +2772,14 @@
         )
         x))
 
+;; Check for unsigned overflow.
+(decl trap_if_overflow (ProducesFlags TrapCode) Reg)
+(rule (trap_if_overflow producer tc)
+      (with_flags_reg
+        producer
+        (ConsumesFlags.ConsumesFlagsSideEffect
+          (MInst.TrapIf (cond_br_cond (Cond.Hs)) tc))))
+
 (decl sink_atomic_load (Inst) Reg)
 (rule (sink_atomic_load x @ (atomic_load _ addr))
       (let ((_ Unit (sink_inst x)))
@@ -3458,14 +3466,15 @@
 
 (decl lower_bmask (Type Type ValueRegs) ValueRegs)
 
-;; For conversions that fit in a register, we can use csetm.
+
+;; For conversions that exactly fit a register, we can use csetm.
 ;;
 ;; cmp   val, #0
 ;; csetm res, ne
 (rule 0
-      (lower_bmask (fits_in_64 _) (fits_in_64 _) val)
+      (lower_bmask (fits_in_64 _) (ty_32_or_64 in_ty) val)
       (with_flags_reg
-        (cmp64_imm (value_regs_get val 0) (u8_into_imm12 0))
+        (cmp_imm (operand_size in_ty) (value_regs_get val 0) (u8_into_imm12 0))
         (csetm (Cond.Ne))))
 
 ;; For conversions from a 128-bit value into a 64-bit or smaller one, we or the
@@ -3497,6 +3506,18 @@
       (let ((res ValueRegs (lower_bmask $I64 $I128 val))
             (res Reg (value_regs_get res 0)))
         (value_regs res res)))
+
+;; For conversions smaller than a register, we need to mask off the high bits, and then
+;; we can recurse into the general case.
+;;
+;; and   tmp, val, #ty_mask
+;; cmp   tmp, #0
+;; csetm res, ne
+(rule 4
+      (lower_bmask out_ty (fits_in_16 in_ty) val)
+      (let ((mask_bits ImmLogic (imm_logic_from_u64 $I32 (ty_mask in_ty)))
+            (masked Reg (and_imm $I32 (value_regs_get val 0) mask_bits)))
+        (lower_bmask out_ty $I32 masked)))
 
 ;; Exceptional `lower_icmp_into_flags` rules.
 ;; We need to guarantee that the flags for `cond` are correct, so we

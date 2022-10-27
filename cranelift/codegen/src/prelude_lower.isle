@@ -320,6 +320,23 @@
 
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Reverse an IntCC flag.
+(decl intcc_reverse (IntCC) IntCC)
+(extern constructor intcc_reverse intcc_reverse)
+
+;; Invert an IntCC flag.
+(decl intcc_inverse (IntCC) IntCC)
+(extern constructor intcc_inverse intcc_inverse)
+
+;; Reverse an FloatCC flag.
+(decl floatcc_reverse (FloatCC) FloatCC)
+(extern constructor floatcc_reverse floatcc_reverse)
+
+;; Invert an FloatCC flag.
+(decl floatcc_inverse (FloatCC) FloatCC)
+(extern constructor floatcc_inverse floatcc_inverse)
+
+
 ;; Newtype wrapper around `MInst` for instructions that are used for their
 ;; effect on flags.
 ;;
@@ -407,6 +424,14 @@
       (let ((_x Unit (emit producer_inst))
             (_y Unit (emit consumer_inst)))
         (value_regs producer_result consumer_result)))
+
+;; A flag-producer that also produces a result, paired with a consumer that has
+;; no results.
+(rule (with_flags (ProducesFlags.ProducesFlagsReturnsResultWithConsumer producer_inst producer_result)
+                  (ConsumesFlags.ConsumesFlagsSideEffect consumer_inst))
+      (let ((_ Unit (emit producer_inst))
+            (_ Unit (emit consumer_inst)))
+        (value_reg producer_result)))
 
 (rule (with_flags (ProducesFlags.ProducesFlagsSideEffect producer_inst)
                   (ConsumesFlags.ConsumesFlagsReturnsReg consumer_inst consumer_result))

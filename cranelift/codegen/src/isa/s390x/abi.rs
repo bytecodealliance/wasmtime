@@ -221,13 +221,16 @@ impl ABIMachineSpec for S390xMachineDeps {
         8
     }
 
-    fn compute_arg_locs(
+    fn compute_arg_locs<'a, I>(
         call_conv: isa::CallConv,
         _flags: &settings::Flags,
-        params: &[ir::AbiParam],
+        params: I,
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)> {
+    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)>
+    where
+        I: IntoIterator<Item = &'a ir::AbiParam>,
+    {
         let mut next_gpr = 0;
         let mut next_fpr = 0;
         let mut next_vr = 0;
@@ -245,9 +248,7 @@ impl ABIMachineSpec for S390xMachineDeps {
             next_gpr += 1;
         }
 
-        for i in 0..params.len() {
-            let mut param = params[i];
-
+        for (i, mut param) in params.into_iter().copied().enumerate() {
             let intreg = in_int_reg(param.value_type);
             let fltreg = in_flt_reg(param.value_type);
             let vecreg = in_vec_reg(param.value_type);

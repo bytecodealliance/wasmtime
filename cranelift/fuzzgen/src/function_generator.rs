@@ -277,6 +277,72 @@ const OPCODE_SIGNATURES: &'static [(
     //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4864
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
+    // Ineg
+    (Opcode::Ineg, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Ineg, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Ineg, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Ineg, &[I64, I64], &[I64], insert_opcode),
+    // ineg.i128 not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5105
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/5108
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Ineg, &[I128, I128], &[I128], insert_opcode),
+    // Imin
+    // imin not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4313
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Imin, &[I8, I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Imin, &[I16, I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Imin, &[I32, I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Imin, &[I64, I64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Imin, &[I128, I128], &[I128], insert_opcode),
+    // Umin
+    // umin not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4313
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umin, &[I8, I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umin, &[I16, I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umin, &[I32, I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umin, &[I64, I64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Umin, &[I128, I128], &[I128], insert_opcode),
+    // Imax
+    // imax not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4313
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Imax, &[I8, I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Imax, &[I16, I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Imax, &[I32, I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Imax, &[I64, I64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Imax, &[I128, I128], &[I128], insert_opcode),
+    // Umax
+    // umax not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
+    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4313
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umax, &[I8, I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umax, &[I16, I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umax, &[I32, I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "aarch64"))]
+    (Opcode::Umax, &[I64, I64], &[I64], insert_opcode),
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    (Opcode::Umax, &[I128, I128], &[I128], insert_opcode),
     // Rotr
     (Opcode::Rotr, &[I8, I8], &[I8], insert_opcode),
     (Opcode::Rotr, &[I8, I16], &[I8], insert_opcode),
@@ -546,6 +612,96 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::BxorNot, &[F32, F32], &[F32], insert_opcode),
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::BxorNot, &[F64, F64], &[F64], insert_opcode),
+    // Bitrev
+    (Opcode::Bitrev, &[I8], &[I8], insert_opcode),
+    (Opcode::Bitrev, &[I16], &[I16], insert_opcode),
+    (Opcode::Bitrev, &[I32], &[I32], insert_opcode),
+    (Opcode::Bitrev, &[I64], &[I64], insert_opcode),
+    (Opcode::Bitrev, &[I128], &[I128], insert_opcode),
+    // Clz
+    (Opcode::Clz, &[I8], &[I8], insert_opcode),
+    (Opcode::Clz, &[I16], &[I16], insert_opcode),
+    (Opcode::Clz, &[I32], &[I32], insert_opcode),
+    (Opcode::Clz, &[I64], &[I64], insert_opcode),
+    (Opcode::Clz, &[I128], &[I128], insert_opcode),
+    // Cls
+    // cls not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5107
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Cls, &[I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Cls, &[I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Cls, &[I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Cls, &[I64], &[I64], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Cls, &[I128], &[I128], insert_opcode),
+    // Ctz
+    (Opcode::Ctz, &[I8], &[I8], insert_opcode),
+    (Opcode::Ctz, &[I16], &[I16], insert_opcode),
+    (Opcode::Ctz, &[I32], &[I32], insert_opcode),
+    (Opcode::Ctz, &[I64], &[I64], insert_opcode),
+    (Opcode::Ctz, &[I128], &[I128], insert_opcode),
+    // Popcnt
+    (Opcode::Popcnt, &[I8], &[I8], insert_opcode),
+    (Opcode::Popcnt, &[I16], &[I16], insert_opcode),
+    (Opcode::Popcnt, &[I32], &[I32], insert_opcode),
+    (Opcode::Popcnt, &[I64], &[I64], insert_opcode),
+    (Opcode::Popcnt, &[I128], &[I128], insert_opcode),
+    // Bmask
+    // bmask not implemented in some backends:
+    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5106
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I8], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I16], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I32], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I64], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I128], &[I8], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I8], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I16], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I32], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I64], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I128], &[I16], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I8], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I16], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I32], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I64], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I128], &[I32], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I8], &[I64], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I16], &[I64], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I32], &[I64], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I64], &[I64], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I128], &[I64], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I8], &[I128], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I16], &[I128], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I32], &[I128], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I64], &[I128], insert_opcode),
+    #[cfg(not(target_arch = "x86_64"))]
+    (Opcode::Bmask, &[I128], &[I128], insert_opcode),
     // Fadd
     (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),
     (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode),
@@ -781,7 +937,6 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Iconst, &[], &[I16], insert_const),
     (Opcode::Iconst, &[], &[I32], insert_const),
     (Opcode::Iconst, &[], &[I64], insert_const),
-    (Opcode::Iconst, &[], &[I128], insert_const),
     // Float Consts
     (Opcode::F32const, &[], &[F32], insert_const),
     (Opcode::F64const, &[], &[F64], insert_const),
@@ -813,7 +968,6 @@ enum BlockTerminator {
     Return,
     Jump(Block),
     Br(Block, Block),
-    BrIcmp(Block, Block),
     BrTable(Block, Vec<Block>),
     Switch(Type, Block, HashMap<u128, Block>),
 }
@@ -823,7 +977,6 @@ enum BlockTerminatorKind {
     Return,
     Jump,
     Br,
-    BrIcmp,
     BrTable,
     Switch,
 }
@@ -1102,19 +1255,6 @@ where
                 }
                 builder.ins().jump(right, &right_args[..]);
             }
-            BlockTerminator::BrIcmp(left, right) => {
-                let cc = *self.u.choose(IntCC::all())?;
-                let _type = *self.u.choose(&[I8, I16, I32, I64, I128])?;
-
-                let lhs = builder.use_var(self.get_variable_of_type(_type)?);
-                let rhs = builder.use_var(self.get_variable_of_type(_type)?);
-
-                let left_args = self.generate_values_for_block(builder, left)?;
-                let right_args = self.generate_values_for_block(builder, right)?;
-
-                builder.ins().br_icmp(cc, lhs, rhs, left, &left_args[..]);
-                builder.ins().jump(right, &right_args[..]);
-            }
             BlockTerminator::BrTable(default, targets) => {
                 // Create jump tables on demand
                 let jt = builder.create_jump_table(JumpTableData::with_blocks(targets));
@@ -1200,11 +1340,11 @@ where
 
     /// Zero initializes the stack slot by inserting `stack_store`'s.
     fn initialize_stack_slots(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let i128_zero = builder.ins().iconst(I128, 0);
-        let i64_zero = builder.ins().iconst(I64, 0);
-        let i32_zero = builder.ins().iconst(I32, 0);
-        let i16_zero = builder.ins().iconst(I16, 0);
         let i8_zero = builder.ins().iconst(I8, 0);
+        let i16_zero = builder.ins().iconst(I16, 0);
+        let i32_zero = builder.ins().iconst(I32, 0);
+        let i64_zero = builder.ins().iconst(I64, 0);
+        let i128_zero = builder.ins().uextend(I128, i64_zero);
 
         for &(slot, init_size) in self.resources.stack_slots.iter() {
             let mut size = init_size;
@@ -1296,13 +1436,10 @@ where
                     valid_terminators.push(BlockTerminatorKind::Return);
                 } else {
                     // If we have more than one block we can allow terminators that target blocks.
-                    // TODO: We could add some kind of BrReturn/BrIcmpReturn here, to explore edges where we exit
-                    // in the middle of the function
-                    valid_terminators.extend_from_slice(&[
-                        BlockTerminatorKind::Jump,
-                        BlockTerminatorKind::Br,
-                        BlockTerminatorKind::BrIcmp,
-                    ]);
+                    // TODO: We could add some kind of BrReturn here, to explore edges where we
+                    // exit in the middle of the function
+                    valid_terminators
+                        .extend_from_slice(&[BlockTerminatorKind::Jump, BlockTerminatorKind::Br]);
                 }
 
                 // BrTable and the Switch interface only allow targeting blocks without params
@@ -1323,9 +1460,6 @@ where
                     BlockTerminatorKind::Jump => BlockTerminator::Jump(next_block),
                     BlockTerminatorKind::Br => {
                         BlockTerminator::Br(next_block, self.generate_target_block(block)?)
-                    }
-                    BlockTerminatorKind::BrIcmp => {
-                        BlockTerminator::BrIcmp(next_block, self.generate_target_block(block)?)
                     }
                     // TODO: Allow generating backwards branches here
                     BlockTerminatorKind::BrTable => {

@@ -83,35 +83,42 @@
       (imm UImm32Shifted))
 
     ;; A multiply operation with two register sources and a register pair destination.
-    ;; FIXME: The pair is hard-coded as %r0/%r1 because regalloc cannot handle pairs.
     (SMulWide
+      (rd WritableRegPair)
       (rn Reg)
       (rm Reg))
 
     ;; A multiply operation with an in/out register pair, and an extra register source.
     ;; Only the lower half of the register pair is used as input.
-    ;; FIXME: The pair is hard-coded as %r0/%r1 because regalloc cannot handle pairs.
     (UMulWide
+      (rd WritableRegPair)
+      (ri Reg)
       (rn Reg))
 
     ;; A divide operation with an in/out register pair, and an extra register source.
     ;; Only the lower half of the register pair is used as input.
-    ;; FIXME: The pair is hard-coded as %r0/%r1 because regalloc cannot handle pairs.
     (SDivMod32
+      (rd WritableRegPair)
+      (ri Reg)
       (rn Reg))
     (SDivMod64
+      (rd WritableRegPair)
+      (ri Reg)
       (rn Reg))
 
     ;; A divide operation with an in/out register pair, and an extra register source.
-    ;; FIXME: The pair is hard-coded as %r0/%r1 because regalloc cannot handle pairs.
     (UDivMod32
+      (rd WritableRegPair)
+      (ri RegPair)
       (rn Reg))
     (UDivMod64
+      (rd WritableRegPair)
+      (ri RegPair)
       (rn Reg))
 
     ;; A FLOGR operation with a register source and a register pair destination.
-    ;; FIXME The pair is hard-coded as %r0/%r1 because regalloc cannot handle pairs.
     (Flogr
+      (rd WritableRegPair)
       (rn Reg))
 
     ;; A shift instruction with a register source, a register destination,
@@ -128,6 +135,7 @@
     (RxSBG
         (op RxSBGOp)
         (rd WritableReg)
+        (ri Reg)
         (rn Reg)
         (start_bit u8)
         (end_bit u8)
@@ -220,12 +228,14 @@
     ;; A 32-bit atomic compare-and-swap operation.
     (AtomicCas32
       (rd WritableReg)
+      (ri Reg)
       (rn Reg)
       (mem MemArg))
 
     ;; A 64-bit atomic compare-and-swap operation.
     (AtomicCas64
       (rd WritableReg)
+      (ri Reg)
       (rn Reg)
       (mem MemArg))
 
@@ -428,11 +438,13 @@
     ;; A 64-bit insert instruction with a shifted 16-bit immediate.
     (Insert64UImm16Shifted
       (rd WritableReg)
+      (ri Reg)
       (imm UImm16Shifted))
 
     ;; A 64-bit insert instruction with a shifted 32-bit immediate.
     (Insert64UImm32Shifted
       (rd WritableReg)
+      (ri Reg)
       (imm UImm32Shifted))
 
     ;; Load 32-bit access register into GPR.
@@ -444,6 +456,7 @@
     ;; (Identical operation to LoadAR, but considers rd to be use/def.)
     (InsertAR
       (rd WritableReg)
+      (ri Reg)
       (ar u8))
 
     ;; A sign- or zero-extend operation.
@@ -454,28 +467,33 @@
       (from_bits u8)
       (to_bits u8))
 
-    ;; A 32-bit conditional move instruction.
+    ;; A 32-bit conditional move instruction. `ri` is the value that's used if
+    ;; the conditional is true, `rm` is used otherwise.
     (CMov32
       (rd WritableReg)
       (cond Cond)
+      (ri Reg)
       (rm Reg))
 
     ;; A 64-bit conditional move instruction.
     (CMov64
       (rd WritableReg)
       (cond Cond)
+      (ri Reg)
       (rm Reg))
 
     ;; A 32-bit conditional move instruction with a 16-bit signed immediate.
     (CMov32SImm16
       (rd WritableReg)
       (cond Cond)
+      (ri Reg)
       (imm i16))
 
     ;; A 64-bit conditional move instruction with a 16-bit signed immediate.
     (CMov64SImm16
       (rd WritableReg)
       (cond Cond)
+      (ri Reg)
       (imm i16))
 
     ;; A 32-bit FPU move possibly implemented as vector instruction.
@@ -492,12 +510,14 @@
     (FpuCMov32
       (rd WritableReg)
       (cond Cond)
+      (ri Reg)
       (rm Reg))
 
     ;; A 64-bit conditional move FPU instruction, possibly as vector instruction.
     (FpuCMov64
       (rd WritableReg)
       (cond Cond)
+      (ri Reg)
       (rm Reg))
 
     ;; 1-op FPU instruction implemented as vector instruction with the W bit.
@@ -737,6 +757,7 @@
     (VecCMov
       (rd WritableReg)
       (cond Cond)
+      (ri Reg)
       (rm Reg))
 
     ;; A 128-bit move instruction from two GPRs to a VR.
@@ -779,6 +800,7 @@
     (VecLoadLane
       (size u32)
       (rd WritableReg)
+      (ri Reg)
       (mem MemArg)
       (lane_imm u8))
 
@@ -794,6 +816,7 @@
     (VecLoadLaneRev
       (size u32)
       (rd WritableReg)
+      (ri Reg)
       (mem MemArg)
       (lane_imm u8))
 
@@ -825,6 +848,7 @@
     (VecInsertLane
       (size u32)
       (rd WritableReg)
+      (ri Reg)
       (rn Reg)
       (lane_imm u8)
       (lane_reg Reg))
@@ -851,6 +875,7 @@
     (VecInsertLaneImm
       (size u32)
       (rd WritableReg)
+      (ri Reg)
       (imm i16)
       (lane_imm u8))
 
@@ -1948,47 +1973,44 @@
 ;; Helpers for register pairs ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; A writable register pair.
-(type WritableRegPair (enum (WritableRegPair (hi WritableReg) (lo WritableReg))))
+(type WritableRegPair (primitive WritableRegPair))
+
+;; Construct a WritableRegPair from two registers.
+(decl writable_regpair (WritableReg WritableReg) WritableRegPair)
+(extern constructor writable_regpair writable_regpair)
 
 ;; Allocate a writable register pair.
-;; FIXME: The pair is hard-coded as %r0/%r1 because regalloc cannot handle pairs.
 (decl temp_writable_regpair () WritableRegPair)
 (rule (temp_writable_regpair)
-      (WritableRegPair.WritableRegPair (writable_gpr 0) (writable_gpr 1)))
-
-;; Allocate a writable register pair and initialize it as a copy of the input.
-;; FIXME: Because there is only a single hard-coded regpair, the copy is a no-op.
-(decl copy_writable_regpair (RegPair) WritableRegPair)
-(rule (copy_writable_regpair _src) (temp_writable_regpair))
+      (writable_regpair (temp_writable_reg $I64) (temp_writable_reg $I64)))
 
 ;; Retrieve the high word of the writable register pair.
 (decl writable_regpair_hi (WritableRegPair) WritableReg)
-(rule (writable_regpair_hi (WritableRegPair.WritableRegPair hi _)) hi)
+(extern constructor writable_regpair_hi writable_regpair_hi)
 
 ;; Retrieve the low word of the writable register pair.
 (decl writable_regpair_lo (WritableRegPair) WritableReg)
-(rule (writable_regpair_lo (WritableRegPair.WritableRegPair _ lo)) lo)
+(extern constructor writable_regpair_lo writable_regpair_lo)
 
 ;; A (read-only) register pair.
-(type RegPair (enum (RegPair (hi Reg) (lo Reg))))
+(type RegPair (primitive RegPair))
 
 ;; Construct a register pair from a writable register pair.
 (decl writable_regpair_to_regpair (WritableRegPair) RegPair)
-(rule (writable_regpair_to_regpair (WritableRegPair.WritableRegPair hi lo))
-      (RegPair.RegPair hi lo))
+(rule (writable_regpair_to_regpair w)
+      (regpair (writable_regpair_hi w) (writable_regpair_lo w)))
 
-;; Uninitalized register pair that can be used for piecewise initialization.
-(decl uninitialized_regpair () RegPair)
-(rule (uninitialized_regpair)
-      (temp_writable_regpair))
+;; Construct a regpair from two registers.
+(decl regpair (Reg Reg) RegPair)
+(extern constructor regpair regpair)
 
 ;; Retrieve the high word of the register pair.
 (decl regpair_hi (RegPair) Reg)
-(rule (regpair_hi (RegPair.RegPair hi _)) hi)
+(extern constructor regpair_hi regpair_hi)
 
 ;; Retrieve the low word of the register pair.
 (decl regpair_lo (RegPair) Reg)
-(rule (regpair_lo (RegPair.RegPair _ lo)) lo)
+(extern constructor regpair_lo regpair_lo)
 
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1999,6 +2021,13 @@
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
         dst))
+
+;; Helper for emitting `MInst.AluRRR` instructions as flag producers.
+(decl alu_rrr_with_flags_paired (Type ALUOp Reg Reg) ProducesFlags)
+(rule (alu_rrr_with_flags_paired ty op src1 src2)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+          (MInst.AluRRR op dst src1 src2) dst)))
 
 ;; Helper for emitting `MInst.AluRRSImm16` instructions.
 (decl alu_rrsimm16 (Type ALUOp Reg i16) Reg)
@@ -2014,12 +2043,26 @@
             (_ Unit (emit (MInst.AluRR op dst src1 src2))))
         dst))
 
+;; Helper for emitting `MInst.AluRR` instructions as flag producers.
+(decl alu_rr_with_flags_paired (Type ALUOp Reg Reg) ProducesFlags)
+(rule (alu_rr_with_flags_paired ty op src1 src2)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+            (MInst.AluRR op dst src1 src2) dst)))
+
 ;; Helper for emitting `MInst.AluRX` instructions.
 (decl alu_rx (Type ALUOp Reg MemArg) Reg)
 (rule (alu_rx ty op src mem)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.AluRX op dst src mem))))
         dst))
+
+;; Helper for emitting `MInst.AluRX` instructions as flags producers.
+(decl alu_rx_with_flags_paired (Type ALUOp Reg MemArg) ProducesFlags)
+(rule (alu_rx_with_flags_paired ty op src mem)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+          (MInst.AluRX op dst src mem) dst)))
 
 ;; Helper for emitting `MInst.AluRSImm16` instructions.
 (decl alu_rsimm16 (Type ALUOp Reg i16) Reg)
@@ -2042,6 +2085,13 @@
             (_ Unit (emit (MInst.AluRUImm32 op dst src imm))))
         dst))
 
+;; Helper for emitting `MInst.AluRUImm32` instructions as flag producers.
+(decl alu_ruimm32_with_flags_paired (Type ALUOp Reg u32) ProducesFlags)
+(rule (alu_ruimm32_with_flags_paired ty op src imm)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+          (MInst.AluRUImm32 op dst src imm) dst)))
+
 ;; Helper for emitting `MInst.AluRUImm16Shifted` instructions.
 (decl alu_ruimm16shifted (Type ALUOp Reg UImm16Shifted) Reg)
 (rule (alu_ruimm16shifted ty op src imm)
@@ -2060,43 +2110,42 @@
 (decl smul_wide (Reg Reg) RegPair)
 (rule (smul_wide src1 src2)
       (let ((dst WritableRegPair (temp_writable_regpair))
-            (_ Unit (emit (MInst.SMulWide src1 src2))))
+            (_ Unit (emit (MInst.SMulWide dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.UMulWide` instructions.
 (decl umul_wide (Reg Reg) RegPair)
 (rule (umul_wide src1 src2)
       (let ((dst WritableRegPair (temp_writable_regpair))
-            (_ Unit (emit (MInst.Mov64 (writable_regpair_lo dst) src2)))
-            (_ Unit (emit (MInst.UMulWide src1))))
+            (_ Unit (emit (MInst.UMulWide dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.SDivMod32` instructions.
-(decl sdivmod32 (RegPair Reg) RegPair)
+(decl sdivmod32 (Reg Reg) RegPair)
 (rule (sdivmod32 src1 src2)
-      (let ((dst WritableRegPair (copy_writable_regpair src1))
-            (_ Unit (emit (MInst.SDivMod32 src2))))
+      (let ((dst WritableRegPair (temp_writable_regpair))
+            (_ Unit (emit (MInst.SDivMod32 dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.SDivMod64` instructions.
-(decl sdivmod64 (RegPair Reg) RegPair)
+(decl sdivmod64 (Reg Reg) RegPair)
 (rule (sdivmod64 src1 src2)
-      (let ((dst WritableRegPair (copy_writable_regpair src1))
-            (_ Unit (emit (MInst.SDivMod64 src2))))
+      (let ((dst WritableRegPair (temp_writable_regpair))
+            (_ Unit (emit (MInst.SDivMod64 dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.UDivMod32` instructions.
 (decl udivmod32 (RegPair Reg) RegPair)
 (rule (udivmod32 src1 src2)
-      (let ((dst WritableRegPair (copy_writable_regpair src1))
-            (_ Unit (emit (MInst.UDivMod32 src2))))
+      (let ((dst WritableRegPair (temp_writable_regpair))
+            (_ Unit (emit (MInst.UDivMod32 dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.UDivMod64` instructions.
 (decl udivmod64 (RegPair Reg) RegPair)
 (rule (udivmod64 src1 src2)
-      (let ((dst WritableRegPair (copy_writable_regpair src1))
-            (_ Unit (emit (MInst.UDivMod64 src2))))
+      (let ((dst WritableRegPair (temp_writable_regpair))
+            (_ Unit (emit (MInst.UDivMod64 dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.ShiftRR` instructions.
@@ -2154,15 +2203,15 @@
 ;; Helper for emitting `MInst.AtomicCas32` instructions.
 (decl atomic_cas32 (Reg Reg MemArg) Reg)
 (rule (atomic_cas32 src1 src2 mem)
-      (let ((dst WritableReg (copy_writable_reg $I32 src1))
-            (_ Unit (emit (MInst.AtomicCas32 dst src2 mem))))
+      (let ((dst WritableReg (temp_writable_reg $I32))
+            (_ Unit (emit (MInst.AtomicCas32 dst src1 src2 mem))))
         dst))
 
 ;; Helper for emitting `MInst.AtomicCas64` instructions.
 (decl atomic_cas64 (Reg Reg MemArg) Reg)
 (rule (atomic_cas64 src1 src2 mem)
-      (let ((dst WritableReg (copy_writable_reg $I64 src1))
-            (_ Unit (emit (MInst.AtomicCas64 dst src2 mem))))
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AtomicCas64 dst src1 src2 mem))))
         dst))
 
 ;; Helper for emitting `MInst.Fence` instructions.
@@ -2275,8 +2324,8 @@
 ;; Helper for emitting `MInst.InsertAR` instructions.
 (decl insert_ar (Reg u8) Reg)
 (rule (insert_ar src ar)
-      (let ((dst WritableReg (copy_writable_reg $I64 src))
-            (_ Unit (emit (MInst.InsertAR dst ar))))
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.InsertAR dst src ar))))
         dst))
 
 ;; Helper for emitting `MInst.FpuRR` instructions.
@@ -2554,8 +2603,8 @@
 ;; Helper for emitting `MInst.VecLoadLane` instructions.
 (decl vec_load_lane (Type Reg MemArg u8) Reg)
 (rule (vec_load_lane ty @ (multi_lane size _) src addr lane_imm)
-      (let ((dst WritableReg (copy_writable_reg ty src))
-            (_ Unit (emit (MInst.VecLoadLane size dst addr lane_imm))))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecLoadLane size dst src addr lane_imm))))
         dst))
 
 ;; Helper for emitting `MInst.VecLoadLaneUndef` instructions.
@@ -2568,8 +2617,8 @@
 ;; Helper for emitting `MInst.VecLoadLaneRev` instructions.
 (decl vec_load_lane_rev (Type Reg MemArg u8) Reg)
 (rule (vec_load_lane_rev ty @ (multi_lane size _) src addr lane_imm)
-      (let ((dst WritableReg (copy_writable_reg ty src))
-            (_ Unit (emit (MInst.VecLoadLaneRev size dst addr lane_imm))))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecLoadLaneRev size dst src addr lane_imm))))
         dst))
 
 ;; Helper for emitting `MInst.VecLoadLaneRevUndef` instructions.
@@ -2592,8 +2641,8 @@
 ;; Helper for emitting `MInst.VecInsertLane` instructions.
 (decl vec_insert_lane (Type Reg Reg u8 Reg) Reg)
 (rule (vec_insert_lane ty @ (multi_lane size _) src1 src2 lane_imm lane_reg)
-      (let ((dst WritableReg (copy_writable_reg ty src1))
-            (_ Unit (emit (MInst.VecInsertLane size dst src2 lane_imm lane_reg))))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecInsertLane size dst src1 src2 lane_imm lane_reg))))
         dst))
 
 ;; Helper for emitting `MInst.VecInsertLaneUndef` instructions.
@@ -2613,8 +2662,8 @@
 ;; Helper for emitting `MInst.VecInsertLaneImm` instructions.
 (decl vec_insert_lane_imm (Type Reg i16 u8) Reg)
 (rule (vec_insert_lane_imm ty @ (multi_lane size _) src imm lane_imm)
-      (let ((dst WritableReg (copy_writable_reg ty src))
-            (_ Unit (emit (MInst.VecInsertLaneImm size dst imm lane_imm))))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecInsertLaneImm size dst src imm lane_imm))))
         dst))
 
 ;; Helper for emitting `MInst.VecReplicateLane` instructions.
@@ -2654,25 +2703,19 @@
       (SideEffectNoResult.Inst (MInst.Jump target)))
 
 ;; Helper for emitting `MInst.CondBr` instructions.
-(decl cond_br (MachLabel MachLabel Cond) SideEffectNoResult)
+(decl cond_br (MachLabel MachLabel Cond) ConsumesFlags)
 (rule (cond_br taken not_taken cond)
-      (SideEffectNoResult.Inst (MInst.CondBr taken not_taken cond)))
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.CondBr taken not_taken cond)))
 
 ;; Helper for emitting `MInst.OneWayCondBr` instructions.
-(decl oneway_cond_br (MachLabel Cond) SideEffectNoResult)
+(decl oneway_cond_br (MachLabel Cond) ConsumesFlags)
 (rule (oneway_cond_br dest cond)
-      (SideEffectNoResult.Inst (MInst.OneWayCondBr dest cond)))
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.OneWayCondBr dest cond)))
 
 ;; Helper for emitting `MInst.JTSequence` instructions.
 (decl jt_sequence (Reg VecMachLabel) SideEffectNoResult)
 (rule (jt_sequence ridx targets)
       (SideEffectNoResult.Inst (MInst.JTSequence ridx targets)))
-
-;; Emit a `ProducesFlags` instruction when the flags are not actually needed.
-(decl drop_flags (ProducesFlags) Reg)
-(rule (drop_flags (ProducesFlags.ProducesFlagsReturnsReg inst result))
-      (let ((_ Unit (emit inst)))
-        result))
 
 
 ;; Helpers for instruction sequences ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2731,7 +2774,7 @@
 (rule (push_rxsbg ib op (real_reg dst) r src start_bit end_bit rotate_amt)
       (if (same_reg dst r))
       (let ((_ Unit (inst_builder_push ib
-                      (MInst.RxSBG op dst src start_bit end_bit rotate_amt))))
+                      (MInst.RxSBG op dst r src start_bit end_bit rotate_amt))))
         dst))
 
 ;; Push a `MInst.UnaryRR` instruction to a sequence.
@@ -2743,13 +2786,13 @@
 ;; Push a `MInst.AtomicCas32` instruction to a sequence.
 (decl push_atomic_cas32 (VecMInstBuilder WritableReg Reg MemArg) Reg)
 (rule (push_atomic_cas32 ib (real_reg dst_src1) src2 mem)
-      (let ((_ Unit (inst_builder_push ib (MInst.AtomicCas32 dst_src1 src2 mem))))
+      (let ((_ Unit (inst_builder_push ib (MInst.AtomicCas32 dst_src1 dst_src1 src2 mem))))
         dst_src1))
 
 ;; Push a `MInst.AtomicCas64` instruction to a sequence.
 (decl push_atomic_cas64 (VecMInstBuilder WritableReg Reg MemArg) Reg)
 (rule (push_atomic_cas64 ib (real_reg dst_src1) src2 mem)
-      (let ((_ Unit (inst_builder_push ib (MInst.AtomicCas64 dst_src1 src2 mem))))
+      (let ((_ Unit (inst_builder_push ib (MInst.AtomicCas64 dst_src1 dst_src1 src2 mem))))
         dst_src1))
 
 ;; Push instructions to break out of the loop if condition is met.
@@ -2767,34 +2810,16 @@
 
 ;; Helpers for generating register moves ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Move source register into destination.  (Non-SSA form.)
-(decl emit_mov (Type WritableReg Reg) Unit)
-
-(rule 1 (emit_mov (gpr32_ty _ty) dst src)
-      (emit (MInst.Mov32 dst src)))
-
-(rule 2 (emit_mov (gpr64_ty _ty) dst src)
-      (emit (MInst.Mov64 dst src)))
-
-(rule 3 (emit_mov $F32 dst src)
-      (emit (MInst.FpuMove32 dst src)))
-
-(rule 3 (emit_mov $F64 dst src)
-      (emit (MInst.FpuMove64 dst src)))
-
-(rule 0 (emit_mov (vr128_ty ty) dst src)
-      (emit (MInst.VecMov dst src)))
-
-;; Allocate a temporary (writable) register, initialized as a copy of the input.
-(decl copy_writable_reg (Type Reg) WritableReg)
-(rule (copy_writable_reg ty src)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit_mov ty dst src)))
-        dst))
-
-;; Likewise, but returning a Reg instead of a WritableReg.
+;; Copy GPR into a virtual register.
 (decl copy_reg (Type Reg) Reg)
-(rule (copy_reg ty reg) (copy_writable_reg ty reg))
+(rule 1 (copy_reg (gpr32_ty ty) src)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.Mov32 dst src))))
+        dst))
+(rule 2 (copy_reg (gpr64_ty ty) src)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.Mov64 dst src))))
+        dst))
 
 ;; Move from memory location into destination.
 (decl emit_load (Type WritableReg MemArg) Unit)
@@ -2820,31 +2845,25 @@
 
 ;; Helpers for accessing argument / return value slots ;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl emit_side_effect (SideEffectNoResult) Unit)
-(rule (emit_side_effect (SideEffectNoResult.Inst inst)) (emit inst))
+(decl arg_store (Type Reg MemArg) SideEffectNoResult)
+(rule (arg_store $I8 reg mem) (store8 reg mem))
+(rule (arg_store $I16 reg mem) (store16 reg mem))
+(rule (arg_store $I32 reg mem) (store32 reg mem))
+(rule (arg_store $I64 reg mem) (store64 reg mem))
+(rule (arg_store $R64 reg mem) (store64 reg mem))
+(rule (arg_store $F32 reg mem) (vec_store_lane $F32X4 reg mem 0))
+(rule (arg_store $F64 reg mem) (vec_store_lane $F64X2 reg mem 0))
+(rule -1 (arg_store (vr128_ty ty) reg mem) (vec_store reg mem))
 
-(decl emit_arg_store (Type Reg MemArg) Unit)
-(rule (emit_arg_store $I8 reg mem) (emit_side_effect (store8 reg mem)))
-(rule (emit_arg_store $I16 reg mem) (emit_side_effect (store16 reg mem)))
-(rule (emit_arg_store $I32 reg mem) (emit_side_effect (store32 reg mem)))
-(rule (emit_arg_store $I64 reg mem) (emit_side_effect (store64 reg mem)))
-(rule (emit_arg_store $R64 reg mem) (emit_side_effect (store64 reg mem)))
-(rule (emit_arg_store $F32 reg mem)
-      (emit_side_effect (vec_store_lane $F32X4 reg mem 0)))
-(rule (emit_arg_store $F64 reg mem)
-      (emit_side_effect (vec_store_lane $F64X2 reg mem 0)))
-(rule -1 (emit_arg_store (vr128_ty ty) reg mem)
-      (emit_side_effect (vec_store reg mem)))
-
-(decl emit_arg_load (Type MemArg) Reg)
-(rule (emit_arg_load $I8 mem) (zext32_mem $I8 mem))
-(rule (emit_arg_load $I16 mem) (zext32_mem $I16 mem))
-(rule (emit_arg_load $I32 mem) (load32 mem))
-(rule (emit_arg_load $I64 mem) (load64 mem))
-(rule (emit_arg_load $R64 mem) (load64 mem))
-(rule (emit_arg_load $F32 mem) (vec_load_lane_undef $F32X4 mem 0))
-(rule (emit_arg_load $F64 mem) (vec_load_lane_undef $F64X2 mem 0))
-(rule -1 (emit_arg_load (vr128_ty ty) mem) (vec_load ty mem))
+(decl arg_load (Type MemArg) Reg)
+(rule (arg_load $I8 mem) (zext32_mem $I8 mem))
+(rule (arg_load $I16 mem) (zext32_mem $I16 mem))
+(rule (arg_load $I32 mem) (load32 mem))
+(rule (arg_load $I64 mem) (load64 mem))
+(rule (arg_load $R64 mem) (load64 mem))
+(rule (arg_load $F32 mem) (vec_load_lane_undef $F32X4 mem 0))
+(rule (arg_load $F64 mem) (vec_load_lane_undef $F64X2 mem 0))
+(rule -1 (arg_load (vr128_ty ty) mem) (vec_load ty mem))
 
 ;; Helper to perform a lane swap in register.
 (decl vec_elt_rev (Type Reg) Reg)
@@ -2875,77 +2894,76 @@
       (vec_elt_rev ty reg))
 
 ;; Helpers to emit a memory copy (MVC or memcpy libcall).
-(decl emit_memcpy (MemArg MemArg u64) Unit)
-(rule 1 (emit_memcpy dst src (len_minus_one len))
-      (emit_side_effect (mvc (memarg_pair dst) (memarg_pair src) len)))
-(rule (emit_memcpy dst src len)
-      (let ((libcall LibCallInfo (lib_call_info_memcpy))
-            (_ Unit (lib_accumulate_outgoing_args_size libcall))
-            (_ Unit (emit_mov $I64 (writable_gpr 2) (load_addr dst)))
-            (_ Unit (emit_mov $I64 (writable_gpr 3) (load_addr src)))
-            (_ Unit (emit_imm $I64 (writable_gpr 4) len)))
-        (emit_side_effect (lib_call libcall))))
+(decl memcpy (MemArg MemArg u64) SideEffectNoResult)
+(rule 1 (memcpy dst src (len_minus_one len))
+      (mvc (memarg_pair dst) (memarg_pair src) len))
+(rule (memcpy dst src len)
+      (let ((libcall LibCallInfo (lib_call_info_memcpy (load_addr dst) (load_addr src) (imm $I64 len)))
+            (_ Unit (lib_accumulate_outgoing_args_size libcall)))
+        (lib_call libcall)))
 
 ;; Prepare a stack copy of a single (oversized) argument.
 (decl copy_to_buffer (i64 ABIArg Value) InstOutput)
 (rule 2 (copy_to_buffer base (abi_arg_only_slot slot) _) (output_none))
 (rule 1 (copy_to_buffer base (abi_arg_struct_pointer _ offset size) val)
       (let ((dst MemArg (memarg_stack_off base offset))
-            (src MemArg (memarg_reg_plus_off val 0 0 (memflags_trusted)))
-            (_ Unit (emit_memcpy dst src size)))
-        (output_none)))
+            (src MemArg (memarg_reg_plus_off val 0 0 (memflags_trusted))))
+        (side_effect (memcpy dst src size))))
 (rule 0 (copy_to_buffer base (abi_arg_implicit_pointer _ offset ty)
                       val @ (value_type ty))
-      (let ((mem MemArg (memarg_stack_off base offset))
-            (_ Unit (emit_arg_store ty val mem)))
-        (output_none)))
+      (side_effect (arg_store ty val (memarg_stack_off base offset))))
 
 ;; Copy a single argument/return value to its slots.
 ;; For oversized arguments, set the slot to the buffer address.
-(decl copy_to_arg (LaneOrder i64 ABIArg Value) Unit)
-(rule 2 (copy_to_arg lo base (abi_arg_only_slot slot) val)
-      (copy_val_to_arg_slot lo base slot val))
-(rule 1 (copy_to_arg _ base (abi_arg_struct_pointer slot offset _) _)
+(decl copy_to_arg (CallArgListBuilder LaneOrder i64 ABIArg Value) InstOutput)
+(rule 2 (copy_to_arg uses lo base (abi_arg_only_slot slot) val)
+      (copy_reg_to_arg_slot uses lo base slot (prepare_arg_val slot val)))
+(rule 1 (copy_to_arg uses lo base (abi_arg_struct_pointer slot offset _) _)
       (let ((ptr Reg (load_addr (memarg_stack_off base offset))))
-        (copy_reg_to_arg_slot base slot ptr)))
-(rule 0 (copy_to_arg _ base (abi_arg_implicit_pointer slot offset _) _)
+        (copy_reg_to_arg_slot uses lo base slot ptr)))
+(rule 0 (copy_to_arg uses lo base (abi_arg_implicit_pointer slot offset _) _)
       (let ((ptr Reg (load_addr (memarg_stack_off base offset))))
-        (copy_reg_to_arg_slot base slot ptr)))
+        (copy_reg_to_arg_slot uses lo base slot ptr)))
 
 ;; Copy a single argument/return value from its slots.
-(decl copy_from_arg (LaneOrder i64 ABIArg) ValueRegs)
-(rule (copy_from_arg lo base (abi_arg_only_slot slot))
-      (value_reg (copy_reg_from_arg_slot lo base slot)))
+(decl copy_from_arg (CallRetList LaneOrder i64 ABIArg) ValueRegs)
+(rule (copy_from_arg defs lo base (abi_arg_only_slot slot))
+      (value_reg (copy_reg_from_arg_slot defs lo base slot)))
 
-;; Copy one component of an argument/return value to its slot.
-(decl copy_val_to_arg_slot (LaneOrder i64 ABIArgSlot Value) Unit)
-(rule (copy_val_to_arg_slot lo _ (ABIArgSlot.Reg reg ty (ArgumentExtension.None)) val)
-      (emit_mov ty (real_reg_to_writable_reg reg) (abi_vec_elt_rev lo ty val)))
-(rule (copy_val_to_arg_slot _ _ (ABIArgSlot.Reg reg _ (ArgumentExtension.Uext)) val)
-      (emit_put_in_reg_zext64 (real_reg_to_writable_reg reg) val))
-(rule (copy_val_to_arg_slot _ _ (ABIArgSlot.Reg reg _ (ArgumentExtension.Sext)) val)
-      (emit_put_in_reg_sext64 (real_reg_to_writable_reg reg) val))
-(rule (copy_val_to_arg_slot _ base (ABIArgSlot.Stack offset ty (ArgumentExtension.None)) val)
-      (emit_arg_store ty val (memarg_stack_off base offset)))
-(rule (copy_val_to_arg_slot _ base (ABIArgSlot.Stack offset _ (ArgumentExtension.Uext)) val)
-      (emit_arg_store $I64 (put_in_reg_zext64 val) (memarg_stack_off base offset)))
-(rule (copy_val_to_arg_slot _ base (ABIArgSlot.Stack offset _ (ArgumentExtension.Sext)) val)
-      (emit_arg_store $I64 (put_in_reg_sext64 val) (memarg_stack_off base offset)))
+;; Place one component of an argument/return value into a register.
+;; Copy reference values into registers of integer type.
+;; Zero- or sign-extend as required by the ABI.
+(decl prepare_arg_val (ABIArgSlot Value) Reg)
+(rule 1 (prepare_arg_val (ABIArgSlot.Reg _ $R64 (ArgumentExtension.None)) val)
+        (copy_reg $I64 val))
+(rule (prepare_arg_val (ABIArgSlot.Reg _ _ (ArgumentExtension.None)) val)
+      val)
+(rule (prepare_arg_val (ABIArgSlot.Reg _ _ (ArgumentExtension.Uext)) val)
+      (put_in_reg_zext64 val))
+(rule (prepare_arg_val (ABIArgSlot.Reg _ _ (ArgumentExtension.Sext)) val)
+      (put_in_reg_sext64 val))
+(rule (prepare_arg_val (ABIArgSlot.Stack _ _ (ArgumentExtension.None)) val)
+      val)
+(rule (prepare_arg_val (ABIArgSlot.Stack _ _ (ArgumentExtension.Uext)) val)
+      (put_in_reg_zext64 val))
+(rule (prepare_arg_val (ABIArgSlot.Stack _ _ (ArgumentExtension.Sext)) val)
+      (put_in_reg_sext64 val))
 
 ;; Copy one component of an argument/return value to its slot, where the
 ;; value is already extended and present in a register.
-(decl copy_reg_to_arg_slot (i64 ABIArgSlot Reg) Unit)
-(rule (copy_reg_to_arg_slot _ (ABIArgSlot.Reg reg ty ext) src)
-      (emit_mov (abi_ext_ty ext ty) (real_reg_to_writable_reg reg) src))
-(rule (copy_reg_to_arg_slot base (ABIArgSlot.Stack offset ty ext) src)
-      (emit_arg_store (abi_ext_ty ext ty) src (memarg_stack_off base offset)))
+(decl copy_reg_to_arg_slot (CallArgListBuilder LaneOrder i64 ABIArgSlot Reg) InstOutput)
+(rule (copy_reg_to_arg_slot uses lo _ (ABIArgSlot.Reg reg ty ext) src)
+      (let ((_ Unit (args_builder_push uses (abi_vec_elt_rev lo ty src) reg)))
+        (output_none)))
+(rule (copy_reg_to_arg_slot _ _ base (ABIArgSlot.Stack offset ty ext) src)
+      (side_effect (arg_store (abi_ext_ty ext ty) src (memarg_stack_off base offset))))
 
 ;; Copy one component of an argument/return value from its slot.
-(decl copy_reg_from_arg_slot (LaneOrder i64 ABIArgSlot) Reg)
-(rule (copy_reg_from_arg_slot lo _ (ABIArgSlot.Reg reg ty ext))
-      (abi_vec_elt_rev lo ty (copy_reg (abi_ext_ty ext ty) (real_reg_to_reg reg))))
-(rule (copy_reg_from_arg_slot _ base (ABIArgSlot.Stack offset ty ext))
-      (emit_arg_load (abi_ext_ty ext ty) (memarg_stack_off base offset)))
+(decl copy_reg_from_arg_slot (CallRetList LaneOrder i64 ABIArgSlot) Reg)
+(rule (copy_reg_from_arg_slot defs lo _ (ABIArgSlot.Reg reg ty ext))
+      (abi_vec_elt_rev lo ty (defs_lookup defs reg)))
+(rule (copy_reg_from_arg_slot _ _ base (ABIArgSlot.Stack offset ty ext))
+      (arg_load (abi_ext_ty ext ty) (memarg_stack_off base offset)))
 
 ;; Helper to compute the type of an implicitly extended argument/return value.
 (decl abi_ext_ty (ArgumentExtension Type) Type)
@@ -2953,77 +2971,86 @@
 (rule (abi_ext_ty (ArgumentExtension.Uext) _) $I64)
 (rule (abi_ext_ty (ArgumentExtension.Sext) _) $I64)
 
-;; Copy a return value to a set of registers.
-(decl s390x_copy_to_regs (WritableValueRegs Value) Unit)
-(rule (s390x_copy_to_regs (only_writable_reg reg) val @ (value_type ty))
-      (emit_mov ty reg val))
-
 
 ;; Helpers for generating immediate values ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Move immediate value into destination register.  (Non-SSA form.)
-(decl emit_imm (Type WritableReg u64) Unit)
+;; Allocate a temporary register, initialized with an immediate.
+(decl imm (Type u64) Reg)
 
 ;; 16-bit (or smaller) result type, any value
-(rule 5 (emit_imm (fits_in_16 _ty) dst n)
-      (emit (MInst.Mov32SImm16 dst (u64_as_i16 n))))
+(rule 5 (imm (fits_in_16 ty) n)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.Mov32SImm16 dst (u64_as_i16 n)))))
+        dst))
 
 ;; 32-bit result type, value fits in i16
-(rule 4 (emit_imm (gpr32_ty _ty) dst (i16_from_u64 n))
-      (emit (MInst.Mov32SImm16 dst n)))
+(rule 4 (imm (gpr32_ty ty) (i16_from_u64 n))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.Mov32SImm16 dst n))))
+        dst))
 
 ;; 32-bit result type, any value
-(rule 3 (emit_imm (gpr32_ty _ty) dst n)
-      (emit (MInst.Mov32Imm dst (u64_as_u32 n))))
+(rule 3 (imm (gpr32_ty ty) n)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.Mov32Imm dst (u64_as_u32 n)))))
+        dst))
 
 ;; 64-bit result type, value fits in i16
-(rule 6 (emit_imm (gpr64_ty _ty) dst (i16_from_u64 n))
-      (emit (MInst.Mov64SImm16 dst n)))
+(rule 6 (imm (gpr64_ty ty) (i16_from_u64 n))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.Mov64SImm16 dst n))))
+        dst))
 
 ;; 64-bit result type, value fits in i32
-(rule 2 (emit_imm (gpr64_ty _ty) dst (i32_from_u64 n))
-      (emit (MInst.Mov64SImm32 dst n)))
+(rule 2 (imm (gpr64_ty ty) (i32_from_u64 n))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.Mov64SImm32 dst n))))
+        dst))
 
 ;; 64-bit result type, value fits in UImm16Shifted
-(rule 1 (emit_imm (gpr64_ty _ty) dst (uimm16shifted_from_u64 n))
-      (emit (MInst.Mov64UImm16Shifted dst n)))
+(rule 1 (imm (gpr64_ty ty) (uimm16shifted_from_u64 n))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.Mov64UImm16Shifted dst n))))
+        dst))
 
 ;; 64-bit result type, value fits in UImm32Shifted
-(rule 0 (emit_imm (gpr64_ty _ty) dst (uimm32shifted_from_u64 n))
-      (emit (MInst.Mov64UImm32Shifted dst n)))
+(rule 0 (imm (gpr64_ty ty) (uimm32shifted_from_u64 n))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.Mov64UImm32Shifted dst n))))
+        dst))
 
 ;; 64-bit result type, value with non-zero low-/high-parts.
-(rule 7 (emit_imm (gpr64_ty ty) dst (and (u64_nonzero_hipart hi)
-                                       (u64_nonzero_lopart lo)))
-      (let ((_ Unit (emit_imm ty dst hi)))
-        (emit_insert_imm dst lo)))
+(rule 7 (imm (gpr64_ty ty) (and (u64_nonzero_hipart hi)
+                                (u64_nonzero_lopart lo)))
+      (insert_imm ty (imm ty hi) lo))
 
-;; Insert immediate value into destination register.  (Non-SSA form.)
-(decl emit_insert_imm (WritableReg u64) Unit)
+;; Replace low 32 bits of 64-bit value with immediate.
+(decl insert_imm (Type Reg u64) Reg)
 
 ;; Insertion, value fits in UImm16Shifted
-(rule 1 (emit_insert_imm dst (uimm16shifted_from_u64 n))
-      (emit (MInst.Insert64UImm16Shifted dst n)))
+(rule 1 (insert_imm ty src (uimm16shifted_from_u64 n))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.Insert64UImm16Shifted dst src n))))
+        dst))
 
 ;; Insertion, value fits in UImm32Shifted
-(rule (emit_insert_imm dst (uimm32shifted_from_u64 n))
-      (emit (MInst.Insert64UImm32Shifted dst n)))
+(rule (insert_imm ty src (uimm32shifted_from_u64 n))
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.Insert64UImm32Shifted dst src n))))
+        dst))
 
 ;; 32-bit floating-point type, any value.  Loaded from literal pool.
 ;; TODO: use LZER to load 0.0
-(rule 8 (emit_imm $F32 dst n)
-      (emit (MInst.LoadFpuConst32 dst (u64_as_u32 n))))
+(rule 8 (imm $F32 n)
+      (let ((dst WritableReg (temp_writable_reg $F32))
+            (_ Unit (emit (MInst.LoadFpuConst32 dst (u64_as_u32 n)))))
+        dst))
 
 ;; 64-bit floating-point type, any value.  Loaded from literal pool.
 ;; TODO: use LZDR to load 0.0
-(rule 8 (emit_imm $F64 dst n)
-      (emit (MInst.LoadFpuConst64 dst n)))
-
-;; Allocate a temporary register, initialized with an immediate.
-(decl imm (Type u64) Reg)
-(rule (imm ty n)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit_imm ty dst n)))
+(rule 8 (imm $F64 n)
+      (let ((dst WritableReg (temp_writable_reg $F64))
+            (_ Unit (emit (MInst.LoadFpuConst64 dst n))))
         dst))
 
 ;; Variant used for negative constants.
@@ -3063,22 +3090,6 @@
 (rule 0 (vec_imm_splat (ty_vec128 ty) n)
       (vec_load_const_replicate ty n))
 
-;; Place an immediate into the low half of a register pair.
-;; The high half is taken from the input.
-(decl imm_regpair_lo (Type u64 RegPair) RegPair)
-(rule (imm_regpair_lo ty n regpair)
-      (let ((dst WritableRegPair (copy_writable_regpair regpair))
-            (_ Unit (emit_imm ty (writable_regpair_lo dst) n)))
-        dst))
-
-;; Place an immediate into the high half of a register pair.
-;; The low half is taken from the input.
-(decl imm_regpair_hi (Type u64 RegPair) RegPair)
-(rule (imm_regpair_hi ty n regpair)
-      (let ((dst WritableRegPair (copy_writable_regpair regpair))
-            (_ Unit (emit_imm ty (writable_regpair_hi dst) n)))
-        dst))
-
 
 ;; Helpers for generating extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3096,154 +3107,88 @@
 (rule (ty_ext64 $I32) $I64)
 (rule (ty_ext64 $I64) $I64)
 
-;; Zero-extend a register from a smaller `Type` into a 32-bit destination.  (Non-SSA form.)
-;; This handles both integer and boolean input types.
-(decl emit_zext32_reg (WritableReg Type Reg) Unit)
-(rule (emit_zext32_reg dst ty src)
-      (emit (MInst.Extend dst src $false (ty_bits ty) 32)))
-
-;; Sign-extend a register from a smaller `Type` into a 32-bit destination.  (Non-SSA form.)
-;; This handles both integer and boolean input types.
-(decl emit_sext32_reg (WritableReg Type Reg) Unit)
-(rule (emit_sext32_reg dst ty src)
-      (emit (MInst.Extend dst src $true (ty_bits ty) 32)))
-
-;; Zero-extend a register from a smaller `Type` into a 64-bit destination.  (Non-SSA form.)
-;; This handles both integer and boolean input types.
-(decl emit_zext64_reg (WritableReg Type Reg) Unit)
-(rule (emit_zext64_reg dst ty src)
-      (emit (MInst.Extend dst src $false (ty_bits ty) 64)))
-
-;; Sign-extend a register from a smaller `Type` into a 64-bit destination.  (Non-SSA form.)
-;; This handles both integer and boolean input types.
-(decl emit_sext64_reg (WritableReg Type Reg) Unit)
-(rule (emit_sext64_reg dst ty src)
-      (emit (MInst.Extend dst src $true (ty_bits ty) 64)))
 
 ;; Zero-extend a register from a smaller `Type` into a 32-bit register.
-;; This handles both integer and boolean input types.
 (decl zext32_reg (Type Reg) Reg)
 (rule (zext32_reg ty src)
       (let ((dst WritableReg (temp_writable_reg $I32))
-            (_ Unit (emit_zext32_reg dst ty src)))
+            (_ Unit (emit (MInst.Extend dst src $false (ty_bits ty) 32))))
         dst))
 
 ;; Sign-extend a register from a smaller `Type` into a 32-bit register.
 (decl sext32_reg (Type Reg) Reg)
 (rule (sext32_reg ty src)
       (let ((dst WritableReg (temp_writable_reg $I32))
-            (_ Unit (emit_sext32_reg dst ty src)))
+            (_ Unit (emit (MInst.Extend dst src $true (ty_bits ty) 32))))
         dst))
 
 ;; Zero-extend a register from a smaller `Type` into a 64-bit register.
 (decl zext64_reg (Type Reg) Reg)
 (rule (zext64_reg ty src)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit_zext64_reg dst ty src)))
+            (_ Unit (emit (MInst.Extend dst src $false (ty_bits ty) 64))))
         dst))
 
 ;; Sign-extend a register from a smaller `Type` into a 64-bit register.
 (decl sext64_reg (Type Reg) Reg)
 (rule (sext64_reg ty src)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit_sext64_reg dst ty src)))
+            (_ Unit (emit (MInst.Extend dst src $true (ty_bits ty) 64))))
         dst))
 
 
-;; Zero-extend memory from a smaller `Type` into a 32-bit destination.  (Non-SSA form.)
-(decl emit_zext32_mem (WritableReg Type MemArg) Unit)
-(rule (emit_zext32_mem dst $I8 mem) (emit (MInst.Load32ZExt8 dst mem)))
-(rule (emit_zext32_mem dst $I16 mem) (emit (MInst.Load32ZExt16 dst mem)))
-
-;; Sign-extend memory from a smaller `Type` into a 32-bit destination.  (Non-SSA form.)
-(decl emit_sext32_mem (WritableReg Type MemArg) Unit)
-(rule (emit_sext32_mem dst $I8 mem) (emit (MInst.Load32SExt8 dst mem)))
-(rule (emit_sext32_mem dst $I16 mem) (emit (MInst.Load32SExt16 dst mem)))
-
-;; Zero-extend memory from a smaller `Type` into a 64-bit destination.  (Non-SSA form.)
-(decl emit_zext64_mem (WritableReg Type MemArg) Unit)
-(rule (emit_zext64_mem dst $I8 mem) (emit (MInst.Load64ZExt8 dst mem)))
-(rule (emit_zext64_mem dst $I16 mem) (emit (MInst.Load64ZExt16 dst mem)))
-(rule (emit_zext64_mem dst $I32 mem) (emit (MInst.Load64ZExt32 dst mem)))
-
-;; Sign-extend memory from a smaller `Type` into a 64-bit destination.  (Non-SSA form.)
-(decl emit_sext64_mem (WritableReg Type MemArg) Unit)
-(rule (emit_sext64_mem dst $I8 mem) (emit (MInst.Load64SExt8 dst mem)))
-(rule (emit_sext64_mem dst $I16 mem) (emit (MInst.Load64SExt16 dst mem)))
-(rule (emit_sext64_mem dst $I32 mem) (emit (MInst.Load64SExt32 dst mem)))
-
 ;; Zero-extend memory from a smaller `Type` into a 32-bit register.
 (decl zext32_mem (Type MemArg) Reg)
-(rule (zext32_mem ty mem)
+(rule (zext32_mem $I8 mem)
       (let ((dst WritableReg (temp_writable_reg $I32))
-            (_ Unit (emit_zext32_mem dst ty mem)))
+            (_ Unit (emit (MInst.Load32ZExt8 dst mem))))
+        dst))
+(rule (zext32_mem $I16 mem)
+      (let ((dst WritableReg (temp_writable_reg $I32))
+            (_ Unit (emit (MInst.Load32ZExt16 dst mem))))
         dst))
 
 ;; Sign-extend memory from a smaller `Type` into a 32-bit register.
 (decl sext32_mem (Type MemArg) Reg)
-(rule (sext32_mem ty mem)
+(rule (sext32_mem $I8 mem)
       (let ((dst WritableReg (temp_writable_reg $I32))
-            (_ Unit (emit_sext32_mem dst ty mem)))
+            (_ Unit (emit (MInst.Load32SExt8 dst mem))))
+        dst))
+(rule (sext32_mem $I16 mem)
+      (let ((dst WritableReg (temp_writable_reg $I32))
+            (_ Unit (emit (MInst.Load32SExt16 dst mem))))
         dst))
 
 ;; Zero-extend memory from a smaller `Type` into a 64-bit register.
 (decl zext64_mem (Type MemArg) Reg)
-(rule (zext64_mem ty mem)
+(rule (zext64_mem $I8 mem)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit_zext64_mem dst ty mem)))
+            (_ Unit (emit (MInst.Load64ZExt8 dst mem))))
+        dst))
+(rule (zext64_mem $I16 mem)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.Load64ZExt16 dst mem))))
+        dst))
+(rule (zext64_mem $I32 mem)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.Load64ZExt32 dst mem))))
         dst))
 
 ;; Sign-extend memory from a smaller `Type` into a 64-bit register.
 (decl sext64_mem (Type MemArg) Reg)
-(rule (sext64_mem ty mem)
+(rule (sext64_mem $I8 mem)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit_sext64_mem dst ty mem)))
+            (_ Unit (emit (MInst.Load64SExt8 dst mem))))
+        dst))
+(rule (sext64_mem $I16 mem)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.Load64SExt16 dst mem))))
+        dst))
+(rule (sext64_mem $I32 mem)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.Load64SExt32 dst mem))))
         dst))
 
-
-;; Place `Value` into destination, zero-extending to 32 bits if smaller.  (Non-SSA form.)
-(decl emit_put_in_reg_zext32 (WritableReg Value) Unit)
-(rule 3 (emit_put_in_reg_zext32 dst (and (value_type ty) (u64_from_value val)))
-      (emit_imm (ty_ext32 ty) dst val))
-(rule 1 (emit_put_in_reg_zext32 dst (and (value_type (fits_in_16 ty)) (sinkable_load load)))
-      (emit_zext32_mem dst ty (sink_load load)))
-(rule 0 (emit_put_in_reg_zext32 dst val @ (value_type (fits_in_16 ty)))
-      (emit_zext32_reg dst ty val))
-(rule 2 (emit_put_in_reg_zext32 dst val @ (value_type (ty_32_or_64 ty)))
-      (emit_mov ty dst val))
-
-;; Place `Value` into destination, sign-extending to 32 bits if smaller.  (Non-SSA form.)
-(decl emit_put_in_reg_sext32 (WritableReg Value) Unit)
-(rule 3 (emit_put_in_reg_sext32 dst (and (value_type ty) (u64_from_signed_value val)))
-      (emit_imm (ty_ext32 ty) dst val))
-(rule 1 (emit_put_in_reg_sext32 dst (and (value_type (fits_in_16 ty)) (sinkable_load load)))
-      (emit_sext32_mem dst ty (sink_load load)))
-(rule 0 (emit_put_in_reg_sext32 dst val @ (value_type (fits_in_16 ty)))
-      (emit_sext32_reg dst ty val))
-(rule 2 (emit_put_in_reg_sext32 dst val @ (value_type (ty_32_or_64 ty)))
-      (emit_mov ty dst val))
-
-;; Place `Value` into destination, zero-extending to 64 bits if smaller.  (Non-SSA form.)
-(decl emit_put_in_reg_zext64 (WritableReg Value) Unit)
-(rule 3 (emit_put_in_reg_zext64 dst (and (value_type ty) (u64_from_value val)))
-      (emit_imm (ty_ext64 ty) dst val))
-(rule 1 (emit_put_in_reg_zext64 dst (and (value_type (gpr32_ty ty)) (sinkable_load load)))
-      (emit_zext64_mem dst ty (sink_load load)))
-(rule 0 (emit_put_in_reg_zext64 dst val @ (value_type (gpr32_ty ty)))
-      (emit_zext64_reg dst ty val))
-(rule 2 (emit_put_in_reg_zext64 dst val @ (value_type (gpr64_ty ty)))
-      (emit_mov ty dst val))
-
-;; Place `Value` into destination, sign-extending to 64 bits if smaller.  (Non-SSA form.)
-(decl emit_put_in_reg_sext64 (WritableReg Value) Unit)
-(rule 3 (emit_put_in_reg_sext64 dst (and (value_type ty) (u64_from_signed_value val)))
-      (emit_imm (ty_ext64 ty) dst val))
-(rule 1 (emit_put_in_reg_sext64 dst (and (value_type (gpr32_ty ty)) (sinkable_load load)))
-      (emit_sext64_mem dst ty (sink_load load)))
-(rule 0 (emit_put_in_reg_sext64 dst val @ (value_type (gpr32_ty ty)))
-      (emit_sext64_reg dst ty val))
-(rule 2 (emit_put_in_reg_sext64 dst val @ (value_type (gpr64_ty ty)))
-      (emit_mov ty dst val))
 
 ;; Place `Value` into a register, zero-extending to 32 bits if smaller.
 (decl put_in_reg_zext32 (Value) Reg)
@@ -3289,110 +3234,67 @@
 (rule 2 (put_in_reg_sext64 val @ (value_type (gpr64_ty ty)))
       val)
 
-;; Place `Value` into the low half of a register pair, zero-extending
-;; to 32 bits if smaller.  The high half is taken from the input.
-(decl put_in_regpair_lo_zext32 (Value RegPair) RegPair)
-(rule (put_in_regpair_lo_zext32 val regpair)
-      (let ((dst WritableRegPair (copy_writable_regpair regpair))
-            (_ Unit (emit_put_in_reg_zext32 (writable_regpair_lo dst) val)))
-        dst))
-
-;; Place `Value` into the low half of a register pair, sign-extending
-;; to 32 bits if smaller.  The high half is taken from the input.
-(decl put_in_regpair_lo_sext32 (Value RegPair) RegPair)
-(rule (put_in_regpair_lo_sext32 val regpair)
-      (let ((dst WritableRegPair (copy_writable_regpair regpair))
-            (_ Unit (emit_put_in_reg_sext32 (writable_regpair_lo dst) val)))
-        dst))
-
-;; Place `Value` into the low half of a register pair, zero-extending
-;; to 64 bits if smaller.  The high half is taken from the input.
-(decl put_in_regpair_lo_zext64 (Value RegPair) RegPair)
-(rule (put_in_regpair_lo_zext64 val regpair)
-      (let ((dst WritableRegPair (copy_writable_regpair regpair))
-            (_ Unit (emit_put_in_reg_zext64 (writable_regpair_lo dst) val)))
-        dst))
-
-;; Place `Value` into the low half of a register pair, sign-extending
-;; to 64 bits if smaller.  The high half is taken from the input.
-(decl put_in_regpair_lo_sext64 (Value RegPair) RegPair)
-(rule (put_in_regpair_lo_sext64 val regpair)
-      (let ((dst WritableRegPair (copy_writable_regpair regpair))
-            (_ Unit (emit_put_in_reg_sext64 (writable_regpair_lo dst) val)))
-        dst))
-
 
 ;; Helpers for generating conditional moves ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Conditionally move immediate value into destination register.  (Non-SSA form.)
-(decl emit_cmov_imm (Type WritableReg Cond i16) ConsumesFlags)
-(rule (emit_cmov_imm (gpr32_ty _ty) dst cond imm)
-      (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.CMov32SImm16 dst cond imm)
-                                             dst))
-(rule 1 (emit_cmov_imm (gpr64_ty _ty) dst cond imm)
-      (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.CMov64SImm16 dst cond imm)
-                                             dst))
-
 ;; Conditionally select between immediate and source register.
 (decl cmov_imm (Type Cond i16 Reg) ConsumesFlags)
-(rule (cmov_imm ty cond imm src)
-      (let ((dst WritableReg (copy_writable_reg ty src)))
-        (emit_cmov_imm ty dst cond imm)))
+(rule 0 (cmov_imm (gpr32_ty ty) cond imm_true reg_false)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (inst MInst (MInst.CMov32SImm16 dst cond reg_false imm_true)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg inst dst)))
+(rule 1 (cmov_imm (gpr64_ty ty) cond imm_true reg_false)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (inst MInst (MInst.CMov64SImm16 dst cond reg_false imm_true)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg inst dst)))
 
-;; Conditionally modify the low word of a register pair.
-;; This cannot be ConsumesFlags since the return value is not a register.
-(decl cmov_imm_regpair_lo (Type ProducesFlags Cond i16 RegPair) RegPair)
-(rule (cmov_imm_regpair_lo ty producer cond imm src)
-      (let ((dst WritableRegPair (copy_writable_regpair src))
-            (consumer ConsumesFlags (emit_cmov_imm ty (writable_regpair_lo dst) cond imm))
-            (_ Reg (with_flags_reg producer consumer)))
-        dst))
-
-;; Conditionally modify the high word of a register pair.
-;; This cannot be ConsumesFlags since the return value is not a register.
-(decl cmov_imm_regpair_hi (Type ProducesFlags Cond i16 RegPair) RegPair)
-(rule (cmov_imm_regpair_hi ty producer cond imm src)
-      (let ((dst WritableRegPair (copy_writable_regpair src))
-            (consumer ConsumesFlags (emit_cmov_imm ty (writable_regpair_hi dst) cond imm))
-            (_ Reg (with_flags_reg producer consumer)))
-        dst))
-
-;; Conditionally select between two source registers.  (Non-SSA form.)
-(decl emit_cmov_reg (Type WritableReg Cond Reg) ConsumesFlags)
-(rule 1 (emit_cmov_reg (gpr32_ty _ty) dst cond src)
-      (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.CMov32 dst cond src)
-                                             dst))
-(rule 2 (emit_cmov_reg (gpr64_ty _ty) dst cond src)
-      (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.CMov64 dst cond src)
-                                             dst))
-(rule 3 (emit_cmov_reg $F32 dst cond src)
-      (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.FpuCMov32 dst cond src)
-                                             dst))
-(rule 3 (emit_cmov_reg $F64 dst cond src)
-      (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.FpuCMov64 dst cond src)
-                                             dst))
-(rule 0 (emit_cmov_reg (vr128_ty ty) dst cond src)
-      (ConsumesFlags.ConsumesFlagsReturnsReg (MInst.VecCMov dst cond src)
-                                             dst))
-
+;; Conditionally select between two immediates.
+(decl cmov_imm_imm (Type Cond i16 i16) ConsumesFlags)
+(rule 0 (cmov_imm_imm (gpr32_ty ty) cond imm_true imm_false)
+      (let ((tmp1 WritableReg (temp_writable_reg ty))
+            (tmp2 WritableReg (temp_writable_reg ty))
+            (inst1 MInst (MInst.Mov32SImm16 tmp1 imm_false))
+            (inst2 MInst (MInst.CMov32SImm16 tmp2 cond tmp1 imm_true))
+            (dst ValueRegs (value_reg tmp2)))
+        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs inst1 inst2 dst)))
+(rule 1 (cmov_imm_imm (gpr64_ty ty) cond imm_true imm_false)
+      (let ((tmp1 WritableReg (temp_writable_reg ty))
+            (tmp2 WritableReg (temp_writable_reg ty))
+            (inst1 MInst (MInst.Mov64SImm16 tmp1 imm_false))
+            (inst2 MInst (MInst.CMov64SImm16 tmp2 cond tmp1 imm_true))
+            (dst ValueRegs (value_reg tmp2)))
+        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs inst1 inst2 dst)))
 
 ;; Conditionally select between two source registers.
-(decl cmov_reg (Type Cond Reg Reg) ConsumesFlags)
-(rule (cmov_reg ty cond src1 src2)
-      (let ((dst WritableReg (copy_writable_reg ty src2)))
-        (emit_cmov_reg ty dst cond src1)))
+(decl cmov_reg_reg (Type Cond Reg Reg) ConsumesFlags)
+(rule 1 (cmov_reg_reg (gpr32_ty ty) cond reg_true reg_false)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (inst MInst (MInst.CMov32 dst cond reg_false reg_true)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg inst dst)))
+(rule 2 (cmov_reg_reg (gpr64_ty ty) cond reg_true reg_false)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (inst MInst (MInst.CMov64 dst cond reg_false reg_true)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg inst dst)))
+(rule 3 (cmov_reg_reg $F32 cond reg_true reg_false)
+      (let ((dst WritableReg (temp_writable_reg $F32))
+            (inst MInst (MInst.FpuCMov32 dst cond reg_false reg_true)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg inst dst)))
+(rule 3 (cmov_reg_reg $F64 cond reg_true reg_false)
+      (let ((dst WritableReg (temp_writable_reg $F64))
+            (inst MInst (MInst.FpuCMov64 dst cond reg_false reg_true)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg inst dst)))
+(rule 0 (cmov_reg_reg (vr128_ty ty) cond reg_true reg_false)
+      (let ((dst WritableReg (temp_writable_reg $F64))
+            (inst MInst (MInst.VecCMov dst cond reg_false reg_true)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg inst dst)))
 
 
 ;; Helpers for generating conditional traps ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl trap_if (ProducesFlags Cond TrapCode) Reg)
-(rule (trap_if (ProducesFlags.ProducesFlagsReturnsReg inst result) cond trap_code)
-      (let ((_ Unit (emit inst))
-            (_ Unit (emit (MInst.TrapIf cond trap_code))))
-        result))
-(rule (trap_if (ProducesFlags.ProducesFlagsSideEffect inst) cond trap_code)
-      (let ((_ Unit (emit inst))
-            (_ Unit (emit (MInst.TrapIf cond trap_code))))
+(rule (trap_if producer cond trap_code)
+      (let ((consumer ConsumesFlags (trap_if_impl cond trap_code))
+            (_ InstOutput (side_effect (with_flags_side_effect producer consumer))))
         (invalid_reg)))
 
 (decl icmps_reg_and_trap (Type Reg Reg Cond TrapCode) Reg)
@@ -3423,9 +3325,9 @@
 (rule (trap_impl trap_code)
       (SideEffectNoResult.Inst (MInst.Trap trap_code)))
 
-(decl trap_if_impl (Cond TrapCode) SideEffectNoResult)
+(decl trap_if_impl (Cond TrapCode) ConsumesFlags)
 (rule (trap_if_impl cond trap_code)
-      (SideEffectNoResult.Inst (MInst.TrapIf cond trap_code)))
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.TrapIf cond trap_code)))
 
 (decl debugtrap_impl () SideEffectNoResult)
 (rule (debugtrap_impl)
@@ -3446,33 +3348,15 @@
 (rule (invert_bool (ProducesBool.ProducesBool producer cond))
       (bool producer (invert_cond cond)))
 
-;; Helpers to emit a `ProducesFlags` or `ConsumesFlags` instruction directly.
-;; We use this in `select_bool_reg` and `select_bool_imm` below instead of
-;; using the `with_flags` mechanism so that we can insert another unrelated
-;; instruction in between the producer and consumer.  (This use is only valid
-;; if that unrelated instruction does not modify the condition code.)
-(decl emit_producer (ProducesFlags) Unit)
-(rule (emit_producer (ProducesFlags.ProducesFlagsSideEffect insn)) (emit insn))
-(decl emit_consumer (ConsumesFlags) Unit)
-(rule (emit_consumer (ConsumesFlags.ConsumesFlagsReturnsReg insn _)) (emit insn))
-
 ;; Use a boolean condition to select between two registers.
 (decl select_bool_reg (Type ProducesBool Reg Reg) Reg)
 (rule (select_bool_reg ty (ProducesBool.ProducesBool producer cond) reg_true reg_false)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit_producer producer))
-            (_ Unit (emit_mov ty dst reg_false))
-            (_ Unit (emit_consumer (emit_cmov_reg ty dst cond reg_true))))
-        dst))
+      (with_flags_reg producer (cmov_reg_reg ty cond reg_true reg_false)))
 
 ;; Use a boolean condition to select between two immediate values.
-(decl select_bool_imm (Type ProducesBool i16 u64) Reg)
+(decl select_bool_imm (Type ProducesBool i16 i16) Reg)
 (rule (select_bool_imm ty (ProducesBool.ProducesBool producer cond) imm_true imm_false)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit_producer producer))
-            (_ Unit (emit_imm ty dst imm_false))
-            (_ Unit (emit_consumer (emit_cmov_imm ty dst cond imm_true))))
-        dst))
+      (with_flags_reg producer (cmov_imm_imm ty cond imm_true imm_false)))
 
 ;; Lower a boolean condition to the values 1/0. This rule is only used in the
 ;; context of instructions that return $I8 results.
@@ -3491,20 +3375,17 @@
 ;; Emit a conditional branch based on a boolean condition.
 (decl cond_br_bool (ProducesBool MachLabel MachLabel) SideEffectNoResult)
 (rule (cond_br_bool (ProducesBool.ProducesBool producer cond) taken not_taken)
-      (let ((_ Unit (emit_producer producer)))
-        (cond_br taken not_taken cond)))
+      (with_flags_side_effect producer (cond_br taken not_taken cond)))
 
 ;; Emit a one-way conditional branch based on a boolean condition.
 (decl oneway_cond_br_bool (ProducesBool MachLabel) SideEffectNoResult)
 (rule (oneway_cond_br_bool (ProducesBool.ProducesBool producer cond) dest)
-      (let ((_ Unit (emit_producer producer)))
-        (oneway_cond_br dest cond)))
+      (with_flags_side_effect producer (oneway_cond_br dest cond)))
 
 ;; Emit a conditional trap based on a boolean condition.
 (decl trap_if_bool (ProducesBool TrapCode) SideEffectNoResult)
 (rule (trap_if_bool (ProducesBool.ProducesBool producer cond) trap_code)
-      (let ((_ Unit (emit_producer producer)))
-        (trap_if_impl cond trap_code)))
+      (with_flags_side_effect producer (trap_if_impl cond trap_code)))
 
 
 ;;;; Helpers for compare-and-swap loops ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3626,25 +3507,57 @@
 
 ;; Helpers for generating `call` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; List of argument registers for a call instruction.
+(type CallArgList extern (enum))
+
+;; Partial (mutable) argument list in the process of being created.
+(type CallArgListBuilder extern (enum))
+
+;; Create a new empty instruction sequence builder.
+(decl args_builder_new () CallArgListBuilder)
+(extern constructor args_builder_new args_builder_new)
+
+;; Push an instruction to a sequence under construction.
+(decl args_builder_push (CallArgListBuilder Reg RealReg) Unit)
+(extern constructor args_builder_push args_builder_push)
+
+;; Complete the sequence under construction.
+(decl args_builder_finish (CallArgListBuilder) CallArgList)
+(extern constructor args_builder_finish args_builder_finish)
+
+;; List of return registers for a call instnuction.
+(type CallRetList extern (enum))
+
+;; Initialize return register list.
+(decl defs_init (Sig) CallRetList)
+(extern constructor defs_init defs_init)
+
+;; Look up return register in list.
+(decl defs_lookup (CallRetList RealReg) Reg)
+(extern constructor defs_lookup defs_lookup)
+
 (decl abi_sig (SigRef) Sig)
 (extern constructor abi_sig abi_sig)
 
-(decl abi_call_info (Sig ExternalName Opcode) BoxCallInfo)
+(decl abi_first_ret (SigRef Sig) usize)
+(extern constructor abi_first_ret abi_first_ret)
+
+(decl abi_call_info (Sig ExternalName CallArgList CallRetList Opcode) BoxCallInfo)
 (extern constructor abi_call_info abi_call_info)
 
-(decl abi_call_ind_info (Sig Reg Opcode) BoxCallIndInfo)
+(decl abi_call_ind_info (Sig Reg CallArgList CallRetList Opcode) BoxCallIndInfo)
 (extern constructor abi_call_ind_info abi_call_ind_info)
 
 (decl writable_link_reg () WritableReg)
 (rule (writable_link_reg) (writable_gpr 14))
 
-(decl abi_call (Sig ExternalName Opcode) SideEffectNoResult)
-(rule (abi_call abi name opcode)
-      (call_impl (writable_link_reg) (abi_call_info abi name opcode)))
+(decl abi_call (Sig ExternalName CallArgList CallRetList Opcode) SideEffectNoResult)
+(rule (abi_call abi name uses defs opcode)
+      (call_impl (writable_link_reg) (abi_call_info abi name uses defs opcode)))
 
-(decl abi_call_ind (Sig Reg Opcode) SideEffectNoResult)
-(rule (abi_call_ind abi target opcode)
-      (call_ind_impl (writable_link_reg) (abi_call_ind_info abi target opcode)))
+(decl abi_call_ind (Sig Reg CallArgList CallRetList Opcode) SideEffectNoResult)
+(rule (abi_call_ind abi target uses defs opcode)
+      (call_ind_impl (writable_link_reg) (abi_call_ind_info abi target uses defs opcode)))
 
 (decl abi_accumulate_outgoing_args_size (Sig) Unit)
 (extern constructor abi_accumulate_outgoing_args_size abi_accumulate_outgoing_args_size)
@@ -3657,10 +3570,10 @@
 
 (type LibCallInfo extern (enum))
 
-(decl lib_call_info_memcpy () LibCallInfo)
+(decl lib_call_info_memcpy (Reg Reg Reg) LibCallInfo)
 (extern constructor lib_call_info_memcpy lib_call_info_memcpy)
 
-(decl lib_call_info_tls_get_offset (SymbolReloc) LibCallInfo)
+(decl lib_call_info_tls_get_offset (WritableReg Reg Reg SymbolReloc) LibCallInfo)
 (extern constructor lib_call_info_tls_get_offset lib_call_info_tls_get_offset)
 
 (decl lib_call_info (LibCallInfo) BoxCallInfo)
@@ -3852,24 +3765,20 @@
 ;; Helpers for generating `clz` and `ctz` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Count leading zeroes.  For a zero input, return the specified value.
-(decl clz_reg (i16 Reg) RegPair)
+(decl clz_reg (i16 Reg) Reg)
 
 ;; The flogr instruction returns 64 for zero input by default.
 (rule (clz_reg 64 x)
       (let ((dst WritableRegPair (temp_writable_regpair))
-            (_ Unit (emit (MInst.Flogr x))))
-        dst))
+            (_ Unit (emit (MInst.Flogr dst x))))
+        (regpair_hi dst)))
 
-;; If another zero return value was requested, we need to override the flogr
-;; result.  This cannot use any of the normal flags mechanisms because we need
-;; to use both result and condition code output of flogr as input to the
-;; conditional move, and because flogr returns a register pair.
+;; If another zero return value was requested, we need to override the flogr result.
 (rule -1 (clz_reg zeroval x)
-      (let ((dst WritableRegPair (temp_writable_regpair))
-            (_ Unit (emit (MInst.Flogr x)))
-            (_ Unit (emit (MInst.CMov64SImm16 (writable_regpair_hi dst)
-                              (intcc_as_cond (IntCC.Equal)) zeroval))))
-        dst))
+      (let ((tmp WritableRegPair (temp_writable_regpair)))
+        (with_flags_reg
+          (ProducesFlags.ProducesFlagsSideEffect (MInst.Flogr tmp x))
+          (cmov_imm $I64 (intcc_as_cond (IntCC.Equal)) zeroval (regpair_hi tmp)))))
 
 ;; Vector count leading zeros.
 (decl vecop_clz (Type) VecUnaryOp)
@@ -3996,17 +3905,37 @@
 (decl add_logical_reg (Type Reg Reg) Reg)
 (rule (add_logical_reg ty x y) (alu_rrr ty (aluop_add_logical ty) x y))
 
+(decl add_logical_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (add_logical_reg_with_flags_paired ty x y)
+      (alu_rrr_with_flags_paired ty (aluop_add_logical ty) x y))
+
 (decl add_logical_reg_zext32 (Type Reg Reg) Reg)
 (rule (add_logical_reg_zext32 ty x y) (alu_rr ty (aluop_add_logical_zext32 ty) x y))
+
+(decl add_logical_reg_zext32_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (add_logical_reg_zext32_with_flags_paired ty x y)
+      (alu_rr_with_flags_paired ty (aluop_add_logical_zext32 ty) x y))
 
 (decl add_logical_zimm32 (Type Reg u32) Reg)
 (rule (add_logical_zimm32 ty x y) (alu_ruimm32 ty (aluop_add_logical ty) x y))
 
+(decl add_logical_zimm32_with_flags_paired (Type Reg u32) ProducesFlags)
+(rule (add_logical_zimm32_with_flags_paired ty x y)
+      (alu_ruimm32_with_flags_paired ty (aluop_add_logical ty) x y))
+
 (decl add_logical_mem (Type Reg MemArg) Reg)
 (rule (add_logical_mem ty x y) (alu_rx ty (aluop_add_logical ty) x y))
 
+(decl add_logical_mem_with_flags_paired (Type Reg MemArg) ProducesFlags)
+(rule (add_logical_mem_with_flags_paired ty x y)
+      (alu_rx_with_flags_paired ty (aluop_add_logical ty) x y))
+
 (decl add_logical_mem_zext32 (Type Reg MemArg) Reg)
 (rule (add_logical_mem_zext32 ty x y) (alu_rx ty (aluop_add_logical_zext32 ty) x y))
+
+(decl add_logical_mem_zext32_with_flags_paired (Type Reg MemArg) ProducesFlags)
+(rule (add_logical_mem_zext32_with_flags_paired ty x y)
+      (alu_rx_with_flags_paired ty (aluop_add_logical_zext32 ty) x y))
 
 
 ;; Helpers for generating `sub` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -4186,7 +4115,7 @@
 
 ;; Helpers for generating `sdivmod` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl sdivmod (Type RegPair Reg) RegPair)
+(decl sdivmod (Type Reg Reg) RegPair)
 (rule (sdivmod $I32 x y) (sdivmod32 x y))
 (rule (sdivmod $I64 x y) (sdivmod64 x y))
 

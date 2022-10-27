@@ -418,12 +418,8 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         }
         IntCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
         IntCompareImm { cond, arg, imm, .. } => write!(w, " {} {}, {}", cond, arg, imm),
-        IntCond { cond, arg, .. } => write!(w, " {} {}", cond, arg),
+        IntAddTrap { args, code, .. } => write!(w, " {}, {}, {}", args[0], args[1], code),
         FloatCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
-        FloatCond { cond, arg, .. } => write!(w, " {} {}", cond, arg),
-        IntSelect { cond, args, .. } => {
-            write!(w, " {} {}, {}, {}", cond, args[0], args[1], args[2])
-        }
         Jump {
             destination,
             ref args,
@@ -440,36 +436,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             let args = args.as_slice(pool);
             write!(w, " {}, {}", args[0], destination)?;
             write_block_args(w, &args[1..])
-        }
-        BranchInt {
-            cond,
-            destination,
-            ref args,
-            ..
-        } => {
-            let args = args.as_slice(pool);
-            write!(w, " {} {}, {}", cond, args[0], destination)?;
-            write_block_args(w, &args[1..])
-        }
-        BranchFloat {
-            cond,
-            destination,
-            ref args,
-            ..
-        } => {
-            let args = args.as_slice(pool);
-            write!(w, " {} {}, {}", cond, args[0], destination)?;
-            write_block_args(w, &args[1..])
-        }
-        BranchIcmp {
-            cond,
-            destination,
-            ref args,
-            ..
-        } => {
-            let args = args.as_slice(pool);
-            write!(w, " {} {}, {}, {}", cond, args[0], args[1], destination)?;
-            write_block_args(w, &args[2..])
         }
         BranchTable {
             arg,

@@ -542,10 +542,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // Otherwise we can continue on like usual.
         let zero = builder.ins().iconst(ir::types::I64, 0);
         let fuel = builder.use_var(self.fuel_var);
-        let cmp = builder.ins().ifcmp(fuel, zero);
-        builder
+        let cmp = builder
             .ins()
-            .brif(IntCC::SignedGreaterThanOrEqual, cmp, out_of_gas_block, &[]);
+            .icmp(IntCC::SignedGreaterThanOrEqual, fuel, zero);
+        builder.ins().brnz(cmp, out_of_gas_block, &[]);
         builder.ins().jump(continuation_block, &[]);
         builder.seal_block(out_of_gas_block);
 
@@ -649,10 +649,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // fine, as we'll reload it and check again before yielding in
         // the cold path.
         let cur_epoch_value = self.epoch_load_current(builder);
-        let cmp = builder.ins().ifcmp(cur_epoch_value, epoch_deadline);
-        builder
-            .ins()
-            .brif(IntCC::UnsignedGreaterThanOrEqual, cmp, new_epoch_block, &[]);
+        let cmp = builder.ins().icmp(
+            IntCC::UnsignedGreaterThanOrEqual,
+            cur_epoch_value,
+            epoch_deadline,
+        );
+        builder.ins().brnz(cmp, new_epoch_block, &[]);
         builder.ins().jump(continuation_block, &[]);
         builder.seal_block(new_epoch_block);
 
@@ -666,13 +668,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder.switch_to_block(new_epoch_block);
         self.epoch_load_deadline_into_var(builder);
         let fresh_epoch_deadline = builder.use_var(self.epoch_deadline_var);
-        let fresh_cmp = builder.ins().ifcmp(cur_epoch_value, fresh_epoch_deadline);
-        builder.ins().brif(
+        let fresh_cmp = builder.ins().icmp(
             IntCC::UnsignedGreaterThanOrEqual,
-            fresh_cmp,
-            new_epoch_doublecheck_block,
-            &[],
+            cur_epoch_value,
+            fresh_epoch_deadline,
         );
+        builder
+            .ins()
+            .brnz(fresh_cmp, new_epoch_doublecheck_block, &[]);
         builder.ins().jump(continuation_block, &[]);
         builder.seal_block(new_epoch_doublecheck_block);
 
@@ -1183,9 +1186,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 builder.switch_to_block(dec_ref_count_block);
                 let prev_ref_count = self.mutate_externref_ref_count(builder, current_elem, -1);
                 let one = builder.ins().iconst(pointer_type, 1);
-                builder
-                    .ins()
-                    .br_icmp(IntCC::Equal, one, prev_ref_count, drop_block, &[]);
+                let cond = builder.ins().icmp(IntCC::Equal, one, prev_ref_count);
+                builder.ins().brnz(cond, drop_block, &[]);
                 builder.ins().jump(continue_block, &[]);
 
                 // Call the `drop_externref` builtin to (you guessed it) drop

@@ -18,9 +18,9 @@ block0(v0: i32):
 ;   bras %r1, 12 ; data userextname0@tlsgd ; lg %r2, 0(%r1)
 ;   brasl %r14, %ElfTlsGetOffset:tls_gdcall:userextname0
 ;   ear %r3, %a0
-;   sllg %r4, %r3, 32
-;   ear %r4, %a1
-;   agr %r2, %r4
+;   sllg %r3, %r3, 32
+;   ear %r3, %a1
+;   agr %r2, %r3
 ;   lmg %r12, %r15, 256(%r15)
 ;   br %r14
 

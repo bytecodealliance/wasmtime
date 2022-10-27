@@ -25,7 +25,7 @@ wiggle::from_witx!({
     // keeping that set the same in this macro and the wasmtime_wiggle / lucet_wiggle macros is
     // tedious, and there is no cost to having a sync function be async in this case.
     async: *,
-    wasmtime: false
+    wasmtime: false,
 });
 
 impl wiggle::GuestErrorType for types::Errno {
@@ -35,10 +35,10 @@ impl wiggle::GuestErrorType for types::Errno {
 }
 
 impl types::UserErrorConversion for WasiCtx {
-    fn errno_from_error(&mut self, e: Error) -> Result<types::Errno, wiggle::Trap> {
+    fn errno_from_error(&mut self, e: Error) -> Result<types::Errno, wasmtime::Trap> {
         debug!("Error: {:?}", e);
         e.try_into()
-            .map_err(|e| wiggle::Trap::String(format!("{:?}", e)))
+            .map_err(|e| wasmtime::Trap::new(format!("{:?}", e)))
     }
 }
 
@@ -1214,12 +1214,12 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         Ok(num_results.try_into().expect("results fit into memory"))
     }
 
-    async fn proc_exit(&mut self, status: types::Exitcode) -> wiggle::Trap {
+    async fn proc_exit(&mut self, status: types::Exitcode) -> wasmtime::Trap {
         // Check that the status is within WASI's range.
         if status < 126 {
-            wiggle::Trap::I32Exit(status as i32)
+            wasmtime::Trap::i32_exit(status as i32)
         } else {
-            wiggle::Trap::String("exit with invalid exit status outside of [0..126)".to_owned())
+            wasmtime::Trap::new("exit with invalid exit status outside of [0..126)")
         }
     }
 

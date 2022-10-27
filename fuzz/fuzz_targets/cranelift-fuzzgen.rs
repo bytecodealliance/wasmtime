@@ -8,8 +8,6 @@ use std::sync::atomic::Ordering;
 
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{LibCall, TrapCode};
-use cranelift_codegen::settings;
-use cranelift_codegen::settings::Configurable;
 use cranelift_filetests::function_runner::{TestFileCompiler, Trampoline};
 use cranelift_fuzzgen::*;
 use cranelift_interpreter::environment::FuncIndex;
@@ -167,24 +165,16 @@ fn build_interpreter(testcase: &TestCase) -> Interpreter {
 static STATISTICS: Lazy<Statistics> = Lazy::new(Statistics::default);
 
 fuzz_target!(|testcase: TestCase| {
+    // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
+    assert!(testcase.flags.enable_verifier());
+
     // Periodically print statistics
     let valid_inputs = STATISTICS.valid_inputs.fetch_add(1, Ordering::SeqCst);
     if valid_inputs != 0 && valid_inputs % 10000 == 0 {
         STATISTICS.print(valid_inputs);
     }
 
-    // Native fn
-    let flags = {
-        let mut builder = settings::builder();
-        // We need llvm ABI extensions for i128 values on x86
-        builder.set("enable_llvm_abi_extensions", "true").unwrap();
-
-        // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
-        builder.set("enable_verifier", "true").unwrap();
-
-        settings::Flags::new(builder)
-    };
-    let mut compiler = TestFileCompiler::with_host_isa(flags).unwrap();
+    let mut compiler = TestFileCompiler::with_host_isa(testcase.flags.clone()).unwrap();
     compiler.declare_function(&testcase.func).unwrap();
     compiler.define_function(testcase.func.clone()).unwrap();
     compiler
