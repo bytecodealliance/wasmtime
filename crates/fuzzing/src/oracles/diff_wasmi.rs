@@ -143,8 +143,7 @@ impl DiffInstance for WasmiInstance {
     }
 
     fn get_global(&mut self, name: &str, _ty: DiffValueType) -> Option<DiffValue> {
-        self
-            .instance
+        self.instance
             .get_export(&self.store, name)
             .and_then(wasmi::Extern::into_global)
             .map(|global| global.get(&self.store).into())
@@ -152,8 +151,7 @@ impl DiffInstance for WasmiInstance {
 
     fn get_memory(&mut self, name: &str, shared: bool) -> Option<Vec<u8>> {
         assert!(!shared);
-        self
-            .instance
+        self.instance
             .get_export(&self.store, name)
             .and_then(wasmi::Extern::into_memory)
             .map(|memory| memory.data(&self.store).to_vec())
