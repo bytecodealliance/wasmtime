@@ -72,6 +72,7 @@ pub FunctionApplication: FunctionApplication = {
 
 pub Width: Box<Width> = {
     "(" "regwidth" ")" => Box::new(Width::RegWidth),
+    "(" <n:UNum> ")" => Box::new(Width::Const(n)),
 }
 
 pub Expr: Box<Expr> = {
@@ -90,6 +91,7 @@ pub Expr: Box<Expr> = {
     "(" "-" <u:Expr> ")" => Box::new(Expr::BVNeg(u, 0)),
     "(" "~" <u:Expr> ")" => Box::new(Expr::BVNot(u, 0)),
 
+    "(" "*" <u:Expr> <v:Expr> ")" => Box::new(Expr::BVMul(u, v, 0)),
     "(" "+" <u:Expr> <v:Expr> ")" => Box::new(Expr::BVAdd(u, v, 0)),
     "(" "-" <u:Expr> <v:Expr> ")" => Box::new(Expr::BVSub(u, v, 0)),
     "(" "&" <u:Expr> <v:Expr> ")" => Box::new(Expr::BVAnd(u, v, 0)),

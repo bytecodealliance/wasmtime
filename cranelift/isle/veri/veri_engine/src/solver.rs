@@ -351,7 +351,8 @@ impl SolverCtx {
                     _ => (),
                 };
                 match op {
-                    BinaryOp::BVAdd
+                    BinaryOp::BVMul
+                    | BinaryOp::BVAdd
                     | BinaryOp::BVSub
                     | BinaryOp::BVAnd
                     | BinaryOp::BVOr
@@ -410,6 +411,7 @@ impl SolverCtx {
                     BinaryOp::Imp => "=>",
                     BinaryOp::Eq => "=",
                     BinaryOp::Lte => "<=",
+                    BinaryOp::BVMul => "bvmul",
                     BinaryOp::BVAdd => "bvadd",
                     BinaryOp::BVSub => "bvsub",
                     BinaryOp::BVAnd => "bvand",
@@ -504,12 +506,16 @@ impl SolverCtx {
             Expr::WidthOf(x) => self.get_expr_width_var(&*x).unwrap().clone(),
             Expr::BVExtract(i, j, x) => {
                 assert!(i > j);
-                assert!(i < self.bitwidth);
-                let xs = self.vir_expr_to_rsmt2_str(*x);
-                let extract = format!("((_ extract {} {}) {})", i, j, xs);
-                let new_width = i - j + 1;
-                let padding = self.new_fresh_bits(self.bitwidth.checked_sub(new_width).unwrap());
-                format!("(concat {} {})", padding, extract)
+                if let Type::BitVector(x_width) = ty.unwrap() {
+                    assert!(i < x_width.unwrap());
+                    let xs = self.vir_expr_to_rsmt2_str(*x);
+                    let extract = format!("((_ extract {} {}) {})", i, j, xs);
+                    let new_width = i - j + 1;
+                    let padding = self.new_fresh_bits(self.bitwidth.checked_sub(new_width).unwrap());
+                    format!("(concat {} {})", padding, extract)
+                } else {
+                    unreachable!("Must perform extraction on bv with known width")
+                }
             }
             Expr::Conditional(c, t, e) => {
                 format!(
@@ -651,7 +657,7 @@ pub fn run_solver(rule_sem: RuleSemantics, query_width: usize) -> VerificationRe
         let name = &v.name;
         let ty = ctx.tyctx.tymap[&v.tyvar].clone();
         let var_ty = ctx.vir_to_rsmt2_constant_ty(&ty);
-        // println!("\t{} : {:?}", name, var_ty);
+        println!("\t{} : {:?}", name, var_ty);
         if let Type::BitVector(w) = ty {
             let wide = ctx.widen_to_query_width(
                 v.tyvar,

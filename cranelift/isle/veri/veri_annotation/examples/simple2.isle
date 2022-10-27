@@ -18,8 +18,3 @@
 ;;@ (spec (sig (args arg) (ret))
 ;;@     (assertions (= (arg) (ret))))
 (decl lower (Inst) ValueRegs)
-
-;;@ (spec (sig (args ty, arg) (ret))
-;;@ (assertions (= (ty) (widthof (arg))), (= (arg) (ret))))
-(decl has_type (Type Inst) Inst)
-(extern extractor has_type has_type)

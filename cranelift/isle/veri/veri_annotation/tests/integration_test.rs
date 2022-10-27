@@ -6,7 +6,7 @@ use veri_ir::isle_annotations::isle_annotation_for_term;
 #[test]
 fn test_parser_single_file() {
     let annotation_env = parse_annotations(&vec![PathBuf::from("examples/simple.isle")]);
-    assert_eq!(annotation_env.annotation_map.len(), 7);
+    assert_eq!(annotation_env.annotation_map.len(), 3);
     for (term, annotation) in annotation_env.annotation_map {
         let expected = isle_annotation_for_term(&term).unwrap();
         assert_eq!(expected, annotation);
@@ -19,7 +19,7 @@ fn test_parser_multi_file() {
         PathBuf::from("examples/simple.isle"),
         PathBuf::from("examples/simple2.isle"),
     ]);
-    assert_eq!(annotation_env.annotation_map.len(), 9);
+    assert_eq!(annotation_env.annotation_map.len(), 4);
     for (term, annotation) in annotation_env.annotation_map {
         let expected = isle_annotation_for_term(&term).unwrap();
         assert_eq!(expected, annotation);
@@ -41,15 +41,10 @@ fn test_parser_str() {
         ;;@     (assertions (= (+ (a) (b)) (r))))
         (decl iadd (Value Value) Inst)
         (extern extractor iadd iadd)
-        
-        ;;@ (spec (sig (args imm_arg) (ret))
-        ;;@     (assertions (= (-(conv_from 12 (imm_arg))) (ret))))
-        (decl imm12_from_negated_value (Imm12) Value)
-        (extern extractor imm12_from_negated_value imm12_from_negated_value)
     ";
     let annotation_env = parse_annotations_str(code);
 
-    assert_eq!(annotation_env.annotation_map.len(), 3);
+    assert_eq!(annotation_env.annotation_map.len(), 2);
     for (term, annotation) in annotation_env.annotation_map {
         let expected = isle_annotation_for_term(&term).unwrap();
         assert_eq!(expected, annotation);

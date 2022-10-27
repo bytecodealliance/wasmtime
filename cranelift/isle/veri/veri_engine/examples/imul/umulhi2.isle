@@ -1,0 +1,92 @@
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
+(decl lower (Inst) InstOutput)
+
+;; Instruction formats.
+(type MInst
+  (enum
+    ;; A no-op of zero size.
+    (Nop0)
+
+    ;; A no-op that is one instruction large.
+    (Nop4)
+
+    ;; An ALU operation with two register sources and a register destination.
+    (AluRRR
+      (alu_op ALUOp)
+      (size OperandSize)
+      (rd WritableReg)
+      (rn Reg)
+      (rm Reg))
+
+    ;; An ALU operation with a register source and an immediate-shiftamt source, and a register destination.
+    (AluRRImmShift
+      (alu_op ALUOp)
+      (size OperandSize)
+      (rd WritableReg)
+      (rn Reg)
+      (immshift ImmShift))
+))
+
+(type ImmShift (primitive ImmShift))
+
+;; An ALU operation. This can be paired with several instruction formats
+;; below (see `Inst`) in any combination.
+(type ALUOp
+  (enum
+    (Add)
+    (Sub)
+    (UMulH)
+    (SMulH)
+    (And)))
+
+(type ALUOp3
+  (enum
+    ;; Multiply-add
+    (MAdd)
+    ;; Multiply-sub
+    (MSub)
+))
+
+(type OperandSize extern
+      (enum Size32
+            Size64))
+
+(decl alu_rrr (ALUOp Type Reg Reg) Reg)
+(extern constructor alu_rrr alu_rrr)
+
+(decl alu_rrrr (ALUOp3 Type Reg Reg Reg) Reg)
+(extern constructor alu_rrrr alu_rrrr)
+
+;;@ (spec (sig (args) (r))
+;;@     (assertions (= (zero_ext (regwidth) (0i1:bv)) (r))))
+(decl zero_reg () Reg)
+(extern constructor zero_reg zero_reg)
+
+;; Helper for calculating the `OperandSize` corresponding to a type
+(decl operand_size (Type) OperandSize)
+(rule (operand_size (fits_in_32 _ty)) (OperandSize.Size32))
+(rule (operand_size (fits_in_64 _ty)) (OperandSize.Size64))
+
+;; Helpers for generating `madd` instructions.
+;;@ (spec (sig (args ty, a, b, c) (r))
+;;@     (assertions (= (+ (c) (* (a) (b))) (r))))
+(decl madd (Type Reg Reg Reg) Reg)
+(rule (madd ty x y z) (alu_rrrr (ALUOp3.MAdd) ty x y z))
+
+(decl imm_shift_from_u8 (u8) ImmShift)
+(extern constructor imm_shift_from_u8 imm_shift_from_u8)
+
+;;@ (spec (sig (args a) (ret))
+;;@     (assertions (= (sign_ext (64) (a)) (ret))))
+(decl put_in_reg_sext64 (Value) Reg)
+(extern constructor put_in_reg_sext64 put_in_reg_sext64)
+
+(rule (lower (has_type (fits_in_32 ty) (umulhi x y)))
+      (let (
+          (x64 Reg (put_in_reg_zext64 x))
+          (y64 Reg (put_in_reg_zext64 y))
+          (mul Reg (madd $I64 x64 y64 (zero_reg)))
+          (result Reg (lsr_imm $I64 mul (imm_shift_from_u8 (ty_bits ty))))
+        )
+        (value_reg result)))

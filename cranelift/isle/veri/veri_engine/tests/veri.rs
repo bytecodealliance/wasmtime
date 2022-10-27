@@ -10,7 +10,7 @@ use veri_ir::{Counterexample, VerificationResult};
 
 #[test]
 fn test_iadds() {
-    test_from_file_custom_prelude(
+    /*test_from_file_custom_prelude(
         "./tests/code/selfcontained/simple_prelude.isle",
         "./tests/code/selfcontained/simple_iadd.isle",
         lte_64_success_result(),
@@ -20,7 +20,8 @@ fn test_iadds() {
         "./tests/code/selfcontained/simple_prelude.isle",
         "./tests/code/selfcontained/iadd_to_sub.isle",
         lte_64_success_result(),
-    );
+    );*/
+
 }
 
 #[test]
@@ -40,12 +41,40 @@ fn test_implicit_conversions() {
 
 #[test]
 fn test_iadd_from_file() {
-    test_from_file("./examples/iadd.isle", lte_64_success_result())
+    test_from_file("./examples/iadd/base_case.isle", lte_64_success_result());
+    test_from_file("./examples/iadd/madd.isle", lte_64_success_result());
+    test_from_file("./examples/iadd/madd2.isle", lte_64_success_result());
+    test_from_file("./examples/iadd/msub.isle", lte_64_success_result());
+/*
+    test_from_file("./examples/iadd/", lte_64_success_result());
+    test_from_file("./examples/iadd/", lte_64_success_result());
+    test_from_file("./examples/iadd/", lte_64_success_result());
+    test_from_file("./examples/iadd/", lte_64_success_result());
+
+    test_from_file("./examples/iadd/", lte_64_success_result());
+    test_from_file("./examples/iadd/", lte_64_success_result());
+    test_from_file("./examples/iadd/", lte_64_success_result());
+    test_from_file("./examples/iadd/", lte_64_success_result());
+    */
 }
 
 #[test]
 fn test_broken_iadd_from_file() {
-    test_from_file("./examples/broken/broken_iadd.isle", all_failure_result())
+    test_from_file("./examples/broken/iadd/broken_base_case.isle", all_failure_result());
+    test_from_file("./examples/broken/iadd/broken_madd.isle", all_failure_result());
+    test_from_file("./examples/broken/iadd/broken_madd2.isle", all_failure_result());
+    test_from_file("./examples/broken/iadd/broken_msub.isle",
+        vec![
+            (Bitwidth::I1, VerificationResult::Success),
+            (Bitwidth::I8, VerificationResult::Failure(Counterexample {})),
+            (
+                Bitwidth::I16,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+            (Bitwidth::I32, VerificationResult::Failure(Counterexample{})),
+            (Bitwidth::I64, VerificationResult::Failure(Counterexample{})),
+        ],
+    );
 }
 
 // DISABLED for now while ruin chaining is on hold

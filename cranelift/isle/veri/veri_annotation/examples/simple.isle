@@ -15,29 +15,8 @@
 (decl iadd (Value Value) Inst)
 (extern extractor iadd iadd)
 
-;;@ (spec (sig (args imm_arg) (ret))
-;;@ (assertions (= (- (sign_ext (widthof (ret)) (imm_arg))) (ret))))
-(decl imm12_from_negated_value (Imm12) Value)
-(extern extractor imm12_from_negated_value imm12_from_negated_value)
-
 ;; CONSTRUCTORS
-
-;;@ (spec (sig (args ty, a, b) (r))
-;;@     (assertions (= (+ (a) (b)) (r))))
-(decl add (Type Reg Reg) Reg)
-(extern constructor add add)
-
-;;@ (spec (sig (args ty, reg, imm_arg) (ret))
-;;@     (assertions (= (- (reg) (sign_ext (widthof (ret)) (imm_arg))) (ret))))
-(decl sub_imm (Type Reg Imm12) Reg)
-(extern constructor sub_imm sub_imm)
-
 ;;@ (spec (sig (args arg) (ret))
 ;;@     (assertions (= (arg) (ret))))
 (decl value_reg (Reg) ValueRegs)
 (extern constructor value_reg value_reg)
-
-;;@ (spec (sig (args arg) (ret))
-;;@     (assertions (= (conv_to (regwidth) (arg)) (ret))))
-(decl put_in_reg (Value) Reg)
-(extern constructor put_in_reg put_in_reg)

@@ -1,0 +1,133 @@
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
+(decl lower (Inst) InstOutput)
+
+;; Instruction formats.
+(type MInst
+  (enum
+    ;; A no-op of zero size.
+    (Nop0)
+
+    ;; A no-op that is one instruction large.
+    (Nop4)
+
+    ;; An ALU operation with two register sources and a register destination.
+    (AluRRR
+      (alu_op ALUOp)
+      (size OperandSize)
+      (rd WritableReg)
+      (rn Reg)
+      (rm Reg))
+))
+
+(type Imm12 (primitive Imm12))
+
+;; An ALU operation. This can be paired with several instruction formats
+;; below (see `Inst`) in any combination.
+(type ALUOp
+  (enum
+    (Add)
+    (Sub)
+    (Orr)
+    (OrrNot)
+    (And)))
+
+(type ALUOp3
+  (enum
+    ;; Multiply-add
+    (MAdd)
+    ;; Multiply-sub
+    (MSub)
+))
+
+(type OperandSize extern
+      (enum Size32
+            Size64))
+
+;; Helper for calculating the `OperandSize` corresponding to a type
+(decl operand_size (Type) OperandSize)
+(rule (operand_size (fits_in_32 _ty)) (OperandSize.Size32))
+(rule (operand_size (fits_in_64 _ty)) (OperandSize.Size64))
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (+ (a) (b)) (r))))
+(decl add (Type Reg Reg) Reg)
+(rule (add ty x y) (alu_rrr (ALUOp.Add) ty x y))
+
+;;@ (spec (sig (args ty, a, b) (r))
+;;@     (assertions (= (+ (a) (sign_ext (regwidth) (b))) (r))))
+(decl add_imm (Type Reg Imm12) Reg)
+(rule (add_imm ty x y) (alu_rr_imm12 (ALUOp.Add) ty x y))
+
+;;@ (spec (sig (args ty, reg, imm_arg) (ret))
+;;@     (assertions (= (-(reg) (sign_ext (regwidth) (imm_arg))) (ret))))
+(decl sub_imm (Type Reg Imm12) Reg)
+(rule (sub_imm ty x y) (alu_rr_imm12 (ALUOp.Sub) ty x y))
+
+;;@ (spec (sig (args ty, a, b, c) (r))
+;;@     (assertions (= (+ (c) (* (a) (b))) (r))))
+(decl madd (Type Reg Reg Reg) Reg)
+(rule (madd ty x y z) (alu_rrrr (ALUOp3.MAdd) ty x y z))
+
+;;@ (spec (sig (args ty, a, b, c) (r))
+;;@     (assertions (= (- (c) (* (a) (b))) (r))))
+(decl msub (Type Reg Reg Reg) Reg)
+(rule (msub ty x y z) (alu_rrrr (ALUOp3.MSub) ty x y z))
+
+(decl alu_rr_imm12 (ALUOp Type Reg Imm12) Reg)
+(extern constructor alu_rr_imm12 alu_rr_imm12)
+
+(decl alu_rrr (ALUOp Type Reg Reg) Reg)
+(extern constructor alu_rrr alu_rrr)
+
+(decl alu_rrrr (ALUOp3 Type Reg Reg Reg) Reg)
+(extern constructor alu_rrrr alu_rrrr)
+
+(decl imm12_from_value (Imm12) Value)
+(extern extractor imm12_from_value imm12_from_value)
+
+(decl imm12_from_negated_value (Imm12) Value)
+(extern extractor imm12_from_negated_value imm12_from_negated_value)
+
+;; Rules
+
+(rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_value y))))
+      (add_imm ty x y))
+
+(rule (lower (has_type (fits_in_64 ty) (iadd (imm12_from_value x) y)))
+      (add_imm ty y x))
+
+(rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_negated_value y))))
+      (sub_imm ty x y))
+
+(rule (lower (has_type (fits_in_64 ty) (iadd (imm12_from_negated_value x) y)))
+      (sub_imm ty y x))
+
+(rule (lower (has_type (fits_in_64 ty) (iadd x (imul y z))))
+      (madd ty y z x))
+
+(rule (lower (has_type (fits_in_64 ty) (iadd (imul x y) z)))
+      (madd ty x y z))
+
+(rule (lower (has_type (fits_in_64 ty) (isub x (imul y z))))
+      (msub ty y z x))
+
+;; Special cases for when we're adding an extended register where the extending
+;; operation can get folded into the add itself.
+;;(rule 0 (lower (has_type (fits_in_64 ty) (iadd x (extended_value_from_value y))))
+;;      (add_extend ty x y))
+
+;;(rule 1 (lower (has_type (fits_in_64 ty) (iadd (extended_value_from_value x) y)))
+;;      (add_extend ty y x))
+
+;; Special cases for when we're adding the shift of a different
+;; register by a constant amount and the shift can get folded into the add.
+;;(rule 7 (lower (has_type (fits_in_64 ty)
+;;                       (iadd x (ishl y (iconst k)))))
+;;      (if-let amt (lshl_from_imm64 ty k))
+;;      (add_shift ty x y amt))
+
+;;(rule 6 (lower (has_type (fits_in_64 ty)
+;;                       (iadd (ishl x (iconst k)) y)))
+;;      (if-let amt (lshl_from_imm64 ty k))
+;;      (add_shift ty y x amt))

@@ -163,6 +163,7 @@ pub enum BinaryOp {
     Lte,
 
     // Bitvector operations
+    BVMul,
     BVAdd,
     BVSub,
     BVAnd,

@@ -5,47 +5,36 @@
 ;; Instruction formats.
 (type MInst
   (enum
-    ;; A no-op of zero size.
-    (Nop0)
-
-    ;; A no-op that is one instruction large.
-    (Nop4)
-
     ;; An ALU operation with two register sources and a register destination.
     (AluRRR
       (alu_op ALUOp)
       (size OperandSize)
-      (rd WritableReg)
-      (rn Reg)
-      (rm Reg))
-))
+)))
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
 (type ALUOp
   (enum
-    (Add)
-    (Sub)
-    (Orr)
-    (OrrNot)
-    (And)))
+    (UMulH)
+))
 
 (type OperandSize extern
       (enum Size32
             Size64))
+
+(decl alu_rrr (ALUOp Type Reg Reg) Reg)
+(extern constructor alu_rrr alu_rrr)
 
 ;; Helper for calculating the `OperandSize` corresponding to a type
 (decl operand_size (Type) OperandSize)
 (rule (operand_size (fits_in_32 _ty)) (OperandSize.Size32))
 (rule (operand_size (fits_in_64 _ty)) (OperandSize.Size64))
 
-(rule (lower (has_type (fits_in_64 ty) (iadd x y)))
-      (add ty x y))
+;; Helper for generating `umulh` instructions.
+;;@ (spec (sig (args ty, x, y) (ret))
+;;@       (assertions (= (extract 127 64 (* (zero_ext (128) (x)) (zero_ext (128) (y)))) (ret))))
+(decl umulh (Type Reg Reg) Reg)
+(rule (umulh ty x y) (alu_rrr (ALUOp.UMulH) ty x y))
 
-;;@ (spec (sig (args ty, a, b) (r))
-;;@     (assertions (= (+ (a) (b)) (r))))
-(decl add (Type Reg Reg) Reg)
-(rule (add ty x y) (alu_rrr (ALUOp.Add) ty x y))
-
-(decl alu_rrr (ALUOp Type Reg Reg) Reg)
-(extern constructor alu_rrr alu_rrr)
+(rule (lower (has_type $I64 (umulhi x y)))
+      (umulh $I64 x y))
