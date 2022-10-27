@@ -173,14 +173,14 @@ impl From<&DiffValue> for wasmi::core::Value {
     }
 }
 
-impl Into<DiffValue> for wasmi::core::Value {
-    fn into(self) -> DiffValue {
-        use wasmi::core::Value::*;
-        match self {
-            I32(n) => DiffValue::I32(n),
-            I64(n) => DiffValue::I64(n),
-            F32(n) => DiffValue::F32(n.to_bits()),
-            F64(n) => DiffValue::F64(n.to_bits()),
+impl From<wasmi::core::Value> for DiffValue {
+    fn from(value: wasmi::core::Value) -> Self {
+        use wasmi::core::Value as WasmiValue;
+        match value {
+            WasmiValue::I32(n) => DiffValue::I32(n),
+            WasmiValue::I64(n) => DiffValue::I64(n),
+            WasmiValue::F32(n) => DiffValue::F32(n.to_bits()),
+            WasmiValue::F64(n) => DiffValue::F64(n.to_bits()),
         }
     }
 }
