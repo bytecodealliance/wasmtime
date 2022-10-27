@@ -605,13 +605,11 @@
 ;;;;;  Rules for `select`;;;;;;;;;
 (rule
   (lower (has_type ty (select c @ (value_type cty) x y)))
-  (gen_select ty (normalize_value cty c) x y)
-)
+  (gen_select ty (normalize_cmp_value cty c) x y))
 
 (rule 1
   (lower (has_type ty (select (icmp cc a b) x y)))
-  (gen_select_reg cc a b x y)
-)
+  (gen_select_reg cc a b x y))
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
 

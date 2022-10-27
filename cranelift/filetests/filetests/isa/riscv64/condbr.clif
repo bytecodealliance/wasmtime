@@ -399,3 +399,167 @@ block1:
 ; block3:
 ;   ret
 
+
+
+function %i8_brz(i8){
+block0(v0: i8):
+    brz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   andi t2,a0,255
+;   beq t2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i8_brnz(i8){
+block0(v0: i8):
+    brnz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   andi t2,a0,255
+;   bne t2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i16_brz(i16){
+block0(v0: i16):
+    brz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   lui t2,16
+;   addi t2,t2,4095
+;   and a2,a0,t2
+;   beq a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i16_brnz(i16){
+block0(v0: i16):
+    brnz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   lui t2,16
+;   addi t2,t2,4095
+;   and a2,a0,t2
+;   bne a2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i32_brz(i32){
+block0(v0: i32):
+    brz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   addiw t2,a0,0
+;   beq t2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i32_brnz(i32){
+block0(v0: i32):
+    brnz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   addiw t2,a0,0
+;   bne t2,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i64_brz(i64){
+block0(v0: i64):
+    brz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   beq a0,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
+function %i64_brnz(i64){
+block0(v0: i64):
+    brnz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; block0:
+;   bne a0,zero,taken(label1),not_taken(label2)
+; block1:
+;   j label3
+; block2:
+;   j label3
+; block3:
+;   ret
+
