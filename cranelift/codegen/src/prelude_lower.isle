@@ -425,6 +425,14 @@
             (_y Unit (emit consumer_inst)))
         (value_regs producer_result consumer_result)))
 
+;; A flag-producer that also produces a result, paired with a consumer that has
+;; no results.
+(rule (with_flags (ProducesFlags.ProducesFlagsReturnsResultWithConsumer producer_inst producer_result)
+                  (ConsumesFlags.ConsumesFlagsSideEffect consumer_inst))
+      (let ((_ Unit (emit producer_inst))
+            (_ Unit (emit consumer_inst)))
+        (value_reg producer_result)))
+
 (rule (with_flags (ProducesFlags.ProducesFlagsSideEffect producer_inst)
                   (ConsumesFlags.ConsumesFlagsReturnsReg consumer_inst consumer_result))
       (let ((_x Unit (emit producer_inst))

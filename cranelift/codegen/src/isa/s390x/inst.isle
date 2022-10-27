@@ -2022,6 +2022,13 @@
             (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
         dst))
 
+;; Helper for emitting `MInst.AluRRR` instructions as flag producers.
+(decl alu_rrr_with_flags_paired (Type ALUOp Reg Reg) ProducesFlags)
+(rule (alu_rrr_with_flags_paired ty op src1 src2)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+          (MInst.AluRRR op dst src1 src2) dst)))
+
 ;; Helper for emitting `MInst.AluRRSImm16` instructions.
 (decl alu_rrsimm16 (Type ALUOp Reg i16) Reg)
 (rule (alu_rrsimm16 ty op src imm)
@@ -2036,12 +2043,26 @@
             (_ Unit (emit (MInst.AluRR op dst src1 src2))))
         dst))
 
+;; Helper for emitting `MInst.AluRR` instructions as flag producers.
+(decl alu_rr_with_flags_paired (Type ALUOp Reg Reg) ProducesFlags)
+(rule (alu_rr_with_flags_paired ty op src1 src2)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+            (MInst.AluRR op dst src1 src2) dst)))
+
 ;; Helper for emitting `MInst.AluRX` instructions.
 (decl alu_rx (Type ALUOp Reg MemArg) Reg)
 (rule (alu_rx ty op src mem)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.AluRX op dst src mem))))
         dst))
+
+;; Helper for emitting `MInst.AluRX` instructions as flags producers.
+(decl alu_rx_with_flags_paired (Type ALUOp Reg MemArg) ProducesFlags)
+(rule (alu_rx_with_flags_paired ty op src mem)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+          (MInst.AluRX op dst src mem) dst)))
 
 ;; Helper for emitting `MInst.AluRSImm16` instructions.
 (decl alu_rsimm16 (Type ALUOp Reg i16) Reg)
@@ -2063,6 +2084,13 @@
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.AluRUImm32 op dst src imm))))
         dst))
+
+;; Helper for emitting `MInst.AluRUImm32` instructions as flag producers.
+(decl alu_ruimm32_with_flags_paired (Type ALUOp Reg u32) ProducesFlags)
+(rule (alu_ruimm32_with_flags_paired ty op src imm)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+          (MInst.AluRUImm32 op dst src imm) dst)))
 
 ;; Helper for emitting `MInst.AluRUImm16Shifted` instructions.
 (decl alu_ruimm16shifted (Type ALUOp Reg UImm16Shifted) Reg)
@@ -3877,17 +3905,37 @@
 (decl add_logical_reg (Type Reg Reg) Reg)
 (rule (add_logical_reg ty x y) (alu_rrr ty (aluop_add_logical ty) x y))
 
+(decl add_logical_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (add_logical_reg_with_flags_paired ty x y)
+      (alu_rrr_with_flags_paired ty (aluop_add_logical ty) x y))
+
 (decl add_logical_reg_zext32 (Type Reg Reg) Reg)
 (rule (add_logical_reg_zext32 ty x y) (alu_rr ty (aluop_add_logical_zext32 ty) x y))
+
+(decl add_logical_reg_zext32_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (add_logical_reg_zext32_with_flags_paired ty x y)
+      (alu_rr_with_flags_paired ty (aluop_add_logical_zext32 ty) x y))
 
 (decl add_logical_zimm32 (Type Reg u32) Reg)
 (rule (add_logical_zimm32 ty x y) (alu_ruimm32 ty (aluop_add_logical ty) x y))
 
+(decl add_logical_zimm32_with_flags_paired (Type Reg u32) ProducesFlags)
+(rule (add_logical_zimm32_with_flags_paired ty x y)
+      (alu_ruimm32_with_flags_paired ty (aluop_add_logical ty) x y))
+
 (decl add_logical_mem (Type Reg MemArg) Reg)
 (rule (add_logical_mem ty x y) (alu_rx ty (aluop_add_logical ty) x y))
 
+(decl add_logical_mem_with_flags_paired (Type Reg MemArg) ProducesFlags)
+(rule (add_logical_mem_with_flags_paired ty x y)
+      (alu_rx_with_flags_paired ty (aluop_add_logical ty) x y))
+
 (decl add_logical_mem_zext32 (Type Reg MemArg) Reg)
 (rule (add_logical_mem_zext32 ty x y) (alu_rx ty (aluop_add_logical_zext32 ty) x y))
+
+(decl add_logical_mem_zext32_with_flags_paired (Type Reg MemArg) ProducesFlags)
+(rule (add_logical_mem_zext32_with_flags_paired ty x y)
+      (alu_rx_with_flags_paired ty (aluop_add_logical_zext32 ty) x y))
 
 
 ;; Helpers for generating `sub` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

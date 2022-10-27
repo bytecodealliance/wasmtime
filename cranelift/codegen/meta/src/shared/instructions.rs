@@ -2153,6 +2153,34 @@ pub(crate) fn define(
         .operands_out(vec![a, c_if_out]),
     );
 
+    {
+        let code = &Operand::new("code", &imm.trapcode);
+
+        let i32_64 = &TypeVar::new(
+            "i32_64",
+            "A 32 or 64-bit scalar integer type",
+            TypeSetBuilder::new().ints(32..64).build(),
+        );
+
+        let a = &Operand::new("a", i32_64);
+        let x = &Operand::new("x", i32_64);
+        let y = &Operand::new("y", i32_64);
+        ig.push(
+            Inst::new(
+                "uadd_overflow_trap",
+                r#"
+            Unsigned addition of x and y, trapping if the result overflows.
+
+            Accepts 32 or 64-bit integers, and does not support vector types.
+            "#,
+                &formats.int_add_trap,
+            )
+            .operands_in(vec![x, y, code])
+            .operands_out(vec![a])
+            .can_trap(true),
+        );
+    }
+
     ig.push(
         Inst::new(
             "isub_bin",

@@ -753,6 +753,15 @@ where
             assign_multiple(&[sum, Value::bool(carry, false, types::I8)?])
         }
         Opcode::IaddIfcarry => unimplemented!("IaddIfcarry"),
+        Opcode::UaddOverflowTrap => {
+            let sum = Value::add(arg(0)?, arg(1)?)?;
+            let carry = Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)?;
+            if carry {
+                ControlFlow::Trap(CraneliftTrap::User(trap_code()))
+            } else {
+                assign(sum)
+            }
+        }
         Opcode::IsubBin => choose(
             Value::into_bool(arg(2)?)?,
             Value::sub(arg(0)?, Value::add(arg(1)?, Value::int(1, ctrl_ty)?)?)?,

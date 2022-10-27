@@ -527,6 +527,7 @@ fn lower_insn_to_regs(
         | Opcode::IsubIfbout
         | Opcode::IsubBorrow
         | Opcode::IsubIfborrow
+        | Opcode::UaddOverflowTrap
         | Opcode::BandImm
         | Opcode::BorImm
         | Opcode::BxorImm

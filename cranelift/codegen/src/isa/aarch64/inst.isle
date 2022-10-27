@@ -2772,6 +2772,14 @@
         )
         x))
 
+;; Check for unsigned overflow.
+(decl trap_if_overflow (ProducesFlags TrapCode) Reg)
+(rule (trap_if_overflow producer tc)
+      (with_flags_reg
+        producer
+        (ConsumesFlags.ConsumesFlagsSideEffect
+          (MInst.TrapIf (cond_br_cond (Cond.Hs)) tc))))
+
 (decl sink_atomic_load (Inst) Reg)
 (rule (sink_atomic_load x @ (atomic_load _ addr))
       (let ((_ Unit (sink_inst x)))
