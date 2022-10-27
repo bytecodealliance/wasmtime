@@ -7,7 +7,10 @@ edition = "2021"
 anyhow = "1"
 thiserror = "1"
 wasmtime = { git = "https://github.com/bytecodealliance/wasmtime" }
-wit-bindgen-host-wasmtime-rust = { git = "https://github.com/bytecodealliance/wit-bindgen" }
+wit-bindgen-host-wasmtime-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", features = ["tracing"] }
 
 [dev-dependencies]
 test-programs-macros = { path = "../test-programs/macros" }
+tracing = { version = "0.1.26" }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt" ]}
+test-log = { version = "0.2", default-features = false, features = ["trace"] }

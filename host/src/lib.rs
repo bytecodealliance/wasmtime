@@ -15,6 +15,7 @@ wit_bindgen_host_wasmtime_rust::generate!({
     import: "../wit/wasi-random.wit.md",
     default: "../wit/command.wit.md",
     name: "wasi",
+    tracing: true,
 });
 
 pub fn add_to_linker<T>(
