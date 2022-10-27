@@ -3149,6 +3149,7 @@ dependencies = [
  "rustix",
  "thiserror",
  "tracing",
+ "wasmtime",
  "wiggle",
  "windows-sys",
 ]

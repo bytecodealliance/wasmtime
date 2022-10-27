@@ -16,7 +16,7 @@ build = "build.rs"
 wasi-common = { workspace = true }
 wasi-cap-std-sync = { workspace = true, optional = true }
 wasi-tokio = { workspace = true, optional = true }
-wiggle = { workspace = true, default-features = false, features = ["wasmtime_integration"] }
+wiggle = { workspace = true }
 wasmtime = { workspace = true }
 anyhow = { workspace = true }
 

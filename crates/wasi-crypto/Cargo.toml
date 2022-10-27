@@ -15,7 +15,7 @@ edition.workspace = true
 anyhow = { workspace = true }
 wasi-crypto = { path = "spec/implementations/hostcalls/rust", version = "0.1.5" }
 wasmtime = { workspace = true }
-wiggle = { workspace = true, default-features = true, features = ['wasmtime_integration'] }
+wiggle = { workspace = true }
 
 [badges]
 maintenance = { status = "experimental" }

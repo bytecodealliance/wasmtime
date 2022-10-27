@@ -34,9 +34,10 @@ impl HandleExercise {
         let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
-        let e = handle_examples::fd_create(&mut ctx, &host_memory, self.return_loc.ptr as i32);
+        let e =
+            handle_examples::fd_create(&mut ctx, &host_memory, self.return_loc.ptr as i32).unwrap();
 
-        assert_eq!(e, Ok(types::Errno::Ok as i32), "fd_create error");
+        assert_eq!(e, types::Errno::Ok as i32, "fd_create error");
 
         let h_got: u32 = host_memory
             .ptr(self.return_loc.ptr)
@@ -45,15 +46,15 @@ impl HandleExercise {
 
         assert_eq!(h_got, 123, "fd_create return val");
 
-        let e = handle_examples::fd_consume(&mut ctx, &host_memory, h_got as i32);
+        let e = handle_examples::fd_consume(&mut ctx, &host_memory, h_got as i32).unwrap();
 
-        assert_eq!(e, Ok(types::Errno::Ok as i32), "fd_consume error");
+        assert_eq!(e, types::Errno::Ok as i32, "fd_consume error");
 
-        let e = handle_examples::fd_consume(&mut ctx, &host_memory, h_got as i32 + 1);
+        let e = handle_examples::fd_consume(&mut ctx, &host_memory, h_got as i32 + 1).unwrap();
 
         assert_eq!(
             e,
-            Ok(types::Errno::InvalidArg as i32),
+            types::Errno::InvalidArg as i32,
             "fd_consume invalid error"
         );
     }
