@@ -70,9 +70,11 @@ pub(crate) fn pipeline_flush_mt() -> Result<()> {
 fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
     cfg_if::cfg_if! {
         if #[cfg(feature = "one-core")] {
+            use std::arch::asm;
             unsafe {
                 asm!("fence.i");
-            }
+            };
+            return Ok(())
         }else {
             match unsafe {
                 libc::syscall(
