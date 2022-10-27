@@ -7,10 +7,12 @@ include!(concat!(env!("OUT_DIR"), "/components.rs"));
 pub fn tests(_input: TokenStream) -> TokenStream {
     let tests = COMPONENTS.iter().map(|(stem, file)| {
         let name = quote::format_ident!("{}", stem);
+        let runner = quote::format_ident!("run_{}", stem);
         quote! {
             #[test]
-            fn #name() {
-                run(#file).unwrap()
+            fn #name() -> anyhow::Result<()> {
+                let (store, inst) = instantiate(#file)?;
+                #runner(store, inst)
             }
         }
     });

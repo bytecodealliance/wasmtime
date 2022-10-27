@@ -7,7 +7,7 @@ use wasmtime::{
 
 test_programs_macros::tests!();
 
-fn run(path: &str) -> Result<()> {
+fn instantiate(path: &str) -> Result<(Store<WasiCtx>, Wasi)> {
     let mut config = Config::new();
     config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
     config.wasm_component_model(true);
@@ -20,8 +20,17 @@ fn run(path: &str) -> Result<()> {
     let mut store = Store::new(&engine, WasiCtx::default());
 
     let (wasi, _instance) = Wasi::instantiate(&mut store, &component, &linker)?;
+    Ok((store, wasi))
+}
 
+fn run_hello_stdout(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
     wasi.command(&mut store)?;
+    Ok(())
+}
 
+fn run_panic(mut store: Store<WasiCtx>, wasi: Wasi) -> Result<()> {
+    let r = wasi.command(&mut store);
+    assert!(r.is_err());
+    println!("{:?}", r);
     Ok(())
 }
