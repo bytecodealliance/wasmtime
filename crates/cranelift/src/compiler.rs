@@ -31,9 +31,10 @@ use std::convert::TryFrom;
 use std::mem;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
+use wasmtime_environ::obj;
 use wasmtime_environ::{
     AddressMapSection, CacheStore, CompileError, FilePos, FlagValue, FunctionBodyData,
-    FunctionInfo, InstructionAddressMap, Module, ModuleTranslation, ModuleTypes, PtrSize,
+    FunctionInfo, InstructionAddressMap, ModuleTranslation, ModuleTypes, PtrSize,
     StackMapInformation, Trampoline, TrapCode, TrapEncodingBuilder, TrapInformation, Tunables,
     VMOffsets,
 };
@@ -367,7 +368,8 @@ impl wasmtime_environ::Compiler for Compiler {
             .map(|f| *f.downcast().unwrap())
             .collect();
 
-        let mut builder = ModuleTextBuilder::new(obj, &translation.module, &*self.isa);
+        let num_funcs = funcs.len() + compiled_trampolines.len();
+        let mut builder = ModuleTextBuilder::new(obj, &*self.isa, num_funcs);
         if self.linkopts.force_jump_veneers {
             builder.force_veneers();
         }
@@ -375,8 +377,14 @@ impl wasmtime_environ::Compiler for Compiler {
         let mut traps = TrapEncodingBuilder::default();
 
         let mut func_starts = Vec::with_capacity(funcs.len());
+        let mut symbols = PrimaryMap::with_capacity(funcs.len());
         for (i, func) in funcs.iter() {
-            let range = builder.func(i, func);
+            let sym = obj::func_symbol_name(translation.module.func_index(i));
+            let (sym, range) = builder.append_func(&sym, func, |idx| {
+                let defined = translation.module.defined_func_index(idx).unwrap();
+                defined.as_u32() as usize
+            });
+            symbols.push(sym);
             if tunables.generate_address_map {
                 addrs.push(range.clone(), &func.address_map.instructions);
             }
@@ -397,10 +405,18 @@ impl wasmtime_environ::Compiler for Compiler {
             .zip(&compiled_trampolines)
         {
             assert!(func.traps.is_empty());
-            trampolines.push(builder.trampoline(*i, &func));
+            let sym = obj::trampoline_symbol_name(*i);
+            let (_, range) = builder.append_func(&sym, &func, |_| {
+                unimplemented!("trampolines should not have relocations");
+            });
+            trampolines.push(Trampoline {
+                signature: *i,
+                start: range.start,
+                length: u32::try_from(range.end - range.start).unwrap(),
+            })
         }
 
-        let symbols = builder.finish()?;
+        builder.finish();
 
         self.append_dwarf(obj, translation, &funcs, tunables, &symbols)?;
         if tunables.generate_address_map {
@@ -429,11 +445,20 @@ impl wasmtime_environ::Compiler for Compiler {
     ) -> Result<(Trampoline, Trampoline)> {
         let host_to_wasm = self.host_to_wasm_trampoline(ty)?;
         let wasm_to_host = self.wasm_to_host_trampoline(ty, host_fn)?;
-        let module = Module::new();
-        let mut builder = ModuleTextBuilder::new(obj, &module, &*self.isa);
-        let a = builder.trampoline(SignatureIndex::new(0), &host_to_wasm);
-        let b = builder.trampoline(SignatureIndex::new(1), &wasm_to_host);
-        builder.finish()?;
+        let mut builder = ModuleTextBuilder::new(obj, &*self.isa, 2);
+        let (_, a) = builder.append_func("host_to_wasm", &host_to_wasm, |_| unreachable!());
+        let (_, b) = builder.append_func("wasm_to_host", &wasm_to_host, |_| unreachable!());
+        let a = Trampoline {
+            signature: SignatureIndex::new(0),
+            start: a.start,
+            length: u32::try_from(a.end - a.start).unwrap(),
+        };
+        let b = Trampoline {
+            signature: SignatureIndex::new(0),
+            start: b.start,
+            length: u32::try_from(b.end - b.start).unwrap(),
+        };
+        builder.finish();
         Ok((a, b))
     }
 

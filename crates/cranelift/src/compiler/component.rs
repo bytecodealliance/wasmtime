@@ -14,7 +14,9 @@ use wasmtime_environ::component::{
     FunctionInfo, LowerImport, LoweredIndex, RuntimeAlwaysTrapIndex, RuntimeMemoryIndex,
     RuntimeTranscoderIndex, Transcode, Transcoder, VMComponentOffsets,
 };
-use wasmtime_environ::{PrimaryMap, PtrSize, SignatureIndex, Trampoline, TrapCode, WasmFuncType};
+use wasmtime_environ::{
+    FuncIndex, PrimaryMap, PtrSize, SignatureIndex, Trampoline, TrapCode, WasmFuncType,
+};
 
 impl ComponentCompiler for Compiler {
     fn compile_lowered_trampoline(
@@ -249,21 +251,23 @@ impl ComponentCompiler for Compiler {
         PrimaryMap<RuntimeTranscoderIndex, FunctionInfo>,
         Vec<Trampoline>,
     )> {
-        let module = Default::default();
-        let mut text = ModuleTextBuilder::new(obj, &module, &*self.isa);
+        let num_funcs = lowerings.len() + always_trap.len() + transcoders.len() + trampolines.len();
+        let mut text = ModuleTextBuilder::new(obj, &*self.isa, num_funcs);
 
         let range2info = |range: Range<u64>| FunctionInfo {
             start: u32::try_from(range.start).unwrap(),
             length: u32::try_from(range.end - range.start).unwrap(),
         };
+        let resolve_reloc = |_idx: FuncIndex| unreachable!();
         let ret_lowerings = lowerings
             .iter()
             .map(|(i, lowering)| {
                 let lowering = lowering.downcast_ref::<CompiledFunction>().unwrap();
                 assert!(lowering.traps.is_empty());
-                let range = text.named_func(
+                let (_sym, range) = text.append_func(
                     &format!("_wasm_component_lowering_trampoline{}", i.as_u32()),
                     &lowering,
+                    &resolve_reloc,
                 );
                 range2info(range)
             })
@@ -275,7 +279,7 @@ impl ComponentCompiler for Compiler {
                 assert_eq!(func.traps.len(), 1);
                 assert_eq!(func.traps[0].trap_code, TrapCode::AlwaysTrapAdapter);
                 let name = format!("_wasmtime_always_trap{}", i.as_u32());
-                let range = text.named_func(&name, func);
+                let (_sym, range) = text.append_func(&name, func, &resolve_reloc);
                 AlwaysTrapInfo {
                     info: range2info(range),
                     trap_offset: func.traps[0].code_offset,
@@ -288,7 +292,7 @@ impl ComponentCompiler for Compiler {
             .map(|(i, func)| {
                 let func = func.downcast_ref::<CompiledFunction>().unwrap();
                 let name = format!("_wasmtime_transcoder{}", i.as_u32());
-                let range = text.named_func(&name, func);
+                let (_sym, range) = text.append_func(&name, func, &resolve_reloc);
                 range2info(range)
             })
             .collect();
@@ -298,11 +302,18 @@ impl ComponentCompiler for Compiler {
             .map(|(i, func)| {
                 let func = func.downcast_ref::<CompiledFunction>().unwrap();
                 assert!(func.traps.is_empty());
-                text.trampoline(*i, func)
+                let name = format!("_trampoline{}", i.as_u32());
+                let (_sym, range) = text.append_func(&name, &func, &resolve_reloc);
+                let info = range2info(range);
+                Trampoline {
+                    signature: *i,
+                    start: info.start.into(),
+                    length: info.length,
+                }
             })
             .collect();
 
-        text.finish()?;
+        text.finish();
 
         Ok((
             ret_lowerings,
