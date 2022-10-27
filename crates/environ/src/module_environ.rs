@@ -14,7 +14,7 @@ use std::convert::{TryFrom, TryInto};
 use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::{
-    CustomSectionReader, DataKind, ElementItem, ElementKind, Encoding, ExternalKind,
+    types::Types, CustomSectionReader, DataKind, ElementItem, ElementKind, Encoding, ExternalKind,
     FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, Type,
     TypeRef, Validator, ValidatorResources,
 };
@@ -90,6 +90,19 @@ pub struct ModuleTranslation<'data> {
     /// When we're parsing the code section this will be incremented so we know
     /// which function is currently being defined.
     code_index: u32,
+
+    /// The type information of the current module made available at the end of the
+    /// validation process.
+    types: Option<Types>,
+}
+
+impl<'data> ModuleTranslation<'data> {
+    /// Returns a reference to the type information of the current module.
+    pub fn get_types(&self) -> &Types {
+        self.types
+            .as_ref()
+            .expect("module type information to be available")
+    }
 }
 
 /// Contains function data: byte code and its offset in the module.
@@ -195,7 +208,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             }
 
             Payload::End(offset) => {
-                self.validator.end(offset)?;
+                self.result.types = Some(self.validator.end(offset)?);
 
                 // With the `escaped_funcs` set of functions finished
                 // we can calculate the set of signatures that are exported as
@@ -622,7 +635,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     "\
 Support for interface types has temporarily been removed from `wasmtime`.
 
-For more information about this temoprary you can read on the issue online:
+For more information about this temporary change you can read on the issue online:
 
     https://github.com/bytecodealliance/wasmtime/issues/1271
 
