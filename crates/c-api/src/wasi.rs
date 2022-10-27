@@ -3,6 +3,7 @@
 use crate::wasm_byte_vec_t;
 use anyhow::Result;
 use cap_std::ambient_authority;
+use std::collections::HashMap;
 use std::ffi::CStr;
 use std::fs::File;
 use std::os::raw::{c_char, c_int};
@@ -10,12 +11,17 @@ use std::path::{Path, PathBuf};
 use std::slice;
 use wasi_common::pipe::ReadPipe;
 use wasmtime_wasi::{
-    sync::{Dir, WasiCtxBuilder},
+    sync::{Dir, TcpListener, WasiCtxBuilder},
     WasiCtx,
 };
 
 unsafe fn cstr_to_path<'a>(path: *const c_char) -> Option<&'a Path> {
     CStr::from_ptr(path).to_str().map(Path::new).ok()
+}
+
+fn cstr_to_string(c_char: *const c_char) -> String {
+    let cstr = unsafe { CStr::from_ptr(c_char) };
+    String::from_utf8_lossy(cstr.to_bytes()).to_string()
 }
 
 unsafe fn open_file(path: *const c_char) -> Option<File> {
@@ -34,7 +40,8 @@ pub struct wasi_config_t {
     stdin: WasiConfigReadPipe,
     stdout: WasiConfigWritePipe,
     stderr: WasiConfigWritePipe,
-    preopens: Vec<(Dir, PathBuf)>,
+    preopen_dirs: Vec<(Dir, PathBuf)>,
+    preopen_sockets: HashMap<u32, TcpListener>,
     inherit_args: bool,
     inherit_env: bool,
 }
@@ -118,8 +125,11 @@ impl wasi_config_t {
                 builder.stderr(Box::new(file))
             }
         };
-        for (dir, path) in self.preopens {
+        for (dir, path) in self.preopen_dirs {
             builder = builder.preopened_dir(dir, path)?;
+        }
+        for (fd_num, listener) in self.preopen_sockets {
+            builder = builder.preopened_socket(fd_num as u32, listener)?;
         }
         Ok(builder.build())
     }
@@ -266,7 +276,35 @@ pub unsafe extern "C" fn wasi_config_preopen_dir(
         None => return false,
     };
 
-    (*config).preopens.push((dir, guest_path.to_owned()));
+    (*config).preopen_dirs.push((dir, guest_path.to_owned()));
+
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasi_config_preopen_socket(
+    config: &mut wasi_config_t,
+    fd_num: u32,
+    tcplisten: *const c_char,
+) -> bool {
+    let address = &cstr_to_string(tcplisten);
+    let stdlistener = match std::net::TcpListener::bind(address) {
+        Ok(listener) => listener,
+        Err(_) => return false,
+    };
+
+    if let Err(_) = stdlistener.set_nonblocking(true) {
+        return false;
+    }
+
+    // Caller cannot call in more than once with the same FD number so return an error.
+    if (*config).preopen_sockets.contains_key(&fd_num) {
+        return false;
+    }
+
+    (*config)
+        .preopen_sockets
+        .insert(fd_num, TcpListener::from_std(stdlistener));
 
     true
 }
