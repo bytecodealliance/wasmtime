@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use libc::{syscall, EINVAL, EPERM, RLIM_SAVED_CUR};
+use libc::{syscall, EINVAL, EPERM};
 use std::ffi::c_void;
 use std::io::{Error, Result};
 
