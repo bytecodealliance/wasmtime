@@ -26,7 +26,7 @@ jobs:
           git log ${{ github.event.before }}...${{ github.event.after }} | tee main.log
           version=$(grep '^version =' Cargo.toml | head -n 1 | sed 's/.*"\(.*\)"/\1/')
           echo "version: $version"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$version" >> $GITHUB_OUTPUT
           echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
           if grep -q "automatically-tag-and-release-this-commit" main.log; then
             echo push-tag
