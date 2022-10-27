@@ -163,7 +163,7 @@ impl DiffInstance for WasmiInstance {
                 .into_memory()
                 .unwrap()
                 .data(&self.store)
-                .to_vec()
+                .to_vec(),
         )
     }
 }
