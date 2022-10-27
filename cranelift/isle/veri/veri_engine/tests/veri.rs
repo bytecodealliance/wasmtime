@@ -140,6 +140,21 @@ fn test_small_rotr_to_shifts_broken() {
 }
 
 #[test]
+fn test_small_rotr_imm_to_shifts() {
+    test_from_file_with_filter(
+        "./examples/small_rotr_imm_to_shifts.isle",
+        "small_rotr_imm".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::Success),
+            (Bitwidth::I8, VerificationResult::Success),
+            (Bitwidth::I16, VerificationResult::Success),
+            (Bitwidth::I32, VerificationResult::InapplicableRule),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+        ],
+    )
+}
+
+#[test]
 fn test_fits_in_16_rotl_to_rotr() {
     test_from_file_with_filter(
         "./examples/fits_in_16_rotl_to_rotr.isle",
