@@ -1166,6 +1166,8 @@
     (inst_data (InstructionData.Binary (Opcode.Rotl) (value_array_2 x y)))
 )
 
+;;@ (spec (sig (args x, y) (ret))
+;;@       (assertions (= (rotr (x) (y)) (ret))))
 (decl rotr (Value Value) Inst)
 (extractor
     (rotr x y)
