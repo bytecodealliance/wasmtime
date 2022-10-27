@@ -1,5 +1,7 @@
 test interpret
 test run
+set enable_llvm_abi_extensions
+target x86_64
 target aarch64
 target riscv64
 target s390x
@@ -11,6 +13,10 @@ block0(v0: i128):
 }
 ; run: %bmask_i128_i128(1) == -1
 ; run: %bmask_i128_i128(0) == 0
+; run: %bmask_i128_i128(0x00000001_00000000_00000000_00000000) == -1
+; run: %bmask_i128_i128(0x00000000_00000001_00000000_00000000) == -1
+; run: %bmask_i128_i128(0x00000000_00000000_00000001_00000000) == -1
+; run: %bmask_i128_i128(0x00000000_00000000_00000000_00000001) == -1
 
 function %bmask_i128_i64(i128) -> i64 {
 block0(v0: i128):
