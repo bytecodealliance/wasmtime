@@ -7,6 +7,7 @@ edition = "2021"
 anyhow = "1"
 thiserror = "1"
 wasmtime = { git = "https://github.com/bytecodealliance/wasmtime" }
-wit-component = { git = "https://github.com/bytecodealliance/wit-bindgen" }
 wit-bindgen-host-wasmtime-rust = { git = "https://github.com/bytecodealliance/wit-bindgen" }
 
+[dev-dependencies]
+test-programs-macros = { path = "../test-programs/macros" }
