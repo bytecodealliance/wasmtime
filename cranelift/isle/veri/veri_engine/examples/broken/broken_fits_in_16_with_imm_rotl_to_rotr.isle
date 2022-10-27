@@ -68,11 +68,11 @@
 ;;     ImmShift::maybe_from_u64(imm_value)
 ;; }
 
-;; Add an assertion that the value fits, using: FFFFFFFFFFFFFF00
+;; Add an assertion that the value fits, using the constand with 56 1's then 6 0's (~63)
 ;;@ (spec (sig (args ty, x) (r))
 ;;@   (assertions 
-;;@     (= (conv_to (widthof (r)) (& (x) (- (int2bv 64 (ty)) (1i64:bv)))) (r)),
-;;@     (= (0i65:bv) (& (& (x) (- (int2bv 64 (ty)) (1i64:bv))) (18446744073709551360i64:bv)))
+;;@     (= (r) (conv_to (widthof (r)) (x))),
+;;@     (= (0i65:bv) (& (x) (~ (63i64:bv))))
 ;;@   )
 ;;@ )
 (decl pure imm_shift_from_imm64 (Type Imm64) ImmShift)
