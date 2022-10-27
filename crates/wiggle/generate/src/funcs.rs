@@ -84,6 +84,16 @@ fn _define_func(
         );
     );
     if settings.get_async(&module, &func).is_sync() {
+        let traced_body = if settings.tracing {
+            quote!(
+                #mk_span
+                _span.in_scope(|| {
+                  #body
+                })
+            )
+        } else {
+            quote!(#body)
+        };
         (
             quote!(
                 #[allow(unreachable_code)] // deals with warnings in noreturn functions
@@ -93,15 +103,23 @@ fn _define_func(
                     #(#abi_params),*
                 ) -> Result<#abi_ret, #rt::wasmtime_crate::Trap> {
                     use std::convert::TryFrom as _;
-                    #mk_span
-                    _span.in_scope(|| {
-                      #body
-                    })
+                    #traced_body
                 }
             ),
             bounds,
         )
     } else {
+        let traced_body = if settings.tracing {
+            quote!(
+                use #rt::tracing::Instrument as _;
+                #mk_span
+                async move {
+                    #body
+                }.instrument(_span)
+            )
+        } else {
+            quote!(#body)
+        };
         (
             quote!(
                 #[allow(unreachable_code)] // deals with warnings in noreturn functions
@@ -111,11 +129,7 @@ fn _define_func(
                     #(#abi_params),*
                 ) -> impl std::future::Future<Output = Result<#abi_ret, #rt::wasmtime_crate::Trap>> + 'a {
                     use std::convert::TryFrom as _;
-                    use #rt::tracing::Instrument as _;
-                    #mk_span
-                    async move {
-                        #body
-                    }.instrument(_span)
+                    #traced_body
                 }
             ),
             bounds,
@@ -243,7 +257,7 @@ impl witx::Bindgen for Rust<'_> {
                         args.push(quote!(#name));
                     }
                 }
-                if func.params.len() > 0 {
+                if self.settings.tracing && func.params.len() > 0 {
                     let args = func
                         .params
                         .iter()
@@ -272,12 +286,14 @@ impl witx::Bindgen for Rust<'_> {
                         let ret = #trait_name::#ident(ctx, #(#args),*).await;
                     })
                 };
-                self.src.extend(quote! {
-                    #rt::tracing::event!(
-                        #rt::tracing::Level::TRACE,
-                        result = #rt::tracing::field::debug(&ret),
-                    );
-                });
+                if self.settings.tracing {
+                    self.src.extend(quote! {
+                        #rt::tracing::event!(
+                            #rt::tracing::Level::TRACE,
+                            result = #rt::tracing::field::debug(&ret),
+                        );
+                    });
+                }
 
                 if func.results.len() > 0 {
                     results.push(quote!(ret));
