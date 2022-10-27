@@ -16,8 +16,8 @@ use std::str;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
-    CompileError, DefinedFuncIndex, FuncIndex, FunctionInfo, Module, ModuleTranslation, PrimaryMap,
-    SignatureIndex, StackMapInformation, Trampoline, Tunables, ELF_WASMTIME_ADDRMAP,
+    CompileError, DefinedFuncIndex, FuncIndex, FunctionLoc, Module, ModuleTranslation, PrimaryMap,
+    SignatureIndex, StackMapInformation, Tunables, WasmFunctionInfo, ELF_WASMTIME_ADDRMAP,
     ELF_WASMTIME_TRAPS,
 };
 use wasmtime_runtime::{
@@ -98,14 +98,14 @@ pub struct CompiledModuleInfo {
     module: Module,
 
     /// Metadata about each compiled function.
-    funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
+    funcs: PrimaryMap<DefinedFuncIndex, (WasmFunctionInfo, FunctionLoc)>,
 
     /// Sorted list, by function index, of names we have for this module.
     func_names: Vec<FunctionName>,
 
     /// The trampolines compiled into the text section and their start/length
     /// relative to the start of the text section.
-    trampolines: Vec<Trampoline>,
+    trampolines: Vec<(SignatureIndex, FunctionLoc)>,
 
     /// General compilation metadata.
     meta: Metadata,
@@ -157,8 +157,8 @@ struct Metadata {
 pub fn finish_compile(
     translation: ModuleTranslation<'_>,
     mut obj: Object,
-    funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
-    trampolines: Vec<Trampoline>,
+    funcs: PrimaryMap<DefinedFuncIndex, (WasmFunctionInfo, FunctionLoc)>,
+    trampolines: Vec<(SignatureIndex, FunctionLoc)>,
     tunables: &Tunables,
 ) -> Result<(MmapVec, CompiledModuleInfo)> {
     let ModuleTranslation {
@@ -363,8 +363,8 @@ pub struct CompiledModule {
     address_map_data: Range<usize>,
     trap_data: Range<usize>,
     module: Arc<Module>,
-    funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
-    trampolines: Vec<Trampoline>,
+    funcs: PrimaryMap<DefinedFuncIndex, (WasmFunctionInfo, FunctionLoc)>,
+    trampolines: Vec<(SignatureIndex, FunctionLoc)>,
     meta: Metadata,
     code: Range<usize>,
     code_memory: CodeMemory,
@@ -589,8 +589,8 @@ impl CompiledModule {
         &self,
     ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, *const [VMFunctionBody])> + '_ {
         let code = self.code();
-        self.funcs.iter().map(move |(i, info)| {
-            let func = &code[info.start as usize..][..info.length as usize];
+        self.funcs.iter().map(move |(i, (_, loc))| {
+            let func = &code[loc.start as usize..][..loc.length as usize];
             (
                 i,
                 std::ptr::slice_from_raw_parts(func.as_ptr().cast::<VMFunctionBody>(), func.len()),
@@ -601,14 +601,14 @@ impl CompiledModule {
     /// Returns the per-signature trampolines for this module.
     pub fn trampolines(&self) -> impl Iterator<Item = (SignatureIndex, VMTrampoline, usize)> + '_ {
         let code = self.code();
-        self.trampolines.iter().map(move |info| {
+        self.trampolines.iter().map(move |(signature, loc)| {
             (
-                info.signature,
+                *signature,
                 unsafe {
-                    let ptr = &code[info.start as usize];
+                    let ptr = &code[loc.start as usize];
                     std::mem::transmute::<*const u8, VMTrampoline>(ptr)
                 },
-                info.length as usize,
+                loc.length as usize,
             )
         })
     }
@@ -623,7 +623,7 @@ impl CompiledModule {
     ) -> impl Iterator<Item = (*const [VMFunctionBody], &[StackMapInformation])> {
         self.finished_functions()
             .map(|(_, f)| f)
-            .zip(self.funcs.values().map(|f| f.stack_maps.as_slice()))
+            .zip(self.funcs.values().map(|f| &f.0.stack_maps[..]))
     }
 
     /// Lookups a defined function by a program counter value.
@@ -631,14 +631,14 @@ impl CompiledModule {
     /// Returns the defined function index and the relative address of
     /// `text_offset` within the function itself.
     pub fn func_by_text_offset(&self, text_offset: usize) -> Option<(DefinedFuncIndex, u32)> {
-        let text_offset = text_offset as u64;
+        let text_offset = u32::try_from(text_offset).unwrap();
 
         let index = match self
             .funcs
-            .binary_search_values_by_key(&text_offset, |info| {
-                debug_assert!(info.length > 0);
+            .binary_search_values_by_key(&text_offset, |(_, loc)| {
+                debug_assert!(loc.length > 0);
                 // Return the inclusive "end" of the function
-                info.start + u64::from(info.length) - 1
+                loc.start + loc.length - 1
             }) {
             Ok(k) => {
                 // Exact match, pc is at the end of this function
@@ -652,22 +652,33 @@ impl CompiledModule {
             }
         };
 
-        let body = self.funcs.get(index)?;
-        let start = body.start;
-        let end = body.start + u64::from(body.length);
+        let (_, loc) = self.funcs.get(index)?;
+        let start = loc.start;
+        let end = loc.start + loc.length;
 
         if text_offset < start || end < text_offset {
             return None;
         }
 
-        Some((index, (text_offset - body.start) as u32))
+        Some((index, text_offset - loc.start))
+    }
+
+    /// Gets the function location information for a given function index.
+    pub fn func_loc(&self, index: DefinedFuncIndex) -> &FunctionLoc {
+        &self
+            .funcs
+            .get(index)
+            .expect("defined function should be present")
+            .1
     }
 
     /// Gets the function information for a given function index.
-    pub fn func_info(&self, index: DefinedFuncIndex) -> &FunctionInfo {
-        self.funcs
+    pub fn wasm_func_info(&self, index: DefinedFuncIndex) -> &WasmFunctionInfo {
+        &self
+            .funcs
             .get(index)
             .expect("defined function should be present")
+            .0
     }
 
     /// Creates a new symbolication context which can be used to further

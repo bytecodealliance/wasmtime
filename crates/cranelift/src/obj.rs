@@ -99,7 +99,7 @@ impl<'a> ModuleTextBuilder<'a> {
         let off = self.text.append(
             true,
             &func.body,
-            self.isa.function_alignment().max(func.info.alignment),
+            self.isa.function_alignment().max(func.alignment),
         );
 
         let symbol_id = self.obj.add_symbol(Symbol {

@@ -13,8 +13,9 @@ use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::ComponentTypes;
+use wasmtime_environ::obj;
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, FunctionInfo, ModuleEnvironment, ModuleTranslation,
+    DefinedFuncIndex, DefinedMemoryIndex, FunctionLoc, ModuleEnvironment, ModuleTranslation,
     ModuleTypes, PrimaryMap, SignatureIndex,
 };
 use wasmtime_jit::{CompiledModule, CompiledModuleInfo};
@@ -369,7 +370,7 @@ impl Module {
             // in parallel. Note that this is also where the actual validation
             // of all function bodies happens as well.
             || -> Result<_> {
-                let funcs = engine.run_maybe_parallel(functions, |(index, func)| {
+                engine.run_maybe_parallel(functions, |(index, func)| {
                     let offset = func.body.range().start;
                     let result =
                         compiler.compile_function(&translation, index, func, tunables, types);
@@ -384,9 +385,7 @@ impl Module {
                             "failed to compile wasm function {index}{name} at offset {offset:#x}"
                         )
                     })
-                })?;
-
-                Ok(funcs.into_iter().collect())
+                })
             },
             // In another (possibly) parallel task all trampolines necessary
             // for untyped host-to-wasm entry are compiled. Note that this
@@ -400,12 +399,45 @@ impl Module {
             },
         );
 
-        // Collect all the function results into a final ELF object.
+        // Weave the separate list of compiled functions into one list, storing
+        // the other metadata off to the side for now.
+        let funcs = funcs?;
+        let trampolines = trampolines?;
+        let mut func_infos = PrimaryMap::with_capacity(funcs.len());
+        let mut compiled_funcs = Vec::with_capacity(funcs.len() + trampolines.len());
+        for (info, func) in funcs {
+            let idx = func_infos.push(info);
+            let sym = obj::func_symbol_name(translation.module.func_index(idx));
+            compiled_funcs.push((sym, func));
+        }
+        for (sig, func) in translation.exported_signatures.iter().zip(trampolines) {
+            let sym = obj::trampoline_symbol_name(*sig);
+            compiled_funcs.push((sym, func));
+        }
+
+        // Emplace all compiled functions into the object file with any other
+        // sections associated with code as well.
         let mut obj = engine.compiler().object()?;
-        let (funcs, trampolines) =
+        let locs =
             engine
                 .compiler()
-                .emit_obj(&translation, funcs?, trampolines?, tunables, &mut obj)?;
+                .append_code(&mut obj, &compiled_funcs, tunables, &|i, idx| {
+                    assert!(i < func_infos.len());
+                    let defined = translation.module.defined_func_index(idx).unwrap();
+                    defined.as_u32() as usize
+                })?;
+
+        // If requested, generate and add dwarf information.
+        if tunables.generate_native_debuginfo && !func_infos.is_empty() {
+            let mut locs = locs.iter();
+            let mut funcs = compiled_funcs.iter();
+            let funcs = (0..func_infos.len())
+                .map(|_| (locs.next().unwrap().0, &*funcs.next().unwrap().1))
+                .collect();
+            engine
+                .compiler()
+                .append_dwarf(&mut obj, &translation, &funcs)?;
+        }
 
         // If configured attempt to use static memory initialization which
         // can either at runtime be implemented as a single memcpy to
@@ -421,6 +453,21 @@ impl Module {
         // FuncTable representation where possible, to enable
         // table lazy init.
         translation.try_func_table_init();
+
+        // Process all the results of compilation into a final state for our
+        // internal representation.
+        let mut locs = locs.into_iter();
+        let funcs = func_infos
+            .into_iter()
+            .map(|(_, info)| (info, locs.next().unwrap().1))
+            .collect();
+        let trampolines = translation
+            .exported_signatures
+            .iter()
+            .cloned()
+            .map(|i| (i, locs.next().unwrap().1))
+            .collect();
+        assert!(locs.next().is_none());
 
         // Insert `Engine` and type-level information into the compiled
         // artifact so if this module is deserialized later it contains all
@@ -951,8 +998,8 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
         self.module.code().as_ptr() as usize
     }
 
-    fn function_info(&self, index: DefinedFuncIndex) -> &FunctionInfo {
-        self.module.func_info(index)
+    fn function_loc(&self, index: DefinedFuncIndex) -> &FunctionLoc {
+        self.module.func_loc(index)
     }
 
     fn memory_image(&self, memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryImage>>> {
@@ -977,7 +1024,7 @@ impl wasmtime_runtime::ModuleInfo for ModuleInner {
     fn lookup_stack_map(&self, pc: usize) -> Option<&wasmtime_environ::StackMap> {
         let text_offset = pc - self.module.code().as_ptr() as usize;
         let (index, func_offset) = self.module.func_by_text_offset(text_offset)?;
-        let info = self.module.func_info(index);
+        let info = self.module.wasm_func_info(index);
 
         // Do a binary search to find the stack map for the given offset.
         let index = match info
@@ -1013,7 +1060,6 @@ pub(crate) struct BareModuleInfo {
     module: Arc<wasmtime_environ::Module>,
     image_base: usize,
     one_signature: Option<(SignatureIndex, VMSharedSignatureIndex)>,
-    function_info: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
 }
 
 impl BareModuleInfo {
@@ -1022,7 +1068,6 @@ impl BareModuleInfo {
             module,
             image_base: 0,
             one_signature: None,
-            function_info: PrimaryMap::default(),
         }
     }
 
@@ -1034,7 +1079,6 @@ impl BareModuleInfo {
             module,
             image_base: 0,
             one_signature,
-            function_info: PrimaryMap::default(),
         }
     }
 
@@ -1060,8 +1104,8 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
         self.image_base
     }
 
-    fn function_info(&self, index: DefinedFuncIndex) -> &FunctionInfo {
-        &self.function_info[index]
+    fn function_loc(&self, _index: DefinedFuncIndex) -> &FunctionLoc {
+        unreachable!()
     }
 
     fn memory_image(&self, _memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryImage>>> {

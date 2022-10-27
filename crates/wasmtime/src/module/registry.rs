@@ -10,10 +10,7 @@ use std::{
 };
 use wasmtime_environ::TrapCode;
 #[cfg(feature = "component-model")]
-use wasmtime_environ::{
-    component::{AlwaysTrapInfo, RuntimeAlwaysTrapIndex},
-    PrimaryMap,
-};
+use wasmtime_environ::{component::RuntimeAlwaysTrapIndex, FunctionLoc, PrimaryMap};
 use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
 
@@ -278,7 +275,10 @@ pub fn unregister_module(module: &Arc<CompiledModule>) {
 
 /// Same as `register_module`, but for components
 #[cfg(feature = "component-model")]
-pub fn register_component(text: &[u8], traps: &PrimaryMap<RuntimeAlwaysTrapIndex, AlwaysTrapInfo>) {
+pub fn register_component(
+    text: &[u8],
+    traps: &PrimaryMap<RuntimeAlwaysTrapIndex, (u32, FunctionLoc)>,
+) {
     if text.is_empty() {
         return;
     }
@@ -287,7 +287,7 @@ pub fn register_component(text: &[u8], traps: &PrimaryMap<RuntimeAlwaysTrapIndex
     let info = Arc::new(
         traps
             .iter()
-            .map(|(_, info)| info.info.start + info.trap_offset)
+            .map(|(_, (trap_offset, loc))| loc.start + *trap_offset)
             .collect::<Vec<_>>(),
     );
     let prev = GLOBAL_MODULES

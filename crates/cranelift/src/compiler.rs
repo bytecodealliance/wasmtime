@@ -4,7 +4,7 @@ use crate::func_environ::FuncEnvironment;
 use crate::obj::ModuleTextBuilder;
 use crate::{
     blank_sig, func_signature, indirect_signature, value_type, wasmtime_call_conv,
-    CompiledFunction, CompiledFunctions, FunctionAddressMap, Relocation, RelocationTarget,
+    CompiledFunction, FunctionAddressMap, Relocation, RelocationTarget,
 };
 use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{
@@ -18,8 +18,7 @@ use cranelift_codegen::{CompiledCode, MachSrcLoc, MachStackMap};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
-    DefinedFuncIndex, FuncIndex, FuncTranslator, MemoryIndex, OwnedMemoryIndex, SignatureIndex,
-    WasmFuncType,
+    DefinedFuncIndex, FuncIndex, FuncTranslator, MemoryIndex, OwnedMemoryIndex, WasmFuncType,
 };
 use object::write::{Object, StandardSegment, SymbolId};
 use object::{RelocationEncoding, RelocationKind, SectionKind};
@@ -31,12 +30,10 @@ use std::convert::TryFrom;
 use std::mem;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
-use wasmtime_environ::obj;
 use wasmtime_environ::{
-    AddressMapSection, CacheStore, CompileError, FilePos, FlagValue, FunctionBodyData,
-    FunctionInfo, InstructionAddressMap, ModuleTranslation, ModuleTypes, PtrSize,
-    StackMapInformation, Trampoline, TrapCode, TrapEncodingBuilder, TrapInformation, Tunables,
-    VMOffsets,
+    AddressMapSection, CacheStore, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionLoc,
+    InstructionAddressMap, ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation, TrapCode,
+    TrapEncodingBuilder, TrapInformation, Tunables, VMOffsets, WasmFunctionInfo,
 };
 
 #[cfg(feature = "component-model")]
@@ -190,7 +187,7 @@ impl wasmtime_environ::Compiler for Compiler {
         input: FunctionBodyData<'_>,
         tunables: &Tunables,
         types: &ModuleTypes,
-    ) -> Result<Box<dyn Any + Send>, CompileError> {
+    ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError> {
         let isa = &*self.isa;
         let module = &translation.module;
         let func_index = module.func_index(func_index);
@@ -325,22 +322,22 @@ impl wasmtime_environ::Compiler for Compiler {
             validator_allocations: validator.into_allocations(),
         });
 
-        Ok(Box::new(CompiledFunction {
-            body: code_buf,
-            relocations: func_relocs,
-            value_labels_ranges: ranges.unwrap_or(Default::default()),
-            sized_stack_slots,
-            unwind_info,
-            traps,
-            info: FunctionInfo {
+        Ok((
+            WasmFunctionInfo {
                 start_srcloc: address_transform.start_srcloc,
-                stack_maps,
-                start: 0,
-                length,
-                alignment,
+                stack_maps: stack_maps.into(),
             },
-            address_map: address_transform,
-        }))
+            Box::new(CompiledFunction {
+                body: code_buf,
+                relocations: func_relocs,
+                value_labels_ranges: ranges.unwrap_or(Default::default()),
+                sized_stack_slots,
+                unwind_info,
+                traps,
+                alignment,
+                address_map: address_transform,
+            }),
+        ))
     }
 
     fn compile_host_to_wasm_trampoline(
@@ -351,90 +348,44 @@ impl wasmtime_environ::Compiler for Compiler {
             .map(|x| Box::new(x) as Box<_>)
     }
 
-    fn emit_obj(
+    fn append_code(
         &self,
-        translation: &ModuleTranslation,
-        funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
-        compiled_trampolines: Vec<Box<dyn Any + Send>>,
-        tunables: &Tunables,
         obj: &mut Object<'static>,
-    ) -> Result<(PrimaryMap<DefinedFuncIndex, FunctionInfo>, Vec<Trampoline>)> {
-        let funcs: CompiledFunctions = funcs
-            .into_iter()
-            .map(|(_i, f)| *f.downcast().unwrap())
-            .collect();
-        let compiled_trampolines: Vec<CompiledFunction> = compiled_trampolines
-            .into_iter()
-            .map(|f| *f.downcast().unwrap())
-            .collect();
-
-        let num_funcs = funcs.len() + compiled_trampolines.len();
-        let mut builder = ModuleTextBuilder::new(obj, &*self.isa, num_funcs);
+        funcs: &[(String, Box<dyn Any + Send>)],
+        tunables: &Tunables,
+        resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
+    ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
+        let mut builder = ModuleTextBuilder::new(obj, &*self.isa, funcs.len());
         if self.linkopts.force_jump_veneers {
             builder.force_veneers();
         }
         let mut addrs = AddressMapSection::default();
         let mut traps = TrapEncodingBuilder::default();
 
-        let mut func_starts = Vec::with_capacity(funcs.len());
-        let mut symbols = PrimaryMap::with_capacity(funcs.len());
-        for (i, func) in funcs.iter() {
-            let sym = obj::func_symbol_name(translation.module.func_index(i));
-            let (sym, range) = builder.append_func(&sym, func, |idx| {
-                let defined = translation.module.defined_func_index(idx).unwrap();
-                defined.as_u32() as usize
-            });
-            symbols.push(sym);
+        let mut ret = Vec::with_capacity(funcs.len());
+        for (i, (sym, func)) in funcs.iter().enumerate() {
+            let func = func.downcast_ref().unwrap();
+            let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
             if tunables.generate_address_map {
                 addrs.push(range.clone(), &func.address_map.instructions);
             }
             traps.push(range.clone(), &func.traps);
-            func_starts.push(range.start);
             builder.append_padding(self.linkopts.padding_between_functions);
-        }
-
-        // Build trampolines for every signature that can be used by this module.
-        assert_eq!(
-            translation.exported_signatures.len(),
-            compiled_trampolines.len()
-        );
-        let mut trampolines = Vec::with_capacity(translation.exported_signatures.len());
-        for (i, func) in translation
-            .exported_signatures
-            .iter()
-            .zip(&compiled_trampolines)
-        {
-            assert!(func.traps.is_empty());
-            let sym = obj::trampoline_symbol_name(*i);
-            let (_, range) = builder.append_func(&sym, &func, |_| {
-                unimplemented!("trampolines should not have relocations");
-            });
-            trampolines.push(Trampoline {
-                signature: *i,
-                start: range.start,
+            let info = FunctionLoc {
+                start: u32::try_from(range.start).unwrap(),
                 length: u32::try_from(range.end - range.start).unwrap(),
-            })
+            };
+            ret.push((sym, info));
         }
 
         builder.finish();
 
-        self.append_dwarf(obj, translation, &funcs, tunables, &symbols)?;
         if tunables.generate_address_map {
             addrs.append_to(obj);
         }
         traps.append_to(obj);
 
-        Ok((
-            funcs
-                .into_iter()
-                .zip(func_starts)
-                .map(|((_, mut f), start)| {
-                    f.info.start = start;
-                    f.info
-                })
-                .collect(),
-            trampolines,
-        ))
+        Ok(ret)
     }
 
     fn emit_trampoline_obj(
@@ -442,20 +393,18 @@ impl wasmtime_environ::Compiler for Compiler {
         ty: &WasmFuncType,
         host_fn: usize,
         obj: &mut Object<'static>,
-    ) -> Result<(Trampoline, Trampoline)> {
+    ) -> Result<(FunctionLoc, FunctionLoc)> {
         let host_to_wasm = self.host_to_wasm_trampoline(ty)?;
         let wasm_to_host = self.wasm_to_host_trampoline(ty, host_fn)?;
         let mut builder = ModuleTextBuilder::new(obj, &*self.isa, 2);
         let (_, a) = builder.append_func("host_to_wasm", &host_to_wasm, |_| unreachable!());
         let (_, b) = builder.append_func("wasm_to_host", &wasm_to_host, |_| unreachable!());
-        let a = Trampoline {
-            signature: SignatureIndex::new(0),
-            start: a.start,
+        let a = FunctionLoc {
+            start: u32::try_from(a.start).unwrap(),
             length: u32::try_from(a.end - a.start).unwrap(),
         };
-        let b = Trampoline {
-            signature: SignatureIndex::new(0),
-            start: b.start,
+        let b = FunctionLoc {
+            start: u32::try_from(b.start).unwrap(),
             length: u32::try_from(b.end - b.start).unwrap(),
         };
         builder.finish();
@@ -493,6 +442,92 @@ impl wasmtime_environ::Compiler for Compiler {
     #[cfg(feature = "component-model")]
     fn component_compiler(&self) -> &dyn wasmtime_environ::component::ComponentCompiler {
         self
+    }
+
+    fn append_dwarf(
+        &self,
+        obj: &mut Object<'_>,
+        translation: &ModuleTranslation<'_>,
+        funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
+    ) -> Result<()> {
+        let ofs = VMOffsets::new(
+            self.isa
+                .triple()
+                .architecture
+                .pointer_width()
+                .unwrap()
+                .bytes(),
+            &translation.module,
+        );
+
+        let memory_offset = if ofs.num_imported_memories > 0 {
+            ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
+        } else if ofs.num_defined_memories > 0 {
+            // The addition of shared memory makes the following assumption,
+            // "owned memory index = 0", possibly false. If the first memory
+            // is a shared memory, the base pointer will not be stored in
+            // the `owned_memories` array. The following code should
+            // eventually be fixed to not only handle shared memories but
+            // also multiple memories.
+            assert_eq!(
+                ofs.num_defined_memories, ofs.num_owned_memories,
+                "the memory base pointer may be incorrect due to sharing memory"
+            );
+            ModuleMemoryOffset::Defined(
+                ofs.vmctx_vmmemory_definition_base(OwnedMemoryIndex::new(0)),
+            )
+        } else {
+            ModuleMemoryOffset::None
+        };
+        let compiled_funcs = funcs
+            .iter()
+            .map(|(_, (_, func))| func.downcast_ref().unwrap())
+            .collect();
+        let dwarf_sections = crate::debug::emit_dwarf(
+            &*self.isa,
+            &translation.debuginfo,
+            &compiled_funcs,
+            &memory_offset,
+        )
+        .with_context(|| "failed to emit DWARF debug information")?;
+
+        let (debug_bodies, debug_relocs): (Vec<_>, Vec<_>) = dwarf_sections
+            .iter()
+            .map(|s| ((s.name, &s.body), (s.name, &s.relocs)))
+            .unzip();
+        let mut dwarf_sections_ids = HashMap::new();
+        for (name, body) in debug_bodies {
+            let segment = obj.segment_name(StandardSegment::Debug).to_vec();
+            let section_id = obj.add_section(segment, name.as_bytes().to_vec(), SectionKind::Debug);
+            dwarf_sections_ids.insert(name, section_id);
+            obj.append_section_data(section_id, &body, 1);
+        }
+
+        // Write all debug data relocations.
+        for (name, relocs) in debug_relocs {
+            let section_id = *dwarf_sections_ids.get(name).unwrap();
+            for reloc in relocs {
+                let target_symbol = match reloc.target {
+                    DwarfSectionRelocTarget::Func(index) => funcs[DefinedFuncIndex::new(index)].0,
+                    DwarfSectionRelocTarget::Section(name) => {
+                        obj.section_symbol(dwarf_sections_ids[name])
+                    }
+                };
+                obj.add_relocation(
+                    section_id,
+                    object::write::Relocation {
+                        offset: u64::from(reloc.offset),
+                        size: reloc.size << 3,
+                        kind: RelocationKind::Absolute,
+                        encoding: RelocationEncoding::Generic,
+                        symbol: target_symbol,
+                        addend: i64::from(reloc.addend),
+                    },
+                )?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -851,6 +886,7 @@ impl Compiler {
             .into_iter()
             .map(mach_trap_to_trap)
             .collect();
+        let alignment = compiled_code.alignment;
 
         let unwind_info = if isa.flags().unwind_info() {
             compiled_code
@@ -866,95 +902,10 @@ impl Compiler {
             relocations: Default::default(),
             sized_stack_slots: Default::default(),
             value_labels_ranges: Default::default(),
-            info: Default::default(),
             address_map: Default::default(),
             traps,
+            alignment,
         })
-    }
-
-    pub fn append_dwarf(
-        &self,
-        obj: &mut Object<'_>,
-        translation: &ModuleTranslation<'_>,
-        funcs: &CompiledFunctions,
-        tunables: &Tunables,
-        func_symbols: &PrimaryMap<DefinedFuncIndex, SymbolId>,
-    ) -> Result<()> {
-        if !tunables.generate_native_debuginfo || funcs.len() == 0 {
-            return Ok(());
-        }
-        let ofs = VMOffsets::new(
-            self.isa
-                .triple()
-                .architecture
-                .pointer_width()
-                .unwrap()
-                .bytes(),
-            &translation.module,
-        );
-
-        let memory_offset = if ofs.num_imported_memories > 0 {
-            ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
-        } else if ofs.num_defined_memories > 0 {
-            // The addition of shared memory makes the following assumption,
-            // "owned memory index = 0", possibly false. If the first memory
-            // is a shared memory, the base pointer will not be stored in
-            // the `owned_memories` array. The following code should
-            // eventually be fixed to not only handle shared memories but
-            // also multiple memories.
-            assert_eq!(
-                ofs.num_defined_memories, ofs.num_owned_memories,
-                "the memory base pointer may be incorrect due to sharing memory"
-            );
-            ModuleMemoryOffset::Defined(
-                ofs.vmctx_vmmemory_definition_base(OwnedMemoryIndex::new(0)),
-            )
-        } else {
-            ModuleMemoryOffset::None
-        };
-        let dwarf_sections =
-            crate::debug::emit_dwarf(&*self.isa, &translation.debuginfo, &funcs, &memory_offset)
-                .with_context(|| "failed to emit DWARF debug information")?;
-
-        let (debug_bodies, debug_relocs): (Vec<_>, Vec<_>) = dwarf_sections
-            .iter()
-            .map(|s| ((s.name, &s.body), (s.name, &s.relocs)))
-            .unzip();
-        let mut dwarf_sections_ids = HashMap::new();
-        for (name, body) in debug_bodies {
-            let segment = obj.segment_name(StandardSegment::Debug).to_vec();
-            let section_id = obj.add_section(segment, name.as_bytes().to_vec(), SectionKind::Debug);
-            dwarf_sections_ids.insert(name, section_id);
-            obj.append_section_data(section_id, &body, 1);
-        }
-
-        // Write all debug data relocations.
-        for (name, relocs) in debug_relocs {
-            let section_id = *dwarf_sections_ids.get(name).unwrap();
-            for reloc in relocs {
-                let target_symbol = match reloc.target {
-                    DwarfSectionRelocTarget::Func(index) => {
-                        func_symbols[DefinedFuncIndex::new(index)]
-                    }
-                    DwarfSectionRelocTarget::Section(name) => {
-                        obj.section_symbol(dwarf_sections_ids[name])
-                    }
-                };
-                obj.add_relocation(
-                    section_id,
-                    object::write::Relocation {
-                        offset: u64::from(reloc.offset),
-                        size: reloc.size << 3,
-                        kind: RelocationKind::Absolute,
-                        encoding: RelocationEncoding::Generic,
-                        symbol: target_symbol,
-                        addend: i64::from(reloc.addend),
-                    },
-                )?;
-            }
-        }
-
-        Ok(())
     }
 }
 

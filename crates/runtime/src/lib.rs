@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use wasmtime_environ::DefinedFuncIndex;
 use wasmtime_environ::DefinedMemoryIndex;
-use wasmtime_environ::FunctionInfo;
+use wasmtime_environ::FunctionLoc;
 use wasmtime_environ::SignatureIndex;
 
 #[macro_use]
@@ -183,7 +183,7 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
 
     /// Descriptors about each compiled function, such as the offset from
     /// `image_base`.
-    fn function_info(&self, func_index: DefinedFuncIndex) -> &FunctionInfo;
+    fn function_loc(&self, func_index: DefinedFuncIndex) -> &FunctionLoc;
 
     /// Returns the `MemoryImage` structure used for copy-on-write
     /// initialization of the memory, if it's applicable.
