@@ -7,7 +7,7 @@ struct Exports;
 export_app!(Exports);
 
 impl app::App for Exports {
-    fn command() {
+    fn command(_: u32, _: u32) {
         panic!("idk");
     }
 }
