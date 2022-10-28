@@ -1,8 +1,11 @@
 [package]
 name = "wasmtime-winch"
-edition = "2021"
 description = "Integration between Wasmtime and Winch"
 version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
 
 [dependencies]
 winch-codegen = { workspace = true }

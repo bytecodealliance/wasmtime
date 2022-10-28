@@ -1,7 +1,10 @@
 [package]
 name = "winch-codegen"
+description = "Winch code generation library"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
 wasmparser = { workspace = true }
