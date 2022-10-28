@@ -287,7 +287,7 @@ pub fn finish_compile(
         }
         let section_id = obj.add_section(
             obj.segment_name(StandardSegment::Debug).to_vec(),
-            wasm_section_name(T::id()).as_bytes().to_vec(),
+            format!("{}.wasm", T::id().name()).into_bytes(),
             SectionKind::Debug,
         );
         obj.append_section_data(section_id, data, 1);
@@ -378,6 +378,9 @@ pub struct CompiledModule {
     unique_id: CompiledModuleId,
     func_names: Vec<FunctionName>,
     func_name_data: Range<usize>,
+    /// Map of dwarf sections indexed by `gimli::SectionId` which points to the
+    /// range within `code_memory`'s mmap as to the contents of the section.
+    dwarf_sections: Vec<Range<usize>>,
 }
 
 impl CompiledModule {
@@ -399,43 +402,102 @@ impl CompiledModule {
     /// about new code that is loaded.
     pub fn from_artifacts(
         mmap: MmapVec,
-        info: Option<CompiledModuleInfo>,
+        mut info: Option<CompiledModuleInfo>,
         profiler: &dyn ProfilingAgent,
         id_allocator: &CompiledModuleIdAllocator,
     ) -> Result<Self> {
-        let obj = File::parse(&mmap[..]).context("failed to parse internal elf file")?;
-        let opt_section = |name: &str| obj.section_by_name(name).and_then(|s| s.data().ok());
-        let section = |name: &str| {
-            opt_section(name)
-                .ok_or_else(|| anyhow!("missing section `{}` in compilation artifacts", name))
-        };
+        use gimli::SectionId::*;
 
-        // Acquire the `CompiledModuleInfo`, either because it was passed in or
-        // by deserializing it from the compiliation image.
-        let info = match info {
-            Some(info) => info,
-            None => bincode::deserialize(section(ELF_WASMTIME_INFO)?)
-                .context("failed to deserialize wasmtime module info")?,
-        };
+        // Parse the `code_memory` as an object file and extract information
+        // about where all of its sections are located, stored into the
+        // `CompiledModule` created here.
+        //
+        // Note that dwarf sections here specifically are those that are carried
+        // over directly from the original wasm module's dwarf sections, not the
+        // wasmtime-generated host DWARF sections.
+        let obj = File::parse(&mmap[..]).context("failed to parse internal elf file")?;
+        let mut wasm_data = None;
+        let mut address_map_data = None;
+        let mut func_name_data = None;
+        let mut trap_data = None;
+        let mut code = None;
+        let mut dwarf_sections = Vec::new();
+        for section in obj.sections() {
+            let name = section.name()?;
+            let data = section.data()?;
+            let range = subslice_range(data, &mmap);
+            let mut gimli = |id: gimli::SectionId| {
+                let idx = id as usize;
+                if dwarf_sections.len() <= idx {
+                    dwarf_sections.resize(idx + 1, 0..0);
+                }
+                dwarf_sections[idx] = range.clone();
+            };
+
+            match name {
+                ELF_WASM_DATA => wasm_data = Some(range),
+                ELF_WASMTIME_ADDRMAP => address_map_data = Some(range),
+                ELF_WASMTIME_TRAPS => trap_data = Some(range),
+                ELF_NAME_DATA => func_name_data = Some(range),
+                ".text" => code = Some(range),
+
+                // Parse the metadata if it's not already available
+                // in-memory.
+                ELF_WASMTIME_INFO => {
+                    if info.is_none() {
+                        info = Some(
+                            bincode::deserialize(data)
+                                .context("failed to deserialize wasmtime module info")?,
+                        );
+                    }
+                }
+
+                // Register dwarf sections into the `dwarf_sections`
+                // array which is indexed by `gimli::SectionId`
+                ".debug_abbrev.wasm" => gimli(DebugAbbrev),
+                ".debug_addr.wasm" => gimli(DebugAddr),
+                ".debug_aranges.wasm" => gimli(DebugAranges),
+                ".debug_frame.wasm" => gimli(DebugFrame),
+                ".eh_frame.wasm" => gimli(EhFrame),
+                ".eh_frame_hdr.wasm" => gimli(EhFrameHdr),
+                ".debug_info.wasm" => gimli(DebugInfo),
+                ".debug_line.wasm" => gimli(DebugLine),
+                ".debug_line_str.wasm" => gimli(DebugLineStr),
+                ".debug_loc.wasm" => gimli(DebugLoc),
+                ".debug_loc_lists.wasm" => gimli(DebugLocLists),
+                ".debug_macinfo.wasm" => gimli(DebugMacinfo),
+                ".debug_macro.wasm" => gimli(DebugMacro),
+                ".debug_pub_names.wasm" => gimli(DebugPubNames),
+                ".debug_pub_types.wasm" => gimli(DebugPubTypes),
+                ".debug_ranges.wasm" => gimli(DebugRanges),
+                ".debug_rng_lists.wasm" => gimli(DebugRngLists),
+                ".debug_str.wasm" => gimli(DebugStr),
+                ".debug_str_offsets.wasm" => gimli(DebugStrOffsets),
+                ".debug_types.wasm" => gimli(DebugTypes),
+                ".debug_cu_index.wasm" => gimli(DebugCuIndex),
+                ".debug_tu_index.wasm" => gimli(DebugTuIndex),
+
+                _ => log::debug!("ignoring section {name}"),
+            }
+        }
+
+        let info = info.ok_or_else(|| anyhow!("failed to find wasm info section"))?;
 
         let mut ret = Self {
             module: Arc::new(info.module),
             funcs: info.funcs,
             trampolines: info.trampolines,
-            wasm_data: subslice_range(section(ELF_WASM_DATA)?, &mmap),
-            address_map_data: opt_section(ELF_WASMTIME_ADDRMAP)
-                .map(|slice| subslice_range(slice, &mmap))
-                .unwrap_or(0..0),
-            func_name_data: opt_section(ELF_NAME_DATA)
-                .map(|slice| subslice_range(slice, &mmap))
-                .unwrap_or(0..0),
-            trap_data: subslice_range(section(ELF_WASMTIME_TRAPS)?, &mmap),
-            code: subslice_range(section(".text")?, &mmap),
+            wasm_data: wasm_data.ok_or_else(|| anyhow!("missing wasm data section"))?,
+            address_map_data: address_map_data.unwrap_or(0..0),
+            func_name_data: func_name_data.unwrap_or(0..0),
+            trap_data: trap_data.ok_or_else(|| anyhow!("missing trap data section"))?,
+            code: code.ok_or_else(|| anyhow!("missing code section"))?,
             dbg_jit_registration: None,
             code_memory: CodeMemory::new(mmap),
             meta: info.meta,
             unique_id: id_allocator.alloc(),
             func_names: info.func_names,
+            dwarf_sections,
         };
         ret.code_memory
             .publish(ret.meta.is_branch_protection_enabled)
@@ -623,13 +685,13 @@ impl CompiledModule {
         if !self.meta.has_wasm_debuginfo {
             return Ok(None);
         }
-        let obj = File::parse(&self.mmap()[..])
-            .context("failed to parse internal ELF file representation")?;
         let dwarf = gimli::Dwarf::load(|id| -> Result<_> {
-            let data = obj
-                .section_by_name(wasm_section_name(id))
-                .and_then(|s| s.data().ok())
-                .unwrap_or(&[]);
+            let range = self
+                .dwarf_sections
+                .get(id as usize)
+                .cloned()
+                .unwrap_or(0..0);
+            let data = &self.mmap()[range];
             Ok(EndianSlice::new(data, gimli::LittleEndian))
         })?;
         let cx = addr2line::Context::from_dwarf(dwarf)
@@ -702,38 +764,4 @@ pub fn subslice_range(inner: &[u8], outer: &[u8]) -> Range<usize> {
 
     let start = inner.as_ptr() as usize - outer.as_ptr() as usize;
     start..start + inner.len()
-}
-
-/// Returns the Wasmtime-specific section name for dwarf debugging sections.
-///
-/// These sections, if configured in Wasmtime, will contain the original raw
-/// dwarf debugging information found in the wasm file, unmodified. These tables
-/// are then consulted later to convert wasm program counters to original wasm
-/// source filenames/line numbers with `addr2line`.
-fn wasm_section_name(id: gimli::SectionId) -> &'static str {
-    use gimli::SectionId::*;
-    match id {
-        DebugAbbrev => ".debug_abbrev.wasm",
-        DebugAddr => ".debug_addr.wasm",
-        DebugAranges => ".debug_aranges.wasm",
-        DebugFrame => ".debug_frame.wasm",
-        EhFrame => ".eh_frame.wasm",
-        EhFrameHdr => ".eh_frame_hdr.wasm",
-        DebugInfo => ".debug_info.wasm",
-        DebugLine => ".debug_line.wasm",
-        DebugLineStr => ".debug_line_str.wasm",
-        DebugLoc => ".debug_loc.wasm",
-        DebugLocLists => ".debug_loc_lists.wasm",
-        DebugMacinfo => ".debug_macinfo.wasm",
-        DebugMacro => ".debug_macro.wasm",
-        DebugPubNames => ".debug_pub_names.wasm",
-        DebugPubTypes => ".debug_pub_types.wasm",
-        DebugRanges => ".debug_ranges.wasm",
-        DebugRngLists => ".debug_rng_lists.wasm",
-        DebugStr => ".debug_str.wasm",
-        DebugStrOffsets => ".debug_str_offsets.wasm",
-        DebugTypes => ".debug_types.wasm",
-        DebugCuIndex => ".debug_cu_index.wasm",
-        DebugTuIndex => ".debug_tu_index.wasm",
-    }
 }
