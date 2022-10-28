@@ -282,10 +282,6 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Ineg, &[I16, I16], &[I16], insert_opcode),
     (Opcode::Ineg, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Ineg, &[I64, I64], &[I64], insert_opcode),
-    // ineg.i128 not implemented in some backends:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5105
-    //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/5108
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Ineg, &[I128, I128], &[I128], insert_opcode),
     // Imin
     // imin not implemented in some backends:
