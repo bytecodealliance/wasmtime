@@ -2917,6 +2917,14 @@
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.Neg size src dst))))
         dst))
+        
+;; Helper for creating `neg` instructions whose flags are also used.
+(decl x64_neg_paired (Type Gpr) ProducesFlags)
+(rule (x64_neg_paired ty src)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (operand_size_of_type_32_64 ty))
+            (inst MInst (MInst.Neg size src dst)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst dst)))
 
 (decl x64_lea (SyntheticAmode) Gpr)
 (rule (x64_lea addr)

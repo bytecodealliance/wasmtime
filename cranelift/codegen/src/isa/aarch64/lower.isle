@@ -540,21 +540,7 @@
 
 ;; `i128`
 (rule -1 (lower (has_type $I128 (isub x y)))
-      (let
-          ;; Get the high/low registers for `x`.
-          ((x_regs ValueRegs x)
-           (x_lo Reg (value_regs_get x_regs 0))
-           (x_hi Reg (value_regs_get x_regs 1))
-
-           ;; Get the high/low registers for `y`.
-           (y_regs ValueRegs y)
-           (y_lo Reg (value_regs_get y_regs 0))
-           (y_hi Reg (value_regs_get y_regs 1)))
-        ;; the actual subtraction is `subs` followed by `sbc` which comprises
-        ;; the low/high bits of the result
-        (with_flags
-          (sub_with_flags_paired $I64 x_lo y_lo)
-          (sbc_paired $I64 x_hi y_hi))))
+      (sub_i128 x y))
 
 ;;;; Rules for `uadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -581,6 +567,10 @@
 ;; `i64` and smaller.
 (rule 1 (lower (has_type (fits_in_64 ty) (ineg x)))
       (sub ty (zero_reg) x))
+
+;; `i128`
+(rule 2 (lower (has_type $I128 (ineg x)))  
+      (sub_i128 (value_regs_zero) x))
 
 ;; vectors.
 (rule (lower (has_type (ty_vec128 ty) (ineg x)))

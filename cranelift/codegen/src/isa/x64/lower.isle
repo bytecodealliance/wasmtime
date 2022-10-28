@@ -777,6 +777,15 @@
 (rule -1 (lower (has_type (fits_in_64 ty) (ineg x)))
       (x64_neg ty x))
 
+(rule -2 (lower (has_type $I128 (ineg x)))
+      ;; Get the high/low registers for `x`.
+      (let ((regs ValueRegs x)
+            (lo Gpr (value_regs_get_gpr regs 0))
+            (hi Gpr (value_regs_get_gpr regs 1)))
+        ;; Do a neg followed by an sub-with-borrow.
+        (with_flags (x64_neg_paired $I64 lo)
+                    (x64_sbb_paired $I64 (imm $I64 0) hi))))
+
 ;; SSE.
 
 (rule (lower (has_type $I8X16 (ineg x)))

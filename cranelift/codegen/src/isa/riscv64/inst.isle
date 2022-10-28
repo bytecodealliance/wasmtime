@@ -703,6 +703,10 @@
 (decl zero_reg () Reg)
 (extern constructor zero_reg zero_reg)
 
+(decl value_regs_zero () ValueRegs)
+(rule (value_regs_zero)
+  (value_regs (imm $I64 0) (imm $I64 0)))
+
 (decl gen_float_round (FloatRoundOP Reg Type) Reg)
 (rule
   (gen_float_round op rs ty)
