@@ -113,12 +113,14 @@ where
         stub_fn::<F> as usize,
         &mut obj,
     )?;
+    engine.append_compiler_info(&mut obj);
+    engine.append_bti(&mut obj);
     let obj = wasmtime_jit::mmap_vec_from_obj(obj)?;
 
     // Copy the results of JIT compilation into executable memory, and this will
     // also take care of unwind table registration.
     let mut code_memory = CodeMemory::new(obj);
-    let code = code_memory.publish(engine.compiler().is_branch_protection_enabled())?;
+    let code = code_memory.publish()?;
 
     register_trampolines(engine.profiler(), &code.obj);
 

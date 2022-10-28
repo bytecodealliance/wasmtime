@@ -136,9 +136,6 @@ struct Metadata {
     /// Note that even if this flag is `true` sections may be missing if they
     /// weren't found in the original wasm module itself.
     has_wasm_debuginfo: bool,
-
-    /// Whether or not branch protection is enabled.
-    is_branch_protection_enabled: bool,
 }
 
 /// Finishes compilation of the `translation` specified, producing the final
@@ -163,7 +160,6 @@ pub fn finish_compile(
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
     trampolines: Vec<Trampoline>,
     tunables: &Tunables,
-    is_branch_protection_enabled: bool,
 ) -> Result<(MmapVec, CompiledModuleInfo)> {
     let ModuleTranslation {
         mut module,
@@ -269,7 +265,6 @@ pub fn finish_compile(
             has_unparsed_debuginfo,
             code_section_offset: debuginfo.wasm_file.code_section_offset,
             has_wasm_debuginfo: tunables.parse_wasm_debuginfo,
-            is_branch_protection_enabled,
         },
     };
     bincode::serialize_into(&mut bytes, &info)?;
@@ -438,7 +433,7 @@ impl CompiledModule {
             func_names: info.func_names,
         };
         ret.code_memory
-            .publish(ret.meta.is_branch_protection_enabled)
+            .publish()
             .context("failed to publish code memory")?;
         ret.register_debug_and_profiling(profiler)?;
 

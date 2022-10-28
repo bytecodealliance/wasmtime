@@ -27,7 +27,7 @@ mod instantiate;
 mod profiling;
 mod unwind;
 
-pub use crate::code_memory::CodeMemory;
+pub use crate::code_memory::{CodeMemory, ELF_WASM_BTI};
 pub use crate::instantiate::{
     finish_compile, mmap_vec_from_obj, subslice_range, CompiledModule, CompiledModuleInfo,
     SetupError, SymbolizeContext,

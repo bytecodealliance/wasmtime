@@ -28,7 +28,6 @@ mod serialization;
 pub use registry::{is_wasm_trap_pc, ModuleRegistry};
 #[cfg(feature = "component-model")]
 pub use registry::{register_component, unregister_component};
-pub use serialization::SerializedModule;
 
 /// A compiled WebAssembly module, ready to be instantiated.
 ///
@@ -288,7 +287,7 @@ impl Module {
         cfg_if::cfg_if! {
             if #[cfg(feature = "cache")] {
                 let state = (HashedEngineCompileEnv(engine), binary);
-                let (mmap, info, types) = wasmtime_cache::ModuleCacheEntry::new(
+                let (mmap, info_and_types) = wasmtime_cache::ModuleCacheEntry::new(
                     "wasmtime",
                     engine.cache_config(),
                 )
@@ -299,28 +298,23 @@ impl Module {
                     |(engine, wasm)| Module::build_artifacts(engine.0, wasm),
 
                     // Implementation of how to serialize artifacts
-                    |(engine, _wasm), (mmap, _info, types)| {
-                        SerializedModule::from_artifacts(
-                            engine.0,
-                            mmap,
-                            types,
-                        ).to_bytes(&engine.0.config().module_version).ok()
+                    |(_engine, _wasm), (mmap, _info_and_types)| {
+                        Some(mmap.to_vec())
                     },
 
                     // Cache hit, deserialize the provided artifacts
                     |(engine, _wasm), serialized_bytes| {
-                        SerializedModule::from_bytes(&serialized_bytes, &engine.0.config().module_version)
-                            .ok()?
-                            .into_parts(engine.0)
-                            .ok()
+                        let mmap = engine.0.load_mmap_bytes(&serialized_bytes).ok()?;
+                        Some((mmap, None))
                     },
                 )?;
             } else {
-                let (mmap, info, types) = Module::build_artifacts(engine, binary)?;
+                let (mmap, info_and_types) = Module::build_artifacts(engine, binary)?;
             }
         };
 
-        Self::from_parts(engine, mmap, info, types)
+        let info_and_types = info_and_types.map(|(info, types)| (info, types.into()));
+        Self::from_parts(engine, mmap, info_and_types)
     }
 
     /// Converts an input binary-encoded WebAssembly module to compilation
@@ -341,7 +335,7 @@ impl Module {
     pub(crate) fn build_artifacts(
         engine: &Engine,
         wasm: &[u8],
-    ) -> Result<(MmapVec, Option<CompiledModuleInfo>, ModuleTypes)> {
+    ) -> Result<(MmapVec, Option<(CompiledModuleInfo, ModuleTypes)>)> {
         let tunables = &engine.config().tunables;
 
         // First a `ModuleEnvironment` is created which records type information
@@ -357,7 +351,7 @@ impl Module {
             .context("failed to parse WebAssembly module")?;
         let types = types.finish();
         let (mmap, info) = Module::compile_functions(engine, translation, &types)?;
-        Ok((mmap, info, types))
+        Ok((mmap, Some((info, types))))
     }
 
     #[cfg(compiler)]
@@ -365,7 +359,7 @@ impl Module {
         engine: &Engine,
         mut translation: ModuleTranslation<'_>,
         types: &ModuleTypes,
-    ) -> Result<(MmapVec, Option<CompiledModuleInfo>)> {
+    ) -> Result<(MmapVec, CompiledModuleInfo)> {
         let tunables = &engine.config().tunables;
         let functions = mem::take(&mut translation.function_body_inputs);
         let functions = functions.into_iter().collect::<Vec<_>>();
@@ -428,16 +422,23 @@ impl Module {
         // table lazy init.
         translation.try_func_table_init();
 
-        let (mmap, info) = wasmtime_jit::finish_compile(
-            translation,
-            obj,
-            funcs,
-            trampolines,
-            tunables,
-            engine.compiler().is_branch_protection_enabled(),
-        )?;
+        // Insert `Engine` and type-level information into the compiled
+        // artifact so if this module is deserialized later it contains all
+        // information necessary.
+        //
+        // Note that `append_compiler_info` and `append_types` here in theory
+        // can both be skipped if this module will never get serialized.
+        // They're only used during deserialization and not during runtime for
+        // the module itself. Currently there's no need for that, however, so
+        // it's left as an exercise for later.
+        engine.append_compiler_info(&mut obj);
+        engine.append_bti(&mut obj);
+        serialization::append_types(types, &mut obj);
 
-        Ok((mmap, Some(info)))
+        let (mmap, info) =
+            wasmtime_jit::finish_compile(translation, obj, funcs, trampolines, tunables)?;
+
+        Ok((mmap, info))
     }
 
     /// Deserializes an in-memory compiled module previously created with
@@ -483,8 +484,8 @@ impl Module {
     /// blobs across versions of wasmtime you can be safely guaranteed that
     /// future versions of wasmtime will reject old cache entries).
     pub unsafe fn deserialize(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
-        let module = SerializedModule::from_bytes(bytes.as_ref(), &engine.config().module_version)?;
-        module.into_module(engine)
+        let mmap = engine.load_mmap_bytes(bytes.as_ref())?;
+        Module::from_parts(engine, mmap, None)
     }
 
     /// Same as [`deserialize`], except that the contents of `path` are read to
@@ -511,16 +512,19 @@ impl Module {
     /// reflect the current state of the file, not necessarily the origianl
     /// state of the file.
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Module> {
-        let module = SerializedModule::from_file(path.as_ref(), &engine.config().module_version)?;
-        module.into_module(engine)
+        let mmap = engine.load_mmap_file(path.as_ref())?;
+        Module::from_parts(engine, mmap, None)
     }
 
     pub(crate) fn from_parts(
         engine: &Engine,
         mmap: MmapVec,
-        info: Option<CompiledModuleInfo>,
-        types: impl Into<Types>,
+        info_and_types: Option<(CompiledModuleInfo, Types)>,
     ) -> Result<Self> {
+        let (info, types) = match info_and_types {
+            Some((info, types)) => (Some(info), types),
+            None => (None, serialization::deserialize_types(&mmap)?.into()),
+        };
         let module = Arc::new(CompiledModule::from_artifacts(
             mmap,
             info,
@@ -531,7 +535,6 @@ impl Module {
         // Validate the module can be used with the current allocator
         engine.allocator().validate(module.module())?;
 
-        let types = types.into();
         let signatures = SignatureCollection::new_for_module(
             engine.signatures(),
             types.module_types(),
@@ -612,7 +615,7 @@ impl Module {
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn serialize(&self) -> Result<Vec<u8>> {
-        SerializedModule::new(self).to_bytes(&self.inner.engine.config().module_version)
+        Ok(self.compiled_module().mmap().to_vec())
     }
 
     pub(crate) fn compiled_module(&self) -> &CompiledModule {

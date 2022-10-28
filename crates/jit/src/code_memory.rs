@@ -1,12 +1,16 @@
 //! Memory management for executable code.
 
 use crate::unwind::UnwindRegistration;
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use object::read::{File, Object, ObjectSection};
 use std::ffi::c_void;
 use std::mem::ManuallyDrop;
 use wasmtime_jit_icache_coherence as icache_coherence;
 use wasmtime_runtime::MmapVec;
+
+/// Name of the section in ELF files indicating that branch protection was
+/// enabled for the compiled code.
+pub const ELF_WASM_BTI: &str = ".wasmtime.bti";
 
 /// Management of executable memory within a `MmapVec`
 ///
@@ -80,7 +84,7 @@ impl CodeMemory {
     /// After this function executes all JIT code should be ready to execute.
     /// The various parsed results of the internals of the `MmapVec` are
     /// returned through the `Publish` structure.
-    pub fn publish(&mut self, enable_branch_protection: bool) -> Result<Publish<'_>> {
+    pub fn publish(&mut self) -> Result<Publish<'_>> {
         assert!(!self.published);
         self.published = true;
 
@@ -92,7 +96,10 @@ impl CodeMemory {
         };
         let mmap_ptr = self.mmap.as_ptr() as u64;
 
-        // Sanity-check that all sections are aligned correctly.
+        // Sanity-check that all sections are aligned correctly and
+        // additionally probe for a few sections that we're interested in.
+        let mut enable_branch_protection = None;
+        let mut text = None;
         for section in ret.obj.sections() {
             let data = match section.data() {
                 Ok(data) => data,
@@ -108,16 +115,24 @@ impl CodeMemory {
                     section.align()
                 );
             }
-        }
 
-        // Find the `.text` section with executable code in it.
-        let text = match ret.obj.section_by_name(".text") {
-            Some(section) => section,
+            match section.name().unwrap_or("") {
+                ELF_WASM_BTI => match data.len() {
+                    1 => enable_branch_protection = Some(data[0] != 0),
+                    _ => bail!("invalid `{ELF_WASM_BTI}` section"),
+                },
+                ".text" => {
+                    ret.text = data;
+                    text = Some(section);
+                }
+                _ => {}
+            }
+        }
+        let enable_branch_protection =
+            enable_branch_protection.ok_or_else(|| anyhow!("missing `{ELF_WASM_BTI}` section"))?;
+        let text = match text {
+            Some(text) => text,
             None => return Ok(ret),
-        };
-        ret.text = match text.data() {
-            Ok(data) if !data.is_empty() => data,
-            _ => return Ok(ret),
         };
 
         // The unsafety here comes from a few things:
