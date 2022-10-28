@@ -428,7 +428,7 @@ impl CompiledModule {
             let range = subslice_range(data, &mmap);
             let mut gimli = |id: gimli::SectionId| {
                 let idx = id as usize;
-                if dwarf_sections.len() < idx {
+                if dwarf_sections.len() <= idx {
                     dwarf_sections.resize(idx + 1, 0..0);
                 }
                 dwarf_sections[idx] = range.clone();
