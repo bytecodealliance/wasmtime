@@ -7,7 +7,8 @@ wit_bindgen_guest_rust::generate!({
     import: "wit/wasi-logging.wit.md",
     import: "wit/wasi-poll.wit.md",
     import: "wit/wasi-random.wit.md",
-    name: "wasi",
+    default: "wit/command.wit.md",
+    name: "wasi_command",
     raw_strings,
     unchecked
 });
@@ -17,6 +18,32 @@ use core::mem::{forget, size_of};
 use core::ptr::{copy_nonoverlapping, null_mut};
 use core::slice;
 use wasi::*;
+
+struct Export;
+impl wasi_command::WasiCommand for Export {
+    fn command(
+        stdin: wasi_filesystem::Descriptor,
+        stdout: wasi_filesystem::Descriptor, /* TODO add the environment Vec<(String, String)> */
+                                             /* TODO logging shouldnt be as ambient? */
+    ) {
+        *Descriptor::get(0) = Descriptor::File(File {
+            fd: stdin,
+            position: 0,
+        });
+        *Descriptor::get(1) = Descriptor::File(File {
+            fd: stdout,
+            position: 0,
+        });
+        *Descriptor::get(2) = Descriptor::Log;
+        /* TODO we need to be able to import the adaptee module's _start func somehow:
+         * this is probably a special case in wit-component
+        #[no_mangle]
+        extern "C" fn _start();
+        start()
+        */
+    }
+}
+export_wasi_command!(Export);
 
 /// The maximum path length. WASI doesn't explicitly guarantee this, but all
 /// popular OS's have a `PATH_MAX` of at most 4096, so that's enough for this
