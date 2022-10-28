@@ -33,13 +33,13 @@ fn wrap_func() -> Result<()> {
     linker.func_wrap("m3", "", || -> Option<ExternRef> { None })?;
     linker.func_wrap("m3", "f", || -> Option<Func> { None })?;
 
-    linker.func_wrap("", "f1", || -> Result<(), Trap> { loop {} })?;
-    linker.func_wrap("", "f2", || -> Result<i32, Trap> { loop {} })?;
-    linker.func_wrap("", "f3", || -> Result<i64, Trap> { loop {} })?;
-    linker.func_wrap("", "f4", || -> Result<f32, Trap> { loop {} })?;
-    linker.func_wrap("", "f5", || -> Result<f64, Trap> { loop {} })?;
-    linker.func_wrap("", "f6", || -> Result<Option<ExternRef>, Trap> { loop {} })?;
-    linker.func_wrap("", "f7", || -> Result<Option<Func>, Trap> { loop {} })?;
+    linker.func_wrap("", "f1", || -> Result<()> { loop {} })?;
+    linker.func_wrap("", "f2", || -> Result<i32> { loop {} })?;
+    linker.func_wrap("", "f3", || -> Result<i64> { loop {} })?;
+    linker.func_wrap("", "f4", || -> Result<f32> { loop {} })?;
+    linker.func_wrap("", "f5", || -> Result<f64> { loop {} })?;
+    linker.func_wrap("", "f6", || -> Result<Option<ExternRef>> { loop {} })?;
+    linker.func_wrap("", "f7", || -> Result<Option<Func>> { loop {} })?;
     Ok(())
 }
 
@@ -444,7 +444,7 @@ fn call_wasm_many_args() -> Result<()> {
 fn trap_smoke() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::<()>::new(&engine);
-    linker.func_wrap("", "", || -> Result<(), Trap> { Err(Trap::new("test")) })?;
+    linker.func_wrap("", "", || -> Result<()> { Err(Trap::new("test").into()) })?;
 
     let mut store = Store::new(&engine, ());
 
@@ -472,7 +472,7 @@ fn trap_import() -> Result<()> {
 
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    linker.func_wrap("", "", || -> Result<(), Trap> { Err(Trap::new("foo")) })?;
+    linker.func_wrap("", "", || -> Result<()> { Err(Trap::new("foo").into()) })?;
 
     let module = Module::new(&engine, &wasm)?;
     let mut store = Store::new(&engine, ());
@@ -607,10 +607,7 @@ fn func_return_nothing() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let f = linker.get(&mut store, "", "").unwrap().into_func().unwrap();
-    let err = f
-        .call(&mut store, &[], &mut [Val::I32(0)])
-        .unwrap_err()
-        .downcast::<Trap>()?;
+    let err = f.call(&mut store, &[], &mut [Val::I32(0)]).unwrap_err();
     assert!(err
         .to_string()
         .contains("function attempted to return an incompatible value"));
@@ -725,7 +722,7 @@ fn wasi_imports() -> Result<()> {
     let instance = linker.instantiate(&mut store, &module)?;
 
     let start = instance.get_typed_func::<(), (), _>(&mut store, "_start")?;
-    let trap = start.call(&mut store, ()).unwrap_err();
+    let trap = start.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
     assert_eq!(trap.i32_exit_status(), Some(123));
 
     Ok(())

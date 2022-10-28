@@ -1,4 +1,5 @@
 use crate::generators::Stacks;
+use anyhow::Result;
 use wasmtime::*;
 
 /// Run the given `Stacks` test case and assert that the host's view of the Wasm
@@ -17,7 +18,7 @@ pub fn check_stacks(stacks: Stacks) -> usize {
         .func_wrap(
             "host",
             "check_stack",
-            |mut caller: Caller<'_, ()>| -> Result<(), Trap> {
+            |mut caller: Caller<'_, ()>| -> Result<()> {
                 let fuel = caller
                     .get_export("fuel")
                     .expect("should export `fuel`")
@@ -26,7 +27,7 @@ pub fn check_stacks(stacks: Stacks) -> usize {
 
                 let fuel_left = fuel.get(&mut caller).unwrap_i32();
                 if fuel_left == 0 {
-                    return Err(Trap::new("out of fuel"));
+                    return Err(Trap::new("out of fuel").into());
                 }
 
                 fuel.set(&mut caller, Val::I32(fuel_left - 1)).unwrap();
@@ -59,6 +60,7 @@ pub fn check_stacks(stacks: Stacks) -> usize {
     for input in stacks.inputs().iter().copied() {
         log::debug!("input: {}", input);
         if let Err(trap) = run.call(&mut store, (input.into(),)) {
+            let trap = trap.downcast::<Trap>().unwrap();
             log::debug!("trap: {}", trap);
             let get_stack = instance
                 .get_typed_func::<(), (u32, u32), _>(&mut store, "get_stack")

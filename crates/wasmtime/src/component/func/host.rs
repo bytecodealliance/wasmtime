@@ -193,7 +193,7 @@ where
     // the component is disallowed, for example, when the `realloc` function
     // calls a canonical import.
     if !flags.may_leave() {
-        bail!("cannot leave component instance");
+        return Err(Trap::new("cannot leave component instance").into());
     }
 
     // There's a 2x2 matrix of whether parameters and results are stored on the
@@ -303,7 +303,7 @@ where
     // the component is disallowed, for example, when the `realloc` function
     // calls a canonical import.
     if !flags.may_leave() {
-        bail!("cannot leave component instance");
+        return Err(Trap::new("cannot leave component instance").into());
     }
 
     let args;

@@ -909,14 +909,6 @@ impl Pointee for str {
     }
 }
 
-impl From<GuestError> for wasmtime_crate::Trap {
-    fn from(err: GuestError) -> wasmtime_crate::Trap {
-        wasmtime_crate::Trap::from(
-            Box::new(err) as Box<dyn std::error::Error + Send + Sync + 'static>
-        )
-    }
-}
-
 pub fn run_in_dummy_executor<F: std::future::Future>(
     future: F,
 ) -> Result<F::Output, wasmtime_crate::Trap> {

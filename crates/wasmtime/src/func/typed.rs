@@ -1,6 +1,6 @@
 use super::{invoke_wasm_and_catch_traps, HostAbi};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
-use crate::{AsContextMut, ExternRef, Func, FuncType, StoreContextMut, Trap, ValRaw, ValType};
+use crate::{AsContextMut, ExternRef, Func, FuncType, StoreContextMut, ValRaw, ValType};
 use anyhow::{bail, Result};
 use std::marker;
 use std::mem::{self, MaybeUninit};
@@ -72,7 +72,7 @@ where
     ///
     /// This function will panic if it is called when the underlying [`Func`] is
     /// connected to an asynchronous store.
-    pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results, Trap> {
+    pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results> {
         let mut store = store.as_context_mut();
         assert!(
             !store.0.async_support(),
@@ -99,7 +99,7 @@ where
         &self,
         mut store: impl AsContextMut<Data = T>,
         params: Params,
-    ) -> Result<Results, Trap>
+    ) -> Result<Results>
     where
         T: Send,
     {
@@ -120,7 +120,7 @@ where
         store: &mut StoreContextMut<'_, T>,
         func: ptr::NonNull<VMCallerCheckedAnyfunc>,
         params: Params,
-    ) -> Result<Results, Trap> {
+    ) -> Result<Results> {
         // double-check that params/results match for this function's type in
         // debug mode.
         if cfg!(debug_assertions) {
@@ -150,9 +150,7 @@ where
             match params.into_abi(&mut store) {
                 Some(abi) => abi,
                 None => {
-                    return Err(Trap::new(
-                        "attempt to pass cross-`Store` value to Wasm as function argument",
-                    ))
+                    bail!("attempt to pass cross-`Store` value to Wasm as function argument")
                 }
             }
         };

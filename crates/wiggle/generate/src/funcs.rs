@@ -101,7 +101,7 @@ fn _define_func(
                     ctx: &mut (impl #(#bounds)+*),
                     memory: &dyn #rt::GuestMemory,
                     #(#abi_params),*
-                ) -> Result<#abi_ret, #rt::wasmtime_crate::Trap> {
+                ) -> #rt::anyhow::Result<#abi_ret> {
                     use std::convert::TryFrom as _;
                     #traced_body
                 }
@@ -127,7 +127,7 @@ fn _define_func(
                     ctx: &'a mut (impl #(#bounds)+*),
                     memory: &'a dyn #rt::GuestMemory,
                     #(#abi_params),*
-                ) -> impl std::future::Future<Output = Result<#abi_ret, #rt::wasmtime_crate::Trap>> + 'a {
+                ) -> impl std::future::Future<Output = #rt::anyhow::Result<#abi_ret>> + 'a {
                     use std::convert::TryFrom as _;
                     #traced_body
                 }

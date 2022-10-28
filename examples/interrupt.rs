@@ -26,7 +26,11 @@ fn main() -> Result<()> {
     });
 
     println!("Entering infinite loop ...");
-    let trap = run.call(&mut store, ()).unwrap_err();
+    let trap = run
+        .call(&mut store, ())
+        .unwrap_err()
+        .downcast::<Trap>()
+        .unwrap();
 
     println!("trap received...");
     assert!(trap.trap_code().unwrap() == TrapCode::Interrupt);

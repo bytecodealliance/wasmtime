@@ -733,16 +733,22 @@ fn bad_import_alignment() -> Result<()> {
         .instantiate(&mut store, &component)?
         .get_typed_func::<(), (), _>(&mut store, "unaligned-retptr")?
         .call(&mut store, ())
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    assert!(trap.to_string().contains("pointer not aligned"), "{}", trap);
+        .unwrap_err();
+    assert!(
+        format!("{:?}", trap).contains("pointer not aligned"),
+        "{}",
+        trap
+    );
     let trap = linker
         .instantiate(&mut store, &component)?
         .get_typed_func::<(), (), _>(&mut store, "unaligned-argptr")?
         .call(&mut store, ())
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    assert!(trap.to_string().contains("pointer not aligned"), "{}", trap);
+        .unwrap_err();
+    assert!(
+        format!("{:?}", trap).contains("pointer not aligned"),
+        "{}",
+        trap
+    );
 
     Ok(())
 }

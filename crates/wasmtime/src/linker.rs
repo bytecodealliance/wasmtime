@@ -149,7 +149,7 @@ macro_rules! generate_wrap_async_func {
                 let mut future = Pin::from(func(caller, $($args),*));
                 match unsafe { async_cx.block_on(future.as_mut()) } {
                     Ok(ret) => ret.into_fallible(),
-                    Err(e) => R::fallible_from_trap(e),
+                    Err(e) => R::fallible_from_error(e),
                 }
             })
         }
@@ -271,7 +271,7 @@ impl<T> Linker<T> {
                         import.name(),
                     );
                     self.func_new(import.module(), import.name(), func_ty, move |_, _, _| {
-                        Err(Trap::new(err_msg.clone()))
+                        bail!("{err_msg}")
                     })?;
                 }
             }
@@ -348,7 +348,7 @@ impl<T> Linker<T> {
         module: &str,
         name: &str,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap> + Send + Sync + 'static,
+        func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Result<&mut Self> {
         let func = HostFunc::new(&self.engine, ty, func);
         let key = self.import_key(module, Some(name));
@@ -366,7 +366,7 @@ impl<T> Linker<T> {
         module: &str,
         name: &str,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<(), Trap> + Send + Sync + 'static,
+        func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
     ) -> Result<&mut Self> {
         let func = HostFunc::new_unchecked(&self.engine, ty, func);
         let key = self.import_key(module, Some(name));
@@ -391,7 +391,7 @@ impl<T> Linker<T> {
                 Caller<'a, T>,
                 &'a [Val],
                 &'a mut [Val],
-            ) -> Box<dyn Future<Output = Result<(), Trap>> + Send + 'a>
+            ) -> Box<dyn Future<Output = Result<()>> + Send + 'a>
             + Send
             + Sync
             + 'static,

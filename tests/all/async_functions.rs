@@ -440,7 +440,7 @@ async fn resume_separate_thread() {
         let func = Func::wrap0_async(&mut store, |_| {
             Box::new(async {
                 tokio::task::yield_now().await;
-                Err::<(), _>(wasmtime::Trap::new("test"))
+                Err::<(), _>(wasmtime::Trap::new("test").into())
             })
         });
         let result = Instance::new_async(&mut store, &module, &[func.into()]).await;
@@ -536,7 +536,7 @@ async fn resume_separate_thread3() {
         // ... all in all this function will need access to the original TLS
         // information to raise the trap. This TLS information should be
         // restored even though the asynchronous execution is suspended.
-        Err::<(), _>(wasmtime::Trap::new(""))
+        Err::<(), _>(wasmtime::Trap::new("").into())
     });
     assert!(f.call(&mut store, &[], &mut []).is_err());
 }
@@ -561,7 +561,12 @@ async fn recursive_async() -> Result<()> {
 
             // ... but calls that actually stack overflow should indeed stack
             // overflow
-            let err = overflow.call_async(&mut caller, ()).await.unwrap_err();
+            let err = overflow
+                .call_async(&mut caller, ())
+                .await
+                .unwrap_err()
+                .downcast::<Trap>()
+                .unwrap();
             assert_eq!(err.trap_code(), Some(TrapCode::StackOverflow));
             Ok(())
         })

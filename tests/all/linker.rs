@@ -32,7 +32,7 @@ fn link_twice_bad() -> Result<()> {
     linker.func_wrap("f", "", || {})?;
     assert!(linker.func_wrap("f", "", || {}).is_err());
     assert!(linker
-        .func_wrap("f", "", || -> Result<(), Trap> { loop {} })
+        .func_wrap("f", "", || -> Result<()> { loop {} })
         .is_err());
 
     // globals

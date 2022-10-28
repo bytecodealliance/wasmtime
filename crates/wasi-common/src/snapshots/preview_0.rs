@@ -6,6 +6,7 @@ use crate::sched::{
 use crate::snapshots::preview_1::types as snapshot1_types;
 use crate::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1 as Snapshot1;
 use crate::{Error, ErrorExt, WasiCtx};
+use anyhow::Result;
 use cap_std::time::Duration;
 use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
@@ -28,10 +29,10 @@ impl wiggle::GuestErrorType for types::Errno {
 }
 
 impl types::UserErrorConversion for WasiCtx {
-    fn errno_from_error(&mut self, e: Error) -> Result<types::Errno, wasmtime::Trap> {
+    fn errno_from_error(&mut self, e: Error) -> Result<types::Errno> {
         debug!("Error: {:?}", e);
-        e.try_into()
-            .map_err(|e| wasmtime::Trap::new(format!("{:?}", e)))
+        let errno = e.try_into()?;
+        Ok(errno)
     }
 }
 
@@ -932,7 +933,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         Ok(num_results.try_into().expect("results fit into memory"))
     }
 
-    async fn proc_exit(&mut self, status: types::Exitcode) -> wasmtime::Trap {
+    async fn proc_exit(&mut self, status: types::Exitcode) -> anyhow::Error {
         Snapshot1::proc_exit(self, status).await
     }
 

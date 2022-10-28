@@ -498,9 +498,8 @@ fn test_invalid_string_encoding(
     let trap = test_raw_when_encoded(engine, src, dst, bytes, len)?.unwrap();
     let src = src.replace("latin1+", "");
     assert!(
-        trap.to_string()
-            .contains(&format!("invalid {src} encoding")),
-        "bad error: {}",
+        format!("{:?}", trap).contains(&format!("invalid {src} encoding")),
+        "bad error: {:?}",
         trap,
     );
     Ok(())
@@ -524,7 +523,7 @@ fn test_raw_when_encoded(
     dst: &str,
     bytes: &[u8],
     len: u32,
-) -> Result<Option<Trap>> {
+) -> Result<Option<anyhow::Error>> {
     let component = format!(
         r#"
 (component
@@ -574,6 +573,6 @@ fn test_raw_when_encoded(
     let func = instance.get_typed_func::<(&[u8], u32), (), _>(&mut store, "f")?;
     match func.call(&mut store, (bytes, len)) {
         Ok(_) => Ok(None),
-        Err(e) => Ok(Some(e.downcast()?)),
+        Err(e) => Ok(Some(e)),
     }
 }

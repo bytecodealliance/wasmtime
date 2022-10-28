@@ -21,7 +21,7 @@ unsafe extern "C" fn stub_fn<F>(
     values_vec: *mut ValRaw,
     values_vec_len: usize,
 ) where
-    F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<(), Trap> + 'static,
+    F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<()> + 'static,
 {
     // Here we are careful to use `catch_unwind` to ensure Rust panics don't
     // unwind past us. The primary reason for this is that Rust considers it UB
@@ -105,7 +105,7 @@ pub fn create_function<F>(
     engine: &Engine,
 ) -> Result<(Box<VMHostFuncContext>, VMSharedSignatureIndex, VMTrampoline)>
 where
-    F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<(), Trap> + Send + Sync + 'static,
+    F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
 {
     let mut obj = engine.compiler().object()?;
     let (t1, t2) = engine.compiler().emit_trampoline_obj(

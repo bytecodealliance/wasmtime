@@ -3,7 +3,7 @@ use crate::{
     AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, StoreContext,
     StoreContextMut, Trap, Val, ValRaw, ValType,
 };
-use anyhow::{bail, Context as _, Result};
+use anyhow::{bail, Context as _, Error, Result};
 use std::future::Future;
 use std::mem;
 use std::panic::{self, AssertUnwindSafe};
@@ -290,7 +290,7 @@ macro_rules! generate_wrap_async_func {
 
                 match unsafe { async_cx.block_on(future.as_mut()) } {
                     Ok(ret) => ret.into_fallible(),
-                    Err(e) => R::fallible_from_trap(e),
+                    Err(e) => R::fallible_from_error(e),
                 }
             })
         }
@@ -332,7 +332,7 @@ impl Func {
     pub fn new<T>(
         store: impl AsContextMut<Data = T>,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap> + Send + Sync + 'static,
+        func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Self {
         let ty_clone = ty.clone();
         unsafe {
@@ -365,7 +365,7 @@ impl Func {
     pub unsafe fn new_unchecked<T>(
         mut store: impl AsContextMut<Data = T>,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<(), Trap> + Send + Sync + 'static,
+        func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
     ) -> Self {
         let store = store.as_context_mut().0;
         let host = HostFunc::new_unchecked(store.engine(), ty, func);
@@ -443,7 +443,7 @@ impl Func {
                 Caller<'a, T>,
                 &'a [Val],
                 &'a mut [Val],
-            ) -> Box<dyn Future<Output = Result<(), Trap>> + Send + 'a>
+            ) -> Box<dyn Future<Output = Result<()>> + Send + 'a>
             + Send
             + Sync
             + 'static,
@@ -505,7 +505,7 @@ impl Func {
     /// | `T`               | `T`                     | a single return value |
     /// | `(T1, T2, ...)`   | `T1 T2 ...`             | multiple returns      |
     ///
-    /// Note that all return types can also be wrapped in `Result<_, Trap>` to
+    /// Note that all return types can also be wrapped in `Result<_>` to
     /// indicate that the host function can generate a trap as well as possibly
     /// returning a value.
     ///
@@ -581,7 +581,7 @@ impl Func {
     /// let add = Func::wrap(&mut store, |a: i32, b: i32| {
     ///     match a.checked_add(b) {
     ///         Some(i) => Ok(i),
-    ///         None => Err(Trap::new("overflow")),
+    ///         None => anyhow::bail!("overflow"),
     ///     }
     /// });
     /// let module = Module::new(
@@ -652,7 +652,7 @@ impl Func {
     /// let log_str = Func::wrap(&mut store, |mut caller: Caller<'_, ()>, ptr: i32, len: i32| {
     ///     let mem = match caller.get_export("memory") {
     ///         Some(Extern::Memory(mem)) => mem,
-    ///         _ => return Err(Trap::new("failed to find host memory")),
+    ///         _ => anyhow::bail!("failed to find host memory"),
     ///     };
     ///     let data = mem.data(&caller)
     ///         .get(ptr as u32 as usize..)
@@ -660,9 +660,9 @@ impl Func {
     ///     let string = match data {
     ///         Some(data) => match str::from_utf8(data) {
     ///             Ok(s) => s,
-    ///             Err(_) => return Err(Trap::new("invalid utf-8")),
+    ///             Err(_) => anyhow::bail!("invalid utf-8"),
     ///         },
-    ///         None => return Err(Trap::new("pointer/length out of bounds")),
+    ///         None => anyhow::bail!("pointer/length out of bounds"),
     ///     };
     ///     assert_eq!(string, "Hello, world!");
     ///     println!("{}", string);
@@ -808,7 +808,7 @@ impl Func {
         &self,
         mut store: impl AsContextMut,
         params_and_returns: *mut ValRaw,
-    ) -> Result<(), Trap> {
+    ) -> Result<()> {
         let mut store = store.as_context_mut();
         let data = &store.0.store_data()[self.0];
         let anyfunc = data.export().anyfunc;
@@ -821,7 +821,7 @@ impl Func {
         anyfunc: NonNull<VMCallerCheckedAnyfunc>,
         trampoline: VMTrampoline,
         params_and_returns: *mut ValRaw,
-    ) -> Result<(), Trap> {
+    ) -> Result<()> {
         invoke_wasm_and_catch_traps(store, |caller| {
             let trampoline = wasmtime_runtime::prepare_host_to_wasm_trampoline(caller, trampoline);
             trampoline(
@@ -1024,8 +1024,8 @@ impl Func {
         mut caller: Caller<'_, T>,
         ty: &FuncType,
         values_vec: &mut [ValRaw],
-        func: &dyn Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap>,
-    ) -> Result<(), Trap> {
+        func: &dyn Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()>,
+    ) -> Result<()> {
         // Translate the raw JIT arguments in `values_vec` into a `Val` which
         // we'll be passing as a slice. The storage for our slice-of-`Val` we'll
         // be taking from the `Store`. We preserve our slice back into the
@@ -1064,14 +1064,10 @@ impl Func {
         // values, and we need to catch that here.
         for (i, (ret, ty)) in results.iter().zip(ty.results()).enumerate() {
             if ret.ty() != ty {
-                return Err(Trap::new(
-                    "function attempted to return an incompatible value",
-                ));
+                bail!("function attempted to return an incompatible value");
             }
             if !ret.comes_from_same_store(caller.store.0) {
-                return Err(Trap::new(
-                    "cross-`Store` values are not currently supported",
-                ));
+                bail!("cross-`Store` values are not currently supported");
             }
             unsafe {
                 values_vec[i] = ret.to_raw(&mut caller.store);
@@ -1224,7 +1220,7 @@ impl Func {
 pub(crate) fn invoke_wasm_and_catch_traps<T>(
     store: &mut StoreContextMut<'_, T>,
     closure: impl FnMut(*mut VMContext),
-) -> Result<(), Trap> {
+) -> Result<()> {
     unsafe {
         let exit = enter_wasm(store);
 
@@ -1342,7 +1338,7 @@ pub unsafe trait WasmRet {
         self,
         store: &mut StoreOpaque,
         ptr: Self::Retptr,
-    ) -> Result<Self::Abi, Trap>;
+    ) -> Result<Self::Abi>;
 
     #[doc(hidden)]
     fn func_type(params: impl Iterator<Item = ValType>) -> FuncType;
@@ -1358,7 +1354,7 @@ pub unsafe trait WasmRet {
     #[doc(hidden)]
     fn into_fallible(self) -> Self::Fallible;
     #[doc(hidden)]
-    fn fallible_from_trap(trap: Trap) -> Self::Fallible;
+    fn fallible_from_error(error: Error) -> Self::Fallible;
 }
 
 unsafe impl<T> WasmRet for T
@@ -1367,17 +1363,13 @@ where
 {
     type Abi = <T as WasmTy>::Abi;
     type Retptr = ();
-    type Fallible = Result<T, Trap>;
+    type Fallible = Result<T>;
 
     fn compatible_with_store(&self, store: &StoreOpaque) -> bool {
         <Self as WasmTy>::compatible_with_store(self, store)
     }
 
-    unsafe fn into_abi_for_ret(
-        self,
-        store: &mut StoreOpaque,
-        _retptr: (),
-    ) -> Result<Self::Abi, Trap> {
+    unsafe fn into_abi_for_ret(self, store: &mut StoreOpaque, _retptr: ()) -> Result<Self::Abi> {
         Ok(<Self as WasmTy>::into_abi(self, store))
     }
 
@@ -1389,16 +1381,16 @@ where
         T::abi_into_raw(f(()), ptr);
     }
 
-    fn into_fallible(self) -> Result<T, Trap> {
+    fn into_fallible(self) -> Result<T> {
         Ok(self)
     }
 
-    fn fallible_from_trap(trap: Trap) -> Result<T, Trap> {
-        Err(trap)
+    fn fallible_from_error(error: Error) -> Result<T> {
+        Err(error)
     }
 }
 
-unsafe impl<T> WasmRet for Result<T, Trap>
+unsafe impl<T> WasmRet for Result<T>
 where
     T: WasmRet,
 {
@@ -1417,7 +1409,7 @@ where
         self,
         store: &mut StoreOpaque,
         retptr: Self::Retptr,
-    ) -> Result<Self::Abi, Trap> {
+    ) -> Result<Self::Abi> {
         self.and_then(|val| val.into_abi_for_ret(store, retptr))
     }
 
@@ -1429,12 +1421,12 @@ where
         T::wrap_trampoline(ptr, f)
     }
 
-    fn into_fallible(self) -> Result<T, Trap> {
+    fn into_fallible(self) -> Result<T> {
         self
     }
 
-    fn fallible_from_trap(trap: Trap) -> Result<T, Trap> {
-        Err(trap)
+    fn fallible_from_error(error: Error) -> Result<T> {
+        Err(error)
     }
 }
 
@@ -1448,7 +1440,7 @@ macro_rules! impl_wasm_host_results {
         {
             type Abi = <($($t::Abi,)*) as HostAbi>::Abi;
             type Retptr = <($($t::Abi,)*) as HostAbi>::Retptr;
-            type Fallible = Result<Self, Trap>;
+            type Fallible = Result<Self>;
 
             #[inline]
             fn compatible_with_store(&self, _store: &StoreOpaque) -> bool {
@@ -1457,7 +1449,7 @@ macro_rules! impl_wasm_host_results {
             }
 
             #[inline]
-            unsafe fn into_abi_for_ret(self, _store: &mut StoreOpaque, ptr: Self::Retptr) -> Result<Self::Abi, Trap> {
+            unsafe fn into_abi_for_ret(self, _store: &mut StoreOpaque, ptr: Self::Retptr) -> Result<Self::Abi> {
                 let ($($t,)*) = self;
                 let abi = ($($t.into_abi(_store),)*);
                 Ok(<($($t::Abi,)*) as HostAbi>::into_abi(abi, ptr))
@@ -1480,13 +1472,13 @@ macro_rules! impl_wasm_host_results {
             }
 
             #[inline]
-            fn into_fallible(self) -> Result<Self, Trap> {
+            fn into_fallible(self) -> Result<Self> {
                 Ok(self)
             }
 
             #[inline]
-            fn fallible_from_trap(trap: Trap) -> Result<Self, Trap> {
-                Err(trap)
+            fn fallible_from_error(error: Error) -> Result<Self> {
+                Err(error)
             }
         }
     )
@@ -1844,7 +1836,7 @@ macro_rules! impl_into_func {
                         let ret = {
                             panic::catch_unwind(AssertUnwindSafe(|| {
                                 if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
-                                    return R::fallible_from_trap(trap);
+                                    return R::fallible_from_error(trap);
                                 }
                                 $(let $args = $args::from_abi($args, caller.store.0);)*
                                 let r = func(
@@ -1852,7 +1844,7 @@ macro_rules! impl_into_func {
                                     $( $args, )*
                                 );
                                 if let Err(trap) = caller.store.0.call_hook(CallHook::ReturningFromHost) {
-                                    return R::fallible_from_trap(trap);
+                                    return R::fallible_from_error(trap);
                                 }
                                 r.into_fallible()
                             }))
@@ -1986,7 +1978,7 @@ impl HostFunc {
     pub fn new<T>(
         engine: &Engine,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap> + Send + Sync + 'static,
+        func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Self {
         let ty_clone = ty.clone();
         unsafe {
@@ -2001,7 +1993,7 @@ impl HostFunc {
     pub unsafe fn new_unchecked<T>(
         engine: &Engine,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<(), Trap> + Send + Sync + 'static,
+        func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
     ) -> Self {
         let func = move |caller_vmctx, values: &mut [ValRaw]| {
             Caller::<T>::with(caller_vmctx, |mut caller| {

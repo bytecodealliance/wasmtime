@@ -15,15 +15,17 @@ fn test_trap_return() -> Result<()> {
 
     let module = Module::new(store.engine(), wat)?;
     let hello_type = FuncType::new(None, None);
-    let hello_func = Func::new(&mut store, hello_type, |_, _, _| Err(Trap::new("test 123")));
+    let hello_func = Func::new(&mut store, hello_type, |_, _, _| {
+        Err(Trap::new("test 123").into())
+    });
 
     let instance = Instance::new(&mut store, &module, &[hello_func.into()])?;
     let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
 
     let e = run_func
         .call(&mut store, ())
-        .err()
-        .expect("error calling function");
+        .unwrap_err()
+        .downcast::<Trap>()?;
     assert!(e.to_string().contains("test 123"));
 
     Ok(())
@@ -45,8 +47,8 @@ fn test_trap_trace() -> Result<()> {
 
     let e = run_func
         .call(&mut store, ())
-        .err()
-        .expect("error calling function");
+        .unwrap_err()
+        .downcast::<Trap>()?;
 
     let trace = e.trace().expect("backtrace is available");
     assert_eq!(trace.len(), 2);
@@ -123,10 +125,8 @@ fn test_trap_through_host() -> Result<()> {
         &module,
         &[host_func_a.into(), host_func_b.into()],
     )?;
-    let a = instance
-        .get_typed_func::<(), (), _>(&mut store, "a")
-        .unwrap();
-    let err = a.call(&mut store, ()).unwrap_err();
+    let a = instance.get_typed_func::<(), (), _>(&mut store, "a")?;
+    let err = a.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
     let trace = err.trace().expect("backtrace is available");
     assert_eq!(trace.len(), 3);
     assert_eq!(trace[0].func_name(), Some("c"));
@@ -155,8 +155,8 @@ fn test_trap_backtrace_disabled() -> Result<()> {
 
     let e = run_func
         .call(&mut store, ())
-        .err()
-        .expect("error calling function");
+        .unwrap_err()
+        .downcast::<Trap>()?;
 
     assert!(e.trace().is_none(), "backtraces should be disabled");
     Ok(())
@@ -174,7 +174,9 @@ fn test_trap_trace_cb() -> Result<()> {
     "#;
 
     let fn_type = FuncType::new(None, None);
-    let fn_func = Func::new(&mut store, fn_type, |_, _, _| Err(Trap::new("cb throw")));
+    let fn_func = Func::new(&mut store, fn_type, |_, _, _| {
+        Err(Trap::new("cb throw").into())
+    });
 
     let module = Module::new(store.engine(), wat)?;
     let instance = Instance::new(&mut store, &module, &[fn_func.into()])?;
@@ -182,8 +184,8 @@ fn test_trap_trace_cb() -> Result<()> {
 
     let e = run_func
         .call(&mut store, ())
-        .err()
-        .expect("error calling function");
+        .unwrap_err()
+        .downcast::<Trap>()?;
 
     let trace = e.trace().expect("backtrace is available");
     assert_eq!(trace.len(), 2);
@@ -211,8 +213,8 @@ fn test_trap_stack_overflow() -> Result<()> {
 
     let e = run_func
         .call(&mut store, ())
-        .err()
-        .expect("error calling function");
+        .unwrap_err()
+        .downcast::<Trap>()?;
 
     let trace = e.trace().expect("backtrace is available");
     assert!(trace.len() >= 32);
@@ -244,8 +246,8 @@ fn trap_display_pretty() -> Result<()> {
 
     let e = run_func
         .call(&mut store, ())
-        .err()
-        .expect("error calling function");
+        .unwrap_err()
+        .downcast::<Trap>()?;
     assert_eq!(
         e.to_string(),
         "\
@@ -321,7 +323,11 @@ fn trap_start_function_import() -> Result<()> {
 
     let module = Module::new(store.engine(), &binary)?;
     let sig = FuncType::new(None, None);
-    let func = Func::new(&mut store, sig, |_, _, _| Err(Trap::new("user trap")));
+    let func = Func::new(
+        &mut store,
+        sig,
+        |_, _, _| Err(Trap::new("user trap").into()),
+    );
     let err = Instance::new(&mut store, &module, &[func.into()])
         .err()
         .unwrap();
@@ -416,7 +422,7 @@ fn rust_catch_panic_import() -> Result<()> {
 
     let instance = Instance::new(&mut store, &module, &[panic.into(), catch_panic.into()])?;
     let run = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
-    let trap = run.call(&mut store, ()).unwrap_err();
+    let trap = run.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
     let trace = trap.trace().unwrap();
     assert_eq!(trace.len(), 1);
     assert_eq!(trace[0].func_index(), 3);
@@ -561,11 +567,11 @@ fn present_after_module_drop() -> Result<()> {
     let func = instance.get_typed_func::<(), (), _>(&mut store, "foo")?;
 
     println!("asserting before we drop modules");
-    assert_trap(func.call(&mut store, ()).unwrap_err());
+    assert_trap(func.call(&mut store, ()).unwrap_err().downcast()?);
     drop((instance, module));
 
     println!("asserting after drop");
-    assert_trap(func.call(&mut store, ()).unwrap_err());
+    assert_trap(func.call(&mut store, ()).unwrap_err().downcast()?);
     return Ok(());
 
     fn assert_trap(t: Trap) {
@@ -796,8 +802,8 @@ fn traps_without_address_map() -> Result<()> {
 
     let e = run_func
         .call(&mut store, ())
-        .err()
-        .expect("error calling function");
+        .unwrap_err()
+        .downcast::<Trap>()?;
 
     let trace = e.trace().expect("backtrace is available");
     assert_eq!(trace.len(), 2);
@@ -848,8 +854,8 @@ fn catch_trap_calling_across_stores() -> Result<()> {
 
             let trap = func
                 .call(&mut data.child_store, ())
-                .err()
-                .expect("should trap");
+                .unwrap_err()
+                .downcast::<Trap>()?;
             assert!(
                 trap.to_string().contains("unreachable"),
                 "trap should contain 'unreachable', got: {trap}"
@@ -963,7 +969,11 @@ async fn async_then_sync_trap() -> Result<()> {
     let a = async_instance
         .get_typed_func::<(), (), _>(&mut async_store, "a")
         .unwrap();
-    let trap = a.call_async(&mut async_store, ()).await.unwrap_err();
+    let trap = a
+        .call_async(&mut async_store, ())
+        .await
+        .unwrap_err()
+        .downcast::<Trap>()?;
 
     let trace = trap.trace().unwrap();
     // We don't support cross-store or cross-engine symbolication currently, so
@@ -1022,25 +1032,21 @@ async fn sync_then_async_trap() -> Result<()> {
     let sync_module = Module::new(sync_store.engine(), wat)?;
 
     let mut sync_linker = Linker::new(sync_store.engine());
-    sync_linker.func_wrap(
-        "",
-        "b",
-        move |mut caller: Caller<SyncCtx>| -> Result<(), Trap> {
-            log::info!("Called `b`...");
-            let async_instance = caller.data().async_instance;
-            let async_store = &mut caller.data_mut().async_store;
+    sync_linker.func_wrap("", "b", move |mut caller: Caller<SyncCtx>| -> Result<()> {
+        log::info!("Called `b`...");
+        let async_instance = caller.data().async_instance;
+        let async_store = &mut caller.data_mut().async_store;
 
-            log::info!("Calling `c`...");
-            let c = async_instance
-                .get_typed_func::<(), (), _>(&mut *async_store, "c")
-                .unwrap();
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current()
-                    .block_on(async move { c.call_async(async_store, ()).await })
-            })?;
-            Ok(())
-        },
-    )?;
+        log::info!("Calling `c`...");
+        let c = async_instance
+            .get_typed_func::<(), (), _>(&mut *async_store, "c")
+            .unwrap();
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current()
+                .block_on(async move { c.call_async(async_store, ()).await })
+        })?;
+        Ok(())
+    })?;
 
     let sync_instance = sync_linker.instantiate(&mut sync_store, &sync_module)?;
 
@@ -1048,7 +1054,10 @@ async fn sync_then_async_trap() -> Result<()> {
     let a = sync_instance
         .get_typed_func::<(), (), _>(&mut sync_store, "a")
         .unwrap();
-    let trap = a.call(&mut sync_store, ()).unwrap_err();
+    let trap = a
+        .call(&mut sync_store, ())
+        .unwrap_err()
+        .downcast::<Trap>()?;
 
     let trace = trap.trace().unwrap();
     // We don't support cross-store or cross-engine symbolication currently, so
