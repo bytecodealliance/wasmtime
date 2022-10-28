@@ -8,8 +8,8 @@ use clap::Parser;
 use std::{fs, path::PathBuf, str::FromStr};
 use target_lexicon::Triple;
 use wasmtime_environ::{
-    wasmparser::{FuncType, Parser as WasmParser, ValType, Validator},
-    DefinedFuncIndex, FunctionBodyData, Module, ModuleEnvironment, ModuleTypes, Tunables,
+    wasmparser::{types::Types, Parser as WasmParser, Validator},
+    DefinedFuncIndex, FunctionBodyData, Module, ModuleEnvironment, Tunables,
 };
 use winch_codegen::isa::{self, TargetIsa};
 
@@ -34,17 +34,18 @@ fn main() -> Result<()> {
     let parser = WasmParser::new(0);
     let mut types = Default::default();
     let tunables = Tunables::default();
-    let translation = ModuleEnvironment::new(&tunables, &mut validator, &mut types)
+    let mut translation = ModuleEnvironment::new(&tunables, &mut validator, &mut types)
         .translate(parser, &bytes)
         .context("Failed to translate WebAssembly module")?;
-    let types = types.finish();
+    let _ = types.finish();
 
-    let module = translation.module;
+    let body_inputs = std::mem::take(&mut translation.function_body_inputs);
+    let module = &translation.module;
+    let types = translation.get_types();
 
-    translation
-        .function_body_inputs
+    body_inputs
         .into_iter()
-        .try_for_each(|func| compile(&*isa, &module, &types, func))?;
+        .try_for_each(|func| compile(&*isa, module, types, func))?;
 
     Ok(())
 }
@@ -52,32 +53,13 @@ fn main() -> Result<()> {
 fn compile(
     isa: &dyn TargetIsa,
     module: &Module,
-    types: &ModuleTypes,
+    types: &Types,
     f: (DefinedFuncIndex, FunctionBodyData<'_>),
 ) -> Result<()> {
     let index = module.func_index(f.0);
-    let func = &module.functions[index];
-    let sig = &types[func.signature];
-    // The following construction of a wasmparser::FuncType
-    // is temporary. This should be replaced by a query to
-    // `wasmparser::types::Types::function_at` which will give us
-    // an equivalent functionality.
-    // There's a change that is needed in wasmparser and wasmtime_environ to
-    // enable this. Once this change lands, this piece of code will be updated.
-    let params: Vec<ValType> = sig
-        .params()
-        .iter()
-        .copied()
-        .map(wasmparser::ValType::from)
-        .collect();
-    let returns: Vec<ValType> = sig
-        .returns()
-        .iter()
-        .copied()
-        .map(wasmparser::ValType::from)
-        .collect();
-    let sig = FuncType::new(params, returns);
-    let sig = sig.clone();
+    let sig = types
+        .func_type_at(index.as_u32())
+        .expect(&format!("function type at index {:?}", index.as_u32()));
     let FunctionBodyData { body, validator } = f.1;
     let validator = validator.into_validator(Default::default());
     let buffer = isa
