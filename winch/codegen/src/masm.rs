@@ -113,6 +113,8 @@ pub(crate) trait MacroAssembler {
             let start = align_to(mem.start, word_size);
             let addr = self.local_address(&LocalSlot::i32(start));
             self.store(RegImm::imm(0), addr, OperandSize::S32);
+            // Ensure that the new start of the range, is word-size aligned.
+            assert!(start % word_size == 0);
             start
         };
 
