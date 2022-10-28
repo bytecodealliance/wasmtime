@@ -41,6 +41,9 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     // wiggle
     "wiggle-generate",
     "wiggle-macro",
+    // winch
+    "winch-codegen",
+    "winch",
     // wasmtime
     "wasmtime-asm-macros",
     "wasmtime-component-util",
@@ -52,6 +55,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-cranelift",
     "wasmtime-jit",
     "wasmtime-cache",
+    "wasmtime-winch",
     "wasmtime",
     // wasi-common/wiggle
     "wiggle",
@@ -127,6 +131,7 @@ fn main() {
     crates.push(root);
     find_crates("crates".as_ref(), &ws, &mut crates);
     find_crates("cranelift".as_ref(), &ws, &mut crates);
+    find_crates("winch".as_ref(), &ws, &mut crates);
 
     let pos = CRATES_TO_PUBLISH
         .iter()

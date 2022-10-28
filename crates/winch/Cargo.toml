@@ -1,0 +1,19 @@
+[package]
+name = "wasmtime-winch"
+description = "Integration between Wasmtime and Winch"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+
+[dependencies]
+winch-codegen = { workspace = true }
+target-lexicon = { workspace = true }
+wasmtime-environ = { workspace = true }
+anyhow = { workspace = true }
+
+[features]
+default = ["all-arch", "component-model"]
+component-model = ["wasmtime-environ/component-model"]
+all-arch = ["winch-codegen/all-arch"]

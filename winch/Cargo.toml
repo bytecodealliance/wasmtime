@@ -1,0 +1,26 @@
+[package]
+name = "winch-tools"
+version = "0.1.0"
+description = "Binaries for testing Winch"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+publish = false
+edition.workspace = true
+
+[[bin]]
+name = "winch-tools"
+path = "src/main.rs"
+
+
+[dependencies]
+winch-codegen = { workspace = true }
+wasmtime-environ = { workspace = true }
+target-lexicon = { workspace = true }    
+anyhow = { workspace = true }
+wasmparser = { workspace = true }
+clap = { workspace = true }
+wat = { workspace = true }
+
+[features]
+default = ["all-arch"]
+all-arch = ["winch-codegen/all-arch"]
