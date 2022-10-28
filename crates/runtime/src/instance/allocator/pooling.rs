@@ -1129,7 +1129,7 @@ mod test {
     use super::*;
     use crate::{CompiledModuleId, Imports, MemoryImage, StorePtr, VMSharedSignatureIndex};
     use std::sync::Arc;
-    use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex, FunctionInfo, SignatureIndex};
+    use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex, FunctionLoc, SignatureIndex};
 
     pub(crate) fn empty_runtime_info(
         module: Arc<wasmtime_environ::Module>,
@@ -1143,7 +1143,7 @@ mod test {
             fn image_base(&self) -> usize {
                 0
             }
-            fn function_info(&self, _: DefinedFuncIndex) -> &FunctionInfo {
+            fn function_loc(&self, _: DefinedFuncIndex) -> &FunctionLoc {
                 unimplemented!()
             }
             fn signature(&self, _: SignatureIndex) -> VMSharedSignatureIndex {

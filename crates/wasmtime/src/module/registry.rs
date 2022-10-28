@@ -1,9 +1,11 @@
 //! Implements a registry of modules for a store.
 
+use crate::code::CodeObject;
 #[cfg(feature = "component-model")]
 use crate::component::Component;
 use crate::{FrameInfo, Module};
 use once_cell::sync::Lazy;
+use std::collections::btree_map::Entry;
 use std::{
     collections::BTreeMap,
     sync::{Arc, RwLock},
@@ -22,25 +24,24 @@ use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
 /// currently small enough to not worry much about.
 #[derive(Default)]
 pub struct ModuleRegistry {
-    // Keyed by the end address of the module's code in memory.
+    // Keyed by the end address of a `CodeObject`.
     //
-    // The value here is the start address and the module/component it
-    // corresponds to.
-    modules_with_code: BTreeMap<usize, (usize, ModuleOrComponent)>,
+    // The value here is the start address and the information about what's
+    // loaded at that address.
+    loaded_code: BTreeMap<usize, (usize, LoadedCode)>,
 
     // Preserved for keeping data segments alive or similar
     modules_without_code: Vec<Module>,
 }
 
-enum ModuleOrComponent {
-    Module(Module),
-    #[cfg(feature = "component-model")]
-    Component(Component),
-}
+struct LoadedCode {
+    /// Representation of loaded code which could be either a component or a
+    /// module.
+    code: Arc<CodeObject>,
 
-fn start(module: &Module) -> usize {
-    assert!(!module.compiled_module().text().is_empty());
-    module.compiled_module().text().as_ptr() as usize
+    /// Modules found within `self.code`, keyed by start address here of the
+    /// address of the first function in the module.
+    modules: BTreeMap<usize, Module>,
 }
 
 impl ModuleRegistry {
@@ -49,25 +50,32 @@ impl ModuleRegistry {
         self.module(pc).map(|(m, _)| m.module_info())
     }
 
-    fn module(&self, pc: usize) -> Option<(&Module, usize)> {
-        match self.module_or_component(pc)? {
-            (ModuleOrComponent::Module(m), offset) => Some((m, offset)),
-            #[cfg(feature = "component-model")]
-            (ModuleOrComponent::Component(_), _) => None,
-        }
-    }
-
-    fn module_or_component(&self, pc: usize) -> Option<(&ModuleOrComponent, usize)> {
-        let (end, (start, module)) = self.modules_with_code.range(pc..).next()?;
+    fn code(&self, pc: usize) -> Option<(&LoadedCode, usize)> {
+        let (end, (start, code)) = self.loaded_code.range(pc..).next()?;
         if pc < *start || *end < pc {
             return None;
         }
-        Some((module, pc - *start))
+        Some((code, pc - *start))
+    }
+
+    fn module(&self, pc: usize) -> Option<(&Module, usize)> {
+        let (code, offset) = self.code(pc)?;
+        Some((code.module(pc)?, offset))
     }
 
     /// Registers a new module with the registry.
     pub fn register_module(&mut self, module: &Module) {
-        let compiled_module = module.compiled_module();
+        self.register(module.code_object(), Some(module))
+    }
+
+    #[cfg(feature = "component-model")]
+    pub fn register_component(&mut self, component: &Component) {
+        self.register(component.code_object(), None)
+    }
+
+    /// Registers a new module with the registry.
+    fn register(&mut self, code: &Arc<CodeObject>, module: Option<&Module>) {
+        let text = code.code_memory().text();
 
         // If there's not actually any functions in this module then we may
         // still need to preserve it for its data segments. Instances of this
@@ -75,88 +83,58 @@ impl ModuleRegistry {
         // and for schemes that perform lazy initialization which could use the
         // module in the future. For that reason we continue to register empty
         // modules and retain them.
-        if compiled_module.finished_functions().len() == 0 {
-            self.modules_without_code.push(module.clone());
-        } else {
-            // The module code range is exclusive for end, so make it inclusive as it
-            // may be a valid PC value
-            let start_addr = start(module);
-            let end_addr = start_addr + compiled_module.text().len() - 1;
-            self.register(
-                start_addr,
-                end_addr,
-                ModuleOrComponent::Module(module.clone()),
-            );
-        }
-    }
-
-    #[cfg(feature = "component-model")]
-    pub fn register_component(&mut self, component: &Component) {
-        // If there's no text section associated with this component (e.g. no
-        // lowered functions) then there's nothing to register, otherwise it's
-        // registered along the same lines as modules above.
-        //
-        // Note that empty components don't need retaining here since it doesn't
-        // have data segments like empty modules.
-        let text = component.text();
         if text.is_empty() {
+            self.modules_without_code.extend(module.cloned());
             return;
         }
-        let start = text.as_ptr() as usize;
-        self.register(
-            start,
-            start + text.len() - 1,
-            ModuleOrComponent::Component(component.clone()),
-        );
-    }
 
-    /// Registers a new module with the registry.
-    fn register(&mut self, start_addr: usize, end_addr: usize, item: ModuleOrComponent) {
-        // Ensure the module isn't already present in the registry
-        // This is expected when a module is instantiated multiple times in the
-        // same store
-        if let Some((other_start, _)) = self.modules_with_code.get(&end_addr) {
+        // The module code range is exclusive for end, so make it inclusive as
+        // it may be a valid PC value
+        let start_addr = text.as_ptr() as usize;
+        let end_addr = start_addr + text.len() - 1;
+
+        // If this module is already present in the registry then that means
+        // it's either an overlapping image, for example for two modules
+        // found within a component, or it's a second instantiation of the same
+        // module. Delegate to `push_module` to find out.
+        if let Some((other_start, prev)) = self.loaded_code.get_mut(&end_addr) {
             assert_eq!(*other_start, start_addr);
+            if let Some(module) = module {
+                prev.push_module(module);
+            }
             return;
         }
 
         // Assert that this module's code doesn't collide with any other
         // registered modules
-        if let Some((_, (prev_start, _))) = self.modules_with_code.range(start_addr..).next() {
+        if let Some((_, (prev_start, _))) = self.loaded_code.range(start_addr..).next() {
             assert!(*prev_start > end_addr);
         }
-        if let Some((prev_end, _)) = self.modules_with_code.range(..=start_addr).next_back() {
+        if let Some((prev_end, _)) = self.loaded_code.range(..=start_addr).next_back() {
             assert!(*prev_end < start_addr);
         }
 
-        let prev = self.modules_with_code.insert(end_addr, (start_addr, item));
+        let mut item = LoadedCode {
+            code: code.clone(),
+            modules: Default::default(),
+        };
+        if let Some(module) = module {
+            item.push_module(module);
+        }
+        let prev = self.loaded_code.insert(end_addr, (start_addr, item));
         assert!(prev.is_none());
     }
 
     /// Looks up a trampoline from an anyfunc.
     pub fn lookup_trampoline(&self, anyfunc: &VMCallerCheckedAnyfunc) -> Option<VMTrampoline> {
-        let signatures = match self
-            .module_or_component(anyfunc.func_ptr.as_ptr() as usize)?
-            .0
-        {
-            ModuleOrComponent::Module(m) => m.signatures(),
-            #[cfg(feature = "component-model")]
-            ModuleOrComponent::Component(c) => c.signatures(),
-        };
-        signatures.trampoline(anyfunc.type_index)
+        let (code, _offset) = self.code(anyfunc.func_ptr.as_ptr() as usize)?;
+        code.code.signatures().trampoline(anyfunc.type_index)
     }
 
     /// Fetches trap information about a program counter in a backtrace.
     pub fn lookup_trap_code(&self, pc: usize) -> Option<TrapCode> {
-        let (code, offset) = match self.module_or_component(pc)? {
-            (ModuleOrComponent::Module(module), offset) => {
-                (module.compiled_module().code_memory(), offset)
-            }
-            #[cfg(feature = "component-model")]
-            (ModuleOrComponent::Component(component), offset) => (component.code_memory(), offset),
-        };
-
-        wasmtime_environ::lookup_trap_code(code.trap_data(), offset)
+        let (code, offset) = self.code(pc)?;
+        wasmtime_environ::lookup_trap_code(code.code.code_memory().trap_data(), offset)
     }
 
     /// Fetches frame information about a program counter in a backtrace.
@@ -168,21 +146,44 @@ impl ModuleRegistry {
     /// boolean indicates whether the engine used to compile this module is
     /// using environment variables to control debuginfo parsing.
     pub(crate) fn lookup_frame_info(&self, pc: usize) -> Option<(FrameInfo, &Module)> {
-        match self.module_or_component(pc)? {
-            (ModuleOrComponent::Module(module), offset) => {
-                let info = FrameInfo::new(module, offset)?;
-                Some((info, module))
+        let (module, offset) = self.module(pc)?;
+        let info = FrameInfo::new(module, offset)?;
+        Some((info, module))
+    }
+}
+
+impl LoadedCode {
+    fn push_module(&mut self, module: &Module) {
+        let func = match module.compiled_module().finished_functions().next() {
+            Some((_, func)) => func,
+            // There are no compiled functions in this module so there's no
+            // need to push onto `self.modules` which is only used for frame
+            // information lookup for a trap which only symbolicates defined
+            // functions.
+            None => return,
+        };
+        let start = unsafe { (*func).as_ptr() as usize };
+
+        match self.modules.entry(start) {
+            // This module is already present, and it should be the same as
+            // `module`.
+            Entry::Occupied(m) => {
+                debug_assert!(Arc::ptr_eq(&module.inner, &m.get().inner));
             }
-            #[cfg(feature = "component-model")]
-            (ModuleOrComponent::Component(_), _) => {
-                // FIXME: should investigate whether it's worth preserving
-                // frame information on a `Component` to resolve a frame here.
-                // Note that this can be traced back to either a lowered
-                // function via a trampoline or an "always trap" function at
-                // this time which may be useful debugging information to have.
-                None
+            // This module was not already present, so now it's time to insert.
+            Entry::Vacant(v) => {
+                v.insert(module.clone());
             }
         }
+    }
+
+    fn module(&self, pc: usize) -> Option<&Module> {
+        // The `modules` map is keyed on the start address of the first
+        // function in the module, so find the first module whose start address
+        // is less than the `pc`. That may be the wrong module but lookup
+        // within the module should fail in that case.
+        let (_start, module) = self.modules.range(..=pc).next_back()?;
+        Some(module)
     }
 }
 

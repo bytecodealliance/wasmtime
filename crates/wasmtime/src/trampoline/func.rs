@@ -120,7 +120,7 @@ where
     )?;
     engine.append_compiler_info(&mut obj);
     engine.append_bti(&mut obj);
-    let obj = wasmtime_jit::mmap_vec_from_obj(obj)?;
+    let obj = wasmtime_jit::ObjectBuilder::new(obj, &engine.config().tunables).finish()?;
 
     // Copy the results of JIT compilation into executable memory, and this will
     // also take care of unwind table registration.

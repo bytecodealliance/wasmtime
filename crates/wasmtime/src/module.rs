@@ -1,3 +1,4 @@
+use crate::code::CodeObject;
 use crate::{
     signatures::SignatureCollection,
     types::{ExportType, ExternType, ImportType},
@@ -5,20 +6,19 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use once_cell::sync::OnceCell;
+use std::any::Any;
 use std::fs;
 use std::mem;
 use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
-#[cfg(feature = "component-model")]
-use wasmtime_environ::component::ComponentTypes;
 use wasmtime_environ::obj;
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, FunctionLoc, ModuleEnvironment, ModuleTranslation,
-    ModuleTypes, PrimaryMap, SignatureIndex,
+    ModuleTypes, PrimaryMap, SignatureIndex, WasmFunctionInfo,
 };
-use wasmtime_jit::{CompiledModule, CompiledModuleInfo};
+use wasmtime_jit::{CodeMemory, CompiledModule, CompiledModuleInfo};
 use wasmtime_runtime::{
     CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMSharedSignatureIndex,
 };
@@ -106,10 +106,14 @@ struct ModuleInner {
     /// The compiled artifacts for this module that will be instantiated and
     /// executed.
     module: CompiledModule,
-    /// Type information of this module.
-    types: Types,
-    /// Registered shared signature for the module.
-    signatures: SignatureCollection,
+
+    /// Runtime information such as the underlying mmap, type information, etc.
+    ///
+    /// Note that this `Arc` is used to share information between compiled
+    /// modules within a component. For bare core wasm modules created with
+    /// `Module::new`, for example, this is a uniquely owned `Arc`.
+    code: Arc<CodeObject>,
+
     /// A set of initialization images for memories, if any.
     ///
     /// Note that this is behind a `OnceCell` to lazily create this image. On
@@ -286,7 +290,7 @@ impl Module {
         cfg_if::cfg_if! {
             if #[cfg(feature = "cache")] {
                 let state = (HashedEngineCompileEnv(engine), binary);
-                let (mmap, info_and_types) = wasmtime_cache::ModuleCacheEntry::new(
+                let (code, info_and_types) = wasmtime_cache::ModuleCacheEntry::new(
                     "wasmtime",
                     engine.cache_config(),
                 )
@@ -294,48 +298,58 @@ impl Module {
                     &state,
 
                     // Cache miss, compute the actual artifacts
-                    |(engine, wasm)| Module::build_artifacts(engine.0, wasm),
+                    |(engine, wasm)| -> Result<_> {
+                        let (mmap, info) = Module::build_artifacts(engine.0, wasm)?;
+                        let code = publish_mmap(mmap)?;
+                        Ok((code, info))
+                    },
 
                     // Implementation of how to serialize artifacts
-                    |(_engine, _wasm), (mmap, _info_and_types)| {
-                        Some(mmap.to_vec())
+                    |(_engine, _wasm), (code, _info_and_types)| {
+                        Some(code.mmap().to_vec())
                     },
 
                     // Cache hit, deserialize the provided artifacts
                     |(engine, _wasm), serialized_bytes| {
-                        let mmap = engine.0.load_mmap_bytes(&serialized_bytes).ok()?;
-                        Some((mmap, None))
+                        let code = engine.0.load_code_bytes(&serialized_bytes).ok()?;
+                        Some((code, None))
                     },
                 )?;
             } else {
                 let (mmap, info_and_types) = Module::build_artifacts(engine, binary)?;
+                let code = publish_mmap(mmap)?;
             }
         };
 
         let info_and_types = info_and_types.map(|(info, types)| (info, types.into()));
-        Self::from_parts(engine, mmap, info_and_types)
+        return Self::from_parts(engine, code, info_and_types);
+
+        fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
+            let mut code = CodeMemory::new(mmap)?;
+            code.publish()?;
+            Ok(Arc::new(code))
+        }
     }
 
-    /// Converts an input binary-encoded WebAssembly module to compilation
-    /// artifacts and type information.
+    /// Compiles a binary-encoded WebAssembly module to an artifact usable by
+    /// Wasmtime.
     ///
     /// This is where compilation actually happens of WebAssembly modules and
-    /// translation/parsing/validation of the binary input occurs. The actual
-    /// result here is a combination of:
+    /// translation/parsing/validation of the binary input occurs. The binary
+    /// artifact represented in the `MmapVec` returned here is an in-memory ELF
+    /// file in an owned area of virtual linear memory where permissions (such
+    /// as the executable bit) can be applied.
     ///
-    /// * The compilation artifacts for the module found within `wasm`, as
-    ///   returned by `wasmtime_jit::finish_compile`.
-    /// * Type information about the module returned. All returned modules have
-    ///   local type information with indices that refer to these returned
-    ///   tables.
-    /// * A boolean value indicating whether forward-edge CFI has been applied
-    ///   to the compiled module.
+    /// Additionally compilation returns an `Option` here which is always
+    /// `Some`, notably compiled metadata about the module in addition to the
+    /// type information found within.
     #[cfg(compiler)]
     pub(crate) fn build_artifacts(
         engine: &Engine,
         wasm: &[u8],
     ) -> Result<(MmapVec, Option<(CompiledModuleInfo, ModuleTypes)>)> {
         let tunables = &engine.config().tunables;
+        let compiler = engine.compiler();
 
         // First a `ModuleEnvironment` is created which records type information
         // about the wasm module. This is where the WebAssembly is parsed and
@@ -345,52 +359,25 @@ impl Module {
             wasmparser::Validator::new_with_features(engine.config().features.clone());
         let parser = wasmparser::Parser::new(0);
         let mut types = Default::default();
-        let translation = ModuleEnvironment::new(tunables, &mut validator, &mut types)
+        let mut translation = ModuleEnvironment::new(tunables, &mut validator, &mut types)
             .translate(parser, wasm)
             .context("failed to parse WebAssembly module")?;
         let types = types.finish();
-        let (mmap, info) = Module::compile_functions(engine, translation, &types)?;
-        Ok((mmap, Some((info, types))))
-    }
 
-    #[cfg(compiler)]
-    pub(crate) fn compile_functions(
-        engine: &Engine,
-        mut translation: ModuleTranslation<'_>,
-        types: &ModuleTypes,
-    ) -> Result<(MmapVec, CompiledModuleInfo)> {
-        let tunables = &engine.config().tunables;
-        let functions = mem::take(&mut translation.function_body_inputs);
-        let functions = functions.into_iter().collect::<Vec<_>>();
-        let compiler = engine.compiler();
+        // Afterwards compile all functions and trampolines required by the
+        // module.
+        let signatures = translation.exported_signatures.clone();
         let (funcs, trampolines) = engine.join_maybe_parallel(
             // In one (possibly) parallel task all wasm functions are compiled
             // in parallel. Note that this is also where the actual validation
             // of all function bodies happens as well.
-            || -> Result<_> {
-                engine.run_maybe_parallel(functions, |(index, func)| {
-                    let offset = func.body.range().start;
-                    let result =
-                        compiler.compile_function(&translation, index, func, tunables, types);
-                    result.with_context(|| {
-                        let index = translation.module.func_index(index);
-                        let name = match translation.debuginfo.name_section.func_names.get(&index) {
-                            Some(name) => format!(" (`{}`)", name),
-                            None => String::new(),
-                        };
-                        let index = index.as_u32();
-                        format!(
-                            "failed to compile wasm function {index}{name} at offset {offset:#x}"
-                        )
-                    })
-                })
-            },
+            || Self::compile_functions(engine, &mut translation, &types),
             // In another (possibly) parallel task all trampolines necessary
             // for untyped host-to-wasm entry are compiled. Note that this
             // isn't really expected to take all that long, it's moreso "well
             // if we're using rayon why not use it here too".
             || -> Result<_> {
-                engine.run_maybe_parallel(translation.exported_signatures.clone(), |sig| {
+                engine.run_maybe_parallel(signatures, |sig| {
                     let ty = &types[sig];
                     Ok(compiler.compile_host_to_wasm_trampoline(ty)?)
                 })
@@ -416,14 +403,11 @@ impl Module {
         // Emplace all compiled functions into the object file with any other
         // sections associated with code as well.
         let mut obj = engine.compiler().object()?;
-        let locs =
-            engine
-                .compiler()
-                .append_code(&mut obj, &compiled_funcs, tunables, &|i, idx| {
-                    assert!(i < func_infos.len());
-                    let defined = translation.module.defined_func_index(idx).unwrap();
-                    defined.as_u32() as usize
-                })?;
+        let locs = compiler.append_code(&mut obj, &compiled_funcs, tunables, &|i, idx| {
+            assert!(i < func_infos.len());
+            let defined = translation.module.defined_func_index(idx).unwrap();
+            defined.as_u32() as usize
+        })?;
 
         // If requested, generate and add dwarf information.
         if tunables.generate_native_debuginfo && !func_infos.is_empty() {
@@ -432,25 +416,8 @@ impl Module {
             let funcs = (0..func_infos.len())
                 .map(|_| (locs.next().unwrap().0, &*funcs.next().unwrap().1))
                 .collect();
-            engine
-                .compiler()
-                .append_dwarf(&mut obj, &translation, &funcs)?;
+            compiler.append_dwarf(&mut obj, &translation, &funcs)?;
         }
-
-        // If configured attempt to use static memory initialization which
-        // can either at runtime be implemented as a single memcpy to
-        // initialize memory or otherwise enabling virtual-memory-tricks
-        // such as mmap'ing from a file to get copy-on-write.
-        if engine.config().memory_init_cow {
-            let align = engine.compiler().page_size_align();
-            let max_always_allowed = engine.config().memory_guaranteed_dense_image_size;
-            translation.try_static_init(align, max_always_allowed);
-        }
-
-        // Attempt to convert table initializer segments to
-        // FuncTable representation where possible, to enable
-        // table lazy init.
-        translation.try_func_table_init();
 
         // Process all the results of compilation into a final state for our
         // internal representation.
@@ -478,12 +445,56 @@ impl Module {
         // it's left as an exercise for later.
         engine.append_compiler_info(&mut obj);
         engine.append_bti(&mut obj);
-        serialization::append_types(types, &mut obj);
+        serialization::append_types(&types, &mut obj);
 
-        let (mmap, info) =
-            wasmtime_jit::finish_compile(translation, obj, funcs, trampolines, tunables)?;
+        let mut obj = wasmtime_jit::ObjectBuilder::new(obj, tunables);
+        let info = obj.append(translation, funcs, trampolines)?;
+        obj.serialize_info(&info);
+        let mmap = obj.finish()?;
 
-        Ok((mmap, info))
+        Ok((mmap, Some((info, types))))
+    }
+
+    #[cfg(compiler)]
+    pub(crate) fn compile_functions(
+        engine: &Engine,
+        translation: &mut ModuleTranslation<'_>,
+        types: &ModuleTypes,
+    ) -> Result<Vec<(WasmFunctionInfo, Box<dyn Any + Send>)>> {
+        let tunables = &engine.config().tunables;
+        let functions = mem::take(&mut translation.function_body_inputs);
+        let functions = functions.into_iter().collect::<Vec<_>>();
+        let compiler = engine.compiler();
+        let funcs = engine.run_maybe_parallel(functions, |(index, func)| {
+            let offset = func.body.range().start;
+            let result = compiler.compile_function(&translation, index, func, tunables, types);
+            result.with_context(|| {
+                let index = translation.module.func_index(index);
+                let name = match translation.debuginfo.name_section.func_names.get(&index) {
+                    Some(name) => format!(" (`{}`)", name),
+                    None => String::new(),
+                };
+                let index = index.as_u32();
+                format!("failed to compile wasm function {index}{name} at offset {offset:#x}")
+            })
+        })?;
+
+        // If configured attempt to use static memory initialization which
+        // can either at runtime be implemented as a single memcpy to
+        // initialize memory or otherwise enabling virtual-memory-tricks
+        // such as mmap'ing from a file to get copy-on-write.
+        if engine.config().memory_init_cow {
+            let align = engine.compiler().page_size_align();
+            let max_always_allowed = engine.config().memory_guaranteed_dense_image_size;
+            translation.try_static_init(align, max_always_allowed);
+        }
+
+        // Attempt to convert table initializer segments to
+        // FuncTable representation where possible, to enable
+        // table lazy init.
+        translation.try_func_table_init();
+
+        Ok(funcs)
     }
 
     /// Deserializes an in-memory compiled module previously created with
@@ -529,8 +540,8 @@ impl Module {
     /// blobs across versions of wasmtime you can be safely guaranteed that
     /// future versions of wasmtime will reject old cache entries).
     pub unsafe fn deserialize(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
-        let mmap = engine.load_mmap_bytes(bytes.as_ref())?;
-        Module::from_parts(engine, mmap, None)
+        let code = engine.load_code_bytes(bytes.as_ref())?;
+        Module::from_parts(engine, code, None)
     }
 
     /// Same as [`deserialize`], except that the contents of `path` are read to
@@ -557,21 +568,63 @@ impl Module {
     /// reflect the current state of the file, not necessarily the origianl
     /// state of the file.
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Module> {
-        let mmap = engine.load_mmap_file(path.as_ref())?;
-        Module::from_parts(engine, mmap, None)
+        let code = engine.load_code_file(path.as_ref())?;
+        Module::from_parts(engine, code, None)
     }
 
-    pub(crate) fn from_parts(
+    /// Entrypoint for creating a `Module` for all above functions, both
+    /// of the AOT and jit-compiled cateogries.
+    ///
+    /// In all cases the compilation artifact, `code_memory`, is provided here.
+    /// The `info_and_types` argument is `None` when a module is being
+    /// deserialized from a precompiled artifact or it's `Some` if it was just
+    /// compiled and the values are already available.
+    fn from_parts(
         engine: &Engine,
-        mmap: MmapVec,
-        info_and_types: Option<(CompiledModuleInfo, Types)>,
+        code_memory: Arc<CodeMemory>,
+        info_and_types: Option<(CompiledModuleInfo, ModuleTypes)>,
     ) -> Result<Self> {
+        // Acquire this module's metadata and type information, deserializing
+        // it from the provided artifact if it wasn't otherwise provided
+        // already.
         let (info, types) = match info_and_types {
-            Some((info, types)) => (Some(info), types),
-            None => (None, serialization::deserialize_types(&mmap)?.into()),
+            Some((info, types)) => (info, types),
+            None => {
+                let types = serialization::deserialize_types(code_memory.mmap())?;
+                let info = bincode::deserialize(code_memory.wasmtime_info())?;
+                (info, types)
+            }
         };
+
+        // Register function type signatures into the engine for the lifetime
+        // of the `Module` that will be returned. This notably also builds up
+        // maps for trampolines to be used for this module when inserted into
+        // stores.
+        //
+        // Note that the unsafety here should be ok since the `trampolines`
+        // field should only point to valid trampoline function pointers
+        // within the text section.
+        let signatures = SignatureCollection::new_for_module(
+            engine.signatures(),
+            &types,
+            info.trampolines
+                .iter()
+                .map(|(idx, f)| (*idx, unsafe { code_memory.vmtrampoline(*f) })),
+        );
+
+        // Package up all our data into a `CodeObject` and delegate to the final
+        // step of module compilation.
+        let code = Arc::new(CodeObject::new(code_memory, signatures, types.into()));
+        Module::from_parts_raw(engine, code, info)
+    }
+
+    pub(crate) fn from_parts_raw(
+        engine: &Engine,
+        code: Arc<CodeObject>,
+        info: CompiledModuleInfo,
+    ) -> Result<Self> {
         let module = CompiledModule::from_artifacts(
-            mmap,
+            code.code_memory().clone(),
             info,
             engine.profiler(),
             engine.unique_id_allocator(),
@@ -580,23 +633,10 @@ impl Module {
         // Validate the module can be used with the current allocator
         engine.allocator().validate(module.module())?;
 
-        let signatures = SignatureCollection::new_for_module(
-            engine.signatures(),
-            types.module_types(),
-            module.trampolines().map(|(idx, f, _)| (idx, f)),
-        );
-
-        // We're about to create a `Module` for real now so enter this module
-        // into the global registry of modules so we can resolve traps
-        // appropriately. Note that the corresponding `unregister` happens below
-        // in `Drop for ModuleInner`.
-        registry::register_code(module.code_memory());
-
         Ok(Self {
             inner: Arc::new(ModuleInner {
                 engine: engine.clone(),
-                types,
-                signatures,
+                code,
                 memory_images: OnceCell::new(),
                 module,
             }),
@@ -667,16 +707,20 @@ impl Module {
         &self.inner.module
     }
 
+    fn code_object(&self) -> &Arc<CodeObject> {
+        &self.inner.code
+    }
+
     pub(crate) fn env_module(&self) -> &wasmtime_environ::Module {
         self.compiled_module().module()
     }
 
     pub(crate) fn types(&self) -> &ModuleTypes {
-        self.inner.types.module_types()
+        self.inner.code.module_types()
     }
 
     pub(crate) fn signatures(&self) -> &SignatureCollection {
-        &self.inner.signatures
+        self.inner.code.signatures()
     }
 
     /// Returns identifier/name that this [`Module`] has. This name
@@ -989,7 +1033,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
     }
 
     fn signature(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
-        self.signatures.as_module_map()[index]
+        self.code.signatures().as_module_map()[index]
     }
 
     fn image_base(&self) -> usize {
@@ -1014,7 +1058,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
     }
 
     fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
-        self.signatures.as_module_map().values().as_slice()
+        self.code.signatures().as_module_map().values().as_slice()
     }
 }
 
@@ -1041,12 +1085,6 @@ impl wasmtime_runtime::ModuleInfo for ModuleInner {
         };
 
         Some(&info.stack_maps[index].stack_map)
-    }
-}
-
-impl Drop for ModuleInner {
-    fn drop(&mut self) {
-        registry::unregister_code(self.module.code_memory());
     }
 }
 
@@ -1123,35 +1161,6 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
             Some((_, id)) => std::slice::from_ref(id),
             None => &[],
         }
-    }
-}
-
-pub(crate) enum Types {
-    Module(ModuleTypes),
-    #[cfg(feature = "component-model")]
-    Component(Arc<ComponentTypes>),
-}
-
-impl Types {
-    fn module_types(&self) -> &ModuleTypes {
-        match self {
-            Types::Module(m) => m,
-            #[cfg(feature = "component-model")]
-            Types::Component(c) => c.module_types(),
-        }
-    }
-}
-
-impl From<ModuleTypes> for Types {
-    fn from(types: ModuleTypes) -> Types {
-        Types::Module(types)
-    }
-}
-
-#[cfg(feature = "component-model")]
-impl From<Arc<ComponentTypes>> for Types {
-    fn from(types: Arc<ComponentTypes>) -> Types {
-        Types::Component(types)
     }
 }
 
