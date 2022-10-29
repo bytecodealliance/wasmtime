@@ -1466,8 +1466,6 @@
 (decl u8_into_uimm5 (u8) UImm5)
 (extern constructor u8_into_uimm5 u8_into_uimm5)
 
-;;@ (spec (sig (args x) (ret))
-;;@     (assertions (= (zero_ext (12) (x)) (ret))))
 (decl u8_into_imm12 (u8) Imm12)
 (extern constructor u8_into_imm12 u8_into_imm12)
 
@@ -1984,14 +1982,10 @@
 (rule (sqsub x y size) (vec_rrr (VecALUOp.Sqsub) x y size))
 
 ;; Helper for generating `umulh` instructions.
-;;@ (spec (sig (args ty, x, y) (ret))
-;;@       (assertions (= (extract 127 64 (* (zero_ext (128) (x)) (zero_ext (128) (y)))) (ret))))
 (decl umulh (Type Reg Reg) Reg)
 (rule (umulh ty x y) (alu_rrr (ALUOp.UMulH) ty x y))
 
 ;; Helper for generating `smulh` instructions.
-;;@ (spec (sig (args ty, x, y) (ret))
-;;@       (assertions (= (extract 127 64 (* (sign_ext (128) (x)) (sign_ext (128) (y)))) (ret))))
 (decl smulh (Type Reg Reg) Reg)
 (rule (smulh ty x y) (alu_rrr (ALUOp.SMulH) ty x y))
 
@@ -2109,8 +2103,6 @@
 (rule (orr_vec x y size) (vec_rrr (VecALUOp.Orr) x y size))
 
 ;; Helpers for generating `and` instructions.
-;;@ (spec (sig (args ty, reg, imm_arg) (ret))
-;;@     (assertions (= (& (reg) (conv_from 12 (imm_arg))) (ret))))
 (decl and_imm (Type Reg ImmLogic) Reg)
 (rule (and_imm ty x y) (alu_rr_imm_logic (ALUOp.And) ty x y))
 
