@@ -1172,6 +1172,50 @@
              (x64_psllq (vector_all_ones)
                     (RegMemImm.Imm 63))))
 
+;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl lower_bmask (Type Type ValueRegs) ValueRegs)
+
+;; Values that fit in a register
+;;
+;; Use the neg instruction on the input which sets the CF (carry) flag
+;; to 0 if the input is 0 or 1 otherwise.
+;; We then subtract the output register with itself, which always gives a 0,
+;; however use the carry flag from the previous negate to generate a -1 if it
+;; was nonzero.
+;;
+;; neg in_reg
+;; sbb out_reg, out_reg
+(rule 0
+      (lower_bmask (fits_in_64 out_ty) (fits_in_64 in_ty) val)
+      (let ((reg Gpr (value_regs_get_gpr val 0))
+            (out ValueRegs (with_flags
+                  (x64_neg_paired in_ty reg)
+                  (x64_sbb_paired out_ty reg reg))))
+        ;; Extract only the output of the sbb instruction
+        (value_reg (value_regs_get out 1))))
+
+
+;; If the input type is I128 we can `or` the registers, and recurse to the general case.
+(rule 1
+      (lower_bmask (fits_in_64 out_ty) $I128 val)
+      (let ((lo Gpr (value_regs_get_gpr val 0))
+            (hi Gpr (value_regs_get_gpr val 1))
+            (mixed Gpr (x64_or $I64 lo hi)))
+        (lower_bmask out_ty $I64 (value_reg mixed))))
+
+;; If the output type is I128 we just duplicate the result of the I64 lowering
+(rule 2
+      (lower_bmask $I128 in_ty val)
+      (let ((res ValueRegs (lower_bmask $I64 in_ty val))
+            (res Gpr (value_regs_get_gpr res 0)))
+        (value_regs res res)))
+
+
+;; Call the lower_bmask rule that does all the procssing
+(rule (lower (has_type out_ty (bmask x @ (value_type in_ty))))
+      (lower_bmask out_ty in_ty x))
+
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.

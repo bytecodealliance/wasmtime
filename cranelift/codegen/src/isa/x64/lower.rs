@@ -467,7 +467,8 @@ fn lower_insn_to_regs(
         | Opcode::TlsValue
         | Opcode::SqmulRoundSat
         | Opcode::Uunarrow
-        | Opcode::Nop => {
+        | Opcode::Nop
+        | Opcode::Bmask => {
             let ty = if outputs.len() > 0 {
                 Some(ctx.output_ty(insn, 0))
             } else {
@@ -495,8 +496,6 @@ fn lower_insn_to_regs(
         Opcode::BorNot | Opcode::BxorNot => {
             unimplemented!("or-not / xor-not opcodes not implemented");
         }
-
-        Opcode::Bmask => unimplemented!("Bmask not implemented"),
 
         Opcode::Vsplit | Opcode::Vconcat => {
             unimplemented!("Vector split/concat ops not implemented.");

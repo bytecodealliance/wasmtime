@@ -646,57 +646,30 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Popcnt, &[I64], &[I64], insert_opcode),
     (Opcode::Popcnt, &[I128], &[I128], insert_opcode),
     // Bmask
-    // bmask not implemented in some backends:
-    //   x64: https://github.com/bytecodealliance/wasmtime/issues/5106
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I8], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I16], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I32], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I64], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I128], &[I8], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I8], &[I16], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I16], &[I16], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I32], &[I16], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I64], &[I16], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I128], &[I16], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I8], &[I32], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I16], &[I32], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I32], &[I32], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I64], &[I32], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I128], &[I32], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I8], &[I64], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I16], &[I64], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I32], &[I64], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I64], &[I64], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I128], &[I64], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I8], &[I128], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I16], &[I128], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I32], &[I128], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I64], &[I128], insert_opcode),
-    #[cfg(not(target_arch = "x86_64"))]
     (Opcode::Bmask, &[I128], &[I128], insert_opcode),
     // Fadd
     (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),
