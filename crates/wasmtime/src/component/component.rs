@@ -152,7 +152,7 @@ impl Component {
                     // do so. This should build up a mapping from
                     // `SignatureIndex` to `VMSharedSignatureIndex` once and
                     // then reuse that for each module somehow.
-                    Module::from_parts(engine, mmap, info, types.clone())
+                    Module::from_parts(engine, mmap, Some((info, types.clone().into())))
                 })?;
 
                 Ok(modules.into_iter().collect::<PrimaryMap<_, _>>())
@@ -164,7 +164,7 @@ impl Component {
         let static_modules = static_modules?;
         let (lowerings, always_trap, transcoders, trampolines, trampoline_obj) = trampolines?;
         let mut trampoline_obj = CodeMemory::new(trampoline_obj);
-        let code = trampoline_obj.publish(engine.compiler().is_branch_protection_enabled())?;
+        let code = trampoline_obj.publish()?;
         let text = wasmtime_jit::subslice_range(code.text, code.mmap);
 
         // This map is used to register all known tramplines in the
@@ -266,6 +266,7 @@ impl Component {
                 trampolines?,
                 &mut obj,
             )?;
+        engine.append_bti(&mut obj);
         return Ok((
             lower,
             traps,

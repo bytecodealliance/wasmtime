@@ -1,16 +1,21 @@
 use crate::signatures::SignatureRegistry;
 use crate::Config;
-use anyhow::Result;
+use anyhow::{Context, Result};
+use object::write::{Object, StandardSegment};
+use object::SectionKind;
 use once_cell::sync::OnceCell;
 #[cfg(feature = "parallel-compilation")]
 use rayon::prelude::*;
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::FlagValue;
 use wasmtime_jit::ProfilingAgent;
-use wasmtime_runtime::{debug_builtins, CompiledModuleIdAllocator, InstanceAllocator};
+use wasmtime_runtime::{debug_builtins, CompiledModuleIdAllocator, InstanceAllocator, MmapVec};
+
+mod serialization;
 
 /// An `Engine` which is a global context for compilation and management of wasm
 /// modules.
@@ -216,9 +221,8 @@ impl Engine {
     pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
-        let (mmap, _, types) = crate::Module::build_artifacts(self, &bytes)?;
-        crate::module::SerializedModule::from_artifacts(self, &mmap, &types)
-            .to_bytes(&self.config().module_version)
+        let (mmap, _) = crate::Module::build_artifacts(self, &bytes)?;
+        Ok(mmap.to_vec())
     }
 
     pub(crate) fn run_maybe_parallel<
@@ -292,6 +296,7 @@ impl Engine {
             .clone()
             .map_err(anyhow::Error::msg)
     }
+
     fn _check_compatible_with_native_host(&self) -> Result<(), String> {
         #[cfg(compiler)]
         {
@@ -545,6 +550,43 @@ impl Engine {
             "cannot test if target-specific flag {:?} is available at runtime",
             flag
         ))
+    }
+
+    #[cfg(compiler)]
+    pub(crate) fn append_compiler_info(&self, obj: &mut Object<'_>) {
+        serialization::append_compiler_info(self, obj);
+    }
+
+    #[cfg(compiler)]
+    pub(crate) fn append_bti(&self, obj: &mut Object<'_>) {
+        let section = obj.add_section(
+            obj.segment_name(StandardSegment::Data).to_vec(),
+            wasmtime_jit::ELF_WASM_BTI.as_bytes().to_vec(),
+            SectionKind::ReadOnlyData,
+        );
+        let contents = if self.compiler().is_branch_protection_enabled() {
+            1
+        } else {
+            0
+        };
+        obj.append_section_data(section, &[contents], 1);
+    }
+
+    pub(crate) fn load_mmap_bytes(&self, bytes: &[u8]) -> Result<MmapVec> {
+        self.load_mmap(MmapVec::from_slice(bytes)?)
+    }
+
+    pub(crate) fn load_mmap_file(&self, path: &Path) -> Result<MmapVec> {
+        self.load_mmap(
+            MmapVec::from_file(path).with_context(|| {
+                format!("failed to create file mapping for: {}", path.display())
+            })?,
+        )
+    }
+
+    fn load_mmap(&self, mmap: MmapVec) -> Result<MmapVec> {
+        serialization::check_compatible(self, &mmap)?;
+        Ok(mmap)
     }
 }
 
