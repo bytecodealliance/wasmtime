@@ -97,7 +97,7 @@ impl DiffEngine for WasmiEngine {
 }
 
 /// Converts `wasmi` trap code to `wasmtime` trap code.
-fn wasmi_to_wasmtime_tap_code(trap: wasmi::core::TrapCode) -> wasmtime::TrapCode {
+fn wasmi_to_wasmtime_trap_code(trap: wasmi::core::TrapCode) -> wasmtime::TrapCode {
     use wasmi::core::TrapCode as WasmiTrapCode;
     match trap {
         WasmiTrapCode::Unreachable => TrapCode::UnreachableCodeReached,
