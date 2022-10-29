@@ -60,8 +60,6 @@ pub(crate) fn pipeline_flush_mt() -> Result<()> {
         // In any other case we got an actual error, so lets propagate that up
         e => e?,
     }
-    #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
-    return riscv_flush_icache(0, 0);
 
     Ok(())
 }
@@ -128,6 +126,6 @@ pub(crate) fn clear_cache(ptr: *const c_void, len: usize) -> Result<()> {
     // See: https://github.com/bytecodealliance/wasmtime/issues/3310
 
     #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
-    riscv_flush_icache(ptr as u64, (ptr as u64) + (len as u64));
+    riscv_flush_icache(ptr as u64, (ptr as u64) + (len as u64))?;
     Ok(())
 }
