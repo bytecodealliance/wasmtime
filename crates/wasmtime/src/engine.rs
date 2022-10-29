@@ -552,10 +552,12 @@ impl Engine {
         ))
     }
 
+    #[cfg(compiler)]
     pub(crate) fn append_compiler_info(&self, obj: &mut Object<'_>) {
         serialization::append_compiler_info(self, obj);
     }
 
+    #[cfg(compiler)]
     pub(crate) fn append_bti(&self, obj: &mut Object<'_>) {
         let section = obj.add_section(
             obj.segment_name(StandardSegment::Data).to_vec(),

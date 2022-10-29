@@ -40,6 +40,7 @@ const ELF_WASM_ENGINE: &str = ".wasmtime.engine";
 ///
 /// The blob of bytes is inserted into the object file specified to become part
 /// of the final compiled artifact.
+#[cfg(compiler)]
 pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>) {
     let section = obj.add_section(
         obj.segment_name(StandardSegment::Data).to_vec(),
@@ -151,6 +152,7 @@ struct WasmFeatures {
 }
 
 impl Metadata {
+    #[cfg(compiler)]
     fn new(engine: &Engine) -> Metadata {
         let wasmparser::WasmFeatures {
             reference_types,
