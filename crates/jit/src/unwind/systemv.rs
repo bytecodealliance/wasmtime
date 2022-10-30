@@ -14,6 +14,8 @@ extern "C" {
 }
 
 impl UnwindRegistration {
+    pub const SECTION_NAME: &str = ".eh_frame";
+
     /// Registers precompiled unwinding information with the system.
     ///
     /// The `_base_address` field is ignored here (only used on other
@@ -66,10 +68,6 @@ impl UnwindRegistration {
         }
 
         Ok(UnwindRegistration { registrations })
-    }
-
-    pub fn section_name() -> &'static str {
-        ".eh_frame"
     }
 }
 

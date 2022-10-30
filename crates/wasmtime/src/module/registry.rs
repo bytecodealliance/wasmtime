@@ -11,7 +11,7 @@ use std::{
 use wasmtime_environ::TrapCode;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::{component::RuntimeAlwaysTrapIndex, FunctionLoc, PrimaryMap};
-use wasmtime_jit::CompiledModule;
+use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
 
 /// Used for registering modules with a store.
@@ -41,8 +41,8 @@ enum ModuleOrComponent {
 }
 
 fn start(module: &Module) -> usize {
-    assert!(!module.compiled_module().code().is_empty());
-    module.compiled_module().code().as_ptr() as usize
+    assert!(!module.compiled_module().text().is_empty());
+    module.compiled_module().text().as_ptr() as usize
 }
 
 impl ModuleRegistry {
@@ -83,7 +83,7 @@ impl ModuleRegistry {
             // The module code range is exclusive for end, so make it inclusive as it
             // may be a valid PC value
             let start_addr = start(module);
-            let end_addr = start_addr + compiled_module.code().len() - 1;
+            let end_addr = start_addr + compiled_module.text().len() - 1;
             self.register(
                 start_addr,
                 end_addr,
@@ -151,9 +151,10 @@ impl ModuleRegistry {
     /// Fetches trap information about a program counter in a backtrace.
     pub fn lookup_trap_code(&self, pc: usize) -> Option<TrapCode> {
         match self.module_or_component(pc)? {
-            (ModuleOrComponent::Module(module), offset) => {
-                wasmtime_environ::lookup_trap_code(module.compiled_module().trap_data(), offset)
-            }
+            (ModuleOrComponent::Module(module), offset) => wasmtime_environ::lookup_trap_code(
+                module.compiled_module().code_memory().trap_data(),
+                offset,
+            ),
             #[cfg(feature = "component-model")]
             (ModuleOrComponent::Component(component), offset) => component.lookup_trap_code(offset),
         }
@@ -205,7 +206,7 @@ type GlobalModuleRegistry = BTreeMap<usize, (usize, TrapInfo)>;
 
 #[derive(Clone)]
 enum TrapInfo {
-    Module(Arc<CompiledModule>),
+    Module(Arc<CodeMemory>),
     #[cfg(feature = "component-model")]
     Component(Arc<Vec<u32>>),
 }
@@ -246,8 +247,8 @@ pub fn is_wasm_trap_pc(pc: usize) -> bool {
 /// This is required to enable traps to work correctly since the signal handler
 /// will lookup in the `GLOBAL_MODULES` list to determine which a particular pc
 /// is a trap or not.
-pub fn register_module(module: &Arc<CompiledModule>) {
-    let code = module.code();
+pub fn register_module(module: &Arc<CodeMemory>) {
+    let code = module.text();
     if code.is_empty() {
         return;
     }
@@ -263,8 +264,8 @@ pub fn register_module(module: &Arc<CompiledModule>) {
 /// Unregisters a module from the global map.
 ///
 /// Must have been previously registered with `register`.
-pub fn unregister_module(module: &Arc<CompiledModule>) {
-    let code = module.code();
+pub fn unregister_module(module: &Arc<CodeMemory>) {
+    let code = module.text();
     if code.is_empty() {
         return;
     }

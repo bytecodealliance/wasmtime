@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
+use wasmtime_environ::obj;
 use wasmtime_environ::FlagValue;
 use wasmtime_jit::ProfilingAgent;
 use wasmtime_runtime::{debug_builtins, CompiledModuleIdAllocator, InstanceAllocator, MmapVec};
@@ -561,7 +562,7 @@ impl Engine {
     pub(crate) fn append_bti(&self, obj: &mut Object<'_>) {
         let section = obj.add_section(
             obj.segment_name(StandardSegment::Data).to_vec(),
-            wasmtime_jit::ELF_WASM_BTI.as_bytes().to_vec(),
+            obj::ELF_WASM_BTI.as_bytes().to_vec(),
             SectionKind::ReadOnlyData,
         );
         let contents = if self.compiler().is_branch_protection_enabled() {

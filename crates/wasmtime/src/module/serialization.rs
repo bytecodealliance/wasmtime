@@ -15,15 +15,14 @@
 use anyhow::{anyhow, Result};
 use object::write::{Object, StandardSegment};
 use object::{File, Object as _, ObjectSection, SectionKind};
+use wasmtime_environ::obj;
 use wasmtime_environ::ModuleTypes;
 use wasmtime_runtime::MmapVec;
-
-const ELF_WASM_TYPES: &str = ".wasmtime.types";
 
 pub fn append_types(types: &ModuleTypes, obj: &mut Object<'_>) {
     let section = obj.add_section(
         obj.segment_name(StandardSegment::Data).to_vec(),
-        ELF_WASM_TYPES.as_bytes().to_vec(),
+        obj::ELF_WASM_TYPES.as_bytes().to_vec(),
         SectionKind::ReadOnlyData,
     );
     let data = bincode::serialize(types).unwrap();
@@ -38,8 +37,8 @@ pub fn deserialize_types(mmap: &MmapVec) -> Result<ModuleTypes> {
     // refactoring.
     let obj = File::parse(&mmap[..])?;
     let data = obj
-        .section_by_name(ELF_WASM_TYPES)
-        .ok_or_else(|| anyhow!("failed to find section `{ELF_WASM_TYPES}`"))?
+        .section_by_name(obj::ELF_WASM_TYPES)
+        .ok_or_else(|| anyhow!("failed to find section `{}`", obj::ELF_WASM_TYPES))?
         .data()?;
     Ok(bincode::deserialize(data)?)
 }

@@ -5,7 +5,6 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
-use std::ops::Range;
 use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
@@ -44,14 +43,10 @@ struct ComponentInner {
     types: Arc<ComponentTypes>,
 
     /// The in-memory ELF image of the compiled functions for this component.
-    trampoline_obj: CodeMemory,
-
-    /// The index ranges within `trampoline_obj`'s mmap memory for the entire
-    /// text section.
-    text: Range<usize>,
+    code_memory: Arc<CodeMemory>,
 
     /// Where lowered function trampolines are located within the `text`
-    /// section of `trampoline_obj`.
+    /// section of `code_memory`.
     ///
     /// These trampolines are the function pointer within the
     /// `VMCallerCheckedAnyfunc` and will delegate indirectly to a host function
@@ -59,7 +54,7 @@ struct ComponentInner {
     lowerings: PrimaryMap<LoweredIndex, FunctionLoc>,
 
     /// Where the "always trap" functions are located within the `text` section
-    /// of `trampoline_obj`.
+    /// of `code_memory`.
     ///
     /// These functions are "degenerate functions" here solely to implement
     /// functions that are `canon lift`'d then immediately `canon lower`'d. The
@@ -164,10 +159,9 @@ impl Component {
             || Component::compile_component(engine, &component, &types, &provided_trampolines),
         );
         let static_modules = static_modules?;
-        let (lowerings, always_trap, transcoders, trampolines, trampoline_obj) = trampolines?;
-        let mut trampoline_obj = CodeMemory::new(trampoline_obj);
-        let code = trampoline_obj.publish()?;
-        let text = wasmtime_jit::subslice_range(code.text, code.mmap);
+        let (lowerings, always_trap, transcoders, trampolines, code_memory) = trampolines?;
+        let mut code_memory = CodeMemory::new(code_memory)?;
+        code_memory.publish()?;
 
         // This map is used to register all known tramplines in the
         // `SignatureCollection` created below. This is later consulted during
@@ -190,7 +184,7 @@ impl Component {
         }
         for (signature, loc) in trampolines {
             vmtrampolines.insert(signature, unsafe {
-                let ptr = code.text[loc.start as usize..][..loc.length as usize].as_ptr();
+                let ptr = code_memory.text()[loc.start as usize..][..loc.length as usize].as_ptr();
                 std::mem::transmute::<*const u8, wasmtime_runtime::VMTrampoline>(ptr)
             });
         }
@@ -212,15 +206,14 @@ impl Component {
             .windows(2)
             .all(|window| { window[0].1.start < window[1].1.start }));
 
-        crate::module::register_component(code.text, &always_trap);
+        crate::module::register_component(code_memory.text(), &always_trap);
         Ok(Component {
             inner: Arc::new(ComponentInner {
                 component,
                 static_modules,
                 types,
                 signatures,
-                trampoline_obj,
-                text,
+                code_memory: Arc::new(code_memory),
                 lowerings,
                 always_trap,
                 transcoders,
@@ -477,12 +470,12 @@ impl Component {
 
 impl ComponentInner {
     fn text(&self) -> &[u8] {
-        &self.trampoline_obj.mmap()[self.text.clone()]
+        self.code_memory.text()
     }
 }
 
 impl Drop for ComponentInner {
     fn drop(&mut self) {
-        crate::module::unregister_component(self.text());
+        crate::module::unregister_component(self.code_memory.text());
     }
 }

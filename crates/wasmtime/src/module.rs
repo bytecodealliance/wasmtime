@@ -592,7 +592,7 @@ impl Module {
         // into the global registry of modules so we can resolve traps
         // appropriately. Note that the corresponding `unregister` happens below
         // in `Drop for ModuleInner`.
-        registry::register_module(&module);
+        registry::register_module(module.code_memory());
 
         Ok(Self {
             inner: Arc::new(ModuleInner {
@@ -995,7 +995,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
     }
 
     fn image_base(&self) -> usize {
-        self.module.code().as_ptr() as usize
+        self.module.text().as_ptr() as usize
     }
 
     fn function_loc(&self, index: DefinedFuncIndex) -> &FunctionLoc {
@@ -1012,7 +1012,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
     }
 
     fn wasm_data(&self) -> &[u8] {
-        self.module.wasm_data()
+        self.module.code_memory().wasm_data()
     }
 
     fn signature_ids(&self) -> &[VMSharedSignatureIndex] {
@@ -1022,7 +1022,7 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
 
 impl wasmtime_runtime::ModuleInfo for ModuleInner {
     fn lookup_stack_map(&self, pc: usize) -> Option<&wasmtime_environ::StackMap> {
-        let text_offset = pc - self.module.code().as_ptr() as usize;
+        let text_offset = pc - self.module.text().as_ptr() as usize;
         let (index, func_offset) = self.module.func_by_text_offset(text_offset)?;
         let info = self.module.wasm_func_info(index);
 
@@ -1048,7 +1048,7 @@ impl wasmtime_runtime::ModuleInfo for ModuleInner {
 
 impl Drop for ModuleInner {
     fn drop(&mut self) {
-        registry::unregister_module(&self.module);
+        registry::unregister_module(self.module.code_memory());
     }
 }
 
@@ -1173,5 +1173,5 @@ fn memory_images(engine: &Engine, module: &CompiledModule) -> Result<Option<Modu
     } else {
         Some(module.mmap())
     };
-    ModuleMemoryImages::new(module.module(), module.wasm_data(), mmap)
+    ModuleMemoryImages::new(module.module(), module.code_memory().wasm_data(), mmap)
 }

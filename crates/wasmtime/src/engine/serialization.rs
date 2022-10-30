@@ -28,11 +28,11 @@ use object::{File, Object as _, ObjectSection, SectionKind};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, Tunables};
 use wasmtime_runtime::MmapVec;
 
 const VERSION: u8 = 0;
-const ELF_WASM_ENGINE: &str = ".wasmtime.engine";
 
 /// Produces a blob of bytes by serializing the `engine`'s configuration data to
 /// be checked, perhaps in a different process, with the `check_compatible`
@@ -44,7 +44,7 @@ const ELF_WASM_ENGINE: &str = ".wasmtime.engine";
 pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>) {
     let section = obj.add_section(
         obj.segment_name(StandardSegment::Data).to_vec(),
-        ELF_WASM_ENGINE.as_bytes().to_vec(),
+        obj::ELF_WASM_ENGINE.as_bytes().to_vec(),
         SectionKind::ReadOnlyData,
     );
     let mut data = Vec::new();
@@ -81,8 +81,8 @@ pub fn check_compatible(engine: &Engine, mmap: &MmapVec) -> Result<()> {
     // refactoring.
     let obj = File::parse(&mmap[..]).context("failed to parse precompiled artifact as an ELF")?;
     let data = obj
-        .section_by_name(ELF_WASM_ENGINE)
-        .ok_or_else(|| anyhow!("failed to find section `{ELF_WASM_ENGINE}`"))?
+        .section_by_name(obj::ELF_WASM_ENGINE)
+        .ok_or_else(|| anyhow!("failed to find section `{}`", obj::ELF_WASM_ENGINE))?
         .data()?;
     let (first, data) = data
         .split_first()

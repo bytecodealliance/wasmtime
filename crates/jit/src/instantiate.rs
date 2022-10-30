@@ -6,65 +6,24 @@
 use crate::code_memory::CodeMemory;
 use crate::debug::create_gdbjit_image;
 use crate::ProfilingAgent;
-use anyhow::{anyhow, bail, Context, Error, Result};
+use anyhow::{bail, Context, Error, Result};
 use object::write::{Object, StandardSegment, WritableBuffer};
-use object::{File, Object as _, ObjectSection, SectionKind};
+use object::SectionKind;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::ops::Range;
 use std::str;
 use std::sync::Arc;
 use thiserror::Error;
+use wasmtime_environ::obj;
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FuncIndex, FunctionLoc, Module, ModuleTranslation, PrimaryMap,
-    SignatureIndex, StackMapInformation, Tunables, WasmFunctionInfo, ELF_WASMTIME_ADDRMAP,
-    ELF_WASMTIME_TRAPS,
+    SignatureIndex, StackMapInformation, Tunables, WasmFunctionInfo,
 };
 use wasmtime_runtime::{
     CompiledModuleId, CompiledModuleIdAllocator, GdbJitImageRegistration, InstantiationError,
     MmapVec, VMFunctionBody, VMTrampoline,
 };
-
-/// This is the name of the section in the final ELF image which contains
-/// concatenated data segments from the original wasm module.
-///
-/// This section is simply a list of bytes and ranges into this section are
-/// stored within a `Module` for each data segment. Memory initialization and
-/// passive segment management all index data directly located in this section.
-///
-/// Note that this implementation does not afford any method of leveraging the
-/// `data.drop` instruction to actually release the data back to the OS. The
-/// data section is simply always present in the ELF image. If we wanted to
-/// release the data it's probably best to figure out what the best
-/// implementation is for it at the time given a particular set of constraints.
-const ELF_WASM_DATA: &'static str = ".rodata.wasm";
-
-/// This is the name of the section in the final ELF image which contains a
-/// `bincode`-encoded `CompiledModuleInfo`.
-///
-/// This section is optionally decoded in `CompiledModule::from_artifacts`
-/// depending on whether or not a `CompiledModuleInfo` is already available. In
-/// cases like `Module::new` where compilation directly leads into consumption,
-/// it's available. In cases like `Module::deserialize` this section must be
-/// decoded to get all the relevant information.
-const ELF_WASMTIME_INFO: &'static str = ".wasmtime.info";
-
-/// This is the name of the section in the final ELF image which contains a
-/// concatenated list of all function names.
-///
-/// This section is optionally included in the final artifact depending on
-/// whether the wasm module has any name data at all (or in the future if we add
-/// an option to not preserve name data). This section is a concatenated list of
-/// strings where `CompiledModuleInfo::func_names` stores offsets/lengths into
-/// this section.
-///
-/// Note that the goal of this section is to avoid having to decode names at
-/// module-load time if we can. Names are typically only used for debugging or
-/// things like backtraces so there's no need to eagerly load all of them. By
-/// storing the data in a separate section the hope is that the data, which is
-/// sometimes quite large (3MB seen for spidermonkey-compiled-to-wasm), can be
-/// paged in lazily from an mmap and is never paged in if we never reference it.
-const ELF_NAME_DATA: &'static str = ".name.wasm";
 
 /// An error condition while setting up a wasm instance, be it validation,
 /// compilation, or instantiation.
@@ -175,7 +134,7 @@ pub fn finish_compile(
     // source of the data later at runtime.
     let data_id = obj.add_section(
         obj.segment_name(StandardSegment::Data).to_vec(),
-        ELF_WASM_DATA.as_bytes().to_vec(),
+        obj::ELF_WASM_DATA.as_bytes().to_vec(),
         SectionKind::ReadOnlyData,
     );
     let mut total_data_len = 0;
@@ -197,7 +156,7 @@ pub fn finish_compile(
     if debuginfo.name_section.func_names.len() > 0 {
         let name_id = obj.add_section(
             obj.segment_name(StandardSegment::Data).to_vec(),
-            ELF_NAME_DATA.as_bytes().to_vec(),
+            obj::ELF_NAME_DATA.as_bytes().to_vec(),
             SectionKind::ReadOnlyData,
         );
         let mut sorted_names = debuginfo.name_section.func_names.iter().collect::<Vec<_>>();
@@ -251,7 +210,7 @@ pub fn finish_compile(
     // `Module::deserialize` (a Wasmtime API).
     let info_id = obj.add_section(
         obj.segment_name(StandardSegment::Data).to_vec(),
-        ELF_WASMTIME_INFO.as_bytes().to_vec(),
+        obj::ELF_WASMTIME_INFO.as_bytes().to_vec(),
         SectionKind::ReadOnlyData,
     );
     let mut bytes = Vec::new();
@@ -359,23 +318,15 @@ pub fn mmap_vec_from_obj(obj: Object) -> Result<MmapVec> {
 
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
-    wasm_data: Range<usize>,
-    address_map_data: Range<usize>,
-    trap_data: Range<usize>,
     module: Arc<Module>,
     funcs: PrimaryMap<DefinedFuncIndex, (WasmFunctionInfo, FunctionLoc)>,
     trampolines: Vec<(SignatureIndex, FunctionLoc)>,
     meta: Metadata,
-    code: Range<usize>,
-    code_memory: CodeMemory,
+    code_memory: Arc<CodeMemory>,
     dbg_jit_registration: Option<GdbJitImageRegistration>,
     /// A unique ID used to register this module with the engine.
     unique_id: CompiledModuleId,
     func_names: Vec<FunctionName>,
-    func_name_data: Range<usize>,
-    /// Map of dwarf sections indexed by `gimli::SectionId` which points to the
-    /// range within `code_memory`'s mmap as to the contents of the section.
-    dwarf_sections: Vec<Range<usize>>,
 }
 
 impl CompiledModule {
@@ -397,106 +348,34 @@ impl CompiledModule {
     /// about new code that is loaded.
     pub fn from_artifacts(
         mmap: MmapVec,
-        mut info: Option<CompiledModuleInfo>,
+        info: Option<CompiledModuleInfo>,
         profiler: &dyn ProfilingAgent,
         id_allocator: &CompiledModuleIdAllocator,
     ) -> Result<Self> {
-        use gimli::SectionId::*;
+        let mut code_memory = CodeMemory::new(mmap)?;
+        code_memory
+            .publish()
+            .context("failed to publish code memory")?;
 
-        // Parse the `code_memory` as an object file and extract information
-        // about where all of its sections are located, stored into the
-        // `CompiledModule` created here.
-        //
-        // Note that dwarf sections here specifically are those that are carried
-        // over directly from the original wasm module's dwarf sections, not the
-        // wasmtime-generated host DWARF sections.
-        let obj = File::parse(&mmap[..]).context("failed to parse internal elf file")?;
-        let mut wasm_data = None;
-        let mut address_map_data = None;
-        let mut func_name_data = None;
-        let mut trap_data = None;
-        let mut code = None;
-        let mut dwarf_sections = Vec::new();
-        for section in obj.sections() {
-            let name = section.name()?;
-            let data = section.data()?;
-            let range = subslice_range(data, &mmap);
-            let mut gimli = |id: gimli::SectionId| {
-                let idx = id as usize;
-                if dwarf_sections.len() <= idx {
-                    dwarf_sections.resize(idx + 1, 0..0);
-                }
-                dwarf_sections[idx] = range.clone();
-            };
-
-            match name {
-                ELF_WASM_DATA => wasm_data = Some(range),
-                ELF_WASMTIME_ADDRMAP => address_map_data = Some(range),
-                ELF_WASMTIME_TRAPS => trap_data = Some(range),
-                ELF_NAME_DATA => func_name_data = Some(range),
-                ".text" => code = Some(range),
-
-                // Parse the metadata if it's not already available
-                // in-memory.
-                ELF_WASMTIME_INFO => {
-                    if info.is_none() {
-                        info = Some(
-                            bincode::deserialize(data)
-                                .context("failed to deserialize wasmtime module info")?,
-                        );
-                    }
-                }
-
-                // Register dwarf sections into the `dwarf_sections`
-                // array which is indexed by `gimli::SectionId`
-                ".debug_abbrev.wasm" => gimli(DebugAbbrev),
-                ".debug_addr.wasm" => gimli(DebugAddr),
-                ".debug_aranges.wasm" => gimli(DebugAranges),
-                ".debug_frame.wasm" => gimli(DebugFrame),
-                ".eh_frame.wasm" => gimli(EhFrame),
-                ".eh_frame_hdr.wasm" => gimli(EhFrameHdr),
-                ".debug_info.wasm" => gimli(DebugInfo),
-                ".debug_line.wasm" => gimli(DebugLine),
-                ".debug_line_str.wasm" => gimli(DebugLineStr),
-                ".debug_loc.wasm" => gimli(DebugLoc),
-                ".debug_loc_lists.wasm" => gimli(DebugLocLists),
-                ".debug_macinfo.wasm" => gimli(DebugMacinfo),
-                ".debug_macro.wasm" => gimli(DebugMacro),
-                ".debug_pub_names.wasm" => gimli(DebugPubNames),
-                ".debug_pub_types.wasm" => gimli(DebugPubTypes),
-                ".debug_ranges.wasm" => gimli(DebugRanges),
-                ".debug_rng_lists.wasm" => gimli(DebugRngLists),
-                ".debug_str.wasm" => gimli(DebugStr),
-                ".debug_str_offsets.wasm" => gimli(DebugStrOffsets),
-                ".debug_types.wasm" => gimli(DebugTypes),
-                ".debug_cu_index.wasm" => gimli(DebugCuIndex),
-                ".debug_tu_index.wasm" => gimli(DebugTuIndex),
-
-                _ => log::debug!("ignoring section {name}"),
+        let info = match info {
+            Some(info) => info,
+            None => {
+                let section = code_memory.wasmtime_info();
+                bincode::deserialize(section)
+                    .context("failed to deserialize wasmtime module info")?
             }
-        }
-
-        let info = info.ok_or_else(|| anyhow!("failed to find wasm info section"))?;
+        };
 
         let mut ret = Self {
             module: Arc::new(info.module),
             funcs: info.funcs,
             trampolines: info.trampolines,
-            wasm_data: wasm_data.ok_or_else(|| anyhow!("missing wasm data section"))?,
-            address_map_data: address_map_data.unwrap_or(0..0),
-            func_name_data: func_name_data.unwrap_or(0..0),
-            trap_data: trap_data.ok_or_else(|| anyhow!("missing trap data section"))?,
-            code: code.ok_or_else(|| anyhow!("missing code section"))?,
             dbg_jit_registration: None,
-            code_memory: CodeMemory::new(mmap),
+            code_memory: Arc::new(code_memory),
             meta: info.meta,
             unique_id: id_allocator.alloc(),
             func_names: info.func_names,
-            dwarf_sections,
         };
-        ret.code_memory
-            .publish()
-            .context("failed to publish code memory")?;
         ret.register_debug_and_profiling(profiler)?;
 
         Ok(ret)
@@ -505,8 +384,8 @@ impl CompiledModule {
     fn register_debug_and_profiling(&mut self, profiler: &dyn ProfilingAgent) -> Result<()> {
         // Register GDB JIT images; initialize profiler and load the wasm module.
         if self.meta.native_debug_info_present {
-            let code = self.code();
-            let bytes = create_gdbjit_image(self.mmap().to_vec(), (code.as_ptr(), code.len()))
+            let text = self.text();
+            let bytes = create_gdbjit_image(self.mmap().to_vec(), (text.as_ptr(), text.len()))
                 .map_err(SetupError::DebugInfo)?;
             profiler.module_load(self, Some(&bytes));
             let reg = GdbJitImageRegistration::register(bytes);
@@ -529,33 +408,16 @@ impl CompiledModule {
         self.code_memory.mmap()
     }
 
-    /// Returns the concatenated list of all data associated with this wasm
-    /// module.
-    ///
-    /// This is used for initialization of memories and all data ranges stored
-    /// in a `Module` are relative to the slice returned here.
-    pub fn wasm_data(&self) -> &[u8] {
-        &self.mmap()[self.wasm_data.clone()]
-    }
-
-    /// Returns the encoded address map section used to pass to
-    /// `wasmtime_environ::lookup_file_pos`.
-    pub fn address_map_data(&self) -> &[u8] {
-        &self.mmap()[self.address_map_data.clone()]
-    }
-
-    /// Returns the encoded trap information for this compiled image.
-    ///
-    /// For more information see `wasmtime_environ::trap_encoding`.
-    pub fn trap_data(&self) -> &[u8] {
-        &self.mmap()[self.trap_data.clone()]
+    /// Returns the underlying owned mmap of this compiled image.
+    pub fn code_memory(&self) -> &Arc<CodeMemory> {
+        &self.code_memory
     }
 
     /// Returns the text section of the ELF image for this compiled module.
     ///
     /// This memory should have the read/execute permissions.
-    pub fn code(&self) -> &[u8] {
-        &self.mmap()[self.code.clone()]
+    pub fn text(&self) -> &[u8] {
+        self.code_memory.text()
     }
 
     /// Return a reference-counting pointer to a module.
@@ -574,7 +436,7 @@ impl CompiledModule {
         // `from_utf8_unchecked` if we really wanted since this section is
         // guaranteed to only have valid utf-8 data. Until it's a problem it's
         // probably best to double-check this though.
-        let data = &self.mmap()[self.func_name_data.clone()];
+        let data = self.code_memory().func_name_data();
         Some(str::from_utf8(&data[name.offset as usize..][..name.len as usize]).unwrap())
     }
 
@@ -588,9 +450,9 @@ impl CompiledModule {
     pub fn finished_functions(
         &self,
     ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, *const [VMFunctionBody])> + '_ {
-        let code = self.code();
+        let text = self.text();
         self.funcs.iter().map(move |(i, (_, loc))| {
-            let func = &code[loc.start as usize..][..loc.length as usize];
+            let func = &text[loc.start as usize..][..loc.length as usize];
             (
                 i,
                 std::ptr::slice_from_raw_parts(func.as_ptr().cast::<VMFunctionBody>(), func.len()),
@@ -600,12 +462,12 @@ impl CompiledModule {
 
     /// Returns the per-signature trampolines for this module.
     pub fn trampolines(&self) -> impl Iterator<Item = (SignatureIndex, VMTrampoline, usize)> + '_ {
-        let code = self.code();
+        let text = self.text();
         self.trampolines.iter().map(move |(signature, loc)| {
             (
                 *signature,
                 unsafe {
-                    let ptr = &code[loc.start as usize];
+                    let ptr = &text[loc.start as usize];
                     std::mem::transmute::<*const u8, VMTrampoline>(ptr)
                 },
                 loc.length as usize,
@@ -692,12 +554,7 @@ impl CompiledModule {
             return Ok(None);
         }
         let dwarf = gimli::Dwarf::load(|id| -> Result<_> {
-            let range = self
-                .dwarf_sections
-                .get(id as usize)
-                .cloned()
-                .unwrap_or(0..0);
-            let data = &self.mmap()[range];
+            let data = self.code_memory().dwarf_section(id);
             Ok(EndianSlice::new(data, gimli::LittleEndian))
         })?;
         let cx = addr2line::Context::from_dwarf(dwarf)
@@ -720,7 +577,7 @@ impl CompiledModule {
     /// If this function returns `false` then `lookup_file_pos` will always
     /// return `None`.
     pub fn has_address_map(&self) -> bool {
-        !self.address_map_data().is_empty()
+        !self.code_memory.address_map_data().is_empty()
     }
 
     /// Returns the bounds, in host memory, of where this module's compiled

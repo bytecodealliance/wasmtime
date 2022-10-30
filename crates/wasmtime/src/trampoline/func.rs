@@ -66,10 +66,15 @@ unsafe extern "C" fn stub_fn<F>(
 }
 
 #[cfg(compiler)]
-fn register_trampolines(profiler: &dyn ProfilingAgent, image: &object::File<'_>) {
-    use object::{Object as _, ObjectSection, ObjectSymbol, SectionKind, SymbolKind};
+fn register_trampolines(profiler: &dyn ProfilingAgent, code: &CodeMemory) {
+    use object::{File, Object as _, ObjectSection, ObjectSymbol, SectionKind, SymbolKind};
     let pid = std::process::id();
     let tid = pid;
+
+    let image = match File::parse(&code.mmap()[..]) {
+        Ok(image) => image,
+        Err(_) => return,
+    };
 
     let text_base = match image.sections().find(|s| s.kind() == SectionKind::Text) {
         Some(section) => match section.data() {
@@ -119,16 +124,17 @@ where
 
     // Copy the results of JIT compilation into executable memory, and this will
     // also take care of unwind table registration.
-    let mut code_memory = CodeMemory::new(obj);
-    let code = code_memory.publish()?;
+    let mut code_memory = CodeMemory::new(obj)?;
+    code_memory.publish()?;
 
-    register_trampolines(engine.profiler(), &code.obj);
+    register_trampolines(engine.profiler(), &code_memory);
 
     // Extract the host/wasm trampolines from the results of compilation since
     // we know their start/length.
 
-    let host_trampoline = code.text[t1.start as usize..][..t1.length as usize].as_ptr();
-    let wasm_trampoline = code.text[t2.start as usize..].as_ptr() as *mut _;
+    let text = code_memory.text();
+    let host_trampoline = text[t1.start as usize..][..t1.length as usize].as_ptr();
+    let wasm_trampoline = text[t2.start as usize..].as_ptr() as *mut _;
     let wasm_trampoline = NonNull::new(wasm_trampoline).unwrap();
 
     let sig = engine.signatures().register(ft.as_wasm_func_type());
