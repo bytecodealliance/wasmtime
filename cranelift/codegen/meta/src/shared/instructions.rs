@@ -3482,8 +3482,7 @@ pub(crate) fn define(
         - `f32` and `f64`. This may change in the future.
 
         The result type must have the same number of vector lanes as the input,
-        and the result lanes must not have fewer bits than the input lanes. If
-        the input and output types are the same, this is a no-op.
+        and the result lanes must not have fewer bits than the input lanes.
         "#,
             &formats.unary,
         )
@@ -3504,8 +3503,7 @@ pub(crate) fn define(
         - `f32` and `f64`. This may change in the future.
 
         The result type must have the same number of vector lanes as the input,
-        and the result lanes must not have more bits than the input lanes. If
-        the input and output types are the same, this is a no-op.
+        and the result lanes must not have more bits than the input lanes.
         "#,
             &formats.unary,
         )
