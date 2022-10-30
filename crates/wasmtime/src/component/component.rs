@@ -13,7 +13,7 @@ use wasmtime_environ::component::{
     ComponentTypes, GlobalInitializer, LoweredIndex, RuntimeAlwaysTrapIndex,
     RuntimeTranscoderIndex, StaticModuleIndex, Translator,
 };
-use wasmtime_environ::{EntityRef, FunctionLoc, PrimaryMap, ScopeVec, SignatureIndex};
+use wasmtime_environ::{EntityRef, FunctionLoc, ObjectKind, PrimaryMap, ScopeVec, SignatureIndex};
 use wasmtime_jit::{CodeMemory, CompiledModuleInfo};
 use wasmtime_runtime::{MmapVec, VMFunctionBody, VMTrampoline};
 
@@ -72,6 +72,13 @@ struct CompiledComponentInfo {
     trampolines: Vec<(SignatureIndex, FunctionLoc)>,
 }
 
+#[derive(Serialize, Deserialize)]
+pub(crate) struct ComponentArtifacts {
+    info: CompiledComponentInfo,
+    types: ComponentTypes,
+    static_modules: PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
+}
+
 impl Component {
     /// Compiles a new WebAssembly component from the in-memory wasm image
     /// provided.
@@ -123,6 +130,49 @@ impl Component {
             .check_compatible_with_native_host()
             .context("compilation settings are not compatible with the native host")?;
 
+        let (mmap, artifacts) = Component::build_artifacts(engine, binary)?;
+        let mut code_memory = CodeMemory::new(mmap)?;
+        code_memory.publish()?;
+        Component::from_parts(engine, Arc::new(code_memory), Some(artifacts))
+    }
+
+    /// Same as [`Module::deserialize`], but for components.
+    ///
+    /// Note that the file referenced here must contain contents previously
+    /// produced by [`Engine::precompile_component`] or
+    /// [`Component::serialize`].
+    ///
+    /// For more information see the [`Module::deserialize`] method.
+    ///
+    /// [`Module::deserialize`]: crate::Module::deserialize
+    pub unsafe fn deserialize(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Component> {
+        let code = engine.load_code_bytes(bytes.as_ref(), ObjectKind::Component)?;
+        Component::from_parts(engine, code, None)
+    }
+
+    /// Same as [`Module::deserialize_file`], but for components.
+    ///
+    /// For more information see the [`Component::deserialize`] and
+    /// [`Module::deserialize_file`] methods.
+    ///
+    /// [`Module::deserialize_file`]: crate::Module::deserialize_file
+    pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Component> {
+        let code = engine.load_code_file(path.as_ref(), ObjectKind::Component)?;
+        Component::from_parts(engine, code, None)
+    }
+
+    /// Performs the compilation phase for a component, translating and
+    /// validating the provided wasm binary to machine code.
+    ///
+    /// This method will compile all nested core wasm binaries in addition to
+    /// any necessary extra functions required for operation with components.
+    /// The output artifact here is the serialized object file contained within
+    /// an owned mmap along with metadata about the compilation itself.
+    #[cfg(compiler)]
+    pub(crate) fn build_artifacts(
+        engine: &Engine,
+        binary: &[u8],
+    ) -> Result<(MmapVec, ComponentArtifacts)> {
         let tunables = &engine.config().tunables;
         let compiler = engine.compiler();
 
@@ -134,7 +184,7 @@ impl Component {
             Translator::new(tunables, &mut validator, &mut types, &scope)
                 .translate(binary)
                 .context("failed to parse WebAssembly module")?;
-        let types = Arc::new(types.finish());
+        let types = types.finish();
 
         // Compile all core wasm modules, in parallel, which will internally
         // compile all their functions in parallel as well.
@@ -262,7 +312,7 @@ impl Component {
             funcs.push((name, func));
         }
 
-        let mut object = compiler.object()?;
+        let mut object = compiler.object(ObjectKind::Component)?;
         let locs = compiler.append_code(&mut object, &funcs, tunables, &|i, idx| {
             // Map from the `i`th function which is requesting the relocation to
             // the index in `modules` that the function belongs to. Using that
@@ -284,6 +334,7 @@ impl Component {
             let offset = module_func_start_index[module_index];
             defined_index.index() + offset
         })?;
+        engine.append_compiler_info(&mut object);
         engine.append_bti(&mut object);
 
         // Disassemble the result of the appending to the text section, where
@@ -335,10 +386,7 @@ impl Component {
             let info = builder.append(module, funcs, trampolines)?;
             static_modules.push(info);
         }
-        let mmap = builder.finish()?;
 
-        // Now that all of the AOT artifacts are prepared delegate to the
-        // implementation of assembling AOT artifacts into a final `Component`.
         let info = CompiledComponentInfo {
             always_trap,
             component,
@@ -349,20 +397,38 @@ impl Component {
                 .collect(),
             transcoders,
         };
-        Component::from_parts(engine, mmap, info, types, static_modules)
+        let artifacts = ComponentArtifacts {
+            info,
+            types,
+            static_modules,
+        };
+        builder.serialize_info(&artifacts);
+
+        let mmap = builder.finish()?;
+        Ok((mmap, artifacts))
     }
 
+    /// Final assembly step for a component from its in-memory representation.
+    ///
+    /// If the `artifacts` are specified as `None` here then they will be
+    /// deserialized from `code_memory`.
     fn from_parts(
         engine: &Engine,
-        mmap: MmapVec,
-        info: CompiledComponentInfo,
-        types: Arc<ComponentTypes>,
-        static_modules: PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
+        code_memory: Arc<CodeMemory>,
+        artifacts: Option<ComponentArtifacts>,
     ) -> Result<Component> {
-        let mut code_memory = CodeMemory::new(mmap)?;
-        code_memory.publish()?;
-        let code_memory = Arc::new(code_memory);
+        let ComponentArtifacts {
+            info,
+            types,
+            static_modules,
+        } = match artifacts {
+            Some(artifacts) => artifacts,
+            None => bincode::deserialize(code_memory.wasmtime_info())?,
+        };
 
+        // Create a signature registration with the `Engine` for all trampolines
+        // and core wasm types found within this component, both for the
+        // component and for all included core wasm modules.
         let signatures = SignatureCollection::new_for_module(
             engine.signatures(),
             types.module_types(),
@@ -377,11 +443,20 @@ impl Component {
                     })
                 }),
         );
+
+        // Assemble the `CodeObject` artifact which is shared by all core wasm
+        // modules as well as the final component.
+        let types = Arc::new(types);
         let code = Arc::new(CodeObject::new(code_memory, signatures, types.into()));
+
+        // Convert all information about static core wasm modules into actual
+        // `Module` instances by converting each `CompiledModuleInfo`, the
+        // `types` type information, and the code memory to a runtime object.
         let static_modules = static_modules
             .into_iter()
             .map(|(_, info)| Module::from_parts_raw(engine, code.clone(), info))
             .collect::<Result<_>>()?;
+
         Ok(Component {
             inner: Arc::new(ComponentInner {
                 static_modules,
@@ -439,5 +514,17 @@ impl Component {
 
     pub(crate) fn code_object(&self) -> &Arc<CodeObject> {
         &self.inner.code
+    }
+
+    /// Same as [`Module::serialize`], except for a component.
+    ///
+    /// Note that the artifact produced here must be passed to
+    /// [`Component::deserialize`] and is not compatible for use with
+    /// [`Module`].
+    ///
+    /// [`Module::serialize`]: crate::Module::serialize
+    /// [`Module`]: crate::Module
+    pub fn serialize(&self) -> Result<Vec<u8>> {
+        Ok(self.code_object().code_memory().mmap().to_vec())
     }
 }

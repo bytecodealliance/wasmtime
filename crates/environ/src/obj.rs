@@ -1,22 +1,19 @@
 //! Utilities for working with object files that operate as Wasmtime's
 //! serialization and intermediate format for compiled modules.
 
-use crate::{EntityRef, FuncIndex, SignatureIndex};
+/// Filler for the `os_abi` field of the ELF header.
+///
+/// This is just a constant that seems reasonable in the sense it's unlikely to
+/// clash with others.
+pub const ELFOSABI_WASMTIME: u8 = 200;
 
-const FUNCTION_PREFIX: &str = "_wasm_function_";
-const TRAMPOLINE_PREFIX: &str = "_trampoline_";
+/// Flag for the `e_flags` field in the ELF header indicating a compiled
+/// module.
+pub const EF_WASMTIME_MODULE: u32 = 1 << 0;
 
-/// Returns the symbol name in an object file for the corresponding wasm
-/// function index in a module.
-pub fn func_symbol_name(index: FuncIndex) -> String {
-    format!("{}{}", FUNCTION_PREFIX, index.index())
-}
-
-/// Returns the symbol name in an object file for the corresponding trampoline
-/// for the given signature in a module.
-pub fn trampoline_symbol_name(index: SignatureIndex) -> String {
-    format!("{}{}", TRAMPOLINE_PREFIX, index.index())
-}
+/// Flag for the `e_flags` field in the ELF header indicating a compiled
+/// component.
+pub const EF_WASMTIME_COMPONENT: u32 = 1 << 1;
 
 /// A custom Wasmtime-specific section of our compilation image which stores
 /// mapping data from offsets in the image to offset in the original wasm
@@ -77,9 +74,6 @@ pub const ELF_WASMTIME_TRAPS: &str = ".wasmtime.traps";
 /// A custom section which consists of just 1 byte which is either 0 or 1 as to
 /// whether BTI is enabled.
 pub const ELF_WASM_BTI: &str = ".wasmtime.bti";
-
-/// A bincode-encoded section containing `ModuleTypes` type information.
-pub const ELF_WASM_TYPES: &str = ".wasmtime.types";
 
 /// A bincode-encoded section containing engine-specific metadata used to
 /// double-check that an artifact can be loaded into the current host.

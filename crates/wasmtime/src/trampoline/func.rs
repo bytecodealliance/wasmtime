@@ -112,7 +112,9 @@ pub fn create_function<F>(
 where
     F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<(), Trap> + Send + Sync + 'static,
 {
-    let mut obj = engine.compiler().object()?;
+    let mut obj = engine
+        .compiler()
+        .object(wasmtime_environ::ObjectKind::Module)?;
     let (t1, t2) = engine.compiler().emit_trampoline_obj(
         ft.as_wasm_func_type(),
         stub_fn::<F> as usize,

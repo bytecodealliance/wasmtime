@@ -1,13 +1,14 @@
 //! A `Compilation` contains the compiled function bodies for a WebAssembly
 //! module.
 
+use crate::obj;
 use crate::{
     DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, ModuleTranslation, ModuleTypes,
     PrimaryMap, StackMap, Tunables, WasmError, WasmFuncType,
 };
 use anyhow::Result;
 use object::write::{Object, SymbolId};
-use object::{Architecture, BinaryFormat};
+use object::{Architecture, BinaryFormat, FileFlags};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::borrow::Cow;
@@ -144,6 +145,14 @@ pub enum SettingKind {
     Preset,
 }
 
+/// Types of objects that can be created by `Compiler::object`
+pub enum ObjectKind {
+    /// A core wasm compilation artifact
+    Module,
+    /// A component compilation artifact
+    Component,
+}
+
 /// An implementation of a compiler which can compile WebAssembly functions to
 /// machine code and perform other miscellaneous tasks needed by the JIT runtime.
 pub trait Compiler: Send + Sync {
@@ -218,11 +227,11 @@ pub trait Compiler: Send + Sync {
     /// The returned object file will have an appropriate
     /// architecture/endianness for `self.triple()`, but at this time it is
     /// always an ELF file, regardless of target platform.
-    fn object(&self) -> Result<Object<'static>> {
+    fn object(&self, kind: ObjectKind) -> Result<Object<'static>> {
         use target_lexicon::Architecture::*;
 
         let triple = self.triple();
-        Ok(Object::new(
+        let mut obj = Object::new(
             BinaryFormat::Elf,
             match triple.architecture {
                 X86_32(_) => Architecture::I386,
@@ -239,7 +248,16 @@ pub trait Compiler: Send + Sync {
                 target_lexicon::Endianness::Little => object::Endianness::Little,
                 target_lexicon::Endianness::Big => object::Endianness::Big,
             },
-        ))
+        );
+        obj.flags = FileFlags::Elf {
+            os_abi: obj::ELFOSABI_WASMTIME,
+            e_flags: match kind {
+                ObjectKind::Module => obj::EF_WASMTIME_MODULE,
+                ObjectKind::Component => obj::EF_WASMTIME_COMPONENT,
+            },
+            abi_version: 0,
+        };
+        Ok(obj)
     }
 
     /// Returns the target triple that this compiler is compiling for.

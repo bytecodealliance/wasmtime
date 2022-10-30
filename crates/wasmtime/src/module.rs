@@ -13,10 +13,9 @@ use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
-use wasmtime_environ::obj;
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, FunctionLoc, ModuleEnvironment, ModuleTranslation,
-    ModuleTypes, PrimaryMap, SignatureIndex, WasmFunctionInfo,
+    ModuleTypes, ObjectKind, PrimaryMap, SignatureIndex, WasmFunctionInfo,
 };
 use wasmtime_jit::{CodeMemory, CompiledModule, CompiledModuleInfo};
 use wasmtime_runtime::{
@@ -24,7 +23,6 @@ use wasmtime_runtime::{
 };
 
 mod registry;
-mod serialization;
 
 pub use registry::{is_wasm_trap_pc, register_code, unregister_code, ModuleRegistry};
 
@@ -311,7 +309,7 @@ impl Module {
 
                     // Cache hit, deserialize the provided artifacts
                     |(engine, _wasm), serialized_bytes| {
-                        let code = engine.0.load_code_bytes(&serialized_bytes).ok()?;
+                        let code = engine.0.load_code_bytes(&serialized_bytes, ObjectKind::Module).ok()?;
                         Some((code, None))
                     },
                 )?;
@@ -392,17 +390,20 @@ impl Module {
         let mut compiled_funcs = Vec::with_capacity(funcs.len() + trampolines.len());
         for (info, func) in funcs {
             let idx = func_infos.push(info);
-            let sym = obj::func_symbol_name(translation.module.func_index(idx));
+            let sym = format!(
+                "_wasm_function_{}",
+                translation.module.func_index(idx).as_u32()
+            );
             compiled_funcs.push((sym, func));
         }
         for (sig, func) in translation.exported_signatures.iter().zip(trampolines) {
-            let sym = obj::trampoline_symbol_name(*sig);
+            let sym = format!("_trampoline_{}", sig.as_u32());
             compiled_funcs.push((sym, func));
         }
 
         // Emplace all compiled functions into the object file with any other
         // sections associated with code as well.
-        let mut obj = engine.compiler().object()?;
+        let mut obj = engine.compiler().object(ObjectKind::Module)?;
         let locs = compiler.append_code(&mut obj, &compiled_funcs, tunables, &|i, idx| {
             assert!(i < func_infos.len());
             let defined = translation.module.defined_func_index(idx).unwrap();
@@ -445,11 +446,10 @@ impl Module {
         // it's left as an exercise for later.
         engine.append_compiler_info(&mut obj);
         engine.append_bti(&mut obj);
-        serialization::append_types(&types, &mut obj);
 
         let mut obj = wasmtime_jit::ObjectBuilder::new(obj, tunables);
         let info = obj.append(translation, funcs, trampolines)?;
-        obj.serialize_info(&info);
+        obj.serialize_info(&(&info, &types));
         let mmap = obj.finish()?;
 
         Ok((mmap, Some((info, types))))
@@ -540,7 +540,7 @@ impl Module {
     /// blobs across versions of wasmtime you can be safely guaranteed that
     /// future versions of wasmtime will reject old cache entries).
     pub unsafe fn deserialize(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
-        let code = engine.load_code_bytes(bytes.as_ref())?;
+        let code = engine.load_code_bytes(bytes.as_ref(), ObjectKind::Module)?;
         Module::from_parts(engine, code, None)
     }
 
@@ -568,7 +568,7 @@ impl Module {
     /// reflect the current state of the file, not necessarily the origianl
     /// state of the file.
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Module> {
-        let code = engine.load_code_file(path.as_ref())?;
+        let code = engine.load_code_file(path.as_ref(), ObjectKind::Module)?;
         Module::from_parts(engine, code, None)
     }
 
@@ -589,11 +589,7 @@ impl Module {
         // already.
         let (info, types) = match info_and_types {
             Some((info, types)) => (info, types),
-            None => {
-                let types = serialization::deserialize_types(code_memory.mmap())?;
-                let info = bincode::deserialize(code_memory.wasmtime_info())?;
-                (info, types)
-            }
+            None => bincode::deserialize(code_memory.wasmtime_info())?,
         };
 
         // Register function type signatures into the engine for the lifetime

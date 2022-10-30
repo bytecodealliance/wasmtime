@@ -12,7 +12,7 @@ use std::sync::Arc;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::obj;
-use wasmtime_environ::FlagValue;
+use wasmtime_environ::{FlagValue, ObjectKind};
 use wasmtime_jit::{CodeMemory, ProfilingAgent};
 use wasmtime_runtime::{debug_builtins, CompiledModuleIdAllocator, InstanceAllocator, MmapVec};
 
@@ -223,6 +223,19 @@ impl Engine {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
         let (mmap, _) = crate::Module::build_artifacts(self, &bytes)?;
+        Ok(mmap.to_vec())
+    }
+
+    /// Same as [`Engine::precompile_module`] except for a
+    /// [`Component`](crate::component::Component)
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg(feature = "component-model")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "component-model")))]
+    pub fn precompile_component(&self, bytes: &[u8]) -> Result<Vec<u8>> {
+        #[cfg(feature = "wat")]
+        let bytes = wat::parse_bytes(&bytes)?;
+        let (mmap, _) = crate::component::Component::build_artifacts(self, &bytes)?;
         Ok(mmap.to_vec())
     }
 
@@ -573,20 +586,35 @@ impl Engine {
         obj.append_section_data(section, &[contents], 1);
     }
 
-    pub(crate) fn load_code_bytes(&self, bytes: &[u8]) -> Result<Arc<CodeMemory>> {
-        self.load_code(MmapVec::from_slice(bytes)?)
+    /// Loads a `CodeMemory` from the specified in-memory slice, copying it to a
+    /// uniquely owned mmap.
+    ///
+    /// The `expected` marker here is whether the bytes are expected to be a
+    /// precompiled module or a component.
+    pub(crate) fn load_code_bytes(
+        &self,
+        bytes: &[u8],
+        expected: ObjectKind,
+    ) -> Result<Arc<CodeMemory>> {
+        self.load_code(MmapVec::from_slice(bytes)?, expected)
     }
 
-    pub(crate) fn load_code_file(&self, path: &Path) -> Result<Arc<CodeMemory>> {
+    /// Like `load_code_bytes`, but crates a mmap from a file on disk.
+    pub(crate) fn load_code_file(
+        &self,
+        path: &Path,
+        expected: ObjectKind,
+    ) -> Result<Arc<CodeMemory>> {
         self.load_code(
             MmapVec::from_file(path).with_context(|| {
                 format!("failed to create file mapping for: {}", path.display())
             })?,
+            expected,
         )
     }
 
-    fn load_code(&self, mmap: MmapVec) -> Result<Arc<CodeMemory>> {
-        serialization::check_compatible(self, &mmap)?;
+    fn load_code(&self, mmap: MmapVec, expected: ObjectKind) -> Result<Arc<CodeMemory>> {
+        serialization::check_compatible(self, &mmap, expected)?;
         let mut code = CodeMemory::new(mmap)?;
         code.publish()?;
         Ok(Arc::new(code))
