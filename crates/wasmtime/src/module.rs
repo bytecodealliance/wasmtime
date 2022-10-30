@@ -105,7 +105,7 @@ struct ModuleInner {
     engine: Engine,
     /// The compiled artifacts for this module that will be instantiated and
     /// executed.
-    module: Arc<CompiledModule>,
+    module: CompiledModule,
     /// Type information of this module.
     types: Types,
     /// Registered shared signature for the module.
@@ -570,12 +570,12 @@ impl Module {
             Some((info, types)) => (Some(info), types),
             None => (None, serialization::deserialize_types(&mmap)?.into()),
         };
-        let module = Arc::new(CompiledModule::from_artifacts(
+        let module = CompiledModule::from_artifacts(
             mmap,
             info,
             engine.profiler(),
             engine.unique_id_allocator(),
-        )?);
+        )?;
 
         // Validate the module can be used with the current allocator
         engine.allocator().validate(module.module())?;
