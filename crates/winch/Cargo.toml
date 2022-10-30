@@ -12,6 +12,7 @@ winch-codegen = { workspace = true }
 target-lexicon = { workspace = true }
 wasmtime-environ = { workspace = true }
 anyhow = { workspace = true }
+object = { workspace = true }
 
 [features]
 default = ["all-arch", "component-model"]
