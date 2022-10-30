@@ -12,7 +12,7 @@ use wasmtime_environ::component::{
     ComponentTypes, GlobalInitializer, LoweredIndex, RuntimeAlwaysTrapIndex,
     RuntimeTranscoderIndex, StaticModuleIndex, Translator,
 };
-use wasmtime_environ::{FunctionLoc, PrimaryMap, ScopeVec, SignatureIndex, TrapCode};
+use wasmtime_environ::{FunctionLoc, PrimaryMap, ScopeVec, SignatureIndex};
 use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::VMFunctionBody;
 
@@ -60,7 +60,7 @@ struct ComponentInner {
     /// functions that are `canon lift`'d then immediately `canon lower`'d. The
     /// `u32` value here is the offset of the trap instruction from the start fo
     /// the function.
-    always_trap: PrimaryMap<RuntimeAlwaysTrapIndex, (u32, FunctionLoc)>,
+    always_trap: PrimaryMap<RuntimeAlwaysTrapIndex, FunctionLoc>,
 
     /// Where all the cranelift-generated transcode functions are located in the
     /// compiled image of this component.
@@ -198,22 +198,15 @@ impl Component {
             vmtrampolines.into_iter(),
         );
 
-        // Assert that this `always_trap` list is sorted which is relied on in
-        // `register_component` as well as `Component::lookup_trap_code` below.
-        assert!(always_trap
-            .values()
-            .as_slice()
-            .windows(2)
-            .all(|window| { window[0].1.start < window[1].1.start }));
-
-        crate::module::register_component(code_memory.text(), &always_trap);
+        let code_memory = Arc::new(code_memory);
+        crate::module::register_code(&code_memory);
         Ok(Component {
             inner: Arc::new(ComponentInner {
                 component,
                 static_modules,
                 types,
                 signatures,
-                code_memory: Arc::new(code_memory),
+                code_memory,
                 lowerings,
                 always_trap,
                 transcoders,
@@ -229,7 +222,7 @@ impl Component {
         provided_trampolines: &HashSet<SignatureIndex>,
     ) -> Result<(
         PrimaryMap<LoweredIndex, FunctionLoc>,
-        PrimaryMap<RuntimeAlwaysTrapIndex, (u32, FunctionLoc)>,
+        PrimaryMap<RuntimeAlwaysTrapIndex, FunctionLoc>,
         PrimaryMap<RuntimeTranscoderIndex, FunctionLoc>,
         Vec<(SignatureIndex, FunctionLoc)>,
         wasmtime_runtime::MmapVec,
@@ -252,7 +245,8 @@ impl Component {
         let lowerings = lowerings?;
         let nlowerings = lowerings.len();
         let (always_trap, other) = other?;
-        let (always_trap_offsets, always_trap): (Vec<_>, Vec<_>) = always_trap?.into_iter().unzip();
+        let always_trap = always_trap?;
+        let nalways_trap = always_trap.len();
         let (transcoders, trampolines) = other?;
         let transcoders = transcoders?;
         let ntranscoders = transcoders.len();
@@ -297,7 +291,7 @@ impl Component {
         engine.append_bti(&mut obj);
         return Ok((
             locs.by_ref().take(nlowerings).collect(),
-            always_trap_offsets.into_iter().zip(locs.by_ref()).collect(),
+            locs.by_ref().take(nalways_trap).collect(),
             locs.by_ref().take(ntranscoders).collect(),
             trampoline_signatures
                 .into_iter()
@@ -331,7 +325,7 @@ impl Component {
             engine: &Engine,
             component: &wasmtime_environ::component::Component,
             types: &ComponentTypes,
-        ) -> Result<Vec<(u32, Box<dyn Any + Send>)>> {
+        ) -> Result<Vec<Box<dyn Any + Send>>> {
             let always_trap = component
                 .initializers
                 .iter()
@@ -434,7 +428,7 @@ impl Component {
     }
 
     pub(crate) fn always_trap_ptr(&self, index: RuntimeAlwaysTrapIndex) -> NonNull<VMFunctionBody> {
-        let (_, loc) = &self.inner.always_trap[index];
+        let loc = &self.inner.always_trap[index];
         self.func(loc)
     }
 
@@ -449,22 +443,8 @@ impl Component {
         NonNull::new(trampoline.as_ptr() as *mut VMFunctionBody).unwrap()
     }
 
-    /// Looks up a trap code for the instruction at `offset` where the offset
-    /// specified is relative to the start of this component's text section.
-    pub(crate) fn lookup_trap_code(&self, offset: usize) -> Option<TrapCode> {
-        let offset = u32::try_from(offset).ok()?;
-        // Currently traps only come from "always trap" adapters so that map is
-        // the only map that's searched.
-        match self
-            .inner
-            .always_trap
-            .values()
-            .as_slice()
-            .binary_search_by_key(&offset, |(trap_offset, loc)| loc.start + *trap_offset)
-        {
-            Ok(_) => Some(TrapCode::AlwaysTrapAdapter),
-            Err(_) => None,
-        }
+    pub(crate) fn code_memory(&self) -> &Arc<CodeMemory> {
+        &self.inner.code_memory
     }
 }
 
@@ -476,6 +456,6 @@ impl ComponentInner {
 
 impl Drop for ComponentInner {
     fn drop(&mut self) {
-        crate::module::unregister_component(self.code_memory.text());
+        crate::module::unregister_code(&self.code_memory);
     }
 }

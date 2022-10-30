@@ -34,10 +34,7 @@ pub trait ComponentCompiler: Send + Sync {
     /// This will create a small trampoline whose only purpose is to generate a
     /// trap at runtime. This is used to implement the degenerate case of a
     /// `canon lift`'d function immediately being `canon lower`'d.
-    ///
-    /// Returns the offset within the compiled function of where the trap
-    /// instruction is as well as the compiled function itself.
-    fn compile_always_trap(&self, ty: &WasmFuncType) -> Result<(u32, Box<dyn Any + Send>)>;
+    fn compile_always_trap(&self, ty: &WasmFuncType) -> Result<Box<dyn Any + Send>>;
 
     /// Compiles a trampoline to implement string transcoding from adapter
     /// modules.

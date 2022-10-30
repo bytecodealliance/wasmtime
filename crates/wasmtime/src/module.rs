@@ -26,9 +26,7 @@ use wasmtime_runtime::{
 mod registry;
 mod serialization;
 
-pub use registry::{is_wasm_trap_pc, ModuleRegistry};
-#[cfg(feature = "component-model")]
-pub use registry::{register_component, unregister_component};
+pub use registry::{is_wasm_trap_pc, register_code, unregister_code, ModuleRegistry};
 
 /// A compiled WebAssembly module, ready to be instantiated.
 ///
@@ -592,7 +590,7 @@ impl Module {
         // into the global registry of modules so we can resolve traps
         // appropriately. Note that the corresponding `unregister` happens below
         // in `Drop for ModuleInner`.
-        registry::register_module(module.code_memory());
+        registry::register_code(module.code_memory());
 
         Ok(Self {
             inner: Arc::new(ModuleInner {
@@ -1048,7 +1046,7 @@ impl wasmtime_runtime::ModuleInfo for ModuleInner {
 
 impl Drop for ModuleInner {
     fn drop(&mut self) {
-        registry::unregister_module(self.module.code_memory());
+        registry::unregister_code(self.module.code_memory());
     }
 }
 

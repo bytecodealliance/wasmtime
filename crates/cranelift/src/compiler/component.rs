@@ -158,7 +158,7 @@ impl ComponentCompiler for Compiler {
         Ok(Box::new(func))
     }
 
-    fn compile_always_trap(&self, ty: &WasmFuncType) -> Result<(u32, Box<dyn Any + Send>)> {
+    fn compile_always_trap(&self, ty: &WasmFuncType) -> Result<Box<dyn Any + Send>> {
         let isa = &*self.isa;
         let CompilerContext {
             mut func_translator,
@@ -182,14 +182,13 @@ impl ComponentCompiler for Compiler {
 
         let func: CompiledFunction =
             self.finish_trampoline(&mut context, incremental_cache_ctx.as_mut(), isa)?;
-        let trap_offset = func.traps[0].code_offset;
         self.save_context(CompilerContext {
             func_translator,
             codegen_context: context,
             incremental_cache_ctx,
             validator_allocations,
         });
-        Ok((trap_offset, Box::new(func)))
+        Ok(Box::new(func))
     }
 
     fn compile_transcoder(

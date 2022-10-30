@@ -9,8 +9,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 use wasmtime_environ::TrapCode;
-#[cfg(feature = "component-model")]
-use wasmtime_environ::{component::RuntimeAlwaysTrapIndex, FunctionLoc, PrimaryMap};
 use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
 
@@ -150,14 +148,15 @@ impl ModuleRegistry {
 
     /// Fetches trap information about a program counter in a backtrace.
     pub fn lookup_trap_code(&self, pc: usize) -> Option<TrapCode> {
-        match self.module_or_component(pc)? {
-            (ModuleOrComponent::Module(module), offset) => wasmtime_environ::lookup_trap_code(
-                module.compiled_module().code_memory().trap_data(),
-                offset,
-            ),
+        let (code, offset) = match self.module_or_component(pc)? {
+            (ModuleOrComponent::Module(module), offset) => {
+                (module.compiled_module().code_memory(), offset)
+            }
             #[cfg(feature = "component-model")]
-            (ModuleOrComponent::Component(component), offset) => component.lookup_trap_code(offset),
-        }
+            (ModuleOrComponent::Component(component), offset) => (component.code_memory(), offset),
+        };
+
+        wasmtime_environ::lookup_trap_code(code.trap_data(), offset)
     }
 
     /// Fetches frame information about a program counter in a backtrace.
@@ -187,8 +186,8 @@ impl ModuleRegistry {
     }
 }
 
-// This is the global module registry that stores information for all modules
-// that are currently in use by any `Store`.
+// This is the global code registry that stores information for all loaded code
+// objects that are currently in use by any `Store` in the current process.
 //
 // The purpose of this map is to be called from signal handlers to determine
 // whether a program counter is a wasm trap or not. Specifically macOS has
@@ -199,23 +198,16 @@ impl ModuleRegistry {
 // supports removal. Any time anything is registered with a `ModuleRegistry`
 // it is also automatically registered with the singleton global module
 // registry. When a `ModuleRegistry` is destroyed then all of its entries
-// are removed from the global module registry.
-static GLOBAL_MODULES: Lazy<RwLock<GlobalModuleRegistry>> = Lazy::new(Default::default);
+// are removed from the global registry.
+static GLOBAL_CODE: Lazy<RwLock<GlobalRegistry>> = Lazy::new(Default::default);
 
-type GlobalModuleRegistry = BTreeMap<usize, (usize, TrapInfo)>;
-
-#[derive(Clone)]
-enum TrapInfo {
-    Module(Arc<CodeMemory>),
-    #[cfg(feature = "component-model")]
-    Component(Arc<Vec<u32>>),
-}
+type GlobalRegistry = BTreeMap<usize, (usize, Arc<CodeMemory>)>;
 
 /// Returns whether the `pc`, according to globally registered information,
 /// is a wasm trap or not.
 pub fn is_wasm_trap_pc(pc: usize) -> bool {
-    let (trap_info, text_offset) = {
-        let all_modules = GLOBAL_MODULES.read().unwrap();
+    let (code, text_offset) = {
+        let all_modules = GLOBAL_CODE.read().unwrap();
 
         let (end, (start, module)) = match all_modules.range(pc..).next() {
             Some(info) => info,
@@ -227,16 +219,7 @@ pub fn is_wasm_trap_pc(pc: usize) -> bool {
         (module.clone(), pc - *start)
     };
 
-    match trap_info {
-        TrapInfo::Module(module) => {
-            wasmtime_environ::lookup_trap_code(module.trap_data(), text_offset).is_some()
-        }
-        #[cfg(feature = "component-model")]
-        TrapInfo::Component(traps) => {
-            let offset = u32::try_from(text_offset).unwrap();
-            traps.binary_search(&offset).is_ok()
-        }
-    }
+    wasmtime_environ::lookup_trap_code(code.trap_data(), text_offset).is_some()
 }
 
 /// Registers a new region of code.
@@ -245,69 +228,33 @@ pub fn is_wasm_trap_pc(pc: usize) -> bool {
 /// prevent leaking memory.
 ///
 /// This is required to enable traps to work correctly since the signal handler
-/// will lookup in the `GLOBAL_MODULES` list to determine which a particular pc
+/// will lookup in the `GLOBAL_CODE` list to determine which a particular pc
 /// is a trap or not.
-pub fn register_module(module: &Arc<CodeMemory>) {
-    let code = module.text();
-    if code.is_empty() {
+pub fn register_code(code: &Arc<CodeMemory>) {
+    let text = code.text();
+    if text.is_empty() {
         return;
     }
-    let start = code.as_ptr() as usize;
-    let end = start + code.len() - 1;
-    let prev = GLOBAL_MODULES
+    let start = text.as_ptr() as usize;
+    let end = start + text.len() - 1;
+    let prev = GLOBAL_CODE
         .write()
         .unwrap()
-        .insert(end, (start, TrapInfo::Module(module.clone())));
+        .insert(end, (start, code.clone()));
     assert!(prev.is_none());
 }
 
-/// Unregisters a module from the global map.
+/// Unregisters a code mmap from the global map.
 ///
 /// Must have been previously registered with `register`.
-pub fn unregister_module(module: &Arc<CodeMemory>) {
-    let code = module.text();
-    if code.is_empty() {
-        return;
-    }
-    let end = (code.as_ptr() as usize) + code.len() - 1;
-    let module = GLOBAL_MODULES.write().unwrap().remove(&end);
-    assert!(module.is_some());
-}
-
-/// Same as `register_module`, but for components
-#[cfg(feature = "component-model")]
-pub fn register_component(
-    text: &[u8],
-    traps: &PrimaryMap<RuntimeAlwaysTrapIndex, (u32, FunctionLoc)>,
-) {
+pub fn unregister_code(code: &Arc<CodeMemory>) {
+    let text = code.text();
     if text.is_empty() {
         return;
     }
-    let start = text.as_ptr() as usize;
-    let end = start + text.len();
-    let info = Arc::new(
-        traps
-            .iter()
-            .map(|(_, (trap_offset, loc))| loc.start + *trap_offset)
-            .collect::<Vec<_>>(),
-    );
-    let prev = GLOBAL_MODULES
-        .write()
-        .unwrap()
-        .insert(end, (start, TrapInfo::Component(info)));
-    assert!(prev.is_none());
-}
-
-/// Same as `unregister_module`, but for components
-#[cfg(feature = "component-model")]
-pub fn unregister_component(text: &[u8]) {
-    if text.is_empty() {
-        return;
-    }
-    let start = text.as_ptr() as usize;
-    let end = start + text.len();
-    let info = GLOBAL_MODULES.write().unwrap().remove(&end);
-    assert!(info.is_some());
+    let end = (text.as_ptr() as usize) + text.len() - 1;
+    let code = GLOBAL_CODE.write().unwrap().remove(&end);
+    assert!(code.is_some());
 }
 
 #[test]
