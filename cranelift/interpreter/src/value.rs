@@ -445,15 +445,7 @@ impl Value for DataValue {
                 _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
             },
             ValueConversionKind::RoundNearestEven(ty) => match (self, ty) {
-                (DataValue::F64(n), types::F32) => {
-                    let mut x = n.as_f64() as f32;
-                    // Rust rounds away from zero, so if we've rounded up we
-                    // should replace this with a proper rounding tied to even.
-                    if (x as f64) != n.as_f64() {
-                        x = n.round_ties_even().as_f64() as f32;
-                    }
-                    DataValue::F32(x.into())
-                }
+                (DataValue::F64(n), types::F32) => DataValue::F32(Ieee32::from(n.as_f64() as f32)),
                 (s, _) => unimplemented!("conversion: {} -> {:?}", s.ty(), kind),
             },
             ValueConversionKind::ToBoolean => match self.ty() {
