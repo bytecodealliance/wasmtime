@@ -78,7 +78,7 @@ impl DiffEngine for WasmiEngine {
         };
         assert!(wasmi.as_code().is_some());
         assert_eq!(
-            wasmi.as_code().map(wasmi_to_wasmtime_tap_code),
+            wasmi.as_code().map(wasmi_to_wasmtime_trap_code),
             trap.trap_code(),
         );
     }
