@@ -242,7 +242,6 @@ impl InstructionData {
     pub fn trap_code(&self) -> Option<TrapCode> {
         match *self {
             Self::CondTrap { code, .. }
-            | Self::FloatCondTrap { code, .. }
             | Self::Trap { code, .. } => Some(code),
             _ => None,
         }
@@ -262,8 +261,7 @@ impl InstructionData {
     /// condition.  Otherwise, return `None`.
     pub fn fp_cond_code(&self) -> Option<FloatCC> {
         match self {
-            &InstructionData::FloatCompare { cond, .. }
-            | &InstructionData::FloatCondTrap { cond, .. } => Some(cond),
+            &InstructionData::FloatCompare { cond, .. } => Some(cond),
             _ => None,
         }
     }
@@ -273,7 +271,6 @@ impl InstructionData {
     pub fn trap_code_mut(&mut self) -> Option<&mut TrapCode> {
         match self {
             Self::CondTrap { code, .. }
-            | Self::FloatCondTrap { code, .. }
             | Self::Trap { code, .. } => Some(code),
             _ => None,
         }

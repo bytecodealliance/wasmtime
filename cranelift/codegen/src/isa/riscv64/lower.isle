@@ -850,11 +850,6 @@
     (vec_writable_to_regs dst)))
 
 
-;;;;;  Rules for `trapff`;;;;;;;;;
-(rule
-  (lower (trapff cc (ffcmp a @ (value_type ty) b) trap_code))
-  (gen_trapff cc a b ty trap_code))
-
 ;;;;;  Rules for `bmask`;;;;;;;;;
 (rule
   (lower (has_type oty (bmask x @ (value_type ity))))

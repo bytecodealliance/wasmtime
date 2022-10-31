@@ -3021,18 +3021,6 @@ impl<'a> Parser<'a> {
                 let code = self.match_enum("expected trap code")?;
                 InstructionData::CondTrap { opcode, arg, code }
             }
-            InstructionFormat::FloatCondTrap => {
-                let cond = self.match_enum("expected floatcc condition code")?;
-                let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let code = self.match_enum("expected trap code")?;
-                InstructionData::FloatCondTrap {
-                    opcode,
-                    cond,
-                    arg,
-                    code,
-                }
-            }
             InstructionFormat::AtomicCas => {
                 let flags = self.optional_memflags();
                 let addr = self.match_value("expected SSA value address")?;

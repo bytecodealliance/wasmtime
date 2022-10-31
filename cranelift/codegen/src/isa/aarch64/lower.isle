@@ -1682,13 +1682,6 @@
 (rule (lower (trap trap_code))
       (side_effect (udf trap_code)))
 
-;;;; Rules for `trapff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Verification ensures the input is always a single-def ffcmp.
-(rule (lower (trapff cc insn @ (ffcmp x @ (value_type ty) y) trap_code))
-      (let ((cond Cond (fp_cond_code cc)))
-       (trap_if (fpu_cmp (scalar_size ty) x y) trap_code cond)))
-
 ;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (resumable_trap trap_code))

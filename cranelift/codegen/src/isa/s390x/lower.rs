@@ -222,7 +222,7 @@ impl LowerBackend for S390xBackend {
             Opcode::GlobalValue => {
                 panic!("global_value should have been removed by legalization!");
             }
-            Opcode::Ifcmp | Opcode::Ffcmp | Opcode::Trapff => {
+            Opcode::Ifcmp | Opcode::Ffcmp => {
                 panic!("Flags opcode should not be encountered.");
             }
             Opcode::Jump | Opcode::Brz | Opcode::Brnz | Opcode::BrTable => {
