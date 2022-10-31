@@ -129,7 +129,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         for i in 0..self.lower_ctx.sigs()[*abi].num_rets() {
             if let &ABIArg::Slots {
                 ref slots, purpose, ..
-            } = &self.lower_ctx.sigs()[*abi].get_ret(i)
+            } = &self.lower_ctx.sigs()[*abi].get_ret(self.lower_ctx.sigs(), i)
             {
                 if purpose == ArgumentPurpose::StructReturn {
                     continue;
@@ -192,7 +192,8 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         defs: &CallRetList,
         opcode: &Opcode,
     ) -> BoxCallInfo {
-        let clobbers = self.lower_ctx.sigs()[*abi].call_clobbers::<S390xMachineDeps>();
+        let clobbers =
+            self.lower_ctx.sigs()[*abi].call_clobbers::<S390xMachineDeps>(self.lower_ctx.sigs());
         Box::new(CallInfo {
             dest: name.clone(),
             uses: uses.clone(),
@@ -213,7 +214,8 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> 
         defs: &CallRetList,
         opcode: &Opcode,
     ) -> BoxCallIndInfo {
-        let clobbers = self.lower_ctx.sigs()[*abi].call_clobbers::<S390xMachineDeps>();
+        let clobbers =
+            self.lower_ctx.sigs()[*abi].call_clobbers::<S390xMachineDeps>(self.lower_ctx.sigs());
         Box::new(CallIndInfo {
             rn: target,
             uses: uses.clone(),

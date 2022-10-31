@@ -87,7 +87,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         params: I,
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
-    ) -> CodegenResult<(ABIArgVec, i64, Option<usize>)>
+        mut args: ArgsAccumulator<'_>,
+    ) -> CodegenResult<(i64, Option<usize>)>
     where
         I: IntoIterator<Item = &'a ir::AbiParam>,
     {
@@ -97,7 +98,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let mut next_vreg = 0;
         let mut next_stack: u64 = 0;
         let mut next_param_idx = 0; // Fastcall cares about overall param index
-        let mut ret = ABIArgVec::new();
 
         if args_or_rets == ArgsOrRets::Args && is_fastcall {
             // Fastcall always reserves 32 bytes of shadow space corresponding to
@@ -114,7 +114,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 let size = size as u64;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
                 next_stack += size;
-                ret.push(ABIArg::StructArg {
+                args.push(ABIArg::StructArg {
                     pointer: None,
                     offset,
                     size,
@@ -216,7 +216,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 }
             }
 
-            ret.push(ABIArg::Slots {
+            args.push(ABIArg::Slots {
                 slots,
                 purpose: param.purpose,
             });
@@ -225,14 +225,14 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
             if let Some(reg) = get_intreg_for_arg(&call_conv, next_gpr, next_param_idx) {
-                ret.push(ABIArg::reg(
+                args.push(ABIArg::reg(
                     reg.to_real_reg().unwrap(),
                     types::I64,
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
                 ));
             } else {
-                ret.push(ABIArg::stack(
+                args.push(ABIArg::stack(
                     next_stack as i64,
                     types::I64,
                     ir::ArgumentExtension::None,
@@ -240,7 +240,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 ));
                 next_stack += 8;
             }
-            Some(ret.len() - 1)
+            Some(args.args().len() - 1)
         } else {
             None
         };
@@ -252,7 +252,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             return Err(CodegenError::ImplLimitExceeded);
         }
 
-        Ok((ret, next_stack as i64, extra_arg))
+        Ok((next_stack as i64, extra_arg))
     }
 
     fn fp_to_arg_offset(_call_conv: isa::CallConv, _flags: &settings::Flags) -> i64 {
