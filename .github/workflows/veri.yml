@@ -16,6 +16,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - uses: ./.github/actions/install-rust
     - name: Build veri_engine
       run: cargo build --verbose --manifest-path cranelift/isle/veri/veri_engine/Cargo.toml
     - name: Test veri_engine
