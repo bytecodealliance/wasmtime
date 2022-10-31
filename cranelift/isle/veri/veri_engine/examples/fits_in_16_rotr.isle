@@ -1,0 +1,30 @@
+
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
+(decl lower (Inst) InstOutput)
+
+;; Instruction formats.
+(type MInst
+  (enum
+))
+
+;; Place a `Value` into a register, zero extending it to 32-bits
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
+(decl put_in_reg_zext32 (Value) Reg)
+(extern constructor put_in_reg_zext32 put_in_reg_zext32)
+
+;;@ (spec (sig (args t, x, y) (ret))
+;;@       (assertions 
+;;@          (= (rotr (x) (y)) (ret)),
+;;@          (= (widthof (x)) (t)), 
+;;@          (<= (widthof (x)) (16i128: isleType)), 
+;;@          (<= (widthof (y)) (16i128: isleType)), 
+;;@       )
+;;@ )
+(decl small_rotr (Type Reg Reg) Reg)
+(extern constructor small_rotr small_rotr)
+
+;; General 8/16-bit case.
+(rule -3 (lower (has_type (fits_in_16 ty) (rotr x y)))
+      (small_rotr ty (put_in_reg_zext32 x) (value_regs_get y 0)))
