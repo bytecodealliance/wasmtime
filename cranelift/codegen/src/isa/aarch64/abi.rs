@@ -345,7 +345,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 ));
                 next_stack += 8;
             }
-            Some(args.len() - 1)
+            Some(args.args().len() - 1)
         } else {
             None
         };

@@ -240,7 +240,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 ));
                 next_stack += 8;
             }
-            Some(args.len() - 1)
+            Some(args.args().len() - 1)
         } else {
             None
         };

@@ -177,7 +177,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 args.push(arg);
                 next_stack += 8;
             }
-            Some(args.len() - 1)
+            Some(args.args().len() - 1)
         } else {
             None
         };

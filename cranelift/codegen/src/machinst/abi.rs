@@ -327,20 +327,14 @@ impl<'a> ArgsAccumulator<'a> {
     pub fn push(&mut self, arg: ABIArg) {
         self.sig_set_abi_args.push(arg)
     }
-}
-
-impl std::ops::Deref for ArgsAccumulator<'_> {
-    type Target = [ABIArg];
 
     #[inline]
-    fn deref(&self) -> &Self::Target {
+    pub fn args(&self) -> &[ABIArg] {
         &self.sig_set_abi_args[self.start..]
     }
-}
 
-impl std::ops::DerefMut for ArgsAccumulator<'_> {
     #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
+    pub fn args_mut(&mut self) -> &mut [ABIArg] {
         &mut self.sig_set_abi_args[self.start..]
     }
 }
