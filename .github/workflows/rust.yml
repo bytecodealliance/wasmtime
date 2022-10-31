@@ -1,0 +1,26 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "oct-3-rebase" ]
+  pull_request:
+    branches: [ "oct-3-rebase" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build veri_engine
+      run: cargo build --verbose --manifest-path cranelift/isle/veri/veri_engine/Cargo.toml
+    - name: Test veri_engine
+      run: cargo test --verbose --manifest-path cranelift/isle/veri/veri_engine/Cargo.toml
+    - name: Build veri_annotation
+      run: cargo build --verbose --manifest-path cranelift/isle/veri/veri_annotation/Cargo.toml
+    - name: Test veri_annotation
+      run: cargo test --verbose --manifest-path cranelift/isle/veri/veri_annotation/Cargo.toml
