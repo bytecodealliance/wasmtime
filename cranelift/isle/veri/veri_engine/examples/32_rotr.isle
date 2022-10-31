@@ -1,0 +1,20 @@
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
+(decl lower (Inst) InstOutput)
+
+;; Instruction formats.
+(type MInst
+  (enum
+))
+
+;;@ (spec (sig (args t, x, y) (ret))
+;;@       (assertions 
+;;@          (= (rotr (conv_to (t) (x)) (conv_to (t) (y))) (ret)),
+;;@       )
+;;@ )
+(decl a64_rotr (Type Reg Reg) Reg)
+(extern constructor a64_rotr a64_rotr)
+
+;; General 32-bit case.
+(rule -1 (lower (has_type $I32 (rotr x y)))
+      (a64_rotr $I32 x (value_regs_get y 0)))
