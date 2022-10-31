@@ -229,6 +229,11 @@ pub struct CommonOptions {
     #[cfg(feature = "pooling-allocator")]
     #[clap(long)]
     pub pooling_allocator: bool,
+
+    /// Maximum stack size, in bytes, that wasm is allowed to consumed before a
+    /// stack overflow is reported.
+    #[clap(long)]
+    pub max_wasm_stack: Option<usize>,
 }
 
 impl CommonOptions {
@@ -333,6 +338,10 @@ impl CommonOptions {
                     instance_limits,
                 });
             }
+        }
+
+        if let Some(max) = self.max_wasm_stack {
+            config.max_wasm_stack(max);
         }
 
         Ok(config)
