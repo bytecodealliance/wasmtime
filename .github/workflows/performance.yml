@@ -105,8 +105,8 @@ jobs:
         run: |
           cargo run -- \
           benchmark \
-          --processes 1 \
-          --iterations-per-process 2 \
+          --processes 5 \
+          --iterations-per-process 5 \
           --engine /tmp/wasmtime_main.so \
           --engine /tmp/wasmtime_commit.so \
           --output-format csv \
@@ -122,31 +122,67 @@ jobs:
 
       - name: Post Process Results
         run: |
+          # Prepare csv for processing
           pip3 install pandas numpy
           grep -v "nanoseconds" /tmp/results_summarized.csv > /tmp/results_cycles_summarized.csv
           sed -i 's/\/tmp\/wasmtime_commit.so/patch/g' /tmp/results_cycles_summarized.csv
           sed -i 's/\/tmp\/wasmtime_main.so/main/g' /tmp/results_cycles_summarized.csv
           sed -i 's/benchmarks-next\///g'  /tmp/results_cycles_summarized.csv
           sed -i 's/\/benchmark.wasm//g'  /tmp/results_cycles_summarized.csv
-          python3 -c "import pandas as pd; pp = pd.read_csv('/tmp/results_cycles_summarized.csv', \
+
+          # Use Pandas to calculate change and sort results
+          python3 -c "import pandas; pp = pandas.read_csv('/tmp/results_cycles_summarized.csv', \
           usecols=['arch','engine','wasm', 'phase', 'mean'], header=0); \
           pp_sorted = pp.sort_values(['wasm', 'phase', 'engine'], ascending=True); \
           pp_pct_changed=pp_sorted.groupby(['wasm','phase'])['mean'].pct_change().reset_index().rename(columns = {'mean':'pct_change'}); \
           pp_sorted.index.name = 'index'; \
           pp_sorted_merged=pp_sorted.merge(pp_pct_changed, on='index'); \
-          pp_sorted_merged[pp_sorted_merged['engine'].str.contains('patch')]; \
           pp_sorted_merged=pp_sorted_merged[pp_sorted_merged['engine'].str.contains('patch')]; \
           pp_sorted_merged=pp_sorted_merged[['wasm','arch','phase','pct_change']]; \
-          print(pp_sorted_merged.to_string(index=False));" >  /tmp/results_cycles_summarized_sorted2.csv
-          sed -i 's/^/ /' /tmp/results_cycles_summarized_sorted2.csv
-          sed -i 's/ \+/|/g' /tmp/results_cycles_summarized_sorted2.csv
-          sed -i -z 's/\n/|\n/g' /tmp/results_cycles_summarized_sorted2.csv
-          sed -i '2 i\ |-|-|-|-|' /tmp/results_cycles_summarized_sorted2.csv
-          sed -i '/main/d' /tmp/results_cycles_summarized_sorted2.csv
-          sed -i '1 i\Shows pct_change on x64 for the patch if merged compared to current head for main.\n\
-          Pct_change is based on clocktick event cycles where the benchmarks are run with Sightglass. \
-          A negative pct_change means clockticks are expected to be reduced for the benchmark, \
-          for that phase, and by that factor, if the patch were merged (i.e. negative is good).\n' /tmp/results_cycles_summarized_sorted2.csv
+          pp_sorted_merged[pp_sorted_merged['phase'].str.contains('Compilation')].to_csv('/tmp/results_compilation.csv', index=False, float_format='%.3f'); \
+          pp_sorted_merged[pp_sorted_merged['phase'].str.contains('Instantiation')].to_csv('/tmp/results_instantiation.csv', index=False, float_format='%.3f'); \
+          pp_sorted_merged[pp_sorted_merged['phase'].str.contains('Execution')].to_csv('/tmp/results_execution.csv', index=False, float_format='%.3f'); \
+          pp_sorted_merged.groupby(['phase'])['pct_change'].mean().to_csv('/tmp/results_averages.csv', float_format='%.3f')"
+
+          # Print create left-most bars forming the table
+          sed -i 's/^/ /' /tmp/results_compilation.csv
+          sed -i 's/ \+/|/g' /tmp/results_compilation.csv
+          sed -i 's/^/ /' /tmp/results_instantiation.csv
+          sed -i 's/ \+/|/g' /tmp/results_instantiation.csv
+          sed -i 's/^/ /' /tmp/results_execution.csv
+          sed -i 's/ \+/|/g' /tmp/results_execution.csv
+          sed -i 's/^/ /' /tmp/results_averages.csv
+          sed -i 's/ \+/|/g' /tmp/results_averages.csv
+
+          # Print right-most bars forming the table
+          sed -i -z 's/\n/|\n/g' /tmp/results_compilation.csv
+          sed -i -z 's/\n/|\n/g' /tmp/results_instantiation.csv
+          sed -i -z 's/\n/|\n/g' /tmp/results_execution.csv
+          sed -i -z 's/\n/|\n/g' /tmp/results_averages.csv
+
+          # Create the header for the table
+          sed -i '2 i\ |-|-|-|-|' /tmp/results_compilation.csv
+          sed -i '2 i\ |-|-|-|-|' /tmp/results_instantiation.csv
+          sed -i '2 i\ |-|-|-|-|' /tmp/results_execution.csv
+          sed -i '2 i\ |-|-|' /tmp/results_averages.csv
+
+          # Merge results
+          cat /tmp/results_compilation.csv > /tmp/results_cycles_summarized_sorted2a.csv
+          echo >> /tmp/results_cycles_summarized_sorted2a.csv
+          cat /tmp/results_instantiation.csv >> /tmp/results_cycles_summarized_sorted2a.csv
+          echo >> /tmp/results_cycles_summarized_sorted2a.csv
+          cat /tmp/results_execution.csv >> /tmp/results_cycles_summarized_sorted2a.csv
+          echo >> /tmp/results_cycles_summarized_sorted2a.csv
+          echo "**Averages (x64):**" >> /tmp/results_cycles_summarized_sorted2a.csv
+          cat /tmp/results_averages.csv >> /tmp/results_cycles_summarized_sorted2a.csv
+          sed -i 's/,/|/g' /tmp/results_cycles_summarized_sorted2a.csv
+
+          # Final formatting
+          cp /tmp/results_cycles_summarized_sorted2a.csv /tmp/results_cycles_summarized_sorted2.csv
+          sed -i 's/pct_change/change_factor/g' /tmp/results_cycles_summarized_sorted2.csv
+          sed -i '1 i\Change factor shows patch effect on x64 if merged compared to current head for main.\n\
+          Results are based on clocktick (CT) event cycles. Change Factor = (Patched_CT - Main_CT) / (Main_CT) \
+          A negative change factor means clockticks are expected to be reduced by the patch.\n' /tmp/results_cycles_summarized_sorted2.csv
 
       - name: Print Results
         run: cat /tmp/results_cycles_summarized_sorted2.csv
