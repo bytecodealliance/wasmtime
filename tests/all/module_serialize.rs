@@ -103,3 +103,15 @@ fn test_deserialize_from_file() -> Result<()> {
         Ok(())
     }
 }
+
+#[test]
+fn deserialize_from_serialized() -> Result<()> {
+    let engine = Engine::default();
+    let buffer1 = serialize(
+        &engine,
+        "(module (func (export \"run\") (result i32) i32.const 42))",
+    )?;
+    let buffer2 = unsafe { Module::deserialize(&engine, &buffer1)?.serialize()? };
+    assert!(buffer1 == buffer2);
+    Ok(())
+}

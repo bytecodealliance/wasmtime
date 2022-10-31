@@ -120,6 +120,9 @@ struct ModuleInner {
     /// improves memory usage for modules that are created but may not ever be
     /// instantiated.
     memory_images: OnceCell<Option<ModuleMemoryImages>>,
+
+    /// Flag indicating whether this module can be serialized or not.
+    serializable: bool,
 }
 
 impl Module {
@@ -611,13 +614,14 @@ impl Module {
         // Package up all our data into a `CodeObject` and delegate to the final
         // step of module compilation.
         let code = Arc::new(CodeObject::new(code_memory, signatures, types.into()));
-        Module::from_parts_raw(engine, code, info)
+        Module::from_parts_raw(engine, code, info, true)
     }
 
     pub(crate) fn from_parts_raw(
         engine: &Engine,
         code: Arc<CodeObject>,
         info: CompiledModuleInfo,
+        serializable: bool,
     ) -> Result<Self> {
         let module = CompiledModule::from_artifacts(
             code.code_memory().clone(),
@@ -635,6 +639,7 @@ impl Module {
                 code,
                 memory_images: OnceCell::new(),
                 module,
+                serializable,
             }),
         })
     }
@@ -696,6 +701,26 @@ impl Module {
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn serialize(&self) -> Result<Vec<u8>> {
+        // The current representation of compiled modules within a compiled
+        // component means that it cannot be serialized. The mmap returned here
+        // is the mmap for the entire component and while it contains all
+        // necessary data to deserialize this particular module it's all
+        // embedded within component-specific information.
+        //
+        // It's not the hardest thing in the world to support this but it's
+        // expected that there's not much of a use case at this time. In theory
+        // all that needs to be done is to edit the `.wasmtime.info` section
+        // to contains this module's metadata instead of the metadata for the
+        // whole component. The metadata itself is fairly trivially
+        // recreateable here it's more that there's no easy one-off API for
+        // editing the sections of an ELF object to use here.
+        //
+        // Overall for now this simply always returns an error in this
+        // situation. If you're reading this and feel that the situation should
+        // be different please feel free to open an issue.
+        if !self.inner.serializable {
+            bail!("cannot serialize a module exported from a component");
+        }
         Ok(self.compiled_module().mmap().to_vec())
     }
 
