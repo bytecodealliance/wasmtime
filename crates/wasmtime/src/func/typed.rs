@@ -72,6 +72,8 @@ where
     ///
     /// This function will panic if it is called when the underlying [`Func`] is
     /// connected to an asynchronous store.
+    ///
+    /// [`Trap`]: crate::Trap
     pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results> {
         let mut store = store.as_context_mut();
         assert!(
@@ -93,6 +95,8 @@ where
     ///
     /// This function will panic if it is called when the underlying [`Func`] is
     /// connected to a synchronous store.
+    ///
+    /// [`Trap`]: crate::Trap
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub async fn call_async<T>(
