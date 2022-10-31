@@ -1,0 +1,37 @@
+(type ImmLogic (primitive ImmLogic))
+(type ImmShift (primitive ImmShift))
+(type Imm12 (primitive Imm12))
+
+;;@ (spec (sig (args arg) (ret))
+;;@     (assertions (= (arg) (ret))))
+(decl lower (Inst) InstOutput)
+
+;; Instruction formats.
+(type MInst
+  (enum
+))
+
+;; Add an assertion that the value fits, using the constand with 56 1's then 6 0's (~63)
+;;@ (spec (sig (args ty, x) (r))
+;;@   (assertions 
+;;@     (= (r) (conv_to (widthof (r)) (x))),
+;;@     (= (0i65:bv) (& (x) (~ (63i64:bv))))
+;;@   )
+;;@ )
+(decl pure imm_shift_from_imm64 (Type Imm64) ImmShift)
+(extern constructor imm_shift_from_imm64 imm_shift_from_imm64)
+
+
+;;@ (spec (sig (args t, x, y) (ret))
+;;@       (assertions 
+;;@          (= (rotr (conv_to (t) (x)) (conv_to (t) (y))) (ret)),
+;;@       )
+;;@ )
+(decl a64_rotr_imm (Type Reg ImmShift) Reg)
+(extern constructor a64_rotr_imm a64_rotr_imm)
+
+
+;; Specialization for the 64-bit case when the rotation amount is an immediate.
+(rule (lower (has_type $I64 (rotr x (iconst k))))
+      (if-let n (imm_shift_from_imm64 $I64 k))
+      (a64_rotr_imm $I64 x n))
