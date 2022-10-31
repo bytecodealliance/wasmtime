@@ -76,36 +76,11 @@ impl DiffEngine for WasmiEngine {
                 .downcast_ref::<wasmi::core::Trap>()
                 .expect(&format!("not a trap: {:?}", err)),
         };
-        match wasmi.as_code() {
-            Some(wasmi::core::TrapCode::StackOverflow) => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::StackOverflow))
-            }
-            Some(wasmi::core::TrapCode::MemoryAccessOutOfBounds) => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::MemoryOutOfBounds))
-            }
-            Some(wasmi::core::TrapCode::Unreachable) => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::UnreachableCodeReached))
-            }
-            Some(wasmi::core::TrapCode::TableAccessOutOfBounds) => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::TableOutOfBounds))
-            }
-            Some(wasmi::core::TrapCode::ElemUninitialized) => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::IndirectCallToNull))
-            }
-            Some(wasmi::core::TrapCode::DivisionByZero) => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::IntegerDivisionByZero))
-            }
-            Some(wasmi::core::TrapCode::IntegerOverflow) => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::IntegerOverflow))
-            }
-            Some(wasmi::core::TrapCode::InvalidConversionToInt) => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::BadConversionToInteger))
-            }
-            Some(wasmi::core::TrapCode::UnexpectedSignature) => {
-                assert_eq!(trap.trap_code(), Some(TrapCode::BadSignature))
-            }
-            None => unreachable!(),
-        }
+        assert!(wasmi.as_code().is_some());
+        assert_eq!(
+            wasmi.as_code().map(wasmi_to_wasmtime_trap_code),
+            trap.trap_code(),
+        );
     }
 
     fn is_stack_overflow(&self, err: &Error) -> bool {
@@ -117,10 +92,23 @@ impl DiffEngine for WasmiEngine {
                 None => return false,
             },
         };
-        match trap.as_code() {
-            Some(wasmi::core::TrapCode::StackOverflow) => true,
-            _ => false,
-        }
+        matches!(trap.as_code(), Some(wasmi::core::TrapCode::StackOverflow))
+    }
+}
+
+/// Converts `wasmi` trap code to `wasmtime` trap code.
+fn wasmi_to_wasmtime_trap_code(trap: wasmi::core::TrapCode) -> wasmtime::TrapCode {
+    use wasmi::core::TrapCode as WasmiTrapCode;
+    match trap {
+        WasmiTrapCode::Unreachable => TrapCode::UnreachableCodeReached,
+        WasmiTrapCode::MemoryAccessOutOfBounds => TrapCode::MemoryOutOfBounds,
+        WasmiTrapCode::TableAccessOutOfBounds => TrapCode::TableOutOfBounds,
+        WasmiTrapCode::ElemUninitialized => TrapCode::IndirectCallToNull,
+        WasmiTrapCode::DivisionByZero => TrapCode::IntegerDivisionByZero,
+        WasmiTrapCode::IntegerOverflow => TrapCode::IntegerOverflow,
+        WasmiTrapCode::InvalidConversionToInt => TrapCode::BadConversionToInteger,
+        WasmiTrapCode::StackOverflow => TrapCode::StackOverflow,
+        WasmiTrapCode::UnexpectedSignature => TrapCode::BadSignature,
     }
 }
 
@@ -141,35 +129,42 @@ impl DiffInstance for WasmiInstance {
         arguments: &[DiffValue],
         result_tys: &[DiffValueType],
     ) -> Result<Option<Vec<DiffValue>>> {
-        let function = match self
+        let function = self
             .instance
             .get_export(&self.store, function_name)
-            .unwrap()
-        {
-            wasmi::Extern::Func(f) => f,
-            _ => unreachable!(),
-        };
+            .and_then(wasmi::Extern::into_func)
+            .unwrap();
         let arguments: Vec<_> = arguments.iter().map(|x| x.into()).collect();
         let mut results = vec![wasmi::core::Value::I32(0); result_tys.len()];
         function
             .call(&mut self.store, &arguments, &mut results)
             .context("wasmi function trap")?;
-        Ok(Some(results.into_iter().map(|x| x.into()).collect()))
+        Ok(Some(results.into_iter().map(Into::into).collect()))
     }
 
     fn get_global(&mut self, name: &str, _ty: DiffValueType) -> Option<DiffValue> {
-        match self.instance.get_export(&self.store, name).unwrap() {
-            wasmi::Extern::Global(g) => Some(g.get(&self.store).into()),
-            _ => unreachable!(),
-        }
+        Some(
+            self.instance
+                .get_export(&self.store, name)
+                .unwrap()
+                .into_global()
+                .unwrap()
+                .get(&self.store)
+                .into(),
+        )
     }
 
     fn get_memory(&mut self, name: &str, shared: bool) -> Option<Vec<u8>> {
         assert!(!shared);
-        match self.instance.get_export(&self.store, name).unwrap() {
-            wasmi::Extern::Memory(m) => Some(m.data(&self.store).to_vec()),
-            _ => unreachable!(),
-        }
+        Some(
+            self.instance
+                .get_export(&self.store, name)
+                .unwrap()
+                .into_memory()
+                .unwrap()
+                .data(&self.store)
+                .to_vec(),
+        )
     }
 }
 
@@ -188,14 +183,14 @@ impl From<&DiffValue> for wasmi::core::Value {
     }
 }
 
-impl Into<DiffValue> for wasmi::core::Value {
-    fn into(self) -> DiffValue {
-        use wasmi::core::Value::*;
-        match self {
-            I32(n) => DiffValue::I32(n),
-            I64(n) => DiffValue::I64(n),
-            F32(n) => DiffValue::F32(n.to_bits()),
-            F64(n) => DiffValue::F64(n.to_bits()),
+impl From<wasmi::core::Value> for DiffValue {
+    fn from(value: wasmi::core::Value) -> Self {
+        use wasmi::core::Value as WasmiValue;
+        match value {
+            WasmiValue::I32(n) => DiffValue::I32(n),
+            WasmiValue::I64(n) => DiffValue::I64(n),
+            WasmiValue::F32(n) => DiffValue::F32(n.to_bits()),
+            WasmiValue::F64(n) => DiffValue::F64(n.to_bits()),
         }
     }
 }
