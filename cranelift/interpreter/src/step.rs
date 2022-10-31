@@ -806,6 +806,7 @@ where
         Opcode::UshrImm => binary_unsigned(Value::ushr, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::SshrImm => binary(Value::ishr, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::Bitrev => assign(Value::reverse_bits(arg(0)?)?),
+        Opcode::Bswap => assign(Value::swap_bytes(arg(0)?)?),
         Opcode::Clz => assign(arg(0)?.leading_zeros()?),
         Opcode::Cls => {
             let count = if Value::lt(&arg(0)?, &Value::int(0, ctrl_ty)?)? {

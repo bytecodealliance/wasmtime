@@ -934,6 +934,9 @@ impl MachInstEmit for Inst {
                     BitOp::RBit => (0b00000, 0b000000),
                     BitOp::Clz => (0b00000, 0b000100),
                     BitOp::Cls => (0b00000, 0b000101),
+                    BitOp::Rev16 => (0b00000, 0b000001),
+                    BitOp::Rev32 => (0b00000, 0b000010),
+                    BitOp::Rev64 => (0b00000, 0b000011),
                 };
                 sink.put4(enc_bit_rr(size.sf_bit(), op1, op2, rn, rd))
             }

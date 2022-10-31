@@ -100,6 +100,7 @@ impl LowerBackend for S390xBackend {
             | Opcode::Vselect
             | Opcode::Bmask
             | Opcode::Bitrev
+            | Opcode::Bswap
             | Opcode::Clz
             | Opcode::Cls
             | Opcode::Ctz

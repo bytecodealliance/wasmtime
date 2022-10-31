@@ -86,6 +86,7 @@ pub trait Value: Clone + From<DataValue> {
     fn leading_zeros(self) -> ValueResult<Self>;
     fn trailing_zeros(self) -> ValueResult<Self>;
     fn reverse_bits(self) -> ValueResult<Self>;
+    fn swap_bytes(self) -> ValueResult<Self>;
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -715,5 +716,9 @@ impl Value for DataValue {
 
     fn reverse_bits(self) -> ValueResult<Self> {
         unary_match!(reverse_bits(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+    }
+
+    fn swap_bytes(self) -> ValueResult<Self> {
+        unary_match!(swap_bytes(&self); [I16, I32, I64, I128, U16, U32, U64, U128])
     }
 }

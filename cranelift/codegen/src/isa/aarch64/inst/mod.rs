@@ -67,6 +67,9 @@ impl BitOp {
             BitOp::RBit => "rbit",
             BitOp::Clz => "clz",
             BitOp::Cls => "cls",
+            BitOp::Rev16 => "rev16",
+            BitOp::Rev32 => "rev32",
+            BitOp::Rev64 => "rev64",
         }
     }
 }

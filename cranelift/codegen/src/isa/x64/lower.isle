@@ -2065,6 +2065,19 @@
                             hi32)))
         swap32))
 
+;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; x64 bswap instruction is only for 32- or 64-bit swaps
+;; implement the 16-bit swap as a rotl by 8
+(rule (lower (has_type $I16 (bswap src)))
+      (x64_rotl $I16 src (Imm8Reg.Imm8 8)))
+
+(rule (lower (has_type $I32 (bswap src)))
+      (x64_bswap $I32 src))
+
+(rule (lower (has_type $I64 (bswap src)))
+      (x64_bswap $I64 src))
+
 ;; Rules for `is_null` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Null references are represented by the constant value `0`.

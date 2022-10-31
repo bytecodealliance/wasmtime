@@ -68,6 +68,7 @@ impl Inst {
             Inst::AluRmiR { .. }
             | Inst::AluRM { .. }
             | Inst::AtomicRmwSeq { .. }
+            | Inst::Bswap { .. }
             | Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
             | Inst::CheckedDivOrRemSeq { .. }
@@ -1373,6 +1374,17 @@ impl PrettyPrint for Inst {
                 format!("{} {}", ljustify2("set".to_string(), cc.to_string()), dst)
             }
 
+            Inst::Bswap { size, src, dst } => {
+                let src = pretty_print_reg(src.to_reg(), size.to_bytes(), allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
+                format!(
+                    "{} {}, {}",
+                    ljustify2("bswap".to_string(), suffix_bwlq(*size)),
+                    src,
+                    dst
+                )
+            }
+
             Inst::Cmove {
                 size,
                 cc,
@@ -1952,6 +1964,10 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
         Inst::Setcc { dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
+        }
+        Inst::Bswap { src, dst, .. } => {
+            collector.reg_use(src.to_reg());
+            collector.reg_reuse_def(dst.to_writable_reg(), 0);
         }
         Inst::Cmove {
             consequent,
