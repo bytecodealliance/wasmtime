@@ -20,7 +20,7 @@
 
 ;;@ (spec (sig (args t, x, y) (ret))
 ;;@       (assertions 
-;;@          (= (rotr (x) (y)) (ret)),
+;;@          (= (rotr (conv_to (t) (x)) (conv_to (t) (y))) (ret)),
 ;;@       )
 ;;@ )
 (decl a64_rotr (Type Reg Reg) Reg)
