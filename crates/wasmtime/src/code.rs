@@ -53,6 +53,7 @@ impl CodeObject {
         &self.mmap
     }
 
+    #[cfg(feature = "component-model")]
     pub fn types(&self) -> &Types {
         &self.types
     }
