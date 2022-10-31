@@ -75,7 +75,6 @@ fn define_control_flow(
         );
     }
 
-    let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
     let fflags: &TypeVar = &ValueType::Special(types::Flag::FFlags.into()).into();
 
     {
@@ -203,20 +202,6 @@ fn define_control_flow(
                 &formats.cond_trap,
             )
             .operands_in(vec![c, code])
-            .can_trap(true),
-        );
-
-        let Cond = &Operand::new("Cond", &imm.intcc);
-        let f = &Operand::new("f", iflags);
-        ig.push(
-            Inst::new(
-                "trapif",
-                r#"
-        Trap when condition is true in integer CPU flags.
-        "#,
-                &formats.int_cond_trap,
-            )
-            .operands_in(vec![Cond, f, code])
             .can_trap(true),
         );
 

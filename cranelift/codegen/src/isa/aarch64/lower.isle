@@ -1682,19 +1682,6 @@
 (rule (lower (trap trap_code))
       (side_effect (udf trap_code)))
 
-;;;; Rules for `trapif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (trapif cc insn @ (iadd_ifcout x y) trap_code))
-      ;; The flags must not have been clobbered by any other instruction, as
-      ;; verified by the CLIF validator; so we can simply use the flags here.
-      (let ((insn ProducesFlags (flags_to_producesflags insn)))
-       (trap_if insn trap_code (cond_code cc))))
-
-;; Verification ensures the input is always a single-def ifcmp.
-(rule (lower (trapif cc insn @ (ifcmp x @ (value_type ty) y) trap_code))
-      (let ((cond Cond (cond_code cc)))
-       (trap_if (lower_icmp_into_flags cc x y ty) trap_code cond)))
-
 ;;;; Rules for `trapff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Verification ensures the input is always a single-def ffcmp.

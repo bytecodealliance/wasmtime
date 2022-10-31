@@ -19,7 +19,6 @@ pub(crate) struct Formats {
     pub(crate) heap_addr: Rc<InstructionFormat>,
     pub(crate) int_compare: Rc<InstructionFormat>,
     pub(crate) int_compare_imm: Rc<InstructionFormat>,
-    pub(crate) int_cond_trap: Rc<InstructionFormat>,
     pub(crate) int_add_trap: Rc<InstructionFormat>,
     pub(crate) jump: Rc<InstructionFormat>,
     pub(crate) load: Rc<InstructionFormat>,
@@ -217,12 +216,6 @@ impl Formats {
             trap: Builder::new("Trap").imm(&imm.trapcode).build(),
 
             cond_trap: Builder::new("CondTrap").value().imm(&imm.trapcode).build(),
-
-            int_cond_trap: Builder::new("IntCondTrap")
-                .imm(&imm.intcc)
-                .value()
-                .imm(&imm.trapcode)
-                .build(),
 
             int_add_trap: Builder::new("IntAddTrap")
                 .value()

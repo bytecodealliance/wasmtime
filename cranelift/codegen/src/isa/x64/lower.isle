@@ -1440,19 +1440,6 @@
         (x64_add_with_flags_paired ty b (sink_load_to_gpr_mem_imm a))
         (trap_if (CC.B) tc)))
 
-;;;; Rules for `trapif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; The flags must not have been clobbered by any other instruction between the
-;; iadd_ifcout and this instruction, as verified by the CLIF validator; so we
-;; can simply use the flags here.
-(rule (lower (trapif cc flags @ (iadd_ifcout _ _) tc))
-      (side_effect
-        (trap_if_icmp (icmp_cond_result (flags_to_producesflags flags) cc) tc)))
-
-;; Verification ensures that the input is always a single-def ifcmp.
-(rule (lower (trapif cc (ifcmp a b) tc))
-      (side_effect (trap_if_icmp (emit_cmp cc a b) tc)))
-
 ;;;; Rules for `trapff` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trapff cc (ffcmp a b) tc))

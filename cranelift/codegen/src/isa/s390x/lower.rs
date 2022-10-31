@@ -177,7 +177,6 @@ impl LowerBackend for S390xBackend {
             | Opcode::Trapz
             | Opcode::Trapnz
             | Opcode::ResumableTrapnz
-            | Opcode::Trapif
             | Opcode::Debugtrap
             | Opcode::Call
             | Opcode::CallIndirect

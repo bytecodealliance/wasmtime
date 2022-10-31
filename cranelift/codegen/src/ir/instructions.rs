@@ -243,7 +243,6 @@ impl InstructionData {
         match *self {
             Self::CondTrap { code, .. }
             | Self::FloatCondTrap { code, .. }
-            | Self::IntCondTrap { code, .. }
             | Self::Trap { code, .. } => Some(code),
             _ => None,
         }
@@ -254,7 +253,6 @@ impl InstructionData {
     pub fn cond_code(&self) -> Option<IntCC> {
         match self {
             &InstructionData::IntCompare { cond, .. }
-            | &InstructionData::IntCondTrap { cond, .. }
             | &InstructionData::IntCompareImm { cond, .. } => Some(cond),
             _ => None,
         }
@@ -276,7 +274,6 @@ impl InstructionData {
         match self {
             Self::CondTrap { code, .. }
             | Self::FloatCondTrap { code, .. }
-            | Self::IntCondTrap { code, .. }
             | Self::Trap { code, .. } => Some(code),
             _ => None,
         }
