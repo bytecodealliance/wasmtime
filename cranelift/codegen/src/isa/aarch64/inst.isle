@@ -3531,19 +3531,11 @@
             (combined Reg (orr $I64 lo hi)))
         (lower_bmask ty $I64 (value_reg combined))))
 
-;; For converting from a smaller type into i128, duplicate the result of
+;; For converting from any type into i128, duplicate the result of
 ;; converting to i64.
 (rule 2
-      (lower_bmask $I128 (fits_in_64 ty) val)
-      (let ((res ValueRegs (lower_bmask $I64 ty val))
-            (res Reg (value_regs_get res 0)))
-        (value_regs res res)))
-
-;; For conversions to a 128-bit mask, we duplicate the result of converting to
-;; an I64.
-(rule 3
-      (lower_bmask $I128 $I128 val)
-      (let ((res ValueRegs (lower_bmask $I64 $I128 val))
+      (lower_bmask $I128 in_ty val)
+      (let ((res ValueRegs (lower_bmask $I64 in_ty val))
             (res Reg (value_regs_get res 0)))
         (value_regs res res)))
 
@@ -3553,7 +3545,7 @@
 ;; and   tmp, val, #ty_mask
 ;; cmp   tmp, #0
 ;; csetm res, ne
-(rule 4
+(rule 3
       (lower_bmask out_ty (fits_in_16 in_ty) val)
       (let ((mask_bits ImmLogic (imm_logic_from_u64 $I32 (ty_mask in_ty)))
             (masked Reg (and_imm $I32 (value_regs_get val 0) mask_bits)))
