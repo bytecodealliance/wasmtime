@@ -111,7 +111,7 @@ Hello, world!
 
 As a library crate one of your primary consumers may be other languages as well.
 You'll want to consult the [section of this book for using `wasmtime` from
-Python`](./lang-python.md) and after running through the basics there you can
+Python](./lang-python.md) and after running through the basics there you can
 execute our file in Python:
 
 ```sh
