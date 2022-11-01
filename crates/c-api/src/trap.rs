@@ -1,7 +1,7 @@
 use crate::{wasm_frame_vec_t, wasm_instance_t, wasm_name_t, wasm_store_t};
 use anyhow::{anyhow, Error};
 use once_cell::unsync::OnceCell;
-use wasmtime::{Trap, TrapCode};
+use wasmtime::{BacktraceContext, Trap};
 
 #[repr(C)]
 pub struct wasm_trap_t {
@@ -76,11 +76,11 @@ pub extern "C" fn wasm_trap_message(trap: &wasm_trap_t, out: &mut wasm_message_t
 
 #[no_mangle]
 pub extern "C" fn wasm_trap_origin(raw: &wasm_trap_t) -> Option<Box<wasm_frame_t>> {
-    let trap = match raw.error.downcast_ref::<Trap>() {
+    let trap = match raw.error.downcast_ref::<BacktraceContext>() {
         Some(trap) => trap,
         None => return None,
     };
-    if trap.trace().unwrap_or(&[]).len() > 0 {
+    if trap.frames().len() > 0 {
         Some(Box::new(wasm_frame_t {
             trap: trap.clone(),
             idx: 0,
@@ -117,26 +117,21 @@ pub extern "C" fn wasmtime_trap_code(raw: &wasm_trap_t, code: &mut i32) -> bool 
         Some(trap) => trap,
         None => return false,
     };
-    match trap.trap_code() {
-        Some(c) => {
-            *code = match c {
-                TrapCode::StackOverflow => 0,
-                TrapCode::MemoryOutOfBounds => 1,
-                TrapCode::HeapMisaligned => 2,
-                TrapCode::TableOutOfBounds => 3,
-                TrapCode::IndirectCallToNull => 4,
-                TrapCode::BadSignature => 5,
-                TrapCode::IntegerOverflow => 6,
-                TrapCode::IntegerDivisionByZero => 7,
-                TrapCode::BadConversionToInteger => 8,
-                TrapCode::UnreachableCodeReached => 9,
-                TrapCode::Interrupt => 10,
-                _ => unreachable!(),
-            };
-            true
-        }
-        None => false,
-    }
+    *code = match trap {
+        Trap::StackOverflow => 0,
+        Trap::MemoryOutOfBounds => 1,
+        Trap::HeapMisaligned => 2,
+        Trap::TableOutOfBounds => 3,
+        Trap::IndirectCallToNull => 4,
+        Trap::BadSignature => 5,
+        Trap::IntegerOverflow => 6,
+        Trap::IntegerDivisionByZero => 7,
+        Trap::BadConversionToInteger => 8,
+        Trap::UnreachableCodeReached => 9,
+        Trap::Interrupt => 10,
+        _ => unreachable!(),
+    };
+    true
 }
 
 #[no_mangle]

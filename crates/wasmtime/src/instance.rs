@@ -324,7 +324,7 @@ impl Instance {
             )
             .map_err(|e| -> Error {
                 match e {
-                    InstantiationError::Trap(trap) => Trap::new_wasm(trap, None).into(),
+                    InstantiationError::Trap(trap) => Trap::from_env(trap).into(),
                     other => other.into(),
                 }
             })?;

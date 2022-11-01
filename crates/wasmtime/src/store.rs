@@ -1890,14 +1890,14 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
 
     fn out_of_gas(&mut self) -> Result<(), anyhow::Error> {
         return match &mut self.out_of_gas_behavior {
-            OutOfGas::Trap => Err(Trap::out_of_fuel().into()),
+            OutOfGas::Trap => Err(Trap::OutOfFuel.into()),
             #[cfg(feature = "async")]
             OutOfGas::InjectFuel {
                 injection_count,
                 fuel_to_inject,
             } => {
                 if *injection_count == 0 {
-                    return Err(Trap::out_of_fuel().into());
+                    return Err(Trap::OutOfFuel.into());
                 }
                 *injection_count -= 1;
                 let fuel = *fuel_to_inject;
@@ -1914,10 +1914,7 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
 
     fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
         return match &mut self.epoch_deadline_behavior {
-            EpochDeadline::Trap => {
-                let trap = Trap::new_wasm(wasmtime_environ::TrapCode::Interrupt, None);
-                Err(anyhow::Error::from(trap))
-            }
+            EpochDeadline::Trap => Err(Trap::Interrupt.into()),
             EpochDeadline::Callback(callback) => {
                 let delta = callback(&mut self.data)?;
                 // Set a new deadline and return the new epoch deadline so

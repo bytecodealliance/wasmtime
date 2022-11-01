@@ -167,20 +167,32 @@ fn memory_guard_page_trap() -> Result<()> {
         let m = instance.get_memory(&mut store, "m").unwrap();
         let f = instance.get_typed_func::<i32, (), _>(&mut store, "f")?;
 
-        let trap = f.call(&mut store, 0).expect_err("function should trap");
-        assert!(trap.to_string().contains("out of bounds"));
+        let trap = f
+            .call(&mut store, 0)
+            .expect_err("function should trap")
+            .downcast::<Trap>()?;
+        assert_eq!(trap, Trap::MemoryOutOfBounds);
 
-        let trap = f.call(&mut store, 1).expect_err("function should trap");
-        assert!(trap.to_string().contains("out of bounds"));
+        let trap = f
+            .call(&mut store, 1)
+            .expect_err("function should trap")
+            .downcast::<Trap>()?;
+        assert_eq!(trap, Trap::MemoryOutOfBounds);
 
         m.grow(&mut store, 1).expect("memory should grow");
         f.call(&mut store, 0).expect("function should not trap");
 
-        let trap = f.call(&mut store, 65536).expect_err("function should trap");
-        assert!(trap.to_string().contains("out of bounds"));
+        let trap = f
+            .call(&mut store, 65536)
+            .expect_err("function should trap")
+            .downcast::<Trap>()?;
+        assert_eq!(trap, Trap::MemoryOutOfBounds);
 
-        let trap = f.call(&mut store, 65537).expect_err("function should trap");
-        assert!(trap.to_string().contains("out of bounds"));
+        let trap = f
+            .call(&mut store, 65537)
+            .expect_err("function should trap")
+            .downcast::<Trap>()?;
+        assert_eq!(trap, Trap::MemoryOutOfBounds);
 
         m.grow(&mut store, 1).expect("memory should grow");
         f.call(&mut store, 65536).expect("function should not trap");

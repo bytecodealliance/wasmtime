@@ -565,9 +565,8 @@ async fn recursive_async() -> Result<()> {
                 .call_async(&mut caller, ())
                 .await
                 .unwrap_err()
-                .downcast::<Trap>()
-                .unwrap();
-            assert_eq!(err.trap_code(), Some(TrapCode::StackOverflow));
+                .downcast::<Trap>()?;
+            assert_eq!(err, Trap::StackOverflow);
             Ok(())
         })
     });

@@ -374,8 +374,7 @@ pub fn differential(
         // falls through to checking the intermediate state otherwise.
         (Err(lhs), Err(rhs)) => {
             let err = rhs.downcast::<Trap>().expect("not a trap");
-            let poisoned = err.trap_code() == Some(TrapCode::StackOverflow)
-                || lhs_engine.is_stack_overflow(&lhs);
+            let poisoned = err == Trap::StackOverflow || lhs_engine.is_stack_overflow(&lhs);
 
             if poisoned {
                 return Ok(false);
@@ -675,11 +674,9 @@ pub fn table_ops(
             .downcast::<Trap>()
             .unwrap();
 
-        match trap.trap_code() {
-            Some(TrapCode::TableOutOfBounds) | Some(TrapCode::OutOfFuel) => {}
-            _ => {
-                panic!("unexpected trap: {}", trap);
-            }
+        match trap {
+            Trap::TableOutOfBounds | Trap::OutOfFuel => {}
+            _ => panic!("unexpected trap: {trap}"),
         }
 
         // Do a final GC after running the Wasm.

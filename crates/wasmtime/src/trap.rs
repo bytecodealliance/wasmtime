@@ -1,52 +1,28 @@
 use crate::store::StoreOpaque;
 use crate::Module;
 use anyhow::Error;
-use once_cell::sync::OnceCell;
 use std::fmt;
-use std::sync::Arc;
-use wasmtime_environ::{EntityRef, FilePos, TrapCode as EnvTrapCode};
+use wasmtime_environ::{EntityRef, FilePos, TrapCode};
 use wasmtime_jit::{demangle_function_name, demangle_function_name_or_index};
 
-/// A struct representing an aborted instruction execution, with a message
-/// indicating the cause.
-#[derive(Clone)]
-pub struct Trap {
-    inner: Arc<TrapInner>,
-}
-
-struct TrapInner {
-    reason: TrapReason,
-    backtrace: OnceCell<TrapBacktrace>,
-}
-
-/// State describing the occasion which evoked a trap.
-#[derive(Debug)]
-enum TrapReason {
-    /// A specific code for a trap triggered while executing WASM.
-    InstructionTrap(TrapCode),
-}
-
-#[derive(Debug)]
-pub(crate) struct TrapBacktrace {
-    wasm_trace: Vec<FrameInfo>,
-    runtime_trace: wasmtime_runtime::Backtrace,
-    hint_wasm_backtrace_details_env: bool,
-}
-
-/// A trap code describing the reason for a trap.
+/// Description of a trap which can happen in WebAssembly, halting wasm
+/// execution.
 ///
-/// All trap instructions have an explicit trap code.
-///
-/// The code can be accessed from the c-api, where the possible values are translated
-/// into enum values defined there:
-///
-/// * `wasm_trap_code` in c-api/src/trap.rs, and
-/// * `wasmtime_trap_code_enum` in c-api/include/wasmtime/trap.h.
-///
-/// These need to be kept in sync.
+/// This enumeration is a list of all possible traps that can happen in wasm, in
+/// addition to some Wasmtime-specific trap codes listed here as well. This type
+/// will be returned as an error when a wasm function hits one of these trap
+/// conditions through the [`anyhow::Error`] wrapper.
+//
+// The code can be accessed from the c-api, where the possible values are translated
+// into enum values defined there:
+//
+// * `wasm_trap_code` in c-api/src/trap.rs, and
+// * `wasmtime_trap_code_enum` in c-api/include/wasmtime/trap.h.
+//
+// These need to be kept in sync.
 #[non_exhaustive]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
-pub enum TrapCode {
+pub enum Trap {
     /// The current stack space was exhausted.
     StackOverflow,
 
@@ -95,38 +71,19 @@ pub enum TrapCode {
     OutOfFuel,
 }
 
-impl TrapCode {
-    /// Panics if `code` is `EnvTrapCode::User`.
-    fn from_non_user(code: EnvTrapCode) -> Self {
-        match code {
-            EnvTrapCode::StackOverflow => TrapCode::StackOverflow,
-            EnvTrapCode::HeapOutOfBounds => TrapCode::MemoryOutOfBounds,
-            EnvTrapCode::HeapMisaligned => TrapCode::HeapMisaligned,
-            EnvTrapCode::TableOutOfBounds => TrapCode::TableOutOfBounds,
-            EnvTrapCode::IndirectCallToNull => TrapCode::IndirectCallToNull,
-            EnvTrapCode::BadSignature => TrapCode::BadSignature,
-            EnvTrapCode::IntegerOverflow => TrapCode::IntegerOverflow,
-            EnvTrapCode::IntegerDivisionByZero => TrapCode::IntegerDivisionByZero,
-            EnvTrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
-            EnvTrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
-            EnvTrapCode::Interrupt => TrapCode::Interrupt,
-            EnvTrapCode::AlwaysTrapAdapter => TrapCode::AlwaysTrapAdapter,
-        }
-    }
-}
-
-fn _assert_trap_is_sync_and_send(t: &Trap) -> (&dyn Sync, &dyn Send) {
-    (t, t)
+#[derive(Debug)]
+pub(crate) struct TrapBacktrace {
+    wasm_trace: Vec<FrameInfo>,
+    #[allow(dead_code)]
+    runtime_trace: wasmtime_runtime::Backtrace,
+    hint_wasm_backtrace_details_env: bool,
 }
 
 impl Trap {
     // Same safety requirements and caveats as
     // `wasmtime_runtime::raise_user_trap`.
     pub(crate) unsafe fn raise(error: anyhow::Error) -> ! {
-        let needs_backtrace = match error.downcast_ref::<Trap>() {
-            Some(trap) => trap.trace().is_none(),
-            None => error.downcast_ref::<BacktraceContext>().is_none(),
-        };
+        let needs_backtrace = error.downcast_ref::<BacktraceContext>().is_none();
         wasmtime_runtime::raise_user_trap(error, needs_backtrace)
     }
 
@@ -136,7 +93,7 @@ impl Trap {
         runtime_trap: Box<wasmtime_runtime::Trap>,
     ) -> Error {
         let wasmtime_runtime::Trap { reason, backtrace } = *runtime_trap;
-        match reason {
+        let (error, pc) = match reason {
             // For user-defined errors they're already an `anyhow::Error` so no
             // conversion is really necessary here, but a `backtrace` may have
             // been captured so it's attempted to get inserted here.
@@ -151,159 +108,59 @@ impl Trap {
             // otherwise the information about what the wasm was doing when the
             // error was generated would be lost.
             wasmtime_runtime::TrapReason::User {
-                mut error,
+                error,
                 needs_backtrace,
             } => {
-                if let Some(backtrace) = backtrace {
-                    debug_assert!(needs_backtrace);
-                    let bt = TrapBacktrace::new(store, backtrace, None);
-                    match error.downcast_mut::<Trap>() {
-                        Some(trap) => {
-                            debug_assert!(trap.inner.backtrace.get().is_none());
-                            trap.record_backtrace(bt);
-                        }
-                        None => {
-                            if !bt.wasm_trace.is_empty() {
-                                error = error.context(BacktraceContext(bt));
-                            }
-                        }
-                    }
-                }
-                error
+                debug_assert!(needs_backtrace == backtrace.is_some());
+                (error, None)
             }
             wasmtime_runtime::TrapReason::Jit(pc) => {
                 let code = store
                     .modules()
                     .lookup_trap_code(pc)
-                    .unwrap_or(EnvTrapCode::StackOverflow);
-                let backtrace = backtrace.map(|bt| TrapBacktrace::new(store, bt, Some(pc)));
-                Trap::new_wasm(code, backtrace).into()
+                    .unwrap_or(TrapCode::StackOverflow);
+                (Trap::from_env(code).into(), Some(pc))
             }
             wasmtime_runtime::TrapReason::Wasm(trap_code) => {
-                let backtrace = backtrace.map(|bt| TrapBacktrace::new(store, bt, None));
-                Trap::new_wasm(trap_code, backtrace).into()
+                (Trap::from_env(trap_code).into(), None)
             }
-        }
-    }
-
-    #[cold] // see Trap::new
-    pub(crate) fn new_wasm(code: EnvTrapCode, backtrace: Option<TrapBacktrace>) -> Self {
-        let code = TrapCode::from_non_user(code);
-        Trap::new_with_trace(TrapReason::InstructionTrap(code), backtrace)
-    }
-
-    #[cold] // see Trap::new
-    pub(crate) fn out_of_fuel() -> Self {
-        Trap::new_with_trace(TrapReason::InstructionTrap(TrapCode::OutOfFuel), None)
-    }
-
-    /// Creates a new `Trap`.
-    /// * `reason` - this is the wasmtime-internal reason for why this trap is
-    ///   being created.
-    ///
-    /// * `backtrace` - this is a captured backtrace from when the trap
-    ///   occurred. Contains the native backtrace, and the backtrace of
-    ///   WebAssembly frames.
-    fn new_with_trace(reason: TrapReason, backtrace: Option<TrapBacktrace>) -> Self {
-        let backtrace = if let Some(bt) = backtrace {
-            OnceCell::with_value(bt)
-        } else {
-            OnceCell::new()
         };
-        Trap {
-            inner: Arc::new(TrapInner { reason, backtrace }),
+        match backtrace {
+            Some(bt) => {
+                let bt = TrapBacktrace::new(store, bt, pc);
+                if bt.wasm_trace.is_empty() {
+                    error
+                } else {
+                    error.context(BacktraceContext(bt))
+                }
+            }
+            None => error,
         }
     }
 
-    /// Displays the error reason for this trap.
-    ///
-    /// In particular, it differs from this struct's `Display` by *only*
-    /// showing the reason, and not the full backtrace. This is useful to
-    /// customize the way the trap is reported, for instance to display a short
-    /// message for user-facing errors.
-    pub fn display_reason<'a>(&'a self) -> impl fmt::Display + 'a {
-        &self.inner.reason
-    }
-
-    /// Returns a list of function frames in WebAssembly code that led to this
-    /// trap happening.
-    ///
-    /// This function return an `Option` of a list of frames to indicate that
-    /// wasm frames are not always available. Frames will never be available if
-    /// backtraces are disabled via
-    /// [`Config::wasm_backtrace`](crate::Config::wasm_backtrace). Frames will
-    /// also not be available for freshly-created traps. WebAssembly frames are
-    /// currently only captured when the trap reaches wasm itself to get raised
-    /// across a wasm boundary.
-    pub fn trace(&self) -> Option<&[FrameInfo]> {
-        self.inner
-            .backtrace
-            .get()
-            .as_ref()
-            .map(|bt| bt.wasm_trace.as_slice())
-    }
-
-    /// Code of a trap that happened while executing a WASM instruction.
-    /// If the trap was triggered by a host export this will be `None`.
-    pub fn trap_code(&self) -> Option<TrapCode> {
-        match self.inner.reason {
-            TrapReason::InstructionTrap(code) => Some(code),
+    /// Panics if `code` is `TrapCode::User`.
+    pub(crate) fn from_env(code: TrapCode) -> Self {
+        match code {
+            TrapCode::StackOverflow => Trap::StackOverflow,
+            TrapCode::HeapOutOfBounds => Trap::MemoryOutOfBounds,
+            TrapCode::HeapMisaligned => Trap::HeapMisaligned,
+            TrapCode::TableOutOfBounds => Trap::TableOutOfBounds,
+            TrapCode::IndirectCallToNull => Trap::IndirectCallToNull,
+            TrapCode::BadSignature => Trap::BadSignature,
+            TrapCode::IntegerOverflow => Trap::IntegerOverflow,
+            TrapCode::IntegerDivisionByZero => Trap::IntegerDivisionByZero,
+            TrapCode::BadConversionToInteger => Trap::BadConversionToInteger,
+            TrapCode::UnreachableCodeReached => Trap::UnreachableCodeReached,
+            TrapCode::Interrupt => Trap::Interrupt,
+            TrapCode::AlwaysTrapAdapter => Trap::AlwaysTrapAdapter,
         }
-    }
-
-    fn record_backtrace(&self, backtrace: TrapBacktrace) {
-        // When a trap is created on top of the wasm stack, the trampoline will
-        // re-raise it via
-        // `wasmtime_runtime::raise_user_trap(trap.into::<Box<dyn Error>>(),
-        // ..)` after `panic::catch_unwind`. We don't want to overwrite the
-        // first backtrace recorded, as it is most precise. However, this should
-        // never happen in the first place because we thread `needs_backtrace`
-        // booleans throuch all calls to `raise_user_trap` to avoid capturing
-        // unnecessary backtraces! So debug assert that we don't ever capture
-        // unnecessary backtraces.
-        let result = self.inner.backtrace.try_insert(backtrace);
-        debug_assert!(result.is_ok());
-    }
-}
-
-impl fmt::Debug for Trap {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut f = f.debug_struct("Trap");
-        f.field("reason", &self.inner.reason);
-        if let Some(backtrace) = self.inner.backtrace.get() {
-            f.field("wasm_trace", &backtrace.wasm_trace)
-                .field("runtime_trace", &backtrace.runtime_trace);
-        }
-        f.finish()
     }
 }
 
 impl fmt::Display for Trap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.inner.reason)?;
+        use Trap::*;
 
-        if let Some(trace) = self.inner.backtrace.get().as_ref() {
-            if !trace.wasm_trace.is_empty() {
-                write!(f, "\n{trace}")?;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl std::error::Error for Trap {}
-
-impl fmt::Display for TrapReason {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TrapReason::InstructionTrap(code) => write!(f, "wasm trap: {}", code),
-        }
-    }
-}
-
-impl fmt::Display for TrapCode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use TrapCode::*;
         let desc = match self {
             StackOverflow => "call stack exhausted",
             MemoryOutOfBounds => "out of bounds memory access",
@@ -319,9 +176,11 @@ impl fmt::Display for TrapCode {
             AlwaysTrapAdapter => "degenerate component adapter called",
             OutOfFuel => "all fuel consumed by WebAssembly",
         };
-        write!(f, "{}", desc)
+        write!(f, "wasm trap: {desc}")
     }
 }
+
+impl std::error::Error for Trap {}
 
 impl TrapBacktrace {
     pub fn new(
@@ -460,17 +319,12 @@ impl fmt::Display for TrapBacktrace {
 
 /// Describes the context (backtrace) at which a user's error terminated (trapped)
 /// WebAssembly execution
+#[derive(Debug)]
 pub struct BacktraceContext(TrapBacktrace);
 
 impl fmt::Display for BacktraceContext {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "error while executing at {}", self.0)
-    }
-}
-
-impl fmt::Debug for BacktraceContext {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.0)
     }
 }
 

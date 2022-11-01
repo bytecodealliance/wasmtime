@@ -26,14 +26,10 @@ fn main() -> Result<()> {
     });
 
     println!("Entering infinite loop ...");
-    let trap = run
-        .call(&mut store, ())
-        .unwrap_err()
-        .downcast::<Trap>()
-        .unwrap();
+    let err = run.call(&mut store, ()).unwrap_err();
 
     println!("trap received...");
-    assert!(trap.trap_code().unwrap() == TrapCode::Interrupt);
+    assert_eq!(err.downcast::<Trap>()?, Trap::Interrupt);
 
     Ok(())
 }
