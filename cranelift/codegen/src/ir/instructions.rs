@@ -241,8 +241,7 @@ impl InstructionData {
     /// `None`.
     pub fn trap_code(&self) -> Option<TrapCode> {
         match *self {
-            Self::CondTrap { code, .. }
-            | Self::Trap { code, .. } => Some(code),
+            Self::CondTrap { code, .. } | Self::Trap { code, .. } => Some(code),
             _ => None,
         }
     }
@@ -270,8 +269,7 @@ impl InstructionData {
     /// trap code. Otherwise, return `None`.
     pub fn trap_code_mut(&mut self) -> Option<&mut TrapCode> {
         match self {
-            Self::CondTrap { code, .. }
-            | Self::Trap { code, .. } => Some(code),
+            Self::CondTrap { code, .. } | Self::Trap { code, .. } => Some(code),
             _ => None,
         }
     }
