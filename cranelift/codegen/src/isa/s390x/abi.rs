@@ -397,21 +397,15 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         // After all arguments are in their well-defined location,
         // allocate buffers for all StructArg or ImplicitPtrArg arguments.
-        for i in 0..args.args().len() {
-            match &mut args.args_mut()[i] {
-                &mut ABIArg::StructArg {
-                    ref mut offset,
-                    size,
-                    ..
-                } => {
+        for arg in args.args_mut() {
+            match arg {
+                ABIArg::StructArg { offset, size, .. } => {
                     *offset = next_stack as i64;
-                    next_stack += size;
+                    next_stack += *size;
                 }
-                &mut ABIArg::ImplicitPtrArg {
-                    ref mut offset, ty, ..
-                } => {
+                ABIArg::ImplicitPtrArg { offset, ty, .. } => {
                     *offset = next_stack as i64;
-                    next_stack += (ty_bits(ty) / 8) as u64;
+                    next_stack += (ty_bits(*ty) / 8) as u64;
                 }
                 _ => {}
             }
