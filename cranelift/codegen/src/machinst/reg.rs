@@ -2,11 +2,9 @@
 //! interface over the register allocator so that we can more easily
 //! swap it out or shim it when necessary.
 
-use crate::machinst::MachInst;
 use alloc::{string::String, vec::Vec};
 use core::{fmt::Debug, hash::Hash};
 use regalloc2::{Allocation, Operand, PReg, PRegSet, VReg};
-use smallvec::{smallvec, SmallVec};
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -399,16 +397,6 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     }
 }
 
-/// Use an OperandCollector to count the number of operands on an instruction.
-pub fn count_operands<I: MachInst>(inst: &I) -> usize {
-    let mut ops = vec![];
-    let mut coll = OperandCollector::new(&mut ops, |vreg| vreg);
-    inst.get_operands(&mut coll);
-    let ((start, end), _) = coll.finish();
-    debug_assert_eq!(0, start);
-    end as usize
-}
-
 /// Pretty-print part of a disassembly, with knowledge of
 /// operand/instruction size, and optionally with regalloc
 /// results. This can be used, for example, to print either `rax` or
@@ -469,18 +457,6 @@ impl<'a> AllocationConsumer<'a> {
 
     pub fn next_writable(&mut self, pre_regalloc_reg: Writable<Reg>) -> Writable<Reg> {
         Writable::from_reg(self.next(pre_regalloc_reg.to_reg()))
-    }
-
-    pub fn next_n(&mut self, count: usize) -> SmallVec<[Allocation; 4]> {
-        let mut allocs = smallvec![];
-        for _ in 0..count {
-            if let Some(next) = self.allocs.next() {
-                allocs.push(*next);
-            } else {
-                return allocs;
-            }
-        }
-        allocs
     }
 }
 
