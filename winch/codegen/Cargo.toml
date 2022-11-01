@@ -1,4 +1,5 @@
 [package]
+authors = ["The Winch Project Developers"]
 name = "winch-codegen"
 description = "Winch code generation library"
 license = "Apache-2.0 WITH LLVM-exception"
