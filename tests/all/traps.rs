@@ -22,11 +22,92 @@ fn test_trap_return() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[hello_func.into()])?;
     let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
 
+    let e = run_func.call(&mut store, ()).unwrap_err();
+    let trap = e.downcast_ref::<Trap>().expect("error is a Trap");
+    assert!(trap.to_string().contains("test 123"));
+
+    assert!(
+        e.downcast_ref::<BacktraceContext>().is_none(),
+        "error should not contain a BacktraceContext"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_anyhow_error_return() -> Result<()> {
+    let mut store = Store::<()>::default();
+    let wat = r#"
+        (module
+        (func $hello (import "" "hello"))
+        (func (export "run") (call $hello))
+        )
+    "#;
+
+    let module = Module::new(store.engine(), wat)?;
+    let hello_type = FuncType::new(None, None);
+    let hello_func = Func::new(&mut store, hello_type, |_, _, _| {
+        Err(anyhow::Error::msg("test 1234"))
+    });
+
+    let instance = Instance::new(&mut store, &module, &[hello_func.into()])?;
+    let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+
+    let e = run_func.call(&mut store, ()).unwrap_err();
+    assert!(!e.to_string().contains("test 1234"));
+    assert!(format!("{:?}", e).contains("Caused by:\n    test 1234"));
+
+    assert!(e.downcast_ref::<Trap>().is_none());
+    assert!(e.downcast_ref::<BacktraceContext>().is_some());
+
+    Ok(())
+}
+
+#[test]
+fn test_trap_return_downcast() -> Result<()> {
+    let mut store = Store::<()>::default();
+    let wat = r#"
+        (module
+        (func $hello (import "" "hello"))
+        (func (export "run") (call $hello))
+        )
+    "#;
+
+    #[derive(Debug)]
+    struct MyTrap;
+    impl std::fmt::Display for MyTrap {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "my trap")
+        }
+    }
+    impl std::error::Error for MyTrap {}
+
+    let module = Module::new(store.engine(), wat)?;
+    let hello_type = FuncType::new(None, None);
+    let hello_func = Func::new(&mut store, hello_type, |_, _, _| {
+        Err(anyhow::Error::from(MyTrap))
+    });
+
+    let instance = Instance::new(&mut store, &module, &[hello_func.into()])?;
+    let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+
     let e = run_func
         .call(&mut store, ())
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    assert!(e.to_string().contains("test 123"));
+        .err()
+        .expect("error calling function");
+    let dbg = format!("{:?}", e);
+    println!("{}", dbg);
+
+    assert!(!e.to_string().contains("my trap"));
+    assert!(dbg.contains("Caused by:\n    my trap"));
+
+    e.downcast_ref::<MyTrap>()
+        .expect("error downcasts to MyTrap");
+    let bt = e
+        .downcast_ref::<BacktraceContext>()
+        .expect("error downcasts to BacktraceContext");
+    assert_eq!(bt.frames().len(), 1);
+    println!("{:?}", bt);
 
     Ok(())
 }

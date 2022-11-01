@@ -430,7 +430,14 @@ impl fmt::Display for TrapBacktrace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "wasm backtrace:")?;
 
+        let mut needs_newline = false;
         for (i, frame) in self.wasm_trace.iter().enumerate() {
+            // Avoid putting a trailing newline on the output
+            if needs_newline {
+                writeln!(f, "")?;
+            } else {
+                needs_newline = true;
+            }
             let name = frame.module_name().unwrap_or("<unknown>");
             write!(f, "  {:>3}: ", i)?;
 
@@ -444,7 +451,6 @@ impl fmt::Display for TrapBacktrace {
             if frame.symbols().is_empty() {
                 write!(f, "{}!", name)?;
                 write_raw_func_name(f)?;
-                writeln!(f, "")?;
             } else {
                 for (i, symbol) in frame.symbols().iter().enumerate() {
                     if i > 0 {
@@ -457,8 +463,8 @@ impl fmt::Display for TrapBacktrace {
                         None if i == 0 => write_raw_func_name(f)?,
                         None => write!(f, "<inlined function>")?,
                     }
-                    writeln!(f, "")?;
                     if let Some(file) = symbol.file() {
+                        writeln!(f, "")?;
                         write!(f, "                    at {}", file)?;
                         if let Some(line) = symbol.line() {
                             write!(f, ":{}", line)?;
@@ -467,7 +473,6 @@ impl fmt::Display for TrapBacktrace {
                             }
                         }
                     }
-                    writeln!(f, "")?;
                 }
             }
         }
@@ -478,7 +483,9 @@ impl fmt::Display for TrapBacktrace {
     }
 }
 
-struct BacktraceContext(TrapBacktrace);
+/// Describes the context (backtrace) at which a user's error terminated (trapped)
+/// WebAssembly execution
+pub struct BacktraceContext(TrapBacktrace);
 
 impl fmt::Display for BacktraceContext {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -486,13 +493,28 @@ impl fmt::Display for BacktraceContext {
     }
 }
 
-/// Description of a frame in a backtrace for a [`Trap`].
+impl fmt::Debug for BacktraceContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
+impl BacktraceContext {
+    /// Returns a list of function frames in WebAssembly code that led to this
+    /// trap happening.
+    pub fn frames(&self) -> &[FrameInfo] {
+        self.0.wasm_trace.as_slice()
+    }
+}
+
+/// Description of a frame in a backtrace for a [`Trap`] or [`BacktraceContext`].
 ///
 /// Whenever a WebAssembly trap occurs an instance of [`Trap`] is created. Each
 /// [`Trap`] has a backtrace of the WebAssembly frames that led to the trap, and
 /// each frame is described by this structure.
 ///
 /// [`Trap`]: crate::Trap
+/// [`BacktraceContext`]: crate::BacktraceContext
 #[derive(Debug)]
 pub struct FrameInfo {
     module_name: Option<String>,
