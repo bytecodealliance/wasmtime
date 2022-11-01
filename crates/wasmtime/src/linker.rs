@@ -3,7 +3,7 @@ use crate::instance::InstancePre;
 use crate::store::StoreOpaque;
 use crate::{
     AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType, Instance,
-    IntoFunc, Module, StoreContextMut, Trap, Val, ValRaw,
+    IntoFunc, Module, StoreContextMut, Val, ValRaw,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use log::warn;
@@ -714,8 +714,7 @@ impl<T> Linker<T> {
                                     .unwrap()
                                     .into_func()
                                     .unwrap()
-                                    .call(&mut caller, params, results)
-                                    .map_err(|error| error.downcast::<Trap>().unwrap())?;
+                                    .call(&mut caller, params, results)?;
 
                                 Ok(())
                             },
@@ -781,8 +780,7 @@ impl<T> Linker<T> {
                                     .into_func()
                                     .unwrap()
                                     .call_async(&mut caller, params, results)
-                                    .await
-                                    .map_err(|error| error.downcast::<Trap>().unwrap())?;
+                                    .await?;
                                 Ok(())
                             })
                         },
