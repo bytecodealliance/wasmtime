@@ -228,7 +228,6 @@ fn trap_smoke() -> Result<()> {
         .unwrap_err()
         .downcast::<Trap>()?;
     assert!(err.to_string().contains("test"));
-    assert!(err.i32_exit_status().is_none());
     Ok(())
 }
 

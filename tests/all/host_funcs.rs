@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 use wasmtime_wasi::sync::WasiCtxBuilder;
+use wasmtime_wasi::I32Exit;
 
 #[test]
 #[should_panic = "cannot use `func_new_async` without enabling async support"]
@@ -456,7 +457,6 @@ fn trap_smoke() -> Result<()> {
         .downcast::<Trap>()?;
 
     assert!(err.to_string().contains("test"));
-    assert!(err.i32_exit_status().is_none());
 
     Ok(())
 }
@@ -722,8 +722,11 @@ fn wasi_imports() -> Result<()> {
     let instance = linker.instantiate(&mut store, &module)?;
 
     let start = instance.get_typed_func::<(), (), _>(&mut store, "_start")?;
-    let trap = start.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
-    assert_eq!(trap.i32_exit_status(), Some(123));
+    let exit = start
+        .call(&mut store, ())
+        .unwrap_err()
+        .downcast::<I32Exit>()?;
+    assert_eq!(exit.0, 123);
 
     Ok(())
 }

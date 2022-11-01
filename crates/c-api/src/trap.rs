@@ -141,17 +141,13 @@ pub extern "C" fn wasmtime_trap_code(raw: &wasm_trap_t, code: &mut i32) -> bool 
 
 #[no_mangle]
 pub extern "C" fn wasmtime_trap_exit_status(raw: &wasm_trap_t, status: &mut i32) -> bool {
-    let trap = match raw.error.downcast_ref::<Trap>() {
-        Some(trap) => trap,
-        None => return false,
-    };
-    match trap.i32_exit_status() {
-        Some(i) => {
-            *status = i;
-            true
-        }
-        None => false,
+    #[cfg(feature = "wasi")]
+    if let Some(exit) = raw.error.downcast_ref::<wasmtime_wasi::I32Exit>() {
+        *status = exit.0;
+        return true;
     }
+
+    false
 }
 
 #[no_mangle]

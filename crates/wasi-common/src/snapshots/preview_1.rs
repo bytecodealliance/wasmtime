@@ -8,7 +8,7 @@ use crate::{
         subscription::{RwEventFlags, SubscriptionResult},
         Poll, Userdata,
     },
-    Error, ErrorExt, ErrorKind, SystemTimeSpec, WasiCtx,
+    Error, ErrorExt, ErrorKind, I32Exit, SystemTimeSpec, WasiCtx,
 };
 use anyhow::{Context, Result};
 use cap_std::time::{Duration, SystemClock};
@@ -1216,12 +1216,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     async fn proc_exit(&mut self, status: types::Exitcode) -> anyhow::Error {
         // Check that the status is within WASI's range.
-        let trap = if status < 126 {
-            wasmtime::Trap::i32_exit(status as i32).into()
+        if status < 126 {
+            I32Exit(status as i32).into()
         } else {
-            wasmtime::Trap::new("exit with invalid exit status outside of [0..126)")
-        };
-        trap.into()
+            wasmtime::Trap::new("exit with invalid exit status outside of [0..126)").into()
+        }
     }
 
     async fn proc_raise(&mut self, _sig: types::Signal) -> Result<(), Error> {

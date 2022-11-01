@@ -25,9 +25,6 @@ enum TrapReason {
     /// An error message describing a trap.
     Message(String),
 
-    /// An `i32` exit status describing an explicit program exit.
-    I32Exit(i32),
-
     /// A specific code for a trap triggered while executing WASM.
     InstructionTrap(TrapCode),
 }
@@ -133,13 +130,6 @@ impl Trap {
         Trap::new_with_trace(reason, None)
     }
 
-    /// Creates a new `Trap` representing an explicit program exit with a classic `i32`
-    /// exit status value.
-    #[cold] // see Trap::new
-    pub fn i32_exit(status: i32) -> Self {
-        Trap::new_with_trace(TrapReason::I32Exit(status), None)
-    }
-
     // Same safety requirements and caveats as
     // `wasmtime_runtime::raise_user_trap`.
     pub(crate) unsafe fn raise(error: anyhow::Error) -> ! {
@@ -229,15 +219,6 @@ impl Trap {
         }
     }
 
-    /// If the trap was the result of an explicit program exit with a classic
-    /// `i32` exit status value, return the value, otherwise return `None`.
-    pub fn i32_exit_status(&self) -> Option<i32> {
-        match self.inner.reason {
-            TrapReason::I32Exit(status) => Some(status),
-            _ => None,
-        }
-    }
-
     /// Displays the error reason for this trap.
     ///
     /// In particular, it differs from this struct's `Display` by *only*
@@ -321,7 +302,6 @@ impl fmt::Display for TrapReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TrapReason::Message(s) => write!(f, "{}", s),
-            TrapReason::I32Exit(status) => write!(f, "Exited with i32 exit status {}", status),
             TrapReason::InstructionTrap(code) => write!(f, "wasm trap: {}", code),
         }
     }
