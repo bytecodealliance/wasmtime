@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
 use wasmtime::*;
@@ -220,13 +220,8 @@ fn import_works() -> Result<()> {
 #[test]
 fn trap_smoke() -> Result<()> {
     let mut store = Store::<()>::default();
-    let f = Func::wrap(&mut store, || -> Result<()> {
-        Err(Trap::new("test").into())
-    });
-    let err = f
-        .call(&mut store, &[], &mut [])
-        .unwrap_err()
-        .downcast::<Trap>()?;
+    let f = Func::wrap(&mut store, || -> Result<()> { bail!("test") });
+    let err = f.call(&mut store, &[], &mut []).unwrap_err();
     assert!(err.to_string().contains("test"));
     Ok(())
 }
@@ -241,13 +236,8 @@ fn trap_import() -> Result<()> {
     )?;
     let mut store = Store::<()>::default();
     let module = Module::new(store.engine(), &wasm)?;
-    let import = Func::wrap(&mut store, || -> Result<()> {
-        Err(Trap::new("foo").into())
-    });
-    let trap = Instance::new(&mut store, &module, &[import.into()])
-        .err()
-        .unwrap()
-        .downcast::<Trap>()?;
+    let import = Func::wrap(&mut store, || -> Result<()> { bail!("foo") });
+    let trap = Instance::new(&mut store, &module, &[import.into()]).unwrap_err();
     assert!(trap.to_string().contains("foo"));
     Ok(())
 }
@@ -618,7 +608,7 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
     let dtor1_run = canary1.0.clone();
     let f1 = Func::wrap(&mut store, move || -> Result<()> {
         drop(&canary1);
-        Err(Trap::new("").into())
+        bail!("")
     });
     assert!(f1.typed::<(), (), _>(&store)?.call(&mut store, ()).is_err());
     assert!(f1.call(&mut store, &[], &mut []).is_err());
@@ -628,7 +618,7 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
     let dtor2_run = canary2.0.clone();
     let f2 = Func::new(&mut store, FuncType::new(None, None), move |_, _, _| {
         drop(&canary2);
-        Err(Trap::new("").into())
+        bail!("")
     });
     assert!(f2.typed::<(), (), _>(&store)?.call(&mut store, ()).is_err());
     assert!(f2.call(&mut store, &[], &mut []).is_err());

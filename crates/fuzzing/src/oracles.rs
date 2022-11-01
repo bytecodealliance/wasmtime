@@ -676,10 +676,7 @@ pub fn table_ops(
             .unwrap();
 
         match trap.trap_code() {
-            Some(TrapCode::TableOutOfBounds) => {}
-            None if trap
-                .to_string()
-                .contains("all fuel consumed by WebAssembly") => {}
+            Some(TrapCode::TableOutOfBounds) | Some(TrapCode::OutOfFuel) => {}
             _ => {
                 panic!("unexpected trap: {}", trap);
             }

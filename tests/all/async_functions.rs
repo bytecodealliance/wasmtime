@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, bail, Result};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
@@ -440,7 +440,7 @@ async fn resume_separate_thread() {
         let func = Func::wrap0_async(&mut store, |_| {
             Box::new(async {
                 tokio::task::yield_now().await;
-                Err::<(), _>(wasmtime::Trap::new("test").into())
+                Err::<(), _>(anyhow!("test"))
             })
         });
         let result = Instance::new_async(&mut store, &module, &[func.into()]).await;
@@ -493,7 +493,7 @@ async fn resume_separate_thread3() {
     // situation we'll set up the TLS info so it's in place while the body of
     // the function executes...
     let mut store = Store::new(&Engine::default(), None);
-    let f = Func::wrap(&mut store, move |mut caller: Caller<'_, _>| {
+    let f = Func::wrap(&mut store, move |mut caller: Caller<'_, _>| -> Result<()> {
         // ... and the execution of this host-defined function (while the TLS
         // info is initialized), will set up a recursive call into wasm. This
         // recursive call will be done asynchronously so we can suspend it
@@ -536,7 +536,7 @@ async fn resume_separate_thread3() {
         // ... all in all this function will need access to the original TLS
         // information to raise the trap. This TLS information should be
         // restored even though the asynchronous execution is suspended.
-        Err::<(), _>(wasmtime::Trap::new("").into())
+        bail!("")
     });
     assert!(f.call(&mut store, &[], &mut []).is_err());
 }

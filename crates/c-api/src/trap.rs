@@ -52,7 +52,7 @@ pub extern "C" fn wasm_trap_new(
     }
     let message = String::from_utf8_lossy(&message[..message.len() - 1]);
     Box::new(wasm_trap_t {
-        error: Trap::new(message).into(),
+        error: Error::msg(message.into_owned()),
     })
 }
 
@@ -61,7 +61,7 @@ pub unsafe extern "C" fn wasmtime_trap_new(message: *const u8, len: usize) -> Bo
     let bytes = crate::slice_from_raw_parts(message, len);
     let message = String::from_utf8_lossy(&bytes);
     Box::new(wasm_trap_t {
-        error: Trap::new(message).into(),
+        error: Error::msg(message.into_owned()),
     })
 }
 

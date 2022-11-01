@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 use wasmtime_wasi::sync::WasiCtxBuilder;
@@ -445,16 +445,13 @@ fn call_wasm_many_args() -> Result<()> {
 fn trap_smoke() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::<()>::new(&engine);
-    linker.func_wrap("", "", || -> Result<()> { Err(Trap::new("test").into()) })?;
+    linker.func_wrap("", "", || -> Result<()> { bail!("test") })?;
 
     let mut store = Store::new(&engine, ());
 
     let f = linker.get(&mut store, "", "").unwrap().into_func().unwrap();
 
-    let err = f
-        .call(&mut store, &[], &mut [])
-        .unwrap_err()
-        .downcast::<Trap>()?;
+    let err = f.call(&mut store, &[], &mut []).unwrap_err();
 
     assert!(err.to_string().contains("test"));
 
@@ -472,16 +469,12 @@ fn trap_import() -> Result<()> {
 
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    linker.func_wrap("", "", || -> Result<()> { Err(Trap::new("foo").into()) })?;
+    linker.func_wrap("", "", || -> Result<()> { bail!("foo") })?;
 
     let module = Module::new(&engine, &wasm)?;
     let mut store = Store::new(&engine, ());
 
-    let trap = linker
-        .instantiate(&mut store, &module)
-        .err()
-        .unwrap()
-        .downcast::<Trap>()?;
+    let trap = linker.instantiate(&mut store, &module).unwrap_err();
 
     assert!(trap.to_string().contains("foo"));
 

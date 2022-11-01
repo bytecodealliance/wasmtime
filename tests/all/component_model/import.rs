@@ -2,7 +2,7 @@ use super::REALLOC_AND_FREE;
 use anyhow::Result;
 use std::ops::Deref;
 use wasmtime::component::*;
-use wasmtime::{Store, StoreContextMut, Trap};
+use wasmtime::{BacktraceContext, Store, StoreContextMut};
 
 #[test]
 fn can_compile() -> Result<()> {
@@ -256,15 +256,13 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
         .instantiate(&mut store, &component)?
         .get_typed_func::<(), (), _>(&mut store, "run")?
         .call(&mut store, ())
-        .unwrap_err()
-        .downcast::<Trap>()?;
+        .unwrap_err();
     assert!(
-        trap.to_string().contains("cannot leave component instance"),
-        "bad trap: {}",
-        trap,
+        format!("{trap:?}").contains("cannot leave component instance"),
+        "bad trap: {trap:?}",
     );
 
-    let trace = trap.trace().unwrap();
+    let trace = trap.downcast_ref::<BacktraceContext>().unwrap().frames();
     assert_eq!(trace.len(), 4);
 
     // This was our entry point...
@@ -294,12 +292,10 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
         .instantiate(&mut store, &component)?
         .get_typed_func::<(&str,), (), _>(&mut store, "take-string")?
         .call(&mut store, ("x",))
-        .unwrap_err()
-        .downcast::<Trap>()?;
+        .unwrap_err();
     assert!(
-        trap.to_string().contains("cannot leave component instance"),
-        "bad trap: {}",
-        trap,
+        format!("{trap:?}").contains("cannot leave component instance"),
+        "bad trap: {trap:?}",
     );
     Ok(())
 }
@@ -344,10 +340,8 @@ fn attempt_to_reenter_during_host() -> Result<()> {
             let func = store.data_mut().func.take().unwrap();
             let trap = func.call(&mut store, ()).unwrap_err();
             assert!(
-                trap.to_string()
-                    .contains("cannot reenter component instance"),
-                "bad trap: {}",
-                trap,
+                format!("{trap:?}").contains("cannot reenter component instance"),
+                "bad trap: {trap:?}",
             );
             Ok(())
         },
@@ -372,10 +366,8 @@ fn attempt_to_reenter_during_host() -> Result<()> {
             let func = store.data_mut().func.take().unwrap();
             let trap = func.call(&mut store, &[], &mut []).unwrap_err();
             assert!(
-                trap.to_string()
-                    .contains("cannot reenter component instance"),
-                "bad trap: {}",
-                trap,
+                format!("{trap:?}").contains("cannot reenter component instance"),
+                "bad trap: {trap:?}",
             );
             Ok(())
         },

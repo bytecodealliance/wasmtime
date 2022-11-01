@@ -3,7 +3,8 @@ use crate::{
     wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t, wasm_val_vec_t, wasmtime_error_t,
     wasmtime_extern_t, wasmtime_val_t, wasmtime_val_union, CStoreContext, CStoreContextMut,
 };
-use anyhow::Result;
+use anyhow::{Error, Result};
+use std::any::Any;
 use std::ffi::c_void;
 use std::mem::{self, MaybeUninit};
 use std::panic::{self, AssertUnwindSafe};
@@ -155,16 +156,20 @@ pub unsafe extern "C" fn wasm_func_call(
         }
         Ok(Err(err)) => Box::into_raw(Box::new(wasm_trap_t::new(err))),
         Err(panic) => {
-            let trap = if let Some(msg) = panic.downcast_ref::<String>() {
-                Trap::new(msg)
-            } else if let Some(msg) = panic.downcast_ref::<&'static str>() {
-                Trap::new(*msg)
-            } else {
-                Trap::new("rust panic happened")
-            };
-            let trap = Box::new(wasm_trap_t::new(trap.into()));
+            let err = error_from_panic(panic);
+            let trap = Box::new(wasm_trap_t::new(err));
             Box::into_raw(trap)
         }
+    }
+}
+
+fn error_from_panic(panic: Box<dyn Any + Send>) -> Error {
+    if let Some(msg) = panic.downcast_ref::<String>() {
+        Error::msg(msg.clone())
+    } else if let Some(msg) = panic.downcast_ref::<&'static str>() {
+        Error::msg(*msg)
+    } else {
+        Error::msg("rust panic happened")
     }
 }
 
@@ -346,22 +351,17 @@ pub unsafe extern "C" fn wasmtime_func_call(
             store.data_mut().wasm_val_storage = params;
             None
         }
-        Ok(Err(trap)) => match trap.downcast::<Trap>() {
-            Ok(trap) => {
-                *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(trap.into())));
+        Ok(Err(trap)) => {
+            if trap.is::<Trap>() {
+                *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(trap)));
                 None
-            }
-            Err(err) => Some(Box::new(wasmtime_error_t::from(err))),
-        },
-        Err(panic) => {
-            let trap = if let Some(msg) = panic.downcast_ref::<String>() {
-                Trap::new(msg)
-            } else if let Some(msg) = panic.downcast_ref::<&'static str>() {
-                Trap::new(*msg)
             } else {
-                Trap::new("rust panic happened")
-            };
-            *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(trap.into())));
+                Some(Box::new(wasmtime_error_t::from(trap)))
+            }
+        }
+        Err(panic) => {
+            let err = error_from_panic(panic);
+            *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(err)));
             None
         }
     }

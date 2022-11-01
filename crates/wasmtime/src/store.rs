@@ -1889,16 +1889,15 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
     }
 
     fn out_of_gas(&mut self) -> Result<(), anyhow::Error> {
-        let trap = || anyhow::Error::from(Trap::new("all fuel consumed by WebAssembly"));
         return match &mut self.out_of_gas_behavior {
-            OutOfGas::Trap => Err(trap()),
+            OutOfGas::Trap => Err(Trap::out_of_fuel().into()),
             #[cfg(feature = "async")]
             OutOfGas::InjectFuel {
                 injection_count,
                 fuel_to_inject,
             } => {
                 if *injection_count == 0 {
-                    return Err(trap());
+                    return Err(Trap::out_of_fuel().into());
                 }
                 *injection_count -= 1;
                 let fuel = *fuel_to_inject;

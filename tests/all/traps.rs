@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::panic::{self, AssertUnwindSafe};
 use std::process::Command;
 use wasmtime::*;
@@ -15,20 +15,17 @@ fn test_trap_return() -> Result<()> {
 
     let module = Module::new(store.engine(), wat)?;
     let hello_type = FuncType::new(None, None);
-    let hello_func = Func::new(&mut store, hello_type, |_, _, _| {
-        Err(Trap::new("test 123").into())
-    });
+    let hello_func = Func::new(&mut store, hello_type, |_, _, _| bail!("test 123"));
 
     let instance = Instance::new(&mut store, &module, &[hello_func.into()])?;
     let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
 
     let e = run_func.call(&mut store, ()).unwrap_err();
-    let trap = e.downcast_ref::<Trap>().expect("error is a Trap");
-    assert!(trap.to_string().contains("test 123"));
+    assert!(format!("{e:?}").contains("test 123"));
 
     assert!(
-        e.downcast_ref::<BacktraceContext>().is_none(),
-        "error should not contain a BacktraceContext"
+        e.downcast_ref::<BacktraceContext>().is_some(),
+        "error should contain a BacktraceContext"
     );
 
     Ok(())
@@ -234,12 +231,8 @@ fn test_trap_backtrace_disabled() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
     let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
 
-    let e = run_func
-        .call(&mut store, ())
-        .unwrap_err()
-        .downcast::<Trap>()?;
-
-    assert!(e.trace().is_none(), "backtraces should be disabled");
+    let e = run_func.call(&mut store, ()).unwrap_err();
+    assert!(e.downcast_ref::<BacktraceContext>().is_none());
     Ok(())
 }
 
@@ -255,26 +248,21 @@ fn test_trap_trace_cb() -> Result<()> {
     "#;
 
     let fn_type = FuncType::new(None, None);
-    let fn_func = Func::new(&mut store, fn_type, |_, _, _| {
-        Err(Trap::new("cb throw").into())
-    });
+    let fn_func = Func::new(&mut store, fn_type, |_, _, _| bail!("cb throw"));
 
     let module = Module::new(store.engine(), wat)?;
     let instance = Instance::new(&mut store, &module, &[fn_func.into()])?;
     let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
 
-    let e = run_func
-        .call(&mut store, ())
-        .unwrap_err()
-        .downcast::<Trap>()?;
+    let e = run_func.call(&mut store, ()).unwrap_err();
 
-    let trace = e.trace().expect("backtrace is available");
+    let trace = e.downcast_ref::<BacktraceContext>().unwrap().frames();
     assert_eq!(trace.len(), 2);
     assert_eq!(trace[0].module_name().unwrap(), "hello_mod");
     assert_eq!(trace[0].func_index(), 2);
     assert_eq!(trace[1].module_name().unwrap(), "hello_mod");
     assert_eq!(trace[1].func_index(), 1);
-    assert!(e.to_string().contains("cb throw"));
+    assert!(format!("{e:?}").contains("cb throw"));
 
     Ok(())
 }
@@ -404,19 +392,9 @@ fn trap_start_function_import() -> Result<()> {
 
     let module = Module::new(store.engine(), &binary)?;
     let sig = FuncType::new(None, None);
-    let func = Func::new(
-        &mut store,
-        sig,
-        |_, _, _| Err(Trap::new("user trap").into()),
-    );
-    let err = Instance::new(&mut store, &module, &[func.into()])
-        .err()
-        .unwrap();
-    assert!(err
-        .downcast_ref::<Trap>()
-        .unwrap()
-        .to_string()
-        .contains("user trap"));
+    let func = Func::new(&mut store, sig, |_, _, _| bail!("user trap"));
+    let err = Instance::new(&mut store, &module, &[func.into()]).unwrap_err();
+    assert!(err.to_string().contains("user trap"));
     Ok(())
 }
 

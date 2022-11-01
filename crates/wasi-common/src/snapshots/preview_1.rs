@@ -10,7 +10,7 @@ use crate::{
     },
     Error, ErrorExt, ErrorKind, I32Exit, SystemTimeSpec, WasiCtx,
 };
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use cap_std::time::{Duration, SystemClock};
 use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
@@ -1219,7 +1219,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if status < 126 {
             I32Exit(status as i32).into()
         } else {
-            wasmtime::Trap::new("exit with invalid exit status outside of [0..126)").into()
+            anyhow!("exit with invalid exit status outside of [0..126)")
         }
     }
 

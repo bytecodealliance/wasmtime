@@ -22,9 +22,6 @@ struct TrapInner {
 /// State describing the occasion which evoked a trap.
 #[derive(Debug)]
 enum TrapReason {
-    /// An error message describing a trap.
-    Message(String),
-
     /// A specific code for a trap triggered while executing WASM.
     InstructionTrap(TrapCode),
 }
@@ -89,6 +86,13 @@ pub enum TrapCode {
     /// generates a function that always traps and, when called, produces this
     /// flavor of trap.
     AlwaysTrapAdapter,
+
+    /// When wasm code is configured to consume fuel and it runs out of fuel
+    /// then this trap will be raised.
+    ///
+    /// For more information see
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel).
+    OutOfFuel,
 }
 
 impl TrapCode {
@@ -116,26 +120,13 @@ fn _assert_trap_is_sync_and_send(t: &Trap) -> (&dyn Sync, &dyn Send) {
 }
 
 impl Trap {
-    /// Creates a new `Trap` with `message`.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// let trap = wasmtime::Trap::new("unexpected error");
-    /// assert!(trap.to_string().contains("unexpected error"));
-    /// ```
-    #[cold] // traps are exceptional, this helps move handling off the main path
-    pub fn new<I: Into<String>>(message: I) -> Self {
-        let reason = TrapReason::Message(message.into());
-        Trap::new_with_trace(reason, None)
-    }
-
     // Same safety requirements and caveats as
     // `wasmtime_runtime::raise_user_trap`.
     pub(crate) unsafe fn raise(error: anyhow::Error) -> ! {
-        let needs_backtrace = error
-            .downcast_ref::<Trap>()
-            .map_or(true, |trap| trap.trace().is_none());
+        let needs_backtrace = match error.downcast_ref::<Trap>() {
+            Some(trap) => trap.trace().is_none(),
+            None => error.downcast_ref::<BacktraceContext>().is_none(),
+        };
         wasmtime_runtime::raise_user_trap(error, needs_backtrace)
     }
 
@@ -201,6 +192,11 @@ impl Trap {
         Trap::new_with_trace(TrapReason::InstructionTrap(code), backtrace)
     }
 
+    #[cold] // see Trap::new
+    pub(crate) fn out_of_fuel() -> Self {
+        Trap::new_with_trace(TrapReason::InstructionTrap(TrapCode::OutOfFuel), None)
+    }
+
     /// Creates a new `Trap`.
     /// * `reason` - this is the wasmtime-internal reason for why this trap is
     ///   being created.
@@ -252,7 +248,6 @@ impl Trap {
     pub fn trap_code(&self) -> Option<TrapCode> {
         match self.inner.reason {
             TrapReason::InstructionTrap(code) => Some(code),
-            _ => None,
         }
     }
 
@@ -301,7 +296,6 @@ impl std::error::Error for Trap {}
 impl fmt::Display for TrapReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TrapReason::Message(s) => write!(f, "{}", s),
             TrapReason::InstructionTrap(code) => write!(f, "wasm trap: {}", code),
         }
     }
@@ -323,6 +317,7 @@ impl fmt::Display for TrapCode {
             UnreachableCodeReached => "wasm `unreachable` instruction executed",
             Interrupt => "interrupt",
             AlwaysTrapAdapter => "degenerate component adapter called",
+            OutOfFuel => "all fuel consumed by WebAssembly",
         };
         write!(f, "{}", desc)
     }
