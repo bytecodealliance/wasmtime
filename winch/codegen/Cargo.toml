@@ -16,7 +16,7 @@ target-lexicon = { workspace = true, features = ["std"] }
 # In the next iteration we'll factor out the common bits so that they can be consumed
 # by Cranelift and Winch.
 cranelift-codegen = { workspace = true }
-regalloc2 = "0.4.1"
+regalloc2 = "0.4.2"
 
 [features]
 x64 = ["cranelift-codegen/x86"]
