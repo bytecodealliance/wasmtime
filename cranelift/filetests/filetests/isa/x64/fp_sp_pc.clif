@@ -39,7 +39,9 @@ block0:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    8(%rbp), %rax
+;   movq    %rbp, %rdi
+;   movq    8(%rdi), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+
