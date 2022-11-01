@@ -24,8 +24,8 @@ fn test_trap_return() -> Result<()> {
     assert!(format!("{e:?}").contains("test 123"));
 
     assert!(
-        e.downcast_ref::<BacktraceContext>().is_some(),
-        "error should contain a BacktraceContext"
+        e.downcast_ref::<WasmBacktrace>().is_some(),
+        "error should contain a WasmBacktrace"
     );
 
     Ok(())
@@ -55,7 +55,7 @@ fn test_anyhow_error_return() -> Result<()> {
     assert!(format!("{:?}", e).contains("Caused by:\n    test 1234"));
 
     assert!(e.downcast_ref::<Trap>().is_none());
-    assert!(e.downcast_ref::<BacktraceContext>().is_some());
+    assert!(e.downcast_ref::<WasmBacktrace>().is_some());
 
     Ok(())
 }
@@ -101,8 +101,8 @@ fn test_trap_return_downcast() -> Result<()> {
     e.downcast_ref::<MyTrap>()
         .expect("error downcasts to MyTrap");
     let bt = e
-        .downcast_ref::<BacktraceContext>()
-        .expect("error downcasts to BacktraceContext");
+        .downcast_ref::<WasmBacktrace>()
+        .expect("error downcasts to WasmBacktrace");
     assert_eq!(bt.frames().len(), 1);
     println!("{:?}", bt);
 
@@ -125,7 +125,7 @@ fn test_trap_trace() -> Result<()> {
 
     let e = run_func.call(&mut store, ()).unwrap_err();
 
-    let trace = e.downcast_ref::<BacktraceContext>().unwrap().frames();
+    let trace = e.downcast_ref::<WasmBacktrace>().unwrap().frames();
     assert_eq!(trace.len(), 2);
     assert_eq!(trace[0].module_name().unwrap(), "hello_mod");
     assert_eq!(trace[0].func_index(), 1);
@@ -198,7 +198,7 @@ fn test_trap_through_host() -> Result<()> {
     )?;
     let a = instance.get_typed_func::<(), (), _>(&mut store, "a")?;
     let err = a.call(&mut store, ()).unwrap_err();
-    let trace = err.downcast_ref::<BacktraceContext>().unwrap().frames();
+    let trace = err.downcast_ref::<WasmBacktrace>().unwrap().frames();
     assert_eq!(trace.len(), 3);
     assert_eq!(trace[0].func_name(), Some("c"));
     assert_eq!(trace[1].func_name(), Some("b"));
@@ -225,7 +225,7 @@ fn test_trap_backtrace_disabled() -> Result<()> {
     let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
 
     let e = run_func.call(&mut store, ()).unwrap_err();
-    assert!(e.downcast_ref::<BacktraceContext>().is_none());
+    assert!(e.downcast_ref::<WasmBacktrace>().is_none());
     Ok(())
 }
 
@@ -249,7 +249,7 @@ fn test_trap_trace_cb() -> Result<()> {
 
     let e = run_func.call(&mut store, ()).unwrap_err();
 
-    let trace = e.downcast_ref::<BacktraceContext>().unwrap().frames();
+    let trace = e.downcast_ref::<WasmBacktrace>().unwrap().frames();
     assert_eq!(trace.len(), 2);
     assert_eq!(trace[0].module_name().unwrap(), "hello_mod");
     assert_eq!(trace[0].func_index(), 2);
@@ -275,7 +275,7 @@ fn test_trap_stack_overflow() -> Result<()> {
 
     let e = run_func.call(&mut store, ()).unwrap_err();
 
-    let trace = e.downcast_ref::<BacktraceContext>().unwrap().frames();
+    let trace = e.downcast_ref::<WasmBacktrace>().unwrap().frames();
     assert!(trace.len() >= 32);
     for i in 0..trace.len() {
         assert_eq!(trace[i].module_name().unwrap(), "rec_mod");
@@ -470,7 +470,7 @@ fn rust_catch_panic_import() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[panic.into(), catch_panic.into()])?;
     let run = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
     let trap = run.call(&mut store, ()).unwrap_err();
-    let trace = trap.downcast_ref::<BacktraceContext>().unwrap().frames();
+    let trace = trap.downcast_ref::<WasmBacktrace>().unwrap().frames();
     assert_eq!(trace.len(), 1);
     assert_eq!(trace[0].func_index(), 3);
     assert_eq!(num_panics.load(std::sync::atomic::Ordering::SeqCst), 2);
@@ -625,7 +625,7 @@ fn present_after_module_drop() -> Result<()> {
 
     fn assert_trap(t: Error) {
         println!("{:?}", t);
-        let trace = t.downcast_ref::<BacktraceContext>().unwrap().frames();
+        let trace = t.downcast_ref::<WasmBacktrace>().unwrap().frames();
         assert_eq!(trace.len(), 1);
         assert_eq!(trace[0].func_index(), 0);
     }
@@ -718,7 +718,7 @@ fn parse_dwarf_info() -> Result<()> {
     let trap = run.call(&mut store, &[], &mut []).unwrap_err();
 
     let mut found = false;
-    let frames = trap.downcast_ref::<BacktraceContext>().unwrap().frames();
+    let frames = trap.downcast_ref::<WasmBacktrace>().unwrap().frames();
     for frame in frames {
         for symbol in frame.symbols() {
             if let Some(file) = symbol.file() {
@@ -847,7 +847,7 @@ fn traps_without_address_map() -> Result<()> {
 
     let e = run_func.call(&mut store, ()).unwrap_err();
 
-    let trace = e.downcast_ref::<BacktraceContext>().unwrap().frames();
+    let trace = e.downcast_ref::<WasmBacktrace>().unwrap().frames();
     assert_eq!(trace.len(), 2);
     assert_eq!(trace[0].func_name(), Some("hello"));
     assert_eq!(trace[0].func_index(), 1);
@@ -900,7 +900,7 @@ fn catch_trap_calling_across_stores() -> Result<()> {
                 "trap should contain 'unreachable', got: {trap:?}"
             );
 
-            let trace = trap.downcast_ref::<BacktraceContext>().unwrap().frames();
+            let trace = trap.downcast_ref::<WasmBacktrace>().unwrap().frames();
 
             assert_eq!(trace.len(), 1);
             assert_eq!(trace[0].func_name(), Some("trap"));
@@ -1010,7 +1010,7 @@ async fn async_then_sync_trap() -> Result<()> {
         .unwrap();
     let trap = a.call_async(&mut async_store, ()).await.unwrap_err();
 
-    let trace = trap.downcast_ref::<BacktraceContext>().unwrap().frames();
+    let trace = trap.downcast_ref::<WasmBacktrace>().unwrap().frames();
     // We don't support cross-store or cross-engine symbolication currently, so
     // the other frames are ignored.
     assert_eq!(trace.len(), 1);
@@ -1091,7 +1091,7 @@ async fn sync_then_async_trap() -> Result<()> {
         .unwrap();
     let trap = a.call(&mut sync_store, ()).unwrap_err();
 
-    let trace = trap.downcast_ref::<BacktraceContext>().unwrap().frames();
+    let trace = trap.downcast_ref::<WasmBacktrace>().unwrap().frames();
     // We don't support cross-store or cross-engine symbolication currently, so
     // the other frames are ignored.
     assert_eq!(trace.len(), 1);

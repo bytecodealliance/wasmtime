@@ -71,23 +71,15 @@ pub enum Trap {
     OutOfFuel,
 }
 
-#[derive(Debug)]
-pub(crate) struct TrapBacktrace {
-    wasm_trace: Vec<FrameInfo>,
-    #[allow(dead_code)]
-    runtime_trace: wasmtime_runtime::Backtrace,
-    hint_wasm_backtrace_details_env: bool,
-}
-
 impl Trap {
     // Same safety requirements and caveats as
     // `wasmtime_runtime::raise_user_trap`.
     pub(crate) unsafe fn raise(error: anyhow::Error) -> ! {
-        let needs_backtrace = error.downcast_ref::<BacktraceContext>().is_none();
+        let needs_backtrace = error.downcast_ref::<WasmBacktrace>().is_none();
         wasmtime_runtime::raise_user_trap(error, needs_backtrace)
     }
 
-    #[cold] // see Trap::new
+    #[cold] // traps are exceptional, this helps move handling off the main path
     pub(crate) fn from_runtime_box(
         store: &StoreOpaque,
         runtime_trap: Box<wasmtime_runtime::Trap>,
@@ -127,11 +119,11 @@ impl Trap {
         };
         match backtrace {
             Some(bt) => {
-                let bt = TrapBacktrace::new(store, bt, pc);
+                let bt = WasmBacktrace::new(store, bt, pc);
                 if bt.wasm_trace.is_empty() {
                     error
                 } else {
-                    error.context(BacktraceContext(bt))
+                    error.context(bt)
                 }
             }
             None => error,
@@ -182,8 +174,17 @@ impl fmt::Display for Trap {
 
 impl std::error::Error for Trap {}
 
-impl TrapBacktrace {
-    pub fn new(
+/// todo
+#[derive(Debug)]
+pub struct WasmBacktrace {
+    wasm_trace: Vec<FrameInfo>,
+    #[allow(dead_code)]
+    runtime_trace: wasmtime_runtime::Backtrace,
+    hint_wasm_backtrace_details_env: bool,
+}
+
+impl WasmBacktrace {
+    fn new(
         store: &StoreOpaque,
         runtime_trace: wasmtime_runtime::Backtrace,
         trap_pc: Option<usize>,
@@ -258,11 +259,17 @@ impl TrapBacktrace {
             hint_wasm_backtrace_details_env,
         }
     }
+
+    /// Returns a list of function frames in WebAssembly this backtrace
+    /// represents.
+    pub fn frames(&self) -> &[FrameInfo] {
+        self.wasm_trace.as_slice()
+    }
 }
 
-impl fmt::Display for TrapBacktrace {
+impl fmt::Display for WasmBacktrace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "wasm backtrace:")?;
+        writeln!(f, "error while executing at wasm backtrace:")?;
 
         let mut needs_newline = false;
         for (i, frame) in self.wasm_trace.iter().enumerate() {
@@ -314,25 +321,6 @@ impl fmt::Display for TrapBacktrace {
             write!(f, "\nnote: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable to may show more debugging information")?;
         }
         Ok(())
-    }
-}
-
-/// Describes the context (backtrace) at which a user's error terminated (trapped)
-/// WebAssembly execution
-#[derive(Debug)]
-pub struct BacktraceContext(TrapBacktrace);
-
-impl fmt::Display for BacktraceContext {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "error while executing at {}", self.0)
-    }
-}
-
-impl BacktraceContext {
-    /// Returns a list of function frames in WebAssembly code that led to this
-    /// trap happening.
-    pub fn frames(&self) -> &[FrameInfo] {
-        self.0.wasm_trace.as_slice()
     }
 }
 

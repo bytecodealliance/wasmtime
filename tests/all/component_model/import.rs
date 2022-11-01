@@ -2,7 +2,7 @@ use super::REALLOC_AND_FREE;
 use anyhow::Result;
 use std::ops::Deref;
 use wasmtime::component::*;
-use wasmtime::{BacktraceContext, Store, StoreContextMut};
+use wasmtime::{Store, StoreContextMut, WasmBacktrace};
 
 #[test]
 fn can_compile() -> Result<()> {
@@ -262,7 +262,7 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
         "bad trap: {trap:?}",
     );
 
-    let trace = trap.downcast_ref::<BacktraceContext>().unwrap().frames();
+    let trace = trap.downcast_ref::<WasmBacktrace>().unwrap().frames();
     assert_eq!(trace.len(), 4);
 
     // This was our entry point...
