@@ -2853,7 +2853,7 @@
 
 (rule (lower (get_return_address))
       (x64_load $I64
-                (Amode.ImmReg 8 (preg_rbp) (mem_flags_trusted))
+                (Amode.ImmReg 8 (x64_rbp) (mem_flags_trusted))
                 (ExtKind.None)))
 
 ;; Rules for `jump` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
