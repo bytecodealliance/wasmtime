@@ -16,17 +16,17 @@ block0(v0: i64, v1: i32):
     jump block2
 
 block1:
-    v2 = heap_addr.i64 heap0, v1, 0
+    v2 = heap_addr.i64 heap0, v1, 68
     v3 = load.i32 v2+64
     jump block3(v3)
 
 block2:
-    v4 = heap_addr.i64 heap0, v1, 0
+    v4 = heap_addr.i64 heap0, v1, 132
     v5 = load.i32 v4+128
     jump block3(v5)
 
 block3(v6: i32):
-    v7 = heap_addr.i64 heap0, v1, 0
+    v7 = heap_addr.i64 heap0, v1, 68
     v8 = load.i32 v7+64
     ;; load should survive:
     ; check: v8 = load.i32 v7+64

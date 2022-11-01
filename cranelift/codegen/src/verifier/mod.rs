@@ -64,6 +64,7 @@ use crate::entity::SparseSet;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir;
 use crate::ir::entities::AnyEntity;
+use crate::ir::immediates::Offset32;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{
     types, ArgumentPurpose, Block, Constant, DynamicStackSlot, FuncRef, Function, GlobalValue,
@@ -743,11 +744,36 @@ impl<'a> Verifier<'a> {
                 self.verify_constant_size(inst, constant_handle, errors)?;
             }
 
+            Load {
+                opcode,
+                offset,
+                arg: addr,
+                ..
+            }
+            | Store {
+                opcode,
+                offset,
+                args: [_, addr],
+                ..
+            } => {
+                self.verify_heap_addr_bounds(inst, opcode, addr, offset, errors)?;
+            }
+
+            LoadNoOffset {
+                opcode, arg: addr, ..
+            }
+            | StoreNoOffset {
+                opcode,
+                args: [_, addr],
+                ..
+            } => {
+                let offset = Offset32::new(0);
+                self.verify_heap_addr_bounds(inst, opcode, addr, offset, errors)?;
+            }
+
             // Exhaustive list so we can't forget to add new formats
             AtomicCas { .. }
             | AtomicRmw { .. }
-            | LoadNoOffset { .. }
-            | StoreNoOffset { .. }
             | Unary { .. }
             | UnaryConst { .. }
             | UnaryImm { .. }
@@ -763,8 +789,6 @@ impl<'a> Verifier<'a> {
             | IntCompare { .. }
             | IntCompareImm { .. }
             | FloatCompare { .. }
-            | Load { .. }
-            | Store { .. }
             | Trap { .. }
             | CondTrap { .. }
             | IntCondTrap { .. }
@@ -1122,6 +1146,66 @@ impl<'a> Verifier<'a> {
         } else {
             Ok(())
         }
+    }
+
+    /// Checks If a `load` or `store` access is within `heap_addr` bounds.
+    fn verify_heap_addr_bounds(
+        &self,
+        inst: Inst,
+        opcode: Opcode,
+        addr: Value,
+        offset: Offset32,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        let dfg = &self.func.dfg;
+
+        // First, let's check if `addr` comes from a `heap_addr` instruction.
+        let valid_size = match dfg.value_def(addr) {
+            ValueDef::Result(def_inst, _) => match dfg[def_inst] {
+                ir::InstructionData::HeapAddr { imm, .. } => u32::from(imm) as i64,
+                // Not a `heap_addr`, we can't verify this.
+                _ => return Ok(()),
+            },
+            _ => return Ok(()),
+        };
+
+        // Some of these instructions do a load + extend, which means
+        // they access less memory than the destination control type.
+        let access_size = match opcode {
+            Opcode::Istore8 | Opcode::Uload8 | Opcode::Sload8 => 1,
+            Opcode::Istore16 | Opcode::Uload16 | Opcode::Sload16 => 2,
+            Opcode::Istore32 | Opcode::Uload32 | Opcode::Sload32 => 4,
+            Opcode::Uload8x8
+            | Opcode::Uload16x4
+            | Opcode::Uload32x2
+            | Opcode::Sload8x8
+            | Opcode::Sload16x4
+            | Opcode::Sload32x2 => 8,
+            _ => dfg.ctrl_typevar(inst).bytes() as i64,
+        };
+
+        let offset: i64 = offset.into();
+
+        // A negative index directly into a `heap_addr` is always illegal.
+        if offset < 0 {
+            return errors.fatal((
+                inst,
+                format!("offset cannot be negative when referencing a heap_addr, got {offset}"),
+            ));
+        }
+
+        // Check if the access is within the bounds provided by  heap_addr
+        let oob_bytes = -(valid_size - (offset + access_size));
+        if oob_bytes > 0 {
+            return errors.fatal((
+                inst,
+                format!(
+                    "out of bounds access of {oob_bytes} bytes past the value checked by the referenced heap_addr",
+                ),
+            ));
+        }
+
+        Ok(())
     }
 
     fn domtree_integrity(

@@ -128,7 +128,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64):
     ; v1 - heap offset (bytes)
     ; v2 - table offset (elements)
     ; v3 - store/load value
-    v4 = heap_addr.i64 heap0, v1, 0
+    v4 = heap_addr.i64 heap0, v1, 8
     v5 = table_addr.i64 table0, v2, +2
 
     ; Store via heap, load via table

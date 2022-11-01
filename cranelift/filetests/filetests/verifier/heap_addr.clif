@@ -1,0 +1,73 @@
+test verifier
+target x86_64
+
+
+function %heap_addr_zero(i64 vmctx, i64) {
+    gv0 = vmctx
+    heap0 = static gv0, offset_guard 0x1000, bound 0x1_0000, index_type i64
+
+block0(v0: i64, v1: i64):
+    ; Zero Sized `heap_addr`s are legal
+    ; See: https://github.com/bytecodealliance/wasmtime/pull/5167#issuecomment-1298908643
+    ; For discussions on this
+    v2 = heap_addr.i64 heap0, v1, 0
+    return
+}
+
+function %heap_addr_negative(i64 vmctx, i64) {
+    gv0 = vmctx
+    heap0 = static gv0, offset_guard 0x1000, bound 0x1_0000, index_type i64
+
+block0(v0: i64, v1: i64):
+    v2 = heap_addr.i64 heap0, v1, 2
+    
+    ; Negative offsets directly from a `heap_addr` are illegal
+    v3 = load.i8 v2-1 ; error: offset cannot be negative when referencing a heap_addr, got -1
+    return
+}
+
+function %heap_addr_invalid_size(i64 vmctx, i64) {
+    gv0 = vmctx
+    heap0 = static gv0, offset_guard 0x1000, bound 0x1_0000, index_type i64
+
+block0(v0: i64, v1: i64):
+    v2 = heap_addr.i64 heap0, v1, 2
+    
+    ; This is legal since we are loading 1 byte from a 2 byte space
+    v3 = load.i8 v2+0
+
+    ; This is legal since we are loading 1 byte from a 2 byte space with a offset of 1
+    v4 = load.i8 v2+1
+    
+    ; This is invalid since we are loading 1 byte past the allowed space
+    v5 = load.i8 v2+2 ; error: out of bounds access of 1 bytes past the value checked by the referenced heap_addr
+
+    return
+}
+
+function %heap_addr_partial_invalid_size(i64 vmctx, i64) {
+    gv0 = vmctx
+    heap0 = static gv0, offset_guard 0x1000, bound 0x1_0000, index_type i64
+
+block0(v0: i64, v1: i64):
+    v2 = heap_addr.i64 heap0, v1, 2
+    
+    ; Part of this load is outside of bounds
+    v3 = load.i32 v2+0 ; error: out of bounds access of 2 bytes past the value checked by the referenced heap_addr
+
+    return
+}
+
+
+function %heap_addr_uload8(i64 vmctx, i64) {
+    gv0 = vmctx
+    heap0 = static gv0, offset_guard 0x1000, bound 0x1_0000, index_type i64
+
+block0(v0: i64, v1: i64):
+    v2 = heap_addr.i64 heap0, v1, 1
+    
+    ; uload8 has a control type different than the amount of bytes it loads
+    ; this should not fail since it only accesses 1 byte of memory
+    v3 = uload8.i64 v2+0
+    return
+}

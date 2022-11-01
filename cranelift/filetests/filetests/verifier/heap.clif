@@ -40,6 +40,6 @@ function %heap_addr_index_type(i64 vmctx, i64) {
     heap0 = static gv0, offset_guard 0x1000, bound 0x1_0000, index_type i32
 
 block0(v0: i64, v1: i64):
-    v2 = heap_addr.i64 heap0, v1, 0; error: index type i64 differs from heap index type i32
+    v2 = heap_addr.i64 heap0, v1, 4; error: index type i64 differs from heap index type i32
     return
 }
