@@ -327,6 +327,22 @@ impl Func {
     ///
     /// For more information about `Send + Sync + 'static` requirements on the
     /// `func`, see [`Func::wrap`](#why-send--sync--static).
+    ///
+    /// # Errors
+    ///
+    /// The host-provided function here returns a
+    /// [`Result<()>`](anyhow::Result). If the function returns `Ok(())` then
+    /// that indicates that the host function completed successfully and wrote
+    /// the result into the `&mut [Val]` argument.
+    ///
+    /// If the function returns `Err(e)`, however, then this is equivalent to
+    /// the host function triggering a trap for wasm. WebAssembly execution is
+    /// immediately halted and the original caller of [`Func::call`], for
+    /// example, will receive the error returned here (possibly with
+    /// [`WasmBacktrace`](crate::WasmBacktrace) context information attached).
+    ///
+    /// For more information about errors in Wasmtime see the [`Trap`]
+    /// documentation.
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn new<T>(
@@ -354,6 +370,11 @@ impl Func {
     /// If you're calling this from Rust it's recommended to either instead use
     /// [`Func::new`] or [`Func::wrap`]. The [`Func::wrap`] API, in particular,
     /// is both safer and faster than this API.
+    ///
+    /// # Errors
+    ///
+    /// See [`Func::new`] for the behavior of returning an error from the host
+    /// function provided here.
     ///
     /// # Unsafety
     ///
@@ -391,6 +412,11 @@ impl Func {
     ///
     /// This function will panic if `store` is not associated with an [async
     /// config](crate::Config::async_support).
+    ///
+    /// # Errors
+    ///
+    /// See [`Func::new`] for the behavior of returning an error from the host
+    /// function provided here.
     ///
     /// # Examples
     ///
@@ -542,6 +568,18 @@ impl Func {
     /// Most host-defined [`Func`] values provide closures that end up not
     /// actually closing over any values. These zero-sized types will use the
     /// context from [`Caller`] for host-defined information.
+    ///
+    /// # Errors
+    ///
+    /// The closure provided here to `wrap` can optionally return a
+    /// [`Result<T>`](anyhow::Result). Returning `Ok(t)` represents the host
+    /// function successfully completing with the `t` result. Returning
+    /// `Err(e)`, however, is equivalent to raising a custom wasm trap.
+    /// Execution of WebAssembly does not resume and the stack is unwound to the
+    /// original caller of the function where the error is returned.
+    ///
+    /// For more information about errors in Wasmtime see the [`Trap`]
+    /// documentation.
     ///
     /// # Examples
     ///
@@ -750,16 +788,41 @@ impl Func {
     /// Invokes this function with the `params` given and writes returned values
     /// to `results`.
     ///
-    /// The `params` here must match the type signature of this `Func`, or a
-    /// trap will occur. If a trap occurs while executing this function, then a
-    /// trap will also be returned. Additionally `results` must have the same
-    /// length as the number of results for this function.
+    /// The `params` here must match the type signature of this `Func`, or an
+    /// error will occur. Additionally `results` must have the same
+    /// length as the number of results for this function. Calling this function
+    /// will synchronously execute the WebAssembly function referenced to get
+    /// the results.
+    ///
+    /// This function will return `Ok(())` if execution completed without a trap
+    /// or error of any kind. In this situation the results will be written to
+    /// the provided `results` array.
+    ///
+    /// # Errors
+    ///
+    /// Any error which occurs throughout the execution of the function will be
+    /// returned as `Err(e)`. The [`Error`](anyhow::Error) type can be inspected
+    /// for the precise error cause such as:
+    ///
+    /// * [`Trap`] - indicates that a wasm trap happened and execution was
+    ///   halted.
+    /// * [`WasmBacktrace`] - optionally included on errors for backtrace
+    ///   information of the trap/error.
+    /// * Other string-based errors to indicate issues such as type errors with
+    ///   `params`.
+    /// * Any host-originating error originally returned from a function defined
+    ///   via [`Func::new`], for example.
+    ///
+    /// Errors typically indicate that execution of WebAssembly was halted
+    /// mid-way and did not complete after the error condition happened.
     ///
     /// # Panics
     ///
     /// This function will panic if called on a function belonging to an async
     /// store. Asynchronous stores must always use `call_async`.
     /// initiates a panic. Also panics if `store` does not own this function.
+    ///
+    /// [`WasmBacktrace`]: crate::WasmBacktrace
     pub fn call(
         &self,
         mut store: impl AsContextMut,
@@ -787,6 +850,10 @@ impl Func {
     /// [`TypedFunc::call`] functions. This means that if this function is
     /// invoked many times with new `ExternRef` values and no other GC happens
     /// via any other means then no values will get collected.
+    ///
+    /// # Errors
+    ///
+    /// For more information about errors see the [`Func::call`] documentation.
     ///
     /// # Unsafety
     ///
@@ -877,6 +944,10 @@ impl Func {
     ///
     /// For more information see the documentation on [asynchronous
     /// configs](crate::Config::async_support).
+    ///
+    /// # Errors
+    ///
+    /// For more information on errors see the [`Func::call`] documentation.
     ///
     /// # Panics
     ///

@@ -381,15 +381,30 @@ impl Config {
         self
     }
 
-    /// Configures whether backtraces exist in a `Trap`.
+    /// Configures whether [`WasmBacktrace`] will be present in the context of
+    /// errors returned from Wasmtime.
     ///
-    /// Enabled by default, this feature builds in support to
-    /// generate backtraces at runtime for WebAssembly modules. This means that
-    /// unwinding information is compiled into wasm modules and necessary runtime
-    /// dependencies are enabled as well.
+    /// A backtrace may be collected whenever an error is returned from a host
+    /// function call through to WebAssembly or when WebAssembly itself hits a
+    /// trap condition, such as an out-of-bounds memory access. This flag
+    /// indicates, in these conditions, whether the backtrace is collected or
+    /// not.
     ///
-    /// When disabled, wasm backtrace details are ignored, and [`crate::Trap::trace()`]
-    /// will always return `None`.
+    /// Currently wasm backtraces are implemented through frame pointer walking.
+    /// This means that collecting a backtrace is expected to be a fast and
+    /// relatively cheap operation. Additionally backtrace collection is
+    /// suitable in concurrent environments since one thread capturing a
+    /// backtrace won't block other threads.
+    ///
+    /// Collected backtraces are attached via [`anyhow::Error::context`] to
+    /// errors returned from host functions. The [`WasmBacktrace`] type can be
+    /// acquired via [`anyhow::Error::downcast_ref`] to inspect the backtrace.
+    /// When this option is disabled then this context is never applied to
+    /// errors coming out of wasm.
+    ///
+    /// This option is `true` by default.
+    ///
+    /// [`WasmBacktrace`]: crate::WasmBacktrace
     #[deprecated = "Backtraces will always be enabled in future Wasmtime releases; if this \
                     causes problems for you, please file an issue."]
     pub fn wasm_backtrace(&mut self, enable: bool) -> &mut Self {
@@ -429,13 +444,16 @@ impl Config {
     /// This configuration option only exists to help third-party stack
     /// capturing mechanisms, such as the system's unwinder or the `backtrace`
     /// crate, determine how to unwind through Wasm frames. It does not affect
-    /// whether Wasmtime can capture Wasm backtraces or not, or whether
-    /// [`Trap::trace`][crate::Trap::trace] returns `Some` or `None`.
+    /// whether Wasmtime can capture Wasm backtraces or not. The presence of
+    /// [`WasmBacktrace`] is controlled by the [`Config::wasm_backtrace`]
+    /// option.
     ///
     /// Note that native unwind information is always generated when targeting
     /// Windows, since the Windows ABI requires it.
     ///
     /// This option defaults to `true`.
+    ///
+    /// [`WasmBacktrace`]: crate::WasmBacktrace
     pub fn native_unwind_info(&mut self, enable: bool) -> &mut Self {
         self.native_unwind_info = enable;
         self

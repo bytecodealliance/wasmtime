@@ -5,13 +5,66 @@ use std::fmt;
 use wasmtime_environ::{EntityRef, FilePos, TrapCode};
 use wasmtime_jit::{demangle_function_name, demangle_function_name_or_index};
 
-/// Description of a trap which can happen in WebAssembly, halting wasm
-/// execution.
+/// Representation of a WebAssembly trap and what caused it to occur.
 ///
-/// This enumeration is a list of all possible traps that can happen in wasm, in
-/// addition to some Wasmtime-specific trap codes listed here as well. This type
-/// will be returned as an error when a wasm function hits one of these trap
-/// conditions through the [`anyhow::Error`] wrapper.
+/// WebAssembly traps happen explicitly for instructions such as `unreachable`
+/// but can also happen as side effects of other instructions such as `i32.load`
+/// loading an out-of-bounds address. Traps halt the execution of WebAssembly
+/// and cause an error to be returned to the host. This enumeration is a list of
+/// all possible traps that can happen in wasm, in addition to some
+/// Wasmtime-specific trap codes listed here as well.
+///
+/// # Errors in Wasmtime
+///
+/// Error-handling in Wasmtime is primarily done through the [`anyhow`] crate
+/// where most results are a [`Result<T>`](anyhow::Result) which is an alias for
+/// [`Result<T, anyhow::Error>`](std::result::Result). Errors in Wasmtime are
+/// represented with [`anyhow::Error`] which acts as a container for any type of
+/// error in addition to optional context for this error. The "base" error or
+/// [`anyhow::Error::root_cause`] is a [`Trap`] whenever WebAssembly hits a
+/// trap, or otherwise it's whatever the host created the error with when
+/// returning an error for a host call.
+///
+/// Any error which happens while WebAssembly is executing will also, by
+/// default, capture a backtrace of the wasm frames while executing. This
+/// backtrace is represented with a [`WasmBacktrace`] instance and is attached
+/// to the [`anyhow::Error`] return value as a
+/// [`context`](anyhow::Error::context). Inspecting a [`WasmBacktrace`] can be
+/// done with the [`downcast_ref`](anyhow::Error::downcast_ref) function. For
+/// information on this see the [`WasmBacktrace`] documentation.
+///
+/// # Examples
+///
+/// ```
+/// # use wasmtime::*;
+/// # use anyhow::Result;
+/// # fn main() -> Result<()> {
+/// let engine = Engine::default();
+/// let module = Module::new(
+///     &engine,
+///     r#"
+///         (module
+///             (func (export "trap")
+///                 unreachable)
+///             (func $overflow (export "overflow")
+///                 call $overflow)
+///         )
+///     "#,
+/// )?;
+/// let mut store = Store::new(&engine, ());
+/// let instance = Instance::new(&mut store, &module, &[])?;
+///
+/// let trap = instance.get_typed_func::<(), (), _>(&mut store, "trap")?;
+/// let error = trap.call(&mut store, ()).unwrap_err();
+/// assert_eq!(*error.downcast_ref::<Trap>().unwrap(), Trap::UnreachableCodeReached);
+/// assert!(error.root_cause().is::<Trap>());
+///
+/// let overflow = instance.get_typed_func::<(), (), _>(&mut store, "overflow")?;
+/// let error = overflow.call(&mut store, ()).unwrap_err();
+/// assert_eq!(*error.downcast_ref::<Trap>().unwrap(), Trap::StackOverflow);
+/// # Ok(())
+/// # }
+/// ```
 //
 // The code can be accessed from the c-api, where the possible values are translated
 // into enum values defined there:
@@ -174,13 +227,63 @@ impl fmt::Display for Trap {
 
 impl std::error::Error for Trap {}
 
-/// todo
+/// Representation of a backtrace of function frames in a WebAssembly module for
+/// where an error happened.
+///
+/// This structure is attached to the [`anyhow::Error`] returned from many
+/// Wasmtime functions that execute WebAssembly such as [`Instance::new`] or
+/// [`Func::call`]. This can be acquired with the [`anyhow::Error::downcast`]
+/// family of methods to programmatically inspect the backtrace. Otherwise since
+/// it's part of the error returned this will get printed along with the rest of
+/// the error when the error is logged.
+///
+/// Capturing of wasm backtraces can be configured through the
+/// [`Config::wasm_backtrace`](crate::Config::wasm_backtrace) method.
+///
+/// For more information about errors in wasmtime see the documentation of the
+/// [`Trap`] type.
+///
+/// [`Func::call`]: crate::Func::call
+/// [`Instance::new`]: crate::Instance::new
+///
+/// # Examples
+///
+/// ```
+/// # use wasmtime::*;
+/// # use anyhow::Result;
+/// # fn main() -> Result<()> {
+/// let engine = Engine::default();
+/// let module = Module::new(
+///     &engine,
+///     r#"
+///         (module
+///             (func $start (export "run")
+///                 call $trap)
+///             (func $trap
+///                 unreachable)
+///         )
+///     "#,
+/// )?;
+/// let mut store = Store::new(&engine, ());
+/// let instance = Instance::new(&mut store, &module, &[])?;
+/// let func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+/// let error = func.call(&mut store, ()).unwrap_err();
+/// let bt = error.downcast_ref::<WasmBacktrace>().unwrap();
+/// let frames = bt.frames();
+/// assert_eq!(frames.len(), 2);
+/// assert_eq!(frames[0].func_name(), Some("trap"));
+/// assert_eq!(frames[1].func_name(), Some("start"));
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct WasmBacktrace {
     wasm_trace: Vec<FrameInfo>,
+    hint_wasm_backtrace_details_env: bool,
+    // This is currently only present for the `Debug` implementation for extra
+    // context.
     #[allow(dead_code)]
     runtime_trace: wasmtime_runtime::Backtrace,
-    hint_wasm_backtrace_details_env: bool,
 }
 
 impl WasmBacktrace {
@@ -324,14 +427,11 @@ impl fmt::Display for WasmBacktrace {
     }
 }
 
-/// Description of a frame in a backtrace for a [`Trap`] or [`BacktraceContext`].
+/// Description of a frame in a backtrace for a [`WasmBacktrace`].
 ///
-/// Whenever a WebAssembly trap occurs an instance of [`Trap`] is created. Each
-/// [`Trap`] has a backtrace of the WebAssembly frames that led to the trap, and
-/// each frame is described by this structure.
-///
-/// [`Trap`]: crate::Trap
-/// [`BacktraceContext`]: crate::BacktraceContext
+/// Whenever an error happens while WebAssembly is executing a
+/// [`WasmBacktrace`] will be attached to the error returned which can be used
+/// to acquire this `FrameInfo`. For more information see [`WasmBacktrace`].
 #[derive(Debug)]
 pub struct FrameInfo {
     module_name: Option<String>,

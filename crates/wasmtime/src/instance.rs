@@ -88,7 +88,8 @@ impl Instance {
     ///
     /// When instantiation fails it's recommended to inspect the return value to
     /// see why it failed, or bubble it upwards. If you'd like to specifically
-    /// check for trap errors, you can use `error.downcast::<Trap>()`.
+    /// check for trap errors, you can use `error.downcast::<Trap>()`. For more
+    /// about error handling see the [`Trap`] documentation.
     ///
     /// # Panics
     ///
@@ -102,7 +103,7 @@ impl Instance {
         mut store: impl AsContextMut,
         module: &Module,
         imports: &[Extern],
-    ) -> Result<Instance, Error> {
+    ) -> Result<Instance> {
         let mut store = store.as_context_mut();
         let imports = Instance::typecheck_externs(store.0, module, imports)?;
         // Note that the unsafety here should be satisfied by the call to
@@ -134,7 +135,7 @@ impl Instance {
         mut store: impl AsContextMut<Data = T>,
         module: &Module,
         imports: &[Extern],
-    ) -> Result<Instance, Error>
+    ) -> Result<Instance>
     where
         T: Send,
     {

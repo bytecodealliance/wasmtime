@@ -68,6 +68,10 @@ where
     /// For more information, see the [`Func::typed`] and [`Func::call`]
     /// documentation.
     ///
+    /// # Errors
+    ///
+    /// For more information on errors see the documentation on [`Func::call`].
+    ///
     /// # Panics
     ///
     /// This function will panic if it is called when the underlying [`Func`] is
@@ -90,6 +94,10 @@ where
     ///
     /// For more information, see the [`Func::typed`] and [`Func::call_async`]
     /// documentation.
+    ///
+    /// # Errors
+    ///
+    /// For more information on errors see the documentation on [`Func::call`].
     ///
     /// # Panics
     ///
