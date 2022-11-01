@@ -337,7 +337,7 @@ wasm backtrace:
     0:   0x23 - m!die
     1:   0x27 - m!<wasm function 1>
     2:   0x2c - m!foo
-    3:   0x31 - m!<wasm function 3>
+    3:   0x31 - m!<wasm function 3>\
 "
     );
     Ok(())
@@ -384,7 +384,7 @@ wasm backtrace:
     2:   0x2c - a!foo
     3:   0x31 - a!<wasm function 3>
     4:   0x29 - b!middle
-    5:   0x2e - b!<wasm function 2>
+    5:   0x2e - b!<wasm function 2>\
 "
     );
     Ok(())
@@ -634,7 +634,7 @@ wasm backtrace:
     0:   0x1d - m!die
     1:   0x21 - m!<wasm function 1>
     2:   0x26 - m!foo
-    3:   0x2b - m!start
+    3:   0x2b - m!start\
 "
     );
     Ok(())
@@ -794,7 +794,7 @@ fn no_hint_even_with_dwarf_info() -> Result<()> {
         "\
 wasm trap: wasm `unreachable` instruction executed
 wasm backtrace:
-    0:   0x1a - <unknown>!start
+    0:   0x1a - <unknown>!start\
 "
     );
     Ok(())
@@ -829,7 +829,7 @@ fn hint_with_dwarf_info() -> Result<()> {
 wasm trap: wasm `unreachable` instruction executed
 wasm backtrace:
     0:   0x1a - <unknown>!start
-note: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable to may show more debugging information
+note: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable to may show more debugging information\
 "
     );
     Ok(())

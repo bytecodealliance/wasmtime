@@ -477,7 +477,7 @@ impl fmt::Display for TrapBacktrace {
             }
         }
         if self.hint_wasm_backtrace_details_env {
-            writeln!(f, "note: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable to may show more debugging information")?;
+            write!(f, "\nnote: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable to may show more debugging information")?;
         }
         Ok(())
     }
