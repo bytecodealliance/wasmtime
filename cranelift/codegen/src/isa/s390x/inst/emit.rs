@@ -5,7 +5,6 @@ use crate::ir::{MemFlags, RelSourceLoc, TrapCode};
 use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
-use crate::machinst::reg::count_operands;
 use crate::machinst::{Reg, RegClass};
 use crate::trace;
 use core::convert::TryFrom;
@@ -1396,7 +1395,23 @@ impl MachInstEmit for Inst {
         state: &mut EmitState,
     ) {
         let mut allocs = AllocationConsumer::new(allocs);
+        self.emit_consumer(&mut allocs, sink, emit_info, state)
+    }
 
+    fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut EmitState) -> String {
+        let mut allocs = AllocationConsumer::new(allocs);
+        self.print_with_state(state, &mut allocs)
+    }
+}
+
+impl Inst {
+    fn emit_consumer(
+        &self,
+        allocs: &mut AllocationConsumer<'_>,
+        sink: &mut MachBuffer<Inst>,
+        emit_info: &EmitInfo,
+        state: &mut EmitState,
+    ) {
         // Verify that we can emit this Inst in the current ISA
         let matches_isa_flags = |iset_requirement: &InstructionSet| -> bool {
             match iset_requirement {
@@ -1541,7 +1556,7 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let ri = allocs.next(ri);
                 debug_assert_eq!(rd.to_reg(), ri);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let (opcode_rx, opcode_rxy) = match alu_op {
                     ALUOp::Add32 => (Some(0x5a), Some(0xe35a)),        // A(Y)
@@ -1960,7 +1975,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::CmpRX { op, rn, ref mem } => {
                 let rn = allocs.next(rn);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let (opcode_rx, opcode_rxy, opcode_ril) = match op {
                     CmpOp::CmpS32 => (Some(0x59), Some(0xe359), Some(0xc6d)), // C(Y), CRL
@@ -2076,7 +2091,7 @@ impl MachInstEmit for Inst {
             } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let opcode = match alu_op {
                     ALUOp::Add32 => 0xebf8,        // LAA
@@ -2115,8 +2130,6 @@ impl MachInstEmit for Inst {
                 sink.bind_label(loop_label);
 
                 for inst in (&body).into_iter() {
-                    let op_count = count_operands(inst);
-                    let sub_allocs = allocs.next_n(op_count);
                     match &inst {
                         // Replace a CondBreak with a branch to done_label.
                         &Inst::CondBreak { cond } => {
@@ -2124,9 +2137,9 @@ impl MachInstEmit for Inst {
                                 target: done_label,
                                 cond: *cond,
                             };
-                            inst.emit(&sub_allocs[..], sink, emit_info, state);
+                            inst.emit_consumer(allocs, sink, emit_info, state);
                         }
-                        _ => inst.emit(&sub_allocs[..], sink, emit_info, state),
+                        _ => inst.emit_consumer(allocs, sink, emit_info, state),
                     };
                 }
 
@@ -2156,7 +2169,7 @@ impl MachInstEmit for Inst {
                 let ri = allocs.next(ri);
                 debug_assert_eq!(rd.to_reg(), ri);
                 let rn = allocs.next(rn);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let (opcode_rs, opcode_rsy) = match self {
                     &Inst::AtomicCas32 { .. } => (Some(0xba), Some(0xeb14)), // CS(Y)
@@ -2189,7 +2202,7 @@ impl MachInstEmit for Inst {
             | &Inst::LoadRev32 { rd, ref mem }
             | &Inst::LoadRev64 { rd, ref mem } => {
                 let rd = allocs.next_writable(rd);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let (opcode_rx, opcode_rxy, opcode_ril) = match self {
                     &Inst::Load32 { .. } => (Some(0x58), Some(0xe358), Some(0xc4d)), // L(Y), LRL
@@ -2223,7 +2236,7 @@ impl MachInstEmit for Inst {
             | &Inst::StoreRev32 { rd, ref mem }
             | &Inst::StoreRev64 { rd, ref mem } => {
                 let rd = allocs.next(rd);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let (opcode_rx, opcode_rxy, opcode_ril) = match self {
                     &Inst::Store8 { .. } => (Some(0x42), Some(0xe372), None), // STC(Y)
@@ -2240,7 +2253,7 @@ impl MachInstEmit for Inst {
                 );
             }
             &Inst::StoreImm8 { imm, ref mem } => {
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let opcode_si = 0x92; // MVI
                 let opcode_siy = 0xeb52; // MVIY
@@ -2251,7 +2264,7 @@ impl MachInstEmit for Inst {
             &Inst::StoreImm16 { imm, ref mem }
             | &Inst::StoreImm32SExt16 { imm, ref mem }
             | &Inst::StoreImm64SExt16 { imm, ref mem } => {
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let opcode = match self {
                     &Inst::StoreImm16 { .. } => 0xe544,       // MVHHI
@@ -2266,14 +2279,14 @@ impl MachInstEmit for Inst {
                 ref src,
                 len_minus_one,
             } => {
-                let dst = dst.with_allocs(&mut allocs);
-                let src = src.with_allocs(&mut allocs);
+                let dst = dst.with_allocs(allocs);
+                let src = src.with_allocs(allocs);
                 let opcode = 0xd2; // MVC
                 mem_mem_emit(&dst, &src, len_minus_one, opcode, true, sink, state);
             }
 
             &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let opcode = 0xeb04; // LMG
                 let rt = rt.to_reg();
@@ -2291,7 +2304,7 @@ impl MachInstEmit for Inst {
                 );
             }
             &Inst::StoreMultiple64 { rt, rt2, ref mem } => {
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let opcode = 0xeb24; // STMG
                 mem_rs_emit(
@@ -2309,7 +2322,7 @@ impl MachInstEmit for Inst {
 
             &Inst::LoadAddr { rd, ref mem } => {
                 let rd = allocs.next_writable(rd);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let opcode_rx = Some(0x41); // LA
                 let opcode_rxy = Some(0xe371); // LAY
@@ -3055,7 +3068,7 @@ impl MachInstEmit for Inst {
             | &Inst::VecLoadElt32Rev { rd, ref mem }
             | &Inst::VecLoadElt64Rev { rd, ref mem } => {
                 let rd = allocs.next_writable(rd);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let (opcode, m3) = match self {
                     &Inst::VecLoad { .. } => (0xe706, 0),          // VL
@@ -3079,7 +3092,7 @@ impl MachInstEmit for Inst {
             | &Inst::VecStoreElt32Rev { rd, ref mem }
             | &Inst::VecStoreElt64Rev { rd, ref mem } => {
                 let rd = allocs.next(rd);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let (opcode, m3) = match self {
                     &Inst::VecStore { .. } => (0xe70e, 0),          // VST
@@ -3097,7 +3110,7 @@ impl MachInstEmit for Inst {
             &Inst::VecLoadReplicate { size, rd, ref mem }
             | &Inst::VecLoadReplicateRev { size, rd, ref mem } => {
                 let rd = allocs.next_writable(rd);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let (opcode, m3) = match (self, size) {
                     (&Inst::VecLoadReplicate { .. }, 8) => (0xe705, 0), // VLREPB
@@ -3225,7 +3238,7 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let ri = allocs.next(ri);
                 debug_assert_eq!(rd.to_reg(), ri);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let opcode_vrx = match (self, size) {
                     (&Inst::VecLoadLane { .. }, 8) => 0xe700,     // VLEB
@@ -3263,7 +3276,7 @@ impl MachInstEmit for Inst {
                 lane_imm,
             } => {
                 let rd = allocs.next_writable(rd);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let (opcode_vrx, opcode_rx, opcode_rxy) = match (self, size) {
                     (&Inst::VecLoadLaneUndef { .. }, 8) => (0xe700, None, None), // VLEB
@@ -3307,7 +3320,7 @@ impl MachInstEmit for Inst {
                 lane_imm,
             } => {
                 let rd = allocs.next(rd);
-                let mem = mem.with_allocs(&mut allocs);
+                let mem = mem.with_allocs(allocs);
 
                 let (opcode_vrx, opcode_rx, opcode_rxy) = match (self, size) {
                     (&Inst::VecStoreLane { .. }, 8) => (0xe708, None, None), // VSTEB
@@ -3652,10 +3665,5 @@ impl MachInstEmit for Inst {
         debug_assert!((end_off - start_off) <= Inst::worst_case_size());
 
         state.clear_post_insn();
-    }
-
-    fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut EmitState) -> String {
-        let mut allocs = AllocationConsumer::new(allocs);
-        self.print_with_state(state, &mut allocs)
     }
 }
