@@ -181,6 +181,7 @@ pub enum Expr {
     BVSub(Box<Expr>, Box<Expr>, u32),
     BVAnd(Box<Expr>, Box<Expr>, u32),
     BVOr(Box<Expr>, Box<Expr>, u32),
+    BVXor(Box<Expr>, Box<Expr>, u32),
     BVRotl(Box<Expr>, Box<Expr>, u32),
     BVRotr(Box<Expr>, Box<Expr>, u32),
     BVShl(Box<Expr>, Box<Expr>, u32),
@@ -244,6 +245,7 @@ impl Expr {
             | Expr::BVSub(_, _, t)
             | Expr::BVAnd(_, _, t)
             | Expr::BVOr(_, _, t)
+            | Expr::BVXor(_, _, t)
             | Expr::BVRotl(_, _, t)
             | Expr::BVRotr(_, _, t)
             | Expr::BVShl(_, _, t)

@@ -1132,6 +1132,8 @@
     (inst_data (InstructionData.Binary (Opcode.Bor) (value_array_2 x y)))
 )
 
+;;@ (spec (sig (args x, y) (ret))
+;;@       (assertions (= (xor (x) (y)) (ret))))
 (decl bxor (Value Value) Inst)
 (extractor
     (bxor x y)

@@ -168,6 +168,7 @@ pub enum BinaryOp {
     BVSub,
     BVAnd,
     BVOr,
+    BVXor,
     BVRotl,
     BVRotr,
     BVShl,

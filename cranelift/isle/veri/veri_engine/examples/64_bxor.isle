@@ -77,5 +77,5 @@
 (decl alu_rs_imm_logic_commutative (ALUOp Type Value Value) Reg)
 (extern constructor alu_rs_imm_logic_commutative alu_rs_imm_logic_commutative)
 
-(rule (lower (has_type $I64 (bor x y)))
-      (alu_rs_imm_logic_commutative (ALUOp.Orr) $I64 x y))
+(rule (lower (has_type $I64 (bxor x y)))
+      (alu_rs_imm_logic_commutative (ALUOp.Eor) $I64 x y))

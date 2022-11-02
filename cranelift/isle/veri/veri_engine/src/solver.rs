@@ -416,6 +416,7 @@ impl SolverCtx {
                     BinaryOp::BVSub => "bvsub",
                     BinaryOp::BVAnd => "bvand",
                     BinaryOp::BVOr => "bvor",
+                    BinaryOp::BVXor => "bvxor",
                     BinaryOp::BVShl => "bvshl",
                     _ => unreachable!("{:?}", op),
                 };
