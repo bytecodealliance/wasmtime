@@ -379,12 +379,16 @@
 //! # }
 //! ```
 
-#![allow(unknown_lints)]
-#![deny(missing_docs, rustdoc::broken_intra_doc_links)]
+#![deny(missing_docs)]
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 #![cfg_attr(nightlydoc, feature(doc_cfg))]
 #![cfg_attr(not(feature = "default"), allow(dead_code, unused_imports))]
+// Allow broken links when the default features is disabled because most of our
+// documentation is written for the "one build" of the `main` branch which has
+// most features enabled. This will present warnings in stripped-down doc builds
+// and will prevent the doc build from failing.
+#![cfg_attr(feature = "default", deny(rustdoc::broken_intra_doc_links))]
 
 #[macro_use]
 mod func;
