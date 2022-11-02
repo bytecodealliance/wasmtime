@@ -490,6 +490,21 @@ fn test_fits_in_32_bor() {
 }
 
 #[test]
+fn test_64_bor() {
+    test_from_file_with_filter(
+        "./examples/64_bor.isle",
+        "bor".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::InapplicableRule),
+            (Bitwidth::I8, VerificationResult::InapplicableRule),
+            (Bitwidth::I16, VerificationResult::InapplicableRule),
+            (Bitwidth::I32, VerificationResult::InapplicableRule),
+            (Bitwidth::I64, VerificationResult::Success),
+        ],
+    )
+}
+
+#[test]
 fn test_broken_fits_in_32_bor() {
     test_from_file_with_filter(
         "./examples/broken/broken_fits_in_32_bor.isle",

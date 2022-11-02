@@ -917,7 +917,7 @@ fn add_rule_constraints(
                 tree.assumptions.push(typed_expr);
                 if tree.decls.contains_key(t) {
                     add_isle_constraints(
-                        cranelift_isle::ast::Def::Decl(tree.decls[dbg!(t)].clone()),
+                        cranelift_isle::ast::Def::Decl(tree.decls[t].clone()),
                         tree,
                         &mut annotation_info,
                         annotation.sig.clone(),
