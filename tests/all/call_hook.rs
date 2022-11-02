@@ -1,4 +1,4 @@
-use anyhow::Error;
+use anyhow::{bail, Error, Result};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{self, Poll};
@@ -424,12 +424,12 @@ fn trapping() -> Result<(), Error> {
     linker.func_wrap(
         "host",
         "f",
-        |mut caller: Caller<State>, action: i32, recur: i32| -> Result<(), Trap> {
+        |mut caller: Caller<State>, action: i32, recur: i32| -> Result<()> {
             assert_eq!(caller.data().context.last(), Some(&Context::Host));
             assert_eq!(caller.data().calls_into_host, caller.data().calls_into_wasm);
 
             match action {
-                TRAP_IN_F => return Err(Trap::new("trapping in f")),
+                TRAP_IN_F => bail!("trapping in f"),
                 TRAP_NEXT_CALL_HOST => caller.data_mut().trap_next_call_host = true,
                 TRAP_NEXT_RETURN_HOST => caller.data_mut().trap_next_return_host = true,
                 TRAP_NEXT_CALL_WASM => caller.data_mut().trap_next_call_wasm = true,
@@ -485,7 +485,7 @@ fn trapping() -> Result<(), Error> {
     };
 
     let (s, e) = run(TRAP_IN_F, false);
-    assert!(e.unwrap().to_string().starts_with("trapping in f"));
+    assert!(format!("{:?}", e.unwrap()).contains("trapping in f"));
     assert_eq!(s.calls_into_host, 1);
     assert_eq!(s.returns_from_host, 1);
     assert_eq!(s.calls_into_wasm, 1);
@@ -501,10 +501,7 @@ fn trapping() -> Result<(), Error> {
 
     // trap in next call to host. recur, so the second call into host traps:
     let (s, e) = run(TRAP_NEXT_CALL_HOST, true);
-    assert!(e
-        .unwrap()
-        .to_string()
-        .starts_with("call_hook: trapping on CallingHost"));
+    assert!(format!("{:?}", e.unwrap()).contains("call_hook: trapping on CallingHost"));
     assert_eq!(s.calls_into_host, 2);
     assert_eq!(s.returns_from_host, 1);
     assert_eq!(s.calls_into_wasm, 2);
@@ -512,10 +509,7 @@ fn trapping() -> Result<(), Error> {
 
     // trap in the return from host. should trap right away, without recursion
     let (s, e) = run(TRAP_NEXT_RETURN_HOST, false);
-    assert!(e
-        .unwrap()
-        .to_string()
-        .starts_with("call_hook: trapping on ReturningFromHost"));
+    assert!(format!("{:?}", e.unwrap()).contains("call_hook: trapping on ReturningFromHost"));
     assert_eq!(s.calls_into_host, 1);
     assert_eq!(s.returns_from_host, 1);
     assert_eq!(s.calls_into_wasm, 1);
@@ -531,10 +525,7 @@ fn trapping() -> Result<(), Error> {
 
     // trap in next call to wasm. recur, so the second call into wasm traps:
     let (s, e) = run(TRAP_NEXT_CALL_WASM, true);
-    assert!(e
-        .unwrap()
-        .to_string()
-        .starts_with("call_hook: trapping on CallingWasm"));
+    assert!(format!("{:?}", e.unwrap()).contains("call_hook: trapping on CallingWasm"));
     assert_eq!(s.calls_into_host, 1);
     assert_eq!(s.returns_from_host, 1);
     assert_eq!(s.calls_into_wasm, 2);
@@ -542,10 +533,7 @@ fn trapping() -> Result<(), Error> {
 
     // trap in the return from wasm. should trap right away, without recursion
     let (s, e) = run(TRAP_NEXT_RETURN_WASM, false);
-    assert!(e
-        .unwrap()
-        .to_string()
-        .starts_with("call_hook: trapping on ReturningFromWasm"));
+    assert!(format!("{:?}", e.unwrap()).contains("call_hook: trapping on ReturningFromWasm"));
     assert_eq!(s.calls_into_host, 1);
     assert_eq!(s.returns_from_host, 1);
     assert_eq!(s.calls_into_wasm, 1);
@@ -560,11 +548,7 @@ async fn basic_async_hook() -> Result<(), Error> {
 
     #[async_trait::async_trait]
     impl CallHookHandler<State> for HandlerR {
-        async fn handle_call_event(
-            &self,
-            obj: &mut State,
-            ch: CallHook,
-        ) -> Result<(), wasmtime::Trap> {
+        async fn handle_call_event(&self, obj: &mut State, ch: CallHook) -> Result<()> {
             State::call_hook(obj, ch)
         }
     }
@@ -638,13 +622,9 @@ async fn timeout_async_hook() -> Result<(), Error> {
 
     #[async_trait::async_trait]
     impl CallHookHandler<State> for HandlerR {
-        async fn handle_call_event(
-            &self,
-            obj: &mut State,
-            ch: CallHook,
-        ) -> Result<(), wasmtime::Trap> {
+        async fn handle_call_event(&self, obj: &mut State, ch: CallHook) -> Result<()> {
             if obj.calls_into_host > 200 {
-                return Err(wasmtime::Trap::new("timeout"));
+                bail!("timeout");
             }
 
             match ch {
@@ -718,11 +698,7 @@ async fn drop_suspended_async_hook() -> Result<(), Error> {
 
     #[async_trait::async_trait]
     impl CallHookHandler<u32> for Handler {
-        async fn handle_call_event(
-            &self,
-            state: &mut u32,
-            _ch: CallHook,
-        ) -> Result<(), wasmtime::Trap> {
+        async fn handle_call_event(&self, state: &mut u32, _ch: CallHook) -> Result<()> {
             assert_eq!(*state, 0);
             *state += 1;
             let _dec = Decrement(state);
@@ -861,12 +837,12 @@ impl Default for State {
 
 impl State {
     // This implementation asserts that hooks are always called in a stack-like manner.
-    fn call_hook(&mut self, s: CallHook) -> Result<(), Trap> {
+    fn call_hook(&mut self, s: CallHook) -> Result<()> {
         match s {
             CallHook::CallingHost => {
                 self.calls_into_host += 1;
                 if self.trap_next_call_host {
-                    return Err(Trap::new("call_hook: trapping on CallingHost"));
+                    bail!("call_hook: trapping on CallingHost");
                 } else {
                     self.context.push(Context::Host);
                 }
@@ -875,7 +851,7 @@ impl State {
                 Some(Context::Host) => {
                     self.returns_from_host += 1;
                     if self.trap_next_return_host {
-                        return Err(Trap::new("call_hook: trapping on ReturningFromHost"));
+                        bail!("call_hook: trapping on ReturningFromHost");
                     }
                 }
                 c => panic!(
@@ -886,7 +862,7 @@ impl State {
             CallHook::CallingWasm => {
                 self.calls_into_wasm += 1;
                 if self.trap_next_call_wasm {
-                    return Err(Trap::new("call_hook: trapping on CallingWasm"));
+                    bail!("call_hook: trapping on CallingWasm");
                 } else {
                     self.context.push(Context::Wasm);
                 }
@@ -895,7 +871,7 @@ impl State {
                 Some(Context::Wasm) => {
                     self.returns_from_wasm += 1;
                     if self.trap_next_return_wasm {
-                        return Err(Trap::new("call_hook: trapping on ReturningFromWasm"));
+                        bail!("call_hook: trapping on ReturningFromWasm");
                     }
                 }
                 c => panic!(

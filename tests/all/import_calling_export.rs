@@ -82,10 +82,7 @@ fn test_returns_incorrect_type() -> Result<()> {
     let mut result = [Val::I32(0)];
     let trap = run_func
         .call(&mut store, &[], &mut result)
-        .expect_err("the execution should fail")
-        .downcast::<Trap>()?;
-    assert!(trap
-        .to_string()
-        .contains("function attempted to return an incompatible value"));
+        .expect_err("the execution should fail");
+    assert!(format!("{:?}", trap).contains("function attempted to return an incompatible value"));
     Ok(())
 }

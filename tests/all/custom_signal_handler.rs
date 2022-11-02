@@ -170,12 +170,7 @@ mod tests {
             let trap = invoke_export(&mut store, instance, "read_out_of_bounds")
                 .unwrap_err()
                 .downcast::<Trap>()?;
-            assert!(
-                trap.to_string()
-                    .contains("wasm trap: out of bounds memory access"),
-                "bad trap message: {:?}",
-                trap.to_string()
-            );
+            assert_eq!(trap, Trap::MemoryOutOfBounds);
         }
 
         // these invoke wasmtime_call_trampoline from callable.rs
@@ -192,10 +187,11 @@ mod tests {
             let read_out_of_bounds_func =
                 instance.get_typed_func::<(), i32, _>(&mut store, "read_out_of_bounds")?;
             println!("calling read_out_of_bounds...");
-            let trap = read_out_of_bounds_func.call(&mut store, ()).unwrap_err();
-            assert!(trap
-                .to_string()
-                .contains("wasm trap: out of bounds memory access"));
+            let trap = read_out_of_bounds_func
+                .call(&mut store, ())
+                .unwrap_err()
+                .downcast::<Trap>()?;
+            assert_eq!(trap, Trap::MemoryOutOfBounds);
         }
         Ok(())
     }

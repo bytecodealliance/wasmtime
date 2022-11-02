@@ -1,7 +1,7 @@
 use super::REALLOC_AND_FREE;
 use anyhow::Result;
 use wasmtime::component::{Component, Linker};
-use wasmtime::{Engine, Store, StoreContextMut, Trap, TrapCode};
+use wasmtime::{Engine, Store, StoreContextMut, Trap};
 
 const UTF16_TAG: u32 = 1 << 31;
 
@@ -248,7 +248,7 @@ fn test_ptr_out_of_bounds(engine: &Engine, src: &str, dst: &str) -> Result<()> {
             .err()
             .unwrap()
             .downcast::<Trap>()?;
-        assert_eq!(trap.trap_code(), Some(TrapCode::UnreachableCodeReached));
+        assert_eq!(trap, Trap::UnreachableCodeReached);
         Ok(())
     };
 
@@ -322,7 +322,7 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
             .call(&mut store, (size,))
             .unwrap_err()
             .downcast::<Trap>()?;
-        assert_eq!(trap.trap_code(), Some(TrapCode::UnreachableCodeReached));
+        assert_eq!(trap, Trap::UnreachableCodeReached);
         Ok(())
     };
 
@@ -422,7 +422,7 @@ fn test_realloc_oob(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     let instance = Linker::new(engine).instantiate(&mut store, &component)?;
     let func = instance.get_typed_func::<(), (), _>(&mut store, "f")?;
     let trap = func.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
-    assert_eq!(trap.trap_code(), Some(TrapCode::UnreachableCodeReached));
+    assert_eq!(trap, Trap::UnreachableCodeReached);
     Ok(())
 }
 
@@ -498,9 +498,8 @@ fn test_invalid_string_encoding(
     let trap = test_raw_when_encoded(engine, src, dst, bytes, len)?.unwrap();
     let src = src.replace("latin1+", "");
     assert!(
-        trap.to_string()
-            .contains(&format!("invalid {src} encoding")),
-        "bad error: {}",
+        format!("{:?}", trap).contains(&format!("invalid {src} encoding")),
+        "bad error: {:?}",
         trap,
     );
     Ok(())
@@ -524,7 +523,7 @@ fn test_raw_when_encoded(
     dst: &str,
     bytes: &[u8],
     len: u32,
-) -> Result<Option<Trap>> {
+) -> Result<Option<anyhow::Error>> {
     let component = format!(
         r#"
 (component
@@ -574,6 +573,6 @@ fn test_raw_when_encoded(
     let func = instance.get_typed_func::<(&[u8], u32), (), _>(&mut store, "f")?;
     match func.call(&mut store, (bytes, len)) {
         Ok(_) => Ok(None),
-        Err(e) => Ok(Some(e.downcast()?)),
+        Err(e) => Ok(Some(e)),
     }
 }

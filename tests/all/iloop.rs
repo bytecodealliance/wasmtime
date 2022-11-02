@@ -31,12 +31,8 @@ fn loops_interruptable() -> anyhow::Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
     let iloop = instance.get_typed_func::<(), (), _>(&mut store, "loop")?;
     store.engine().increment_epoch();
-    let trap = iloop.call(&mut store, ()).unwrap_err();
-    assert!(
-        trap.trap_code().unwrap() == TrapCode::Interrupt,
-        "bad message: {}",
-        trap
-    );
+    let trap = iloop.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
+    assert_eq!(trap, Trap::Interrupt);
     Ok(())
 }
 
@@ -48,12 +44,8 @@ fn functions_interruptable() -> anyhow::Result<()> {
     let instance = Instance::new(&mut store, &module, &[func.into()])?;
     let iloop = instance.get_typed_func::<(), (), _>(&mut store, "loop")?;
     store.engine().increment_epoch();
-    let trap = iloop.call(&mut store, ()).unwrap_err();
-    assert!(
-        trap.trap_code().unwrap() == TrapCode::Interrupt,
-        "{}",
-        trap.to_string()
-    );
+    let trap = iloop.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
+    assert_eq!(trap, Trap::Interrupt);
     Ok(())
 }
 
@@ -98,15 +90,11 @@ fn loop_interrupt_from_afar() -> anyhow::Result<()> {
     // Enter the infinitely looping function and assert that our interrupt
     // handle does indeed actually interrupt the function.
     let iloop = instance.get_typed_func::<(), (), _>(&mut store, "loop")?;
-    let trap = iloop.call(&mut store, ()).unwrap_err();
+    let trap = iloop.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
     STOP.store(true, SeqCst);
     thread.join().unwrap();
     assert!(HITS.load(SeqCst) > NUM_HITS);
-    assert!(
-        trap.trap_code().unwrap() == TrapCode::Interrupt,
-        "bad message: {}",
-        trap.to_string()
-    );
+    assert_eq!(trap, Trap::Interrupt);
     Ok(())
 }
 
@@ -138,14 +126,10 @@ fn function_interrupt_from_afar() -> anyhow::Result<()> {
     // Enter the infinitely looping function and assert that our interrupt
     // handle does indeed actually interrupt the function.
     let iloop = instance.get_typed_func::<(), (), _>(&mut store, "loop")?;
-    let trap = iloop.call(&mut store, ()).unwrap_err();
+    let trap = iloop.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
     STOP.store(true, SeqCst);
     thread.join().unwrap();
     assert!(HITS.load(SeqCst) > NUM_HITS);
-    assert!(
-        trap.trap_code().unwrap() == TrapCode::Interrupt,
-        "bad message: {}",
-        trap.to_string()
-    );
+    assert_eq!(trap, Trap::Interrupt);
     Ok(())
 }

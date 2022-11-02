@@ -1,5 +1,6 @@
 /// Execute the wiggle guest conversion code to exercise it
 mod convert_just_errno {
+    use anyhow::Result;
     use wiggle_test::{impl_errno, HostMemory, WasiCtx};
 
     /// The `errors` argument to the wiggle gives us a hook to map a rich error
@@ -31,10 +32,7 @@ mod convert_just_errno {
     /// When the `errors` mapping in witx is non-empty, we need to impl the
     /// types::UserErrorConversion trait that wiggle generates from that mapping.
     impl<'a> types::UserErrorConversion for WasiCtx<'a> {
-        fn errno_from_rich_error(
-            &mut self,
-            e: RichError,
-        ) -> Result<types::Errno, wiggle::wasmtime_crate::Trap> {
+        fn errno_from_rich_error(&mut self, e: RichError) -> Result<types::Errno> {
             // WasiCtx can collect a Vec<String> log so we can test this. We're
             // logging the Display impl that `thiserror::Error` provides us.
             self.log.borrow_mut().push(e.to_string());
@@ -105,6 +103,7 @@ mod convert_just_errno {
 /// we use two distinct error types.
 mod convert_multiple_error_types {
     pub use super::convert_just_errno::RichError;
+    use anyhow::Result;
     use wiggle_test::{impl_errno, WasiCtx};
 
     /// Test that we can map multiple types of errors.
@@ -143,16 +142,13 @@ mod convert_multiple_error_types {
     // each member of the `errors` mapping.
     // Bodies elided.
     impl<'a> types::UserErrorConversion for WasiCtx<'a> {
-        fn errno_from_rich_error(
-            &mut self,
-            _e: RichError,
-        ) -> Result<types::Errno, wiggle::wasmtime_crate::Trap> {
+        fn errno_from_rich_error(&mut self, _e: RichError) -> Result<types::Errno> {
             unimplemented!()
         }
         fn errno2_from_another_rich_error(
             &mut self,
             _e: AnotherRichError,
-        ) -> Result<types::Errno2, wiggle::wasmtime_crate::Trap> {
+        ) -> Result<types::Errno2> {
             unimplemented!()
         }
     }
@@ -165,7 +161,7 @@ mod convert_multiple_error_types {
         fn bar(&mut self, _: u32) -> Result<(), AnotherRichError> {
             unimplemented!()
         }
-        fn baz(&mut self, _: u32) -> wiggle::wasmtime_crate::Trap {
+        fn baz(&mut self, _: u32) -> anyhow::Error {
             unimplemented!()
         }
     }

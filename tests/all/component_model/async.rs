@@ -1,6 +1,6 @@
 use anyhow::Result;
 use wasmtime::component::*;
-use wasmtime::{Store, StoreContextMut, Trap, TrapCode};
+use wasmtime::{Store, StoreContextMut, Trap};
 
 /// This is super::func::thunks, except with an async store.
 #[tokio::test]
@@ -38,7 +38,7 @@ async fn smoke() -> Result<()> {
         .call_async(&mut store, ())
         .await
         .unwrap_err();
-    assert!(err.downcast::<Trap>()?.trap_code() == Some(TrapCode::UnreachableCodeReached));
+    assert_eq!(err.downcast::<Trap>()?, Trap::UnreachableCodeReached);
 
     Ok(())
 }

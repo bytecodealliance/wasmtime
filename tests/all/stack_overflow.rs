@@ -28,12 +28,8 @@ fn host_always_has_some_stack() -> anyhow::Result<()> {
 
     // Make sure that our function traps and the trap says that the call stack
     // has been exhausted.
-    let trap = foo.call(&mut store, ()).unwrap_err();
-    assert!(
-        trap.to_string().contains("call stack exhausted"),
-        "{}",
-        trap.to_string()
-    );
+    let trap = foo.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
+    assert_eq!(trap, Trap::StackOverflow);
 
     // Additionally, however, and this is the crucial test, make sure that the
     // host function actually completed. If HITS is 1 then we entered but didn't

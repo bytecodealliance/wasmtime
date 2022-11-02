@@ -1,7 +1,8 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 use wasmtime_wasi::sync::WasiCtxBuilder;
+use wasmtime_wasi::I32Exit;
 
 #[test]
 #[should_panic = "cannot use `func_new_async` without enabling async support"]
@@ -33,13 +34,13 @@ fn wrap_func() -> Result<()> {
     linker.func_wrap("m3", "", || -> Option<ExternRef> { None })?;
     linker.func_wrap("m3", "f", || -> Option<Func> { None })?;
 
-    linker.func_wrap("", "f1", || -> Result<(), Trap> { loop {} })?;
-    linker.func_wrap("", "f2", || -> Result<i32, Trap> { loop {} })?;
-    linker.func_wrap("", "f3", || -> Result<i64, Trap> { loop {} })?;
-    linker.func_wrap("", "f4", || -> Result<f32, Trap> { loop {} })?;
-    linker.func_wrap("", "f5", || -> Result<f64, Trap> { loop {} })?;
-    linker.func_wrap("", "f6", || -> Result<Option<ExternRef>, Trap> { loop {} })?;
-    linker.func_wrap("", "f7", || -> Result<Option<Func>, Trap> { loop {} })?;
+    linker.func_wrap("", "f1", || -> Result<()> { loop {} })?;
+    linker.func_wrap("", "f2", || -> Result<i32> { loop {} })?;
+    linker.func_wrap("", "f3", || -> Result<i64> { loop {} })?;
+    linker.func_wrap("", "f4", || -> Result<f32> { loop {} })?;
+    linker.func_wrap("", "f5", || -> Result<f64> { loop {} })?;
+    linker.func_wrap("", "f6", || -> Result<Option<ExternRef>> { loop {} })?;
+    linker.func_wrap("", "f7", || -> Result<Option<Func>> { loop {} })?;
     Ok(())
 }
 
@@ -444,19 +445,15 @@ fn call_wasm_many_args() -> Result<()> {
 fn trap_smoke() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::<()>::new(&engine);
-    linker.func_wrap("", "", || -> Result<(), Trap> { Err(Trap::new("test")) })?;
+    linker.func_wrap("", "", || -> Result<()> { bail!("test") })?;
 
     let mut store = Store::new(&engine, ());
 
     let f = linker.get(&mut store, "", "").unwrap().into_func().unwrap();
 
-    let err = f
-        .call(&mut store, &[], &mut [])
-        .unwrap_err()
-        .downcast::<Trap>()?;
+    let err = f.call(&mut store, &[], &mut []).unwrap_err();
 
     assert!(err.to_string().contains("test"));
-    assert!(err.i32_exit_status().is_none());
 
     Ok(())
 }
@@ -472,16 +469,12 @@ fn trap_import() -> Result<()> {
 
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    linker.func_wrap("", "", || -> Result<(), Trap> { Err(Trap::new("foo")) })?;
+    linker.func_wrap("", "", || -> Result<()> { bail!("foo") })?;
 
     let module = Module::new(&engine, &wasm)?;
     let mut store = Store::new(&engine, ());
 
-    let trap = linker
-        .instantiate(&mut store, &module)
-        .err()
-        .unwrap()
-        .downcast::<Trap>()?;
+    let trap = linker.instantiate(&mut store, &module).unwrap_err();
 
     assert!(trap.to_string().contains("foo"));
 
@@ -607,10 +600,7 @@ fn func_return_nothing() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let f = linker.get(&mut store, "", "").unwrap().into_func().unwrap();
-    let err = f
-        .call(&mut store, &[], &mut [Val::I32(0)])
-        .unwrap_err()
-        .downcast::<Trap>()?;
+    let err = f.call(&mut store, &[], &mut [Val::I32(0)]).unwrap_err();
     assert!(err
         .to_string()
         .contains("function attempted to return an incompatible value"));
@@ -725,8 +715,11 @@ fn wasi_imports() -> Result<()> {
     let instance = linker.instantiate(&mut store, &module)?;
 
     let start = instance.get_typed_func::<(), (), _>(&mut store, "_start")?;
-    let trap = start.call(&mut store, ()).unwrap_err();
-    assert_eq!(trap.i32_exit_status(), Some(123));
+    let exit = start
+        .call(&mut store, ())
+        .unwrap_err()
+        .downcast::<I32Exit>()?;
+    assert_eq!(exit.0, 123);
 
     Ok(())
 }

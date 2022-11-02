@@ -252,11 +252,7 @@ fn exit125_wasi_snapshot1() -> Result<()> {
 fn exit126_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit126_wasi_snapshot0.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
-    if cfg!(windows) {
-        assert_eq!(output.status.code().unwrap(), 3);
-    } else {
-        assert_eq!(output.status.code().unwrap(), 128 + libc::SIGABRT);
-    }
+    assert_eq!(output.status.code().unwrap(), 1);
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
     Ok(())
@@ -267,11 +263,7 @@ fn exit126_wasi_snapshot0() -> Result<()> {
 fn exit126_wasi_snapshot1() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit126_wasi_snapshot1.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
-    if cfg!(windows) {
-        assert_eq!(output.status.code().unwrap(), 3);
-    } else {
-        assert_eq!(output.status.code().unwrap(), 128 + libc::SIGABRT);
-    }
+    assert_eq!(output.status.code().unwrap(), 1);
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
     Ok(())

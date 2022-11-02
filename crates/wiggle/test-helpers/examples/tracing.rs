@@ -1,3 +1,4 @@
+use anyhow::Result;
 use wiggle_test::{impl_errno, HostMemory, WasiCtx};
 
 /// The `errors` argument to the wiggle gives us a hook to map a rich error
@@ -32,10 +33,7 @@ impl_errno!(types::Errno);
 /// When the `errors` mapping in witx is non-empty, we need to impl the
 /// types::UserErrorConversion trait that wiggle generates from that mapping.
 impl<'a> types::UserErrorConversion for WasiCtx<'a> {
-    fn errno_from_rich_error(
-        &mut self,
-        e: RichError,
-    ) -> Result<types::Errno, wiggle::wasmtime_crate::Trap> {
+    fn errno_from_rich_error(&mut self, e: RichError) -> Result<types::Errno> {
         wiggle::tracing::debug!(
             rich_error = wiggle::tracing::field::debug(&e),
             "error conversion"

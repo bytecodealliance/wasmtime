@@ -3,7 +3,7 @@
 use crate::generators::{Config, DiffValue, DiffValueType};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
 use anyhow::{Context, Error, Result};
-use wasmtime::{Trap, TrapCode};
+use wasmtime::Trap;
 
 /// A wrapper for `wasmi` as a [`DiffEngine`].
 pub struct WasmiEngine {
@@ -55,8 +55,8 @@ impl DiffEngine for WasmiEngine {
             // Wasmtime reports as a `MemoryOutOfBounds`.
             Some(wasmi::Error::Memory(msg)) => {
                 assert_eq!(
-                    trap.trap_code(),
-                    Some(TrapCode::MemoryOutOfBounds),
+                    *trap,
+                    Trap::MemoryOutOfBounds,
                     "wasmtime error did not match wasmi: {msg}"
                 );
                 return;
@@ -77,10 +77,7 @@ impl DiffEngine for WasmiEngine {
                 .expect(&format!("not a trap: {:?}", err)),
         };
         assert!(wasmi.as_code().is_some());
-        assert_eq!(
-            wasmi.as_code().map(wasmi_to_wasmtime_trap_code),
-            trap.trap_code(),
-        );
+        assert_eq!(wasmi_to_wasmtime_trap_code(wasmi.as_code().unwrap()), *trap);
     }
 
     fn is_stack_overflow(&self, err: &Error) -> bool {
@@ -97,18 +94,18 @@ impl DiffEngine for WasmiEngine {
 }
 
 /// Converts `wasmi` trap code to `wasmtime` trap code.
-fn wasmi_to_wasmtime_trap_code(trap: wasmi::core::TrapCode) -> wasmtime::TrapCode {
-    use wasmi::core::TrapCode as WasmiTrapCode;
+fn wasmi_to_wasmtime_trap_code(trap: wasmi::core::TrapCode) -> Trap {
+    use wasmi::core::TrapCode;
     match trap {
-        WasmiTrapCode::Unreachable => TrapCode::UnreachableCodeReached,
-        WasmiTrapCode::MemoryAccessOutOfBounds => TrapCode::MemoryOutOfBounds,
-        WasmiTrapCode::TableAccessOutOfBounds => TrapCode::TableOutOfBounds,
-        WasmiTrapCode::ElemUninitialized => TrapCode::IndirectCallToNull,
-        WasmiTrapCode::DivisionByZero => TrapCode::IntegerDivisionByZero,
-        WasmiTrapCode::IntegerOverflow => TrapCode::IntegerOverflow,
-        WasmiTrapCode::InvalidConversionToInt => TrapCode::BadConversionToInteger,
-        WasmiTrapCode::StackOverflow => TrapCode::StackOverflow,
-        WasmiTrapCode::UnexpectedSignature => TrapCode::BadSignature,
+        TrapCode::Unreachable => Trap::UnreachableCodeReached,
+        TrapCode::MemoryAccessOutOfBounds => Trap::MemoryOutOfBounds,
+        TrapCode::TableAccessOutOfBounds => Trap::TableOutOfBounds,
+        TrapCode::ElemUninitialized => Trap::IndirectCallToNull,
+        TrapCode::DivisionByZero => Trap::IntegerDivisionByZero,
+        TrapCode::IntegerOverflow => Trap::IntegerOverflow,
+        TrapCode::InvalidConversionToInt => Trap::BadConversionToInteger,
+        TrapCode::StackOverflow => Trap::StackOverflow,
+        TrapCode::UnexpectedSignature => Trap::BadSignature,
     }
 }
 

@@ -340,7 +340,7 @@
 //!     // module which called this host function.
 //!     let mem = match caller.get_export("memory") {
 //!         Some(Extern::Memory(mem)) => mem,
-//!         _ => return Err(Trap::new("failed to find host memory")),
+//!         _ => anyhow::bail!("failed to find host memory"),
 //!     };
 //!
 //!     // Use the `ptr` and `len` values to get a subslice of the wasm-memory
@@ -351,9 +351,9 @@
 //!     let string = match data {
 //!         Some(data) => match str::from_utf8(data) {
 //!             Ok(s) => s,
-//!             Err(_) => return Err(Trap::new("invalid utf-8")),
+//!             Err(_) => anyhow::bail!("invalid utf-8"),
 //!         },
-//!         None => return Err(Trap::new("pointer/length out of bounds")),
+//!         None => anyhow::bail!("pointer/length out of bounds"),
 //!     };
 //!     assert_eq!(string, "Hello, world!");
 //!     println!("{}", string);

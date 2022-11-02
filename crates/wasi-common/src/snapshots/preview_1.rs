@@ -8,9 +8,9 @@ use crate::{
         subscription::{RwEventFlags, SubscriptionResult},
         Poll, Userdata,
     },
-    Error, ErrorExt, ErrorKind, SystemTimeSpec, WasiCtx,
+    Error, ErrorExt, ErrorKind, I32Exit, SystemTimeSpec, WasiCtx,
 };
-use anyhow::Context;
+use anyhow::{anyhow, Context, Result};
 use cap_std::time::{Duration, SystemClock};
 use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
@@ -35,10 +35,10 @@ impl wiggle::GuestErrorType for types::Errno {
 }
 
 impl types::UserErrorConversion for WasiCtx {
-    fn errno_from_error(&mut self, e: Error) -> Result<types::Errno, wasmtime::Trap> {
+    fn errno_from_error(&mut self, e: Error) -> Result<types::Errno> {
         debug!("Error: {:?}", e);
-        e.try_into()
-            .map_err(|e| wasmtime::Trap::new(format!("{:?}", e)))
+        let errno = e.try_into()?;
+        Ok(errno)
     }
 }
 
@@ -1214,12 +1214,12 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         Ok(num_results.try_into().expect("results fit into memory"))
     }
 
-    async fn proc_exit(&mut self, status: types::Exitcode) -> wasmtime::Trap {
+    async fn proc_exit(&mut self, status: types::Exitcode) -> anyhow::Error {
         // Check that the status is within WASI's range.
         if status < 126 {
-            wasmtime::Trap::i32_exit(status as i32)
+            I32Exit(status as i32).into()
         } else {
-            wasmtime::Trap::new("exit with invalid exit status outside of [0..126)")
+            anyhow!("exit with invalid exit status outside of [0..126)")
         }
     }
 

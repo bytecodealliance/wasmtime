@@ -132,7 +132,7 @@ fn test_async_host_func_pending() {
         )
         .unwrap_err();
     assert!(
-        format!("{}", trap).contains("Cannot wait on pending future"),
+        format!("{:?}", trap).contains("Cannot wait on pending future"),
         "expected get a pending future Trap from dummy executor, got: {}",
         trap
     );
