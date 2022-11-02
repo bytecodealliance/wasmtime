@@ -177,7 +177,7 @@ pub trait Compiler: Send + Sync {
         ty: &WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
 
-    /// Appends a list of compiled functiosn to an in-memory object.
+    /// Appends a list of compiled functions to an in-memory object.
     ///
     /// This function will receive the same `Box<dyn Ayn>` produced as part of
     /// compilation from functions like `compile_function`,
