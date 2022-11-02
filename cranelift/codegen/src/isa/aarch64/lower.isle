@@ -2212,8 +2212,8 @@
 ;;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; SIMD&FP <=> SIMD&FP
-(rule 5 (lower (has_type (ty_float_or_vec out_ty) (bitcast x @ (value_type (ty_float_or_vec _)))))
-      (fpu_move out_ty x))
+(rule 5 (lower (has_type (ty_float_or_vec _) (bitcast x @ (value_type (ty_float_or_vec _)))))
+      x)
 
 ; GPR => SIMD&FP
 (rule 4 (lower (has_type (ty_float_or_vec _) (bitcast x @ (value_type in_ty))))
@@ -2231,11 +2231,6 @@
       (if (ty_int_ref_scalar_64 in_ty))
       x)
 (rule 1 (lower (has_type $I128 (bitcast x @ (value_type $I128)))) x)
-
-;;; Rules for `raw_bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (raw_bitcast val))
-      val)
 
 ;;; Rules for `extractlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

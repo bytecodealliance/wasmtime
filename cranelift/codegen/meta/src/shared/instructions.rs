@@ -683,8 +683,6 @@ pub(crate) fn define(
             .build(),
     );
 
-    let AnyTo = &TypeVar::copy_from(Any, "AnyTo".to_string());
-
     let Mem = &TypeVar::new(
         "Mem",
         "Any type that can be stored in memory",
@@ -3148,32 +3146,6 @@ pub(crate) fn define(
         The input and output types must be storable to memory and of the same
         size. A bitcast is equivalent to storing one type and loading the other
         type from the same address.
-
-        For vector types, the lane types must also be the same size (see
-        `raw_bitcast` for changing the lane size).
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
-    );
-
-    let x = &Operand::new("x", Any);
-    let a = &Operand::new("a", AnyTo).with_doc("Bits of `x` reinterpreted");
-
-    ig.push(
-        Inst::new(
-            "raw_bitcast",
-            r#"
-        Cast the bits in `x` as a different type of the same bit width.
-
-        This instruction does not change the data's representation but allows
-        data in registers to be used as different types, e.g. an i32x4 as a
-        b8x16. The only constraint on the result `a` is that it can be
-        `raw_bitcast` back to the original type. Also, in a raw_bitcast between
-        vector types with the same number of lanes, the value of each result
-        lane is a raw_bitcast of the corresponding operand lane. TODO there is
-        currently no mechanism for enforcing the bit width constraint.
         "#,
             &formats.unary,
         )

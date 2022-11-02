@@ -814,11 +814,6 @@
    (lower (has_type out (bitcast v @ (value_type in_ty))))
    (gen_moves v in_ty out))
 
-;;;;;  Rules for `raw_bitcast`;;;;;;;;;
-(rule
-   (lower (has_type out (raw_bitcast v @ (value_type in_ty))))
-   (gen_moves v in_ty out))
-
 ;;;;;  Rules for `ceil`;;;;;;;;;
 (rule 
   (lower (has_type ty (ceil x)))

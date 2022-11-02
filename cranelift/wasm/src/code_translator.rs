@@ -1427,7 +1427,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let data = value.bytes().to_vec().into();
             let handle = builder.func.dfg.constants.insert(data);
             let value = builder.ins().vconst(I8X16, handle);
-            // the v128.const is typed in CLIF as a I8x16 but raw_bitcast to a different type
+            // the v128.const is typed in CLIF as a I8x16 but bitcast to a different type
             // before use
             state.push1(value)
         }
@@ -1536,7 +1536,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let shuffled = builder.ins().shuffle(a, b, mask);
             state.push1(shuffled)
             // At this point the original types of a and b are lost; users of this value (i.e. this
-            // WASM-to-CLIF translator) may need to raw_bitcast for type-correctness. This is due
+            // WASM-to-CLIF translator) may need to bitcast for type-correctness. This is due
             // to WASM using the less specific v128 type for certain operations and more specific
             // types (e.g. i8x16) for others.
         }
@@ -2895,14 +2895,14 @@ fn type_of(operator: &Operator) -> Type {
 }
 
 /// Some SIMD operations only operate on I8X16 in CLIF; this will convert them to that type by
-/// adding a raw_bitcast if necessary.
+/// adding a bitcast if necessary.
 fn optionally_bitcast_vector(
     value: Value,
     needed_type: Type,
     builder: &mut FunctionBuilder,
 ) -> Value {
     if builder.func.dfg.value_type(value) != needed_type {
-        builder.ins().raw_bitcast(needed_type, value)
+        builder.ins().bitcast(needed_type, value)
     } else {
         value
     }
@@ -2937,7 +2937,7 @@ fn canonicalise_v128_values<'a>(
     // Otherwise we'll have to cast, and push the resulting `Value`s into `canonicalised`.
     for v in values {
         tmp_canonicalised.push(if is_non_canonical_v128(builder.func.dfg.value_type(*v)) {
-            builder.ins().raw_bitcast(I8X16, *v)
+            builder.ins().bitcast(I8X16, *v)
         } else {
             *v
         });
@@ -3048,7 +3048,7 @@ fn bitcast_arguments<'a>(
 
 /// A helper for bitcasting a sequence of return values for the function currently being built. If
 /// a value is a vector type that does not match its expected type, this will modify the value in
-/// place to point to the result of a `raw_bitcast`. This conversion is necessary to translate Wasm
+/// place to point to the result of a `bitcast`. This conversion is necessary to translate Wasm
 /// code that uses `V128` as function parameters (or implicitly in block parameters) and still use
 /// specific CLIF types (e.g. `I32X4`) in the function body.
 pub fn bitcast_wasm_returns<FE: FuncEnvironment + ?Sized>(
@@ -3060,7 +3060,7 @@ pub fn bitcast_wasm_returns<FE: FuncEnvironment + ?Sized>(
         environ.is_wasm_return(&builder.func.signature, i)
     });
     for (t, arg) in changes {
-        *arg = builder.ins().raw_bitcast(t, *arg);
+        *arg = builder.ins().bitcast(t, *arg);
     }
 }
 
@@ -3076,6 +3076,6 @@ fn bitcast_wasm_params<FE: FuncEnvironment + ?Sized>(
         environ.is_wasm_parameter(&callee_signature, i)
     });
     for (t, arg) in changes {
-        *arg = builder.ins().raw_bitcast(t, *arg);
+        *arg = builder.ins().bitcast(t, *arg);
     }
 }

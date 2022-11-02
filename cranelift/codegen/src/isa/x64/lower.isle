@@ -3303,6 +3303,14 @@
 (rule (lower (has_type $F64 (bitcast src @ (value_type $I64))))
       (bitcast_gpr_to_xmm $I64 src))
 
+;; Bitcast between types residing in GPR registers is a no-op.
+(rule 1 (lower (has_type (is_gpr_type _)
+                         (bitcast x @ (value_type (is_gpr_type _))))) x)
+
+;; Bitcast between types residing in XMM registers is a no-op.
+(rule 2 (lower (has_type (is_xmm_type _)
+                         (bitcast x @ (value_type (is_xmm_type _))))) x)
+
 ;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fcopysign a @ (value_type $F32) b)))
@@ -3471,15 +3479,6 @@
 (rule (lower (has_type ty (vconst const)))
       ;; TODO use Inst::gen_constant() instead.
       (x64_xmm_load_const ty (const_to_vconst const)))
-
-;; Rules for `raw_bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; A raw_bitcast is just a mechanism for correcting the type of V128 values (see
-;; https://github.com/bytecodealliance/wasmtime/issues/1147). As such, this IR
-;; instruction should emit no machine code but a move is necessary to give the
-;; register allocator a definition for the output virtual register.
-(rule (lower (raw_bitcast val))
-      (put_in_regs val))
 
 ;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

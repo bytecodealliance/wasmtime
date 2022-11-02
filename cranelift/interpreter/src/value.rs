@@ -335,7 +335,7 @@ impl Value for DataValue {
     fn convert(self, kind: ValueConversionKind) -> ValueResult<Self> {
         Ok(match kind {
             ValueConversionKind::Exact(ty) => match (self, ty) {
-                // TODO a lot to do here: from bmask to ireduce to raw_bitcast...
+                // TODO a lot to do here: from bmask to ireduce to bitcast...
                 (val, ty) if val.ty().is_int() && ty.is_int() => {
                     DataValue::from_integer(val.into_int()?, ty)?
                 }

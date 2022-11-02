@@ -207,8 +207,6 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::Vconst => implemented_in_isle(ctx),
 
-        Opcode::RawBitcast => implemented_in_isle(ctx),
-
         Opcode::Extractlane => implemented_in_isle(ctx),
 
         Opcode::Insertlane => implemented_in_isle(ctx),

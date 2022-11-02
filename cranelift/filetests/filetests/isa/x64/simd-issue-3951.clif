@@ -12,7 +12,7 @@ function %check_issue_3951(i64 vmctx) -> i8x16 fast {
     v4 = global_value.i64 gv0
     v5 = load.i8x16 notrap aligned v4+8
     v6 = icmp ugt v3, v5
-    v7 = raw_bitcast.i8x16 v6
+    v7 = bitcast.i8x16 v6
     jump block1(v7)
   block1(v1: i8x16):
     return v1
