@@ -350,16 +350,11 @@ fn test_initial_table_limits_exceeded() -> Result<()> {
 
 #[test]
 fn test_pooling_allocator_initial_limits_exceeded() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_count(1).instance_memories(2);
     let mut config = Config::new();
     config.wasm_multi_memory(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            count: 1,
-            memories: 2,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
     let engine = Engine::new(&config)?;
     let module = Module::new(
@@ -721,15 +716,10 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
     if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
         return Ok(());
     }
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_memory_pages(10).instance_table_elements(10);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            memory_pages: 10,
-            table_elements: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config).unwrap();
     let linker = Linker::new(&engine);
 
@@ -829,16 +819,11 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
     if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
         return Ok(());
     }
+    let mut pool = PoolingAllocationConfig::default();
+    pool.instance_memory_pages(10).instance_table_elements(10);
     let mut config = Config::new();
     config.async_support(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
-        strategy: PoolingAllocationStrategy::NextAvailable,
-        instance_limits: InstanceLimits {
-            memory_pages: 10,
-            table_elements: 10,
-            ..Default::default()
-        },
-    });
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config).unwrap();
     let linker = Linker::new(&engine);
 

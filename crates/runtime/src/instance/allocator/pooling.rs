@@ -50,114 +50,34 @@ fn round_up_to_pow2(n: usize, to: usize) -> usize {
     (n + to - 1) & !(to - 1)
 }
 
-/// Represents the limits placed on instances by the pooling instance allocator.
+/// Instance-related limit configuration for pooling.
+///
+/// More docs on this can be found at `wasmtime::PoolingAllocationConfig`.
 #[derive(Debug, Copy, Clone)]
 pub struct InstanceLimits {
-    /// The maximum number of concurrent instances supported (default is 1000).
-    ///
-    /// This value has a direct impact on the amount of memory allocated by the pooling
-    /// instance allocator.
-    ///
-    /// The pooling instance allocator allocates three memory pools with sizes depending on this value:
-    ///
-    /// * An instance pool, where each entry in the pool can store the runtime representation
-    ///   of an instance, including a maximal `VMContext` structure.
-    ///
-    /// * A memory pool, where each entry in the pool contains the reserved address space for each
-    ///   linear memory supported by an instance.
-    ///
-    /// * A table pool, where each entry in the pool contains the space needed for each WebAssembly table
-    ///   supported by an instance (see `table_elements` to control the size of each table).
-    ///
-    /// Additionally, this value will also control the maximum number of execution stacks allowed for
-    /// asynchronous execution (one per instance), when enabled.
-    ///
-    /// The memory pool will reserve a large quantity of host process address space to elide the bounds
-    /// checks required for correct WebAssembly memory semantics. Even for 64-bit address spaces, the
-    /// address space is limited when dealing with a large number of supported instances.
-    ///
-    /// For example, on Linux x86_64, the userland address space limit is 128 TiB. That might seem like a lot,
-    /// but each linear memory will *reserve* 6 GiB of space by default. Multiply that by the number of linear
-    /// memories each instance supports and then by the number of supported instances and it becomes apparent
-    /// that address space can be exhausted depending on the number of supported instances.
+    /// Maximum instances to support
     pub count: u32,
 
-    /// The maximum size, in bytes, allocated for an instance and its
-    /// `VMContext`.
-    ///
-    /// This amount of space is pre-allocated for `count` number of instances
-    /// and is used to store the runtime `wasmtime_runtime::Instance` structure
-    /// along with its adjacent `VMContext` structure. The `Instance` type has a
-    /// static size but `VMContext` is dynamically sized depending on the module
-    /// being instantiated. This size limit loosely correlates to the size of
-    /// the wasm module, taking into account factors such as:
-    ///
-    /// * number of functions
-    /// * number of globals
-    /// * number of memories
-    /// * number of tables
-    /// * number of function types
-    ///
-    /// If the allocated size per instance is too small then instantiation of a
-    /// module will fail at runtime with an error indicating how many bytes were
-    /// needed. This amount of bytes are committed to memory per-instance when
-    /// a pooling allocator is created.
-    ///
-    /// The default value for this is 1MB.
+    /// Maximum size of instance VMContext
     pub size: usize,
 
-    /// The maximum number of defined tables for a module (default is 1).
-    ///
-    /// This value controls the capacity of the `VMTableDefinition` table in each instance's
-    /// `VMContext` structure.
-    ///
-    /// The allocated size of the table will be `tables * sizeof(VMTableDefinition)` for each
-    /// instance regardless of how many tables are defined by an instance's module.
+    /// Maximum number of tables per instance
     pub tables: u32,
 
-    /// The maximum table elements for any table defined in a module (default is 10000).
-    ///
-    /// If a table's minimum element limit is greater than this value, the module will
-    /// fail to instantiate.
-    ///
-    /// If a table's maximum element limit is unbounded or greater than this value,
-    /// the maximum will be `table_elements` for the purpose of any `table.grow` instruction.
-    ///
-    /// This value is used to reserve the maximum space for each supported table; table elements
-    /// are pointer-sized in the Wasmtime runtime.  Therefore, the space reserved for each instance
-    /// is `tables * table_elements * sizeof::<*const ()>`.
+    /// Maximum number of table elements per table
     pub table_elements: u32,
 
-    /// The maximum number of defined linear memories for a module (default is 1).
-    ///
-    /// This value controls the capacity of the `VMMemoryDefinition` table in each instance's
-    /// `VMContext` structure.
-    ///
-    /// The allocated size of the table will be `memories * sizeof(VMMemoryDefinition)` for each
-    /// instance regardless of how many memories are defined by an instance's module.
+    /// Maximum number of linear memories per instance
     pub memories: u32,
 
-    /// The maximum number of pages for any linear memory defined in a module (default is 160).
-    ///
-    /// The default of 160 means at most 10 MiB of host memory may be committed for each instance.
-    ///
-    /// If a memory's minimum page limit is greater than this value, the module will
-    /// fail to instantiate.
-    ///
-    /// If a memory's maximum page limit is unbounded or greater than this value,
-    /// the maximum will be `memory_pages` for the purpose of any `memory.grow` instruction.
-    ///
-    /// This value is used to control the maximum accessible space for each linear memory of an instance.
-    ///
-    /// The reservation size of each linear memory is controlled by the
-    /// `static_memory_maximum_size` setting and this value cannot
-    /// exceed the configured static memory maximum size.
+    /// Maximum number of wasm pages for each linear memory.
     pub memory_pages: u64,
 }
 
 impl Default for InstanceLimits {
     fn default() -> Self {
-        // See doc comments for `wasmtime::InstanceLimits` for these default values
+        // See doc comments for `wasmtime::PoolingAllocationConfig` for these
+        // default values
         Self {
             count: 1000,
             size: 1 << 20, // 1 MB
@@ -209,16 +129,12 @@ struct InstancePool {
 }
 
 impl InstancePool {
-    fn new(
-        strategy: PoolingAllocationStrategy,
-        instance_limits: &InstanceLimits,
-        tunables: &Tunables,
-    ) -> Result<Self> {
+    fn new(config: &PoolingInstanceAllocatorConfig, tunables: &Tunables) -> Result<Self> {
         let page_size = crate::page_size();
 
-        let instance_size = round_up_to_pow2(instance_limits.size, mem::align_of::<Instance>());
+        let instance_size = round_up_to_pow2(config.limits.size, mem::align_of::<Instance>());
 
-        let max_instances = instance_limits.count as usize;
+        let max_instances = config.limits.count as usize;
 
         let allocation_size = round_up_to_pow2(
             instance_size
@@ -234,9 +150,12 @@ impl InstancePool {
             mapping,
             instance_size,
             max_instances,
-            index_allocator: Mutex::new(PoolingAllocationState::new(strategy, max_instances)),
-            memories: MemoryPool::new(instance_limits, tunables)?,
-            tables: TablePool::new(instance_limits)?,
+            index_allocator: Mutex::new(PoolingAllocationState::new(
+                config.strategy,
+                max_instances,
+            )),
+            memories: MemoryPool::new(&config.limits, tunables)?,
+            tables: TablePool::new(&config.limits)?,
         };
 
         Ok(pool)
@@ -892,25 +811,21 @@ struct StackPool {
 
 #[cfg(all(feature = "async", unix))]
 impl StackPool {
-    fn new(
-        instance_limits: &InstanceLimits,
-        stack_size: usize,
-        async_stack_zeroing: bool,
-    ) -> Result<Self> {
+    fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
         use rustix::mm::{mprotect, MprotectFlags};
 
         let page_size = crate::page_size();
 
         // Add a page to the stack size for the guard page when using fiber stacks
-        let stack_size = if stack_size == 0 {
+        let stack_size = if config.stack_size == 0 {
             0
         } else {
-            round_up_to_pow2(stack_size, page_size)
+            round_up_to_pow2(config.stack_size, page_size)
                 .checked_add(page_size)
                 .ok_or_else(|| anyhow!("stack size exceeds addressable memory"))?
         };
 
-        let max_instances = instance_limits.count as usize;
+        let max_instances = config.limits.count as usize;
 
         let allocation_size = stack_size
             .checked_mul(max_instances)
@@ -936,7 +851,7 @@ impl StackPool {
             stack_size,
             max_instances,
             page_size,
-            async_stack_zeroing,
+            async_stack_zeroing: config.async_stack_zeroing,
             // We always use a `NextAvailable` strategy for stack
             // allocation. We don't want or need an affinity policy
             // here: stacks do not benefit from being allocated to the
@@ -1011,6 +926,33 @@ impl StackPool {
     }
 }
 
+/// Configuration options for the pooling instance allocator supplied at
+/// construction.
+#[derive(Copy, Clone, Debug)]
+pub struct PoolingInstanceAllocatorConfig {
+    /// Allocation strategy to use for slot indexes in the pooling instance
+    /// allocator.
+    pub strategy: PoolingAllocationStrategy,
+    /// The size, in bytes, of async stacks to allocate (not including the guard
+    /// page).
+    pub stack_size: usize,
+    /// The limits to apply to instances allocated within this allocator.
+    pub limits: InstanceLimits,
+    /// Whether or not async stacks are zeroed after use.
+    pub async_stack_zeroing: bool,
+}
+
+impl Default for PoolingInstanceAllocatorConfig {
+    fn default() -> PoolingInstanceAllocatorConfig {
+        PoolingInstanceAllocatorConfig {
+            strategy: Default::default(),
+            stack_size: 2 << 20,
+            limits: InstanceLimits::default(),
+            async_stack_zeroing: false,
+        }
+    }
+}
+
 /// Implements the pooling instance allocator.
 ///
 /// This allocator internally maintains pools of instances, memories, tables, and stacks.
@@ -1027,28 +969,19 @@ pub struct PoolingInstanceAllocator {
 
 impl PoolingInstanceAllocator {
     /// Creates a new pooling instance allocator with the given strategy and limits.
-    pub fn new(
-        strategy: PoolingAllocationStrategy,
-        instance_limits: InstanceLimits,
-        stack_size: usize,
-        tunables: &Tunables,
-        async_stack_zeroing: bool,
-    ) -> Result<Self> {
-        if instance_limits.count == 0 {
+    pub fn new(config: &PoolingInstanceAllocatorConfig, tunables: &Tunables) -> Result<Self> {
+        if config.limits.count == 0 {
             bail!("the instance count limit cannot be zero");
         }
 
-        let instances = InstancePool::new(strategy, &instance_limits, tunables)?;
-
-        drop(stack_size); // suppress unused warnings w/o async feature
-        drop(async_stack_zeroing); // suppress unused warnings w/o async feature
+        let instances = InstancePool::new(config, tunables)?;
 
         Ok(Self {
             instances: instances,
             #[cfg(all(feature = "async", unix))]
-            stacks: StackPool::new(&instance_limits, stack_size, async_stack_zeroing)?,
+            stacks: StackPool::new(config)?,
             #[cfg(all(feature = "async", windows))]
-            stack_size,
+            stack_size: config.stack_size,
         })
     }
 }
@@ -1173,7 +1106,9 @@ mod test {
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn test_instance_pool() -> Result<()> {
-        let instance_limits = InstanceLimits {
+        let mut config = PoolingInstanceAllocatorConfig::default();
+        config.strategy = PoolingAllocationStrategy::NextAvailable;
+        config.limits = InstanceLimits {
             count: 3,
             tables: 1,
             memories: 1,
@@ -1184,8 +1119,7 @@ mod test {
         };
 
         let instances = InstancePool::new(
-            PoolingAllocationStrategy::NextAvailable,
-            &instance_limits,
+            &config,
             &Tunables {
                 static_memory_bound: 1,
                 ..Tunables::default()
@@ -1336,14 +1270,16 @@ mod test {
     #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
     #[test]
     fn test_stack_pool() -> Result<()> {
-        let pool = StackPool::new(
-            &InstanceLimits {
+        let config = PoolingInstanceAllocatorConfig {
+            limits: InstanceLimits {
                 count: 10,
                 ..Default::default()
             },
-            1,
-            true,
-        )?;
+            stack_size: 1,
+            async_stack_zeroing: true,
+            ..PoolingInstanceAllocatorConfig::default()
+        };
+        let pool = StackPool::new(&config)?;
 
         let native_page_size = crate::page_size();
         assert_eq!(pool.stack_size, 2 * native_page_size);
@@ -1410,39 +1346,38 @@ mod test {
 
     #[test]
     fn test_pooling_allocator_with_zero_instance_count() {
+        let config = PoolingInstanceAllocatorConfig {
+            limits: InstanceLimits {
+                count: 0,
+                ..Default::default()
+            },
+            ..PoolingInstanceAllocatorConfig::default()
+        };
         assert_eq!(
-            PoolingInstanceAllocator::new(
-                PoolingAllocationStrategy::Random,
-                InstanceLimits {
-                    count: 0,
-                    ..Default::default()
-                },
-                4096,
-                &Tunables::default(),
-                true,
-            )
-            .map_err(|e| e.to_string())
-            .expect_err("expected a failure constructing instance allocator"),
+            PoolingInstanceAllocator::new(&config, &Tunables::default(),)
+                .map_err(|e| e.to_string())
+                .expect_err("expected a failure constructing instance allocator"),
             "the instance count limit cannot be zero"
         );
     }
 
     #[test]
     fn test_pooling_allocator_with_memory_pages_exceeded() {
+        let config = PoolingInstanceAllocatorConfig {
+            limits: InstanceLimits {
+                count: 1,
+                memory_pages: 0x10001,
+                ..Default::default()
+            },
+            ..PoolingInstanceAllocatorConfig::default()
+        };
         assert_eq!(
             PoolingInstanceAllocator::new(
-                PoolingAllocationStrategy::Random,
-                InstanceLimits {
-                    count: 1,
-                    memory_pages: 0x10001,
-                    ..Default::default()
-                },
-                4096,
+                &config,
                 &Tunables {
                     static_memory_bound: 1,
                     ..Tunables::default()
                 },
-                true,
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
@@ -1452,21 +1387,22 @@ mod test {
 
     #[test]
     fn test_pooling_allocator_with_reservation_size_exceeded() {
+        let config = PoolingInstanceAllocatorConfig {
+            limits: InstanceLimits {
+                count: 1,
+                memory_pages: 2,
+                ..Default::default()
+            },
+            ..PoolingInstanceAllocatorConfig::default()
+        };
         assert_eq!(
             PoolingInstanceAllocator::new(
-                PoolingAllocationStrategy::Random,
-                InstanceLimits {
-                    count: 1,
-                    memory_pages: 2,
-                    ..Default::default()
-                },
-                4096,
+                &config,
                 &Tunables {
                     static_memory_bound: 1,
                     static_memory_offset_guard_size: 0,
                     ..Tunables::default()
                 },
-                true
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
@@ -1477,9 +1413,9 @@ mod test {
     #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
     #[test]
     fn test_stack_zeroed() -> Result<()> {
-        let allocator = PoolingInstanceAllocator::new(
-            PoolingAllocationStrategy::NextAvailable,
-            InstanceLimits {
+        let config = PoolingInstanceAllocatorConfig {
+            strategy: PoolingAllocationStrategy::NextAvailable,
+            limits: InstanceLimits {
                 count: 1,
                 table_elements: 0,
                 memory_pages: 0,
@@ -1487,10 +1423,11 @@ mod test {
                 memories: 0,
                 ..Default::default()
             },
-            128,
-            &Tunables::default(),
-            true,
-        )?;
+            stack_size: 128,
+            async_stack_zeroing: true,
+            ..PoolingInstanceAllocatorConfig::default()
+        };
+        let allocator = PoolingInstanceAllocator::new(&config, &Tunables::default())?;
 
         unsafe {
             for _ in 0..255 {
@@ -1512,9 +1449,9 @@ mod test {
     #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
     #[test]
     fn test_stack_unzeroed() -> Result<()> {
-        let allocator = PoolingInstanceAllocator::new(
-            PoolingAllocationStrategy::NextAvailable,
-            InstanceLimits {
+        let config = PoolingInstanceAllocatorConfig {
+            strategy: PoolingAllocationStrategy::NextAvailable,
+            limits: InstanceLimits {
                 count: 1,
                 table_elements: 0,
                 memory_pages: 0,
@@ -1522,10 +1459,11 @@ mod test {
                 memories: 0,
                 ..Default::default()
             },
-            128,
-            &Tunables::default(),
-            false,
-        )?;
+            stack_size: 128,
+            async_stack_zeroing: false,
+            ..PoolingInstanceAllocatorConfig::default()
+        };
+        let allocator = PoolingInstanceAllocator::new(&config, &Tunables::default())?;
 
         unsafe {
             for i in 0..255 {
