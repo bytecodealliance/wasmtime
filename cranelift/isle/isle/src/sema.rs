@@ -22,6 +22,7 @@ use crate::{StableMap, StableSet};
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 declare_id!(
@@ -500,6 +501,43 @@ pub enum Expr {
     },
 }
 
+/// Visitor interface for [Pattern]s. Visitors can assign an arbitrary identifier to each
+/// subpattern, which is threaded through to subsequent calls into the visitor.
+pub trait PatternVisitor {
+    /// The type of subpattern identifiers.
+    type PatternId: Copy;
+
+    /// Match if `a` and `b` have equal values.
+    fn add_match_equal(&mut self, a: Self::PatternId, b: Self::PatternId, ty: TypeId);
+    /// Match if `input` is the given integer constant.
+    fn add_match_int(&mut self, input: Self::PatternId, ty: TypeId, int_val: i128);
+    /// Match if `input` is the given primitive constant.
+    fn add_match_prim(&mut self, input: Self::PatternId, ty: TypeId, val: Sym);
+
+    /// Match if `input` is the given enum variant. Returns an identifier for each field within the
+    /// enum variant. The length of the return list must equal the length of `arg_tys`.
+    fn add_match_variant(
+        &mut self,
+        input: Self::PatternId,
+        input_ty: TypeId,
+        arg_tys: &[TypeId],
+        variant: VariantId,
+    ) -> Vec<Self::PatternId>;
+
+    /// Match if the given external extractor succeeds on `input`. Returns an identifier for each
+    /// return value from the external extractor. The length of the return list must equal the
+    /// length of `output_tys`.
+    fn add_extract(
+        &mut self,
+        input: Self::PatternId,
+        input_ty: TypeId,
+        output_tys: Vec<TypeId>,
+        term: TermId,
+        infallible: bool,
+        multi: bool,
+    ) -> Vec<Self::PatternId>;
+}
+
 impl Pattern {
     /// Get this pattern's type.
     pub fn ty(&self) -> TypeId {
@@ -522,6 +560,114 @@ impl Pattern {
             _ => None,
         }
     }
+
+    /// Recursively visit every sub-pattern.
+    pub fn visit<V: PatternVisitor>(
+        &self,
+        visitor: &mut V,
+        input: V::PatternId,
+        termenv: &TermEnv,
+        vars: &mut HashMap<VarId, V::PatternId>,
+    ) {
+        match self {
+            &Pattern::BindPattern(_ty, var, ref subpat) => {
+                // Bind the appropriate variable and recurse.
+                assert!(!vars.contains_key(&var));
+                vars.insert(var, input);
+                subpat.visit(visitor, input, termenv, vars);
+            }
+            &Pattern::Var(ty, var) => {
+                // Assert that the value matches the existing bound var.
+                let var_val = vars
+                    .get(&var)
+                    .copied()
+                    .expect("Variable should already be bound");
+                visitor.add_match_equal(input, var_val, ty);
+            }
+            &Pattern::ConstInt(ty, value) => visitor.add_match_int(input, ty, value),
+            &Pattern::ConstPrim(ty, value) => visitor.add_match_prim(input, ty, value),
+            &Pattern::Term(ty, term, ref args) => {
+                // Determine whether the term has an external extractor or not.
+                let termdata = &termenv.terms[term.index()];
+                let arg_values = match &termdata.kind {
+                    TermKind::EnumVariant { variant } => {
+                        visitor.add_match_variant(input, ty, &termdata.arg_tys, *variant)
+                    }
+                    TermKind::Decl {
+                        extractor_kind: None,
+                        ..
+                    } => {
+                        panic!("Pattern invocation of undefined term body")
+                    }
+                    TermKind::Decl {
+                        extractor_kind: Some(ExtractorKind::InternalExtractor { .. }),
+                        ..
+                    } => {
+                        panic!("Should have been expanded away")
+                    }
+                    TermKind::Decl {
+                        multi,
+                        extractor_kind: Some(ExtractorKind::ExternalExtractor { infallible, .. }),
+                        ..
+                    } => {
+                        // Evaluate all `input` args.
+                        let output_tys = args.iter().map(|arg| arg.ty()).collect();
+
+                        // Invoke the extractor.
+                        visitor.add_extract(
+                            input,
+                            termdata.ret_ty,
+                            output_tys,
+                            term,
+                            *infallible && !*multi,
+                            *multi,
+                        )
+                    }
+                };
+                for (pat, val) in args.iter().zip(arg_values) {
+                    pat.visit(visitor, val, termenv, vars);
+                }
+            }
+            &Pattern::And(_ty, ref children) => {
+                for child in children {
+                    child.visit(visitor, input, termenv, vars);
+                }
+            }
+            &Pattern::Wildcard(_ty) => {
+                // Nothing!
+            }
+        }
+    }
+}
+
+/// Visitor interface for [Expr]s. Visitors can return an arbitrary identifier for each
+/// subexpression, which is threaded through to subsequent calls into the visitor.
+pub trait ExprVisitor {
+    /// The type of subexpression identifiers.
+    type ExprId: Copy;
+
+    /// Construct a constant integer.
+    fn add_const_int(&mut self, ty: TypeId, val: i128) -> Self::ExprId;
+    /// Construct a primitive constant.
+    fn add_const_prim(&mut self, ty: TypeId, val: Sym) -> Self::ExprId;
+
+    /// Construct an enum variant with the given `inputs` assigned to the variant's fields in order.
+    fn add_create_variant(
+        &mut self,
+        inputs: Vec<(Self::ExprId, TypeId)>,
+        ty: TypeId,
+        variant: VariantId,
+    ) -> Self::ExprId;
+
+    /// Call an external constructor with the given `inputs` as arguments.
+    fn add_construct(
+        &mut self,
+        inputs: Vec<(Self::ExprId, TypeId)>,
+        ty: TypeId,
+        term: TermId,
+        infallible: bool,
+        multi: bool,
+    ) -> Self::ExprId;
 }
 
 impl Expr {
@@ -534,6 +680,165 @@ impl Expr {
             &Self::ConstPrim(t, ..) => t,
             &Self::Let { ty: t, .. } => t,
         }
+    }
+
+    /// Recursively visit every subexpression.
+    pub fn visit<V: ExprVisitor>(
+        &self,
+        visitor: &mut V,
+        termenv: &TermEnv,
+        vars: &HashMap<VarId, V::ExprId>,
+    ) -> V::ExprId {
+        log!("Expr::visit: expr {:?}", self);
+        match self {
+            &Expr::ConstInt(ty, val) => visitor.add_const_int(ty, val),
+            &Expr::ConstPrim(ty, val) => visitor.add_const_prim(ty, val),
+            &Expr::Let {
+                ty: _ty,
+                ref bindings,
+                ref body,
+            } => {
+                let mut vars = vars.clone();
+                for &(var, _var_ty, ref var_expr) in bindings {
+                    let var_value = var_expr.visit(visitor, termenv, &vars);
+                    vars.insert(var, var_value);
+                }
+                body.visit(visitor, termenv, &vars)
+            }
+            &Expr::Var(_ty, var_id) => *vars.get(&var_id).unwrap(),
+            &Expr::Term(ty, term, ref arg_exprs) => {
+                let termdata = &termenv.terms[term.index()];
+                let arg_values_tys = arg_exprs
+                    .iter()
+                    .map(|arg_expr| arg_expr.visit(visitor, termenv, vars))
+                    .zip(termdata.arg_tys.iter().copied())
+                    .collect();
+                match &termdata.kind {
+                    TermKind::EnumVariant { variant } => {
+                        visitor.add_create_variant(arg_values_tys, ty, *variant)
+                    }
+                    TermKind::Decl {
+                        constructor_kind: Some(ConstructorKind::InternalConstructor),
+                        multi,
+                        ..
+                    } => {
+                        visitor.add_construct(
+                            arg_values_tys,
+                            ty,
+                            term,
+                            /* infallible = */ false,
+                            *multi,
+                        )
+                    }
+                    TermKind::Decl {
+                        constructor_kind: Some(ConstructorKind::ExternalConstructor { .. }),
+                        pure,
+                        multi,
+                        ..
+                    } => {
+                        visitor.add_construct(
+                            arg_values_tys,
+                            ty,
+                            term,
+                            /* infallible = */ !pure,
+                            *multi,
+                        )
+                    }
+                    TermKind::Decl {
+                        constructor_kind: None,
+                        ..
+                    } => panic!("Should have been caught by typechecking"),
+                }
+            }
+        }
+    }
+}
+
+/// Information about an expression after it has been fully visited in [RuleVisitor::add_expr].
+#[derive(Clone, Copy)]
+pub struct VisitedExpr<V: ExprVisitor> {
+    /// The type of the top-level expression.
+    pub ty: TypeId,
+    /// The identifier returned by the visitor for the top-level expression.
+    pub value: V::ExprId,
+}
+
+/// Visitor interface for [Rule]s. Visitors must be able to visit patterns by implementing
+/// [PatternVisitor], and to visit expressions by providing a type that implements [ExprVisitor].
+pub trait RuleVisitor: PatternVisitor {
+    /// The type of expression visitors constructed by [RuleVisitor::add_expr].
+    type ExprVisitor: ExprVisitor;
+    /// The type returned from [RuleVisitor::add_expr], which may be exchanged for a subpattern
+    /// identifier using [RuleVisitor::expr_as_pattern].
+    type Expr;
+
+    /// Visit one of the arguments to the top-level pattern.
+    fn add_arg(&mut self, index: usize, ty: TypeId) -> Self::PatternId;
+
+    /// Visit an expression, used once for each if-let and once for the rule's right-hand side.
+    fn add_expr<F>(&mut self, visitor: F) -> Self::Expr
+    where
+        F: FnOnce(&mut Self::ExprVisitor) -> VisitedExpr<Self::ExprVisitor>;
+
+    /// Given an expression from [RuleVisitor::add_expr], return an identifier that can be used with
+    /// the pattern visitor.
+    fn expr_as_pattern(&mut self, expr: Self::Expr) -> Self::PatternId;
+
+    /// Given an identifier from the pattern visitor, return an identifier that can be used with
+    /// the expression visitor.
+    fn pattern_as_expr(
+        &mut self,
+        pattern: Self::PatternId,
+    ) -> <Self::ExprVisitor as ExprVisitor>::ExprId;
+}
+
+impl Rule {
+    /// Recursively visit every pattern and expression in this rule. Returns the [RuleVisitor::Expr]
+    /// that was returned from [RuleVisitor::add_expr] when that function was called on the rule's
+    /// right-hand side.
+    pub fn visit<V: RuleVisitor>(&self, visitor: &mut V, termenv: &TermEnv) -> V::Expr {
+        let mut vars = HashMap::new();
+
+        // Visit the pattern, starting from the root input value.
+        if let &Pattern::Term(_, term, ref args) = &self.lhs {
+            let termdata = &termenv.terms[term.index()];
+            for (i, (subpat, &arg_ty)) in args.iter().zip(termdata.arg_tys.iter()).enumerate() {
+                let value = visitor.add_arg(i, arg_ty);
+                subpat.visit(visitor, value, termenv, &mut vars);
+            }
+        } else {
+            unreachable!("Pattern must have a term at the root");
+        }
+
+        // Visit the `if-let` clauses, using `V::ExprVisitor` for the sub-exprs (right-hand sides).
+        for iflet in self.iflets.iter() {
+            let var_exprs = vars
+                .iter()
+                .map(|(&var, &val)| (var, visitor.pattern_as_expr(val)))
+                .collect();
+            let subexpr = visitor.add_expr(|visitor| {
+                let value = iflet.rhs.visit(visitor, termenv, &var_exprs);
+                VisitedExpr {
+                    ty: iflet.rhs.ty(),
+                    value,
+                }
+            });
+            let value = visitor.expr_as_pattern(subexpr);
+            iflet.lhs.visit(visitor, value, termenv, &mut vars);
+        }
+
+        // Visit the rule's right-hand side, making use of the bound variables from the pattern.
+        let var_exprs = vars
+            .iter()
+            .map(|(&var, &val)| (var, visitor.pattern_as_expr(val)))
+            .collect();
+        visitor.add_expr(|visitor| {
+            let value = self.rhs.visit(visitor, termenv, &var_exprs);
+            VisitedExpr {
+                ty: self.rhs.ty(),
+                value,
+            }
+        })
     }
 }
 

@@ -3,7 +3,6 @@
 use crate::lexer::Pos;
 use crate::log;
 use crate::sema::*;
-use crate::StableMap;
 
 declare_id!(
     /// The id of an instruction in a `PatternSequence`.
@@ -239,32 +238,64 @@ impl ExprSequence {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-enum ValueOrArgs {
-    Value(Value),
-    ImplicitTermFromArgs(TermId),
-}
-
-impl ValueOrArgs {
-    fn to_value(&self) -> Option<Value> {
-        match self {
-            &ValueOrArgs::Value(v) => Some(v),
-            _ => None,
-        }
-    }
-}
-
 impl PatternSequence {
     fn add_inst(&mut self, inst: PatternInst) -> InstId {
         let id = InstId(self.insts.len());
         self.insts.push(inst);
         id
     }
+}
+
+/// Used as an intermediate representation of expressions in the [RuleVisitor] implementation for
+/// [PatternSequence].
+pub struct ReturnExpr {
+    seq: ExprSequence,
+    output: Value,
+    output_ty: TypeId,
+}
+
+impl RuleVisitor for PatternSequence {
+    type ExprVisitor = ExprSequence;
+    type Expr = ReturnExpr;
 
     fn add_arg(&mut self, index: usize, ty: TypeId) -> Value {
         let inst = self.add_inst(PatternInst::Arg { index, ty });
         Value::Pattern { inst, output: 0 }
     }
+
+    fn add_expr<F>(&mut self, visitor: F) -> ReturnExpr
+    where
+        F: FnOnce(&mut ExprSequence) -> VisitedExpr<ExprSequence>,
+    {
+        let mut expr = ExprSequence::default();
+        let VisitedExpr { ty, value } = visitor(&mut expr);
+        let index = 0;
+        expr.add_inst(ExprInst::Return { index, ty, value });
+        ReturnExpr {
+            seq: expr,
+            output: value,
+            output_ty: ty,
+        }
+    }
+
+    fn expr_as_pattern(&mut self, expr: ReturnExpr) -> Value {
+        let inst = self.add_inst(PatternInst::Expr {
+            seq: expr.seq,
+            output: expr.output,
+            output_ty: expr.output_ty,
+        });
+
+        // Create values for all outputs.
+        Value::Pattern { inst, output: 0 }
+    }
+
+    fn pattern_as_expr(&mut self, pattern: Value) -> Value {
+        pattern
+    }
+}
+
+impl PatternVisitor for PatternSequence {
+    type PatternId = Value;
 
     fn add_match_equal(&mut self, a: Value, b: Value, ty: TypeId) {
         self.add_inst(PatternInst::MatchEqual { a, b, ty });
@@ -300,8 +331,8 @@ impl PatternSequence {
 
     fn add_extract(
         &mut self,
-        inputs: Vec<Value>,
-        input_tys: Vec<TypeId>,
+        input: Value,
+        input_ty: TypeId,
         output_tys: Vec<TypeId>,
         term: TermId,
         infallible: bool,
@@ -309,8 +340,8 @@ impl PatternSequence {
     ) -> Vec<Value> {
         let outputs = output_tys.len();
         let inst = self.add_inst(PatternInst::Extract {
-            inputs,
-            input_tys,
+            inputs: vec![input],
+            input_tys: vec![input_ty],
             output_tys,
             term,
             infallible,
@@ -320,131 +351,6 @@ impl PatternSequence {
             .map(|output| Value::Pattern { inst, output })
             .collect()
     }
-
-    fn add_expr_seq(&mut self, seq: ExprSequence, output: Value, output_ty: TypeId) -> Value {
-        let inst = self.add_inst(PatternInst::Expr {
-            seq,
-            output,
-            output_ty,
-        });
-
-        // Create values for all outputs.
-        Value::Pattern { inst, output: 0 }
-    }
-
-    /// Generate PatternInsts to match the given (sub)pattern. Works
-    /// recursively down the AST.
-    fn gen_pattern(
-        &mut self,
-        input: ValueOrArgs,
-        termenv: &TermEnv,
-        pat: &Pattern,
-        vars: &mut StableMap<VarId, Value>,
-    ) {
-        match pat {
-            &Pattern::BindPattern(_ty, var, ref subpat) => {
-                // Bind the appropriate variable and recurse.
-                assert!(!vars.contains_key(&var));
-                if let Some(v) = input.to_value() {
-                    vars.insert(var, v);
-                }
-                self.gen_pattern(input, termenv, subpat, vars);
-            }
-            &Pattern::Var(ty, var) => {
-                // Assert that the value matches the existing bound var.
-                let var_val = vars
-                    .get(&var)
-                    .cloned()
-                    .expect("Variable should already be bound");
-                let input_val = input
-                    .to_value()
-                    .expect("Cannot match an =var pattern against root term");
-                self.add_match_equal(input_val, var_val, ty);
-            }
-            &Pattern::ConstInt(ty, value) => {
-                // Assert that the value matches the constant integer.
-                let input_val = input
-                    .to_value()
-                    .expect("Cannot match an integer pattern against root term");
-                self.add_match_int(input_val, ty, value);
-            }
-            &Pattern::ConstPrim(ty, value) => {
-                let input_val = input
-                    .to_value()
-                    .expect("Cannot match a constant-primitive pattern against root term");
-                self.add_match_prim(input_val, ty, value);
-            }
-            &Pattern::Term(ty, term, ref args) => {
-                match input {
-                    ValueOrArgs::ImplicitTermFromArgs(termid) => {
-                        assert_eq!(
-                            termid, term,
-                            "Cannot match a different term against root pattern"
-                        );
-                        let termdata = &termenv.terms[term.index()];
-                        let arg_tys = &termdata.arg_tys[..];
-                        for (i, subpat) in args.iter().enumerate() {
-                            let value = self.add_arg(i, arg_tys[i]);
-                            self.gen_pattern(ValueOrArgs::Value(value), termenv, subpat, vars);
-                        }
-                    }
-                    ValueOrArgs::Value(input) => {
-                        // Determine whether the term has an external extractor or not.
-                        let termdata = &termenv.terms[term.index()];
-                        let arg_values = match &termdata.kind {
-                            TermKind::EnumVariant { variant } => {
-                                self.add_match_variant(input, ty, &termdata.arg_tys, *variant)
-                            }
-                            TermKind::Decl {
-                                extractor_kind: None,
-                                ..
-                            } => {
-                                panic!("Pattern invocation of undefined term body")
-                            }
-                            TermKind::Decl {
-                                extractor_kind: Some(ExtractorKind::InternalExtractor { .. }),
-                                ..
-                            } => {
-                                panic!("Should have been expanded away")
-                            }
-                            TermKind::Decl {
-                                multi,
-                                extractor_kind:
-                                    Some(ExtractorKind::ExternalExtractor { infallible, .. }),
-                                ..
-                            } => {
-                                // Evaluate all `input` args.
-                                let inputs = vec![input];
-                                let input_tys = vec![termdata.ret_ty];
-                                let output_tys = args.iter().map(|arg| arg.ty()).collect();
-
-                                // Invoke the extractor.
-                                self.add_extract(
-                                    inputs,
-                                    input_tys,
-                                    output_tys,
-                                    term,
-                                    *infallible && !*multi,
-                                    *multi,
-                                )
-                            }
-                        };
-                        for (pat, val) in args.iter().zip(arg_values) {
-                            self.gen_pattern(ValueOrArgs::Value(val), termenv, pat, vars);
-                        }
-                    }
-                }
-            }
-            &Pattern::And(_ty, ref children) => {
-                for child in children {
-                    self.gen_pattern(input, termenv, child, vars);
-                }
-            }
-            &Pattern::Wildcard(_ty) => {
-                // Nothing!
-            }
-        }
-    }
 }
 
 impl ExprSequence {
@@ -453,6 +359,10 @@ impl ExprSequence {
         self.insts.push(inst);
         id
     }
+}
+
+impl ExprVisitor for ExprSequence {
+    type ExprId = Value;
 
     fn add_const_int(&mut self, ty: TypeId, val: i128) -> Value {
         let inst = self.add_inst(ExprInst::ConstInt { ty, val });
@@ -495,134 +405,15 @@ impl ExprSequence {
         });
         Value::Expr { inst, output: 0 }
     }
-
-    fn add_return(&mut self, ty: TypeId, value: Value) {
-        self.add_inst(ExprInst::Return {
-            index: 0,
-            ty,
-            value,
-        });
-    }
-
-    /// Creates a sequence of ExprInsts to generate the given
-    /// expression value. Returns the value ID as well as the root
-    /// term ID, if any.
-    fn gen_expr(
-        &mut self,
-        termenv: &TermEnv,
-        expr: &Expr,
-        vars: &StableMap<VarId, Value>,
-    ) -> Value {
-        log!("gen_expr: expr {:?}", expr);
-        match expr {
-            &Expr::ConstInt(ty, val) => self.add_const_int(ty, val),
-            &Expr::ConstPrim(ty, val) => self.add_const_prim(ty, val),
-            &Expr::Let {
-                ty: _ty,
-                ref bindings,
-                ref body,
-            } => {
-                let mut vars = vars.clone();
-                for &(var, _var_ty, ref var_expr) in bindings {
-                    let var_value = self.gen_expr(termenv, var_expr, &vars);
-                    vars.insert(var, var_value);
-                }
-                self.gen_expr(termenv, body, &vars)
-            }
-            &Expr::Var(_ty, var_id) => vars.get(&var_id).cloned().unwrap(),
-            &Expr::Term(ty, term, ref arg_exprs) => {
-                let termdata = &termenv.terms[term.index()];
-                let arg_values_tys = arg_exprs
-                    .iter()
-                    .map(|arg_expr| self.gen_expr(termenv, arg_expr, vars))
-                    .zip(termdata.arg_tys.iter().copied())
-                    .collect();
-                match &termdata.kind {
-                    TermKind::EnumVariant { variant } => {
-                        self.add_create_variant(arg_values_tys, ty, *variant)
-                    }
-                    TermKind::Decl {
-                        constructor_kind: Some(ConstructorKind::InternalConstructor),
-                        multi,
-                        ..
-                    } => {
-                        self.add_construct(
-                            arg_values_tys,
-                            ty,
-                            term,
-                            /* infallible = */ false,
-                            *multi,
-                        )
-                    }
-                    TermKind::Decl {
-                        constructor_kind: Some(ConstructorKind::ExternalConstructor { .. }),
-                        pure,
-                        multi,
-                        ..
-                    } => {
-                        self.add_construct(
-                            arg_values_tys,
-                            ty,
-                            term,
-                            /* infallible = */ !pure,
-                            *multi,
-                        )
-                    }
-                    TermKind::Decl {
-                        constructor_kind: None,
-                        ..
-                    } => panic!("Should have been caught by typechecking"),
-                }
-            }
-        }
-    }
 }
 
 /// Build a sequence from a rule.
 pub fn lower_rule(termenv: &TermEnv, rule: RuleId) -> (PatternSequence, ExprSequence) {
-    let mut pattern_seq: PatternSequence = Default::default();
-    let mut expr_seq: ExprSequence = Default::default();
-
     let ruledata = &termenv.rules[rule.index()];
+    log!("lower_rule: ruledata {:?}", ruledata);
+
+    let mut pattern_seq = PatternSequence::default();
+    let mut expr_seq = ruledata.visit(&mut pattern_seq, termenv).seq;
     expr_seq.pos = ruledata.pos;
-
-    let mut vars = StableMap::new();
-    let root_term = ruledata
-        .lhs
-        .root_term()
-        .expect("Pattern must have a term at the root");
-
-    log!("lower_rule: ruledata {:?}", ruledata,);
-
-    // Lower the pattern, starting from the root input value.
-    pattern_seq.gen_pattern(
-        ValueOrArgs::ImplicitTermFromArgs(root_term),
-        termenv,
-        &ruledata.lhs,
-        &mut vars,
-    );
-
-    // Lower the `if-let` clauses into the pattern seq, using
-    // `PatternInst::Expr` for the sub-exprs (right-hand sides).
-    for iflet in &ruledata.iflets {
-        let mut subexpr_seq: ExprSequence = Default::default();
-        let subexpr_ret_value = subexpr_seq.gen_expr(termenv, &iflet.rhs, &mut vars);
-        subexpr_seq.add_return(iflet.rhs.ty(), subexpr_ret_value);
-        let pattern_value =
-            pattern_seq.add_expr_seq(subexpr_seq, subexpr_ret_value, iflet.rhs.ty());
-        pattern_seq.gen_pattern(
-            ValueOrArgs::Value(pattern_value),
-            termenv,
-            &iflet.lhs,
-            &mut vars,
-        );
-    }
-
-    // Lower the expression, making use of the bound variables
-    // from the pattern.
-    let rhs_root_val = expr_seq.gen_expr(termenv, &ruledata.rhs, &vars);
-    // Return the root RHS value.
-    let output_ty = ruledata.rhs.ty();
-    expr_seq.add_return(output_ty, rhs_root_val);
     (pattern_seq, expr_seq)
 }
