@@ -10,6 +10,8 @@ pub struct UnwindRegistration {
 }
 
 impl UnwindRegistration {
+    pub const SECTION_NAME: &str = ".pdata";
+
     pub unsafe fn new(
         base_address: *const u8,
         unwind_info: *const u8,
@@ -30,10 +32,6 @@ impl UnwindRegistration {
         Ok(UnwindRegistration {
             functions: unwind_info as usize,
         })
-    }
-
-    pub fn section_name() -> &'static str {
-        ".pdata"
     }
 }
 

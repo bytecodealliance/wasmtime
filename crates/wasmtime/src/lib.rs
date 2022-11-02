@@ -389,6 +389,7 @@
 #[macro_use]
 mod func;
 
+mod code;
 mod config;
 mod engine;
 mod externals;

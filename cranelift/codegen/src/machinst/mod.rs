@@ -397,8 +397,10 @@ impl CompiledCode {
 pub trait TextSectionBuilder {
     /// Appends `data` to the text section with the `align` specified.
     ///
-    /// If `labeled` is `true` then the offset of the final data is used to
-    /// resolve relocations in `resolve_reloc` in the future.
+    /// If `labeled` is `true` then this also binds the appended data to the
+    /// `n`th label for how many times this has been called with `labeled:
+    /// true`. The label target can be passed as the `target` argument to
+    /// `resolve_reloc`.
     ///
     /// This function returns the offset at which the data was placed in the
     /// text section.
@@ -418,7 +420,7 @@ pub trait TextSectionBuilder {
     /// If this builder does not know how to handle `reloc` then this function
     /// will return `false`. Otherwise this function will return `true` and this
     /// relocation will be resolved in the final bytes returned by `finish`.
-    fn resolve_reloc(&mut self, offset: u64, reloc: Reloc, addend: Addend, target: u32) -> bool;
+    fn resolve_reloc(&mut self, offset: u64, reloc: Reloc, addend: Addend, target: usize) -> bool;
 
     /// A debug-only option which is used to for
     fn force_veneers(&mut self);

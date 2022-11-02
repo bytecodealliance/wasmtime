@@ -3775,6 +3775,7 @@ name = "wasmtime-winch"
 version = "3.0.0"
 dependencies = [
  "anyhow",
+ "object",
  "target-lexicon",
  "wasmtime-environ",
  "winch-codegen",

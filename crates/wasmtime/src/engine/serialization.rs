@@ -24,15 +24,15 @@
 use crate::{Engine, ModuleVersionStrategy};
 use anyhow::{anyhow, bail, Context, Result};
 use object::write::{Object, StandardSegment};
-use object::{File, Object as _, ObjectSection, SectionKind};
+use object::{File, FileFlags, Object as _, ObjectSection, SectionKind};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::str::FromStr;
-use wasmtime_environ::{FlagValue, Tunables};
+use wasmtime_environ::obj;
+use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
 use wasmtime_runtime::MmapVec;
 
 const VERSION: u8 = 0;
-const ELF_WASM_ENGINE: &str = ".wasmtime.engine";
 
 /// Produces a blob of bytes by serializing the `engine`'s configuration data to
 /// be checked, perhaps in a different process, with the `check_compatible`
@@ -44,7 +44,7 @@ const ELF_WASM_ENGINE: &str = ".wasmtime.engine";
 pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>) {
     let section = obj.add_section(
         obj.segment_name(StandardSegment::Data).to_vec(),
-        ELF_WASM_ENGINE.as_bytes().to_vec(),
+        obj::ELF_WASM_ENGINE.as_bytes().to_vec(),
         SectionKind::ReadOnlyData,
     );
     let mut data = Vec::new();
@@ -73,16 +73,37 @@ pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>) {
 /// provided here, notably compatible wasm features are enabled, compatible
 /// compiler options, etc. If a mismatch is found and the compilation metadata
 /// specified is incompatible then an error is returned.
-pub fn check_compatible(engine: &Engine, mmap: &MmapVec) -> Result<()> {
+pub fn check_compatible(engine: &Engine, mmap: &MmapVec, expected: ObjectKind) -> Result<()> {
+    // Parse the input `mmap` as an ELF file and see if the header matches the
+    // Wasmtime-generated header. This includes a Wasmtime-specific `os_abi` and
+    // the `e_flags` field should indicate whether `expected` matches or not.
+    //
+    // Note that errors generated here could mean that a precompiled module was
+    // loaded as a component, or vice versa, both of which aren't supposed to
+    // work.
+    //
     // Ideally we'd only `File::parse` once and avoid the linear
     // `section_by_name` search here but the general serialization code isn't
     // structured well enough to make this easy and additionally it's not really
     // a perf issue right now so doing that is left for another day's
     // refactoring.
     let obj = File::parse(&mmap[..]).context("failed to parse precompiled artifact as an ELF")?;
+    let expected_e_flags = match expected {
+        ObjectKind::Module => obj::EF_WASMTIME_MODULE,
+        ObjectKind::Component => obj::EF_WASMTIME_COMPONENT,
+    };
+    match obj.flags() {
+        FileFlags::Elf {
+            os_abi: obj::ELFOSABI_WASMTIME,
+            abi_version: 0,
+            e_flags,
+        } if e_flags == expected_e_flags => {}
+        _ => bail!("incompatible object file format"),
+    }
+
     let data = obj
-        .section_by_name(ELF_WASM_ENGINE)
-        .ok_or_else(|| anyhow!("failed to find section `{ELF_WASM_ENGINE}`"))?
+        .section_by_name(obj::ELF_WASM_ENGINE)
+        .ok_or_else(|| anyhow!("failed to find section `{}`", obj::ELF_WASM_ENGINE))?
         .data()?;
     let (first, data) = data
         .split_first()

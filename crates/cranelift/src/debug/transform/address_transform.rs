@@ -605,7 +605,7 @@ impl AddressTransform {
 #[cfg(test)]
 mod tests {
     use super::{build_function_lookup, get_wasm_code_offset, AddressTransform};
-    use crate::{CompiledFunction, CompiledFunctions, FunctionAddressMap};
+    use crate::{CompiledFunction, FunctionAddressMap};
     use cranelift_entity::PrimaryMap;
     use gimli::write::Address;
     use std::iter::FromIterator;
@@ -648,13 +648,6 @@ mod tests {
             body_offset: 0,
             body_len: 30,
         }
-    }
-
-    fn create_simple_module(address_map: FunctionAddressMap) -> CompiledFunctions {
-        PrimaryMap::from_iter(vec![CompiledFunction {
-            address_map,
-            ..Default::default()
-        }])
     }
 
     #[test]
@@ -735,7 +728,11 @@ mod tests {
 
     #[test]
     fn test_addr_translate() {
-        let input = create_simple_module(create_simple_func(11));
+        let func = CompiledFunction {
+            address_map: create_simple_func(11),
+            ..Default::default()
+        };
+        let input = PrimaryMap::from_iter([&func]);
         let at = AddressTransform::new(
             &input,
             &WasmFileInfo {

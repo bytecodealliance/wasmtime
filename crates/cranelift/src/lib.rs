@@ -10,7 +10,7 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmType};
 use target_lexicon::{Architecture, CallingConvention};
 use wasmtime_environ::{
-    FilePos, FunctionInfo, InstructionAddressMap, ModuleTranslation, ModuleTypes, TrapInformation,
+    FilePos, InstructionAddressMap, ModuleTranslation, ModuleTypes, TrapInformation,
 };
 
 pub use builder::builder;
@@ -21,7 +21,7 @@ mod debug;
 mod func_environ;
 mod obj;
 
-type CompiledFunctions = PrimaryMap<DefinedFuncIndex, CompiledFunction>;
+type CompiledFunctions<'a> = PrimaryMap<DefinedFuncIndex, &'a CompiledFunction>;
 
 /// Compiled function: machine code body, jump table offsets, and unwind information.
 #[derive(Default)]
@@ -43,9 +43,7 @@ pub struct CompiledFunction {
     relocations: Vec<Relocation>,
     value_labels_ranges: cranelift_codegen::ValueLabelsRanges,
     sized_stack_slots: ir::StackSlots,
-
-    // TODO: Add dynamic_stack_slots?
-    info: FunctionInfo,
+    alignment: u32,
 }
 
 /// Function and its instructions addresses mappings.

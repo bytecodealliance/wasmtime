@@ -1,6 +1,9 @@
 use anyhow::Result;
+use object::write::{Object, SymbolId};
+use std::any::Any;
 use wasmtime_environ::{
-    CompileError, DefinedFuncIndex, FunctionBodyData, ModuleTranslation, ModuleTypes, Tunables,
+    CompileError, DefinedFuncIndex, FuncIndex, FunctionBodyData, FunctionLoc, ModuleTranslation,
+    ModuleTypes, PrimaryMap, Tunables, WasmFunctionInfo,
 };
 use winch_codegen::isa::TargetIsa;
 
@@ -22,28 +25,24 @@ impl wasmtime_environ::Compiler for Compiler {
         _data: FunctionBodyData<'_>,
         _tunables: &Tunables,
         _types: &ModuleTypes,
-    ) -> Result<Box<dyn std::any::Any + Send>, CompileError> {
+    ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError> {
         todo!()
     }
 
     fn compile_host_to_wasm_trampoline(
         &self,
         _ty: &wasmtime_environ::WasmFuncType,
-    ) -> Result<Box<dyn std::any::Any + Send>, CompileError> {
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
         todo!()
     }
 
-    fn emit_obj(
+    fn append_code(
         &self,
-        _module: &ModuleTranslation,
-        _funcs: wasmtime_environ::PrimaryMap<DefinedFuncIndex, Box<dyn std::any::Any + Send>>,
-        _trampolines: Vec<Box<dyn std::any::Any + Send>>,
+        _obj: &mut Object<'static>,
+        _funcs: &[(String, Box<dyn Any + Send>)],
         _tunables: &Tunables,
-        _obj: &mut wasmtime_environ::object::write::Object<'static>,
-    ) -> Result<(
-        wasmtime_environ::PrimaryMap<DefinedFuncIndex, wasmtime_environ::FunctionInfo>,
-        Vec<wasmtime_environ::Trampoline>,
-    )> {
+        _resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
+    ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         todo!()
     }
 
@@ -52,7 +51,7 @@ impl wasmtime_environ::Compiler for Compiler {
         _ty: &wasmtime_environ::WasmFuncType,
         _host_fn: usize,
         _obj: &mut wasmtime_environ::object::write::Object<'static>,
-    ) -> Result<(wasmtime_environ::Trampoline, wasmtime_environ::Trampoline)> {
+    ) -> Result<(FunctionLoc, FunctionLoc)> {
         todo!()
     }
 
@@ -78,6 +77,15 @@ impl wasmtime_environ::Compiler for Compiler {
 
     #[cfg(feature = "component-model")]
     fn component_compiler(&self) -> &dyn wasmtime_environ::component::ComponentCompiler {
+        todo!()
+    }
+
+    fn append_dwarf(
+        &self,
+        _obj: &mut Object<'_>,
+        _translation: &ModuleTranslation<'_>,
+        _funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
+    ) -> Result<()> {
         todo!()
     }
 }

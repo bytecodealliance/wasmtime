@@ -523,8 +523,9 @@ impl FrameInfo {
     pub(crate) fn new(module: &Module, text_offset: usize) -> Option<FrameInfo> {
         let module = module.compiled_module();
         let (index, _func_offset) = module.func_by_text_offset(text_offset)?;
-        let info = module.func_info(index);
-        let instr = wasmtime_environ::lookup_file_pos(module.address_map_data(), text_offset);
+        let info = module.wasm_func_info(index);
+        let instr =
+            wasmtime_environ::lookup_file_pos(module.code_memory().address_map_data(), text_offset);
 
         // In debug mode for now assert that we found a mapping for `pc` within
         // the function, because otherwise something is buggy along the way and

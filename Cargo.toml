@@ -37,6 +37,7 @@ libc = "0.2.60"
 humantime = "2.0.0"
 once_cell = { workspace = true }
 listenfd = "1.0.0"
+wat = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["mm", "param"] }
@@ -90,7 +91,7 @@ members = [
   "examples/wasi/wasm",
   "examples/tokio/wasm",
   "fuzz",
-  "winch", 
+  "winch",
   "winch/codegen"
 ]
 exclude = [

@@ -5,6 +5,7 @@ use std::iter;
 use wasmtime::component::Component;
 use wasmtime_component_util::REALLOC_AND_FREE;
 
+mod aot;
 mod r#async;
 mod dynamic;
 mod func;
