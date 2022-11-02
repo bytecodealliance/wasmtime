@@ -95,6 +95,16 @@ WASI_API_EXTERN void wasi_config_inherit_env(wasi_config_t* config);
 WASI_API_EXTERN bool wasi_config_set_stdin_file(wasi_config_t* config, const char* path);
 
 /**
+ * \brief Configures standard input to be taken from the specified #wasm_byte_vec_t.
+ *
+ * By default WASI programs have no stdin, but this configures the specified
+ * bytes to be used as stdin for this configuration.
+ *
+ * This function takes ownership of the `binary` argument.
+ */
+WASI_API_EXTERN void wasi_config_set_stdin_bytes(wasi_config_t* config, wasm_byte_vec_t* binary);
+
+/**
  * \brief Configures this process's own stdin stream to be used as stdin for
  * this WASI configuration.
  */

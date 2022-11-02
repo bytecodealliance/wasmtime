@@ -1,5 +1,6 @@
 //! The WASI embedding API definitions for Wasmtime.
 
+use crate::wasm_byte_vec_t;
 use anyhow::Result;
 use cap_std::ambient_authority;
 use std::ffi::CStr;
@@ -7,6 +8,7 @@ use std::fs::File;
 use std::os::raw::{c_char, c_int};
 use std::path::{Path, PathBuf};
 use std::slice;
+use wasi_common::pipe::ReadPipe;
 use wasmtime_wasi::{
     sync::{Dir, WasiCtxBuilder},
     WasiCtx,
@@ -44,6 +46,7 @@ pub enum WasiConfigReadPipe {
     None,
     Inherit,
     File(File),
+    Bytes(Vec<u8>),
 }
 
 #[repr(C)]
@@ -88,28 +91,32 @@ impl wasi_config_t {
             WasiConfigReadPipe::None => builder,
             WasiConfigReadPipe::Inherit => builder.inherit_stdin(),
             WasiConfigReadPipe::File(file) => {
-            let file = cap_std::fs::File::from_std(file);
-            let file = wasi_cap_std_sync::file::File::from_cap_std(file);
+                let file = cap_std::fs::File::from_std(file);
+                let file = wasi_cap_std_sync::file::File::from_cap_std(file);
                 builder.stdin(Box::new(file))
-        }
+            }
+            WasiConfigReadPipe::Bytes(binary) => {
+                let binary = ReadPipe::from(binary);
+                builder.stdin(Box::new(binary))
+            }
         };
         builder = match self.stdout {
             WasiConfigWritePipe::None => builder,
             WasiConfigWritePipe::Inherit => builder.inherit_stdout(),
             WasiConfigWritePipe::File(file) => {
-            let file = cap_std::fs::File::from_std(file);
-            let file = wasi_cap_std_sync::file::File::from_cap_std(file);
+                let file = cap_std::fs::File::from_std(file);
+                let file = wasi_cap_std_sync::file::File::from_cap_std(file);
                 builder.stdout(Box::new(file))
-        }
+            }
         };
         builder = match self.stderr {
             WasiConfigWritePipe::None => builder,
             WasiConfigWritePipe::Inherit => builder.inherit_stderr(),
             WasiConfigWritePipe::File(file) => {
-            let file = cap_std::fs::File::from_std(file);
-            let file = wasi_cap_std_sync::file::File::from_cap_std(file);
+                let file = cap_std::fs::File::from_std(file);
+                let file = wasi_cap_std_sync::file::File::from_cap_std(file);
                 builder.stderr(Box::new(file))
-        }
+            }
         };
         for (dir, path) in self.preopens {
             builder = builder.preopened_dir(dir, path)?;
@@ -183,6 +190,16 @@ pub unsafe extern "C" fn wasi_config_set_stdin_file(
     config.stdin = WasiConfigReadPipe::File(file);
 
     true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasi_config_set_stdin_bytes(
+    config: &mut wasi_config_t,
+    binary: &mut wasm_byte_vec_t,
+) {
+    let binary = binary.take();
+
+    config.stdin = WasiConfigReadPipe::Bytes(binary);
 }
 
 #[no_mangle]
