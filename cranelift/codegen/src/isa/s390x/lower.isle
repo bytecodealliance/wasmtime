@@ -3844,6 +3844,20 @@
 
 ;;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; UaddOverflowTrap is implemented via a ADD LOGICAL instruction, which sets the
+;; the condition code as follows:
+;;   0   Result zero; no carry
+;;   1   Result not zero; no carry
+;;   2   Result zero; carry
+;;   3   Result not zero; carry
+;; This means "carry" corresponds to condition code 2 or 3, i.e.
+;; a condition mask of 2 | 1.
+;;
+;; As this does not match any of the encodings used with a normal integer
+;; comparsion, this cannot be represented by any IntCC value.  We need to
+;; remap the IntCC::UnsignedGreaterThan value that we have here as result
+;; of the unsigned_add_overflow_condition call to the correct mask.
+
 (rule 0 (lower (has_type (fits_in_64 ty) (uadd_overflow_trap x y tc)))
       (with_flags
         (add_logical_reg_with_flags_paired ty x y)
