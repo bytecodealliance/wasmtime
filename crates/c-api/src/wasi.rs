@@ -29,15 +29,30 @@ unsafe fn create_file(path: *const c_char) -> Option<File> {
 pub struct wasi_config_t {
     args: Vec<Vec<u8>>,
     env: Vec<(Vec<u8>, Vec<u8>)>,
-    stdin: Option<File>,
-    stdout: Option<File>,
-    stderr: Option<File>,
+    stdin: WasiConfigReadPipe,
+    stdout: WasiConfigWritePipe,
+    stderr: WasiConfigWritePipe,
     preopens: Vec<(Dir, PathBuf)>,
     inherit_args: bool,
     inherit_env: bool,
-    inherit_stdin: bool,
-    inherit_stdout: bool,
-    inherit_stderr: bool,
+}
+
+#[repr(C)]
+#[derive(Default)]
+pub enum WasiConfigReadPipe {
+    #[default]
+    None,
+    Inherit,
+    File(File),
+}
+
+#[repr(C)]
+#[derive(Default)]
+pub enum WasiConfigWritePipe {
+    #[default]
+    None,
+    Inherit,
+    File(File),
 }
 
 wasmtime_c_api_macros::declare_own!(wasi_config_t);
@@ -69,27 +84,33 @@ impl wasi_config_t {
                 .collect::<Result<Vec<(String, String)>>>()?;
             builder = builder.envs(&env)?;
         }
-        if self.inherit_stdin {
-            builder = builder.inherit_stdin();
-        } else if let Some(file) = self.stdin {
+        builder = match self.stdin {
+            WasiConfigReadPipe::None => builder,
+            WasiConfigReadPipe::Inherit => builder.inherit_stdin(),
+            WasiConfigReadPipe::File(file) => {
             let file = cap_std::fs::File::from_std(file);
             let file = wasi_cap_std_sync::file::File::from_cap_std(file);
-            builder = builder.stdin(Box::new(file));
+                builder.stdin(Box::new(file))
         }
-        if self.inherit_stdout {
-            builder = builder.inherit_stdout();
-        } else if let Some(file) = self.stdout {
+        };
+        builder = match self.stdout {
+            WasiConfigWritePipe::None => builder,
+            WasiConfigWritePipe::Inherit => builder.inherit_stdout(),
+            WasiConfigWritePipe::File(file) => {
             let file = cap_std::fs::File::from_std(file);
             let file = wasi_cap_std_sync::file::File::from_cap_std(file);
-            builder = builder.stdout(Box::new(file));
+                builder.stdout(Box::new(file))
         }
-        if self.inherit_stderr {
-            builder = builder.inherit_stderr();
-        } else if let Some(file) = self.stderr {
+        };
+        builder = match self.stderr {
+            WasiConfigWritePipe::None => builder,
+            WasiConfigWritePipe::Inherit => builder.inherit_stderr(),
+            WasiConfigWritePipe::File(file) => {
             let file = cap_std::fs::File::from_std(file);
             let file = wasi_cap_std_sync::file::File::from_cap_std(file);
-            builder = builder.stderr(Box::new(file));
+                builder.stderr(Box::new(file))
         }
+        };
         for (dir, path) in self.preopens {
             builder = builder.preopened_dir(dir, path)?;
         }
@@ -159,16 +180,14 @@ pub unsafe extern "C" fn wasi_config_set_stdin_file(
         None => return false,
     };
 
-    config.stdin = Some(file);
-    config.inherit_stdin = false;
+    config.stdin = WasiConfigReadPipe::File(file);
 
     true
 }
 
 #[no_mangle]
 pub extern "C" fn wasi_config_inherit_stdin(config: &mut wasi_config_t) {
-    config.stdin = None;
-    config.inherit_stdin = true;
+    config.stdin = WasiConfigReadPipe::Inherit;
 }
 
 #[no_mangle]
@@ -181,16 +200,14 @@ pub unsafe extern "C" fn wasi_config_set_stdout_file(
         None => return false,
     };
 
-    config.stdout = Some(file);
-    config.inherit_stdout = false;
+    config.stdout = WasiConfigWritePipe::File(file);
 
     true
 }
 
 #[no_mangle]
 pub extern "C" fn wasi_config_inherit_stdout(config: &mut wasi_config_t) {
-    config.stdout = None;
-    config.inherit_stdout = true;
+    config.stdout = WasiConfigWritePipe::Inherit;
 }
 
 #[no_mangle]
@@ -203,16 +220,14 @@ pub unsafe extern "C" fn wasi_config_set_stderr_file(
         None => return false,
     };
 
-    (*config).stderr = Some(file);
-    (*config).inherit_stderr = false;
+    config.stderr = WasiConfigWritePipe::File(file);
 
     true
 }
 
 #[no_mangle]
 pub extern "C" fn wasi_config_inherit_stderr(config: &mut wasi_config_t) {
-    config.stderr = None;
-    config.inherit_stderr = true;
+    config.stderr = WasiConfigWritePipe::Inherit;
 }
 
 #[no_mangle]
