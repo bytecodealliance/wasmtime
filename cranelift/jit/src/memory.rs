@@ -64,7 +64,7 @@ impl PtrLen {
                 len: alloc_size,
             })
         } else {
-            Err(io::Error::last_os_error())
+            Err(io::Error::from(io::ErrorKind::OutOfMemory))
         }
     }
 
