@@ -752,6 +752,22 @@ impl Expr {
             }
         }
     }
+
+    fn visit_in_rule<V: RuleVisitor>(
+        &self,
+        visitor: &mut V,
+        termenv: &TermEnv,
+        vars: &HashMap<VarId, V::PatternId>,
+    ) -> V::Expr {
+        let var_exprs = vars
+            .iter()
+            .map(|(&var, &val)| (var, visitor.pattern_as_expr(val)))
+            .collect();
+        visitor.add_expr(|visitor| VisitedExpr {
+            ty: self.ty(),
+            value: self.visit(visitor, termenv, &var_exprs),
+        })
+    }
 }
 
 /// Information about an expression after it has been fully visited in [RuleVisitor::add_expr].
@@ -812,33 +828,13 @@ impl Rule {
 
         // Visit the `if-let` clauses, using `V::ExprVisitor` for the sub-exprs (right-hand sides).
         for iflet in self.iflets.iter() {
-            let var_exprs = vars
-                .iter()
-                .map(|(&var, &val)| (var, visitor.pattern_as_expr(val)))
-                .collect();
-            let subexpr = visitor.add_expr(|visitor| {
-                let value = iflet.rhs.visit(visitor, termenv, &var_exprs);
-                VisitedExpr {
-                    ty: iflet.rhs.ty(),
-                    value,
-                }
-            });
+            let subexpr = iflet.rhs.visit_in_rule(visitor, termenv, &vars);
             let value = visitor.expr_as_pattern(subexpr);
             iflet.lhs.visit(visitor, value, termenv, &mut vars);
         }
 
         // Visit the rule's right-hand side, making use of the bound variables from the pattern.
-        let var_exprs = vars
-            .iter()
-            .map(|(&var, &val)| (var, visitor.pattern_as_expr(val)))
-            .collect();
-        visitor.add_expr(|visitor| {
-            let value = self.rhs.visit(visitor, termenv, &var_exprs);
-            VisitedExpr {
-                ty: self.rhs.ty(),
-                value,
-            }
-        })
+        self.rhs.visit_in_rule(visitor, termenv, &vars)
     }
 }
 
