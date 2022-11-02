@@ -9,6 +9,7 @@ block0(v0: i8, v1: i8):
 ; run: %iaddcout_i8_v(100, 27) == 127
 ; run: %iaddcout_i8_v(100, -20) == 80
 ; run: %iaddcout_i8_v(100, 28) == -128
+; run: %iaddcout_i8_v(-128, -128) == 0
 
 function %iaddcout_i8_c(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -19,6 +20,7 @@ block0(v0: i8, v1: i8):
 ; run: %iaddcout_i8_c(100, 27) == 0
 ; run: %iaddcout_i8_c(100, -20) == 0
 ; run: %iaddcout_i8_c(100, 28) == 1
+; run: %iaddcout_i8_c(-128, -128) == 1
 
 function %iaddcout_i16_v(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):

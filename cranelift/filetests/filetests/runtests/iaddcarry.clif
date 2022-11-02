@@ -11,6 +11,7 @@ block0(v0: i8, v1: i8, v2: i8):
 ; run: %iaddcarry_i8_v(100, 27, 0) == 127
 ; run: %iaddcarry_i8_v(127, 127, 1) == -1
 ; run: %iaddcarry_i8_v(127, 127, 0) == -2
+; run: %iaddcarry_i8_v(-128, -128, 0) == 0
 
 function %iaddcarry_i8_c(i8, i8, i8) -> i8 {
 block0(v0: i8, v1: i8, v2: i8):
@@ -23,6 +24,7 @@ block0(v0: i8, v1: i8, v2: i8):
 ; run: %iaddcarry_i8_c(100, 27, 0) == 0
 ; run: %iaddcarry_i8_c(127, 127, 1) == 1
 ; run: %iaddcarry_i8_c(127, 127, 0) == 1
+; run: %iaddcarry_i8_c(-128, -128, 0) == 1
 
 function %iaddcarry_i16_v(i16, i16, i8) -> i16 {
 block0(v0: i16, v1: i16, v2: i8):

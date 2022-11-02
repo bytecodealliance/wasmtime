@@ -56,6 +56,7 @@ pub trait Value: Clone + From<DataValue> {
     fn sqrt(self) -> ValueResult<Self>;
     fn fma(self, a: Self, b: Self) -> ValueResult<Self>;
     fn abs(self) -> ValueResult<Self>;
+    fn checked_add(self, other: Self) -> ValueResult<Option<Self>>;
 
     // Float operations
     fn neg(self) -> ValueResult<Self>;
@@ -184,6 +185,12 @@ macro_rules! binary_match {
     ( $op:ident($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ] ) => {
         match ($arg1, $arg2) {
             $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => { Ok(DataValue::$data_value_ty(a.$op(*b))) } )*
+            _ => unimplemented!()
+        }
+    };
+    ( option $op:ident($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ] ) => {
+        match ($arg1, $arg2) {
+            $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => { Ok(a.$op(*b).map(DataValue::$data_value_ty)) } )*
             _ => unimplemented!()
         }
     };
@@ -613,6 +620,10 @@ impl Value for DataValue {
 
     fn abs(self) -> ValueResult<Self> {
         unary_match!(abs(&self); [F32, F64])
+    }
+
+    fn checked_add(self, other: Self) -> ValueResult<Option<Self>> {
+        binary_match!(option checked_add(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
     }
 
     fn neg(self) -> ValueResult<Self> {
