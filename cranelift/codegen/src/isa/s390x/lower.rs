@@ -141,7 +141,6 @@ impl LowerBackend for S390xBackend {
             | Opcode::ScalarToVector
             | Opcode::VhighBits
             | Opcode::Bitcast
-            | Opcode::RawBitcast
             | Opcode::Load
             | Opcode::Uload8
             | Opcode::Sload8

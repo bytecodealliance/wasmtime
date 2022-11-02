@@ -947,7 +947,7 @@ where
         Opcode::Nearest => assign(Value::nearest(arg(0)?)?),
         Opcode::IsNull => unimplemented!("IsNull"),
         Opcode::IsInvalid => unimplemented!("IsInvalid"),
-        Opcode::Bitcast | Opcode::RawBitcast | Opcode::ScalarToVector => {
+        Opcode::Bitcast | Opcode::ScalarToVector => {
             let input_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
             let arg0 = extractlanes(&arg(0)?, input_ty)?;
 

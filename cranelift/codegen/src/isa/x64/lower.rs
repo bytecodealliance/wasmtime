@@ -453,7 +453,6 @@ fn lower_insn_to_regs(
         | Opcode::GetPinnedReg
         | Opcode::SetPinnedReg
         | Opcode::Vconst
-        | Opcode::RawBitcast
         | Opcode::Insertlane
         | Opcode::Shuffle
         | Opcode::Swizzle

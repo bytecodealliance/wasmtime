@@ -51,7 +51,7 @@ block0:
     v0 = vconst.i8x16 [0 1 2 0 0 0 0 0 0 0 0 0 0 0 0 0]
     v1 = vconst.i8x16 [1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0xff]
     v2 = icmp sgt v0, v1
-    v3 = raw_bitcast.i8x16 v2
+    v3 = bitcast.i8x16 v2
     v4 = vconst.i8x16 [0 0 0xff 0 0 0 0 0 0 0 0 0 0 0 0 0xff]
     v7 = icmp eq v3, v4
     v8 = vall_true v7
@@ -126,7 +126,7 @@ block0:
     v1 = vconst.i16x8 [-1 -1 -1 -1 -1 -1 -1 -1]
     v2 = icmp ult v0, v1
     v3 = vconst.i16x8 0x00
-    v4 = raw_bitcast.i16x8 v2
+    v4 = bitcast.i16x8 v2
     v5 = icmp eq v3, v4
     v8 = vall_true v5
     return v8
@@ -200,7 +200,7 @@ block0:
     v2 = fcmp gt v0, v1
     ; now check that the result v2 is all zeroes
     v3 = vconst.i32x4 0x00
-    v4 = raw_bitcast.i32x4 v2
+    v4 = bitcast.i32x4 v2
     v5 = icmp eq v3, v4
     v8 = vall_true v5
     return v8

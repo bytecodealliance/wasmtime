@@ -1078,17 +1078,7 @@ impl<'a> Verifier<'a> {
         let typ = self.func.dfg.ctrl_typevar(inst);
         let value_type = self.func.dfg.value_type(arg);
 
-        if typ.lane_bits() != value_type.lane_bits() {
-            errors.fatal((
-                inst,
-                format!(
-                    "The bitcast argument {} has a lane type of {} bits, which doesn't match an expected type of {} bits",
-                    arg,
-                    value_type.lane_bits(),
-                    typ.lane_bits()
-                ),
-            ))
-        } else if typ.bits() != value_type.bits() {
+        if typ.bits() != value_type.bits() {
             errors.fatal((
                 inst,
                 format!(

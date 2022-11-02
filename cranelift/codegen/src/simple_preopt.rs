@@ -863,7 +863,7 @@ mod simplify {
                                 return;
                             }
                             let new_type = I8.by(old_cond_type.bytes()).unwrap();
-                            (pos.ins().raw_bitcast(new_type, args[0]), new_type)
+                            (pos.ins().bitcast(new_type, args[0]), new_type)
                         }
                         _ => return,
                     };
@@ -874,10 +874,10 @@ mod simplify {
 
                     if arg_type != old_arg_type {
                         // Operands types must match, we need to add bitcasts.
-                        let arg1 = pos.ins().raw_bitcast(arg_type, args[1]);
-                        let arg2 = pos.ins().raw_bitcast(arg_type, args[2]);
+                        let arg1 = pos.ins().bitcast(arg_type, args[1]);
+                        let arg2 = pos.ins().bitcast(arg_type, args[2]);
                         let ret = pos.ins().vselect(cond_val, arg1, arg2);
-                        pos.func.dfg.replace(inst).raw_bitcast(old_arg_type, ret);
+                        pos.func.dfg.replace(inst).bitcast(old_arg_type, ret);
                     } else {
                         pos.func
                             .dfg

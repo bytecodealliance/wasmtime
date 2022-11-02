@@ -70,11 +70,11 @@ fn add_nan_canon_seq(pos: &mut FuncCursor, inst: Inst) {
             .select(is_nan, canon_nan, new_res);
     };
     let vector_select = |pos: &mut FuncCursor, canon_nan: Value| {
-        let cond = pos.ins().raw_bitcast(types::I8X16, is_nan);
-        let canon_nan = pos.ins().raw_bitcast(types::I8X16, canon_nan);
-        let result = pos.ins().raw_bitcast(types::I8X16, new_res);
+        let cond = pos.ins().bitcast(types::I8X16, is_nan);
+        let canon_nan = pos.ins().bitcast(types::I8X16, canon_nan);
+        let result = pos.ins().bitcast(types::I8X16, new_res);
         let bitmask = pos.ins().bitselect(cond, canon_nan, result);
-        pos.ins().with_result(val).raw_bitcast(val_type, bitmask);
+        pos.ins().with_result(val).bitcast(val_type, bitmask);
     };
 
     match val_type {

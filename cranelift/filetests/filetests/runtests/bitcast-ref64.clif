@@ -1,7 +1,8 @@
 test run
 target aarch64
-; the interpreter, x86_64, and s390x do not support bitcasting to/from
-; references
+target x86_64
+target s390x
+; the interpreter does not support bitcasting to/from references
 
 function %bitcast_ir64(i64) -> i8 {
 block0(v0: i64):
