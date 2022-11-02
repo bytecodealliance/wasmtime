@@ -196,10 +196,10 @@ impl Memory {
 
                     unsafe {
                         if libc::mprotect(ptr as *mut libc::c_void, len, prot) < 0 {
-                            return Err(ModuleError::Syscall {
-                                message: "unable to make memory readable+executable",
-                                err: io::Error::last_os_error(),
-                            });
+                            return Err(ModuleError::Backend(
+                                anyhow::Error::new(io::Error::last_os_error())
+                                    .context("unable to make memory readable+executable"),
+                            ));
                         }
                     }
 
@@ -208,18 +208,11 @@ impl Memory {
             }
 
             unsafe {
-                region::protect(ptr, len, region::Protection::READ_EXECUTE).map_err(
-                    |e| match e {
-                        region::Error::SystemCall(error) => ModuleError::Syscall {
-                            message: "unable to make memory readable+executable",
-                            err: error,
-                        },
-                        _ => ModuleError::Backend(anyhow::anyhow!(
-                            "unable to make memory readable+executable: {}",
-                            e
-                        )),
-                    },
-                )?;
+                region::protect(ptr, len, region::Protection::READ_EXECUTE).map_err(|e| {
+                    ModuleError::Backend(
+                        anyhow::Error::new(e).context("unable to make memory readable+executable"),
+                    )
+                })?;
             }
             Ok(())
         };
@@ -241,15 +234,10 @@ impl Memory {
 
         for &PtrLen { ptr, len, .. } in self.non_protected_allocations_iter() {
             unsafe {
-                region::protect(ptr, len, region::Protection::READ).map_err(|e| match e {
-                    region::Error::SystemCall(error) => ModuleError::Syscall {
-                        message: "unable to make memory readonly",
-                        err: error,
-                    },
-                    _ => ModuleError::Backend(anyhow::anyhow!(
-                        "unable to make memory readonly: {}",
-                        e
-                    )),
+                region::protect(ptr, len, region::Protection::READ).map_err(|e| {
+                    ModuleError::Backend(
+                        anyhow::Error::new(e).context("unable to make memory readonly"),
+                    )
                 })?;
             }
         }

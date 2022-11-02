@@ -237,14 +237,6 @@ pub enum ModuleError {
         err: std::io::Error,
     },
 
-    /// Syscall failure from a backend
-    Syscall {
-        /// Tell what the syscall was for
-        message: &'static str,
-        /// Io error the syscall failed with
-        err: std::io::Error,
-    },
-
     /// Wraps a generic error from a backend
     Backend(anyhow::Error),
 }
@@ -267,7 +259,6 @@ impl std::error::Error for ModuleError {
             | Self::InvalidImportDefinition { .. } => None,
             Self::Compilation(source) => Some(source),
             Self::Allocation { err: source, .. } => Some(source),
-            Self::Syscall { err: source, .. } => Some(source),
             Self::Backend(source) => Some(&**source),
         }
     }
@@ -304,9 +295,6 @@ impl std::fmt::Display for ModuleError {
             }
             Self::Allocation { message, err } => {
                 write!(f, "Allocation error: {}: {}", message, err)
-            }
-            Self::Syscall { message, err } => {
-                write!(f, "Syscall error: {}: {}", message, err)
             }
             Self::Backend(err) => write!(f, "Backend error: {}", err),
         }
