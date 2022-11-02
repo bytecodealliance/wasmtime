@@ -86,7 +86,7 @@ fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
                         const sys_riscv_flush_icache :i64 =  __NR_arch_specific_syscall + 15;
                         sys_riscv_flush_icache
                     },
-                    // Current the parameter is not used,But defined. https://github.com/torvalds/linux/blob/4d1044fcb996e8de9b9ab392f4a767890e45202d/arch/riscv/kernel/sys_riscv.c#L64-L66
+                    // Currently these parameters are not used, but they are still defined.
                     start, // start
                     end, // end
                     {
