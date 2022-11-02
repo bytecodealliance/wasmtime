@@ -1116,6 +1116,8 @@
     (inst_data (InstructionData.Ternary (Opcode.IsubIfborrow) (value_array_3 x y b_in)))
 )
 
+;;@ (spec (sig (args x, y) (ret))
+;;@       (assertions (= (& (x) (y)) (ret))))
 (decl band (Value Value) Inst)
 (extractor
     (band x y)

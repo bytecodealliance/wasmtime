@@ -21,7 +21,6 @@ fn test_iadds() {
         "./tests/code/selfcontained/iadd_to_sub.isle",
         lte_64_success_result(),
     );*/
-
 }
 
 #[test]
@@ -45,7 +44,7 @@ fn test_iadd_from_file() {
     test_from_file("./examples/iadd/madd.isle", lte_64_success_result());
     test_from_file("./examples/iadd/madd2.isle", lte_64_success_result());
     test_from_file("./examples/iadd/msub.isle", lte_64_success_result());
-/*
+    /*
     test_from_file("./examples/iadd/", lte_64_success_result());
     test_from_file("./examples/iadd/", lte_64_success_result());
     test_from_file("./examples/iadd/", lte_64_success_result());
@@ -60,10 +59,20 @@ fn test_iadd_from_file() {
 
 #[test]
 fn test_broken_iadd_from_file() {
-    test_from_file("./examples/broken/iadd/broken_base_case.isle", all_failure_result());
-    test_from_file("./examples/broken/iadd/broken_madd.isle", all_failure_result());
-    test_from_file("./examples/broken/iadd/broken_madd2.isle", all_failure_result());
-    test_from_file("./examples/broken/iadd/broken_msub.isle",
+    test_from_file(
+        "./examples/broken/iadd/broken_base_case.isle",
+        all_failure_result(),
+    );
+    test_from_file(
+        "./examples/broken/iadd/broken_madd.isle",
+        all_failure_result(),
+    );
+    test_from_file(
+        "./examples/broken/iadd/broken_madd2.isle",
+        all_failure_result(),
+    );
+    test_from_file(
+        "./examples/broken/iadd/broken_msub.isle",
         vec![
             (Bitwidth::I1, VerificationResult::Success),
             (Bitwidth::I8, VerificationResult::Failure(Counterexample {})),
@@ -71,8 +80,14 @@ fn test_broken_iadd_from_file() {
                 Bitwidth::I16,
                 VerificationResult::Failure(Counterexample {}),
             ),
-            (Bitwidth::I32, VerificationResult::Failure(Counterexample{})),
-            (Bitwidth::I64, VerificationResult::Failure(Counterexample{})),
+            (
+                Bitwidth::I32,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+            (
+                Bitwidth::I64,
+                VerificationResult::Failure(Counterexample {}),
+            ),
         ],
     );
 }
@@ -213,12 +228,14 @@ fn test_broken_32_general_rotl_to_rotr() {
             (Bitwidth::I1, VerificationResult::InapplicableRule),
             (Bitwidth::I8, VerificationResult::InapplicableRule),
             (Bitwidth::I16, VerificationResult::InapplicableRule),
-            (Bitwidth::I32, VerificationResult::Failure(Counterexample{})),
+            (
+                Bitwidth::I32,
+                VerificationResult::Failure(Counterexample {}),
+            ),
             (Bitwidth::I64, VerificationResult::InapplicableRule),
         ],
     )
 }
-
 
 #[test]
 fn test_64_general_rotl_to_rotr() {
@@ -306,7 +323,10 @@ fn test_broken_fits_in_16_with_imm_rotl_to_rotr() {
         vec![
             (Bitwidth::I1, VerificationResult::Success),
             (Bitwidth::I8, VerificationResult::Failure(Counterexample {})),
-            (Bitwidth::I16, VerificationResult::Failure(Counterexample {})),
+            (
+                Bitwidth::I16,
+                VerificationResult::Failure(Counterexample {}),
+            ),
             (Bitwidth::I32, VerificationResult::InapplicableRule),
             (Bitwidth::I64, VerificationResult::InapplicableRule),
         ],
@@ -404,10 +424,45 @@ fn test_64_with_imm_rotr() {
 }
 
 #[test]
+fn test_fits_in_32_band() {
+    test_from_file_with_filter(
+        "./examples/fits_in_32_band.isle",
+        "band".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::Success),
+            (Bitwidth::I8, VerificationResult::Success),
+            (Bitwidth::I16, VerificationResult::Success),
+            (Bitwidth::I32, VerificationResult::Success),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+        ],
+    )
+}
+
+#[test]
+fn test_broken_fits_in_32_band() {
+    test_from_file_with_filter(
+        "./examples/broken/broken_fits_in_32_band.isle",
+        "band".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::Failure(Counterexample {})),
+            (Bitwidth::I8, VerificationResult::Failure(Counterexample {})),
+            (
+                Bitwidth::I16,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+            (
+                Bitwidth::I32,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+        ],
+    )
+}
+
+#[test]
 fn test_if_let() {
     test_from_file("./examples/constructs/if-let.isle", all_success_result());
 }
-
 
 #[test]
 fn test_let() {

@@ -167,7 +167,7 @@ fn type_annotations_using_rule<'a>(
             );
             let iflet_rhs =
                 &mut create_parse_tree_expr(&iflet.rhs, &mut parse_tree, var_map, typeenv, termenv);
-            
+
             let iflet_lhs_expr = add_rule_constraints(
                 &mut parse_tree,
                 iflet_lhs,
@@ -915,12 +915,14 @@ fn add_rule_constraints(
                 let (typed_expr, _) = add_annotation_constraints(*expr, tree, &mut annotation_info);
                 curr.assertions.push(typed_expr.clone());
                 tree.assumptions.push(typed_expr);
-                add_isle_constraints(
-                    cranelift_isle::ast::Def::Decl(tree.decls[t].clone()),
-                    tree,
-                    &mut annotation_info,
-                    annotation.sig.clone(),
-                );
+                if tree.decls.contains_key(t) {
+                    add_isle_constraints(
+                        cranelift_isle::ast::Def::Decl(tree.decls[dbg!(t)].clone()),
+                        tree,
+                        &mut annotation_info,
+                        annotation.sig.clone(),
+                    );
+                }
             }
 
             // set args in rule equal to args in annotation
@@ -1254,7 +1256,8 @@ fn create_parse_tree_pattern(
             let sym = var_map[var_id];
             let ident = typeenv.syms[sym.index()].clone();
 
-            let type_var = tree.var_to_type_var_map
+            let type_var = tree
+                .var_to_type_var_map
                 .entry(ident.clone())
                 .or_insert(tree.next_type_var);
             if *type_var == tree.next_type_var {
@@ -1295,7 +1298,8 @@ fn create_parse_tree_pattern(
             if let Some(sym) = s {
                 name = typeenv.syms[sym.index()].clone();
             }
-            let type_var = tree.var_to_type_var_map
+            let type_var = tree
+                .var_to_type_var_map
                 .entry(name.clone())
                 .or_insert(tree.next_type_var);
             if *type_var == tree.next_type_var {
@@ -1408,7 +1412,8 @@ fn create_parse_tree_expr(
                 let sym = var_map[var_id];
                 ident = typeenv.syms[sym.index()].clone();
             }
-            let type_var = tree.var_to_type_var_map
+            let type_var = tree
+                .var_to_type_var_map
                 .entry(ident.clone())
                 .or_insert(tree.next_type_var);
             if *type_var == tree.next_type_var {
