@@ -142,6 +142,9 @@ pub extern "C" fn wasmtime_trap_exit_status(raw: &wasm_trap_t, status: &mut i32)
         return true;
     }
 
+    // Squash unused warnings in wasi-disabled builds.
+    drop((raw, status));
+
     false
 }
 
