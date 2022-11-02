@@ -475,6 +475,42 @@ fn test_64_band() {
 }
 
 #[test]
+fn test_fits_in_32_bor() {
+    test_from_file_with_filter(
+        "./examples/fits_in_32_bor.isle",
+        "bor".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::Success),
+            (Bitwidth::I8, VerificationResult::Success),
+            (Bitwidth::I16, VerificationResult::Success),
+            (Bitwidth::I32, VerificationResult::Success),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+        ],
+    )
+}
+
+#[test]
+fn test_broken_fits_in_32_bor() {
+    test_from_file_with_filter(
+        "./examples/broken/broken_fits_in_32_bor.isle",
+        "bor".to_string(),
+        vec![
+            (Bitwidth::I1, VerificationResult::Failure(Counterexample {})),
+            (Bitwidth::I8, VerificationResult::Failure(Counterexample {})),
+            (
+                Bitwidth::I16,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+            (
+                Bitwidth::I32,
+                VerificationResult::Failure(Counterexample {}),
+            ),
+            (Bitwidth::I64, VerificationResult::InapplicableRule),
+        ],
+    )
+}
+
+#[test]
 fn test_if_let() {
     test_from_file("./examples/constructs/if-let.isle", all_success_result());
 }

@@ -14,7 +14,7 @@
 
 ;;@ (spec (sig (args) (ret))
 ;;@       (assertions (= (1i64:bv) (ret))))
-;;decl ALUOp.Or
+;;decl ALUOp.Orr
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
@@ -69,5 +69,5 @@
 (decl alu_rs_imm_logic_commutative (ALUOp Type Value Value) Reg)
 (extern constructor alu_rs_imm_logic_commutative alu_rs_imm_logic_commutative)
 
-(rule -1 (lower (has_type (fits_in_32 ty) (band x y)))
-      (alu_rs_imm_logic_commutative (ALUOp.And) ty x y))
+(rule -1 (lower (has_type (fits_in_32 ty) (bor x y)))
+      (alu_rs_imm_logic_commutative (ALUOp.Orr) ty x y))
