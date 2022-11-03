@@ -3,12 +3,15 @@
 use crate::wasm_byte_vec_t;
 use anyhow::Result;
 use cap_std::ambient_authority;
+use std::collections::VecDeque;
 use std::ffi::CStr;
 use std::fs::File;
+use std::io;
 use std::os::raw::{c_char, c_int};
 use std::path::{Path, PathBuf};
 use std::slice;
-use wasi_common::pipe::ReadPipe;
+use std::sync::{Arc, RwLock};
+use wasi_common::pipe::{ReadPipe, WritePipe};
 use wasmtime_wasi::{
     sync::{Dir, WasiCtxBuilder},
     WasiCtx,
@@ -47,6 +50,7 @@ pub enum WasiConfigReadPipe {
     Inherit,
     File(File),
     Bytes(Vec<u8>),
+    Pipe(Queue),
 }
 
 #[repr(C)]
@@ -56,9 +60,26 @@ pub enum WasiConfigWritePipe {
     None,
     Inherit,
     File(File),
+    Pipe(Queue),
 }
 
+#[repr(C)]
+#[derive(Default)]
+pub struct wasi_read_pipe_t {
+    queue: Queue,
+}
+
+#[repr(C)]
+#[derive(Default)]
+pub struct wasi_write_pipe_t {
+    queue: Queue,
+}
+
+type Queue = Arc<RwLock<BoundedVecDeque<u8>>>;
+
 wasmtime_c_api_macros::declare_own!(wasi_config_t);
+wasmtime_c_api_macros::declare_own!(wasi_read_pipe_t);
+wasmtime_c_api_macros::declare_own!(wasi_write_pipe_t);
 
 impl wasi_config_t {
     pub fn into_wasi_ctx(self) -> Result<WasiCtx> {
@@ -99,6 +120,10 @@ impl wasi_config_t {
                 let binary = ReadPipe::from(binary);
                 builder.stdin(Box::new(binary))
             }
+            WasiConfigReadPipe::Pipe(queue) => {
+                let queue = ReadPipe::from_shared(queue);
+                builder.stdin(Box::new(queue))
+            }
         };
         builder = match self.stdout {
             WasiConfigWritePipe::None => builder,
@@ -108,6 +133,10 @@ impl wasi_config_t {
                 let file = wasi_cap_std_sync::file::File::from_cap_std(file);
                 builder.stdout(Box::new(file))
             }
+            WasiConfigWritePipe::Pipe(queue) => {
+                let queue = WritePipe::from_shared(queue);
+                builder.stdout(Box::new(queue))
+            }
         };
         builder = match self.stderr {
             WasiConfigWritePipe::None => builder,
@@ -116,6 +145,10 @@ impl wasi_config_t {
                 let file = cap_std::fs::File::from_std(file);
                 let file = wasi_cap_std_sync::file::File::from_cap_std(file);
                 builder.stderr(Box::new(file))
+            }
+            WasiConfigWritePipe::Pipe(queue) => {
+                let queue = WritePipe::from_shared(queue);
+                builder.stderr(Box::new(queue))
             }
         };
         for (dir, path) in self.preopens {
@@ -203,6 +236,14 @@ pub unsafe extern "C" fn wasi_config_set_stdin_bytes(
 }
 
 #[no_mangle]
+pub extern "C" fn wasi_config_set_stdin_pipe(
+    config: &mut wasi_config_t,
+    read_pipe: Box<wasi_read_pipe_t>,
+) {
+    config.stdin = WasiConfigReadPipe::Pipe(read_pipe.queue);
+}
+
+#[no_mangle]
 pub extern "C" fn wasi_config_inherit_stdin(config: &mut wasi_config_t) {
     config.stdin = WasiConfigReadPipe::Inherit;
 }
@@ -223,6 +264,14 @@ pub unsafe extern "C" fn wasi_config_set_stdout_file(
 }
 
 #[no_mangle]
+pub extern "C" fn wasi_config_set_stdout_pipe(
+    config: &mut wasi_config_t,
+    write_pipe: Box<wasi_write_pipe_t>,
+) {
+    config.stdout = WasiConfigWritePipe::Pipe(write_pipe.queue);
+}
+
+#[no_mangle]
 pub extern "C" fn wasi_config_inherit_stdout(config: &mut wasi_config_t) {
     config.stdout = WasiConfigWritePipe::Inherit;
 }
@@ -240,6 +289,14 @@ pub unsafe extern "C" fn wasi_config_set_stderr_file(
     config.stderr = WasiConfigWritePipe::File(file);
 
     true
+}
+
+#[no_mangle]
+pub extern "C" fn wasi_config_set_stderr_pipe(
+    config: &mut wasi_config_t,
+    write_pipe: Box<wasi_write_pipe_t>,
+) {
+    config.stderr = WasiConfigWritePipe::Pipe(write_pipe.queue);
 }
 
 #[no_mangle]
@@ -269,4 +326,90 @@ pub unsafe extern "C" fn wasi_config_preopen_dir(
     (*config).preopens.push((dir, guest_path.to_owned()));
 
     true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasi_pipe_new(
+    limit: usize,
+    ret_read_pipe: *mut *mut wasi_read_pipe_t,
+    ret_write_pipe: *mut *mut wasi_write_pipe_t,
+) {
+    let queue = BoundedVecDeque::new(limit);
+    let queue = Arc::new(RwLock::new(queue));
+
+    if !ret_read_pipe.is_null() {
+        *ret_read_pipe = Box::into_raw(Box::new(wasi_read_pipe_t {
+            queue: queue.clone(),
+        }));
+    }
+    if !ret_write_pipe.is_null() {
+        *ret_write_pipe = Box::into_raw(Box::new(wasi_write_pipe_t {
+            queue: queue.clone(),
+        }));
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wasi_read_pipe_len(read_pipe: &wasi_read_pipe_t) -> usize {
+    let queue = read_pipe.queue.read().unwrap();
+    queue.len()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasi_read_pipe_read(
+    read_pipe: &mut wasi_read_pipe_t,
+    buf: *mut u8,
+    buf_len: usize,
+) -> usize {
+    let mut buf = crate::slice_from_raw_parts_mut(buf, buf_len);
+    let mut queue = read_pipe.queue.write().unwrap();
+    std::io::Read::read(&mut *queue, &mut buf).unwrap()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasi_write_pipe_write(
+    write_pipe: &mut wasi_write_pipe_t,
+    buf: *const u8,
+    buf_len: usize,
+) -> usize {
+    let buf = crate::slice_from_raw_parts(buf, buf_len);
+    let mut queue = write_pipe.queue.write().unwrap();
+    std::io::Write::write(&mut *queue, buf).unwrap()
+}
+
+#[derive(Default)]
+pub struct BoundedVecDeque<T> {
+    deque: VecDeque<T>,
+    limit: usize,
+}
+impl<T> BoundedVecDeque<T> {
+    fn new(limit: usize) -> Self {
+        Self {
+            deque: VecDeque::new(),
+            limit,
+        }
+    }
+    #[inline]
+    fn len(&self) -> usize {
+        self.deque.len()
+    }
+}
+impl io::Read for BoundedVecDeque<u8> {
+    #[inline]
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        io::Read::read(&mut self.deque, buf)
+    }
+}
+impl io::Write for BoundedVecDeque<u8> {
+    #[inline]
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let amt = self.limit.saturating_sub(self.len());
+        let amt = std::cmp::min(amt, buf.len());
+        self.deque.extend(&buf[..amt]);
+        Ok(amt)
+    }
+    #[inline]
+    fn flush(&mut self) -> io::Result<()> {
+        self.deque.flush()
+    }
 }
