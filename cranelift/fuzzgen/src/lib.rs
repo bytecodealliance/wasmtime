@@ -238,7 +238,6 @@ where
         builder.set("opt_level", &format!("{}", opt)[..])?;
 
         // Boolean flags
-        // TODO: probestack is semantics preserving, but only works inline and on x64
         // TODO: enable_pinned_reg does not work with our current trampolines. See: #4376
         // TODO: is_pic has issues:
         //   x86: https://github.com/bytecodealliance/wasmtime/issues/5005
@@ -265,6 +264,19 @@ where
 
             let value = format!("{}", enabled);
             builder.set(flag_name, value.as_str())?;
+        }
+
+        // Optionally test inline stackprobes on x86
+        // TODO: inline stack probes are not available on AArch64
+        // TODO: Test outlined stack probes.
+        if cfg!(target_arch = "x86_64") && bool::arbitrary(self.u)? {
+            builder.enable("enable_probestack")?;
+            builder.set("probestack_strategy", "inline")?;
+
+            let size = self
+                .u
+                .int_in_range(self.config.stack_probe_size_log2.clone())?;
+            builder.set("probestack_size_log2", &format!("{}", size))?;
         }
 
         // Fixed settings

@@ -37,6 +37,8 @@ pub struct Config {
     pub static_stack_slots_per_function: RangeInclusive<usize>,
     /// Size in bytes
     pub static_stack_slot_size: RangeInclusive<usize>,
+    /// Allowed stack probe sizes
+    pub stack_probe_size_log2: RangeInclusive<usize>,
 
     /// Determines how often we generate a backwards branch
     /// Backwards branches are prone to infinite loops, and thus cause timeouts.
@@ -80,6 +82,19 @@ impl Default for Config {
             funcrefs_per_function: 0..=8,
             static_stack_slots_per_function: 0..=8,
             static_stack_slot_size: 0..=128,
+            // We need the mix of sizes that allows us to:
+            //  * not generates any stack probes
+            //  * generate unrolled stack probes
+            //  * generate loop stack probes
+            //
+            // This depends on the total amount of stack space that we have for this function
+            // (controlled by `static_stack_slots_per_function` and `static_stack_slot_size`)
+            //
+            // 1<<6 = 64 and 1<<14 = 16384
+            //
+            // This range allows us to generate all 3 cases within the current allowed
+            // stack size range.
+            stack_probe_size_log2: 6..=14,
             // 0.1% allows us to explore this, while not causing enough timeouts to significantly
             // impact execs/s
             backwards_branch_ratio: (1, 1000),
