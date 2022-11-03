@@ -128,28 +128,6 @@ block0(v0: i32x4, v1: i32x4):
 ;   popq    %rbp
 ;   ret
 
-function %bitselect_i16x8() -> i16x8 {
-block0:
-    v0 = vconst.i16x8 [0 0 0 0 0 0 0 0]
-    v1 = vconst.i16x8 [0 0 0 0 0 0 0 0]
-    v2 = vconst.i16x8 [0 0 0 0 0 0 0 0]
-    v3 = bitselect v0, v1, v2
-    return v3
-}
-
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
-;   movdqu  const(0), %xmm0
-;   movdqu  const(0), %xmm2
-;   movdqu  const(0), %xmm6
-;   pand    %xmm2, %xmm0, %xmm2
-;   pandn   %xmm0, %xmm6, %xmm0
-;   por     %xmm0, %xmm2, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-
 function %vselect_i16x8(i16x8, i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8, v2: i16x8):
     v3 = vselect v0, v1, v2
