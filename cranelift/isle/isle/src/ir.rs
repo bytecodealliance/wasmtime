@@ -255,12 +255,17 @@ pub struct ReturnExpr {
 }
 
 impl RuleVisitor for PatternSequence {
+    type PatternVisitor = Self;
     type ExprVisitor = ExprSequence;
     type Expr = ReturnExpr;
 
     fn add_arg(&mut self, index: usize, ty: TypeId) -> Value {
         let inst = self.add_inst(PatternInst::Arg { index, ty });
         Value::Pattern { inst, output: 0 }
+    }
+
+    fn add_pattern<F: FnOnce(&mut Self)>(&mut self, visitor: F) {
+        visitor(self)
     }
 
     fn add_expr<F>(&mut self, visitor: F) -> ReturnExpr

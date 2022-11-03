@@ -757,7 +757,7 @@ impl Expr {
         &self,
         visitor: &mut V,
         termenv: &TermEnv,
-        vars: &HashMap<VarId, V::PatternId>,
+        vars: &HashMap<VarId, <V::PatternVisitor as PatternVisitor>::PatternId>,
     ) -> V::Expr {
         let var_exprs = vars
             .iter()
@@ -781,7 +781,9 @@ pub struct VisitedExpr<V: ExprVisitor> {
 
 /// Visitor interface for [Rule]s. Visitors must be able to visit patterns by implementing
 /// [PatternVisitor], and to visit expressions by providing a type that implements [ExprVisitor].
-pub trait RuleVisitor: PatternVisitor {
+pub trait RuleVisitor {
+    /// The type of pattern visitors constructed by [RuleVisitor::add_pattern].
+    type PatternVisitor: PatternVisitor;
     /// The type of expression visitors constructed by [RuleVisitor::add_expr].
     type ExprVisitor: ExprVisitor;
     /// The type returned from [RuleVisitor::add_expr], which may be exchanged for a subpattern
@@ -789,7 +791,18 @@ pub trait RuleVisitor: PatternVisitor {
     type Expr;
 
     /// Visit one of the arguments to the top-level pattern.
-    fn add_arg(&mut self, index: usize, ty: TypeId) -> Self::PatternId;
+    fn add_arg(
+        &mut self,
+        index: usize,
+        ty: TypeId,
+    ) -> <Self::PatternVisitor as PatternVisitor>::PatternId;
+
+    /// Visit a pattern, used once for the rule's left-hand side and once for each if-let. You can
+    /// determine which part of the rule the pattern comes from based on whether the `PatternId`
+    /// passed to the first call to this visitor came from `add_arg` or `expr_as_pattern`.
+    fn add_pattern<F>(&mut self, visitor: F)
+    where
+        F: FnOnce(&mut Self::PatternVisitor);
 
     /// Visit an expression, used once for each if-let and once for the rule's right-hand side.
     fn add_expr<F>(&mut self, visitor: F) -> Self::Expr
@@ -797,14 +810,17 @@ pub trait RuleVisitor: PatternVisitor {
         F: FnOnce(&mut Self::ExprVisitor) -> VisitedExpr<Self::ExprVisitor>;
 
     /// Given an expression from [RuleVisitor::add_expr], return an identifier that can be used with
-    /// the pattern visitor.
-    fn expr_as_pattern(&mut self, expr: Self::Expr) -> Self::PatternId;
+    /// a pattern visitor in [RuleVisitor::add_pattern].
+    fn expr_as_pattern(
+        &mut self,
+        expr: Self::Expr,
+    ) -> <Self::PatternVisitor as PatternVisitor>::PatternId;
 
     /// Given an identifier from the pattern visitor, return an identifier that can be used with
     /// the expression visitor.
     fn pattern_as_expr(
         &mut self,
-        pattern: Self::PatternId,
+        pattern: <Self::PatternVisitor as PatternVisitor>::PatternId,
     ) -> <Self::ExprVisitor as ExprVisitor>::ExprId;
 }
 
@@ -820,7 +836,7 @@ impl Rule {
             let termdata = &termenv.terms[term.index()];
             for (i, (subpat, &arg_ty)) in args.iter().zip(termdata.arg_tys.iter()).enumerate() {
                 let value = visitor.add_arg(i, arg_ty);
-                subpat.visit(visitor, value, termenv, &mut vars);
+                visitor.add_pattern(|visitor| subpat.visit(visitor, value, termenv, &mut vars));
             }
         } else {
             unreachable!("Pattern must have a term at the root");
@@ -830,7 +846,7 @@ impl Rule {
         for iflet in self.iflets.iter() {
             let subexpr = iflet.rhs.visit_in_rule(visitor, termenv, &vars);
             let value = visitor.expr_as_pattern(subexpr);
-            iflet.lhs.visit(visitor, value, termenv, &mut vars);
+            visitor.add_pattern(|visitor| iflet.lhs.visit(visitor, value, termenv, &mut vars));
         }
 
         // Visit the rule's right-hand side, making use of the bound variables from the pattern.
