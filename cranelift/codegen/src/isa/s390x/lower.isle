@@ -1190,15 +1190,8 @@
 
 ;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I16 (bswap x)))
-      (lshr_imm $I32 (bswap_reg $I32 x) 16))
-
-(rule (lower (has_type $I32 (bswap x)))
-      (bswap_reg $I32 x))
-
-(rule (lower (has_type $I64 (bswap x)))
-      (bswap_reg $I64 x))
-
+(rule (lower (has_type ty (bswap x)))
+      (bitrev_bytes ty x))
 
 ;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
