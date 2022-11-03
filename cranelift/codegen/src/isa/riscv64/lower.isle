@@ -635,15 +635,15 @@
       (t2 Reg (gen_move2 y $I64 $I64)))
     (value_regs t1 t2)))
 
-;;;;;  Rules for `imax`;;;;;;;;;
+;;;;;  Rules for `smax`;;;;;;;;;
 (rule
-  (lower (has_type ty (imax x y)))
-  (gen_int_select ty (IntSelectOP.Imax) (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
+  (lower (has_type ty (smax x y)))
+  (gen_int_select ty (IntSelectOP.Smax) (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
 
-;;;;;  Rules for `imin`;;;;;;;;;
+;;;;;  Rules for `smin`;;;;;;;;;
 (rule
-  (lower (has_type ty (imin x y)))
-  (gen_int_select ty (IntSelectOP.Imin) (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
+  (lower (has_type ty (smin x y)))
+  (gen_int_select ty (IntSelectOP.Smin) (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
 ;;;;;  Rules for `umax`;;;;;;;;;
 (rule
   (lower (has_type ty (umax x y)))

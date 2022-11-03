@@ -344,9 +344,9 @@ fn lower_insn_to_regs(
         | Opcode::Imul
         | Opcode::BandNot
         | Opcode::Iabs
-        | Opcode::Imax
+        | Opcode::Smax
         | Opcode::Umax
-        | Opcode::Imin
+        | Opcode::Smin
         | Opcode::Umin
         | Opcode::Bnot
         | Opcode::Bitselect

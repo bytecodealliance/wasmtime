@@ -6,18 +6,18 @@ target x86_64
 target riscv64
 
 
-; sort three signed i8s with imin and imax only
+; sort three signed i8s with smin and smax only
 function %isort3(i8, i8, i8) -> i8, i8, i8 {
 block0(v0: i8, v1: i8, v2: i8):
-    v3 = imin.i8 v0, v1
-    v4 = imin.i8 v1, v2
-    v5 = imin.i8 v2, v0
-    v6 = imin.i8 v3, v4 ; low
-    v7 = imax.i8 v0, v1
-    v8 = imax.i8 v1, v2
-    v9 = imax.i8 v7, v8 ; high
-    v10 = imax.i8 v3, v4
-    v11 = imax.i8 v10, v5 ; mid = max of min of all pairs
+    v3 = smin.i8 v0, v1
+    v4 = smin.i8 v1, v2
+    v5 = smin.i8 v2, v0
+    v6 = smin.i8 v3, v4 ; low
+    v7 = smax.i8 v0, v1
+    v8 = smax.i8 v1, v2
+    v9 = smax.i8 v7, v8 ; high
+    v10 = smax.i8 v3, v4
+    v11 = smax.i8 v10, v5 ; mid = max of min of all pairs
     return v6, v11, v9
 }
 ; run: %isort3(1, 2, 3) == [1, 2, 3]
@@ -33,65 +33,65 @@ block0(v0: i8, v1: i8, v2: i8):
 ; run: %isort3(5, 4, 4) == [4, 4, 5]
 
 
-function %imin_max_i8(i8, i8) -> i8, i8 {
+function %smin_max_i8(i8, i8) -> i8, i8 {
 block0(v0: i8, v1: i8):
-    v2 = imin.i8 v0, v1
-    v3 = imax.i8 v0, v1
+    v2 = smin.i8 v0, v1
+    v3 = smax.i8 v0, v1
     return v2, v3
 }
-; run: %imin_max_i8(127, -128) == [-128, 127]
-; run: %imin_max_i8(-128, 127) == [-128, 127]
-; run: %imin_max_i8(-1, 0) == [-1, 0]
-; run: %imin_max_i8(1, -1) == [-1, 1]
-; run: %imin_max_i8(1, 2) == [1, 2]
-; run: %imin_max_i8(2, 1) == [1, 2]
-; run: %imin_max_i8(2, 2) == [2, 2]
-; run: %imin_max_i8(0x7f, 0x80) == [0x80, 0x7f]
+; run: %smin_max_i8(127, -128) == [-128, 127]
+; run: %smin_max_i8(-128, 127) == [-128, 127]
+; run: %smin_max_i8(-1, 0) == [-1, 0]
+; run: %smin_max_i8(1, -1) == [-1, 1]
+; run: %smin_max_i8(1, 2) == [1, 2]
+; run: %smin_max_i8(2, 1) == [1, 2]
+; run: %smin_max_i8(2, 2) == [2, 2]
+; run: %smin_max_i8(0x7f, 0x80) == [0x80, 0x7f]
 
-function %imin_max_i16(i16, i16) -> i16, i16 {
+function %smin_max_i16(i16, i16) -> i16, i16 {
 block0(v0: i16, v1: i16):
-    v2 = imin.i16 v0, v1
-    v3 = imax.i16 v0, v1
+    v2 = smin.i16 v0, v1
+    v3 = smax.i16 v0, v1
     return v2, v3
 }
-; run: %imin_max_i16(32767, -32768) == [-32768, 32767]
-; run: %imin_max_i16(-32768, 32767) == [-32768, 32767]
-; run: %imin_max_i16(-1, 0) == [-1, 0]
-; run: %imin_max_i16(1, -1) == [-1, 1]
-; run: %imin_max_i16(1, 2) == [1, 2]
-; run: %imin_max_i16(2, 1) == [1, 2]
-; run: %imin_max_i16(2, 2) == [2, 2]
-; run: %imin_max_i16(0x7f, 0x80) == [0x7f, 0x80]
-; run: %imin_max_i16(0x7fff, 0x8000) == [0x8000, 0x7fff]
+; run: %smin_max_i16(32767, -32768) == [-32768, 32767]
+; run: %smin_max_i16(-32768, 32767) == [-32768, 32767]
+; run: %smin_max_i16(-1, 0) == [-1, 0]
+; run: %smin_max_i16(1, -1) == [-1, 1]
+; run: %smin_max_i16(1, 2) == [1, 2]
+; run: %smin_max_i16(2, 1) == [1, 2]
+; run: %smin_max_i16(2, 2) == [2, 2]
+; run: %smin_max_i16(0x7f, 0x80) == [0x7f, 0x80]
+; run: %smin_max_i16(0x7fff, 0x8000) == [0x8000, 0x7fff]
 
-function %imin_max_i32(i32, i32) -> i32, i32 {
+function %smin_max_i32(i32, i32) -> i32, i32 {
 block0(v0: i32, v1: i32):
-    v2 = imin.i32 v0, v1
-    v3 = imax.i32 v0, v1
+    v2 = smin.i32 v0, v1
+    v3 = smax.i32 v0, v1
     return v2, v3
 }
-; run: %imin_max_i32(-1, 0) == [-1, 0]
-; run: %imin_max_i32(1, -1) == [-1, 1]
-; run: %imin_max_i32(1, 2) == [1, 2]
-; run: %imin_max_i32(2, 1) == [1, 2]
-; run: %imin_max_i32(0x7f, 0x80) == [0x7f, 0x80]
-; run: %imin_max_i32(0x7fff, 0x8000) == [0x7fff, 0x8000]
-; run: %imin_max_i32(0x7fffffff, 0x80000000) == [0x80000000, 0x7fffffff]
+; run: %smin_max_i32(-1, 0) == [-1, 0]
+; run: %smin_max_i32(1, -1) == [-1, 1]
+; run: %smin_max_i32(1, 2) == [1, 2]
+; run: %smin_max_i32(2, 1) == [1, 2]
+; run: %smin_max_i32(0x7f, 0x80) == [0x7f, 0x80]
+; run: %smin_max_i32(0x7fff, 0x8000) == [0x7fff, 0x8000]
+; run: %smin_max_i32(0x7fffffff, 0x80000000) == [0x80000000, 0x7fffffff]
 
-function %imin_max_i64(i64, i64) -> i64, i64 {
+function %smin_max_i64(i64, i64) -> i64, i64 {
 block0(v0: i64, v1: i64):
-    v2 = imin.i64 v0, v1
-    v3 = imax.i64 v0, v1
+    v2 = smin.i64 v0, v1
+    v3 = smax.i64 v0, v1
     return v2, v3
 }
-; run: %imin_max_i64(-1, 0) == [-1, 0]
-; run: %imin_max_i64(1, -1) == [-1, 1]
-; run: %imin_max_i64(1, 2) == [1, 2]
-; run: %imin_max_i64(2, 1) == [1, 2]
-; run: %imin_max_i64(0x7f, 0x80) == [0x7f, 0x80]
-; run: %imin_max_i64(0x7fff, 0x8000) == [0x7fff, 0x8000]
-; run: %imin_max_i64(0x7fffffff, 0x80000000) == [0x7fffffff, 0x80000000]
-; run: %imin_max_i64(0x7fffffffffffffff, 0x8000000000000000) == [0x8000000000000000, 0x7fffffffffffffff]
+; run: %smin_max_i64(-1, 0) == [-1, 0]
+; run: %smin_max_i64(1, -1) == [-1, 1]
+; run: %smin_max_i64(1, 2) == [1, 2]
+; run: %smin_max_i64(2, 1) == [1, 2]
+; run: %smin_max_i64(0x7f, 0x80) == [0x7f, 0x80]
+; run: %smin_max_i64(0x7fff, 0x8000) == [0x7fff, 0x8000]
+; run: %smin_max_i64(0x7fffffff, 0x80000000) == [0x7fffffff, 0x80000000]
+; run: %smin_max_i64(0x7fffffffffffffff, 0x8000000000000000) == [0x8000000000000000, 0x7fffffffffffffff]
 
 function %umin_max_i8(i8, i8) -> i8, i8 {
 block0(v0: i8, v1: i8):

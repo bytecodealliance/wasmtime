@@ -874,12 +874,12 @@
             (result Reg (msub $I64 div y64 x64)))
         result))
 
-;;; Rules for integer min/max: umin, imin, umax, imax ;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Rules for integer min/max: umin, smin, umax, smax ;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty @ (not_i64x2) (imin x y)))
+(rule (lower (has_type ty @ (not_i64x2) (smin x y)))
       (vec_rrr (VecALUOp.Smin) x y (vector_size ty)))
 
-(rule 1 (lower (has_type $I64X2 (imin x y)))
+(rule 1 (lower (has_type $I64X2 (smin x y)))
       (bsl $I64X2 (vec_rrr (VecALUOp.Cmgt) y x (VectorSize.Size64x2)) x y))
 
 (rule (lower (has_type ty @ (not_i64x2) (umin x y)))
@@ -888,10 +888,10 @@
 (rule 1 (lower (has_type $I64X2 (umin x y)))
       (bsl $I64X2 (vec_rrr (VecALUOp.Cmhi) y x (VectorSize.Size64x2)) x y))
 
-(rule (lower (has_type ty @ (not_i64x2) (imax x y)))
+(rule (lower (has_type ty @ (not_i64x2) (smax x y)))
       (vec_rrr (VecALUOp.Smax) x y (vector_size ty)))
 
-(rule 1 (lower (has_type $I64X2 (imax x y)))
+(rule 1 (lower (has_type $I64X2 (smax x y)))
       (bsl $I64X2 (vec_rrr (VecALUOp.Cmgt) x y (VectorSize.Size64x2)) x y))
 
 (rule (lower (has_type ty @ (not_i64x2) (umax x y)))

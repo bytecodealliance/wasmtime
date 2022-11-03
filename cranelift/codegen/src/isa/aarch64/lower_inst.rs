@@ -225,7 +225,7 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::Iconcat => implemented_in_isle(ctx),
 
-        Opcode::Imax | Opcode::Umax | Opcode::Umin | Opcode::Imin => implemented_in_isle(ctx),
+        Opcode::Smax | Opcode::Umax | Opcode::Umin | Opcode::Smin => implemented_in_isle(ctx),
 
         Opcode::IaddPairwise => implemented_in_isle(ctx),
 

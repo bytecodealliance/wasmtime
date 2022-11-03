@@ -416,7 +416,7 @@ fn define_simd_arithmetic(
 
     ig.push(
         Inst::new(
-            "imin",
+            "smin",
             r#"
         Signed integer minimum.
         "#,
@@ -440,7 +440,7 @@ fn define_simd_arithmetic(
 
     ig.push(
         Inst::new(
-            "imax",
+            "smax",
             r#"
         Signed integer maximum.
         "#,
