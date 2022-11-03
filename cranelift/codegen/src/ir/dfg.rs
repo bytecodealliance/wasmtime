@@ -595,6 +595,17 @@ impl DataFlowGraph {
         DisplayInst(self, inst)
     }
 
+    /// Returns an object that displays the given `value`'s defining instruction.
+    ///
+    /// Panics if the value is not defined by an instruction (i.e. it is a basic
+    /// block argument).
+    pub fn display_value_inst(&self, value: Value) -> DisplayInst<'_> {
+        match self.value_def(value) {
+            ir::ValueDef::Result(inst, _) => self.display_inst(inst),
+            ir::ValueDef::Param(_, _) => panic!("value is not defined by an instruction"),
+        }
+    }
+
     /// Get all value arguments on `inst` as a slice.
     pub fn inst_args(&self, inst: Inst) -> &[Value] {
         self.insts[inst].arguments(&self.value_lists)
