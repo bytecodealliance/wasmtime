@@ -102,12 +102,20 @@ fn dynamic_addr(
         );
         (IntCC::UnsignedGreaterThan, adj_offset, bound)
     };
-    let oob = pos.ins().icmp(cc, lhs, bound);
-    pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
 
     let spectre_oob_comparison = if isa.flags().enable_heap_access_spectre_mitigation() {
+        // When we emit a spectre-guarded heap access, we do a `select
+        // is_out_of_bounds, NULL, addr` to compute the address, and so the load
+        // will trap if the address is out of bounds, which means we don't need
+        // to do another explicit bounds check like we do below.
         Some((cc, lhs, bound))
     } else {
+        let oob = pos.ins().icmp(cc, lhs, bound);
+        trace!("  inserting: {}", pos.func.dfg.display_value_inst(oob));
+
+        let trapnz = pos.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
+        trace!("  inserting: {}", pos.func.dfg.display_inst(trapnz));
+
         None
     };
 
