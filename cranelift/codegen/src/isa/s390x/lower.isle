@@ -291,17 +291,17 @@
       (vec_umin ty x y))
 
 
-;;;; Rules for `imax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `smax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Signed maximum of two vector registers.
-(rule (lower (has_type (ty_vec128 ty) (imax x y)))
+(rule (lower (has_type (ty_vec128 ty) (smax x y)))
       (vec_smax ty x y))
 
 
-;;;; Rules for `imin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `smin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Signed minimum of two vector registers.
-(rule (lower (has_type (ty_vec128 ty) (imin x y)))
+(rule (lower (has_type (ty_vec128 ty) (smin x y)))
       (vec_smin ty x y))
 
 

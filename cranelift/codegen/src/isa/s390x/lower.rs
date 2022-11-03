@@ -58,9 +58,9 @@ impl LowerBackend for S390xBackend {
             | Opcode::UsubSat
             | Opcode::SsubSat
             | Opcode::IaddPairwise
-            | Opcode::Imin
+            | Opcode::Smin
             | Opcode::Umin
-            | Opcode::Imax
+            | Opcode::Smax
             | Opcode::Umax
             | Opcode::AvgRound
             | Opcode::Iabs

@@ -4132,7 +4132,7 @@
 (rule (vec_umax ty x y) (vec_rrr ty (vecop_umax ty) x y))
 
 
-;; Helpers for generating `imax` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Helpers for generating `smax` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl vecop_smax (Type) VecBinaryOp)
 (rule (vecop_smax $I8X16) (VecBinaryOp.SMax8x16))
@@ -4156,7 +4156,7 @@
 (rule (vec_umin ty x y) (vec_rrr ty (vecop_umin ty) x y))
 
 
-;; Helpers for generating `imin` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Helpers for generating `smin` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl vecop_smin (Type) VecBinaryOp)
 (rule (vecop_smin $I8X16) (VecBinaryOp.SMin8x16))

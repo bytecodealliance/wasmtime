@@ -1328,7 +1328,7 @@
 (rule (vec_insert_lane $F64X2 vec val 1)
       (x64_movlhps vec (reg_mem_to_xmm_mem val)))
 
-;;;; Rules for `imin`, `imax`, `umin`, `umax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `smin`, `smax`, `umin`, `umax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.
 
@@ -1350,32 +1350,32 @@
 (rule -1 (lower (has_type (fits_in_64 ty) (umax x y)))
       (cmp_and_choose ty (CC.NB) x y))
 
-(rule -1 (lower (has_type (fits_in_64 ty) (imin x y)))
+(rule -1 (lower (has_type (fits_in_64 ty) (smin x y)))
       (cmp_and_choose ty (CC.L) x y))
 
-(rule -1 (lower (has_type (fits_in_64 ty) (imax x y)))
+(rule -1 (lower (has_type (fits_in_64 ty) (smax x y)))
       (cmp_and_choose ty (CC.NL) x y))
 
-;; SSE `imax`.
+;; SSE `smax`.
 
-(rule (lower (has_type $I8X16 (imax x y)))
+(rule (lower (has_type $I8X16 (smax x y)))
       (x64_pmaxsb x y))
 
-(rule (lower (has_type $I16X8 (imax x y)))
+(rule (lower (has_type $I16X8 (smax x y)))
       (x64_pmaxsw x y))
 
-(rule (lower (has_type $I32X4 (imax x y)))
+(rule (lower (has_type $I32X4 (smax x y)))
       (x64_pmaxsd x y))
 
-;; SSE `imin`.
+;; SSE `smin`.
 
-(rule (lower (has_type $I8X16 (imin x y)))
+(rule (lower (has_type $I8X16 (smin x y)))
       (x64_pminsb x y))
 
-(rule (lower (has_type $I16X8 (imin x y)))
+(rule (lower (has_type $I16X8 (smin x y)))
       (x64_pminsw x y))
 
-(rule (lower (has_type $I32X4 (imin x y)))
+(rule (lower (has_type $I32X4 (smin x y)))
       (x64_pminsd x y))
 
 ;; SSE `umax`.

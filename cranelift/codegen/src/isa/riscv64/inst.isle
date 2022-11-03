@@ -367,9 +367,9 @@
 ))
 
 (type IntSelectOP (enum
-  (Imax)
+  (Smax)
   (Umax)
-  (Imin)
+  (Smin)
   (Umin)
 ))
 

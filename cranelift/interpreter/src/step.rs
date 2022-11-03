@@ -589,7 +589,7 @@ where
             }
             ControlFlow::Continue
         }
-        Opcode::Imin => {
+        Opcode::Smin => {
             if ctrl_ty.is_vector() {
                 let icmp = icmp(ctrl_ty, IntCC::SignedGreaterThan, &arg(1)?, &arg(0)?)?;
                 assign(vselect(&icmp, &arg(0)?, &arg(1)?, ctrl_ty)?)
@@ -612,7 +612,7 @@ where
                 )
             }
         }
-        Opcode::Imax => {
+        Opcode::Smax => {
             if ctrl_ty.is_vector() {
                 let icmp = icmp(ctrl_ty, IntCC::SignedGreaterThan, &arg(0)?, &arg(1)?)?;
                 assign(vselect(&icmp, &arg(0)?, &arg(1)?, ctrl_ty)?)

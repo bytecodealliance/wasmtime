@@ -283,20 +283,20 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Ineg, &[I32, I32], &[I32], insert_opcode),
     (Opcode::Ineg, &[I64, I64], &[I64], insert_opcode),
     (Opcode::Ineg, &[I128, I128], &[I128], insert_opcode),
-    // Imin
-    // imin not implemented in some backends:
+    // Smin
+    // smin not implemented in some backends:
     //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
     //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4313
     #[cfg(not(target_arch = "aarch64"))]
-    (Opcode::Imin, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Smin, &[I8, I8], &[I8], insert_opcode),
     #[cfg(not(target_arch = "aarch64"))]
-    (Opcode::Imin, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Smin, &[I16, I16], &[I16], insert_opcode),
     #[cfg(not(target_arch = "aarch64"))]
-    (Opcode::Imin, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Smin, &[I32, I32], &[I32], insert_opcode),
     #[cfg(not(target_arch = "aarch64"))]
-    (Opcode::Imin, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Smin, &[I64, I64], &[I64], insert_opcode),
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-    (Opcode::Imin, &[I128, I128], &[I128], insert_opcode),
+    (Opcode::Smin, &[I128, I128], &[I128], insert_opcode),
     // Umin
     // umin not implemented in some backends:
     //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
@@ -311,20 +311,20 @@ const OPCODE_SIGNATURES: &'static [(
     (Opcode::Umin, &[I64, I64], &[I64], insert_opcode),
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     (Opcode::Umin, &[I128, I128], &[I128], insert_opcode),
-    // Imax
-    // imax not implemented in some backends:
+    // Smax
+    // smax not implemented in some backends:
     //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370
     //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/4313
     #[cfg(not(target_arch = "aarch64"))]
-    (Opcode::Imax, &[I8, I8], &[I8], insert_opcode),
+    (Opcode::Smax, &[I8, I8], &[I8], insert_opcode),
     #[cfg(not(target_arch = "aarch64"))]
-    (Opcode::Imax, &[I16, I16], &[I16], insert_opcode),
+    (Opcode::Smax, &[I16, I16], &[I16], insert_opcode),
     #[cfg(not(target_arch = "aarch64"))]
-    (Opcode::Imax, &[I32, I32], &[I32], insert_opcode),
+    (Opcode::Smax, &[I32, I32], &[I32], insert_opcode),
     #[cfg(not(target_arch = "aarch64"))]
-    (Opcode::Imax, &[I64, I64], &[I64], insert_opcode),
+    (Opcode::Smax, &[I64, I64], &[I64], insert_opcode),
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-    (Opcode::Imax, &[I128, I128], &[I128], insert_opcode),
+    (Opcode::Smax, &[I128, I128], &[I128], insert_opcode),
     // Umax
     // umax not implemented in some backends:
     //   x64: https://github.com/bytecodealliance/wasmtime/issues/3370

@@ -241,9 +241,9 @@ block0(v0: i8x16, v1: i8x16):
 ;   vmnlb %v24, %v24, %v25
 ;   br %r14
 
-function %imax_i64x2(i64x2, i64x2) -> i64x2 {
+function %smax_i64x2(i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2):
-  v2 = imax.i64x2 v0, v1
+  v2 = smax.i64x2 v0, v1
   return v2
 }
 
@@ -251,9 +251,9 @@ block0(v0: i64x2, v1: i64x2):
 ;   vmxg %v24, %v24, %v25
 ;   br %r14
 
-function %imax_i32x4(i32x4, i32x4) -> i32x4 {
+function %smax_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
-  v2 = imax.i32x4 v0, v1
+  v2 = smax.i32x4 v0, v1
   return v2
 }
 
@@ -261,9 +261,9 @@ block0(v0: i32x4, v1: i32x4):
 ;   vmxf %v24, %v24, %v25
 ;   br %r14
 
-function %imax_i16x8(i16x8, i16x8) -> i16x8 {
+function %smax_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
-  v2 = imax.i16x8 v0, v1
+  v2 = smax.i16x8 v0, v1
   return v2
 }
 
@@ -271,9 +271,9 @@ block0(v0: i16x8, v1: i16x8):
 ;   vmxh %v24, %v24, %v25
 ;   br %r14
 
-function %imax_i8x16(i8x16, i8x16) -> i8x16 {
+function %smax_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
-  v2 = imax.i8x16 v0, v1
+  v2 = smax.i8x16 v0, v1
   return v2
 }
 
@@ -281,9 +281,9 @@ block0(v0: i8x16, v1: i8x16):
 ;   vmxb %v24, %v24, %v25
 ;   br %r14
 
-function %imin_i64x2(i64x2, i64x2) -> i64x2 {
+function %smin_i64x2(i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2):
-  v2 = imin.i64x2 v0, v1
+  v2 = smin.i64x2 v0, v1
   return v2
 }
 
@@ -291,9 +291,9 @@ block0(v0: i64x2, v1: i64x2):
 ;   vmng %v24, %v24, %v25
 ;   br %r14
 
-function %imin_i32x4(i32x4, i32x4) -> i32x4 {
+function %smin_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
-  v2 = imin.i32x4 v0, v1
+  v2 = smin.i32x4 v0, v1
   return v2
 }
 
@@ -301,9 +301,9 @@ block0(v0: i32x4, v1: i32x4):
 ;   vmnf %v24, %v24, %v25
 ;   br %r14
 
-function %imin_i16x8(i16x8, i16x8) -> i16x8 {
+function %smin_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
-  v2 = imin.i16x8 v0, v1
+  v2 = smin.i16x8 v0, v1
   return v2
 }
 
@@ -311,9 +311,9 @@ block0(v0: i16x8, v1: i16x8):
 ;   vmnh %v24, %v24, %v25
 ;   br %r14
 
-function %imin_i8x16(i8x16, i8x16) -> i8x16 {
+function %smin_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
-  v2 = imin.i8x16 v0, v1
+  v2 = smin.i8x16 v0, v1
   return v2
 }
 
