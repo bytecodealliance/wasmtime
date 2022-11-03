@@ -1528,6 +1528,11 @@
 (rule (lower (has_type $I64 (bswap x)))
       (a64_rev64 $I64 x))
 
+(rule (lower (has_type $I128 (bswap x)))
+      (value_regs
+       (a64_rev64 $I64 (value_regs_get x 1))
+       (a64_rev64 $I64 (value_regs_get x 0))))
+
 ;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Bmask tests the value against zero, and uses `csetm` to assert the result.

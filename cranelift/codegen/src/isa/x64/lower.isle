@@ -2060,6 +2060,11 @@
 (rule (lower (has_type $I64 (bswap src)))
       (x64_bswap $I64 src))
 
+(rule (lower (has_type $I128 (bswap src)))
+      (value_regs
+       (x64_bswap $I64 (value_regs_get_gpr src 1))
+       (x64_bswap $I64 (value_regs_get_gpr src 0))))
+
 ;; Rules for `is_null` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Null references are represented by the constant value `0`.
