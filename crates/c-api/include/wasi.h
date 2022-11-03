@@ -40,6 +40,18 @@ extern "C" {
 WASI_DECLARE_OWN(config)
 
 /**
+ * \typedef wasi_out_bytes_t
+ * \brief Convenience alias for #wasi_out_bytes_t
+ *
+ * \struct wasi_out_bytes_t
+ * \brief Bounded output bytes from wasi_config_set_stdout_bytes(size_t len)
+ *
+ * \fn void wasi_out_bytes_delete(wasi_out_bytes_t *);
+ * \brief Deletes a configuration object.
+ */
+WASI_DECLARE_OWN(out_bytes)
+
+/**
  * \brief Creates a new empty configuration object.
  *
  * The caller is expected to deallocate the returned configuration
@@ -122,13 +134,21 @@ WASI_API_EXTERN void wasi_config_inherit_stdin(wasi_config_t* config);
 WASI_API_EXTERN bool wasi_config_set_stdout_file(wasi_config_t* config, const char* path);
 
 /**
+ * \brief Configures standard output to be written to a bounded memory slice.
+ *
+ * By default WASI programs have no stdout, but this configures an internal
+ * memory buffer to be used as stdout.
+ */
+WASI_API_EXTERN own wasi_out_bytes_t *wasi_config_set_stdout_bytes(wasi_config_t *config, size_t size);
+
+/**
  * \brief Configures this process's own stdout stream to be used as stdout for
  * this WASI configuration.
  */
 WASI_API_EXTERN void wasi_config_inherit_stdout(wasi_config_t* config);
 
 /**
- * \brief Configures standard output to be written to the specified file.
+ * \brief Configures standard error to be written to the specified file.
  *
  * By default WASI programs have no stderr, but this configures the specified
  * file to be used as stderr.
@@ -137,6 +157,14 @@ WASI_API_EXTERN void wasi_config_inherit_stdout(wasi_config_t* config);
  * returned. Otherwise `true` is returned.
  */
 WASI_API_EXTERN bool wasi_config_set_stderr_file(wasi_config_t* config, const char* path);
+
+/**
+ * \brief Configures standard error to be written to a bounded memory slice.
+ *
+ * By default WASI programs have no stderr, but this configures an internal
+ * memory buffer to be used as stderr.
+ */
+WASI_API_EXTERN own wasi_out_bytes_t* wasi_config_set_stderr_bytes(wasi_config_t* config, size_t size);
 
 /**
  * \brief Configures this process's own stderr stream to be used as stderr for
@@ -155,6 +183,17 @@ WASI_API_EXTERN void wasi_config_inherit_stderr(wasi_config_t* config);
  * `guest_path` is the name by which it will be known in wasm.
  */
 WASI_API_EXTERN bool wasi_config_preopen_dir(wasi_config_t* config, const char* path, const char* guest_path);
+
+/**
+ * \brief Converts released output bytes into a vector of bytes.
+ *
+ * If the origin #wasi_config_t or the set #wasmtime_context_t is not deleted then
+ * `false` is returned. Otherwise `true` is returned and the vector is filled in.
+ *
+ * This function does take ownership of `out_bytes`, and the caller is expected to
+ * deallocate the returned #wasm_byte_vec_t.
+ */
+WASM_API_EXTERN bool wasi_out_bytes_take(own wasi_out_bytes_t* out_bytes, wasm_byte_vec_t* ret);
 
 #undef own
 

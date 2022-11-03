@@ -5,10 +5,11 @@ use anyhow::Result;
 use cap_std::ambient_authority;
 use std::ffi::CStr;
 use std::fs::File;
+use std::io::Cursor;
 use std::os::raw::{c_char, c_int};
 use std::path::{Path, PathBuf};
 use std::slice;
-use wasi_common::pipe::ReadPipe;
+use wasi_common::pipe::{ReadPipe, WritePipe};
 use wasmtime_wasi::{
     sync::{Dir, WasiCtxBuilder},
     WasiCtx,
@@ -56,9 +57,18 @@ pub enum WasiConfigWritePipe {
     None,
     Inherit,
     File(File),
+    Bytes(OutBytes),
 }
 
+#[repr(C)]
+pub struct wasi_out_bytes_t {
+    binary: OutBytes,
+}
+
+type OutBytes = WritePipe<Cursor<Box<[u8]>>>;
+
 wasmtime_c_api_macros::declare_own!(wasi_config_t);
+wasmtime_c_api_macros::declare_own!(wasi_out_bytes_t);
 
 impl wasi_config_t {
     pub fn into_wasi_ctx(self) -> Result<WasiCtx> {
@@ -108,6 +118,7 @@ impl wasi_config_t {
                 let file = wasi_cap_std_sync::file::File::from_cap_std(file);
                 builder.stdout(Box::new(file))
             }
+            WasiConfigWritePipe::Bytes(binary) => builder.stdout(Box::new(binary)),
         };
         builder = match self.stderr {
             WasiConfigWritePipe::None => builder,
@@ -117,6 +128,7 @@ impl wasi_config_t {
                 let file = wasi_cap_std_sync::file::File::from_cap_std(file);
                 builder.stderr(Box::new(file))
             }
+            WasiConfigWritePipe::Bytes(binary) => builder.stderr(Box::new(binary)),
         };
         for (dir, path) in self.preopens {
             builder = builder.preopened_dir(dir, path)?;
@@ -223,6 +235,19 @@ pub unsafe extern "C" fn wasi_config_set_stdout_file(
 }
 
 #[no_mangle]
+pub extern "C" fn wasi_config_set_stdout_bytes(
+    config: &mut wasi_config_t,
+    size: usize,
+) -> Box<wasi_out_bytes_t> {
+    let binary = vec![0; size].into_boxed_slice();
+    let binary = WritePipe::new(Cursor::new(binary));
+
+    config.stdout = WasiConfigWritePipe::Bytes(binary.clone());
+
+    Box::new(wasi_out_bytes_t { binary })
+}
+
+#[no_mangle]
 pub extern "C" fn wasi_config_inherit_stdout(config: &mut wasi_config_t) {
     config.stdout = WasiConfigWritePipe::Inherit;
 }
@@ -240,6 +265,19 @@ pub unsafe extern "C" fn wasi_config_set_stderr_file(
     config.stderr = WasiConfigWritePipe::File(file);
 
     true
+}
+
+#[no_mangle]
+pub extern "C" fn wasi_config_set_stderr_bytes(
+    config: &mut wasi_config_t,
+    size: usize,
+) -> Box<wasi_out_bytes_t> {
+    let binary = vec![0; size].into_boxed_slice();
+    let binary = WritePipe::new(Cursor::new(binary));
+
+    config.stderr = WasiConfigWritePipe::Bytes(binary.clone());
+
+    Box::new(wasi_out_bytes_t { binary })
 }
 
 #[no_mangle]
@@ -269,4 +307,19 @@ pub unsafe extern "C" fn wasi_config_preopen_dir(
     (*config).preopens.push((dir, guest_path.to_owned()));
 
     true
+}
+
+#[no_mangle]
+pub extern "C" fn wasi_out_bytes_take(
+    out_bytes: Box<wasi_out_bytes_t>,
+    ret: &mut wasm_byte_vec_t,
+) -> bool {
+    match out_bytes.binary.try_into_inner() {
+        Ok(binary) => {
+            ret.set_buffer(binary.into_inner().to_vec());
+
+            true
+        }
+        Err(_) => false,
+    }
 }
