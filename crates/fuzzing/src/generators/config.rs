@@ -1,8 +1,7 @@
 //! Generate a configuration for both Wasmtime and the Wasm module to execute.
 
 use super::{
-    CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig, NormalMemoryConfig,
-    UnalignedMemoryCreator,
+    CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig, UnalignedMemoryCreator,
 };
 use crate::oracles::{StoreLimits, Timeout};
 use anyhow::Result;
@@ -81,14 +80,6 @@ impl Config {
             pooling.instance_table_elements = 1_000;
 
             pooling.instance_size = 1_000_000;
-
-            match &mut self.wasmtime.memory_config {
-                MemoryConfig::Normal(config) => {
-                    config.static_memory_maximum_size =
-                        Some(pooling.instance_memory_pages * 0x10000);
-                }
-                MemoryConfig::CustomUnaligned => unreachable!(), // Arbitrary impl for `Config` should have prevented this
-            }
         }
     }
 
@@ -130,14 +121,6 @@ impl Config {
             pooling.instance_memory_pages = pooling.instance_memory_pages.max(900);
             pooling.instance_count = pooling.instance_count.max(500);
             pooling.instance_size = pooling.instance_size.max(64 * 1024);
-
-            match &mut self.wasmtime.memory_config {
-                MemoryConfig::Normal(config) => {
-                    config.static_memory_maximum_size =
-                        Some(pooling.instance_memory_pages * 0x10000);
-                }
-                MemoryConfig::CustomUnaligned => unreachable!(), // Arbitrary impl for `Config` should have prevented this
-            }
         }
     }
 
@@ -319,27 +302,19 @@ impl<'a> Arbitrary<'a> for Config {
             // https://github.com/bytecodealliance/wasmtime/issues/4244.
             cfg.threads_enabled = false;
 
-            // Force the use of a normal memory config when using the pooling allocator and
-            // limit the static memory maximum to be the same as the pooling allocator's memory
-            // page limit.
+            // Ensure the pooling allocator can support the maximal size of
+            // memory, picking the smaller of the two to win.
             if cfg.max_memory_pages < pooling.instance_memory_pages {
                 pooling.instance_memory_pages = cfg.max_memory_pages;
             } else {
                 cfg.max_memory_pages = pooling.instance_memory_pages;
             }
-            config.wasmtime.memory_config = match config.wasmtime.memory_config {
-                MemoryConfig::Normal(mut config) => {
-                    config.static_memory_maximum_size =
-                        Some(pooling.instance_memory_pages * 0x10000);
-                    MemoryConfig::Normal(config)
-                }
-                MemoryConfig::CustomUnaligned => {
-                    let mut config: NormalMemoryConfig = u.arbitrary()?;
-                    config.static_memory_maximum_size =
-                        Some(pooling.instance_memory_pages * 0x10000);
-                    MemoryConfig::Normal(config)
-                }
-            };
+
+            // Forcibly don't use the `CustomUnaligned` memory configuration
+            // with the pooling allocator active.
+            if let MemoryConfig::CustomUnaligned = config.wasmtime.memory_config {
+                config.wasmtime.memory_config = MemoryConfig::Normal(u.arbitrary()?);
+            }
 
             // Don't allow too many linear memories per instance since massive
             // virtual mappings can fail to get allocated.

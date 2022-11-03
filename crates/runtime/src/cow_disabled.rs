@@ -5,7 +5,7 @@
 use crate::{InstantiationError, MmapVec};
 use anyhow::Result;
 use std::sync::Arc;
-use wasmtime_environ::{DefinedMemoryIndex, Module};
+use wasmtime_environ::{DefinedMemoryIndex, MemoryStyle, Module};
 
 /// A shim for the memory image container when support is not included.
 pub enum ModuleMemoryImages {}
@@ -49,6 +49,7 @@ impl MemoryImageSlot {
         &mut self,
         _: usize,
         _: Option<&Arc<MemoryImage>>,
+        _: &MemoryStyle,
     ) -> Result<Self, InstantiationError> {
         unreachable!();
     }
