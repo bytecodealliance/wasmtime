@@ -414,8 +414,6 @@ fn lower_insn_to_regs(
         | Opcode::Return
         | Opcode::Call
         | Opcode::CallIndirect
-        | Opcode::Trapif
-        | Opcode::Trapff
         | Opcode::GetFramePointer
         | Opcode::GetStackPointer
         | Opcode::GetReturnAddress

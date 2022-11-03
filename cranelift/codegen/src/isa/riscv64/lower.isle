@@ -845,25 +845,6 @@
     (vec_writable_to_regs dst)))
 
 
-;;;;;  Rules for `trapif`;;;;;;;;;
-(rule
-  (lower (trapif cc (ifcmp a @ (value_type ty) b) trap_code))
-  (let
-    ((test Reg (lower_icmp cc a b ty)))
-    (gen_trapif test trap_code)))
-
-(rule
-  (lower (trapif _ (iadd_ifcout a @ (value_type ty) b) trap_code))
-  (let
-    ((res ValueRegs (lower_uadd_overflow a b ty)))
-    (gen_trapif (value_regs_get res 1) trap_code)))
-
-
-;;;;;  Rules for `trapff`;;;;;;;;;
-(rule
-  (lower (trapff cc (ffcmp a @ (value_type ty) b) trap_code))
-  (gen_trapff cc a b ty trap_code))
-
 ;;;;;  Rules for `bmask`;;;;;;;;;
 (rule
   (lower (has_type oty (bmask x @ (value_type ity))))

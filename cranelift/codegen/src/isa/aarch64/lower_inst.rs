@@ -183,8 +183,6 @@ pub(crate) fn lower_insn_to_regs(
 
         Opcode::Trap | Opcode::ResumableTrap => implemented_in_isle(ctx),
 
-        Opcode::Trapif | Opcode::Trapff => implemented_in_isle(ctx),
-
         Opcode::Trapz | Opcode::Trapnz | Opcode::ResumableTrapnz => {
             panic!("trapz / trapnz / resumable_trapnz should have been removed by legalization!");
         }

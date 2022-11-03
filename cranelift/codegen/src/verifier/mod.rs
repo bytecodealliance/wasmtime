@@ -767,8 +767,6 @@ impl<'a> Verifier<'a> {
             | Store { .. }
             | Trap { .. }
             | CondTrap { .. }
-            | IntCondTrap { .. }
-            | FloatCondTrap { .. }
             | NullAry { .. } => {}
         }
 

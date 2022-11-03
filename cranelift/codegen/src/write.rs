@@ -489,12 +489,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         } => write!(w, "{} {}, {}{}", flags, args[0], args[1], offset),
         Trap { code, .. } => write!(w, " {}", code),
         CondTrap { arg, code, .. } => write!(w, " {}, {}", arg, code),
-        IntCondTrap {
-            cond, arg, code, ..
-        } => write!(w, " {} {}, {}", cond, arg, code),
-        FloatCondTrap {
-            cond, arg, code, ..
-        } => write!(w, " {} {}, {}", cond, arg, code),
     }?;
 
     let mut sep = "  ; ";

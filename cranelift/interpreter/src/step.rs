@@ -315,14 +315,6 @@ where
         Opcode::Trapz => trap_when(!arg(0)?.into_bool()?, CraneliftTrap::User(trap_code())),
         Opcode::Trapnz => trap_when(arg(0)?.into_bool()?, CraneliftTrap::User(trap_code())),
         Opcode::ResumableTrapnz => trap_when(arg(0)?.into_bool()?, CraneliftTrap::Resumable),
-        Opcode::Trapif => trap_when(
-            state.has_iflag(inst.cond_code().unwrap()),
-            CraneliftTrap::User(trap_code()),
-        ),
-        Opcode::Trapff => trap_when(
-            state.has_fflag(inst.fp_cond_code().unwrap()),
-            CraneliftTrap::User(trap_code()),
-        ),
         Opcode::Return => ControlFlow::Return(args()?),
         Opcode::Call => {
             let func_ref = if let InstructionData::Call { func_ref, .. } = inst {

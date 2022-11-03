@@ -2324,12 +2324,10 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
         Err(_) => {
             let index_type = builder.func.heaps[heap].index_type;
             let offset = builder.ins().iconst(index_type, memarg.offset as i64);
-            let (addr, overflow) = builder.ins().iadd_ifcout(addr, offset);
-            builder.ins().trapif(
-                environ.unsigned_add_overflow_condition(),
-                overflow,
-                ir::TrapCode::HeapOutOfBounds,
-            );
+            let addr =
+                builder
+                    .ins()
+                    .uadd_overflow_trap(addr, offset, ir::TrapCode::HeapOutOfBounds);
             let base = builder
                 .ins()
                 .heap_addr(environ.pointer_type(), heap, addr, access_size);
@@ -2384,10 +2382,8 @@ fn prepare_atomic_addr<FE: FuncEnvironment + ?Sized>(
         let misalignment = builder
             .ins()
             .band_imm(effective_addr, i64::from(loaded_bytes - 1));
-        let f = builder.ins().ifcmp_imm(misalignment, 0);
-        builder
-            .ins()
-            .trapif(IntCC::NotEqual, f, ir::TrapCode::HeapMisaligned);
+        let f = builder.ins().icmp_imm(IntCC::NotEqual, misalignment, 0);
+        builder.ins().trapnz(f, ir::TrapCode::HeapMisaligned);
     }
 
     let (flags, mut addr, offset) = prepare_addr(memarg, loaded_bytes, builder, state, environ)?;
