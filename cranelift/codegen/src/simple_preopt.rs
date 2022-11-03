@@ -826,67 +826,6 @@ mod simplify {
                 }
             }
 
-            InstructionData::Ternary {
-                opcode: Opcode::Bitselect,
-                args,
-            } => {
-                let old_cond_type = pos.func.dfg.value_type(args[0]);
-                if !old_cond_type.is_vector() {
-                    return;
-                }
-
-                // Replace bitselect with vselect if each lane of controlling mask is either
-                // all ones or all zeroes; on x86 bitselect is encoded using 3 instructions,
-                // while vselect can be encoded using single BLEND instruction.
-                if let ValueDef::Result(def_inst, _) = pos.func.dfg.value_def(args[0]) {
-                    let (cond_val, cond_type) = match pos.func.dfg[def_inst] {
-                        InstructionData::IntCompare { .. }
-                        | InstructionData::FloatCompare { .. } => {
-                            // If the controlled mask is from a comparison, the value will be all
-                            // zeros or ones in each output lane.
-                            let arg = args[0];
-                            let arg_type = pos.func.dfg.value_type(arg);
-                            if !arg_type.is_vector() {
-                                return;
-                            }
-                            (arg, arg_type)
-                        }
-                        InstructionData::UnaryConst {
-                            opcode: Opcode::Vconst,
-                            constant_handle,
-                        } => {
-                            // If each byte of controlling mask is 0x00 or 0xFF then
-                            // we will always bitcast our way to vselect(I8x16, I8x16).
-                            // Bitselect operates at bit level, so the lane types don't matter.
-                            let const_data = pos.func.dfg.constants.get(constant_handle);
-                            if !const_data.iter().all(|&b| b == 0 || b == 0xFF) {
-                                return;
-                            }
-                            let new_type = I8.by(old_cond_type.bytes()).unwrap();
-                            (pos.ins().bitcast(new_type, args[0]), new_type)
-                        }
-                        _ => return,
-                    };
-
-                    let lane_type = Type::int(cond_type.lane_bits() as u16).unwrap();
-                    let arg_type = lane_type.by(cond_type.lane_count()).unwrap();
-                    let old_arg_type = pos.func.dfg.value_type(args[1]);
-
-                    if arg_type != old_arg_type {
-                        // Operands types must match, we need to add bitcasts.
-                        let arg1 = pos.ins().bitcast(arg_type, args[1]);
-                        let arg2 = pos.ins().bitcast(arg_type, args[2]);
-                        let ret = pos.ins().vselect(cond_val, arg1, arg2);
-                        pos.func.dfg.replace(inst).bitcast(old_arg_type, ret);
-                    } else {
-                        pos.func
-                            .dfg
-                            .replace(inst)
-                            .vselect(cond_val, args[1], args[2]);
-                    }
-                }
-            }
-
             _ => {}
         }
     }

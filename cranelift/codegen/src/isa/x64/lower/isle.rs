@@ -714,6 +714,15 @@ impl Context for IsleContext<'_, '_, MInst, Flags, IsaFlags, 6> {
     }
 
     #[inline]
+    fn vconst_all_ones_or_all_zeros(&mut self, constant: Constant) -> Option<()> {
+        let const_data = self.lower_ctx.get_constant_data(constant);
+        if const_data.iter().all(|&b| b == 0 || b == 0xFF) {
+            return Some(());
+        }
+        None
+    }
+
+    #[inline]
     fn fcvt_uint_mask_const(&mut self) -> VCodeConstant {
         self.lower_ctx
             .use_constant(VCodeConstantData::WellKnown(&UINT_MASK))
