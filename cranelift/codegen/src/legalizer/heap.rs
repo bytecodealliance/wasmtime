@@ -309,6 +309,7 @@ fn compute_addr(
             .dfg
             .replace(inst)
             .select_spectre_guard(cmp, zero, final_addr);
+        trace!("  inserting: {}", pos.func.dfg.display_value_inst(value));
     } else if offset == 0 {
         let addr = pos.func.dfg.replace(inst).iadd(base, index);
         trace!("  inserting: {}", pos.func.dfg.display_value_inst(addr));

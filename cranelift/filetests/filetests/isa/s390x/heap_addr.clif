@@ -12,20 +12,14 @@ block0(v0: i64, v1: i32):
 }
 
 ; block0:
-;   llgfr %r5, %r3
-;   lgr %r4, %r2
-;   lg %r2, 0(%r4)
-;   aghik %r3, %r2, 0
-;   clgr %r5, %r3
-;   jgnh label1 ; jg label2
-; block1:
-;   agrk %r2, %r4, %r5
-;   lghi %r4, 0
-;   clgr %r5, %r3
-;   locgrh %r2, %r4
+;   llgfr %r4, %r3
+;   lghi %r3, 0
+;   ag %r3, 0(%r2)
+;   agr %r2, %r4
+;   lghi %r5, 0
+;   clgr %r4, %r3
+;   locgrh %r2, %r5
 ;   br %r14
-; block2:
-;   trap
 
 function %static_heap_check(i64 vmctx, i32) -> i64 {
     gv0 = vmctx
@@ -66,18 +60,13 @@ block0(v0: i64, v1: i32):
 ;   lghi %r5, 24
 ;   algfr %r5, %r3
 ;   jle 6 ; trap
-;   clgr %r5, %r4
-;   jgnh label1 ; jg label2
-; block1:
-;   agrk %r3, %r2, %r7
-;   aghik %r2, %r3, 16
+;   agr %r2, %r7
+;   aghi %r2, 16
 ;   lghi %r3, 0
 ;   clgr %r5, %r4
 ;   locgrh %r2, %r3
 ;   lmg %r7, %r15, 56(%r15)
 ;   br %r14
-; block2:
-;   trap
 
 function %static_heap_check_with_offset(i64 vmctx, i32) -> i64 {
     gv0 = vmctx
