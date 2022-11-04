@@ -1,5 +1,5 @@
 //! A strongly-normalizing intermediate representation for ISLE rules.
-use crate::error::{Error, Result, Span};
+use crate::error::{Error, Source, Span};
 use crate::lexer::Pos;
 use crate::sema::{self, RuleVisitor};
 use std::cmp::Reverse;
@@ -88,6 +88,50 @@ pub enum Expr {
     Constructor(sema::TermId, Box<[ExprId]>),
 }
 
+#[derive(Debug)]
+struct UnmatchableError {
+    pos: Pos,
+    constraint_a: Constraint,
+    constraint_b: Constraint,
+}
+
+/// A collection of errors detected during rule normalization.
+#[derive(Debug, Default)]
+pub struct Errors {
+    unmatchable: Vec<UnmatchableError>,
+}
+
+impl Errors {
+    /// Convert this collection into ISLE errors given the [sema::TypeEnv] context.
+    pub fn annotate(mut self, tyenv: &sema::TypeEnv) -> Result<(), Error> {
+        let one = |err: UnmatchableError| {
+            let src = Source::new(
+                tyenv.filenames[err.pos.file].clone(),
+                tyenv.file_texts[err.pos.file].clone(),
+            );
+            Error::UnmatchableError {
+                msg: format!(
+                    "rule requires binding to match both {:?} and {:?}",
+                    err.constraint_a, err.constraint_b
+                ),
+                src,
+                span: Span::new_single(err.pos),
+            }
+        };
+        match self.unmatchable.len() {
+            0 => Ok(()),
+            1 => Err(one(self.unmatchable.pop().unwrap())),
+            _ => Err(Error::Errors(
+                self.unmatchable.into_iter().map(one).collect(),
+            )),
+        }
+    }
+
+    fn append(&mut self, other: &mut Errors) {
+        self.unmatchable.append(&mut other.unmatchable);
+    }
+}
+
 /// A term-rewriting rule. All [BindingId]s and [ExprId]s are only meaningful in the context of the
 /// [RuleSet] that contains this rule.
 #[derive(Debug, Default)]
@@ -123,17 +167,18 @@ pub enum Overlap {
 }
 
 impl Rule {
-    fn set_constraint(&mut self, source: BindingId, constraint: Constraint) -> Result<()> {
+    fn set_constraint(
+        &mut self,
+        source: BindingId,
+        constraint: Constraint,
+    ) -> Result<(), UnmatchableError> {
         match self.constraints.entry(source) {
             Entry::Occupied(entry) => {
                 if entry.get() != &constraint {
-                    return Err(Error::UnmatchableError {
-                        msg: format!(
-                            "rule requires binding to match both {:?} and {:?}",
-                            entry.get(),
-                            constraint
-                        ),
-                        span: Span::new_single(self.pos),
+                    return Err(UnmatchableError {
+                        pos: self.pos,
+                        constraint_a: *entry.get(),
+                        constraint_b: constraint,
                     });
                 }
             }
@@ -179,7 +224,9 @@ impl Rule {
             (other, self)
         };
 
-        let mut subset = true;
+        // TODO: nonlinear constraints complicate the subset check
+        let mut subset = small.equals.is_empty();
+
         for (binding, a) in small.constraints.iter() {
             if let Some(b) = big.constraints.get(binding) {
                 if a != b {
@@ -229,8 +276,8 @@ pub struct RuleSet {
 }
 
 /// Construct a [RuleSet] for each term in `termenv` that has rules.
-pub fn build(termenv: &sema::TermEnv) -> Result<impl Iterator<Item = (sema::TermId, RuleSet)>> {
-    let mut errors = Vec::new();
+pub fn build(termenv: &sema::TermEnv) -> (Vec<(sema::TermId, RuleSet)>, Errors) {
+    let mut errors = Errors::default();
     let mut term = HashMap::new();
     for rule in termenv.rules.iter() {
         let builder = term
@@ -240,17 +287,19 @@ pub fn build(termenv: &sema::TermEnv) -> Result<impl Iterator<Item = (sema::Term
         errors.append(&mut builder.errors);
     }
 
-    match errors.len() {
-        0 => Ok(term.into_iter().map(|(term, builder)| {
+    let mut result: Vec<_> = term
+        .into_iter()
+        .map(|(term, builder)| {
             let mut ruleset = builder.rules;
             ruleset
                 .rules
                 .sort_unstable_by_key(|(_, rule)| (Reverse(rule.prio), rule.pos));
             (term, ruleset)
-        })),
-        1 => Err(errors.pop().unwrap()),
-        _ => Err(Error::Errors(errors)),
-    }
+        })
+        .collect();
+    result.sort_unstable_by_key(|(term, _)| *term);
+
+    (result, errors)
 }
 
 #[derive(Debug, Default)]
@@ -258,7 +307,7 @@ struct RuleSetBuilder {
     current_rule: RuleBuilder,
     binding_map: HashMap<Binding, BindingId>,
     expr_map: HashMap<Expr, ExprId>,
-    errors: Vec<Error>,
+    errors: Errors,
     rules: RuleSet,
 }
 
@@ -364,7 +413,7 @@ impl RuleSetBuilder {
 
     fn set_constraint_or_error(&mut self, input: BindingId, constraint: Constraint) {
         if let Err(e) = self.current_rule.rule.set_constraint(input, constraint) {
-            self.errors.push(e);
+            self.errors.unmatchable.push(e);
         }
     }
 }

@@ -10,9 +10,12 @@ use crate::trie_again;
 
 /// Check for overlap.
 pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
-    let mut unmatchable = Vec::new();
+    let (terms, errors) = trie_again::build(termenv);
+    errors.annotate(tyenv)?;
+
+    let mut subsets = Vec::new();
     let mut overlaps = Errors::default();
-    for (term, ruleset) in trie_again::build(termenv)? {
+    for (term, ruleset) in terms {
         let is_multi_ctor = match &termenv.terms[term.index()].kind {
             &TermKind::Decl { multi, .. } => multi,
             _ => false,
@@ -37,12 +40,9 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
                         let (lo, hi) = if a.prio < b.prio { (a, b) } else { (b, a) };
                         if hi.constraints.len() <= lo.constraints.len() {
                             // Otherwise, the lower-priority rule can never match.
-                            unmatchable.push(Error::UnmatchableError {
-                                msg: format!(
-                                    "rule shadowed by more general higher-priority rule at {:?}",
-                                    hi.pos
-                                ),
-                                span: Span::new_single(lo.pos),
+                            subsets.push(Error::ShadowedError {
+                                shadowed: source_span(lo.pos, tyenv),
+                                other: source_span(hi.pos, tyenv),
                             });
                         }
                     }
@@ -57,14 +57,22 @@ pub fn check(tyenv: &TypeEnv, termenv: &TermEnv) -> Result<()> {
         _ => Pos::default(),
     });
 
-    // FIXME: for the moment, the unmatchable rules will just break CI
-    //errors.append(&mut unmatchable);
+    // TODO: fix the errors identified here and then enforce that new ones aren't added
+    // errors.append(&mut subsets);
 
     match errors.len() {
         0 => Ok(()),
         1 => Err(errors.pop().unwrap()),
         _ => Err(Error::Errors(errors)),
     }
+}
+
+fn source_span(pos: Pos, tyenv: &TypeEnv) -> (Source, Span) {
+    let src = Source::new(
+        tyenv.filenames[pos.file].clone(),
+        tyenv.file_texts[pos.file].clone(),
+    );
+    (src, Span::new_single(pos))
 }
 
 /// A graph of rules that overlap in the ISLE source. The edges are undirected.
@@ -82,16 +90,7 @@ impl Errors {
     fn report(mut self, tyenv: &TypeEnv, termenv: &TermEnv) -> Vec<Error> {
         let mut errors = Vec::new();
 
-        let get_info = |id: RuleId| {
-            let rule = &termenv.rules[id.0];
-            let file = rule.pos.file;
-            let src = Source::new(
-                tyenv.filenames[file].clone(),
-                tyenv.file_texts[file].clone(),
-            );
-            let span = Span::new_single(rule.pos);
-            (src, span)
-        };
+        let get_info = |id: RuleId| source_span(termenv.rules[id.0].pos, tyenv);
 
         while let Some((&id, _)) = self
             .nodes
