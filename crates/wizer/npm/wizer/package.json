@@ -4,7 +4,6 @@
   "description": "The WebAssembly Pre-Initializer",
   "type": "module",
   "scripts": {
-    "update": "node ./update.js",
     "version": "node ./update.js $npm_package_version"
   },
   "devDependencies": {

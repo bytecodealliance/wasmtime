@@ -7,12 +7,9 @@ import decompress from 'decompress';
 import decompressUnzip from 'decompress-unzip';
 import decompressTar from 'decompress-tar';
 import plzma from 'plzmasdk';
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const tag = 'dev';
-let response = await fetch(`https://api.github.com/repos/bytecodealliance/wizer/releases/tags/${tag}`)
-response = await response.json()
-const id = response.id
+const tag = process.argv.slice(2).at(0) || 'dev';
+
 let packages = {
     'wizer-darwin-arm64': {
         releaseAsset: `wizer-${tag}-aarch64-macos.tar.xz`,
@@ -43,20 +40,40 @@ let packages = {
         cpu: 'x64',
     },
 }
-let assets = await fetch(`https://api.github.com/repos/bytecodealliance/wizer/releases/${id}/assets`)
+
+const response = await fetch(`https://api.github.com/repos/bytecodealliance/wizer/releases/tags/${tag}`)
+if (!response.ok) {
+    console.error(`Response from https://api.github.com/repos/bytecodealliance/wizer/releases/tags/${tag} was not ok`, response)
+    console.error(await response.text())
+    process.exit(1)
+}
+response = await response.json()
+const id = response.id
+const assets = await fetch(`https://api.github.com/repos/bytecodealliance/wizer/releases/${id}/assets`)
+if (!assets.ok) {
+    console.error(`Response from https://api.github.com/repos/bytecodealliance/wizer/releases/${id}/assets was not ok`, assets)
+    console.error(await response.text())
+    process.exit(1)
+}
 assets = await assets.json()
 
 for (const [packageName, info] of Object.entries(packages)) {
     const asset = assets.find(asset => asset.name === info.releaseAsset)
     if (!asset) {
-        throw new Error(`Can't find an asset named ${info.releaseAsset} for the release https://github.com/bytecodealliance/wizer/releases/tag/${tag}`)
+        console.error(`Can't find an asset named ${info.releaseAsset} for the release https://github.com/bytecodealliance/wizer/releases/tag/${tag}`)
+        process.exit(1)
     }
     const packageDirectory = join(__dirname, '../', packageName.split('/').pop())
     await mkdir(packageDirectory, { recursive: true })
     await writeFile(join(packageDirectory, 'package.json'), packageJson(packageName, tag, info.description, info.os, info.cpu))
     await writeFile(join(packageDirectory, 'index.js'), indexJs(info.binaryAsset))
     const browser_download_url = asset.browser_download_url;
-    let archive = await fetch(browser_download_url)
+    const archive = await fetch(browser_download_url)
+    if (!archive.ok) {
+        console.error(`Response from ${browser_download_url} was not ok`, archive)
+        console.error(await response.text())
+        process.exit(1)
+    }
     let buf = await archive.arrayBuffer()
 
     // Need to decompress into the original tarball format for later use in the `decompress` function
