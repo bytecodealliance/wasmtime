@@ -15,7 +15,7 @@ pub struct Config {
     pub errors: ErrorConf,
     pub async_: AsyncConf,
     pub wasmtime: bool,
-    pub tracing: bool,
+    pub tracing: TracingConf,
 }
 
 mod kw {
@@ -34,7 +34,7 @@ pub enum ConfigField {
     Error(ErrorConf),
     Async(AsyncConf),
     Wasmtime(bool),
-    Tracing(bool),
+    Tracing(TracingConf),
 }
 
 impl Parse for ConfigField {
@@ -73,7 +73,7 @@ impl Parse for ConfigField {
         } else if lookahead.peek(kw::tracing) {
             input.parse::<kw::tracing>()?;
             input.parse::<Token![:]>()?;
-            Ok(ConfigField::Tracing(input.parse::<syn::LitBool>()?.value))
+            Ok(ConfigField::Tracing(input.parse()?))
         } else {
             Err(lookahead.error())
         }
@@ -128,7 +128,7 @@ impl Config {
             errors: errors.take().unwrap_or_default(),
             async_: async_.take().unwrap_or_default(),
             wasmtime: wasmtime.unwrap_or(true),
-            tracing: tracing.unwrap_or(true),
+            tracing: tracing.unwrap_or_default(),
         })
     }
 
@@ -563,5 +563,18 @@ impl Parse for WasmtimeConfigField {
         } else {
             Err(lookahead.error())
         }
+    }
+}
+
+#[derive(Clone, Default, Debug)]
+pub struct TracingConf {
+    pub enabled: bool,
+    pub excluded_functions: HashMap<String, HashSet<String>>,
+}
+
+impl Parse for TracingConf {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let enabled = input.parse::<syn::LitBool>()?.value;
+        Ok(TracingConf { enabled })
     }
 }

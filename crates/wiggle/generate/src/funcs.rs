@@ -84,7 +84,7 @@ fn _define_func(
         );
     );
     if settings.get_async(&module, &func).is_sync() {
-        let traced_body = if settings.tracing {
+        let traced_body = if settings.tracing.enabled {
             quote!(
                 #mk_span
                 _span.in_scope(|| {
@@ -109,7 +109,7 @@ fn _define_func(
             bounds,
         )
     } else {
-        let traced_body = if settings.tracing {
+        let traced_body = if settings.tracing.enabled {
             quote!(
                 use #rt::tracing::Instrument as _;
                 #mk_span
@@ -261,7 +261,7 @@ impl witx::Bindgen for Rust<'_> {
                         args.push(quote!(#name));
                     }
                 }
-                if self.settings.tracing && func.params.len() > 0 {
+                if self.settings.tracing.enabled && func.params.len() > 0 {
                     let args = func
                         .params
                         .iter()
@@ -290,7 +290,7 @@ impl witx::Bindgen for Rust<'_> {
                         let ret = #trait_name::#ident(ctx, #(#args),*).await;
                     })
                 };
-                if self.settings.tracing {
+                if self.settings.tracing.enabled {
                     self.src.extend(quote! {
                         #rt::tracing::event!(
                             #rt::tracing::Level::TRACE,

@@ -153,7 +153,7 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
         &config.async_,
         &doc,
         config.wasmtime,
-        config.tracing,
+        &config.tracing,
     )
     .expect("validating codegen settings");
 
@@ -195,7 +195,7 @@ pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
         &config.c.async_,
         &doc,
         true,
-        config.c.tracing,
+        &config.c.tracing,
     )
     .expect("validating codegen settings");
 
