@@ -5,20 +5,20 @@
   "type": "module",
   "scripts": {
     "update": "node ./update.js",
-    "postinstall": "node ./post-install.js"
+    "version": "node ./update.js $npm_package_version"
   },
   "devDependencies": {
-    "@felipecrs/decompress-tarxz": "^4.0.0",
     "decompress": "^4.2.1",
     "decompress-unzip": "^4.0.1",
-    "zx": "^7.0.8"
+    "decompress-tar": "^4.1.1",
+    "plzmasdk": "^1.2.5"
   },
   "main": "index.js",
   "engines": {
     "node": ">=16"
   },
   "bin": {
-    "wizer": "wizer"
+    "wizer": "./wizer.js"
   },
   "optionalDependencies": {
     "@bytecode-alliance/wizer-darwin-arm64": "1.5.56",

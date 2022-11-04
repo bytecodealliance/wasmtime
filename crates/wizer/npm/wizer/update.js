@@ -2,11 +2,11 @@
 
 import { fileURLToPath } from 'node:url';
 import { dirname, join, parse } from 'node:path';
-import { fetch } from 'zx'
 import { mkdir, writeFile } from "node:fs/promises";
 import decompress from 'decompress';
 import decompressUnzip from 'decompress-unzip';
-import decompressTarxz from '@felipecrs/decompress-tarxz';
+import decompressTar from 'decompress-tar';
+import plzma from 'plzmasdk';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const tag = 'dev';
@@ -15,7 +15,7 @@ response = await response.json()
 const id = response.id
 let packages = {
     'wizer-darwin-arm64': {
-        releaseAsset: `wizer-${tag}-x86_64-macos.tar.xz`,
+        releaseAsset: `wizer-${tag}-aarch64-macos.tar.xz`,
         binaryAsset: 'wizer',
         description: 'The macOS 64-bit binary for Wizer, the WebAssembly Pre-Initializer',
         os: 'darwin',
@@ -46,9 +46,6 @@ let packages = {
 let assets = await fetch(`https://api.github.com/repos/bytecodealliance/wizer/releases/${id}/assets`)
 assets = await assets.json()
 
-// console.log({id,assets})
-// 'arm', 'arm64', 'ia32', 'mips','mipsel', 'ppc', 'ppc64', 's390', 's390x', and 'x64'
-// 'aix', 'android', 'darwin', 'freebsd','linux', 'openbsd', 'sunos', and 'win32'.
 for (const [packageName, info] of Object.entries(packages)) {
     const asset = assets.find(asset => asset.name === info.releaseAsset)
     if (!asset) {
@@ -60,12 +57,32 @@ for (const [packageName, info] of Object.entries(packages)) {
     await writeFile(join(packageDirectory, 'index.js'), indexJs(info.binaryAsset))
     const browser_download_url = asset.browser_download_url;
     let archive = await fetch(browser_download_url)
-    await decompress(Buffer.from(await archive.arrayBuffer()), packageDirectory, {
+    let buf = await archive.arrayBuffer()
+
+    // Need to decompress into the original tarball format for later use in the `decompress` function
+    if (info.releaseAsset.endsWith('.xz')) {
+        const archiveDataInStream = new plzma.InStream(buf);
+        const decoder = new plzma.Decoder(archiveDataInStream, plzma.FileType.xz);
+        decoder.open();
+
+        // We know the xz archive only contains 1 file, the tarball
+        // We extract the tarball in-memory, for later use in the `decompress` function
+        const selectedItemsToStreams = new Map();
+        selectedItemsToStreams.set(decoder.itemAt(0), plzma.OutStream());
+
+        decoder.extract(selectedItemsToStreams);
+        for (const value of selectedItemsToStreams.values()) {
+            buf = value.copyContent()
+        }
+    }
+    await decompress(Buffer.from(buf), packageDirectory, {
+        // Remove the leading directory from the extracted file.
         strip:1,
         plugins: [
-            decompressTarxz(),
-            decompressUnzip()
+            decompressUnzip(),
+            decompressTar()
         ],
+        // Only extract the binary file and nothing else
         filter: file => parse(file.path).base === info.binaryAsset
     })
 }
