@@ -544,8 +544,9 @@ where
         Opcode::Vconst => assign(imm()),
         Opcode::Null => unimplemented!("Null"),
         Opcode::Nop => ControlFlow::Continue,
-        Opcode::Select => choose(arg(0)?.into_bool()?, arg(1)?, arg(2)?),
-        Opcode::SelectSpectreGuard => unimplemented!("SelectSpectreGuard"),
+        Opcode::Select | Opcode::SelectSpectreGuard => {
+            choose(arg(0)?.into_bool()?, arg(1)?, arg(2)?)
+        }
         Opcode::Bitselect => {
             let mask_a = Value::and(arg(0)?, arg(1)?)?;
             let mask_b = Value::and(Value::not(arg(0)?)?, arg(2)?)?;
